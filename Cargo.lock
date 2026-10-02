@@ -935,7 +935,7 @@ checksum = "a6ef517f0926dd24a1582492c791b6a4818a4d94e789a334894aa15b0d12f55c"
 
 [[package]]
 name = "core-analysis"
-version = "0.0.1"
+version = "0.1.0"
 dependencies = [
  "core-raster",
  "core-slicer",
@@ -945,7 +945,7 @@ dependencies = [
 
 [[package]]
 name = "core-format"
-version = "0.0.1"
+version = "0.1.0"
 dependencies = [
  "core-raster",
  "core-slicer",
@@ -974,7 +974,7 @@ checksum = "773648b94d0e5d620f64f280777445740e61fe701025087ec8b57f45c791888b"
 
 [[package]]
 name = "core-geometry"
-version = "0.0.1"
+version = "0.1.0"
 dependencies = [
  "criterion",
  "earcutr",
@@ -1010,7 +1010,7 @@ dependencies = [
 
 [[package]]
 name = "core-mesh-io"
-version = "0.0.1"
+version = "0.1.0"
 dependencies = [
  "core-geometry",
  "criterion",
@@ -1025,7 +1025,7 @@ dependencies = [
 
 [[package]]
 name = "core-pipeline"
-version = "0.0.1"
+version = "0.1.0"
 dependencies = [
  "core-analysis",
  "core-format",
@@ -1047,7 +1047,7 @@ dependencies = [
 
 [[package]]
 name = "core-plate"
-version = "0.0.1"
+version = "0.1.0"
 dependencies = [
  "core-geometry",
  "core-slicer",
@@ -1058,7 +1058,7 @@ dependencies = [
 
 [[package]]
 name = "core-raster"
-version = "0.0.1"
+version = "0.1.0"
 dependencies = [
  "core-slicer",
  "criterion",
@@ -1069,7 +1069,7 @@ dependencies = [
 
 [[package]]
 name = "core-slicer"
-version = "0.0.1"
+version = "0.1.0"
 dependencies = [
  "core-geometry",
  "criterion",
@@ -1084,7 +1084,7 @@ dependencies = [
 
 [[package]]
 name = "core-supports"
-version = "0.0.1"
+version = "0.1.0"
 dependencies = [
  "core-geometry",
  "core-raster",
@@ -1097,14 +1097,14 @@ dependencies = [
 
 [[package]]
 name = "core-thumbnail"
-version = "0.0.1"
+version = "0.1.0"
 dependencies = [
  "core-geometry",
 ]
 
 [[package]]
 name = "core-volume"
-version = "0.0.1"
+version = "0.1.0"
 dependencies = [
  "core-geometry",
  "criterion",
@@ -1515,7 +1515,7 @@ dependencies = [
 
 [[package]]
 name = "encrust-app"
-version = "0.0.1"
+version = "0.1.0"
 dependencies = [
  "anyhow",
  "bytemuck",
@@ -1563,7 +1563,7 @@ dependencies = [
 
 [[package]]
 name = "encrust-cli"
-version = "0.0.1"
+version = "0.1.0"
 dependencies = [
  "anyhow",
  "clap",
@@ -1846,7 +1846,7 @@ dependencies = [
 
 [[package]]
 name = "format-anycubic"
-version = "0.0.1"
+version = "0.1.0"
 dependencies = [
  "core-format",
  "core-raster",
@@ -1858,7 +1858,7 @@ dependencies = [
 
 [[package]]
 name = "format-chitu"
-version = "0.0.1"
+version = "0.1.0"
 dependencies = [
  "core-format",
  "core-raster",
@@ -1870,7 +1870,7 @@ dependencies = [
 
 [[package]]
 name = "format-creality"
-version = "0.0.1"
+version = "0.1.0"
 dependencies = [
  "core-format",
  "core-raster",
@@ -1880,7 +1880,7 @@ dependencies = [
 
 [[package]]
 name = "format-cws"
-version = "0.0.1"
+version = "0.1.0"
 dependencies = [
  "core-format",
  "core-raster",
@@ -1891,7 +1891,7 @@ dependencies = [
 
 [[package]]
 name = "format-gcode-zip"
-version = "0.0.1"
+version = "0.1.0"
 dependencies = [
  "core-format",
  "core-raster",
@@ -1902,7 +1902,7 @@ dependencies = [
 
 [[package]]
 name = "format-goo"
-version = "0.0.1"
+version = "0.1.0"
 dependencies = [
  "core-format",
  "core-raster",
@@ -1915,7 +1915,7 @@ dependencies = [
 
 [[package]]
 name = "format-sl1"
-version = "0.0.1"
+version = "0.1.0"
 dependencies = [
  "core-format",
  "core-raster",
@@ -1928,7 +1928,7 @@ dependencies = [
 
 [[package]]
 name = "format-svgx"
-version = "0.0.1"
+version = "0.1.0"
 dependencies = [
  "core-format",
  "core-raster",
@@ -2960,7 +2960,7 @@ dependencies = [
 
 [[package]]
 name = "net-prusalink"
-version = "0.0.1"
+version = "0.1.0"
 dependencies = [
  "md-5",
  "serde",
@@ -2972,7 +2972,7 @@ dependencies = [
 
 [[package]]
 name = "net-sdcp"
-version = "0.0.1"
+version = "0.1.0"
 dependencies = [
  "md-5",
  "serde",
@@ -3718,7 +3718,7 @@ checksum = "e8cf8e6a8aa66ce33f63993ffc4ea4271eb5b0530a9002db8455ea6050c77bfa"
 
 [[package]]
 name = "printer-profiles"
-version = "0.0.1"
+version = "0.1.0"
 dependencies = [
  "directories",
  "serde",
@@ -5962,7 +5962,7 @@ checksum = "66fee0b777b0f5ac1c69bb06d361268faafa61cd4682ae064a171c16c433e9e4"
 
 [[package]]
 name = "xtask"
-version = "0.0.1"
+version = "0.1.0"
 dependencies = [
  "anyhow",
  "clap",
