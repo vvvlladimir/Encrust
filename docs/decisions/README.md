@@ -50,6 +50,7 @@ Grouped by what the decision governs; the number is still the order it was taken
 | [0172](0172-the-window-offers-a-signed-update-and-never-applies-one.md) | The window offers a signed update, and never applies one by itself | Accepted |
 | [0173](0173-a-pull-request-runs-linux-and-main-runs-the-rest.md) | A pull request runs Linux, and main runs the rest | Accepted |
 | [0174](0174-a-plate-is-a-crate-live-and-written-down.md) | A plate is a crate, live and written down | Accepted |
+| [0176](0176-the-command-line-is-encrust-with-subcommands.md) | The command line is `encrust`, with subcommands, JSON and a clean Ctrl-C | Accepted |
 
 ### Geometry
 

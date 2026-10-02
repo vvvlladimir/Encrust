@@ -22,7 +22,8 @@ use core_slicer::{AdaptiveSettings, Windows};
 use core_volume::{ReliefSettings, press};
 use printer_profiles::{Compensation, MaterialProfile, PrinterProfile};
 
-use crate::Args;
+use crate::args::{ImportArgs, JobArgs, RasterArgs};
+use crate::exit::Stop;
 use crate::hollowing::{self, HollowReport};
 use crate::png_stack::write_stack;
 use crate::profiles::Chosen;
@@ -32,6 +33,16 @@ use crate::slice_report::SliceReport;
 use crate::sliced_file::{format_of, write_sliced};
 use crate::stats::MeshStats;
 use crate::supports::{SupportReport, stand_under};
+
+/// How a run talks while it works, and what can stop it.
+pub struct Watch<'a> {
+    /// Print each stage as it finishes, which a single run wants and a batch does not: a
+    /// folder of two hundred models would bury its own summary.
+    pub talk: bool,
+    /// Draw a bar over the layers as they are written.
+    pub progress: bool,
+    pub stop: &'a Stop,
+}
 
 /// What one model's run found and wrote.
 pub struct Outcome {
@@ -62,35 +73,38 @@ pub struct OrientSummary {
     pub overhang_mm2: Scalar,
 }
 
-/// Loads, repairs, places, hollows, supports and slices one model into `output`.
-///
-/// `talk` prints each stage as it finishes, which is what a single run wants and a batch
-/// run does not: a folder of two hundred models would bury its own summary.
+/// Loads, repairs, places, hollows, supports and slices one model into `output`, asking
+/// `watch.stop` between stages and between windows of layers.
 pub fn slice_one(
     input: &Path,
     output: &Path,
-    args: &Args,
+    job: &JobArgs,
     chosen: &Chosen,
-    talk: bool,
+    watch: &Watch,
 ) -> Result<Outcome> {
     let profile = chosen.printer.as_ref();
     let material = &chosen.material;
+    let talk = watch.talk;
 
-    let (mut mesh, import, oriented) = import(input, args, profile, talk)?;
-    let hollow = hollow_and_cut(&mut mesh, args, talk)?;
+    let (mut mesh, import, oriented) = import(input, &job.import, profile, talk)?;
+    watch.stop.check()?;
+    let hollow = hollow_and_cut(&mut mesh, job, talk)?;
+    watch.stop.check()?;
 
-    let layer_height = args.layer_height.unwrap_or(material.layer_height_mm);
-    let supports = args
-        .support_profile()?
+    let layer_height = job.slicing.layer_height.unwrap_or(material.layer_height_mm);
+    let supports = job
+        .supports
+        .profile()?
         .map(|profile| stand_under(&mut mesh, &profile, layer_height))
         .transpose()?;
     if talk && let Some(report) = &supports {
         print!("{report}");
     }
+    watch.stop.check()?;
 
-    let cutting = cutting_of(args, layer_height, &material.compensation, talk);
+    let cutting = cutting_of(job, layer_height, &material.compensation, talk);
     let models = [Model::placed(Arc::new(mesh), Transform::default())];
-    let (slice, raster) = slice_and_write(&models, &cutting, args, output, chosen, talk)?;
+    let (slice, raster) = slice_and_write(&models, &cutting, job, output, chosen, watch)?;
 
     Ok(Outcome {
         input: input.to_path_buf(),
@@ -107,7 +121,7 @@ pub fn slice_one(
 /// Loads, welds, places and repairs the model, and says what import found.
 fn import(
     input: &Path,
-    args: &Args,
+    args: &ImportArgs,
     profile: Option<&PrinterProfile>,
     talk: bool,
 ) -> Result<(Mesh, ImportReport, Option<OrientSummary>)> {
@@ -148,19 +162,19 @@ fn import(
 }
 
 /// Shells the model when asked to, then cuts its drain holes and channels.
-fn hollow_and_cut(mesh: &mut Mesh, args: &Args, talk: bool) -> Result<Option<HollowReport>> {
+fn hollow_and_cut(mesh: &mut Mesh, job: &JobArgs, talk: bool) -> Result<Option<HollowReport>> {
     // Where the cuts land is read off the model as it was imported; what they are cut
     // into may be the shell. See ADR 0075.
-    let placed = args
+    let placed = job
         .hollow
         .cutting()
-        .then(|| hollowing::placed(mesh, &args.hollow))
+        .then(|| hollowing::placed(mesh, &job.hollow))
         .transpose()?;
 
     let mut hollow = None;
     let mut wall = None;
-    if args.hollow.wanted() {
-        let (shelled, report) = hollowing::run(mesh, &args.hollow)?;
+    if job.hollow.wanted() {
+        let (shelled, report) = hollowing::run(mesh, &job.hollow, job.import.precision)?;
         if talk {
             print!("{report}");
         }
@@ -179,7 +193,7 @@ fn hollow_and_cut(mesh: &mut Mesh, args: &Args, talk: bool) -> Result<Option<Hol
 
 /// How the stack is cut, and what the resin's shrinkage does to it on the way in.
 fn cutting_of(
-    args: &Args,
+    job: &JobArgs,
     layer_height: Scalar,
     compensation: &Compensation,
     talk: bool,
@@ -192,12 +206,13 @@ fn cutting_of(
     }
     Cutting {
         layer_height_mm: layer_height,
-        adaptive: args
+        adaptive: job
+            .slicing
             .adaptive
-            .then(|| adaptive_settings(args, layer_height, talk)),
-        samples: args.samples_per_layer,
+            .then(|| adaptive_settings(job, layer_height, talk)),
+        samples: job.slicing.samples_per_layer,
         compensation: *compensation,
-        slice_window: args.slice_window,
+        slice_window: job.slicing.slice_window,
     }
 }
 
@@ -209,32 +224,33 @@ fn cutting_of(
 fn slice_and_write(
     models: &[Model],
     cutting: &Cutting,
-    args: &Args,
+    job: &JobArgs,
     output: &Path,
     chosen: &Chosen,
-    talk: bool,
+    watch: &Watch,
 ) -> Result<(SliceReport, Option<RasterReport>)> {
     let profile = chosen.printer.as_ref();
-    let format = (!args.no_raster)
-        .then(|| format_of(output, args.ctb_version))
+    let format = (!job.dry_run)
+        .then(|| format_of(output, job.raster.ctb_version))
         .flatten();
 
     let (mut slice, raster) = match (format, profile) {
         (Some(format), Some(printer)) => write_sliced(
             models,
             cutting,
-            args,
+            job,
             output,
             printer,
             &chosen.material,
             format,
+            watch,
         )
         .map(|(slice, raster)| (slice, Some(raster)))?,
-        _ => cut_without_a_container(models, cutting, args, output, profile, &chosen.material)?,
+        _ => cut_without_a_container(models, cutting, job, output, chosen, watch.stop)?,
     };
 
     slice.finish_drainage();
-    if talk {
+    if watch.talk {
         print!("{slice}");
         if let Some(raster) = &raster {
             print!("{raster}");
@@ -243,31 +259,32 @@ fn slice_and_write(
     Ok((slice, raster))
 }
 
-/// The stack cut for a PNG directory, or only counted when `--no-raster` or no profile
+/// The stack cut for a PNG directory, or only counted when `--dry-run` or no profile
 /// leaves nothing to draw on.
 fn cut_without_a_container(
     models: &[Model],
     cutting: &Cutting,
-    args: &Args,
+    job: &JobArgs,
     output: &Path,
-    profile: Option<&PrinterProfile>,
-    material: &MaterialProfile,
+    chosen: &Chosen,
+    stop: &Stop,
 ) -> Result<(SliceReport, Option<RasterReport>)> {
+    let material = &chosen.material;
     let mesh = bake(models, &cutting.compensation).context("nothing to slice")?;
     let windows = cut(&mesh, cutting)?;
-    let mut slice = report_of(&mesh, &windows, args);
+    let mut slice = report_of(&mesh, &windows, job);
 
-    if args.no_raster {
-        measure(&mesh, &windows, &mut slice)?;
+    if job.dry_run {
+        measure(&mesh, &windows, &mut slice, stop)?;
         return Ok((slice, None));
     }
-    let Some(profile) = profile else {
+    let Some(profile) = chosen.printer.as_ref() else {
         tracing::warn!("rasterisation needs --profile to know the panel; nothing was written");
-        measure(&mesh, &windows, &mut slice)?;
+        measure(&mesh, &windows, &mut slice, stop)?;
         return Ok((slice, None));
     };
 
-    let settings = panel_of(profile, args)?;
+    let settings = panel_of(profile, &job.raster)?;
     let report = write_stack(
         &mesh,
         &windows,
@@ -275,8 +292,9 @@ fn cut_without_a_container(
         &settings,
         output,
         &Tolerance::of(material),
-        raster_window(args),
-        fold_of(args, material),
+        raster_window(&job.raster),
+        fold_of(&job.raster, material),
+        stop,
     )
     .with_context(|| format!("cannot write the mask stack to {}", output.display()))?;
     Ok((slice, Some(report)))
@@ -284,11 +302,11 @@ fn cut_without_a_container(
 
 /// An empty report over `windows`, watching the stack for trapped resin where a cavity
 /// was cut or `--check-drainage` asked for it.
-pub fn report_of(mesh: &Mesh, windows: &Windows, args: &Args) -> SliceReport {
+pub fn report_of(mesh: &Mesh, windows: &Windows, job: &JobArgs) -> SliceReport {
     let mut slice = SliceReport::new(windows.settings(), windows.plan().clone());
     // Resin only gets trapped in a model with a cavity in it, so the stack is watched for
     // it whenever one was cut, and on request otherwise.
-    if (args.hollow.wanted() || args.hollow.cutting() || args.check_drainage)
+    if (job.hollow.wanted() || job.hollow.cutting() || job.slicing.check_drainage)
         && let Some(bounds) = mesh.aabb()
     {
         slice.watch_drainage(bounds.mins.truncate(), bounds.maxs.truncate());
@@ -298,7 +316,7 @@ pub fn report_of(mesh: &Mesh, windows: &Windows, args: &Args) -> SliceReport {
 
 /// How the stack folds as it is written: how many bottom layers the plate holds, and
 /// whether islands come out.
-pub fn fold_of(args: &Args, material: &MaterialProfile) -> Measured {
+pub fn fold_of(args: &RasterArgs, material: &MaterialProfile) -> Measured {
     let fold = Measured::new(material.bottom_layers as usize);
     if args.remove_islands {
         fold.removing_islands()
@@ -308,13 +326,13 @@ pub fn fold_of(args: &Args, material: &MaterialProfile) -> Measured {
 }
 
 /// Layers rasterised at once, which defaults to one per thread.
-pub fn raster_window(args: &Args) -> usize {
+pub fn raster_window(args: &RasterArgs) -> usize {
     args.raster_window
         .unwrap_or_else(rayon::current_num_threads)
 }
 
 /// The panel the masks are drawn for, refused when it cannot produce a usable mask.
-pub fn panel_of(profile: &PrinterProfile, args: &Args) -> Result<RasterSettings> {
+pub fn panel_of(profile: &PrinterProfile, args: &RasterArgs) -> Result<RasterSettings> {
     let settings = raster_settings(profile, overrides_of(args));
     settings
         .validate()
@@ -349,7 +367,7 @@ fn press_relief(
     mesh: Mesh,
     welded: &Welded,
     loaded: &Loaded,
-    args: &Args,
+    args: &ImportArgs,
     talk: bool,
 ) -> Result<Mesh> {
     let Some(amplitude_mm) = args.relief else {
@@ -382,7 +400,7 @@ fn press_relief(
         &heights,
         &ReliefSettings {
             amplitude_mm,
-            precision: args.hollow.precision,
+            precision: args.precision,
             ..ReliefSettings::default()
         },
     )
@@ -408,13 +426,13 @@ fn press_relief(
     Ok(relief.mesh)
 }
 
-/// Loads and repairs a model without slicing it, for `--no-slice`.
-pub fn inspect(input: &Path, args: &Args, chosen: &Chosen) -> Result<ImportReport> {
+/// Loads and repairs a model without slicing it, for `inspect`.
+pub fn inspect(input: &Path, args: &ImportArgs, chosen: &Chosen) -> Result<ImportReport> {
     let profile = chosen.printer.as_ref();
     let loaded = load(input)?;
     let welded = weld(&loaded.mesh, args.weld_tolerance);
     let (mesh, _) = place(welded.mesh.clone(), args, profile)?;
-    // Pressed here too, so that what `--no-slice` measures is what would be printed.
+    // Pressed here too, so that what `inspect` measures is what would be printed.
     let mut mesh = press_relief(mesh, &welded, &loaded, args, false)?;
 
     let orientation = (!args.no_validate).then(|| orient_outward(&mut mesh));
@@ -433,10 +451,10 @@ pub fn inspect(input: &Path, args: &Args, chosen: &Chosen) -> Result<ImportRepor
 }
 
 /// What an adaptive run is allowed to do: the layer height becomes its ceiling.
-fn adaptive_settings(args: &Args, layer_height: Scalar, talk: bool) -> AdaptiveSettings {
+fn adaptive_settings(job: &JobArgs, layer_height: Scalar, talk: bool) -> AdaptiveSettings {
     let settings = AdaptiveSettings {
-        cusp_mm: args.cusp,
-        min_height_mm: args.min_layer_height,
+        cusp_mm: job.slicing.cusp,
+        min_height_mm: job.slicing.min_layer_height,
         max_height_mm: layer_height,
     };
     let reachable = settings.reachable_max_mm();
@@ -451,7 +469,7 @@ fn adaptive_settings(args: &Args, layer_height: Scalar, talk: bool) -> AdaptiveS
 }
 
 /// What the command line sets over the panel the printer profile describes.
-pub fn overrides_of(args: &Args) -> PanelOverrides {
+pub fn overrides_of(args: &RasterArgs) -> PanelOverrides {
     PanelOverrides {
         shading: if args.no_anti_alias {
             Shading::Binary
@@ -465,11 +483,12 @@ pub fn overrides_of(args: &Args) -> PanelOverrides {
 }
 
 /// Cuts the stack to count it, for a run that writes nothing.
-fn measure(mesh: &Mesh, windows: &Windows, report: &mut SliceReport) -> Result<()> {
+fn measure(mesh: &Mesh, windows: &Windows, report: &mut SliceReport, stop: &Stop) -> Result<()> {
     windows
         .stream(mesh, |sliced| {
+            stop.check()?;
             report.absorb(sliced);
-            Ok::<(), core_slicer::SliceError>(())
+            Ok::<(), anyhow::Error>(())
         })
         .context("cannot slice the model")
 }
@@ -490,10 +509,11 @@ pub fn load(path: &Path) -> Result<Loaded> {
 /// Applies the requested orientation, scale, rotation and placement, in that order.
 fn place(
     mesh: Mesh,
-    args: &Args,
+    args: &ImportArgs,
     profile: Option<&PrinterProfile>,
 ) -> Result<(Mesh, Option<OrientSummary>)> {
-    let (mesh, oriented) = if args.orient {
+    let transform = &args.transform;
+    let (mesh, oriented) = if transform.orient {
         let found = orient(&mesh, &OrientSettings::default())
             .context("cannot find an orientation for this model")?;
         let summary = OrientSummary {
@@ -515,19 +535,19 @@ fn place(
         (mesh, None)
     };
 
-    let transform = Transform {
+    let placement = Transform {
         translation: Vec3::ZERO,
-        rotation: args.rotate.map_or(Quat::IDENTITY, euler_degrees),
-        scale: args.scale.unwrap_or(Vec3::ONE),
+        rotation: transform.rotate.map_or(Quat::IDENTITY, euler_degrees),
+        scale: transform.scale.unwrap_or(Vec3::ONE),
     };
 
-    let mut mesh = if transform == Transform::default() {
+    let mut mesh = if placement == Transform::default() {
         mesh
     } else {
-        transform_mesh(&mesh, transform)
+        transform_mesh(&mesh, placement)
     };
 
-    if args.center {
+    if transform.center {
         let bounds = mesh.aabb().context("mesh has no vertices")?;
         let plate = profile.map_or(Vec3::ZERO, |p| {
             Vec3::new(p.build_volume.x, p.build_volume.y, 0.0)

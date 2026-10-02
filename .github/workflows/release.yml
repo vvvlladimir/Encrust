@@ -124,15 +124,16 @@ jobs:
           TARGET: ${{ matrix.target }}
           ARCHIVE: ${{ matrix.archive }}
         run: |
-          out=staging/encrust
+          # `Encrust/`, not `encrust/`: a window from before ADR 0176 must not find the CLI there.
+          out=staging/Encrust
           mkdir -p "$out"
           if [ "$RUNNER_OS" = "Windows" ]; then ext=.exe; else ext=""; fi
+          cp "target/$TARGET/release/encrust-gui$ext" "$out/"
           cp "target/$TARGET/release/encrust$ext" "$out/"
-          cp "target/$TARGET/release/slice$ext" "$out/"
           cp LICENSE README.md "$out/"
           case "$ARCHIVE" in
-            *.zip) (cd staging && 7z a "../$ARCHIVE" encrust) ;;
-            *) tar -czf "$ARCHIVE" -C staging encrust ;;
+            *.zip) (cd staging && 7z a "../$ARCHIVE" Encrust) ;;
+            *) tar -czf "$ARCHIVE" -C staging Encrust ;;
           esac
 
       - name: Install cargo-packager

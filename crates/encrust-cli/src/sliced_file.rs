@@ -3,13 +3,14 @@ use std::path::Path;
 use anyhow::{Context, Result};
 use core_engine::{Cutting, Model, Plate, Run};
 use core_format::{ExposurePlan, PrintJob};
-use core_pipeline::{Observer, SlicedFormat};
-use core_slicer::Sliced;
+use core_pipeline::SlicedFormat;
 use format_chitu::CtbVersion;
 use printer_profiles::{MaterialProfile, OutputFormat, PrinterProfile};
 
-use crate::Args;
-use crate::pipeline::{overrides_of, raster_window, report_of};
+use crate::args::JobArgs;
+use crate::exit::Cancelled;
+use crate::pipeline::{Watch, overrides_of, raster_window, report_of};
+use crate::progress::{Watching, bar};
 use crate::raster_report::RasterReport;
 use crate::slice_report::SliceReport;
 
@@ -40,28 +41,20 @@ pub fn format_of(path: &Path, revision: CtbRevision) -> Option<SlicedFormat> {
     SlicedFormat::of(path, revision.into())
 }
 
-/// Every window of the stack, counted into the slicing report as it goes past.
-struct Absorbing<'a>(&'a mut SliceReport);
-
-impl Observer for Absorbing<'_> {
-    fn window(&mut self, sliced: &Sliced) {
-        self.0.absorb(sliced);
-    }
-}
-
 /// Slices and rasterises `models` straight into a printable sliced file.
 ///
 /// Nothing but the window being worked on is ever in memory; see `core_engine::Run` and
-/// ADR 0010.
+/// ADR 0010. A run `watch.stop` cancels leaves no file behind.
 #[allow(clippy::too_many_arguments)]
 pub fn write_sliced(
     models: &[Model],
     cutting: &Cutting,
-    args: &Args,
+    job: &JobArgs,
     path: &Path,
     printer: &PrinterProfile,
     material: &MaterialProfile,
     format: SlicedFormat,
+    watch: &Watch,
 ) -> Result<(SliceReport, RasterReport)> {
     let format = format.at_revision_of(printer.output);
     warn_if_the_machine_reads_another_container(printer, format);
@@ -70,21 +63,27 @@ pub fn write_sliced(
         models: models.to_vec(),
         printer: printer.clone(),
         material: material.clone(),
-        panel: overrides_of(args),
+        panel: overrides_of(&job.raster),
         cutting: *cutting,
-        exposure: ExposurePlan::new(args.exposure_at.clone()),
-        remove_islands: args.remove_islands,
+        exposure: ExposurePlan::new(job.slicing.exposure_at.clone()),
+        remove_islands: job.raster.remove_islands,
         format,
-        raster_window: raster_window(args),
+        raster_window: raster_window(&job.raster),
     })?;
 
-    let mut slice = report_of(run.mesh(), run.windows(), args);
+    let mut slice = report_of(run.mesh(), run.windows(), job);
     warn_if_exposure_was_measured_elsewhere(run.job(), material);
 
+    let mut watching = Watching {
+        report: &mut slice,
+        bar: watch.progress.then(|| bar("layers")),
+        stop: watch.stop,
+    };
     let written = run
-        .write_file(path, &mut Absorbing(&mut slice))
-        .with_context(|| format!("cannot write {}", path.display()))?
-        .context("a command-line run is never cancelled")?;
+        .write_file(path, &mut watching)
+        .with_context(|| format!("cannot write {}", path.display()))?;
+    drop(watching);
+    let written = written.ok_or(Cancelled)?;
 
     let raster = RasterReport::of_written(path.to_owned(), *run.panel(), written);
     Ok((slice, raster))

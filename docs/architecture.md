@@ -86,9 +86,9 @@ it are in `.claude/rules/architecture.md`.
 | `format-cws` | `CwsWriter`, `CwsReader`, `claims`: a zip of eight-bit PNGs, one `slice.conf` and the gcode program that runs them (ADR 0170) |
 | `net-sdcp` | `Printer` with its `Transport`, `Attributes`, `Status`, `Machine`, `PrintInfo`, `FileTransferInfo`/`Fetching`, `Transfer`, `SdcpError`; `discover`/`probe` over UDP for both reply shapes, `Control` over a WebSocket or an MQTT broker of its own, `upload` posting packets or serving the file a board fetches (ADR 0154, 0155) |
 | `net-prusalink` | `Link`, `Auth`, `Version`, `DEFAULT_USER`, `PrusaLinkError`; `probe`, `upload` as one PUT and `start_print`, over HTTP digest or an API key (ADR 0152) |
-| `encrust-cli` | `slice` binary: `pipeline` runs one model — orient, hollow, supports, then hands it to `core-engine` as a one-model plate, or cuts it here for a PNG stack; `batch` runs it over a directory with a JSON report per model |
+| `encrust-cli` | `encrust` binary, one subcommand per module in `commands/` (ADR 0176): `pipeline` runs one model — orient, hollow, supports, then hands it to `core-engine` as a one-model plate, or cuts it here for a PNG stack; `batch` runs it over a directory with a JSON report per model; `--json`, exit codes, the progress bar and Ctrl-C |
 | `xtask` | `xtask` binary: `gen-profiles`, the printer catalogue transcribed from a directory of source profiles, run by hand and never from a build script (ADR 0165) |
-| `encrust-app` | `encrust` binary: egui/wgpu window — plate panel left, one inspector panel per tool and the rail beside it, plate tabs on their own strip, Preview splitting the stage between model and mask; `Scene` with `duplicate`/`mirror`/`array`, `BuildPlate` — the machine's platform, named apart from `core_engine::Plate` — `OrbitCamera`, picking, gizmo, `History`, `Measure`, `Cutting`, jobs that hold no stack, `Settings`, `shortcuts`, `ui/theme`, `prefs`, `project` — the dialogs and the `Scene` ↔ `Manifest` conversion over `core_engine::project` — `updates` |
+| `encrust-app` | `encrust-gui` binary: egui/wgpu window — plate panel left, one inspector panel per tool and the rail beside it, plate tabs on their own strip, Preview splitting the stage between model and mask; `Scene` with `duplicate`/`mirror`/`array`, `BuildPlate` — the machine's platform, named apart from `core_engine::Plate` — `OrbitCamera`, picking, gizmo, `History`, `Measure`, `Cutting`, jobs that hold no stack, `Settings`, `shortcuts`, `ui/theme`, `prefs`, `project` — the dialogs and the `Scene` ↔ `Manifest` conversion over `core_engine::project` — `updates` |
 
 ## The allowed dependency graph
 
@@ -101,7 +101,8 @@ encrust-app ──> core-engine, every core-*, printer-profiles, every format-*,
                bytemuck, image, rfd, rayon, serde, serde_json, zip,
                ureq (with TLS), minisign-verify, tar, flate2;
                winresource at build time, for the Windows icon
-encrust-cli ──> core-engine, every core-*, printer-profiles, every format-*, rayon
+encrust-cli ──> core-engine, every core-*, printer-profiles, every format-*, rayon,
+               clap, serde, serde_json, indicatif, ctrlc
 xtask ──> printer-profiles, toml
 
 core-engine ──> core-pipeline, core-analysis, core-format, core-geometry, core-raster,

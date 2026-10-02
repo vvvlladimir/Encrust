@@ -8,6 +8,7 @@ use core_pipeline::Tolerance;
 use core_raster::{LayerRuns, RasterSettings};
 use core_slicer::Windows;
 
+use crate::exit::Stop;
 use crate::raster_report::RasterReport;
 use crate::slice_report::SliceReport;
 use crate::stack::{report_for, stream_into};
@@ -23,6 +24,7 @@ pub fn write_stack(
     tolerance: &Tolerance,
     window: usize,
     fold: Measured,
+    stop: &Stop,
 ) -> Result<RasterReport> {
     fs::create_dir_all(directory)
         .with_context(|| format!("cannot create {}", directory.display()))?;
@@ -30,6 +32,7 @@ pub fn write_stack(
     let mut index = 0;
     let mut report = report_for(directory.to_owned(), settings, fold);
     windows.stream(mesh, |sliced| {
+        stop.check()?;
         slice.absorb(sliced);
         stream_into(
             &mut report,

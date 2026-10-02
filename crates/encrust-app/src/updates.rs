@@ -352,7 +352,7 @@ mod tests {
     fn a_restart_the_user_backed_out_of_starts_nothing() {
         let mut updates = Updates {
             stage: Stage::Installed(feed::tests::an_offer("9.0.0")),
-            exe: Some(PathBuf::from("encrust")),
+            exe: Some(PathBuf::from("encrust-gui")),
             ..Updates::default()
         };
         updates.restart();

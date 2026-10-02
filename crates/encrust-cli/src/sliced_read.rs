@@ -1,25 +1,117 @@
-use std::fmt::Write as _;
+use std::fmt::{self, Write as _};
 use std::path::Path;
 
 use anyhow::{Context, Result};
 use core_format::{OpenFile, SlicedFile};
 use core_pipeline::open;
+use serde::Serialize;
 
-/// Opens a sliced file, prints what it says about itself, and decodes every layer.
+/// What a sliced file states about itself, and what decoding its every layer found.
+pub struct Info {
+    facts: SlicedFile,
+    stack: Stack,
+}
+
+/// What the decoded layers add up to, which the header can be checked against.
+#[derive(Serialize)]
+pub struct Stack {
+    pub layers_decoded: u32,
+    pub lit_px: u64,
+    /// Absent when the container records no panel size to measure a pixel by.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub cured_mm3: Option<f64>,
+}
+
+/// Opens a sliced file, reads what it says about itself, and decodes every layer.
 ///
 /// Decoding the whole stack is the point: a header can be read from a file no machine would
 /// print, and the layers are where a container is really tested.
-pub fn read(path: &Path) -> Result<String> {
+pub fn read(path: &Path) -> Result<Info> {
     let file =
         std::fs::File::open(path).with_context(|| format!("cannot open {}", path.display()))?;
     let mut source = std::io::BufReader::new(file);
     let mut opened = open(path, &mut source)
         .with_context(|| format!("cannot read {} as a sliced file", path.display()))?;
 
-    let mut report = facts_of(opened.facts());
     let stack = decode_stack(&mut opened)?;
-    report.push_str(&stack);
-    Ok(report)
+    Ok(Info {
+        facts: opened.facts().clone(),
+        stack,
+    })
+}
+
+#[derive(Serialize)]
+struct Header<'a> {
+    format: &'a str,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    version: Option<u32>,
+    machine: Option<&'a str>,
+    slicer: Option<&'a str>,
+    resin: Option<&'a str>,
+    width_px: u32,
+    height_px: u32,
+    display_mm: Option<[f32; 2]>,
+    layers: u32,
+    layer_height_mm: f32,
+    height_mm: f32,
+    exposure_s: f32,
+    bottom_exposure_s: f32,
+    bottom_layers: u32,
+    grey_steps: u16,
+    print_time_s: Option<u32>,
+    volume_mm3: Option<f32>,
+}
+
+#[derive(Serialize)]
+struct Document<'a> {
+    file: Header<'a>,
+    stack: &'a Stack,
+}
+
+impl Info {
+    /// The same facts as the text, as `info --json` prints them.
+    pub fn document(&self) -> impl Serialize + '_ {
+        let facts = &self.facts;
+        Document {
+            file: Header {
+                format: facts.format,
+                version: facts.version,
+                machine: facts.machine.as_deref(),
+                slicer: facts.slicer.as_deref(),
+                resin: facts.resin.as_deref(),
+                width_px: facts.width_px,
+                height_px: facts.height_px,
+                display_mm: facts.display_mm.map(|(width, height)| [width, height]),
+                layers: facts.layer_count(),
+                layer_height_mm: facts.layer_height_mm,
+                height_mm: facts.height_mm(),
+                exposure_s: facts.exposure_s,
+                bottom_exposure_s: facts.bottom_exposure_s,
+                bottom_layers: facts.bottom_layers,
+                grey_steps: facts.grey_steps,
+                print_time_s: facts.print_time_s,
+                volume_mm3: facts.volume_mm3,
+            },
+            stack: &self.stack,
+        }
+    }
+}
+
+impl fmt::Display for Info {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(&facts_of(&self.facts))?;
+        let stack = &self.stack;
+        writeln!(
+            f,
+            "  {:<14}{} layers decoded, every pixel of the panel covered",
+            "stack", stack.layers_decoded
+        )?;
+        writeln!(f, "  {:<14}{} over the stack", "lit pixels", stack.lit_px)?;
+        if let Some(cured_mm3) = stack.cured_mm3 {
+            writeln!(f, "  {:<14}{cured_mm3:.1} mm^3", "masks cure")?;
+        }
+        Ok(())
+    }
 }
 
 fn facts_of(facts: &SlicedFile) -> String {
@@ -84,7 +176,7 @@ fn facts_of(facts: &SlicedFile) -> String {
 
 /// Decodes every layer and adds up what the masks actually cure, which is the number the
 /// header can be checked against.
-fn decode_stack(opened: &mut impl OpenFile) -> Result<String> {
+fn decode_stack(opened: &mut impl OpenFile) -> Result<Stack> {
     let facts = opened.facts().clone();
     let pitch = pitch_mm2(&facts);
     let mut cured_mm3 = 0.0f64;
@@ -119,18 +211,11 @@ fn decode_stack(opened: &mut impl OpenFile) -> Result<String> {
         cured_mm3 += lit as f64 * f64::from(pitch) * f64::from(thickness);
     }
 
-    let mut out = String::new();
-    let _ = writeln!(
-        out,
-        "  {:<14}{} layers decoded, every pixel of the panel covered",
-        "stack",
-        facts.layer_count()
-    );
-    let _ = writeln!(out, "  {:<14}{lit_total} over the stack", "lit pixels");
-    if pitch > 0.0 {
-        let _ = writeln!(out, "  {:<14}{cured_mm3:.1} mm^3", "masks cure");
-    }
-    Ok(out)
+    Ok(Stack {
+        layers_decoded: facts.layer_count(),
+        lit_px: lit_total,
+        cured_mm3: (pitch > 0.0).then_some(cured_mm3),
+    })
 }
 
 /// Area of one pixel, square millimetres, or zero when the container records no panel size.

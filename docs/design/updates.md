@@ -43,13 +43,14 @@ version is offered.
 
 ## The swap
 
-The archive holds `encrust/encrust` and `encrust/slice` (`.exe` on Windows). The new window
-binary is written beside the running one as `encrust.new`, given the old file's permissions
-and renamed over it, so a failure halfway leaves the old binary whole. `slice` is replaced
+The archive holds `Encrust/encrust-gui` and `Encrust/encrust` (`.exe` on Windows); the
+directory is capitalised so a window from before ADR 0176 never takes the CLI for itself. The
+new window binary is written beside the running one as `encrust-gui.new`, given the old
+file's permissions and renamed over it, so a failure halfway leaves the old binary whole. `encrust` is replaced
 the same way, and only when it already stands beside the window.
 
 Windows will not overwrite a running binary but will rename it, so there the running one
-is first renamed to `encrust.old`; the next start deletes it. The path of the running
+is first renamed to `encrust-gui.old`; the next start deletes it. The path of the running
 binary is read before the swap, because on Linux it reads `(deleted)` afterwards.
 
 "Restart" closes the window through the usual unsaved-changes question and starts the new

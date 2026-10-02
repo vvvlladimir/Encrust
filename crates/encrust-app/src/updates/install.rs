@@ -16,13 +16,20 @@ const ARCHIVE_LIMIT: u64 = 512 << 20;
 const FEED_TIMEOUT: Duration = Duration::from_secs(20);
 const ARCHIVE_TIMEOUT: Duration = Duration::from_secs(15 * 60);
 
-/// The two binaries of the archive, inside its `encrust/` directory as `release.yml` packs it.
+/// The archive's directory, renamed with the binaries so that a window that still reads
+/// `encrust/encrust` as itself finds nothing rather than the command line (ADR 0176).
+const DIR: &str = "Encrust";
+/// The two binaries of the archive, inside [`DIR`] as `release.yml` packs it.
 const APP: &str = if cfg!(windows) {
+    "encrust-gui.exe"
+} else {
+    "encrust-gui"
+};
+const CLI: &str = if cfg!(windows) {
     "encrust.exe"
 } else {
     "encrust"
 };
-const CLI: &str = if cfg!(windows) { "slice.exe" } else { "slice" };
 
 /// The binaries a verified archive holds.
 struct Binaries {
@@ -37,7 +44,7 @@ pub fn check(running: Version) -> Result<Option<Offer>, UpdateError> {
 }
 
 /// Downloads `download`, refuses it unless the release key signed it for `version`, and
-/// replaces `exe` with what it holds, and the `slice` beside `exe` when there is one.
+/// replaces `exe` with what it holds, and the `encrust` beside `exe` when there is one.
 pub fn install(download: &Download, version: Version, exe: &Path) -> Result<(), UpdateError> {
     let archive = fetch(&download.url, ARCHIVE_LIMIT, ARCHIVE_TIMEOUT)?;
     let expected = verify::trusted_comment(version, &download.archive);
@@ -102,7 +109,7 @@ fn unpack(archive: &[u8], name: &str) -> Result<Binaries, UpdateError> {
     } else {
         untar(archive)?
     };
-    let mut take = |file: &str| entries.remove(&format!("encrust/{file}"));
+    let mut take = |file: &str| entries.remove(&format!("{DIR}/{file}"));
     let app = take(APP).ok_or_else(|| UpdateError::Missing(APP.to_owned()))?;
     Ok(Binaries {
         app,
@@ -148,8 +155,8 @@ fn unzip(archive: &[u8]) -> Result<Entries, UpdateError> {
     Ok(entries)
 }
 
-/// Puts the binaries beside `exe` in place of the ones there. `slice` is replaced only
-/// where it was installed alongside.
+/// Puts the binaries beside `exe` in place of the ones there. The command line is replaced
+/// only where it was installed alongside.
 fn swap(exe: &Path, binaries: &Binaries) -> Result<(), UpdateError> {
     replace_running(exe, &binaries.app)?;
     let cli = exe.with_file_name(CLI);
@@ -217,14 +224,6 @@ fn aside(exe: &Path) -> PathBuf {
 mod tests {
     use super::*;
 
-    #[cfg(not(windows))]
-    fn fixture(name: &str) -> Vec<u8> {
-        let path = Path::new(env!("CARGO_MANIFEST_DIR"))
-            .join("tests/fixtures/update")
-            .join(name);
-        fs::read(path).expect("the update fixtures are checked in")
-    }
-
     /// A directory of its own under the system's temporary one, emptied first.
     fn scratch(name: &str) -> PathBuf {
         let dir =
@@ -244,22 +243,39 @@ mod tests {
         zip.finish().expect("the archive closes").into_inner()
     }
 
-    /// The fixture holds Unix names; on Windows the zip test covers the same path.
-    #[cfg(not(windows))]
+    fn tarred(entries: &[(&str, &[u8])]) -> Vec<u8> {
+        let gzip = flate2::write::GzEncoder::new(Vec::new(), flate2::Compression::default());
+        let mut tar = tar::Builder::new(gzip);
+        for (name, bytes) in entries {
+            let mut header = tar::Header::new_gnu();
+            header.set_size(bytes.len() as u64);
+            header.set_mode(0o755);
+            header.set_cksum();
+            tar.append_data(&mut header, name, *bytes)
+                .expect("an entry is written");
+        }
+        let gzip = tar.into_inner().expect("the archive closes");
+        gzip.finish().expect("the gzip stream closes")
+    }
+
     #[test]
     fn the_tarball_release_yml_packs_holds_both_binaries() {
-        let binaries = unpack(&fixture("encrust-test.tar.gz"), "encrust-test.tar.gz")
-            .expect("the fixture unpacks");
-        assert_eq!(binaries.app, b"new app\n");
-        assert_eq!(binaries.cli.as_deref(), Some(&b"new cli\n"[..]));
+        let archive = tarred(&[
+            (&format!("{DIR}/{APP}"), b"new app"),
+            (&format!("{DIR}/{CLI}"), b"new cli"),
+        ]);
+        let binaries =
+            unpack(&archive, "encrust-linux-x86_64.tar.gz").expect("the tarball unpacks");
+        assert_eq!(binaries.app, b"new app");
+        assert_eq!(binaries.cli.as_deref(), Some(&b"new cli"[..]));
     }
 
     #[test]
     fn the_zip_release_yml_packs_holds_both_binaries() {
         let archive = zipped(&[
-            (&format!("encrust/{APP}"), b"app"),
-            (&format!("encrust/{CLI}"), b"cli"),
-            ("encrust/LICENSE", b"text"),
+            (&format!("{DIR}/{APP}"), b"app"),
+            (&format!("{DIR}/{CLI}"), b"cli"),
+            (&format!("{DIR}/LICENSE"), b"text"),
         ]);
         let binaries = unpack(&archive, "encrust-windows-x86_64.zip").expect("the zip unpacks");
         assert_eq!(binaries.app, b"app");
@@ -268,19 +284,22 @@ mod tests {
 
     #[test]
     fn an_appimage_is_not_replaced_from_the_window() {
-        assert!(packaged(Path::new("/tmp/.mount_x/usr/bin/encrust"), true));
+        assert!(packaged(
+            Path::new("/tmp/.mount_x/usr/bin/encrust-gui"),
+            true
+        ));
     }
 
     #[cfg(target_os = "linux")]
     #[test]
     fn a_deb_install_is_not_replaced_but_a_home_one_is() {
-        assert!(packaged(Path::new("/usr/bin/encrust"), false));
-        assert!(!packaged(Path::new("/home/u/encrust/encrust"), false));
+        assert!(packaged(Path::new("/usr/bin/encrust-gui"), false));
+        assert!(!packaged(Path::new("/home/u/Encrust/encrust-gui"), false));
     }
 
     #[test]
     fn an_archive_without_the_window_is_refused() {
-        let archive = zipped(&[("encrust/LICENSE", b"text")]);
+        let archive = zipped(&[(&format!("{DIR}/LICENSE"), b"text")]);
         let unpacked = unpack(&archive, "a.zip");
         assert!(matches!(unpacked, Err(UpdateError::Missing(name)) if name == APP));
     }
@@ -332,7 +351,7 @@ mod tests {
     }
 
     #[test]
-    fn a_window_installed_alone_gets_no_slice_beside_it() {
+    fn a_window_installed_alone_gets_no_command_line_beside_it() {
         let dir = scratch("alone");
         let exe = dir.join(APP);
         fs::write(&exe, b"old app").expect("written");

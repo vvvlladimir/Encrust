@@ -92,20 +92,24 @@ fn written_layers(directory: &Path) -> usize {
         .unwrap_or(0)
 }
 
-fn slice(args: &[&str]) -> Output {
-    Command::new(env!("CARGO_BIN_EXE_slice"))
+fn encrust(args: &[&str]) -> Output {
+    Command::new(env!("CARGO_BIN_EXE_encrust"))
         .args(args)
         .output()
-        .expect("the slice binary runs")
+        .expect("the encrust binary runs")
+}
+
+fn slice(args: &[&str]) -> Output {
+    encrust(&[&["slice"], args].concat())
 }
 
 /// Runs the binary with its own profile directory, so a test never reads the real one.
-fn slice_with_profiles(dir: &Path, args: &[&str]) -> Output {
-    Command::new(env!("CARGO_BIN_EXE_slice"))
+fn encrust_with_profiles(dir: &Path, args: &[&str]) -> Output {
+    Command::new(env!("CARGO_BIN_EXE_encrust"))
         .env("ENCRUST_PROFILE_DIR", dir)
         .args(args)
         .output()
-        .expect("the slice binary runs")
+        .expect("the encrust binary runs")
 }
 
 fn stdout(output: &Output) -> String {
@@ -179,9 +183,9 @@ fn a_cube_is_sliced_into_layers_that_add_back_up_to_its_volume() {
 }
 
 #[test]
-fn no_slice_stops_after_the_import_report() {
+fn inspect_stops_after_the_import_report() {
     let path = write_box_stl("no-slice", 10.0, 12, 0);
-    let output = slice(&[path.to_str().unwrap(), "--no-slice"]);
+    let output = encrust(&["inspect", path.to_str().unwrap()]);
     let text = stdout(&output);
 
     assert!(output.status.success());
@@ -203,10 +207,10 @@ fn strict_fails_on_an_open_mesh_and_passes_on_a_closed_one() {
     let open = write_box_stl("strict-open", 10.0, 10, 0);
     let closed = write_box_stl("strict-closed", 10.0, 12, 0);
 
-    assert!(
-        !slice(&[open.to_str().unwrap(), "--strict"])
-            .status
-            .success()
+    assert_eq!(
+        slice(&[open.to_str().unwrap(), "--strict"]).status.code(),
+        Some(3),
+        "an unclean model under --strict is exit code 3"
     );
     assert!(
         slice(&[closed.to_str().unwrap(), "--strict"])
@@ -232,7 +236,7 @@ fn center_sits_the_model_on_the_plate() {
     let text = stdout(&slice(&[
         path.to_str().unwrap(),
         "--center",
-        "--no-raster",
+        "--dry-run",
         "--profile",
         shipped_profile().to_str().unwrap(),
     ]));
@@ -252,11 +256,11 @@ fn a_model_larger_than_the_machine_is_reported() {
         path.to_str().unwrap(),
         "--profile",
         shipped_profile().to_str().unwrap(),
-        "--no-raster",
+        "--dry-run",
         "--strict",
     ]);
 
-    assert!(!output.status.success());
+    assert_eq!(output.status.code(), Some(3));
     assert_eq!(
         field(&stdout(&output), "fits"),
         "Mars 4 Ultra: no, over X by 46.640 mm, Y by 122.240 mm, Z by 35.000 mm"
@@ -268,7 +272,7 @@ fn an_unknown_extension_is_an_error() {
     let output = slice(&["model.gcode"]);
     let stderr = String::from_utf8(output.stderr).expect("stderr is utf-8");
 
-    assert!(!output.status.success());
+    assert_eq!(output.status.code(), Some(1), "a failed run is exit code 1");
     assert!(stderr.contains("gcode"), "got {stderr}");
 }
 
@@ -445,15 +449,16 @@ fn a_model_hanging_off_the_display_is_clipped_and_fails_strict() {
         field(&text, "raster defect"),
         "6 layers clipped, up to 100.0 px past the panel"
     );
-    assert!(
-        !output.status.success(),
+    assert_eq!(
+        output.status.code(),
+        Some(3),
         "--strict must fail on a layer that does not fit the display"
     );
     assert_eq!(written_layers(&out), 6, "a clipped layer is still written");
 }
 
 #[test]
-fn no_raster_stops_after_the_slice_report() {
+fn dry_run_stops_after_the_slice_report() {
     let path = write_box_stl("no-raster", 10.0, 12, 0);
     let out = output_dir("no-raster");
     let text = stdout(&slice(&[
@@ -462,7 +467,7 @@ fn no_raster_stops_after_the_slice_report() {
         test_panel().to_str().unwrap(),
         "--layer-height",
         "5",
-        "--no-raster",
+        "--dry-run",
         "-o",
         out.to_str().unwrap(),
     ]));
@@ -798,7 +803,7 @@ fn the_ctb_version_flag_picks_the_revision() {
 
 #[test]
 fn the_catalogue_is_listed_without_a_mesh() {
-    let output = slice(&["--list-profiles"]);
+    let output = encrust(&["profiles", "list"]);
     assert!(output.status.success(), "{}", stdout(&output));
 
     let text = stdout(&output);
@@ -810,11 +815,11 @@ fn the_catalogue_is_listed_without_a_mesh() {
 #[test]
 fn a_printer_id_replaces_the_profile_path() {
     let path = write_box_stl("by-id", 10.0, 12, 0);
-    let output = slice(&[
+    let output = encrust(&[
+        "inspect",
         path.to_str().unwrap(),
         "--printer",
         "elegoo-mars-3-pro",
-        "--no-slice",
     ]);
     assert!(output.status.success(), "{}", stdout(&output));
     assert_eq!(field(&stdout(&output), "fits"), "Mars 3 Pro: yes");
@@ -823,13 +828,13 @@ fn a_printer_id_replaces_the_profile_path() {
 #[test]
 fn an_unknown_printer_id_is_refused() {
     let path = write_box_stl("unknown-id", 10.0, 12, 0);
-    let output = slice(&[
+    let output = encrust(&[
+        "inspect",
         path.to_str().unwrap(),
         "--printer",
         "no-such-machine",
-        "--no-slice",
     ]);
-    assert!(!output.status.success());
+    assert_eq!(output.status.code(), Some(1));
     let errors = String::from_utf8(output.stderr.clone()).expect("stderr is utf-8");
     assert!(errors.contains("no-such-machine"), "{errors}");
 }
@@ -869,13 +874,13 @@ fn a_user_profile_overrides_the_catalogue_by_id() {
     fs::copy(test_panel(), printers.join("elegoo-mars-4-ultra.toml")).expect("copy the panel");
 
     let path = write_box_stl("user-override", 10.0, 12, 0);
-    let output = slice_with_profiles(
+    let output = encrust_with_profiles(
         &dir,
         &[
+            "inspect",
             path.to_str().unwrap(),
             "--printer",
             "elegoo-mars-4-ultra",
-            "--no-slice",
         ],
     );
     assert!(output.status.success(), "{}", stdout(&output));
@@ -904,8 +909,11 @@ fn a_goo_name_on_a_chitu_machine_is_written_but_reported() {
     assert!(output.status.success(), "{}", stdout(&output));
     assert!(out.exists(), "the extension still decides the writer");
 
-    let text = stdout(&output);
-    assert!(text.contains(".ctb v4") && text.contains(".goo"), "{text}");
+    let warning = stderr(&output);
+    assert!(
+        warning.contains(".ctb v4") && warning.contains(".goo"),
+        "the warning is a log line, so it goes to stderr: {warning}"
+    );
 }
 
 /// Pixels the printer would expose on one layer of a stack.
@@ -1135,7 +1143,7 @@ fn a_hollow_box_with_no_hole_reports_the_resin_it_traps() {
         "2",
         "--layer-height",
         "0.5",
-        "--no-raster",
+        "--dry-run",
     ]));
 
     let reported = field(&sealed, "trapped resin");
@@ -1160,7 +1168,7 @@ fn a_hollow_box_with_no_hole_reports_the_resin_it_traps() {
         "2",
         "--layer-height",
         "0.5",
-        "--no-raster",
+        "--dry-run",
         "--drain",
         "4",
         "--drain-at",
@@ -1183,12 +1191,13 @@ fn trapped_resin_fails_a_strict_run() {
         "2",
         "--layer-height",
         "0.5",
-        "--no-raster",
+        "--dry-run",
         "--strict",
     ]);
 
-    assert!(
-        !output.status.success(),
+    assert_eq!(
+        output.status.code(),
+        Some(3),
         "resin that cannot get out is a defect:\n{}",
         stdout(&output)
     );
@@ -1199,14 +1208,14 @@ fn a_solid_model_is_not_checked_for_drainage_unless_it_is_asked_for() {
     let path = write_box_stl("drainage-flag", 10.0, 12, 0);
     let input = path.to_str().unwrap();
 
-    let quiet = stdout(&slice(&[input, "--layer-height", "1", "--no-raster"]));
+    let quiet = stdout(&slice(&[input, "--layer-height", "1", "--dry-run"]));
     assert!(!quiet.contains("trapped resin"));
 
     let checked = stdout(&slice(&[
         input,
         "--layer-height",
         "1",
-        "--no-raster",
+        "--dry-run",
         "--check-drainage",
     ]));
     assert!(
@@ -1271,7 +1280,8 @@ fn a_directory_of_models_is_sliced_one_file_and_one_report_each() {
     let input = batch_input("stack");
     let out = output_dir("batch-stack");
 
-    let output = slice(&[
+    let output = encrust(&[
+        "batch",
         input.to_str().expect("ascii path"),
         "--profile",
         test_panel().to_str().expect("ascii path"),
@@ -1306,16 +1316,18 @@ fn a_model_that_cannot_be_loaded_is_reported_and_the_rest_still_run() {
     fs::write(input.join("broken.stl"), b"not an stl at all").expect("write the bad model");
     let out = output_dir("batch-broken");
 
-    let output = slice(&[
+    let output = encrust(&[
+        "batch",
         input.to_str().expect("ascii path"),
         "--profile",
         test_panel().to_str().expect("ascii path"),
         "-o",
         out.to_str().expect("ascii path"),
     ]);
-    assert!(
-        output.status.success(),
-        "one bad model does not fail the run without --strict: {}",
+    assert_eq!(
+        output.status.code(),
+        Some(4),
+        "a batch in which a model failed says so in its exit code: {}",
         stderr(&output)
     );
 
@@ -1330,12 +1342,14 @@ fn a_model_that_cannot_be_loaded_is_reported_and_the_rest_still_run() {
 }
 
 #[test]
-fn strict_fails_the_run_when_a_model_does() {
+fn an_unclean_model_fails_a_strict_batch_with_3() {
     let input = batch_input("strict");
-    fs::write(input.join("broken.stl"), b"not an stl at all").expect("write the bad model");
+    let open = write_box_stl("strict-batch-open", 10.0, 10, 0);
+    fs::copy(&open, input.join("open.stl")).expect("copy the open box in");
     let out = output_dir("batch-strict");
 
-    let output = slice(&[
+    let output = encrust(&[
+        "batch",
         input.to_str().expect("ascii path"),
         "--profile",
         test_panel().to_str().expect("ascii path"),
@@ -1343,9 +1357,11 @@ fn strict_fails_the_run_when_a_model_does() {
         out.to_str().expect("ascii path"),
         "--strict",
     ]);
-    assert!(
-        !output.status.success(),
-        "a failed model has to fail --strict"
+    assert_eq!(
+        output.status.code(),
+        Some(3),
+        "an open box has to fail --strict: {}",
+        stderr(&output)
     );
 }
 
@@ -1370,5 +1386,153 @@ fn asking_for_supports_reports_what_was_stood() {
         stdout(&with).contains("Supports"),
         "the run says what it stood: {}",
         stdout(&with)
+    );
+}
+
+fn json(output: &Output) -> serde_json::Value {
+    serde_json::from_slice(&output.stdout).unwrap_or_else(|error| {
+        panic!(
+            "stdout is not one JSON document ({error}):\n{}",
+            stdout(output)
+        )
+    })
+}
+
+#[test]
+fn json_puts_one_document_on_stdout_and_the_logs_on_stderr() {
+    let path = write_box_stl("json-slice", 10.0, 12, 0);
+    let out = output_file("json-slice.goo");
+    let output = encrust(&[
+        "--json",
+        "slice",
+        path.to_str().unwrap(),
+        "--profile",
+        test_panel().to_str().unwrap(),
+        "--layer-height",
+        "1",
+        "-o",
+        out.to_str().unwrap(),
+    ]);
+    assert!(output.status.success(), "{}", stderr(&output));
+
+    let report = json(&output);
+    assert_eq!(report["schema"], 1);
+    assert_eq!(report["status"], "ok");
+    assert_eq!(report["slicing"]["layers"], 10, "a 10 mm cube at 1 mm");
+    assert!(report["cured"].is_object(), "a written file was measured");
+}
+
+#[test]
+fn json_reports_a_failure_as_a_document_too() {
+    let output = encrust(&["slice", "model.gcode", "--json"]);
+
+    assert_eq!(output.status.code(), Some(1));
+    let failure = json(&output);
+    assert_eq!(failure["schema"], 1);
+    assert!(
+        failure["error"]["message"]
+            .as_str()
+            .is_some_and(|message| message.contains("gcode")),
+        "{failure}"
+    );
+    assert!(
+        stderr(&output).contains("error:"),
+        "the text still goes to stderr"
+    );
+}
+
+#[test]
+fn inspect_info_and_profiles_answer_json_as_well() {
+    let path = write_box_stl("json-inspect", 10.0, 12, 0);
+    let inspected = json(&encrust(&["inspect", path.to_str().unwrap(), "--json"]));
+    assert_eq!(inspected["model"]["faces"], 12);
+    assert!(
+        inspected.get("output").is_none(),
+        "nothing is written by inspect"
+    );
+
+    let out = output_file("json-info.goo");
+    let sliced = slice(&[
+        path.to_str().unwrap(),
+        "--profile",
+        test_panel().to_str().unwrap(),
+        "--layer-height",
+        "2",
+        "-o",
+        out.to_str().unwrap(),
+    ]);
+    assert!(sliced.status.success(), "{}", stderr(&sliced));
+    let info = json(&encrust(&["info", out.to_str().unwrap(), "--json"]));
+    assert_eq!(info["file"]["format"], "goo");
+    assert_eq!(info["stack"]["layers_decoded"], 5);
+
+    let listing = json(&encrust(&["profiles", "list", "--json"]));
+    let printers = listing["printers"].as_array().expect("a list of printers");
+    assert!(
+        printers
+            .iter()
+            .any(|printer| printer["id"] == "elegoo-mars-4-ultra")
+    );
+}
+
+#[test]
+fn a_batch_answers_json_with_its_summary() {
+    let input = batch_input("json");
+    let out = output_dir("batch-json");
+    let output = encrust(&[
+        "batch",
+        input.to_str().expect("ascii path"),
+        "--profile",
+        test_panel().to_str().expect("ascii path"),
+        "-o",
+        out.to_str().expect("ascii path"),
+        "--json",
+    ]);
+    assert!(output.status.success(), "{}", stderr(&output));
+    let summary = json(&output);
+    assert_eq!(summary["schema"], 1);
+    assert_eq!(summary["models"], 2);
+}
+
+#[test]
+fn a_flag_no_subcommand_takes_is_exit_code_2() {
+    assert_eq!(encrust(&["slice", "--no-such-flag"]).status.code(), Some(2));
+    assert_eq!(
+        encrust(&[]).status.code(),
+        Some(2),
+        "a subcommand is required"
+    );
+}
+
+#[test]
+fn slice_refuses_a_directory_and_points_at_batch() {
+    let input = batch_input("not-a-slice");
+    let output = slice(&[input.to_str().expect("ascii path")]);
+    assert_eq!(output.status.code(), Some(1));
+    assert!(
+        stderr(&output).contains("encrust batch"),
+        "{}",
+        stderr(&output)
+    );
+}
+
+#[test]
+fn piped_output_draws_no_progress_bar() {
+    let path = write_box_stl("no-bar", 10.0, 12, 0);
+    let out = output_file("no-bar.goo");
+    let output = slice(&[
+        path.to_str().unwrap(),
+        "--profile",
+        test_panel().to_str().unwrap(),
+        "--layer-height",
+        "1",
+        "-o",
+        out.to_str().unwrap(),
+    ]);
+    assert!(output.status.success(), "{}", stderr(&output));
+    assert!(
+        !stderr(&output).contains("layers,"),
+        "stderr is a pipe here, not a terminal: {}",
+        stderr(&output)
     );
 }
