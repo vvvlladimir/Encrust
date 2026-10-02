@@ -14,7 +14,6 @@ Free and open source, for MSLA and SLA printers.
 &nbsp;·&nbsp; [Report a bug](https://github.com/vvvlladimir/Encrust/issues)
 
 [![CI](https://github.com/vvvlladimir/Encrust/actions/workflows/ci.yml/badge.svg)](https://github.com/vvvlladimir/Encrust/actions/workflows/ci.yml)
-[![Release](https://img.shields.io/github/v/release/vvvlladimir/Encrust?include_prereleases&label=release)](https://github.com/vvvlladimir/Encrust/releases)
 [![Status: alpha](https://img.shields.io/badge/status-alpha-orange.svg)](#where-it-stands)
 [![Platforms](https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-lightgrey.svg)](#try-it)
 [![License: AGPL v3](https://img.shields.io/badge/license-AGPL--3.0-blue.svg)](LICENSE)
@@ -50,8 +49,8 @@ what that update downloads.
 > `xattr -dr com.apple.quarantine /Applications/Encrust.app` in Terminal.
 
 **A good first print:** pick your printer and resin, load something small, and look at the
-analysis view before you send it. If your printer isn't one of the verified ones below, start
-with a calibration piece rather than the model you care about.
+analysis view before you send it. Unless your printer is the one verified below, start with a
+calibration piece rather than the model you care about.
 
 <details>
 <summary><b>Prefer the command line, or building from source?</b></summary>
@@ -78,19 +77,28 @@ Every flag is described in [`docs/cli.md`](docs/cli.md), and
 
 ## Printers
 
-Five printer profiles and four resin profiles ship with 0.1.0:
+Encrust ships with profiles for **100 printers** from 14 makers, plus four resin profiles:
 
-| Printer | Format | Tested with a real print |
+| Maker | Printers | Formats |
 |---|---|---|
-| ELEGOO Saturn 4 Ultra | `.goo` | ✅ Yes |
-| ELEGOO Mars 4 Ultra | `.goo` | Not yet |
-| ELEGOO Mars 3 Pro | `.ctb` | Not yet |
-| Phrozen Sonic Mini 8K | `.ctb` | Not yet |
-| Uniformation GKtwo | `.ctb` | Not yet |
+| Anycubic | 19 | `.pwmx` family, `.photon` |
+| Elegoo | 16 | `.goo`, `.ctb` |
+| Creality | 15 | `.cxdlp`, `.ctb` |
+| Phrozen | 13 | `.ctb`, `.zip`, `.goo` |
+| EPAX | 8 | `.ctb` |
+| FlashForge | 8 | `.svgx` |
+| Nova3D | 5 | `.cws` |
+| Peopoly | 4 | `.ctb` |
+| QIDI | 4 | `.ctb` |
+| Wanhao | 3 | `.zip` |
+| Prusa | 2 | `.sl1`, `.sl1s` |
+| Kelant, UniFormation, Voxelab | 1 each | `.zip`, `.ctb`, `.svgx` |
 
-"Not yet" means the profile follows the format specification and the written file reads back
-correctly — but nobody has cured resin with it so far. Encrypted `.ctb`, which some newer Chitu
-boards need, isn't supported yet.
+**So far, only one has actually printed a file Encrust wrote: the ELEGOO Saturn 4 Ultra.**
+Every other profile is built from the printer's published specification, and its files are
+checked by reading them back — but nobody has cured resin with them yet. They are very
+likely close, so start with a small calibration piece and check the build area and mirroring.
+Encrypted `.ctb`, which some newer Chitu boards need, isn't supported yet.
 
 **Own one of these, or a printer that isn't listed?** A single test print is the most valuable
 thing you can give this project — see [Help it grow](#help-it-grow).
@@ -147,14 +155,13 @@ thing you can give this project — see [Help it grow](#help-it-grow).
 
 ## Where it stands
 
-**Alpha, version 0.1.0** — the first public release. Every stage of the pipeline is in place and
-covered by around 1,500 unit, property and integration tests, which run on Windows, macOS and
-Linux for every change.
+**Alpha.** Every stage of the pipeline is in place and covered by around 1,500 unit, property and
+integration tests, which run on Windows, macOS and Linux for every change.
 
 Being honest about what alpha means here:
 
-- **One printer is proven.** Only the ELEGOO Saturn 4 Ultra has printed a file Encrust wrote. The
-  other profiles are very likely fine, but unconfirmed.
+- **One printer is proven.** Of the hundred profiles, only the ELEGOO Saturn 4 Ultra has printed a
+  file Encrust wrote. The rest are very likely close, but unconfirmed.
 - **Resin settings are a starting point.** Exposure and lift values in the bundled profiles aren't
   calibrated for your bottle — run a calibration print first.
 - **There will be bugs.** Encrust hasn't yet had the thousands of hours of real-world use that
@@ -180,59 +187,25 @@ An update check sends nothing but the request itself, and an update is installed
 carries the project's own signature. No analytics, no crash reporting, no licence checks, no
 account, no cloud. Your models, profiles and projects are just files on your disk.
 
-## Questions you might have
-
-**Is it really free?**
-Yes. Everything that runs on your machine is and will stay free and open source under AGPL-3.0. If
-something paid ever appears, it will be for a service that genuinely costs money to run — never a
-paywall in front of features that already work.
-
-**Will it work with my printer?**
-If your printer reads one of the formats above, quite possibly — check the table and start with a
-small print. Printers that need encrypted `.ctb` aren't supported yet.
-
-**Should I switch to it completely?**
-Not yet. Established slicers have hundreds of verified profiles and years of prints behind them.
-What Encrust offers today is a fully offline workflow, a real command line, and an honest look at
-the file it produced. Use it alongside what you have, and tell us how it goes.
-
-**Can it open files sliced elsewhere?**
-Yes — every format it supports, including several it can't write yet.
-
-**Is it a fork?**
-No. It's written from scratch in Rust. The ELEGOO `.goo` specification and open-source readers of
-the other containers are the references for format details.
-
 ## Help it grow
 
 Encrust is actively developed, and right now the people who try it shape it the most.
 
-- 🖨️ **Test your printer.** Tell us which printer you have, attach a file its own software
+- **Test your printer.** Tell us which printer you have, attach a file its own software
   produced, and say whether Encrust's file printed. This is the one thing the project can't do on
   its own. [Open an issue](https://github.com/vvvlladimir/Encrust/issues/new/choose).
-- 🐛 **Report what breaks.** A bug report or a mesh that trips it up is genuinely useful.
-- 💬 **Say what you'd want.** Ideas and questions are welcome in
+- **Report what breaks.** A bug report or a mesh that trips it up is genuinely useful.
+- **Say what you'd want.** Ideas and questions are welcome in
   [Discussions](https://github.com/vvvlladimir/Encrust/discussions).
-- 🛠️ **Send code.** Start with [CONTRIBUTING.md](CONTRIBUTING.md) and [`AGENTS.md`](AGENTS.md);
+- **Send code.** Start with [CONTRIBUTING.md](CONTRIBUTING.md) and [`AGENTS.md`](AGENTS.md);
   [`docs/decisions/`](docs/decisions/) explains the reasoning behind every structural choice.
 
 If Encrust looks useful to you, a ⭐ helps other resin printers find it.
-
-## Under the hood
-
-A Cargo workspace of small crates with a one-way dependency graph. The cores never touch a
-graphics or windowing library — only the two binaries do — so everything the app can do also runs
-from a test, a benchmark or the command line. The crate map and its rules live in
-[`docs/architecture.md`](docs/architecture.md).
 
 ## Licence
 
 [AGPL-3.0-only](LICENSE). You're free to run, study, change and share Encrust; if you distribute a
 modified version, or offer it to others over a network, you share its source too.
-
-Contributions are covered by a [contributor licence agreement](.github/CLA.md), which keeps open
-the option of a second, commercial licence. The public source stays open —
-[ADR-0159](docs/decisions/0159-agpl-with-a-contributor-licence-agreement.md) explains why.
 
 ## A word of care
 
