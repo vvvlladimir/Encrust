@@ -38,7 +38,7 @@ net-sdcp = { path = "crates/net-sdcp" }
 net-prusalink = { path = "crates/net-prusalink" }
 
 glam = { version = "0.33", features = ["serde"] }
-parry3d = "0.30"
+parry3d = "0.31"
 earcutr = "0.5"
 i_overlay = "9.0"
 rayon = "1.12"
@@ -60,7 +60,7 @@ md-5 = "0.11"
 
 # The update check is the one call that leaves the local network, so only `encrust-app`
 # turns TLS on; see docs/decisions/0172.
-minisign-verify = "0.2"
+minisign-verify = "0.3"
 flate2 = "1.1"
 tar = { version = "0.4", default-features = false }
 
@@ -76,7 +76,7 @@ egui-wgpu = "0.36"
 wgpu = "30.0"
 transform-gizmo-egui = "0.11"
 bytemuck = { version = "1.25", features = ["derive"] }
-rfd = "0.16"
+rfd = "0.17"
 winresource = { version = "0.1", default-features = false }
 criterion = "0.8"
 proptest = "1.11"
