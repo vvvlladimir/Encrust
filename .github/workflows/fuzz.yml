@@ -91,7 +91,7 @@ jobs:
       # that input goes into the owning crate's tests with the fix. See fuzz/README.md.
       - name: Keep what crashed
         if: failure()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: fuzz-${{ matrix.target }}-artifacts
           path: fuzz/artifacts/
