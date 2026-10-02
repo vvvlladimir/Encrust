@@ -208,6 +208,7 @@ fn aside(exe: &Path) -> PathBuf {
 mod tests {
     use super::*;
 
+    #[cfg(not(windows))]
     fn fixture(name: &str) -> Vec<u8> {
         let path = Path::new(env!("CARGO_MANIFEST_DIR"))
             .join("tests/fixtures/update")

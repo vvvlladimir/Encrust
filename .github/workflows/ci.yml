@@ -121,6 +121,10 @@ jobs:
     name: secret scan
     if: github.event.pull_request.draft != true
     runs-on: ubuntu-latest
+    # The action lists a pull request's commits to scan only those.
+    permissions:
+      contents: read
+      pull-requests: read
     steps:
       - uses: actions/checkout@v7
         with:

@@ -37,16 +37,16 @@ updates:
       prefix: build
       include: scope
 
-  # The fuzz crate is deliberately outside the workspace, so its lockfile is its own. Nothing a
-  # user runs is built from it, so everything goes in one monthly pull request.
+  # The fuzz crate is deliberately outside the workspace, so its lockfile is its own. Only its own
+  # dependency is bumped here: the rest comes from the workspace, whose Cargo.toml a bump from this
+  # directory would edit without touching the root Cargo.lock.
   - package-ecosystem: cargo
     directory: /fuzz
     schedule:
       interval: monthly
     open-pull-requests-limit: 1
-    groups:
-      fuzz:
-        patterns: ["*"]
+    allow:
+      - dependency-name: libfuzzer-sys
     commit-message:
       prefix: build
       include: scope

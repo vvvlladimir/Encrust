@@ -54,7 +54,17 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        target: [mesh, sliced_chitu, sliced_goo, sliced_anycubic, sliced_sl1, sniff]
+        target:
+          - mesh
+          - sliced_chitu
+          - sliced_goo
+          - sliced_anycubic
+          - sliced_sl1
+          - sliced_gcode_zip
+          - sliced_creality
+          - sliced_svgx
+          - sliced_cws
+          - sniff
     steps:
       - uses: actions/checkout@v7
 
