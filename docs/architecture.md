@@ -96,7 +96,8 @@ Arrows point at what a crate may depend on. Anything not drawn is forbidden.
 encrust-app ──> every core-*, printer-profiles, every format-*, net-sdcp, net-prusalink,
                egui, eframe, egui_dock, egui-wgpu, wgpu, transform-gizmo-egui,
                bytemuck, image, rfd, rayon, serde, serde_json, zip,
-               ureq (with TLS), minisign-verify, tar, flate2
+               ureq (with TLS), minisign-verify, tar, flate2;
+               winresource at build time, for the Windows icon
 encrust-cli ──> every core-*, printer-profiles, every format-*, rayon
 xtask ──> printer-profiles, toml
 

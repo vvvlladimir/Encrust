@@ -6,9 +6,9 @@
 
 ## Context
 
-[ADR-0160](0160-a-release-is-an-archive-of-two-binaries.md) settled what a release contains — two
-binaries, the licence and the README, four targets, a draft a maintainer publishes — and said a tag
-matching `v*` triggers the build. Everything in it about the contents still holds; the trigger does
+[ADR-0160](0160-a-release-is-an-installer-per-platform.md) settled what a release contains — an
+installer and an archive for each of four targets, on a draft a maintainer publishes — and said a
+tag matching `v*` triggers the build. Everything in it about the contents still holds; the trigger does
 not survive contact with automation.
 
 Two facts forced the revision. Conventional Commits are already the rule here, so the version number
@@ -30,8 +30,7 @@ nothing about the lock, and the release build runs `--locked`.
 still refuses a tag whose version disagrees with `Cargo.toml`, and it still only uploads to a draft:
 publishing stays a human act.
 
-The archive contents, the four targets, the absence of installers and of code signing are unchanged
-from 0160.
+What a release contains, its four targets and the absence of code signing are as 0160 states.
 
 ## Consequences
 

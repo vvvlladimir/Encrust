@@ -55,7 +55,10 @@ binary is read before the swap, because on Linux it reads `(deleted)` afterwards
 "Restart" closes the window through the usual unsaved-changes question and starts the new
 binary as the process exits. "Keep working" in that question cancels the restart.
 
-A development build (`debug_assertions`) is offered but never replaced.
+A development build (`debug_assertions`) is offered but never replaced, and so is a copy
+started from an `.AppImage` (it runs from a read-only mount) or installed under `/usr` by the
+`.deb` (the package manager owns it); those are sent to the release page. Inside `Encrust.app`
+and the per-user Windows install the swap works as above.
 
 ## The signing key
 

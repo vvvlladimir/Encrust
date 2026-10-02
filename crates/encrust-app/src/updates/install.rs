@@ -51,13 +51,22 @@ pub fn install(download: &Download, version: Version, exe: &Path) -> Result<(), 
     swap(exe, &binaries)
 }
 
-/// The binary this window was started from, unless it is a development build: that one is
-/// updated by building it, and replacing it would only confuse the next build.
-pub fn current_exe() -> Option<PathBuf> {
+/// The binary this window was started from, or why the window must not replace it.
+pub fn current_exe() -> Result<PathBuf, &'static str> {
     if cfg!(debug_assertions) {
-        return None;
+        return Err("A development build is updated by building it.");
     }
-    std::env::current_exe().ok()
+    let exe = std::env::current_exe().map_err(|_| "The running program cannot be located.")?;
+    if packaged(&exe, std::env::var_os("APPIMAGE").is_some()) {
+        return Err("This copy is updated by downloading the new package.");
+    }
+    Ok(exe)
+}
+
+/// An AppImage runs from a read-only mount, and what a `.deb` put under `/usr` is the
+/// package manager's to replace.
+fn packaged(exe: &Path, appimage: bool) -> bool {
+    appimage || (cfg!(target_os = "linux") && exe.starts_with("/usr"))
 }
 
 /// Removes what a swap on Windows had to leave behind, the old binary it could not delete
@@ -255,6 +264,18 @@ mod tests {
         let binaries = unpack(&archive, "encrust-windows-x86_64.zip").expect("the zip unpacks");
         assert_eq!(binaries.app, b"app");
         assert_eq!(binaries.cli.as_deref(), Some(&b"cli"[..]));
+    }
+
+    #[test]
+    fn an_appimage_is_not_replaced_from_the_window() {
+        assert!(packaged(Path::new("/tmp/.mount_x/usr/bin/encrust"), true));
+    }
+
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn a_deb_install_is_not_replaced_but_a_home_one_is() {
+        assert!(packaged(Path::new("/usr/bin/encrust"), false));
+        assert!(!packaged(Path::new("/home/u/encrust/encrust"), false));
     }
 
     #[test]

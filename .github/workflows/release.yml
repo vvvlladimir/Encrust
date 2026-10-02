@@ -8,10 +8,11 @@ name: Release
 # pushed with GITHUB_TOKEN raises no event, so `on: push: tags` would simply never fire. The manual
 # trigger is for rebuilding a tag whose run failed.
 #
-# There are no installers and no code signing yet, so an archive is the two binaries, the licence
-# and the README. Each archive is signed with the project's release key, and `latest.json` names
-# them for the window's update check; publishing the draft is what makes that feed visible, so
-# nothing is offered before somebody has looked at it. See ADR-0160, ADR-0162 and ADR-0172.
+# Each platform gets an installer people download and an archive the window's own update reads:
+# `.dmg`, `-setup.exe`, `.AppImage` and `.deb` from `cargo packager`, configured in
+# crates/encrust-app/Cargo.toml. Nothing is code-signed; each archive is signed with the project's
+# release key, and `latest.json` names them for the window's update check. Publishing the draft is
+# what makes that feed visible. See ADR-0160, ADR-0162 and ADR-0172.
 
 on:
   workflow_call:
@@ -74,17 +75,21 @@ jobs:
           - os: macos-latest
             target: aarch64-apple-darwin
             archive: encrust-macos-aarch64.tar.gz
+            formats: dmg
           - os: macos-latest
             target: x86_64-apple-darwin
             archive: encrust-macos-x86_64.tar.gz
+            formats: dmg
           # The oldest supported runner: a Linux binary cannot run against a glibc older than the
           # one it was built on, and a newer runner would raise that floor for no gain.
           - os: ubuntu-22.04
             target: x86_64-unknown-linux-gnu
             archive: encrust-linux-x86_64.tar.gz
+            formats: appimage,deb
           - os: windows-latest
             target: x86_64-pc-windows-msvc
             archive: encrust-windows-x86_64.zip
+            formats: nsis
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v7
@@ -130,13 +135,40 @@ jobs:
             *) tar -czf "$ARCHIVE" -C staging encrust ;;
           esac
 
-      - name: Attach it to the draft
+      - name: Install cargo-packager
+        run: cargo install cargo-packager --locked
+
+      # linuxdeploy is itself an AppImage, and a runner has no FUSE to mount it with.
+      - name: Package the installers
+        shell: bash
+        env:
+          APPIMAGE_EXTRACT_AND_RUN: 1
+        run: >
+          cargo packager --release --target ${{ matrix.target }} -p encrust-app
+          -f ${{ matrix.formats }} -o "$GITHUB_WORKSPACE/packages"
+
+      # Names without the version, so `releases/latest/download/<name>` always works.
+      - name: Attach them to the draft
         shell: bash
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAG: ${{ inputs.tag }}
           ARCHIVE: ${{ matrix.archive }}
-        run: gh release upload "$TAG" "$ARCHIVE" --clobber --repo "$GITHUB_REPOSITORY"
+          TARGET: ${{ matrix.target }}
+        run: |
+          mkdir installers
+          for path in packages/*; do
+            case "$path" in
+              *.dmg) name="Encrust-macos-${TARGET%%-*}.dmg" ;;
+              *-setup.exe) name=Encrust-windows-x86_64-setup.exe ;;
+              *.AppImage) name=Encrust-linux-x86_64.AppImage ;;
+              *.deb) name=encrust_amd64.deb ;;
+              *) continue ;;
+            esac
+            cp "$path" "installers/$name"
+          done
+          ls installers
+          gh release upload "$TAG" "$ARCHIVE" installers/* --clobber --repo "$GITHUB_REPOSITORY"
 
   # One job holds the signing key, after every leg has uploaded, so the feed names every archive.
   # The trusted comment binds a signature to its version and file name, which the window checks;

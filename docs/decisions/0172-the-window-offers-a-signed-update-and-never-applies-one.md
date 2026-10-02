@@ -12,7 +12,7 @@ on: the check, the download, the signature and the swap have to be built here.
 
 Three commitments bind it. The README promises no network call the user did not ask for.
 The network crates carry no TLS stack, and GitHub serves nothing without one. An archive
-is unsigned by any platform authority ([ADR 0160](0160-a-release-is-an-archive-of-two-binaries.md)),
+is unsigned by any platform authority ([ADR 0160](0160-a-release-is-an-installer-per-platform.md)),
 so the download needs a signature of the project's own, or whoever controls the feed or the
 connection controls every user's binary.
 

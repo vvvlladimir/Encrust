@@ -148,7 +148,7 @@ impl Updates {
         else {
             return;
         };
-        let (Some(download), Some(exe)) = (offer.download.clone(), install::current_exe()) else {
+        let (Some(download), Ok(exe)) = (offer.download.clone(), install::current_exe()) else {
             return;
         };
         let offer = offer.clone();
@@ -186,10 +186,8 @@ impl Updates {
     pub fn blocked(offer: &Offer) -> Option<&'static str> {
         if offer.download.is_none() {
             Some("This release has no build for this platform.")
-        } else if install::current_exe().is_none() {
-            Some("A development build is updated by building it.")
         } else {
-            None
+            install::current_exe().err()
         }
     }
 
