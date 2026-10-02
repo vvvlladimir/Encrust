@@ -3,7 +3,7 @@ use core_geometry::{Quat, Transform, Vec3};
 
 use crate::import::recenter;
 use crate::panels::Window;
-use crate::plate::Plate;
+use crate::plate::BuildPlate;
 use crate::scene::{ObjectId, Scene, SceneObject};
 use crate::state::Tools;
 use crate::ui::{
@@ -41,7 +41,7 @@ pub fn ui(ui: &mut egui::Ui, window: &mut Window) {
     scale(ui, &mut window.doc.scene, &window.doc.plate, id);
 }
 
-fn position(ui: &mut egui::Ui, scene: &mut Scene, plate: &Plate, id: ObjectId) {
+fn position(ui: &mut egui::Ui, scene: &mut Scene, plate: &BuildPlate, id: ObjectId) {
     let tooltip = "Back to the middle of the plate";
     let (reset, ()) = section_with_action(ui, "Move", (icon::RESET, tooltip), |ui| {
         let Some(object) = scene.get_mut(id) else {
@@ -143,7 +143,7 @@ fn rotation_rows(ui: &mut egui::Ui, pivot: &mut Transform) -> bool {
 
 /// Size in the model's own axes, stretched: what the model measures before it is turned,
 /// so a number typed here stays put however it is rotated afterwards.
-fn scale(ui: &mut egui::Ui, scene: &mut Scene, plate: &Plate, id: ObjectId) {
+fn scale(ui: &mut egui::Ui, scene: &mut Scene, plate: &BuildPlate, id: ObjectId) {
     let linked_id = ui.id().with("scale-linked");
     let mut linked = ui.memory(|memory| memory.data.get_temp(linked_id).unwrap_or(true));
     let tooltip = "Back to the size the model was imported at";
@@ -297,7 +297,7 @@ fn auto_orient(ui: &mut egui::Ui, window: &mut Window, id: ObjectId) {
 }
 
 /// Stretches the model evenly until its bounds meet the build volume on the tightest side.
-fn fit(object: &mut SceneObject, plate: &Plate) {
+fn fit(object: &mut SceneObject, plate: &BuildPlate) {
     let Some(bounds) = object.world_bounds() else {
         return;
     };
@@ -312,7 +312,7 @@ fn fit(object: &mut SceneObject, plate: &Plate) {
 }
 
 /// Centres the model over the plate and stands it on it, in one move.
-fn place(scene: &mut Scene, plate: &Plate, id: ObjectId) {
+fn place(scene: &mut Scene, plate: &BuildPlate, id: ObjectId) {
     if let Some(index) = scene.objects().iter().position(|object| object.id == id) {
         recenter(scene, plate, index);
     }

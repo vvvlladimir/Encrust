@@ -25,7 +25,7 @@ use core_engine::project::{
 };
 
 /// What a project file is written from: the plate, and the numbers each tool is set to.
-pub struct Plate<'a> {
+pub struct Captured<'a> {
     pub scene: &'a Scene,
     pub slicing: &'a Slicing,
     pub supports: &'a SupportTool,
@@ -36,7 +36,7 @@ pub struct Plate<'a> {
 }
 
 /// The same, to be written into by a load.
-pub struct PlateMut<'a> {
+pub struct CapturedMut<'a> {
     pub scene: &'a mut Scene,
     pub slicing: &'a mut Slicing,
     pub supports: &'a mut SupportTool,
@@ -47,8 +47,8 @@ pub struct PlateMut<'a> {
 }
 
 /// The whole plate as a project, ready to be written.
-pub fn capture(plate: Plate<'_>) -> Project {
-    let Plate {
+pub fn capture(plate: Captured<'_>) -> Project {
+    let Captured {
         scene,
         slicing,
         supports,
@@ -161,8 +161,8 @@ fn object_state(object: &SceneObject) -> ObjectState {
 }
 
 /// Puts a loaded project in place of whatever the window was holding.
-pub fn apply(project: Project, plate: PlateMut<'_>) {
-    let PlateMut {
+pub fn apply(project: Project, plate: CapturedMut<'_>) {
+    let CapturedMut {
         scene,
         slicing,
         supports,
@@ -367,8 +367,8 @@ mod tests {
     }
 
     impl Bench {
-        fn plate(&self) -> Plate<'_> {
-            Plate {
+        fn plate(&self) -> Captured<'_> {
+            Captured {
                 scene: &self.scene,
                 slicing: &self.slicing,
                 supports: &self.supports,
@@ -379,8 +379,8 @@ mod tests {
             }
         }
 
-        fn plate_mut(&mut self) -> PlateMut<'_> {
-            PlateMut {
+        fn plate_mut(&mut self) -> CapturedMut<'_> {
+            CapturedMut {
                 scene: &mut self.scene,
                 slicing: &mut self.slicing,
                 supports: &mut self.supports,

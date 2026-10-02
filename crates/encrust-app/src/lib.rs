@@ -44,7 +44,7 @@ use crate::app::SlicerApp;
 
 // What a test needs to put a model on the plate and slice it the way the window does.
 pub use import::prepare;
-pub use plate::Plate;
+pub use plate::BuildPlate;
 pub use scene::Scene;
 pub use slicing::Slicing;
 pub use status::Status;

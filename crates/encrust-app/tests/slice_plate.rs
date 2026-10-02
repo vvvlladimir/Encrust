@@ -8,7 +8,7 @@ use std::fs;
 use std::path::PathBuf;
 use std::time::{Duration, Instant};
 
-use encrust_app::{Plate, Scene, Slicing, Status, prepare};
+use encrust_app::{BuildPlate, Scene, Slicing, Status, prepare};
 use format_goo::decode;
 use printer_profiles::Catalogue;
 
@@ -106,7 +106,7 @@ fn a_cube_imported_and_sliced_as_the_window_does_reaches_the_file_whole() {
     let catalogue = Catalogue::bundled().expect("the shipped catalogue loads");
     let printer = catalogue.printer(PRINTER).expect("the printer ships");
     let (pitch_x, pitch_y) = printer.profile.display.pixel_pitch_mm();
-    let plate = Plate::from_profile(&printer.profile);
+    let plate = BuildPlate::from_profile(&printer.profile);
 
     let model = write_cube_stl("cube", 10.0);
     let mut scene = Scene::default();

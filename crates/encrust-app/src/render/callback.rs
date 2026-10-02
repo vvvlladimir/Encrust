@@ -7,7 +7,7 @@ use egui::Color32;
 use egui_wgpu::{CallbackResources, CallbackTrait, ScreenDescriptor};
 
 use crate::camera::OrbitCamera;
-use crate::plate::Plate;
+use crate::plate::BuildPlate;
 use crate::render::gpu::{
     DrainCut, ExposureBand, FrameInput, MAX_BANDS, MAX_CUTS, ModelDraw, ReliefDraw,
     ViewportResources,
@@ -80,7 +80,7 @@ impl ViewportCallback {
     /// `aspect` is the width of the viewport rectangle over its height.
     pub fn new(
         scene: &Scene,
-        plate: &Plate,
+        plate: &BuildPlate,
         camera: &OrbitCamera,
         view: ViewOptions,
         shading: Shading<'_>,
@@ -310,7 +310,7 @@ pub(crate) fn cuts_of(
 /// Two triangles lying in the cutting plane, covering everything that could be cut. The
 /// stencil decides which of their fragments survive, so the quad only has to be big
 /// enough, never exact.
-fn cap_quad(scene: &Scene, plate: &Plate, height_mm: Scalar) -> Vec<LineVertex> {
+fn cap_quad(scene: &Scene, plate: &BuildPlate, height_mm: Scalar) -> Vec<LineVertex> {
     let (mut min_x, mut min_y) = (0.0_f32, 0.0_f32);
     let (mut max_x, mut max_y) = (plate.x_mm, plate.y_mm);
     if let Some(bounds) = scene.world_bounds() {

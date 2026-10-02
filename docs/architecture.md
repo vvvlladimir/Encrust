@@ -88,7 +88,7 @@ it are in `.claude/rules/architecture.md`.
 | `net-prusalink` | `Link`, `Auth`, `Version`, `DEFAULT_USER`, `PrusaLinkError`; `probe`, `upload` as one PUT and `start_print`, over HTTP digest or an API key (ADR 0152) |
 | `encrust-cli` | `slice` binary: `pipeline` runs one model — orient, hollow, supports, then hands it to `core-engine` as a one-model plate, or cuts it here for a PNG stack; `batch` runs it over a directory with a JSON report per model |
 | `xtask` | `xtask` binary: `gen-profiles`, the printer catalogue transcribed from a directory of source profiles, run by hand and never from a build script (ADR 0165) |
-| `encrust-app` | `encrust` binary: egui/wgpu window — plate panel left, one inspector panel per tool and the rail beside it, plate tabs on their own strip, Preview splitting the stage between model and mask; `Scene` with `duplicate`/`mirror`/`array`, `Plate`, `OrbitCamera`, picking, gizmo, `History`, `Measure`, `Cutting`, jobs that hold no stack, `Settings`, `shortcuts`, `ui/theme`, `prefs`, `project` — the dialogs and the `Scene` ↔ `Manifest` conversion over `core_engine::project` — `updates` |
+| `encrust-app` | `encrust` binary: egui/wgpu window — plate panel left, one inspector panel per tool and the rail beside it, plate tabs on their own strip, Preview splitting the stage between model and mask; `Scene` with `duplicate`/`mirror`/`array`, `BuildPlate` — the machine's platform, named apart from `core_engine::Plate` — `OrbitCamera`, picking, gizmo, `History`, `Measure`, `Cutting`, jobs that hold no stack, `Settings`, `shortcuts`, `ui/theme`, `prefs`, `project` — the dialogs and the `Scene` ↔ `Manifest` conversion over `core_engine::project` — `updates` |
 
 ## The allowed dependency graph
 
@@ -222,6 +222,8 @@ by a shared crate (ADR 0153).
 | `Sl1Flavour` | `format-sl1` | Which Prusa extension a file takes: `.sl1` or `.sl1s` |
 | `SlicedFile` | `core-format` | What an opened file says about itself, whoever wrote it (ADR 0149) |
 | `Opened<S>` | `core-pipeline` | An opened sliced file over the source it took, whichever container it turned out to be (ADR 0150) |
+| `Plate`, `Model` | `core-engine` | What a run cuts: the models where they stand, the machine, the resin and the cutting (ADR 0174) |
+| `BuildPlate` | `encrust-app` | The machine's platform, which is what a model is placed on |
 | `Preview` | `encrust-app` | The layer under the slider, off a source that is a plate being cut or a file being read (ADR 0151) |
 
 ## Coordinates and units
@@ -247,7 +249,7 @@ scene.rs     Scene, SceneObject, ObjectId, ImportSummary, the plates, duplicate,
 undo.rs      History: whole-scene snapshots, found by hashing what can be edited
 measure.rs   the two picked points, and the corner a click snaps to
 import.rs    the files being opened: load, repair, index, place
-plate.rs     the build volume
+plate.rs     BuildPlate: the build volume, named apart from core_engine::Plate
 camera.rs    OrbitCamera and its matrices
 pick.rs      cursor to ray, ray to nearest object
 gizmo.rs     transform handles over transform-gizmo-egui

@@ -5,7 +5,7 @@ use printer_profiles::{MaterialProfile, PrinterProfile};
 
 use crate::import::recenter;
 use crate::panels::Window;
-use crate::plate::Plate;
+use crate::plate::BuildPlate;
 use crate::settings::{installed, installed_printers};
 use crate::slicing::Slicing;
 use crate::state::Machine;
@@ -118,7 +118,7 @@ pub fn open_printer(window: &mut Window) {
 /// put back over the new centre rather than left hanging off the old one. The machine on
 /// the network follows the profile, because it is bound to it; see ADR 0156.
 pub fn apply_printer(window: &mut Window, profile: PrinterProfile, id: Option<String>) {
-    window.doc.plate = Plate::from_profile(&profile);
+    window.doc.plate = BuildPlate::from_profile(&profile);
     window.machine.network.bind_to(id.clone());
     window.machine.slicing.set_printer(profile, id);
     for index in 0..window.doc.scene.objects().len() {

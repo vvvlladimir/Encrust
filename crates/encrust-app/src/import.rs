@@ -11,7 +11,7 @@ use core_mesh_io::{Loaded, loader_for_extension};
 use crate::camera::OrbitCamera;
 use crate::job::{ImportJob, ImportOutcome, ImportStage};
 use crate::panels::frame_view;
-use crate::plate::Plate;
+use crate::plate::BuildPlate;
 use crate::scene::{ImportSummary, Imported, Mapped, Scene};
 use crate::status::Status;
 
@@ -26,7 +26,7 @@ pub struct Imports {
 
 impl Imports {
     /// Asks for a mesh file and starts opening it.
-    pub fn open_dialog(&mut self, plate: &Plate, status: &mut Status) {
+    pub fn open_dialog(&mut self, plate: &BuildPlate, status: &mut Status) {
         if let Some(path) = rfd::FileDialog::new()
             .add_filter("Mesh", &["stl", "obj", "3mf"])
             .pick_file()
@@ -36,7 +36,7 @@ impl Imports {
     }
 
     /// Starts opening a mesh by path. The one way a model reaches the plate.
-    pub fn open(&mut self, path: PathBuf, plate: &Plate, status: &mut Status) {
+    pub fn open(&mut self, path: PathBuf, plate: &BuildPlate, status: &mut Status) {
         *status = Status::Info(format!("Opening {}", path.display()));
         self.jobs.push(ImportJob::spawn(path, plate.clone()));
     }
@@ -60,7 +60,7 @@ impl Imports {
     pub fn poll(
         &mut self,
         scene: &mut Scene,
-        plate: &Plate,
+        plate: &BuildPlate,
         camera: &mut OrbitCamera,
         status: &mut Status,
     ) -> bool {
@@ -98,7 +98,11 @@ impl Imports {
 /// The repair order matches the CLI's: weld first, because on an unwelded mesh every edge
 /// looks like a boundary and neither the orientation fix nor the diagnostics mean
 /// anything. `stage` is called before each part of the work starts.
-pub fn prepare(path: &Path, plate: &Plate, stage: &mut dyn FnMut(ImportStage)) -> Result<Imported> {
+pub fn prepare(
+    path: &Path,
+    plate: &BuildPlate,
+    stage: &mut dyn FnMut(ImportStage),
+) -> Result<Imported> {
     let extension = path
         .extension()
         .and_then(|e| e.to_str())
@@ -190,7 +194,7 @@ fn mapped(loaded: &Loaded, welded: &Welded, before: &[[u32; 3]]) -> Option<Arc<M
 }
 
 /// Puts an already placed object back in the middle of the plate, standing on z = 0.
-pub fn recenter(scene: &mut Scene, plate: &Plate, index: usize) -> Option<()> {
+pub fn recenter(scene: &mut Scene, plate: &BuildPlate, index: usize) -> Option<()> {
     let object = scene.objects_mut().get_mut(index)?;
     let bounds = object.world_bounds()?;
     object.transform.translation +=
@@ -211,7 +215,7 @@ mod tests {
 
     /// Prepares a file with the stages thrown away, which is what the tests care about.
     fn prepared(path: &Path) -> Result<Imported> {
-        prepare(path, &Plate::default(), &mut |_| {})
+        prepare(path, &BuildPlate::default(), &mut |_| {})
     }
 
     #[test]

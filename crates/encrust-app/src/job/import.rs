@@ -1,7 +1,7 @@
 use std::path::{Path, PathBuf};
 use std::sync::mpsc::{self, Receiver, TryRecvError};
 
-use crate::plate::Plate;
+use crate::plate::BuildPlate;
 use crate::scene::Imported;
 
 /// What an import is doing. Reading is the file, repairing is welding and orienting, and
@@ -54,7 +54,7 @@ impl ImportJob {
     /// Starts the import. The thread is detached: nothing can cancel a read that is
     /// already under way, and an import that finishes into a dropped handle is dropped
     /// with it.
-    pub fn spawn(path: PathBuf, plate: Plate) -> Self {
+    pub fn spawn(path: PathBuf, plate: BuildPlate) -> Self {
         let (sender, reports) = mpsc::channel();
         let worker_path = path.clone();
 
@@ -117,7 +117,7 @@ mod tests {
 
     #[test]
     fn a_file_that_is_not_there_comes_back_as_a_failure() {
-        let mut job = ImportJob::spawn(PathBuf::from("no-such-model.stl"), Plate::default());
+        let mut job = ImportJob::spawn(PathBuf::from("no-such-model.stl"), BuildPlate::default());
         let outcome = loop {
             if let Some(outcome) = job.poll() {
                 break outcome;
@@ -133,7 +133,7 @@ mod tests {
 
     #[test]
     fn a_running_import_says_which_file_it_is_on() {
-        let job = ImportJob::spawn(PathBuf::from("/models/dragon.stl"), Plate::default());
+        let job = ImportJob::spawn(PathBuf::from("/models/dragon.stl"), BuildPlate::default());
         assert!(job.label().ends_with("dragon.stl"), "got {}", job.label());
         assert_eq!(job.path(), Path::new("/models/dragon.stl"));
     }

@@ -70,7 +70,7 @@ pub fn open_dialog(window: &mut Window) {
 
     state::apply(
         project,
-        state::PlateMut {
+        state::CapturedMut {
             scene: &mut window.doc.scene,
             slicing: &mut window.machine.slicing,
             supports: &mut window.tools.supports,
@@ -128,7 +128,7 @@ fn write(window: &mut Window, path: std::path::PathBuf) {
 
 /// The plate as a project, which is both what gets written and what gets hashed.
 fn captured(window: &Window) -> Project {
-    state::capture(state::Plate {
+    state::capture(state::Captured {
         scene: &window.doc.scene,
         slicing: &window.machine.slicing,
         supports: &window.tools.supports,
