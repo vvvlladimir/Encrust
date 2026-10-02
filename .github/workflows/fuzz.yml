@@ -1,0 +1,65 @@
+name: Fuzz
+
+# The readers take bytes nobody in this project wrote: meshes, sliced files from other slicers,
+# textures from a pack. Property tests cover the shapes we thought of; this covers the ones we did
+# not. On a schedule rather than on a pull request — two minutes of fuzzing is a smoke test, and
+# failing a pull request over which inputs one random session reached would teach everybody to
+# ignore it.
+
+on:
+  schedule:
+    - cron: "0 4 * * 2"
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - fuzz/**
+      - .github/workflows/fuzz.yml
+
+permissions:
+  contents: read
+
+concurrency:
+  group: fuzz-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  fuzz:
+    name: ${{ matrix.target }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        target: [mesh, sliced_chitu, sliced_goo, sliced_anycubic, sliced_sl1, sniff]
+    steps:
+      - uses: actions/checkout@v7
+
+      # cargo-fuzz builds with `-Z` flags, so this job is the one place a nightly toolchain is
+      # used. The product's own pin is untouched.
+      - name: Nightly toolchain
+        run: rustup toolchain install nightly --profile minimal
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: fuzz
+          workspaces: fuzz
+
+      - name: Install cargo-fuzz
+        run: cargo install cargo-fuzz --locked
+
+      # 65536 bytes is above every header and layer table these containers have, so a longer input
+      # buys slower iterations rather than deeper coverage.
+      - name: Fuzz ${{ matrix.target }}
+        working-directory: fuzz
+        run: |
+          cargo +nightly fuzz run ${{ matrix.target }} \
+            -- -max_total_time=120 -max_len=65536 -rss_limit_mb=2048
+
+      # A crash is the whole point of the job, and it is worthless without the input that caused it:
+      # that input goes into the owning crate's tests with the fix. See fuzz/README.md.
+      - name: Keep what crashed
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: fuzz-${{ matrix.target }}-artifacts
+          path: fuzz/artifacts/
+          if-no-files-found: ignore

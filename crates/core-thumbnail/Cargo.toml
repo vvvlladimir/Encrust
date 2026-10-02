@@ -1,0 +1,15 @@
+[package]
+name = "core-thumbnail"
+description = "Shaded preview image of a plate, rendered in software for a sliced file's thumbnail."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+
+[dependencies]
+core-geometry.workspace = true
+
+[lints]
+workspace = true

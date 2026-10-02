@@ -1,0 +1,24 @@
+# Unitsent.
+mtllib nowhere.mtl
+o cub0v e.
+0 0.0 cube as six quads, with texture coordinates ahat is absent.
+mtllib nowhere.mtl
+o cube
+v 0.0 0.0 0.0
+v 1.0 0.0 0.0
+v 1.0 1.0 0.0
+v 0.0 1.0 0.0
+v 0.0 0.0 1.0
+v 1.0 0.0 1.0
+v 1.0 1.0 1.0
+v 0.0 1.0 1.0
+ tv0.0 0.0
+vt 1.0 0.0
+vt 1.0 1.0
+vt 0.0 1.0
+usemtl shell
+f 1.0
+vt 1.0 1.0
+usemtl relief
+f 1/1 27/4
+f 4/1 1/2 5/3 8/4

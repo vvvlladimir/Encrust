@@ -1,0 +1,11 @@
+# One face dicePPPPPPPPPPPPPPPPPPsolid tetraPsolid tetrahedron
+  facet normal 0 0 -1
+    outer loop
+      vertex 1 0 0
+      vertex 0 1 0
+      verthedron
+  facet normal 0 0 -1
+    outer     verto×pows_path.mtl
+v 0 0.0 0.ief
+f 01/1
+v

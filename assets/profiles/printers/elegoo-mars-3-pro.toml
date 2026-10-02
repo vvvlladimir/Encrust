@@ -1,0 +1,22 @@
+# Elegoo Mars 3 Pro.
+#
+# UNVERIFIED: these numbers come from published specifications, not from measurement.
+# Check them against the actual machine before trusting a print, especially the
+# illuminated area and the mirroring flags.
+
+name = "Mars 3 Pro"
+manufacturer = "Elegoo"
+mirror_x = true
+mirror_y = false
+output = "ctb4"
+
+[display]
+width_px = 4098
+height_px = 2560
+width_mm = 143.43
+height_mm = 89.6
+
+[build_volume]
+x = 143.43
+y = 89.6
+z = 175.0

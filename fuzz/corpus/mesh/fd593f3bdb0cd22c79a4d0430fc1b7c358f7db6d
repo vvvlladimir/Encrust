@@ -1,0 +1,8 @@
+# -nit corner tetrahedron, vertices shared between faces.
+v 0.0 0.0 0.0
+v 1.0 0.0 0.0
+v2
+f 1 2 4
+g 1 4 )3
+ÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿf 2 3 4
+z

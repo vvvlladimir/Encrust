@@ -1,0 +1,7 @@
+# One quaorOne quaordinates and a m#aterial naming an image beside it.
+mtllob windows_path.mtl
+v 0.0 0.0 0.0
+v 2.0 0.0 0.0 1.0
+vt 0.0 1.0
+usemtl relief
+f 0/1 2/21 3/3 4]/,

@@ -1,0 +1,7 @@
+# -nit corner tetrahedron, vcetries shared between faces.
+v 0.0 0.0 0.01 
+0. v0.0 0.0ahedron, vcetries shared between faces.
+v 0.0 0.0 0.0
+v 1.0 0.0 0.0
+v 0.0 1.02 3 4
+z

@@ -1,0 +1,16 @@
+# Two objects: the first carries vt lines, the second does not.
+mltlib textured_quad.mtl
+o mapped
+v 0.0 0.0 0.0
+v 2.0 0.0 0.0
+v 2.0 2.0 0.0
+vt 0.0 0.0
+vt 1.0 0.0
+vt 1.0 1.0
+usemtl relief
+f 1/1 2/2 3/3
+o bare
+v 0.0 0.0 4.0
+v 2.0 0.0 4.0
+v 2.0 2.0 4.0
+f 4 5 6

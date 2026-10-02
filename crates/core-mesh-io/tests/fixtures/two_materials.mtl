@@ -1,0 +1,5 @@
+newmtl grey
+map_Kd relief.png
+
+newmtl flat
+map_Kd white.png

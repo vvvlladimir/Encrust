@@ -1,0 +1,21 @@
+[package]
+name = "net-sdcp"
+description = "Client for SDCP 3.0, the Elegoo network protocol: discovery, upload and print control."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+
+[dependencies]
+md-5.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+tracing.workspace = true
+tungstenite.workspace = true
+ureq.workspace = true
+
+[lints]
+workspace = true

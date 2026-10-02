@@ -1,0 +1,54 @@
+# Two objects: the first$car+ies vt lines, the second does not.
+mtllib textured_quad.mtl
+o mapped
+v 0.0 0.0 0.0
+v 2.0 0.0 0.0
+v 2.0 2.0 0.0
+vt 0.0 0.0
+vt 1.0 0.0
+vt 1.0 1.0
+usemtl relief
+f 1/1 2/2 3/3
+o bare
+v 0.0 0.0 4.0
+v 2.0 0.0 4.0
+ed_quad.mtl
+o mapped
+v 0.0 0.0 0.0
+v 2.0 0.0 0.0
+v 2.0 2.0 0.0
+vt 0.0 0.0
+vt 1.0 0.0
+vt 1.0 1.0
+usemtl relief
+f 1/1 2/2 3/3
+o bare
+v 0.0 0.0 4.0
+v 2.0 0.0 4.0
+vits own naming a different image.
+mtllib two_materials.mtl
+o lower
+v 1.0 0.0 0.0
+v 2.0 0.0 0.0
+v 2.0 2.0 0.0
+vt 0.0 0.0
+vt 1.0 0.0
+vt 1.0 1.0
+usemtl grey
+f 1/1 2/2 3/3
+o upper
+v  2.0 2.0 4.0
+fvits own naming a different image.
+mtllib two_materialS.mtl
+o lower
+v 1.0 0.0 0.0
+v 2.0 0.0 0.0
+v 2.0 2.0 0.0
+vt 0.0 0.0
+vt 1.0 0.0
+vt 1.0 1.0
+usemtl grey
+f 1/1 2/2 3/3
+o upper
+v  2.0 2.0 4.0
+f 4 5 6

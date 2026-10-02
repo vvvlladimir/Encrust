@@ -1,0 +1,25 @@
+[package]
+name = "core-raster"
+description = "Rasterizer trait and the per-layer bitmask it produces."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+
+[dependencies]
+core-slicer.workspace = true
+glam.workspace = true
+thiserror.workspace = true
+
+[dev-dependencies]
+criterion.workspace = true
+proptest.workspace = true
+
+[[bench]]
+name = "raster"
+harness = false
+
+[lints]
+workspace = true

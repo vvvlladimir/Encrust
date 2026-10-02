@@ -1,0 +1,52 @@
+version: 2
+
+# Weekly, and grouped as hard as the risk allows: a separate pull request per bump is a queue
+# nobody reads, and an update nobody reads is an update nobody checked. What actually matters — a
+# published advisory, or a yanked crate — is watched by the audit workflow, not by this file.
+updates:
+  - package-ecosystem: cargo
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+    # Two pull requests at most: everything compatible in one, every major in another. A major is
+    # still read line by line — egui, wgpu and the crates that decode somebody else's file break
+    # quietly — but it is read in one sitting rather than in six notifications.
+    open-pull-requests-limit: 2
+    groups:
+      cargo-compatible:
+        update-types: [minor, patch]
+      cargo-major:
+        update-types: [major]
+    commit-message:
+      prefix: build
+      include: scope
+
+  # Actions are small and are read together — majors included, since a workflow either still runs
+  # or does not. One pull request for the lot.
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 1
+    groups:
+      actions:
+        patterns: ["*"]
+    commit-message:
+      prefix: build
+      include: scope
+
+  # The fuzz crate is deliberately outside the workspace, so its lockfile is its own. Nothing a
+  # user runs is built from it, so everything goes in one monthly pull request.
+  - package-ecosystem: cargo
+    directory: /fuzz
+    schedule:
+      interval: monthly
+    open-pull-requests-limit: 1
+    groups:
+      fuzz:
+        patterns: ["*"]
+    commit-message:
+      prefix: build
+      include: scope

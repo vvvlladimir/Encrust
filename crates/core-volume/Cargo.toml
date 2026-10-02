@@ -1,0 +1,25 @@
+[package]
+name = "core-volume"
+description = "Sparse narrow-band signed distance fields, CSG over them, and marching cubes back to a mesh."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+
+[dependencies]
+serde.workspace = true
+core-geometry.workspace = true
+rayon.workspace = true
+thiserror.workspace = true
+
+[dev-dependencies]
+criterion.workspace = true
+
+[[bench]]
+name = "field"
+harness = false
+
+[lints]
+workspace = true

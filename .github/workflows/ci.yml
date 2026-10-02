@@ -1,0 +1,131 @@
+name: CI
+
+# Everything that must hold before a change reaches main: the three checks from AGENTS.md on every
+# platform the project claims to support, plus the rust-version floor and the rustdoc rules. The
+# release workflow trusts this one and does not repeat it — a tag only ever sits on a commit that
+# already passed here.
+
+on:
+  push:
+    branches: [main]
+  # `ready_for_review` is on top of the default three: a draft runs nothing, so the run happens
+  # when the pull request is declared finished rather than on every commit leading up to it.
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+
+permissions:
+  contents: read
+
+# A second push to the same branch makes the first run's answer worthless.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+  # wgpu, naga and egui make `target/` tens of gigabytes once debug info is in it, which is how the
+  # ubuntu leg of this workflow used to die without even leaving a log. Nothing here runs a
+  # debugger, so the symbols are pure disk.
+  CARGO_PROFILE_DEV_DEBUG: "0"
+  CARGO_PROFILE_TEST_DEBUG: "0"
+
+jobs:
+  rust:
+    name: rust (${{ matrix.os }})
+    if: github.event.pull_request.draft != true
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Linux windowing headers
+        if: matrix.os == 'ubuntu-latest'
+        uses: ./.github/actions/linux-gui-deps
+
+      # rustup reads rust-toolchain.toml and installs that channel with its components; no action
+      # is needed, and none may override it, or CI would test a compiler nobody develops against.
+      - name: Install the pinned toolchain
+        run: rustup show
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: ci
+
+      - name: Format
+        if: matrix.os == 'ubuntu-latest'
+        run: cargo fmt --all --check
+
+      - name: Clippy
+        run: cargo clippy --workspace --all-targets --locked -- -D warnings
+
+      # There is no GPU on a runner, so nothing here opens a window: these are the cores' tests,
+      # and the app is only compiled, by the clippy step above.
+      - name: Test
+        run: cargo test --workspace --locked
+
+  # One source of truth: the toolchain checked here is the one Cargo.toml claims as its floor.
+  msrv:
+    name: msrv
+    if: github.event.pull_request.draft != true
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: ./.github/actions/linux-gui-deps
+
+      - id: msrv
+        run: echo "version=$(grep -m1 '^rust-version' Cargo.toml | cut -d'"' -f2)" >> "$GITHUB_OUTPUT"
+
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: ${{ steps.msrv.outputs.version }}
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: msrv
+
+      # rust-toolchain.toml pins stable, and only this variable outranks it.
+      - run: cargo check --workspace --all-targets --locked
+        env:
+          RUSTUP_TOOLCHAIN: ${{ steps.msrv.outputs.version }}
+
+  # Every public item of a library crate carries rustdoc, by the rule in code-style.md. A broken
+  # intra-doc link is the usual way that stops being true.
+  docs:
+    name: rustdoc
+    if: github.event.pull_request.draft != true
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: ./.github/actions/linux-gui-deps
+
+      - name: Install the pinned toolchain
+        run: rustup show
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: docs
+
+      - run: cargo doc --workspace --no-deps --locked
+        env:
+          RUSTDOCFLAGS: -D warnings
+
+  # A secret can land in any file, so this is here rather than in audit.yml, whose triggers are
+  # filtered to the lockfile. What may be ignored is in .gitleaks.toml. Free for public
+  # repositories and personal accounts; an organisation would need GITLEAKS_LICENSE.
+  secrets:
+    name: secret scan
+    if: github.event.pull_request.draft != true
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          # The whole history, because a secret removed in a later commit is still in an earlier one.
+          fetch-depth: 0
+      - uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

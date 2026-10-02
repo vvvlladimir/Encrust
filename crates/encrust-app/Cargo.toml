@@ -1,0 +1,57 @@
+[package]
+name = "encrust-app"
+description = "Desktop GUI for Encrust."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+
+[[bin]]
+name = "encrust"
+path = "src/main.rs"
+
+[dependencies]
+core-analysis.workspace = true
+core-geometry.workspace = true
+core-mesh-io.workspace = true
+core-pipeline.workspace = true
+core-plate.workspace = true
+core-slicer.workspace = true
+core-raster.workspace = true
+core-supports.workspace = true
+core-volume.workspace = true
+core-format.workspace = true
+core-thumbnail.workspace = true
+format-goo.workspace = true
+format-chitu.workspace = true
+format-anycubic.workspace = true
+format-sl1.workspace = true
+format-creality.workspace = true
+format-svgx.workspace = true
+format-cws.workspace = true
+net-prusalink.workspace = true
+net-sdcp.workspace = true
+ureq = { workspace = true, features = ["rustls"] }
+minisign-verify.workspace = true
+flate2.workspace = true
+tar.workspace = true
+printer-profiles.workspace = true
+anyhow.workspace = true
+thiserror.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+zip.workspace = true
+rayon.workspace = true
+eframe.workspace = true
+egui.workspace = true
+egui-phosphor.workspace = true
+egui-wgpu.workspace = true
+wgpu.workspace = true
+transform-gizmo-egui.workspace = true
+bytemuck.workspace = true
+image.workspace = true
+rfd.workspace = true
+tracing.workspace = true
+tracing-subscriber.workspace = true

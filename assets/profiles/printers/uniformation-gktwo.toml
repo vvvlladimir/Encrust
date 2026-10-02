@@ -1,0 +1,22 @@
+# UniFormation GKtwo.
+#
+# UNVERIFIED: these numbers come from published specifications, not from measurement.
+# Check them against the actual machine before trusting a print, especially the
+# illuminated area and the mirroring flags.
+
+name = "GKtwo"
+manufacturer = "UniFormation"
+mirror_x = true
+mirror_y = false
+output = "ctb4"
+
+[display]
+width_px = 7680
+height_px = 4320
+width_mm = 228.0
+height_mm = 128.0
+
+[build_volume]
+x = 228.0
+y = 128.0
+z = 245.0

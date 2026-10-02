@@ -1,0 +1,60 @@
+# A standard grey model resin, the pigment most exposure tables are written for.
+#
+# UNVERIFIED: exposure depends on the bottle, the printer's LED and the room temperature.
+# Print an exposure test before trusting these numbers.
+
+name = "Standard grey"
+layer_height_mm = 0.05
+exposure_s = 2.6
+bottom_exposure_s = 32.0
+bottom_layers = 6
+transition_layers = 8
+light_off_delay_s = 0.5
+
+lift_distance_mm = 6.0
+lift_speed_mm_min = 65.0
+retract_distance_mm = 6.0
+retract_speed_mm_min = 150.0
+
+bottom_lift_distance_mm = 8.0
+bottom_lift_speed_mm_min = 60.0
+bottom_retract_speed_mm_min = 150.0
+
+light_pwm = 255
+bottom_light_pwm = 255
+density_g_cm3 = 1.1
+
+# The wait is spent resting after the plate is back down, where the film has settled,
+# rather than as a light-off delay the peel already consumes.
+[waits]
+mode = "rest"
+after_retract_s = 0.5
+
+[printers.elegoo-mars-4-ultra]
+exposure_s = 2.5
+bottom_exposure_s = 30.0
+
+[printers.elegoo-saturn-4-ultra]
+exposure_s = 2.3
+bottom_exposure_s = 28.0
+lift_distance_mm = 4.0
+lift_speed_mm_min = 120.0
+retract_distance_mm = 4.0
+retract_speed_mm_min = 200.0
+
+[printers.elegoo-mars-3-pro]
+exposure_s = 3.2
+bottom_exposure_s = 38.0
+
+[printers.phrozen-sonic-mini-8k]
+exposure_s = 2.8
+bottom_exposure_s = 34.0
+
+[printers.uniformation-gktwo]
+exposure_s = 2.5
+bottom_exposure_s = 32.0
+light_off_delay_s = 0.3
+
+[printers.uniformation-gktwo.waits]
+mode = "rest"
+after_retract_s = 0.3

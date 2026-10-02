@@ -1,0 +1,30 @@
+# Elegoo Saturn 4 Ultra.
+#
+# UNVERIFIED: these numbers come from published specifications, not from measurement.
+# Check them against the actual machine before trusting a print, especially the
+# illuminated area and the mirroring flags.
+
+name = "Saturn 4 Ultra"
+manufacturer = "Elegoo"
+# Verified against a file the vendor's own slicer wrote for this machine.
+machine_name = "ELEGOO Saturn 4 Ultra"
+mirror_x = true
+mirror_y = false
+output = "goo"
+# Elegoo Link: this generation answers an SDCP broadcast.
+connection = "sdcp"
+
+[display]
+width_px = 11520
+height_px = 5120
+width_mm = 218.88
+height_mm = 122.88
+
+[build_volume]
+x = 218.88
+y = 122.88
+z = 220.0
+
+[firmware]
+# A tilting vat: obeying the per-layer lift and retract stalls the plate, see ADR 0142.
+per_layer_settings = false

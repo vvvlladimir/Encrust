@@ -1,0 +1,27 @@
+[package]
+name = "format-chitu"
+description = "Writer for the Chitu .ctb sliced-file format, versions 4 and 5."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+
+[dependencies]
+core-format.workspace = true
+core-raster.workspace = true
+thiserror.workspace = true
+tracing.workspace = true
+
+[dev-dependencies]
+core-format.workspace = true
+printer-profiles.workspace = true
+criterion.workspace = true
+
+[lints]
+workspace = true
+
+[[bench]]
+name = "encode"
+harness = false

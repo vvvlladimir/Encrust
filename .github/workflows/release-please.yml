@@ -1,0 +1,57 @@
+name: Release please
+
+# Keeps one open pull request carrying the next version and its changelog, written from the
+# Conventional Commit subjects on main. Merging it bumps the version, tags the release and calls
+# `release.yml` to build it. Nothing is released by pushing to main.
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  release-please:
+    runs-on: ubuntu-latest
+    outputs:
+      pr: ${{ steps.release.outputs.pr }}
+      released: ${{ steps.release.outputs.release_created }}
+      tag: ${{ steps.release.outputs.tag_name }}
+    steps:
+      - uses: googleapis/release-please-action@v5
+        id: release
+        with:
+          config-file: release-please-config.json
+          manifest-file: .release-please-manifest.json
+
+  # release-please edits Cargo.toml but knows nothing about Cargo.lock, which carries the version of
+  # every crate in the workspace. Left stale, the release build fails on `--locked`.
+  lockfile:
+    needs: release-please
+    if: needs.release-please.outputs.pr != ''
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ fromJSON(needs.release-please.outputs.pr).headBranchName }}
+      - name: Install the pinned toolchain
+        run: rustup show
+      - run: cargo update --workspace
+      - name: Commit the refreshed lock
+        run: |
+          git diff --quiet -- Cargo.lock && exit 0
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add Cargo.lock
+          git commit -m "chore: refresh Cargo.lock for the release"
+          git push
+
+  build:
+    needs: release-please
+    if: needs.release-please.outputs.released == 'true'
+    uses: ./.github/workflows/release.yml
+    with:
+      tag: ${{ needs.release-please.outputs.tag }}
+    secrets: inherit

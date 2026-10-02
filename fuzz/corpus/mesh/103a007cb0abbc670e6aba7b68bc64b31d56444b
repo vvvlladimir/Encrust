@@ -1,0 +1,9 @@
+# Two objects: the first carries vt .0 1.0
+usemtl reliefe first carrlines, the second does not.
+ 2.0 0.0
+vt 0.0 0.0
+vt 1.0 0.0
+vt 1.0 1.0
+usemtl reliefe first carries vt lines, the second does not.
+ 2.0 02.0 2.0 4.0
+f 4 5 6

@@ -1,0 +1,8 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Question or idea
+    url: https://github.com/vvvlladimir/Encrust/discussions
+    about: Anything that is not a bug or a printer — ask in Discussions first.
+  - name: Security vulnerability
+    url: https://github.com/vvvlladimir/Encrust/security/advisories/new
+    about: Report it privately, never as an issue.

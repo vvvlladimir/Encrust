@@ -1,0 +1,7 @@
+# Two  the first carries vt .0 1.0
+usemtl relief carries vt .0 1.0
+usemtl reliefe first carr0.0
+vt 1.0 1.0
+usemtl relief does not.
+ 2.0 02.0 2.0 4.0
+f 4 5 6

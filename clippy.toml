@@ -1,0 +1,20 @@
+msrv = "1.96"
+too-many-arguments-threshold = 8
+
+# A colour is a token: spelled in `crates/encrust-app/src/ui/theme.rs`, read everywhere
+# else. See docs/design/ui-design-system.md and docs/decisions/0107.
+disallowed-methods = [
+  { path = "egui::Color32::from_rgb", reason = "read a colour from ui::theme" },
+  { path = "egui::Color32::from_rgb_additive", reason = "read a colour from ui::theme" },
+  { path = "egui::Color32::from_rgba_premultiplied", reason = "read a colour from ui::theme" },
+  { path = "egui::Color32::from_rgba_unmultiplied", reason = "read a colour from ui::theme" },
+  { path = "egui::Color32::from_rgba_unmultiplied_const", reason = "read a colour from ui::theme" },
+  { path = "egui::Color32::from_gray", reason = "read a colour from ui::theme" },
+  { path = "egui::Color32::from_black_alpha", reason = "read a colour from ui::theme" },
+  { path = "egui::Color32::from_white_alpha", reason = "read a colour from ui::theme" },
+  { path = "egui::Color32::from_additive_luminance", reason = "read a colour from ui::theme" },
+  { path = "egui::Color32::from_hex", reason = "read a colour from ui::theme" },
+]
+
+allow-unwrap-in-tests = true
+allow-expect-in-tests = true

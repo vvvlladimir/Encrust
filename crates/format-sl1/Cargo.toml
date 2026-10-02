@@ -1,0 +1,24 @@
+[package]
+name = "format-sl1"
+description = "Writer for the Prusa .sl1 and .sl1s sliced-file formats."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+
+[dependencies]
+core-format.workspace = true
+core-raster.workspace = true
+thiserror.workspace = true
+tracing.workspace = true
+zip.workspace = true
+
+[dev-dependencies]
+core-format.workspace = true
+png.workspace = true
+printer-profiles.workspace = true
+
+[lints]
+workspace = true

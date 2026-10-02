@@ -1,0 +1,22 @@
+[package]
+name = "format-gcode-zip"
+description = "Writer and reader for the zip of greyscale PNGs a Chitu board runs as gcode."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+
+[dependencies]
+core-format.workspace = true
+core-raster.workspace = true
+tracing.workspace = true
+zip.workspace = true
+
+[dev-dependencies]
+printer-profiles.workspace = true
+zip.workspace = true
+
+[lints]
+workspace = true

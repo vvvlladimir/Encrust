@@ -1,0 +1,47 @@
+# What `cargo deny check` refuses, run in CI beside clippy. Every dependency here reads
+# untrusted files — meshes, textures, printer profiles — so an advisory against one is a
+# build failure, not a notice.
+
+[advisories]
+yanked = "deny"
+# A vulnerability anywhere fails the build. "Unmaintained" only does when the crate is one
+# we chose ourselves: eframe pulls in unmaintained font parsing we have no upgrade for.
+unmaintained = "workspace"
+
+[licenses]
+# Encrust ships under AGPL-3.0-only. Nothing here may be copyleft beyond that, or
+# unlicensed; AGPL can take every licence listed, the reverse is what this guards.
+allow = [
+    # The workspace's own crates.
+    "AGPL-3.0-only",
+    "MIT",
+    "Apache-2.0",
+    "Apache-2.0 WITH LLVM-exception",
+    "BSD-2-Clause",
+    "BSD-3-Clause",
+    "BSL-1.0",
+    "ISC",
+    "MPL-2.0",
+    "Unicode-3.0",
+    "Zlib",
+    "0BSD",
+    "Unlicense",
+    "OFL-1.1",
+    "Ubuntu-font-1.0",
+    # The certificate roots the update check trusts; a permissive data licence (ADR 0172).
+    "CDLA-Permissive-2.0",
+]
+confidence-threshold = 0.9
+
+[bans]
+# A second copy of a crate is usually a dependency lagging behind, not a decision.
+multiple-versions = "warn"
+# Every path dependency inside the workspace reads as a wildcard, and cargo-deny only
+# forgives that for crates marked unpublished. Nothing here is published, and every
+# external dependency is pinned in `[workspace.dependencies]`, so there is nothing left
+# for this check to find.
+wildcards = "allow"
+
+[sources]
+unknown-registry = "deny"
+unknown-git = "deny"

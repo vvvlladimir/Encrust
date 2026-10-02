@@ -1,0 +1,67 @@
+name: Printer profile
+description: Add support for a printer, or fix a profile that is wrong.
+title: "[printer] "
+labels: ["printer profile"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        This is the most useful issue you can open. A profile is only trustworthy once somebody with
+        the machine has checked it, and five printers is all this project has.
+
+        Please **do not attach a model you did not make yourself** — a 10 mm cube is enough.
+  - type: input
+    id: printer
+    attributes:
+      label: Printer
+      description: Make, model and revision if there is one.
+      placeholder: ELEGOO Mars 5 Ultra
+    validations:
+      required: true
+  - type: dropdown
+    id: state
+    attributes:
+      label: What are you reporting?
+      options:
+        - A printer Encrust does not support
+        - A profile that exists but is wrong
+        - A profile that works — confirming it
+    validations:
+      required: true
+  - type: textarea
+    id: machine
+    attributes:
+      label: Machine details
+      description: Screen resolution in pixels, build volume in mm, and the file extension its own slicer writes.
+      placeholder: |
+        Resolution: 11520 x 5120
+        Build volume: 218.88 x 122.88 x 260 mm
+        Format: .goo
+    validations:
+      required: true
+  - type: textarea
+    id: file
+    attributes:
+      label: A file its own slicer produced
+      description: >
+        Drag in a small sliced file — a 10 mm cube from whichever slicer you use today. The
+        header fields, the layer encoding and the machine's own defaults are all in there, and that
+        is what a profile is made from. Zip it if GitHub refuses the extension.
+    validations:
+      required: true
+  - type: textarea
+    id: resin
+    attributes:
+      label: Resin and settings you actually print with
+      description: Layer height, normal and bottom exposure, lift distance and speed.
+    validations:
+      required: false
+  - type: textarea
+    id: result
+    attributes:
+      label: If you already tried Encrust on it
+      description: >
+        What happened — including "it printed fine", which is as useful as a failure and much rarer.
+        Paste the CLI's JSON report if you have one.
+    validations:
+      required: false

@@ -1,0 +1,24 @@
+[package]
+name = "core-analysis"
+description = "What a written layer stack cures, and how hard each layer pulls on the film."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+
+[dependencies]
+core-raster.workspace = true
+
+[dev-dependencies]
+core-slicer.workspace = true
+criterion.workspace = true
+glam.workspace = true
+
+[[bench]]
+name = "measure"
+harness = false
+
+[lints]
+workspace = true

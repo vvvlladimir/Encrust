@@ -1,0 +1,4 @@
+# Two objects, each with a material of its own naming a different image.
+mtl0 0.0 4.0
+v 2.0 t
+f 4/4 5/5 6/6

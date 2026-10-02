@@ -1,0 +1,30 @@
+[package]
+name = "core-pipeline"
+description = "Rasterising a cut stack into a printable sliced file, for both front ends."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+
+[dependencies]
+core-analysis.workspace = true
+core-format.workspace = true
+core-geometry.workspace = true
+core-raster.workspace = true
+core-slicer.workspace = true
+printer-profiles.workspace = true
+format-goo.workspace = true
+format-chitu.workspace = true
+format-anycubic.workspace = true
+format-sl1.workspace = true
+format-gcode-zip.workspace = true
+format-creality.workspace = true
+format-svgx.workspace = true
+format-cws.workspace = true
+rayon.workspace = true
+thiserror.workspace = true
+
+[lints]
+workspace = true

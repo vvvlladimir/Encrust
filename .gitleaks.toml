@@ -1,0 +1,24 @@
+# What `gitleaks` may ignore in this repository, run in CI beside cargo-deny. Encrust holds no
+# credentials of its own — it talks to printers on the local network — so everything here is a
+# placeholder in a test or a file of deliberately arbitrary bytes.
+
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Test placeholders and binary fixtures"
+
+# A PrusaLink API key is a hex string, so a fake one in a test reads as a real one to any
+# entropy rule. These two are the only placeholders used; a real key never appears in a test.
+regexes = [
+  '''0123456789abcdef''',
+  '''deadbeef''',
+]
+
+paths = [
+  # Meshes, sliced files and fuzz corpus: arbitrary bytes by design, and high entropy by accident.
+  '''crates/.*/tests/fixtures/.*''',
+  '''fuzz/corpus/.*''',
+  # Its own allowlist quotes every pattern above.
+  '''\.gitleaks\.toml''',
+]

@@ -1,0 +1,18 @@
+name: Linux GUI dependencies
+description: >
+  The development headers eframe needs to link on Linux. `x11-dl` and `wayland-sys` find their
+  libraries with pkg-config at build time even though winit opens them with dlopen at run time.
+
+runs:
+  using: composite
+  steps:
+    - shell: bash
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y --no-install-recommends \
+          libgtk-3-dev \
+          libxcb-render0-dev \
+          libxcb-shape0-dev \
+          libxcb-xfixes0-dev \
+          libxkbcommon-dev \
+          libssl-dev

@@ -1,0 +1,22 @@
+# Phrozen Sonic Mini 8K.
+#
+# UNVERIFIED: these numbers come from published specifications, not from measurement.
+# Check them against the actual machine before trusting a print, especially the
+# illuminated area and the mirroring flags.
+
+name = "Sonic Mini 8K"
+manufacturer = "Phrozen"
+mirror_x = true
+mirror_y = false
+output = "ctb4"
+
+[display]
+width_px = 7500
+height_px = 3240
+width_mm = 165.0
+height_mm = 71.28
+
+[build_volume]
+x = 165.0
+y = 71.28
+z = 180.0

@@ -1,0 +1,20 @@
+[package]
+name = "format-creality"
+description = "Writer and reader for the Creality .cxdlp sliced-file format."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+
+[dependencies]
+core-format.workspace = true
+core-raster.workspace = true
+tracing.workspace = true
+
+[dev-dependencies]
+printer-profiles.workspace = true
+
+[lints]
+workspace = true

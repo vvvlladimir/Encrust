@@ -1,0 +1,198 @@
+name: Release
+
+# Builds the archives for a tag and hangs them on the draft release release-please already made.
+# Nothing reaches a user until a maintainer publishes that draft by hand: with four of five printer
+# profiles unverified, a bad release costs more than a late one.
+#
+# Called by `release-please.yml` once it has tagged the release, never by the tag itself: a tag
+# pushed with GITHUB_TOKEN raises no event, so `on: push: tags` would simply never fire. The manual
+# trigger is for rebuilding a tag whose run failed.
+#
+# There are no installers and no code signing yet, so an archive is the two binaries, the licence
+# and the README. Each archive is signed with the project's release key, and `latest.json` names
+# them for the window's update check; publishing the draft is what makes that feed visible, so
+# nothing is offered before somebody has looked at it. See ADR-0160, ADR-0162 and ADR-0172.
+
+on:
+  workflow_call:
+    inputs:
+      tag:
+        description: The tag to build, for example v0.1.0.
+        required: true
+        type: string
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: The tag to build, for example v0.1.0.
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  # One job owns the draft, so the four build legs never race over it. It also refuses a tag naming
+  # a version the binaries do not carry: `--version` would then disagree with the page the user
+  # downloaded from.
+  draft:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ inputs.tag }}
+
+      - name: Tag matches the workspace version
+        env:
+          TAG: ${{ inputs.tag }}
+        run: |
+          crate=$(grep -m1 '^version = ' Cargo.toml | cut -d'"' -f2)
+          test "$crate" = "${TAG#v}" || {
+            echo "tag $TAG does not match Cargo.toml version $crate" >&2
+            exit 1
+          }
+
+      # release-please opens the draft and writes its notes; this only covers the manual trigger on
+      # a tag that has none, and must never overwrite a body that already exists.
+      - name: Make sure a draft exists
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ inputs.tag }}
+        run: |
+          gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1 && exit 0
+          gh release create "$TAG" --repo "$GITHUB_REPOSITORY" --draft \
+            --title "$TAG" --generate-notes
+
+  build:
+    needs: draft
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-latest
+            target: aarch64-apple-darwin
+            archive: encrust-macos-aarch64.tar.gz
+          - os: macos-latest
+            target: x86_64-apple-darwin
+            archive: encrust-macos-x86_64.tar.gz
+          # The oldest supported runner: a Linux binary cannot run against a glibc older than the
+          # one it was built on, and a newer runner would raise that floor for no gain.
+          - os: ubuntu-22.04
+            target: x86_64-unknown-linux-gnu
+            archive: encrust-linux-x86_64.tar.gz
+          - os: windows-latest
+            target: x86_64-pc-windows-msvc
+            archive: encrust-windows-x86_64.zip
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ inputs.tag }}
+
+      - name: Linux windowing headers
+        if: startsWith(matrix.os, 'ubuntu')
+        uses: ./.github/actions/linux-gui-deps
+
+      # rust-toolchain.toml decides the version; the target is what this matrix entry adds.
+      - name: Install the pinned toolchain
+        shell: bash
+        run: |
+          rustup show
+          rustup target add ${{ matrix.target }}
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: ${{ matrix.target }}
+
+      - name: Build
+        run: >
+          cargo build --release --locked --target ${{ matrix.target }}
+          -p encrust-app -p encrust-cli
+
+      # The profiles are compiled into printer-profiles, so the archive needs no asset directory.
+      # The licence it does need: handing somebody the binary is what obliges us to pass it on.
+      - name: Collect the archive
+        shell: bash
+        env:
+          TARGET: ${{ matrix.target }}
+          ARCHIVE: ${{ matrix.archive }}
+        run: |
+          out=staging/encrust
+          mkdir -p "$out"
+          if [ "$RUNNER_OS" = "Windows" ]; then ext=.exe; else ext=""; fi
+          cp "target/$TARGET/release/encrust$ext" "$out/"
+          cp "target/$TARGET/release/slice$ext" "$out/"
+          cp LICENSE README.md "$out/"
+          case "$ARCHIVE" in
+            *.zip) (cd staging && 7z a "../$ARCHIVE" encrust) ;;
+            *) tar -czf "$ARCHIVE" -C staging encrust ;;
+          esac
+
+      - name: Attach it to the draft
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ inputs.tag }}
+          ARCHIVE: ${{ matrix.archive }}
+        run: gh release upload "$TAG" "$ARCHIVE" --clobber --repo "$GITHUB_REPOSITORY"
+
+  # One job holds the signing key, after every leg has uploaded, so the feed names every archive.
+  # The trusted comment binds a signature to its version and file name, which the window checks;
+  # a signature cannot then be moved to another archive or replayed for an older release.
+  feed:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ inputs.tag }}
+
+      - name: Install minisign
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y minisign
+
+      - name: Sign the archives and write the feed
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ inputs.tag }}
+          UPDATE_SIGNING_KEY: ${{ secrets.UPDATE_SIGNING_KEY }}
+        run: |
+          test -n "$UPDATE_SIGNING_KEY" || {
+            echo "the UPDATE_SIGNING_KEY secret is not set" >&2
+            exit 1
+          }
+          version="${TAG#v}"
+          # The window accepts an archive only under the repository its Cargo.toml names.
+          repository=$(grep -m1 '^repository = ' Cargo.toml | cut -d'"' -f2)
+          key="$RUNNER_TEMP/release.key"
+          (umask 077 && printf '%s\n' "$UPDATE_SIGNING_KEY" > "$key")
+
+          mkdir dist
+          gh release download "$TAG" --pattern 'encrust-*' --dir dist --repo "$GITHUB_REPOSITORY"
+          rm -f dist/*.minisig
+          platforms='{}'
+          for path in dist/encrust-*.tar.gz dist/encrust-*.zip; do
+            [ -e "$path" ] || continue
+            archive=$(basename "$path")
+            minisign -S -s "$key" -m "$path" -t "encrust $version $archive"
+            # Against the key compiled into the window, so a secret that drifted from it fails here
+            # rather than in every user's update.
+            minisign -V -p assets/update-key.pub -m "$path"
+            platform="${archive#encrust-}"
+            platform="${platform%.tar.gz}"
+            platform="${platform%.zip}"
+            platforms=$(jq --arg platform "$platform" \
+              --arg url "$repository/releases/download/$TAG/$archive" \
+              --rawfile signature "$path.minisig" \
+              '.[$platform] = {url: $url, signature: $signature}' <<<"$platforms")
+          done
+          rm -f "$key"
+
+          gh release view "$TAG" --json body --jq .body --repo "$GITHUB_REPOSITORY" > notes.md
+          jq -n --arg version "$version" --rawfile notes notes.md --argjson platforms "$platforms" \
+            '{version: $version, notes: $notes, platforms: $platforms}' > dist/latest.json
+          gh release upload "$TAG" dist/*.minisig dist/latest.json --clobber \
+            --repo "$GITHUB_REPOSITORY"

@@ -1,0 +1,56 @@
+# A water-washable resin: thinner than a standard one and less forgiving of overexposure,
+# so it is exposed shorter and lifted faster.
+#
+# UNVERIFIED: exposure depends on the bottle, the printer's LED and the room temperature.
+# Print an exposure test before trusting these numbers.
+
+name = "Water washable"
+layer_height_mm = 0.05
+exposure_s = 2.2
+bottom_exposure_s = 28.0
+bottom_layers = 6
+transition_layers = 6
+light_off_delay_s = 0.4
+
+lift_distance_mm = 6.0
+lift_speed_mm_min = 80.0
+retract_distance_mm = 6.0
+retract_speed_mm_min = 180.0
+
+bottom_lift_distance_mm = 8.0
+bottom_lift_speed_mm_min = 70.0
+bottom_retract_speed_mm_min = 180.0
+
+light_pwm = 255
+bottom_light_pwm = 255
+density_g_cm3 = 1.08
+
+# The wait is spent resting after the plate is back down, where the film has settled,
+# rather than as a light-off delay the peel already consumes.
+[waits]
+mode = "rest"
+after_retract_s = 0.4
+
+[printers.elegoo-mars-4-ultra]
+exposure_s = 2.1
+bottom_exposure_s = 26.0
+
+[printers.elegoo-saturn-4-ultra]
+exposure_s = 1.9
+bottom_exposure_s = 24.0
+lift_distance_mm = 4.0
+lift_speed_mm_min = 140.0
+retract_distance_mm = 4.0
+retract_speed_mm_min = 220.0
+
+[printers.elegoo-mars-3-pro]
+exposure_s = 2.8
+bottom_exposure_s = 32.0
+
+[printers.phrozen-sonic-mini-8k]
+exposure_s = 2.4
+bottom_exposure_s = 30.0
+
+[printers.uniformation-gktwo]
+exposure_s = 2.2
+bottom_exposure_s = 28.0

@@ -1,0 +1,10 @@
+# One quad with texture coordinates and a material naming an imag bedseei it.
+mtllib windows_path.mtl
+v 5.0 0.0 0.0
+v 2.0 0.0 0.0
+v 2.0 2.0 0.0
+v 0.0 2.0 0.0
+vt 0.0 0.0
+vt 1.0 
+v0.01 t.00
+us;mt

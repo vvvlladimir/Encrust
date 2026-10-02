@@ -1,0 +1,17 @@
+# Two objects: the firs't carries vt lines, the second does not.
+mtllib1
+    outer loop
+  0.0    ventex 0 1 0
+      vertex 1vt 1.0 0.0
+vt 1.0 1.0
+usemtl relief
+f 1/1 2/2 3/ 0 1
+   2endloop
+  endfacet
+en3
+o ra6
+er 0.0 0.0 4.0
+v 2.0 
+m0 2.0 4.0
+f 4 5 6dsolid tetr
+ahedron

@@ -1,0 +1,242 @@
+use std::path::{Path, PathBuf};
+use std::sync::Arc;
+
+use anyhow::{Context, Result};
+use core_geometry::{
+    DEFAULT_WELD_TOLERANCE, Heightmap, Transform, Welded, center_over_plate, diagnose,
+    drop_to_plate, orient_outward, weld,
+};
+use core_mesh_io::{Loaded, loader_for_extension};
+
+use crate::camera::OrbitCamera;
+use crate::job::{ImportJob, ImportOutcome, ImportStage};
+use crate::panels::frame_view;
+use crate::plate::Plate;
+use crate::scene::{ImportSummary, Imported, Mapped, Scene};
+use crate::status::Status;
+
+/// The imports currently being read, one thread each.
+///
+/// Opening a model is seconds of work on a real part, so none of it happens on the thread
+/// that draws; see `docs/decisions/0038`. Several files dropped at once open at once.
+#[derive(Debug, Default)]
+pub struct Imports {
+    jobs: Vec<ImportJob>,
+}
+
+impl Imports {
+    /// Asks for a mesh file and starts opening it.
+    pub fn open_dialog(&mut self, plate: &Plate, status: &mut Status) {
+        if let Some(path) = rfd::FileDialog::new()
+            .add_filter("Mesh", &["stl", "obj", "3mf"])
+            .pick_file()
+        {
+            self.open(path, plate, status);
+        }
+    }
+
+    /// Starts opening a mesh by path. The one way a model reaches the plate.
+    pub fn open(&mut self, path: PathBuf, plate: &Plate, status: &mut Status) {
+        *status = Status::Info(format!("Opening {}", path.display()));
+        self.jobs.push(ImportJob::spawn(path, plate.clone()));
+    }
+
+    pub fn is_busy(&self) -> bool {
+        !self.jobs.is_empty()
+    }
+
+    /// What the status bar says while files are being read.
+    pub fn label(&self) -> Option<String> {
+        let first = self.jobs.first()?;
+        Some(match self.jobs.len() {
+            1 => first.label(),
+            rest => format!("{}, and {} more", first.label(), rest - 1),
+        })
+    }
+
+    /// Puts every import that has finished into the scene, and points the camera at what
+    /// arrived. Returns whether one is still running, which is what tells the window to
+    /// keep repainting.
+    pub fn poll(
+        &mut self,
+        scene: &mut Scene,
+        plate: &Plate,
+        camera: &mut OrbitCamera,
+        status: &mut Status,
+    ) -> bool {
+        let mut opened = Vec::new();
+        self.jobs.retain_mut(|job| match job.poll() {
+            None => true,
+            Some(outcome) => {
+                opened.push((job.path().to_path_buf(), outcome));
+                false
+            }
+        });
+
+        let reported = !opened.is_empty();
+        for (path, outcome) in opened {
+            match outcome {
+                ImportOutcome::Opened(imported) => {
+                    scene.insert(*imported);
+                    *status = Status::Info(format!("Opened {}", path.display()));
+                    frame_view(scene, plate, camera);
+                }
+                ImportOutcome::Failed(message) => *status = Status::Error(message),
+            }
+        }
+
+        // What just finished is the news; the ones still reading say so on a later frame.
+        if !reported && let Some(label) = self.label() {
+            *status = Status::Info(label);
+        }
+        self.is_busy()
+    }
+}
+
+/// Loads a mesh, repairs it and stands it on the middle of the plate.
+///
+/// The repair order matches the CLI's: weld first, because on an unwelded mesh every edge
+/// looks like a boundary and neither the orientation fix nor the diagnostics mean
+/// anything. `stage` is called before each part of the work starts.
+pub fn prepare(path: &Path, plate: &Plate, stage: &mut dyn FnMut(ImportStage)) -> Result<Imported> {
+    let extension = path
+        .extension()
+        .and_then(|e| e.to_str())
+        .with_context(|| format!("{} has no file extension", path.display()))?;
+
+    let loader = loader_for_extension(extension)
+        .with_context(|| format!("cannot load {}", path.display()))?;
+
+    stage(ImportStage::Reading);
+    let loaded = loader
+        .load(path)
+        .with_context(|| format!("cannot load {}", path.display()))?;
+
+    stage(ImportStage::Repairing);
+    // Repaired in place and moved out at the end, so a mesh of tens of megabytes is
+    // never held twice.
+    let mut welded = weld(&loaded.mesh, DEFAULT_WELD_TOLERANCE);
+    // Kept only where there is a map to carry through the repair, which is the one thing
+    // that renumbers and turns round the faces it is indexed by.
+    let before = loaded.uvs.is_some().then(|| welded.mesh.faces.clone());
+    let orientation = orient_outward(&mut welded.mesh);
+    let mapped = before.and_then(|before| mapped(&loaded, &welded, &before));
+    let diagnostics = diagnose(&welded.mesh);
+    let summary = ImportSummary::new(&welded, orientation, diagnostics);
+    let mesh = welded.mesh;
+
+    let bounds = mesh
+        .aabb()
+        .with_context(|| format!("{} has no vertices", path.display()))?;
+    let placement = drop_to_plate(&bounds) + center_over_plate(&bounds, plate.x_mm, plate.y_mm);
+
+    let name = path.file_stem().map_or_else(
+        || path.display().to_string(),
+        |stem| stem.to_string_lossy().into_owned(),
+    );
+
+    stage(ImportStage::Indexing);
+    Ok(Imported {
+        mapped,
+        ..Imported::new(
+            name,
+            Arc::new(mesh),
+            Transform::from_translation(placement),
+            summary,
+        )
+    })
+}
+
+/// The file's textures, over the mesh as the repair left it.
+///
+/// A file that carries coordinates but no image it can read is not mapped: there would be
+/// nothing to press. One image it cannot read among several is refused whole rather than
+/// silently renumbering the rest, which the map is indexed by.
+fn mapped(loaded: &Loaded, welded: &Welded, before: &[[u32; 3]]) -> Option<Arc<Mapped>> {
+    if loaded.textures.is_empty() {
+        return None;
+    }
+    let heights: Vec<Heightmap> = loaded
+        .textures
+        .iter()
+        .map(|texture| {
+            texture
+                .decode()
+                .inspect_err(|error| tracing::warn!(%error, "the texture cannot be read"))
+                .ok()
+        })
+        .collect::<Option<_>>()?;
+    let flipped: Vec<u32> = before
+        .iter()
+        .zip(&welded.mesh.faces)
+        .enumerate()
+        .filter(|(_, (was, is))| was != is)
+        .map(|(face, _)| face as u32)
+        .collect();
+
+    Some(Arc::new(Mapped {
+        names: loaded
+            .textures
+            .iter()
+            .map(|texture| texture.name.clone())
+            .collect(),
+        uvs: loaded
+            .uvs
+            .as_ref()?
+            .without(&welded.dropped)
+            .flipping(&flipped),
+        heights,
+    }))
+}
+
+/// Puts an already placed object back in the middle of the plate, standing on z = 0.
+pub fn recenter(scene: &mut Scene, plate: &Plate, index: usize) -> Option<()> {
+    let object = scene.objects_mut().get_mut(index)?;
+    let bounds = object.world_bounds()?;
+    object.transform.translation +=
+        drop_to_plate(&bounds) + center_over_plate(&bounds, plate.x_mm, plate.y_mm);
+    Some(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::path::PathBuf;
+
+    fn fixture(name: &str) -> PathBuf {
+        PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("tests/fixtures")
+            .join(name)
+    }
+
+    /// Prepares a file with the stages thrown away, which is what the tests care about.
+    fn prepared(path: &Path) -> Result<Imported> {
+        prepare(path, &Plate::default(), &mut |_| {})
+    }
+
+    #[test]
+    fn a_file_without_an_extension_is_rejected() {
+        let error = prepared(Path::new("model")).expect_err("a file with no extension");
+        assert!(error.to_string().contains("extension"));
+    }
+
+    #[test]
+    fn an_unsupported_extension_is_rejected() {
+        assert!(prepared(&fixture("model.gcode")).is_err());
+    }
+
+    #[test]
+    fn a_prepared_model_carries_a_hierarchy_of_its_own_mesh() {
+        let imported = prepared(&fixture("cube.stl")).expect("the fixture is a sound cube");
+        assert!(!imported.mesh.is_empty());
+        assert!(
+            !imported.bvh.is_empty(),
+            "a model is indexed before it lands"
+        );
+        assert!(
+            imported.transform.translation.z.abs() < 1e-5,
+            "an import stands on the plate, got {}",
+            imported.transform.translation
+        );
+    }
+}

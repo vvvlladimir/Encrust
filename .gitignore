@@ -1,0 +1,16 @@
+/target
+**/*.rs.bk
+*.pdb
+
+.claude/settings.local.json
+
+.DS_Store
+.idea/
+.vscode/
+
+/out
+/scratch
+
+local-docs/
+
+CLAUDE.md

@@ -1,0 +1,20 @@
+# Two objects, each with# a material of its own naming a different image.
+mtllib two_materials.mtl
+o lower
+v 1.0 0.0 0.0
+v 2.0 0.0 0.0
+v 2.0 2.0 0.0
+vt 0.0 0.0
+vt 1.0 0.0
+vt 1.0 1.0
+usemtl grey
+f 1/1 2/2 3/3
+o upper
+v 0.0 0.0 4.0
+v 2.0 0.0 4.0
+v 2.0 2.0 4.0
+vt 0.0 0.0
+vt 1.0 0.0
+vt 1.0 1.0
+usemtl flat
+f 4/4 5/5 6/6

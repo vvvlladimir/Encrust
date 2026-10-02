@@ -1,0 +1,23 @@
+# A tiny panel for the CLI tests: 200 x 200 px at a 0.1 mm pitch.
+#
+# The build volume is deliberately larger than the illuminated area, which no real machine
+# is, so that a model can pass the millimetre fit check and still hang off the display.
+# That is what separates the import fit check from raster clipping in the tests.
+
+name = "Test panel"
+manufacturer = "Encrust tests"
+mirror_x = false
+mirror_y = false
+
+[display]
+width_px = 200
+height_px = 200
+width_mm = 20.0
+height_mm = 20.0
+# A floor the tests can see honoured; a profile that says nothing keeps every grey.
+grey_floor = 128
+
+[build_volume]
+x = 40.0
+y = 40.0
+z = 50.0

@@ -1,0 +1,111 @@
+[workspace]
+resolver = "3"
+members = ["crates/*"]
+# `cargo fuzz` builds with `-Z` flags that need nightly, so the fuzz crate keeps its own
+# lockfile and toolchain; see docs/decisions/0161.
+exclude = ["fuzz"]
+
+[workspace.package]
+version = "0.0.1"
+edition = "2024"
+rust-version = "1.96"
+license = "AGPL-3.0-only"
+repository = "https://github.com/vvvlladimir/Encrust"
+authors = ["Encrust contributors"]
+
+[workspace.dependencies]
+core-geometry = { path = "crates/core-geometry" }
+core-mesh-io = { path = "crates/core-mesh-io" }
+core-slicer = { path = "crates/core-slicer" }
+core-raster = { path = "crates/core-raster" }
+core-supports = { path = "crates/core-supports" }
+core-volume = { path = "crates/core-volume" }
+core-plate = { path = "crates/core-plate" }
+core-pipeline = { path = "crates/core-pipeline" }
+core-format = { path = "crates/core-format" }
+core-thumbnail = { path = "crates/core-thumbnail" }
+core-analysis = { path = "crates/core-analysis" }
+printer-profiles = { path = "crates/printer-profiles" }
+format-goo = { path = "crates/format-goo" }
+format-chitu = { path = "crates/format-chitu" }
+format-anycubic = { path = "crates/format-anycubic" }
+format-sl1 = { path = "crates/format-sl1" }
+format-gcode-zip = { path = "crates/format-gcode-zip" }
+format-creality = { path = "crates/format-creality" }
+format-svgx = { path = "crates/format-svgx" }
+format-cws = { path = "crates/format-cws" }
+net-sdcp = { path = "crates/net-sdcp" }
+net-prusalink = { path = "crates/net-prusalink" }
+
+glam = { version = "0.33", features = ["serde"] }
+parry3d = "0.30"
+earcutr = "0.5"
+i_overlay = "9.0"
+rayon = "1.12"
+thiserror = "2.0"
+anyhow = "1.0"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+zip = { version = "8.6", default-features = false, features = ["deflate-flate2"] }
+toml = "1.1"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+clap = { version = "4.6", features = ["derive"] }
+directories = "6.0"
+
+# Plain HTTP and WebSocket on the local network only, so no TLS stack is pulled in.
+tungstenite = { version = "0.30", default-features = false, features = ["handshake"] }
+ureq = { version = "3.4", default-features = false }
+md-5 = "0.11"
+
+# The update check is the one call that leaves the local network, so only `encrust-app`
+# turns TLS on; see docs/decisions/0172.
+minisign-verify = "0.2"
+flate2 = "1.1"
+tar = { version = "0.4", default-features = false }
+
+stl_io = "0.11"
+tobj = { version = "4.0", default-features = false }
+threemf2 = { version = "0.4", default-features = false, features = ["package-memory-optimized-read"] }
+png = "0.18"
+image = { version = "0.25", default-features = false, features = ["png", "jpeg", "bmp", "tga"] }
+eframe = "0.36"
+egui = "0.36"
+egui-phosphor = { version = "0.14", default-features = false, features = ["regular"] }
+egui-wgpu = "0.36"
+wgpu = "30.0"
+transform-gizmo-egui = "0.11"
+bytemuck = { version = "1.25", features = ["derive"] }
+rfd = "0.16"
+criterion = "0.8"
+proptest = "1.11"
+
+[workspace.lints.clippy]
+pedantic = { level = "warn", priority = -1 }
+unwrap_used = "warn"
+expect_used = "warn"
+module_name_repetitions = "allow"
+must_use_candidate = "allow"
+missing_errors_doc = "allow"
+missing_panics_doc = "allow"
+similar_names = "allow"
+cast_precision_loss = "allow"
+cast_possible_truncation = "allow"
+cast_sign_loss = "allow"
+
+# An unoptimised build of this workspace is nine times slower on a real model, which is
+# long enough that the window looks hung. Dependencies carry no debug work of ours, so
+# they go to full speed; see docs/decisions/0037.
+[profile.dev]
+opt-level = 1
+
+[profile.dev.package."*"]
+opt-level = 3
+
+[profile.release]
+lto = "thin"
+codegen-units = 1
+
+[profile.bench]
+lto = "thin"
+codegen-units = 1

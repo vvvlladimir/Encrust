@@ -1,0 +1,31 @@
+[package]
+name = "core-supports"
+description = "Support columns: where one can stand, and the mesh it is printed as."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+
+[dependencies]
+serde.workspace = true
+core-geometry.workspace = true
+core-raster.workspace = true
+core-slicer.workspace = true
+printer-profiles.workspace = true
+rayon.workspace = true
+
+[dev-dependencies]
+criterion.workspace = true
+
+[[bench]]
+name = "place"
+harness = false
+
+[[bench]]
+name = "branch"
+harness = false
+
+[lints]
+workspace = true

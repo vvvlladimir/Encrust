@@ -1,0 +1,21 @@
+[package]
+name = "core-format"
+description = "The sliced-file layer: what a print job is, and the traits a format writer implements."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+
+[dependencies]
+serde.workspace = true
+core-raster.workspace = true
+png.workspace = true
+core-slicer.workspace = true
+core-thumbnail.workspace = true
+printer-profiles.workspace = true
+thiserror.workspace = true
+
+[lints]
+workspace = true

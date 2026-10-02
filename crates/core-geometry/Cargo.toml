@@ -1,0 +1,34 @@
+[package]
+name = "core-geometry"
+description = "Mesh, triangle, bounding box and transform primitives shared by every core crate."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+
+[dependencies]
+serde.workspace = true
+glam.workspace = true
+parry3d.workspace = true
+earcutr.workspace = true
+
+[dev-dependencies]
+criterion.workspace = true
+proptest.workspace = true
+
+[[bench]]
+name = "mesh_repair"
+harness = false
+
+[[bench]]
+name = "raycast"
+harness = false
+
+[[bench]]
+name = "field_queries"
+harness = false
+
+[lints]
+workspace = true

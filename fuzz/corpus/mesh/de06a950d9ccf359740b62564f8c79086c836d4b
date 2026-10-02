@@ -1,0 +1,5 @@
+# Unit corner tetrahedron, vertice0.0 0.0 1.0
+f f 1 4 3
+f 2 4
+f 1 4 3
+f 2 r 4

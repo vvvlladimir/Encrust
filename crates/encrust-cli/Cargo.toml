@@ -1,0 +1,46 @@
+[package]
+name = "encrust-cli"
+description = "Command line front end for Encrust."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+
+[[bin]]
+name = "slice"
+path = "src/main.rs"
+
+# A bench for hollowing: stage timings and peak live bytes, counted by the allocator.
+[[bin]]
+name = "hollow-lab"
+path = "src/bin/hollow_lab.rs"
+
+[dependencies]
+core-analysis.workspace = true
+core-geometry.workspace = true
+core-mesh-io.workspace = true
+core-pipeline.workspace = true
+core-plate.workspace = true
+core-slicer.workspace = true
+core-raster.workspace = true
+core-supports.workspace = true
+core-volume.workspace = true
+printer-profiles.workspace = true
+core-format.workspace = true
+core-thumbnail.workspace = true
+format-goo.workspace = true
+format-chitu.workspace = true
+format-anycubic.workspace = true
+format-sl1.workspace = true
+anyhow.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+clap.workspace = true
+rayon.workspace = true
+tracing.workspace = true
+tracing-subscriber.workspace = true
+
+[dev-dependencies]
+png.workspace = true

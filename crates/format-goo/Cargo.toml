@@ -1,0 +1,28 @@
+[package]
+name = "format-goo"
+description = "Writer for the Elegoo .goo sliced-file format."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+
+[dependencies]
+core-format.workspace = true
+core-raster.workspace = true
+thiserror.workspace = true
+tracing.workspace = true
+
+[dev-dependencies]
+core-format.workspace = true
+printer-profiles.workspace = true
+proptest.workspace = true
+criterion.workspace = true
+
+[lints]
+workspace = true
+
+[[bench]]
+name = "encode"
+harness = false

@@ -1,0 +1,29 @@
+[package]
+name = "core-slicer"
+description = "Slicing settings, layer/contour data and the SliceEngine trait."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+
+[dependencies]
+serde.workspace = true
+core-geometry.workspace = true
+glam.workspace = true
+rayon.workspace = true
+thiserror.workspace = true
+tracing.workspace = true
+i_overlay = { workspace = true }
+
+[dev-dependencies]
+criterion.workspace = true
+proptest.workspace = true
+
+[[bench]]
+name = "slice"
+harness = false
+
+[lints]
+workspace = true

@@ -1,0 +1,91 @@
+[package]
+name = "encrust-fuzz"
+version = "0.0.0"
+edition = "2024"
+publish = false
+license = "AGPL-3.0-only"
+
+# Deliberately outside the workspace: `cargo fuzz` builds with `-Z` flags that need nightly, and
+# the product stays on the toolchain pinned in rust-toolchain.toml. See docs/decisions/0161.
+
+[package.metadata]
+cargo-fuzz = true
+
+[dependencies]
+libfuzzer-sys = "0.4"
+core-format = { path = "../crates/core-format" }
+core-mesh-io = { path = "../crates/core-mesh-io" }
+core-pipeline = { path = "../crates/core-pipeline" }
+
+[[bin]]
+name = "mesh"
+path = "fuzz_targets/mesh.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "sliced_chitu"
+path = "fuzz_targets/sliced_chitu.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "sliced_goo"
+path = "fuzz_targets/sliced_goo.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "sliced_anycubic"
+path = "fuzz_targets/sliced_anycubic.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "sliced_sl1"
+path = "fuzz_targets/sliced_sl1.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "sliced_gcode_zip"
+path = "fuzz_targets/sliced_gcode_zip.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "sliced_creality"
+path = "fuzz_targets/sliced_creality.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "sliced_svgx"
+path = "fuzz_targets/sliced_svgx.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "sliced_cws"
+path = "fuzz_targets/sliced_cws.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "sniff"
+path = "fuzz_targets/sniff.rs"
+test = false
+doc = false
+bench = false
+
+[profile.release]
+debug = 1
