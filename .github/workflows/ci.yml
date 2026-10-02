@@ -1,17 +1,19 @@
 name: CI
 
-# Everything that must hold before a change reaches main: the three checks from AGENTS.md on every
-# platform the project claims to support, plus the rust-version floor and the rustdoc rules. The
-# release workflow trusts this one and does not repeat it — a tag only ever sits on a commit that
-# already passed here.
+# Everything that must hold before a change reaches main: the three checks from AGENTS.md, the
+# rustdoc rules and the rust-version floor. A pull request runs Linux only; macOS, Windows and the
+# floor run on main, or on demand before a merge. See ADR-0173.
 
 on:
   push:
     branches: [main]
+    paths-ignore: ["docs/**", "**.md"]
   # `ready_for_review` is on top of the default three: a draft runs nothing, so the run happens
   # when the pull request is declared finished rather than on every commit leading up to it.
   pull_request:
     types: [opened, synchronize, reopened, ready_for_review]
+    paths-ignore: ["docs/**", "**.md"]
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -30,20 +32,14 @@ env:
   CARGO_PROFILE_TEST_DEBUG: "0"
 
 jobs:
-  rust:
-    name: rust (${{ matrix.os }})
+  linux:
+    name: rust (ubuntu)
     if: github.event.pull_request.draft != true
-    runs-on: ${{ matrix.os }}
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [ubuntu-latest, macos-latest, windows-latest]
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
 
-      - name: Linux windowing headers
-        if: matrix.os == 'ubuntu-latest'
-        uses: ./.github/actions/linux-gui-deps
+      - uses: ./.github/actions/linux-gui-deps
 
       # rustup reads rust-toolchain.toml and installs that channel with its components; no action
       # is needed, and none may override it, or CI would test a compiler nobody develops against.
@@ -51,11 +47,8 @@ jobs:
         run: rustup show
 
       - uses: Swatinem/rust-cache@v2
-        with:
-          shared-key: ci
 
       - name: Format
-        if: matrix.os == 'ubuntu-latest'
         run: cargo fmt --all --check
 
       - name: Clippy
@@ -66,10 +59,39 @@ jobs:
       - name: Test
         run: cargo test --workspace --locked
 
+      # Every public item of a library crate carries rustdoc, by the rule in code-style.md. A broken
+      # intra-doc link is the usual way that stops being true.
+      - name: Rustdoc
+        run: cargo doc --workspace --no-deps --locked
+        env:
+          RUSTDOCFLAGS: -D warnings
+
+  platforms:
+    name: rust (${{ matrix.os }})
+    if: github.event_name != 'pull_request'
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-latest, windows-latest]
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Install the pinned toolchain
+        run: rustup show
+
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Clippy
+        run: cargo clippy --workspace --all-targets --locked -- -D warnings
+
+      - name: Test
+        run: cargo test --workspace --locked
+
   # One source of truth: the toolchain checked here is the one Cargo.toml claims as its floor.
   msrv:
     name: msrv
-    if: github.event.pull_request.draft != true
+    if: github.event_name != 'pull_request'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
@@ -91,28 +113,6 @@ jobs:
       - run: cargo check --workspace --all-targets --locked
         env:
           RUSTUP_TOOLCHAIN: ${{ steps.msrv.outputs.version }}
-
-  # Every public item of a library crate carries rustdoc, by the rule in code-style.md. A broken
-  # intra-doc link is the usual way that stops being true.
-  docs:
-    name: rustdoc
-    if: github.event.pull_request.draft != true
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v7
-
-      - uses: ./.github/actions/linux-gui-deps
-
-      - name: Install the pinned toolchain
-        run: rustup show
-
-      - uses: Swatinem/rust-cache@v2
-        with:
-          shared-key: docs
-
-      - run: cargo doc --workspace --no-deps --locked
-        env:
-          RUSTDOCFLAGS: -D warnings
 
   # A secret can land in any file, so this is here rather than in audit.yml, whose triggers are
   # filtered to the lockfile. What may be ignored is in .gitleaks.toml. Free for public

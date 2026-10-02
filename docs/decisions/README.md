@@ -45,9 +45,10 @@ Grouped by what the decision governs; the number is still the order it was taken
 | [0129](0129-what-a-model-carries-lives-in-its-core.md) | What a model carries lives in the core that makes it | Accepted |
 | [0159](0159-agpl-with-a-contributor-licence-agreement.md) | AGPL-3.0 with a contributor licence agreement | Accepted |
 | [0160](0160-a-release-is-an-archive-of-two-binaries.md) | A release is an archive of two binaries, built in CI | Superseded by 0162 |
-| [0161](0161-the-readers-are-fuzzed-outside-the-workspace.md) | The readers are fuzzed from a crate outside the workspace | Accepted |
+| [0161](0161-the-readers-are-fuzzed-outside-the-workspace.md) | The readers are fuzzed from a crate outside the workspace | Superseded by 0173 (the CI trigger only) |
 | [0162](0162-release-please-cuts-the-release.md) | release-please cuts the release, and the build workflow is called by it | Accepted |
 | [0172](0172-the-window-offers-a-signed-update-and-never-applies-one.md) | The window offers a signed update, and never applies one by itself | Accepted |
+| [0173](0173-a-pull-request-runs-linux-and-main-runs-the-rest.md) | A pull request runs Linux, and main runs the rest | Accepted |
 
 ### Geometry
 

@@ -4,7 +4,7 @@ name: Fuzz
 # textures from a pack. Property tests cover the shapes we thought of; this covers the ones we did
 # not. On a schedule rather than on a pull request — two minutes of fuzzing is a smoke test, and
 # failing a pull request over which inputs one random session reached would teach everybody to
-# ignore it.
+# ignore it. A pull request touching fuzz/ only checks that the targets still build. See ADR-0173.
 
 on:
   schedule:
@@ -23,8 +23,33 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  build:
+    name: build targets
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      # cargo-fuzz builds with `-Z` flags, so this workflow is the one place a nightly toolchain is
+      # used. The product's own pin is untouched.
+      - name: Nightly toolchain
+        run: rustup toolchain install nightly --profile minimal
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: fuzz
+          workspaces: fuzz
+
+      - name: Install cargo-fuzz
+        run: cargo install cargo-fuzz --locked
+
+      - name: Build every target
+        working-directory: fuzz
+        run: cargo +nightly fuzz build
+
   fuzz:
     name: ${{ matrix.target }}
+    if: github.event_name != 'pull_request'
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -33,8 +58,6 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
-      # cargo-fuzz builds with `-Z` flags, so this job is the one place a nightly toolchain is
-      # used. The product's own pin is untouched.
       - name: Nightly toolchain
         run: rustup toolchain install nightly --profile minimal
 

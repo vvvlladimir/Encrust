@@ -1,6 +1,6 @@
 # 0161. The readers are fuzzed from a crate outside the workspace
 
-- **Status:** Accepted
+- **Status:** Superseded by 0173 (the CI trigger only)
 - **Date:** 2026-10-01
 
 ## Context
