@@ -38,7 +38,7 @@ net-sdcp = { path = "crates/net-sdcp" }
 net-prusalink = { path = "crates/net-prusalink" }
 
 glam = { version = "0.33", features = ["serde"] }
-parry3d = "0.30"
+parry3d = "0.31"
 earcutr = "0.5"
 i_overlay = "9.0"
 rayon = "1.12"
