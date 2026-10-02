@@ -2,15 +2,15 @@
 
 How the picture inside a `.goo` or `.ctb` file is made. The renderer is
 `core-thumbnail/src/render.rs`, the image and its resampling `core-thumbnail/src/image.rs`,
-and the two callers are `encrust-cli/src/main.rs` and `encrust-app/src/job/pipeline.rs`. Why
+and the one caller is `core-engine/src/run.rs`, which renders it for every front end. Why
 it is a software renderer rather than the viewport's is in ADR 0048.
 
 ## What is drawn
 
 A `Part` is a borrowed `Mesh` plus the `Transform` that places it on the plate, so a plate
-is drawn without being merged into one mesh: the CLI hands over the single mesh it sliced,
-and the window hands over every visible model with its placement and every support mesh
-with the identity transform, all as `Arc` clones.
+is drawn without being merged into one mesh: `core_engine::parts` hands over every model
+on the plate with its placement, and every support mesh with the identity transform, all
+as `Arc` clones.
 
 The plate itself, the grid and the build volume are not drawn. The picture is the part on
 a flat background.

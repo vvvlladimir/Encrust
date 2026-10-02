@@ -1,17 +1,17 @@
 use std::path::Path;
 
 use anyhow::{Context, Result};
-use core_analysis::Measured;
-use core_format::{ExposurePlan, PrintJob, Thumbnail};
-use core_pipeline::{Observer, SlicedFormat, Writing};
-use core_raster::RasterSettings;
+use core_engine::{Cutting, Model, Plate, Run};
+use core_format::{ExposurePlan, PrintJob};
+use core_pipeline::{Observer, SlicedFormat};
 use core_slicer::Sliced;
 use format_chitu::CtbVersion;
-use printer_profiles::{MaterialProfile, PrinterProfile};
+use printer_profiles::{MaterialProfile, OutputFormat, PrinterProfile};
 
+use crate::Args;
+use crate::pipeline::{overrides_of, raster_window, report_of};
 use crate::raster_report::RasterReport;
 use crate::slice_report::SliceReport;
-use crate::slicing::Plan;
 
 /// Which `.ctb` revision `--ctb-version` asked for.
 ///
@@ -49,58 +49,59 @@ impl Observer for Absorbing<'_> {
     }
 }
 
-/// Slices and rasterises straight into a printable sliced file.
+/// Slices and rasterises `models` straight into a printable sliced file.
 ///
-/// Nothing but the window being worked on is ever in memory; see
-/// `core_pipeline::write` and ADR 0010.
+/// Nothing but the window being worked on is ever in memory; see `core_engine::Run` and
+/// ADR 0010.
 #[allow(clippy::too_many_arguments)]
 pub fn write_sliced(
-    plan: &Plan,
-    slice: &mut SliceReport,
-    settings: &RasterSettings,
+    models: &[Model],
+    cutting: &Cutting,
+    args: &Args,
     path: &Path,
-    window: usize,
     printer: &PrinterProfile,
     material: &MaterialProfile,
-    exposure: ExposurePlan,
     format: SlicedFormat,
-    thumbnail: Option<Thumbnail>,
-    fold: Measured,
-) -> Result<RasterReport> {
-    let job = PrintJob {
+) -> Result<(SliceReport, RasterReport)> {
+    let format = format.at_revision_of(printer.output);
+    warn_if_the_machine_reads_another_container(printer, format);
+
+    let run = Run::of(&Plate {
+        models: models.to_vec(),
         printer: printer.clone(),
         material: material.clone(),
-        raster: *settings,
-        plan: plan.layers().clone(),
-        // What the stack comes to is only known once it has been cut, and the header is
-        // written before the first layer; `finish` lays it down again. See ADR 0067.
-        volume_mm3: 0.0,
-        exposure,
-        thumbnail,
-    };
-    warn_if_exposure_was_measured_elsewhere(&job, material);
+        panel: overrides_of(args),
+        cutting: *cutting,
+        exposure: ExposurePlan::new(args.exposure_at.clone()),
+        remove_islands: args.remove_islands,
+        format,
+        raster_window: raster_window(args),
+    })?;
 
-    let written = core_pipeline::write(
-        &Writing {
-            format,
-            path,
-            job: &job,
-            mesh: plan.mesh(),
-            windows: plan.windows(),
-            settings,
-            window,
-            fold,
-        },
-        &mut Absorbing(slice),
-    )
-    .with_context(|| format!("cannot write {}", path.display()))?
-    .context("a command-line run is never cancelled")?;
+    let mut slice = report_of(run.mesh(), run.windows(), args);
+    warn_if_exposure_was_measured_elsewhere(run.job(), material);
 
-    Ok(RasterReport::of_written(
-        path.to_owned(),
-        *settings,
-        written,
-    ))
+    let written = run
+        .write_file(path, &mut Absorbing(&mut slice))
+        .with_context(|| format!("cannot write {}", path.display()))?
+        .context("a command-line run is never cancelled")?;
+
+    let raster = RasterReport::of_written(path.to_owned(), *run.panel(), written);
+    Ok((slice, raster))
+}
+
+/// A file in a container the chosen machine does not read is written anyway — the output
+/// name has the last word (ADR 0047) — but the run says so.
+fn warn_if_the_machine_reads_another_container(printer: &PrinterProfile, format: SlicedFormat) {
+    let family = OutputFormat::from(format);
+    if family != printer.output {
+        tracing::warn!(
+            "{} reads {}, and this is a {} file",
+            printer.name,
+            printer.output.label(),
+            family.label()
+        );
+    }
 }
 
 /// Exposure follows the layer height, so a stack cut off the height the resin was

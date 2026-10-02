@@ -1,19 +1,15 @@
 use std::num::NonZeroU8;
 use std::path::{Path, PathBuf};
 
-use std::sync::Arc;
-
 use anyhow::{Context, Result, bail};
+use core_engine::{Cutting, Plate};
 use core_format::{ExposurePlan, ExposureRange};
 use core_geometry::Scalar;
 use core_raster::{RasterSettings, Shading};
-use core_slicer::{AdaptiveSettings, ONE_SAMPLE};
+use core_slicer::{AdaptiveSettings, ONE_SAMPLE, WINDOW_LAYERS};
 use printer_profiles::{Catalogue, MaterialProfile, PrinterProfile};
 
-use crate::job::{
-    Cutting, Outcome, SliceJob, SliceRequest, SlicedFormat, merge_plate_compensated, plate_parts,
-    worker_threads,
-};
+use crate::job::{Outcome, SliceJob, SliceRequest, SlicedFormat, models_of, worker_threads};
 use crate::preview::Fold;
 use crate::scene::Scene;
 use crate::status::Status;
@@ -272,6 +268,7 @@ impl Slicing {
             layer_height_mm: self.layer_height_mm(),
             adaptive: self.adaptive,
             compensation: self.material.compensation,
+            slice_window: WINDOW_LAYERS,
         }
     }
 
@@ -327,25 +324,29 @@ impl Slicing {
         let Some(printer) = self.printer.clone() else {
             bail!("no printer profile is loaded");
         };
-        let mesh = Arc::new(
-            merge_plate_compensated(scene, plate, &self.material.compensation)
-                .context("nothing visible on the plate to slice")?,
-        );
+        let models = models_of(scene, plate);
+        if models.is_empty() {
+            bail!("nothing visible on the plate to slice");
+        }
+        // The output name has the last word on the container, and only the profile knows
+        // which revision of it the machine reads; see ADR 0047.
+        let format = SlicedFormat::of(&output, self.format.ctb_version())
+            .with_context(|| format!("{} names no sliced-file format", output.display()))?
+            .at_revision_of(printer.output);
 
         self.job = Some(SliceJob::spawn(SliceRequest {
-            mesh,
-            plate: plate_parts(scene, plate),
+            plate: Plate {
+                models,
+                printer,
+                material: self.material.clone(),
+                panel: self.overrides(),
+                cutting: self.cutting(),
+                exposure: ExposurePlan::new(self.exposure.clone()),
+                remove_islands: self.remove_islands,
+                format,
+                raster_window: worker_threads(),
+            },
             output,
-            cutting: self.cutting(),
-            printer,
-            material: self.material.clone(),
-            exposure: ExposurePlan::new(self.exposure.clone()),
-            shading: self.shading(),
-            grey_levels: self.grey_levels,
-            blur_px: self.blur_px,
-            remove_islands: self.remove_islands,
-            ctb_version: self.format.ctb_version(),
-            window: worker_threads(),
             threads: worker_threads(),
         }));
         Ok(())
@@ -363,17 +364,19 @@ impl Slicing {
 
     /// The panel the masks are drawn for, or `None` without a printer profile.
     pub fn raster_settings(&self) -> Option<RasterSettings> {
-        self.printer.as_ref().map(|printer| {
-            raster_settings(
-                printer,
-                PanelOverrides {
-                    shading: self.shading(),
-                    grey_levels: self.grey_levels,
-                    grey_floor: None,
-                    blur_px: self.blur_px,
-                },
-            )
-        })
+        self.printer
+            .as_ref()
+            .map(|printer| raster_settings(printer, self.overrides()))
+    }
+
+    /// What the window sets over the panel the printer profile describes.
+    fn overrides(&self) -> PanelOverrides {
+        PanelOverrides {
+            shading: self.shading(),
+            grey_levels: self.grey_levels,
+            grey_floor: None,
+            blur_px: self.blur_px,
+        }
     }
 
     fn shading(&self) -> Shading {

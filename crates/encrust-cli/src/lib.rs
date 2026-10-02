@@ -10,7 +10,6 @@ mod raster_report;
 mod slice_report;
 mod sliced_file;
 mod sliced_read;
-mod slicing;
 mod stack;
 mod stats;
 mod supports;
@@ -32,7 +31,7 @@ use printer_profiles::SupportProfile;
 use crate::hollowing::HollowArgs;
 use crate::report::{parse_exposure_band, parse_rotation, parse_scale};
 use crate::sliced_file::CtbRevision;
-use crate::slicing::SLICE_WINDOW_LAYERS;
+use core_slicer::WINDOW_LAYERS as SLICE_WINDOW_LAYERS;
 
 /// Slice a mesh for an MSLA resin printer.
 #[derive(Parser, Debug)]

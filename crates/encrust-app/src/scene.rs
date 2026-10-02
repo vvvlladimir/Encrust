@@ -2,11 +2,11 @@ use std::sync::{Arc, Mutex};
 
 use rayon::prelude::*;
 
+pub use core_engine::project::Axis;
 use core_geometry::{
     Aabb, Bvh, Heightmap, Mesh, MeshDiagnostics, Orientation, Quat, Scalar, Transform, UvMap, Vec3,
     Welded, center_of_mass,
 };
-use serde::{Deserialize, Serialize};
 
 use core_supports::ModelSupports;
 use core_volume::ModelHollow;
@@ -257,34 +257,12 @@ impl SceneObject {
     }
 }
 
-/// The axis a copy is flipped on, in the model's own frame: for a model standing as it
-/// was imported, the plate's axis of the same name.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "kebab-case")]
-pub enum Axis {
-    X,
-    Y,
-    Z,
-}
-
-impl Axis {
-    pub const ALL: [Self; 3] = [Self::X, Self::Y, Self::Z];
-
-    pub fn label(self) -> &'static str {
-        match self {
-            Self::X => "X",
-            Self::Y => "Y",
-            Self::Z => "Z",
-        }
-    }
-
-    /// The scale that flips this axis and leaves the other two alone.
-    fn flip(self) -> Vec3 {
-        match self {
-            Self::X => Vec3::new(-1.0, 1.0, 1.0),
-            Self::Y => Vec3::new(1.0, -1.0, 1.0),
-            Self::Z => Vec3::new(1.0, 1.0, -1.0),
-        }
+/// The scale that flips `axis` and leaves the other two alone.
+fn flip(axis: Axis) -> Vec3 {
+    match axis {
+        Axis::X => Vec3::new(-1.0, 1.0, 1.0),
+        Axis::Y => Vec3::new(1.0, -1.0, 1.0),
+        Axis::Z => Vec3::new(1.0, 1.0, -1.0),
     }
 }
 
@@ -639,7 +617,7 @@ impl Scene {
         let Some(object) = self.get_mut(id) else {
             return false;
         };
-        object.transform.scale *= axis.flip();
+        object.transform.scale *= flip(axis);
 
         let Some(after) = self.get(id).and_then(SceneObject::world_bounds) else {
             return false;

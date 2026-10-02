@@ -30,4 +30,5 @@ container's crate if the container is someone else's (ADR 0148). A new printer p
 new `net-*` crate taking the path of a finished file and depending on nothing here, not even
 another `net-*` (ADR 0136); what two of them share is settled in `encrust-app` by an enum over
 destinations (ADR 0153). `core-pipeline` spans core layers only to write a cut stack into a
-file, never to hold what two callers happen to share (ADR 0127).
+sink, and `core-engine` only to run a plate down to that call and to hold the `.encrust`
+format; neither takes what two callers happen to share (ADR 0127, 0174).

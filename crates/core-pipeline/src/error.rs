@@ -26,9 +26,10 @@ pub enum PipelineError {
         source: std::io::Error,
     },
 
-    #[error("cannot write {}", path.display())]
+    #[error("cannot write {name}")]
     Write {
-        path: PathBuf,
+        /// What the file being written is called, without its directory or extension.
+        name: String,
         #[source]
         source: FormatError,
     },

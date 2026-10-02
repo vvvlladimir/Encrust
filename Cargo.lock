@@ -944,6 +944,27 @@ dependencies = [
 ]
 
 [[package]]
+name = "core-engine"
+version = "0.1.0"
+dependencies = [
+ "core-analysis",
+ "core-format",
+ "core-geometry",
+ "core-pipeline",
+ "core-raster",
+ "core-slicer",
+ "core-supports",
+ "core-thumbnail",
+ "core-volume",
+ "format-chitu",
+ "printer-profiles",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.20",
+ "zip",
+]
+
+[[package]]
 name = "core-format"
 version = "0.1.0"
 dependencies = [
@@ -1520,6 +1541,7 @@ dependencies = [
  "anyhow",
  "bytemuck",
  "core-analysis",
+ "core-engine",
  "core-format",
  "core-geometry",
  "core-mesh-io",
@@ -1569,6 +1591,7 @@ dependencies = [
  "anyhow",
  "clap",
  "core-analysis",
+ "core-engine",
  "core-format",
  "core-geometry",
  "core-mesh-io",

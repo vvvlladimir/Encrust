@@ -49,6 +49,7 @@ Grouped by what the decision governs; the number is still the order it was taken
 | [0162](0162-release-please-cuts-the-release.md) | release-please cuts the release, and the build workflow is called by it | Accepted |
 | [0172](0172-the-window-offers-a-signed-update-and-never-applies-one.md) | The window offers a signed update, and never applies one by itself | Accepted |
 | [0173](0173-a-pull-request-runs-linux-and-main-runs-the-rest.md) | A pull request runs Linux, and main runs the rest | Accepted |
+| [0174](0174-a-plate-is-a-crate-live-and-written-down.md) | A plate is a crate, live and written down | Accepted |
 
 ### Geometry
 
@@ -110,6 +111,7 @@ Grouped by what the decision governs; the number is still the order it was taken
 | [0012](0012-streaming-sliced-file-writer.md) | Sliced-file writers take layers one at a time | Accepted |
 | [0013](0013-exposure-settings-in-the-material-profile.md) | Exposure and motion settings live in MaterialProfile | Accepted |
 | [0045](0045-sliced-files-are-written-to-a-seekable-sink.md) | Every sliced file is written to a seekable sink | Accepted |
+| [0175](0175-a-sliced-file-leaves-through-a-sink.md) | A sliced file leaves through a sink, not a path | Accepted |
 | [0067](0067-the-resin-volume-is-patched-in-at-finish.md) | The resin volume is patched into the header at `finish` | Accepted |
 | [0090](0090-exposure-is-banded-by-height.md) | Exposure varies by bands of height, and the bottom block is out of reach | Accepted |
 | [0128](0128-the-exposure-follows-the-layer-in-sight.md) | The exposure follows the layer in sight | Accepted |

@@ -15,14 +15,14 @@ use core_supports::ModelSupports;
 use core_volume::ModelHollow;
 
 use crate::hollow::HollowTool;
-use crate::project::{
-    Chosen, CutState, DrainState, Group, HollowState, Manifest, ObjectHollowState, ObjectState,
-    ObjectSupportState, Project, SlicingState, Summary, SupportState, VERSION,
-};
 use crate::scene::{ImportSummary, Imported, Scene, SceneObject};
 use crate::slicing::Slicing;
 use crate::supports::{SupportGroup, SupportTool};
 use crate::workspace::Array;
+use core_engine::project::{
+    Chosen, CutState, DrainState, Group, HollowState, Manifest, ObjectHollowState, ObjectState,
+    ObjectSupportState, Project, SlicingState, Summary, SupportState, VERSION,
+};
 
 /// What a project file is written from: the plate, and the numbers each tool is set to.
 pub struct Plate<'a> {
@@ -306,8 +306,8 @@ mod tests {
     use crate::cut::Keep;
 
     use super::*;
-    use crate::project::{read_from, write_to};
     use crate::scene::ImportSummary;
+    use core_engine::project::{read_from, write_to};
 
     /// Axis-aligned cube spanning 0..1 on every axis, twelve triangles.
     fn unit_cube() -> Mesh {

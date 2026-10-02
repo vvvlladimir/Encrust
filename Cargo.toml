@@ -22,6 +22,7 @@ core-supports = { path = "crates/core-supports" }
 core-volume = { path = "crates/core-volume" }
 core-plate = { path = "crates/core-plate" }
 core-pipeline = { path = "crates/core-pipeline" }
+core-engine = { path = "crates/core-engine" }
 core-format = { path = "crates/core-format" }
 core-thumbnail = { path = "crates/core-thumbnail" }
 core-analysis = { path = "crates/core-analysis" }

@@ -16,6 +16,7 @@ path = "src/main.rs"
 core-analysis.workspace = true
 core-geometry.workspace = true
 core-mesh-io.workspace = true
+core-engine.workspace = true
 core-pipeline.workspace = true
 core-plate.workspace = true
 core-slicer.workspace = true

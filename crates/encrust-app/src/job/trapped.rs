@@ -4,7 +4,9 @@ use std::sync::mpsc::{self, Receiver, TryRecvError};
 use core_geometry::{Mesh, Scalar, Transform, transform_mesh};
 use core_supports::{TrapScan, Trapped};
 
-use crate::job::pipeline::{Cutting, thread_pool, windows_of, worker_threads};
+use core_engine::{Cutting, cut};
+
+use crate::job::pipeline::{thread_pool, worker_threads};
 use crate::scene::{ObjectId, Scene};
 
 /// One model to look through, owned so that it can cross to the worker thread.
@@ -129,8 +131,8 @@ fn look_through(task: &TrapTask, layer_height_mm: Scalar) -> Result<Vec<Trapped>
     let Some(bounds) = placed.aabb() else {
         return Ok(Vec::new());
     };
-    let windows = windows_of(&placed, Cutting::uniform(layer_height_mm)).map_err(|error| {
-        error
+    let windows = cut(&placed, &Cutting::uniform(layer_height_mm)).map_err(|error| {
+        anyhow::Error::new(error)
             .chain()
             .map(ToString::to_string)
             .collect::<Vec<_>>()
