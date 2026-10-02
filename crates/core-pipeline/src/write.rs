@@ -39,10 +39,12 @@ pub trait Observer {
 
 impl Observer for () {}
 
-/// One run from a cut stack to a sliced file on disk.
+/// One run from a cut stack to a sliced file, wherever that file is being written.
 pub struct Writing<'a> {
     pub format: SlicedFormat,
-    pub path: &'a Path,
+    /// What the file is called, without its directory or its extension: the name an
+    /// `.sl1` gives its layer entries, and the one an error quotes.
+    pub name: &'a str,
     /// Everything the file carries but the masks.
     pub job: &'a PrintJob,
     /// The mesh standing in plate coordinates, cut window by window as the file is
@@ -67,35 +69,25 @@ pub struct Written {
     pub measured: Measured,
 }
 
-/// Cuts, rasterises and writes the whole stack, a window at a time.
+/// Cuts, rasterises and writes the whole stack into `sink`, a window at a time.
 ///
-/// `None` means the observer cancelled it, in which case nothing is left on disk: a file
-/// stopped half way through the stack would still look printable.
-pub fn write(
+/// `None` means the observer cancelled it, and whatever reached `sink` is a file stopped
+/// half way through the stack: the caller throws it away. [`write`] does that for a file
+/// on disk.
+pub fn write_to(
     request: &Writing<'_>,
+    sink: &mut dyn WriteSeek,
     observer: &mut dyn Observer,
 ) -> Result<Option<Written>, PipelineError> {
-    let path = request.path;
-    let file = File::create(path).map_err(|source| PipelineError::Create {
-        path: path.to_owned(),
-        source,
-    })?;
-    let mut buffered = BufWriter::with_capacity(WRITE_BUFFER_BYTES, file);
-
-    let written = match request.format {
-        SlicedFormat::Goo => write_with(&GooWriter, &mut buffered, request, observer),
-        SlicedFormat::Ctb(version) => {
-            write_with(&CtbWriter::new(version), &mut buffered, request, observer)
+    match request.format {
+        SlicedFormat::Goo => write_with(&GooWriter, sink, request, observer),
+        SlicedFormat::Ctb(version) => write_with(&CtbWriter::new(version), sink, request, observer),
+        SlicedFormat::Cbddlp(flavour) => {
+            write_with(&CbddlpWriter::new(flavour), sink, request, observer)
         }
-        SlicedFormat::Cbddlp(flavour) => write_with(
-            &CbddlpWriter::new(flavour),
-            &mut buffered,
-            request,
-            observer,
-        ),
         SlicedFormat::Anycubic(flavour, version) => write_with(
             &AnycubicWriter::new(flavour, version),
-            &mut buffered,
+            sink,
             request,
             observer,
         ),
@@ -103,35 +95,40 @@ pub fn write(
         // The layers of an `.sl1` are named after the file they sit in, which is the one
         // thing a writer is not handed; see docs/formats/sl1.md.
         SlicedFormat::Sl1(flavour) => write_with(
-            &Sl1Writer::new(flavour, job_dir_of(path)),
-            &mut buffered,
+            &Sl1Writer::new(flavour, request.name.to_owned()),
+            sink,
             request,
             observer,
         ),
-        SlicedFormat::GcodeZip => write_with(&GcodeZipWriter, &mut buffered, request, observer),
-        SlicedFormat::Cxdlp(CxdlpVersion::V3) => {
-            write_with(&CxdlpWriter, &mut buffered, request, observer)
-        }
+        SlicedFormat::GcodeZip => write_with(&GcodeZipWriter, sink, request, observer),
+        SlicedFormat::Cxdlp(CxdlpVersion::V3) => write_with(&CxdlpWriter, sink, request, observer),
         SlicedFormat::Cxdlp(CxdlpVersion::V4) => {
-            write_with(&CxdlpV4Writer, &mut buffered, request, observer)
+            write_with(&CxdlpV4Writer, sink, request, observer)
         }
-        SlicedFormat::Svgx => write_with(&SvgxWriter, &mut buffered, request, observer),
-        SlicedFormat::Cws => write_with(&CwsWriter, &mut buffered, request, observer),
-    };
+        SlicedFormat::Svgx => write_with(&SvgxWriter, sink, request, observer),
+        SlicedFormat::Cws => write_with(&CwsWriter, sink, request, observer),
+    }
+}
 
+/// The same into a file at `path`, which is removed again when the run fails or is
+/// cancelled: a file stopped half way through the stack would still look printable.
+pub fn write(
+    request: &Writing<'_>,
+    path: &Path,
+    observer: &mut dyn Observer,
+) -> Result<Option<Written>, PipelineError> {
+    let file = File::create(path).map_err(|source| PipelineError::Create {
+        path: path.to_owned(),
+        source,
+    })?;
+    let mut buffered = BufWriter::with_capacity(WRITE_BUFFER_BYTES, file);
+
+    let written = write_to(request, &mut buffered, observer);
     if !matches!(written, Ok(Some(_))) {
         drop(buffered);
         let _ = std::fs::remove_file(path);
     }
     written
-}
-
-/// The output file's own stem, which is what an `.sl1` names its layer entries after.
-fn job_dir_of(path: &Path) -> String {
-    path.file_stem()
-        .unwrap_or_default()
-        .to_string_lossy()
-        .into_owned()
 }
 
 /// Measures what the stack cures without writing it anywhere, so a preview can say what
@@ -173,7 +170,7 @@ where
     W: SlicedFileWriter + 'w,
 {
     let failed = |source| PipelineError::Write {
-        path: request.path.to_owned(),
+        name: request.name.to_owned(),
         source,
     };
 
@@ -225,7 +222,7 @@ fn stream_layers<S: LayerSink>(
 
                 for (layer, overflow_px) in encoded {
                     sink.push(layer).map_err(|source| PipelineError::Write {
-                        path: request.path.to_owned(),
+                        name: request.name.to_owned(),
                         source,
                     })?;
                     written.layers += 1;

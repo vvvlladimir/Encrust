@@ -14,11 +14,10 @@ use core_raster::{
 };
 use core_slicer::{Contour, LayerPlan, Sliced, Windows};
 
+use core_engine::{Cutting, bake};
 use core_pipeline::{Opened, Tolerance, open_file};
 
-use crate::job::{
-    Cutting, MeasureJob, MeasureOutcome, PreviewJob, PreviewOutcome, merge_plate_compensated,
-};
+use crate::job::{MeasureJob, MeasureOutcome, PreviewJob, PreviewOutcome, models_of};
 use crate::scene::Scene;
 use crate::status::Status;
 use crate::ui::theme;
@@ -328,8 +327,11 @@ impl Preview {
 
     /// Starts cutting everything visible on the plate. Fails when there is nothing there.
     pub fn build(&mut self, scene: &Scene, cutting: Cutting) -> Result<()> {
-        let mesh = merge_plate_compensated(scene, scene.active_plate(), &cutting.compensation)
-            .context("nothing visible on the plate to preview")?;
+        let mesh = bake(
+            &models_of(scene, scene.active_plate()),
+            &cutting.compensation,
+        )
+        .context("nothing visible on the plate to preview")?;
         self.job = Some(Build {
             job: PreviewJob::spawn(mesh, cutting),
             fingerprint: stack_fingerprint(scene, cutting),

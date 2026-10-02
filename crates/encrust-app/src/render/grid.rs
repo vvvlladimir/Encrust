@@ -1,7 +1,7 @@
 use core_geometry::Vec3;
 use egui::Color32;
 
-use crate::plate::Plate;
+use crate::plate::BuildPlate;
 use crate::render::vertex::LineVertex;
 use crate::ui::theme;
 
@@ -13,7 +13,7 @@ pub const GRID_SPACING_MM: f32 = 10.0;
 ///
 /// The two axes are drawn along the plate edges that start at the origin, so the
 /// coordinates in the Settings panel can be read straight off the picture.
-pub fn plate_lines(plate: &Plate, grid: bool) -> Vec<LineVertex> {
+pub fn plate_lines(plate: &BuildPlate, grid: bool) -> Vec<LineVertex> {
     let scene = theme::scene();
     let [axis_x, axis_y] = scene.plate_axis;
     let mut lines = Vec::new();
@@ -52,7 +52,7 @@ fn interior_offsets(extent_mm: f32) -> impl Iterator<Item = f32> {
     (1..count).map(|i| i as f32 * GRID_SPACING_MM)
 }
 
-fn push_volume(lines: &mut Vec<LineVertex>, plate: &Plate) {
+fn push_volume(lines: &mut Vec<LineVertex>, plate: &BuildPlate) {
     let volume = theme::scene().volume;
     let (x, y, z) = (plate.x_mm, plate.y_mm, plate.z_mm);
     let corners = [[0.0, 0.0], [x, 0.0], [x, y], [0.0, y]];
@@ -76,8 +76,8 @@ fn push(lines: &mut Vec<LineVertex>, from: [f32; 3], to: [f32; 3], color: Color3
 mod tests {
     use super::*;
 
-    fn plate(x_mm: f32, y_mm: f32) -> Plate {
-        Plate {
+    fn plate(x_mm: f32, y_mm: f32) -> BuildPlate {
+        BuildPlate {
             name: None,
             x_mm,
             y_mm,

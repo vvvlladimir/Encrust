@@ -1,5 +1,5 @@
+pub use core_engine::project::Array;
 use core_geometry::Scalar;
-use serde::{Deserialize, Serialize};
 
 use crate::ui::{icon, theme};
 
@@ -99,25 +99,6 @@ impl Tool {
 pub struct Section {
     /// Height above the plate, millimetres, or `None` while the whole model is drawn.
     pub height_mm: Option<Scalar>,
-}
-
-/// The grid of copies the Array button lays out.
-#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
-pub struct Array {
-    pub columns: u32,
-    pub rows: u32,
-    /// Space left between one copy and the next, millimetres.
-    pub gap_mm: Scalar,
-}
-
-impl Default for Array {
-    fn default() -> Self {
-        Self {
-            columns: 2,
-            rows: 2,
-            gap_mm: 5.0,
-        }
-    }
 }
 
 /// What the window shows besides the models.

@@ -16,4 +16,4 @@ pub use fold::{Folded, Tolerance, fold_group};
 pub use format::SlicedFormat;
 pub use panel::{PanelOverrides, raster_settings};
 pub use read::{Opened, open, open_file, reads_sliced_file};
-pub use write::{Observer, Writing, Written, measure, write};
+pub use write::{Observer, Writing, Written, measure, write, write_to};

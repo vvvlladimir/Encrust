@@ -1,66 +1,24 @@
-use std::num::NonZeroU8;
 use std::path::PathBuf;
-use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 
 use anyhow::{Context, Result};
 use core_analysis::Measured;
-use core_format::{ExposurePlan, PrintJob};
-use core_geometry::{Mesh, Scalar, Transform};
-use core_pipeline::{Observer, PanelOverrides, SlicedFormat, Tolerance, Writing, raster_settings};
-use core_raster::{RasterSettings, Shading};
-use core_slicer::{
-    AdaptiveSettings, ONE_SAMPLE, PlaneSliceEngine, SliceEngine, SliceSettings, Sliced,
-    WINDOW_LAYERS, Windows, adaptive_plan,
-};
-use core_thumbnail::{Part, ThumbnailSettings, render as render_thumbnail};
-use format_chitu::CtbVersion;
-use printer_profiles::{Compensation, MaterialProfile, PrinterProfile};
+use core_engine::{Plate, Run};
+use core_geometry::{Mesh, Scalar};
+use core_pipeline::{Observer, Tolerance};
+use core_raster::RasterSettings;
+use core_slicer::{PlaneSliceEngine, SliceEngine, SliceSettings, Sliced, Windows};
 
 use crate::job::{Outcome, Progress, Stage};
 
 /// Everything one slicing run needs, owned so that it can cross to the worker thread.
 pub struct SliceRequest {
-    /// Every visible model baked into plate coordinates, cut a window at a time as the
-    /// file is written; see `docs/decisions/0068-the-window-holds-no-stack.md`.
-    pub mesh: Arc<Mesh>,
-    /// Every visible mesh and where it stands, for the file's thumbnail.
-    pub plate: Vec<(Arc<Mesh>, Transform)>,
+    /// The plate as the engine takes it: the models where they stand, the machine, the
+    /// resin, and how the stack is cut and drawn.
+    pub plate: Plate,
     pub output: PathBuf,
-    pub cutting: Cutting,
-    pub printer: PrinterProfile,
-    pub material: MaterialProfile,
-    /// Exposure bands over the resin's own; empty means the resin's throughout.
-    pub exposure: ExposurePlan,
-    pub shading: Shading,
-    /// How many greys an anti-aliased edge is rounded to, or `None` for all 255.
-    pub grey_levels: Option<NonZeroU8>,
-    /// Radius an edge is faded over, pixels; `0` leaves it sharp.
-    pub blur_px: u8,
-    /// Whether every island is taken out of the file.
-    pub remove_islands: bool,
-    /// Revision a `.ctb` output is written at; ignored for every other format.
-    pub ctb_version: CtbVersion,
-    /// Layers rasterised at once. Peak memory is this many masks; see
-    /// `docs/decisions/0010-streaming-raster-stack.md`.
-    pub window: usize,
-    /// Threads the job may use. See `worker_threads`.
+    /// Threads the job may use. See [`worker_threads`].
     pub threads: usize,
-}
-
-impl SliceRequest {
-    /// The panel this run draws its masks for.
-    pub fn panel(&self) -> RasterSettings {
-        raster_settings(
-            &self.printer,
-            PanelOverrides {
-                shading: self.shading,
-                grey_levels: self.grey_levels,
-                grey_floor: None,
-                blur_px: self.blur_px,
-            },
-        )
-    }
 }
 
 /// Threads a background job runs on: one fewer than the machine has.
@@ -123,50 +81,6 @@ pub fn slice_mesh(mesh: &Mesh, layer_height_mm: Scalar) -> Result<Sliced> {
         .context("cannot slice the model")
 }
 
-/// How a stack is cut: one thickness throughout, or as thick as the surface allows.
-#[derive(Debug, Clone, Copy, PartialEq)]
-pub struct Cutting {
-    /// The thickest layer the stack may use, millimetres.
-    pub layer_height_mm: Scalar,
-    /// The rules an adaptive stack follows, or `None` for one thickness throughout.
-    pub adaptive: Option<AdaptiveSettings>,
-    /// How many planes are sampled inside each layer's band.
-    pub samples: NonZeroU8,
-    /// The resin's corrections, of which only the shrinkage changes what is cut.
-    pub compensation: Compensation,
-}
-
-impl Cutting {
-    pub fn uniform(layer_height_mm: Scalar) -> Self {
-        Self {
-            layer_height_mm,
-            adaptive: None,
-            samples: ONE_SAMPLE,
-            compensation: Compensation::default(),
-        }
-    }
-}
-
-/// The windows a mesh standing in plate coordinates will be cut in.
-pub fn windows_of(mesh: &Mesh, cutting: Cutting) -> Result<Windows> {
-    let Some(adaptive) = cutting.adaptive else {
-        let settings = SliceSettings {
-            layer_height: cutting.layer_height_mm,
-            samples: cutting.samples,
-        };
-        return Windows::new(mesh, settings, WINDOW_LAYERS).context("cannot slice the model");
-    };
-    let plan = adaptive_plan(
-        mesh,
-        &AdaptiveSettings {
-            max_height_mm: cutting.layer_height_mm,
-            ..adaptive
-        },
-    )
-    .context("cannot plan the layers")?;
-    Ok(Windows::planned(plan, cutting.samples, WINDOW_LAYERS))
-}
-
 /// Measures what the stack cures without writing it, so Preview can say what the print
 /// takes. `None` when cancelled.
 pub fn measure_stack(
@@ -188,7 +102,7 @@ pub fn measure_stack(
     .context("cannot measure the stack")
 }
 
-/// The worker's cancel flag and progress channel, as the pipeline wants to see them.
+/// The worker's cancel flag and progress channel, as the engine wants to see them.
 struct Worker<'a> {
     cancel: &'a AtomicBool,
     report: &'a mut (dyn FnMut(Progress) + Send),
@@ -219,51 +133,14 @@ fn slice_and_write(
     report: &mut (dyn FnMut(Progress) + Send),
 ) -> Result<Outcome> {
     report(Progress::Stage(Stage::Slicing));
-    let windows = windows_of(&request.mesh, request.cutting)?;
+    let run = Run::of(&request.plate)?;
     if cancel.load(Ordering::Relaxed) {
         return Ok(Outcome::Cancelled);
     }
 
-    let raster = request.panel();
-    raster
-        .validate()
-        .context("the panel cannot produce a usable mask")?;
-
-    let path = &request.output;
-    let format = SlicedFormat::of(path, request.ctb_version)
-        .with_context(|| format!("{} names no sliced-file format", path.display()))?
-        .at_revision_of(request.printer.output);
-
-    let job = PrintJob {
-        printer: request.printer.clone(),
-        material: request.material.clone(),
-        raster,
-        plan: windows.plan().clone(),
-        // Only known once the stack has been cut; `finish` writes it (ADR 0067).
-        volume_mm3: 0.0,
-        exposure: request.exposure.clone(),
-        thumbnail: thumbnail(request),
-    };
-
-    let mut fold = Measured::new(request.material.bottom_layers as usize);
-    if request.remove_islands {
-        fold = fold.removing_islands();
-    }
-
     report(Progress::Stage(Stage::Rasterising));
-    let written = core_pipeline::write(
-        &Writing {
-            format,
-            path,
-            job: &job,
-            mesh: &request.mesh,
-            windows: &windows,
-            settings: &raster,
-            window: request.window,
-            fold,
-        },
-        &mut Worker { cancel, report },
-    )?;
+    let path = &request.output;
+    let written = run.write_file(path, &mut Worker { cancel, report })?;
 
     let Some(written) = written else {
         return Ok(Outcome::Cancelled);
@@ -276,21 +153,16 @@ fn slice_and_write(
     })
 }
 
-/// The picture of the plate the file carries, or `None` when nothing was handed over.
-fn thumbnail(request: &SliceRequest) -> Option<core_thumbnail::Thumbnail> {
-    let parts: Vec<Part<'_>> = request
-        .plate
-        .iter()
-        .map(|(mesh, transform)| Part::new(mesh, *transform))
-        .collect();
-    (!parts.is_empty()).then(|| render_thumbnail(&parts, &ThumbnailSettings::default()))
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
-    use core_geometry::Vec3;
+    use core_engine::{Cutting, Model};
+    use core_format::ExposurePlan;
+    use core_geometry::{Transform, Vec3};
+    use core_pipeline::{PanelOverrides, SlicedFormat};
+    use printer_profiles::{MaterialProfile, PrinterProfile};
     use std::path::Path;
+    use std::sync::Arc;
 
     /// Panel of 64 x 32 pixels at a 0.2 mm pitch: 12.8 x 6.4 mm of build area.
     const PROFILE: &str = r#"
@@ -338,35 +210,32 @@ z = 10.0
         Mesh::new(vertices, faces)
     }
 
-    /// A path of its own per test, since the pipeline writes to a real file.
+    /// A path of its own per test, since the job writes to a real file.
     fn temp_goo(name: &str) -> PathBuf {
-        temp_output(name, "goo")
+        std::env::temp_dir().join(format!("encrust-{}-{name}.goo", std::process::id()))
     }
 
-    fn temp_output(name: &str, extension: &str) -> PathBuf {
-        std::env::temp_dir().join(format!("encrust-{}-{name}.{extension}", std::process::id()))
+    /// A plate holding one 4 x 4 x 2 mm box, standing well inside the panel.
+    fn plate() -> Plate {
+        let mesh = Arc::new(box_mesh(Vec3::new(1.0, 1.0, 0.0), Vec3::new(5.0, 5.0, 2.0)));
+        Plate {
+            models: vec![Model::placed(mesh, Transform::default())],
+            printer: PrinterProfile::from_toml_str(PROFILE, Path::new("inline.toml"))
+                .expect("the inline profile is valid"),
+            material: MaterialProfile::default(),
+            panel: PanelOverrides::default(),
+            cutting: Cutting::uniform(0.5),
+            exposure: ExposurePlan::default(),
+            remove_islands: false,
+            format: SlicedFormat::Goo,
+            raster_window: 2,
+        }
     }
 
     fn request(output: PathBuf) -> SliceRequest {
         SliceRequest {
-            grey_levels: None,
-            blur_px: 0,
-            remove_islands: false,
-            // 4 x 4 x 2 mm, standing on the plate well inside the panel.
-            mesh: Arc::new(box_mesh(Vec3::new(1.0, 1.0, 0.0), Vec3::new(5.0, 5.0, 2.0))),
-            plate: vec![(
-                Arc::new(box_mesh(Vec3::new(1.0, 1.0, 0.0), Vec3::new(5.0, 5.0, 2.0))),
-                Transform::default(),
-            )],
+            plate: plate(),
             output,
-            cutting: Cutting::uniform(0.5),
-            printer: PrinterProfile::from_toml_str(PROFILE, Path::new("inline.toml"))
-                .expect("the inline profile is valid"),
-            material: MaterialProfile::default(),
-            exposure: ExposurePlan::default(),
-            shading: Shading::Coverage,
-            ctb_version: CtbVersion::V4,
-            window: 2,
             threads: 2,
         }
     }
@@ -423,55 +292,24 @@ z = 10.0
     }
 
     #[test]
-    fn the_requested_revision_reaches_the_ctb_header() {
-        let output = temp_output("version-five", "ctb");
+    fn an_empty_plate_comes_back_as_a_failure() {
+        let output = temp_goo("empty");
         let request = SliceRequest {
-            ctb_version: CtbVersion::V5,
+            plate: Plate {
+                models: Vec::new(),
+                ..plate()
+            },
             ..request(output.clone())
         };
-        let cancel = AtomicBool::new(false);
 
-        let outcome = run(&request, &cancel, &mut |_| {});
-        assert!(
-            matches!(outcome, Outcome::Written { .. }),
-            "got {outcome:?}"
-        );
-
-        let file = std::fs::read(&output).expect("the file is on disk");
-        assert_eq!(u32::from_le_bytes([file[4], file[5], file[6], file[7]]), 5);
-        std::fs::remove_file(&output).expect("the test wrote the file");
-    }
-
-    #[test]
-    fn a_name_no_format_claims_fails_without_creating_a_file() {
-        let output = temp_output("unknown", "sliced");
-        let request = request(output.clone());
-        let cancel = AtomicBool::new(false);
-
-        let Outcome::Failed(message) = run(&request, &cancel, &mut |_| {}) else {
-            panic!("an extension no writer claims cannot be written");
+        let Outcome::Failed(message) = run(&request, &AtomicBool::new(false), &mut |_| {}) else {
+            panic!("a plate with nothing on it cannot be sliced");
         };
-        assert!(message.contains("no sliced-file format"), "got {message}");
+        assert!(message.contains("nothing on the plate"), "got {message}");
         assert!(
             !output.exists(),
-            "nothing is created before the format is known"
+            "nothing is created before the plate is cut"
         );
-    }
-
-    #[test]
-    fn the_written_file_carries_a_picture_of_the_plate() {
-        let output = temp_goo("thumbnail");
-        let request = request(output.clone());
-        run(&request, &AtomicBool::new(false), &mut |_| {});
-
-        let file = std::fs::read(&output).expect("the run wrote the file");
-        // The small preview is 116 by 116 RGB565 at a fixed offset; see docs/formats/goo.md
-        let preview = &file[194..194 + 2 * 116 * 116];
-        assert!(
-            preview.iter().any(|byte| *byte != 0),
-            "the box on the plate reaches the preview record"
-        );
-        std::fs::remove_file(&output).expect("the test wrote the file");
     }
 
     #[test]
@@ -489,7 +327,10 @@ z = 10.0
     fn cancelling_part_way_stops_and_removes_the_partial_file() {
         let output = temp_goo("cancelled-late");
         let request = SliceRequest {
-            window: 1,
+            plate: Plate {
+                raster_window: 1,
+                ..plate()
+            },
             ..request(output.clone())
         };
         let cancel = AtomicBool::new(false);

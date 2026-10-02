@@ -1,4 +1,5 @@
-//! What a batch run writes down: one JSON per model, and one over the lot.
+//! What a run writes down as JSON: one report per model, from `slice`, `inspect` and each
+//! model of a `batch`, and one over a whole batch.
 //!
 //! The shape is the report, not the code: every number a farm would want to gate on is a
 //! field here rather than a line of prose to be grepped.
@@ -18,7 +19,9 @@ use crate::report::ImportReport;
 #[derive(Debug, Serialize)]
 pub struct ModelReport {
     pub input: String,
-    pub output: String,
+    /// Where the file went, or would have gone; absent for a model only inspected.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub output: Option<String>,
     pub status: Status,
     /// The whole error chain, for a model that did not make it.
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -166,7 +169,7 @@ impl ModelReport {
         };
         Self {
             input: outcome.input.display().to_string(),
-            output: outcome.output.display().to_string(),
+            output: Some(outcome.output.display().to_string()),
             status,
             error: None,
             seconds: took.as_secs_f64(),
@@ -208,8 +211,8 @@ impl ModelReport {
         }
     }
 
-    /// A model that was only looked at, for a `--no-slice` batch.
-    pub fn inspected(import: &ImportReport, output: &Path, took: Duration) -> Self {
+    /// A model that was only looked at, for `inspect`.
+    pub fn inspected(import: &ImportReport, took: Duration) -> Self {
         let status = if import.is_clean() {
             Status::Ok
         } else {
@@ -217,7 +220,7 @@ impl ModelReport {
         };
         Self {
             input: import.path.display().to_string(),
-            output: output.display().to_string(),
+            output: None,
             status,
             error: None,
             seconds: took.as_secs_f64(),
@@ -236,7 +239,7 @@ impl ModelReport {
         let causes: Vec<String> = error.chain().map(ToString::to_string).collect();
         Self {
             input: input.display().to_string(),
-            output: output.display().to_string(),
+            output: Some(output.display().to_string()),
             status: Status::Failed,
             error: Some(causes.join(": ")),
             seconds: took.as_secs_f64(),

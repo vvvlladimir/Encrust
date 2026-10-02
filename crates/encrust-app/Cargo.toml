@@ -9,13 +9,14 @@ repository.workspace = true
 authors.workspace = true
 
 [[bin]]
-name = "encrust"
+name = "encrust-gui"
 path = "src/main.rs"
 
 [dependencies]
 core-analysis.workspace = true
 core-geometry.workspace = true
 core-mesh-io.workspace = true
+core-engine.workspace = true
 core-pipeline.workspace = true
 core-plate.workspace = true
 core-slicer.workspace = true
@@ -70,7 +71,7 @@ license-file = "../../LICENSE"
 category = "GraphicsAndDesign"
 # The .icns is the squircled macOS grid (ADR 0135); Linux takes the PNG, Windows the .ico.
 icons = ["../../assets/icon/encrust.icns", "../../assets/icon/encrust-256.png", "../../assets/icon/encrust.ico"]
-binaries = [{ path = "encrust", main = true }, { path = "slice" }]
+binaries = [{ path = "encrust-gui", main = true }, { path = "encrust" }]
 
 [package.metadata.packager.macos]
 minimum-system-version = "11.0"

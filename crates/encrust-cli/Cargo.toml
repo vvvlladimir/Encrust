@@ -9,7 +9,7 @@ repository.workspace = true
 authors.workspace = true
 
 [[bin]]
-name = "slice"
+name = "encrust"
 path = "src/main.rs"
 
 # A bench for hollowing: stage timings and peak live bytes, counted by the allocator.
@@ -21,6 +21,7 @@ path = "src/bin/hollow_lab.rs"
 core-analysis.workspace = true
 core-geometry.workspace = true
 core-mesh-io.workspace = true
+core-engine.workspace = true
 core-pipeline.workspace = true
 core-plate.workspace = true
 core-slicer.workspace = true
@@ -38,6 +39,8 @@ anyhow.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 clap.workspace = true
+indicatif.workspace = true
+ctrlc.workspace = true
 rayon.workspace = true
 tracing.workspace = true
 tracing-subscriber.workspace = true

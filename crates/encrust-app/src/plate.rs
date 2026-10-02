@@ -3,11 +3,14 @@ use printer_profiles::PrinterProfile;
 
 /// The build volume the viewport draws and models are placed on, in millimetres.
 ///
+/// Named for the platform, not for what stands on it: what a run cuts and writes is
+/// `core_engine::Plate`.
+///
 /// Plate coordinates put the origin at the front left corner of the plate, so a model
 /// standing on it has `z >= 0` and `x`, `y` inside the plate extent. This is the same
 /// convention the rasteriser uses, so a model that looks placed here rasterises placed.
 #[derive(Debug, Clone, PartialEq)]
-pub struct Plate {
+pub struct BuildPlate {
     /// The printer this volume belongs to, or `None` until a profile is loaded. Not
     /// having a printer is a state, not a printer called "no printer".
     pub name: Option<String>,
@@ -16,7 +19,7 @@ pub struct Plate {
     pub z_mm: f32,
 }
 
-impl Default for Plate {
+impl Default for BuildPlate {
     /// A mid-sized MSLA envelope, used until a printer profile is loaded.
     fn default() -> Self {
         Self {
@@ -28,7 +31,7 @@ impl Default for Plate {
     }
 }
 
-impl Plate {
+impl BuildPlate {
     pub fn from_profile(profile: &PrinterProfile) -> Self {
         Self {
             name: Some(format!("{} {}", profile.manufacturer, profile.name)),
@@ -80,19 +83,19 @@ z = 100.0
     fn a_profile_sets_the_build_volume() {
         let profile = PrinterProfile::from_toml_str(SAMPLE, Path::new("inline.toml"))
             .expect("the sample profile is valid");
-        let plate = Plate::from_profile(&profile);
+        let plate = BuildPlate::from_profile(&profile);
         assert_eq!(plate.name.as_deref(), Some("Acme Test"));
         assert_eq!((plate.x_mm, plate.y_mm, plate.z_mm), (10.0, 5.0, 100.0));
     }
 
     #[test]
     fn a_plate_without_a_profile_invites_one() {
-        assert_eq!(Plate::default().display_name(), "Select a printer");
+        assert_eq!(BuildPlate::default().display_name(), "Select a printer");
     }
 
     #[test]
     fn the_center_sits_on_the_plate_surface() {
-        let plate = Plate {
+        let plate = BuildPlate {
             name: None,
             x_mm: 10.0,
             y_mm: 6.0,
@@ -103,7 +106,7 @@ z = 100.0
 
     #[test]
     fn the_diagonal_is_the_box_diagonal() {
-        let plate = Plate {
+        let plate = BuildPlate {
             name: None,
             x_mm: 3.0,
             y_mm: 4.0,

@@ -15,17 +15,17 @@ use core_supports::ModelSupports;
 use core_volume::ModelHollow;
 
 use crate::hollow::HollowTool;
-use crate::project::{
-    Chosen, CutState, DrainState, Group, HollowState, Manifest, ObjectHollowState, ObjectState,
-    ObjectSupportState, Project, SlicingState, Summary, SupportState, VERSION,
-};
 use crate::scene::{ImportSummary, Imported, Scene, SceneObject};
 use crate::slicing::Slicing;
 use crate::supports::{SupportGroup, SupportTool};
 use crate::workspace::Array;
+use core_engine::project::{
+    Chosen, CutState, DrainState, Group, HollowState, Manifest, ObjectHollowState, ObjectState,
+    ObjectSupportState, Project, SlicingState, Summary, SupportState, VERSION,
+};
 
 /// What a project file is written from: the plate, and the numbers each tool is set to.
-pub struct Plate<'a> {
+pub struct Captured<'a> {
     pub scene: &'a Scene,
     pub slicing: &'a Slicing,
     pub supports: &'a SupportTool,
@@ -36,7 +36,7 @@ pub struct Plate<'a> {
 }
 
 /// The same, to be written into by a load.
-pub struct PlateMut<'a> {
+pub struct CapturedMut<'a> {
     pub scene: &'a mut Scene,
     pub slicing: &'a mut Slicing,
     pub supports: &'a mut SupportTool,
@@ -47,8 +47,8 @@ pub struct PlateMut<'a> {
 }
 
 /// The whole plate as a project, ready to be written.
-pub fn capture(plate: Plate<'_>) -> Project {
-    let Plate {
+pub fn capture(plate: Captured<'_>) -> Project {
+    let Captured {
         scene,
         slicing,
         supports,
@@ -161,8 +161,8 @@ fn object_state(object: &SceneObject) -> ObjectState {
 }
 
 /// Puts a loaded project in place of whatever the window was holding.
-pub fn apply(project: Project, plate: PlateMut<'_>) {
-    let PlateMut {
+pub fn apply(project: Project, plate: CapturedMut<'_>) {
+    let CapturedMut {
         scene,
         slicing,
         supports,
@@ -306,8 +306,8 @@ mod tests {
     use crate::cut::Keep;
 
     use super::*;
-    use crate::project::{read_from, write_to};
     use crate::scene::ImportSummary;
+    use core_engine::project::{read_from, write_to};
 
     /// Axis-aligned cube spanning 0..1 on every axis, twelve triangles.
     fn unit_cube() -> Mesh {
@@ -367,8 +367,8 @@ mod tests {
     }
 
     impl Bench {
-        fn plate(&self) -> Plate<'_> {
-            Plate {
+        fn plate(&self) -> Captured<'_> {
+            Captured {
                 scene: &self.scene,
                 slicing: &self.slicing,
                 supports: &self.supports,
@@ -379,8 +379,8 @@ mod tests {
             }
         }
 
-        fn plate_mut(&mut self) -> PlateMut<'_> {
-            PlateMut {
+        fn plate_mut(&mut self) -> CapturedMut<'_> {
+            CapturedMut {
                 scene: &mut self.scene,
                 slicing: &mut self.slicing,
                 supports: &mut self.supports,

@@ -1,27 +1,53 @@
-# The `slice` command line
+# The `encrust` command line
 
-Every flag the CLI answers, with the shape of an invocation that uses it. `--help` is
-authoritative; this file is the worked examples. The window reaches the same code through
-`encrust-app/src/job/`.
+Every subcommand, with the shape of an invocation that uses it. `encrust <command> --help` is
+authoritative; this file is the worked examples and the contract a script can rely on. The
+window reaches the same code through `core-engine`. In a checkout, `encrust` below is
+`cargo run --release -p encrust-cli --bin encrust --`.
 
 `--profile` and `--material` take a TOML path and win over the catalogue ids.
 `--slice-window` trades memory for time on a dense stack (ADR 0066). The dev profile is
 optimised (ADR 0037); every quoted timing is a release timing.
 
 ```sh
-cargo run -p encrust-cli --bin slice -- --list-profiles
-cargo run -p encrust-cli --bin slice -- --read plate.ctb           # open a sliced file
-cargo run -p encrust-cli --bin slice -- model.stl -o out            # PNG stack
+encrust profiles list
+encrust info plate.ctb                       # open a sliced file
+encrust inspect model.stl --printer elegoo-mars-4-ultra
+encrust slice model.stl -o out               # PNG stack
 
-cargo run --release -p encrust-cli --bin slice -- model.stl \
+encrust slice model.stl \
   --printer elegoo-mars-4-ultra --resin standard-grey --center -o model.goo
 
-cargo run --release -p encrust-cli --bin slice -- model.stl \
+encrust slice model.stl \
   --printer elegoo-mars-3-pro --center --ctb-version 5 -o model.ctb
 
-cargo run --release -p encrust-cli --bin slice -- model.stl \
+encrust slice model.stl \
   --printer elegoo-mars-3-pro --center -o model.cbddlp     # or .photon
+
+encrust slice model.stl --printer elegoo-mars-4-ultra --dry-run   # cut and measure, write nothing
 ```
+
+## Output, exit codes and Ctrl-C
+
+The global flags go before or after the subcommand. `--json` prints exactly one JSON
+document to stdout, with `"schema": 1` beside the report's own fields; a failure prints
+`{"schema": 1, "error": {"message", "chain", "cancelled"}}` there instead, and the text
+still goes to stderr. Logs always go to stderr; `-q` keeps only errors, `-v` and `-vv` add
+debug and trace, and `RUST_LOG` wins over all three. `slice`, `inspect` and every model of a
+batch share one report shape.
+
+| Code | Meaning |
+|---|---|
+| 0 | Done |
+| 1 | The run failed |
+| 2 | The arguments were wrong |
+| 3 | `--strict`, and a model has defects or does not fit |
+| 4 | A batch in which at least one model failed |
+| 130 | Stopped by Ctrl-C |
+
+On a terminal `slice` draws a bar over the layers on stderr, and `batch` one over the
+models; `--no-progress`, `--quiet` and `--json` turn it off. The first Ctrl-C stops the run
+between layers and removes the file it was writing; a second one exits at once.
 
 The output extension picks the format (ADR 0047): `.goo`, `.ctb`, `.cbddlp`, `.photon`,
 `.sl1`, `.sl1s`, `.zip`, `.cxdlp`, `.svgx`, `.cws`, one of the seven Anycubic extensions in
@@ -41,14 +67,14 @@ and `--adaptive` are refused rather than flattened under an `.sl1` name (ADR 014
 is the other archive and carries both, because every number it states is per layer in its
 `run.gcode` (ADR 0167).
 
-`--read` opens any of those containers, whoever wrote it, prints what the file states, and
+`info` opens any of those containers, whoever wrote it, prints what the file states, and
 then decodes every layer to check that it does: a header can be read from a file no machine
 would print. A file whose name says nothing is recognised by its own first bytes (ADR 0149).
 
 Hollowing, with an infill lattice in the cavity:
 
 ```sh
-cargo run --release -p encrust-cli --bin slice -- model.stl \
+encrust slice model.stl \
   --printer elegoo-mars-4-ultra --hollow 2 --hollow-mode bottom-through \
   --infill hive --infill-size 5 --infill-density 0.15 --precision 0.5 -o model.goo
 ```
@@ -57,7 +83,7 @@ A hole into the surface nearest a point, cut with or without a cavity behind it,
 check that says whether any resin is still stuck. `--check-drainage` asks for it alone:
 
 ```sh
-cargo run --release -p encrust-cli --bin slice -- model.stl \
+encrust slice model.stl \
   --printer elegoo-mars-4-ultra --hollow 2 --drain 4 --drain-at 30,30,60 -o model.goo
 ```
 
@@ -65,7 +91,7 @@ The model's own texture pressed in as relief, as deep as the plate millimetres g
 Negative sinks it in. Needs a model carrying UVs and an image beside it:
 
 ```sh
-cargo run --release -p encrust-cli --bin slice -- textured.obj \
+encrust slice textured.obj \
   --printer elegoo-mars-4-ultra --relief 0.4 --precision 0.6 -o model.goo
 ```
 
@@ -73,7 +99,7 @@ Exposure of its own over a band of print height, repeatable. The bottom block ke
 resin's ramp whatever a band says:
 
 ```sh
-cargo run --release -p encrust-cli --bin slice -- model.stl \
+encrust slice model.stl \
   --printer elegoo-mars-4-ultra --exposure-at 4:6:9.5 -o model.goo
 ```
 
@@ -81,14 +107,14 @@ Thick layers on a vertical wall, thin on a shallow slope, against a cusp target.
 printer profile whose `[firmware]` claims `variable_layer_height`:
 
 ```sh
-cargo run --release -p encrust-cli --bin slice -- model.stl \
+encrust slice model.stl \
   --printer elegoo-mars-4-ultra --adaptive --cusp 0.03 --min-layer-height 0.02 -o model.goo
 ```
 
 Every island taken out of the file, and whatever stood only on one:
 
 ```sh
-cargo run --release -p encrust-cli --bin slice -- model.stl \
+encrust slice model.stl \
   --printer elegoo-mars-4-ultra --remove-islands -o model.goo
 ```
 
@@ -96,25 +122,26 @@ Turn the model the way it prints best before anything else is done to it, and bu
 supports to a shipped preset or to your own profile:
 
 ```sh
-cargo run --release -p encrust-cli --bin slice -- model.stl \
+encrust slice model.stl \
   --printer elegoo-mars-4-ultra --orient --center -o model.goo
 
-cargo run --release -p encrust-cli --bin slice -- model.stl \
+encrust slice model.stl \
   --printer elegoo-mars-4-ultra --supports medium --center -o model.goo
 ```
 
-A folder of parts: every flag above applies to each model, one file and one
-`<model>.json` each, plus `batch.json` over the lot. `--jobs` cuts several at once:
+A folder of parts: every flag of `slice` applies to each model, one file and one
+`<model>.json` each, plus `batch.json` over the lot. `--jobs` cuts several at once. A model
+that fails does not stop the others; it is exit code 4 at the end:
 
 ```sh
-cargo run --release -p encrust-cli --bin slice -- models/ \
+encrust batch models/ \
   --printer elegoo-mars-4-ultra --center --orient --supports light -o out/
 ```
 
 The window, optionally opening a model on startup:
 
 ```sh
-cargo run -p encrust-app --bin encrust -- model.stl
+cargo run -p encrust-app --bin encrust-gui -- model.stl
 ```
 
 ## `hollow-lab`

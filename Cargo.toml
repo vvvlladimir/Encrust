@@ -22,6 +22,7 @@ core-supports = { path = "crates/core-supports" }
 core-volume = { path = "crates/core-volume" }
 core-plate = { path = "crates/core-plate" }
 core-pipeline = { path = "crates/core-pipeline" }
+core-engine = { path = "crates/core-engine" }
 core-format = { path = "crates/core-format" }
 core-thumbnail = { path = "crates/core-thumbnail" }
 core-analysis = { path = "crates/core-analysis" }
@@ -51,6 +52,9 @@ toml = "1.1"
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 clap = { version = "4.6", features = ["derive"] }
+# The command line's progress bar and its Ctrl-C; see docs/decisions/0176.
+indicatif = { version = "0.18", default-features = false }
+ctrlc = "3.5"
 directories = "6.0"
 
 # Plain HTTP and WebSocket on the local network only, so no TLS stack is pulled in.

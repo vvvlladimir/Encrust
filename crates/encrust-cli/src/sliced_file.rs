@@ -1,17 +1,18 @@
 use std::path::Path;
 
 use anyhow::{Context, Result};
-use core_analysis::Measured;
-use core_format::{ExposurePlan, PrintJob, Thumbnail};
-use core_pipeline::{Observer, SlicedFormat, Writing};
-use core_raster::RasterSettings;
-use core_slicer::Sliced;
+use core_engine::{Cutting, Model, Plate, Run};
+use core_format::{ExposurePlan, PrintJob};
+use core_pipeline::SlicedFormat;
 use format_chitu::CtbVersion;
-use printer_profiles::{MaterialProfile, PrinterProfile};
+use printer_profiles::{MaterialProfile, OutputFormat, PrinterProfile};
 
+use crate::args::JobArgs;
+use crate::exit::Cancelled;
+use crate::pipeline::{Watch, overrides_of, raster_window, report_of};
+use crate::progress::{Watching, bar};
 use crate::raster_report::RasterReport;
 use crate::slice_report::SliceReport;
-use crate::slicing::Plan;
 
 /// Which `.ctb` revision `--ctb-version` asked for.
 ///
@@ -40,67 +41,66 @@ pub fn format_of(path: &Path, revision: CtbRevision) -> Option<SlicedFormat> {
     SlicedFormat::of(path, revision.into())
 }
 
-/// Every window of the stack, counted into the slicing report as it goes past.
-struct Absorbing<'a>(&'a mut SliceReport);
-
-impl Observer for Absorbing<'_> {
-    fn window(&mut self, sliced: &Sliced) {
-        self.0.absorb(sliced);
-    }
-}
-
-/// Slices and rasterises straight into a printable sliced file.
+/// Slices and rasterises `models` straight into a printable sliced file.
 ///
-/// Nothing but the window being worked on is ever in memory; see
-/// `core_pipeline::write` and ADR 0010.
+/// Nothing but the window being worked on is ever in memory; see `core_engine::Run` and
+/// ADR 0010. A run `watch.stop` cancels leaves no file behind.
 #[allow(clippy::too_many_arguments)]
 pub fn write_sliced(
-    plan: &Plan,
-    slice: &mut SliceReport,
-    settings: &RasterSettings,
+    models: &[Model],
+    cutting: &Cutting,
+    job: &JobArgs,
     path: &Path,
-    window: usize,
     printer: &PrinterProfile,
     material: &MaterialProfile,
-    exposure: ExposurePlan,
     format: SlicedFormat,
-    thumbnail: Option<Thumbnail>,
-    fold: Measured,
-) -> Result<RasterReport> {
-    let job = PrintJob {
+    watch: &Watch,
+) -> Result<(SliceReport, RasterReport)> {
+    let format = format.at_revision_of(printer.output);
+    warn_if_the_machine_reads_another_container(printer, format);
+
+    let run = Run::of(&Plate {
+        models: models.to_vec(),
         printer: printer.clone(),
         material: material.clone(),
-        raster: *settings,
-        plan: plan.layers().clone(),
-        // What the stack comes to is only known once it has been cut, and the header is
-        // written before the first layer; `finish` lays it down again. See ADR 0067.
-        volume_mm3: 0.0,
-        exposure,
-        thumbnail,
+        panel: overrides_of(&job.raster),
+        cutting: *cutting,
+        exposure: ExposurePlan::new(job.slicing.exposure_at.clone()),
+        remove_islands: job.raster.remove_islands,
+        format,
+        raster_window: raster_window(&job.raster),
+    })?;
+
+    let mut slice = report_of(run.mesh(), run.windows(), job);
+    warn_if_exposure_was_measured_elsewhere(run.job(), material);
+
+    let mut watching = Watching {
+        report: &mut slice,
+        bar: watch.progress.then(|| bar("layers")),
+        stop: watch.stop,
     };
-    warn_if_exposure_was_measured_elsewhere(&job, material);
+    let written = run
+        .write_file(path, &mut watching)
+        .with_context(|| format!("cannot write {}", path.display()))?;
+    drop(watching);
+    let written = written.ok_or(Cancelled)?;
 
-    let written = core_pipeline::write(
-        &Writing {
-            format,
-            path,
-            job: &job,
-            mesh: plan.mesh(),
-            windows: plan.windows(),
-            settings,
-            window,
-            fold,
-        },
-        &mut Absorbing(slice),
-    )
-    .with_context(|| format!("cannot write {}", path.display()))?
-    .context("a command-line run is never cancelled")?;
+    let raster = RasterReport::of_written(path.to_owned(), *run.panel(), written);
+    Ok((slice, raster))
+}
 
-    Ok(RasterReport::of_written(
-        path.to_owned(),
-        *settings,
-        written,
-    ))
+/// A file in a container the chosen machine does not read is written anyway — the output
+/// name has the last word (ADR 0047) — but the run says so.
+fn warn_if_the_machine_reads_another_container(printer: &PrinterProfile, format: SlicedFormat) {
+    let family = OutputFormat::from(format);
+    if family != printer.output {
+        tracing::warn!(
+            "{} reads {}, and this is a {} file",
+            printer.name,
+            printer.output.label(),
+            family.label()
+        );
+    }
 }
 
 /// Exposure follows the layer height, so a stack cut off the height the resin was

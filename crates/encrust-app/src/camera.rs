@@ -4,7 +4,7 @@ use core_geometry::glam::camera::rh::proj::directx::perspective;
 use core_geometry::glam::camera::rh::view::look_at_mat4;
 use core_geometry::{Aabb, Mat4, Vec2, Vec3};
 
-use crate::plate::Plate;
+use crate::plate::BuildPlate;
 
 /// Kept away from straight up and straight down, where the view direction becomes
 /// parallel to the up vector and the look-at basis is undefined.
@@ -100,7 +100,7 @@ impl OrbitCamera {
     }
 
     /// The view an empty window opens with: the whole build volume, seen from the front.
-    pub fn framing_plate(plate: &Plate) -> Self {
+    pub fn framing_plate(plate: &BuildPlate) -> Self {
         let mut camera = Self {
             target: plate.center(),
             ..Self::default()
@@ -198,7 +198,7 @@ mod tests {
 
     #[test]
     fn the_opening_view_looks_at_the_middle_of_the_plate() {
-        let plate = Plate::default();
+        let plate = BuildPlate::default();
         let camera = OrbitCamera::framing_plate(&plate);
         assert_eq!(camera.target, plate.center());
         assert!(

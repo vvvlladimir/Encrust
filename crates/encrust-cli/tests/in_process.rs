@@ -8,7 +8,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 
 use clap::Parser;
-use encrust_cli::{Args, run};
+use encrust_cli::{Cli, Exit, Stop, exit_code, run};
 
 /// Binary STL of an axis-aligned box, written the way an exporter would: three fresh
 /// vertices per triangle.
@@ -63,11 +63,16 @@ fn temp(name: &str, extension: &str) -> PathBuf {
     ))
 }
 
-/// The invocation a user would type, parsed the way `main` parses it.
-fn args(arguments: &[&str]) -> Args {
-    let mut argv = vec!["slice"];
+/// `encrust slice` as a user would type it, parsed the way `main` parses it and run
+/// until `stop` is asked for.
+fn slice_until(arguments: &[&str], stop: &Stop) -> anyhow::Result<Exit> {
+    let mut argv = vec!["encrust", "slice"];
     argv.extend_from_slice(arguments);
-    Args::parse_from(argv)
+    run(&Cli::parse_from(argv), stop)
+}
+
+fn slice(arguments: &[&str]) -> anyhow::Result<Exit> {
+    slice_until(arguments, &Stop::default())
 }
 
 fn as_str(path: &Path) -> String {
@@ -84,17 +89,17 @@ fn a_box_typed_at_the_command_line_becomes_a_printable_goo_file() {
     let model = write_box_stl("cube", 10.0);
     let out = temp("cube", "goo");
 
-    let clean = run(&args(&[
+    let clean = slice(&[
         &as_str(&model),
         "--printer",
         "elegoo-mars-4-ultra",
         "--center",
         "-o",
         &as_str(&out),
-    ]))
+    ])
     .expect("a closed box slices");
 
-    assert!(clean, "a closed box has no defect to report");
+    assert_eq!(clean, Exit::Success, "a closed box has no defect to report");
     let file = fs::read(&out).expect("the run wrote the file");
     assert_eq!(&file[4..12], &GOO_MAGIC, "the goo writer wrote the header");
     let _ = fs::remove_file(&model);
@@ -106,7 +111,7 @@ fn the_ctb_revision_flag_reaches_the_file_the_window_would_have_written() {
     let model = write_box_stl("revision", 10.0);
     let out = temp("revision", "ctb");
 
-    run(&args(&[
+    slice(&[
         &as_str(&model),
         "--printer",
         "elegoo-mars-4-ultra",
@@ -115,7 +120,7 @@ fn the_ctb_revision_flag_reaches_the_file_the_window_would_have_written() {
         "5",
         "-o",
         &as_str(&out),
-    ]))
+    ])
     .expect("a closed box slices");
 
     let file = fs::read(&out).expect("the run wrote the file");
@@ -139,7 +144,7 @@ fn an_open_mesh_fails_a_strict_run_without_an_error() {
     fs::write(&model, bytes).expect("the temporary directory is writable");
 
     let out = temp("open", "goo");
-    let clean = run(&args(&[
+    let clean = slice(&[
         &as_str(&model),
         "--printer",
         "elegoo-mars-4-ultra",
@@ -147,10 +152,14 @@ fn an_open_mesh_fails_a_strict_run_without_an_error() {
         "--strict",
         "-o",
         &as_str(&out),
-    ]))
+    ])
     .expect("an open mesh still slices");
 
-    assert!(!clean, "--strict has to notice the missing faces");
+    assert_eq!(
+        clean,
+        Exit::Unclean,
+        "--strict has to notice the missing faces"
+    );
     let _ = fs::remove_file(&model);
     let _ = fs::remove_file(&out);
 }
@@ -160,14 +169,14 @@ fn a_name_no_writer_claims_is_written_as_a_png_stack() {
     let model = write_box_stl("png", 4.0);
     let out = temp("png-stack", "d");
 
-    run(&args(&[
+    slice(&[
         &as_str(&model),
         "--printer",
         "elegoo-mars-4-ultra",
         "--center",
         "-o",
         &as_str(&out),
-    ]))
+    ])
     .expect("a closed box slices");
 
     let layers = fs::read_dir(&out)
@@ -176,4 +185,28 @@ fn a_name_no_writer_claims_is_written_as_a_png_stack() {
     assert!(layers > 0, "a directory name asks for a PNG stack");
     let _ = fs::remove_file(&model);
     let _ = fs::remove_dir_all(&out);
+}
+
+#[test]
+fn a_run_stopped_by_ctrl_c_exits_130_and_leaves_no_file() {
+    let model = write_box_stl("cancelled", 10.0);
+    let out = temp("cancelled", "goo");
+    let stop = Stop::default();
+    stop.request();
+
+    let result = slice_until(
+        &[
+            &as_str(&model),
+            "--printer",
+            "elegoo-mars-4-ultra",
+            "--center",
+            "-o",
+            &as_str(&out),
+        ],
+        &stop,
+    );
+
+    assert_eq!(exit_code(&result), 130, "got {result:?}");
+    assert!(!out.exists(), "a cancelled run removes what it started");
+    let _ = fs::remove_file(&model);
 }

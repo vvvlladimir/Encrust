@@ -1,7 +1,9 @@
 # The Encrust `.encrust` project
 
 Our own format: a plate as it was left, so that it opens the same tomorrow. Written and
-read by `encrust-app` alone, in `crates/encrust-app/src/project.rs`.
+read in `crates/core-engine/src/project.rs`, which has no front end in it, so a window,
+a terminal and a browser all open the same file (ADR 0174). What the window converts to
+and from it is `crates/encrust-app/src/project/state.rs`.
 
 ## Shape of a file
 

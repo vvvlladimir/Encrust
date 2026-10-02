@@ -4,7 +4,9 @@ use std::sync::mpsc::{self, Receiver, TryRecvError};
 use core_geometry::Mesh;
 use core_slicer::Windows;
 
-use crate::job::pipeline::{Cutting, thread_pool, windows_of, worker_threads};
+use core_engine::{Cutting, cut};
+
+use crate::job::pipeline::{thread_pool, worker_threads};
 
 /// How a preview build ended.
 #[derive(Debug, Clone, PartialEq)]
@@ -55,10 +57,10 @@ fn build(mesh: Mesh, cutting: Cutting) -> PreviewOutcome {
         Err(error) => return PreviewOutcome::Failed(error.to_string()),
     };
 
-    match pool.install(|| windows_of(&mesh, cutting)) {
+    match pool.install(|| cut(&mesh, &cutting)) {
         Ok(windows) => PreviewOutcome::Built(Arc::new(mesh), windows),
         Err(error) => PreviewOutcome::Failed(
-            error
+            anyhow::Error::new(error)
                 .chain()
                 .map(ToString::to_string)
                 .collect::<Vec<_>>()
@@ -114,7 +116,10 @@ mod tests {
         let PreviewOutcome::Failed(message) = wait(&mut job) else {
             panic!("a layer height of zero cannot produce a stack");
         };
-        assert!(message.contains("cannot slice the model"), "got {message}");
+        assert!(
+            message.contains("cannot work out the layers"),
+            "got {message}"
+        );
     }
 
     #[test]

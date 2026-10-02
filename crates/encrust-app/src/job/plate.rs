@@ -1,117 +1,41 @@
-use std::sync::Arc;
-
-use core_geometry::{Mesh, Transform, Vec3, transform_mesh};
-use printer_profiles::Compensation;
+use core_engine::Model;
 
 use crate::scene::Scene;
 
-/// Bakes every visible object of `plate`, and the supports under it, into one mesh in
-/// plate coordinates, ready to slice.
+/// Every visible model of `plate`, with its cavity, its cuts and its supports, as the
+/// engine takes them.
 ///
-/// The slicer takes a single mesh, and two objects that overlap are one solid on the
-/// plate, so placement is applied here rather than layer by layer. A hollowed model goes
-/// in as its shell — the outer surface with the cavity wound the other way — because the
-/// rasteriser's positive winding rule is what takes the cavity out; see
-/// `docs/decisions/0059`. Supports are already in plate coordinates and go in as they
-/// are. Returns `None` when nothing visible has any geometry.
-/// The same, with the resin's shrinkage compensation applied to each object as it goes in.
-///
-/// Each object is scaled about its own footprint and about the plate, not about the scene:
-/// a part shrinks towards itself and is held at the plate while it prints, so a
-/// correction must not move its neighbours; see `docs/design/compensation.md`.
-pub fn merge_plate_compensated(
-    scene: &Scene,
-    plate: u32,
-    compensation: &Compensation,
-) -> Option<Mesh> {
-    let mut merged = Mesh::default();
-
-    for object in scene.printable(plate) {
-        let mut part = Mesh::default();
-        let mesh = object.hollow.shell().unwrap_or(&object.mesh);
-        let placed = if object.transform == Transform::default() {
-            mesh.as_ref().clone()
-        } else {
-            transform_mesh(mesh, object.transform)
-        };
-        append(&mut part, &placed);
-
-        // The holes and channels, wound inward, which is what takes them out of the model
-        // they were placed on, cavity or no cavity; see ADR 0075.
-        if let Some(cuts) = object.hollow.cut_bodies() {
-            append(&mut part, &transform_mesh(cuts, object.transform));
-        }
-
-        for supports in object.supports.meshes().unwrap_or_default() {
-            append(&mut part, supports);
-        }
-
-        append(&mut merged, &compensated(part, compensation));
-    }
-
-    (!merged.is_empty()).then_some(merged)
-}
-
-/// `part` grown or shrunk to come out at the size it was modelled at, held where it
-/// stands: the scale is taken about the middle of its footprint and about the plate.
-fn compensated(part: Mesh, compensation: &Compensation) -> Mesh {
-    let Some(bounds) = part.aabb().filter(|_| !compensation.scales_nothing()) else {
-        return part;
-    };
-    let (scale, translation) = compensation.placement(
-        (bounds.mins.x + bounds.maxs.x) / 2.0,
-        (bounds.mins.y + bounds.maxs.y) / 2.0,
-    );
-    transform_mesh(
-        &part,
-        Transform {
-            translation: Vec3::from_array(translation),
-            scale: Vec3::from_array(scale),
-            ..Transform::default()
-        },
-    )
-}
-
-/// Every visible mesh of `plate` and where it stands, without copying any of them.
-///
-/// The thumbnail is rendered from this rather than from `merge_plate`, because a render
-/// reads each vertex once wherever it lives and merging would copy the whole plate for
-/// nothing. Support meshes are already in plate coordinates.
-pub fn plate_parts(scene: &Scene, plate: u32) -> Vec<(Arc<Mesh>, Transform)> {
-    let mut parts = Vec::new();
-    for object in scene.printable(plate) {
-        let mesh = object.hollow.shell().unwrap_or(&object.mesh);
-        parts.push((Arc::clone(mesh), object.transform));
-        for supports in object.supports.meshes().unwrap_or_default() {
-            parts.push((Arc::clone(supports), Transform::default()));
-        }
-    }
-    parts
-}
-
-fn append(merged: &mut Mesh, mesh: &Mesh) {
-    let offset = merged.vertices.len() as u32;
-    merged.vertices.extend_from_slice(&mesh.vertices);
-    merged.faces.extend(
-        mesh.faces
-            .iter()
-            .map(|[a, b, c]| [a + offset, b + offset, c + offset]),
-    );
+/// A hollowed model goes in as its shell: the outer surface with the cavity wound the
+/// other way, which is what the rasteriser's positive winding rule takes out; see
+/// `docs/decisions/0059`. Nothing is copied — the meshes travel as the `Arc`s the scene
+/// holds them in.
+pub fn models_of(scene: &Scene, plate: u32) -> Vec<Model> {
+    scene
+        .printable(plate)
+        .map(|object| Model {
+            mesh: std::sync::Arc::clone(object.hollow.shell().unwrap_or(&object.mesh)),
+            transform: object.transform,
+            cuts: object.hollow.cut_bodies().cloned(),
+            supports: object.supports.meshes().unwrap_or_default().to_vec(),
+        })
+        .collect()
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::scene::ImportSummary;
-    use core_geometry::{Bvh, Orientation, Scalar, Vec3, diagnose};
+    use core_engine::bake;
+    use core_geometry::{Bvh, Mesh, Orientation, Scalar, Transform, Vec3, diagnose};
     use core_raster::{Grey, PixelPitch, RasterSettings, Rasterizer, ScanlineRasterizer, Shading};
     use core_slicer::{PlaneSliceEngine, SliceEngine, SliceSettings, Winding};
     use core_volume::Shell;
-    use printer_profiles::SupportProfile;
+    use printer_profiles::{Compensation, SupportProfile};
     use std::sync::Arc;
 
+    /// What the window hands the engine for `plate`, baked into one mesh.
     fn merge_plate(scene: &Scene, plate: u32) -> Option<Mesh> {
-        merge_plate_compensated(scene, plate, &Compensation::default())
+        bake(&models_of(scene, plate), &Compensation::default())
     }
 
     /// Axis-aligned cube spanning 0..1 on every axis, twelve triangles.
@@ -187,42 +111,6 @@ mod tests {
     #[test]
     fn an_empty_scene_has_nothing_to_slice() {
         assert!(merge_plate(&Scene::default(), 0).is_none());
-    }
-
-    #[test]
-    fn two_objects_keep_all_their_faces_and_their_places() {
-        let mut scene = Scene::default();
-        insert(&mut scene, Transform::default());
-        insert(
-            &mut scene,
-            Transform::from_translation(Vec3::new(5.0, 0.0, 0.0)),
-        );
-
-        let merged = merge_plate(&scene, 0).expect("two cubes have geometry");
-        assert_eq!(merged.faces.len(), 24);
-        assert_eq!(merged.vertices.len(), 16);
-
-        let bounds = merged.aabb().expect("the merge has vertices");
-        assert!(bounds.mins.abs_diff_eq(Vec3::ZERO, 1e-5));
-        assert!(bounds.maxs.abs_diff_eq(Vec3::new(6.0, 1.0, 1.0), 1e-5));
-    }
-
-    #[test]
-    fn the_second_objects_faces_point_at_its_own_vertices() {
-        let mut scene = Scene::default();
-        insert(&mut scene, Transform::default());
-        insert(
-            &mut scene,
-            Transform::from_translation(Vec3::new(5.0, 0.0, 0.0)),
-        );
-
-        let merged = merge_plate(&scene, 0).expect("two cubes have geometry");
-        for face in &merged.faces[12..] {
-            assert!(
-                face.iter().all(|index| *index >= 8),
-                "the second cube must index its own vertices"
-            );
-        }
     }
 
     /// A cube ten millimetres across, hanging ten millimetres over the plate, with one
@@ -464,44 +352,6 @@ mod tests {
             (40000 - lit) > 500,
             "a 3 mm hole takes about 700 px out of the 40000 the lid covers, got {}",
             40000 - lit
-        );
-    }
-
-    #[test]
-    fn a_shrinking_resin_prints_the_part_larger_where_it_already_stood() {
-        let mut scene = Scene::default();
-        insert(
-            &mut scene,
-            Transform::from_translation(Vec3::new(30.0, 40.0, 0.0)),
-        );
-        let plain =
-            merge_plate_compensated(&scene, 0, &Compensation::default()).expect("a cube is there");
-        let grown = merge_plate_compensated(
-            &scene,
-            0,
-            &Compensation {
-                shrink_x_pct: 101.0,
-                shrink_y_pct: 101.0,
-                ..Compensation::default()
-            },
-        )
-        .expect("a cube is there");
-
-        let before = plain.aabb().expect("a cube has bounds");
-        let after = grown.aabb().expect("a cube has bounds");
-        let width = |bounds: &core_geometry::Aabb| bounds.maxs.x - bounds.mins.x;
-        let middle = |bounds: &core_geometry::Aabb| (bounds.mins.x + bounds.maxs.x) / 2.0;
-        assert!(
-            (width(&after) / width(&before) - 1.01).abs() < 1e-4,
-            "a unit cube comes out one percent wider"
-        );
-        assert!(
-            (middle(&after) - middle(&before)).abs() < 1e-4,
-            "and still stands where it stood"
-        );
-        assert!(
-            (after.mins.z - before.mins.z).abs() < 1e-4,
-            "and still sits on the plate"
         );
     }
 }
