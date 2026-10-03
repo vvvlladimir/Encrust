@@ -1,11 +1,10 @@
-//! STL, OBJ and 3MF, and the textures a file can carry with it. The loaders take a path rather
-//! than bytes, so the input is written to a temporary file named for the loader this run picked.
+//! STL, OBJ and 3MF, and the textures a file can carry with it.
 #![no_main]
 
-use std::fs;
-use std::process;
+use std::io::Cursor;
+use std::path::Path;
 
-use core_mesh_io::loader_for_extension;
+use core_mesh_io::{ModelFile, loader_for_extension};
 use libfuzzer_sys::fuzz_target;
 
 fuzz_target!(|data: &[u8]| {
@@ -19,19 +18,16 @@ fuzz_target!(|data: &[u8]| {
         _ => "3mf",
     };
 
-    // The pid keeps parallel `-jobs` runs out of each other's file.
-    let path = std::env::temp_dir().join(format!("encrust-fuzz-{}.{extension}", process::id()));
-    if fs::write(&path, body).is_err() {
-        return;
-    }
-
     let loader = loader_for_extension(extension).expect("the three loaders are built in");
-    if let Ok(loaded) = loader.load(&path) {
+    let file = ModelFile {
+        path: Path::new(extension),
+        source: &mut Cursor::new(body),
+        beside: &|_| None,
+    };
+    if let Ok(loaded) = loader.read(file) {
         // A texture is decoded lazily, so loading alone never reaches the image decoders.
         for texture in &loaded.textures {
             let _ = texture.decode();
         }
     }
-
-    let _ = fs::remove_file(&path);
 });

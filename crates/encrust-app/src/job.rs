@@ -13,7 +13,7 @@ mod trapped;
 
 pub use core_pipeline::SlicedFormat;
 pub use format::{applied_to, label_of};
-pub use hollow::{HollowJob, HollowOutcome, HollowRequest, hollow_tasks};
+pub use hollow::{HollowJob, HollowOutcome, HollowRequest, HollowTask, hollow_tasks};
 pub use import::{ImportJob, ImportOutcome, ImportStage};
 pub use measure::{MeasureJob, MeasureOutcome};
 pub use orient::{OrientJob, OrientOutcome, OrientRequest, orient_tasks};

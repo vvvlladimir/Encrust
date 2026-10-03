@@ -5,7 +5,6 @@ use core_raster::Shading;
 use core_format::Fields;
 use core_format::PrintJob;
 use core_format::Thumbnail;
-use core_format::now_utc;
 use core_format::rgb565;
 
 /// Bytes the header occupies. The format fixes it, and `offset of layer content` repeats it.
@@ -43,7 +42,7 @@ fn write_identity(fields: &mut Fields<'_>, job: &PrintJob) -> io::Result<()> {
     fields.bytes(&MAGIC_TAG)?;
     fields.text("Encrust", 32)?;
     fields.text(env!("CARGO_PKG_VERSION"), 24)?;
-    fields.text(&now_utc(), 24)?;
+    fields.text(&job.created_utc(), 24)?;
     fields.text(job.printer.machine_name(), 32)?;
     fields.text(job.printer.machine_name(), 32)?;
     fields.text(&job.material.name, 32)?;

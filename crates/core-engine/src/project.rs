@@ -17,7 +17,7 @@ use core_format::ExposureRange;
 use core_geometry::{Mesh, MeshDiagnostics, Orientation, Scalar, Transform};
 use core_slicer::AdaptiveSettings;
 use core_supports::{ProjectSettings, Region, SupportPoint, SupportTree};
-use core_volume::{Blocker, Channel, DrainHole, HollowMode, InfillSettings};
+use core_volume::{Blocker, Channel, DrainHole, HollowMode, HollowSettings, InfillSettings};
 use printer_profiles::{MaterialProfile, OutputFormat, PrinterProfile, SupportProfile};
 use serde::{Deserialize, Serialize};
 
@@ -26,7 +26,7 @@ pub const EXTENSION: &str = "encrust";
 
 /// The manifest this build writes. A file claiming a higher one is refused rather than
 /// read as far as it parses.
-pub const VERSION: u32 = 1;
+pub const VERSION: u32 = 2;
 
 const MANIFEST: &str = "project.json";
 
@@ -260,6 +260,44 @@ pub struct ObjectHollowState {
     pub blockers: Vec<Blocker>,
     pub drains: Vec<DrainHole>,
     pub channels: Vec<Channel>,
+    /// What the model was hollowed with, or `None` for a solid one. Absent in a version 1
+    /// file, which kept no cavity at all.
+    #[serde(default)]
+    pub cavity: Option<Cavity>,
+}
+
+/// The wall a model was hollowed to, which is all a cavity needs to be built again: its
+/// blockers and channels are already beside it (ADR 0178).
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+pub struct Cavity {
+    pub thickness_mm: Scalar,
+    pub mode: HollowMode,
+    pub precision: Scalar,
+    pub infill: Option<InfillSettings>,
+}
+
+impl Cavity {
+    /// The wall `asked` builds, without what the model laid over it.
+    pub fn of(asked: &HollowSettings) -> Self {
+        Self {
+            thickness_mm: asked.thickness_mm,
+            mode: asked.mode,
+            precision: asked.precision,
+            infill: asked.infill,
+        }
+    }
+
+    /// What a run is asked for to build this wall again, before the model lays its own
+    /// blockers and channels over it.
+    pub fn settings(&self) -> HollowSettings {
+        HollowSettings {
+            thickness_mm: self.thickness_mm,
+            mode: self.mode,
+            precision: self.precision,
+            infill: self.infill,
+            ..HollowSettings::default()
+        }
+    }
 }
 
 /// Writes the project into `sink`, which is the only thing a browser can offer.
@@ -440,6 +478,12 @@ mod tests {
                                 points: vec![Vec3::ZERO, Vec3::Z],
                                 diameter_mm: 3.0,
                             }],
+                            cavity: Some(Cavity {
+                                thickness_mm: 1.5,
+                                mode: HollowMode::BottomThrough,
+                                precision: 0.25,
+                                infill: None,
+                            }),
                         },
                     })
                     .collect(),
@@ -484,8 +528,42 @@ mod tests {
             object.hollow.channels,
             saved.manifest.objects[0].hollow.channels
         );
+        assert_eq!(
+            object.hollow.cavity,
+            saved.manifest.objects[0].hollow.cavity
+        );
         assert_eq!(back.manifest.slicing.format, OutputFormat::Ctb5);
         assert_eq!(back.manifest.hollow.mode, HollowMode::BottomThrough);
+    }
+
+    #[test]
+    fn a_version_1_file_opens_with_every_model_solid() {
+        let saved = project(1);
+        let mut manifest = serde_json::to_value(&saved.manifest).expect("the manifest serialises");
+        manifest["version"] = 1.into();
+        let hollow = manifest["objects"][0]["hollow"]
+            .as_object_mut()
+            .expect("an object carries its hollow state");
+        hollow.remove("cavity");
+
+        let mut bytes = Cursor::new(Vec::new());
+        {
+            let mut zip = zip::ZipWriter::new(&mut bytes);
+            let options = zip::write::SimpleFileOptions::default();
+            zip.start_file(MANIFEST, options)
+                .expect("a zip in memory takes an entry");
+            zip.write_all(&serde_json::to_vec(&manifest).expect("the manifest serialises"))
+                .expect("a zip in memory takes bytes");
+            zip.start_file(mesh_name(0), options)
+                .expect("a zip in memory takes an entry");
+            zip.write_all(&blob::write(&saved.meshes[0]))
+                .expect("a zip in memory takes bytes");
+            zip.finish().expect("a zip in memory finishes");
+        }
+        bytes.set_position(0);
+
+        let back = read_from(bytes).expect("a version 1 file still opens");
+        assert_eq!(back.manifest.objects[0].hollow.cavity, None);
     }
 
     #[test]

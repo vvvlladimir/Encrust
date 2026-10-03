@@ -52,6 +52,7 @@ impl Run {
             volume_mm3: 0.0,
             exposure: plate.exposure.clone(),
             thumbnail: thumbnail(&plate.models),
+            created_unix_s: plate.created_unix_s,
         };
 
         Ok(Self {

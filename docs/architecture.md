@@ -64,7 +64,7 @@ it are in `.claude/rules/architecture.md`.
 | Crate | Owns |
 |---|---|
 | `core-geometry` | `Mesh`, `UvMap`, `Heightmap`, `Triangle`, `Aabb`, `Transform`, `Ray`, `PlacedHit`, `Bvh` with `closest`/`faces_within`, `ClosestPoint`, `Adjacency`, `Winding`, `Plane`, `Cut`, `FastHasher`/`FastMap`/`FastSet`, glam re-exports; `weld`, `diagnose`, `orient_outward`, `center_of_mass`, `transform_mesh`, raycasts, `closest_point`, `winding_number`, `cut`, `split` |
-| `core-mesh-io` | `MeshLoader` returning `Loaded` with one `Texture` per material and `decode` to a `Heightmap`, `StlLoader`, `ObjLoader` with UVs and `map_Kd`, `ThreeMfLoader` with `texture2dgroup` |
+| `core-mesh-io` | `MeshLoader` reading a `ModelFile` — a name, a `ReadSeek` and the files beside it — or a path, returning `Loaded` with one `Texture` per material and `decode` to a `Heightmap`, `StlLoader`, `ObjLoader` with UVs and `map_Kd`, `ThreeMfLoader` with `texture2dgroup` |
 | `core-slicer` | `SliceSettings`, `LayerPlan`, `AdaptiveSettings`, `Layer`, `Contour`, `Sliced`, `SliceEngine` with `slice_at`, `PlaneSliceEngine`, `layer_heights`, `adaptive_plan`, `offset_contours`, `Windows` sampling several planes a layer |
 | `core-raster` | `RasterSettings`, `Grey`, `Run`, `LayerRuns` with `blurred`, `LayerMask`, `Rastered`, `Rasterizer`, `ScanlineRasterizer`, `downsample` |
 | `core-analysis` | `cure` into a `Cured` layer of `Piece`s with area, centre and pull after Stefan; `Measured` folding volume, hardest pull, widest step and `Risk`s — islands, levers on the narrowest neck under a piece, peels — or taking islands out as it goes; `erase`, `island_runs`, `equivalent_disc_mm` |
@@ -75,7 +75,7 @@ it are in `.claude/rules/architecture.md`.
 | `core-thumbnail` | `Thumbnail`, `Part`, `ThumbnailSettings`, `render` (CPU only) |
 | `core-format` | `PrintJob`, `ExposureRange`/`ExposurePlan`, `SlicedFileWriter`, `LayerSink`, `Fields`, `FormatError`, the greyscale and colour PNG codec the archive containers share (ADR 0167), and `Rle7Layer`/`decode_rle7` with the RGB15 preview record two binary families share (ADR 0168); `Reads::claim`, `panel_in_range` and `read_entry`, the bounds every reader puts a header's counts through (ADR 0171) |
 | `core-pipeline` | The write stage every front end shares (ADR 0127): `SlicedFormat` and the extension that picks it, `PanelOverrides`/`raster_settings`, `Folded`/`Tolerance`/`fold_group`, `Writing`/`Written`/`write_to` streaming a stack into a sink with `write` wrapping it for a path (ADR 0175), `measure` doing the same without writing, `Observer` for a window arriving, layers landing and whether to stop, `PipelineError` |
-| `core-engine` | The plate every front end runs (ADR 0174): `Model`/`Plate`, `Cutting` and `cut`, `bake` merging the plate into one mesh with the resin's shrinkage applied and `parts` listing it for a thumbnail, `Run` with `write`/`write_file`/`measure`, `EngineError`; and `project` — the `.encrust` manifest, its mesh blobs, `read_from`/`write_to`, `digest`, `Axis`/`Keep`/`Array` |
+| `core-engine` | The plate every front end runs (ADR 0174): `Model`/`Plate`, `Cutting` and `cut`, `bake` merging the plate into one mesh with the resin's shrinkage applied and `parts` listing it for a thumbnail, `Run` with `write`/`write_file`/`measure`, `EngineError`; `open_plate` with `Opening`, a project's plate with its cavities and support trees built again (ADR 0178); and `project` — the `.encrust` manifest with each model's `Cavity`, its mesh blobs, `read_from`/`write_to`, `digest`, `Axis`/`Keep`/`Array` |
 | `format-goo` | `GooWriter`, `GooReader` and the `.goo` codec |
 | `format-chitu` | `CtbWriter`, `CtbVersion` v4/v5; `CbddlpWriter`, `CbddlpFlavour` and the eight-pass RLE1 codec (ADR 0146); `ChituReader` and `layer_crypt` (ADR 0149) |
 | `format-anycubic` | `AnycubicWriter`, `AnycubicFlavour` over seventeen extensions, `AnycubicVersion` v1/516/517, `AnycubicReader` and the four-bit PW0 codec (ADR 0147, 0166) |
@@ -87,6 +87,7 @@ it are in `.claude/rules/architecture.md`.
 | `net-sdcp` | `Printer` with its `Transport`, `Attributes`, `Status`, `Machine`, `PrintInfo`, `FileTransferInfo`/`Fetching`, `Transfer`, `SdcpError`; `discover`/`probe` over UDP for both reply shapes, `Control` over a WebSocket or an MQTT broker of its own, `upload` posting packets or serving the file a board fetches (ADR 0154, 0155) |
 | `net-prusalink` | `Link`, `Auth`, `Version`, `DEFAULT_USER`, `PrusaLinkError`; `probe`, `upload` as one PUT and `start_print`, over HTTP digest or an API key (ADR 0152) |
 | `encrust-cli` | `encrust` binary, one subcommand per module in `commands/` (ADR 0176): `pipeline` runs one model — orient, hollow, supports, then hands it to `core-engine` as a one-model plate, or cuts it here for a PNG stack; `batch` runs it over a directory with a JSON report per model; `--json`, exit codes, the progress bar and Ctrl-C |
+| `web-engine` | The browser's front end (ADR 0177): `slice_project`, the bytes of a project into the bytes of a sliced file with no file system, thread or clock, and the `wasm-bindgen` exports of it; `www/` the page, its worker and the Node measurement |
 | `xtask` | `xtask` binary: `gen-profiles`, the printer catalogue transcribed from a directory of source profiles, run by hand and never from a build script (ADR 0165) |
 | `encrust-app` | `encrust-gui` binary: egui/wgpu window — plate panel left, one inspector panel per tool and the rail beside it, plate tabs on their own strip, Preview splitting the stage between model and mask; `Scene` with `duplicate`/`mirror`/`array`, `BuildPlate` — the machine's platform, named apart from `core_engine::Plate` — `OrbitCamera`, picking, gizmo, `History`, `Measure`, `Cutting`, jobs that hold no stack, `Settings`, `shortcuts`, `ui/theme`, `prefs`, `project` — the dialogs and the `Scene` ↔ `Manifest` conversion over `core_engine::project` — `updates` |
 
@@ -103,6 +104,7 @@ encrust-app ──> core-engine, every core-*, printer-profiles, every format-*,
                winresource at build time, for the Windows icon
 encrust-cli ──> core-engine, every core-*, printer-profiles, every format-*, rayon,
                clap, serde, serde_json, indicatif, ctrlc
+web-engine ──> core-engine, core-pipeline, wasm-bindgen
 xtask ──> printer-profiles, toml
 
 core-engine ──> core-pipeline, core-analysis, core-format, core-geometry, core-raster,

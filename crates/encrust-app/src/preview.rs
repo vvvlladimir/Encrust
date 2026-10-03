@@ -1403,6 +1403,7 @@ z = 10.0
             volume_mm3: 0.0,
             exposure: core_format::ExposurePlan::default(),
             thumbnail: None,
+            created_unix_s: 0,
         };
 
         let mut mask = LayerMask::new(16, 8);

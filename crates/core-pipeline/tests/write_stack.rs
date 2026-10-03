@@ -109,6 +109,7 @@ fn job(plan: core_slicer::LayerPlan, raster: RasterSettings) -> PrintJob {
         volume_mm3: 0.0,
         exposure: ExposurePlan::default(),
         thumbnail: None,
+        created_unix_s: 0,
     }
 }
 

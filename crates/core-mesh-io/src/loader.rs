@@ -1,6 +1,27 @@
+use std::fs::File;
+use std::io::{BufReader, Read, Seek};
 use std::path::Path;
 
 use crate::{Loaded, MeshIoError, ObjLoader, StlLoader, ThreeMfLoader};
+
+/// A byte source a loader can read and rewind.
+pub trait ReadSeek: Read + Seek {}
+
+impl<T: Read + Seek> ReadSeek for T {}
+
+/// A model file in hand: its name, its bytes, and a way to the files that sit beside it.
+///
+/// Nothing here touches a disk, so a browser hands over what the user picked the same way
+/// a desktop hands over a path.
+pub struct ModelFile<'a> {
+    /// What the file is called, which is what errors name and what a sibling is found
+    /// beside.
+    pub path: &'a Path,
+    pub source: &'a mut dyn ReadSeek,
+    /// The bytes of a file next to this one by its name as the model refers to it — an
+    /// `.obj`'s material library or its texture — or `None` when there is no such file.
+    pub beside: &'a dyn Fn(&str) -> Option<Vec<u8>>,
+}
 
 /// A mesh importer for one file format.
 ///
@@ -11,7 +32,22 @@ pub trait MeshLoader {
     /// Lower-case extensions this loader accepts, without the dot.
     fn extensions(&self) -> &'static [&'static str];
 
-    fn load(&self, path: &Path) -> Result<Loaded, MeshIoError>;
+    fn read(&self, file: ModelFile<'_>) -> Result<Loaded, MeshIoError>;
+
+    /// Reads the file at `path`, finding its siblings in the same directory.
+    fn load(&self, path: &Path) -> Result<Loaded, MeshIoError> {
+        let file = File::open(path).map_err(|source| MeshIoError::Io {
+            path: path.to_owned(),
+            source,
+        })?;
+        let directory = path.parent().unwrap_or(Path::new("."));
+        let beside = |name: &str| std::fs::read(directory.join(name)).ok();
+        self.read(ModelFile {
+            path,
+            source: &mut BufReader::new(file),
+            beside: &beside,
+        })
+    }
 }
 
 /// Picks a loader by file extension, case-insensitively.

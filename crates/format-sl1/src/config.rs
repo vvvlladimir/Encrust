@@ -1,4 +1,4 @@
-use core_format::{PrintJob, now_utc};
+use core_format::PrintJob;
 
 use crate::writer::Sl1Flavour;
 
@@ -15,7 +15,7 @@ pub(crate) fn config_ini(job: &PrintJob, flavour: Sl1Flavour, job_dir: &str) -> 
     ini.number("expTime", job.header_exposure_s());
     ini.number("expTimeFirst", material.bottom_exposure_s);
     ini.int("expUserProfile", 0);
-    ini.text("fileCreationTimestamp", &now_utc());
+    ini.text("fileCreationTimestamp", &job.created_utc());
     ini.int("hollow", 0);
     ini.number("layerHeight", job.nominal_height_mm());
     ini.text("materialName", &material.name);

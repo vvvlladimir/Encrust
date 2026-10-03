@@ -56,4 +56,6 @@ pub struct Plate {
     pub format: SlicedFormat,
     /// Layers rasterised at once. Peak memory is this many masks (ADR 0010).
     pub raster_window: usize,
+    /// When the file is made, seconds since the Unix epoch, read off the caller's clock.
+    pub created_unix_s: u64,
 }

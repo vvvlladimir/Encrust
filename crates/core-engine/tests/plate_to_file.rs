@@ -88,6 +88,7 @@ fn plate(format: SlicedFormat) -> Plate {
         remove_islands: false,
         format,
         raster_window: 2,
+        created_unix_s: 0,
     }
 }
 

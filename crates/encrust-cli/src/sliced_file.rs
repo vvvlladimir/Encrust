@@ -69,6 +69,7 @@ pub fn write_sliced(
         remove_islands: job.raster.remove_islands,
         format,
         raster_window: raster_window(&job.raster),
+        created_unix_s: now_unix_s(),
     })?;
 
     let mut slice = report_of(run.mesh(), run.windows(), job);
@@ -118,6 +119,14 @@ fn warn_if_exposure_was_measured_elsewhere(job: &PrintJob, material: &MaterialPr
             normal_s,
         );
     }
+}
+
+/// The clock the file is stamped with. One that reads before the epoch stamps the epoch:
+/// the field is informational and no printer refuses a file over it.
+fn now_unix_s() -> u64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map_or(0, |since| since.as_secs())
 }
 
 #[cfg(test)]

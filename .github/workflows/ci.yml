@@ -59,6 +59,15 @@ jobs:
       - name: Test
         run: cargo test --workspace --locked
 
+      # Everything but the front ends, the network and the profile tool builds for a browser.
+      # Compiling is not running: a call that only fails there is kept out by ADR 0177.
+      - name: Browser build
+        run: |
+          rustup target add wasm32-unknown-unknown
+          cargo check --workspace --locked --target wasm32-unknown-unknown \
+            --exclude encrust-app --exclude encrust-cli --exclude net-sdcp \
+            --exclude net-prusalink --exclude xtask
+
       # Every public item of a library crate carries rustdoc, by the rule in code-style.md. A broken
       # intra-doc link is the usual way that stops being true.
       - name: Rustdoc

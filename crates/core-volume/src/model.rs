@@ -177,6 +177,11 @@ impl ModelHollow {
         self.built.as_ref().map(|built| &built.mesh)
     }
 
+    /// What the standing shell was built from, or `None` while the model is still solid.
+    pub fn asked(&self) -> Option<&HollowSettings> {
+        self.built.as_ref().map(|built| &built.settings)
+    }
+
     /// Resin the cavity takes out of this model, in cubic millimetres.
     pub fn cavity_mm3(&self) -> Scalar {
         self.built.as_ref().map_or(0.0, |built| built.cavity_mm3)

@@ -114,14 +114,14 @@ dependencies = [
 
 [[package]]
 name = "core-analysis"
-version = "0.0.1"
+version = "0.1.0"
 dependencies = [
  "core-raster",
 ]
 
 [[package]]
 name = "core-format"
-version = "0.0.1"
+version = "0.1.0"
 dependencies = [
  "core-raster",
  "core-slicer",
@@ -134,7 +134,7 @@ dependencies = [
 
 [[package]]
 name = "core-geometry"
-version = "0.0.1"
+version = "0.1.0"
 dependencies = [
  "earcutr",
  "glam",
@@ -144,7 +144,7 @@ dependencies = [
 
 [[package]]
 name = "core-mesh-io"
-version = "0.0.1"
+version = "0.1.0"
 dependencies = [
  "core-geometry",
  "image",
@@ -158,7 +158,7 @@ dependencies = [
 
 [[package]]
 name = "core-pipeline"
-version = "0.0.1"
+version = "0.1.0"
 dependencies = [
  "core-analysis",
  "core-format",
@@ -180,7 +180,7 @@ dependencies = [
 
 [[package]]
 name = "core-raster"
-version = "0.0.1"
+version = "0.1.0"
 dependencies = [
  "core-slicer",
  "glam",
@@ -189,7 +189,7 @@ dependencies = [
 
 [[package]]
 name = "core-slicer"
-version = "0.0.1"
+version = "0.1.0"
 dependencies = [
  "core-geometry",
  "glam",
@@ -202,7 +202,7 @@ dependencies = [
 
 [[package]]
 name = "core-thumbnail"
-version = "0.0.1"
+version = "0.1.0"
 dependencies = [
  "core-geometry",
 ]
@@ -343,7 +343,7 @@ checksum = "77ce24cb58228fbb8aa041425bb1050850ac19177686ea6e0f41a70416f56fdb"
 
 [[package]]
 name = "format-anycubic"
-version = "0.0.1"
+version = "0.1.0"
 dependencies = [
  "core-format",
  "core-raster",
@@ -353,7 +353,7 @@ dependencies = [
 
 [[package]]
 name = "format-chitu"
-version = "0.0.1"
+version = "0.1.0"
 dependencies = [
  "core-format",
  "core-raster",
@@ -363,7 +363,7 @@ dependencies = [
 
 [[package]]
 name = "format-creality"
-version = "0.0.1"
+version = "0.1.0"
 dependencies = [
  "core-format",
  "core-raster",
@@ -372,7 +372,7 @@ dependencies = [
 
 [[package]]
 name = "format-cws"
-version = "0.0.1"
+version = "0.1.0"
 dependencies = [
  "core-format",
  "core-raster",
@@ -382,7 +382,7 @@ dependencies = [
 
 [[package]]
 name = "format-gcode-zip"
-version = "0.0.1"
+version = "0.1.0"
 dependencies = [
  "core-format",
  "core-raster",
@@ -392,7 +392,7 @@ dependencies = [
 
 [[package]]
 name = "format-goo"
-version = "0.0.1"
+version = "0.1.0"
 dependencies = [
  "core-format",
  "core-raster",
@@ -402,7 +402,7 @@ dependencies = [
 
 [[package]]
 name = "format-sl1"
-version = "0.0.1"
+version = "0.1.0"
 dependencies = [
  "core-format",
  "core-raster",
@@ -413,7 +413,7 @@ dependencies = [
 
 [[package]]
 name = "format-svgx"
-version = "0.0.1"
+version = "0.1.0"
 dependencies = [
  "core-format",
  "core-raster",
@@ -846,7 +846,7 @@ dependencies = [
 
 [[package]]
 name = "printer-profiles"
-version = "0.0.1"
+version = "0.1.0"
 dependencies = [
  "directories",
  "serde",

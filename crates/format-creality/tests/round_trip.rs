@@ -70,6 +70,7 @@ fn job(layer_count: u32) -> PrintJob {
         volume_mm3: 0.0,
         exposure: ExposurePlan::default(),
         thumbnail: None,
+        created_unix_s: 0,
     }
 }
 

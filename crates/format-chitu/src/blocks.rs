@@ -1,6 +1,6 @@
 use std::io;
 
-use core_format::{Fields, PREVIEW_SIZES_PX, PrintJob, Rgb, minutes_since_epoch, write_preview};
+use core_format::{Fields, PREVIEW_SIZES_PX, PrintJob, Rgb, write_preview};
 
 use crate::writer::CtbVersion;
 
@@ -184,7 +184,7 @@ fn write_slicer_info(
     fields.u8(0x0F)?;
     fields.u16_le(0)?;
     fields.u8(version.per_layer_settings())?;
-    fields.u32_le(minutes_since_epoch())?;
+    fields.u32_le(job.created_minutes())?;
     fields.u32_le(1)?;
     fields.u32_le(version.software_version())?;
     let [_, after_lift_s, after_retract_s] = job.material.waits.rests_s();

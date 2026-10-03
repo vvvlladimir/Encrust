@@ -345,6 +345,7 @@ impl Slicing {
                 remove_islands: self.remove_islands,
                 format,
                 raster_window: worker_threads(),
+                created_unix_s: now_unix_s(),
             },
             output,
             threads: worker_threads(),
@@ -520,6 +521,14 @@ fn report(outcome: Outcome, material: &MaterialProfile) -> Status {
     }
 }
 
+/// The clock the file is stamped with. One that reads before the epoch stamps the epoch:
+/// the field is informational and no printer refuses a file over it.
+fn now_unix_s() -> u64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map_or(0, |since| since.as_secs())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -676,6 +685,7 @@ z = 10.0
             volume_mm3: 0.0,
             exposure: ExposurePlan::new(slicing.exposure.clone()),
             thumbnail: None,
+            created_unix_s: 0,
         };
         let (before, after) = (job(&before), job(&after));
         for index in [0, 10, 100, 250, 399] {

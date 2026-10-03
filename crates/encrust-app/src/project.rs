@@ -7,7 +7,7 @@
 pub mod state;
 
 use anyhow::Context as _;
-use core_engine::project::{EXTENSION, Project, digest, load, save};
+use core_engine::project::{Cavity, EXTENSION, Project, digest, load, save};
 
 use crate::panels::Window;
 use crate::panels::frame_view;
@@ -68,6 +68,12 @@ pub fn open_dialog(window: &mut Window) {
         return;
     };
 
+    let cavities: Vec<Option<Cavity>> = project
+        .manifest
+        .objects
+        .iter()
+        .map(|object| object.hollow.cavity)
+        .collect();
     state::apply(
         project,
         state::CapturedMut {
@@ -81,7 +87,13 @@ pub fn open_dialog(window: &mut Window) {
         },
     );
     window.doc.project.path = Some(path);
-    window.doc.project.saved = Some(digest(&captured(window).manifest));
+    // The cavities are still being built on a worker; the plate counts as saved in the
+    // state it reaches once they are.
+    let mut manifest = captured(window).manifest;
+    for (object, cavity) in manifest.objects.iter_mut().zip(cavities) {
+        object.hollow.cavity = cavity;
+    }
+    window.doc.project.saved = Some(digest(&manifest));
     window.doc.history = History::default();
     frame_view(
         &window.doc.scene,

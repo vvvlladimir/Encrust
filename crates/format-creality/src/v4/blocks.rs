@@ -4,7 +4,7 @@
 
 use std::io;
 
-use core_format::{Fields, PREVIEW_HEADER_BYTES, PrintJob, Rgb, encode_rgb15, minutes_since_epoch};
+use core_format::{Fields, PREVIEW_HEADER_BYTES, PrintJob, Rgb, encode_rgb15};
 
 use crate::family::MAGIC;
 
@@ -166,7 +166,7 @@ fn write_slicer_info(fields: &mut Fields<'_>, job: &PrintJob) -> io::Result<()> 
     fields.zeros(4 * 6)?;
     fields.f32_le(after_lift_s)?;
     fields.u32_le(u32::from(job.printer.firmware.per_layer_settings))?;
-    fields.u32_le(minutes_since_epoch())?;
+    fields.u32_le(job.created_minutes())?;
     fields.u32_le(1)?;
 
     // No slicer names itself here: the field is a capability stamp of the vendor's own.

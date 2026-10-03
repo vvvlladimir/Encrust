@@ -229,6 +229,7 @@ z = 10.0
             remove_islands: false,
             format: SlicedFormat::Goo,
             raster_window: 2,
+            created_unix_s: 0,
         }
     }
 
