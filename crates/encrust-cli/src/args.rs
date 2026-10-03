@@ -47,7 +47,7 @@ impl ProfileArgs {
 }
 
 /// What happens to a model on its way in: repair, placement and relief.
-#[derive(Debug, clap::Args)]
+#[derive(Debug, Clone, clap::Args)]
 #[command(next_help_heading = "Model")]
 pub struct ImportArgs {
     /// Distance below which vertices are merged, millimetres.
@@ -73,7 +73,7 @@ pub struct ImportArgs {
 }
 
 /// Where the model stands on the plate.
-#[derive(Debug, clap::Args)]
+#[derive(Debug, Clone, clap::Args)]
 pub struct TransformArgs {
     /// Rotation in degrees around X, Y and Z, applied in that order.
     #[arg(long, value_name = "X,Y,Z", value_parser = parse_rotation)]
@@ -106,11 +106,22 @@ pub struct SupportArgs {
 }
 
 /// A shipped support preset, for a run that has no profile of its own to point at.
-#[derive(Clone, Copy, Debug, clap::ValueEnum)]
+#[derive(Clone, Copy, Debug, clap::ValueEnum, serde::Deserialize)]
+#[serde(rename_all = "kebab-case")]
 pub enum SupportPreset {
     Light,
     Medium,
     Heavy,
+}
+
+impl SupportPreset {
+    pub fn profile(self) -> SupportProfile {
+        match self {
+            Self::Light => SupportProfile::light(),
+            Self::Medium => SupportProfile::medium(),
+            Self::Heavy => SupportProfile::heavy(),
+        }
+    }
 }
 
 impl SupportArgs {
@@ -121,11 +132,7 @@ impl SupportArgs {
                 .with_context(|| format!("cannot load {}", path.display()))
                 .map(Some);
         }
-        Ok(self.supports.map(|preset| match preset {
-            SupportPreset::Light => SupportProfile::light(),
-            SupportPreset::Medium => SupportProfile::medium(),
-            SupportPreset::Heavy => SupportProfile::heavy(),
-        }))
+        Ok(self.supports.map(SupportPreset::profile))
     }
 }
 
@@ -228,10 +235,6 @@ pub struct JobArgs {
 
     #[command(flatten)]
     pub raster: RasterArgs,
-
-    /// Cut and measure the stack, but write nothing.
-    #[arg(long)]
-    pub dry_run: bool,
 
     /// Exit with code 3 when the model has defects or does not fit.
     #[arg(long)]

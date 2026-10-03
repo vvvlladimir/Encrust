@@ -52,6 +52,7 @@ Grouped by what the decision governs; the number is still the order it was taken
 | [0174](0174-a-plate-is-a-crate-live-and-written-down.md) | A plate is a crate, live and written down | Accepted |
 | [0176](0176-the-command-line-is-encrust-with-subcommands.md) | The command line is `encrust`, with subcommands, JSON and a clean Ctrl-C | Accepted |
 | [0177](0177-the-cores-build-for-a-browser.md) | The cores build for a browser: wasm32, one thread, no clock, a cavity budget | Accepted |
+| [0179](0179-a-plate-file-is-toml-read-by-the-command-line.md) | A plate file is TOML, read by the command line alone | Accepted |
 
 ### Geometry
 
@@ -209,6 +210,7 @@ Grouped by what the decision governs; the number is still the order it was taken
 | [0169](0169-the-vector-container-traces-its-polygons-out-of-the-mask.md) | Trace the `.svgx` polygons out of the mask rather than carry contours to the writer | Accepted |
 | [0170](0170-the-cws-is-its-own-crate-and-only-the-plain-variant-is-written.md) | Write the `.cws` from its own crate, and only the plain variant | Accepted |
 | [0171](0171-a-count-read-from-a-file-is-checked-against-the-file.md) | Check every count a file states against the file before reserving for it | Accepted |
+| [0180](0180-a-sliced-file-is-converted-in-the-write-stage.md) | A sliced file is converted in the write stage, never resampled | Accepted |
 
 ### Printer and material profiles
 

@@ -6,16 +6,20 @@
 mod args;
 mod batch;
 mod commands;
+mod estimate;
 mod exit;
 mod hollowing;
 mod json;
+mod plate_file;
 mod png_stack;
 mod progress;
+mod project;
 mod raster_report;
 mod slice_report;
 mod sliced_file;
 mod sliced_read;
 mod stack;
+mod stage;
 mod stats;
 mod supports;
 

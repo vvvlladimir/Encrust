@@ -75,39 +75,7 @@ impl fmt::Display for RasterReport {
             self.destination.display()
         )?;
         writeln!(f, "  cured volume  {:.3} mm^3", self.measured.volume_mm3())?;
-        if let Some(pull) = self.measured.hardest_pull() {
-            writeln!(
-                f,
-                "  hardest pull  layer {}, like a disc {:.1} mm across",
-                pull.layer + 1,
-                equivalent_disc_mm(pull.value)
-            )?;
-        }
-        if let Some(growth) = self.measured.largest_growth() {
-            writeln!(
-                f,
-                "  widest step   layer {}, {:.1} mm^2 more than the one under it",
-                growth.layer + 1,
-                growth.value
-            )?;
-        }
-        let risks = self.measured.risks();
-        for risk in risks.iter().take(RISKS_SHOWN) {
-            writeln!(f, "  risk          {}", describe_risk(risk))?;
-        }
-        if risks.len() > RISKS_SHOWN {
-            writeln!(f, "  risk          and {} more", risks.len() - RISKS_SHOWN)?;
-        }
-        if self.measured.removed_islands() > 0 {
-            writeln!(
-                f,
-                "  islands       {} taken out of the file",
-                self.measured.removed_islands()
-            )?;
-        }
-        if let Some(worst) = self.measured.worst() {
-            writeln!(f, "  likely fails  at layer {}", worst.layer + 1)?;
-        }
+        write_risks(f, &self.measured)?;
 
         if !self.is_clean() {
             writeln!(
@@ -139,6 +107,45 @@ fn describe_risk(risk: &Risk) -> String {
         RiskKind::Peel { force_n } => format!("peel of {force_n:.0} N on the film"),
     };
     format!("layer {}, {what} at {x:.1}, {y:.1} mm", risk.layer + 1)
+}
+
+/// The layers that pull hardest and grow most, and what is likely to fail, as both the
+/// written report and `estimate` print them.
+pub fn write_risks(f: &mut fmt::Formatter<'_>, measured: &Measured) -> fmt::Result {
+    if let Some(pull) = measured.hardest_pull() {
+        writeln!(
+            f,
+            "  hardest pull  layer {}, like a disc {:.1} mm across",
+            pull.layer + 1,
+            equivalent_disc_mm(pull.value)
+        )?;
+    }
+    if let Some(growth) = measured.largest_growth() {
+        writeln!(
+            f,
+            "  widest step   layer {}, {:.1} mm^2 more than the one under it",
+            growth.layer + 1,
+            growth.value
+        )?;
+    }
+    let risks = measured.risks();
+    for risk in risks.iter().take(RISKS_SHOWN) {
+        writeln!(f, "  risk          {}", describe_risk(risk))?;
+    }
+    if risks.len() > RISKS_SHOWN {
+        writeln!(f, "  risk          and {} more", risks.len() - RISKS_SHOWN)?;
+    }
+    if measured.removed_islands() > 0 {
+        writeln!(
+            f,
+            "  islands       {} taken out of the file",
+            measured.removed_islands()
+        )?;
+    }
+    if let Some(worst) = measured.worst() {
+        writeln!(f, "  likely fails  at layer {}", worst.layer + 1)?;
+    }
+    Ok(())
 }
 
 fn describe_shading(settings: &RasterSettings) -> String {

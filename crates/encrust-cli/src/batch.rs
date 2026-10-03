@@ -18,7 +18,7 @@ use crate::pipeline::{self, Watch};
 use crate::profiles::Chosen;
 use crate::progress::bar;
 
-pub use report::{ModelReport, Summary};
+pub use report::{EstimateReport, ModelReport, PlateReport, Summary};
 
 /// The mesh extensions a batch run picks up. A directory holds anything; only these are
 /// models, and anything else in it is left alone rather than failed on.

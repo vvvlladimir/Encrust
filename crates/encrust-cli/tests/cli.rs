@@ -103,6 +103,10 @@ fn slice(args: &[&str]) -> Output {
     encrust(&[&["slice"], args].concat())
 }
 
+fn estimate(args: &[&str]) -> Output {
+    encrust(&[&["estimate"], args].concat())
+}
+
 /// Runs the binary with its own profile directory, so a test never reads the real one.
 fn encrust_with_profiles(dir: &Path, args: &[&str]) -> Output {
     Command::new(env!("CARGO_BIN_EXE_encrust"))
@@ -233,10 +237,9 @@ fn scale_and_rotation_change_the_reported_size() {
 #[test]
 fn center_sits_the_model_on_the_plate() {
     let path = write_box_stl("centered", 10.0, 12, 0);
-    let text = stdout(&slice(&[
+    let text = stdout(&estimate(&[
         path.to_str().unwrap(),
         "--center",
-        "--dry-run",
         "--profile",
         shipped_profile().to_str().unwrap(),
     ]));
@@ -252,11 +255,10 @@ fn center_sits_the_model_on_the_plate() {
 #[test]
 fn a_model_larger_than_the_machine_is_reported() {
     let path = write_box_stl("oversized", 200.0, 12, 0);
-    let output = slice(&[
+    let output = estimate(&[
         path.to_str().unwrap(),
         "--profile",
         shipped_profile().to_str().unwrap(),
-        "--dry-run",
         "--strict",
     ]);
 
@@ -458,23 +460,21 @@ fn a_model_hanging_off_the_display_is_clipped_and_fails_strict() {
 }
 
 #[test]
-fn dry_run_stops_after_the_slice_report() {
+fn estimate_reports_the_stack_and_writes_nothing() {
     let path = write_box_stl("no-raster", 10.0, 12, 0);
-    let out = output_dir("no-raster");
-    let text = stdout(&slice(&[
+    let text = stdout(&estimate(&[
         path.to_str().unwrap(),
         "--profile",
         test_panel().to_str().unwrap(),
         "--layer-height",
         "5",
-        "--dry-run",
-        "-o",
-        out.to_str().unwrap(),
     ]));
 
     assert!(text.contains("layers        2"));
-    assert!(!text.contains("masks"));
-    assert!(!out.exists(), "nothing may be written when raster is off");
+    assert!(!text.contains("masks"), "no mask is written:\n{text}");
+    // A 10 mm cube cures 1000 mm3, which is one millilitre.
+    assert_eq!(field(&text, "resin"), "1.0 ml, 1.1 g", "{text}");
+    assert!(text.contains("print time"));
 }
 
 #[test]
@@ -1137,13 +1137,12 @@ fn a_drain_hole_is_cut_into_a_solid_model_too() {
 fn a_hollow_box_with_no_hole_reports_the_resin_it_traps() {
     let path = write_box_stl("trapped", 20.0, 12, 0);
     let input = path.to_str().unwrap();
-    let sealed = stdout(&slice(&[
+    let sealed = stdout(&estimate(&[
         input,
         "--hollow",
         "2",
         "--layer-height",
         "0.5",
-        "--dry-run",
     ]));
 
     let reported = field(&sealed, "trapped resin");
@@ -1162,13 +1161,12 @@ fn a_hollow_box_with_no_hole_reports_the_resin_it_traps() {
         "the pocket holds the cavity the run cut: {held} against {cavity}"
     );
 
-    let drained = stdout(&slice(&[
+    let drained = stdout(&estimate(&[
         input,
         "--hollow",
         "2",
         "--layer-height",
         "0.5",
-        "--dry-run",
         "--drain",
         "4",
         "--drain-at",
@@ -1185,13 +1183,12 @@ fn a_hollow_box_with_no_hole_reports_the_resin_it_traps() {
 #[test]
 fn trapped_resin_fails_a_strict_run() {
     let path = write_box_stl("trapped-strict", 20.0, 12, 0);
-    let output = slice(&[
+    let output = estimate(&[
         path.to_str().unwrap(),
         "--hollow",
         "2",
         "--layer-height",
         "0.5",
-        "--dry-run",
         "--strict",
     ]);
 
@@ -1208,14 +1205,13 @@ fn a_solid_model_is_not_checked_for_drainage_unless_it_is_asked_for() {
     let path = write_box_stl("drainage-flag", 10.0, 12, 0);
     let input = path.to_str().unwrap();
 
-    let quiet = stdout(&slice(&[input, "--layer-height", "1", "--dry-run"]));
+    let quiet = stdout(&estimate(&[input, "--layer-height", "1"]));
     assert!(!quiet.contains("trapped resin"));
 
-    let checked = stdout(&slice(&[
+    let checked = stdout(&estimate(&[
         input,
         "--layer-height",
         "1",
-        "--dry-run",
         "--check-drainage",
     ]));
     assert!(
@@ -1535,4 +1531,319 @@ fn piped_output_draws_no_progress_bar() {
         "stderr is a pipe here, not a terminal: {}",
         stderr(&output)
     );
+}
+
+/// What a run cured, in cubic millimetres, out of `estimate --json`.
+fn cured_mm3(output: &Output) -> f64 {
+    assert!(output.status.success(), "{}", stderr(output));
+    json(output)["print"]["resin_mm3"]
+        .as_f64()
+        .unwrap_or_else(|| panic!("no print.resin_mm3 in {}", stdout(output)))
+}
+
+#[test]
+fn two_models_arranged_stand_apart_and_cure_twice_one() {
+    let a = write_box_stl("arrange-a", 10.0, 12, 0);
+    let b = write_box_stl("arrange-b", 10.0, 12, 0);
+    let (a, b) = (a.to_str().unwrap(), b.to_str().unwrap());
+    let profile = shipped_profile();
+    let run = |extra: &[&str]| {
+        estimate(
+            &[
+                &[
+                    a,
+                    b,
+                    "--profile",
+                    profile.to_str().unwrap(),
+                    "--layer-height",
+                    "5",
+                ][..],
+                extra,
+                &["--json"],
+            ]
+            .concat(),
+        )
+    };
+
+    // Two 10 mm cubes are 2000 mm3; left where their files put them they are the same
+    // cube twice, which cures 1000. Anti-aliased edges cost a fraction of a pixel row.
+    let apart = cured_mm3(&run(&["--arrange"]));
+    let stacked = cured_mm3(&run(&[]));
+    assert!((apart - 2000.0).abs() < 40.0, "arranged: {apart}");
+    assert!(
+        (stacked - 1000.0).abs() < 20.0,
+        "on top of each other: {stacked}"
+    );
+    assert_eq!(
+        json(&run(&["--arrange"]))["models"]
+            .as_array()
+            .map(Vec::len),
+        Some(2)
+    );
+}
+
+#[test]
+fn center_is_refused_for_several_models() {
+    let a = write_box_stl("center-a", 10.0, 12, 0);
+    let b = write_box_stl("center-b", 10.0, 12, 0);
+    let output = estimate(&[a.to_str().unwrap(), b.to_str().unwrap(), "--center"]);
+    assert_eq!(output.status.code(), Some(1));
+    assert!(stderr(&output).contains("--arrange"), "{}", stderr(&output));
+}
+
+/// A plate file beside two cubes, standing where `positions` say.
+fn plate_file(name: &str, body: &str) -> PathBuf {
+    let cube = write_box_stl(&format!("{name}-cube"), 10.0, 12, 0);
+    let dir = cube.parent().expect("the cube is in a directory");
+    let path = dir.join(format!("{name}.toml"));
+    let cube_name = cube.file_name().and_then(|name| name.to_str()).unwrap();
+    fs::write(&path, body.replace("CUBE", cube_name)).expect("write the plate file");
+    path
+}
+
+#[test]
+fn a_plate_file_places_each_model_where_it_says() {
+    let plate = plate_file(
+        "two-placed",
+        r#"
+        layer_height_mm = 5
+        [[model]]
+        path = "CUBE"
+        position = [30, 30]
+        [[model]]
+        path = "CUBE"
+        position = [60, 30]
+        scale = [1, 1, 2]
+        "#,
+    );
+    let output = estimate(&[
+        plate.to_str().unwrap(),
+        "--profile",
+        shipped_profile().to_str().unwrap(),
+        "--json",
+    ]);
+
+    // One cube and one stretched to twice its height: 1000 + 2000 mm3.
+    let cured = cured_mm3(&output);
+    assert!((cured - 3000.0).abs() < 60.0, "cured {cured}");
+    assert_eq!(
+        json(&output)["slicing"]["layer_height_mm"].as_f64(),
+        Some(5.0)
+    );
+}
+
+#[test]
+fn a_flag_wins_over_the_plate_file() {
+    let plate = plate_file(
+        "flag-wins",
+        "layer_height_mm = 5\n[[model]]\npath = \"CUBE\"\nposition = [30, 30]\n",
+    );
+    let output = estimate(&[
+        plate.to_str().unwrap(),
+        "--profile",
+        shipped_profile().to_str().unwrap(),
+        "--layer-height",
+        "2.5",
+        "--json",
+    ]);
+    assert_eq!(
+        json(&output)["slicing"]["layer_height_mm"].as_f64(),
+        Some(2.5)
+    );
+}
+
+#[test]
+fn a_plate_both_arranged_and_placed_is_refused() {
+    let plate = plate_file(
+        "arranged-and-placed",
+        "arrange = true\n[[model]]\npath = \"CUBE\"\nposition = [30, 30]\n",
+    );
+    let output = estimate(&[plate.to_str().unwrap()]);
+    assert_eq!(output.status.code(), Some(1));
+    assert!(stderr(&output).contains("position"), "{}", stderr(&output));
+}
+
+fn project_fixture() -> PathBuf {
+    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/cube.encrust")
+}
+
+#[test]
+fn a_project_slices_as_the_window_saved_it() {
+    let out = output_file("project.goo");
+    let output = slice(&[
+        project_fixture().to_str().unwrap(),
+        "-o",
+        out.to_str().unwrap(),
+        "--json",
+    ]);
+    assert!(output.status.success(), "{}", stderr(&output));
+    assert!(out.exists());
+
+    // The fixture is a 20 mm cube hollowed to a 2 mm wall, on one support: the wall is
+    // 8000 - 4096 mm3, and the support adds a little.
+    let report = json(&output);
+    let cured = report["cured"]["resin_mm3"]
+        .as_f64()
+        .expect("the file was written");
+    assert!((3904.0..4300.0).contains(&cured), "cured {cured}");
+    assert_eq!(report["models"][0]["input"].as_str(), Some("cube"));
+}
+
+#[test]
+fn a_flag_that_shapes_a_model_is_refused_for_a_project() {
+    let output = estimate(&[project_fixture().to_str().unwrap(), "--hollow", "3"]);
+    assert_eq!(output.status.code(), Some(1));
+    assert!(stderr(&output).contains("--hollow"), "{}", stderr(&output));
+}
+
+#[test]
+fn a_project_is_sliced_on_its_own() {
+    let cube = write_box_stl("beside-project", 10.0, 12, 0);
+    let output = estimate(&[project_fixture().to_str().unwrap(), cube.to_str().unwrap()]);
+    assert_eq!(output.status.code(), Some(1));
+    assert!(
+        stderr(&output).contains("on its own"),
+        "{}",
+        stderr(&output)
+    );
+}
+
+#[test]
+fn info_takes_one_layer_out_as_a_png() {
+    let path = write_box_stl("layer-out", 10.0, 12, 0);
+    let goo = output_file("layer-out.goo");
+    let written = slice(&[
+        path.to_str().unwrap(),
+        "--profile",
+        test_panel().to_str().unwrap(),
+        "--layer-height",
+        "1",
+        "--no-anti-alias",
+        "-o",
+        goo.to_str().unwrap(),
+    ]);
+    assert!(written.status.success(), "{}", stderr(&written));
+
+    let dir = output_dir("layer-out-png");
+    fs::create_dir_all(&dir).expect("a fresh directory");
+    let png = dir.join("layer_0000.png");
+    let output = encrust(&[
+        "info",
+        goo.to_str().unwrap(),
+        "--layer",
+        "3",
+        "--png",
+        png.to_str().unwrap(),
+    ]);
+    assert!(output.status.success(), "{}", stderr(&output));
+
+    // A 10 mm cube on a 0.1 mm pitch lights a square 100 pixels a side.
+    let (width, height, pixels) = layer_pixels(&dir, 0);
+    assert_eq!((width, height), (200, 200), "the whole panel");
+    assert_eq!(pixels.iter().filter(|&&grey| grey > 0).count(), 100 * 100);
+
+    let past = encrust(&[
+        "info",
+        goo.to_str().unwrap(),
+        "--layer",
+        "99",
+        "--png",
+        png.to_str().unwrap(),
+    ]);
+    assert_eq!(past.status.code(), Some(1), "the stack has ten layers");
+}
+
+#[test]
+fn convert_writes_the_same_masks_into_another_container() {
+    let path = write_box_stl("convert-me", 10.0, 12, 0);
+    let goo = output_file("convert-me.goo");
+    let panel = test_panel();
+    let written = slice(&[
+        path.to_str().unwrap(),
+        "--profile",
+        panel.to_str().unwrap(),
+        "--layer-height",
+        "1",
+        "-o",
+        goo.to_str().unwrap(),
+    ]);
+    assert!(written.status.success(), "{}", stderr(&written));
+
+    let ctb = output_file("convert-me.ctb");
+    let output = encrust(&[
+        "convert",
+        goo.to_str().unwrap(),
+        "-o",
+        ctb.to_str().unwrap(),
+        "--profile",
+        panel.to_str().unwrap(),
+        "--json",
+    ]);
+    assert!(output.status.success(), "{}", stderr(&output));
+    assert_eq!(json(&output)["layers"].as_u64(), Some(10));
+
+    // The same layer out of either file is the same image.
+    let layer = |file: &Path, name: &str| {
+        let dir = output_dir(name);
+        fs::create_dir_all(&dir).expect("a fresh directory");
+        let png = dir.join("layer_0000.png");
+        let out = encrust(&[
+            "info",
+            file.to_str().unwrap(),
+            "--layer",
+            "5",
+            "--png",
+            png.to_str().unwrap(),
+        ]);
+        assert!(out.status.success(), "{}", stderr(&out));
+        layer_pixels(&dir, 0)
+    };
+    assert_eq!(layer(&goo, "convert-goo"), layer(&ctb, "convert-ctb"));
+}
+
+#[test]
+fn convert_refuses_a_machine_it_cannot_draw_the_masks_for() {
+    let path = write_box_stl("convert-refused", 10.0, 12, 0);
+    let goo = output_file("convert-refused.goo");
+    let panel = test_panel();
+    let written = slice(&[
+        path.to_str().unwrap(),
+        "--profile",
+        panel.to_str().unwrap(),
+        "--layer-height",
+        "2",
+        "-o",
+        goo.to_str().unwrap(),
+    ]);
+    assert!(written.status.success(), "{}", stderr(&written));
+    let ctb = output_file("convert-refused.ctb");
+
+    let no_printer = encrust(&[
+        "convert",
+        goo.to_str().unwrap(),
+        "-o",
+        ctb.to_str().unwrap(),
+    ]);
+    assert_eq!(no_printer.status.code(), Some(1));
+    assert!(
+        stderr(&no_printer).contains("--printer"),
+        "{}",
+        stderr(&no_printer)
+    );
+
+    let other_panel = encrust(&[
+        "convert",
+        goo.to_str().unwrap(),
+        "-o",
+        ctb.to_str().unwrap(),
+        "--profile",
+        shipped_profile().to_str().unwrap(),
+    ]);
+    assert_eq!(other_panel.status.code(), Some(1));
+    assert!(
+        stderr(&other_panel).contains("resampled"),
+        "{}",
+        stderr(&other_panel)
+    );
+    assert!(!ctb.exists(), "nothing is left behind");
 }

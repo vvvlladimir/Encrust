@@ -1,15 +1,14 @@
 use std::path::Path;
 
 use anyhow::{Context, Result};
-use core_engine::{Cutting, Model, Plate, Run};
-use core_format::{ExposurePlan, PrintJob};
+use core_engine::{Plate, Run};
+use core_format::PrintJob;
 use core_pipeline::SlicedFormat;
 use format_chitu::CtbVersion;
 use printer_profiles::{MaterialProfile, OutputFormat, PrinterProfile};
 
-use crate::args::JobArgs;
 use crate::exit::Cancelled;
-use crate::pipeline::{Watch, overrides_of, raster_window, report_of};
+use crate::pipeline::{Watch, report_of};
 use crate::progress::{Watching, bar};
 use crate::raster_report::RasterReport;
 use crate::slice_report::SliceReport;
@@ -41,39 +40,20 @@ pub fn format_of(path: &Path, revision: CtbRevision) -> Option<SlicedFormat> {
     SlicedFormat::of(path, revision.into())
 }
 
-/// Slices and rasterises `models` straight into a printable sliced file.
+/// Slices and rasterises `plate` straight into a printable sliced file at `path`.
 ///
 /// Nothing but the window being worked on is ever in memory; see `core_engine::Run` and
 /// ADR 0010. A run `watch.stop` cancels leaves no file behind.
-#[allow(clippy::too_many_arguments)]
-pub fn write_sliced(
-    models: &[Model],
-    cutting: &Cutting,
-    job: &JobArgs,
+pub fn write_plate(
+    plate: &Plate,
     path: &Path,
-    printer: &PrinterProfile,
-    material: &MaterialProfile,
-    format: SlicedFormat,
+    drainage: bool,
     watch: &Watch,
 ) -> Result<(SliceReport, RasterReport)> {
-    let format = format.at_revision_of(printer.output);
-    warn_if_the_machine_reads_another_container(printer, format);
-
-    let run = Run::of(&Plate {
-        models: models.to_vec(),
-        printer: printer.clone(),
-        material: material.clone(),
-        panel: overrides_of(&job.raster),
-        cutting: *cutting,
-        exposure: ExposurePlan::new(job.slicing.exposure_at.clone()),
-        remove_islands: job.raster.remove_islands,
-        format,
-        raster_window: raster_window(&job.raster),
-        created_unix_s: now_unix_s(),
-    })?;
-
-    let mut slice = report_of(run.mesh(), run.windows(), job);
-    warn_if_exposure_was_measured_elsewhere(run.job(), material);
+    warn_if_the_machine_reads_another_container(&plate.printer, plate.format);
+    let run = Run::of(plate)?;
+    let mut slice = report_of(run.mesh(), run.windows(), drainage);
+    warn_if_exposure_was_measured_elsewhere(run.job(), &plate.material);
 
     let mut watching = Watching {
         report: &mut slice,
@@ -123,7 +103,7 @@ fn warn_if_exposure_was_measured_elsewhere(job: &PrintJob, material: &MaterialPr
 
 /// The clock the file is stamped with. One that reads before the epoch stamps the epoch:
 /// the field is informational and no printer refuses a file over it.
-fn now_unix_s() -> u64 {
+pub fn now_unix_s() -> u64 {
     std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .map_or(0, |since| since.as_secs())

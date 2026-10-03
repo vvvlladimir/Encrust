@@ -4,7 +4,7 @@
 //! The shape is the report, not the code: every number a farm would want to gate on is a
 //! field here rather than a line of prose to be grepped.
 
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::time::Duration;
 
 use anyhow::Result;
@@ -12,13 +12,17 @@ use core_analysis::{Measured, RiskKind, equivalent_disc_mm};
 use core_geometry::Scalar;
 use serde::Serialize;
 
+use crate::estimate::Estimate;
 use crate::pipeline::Outcome;
 use crate::report::ImportReport;
+use crate::slice_report::SliceReport;
+use crate::stage::Part;
 
 /// One model's run, from its file to what came out.
 #[derive(Debug, Serialize)]
 pub struct ModelReport {
-    pub input: String,
+    #[serde(flatten)]
+    pub part: PartReport,
     /// Where the file went, or would have gone; absent for a model only inspected.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub output: Option<String>,
@@ -27,6 +31,83 @@ pub struct ModelReport {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub error: Option<String>,
     pub seconds: f64,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub slicing: Option<Slicing>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub cured: Option<Cured>,
+}
+
+/// A plate of several models, or one out of a plate file or a project: one entry per
+/// model for what was done to it, and the stack they make together.
+#[derive(Debug, Serialize)]
+pub struct PlateReport {
+    pub input: Vec<String>,
+    pub output: String,
+    pub status: Status,
+    pub seconds: f64,
+    pub models: Vec<PartReport>,
+    pub slicing: Slicing,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub cured: Option<Cured>,
+}
+
+/// What `estimate` found: the models, the stack, and with a printer the print.
+#[derive(Debug, Serialize)]
+pub struct EstimateReport {
+    pub input: Vec<String>,
+    pub status: Status,
+    pub seconds: f64,
+    pub models: Vec<PartReport>,
+    pub slicing: Slicing,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub print: Option<PrintReport>,
+}
+
+/// What printing the stack takes. Absent without a printer to draw the masks for.
+#[derive(Debug, Serialize)]
+pub struct PrintReport {
+    pub layers: u32,
+    pub height_mm: f32,
+    pub print_time_s: u32,
+    /// What the masks cure, which is what the weight and the price are taken from.
+    pub resin_mm3: f32,
+    pub weight_g: f32,
+    /// In `currency`; absent for a resin with no price.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub cost: Option<f32>,
+    pub currency: String,
+    pub cured: Cured,
+}
+
+impl EstimateReport {
+    pub fn of(inputs: &[PathBuf], parts: &[Part], estimate: &Estimate, took: Duration) -> Self {
+        Self {
+            input: inputs
+                .iter()
+                .map(|path| path.display().to_string())
+                .collect(),
+            status: status_of(parts.iter().all(Part::is_clean) && estimate.is_clean()),
+            seconds: took.as_secs_f64(),
+            models: parts.iter().map(PartReport::of).collect(),
+            slicing: Slicing::of(&estimate.slice),
+            print: estimate.print.as_ref().map(|print| PrintReport {
+                layers: print.job.layer_count(),
+                height_mm: print.job.height_mm(),
+                print_time_s: print.print_time_s(),
+                resin_mm3: print.job.volume_mm3,
+                weight_g: print.weight_g(),
+                cost: print.cost(),
+                currency: print.job.material.details.currency.clone(),
+                cured: Cured::of(&print.measured),
+            }),
+        }
+    }
+}
+
+/// What was done to one model on its way onto the plate.
+#[derive(Debug, Serialize)]
+pub struct PartReport {
+    pub input: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub model: Option<Model>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -39,10 +120,6 @@ pub struct ModelReport {
     pub hollow: Option<Hollow>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub supports: Option<Supports>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub slicing: Option<Slicing>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub cured: Option<Cured>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
@@ -139,7 +216,7 @@ pub struct Cured {
 }
 
 impl Cured {
-    fn of(measured: &Measured) -> Self {
+    pub fn of(measured: &Measured) -> Self {
         let pull = measured.hardest_pull();
         let step = measured.largest_growth();
         let risks = measured.risks();
@@ -160,50 +237,95 @@ impl Cured {
     }
 }
 
-impl ModelReport {
-    pub fn sliced(outcome: &Outcome, took: Duration) -> Self {
-        let status = if outcome.is_clean() {
-            Status::Ok
-        } else {
-            Status::Unclean
-        };
+impl PartReport {
+    pub fn of(part: &Part) -> Self {
+        let import = part.import.as_ref();
         Self {
-            input: outcome.input.display().to_string(),
-            output: Some(outcome.output.display().to_string()),
-            status,
-            error: None,
-            seconds: took.as_secs_f64(),
-            model: Some(model_of(&outcome.import)),
-            repair: Some(repair_of(&outcome.import)),
-            fit: fit_of(&outcome.import),
-            oriented: outcome.oriented.as_ref().map(|found| Oriented {
+            input: part.input.display().to_string(),
+            model: import.map(model_of),
+            repair: import.map(repair_of),
+            fit: import.and_then(fit_of),
+            oriented: part.oriented.as_ref().map(|found| Oriented {
                 degrees: found.degrees,
                 peak_section_mm2: found.peak_mm2,
                 overhang_mm2: found.overhang_mm2,
             }),
-            hollow: outcome.hollow.as_ref().map(|report| Hollow {
+            hollow: part.hollow.as_ref().map(|report| Hollow {
                 wall_mm: report.wall().0,
                 cavity_mm3: report.cavity_mm3(),
             }),
-            supports: outcome.supports.as_ref().map(|report| Supports {
+            supports: part.supports.as_ref().map(|report| Supports {
                 contacts: report.contacts,
                 standing: report.standing,
                 trunks: report.trees,
                 no_room_for: report.unsupported(),
             }),
-            slicing: Some(Slicing {
-                layers: outcome.slice.layer_count(),
-                layer_height_mm: outcome.slice.settings.layer_height,
-                resin_mm3: outcome.slice.resin_volume_mm3(),
-                trapped_pockets: outcome.slice.trapped().len(),
-                trapped_mm3: outcome
-                    .slice
-                    .trapped()
-                    .iter()
-                    .map(|pocket| pocket.volume_mm3)
-                    .sum(),
-                open_contours: outcome.slice.open_contours(),
-            }),
+        }
+    }
+
+    fn named(input: &Path) -> Self {
+        Self {
+            input: input.display().to_string(),
+            model: None,
+            repair: None,
+            fit: None,
+            oriented: None,
+            hollow: None,
+            supports: None,
+        }
+    }
+}
+
+impl Slicing {
+    fn of(slice: &SliceReport) -> Self {
+        Self {
+            layers: slice.layer_count(),
+            layer_height_mm: slice.settings.layer_height,
+            resin_mm3: slice.resin_volume_mm3(),
+            trapped_pockets: slice.trapped().len(),
+            trapped_mm3: slice.trapped().iter().map(|pocket| pocket.volume_mm3).sum(),
+            open_contours: slice.open_contours(),
+        }
+    }
+}
+
+fn status_of(clean: bool) -> Status {
+    if clean { Status::Ok } else { Status::Unclean }
+}
+
+impl PlateReport {
+    pub fn sliced(inputs: &[PathBuf], outcome: &Outcome, took: Duration) -> Self {
+        Self {
+            input: inputs
+                .iter()
+                .map(|path| path.display().to_string())
+                .collect(),
+            output: outcome.output.display().to_string(),
+            status: status_of(outcome.is_clean()),
+            seconds: took.as_secs_f64(),
+            models: outcome.parts.iter().map(PartReport::of).collect(),
+            slicing: Slicing::of(&outcome.slice),
+            cured: outcome
+                .raster
+                .as_ref()
+                .map(|raster| Cured::of(&raster.measured)),
+        }
+    }
+}
+
+impl ModelReport {
+    /// A run of one model, whose outcome has exactly the one part.
+    pub fn sliced(outcome: &Outcome, took: Duration) -> Self {
+        Self {
+            part: outcome
+                .parts
+                .first()
+                .map_or_else(|| PartReport::named(&outcome.output), PartReport::of),
+            output: Some(outcome.output.display().to_string()),
+            status: status_of(outcome.is_clean()),
+            error: None,
+            seconds: took.as_secs_f64(),
+            slicing: Some(Slicing::of(&outcome.slice)),
             cured: outcome
                 .raster
                 .as_ref()
@@ -213,23 +335,17 @@ impl ModelReport {
 
     /// A model that was only looked at, for `inspect`.
     pub fn inspected(import: &ImportReport, took: Duration) -> Self {
-        let status = if import.is_clean() {
-            Status::Ok
-        } else {
-            Status::Unclean
-        };
         Self {
-            input: import.path.display().to_string(),
+            part: PartReport {
+                model: Some(model_of(import)),
+                repair: Some(repair_of(import)),
+                fit: fit_of(import),
+                ..PartReport::named(&import.path)
+            },
             output: None,
-            status,
+            status: status_of(import.is_clean()),
             error: None,
             seconds: took.as_secs_f64(),
-            model: Some(model_of(import)),
-            repair: Some(repair_of(import)),
-            fit: fit_of(import),
-            oriented: None,
-            hollow: None,
-            supports: None,
             slicing: None,
             cured: None,
         }
@@ -238,17 +354,11 @@ impl ModelReport {
     pub fn failed(input: &Path, output: &Path, error: &anyhow::Error, took: Duration) -> Self {
         let causes: Vec<String> = error.chain().map(ToString::to_string).collect();
         Self {
-            input: input.display().to_string(),
+            part: PartReport::named(input),
             output: Some(output.display().to_string()),
             status: Status::Failed,
             error: Some(causes.join(": ")),
             seconds: took.as_secs_f64(),
-            model: None,
-            repair: None,
-            fit: None,
-            oriented: None,
-            hollow: None,
-            supports: None,
             slicing: None,
             cured: None,
         }
@@ -256,9 +366,10 @@ impl ModelReport {
 
     /// The one line this model gets in the terminal.
     pub fn line(&self) -> String {
-        let name = Path::new(&self.input)
+        let input = &self.part.input;
+        let name = Path::new(input)
             .file_name()
-            .map_or_else(|| self.input.clone(), |name| name.to_string_lossy().into());
+            .map_or_else(|| input.clone(), |name| name.to_string_lossy().into());
         match self.status {
             Status::Failed => format!(
                 "  failed   {name}  {}",
@@ -270,7 +381,7 @@ impl ModelReport {
                 } else {
                     "unclean"
                 };
-                let what = match (&self.slicing, &self.model) {
+                let what = match (&self.slicing, &self.part.model) {
                     (Some(slicing), _) => format!(
                         "{} layers, {:.1} ml",
                         slicing.layers,

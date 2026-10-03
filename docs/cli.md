@@ -24,7 +24,8 @@ encrust slice model.stl \
 encrust slice model.stl \
   --printer elegoo-mars-3-pro --center -o model.cbddlp     # or .photon
 
-encrust slice model.stl --printer elegoo-mars-4-ultra --dry-run   # cut and measure, write nothing
+encrust estimate model.stl --printer elegoo-mars-4-ultra   # time, resin, price; writes nothing
+encrust convert plate.ctb --printer elegoo-mars-4-ultra -o plate.goo
 ```
 
 ## Output, exit codes and Ctrl-C
@@ -33,8 +34,10 @@ The global flags go before or after the subcommand. `--json` prints exactly one 
 document to stdout, with `"schema": 1` beside the report's own fields; a failure prints
 `{"schema": 1, "error": {"message", "chain", "cancelled"}}` there instead, and the text
 still goes to stderr. Logs always go to stderr; `-q` keeps only errors, `-v` and `-vv` add
-debug and trace, and `RUST_LOG` wins over all three. `slice`, `inspect` and every model of a
-batch share one report shape.
+debug and trace, and `RUST_LOG` wins over all three. `slice` of one model, `inspect` and every
+model of a batch share one report shape; `slice` of a plate prints one entry per model under
+`models` beside the stack they make, and `estimate` adds `print` — layers, height, time,
+resin, weight, cost and the risks — when there is a printer to draw the masks for.
 
 | Code | Meaning |
 |---|---|
@@ -129,6 +132,66 @@ encrust slice model.stl \
   --printer elegoo-mars-4-ultra --supports medium --center -o model.goo
 ```
 
+## Plates: several models, a plate file, a project
+
+Several models go on one plate. `--arrange` spreads them, biggest first; without it each
+stands where its file put it. `--center` and `--drain-at` point at one model, so they are
+refused for several:
+
+```sh
+encrust slice a.stl b.stl c.stl --printer elegoo-mars-4-ultra --arrange --supports light -o plate.goo
+```
+
+A plate file says the same per model. Paths are relative to it, every key is optional but
+`path`, and a key it does not know is an error:
+
+```toml
+printer = "elegoo-mars-4-ultra"
+resin = "standard-grey"
+layer_height_mm = 0.05
+arrange = false                 # true spreads every model; it cannot be mixed with position
+
+[[model]]
+path = "a.stl"
+rotate = [0, 0, 45]             # degrees around X, Y, Z
+scale = 1.2                     # or [x, y, z]
+position = [60, 40]             # where the middle of the footprint goes, plate mm
+supports = "medium"             # light, medium or heavy
+
+[[model]]
+path = "b.stl"
+hollow = { wall_mm = 2.0, mode = "bottom-through" }
+```
+
+A project saved by the window slices as it was saved, its cavities and supports built again
+(ADR 0178). It carries its own models, so a flag that shapes one — `--hollow`, `--supports`,
+`--rotate` and the rest — is refused; `--printer`, `--resin` and `--layer-height` replace the
+project's own:
+
+```sh
+encrust slice plate.toml -o plate.goo
+encrust slice plate.encrust --resin standard-grey -o plate.goo
+```
+
+A flag wins over the plate file or project, which wins over the profiles' own numbers.
+
+## Estimate, info and convert
+
+`estimate` takes what `slice` takes and writes nothing. It prints what the stack is and,
+with a printer, what the print takes: time, resin by volume and weight, price where the
+resin has one, and the layers likely to fail. `--strict` fails it on the same defects.
+
+`info --layer N --png out.png` takes one layer out of a sliced file, counted from one as a
+printer's screen counts.
+
+`convert` writes a sliced file again in the container its output names, for the printer
+given. The masks are copied, never resampled, so the printer's panel must be the size the
+file was drawn for; the layer heights and every exposure are the file's own, and the resin
+gives the lifts, waits and price. A stack of varying layer heights is refused for now, and
+the new file's previews are blank (ADR 0180).
+
+## Batch
+
 A folder of parts: every flag of `slice` applies to each model, one file and one
 `<model>.json` each, plus `batch.json` over the lot. `--jobs` cuts several at once. A model
 that fails does not stop the others; it is exit code 4 at the end:
@@ -137,6 +200,8 @@ that fails does not stop the others; it is exit code 4 at the end:
 encrust batch models/ \
   --printer elegoo-mars-4-ultra --center --orient --supports light -o out/
 ```
+
+## The window
 
 The window, optionally opening a model on startup:
 

@@ -1,15 +1,15 @@
-//! One model, from a file on disk to a sliced file beside it.
+//! The stages one model goes through on its way onto the plate, and the cut of a staged
+//! plate into a file.
 //!
-//! Both the single run and the batch run go through here: the batch is this loop, once
-//! per model, with the same settings.
+//! The single run, the batch and a plate of several models all go through here; what
+//! assembles a plate is `stage`.
 
 use std::path::{Path, PathBuf};
-use std::sync::Arc;
 use std::time::Instant;
 
 use anyhow::{Context, Result};
 use core_analysis::Measured;
-use core_engine::{Cutting, Model, bake, cut};
+use core_engine::{Cutting, bake, cut};
 use core_geometry::{
     Bvh, Mesh, Quat, Scalar, Transform, Vec3, Welded, center_over_plate, diagnose, drop_to_plate,
     orient_outward, transform_mesh, weld,
@@ -17,22 +17,22 @@ use core_geometry::{
 use core_mesh_io::{Loaded, loader_for_extension};
 use core_pipeline::{PanelOverrides, Tolerance, raster_settings};
 use core_plate::{OrientSettings, orient};
-use core_raster::{RasterSettings, Shading};
+use core_raster::Shading;
 use core_slicer::{AdaptiveSettings, Windows};
 use core_volume::{ReliefSettings, press};
 use printer_profiles::{Compensation, MaterialProfile, PrinterProfile};
 
 use crate::args::{ImportArgs, JobArgs, RasterArgs};
 use crate::exit::Stop;
-use crate::hollowing::{self, HollowReport};
+use crate::hollowing::{self, HollowArgs, HollowReport};
 use crate::png_stack::write_stack;
 use crate::profiles::Chosen;
 use crate::raster_report::RasterReport;
 use crate::report::{FitCheck, ImportReport};
 use crate::slice_report::SliceReport;
-use crate::sliced_file::{format_of, write_sliced};
+use crate::sliced_file::{format_of, write_plate};
+use crate::stage::{self, Part, Staged};
 use crate::stats::MeshStats;
-use crate::supports::{SupportReport, stand_under};
 
 /// How a run talks while it works, and what can stop it.
 pub struct Watch<'a> {
@@ -44,23 +44,18 @@ pub struct Watch<'a> {
     pub stop: &'a Stop,
 }
 
-/// What one model's run found and wrote.
+/// What one run found and wrote: a part per model on the plate, and the stack they made.
 pub struct Outcome {
-    pub input: PathBuf,
+    pub parts: Vec<Part>,
     pub output: PathBuf,
-    pub import: ImportReport,
-    pub oriented: Option<OrientSummary>,
-    pub hollow: Option<HollowReport>,
-    pub supports: Option<SupportReport>,
     pub slice: SliceReport,
     pub raster: Option<RasterReport>,
 }
 
 impl Outcome {
-    /// Nothing found would stop this model printing correctly.
+    /// Nothing found would stop this plate printing correctly.
     pub fn is_clean(&self) -> bool {
-        self.import.is_clean()
-            && self.hollow.as_ref().is_none_or(HollowReport::is_clean)
+        self.parts.iter().all(Part::is_clean)
             && self.slice.is_clean()
             && self.raster.as_ref().is_none_or(RasterReport::is_clean)
     }
@@ -82,44 +77,18 @@ pub fn slice_one(
     chosen: &Chosen,
     watch: &Watch,
 ) -> Result<Outcome> {
-    let profile = chosen.printer.as_ref();
-    let material = &chosen.material;
-    let talk = watch.talk;
-
-    let (mut mesh, import, oriented) = import(input, &job.import, profile, talk)?;
-    watch.stop.check()?;
-    let hollow = hollow_and_cut(&mut mesh, job, talk)?;
-    watch.stop.check()?;
-
-    let layer_height = job.slicing.layer_height.unwrap_or(material.layer_height_mm);
-    let supports = job
-        .supports
-        .profile()?
-        .map(|profile| stand_under(&mut mesh, &profile, layer_height))
-        .transpose()?;
-    if talk && let Some(report) = &supports {
-        print!("{report}");
-    }
-    watch.stop.check()?;
-
-    let cutting = cutting_of(job, layer_height, &material.compensation, talk);
-    let models = [Model::placed(Arc::new(mesh), Transform::default())];
-    let (slice, raster) = slice_and_write(&models, &cutting, job, output, chosen, watch)?;
-
+    let staged = stage::models(&[input.to_path_buf()], false, job, chosen, watch)?;
+    let (slice, raster) = slice_staged(&staged, output, job, watch)?;
     Ok(Outcome {
-        input: input.to_path_buf(),
+        parts: staged.parts,
         output: output.to_path_buf(),
-        import,
-        oriented,
-        hollow,
-        supports,
         slice,
         raster,
     })
 }
 
 /// Loads, welds, places and repairs the model, and says what import found.
-fn import(
+pub fn import(
     input: &Path,
     args: &ImportArgs,
     profile: Option<&PrinterProfile>,
@@ -162,19 +131,23 @@ fn import(
 }
 
 /// Shells the model when asked to, then cuts its drain holes and channels.
-fn hollow_and_cut(mesh: &mut Mesh, job: &JobArgs, talk: bool) -> Result<Option<HollowReport>> {
+pub fn hollow_and_cut(
+    mesh: &mut Mesh,
+    args: &HollowArgs,
+    precision: Scalar,
+    talk: bool,
+) -> Result<Option<HollowReport>> {
     // Where the cuts land is read off the model as it was imported; what they are cut
     // into may be the shell. See ADR 0075.
-    let placed = job
-        .hollow
+    let placed = args
         .cutting()
-        .then(|| hollowing::placed(mesh, &job.hollow))
+        .then(|| hollowing::placed(mesh, args))
         .transpose()?;
 
     let mut hollow = None;
     let mut wall = None;
-    if job.hollow.wanted() {
-        let (shelled, report) = hollowing::run(mesh, &job.hollow, job.import.precision)?;
+    if args.wanted() {
+        let (shelled, report) = hollowing::run(mesh, args, precision)?;
         if talk {
             print!("{report}");
         }
@@ -192,7 +165,7 @@ fn hollow_and_cut(mesh: &mut Mesh, job: &JobArgs, talk: bool) -> Result<Option<H
 }
 
 /// How the stack is cut, and what the resin's shrinkage does to it on the way in.
-fn cutting_of(
+pub fn cutting_of(
     job: &JobArgs,
     layer_height: Scalar,
     compensation: &Compensation,
@@ -216,37 +189,24 @@ fn cutting_of(
     }
 }
 
-/// Cuts the stack and writes it, or only measures it when there is no panel to draw on.
+/// Cuts the staged plate and writes it, or only measures it when there is no panel to
+/// draw on.
 ///
-/// A printable file is the engine's run over the whole plate; a PNG stack and a run that
-/// writes nothing are cut here, because neither needs a container and the PNG stack is a
+/// A printable file is the engine's run over the whole plate; a PNG stack and a run with
+/// no printer are cut here, because neither needs a container and the PNG stack is a
 /// debug artefact rather than a printer format.
-fn slice_and_write(
-    models: &[Model],
-    cutting: &Cutting,
-    job: &JobArgs,
+pub fn slice_staged(
+    staged: &Staged,
     output: &Path,
-    chosen: &Chosen,
+    job: &JobArgs,
     watch: &Watch,
 ) -> Result<(SliceReport, Option<RasterReport>)> {
-    let profile = chosen.printer.as_ref();
-    let format = (!job.dry_run)
-        .then(|| format_of(output, job.raster.ctb_version))
-        .flatten();
-
-    let (mut slice, raster) = match (format, profile) {
-        (Some(format), Some(printer)) => write_sliced(
-            models,
-            cutting,
-            job,
-            output,
-            printer,
-            &chosen.material,
-            format,
-            watch,
-        )
-        .map(|(slice, raster)| (slice, Some(raster)))?,
-        _ => cut_without_a_container(models, cutting, job, output, chosen, watch.stop)?,
+    let format = format_of(output, job.raster.ctb_version);
+    let window = raster_window(&job.raster);
+    let (mut slice, raster) = match (format, staged.plate(format, window)) {
+        (Some(_), Some(plate)) => write_plate(&plate, output, staged.drainage, watch)
+            .map(|(slice, raster)| (slice, Some(raster)))?,
+        _ => cut_without_a_container(staged, output, window, watch.stop)?,
     };
 
     slice.finish_drainage();
@@ -259,32 +219,30 @@ fn slice_and_write(
     Ok((slice, raster))
 }
 
-/// The stack cut for a PNG directory, or only counted when `--dry-run` or no profile
-/// leaves nothing to draw on.
+/// The stack cut for a PNG directory, or only counted when no profile leaves nothing to
+/// draw on.
 fn cut_without_a_container(
-    models: &[Model],
-    cutting: &Cutting,
-    job: &JobArgs,
+    staged: &Staged,
     output: &Path,
-    chosen: &Chosen,
+    raster_window: usize,
     stop: &Stop,
 ) -> Result<(SliceReport, Option<RasterReport>)> {
-    let material = &chosen.material;
-    let mesh = bake(models, &cutting.compensation).context("nothing to slice")?;
+    let material = &staged.material;
+    let cutting = &staged.cutting;
+    let mesh = bake(&staged.models, &cutting.compensation).context("nothing to slice")?;
     let windows = cut(&mesh, cutting)?;
-    let mut slice = report_of(&mesh, &windows, job);
+    let mut slice = report_of(&mesh, &windows, staged.drainage);
 
-    if job.dry_run {
-        measure(&mesh, &windows, &mut slice, stop)?;
-        return Ok((slice, None));
-    }
-    let Some(profile) = chosen.printer.as_ref() else {
+    let Some(profile) = staged.printer.as_ref() else {
         tracing::warn!("rasterisation needs --profile to know the panel; nothing was written");
         measure(&mesh, &windows, &mut slice, stop)?;
         return Ok((slice, None));
     };
 
-    let settings = panel_of(profile, &job.raster)?;
+    let settings = raster_settings(profile, staged.panel);
+    settings
+        .validate()
+        .context("the panel cannot produce a usable mask")?;
     let report = write_stack(
         &mesh,
         &windows,
@@ -292,23 +250,19 @@ fn cut_without_a_container(
         &settings,
         output,
         &Tolerance::of(material),
-        raster_window(&job.raster),
-        fold_of(&job.raster, material),
+        raster_window,
+        fold_of(staged.remove_islands, material),
         stop,
     )
     .with_context(|| format!("cannot write the mask stack to {}", output.display()))?;
     Ok((slice, Some(report)))
 }
 
-/// An empty report over `windows`, watching the stack for trapped resin where a cavity
-/// was cut or `--check-drainage` asked for it.
-pub fn report_of(mesh: &Mesh, windows: &Windows, job: &JobArgs) -> SliceReport {
+/// An empty report over `windows`, watching the stack for trapped resin when `drainage`
+/// asks for it.
+pub fn report_of(mesh: &Mesh, windows: &Windows, drainage: bool) -> SliceReport {
     let mut slice = SliceReport::new(windows.settings(), windows.plan().clone());
-    // Resin only gets trapped in a model with a cavity in it, so the stack is watched for
-    // it whenever one was cut, and on request otherwise.
-    if (job.hollow.wanted() || job.hollow.cutting() || job.slicing.check_drainage)
-        && let Some(bounds) = mesh.aabb()
-    {
+    if drainage && let Some(bounds) = mesh.aabb() {
         slice.watch_drainage(bounds.mins.truncate(), bounds.maxs.truncate());
     }
     slice
@@ -316,9 +270,9 @@ pub fn report_of(mesh: &Mesh, windows: &Windows, job: &JobArgs) -> SliceReport {
 
 /// How the stack folds as it is written: how many bottom layers the plate holds, and
 /// whether islands come out.
-pub fn fold_of(args: &RasterArgs, material: &MaterialProfile) -> Measured {
+pub fn fold_of(remove_islands: bool, material: &MaterialProfile) -> Measured {
     let fold = Measured::new(material.bottom_layers as usize);
-    if args.remove_islands {
+    if remove_islands {
         fold.removing_islands()
     } else {
         fold
@@ -329,15 +283,6 @@ pub fn fold_of(args: &RasterArgs, material: &MaterialProfile) -> Measured {
 pub fn raster_window(args: &RasterArgs) -> usize {
     args.raster_window
         .unwrap_or_else(rayon::current_num_threads)
-}
-
-/// The panel the masks are drawn for, refused when it cannot produce a usable mask.
-pub fn panel_of(profile: &PrinterProfile, args: &RasterArgs) -> Result<RasterSettings> {
-    let settings = raster_settings(profile, overrides_of(args));
-    settings
-        .validate()
-        .context("the panel cannot produce a usable mask")?;
-    Ok(settings)
 }
 
 /// Says what a file carried beyond its triangles, when it carried anything.

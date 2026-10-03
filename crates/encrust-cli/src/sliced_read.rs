@@ -2,8 +2,9 @@ use std::fmt::{self, Write as _};
 use std::path::Path;
 
 use anyhow::{Context, Result};
-use core_format::{OpenFile, SlicedFile};
+use core_format::{OpenFile, SlicedFile, encode_grey};
 use core_pipeline::open;
+use core_raster::LayerRuns;
 use serde::Serialize;
 
 /// What a sliced file states about itself, and what decoding its every layer found.
@@ -38,6 +39,25 @@ pub fn read(path: &Path) -> Result<Info> {
         facts: opened.facts().clone(),
         stack,
     })
+}
+
+/// Layer `number` of the file at `path`, counted from one as a printer's screen counts, as
+/// an eight-bit greyscale PNG of the whole panel.
+pub fn layer_png(path: &Path, number: u32) -> Result<Vec<u8>> {
+    let file =
+        std::fs::File::open(path).with_context(|| format!("cannot open {}", path.display()))?;
+    let mut opened = open(path, std::io::BufReader::new(file))
+        .with_context(|| format!("cannot read {} as a sliced file", path.display()))?;
+    let (width_px, height_px) = (opened.facts().width_px, opened.facts().height_px);
+    let runs = opened
+        .layer(number.saturating_sub(1))
+        .with_context(|| format!("cannot decode layer {number}"))?;
+
+    let mut layer = LayerRuns::builder(width_px, height_px);
+    for run in runs {
+        layer.push(run.length, run.value);
+    }
+    Ok(encode_grey(&layer.finish())?)
 }
 
 #[derive(Serialize)]

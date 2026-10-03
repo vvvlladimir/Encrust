@@ -1,10 +1,12 @@
 //! The `encrust` command line: global flags, one subcommand each, and the dispatch to them.
 
 mod batch;
+mod convert;
+mod estimate;
 mod info;
 mod inspect;
 mod profiles;
-mod slice;
+pub mod slice;
 
 use std::io::IsTerminal;
 
@@ -15,6 +17,8 @@ use crate::exit::{Exit, Stop};
 use crate::pipeline::Watch;
 
 pub use batch::BatchCommand;
+pub use convert::ConvertCommand;
+pub use estimate::EstimateCommand;
 pub use info::InfoCommand;
 pub use inspect::InspectCommand;
 pub use profiles::ProfilesCommand;
@@ -83,15 +87,21 @@ impl GlobalArgs {
 
 #[derive(Subcommand, Debug)]
 pub enum Command {
-    /// Slice one model into a printable file, or a PNG stack for a name with no extension.
+    /// Slice models, a plate file or a project into a printable file, or a PNG stack for a
+    /// name with no extension.
     Slice(SliceCommand),
+    /// What a plate would take to print — layers, time, resin, weight, price, the layers
+    /// likely to fail — with nothing written.
+    Estimate(EstimateCommand),
     /// Slice every model in a directory: one file and one JSON report each, and
     /// `batch.json` over the lot.
     Batch(BatchCommand),
     /// Load and repair a model and say what was found, without slicing it.
     Inspect(InspectCommand),
-    /// Open a sliced file, print what it states and decode every layer.
+    /// Open a sliced file, print what it states and decode every layer, or take one out.
     Info(InfoCommand),
+    /// Write a sliced file again in another container, for a machine with the same panel.
+    Convert(ConvertCommand),
     /// The printers and resins in the catalogue.
     #[command(subcommand)]
     Profiles(ProfilesCommand),
@@ -115,9 +125,11 @@ pub fn run(cli: &Cli, stop: &Stop) -> Result<Exit> {
     let global = &cli.global;
     match &cli.command {
         Command::Slice(command) => command.run(global, stop),
+        Command::Estimate(command) => command.run(global, stop),
         Command::Batch(command) => command.run(global, stop),
         Command::Inspect(command) => command.run(global),
         Command::Info(command) => command.run(global),
+        Command::Convert(command) => command.run(global, stop),
         Command::Profiles(command) => command.run(global),
     }
 }

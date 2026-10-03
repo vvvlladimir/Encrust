@@ -9,7 +9,8 @@ use core_volume::{
 };
 
 /// Which surface `--hollow-mode` measures the wall from.
-#[derive(Debug, Default, Clone, Copy, clap::ValueEnum)]
+#[derive(Debug, Default, Clone, Copy, clap::ValueEnum, serde::Deserialize)]
+#[serde(rename_all = "kebab-case")]
 pub enum Mode {
     #[default]
     Internal,
@@ -46,7 +47,7 @@ impl From<Pattern> for InfillPattern {
 }
 
 /// The hollowing half of the command line.
-#[derive(Debug, clap::Args)]
+#[derive(Debug, Clone, clap::Args)]
 #[command(next_help_heading = "Hollowing")]
 pub struct HollowArgs {
     /// Hollow the model, leaving a wall this many millimetres thick.
