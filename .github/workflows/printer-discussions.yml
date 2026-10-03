@@ -1,0 +1,34 @@
+name: Printer discussions
+
+# One discussion per printer profile, in the "Printers" category: people 👍 the printers Encrust has
+# printed on for them, and the website lights its printer map from those counts. A new or renamed
+# profile on main gets its discussion here; the script explains the rest.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - assets/profiles/printers/**
+      - .github/scripts/printer-discussions.mjs
+      - .github/workflows/printer-discussions.yml
+  workflow_dispatch:
+
+concurrency:
+  group: printer-discussions
+
+permissions:
+  contents: read
+  discussions: write
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+      - run: node .github/scripts/printer-discussions.mjs
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
