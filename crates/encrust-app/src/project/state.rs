@@ -85,7 +85,7 @@ pub fn capture(plate: Captured<'_>) -> Project {
         },
         cut: CutState {
             axis: cut.axis,
-            height_mm: cut.height_mm,
+            height_mm: cut.offset_mm,
             keep: cut.keep,
         },
         array: *array,
@@ -196,7 +196,7 @@ pub fn apply(project: Project, plate: CapturedMut<'_>) {
     drain.depth_mm = manifest.drain.depth_mm;
     drain.taper = manifest.drain.taper;
     cut.axis = manifest.cut.axis;
-    cut.height_mm = manifest.cut.height_mm;
+    cut.offset_mm = manifest.cut.height_mm;
     cut.keep = manifest.cut.keep;
     *array = manifest.array;
 
@@ -498,7 +498,7 @@ mod tests {
             },
             cut: CutTool {
                 axis: crate::scene::Axis::X,
-                height_mm: 17.5,
+                offset_mm: 17.5,
                 keep: Keep::Above,
             },
             array: Array {
@@ -583,7 +583,7 @@ mod tests {
         assert_eq!(back.drain.depth_mm, saved.drain.depth_mm);
         assert_eq!(back.drain.taper, saved.drain.taper);
         assert_eq!(back.cut.axis, saved.cut.axis);
-        assert_eq!(back.cut.height_mm, saved.cut.height_mm);
+        assert_eq!(back.cut.offset_mm, saved.cut.offset_mm);
         assert_eq!(back.cut.keep, saved.cut.keep);
         assert_eq!(back.array, saved.array);
     }

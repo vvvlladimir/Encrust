@@ -232,6 +232,8 @@ pub struct DrainState {
 #[derive(Debug, Serialize, Deserialize)]
 pub struct CutState {
     pub axis: Axis,
+    /// Across Z, millimetres above the plate; across X or Y, millimetres from the model's
+    /// centre of mass. Named for the Z cut it began as.
     pub height_mm: Scalar,
     pub keep: Keep,
 }

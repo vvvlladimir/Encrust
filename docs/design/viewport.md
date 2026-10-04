@@ -157,6 +157,16 @@ egui's pass, the same in a browser as at the desk (ADR 0184). Which height the
 rail hands over depends on the mode, and `panels::section::cut_height` is the one place
 that decides.
 
+## The Cut tool's plane
+
+The plane is traced on the model rather than drawn in the air. The globals carry it as
+`cut_plane = (normal, offset_mm)` with the selected model's box in `cut_low`/`cut_high`,
+and the model fragment shader darkens whatever lies within a pixel and a half of it,
+measured with `fwidth` so the line keeps its width at any zoom. The derivative is taken
+before any `discard`, as WGSL requires. The box keeps the line off every other model; an
+outline painted over the frame shows the plane where it misses the model. It is
+independent of the section rail.
+
 ## What is not tested
 
 The rendered pixels and the gizmo's interaction. Everything above those boundaries —

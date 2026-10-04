@@ -39,6 +39,12 @@ struct Globals {
     // model past it is to be marked; outside_color.rgb is what marks it.
     volume: vec4<f32>,
     outside_color: vec4<f32>,
+    // The Cut tool's plane: xyz its normal, w its offset along it in millimetres. It is
+    // traced only inside cut_low..cut_high, and only while cut_low.w is 1.0.
+    cut_plane: vec4<f32>,
+    cut_low: vec4<f32>,
+    cut_high: vec4<f32>,
+    cut_color: vec4<f32>,
     cuts: array<DrainCut, MAX_CUTS>,
     bands: array<ExposureBand, MAX_BANDS>,
 };
@@ -147,6 +153,24 @@ fn cut_away(world: vec3<f32>) -> bool {
     return false;
 }
 
+// Half the width of the line the Cut tool's plane is traced with, in pixels, and how far
+// past the model's box a fragment may stand and still be traced, in millimetres.
+const CUT_LINE_HALF_PX = 1.5;
+const CUT_LINE_SLACK = 0.5;
+
+// How much of the line covers a fragment. The derivative is taken before anything can
+// discard, since WGSL asks for it in uniform control flow.
+fn cut_line(world: vec3<f32>) -> f32 {
+    let along = dot(globals.cut_plane.xyz, world) - globals.cut_plane.w;
+    let pixels = abs(along) / max(fwidth(along), 1e-6);
+    let low = world < globals.cut_low.xyz - vec3<f32>(CUT_LINE_SLACK);
+    let high = world > globals.cut_high.xyz + vec3<f32>(CUT_LINE_SLACK);
+    if (globals.cut_low.w < 0.5 || any(low) || any(high)) {
+        return 0.0;
+    }
+    return 1.0 - smoothstep(CUT_LINE_HALF_PX - 0.5, CUT_LINE_HALF_PX + 0.5, pixels);
+}
+
 // The band a fragment stands in, washed over its colour. Bands are walked backwards so
 // that the last one drawn wins, as it does when the file is written. See ADR 0090.
 fn banded(base: vec3<f32>, height: f32) -> vec3<f32> {
@@ -175,6 +199,7 @@ fn section_crossing_fragment(in: ModelFragment) -> @location(0) vec4<f32> {
 
 @fragment
 fn model_fragment(in: ModelFragment, @builtin(front_facing) front_facing: bool) -> @location(0) vec4<f32> {
+    let traced = cut_line(in.world);
     let cutting = globals.section.y > 0.5;
     if (cutting && in.world.z > globals.section.x) {
         discard;
@@ -215,7 +240,8 @@ fn model_fragment(in: ModelFragment, @builtin(front_facing) front_facing: bool) 
     let light = normalize(-globals.light_direction.xyz);
     let diffuse = max(dot(normal, light), 0.0);
     let ambient = 0.30 + 0.12 * (normal.z * 0.5 + 0.5);
-    return vec4<f32>(base * (ambient + 0.70 * diffuse), in.color.a);
+    let lit = base * (ambient + 0.70 * diffuse);
+    return vec4<f32>(mix(lit, globals.cut_color.rgb, traced), in.color.a);
 }
 
 // The textured pass: the model washed with the heights a relief would press into it, so

@@ -11,7 +11,8 @@ use crate::camera::OrbitCamera;
 use crate::plate::BuildPlate;
 use crate::render::callback::cuts_of;
 use crate::render::gpu::{
-    DEPTH_FORMAT, DrainCut, ExposureBand, FrameInput, ModelDraw, ReliefDraw, ViewportResources,
+    CutLine, DEPTH_FORMAT, DrainCut, ExposureBand, FrameInput, ModelDraw, ReliefDraw,
+    ViewportResources,
 };
 use crate::render::machine::machine_faces;
 use crate::render::vertex::{BodyVertex, LineVertex, ModelInstance, NOT_MARKED};
@@ -148,6 +149,57 @@ fn a_model_past_the_build_volume_is_marked_there() {
     assert_ne!(plain, tight, "the part past x = 100 mm has to show");
 }
 
+/// The Cut tool's plane is traced where it crosses the model it is set on, and nowhere on
+/// a model whose box it does not reach.
+#[test]
+fn the_cut_plane_is_traced_across_the_model_it_is_set_on() {
+    let Some(plain) = paint_ball(&[], 0.0, None) else {
+        return;
+    };
+    let line = |bounds| CutLine {
+        normal: Vec3::Z,
+        offset_mm: 45.0,
+        bounds,
+    };
+    // The ball of radius 40 stands at z = 45, so the plane runs round its equator.
+    let ball = core_geometry::Aabb::new(Vec3::new(35.0, 0.0, 5.0), Vec3::new(115.0, 80.0, 85.0));
+    let elsewhere = core_geometry::Aabb::new(Vec3::splat(-50.0), Vec3::splat(-10.0));
+    let traced = paint_marked_ball(Marks {
+        cut_line: Some(line(ball)),
+        ..Marks::default()
+    })
+    .expect("the second frame draws too");
+    let missed = paint_marked_ball(Marks {
+        cut_line: Some(line(elsewhere)),
+        ..Marks::default()
+    })
+    .expect("the third frame draws too");
+
+    // Compared with the untraced frame rather than with the token: this target is sRGB and
+    // lightens what is written to it, so no pixel holds the token as it is.
+    let brightness = |pixel: &[u8; 4]| {
+        pixel[..3]
+            .iter()
+            .map(|channel| u32::from(*channel))
+            .sum::<u32>()
+    };
+    let darkened = plain
+        .as_chunks::<4>()
+        .0
+        .iter()
+        .zip(traced.as_chunks::<4>().0)
+        .filter(|(before, after)| brightness(after) + 60 < brightness(before))
+        .count();
+    assert!(
+        darkened > 500,
+        "a ball 80 mm across has a long equator to darken, got {darkened} pixels"
+    );
+    assert_eq!(
+        plain, missed,
+        "a plane set on another model traces nothing on this one"
+    );
+}
+
 /// The machine is the only thing on an empty plate, so if the pass that paints it is
 /// wrong there is nothing else on screen to hide that.
 #[test]
@@ -186,6 +238,16 @@ fn paint_ball(
     band_floor_mm: f32,
     volume_mm: Option<Vec3>,
 ) -> Option<Vec<u8>> {
+    paint_marked_ball(Marks {
+        bands,
+        band_floor_mm,
+        volume_mm,
+        ..Marks::default()
+    })
+}
+
+/// The ball of [`drilled_ball`] undrilled and uncut, painted with `marks`.
+fn paint_marked_ball(marks: Marks<'_>) -> Option<Vec<u8>> {
     let (mesh, _, _, _) = drilled_ball(false);
     let models = vec![ModelDraw {
         mesh,
@@ -195,12 +257,6 @@ fn paint_ball(
         target: Vec3::new(75.0, 40.0, 45.0),
         distance_mm: 170.0,
         ..OrbitCamera::default()
-    };
-    let marks = Marks {
-        bands,
-        band_floor_mm,
-        volume_mm,
-        ..Marks::default()
     };
     paint(camera, None, &models, &[], marks, &[])
 }
@@ -254,6 +310,7 @@ struct Marks<'a> {
     bands: &'a [ExposureBand],
     band_floor_mm: f32,
     volume_mm: Option<Vec3>,
+    cut_line: Option<CutLine>,
 }
 
 /// The texture the Relief tool shows has to reach the surface: a model drawn with a map
@@ -350,6 +407,7 @@ fn paint_textured(camera: OrbitCamera, draw: &ReliefDraw) -> Option<Vec<u8>> {
             bands: &[],
             band_floor_mm: 0.0,
             volume_mm: None,
+            cut_line: None,
         },
     );
     Some(read_back(device, queue, format, &resources))
@@ -370,6 +428,7 @@ fn paint(
         bands,
         band_floor_mm,
         volume_mm,
+        cut_line,
     } = marks;
     let (device, queue) = gpu()?;
     let format = wgpu::TextureFormat::Rgba8UnormSrgb;
@@ -392,6 +451,7 @@ fn paint(
             bands,
             band_floor_mm,
             volume_mm,
+            cut_line,
         },
     );
 

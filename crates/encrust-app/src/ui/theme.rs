@@ -183,6 +183,9 @@ pub struct Scene {
     pub bounds: Color32,
     /// The flat face Orient to Face would lay on the plate, over the model.
     pub facet: Color32,
+    /// Where the Cut tool's plane crosses the model: darker than the selection it is
+    /// traced over, and apart from the red that marks a model past the build volume.
+    pub cut_line: Color32,
     /// The plate's X and Y lines, in the same CAD convention as `Palette::axis`.
     pub plate_axis: [Color32; 2],
     /// The move and rotate handles, per axis, and the one being hovered or dragged:
@@ -210,6 +213,7 @@ const ENCRUST_SCENE: Scene = Scene {
     label: Color32::from_rgba_premultiplied(0x96, 0x9b, 0xa6, 0xc8),
     bounds: Color32::from_rgb(0xf2, 0xf2, 0xf2),
     facet: Color32::from_rgba_premultiplied(0xd9, 0x6b, 0x33, 0xd9),
+    cut_line: Color32::from_rgb(0xa8, 0x3a, 0x12),
     plate_axis: [
         Color32::from_rgb(0xcc, 0x4d, 0x4d),
         Color32::from_rgb(0x59, 0xb3, 0x59),

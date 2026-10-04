@@ -8,7 +8,7 @@ use crate::measure;
 use crate::panels::{Overlays, Window, section};
 use crate::pick::{occluded, pick, pick_surface, ray_through};
 use crate::plate::BuildPlate;
-use crate::render::{Banding, Shading, ViewportCallback};
+use crate::render::{Banding, CutLine, Shading, ViewportCallback};
 use crate::scene::Scene;
 use crate::state::{Doc, Tools, View};
 use crate::supports::Picked;
@@ -29,6 +29,11 @@ const BRACKET_ARM: f32 = 0.15;
 const MAX_FACET_TRIANGLES: usize = 200_000;
 /// How many pieces each arm is tested for being hidden in.
 const BRACKET_PIECES: u32 = 6;
+
+/// How far the cut plane reaches past the model on each side: a share of its widest side,
+/// and a floor so a small part still shows a plane around it, in millimetres.
+const CUT_PLANE_MARGIN: f32 = 0.15;
+const CUT_PLANE_MARGIN_MIN_MM: f32 = 3.0;
 
 /// How many segments the brush ring is drawn with.
 const BRUSH_SEGMENTS: u32 = 48;
@@ -183,6 +188,7 @@ fn paint_plate(ui: &egui::Ui, window: &Window, rect: egui::Rect) {
                 floor_mm: window.machine.slicing.band_floor_mm(),
             },
             textured: *window.tool == Tool::Relief,
+            cut_line: cut_line(window),
         },
         rect,
     );
@@ -209,6 +215,9 @@ fn draw_tool_overlays(ui: &egui::Ui, window: &mut Window, rect: egui::Rect, poin
     }
     if *window.tool == Tool::Measure {
         draw_measure(ui, window, rect);
+    }
+    if *window.tool == Tool::Cut {
+        draw_cut_plane(ui, window, rect);
     }
     if *window.tool == Tool::Supports && window.tools.supports.placing.paints() {
         draw_brush(ui, window, rect);
@@ -322,6 +331,65 @@ fn draw_measure(ui: &egui::Ui, window: &Window, viewport: egui::Rect) {
     let box_rect = egui::Rect::from_center_size(middle, galley.size() + egui::vec2(10.0, 6.0));
     painter.rect_filled(box_rect, theme::R_CONTROL, theme::colors().panel);
     painter.galley(box_rect.center() - galley.size() / 2.0, galley, accent);
+}
+
+/// Where the Cut tool's plane crosses the selected model, for the 3D pass to trace on its
+/// surface.
+fn cut_line(window: &Window) -> Option<CutLine> {
+    if *window.tool != Tool::Cut {
+        return None;
+    }
+    let object = window.doc.scene.get(window.doc.scene.selected()?)?;
+    let plane = window.tools.cut.plane(object)?;
+    Some(CutLine {
+        normal: plane.normal,
+        offset_mm: plane.normal.dot(plane.point),
+        bounds: object.world_bounds()?,
+    })
+}
+
+/// The outline of the Cut tool's plane, a little wider than the selected model, so the
+/// plane can be found where it misses the model and no line is traced on it.
+fn draw_cut_plane(ui: &egui::Ui, window: &Window, viewport: egui::Rect) {
+    let Some(object) = window
+        .doc
+        .scene
+        .selected()
+        .and_then(|id| window.doc.scene.get(id))
+    else {
+        return;
+    };
+    let Some(bounds) = object.world_bounds() else {
+        return;
+    };
+    let tool = &window.tools.cut;
+    let (axis, across, along) = match tool.axis {
+        crate::scene::Axis::X => (0, 1, 2),
+        crate::scene::Axis::Y => (1, 0, 2),
+        crate::scene::Axis::Z => (2, 0, 1),
+    };
+    let size = bounds.maxs - bounds.mins;
+    let margin = (size.max_element() * CUT_PLANE_MARGIN).max(CUT_PLANE_MARGIN_MIN_MM);
+    let (lo, hi) = (bounds.mins - margin, bounds.maxs + margin);
+
+    let on_screen = projector(&window.view.camera, viewport);
+    let corners: Option<Vec<egui::Pos2>> = [(lo, lo), (hi, lo), (hi, hi), (lo, hi)]
+        .into_iter()
+        .map(|(u, v)| {
+            let mut corner = Vec3::ZERO;
+            corner[axis] = tool.position_mm(object);
+            corner[across] = u[across];
+            corner[along] = v[along];
+            on_screen(corner)
+        })
+        .collect();
+    let Some(corners) = corners else {
+        return;
+    };
+    ui.painter_at(viewport).add(egui::Shape::closed_line(
+        corners,
+        egui::Stroke::new(1.0, theme::colors().accent.gamma_multiply(0.6)),
+    ));
 }
 
 /// Brackets on the corners of each picked model's bounds, and the size of each side, the

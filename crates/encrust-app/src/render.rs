@@ -12,6 +12,7 @@ mod target;
 mod vertex;
 
 pub use callback::{Banding, Shading, ViewportCallback};
+pub use gpu::CutLine;
 #[cfg(not(target_arch = "wasm32"))]
 pub use gpu::MULTISAMPLING;
 pub use label::prime as prime_label;

@@ -2,7 +2,7 @@ use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 
 use bytemuck::{Pod, Zeroable};
-use core_geometry::{Mat4, Mesh, Scalar, Vec3};
+use core_geometry::{Aabb, Mat4, Mesh, Scalar, Vec3};
 use wgpu::util::DeviceExt as _;
 
 use crate::render::target::SceneTarget;
@@ -62,6 +62,13 @@ struct Globals {
     volume: [f32; 4],
     /// `xyz` marks whatever stands past the build volume; `w` is unused padding.
     outside_color: [f32; 4],
+    /// The Cut tool's plane as `xyz` its normal and `w` its offset along it, millimetres.
+    cut_plane: [f32; 4],
+    /// The box the plane is traced on, plate millimetres; `cut_low.w` is 1.0 while it is.
+    cut_low: [f32; 4],
+    cut_high: [f32; 4],
+    /// `xyz` is the colour the plane is traced in; `w` is unused padding.
+    cut_color: [f32; 4],
     cuts: [DrainCut; MAX_CUTS],
     bands: [ExposureBand; MAX_BANDS],
 }
@@ -154,6 +161,18 @@ pub struct FrameInput<'a> {
     pub band_floor_mm: f32,
     /// The build volume in plate millimetres, or `None` to mark nothing standing past it.
     pub volume_mm: Option<Vec3>,
+    /// Where the Cut tool's plane meets the model it is set on, traced over its surface.
+    pub cut_line: Option<CutLine>,
+}
+
+/// The Cut tool's plane, traced as a line wherever it crosses the surface inside `bounds`.
+#[derive(Debug, Clone, Copy)]
+pub struct CutLine {
+    pub normal: Vec3,
+    /// How far along `normal` the plane stands from the origin, millimetres.
+    pub offset_mm: Scalar,
+    /// The model being cut, plate millimetres, so no other model is traced.
+    pub bounds: Aabb,
 }
 
 /// One object to draw: which cached mesh, and which instance slot holds its placement.
@@ -290,6 +309,7 @@ impl ViewportResources {
             bands,
             band_floor_mm,
             volume_mm,
+            cut_line,
         } = frame;
         let mut drains = [DrainCut::default(); MAX_CUTS];
         let taken = cuts.len().min(MAX_CUTS);
@@ -309,6 +329,12 @@ impl ViewportResources {
                 inside_color: theme::gamma(theme::scene().section_wash),
                 volume: volume_mm.map_or([0.0; 4], |volume| volume.extend(1.0).to_array()),
                 outside_color: theme::gamma(theme::scene().outside),
+                cut_plane: cut_line.map_or([0.0; 4], |line| {
+                    line.normal.extend(line.offset_mm).to_array()
+                }),
+                cut_low: cut_line.map_or([0.0; 4], |line| line.bounds.mins.extend(1.0).to_array()),
+                cut_high: cut_line.map_or([0.0; 4], |line| line.bounds.maxs.extend(0.0).to_array()),
+                cut_color: theme::gamma(theme::scene().cut_line),
                 cuts: drains,
                 bands: washes,
             }),

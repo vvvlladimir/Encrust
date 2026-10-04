@@ -10,7 +10,7 @@ use egui_wgpu::{CallbackResources, CallbackTrait, ScreenDescriptor};
 use crate::camera::OrbitCamera;
 use crate::plate::BuildPlate;
 use crate::render::gpu::{
-    DrainCut, ExposureBand, FrameInput, MAX_BANDS, MAX_CUTS, ModelDraw, ReliefDraw,
+    CutLine, DrainCut, ExposureBand, FrameInput, MAX_BANDS, MAX_CUTS, ModelDraw, ReliefDraw,
 };
 use crate::render::grid::plate_lines;
 use crate::render::label;
@@ -54,6 +54,7 @@ pub struct ViewportCallback {
     bands: Vec<ExposureBand>,
     band_floor_mm: f32,
     volume_mm: Vec3,
+    cut_line: Option<CutLine>,
 }
 
 /// The exposure bands washed over the models, and the height below which one shows
@@ -76,6 +77,8 @@ pub struct Shading<'a> {
     /// Whether a model still carrying a texture is drawn with it, which is what the Relief
     /// tool shows.
     pub textured: bool,
+    /// The Cut tool's plane, traced over the model it is set on.
+    pub cut_line: Option<CutLine>,
 }
 
 impl ViewportCallback {
@@ -93,6 +96,7 @@ impl ViewportCallback {
             section_mm,
             banding,
             textured,
+            cut_line,
         } = shading;
         let Draws {
             models,
@@ -120,6 +124,7 @@ impl ViewportCallback {
             bands: bands_of(banding.ranges),
             band_floor_mm: banding.floor_mm,
             volume_mm: Vec3::new(plate.x_mm, plate.y_mm, plate.z_mm),
+            cut_line,
         }
     }
 }
@@ -381,6 +386,7 @@ impl CallbackTrait for ViewportCallback {
                     bands: &self.bands,
                     band_floor_mm: self.band_floor_mm,
                     volume_mm: Some(self.volume_mm),
+                    cut_line: self.cut_line,
                 },
             );
             // The same pixels egui hands `paint` its viewport for, so the copy lands

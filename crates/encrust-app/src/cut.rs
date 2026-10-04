@@ -4,15 +4,16 @@ pub use core_engine::project::Keep;
 
 use core_engine::project::Axis;
 
-use crate::scene::{ImportSummary, Imported, ObjectId, Scene};
+use crate::scene::{ImportSummary, Imported, ObjectId, Scene, SceneObject};
 use crate::status::Status;
 
 /// Where the Cut tool's plane is, and what it does with the halves.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct CutTool {
     pub axis: Axis,
-    /// Where the plane crosses the axis, in plate millimetres.
-    pub height_mm: Scalar,
+    /// Where the plane crosses the axis, millimetres: across Z, the height above the plate;
+    /// across X or Y, the distance from the model's centre of mass.
+    pub offset_mm: Scalar,
     pub keep: Keep,
 }
 
@@ -20,16 +21,35 @@ impl Default for CutTool {
     fn default() -> Self {
         Self {
             axis: Axis::Z,
-            height_mm: 10.0,
+            offset_mm: 10.0,
             keep: Keep::Both,
         }
     }
 }
 
 impl CutTool {
-    /// The plane the tool is set to, in plate coordinates.
-    pub fn plane(&self) -> Option<Plane> {
-        Plane::at(normal(self.axis), self.height_mm)
+    /// The plane the tool is set to for one model, in plate coordinates.
+    pub fn plane(&self, object: &SceneObject) -> Option<Plane> {
+        Plane::at(normal(self.axis), self.position_mm(object))
+    }
+
+    /// Where the plane crosses its axis for one model, in plate millimetres.
+    pub fn position_mm(&self, object: &SceneObject) -> Scalar {
+        match self.axis {
+            Axis::X => object.pivot().translation.x + self.offset_mm,
+            Axis::Y => object.pivot().translation.y + self.offset_mm,
+            Axis::Z => self.offset_mm,
+        }
+    }
+
+    /// Turns the plane to `axis`, through the model's centre of mass on every axis: the
+    /// offset meant for one axis means nothing on another.
+    pub fn set_axis(&mut self, axis: Axis, object: &SceneObject) {
+        self.axis = axis;
+        self.offset_mm = match axis {
+            Axis::X | Axis::Y => 0.0,
+            Axis::Z => object.pivot().translation.z,
+        };
     }
 
     /// Cuts one model in two, in plate coordinates, and puts the halves on the plate in
@@ -39,12 +59,13 @@ impl CutTool {
     /// survive: the halves are new geometry, and a support placed on a surface that has
     /// been cut away has nothing to hold.
     pub fn apply(&self, scene: &mut Scene, id: ObjectId) -> Status {
-        let Some(plane) = self.plane() else {
-            return Status::Error("the cut plane has no direction".to_owned());
-        };
         let Some(object) = scene.get(id) else {
             return Status::Error("nothing is selected to cut".to_owned());
         };
+        let Some(plane) = self.plane(object) else {
+            return Status::Error("the cut plane has no direction".to_owned());
+        };
+        let position_mm = self.position_mm(object);
 
         let name = object.name.clone();
         let mesh = object.hollow.shell().unwrap_or(&object.mesh);
@@ -71,7 +92,10 @@ impl CutTool {
             place(scene, name, mesh);
         }
         match halves.open_loops {
-            0 => Status::Info(format!("Cut {name} at {:.1} mm", self.height_mm)),
+            0 => Status::Info(format!(
+                "Cut {name} at {} {position_mm:.1} mm",
+                self.axis.label()
+            )),
             open => Status::Info(format!(
                 "Cut {name}; {open} cut loops were open and left uncapped"
             )),
@@ -191,7 +215,7 @@ mod tests {
     fn a_cut_leaves_two_models_where_there_was_one() {
         let (mut scene, id) = scene_with(cuboid(Vec3::splat(10.0)), Transform::default());
         let tool = CutTool {
-            height_mm: 4.0,
+            offset_mm: 4.0,
             ..CutTool::default()
         };
 
@@ -214,7 +238,7 @@ mod tests {
         let lifted = Transform::from_translation(Vec3::new(0.0, 0.0, 20.0));
         let (mut scene, id) = scene_with(cuboid(Vec3::splat(10.0)), lifted);
         let tool = CutTool {
-            height_mm: 4.0,
+            offset_mm: 4.0,
             ..CutTool::default()
         };
 
@@ -230,7 +254,7 @@ mod tests {
     fn keeping_one_half_throws_the_other_away() {
         let (mut scene, id) = scene_with(cuboid(Vec3::splat(10.0)), Transform::default());
         let tool = CutTool {
-            height_mm: 6.0,
+            offset_mm: 6.0,
             keep: Keep::Below,
             ..CutTool::default()
         };
@@ -243,11 +267,12 @@ mod tests {
 
     #[test]
     fn cutting_across_the_other_axes_is_the_same_cut() {
+        // The cube's centre of mass is at 5 mm, so 2 mm short of it is 3 mm into the cube.
         for (axis, expected) in [(Axis::X, 300.0), (Axis::Y, 300.0)] {
             let (mut scene, id) = scene_with(cuboid(Vec3::splat(10.0)), Transform::default());
             let tool = CutTool {
                 axis,
-                height_mm: 3.0,
+                offset_mm: -2.0,
                 keep: Keep::Below,
             };
             tool.apply(&mut scene, id);
@@ -259,6 +284,47 @@ mod tests {
                 axis.label()
             );
         }
+    }
+
+    #[test]
+    fn a_cut_across_x_follows_the_model_across_the_plate() {
+        let moved = Transform::from_translation(Vec3::new(40.0, 25.0, 0.0));
+        let (mut scene, id) = scene_with(cuboid(Vec3::splat(10.0)), moved);
+        let tool = CutTool {
+            axis: Axis::X,
+            offset_mm: 0.0,
+            keep: Keep::Below,
+        };
+
+        let status = tool.apply(&mut scene, id);
+        assert!(
+            !status.is_error(),
+            "a plane through the centre of mass meets the model"
+        );
+        let volume = signed_volume(&scene.objects()[0].mesh);
+        assert!(
+            (volume - 500.0).abs() < 1e-1,
+            "through the middle of a 10 mm cube leaves half of 1000 mm³, got {volume}"
+        );
+    }
+
+    #[test]
+    fn turning_the_plane_puts_it_through_the_centre_of_mass() {
+        let lifted = Transform::from_translation(Vec3::new(0.0, 0.0, 20.0));
+        let (scene, id) = scene_with(cuboid(Vec3::splat(10.0)), lifted);
+        let object = scene.get(id).expect("the cube was just inserted");
+        let mut tool = CutTool::default();
+
+        tool.set_axis(Axis::Z, object);
+        assert!(
+            (tool.position_mm(object) - 25.0).abs() < 1e-4,
+            "20 mm up, 5 mm in"
+        );
+        tool.set_axis(Axis::Y, object);
+        assert!(
+            (tool.position_mm(object) - 5.0).abs() < 1e-4,
+            "the cube spans 0..10 in Y"
+        );
     }
 
     #[test]
