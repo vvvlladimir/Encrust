@@ -754,6 +754,20 @@ z = 10.0
     }
 
     #[test]
+    fn a_name_no_format_claims_is_refused_before_anything_is_written() {
+        let mut slicing = with_printer();
+        let output =
+            std::env::temp_dir().join(format!("encrust-{}-no-format.sliced", std::process::id()));
+        assert!(
+            slicing
+                .start(&scene_with_a_model(), 0, output.clone())
+                .is_err()
+        );
+        assert!(slicing.job.is_none(), "a rejected start runs nothing");
+        assert!(!output.exists(), "nor does it leave a file or a PNG stack");
+    }
+
+    #[test]
     fn a_hidden_model_is_not_something_to_slice() {
         let slicing = with_printer();
         let mut scene = scene_with_a_model();

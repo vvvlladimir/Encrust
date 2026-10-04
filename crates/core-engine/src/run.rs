@@ -71,6 +71,7 @@ impl Run {
         &self.mesh
     }
 
+    /// The stack as it is cut, a window of layers at a time.
     pub fn windows(&self) -> &Windows {
         &self.windows
     }
@@ -80,6 +81,7 @@ impl Run {
         self.windows.plan()
     }
 
+    /// How many layers the plate is cut into.
     pub fn layer_count(&self) -> usize {
         self.windows.layer_count()
     }

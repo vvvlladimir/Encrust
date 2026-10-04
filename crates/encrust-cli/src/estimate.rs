@@ -44,13 +44,14 @@ impl Print {
 
 /// Cuts `staged`, and with a printer rasterises it too, writing nothing.
 pub fn estimate(
-    staged: &Staged,
+    staged: &mut Staged,
     raster: &crate::args::RasterArgs,
     watch: &Watch,
 ) -> Result<Estimate> {
-    let mut estimate = match staged.plate(None, raster_window(raster)) {
+    let mut estimate = match staged.take_plate(None, raster_window(raster)) {
         Some(plate) => {
             let run = Run::of(&plate)?;
+            drop(plate);
             let mut slice = report_of(run.mesh(), run.windows(), staged.drainage);
             let mut watching = Watching {
                 report: &mut slice,

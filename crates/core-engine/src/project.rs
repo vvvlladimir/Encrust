@@ -41,8 +41,10 @@ pub enum Axis {
 }
 
 impl Axis {
+    /// Every axis, in the order a picker lists them.
     pub const ALL: [Self; 3] = [Self::X, Self::Y, Self::Z];
 
+    /// The axis's name as the window shows it.
     pub fn label(self) -> &'static str {
         match self {
             Self::X => "X",
@@ -63,8 +65,10 @@ pub enum Keep {
 }
 
 impl Keep {
+    /// Every choice, in the order a picker lists them.
     pub const ALL: [Self; 3] = [Self::Both, Self::Below, Self::Above];
 
+    /// The choice as the window shows it.
     pub fn label(self) -> &'static str {
         match self {
             Self::Both => "Both",
@@ -93,6 +97,7 @@ impl Default for Array {
     }
 }
 
+/// Why a `.encrust` file could not be opened.
 #[derive(Debug, thiserror::Error)]
 pub enum ProjectError {
     #[error("cannot read the project file")]
@@ -130,6 +135,7 @@ pub struct Project {
     pub meshes: Vec<Arc<Mesh>>,
 }
 
+/// Everything a project holds but its meshes, as `project.json` stores it.
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Manifest {
     pub version: u32,
@@ -163,6 +169,7 @@ fn one_sample() -> NonZeroU8 {
     core_slicer::ONE_SAMPLE
 }
 
+/// How the plate is cut and drawn: layer height, exposures, anti-aliasing, the container.
 #[derive(Debug, Serialize, Deserialize)]
 pub struct SlicingState {
     pub layer_height_mm: Scalar,
@@ -184,6 +191,7 @@ pub struct SlicingState {
     pub format: OutputFormat,
 }
 
+/// The support tool as it was left: its groups and what the next support is drawn with.
 #[derive(Debug, Serialize, Deserialize)]
 pub struct SupportState {
     /// One entry per group, group 0 first; see `docs/decisions/0094`.
@@ -194,12 +202,14 @@ pub struct SupportState {
     pub flood_angle_deg: Scalar,
 }
 
+/// A named set of support settings that supports are drawn with.
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Group {
     pub name: String,
     pub profile: SupportProfile,
 }
 
+/// What the next hollowing is done with. A hollowed model carries its own [`Cavity`].
 #[derive(Debug, Serialize, Deserialize)]
 pub struct HollowState {
     pub thickness_mm: Scalar,
@@ -218,6 +228,7 @@ pub struct DrainState {
     pub taper: Scalar,
 }
 
+/// Where the cut tool's plane stands and which halves it keeps.
 #[derive(Debug, Serialize, Deserialize)]
 pub struct CutState {
     pub axis: Axis,
@@ -225,6 +236,7 @@ pub struct CutState {
     pub keep: Keep,
 }
 
+/// One model on a plate: where it stands, and what was done to it.
 #[derive(Debug, Serialize, Deserialize)]
 pub struct ObjectState {
     pub name: String,
@@ -247,6 +259,7 @@ pub struct Summary {
     pub diagnostics: MeshDiagnostics,
 }
 
+/// One model's supports: the points placed, the regions painted and the trees kept.
 #[derive(Debug, Default, Serialize, Deserialize)]
 pub struct ObjectSupportState {
     pub points: Vec<SupportPoint>,
@@ -255,6 +268,7 @@ pub struct ObjectSupportState {
     pub frozen: Vec<SupportTree>,
 }
 
+/// One model's hollowing: its cavity, and the blockers, drains and channels cut into it.
 #[derive(Debug, Default, Serialize, Deserialize)]
 pub struct ObjectHollowState {
     pub blockers: Vec<Blocker>,

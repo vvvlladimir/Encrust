@@ -45,13 +45,15 @@ pub fn format_of(path: &Path, revision: CtbRevision) -> Option<SlicedFormat> {
 /// Nothing but the window being worked on is ever in memory; see `core_engine::Run` and
 /// ADR 0010. A run `watch.stop` cancels leaves no file behind.
 pub fn write_plate(
-    plate: &Plate,
+    plate: Plate,
     path: &Path,
     drainage: bool,
     watch: &Watch,
 ) -> Result<(SliceReport, RasterReport)> {
     warn_if_the_machine_reads_another_container(&plate.printer, plate.format);
-    let run = Run::of(plate)?;
+    let run = Run::of(&plate)?;
+    // The run holds the baked plate; the models it was baked from are not needed again.
+    drop(plate.models);
     let mut slice = report_of(run.mesh(), run.windows(), drainage);
     warn_if_exposure_was_measured_elsewhere(run.job(), &plate.material);
 

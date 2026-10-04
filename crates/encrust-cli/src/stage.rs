@@ -81,13 +81,20 @@ pub struct Staged {
 impl Staged {
     /// The run's input for a file of `format`, or `None` without a printer to draw for.
     /// With no format, the one the printer reads.
-    pub fn plate(&self, format: Option<SlicedFormat>, raster_window: usize) -> Option<Plate> {
+    ///
+    /// The models move into the plate, so that once the run has baked them the caller can
+    /// let them go rather than hold a second copy of the plate through the write.
+    pub fn take_plate(
+        &mut self,
+        format: Option<SlicedFormat>,
+        raster_window: usize,
+    ) -> Option<Plate> {
         let printer = self.printer.clone()?;
         let format = format
             .unwrap_or_else(|| printer.output.into())
             .at_revision_of(printer.output);
         Some(Plate {
-            models: self.models.clone(),
+            models: std::mem::take(&mut self.models),
             material: self.material.clone(),
             panel: self.panel,
             cutting: self.cutting,
@@ -109,24 +116,30 @@ enum Given<'a> {
 }
 
 fn given(inputs: &[PathBuf]) -> Result<Given<'_>> {
-    let of = |path: &Path| {
-        path.extension()
-            .and_then(|extension| extension.to_str())
-            .map(str::to_ascii_lowercase)
-    };
-    let plate = inputs
-        .iter()
-        .find(|path| matches!(of(path).as_deref(), Some("toml" | "encrust")));
+    let plate = inputs.iter().find(|path| describes_a_plate(path));
     match (plate, inputs) {
         (None, []) => bail!("nothing to slice: name a model, a plate file or a project"),
         (None, _) => Ok(Given::Models(inputs)),
-        (Some(_), [only]) if of(only).as_deref() == Some("toml") => Ok(Given::PlateFile(only)),
+        (Some(_), [only]) if extension_of(only).as_deref() == Some("toml") => {
+            Ok(Given::PlateFile(only))
+        }
         (Some(_), [only]) => Ok(Given::Project(only)),
         (Some(path), _) => bail!(
             "{} describes a whole plate, so it is sliced on its own",
             path.display()
         ),
     }
+}
+
+/// Whether `path` names a whole plate, a plate file or a project, rather than a model.
+pub fn describes_a_plate(path: &Path) -> bool {
+    matches!(extension_of(path).as_deref(), Some("toml" | "encrust"))
+}
+
+fn extension_of(path: &Path) -> Option<String> {
+    path.extension()
+        .and_then(|extension| extension.to_str())
+        .map(str::to_ascii_lowercase)
 }
 
 /// Stages whatever `inputs` name. `arrange` spreads several models over the plate.

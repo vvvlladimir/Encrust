@@ -52,10 +52,7 @@ impl PlateArgs {
 
     /// Whether this is one model alone, whose report keeps the shape a batch gives each.
     pub fn is_one_model(&self) -> bool {
-        matches!(self.inputs.as_slice(), [only]
-        if !only.extension().is_some_and(|extension| {
-            extension.eq_ignore_ascii_case("toml") || extension.eq_ignore_ascii_case("encrust")
-        }))
+        matches!(self.inputs.as_slice(), [only] if !stage::describes_a_plate(only))
     }
 }
 
@@ -64,8 +61,8 @@ impl SliceCommand {
         self.plate.check()?;
         let started = Instant::now();
         let watch = global.watch(stop);
-        let staged = stage::stage(&self.plate.inputs, self.plate.arrange, &self.job, &watch)?;
-        let (slice, raster) = slice_staged(&staged, &self.output, &self.job, &watch)?;
+        let mut staged = stage::stage(&self.plate.inputs, self.plate.arrange, &self.job, &watch)?;
+        let (slice, raster) = slice_staged(&mut staged, &self.output, &self.job, &watch)?;
         let outcome = Outcome {
             parts: staged.parts,
             output: self.output.clone(),

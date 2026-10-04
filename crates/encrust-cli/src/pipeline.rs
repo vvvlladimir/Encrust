@@ -77,8 +77,8 @@ pub fn slice_one(
     chosen: &Chosen,
     watch: &Watch,
 ) -> Result<Outcome> {
-    let staged = stage::models(&[input.to_path_buf()], false, job, chosen, watch)?;
-    let (slice, raster) = slice_staged(&staged, output, job, watch)?;
+    let mut staged = stage::models(&[input.to_path_buf()], false, job, chosen, watch)?;
+    let (slice, raster) = slice_staged(&mut staged, output, job, watch)?;
     Ok(Outcome {
         parts: staged.parts,
         output: output.to_path_buf(),
@@ -196,17 +196,18 @@ pub fn cutting_of(
 /// no printer are cut here, because neither needs a container and the PNG stack is a
 /// debug artefact rather than a printer format.
 pub fn slice_staged(
-    staged: &Staged,
+    staged: &mut Staged,
     output: &Path,
     job: &JobArgs,
     watch: &Watch,
 ) -> Result<(SliceReport, Option<RasterReport>)> {
     let format = format_of(output, job.raster.ctb_version);
     let window = raster_window(&job.raster);
-    let (mut slice, raster) = match (format, staged.plate(format, window)) {
-        (Some(_), Some(plate)) => write_plate(&plate, output, staged.drainage, watch)
+    let plate = format.and_then(|format| staged.take_plate(Some(format), window));
+    let (mut slice, raster) = match plate {
+        Some(plate) => write_plate(plate, output, staged.drainage, watch)
             .map(|(slice, raster)| (slice, Some(raster)))?,
-        _ => cut_without_a_container(staged, output, window, watch.stop)?,
+        None => cut_without_a_container(staged, output, window, watch.stop)?,
     };
 
     slice.finish_drainage();

@@ -69,7 +69,6 @@ wasm-bindgen-futures.workspace = true
 js-sys.workspace = true
 web-sys = { workspace = true, features = [
     "Blob",
-    "BlobPropertyBag",
     "Document",
     "Element",
     "File",
@@ -79,12 +78,10 @@ web-sys = { workspace = true, features = [
     "FileSystemGetFileOptions",
     "FileSystemReadWriteOptions",
     "FileSystemSyncAccessHandle",
-    "HtmlAnchorElement",
     "HtmlCanvasElement",
     "HtmlInputElement",
     "Storage",
     "StorageManager",
-    "Url",
     "Window",
 ] }
 
