@@ -34,6 +34,7 @@ format-svgx.workspace = true
 format-cws.workspace = true
 net-prusalink.workspace = true
 net-sdcp.workspace = true
+printer-link.workspace = true
 flate2.workspace = true
 ureq.workspace = true
 minisign-verify.workspace = true

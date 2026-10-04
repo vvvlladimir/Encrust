@@ -5,8 +5,10 @@ mod digest;
 mod error;
 mod link;
 mod session;
+mod status;
 mod upload;
 
 pub use error::PrusaLinkError;
 pub use link::{Auth, DEFAULT_USER, Link, Version};
+pub use status::{Job, Machine, Status, status};
 pub use upload::{probe, start_print, upload};

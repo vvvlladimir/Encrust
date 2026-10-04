@@ -5,6 +5,7 @@ mod convert;
 mod estimate;
 mod info;
 mod inspect;
+mod printer;
 mod profiles;
 pub mod slice;
 
@@ -21,6 +22,7 @@ pub use convert::ConvertCommand;
 pub use estimate::EstimateCommand;
 pub use info::InfoCommand;
 pub use inspect::InspectCommand;
+pub use printer::PrinterCommand;
 pub use profiles::ProfilesCommand;
 pub use slice::SliceCommand;
 
@@ -105,6 +107,9 @@ pub enum Command {
     /// The printers and resins in the catalogue.
     #[command(subcommand)]
     Profiles(ProfilesCommand),
+    /// Find printers on the network, ask one what it is doing, send it a file.
+    #[command(subcommand)]
+    Printer(PrinterCommand),
 }
 
 /// Sends logs to stderr at the level the global flags ask for, unless `RUST_LOG` says
@@ -131,5 +136,6 @@ pub fn run(cli: &Cli, stop: &Stop) -> Result<Exit> {
         Command::Info(command) => command.run(global),
         Command::Convert(command) => command.run(global, stop),
         Command::Profiles(command) => command.run(global),
+        Command::Printer(command) => command.run(global, stop),
     }
 }

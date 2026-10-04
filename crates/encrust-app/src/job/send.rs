@@ -1,29 +1,9 @@
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::{self, Receiver, Sender, TryRecvError};
-use std::time::Duration;
 
-use net_prusalink::{Link, PrusaLinkError};
-use net_sdcp::{Control, Printer, SdcpError, Transfer, Transport};
-
-/// A printer on a local network answers at once or not at all.
-const CONNECT_TIMEOUT: Duration = Duration::from_secs(5);
-
-/// How one printer is reached: the two protocols share nothing but this errand.
-#[derive(Debug, Clone)]
-pub enum Wire {
-    Sdcp(Printer),
-    Prusa(Link),
-}
-
-impl Wire {
-    /// Whether the transfer counts bytes as it goes. A `PrusaLink` upload is one PUT with
-    /// no progress inside it, so the bar animates rather than filling; see ADR 0152.
-    fn reports_progress(&self) -> bool {
-        matches!(self, Self::Sdcp(_))
-    }
-}
+use printer_link::{SendError, Wire};
 
 /// What a job does to the printer it is pointed at.
 pub enum Action {
@@ -84,7 +64,7 @@ impl SendJob {
         let worker_cancel = Arc::clone(&cancel);
         let printer = request.name.clone();
         let starting = matches!(request.action, Action::StartPrint { .. });
-        let counts_bytes = request.wire.reports_progress();
+        let counts_bytes = request.wire.counts_bytes();
 
         crate::job::spawn(move || {
             let outcome = run(&request, &worker_cancel, &sender);
@@ -163,124 +143,44 @@ impl Drop for SendJob {
 
 fn run(request: &SendRequest, cancel: &AtomicBool, sender: &Sender<SendProgress>) -> SendOutcome {
     let printer = request.name.clone();
-    match &request.action {
+    let cancelled = || cancel.load(Ordering::Relaxed);
+    let finished = match &request.action {
         Action::Upload { path, temporary } => {
-            let outcome = upload(&request.wire, path, cancel, sender);
+            let mut progress = |transfer: printer_link::Transfer| {
+                let _ = sender.send(SendProgress::Uploading {
+                    sent_bytes: transfer.sent_bytes,
+                    total_bytes: transfer.total_bytes,
+                });
+            };
+            let sent = printer_link::upload(&request.wire, path, &mut progress, &cancelled);
             if *temporary {
                 let _ = std::fs::remove_file(path);
             }
-            match outcome {
-                Ok(filename) => SendOutcome::Sent { printer, filename },
-                Err(Failure::Cancelled) => SendOutcome::Cancelled,
-                Err(Failure::Said(message)) => SendOutcome::Failed(message),
-            }
+            sent.map(|filename| SendOutcome::Sent { printer, filename })
         }
-        Action::StartPrint { filename } => match start(&request.wire, filename) {
-            Ok(()) => SendOutcome::Printing {
+        Action::StartPrint { filename } => {
+            printer_link::start_print(&request.wire, filename).map(|()| SendOutcome::Printing {
                 printer,
                 filename: filename.clone(),
-            },
-            Err(Failure::Cancelled) => SendOutcome::Cancelled,
-            Err(Failure::Said(message)) => SendOutcome::Failed(message),
-        },
-    }
-}
-
-/// Why an errand ended badly. The two clients have their own error types and the window
-/// has one line to print either in, so both are flattened here.
-enum Failure {
-    Cancelled,
-    Said(String),
-}
-
-impl From<SdcpError> for Failure {
-    fn from(error: SdcpError) -> Self {
-        match error {
-            SdcpError::Cancelled => Self::Cancelled,
-            other => Self::Said(other.to_string()),
+            })
         }
-    }
+    };
+    finished.unwrap_or_else(|error| failed(&error))
 }
 
-impl From<PrusaLinkError> for Failure {
-    fn from(error: PrusaLinkError) -> Self {
-        match error {
-            PrusaLinkError::Cancelled => Self::Cancelled,
-            other => Self::Said(other.to_string()),
-        }
-    }
-}
-
-fn upload(
-    wire: &Wire,
-    path: &Path,
-    cancel: &AtomicBool,
-    sender: &Sender<SendProgress>,
-) -> Result<String, Failure> {
-    match wire {
-        Wire::Sdcp(printer) => Ok(upload_sdcp(printer, path, cancel, sender)?),
-        Wire::Prusa(link) => Ok(net_prusalink::upload(link, path, &|| {
-            cancel.load(Ordering::Relaxed)
-        })?),
-    }
-}
-
-/// The board is asked what it takes before the file is sent, so a mismatch costs a
-/// connection rather than a whole transfer.
-///
-/// Only a version 3 board is asked. The generation before it answers the question with its
-/// status rather than its attributes, and opening a connection to it means running a broker
-/// and waiting for it to dial back — a price to pay twice for an answer that is empty.
-fn upload_sdcp(
-    printer: &Printer,
-    path: &Path,
-    cancel: &AtomicBool,
-    sender: &Sender<SendProgress>,
-) -> Result<String, SdcpError> {
-    if printer.transport == Transport::WebSocket {
-        refuse_wrong_type(printer, path)?;
-    }
-    net_sdcp::upload(printer, path, &mut |transfer: Transfer| {
-        let _ = sender.send(SendProgress::Uploading {
-            sent_bytes: transfer.sent_bytes,
-            total_bytes: transfer.total_bytes,
-        });
-        !cancel.load(Ordering::Relaxed)
-    })
-}
-
-/// Fails when the board says it does not print files of this extension.
-fn refuse_wrong_type(printer: &Printer, path: &Path) -> Result<(), SdcpError> {
-    let extension = path
-        .extension()
-        .unwrap_or_default()
-        .to_string_lossy()
-        .into_owned();
-    let mut control = Control::connect(printer, CONNECT_TIMEOUT)?;
-    let attributes = control.attributes()?;
-    if attributes.file_types.is_empty() || attributes.accepts(&extension) {
-        return Ok(());
-    }
-    Err(SdcpError::UnsupportedFileType {
-        printer: printer.name.clone(),
-        extension,
-        supported: attributes.file_types.join(", "),
-    })
-}
-
-fn start(wire: &Wire, filename: &str) -> Result<(), Failure> {
-    match wire {
-        Wire::Sdcp(printer) => {
-            let mut control = Control::connect(printer, CONNECT_TIMEOUT)?;
-            Ok(control.start_print(filename, 0)?)
-        }
-        Wire::Prusa(link) => Ok(net_prusalink::start_print(link, filename)?),
+/// The window has one line to print a failure in, so the error chain is flattened.
+fn failed(error: &SendError) -> SendOutcome {
+    match error.is_cancelled() {
+        true => SendOutcome::Cancelled,
+        false => SendOutcome::Failed(error.to_string()),
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use net_prusalink::Link;
+    use net_sdcp::{Printer, Transport};
     use std::net::IpAddr;
 
     fn a_printer() -> Printer {
@@ -367,24 +267,6 @@ mod tests {
             panic!("a dead worker must end the job");
         };
         assert!(message.contains("stopped"), "got {message}");
-    }
-
-    #[test]
-    fn cancelling_is_told_from_failing_whichever_protocol_reports_it() {
-        assert!(matches!(
-            Failure::from(SdcpError::Cancelled),
-            Failure::Cancelled
-        ));
-        assert!(matches!(
-            Failure::from(PrusaLinkError::Cancelled),
-            Failure::Cancelled
-        ));
-        let Failure::Said(message) = Failure::from(PrusaLinkError::Unauthorized {
-            host: "sl1.local".to_owned(),
-        }) else {
-            panic!("a refusal is not a cancellation");
-        };
-        assert!(message.contains("sl1.local"), "got {message}");
     }
 
     #[test]

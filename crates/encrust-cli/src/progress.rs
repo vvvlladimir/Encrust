@@ -16,6 +16,14 @@ pub fn bar(what: &str) -> ProgressBar {
     ProgressBar::new(0).with_style(style)
 }
 
+/// A bar over the bytes of a transfer `what` names, under the same conditions as [`bar`].
+pub fn bytes_bar(what: &str) -> ProgressBar {
+    let template = format!("{{bar:40}} {{bytes}}/{{total_bytes}} {what}, {{eta}} left");
+    let style =
+        ProgressStyle::with_template(&template).unwrap_or_else(|_| ProgressStyle::default_bar());
+    ProgressBar::new(0).with_style(style)
+}
+
 /// What one model's run hears while its file is written: each window into the slice report,
 /// each layer onto the bar, and Ctrl-C through `stop`.
 pub struct Watching<'a> {

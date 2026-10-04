@@ -45,8 +45,8 @@ headers, and reloads once; where even that fails it says what the host must send
 
 ### What a browser does not have yet
 
-- The printer network and updates; the Network card, the Send button and the Updates page
-  are hidden (step A6).
+- The printer network: a sliced file is downloaded, and the Network card says so (ADR 0182).
+- Updates; the Updates page is hidden.
 - A capped section: eframe's web painter makes its depth buffer without a stencil plane
   whatever it is asked for, so the cut is drawn open.
 - A warning before the tab is closed over unsaved work.

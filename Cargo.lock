@@ -1597,6 +1597,7 @@ dependencies = [
  "minisign-verify",
  "net-prusalink",
  "net-sdcp",
+ "printer-link",
  "printer-profiles",
  "rayon",
  "rfd",
@@ -1641,7 +1642,10 @@ dependencies = [
  "format-goo",
  "format-sl1",
  "indicatif",
+ "net-prusalink",
+ "net-sdcp",
  "png",
+ "printer-link",
  "printer-profiles",
  "rayon",
  "serde",
@@ -3814,6 +3818,18 @@ name = "presser"
 version = "0.3.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e8cf8e6a8aa66ce33f63993ffc4ea4271eb5b0530a9002db8455ea6050c77bfa"
+
+[[package]]
+name = "printer-link"
+version = "0.1.0"
+dependencies = [
+ "net-prusalink",
+ "net-sdcp",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.20",
+ "tracing",
+]
 
 [[package]]
 name = "printer-profiles"

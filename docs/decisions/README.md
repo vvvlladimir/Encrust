@@ -237,9 +237,10 @@ Grouped by what the decision governs; the number is still the order it was taken
 | [0136](0136-a-network-protocol-is-a-crate-of-its-own.md) | A network protocol is a crate of its own | Accepted |
 | [0137](0137-the-network-client-is-synchronous.md) | The network client is synchronous | Accepted |
 | [0152](0152-the-file-goes-up-as-one-put-and-nothing-else.md) | The file goes up as one PUT and nothing else | Accepted |
-| [0153](0153-a-prusa-machine-is-set-up-not-discovered.md) | A Prusa machine is set up, not discovered | Accepted |
+| [0153](0153-a-prusa-machine-is-set-up-not-discovered.md) | A Prusa machine is set up, not discovered | Superseded by 0182 (where the enum lives only) |
 | [0154](0154-sdcp-version-one-is-the-same-crate-with-a-second-transport.md) | SDCP version 1 is the same crate with a second transport | Accepted |
 | [0155](0155-the-broker-and-the-file-server-are-written-here.md) | The broker and the file server are written here | Accepted |
+| [0182](0182-sending-is-a-crate-both-front-ends-share-and-a-browser-downloads.md) | Sending is a crate both front ends share, and a browser downloads | Accepted |
 
 ### The window and the command line
 

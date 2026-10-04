@@ -26,6 +26,7 @@ encrust slice model.stl \
 
 encrust estimate model.stl --printer elegoo-mars-4-ultra   # time, resin, price; writes nothing
 encrust convert plate.ctb --printer elegoo-mars-4-ultra -o plate.goo
+encrust printer send model.goo 192.168.1.42 --start      # to an Elegoo board
 ```
 
 ## Output, exit codes and Ctrl-C
@@ -189,6 +190,35 @@ given. The masks are copied, never resampled, so the printer's panel must be the
 file was drawn for; the layer heights and every exposure are the file's own, and the resin
 gives the lifts, waits and price. A stack of varying layer heights is refused for now, and
 the new file's previews are blank (ADR 0180).
+
+## Printers on the network
+
+`printer discover` broadcasts for Elegoo boards, both SDCP generations, and asks each
+`--address` directly for a network the broadcast does not cross. `printer status` and
+`printer send` take a board's IP address, which is asked who it is before anything else;
+`--wait` is how long it is given, in seconds. `send --start` starts the file once it has
+landed. On a terminal a board's transfer draws a bar over its bytes; Ctrl-C stops it between
+packets and exits 130.
+
+```sh
+encrust printer discover --address 10.0.4.17
+encrust printer status 192.168.1.42 --json
+encrust printer send model.goo 192.168.1.42 --start
+```
+
+A Prusa machine answers no broadcast and takes only `.sl1` and `.sl1s`. It is named by host
+with `--prusalink`, and lets in a key, or a password under `--user` (`maker` unless set). Pass
+them as `ENCRUST_PRUSALINK_KEY` or `ENCRUST_PRUSALINK_PASSWORD` rather than as flags, so they
+stay out of the shell's history. Its upload is one request, so it has no bar and Ctrl-C lands
+only before it starts (ADR 0152).
+
+```sh
+ENCRUST_PRUSALINK_PASSWORD=… encrust printer send model.sl1 sl1.local --prusalink --start
+```
+
+Under `--json`, `status` prints `printer`, `protocol` (`sdcp-3`, `sdcp-1` or `prusalink`),
+`state`, `file`, `progress` from 0 to 1, `remaining_s` and `error`; `send` prints
+`printer`, `protocol`, `file` as it landed and `started`; `discover` prints `printers`.
 
 ## Batch
 

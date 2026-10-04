@@ -53,7 +53,8 @@ folds the volume the header, the weight and the price are taken from (ADR 0163).
 A written file is the end of the pipeline. Sending it to a printer starts from the path
 alone: `net-sdcp` and `net-prusalink` take it and nothing else (ADR 0136), and the window
 chooses between a file and a printer on the one button that writes (ADR 0138). The two
-protocols meet only in the window, as an enum over what a destination can be (ADR 0153).
+protocols meet in `printer-link`, an enum over what a destination can be that the window and
+`encrust printer` both call; a browser downloads the file instead (ADR 0182).
 
 ## What each crate owns
 
@@ -85,8 +86,9 @@ it are in `.claude/rules/architecture.md`.
 | `format-svgx` | `SvgxWriter`, `SvgxReader`: a binary header, two bitmap previews and an SVG document whose layers are polygons traced out of the mask (ADR 0169) |
 | `format-cws` | `CwsWriter`, `CwsReader`, `claims`: a zip of eight-bit PNGs, one `slice.conf` and the gcode program that runs them (ADR 0170) |
 | `net-sdcp` | `Printer` with its `Transport`, `Attributes`, `Status`, `Machine`, `PrintInfo`, `FileTransferInfo`/`Fetching`, `Transfer`, `SdcpError`; `discover`/`probe` over UDP for both reply shapes, `Control` over a WebSocket or an MQTT broker of its own, `upload` posting packets or serving the file a board fetches (ADR 0154, 0155) |
-| `net-prusalink` | `Link`, `Auth`, `Version`, `DEFAULT_USER`, `PrusaLinkError`; `probe`, `upload` as one PUT and `start_print`, over HTTP digest or an API key (ADR 0152) |
-| `encrust-cli` | `encrust` binary, one subcommand per module in `commands/` (ADR 0176): `stage` assembles a plate from models, a plate file (`plate_file`, ADR 0179) or a project (`project`, ADR 0178); `pipeline` runs a model through orient, hollow and supports and writes a staged plate through `core-engine`, or cuts it here for a PNG stack; `estimate` measures one without writing; `convert`; `batch` runs one model at a time over a directory with a JSON report each; `--json`, exit codes, the progress bar and Ctrl-C |
+| `net-prusalink` | `Link`, `Auth`, `Version`, `DEFAULT_USER`, `Status`/`Machine`/`Job`, `PrusaLinkError`; `probe`, `upload` as one PUT, `start_print` and `status`, over HTTP digest or an API key (ADR 0152) |
+| `printer-link` | `Wire` over a board or a Prusa machine, `upload` with the board's pre-flight, `start_print`, `state` into one `State`, `scan` of both into `Found`, `SendError` (ADR 0182) |
+| `encrust-cli` | `encrust` binary, one subcommand per module in `commands/` (ADR 0176): `stage` assembles a plate from models, a plate file (`plate_file`, ADR 0179) or a project (`project`, ADR 0178); `pipeline` runs a model through orient, hollow and supports and writes a staged plate through `core-engine`, or cuts it here for a PNG stack; `estimate` measures one without writing; `convert`; `printer` discovers, asks and sends through `printer-link`; `batch` runs one model at a time over a directory with a JSON report each; `--json`, exit codes, the progress bar and Ctrl-C |
 | `encrust-web` | The window's browser front end (ADR 0181): `start`, the window on a canvas; `www/` the page, its headers and the service worker that isolates it where a host sends no headers |
 | `web-engine` | The browser's front end without a window (ADR 0177): `slice_project`, the bytes of a project into the bytes of a sliced file with no file system, thread or clock, and the `wasm-bindgen` exports of it; `www/` the page, its worker and the Node measurement |
 | `xtask` | `xtask` binary: `gen-profiles`, the printer catalogue transcribed from a directory of source profiles, run by hand and never from a build script (ADR 0165) |
@@ -97,16 +99,17 @@ it are in `.claude/rules/architecture.md`.
 Arrows point at what a crate may depend on. Anything not drawn is forbidden.
 
 ```
-encrust-app ──> core-engine, every core-*, printer-profiles, every format-*, net-sdcp,
-               net-prusalink,
+encrust-app ──> core-engine, every core-*, printer-profiles, every format-*, printer-link,
+               net-sdcp, net-prusalink,
                egui, eframe, egui_dock, egui-wgpu, wgpu, transform-gizmo-egui,
                bytemuck, image, rfd, rayon, serde, serde_json, zip,
                ureq (with TLS at the desk), minisign-verify, tar, flate2, web-time;
                in a browser wasm-bindgen, wasm-bindgen-futures, js-sys, web-sys;
                winresource at build time, for the Windows icon
 encrust-web ──> encrust-app, wasm-bindgen, wasm-bindgen-futures, web-sys, getrandom
-encrust-cli ──> core-engine, every core-*, printer-profiles, every format-*, rayon,
-               clap, serde, serde_json, toml, indicatif, ctrlc
+encrust-cli ──> core-engine, every core-*, printer-profiles, every format-*, printer-link,
+               net-sdcp, net-prusalink, rayon, clap, serde, serde_json, toml, indicatif,
+               ctrlc
 web-engine ──> core-engine, core-pipeline, wasm-bindgen
 xtask ──> printer-profiles, toml
 
@@ -118,6 +121,7 @@ core-pipeline ──> core-analysis, core-format, core-geometry, core-raster, co
 format-goo, format-chitu, format-anycubic, format-creality ──> core-format, core-raster
 format-sl1, format-gcode-zip, format-cws ──> core-format, core-raster, zip
 format-svgx ──> core-format, core-raster, core-slicer, glam
+printer-link ──> net-sdcp, net-prusalink, serde
 net-sdcp ──> (nothing in this workspace; tungstenite, ureq, md-5, serde)
 net-prusalink ──> (nothing in this workspace; ureq, md-5, serde)
 core-format ──> core-raster, core-slicer, printer-profiles, core-thumbnail, png
@@ -146,8 +150,8 @@ may take that container's crate with it, as the archive formats take `zip` (ADR 
 part larger than memory before the loader under it reserves one (ADR 0171). A new printer network protocol is a new
 `net-*` crate, taking the path of a file that is already written and depending on nothing
 in the workspace at all — not even on another `net-*` crate (ADR 0136). Where two of them
-have something in common, it is settled in `encrust-app` by an enum over destinations, not
-by a shared crate (ADR 0153).
+have something in common, it is settled in `printer-link` above them by an enum over
+destinations, not by a crate under them (ADR 0182).
 
 ## Why the graph is shaped this way
 
@@ -185,8 +189,8 @@ by a shared crate (ADR 0153).
   the workspace: each is handed the path of a file that is already written. One protocol is
   one crate, with no shared crate and no sideways edge between them (ADR 0136), and both
   block rather than bringing an async runtime into a synchronous workspace (ADR 0137). What
-  the two have in common is settled in `encrust-app`, where both are already linked, by an
-  enum over a destination rather than a trait over a client (ADR 0153).
+  the two have in common is settled in `printer-link`, above both and under both binaries,
+  by an enum over a destination rather than a trait over a client (ADR 0153, 0182).
 - `net-sdcp` covers SDCP versions 3 and 1, because they are one protocol over two transports
   and a second crate would duplicate the envelope, the discovery parser and the ack table
   (ADR 0154). Version 1 inverts the roles, so the crate runs an MQTT broker and a one-file

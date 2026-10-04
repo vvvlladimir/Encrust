@@ -1847,3 +1847,24 @@ fn convert_refuses_a_machine_it_cannot_draw_the_masks_for() {
     );
     assert!(!ctb.exists(), "nothing is left behind");
 }
+
+#[test]
+fn a_printer_that_does_not_answer_fails_with_one_json_document() {
+    let file = output_dir("printer-send").with_extension("goo");
+    fs::write(&file, b"not a real stack").expect("the temporary directory is writable");
+    let output = Command::new(env!("CARGO_BIN_EXE_encrust"))
+        .env("ENCRUST_PRUSALINK_KEY", "k3y")
+        .args(["printer", "send", file.to_str().unwrap(), "127.0.0.1:1"])
+        .args(["--prusalink", "--json"])
+        .output()
+        .expect("the encrust binary runs");
+    assert_eq!(output.status.code(), Some(1), "{}", stderr(&output));
+    let document = json(&output);
+    assert!(
+        document["error"]["message"]
+            .as_str()
+            .is_some_and(|message| message.contains("127.0.0.1:1")),
+        "{document}"
+    );
+    fs::remove_file(file).ok();
+}

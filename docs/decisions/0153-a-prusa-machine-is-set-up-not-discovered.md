@@ -1,6 +1,6 @@
 # 0153. A Prusa machine is set up, not discovered
 
-- **Status:** Accepted
+- **Status:** Superseded by 0182 (where the enum lives only)
 - **Date:** 2026-10-01
 
 ## Context

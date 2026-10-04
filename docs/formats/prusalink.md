@@ -30,7 +30,7 @@ sent twice. Every request after counts up in `nc`, because a server is entitled 
 count it has already seen. `qop=auth` is answered when offered and the RFC 2069 form when
 not; `auth-int` is not implemented and no shipping firmware asks for it.
 
-## The three calls
+## The four calls
 
 ### `GET /api/version`
 
@@ -65,6 +65,13 @@ so that is what goes.
 
 Starts a file already on the storage. The body is ignored; `204 No Content` is the answer.
 
+### `GET /api/v1/status`
+
+What `encrust printer status` reads. `printer.state` is the one required field — `IDLE`,
+`BUSY`, `PRINTING`, `PAUSED`, `FINISHED`, `STOPPED`, `ERROR`, `ATTENTION` or `READY` — and
+`job`, while there is one, carries `progress` in percent and `time_remaining` in seconds.
+The file being printed is not named here; that is `GET /api/v1/job`'s, which is not read.
+
 ## What a refusal means
 
 The body of an error is the API's `Error` object — `code`, `title`, `text`, `url` — and the
@@ -90,6 +97,10 @@ There is no progress inside the transfer. The file is one PUT and `ureq` derives
 `Content-Length` from the body it is given, so a reader wrapped to count bytes would go up
 chunked instead — which PrusaLink does not take. The window animates its bar rather than
 filling it, and a cancel only lands before the PUT begins (ADR 0152).
+
+A page in a browser cannot call any of this. The machine answers no CORS preflight, and a
+digest login or an API key is a header that needs one, so the web build only downloads
+(ADR 0182).
 
 Older firmware — PrusaLink before 0.7, SL1 before 1.8.0 — has no `upload-by-put` and takes
 only the OctoPrint-style multipart `POST /api/files/{storage}`. That is refused here by

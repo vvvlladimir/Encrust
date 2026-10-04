@@ -220,7 +220,7 @@ struct Bound {
 }
 
 fn bound_machine(machine: &mut Machine) -> Option<Bound> {
-    // TODO(step-A6): a browser reaches no printer yet; it sends over `fetch` and WebSocket.
+    // A browser reaches no printer, so the file is only ever downloaded (ADR 0182).
     if cfg!(target_arch = "wasm32") {
         return None;
     }

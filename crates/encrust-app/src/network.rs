@@ -11,7 +11,9 @@ use net_prusalink::Link;
 use net_sdcp::Printer;
 use printer_profiles::Connection;
 
-use crate::job::{Action, SendJob, SendOutcome, SendRequest, Wire};
+use printer_link::{Found, Wire};
+
+use crate::job::{Action, SendJob, SendOutcome, SendRequest};
 use crate::status::Status;
 
 /// Long enough for every printer on the segment to answer, short enough to wait through.
@@ -148,13 +150,6 @@ pub struct Network {
     pub prusa_draft: PrusaDraft,
 }
 
-/// What a scan came back with, from both protocols at once.
-struct Found {
-    printers: Vec<Printer>,
-    /// What each Prusa host called itself, keyed by host.
-    reached: BTreeMap<String, String>,
-}
-
 impl Network {
     /// Every printer the window could send to, boards first.
     pub fn targets(&self) -> Vec<Target<'_>> {
@@ -272,28 +267,7 @@ impl Network {
         let manual = self.manual.clone();
         let links: Vec<Link> = self.prusa.iter().map(|prusa| prusa.link.clone()).collect();
         crate::job::spawn(move || {
-            let mut printers = net_sdcp::discover(SCAN_WINDOW).unwrap_or_default();
-            for address in manual {
-                let known = printers.iter().any(|printer| printer.address == address);
-                if known {
-                    continue;
-                }
-                if let Ok(Some(printer)) = net_sdcp::probe(address, SCAN_WINDOW) {
-                    printers.push(printer);
-                }
-            }
-            let mut reached = BTreeMap::new();
-            for link in links {
-                match net_prusalink::probe(&link) {
-                    Ok(version) => {
-                        reached.insert(link.host.clone(), version.text);
-                    }
-                    Err(error) => {
-                        tracing::debug!(host = %link.host, %error, "a Prusa machine did not answer");
-                    }
-                }
-            }
-            let _ = sender.send(Found { printers, reached });
+            let _ = sender.send(printer_link::scan(SCAN_WINDOW, &manual, &links));
         });
         self.scan = Some(receiver);
     }
@@ -377,13 +351,13 @@ impl Network {
         match receiver.try_recv() {
             Ok(found) => {
                 self.seen = found
-                    .printers
+                    .boards
                     .iter()
                     .map(|printer| Target::Sdcp(printer).key())
                     .chain(found.reached.keys().map(|host| format!("prusa:{host}")))
                     .collect();
                 self.asked = true;
-                self.printers = merged(std::mem::take(&mut self.printers), found.printers);
+                self.printers = merged(std::mem::take(&mut self.printers), found.boards);
                 for prusa in &mut self.prusa {
                     prusa.text = found.reached.get(&prusa.link.host).cloned();
                 }
@@ -565,7 +539,7 @@ mod tests {
         };
         sender
             .send(Found {
-                printers: Vec::new(),
+                boards: Vec::new(),
                 reached: BTreeMap::new(),
             })
             .expect("the scan holds the receiver");
@@ -622,7 +596,7 @@ mod tests {
 
         sender
             .send(Found {
-                printers: vec![a_printer("aa")],
+                boards: vec![a_printer("aa")],
                 reached: BTreeMap::new(),
             })
             .expect("the scan holds the receiver");
@@ -649,7 +623,7 @@ mod tests {
         };
         sender
             .send(Found {
-                printers: Vec::new(),
+                boards: Vec::new(),
                 reached: BTreeMap::from([("sl1.local".to_owned(), "Prusa SLA 1.8.0".to_owned())]),
             })
             .expect("the scan holds the receiver");

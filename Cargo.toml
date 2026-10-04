@@ -38,6 +38,7 @@ format-svgx = { path = "crates/format-svgx" }
 format-cws = { path = "crates/format-cws" }
 net-sdcp = { path = "crates/net-sdcp" }
 net-prusalink = { path = "crates/net-prusalink" }
+printer-link = { path = "crates/printer-link" }
 
 glam = { version = "0.33", features = ["serde"] }
 parry3d = "0.30"
@@ -61,7 +62,7 @@ web-sys = "0.3.106"
 web-time = "1.1"
 getrandom = "0.3"
 getrandom-04 = { package = "getrandom", version = "0.4" }
-clap = { version = "4.6", features = ["derive"] }
+clap = { version = "4.6", features = ["derive", "env"] }
 # The command line's progress bar and its Ctrl-C; see docs/decisions/0176.
 indicatif = { version = "0.18", default-features = false }
 ctrlc = "3.5"
