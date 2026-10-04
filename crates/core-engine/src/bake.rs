@@ -19,27 +19,32 @@ use crate::plate::Model;
 /// correction must not move its neighbours; see `docs/design/compensation.md`.
 pub fn bake(models: &[Model], compensation: &Compensation) -> Option<Mesh> {
     let mut merged = Mesh::default();
-
     for model in models {
-        let mut part = Mesh::default();
-        let placed = if model.transform == Transform::default() {
-            model.mesh.as_ref().clone()
+        let part = compensated(placed(model), compensation);
+        // The first part becomes the bake rather than being copied into it.
+        if merged.vertices.is_empty() {
+            merged = part;
         } else {
-            transform_mesh(&model.mesh, model.transform)
-        };
-        append(&mut part, &placed);
-
-        if let Some(cuts) = &model.cuts {
-            append(&mut part, &transform_mesh(cuts, model.transform));
+            append(&mut merged, &part);
         }
-        for supports in &model.supports {
-            append(&mut part, supports);
-        }
-
-        append(&mut merged, &compensated(part, compensation));
     }
-
     (!merged.is_empty()).then_some(merged)
+}
+
+/// One model with its cuts and supports, in plate coordinates.
+fn placed(model: &Model) -> Mesh {
+    let mut part = if model.transform == Transform::default() {
+        model.mesh.as_ref().clone()
+    } else {
+        transform_mesh(&model.mesh, model.transform)
+    };
+    if let Some(cuts) = &model.cuts {
+        append(&mut part, &transform_mesh(cuts, model.transform));
+    }
+    for supports in &model.supports {
+        append(&mut part, supports);
+    }
+    part
 }
 
 /// Every mesh on the plate and where it stands, without copying any of them.
@@ -68,14 +73,18 @@ fn compensated(part: Mesh, compensation: &Compensation) -> Mesh {
         Scalar::midpoint(bounds.mins.x, bounds.maxs.x),
         Scalar::midpoint(bounds.mins.y, bounds.maxs.y),
     );
-    transform_mesh(
-        &part,
-        Transform {
-            translation: Vec3::from_array(translation),
-            scale: Vec3::from_array(scale),
-            ..Transform::default()
-        },
-    )
+    let matrix = Transform {
+        translation: Vec3::from_array(translation),
+        scale: Vec3::from_array(scale),
+        ..Transform::default()
+    }
+    .to_matrix();
+    // In place: a shrink factor is never negative, so no face turns inside out.
+    let mut part = part;
+    for vertex in &mut part.vertices {
+        *vertex = matrix.transform_point3(*vertex);
+    }
+    part
 }
 
 fn append(merged: &mut Mesh, mesh: &Mesh) {
