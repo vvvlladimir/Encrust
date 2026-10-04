@@ -27,7 +27,8 @@ fn stack(scene: &Scene, slicing: &Slicing) -> (Scalar, (usize, Option<usize>)) {
     let Some(bounds) = scene.world_bounds() else {
         return (0.0, (0, None));
     };
-    let height_mm = (bounds.maxs.z - bounds.mins.z).max(0.0);
+    // Counted from the plate up, as it is cut: nothing under the plate is.
+    let height_mm = (bounds.maxs.z - bounds.mins.z.max(0.0)).max(0.0);
     let count = |height: Scalar| (height_mm / height).ceil().max(0.0) as usize;
     let fewest = slicing
         .adaptive

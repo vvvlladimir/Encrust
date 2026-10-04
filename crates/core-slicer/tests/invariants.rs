@@ -6,7 +6,7 @@
 #[path = "shared/bodies.rs"]
 mod shared;
 
-use core_geometry::{Mesh, Quat, Scalar, Transform, Vec3, transform_mesh};
+use core_geometry::{Mesh, Quat, Scalar, Transform, Vec3, lift_over_plate, transform_mesh};
 use core_slicer::{PlaneSliceEngine, SliceEngine, SliceSettings, Winding};
 use proptest::prelude::*;
 use shared::bodies;
@@ -30,20 +30,23 @@ proptest! {
     fn a_closed_body_yields_closed_contours(
         angles in prop::array::uniform3(0.0..std::f32::consts::TAU),
         scale in 0.5..4.0f32,
-        offset in -20.0..20.0f32,
+        lift in 0.0..20.0f32,
         layer_height in 0.05..1.0f32,
     ) {
         let rotation = Quat::from_rotation_z(angles[2])
             * Quat::from_rotation_y(angles[1])
             * Quat::from_rotation_x(angles[0]);
-        let placed = transform_mesh(
+        let turned = transform_mesh(
             &bodies::cube(10.0),
             Transform {
-                translation: Vec3::new(0.0, 0.0, offset),
                 rotation,
                 scale: Vec3::splat(scale),
+                ..Transform::default()
             },
         );
+        // Over the plate, since nothing under it is cut.
+        let bounds = turned.aabb().expect("a cube has bounds");
+        let placed = transform_mesh(&turned, Transform::from_translation(lift_over_plate(&bounds, lift)));
 
         prop_assert!(sliced(&placed, layer_height).is_clean());
     }

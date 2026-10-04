@@ -121,11 +121,9 @@ impl Pseudonormals {
         let to_point = found.point - triangle.a;
         let (d00, d01, d11) = (edge1.dot(edge1), edge1.dot(edge2), edge2.dot(edge2));
         let determinant = d00 * d11 - d01 * d01;
-        if determinant <= 0.0 {
-            // A face with no area has no barycentric coordinates and no normal either.
-            return face;
-        }
-        if determinant < WELL_SHAPED * d00 * d11 {
+        // Cancellation can leave a sliver's determinant at zero or below it, so a face
+        // with no area is a sliver too: its seams still have normals where it has none.
+        if determinant <= WELL_SHAPED * d00 * d11 {
             return self.on_a_sliver(corners, [triangle.a, triangle.b, triangle.c], point, found);
         }
 
@@ -326,6 +324,28 @@ mod tests {
             vec![[0, 1, 2], [2, 1, 3]],
         );
         let point = Vec3::new(100.0, 122.2, 1.0);
+        let found = closest_point(&mesh, point).expect("the mesh has faces");
+
+        assert!(
+            !Signer::new(&mesh, SignMode::Pseudonormal).is_inside(&mesh, point, &found),
+            "the point stands off the ridge, outside both faces"
+        );
+    }
+
+    /// A sliver so thin that `f32` puts its determinant below zero, which read as a face
+    /// with no area and signed the point by the sliver's own normal.
+    #[test]
+    fn a_sliver_whose_determinant_cancels_below_zero_is_still_signed_by_its_edge() {
+        let mesh = Mesh::new(
+            vec![
+                Vec3::new(97.21413, 97.78362, 0.0),
+                Vec3::new(97.074_936, 122.76993, 0.0),
+                Vec3::new(97.078_255, 122.29129, 0.0),
+                Vec3::new(96.0, 122.5, 1.5),
+            ],
+            vec![[0, 1, 2], [2, 1, 3]],
+        );
+        let point = Vec3::new(100.0, 122.6, 1.0);
         let found = closest_point(&mesh, point).expect("the mesh has faces");
 
         assert!(

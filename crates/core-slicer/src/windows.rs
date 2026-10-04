@@ -2,7 +2,7 @@ use std::num::NonZeroU8;
 
 use core_geometry::{Mesh, Scalar};
 
-use crate::engine::{PlaneSliceEngine, SliceEngine, layer_heights};
+use crate::engine::{PlaneSliceEngine, SliceEngine, layer_heights, on_the_plate};
 use crate::{Layer, LayerPlan, SliceError, SliceSettings, Sliced};
 
 /// Layers cut in one go before their contours are handed on and dropped.
@@ -26,10 +26,10 @@ impl Windows {
         // Asking for the heights first is what rejects a zero layer height and an empty
         // mesh, which a plan built from bounds alone could not.
         let heights = layer_heights(mesh, &settings)?;
-        let aabb = mesh.aabb().ok_or(SliceError::EmptyMesh)?;
+        let (z_min, z_max) = on_the_plate(mesh)?;
         Ok(Self {
             settings,
-            plan: LayerPlan::uniform(&settings, aabb.mins.z, aabb.maxs.z),
+            plan: LayerPlan::uniform(&settings, z_min, z_max),
             heights,
             window: window.max(1),
         })

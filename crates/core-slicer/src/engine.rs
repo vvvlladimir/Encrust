@@ -25,11 +25,33 @@ pub fn layer_heights(mesh: &Mesh, settings: &SliceSettings) -> Result<Vec<Scalar
     if settings.layer_height <= 0.0 {
         return Err(SliceError::NonPositiveLayerHeight(settings.layer_height));
     }
+    let (z_min, z_max) = on_the_plate(mesh)?;
+    Ok(settings.plane_heights(z_min, z_max))
+}
+
+/// Height of the plate, plate millimetres. A stack never starts under it: a layer below it
+/// would drive the plate into the vat floor.
+const PLATE_MM: Scalar = 0.0;
+
+/// The heights of `mesh` a stack covers: from its bottom, or from the plate where it reaches
+/// under it, to its top. Whatever stands under the plate is not cut.
+pub(crate) fn on_the_plate(mesh: &Mesh) -> Result<(Scalar, Scalar), SliceError> {
     let aabb = mesh
         .aabb()
         .filter(|_| !mesh.is_empty())
         .ok_or(SliceError::EmptyMesh)?;
-    Ok(settings.plane_heights(aabb.mins.z, aabb.maxs.z))
+    if aabb.maxs.z <= PLATE_MM {
+        return Err(SliceError::UnderThePlate {
+            top_mm: aabb.maxs.z,
+        });
+    }
+    if aabb.mins.z < PLATE_MM {
+        tracing::warn!(
+            bottom_mm = aabb.mins.z,
+            "the model reaches under the plate, and what is under it is not cut"
+        );
+    }
+    Ok((aabb.mins.z.max(PLATE_MM), aabb.maxs.z))
 }
 
 /// Slices by intersecting every face with each Z plane and stitching the crossings into

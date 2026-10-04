@@ -93,6 +93,7 @@ Grouped by what the decision governs; the number is still the order it was taken
 | [0091](0091-a-stack-is-planned-not-counted.md) | A stack is a plan of boundaries, not a count times a height | Accepted |
 | [0114](0114-unite-a-layers-planes-by-brightness.md) | A layer is sampled at several planes, united by brightness on the runs | Accepted |
 | [0134](0134-a-layer-starts-at-the-near-edge-of-the-plate.md) | Write the plate as it stands, and leave mirroring to the header | Accepted |
+| [0187](0187-nothing-under-the-plate-is-cut.md) | Nothing under the plate is cut | Accepted |
 
 ### Rasterisation
 

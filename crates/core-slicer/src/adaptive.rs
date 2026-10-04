@@ -3,6 +3,7 @@ use rayon::prelude::*;
 
 use serde::{Deserialize, Serialize};
 
+use crate::engine::on_the_plate;
 use crate::{LayerPlan, SliceError};
 
 /// What an adaptive stack is allowed to do: how much stair-stepping to accept, and the
@@ -71,11 +72,7 @@ const APART_MM: Scalar = 1e-4;
 /// own, and gets one. See `docs/design/slicing.md`.
 pub fn plan(mesh: &Mesh, settings: &AdaptiveSettings) -> Result<LayerPlan, SliceError> {
     settings.validate()?;
-    let aabb = mesh
-        .aabb()
-        .filter(|_| !mesh.is_empty())
-        .ok_or(SliceError::EmptyMesh)?;
-    let (z_min, z_max) = (aabb.mins.z, aabb.maxs.z);
+    let (z_min, z_max) = on_the_plate(mesh)?;
     if z_max <= z_min {
         return Ok(LayerPlan::from_bounds(Vec::new(), z_max));
     }

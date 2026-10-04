@@ -8,10 +8,10 @@ mod shared;
 
 use std::f32::consts::PI;
 
-use core_geometry::{Scalar, Transform, transform_mesh};
+use core_geometry::{Scalar, Transform, Vec3, transform_mesh};
 use core_slicer::{
-    AdaptiveSettings, Contour, PlaneSliceEngine, SliceEngine, SliceSettings, Sliced, Winding,
-    adaptive_plan,
+    AdaptiveSettings, Contour, PlaneSliceEngine, SliceEngine, SliceError, SliceSettings, Sliced,
+    WINDOW_LAYERS, Winding, Windows, adaptive_plan,
 };
 use shared::bodies;
 
@@ -221,10 +221,13 @@ fn a_sphere_is_planned_thick_at_its_equator_and_thin_at_its_poles() {
         min_height_mm: 0.02,
         max_height_mm: 0.10,
     };
-    let plan =
-        adaptive_plan(&bodies::uv_sphere(radius, 128, 128), &settings).expect("a sphere plans");
+    let standing = transform_mesh(
+        &bodies::uv_sphere(radius, 128, 128),
+        Transform::from_translation(Vec3::new(0.0, 0.0, radius)),
+    );
+    let plan = adaptive_plan(&standing, &settings).expect("a sphere plans");
 
-    // The sphere is centred on the origin, so the equator is the middle of the stack.
+    // The sphere stands on the plate, so the equator is the middle of the stack.
     let thickness_at = |z: Scalar| {
         (0..plan.layer_count())
             .find(|&index| plan.top_of(index).is_some_and(|top| top >= z))
@@ -232,8 +235,8 @@ fn a_sphere_is_planned_thick_at_its_equator_and_thin_at_its_poles() {
             .expect("a layer at that height")
     };
 
-    let equator = thickness_at(0.0);
-    let pole = thickness_at(radius - 0.05);
+    let equator = thickness_at(radius);
+    let pole = thickness_at(2.0 * radius - 0.05);
     assert!(
         (equator - settings.max_height_mm).abs() < 1e-5,
         "the equator is a vertical wall and takes the ceiling, not {equator} mm"
@@ -243,4 +246,66 @@ fn a_sphere_is_planned_thick_at_its_equator_and_thin_at_its_poles() {
         "the pole lies flat and takes the floor, not {pole} mm"
     );
     assert!(!plan.is_uniform());
+}
+
+/// A 10 mm cube sunk 4 mm into the plate: only the 6 mm standing on it are cut, from the
+/// plate up, so no layer drives the plate into the vat floor.
+#[test]
+fn what_stands_under_the_plate_is_not_cut() {
+    let sunk = transform_mesh(
+        &bodies::cube(10.0),
+        Transform::from_translation(Vec3::new(0.0, 0.0, -4.0)),
+    );
+
+    let stack = slice(&sunk, 0.5);
+    assert_eq!(
+        stack.layers.len(),
+        12,
+        "6 mm over the plate at 0.5 mm a layer"
+    );
+    assert!(
+        stack.layers.iter().all(|layer| layer.z > 0.0),
+        "every plane is over the plate"
+    );
+
+    let settings = AdaptiveSettings {
+        cusp_mm: 0.03,
+        min_height_mm: 0.02,
+        max_height_mm: 0.10,
+    };
+    let plan = adaptive_plan(&sunk, &settings).expect("the cube stands partly on the plate");
+    assert!(
+        plan.band_of(0).is_some_and(|(bottom, _)| bottom == 0.0),
+        "an adaptive stack starts on the plate too"
+    );
+}
+
+#[test]
+fn a_model_wholly_under_the_plate_is_refused() {
+    let buried = transform_mesh(
+        &bodies::cube(10.0),
+        Transform::from_translation(Vec3::new(0.0, 0.0, -12.0)),
+    );
+    let settings = SliceSettings {
+        layer_height: 0.5,
+        ..SliceSettings::default()
+    };
+
+    assert!(matches!(
+        PlaneSliceEngine.slice(&buried, &settings),
+        Err(SliceError::UnderThePlate { top_mm }) if (top_mm + 2.0).abs() < 1e-5
+    ));
+    assert!(matches!(
+        Windows::new(&buried, settings, WINDOW_LAYERS),
+        Err(SliceError::UnderThePlate { .. })
+    ));
+    let adaptive = AdaptiveSettings {
+        cusp_mm: 0.03,
+        min_height_mm: 0.02,
+        max_height_mm: 0.10,
+    };
+    assert!(matches!(
+        adaptive_plan(&buried, &adaptive),
+        Err(SliceError::UnderThePlate { .. })
+    ));
 }

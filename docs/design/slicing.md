@@ -63,6 +63,11 @@ sits in the middle of that band, clipped at the top to the mesh. A uniform stack
 plan whose boundaries are `z_min + n·h`; an adaptive one is the same shape with its own
 numbers (ADR 0091).
 
+`z_min` is the mesh's bottom or the plate, whichever stands higher. Nothing under the plate
+is cut: a layer there would drive the plate into the vat floor. A mesh reaching under it is
+cut from the plate up, with a warning, and one wholly under it is
+`SliceError::UnderThePlate` rather than an empty stack (ADR 0187).
+
 Sampling the middle rather than an edge matters because model vertices land on layer
 boundaries all the time: CAD work is done on a 0.05 mm grid and printed at 0.05 mm layers.
 A plane on the boundary would meet those vertices head on. A plane in the middle of the

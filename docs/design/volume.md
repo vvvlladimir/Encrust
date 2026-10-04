@@ -122,8 +122,8 @@ question is asked at the true nearest point, not the carried face: near a thin w
 carrier hands over the wall's far side, close enough for a distance and wrong for a side.
 
 The pseudonormal tells a seam from a face by barycentrics, except on a triangle whose angle
-at its first corner is under about six degrees, where `f32` cancellation loses the seam. There
-the offset decides: straight along the normal is the face, otherwise the nearest corner or
+at its first corner is under about six degrees, where `f32` cancellation loses the seam and
+can leave the determinant at zero or below. There the offset decides: straight along the normal is the face, otherwise the nearest corner or
 edge (ADR 0186).
 
 ## The operators

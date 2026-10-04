@@ -12,4 +12,7 @@ pub enum SliceError {
 
     #[error("mesh has no triangles")]
     EmptyMesh,
+
+    #[error("the model stands wholly under the plate, its top at {top_mm} mm")]
+    UnderThePlate { top_mm: f32 },
 }
