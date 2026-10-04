@@ -1,6 +1,6 @@
 # 0014. Paint the viewport into egui's own render pass
 
-- **Status:** Accepted
+- **Status:** Superseded by 0184 (the scene's pass only)
 - **Date:** 2026-09-17
 
 ## Context

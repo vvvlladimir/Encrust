@@ -146,9 +146,10 @@ goes past its floor, leaving a hairline that lights up and brings it back on a c
 has nothing to edit, and the stage splits in two there — the model on one half, the
 exposure mask on the other; see `docs/decisions/0103`.
 
-What still floats over the stage is `egui::Area`s anchored to a rectangle by their corner:
-the view tools at the top right of the viewport and the section rail at the middle of the
-stage's right edge. The mode switch is not one of them: it sits in the title strip,
+What still floats over the stage is `egui::Area`s anchored to a rectangle by their corner,
+laid out together in `panels/view_column.rs`: the view tools at the top right of the
+viewport, and the section rail under them, one card width and centred in the height left.
+In Preview the rail stands against the mask's edge instead, centred on the stage. The mode switch is not one of them: it sits in the title strip,
 centred on the window, so it stays put whichever columns the mode draws. The section rail is the layer
 scrubber, drawn in both modes and cutting the models at its own height; see
 `docs/decisions/0061`. It is one column of controls wide, and the height it is parked at is

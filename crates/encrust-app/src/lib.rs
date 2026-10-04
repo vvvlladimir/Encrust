@@ -56,10 +56,8 @@ pub fn run(initial_model: Option<&std::path::Path>) -> anyhow::Result<()> {
     let options = eframe::NativeOptions {
         viewport: viewport()?,
         renderer: eframe::Renderer::Wgpu,
-        // The viewport draws into egui's own render pass, so egui is the one that has to
-        // allocate the depth and stencil buffers it needs. See `render::gpu`.
-        depth_buffer: render::DEPTH_BUFFER_BITS,
-        stencil_buffer: render::STENCIL_BUFFER_BITS,
+        // The viewport draws into its own depth and stencil planes and egui needs none,
+        // but the copy into egui's pass must agree with it on samples. See `render::target`.
         multisampling: render::MULTISAMPLING,
         ..Default::default()
     };
@@ -80,15 +78,10 @@ pub async fn run_web(
     bindings: String,
 ) -> Result<(), wasm_bindgen::JsValue> {
     web::thread::init(bindings);
-    let options = eframe::WebOptions {
-        // The viewport draws into egui's own render pass, as at the desk.
-        depth_buffer: render::DEPTH_BUFFER_BITS,
-        ..Default::default()
-    };
     eframe::WebRunner::new()
         .start(
             canvas,
-            options,
+            eframe::WebOptions::default(),
             Box::new(|cc| Ok(Box::new(SlicerApp::new(cc, None)))),
         )
         .await

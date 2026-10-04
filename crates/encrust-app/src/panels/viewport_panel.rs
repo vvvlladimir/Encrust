@@ -184,7 +184,7 @@ fn paint_plate(ui: &egui::Ui, window: &Window, rect: egui::Rect) {
             },
             textured: *window.tool == Tool::Relief,
         },
-        rect.width() / rect.height(),
+        rect,
     );
     ui.painter()
         .add(egui_wgpu::Callback::new_paint_callback(rect, callback));

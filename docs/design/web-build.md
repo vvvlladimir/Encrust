@@ -72,8 +72,6 @@ that script changed first: `scripts/web-app.mjs` in the site repository.
 
 - The printer network: a sliced file is downloaded, and the Network card says so (ADR 0182).
 - Updates; the Updates page is hidden.
-- A capped section: eframe's web painter makes its depth buffer without a stencil plane
-  whatever it is asked for, so the cut is drawn open.
 - A warning before the tab is closed over unsaved work.
 - A worker that panics ends without an outcome, so its job never finishes.
 

@@ -5,6 +5,7 @@ use bytemuck::{Pod, Zeroable};
 use core_geometry::{Mat4, Mesh, Scalar, Vec3};
 use wgpu::util::DeviceExt as _;
 
+use crate::render::target::SceneTarget;
 use crate::render::vertex::{
     BodyVertex, LabelVertex, LineVertex, ModelInstance, ModelVertex, ReliefVertex,
     flat_shaded_vertices, textured_vertices,
@@ -12,27 +13,13 @@ use crate::render::vertex::{
 use crate::scene::Mapped;
 use crate::ui::theme;
 
-/// Depth and stencil format of the viewport. The window asks eframe for buffers of the
-/// same width in `lib.rs`; egui attaches them to the pass our callback paints into. The
-/// stencil plane is what caps the section cut, see `docs/decisions/0062`.
-#[cfg(not(target_arch = "wasm32"))]
+/// Depth and stencil format of the viewport's own target, `render::target`. The stencil
+/// plane is what caps the section cut, see `docs/decisions/0062` and `0184`.
 pub const DEPTH_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Depth24PlusStencil8;
-
-/// eframe's web painter asks for no stencil plane whatever it is told, so in a browser the
-/// cut is left open; see `docs/design/web-build.md`.
-#[cfg(target_arch = "wasm32")]
-pub const DEPTH_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Depth24Plus;
 
 /// Multisampling is off, matching [`MULTISAMPLING`]. A pipeline whose sample count
 /// disagrees with the render pass is rejected at draw time.
 pub const SAMPLE_COUNT: u32 = 1;
-
-/// What `NativeOptions::depth_buffer` and `NativeOptions::stencil_buffer` must be set to
-/// for egui to allocate [`DEPTH_FORMAT`]; the mapping is
-/// `egui_wgpu::depth_format_from_bits`.
-pub const DEPTH_BUFFER_BITS: u8 = 24;
-#[cfg(not(target_arch = "wasm32"))]
-pub const STENCIL_BUFFER_BITS: u8 = 8;
 
 /// What `NativeOptions::multisampling` must be set to for [`SAMPLE_COUNT`]. Zero and one
 /// both mean one sample.
@@ -191,8 +178,8 @@ pub struct ViewportResources {
     globals_bind_group: wgpu::BindGroup,
     model_pipeline: wgpu::RenderPipeline,
     line_pipeline: wgpu::RenderPipeline,
-    /// What caps the section cut, where the depth buffer has a stencil plane to do it in.
-    capping: Option<Capping>,
+    /// What caps the section cut.
+    capping: Capping,
     /// Draws the translucent machine over everything already painted.
     body_pipeline: wgpu::RenderPipeline,
     /// Draws the word the machine carries, sampled out of the font atlas.
@@ -213,6 +200,7 @@ pub struct ViewportResources {
     label: DynamicBuffer,
     meshes: HashMap<usize, CachedMesh>,
     frame: Frame,
+    target: SceneTarget,
 }
 
 /// What the last `prepare` decided to draw, replayed by `paint`.
@@ -280,6 +268,7 @@ impl ViewportResources {
             label: DynamicBuffer::new(device, "viewport_label"),
             meshes: HashMap::new(),
             frame: Frame::default(),
+            target: SceneTarget::new(device, target_format),
         }
     }
 
@@ -500,6 +489,25 @@ impl ViewportResources {
         key
     }
 
+    /// Draws the frame `prepare` recorded into the viewport's own target, into `viewport`
+    /// of a window `size_px` pixels large.
+    pub fn draw(
+        &mut self,
+        device: &wgpu::Device,
+        encoder: &mut wgpu::CommandEncoder,
+        size_px: [u32; 2],
+        viewport: egui::epaint::ViewportInPixels,
+    ) {
+        let mut pass = self.target.begin(device, encoder, size_px, viewport);
+        self.paint(&mut pass);
+    }
+
+    /// Lays what `draw` drew over egui's pass.
+    pub fn present(&self, render_pass: &mut wgpu::RenderPass<'static>) {
+        self.target.present(render_pass);
+    }
+
+    /// Records the scene into a pass whose depth plane is [`DEPTH_FORMAT`].
     pub fn paint(&self, render_pass: &mut wgpu::RenderPass<'static>) {
         render_pass.set_bind_group(0, &self.globals_bind_group, &[]);
 
@@ -515,9 +523,8 @@ impl ViewportResources {
         // cut took away is counted first, the models are drawn, and the face is filled
         // wherever the count says the plane runs through a solid. See
         // `docs/decisions/0062`.
-        let capping = self.capping.as_ref().filter(|_| self.frame.cutting);
-        if let Some(capping) = capping {
-            render_pass.set_pipeline(&capping.crossing);
+        if self.frame.cutting {
+            render_pass.set_pipeline(&self.capping.crossing);
             self.draw_meshes(render_pass, &self.frame.solids, self.frame.solid_base);
         }
 
@@ -539,10 +546,8 @@ impl ViewportResources {
             }
         }
 
-        if let Some(capping) = capping
-            && self.frame.cap_vertices > 0
-        {
-            render_pass.set_pipeline(&capping.cap);
+        if self.frame.cutting && self.frame.cap_vertices > 0 {
+            render_pass.set_pipeline(&self.capping.cap);
             render_pass.set_stencil_reference(MATERIAL_ABOVE);
             render_pass.set_vertex_buffer(0, self.cap.buffer.slice(..));
             render_pass.draw(0..self.frame.cap_vertices, 0..1);
@@ -655,7 +660,7 @@ fn globals_layout(device: &wgpu::Device) -> wgpu::BindGroupLayout {
 struct Solid {
     model: wgpu::RenderPipeline,
     line: wgpu::RenderPipeline,
-    capping: Option<Capping>,
+    capping: Capping,
 }
 
 /// The two passes that fill the section cut with a flat face.
@@ -729,7 +734,7 @@ impl<'a> Builder<'a> {
                 topology: wgpu::PrimitiveTopology::LineList,
                 ..PipelineKind::default()
             }),
-            capping: DEPTH_FORMAT.has_stencil_aspect().then(|| self.capping()),
+            capping: self.capping(),
         }
     }
 

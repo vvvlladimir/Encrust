@@ -248,7 +248,7 @@ Grouped by what the decision governs; the number is still the order it was taken
 | # | Decision | Status |
 |---|---|---|
 | [0011](0011-png-stack-in-the-cli.md) | The PNG stack lives in encrust-cli, written with png | Accepted |
-| [0014](0014-viewport-in-the-egui-render-pass.md) | The viewport paints into egui's own render pass | Accepted |
+| [0014](0014-viewport-in-the-egui-render-pass.md) | The viewport paints into egui's own render pass | Superseded by 0184 (the scene's pass only) |
 | [0015](0015-scene-owns-meshes-behind-arc.md) | The window owns the scene; meshes are shared behind Arc | Accepted |
 | [0017](0017-transform-gizmo-crate.md) | transform-gizmo-egui for the transform handles | Accepted |
 | [0018](0018-background-slicing-job.md) | Slicing runs on a worker thread and reports over a channel | Accepted |
@@ -256,11 +256,12 @@ Grouped by what the decision governs; the number is still the order it was taken
 | [0024](0024-design-tokens-and-bundled-typeface.md) | One token module paints the window; the typeface is compiled in | Accepted |
 | [0025](0025-fixed-window-layout.md) | Fixed panels instead of egui_dock | Accepted |
 | [0061](0061-the-section-slider-is-one-rail-in-both-modes.md) | The section slider is one rail, in both modes | Accepted |
-| [0062](0062-cap-the-section-cut-with-the-stencil-plane.md) | The section cut is capped with the stencil plane | Accepted |
+| [0062](0062-cap-the-section-cut-with-the-stencil-plane.md) | The section cut is capped with the stencil plane | Superseded by 0184 (where the stencil comes from only) |
 | [0068](0068-the-window-holds-no-stack.md) | The window holds no stack: it cuts the window it is showing | Accepted |
 | [0070](0070-a-mesh-is-drawn-in-buffer-sized-pieces.md) | A mesh is drawn in pieces the card will take | Accepted |
 | [0073](0073-the-viewport-subtracts-a-drain-per-fragment.md) | The viewport subtracts a drain per fragment | Accepted |
 | [0074](0074-the-section-cap-counts-material-not-crossings.md) | The section cap counts material, not crossings | Accepted |
+| [0184](0184-the-viewport-draws-into-its-own-target.md) | The viewport draws into its own target | Accepted |
 | [0097](0097-a-project-is-a-zip-of-a-manifest-and-the-meshes.md) | A project is a zip of a JSON manifest and the meshes | Accepted |
 | [0099](0099-unsaved-work-is-a-digest-asked-for-at-the-door.md) | Unsaved work is a digest of the manifest, asked for only at the door | Accepted |
 | [0100](0100-a-batch-is-the-single-run-once-per-model.md) | A batch is the single run, once per model, in the same binary | Accepted |

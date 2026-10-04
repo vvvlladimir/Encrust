@@ -12,13 +12,12 @@ use crate::workspace::{Mode, Section};
 /// of a print, slow enough to see a layer.
 const PLAY_LAYERS_PER_S: f32 = 30.0;
 
-/// Width of the rail card, and the room its slider is given: tall enough to aim a layer
-/// with, never so tall that it reaches the view tools in the corner above it.
-const CARD_W: f32 = 30.0;
+/// The room the slider is given: tall enough to aim a layer with, never taller than the
+/// room under the view tools.
 const SLIDER_H: f32 = 340.0;
 const MIN_SLIDER_H: f32 = 110.0;
-/// Points of the viewport the card's buttons and margins take beside the slider.
-const CARD_CHROME_H: f32 = 150.0;
+/// Points the card's three buttons, their gaps and its margins take beside the slider.
+const CARD_CHROME_H: f32 = 118.0;
 
 /// Thickness of the trough, and the width the slider is allocated, which is what egui
 /// sizes the handle from: it draws one of `width / 2.5`.
@@ -49,9 +48,9 @@ pub fn cut_height(mode: Mode, section: &Section, preview: &Preview) -> Option<Sc
     }
 }
 
-/// How tall the slider can be inside a viewport of `viewport_h` points.
-pub fn slider_height(viewport_h: f32) -> f32 {
-    (viewport_h - CARD_CHROME_H).clamp(MIN_SLIDER_H, SLIDER_H)
+/// How tall the slider can be in a card given `room_h` points of height.
+pub fn slider_height(room_h: f32) -> f32 {
+    (room_h - CARD_CHROME_H).clamp(MIN_SLIDER_H, SLIDER_H)
 }
 
 /// Whether the rail has anything to scrub through, which is what decides if the card is
@@ -66,10 +65,10 @@ pub fn is_available(window: &Window) -> bool {
 }
 
 /// The card: the slider that moves the cut and the buttons that step it, with the height
-/// it is at shown beside the handle while the rail is in use. Drawn down the right edge
-/// of the viewport in both modes.
+/// it is at shown beside the handle while the rail is in use. One icon button wide, like
+/// the view tools it is lined up under.
 pub fn ui(ui: &mut egui::Ui, window: &mut Window, slider_h: f32) {
-    ui.set_width(CARD_W);
+    ui.set_width(theme::ICON_SIZE);
     if window.machine.preview.is_building() {
         building(ui, window.machine);
         return;

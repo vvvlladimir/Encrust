@@ -4,6 +4,7 @@ use core_format::ExposureRange;
 use core_geometry::{Mat4, Mesh, Scalar, Transform, Vec3};
 use core_volume::{Channel, DrainHole, MOUTH_LIFT_MM};
 use egui::Color32;
+use egui::epaint::ViewportInPixels;
 use egui_wgpu::{CallbackResources, CallbackTrait, ScreenDescriptor};
 
 use crate::camera::OrbitCamera;
@@ -28,6 +29,8 @@ const CAP_MARGIN_MM: f32 = 10.0;
 /// It carries plain data rather than a borrow of the scene: egui runs `prepare` and
 /// `paint` after the UI closure has returned, when the app state is borrowed elsewhere.
 pub struct ViewportCallback {
+    /// The panel the viewport fills, in points.
+    rect: egui::Rect,
     view_projection: Mat4,
     section_mm: Option<Scalar>,
     lines: Vec<LineVertex>,
@@ -76,14 +79,14 @@ pub struct Shading<'a> {
 }
 
 impl ViewportCallback {
-    /// `aspect` is the width of the viewport rectangle over its height.
+    /// `rect` is the panel the viewport fills, in points.
     pub fn new(
         scene: &Scene,
         plate: &BuildPlate,
         camera: &OrbitCamera,
         view: ViewOptions,
         shading: Shading<'_>,
-        aspect: f32,
+        rect: egui::Rect,
     ) -> Self {
         let Shading {
             overhang_deg,
@@ -100,7 +103,8 @@ impl ViewportCallback {
 
         let (label, atlas) = label::front(plate);
         Self {
-            view_projection: camera.view_projection(aspect),
+            rect,
+            view_projection: camera.view_projection(rect.width() / rect.height()),
             section_mm,
             lines: plate_lines(plate, view.grid),
             models,
@@ -354,8 +358,8 @@ impl CallbackTrait for ViewportCallback {
         &self,
         device: &wgpu::Device,
         queue: &wgpu::Queue,
-        _screen_descriptor: &ScreenDescriptor,
-        _egui_encoder: &mut wgpu::CommandEncoder,
+        screen: &ScreenDescriptor,
+        egui_encoder: &mut wgpu::CommandEncoder,
         callback_resources: &mut CallbackResources,
     ) -> Vec<wgpu::CommandBuffer> {
         super::with_resources(callback_resources, |resources| {
@@ -379,6 +383,14 @@ impl CallbackTrait for ViewportCallback {
                     volume_mm: Some(self.volume_mm),
                 },
             );
+            // The same pixels egui hands `paint` its viewport for, so the copy lands
+            // exactly where the scene was drawn.
+            let viewport = ViewportInPixels::from_points(
+                &self.rect,
+                screen.pixels_per_point,
+                screen.size_in_pixels,
+            );
+            resources.draw(device, egui_encoder, screen.size_in_pixels, viewport);
         });
         Vec::new()
     }
@@ -389,7 +401,9 @@ impl CallbackTrait for ViewportCallback {
         render_pass: &mut wgpu::RenderPass<'static>,
         callback_resources: &CallbackResources,
     ) {
-        super::resources(callback_resources, |resources| resources.paint(render_pass));
+        super::resources(callback_resources, |resources| {
+            resources.present(render_pass)
+        });
     }
 }
 
