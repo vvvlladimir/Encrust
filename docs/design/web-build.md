@@ -37,6 +37,15 @@ takes the page at once, which is what isolates it. `manifest.webmanifest` and th
 under `icons/` make the page installable. The title strip carries a Source link to the tag
 the build was made from, which the AGPL asks of a program served over a network.
 
+Each release carries the build as `encrust-web.tar.gz` (the `web` job in `release.yml`, on a
+pinned nightly), outside the update feed. Publishing the release makes `notify-site.yml` tell
+the site repository, which pins it in `src/data/web-app.json` and serves it at
+`encrust.app/app/run/`; the site checks daily as well. The site moves this `_headers` under
+that prefix and replaces its own Content-Security-Policy there with one allowing
+`'wasm-unsafe-eval'` and the page's inline script, whose hash it takes from each build. A
+build that needs anything more from the page's policy (another origin, `blob:` workers) needs
+that script changed first: `scripts/web-app.mjs` in the site repository.
+
 ### How it runs
 
 - **Threads.** `web/thread.js` is both the page's way to start a worker and the worker:
