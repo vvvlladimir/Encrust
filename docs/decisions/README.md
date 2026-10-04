@@ -85,7 +85,7 @@ Grouped by what the decision governs; the number is still the order it was taken
 
 | # | Decision | Status |
 |---|---|---|
-| [0006](0006-slicing-degenerate-cases.md) | Strict-sign vertex classification, stitching by mesh edge | Accepted |
+| [0006](0006-slicing-degenerate-cases.md) | Strict-sign vertex classification, stitching by mesh edge | Superseded by 0186 (an edge left twice only) |
 | [0007](0007-slicing-performance-and-parallelism.md) | Z buckets for faces, rayon over layers | Accepted |
 | [0008](0008-non-zero-winding-fill.md) | Non-zero winding fill, not even-odd | Accepted |
 | [0066](0066-a-stack-is-sliced-a-window-at-a-time.md) | A stack is sliced a window of layers at a time | Accepted |
@@ -178,13 +178,14 @@ Grouped by what the decision governs; the number is still the order it was taken
 | [0065](0065-a-fields-distances-are-quantised-to-its-band.md) | A field's distances are quantised to its band | Accepted |
 | [0069](0069-the-band-walks-out-to-the-isosurface.md) | The band walks out to the isosurface rather than taking every tile near it | Accepted |
 | [0076](0076-a-channel-is-a-pipe-through-the-part.md) | A channel is a pipe through the part, not a slot in it | Accepted |
-| [0082](0082-scatter-the-field-and-carry-it-coarse.md) | The field is scattered from the faces and carried across the wall coarse | Accepted |
+| [0082](0082-scatter-the-field-and-carry-it-coarse.md) | The field is scattered from the faces and carried across the wall coarse | Superseded by 0186 (where a far block's side comes from only) |
 | [0083](0083-precision-is-capped-by-the-surface-it-pays-for.md) | Precision is capped by the surface a field pays for, not by the longest side | Accepted |
-| [0084](0084-a-cavity-is-clustered-surface-nets.md) | A cavity is extracted as surface nets clustered onto the lattice | Accepted |
+| [0084](0084-a-cavity-is-clustered-surface-nets.md) | A cavity is extracted as surface nets clustered onto the lattice | Superseded by 0186 (how folded copies are merged only) |
 | [0085](0085-a-build-is-priced-by-its-larger-phase.md) | A build is priced by its larger phase, not by one constant a tile | Accepted |
 | [0116](0116-a-texture-is-pressed-into-the-field.md) | A texture is pressed into the field, not onto the vertices | Accepted |
 | [0122](0122-a-reliefs-depth-is-a-plate-millimetre.md) | A relief's depth is a plate millimetre, pressed after placement | Accepted |
 | [0185](0185-a-wall-is-measured-on-the-plate.md) | A wall is measured on the plate, not in the model's own space | Accepted |
+| [0186](0186-a-cavity-is-a-closed-surface-and-a-slice-follows-it-through-a-branch.md) | A cavity is a closed surface, and a slice follows it through a branch | Accepted |
 
 ### The plate
 

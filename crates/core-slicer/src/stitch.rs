@@ -1,4 +1,4 @@
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 
 use core_geometry::Vec2;
 
@@ -17,14 +17,18 @@ pub(crate) struct Stitched {
 /// Chains crossings into closed contours by following the mesh edges they sit on.
 ///
 /// On a closed, consistently wound mesh every crossed edge is used once as an entry and
-/// once as an exit, so the chain is a permutation and every loop closes exactly.
+/// once as an exit, so the chain is a permutation and every loop closes exactly. Where two
+/// sheets of surface share an edge it is entered and left twice, and the chain takes the
+/// sharpest left turn there, which keeps two loops touching at a point two loops.
 pub(crate) fn stitch(crossings: Vec<Crossing>) -> Stitched {
     let mut result = Stitched::default();
-    let mut pending: HashMap<EdgeKey, Crossing> = HashMap::with_capacity(crossings.len());
+    let mut pending: Pending = HashMap::with_capacity(crossings.len());
     for crossing in crossings {
-        if pending.insert(crossing.start_edge, crossing).is_some() {
+        let leaving = pending.entry(crossing.start_edge).or_default();
+        if !leaving.is_empty() {
             result.unlinked += 1;
         }
+        leaving.push(crossing);
     }
 
     // Chains that start at a boundary have to be walked from their head, or an arbitrary
@@ -38,17 +42,29 @@ pub(crate) fn stitch(crossings: Vec<Crossing>) -> Stitched {
     result
 }
 
-/// Crossings nothing leads into: the open end of a chain.
-fn heads(pending: &HashMap<EdgeKey, Crossing>) -> Vec<EdgeKey> {
-    let reachable: HashSet<EdgeKey> = pending.values().map(|c| c.end_edge).collect();
+/// The crossings not yet chained, by the edge each one leaves from. Nearly every edge
+/// holds one; an edge two sheets of surface share holds two.
+type Pending = HashMap<EdgeKey, Vec<Crossing>>;
+
+/// Edges more crossings leave from than arrive at, once for each one over: the open
+/// ends of chains.
+fn heads(pending: &Pending) -> Vec<EdgeKey> {
+    let mut arriving: HashMap<EdgeKey, usize> = HashMap::new();
+    for crossing in pending.values().flatten() {
+        *arriving.entry(crossing.end_edge).or_default() += 1;
+    }
     pending
-        .keys()
-        .filter(|edge| !reachable.contains(*edge))
-        .copied()
+        .iter()
+        .flat_map(|(edge, leaving)| {
+            let over = leaving
+                .len()
+                .saturating_sub(arriving.get(edge).copied().unwrap_or(0));
+            std::iter::repeat_n(*edge, over)
+        })
         .collect()
 }
 
-fn take_contour(pending: &mut HashMap<EdgeKey, Crossing>, start: EdgeKey, result: &mut Stitched) {
+fn take_contour(pending: &mut Pending, start: EdgeKey, result: &mut Stitched) {
     let (points, closed) = walk(pending, start);
     if !closed {
         result.open += 1;
@@ -60,14 +76,14 @@ fn take_contour(pending: &mut HashMap<EdgeKey, Crossing>, start: EdgeKey, result
 }
 
 /// Follows the chain from `start` back to itself, consuming every crossing it uses.
-fn walk(pending: &mut HashMap<EdgeKey, Crossing>, start: EdgeKey) -> (Vec<Vec2>, bool) {
+fn walk(pending: &mut Pending, start: EdgeKey) -> (Vec<Vec2>, bool) {
     let mut points = Vec::new();
     let mut edge = start;
-    let mut last_end = None;
+    let mut last: Option<Crossing> = None;
 
-    while let Some(crossing) = pending.remove(&edge) {
+    while let Some(crossing) = take(pending, edge, last.as_ref()) {
         points.push(crossing.start);
-        last_end = Some(crossing.end);
+        last = Some(crossing);
         if crossing.end_edge == start {
             return (points, true);
         }
@@ -76,10 +92,34 @@ fn walk(pending: &mut HashMap<EdgeKey, Crossing>, start: EdgeKey) -> (Vec<Vec2>,
 
     // The chain ran into an open or already-consumed edge. Keep the last point and let
     // the contour's implicit closing edge bridge the gap.
-    if let Some(end) = last_end {
-        points.push(end);
+    if let Some(last) = last {
+        points.push(last.end);
     }
     (points, false)
+}
+
+/// Takes the crossing leaving `edge` that turns furthest left from `arriving`, or the
+/// only one there is.
+fn take(pending: &mut Pending, edge: EdgeKey, arriving: Option<&Crossing>) -> Option<Crossing> {
+    let leaving = pending.get_mut(&edge)?;
+    let index = match arriving {
+        Some(arriving) if leaving.len() > 1 => {
+            let heading = arriving.end - arriving.start;
+            let turn = |crossing: &Crossing| {
+                let next = crossing.end - crossing.start;
+                heading.perp_dot(next).atan2(heading.dot(next))
+            };
+            (0..leaving.len())
+                .max_by(|a, b| turn(&leaving[*a]).total_cmp(&turn(&leaving[*b])))
+                .unwrap_or(0)
+        }
+        _ => 0,
+    };
+    let crossing = leaving.swap_remove(index);
+    if leaving.is_empty() {
+        pending.remove(&edge);
+    }
+    Some(crossing)
 }
 
 #[cfg(test)]
@@ -144,13 +184,52 @@ mod tests {
         );
     }
 
-    #[test]
-    fn a_second_crossing_on_one_edge_is_reported_as_unlinked() {
-        let mut crossings = square();
-        crossings.push(crossing((0, 0), (2, 2), Vec2::ZERO, Vec2::ONE));
-        let stitched = stitch(crossings);
+    /// Two unit squares meeting at one corner, over edges each of them uses: the shared
+    /// corner is entered twice and left twice, the way it is where two sheets of a cavity
+    /// touch along an edge of the mesh.
+    fn touching_squares() -> Vec<Crossing> {
+        let low = [
+            Vec2::new(0.0, 0.0),
+            Vec2::new(1.0, 0.0),
+            Vec2::new(1.0, 1.0),
+            Vec2::new(0.0, 1.0),
+        ];
+        let high = low.map(|corner| corner + Vec2::ONE);
+        // Edge 2 is the shared corner: the low square's third, the high square's first.
+        let low_edges = [0, 1, 2, 3];
+        let high_edges = [2, 11, 12, 13];
+        let mut crossings = Vec::new();
+        for (corners, edges) in [(low, low_edges), (high, high_edges)] {
+            for i in 0..4 {
+                crossings.push(crossing(
+                    (edges[i], edges[i]),
+                    (edges[(i + 1) % 4], edges[(i + 1) % 4]),
+                    corners[i],
+                    corners[(i + 1) % 4],
+                ));
+            }
+        }
+        crossings
+    }
 
-        assert_eq!(stitched.unlinked, 1);
+    #[test]
+    fn an_edge_two_sheets_share_is_reported_and_still_closes_both_loops() {
+        let stitched = stitch(touching_squares());
+
+        assert_eq!(stitched.unlinked, 1, "the shared edge is left twice");
+        assert_eq!(stitched.open, 0, "no chain is closed over a gap");
+        assert_eq!(
+            stitched.contours.len(),
+            2,
+            "two squares, not one figure of eight"
+        );
+        assert!(
+            stitched
+                .contours
+                .iter()
+                .all(|contour| contour.points.len() == 4 && contour.winding == Winding::Outer),
+            "each is a whole square wound as an outer contour"
+        );
     }
 
     #[test]

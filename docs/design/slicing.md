@@ -151,8 +151,13 @@ face asks, because `v0 + t·(v1 - v0)` is not symmetric in floating point. Both 
 shared edge therefore produce bit-identical coordinates, and adjacent segments meet with
 no gap at all.
 
-Chains are walked from their heads first — the entry edges nothing leads into. Starting
-anywhere else would cut a single broken contour into two.
+Chains are walked from their heads first — the entry edges more segments leave than
+arrive at. Starting anywhere else would cut a single broken contour into two.
+
+Where two sheets of surface share an edge, as they do where a cavity touches itself, the
+edge is entered twice and left twice. Every segment leaving it is kept, and a chain arriving
+there takes the one that turns furthest left, which traces two loops touching at a point as
+two loops rather than one figure of eight (ADR 0186).
 
 ## What a broken mesh does
 
@@ -163,7 +168,7 @@ Nothing here fails a slice. What the mesh made the slicer paper over is counted 
 |---|---|
 | `open_contours` | A chain ran out of faces and was closed with a straight jump. |
 | `degenerate_contours` | A chain enclosed no area and was dropped. |
-| `unlinked_segments` | An edge carried a second entry: the surface branches there. |
+| `unlinked_segments` | An edge carried a second entry: the surface branches there. The chain still follows it. |
 
 `Sliced::is_clean` is all three at zero. The CLI prints them and `--strict` turns them into
 a non-zero exit code.

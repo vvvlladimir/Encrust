@@ -1,5 +1,5 @@
 use bytemuck::{Pod, Zeroable};
-use core_geometry::{Mat3, Mesh, Transform, UvMap, Vec2, Vec3};
+use core_geometry::{Mat3, Mat4, Mesh, Transform, UvMap, Vec2, Vec3};
 use egui::Color32;
 
 use crate::ui::theme;
@@ -160,6 +160,11 @@ impl ModelInstance {
             color: theme::gamma(color),
             overhang,
         }
+    }
+
+    /// Whether the placement mirrors the model, which turns its winding on screen.
+    pub fn is_mirrored(&self) -> bool {
+        Mat3::from_mat4(Mat4::from_cols_array_2d(&self.model)).determinant() < 0.0
     }
 }
 
@@ -322,6 +327,26 @@ mod tests {
             ..Transform::default()
         };
         assert_eq!(normal_matrix(&flat.to_matrix()), Mat3::IDENTITY);
+    }
+
+    #[test]
+    fn one_flipped_axis_mirrors_and_two_turn_the_model_round() {
+        let scaled = |scale| {
+            let transform = Transform {
+                scale,
+                ..Transform::default()
+            };
+            ModelInstance::new(transform, Color32::WHITE, NOT_MARKED).is_mirrored()
+        };
+        assert!(scaled(Vec3::new(-1.0, 1.0, 1.0)), "one flip is a mirror");
+        assert!(
+            !scaled(Vec3::new(-1.0, -1.0, 1.0)),
+            "two flips are a half turn about the third axis"
+        );
+        assert!(
+            !scaled(Vec3::new(2.0, 1.0, 0.5)),
+            "a stretch mirrors nothing"
+        );
     }
 
     #[test]

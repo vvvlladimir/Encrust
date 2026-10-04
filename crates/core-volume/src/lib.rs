@@ -16,6 +16,7 @@ mod model;
 mod relief;
 mod scatter;
 mod sdf;
+mod shells;
 mod sign;
 mod sweep;
 

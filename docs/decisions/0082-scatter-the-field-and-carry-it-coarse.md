@@ -1,6 +1,6 @@
 # 0082. Scatter the field from the faces, and carry it across the wall coarse
 
-- **Status:** Accepted
+- **Status:** Superseded by 0186 (where a far block's side comes from only)
 - **Date:** 2026-09-24
 
 ## Context

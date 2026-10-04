@@ -115,6 +115,12 @@ invertible and falls back to the identity. Back faces are not culled and are lit
 they faced the camera, so an inverted face reads as the mesh defect the Scene panel
 reports rather than as a rendering bug.
 
+A mirror is a negative scale, which turns every triangle's winding on screen while the
+mesh keeps its own. The model, relief and crossing-count pipelines are therefore each built
+twice, counter-clockwise front faces and clockwise, and an instance whose matrix has a
+negative determinant is drawn through the second. Otherwise a mirrored model would be lit
+as its own inside and would count the wrong way into the stencil.
+
 ## The section cut
 
 Models are drawn up to the height the section rail is parked at. The globals uniform

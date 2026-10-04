@@ -12,6 +12,7 @@ use crate::extract::extract;
 use crate::grid::tile_of;
 use crate::infill::{InfillSettings, lattice};
 use crate::sdf::Sdf;
+use crate::shells::outer_shells;
 use crate::sign::SignMode;
 
 /// How far past its own surface a hollowing field reaches.
@@ -230,7 +231,36 @@ pub struct Hollowed {
 /// The model itself is never remeshed: only the cavity comes out of a field, so the
 /// outside keeps every triangle it was imported with. See `docs/design/hollowing.md`.
 pub fn hollow(mesh: &Mesh, bvh: &Bvh, settings: &HollowSettings) -> Result<Hollowed, VolumeError> {
-    shelled_to_budget(mesh, bvh, settings)
+    match outer_shells(mesh) {
+        Some(surface) => {
+            let bvh = Bvh::build(&surface);
+            let solid = Solid {
+                mesh,
+                surface: &surface,
+                bvh: &bvh,
+            };
+            shelled_to_budget(&solid, settings)
+        }
+        None => shelled_to_budget(
+            &Solid {
+                mesh,
+                surface: mesh,
+                bvh,
+            },
+            settings,
+        ),
+    }
+}
+
+/// The model a hollowing run is given, and the surface its fields are built from.
+struct Solid<'a> {
+    /// What comes back first in the hollowed mesh, untouched.
+    mesh: &'a Mesh,
+    /// The shells of `mesh` that bound it, with any shell lying inside another left out:
+    /// see [`outer_shells`].
+    surface: &'a Mesh,
+    /// Over `surface`.
+    bvh: &'a Bvh,
 }
 
 /// [`hollow`] for a model that stands on the plate scaled by `scale`: the wall, the infill
@@ -283,19 +313,18 @@ pub fn hollow_at_scale(
 
 /// The shell alone, on the finest lattice that fits the budget.
 fn shelled_to_budget(
-    mesh: &Mesh,
-    bvh: &Bvh,
+    solid: &Solid<'_>,
     settings: &HollowSettings,
 ) -> Result<Hollowed, VolumeError> {
-    let bounds = mesh.aabb().ok_or(VolumeError::EmptyMesh)?;
+    let bounds = solid.surface.aabb().ok_or(VolumeError::EmptyMesh)?;
     if !settings.thickness_mm.is_finite() || settings.thickness_mm <= 0.0 {
         return Err(VolumeError::BadThickness(settings.thickness_mm));
     }
 
-    let asked_mm = settings.voxel_mm(mesh.surface_area());
+    let asked_mm = settings.voxel_mm(solid.surface.surface_area());
     let mut voxel_mm = asked_mm;
     for _ in 0..COARSENINGS {
-        match cut(mesh, bvh, settings, bounds, voxel_mm) {
+        match cut(solid, settings, bounds, voxel_mm) {
             // The lattice the field priced is the one that fits, taken a twentieth
             // coarser still: the second run has the blockers and the open floor to pay
             // for as well, and a run refused twice over is worse than one voxel blunter.
@@ -308,7 +337,7 @@ fn shelled_to_budget(
             }
         }
     }
-    cut(mesh, bvh, settings, bounds, voxel_mm)
+    cut(solid, settings, bounds, voxel_mm)
 }
 
 /// How many times a lattice may be coarsened before the run is given up on.
@@ -320,8 +349,7 @@ pub(crate) const COARSENINGS: usize = 3;
 
 /// One hollowing attempt, on a lattice of `voxel_mm`.
 fn cut(
-    mesh: &Mesh,
-    bvh: &Bvh,
+    solid: &Solid<'_>,
     settings: &HollowSettings,
     bounds: Aabb,
     voxel_mm: Scalar,
@@ -339,19 +367,18 @@ fn cut(
         clip: None,
         budget_bytes: settings.budget_bytes,
     };
-    let offset = build(mesh, bvh, &field)?;
+    let offset = build(solid.surface, solid.bvh, &field)?;
 
     match settings.mode {
-        HollowMode::External => Ok(mould(mesh, &offset, voxel_mm)),
-        _ => shelled(mesh, bvh, offset, &field, bounds.mins.z, settings),
+        HollowMode::External => Ok(mould(solid.surface, &offset, voxel_mm)),
+        _ => shelled(solid, offset, &field, bounds.mins.z, settings),
     }
 }
 
 /// The model with the cavity that `offset` bounds appended to it, and whatever stands in
 /// that cavity appended after.
 fn shelled(
-    mesh: &Mesh,
-    bvh: &Bvh,
+    solid: &Solid<'_>,
     offset: Sdf,
     field: &FieldSettings,
     bottom_mm: Scalar,
@@ -360,7 +387,14 @@ fn shelled(
     let cavity = match settings.mode {
         HollowMode::BottomThrough => {
             let floor_mm = bottom_mm + settings.thickness_mm + field.voxel_mm;
-            open_bottom(mesh, bvh, &offset, field, floor_mm, bottom_mm)?
+            open_bottom(
+                solid.surface,
+                solid.bvh,
+                &offset,
+                field,
+                floor_mm,
+                bottom_mm,
+            )?
         }
         _ => offset,
     };
@@ -383,11 +417,11 @@ fn shelled(
     // a real model is millions of triangles.
     let mut whole = Mesh::new(
         Vec::with_capacity(
-            mesh.vertices.len() + cavity_mesh.vertices.len() + filling.vertices.len(),
+            solid.mesh.vertices.len() + cavity_mesh.vertices.len() + filling.vertices.len(),
         ),
-        Vec::with_capacity(mesh.faces.len() + cavity_mesh.faces.len() + filling.faces.len()),
+        Vec::with_capacity(solid.mesh.faces.len() + cavity_mesh.faces.len() + filling.faces.len()),
     );
-    append(&mut whole, mesh);
+    append(&mut whole, solid.mesh);
     append(&mut whole, &flipped(&cavity_mesh));
     drop(cavity_mesh);
     append(&mut whole, &filling);

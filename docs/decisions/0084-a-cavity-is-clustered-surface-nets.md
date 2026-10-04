@@ -1,6 +1,6 @@
 # 0084. Extract a cavity as surface nets clustered onto the lattice
 
-- **Status:** Accepted
+- **Status:** Superseded by 0186 (how folded copies are merged only)
 - **Date:** 2026-09-24
 
 ## Context

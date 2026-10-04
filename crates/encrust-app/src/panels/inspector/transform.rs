@@ -157,14 +157,16 @@ fn scale(ui: &mut egui::Ui, scene: &mut Scene, plate: &BuildPlate, id: ObjectId)
             .map_or(Vec3::ONE, |bounds| bounds.maxs - bounds.mins);
         let mut pivot = object.pivot();
         let column = scale_header(ui, &mut linked);
+        let mut factors = pivot.scale.abs();
         let mut changed = false;
         for axis in 0..3 {
             ui.horizontal(|ui| {
                 label_column(ui, axis, "");
-                changed |= scale_row(ui, &mut pivot.scale, extent, axis, linked, column);
+                changed |= scale_row(ui, &mut factors, extent, axis, linked, column);
             });
         }
         if changed {
+            pivot.scale = keeping_mirror(pivot.scale, factors);
             object.settle(pivot);
         }
         ui.add_space(4.0);
@@ -175,9 +177,10 @@ fn scale(ui: &mut egui::Ui, scene: &mut Scene, plate: &BuildPlate, id: ObjectId)
     });
     ui.memory_mut(|memory| memory.data.insert_temp(linked_id, linked));
     if reset && let Some(object) = scene.get_mut(id) {
+        let pivot = object.pivot();
         object.settle(Transform {
-            scale: Vec3::ONE,
-            ..object.pivot()
+            scale: keeping_mirror(pivot.scale, Vec3::ONE),
+            ..pivot
         });
         object.stand_on_plate();
     }
@@ -306,14 +309,39 @@ fn fit(object: &mut SceneObject, plate: &BuildPlate) {
     let factor = (room / size.max(Vec3::splat(f32::EPSILON))).min_element();
     let pivot = object.pivot();
     object.settle(Transform {
-        scale: (pivot.scale * factor).max(Vec3::splat(MIN_SCALE)),
+        scale: keeping_mirror(pivot.scale, pivot.scale.abs() * factor),
         ..pivot
     });
+}
+
+/// `sizes` as factors on each axis, flipped wherever `scale` was: the fields show and
+/// take a size, and a mirror is not one.
+fn keeping_mirror(scale: Vec3, sizes: Vec3) -> Vec3 {
+    sizes.max(Vec3::splat(MIN_SCALE)) * scale.signum()
 }
 
 /// Centres the model over the plate and stands it on it, in one move.
 fn place(scene: &mut Scene, plate: &BuildPlate, id: ObjectId) {
     if let Some(index) = scene.objects().iter().position(|object| object.id == id) {
         recenter(scene, plate, index);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn a_new_size_keeps_the_axes_a_mirror_flipped() {
+        let mirrored = Vec3::new(-1.0, 1.0, -2.0);
+        assert_eq!(
+            keeping_mirror(mirrored, Vec3::new(1.5, 1.5, 3.0)),
+            Vec3::new(-1.5, 1.5, -3.0)
+        );
+        assert_eq!(
+            keeping_mirror(mirrored, Vec3::ZERO),
+            Vec3::new(-MIN_SCALE, MIN_SCALE, -MIN_SCALE),
+            "a size of nothing is the smallest one, still mirrored"
+        );
     }
 }

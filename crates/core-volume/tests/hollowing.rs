@@ -357,6 +357,46 @@ fn a_model_flattened_to_nothing_cannot_be_hollowed() {
     );
 }
 
+/// A box standing on the floor of the model and up through its wall, the way a stray part
+/// left inside a sculpt does. A field over it read its outside as air and cut a wall
+/// around it, open where it met the model's own.
+#[test]
+fn a_shell_inside_the_model_gets_no_wall_of_its_own() {
+    let outer = cube(20.0, 0.0);
+    let inner = cube(4.0, 0.0);
+    let mut mesh = outer.clone();
+    let offset = mesh.vertices.len() as u32;
+    mesh.vertices.extend(
+        inner
+            .vertices
+            .iter()
+            .map(|vertex| *vertex + Vec3::new(8.0, 8.0, 0.0)),
+    );
+    mesh.faces.extend(
+        inner
+            .faces
+            .iter()
+            .map(|face| face.map(|corner| corner + offset)),
+    );
+    let bvh = Bvh::build(&mesh);
+
+    let hollowed =
+        hollow(&mesh, &bvh, &settings(2.0, HollowMode::Internal)).expect("a closed cube hollows");
+
+    let cavity = 16.0 * 16.0 * 16.0;
+    assert!(
+        (hollowed.cavity_mm3 - cavity).abs() / cavity < 0.03,
+        "the cavity of a 20 mm cube with a 2 mm wall is {cavity} mm3, with no wall cut around \
+         the box inside it; got {}",
+        hollowed.cavity_mm3
+    );
+    assert_eq!(
+        &hollowed.mesh.faces[..mesh.faces.len()],
+        &mesh.faces[..],
+        "the box inside is still in the model, and still prints solid"
+    );
+}
+
 #[test]
 fn a_mould_grows_a_wall_outside_the_model() {
     let mesh = ball(8.0, 64, 64);

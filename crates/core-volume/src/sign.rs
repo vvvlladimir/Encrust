@@ -7,6 +7,11 @@ use core_geometry::{ClosestPoint, Mesh, Scalar, Vec3, Winding, diagnose};
 /// well past the error of a projection onto it.
 const ON_THE_SEAM: Scalar = 1e-4;
 
+/// The squared sine of a triangle's angle at its first corner under which its barycentrics
+/// are not trusted: about six degrees, where `f32` cancellation is still a tenth of
+/// [`ON_THE_SEAM`].
+const WELL_SHAPED: Scalar = 1e-2;
+
 /// How a field decides which side of the surface a point is on.
 ///
 /// The two answers differ only on a mesh that is not watertight, and that is the whole
@@ -49,7 +54,9 @@ impl Signer {
     /// pseudonormal needs and the winding number ignores.
     pub(crate) fn is_inside(&self, mesh: &Mesh, point: Vec3, found: &ClosestPoint) -> bool {
         match self {
-            Self::Pseudonormal(normals) => (point - found.point).dot(normals.at(mesh, found)) < 0.0,
+            Self::Pseudonormal(normals) => {
+                (point - found.point).dot(normals.at(mesh, point, found)) < 0.0
+            }
             Self::Winding(winding) => winding.is_inside(mesh, point),
         }
     }
@@ -99,14 +106,15 @@ impl Pseudonormals {
         Self { face, vertex, edge }
     }
 
-    /// Normal to sign against at a nearest point: the face's, the edge's or the vertex's,
-    /// depending on where inside its triangle the point landed.
-    fn at(&self, mesh: &Mesh, found: &ClosestPoint) -> Vec3 {
+    /// Normal to sign `point` against at its nearest point: the face's, the edge's or the
+    /// vertex's, depending on where inside its triangle the point landed.
+    fn at(&self, mesh: &Mesh, point: Vec3, found: &ClosestPoint) -> Vec3 {
         let (Some(corners), Some(triangle)) =
             (mesh.faces.get(found.face), mesh.triangle(found.face))
         else {
             return Vec3::ZERO;
         };
+        let face = self.face.get(found.face).copied().unwrap_or(Vec3::ZERO);
 
         let edge1 = triangle.b - triangle.a;
         let edge2 = triangle.c - triangle.a;
@@ -115,7 +123,10 @@ impl Pseudonormals {
         let determinant = d00 * d11 - d01 * d01;
         if determinant <= 0.0 {
             // A face with no area has no barycentric coordinates and no normal either.
-            return self.face.get(found.face).copied().unwrap_or(Vec3::ZERO);
+            return face;
+        }
+        if determinant < WELL_SHAPED * d00 * d11 {
+            return self.on_a_sliver(corners, [triangle.a, triangle.b, triangle.c], point, found);
         }
 
         let (d20, d21) = (to_point.dot(edge1), to_point.dot(edge2));
@@ -125,25 +136,78 @@ impl Pseudonormals {
 
         for (weight, corner) in [(alpha, 0), (beta, 1), (gamma, 2)] {
             if weight > 1.0 - ON_THE_SEAM {
-                return self
-                    .vertex
-                    .get(corners[corner] as usize)
-                    .copied()
-                    .unwrap_or(Vec3::ZERO);
+                return self.vertex_normal(corners[corner], face);
             }
         }
         for (weight, ends) in [(alpha, (1, 2)), (beta, (2, 0)), (gamma, (0, 1))] {
             if weight < ON_THE_SEAM {
-                return self
-                    .edge
-                    .get(&seam(corners[ends.0], corners[ends.1]))
-                    .copied()
-                    .unwrap_or(Vec3::ZERO);
+                return self.edge_normal(corners[ends.0], corners[ends.1], face);
             }
         }
-
-        self.face.get(found.face).copied().unwrap_or(Vec3::ZERO)
+        face
     }
+
+    /// [`Self::at`] on a triangle too thin for its barycentrics, which lose the seam to
+    /// cancellation there: told apart by where the offset points and which corner or
+    /// edge is nearest instead. The face normal on the wrong side of a thin edge would
+    /// invert a whole block of the field.
+    fn on_a_sliver(
+        &self,
+        corners: &[u32; 3],
+        points: [Vec3; 3],
+        point: Vec3,
+        found: &ClosestPoint,
+    ) -> Vec3 {
+        let face = self.face.get(found.face).copied().unwrap_or(Vec3::ZERO);
+        // A nearest point inside the face lies straight under `point`.
+        let offset = point - found.point;
+        if offset.dot(face).abs() >= (1.0 - ON_THE_SEAM) * offset.length() {
+            return face;
+        }
+
+        let longest = (0..3)
+            .map(|corner| (points[(corner + 1) % 3] - points[corner]).length())
+            .fold(0.0, Scalar::max);
+        let (corner, from_corner) =
+            nearest_of((0..3).map(|corner| (corner, (found.point - points[corner]).length())));
+        if from_corner <= ON_THE_SEAM * longest {
+            return self.vertex_normal(corners[corner], face);
+        }
+
+        let (edge, _) = nearest_of((0..3).map(|corner| {
+            let (from, to) = (points[corner], points[(corner + 1) % 3]);
+            (
+                corner,
+                (found.point - closest_on_segment(found.point, from, to)).length(),
+            )
+        }));
+        self.edge_normal(corners[edge], corners[(edge + 1) % 3], face)
+    }
+
+    fn vertex_normal(&self, vertex: u32, face: Vec3) -> Vec3 {
+        self.vertex.get(vertex as usize).copied().unwrap_or(face)
+    }
+
+    fn edge_normal(&self, one: u32, other: u32, face: Vec3) -> Vec3 {
+        self.edge.get(&seam(one, other)).copied().unwrap_or(face)
+    }
+}
+
+/// The entry with the smallest distance.
+fn nearest_of(entries: impl Iterator<Item = (usize, Scalar)>) -> (usize, Scalar) {
+    entries.fold((0, Scalar::INFINITY), |best, entry| {
+        if entry.1 < best.1 { entry } else { best }
+    })
+}
+
+/// The point of the segment from `from` to `to` nearest `point`.
+fn closest_on_segment(point: Vec3, from: Vec3, to: Vec3) -> Vec3 {
+    let span = to - from;
+    let squared = span.length_squared();
+    if squared <= 0.0 {
+        return from;
+    }
+    from + span * ((point - from).dot(span) / squared).clamp(0.0, 1.0)
 }
 
 /// An edge key that does not care which way round the two faces walk it.
@@ -245,6 +309,29 @@ mod tests {
                 "the two modes disagree at {point}"
             );
         }
+    }
+
+    /// A sliver 24 mm long and a tenth wide lying face down, and a face rising from its
+    /// short edge. Its barycentrics lose that edge to cancellation, which signed the point
+    /// off it by the sliver's own normal and called it inside.
+    #[test]
+    fn a_point_off_the_short_edge_of_a_sliver_is_signed_by_the_edge() {
+        let mesh = Mesh::new(
+            vec![
+                Vec3::new(97.21413, 97.78362, 0.0),
+                Vec3::new(97.08101, 122.19565, 0.0),
+                Vec3::new(97.09066, 121.70752, 0.0),
+                Vec3::new(96.0, 122.0, 1.5),
+            ],
+            vec![[0, 1, 2], [2, 1, 3]],
+        );
+        let point = Vec3::new(100.0, 122.2, 1.0);
+        let found = closest_point(&mesh, point).expect("the mesh has faces");
+
+        assert!(
+            !Signer::new(&mesh, SignMode::Pseudonormal).is_inside(&mesh, point, &found),
+            "the point stands off the ridge, outside both faces"
+        );
     }
 
     #[test]

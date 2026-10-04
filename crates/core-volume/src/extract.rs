@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 use core_geometry::{FastMap, Mesh, Scalar, Vec3, glam::IVec3};
 use rayon::prelude::*;
@@ -64,7 +64,7 @@ const CLUSTER_MIN_COSINE: Scalar = 0.0;
 /// whose merge this keeps.
 pub fn extract(field: &Sdf) -> Mesh {
     let mut layers: HashMap<i32, Vec<IVec3>> = HashMap::new();
-    for tile in field.tile_keys() {
+    for tile in meshed_tiles(field) {
         layers.entry(tile.z).or_default().push(tile);
     }
     let mut levels: Vec<i32> = layers.keys().copied().collect();
@@ -72,9 +72,7 @@ pub fn extract(field: &Sdf) -> Mesh {
 
     let mut mesh = Mesh::default();
     let mut shared: FastMap<u64, u32> = FastMap::default();
-    // Where each triangle was written and which way round, so that a second copy of it
-    // can take the first back out.
-    let mut written: FastMap<[u32; 3], (usize, bool)> = FastMap::default();
+    let mut written = Written::default();
     for level in levels {
         let Some(mut tiles) = layers.remove(&level) else {
             continue;
@@ -96,22 +94,56 @@ pub fn extract(field: &Sdf) -> Mesh {
         // only a triangle standing on it can be written a second time.
         let floor = (level + 1) * TILE - 1;
         shared.retain(|key, _| key_z(*key) >= floor);
-        let kept: std::collections::HashSet<u32> = shared.values().copied().collect();
-        written.retain(|face, _| face.iter().all(|corner| kept.contains(corner)));
+        let kept: HashSet<u32> = shared.values().copied().collect();
+        written.retain(|face| face.iter().all(|corner| kept.contains(corner)));
     }
 
     mesh.faces.retain(|face| face[0] != face[1]);
     mesh
 }
 
+/// The stored tiles, and every tile below one of them that the surface reaches into.
+///
+/// A quad around an edge on a tile's lowest face names cells of the tiles below it. The
+/// field need not store those — the surface may cross only the face they share — but the
+/// cells still need their vertices, or the quad is lost and the surface left open. A tile
+/// taken in for that names cells below it in turn, so the set is grown until it holds.
+fn meshed_tiles(field: &Sdf) -> Vec<IVec3> {
+    let mut meshed: HashSet<IVec3> = field.tile_keys().collect();
+    let mut grown: Vec<IVec3> = meshed.iter().copied().collect();
+    while !grown.is_empty() {
+        let below: HashSet<IVec3> = grown
+            .iter()
+            .flat_map(|tile| CORNER_OFFSETS[1..].iter().map(move |step| *tile - *step))
+            .filter(|tile| !meshed.contains(tile))
+            .collect();
+        grown = below
+            .into_par_iter()
+            .filter(|tile| reaches_into(field, *tile))
+            .collect();
+        meshed.extend(grown.iter().copied());
+    }
+    meshed.into_iter().collect()
+}
+
+/// Whether a tile the field does not store has a cell the surface crosses: one value of
+/// its neighbours' first rows, which its far cells reach into, on the other side of its own.
+fn reaches_into(field: &Sdf, tile: IVec3) -> bool {
+    let base = tile * TILE;
+    let inside = field.value(base) < 0.0;
+    (0..BLOCK).any(|z| {
+        (0..BLOCK).any(|y| {
+            (0..BLOCK).any(|x| {
+                let local = IVec3::new(x, y, z);
+                local.max_element() == TILE && (field.value(base + local) < 0.0) != inside
+            })
+        })
+    })
+}
+
 /// Appends one tile's vertices, then its quads as triangles against whatever cell each
 /// corner names.
-fn merge(
-    mesh: &mut Mesh,
-    shared: &mut FastMap<u64, u32>,
-    written: &mut FastMap<[u32; 3], (usize, bool)>,
-    part: &TilePart,
-) {
+fn merge(mesh: &mut Mesh, shared: &mut FastMap<u64, u32>, written: &mut Written, part: &TilePart) {
     let first = mesh.vertices.len() as u32;
     mesh.vertices.extend_from_slice(&part.vertices);
     for (cell, local) in &part.named {
@@ -132,27 +164,54 @@ fn merge(
             if face[0] == face[1] || face[1] == face[2] || face[0] == face[2] {
                 continue;
             }
-            // Clustering can fold two quads onto one triangle. Two copies wound the same
-            // way are one piece of surface written twice; wound against each other they
-            // enclose nothing at all. Either way only edges used four times come of
-            // keeping both, and a surface with those cannot be sliced.
-            let mut named = face;
-            named.sort_unstable();
-            let forward = (face[0] < face[1]) == (face[1] < face[2]);
-            match written.get(&named).copied() {
-                // Already taken back out, or already standing the way this one does.
-                Some((CANCELLED, _)) => {}
-                Some((_, kept)) if kept == forward => {}
-                Some((at, _)) => {
-                    mesh.faces[at] = CANCELLED_FACE;
-                    written.insert(named, (CANCELLED, forward));
-                }
-                None => {
-                    written.insert(named, (mesh.faces.len(), forward));
-                    mesh.faces.push(face);
-                }
+            written.add(mesh, face);
+        }
+    }
+}
+
+/// Every copy of a triangle still standing, so that one wound against them can take one
+/// back out.
+///
+/// Clustering can fold two quads onto one triangle. Copies are summed the way the surface
+/// sums them: two wound against each other enclose nothing and both go, two wound alike
+/// both stay. Dropping either kind alone would leave the cavity open along the fold, and
+/// an open cavity slices with a jump across it; see ADR 0186.
+#[derive(Default)]
+struct Written {
+    /// Where the first standing copy is and which way it is wound, or [`CANCELLED`].
+    first: FastMap<[u32; 3], (usize, bool)>,
+    /// Further copies wound the same way, which only a fold makes.
+    more: FastMap<[u32; 3], Vec<usize>>,
+}
+
+impl Written {
+    fn add(&mut self, mesh: &mut Mesh, face: [u32; 3]) {
+        let mut named = face;
+        named.sort_unstable();
+        let forward = (face[0] < face[1]) == (face[1] < face[2]);
+        match self.first.get(&named).copied() {
+            Some((at, kept)) if at != CANCELLED && kept != forward => {
+                let extra = self.more.get_mut(&named).and_then(Vec::pop);
+                let taken = extra.unwrap_or_else(|| {
+                    self.first.insert(named, (CANCELLED, kept));
+                    at
+                });
+                mesh.faces[taken] = CANCELLED_FACE;
+            }
+            Some((at, _)) if at != CANCELLED => {
+                self.more.entry(named).or_default().push(mesh.faces.len());
+                mesh.faces.push(face);
+            }
+            _ => {
+                self.first.insert(named, (mesh.faces.len(), forward));
+                mesh.faces.push(face);
             }
         }
+    }
+
+    fn retain(&mut self, keep: impl Fn(&[u32; 3]) -> bool) {
+        self.first.retain(|face, _| keep(face));
+        self.more.retain(|face, _| keep(face));
     }
 }
 
@@ -429,6 +488,73 @@ fn edge_ends() -> [(usize, usize); EDGES] {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::grid::VoxelGrid;
+    use crate::sdf::{Quantised, TILE_VALUES, encode};
+    use core_geometry::diagnose;
+
+    /// Every edge of `mesh` used as often one way round as the other.
+    fn balanced(mesh: &Mesh) -> bool {
+        let mut uses: HashMap<(u32, u32), i32> = HashMap::new();
+        for face in &mesh.faces {
+            for corner in 0..3 {
+                let (from, to) = (face[corner], face[(corner + 1) % 3]);
+                let key = (from.min(to), from.max(to));
+                *uses.entry(key).or_default() += if from < to { 1 } else { -1 };
+            }
+        }
+        uses.values().all(|net| *net == 0)
+    }
+
+    /// One stored tile whose lowest layer of X is inside and the rest outside, with no
+    /// tile stored around it: the surface crosses the edges into the tiles below it, which
+    /// the field has no values for.
+    #[test]
+    fn a_surface_on_a_tiles_lowest_face_is_closed_through_the_tiles_below() {
+        let band_mm = 0.4;
+        let values: Box<[Quantised]> = (0..TILE_VALUES)
+            .map(|index| {
+                encode(
+                    if index % TILE as usize == 0 {
+                        -0.1
+                    } else {
+                        0.1
+                    },
+                    band_mm,
+                )
+            })
+            .collect();
+        let field = Sdf::new(
+            VoxelGrid::new(0.2),
+            band_mm,
+            HashMap::from([(IVec3::ZERO, values)]),
+            HashMap::new(),
+        );
+
+        let mesh = extract(&field);
+        assert!(!mesh.is_empty(), "the inside layer has a surface around it");
+        assert_eq!(diagnose(&mesh).boundary_edges, 0, "the surface is closed");
+        assert!(
+            balanced(&mesh),
+            "every edge is crossed back as often as it is crossed"
+        );
+    }
+
+    #[test]
+    fn copies_of_a_triangle_add_up_the_way_the_surface_does() {
+        let mut mesh = Mesh::new(vec![Vec3::ZERO, Vec3::X, Vec3::Y], Vec::new());
+        let mut written = Written::default();
+        let (forward, backward) = ([0, 1, 2], [0, 2, 1]);
+        for face in [forward, backward, forward, forward] {
+            written.add(&mut mesh, face);
+        }
+        mesh.faces.retain(|face| face[0] != face[1]);
+
+        assert_eq!(
+            mesh.faces,
+            vec![forward, forward],
+            "one copy taken out by its opposite, the two written alike after it kept"
+        );
+    }
 
     /// Corner values for a cell with only the corner at its lowest point inside.
     fn one_corner_inside() -> [Scalar; CORNERS] {

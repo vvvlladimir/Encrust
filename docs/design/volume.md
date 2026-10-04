@@ -117,7 +117,14 @@ inverts (ADR 0055).
 
 It is asked for only where values are written, once per 4³ block of a stored tile: a block
 the surface crosses no lattice edge of is all one side, and a band sitting a wall off the
-mesh is never nearer than that. That is what keeps the winding number affordable.
+mesh is never nearer than that. That is what keeps the winding number affordable. The one
+question is asked at the true nearest point, not the carried face: near a thin wall the
+carrier hands over the wall's far side, close enough for a distance and wrong for a side.
+
+The pseudonormal tells a seam from a face by barycentrics, except on a triangle whose angle
+at its first corner is under about six degrees, where `f32` cancellation loses the seam. There
+the offset decides: straight along the normal is the face, otherwise the nearest corner or
+edge (ADR 0186).
 
 ## The operators
 
@@ -166,9 +173,14 @@ with any other about where a facet ends.
 
 Two things the curve does that have to be undone. The mean of a curved patch lies inside
 the surface, so a facet is lifted back out along its normal by the rise the cells' own
-normals imply. And clustering can fold two quads onto one triangle, whose every edge would
-then be used four times; a second copy wound the same way is dropped and one wound against
-the first takes both out. See ADR 0084.
+normals imply. And clustering can fold two quads onto one triangle. Copies are summed the
+way the surface sums them: one wound against another takes it out, and two wound alike both
+stay. Dropping either kind alone opens the surface. See ADR 0084 and 0186.
+
+A quad around an edge on a tile's lowest face names cells of the tiles below it, which the
+field need not store when the surface only crosses the face they share. Those tiles are
+meshed too, and the ones below them in turn, so no quad loses a corner and the cavity comes
+out closed whatever the field stored (ADR 0186).
 
 Tiles are never welded. Every vertex is named by the cell it stands in — that cell packed
 into a `u64` — so a cell clustered with others simply names the same vertex from each.

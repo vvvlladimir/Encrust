@@ -41,6 +41,14 @@ model comes back unchanged with `cavity_mm3` at zero — the honest answer to "h
 
 `External` is the same build at `iso_mm = +t`: a mould. Infill and blockers do not apply.
 
+The fields are built from the shells that bound the solid, not from every shell of the
+mesh. A shell most of whose faces have the rest of the mesh standing just outside them — a
+stray part left inside a sculpt — is left out of them. A field over it reads its outside
+as air and cuts a wall around it. It stays in the model, so under the non-zero rule it
+prints solid wherever it is, in the wall or standing in the cavity. A mould turns the
+bounding shells inside out, not the stray ones, which would print as resin in its void
+(ADR 0186).
+
 ## Bottom through
 
 The floor comes out so resin runs onto the plate. The cavity's cross-section one voxel

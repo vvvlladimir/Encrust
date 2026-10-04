@@ -84,13 +84,8 @@ fn collect(heights: Vec<Scalar>, stitched: Vec<Stitched>) -> Sliced {
         ..Sliced::default()
     };
     for (z, plane) in heights.into_iter().zip(stitched) {
-        if plane.open > 0 || plane.unlinked > 0 {
-            tracing::warn!(
-                z,
-                open = plane.open,
-                unlinked = plane.unlinked,
-                "layer closed over a hole in the mesh"
-            );
+        if plane.open > 0 {
+            tracing::warn!(z, open = plane.open, "layer closed over a hole in the mesh");
         }
         sliced.open_contours += plane.open;
         sliced.degenerate_contours += plane.degenerate;

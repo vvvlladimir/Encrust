@@ -176,7 +176,7 @@ pub struct ReliefDraw {
 pub struct ViewportResources {
     globals: wgpu::Buffer,
     globals_bind_group: wgpu::BindGroup,
-    model_pipeline: wgpu::RenderPipeline,
+    model_pipeline: Facing,
     line_pipeline: wgpu::RenderPipeline,
     /// What caps the section cut.
     capping: Capping,
@@ -187,7 +187,7 @@ pub struct ViewportResources {
     label_layout: wgpu::BindGroupLayout,
     label_sampler: wgpu::Sampler,
     /// Draws a model with its own texture washed over it, for the Relief tool.
-    relief_pipeline: wgpu::RenderPipeline,
+    relief_pipeline: Facing,
     relief_layout: wgpu::BindGroupLayout,
     relief_sampler: wgpu::Sampler,
     reliefs: HashMap<usize, CachedRelief>,
@@ -212,12 +212,13 @@ struct Frame {
     line_vertices: u32,
     body_vertices: u32,
     label_vertices: u32,
-    models: Vec<usize>,
-    solids: Vec<usize>,
+    /// Each mesh with whether its placement mirrors it, which picks the pipeline.
+    models: Vec<(usize, bool)>,
+    solids: Vec<(usize, bool)>,
     solid_base: u32,
     /// The textured models, and where their instances start: after the models and the
     /// solids, in the same buffer.
-    reliefs: Vec<usize>,
+    reliefs: Vec<(usize, bool)>,
     relief_base: u32,
     cap_vertices: u32,
     cutting: bool,
@@ -253,10 +254,10 @@ impl ViewportResources {
             line_pipeline: solid.line,
             capping: solid.capping,
             body_pipeline: build.body(),
-            label_pipeline: label.pipeline,
+            label_pipeline: label.pipelines,
             label_layout: label.layout,
             label_sampler: label.sampler,
-            relief_pipeline: relief.pipeline,
+            relief_pipeline: relief.pipelines,
             relief_layout: relief.layout,
             relief_sampler: relief.sampler,
             reliefs: HashMap::new(),
@@ -340,15 +341,15 @@ impl ViewportResources {
         self.frame.reliefs.clear();
         for draw in models {
             let key = self.cache(device, &draw.mesh);
-            self.frame.models.push(key);
+            self.frame.models.push((key, draw.instance.is_mirrored()));
         }
         for draw in solids {
             let key = self.cache(device, &draw.mesh);
-            self.frame.solids.push(key);
+            self.frame.solids.push((key, draw.instance.is_mirrored()));
         }
         for draw in reliefs {
             let key = self.cache_relief(device, queue, draw);
-            self.frame.reliefs.push(key);
+            self.frame.reliefs.push((key, draw.instance.is_mirrored()));
         }
 
         // A mesh nobody drew this frame was removed from the scene or replaced.
@@ -357,10 +358,10 @@ impl ViewportResources {
             .models
             .iter()
             .chain(&self.frame.solids)
-            .copied()
+            .map(|(key, _)| *key)
             .collect();
         self.meshes.retain(|key, _| live.contains(key));
-        let textured: HashSet<usize> = self.frame.reliefs.iter().copied().collect();
+        let textured: HashSet<usize> = self.frame.reliefs.iter().map(|(key, _)| *key).collect();
         self.reliefs.retain(|key, _| textured.contains(key));
     }
 
@@ -524,20 +525,24 @@ impl ViewportResources {
         // wherever the count says the plane runs through a solid. See
         // `docs/decisions/0062`.
         if self.frame.cutting {
-            render_pass.set_pipeline(&self.capping.crossing);
-            self.draw_meshes(render_pass, &self.frame.solids, self.frame.solid_base);
+            let crossing = &self.capping.crossing;
+            self.draw_meshes(
+                render_pass,
+                crossing,
+                &self.frame.solids,
+                self.frame.solid_base,
+            );
         }
 
-        render_pass.set_pipeline(&self.model_pipeline);
-        self.draw_meshes(render_pass, &self.frame.models, 0);
+        self.draw_meshes(render_pass, &self.model_pipeline, &self.frame.models, 0);
 
         if !self.frame.reliefs.is_empty() {
-            render_pass.set_pipeline(&self.relief_pipeline);
-            for (index, key) in self.frame.reliefs.iter().enumerate() {
+            for (index, (key, mirrored)) in self.frame.reliefs.iter().enumerate() {
                 let Some(relief) = self.reliefs.get(key) else {
                     continue;
                 };
                 let instance = self.frame.relief_base + index as u32;
+                render_pass.set_pipeline(self.relief_pipeline.of(*mirrored));
                 render_pass.set_bind_group(1, &relief.bind_group, &[]);
                 for (buffer, count) in &relief.pieces {
                     render_pass.set_vertex_buffer(0, buffer.slice(..));
@@ -574,12 +579,19 @@ impl ViewportResources {
     }
 
     /// Draws one mesh per entry, each with the instance that many slots past `base`.
-    fn draw_meshes(&self, render_pass: &mut wgpu::RenderPass<'static>, keys: &[usize], base: u32) {
-        for (index, key) in keys.iter().enumerate() {
+    fn draw_meshes(
+        &self,
+        render_pass: &mut wgpu::RenderPass<'static>,
+        pipelines: &Facing,
+        keys: &[(usize, bool)],
+        base: u32,
+    ) {
+        for (index, (key, mirrored)) in keys.iter().enumerate() {
             let Some(mesh) = self.meshes.get(key).filter(|mesh| !mesh.pieces.is_empty()) else {
                 continue;
             };
             let instance = base + index as u32;
+            render_pass.set_pipeline(pipelines.of(*mirrored));
             for (buffer, count) in &mesh.pieces {
                 render_pass.set_vertex_buffer(0, buffer.slice(..));
                 render_pass.draw(0..*count, instance..instance + 1);
@@ -656,9 +668,27 @@ fn globals_layout(device: &wgpu::Device) -> wgpu::BindGroupLayout {
     })
 }
 
+/// One pipeline built twice: for a model as imported, and for one a negative scale
+/// mirrors. A mirror turns every triangle's winding on screen, and the front face, the
+/// shading and the section's stencil count all read that winding.
+struct Facing {
+    upright: wgpu::RenderPipeline,
+    mirrored: wgpu::RenderPipeline,
+}
+
+impl Facing {
+    fn of(&self, mirrored: bool) -> &wgpu::RenderPipeline {
+        if mirrored {
+            &self.mirrored
+        } else {
+            &self.upright
+        }
+    }
+}
+
 /// The pipelines that draw the plate and the models in their own flat colours.
 struct Solid {
-    model: wgpu::RenderPipeline,
+    model: Facing,
     line: wgpu::RenderPipeline,
     capping: Capping,
 }
@@ -666,15 +696,15 @@ struct Solid {
 /// The two passes that fill the section cut with a flat face.
 struct Capping {
     /// Counts, in the stencil plane, how often a view ray crosses a solid above the cut.
-    crossing: wgpu::RenderPipeline,
+    crossing: Facing,
     /// Fills the cut wherever that count says the plane is inside a solid.
     cap: wgpu::RenderPipeline,
 }
 
 /// A pipeline that samples one texture, with the layout its bind group is built against
 /// and the sampler it reads through.
-struct Textured {
-    pipeline: wgpu::RenderPipeline,
+struct Textured<P> {
+    pipelines: P,
     layout: wgpu::BindGroupLayout,
     sampler: wgpu::Sampler,
 }
@@ -708,18 +738,33 @@ impl<'a> Builder<'a> {
     }
 
     fn plain(&self, kind: PipelineKind<'_>) -> wgpu::RenderPipeline {
-        pipeline(
-            self.device,
-            &self.layout,
-            &self.shader,
-            self.target_format,
-            kind,
-        )
+        self.on(&self.layout, kind)
+    }
+
+    fn on(&self, layout: &wgpu::PipelineLayout, kind: PipelineKind<'_>) -> wgpu::RenderPipeline {
+        pipeline(self.device, layout, &self.shader, self.target_format, kind)
+    }
+
+    fn facing(&self, kind: PipelineKind<'_>) -> Facing {
+        self.facing_on(&self.layout, kind)
+    }
+
+    fn facing_on(&self, layout: &wgpu::PipelineLayout, kind: PipelineKind<'_>) -> Facing {
+        Facing {
+            upright: self.on(layout, kind.clone()),
+            mirrored: self.on(
+                layout,
+                PipelineKind {
+                    front_face: wgpu::FrontFace::Cw,
+                    ..kind
+                },
+            ),
+        }
     }
 
     fn solid(&self) -> Solid {
         Solid {
-            model: self.plain(PipelineKind {
+            model: self.facing(PipelineKind {
                 label: "viewport_models",
                 vertex_entry: "model_vertex",
                 fragment_entry: "model_fragment",
@@ -740,7 +785,7 @@ impl<'a> Builder<'a> {
 
     fn capping(&self) -> Capping {
         Capping {
-            crossing: self.plain(PipelineKind {
+            crossing: self.facing(PipelineKind {
                 label: "viewport_section_crossings",
                 vertex_entry: "model_vertex",
                 fragment_entry: "section_crossing_fragment",
@@ -779,10 +824,11 @@ impl<'a> Builder<'a> {
     }
 
     /// Draws the word the machine carries, sampled out of the font atlas.
-    fn label(&self) -> Textured {
+    fn label(&self) -> Textured<wgpu::RenderPipeline> {
         self.textured(
             wgpu::TextureViewDimension::D2,
             wgpu::AddressMode::ClampToEdge,
+            Self::on,
             PipelineKind {
                 label: "viewport_label",
                 vertex_entry: "label_vertex",
@@ -797,12 +843,13 @@ impl<'a> Builder<'a> {
     }
 
     /// Draws a model with its own texture washed over it, for the Relief tool.
-    fn relief(&self) -> Textured {
+    fn relief(&self) -> Textured<Facing> {
         self.textured(
             wgpu::TextureViewDimension::D2Array,
             // Wrapping, because a coordinate outside the unit square wraps everywhere else
             // a texture is read; see ADR 0116.
             wgpu::AddressMode::Repeat,
+            Self::facing_on,
             PipelineKind {
                 label: "viewport_relief",
                 vertex_entry: "relief_vertex",
@@ -813,12 +860,13 @@ impl<'a> Builder<'a> {
         )
     }
 
-    fn textured(
+    fn textured<P>(
         &self,
         dimension: wgpu::TextureViewDimension,
         address_mode: wgpu::AddressMode,
+        build: impl FnOnce(&Self, &wgpu::PipelineLayout, PipelineKind<'_>) -> P,
         kind: PipelineKind<'_>,
-    ) -> Textured {
+    ) -> Textured<P> {
         let layout = texture_layout(self.device, kind.label, dimension);
         let sampler = self.device.create_sampler(&wgpu::SamplerDescriptor {
             label: Some(kind.label),
@@ -837,13 +885,7 @@ impl<'a> Builder<'a> {
                 immediate_size: 0,
             });
         Textured {
-            pipeline: pipeline(
-                self.device,
-                &pipeline_layout,
-                &self.shader,
-                self.target_format,
-                kind,
-            ),
+            pipelines: build(self, &pipeline_layout, kind),
             layout,
             sampler,
         }
@@ -879,12 +921,14 @@ fn texture_layout(
     })
 }
 
+#[derive(Clone)]
 struct PipelineKind<'a> {
     label: &'a str,
     vertex_entry: &'a str,
     fragment_entry: &'a str,
     buffers: &'a [Option<wgpu::VertexBufferLayout<'a>>],
     topology: wgpu::PrimitiveTopology,
+    front_face: wgpu::FrontFace,
     writes_color: bool,
     depth_write: bool,
     depth_compare: wgpu::CompareFunction,
@@ -899,6 +943,7 @@ impl Default for PipelineKind<'_> {
             fragment_entry: "model_fragment",
             buffers: &[],
             topology: wgpu::PrimitiveTopology::TriangleList,
+            front_face: wgpu::FrontFace::Ccw,
             writes_color: true,
             depth_write: true,
             depth_compare: wgpu::CompareFunction::Less,
@@ -941,7 +986,7 @@ fn pipeline(
         }),
         primitive: wgpu::PrimitiveState {
             topology: kind.topology,
-            front_face: wgpu::FrontFace::Ccw,
+            front_face: kind.front_face,
             cull_mode: None,
             ..Default::default()
         },

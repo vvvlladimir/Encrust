@@ -1,6 +1,6 @@
 # 0006. Classify vertices by strict sign, stitch contours by mesh edge
 
-- **Status:** Accepted
+- **Status:** Superseded by 0186 (an edge left twice only)
 - **Date:** 2026-09-17
 
 ## Context

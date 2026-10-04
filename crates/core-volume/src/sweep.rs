@@ -60,7 +60,15 @@ pub(crate) fn fill(
         .par_iter()
         .filter_map(|tile| {
             let work = refine(mesh, faces, bvh, grid, &carrier, *tile, (band_mm, iso_mm));
-            let values = tile_values(mesh, faces, signer, grid, *tile, &work, band_mm, iso_mm)?;
+            let values = tile_values(
+                (mesh, faces, bvh),
+                signer,
+                grid,
+                *tile,
+                &work,
+                band_mm,
+                iso_mm,
+            )?;
             Some((*tile, values))
         })
         .collect()
@@ -444,8 +452,7 @@ fn searched(mesh: &Mesh, bvh: &Bvh, point: Vec3) -> Nearest {
 /// One tile's stored values, or `None` when the band misses every voxel of it.
 #[allow(clippy::too_many_arguments)]
 fn tile_values(
-    mesh: &Mesh,
-    faces: &Faces,
+    surface: (&Mesh, &Faces, &Bvh),
     signer: &Signer,
     grid: VoxelGrid,
     tile: IVec3,
@@ -461,8 +468,7 @@ fn tile_values(
     for corner in 0..8 {
         let block = base + IVec3::new(corner & 1, (corner >> 1) & 1, (corner >> 2) & 1) * SIDED;
         crosses |= block_values(
-            mesh,
-            faces,
+            surface,
             signer,
             grid,
             block,
@@ -486,8 +492,7 @@ const SIDED: i32 = 4;
 /// Writes one block of a tile and says whether the band crossed it.
 #[allow(clippy::too_many_arguments)]
 fn block_values(
-    mesh: &Mesh,
-    faces: &Faces,
+    (mesh, faces, bvh): (&Mesh, &Faces, &Bvh),
     signer: &Signer,
     grid: VoxelGrid,
     block: IVec3,
@@ -521,7 +526,12 @@ fn block_values(
     let Some((_, first, on_first)) = found.first() else {
         return false;
     };
-    let one_sided = (nearest > reach_mm).then(|| signer.is_inside(mesh, *first, on_first));
+    // The side is asked of the true nearest point, not of the carried face: a face from
+    // the far side of a thin wall is near enough for a distance and wrong for a side.
+    let one_sided = (nearest > reach_mm).then(|| {
+        let exact = bvh.closest(mesh, *first);
+        signer.is_inside(mesh, *first, exact.as_ref().unwrap_or(on_first))
+    });
 
     let mut crosses = false;
     for (slot, point, on_face) in found.iter() {
@@ -545,4 +555,74 @@ fn tile_voxels() -> impl Iterator<Item = IVec3> {
 /// Where a block voxel sits in the block's own values.
 fn at(local: IVec3) -> usize {
     ((local.z * SIDE + local.y) * SIDE + local.x) as usize
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::sdf::step_mm;
+    use crate::sign::SignMode;
+
+    /// A plate ten millimetres square and a tenth thick, wound outward; its first two
+    /// faces are its underside.
+    fn plate() -> Mesh {
+        let (s, t) = (10.0, 0.1);
+        let corners = [
+            Vec3::new(0.0, 0.0, 0.0),
+            Vec3::new(s, 0.0, 0.0),
+            Vec3::new(s, s, 0.0),
+            Vec3::new(0.0, s, 0.0),
+            Vec3::new(0.0, 0.0, t),
+            Vec3::new(s, 0.0, t),
+            Vec3::new(s, s, t),
+            Vec3::new(0.0, s, t),
+        ];
+        Mesh::new(
+            corners.to_vec(),
+            vec![
+                [0, 2, 1],
+                [0, 3, 2],
+                [4, 5, 6],
+                [4, 6, 7],
+                [0, 1, 5],
+                [0, 5, 4],
+                [1, 2, 6],
+                [1, 6, 5],
+                [2, 3, 7],
+                [2, 7, 6],
+                [3, 0, 4],
+                [3, 4, 7],
+            ],
+        )
+    }
+
+    #[test]
+    fn a_block_carried_the_far_side_of_a_thin_wall_is_still_signed_by_the_near_side() {
+        let mesh = plate();
+        let faces = Faces::of(&mesh);
+        let bvh = Bvh::build(&mesh);
+        let signer = Signer::new(&mesh, SignMode::Pseudonormal);
+        let grid = VoxelGrid::new(0.2);
+        let (band_mm, iso_mm) = (0.4, 3.0);
+        // The tile from 3.2 to 4.6 mm over the plate, every voxel of it handed the
+        // underside: near enough in distance, and facing the other way.
+        let underside = vec![0; TILE_VALUES].into_boxed_slice();
+
+        let values = tile_values(
+            (&mesh, &faces, &bvh),
+            &signer,
+            grid,
+            IVec3::new(2, 2, 2),
+            &underside,
+            band_mm,
+            iso_mm,
+        )
+        .expect("the 3 mm offset crosses the tile");
+
+        let lowest = Scalar::from(values[0]) * step_mm(band_mm);
+        assert!(
+            lowest > 0.0,
+            "3.2 mm up is over the plate and outside its 3 mm offset, got {lowest}"
+        );
+    }
 }
