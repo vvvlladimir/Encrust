@@ -62,8 +62,9 @@ that script changed first: `scripts/web-app.mjs` in the site repository.
   thread-local of the page's thread instead of egui's callback map (`render.rs`).
 - **Files.** A sliced file is written on its worker to private storage through a
   `FileSystemSyncAccessHandle`, a megabyte per call: unbuffered, a million-face plate took
-  36 s instead of 1.2 s. The worker hands the file to the page, which alone may start a
-  download. A browser without private storage, such as a private window, gets it written
+  36 s instead of 1.2 s. Every file goes to one entry, `sliced-file`, so the storage keeps
+  the last one rather than all. The worker hands the file to the page, which alone may start
+  a download. A browser without private storage, such as a private window, gets it written
   in memory.
 - **Storage.** Preferences are the `localStorage` entry `encrust.preferences`, and each of
   the user's profiles one entry under `encrust.profiles/`.

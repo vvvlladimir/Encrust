@@ -49,10 +49,13 @@ pub fn download(name: &str, bytes: &[u8]) -> Result<(), JsValue> {
     Ok(())
 }
 
-/// Hands the file `name` in private storage to the user under the same name, as the disk
-/// holds it.
+/// The one entry in private storage a sliced file is written to, whatever it is called, so
+/// the storage holds the last file and never every one the page has made.
+const STORED: &str = "sliced-file";
+
+/// Hands the sliced file in private storage to the user under `name`, as the disk holds it.
 pub async fn download_stored(name: &str) -> std::io::Result<()> {
-    let file: Blob = opfs::read(name).await?.into();
+    let file: Blob = opfs::read(STORED).await?.into();
     offer_file(name, &file);
     Ok(())
 }
@@ -66,7 +69,7 @@ pub async fn slice_offered(
     report: &mut (dyn FnMut(Progress) + Send),
 ) -> Outcome {
     let name = request.output.to_string_lossy().into_owned();
-    let (outcome, offered) = match opfs::StoredFile::create(&name).await {
+    let (outcome, offered) = match opfs::StoredFile::create(STORED).await {
         Ok(file) => {
             // Every write is a call into the browser, so they go out a megabyte at a time.
             let mut sink = std::io::BufWriter::with_capacity(1 << 20, file);
@@ -187,13 +190,21 @@ async fn read_all(wanted: Wanted, files: FileList) {
             .map(|(name, bytes)| crate::files::Handed::bytes(name, bytes))
             .collect()
     };
-    for handed in handed {
-        let is_mesh = handed
+    let is_mesh = |handed: &crate::files::Handed| {
+        handed
             .path()
             .extension()
             .and_then(|extension| extension.to_str())
-            .is_some_and(|extension| MESHES.contains(&extension.to_ascii_lowercase().as_str()));
-        if wanted != Wanted::Model || is_mesh {
+            .is_some_and(|extension| MESHES.contains(&extension.to_ascii_lowercase().as_str()))
+    };
+    if wanted == Wanted::Model && !handed.iter().any(is_mesh) {
+        return arrive(Arrived::Failed(format!(
+            "no model among the files picked; pick a .{} with its materials and textures",
+            MESHES.join(", .")
+        )));
+    }
+    for handed in handed {
+        if wanted != Wanted::Model || is_mesh(&handed) {
             arrive(Arrived::File(wanted, handed));
         }
     }
