@@ -57,6 +57,17 @@ pub enum PipelineError {
         printer_px: (u32, u32),
     },
 
+    #[error(
+        "the file's masks were drawn for a {:.2} x {:.2} mm panel and the printer's is {:.2} x {:.2} mm; the print would come out at the wrong scale",
+        file_mm.0, file_mm.1, printer_mm.0, printer_mm.1
+    )]
+    PanelSizeMismatch {
+        /// Panel size the file records, millimetres.
+        file_mm: (f32, f32),
+        /// Panel size of the printer converted to, millimetres.
+        printer_mm: (f32, f32),
+    },
+
     #[error("the file's layers are not all one height, which a conversion cannot carry yet")]
     VaryingHeights,
 

@@ -8,7 +8,7 @@ use core_format::{
 };
 use core_raster::{LayerRuns, Run, Shading};
 use core_slicer::LayerPlan;
-use printer_profiles::{MaterialProfile, PrinterProfile};
+use printer_profiles::{Display, MaterialProfile, PrinterProfile};
 use rayon::prelude::*;
 
 use crate::error::PipelineError;
@@ -97,6 +97,7 @@ fn job_of(facts: &SlicedFile, converting: &Converting<'_>) -> Result<PrintJob, P
             printer_px: (display.width_px, display.height_px),
         });
     }
+    check_panel_size(facts, display)?;
     let plan = plan_of(facts);
     if !plan.is_uniform() {
         // TODO(step-B6): carry a stack of varying heights, which needs an exposure per
@@ -132,6 +133,25 @@ fn job_of(facts: &SlicedFile, converting: &Converting<'_>) -> Result<PrintJob, P
         volume_mm3: facts.volume_mm3.unwrap_or(0.0),
         thumbnail: None,
         created_unix_s: converting.created_unix_s,
+    })
+}
+
+/// Refuses a printer whose panel differs in size from the one the file records, since the
+/// same pixels would then print at another scale. A file recording no size passes.
+fn check_panel_size(facts: &SlicedFile, display: &Display) -> Result<(), PipelineError> {
+    let Some(file_mm) = facts.display_mm.filter(|(w, h)| *w > 0.0 && *h > 0.0) else {
+        return Ok(());
+    };
+    let printer_mm = (display.width_mm, display.height_mm);
+    // 1 % absorbs headers and profiles rounding one panel differently; two panels sharing a
+    // resolution differ by far more.
+    let close = |file: f32, printer: f32| (file - printer).abs() <= printer * 0.01;
+    if close(file_mm.0, printer_mm.0) && close(file_mm.1, printer_mm.1) {
+        return Ok(());
+    }
+    Err(PipelineError::PanelSizeMismatch {
+        file_mm,
+        printer_mm,
     })
 }
 

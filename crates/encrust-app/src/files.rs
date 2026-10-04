@@ -116,7 +116,7 @@ pub enum Arrived {
 }
 
 /// Files handed over at once, as the window opens them: each mesh with the files that
-/// sit beside one, and anything else on its own.
+/// sit beside it in its own folder, and anything else on its own.
 #[cfg_attr(
     not(target_arch = "wasm32"),
     allow(dead_code, reason = "only a browser hands over bytes, and only later")
@@ -132,23 +132,29 @@ pub fn together(files: Vec<(String, Arc<[u8]>)>) -> Vec<Handed> {
                     .any(|known| known.eq_ignore_ascii_case(extension))
             })
     };
-    let beside: Arc<[(String, Arc<[u8]>)]> = files
-        .iter()
-        .filter(|(name, _)| is(name, &SIBLINGS))
-        .cloned()
-        .collect();
-    files
-        .into_iter()
-        .filter(|(name, _)| !is(name, &SIBLINGS))
+    let (siblings, rest): (Vec<_>, Vec<_>) =
+        files.into_iter().partition(|(name, _)| is(name, &SIBLINGS));
+    rest.into_iter()
         .map(|(name, bytes)| Handed::Bytes {
             beside: if is(&name, &MESHES) {
-                Arc::clone(&beside)
+                in_folder_of(&name, &siblings)
             } else {
                 Arc::new([])
             },
             name: PathBuf::from(name),
             bytes,
         })
+        .collect()
+}
+
+/// The siblings in the same folder as `mesh`, so two models dropped together each keep
+/// their own `material.mtl`.
+fn in_folder_of(mesh: &str, siblings: &[(String, Arc<[u8]>)]) -> Arc<[(String, Arc<[u8]>)]> {
+    let folder = Path::new(mesh).parent();
+    siblings
+        .iter()
+        .filter(|(name, _)| Path::new(name).parent() == folder)
+        .cloned()
         .collect()
 }
 
@@ -226,5 +232,17 @@ mod tests {
             handed[1].beside("hull.png").is_none(),
             "a sliced file has nothing beside it"
         );
+    }
+
+    #[test]
+    fn models_handed_together_keep_their_own_siblings_of_one_name() {
+        let handed = together(vec![
+            ("boat/boat.obj".to_owned(), Arc::from(&b""[..])),
+            ("boat/material.mtl".to_owned(), Arc::from(&b"boat"[..])),
+            ("car/car.obj".to_owned(), Arc::from(&b""[..])),
+            ("car/material.mtl".to_owned(), Arc::from(&b"car"[..])),
+        ]);
+        assert_eq!(handed[0].beside("material.mtl"), Some(b"boat".to_vec()));
+        assert_eq!(handed[1].beside("material.mtl"), Some(b"car".to_vec()));
     }
 }

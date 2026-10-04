@@ -188,7 +188,7 @@ printer's screen counts.
 
 `convert` writes a sliced file again in the container its output names, for the printer
 given. The masks are copied, never resampled, so the printer's panel must be the size the
-file was drawn for; the layer heights and every exposure are the file's own, and the resin
+file was drawn for, in pixels and, where the file records it, in millimetres; the layer heights and every exposure are the file's own, and the resin
 gives the lifts, waits and price. A stack of varying layer heights is refused for now, and
 the new file's previews are blank (ADR 0180).
 

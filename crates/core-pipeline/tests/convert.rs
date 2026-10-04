@@ -184,6 +184,22 @@ fn a_panel_of_another_size_is_refused() {
 }
 
 #[test]
+fn a_panel_of_the_same_resolution_but_another_size_is_refused() {
+    let mut source = written();
+    source.facts.display_mm = Some((1.6, 0.8));
+    let resin = MaterialProfile::default();
+    let printer = printer(WIDTH_PX);
+    let error = convert_to(
+        &mut source,
+        &converting(&printer, &resin),
+        &mut Cursor::new(Vec::new()),
+        &mut (),
+    )
+    .expect_err("masks drawn for 0.2 mm pixels on a panel of 0.1 mm pixels");
+    assert!(matches!(error, PipelineError::PanelSizeMismatch { .. }));
+}
+
+#[test]
 fn a_stack_of_varying_heights_is_refused() {
     let mut source = written();
     source.facts.layers[3].z_mm = 0.25;
