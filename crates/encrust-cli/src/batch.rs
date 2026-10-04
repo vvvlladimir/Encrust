@@ -13,7 +13,7 @@ use core_pipeline::SlicedFormat;
 use rayon::prelude::*;
 
 use crate::args::JobArgs;
-use crate::exit::Stop;
+use crate::exit::{Stop, is_cancelled};
 use crate::pipeline::{self, Watch};
 use crate::profiles::Chosen;
 use crate::progress::bar;
@@ -61,7 +61,7 @@ pub fn run(batch: &Batch, chosen: &Chosen, watch: &Watch) -> Result<Summary> {
     if let Some(progress) = &progress {
         progress.set_length(models.len() as u64);
     }
-    let reports: Vec<ModelReport> = pool.install(|| {
+    let reports: Vec<Option<ModelReport>> = pool.install(|| {
         models
             .par_iter()
             .map(|model| {
@@ -77,6 +77,7 @@ pub fn run(batch: &Batch, chosen: &Chosen, watch: &Watch) -> Result<Summary> {
         progress.finish_and_clear();
     }
     watch.stop.check()?;
+    let reports: Vec<ModelReport> = reports.into_iter().flatten().collect();
 
     if watch.talk {
         for report in &reports {
@@ -96,7 +97,12 @@ pub fn run(batch: &Batch, chosen: &Chosen, watch: &Watch) -> Result<Summary> {
 
 /// One model, and its report written beside its output. A model that fails does not stop
 /// the run: an overnight batch reports the bad one in the morning rather than at 2 a.m.
-fn one(model: &Path, batch: &Batch, chosen: &Chosen, stop: &Stop) -> ModelReport {
+/// `None` once Ctrl-C is pressed: a model not started is skipped, and one stopped is not a
+/// failure to report.
+fn one(model: &Path, batch: &Batch, chosen: &Chosen, stop: &Stop) -> Option<ModelReport> {
+    if stop.requested() {
+        return None;
+    }
     let output = output_for(model, batch.output, chosen);
     let started = std::time::Instant::now();
     let quiet = Watch {
@@ -106,6 +112,7 @@ fn one(model: &Path, batch: &Batch, chosen: &Chosen, stop: &Stop) -> ModelReport
     };
     let report = match pipeline::slice_one(model, &output, batch.job, chosen, &quiet) {
         Ok(outcome) => ModelReport::sliced(&outcome, started.elapsed()),
+        Err(error) if is_cancelled(&error) => return None,
         Err(error) => ModelReport::failed(model, &output, &error, started.elapsed()),
     };
 
@@ -116,7 +123,7 @@ fn one(model: &Path, batch: &Batch, chosen: &Chosen, stop: &Stop) -> ModelReport
     if let Err(error) = report::write(&beside, &report) {
         tracing::warn!("cannot write {}: {error:#}", beside.display());
     }
-    report
+    Some(report)
 }
 
 /// Where one model's output goes: its own name in the output directory, with the
@@ -206,6 +213,47 @@ mod tests {
         };
         let error = run(&command.batch(), &chosen, &watch).expect_err("there is nothing to slice");
         assert!(error.to_string().contains("no models"));
+
+        std::fs::remove_dir_all(&dir).expect("the directory was just made");
+    }
+
+    #[test]
+    fn a_batch_stopped_by_ctrl_c_starts_no_model_and_reports_none() {
+        let dir = std::env::temp_dir().join("encrust-batch-stopped");
+        let out = dir.join("out");
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).expect("the temporary directory is writable");
+        for name in ["a.stl", "b.stl"] {
+            std::fs::write(dir.join(name), b"").expect("the temporary directory is writable");
+        }
+
+        let cli = <crate::Cli as clap::Parser>::parse_from([
+            "encrust",
+            "batch",
+            dir.to_str().expect("ascii path"),
+            "-o",
+            out.to_str().expect("ascii path"),
+        ]);
+        let crate::Command::Batch(command) = &cli.command else {
+            unreachable!("the batch subcommand was parsed");
+        };
+        let chosen = crate::profiles::Chosen {
+            printer: None,
+            material: printer_profiles::MaterialProfile::default(),
+        };
+        let stop = Stop::default();
+        stop.request();
+        let watch = Watch {
+            talk: false,
+            progress: false,
+            stop: &stop,
+        };
+        let error = run(&command.batch(), &chosen, &watch).expect_err("the batch was stopped");
+        assert!(is_cancelled(&error), "got {error:#}");
+        assert!(
+            !out.join("a.json").exists() && !out.join("b.json").exists(),
+            "a model Ctrl-C kept from starting is not reported as failed"
+        );
 
         std::fs::remove_dir_all(&dir).expect("the directory was just made");
     }

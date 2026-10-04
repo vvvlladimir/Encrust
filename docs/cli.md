@@ -52,7 +52,9 @@ resin, weight, cost and the risks — when there is a printer to draw the masks 
 
 On a terminal `slice` draws a bar over the layers on stderr, and `batch` one over the
 models; `--no-progress`, `--quiet` and `--json` turn it off. The first Ctrl-C stops the run
-between layers and removes the file it was writing; a second one exits at once.
+between layers and removes the file it was writing, and a batch starts no further model; a
+second one exits at once. `inspect`, `info` and `profiles` write nothing, so one Ctrl-C ends
+them.
 
 The output extension picks the format (ADR 0047): `.goo`, `.ctb`, `.cbddlp`, `.photon`,
 `.sl1`, `.sl1s`, `.zip`, `.cxdlp`, `.svgx`, `.cws`, one of the seven Anycubic extensions in

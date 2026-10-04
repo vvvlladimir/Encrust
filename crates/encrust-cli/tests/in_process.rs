@@ -210,3 +210,42 @@ fn a_run_stopped_by_ctrl_c_exits_130_and_leaves_no_file() {
     assert!(!out.exists(), "a cancelled run removes what it started");
     let _ = fs::remove_file(&model);
 }
+
+#[test]
+fn a_png_stack_that_stops_half_way_takes_back_the_layers_it_wrote() {
+    let model = write_box_stl("half-stack", 10.0);
+    let out = temp("half-stack", "d");
+    // A directory where the second layer goes makes that write fail after the first.
+    fs::create_dir_all(out.join("layer_0001.png")).expect("the temporary directory is writable");
+
+    let result = slice(&[
+        &as_str(&model),
+        "--printer",
+        "elegoo-mars-4-ultra",
+        "--center",
+        "-o",
+        &as_str(&out),
+    ]);
+
+    assert!(result.is_err(), "the second layer cannot be written");
+    assert!(
+        !out.join("layer_0000.png").exists(),
+        "a stack that did not finish keeps no layer to pass for a shorter whole"
+    );
+    assert!(
+        out.exists(),
+        "a directory the run did not make is left where it was"
+    );
+    let _ = fs::remove_file(&model);
+    let _ = fs::remove_dir_all(&out);
+}
+
+#[test]
+fn only_a_run_that_reads_stop_takes_over_ctrl_c() {
+    let watches = |argv: &[&str]| Cli::parse_from(argv).command.watches_stop();
+    assert!(watches(&["encrust", "slice", "model.stl"]));
+    assert!(watches(&["encrust", "batch", "models"]));
+    assert!(!watches(&["encrust", "info", "plate.ctb"]));
+    assert!(!watches(&["encrust", "inspect", "model.stl"]));
+    assert!(!watches(&["encrust", "profiles", "list"]));
+}

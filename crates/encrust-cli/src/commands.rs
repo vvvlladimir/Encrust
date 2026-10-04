@@ -121,6 +121,18 @@ pub enum Command {
     Completions(CompletionsCommand),
 }
 
+impl Command {
+    /// Whether the run reads [`Stop`] between its steps. One that does not is left to the
+    /// shell's own Ctrl-C, so the first press ends it.
+    pub fn watches_stop(&self) -> bool {
+        match self {
+            Self::Slice(_) | Self::Estimate(_) | Self::Batch(_) | Self::Convert(_) => true,
+            Self::Printer(command) => matches!(command, PrinterCommand::Send(_)),
+            Self::Inspect(_) | Self::Info(_) | Self::Profiles(_) | Self::Completions(_) => false,
+        }
+    }
+}
+
 /// Sends logs to stderr at the level the global flags ask for, unless `RUST_LOG` says
 /// otherwise. Stdout is the report's alone, which is what keeps `--json` parseable.
 pub fn init_tracing(cli: &Cli) {

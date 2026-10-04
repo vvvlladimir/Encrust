@@ -10,11 +10,13 @@ fn main() -> ExitCode {
     // second one does not wait.
     let stop = Stop::default();
     let handler = stop.clone();
-    if let Err(error) = ctrlc::set_handler(move || {
-        if handler.request() {
-            std::process::exit(130);
-        }
-    }) {
+    if cli.command.watches_stop()
+        && let Err(error) = ctrlc::set_handler(move || {
+            if handler.request() {
+                std::process::exit(130);
+            }
+        })
+    {
         tracing::warn!("Ctrl-C will not stop the run cleanly: {error}");
     }
 

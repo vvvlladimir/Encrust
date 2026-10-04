@@ -26,12 +26,13 @@ pub fn write_stack(
     fold: Measured,
     stop: &Stop,
 ) -> Result<RasterReport> {
+    let created = !directory.exists();
     fs::create_dir_all(directory)
         .with_context(|| format!("cannot create {}", directory.display()))?;
 
     let mut index = 0;
     let mut report = report_for(directory.to_owned(), settings, fold);
-    windows.stream(mesh, |sliced| {
+    let streamed = windows.stream(mesh, |sliced| {
         stop.check()?;
         slice.absorb(sliced);
         stream_into(
@@ -47,8 +48,24 @@ pub fn write_stack(
                 fs::write(&path, &png).with_context(|| format!("cannot write {}", path.display()))
             },
         )
-    })?;
+    });
+    if let Err(error) = streamed {
+        remove_stack(directory, index, created);
+        return Err(error);
+    }
     Ok(report)
+}
+
+/// Takes back the first `written` layers of a stack that did not finish, so a shorter
+/// stack is never left to pass for a whole one, and the directory too if this run made it.
+fn remove_stack(directory: &Path, written: usize, created: bool) {
+    for index in 0..written {
+        let _ = fs::remove_file(layer_path(directory, index));
+    }
+    if created {
+        // Fails, and so keeps the directory, if anything else has landed in it since.
+        let _ = fs::remove_dir(directory);
+    }
 }
 
 /// Expands a layer into the same 8-bit greyscale PNG the archive containers hold one of
