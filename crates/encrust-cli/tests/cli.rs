@@ -1438,6 +1438,49 @@ fn json_reports_a_failure_as_a_document_too() {
 }
 
 #[test]
+fn json_reports_wrong_arguments_as_a_document_too() {
+    let output = encrust(&["slice", "model.stl", "--json", "--no-such-flag"]);
+
+    assert_eq!(output.status.code(), Some(2));
+    let failure = json(&output);
+    assert_eq!(failure["schema"], 1);
+    assert!(
+        failure["error"]["message"]
+            .as_str()
+            .is_some_and(|message| message.contains("--no-such-flag")),
+        "{failure}"
+    );
+    assert!(
+        stderr(&output).contains("Usage"),
+        "the usage still goes to stderr"
+    );
+}
+
+#[test]
+fn quiet_info_and_profiles_list_print_nothing_but_still_check_the_file() {
+    let path = write_box_stl("quiet-info", 10.0, 12, 0);
+    let out = output_file("quiet-info.goo");
+    let sliced = slice(&[
+        path.to_str().unwrap(),
+        "--profile",
+        test_panel().to_str().unwrap(),
+        "--layer-height",
+        "2",
+        "-o",
+        out.to_str().unwrap(),
+    ]);
+    assert!(sliced.status.success(), "{}", stderr(&sliced));
+
+    let info = encrust(&["-q", "info", out.to_str().unwrap()]);
+    assert!(info.status.success(), "{}", stderr(&info));
+    assert_eq!(stdout(&info), "", "--quiet prints nothing but errors");
+
+    let listing = encrust(&["-q", "profiles", "list"]);
+    assert!(listing.status.success(), "{}", stderr(&listing));
+    assert_eq!(stdout(&listing), "");
+}
+
+#[test]
 fn inspect_info_and_profiles_answer_json_as_well() {
     let path = write_box_stl("json-inspect", 10.0, 12, 0);
     let inspected = json(&encrust(&["inspect", path.to_str().unwrap(), "--json"]));
@@ -1694,6 +1737,15 @@ fn a_flag_that_shapes_a_model_is_refused_for_a_project() {
     let output = estimate(&[project_fixture().to_str().unwrap(), "--hollow", "3"]);
     assert_eq!(output.status.code(), Some(1));
     assert!(stderr(&output).contains("--hollow"), "{}", stderr(&output));
+}
+
+#[test]
+fn blur_and_samples_per_layer_are_refused_for_a_project_too() {
+    for flags in [["--blur", "2"], ["--samples-per-layer", "3"]] {
+        let output = estimate(&[&[project_fixture().to_str().unwrap()][..], &flags].concat());
+        assert_eq!(output.status.code(), Some(1), "{flags:?}");
+        assert!(stderr(&output).contains(flags[0]), "{}", stderr(&output));
+    }
 }
 
 #[test]

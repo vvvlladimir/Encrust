@@ -39,7 +39,7 @@ impl InfoCommand {
         let info = sliced_read::read(&self.file)?;
         if global.json {
             json::print(&info.document())?;
-        } else {
+        } else if !global.quiet {
             print!("{info}");
         }
         Ok(Exit::Success)

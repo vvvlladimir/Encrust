@@ -1,8 +1,8 @@
 //! A `.encrust` project saved by the window, sliced without one.
 //!
 //! The project carries its own models, placements, supports and walls, so the flags that
-//! shape a model are refused rather than quietly ignored. The printer, the resin and the
-//! layer height are what a flag may still change.
+//! shape a model are refused rather than quietly ignored. The printer, the resin, the
+//! layer height and how many layers are cut at once are what a flag may still change.
 
 use std::path::{Path, PathBuf};
 
@@ -61,7 +61,11 @@ pub fn stage(path: &Path, job: &JobArgs) -> Result<Staged> {
         models: plate.models,
         printer: Some(plate.printer),
         material: plate.material,
-        cutting: plate.cutting,
+        // How many layers are cut at once trades memory for time and shapes nothing.
+        cutting: core_engine::Cutting {
+            slice_window: job.slicing.slice_window,
+            ..plate.cutting
+        },
         panel: plate.panel,
         exposure: plate.exposure,
         remove_islands: plate.remove_islands,
@@ -127,11 +131,16 @@ fn refuse_shaping_flags(job: &JobArgs) -> Result<()> {
             job.supports.supports.is_some() || job.supports.support_profile.is_some(),
         ),
         ("--adaptive", job.slicing.adaptive),
+        (
+            "--samples-per-layer",
+            job.slicing.samples_per_layer.get() != 1,
+        ),
         ("--exposure-at", !job.slicing.exposure_at.is_empty()),
         ("--remove-islands", job.raster.remove_islands),
         ("--no-anti-alias", job.raster.no_anti_alias),
         ("--grey-levels", job.raster.grey_levels.is_some()),
         ("--grey-floor", job.raster.grey_floor.is_some()),
+        ("--blur", job.raster.blur != 0),
     ];
     if let Some((flag, _)) = given.iter().find(|(_, given)| *given) {
         bail!("{flag} does not apply to a project, which carries its own; change it in the window");

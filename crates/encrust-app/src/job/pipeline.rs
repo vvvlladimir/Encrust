@@ -203,7 +203,8 @@ fn slice_and_write(
     }
 
     report(Progress::Stage(Stage::Rasterising));
-    let written = write(&run, &mut Worker { cancel, report })?;
+    let written = write(&run, &mut Worker { cancel, report })
+        .with_context(|| format!("cannot write {}", request.output.display()))?;
 
     let Some(written) = written else {
         return Ok(Outcome::Cancelled);
@@ -424,5 +425,22 @@ z = 10.0
             panic!("writing into a directory that does not exist must fail");
         };
         assert!(message.contains("cannot create"), "got {message}");
+    }
+
+    #[test]
+    fn a_file_the_format_refuses_names_its_whole_path() {
+        let output = temp_goo("refused");
+        let mut request = request(output.clone());
+        request.plate.exposure =
+            ExposurePlan::new(vec![core_format::ExposureRange::new(0.0, 1.0, -1.0)]);
+        let cancel = AtomicBool::new(false);
+
+        let Outcome::Failed(message) = run(&request, &cancel, &mut |_| {}) else {
+            panic!("a negative exposure must fail the file");
+        };
+        assert!(
+            message.contains(&output.display().to_string()),
+            "the user is told which file, not just its stem: {message}"
+        );
     }
 }

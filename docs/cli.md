@@ -169,8 +169,8 @@ hollow = { wall_mm = 2.0, mode = "bottom-through" }
 
 A project saved by the window slices as it was saved, its cavities and supports built again
 (ADR 0178). It carries its own models, so a flag that shapes one — `--hollow`, `--supports`,
-`--rotate` and the rest — is refused; `--printer`, `--resin` and `--layer-height` replace the
-project's own:
+`--rotate`, `--blur` and the rest — is refused; `--printer`, `--resin` and `--layer-height`
+replace the project's own, and `--slice-window` applies as to a model:
 
 ```sh
 encrust slice plate.toml -o plate.goo

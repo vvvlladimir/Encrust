@@ -53,7 +53,7 @@ impl ProfilesCommand {
                 let listing = profiles::list()?;
                 if global.json {
                     json::print(&listing)?;
-                } else {
+                } else if !global.quiet {
                     print!("{listing}");
                 }
             }
