@@ -3,7 +3,7 @@ use std::sync::{Arc, OnceLock};
 use core_geometry::Vec3;
 use egui::ColorImage;
 
-use crate::plate::Plate;
+use crate::plate::BuildPlate;
 use crate::render::machine::LIP_MM;
 use crate::render::vertex::LabelVertex;
 use crate::ui::theme;
@@ -76,7 +76,7 @@ fn lay_out(painter: &egui::Painter) -> Word {
 ///
 /// Geometry rather than an overlay: it is painted on the machine, so it keeps the
 /// machine's perspective and stays put when the camera moves.
-pub fn front(plate: &Plate) -> (Vec<LabelVertex>, Option<Arc<ColorImage>>) {
+pub fn front(plate: &BuildPlate) -> (Vec<LabelVertex>, Option<Arc<ColorImage>>) {
     let Some(word) = LAID_OUT.get() else {
         return (Vec::new(), None);
     };
@@ -106,7 +106,7 @@ mod tests {
         // The atlas needs a context, which a headless test has none of; what matters is
         // that the frame asking for the word first gets an empty one rather than a panic.
         if LAID_OUT.get().is_none() {
-            let (vertices, atlas) = front(&Plate::default());
+            let (vertices, atlas) = front(&BuildPlate::default());
             assert!(vertices.is_empty() && atlas.is_none());
         }
     }

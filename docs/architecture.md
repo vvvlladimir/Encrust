@@ -23,9 +23,10 @@
    grey, LCD reading order, positive winding fill, edges anti-aliased by area coverage.
    `LayerMask` is the same layer expanded to pixels, for PNGs and the preview.
    See `docs/design/rasterisation.md`.
-5. **Output.** `core-pipeline` runs steps 4 and 5 for both front ends — it picks the
-   writer from the output extension, folds each window into what it cures and streams it
-   into the file (ADR 0127). `core-format` holds what every sliced file shares, the PNG
+5. **Output.** `core-engine` takes the plate — every model where it stands — bakes it into
+   one mesh, plans its layers and hands it to `core-pipeline`, which folds each window
+   into what it cures and streams it into a sink (ADR 0174, 0175). The writer comes from
+   the output extension (ADR 0127). `core-format` holds what every sliced file shares, the PNG
    codec the archive containers need and the seven-bit run-length codec two families carry
    their layers in included (ADR 0168); `format-goo`, `format-chitu`, `format-anycubic`,
    `format-sl1`, `format-gcode-zip`, `format-creality`, `format-svgx` and `format-cws`
@@ -52,7 +53,8 @@ folds the volume the header, the weight and the price are taken from (ADR 0163).
 A written file is the end of the pipeline. Sending it to a printer starts from the path
 alone: `net-sdcp` and `net-prusalink` take it and nothing else (ADR 0136), and the window
 chooses between a file and a printer on the one button that writes (ADR 0138). The two
-protocols meet only in the window, as an enum over what a destination can be (ADR 0153).
+protocols meet in `printer-link`, an enum over what a destination can be that the window and
+`encrust printer` both call; a browser downloads the file instead (ADR 0182).
 
 ## What each crate owns
 
@@ -63,17 +65,18 @@ it are in `.claude/rules/architecture.md`.
 | Crate | Owns |
 |---|---|
 | `core-geometry` | `Mesh`, `UvMap`, `Heightmap`, `Triangle`, `Aabb`, `Transform`, `Ray`, `PlacedHit`, `Bvh` with `closest`/`faces_within`, `ClosestPoint`, `Adjacency`, `Winding`, `Plane`, `Cut`, `FastHasher`/`FastMap`/`FastSet`, glam re-exports; `weld`, `diagnose`, `orient_outward`, `center_of_mass`, `transform_mesh`, raycasts, `closest_point`, `winding_number`, `cut`, `split` |
-| `core-mesh-io` | `MeshLoader` returning `Loaded` with one `Texture` per material and `decode` to a `Heightmap`, `StlLoader`, `ObjLoader` with UVs and `map_Kd`, `ThreeMfLoader` with `texture2dgroup` |
+| `core-mesh-io` | `MeshLoader` reading a `ModelFile` — a name, a `ReadSeek` and the files beside it — or a path, returning `Loaded` with one `Texture` per material and `decode` to a `Heightmap`, `StlLoader`, `ObjLoader` with UVs and `map_Kd`, `ThreeMfLoader` with `texture2dgroup` |
 | `core-slicer` | `SliceSettings`, `LayerPlan`, `AdaptiveSettings`, `Layer`, `Contour`, `Sliced`, `SliceEngine` with `slice_at`, `PlaneSliceEngine`, `layer_heights`, `adaptive_plan`, `offset_contours`, `Windows` sampling several planes a layer |
 | `core-raster` | `RasterSettings`, `Grey`, `Run`, `LayerRuns` with `blurred`, `LayerMask`, `Rastered`, `Rasterizer`, `ScanlineRasterizer`, `downsample` |
 | `core-analysis` | `cure` into a `Cured` layer of `Piece`s with area, centre and pull after Stefan; `Measured` folding volume, hardest pull, widest step and `Risk`s — islands, levers on the narrowest neck under a piece, peels — or taking islands out as it goes; `erase`, `island_runs`, `equivalent_disc_mm` |
 | `core-supports` | `Placed`, `Profiles`, `SupportPoint`, `Landing`, `Column`, `SupportTree`; `columns`, `grow`, `mesh_trees`/`mesh_groups`, `grab`/`Grab`/`Part`, `support_under`, `generate_supports`; `Region`/`Blocked` and `project`/`ProjectSettings` for a painted patch; `ModelSupports`, the supports one model carries; `TrapScan`/`Trapped` for resin with no way out |
 | `core-plate` | `OrientSettings`, `Oriented`, `Score`, `Footprint`, `ArrangeSettings`, `Arranged`, `Placed`, `PlateError`; `orient` — flat faces and a Fibonacci sphere scored on overhang, peel, height and footprint, the best few cut to measure the section; `arrange` — footprint bitmaps packed into the corner and centred |
 | `core-volume` | `Sdf`, `VoxelGrid`, `FieldSettings`, `SignMode`, `VolumeError`; `build` — scattered from the faces, carried coarse across the wall, refined where it is stored — CSG operators, `extract` — clustered surface nets; `hollow` with `HollowSettings`, `HollowMode`, `Blocker`, `Hollowed`, `lattice_mm`, `MIN_WALL_MM`, `sleeves`, `InfillSettings`/`InfillPattern`; `DrainHole`, `Channel`, `drill`, `bores`, `channel_under`, `hole_at`, `lift_for`, `pierce`; `ModelHollow` with `Shell`, `HoleSize`, `markers` — what one model carries; `press` with `ReliefSettings`/`Relief` |
-| `printer-profiles` | `PrinterProfile`/`OutputFormat`/`AnycubicExtension`/`PhotonRevision`/`Connection`/`Firmware`, `MaterialProfile`/`PrinterTuning`/`Compensation` and `exposure_for_mm`, `SupportProfile` and its segments, TOML load/save, `Catalogue` of printers, resins and support profiles, and `user_dir` |
+| `printer-profiles` | `PrinterProfile`/`OutputFormat`/`AnycubicExtension`/`PhotonRevision`/`Connection`/`Firmware`, `MaterialProfile`/`PrinterTuning`/`Compensation` and `exposure_for_mm`, `SupportProfile` and its segments, TOML load/save, `Catalogue` of printers, resins and support profiles, the `ProfileStore` it writes edits through with `DirStore` over a directory (ADR 0181), and `user_dir` |
 | `core-thumbnail` | `Thumbnail`, `Part`, `ThumbnailSettings`, `render` (CPU only) |
 | `core-format` | `PrintJob`, `ExposureRange`/`ExposurePlan`, `SlicedFileWriter`, `LayerSink`, `Fields`, `FormatError`, the greyscale and colour PNG codec the archive containers share (ADR 0167), and `Rle7Layer`/`decode_rle7` with the RGB15 preview record two binary families share (ADR 0168); `Reads::claim`, `panel_in_range` and `read_entry`, the bounds every reader puts a header's counts through (ADR 0171) |
-| `core-pipeline` | The stage both front ends share (ADR 0127): `SlicedFormat` and the extension that picks it, `PanelOverrides`/`raster_settings`, `Folded`/`Tolerance`/`fold_group`, `Writing`/`Written`/`write` streaming a stack into a file, `measure` doing the same without writing, `Observer` for a window arriving, layers landing and whether to stop, `PipelineError` |
+| `core-pipeline` | The write stage every front end shares (ADR 0127): `SlicedFormat` and the extension that picks it, `PanelOverrides`/`raster_settings`, `Folded`/`Tolerance`/`fold_group`, `Writing`/`Written`/`write_to` streaming a stack into a sink with `write` wrapping it for a path (ADR 0175), `measure` doing the same without writing, `convert`/`convert_to` with `Converting`/`Converted` writing a read file again in another container (ADR 0180), `Observer` for a window arriving, layers landing and whether to stop, `PipelineError` |
+| `core-engine` | The plate every front end runs (ADR 0174): `Model`/`Plate`, `Cutting` and `cut`, `bake` merging the plate into one mesh with the resin's shrinkage applied and `parts` listing it for a thumbnail, `Run` with `write`/`write_file`/`measure`, `EngineError`; `open_plate` with `Opening`, a project's plate with its cavities and support trees built again (ADR 0178); and `project` — the `.encrust` manifest with each model's `Cavity`, its mesh blobs, `read_from`/`write_to`, `digest`, `Axis`/`Keep`/`Array` |
 | `format-goo` | `GooWriter`, `GooReader` and the `.goo` codec |
 | `format-chitu` | `CtbWriter`, `CtbVersion` v4/v5; `CbddlpWriter`, `CbddlpFlavour` and the eight-pass RLE1 codec (ADR 0146); `ChituReader` and `layer_crypt` (ADR 0149) |
 | `format-anycubic` | `AnycubicWriter`, `AnycubicFlavour` over seventeen extensions, `AnycubicVersion` v1/516/517, `AnycubicReader` and the four-bit PW0 codec (ADR 0147, 0166) |
@@ -83,29 +86,42 @@ it are in `.claude/rules/architecture.md`.
 | `format-svgx` | `SvgxWriter`, `SvgxReader`: a binary header, two bitmap previews and an SVG document whose layers are polygons traced out of the mask (ADR 0169) |
 | `format-cws` | `CwsWriter`, `CwsReader`, `claims`: a zip of eight-bit PNGs, one `slice.conf` and the gcode program that runs them (ADR 0170) |
 | `net-sdcp` | `Printer` with its `Transport`, `Attributes`, `Status`, `Machine`, `PrintInfo`, `FileTransferInfo`/`Fetching`, `Transfer`, `SdcpError`; `discover`/`probe` over UDP for both reply shapes, `Control` over a WebSocket or an MQTT broker of its own, `upload` posting packets or serving the file a board fetches (ADR 0154, 0155) |
-| `net-prusalink` | `Link`, `Auth`, `Version`, `DEFAULT_USER`, `PrusaLinkError`; `probe`, `upload` as one PUT and `start_print`, over HTTP digest or an API key (ADR 0152) |
-| `encrust-cli` | `slice` binary: `pipeline` runs one model — orient, hollow, supports, then cut and stream the stack a window at a time into `.goo`, `.ctb` or PNGs; `batch` runs it over a directory with a JSON report per model |
-| `xtask` | `xtask` binary: `gen-profiles`, the printer catalogue transcribed from a directory of source profiles, run by hand and never from a build script (ADR 0165) |
-| `encrust-app` | `encrust` binary: egui/wgpu window — plate panel left, one inspector panel per tool and the rail beside it, plate tabs on their own strip, Preview splitting the stage between model and mask; `Scene` with `duplicate`/`mirror`/`array`, `Plate`, `OrbitCamera`, picking, gizmo, `History`, `Measure`, `Cutting`, jobs that hold no stack, `Settings`, `shortcuts`, `ui/theme`, `prefs`, `project`, `updates` |
+| `net-prusalink` | `Link`, `Auth`, `Version`, `DEFAULT_USER`, `Status`/`Machine`/`Job`, `PrusaLinkError`; `probe`, `upload` as one PUT, `start_print` and `status`, over HTTP digest or an API key (ADR 0152) |
+| `printer-link` | `Wire` over a board or a Prusa machine, `upload` with the board's pre-flight, `start_print`, `state` into one `State`, `scan` of both into `Found`, `SendError` (ADR 0182) |
+| `encrust-cli` | `encrust` binary, one subcommand per module in `commands/` (ADR 0176): `stage` assembles a plate from models, a plate file (`plate_file`, ADR 0179) or a project (`project`, ADR 0178); `pipeline` runs a model through orient, hollow and supports and writes a staged plate through `core-engine`, or cuts it here for a PNG stack; `estimate` measures one without writing; `convert`; `printer` discovers, asks and sends through `printer-link`; `profiles show`; `completions`; `config`, the flags a `--config` file holds; `batch` runs one model at a time over a directory with a JSON report each; `--json`, exit codes, the progress bar and Ctrl-C |
+| `encrust-web` | The window's browser front end (ADR 0181): `start`, the window on a canvas; `www/` the page, its headers, its manifest and `sw.js`, the service worker that isolates it where a host sends no headers and keeps the build for working offline (ADR 0183) |
+| `web-engine` | The browser's front end without a window (ADR 0177): `slice_project`, the bytes of a project into the bytes of a sliced file with no file system, thread or clock, and the `wasm-bindgen` exports of it; `www/` the page, its worker and the Node measurement |
+| `xtask` | `xtask` binary: `gen-profiles`, the printer catalogue transcribed from a directory of source profiles, run by hand and never from a build script (ADR 0165); `web`, the browser build; `man`, the command line's man pages from its own clap definition (ADR 0183) |
+| `encrust-app` | `encrust-gui` binary: egui/wgpu window — plate panel left, one inspector panel per tool and the rail beside it, plate tabs on their own strip, Preview splitting the stage between model and mask; `Scene` with `duplicate`/`mirror`/`array`, `BuildPlate` — the machine's platform, named apart from `core_engine::Plate` — `OrbitCamera`, picking, gizmo, `History`, `Measure`, `Cutting`, jobs that hold no stack, `Settings`, `shortcuts`, `ui/theme`, `prefs`, `project` — the dialogs and the `Scene` ↔ `Manifest` conversion over `core_engine::project` — `updates`; `files` and, for a browser, `web` (ADR 0181) |
 
 ## The allowed dependency graph
 
 Arrows point at what a crate may depend on. Anything not drawn is forbidden.
 
 ```
-encrust-app ──> every core-*, printer-profiles, every format-*, net-sdcp, net-prusalink,
+encrust-app ──> core-engine, every core-*, printer-profiles, every format-*, printer-link,
+               net-sdcp, net-prusalink,
                egui, eframe, egui_dock, egui-wgpu, wgpu, transform-gizmo-egui,
                bytemuck, image, rfd, rayon, serde, serde_json, zip,
-               ureq (with TLS), minisign-verify, tar, flate2;
+               ureq (with TLS at the desk), minisign-verify, tar, flate2, web-time;
+               in a browser wasm-bindgen, wasm-bindgen-futures, js-sys, web-sys;
                winresource at build time, for the Windows icon
-encrust-cli ──> every core-*, printer-profiles, every format-*, rayon
-xtask ──> printer-profiles, toml
+encrust-web ──> encrust-app, wasm-bindgen, wasm-bindgen-futures, web-sys, getrandom
+encrust-cli ──> core-engine, every core-*, printer-profiles, every format-*, printer-link,
+               net-sdcp, net-prusalink, rayon, clap, clap_complete, serde, serde_json, toml,
+               indicatif, ctrlc
+web-engine ──> core-engine, core-pipeline, wasm-bindgen
+xtask ──> printer-profiles, encrust-cli, toml, clap, clap_mangen
 
+core-engine ──> core-pipeline, core-analysis, core-format, core-geometry, core-raster,
+               core-slicer, core-supports, core-thumbnail, core-volume, printer-profiles,
+               serde, serde_json, zip
 core-pipeline ──> core-analysis, core-format, core-geometry, core-raster, core-slicer,
                printer-profiles, every format-*, rayon
 format-goo, format-chitu, format-anycubic, format-creality ──> core-format, core-raster
 format-sl1, format-gcode-zip, format-cws ──> core-format, core-raster, zip
 format-svgx ──> core-format, core-raster, core-slicer, glam
+printer-link ──> net-sdcp, net-prusalink, serde
 net-sdcp ──> (nothing in this workspace; tungstenite, ureq, md-5, serde)
 net-prusalink ──> (nothing in this workspace; ureq, md-5, serde)
 core-format ──> core-raster, core-slicer, printer-profiles, core-thumbnail, png
@@ -121,9 +137,11 @@ printer-profiles ──> (nothing in this workspace)
 core-geometry ──> (nothing in this workspace)
 ```
 
-Only the two binaries may depend on graphics crates. Spanning core layers is what
-`core-pipeline` is for, and it stays the write stage: a cut stack into a printable file,
-never a place to put anything else two callers happen to share (ADR 0127). `core-mesh-io`,
+Only the front ends — the two binaries and `encrust-web` — may depend on graphics crates.
+Spanning core layers is what `core-pipeline` and `core-engine` are for, and each stays its own stage: `core-pipeline`
+is handed a mesh and its windows and writes a printable file (ADR 0127), `core-engine` is
+handed a plate and runs it down to that call (ADR 0174). Neither is a place to put what
+two callers merely happen to share. `core-mesh-io`,
 `core-slicer` and `core-volume` are peers and never reference each other. A new
 sliced-file format is a new `format-*` crate beside `format-goo`, depending on
 `core-format` and nothing else in the workspace; a format whose container is someone else's
@@ -132,8 +150,8 @@ may take that container's crate with it, as the archive formats take `zip` (ADR 
 part larger than memory before the loader under it reserves one (ADR 0171). A new printer network protocol is a new
 `net-*` crate, taking the path of a file that is already written and depending on nothing
 in the workspace at all — not even on another `net-*` crate (ADR 0136). Where two of them
-have something in common, it is settled in `encrust-app` by an enum over destinations, not
-by a shared crate (ADR 0153).
+have something in common, it is settled in `printer-link` above them by an enum over
+destinations, not by a crate under them (ADR 0182).
 
 ## Why the graph is shaped this way
 
@@ -157,17 +175,22 @@ by a shared crate (ADR 0153).
 - `core-format` reads `core-slicer` for the `LayerPlan` a written file records, and
   re-exports it, so a `format-*` crate gets the type without a dependency of its own
   (ADR 0091).
-- `core-pipeline` sits above every other core because it is the one place that runs them
-  in order. It stops at the write stage: orient, hollow and supports are driven from
-  flags in the CLI and from tool state in the window, so they were never duplicated and
-  never moved (ADR 0127).
+- `core-pipeline` stops at the write stage, and `core-engine` sits above it with the run
+  that reaches it: bake the plate into one mesh with the resin's shrinkage applied, plan
+  the layers, render the thumbnail, assemble the `PrintJob`. Both front ends had written
+  that five times over (ADR 0174). Orient, hollow and supports are still not there: the
+  CLI drives them from flags and the window from tool state, so they were never
+  duplicated (ADR 0127), and a `Model` carries only their result (ADR 0129).
+- `core-engine` also owns the `.encrust` file, because a plate live and a plate written
+  down are the same facts in two forms. It is data and (de)serialisation only, so the
+  command line and a browser can open a project without a window (ADR 0174).
 - No core crate renders through a GPU; `core-thumbnail` is CPU-only (ADR 0048).
 - `net-sdcp` and `net-prusalink` sit beside the `format-*` crates and depend on nothing in
   the workspace: each is handed the path of a file that is already written. One protocol is
   one crate, with no shared crate and no sideways edge between them (ADR 0136), and both
   block rather than bringing an async runtime into a synchronous workspace (ADR 0137). What
-  the two have in common is settled in `encrust-app`, where both are already linked, by an
-  enum over a destination rather than a trait over a client (ADR 0153).
+  the two have in common is settled in `printer-link`, above both and under both binaries,
+  by an enum over a destination rather than a trait over a client (ADR 0153, 0182).
 - `net-sdcp` covers SDCP versions 3 and 1, because they are one protocol over two transports
   and a second crate would duplicate the envelope, the discovery parser and the ack table
   (ADR 0154). Version 1 inverts the roles, so the crate runs an MQTT broker and a one-file
@@ -209,6 +232,8 @@ by a shared crate (ADR 0153).
 | `Sl1Flavour` | `format-sl1` | Which Prusa extension a file takes: `.sl1` or `.sl1s` |
 | `SlicedFile` | `core-format` | What an opened file says about itself, whoever wrote it (ADR 0149) |
 | `Opened<S>` | `core-pipeline` | An opened sliced file over the source it took, whichever container it turned out to be (ADR 0150) |
+| `Plate`, `Model` | `core-engine` | What a run cuts: the models where they stand, the machine, the resin and the cutting (ADR 0174) |
+| `BuildPlate` | `encrust-app` | The machine's platform, which is what a model is placed on |
 | `Preview` | `encrust-app` | The layer under the slider, off a source that is a plate being cut or a file being read (ADR 0151) |
 
 ## Coordinates and units
@@ -225,7 +250,9 @@ by a shared crate (ADR 0153).
 
 ```
 main.rs      the one argument, the logger, and a call into the library
-lib.rs       the modules, and `run` — window options and the model to open on startup
+lib.rs       the modules, `run` — window options and the model to open on startup — and
+             `run_web`, the same on a canvas
+files.rs     Handed: a file the user gave, a path or its bytes; the dialogs that ask for one
 app.rs       SlicerApp: mode, tool, and the four groups of state.rs
 state.rs     Doc, View, Tools, Machine: the window state in the groups it travels in
 workspace.rs Mode, Tool, ViewOptions, Array
@@ -234,7 +261,7 @@ scene.rs     Scene, SceneObject, ObjectId, ImportSummary, the plates, duplicate,
 undo.rs      History: whole-scene snapshots, found by hashing what can be edited
 measure.rs   the two picked points, and the corner a click snaps to
 import.rs    the files being opened: load, repair, index, place
-plate.rs     the build volume
+plate.rs     BuildPlate: the build volume, named apart from core_engine::Plate
 camera.rs    OrbitCamera and its matrices
 pick.rs      cursor to ray, ray to nearest object
 gizmo.rs     transform handles over transform-gizmo-egui
@@ -245,12 +272,14 @@ orient.rs    the auto-orient run, and the turn it applies to the scene
 arrange.rs   packing everything visible onto the plate
 cut.rs       the cut plane, the halves it leaves, and splitting into parts
 preview.rs   the sliced stack, the texture of one layer, and what the stack cures
-project/     the .encrust file: manifest, mesh blob, the plate captured and applied
+project/     the .encrust dialogs, and the plate captured into and applied from
+             core_engine::project
 job/         worker threads: import, merge, export, preview, measure, supports, hollow, orient, send
 panels/      title strip, tool rail, stage, inspector, status strip
 profiles.rs  loading a profile from a file dialog
 network.rs   printers a scan found, where the Slice button sends, and the errand running
 prefs.rs     the machine, resin, format and printer addresses remembered between runs
+web/         a browser's threads, dialogs, downloads, private storage and page storage
 ui/          design tokens, fonts, icons, widgets
 render/      wgpu pipelines, buffers, paint callback, shader.wgsl
 ```

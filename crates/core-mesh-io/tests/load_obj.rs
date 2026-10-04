@@ -1,7 +1,7 @@
 use std::path::Path;
 
 use core_geometry::{Mapping, Vec2, Vec3};
-use core_mesh_io::{MeshIoError, MeshLoader, ObjLoader, Texture, loader_for_extension};
+use core_mesh_io::{MeshIoError, MeshLoader, ModelFile, ObjLoader, Texture, loader_for_extension};
 
 fn fixture(name: &str) -> std::path::PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR"))
@@ -83,6 +83,37 @@ fn missing_file_reports_its_path() {
         .load(&fixture("absent.obj"))
         .expect_err("the fixture is not there");
     assert!(matches!(err, MeshIoError::Io { .. }));
+}
+
+#[test]
+fn an_obj_in_memory_finds_its_material_and_texture_through_the_caller() {
+    let read = |name: &str| std::fs::read(fixture(name)).expect("the fixture is there");
+    let (obj, mtl, png) = (
+        read("textured_quad.obj"),
+        read("textured_quad.mtl"),
+        read("relief.png"),
+    );
+    // What a browser has: the files the user picked, by name, and no directory.
+    let beside = |name: &str| match name {
+        "textured_quad.mtl" => Some(mtl.clone()),
+        "relief.png" => Some(png.clone()),
+        _ => None,
+    };
+
+    let loaded = ObjLoader
+        .read(ModelFile {
+            path: Path::new("textured_quad.obj"),
+            source: &mut std::io::Cursor::new(obj),
+            beside: &beside,
+        })
+        .expect("the bytes are the fixture");
+
+    assert_eq!(loaded.mesh.faces.len(), 2, "one quad, two triangles");
+    let [texture] = loaded.textures.as_slice() else {
+        panic!("the material handed over names one map_Kd");
+    };
+    assert_eq!(texture.name, "relief.png");
+    assert_eq!(texture.bytes, png);
 }
 
 #[test]

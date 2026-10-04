@@ -635,11 +635,16 @@ impl SupportProfile {
 
     /// Writes the profile back out as TOML.
     pub fn save(&self, path: &Path) -> Result<(), ProfileError> {
-        let source = toml::to_string_pretty(self).map_err(|source| ProfileError::Serialise {
+        let source = self.to_toml_string(path)?;
+        std::fs::write(path, source).map_err(|source| ProfileError::Io {
             path: path.to_owned(),
             source,
-        })?;
-        std::fs::write(path, source).map_err(|source| ProfileError::Io {
+        })
+    }
+
+    /// The profile as the TOML it is kept in; `path` is where it is going, for the error.
+    pub fn to_toml_string(&self, path: &Path) -> Result<String, ProfileError> {
+        toml::to_string_pretty(self).map_err(|source| ProfileError::Serialise {
             path: path.to_owned(),
             source,
         })

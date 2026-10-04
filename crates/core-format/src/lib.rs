@@ -29,7 +29,6 @@ pub use reader::{
 pub use rgb15::{PREVIEW_HEADER_BYTES, PREVIEW_SIZES_PX, encode_rgb15, write_preview};
 pub use rle7::{Rle7Layer, decode_rle7};
 pub use ser::{Fields, WriteSeek};
-pub use timestamp::{minutes_since_epoch, now_utc};
 pub use writer::{LayerSink, SlicedFileWriter, WRITE_BUFFER_BYTES, validate};
 
 // How an exposure follows the layer height is a property of the resin, so it lives with

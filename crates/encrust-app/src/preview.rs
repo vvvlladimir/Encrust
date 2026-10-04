@@ -14,11 +14,11 @@ use core_raster::{
 };
 use core_slicer::{Contour, LayerPlan, Sliced, Windows};
 
-use core_pipeline::{Opened, Tolerance, open_file};
+use core_engine::{Cutting, bake};
+use core_pipeline::{Opened, Tolerance, open};
 
-use crate::job::{
-    Cutting, MeasureJob, MeasureOutcome, PreviewJob, PreviewOutcome, merge_plate_compensated,
-};
+use crate::files::Handed;
+use crate::job::{MeasureJob, MeasureOutcome, PreviewJob, PreviewOutcome, models_of};
 use crate::scene::Scene;
 use crate::status::Status;
 use crate::ui::theme;
@@ -260,8 +260,12 @@ impl Preview {
     ///
     /// Only its tables are read: a layer is decoded when the slider lands on it, so opening
     /// a stack of thousands costs the same as opening one of ten.
-    pub fn read_file(&mut self, path: &Path) -> Result<()> {
-        let open = open_file(path).with_context(|| format!("cannot open {}", path.display()))?;
+    pub fn read_file(&mut self, file: &Handed) -> Result<()> {
+        let path = file.path();
+        let source: Box<dyn ReadSeek> = file
+            .reader()
+            .with_context(|| format!("cannot read {}", path.display()))?;
+        let open = open(path, source).with_context(|| format!("cannot open {}", path.display()))?;
         let facts = open.facts().clone();
         if facts.layer_count() == 0 {
             bail!("{} has no layers", path.display());
@@ -275,7 +279,7 @@ impl Preview {
         self.layer = facts.layer_count() as usize - 1;
         self.view = MaskView::default();
         self.source = Some(Source::Read(Box::new(ReadFile {
-            fingerprint: path_fingerprint(path),
+            fingerprint: file_fingerprint(file),
             path: path.to_owned(),
             facts,
             open,
@@ -328,8 +332,11 @@ impl Preview {
 
     /// Starts cutting everything visible on the plate. Fails when there is nothing there.
     pub fn build(&mut self, scene: &Scene, cutting: Cutting) -> Result<()> {
-        let mesh = merge_plate_compensated(scene, scene.active_plate(), &cutting.compensation)
-            .context("nothing visible on the plate to preview")?;
+        let mesh = bake(
+            &models_of(scene, scene.active_plate()),
+            &cutting.compensation,
+        )
+        .context("nothing visible on the plate to preview")?;
         self.job = Some(Build {
             job: PreviewJob::spawn(mesh, cutting),
             fingerprint: stack_fingerprint(scene, cutting),
@@ -792,13 +799,18 @@ impl Preview {
     }
 }
 
-/// A file's own fingerprint for the texture cache: its name, and what it was last written.
+/// A file's own fingerprint for the texture cache: its name, and what it was last written —
+/// or, for bytes handed over, which bytes they are.
 ///
 /// A file opened twice over an edit must not show the first one's cached picture.
-fn path_fingerprint(path: &Path) -> u64 {
+fn file_fingerprint(file: &Handed) -> u64 {
     let mut hasher = DefaultHasher::new();
+    let path = file.path();
     path.hash(&mut hasher);
-    if let Ok(meta) = std::fs::metadata(path) {
+    if let Handed::Bytes { bytes, .. } = file {
+        bytes.as_ptr().hash(&mut hasher);
+        bytes.len().hash(&mut hasher);
+    } else if let Ok(meta) = std::fs::metadata(path) {
         meta.len().hash(&mut hasher);
         if let Ok(modified) = meta.modified() {
             modified.hash(&mut hasher);
@@ -1401,6 +1413,7 @@ z = 10.0
             volume_mm3: 0.0,
             exposure: core_format::ExposurePlan::default(),
             thumbnail: None,
+            created_unix_s: 0,
         };
 
         let mut mask = LayerMask::new(16, 8);
@@ -1432,7 +1445,9 @@ z = 10.0
     fn an_opened_file_reports_what_it_states_and_not_what_a_profile_would() {
         let path = written_goo("states", 4);
         let mut preview = Preview::default();
-        preview.read_file(&path).expect("a .goo we wrote opens");
+        preview
+            .read_file(&Handed::Path(path.clone()))
+            .expect("a .goo we wrote opens");
 
         let facts = preview.read_facts().expect("a file is open");
         assert_eq!(facts.format, "goo");
@@ -1455,7 +1470,9 @@ z = 10.0
     fn a_layer_of_an_opened_file_is_decoded_rather_than_cut() {
         let path = written_goo("decode", 3);
         let mut preview = Preview::default();
-        preview.read_file(&path).expect("a .goo we wrote opens");
+        preview
+            .read_file(&Handed::Path(path.clone()))
+            .expect("a .goo we wrote opens");
         let panel = preview.read_panel().expect("a .goo records its panel");
 
         preview.set_layer(1);
@@ -1479,7 +1496,9 @@ z = 10.0
     fn an_opened_file_is_never_stale_against_the_scene_and_states_its_own_heights() {
         let path = written_goo("heights", 4);
         let mut preview = Preview::default();
-        preview.read_file(&path).expect("a .goo we wrote opens");
+        preview
+            .read_file(&Handed::Path(path.clone()))
+            .expect("a .goo we wrote opens");
 
         assert!(
             !preview.is_stale(0),
@@ -1506,7 +1525,9 @@ z = 10.0
     fn closing_a_file_leaves_nothing_of_it_behind() {
         let path = written_goo("close", 2);
         let mut preview = Preview::default();
-        preview.read_file(&path).expect("a .goo we wrote opens");
+        preview
+            .read_file(&Handed::Path(path.clone()))
+            .expect("a .goo we wrote opens");
         preview.close_file();
 
         assert!(preview.read_facts().is_none());

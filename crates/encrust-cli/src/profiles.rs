@@ -1,9 +1,11 @@
 //! Resolving `--printer` and `--resin` against the catalogue, and listing what is in it.
 
+use std::fmt;
 use std::path::Path;
 
 use anyhow::{Context, Result};
-use printer_profiles::{Catalogue, MaterialProfile, PrinterProfile};
+use printer_profiles::{Catalogue, Kind, MaterialProfile, PrinterProfile};
+use serde::Serialize;
 
 /// What the four profile arguments name, before any of it is loaded.
 pub struct Selection<'a> {
@@ -49,7 +51,7 @@ fn printer_from(catalogue: Option<&Catalogue>, id: &str) -> Result<PrinterProfil
     let catalogue = catalogue.context("the catalogue was not loaded")?;
     let entry = catalogue.printer(id).with_context(|| {
         format!(
-            "run --list-profiles to see the {} printers there are",
+            "run `encrust profiles list` to see the {} printers there are",
             catalogue.printers().count()
         )
     })?;
@@ -78,7 +80,7 @@ fn resolve_material(
     let entry = match selection.resin_id {
         Some(id) => catalogue.resin(id).with_context(|| {
             format!(
-                "run --list-profiles to see the {} resins there are",
+                "run `encrust profiles list` to see the {} resins there are",
                 catalogue.resins().count()
             )
         })?,
@@ -105,50 +107,136 @@ fn resolve_material(
     Ok(entry.profile.starting_point(printer_id))
 }
 
-/// Prints the catalogue, one line per profile, marking what came from the user.
-pub fn list() -> Result<()> {
+/// One profile of the catalogue as the TOML it is kept in, and which kind it turned out to
+/// be. An id two kinds share needs `kind` to say which.
+pub fn show(id: &str, kind: Option<Kind>) -> Result<(Kind, String)> {
     let catalogue = Catalogue::load().context("cannot read the profile catalogue")?;
-
-    println!("Printers:");
-    for entry in catalogue.printers() {
-        let printer = &entry.profile;
-        let volume = &printer.build_volume;
-        println!(
-            "  {:<24} {} {} — {:.0} x {:.0} x {:.0} mm, {} x {} px{}",
-            entry.id,
-            printer.manufacturer,
-            printer.name,
-            volume.x,
-            volume.y,
-            volume.z,
-            printer.display.width_px,
-            printer.display.height_px,
-            origin(&entry.source),
-        );
+    let named = Path::new(id);
+    let found: Vec<(Kind, String)> = [Kind::Printer, Kind::Resin, Kind::Support]
+        .into_iter()
+        .filter(|candidate| kind.is_none_or(|wanted| wanted == *candidate))
+        .filter_map(|candidate| {
+            let toml = match candidate {
+                Kind::Printer => catalogue.printer(id).ok()?.profile.to_toml_string(named),
+                Kind::Resin => catalogue.resin(id).ok()?.profile.to_toml_string(named),
+                Kind::Support => catalogue.support(id).ok()?.profile.to_toml_string(named),
+            };
+            Some(toml.map(|toml| (candidate, toml)))
+        })
+        .collect::<Result<_, _>>()
+        .with_context(|| format!("cannot write {id} out as TOML"))?;
+    let mut found = found.into_iter();
+    match (found.next(), found.next()) {
+        (Some(one), None) => Ok(one),
+        (None, _) => anyhow::bail!("no profile is called {id}; `encrust profiles list` says which"),
+        (Some(_), Some(_)) => anyhow::bail!("{id} names more than one kind; pick one with --kind"),
     }
-
-    println!("\nResins:");
-    for entry in catalogue.resins() {
-        let tuned = catalogue
-            .printers()
-            .filter(|printer| entry.profile.is_tuned_for(&printer.id))
-            .count();
-        println!(
-            "  {:<24} {} — {:.2} s at {:.3} mm, tuned for {tuned} of {} printers{}",
-            entry.id,
-            entry.profile.name,
-            entry.profile.exposure_s,
-            entry.profile.layer_height_mm,
-            catalogue.printers().count(),
-            origin(&entry.source),
-        );
-    }
-    Ok(())
 }
 
-fn origin(source: &printer_profiles::Source) -> &'static str {
-    match source {
-        printer_profiles::Source::Bundled => "",
-        printer_profiles::Source::User(_) => "  [user]",
+/// The catalogue as `profiles list` prints it.
+#[derive(Serialize)]
+pub struct Listing {
+    printers: Vec<PrinterLine>,
+    resins: Vec<ResinLine>,
+}
+
+#[derive(Serialize)]
+struct PrinterLine {
+    id: String,
+    manufacturer: String,
+    name: String,
+    build_volume_mm: [f32; 3],
+    width_px: u32,
+    height_px: u32,
+    user: bool,
+}
+
+#[derive(Serialize)]
+struct ResinLine {
+    id: String,
+    name: String,
+    exposure_s: f32,
+    layer_height_mm: f32,
+    /// Printers in the catalogue this resin carries measured numbers for.
+    tuned_for: usize,
+    user: bool,
+}
+
+/// Reads the catalogue, marking what came from the user.
+pub fn list() -> Result<Listing> {
+    let catalogue = Catalogue::load().context("cannot read the profile catalogue")?;
+    let printers = catalogue
+        .printers()
+        .map(|entry| {
+            let printer = &entry.profile;
+            let volume = &printer.build_volume;
+            PrinterLine {
+                id: entry.id.clone(),
+                manufacturer: printer.manufacturer.clone(),
+                name: printer.name.clone(),
+                build_volume_mm: [volume.x, volume.y, volume.z],
+                width_px: printer.display.width_px,
+                height_px: printer.display.height_px,
+                user: is_user(&entry.source),
+            }
+        })
+        .collect();
+    let resins = catalogue
+        .resins()
+        .map(|entry| ResinLine {
+            id: entry.id.clone(),
+            name: entry.profile.name.clone(),
+            exposure_s: entry.profile.exposure_s,
+            layer_height_mm: entry.profile.layer_height_mm,
+            tuned_for: catalogue
+                .printers()
+                .filter(|printer| entry.profile.is_tuned_for(&printer.id))
+                .count(),
+            user: is_user(&entry.source),
+        })
+        .collect();
+    Ok(Listing { printers, resins })
+}
+
+impl fmt::Display for Listing {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        writeln!(f, "Printers:")?;
+        for printer in &self.printers {
+            let [x, y, z] = printer.build_volume_mm;
+            writeln!(
+                f,
+                "  {:<24} {} {} — {x:.0} x {y:.0} x {z:.0} mm, {} x {} px{}",
+                printer.id,
+                printer.manufacturer,
+                printer.name,
+                printer.width_px,
+                printer.height_px,
+                origin(printer.user),
+            )?;
+        }
+
+        writeln!(f, "\nResins:")?;
+        for resin in &self.resins {
+            writeln!(
+                f,
+                "  {:<24} {} — {:.2} s at {:.3} mm, tuned for {} of {} printers{}",
+                resin.id,
+                resin.name,
+                resin.exposure_s,
+                resin.layer_height_mm,
+                resin.tuned_for,
+                self.printers.len(),
+                origin(resin.user),
+            )?;
+        }
+        Ok(())
     }
+}
+
+fn is_user(source: &printer_profiles::Source) -> bool {
+    matches!(source, printer_profiles::Source::User(_))
+}
+
+fn origin(user: bool) -> &'static str {
+    if user { "  [user]" } else { "" }
 }

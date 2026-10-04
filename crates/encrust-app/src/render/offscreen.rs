@@ -8,7 +8,7 @@ use core_geometry::{Bvh, Heightmap, Mesh, Scalar, Transform, UvMap, Vec2, Vec3};
 use core_volume::{DrainHole, HollowSettings, bores, drill, hollow};
 
 use crate::camera::OrbitCamera;
-use crate::plate::Plate;
+use crate::plate::BuildPlate;
 use crate::render::callback::cuts_of;
 use crate::render::gpu::{
     DEPTH_FORMAT, DrainCut, ExposureBand, FrameInput, ModelDraw, ReliefDraw, ViewportResources,
@@ -166,7 +166,7 @@ fn the_machine_shows_under_an_empty_plate() {
         &[],
         &[],
         Marks::default(),
-        &machine_faces(&Plate::default()),
+        &machine_faces(&BuildPlate::default()),
     )
     .expect("the second frame draws too");
 

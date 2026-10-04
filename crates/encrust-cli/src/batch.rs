@@ -12,93 +12,126 @@ use anyhow::{Context, Result, bail};
 use core_pipeline::SlicedFormat;
 use rayon::prelude::*;
 
-use crate::Args;
+use crate::args::JobArgs;
+use crate::exit::{Stop, is_cancelled};
+use crate::pipeline::{self, Watch};
 use crate::profiles::Chosen;
-use crate::{pipeline, report::ImportReport};
+use crate::progress::bar;
 
-pub use report::{ModelReport, Summary};
+pub use report::{EstimateReport, ModelReport, PlateReport, Summary};
 
 /// The mesh extensions a batch run picks up. A directory holds anything; only these are
 /// models, and anything else in it is left alone rather than failed on.
 const MODELS: [&str; 3] = ["stl", "obj", "3mf"];
 
-/// Slices every model in `input` into `args.output`, which is made if it is not there.
-///
-/// Returns false when `--strict` was given and any model came out unclean, so a farm can
-/// gate on the exit code.
-pub fn run(input: &Path, args: &Args, chosen: &Chosen) -> Result<bool> {
-    let models = models_in(input)?;
+/// Where a batch reads its models from and writes their files to, and how many it cuts
+/// at once.
+pub struct Batch<'a> {
+    pub input: &'a Path,
+    pub output: &'a Path,
+    pub job: &'a JobArgs,
+    pub jobs: usize,
+}
+
+/// Slices every model in `batch.input` into `batch.output`, which is made if it is not
+/// there, and writes `batch.json` over the lot. A batch Ctrl-C stopped writes no summary.
+pub fn run(batch: &Batch, chosen: &Chosen, watch: &Watch) -> Result<Summary> {
+    let models = models_in(batch.input)?;
     if models.is_empty() {
-        bail!("no models in {}", input.display());
+        bail!("no models in {}", batch.input.display());
     }
-    let out_dir = &args.output;
+    let out_dir = batch.output;
     std::fs::create_dir_all(out_dir)
         .with_context(|| format!("cannot make the output directory {}", out_dir.display()))?;
 
-    println!(
-        "Batch: {} model(s) from {} into {}\n",
-        models.len(),
-        input.display(),
-        out_dir.display()
-    );
-
-    let pool = rayon::ThreadPoolBuilder::new()
-        .num_threads(args.jobs.max(1))
-        .build()
-        .context("cannot start the batch thread pool")?;
-    let reports: Vec<ModelReport> = pool.install(|| {
-        models
-            .par_iter()
-            .map(|model| one(model, args, chosen))
-            .collect()
-    });
-
-    for report in &reports {
-        println!("{}", report.line());
+    if watch.talk {
+        println!(
+            "Batch: {} model(s) from {} into {}\n",
+            models.len(),
+            batch.input.display(),
+            out_dir.display()
+        );
     }
 
-    let summary = Summary::of(input, out_dir, reports);
+    let pool = rayon::ThreadPoolBuilder::new()
+        .num_threads(batch.jobs.max(1))
+        .build()
+        .context("cannot start the batch thread pool")?;
+    let progress = watch.progress.then(|| bar("models"));
+    if let Some(progress) = &progress {
+        progress.set_length(models.len() as u64);
+    }
+    let reports: Vec<Option<ModelReport>> = pool.install(|| {
+        models
+            .par_iter()
+            .map(|model| {
+                let report = one(model, batch, chosen, watch.stop);
+                if let Some(progress) = &progress {
+                    progress.inc(1);
+                }
+                report
+            })
+            .collect()
+    });
+    if let Some(progress) = progress {
+        progress.finish_and_clear();
+    }
+    watch.stop.check()?;
+    let reports: Vec<ModelReport> = reports.into_iter().flatten().collect();
+
+    if watch.talk {
+        for report in &reports {
+            println!("{}", report.line());
+        }
+    }
+
+    let summary = Summary::of(batch.input, out_dir, reports);
     let path = out_dir.join("batch.json");
     report::write(&path, &summary)
         .with_context(|| format!("cannot write the batch report {}", path.display()))?;
-    println!("\n{}", summary.line(&path));
-
-    Ok(!args.strict || summary.failed == 0 && summary.unclean == 0)
+    if watch.talk {
+        println!("\n{}", summary.line(&path));
+    }
+    Ok(summary)
 }
 
 /// One model, and its report written beside its output. A model that fails does not stop
 /// the run: an overnight batch reports the bad one in the morning rather than at 2 a.m.
-fn one(model: &Path, args: &Args, chosen: &Chosen) -> ModelReport {
-    let output = output_for(model, args, chosen);
+/// `None` once Ctrl-C is pressed: a model not started is skipped, and one stopped is not a
+/// failure to report.
+fn one(model: &Path, batch: &Batch, chosen: &Chosen, stop: &Stop) -> Option<ModelReport> {
+    if stop.requested() {
+        return None;
+    }
+    let output = output_for(model, batch.output, chosen);
     let started = std::time::Instant::now();
-    let outcome = if args.no_slice {
-        pipeline::inspect(model, args, chosen).map(Err::<pipeline::Outcome, ImportReport>)
-    } else {
-        pipeline::slice_one(model, &output, args, chosen, false).map(Ok)
+    let quiet = Watch {
+        talk: false,
+        progress: false,
+        stop,
     };
-
-    let report = match outcome {
-        Ok(Ok(outcome)) => ModelReport::sliced(&outcome, started.elapsed()),
-        Ok(Err(import)) => ModelReport::inspected(&import, &output, started.elapsed()),
+    let report = match pipeline::slice_one(model, &output, batch.job, chosen, &quiet) {
+        Ok(outcome) => ModelReport::sliced(&outcome, started.elapsed()),
+        Err(error) if is_cancelled(&error) => return None,
         Err(error) => ModelReport::failed(model, &output, &error, started.elapsed()),
     };
 
-    let beside = args.output.join(format!(
+    let beside = batch.output.join(format!(
         "{}.json",
         model.file_stem().unwrap_or_default().to_string_lossy()
     ));
     if let Err(error) = report::write(&beside, &report) {
         tracing::warn!("cannot write {}: {error:#}", beside.display());
     }
-    report
+    Some(report)
 }
 
 /// Where one model's output goes: its own name in the output directory, with the
 /// extension the printer's firmware reads. A run with no printer writes a PNG stack, and
 /// a stack is a directory rather than a file.
-fn output_for(model: &Path, args: &Args, chosen: &Chosen) -> PathBuf {
+fn output_for(model: &Path, out_dir: &Path, chosen: &Chosen) -> PathBuf {
     let stem = model.file_stem().unwrap_or_default();
-    let path = args.output.join(stem);
+    let path = out_dir.join(stem);
     match chosen.printer.as_ref().map(|printer| printer.output) {
         Some(format) => path.with_extension(SlicedFormat::from(format).extension()),
         None => path,
@@ -161,13 +194,66 @@ mod tests {
         let dir = std::env::temp_dir().join("encrust-batch-empty");
         std::fs::create_dir_all(&dir).expect("the temporary directory is writable");
 
-        let args = <Args as clap::Parser>::parse_from(["slice", dir.to_str().expect("ascii path")]);
+        let cli = <crate::Cli as clap::Parser>::parse_from([
+            "encrust",
+            "batch",
+            dir.to_str().expect("ascii path"),
+        ]);
+        let crate::Command::Batch(command) = &cli.command else {
+            unreachable!("the batch subcommand was parsed");
+        };
         let chosen = crate::profiles::Chosen {
             printer: None,
             material: printer_profiles::MaterialProfile::default(),
         };
-        let error = run(&dir, &args, &chosen).expect_err("there is nothing to slice");
+        let watch = Watch {
+            talk: false,
+            progress: false,
+            stop: &Stop::default(),
+        };
+        let error = run(&command.batch(), &chosen, &watch).expect_err("there is nothing to slice");
         assert!(error.to_string().contains("no models"));
+
+        std::fs::remove_dir_all(&dir).expect("the directory was just made");
+    }
+
+    #[test]
+    fn a_batch_stopped_by_ctrl_c_starts_no_model_and_reports_none() {
+        let dir = std::env::temp_dir().join("encrust-batch-stopped");
+        let out = dir.join("out");
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).expect("the temporary directory is writable");
+        for name in ["a.stl", "b.stl"] {
+            std::fs::write(dir.join(name), b"").expect("the temporary directory is writable");
+        }
+
+        let cli = <crate::Cli as clap::Parser>::parse_from([
+            "encrust",
+            "batch",
+            dir.to_str().expect("ascii path"),
+            "-o",
+            out.to_str().expect("ascii path"),
+        ]);
+        let crate::Command::Batch(command) = &cli.command else {
+            unreachable!("the batch subcommand was parsed");
+        };
+        let chosen = crate::profiles::Chosen {
+            printer: None,
+            material: printer_profiles::MaterialProfile::default(),
+        };
+        let stop = Stop::default();
+        stop.request();
+        let watch = Watch {
+            talk: false,
+            progress: false,
+            stop: &stop,
+        };
+        let error = run(&command.batch(), &chosen, &watch).expect_err("the batch was stopped");
+        assert!(is_cancelled(&error), "got {error:#}");
+        assert!(
+            !out.join("a.json").exists() && !out.join("b.json").exists(),
+            "a model Ctrl-C kept from starting is not reported as failed"
+        );
 
         std::fs::remove_dir_all(&dir).expect("the directory was just made");
     }

@@ -29,7 +29,7 @@ impl FitCheck {
     }
 }
 
-/// Everything the `slice` command learned about a model, ready to print.
+/// Everything import learned about a model, ready to print.
 pub struct ImportReport {
     pub path: PathBuf,
     pub stats: MeshStats,

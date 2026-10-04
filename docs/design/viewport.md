@@ -1,7 +1,7 @@
 # The viewport
 
 How `encrust-app` draws the plate and the models on it, and how the mouse orbits, selects
-and drags. Decisions: ADR 0014, 0015, 0016, 0017, 0036, 0062, 0108.
+and drags. Decisions: ADR 0014, 0015, 0016, 0017, 0036, 0062, 0108, 0184.
 
 ## Coordinates
 
@@ -122,7 +122,7 @@ carries `section = (height_mm, on, 0, 0)` — a height alone could not say "no c
 model below the plate is legal — and the model fragment shader discards anything whose
 world `z` is above it. The plate and grid go through the line pipeline and are never cut.
 
-The opened face is capped with the stencil plane, three draws inside egui's own pass:
+The opened face is capped with the stencil plane, three draws in the viewport's own pass:
 
 1. **Count the crossings.** Every solid is drawn again with colour and depth writes off
    and the depth test `Always`, keeping only what the cut took (`world_z > section`), so
@@ -145,8 +145,9 @@ fragment's height, walked backwards so the last band wins as it does when the fi
 written. Nothing is washed below the height the bottom block reaches, because a band has
 no effect there (ADR 0090). Eight bands fit in the globals; the ninth is left untinted.
 
-The stencil comes from egui: the window asks eframe for `depth_buffer: 24` and
-`stencil_buffer: 8`, and egui clears it before attaching it to the pass. Which height the
+The stencil is the viewport's own: the scene is drawn into a window-sized colour plane and
+a `Depth24PlusStencil8` plane in `render::target`, and one triangle copies the colour into
+egui's pass, the same in a browser as at the desk (ADR 0184). Which height the
 rail hands over depends on the mode, and `panels::section::cut_height` is the one place
 that decides.
 

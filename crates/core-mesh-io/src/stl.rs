@@ -1,10 +1,8 @@
-use std::fs::File;
 use std::io::BufReader;
-use std::path::Path;
 
 use core_geometry::{Mesh, Vec3};
 
-use crate::{Loaded, MeshIoError, MeshLoader};
+use crate::{Loaded, MeshIoError, MeshLoader, ModelFile};
 
 /// Reads binary and ASCII STL. The format carries no units; values are taken as millimetres.
 ///
@@ -17,12 +15,9 @@ impl MeshLoader for StlLoader {
         &["stl"]
     }
 
-    fn load(&self, path: &Path) -> Result<Loaded, MeshIoError> {
-        let file = File::open(path).map_err(|source| MeshIoError::Io {
-            path: path.to_owned(),
-            source,
-        })?;
-        let mut reader = BufReader::new(file);
+    fn read(&self, file: ModelFile<'_>) -> Result<Loaded, MeshIoError> {
+        let path = file.path;
+        let mut reader = BufReader::new(file.source);
 
         let triangles =
             stl_io::create_stl_reader(&mut reader).map_err(|source| MeshIoError::Malformed {

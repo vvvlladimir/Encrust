@@ -3,6 +3,7 @@ use core_slicer::LayerPlan;
 use core_thumbnail::Thumbnail;
 use printer_profiles::{MaterialProfile, PrinterProfile};
 
+use crate::timestamp::format_utc;
 use crate::{ExposurePlan, exposure_for_mm};
 
 /// Everything a sliced-file writer needs besides the layers themselves.
@@ -26,6 +27,9 @@ pub struct PrintJob {
     /// Picture of the plate the format's preview records are cut from, or `None` to
     /// leave them the blank image of the right size that the header still points at.
     pub thumbnail: Option<Thumbnail>,
+    /// When the file was made, seconds since the Unix epoch. The caller reads the clock,
+    /// because a browser has none this crate can reach.
+    pub created_unix_s: u64,
 }
 
 /// Every height a file states, rounded to the micron the machines step in; see
@@ -127,6 +131,17 @@ impl PrintJob {
                 || !self.is_uniform())
     }
 
+    /// When the file was made as `YYYY-MM-DD hh:mm:ss` in UTC.
+    pub fn created_utc(&self) -> String {
+        format_utc(self.created_unix_s)
+    }
+
+    /// When the file was made in minutes since the Unix epoch, the unit several containers
+    /// stamp in.
+    pub fn created_minutes(&self) -> u32 {
+        (self.created_unix_s / 60) as u32
+    }
+
     /// Resin consumed, grams.
     pub fn weight_g(&self) -> f32 {
         self.volume_mm3 / 1000.0 * self.material.density_g_cm3
@@ -179,6 +194,17 @@ mod tests {
     use super::*;
     use crate::ExposureRange;
     use crate::fixtures::sample_job;
+
+    #[test]
+    fn a_job_is_stamped_with_the_time_its_caller_gave() {
+        // 2024-02-29T13:45:01Z, whatever the clock of the machine running the test says.
+        let job = PrintJob {
+            created_unix_s: 1_709_214_301,
+            ..sample_job(1)
+        };
+        assert_eq!(job.created_utc(), "2024-02-29 13:45:01");
+        assert_eq!(job.created_minutes(), 1_709_214_301 / 60);
+    }
 
     #[test]
     fn height_is_layer_count_times_layer_height() {

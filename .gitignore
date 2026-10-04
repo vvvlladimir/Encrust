@@ -14,3 +14,6 @@
 local-docs/
 
 CLAUDE.md
+
+# The browser build of web-engine, made by hand; see docs/design/web-build.md.
+/crates/web-engine/www/pkg

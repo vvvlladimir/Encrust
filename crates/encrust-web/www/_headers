@@ -1,0 +1,13 @@
+# Threads share memory only on a page isolated from other origins; see docs/design/web-build.md.
+# A file keeps its name between builds, so every one is revalidated; the service worker is
+# what serves them fast and offline.
+/*
+  Cross-Origin-Opener-Policy: same-origin
+  Cross-Origin-Embedder-Policy: require-corp
+  Cache-Control: no-cache
+
+/*.wasm
+  Content-Type: application/wasm
+
+/*.webmanifest
+  Content-Type: application/manifest+json

@@ -1,19 +1,15 @@
 use std::num::NonZeroU8;
 use std::path::{Path, PathBuf};
 
-use std::sync::Arc;
-
 use anyhow::{Context, Result, bail};
+use core_engine::{Cutting, Plate};
 use core_format::{ExposurePlan, ExposureRange};
 use core_geometry::Scalar;
 use core_raster::{RasterSettings, Shading};
-use core_slicer::{AdaptiveSettings, ONE_SAMPLE};
+use core_slicer::{AdaptiveSettings, ONE_SAMPLE, WINDOW_LAYERS};
 use printer_profiles::{Catalogue, MaterialProfile, PrinterProfile};
 
-use crate::job::{
-    Cutting, Outcome, SliceJob, SliceRequest, SlicedFormat, merge_plate_compensated, plate_parts,
-    worker_threads,
-};
+use crate::job::{Outcome, SliceJob, SliceRequest, SlicedFormat, models_of, worker_threads};
 use crate::preview::Fold;
 use crate::scene::Scene;
 use crate::status::Status;
@@ -116,6 +112,7 @@ impl Default for Slicing {
 impl Slicing {
     /// Lays the user's own profile directory over the shipped catalogue. A directory
     /// that is not there is normal; one that cannot be read is worth saying out loud.
+    #[cfg(not(target_arch = "wasm32"))]
     pub fn load_user_profiles(&mut self, status: &mut Status) {
         let Some(dir) = printer_profiles::user_dir() else {
             return;
@@ -124,6 +121,18 @@ impl Slicing {
             *status = Status::failed(
                 &anyhow::Error::new(error)
                     .context(format!("cannot read your profiles in {}", dir.display())),
+            );
+        }
+    }
+
+    /// Lays the profiles the page keeps over the shipped catalogue; a browser has no
+    /// directory to give.
+    #[cfg(target_arch = "wasm32")]
+    pub fn load_user_profiles(&mut self, status: &mut Status) {
+        let store = std::sync::Arc::new(crate::web::profiles::PageProfiles);
+        if let Err(error) = self.catalogue.overlay_store(store) {
+            *status = Status::failed(
+                &anyhow::Error::new(error).context("cannot read your profiles in this browser"),
             );
         }
     }
@@ -272,6 +281,7 @@ impl Slicing {
             layer_height_mm: self.layer_height_mm(),
             adaptive: self.adaptive,
             compensation: self.material.compensation,
+            slice_window: WINDOW_LAYERS,
         }
     }
 
@@ -327,25 +337,30 @@ impl Slicing {
         let Some(printer) = self.printer.clone() else {
             bail!("no printer profile is loaded");
         };
-        let mesh = Arc::new(
-            merge_plate_compensated(scene, plate, &self.material.compensation)
-                .context("nothing visible on the plate to slice")?,
-        );
+        let models = models_of(scene, plate);
+        if models.is_empty() {
+            bail!("nothing visible on the plate to slice");
+        }
+        // The output name has the last word on the container, and only the profile knows
+        // which revision of it the machine reads; see ADR 0047.
+        let format = SlicedFormat::of(&output, self.format.ctb_version())
+            .with_context(|| format!("{} names no sliced-file format", output.display()))?
+            .at_revision_of(printer.output);
 
         self.job = Some(SliceJob::spawn(SliceRequest {
-            mesh,
-            plate: plate_parts(scene, plate),
+            plate: Plate {
+                models,
+                printer,
+                material: self.material.clone(),
+                panel: self.overrides(),
+                cutting: self.cutting(),
+                exposure: ExposurePlan::new(self.exposure.clone()),
+                remove_islands: self.remove_islands,
+                format,
+                raster_window: worker_threads(),
+                created_unix_s: now_unix_s(),
+            },
             output,
-            cutting: self.cutting(),
-            printer,
-            material: self.material.clone(),
-            exposure: ExposurePlan::new(self.exposure.clone()),
-            shading: self.shading(),
-            grey_levels: self.grey_levels,
-            blur_px: self.blur_px,
-            remove_islands: self.remove_islands,
-            ctb_version: self.format.ctb_version(),
-            window: worker_threads(),
             threads: worker_threads(),
         }));
         Ok(())
@@ -363,17 +378,19 @@ impl Slicing {
 
     /// The panel the masks are drawn for, or `None` without a printer profile.
     pub fn raster_settings(&self) -> Option<RasterSettings> {
-        self.printer.as_ref().map(|printer| {
-            raster_settings(
-                printer,
-                PanelOverrides {
-                    shading: self.shading(),
-                    grey_levels: self.grey_levels,
-                    grey_floor: None,
-                    blur_px: self.blur_px,
-                },
-            )
-        })
+        self.printer
+            .as_ref()
+            .map(|printer| raster_settings(printer, self.overrides()))
+    }
+
+    /// What the window sets over the panel the printer profile describes.
+    fn overrides(&self) -> PanelOverrides {
+        PanelOverrides {
+            shading: self.shading(),
+            grey_levels: self.grey_levels,
+            grey_floor: None,
+            blur_px: self.blur_px,
+        }
     }
 
     fn shading(&self) -> Shading {
@@ -515,6 +532,15 @@ fn report(outcome: Outcome, material: &MaterialProfile) -> Status {
         Outcome::Cancelled => Status::Info("Slicing cancelled".to_owned()),
         Outcome::Failed(message) => Status::Error(message),
     }
+}
+
+/// The clock the file is stamped with. One that reads before the epoch stamps the epoch:
+/// the field is informational and no printer refuses a file over it. `web_time`, because
+/// the standard clock panics in a browser.
+fn now_unix_s() -> u64 {
+    web_time::SystemTime::now()
+        .duration_since(web_time::UNIX_EPOCH)
+        .map_or(0, |since| since.as_secs())
 }
 
 #[cfg(test)]
@@ -673,6 +699,7 @@ z = 10.0
             volume_mm3: 0.0,
             exposure: ExposurePlan::new(slicing.exposure.clone()),
             thumbnail: None,
+            created_unix_s: 0,
         };
         let (before, after) = (job(&before), job(&after));
         for index in [0, 10, 100, 250, 399] {
@@ -724,6 +751,20 @@ z = 10.0
         let scene = Scene::default();
         assert!(slicing.blocker(&scene).is_some());
         assert!(slicing.start(&scene, 0, PathBuf::from("out.goo")).is_err());
+    }
+
+    #[test]
+    fn a_name_no_format_claims_is_refused_before_anything_is_written() {
+        let mut slicing = with_printer();
+        let output =
+            std::env::temp_dir().join(format!("encrust-{}-no-format.sliced", std::process::id()));
+        assert!(
+            slicing
+                .start(&scene_with_a_model(), 0, output.clone())
+                .is_err()
+        );
+        assert!(slicing.job.is_none(), "a rejected start runs nothing");
+        assert!(!output.exists(), "nor does it leave a file or a PNG stack");
     }
 
     #[test]

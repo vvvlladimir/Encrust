@@ -60,13 +60,13 @@ With a recent stable Rust toolchain (`rust-toolchain.toml` pins the version):
 ```sh
 git clone https://github.com/vvvlladimir/Encrust.git
 cd Encrust
-cargo run --release -p encrust-app --bin encrust
+cargo run --release -p encrust-app --bin encrust-gui
 ```
 
 Slicing without a window:
 
 ```sh
-cargo run --release -p encrust-cli --bin slice -- model.stl \
+cargo run --release -p encrust-cli --bin encrust -- slice model.stl \
   --printer elegoo-saturn-4-ultra --resin standard-grey --center -o model.goo
 ```
 

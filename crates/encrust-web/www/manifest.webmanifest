@@ -1,0 +1,15 @@
+{
+  "name": "Encrust",
+  "short_name": "Encrust",
+  "description": "A slicer for resin printers, running in the browser.",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#16171a",
+  "theme_color": "#16171a",
+  "icons": [
+    { "src": "icons/encrust.svg", "sizes": "any", "type": "image/svg+xml" },
+    { "src": "icons/encrust-256.png", "sizes": "256x256", "type": "image/png" },
+    { "src": "icons/encrust-512.png", "sizes": "512x512", "type": "image/png" }
+  ]
+}

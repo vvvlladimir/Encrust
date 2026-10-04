@@ -30,8 +30,8 @@ just as useful as a failure and far rarer in a bug tracker.
 git clone git@github.com:vvvlladimir/Encrust.git
 cd Encrust
 
-cargo run --release -p encrust-app --bin encrust      # the window
-cargo run --release -p encrust-cli --bin slice -- --help
+cargo run --release -p encrust-app --bin encrust-gui  # the window
+cargo run --release -p encrust-cli --bin encrust -- --help
 ```
 
 `rust-toolchain.toml` pins the toolchain, so `rustup` installs the right one on the first build.

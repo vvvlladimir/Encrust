@@ -1,24 +1,6 @@
-use std::time::{SystemTime, UNIX_EPOCH};
-
-/// The current UTC time as `YYYY-MM-DD hh:mm:ss`, the stamp sliced files carry.
-///
-/// A file whose clock cannot be read gets the epoch rather than an error: the field is
-/// informational and no printer refuses a file over it.
-pub fn now_utc() -> String {
-    let seconds = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .map_or(0, |since| since.as_secs());
-    format_utc(seconds)
-}
-
-/// Minutes since the Unix epoch, which is the unit several containers stamp in.
-pub fn minutes_since_epoch() -> u32 {
-    SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .map_or(0, |since| since.as_secs() / 60) as u32
-}
-
-fn format_utc(seconds: u64) -> String {
+/// `seconds` since the Unix epoch as `YYYY-MM-DD hh:mm:ss` in UTC, the stamp sliced files
+/// carry.
+pub(crate) fn format_utc(seconds: u64) -> String {
     let days = (seconds / 86_400).cast_signed();
     let rest = seconds % 86_400;
     let (year, month, day) = civil_from_days(days);
@@ -66,7 +48,7 @@ mod tests {
     }
 
     #[test]
-    fn the_string_fits_the_twenty_four_byte_field() {
-        assert!(now_utc().len() <= 24);
+    fn the_last_second_of_9999_fits_the_twenty_four_byte_field() {
+        assert!(format_utc(253_402_300_799).len() <= 24);
     }
 }

@@ -22,6 +22,9 @@ core-supports = { path = "crates/core-supports" }
 core-volume = { path = "crates/core-volume" }
 core-plate = { path = "crates/core-plate" }
 core-pipeline = { path = "crates/core-pipeline" }
+core-engine = { path = "crates/core-engine" }
+encrust-cli = { path = "crates/encrust-cli" }
+encrust-app = { path = "crates/encrust-app" }
 core-format = { path = "crates/core-format" }
 core-thumbnail = { path = "crates/core-thumbnail" }
 core-analysis = { path = "crates/core-analysis" }
@@ -36,6 +39,7 @@ format-svgx = { path = "crates/format-svgx" }
 format-cws = { path = "crates/format-cws" }
 net-sdcp = { path = "crates/net-sdcp" }
 net-prusalink = { path = "crates/net-prusalink" }
+printer-link = { path = "crates/printer-link" }
 
 glam = { version = "0.33", features = ["serde"] }
 parry3d = "0.30"
@@ -50,7 +54,22 @@ zip = { version = "8.6", default-features = false, features = ["deflate-flate2"]
 toml = "1.1"
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
-clap = { version = "4.6", features = ["derive"] }
+# The browser's bindings: `web-engine`, and the window as a browser runs it; see
+# docs/decisions/0177 and 0181. All but `getrandom` already came in under `eframe`.
+wasm-bindgen = "0.2.129"
+wasm-bindgen-futures = "0.4.79"
+js-sys = "0.3.106"
+web-sys = "0.3.106"
+web-time = "1.1"
+getrandom = "0.3"
+getrandom-04 = { package = "getrandom", version = "0.4" }
+clap = { version = "4.6", features = ["derive", "env"] }
+# Shell completions from the command line, and its man page from xtask; see docs/decisions/0183.
+clap_complete = "4.6"
+clap_mangen = "0.3"
+# The command line's progress bar and its Ctrl-C; see docs/decisions/0176.
+indicatif = { version = "0.18", default-features = false }
+ctrlc = "3.5"
 directories = "6.0"
 
 # Plain HTTP and WebSocket on the local network only, so no TLS stack is pulled in.

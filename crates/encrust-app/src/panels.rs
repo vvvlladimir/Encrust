@@ -11,6 +11,7 @@ mod support_diagram;
 mod support_fields;
 mod title_bar;
 mod tool_rail;
+mod view_column;
 mod viewport_panel;
 
 pub use inspector::slice_this_plate;

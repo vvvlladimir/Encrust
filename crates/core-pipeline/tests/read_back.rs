@@ -68,6 +68,7 @@ fn job() -> PrintJob {
         volume_mm3: 0.0,
         exposure: ExposurePlan::default(),
         thumbnail: Some(Thumbnail::filled(8, 8, [200, 40, 40])),
+        created_unix_s: 0,
     }
 }
 

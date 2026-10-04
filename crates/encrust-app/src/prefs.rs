@@ -3,6 +3,7 @@
 
 use std::collections::BTreeMap;
 use std::net::IpAddr;
+#[cfg(not(target_arch = "wasm32"))]
 use std::path::PathBuf;
 
 use serde::{Deserialize, Serialize};
@@ -100,31 +101,55 @@ impl Preferences {
     /// Writes the file, making its directory first. A failure is silent: nothing the user
     /// asked for has failed, and the window has no room to say it.
     pub fn save(&self) {
-        let Some(path) = file() else {
-            return;
-        };
-        let Some(dir) = path.parent() else {
-            return;
-        };
-        if std::fs::create_dir_all(dir).is_err() {
-            return;
-        }
         if let Ok(text) = serde_json::to_string_pretty(self) {
-            let _ = std::fs::write(path, text);
+            store(&text);
         }
     }
 }
 
 /// What was remembered, or nothing at all when the file is missing or unreadable.
 pub fn load() -> Preferences {
-    let Some(text) = file().and_then(|path| std::fs::read_to_string(path).ok()) else {
+    let Some(text) = stored() else {
         return Preferences::default();
     };
     serde_json::from_str(&text).unwrap_or_default()
 }
 
+#[cfg(not(target_arch = "wasm32"))]
+fn store(text: &str) {
+    let Some(path) = file() else {
+        return;
+    };
+    let Some(dir) = path.parent() else {
+        return;
+    };
+    if std::fs::create_dir_all(dir).is_ok() {
+        let _ = std::fs::write(path, text);
+    }
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+fn stored() -> Option<String> {
+    file().and_then(|path| std::fs::read_to_string(path).ok())
+}
+
+/// The page's own storage, where a browser keeps what a desktop keeps in a file.
+#[cfg(target_arch = "wasm32")]
+const KEY: &str = "encrust.preferences";
+
+#[cfg(target_arch = "wasm32")]
+fn store(text: &str) {
+    crate::web::remember(KEY, text);
+}
+
+#[cfg(target_arch = "wasm32")]
+fn stored() -> Option<String> {
+    crate::web::remembered(KEY)
+}
+
 /// Beside the user's profile directory, because both are this application's own settings
 /// and a user moving one expects the other to follow.
+#[cfg(not(target_arch = "wasm32"))]
 fn file() -> Option<PathBuf> {
     let dir = printer_profiles::user_dir()?;
     Some(dir.with_file_name("preferences.json"))

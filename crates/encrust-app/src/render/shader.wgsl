@@ -285,11 +285,12 @@ fn relief_fragment(in: ReliefFragment, @builtin(front_facing) front_facing: bool
         normal = -normal;
     }
 
+    // Sampled before the branch: a sample may only sit in uniform control flow, which a
+    // browser's shader compiler enforces. V runs up the image, a texture samples down it.
+    let uv = vec2<f32>(in.uv.x, 1.0 - in.uv.y);
+    let height = textureSample(relief_texture, relief_sampler, uv, max(i32(in.layer), 0)).r;
     var base = in.color.rgb;
     if (in.layer >= 0.0) {
-        // V runs up from the bottom of the image, and a texture samples down from the top.
-        let uv = vec2<f32>(in.uv.x, 1.0 - in.uv.y);
-        let height = textureSample(relief_texture, relief_sampler, uv, i32(in.layer)).r;
         base = base * mix(RELIEF_FLOOR, RELIEF_CEILING, height);
     }
 

@@ -99,7 +99,24 @@ fn toggle_maximised(ctx: &egui::Context) {
 #[cfg(target_os = "macos")]
 fn window_buttons(_ui: &mut egui::Ui) {}
 
-#[cfg(not(target_os = "macos"))]
+/// A browser tab is closed by the browser. In its place the page offers the source it runs,
+/// at the tag it was built from, as the AGPL asks of a program served over a network.
+#[cfg(target_arch = "wasm32")]
+fn window_buttons(ui: &mut egui::Ui) {
+    let source = concat!(
+        env!("CARGO_PKG_REPOSITORY"),
+        "/tree/v",
+        env!("CARGO_PKG_VERSION")
+    );
+    ui.add_space(8.0);
+    let label = egui::RichText::new("Source")
+        .font(theme::small())
+        .color(theme::colors().text_low);
+    ui.hyperlink_to(label, source)
+        .on_hover_text("Encrust is free software under the AGPL-3.0; this is the code it runs");
+}
+
+#[cfg(not(any(target_os = "macos", target_arch = "wasm32")))]
 fn window_buttons(ui: &mut egui::Ui) {
     if icon_button(ui, icon::CANCEL, "Close").clicked() {
         ui.ctx().send_viewport_cmd(egui::ViewportCommand::Close);
@@ -299,9 +316,12 @@ fn file_menu(ui: &mut egui::Ui, window: &mut Window) {
         ui.close();
         toggle_settings(window.machine);
     }
-    ui.separator();
-    if ui.button("Quit").clicked() {
-        ui.ctx().send_viewport_cmd(egui::ViewportCommand::Close);
+    // A page is left by closing its tab.
+    if cfg!(not(target_arch = "wasm32")) {
+        ui.separator();
+        if ui.button("Quit").clicked() {
+            ui.ctx().send_viewport_cmd(egui::ViewportCommand::Close);
+        }
     }
 }
 

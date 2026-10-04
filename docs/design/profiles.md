@@ -94,9 +94,9 @@ exposure hidden in one machine's table is caught when the file is read, naming t
 
 ## What each binary does with it
 
-`slice --printer <id> --resin <id>` resolves both through the catalogue; `--profile` and
-`--material` take paths and win over the ids. `--list-profiles` prints the catalogue and
-exits. A printer alone still gets a resin: the first one measured on that machine.
+`encrust slice --printer <id> --resin <id>` resolves both through the catalogue; `--profile` and
+`--material` take paths and win over the ids. `encrust profiles list` prints the catalogue
+and exits. A printer alone still gets a resin: the first one measured on that machine.
 
 The window keeps the catalogue in `Slicing`, along with the resin as loaded and the resin
 as resolved. Picking a printer sets the plate, the container it writes, the machine on the

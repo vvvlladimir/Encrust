@@ -2,33 +2,59 @@ mod format;
 mod hollow;
 mod import;
 mod measure;
-mod merge;
 mod orient;
 mod pipeline;
 mod place;
+mod plate;
 mod preview;
 mod relief;
 mod send;
 mod trapped;
 
 pub use core_pipeline::SlicedFormat;
-pub use format::{applied_to, label_of};
-pub use hollow::{HollowJob, HollowOutcome, HollowRequest, hollow_tasks};
+#[cfg(not(target_arch = "wasm32"))]
+pub use format::applied_to;
+pub use format::label_of;
+pub use hollow::{HollowJob, HollowOutcome, HollowRequest, HollowTask, hollow_tasks};
 pub use import::{ImportJob, ImportOutcome, ImportStage};
 pub use measure::{MeasureJob, MeasureOutcome};
-pub use merge::{merge_plate_compensated, plate_parts};
 pub use orient::{OrientJob, OrientOutcome, OrientRequest, orient_tasks};
-pub use pipeline::{Cutting, SliceRequest, run, worker_threads};
+#[cfg(target_arch = "wasm32")]
+pub use pipeline::run_into;
+pub use pipeline::{SliceRequest, worker_threads};
 pub use place::{SupportJob, SupportOutcome, SupportRequest, tasks_of};
+pub use plate::models_of;
 pub use preview::{PreviewJob, PreviewOutcome};
 pub use relief::{ReliefJob, ReliefOutcome, ReliefRequest, relief_tasks};
-pub use send::{Action, SendJob, SendOutcome, SendRequest, Wire};
+pub use send::{Action, SendJob, SendOutcome, SendRequest};
 pub use trapped::{TrapJob, TrapOutcome, TrapRequest, trap_tasks};
 
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::{self, Receiver, TryRecvError};
+
+/// Runs `work` off the thread that draws: on a thread of its own at the desk, and in a
+/// browser on a worker, since the page's thread may never wait; see ADR 0181.
+pub fn spawn(work: impl FnOnce() + Send + 'static) {
+    #[cfg(not(target_arch = "wasm32"))]
+    std::thread::spawn(work);
+    #[cfg(target_arch = "wasm32")]
+    crate::web::thread::spawn(work);
+}
+
+/// The cores the machine has.
+#[cfg(not(target_arch = "wasm32"))]
+pub fn cores() -> usize {
+    std::thread::available_parallelism().map_or(1, std::num::NonZero::get)
+}
+
+/// The cores the machine has, which a browser tells the page rather than the standard
+/// library.
+#[cfg(target_arch = "wasm32")]
+pub fn cores() -> usize {
+    crate::web::thread::cores()
+}
 
 /// What the worker is doing.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -94,10 +120,19 @@ impl SliceJob {
         let cancel = Arc::new(AtomicBool::new(false));
         let worker_cancel = Arc::clone(&cancel);
 
-        std::thread::spawn(move || {
-            let outcome = run(&request, &worker_cancel, &mut |message| {
+        #[cfg(not(target_arch = "wasm32"))]
+        spawn(move || {
+            let outcome = pipeline::run(&request, &worker_cancel, &mut |message| {
                 let _ = sender.send(message);
             });
+            let _ = sender.send(Progress::Finished(outcome));
+        });
+        #[cfg(target_arch = "wasm32")]
+        crate::web::thread::spawn_async(move || async move {
+            let outcome = crate::web::files::slice_offered(&request, &worker_cancel, &mut |m| {
+                let _ = sender.send(m);
+            })
+            .await;
             let _ = sender.send(Progress::Finished(outcome));
         });
 

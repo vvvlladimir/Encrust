@@ -54,7 +54,7 @@ fuzzer spends its session copying rather than mutating.
 
 ```sh
 cd .. && mkdir -p /tmp/seed && for fmt in goo ctb cbddlp sl1 zip svgx cws pwmx; do
-  cargo run --release -p encrust-cli --bin slice -- crates/encrust-app/tests/fixtures/cube.stl \
+  cargo run --release -p encrust-cli --bin encrust -- slice crates/encrust-app/tests/fixtures/cube.stl \
     --printer anycubic-photon-zero --resin standard-grey --center --layer-height 0.5 \
     -o "/tmp/seed/cube.$fmt"
 done

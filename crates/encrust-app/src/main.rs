@@ -4,7 +4,7 @@ use anyhow::Result;
 
 fn main() -> Result<()> {
     // One optional argument, the model to open on startup. Everything else is done in the
-    // window; `encrust-cli` is the place for a real command line.
+    // window; the `encrust` command line is the place for a real command line.
     let initial_model = std::env::args_os().nth(1).map(PathBuf::from);
 
     tracing_subscriber::fmt()

@@ -4,13 +4,13 @@ use core_format::ExposureRange;
 use core_geometry::{Mat4, Mesh, Scalar, Transform, Vec3};
 use core_volume::{Channel, DrainHole, MOUTH_LIFT_MM};
 use egui::Color32;
+use egui::epaint::ViewportInPixels;
 use egui_wgpu::{CallbackResources, CallbackTrait, ScreenDescriptor};
 
 use crate::camera::OrbitCamera;
-use crate::plate::Plate;
+use crate::plate::BuildPlate;
 use crate::render::gpu::{
     DrainCut, ExposureBand, FrameInput, MAX_BANDS, MAX_CUTS, ModelDraw, ReliefDraw,
-    ViewportResources,
 };
 use crate::render::grid::plate_lines;
 use crate::render::label;
@@ -29,6 +29,8 @@ const CAP_MARGIN_MM: f32 = 10.0;
 /// It carries plain data rather than a borrow of the scene: egui runs `prepare` and
 /// `paint` after the UI closure has returned, when the app state is borrowed elsewhere.
 pub struct ViewportCallback {
+    /// The panel the viewport fills, in points.
+    rect: egui::Rect,
     view_projection: Mat4,
     section_mm: Option<Scalar>,
     lines: Vec<LineVertex>,
@@ -77,14 +79,14 @@ pub struct Shading<'a> {
 }
 
 impl ViewportCallback {
-    /// `aspect` is the width of the viewport rectangle over its height.
+    /// `rect` is the panel the viewport fills, in points.
     pub fn new(
         scene: &Scene,
-        plate: &Plate,
+        plate: &BuildPlate,
         camera: &OrbitCamera,
         view: ViewOptions,
         shading: Shading<'_>,
-        aspect: f32,
+        rect: egui::Rect,
     ) -> Self {
         let Shading {
             overhang_deg,
@@ -101,7 +103,8 @@ impl ViewportCallback {
 
         let (label, atlas) = label::front(plate);
         Self {
-            view_projection: camera.view_projection(aspect),
+            rect,
+            view_projection: camera.view_projection(rect.width() / rect.height()),
             section_mm,
             lines: plate_lines(plate, view.grid),
             models,
@@ -310,7 +313,7 @@ pub(crate) fn cuts_of(
 /// Two triangles lying in the cutting plane, covering everything that could be cut. The
 /// stencil decides which of their fragments survive, so the quad only has to be big
 /// enough, never exact.
-fn cap_quad(scene: &Scene, plate: &Plate, height_mm: Scalar) -> Vec<LineVertex> {
+fn cap_quad(scene: &Scene, plate: &BuildPlate, height_mm: Scalar) -> Vec<LineVertex> {
     let (mut min_x, mut min_y) = (0.0_f32, 0.0_f32);
     let (mut max_x, mut max_y) = (plate.x_mm, plate.y_mm);
     if let Some(bounds) = scene.world_bounds() {
@@ -355,11 +358,11 @@ impl CallbackTrait for ViewportCallback {
         &self,
         device: &wgpu::Device,
         queue: &wgpu::Queue,
-        _screen_descriptor: &ScreenDescriptor,
-        _egui_encoder: &mut wgpu::CommandEncoder,
+        screen: &ScreenDescriptor,
+        egui_encoder: &mut wgpu::CommandEncoder,
         callback_resources: &mut CallbackResources,
     ) -> Vec<wgpu::CommandBuffer> {
-        if let Some(resources) = callback_resources.get_mut::<ViewportResources>() {
+        super::with_resources(callback_resources, |resources| {
             resources.prepare(
                 device,
                 queue,
@@ -380,7 +383,15 @@ impl CallbackTrait for ViewportCallback {
                     volume_mm: Some(self.volume_mm),
                 },
             );
-        }
+            // The same pixels egui hands `paint` its viewport for, so the copy lands
+            // exactly where the scene was drawn.
+            let viewport = ViewportInPixels::from_points(
+                &self.rect,
+                screen.pixels_per_point,
+                screen.size_in_pixels,
+            );
+            resources.draw(device, egui_encoder, screen.size_in_pixels, viewport);
+        });
         Vec::new()
     }
 
@@ -390,9 +401,9 @@ impl CallbackTrait for ViewportCallback {
         render_pass: &mut wgpu::RenderPass<'static>,
         callback_resources: &CallbackResources,
     ) {
-        if let Some(resources) = callback_resources.get::<ViewportResources>() {
-            resources.paint(render_pass);
-        }
+        super::resources(callback_resources, |resources| {
+            resources.present(render_pass)
+        });
     }
 }
 

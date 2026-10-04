@@ -7,6 +7,7 @@ mod error;
 mod exposure;
 mod material;
 mod printer;
+mod store;
 mod support;
 
 pub use catalogue::{Catalogue, Entry, Kind, PROFILE_DIR_VAR, Source, is_valid_id, user_dir};
@@ -18,6 +19,7 @@ pub use printer::{
     AnycubicExtension, BuildVolume, Connection, Display, Firmware, OutputFormat, PhotonRevision,
     PrinterProfile,
 };
+pub use store::{DirStore, ProfileStore};
 pub use support::{
     BottomSegment, Bracing, Branching, ContactShape, MiddleSegment, PlatformShape, Raft, RaftShape,
     SmallPillar, SupportProfile, TipSegment, TopSegment,

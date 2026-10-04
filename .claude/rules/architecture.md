@@ -1,8 +1,9 @@
 # Architecture rules
 
 1. **Cores know nothing about the UI.** No `core-*` crate may touch `egui`, `eframe`, `wgpu`,
-   `winit` or any graphics or windowing crate; only the two binaries may. Each core works from
-   a CLI, a test and a benchmark with no window open.
+   `winit` or any graphics or windowing crate; only the front ends — the two binaries and
+   `encrust-web` — may. Each core works from a CLI, a test and a benchmark with no window
+   open.
 2. **Extend through traits, not enum switches** — but only once the second implementation
    arrives or a crate boundary demands it. No abstraction ahead of its use.
 3. **Simplicity beats generality.** No plugin system, no injection, no event bus. Plain
@@ -30,4 +31,5 @@ container's crate if the container is someone else's (ADR 0148). A new printer p
 new `net-*` crate taking the path of a finished file and depending on nothing here, not even
 another `net-*` (ADR 0136); what two of them share is settled in `encrust-app` by an enum over
 destinations (ADR 0153). `core-pipeline` spans core layers only to write a cut stack into a
-file, never to hold what two callers happen to share (ADR 0127).
+sink, and `core-engine` only to run a plate down to that call and to hold the `.encrust`
+format; neither takes what two callers happen to share (ADR 0127, 0174).

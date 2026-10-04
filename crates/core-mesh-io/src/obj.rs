@@ -1,11 +1,10 @@
 use std::collections::HashMap;
-use std::fs::File;
-use std::io::BufReader;
+use std::io::{BufReader, Cursor};
 use std::path::Path;
 
 use core_geometry::{Mapping, Mesh, UvMap, Vec2, Vec3};
 
-use crate::{Loaded, MeshIoError, MeshLoader, Texture};
+use crate::{Loaded, MeshIoError, MeshLoader, ModelFile, Texture};
 
 /// Reads Wavefront OBJ. The format carries no units; values are taken as millimetres.
 ///
@@ -19,12 +18,9 @@ impl MeshLoader for ObjLoader {
         &["obj"]
     }
 
-    fn load(&self, path: &Path) -> Result<Loaded, MeshIoError> {
-        let file = File::open(path).map_err(|source| MeshIoError::Io {
-            path: path.to_owned(),
-            source,
-        })?;
-        let mut reader = BufReader::new(file);
+    fn read(&self, file: ModelFile<'_>) -> Result<Loaded, MeshIoError> {
+        let (path, beside) = (file.path, file.beside);
+        let mut reader = BufReader::new(file.source);
 
         let options = tobj::LoadOptions {
             triangulate: true,
@@ -33,7 +29,7 @@ impl MeshLoader for ObjLoader {
             ..tobj::LoadOptions::default()
         };
         let (models, materials) =
-            tobj::load_obj_buf(&mut reader, &options, |mtl| load_mtl(path, mtl)).map_err(
+            tobj::load_obj_buf(&mut reader, &options, |mtl| load_mtl(path, mtl, beside)).map_err(
                 |source| MeshIoError::Malformed {
                     path: path.to_owned(),
                     format: "OBJ",
@@ -42,7 +38,7 @@ impl MeshLoader for ObjLoader {
             )?;
 
         let mesh = merge(&models);
-        let (textures, of_material) = diffuse_maps(path, materials.as_deref().unwrap_or(&[]));
+        let (textures, of_material) = diffuse_maps(beside, materials.as_deref().unwrap_or(&[]));
         let uvs = uv_map(&models, mesh.faces.len(), &of_material);
         tracing::debug!(
             path = %path.display(),
@@ -64,18 +60,22 @@ impl MeshLoader for ObjLoader {
 /// `tobj` splits the line on a space alone, so a file separating the keyword from the name
 /// with a tab hands over an empty path; the model's own name with an `.mtl` extension is
 /// where such a file sits anyway.
-fn load_mtl(obj: &Path, mtl: &Path) -> tobj::MTLLoadResult {
-    let beside = obj.parent().unwrap_or(Path::new(".")).join(mtl);
-    let named = if beside.is_file() {
-        beside
-    } else {
-        obj.with_extension("mtl")
-    };
-    let file = File::open(named);
-    let Ok(file) = file else {
+fn load_mtl(
+    obj: &Path,
+    mtl: &Path,
+    beside: &dyn Fn(&str) -> Option<Vec<u8>>,
+) -> tobj::MTLLoadResult {
+    let own = obj.with_extension("mtl");
+    let found = [Some(mtl), own.file_name().map(Path::new)]
+        .into_iter()
+        .flatten()
+        .filter(|name| !name.as_os_str().is_empty())
+        .filter_map(Path::to_str)
+        .find_map(beside);
+    let Some(bytes) = found else {
         return Ok((Vec::new(), HashMap::new()));
     };
-    tobj::load_mtl_buf(&mut BufReader::new(file))
+    tobj::load_mtl_buf(&mut Cursor::new(bytes))
 }
 
 /// Every `map_Kd` the materials name, read once each, and which of them each material
@@ -83,12 +83,15 @@ fn load_mtl(obj: &Path, mtl: &Path) -> tobj::MTLLoadResult {
 ///
 /// Two materials sharing an image share its entry, so a model whose parts repeat a texture
 /// does not carry it twice.
-fn diffuse_maps(obj: &Path, materials: &[tobj::Material]) -> (Vec<Texture>, Vec<Option<usize>>) {
+fn diffuse_maps(
+    beside: &dyn Fn(&str) -> Option<Vec<u8>>,
+    materials: &[tobj::Material],
+) -> (Vec<Texture>, Vec<Option<usize>>) {
     let mut textures: Vec<Texture> = Vec::new();
     let of_material = materials
         .iter()
         .map(|material| {
-            let texture = diffuse_map(obj, material.diffuse_texture.as_deref()?)?;
+            let texture = diffuse_map(beside, material.diffuse_texture.as_deref()?)?;
             let at = textures
                 .iter()
                 .position(|already| already.name == texture.name)
@@ -107,10 +110,9 @@ fn diffuse_maps(obj: &Path, materials: &[tobj::Material]) -> (Vec<Texture>, Vec<
 /// Exporters routinely write the absolute path the image had on the machine that made the
 /// file, so a name that resolves to nothing is tried again as a bare file name beside the
 /// model, which is where such an image actually travels.
-fn diffuse_map(obj: &Path, named: &str) -> Option<Texture> {
-    let beside = obj.parent().unwrap_or(Path::new("."));
+fn diffuse_map(beside: &dyn Fn(&str) -> Option<Vec<u8>>, named: &str) -> Option<Texture> {
     for name in [named, file_name(named)] {
-        if let Ok(bytes) = std::fs::read(beside.join(name)) {
+        if let Some(bytes) = beside(name) {
             return Some(Texture {
                 name: name.to_owned(),
                 bytes,

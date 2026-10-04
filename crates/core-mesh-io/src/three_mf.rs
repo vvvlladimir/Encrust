@@ -1,5 +1,4 @@
-use std::fs::File;
-use std::io::BufReader;
+use std::io::{BufReader, SeekFrom};
 use std::path::Path;
 
 use core_geometry::{Mapping, Mat4, Mesh, UvMap, Vec2, Vec3};
@@ -11,7 +10,7 @@ use threemf2::model::domain::transform::Transform;
 use threemf2::model::domain::types::{PathResource, ResourceId};
 use threemf2::package::ThreemfPackage;
 
-use crate::{Loaded, MeshIoError, MeshLoader, Texture};
+use crate::{Loaded, MeshIoError, MeshLoader, ModelFile, ReadSeek, Texture};
 
 /// How deep a chain of components may nest before the file is called malformed. The
 /// specification forbids a cycle; nothing in a file stops one.
@@ -38,15 +37,12 @@ impl MeshLoader for ThreeMfLoader {
         &["3mf"]
     }
 
-    fn load(&self, path: &Path) -> Result<Loaded, MeshIoError> {
-        let file = File::open(path).map_err(|source| MeshIoError::Io {
-            path: path.to_owned(),
-            source,
-        })?;
-        refuse_oversized_parts(path, &file)?;
+    fn read(&self, file: ModelFile<'_>) -> Result<Loaded, MeshIoError> {
+        let path = file.path;
+        refuse_oversized_parts(path, file.source)?;
 
         let package = ThreemfPackage::from_reader_with_memory_optimized_deserializer(
-            BufReader::new(file),
+            BufReader::new(file.source),
             true,
         )
         .map_err(|source| malformed(path, source.to_string()))?;
@@ -86,12 +82,8 @@ impl MeshLoader for ThreeMfLoader {
 /// Every claim is read before any part is, because the reader under us reserves a buffer
 /// from it: a kilobyte of zip stating a four-gigabyte part is a bomb, not a model. The
 /// entries are opened raw, so this costs a seek each and decompresses nothing.
-fn refuse_oversized_parts(path: &Path, file: &File) -> Result<(), MeshIoError> {
-    let file = file.try_clone().map_err(|source| MeshIoError::Io {
-        path: path.to_owned(),
-        source,
-    })?;
-    let mut archive = zip::ZipArchive::new(BufReader::new(file))
+fn refuse_oversized_parts(path: &Path, source: &mut dyn ReadSeek) -> Result<(), MeshIoError> {
+    let mut archive = zip::ZipArchive::new(BufReader::new(&mut *source))
         .map_err(|source| malformed(path, source.to_string()))?;
 
     for index in 0..archive.len() {
@@ -105,6 +97,13 @@ fn refuse_oversized_parts(path: &Path, file: &File) -> Result<(), MeshIoError> {
             ));
         }
     }
+    drop(archive);
+    source
+        .seek(SeekFrom::Start(0))
+        .map_err(|source| MeshIoError::Io {
+            path: path.to_owned(),
+            source,
+        })?;
     Ok(())
 }
 

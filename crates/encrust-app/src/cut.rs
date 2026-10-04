@@ -1,30 +1,11 @@
 use core_geometry::{Mesh, Plane, Scalar, Transform, Vec3, cut, diagnose, split, transform_mesh};
-use serde::{Deserialize, Serialize};
 
-use crate::scene::{Axis, ImportSummary, Imported, ObjectId, Scene};
+pub use core_engine::project::Keep;
+
+use core_engine::project::Axis;
+
+use crate::scene::{ImportSummary, Imported, ObjectId, Scene};
 use crate::status::Status;
-
-/// Which halves of a cut stay on the plate.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
-#[serde(rename_all = "kebab-case")]
-pub enum Keep {
-    #[default]
-    Both,
-    Below,
-    Above,
-}
-
-impl Keep {
-    pub const ALL: [Self; 3] = [Self::Both, Self::Below, Self::Above];
-
-    pub fn label(self) -> &'static str {
-        match self {
-            Self::Both => "Both",
-            Self::Below => "Lower",
-            Self::Above => "Upper",
-        }
-    }
-}
 
 /// Where the Cut tool's plane is, and what it does with the halves.
 #[derive(Debug, Clone, Copy, PartialEq)]

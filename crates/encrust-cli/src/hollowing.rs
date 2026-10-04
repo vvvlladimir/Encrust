@@ -9,7 +9,8 @@ use core_volume::{
 };
 
 /// Which surface `--hollow-mode` measures the wall from.
-#[derive(Debug, Default, Clone, Copy, clap::ValueEnum)]
+#[derive(Debug, Default, Clone, Copy, clap::ValueEnum, serde::Deserialize)]
+#[serde(rename_all = "kebab-case")]
 pub enum Mode {
     #[default]
     Internal,
@@ -46,7 +47,8 @@ impl From<Pattern> for InfillPattern {
 }
 
 /// The hollowing half of the command line.
-#[derive(Debug, clap::Args)]
+#[derive(Debug, Clone, clap::Args)]
+#[command(next_help_heading = "Hollowing")]
 pub struct HollowArgs {
     /// Hollow the model, leaving a wall this many millimetres thick.
     #[arg(long = "hollow", value_name = "MM")]
@@ -55,11 +57,6 @@ pub struct HollowArgs {
     /// Which surface the wall is measured from.
     #[arg(long = "hollow-mode", value_name = "MODE", default_value = "internal")]
     pub mode: Mode,
-
-    /// How smooth the cavity comes out, 0 to 1. Not the layer height: the outside of the
-    /// model never passes through the lattice.
-    #[arg(long = "precision", value_name = "0..1", default_value_t = 0.5)]
-    pub precision: Scalar,
 
     /// Fill the cavity with a lattice.
     #[arg(long = "infill", value_name = "PATTERN")]
@@ -133,14 +130,15 @@ impl HollowArgs {
         !self.drain_at.is_empty() || !self.channels.is_empty()
     }
 
-    /// What was asked for, or `None` when `--hollow` was not given. Every channel keeps a
-    /// wall of solid around it, so it comes out of the run as a pipe through the part.
-    fn settings(&self) -> Option<HollowSettings> {
+    /// What was asked for, cut on the lattice `precision` picks, or `None` when `--hollow`
+    /// was not given. Every channel keeps a wall of solid around it, so it comes out of the
+    /// run as a pipe through the part.
+    fn settings(&self, precision: Scalar) -> Option<HollowSettings> {
         let thickness_mm = self.thickness_mm?;
         Some(HollowSettings {
             thickness_mm,
             mode: self.mode.into(),
-            precision: self.precision,
+            precision,
             infill: self.infill.map(|pattern| InfillSettings {
                 pattern: pattern.into(),
                 size_mm: self.size_mm,
@@ -181,10 +179,10 @@ impl HollowArgs {
 }
 
 /// Hollows the mesh and says what that cost and what it saved.
-pub fn run(mesh: &Mesh, args: &HollowArgs) -> Result<(Mesh, HollowReport)> {
+pub fn run(mesh: &Mesh, args: &HollowArgs, precision: Scalar) -> Result<(Mesh, HollowReport)> {
     let started = Instant::now();
     let bvh = Bvh::build(mesh);
-    let Some(settings) = args.settings() else {
+    let Some(settings) = args.settings(precision) else {
         bail!("--hollow was not given, so there is nothing to hollow");
     };
     let hollowed = hollow(mesh, &bvh, &settings).context("hollowing the model")?;

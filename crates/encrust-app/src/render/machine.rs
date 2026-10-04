@@ -1,7 +1,7 @@
 use core_geometry::Vec3;
 use egui::Color32;
 
-use crate::plate::Plate;
+use crate::plate::BuildPlate;
 use crate::render::vertex::BodyVertex;
 use crate::ui::theme;
 
@@ -36,7 +36,7 @@ const KNOB_SIDES: usize = 12;
 /// is a face over the whole plate, drawn after the grid and losing every depth tie to it,
 /// so the plate reads as a surface while its lines stay crisp. Everything is under the
 /// plate, so nothing the machine draws can stand in the build volume.
-pub fn machine_faces(plate: &Plate) -> Vec<BodyVertex> {
+pub fn machine_faces(plate: &BuildPlate) -> Vec<BodyVertex> {
     let scene = theme::scene();
     let mut faces = Vec::new();
     arm(&mut faces, plate, scene.platform);
@@ -44,7 +44,7 @@ pub fn machine_faces(plate: &Plate) -> Vec<BodyVertex> {
     faces
 }
 
-fn deck(faces: &mut Vec<BodyVertex>, plate: &Plate, colour: Color32) {
+fn deck(faces: &mut Vec<BodyVertex>, plate: &BuildPlate, colour: Color32) {
     let (left, front) = (-LIP_MM, -LIP_MM);
     let (right, back) = (plate.x_mm + LIP_MM, plate.y_mm + LIP_MM);
     floor(faces, [left, front, right, back], 0.0, colour);
@@ -63,7 +63,7 @@ fn deck(faces: &mut Vec<BodyVertex>, plate: &Plate, colour: Color32) {
     );
 }
 
-fn arm(faces: &mut Vec<BodyVertex>, plate: &Plate, colour: Color32) {
+fn arm(faces: &mut Vec<BodyVertex>, plate: &BuildPlate, colour: Color32) {
     let middle = plate.x_mm / 2.0;
     let front = plate.y_mm;
     let sides = [
@@ -187,8 +187,8 @@ pub(crate) fn quad(faces: &mut Vec<BodyVertex>, corners: [Vec3; 4], colour: Colo
 mod tests {
     use super::*;
 
-    fn plate() -> Plate {
-        Plate {
+    fn plate() -> BuildPlate {
+        BuildPlate {
             name: None,
             x_mm: 150.0,
             y_mm: 80.0,

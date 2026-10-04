@@ -1,0 +1,31 @@
+[package]
+name = "core-engine"
+description = "A plate of placed models into a printable sliced file, for every front end."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+
+[dependencies]
+core-analysis.workspace = true
+core-format.workspace = true
+core-geometry.workspace = true
+core-pipeline.workspace = true
+core-raster.workspace = true
+core-slicer.workspace = true
+core-supports.workspace = true
+core-thumbnail.workspace = true
+core-volume.workspace = true
+printer-profiles.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+zip.workspace = true
+
+[lints]
+workspace = true
+
+[dev-dependencies]
+format-chitu.workspace = true

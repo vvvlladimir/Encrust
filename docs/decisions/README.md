@@ -49,6 +49,12 @@ Grouped by what the decision governs; the number is still the order it was taken
 | [0162](0162-release-please-cuts-the-release.md) | release-please cuts the release, and the build workflow is called by it | Accepted |
 | [0172](0172-the-window-offers-a-signed-update-and-never-applies-one.md) | The window offers a signed update, and never applies one by itself | Accepted |
 | [0173](0173-a-pull-request-runs-linux-and-main-runs-the-rest.md) | A pull request runs Linux, and main runs the rest | Accepted |
+| [0174](0174-a-plate-is-a-crate-live-and-written-down.md) | A plate is a crate, live and written down | Accepted |
+| [0176](0176-the-command-line-is-encrust-with-subcommands.md) | The command line is `encrust`, with subcommands, JSON and a clean Ctrl-C | Accepted |
+| [0177](0177-the-cores-build-for-a-browser.md) | The cores build for a browser: wasm32, one thread, no clock, a cavity budget | Accepted |
+| [0179](0179-a-plate-file-is-toml-read-by-the-command-line.md) | A plate file is TOML, read by the command line alone | Accepted |
+| [0181](0181-the-window-runs-in-a-browser-on-workers.md) | The window runs in a browser, on workers sharing its memory | Accepted |
+| [0183](0183-the-web-build-works-offline-and-the-command-line-completes-and-remembers.md) | The web build works offline, and the command line completes and remembers its flags | Accepted |
 
 ### Geometry
 
@@ -110,6 +116,7 @@ Grouped by what the decision governs; the number is still the order it was taken
 | [0012](0012-streaming-sliced-file-writer.md) | Sliced-file writers take layers one at a time | Accepted |
 | [0013](0013-exposure-settings-in-the-material-profile.md) | Exposure and motion settings live in MaterialProfile | Accepted |
 | [0045](0045-sliced-files-are-written-to-a-seekable-sink.md) | Every sliced file is written to a seekable sink | Accepted |
+| [0175](0175-a-sliced-file-leaves-through-a-sink.md) | A sliced file leaves through a sink, not a path | Accepted |
 | [0067](0067-the-resin-volume-is-patched-in-at-finish.md) | The resin volume is patched into the header at `finish` | Accepted |
 | [0090](0090-exposure-is-banded-by-height.md) | Exposure varies by bands of height, and the bottom block is out of reach | Accepted |
 | [0128](0128-the-exposure-follows-the-layer-in-sight.md) | The exposure follows the layer in sight | Accepted |
@@ -186,6 +193,7 @@ Grouped by what the decision governs; the number is still the order it was taken
 | [0088](0088-the-plate-is-packed-as-a-bitmap.md) | The plate is packed as a bitmap into the corner, and the block centred | Accepted |
 | [0098](0098-a-plate-is-a-number-on-the-object.md) | A plate is a number on the object, not a scene of its own | Accepted |
 | [0101](0101-a-tool-works-on-the-selection-or-the-plate.md) | A tool works on what is picked, and on the whole plate only when nothing is | Accepted |
+| [0178](0178-a-project-names-its-cavities-and-the-engine-opens-it.md) | A project names its cavities, and the engine opens it into a plate | Accepted |
 
 ### Sliced-file formats
 
@@ -204,6 +212,7 @@ Grouped by what the decision governs; the number is still the order it was taken
 | [0169](0169-the-vector-container-traces-its-polygons-out-of-the-mask.md) | Trace the `.svgx` polygons out of the mask rather than carry contours to the writer | Accepted |
 | [0170](0170-the-cws-is-its-own-crate-and-only-the-plain-variant-is-written.md) | Write the `.cws` from its own crate, and only the plain variant | Accepted |
 | [0171](0171-a-count-read-from-a-file-is-checked-against-the-file.md) | Check every count a file states against the file before reserving for it | Accepted |
+| [0180](0180-a-sliced-file-is-converted-in-the-write-stage.md) | A sliced file is converted in the write stage, never resampled | Accepted |
 
 ### Printer and material profiles
 
@@ -229,16 +238,17 @@ Grouped by what the decision governs; the number is still the order it was taken
 | [0136](0136-a-network-protocol-is-a-crate-of-its-own.md) | A network protocol is a crate of its own | Accepted |
 | [0137](0137-the-network-client-is-synchronous.md) | The network client is synchronous | Accepted |
 | [0152](0152-the-file-goes-up-as-one-put-and-nothing-else.md) | The file goes up as one PUT and nothing else | Accepted |
-| [0153](0153-a-prusa-machine-is-set-up-not-discovered.md) | A Prusa machine is set up, not discovered | Accepted |
+| [0153](0153-a-prusa-machine-is-set-up-not-discovered.md) | A Prusa machine is set up, not discovered | Superseded by 0182 (where the enum lives only) |
 | [0154](0154-sdcp-version-one-is-the-same-crate-with-a-second-transport.md) | SDCP version 1 is the same crate with a second transport | Accepted |
 | [0155](0155-the-broker-and-the-file-server-are-written-here.md) | The broker and the file server are written here | Accepted |
+| [0182](0182-sending-is-a-crate-both-front-ends-share-and-a-browser-downloads.md) | Sending is a crate both front ends share, and a browser downloads | Accepted |
 
 ### The window and the command line
 
 | # | Decision | Status |
 |---|---|---|
 | [0011](0011-png-stack-in-the-cli.md) | The PNG stack lives in encrust-cli, written with png | Accepted |
-| [0014](0014-viewport-in-the-egui-render-pass.md) | The viewport paints into egui's own render pass | Accepted |
+| [0014](0014-viewport-in-the-egui-render-pass.md) | The viewport paints into egui's own render pass | Superseded by 0184 (the scene's pass only) |
 | [0015](0015-scene-owns-meshes-behind-arc.md) | The window owns the scene; meshes are shared behind Arc | Accepted |
 | [0017](0017-transform-gizmo-crate.md) | transform-gizmo-egui for the transform handles | Accepted |
 | [0018](0018-background-slicing-job.md) | Slicing runs on a worker thread and reports over a channel | Accepted |
@@ -246,11 +256,12 @@ Grouped by what the decision governs; the number is still the order it was taken
 | [0024](0024-design-tokens-and-bundled-typeface.md) | One token module paints the window; the typeface is compiled in | Accepted |
 | [0025](0025-fixed-window-layout.md) | Fixed panels instead of egui_dock | Accepted |
 | [0061](0061-the-section-slider-is-one-rail-in-both-modes.md) | The section slider is one rail, in both modes | Accepted |
-| [0062](0062-cap-the-section-cut-with-the-stencil-plane.md) | The section cut is capped with the stencil plane | Accepted |
+| [0062](0062-cap-the-section-cut-with-the-stencil-plane.md) | The section cut is capped with the stencil plane | Superseded by 0184 (where the stencil comes from only) |
 | [0068](0068-the-window-holds-no-stack.md) | The window holds no stack: it cuts the window it is showing | Accepted |
 | [0070](0070-a-mesh-is-drawn-in-buffer-sized-pieces.md) | A mesh is drawn in pieces the card will take | Accepted |
 | [0073](0073-the-viewport-subtracts-a-drain-per-fragment.md) | The viewport subtracts a drain per fragment | Accepted |
 | [0074](0074-the-section-cap-counts-material-not-crossings.md) | The section cap counts material, not crossings | Accepted |
+| [0184](0184-the-viewport-draws-into-its-own-target.md) | The viewport draws into its own target | Accepted |
 | [0097](0097-a-project-is-a-zip-of-a-manifest-and-the-meshes.md) | A project is a zip of a JSON manifest and the meshes | Accepted |
 | [0099](0099-unsaved-work-is-a-digest-asked-for-at-the-door.md) | Unsaved work is a digest of the manifest, asked for only at the door | Accepted |
 | [0100](0100-a-batch-is-the-single-run-once-per-model.md) | A batch is the single run, once per model, in the same binary | Accepted |

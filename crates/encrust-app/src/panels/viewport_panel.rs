@@ -7,7 +7,7 @@ use crate::drain::Placing;
 use crate::measure;
 use crate::panels::{Overlays, Window, section};
 use crate::pick::{occluded, pick, pick_surface, ray_through};
-use crate::plate::Plate;
+use crate::plate::BuildPlate;
 use crate::render::{Banding, Shading, ViewportCallback};
 use crate::scene::Scene;
 use crate::state::{Doc, Tools, View};
@@ -184,7 +184,7 @@ fn paint_plate(ui: &egui::Ui, window: &Window, rect: egui::Rect) {
             },
             textured: *window.tool == Tool::Relief,
         },
-        rect.width() / rect.height(),
+        rect,
     );
     ui.painter()
         .add(egui_wgpu::Callback::new_paint_callback(rect, callback));
@@ -398,7 +398,7 @@ fn size_labels(
 }
 
 /// Points the camera at everything on the plate, or at the plate itself when it is empty.
-pub fn frame_view(scene: &Scene, plate: &Plate, camera: &mut OrbitCamera) {
+pub fn frame_view(scene: &Scene, plate: &BuildPlate, camera: &mut OrbitCamera) {
     match scene.world_bounds() {
         Some(bounds) => camera.frame(&bounds),
         None => *camera = OrbitCamera::framing_plate(plate),
@@ -1101,7 +1101,7 @@ mod tests {
 
     #[test]
     fn framing_an_empty_scene_falls_back_to_the_plate() {
-        let plate = Plate::default();
+        let plate = BuildPlate::default();
         let mut camera = OrbitCamera::default();
         frame_view(&Scene::default(), &plate, &mut camera);
         assert_eq!(camera.target, plate.center());

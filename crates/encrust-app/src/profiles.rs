@@ -3,9 +3,10 @@
 use anyhow::Context as _;
 use printer_profiles::{MaterialProfile, PrinterProfile};
 
+use crate::files::{self, Handed, Wanted};
 use crate::import::recenter;
 use crate::panels::Window;
-use crate::plate::Plate;
+use crate::plate::BuildPlate;
 use crate::settings::{installed, installed_printers};
 use crate::slicing::Slicing;
 use crate::state::Machine;
@@ -91,16 +92,20 @@ pub fn resin_menu(ui: &mut egui::Ui, machine: &mut Machine) {
     }
 }
 
-/// Loads a printer profile the user picks off disk.
+/// Asks for a printer profile and loads it.
 pub fn open_printer(window: &mut Window) {
-    let Some(path) = rfd::FileDialog::new()
-        .add_filter("Printer profile", &["toml"])
-        .pick_file()
-    else {
-        return;
-    };
+    if let Some(file) = files::pick(Wanted::PrinterProfile) {
+        load_printer(window, &file);
+    }
+}
 
-    let loaded = PrinterProfile::load(&path)
+/// Loads a printer profile the user handed over.
+pub fn load_printer(window: &mut Window, file: &Handed) {
+    let path = file.path();
+    let loaded = file
+        .text()
+        .map_err(anyhow::Error::new)
+        .and_then(|text| Ok(PrinterProfile::from_toml_str(&text, path)?))
         .with_context(|| format!("cannot load the profile {}", path.display()));
     let Some(profile) = window
         .machine
@@ -118,7 +123,7 @@ pub fn open_printer(window: &mut Window) {
 /// put back over the new centre rather than left hanging off the old one. The machine on
 /// the network follows the profile, because it is bound to it; see ADR 0156.
 pub fn apply_printer(window: &mut Window, profile: PrinterProfile, id: Option<String>) {
-    window.doc.plate = Plate::from_profile(&profile);
+    window.doc.plate = BuildPlate::from_profile(&profile);
     window.machine.network.bind_to(id.clone());
     window.machine.slicing.set_printer(profile, id);
     for index in 0..window.doc.scene.objects().len() {
@@ -131,16 +136,20 @@ pub fn apply_printer(window: &mut Window, profile: PrinterProfile, id: Option<St
     );
 }
 
-/// Loads a resin profile, which brings the layer height it was measured at with it.
+/// Asks for a resin profile and loads it.
 pub fn open_material(slicing: &mut Slicing, status: &mut Status) {
-    let Some(path) = rfd::FileDialog::new()
-        .add_filter("Resin profile", &["toml"])
-        .pick_file()
-    else {
-        return;
-    };
+    if let Some(file) = files::pick(Wanted::ResinProfile) {
+        load_material(slicing, status, &file);
+    }
+}
 
-    let loaded = MaterialProfile::load(&path)
+/// Loads a resin profile, which brings the layer height it was measured at with it.
+pub fn load_material(slicing: &mut Slicing, status: &mut Status, file: &Handed) {
+    let path = file.path();
+    let loaded = file
+        .text()
+        .map_err(anyhow::Error::new)
+        .and_then(|text| Ok(MaterialProfile::from_toml_str(&text, path)?))
         .with_context(|| format!("cannot load the resin profile {}", path.display()));
     if let Some(material) = status.report(&format!("Loaded {}", path.display()), loaded) {
         slicing.resin_id = None;

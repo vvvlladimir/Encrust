@@ -1,4 +1,4 @@
-//! Embeds the icon in `encrust.exe`, where Explorer, the taskbar and the Start menu read it.
+//! Embeds the icon in `encrust-gui.exe`, where Explorer, the taskbar and the Start menu read it.
 
 fn main() -> std::io::Result<()> {
     println!("cargo:rerun-if-changed=../../assets/icon/encrust.ico");

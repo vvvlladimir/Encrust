@@ -17,6 +17,7 @@ pub use egui_phosphor::regular::{
     TREE_STRUCTURE as SUPPORTS, WARNING, WIFI_HIGH as NETWORK, X as CANCEL,
 };
 
-/// The window buttons the strip draws itself. macOS keeps its own over the content view.
-#[cfg(not(target_os = "macos"))]
+/// The window buttons the strip draws itself. macOS keeps its own over the content view,
+/// and a browser tab has the browser's.
+#[cfg(not(any(target_os = "macos", target_arch = "wasm32")))]
 pub use egui_phosphor::regular::{MINUS as MINIMISE, SQUARE as MAXIMISE};

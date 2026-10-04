@@ -124,15 +124,16 @@ jobs:
           TARGET: ${{ matrix.target }}
           ARCHIVE: ${{ matrix.archive }}
         run: |
-          out=staging/encrust
+          # `Encrust/`, not `encrust/`: a window from before ADR 0176 must not find the CLI there.
+          out=staging/Encrust
           mkdir -p "$out"
           if [ "$RUNNER_OS" = "Windows" ]; then ext=.exe; else ext=""; fi
+          cp "target/$TARGET/release/encrust-gui$ext" "$out/"
           cp "target/$TARGET/release/encrust$ext" "$out/"
-          cp "target/$TARGET/release/slice$ext" "$out/"
           cp LICENSE README.md "$out/"
           case "$ARCHIVE" in
-            *.zip) (cd staging && 7z a "../$ARCHIVE" encrust) ;;
-            *) tar -czf "$ARCHIVE" -C staging encrust ;;
+            *.zip) (cd staging && 7z a "../$ARCHIVE" Encrust) ;;
+            *) tar -czf "$ARCHIVE" -C staging Encrust ;;
           esac
 
       - name: Install cargo-packager
@@ -169,6 +170,59 @@ jobs:
           done
           ls installers
           gh release upload "$TAG" "$ARCHIVE" installers/* --clobber --repo "$GITHUB_REPOSITORY"
+
+  # The window built for a browser, as one archive the site unpacks under /app/run/ (encrust-site,
+  # scripts/web-app.mjs). The site takes it from the latest published release, so it ships when the
+  # desktop builds do. It is not in the update feed: a browser updates through its service worker.
+  # The nightly is pinned so that the same tag builds the same module twice. See
+  # docs/design/web-build.md.
+  web:
+    needs: draft
+    runs-on: ubuntu-latest
+    env:
+      TOOLCHAIN: nightly-2026-10-01
+      BINARYEN: version_133
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ inputs.tag }}
+
+      - name: Install the nightly with the standard library's source
+        run: |
+          rustup toolchain install "$TOOLCHAIN" --profile minimal --component rust-src
+          rustup target add wasm32-unknown-unknown --toolchain "$TOOLCHAIN"
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: web-release
+
+      # wasm-bindgen-cli must be the exact version of the crate, which the lock names.
+      - name: Install wasm-bindgen and wasm-opt
+        run: |
+          version=$(grep -A1 '^name = "wasm-bindgen"$' Cargo.lock | sed -n 's/^version = "\(.*\)"$/\1/p')
+          cargo install wasm-bindgen-cli --version "$version" --locked
+          curl -fsSL "https://github.com/WebAssembly/binaryen/releases/download/$BINARYEN/binaryen-$BINARYEN-x86_64-linux.tar.gz" \
+            | tar -xz -C "$RUNNER_TEMP"
+          echo "$RUNNER_TEMP/binaryen-$BINARYEN/bin" >> "$GITHUB_PATH"
+
+      - name: Build
+        run: cargo xtask web --toolchain "$TOOLCHAIN"
+
+      # Cloudflare serves no single file over 25 MiB, so a module past that could never go live.
+      - name: Pack and attach to the draft
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ inputs.tag }}
+        run: |
+          size=$(stat -c %s target/web/dist/encrust_web_bg.wasm)
+          test "$size" -le 26214400 || {
+            echo "encrust_web_bg.wasm is $size bytes, over Cloudflare's 25 MiB per file" >&2
+            exit 1
+          }
+          tar -czf encrust-web.tar.gz -C target/web/dist .
+          sha256sum encrust-web.tar.gz | cut -d' ' -f1 > encrust-web.tar.gz.sha256
+          gh release upload "$TAG" encrust-web.tar.gz encrust-web.tar.gz.sha256 --clobber \
+            --repo "$GITHUB_REPOSITORY"
 
   # One job holds the signing key, after every leg has uploaded, so the feed names every archive.
   # The trusted comment binds a signature to its version and file name, which the window checks;
@@ -209,6 +263,8 @@ jobs:
           for path in dist/encrust-*.tar.gz dist/encrust-*.zip; do
             [ -e "$path" ] || continue
             archive=$(basename "$path")
+            # The browser build is no platform the window could update to.
+            [ "$archive" = encrust-web.tar.gz ] && continue
             minisign -S -s "$key" -m "$path" -t "encrust $version $archive"
             # Against the key compiled into the window, so a secret that drifted from it fails here
             # rather than in every user's update.

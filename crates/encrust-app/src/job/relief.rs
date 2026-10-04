@@ -60,7 +60,7 @@ impl ReliefJob {
     /// Starts the run. The thread is detached: it ends on its own.
     pub fn spawn(request: ReliefRequest) -> Self {
         let (sender, outcome) = mpsc::channel();
-        std::thread::spawn(move || {
+        crate::job::spawn(move || {
             let _ = sender.send(run(&request));
         });
         Self { outcome }

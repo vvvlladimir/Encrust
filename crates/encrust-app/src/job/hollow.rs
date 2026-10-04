@@ -78,7 +78,7 @@ impl HollowJob {
         let cancel = Arc::new(AtomicBool::new(false));
         let worker_cancel = Arc::clone(&cancel);
 
-        std::thread::spawn(move || {
+        crate::job::spawn(move || {
             let outcome = run(&request, &worker_cancel, &mut |fraction| {
                 let _ = sender.send(Report::Progress(fraction));
             });

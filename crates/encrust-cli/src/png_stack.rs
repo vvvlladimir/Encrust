@@ -3,35 +3,42 @@ use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result};
 use core_analysis::Measured;
+use core_geometry::Mesh;
 use core_pipeline::Tolerance;
 use core_raster::{LayerRuns, RasterSettings};
+use core_slicer::Windows;
 
+use crate::exit::Stop;
 use crate::raster_report::RasterReport;
 use crate::slice_report::SliceReport;
-use crate::slicing::Plan;
 use crate::stack::{report_for, stream_into};
 
 /// Slices and rasterises into `directory` as `layer_NNNN.png`, a window at a time.
+#[allow(clippy::too_many_arguments)]
 pub fn write_stack(
-    plan: &Plan,
+    mesh: &Mesh,
+    windows: &Windows,
     slice: &mut SliceReport,
     settings: &RasterSettings,
     directory: &Path,
     tolerance: &Tolerance,
     window: usize,
     fold: Measured,
+    stop: &Stop,
 ) -> Result<RasterReport> {
+    let created = !directory.exists();
     fs::create_dir_all(directory)
         .with_context(|| format!("cannot create {}", directory.display()))?;
 
     let mut index = 0;
     let mut report = report_for(directory.to_owned(), settings, fold);
-    plan.stream(|sliced| {
+    let streamed = windows.stream(mesh, |sliced| {
+        stop.check()?;
         slice.absorb(sliced);
         stream_into(
             &mut report,
             &sliced.layers,
-            plan.layers(),
+            windows.plan(),
             tolerance,
             window,
             to_png,
@@ -41,8 +48,24 @@ pub fn write_stack(
                 fs::write(&path, &png).with_context(|| format!("cannot write {}", path.display()))
             },
         )
-    })?;
+    });
+    if let Err(error) = streamed {
+        remove_stack(directory, index, created);
+        return Err(error);
+    }
     Ok(report)
+}
+
+/// Takes back the first `written` layers of a stack that did not finish, so a shorter
+/// stack is never left to pass for a whole one, and the directory too if this run made it.
+fn remove_stack(directory: &Path, written: usize, created: bool) {
+    for index in 0..written {
+        let _ = fs::remove_file(layer_path(directory, index));
+    }
+    if created {
+        // Fails, and so keeps the directory, if anything else has landed in it since.
+        let _ = fs::remove_dir(directory);
+    }
 }
 
 /// Expands a layer into the same 8-bit greyscale PNG the archive containers hold one of

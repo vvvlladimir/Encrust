@@ -117,6 +117,7 @@ fn job(machine: &Machine) -> Option<PrintJob> {
         volume_mm3: 0.0,
         exposure: ExposurePlan::new(slicing.exposure.clone()),
         thumbnail: None,
+        created_unix_s: 0,
     })
 }
 

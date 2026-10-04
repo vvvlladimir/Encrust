@@ -1,0 +1,33 @@
+name: Notify the site
+
+# Publishing a release is what puts its browser build on encrust.app/app/run/: this tells the site
+# repository, whose sync-web-app workflow pins the new release and so redeploys the site. The site
+# also checks once a day, so a missed or failed run here only delays the update.
+#
+# A release is published by hand (see release.yml), so this event fires. GITHUB_TOKEN cannot reach
+# another repository: SITE_DISPATCH_TOKEN is a fine-grained token with Contents: read and write on
+# vvvlladimir/Encrust-site only, which is what a repository_dispatch asks for.
+
+on:
+  release:
+    types: [published]
+
+permissions:
+  contents: read
+
+jobs:
+  dispatch:
+    if: ${{ !github.event.release.prerelease }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Send app-released to the site
+        env:
+          GH_TOKEN: ${{ secrets.SITE_DISPATCH_TOKEN }}
+          TAG: ${{ github.event.release.tag_name }}
+        run: |
+          test -n "$GH_TOKEN" || {
+            echo "the SITE_DISPATCH_TOKEN secret is not set; the site will pick $TAG up on its daily check" >&2
+            exit 0
+          }
+          gh api repos/vvvlladimir/Encrust-site/dispatches \
+            -f event_type=app-released -f "client_payload[tag]=$TAG"

@@ -1,7 +1,8 @@
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use std::sync::mpsc::{self, Receiver, TryRecvError};
 
-use crate::plate::Plate;
+use crate::files::Handed;
+use crate::plate::BuildPlate;
 use crate::scene::Imported;
 
 /// What an import is doing. Reading is the file, repairing is welding and orienting, and
@@ -46,7 +47,7 @@ enum Report {
 #[derive(Debug)]
 pub struct ImportJob {
     reports: Receiver<Report>,
-    path: PathBuf,
+    file: Handed,
     stage: ImportStage,
 }
 
@@ -54,12 +55,12 @@ impl ImportJob {
     /// Starts the import. The thread is detached: nothing can cancel a read that is
     /// already under way, and an import that finishes into a dropped handle is dropped
     /// with it.
-    pub fn spawn(path: PathBuf, plate: Plate) -> Self {
+    pub fn spawn(file: Handed, plate: BuildPlate) -> Self {
         let (sender, reports) = mpsc::channel();
-        let worker_path = path.clone();
+        let worker_file = file.clone();
 
-        std::thread::spawn(move || {
-            let outcome = match crate::import::prepare(&worker_path, &plate, &mut |stage| {
+        crate::job::spawn(move || {
+            let outcome = match crate::import::prepare(&worker_file, &plate, &mut |stage| {
                 let _ = sender.send(Report::Stage(stage));
             }) {
                 Ok(imported) => ImportOutcome::Opened(Box::new(imported)),
@@ -76,7 +77,7 @@ impl ImportJob {
 
         Self {
             reports,
-            path,
+            file,
             stage: ImportStage::Reading,
         }
     }
@@ -99,12 +100,13 @@ impl ImportJob {
     }
 
     pub fn path(&self) -> &Path {
-        &self.path
+        self.file.path()
     }
 
     pub fn label(&self) -> String {
-        let name = self.path.file_name().map_or_else(
-            || self.path.display().to_string(),
+        let path = self.path();
+        let name = path.file_name().map_or_else(
+            || path.display().to_string(),
             |name| name.to_string_lossy().into_owned(),
         );
         format!("{} {name}", self.stage.label())
@@ -117,7 +119,10 @@ mod tests {
 
     #[test]
     fn a_file_that_is_not_there_comes_back_as_a_failure() {
-        let mut job = ImportJob::spawn(PathBuf::from("no-such-model.stl"), Plate::default());
+        let mut job = ImportJob::spawn(
+            Handed::Path("no-such-model.stl".into()),
+            BuildPlate::default(),
+        );
         let outcome = loop {
             if let Some(outcome) = job.poll() {
                 break outcome;
@@ -133,7 +138,10 @@ mod tests {
 
     #[test]
     fn a_running_import_says_which_file_it_is_on() {
-        let job = ImportJob::spawn(PathBuf::from("/models/dragon.stl"), Plate::default());
+        let job = ImportJob::spawn(
+            Handed::Path("/models/dragon.stl".into()),
+            BuildPlate::default(),
+        );
         assert!(job.label().ends_with("dragon.stl"), "got {}", job.label());
         assert_eq!(job.path(), Path::new("/models/dragon.stl"));
     }

@@ -109,6 +109,7 @@ fn job(plan: core_slicer::LayerPlan, raster: RasterSettings) -> PrintJob {
         volume_mm3: 0.0,
         exposure: ExposurePlan::default(),
         thumbnail: None,
+        created_unix_s: 0,
     }
 }
 
@@ -118,6 +119,14 @@ fn temp(name: &str, extension: &str) -> PathBuf {
         "encrust-pipeline-{}-{name}.{extension}",
         std::process::id()
     ))
+}
+
+/// What a file on disk is called, without its directory or its extension.
+fn name_of(path: &Path) -> String {
+    path.file_stem()
+        .unwrap_or_default()
+        .to_string_lossy()
+        .into_owned()
 }
 
 /// Writes `mesh` and hands back the file's path and what the run came to.
@@ -135,7 +144,7 @@ fn run(
     write_stack(
         &Writing {
             format,
-            path,
+            name: &name_of(path),
             job: &job,
             mesh,
             windows: &windows,
@@ -143,6 +152,7 @@ fn run(
             window,
             fold,
         },
+        path,
         observer,
     )
     .expect("the box writes")
@@ -324,7 +334,7 @@ fn a_run_whose_file_cannot_be_created_names_the_path() {
     let error = write_stack(
         &Writing {
             format: SlicedFormat::Goo,
-            path: &path,
+            name: &name_of(&path),
             job: &job,
             mesh: &mesh,
             windows: &windows,
@@ -332,6 +342,7 @@ fn a_run_whose_file_cannot_be_created_names_the_path() {
             window: 2,
             fold: Measured::new(0),
         },
+        &path,
         &mut (),
     )
     .expect_err("writing into a directory that does not exist cannot succeed");
@@ -439,7 +450,7 @@ fn rounding_the_greys_still_writes_the_stack() {
     let written = write_stack(
         &Writing {
             format: SlicedFormat::Goo,
-            path: &path,
+            name: &name_of(&path),
             job: &job,
             mesh: &mesh,
             windows: &windows,
@@ -447,6 +458,7 @@ fn rounding_the_greys_still_writes_the_stack() {
             window: 2,
             fold: Measured::new(0),
         },
+        &path,
         &mut (),
     )
     .expect("the box writes")

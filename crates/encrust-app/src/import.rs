@@ -1,4 +1,3 @@
-use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use anyhow::{Context, Result};
@@ -6,12 +5,13 @@ use core_geometry::{
     DEFAULT_WELD_TOLERANCE, Heightmap, Transform, Welded, center_over_plate, diagnose,
     drop_to_plate, orient_outward, weld,
 };
-use core_mesh_io::{Loaded, loader_for_extension};
+use core_mesh_io::{Loaded, ModelFile, loader_for_extension};
 
 use crate::camera::OrbitCamera;
+use crate::files::{self, Handed, Wanted};
 use crate::job::{ImportJob, ImportOutcome, ImportStage};
 use crate::panels::frame_view;
-use crate::plate::Plate;
+use crate::plate::BuildPlate;
 use crate::scene::{ImportSummary, Imported, Mapped, Scene};
 use crate::status::Status;
 
@@ -26,19 +26,16 @@ pub struct Imports {
 
 impl Imports {
     /// Asks for a mesh file and starts opening it.
-    pub fn open_dialog(&mut self, plate: &Plate, status: &mut Status) {
-        if let Some(path) = rfd::FileDialog::new()
-            .add_filter("Mesh", &["stl", "obj", "3mf"])
-            .pick_file()
-        {
-            self.open(path, plate, status);
+    pub fn open_dialog(&mut self, plate: &BuildPlate, status: &mut Status) {
+        if let Some(file) = files::pick(Wanted::Model) {
+            self.open(file, plate, status);
         }
     }
 
-    /// Starts opening a mesh by path. The one way a model reaches the plate.
-    pub fn open(&mut self, path: PathBuf, plate: &Plate, status: &mut Status) {
-        *status = Status::Info(format!("Opening {}", path.display()));
-        self.jobs.push(ImportJob::spawn(path, plate.clone()));
+    /// Starts opening a mesh. The one way a model reaches the plate.
+    pub fn open(&mut self, file: Handed, plate: &BuildPlate, status: &mut Status) {
+        *status = Status::Info(format!("Opening {}", file.path().display()));
+        self.jobs.push(ImportJob::spawn(file, plate.clone()));
     }
 
     pub fn is_busy(&self) -> bool {
@@ -60,7 +57,7 @@ impl Imports {
     pub fn poll(
         &mut self,
         scene: &mut Scene,
-        plate: &Plate,
+        plate: &BuildPlate,
         camera: &mut OrbitCamera,
         status: &mut Status,
     ) -> bool {
@@ -98,7 +95,12 @@ impl Imports {
 /// The repair order matches the CLI's: weld first, because on an unwelded mesh every edge
 /// looks like a boundary and neither the orientation fix nor the diagnostics mean
 /// anything. `stage` is called before each part of the work starts.
-pub fn prepare(path: &Path, plate: &Plate, stage: &mut dyn FnMut(ImportStage)) -> Result<Imported> {
+pub fn prepare(
+    file: &Handed,
+    plate: &BuildPlate,
+    stage: &mut dyn FnMut(ImportStage),
+) -> Result<Imported> {
+    let path = file.path();
     let extension = path
         .extension()
         .and_then(|e| e.to_str())
@@ -108,9 +110,15 @@ pub fn prepare(path: &Path, plate: &Plate, stage: &mut dyn FnMut(ImportStage)) -
         .with_context(|| format!("cannot load {}", path.display()))?;
 
     stage(ImportStage::Reading);
-    let loaded = loader
-        .load(path)
-        .with_context(|| format!("cannot load {}", path.display()))?;
+    let loaded = match file {
+        Handed::Path(path) => loader.load(path),
+        Handed::Bytes { bytes, .. } => loader.read(ModelFile {
+            path,
+            source: &mut std::io::Cursor::new(&bytes[..]),
+            beside: &|name| file.beside(name),
+        }),
+    }
+    .with_context(|| format!("cannot load {}", path.display()))?;
 
     stage(ImportStage::Repairing);
     // Repaired in place and moved out at the end, so a mesh of tens of megabytes is
@@ -190,7 +198,7 @@ fn mapped(loaded: &Loaded, welded: &Welded, before: &[[u32; 3]]) -> Option<Arc<M
 }
 
 /// Puts an already placed object back in the middle of the plate, standing on z = 0.
-pub fn recenter(scene: &mut Scene, plate: &Plate, index: usize) -> Option<()> {
+pub fn recenter(scene: &mut Scene, plate: &BuildPlate, index: usize) -> Option<()> {
     let object = scene.objects_mut().get_mut(index)?;
     let bounds = object.world_bounds()?;
     object.transform.translation +=
@@ -201,7 +209,7 @@ pub fn recenter(scene: &mut Scene, plate: &Plate, index: usize) -> Option<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::path::PathBuf;
+    use std::path::{Path, PathBuf};
 
     fn fixture(name: &str) -> PathBuf {
         PathBuf::from(env!("CARGO_MANIFEST_DIR"))
@@ -211,7 +219,11 @@ mod tests {
 
     /// Prepares a file with the stages thrown away, which is what the tests care about.
     fn prepared(path: &Path) -> Result<Imported> {
-        prepare(path, &Plate::default(), &mut |_| {})
+        prepare(
+            &Handed::Path(path.to_owned()),
+            &BuildPlate::default(),
+            &mut |_| {},
+        )
     }
 
     #[test]
@@ -238,5 +250,17 @@ mod tests {
             "an import stands on the plate, got {}",
             imported.transform.translation
         );
+    }
+
+    #[test]
+    fn a_model_handed_over_as_bytes_opens_as_it_does_from_disk() {
+        let bytes = std::fs::read(fixture("cube.stl")).expect("the fixture is checked in");
+        let handed = Handed::bytes("cube.stl", bytes.into());
+        let imported =
+            prepare(&handed, &BuildPlate::default(), &mut |_| {}).expect("a sound cube opens");
+        let from_disk = prepared(&fixture("cube.stl")).expect("a sound cube opens");
+
+        assert_eq!(imported.name, "cube");
+        assert_eq!(imported.mesh.faces.len(), from_disk.mesh.faces.len());
     }
 }

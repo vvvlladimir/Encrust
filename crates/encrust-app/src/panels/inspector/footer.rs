@@ -1,7 +1,9 @@
 use anyhow::Context as _;
 use printer_profiles::Connection;
 
-use crate::job::{SlicedFormat, applied_to, label_of};
+use crate::job::SlicedFormat;
+#[cfg(not(target_arch = "wasm32"))]
+use crate::job::{applied_to, label_of};
 use crate::network::{Reach, temporary_path};
 use crate::panels::Window;
 use crate::scene::Scene;
@@ -218,6 +220,10 @@ struct Bound {
 }
 
 fn bound_machine(machine: &mut Machine) -> Option<Bound> {
+    // A browser reaches no printer, so the file is only ever downloaded (ADR 0182).
+    if cfg!(target_arch = "wasm32") {
+        return None;
+    }
     let connection = machine
         .slicing
         .printer
@@ -277,16 +283,9 @@ fn start(scene: &Scene, slicing: &mut Slicing, status: &mut Status, run: Run, vi
         let _ = status.report("Slicing", started);
         return;
     }
-    // The chosen format goes first, so the dialog offers it; the others stay reachable,
-    // because the name is what decides in the end.
-    let mut dialog = rfd::FileDialog::new().set_file_name(default_file_name(scene, format));
-    for choice in [format].into_iter().chain(SlicedFormat::CHOICES) {
-        dialog = dialog.add_filter(label_of(choice), &[choice.extension()]);
-    }
-    let Some(path) = dialog.save_file() else {
+    let Some(path) = save_path(scene, format) else {
         return;
     };
-    let path = applied_to(format, path);
 
     if run == Run::EveryPlate {
         let queued = slicing.start_all(scene, &path, status);
@@ -300,6 +299,23 @@ fn start(scene: &Scene, slicing: &mut Slicing, status: &mut Status, run: Run, vi
         .start(scene, scene.active_plate(), path.clone())
         .with_context(|| format!("cannot slice into {}", path.display()));
     let _ = status.report(&format!("Slicing into {}", path.display()), started);
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+fn save_path(scene: &Scene, format: SlicedFormat) -> Option<std::path::PathBuf> {
+    // The chosen format goes first, so the dialog offers it; the others stay reachable,
+    // because the name is what decides in the end.
+    let mut dialog = rfd::FileDialog::new().set_file_name(default_file_name(scene, format));
+    for choice in [format].into_iter().chain(SlicedFormat::CHOICES) {
+        dialog = dialog.add_filter(label_of(choice), &[choice.extension()]);
+    }
+    Some(applied_to(format, dialog.save_file()?))
+}
+
+/// A browser asks where a download goes itself, so the file is only named.
+#[cfg(target_arch = "wasm32")]
+fn save_path(scene: &Scene, format: SlicedFormat) -> Option<std::path::PathBuf> {
+    Some(default_file_name(scene, format).into())
 }
 
 /// The selected model's name, or the first one's, so the dialog opens on something

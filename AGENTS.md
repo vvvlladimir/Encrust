@@ -9,9 +9,11 @@ cargo fmt --all
 cargo clippy --workspace --all-targets -- -D warnings
 cargo test --workspace
 cargo bench --workspace
-cargo run --release -p encrust-cli --bin slice -- model.stl \
+cargo run --release -p encrust-cli --bin encrust -- slice model.stl \
   --printer elegoo-mars-4-ultra --resin standard-grey --center -o model.goo
 cargo xtask gen-profiles --source <dir of .ini profiles> --dry-run
+cargo xtask web   # the window for a browser, on nightly: docs/design/web-build.md
+cargo xtask man   # the command line's man pages, into target/man
 ```
 
 The first three pass before any piece of work is done.

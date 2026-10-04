@@ -1,7 +1,7 @@
 use core_geometry::{Scalar, Vec2, Vec3};
 use core_plate::{ArrangeSettings, Footprint, arrange};
 
-use crate::plate::Plate;
+use crate::plate::BuildPlate;
 use crate::scene::Scene;
 use crate::status::Status;
 
@@ -9,7 +9,7 @@ use crate::status::Status;
 ///
 /// The footprint is the model itself: the supports under it lean outside it, and the
 /// clearance is what covers them until a support mesh is packed with its model.
-pub fn arrange_plate(scene: &mut Scene, plate: &Plate, clearance_mm: Scalar) -> Status {
+pub fn arrange_plate(scene: &mut Scene, plate: &BuildPlate, clearance_mm: Scalar) -> Status {
     let settings = ArrangeSettings {
         clearance_mm,
         ..ArrangeSettings::default()
@@ -83,8 +83,8 @@ mod tests {
         Mesh::new(vertices, faces)
     }
 
-    fn plate() -> Plate {
-        Plate {
+    fn plate() -> BuildPlate {
+        BuildPlate {
             name: None,
             x_mm: 150.0,
             y_mm: 80.0,

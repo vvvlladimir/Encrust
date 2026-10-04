@@ -16,6 +16,9 @@ use crate::ui::{count_row, hint, icon, number_row, picker, switch, text_row};
 const FINE_STEP: f64 = 0.01;
 const COARSE_STEP: f64 = 0.1;
 
+const BROWSER_SENDS_NOTHING: &str = "A browser cannot reach a printer on your network. \
+    What is sliced downloads, and goes over on a stick or through the printer's own app.";
+
 /// The machine open in the list, written back as it is edited.
 pub fn form(ui: &mut egui::Ui, window: &mut Window) {
     let machine = &mut *window.machine;
@@ -30,8 +33,10 @@ pub fn form(ui: &mut egui::Ui, window: &mut Window) {
     form_card(ui, "Display", |ui| display(ui, profile));
     form_card(ui, "Build volume", |ui| volume(ui, profile));
     form_card(ui, "Output", |ui| output(ui, profile));
-    form_card(ui, "Network", |ui| {
-        connection::card(ui, &id, &mut profile.connection, &mut machine.network);
+    // A browser reaches no printer, so a file is downloaded instead (ADR 0182).
+    form_card(ui, "Network", |ui| match cfg!(target_arch = "wasm32") {
+        true => hint(ui, BROWSER_SENDS_NOTHING),
+        false => connection::card(ui, &id, &mut profile.connection, &mut machine.network),
     });
     form_card(ui, "Firmware", |ui| firmware(ui, profile));
 

@@ -1,0 +1,25 @@
+[package]
+name = "web-engine"
+description = "The engine for a browser: a project in, a sliced file out, over wasm-bindgen."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+publish = false
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+core-engine.workspace = true
+core-pipeline.workspace = true
+thiserror.workspace = true
+wasm-bindgen.workspace = true
+
+[lints]
+workspace = true
+
+[dev-dependencies]
+core-volume.workspace = true

@@ -1,11 +1,8 @@
-use egui::{Align2, Frame, Id, Pos2, Rect, Vec2, vec2};
+use egui::{Align2, Frame, Id, Pos2, Rect};
 
-use crate::panels::{Window, frame_view, mask_pane, section, viewport_panel};
-use crate::ui::{card, icon, icon_button, secondary_button, theme};
+use crate::panels::{Window, mask_pane, view_column, viewport_panel};
+use crate::ui::{card, icon, secondary_button, theme};
 use crate::workspace::Mode;
-
-/// Points between a floating card and the edge of the stage it is anchored to.
-const INSET: f32 = 12.0;
 
 /// Where the cards over the stage ended up last frame.
 ///
@@ -54,75 +51,9 @@ pub fn ui(ui: &mut egui::Ui, window: &mut Window) {
         rects.push(empty_state(ui, viewport, window));
     }
 
-    rects.push(overlay(
-        ui,
-        "view-tools",
-        viewport,
-        Align2::RIGHT_TOP,
-        card().inner_margin(3),
-        |ui| view_tools(ui, window),
-    ));
-
-    // The section rail is centred down the right edge of the stage rather than laid
-    // across the bottom, so that one control moves the cut in both modes, and so that
-    // Preview parks it against the mask; see `docs/decisions/0061`.
-    if section::is_available(window) {
-        let slider_h = section::slider_height(stage.height());
-        rects.push(overlay(
-            ui,
-            "section-rail",
-            stage,
-            Align2::RIGHT_CENTER,
-            card(),
-            |ui| section::ui(ui, window, slider_h),
-        ));
-    }
+    rects.extend(view_column::ui(ui, window, viewport, stage));
 
     window.view.overlays.rects = rects;
-}
-
-/// A card floating against one edge of `against`. Returns the room it took.
-fn overlay(
-    ui: &egui::Ui,
-    id: &str,
-    against: Rect,
-    corner: Align2,
-    frame: Frame,
-    add: impl FnOnce(&mut egui::Ui),
-) -> Rect {
-    // `to_sign` is -1 at a Min edge and +1 at a Max one, so subtracting it walks the
-    // anchor inwards whichever edge the card is pinned to.
-    let sign = Vec2::new(corner.x().to_sign(), corner.y().to_sign());
-    let anchor = corner.pos_in_rect(&against) - sign * INSET;
-
-    egui::Area::new(Id::new(id))
-        .order(egui::Order::Middle)
-        .fixed_pos(anchor)
-        .pivot(corner)
-        .constrain_to(against)
-        .show(ui.ctx(), |ui| {
-            frame.show(ui, add);
-        })
-        .response
-        .rect
-}
-
-/// What the viewport draws besides the models, and how to point the camera at them.
-fn view_tools(ui: &mut egui::Ui, window: &mut Window) {
-    ui.spacing_mut().item_spacing = vec2(2.0, 2.0);
-    ui.vertical(|ui| {
-        if icon_button(ui, icon::FRAME, "Frame view").clicked() {
-            frame_view(
-                &window.doc.scene,
-                &window.doc.plate,
-                &mut window.view.camera,
-            );
-        }
-        let grid = &mut window.view.options.grid;
-        if icon_button(ui, icon::GRID, "Plate grid").clicked() {
-            *grid = !*grid;
-        }
-    });
 }
 
 /// The whole viewport when there is nothing on the plate: one card, one thing to do.

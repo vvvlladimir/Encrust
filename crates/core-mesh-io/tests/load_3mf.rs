@@ -1,12 +1,29 @@
 use std::path::Path;
 
 use core_geometry::{Mapping, Vec2, Vec3, signed_volume};
-use core_mesh_io::{MeshIoError, MeshLoader, ThreeMfLoader, loader_for_extension};
+use core_mesh_io::{MeshIoError, MeshLoader, ModelFile, ThreeMfLoader, loader_for_extension};
 
 fn fixture(name: &str) -> std::path::PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("tests/fixtures")
         .join(name)
+}
+
+#[test]
+fn a_3mf_in_memory_reads_as_it_does_from_disk() {
+    let bytes = std::fs::read(fixture("tetrahedron.3mf")).expect("the fixture is there");
+    let mesh = ThreeMfLoader
+        .read(ModelFile {
+            path: Path::new("tetrahedron.3mf"),
+            source: &mut std::io::Cursor::new(bytes),
+            beside: &|_| None,
+        })
+        .expect("the bytes are the fixture")
+        .mesh;
+
+    // The same unit corner tetrahedron the file on disk is.
+    assert_eq!(mesh.faces.len(), 4);
+    assert_eq!(mesh.aabb().map(|aabb| aabb.maxs), Some(Vec3::ONE));
 }
 
 #[test]

@@ -1,6 +1,6 @@
 # 0062. Cap the section cut with the stencil plane
 
-- **Status:** Accepted
+- **Status:** Superseded by 0184 (where the stencil comes from only)
 - **Date:** 2026-09-22
 
 ## Context

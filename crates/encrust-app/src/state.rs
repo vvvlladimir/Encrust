@@ -8,7 +8,7 @@ use crate::measure::Measure;
 use crate::network::Network;
 use crate::orient::OrientTool;
 use crate::panels::Overlays;
-use crate::plate::Plate;
+use crate::plate::BuildPlate;
 use crate::preview::Preview;
 use crate::project::Opened;
 use crate::relief::ReliefTool;
@@ -27,7 +27,7 @@ use crate::workspace::{Array, Section, ViewOptions};
 #[derive(Default)]
 pub struct Doc {
     pub scene: Scene,
-    pub plate: Plate,
+    pub plate: BuildPlate,
     pub history: History,
     pub project: Opened,
     pub imports: Imports,
@@ -45,7 +45,7 @@ pub struct View {
 
 impl View {
     /// A view framing `plate` from the default angle.
-    pub fn framing(plate: &Plate) -> Self {
+    pub fn framing(plate: &BuildPlate) -> Self {
         Self {
             options: ViewOptions::default(),
             camera: OrbitCamera::framing_plate(plate),

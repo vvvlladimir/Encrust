@@ -26,9 +26,10 @@ pub enum PipelineError {
         source: std::io::Error,
     },
 
-    #[error("cannot write {}", path.display())]
+    #[error("cannot write {name}")]
     Write {
-        path: PathBuf,
+        /// What the file being written is called, without its directory or extension.
+        name: String,
         #[source]
         source: FormatError,
     },
@@ -43,6 +44,37 @@ pub enum PipelineError {
     #[error("cannot open {}", path.display())]
     Open {
         path: PathBuf,
+        #[source]
+        source: FormatError,
+    },
+
+    #[error(
+        "the file's masks are {} x {} px and the printer's panel is {} x {} px; a mask is not resampled",
+        file_px.0, file_px.1, printer_px.0, printer_px.1
+    )]
+    PanelMismatch {
+        file_px: (u32, u32),
+        printer_px: (u32, u32),
+    },
+
+    #[error(
+        "the file's masks were drawn for a {:.2} x {:.2} mm panel and the printer's is {:.2} x {:.2} mm; the print would come out at the wrong scale",
+        file_mm.0, file_mm.1, printer_mm.0, printer_mm.1
+    )]
+    PanelSizeMismatch {
+        /// Panel size the file records, millimetres.
+        file_mm: (f32, f32),
+        /// Panel size of the printer converted to, millimetres.
+        printer_mm: (f32, f32),
+    },
+
+    #[error("the file's layers are not all one height, which a conversion cannot carry yet")]
+    VaryingHeights,
+
+    #[error("cannot decode layer {layer}")]
+    Decode {
+        /// Index of the layer, counted from zero.
+        layer: usize,
         #[source]
         source: FormatError,
     },
