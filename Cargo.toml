@@ -23,6 +23,7 @@ core-volume = { path = "crates/core-volume" }
 core-plate = { path = "crates/core-plate" }
 core-pipeline = { path = "crates/core-pipeline" }
 core-engine = { path = "crates/core-engine" }
+encrust-cli = { path = "crates/encrust-cli" }
 encrust-app = { path = "crates/encrust-app" }
 core-format = { path = "crates/core-format" }
 core-thumbnail = { path = "crates/core-thumbnail" }
@@ -63,6 +64,9 @@ web-time = "1.1"
 getrandom = "0.3"
 getrandom-04 = { package = "getrandom", version = "0.4" }
 clap = { version = "4.6", features = ["derive", "env"] }
+# Shell completions from the command line, and its man page from xtask; see docs/decisions/0183.
+clap_complete = "4.6"
+clap_mangen = "0.3"
 # The command line's progress bar and its Ctrl-C; see docs/decisions/0176.
 indicatif = { version = "0.18", default-features = false }
 ctrlc = "3.5"

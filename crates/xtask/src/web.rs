@@ -1,6 +1,7 @@
 //! `cargo xtask web`: the window built for a browser, with threads, ready to serve. What
 //! each step is for is in `docs/design/web-build.md`.
 
+use std::hash::{DefaultHasher, Hash as _, Hasher as _};
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
@@ -61,10 +62,15 @@ pub fn run(args: &Args) -> Result<()> {
     if args.check {
         return Ok(());
     }
+    // A file left from an earlier build would be kept for offline use; only a directory
+    // under `target/` is ours to empty.
+    if pkg.starts_with(root.join("target")) && pkg.exists() {
+        std::fs::remove_dir_all(&pkg).with_context(|| format!("cannot empty {}", pkg.display()))?;
+    }
     step(
         Command::new("wasm-bindgen")
             .current_dir(&root)
-            .args(["--target", "web", "--out-dir"])
+            .args(["--target", "web", "--no-typescript", "--out-dir"])
             .arg(&pkg)
             .arg(WASM),
         "wasm-bindgen",
@@ -90,6 +96,8 @@ pub fn run(args: &Args) -> Result<()> {
         )?;
     }
     copy_page(&root.join("crates/encrust-web/www"), &pkg)?;
+    copy_icons(&root.join("assets/icon"), &pkg.join("icons"))?;
+    stamp_worker(&pkg)?;
     println!("{}", pkg.display());
     Ok(())
 }
@@ -113,6 +121,56 @@ fn copy_page(from: &Path, to: &Path) -> Result<()> {
             let name = path.file_name().unwrap_or_default();
             std::fs::copy(&path, to.join(name))
                 .with_context(|| format!("cannot copy {}", path.display()))?;
+        }
+    }
+    Ok(())
+}
+
+/// The icons the manifest names, under the names it gives them.
+fn copy_icons(from: &Path, to: &Path) -> Result<()> {
+    std::fs::create_dir_all(to).with_context(|| format!("cannot create {}", to.display()))?;
+    for (source, name) in [
+        ("encrust.svg", "encrust.svg"),
+        ("encrust-256.png", "encrust-256.png"),
+        ("encrust-macos-512.png", "encrust-512.png"),
+    ] {
+        std::fs::copy(from.join(source), to.join(name))
+            .with_context(|| format!("cannot copy {source}"))?;
+    }
+    Ok(())
+}
+
+/// Writes into the service worker every file it keeps for working offline, and a build id
+/// taken from their bytes, so that any change to them is a new worker and a new cache.
+fn stamp_worker(pkg: &Path) -> Result<()> {
+    let mut files = Vec::new();
+    listed(pkg, pkg, &mut files)?;
+    files.retain(|file| file != "sw.js" && file != "_headers");
+    files.sort();
+    let mut hasher = DefaultHasher::new();
+    for file in &files {
+        file.hash(&mut hasher);
+        std::fs::read(pkg.join(file))?.hash(&mut hasher);
+    }
+    let build = format!("{}-{:016x}", env!("CARGO_PKG_VERSION"), hasher.finish());
+    let kept: Vec<String> = std::iter::once("./".to_owned()).chain(files).collect();
+    let worker = pkg.join("sw.js");
+    let source = std::fs::read_to_string(&worker)
+        .with_context(|| format!("cannot read {}", worker.display()))?
+        .replace("__BUILD__", &build)
+        .replace("__FILES__", &format!("{kept:?}"));
+    std::fs::write(&worker, source).with_context(|| format!("cannot write {}", worker.display()))
+}
+
+/// Every file under `dir`, as a path relative to `root` with forward slashes.
+fn listed(root: &Path, dir: &Path, files: &mut Vec<String>) -> Result<()> {
+    for entry in std::fs::read_dir(dir).with_context(|| format!("cannot read {}", dir.display()))? {
+        let path = entry?.path();
+        if path.is_dir() {
+            listed(root, &path, files)?;
+        } else if let Ok(relative) = path.strip_prefix(root) {
+            let parts: Vec<_> = relative.iter().map(|part| part.to_string_lossy()).collect();
+            files.push(parts.join("/"));
         }
     }
     Ok(())

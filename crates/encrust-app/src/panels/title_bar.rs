@@ -94,10 +94,27 @@ fn toggle_maximised(ctx: &egui::Context) {
     ctx.send_viewport_cmd(egui::ViewportCommand::Maximized(!maximised));
 }
 
-/// macOS keeps drawing its own and a browser tab is closed by the browser; every other
-/// platform has none, because the strip replaced the system title bar.
-#[cfg(any(target_os = "macos", target_arch = "wasm32"))]
+/// macOS keeps drawing its own; every other platform has none, because the strip replaced
+/// the system title bar.
+#[cfg(target_os = "macos")]
 fn window_buttons(_ui: &mut egui::Ui) {}
+
+/// A browser tab is closed by the browser. In its place the page offers the source it runs,
+/// at the tag it was built from, as the AGPL asks of a program served over a network.
+#[cfg(target_arch = "wasm32")]
+fn window_buttons(ui: &mut egui::Ui) {
+    let source = concat!(
+        env!("CARGO_PKG_REPOSITORY"),
+        "/tree/v",
+        env!("CARGO_PKG_VERSION")
+    );
+    ui.add_space(8.0);
+    let label = egui::RichText::new("Source")
+        .font(theme::small())
+        .color(theme::colors().text_low);
+    ui.hyperlink_to(label, source)
+        .on_hover_text("Encrust is free software under the AGPL-3.0; this is the code it runs");
+}
 
 #[cfg(not(any(target_os = "macos", target_arch = "wasm32")))]
 fn window_buttons(ui: &mut egui::Ui) {

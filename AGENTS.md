@@ -13,6 +13,7 @@ cargo run --release -p encrust-cli --bin encrust -- slice model.stl \
   --printer elegoo-mars-4-ultra --resin standard-grey --center -o model.goo
 cargo xtask gen-profiles --source <dir of .ini profiles> --dry-run
 cargo xtask web   # the window for a browser, on nightly: docs/design/web-build.md
+cargo xtask man   # the command line's man pages, into target/man
 ```
 
 The first three pass before any piece of work is done.

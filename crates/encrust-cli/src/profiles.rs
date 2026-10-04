@@ -4,7 +4,7 @@ use std::fmt;
 use std::path::Path;
 
 use anyhow::{Context, Result};
-use printer_profiles::{Catalogue, MaterialProfile, PrinterProfile};
+use printer_profiles::{Catalogue, Kind, MaterialProfile, PrinterProfile};
 use serde::Serialize;
 
 /// What the four profile arguments name, before any of it is loaded.
@@ -105,6 +105,32 @@ fn resolve_material(
         );
     }
     Ok(entry.profile.starting_point(printer_id))
+}
+
+/// One profile of the catalogue as the TOML it is kept in, and which kind it turned out to
+/// be. An id two kinds share needs `kind` to say which.
+pub fn show(id: &str, kind: Option<Kind>) -> Result<(Kind, String)> {
+    let catalogue = Catalogue::load().context("cannot read the profile catalogue")?;
+    let named = Path::new(id);
+    let found: Vec<(Kind, String)> = [Kind::Printer, Kind::Resin, Kind::Support]
+        .into_iter()
+        .filter(|candidate| kind.is_none_or(|wanted| wanted == *candidate))
+        .filter_map(|candidate| {
+            let toml = match candidate {
+                Kind::Printer => catalogue.printer(id).ok()?.profile.to_toml_string(named),
+                Kind::Resin => catalogue.resin(id).ok()?.profile.to_toml_string(named),
+                Kind::Support => catalogue.support(id).ok()?.profile.to_toml_string(named),
+            };
+            Some(toml.map(|toml| (candidate, toml)))
+        })
+        .collect::<Result<_, _>>()
+        .with_context(|| format!("cannot write {id} out as TOML"))?;
+    let mut found = found.into_iter();
+    match (found.next(), found.next()) {
+        (Some(one), None) => Ok(one),
+        (None, _) => anyhow::bail!("no profile is called {id}; `encrust profiles list` says which"),
+        (Some(_), Some(_)) => anyhow::bail!("{id} names more than one kind; pick one with --kind"),
+    }
 }
 
 /// The catalogue as `profiles list` prints it.

@@ -11,6 +11,7 @@ optimised (ADR 0037); every quoted timing is a release timing.
 
 ```sh
 encrust profiles list
+encrust profiles show elegoo-mars-4-ultra -o my-printer.toml   # a profile to start from
 encrust info plate.ctb                       # open a sliced file
 encrust inspect model.stl --printer elegoo-mars-4-ultra
 encrust slice model.stl -o out               # PNG stack
@@ -190,6 +191,36 @@ given. The masks are copied, never resampled, so the printer's panel must be the
 file was drawn for; the layer heights and every exposure are the file's own, and the resin
 gives the lifts, waits and price. A stack of varying layer heights is refused for now, and
 the new file's previews are blank (ADR 0180).
+
+## Profiles, a config file, completions
+
+`profiles show <id>` prints a printer, resin or support profile as the TOML it is kept in, or
+writes it with `-o`; edited, it is what `--profile` and `--material` take. `--kind` picks
+one when two kinds share an id.
+
+`--config FILE` holds flags written down: a key is a flag's long name, `true` the bare flag,
+`false` nothing, an array the flag once per element. Keys at the top are the global flags,
+a table names a subcommand, and a nested one a subcommand under it. A key fills in only a
+flag that was not typed and has no variable set, so the command line always wins; written
+flags behave as typed ones, so they win over a plate file or a project too, and a written
+flag that conflicts with a typed one is an argument error. A key the command does not take
+is an error, exit code 2.
+
+```toml
+no-progress = true
+
+[slice]
+printer = "elegoo-mars-4-ultra"
+resin = "standard-grey"
+center = true
+
+[printer.send]
+start = true
+```
+
+`completions <shell>` prints the script for bash, zsh, fish, elvish or PowerShell:
+`encrust completions zsh > ~/.zfunc/_encrust`. `cargo xtask man` writes a man page per
+subcommand into `target/man`.
 
 ## Printers on the network
 

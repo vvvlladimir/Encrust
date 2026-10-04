@@ -1,10 +1,9 @@
 use std::process::ExitCode;
 
-use clap::Parser;
-use encrust_cli::{Cli, Stop, exit_code, init_tracing, json_error, run};
+use encrust_cli::{Stop, exit_code, init_tracing, json_error, parse_from, run};
 
 fn main() -> ExitCode {
-    let cli = Cli::parse();
+    let cli = parse_from(std::env::args_os().collect()).unwrap_or_else(|error| error.exit());
     init_tracing(&cli);
 
     // The first Ctrl-C lets the run stop between layers and remove what it half wrote; a

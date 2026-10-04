@@ -6,6 +6,7 @@
 mod args;
 mod batch;
 mod commands;
+mod config;
 mod estimate;
 mod exit;
 mod hollowing;
@@ -28,5 +29,6 @@ pub mod profiles;
 pub mod report;
 
 pub use commands::{Cli, Command, GlobalArgs, init_tracing, run};
+pub use config::parse_from;
 pub use exit::{Cancelled, Exit, Stop, exit_code};
 pub use json::{SCHEMA, error as json_error};

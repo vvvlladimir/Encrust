@@ -4,6 +4,9 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Encrust</title>
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" href="icons/encrust.svg" type="image/svg+xml">
+  <meta name="theme-color" content="#16171a">
   <style>
     html, body { margin: 0; height: 100%; overflow: hidden; background: #16171a; }
     canvas { display: block; width: 100%; height: 100%; }
@@ -26,12 +29,16 @@
     };
     const source = `<a href="https://github.com/vvvlladimir/Encrust">Source code</a> (AGPL-3.0).`;
 
+    // One worker isolates a page whose host cannot send the headers, and keeps the build
+    // for working offline; it takes over a page that was not isolated once it is active.
+    const registering = "serviceWorker" in navigator
+      ? navigator.serviceWorker.register("sw.js")
+        .then(() => navigator.serviceWorker.ready)
+        .then(() => true, () => false)
+      : Promise.resolve(false);
+
     if (!crossOriginIsolated) {
-      // A host that cannot send the headers gets them from a worker in front of the page,
-      // which takes over on the next load.
-      const registered = "serviceWorker" in navigator
-        && await navigator.serviceWorker.register("isolate.js").then(() => true, () => false);
-      if (registered && !sessionStorage.getItem("encrust.isolating")) {
+      if (await registering && !sessionStorage.getItem("encrust.isolating")) {
         sessionStorage.setItem("encrust.isolating", "1");
         location.reload();
       } else {

@@ -1868,3 +1868,34 @@ fn a_printer_that_does_not_answer_fails_with_one_json_document() {
     );
     fs::remove_file(file).ok();
 }
+
+#[test]
+fn a_shipped_profile_shows_as_toml_that_loads_back() {
+    let mine = output_dir("profiles-show-mine");
+    fs::create_dir_all(&mine).expect("the temporary directory is writable");
+    let output = encrust_with_profiles(&mine, &["profiles", "show", "elegoo-mars-4-ultra"]);
+    assert_eq!(output.status.code(), Some(0), "{}", stderr(&output));
+    let path = output_dir("profiles-show").with_extension("toml");
+    fs::write(&path, output.stdout).expect("the temporary directory is writable");
+    let shown = printer_profiles::PrinterProfile::load(&path).expect("the shown TOML loads");
+    let shipped =
+        printer_profiles::PrinterProfile::load(&shipped_profile()).expect("the shipped file");
+    assert_eq!(shown.name, shipped.name);
+
+    let unknown = encrust_with_profiles(&mine, &["profiles", "show", "no-such-machine"]);
+    assert_eq!(unknown.status.code(), Some(1));
+}
+
+#[test]
+fn completions_are_printed_for_each_shell() {
+    for shell in ["bash", "zsh", "fish", "powershell"] {
+        let output = encrust(&["completions", shell]);
+        assert_eq!(
+            output.status.code(),
+            Some(0),
+            "{shell}: {}",
+            stderr(&output)
+        );
+        assert!(stdout(&output).contains("encrust"), "{shell}");
+    }
+}

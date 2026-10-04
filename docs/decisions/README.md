@@ -54,6 +54,7 @@ Grouped by what the decision governs; the number is still the order it was taken
 | [0177](0177-the-cores-build-for-a-browser.md) | The cores build for a browser: wasm32, one thread, no clock, a cavity budget | Accepted |
 | [0179](0179-a-plate-file-is-toml-read-by-the-command-line.md) | A plate file is TOML, read by the command line alone | Accepted |
 | [0181](0181-the-window-runs-in-a-browser-on-workers.md) | The window runs in a browser, on workers sharing its memory | Accepted |
+| [0183](0183-the-web-build-works-offline-and-the-command-line-completes-and-remembers.md) | The web build works offline, and the command line completes and remembers its flags | Accepted |
 
 ### Geometry
 

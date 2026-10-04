@@ -88,10 +88,10 @@ it are in `.claude/rules/architecture.md`.
 | `net-sdcp` | `Printer` with its `Transport`, `Attributes`, `Status`, `Machine`, `PrintInfo`, `FileTransferInfo`/`Fetching`, `Transfer`, `SdcpError`; `discover`/`probe` over UDP for both reply shapes, `Control` over a WebSocket or an MQTT broker of its own, `upload` posting packets or serving the file a board fetches (ADR 0154, 0155) |
 | `net-prusalink` | `Link`, `Auth`, `Version`, `DEFAULT_USER`, `Status`/`Machine`/`Job`, `PrusaLinkError`; `probe`, `upload` as one PUT, `start_print` and `status`, over HTTP digest or an API key (ADR 0152) |
 | `printer-link` | `Wire` over a board or a Prusa machine, `upload` with the board's pre-flight, `start_print`, `state` into one `State`, `scan` of both into `Found`, `SendError` (ADR 0182) |
-| `encrust-cli` | `encrust` binary, one subcommand per module in `commands/` (ADR 0176): `stage` assembles a plate from models, a plate file (`plate_file`, ADR 0179) or a project (`project`, ADR 0178); `pipeline` runs a model through orient, hollow and supports and writes a staged plate through `core-engine`, or cuts it here for a PNG stack; `estimate` measures one without writing; `convert`; `printer` discovers, asks and sends through `printer-link`; `batch` runs one model at a time over a directory with a JSON report each; `--json`, exit codes, the progress bar and Ctrl-C |
-| `encrust-web` | The window's browser front end (ADR 0181): `start`, the window on a canvas; `www/` the page, its headers and the service worker that isolates it where a host sends no headers |
+| `encrust-cli` | `encrust` binary, one subcommand per module in `commands/` (ADR 0176): `stage` assembles a plate from models, a plate file (`plate_file`, ADR 0179) or a project (`project`, ADR 0178); `pipeline` runs a model through orient, hollow and supports and writes a staged plate through `core-engine`, or cuts it here for a PNG stack; `estimate` measures one without writing; `convert`; `printer` discovers, asks and sends through `printer-link`; `profiles show`; `completions`; `config`, the flags a `--config` file holds; `batch` runs one model at a time over a directory with a JSON report each; `--json`, exit codes, the progress bar and Ctrl-C |
+| `encrust-web` | The window's browser front end (ADR 0181): `start`, the window on a canvas; `www/` the page, its headers, its manifest and `sw.js`, the service worker that isolates it where a host sends no headers and keeps the build for working offline (ADR 0183) |
 | `web-engine` | The browser's front end without a window (ADR 0177): `slice_project`, the bytes of a project into the bytes of a sliced file with no file system, thread or clock, and the `wasm-bindgen` exports of it; `www/` the page, its worker and the Node measurement |
-| `xtask` | `xtask` binary: `gen-profiles`, the printer catalogue transcribed from a directory of source profiles, run by hand and never from a build script (ADR 0165) |
+| `xtask` | `xtask` binary: `gen-profiles`, the printer catalogue transcribed from a directory of source profiles, run by hand and never from a build script (ADR 0165); `web`, the browser build; `man`, the command line's man pages from its own clap definition (ADR 0183) |
 | `encrust-app` | `encrust-gui` binary: egui/wgpu window — plate panel left, one inspector panel per tool and the rail beside it, plate tabs on their own strip, Preview splitting the stage between model and mask; `Scene` with `duplicate`/`mirror`/`array`, `BuildPlate` — the machine's platform, named apart from `core_engine::Plate` — `OrbitCamera`, picking, gizmo, `History`, `Measure`, `Cutting`, jobs that hold no stack, `Settings`, `shortcuts`, `ui/theme`, `prefs`, `project` — the dialogs and the `Scene` ↔ `Manifest` conversion over `core_engine::project` — `updates`; `files` and, for a browser, `web` (ADR 0181) |
 
 ## The allowed dependency graph
@@ -108,10 +108,10 @@ encrust-app ──> core-engine, every core-*, printer-profiles, every format-*,
                winresource at build time, for the Windows icon
 encrust-web ──> encrust-app, wasm-bindgen, wasm-bindgen-futures, web-sys, getrandom
 encrust-cli ──> core-engine, every core-*, printer-profiles, every format-*, printer-link,
-               net-sdcp, net-prusalink, rayon, clap, serde, serde_json, toml, indicatif,
-               ctrlc
+               net-sdcp, net-prusalink, rayon, clap, clap_complete, serde, serde_json, toml,
+               indicatif, ctrlc
 web-engine ──> core-engine, core-pipeline, wasm-bindgen
-xtask ──> printer-profiles, toml
+xtask ──> printer-profiles, encrust-cli, toml, clap, clap_mangen
 
 core-engine ──> core-pipeline, core-analysis, core-format, core-geometry, core-raster,
                core-slicer, core-supports, core-thumbnail, core-volume, printer-profiles,

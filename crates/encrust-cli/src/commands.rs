@@ -1,6 +1,7 @@
 //! The `encrust` command line: global flags, one subcommand each, and the dispatch to them.
 
 mod batch;
+mod completions;
 mod convert;
 mod estimate;
 mod info;
@@ -10,6 +11,7 @@ mod profiles;
 pub mod slice;
 
 use std::io::IsTerminal;
+use std::path::PathBuf;
 
 use anyhow::Result;
 use clap::{ArgAction, Parser, Subcommand};
@@ -18,6 +20,7 @@ use crate::exit::{Exit, Stop};
 use crate::pipeline::Watch;
 
 pub use batch::BatchCommand;
+pub use completions::CompletionsCommand;
 pub use convert::ConvertCommand;
 pub use estimate::EstimateCommand;
 pub use info::InfoCommand;
@@ -56,6 +59,10 @@ pub struct GlobalArgs {
     /// Draw no progress bar, even on a terminal.
     #[arg(long, global = true)]
     pub no_progress: bool,
+
+    /// Flags written down in a TOML file, a table per subcommand; a flag typed here wins.
+    #[arg(long, global = true, value_name = "PATH")]
+    pub config: Option<PathBuf>,
 }
 
 impl GlobalArgs {
@@ -110,6 +117,8 @@ pub enum Command {
     /// Find printers on the network, ask one what it is doing, send it a file.
     #[command(subcommand)]
     Printer(PrinterCommand),
+    /// Print the completion script for a shell, to be sourced from its startup file.
+    Completions(CompletionsCommand),
 }
 
 /// Sends logs to stderr at the level the global flags ask for, unless `RUST_LOG` says
@@ -137,5 +146,6 @@ pub fn run(cli: &Cli, stop: &Stop) -> Result<Exit> {
         Command::Convert(command) => command.run(global, stop),
         Command::Profiles(command) => command.run(global),
         Command::Printer(command) => command.run(global, stop),
+        Command::Completions(command) => command.run(),
     }
 }

@@ -18,8 +18,24 @@ Threads in wasm rebuild the standard library with atomics, which only nightly do
 flags are in `crates/xtask/src/web.rs` and build into `target/web/` so that they never
 touch the stable builds. Serve `target/web/dist` with `Cross-Origin-Opener-Policy:
 same-origin` and `Cross-Origin-Embedder-Policy: require-corp`; `_headers` says so to a host
-that reads it. Without them the page registers `isolate.js`, a service worker that adds the
-headers, and reloads once; where even that fails it says what the host must send.
+that reads it, with `Cache-Control: no-cache` on everything, because a file keeps its name
+from one build to the next.
+
+### Publishing and working offline
+
+The page always registers `sw.js` (ADR 0183). It adds the two headers to every response of
+its origin, so a host that cannot send them still gets an isolated page: on a page that is
+not isolated the script waits for the worker to be active and reloads once, and where even
+that fails it says what the host must send. It also keeps every file of the build in a
+cache named for the build, which `cargo xtask web` writes in as the version and a hash of
+the files, with their list, so the window opens offline after the first visit.
+
+A new build installs in the background and takes over once every tab of the old one is
+closed. It cannot take over a running page: that page's threads import the module script
+as they start, and the new script over the old memory would not run. Only the first worker
+takes the page at once, which is what isolates it. `manifest.webmanifest` and the icons
+under `icons/` make the page installable. The title strip carries a Source link to the tag
+the build was made from, which the AGPL asks of a program served over a network.
 
 ### How it runs
 
