@@ -3,9 +3,11 @@ use std::sync::atomic::{AtomicBool, Ordering};
 
 use anyhow::{Context, Result};
 use core_analysis::Measured;
-use core_engine::{Plate, Run};
+use core_engine::{EngineError, Plate, Run};
+#[cfg(target_arch = "wasm32")]
+use core_format::WriteSeek;
 use core_geometry::{Mesh, Scalar};
-use core_pipeline::{Observer, Tolerance};
+use core_pipeline::{Observer, Tolerance, Written};
 use core_raster::RasterSettings;
 use core_slicer::{PlaneSliceEngine, SliceEngine, SliceSettings, Sliced, Windows};
 
@@ -27,13 +29,14 @@ pub struct SliceRequest {
 /// every core is a slicer that makes the machine unusable and hot; see
 /// `docs/decisions/0019-slicing-job-thread-budget.md`.
 pub fn worker_threads() -> usize {
-    std::thread::available_parallelism().map_or(1, |cores| cores.get().saturating_sub(1).max(1))
+    crate::job::cores().saturating_sub(1).max(1)
 }
 
-/// Slices, rasterises and writes the sliced file, reporting as it goes.
+/// Slices, rasterises and writes the sliced file to `request.output`, reporting as it goes.
 ///
 /// Every failure comes back as `Outcome::Failed` rather than a `Result`: the caller is a
 /// worker thread whose only channel to the user is `report`.
+#[cfg(not(target_arch = "wasm32"))]
 pub fn run(
     request: &SliceRequest,
     cancel: &AtomicBool,
@@ -44,15 +47,43 @@ pub fn run(
         Err(error) => return Outcome::Failed(error.to_string()),
     };
 
-    pool.install(|| match slice_and_write(request, cancel, report) {
-        Ok(outcome) => outcome,
-        Err(error) => Outcome::Failed(
+    pool.install(|| {
+        flattened(slice_and_write(request, cancel, report, |run, observer| {
+            run.write_file(&request.output, observer)
+        }))
+    })
+}
+
+/// The same, into `sink`, under the name `request.output` gives the container.
+///
+/// In a browser the sink is a file only this thread may touch, so the job runs here, on
+/// the shared pool, rather than in a pool of its own.
+#[cfg(target_arch = "wasm32")]
+pub fn run_into(
+    request: &SliceRequest,
+    sink: &mut dyn WriteSeek,
+    cancel: &AtomicBool,
+    report: &mut (dyn FnMut(Progress) + Send),
+) -> Outcome {
+    let name = request
+        .output
+        .file_stem()
+        .unwrap_or_default()
+        .to_string_lossy();
+    flattened(slice_and_write(request, cancel, report, |run, observer| {
+        run.write(&name, sink, observer)
+    }))
+}
+
+fn flattened(result: Result<Outcome>) -> Outcome {
+    result.unwrap_or_else(|error| {
+        Outcome::Failed(
             error
                 .chain()
                 .map(ToString::to_string)
                 .collect::<Vec<_>>()
                 .join(": "),
-        ),
+        )
     })
 }
 
@@ -60,11 +91,43 @@ pub fn run(
 ///
 /// Every job builds its own, so the thread budget covers the slicer's parallelism as well
 /// as the rasteriser's, and the rest of the machine keeps a core.
-pub fn thread_pool(threads: usize) -> Result<rayon::ThreadPool> {
-    rayon::ThreadPoolBuilder::new()
-        .num_threads(threads.max(1))
-        .build()
-        .context("cannot start the slicing threads")
+pub fn thread_pool(threads: usize) -> Result<Pool> {
+    #[cfg(not(target_arch = "wasm32"))]
+    {
+        rayon::ThreadPoolBuilder::new()
+            .num_threads(threads.max(1))
+            .build()
+            .map(Pool)
+            .context("cannot start the slicing threads")
+    }
+    // In a browser a thread is a worker started at a cost, so every job shares one pool,
+    // held to the same budget; see `crate::web::thread`.
+    #[cfg(target_arch = "wasm32")]
+    {
+        let _ = threads;
+        Ok(Pool)
+    }
+}
+
+/// Where a job's parallel loops run.
+#[cfg(not(target_arch = "wasm32"))]
+pub struct Pool(rayon::ThreadPool);
+
+#[cfg(target_arch = "wasm32")]
+pub struct Pool;
+
+impl Pool {
+    /// Runs `op` with its parallel loops on this pool.
+    pub fn install<R: Send>(&self, op: impl FnOnce() -> R + Send) -> R {
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            self.0.install(op)
+        }
+        #[cfg(target_arch = "wasm32")]
+        {
+            op()
+        }
+    }
 }
 
 /// Cuts a mesh standing in plate coordinates into its whole stack of closed contours.
@@ -131,6 +194,7 @@ fn slice_and_write(
     request: &SliceRequest,
     cancel: &AtomicBool,
     report: &mut (dyn FnMut(Progress) + Send),
+    write: impl FnOnce(&Run, &mut Worker<'_>) -> Result<Option<Written>, EngineError>,
 ) -> Result<Outcome> {
     report(Progress::Stage(Stage::Slicing));
     let run = Run::of(&request.plate)?;
@@ -139,14 +203,13 @@ fn slice_and_write(
     }
 
     report(Progress::Stage(Stage::Rasterising));
-    let path = &request.output;
-    let written = run.write_file(path, &mut Worker { cancel, report })?;
+    let written = write(&run, &mut Worker { cancel, report })?;
 
     let Some(written) = written else {
         return Ok(Outcome::Cancelled);
     };
     Ok(Outcome::Written {
-        path: path.clone(),
+        path: request.output.clone(),
         layers: written.layers,
         clipped_layers: written.clipped_layers,
         volume_mm3: written.measured.volume_mm3(),

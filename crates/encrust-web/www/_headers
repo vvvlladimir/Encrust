@@ -1,0 +1,7 @@
+# Threads share memory only on a page isolated from other origins; see docs/design/web-build.md.
+/*
+  Cross-Origin-Opener-Policy: same-origin
+  Cross-Origin-Embedder-Policy: require-corp
+
+/*.wasm
+  Content-Type: application/wasm

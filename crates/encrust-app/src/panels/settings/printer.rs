@@ -30,9 +30,12 @@ pub fn form(ui: &mut egui::Ui, window: &mut Window) {
     form_card(ui, "Display", |ui| display(ui, profile));
     form_card(ui, "Build volume", |ui| volume(ui, profile));
     form_card(ui, "Output", |ui| output(ui, profile));
-    form_card(ui, "Network", |ui| {
-        connection::card(ui, &id, &mut profile.connection, &mut machine.network);
-    });
+    // TODO(step-A6): a browser reaches no printer yet, so it has nothing to set up here.
+    if cfg!(not(target_arch = "wasm32")) {
+        form_card(ui, "Network", |ui| {
+            connection::card(ui, &id, &mut profile.connection, &mut machine.network);
+        });
+    }
     form_card(ui, "Firmware", |ui| firmware(ui, profile));
 
     if settled(ui) {

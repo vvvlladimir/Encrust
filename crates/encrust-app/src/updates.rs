@@ -7,7 +7,7 @@ mod verify;
 
 use std::path::PathBuf;
 use std::sync::mpsc::{self, Receiver, TryRecvError};
-use std::time::{SystemTime, UNIX_EPOCH};
+use web_time::{SystemTime, UNIX_EPOCH};
 
 use serde::{Deserialize, Serialize};
 
@@ -132,7 +132,7 @@ impl Updates {
     fn start_check(&mut self, asked: bool) {
         self.prefs.checked_at_s = Some(now_s());
         let (sender, reply) = mpsc::channel();
-        std::thread::spawn(move || {
+        crate::job::spawn(move || {
             let _ = sender.send(install::check(Self::running()));
         });
         self.stage = Stage::Checking { asked, reply };
@@ -156,7 +156,7 @@ impl Updates {
         self.exe = Some(exe.clone());
         let version = offer.version;
         let (sender, reply) = mpsc::channel();
-        std::thread::spawn(move || {
+        crate::job::spawn(move || {
             let _ = sender.send(install::install(&download, version, &exe));
         });
         self.stage = Stage::Installing { offer, reply };

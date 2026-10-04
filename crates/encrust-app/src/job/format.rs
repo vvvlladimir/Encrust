@@ -1,6 +1,7 @@
 //! What the window adds to `core_pipeline::SlicedFormat`: the words on the picker, and
 //! the name a file dialog opens with.
 
+#[cfg(not(target_arch = "wasm32"))]
 use std::path::PathBuf;
 
 use core_pipeline::SlicedFormat;
@@ -32,6 +33,7 @@ pub fn label_of(format: SlicedFormat) -> &'static str {
 ///
 /// A name the user typed an extension on keeps it: that is what decides the format, and
 /// overriding it would write a `.goo` file called `plate.ctb`.
+#[cfg(not(target_arch = "wasm32"))]
 pub fn applied_to(format: SlicedFormat, path: PathBuf) -> PathBuf {
     match path.extension() {
         Some(_) => path,

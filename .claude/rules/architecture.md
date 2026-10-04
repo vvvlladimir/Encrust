@@ -1,8 +1,9 @@
 # Architecture rules
 
 1. **Cores know nothing about the UI.** No `core-*` crate may touch `egui`, `eframe`, `wgpu`,
-   `winit` or any graphics or windowing crate; only the two binaries may. Each core works from
-   a CLI, a test and a benchmark with no window open.
+   `winit` or any graphics or windowing crate; only the front ends — the two binaries and
+   `encrust-web` — may. Each core works from a CLI, a test and a benchmark with no window
+   open.
 2. **Extend through traits, not enum switches** — but only once the second implementation
    arrives or a crate boundary demands it. No abstraction ahead of its use.
 3. **Simplicity beats generality.** No plugin system, no injection, no event bus. Plain

@@ -71,7 +71,7 @@ it are in `.claude/rules/architecture.md`.
 | `core-supports` | `Placed`, `Profiles`, `SupportPoint`, `Landing`, `Column`, `SupportTree`; `columns`, `grow`, `mesh_trees`/`mesh_groups`, `grab`/`Grab`/`Part`, `support_under`, `generate_supports`; `Region`/`Blocked` and `project`/`ProjectSettings` for a painted patch; `ModelSupports`, the supports one model carries; `TrapScan`/`Trapped` for resin with no way out |
 | `core-plate` | `OrientSettings`, `Oriented`, `Score`, `Footprint`, `ArrangeSettings`, `Arranged`, `Placed`, `PlateError`; `orient` — flat faces and a Fibonacci sphere scored on overhang, peel, height and footprint, the best few cut to measure the section; `arrange` — footprint bitmaps packed into the corner and centred |
 | `core-volume` | `Sdf`, `VoxelGrid`, `FieldSettings`, `SignMode`, `VolumeError`; `build` — scattered from the faces, carried coarse across the wall, refined where it is stored — CSG operators, `extract` — clustered surface nets; `hollow` with `HollowSettings`, `HollowMode`, `Blocker`, `Hollowed`, `lattice_mm`, `MIN_WALL_MM`, `sleeves`, `InfillSettings`/`InfillPattern`; `DrainHole`, `Channel`, `drill`, `bores`, `channel_under`, `hole_at`, `lift_for`, `pierce`; `ModelHollow` with `Shell`, `HoleSize`, `markers` — what one model carries; `press` with `ReliefSettings`/`Relief` |
-| `printer-profiles` | `PrinterProfile`/`OutputFormat`/`AnycubicExtension`/`PhotonRevision`/`Connection`/`Firmware`, `MaterialProfile`/`PrinterTuning`/`Compensation` and `exposure_for_mm`, `SupportProfile` and its segments, TOML load/save, `Catalogue` of printers, resins and support profiles, and `user_dir` |
+| `printer-profiles` | `PrinterProfile`/`OutputFormat`/`AnycubicExtension`/`PhotonRevision`/`Connection`/`Firmware`, `MaterialProfile`/`PrinterTuning`/`Compensation` and `exposure_for_mm`, `SupportProfile` and its segments, TOML load/save, `Catalogue` of printers, resins and support profiles, the `ProfileStore` it writes edits through with `DirStore` over a directory (ADR 0181), and `user_dir` |
 | `core-thumbnail` | `Thumbnail`, `Part`, `ThumbnailSettings`, `render` (CPU only) |
 | `core-format` | `PrintJob`, `ExposureRange`/`ExposurePlan`, `SlicedFileWriter`, `LayerSink`, `Fields`, `FormatError`, the greyscale and colour PNG codec the archive containers share (ADR 0167), and `Rle7Layer`/`decode_rle7` with the RGB15 preview record two binary families share (ADR 0168); `Reads::claim`, `panel_in_range` and `read_entry`, the bounds every reader puts a header's counts through (ADR 0171) |
 | `core-pipeline` | The write stage every front end shares (ADR 0127): `SlicedFormat` and the extension that picks it, `PanelOverrides`/`raster_settings`, `Folded`/`Tolerance`/`fold_group`, `Writing`/`Written`/`write_to` streaming a stack into a sink with `write` wrapping it for a path (ADR 0175), `measure` doing the same without writing, `convert`/`convert_to` with `Converting`/`Converted` writing a read file again in another container (ADR 0180), `Observer` for a window arriving, layers landing and whether to stop, `PipelineError` |
@@ -87,9 +87,10 @@ it are in `.claude/rules/architecture.md`.
 | `net-sdcp` | `Printer` with its `Transport`, `Attributes`, `Status`, `Machine`, `PrintInfo`, `FileTransferInfo`/`Fetching`, `Transfer`, `SdcpError`; `discover`/`probe` over UDP for both reply shapes, `Control` over a WebSocket or an MQTT broker of its own, `upload` posting packets or serving the file a board fetches (ADR 0154, 0155) |
 | `net-prusalink` | `Link`, `Auth`, `Version`, `DEFAULT_USER`, `PrusaLinkError`; `probe`, `upload` as one PUT and `start_print`, over HTTP digest or an API key (ADR 0152) |
 | `encrust-cli` | `encrust` binary, one subcommand per module in `commands/` (ADR 0176): `stage` assembles a plate from models, a plate file (`plate_file`, ADR 0179) or a project (`project`, ADR 0178); `pipeline` runs a model through orient, hollow and supports and writes a staged plate through `core-engine`, or cuts it here for a PNG stack; `estimate` measures one without writing; `convert`; `batch` runs one model at a time over a directory with a JSON report each; `--json`, exit codes, the progress bar and Ctrl-C |
-| `web-engine` | The browser's front end (ADR 0177): `slice_project`, the bytes of a project into the bytes of a sliced file with no file system, thread or clock, and the `wasm-bindgen` exports of it; `www/` the page, its worker and the Node measurement |
+| `encrust-web` | The window's browser front end (ADR 0181): `start`, the window on a canvas; `www/` the page, its headers and the service worker that isolates it where a host sends no headers |
+| `web-engine` | The browser's front end without a window (ADR 0177): `slice_project`, the bytes of a project into the bytes of a sliced file with no file system, thread or clock, and the `wasm-bindgen` exports of it; `www/` the page, its worker and the Node measurement |
 | `xtask` | `xtask` binary: `gen-profiles`, the printer catalogue transcribed from a directory of source profiles, run by hand and never from a build script (ADR 0165) |
-| `encrust-app` | `encrust-gui` binary: egui/wgpu window — plate panel left, one inspector panel per tool and the rail beside it, plate tabs on their own strip, Preview splitting the stage between model and mask; `Scene` with `duplicate`/`mirror`/`array`, `BuildPlate` — the machine's platform, named apart from `core_engine::Plate` — `OrbitCamera`, picking, gizmo, `History`, `Measure`, `Cutting`, jobs that hold no stack, `Settings`, `shortcuts`, `ui/theme`, `prefs`, `project` — the dialogs and the `Scene` ↔ `Manifest` conversion over `core_engine::project` — `updates` |
+| `encrust-app` | `encrust-gui` binary: egui/wgpu window — plate panel left, one inspector panel per tool and the rail beside it, plate tabs on their own strip, Preview splitting the stage between model and mask; `Scene` with `duplicate`/`mirror`/`array`, `BuildPlate` — the machine's platform, named apart from `core_engine::Plate` — `OrbitCamera`, picking, gizmo, `History`, `Measure`, `Cutting`, jobs that hold no stack, `Settings`, `shortcuts`, `ui/theme`, `prefs`, `project` — the dialogs and the `Scene` ↔ `Manifest` conversion over `core_engine::project` — `updates`; `files` and, for a browser, `web` (ADR 0181) |
 
 ## The allowed dependency graph
 
@@ -100,8 +101,10 @@ encrust-app ──> core-engine, every core-*, printer-profiles, every format-*,
                net-prusalink,
                egui, eframe, egui_dock, egui-wgpu, wgpu, transform-gizmo-egui,
                bytemuck, image, rfd, rayon, serde, serde_json, zip,
-               ureq (with TLS), minisign-verify, tar, flate2;
+               ureq (with TLS at the desk), minisign-verify, tar, flate2, web-time;
+               in a browser wasm-bindgen, wasm-bindgen-futures, js-sys, web-sys;
                winresource at build time, for the Windows icon
+encrust-web ──> encrust-app, wasm-bindgen, wasm-bindgen-futures, web-sys, getrandom
 encrust-cli ──> core-engine, every core-*, printer-profiles, every format-*, rayon,
                clap, serde, serde_json, toml, indicatif, ctrlc
 web-engine ──> core-engine, core-pipeline, wasm-bindgen
@@ -130,8 +133,8 @@ printer-profiles ──> (nothing in this workspace)
 core-geometry ──> (nothing in this workspace)
 ```
 
-Only the two binaries may depend on graphics crates. Spanning core layers is what
-`core-pipeline` and `core-engine` are for, and each stays its own stage: `core-pipeline`
+Only the front ends — the two binaries and `encrust-web` — may depend on graphics crates.
+Spanning core layers is what `core-pipeline` and `core-engine` are for, and each stays its own stage: `core-pipeline`
 is handed a mesh and its windows and writes a printable file (ADR 0127), `core-engine` is
 handed a plate and runs it down to that call (ADR 0174). Neither is a place to put what
 two callers merely happen to share. `core-mesh-io`,
@@ -243,7 +246,9 @@ by a shared crate (ADR 0153).
 
 ```
 main.rs      the one argument, the logger, and a call into the library
-lib.rs       the modules, and `run` — window options and the model to open on startup
+lib.rs       the modules, `run` — window options and the model to open on startup — and
+             `run_web`, the same on a canvas
+files.rs     Handed: a file the user gave, a path or its bytes; the dialogs that ask for one
 app.rs       SlicerApp: mode, tool, and the four groups of state.rs
 state.rs     Doc, View, Tools, Machine: the window state in the groups it travels in
 workspace.rs Mode, Tool, ViewOptions, Array
@@ -270,6 +275,7 @@ panels/      title strip, tool rail, stage, inspector, status strip
 profiles.rs  loading a profile from a file dialog
 network.rs   printers a scan found, where the Slice button sends, and the errand running
 prefs.rs     the machine, resin, format and printer addresses remembered between runs
+web/         a browser's threads, dialogs, downloads, private storage and page storage
 ui/          design tokens, fonts, icons, widgets
 render/      wgpu pipelines, buffers, paint callback, shader.wgsl
 ```

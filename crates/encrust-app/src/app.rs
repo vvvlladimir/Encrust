@@ -1,5 +1,6 @@
 use std::path::Path;
 
+use crate::files::{Arrived, Handed, Wanted};
 use crate::panels::Window;
 use crate::prefs::Preferences;
 use crate::preview::stack_fingerprint;
@@ -49,6 +50,8 @@ impl SlicerApp {
         if let Some(render_state) = cc.wgpu_render_state.as_ref() {
             render::install(render_state);
         }
+        #[cfg(target_arch = "wasm32")]
+        crate::web::hold_context(&cc.egui_ctx);
         theme::apply(&cc.egui_ctx);
         crate::updates::sweep();
 
@@ -61,32 +64,34 @@ impl SlicerApp {
         prefs.apply(&mut app.window());
         project::mark_saved(&mut app.window());
         if let Some(path) = initial_model {
-            // A sliced file named on the command line is opened to look at, not imported.
-            if core_pipeline::reads_sliced_file(path) {
-                app.open_sliced_file(path);
-            } else {
-                app.open_model(path);
-            }
+            app.open_dropped(Handed::Path(path.to_path_buf()));
         }
         app
     }
 
-    fn open_model(&mut self, path: &Path) {
-        self.doc.imports.open(
-            path.to_path_buf(),
-            &self.doc.plate,
-            &mut self.machine.status,
-        );
+    /// A sliced file is opened to look at, not imported; anything else is a model.
+    fn open_dropped(&mut self, file: Handed) {
+        if core_pipeline::reads_sliced_file(file.path()) {
+            self.open_sliced_file(&file);
+        } else {
+            self.open_model(file);
+        }
+    }
+
+    fn open_model(&mut self, file: Handed) {
+        self.doc
+            .imports
+            .open(file, &self.doc.plate, &mut self.machine.status);
     }
 
     /// Opens a sliced file to look at, which is the Preview mode showing a container rather
     /// than the plate. Only its tables are read; a layer is decoded when it is shown.
-    fn open_sliced_file(&mut self, path: &Path) {
+    fn open_sliced_file(&mut self, file: &Handed) {
         crate::sliced::open(
             &mut self.machine.preview,
             &mut self.mode,
             &mut self.machine.status,
-            path,
+            file,
         );
     }
 
@@ -105,27 +110,45 @@ impl SlicerApp {
     }
 
     /// A file dropped on the window opens the way the dialog would open it: a mesh goes on
-    /// to the plate, and a sliced file goes under the layer slider.
+    /// to the plate, and a sliced file goes under the layer slider. A browser drops bytes,
+    /// several at once for a model and its textures.
     fn take_dropped_files(&mut self, ctx: &egui::Context) {
-        let dropped: Vec<std::path::PathBuf> = ctx.input(|input| {
-            input
-                .raw
-                .dropped_files
-                .iter()
-                .map(|file| file.path().to_path_buf())
-                .collect()
-        });
-        for path in dropped {
-            if core_pipeline::reads_sliced_file(&path) {
-                self.open_sliced_file(&path);
-            } else {
-                self.open_model(&path);
+        let dropped = ctx.input_mut(|input| std::mem::take(&mut input.raw.dropped_files));
+        #[cfg(not(target_arch = "wasm32"))]
+        for file in dropped {
+            self.open_dropped(Handed::Path(file.path().to_path_buf()));
+        }
+        // A browser reads a dropped file by a promise, so it arrives on a later frame.
+        #[cfg(target_arch = "wasm32")]
+        crate::web::files::read_dropped(dropped);
+    }
+
+    /// What a browser's dialogs handed over since the last frame, each where it was asked
+    /// for.
+    fn take_arrived_files(&mut self) {
+        for arrived in crate::files::arrived() {
+            match arrived {
+                Arrived::File(Wanted::Model, file) => self.open_model(file),
+                Arrived::File(Wanted::SlicedFile, file) => self.open_sliced_file(&file),
+                Arrived::File(Wanted::Project, file) => {
+                    project::open(&mut self.window(), &file);
+                }
+                Arrived::File(Wanted::PrinterProfile, file) => {
+                    crate::profiles::load_printer(&mut self.window(), &file);
+                }
+                Arrived::File(Wanted::ResinProfile, file) => crate::profiles::load_material(
+                    &mut self.machine.slicing,
+                    &mut self.machine.status,
+                    &file,
+                ),
+                Arrived::Dropped(file) => self.open_dropped(file),
+                Arrived::Failed(message) => self.machine.status = Status::Error(message),
             }
         }
     }
 
     /// A stack written for a printer goes straight on to it; one the user named is
-    /// already where they asked for it.
+    /// already where they asked for it, or in a browser, already handed over as a download.
     fn hand_written_file_to_the_network(&mut self) {
         let Some(written) = self.machine.slicing.take_written() else {
             return;
@@ -251,6 +274,7 @@ impl SlicerApp {
 impl eframe::App for SlicerApp {
     fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
         self.take_dropped_files(ui.ctx());
+        self.take_arrived_files();
 
         // A background job reports over a channel, which wakes nothing on its own, so the
         // window has to keep asking for frames while one is running.
@@ -339,7 +363,7 @@ mod tests {
     #[test]
     fn a_file_that_cannot_be_read_leaves_the_scene_alone() {
         let mut app = SlicerApp::default();
-        app.open_model(Path::new("does-not-exist.stl"));
+        app.open_model(Handed::Path("does-not-exist.stl".into()));
 
         // The read is on a worker thread, so the failure lands on a later frame.
         while app.doc.imports.poll(
@@ -361,7 +385,7 @@ mod tests {
         // containers themselves are checked in `core-pipeline/tests/read_back.rs`.
         let path = crate::preview::tests::written_goo("app-startup", 3);
         let mut app = SlicerApp::default();
-        app.open_sliced_file(&path);
+        app.open_sliced_file(&Handed::Path(path));
 
         assert_eq!(
             app.mode,
@@ -389,7 +413,7 @@ mod tests {
         let fixture =
             std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/cube.stl");
         let mut app = SlicerApp::default();
-        app.open_model(&fixture);
+        app.open_model(Handed::Path(fixture));
 
         while app.doc.imports.poll(
             &mut app.doc.scene,

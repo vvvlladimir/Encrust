@@ -94,12 +94,12 @@ fn toggle_maximised(ctx: &egui::Context) {
     ctx.send_viewport_cmd(egui::ViewportCommand::Maximized(!maximised));
 }
 
-/// macOS keeps drawing its own; every other platform has none, because the strip replaced
-/// the system title bar.
-#[cfg(target_os = "macos")]
+/// macOS keeps drawing its own and a browser tab is closed by the browser; every other
+/// platform has none, because the strip replaced the system title bar.
+#[cfg(any(target_os = "macos", target_arch = "wasm32"))]
 fn window_buttons(_ui: &mut egui::Ui) {}
 
-#[cfg(not(target_os = "macos"))]
+#[cfg(not(any(target_os = "macos", target_arch = "wasm32")))]
 fn window_buttons(ui: &mut egui::Ui) {
     if icon_button(ui, icon::CANCEL, "Close").clicked() {
         ui.ctx().send_viewport_cmd(egui::ViewportCommand::Close);
@@ -299,9 +299,12 @@ fn file_menu(ui: &mut egui::Ui, window: &mut Window) {
         ui.close();
         toggle_settings(window.machine);
     }
-    ui.separator();
-    if ui.button("Quit").clicked() {
-        ui.ctx().send_viewport_cmd(egui::ViewportCommand::Close);
+    // A page is left by closing its tab.
+    if cfg!(not(target_arch = "wasm32")) {
+        ui.separator();
+        if ui.button("Quit").clicked() {
+            ui.ctx().send_viewport_cmd(egui::ViewportCommand::Close);
+        }
     }
 }
 

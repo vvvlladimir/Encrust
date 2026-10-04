@@ -13,9 +13,15 @@ use crate::scene::Mapped;
 use crate::ui::theme;
 
 /// Depth and stencil format of the viewport. The window asks eframe for buffers of the
-/// same width in `main.rs`; egui attaches them to the pass our callback paints into. The
+/// same width in `lib.rs`; egui attaches them to the pass our callback paints into. The
 /// stencil plane is what caps the section cut, see `docs/decisions/0062`.
+#[cfg(not(target_arch = "wasm32"))]
 pub const DEPTH_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Depth24PlusStencil8;
+
+/// eframe's web painter asks for no stencil plane whatever it is told, so in a browser the
+/// cut is left open; see `docs/design/web-build.md`.
+#[cfg(target_arch = "wasm32")]
+pub const DEPTH_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Depth24Plus;
 
 /// Multisampling is off, matching [`MULTISAMPLING`]. A pipeline whose sample count
 /// disagrees with the render pass is rejected at draw time.
@@ -25,10 +31,12 @@ pub const SAMPLE_COUNT: u32 = 1;
 /// for egui to allocate [`DEPTH_FORMAT`]; the mapping is
 /// `egui_wgpu::depth_format_from_bits`.
 pub const DEPTH_BUFFER_BITS: u8 = 24;
+#[cfg(not(target_arch = "wasm32"))]
 pub const STENCIL_BUFFER_BITS: u8 = 8;
 
 /// What `NativeOptions::multisampling` must be set to for [`SAMPLE_COUNT`]. Zero and one
 /// both mean one sample.
+#[cfg(not(target_arch = "wasm32"))]
 pub const MULTISAMPLING: u16 = 0;
 
 /// Direction the key light travels, in plate coordinates: down, from the front left.
@@ -183,11 +191,8 @@ pub struct ViewportResources {
     globals_bind_group: wgpu::BindGroup,
     model_pipeline: wgpu::RenderPipeline,
     line_pipeline: wgpu::RenderPipeline,
-    /// Counts, in the stencil plane, how often a view ray crosses a solid above the cut.
-    crossing_pipeline: wgpu::RenderPipeline,
-    /// Fills the cut with a flat face wherever that count says the plane is inside a
-    /// solid.
-    cap_pipeline: wgpu::RenderPipeline,
+    /// What caps the section cut, where the depth buffer has a stencil plane to do it in.
+    capping: Option<Capping>,
     /// Draws the translucent machine over everything already painted.
     body_pipeline: wgpu::RenderPipeline,
     /// Draws the word the machine carries, sampled out of the font atlas.
@@ -258,8 +263,7 @@ impl ViewportResources {
             globals_bind_group,
             model_pipeline: solid.model,
             line_pipeline: solid.line,
-            crossing_pipeline: solid.crossing,
-            cap_pipeline: solid.cap,
+            capping: solid.capping,
             body_pipeline: build.body(),
             label_pipeline: label.pipeline,
             label_layout: label.layout,
@@ -511,8 +515,9 @@ impl ViewportResources {
         // cut took away is counted first, the models are drawn, and the face is filled
         // wherever the count says the plane runs through a solid. See
         // `docs/decisions/0062`.
-        if self.frame.cutting {
-            render_pass.set_pipeline(&self.crossing_pipeline);
+        let capping = self.capping.as_ref().filter(|_| self.frame.cutting);
+        if let Some(capping) = capping {
+            render_pass.set_pipeline(&capping.crossing);
             self.draw_meshes(render_pass, &self.frame.solids, self.frame.solid_base);
         }
 
@@ -534,8 +539,10 @@ impl ViewportResources {
             }
         }
 
-        if self.frame.cutting && self.frame.cap_vertices > 0 {
-            render_pass.set_pipeline(&self.cap_pipeline);
+        if let Some(capping) = capping
+            && self.frame.cap_vertices > 0
+        {
+            render_pass.set_pipeline(&capping.cap);
             render_pass.set_stencil_reference(MATERIAL_ABOVE);
             render_pass.set_vertex_buffer(0, self.cap.buffer.slice(..));
             render_pass.draw(0..self.frame.cap_vertices, 0..1);
@@ -648,6 +655,11 @@ fn globals_layout(device: &wgpu::Device) -> wgpu::BindGroupLayout {
 struct Solid {
     model: wgpu::RenderPipeline,
     line: wgpu::RenderPipeline,
+    capping: Option<Capping>,
+}
+
+/// The two passes that fill the section cut with a flat face.
+struct Capping {
     /// Counts, in the stencil plane, how often a view ray crosses a solid above the cut.
     crossing: wgpu::RenderPipeline,
     /// Fills the cut wherever that count says the plane is inside a solid.
@@ -717,6 +729,12 @@ impl<'a> Builder<'a> {
                 topology: wgpu::PrimitiveTopology::LineList,
                 ..PipelineKind::default()
             }),
+            capping: DEPTH_FORMAT.has_stencil_aspect().then(|| self.capping()),
+        }
+    }
+
+    fn capping(&self) -> Capping {
+        Capping {
             crossing: self.plain(PipelineKind {
                 label: "viewport_section_crossings",
                 vertex_entry: "model_vertex",

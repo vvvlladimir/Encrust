@@ -1,2 +1,7 @@
 [alias]
 xtask = "run --quiet --package xtask --"
+
+# `getrandom` 0.3 reads the browser's randomness only when told to here as well as by
+# feature; the threaded build sets these flags itself, see `cargo xtask web`.
+[target.wasm32-unknown-unknown]
+rustflags = ['--cfg', 'getrandom_backend="wasm_js"']

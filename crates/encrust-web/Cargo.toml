@@ -1,0 +1,26 @@
+[package]
+name = "encrust-web"
+description = "The Encrust window in a browser: a canvas, the window on it, threads as workers."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+publish = false
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+# Nothing but a browser build has anything to compile here; see docs/decisions/0181.
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+encrust-app.workspace = true
+wasm-bindgen.workspace = true
+wasm-bindgen-futures.workspace = true
+web-sys = { workspace = true, features = ["HtmlCanvasElement"] }
+# The front end picks the browser's source of randomness for everything under it.
+getrandom = { workspace = true, features = ["wasm_js"] }
+getrandom-04 = { workspace = true, features = ["wasm_js"] }
+
+[lints]
+workspace = true

@@ -6,9 +6,12 @@
 
 pub mod state;
 
-use anyhow::Context as _;
-use core_engine::project::{Cavity, EXTENSION, Project, digest, load, save};
+use std::path::PathBuf;
 
+use anyhow::Context as _;
+use core_engine::project::{Cavity, EXTENSION, Project, ProjectError, digest, load, read_from};
+
+use crate::files::{self, Handed, Wanted};
 use crate::panels::Window;
 use crate::panels::frame_view;
 use crate::scene::Scene;
@@ -19,7 +22,8 @@ use crate::undo::History;
 /// strip knows what to call the plate.
 #[derive(Debug, Default)]
 pub struct Opened {
-    pub path: Option<std::path::PathBuf>,
+    /// In a browser, where nothing has a path, the name it was last opened or saved under.
+    pub path: Option<PathBuf>,
     /// The digest of the plate as it was last written or read, or `None` for a plate that
     /// has never been either. Unsaved work is this not matching the plate in hand.
     saved: Option<u64>,
@@ -49,15 +53,21 @@ pub fn clear(window: &mut Window) {
     window.machine.status = Status::Info("New plate".to_owned());
 }
 
-/// Opens a project over whatever the window was holding.
+/// Asks for a project and opens it.
 pub fn open_dialog(window: &mut Window) {
-    let Some(path) = rfd::FileDialog::new()
-        .add_filter("Encrust project", &[EXTENSION])
-        .pick_file()
-    else {
-        return;
+    if let Some(file) = files::pick(Wanted::Project) {
+        open(window, &file);
+    }
+}
+
+/// Opens a project over whatever the window was holding.
+pub fn open(window: &mut Window, file: &Handed) {
+    let path = file.path().to_path_buf();
+    let read = match file {
+        Handed::Path(path) => load(path),
+        Handed::Bytes { bytes, .. } => read_from(std::io::Cursor::new(&bytes[..])),
     };
-    let read = load(&path)
+    let read = read
         .map_err(anyhow::Error::new)
         .with_context(|| format!("cannot open the project {}", path.display()));
     let Some(project) = window
@@ -110,6 +120,7 @@ pub fn save_open(window: &mut Window) {
     }
 }
 
+#[cfg(not(target_arch = "wasm32"))]
 pub fn save_dialog(window: &mut Window) {
     let Some(path) = rfd::FileDialog::new()
         .add_filter("Encrust project", &[EXTENSION])
@@ -121,10 +132,23 @@ pub fn save_dialog(window: &mut Window) {
     write(window, with_extension(path));
 }
 
-fn write(window: &mut Window, path: std::path::PathBuf) {
+/// A browser asks where to put a download itself, so the project goes out under the name
+/// it came in with.
+#[cfg(target_arch = "wasm32")]
+pub fn save_dialog(window: &mut Window) {
+    let name = window
+        .doc
+        .project
+        .path
+        .clone()
+        .unwrap_or_else(|| PathBuf::from(format!("plate.{EXTENSION}")));
+    write(window, name);
+}
+
+fn write(window: &mut Window, path: PathBuf) {
     let project = captured(window);
     let digest = digest(&project.manifest);
-    let written = save(&path, &project)
+    let written = store(&path, &project)
         .map_err(anyhow::Error::new)
         .with_context(|| format!("cannot write the project {}", path.display()));
     if window
@@ -136,6 +160,21 @@ fn write(window: &mut Window, path: std::path::PathBuf) {
         window.doc.project.path = Some(path);
         window.doc.project.saved = Some(digest);
     }
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+fn store(path: &std::path::Path, project: &Project) -> Result<(), ProjectError> {
+    core_engine::project::save(path, project)
+}
+
+/// Written whole in memory and handed to the user as a download.
+#[cfg(target_arch = "wasm32")]
+fn store(path: &std::path::Path, project: &Project) -> Result<(), ProjectError> {
+    let mut sink = std::io::Cursor::new(Vec::new());
+    core_engine::project::write_to(&mut sink, project)?;
+    let name = path.file_name().unwrap_or_default().to_string_lossy();
+    crate::web::files::download(&name, sink.get_ref())
+        .map_err(|error| ProjectError::Io(crate::web::opfs::failed(error)))
 }
 
 /// The plate as a project, which is both what gets written and what gets hashed.
@@ -210,7 +249,8 @@ pub fn guard_close(ui: &egui::Ui, window: &mut Window) {
 
 /// A name typed without the extension is still a project file; a dialog that already
 /// applied it is left alone.
-fn with_extension(path: std::path::PathBuf) -> std::path::PathBuf {
+#[cfg(not(target_arch = "wasm32"))]
+fn with_extension(path: PathBuf) -> PathBuf {
     if path
         .extension()
         .is_some_and(|extension| extension.eq_ignore_ascii_case(EXTENSION))

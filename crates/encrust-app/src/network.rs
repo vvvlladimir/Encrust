@@ -271,7 +271,7 @@ impl Network {
         let (sender, receiver) = mpsc::channel();
         let manual = self.manual.clone();
         let links: Vec<Link> = self.prusa.iter().map(|prusa| prusa.link.clone()).collect();
-        std::thread::spawn(move || {
+        crate::job::spawn(move || {
             let mut printers = net_sdcp::discover(SCAN_WINDOW).unwrap_or_default();
             for address in manual {
                 let known = printers.iter().any(|printer| printer.address == address);

@@ -4,40 +4,36 @@
 //! from the container and nothing from the window's own profiles. See
 //! `docs/decisions/0151`.
 
-use std::path::Path;
-
+use crate::files::{self, Handed, Wanted};
 use crate::panels::Window;
 use crate::preview::Preview;
 use crate::status::Status;
 use crate::workspace::Mode;
 
 /// The containers the dialog offers, which are the ones a reader claims.
-const EXTENSIONS: [&str; 13] = [
+pub const EXTENSIONS: [&str; 13] = [
     "goo", "ctb", "cbddlp", "photon", "pwmx", "pwmo", "pwms", "sl1", "sl1s", "zip", "cxdlp",
     "svgx", "cws",
 ];
 
 /// Asks for a sliced file and opens it.
 pub fn open_dialog(window: &mut Window) {
-    if let Some(path) = rfd::FileDialog::new()
-        .add_filter("Sliced file", &EXTENSIONS)
-        .pick_file()
-    {
+    if let Some(file) = files::pick(Wanted::SlicedFile) {
         open(
             &mut window.machine.preview,
             window.mode,
             &mut window.machine.status,
-            &path,
+            &file,
         );
     }
 }
 
-/// Opens `path` and moves to the mode that shows it. The one way a file reaches the slider.
-pub fn open(preview: &mut Preview, mode: &mut Mode, status: &mut Status, path: &Path) {
-    match preview.read_file(path) {
+/// Opens `file` and moves to the mode that shows it. The one way a file reaches the slider.
+pub fn open(preview: &mut Preview, mode: &mut Mode, status: &mut Status, file: &Handed) {
+    match preview.read_file(file) {
         Ok(()) => {
             *mode = Mode::Preview;
-            *status = Status::Info(format!("Opened {}", path.display()));
+            *status = Status::Info(format!("Opened {}", file.path().display()));
         }
         Err(error) => *status = Status::Error(format!("{error:#}")),
     }

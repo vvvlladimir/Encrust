@@ -112,6 +112,7 @@ impl Default for Slicing {
 impl Slicing {
     /// Lays the user's own profile directory over the shipped catalogue. A directory
     /// that is not there is normal; one that cannot be read is worth saying out loud.
+    #[cfg(not(target_arch = "wasm32"))]
     pub fn load_user_profiles(&mut self, status: &mut Status) {
         let Some(dir) = printer_profiles::user_dir() else {
             return;
@@ -120,6 +121,18 @@ impl Slicing {
             *status = Status::failed(
                 &anyhow::Error::new(error)
                     .context(format!("cannot read your profiles in {}", dir.display())),
+            );
+        }
+    }
+
+    /// Lays the profiles the page keeps over the shipped catalogue; a browser has no
+    /// directory to give.
+    #[cfg(target_arch = "wasm32")]
+    pub fn load_user_profiles(&mut self, status: &mut Status) {
+        let store = std::sync::Arc::new(crate::web::profiles::PageProfiles);
+        if let Err(error) = self.catalogue.overlay_store(store) {
+            *status = Status::failed(
+                &anyhow::Error::new(error).context("cannot read your profiles in this browser"),
             );
         }
     }
@@ -522,10 +535,11 @@ fn report(outcome: Outcome, material: &MaterialProfile) -> Status {
 }
 
 /// The clock the file is stamped with. One that reads before the epoch stamps the epoch:
-/// the field is informational and no printer refuses a file over it.
+/// the field is informational and no printer refuses a file over it. `web_time`, because
+/// the standard clock panics in a browser.
 fn now_unix_s() -> u64 {
-    std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
+    web_time::SystemTime::now()
+        .duration_since(web_time::UNIX_EPOCH)
         .map_or(0, |since| since.as_secs())
 }
 

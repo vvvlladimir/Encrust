@@ -3,8 +3,11 @@
 
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
 
-use crate::{MaterialProfile, PrinterProfile, ProfileError, SupportProfile};
+use crate::{
+    DirStore, MaterialProfile, PrinterProfile, ProfileError, ProfileStore, SupportProfile,
+};
 
 include!(concat!(env!("OUT_DIR"), "/bundled_profiles.rs"));
 
@@ -60,9 +63,9 @@ pub struct Catalogue {
     printers: BTreeMap<String, Entry<PrinterProfile>>,
     resins: BTreeMap<String, Entry<MaterialProfile>>,
     supports: BTreeMap<String, Entry<SupportProfile>>,
-    /// Where an edited profile is written. `None` until a directory is laid over the
+    /// Where an edited profile is written. `None` until a store is laid over the
     /// catalogue, which is what makes a bundled-only catalogue read-only.
-    root: Option<PathBuf>,
+    store: Option<Arc<dyn ProfileStore>>,
 }
 
 impl Catalogue {
@@ -72,7 +75,7 @@ impl Catalogue {
             printers: bundled_table(BUNDLED_PRINTERS, "printers", PrinterProfile::from_toml_str)?,
             resins: bundled_table(BUNDLED_RESINS, "resins", MaterialProfile::from_toml_str)?,
             supports: bundled_table(BUNDLED_SUPPORTS, "supports", SupportProfile::from_toml_str)?,
-            root: None,
+            store: None,
         })
     }
 
@@ -94,30 +97,39 @@ impl Catalogue {
         Ok(catalogue)
     }
 
-    /// The directory edits are written to, if there is one.
-    pub fn root(&self) -> Option<&Path> {
-        self.root.as_deref()
-    }
-
     /// Reads `<dir>/printers`, `<dir>/resins` and `<dir>/supports` over what is already
     /// loaded. A missing directory is not an error: most users have never made one.
     pub fn overlay(&mut self, dir: &Path) -> Result<(), ProfileError> {
-        self.root = Some(dir.to_owned());
-        overlay_dir(
+        self.overlay_store(Arc::new(DirStore::new(dir)))
+    }
+
+    /// Lays what `store` keeps over what is already loaded, by id, and writes edits there.
+    pub fn overlay_store(&mut self, store: Arc<dyn ProfileStore>) -> Result<(), ProfileError> {
+        overlay(
             &mut self.printers,
-            &dir.join("printers"),
+            &*store,
+            Kind::Printer,
             PrinterProfile::from_toml_str,
         )?;
-        overlay_dir(
+        overlay(
             &mut self.resins,
-            &dir.join("resins"),
+            &*store,
+            Kind::Resin,
             MaterialProfile::from_toml_str,
         )?;
-        overlay_dir(
+        overlay(
             &mut self.supports,
-            &dir.join("supports"),
+            &*store,
+            Kind::Support,
             SupportProfile::from_toml_str,
-        )
+        )?;
+        self.store = Some(store);
+        Ok(())
+    }
+
+    /// Whether edits have somewhere to be written.
+    pub fn has_store(&self) -> bool {
+        self.store.is_some()
     }
 
     pub fn printers(&self) -> impl Iterator<Item = &Entry<PrinterProfile>> {
@@ -173,15 +185,27 @@ impl Catalogue {
         table.iter().any(|(name, _)| *name == id)
     }
 
-    /// Where a profile of this kind and id belongs in the directory being edited.
-    pub fn user_path(&self, kind: Kind, id: &str) -> Result<PathBuf, ProfileError> {
+    /// The store a profile of `id` is written to, once the id is known to be usable.
+    fn store_for(&self, id: &str) -> Result<&dyn ProfileStore, ProfileError> {
         if !is_valid_id(id) {
             return Err(ProfileError::BadId { id: id.to_owned() });
         }
-        let dir = self.root.as_ref().ok_or(ProfileError::NoUserDir {
+        self.store.as_deref().ok_or(ProfileError::NoUserDir {
             variable: PROFILE_DIR_VAR,
-        })?;
-        Ok(dir.join(kind.dir()).join(format!("{id}.toml")))
+        })
+    }
+
+    /// Writes `toml` as the profile of `kind` and `id`, and says where it went.
+    fn keep(
+        &self,
+        kind: Kind,
+        id: &str,
+        toml: impl FnOnce(&Path) -> Result<String, ProfileError>,
+    ) -> Result<PathBuf, ProfileError> {
+        let store = self.store_for(id)?;
+        let path = store.path_of(kind, id);
+        store.write(kind, id, &toml(&path)?)?;
+        Ok(path)
     }
 
     /// Writes a printer into the user's directory and takes it into the catalogue, where
@@ -191,8 +215,7 @@ impl Catalogue {
         id: &str,
         profile: &PrinterProfile,
     ) -> Result<PathBuf, ProfileError> {
-        let path = self.user_path(Kind::Printer, id)?;
-        write_profile(&path, |path| profile.save(path))?;
+        let path = self.keep(Kind::Printer, id, |path| profile.to_toml_string(path))?;
         self.printers.insert(
             id.to_owned(),
             Entry {
@@ -210,8 +233,7 @@ impl Catalogue {
         id: &str,
         resin: &MaterialProfile,
     ) -> Result<PathBuf, ProfileError> {
-        let path = self.user_path(Kind::Resin, id)?;
-        write_profile(&path, |path| resin.save(path))?;
+        let path = self.keep(Kind::Resin, id, |path| resin.to_toml_string(path))?;
         self.resins.insert(
             id.to_owned(),
             Entry {
@@ -229,8 +251,7 @@ impl Catalogue {
         id: &str,
         profile: &SupportProfile,
     ) -> Result<PathBuf, ProfileError> {
-        let path = self.user_path(Kind::Support, id)?;
-        write_profile(&path, |path| profile.save(path))?;
+        let path = self.keep(Kind::Support, id, |path| profile.to_toml_string(path))?;
         self.supports.insert(
             id.to_owned(),
             Entry {
@@ -245,12 +266,7 @@ impl Catalogue {
     /// Throws away the user's copy of a profile. What was shipped under that id comes
     /// back; an id that was only ever theirs leaves the catalogue.
     pub fn forget_user_copy(&mut self, kind: Kind, id: &str) -> Result<(), ProfileError> {
-        let path = self.user_path(kind, id)?;
-        match std::fs::remove_file(&path) {
-            Ok(()) => {}
-            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
-            Err(source) => return Err(ProfileError::Io { path, source }),
-        }
+        self.store_for(id)?.remove(kind, id)?;
         match kind {
             Kind::Printer => restore_bundled(
                 &mut self.printers,
@@ -307,21 +323,6 @@ pub fn user_dir() -> Option<PathBuf> {
 
 type Parse<T> = fn(&str, &Path) -> Result<T, ProfileError>;
 
-/// Makes the directory before writing, because the user's profile directory does not
-/// exist until the first profile they save.
-fn write_profile(
-    path: &Path,
-    save: impl FnOnce(&Path) -> Result<(), ProfileError>,
-) -> Result<(), ProfileError> {
-    if let Some(dir) = path.parent() {
-        std::fs::create_dir_all(dir).map_err(|source| ProfileError::Io {
-            path: dir.to_owned(),
-            source,
-        })?;
-    }
-    save(path)
-}
-
 /// Puts the shipped profile of `id` back, or drops the id when nothing was shipped
 /// under it.
 fn restore_bundled<T>(
@@ -372,46 +373,20 @@ fn bundled_table<T>(
         .collect()
 }
 
-fn overlay_dir<T>(
+fn overlay<T>(
     map: &mut BTreeMap<String, Entry<T>>,
-    dir: &Path,
+    store: &dyn ProfileStore,
+    kind: Kind,
     parse: Parse<T>,
 ) -> Result<(), ProfileError> {
-    let entries = match std::fs::read_dir(dir) {
-        Ok(entries) => entries,
-        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(()),
-        Err(source) => {
-            return Err(ProfileError::Io {
-                path: dir.to_owned(),
-                source,
-            });
-        }
-    };
-
-    for entry in entries {
-        let path = entry
-            .map_err(|source| ProfileError::Io {
-                path: dir.to_owned(),
-                source,
-            })?
-            .path();
-        if path.extension().is_none_or(|extension| extension != "toml") {
-            continue;
-        }
-        let Some(id) = path.file_stem().and_then(|stem| stem.to_str()) else {
-            continue;
-        };
-        let source = std::fs::read_to_string(&path).map_err(|source| ProfileError::Io {
-            path: path.clone(),
-            source,
-        })?;
-        let profile = parse(&source, &path)?;
+    for (id, path, toml) in store.read_all(kind)? {
+        let profile = parse(&toml, &path)?;
         map.insert(
-            id.to_owned(),
+            id.clone(),
             Entry {
-                id: id.to_owned(),
+                id,
                 profile,
-                source: Source::User(path.clone()),
+                source: Source::User(path),
             },
         );
     }
@@ -689,11 +664,72 @@ z = 100.0
     #[test]
     fn a_bundled_catalogue_has_nowhere_to_save() {
         let mut catalogue = Catalogue::bundled().expect("the shipped catalogue is valid");
-        assert!(catalogue.root().is_none());
+        assert!(!catalogue.has_store());
         let error = catalogue
             .save_resin("my-resin", &MaterialProfile::default())
             .unwrap_err();
         assert!(matches!(error, ProfileError::NoUserDir { .. }));
+    }
+
+    /// A store with no directory behind it, as a browser's is.
+    #[derive(Debug, Default)]
+    struct Kept(std::sync::Mutex<BTreeMap<(&'static str, String), String>>);
+
+    impl ProfileStore for Kept {
+        fn path_of(&self, kind: Kind, id: &str) -> PathBuf {
+            PathBuf::from(format!("kept/{}/{id}.toml", kind.dir()))
+        }
+
+        fn read_all(&self, kind: Kind) -> Result<Vec<(String, PathBuf, String)>, ProfileError> {
+            let kept = self.0.lock().expect("no test panics holding it");
+            Ok(kept
+                .iter()
+                .filter(|((dir, _), _)| *dir == kind.dir())
+                .map(|((_, id), toml)| (id.clone(), self.path_of(kind, id), toml.clone()))
+                .collect())
+        }
+
+        fn write(&self, kind: Kind, id: &str, toml: &str) -> Result<(), ProfileError> {
+            let mut kept = self.0.lock().expect("no test panics holding it");
+            kept.insert((kind.dir(), id.to_owned()), toml.to_owned());
+            Ok(())
+        }
+
+        fn remove(&self, kind: Kind, id: &str) -> Result<(), ProfileError> {
+            let mut kept = self.0.lock().expect("no test panics holding it");
+            kept.remove(&(kind.dir(), id.to_owned()));
+            Ok(())
+        }
+    }
+
+    #[test]
+    fn a_store_with_no_directory_keeps_what_is_saved_into_it() {
+        let store = Arc::new(Kept::default());
+        let mut catalogue = Catalogue::bundled().expect("the shipped catalogue is valid");
+        catalogue
+            .overlay_store(Arc::clone(&store) as Arc<dyn ProfileStore>)
+            .expect("an empty store reads");
+        let resin = MaterialProfile {
+            name: "Mine".to_owned(),
+            ..MaterialProfile::default()
+        };
+        let path = catalogue
+            .save_resin("my-resin", &resin)
+            .expect("the store takes it");
+        assert_eq!(path, PathBuf::from("kept/resins/my-resin.toml"));
+
+        let mut reloaded = Catalogue::bundled().expect("the shipped catalogue is valid");
+        reloaded
+            .overlay_store(Arc::clone(&store) as Arc<dyn ProfileStore>)
+            .expect("the store reads back");
+        let entry = reloaded.resin("my-resin").expect("the saved resin is back");
+        assert_eq!(entry.profile.name, "Mine");
+        assert_eq!(entry.source, Source::User(path));
+
+        reloaded
+            .forget_user_copy(Kind::Resin, "my-resin")
+            .expect("the store lets it go");
+        assert!(reloaded.resin("my-resin").is_err(), "only the user had it");
     }
 
     const SAMPLE_PRINTER: &str = r#"

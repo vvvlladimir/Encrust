@@ -86,7 +86,7 @@ impl SendJob {
         let starting = matches!(request.action, Action::StartPrint { .. });
         let counts_bytes = request.wire.reports_progress();
 
-        std::thread::spawn(move || {
+        crate::job::spawn(move || {
             let outcome = run(&request, &worker_cancel, &sender);
             let _ = sender.send(SendProgress::Finished(outcome));
         });

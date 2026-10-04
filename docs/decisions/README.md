@@ -53,6 +53,7 @@ Grouped by what the decision governs; the number is still the order it was taken
 | [0176](0176-the-command-line-is-encrust-with-subcommands.md) | The command line is `encrust`, with subcommands, JSON and a clean Ctrl-C | Accepted |
 | [0177](0177-the-cores-build-for-a-browser.md) | The cores build for a browser: wasm32, one thread, no clock, a cavity budget | Accepted |
 | [0179](0179-a-plate-file-is-toml-read-by-the-command-line.md) | A plate file is TOML, read by the command line alone | Accepted |
+| [0181](0181-the-window-runs-in-a-browser-on-workers.md) | The window runs in a browser, on workers sharing its memory | Accepted |
 
 ### Geometry
 

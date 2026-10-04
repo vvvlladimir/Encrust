@@ -52,7 +52,7 @@ pub struct TrapJob {
 impl TrapJob {
     pub fn spawn(request: TrapRequest) -> Self {
         let (sender, result) = mpsc::channel();
-        std::thread::spawn(move || {
+        crate::job::spawn(move || {
             let _ = sender.send(check(&request));
         });
         Self { result }

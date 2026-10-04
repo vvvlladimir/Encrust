@@ -8,7 +8,7 @@ use std::fs;
 use std::path::PathBuf;
 use std::time::{Duration, Instant};
 
-use encrust_app::{BuildPlate, Scene, Slicing, Status, prepare};
+use encrust_app::{BuildPlate, Handed, Scene, Slicing, Status, prepare};
 use format_goo::decode;
 use printer_profiles::Catalogue;
 
@@ -110,7 +110,9 @@ fn a_cube_imported_and_sliced_as_the_window_does_reaches_the_file_whole() {
 
     let model = write_cube_stl("cube", 10.0);
     let mut scene = Scene::default();
-    scene.insert(prepare(&model, &plate, &mut |_| {}).expect("a closed cube imports"));
+    scene.insert(
+        prepare(&Handed::Path(model.clone()), &plate, &mut |_| {}).expect("a closed cube imports"),
+    );
 
     let mut slicing = Slicing::default();
     slicing.set_printer(printer.profile.clone(), Some(printer.id.clone()));

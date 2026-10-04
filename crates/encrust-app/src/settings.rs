@@ -22,7 +22,12 @@ pub enum Section {
 }
 
 impl Section {
+    #[cfg(not(target_arch = "wasm32"))]
     pub const ALL: [Self; 3] = [Self::Printers, Self::Supports, Self::Updates];
+
+    /// A page loads the latest release every time it is opened, so it has nothing to update.
+    #[cfg(target_arch = "wasm32")]
+    pub const ALL: [Self; 2] = [Self::Printers, Self::Supports];
 
     pub fn label(self) -> &'static str {
         match self {

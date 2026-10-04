@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Encrust</title>
+  <style>
+    html, body { margin: 0; height: 100%; overflow: hidden; background: #16171a; }
+    canvas { display: block; width: 100%; height: 100%; }
+    #notice { display: none; color: #d8d9dc; font: 15px system-ui, sans-serif;
+              max-width: 36rem; margin: 20vh auto; line-height: 1.5; }
+    a { color: #8ab4ff; }
+  </style>
+</head>
+<body>
+  <canvas id="encrust"></canvas>
+  <div id="notice"></div>
+  <script type="module">
+    // The window runs on threads that share memory, which a browser allows only on a page
+    // isolated from other origins; see docs/design/web-build.md.
+    const notice = (html) => {
+      document.getElementById("encrust").remove();
+      const box = document.getElementById("notice");
+      box.innerHTML = html;
+      box.style.display = "block";
+    };
+    const source = `<a href="https://github.com/vvvlladimir/Encrust">Source code</a> (AGPL-3.0).`;
+
+    if (!crossOriginIsolated) {
+      // A host that cannot send the headers gets them from a worker in front of the page,
+      // which takes over on the next load.
+      const registered = "serviceWorker" in navigator
+        && await navigator.serviceWorker.register("isolate.js").then(() => true, () => false);
+      if (registered && !sessionStorage.getItem("encrust.isolating")) {
+        sessionStorage.setItem("encrust.isolating", "1");
+        location.reload();
+      } else {
+        notice(`Encrust needs a page isolated from other sites to run its threads, and this
+          one is not. The host has to send <code>Cross-Origin-Opener-Policy: same-origin</code>
+          and <code>Cross-Origin-Embedder-Policy: require-corp</code>. ${source}`);
+      }
+    } else {
+      sessionStorage.removeItem("encrust.isolating");
+      const bindings = new URL("./encrust_web.js", import.meta.url).href;
+      try {
+        const { default: init, start } = await import(bindings);
+        await init();
+        await start(document.getElementById("encrust"), bindings);
+      } catch (error) {
+        notice(`Encrust could not start in this browser: ${error}. ${source}`);
+      }
+    }
+  </script>
+</body>
+</html>

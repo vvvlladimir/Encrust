@@ -1,11 +1,13 @@
-//! The Encrust window. `main.rs` reads the one argument and starts the logger; the
-//! window itself, and every tool in it, is here.
+//! The Encrust window. `main.rs` reads the one argument and starts the logger, and
+//! `encrust-web` hands it a canvas in a browser; the window itself, and every tool in it,
+//! is here.
 
 mod app;
 mod arrange;
 mod camera;
 mod cut;
 mod drain;
+mod files;
 mod gizmo;
 mod hollow;
 mod import;
@@ -34,15 +36,14 @@ mod ui;
 mod undo;
 mod updates;
 mod viewport_input;
+#[cfg(target_arch = "wasm32")]
+mod web;
 mod workspace;
-
-use std::path::Path;
-
-use anyhow::{Context, Result, anyhow};
 
 use crate::app::SlicerApp;
 
 // What a test needs to put a model on the plate and slice it the way the window does.
+pub use files::Handed;
 pub use import::prepare;
 pub use plate::BuildPlate;
 pub use scene::Scene;
@@ -50,7 +51,8 @@ pub use slicing::Slicing;
 pub use status::Status;
 
 /// Opens the window, with `initial_model` loaded onto the plate if one was named.
-pub fn run(initial_model: Option<&Path>) -> Result<()> {
+#[cfg(not(target_arch = "wasm32"))]
+pub fn run(initial_model: Option<&std::path::Path>) -> anyhow::Result<()> {
     let options = eframe::NativeOptions {
         viewport: viewport()?,
         renderer: eframe::Renderer::Wgpu,
@@ -67,7 +69,29 @@ pub fn run(initial_model: Option<&Path>) -> Result<()> {
         options,
         Box::new(move |cc| Ok(Box::new(SlicerApp::new(cc, initial_model)))),
     )
-    .map_err(|e| anyhow!("cannot start the window: {e}"))
+    .map_err(|e| anyhow::anyhow!("cannot start the window: {e}"))
+}
+
+/// Opens the window on `canvas`. `bindings` is the URL of the module's JavaScript, which
+/// every worker the window starts imports again; see ADR 0181.
+#[cfg(target_arch = "wasm32")]
+pub async fn run_web(
+    canvas: web_sys::HtmlCanvasElement,
+    bindings: String,
+) -> Result<(), wasm_bindgen::JsValue> {
+    web::thread::init(bindings);
+    let options = eframe::WebOptions {
+        // The viewport draws into egui's own render pass, as at the desk.
+        depth_buffer: render::DEPTH_BUFFER_BITS,
+        ..Default::default()
+    };
+    eframe::WebRunner::new()
+        .start(
+            canvas,
+            options,
+            Box::new(|cc| Ok(Box::new(SlicerApp::new(cc, None)))),
+        )
+        .await
 }
 
 /// The icon is compiled in rather than read from disk, like the faces in `ui::fonts`.
@@ -78,7 +102,7 @@ const ICON: &[u8] = include_bytes!(concat!(
     "/../../assets/icon/encrust-macos-512.png"
 ));
 
-#[cfg(not(target_os = "macos"))]
+#[cfg(not(any(target_os = "macos", target_arch = "wasm32")))]
 const ICON: &[u8] = include_bytes!(concat!(
     env!("CARGO_MANIFEST_DIR"),
     "/../../assets/icon/encrust-256.png"
@@ -86,7 +110,9 @@ const ICON: &[u8] = include_bytes!(concat!(
 
 /// The title strip is the window's own title bar: macOS keeps its buttons over a
 /// full-size content view, every other platform draws none. See `docs/decisions/0104`.
-fn viewport() -> Result<egui::ViewportBuilder> {
+#[cfg(not(target_arch = "wasm32"))]
+fn viewport() -> anyhow::Result<egui::ViewportBuilder> {
+    use anyhow::Context as _;
     let viewport = egui::ViewportBuilder::default()
         .with_inner_size([1280.0, 800.0])
         .with_icon(icon().context("the window icon")?);
@@ -102,7 +128,9 @@ fn viewport() -> Result<egui::ViewportBuilder> {
 
 /// The window icon on Windows and Linux; on macOS `eframe` also hands it to the Dock,
 /// over whatever the bundle's `.icns` set.
-fn icon() -> Result<egui::IconData> {
+#[cfg(not(target_arch = "wasm32"))]
+fn icon() -> anyhow::Result<egui::IconData> {
+    use anyhow::Context as _;
     let image = image::load_from_memory(ICON)
         .context("cannot decode the compiled-in icon")?
         .into_rgba8();

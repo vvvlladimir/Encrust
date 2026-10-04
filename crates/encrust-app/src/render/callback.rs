@@ -10,7 +10,6 @@ use crate::camera::OrbitCamera;
 use crate::plate::BuildPlate;
 use crate::render::gpu::{
     DrainCut, ExposureBand, FrameInput, MAX_BANDS, MAX_CUTS, ModelDraw, ReliefDraw,
-    ViewportResources,
 };
 use crate::render::grid::plate_lines;
 use crate::render::label;
@@ -359,7 +358,7 @@ impl CallbackTrait for ViewportCallback {
         _egui_encoder: &mut wgpu::CommandEncoder,
         callback_resources: &mut CallbackResources,
     ) -> Vec<wgpu::CommandBuffer> {
-        if let Some(resources) = callback_resources.get_mut::<ViewportResources>() {
+        super::with_resources(callback_resources, |resources| {
             resources.prepare(
                 device,
                 queue,
@@ -380,7 +379,7 @@ impl CallbackTrait for ViewportCallback {
                     volume_mm: Some(self.volume_mm),
                 },
             );
-        }
+        });
         Vec::new()
     }
 
@@ -390,9 +389,7 @@ impl CallbackTrait for ViewportCallback {
         render_pass: &mut wgpu::RenderPass<'static>,
         callback_resources: &CallbackResources,
     ) {
-        if let Some(resources) = callback_resources.get::<ViewportResources>() {
-            resources.paint(render_pass);
-        }
+        super::resources(callback_resources, |resources| resources.paint(render_pass));
     }
 }
 

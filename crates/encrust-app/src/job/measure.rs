@@ -38,7 +38,7 @@ impl MeasureJob {
         let cancel = Arc::new(AtomicBool::new(false));
         let worker_cancel = Arc::clone(&cancel);
 
-        std::thread::spawn(move || {
+        crate::job::spawn(move || {
             let measured = thread_pool(worker_threads()).and_then(|pool| {
                 pool.install(|| {
                     measure_stack(&mesh, &windows, &settings, &tolerance, fold, &worker_cancel)

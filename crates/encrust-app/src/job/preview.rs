@@ -32,7 +32,7 @@ impl PreviewJob {
     pub fn spawn(mesh: Mesh, cutting: Cutting) -> Self {
         let (sender, result) = mpsc::channel();
 
-        std::thread::spawn(move || {
+        crate::job::spawn(move || {
             let _ = sender.send(build(mesh, cutting));
         });
 
