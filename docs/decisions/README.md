@@ -171,7 +171,7 @@ Grouped by what the decision governs; the number is still the order it was taken
 |---|---|---|
 | [0057](0057-a-field-is-band-tiles-and-solid-runs-on-a-global-lattice.md) | A field is band tiles and solid runs, on one global lattice | Accepted |
 | [0058](0058-the-band-is-built-around-an-isosurface.md) | The band is built around an isosurface, not around the mesh | Accepted |
-| [0059](0059-a-hollow-is-the-model-with-its-cavity-appended.md) | A hollow is the model with its cavity appended, not welded | Accepted |
+| [0059](0059-a-hollow-is-the-model-with-its-cavity-appended.md) | A hollow is the model with its cavity appended, not welded | Superseded by 0185 (the space the wall is measured in only) |
 | [0060](0060-a-lattice-is-boxes-clipped-to-the-cavity.md) | A lattice is boxes clipped to the cavity, not a field | Accepted |
 | [0063](0063-a-field-is-built-to-a-memory-budget.md) | A field is priced and built to a memory budget | Accepted |
 | [0064](0064-marching-cubes-merges-by-lattice-edge-in-layers.md) | Marching cubes merges by lattice edge, a layer at a time | Accepted |
@@ -184,6 +184,7 @@ Grouped by what the decision governs; the number is still the order it was taken
 | [0085](0085-a-build-is-priced-by-its-larger-phase.md) | A build is priced by its larger phase, not by one constant a tile | Accepted |
 | [0116](0116-a-texture-is-pressed-into-the-field.md) | A texture is pressed into the field, not onto the vertices | Accepted |
 | [0122](0122-a-reliefs-depth-is-a-plate-millimetre.md) | A relief's depth is a plate millimetre, pressed after placement | Accepted |
+| [0185](0185-a-wall-is-measured-on-the-plate.md) | A wall is measured on the plate, not in the model's own space | Accepted |
 
 ### The plate
 

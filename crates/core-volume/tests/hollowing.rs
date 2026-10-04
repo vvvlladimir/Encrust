@@ -5,7 +5,7 @@
 use core_geometry::{Bvh, Mesh, Scalar, Vec3, signed_volume};
 use core_volume::{
     Blocker, Channel, HollowMode, HollowSettings, InfillPattern, InfillSettings, VolumeError,
-    drill, hole_at, hollow, pierce, sleeves,
+    drill, hole_at, hollow, hollow_at_scale, pierce, sleeves,
 };
 
 const PI: Scalar = std::f32::consts::PI;
@@ -291,6 +291,70 @@ fn infill_takes_its_own_volume_back_out_of_the_cavity() {
             pattern.label()
         );
     }
+}
+
+#[test]
+fn a_stretched_model_keeps_the_wall_it_asked_for_on_the_plate() {
+    let mesh = cube(20.0, 0.0);
+    let bvh = Bvh::build(&mesh);
+    let stretch = Vec3::new(2.0, 1.0, 1.0);
+    let hollowed = hollow_at_scale(&mesh, &bvh, &settings(2.0, HollowMode::Internal), stretch)
+        .expect("a closed cube hollows");
+
+    let cavity = (40.0 - 4.0) * (20.0 - 4.0) * (20.0 - 4.0);
+    assert!(
+        (hollowed.cavity_mm3 - cavity).abs() / cavity < 0.05,
+        "a 40 x 20 x 20 mm box with a 2 mm wall holds {cavity} mm3, got {}",
+        hollowed.cavity_mm3
+    );
+}
+
+#[test]
+fn a_stretched_model_is_filled_as_if_it_had_been_built_that_size() {
+    let mesh = cube(20.0, 0.0);
+    let bvh = Bvh::build(&mesh);
+    let stretch = Vec3::new(1.6, 1.0, -1.0);
+    let mut asked = settings(2.0, HollowMode::Internal);
+    asked.infill = Some(InfillSettings {
+        pattern: InfillPattern::Hive,
+        size_mm: 5.0,
+        density: 0.15,
+    });
+    asked.blockers = vec![Blocker::ball(Vec3::new(10.0, 10.0, 10.0), 3.0)];
+    let scaled = hollow_at_scale(&mesh, &bvh, &asked, stretch).expect("a closed cube hollows");
+
+    let size = stretch.abs();
+    let placed = Mesh::new(
+        mesh.vertices.iter().map(|vertex| *vertex * size).collect(),
+        mesh.faces.clone(),
+    );
+    asked.blockers = vec![Blocker::ball(Vec3::new(16.0, 10.0, 10.0), 3.0)];
+    let built = hollow(&placed, &Bvh::build(&placed), &asked).expect("a closed box hollows");
+
+    assert_eq!(
+        scaled.mesh.faces, built.mesh.faces,
+        "the same cells, the same struts and the same blocker as on the box itself"
+    );
+    assert!(
+        scaled
+            .mesh
+            .vertices
+            .iter()
+            .zip(&built.mesh.vertices)
+            .all(|(scaled, built)| (*scaled * size).abs_diff_eq(*built, 1e-3)),
+        "the shell comes back in the model's own space, to be scaled onto the plate"
+    );
+}
+
+#[test]
+fn a_model_flattened_to_nothing_cannot_be_hollowed() {
+    let mesh = cube(20.0, 0.0);
+    let bvh = Bvh::build(&mesh);
+    let flat = Vec3::new(1.0, 0.0, 1.0);
+    assert_eq!(
+        hollow_at_scale(&mesh, &bvh, &settings(2.0, HollowMode::Internal), flat).unwrap_err(),
+        VolumeError::BadScale(flat)
+    );
 }
 
 #[test]

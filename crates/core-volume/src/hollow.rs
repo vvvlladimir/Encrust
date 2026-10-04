@@ -233,6 +233,54 @@ pub fn hollow(mesh: &Mesh, bvh: &Bvh, settings: &HollowSettings) -> Result<Hollo
     shelled_to_budget(mesh, bvh, settings)
 }
 
+/// [`hollow`] for a model that stands on the plate scaled by `scale`: the wall, the infill
+/// and the blockers are measured in millimetres of the plate, and the shell comes back in
+/// the model's own space. See `docs/decisions/0185-a-wall-is-measured-on-the-plate.md`.
+pub fn hollow_at_scale(
+    mesh: &Mesh,
+    bvh: &Bvh,
+    settings: &HollowSettings,
+    scale: Vec3,
+) -> Result<Hollowed, VolumeError> {
+    // A mirror is an isometry, so only the size of the scale reaches the field.
+    let scale = scale.abs();
+    if scale == Vec3::ONE {
+        return hollow(mesh, bvh, settings);
+    }
+    if !scale.is_finite() || scale.min_element() <= 0.0 {
+        return Err(VolumeError::BadScale(scale));
+    }
+
+    let placed = Mesh::new(
+        mesh.vertices.iter().map(|vertex| *vertex * scale).collect(),
+        mesh.faces.clone(),
+    );
+    let placed_bvh = Bvh::build(&placed);
+    // A blocker's radius was brought into the model's space through the smallest axis.
+    let smallest = scale.min_element();
+    let blockers = settings
+        .blockers
+        .iter()
+        .map(|blocker| Blocker {
+            from: blocker.from * scale,
+            to: blocker.to * scale,
+            radius_mm: blocker.radius_mm * smallest,
+        })
+        .collect();
+    let mut hollowed = hollow(
+        &placed,
+        &placed_bvh,
+        &HollowSettings {
+            blockers,
+            ..settings.clone()
+        },
+    )?;
+    for vertex in &mut hollowed.mesh.vertices {
+        *vertex /= scale;
+    }
+    Ok(hollowed)
+}
+
 /// The shell alone, on the finest lattice that fits the budget.
 fn shelled_to_budget(
     mesh: &Mesh,

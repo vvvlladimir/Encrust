@@ -3,7 +3,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::{self, Receiver, TryRecvError};
 
 use core_geometry::{Bvh, Mesh, Scalar, Vec3};
-use core_volume::{HollowSettings, Shell, hollow};
+use core_volume::{HollowSettings, Shell, hollow_at_scale};
 
 use crate::job::pipeline::{thread_pool, worker_threads};
 use crate::scene::{ObjectId, Scene};
@@ -15,8 +15,8 @@ pub struct HollowTask {
     /// cavity is worked out and kept in.
     pub mesh: Arc<Mesh>,
     pub bvh: Arc<Bvh>,
-    /// What the model is scaled by where it stands. The wall is measured in the model's
-    /// own space, so a model rescaled afterwards has to be hollowed again.
+    /// What the model is scaled by where it stands. The wall is measured on the plate at
+    /// this scale, so a model rescaled afterwards has to be hollowed again.
     pub scale: Vec3,
     pub settings: HollowSettings,
 }
@@ -185,7 +185,7 @@ fn shell_each(
         }
         report(index as f32 / models);
 
-        match hollow(&task.mesh, &task.bvh, &task.settings) {
+        match hollow_at_scale(&task.mesh, &task.bvh, &task.settings, task.scale) {
             Ok(hollowed) => shells.push(Shelled {
                 id: task.id,
                 shell: Shell {

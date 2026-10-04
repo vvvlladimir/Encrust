@@ -224,8 +224,9 @@ the nearest surface and deep enough to reach it.
 - A hollowed mesh is not watertight and `diagnose` says so. Nothing downstream of the
   rasteriser asks, but it cannot go back into `build`: the winding number would read the
   cavity as a second shell. Step 8e cuts the cavity's *field* instead.
-- The wall is in model space. A model scaled after hollowing has a wall scaled with it; the
-  window notices and asks to be run again.
+- The shell is kept in model space but measured on the plate, at the scale the model
+  stood at (ADR 0185). A model scaled after hollowing has a wall scaled with it; the window
+  notices and asks to be run again.
 - Saved resin is reported as the density times the cavity, true by construction. The mesh's
   own volume cannot be used, because the boxes overlap.
 - A channel narrower than a tenth of a millimetre drains in life and reads as closed to the

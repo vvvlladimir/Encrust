@@ -1,6 +1,6 @@
 # 0059. A hollow is the model with its cavity appended, not welded
 
-- **Status:** Accepted
+- **Status:** Superseded by 0185 (the space the wall is measured in only)
 - **Date:** 2026-09-21
 
 ## Context

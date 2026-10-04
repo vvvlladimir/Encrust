@@ -6,7 +6,7 @@ use core_pipeline::{PanelOverrides, SlicedFormat};
 use core_raster::Shading;
 use core_slicer::WINDOW_LAYERS;
 use core_supports::ModelSupports;
-use core_volume::{ModelHollow, Shell, hollow};
+use core_volume::{ModelHollow, Shell, hollow_at_scale};
 use printer_profiles::{MaterialProfile, SupportProfile};
 
 use crate::project::{Manifest, ObjectState, Project, SlicingState};
@@ -132,10 +132,13 @@ fn model(
             budget_bytes,
             ..wall.settings()
         });
-        let hollowed = hollow(mesh, &bvh, &settings).map_err(|source| EngineError::Hollow {
-            object: object.name.clone(),
-            source,
-        })?;
+        let hollowed =
+            hollow_at_scale(mesh, &bvh, &settings, object.transform.scale).map_err(|source| {
+                EngineError::Hollow {
+                    object: object.name.clone(),
+                    source,
+                }
+            })?;
         cavity.take(Shell {
             mesh: Arc::new(hollowed.mesh),
             cavity_mm3: hollowed.cavity_mm3,

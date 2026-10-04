@@ -195,8 +195,9 @@ impl ModelHollow {
     }
 
     /// Whether what is built no longer matches what the tool is asking for, or the model
-    /// has been rescaled under it. A wall is measured in the model's own space, so a
-    /// model scaled after it was hollowed has a wall of the wrong thickness.
+    /// has been rescaled under it. A wall is measured on the plate at the scale it was
+    /// built under, so a model scaled after it was hollowed has a wall of the wrong
+    /// thickness.
     pub fn is_stale(&self, asked: &HollowSettings, transform: Transform) -> bool {
         self.built.as_ref().is_some_and(|built| {
             built.scale != transform.scale || built.settings != self.asking(asked)
@@ -855,8 +856,8 @@ mod tests {
         };
         assert!(
             hollow.is_stale(&asked, doubled),
-            "a wall measured in the model's own space is the wrong thickness once the \
-             model is scaled"
+            "a wall measured at one scale is the wrong thickness once the model is \
+             scaled again"
         );
     }
 }
