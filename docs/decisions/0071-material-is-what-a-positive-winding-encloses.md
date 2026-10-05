@@ -1,6 +1,6 @@
 # 0071. Fill where the winding number is positive
 
-- **Status:** Accepted
+- **Status:** Accepted; a cut's weight is amended by 0188
 - **Date:** 2026-09-22
 
 ## Context

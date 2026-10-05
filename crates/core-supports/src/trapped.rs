@@ -105,6 +105,9 @@ impl TrapScan {
 
         self.centre_floors(&current);
         self.close_unseen(&seen);
+        // A slot freed by a merge is handed out only once this layer is read: its alias
+        // would otherwise fold a pocket opened on the same layer into the survivor.
+        self.free.extend(alias.keys());
         self.previous = current;
         self.layers += 1;
     }
@@ -187,7 +190,7 @@ impl TrapScan {
     }
 
     /// Folds `dead` into `into` and leaves a forwarding entry behind, so the runs already
-    /// pointing at the dead pocket still land on the survivor.
+    /// pointing at the dead pocket still land on the survivor. The slot is freed by `push`.
     fn merge(&mut self, into: usize, dead: usize, alias: &mut FastMap<usize, usize>) -> usize {
         if into == dead {
             return into;
@@ -208,7 +211,6 @@ impl TrapScan {
             kept.floor = gone.floor;
         }
 
-        self.free.push(dead);
         alias.insert(dead, into);
         into
     }
@@ -498,6 +500,40 @@ mod tests {
         let found = scan(&[false, true, true, false, true, true, false]);
         assert_eq!(found.len(), 2, "one pocket each side of the floor between");
         assert!(found[0].at.z < found[1].at.z || found[1].at.z < found[0].at.z);
+    }
+
+    #[test]
+    fn a_pocket_opening_on_the_layer_two_others_join_stays_its_own() {
+        let square = || ring(10.0, 10.0, 30.0, 30.0, Winding::Outer);
+        let left = || ring(12.0, 12.0, 14.0, 14.0, Winding::Inner);
+        let right = || ring(16.0, 12.0, 18.0, 14.0, Winding::Inner);
+        let joined = || ring(12.0, 12.0, 18.0, 14.0, Winding::Inner);
+        let apart = || ring(22.0, 22.0, 28.0, 28.0, Winding::Inner);
+
+        let mut scan = TrapScan::new(Vec2::splat(10.0), Vec2::splat(30.0), LAYER_MM);
+        scan.push(&layer(0.25, false));
+        scan.push(&Layer::new(0.75, vec![square(), left(), right()]));
+        // The two pockets below meet, and one with nothing under it opens beside them.
+        for z in [1.25, 1.75, 2.25] {
+            scan.push(&Layer::new(z, vec![square(), joined(), apart()]));
+        }
+        scan.push(&layer(2.75, false));
+
+        let found = scan.finish();
+        assert_eq!(
+            found.len(),
+            2,
+            "the joined pocket and the one apart, got {found:?}"
+        );
+        let apart = found
+            .iter()
+            .find(|trapped| trapped.at.x > 20.0)
+            .expect("the pocket apart is reported where it is");
+        assert!(
+            (apart.volume_mm3 - 54.0).abs() < 2.0,
+            "6 x 6 mm over three 0.5 mm layers is 54 mm3, got {}",
+            apart.volume_mm3
+        );
     }
 
     #[test]

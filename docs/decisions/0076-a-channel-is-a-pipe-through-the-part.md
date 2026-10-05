@@ -1,6 +1,6 @@
 # 0076. A channel is a pipe through the part, not a slot in it
 
-- **Status:** Accepted
+- **Status:** Superseded by 0188 (waiting for a second run only)
 - **Date:** 2026-09-23
 
 ## Context

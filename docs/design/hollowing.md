@@ -166,7 +166,9 @@ A hole is a cone appended to the whole solid wound inward, so it cuts the shell 
 cavity's ceiling in one pass, and it is exact at any layer height: `core-volume/drain.rs`
 meshes it, nothing about it is voxelised. Its mouth starts a radius clear of the surface —
 more than the sag of any surface curving away under a hole that wide — so the mouth is
-never left capped, and what stands outside the model prints as nothing.
+never left capped, and what stands outside the model prints as nothing. Every body is laid
+`CUT_WEIGHT` deep, so it takes out the lattice bonded into the wall and a support's tip with
+the shell rather than leaving them standing in the hole (ADR 0188).
 
 | | What it is | Where it comes from |
 |---|---|---|
@@ -201,16 +203,17 @@ groove along the model rather than a tunnel under it.
 A channel is a pipe through the part, so the cavity has to keep off it: `sleeves` turns
 each leg of the spine into a `Blocker` of the tube's radius and the wall, and the window
 and the CLI pass those in with the blockers a user placed (ADR 0076). The wall of the pipe
-is therefore the wall of the model. A channel dug on a model that is already hollow makes
-its shell stale — until it is hollowed again the tube is a bare tunnel between its points —
-and a sleeved channel drains its own two mouths, not the cavity it crosses.
+is therefore the wall of the model. A channel dug or cleared on a model that is already
+hollow rebuilds its shell at once, at the numbers it was built at, and a sleeved channel
+drains its own two mouths, not the cavity it crosses.
 
 What the window draws inside a cut is a second mesh, `bores`: the wall of every tube and
 the floor of every hole that ends in material. It is clipped to the model with one ray per
 sector of the tube — twenty-four per tube, exact where they land and polygonal between them,
-which is what the tube already is — and cut short at the wall a cavity left, so no part of
-it stands outside the model or crosses the cavity. It is drawn and never sliced: the cut
-itself is what the layer sees.
+which is what the tube already is — and a hole's is cut short at the wall a cavity left, so
+no part of it stands outside the model or crosses the cavity. A channel runs in its sleeve,
+so its wall goes its whole length, with a ball's wall round each bend. It is drawn and never
+sliced: the cut itself is what the layer sees.
 
 ## Trapped resin
 

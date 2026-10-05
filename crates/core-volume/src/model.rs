@@ -204,6 +204,15 @@ impl ModelHollow {
         })
     }
 
+    /// What the standing shell would be built from now, at the numbers it was built at, or
+    /// `None` when it already is that or the model is solid. A channel dug or cleared, or a
+    /// blocker placed, after the model was hollowed is what moves it.
+    pub fn rebuild(&self) -> Option<HollowSettings> {
+        let built = self.asked()?;
+        let wanted = self.asking(built);
+        (wanted != *built).then_some(wanted)
+    }
+
     /// What the tool is asking for, with what this model carries laid over it: its own
     /// blockers, and a sleeve of wall around every channel so the cavity keeps off the
     /// pipe. A channel placed on a hollow model therefore makes its shell stale.
@@ -841,6 +850,42 @@ mod tests {
                 .iter()
                 .all(|blocker| { (blocker.radius_mm - (1.0 + asked.thickness_mm)).abs() < 1e-4 }),
             "the sleeve is the tube's radius and the wall around it"
+        );
+    }
+
+    #[test]
+    fn a_shell_asks_to_be_rebuilt_once_a_channel_is_dug_or_cleared_and_not_before() {
+        let mut hollow = ModelHollow::default();
+        assert_eq!(
+            hollow.rebuild(),
+            None,
+            "a solid model has nothing to rebuild"
+        );
+        let built = hollow.asking(&HollowSettings::for_wall(3.0));
+        hollow.take(shell(Vec3::ONE, built));
+        assert_eq!(
+            hollow.rebuild(),
+            None,
+            "the shell is what it was built from"
+        );
+
+        hollow.add_channel_point(Vec3::new(1.0, 0.0, 0.0), Vec3::X, Transform::default());
+        hollow.add_channel_point(Vec3::new(1.0, 0.0, 6.0), Vec3::X, Transform::default());
+        hollow.finish_channel(2.0, Transform::default());
+        let sleeved = hollow.rebuild().expect("the pipe needs its sleeve");
+        assert!(
+            (sleeved.thickness_mm - 3.0).abs() < 1e-6,
+            "at the wall it was built at, whatever the tool now says"
+        );
+        assert_eq!(sleeved.blockers.len(), 3, "a sleeve over each leg");
+
+        hollow.take(shell(Vec3::ONE, sleeved));
+        hollow.clear_channels();
+        assert!(
+            hollow
+                .rebuild()
+                .is_some_and(|wanted| wanted.blockers.is_empty()),
+            "a sleeve with no pipe in it is solid resin for nothing"
         );
     }
 

@@ -2,7 +2,7 @@ use anyhow::{Result, bail};
 use core_geometry::Scalar;
 use core_volume::{HollowMode, HollowSettings, InfillSettings};
 
-use crate::job::{HollowJob, HollowOutcome, HollowRequest, hollow_tasks};
+use crate::job::{HollowJob, HollowOutcome, HollowRequest, hollow_tasks, rebuild_tasks};
 use crate::scene::Scene;
 use crate::status::Status;
 
@@ -73,6 +73,18 @@ impl HollowTool {
         Ok(())
     }
 
+    /// Builds again every hollow model whose cuts moved under its shell, at the numbers it
+    /// was built at, and says whether a run was started. A channel is a pipe only once the
+    /// cavity keeps off it, so digging one on a hollow model cannot wait for a second press.
+    pub fn rebuild(&mut self, scene: &Scene) -> bool {
+        let tasks = rebuild_tasks(scene);
+        if tasks.is_empty() || self.job.is_some() {
+            return false;
+        }
+        self.job = Some(HollowJob::spawn(HollowRequest { tasks }));
+        true
+    }
+
     /// Drains a running job into the scene and the status bar. Returns whether one is
     /// still going, which is what tells the window to keep repainting.
     pub fn poll(&mut self, scene: &mut Scene, status: &mut Status) -> bool {
@@ -105,5 +117,81 @@ impl HollowTool {
             HollowOutcome::Failed(message) => *status = Status::Error(message),
         }
         false
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use core_geometry::{Mesh, Orientation, Transform, Vec3, diagnose};
+    use core_volume::Shell;
+    use std::sync::Arc;
+
+    use crate::scene::{ImportSummary, Imported};
+
+    fn scene_with_a_tetrahedron() -> Scene {
+        let mesh = Mesh::new(
+            vec![
+                Vec3::new(0.0, 0.0, 0.0),
+                Vec3::new(20.0, 0.0, 0.0),
+                Vec3::new(0.0, 20.0, 0.0),
+                Vec3::new(0.0, 0.0, 20.0),
+            ],
+            vec![[0, 2, 1], [0, 1, 3], [1, 2, 3], [2, 0, 3]],
+        );
+        let mut scene = Scene::default();
+        scene.insert(Imported::new(
+            "tetrahedron".to_owned(),
+            Arc::new(mesh.clone()),
+            Transform::default(),
+            ImportSummary {
+                vertices_merged: 0,
+                faces_removed: 0,
+                orientation: Orientation {
+                    flipped_faces: 0,
+                    inverted_shells: 0,
+                    orientable: true,
+                },
+                diagnostics: diagnose(&mesh),
+            },
+        ));
+        scene
+    }
+
+    #[test]
+    fn digging_a_channel_into_a_hollow_model_hollows_it_again_and_nothing_else_does() {
+        let mut scene = scene_with_a_tetrahedron();
+        let mut tool = HollowTool::default();
+        assert!(
+            !tool.rebuild(&scene),
+            "a solid model has no shell to rebuild"
+        );
+
+        let object = &mut scene.objects_mut()[0];
+        let built = object.hollow.asking(&tool.settings());
+        object.hollow.take(Shell {
+            mesh: Arc::new(Mesh::default()),
+            cavity_mm3: 0.0,
+            voxel_mm: 0.2,
+            coarsened: false,
+            scale: Vec3::ONE,
+            settings: built,
+        });
+        assert!(!tool.rebuild(&scene), "the shell is what it was built from");
+
+        let object = &mut scene.objects_mut()[0];
+        object.hollow.add_channel_point(
+            Vec3::new(5.0, 5.0, 0.0),
+            Vec3::NEG_Z,
+            Transform::default(),
+        );
+        object.hollow.add_channel_point(
+            Vec3::new(10.0, 5.0, 0.0),
+            Vec3::NEG_Z,
+            Transform::default(),
+        );
+        assert!(object.hollow.finish_channel(2.0, Transform::default()));
+        assert!(tool.rebuild(&scene), "the channel needs its sleeve now");
+        assert!(tool.job.is_some());
     }
 }

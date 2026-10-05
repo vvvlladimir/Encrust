@@ -24,6 +24,16 @@ pub const MOUTH_LIFT_MM: Scalar = 0.05;
 const BEND_RINGS: usize = 6;
 const BEND_SEGMENTS: usize = 12;
 
+/// Rings and segments of the wall drawn round a bend: fine enough that its faces stand
+/// within the three percent of the radius the viewport's cut test leaves them (ADR 0073).
+const JOINT_RINGS: usize = 12;
+const JOINT_SEGMENTS: usize = 24;
+
+/// How many times a cut is laid over itself. Its winding has to outweigh every body that
+/// can stand where it lands — a shell, the lattice bonded into it, three struts meeting at
+/// a corner, a support's tip — or what they add up to is left in the hole; see ADR 0188.
+pub const CUT_WEIGHT: usize = 8;
+
 /// A hole drilled into the model so the resin behind it can get out.
 ///
 /// It is subtracted from the whole solid rather than from the cavity alone, so one hole
@@ -55,8 +65,9 @@ pub struct Channel {
     pub diameter_mm: Scalar,
 }
 
-/// The bodies `holes` and `channels` take out of a model, wound inward: appending them to
-/// the model is what subtracts them (ADR 0071, 0075).
+/// The bodies `holes` and `channels` take out of a model, wound inward and laid
+/// [`CUT_WEIGHT`] deep: appending them to the model is what subtracts them (ADR 0071, 0075,
+/// 0188).
 ///
 /// They are meshed, never voxelised, so a hole is exact at any layer height and needs no
 /// field of its own. A hole with a diameter, a depth or an axis of nothing cannot be
@@ -75,7 +86,17 @@ pub fn drill(holes: &[DrainHole], channels: &[Channel]) -> Result<Mesh, VolumeEr
             &tunnel(channel).ok_or(VolumeError::BadChannel { index })?,
         );
     }
-    Ok(inward(&cut))
+    Ok(weighted(&inward(&cut)))
+}
+
+/// `body` laid [`CUT_WEIGHT`] times over itself, each copy closed on vertices of its own so
+/// the slicer links every copy into rings of its own.
+fn weighted(body: &Mesh) -> Mesh {
+    let mut whole = Mesh::default();
+    for _ in 0..CUT_WEIGHT {
+        append(&mut whole, body);
+    }
+    whole
 }
 
 /// What those cuts look like from inside: the wall of every hole and channel, clipped to
@@ -84,8 +105,10 @@ pub fn drill(holes: &[DrainHole], channels: &[Channel]) -> Result<Mesh, VolumeEr
 /// Drawn, never sliced. The cut itself reaches out past the surface so that no film is left
 /// over a mouth; a wall that did the same would stand out of the model as a boss, and one
 /// carried across a cavity would read as a rod. So each sector of each tube is cast along
-/// `mesh` and kept only where it is inside, and only for `wall_mm` past each entry when the
-/// model has been hollowed to that wall. See ADR 0073.
+/// `mesh` and kept only where it is inside, and a hole's only for `wall_mm` past each entry
+/// when the model has been hollowed to that wall. A channel runs through the sleeve of wall
+/// its cavity keeps off it, so its wall is drawn its whole length and round every bend. See
+/// ADR 0073 and 0188.
 pub fn bores(
     mesh: &Mesh,
     bvh: &Bvh,
@@ -125,11 +148,21 @@ pub fn bores(
         for pair in channel.points.windows(2) {
             append(
                 &mut bore,
-                &wall(mesh, bvh, pair[0], pair[1], radius, radius, wall_mm, false),
+                &wall(mesh, bvh, pair[0], pair[1], radius, radius, None, false),
             );
+        }
+        let bends = &channel.points[1..channel.points.len() - 1];
+        for bend in bends.iter().filter(|bend| is_inside(mesh, bvh, **bend)) {
+            let round = ball(*bend, radius, JOINT_RINGS, JOINT_SEGMENTS);
+            append(&mut bore, &inward(&round));
         }
     }
     Ok(bore)
+}
+
+/// Whether `point` stands inside `mesh`, by the parity of what a ray from it crosses.
+fn is_inside(mesh: &Mesh, bvh: &Bvh, point: Vec3) -> bool {
+    !solid_runs(mesh, bvh, point, point + Vec3::Z * SKIN_MM, None).is_empty()
 }
 
 /// The inside of one tube: a strip per sector over the stretches of that sector which run
@@ -427,7 +460,7 @@ fn tunnel(channel: &Channel) -> Option<Mesh> {
         return None;
     }
     for point in &channel.points {
-        append(&mut dug, &ball(*point, radius));
+        append(&mut dug, &ball(*point, radius, BEND_RINGS, BEND_SEGMENTS));
     }
     Some(dug)
 }
@@ -469,14 +502,14 @@ fn frame(axis: Vec3) -> (Vec3, Vec3) {
     (right, axis.cross(right))
 }
 
-/// A ball of `radius_mm` about `center`, wound outward.
-fn ball(center: Vec3, radius_mm: Scalar) -> Mesh {
+/// A ball of `radius_mm` about `center` on `rings` and `segments`, wound outward.
+fn ball(center: Vec3, radius_mm: Scalar, rings: usize, segments: usize) -> Mesh {
     let mut vertices = vec![center + Vec3::Z * radius_mm];
-    for ring in 1..BEND_RINGS {
-        let theta = std::f32::consts::PI * ring as Scalar / BEND_RINGS as Scalar;
+    for ring in 1..rings {
+        let theta = std::f32::consts::PI * ring as Scalar / rings as Scalar;
         let (sin_theta, cos_theta) = theta.sin_cos();
-        for segment in 0..BEND_SEGMENTS {
-            let phi = std::f32::consts::TAU * segment as Scalar / BEND_SEGMENTS as Scalar;
+        for segment in 0..segments {
+            let phi = std::f32::consts::TAU * segment as Scalar / segments as Scalar;
             let (sin_phi, cos_phi) = phi.sin_cos();
             vertices.push(
                 center + radius_mm * Vec3::new(sin_theta * cos_phi, sin_theta * sin_phi, cos_theta),
@@ -486,20 +519,14 @@ fn ball(center: Vec3, radius_mm: Scalar) -> Mesh {
     let south = vertices.len() as u32;
     vertices.push(center - Vec3::Z * radius_mm);
 
-    let at = |ring: usize, segment: usize| {
-        (1 + (ring - 1) * BEND_SEGMENTS + segment % BEND_SEGMENTS) as u32
-    };
+    let at = |ring: usize, segment: usize| (1 + (ring - 1) * segments + segment % segments) as u32;
     let mut faces = Vec::new();
-    for segment in 0..BEND_SEGMENTS {
+    for segment in 0..segments {
         faces.push([0, at(1, segment), at(1, segment + 1)]);
-        faces.push([
-            south,
-            at(BEND_RINGS - 1, segment + 1),
-            at(BEND_RINGS - 1, segment),
-        ]);
+        faces.push([south, at(rings - 1, segment + 1), at(rings - 1, segment)]);
     }
-    for ring in 1..BEND_RINGS - 1 {
-        for segment in 0..BEND_SEGMENTS {
+    for ring in 1..rings - 1 {
+        for segment in 0..segments {
             faces.push([
                 at(ring, segment),
                 at(ring + 1, segment),
@@ -547,7 +574,7 @@ mod tests {
         // The mouth of this one stands a millimetre clear of the surface, so the tube is
         // depth + lift long, and a 24-sided prism is a hair under the circle it stands in.
         let expected = std::f32::consts::PI * 1.0 * 11.0;
-        let volume = -signed_volume(&cut);
+        let volume = -signed_volume(&cut) / CUT_WEIGHT as Scalar;
         assert!(
             (volume - expected).abs() < 0.03 * expected,
             "a 2 mm by 11 mm tube holds {expected} mm3, got {volume}"
@@ -653,17 +680,21 @@ mod tests {
     }
 
     #[test]
-    fn a_wall_stops_at_the_cavity_behind_the_model_it_was_hollowed_to() {
+    fn a_holes_wall_stops_at_the_cavity_behind_the_model_it_was_hollowed_to() {
         let mesh = box_mesh();
         let bvh = Bvh::build(&mesh);
-        let channel = Channel {
-            points: vec![Vec3::new(5.0, 5.0, 12.0), Vec3::new(5.0, 5.0, -2.0)],
+        let through = DrainHole {
+            at: Vec3::new(5.0, 5.0, 10.0),
+            axis: Vec3::NEG_Z,
             diameter_mm: 2.0,
+            depth_mm: 9.0,
+            taper: 1.0,
+            lift_mm: 0.0,
         };
 
-        // A two millimetre wall: the tube crosses the cavity between them, where there is
-        // no material to draw a wall on.
-        let bore = bores(&mesh, &bvh, &[], &[channel], Some(2.0)).expect("the channel digs");
+        // A two millimetre wall: the hole runs on into the cavity, where there is no
+        // material to draw a wall on.
+        let bore = bores(&mesh, &bvh, &[through], &[], Some(2.0)).expect("the hole drills");
         let carried = bore
             .vertices
             .iter()
@@ -672,6 +703,49 @@ mod tests {
             !carried,
             "a wall carried across the cavity reads as a rod standing in it"
         );
+    }
+
+    #[test]
+    fn a_channels_wall_runs_its_whole_length_through_a_hollow_model() {
+        let mesh = box_mesh();
+        let bvh = Bvh::build(&mesh);
+        let channel = Channel {
+            points: vec![Vec3::new(5.0, 5.0, 12.0), Vec3::new(5.0, 5.0, -2.0)],
+            diameter_mm: 2.0,
+        };
+
+        // The cavity keeps a sleeve of wall round the pipe, so there is material all the
+        // way along it however thin the wall the model was hollowed to.
+        let bore = bores(&mesh, &bvh, &[], &[channel], Some(2.0)).expect("the channel digs");
+        let bounds = bore.aabb().expect("the wall has vertices");
+        assert!(
+            bounds.mins.z < 0.01 && bounds.maxs.z > 9.99,
+            "the pipe is walled from the lid to the floor, got {bounds:?}"
+        );
+    }
+
+    #[test]
+    fn a_bend_in_a_channel_is_walled_round() {
+        let mesh = box_mesh();
+        let bvh = Bvh::build(&mesh);
+        let bent = Channel {
+            points: vec![
+                Vec3::new(2.0, 5.0, 12.0),
+                Vec3::new(2.0, 5.0, 5.0),
+                Vec3::new(8.0, 5.0, 5.0),
+                Vec3::new(8.0, 5.0, 12.0),
+            ],
+            diameter_mm: 2.0,
+        };
+
+        // Past the outside of the bend at (2, 5, 5) only the ball's wall reaches: the two
+        // legs end in rings through the bend itself.
+        let bore = bores(&mesh, &bvh, &[], &[bent], None).expect("the channel digs");
+        let round = bore
+            .vertices
+            .iter()
+            .any(|vertex| vertex.x < 1.5 && vertex.z < 4.5);
+        assert!(round, "the outside of the bend has a wall of its own");
     }
 
     #[test]

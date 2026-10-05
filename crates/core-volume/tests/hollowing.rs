@@ -4,8 +4,8 @@
 
 use core_geometry::{Bvh, Mesh, Scalar, Vec3, signed_volume};
 use core_volume::{
-    Blocker, Channel, HollowMode, HollowSettings, InfillPattern, InfillSettings, VolumeError,
-    drill, hole_at, hollow, hollow_at_scale, pierce, sleeves,
+    Blocker, CUT_WEIGHT, Channel, HollowMode, HollowSettings, InfillPattern, InfillSettings,
+    VolumeError, drill, hole_at, hollow, hollow_at_scale, pierce, sleeves,
 };
 
 const PI: Scalar = std::f32::consts::PI;
@@ -549,7 +549,7 @@ fn a_drain_hole_takes_its_own_tube_out_of_the_shell() {
     // millimetres in. What the rule fills is only the part of it inside the wall, but what
     // is appended, and so what the signed volume counts, is the whole tube.
     let tube = PI * 1.5 * 1.5 * 4.0;
-    let taken = enclosed(&solid.mesh) - enclosed(&drained);
+    let taken = (enclosed(&solid.mesh) - enclosed(&drained)) / CUT_WEIGHT as Scalar;
     assert!(
         (taken - tube).abs() / tube < 0.05,
         "a 3 mm by 4 mm tube is {tube} mm3, got {taken}"
@@ -574,7 +574,7 @@ fn a_hole_shallower_than_the_wall_is_deepened_until_it_is_through_it() {
     );
 
     let wall = PI * 1.5 * 1.5 * 2.0;
-    let taken = enclosed(&shell.mesh) - enclosed(&drained);
+    let taken = (enclosed(&shell.mesh) - enclosed(&drained)) / CUT_WEIGHT as Scalar;
     assert!(
         taken > wall,
         "the hole has to reach past the {wall} mm3 of wall in front of it, got {taken}"

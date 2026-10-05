@@ -1,7 +1,7 @@
 use crate::drain::Placing;
 use crate::panels::Window;
 use crate::panels::inspector::hollow;
-use crate::state::{Doc, Tools};
+use crate::state::Tools;
 use crate::ui::{
     Segment, Segmented, describe, hint, icon, number_row, primary_button, secondary_button,
     section, stats, subheading, theme, tone,
@@ -36,7 +36,7 @@ pub fn ui(ui: &mut egui::Ui, window: &mut Window) {
         sizes(ui, window.tools);
 
         subheading(ui, "Placed");
-        placed(ui, window.doc);
+        placed(ui, window);
 
         ui.add_space(8.0);
         hollow::action(ui, window);
@@ -87,6 +87,7 @@ fn placing(ui: &mut egui::Ui, window: &mut Window) {
     {
         let dug = window.tools.drain.finish_channels(&mut window.doc.scene);
         window.machine.status = crate::status::Status::Info(format!("{dug} channel(s) dug"));
+        rebuild_around_cuts(window);
     }
 }
 
@@ -128,8 +129,9 @@ fn sizes(ui: &mut egui::Ui, tools: &mut Tools) {
 }
 
 /// How many holes are standing, and the one way to take them all away.
-fn placed(ui: &mut egui::Ui, doc: &mut Doc) {
-    let drilled: usize = doc
+fn placed(ui: &mut egui::Ui, window: &mut Window) {
+    let drilled: usize = window
+        .doc
         .scene
         .targets()
         .map(|object| object.hollow.drains().len() + object.hollow.channels().len())
@@ -140,10 +142,20 @@ fn placed(ui: &mut egui::Ui, doc: &mut Doc) {
     }
 
     if secondary_button(ui, icon::REMOVE, &format!("Clear {drilled} cut(s)")).clicked() {
-        for object in doc.scene.targets_mut() {
+        for object in window.doc.scene.targets_mut() {
             object.hollow.clear_drains();
             object.hollow.clear_channels();
         }
+        rebuild_around_cuts(window);
+    }
+}
+
+/// A channel dug or cleared on a hollow model moves the sleeve its cavity keeps off it, so
+/// the shell is built again on the spot rather than left open into the pipe.
+fn rebuild_around_cuts(window: &mut Window) {
+    if window.tools.hollow.rebuild(&window.doc.scene) {
+        window.machine.status =
+            crate::status::Status::Info("Hollowing again around the channels".to_owned());
     }
 }
 

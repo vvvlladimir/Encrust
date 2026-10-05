@@ -843,8 +843,8 @@ fn as_seen(settings: &RasterSettings) -> RasterSettings {
 
 /// Identifies the stack a scene would slice into.
 ///
-/// Placement, visibility, which meshes are loaded and the layer height all change the
-/// contours; selecting an object or moving the camera does not, and must not cost a
+/// Placement, visibility, which meshes are loaded, the cuts in them and the layer height
+/// all change the contours; selecting an object or moving the camera does not, and must not cost a
 /// rebuild.
 pub fn stack_fingerprint(scene: &Scene, cutting: Cutting) -> u64 {
     let mut hasher = DefaultHasher::new();
@@ -867,6 +867,11 @@ pub fn stack_fingerprint(scene: &Scene, cutting: Cutting) -> u64 {
         object.id.hash(&mut hasher);
         Arc::as_ptr(&object.mesh).hash(&mut hasher);
         object.hollow.shell().map(Arc::as_ptr).hash(&mut hasher);
+        object
+            .hollow
+            .cut_bodies()
+            .map(Arc::as_ptr)
+            .hash(&mut hasher);
         for supports in object.supports.meshes().unwrap_or_default() {
             Arc::as_ptr(supports).hash(&mut hasher);
         }
@@ -1333,6 +1338,34 @@ pub(crate) mod tests {
             stack_fingerprint(&scene, Cutting::uniform(0.05)),
             moved,
             "hiding a model changes the stack"
+        );
+    }
+
+    #[test]
+    fn drilling_a_hole_or_clearing_it_changes_the_fingerprint() {
+        let mut scene = scene_with_a_model();
+        let solid = stack_fingerprint(&scene, Cutting::uniform(0.05));
+
+        let object = &mut scene.objects_mut()[0];
+        let (mesh, bvh) = (Arc::clone(&object.mesh), Arc::clone(&object.bvh));
+        let size = core_volume::HoleSize {
+            diameter_mm: 0.2,
+            depth_mm: 0.2,
+            taper: 1.0,
+        };
+        let point = mesh.vertices[0];
+        let transform = object.transform;
+        object
+            .hollow
+            .add_drain(&mesh, &bvh, point, Vec3::NEG_Z, size, transform);
+        let drilled = stack_fingerprint(&scene, Cutting::uniform(0.05));
+        assert_ne!(drilled, solid, "a hole changes what the layers hold");
+
+        scene.objects_mut()[0].hollow.clear_drains();
+        assert_ne!(
+            stack_fingerprint(&scene, Cutting::uniform(0.05)),
+            drilled,
+            "and so does taking it back out"
         );
     }
 
