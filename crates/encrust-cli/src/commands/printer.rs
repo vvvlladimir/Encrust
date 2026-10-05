@@ -190,6 +190,9 @@ fn status(args: &MachineArgs, global: &GlobalArgs) -> Result<()> {
 /// One line for a state: what, on which file, how far, and what went wrong.
 fn described(state: &State) -> String {
     let mut line = state.state.clone();
+    if let Some(stage) = &state.stage {
+        line += &format!(" ({stage})");
+    }
     if let Some(file) = &state.file {
         line += &format!(", {file}");
     }
@@ -317,11 +320,15 @@ mod tests {
     fn a_state_reads_as_one_line() {
         let state = State {
             state: "printing".to_owned(),
+            stage: Some("exposing".to_owned()),
             file: Some("cube.goo".to_owned()),
             progress: Some(0.25),
             remaining_s: Some(61),
             error: None,
         };
-        assert_eq!(described(&state), "printing, cube.goo, 25%, 2 min left");
+        assert_eq!(
+            described(&state),
+            "printing (exposing), cube.goo, 25%, 2 min left"
+        );
     }
 }

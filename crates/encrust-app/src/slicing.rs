@@ -412,10 +412,11 @@ impl Slicing {
         };
 
         self.job = None;
+        let to_send = std::mem::take(&mut self.to_send);
         if let Outcome::Written { path, .. } = &outcome {
             self.written = Some(Written {
                 path: path.clone(),
-                to_send: self.to_send,
+                to_send,
             });
         }
         let failed = matches!(outcome, Outcome::Failed(_) | Outcome::Cancelled);
@@ -429,7 +430,6 @@ impl Slicing {
 
     /// Takes the file the last job wrote, once.
     pub fn take_written(&mut self) -> Option<Written> {
-        self.to_send = false;
         self.written.take()
     }
 
@@ -920,6 +920,32 @@ z = 10.0
         let mut status = Status::default();
         assert!(!slicing.poll(&Scene::default(), &mut status));
         assert_eq!(status, Status::Idle);
+    }
+
+    #[test]
+    fn a_stack_cut_to_send_is_still_for_sending_when_the_window_asked_every_frame() {
+        let scene = scene_with_a_model();
+        let mut slicing = with_printer();
+        let mut status = Status::default();
+        let path = std::env::temp_dir().join("encrust-slicing-to-send.goo");
+        slicing.send_when_written();
+        slicing
+            .start(&scene, 0, path.clone())
+            .expect("a loaded printer and a model");
+        let written = loop {
+            // The window asks for a written file on every frame, the job's first included.
+            if let Some(written) = slicing.take_written() {
+                break written;
+            }
+            slicing.poll(&scene, &mut status);
+            assert!(!status.is_error(), "{status:?}");
+        };
+        std::fs::remove_file(&path).ok();
+        assert!(written.to_send, "the Send button asked for this stack");
+        assert!(
+            !slicing.to_send,
+            "the next stack goes to a file unless asked again"
+        );
     }
 
     /// The shipped catalogue with its resins taken as the user's own, which is what a

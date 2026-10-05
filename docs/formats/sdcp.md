@@ -82,13 +82,21 @@ Every response carries an `Ack`, and only `0` is success. The other seven say wh
 busy, file not found, MD5 mismatch, unreadable, resolution mismatch, unknown format,
 wrong machine. `net-sdcp` spells each of them out rather than reporting a number.
 
-Two details the shape of the client follows from:
+Four details the shape of the client follows from:
 
 1. **Reports arrive whenever the board feels like it**, on the same socket a response
    comes back on. A read loop therefore files status and attributes as they pass and
    keeps reading until the `RequestID` it is waiting for turns up.
-2. **`CurrentStatus` is an array** of the states that are live at once. Firmware in the
-   field sends a bare number instead, so both are accepted.
+2. **Command `0` is answered twice.** The response is a bare `Ack`; the state itself follows
+   later on the status topic, so a refresh waits for that report and fails if it never
+   comes rather than reading the empty state as idle.
+3. **`CurrentStatus` is an array** of the states that are live at once. Firmware in the
+   field sends a bare number instead, so both are accepted. `PrintInfo.Status` says what a
+   print is doing inside that: homing, lowering, exposing, lifting, pausing, paused,
+   stopping, stopped, complete, and `10`, checking a file it has just taken.
+4. **A board checks a file after it lands and is busy until it has.** A start sent then is
+   answered `Ack 1`, so a start waits out status `10` and asks again on busy, for up to a
+   minute; a board printing something else is refused at once.
 
 ### Upload, version 3: `POST http://${MainboardIP}:3030/uploadFile/upload`
 

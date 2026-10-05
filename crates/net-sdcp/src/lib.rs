@@ -14,6 +14,6 @@ pub use control::Control;
 pub use discover::{discover, probe};
 pub use error::SdcpError;
 pub use printer::{
-    Attributes, Fetching, FileTransferInfo, Machine, PrintInfo, Printer, Status, Transport,
+    Attributes, Fetching, FileTransferInfo, Machine, PrintInfo, Printer, Stage, Status, Transport,
 };
 pub use upload::{Transfer, upload};
