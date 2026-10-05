@@ -34,6 +34,9 @@ pub struct DrainTool {
     pub job: Option<TrapJob>,
     /// Whether a check has finished since the plate last changed under it.
     pub checked: bool,
+    /// Whether the plate is waiting for a check: a cavity or a cut has moved and the
+    /// pockets on screen are no longer what the models hold. See ADR 0189.
+    pub(crate) asked: bool,
 }
 
 impl Default for DrainTool {
@@ -47,6 +50,7 @@ impl Default for DrainTool {
             placing: Placing::default(),
             job: None,
             checked: false,
+            asked: false,
         }
     }
 }
@@ -69,11 +73,33 @@ impl DrainTool {
         }
 
         self.checked = false;
+        self.asked = false;
         self.job = Some(TrapJob::spawn(TrapRequest {
             tasks,
             layer_height_mm,
         }));
         Ok(())
+    }
+
+    /// Says that the plate has moved under the last check: a cavity was cut, or a hole or
+    /// a channel went in or came out.
+    pub fn ask_for_a_check(&mut self) {
+        self.asked = true;
+    }
+
+    /// Starts the check the plate is waiting for, and says whether one is now going.
+    ///
+    /// A change while a check is running is kept rather than queued, so clicking hole
+    /// after hole costs one check after the one in flight and not one each.
+    pub fn start_if_asked(&mut self, scene: &Scene, layer_height_mm: Scalar) -> bool {
+        if !self.asked || self.job.is_some() {
+            return false;
+        }
+        if trap_tasks(scene).is_empty() {
+            self.asked = false;
+            return false;
+        }
+        self.start(scene, layer_height_mm).is_ok()
     }
 
     /// Drains a running check into the scene and the status bar. Returns whether one is
@@ -108,6 +134,7 @@ impl DrainTool {
 
     /// Digs the channel every model has been laying out, and says how many were dug.
     pub fn finish_channels(&mut self, scene: &mut Scene) -> usize {
+        self.ask_for_a_check();
         let diameter_mm = self.diameter_mm;
         let mut dug = 0;
         for object in scene.targets_mut() {
@@ -122,7 +149,11 @@ impl DrainTool {
     }
 
     /// Drills a hole into every pocket the last check found, and says how many it put in.
+    ///
+    /// The check runs again after it, which is what takes the marks off the pockets the
+    /// holes have drained and leaves the ones they have not.
     pub fn drill_found(&mut self, scene: &mut Scene) -> usize {
+        self.ask_for_a_check();
         let (diameter_mm, taper) = (self.diameter_mm, self.taper);
         let mut drilled = 0;
 
@@ -192,4 +223,77 @@ fn trap_radius_mm(volume_mm3: Scalar) -> Scalar {
         .max(0.0)
         .cbrt();
     ball.clamp(1.0, 5.0)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use core_geometry::{Orientation, Transform, Vec3, diagnose};
+
+    use crate::scene::{ImportSummary, Imported};
+
+    fn scene_with_a_tetrahedron() -> Scene {
+        let mesh = Mesh::new(
+            vec![
+                Vec3::new(0.0, 0.0, 0.0),
+                Vec3::new(20.0, 0.0, 0.0),
+                Vec3::new(0.0, 20.0, 0.0),
+                Vec3::new(0.0, 0.0, 20.0),
+            ],
+            vec![[0, 2, 1], [0, 1, 3], [1, 2, 3], [2, 0, 3]],
+        );
+        let mut scene = Scene::default();
+        scene.insert(Imported::new(
+            "tetrahedron".to_owned(),
+            Arc::new(mesh.clone()),
+            Transform::default(),
+            ImportSummary {
+                vertices_merged: 0,
+                faces_removed: 0,
+                orientation: Orientation {
+                    flipped_faces: 0,
+                    inverted_shells: 0,
+                    orientable: true,
+                },
+                diagnostics: diagnose(&mesh),
+            },
+        ));
+        scene
+    }
+
+    #[test]
+    fn a_cut_that_moved_is_checked_once_however_many_moved_while_one_ran() {
+        let mut scene = scene_with_a_tetrahedron();
+        let mut tool = DrainTool::default();
+        let mut status = Status::default();
+
+        assert!(
+            !tool.start_if_asked(&scene, 0.05),
+            "nothing has moved, so nothing is checked"
+        );
+
+        tool.ask_for_a_check();
+        assert!(tool.start_if_asked(&scene, 0.05), "a cut moved");
+        tool.ask_for_a_check();
+        assert!(
+            !tool.start_if_asked(&scene, 0.05),
+            "the check in flight is the one that answers for it"
+        );
+        while tool.poll(&mut scene, &mut status) {
+            std::thread::yield_now();
+        }
+        assert!(
+            tool.start_if_asked(&scene, 0.05),
+            "and what moved under it is checked after it"
+        );
+    }
+
+    #[test]
+    fn an_empty_plate_forgets_the_check_it_was_asked_for() {
+        let scene = Scene::default();
+        let mut tool = DrainTool::default();
+        tool.ask_for_a_check();
+        assert!(!tool.start_if_asked(&scene, 0.05));
+        assert!(!tool.asked, "there is nothing left to check it against");
+    }
 }

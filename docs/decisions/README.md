@@ -171,10 +171,10 @@ Grouped by what the decision governs; the number is still the order it was taken
 | # | Decision | Status |
 |---|---|---|
 | [0057](0057-a-field-is-band-tiles-and-solid-runs-on-a-global-lattice.md) | A field is band tiles and solid runs, on one global lattice | Accepted |
-| [0058](0058-the-band-is-built-around-an-isosurface.md) | The band is built around an isosurface, not around the mesh | Accepted |
-| [0059](0059-a-hollow-is-the-model-with-its-cavity-appended.md) | A hollow is the model with its cavity appended, not welded | Superseded by 0185 (the space the wall is measured in only) |
+| [0058](0058-the-band-is-built-around-an-isosurface.md) | The band is built around an isosurface, not around the mesh | Accepted; the bottom-through field it prices is dropped by 0189 |
+| [0059](0059-a-hollow-is-the-model-with-its-cavity-appended.md) | A hollow is the model with its cavity appended, not welded | Superseded by 0185 (the space the wall is measured in only); `BottomThrough` dropped by 0189 |
 | [0060](0060-a-lattice-is-boxes-clipped-to-the-cavity.md) | A lattice is boxes clipped to the cavity, not a field | Accepted |
-| [0063](0063-a-field-is-built-to-a-memory-budget.md) | A field is priced and built to a memory budget | Accepted |
+| [0063](0063-a-field-is-built-to-a-memory-budget.md) | A field is priced and built to a memory budget | Accepted; the clipped floor field it names is dropped by 0189 |
 | [0064](0064-marching-cubes-merges-by-lattice-edge-in-layers.md) | Marching cubes merges by lattice edge, a layer at a time | Accepted |
 | [0065](0065-a-fields-distances-are-quantised-to-its-band.md) | A field's distances are quantised to its band | Accepted |
 | [0069](0069-the-band-walks-out-to-the-isosurface.md) | The band walks out to the isosurface rather than taking every tile near it | Accepted |
@@ -188,6 +188,7 @@ Grouped by what the decision governs; the number is still the order it was taken
 | [0185](0185-a-wall-is-measured-on-the-plate.md) | A wall is measured on the plate, not in the model's own space | Accepted |
 | [0186](0186-a-cavity-is-a-closed-surface-and-a-slice-follows-it-through-a-branch.md) | A cavity is a closed surface, and a slice follows it through a branch | Accepted |
 | [0188](0188-a-cut-outweighs-what-it-lands-in-and-a-channel-stays-a-pipe.md) | A cut outweighs what it lands in, and a channel stays a pipe | Accepted |
+| [0189](0189-resin-leaves-through-a-hole-and-a-lattice-never-closes-a-cell.md) | Resin leaves through a hole, and a lattice never closes a cell | Accepted |
 
 ### The plate
 

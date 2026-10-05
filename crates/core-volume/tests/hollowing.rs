@@ -160,44 +160,6 @@ fn a_wall_thicker_than_the_model_hollows_nothing() {
 }
 
 #[test]
-fn the_bottom_through_cavity_reaches_the_underside_of_the_model() {
-    // A 20 mm cube with a 3 mm wall: the closed cavity is 14^3, and taking its floor out
-    // adds the 14 x 14 x 3 slab under it.
-    let mesh = cube(20.0, 0.031);
-    let bvh = Bvh::build(&mesh);
-    let closed =
-        hollow(&mesh, &bvh, &settings(3.0, HollowMode::Internal)).expect("a closed cube hollows");
-    let open = hollow(&mesh, &bvh, &settings(3.0, HollowMode::BottomThrough))
-        .expect("a closed cube hollows");
-
-    let floor = 14.0 * 14.0 * 3.0;
-    let added = open.cavity_mm3 - closed.cavity_mm3;
-    assert!(
-        (added - floor).abs() / floor < 0.05,
-        "the floor taken out is 14 x 14 x 3 = {floor} mm3, got {added}"
-    );
-}
-
-#[test]
-fn a_bottom_through_cavity_stays_inside_the_model() {
-    let mesh = cube(20.0, 0.031);
-    let bvh = Bvh::build(&mesh);
-    let hollowed = hollow(&mesh, &bvh, &settings(3.0, HollowMode::BottomThrough))
-        .expect("a closed cube hollows");
-
-    let before = mesh.aabb().expect("the cube has vertices");
-    let after = hollowed.mesh.aabb().expect("the hollow has vertices");
-    assert!(
-        after.mins.z >= before.mins.z - 1e-4,
-        "the cavity must not hang below the model, which would slice as a rim of material \
-         with nothing around it: model starts at {}, hollow at {}",
-        before.mins.z,
-        after.mins.z
-    );
-    assert!(after.maxs.z <= before.maxs.z + 1e-4);
-}
-
-#[test]
 fn a_blocker_keeps_the_wall_solid() {
     let mesh = ball(10.0, 48, 48);
     let bvh = Bvh::build(&mesh);

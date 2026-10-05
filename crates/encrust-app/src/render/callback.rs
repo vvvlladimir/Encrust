@@ -203,9 +203,10 @@ impl Draws {
                 theme::scene().blocker,
             );
         }
-        // The pockets the last drainage check found, marked the same way.
+        // The pockets the last drainage check found, in their own red: a hole has to go
+        // into each before the model is printed. See ADR 0189.
         if let Some(traps) = object.traps.markers() {
-            self.flat(Arc::clone(traps), object.transform, theme::scene().blocker);
+            self.flat(Arc::clone(traps), object.transform, theme::scene().trapped);
         }
     }
 

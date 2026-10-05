@@ -480,7 +480,7 @@ mod tests {
 
         let hollow = HollowTool {
             thickness_mm: 1.75,
-            mode: HollowMode::BottomThrough,
+            mode: HollowMode::External,
             infill_on: true,
             ..HollowTool::default()
         };

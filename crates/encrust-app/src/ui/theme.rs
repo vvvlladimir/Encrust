@@ -157,7 +157,11 @@ pub struct Scene {
     /// A mesh that could not be oriented outward.
     pub unsound: Color32,
     /// A hollowing blocker: a marker the user placed, not geometry that is printed.
+    /// Translucent and apart from every colour a model is drawn in, so it never reads as
+    /// a lump of the part.
     pub blocker: Color32,
+    /// A pocket of resin with no way out, marked where a hole has to go.
+    pub trapped: Color32,
     /// The patch painted to be filled with supports.
     pub painted: Color32,
     /// The patch painted to keep supports off.
@@ -199,7 +203,8 @@ const ENCRUST_SCENE: Scene = Scene {
     support: Color32::from_rgb(0x5c, 0x70, 0x8a),
     selected: Color32::from_rgb(0xf5, 0xb5, 0x4a),
     unsound: Color32::from_rgb(0xd9, 0x6b, 0x61),
-    blocker: Color32::from_rgb(0xf5, 0xb5, 0x4a),
+    blocker: Color32::from_rgba_premultiplied(0x6a, 0x54, 0xa8, 0xcc),
+    trapped: Color32::from_rgba_premultiplied(0xcc, 0x25, 0x25, 0xd9),
     painted: Color32::from_rgb(0x59, 0xb8, 0x94),
     blocked: Color32::from_rgb(0xd9, 0x6b, 0x61),
     section_cap: Color32::from_rgb(0xc2, 0xbd, 0xb8),
@@ -465,6 +470,22 @@ mod tests {
         assert!(
             (red - 128.0 / 255.0).abs() < 1e-6,
             "a token reaches the buffers in the gamma space egui-wgpu writes"
+        );
+    }
+
+    /// A blocker used to be the colour a picked model is drawn in, which left it
+    /// indistinguishable from a lump of the model itself.
+    #[test]
+    fn a_marker_is_its_own_colour_and_lets_the_model_through() {
+        let scene = scene();
+        for marker in [scene.blocker, scene.trapped] {
+            for surface in [scene.object, scene.selected, scene.support, scene.unsound] {
+                assert_ne!(marker, surface, "a marker is not a surface of the part");
+            }
+        }
+        assert!(
+            scene.blocker.a() < u8::MAX,
+            "a blocker is translucent, so what it covers is still there"
         );
     }
 

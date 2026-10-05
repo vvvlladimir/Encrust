@@ -146,6 +146,7 @@ fn placed(ui: &mut egui::Ui, window: &mut Window) {
             object.hollow.clear_drains();
             object.hollow.clear_channels();
         }
+        window.tools.drain.ask_for_a_check();
         rebuild_around_cuts(window);
     }
 }

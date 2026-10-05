@@ -15,7 +15,6 @@ pub enum Mode {
     #[default]
     Internal,
     External,
-    BottomThrough,
 }
 
 impl From<Mode> for HollowMode {
@@ -23,7 +22,6 @@ impl From<Mode> for HollowMode {
         match mode {
             Mode::Internal => Self::Internal,
             Mode::External => Self::External,
-            Mode::BottomThrough => Self::BottomThrough,
         }
     }
 }

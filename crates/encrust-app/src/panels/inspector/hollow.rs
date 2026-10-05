@@ -1,5 +1,6 @@
 use core_volume::{HollowMode, InfillPattern, MIN_WALL_MM};
 
+use crate::drain::Placing;
 use crate::job::HollowJob;
 use crate::panels::Window;
 use crate::state::{Doc, Tools};
@@ -7,6 +8,7 @@ use crate::ui::{
     Segment, Segmented, describe, hint, icon, nested, number_row, primary_button, secondary_button,
     section, stats, subheading, switch, theme, tone,
 };
+use crate::workspace::Tool;
 
 /// Per point of drag. A wall is measured in whole millimetres, precision and density in
 /// hundredths of their own range.
@@ -51,7 +53,68 @@ pub fn ui(ui: &mut egui::Ui, window: &mut Window) {
 
         subheading(ui, "On the plate");
         done(ui, window);
+        drainage(ui, window);
     });
+}
+
+/// What the check after a run found: where the resin cannot get out of the cavity, and
+/// the two ways to let it out. See ADR 0189.
+fn drainage(ui: &mut egui::Ui, window: &mut Window) {
+    if window.tools.drain.job.is_some() {
+        subheading(ui, "Drainage");
+        tone(ui, "Looking for trapped resin", theme::colors().text_mid);
+        ui.add(
+            egui::ProgressBar::new(0.0)
+                .desired_height(6.0)
+                .corner_radius(theme::R_CONTROL),
+        );
+        return;
+    }
+
+    let trapped: usize = window
+        .doc
+        .scene
+        .targets()
+        .map(|object| object.traps.found().len())
+        .sum();
+    let hollowed = window
+        .doc
+        .scene
+        .targets()
+        .any(|object| object.hollow.is_hollow());
+    if trapped == 0 {
+        if window.tools.drain.checked && hollowed {
+            subheading(ui, "Drainage");
+            tone(
+                ui,
+                "The resin can get out of every cavity on the plate.",
+                theme::colors().ok,
+            );
+        }
+        return;
+    }
+
+    subheading(ui, "Drainage");
+    tone(
+        ui,
+        &format!("Resin is trapped in {trapped} place(s) — put a hole in each."),
+        theme::colors().danger,
+    );
+    ui.add_space(4.0);
+    if secondary_button(ui, icon::DRAIN, "Drill a hole into each").clicked() {
+        let drilled = window.tools.drain.drill_found(&mut window.doc.scene);
+        window.machine.status = crate::status::Status::Info(format!("{drilled} hole(s) placed"));
+    }
+    ui.add_space(4.0);
+    if secondary_button(ui, icon::DRAIN, "Place them by hand").clicked() {
+        *window.tool = Tool::Drain;
+        window.tools.drain.placing = Placing::Hole;
+    }
+    ui.add_space(2.0);
+    describe(
+        ui,
+        "Each pocket is marked in red on the plate, and the mark goes once a hole reaches it.",
+    );
 }
 
 /// Which surface the wall is measured from.
@@ -59,7 +122,6 @@ fn modes(ui: &mut egui::Ui, tools: &mut Tools) {
     let segments = [
         Segment::new(HollowMode::Internal, "Inside"),
         Segment::new(HollowMode::External, "Outside"),
-        Segment::new(HollowMode::BottomThrough, "Through"),
     ];
     let width = ui.available_width();
     let mut chosen = tools.hollow.mode;
@@ -73,7 +135,6 @@ fn modes(ui: &mut egui::Ui, tools: &mut Tools) {
         match tools.hollow.mode {
             HollowMode::Internal => "The wall grows inward; the outside is untouched.",
             HollowMode::External => "The wall grows outward, making a mould of the model.",
-            HollowMode::BottomThrough => "Inside, with the floor open so the resin drains.",
         },
     );
 }

@@ -118,15 +118,6 @@ fn matrix() -> Vec<Case> {
             sign: SignMode::Auto,
         },
         Case {
-            label: "0.5 mm wall, finest, bottom through",
-            wall_mm: 0.5,
-            precision: 1.0,
-            infill: None,
-            mode: HollowMode::BottomThrough,
-            lattice_mm: None,
-            sign: SignMode::Auto,
-        },
-        Case {
             label: "2 mm wall, 5 mm grid at 15%",
             wall_mm: 2.0,
             precision: 0.5,

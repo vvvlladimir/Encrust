@@ -47,7 +47,8 @@ on `accent`.
 
 `theme::Scene` is the other half of the tokens: the grey of printed resin (`object`), the
 cooler `support` and a `support_tint` per group after it, `selected`, `unsound`,
-`blocker`, `painted` and `blocked`, the `section_cap` and the `section_wash` behind it, the
+the translucent `blocker` and the red `trapped` a pocket of resin is marked with,
+`painted` and `blocked`, the `section_cap` and the `section_wash` behind it, the
 `overhang` a leaning face is marked with, the `outside` of what stands past the build
 volume, the `gizmo` handles, and the plate's `grid`, `plate_border`, `volume` and two
 `plate_axis` lines. It is

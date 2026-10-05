@@ -24,6 +24,9 @@ pub struct HollowTool {
     /// Radius of the blocker the next click drops.
     pub blocker_mm: Scalar,
     pub job: Option<HollowJob>,
+    /// Whether a run has just put a cavity on the plate, which is what asks for the
+    /// drainage check that follows every one; see ADR 0189.
+    pub(crate) hollowed: bool,
 }
 
 impl Default for HollowTool {
@@ -37,6 +40,7 @@ impl Default for HollowTool {
             infill: InfillSettings::default(),
             blocker_mm: DEFAULT_BLOCKER_MM,
             job: None,
+            hollowed: false,
         }
     }
 }
@@ -85,6 +89,12 @@ impl HollowTool {
         true
     }
 
+    /// Whether a cavity has been cut since this was last asked, so the resin it traps is
+    /// looked for once per run rather than once per frame.
+    pub fn take_hollowed(&mut self) -> bool {
+        std::mem::take(&mut self.hollowed)
+    }
+
     /// Drains a running job into the scene and the status bar. Returns whether one is
     /// still going, which is what tells the window to keep repainting.
     pub fn poll(&mut self, scene: &mut Scene, status: &mut Status) -> bool {
@@ -100,6 +110,7 @@ impl HollowTool {
         match outcome {
             HollowOutcome::Hollowed(shells) => {
                 let models = shells.len();
+                self.hollowed = models > 0;
                 for shell in shells {
                     if let Some(object) = scene.get_mut(shell.id) {
                         object.hollow.take(shell.shell);
@@ -156,6 +167,27 @@ mod tests {
             },
         ));
         scene
+    }
+
+    #[test]
+    fn a_finished_run_asks_once_for_the_drainage_check_that_follows_it() {
+        let mut scene = scene_with_a_tetrahedron();
+        let mut tool = HollowTool::default();
+        let mut status = Status::default();
+        tool.start(&scene).expect("a model is on the plate");
+        while tool.poll(&mut scene, &mut status) {
+            std::thread::yield_now();
+        }
+
+        assert!(
+            tool.take_hollowed(),
+            "a cavity is only finished once the resin can get out of it, so the window \
+             looks for what it traps"
+        );
+        assert!(
+            !tool.take_hollowed(),
+            "and it looks once per run, not once per frame"
+        );
     }
 
     #[test]

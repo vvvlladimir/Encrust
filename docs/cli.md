@@ -78,11 +78,13 @@ is the other archive and carries both, because every number it states is per lay
 then decodes every layer to check that it does: a header can be read from a file no machine
 would print. A file whose name says nothing is recognised by its own first bytes (ADR 0149).
 
-Hollowing, with an infill lattice in the cavity:
+Hollowing, with an infill lattice in the cavity. `--hollow-mode internal` grows the wall
+inward, which is the default; `external` grows it outward and makes a mould of the model.
+Nothing opens the cavity by itself — `--drain-at` below is what lets the resin out:
 
 ```sh
 encrust slice model.stl \
-  --printer elegoo-mars-4-ultra --hollow 2 --hollow-mode bottom-through \
+  --printer elegoo-mars-4-ultra --hollow 2 \
   --infill hive --infill-size 5 --infill-density 0.15 --precision 0.5 -o model.goo
 ```
 
@@ -164,7 +166,7 @@ supports = "medium"             # light, medium or heavy
 
 [[model]]
 path = "b.stl"
-hollow = { wall_mm = 2.0, mode = "bottom-through" }
+hollow = { wall_mm = 2.0, mode = "internal" }   # or "external" for a mould
 ```
 
 A project saved by the window slices as it was saved, its cavities and supports built again

@@ -436,7 +436,7 @@ mod tests {
                 },
                 hollow: HollowState {
                     thickness_mm: 2.0,
-                    mode: HollowMode::BottomThrough,
+                    mode: HollowMode::External,
                     precision: 0.5,
                     infill_on: true,
                     infill: InfillSettings::default(),
@@ -496,7 +496,7 @@ mod tests {
                             }],
                             cavity: Some(Cavity {
                                 thickness_mm: 1.5,
-                                mode: HollowMode::BottomThrough,
+                                mode: HollowMode::External,
                                 precision: 0.25,
                                 infill: None,
                             }),
@@ -549,7 +549,7 @@ mod tests {
             saved.manifest.objects[0].hollow.cavity
         );
         assert_eq!(back.manifest.slicing.format, OutputFormat::Ctb5);
-        assert_eq!(back.manifest.hollow.mode, HollowMode::BottomThrough);
+        assert_eq!(back.manifest.hollow.mode, HollowMode::External);
     }
 
     #[test]
