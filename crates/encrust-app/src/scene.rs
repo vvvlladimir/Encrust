@@ -4,8 +4,8 @@ use rayon::prelude::*;
 
 pub use core_engine::project::Axis;
 use core_geometry::{
-    Aabb, Bvh, Heightmap, Mesh, MeshDiagnostics, Orientation, Quat, Scalar, Transform, UvMap, Vec3,
-    Welded, center_of_mass,
+    Aabb, Bvh, Heightmap, Mesh, MeshDiagnostics, Orientation, Quat, Scalar, Transform, UvMap, Vec2,
+    Vec3, Welded, center_of_mass,
 };
 
 use core_supports::ModelSupports;
@@ -49,6 +49,57 @@ impl ImportSummary {
     /// Nothing about this model would make slicing produce garbage.
     pub fn is_sound(&self) -> bool {
         self.diagnostics.is_sound() && self.orientation.orientable
+    }
+
+    /// What is still wrong with the mesh, in the words the window says it in. Empty for a
+    /// model that will slice as it stands.
+    pub fn defects(&self) -> Vec<String> {
+        let diagnostics = &self.diagnostics;
+        let mut lines = Vec::new();
+        if diagnostics.boundary_edges > 0 {
+            lines.push(format!(
+                "The surface is not closed: {} edges have nothing on the other side",
+                diagnostics.boundary_edges
+            ));
+        }
+        for (count, line) in [
+            (
+                diagnostics.non_manifold_edges,
+                "edges where more than two faces meet",
+            ),
+            (diagnostics.degenerate_faces, "faces with no area"),
+            (diagnostics.duplicate_faces, "faces drawn twice over"),
+        ] {
+            if count > 0 {
+                lines.push(format!("{count} {line}"));
+            }
+        }
+        if !self.orientation.orientable {
+            lines.push("No consistent inside and outside, so slicing it is a guess".to_owned());
+        }
+        lines
+    }
+
+    /// What repair changed on the way in.
+    ///
+    /// Merged vertices are not among them: an STL stores every triangle on its own, so
+    /// every STL merges thousands and it says nothing about the model.
+    pub fn repairs(&self) -> Vec<String> {
+        [
+            (self.faces_removed, "collapsed faces removed"),
+            (
+                self.orientation.flipped_faces,
+                "faces turned the right way round",
+            ),
+            (
+                self.orientation.inverted_shells,
+                "shells turned the right way out",
+            ),
+        ]
+        .iter()
+        .filter(|(count, _)| *count > 0)
+        .map(|(count, what)| format!("Repaired: {count} {what}"))
+        .collect()
     }
 }
 
@@ -255,6 +306,19 @@ impl SceneObject {
             self.transform.translation += core_geometry::drop_to_plate(&bounds);
         }
     }
+}
+
+/// How far a grid whose near corner is at `min` and which spans `span` has to move to
+/// stand on a plate `plate` across. Zero for a grid already on it, and the move that puts
+/// its near corner in the plate's own corner for one too big to fit.
+fn onto_plate(min: Vec2, span: Vec2, plate: Vec2) -> Vec2 {
+    let axis = |min: Scalar, span: Scalar, plate: Scalar| {
+        if span >= plate {
+            return -min;
+        }
+        (0.0 as Scalar).clamp(-min, plate - span - min)
+    };
+    Vec2::new(axis(min.x, span.x, plate.x), axis(min.y, span.y, plate.y))
 }
 
 /// The scale that flips `axis` and leaves the other two alone.
@@ -603,33 +667,41 @@ impl Scene {
         Some(copy_id)
     }
 
-    /// Lays a grid of copies out beside an object, each one a footprint and `gap_mm`
-    /// from the last, with the original in the near left corner.
+    /// Lays a grid of copies out beside an object, each one a footprint and `gap_mm` from
+    /// the last, and slides the whole grid onto a plate `plate_mm` across.
     ///
-    /// Nothing here knows the plate, so copies are laid out wherever the original stands;
-    /// fitting them onto it is what arranging is for.
+    /// The grid keeps its shape: everything in it, the original included, moves by one
+    /// offset, and only far enough to stand inside the plate. A grid with no room on it
+    /// starts at the plate's near corner and runs off the far one.
     pub fn array(
         &mut self,
         id: ObjectId,
         columns: usize,
         rows: usize,
         gap_mm: Scalar,
+        plate_mm: Vec2,
     ) -> Vec<ObjectId> {
         let Some(bounds) = self.get(id).and_then(SceneObject::world_bounds) else {
             return Vec::new();
         };
-        let step = Vec3::new(
-            bounds.maxs.x - bounds.mins.x + gap_mm,
-            bounds.maxs.y - bounds.mins.y + gap_mm,
-            0.0,
-        );
+        let (columns, rows) = (columns.max(1), rows.max(1));
+        let footprint = Vec2::new(bounds.maxs.x - bounds.mins.x, bounds.maxs.y - bounds.mins.y);
+        let step = footprint + Vec2::splat(gap_mm);
+        let span = footprint
+            + Vec2::new(
+                step.x * (columns - 1) as Scalar,
+                step.y * (rows - 1) as Scalar,
+            );
+        let onto = onto_plate(Vec2::new(bounds.mins.x, bounds.mins.y), span, plate_mm);
+        // The near cell is moved first, so every copy is laid out from where the grid
+        // ended up rather than from where the model was.
+        if let Some(object) = self.get_mut(id) {
+            object.transform.translation += Vec3::new(onto.x, onto.y, 0.0);
+        }
 
         let mut copies = Vec::new();
-        for row in 0..rows.max(1) {
-            for column in 0..columns.max(1) {
-                if row == 0 && column == 0 {
-                    continue;
-                }
+        for row in 0..rows {
+            for column in (0..columns).skip(usize::from(row == 0)) {
                 let offset = Vec3::new(step.x * column as Scalar, step.y * row as Scalar, 0.0);
                 copies.extend(self.duplicate(id, offset));
             }
@@ -1232,7 +1304,7 @@ mod tests {
     #[test]
     fn an_array_lays_out_every_cell_but_the_one_already_filled() {
         let (mut scene, id) = scene_with_cube();
-        let copies = scene.array(id, 3, 2, 1.0);
+        let copies = scene.array(id, 3, 2, 1.0, Vec2::new(100.0, 100.0));
 
         assert_eq!(copies.len(), 5, "six cells, one of them the original");
         assert_eq!(scene.objects().len(), 6);
@@ -1243,10 +1315,47 @@ mod tests {
     }
 
     #[test]
+    fn an_array_that_would_run_off_the_plate_is_slid_back_onto_it() {
+        let (mut scene, id) = scene_with_cube();
+        scene.objects_mut()[0].transform.translation = Vec3::new(8.0, 0.0, 0.0);
+
+        let copies = scene.array(id, 3, 1, 1.0, Vec2::new(10.0, 10.0));
+
+        // Three unit cubes two millimetres apart span 5 mm, so the grid starts at 5 mm.
+        let left = scene.get(id).expect("the original is on the plate");
+        assert_eq!(left.transform.translation, Vec3::new(5.0, 0.0, 0.0));
+        let right = scene.get(copies[1]).expect("the far copy is on the plate");
+        assert_eq!(right.transform.translation, Vec3::new(9.0, 0.0, 0.0));
+        for object in scene.objects() {
+            let bounds = object.world_bounds().expect("a cube has vertices");
+            assert!(bounds.maxs.x <= 10.0, "{bounds:?} hangs off the plate");
+        }
+    }
+
+    #[test]
+    fn an_array_with_no_room_on_the_plate_starts_at_its_near_corner() {
+        let (mut scene, id) = scene_with_cube();
+        scene.objects_mut()[0].transform.translation = Vec3::new(3.0, 3.0, 0.0);
+
+        scene.array(id, 5, 1, 1.0, Vec2::new(4.0, 4.0));
+
+        let left = scene.get(id).expect("the original is on the plate");
+        assert_eq!(
+            left.transform.translation,
+            Vec3::new(0.0, 3.0, 0.0),
+            "a grid that cannot fit still starts on the plate"
+        );
+    }
+
+    #[test]
     fn an_array_of_something_that_is_not_there_lays_out_nothing() {
         let (mut scene, id) = scene_with_cube();
         scene.remove(id);
-        assert!(scene.array(id, 2, 2, 1.0).is_empty());
+        assert!(
+            scene
+                .array(id, 2, 2, 1.0, Vec2::new(100.0, 100.0))
+                .is_empty()
+        );
     }
 
     #[test]

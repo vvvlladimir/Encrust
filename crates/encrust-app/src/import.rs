@@ -12,6 +12,7 @@ use crate::files::{self, Handed, Wanted};
 use crate::job::{ImportJob, ImportOutcome, ImportStage};
 use crate::panels::frame_view;
 use crate::plate::BuildPlate;
+use crate::repair::Repairs;
 use crate::scene::{ImportSummary, Imported, Mapped, Scene};
 use crate::status::Status;
 
@@ -51,14 +52,15 @@ impl Imports {
         })
     }
 
-    /// Puts every import that has finished into the scene, and points the camera at what
-    /// arrived. Returns whether one is still running, which is what tells the window to
-    /// keep repainting.
+    /// Puts every import that has finished into the scene, points the camera at what
+    /// arrived and asks about anything that came in broken. Returns whether one is still
+    /// running, which is what tells the window to keep repainting.
     pub fn poll(
         &mut self,
         scene: &mut Scene,
         plate: &BuildPlate,
         camera: &mut OrbitCamera,
+        repairs: &mut Repairs,
         status: &mut Status,
     ) -> bool {
         let mut opened = Vec::new();
@@ -74,7 +76,10 @@ impl Imports {
         for (path, outcome) in opened {
             match outcome {
                 ImportOutcome::Opened(imported) => {
-                    scene.insert(*imported);
+                    let id = scene.insert(*imported);
+                    if let Some(object) = scene.get(id) {
+                        repairs.consider(object);
+                    }
                     *status = Status::Info(format!("Opened {}", path.display()));
                     frame_view(scene, plate, camera);
                 }
@@ -138,9 +143,11 @@ pub fn prepare(
         .with_context(|| format!("{} has no vertices", path.display()))?;
     let placement = drop_to_plate(&bounds) + center_over_plate(&bounds, plate.x_mm, plate.y_mm);
 
-    let name = path.file_stem().map_or_else(
+    // The file's own name, extension and all: three copies of one cube opened from an
+    // STL, an OBJ and a 3MF are otherwise one name three times over.
+    let name = path.file_name().map_or_else(
         || path.display().to_string(),
-        |stem| stem.to_string_lossy().into_owned(),
+        |name| name.to_string_lossy().into_owned(),
     );
 
     stage(ImportStage::Indexing);
@@ -253,6 +260,12 @@ mod tests {
     }
 
     #[test]
+    fn a_model_is_named_after_its_file_with_the_extension_on_it() {
+        let imported = prepared(&fixture("cube.stl")).expect("a sound cube opens");
+        assert_eq!(imported.name, "cube.stl");
+    }
+
+    #[test]
     fn a_model_handed_over_as_bytes_opens_as_it_does_from_disk() {
         let bytes = std::fs::read(fixture("cube.stl")).expect("the fixture is checked in");
         let handed = Handed::bytes("cube.stl", bytes.into());
@@ -260,7 +273,7 @@ mod tests {
             prepare(&handed, &BuildPlate::default(), &mut |_| {}).expect("a sound cube opens");
         let from_disk = prepared(&fixture("cube.stl")).expect("a sound cube opens");
 
-        assert_eq!(imported.name, "cube");
+        assert_eq!(imported.name, "cube.stl");
         assert_eq!(imported.mesh.faces.len(), from_disk.mesh.faces.len());
     }
 }

@@ -1,3 +1,4 @@
+use crate::triangulate::triangulate;
 use crate::{FastMap, Mesh, Scalar, Vec2, Vec3};
 
 /// A vertex within this distance of the plane is on it, in millimetres. Closer than a
@@ -272,34 +273,6 @@ fn contains(ring: &[u32], flat: &[Vec2], point: Vec2) -> bool {
         }
     }
     inside
-}
-
-/// Fills one ring and the rings inside it, by ear clipping; see `docs/decisions/0089`.
-fn triangulate(outer: &[u32], holes: &[&Vec<u32>], flat: &[Vec2]) -> Vec<[u32; 3]> {
-    let mut ring: Vec<u32> = outer.to_vec();
-    let mut hole_starts = Vec::with_capacity(holes.len());
-    for hole in holes {
-        hole_starts.push(ring.len());
-        ring.extend(hole.iter().copied());
-    }
-
-    let coordinates: Vec<f64> = ring
-        .iter()
-        .flat_map(|point| {
-            let flat = flat[*point as usize];
-            [f64::from(flat.x), f64::from(flat.y)]
-        })
-        .collect();
-
-    let Ok(indices) = earcutr::earcut(&coordinates, &hole_starts, 2) else {
-        return Vec::new();
-    };
-    indices
-        .as_chunks::<3>()
-        .0
-        .iter()
-        .map(|corner| [ring[corner[0]], ring[corner[1]], ring[corner[2]]])
-        .collect()
 }
 
 /// The part of a triangle on one side of the plane, as the corners of a polygon.

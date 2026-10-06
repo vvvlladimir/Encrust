@@ -8,6 +8,7 @@ mod place;
 mod plate;
 mod preview;
 mod relief;
+mod repair;
 mod send;
 mod trapped;
 
@@ -26,6 +27,7 @@ pub use place::{SupportJob, SupportOutcome, SupportRequest, tasks_of};
 pub use plate::models_of;
 pub use preview::{PreviewJob, PreviewOutcome};
 pub use relief::{ReliefJob, ReliefOutcome, ReliefRequest, relief_tasks};
+pub use repair::{RepairJob, RepairOutcome, RepairRequest, Repaired};
 pub use send::{Action, SendJob, SendOutcome, SendRequest};
 pub use trapped::{TrapJob, TrapOutcome, TrapRequest, trap_tasks};
 

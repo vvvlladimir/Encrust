@@ -71,6 +71,7 @@ fn action(ui: &mut egui::Ui, window: &mut Window) {
     // Nothing on the plate means nothing to start either: the row would outlive what
     // the user was looking at when they sent it.
     if blocker.is_none() {
+        broken_reminder(ui, &window.doc.scene);
         waiting_to_print(ui, window);
     }
     if let Some(via) = slice_row(ui, window.machine, blocker) {
@@ -99,6 +100,25 @@ fn action(ui: &mut egui::Ui, window: &mut Window) {
             );
         }
     }
+}
+
+/// A model left broken is a reminder here rather than a blocker: what is sliced from it
+/// may be nothing like the model, and this is the last place to turn back.
+fn broken_reminder(ui: &mut egui::Ui, scene: &Scene) {
+    let broken = crate::repair::broken_on_the_plate(scene);
+    if broken == 0 {
+        return;
+    }
+    let line = match broken {
+        1 => "1 model on this plate is broken; what is sliced from it may not print".to_owned(),
+        count => {
+            format!(
+                "{count} models on this plate are broken; what is sliced from them may not print"
+            )
+        }
+    };
+    tone(ui, &line, theme::colors().warn);
+    ui.add_space(4.0);
 }
 
 /// A stack that reached the printer is not printing yet: starting it is a second,

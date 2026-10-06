@@ -9,7 +9,8 @@
 
 1. **Import.** `core-mesh-io` parses a file into a `core_geometry::Mesh` — vertices plus
    triangle indices, millimetres, model space — unwelded. `weld` gives it topology,
-   `diagnose` reports what is wrong, `orient_outward` fixes the winding. A file that
+   `diagnose` reports what is wrong, `orient_outward` fixes the winding, and `fill_holes`
+   closes what is open when the user asks for it (ADR 0194). A file that
    carries UVs and an image brings them along in `Loaded`, for `core_volume::press` to
    turn into relief (ADR 0115, 0116).
    See `docs/design/mesh-repair.md`.
@@ -64,7 +65,7 @@ it are in `.claude/rules/architecture.md`.
 
 | Crate | Owns |
 |---|---|
-| `core-geometry` | `Mesh`, `UvMap`, `Heightmap`, `Triangle`, `Aabb`, `Transform`, `Ray`, `PlacedHit`, `Bvh` with `closest`/`faces_within`, `ClosestPoint`, `Adjacency`, `Winding`, `Plane`, `Cut`, `FastHasher`/`FastMap`/`FastSet`, glam re-exports; `weld`, `diagnose`, `orient_outward`, `center_of_mass`, `transform_mesh`, raycasts, `closest_point`, `winding_number`, `cut`, `split` |
+| `core-geometry` | `Mesh`, `UvMap`, `Heightmap`, `Triangle`, `Aabb`, `Transform`, `Ray`, `PlacedHit`, `Bvh` with `closest`/`faces_within`, `ClosestPoint`, `Adjacency`, `Winding`, `Plane`, `Cut`, `FastHasher`/`FastMap`/`FastSet`, glam re-exports; `weld`, `diagnose`, `orient_outward`, `fill_holes`, `center_of_mass`, `transform_mesh`, raycasts, `closest_point`, `winding_number`, `cut`, `split` |
 | `core-mesh-io` | `MeshLoader` reading a `ModelFile` — a name, a `ReadSeek` and the files beside it — or a path, returning `Loaded` with one `Texture` per material and `decode` to a `Heightmap`, `StlLoader`, `ObjLoader` with UVs and `map_Kd`, `ThreeMfLoader` with `texture2dgroup` |
 | `core-slicer` | `SliceSettings`, `LayerPlan`, `AdaptiveSettings`, `Layer`, `Contour`, `Sliced`, `SliceEngine` with `slice_at`, `PlaneSliceEngine`, `layer_heights`, `adaptive_plan`, `offset_contours`, `Windows` sampling several planes a layer |
 | `core-raster` | `RasterSettings`, `Grey`, `Run`, `LayerRuns` with `blurred`, `LayerMask`, `Rastered`, `Rasterizer`, `ScanlineRasterizer`, `downsample` |
@@ -263,6 +264,7 @@ scene.rs     Scene, SceneObject, ObjectId, ImportSummary, the plates, duplicate,
 undo.rs      History: scene snapshots and tool-value snapshots, found by watching both
 measure.rs   the two picked points, and the corner a click snaps to
 import.rs    the files being opened: load, repair, index, place
+repair.rs    the question a broken model raises, and the runs that close its holes
 plate.rs     BuildPlate: the build volume, named apart from core_engine::Plate
 camera.rs    OrbitCamera and its matrices
 pick.rs      cursor to ray, ray to nearest object
@@ -276,7 +278,8 @@ cut.rs       the cut plane, the halves it leaves, and splitting into parts
 preview.rs   the sliced stack, the texture of one layer, and what the stack cures
 project/     the .encrust dialogs, and the plate captured into and applied from
              core_engine::project
-job/         worker threads: import, merge, export, preview, measure, supports, hollow, orient, send
+job/         worker threads: import, repair, merge, export, preview, measure, supports,
+             hollow, orient, send
 panels/      title strip, tool rail, stage, inspector, status strip
 profiles.rs  loading a profile from a file dialog
 network.rs   printers a scan found, where the Slice button sends, and the errand running
