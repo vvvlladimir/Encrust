@@ -1026,6 +1026,7 @@ fn place_drain_under_cursor(window: &mut Window, viewport: egui::Rect, cursor: e
     };
     window.doc.scene.select(Some(id));
     let size = window.tools.drain.size();
+    window.tools.drain.ask_for_a_check();
     if let Some(object) = window.doc.scene.get_mut(id) {
         let transform = object.transform;
         object.hollow.add_drain(
@@ -1060,6 +1061,7 @@ fn remove_drain_under_cursor(window: &mut Window, viewport: egui::Rect, cursor: 
     else {
         return;
     };
+    window.tools.drain.ask_for_a_check();
     if let Some(object) = window.doc.scene.get_mut(id) {
         let transform = object.transform;
         object.hollow.remove_drain(hit.point, transform);

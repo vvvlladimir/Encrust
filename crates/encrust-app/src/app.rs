@@ -249,6 +249,24 @@ impl SlicerApp {
         }
     }
 
+    /// Looks for resin the plate cannot let out whenever a cavity or a cut has moved under
+    /// the last check, so that a hollow model says where a hole is needed without being
+    /// asked, and says whether a check is now running; see ADR 0189.
+    fn check_what_the_plate_traps(&mut self) -> bool {
+        if self.tools.hollow.take_hollowed() {
+            self.tools.drain.ask_for_a_check();
+        }
+        // Resin with no way out is inside the model, so the viewport opens the model up
+        // to show where. Closing it again is the user's, and it stays closed.
+        if self.tools.drain.take_appeared() {
+            self.view.options.xray = true;
+        }
+        let layer_height_mm = self.machine.slicing.layer_height_mm();
+        self.tools
+            .drain
+            .start_if_asked(&self.doc.scene, layer_height_mm)
+    }
+
     /// Rebuilds the columns and the painted patches of every object whose placement,
     /// points, paint or profile moved under them, so that what the viewport draws is what
     /// would be sliced.
@@ -311,7 +329,9 @@ impl eframe::App for SlicerApp {
                 .orient
                 .poll(&mut self.doc.scene, &mut self.machine.status)
             | crate::panels::animate_preview(ui.ctx(), &mut self.machine.preview);
-        if working {
+        // Started after the polls and counted with them, so the frame a run ends on is
+        // also the frame its drainage check starts and asks for the next one.
+        if working | self.check_what_the_plate_traps() {
             ui.ctx().request_repaint();
         }
         self.machine.updates.tick();

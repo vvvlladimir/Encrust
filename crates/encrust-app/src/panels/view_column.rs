@@ -84,5 +84,9 @@ fn view_tools(ui: &mut egui::Ui, window: &mut Window) {
         if icon_button(ui, icon::GRID, "Plate grid").clicked() {
             *grid = !*grid;
         }
+        let xray = &mut window.view.options.xray;
+        if icon_button(ui, icon::XRAY, "See through models").clicked() {
+            *xray = !*xray;
+        }
     });
 }

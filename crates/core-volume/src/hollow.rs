@@ -1,6 +1,7 @@
 use std::collections::HashSet;
+use std::ops::Range;
 
-use core_geometry::{Aabb, Bvh, Mesh, Scalar, Vec3, glam::IVec3, signed_volume};
+use core_geometry::{Bvh, Mesh, Scalar, Vec3, glam::IVec3, signed_volume};
 
 use serde::{Deserialize, Serialize};
 
@@ -80,20 +81,16 @@ pub enum HollowMode {
     Internal,
     /// The wall grows outward, so the model becomes the cavity of a mould around it.
     External,
-    /// Internal, with the floor of the cavity taken out so the resin can run onto the
-    /// plate. For a model standing on the plate; the opening is cut at its own underside.
-    BottomThrough,
 }
 
 impl HollowMode {
     /// The modes a picker offers, in the order it draws them.
-    pub const ALL: [Self; 3] = [Self::Internal, Self::External, Self::BottomThrough];
+    pub const ALL: [Self; 2] = [Self::Internal, Self::External];
 
     pub fn label(self) -> &'static str {
         match self {
             Self::Internal => "Internal",
             Self::External => "External",
-            Self::BottomThrough => "Bottom through",
         }
     }
 }
@@ -217,6 +214,11 @@ pub struct Hollowed {
     /// positive winding rule the rasteriser fills by already subtracts the cavity; see
     /// `docs/decisions/0059-a-hollow-is-the-model-with-its-cavity-appended.md`.
     pub mesh: Mesh,
+    /// Which faces of `mesh` bound the space the resin fills: the cavity's own surface
+    /// for a shell, the model's own for a mould. Empty when nothing was carved. A viewport
+    /// draws that range on its own to show what a drain hole has to let out; see
+    /// `docs/design/hollowing.md`.
+    pub cavity: Range<usize>,
     /// Volume the cavity takes out of the model, in cubic millimetres.
     pub cavity_mm3: Scalar,
     /// The lattice the cavity was actually cut on, in millimetres.
@@ -316,7 +318,7 @@ fn shelled_to_budget(
     solid: &Solid<'_>,
     settings: &HollowSettings,
 ) -> Result<Hollowed, VolumeError> {
-    let bounds = solid.surface.aabb().ok_or(VolumeError::EmptyMesh)?;
+    solid.surface.aabb().ok_or(VolumeError::EmptyMesh)?;
     if !settings.thickness_mm.is_finite() || settings.thickness_mm <= 0.0 {
         return Err(VolumeError::BadThickness(settings.thickness_mm));
     }
@@ -324,10 +326,10 @@ fn shelled_to_budget(
     let asked_mm = settings.voxel_mm(solid.surface.surface_area());
     let mut voxel_mm = asked_mm;
     for _ in 0..COARSENINGS {
-        match cut(solid, settings, bounds, voxel_mm) {
+        match cut(solid, settings, voxel_mm) {
             // The lattice the field priced is the one that fits, taken a twentieth
-            // coarser still: the second run has the blockers and the open floor to pay
-            // for as well, and a run refused twice over is worse than one voxel blunter.
+            // coarser still: the second run has the blockers to pay for as well, and a
+            // run refused twice over is worse than one voxel blunter.
             Err(VolumeError::TooFine { fits_at_mm, .. }) => voxel_mm = fits_at_mm * 1.05,
             other => {
                 return other.map(|mut hollowed| {
@@ -337,7 +339,7 @@ fn shelled_to_budget(
             }
         }
     }
-    cut(solid, settings, bounds, voxel_mm)
+    cut(solid, settings, voxel_mm)
 }
 
 /// How many times a lattice may be coarsened before the run is given up on.
@@ -351,7 +353,6 @@ pub(crate) const COARSENINGS: usize = 3;
 fn cut(
     solid: &Solid<'_>,
     settings: &HollowSettings,
-    bounds: Aabb,
     voxel_mm: Scalar,
 ) -> Result<Hollowed, VolumeError> {
     let field = FieldSettings {
@@ -361,7 +362,7 @@ fn cut(
         // inward for a shell, outward for a mould.
         iso_mm: match settings.mode {
             HollowMode::External => settings.thickness_mm,
-            _ => -settings.thickness_mm,
+            HollowMode::Internal => -settings.thickness_mm,
         },
         sign: settings.sign,
         clip: None,
@@ -371,7 +372,7 @@ fn cut(
 
     match settings.mode {
         HollowMode::External => Ok(mould(solid.surface, &offset, voxel_mm)),
-        _ => shelled(solid, offset, &field, bounds.mins.z, settings),
+        HollowMode::Internal => shelled(solid, offset, &field, settings),
     }
 }
 
@@ -381,24 +382,9 @@ fn shelled(
     solid: &Solid<'_>,
     offset: Sdf,
     field: &FieldSettings,
-    bottom_mm: Scalar,
     settings: &HollowSettings,
 ) -> Result<Hollowed, VolumeError> {
-    let cavity = match settings.mode {
-        HollowMode::BottomThrough => {
-            let floor_mm = bottom_mm + settings.thickness_mm + field.voxel_mm;
-            open_bottom(
-                solid.surface,
-                solid.bvh,
-                &offset,
-                field,
-                floor_mm,
-                bottom_mm,
-            )?
-        }
-        _ => offset,
-    };
-    let cavity = blocked(cavity, &settings.blockers);
+    let cavity = blocked(offset, &settings.blockers);
 
     let cavity_mesh = extract(&cavity);
     let hollow_mm3 = volume_of(&cavity_mesh);
@@ -422,6 +408,7 @@ fn shelled(
         Vec::with_capacity(solid.mesh.faces.len() + cavity_mesh.faces.len() + filling.faces.len()),
     );
     append(&mut whole, solid.mesh);
+    let cavity_faces = whole.faces.len()..whole.faces.len() + cavity_mesh.faces.len();
     append(&mut whole, &flipped(&cavity_mesh));
     drop(cavity_mesh);
     append(&mut whole, &filling);
@@ -431,6 +418,7 @@ fn shelled(
     let filled = settings.infill.map_or(0.0, |infill| infill.density);
     Ok(Hollowed {
         mesh: whole,
+        cavity: cavity_faces,
         cavity_mm3: (hollow_mm3 * (1.0 - filled)).max(0.0),
         voxel_mm: field.voxel_mm,
         coarsened: false,
@@ -441,68 +429,16 @@ fn shelled(
 /// becomes the cavity.
 fn mould(mesh: &Mesh, grown: &Sdf, voxel_mm: Scalar) -> Hollowed {
     let mut whole = extract(grown);
+    // The void of a mould is the model it was taken off, so that is what holds the resin.
+    let cavity = whole.faces.len()..whole.faces.len() + mesh.faces.len();
     append(&mut whole, &flipped(mesh));
     Hollowed {
         mesh: whole,
+        cavity,
         cavity_mm3: volume_of(mesh),
         voxel_mm,
         coarsened: false,
     }
-}
-
-/// The cavity with its floor taken out: its cross-section just above the floor, carried
-/// down through the bottom of the model.
-///
-/// The prism is clipped against the model's own field rather than against a plane, so the
-/// cavity can never reach outside the solid — which is what would otherwise leave a rim of
-/// material with nothing around it once the two are sliced together.
-fn open_bottom(
-    mesh: &Mesh,
-    bvh: &Bvh,
-    cavity: &Sdf,
-    field: &FieldSettings,
-    floor_mm: Scalar,
-    bottom_mm: Scalar,
-) -> Result<Sdf, VolumeError> {
-    // Only the floor is cut against the model, so the model's own field is built for the
-    // slab the floor stands in and not over the whole part, which on a tall model is the
-    // difference between a second field and a fortieth of one.
-    let mut slab = mesh.aabb().ok_or(VolumeError::EmptyMesh)?;
-    slab.maxs.z = floor_mm + field.band_voxels * field.voxel_mm;
-    let solid = build(
-        mesh,
-        bvh,
-        &FieldSettings {
-            iso_mm: 0.0,
-            clip: Some(slab),
-            ..*field
-        },
-    )?;
-
-    let grid = cavity.grid();
-    let floor_voxel = grid.voxel(Vec3::new(0.0, 0.0, floor_mm)).z;
-    let floor_tile = tile_of(IVec3::new(0, 0, floor_voxel)).z;
-    let bottom_tile = tile_of(grid.voxel(Vec3::new(0.0, 0.0, bottom_mm))).z;
-
-    let mut candidates: HashSet<IVec3> = cavity.tile_keys().collect();
-    candidates.extend(solid.tile_keys());
-    let columns: HashSet<(i32, i32)> = cavity.tile_keys().map(|tile| (tile.x, tile.y)).collect();
-    for (x, y) in columns {
-        for z in bottom_tile..=floor_tile {
-            candidates.insert(IVec3::new(x, y, z));
-        }
-    }
-
-    let band_mm = cavity.band_mm().min(solid.band_mm());
-    Ok(assemble(grid, band_mm, candidates, |voxel| {
-        // Above the floor the cavity is itself: the model's field there is inside the
-        // solid and would never have won the comparison, and it is no longer built.
-        if voxel.z >= floor_voxel {
-            return cavity.value(voxel);
-        }
-        let lifted = IVec3::new(voxel.x, voxel.y, floor_voxel);
-        cavity.value(lifted).max(solid.value(voxel))
-    }))
 }
 
 /// The cavity with every blocker taken out of it.

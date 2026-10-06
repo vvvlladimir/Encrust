@@ -51,7 +51,60 @@ pub fn ui(ui: &mut egui::Ui, window: &mut Window) {
 
         subheading(ui, "On the plate");
         done(ui, window);
+        drainage(ui, window);
     });
+}
+
+/// What the check after a run found: whether the resin can get out of the cavity. The
+/// holes themselves are the Drain tool's, not this panel's. See ADR 0190.
+fn drainage(ui: &mut egui::Ui, window: &mut Window) {
+    if window.tools.drain.job.is_some() {
+        subheading(ui, "Drainage");
+        tone(ui, "Looking for trapped resin", theme::colors().text_mid);
+        ui.add(
+            egui::ProgressBar::new(0.0)
+                .desired_height(6.0)
+                .corner_radius(theme::R_CONTROL),
+        );
+        return;
+    }
+
+    let trapped: usize = window
+        .doc
+        .scene
+        .targets()
+        .map(|object| object.traps.found().len())
+        .sum();
+    let hollowed = window
+        .doc
+        .scene
+        .targets()
+        .any(|object| object.hollow.is_hollow());
+    if trapped == 0 {
+        if window.tools.drain.checked && hollowed {
+            subheading(ui, "Drainage");
+            tone(
+                ui,
+                "The resin can get out of every cavity on the plate.",
+                theme::colors().ok,
+            );
+        }
+        return;
+    }
+
+    subheading(ui, "Drainage");
+    tone(
+        ui,
+        &format!("Resin is trapped in {trapped} place(s) — put a hole in each."),
+        theme::colors().danger,
+    );
+    ui.add_space(2.0);
+    describe(
+        ui,
+        "The model is shown through, and the space that fills with resin is painted red \
+         inside it. Drain holes go in with the Drain tool, and the red goes once the \
+         resin can get out.",
+    );
 }
 
 /// Which surface the wall is measured from.
@@ -59,7 +112,6 @@ fn modes(ui: &mut egui::Ui, tools: &mut Tools) {
     let segments = [
         Segment::new(HollowMode::Internal, "Inside"),
         Segment::new(HollowMode::External, "Outside"),
-        Segment::new(HollowMode::BottomThrough, "Through"),
     ];
     let width = ui.available_width();
     let mut chosen = tools.hollow.mode;
@@ -73,7 +125,6 @@ fn modes(ui: &mut egui::Ui, tools: &mut Tools) {
         match tools.hollow.mode {
             HollowMode::Internal => "The wall grows inward; the outside is untouched.",
             HollowMode::External => "The wall grows outward, making a mould of the model.",
-            HollowMode::BottomThrough => "Inside, with the floor open so the resin drains.",
         },
     );
 }

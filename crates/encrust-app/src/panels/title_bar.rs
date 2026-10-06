@@ -421,6 +421,7 @@ fn view_menu(ui: &mut egui::Ui, window: &mut Window) {
         window.view.options.plate_panel = !window.view.options.plate_panel;
     }
     ui.checkbox(&mut window.view.options.grid, "Plate grid");
+    ui.checkbox(&mut window.view.options.xray, "See through models");
     ui.separator();
     if item(ui, "Keyboard shortcuts", Action::Sheet).clicked() {
         ui.close();

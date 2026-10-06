@@ -89,7 +89,7 @@ Grouped by what the decision governs; the number is still the order it was taken
 | [0007](0007-slicing-performance-and-parallelism.md) | Z buckets for faces, rayon over layers | Accepted |
 | [0008](0008-non-zero-winding-fill.md) | Non-zero winding fill, not even-odd | Accepted |
 | [0066](0066-a-stack-is-sliced-a-window-at-a-time.md) | A stack is sliced a window of layers at a time | Accepted |
-| [0071](0071-material-is-what-a-positive-winding-encloses.md) | Material is what a positive winding number encloses | Accepted |
+| [0071](0071-material-is-what-a-positive-winding-encloses.md) | Material is what a positive winding number encloses | Accepted; a cut's weight is amended by 0188 |
 | [0091](0091-a-stack-is-planned-not-counted.md) | A stack is a plan of boundaries, not a count times a height | Accepted |
 | [0114](0114-unite-a-layers-planes-by-brightness.md) | A layer is sampled at several planes, united by brightness on the runs | Accepted |
 | [0134](0134-a-layer-starts-at-the-near-edge-of-the-plate.md) | Write the plate as it stands, and leave mirroring to the header | Accepted |
@@ -171,14 +171,14 @@ Grouped by what the decision governs; the number is still the order it was taken
 | # | Decision | Status |
 |---|---|---|
 | [0057](0057-a-field-is-band-tiles-and-solid-runs-on-a-global-lattice.md) | A field is band tiles and solid runs, on one global lattice | Accepted |
-| [0058](0058-the-band-is-built-around-an-isosurface.md) | The band is built around an isosurface, not around the mesh | Accepted |
-| [0059](0059-a-hollow-is-the-model-with-its-cavity-appended.md) | A hollow is the model with its cavity appended, not welded | Superseded by 0185 (the space the wall is measured in only) |
+| [0058](0058-the-band-is-built-around-an-isosurface.md) | The band is built around an isosurface, not around the mesh | Accepted; the bottom-through field it prices is dropped by 0189 |
+| [0059](0059-a-hollow-is-the-model-with-its-cavity-appended.md) | A hollow is the model with its cavity appended, not welded | Superseded by 0185 (the space the wall is measured in only); `BottomThrough` dropped by 0189 |
 | [0060](0060-a-lattice-is-boxes-clipped-to-the-cavity.md) | A lattice is boxes clipped to the cavity, not a field | Accepted |
-| [0063](0063-a-field-is-built-to-a-memory-budget.md) | A field is priced and built to a memory budget | Accepted |
+| [0063](0063-a-field-is-built-to-a-memory-budget.md) | A field is priced and built to a memory budget | Accepted; the clipped floor field it names is dropped by 0189 |
 | [0064](0064-marching-cubes-merges-by-lattice-edge-in-layers.md) | Marching cubes merges by lattice edge, a layer at a time | Accepted |
 | [0065](0065-a-fields-distances-are-quantised-to-its-band.md) | A field's distances are quantised to its band | Accepted |
 | [0069](0069-the-band-walks-out-to-the-isosurface.md) | The band walks out to the isosurface rather than taking every tile near it | Accepted |
-| [0076](0076-a-channel-is-a-pipe-through-the-part.md) | A channel is a pipe through the part, not a slot in it | Accepted |
+| [0076](0076-a-channel-is-a-pipe-through-the-part.md) | A channel is a pipe through the part, not a slot in it | Superseded by 0188 (waiting for a second run only) |
 | [0082](0082-scatter-the-field-and-carry-it-coarse.md) | The field is scattered from the faces and carried across the wall coarse | Superseded by 0186 (where a far block's side comes from only) |
 | [0083](0083-precision-is-capped-by-the-surface-it-pays-for.md) | Precision is capped by the surface a field pays for, not by the longest side | Accepted |
 | [0084](0084-a-cavity-is-clustered-surface-nets.md) | A cavity is extracted as surface nets clustered onto the lattice | Superseded by 0186 (how folded copies are merged only) |
@@ -187,6 +187,9 @@ Grouped by what the decision governs; the number is still the order it was taken
 | [0122](0122-a-reliefs-depth-is-a-plate-millimetre.md) | A relief's depth is a plate millimetre, pressed after placement | Accepted |
 | [0185](0185-a-wall-is-measured-on-the-plate.md) | A wall is measured on the plate, not in the model's own space | Accepted |
 | [0186](0186-a-cavity-is-a-closed-surface-and-a-slice-follows-it-through-a-branch.md) | A cavity is a closed surface, and a slice follows it through a branch | Accepted |
+| [0188](0188-a-cut-outweighs-what-it-lands-in-and-a-channel-stays-a-pipe.md) | A cut outweighs what it lands in, and a channel stays a pipe | Accepted |
+| [0189](0189-resin-leaves-through-a-hole-and-a-lattice-never-closes-a-cell.md) | Resin leaves through a hole, and a lattice never closes a cell | Accepted; its marks are replaced by 0190 |
+| [0190](0190-the-space-that-holds-resin-is-painted-and-the-model-is-seen-through.md) | Paint the space that holds resin, and see the model through | Accepted |
 
 ### The plate
 
@@ -261,8 +264,8 @@ Grouped by what the decision governs; the number is still the order it was taken
 | [0061](0061-the-section-slider-is-one-rail-in-both-modes.md) | The section slider is one rail, in both modes | Accepted |
 | [0062](0062-cap-the-section-cut-with-the-stencil-plane.md) | The section cut is capped with the stencil plane | Superseded by 0184 (where the stencil comes from only) |
 | [0068](0068-the-window-holds-no-stack.md) | The window holds no stack: it cuts the window it is showing | Accepted |
-| [0070](0070-a-mesh-is-drawn-in-buffer-sized-pieces.md) | A mesh is drawn in pieces the card will take | Accepted |
-| [0073](0073-the-viewport-subtracts-a-drain-per-fragment.md) | The viewport subtracts a drain per fragment | Accepted |
+| [0070](0070-a-mesh-is-drawn-in-buffer-sized-pieces.md) | A mesh is drawn in pieces the card will take | Accepted; 0190 breaks a piece at a drawn range too |
+| [0073](0073-the-viewport-subtracts-a-drain-per-fragment.md) | The viewport subtracts a drain per fragment | Superseded by 0188 (a channel's wall only) |
 | [0074](0074-the-section-cap-counts-material-not-crossings.md) | The section cap counts material, not crossings | Accepted |
 | [0184](0184-the-viewport-draws-into-its-own-target.md) | The viewport draws into its own target | Accepted |
 | [0097](0097-a-project-is-a-zip-of-a-manifest-and-the-meshes.md) | A project is a zip of a JSON manifest and the meshes | Accepted |

@@ -968,20 +968,6 @@ fn a_hollowed_cube_exposes_a_ring_on_the_layers_that_cross_its_cavity() {
 }
 
 #[test]
-fn bottom_through_takes_the_floor_out_of_the_stack() {
-    let (out, _) = hollow_cube(
-        "through",
-        &["--hollow", "3", "--hollow-mode", "bottom-through"],
-    );
-
-    let floor = lit_pixels(&out, 0);
-    assert!(
-        (floor as f32 - 15_600.0).abs() / 15_600.0 < 0.03,
-        "bottom through opens the first layer into the same ring, got {floor}"
-    );
-}
-
-#[test]
 fn hollowing_reports_the_resin_it_saves() {
     let (_, text) = hollow_cube("saved", &["--hollow", "3"]);
 
@@ -1177,6 +1163,38 @@ fn a_hollow_box_with_no_hole_reports_the_resin_it_traps() {
     assert!(
         !drained.contains("trapped resin"),
         "a hole through the lid lets it all out:\n{drained}"
+    );
+}
+
+#[test]
+fn a_hive_in_a_cavity_drains_through_one_hole() {
+    // Each cell used to be a sealed box, so a hole in the lid drained the one under it and
+    // left every other cell full.
+    let path = write_box_stl("hive-drain", 20.0, 12, 0);
+    let input = path.to_str().unwrap();
+    let report = stdout(&estimate(&[
+        input,
+        "--hollow",
+        "2",
+        "--infill",
+        "hive",
+        "--infill-size",
+        "5",
+        "--infill-density",
+        "0.15",
+        "--layer-height",
+        "0.5",
+        "--drain",
+        "4",
+        "--drain-at",
+        "10,10,20",
+        "--drain-depth",
+        "3",
+    ]));
+    assert!(
+        !report.contains("trapped resin"),
+        "the cells are open over the floor of the cavity, so one hole drains all of \
+         them:\n{report}"
     );
 }
 

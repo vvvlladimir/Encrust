@@ -4,8 +4,8 @@
 
 use core_geometry::{Bvh, Mesh, Scalar, Vec3, signed_volume};
 use core_volume::{
-    Blocker, Channel, HollowMode, HollowSettings, InfillPattern, InfillSettings, VolumeError,
-    drill, hole_at, hollow, hollow_at_scale, pierce, sleeves,
+    Blocker, CUT_WEIGHT, Channel, HollowMode, HollowSettings, InfillPattern, InfillSettings,
+    VolumeError, drill, hole_at, hollow, hollow_at_scale, pierce, sleeves,
 };
 
 const PI: Scalar = std::f32::consts::PI;
@@ -133,6 +133,33 @@ fn the_cavity_is_the_ball_the_wall_left_room_for() {
     );
 }
 
+/// A viewport paints the space that fills with resin out of the shell's own faces rather
+/// than out of a second mesh, so the range has to be exactly the cavity: wound inward, and
+/// holding what the wall left room for.
+#[test]
+fn the_cavity_range_is_the_space_the_wall_left_room_for() {
+    let mesh = ball(10.0, 96, 96);
+    let bvh = Bvh::build(&mesh);
+    let hollowed =
+        hollow(&mesh, &bvh, &settings(2.0, HollowMode::Internal)).expect("a closed ball hollows");
+
+    assert_eq!(
+        hollowed.cavity.start,
+        mesh.faces.len(),
+        "the model's own faces come first and the cavity's follow them"
+    );
+    let cavity = Mesh::new(
+        hollowed.mesh.vertices.clone(),
+        hollowed.mesh.faces[hollowed.cavity.clone()].to_vec(),
+    );
+    let held = 4.0 / 3.0 * PI * (8.0 as Scalar).powi(3);
+    let measured = signed_volume(&cavity);
+    assert!(
+        (measured + held).abs() / held < 0.03,
+        "the cavity is wound inward around 4/3 pi 8^3 = {held} mm3, got {measured}"
+    );
+}
+
 #[test]
 fn hollowing_leaves_the_outside_of_the_model_alone() {
     let mesh = ball(10.0, 48, 48);
@@ -157,44 +184,6 @@ fn a_wall_thicker_than_the_model_hollows_nothing() {
 
     assert!(hollowed.cavity_mm3 < Scalar::EPSILON);
     assert_eq!(hollowed.mesh.faces.len(), mesh.faces.len());
-}
-
-#[test]
-fn the_bottom_through_cavity_reaches_the_underside_of_the_model() {
-    // A 20 mm cube with a 3 mm wall: the closed cavity is 14^3, and taking its floor out
-    // adds the 14 x 14 x 3 slab under it.
-    let mesh = cube(20.0, 0.031);
-    let bvh = Bvh::build(&mesh);
-    let closed =
-        hollow(&mesh, &bvh, &settings(3.0, HollowMode::Internal)).expect("a closed cube hollows");
-    let open = hollow(&mesh, &bvh, &settings(3.0, HollowMode::BottomThrough))
-        .expect("a closed cube hollows");
-
-    let floor = 14.0 * 14.0 * 3.0;
-    let added = open.cavity_mm3 - closed.cavity_mm3;
-    assert!(
-        (added - floor).abs() / floor < 0.05,
-        "the floor taken out is 14 x 14 x 3 = {floor} mm3, got {added}"
-    );
-}
-
-#[test]
-fn a_bottom_through_cavity_stays_inside_the_model() {
-    let mesh = cube(20.0, 0.031);
-    let bvh = Bvh::build(&mesh);
-    let hollowed = hollow(&mesh, &bvh, &settings(3.0, HollowMode::BottomThrough))
-        .expect("a closed cube hollows");
-
-    let before = mesh.aabb().expect("the cube has vertices");
-    let after = hollowed.mesh.aabb().expect("the hollow has vertices");
-    assert!(
-        after.mins.z >= before.mins.z - 1e-4,
-        "the cavity must not hang below the model, which would slice as a rim of material \
-         with nothing around it: model starts at {}, hollow at {}",
-        before.mins.z,
-        after.mins.z
-    );
-    assert!(after.maxs.z <= before.maxs.z + 1e-4);
 }
 
 #[test]
@@ -549,7 +538,7 @@ fn a_drain_hole_takes_its_own_tube_out_of_the_shell() {
     // millimetres in. What the rule fills is only the part of it inside the wall, but what
     // is appended, and so what the signed volume counts, is the whole tube.
     let tube = PI * 1.5 * 1.5 * 4.0;
-    let taken = enclosed(&solid.mesh) - enclosed(&drained);
+    let taken = (enclosed(&solid.mesh) - enclosed(&drained)) / CUT_WEIGHT as Scalar;
     assert!(
         (taken - tube).abs() / tube < 0.05,
         "a 3 mm by 4 mm tube is {tube} mm3, got {taken}"
@@ -574,7 +563,7 @@ fn a_hole_shallower_than_the_wall_is_deepened_until_it_is_through_it() {
     );
 
     let wall = PI * 1.5 * 1.5 * 2.0;
-    let taken = enclosed(&shell.mesh) - enclosed(&drained);
+    let taken = (enclosed(&shell.mesh) - enclosed(&drained)) / CUT_WEIGHT as Scalar;
     assert!(
         taken > wall,
         "the hole has to reach past the {wall} mm3 of wall in front of it, got {taken}"

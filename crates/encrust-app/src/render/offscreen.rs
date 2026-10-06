@@ -24,15 +24,15 @@ const SECTION_MM: Scalar = 50.0;
 
 /// The ball every frame is drawn from: the model, its hierarchy and its hollowed shell.
 /// Hollowing it is the dearest thing in this file and the answer never changes.
-fn hollowed_ball() -> &'static (Mesh, Bvh, Arc<Mesh>) {
-    static BALL: OnceLock<(Mesh, Bvh, Arc<Mesh>)> = OnceLock::new();
+fn hollowed_ball() -> &'static (Mesh, Bvh, Arc<Mesh>, std::ops::Range<usize>) {
+    static BALL: OnceLock<(Mesh, Bvh, Arc<Mesh>, std::ops::Range<usize>)> = OnceLock::new();
     BALL.get_or_init(|| {
         let mesh = core_geometry::transform_mesh(
             &ball(40.0, 48, 64),
             Transform::from_translation(Vec3::new(75.0, 40.0, 45.0)),
         );
         let bvh = Bvh::build(&mesh);
-        let shell = hollow(
+        let hollowed = hollow(
             &mesh,
             &bvh,
             &HollowSettings {
@@ -41,15 +41,14 @@ fn hollowed_ball() -> &'static (Mesh, Bvh, Arc<Mesh>) {
                 ..HollowSettings::default()
             },
         )
-        .expect("the ball hollows")
-        .mesh;
-        (mesh, bvh, Arc::new(shell))
+        .expect("the ball hollows");
+        (mesh, bvh, Arc::new(hollowed.mesh), hollowed.cavity)
     })
 }
 
 /// A hollow ball, with the holes of [`holes`] in it or without them.
 fn drilled_ball(drilled: bool) -> (Arc<Mesh>, Arc<Mesh>, Arc<Mesh>, Vec<DrainHole>) {
-    let (mesh, bvh, shell) = hollowed_ball();
+    let (mesh, bvh, shell, _) = hollowed_ball();
     let holes = if drilled { holes() } else { Vec::new() };
     let bodies = drill(&holes, &[]).expect("the holes drill");
     let walls = bores(mesh, bvh, &holes, &[], Some(2.4)).expect("the walls mesh");
@@ -248,17 +247,39 @@ fn paint_ball(
 
 /// The ball of [`drilled_ball`] undrilled and uncut, painted with `marks`.
 fn paint_marked_ball(marks: Marks<'_>) -> Option<Vec<u8>> {
+    paint_ball_around(Vec::new(), marks)
+}
+
+/// The same ball with `inside` drawn in it, which is where the trapped resin shows.
+fn paint_ball_around(inside: Vec<ModelDraw>, marks: Marks<'_>) -> Option<Vec<u8>> {
+    paint_ball_cached(inside, marks, false)
+}
+
+/// The same again, and when `cached` the ball alone is drawn on an earlier frame so that
+/// the mesh is already on the card when the one carrying `inside` arrives. That is the
+/// order the window draws in: a shell is on screen long before the drainage check says
+/// what is trapped in it.
+fn paint_ball_cached(inside: Vec<ModelDraw>, marks: Marks<'_>, cached: bool) -> Option<Vec<u8>> {
     let (mesh, _, _, _) = drilled_ball(false);
-    let models = vec![ModelDraw {
-        mesh,
-        instance: ModelInstance::new(Transform::default(), theme::scene().selected, NOT_MARKED),
-    }];
+    let ball = || {
+        ModelDraw::whole(
+            Arc::clone(&mesh),
+            ModelInstance::new(Transform::default(), theme::scene().object, NOT_MARKED),
+        )
+    };
+    let mut models = vec![ball()];
+    models.extend(inside);
+    let plain = [ball()];
+    let before: &[&[ModelDraw]] = match cached {
+        true => &[&plain],
+        false => &[],
+    };
     let camera = OrbitCamera {
         target: Vec3::new(75.0, 40.0, 45.0),
         distance_mm: 170.0,
         ..OrbitCamera::default()
     };
-    paint(camera, None, &models, &[], marks, &[])
+    paint_after(camera, None, before, &models, &[], marks, &[])
 }
 
 /// The frame as the window would draw it, or `None` on a machine with no adapter to draw
@@ -267,28 +288,22 @@ fn render(drilled: bool) -> Option<Vec<u8>> {
     let (mesh, bodies, walls, drilled) = drilled_ball(drilled);
     let cap_colour =
         ModelInstance::new(Transform::default(), theme::scene().section_cap, NOT_MARKED);
-    let models = vec![ModelDraw {
-        mesh: Arc::clone(&mesh),
-        instance: ModelInstance::new(Transform::default(), theme::scene().selected, NOT_MARKED),
-    }];
+    let models = vec![ModelDraw::whole(
+        Arc::clone(&mesh),
+        ModelInstance::new(Transform::default(), theme::scene().object, NOT_MARKED),
+    )];
     // The window counts the cut bodies into the cap without drawing them; see ADR 0075.
     let solids = vec![
-        ModelDraw {
-            mesh,
-            instance: cap_colour,
-        },
-        ModelDraw {
-            mesh: bodies,
-            instance: cap_colour,
-        },
+        ModelDraw::whole(mesh, cap_colour),
+        ModelDraw::whole(bodies, cap_colour),
     ];
     let cuts: Vec<DrainCut> = cuts_of(&drilled, &[], Transform::default());
     let models = {
         let mut models = models;
-        models.push(ModelDraw {
-            mesh: walls,
-            instance: ModelInstance::new(Transform::default(), theme::scene().selected, NOT_MARKED),
-        });
+        models.push(ModelDraw::whole(
+            walls,
+            ModelInstance::new(Transform::default(), theme::scene().object, NOT_MARKED),
+        ));
         models
     };
     let camera = OrbitCamera {
@@ -311,6 +326,149 @@ struct Marks<'a> {
     band_floor_mm: f32,
     volume_mm: Option<Vec3>,
     cut_line: Option<CutLine>,
+    /// Whether the models are drawn seen through; see `docs/design/viewport.md`.
+    xray: bool,
+}
+
+/// Seen through, a model is a wash rather than a surface: it keeps less of itself than it
+/// does drawn solid, so what stands behind and inside it comes through. It keeps a good
+/// deal of itself all the same — every surface along a ray adds its own wash — which is why
+/// this asks for a shift rather than for a faint picture.
+#[test]
+fn a_model_seen_through_keeps_less_of_itself_than_a_solid_one() {
+    let Some(solid) = paint_marked_ball(Marks::default()) else {
+        return;
+    };
+    let seen_through = paint_marked_ball(Marks {
+        xray: true,
+        ..Marks::default()
+    })
+    .expect("the second frame draws on the adapter the first one drew on");
+
+    let (solid_pixels, solid_light) = lit(&solid);
+    let (through_pixels, through_light) = lit(&seen_through);
+    assert!(solid_pixels > 0, "the ball is on screen at all");
+    assert!(
+        through_pixels > solid_pixels / 2,
+        "the model is still there: {through_pixels} pixels against {solid_pixels}"
+    );
+
+    let brightness = |light: u64, count: usize| light as f64 / count as f64;
+    assert!(
+        brightness(through_light, through_pixels) < brightness(solid_light, solid_pixels) * 0.95,
+        "a surface seen through keeps a fraction of itself: {} against {}",
+        brightness(through_light, through_pixels),
+        brightness(solid_light, solid_pixels)
+    );
+}
+
+/// Trapped resin is the whole reason the x-ray exists, so the wall in front of the cavity
+/// may not wash it out. The x-ray collapses a surface hardest where it faces the camera,
+/// and that is exactly where the space behind the wall has to keep its own colour, which is
+/// what `ModelInstance::as_volume` is for. It is drawn out of the shell's own cavity faces,
+/// so this also pins that a part of a cached mesh draws.
+#[test]
+fn the_cavity_that_holds_resin_is_painted_through_the_wall_in_front_of_it() {
+    let seen_through = Marks {
+        xray: true,
+        ..Marks::default()
+    };
+    let Some(plain) = paint_ball_around(Vec::new(), seen_through) else {
+        return;
+    };
+    let volume = paint_ball_around(vec![trapped_cavity(true)], seen_through)
+        .expect("the later frames draw on the adapter the first one drew on");
+    let surface = paint_ball_around(vec![trapped_cavity(false)], seen_through)
+        .expect("the later frames draw on the adapter the first one drew on");
+
+    let red = redder_than(&volume, &plain);
+    assert!(
+        red > 10_000,
+        "the whole cavity reads red, not a speck of it: {red} pixels"
+    );
+
+    // The camera looks at the middle of the ball, so the pixel at the middle of the frame
+    // is the one the x-ray washes a surface down hardest at.
+    let head_on = |frame: &[u8]| {
+        let pixel = frame.as_chunks::<4>().0[(SIZE as usize / 2) * (SIZE as usize + 1)];
+        i32::from(pixel[0]) - i32::from(pixel[1])
+    };
+    assert!(
+        head_on(&volume) > 3 * head_on(&surface).max(1),
+        "head-on the volume keeps its own colour where a surface loses it: {} against {}",
+        head_on(&volume),
+        head_on(&surface)
+    );
+}
+
+/// The window has the shell on the card for many frames before the drainage check comes
+/// back, and the cavity is painted out of that same cached mesh. A cache that answers the
+/// later frame with the pieces the first one asked for draws nothing at all, which is the
+/// shape of a bug that passed every single-frame test.
+#[test]
+fn the_cavity_paints_on_a_frame_after_the_shell_reached_the_card() {
+    let seen_through = Marks {
+        xray: true,
+        ..Marks::default()
+    };
+    let Some(plain) = paint_ball_cached(Vec::new(), seen_through, true) else {
+        return;
+    };
+    let marked = paint_ball_cached(vec![trapped_cavity(true)], seen_through, true)
+        .expect("the later frames draw on the adapter the first one drew on");
+
+    let red = redder_than(&marked, &plain);
+    assert!(
+        red > 10_000,
+        "the cavity reads red on a frame after its mesh was cached: {red} pixels"
+    );
+}
+
+/// How many pixels of `frame` lead red over green by at least `RED_LEAD` more than the same
+/// pixel of `against` does. The offscreen target is sRGB while the window's is not, so what
+/// a token comes to in absolute bytes here is not what it comes to on screen; a shift
+/// between two frames drawn the same way is.
+const RED_LEAD: i32 = 20;
+
+fn redder_than(frame: &[u8], against: &[u8]) -> usize {
+    let lead = |pixel: &[u8; 4]| i32::from(pixel[0]) - i32::from(pixel[1]);
+    frame
+        .as_chunks::<4>()
+        .0
+        .iter()
+        .zip(against.as_chunks::<4>().0)
+        .filter(|(marked, plain)| lead(marked) - lead(plain) >= RED_LEAD)
+        .count()
+}
+
+/// The cavity of the hollow ball, painted in the red of resin with no way out. `volume` is
+/// whether it is painted as the space it bounds rather than as one more surface.
+fn trapped_cavity(volume: bool) -> ModelDraw {
+    let (_, _, shell, cavity) = hollowed_ball();
+    let instance = ModelInstance::new(Transform::default(), theme::scene().trapped, NOT_MARKED);
+    ModelDraw::part(
+        Arc::clone(shell),
+        cavity.clone(),
+        match volume {
+            true => instance.as_volume(),
+            false => instance,
+        },
+    )
+}
+
+/// How many pixels the frame paints at all, and how bright they come to in total.
+fn lit(frame: &[u8]) -> (usize, u64) {
+    frame
+        .as_chunks::<4>()
+        .0
+        .iter()
+        .filter(|pixel| pixel[..3] != [0, 0, 0])
+        .fold((0, 0), |(count, light), pixel| {
+            (
+                count + 1,
+                light + u64::from(pixel[0].max(pixel[1]).max(pixel[2])),
+            )
+        })
 }
 
 /// The texture the Relief tool shows has to reach the surface: a model drawn with a map
@@ -331,10 +489,7 @@ fn a_texture_shows_on_the_model_it_would_be_pressed_into() {
     let Some(flat) = paint(
         camera,
         None,
-        &[ModelDraw {
-            mesh: Arc::clone(&mesh),
-            instance,
-        }],
+        &[ModelDraw::whole(Arc::clone(&mesh), instance)],
         &[],
         Marks::default(),
         &[],
@@ -395,6 +550,7 @@ fn paint_textured(camera: OrbitCamera, draw: &ReliefDraw) -> Option<Vec<u8>> {
         FrameInput {
             reliefs: std::slice::from_ref(draw),
             view_projection: camera.view_projection(1.0),
+            eye: camera.eye(),
             section_mm: None,
             lines: &[],
             models: &[],
@@ -408,6 +564,7 @@ fn paint_textured(camera: OrbitCamera, draw: &ReliefDraw) -> Option<Vec<u8>> {
             band_floor_mm: 0.0,
             volume_mm: None,
             cut_line: None,
+            xray: false,
         },
     );
     Some(read_back(device, queue, format, &resources))
@@ -423,37 +580,57 @@ fn paint(
     marks: Marks<'_>,
     body: &[BodyVertex],
 ) -> Option<Vec<u8>> {
+    paint_after(camera, section_mm, &[], models, solids, marks, body)
+}
+
+/// The same, with each frame of `before` prepared against the same resources first and
+/// thrown away. The window draws a shell for many frames before the drainage check comes
+/// back and says what is trapped in it, so what the card holds for a mesh has to answer a
+/// later frame asking for something the first one did not.
+fn paint_after<'a>(
+    camera: OrbitCamera,
+    section_mm: Option<Scalar>,
+    before: &[&'a [ModelDraw]],
+    models: &'a [ModelDraw],
+    solids: &'a [ModelDraw],
+    marks: Marks<'a>,
+    body: &'a [BodyVertex],
+) -> Option<Vec<u8>> {
     let Marks {
         cuts,
         bands,
         band_floor_mm,
         volume_mm,
         cut_line,
+        xray,
     } = marks;
     let (device, queue) = gpu()?;
     let format = wgpu::TextureFormat::Rgba8UnormSrgb;
     let mut resources = ViewportResources::new(device, format);
-    resources.prepare(
-        device,
-        queue,
-        FrameInput {
-            reliefs: &[],
-            view_projection: camera.view_projection(1.0),
-            section_mm,
-            lines: &[],
-            models,
-            solids,
-            cap: &cap_quad(section_mm.unwrap_or_default()),
-            body,
-            label: &[],
-            atlas: None,
-            cuts,
-            bands,
-            band_floor_mm,
-            volume_mm,
-            cut_line,
-        },
-    );
+    let cap = cap_quad(section_mm.unwrap_or_default());
+    let input = |models: &'a [ModelDraw]| FrameInput {
+        reliefs: &[],
+        view_projection: camera.view_projection(1.0),
+        eye: camera.eye(),
+        section_mm,
+        lines: &[],
+        models,
+        solids,
+        cap: &cap,
+        body,
+        label: &[],
+        atlas: None,
+        cuts,
+        bands,
+        band_floor_mm,
+        volume_mm,
+        cut_line,
+        xray,
+    };
+    for earlier in before {
+        resources.prepare(device, queue, input(earlier));
+    }
+    resources.prepare(device, queue, input(models));
 
     Some(read_back(device, queue, format, &resources))
 }

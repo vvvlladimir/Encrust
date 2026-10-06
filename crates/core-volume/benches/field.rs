@@ -123,10 +123,6 @@ fn benchmarks(c: &mut Criterion) {
         precision: 0.5,
         ..HollowSettings::default()
     };
-    let through = HollowSettings {
-        mode: HollowMode::BottomThrough,
-        ..empty.clone()
-    };
     let filled = HollowSettings {
         infill: Some(InfillSettings {
             pattern: InfillPattern::Hive,
@@ -138,10 +134,6 @@ fn benchmarks(c: &mut Criterion) {
 
     c.bench_function("hollow a 40 mm ball with a 2 mm wall", |b| {
         b.iter(|| hollow(std::hint::black_box(&mesh), &bvh, &empty));
-    });
-
-    c.bench_function("hollow a 40 mm ball through its bottom", |b| {
-        b.iter(|| hollow(std::hint::black_box(&mesh), &bvh, &through));
     });
 
     c.bench_function("hollow a 40 mm ball and fill it with a gyroid", |b| {

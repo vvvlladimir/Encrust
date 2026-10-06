@@ -14,6 +14,15 @@ use crate::sdf::Sdf;
 const COARSE_CHUNK: Scalar = 4.0;
 const FINE_CHUNK: Scalar = 16.0;
 
+/// How high the opening a hive or grid wall leaves over the floor of the cavity and under
+/// its ceiling is, in millimetres: enough for resin to run from cell to cell towards a hole.
+const OPENING_MM: Scalar = 1.5;
+
+/// How far either side of a junction a wall still stands the whole height of the cavity,
+/// as a fraction of the cell: a quarter, so the opening is the middle half of each side and
+/// the bridge over it is short enough to print.
+const POST_REACH: Scalar = 0.25;
+
 /// Which lattice stands in a cavity.
 ///
 /// All three are open networks rather than closed cells, because resin has to be able to
@@ -124,13 +133,14 @@ pub(crate) fn lattice(
         thickness: thickness_mm,
         step: step_mm,
         bond: bond_mm,
+        opening: Opening::Full,
     };
     let parts: Vec<Mesh> = match settings.pattern {
         InfillPattern::Hive | InfillPattern::Grid => footprint(settings, &bounds)
             .into_par_iter()
-            .map(|(from, to)| {
+            .map(|wall| {
                 let mut mesh = Mesh::default();
-                walls(cavity, from, to, chunk_mm, &bounds, &shape, &mut mesh);
+                opened_wall(cavity, &wall, chunk_mm, &bounds, &shape, &mut mesh);
                 mesh
             })
             .collect(),
@@ -167,12 +177,41 @@ fn joined(parts: Vec<Mesh>) -> Mesh {
     whole
 }
 
-/// How thick a piece is, how finely the cavity under it is walked, and how far it may
-/// reach past the cavity to meet the wall. All three in millimetres.
+/// How thick a piece is, how finely the cavity under it is walked, how far it may reach
+/// past the cavity to meet the wall — all three in millimetres — and what it leaves of the
+/// opening at the cavity's floor and ceiling.
+#[derive(Clone, Copy)]
 struct Shape {
     thickness: Scalar,
     step: Scalar,
     bond: Scalar,
+    opening: Opening,
+}
+
+/// What a piece of wall does with the opening a cell needs over the floor of the cavity and
+/// under its ceiling.
+#[derive(Clone, Copy)]
+enum Opening {
+    /// Nothing: the piece is the whole height of the cavity, as a scaffold strut is.
+    Full,
+    /// The piece stops that far short of both, which is the way from one cell to the next.
+    Clear(Scalar),
+    /// Those two stretches alone, which is what carries a post to the shell above and
+    /// below the open wall.
+    Caps(Scalar),
+}
+
+/// The line one wall stands along, and the way across it.
+struct Line {
+    from: Vec3,
+    direction: Vec3,
+    side: Vec3,
+}
+
+impl Line {
+    fn at(&self, along_mm: Scalar) -> Vec3 {
+        self.from + self.direction * along_mm
+    }
 }
 
 /// The box the cavity's own tiles stand in.
@@ -189,26 +228,48 @@ fn cavity_bounds(cavity: &Sdf) -> Option<Aabb> {
     ))
 }
 
+/// One wall of the footprint: the segment it stands on, where along that segment a post
+/// reaches the shell, and how far either side of a post it does.
+struct Wall {
+    from: Vec3,
+    to: Vec3,
+    /// Millimetres along the segment from `from`, which is where a wall across this one
+    /// meets it.
+    posts: Vec<Scalar>,
+    reach_mm: Scalar,
+}
+
 /// The two-dimensional pattern a vertical lattice is the extrusion of, as the segments of
 /// its own walls, anchored on the global lattice so it does not move when a model does.
-fn footprint(settings: &InfillSettings, bounds: &Aabb) -> Vec<(Vec3, Vec3)> {
+fn footprint(settings: &InfillSettings, bounds: &Aabb) -> Vec<Wall> {
     match settings.pattern {
         InfillPattern::Grid => grid_lines(settings.size_mm, bounds),
         _ => hive_edges(settings.size_mm, bounds),
     }
 }
 
-/// Walls on the lattice's own x and y planes, each spanning the bounds.
-fn grid_lines(size_mm: Scalar, bounds: &Aabb) -> Vec<(Vec3, Vec3)> {
+/// Walls on the lattice's own x and y planes, each spanning the bounds, with a post where
+/// every wall across it meets it.
+fn grid_lines(size_mm: Scalar, bounds: &Aabb) -> Vec<Wall> {
     let mut lines = Vec::new();
     for axis in 0..2 {
+        let across = 1 - axis;
+        let posts: Vec<Scalar> = steps(size_mm, bounds.mins[across], bounds.maxs[across])
+            .into_iter()
+            .map(|corner| corner - bounds.mins[across])
+            .collect();
         for step in steps(size_mm, bounds.mins[axis], bounds.maxs[axis]) {
             let mut from = bounds.mins;
             let mut to = bounds.maxs;
             from[axis] = step;
             to[axis] = step;
             to.z = bounds.mins.z;
-            lines.push((from, to));
+            lines.push(Wall {
+                from,
+                to,
+                posts: posts.clone(),
+                reach_mm: POST_REACH * size_mm,
+            });
         }
     }
     lines
@@ -218,7 +279,7 @@ fn grid_lines(size_mm: Scalar, bounds: &Aabb) -> Vec<(Vec3, Vec3)> {
 ///
 /// A flat-topped hexagon of circumradius `r` tiles on a rectangle `1.5 r` across and
 /// `sqrt(3) r` up, with every other column offset by half a row.
-fn hive_edges(size_mm: Scalar, bounds: &Aabb) -> Vec<(Vec3, Vec3)> {
+fn hive_edges(size_mm: Scalar, bounds: &Aabb) -> Vec<Wall> {
     let radius = size_mm / 2.0;
     let (across, up) = (1.5 * radius, (3.0 as Scalar).sqrt() * radius);
     let corner = |center: Vec3, step: usize| {
@@ -236,8 +297,16 @@ fn hive_edges(size_mm: Scalar, bounds: &Aabb) -> Vec<(Vec3, Vec3)> {
             let center = Vec3::new(x, y + offset, bounds.mins.z);
             // Three of the six, so two neighbouring cells do not both draw the edge they
             // share.
+            // An edge is one side of a cell, so its posts are its own two ends.
             for step in 0..3 {
-                edges.push((corner(center, step), corner(center, step + 1)));
+                let (from, to) = (corner(center, step), corner(center, step + 1));
+                let length = (to - from).length();
+                edges.push(Wall {
+                    from,
+                    to,
+                    posts: vec![0.0, length],
+                    reach_mm: POST_REACH * length,
+                });
             }
         }
     }
@@ -271,6 +340,51 @@ fn steps(pitch: Scalar, from: Scalar, to: Scalar) -> Vec<Scalar> {
     (first..=last).map(|step| step as Scalar * pitch).collect()
 }
 
+/// Stands a wall along the segment of `wall`, open over the floor of the cavity and under
+/// its ceiling everywhere but at its posts, so that no cell is closed off from the next.
+///
+/// The open wall is one walk along the whole segment, so it still merges into as few boxes
+/// as the cavity allows (ADR 0060); only the posts, which carry it to the shell above and
+/// below, are stood stretch by stretch. See ADR 0189.
+fn opened_wall(
+    cavity: &Sdf,
+    wall: &Wall,
+    chunk_mm: Scalar,
+    bounds: &Aabb,
+    shape: &Shape,
+    mesh: &mut Mesh,
+) {
+    let length = (wall.to - wall.from).length();
+    if length <= 0.0 {
+        return;
+    }
+    let open = Shape {
+        opening: Opening::Clear(OPENING_MM),
+        ..*shape
+    };
+    walls(cavity, wall.from, wall.to, chunk_mm, bounds, &open, mesh);
+
+    let capped = Shape {
+        opening: Opening::Caps(OPENING_MM),
+        ..*shape
+    };
+    let direction = (wall.to - wall.from) / length;
+    for post in &wall.posts {
+        let (from_mm, to_mm) = (
+            (post - wall.reach_mm).max(0.0),
+            (post + wall.reach_mm).min(length),
+        );
+        if to_mm <= from_mm {
+            continue;
+        }
+        let (from, to) = (
+            wall.from + direction * from_mm,
+            wall.from + direction * to_mm,
+        );
+        walls(cavity, from, to, chunk_mm, bounds, &capped, mesh);
+    }
+}
+
 /// Stands a wall along the footprint segment `from`–`to`, as few boxes as its own span
 /// allows.
 ///
@@ -280,7 +394,8 @@ fn steps(pitch: Scalar, from: Scalar, to: Scalar) -> Vec<Scalar> {
 /// broken where holding it would cost more than a lattice step of height, so a wall
 /// crossing the middle of a cavity is one box and only its ends are chased in detail. A
 /// box per chunk would put one contour per chunk on every layer the wall crosses, which
-/// is what makes a slice stack of a dense lattice unaffordable.
+/// is what makes a slice stack of a dense lattice unaffordable. Where the cavity ends
+/// across the wall's way, the wall is carried on to meet it; see [`meet`].
 fn walls(
     cavity: &Sdf,
     from: Vec3,
@@ -295,36 +410,141 @@ fn walls(
     if length <= 0.0 {
         return;
     }
-
     let direction = along / length;
-    let side = Vec3::new(-direction.y, direction.x, 0.0);
+    let line = Line {
+        from,
+        direction,
+        side: Vec3::new(-direction.y, direction.x, 0.0),
+    };
     let chunks = (length / chunk_mm).ceil().max(1.0) as usize;
     let chunk = length / chunks as Scalar;
 
     let mut run: Option<(Scalar, Vec<(Scalar, Scalar)>)> = None;
+    let mut open_before = false;
     for index in 0..chunks {
-        let start = from + direction * (index as Scalar * chunk);
-        let at = [
-            start,
-            start + direction * (chunk / 2.0),
-            start + direction * chunk,
-        ];
-        let here = shared_spans(cavity, at, bounds.mins.z, bounds.maxs.z, shape.step);
-
         let at_mm = index as Scalar * chunk;
+        let here = spans_over(cavity, &line, at_mm, at_mm + chunk, bounds, shape);
+        match &run {
+            Some((_, held)) if here.is_empty() => {
+                meet(cavity, &line, (at_mm, chunk), held, bounds, shape, mesh);
+            }
+            None if !here.is_empty() && open_before => {
+                meet(cavity, &line, (at_mm, -chunk), &here, bounds, shape, mesh);
+            }
+            // The segment starts inside and leaves the cavity within its first chunk.
+            None if here.is_empty() && index == 0 => {
+                let start = spans_over(cavity, &line, 0.0, 0.0, bounds, shape);
+                if !start.is_empty() {
+                    meet(cavity, &line, (0.0, chunk), &start, bounds, shape, mesh);
+                }
+            }
+            _ => {}
+        }
+        open_before = here.is_empty();
+
         let held = run.take().and_then(|(began, spans)| {
             let merged = overlaps(&spans, &here);
             if keeps_its_height(&spans, &merged, shape.step) {
                 return Some((began, merged));
             }
-            flush(from, direction, side, began, at_mm, &spans, shape, mesh);
+            flush(&line, began, at_mm, &spans, shape, mesh);
             None
         });
         run = held.or_else(|| (!here.is_empty()).then_some((at_mm, here)));
     }
     if let Some((began, spans)) = run {
-        flush(from, direction, side, began, length, &spans, shape, mesh);
+        flush(&line, began, length, &spans, shape, mesh);
     }
+}
+
+/// The stretches of height the cavity holds all along `start`–`end` of `line`, as the
+/// wall's own opening leaves them.
+fn spans_over(
+    cavity: &Sdf,
+    line: &Line,
+    start: Scalar,
+    end: Scalar,
+    bounds: &Aabb,
+    shape: &Shape,
+) -> Vec<(Scalar, Scalar)> {
+    let at = [
+        line.at(start),
+        line.at(Scalar::midpoint(start, end)),
+        line.at(end),
+    ];
+    let spans = shared_spans(cavity, at, bounds.mins.z, bounds.maxs.z, shape.step);
+    match shape.opening {
+        Opening::Full => spans,
+        // The bond is added back when the box is stood up, so it is taken off here as
+        // well, which leaves the opening measured from the cavity itself.
+        Opening::Clear(mm) => spans
+            .into_iter()
+            .map(|(low, high)| (low + mm + shape.bond, high - mm - shape.bond))
+            .filter(|(low, high)| high > low)
+            .collect(),
+        Opening::Caps(mm) => spans.into_iter().flat_map(|span| caps(span, mm)).collect(),
+    }
+}
+
+/// The two ends of a span a post stands in, or the whole of one with no room to open: the
+/// cap and the open wall above it overlap by the bond, so the two never leave a gap.
+fn caps((low, high): (Scalar, Scalar), mm: Scalar) -> Vec<(Scalar, Scalar)> {
+    if high - low <= 2.0 * mm {
+        return vec![(low, high)];
+    }
+    vec![(low, low + mm), (high - mm, high)]
+}
+
+/// Carries a wall of `held` spans from `at_mm` across the last `reach_mm` of its way,
+/// forward or back by its sign, to the side of the cavity, and fuses it in by the bond.
+///
+/// A chunk the cavity leaves part of the way across holds no span, so a wall walked in
+/// chunks stops up to a chunk short of the side it runs into; along a vertical side that
+/// gap is a corridor joining every cell along it. The stretch is walked again a lattice
+/// step at a time, which follows a side curving away under or over it.
+fn meet(
+    cavity: &Sdf,
+    line: &Line,
+    (at_mm, reach_mm): (Scalar, Scalar),
+    held: &[(Scalar, Scalar)],
+    bounds: &Aabb,
+    shape: &Shape,
+    mesh: &mut Mesh,
+) {
+    let step = shape.step.copysign(reach_mm);
+    let steps = (reach_mm / step).ceil() as usize;
+    let mut reached = at_mm;
+    let mut last = held.to_vec();
+    for index in 0..steps {
+        let near = at_mm + step * index as Scalar;
+        let spans = spans_over(cavity, line, near, near + step, bounds, shape);
+        if spans.is_empty() {
+            break;
+        }
+        flush(
+            line,
+            near.min(near + step),
+            near.max(near + step),
+            &spans,
+            shape,
+            mesh,
+        );
+        reached = near + step;
+        last = spans;
+    }
+    let Some(&(low, high)) = last.first() else {
+        return;
+    };
+    // Past the last step that held, to where the side is at the middle of its height.
+    let height = Scalar::midpoint(low, high);
+    let start = Vec3::new(line.at(reached).x, line.at(reached).y, height);
+    let across = line.direction * step.signum();
+    let past = spans_along(cavity, start, start + across * shape.step, shape.step)
+        .first()
+        .filter(|(begin, _)| *begin <= 0.0)
+        .map_or(0.0, |(_, end)| *end);
+    let far = reached + (past + shape.bond).copysign(step);
+    flush(line, reached.min(far), reached.max(far), &last, shape, mesh);
 }
 
 /// Whether a run is still worth holding: merging must not have cost it more than a step
@@ -343,24 +563,21 @@ fn keeps_its_height(
 }
 
 /// Stands one box per span over the stretch of wall from `began` to `ended`.
-#[allow(clippy::too_many_arguments)]
 fn flush(
-    from: Vec3,
-    direction: Vec3,
-    side: Vec3,
+    line: &Line,
     began: Scalar,
     ended: Scalar,
     spans: &[(Scalar, Scalar)],
     shape: &Shape,
     mesh: &mut Mesh,
 ) {
-    let middle = from + direction * Scalar::midpoint(began, ended);
+    let middle = line.at(Scalar::midpoint(began, ended));
     for (bottom, top) in spans {
         let (bottom, top) = (bottom - shape.bond, top + shape.bond);
         mesh_box(
             Vec3::new(middle.x, middle.y, Scalar::midpoint(bottom, top)),
-            direction * ((ended - began) / 2.0),
-            side * (shape.thickness / 2.0),
+            line.direction * ((ended - began) / 2.0),
+            line.side * (shape.thickness / 2.0),
             Vec3::new(0.0, 0.0, (top - bottom) / 2.0),
             mesh,
         );
@@ -630,6 +847,143 @@ mod tests {
                 );
             }
         }
+    }
+
+    /// Each box of `mesh` as its lowest and highest corner: every box is upright, so that is
+    /// all of it.
+    fn boxes(mesh: &Mesh) -> Vec<(Vec3, Vec3)> {
+        mesh.vertices
+            .chunks(8)
+            .map(|corners| {
+                corners
+                    .iter()
+                    .fold((corners[0], corners[0]), |(low, high), corner| {
+                        (low.min(*corner), high.max(*corner))
+                    })
+            })
+            .collect()
+    }
+
+    fn covered(boxes: &[(Vec3, Vec3)], point: Vec3) -> bool {
+        boxes
+            .iter()
+            .any(|(low, high)| point.cmpge(*low).all() && point.cmple(*high).all())
+    }
+
+    #[test]
+    fn a_hive_wall_is_open_over_the_floor_in_the_middle_and_stands_on_it_at_its_ends() {
+        let radius = 12.0;
+        let cavity = ball_cavity(radius);
+        let settings = hive(5.0, 0.2);
+        let mesh = lattice(&cavity, &settings, 0.5, 0.0).expect("lattice");
+        let boxes = boxes(&mesh);
+        let bounds = cavity_bounds(&cavity).expect("the ball has tiles");
+
+        let mut checked = 0;
+        for Wall { from, to, .. } in hive_edges(settings.size_mm, &bounds) {
+            let middle = from.lerp(to, 0.5).truncate();
+            if middle.length() > radius / 2.0 {
+                continue;
+            }
+            // The floor of a ball under (x, y) is where its lower half stands.
+            let low = |at: Vec3| {
+                let floor = -(radius * radius - at.truncate().length_squared()).sqrt();
+                Vec3::new(at.x, at.y, floor + OPENING_MM / 2.0)
+            };
+            assert!(
+                !covered(&boxes, low(from.lerp(to, 0.5))),
+                "the middle of a wall leaves the floor open to the next cell"
+            );
+            assert!(
+                covered(&boxes, low(from.lerp(to, 0.1))),
+                "and its ends still stand on it"
+            );
+            checked += 1;
+        }
+        assert!(
+            checked > 3,
+            "the middle of the ball holds walls, got {checked}"
+        );
+    }
+
+    #[test]
+    fn a_grid_wall_leaves_the_floor_open_between_its_posts_and_still_crosses_in_one_box() {
+        let radius = 12.0;
+        let cell = 4.0;
+        let cavity = ball_cavity(radius);
+        let settings = InfillSettings {
+            pattern: InfillPattern::Grid,
+            size_mm: cell,
+            density: 0.2,
+        };
+        let mesh = lattice(&cavity, &settings, 0.5, 0.0).expect("lattice");
+        let boxes = boxes(&mesh);
+
+        // A hair into the opening over the floor of the ball, which under (x, y) is where
+        // its lower half stands. The line y = 0 is one of the lattice's own, and a post
+        // stands on it wherever x is a multiple of the cell.
+        let over_the_floor = |x: Scalar| {
+            let floor = -(radius * radius - x * x).sqrt();
+            Vec3::new(x, 0.0, floor + OPENING_MM / 2.0)
+        };
+        assert!(
+            covered(&boxes, over_the_floor(cell)),
+            "a post carries the wall to the floor"
+        );
+        assert!(
+            !covered(&boxes, over_the_floor(cell / 2.0)),
+            "and between two posts the resin runs under the wall to the next cell"
+        );
+
+        let widest = boxes
+            .iter()
+            .map(|(low, high)| (high.x - low.x).max(high.y - low.y))
+            .fold(0.0, Scalar::max);
+        assert!(
+            widest > 3.0 * cell,
+            "the open wall is one walk, so it still merges over several cells; widest box \
+             {widest} mm against a {cell} mm cell"
+        );
+    }
+
+    #[test]
+    fn a_hive_wall_running_into_the_side_of_the_cavity_meets_it() {
+        // Walked in chunks, a wall used to stop up to a chunk short of the side, leaving a
+        // corridor round the equator that joined every cell along it.
+        let radius = 12.0;
+        let cavity = ball_cavity(radius);
+        let settings = hive(5.0, 0.2);
+        let mesh = lattice(&cavity, &settings, 0.5, 1.0).expect("lattice");
+        let boxes = boxes(&mesh);
+        let bounds = cavity_bounds(&cavity).expect("the ball has tiles");
+
+        let mut met = 0;
+        for Wall { from, to, .. } in hive_edges(settings.size_mm, &bounds) {
+            let (inner, outer) = (from.truncate(), to.truncate());
+            let (inside, outside) = match (inner.length(), outer.length()) {
+                (a, b) if a < radius - 1.0 && b > radius => (inner, outer),
+                (a, b) if b < radius - 1.0 && a > radius => (outer, inner),
+                _ => continue,
+            };
+            // Where the wall's own line crosses a circle a twentieth of a millimetre inside.
+            let near = radius - 0.05;
+            let (mut low, mut high) = (0.0, 1.0);
+            for _ in 0..40 {
+                let middle = Scalar::midpoint(low, high);
+                if inside.lerp(outside, middle).length() < near {
+                    low = middle;
+                } else {
+                    high = middle;
+                }
+            }
+            let at = inside.lerp(outside, low);
+            assert!(
+                covered(&boxes, Vec3::new(at.x, at.y, 0.0)),
+                "a wall stops short of the side at {at}"
+            );
+            met += 1;
+        }
+        assert!(met > 3, "walls run into the side of a ball, got {met}");
     }
 
     #[test]

@@ -157,7 +157,15 @@ pub struct Scene {
     /// A mesh that could not be oriented outward.
     pub unsound: Color32,
     /// A hollowing blocker: a marker the user placed, not geometry that is printed.
+    /// Translucent and apart from every colour a model is drawn in, so it never reads as
+    /// a lump of the part.
     pub blocker: Color32,
+    /// The space inside a model that fills with resin no hole lets out. Laid down twice —
+    /// the near wall of the cavity and its far wall both paint it — so it is translucent
+    /// enough that the lattice standing in it still reads. Cold rather than warm, so it
+    /// parts from the amber a picked model is drawn in as well as from the grey of one
+    /// that is not.
+    pub trapped: Color32,
     /// The patch painted to be filled with supports.
     pub painted: Color32,
     /// The patch painted to keep supports off.
@@ -199,7 +207,8 @@ const ENCRUST_SCENE: Scene = Scene {
     support: Color32::from_rgb(0x5c, 0x70, 0x8a),
     selected: Color32::from_rgb(0xf5, 0xb5, 0x4a),
     unsound: Color32::from_rgb(0xd9, 0x6b, 0x61),
-    blocker: Color32::from_rgb(0xf5, 0xb5, 0x4a),
+    blocker: Color32::from_rgba_premultiplied(0x6a, 0x54, 0xa8, 0xcc),
+    trapped: Color32::from_rgba_premultiplied(0x51, 0x0a, 0x1a, 0x59),
     painted: Color32::from_rgb(0x59, 0xb8, 0x94),
     blocked: Color32::from_rgb(0xd9, 0x6b, 0x61),
     section_cap: Color32::from_rgb(0xc2, 0xbd, 0xb8),
@@ -230,6 +239,12 @@ const ENCRUST_SCENE: Scene = Scene {
 pub const fn scene() -> &'static Scene {
     &ENCRUST_SCENE
 }
+
+/// How much of itself a surface keeps at most when the viewport is drawing the models
+/// seen through — on an edge turned away from the camera. A surface facing the camera
+/// keeps a third of this, so a wall is glass rather than a window; the shader's
+/// `XRAY_FLOOR` is that third.
+pub const SEEN_THROUGH: f32 = 0.80;
 
 /// A token as the vertex and uniform buffers want it: gamma-space, not linear.
 ///
@@ -466,6 +481,22 @@ mod tests {
             (red - 128.0 / 255.0).abs() < 1e-6,
             "a token reaches the buffers in the gamma space egui-wgpu writes"
         );
+    }
+
+    /// A blocker used to be the colour a picked model is drawn in, which left it
+    /// indistinguishable from a lump of the model itself.
+    #[test]
+    fn a_marker_is_its_own_colour_and_lets_the_model_through() {
+        let scene = scene();
+        for marker in [scene.blocker, scene.trapped] {
+            for surface in [scene.object, scene.selected, scene.support, scene.unsound] {
+                assert_ne!(marker, surface, "a marker is not a surface of the part");
+            }
+            assert!(
+                marker.a() < u8::MAX,
+                "a marker is translucent, so what it covers is still there"
+            );
+        }
     }
 
     #[test]

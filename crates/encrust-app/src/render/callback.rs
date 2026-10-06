@@ -32,6 +32,7 @@ pub struct ViewportCallback {
     /// The panel the viewport fills, in points.
     rect: egui::Rect,
     view_projection: Mat4,
+    eye: Vec3,
     section_mm: Option<Scalar>,
     lines: Vec<LineVertex>,
     models: Vec<ModelDraw>,
@@ -55,6 +56,9 @@ pub struct ViewportCallback {
     band_floor_mm: f32,
     volume_mm: Vec3,
     cut_line: Option<CutLine>,
+    /// Whether the models are drawn seen through, so a cavity that holds resin can be
+    /// looked into; see `docs/design/viewport.md`.
+    xray: bool,
 }
 
 /// The exposure bands washed over the models, and the height below which one shows
@@ -109,6 +113,7 @@ impl ViewportCallback {
         Self {
             rect,
             view_projection: camera.view_projection(rect.width() / rect.height()),
+            eye: camera.eye(),
             section_mm,
             lines: plate_lines(plate, view.grid),
             models,
@@ -125,6 +130,7 @@ impl ViewportCallback {
             band_floor_mm: banding.floor_mm,
             volume_mm: Vec3::new(plate.x_mm, plate.y_mm, plate.z_mm),
             cut_line,
+            xray: view.xray,
         }
     }
 }
@@ -147,6 +153,12 @@ impl Draws {
             draws.model(object, colour, mark, textured);
             draws.hollowing(object, colour);
             draws.supports(object);
+        }
+        // Last, so that the resin inside one model is still seen when another stands in
+        // front of it: nothing hides anything under the x-ray, but what is drawn later
+        // washes over what came before.
+        for object in scene.printable(scene.active_plate()) {
+            draws.traps(object);
         }
         draws
     }
@@ -171,9 +183,11 @@ impl Draws {
                 mapped: Arc::clone(mapped),
                 instance,
             }),
-            None => self.models.push(ModelDraw {
-                mesh: Arc::clone(&mesh),
-                instance,
+            // The cavity's own faces are declared even while nothing is trapped in it, so
+            // that the frame which does paint them finds the mesh already cut to suit.
+            None => self.models.push(match object.hollow.cavity_faces() {
+                Some(cavity) => ModelDraw::whole_around(Arc::clone(&mesh), cavity, instance),
+                None => ModelDraw::whole(Arc::clone(&mesh), instance),
             }),
         }
 
@@ -203,10 +217,25 @@ impl Draws {
                 theme::scene().blocker,
             );
         }
-        // The pockets the last drainage check found, marked the same way.
-        if let Some(traps) = object.traps.markers() {
-            self.flat(Arc::clone(traps), object.transform, theme::scene().blocker);
+    }
+
+    /// The cavity of a model the last drainage check found resin in, painted in its own
+    /// red: that whole space fills with resin unless a hole is drilled into it. It is the
+    /// shell's own cavity faces rather than a mesh of its own, so nothing is uploaded
+    /// twice, and the x-ray never washes it down. See ADR 0190.
+    fn traps(&mut self, object: &SceneObject) {
+        if object.traps.found().is_empty() {
+            return;
         }
+        let (Some(shell), Some(cavity)) = (object.hollow.shell(), object.hollow.cavity_faces())
+        else {
+            return;
+        };
+        self.models.push(ModelDraw::part(
+            Arc::clone(shell),
+            cavity,
+            ModelInstance::new(object.transform, theme::scene().trapped, NOT_MARKED).as_volume(),
+        ));
     }
 
     /// Patches and columns are already in plate coordinates: they were built against the
@@ -241,18 +270,18 @@ impl Draws {
 
     /// Drawn in one flat colour and never marked for overhangs.
     fn flat(&mut self, mesh: Arc<Mesh>, transform: Transform, colour: Color32) {
-        self.models.push(ModelDraw {
+        self.models.push(ModelDraw::whole(
             mesh,
-            instance: ModelInstance::new(transform, colour, NOT_MARKED),
-        });
+            ModelInstance::new(transform, colour, NOT_MARKED),
+        ));
     }
 
     /// Counted into the stencil for the section cap, never drawn.
     fn solid(&mut self, mesh: Arc<Mesh>, transform: Transform) {
-        self.solids.push(ModelDraw {
+        self.solids.push(ModelDraw::whole(
             mesh,
-            instance: ModelInstance::new(transform, theme::scene().section_cap, NOT_MARKED),
-        });
+            ModelInstance::new(transform, theme::scene().section_cap, NOT_MARKED),
+        ));
     }
 }
 
@@ -373,6 +402,7 @@ impl CallbackTrait for ViewportCallback {
                 queue,
                 FrameInput {
                     view_projection: self.view_projection,
+                    eye: self.eye,
                     section_mm: self.section_mm,
                     lines: &self.lines,
                     models: &self.models,
@@ -387,6 +417,7 @@ impl CallbackTrait for ViewportCallback {
                     band_floor_mm: self.band_floor_mm,
                     volume_mm: Some(self.volume_mm),
                     cut_line: self.cut_line,
+                    xray: self.xray,
                 },
             );
             // The same pixels egui hands `paint` its viewport for, so the copy lands
@@ -416,7 +447,80 @@ impl CallbackTrait for ViewportCallback {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use core_geometry::Quat;
+    use core_geometry::{Bvh, Quat, diagnose};
+    use core_supports::Trapped;
+
+    use crate::scene::{ImportSummary, Imported};
+
+    /// A ball hollowed the way the window hollows one, with resin reported trapped in it.
+    fn a_hollowed_ball_with_resin_in_it() -> Scene {
+        let mesh = Arc::new(core_volume::markers([(Vec3::splat(10.0), 10.0)]).expect("a ball"));
+        let mut scene = Scene::default();
+        scene.insert(Imported::new(
+            "ball".to_owned(),
+            Arc::clone(&mesh),
+            Transform::default(),
+            ImportSummary {
+                vertices_merged: 0,
+                faces_removed: 0,
+                orientation: core_geometry::Orientation {
+                    flipped_faces: 0,
+                    inverted_shells: 0,
+                    orientable: true,
+                },
+                diagnostics: diagnose(&mesh),
+            },
+        ));
+
+        let object = &mut scene.objects_mut()[0];
+        let bvh = Bvh::build(&mesh);
+        let asking = object
+            .hollow
+            .asking(&crate::hollow::HollowTool::default().settings());
+        let hollowed = core_volume::hollow(&mesh, &bvh, &asking).expect("a ball hollows");
+        object.hollow.take(core_volume::Shell {
+            mesh: Arc::new(hollowed.mesh),
+            cavity: hollowed.cavity,
+            cavity_mm3: hollowed.cavity_mm3,
+            voxel_mm: hollowed.voxel_mm,
+            coarsened: hollowed.coarsened,
+            scale: Vec3::ONE,
+            settings: asking,
+        });
+        object.traps.set(vec![Trapped {
+            at: Vec3::splat(10.0),
+            volume_mm3: 100.0,
+        }]);
+        scene
+    }
+
+    /// The whole window path from a drainage check to the picture: a model the check found
+    /// resin in has the faces of its own cavity drawn once more, in the colour of resin
+    /// that cannot get out and in a way the x-ray will not wash down.
+    #[test]
+    fn a_model_with_resin_trapped_in_it_has_its_cavity_drawn_in_its_own_colour() {
+        let mut scene = a_hollowed_ball_with_resin_in_it();
+        let cavity = scene.objects()[0]
+            .hollow
+            .cavity_faces()
+            .expect("the ball is hollow");
+        assert!(!cavity.is_empty(), "and the cavity has faces of its own");
+
+        let draws = Draws::of(&scene, NOT_MARKED, false);
+        let painted = draws
+            .models
+            .iter()
+            .filter(|draw| draw.faces() == cavity)
+            .count();
+        assert_eq!(painted, 1, "the cavity is drawn once over the shell");
+
+        scene.objects_mut()[0].traps.set(Vec::new());
+        let drained = Draws::of(&scene, NOT_MARKED, false);
+        assert!(
+            drained.models.iter().all(|draw| draw.faces() != cavity),
+            "and not at all once the resin can get out"
+        );
+    }
 
     fn hole() -> DrainHole {
         DrainHole {

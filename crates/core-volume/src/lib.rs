@@ -23,7 +23,8 @@ mod sweep;
 pub use build::{FieldSettings, build};
 pub use csg::{difference, intersection, offset, shell, union};
 pub use drain::{
-    Channel, DrainHole, MOUTH_LIFT_MM, bores, channel_under, drill, hole_at, lift_for, pierce,
+    CUT_WEIGHT, Channel, DrainHole, MOUTH_LIFT_MM, bores, channel_under, drill, hole_at, lift_for,
+    pierce,
 };
 pub use error::VolumeError;
 pub use extract::extract;

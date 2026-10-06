@@ -157,6 +157,52 @@ egui's pass, the same in a browser as at the desk (ADR 0184). Which height the
 rail hands over depends on the mode, and `panels::section::cut_height` is the one place
 that decides.
 
+## Seeing through the models
+
+The x-ray is a view of its own, not a tool: the view card and the View menu toggle it, and
+a drainage check that finds trapped resin opens it. The models are drawn by the same shader
+through a second pipeline with no depth at all — `depth_write` off and `depth_compare`
+`Always` — so nothing hides anything and the wall, the cavity behind it, the lattice
+standing in it and the drain holes all paint, each adding its own wash. The more material
+a ray crosses, the brighter it reads.
+
+How much of itself a surface keeps is `theme::SEEN_THROUGH` on an edge turned away from
+the camera and the shader's `XRAY_FLOOR` of that where it faces the camera, so a wall in
+front of a cavity is glass while every rim draws its own line. The factor scales the shaded
+colour and the alpha together, which keeps the fragment premultiplied for the blend and
+washes the overhang mark and the inside wash down with the surface rather than the token
+they were mixed into.
+
+An instance says whether it is a **surface** or a **volume**. A surface is what the
+paragraphs above describe. A volume is the space between the two walls that bound it — the
+red a cavity holding resin is painted with — so no light shades it, the inside wash does
+not lighten its far wall, and the x-ray does not wash it down: both walls lay the token
+down as it is, and what the eye reads is the token twice over. That is why `trapped` is far
+more translucent than it looks: head-on it is laid twice, where a surface in the same place
+would be down to `XRAY_FLOOR` of itself. Volumes are gathered after every model, so a
+second model standing in front cannot wash one out.
+
+Everything else applies to the flat pass alone: the plate, the machine, the section cap and
+a model drawn with its own texture are unchanged, so a relief still shows what it would
+press in.
+
+That red is the shell's own cavity faces drawn a second time, not a mesh of its own: a
+`ModelDraw` names a face range, and `pieces` breaks a cached mesh at the ends of every
+range drawn from it as well as at the card's ceiling, so part of a mesh is a whole number
+of pieces and nothing is uploaded twice (ADR 0070, 0190). Nothing is culled, so the near
+wall of the cavity and its far wall both paint, and the space between them reads as a
+volume rather than as an outline.
+
+A shell reaches the card frames before the drainage check says whether its cavity is to be
+painted, so the draw of the whole shell *declares* that range as well — `ModelDraw::breaks`
+— and the pieces are cut for it from the first upload. The cache compares the breaks it
+holds against the ones asked for and uploads again when they differ, which is the net under
+that: without it the later frame asks for a range no piece lines up with and paints
+nothing at all.
+
+The turn from no trapped resin to some is what opens the view, never a later check with the
+same trouble, so a view closed by hand stays closed (ADR 0190).
+
 ## The Cut tool's plane
 
 The plane is traced on the model rather than drawn in the air. The globals carry it as

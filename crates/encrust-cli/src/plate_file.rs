@@ -148,18 +148,28 @@ mod tests {
             [[model]]
             path = "b.stl"
             scale = [1, 2, 1]
-            hollow = { wall_mm = 2.0, mode = "bottom-through" }
+            hollow = { wall_mm = 2.0, mode = "internal" }
+            [[model]]
+            path = "c.stl"
+            hollow = { wall_mm = 1.0, mode = "external" }
             "#,
         )
         .expect("the documented example parses");
 
-        assert_eq!(plate.models.len(), 2);
+        assert_eq!(plate.models.len(), 3);
         assert_eq!(plate.models[0].rotate, Some([0.0, 0.0, 45.0]));
         assert!(matches!(plate.models[0].scale, Some(Scale::Uniform(factor)) if factor == 1.5));
         assert!(matches!(
             plate.models[1].hollow,
             Some(Wall {
-                mode: Mode::BottomThrough,
+                mode: Mode::Internal,
+                ..
+            })
+        ));
+        assert!(matches!(
+            plate.models[2].hollow,
+            Some(Wall {
+                mode: Mode::External,
                 ..
             })
         ));

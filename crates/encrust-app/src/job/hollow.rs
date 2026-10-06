@@ -154,6 +154,23 @@ pub fn hollow_tasks(scene: &Scene, settings: &HollowSettings) -> Vec<HollowTask>
         .collect()
 }
 
+/// Every visible model whose shell no longer matches the cuts it carries, to be built
+/// again at the numbers it was built at.
+pub fn rebuild_tasks(scene: &Scene) -> Vec<HollowTask> {
+    scene
+        .targets()
+        .filter_map(|object| {
+            Some(HollowTask {
+                id: object.id,
+                mesh: Arc::clone(&object.mesh),
+                bvh: Arc::clone(&object.bvh),
+                scale: object.transform.scale,
+                settings: object.hollow.rebuild()?,
+            })
+        })
+        .collect()
+}
+
 /// Hollows every model of the request.
 ///
 /// Every failure comes back as `HollowOutcome::Failed` rather than a `Result`: the caller
@@ -190,6 +207,7 @@ fn shell_each(
                 id: task.id,
                 shell: Shell {
                     mesh: Arc::new(hollowed.mesh),
+                    cavity: hollowed.cavity,
                     cavity_mm3: hollowed.cavity_mm3,
                     voxel_mm: hollowed.voxel_mm,
                     coarsened: hollowed.coarsened,

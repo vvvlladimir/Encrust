@@ -219,6 +219,7 @@ mod tests {
         insert(&mut scene, Transform::default());
         scene.objects_mut()[0].hollow.take(Shell {
             mesh: Arc::new(shelled_cube()),
+            cavity: 0..0,
             cavity_mm3: 0.125,
             voxel_mm: 0.2,
             coarsened: false,
@@ -273,6 +274,75 @@ mod tests {
         let merged = merge_plate(&scene, 0).expect("one cube is still visible");
         assert_eq!(merged.faces.len(), 12);
     }
+    /// What a hole cuts is gone whatever else stands there: a lattice bonded into the wall,
+    /// a support's tip, or here a second model laid over the first.
+    #[test]
+    fn a_hole_opens_through_every_body_that_overlaps_where_it_is_drilled() {
+        let mut scene = Scene::default();
+        let transform = Transform {
+            scale: Vec3::splat(20.0),
+            ..Transform::default()
+        };
+        insert(&mut scene, transform);
+        insert(&mut scene, transform);
+
+        let object = &mut scene.objects_mut()[0];
+        let mesh = Arc::clone(&object.mesh);
+        let bvh = Bvh::build(&mesh);
+        object.hollow.add_drain(
+            &mesh,
+            &bvh,
+            Vec3::new(10.0, 10.0, 20.0),
+            Vec3::Z,
+            crate::drain::DrainTool::default().size(),
+            transform,
+        );
+
+        let merged = merge_plate(&scene, 0).expect("the plate has geometry");
+        let sliced = PlaneSliceEngine
+            .slice(
+                &merged,
+                &SliceSettings {
+                    layer_height: 0.05,
+                    ..SliceSettings::default()
+                },
+            )
+            .expect("closed meshes slice");
+        let layer = sliced
+            .layers
+            .iter()
+            .find(|layer| (layer.z - 19.5).abs() < 0.05)
+            .expect("the stack reaches the lid");
+        let mask = ScanlineRasterizer
+            .rasterize(layer, &lid_raster())
+            .expect("the layer rasterises")
+            .runs
+            .to_mask();
+        assert_eq!(
+            mask.pixels()[LID_MIDDLE],
+            0x00,
+            "two cubes in one place count twice, and the hole still opens through both"
+        );
+    }
+
+    /// The pixel under the middle of the lid on [`lid_raster`]: the lid fills the first 200
+    /// rows and columns, so its middle is the hundredth of each.
+    const LID_MIDDLE: usize = 100 * 400 + 100;
+
+    /// A 40 mm square panel at a tenth of a millimetre, under the 20 mm lid of [`insert`].
+    fn lid_raster() -> RasterSettings {
+        RasterSettings {
+            width_px: 400,
+            height_px: 400,
+            pitch: PixelPitch { x: 0.1, y: 0.1 },
+            mirror_x: false,
+            mirror_y: false,
+            shading: Shading::Coverage,
+            grey: Grey::default(),
+            blur_px: 0,
+        }
+    }
+
     /// The whole window path for a drain hole: a hole is placed on a model, the model is
     /// hollowed with it, and the stack that goes to the printer has the hole in it.
     #[test]
@@ -301,6 +371,7 @@ mod tests {
         let hollowed = core_volume::hollow(&mesh, &bvh, &asking).expect("a cube hollows");
         object.hollow.take(Shell {
             mesh: Arc::new(hollowed.mesh),
+            cavity: hollowed.cavity,
             cavity_mm3: hollowed.cavity_mm3,
             voxel_mm: hollowed.voxel_mm,
             coarsened: hollowed.coarsened,
@@ -325,26 +396,14 @@ mod tests {
             .find(|layer| (layer.z - 19.5).abs() < 0.05)
             .expect("the stack reaches the lid");
 
-        let raster = RasterSettings {
-            width_px: 400,
-            height_px: 400,
-            pitch: PixelPitch { x: 0.1, y: 0.1 },
-            mirror_x: false,
-            mirror_y: false,
-            shading: Shading::Coverage,
-            grey: Grey::default(),
-            blur_px: 0,
-        };
         let mask = ScanlineRasterizer
-            .rasterize(layer, &raster)
+            .rasterize(layer, &lid_raster())
             .expect("the layer rasterises")
             .runs
             .to_mask();
-        // The lid is 20 mm square at the origin, and image rows grow the other way from
-        // model Y, so its middle sits at row 300 of the 400 the panel is high.
         let lit = mask.pixels().iter().filter(|&&pixel| pixel > 0).count();
         assert_eq!(
-            mask.pixels()[300 * 400 + 100],
+            mask.pixels()[LID_MIDDLE],
             0x00,
             "the hole is open at the middle of the lid"
         );
