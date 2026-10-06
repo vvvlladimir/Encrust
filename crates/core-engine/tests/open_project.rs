@@ -1,4 +1,5 @@
-//! A `.encrust` project opened into a plate, with what the file leaves out built again.
+//! A `.encrust` project opened into a plate, which is the file's own geometry: nothing
+//! is hollowed again and no support is grown again.
 #![expect(
     clippy::expect_used,
     reason = "a broken fixture must fail the run loudly"
@@ -7,14 +8,14 @@
 use std::sync::Arc;
 
 use core_engine::project::{
-    Array, Axis, Cavity, Chosen, CutState, DrainState, Group, HollowState, Keep, Manifest,
-    ObjectHollowState, ObjectState, ObjectSupportState, Project, SlicingState, Summary,
-    SupportState, VERSION,
+    Array, Axis, BuiltCavity, Cavity, Chosen, CutState, DrainState, Group, HollowState, Keep,
+    Manifest, ModelMeshes, ObjectHollowState, ObjectState, ObjectSupportState, Project,
+    SlicingState, Summary, SupportState, VERSION,
 };
 use core_engine::{EngineError, Opening, open_plate};
-use core_geometry::{Mesh, Orientation, Transform, Vec3, diagnose, signed_volume};
-use core_supports::{ProjectSettings, SupportPoint};
-use core_volume::{HollowMode, InfillSettings, VolumeError};
+use core_geometry::{Bvh, Mesh, Orientation, Transform, Vec3, diagnose};
+use core_supports::{ModelSupports, ProjectSettings, SupportPoint, SupportTree};
+use core_volume::{HollowMode, InfillSettings};
 use printer_profiles::{MaterialProfile, OutputFormat, PrinterProfile, SupportProfile};
 
 const PRINTER: &str = r#"
@@ -150,26 +151,55 @@ fn project() -> Project {
             active_plate: 0,
             objects: vec![object("cube", &cube, Transform::default())],
         },
-        meshes: vec![Arc::new(cube)],
+        models: vec![ModelMeshes {
+            source: Arc::new(cube),
+            shell: None,
+        }],
     }
 }
 
 fn opening() -> Opening {
     Opening {
         plate: 0,
-        hollow_budget_bytes: 256 << 20,
         raster_window: 2,
         created_unix_s: 0,
     }
 }
 
-fn wall(thickness_mm: f32) -> Cavity {
-    Cavity {
-        thickness_mm,
-        mode: HollowMode::default(),
-        precision: 0.5,
-        infill: None,
-    }
+/// A shell of `thickness_mm` as a run would have left it, standing on `saved`'s only
+/// model: a box 2 mm inside the cube, which no run would produce from the cube itself.
+fn hollowed(saved: &mut Project, thickness_mm: f32) {
+    saved.manifest.objects[0].hollow.built = Some(BuiltCavity {
+        wall: Cavity {
+            thickness_mm,
+            mode: HollowMode::default(),
+            precision: 0.5,
+            infill: None,
+        },
+        cavity_faces: 0..12,
+        cavity_mm3: 16.0f32.powi(3),
+        voxel_mm: 0.2,
+        coarsened: false,
+        scale: Vec3::ONE,
+    });
+    saved.models[0].shell = Some(Arc::new(box_mesh(
+        Vec3::splat(thickness_mm),
+        Vec3::splat(20.0 - thickness_mm),
+    )));
+}
+
+/// The trees an automatic run grows under a cube standing at `transform` from one point,
+/// in the model's own space: what the window writes into a project.
+fn grown_under(mesh: &Mesh, transform: Transform, contact: Vec3) -> Vec<SupportTree> {
+    let mut supports = ModelSupports::default();
+    supports.add(contact, transform, 0);
+    supports.refresh(
+        mesh,
+        &Bvh::build(mesh),
+        transform,
+        std::slice::from_ref(&SupportProfile::medium()),
+    );
+    supports.grown(transform)
 }
 
 #[test]
@@ -181,7 +211,7 @@ fn a_solid_model_opens_as_the_mesh_it_was_saved_with() {
         panic!("one object on the plate");
     };
     assert!(
-        Arc::ptr_eq(&model.mesh, &saved.meshes[0]),
+        Arc::ptr_eq(&model.mesh, &saved.models[0].source),
         "nothing to rebuild"
     );
     assert!(model.cuts.is_none(), "no hole was drilled");
@@ -192,40 +222,31 @@ fn a_solid_model_opens_as_the_mesh_it_was_saved_with() {
 }
 
 #[test]
-fn a_hollowed_model_opens_as_its_shell() {
+fn a_hollowed_model_opens_as_the_shell_in_the_file() {
     let mut saved = project();
-    saved.manifest.objects[0].hollow.cavity = Some(wall(2.0));
+    hollowed(&mut saved, 2.0);
     let plate = open_plate(&saved, &opening()).expect("the project is complete");
 
-    // A 20 mm cube with a 2 mm wall keeps 20^3 - 16^3 mm3; the cavity comes off a lattice
-    // a fraction of a millimetre across, so its faces sit within a voxel of the plane.
-    let expected = 20.0f32.powi(3) - 16.0f32.powi(3);
-    let kept = signed_volume(&plate.models[0].mesh);
+    let shell = saved.models[0]
+        .shell
+        .as_ref()
+        .expect("the model was given a shell");
     assert!(
-        (kept - expected).abs() / expected < 0.05,
-        "expected about {expected} mm3 of wall, got {kept}"
+        Arc::ptr_eq(&plate.models[0].mesh, shell),
+        "the shell is read, not hollowed again"
     );
 }
 
 #[test]
-fn a_cavity_that_cannot_be_built_names_its_model() {
-    let mut saved = project();
-    saved.manifest.objects[0].hollow.cavity = Some(wall(0.0));
-
-    let error = open_plate(&saved, &opening()).expect_err("a wall of no thickness");
-    assert!(matches!(
-        error,
-        EngineError::Hollow { ref object, source: VolumeError::BadThickness(_) } if object == "cube"
-    ));
-}
-
-#[test]
-fn a_support_point_grows_into_a_column_down_to_the_plate() {
+fn a_tree_the_file_keeps_stands_down_to_the_plate() {
     let mut saved = project();
     let lifted = Transform::from_translation(Vec3::new(30.0, 30.0, 10.0));
     let object = &mut saved.manifest.objects[0];
     object.transform = lifted;
-    object.supports.points = vec![SupportPoint::new(Vec3::new(10.0, 10.0, 0.0))];
+    // The contact is clicked on the plate: the underside of a cube standing at (30, 30, 10).
+    object.supports.grown =
+        grown_under(&saved.models[0].source, lifted, Vec3::new(40.0, 40.0, 10.0));
+    assert_eq!(object.supports.grown.len(), 1, "one point, one tree");
 
     let plate = open_plate(&saved, &opening()).expect("the project is complete");
     let [column] = plate.models[0].supports.as_slice() else {
@@ -240,15 +261,39 @@ fn a_support_point_grows_into_a_column_down_to_the_plate() {
 }
 
 #[test]
+fn a_point_without_a_tree_grows_nothing() {
+    let mut saved = project();
+    saved.manifest.objects[0].supports.points = vec![SupportPoint::new(Vec3::new(10.0, 10.0, 0.0))];
+
+    let plate = open_plate(&saved, &opening()).expect("the project is complete");
+    assert!(
+        plate.models[0]
+            .supports
+            .iter()
+            .all(|group| group.faces.is_empty()),
+        "opening a project decides nothing about where a support goes"
+    );
+}
+
+#[test]
 fn only_what_is_visible_on_the_opened_plate_is_taken() {
     let mut saved = project();
-    let cube = Arc::clone(&saved.meshes[0]);
+    let cube = Arc::clone(&saved.models[0].source);
     let mut elsewhere = object("elsewhere", &cube, Transform::default());
     elsewhere.plate = 1;
     let mut hidden = object("hidden", &cube, Transform::default());
     hidden.visible = false;
     saved.manifest.objects.extend([elsewhere, hidden]);
-    saved.meshes.extend([Arc::clone(&cube), cube]);
+    saved.models.extend([
+        ModelMeshes {
+            source: Arc::clone(&cube),
+            shell: None,
+        },
+        ModelMeshes {
+            source: cube,
+            shell: None,
+        },
+    ]);
 
     let plate = open_plate(&saved, &opening()).expect("the project is complete");
     assert_eq!(plate.models.len(), 1);

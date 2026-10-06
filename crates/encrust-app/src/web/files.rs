@@ -12,7 +12,7 @@ use wasm_bindgen::prelude::*;
 use wasm_bindgen_futures::{JsFuture, spawn_local};
 use web_sys::{Blob, FileList, HtmlInputElement};
 
-use crate::files::{Arrived, MESHES, SIBLINGS, Wanted, together};
+use crate::files::{Arrived, SIBLINGS, Wanted, together};
 use crate::job::{Outcome, Progress, SliceRequest, run_into};
 use crate::web::opfs;
 
@@ -110,7 +110,7 @@ fn open_input(wanted: Wanted) -> Result<(), JsValue> {
     let input: HtmlInputElement = document.create_element("input")?.unchecked_into();
     input.set_type("file");
     input.set_accept(&accept(wanted));
-    input.set_multiple(wanted == Wanted::Model);
+    input.set_multiple(wanted.takes_several());
 
     let read = input.clone();
     let changed = Closure::once_into_js(move || {
@@ -125,13 +125,13 @@ fn open_input(wanted: Wanted) -> Result<(), JsValue> {
 
 /// What the dialog lets through: a model's own extensions and those of its siblings.
 fn accept(wanted: Wanted) -> String {
-    let (_, extensions) = wanted.filter();
-    let siblings: &[&str] = if wanted == Wanted::Model {
+    let siblings: &[&str] = if wanted.takes_several() {
         &SIBLINGS
     } else {
         &[]
     };
-    extensions
+    wanted
+        .extensions()
         .iter()
         .chain(siblings)
         .map(|extension| format!(".{extension}"))
@@ -183,30 +183,26 @@ async fn read_all(wanted: Wanted, files: FileList) {
             }
         }
     }
-    let handed = if wanted == Wanted::Model {
+    let handed = if wanted.takes_several() {
         together(read)
     } else {
         read.into_iter()
             .map(|(name, bytes)| crate::files::Handed::bytes(name, bytes))
             .collect()
     };
-    let is_mesh = |handed: &crate::files::Handed| {
-        handed
-            .path()
-            .extension()
-            .and_then(|extension| extension.to_str())
-            .is_some_and(|extension| MESHES.contains(&extension.to_ascii_lowercase().as_str()))
-    };
-    if wanted == Wanted::Model && !handed.iter().any(is_mesh) {
+    // The siblings picked with a mesh are read with it, not opened on their own.
+    let mut asked_for = handed
+        .into_iter()
+        .filter(|handed| wanted.takes(handed.path()))
+        .peekable();
+    if asked_for.peek().is_none() {
         return arrive(Arrived::Failed(format!(
-            "no model among the files picked; pick a .{} with its materials and textures",
-            MESHES.join(", .")
+            "nothing to open among the files picked; pick a .{}",
+            wanted.extensions().join(", .")
         )));
     }
-    for handed in handed {
-        if wanted != Wanted::Model || is_mesh(&handed) {
-            arrive(Arrived::File(wanted, handed));
-        }
+    for handed in asked_for {
+        arrive(Arrived::File(wanted, handed));
     }
 }
 

@@ -273,7 +273,11 @@ fn item_enabled(ui: &mut egui::Ui, label: &str, action: Action, enabled: bool) -
 fn file_menu(ui: &mut egui::Ui, window: &mut Window) {
     if item(ui, "New plate", Action::NewPlate).clicked() {
         ui.close();
-        project::clear(window);
+        window.doc.scene.add_plate();
+    }
+    if item(ui, "New project", Action::NewProject).clicked() {
+        ui.close();
+        project::new_project(window);
     }
     if item(ui, "Open project...", Action::OpenProject).clicked() {
         ui.close();

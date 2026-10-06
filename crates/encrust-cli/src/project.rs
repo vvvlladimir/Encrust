@@ -9,7 +9,6 @@ use std::path::{Path, PathBuf};
 use anyhow::{Context, Result, bail};
 use core_engine::project::{Chosen, Project, load};
 use core_engine::{Opening, open_plate};
-use core_volume::HollowSettings;
 use printer_profiles::{Catalogue, MaterialProfile};
 
 use crate::args::JobArgs;
@@ -30,7 +29,6 @@ pub fn stage(path: &Path, job: &JobArgs) -> Result<Staged> {
         &project,
         &Opening {
             plate: manifest.active_plate,
-            hollow_budget_bytes: HollowSettings::default().budget_bytes,
             raster_window: raster_window(&job.raster),
             created_unix_s: now_unix_s(),
         },
@@ -45,7 +43,7 @@ pub fn stage(path: &Path, job: &JobArgs) -> Result<Staged> {
     let drainage = job.slicing.check_drainage
         || on_plate.iter().any(|object| {
             let hollow = &object.hollow;
-            hollow.cavity.is_some() || !hollow.drains.is_empty() || !hollow.channels.is_empty()
+            hollow.built.is_some() || !hollow.drains.is_empty() || !hollow.channels.is_empty()
         });
     Ok(Staged {
         parts: on_plate

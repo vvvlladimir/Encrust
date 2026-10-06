@@ -1,20 +1,23 @@
-//! The `.encrust` project file: what the plate holds, written to be opened again.
+//! The `.encrust` project file: the plate as it stands, written to be opened as it was.
 //!
-//! A zip of one JSON manifest and one mesh blob per model. Only what the user typed or
-//! clicked is in it; everything a front end can work out again — hierarchies, support
-//! trees, cavities, the slice stack — is left out and rebuilt on load. Data and
-//! (de)serialisation only: nothing here knows about a window. See
-//! `docs/formats/encrust-project.md` and `docs/decisions/0097`.
+//! A zip of one JSON manifest and the meshes of every model — what was imported, and the
+//! shell the tools built from it. Nothing the file holds is decided again on opening; only
+//! what is a cheap pure function of it is worked out, and `restore` is where that is done.
+//! See `docs/formats/encrust-project.md` and `docs/decisions/0191`.
 
 mod blob;
+mod restore;
+
+pub use restore::{hollow_of, supports_of};
 
 use std::io::{Read, Seek, Write};
 use std::num::NonZeroU8;
+use std::ops::Range;
 use std::path::Path;
 use std::sync::Arc;
 
 use core_format::ExposureRange;
-use core_geometry::{Mesh, MeshDiagnostics, Orientation, Scalar, Transform};
+use core_geometry::{Mesh, MeshDiagnostics, Orientation, Scalar, Transform, Vec3};
 use core_slicer::AdaptiveSettings;
 use core_supports::{ProjectSettings, Region, SupportPoint, SupportTree};
 use core_volume::{Blocker, Channel, DrainHole, HollowMode, HollowSettings, InfillSettings};
@@ -24,9 +27,9 @@ use serde::{Deserialize, Serialize};
 /// What a project file is called, and what an open or save dialog filters on.
 pub const EXTENSION: &str = "encrust";
 
-/// The manifest this build writes. A file claiming a higher one is refused rather than
-/// read as far as it parses.
-pub const VERSION: u32 = 2;
+/// The manifest this build writes. A file of any other version is refused: the format
+/// carries built geometry, which an older one has none of (ADR 0191).
+pub const VERSION: u32 = 3;
 
 const MANIFEST: &str = "project.json";
 
@@ -105,9 +108,9 @@ pub enum ProjectError {
     #[error("this is not an Encrust project: {0}")]
     NotAProject(String),
     #[error(
-        "this project was written by a newer Encrust (format {found}, this build reads {VERSION})"
+        "this project is of format {found}, and this build reads {VERSION}: open the models it was built from and build the plate again"
     )]
-    TooNew { found: u32 },
+    WrongVersion { found: u32 },
     #[error("the project's manifest is damaged: {0}")]
     BadManifest(#[from] serde_json::Error),
     #[error("the model {name} in the project is missing or damaged")]
@@ -127,12 +130,29 @@ pub fn digest(manifest: &Manifest) -> u64 {
     hasher.finish()
 }
 
-/// A project as the window holds it: the manifest, and one mesh per object in the same
-/// order as [`Manifest::objects`].
+/// A project as the window holds it: the manifest, and the geometry of each object in
+/// the same order as [`Manifest::objects`].
 #[derive(Debug)]
 pub struct Project {
     pub manifest: Manifest,
-    pub meshes: Vec<Arc<Mesh>>,
+    pub models: Vec<ModelMeshes>,
+}
+
+/// The geometry one object carries: the mesh it was imported as, and the shell hollowing
+/// built from it, which is what prints.
+#[derive(Debug, Clone)]
+pub struct ModelMeshes {
+    pub source: Arc<Mesh>,
+    /// The hollowed shell as it stands, or `None` for a model that is still solid.
+    pub shell: Option<Arc<Mesh>>,
+}
+
+impl ModelMeshes {
+    /// What this object prints as: its shell when it has one, the mesh it came in as
+    /// otherwise.
+    pub fn printed(&self) -> &Arc<Mesh> {
+        self.shell.as_ref().unwrap_or(&self.source)
+    }
 }
 
 /// Everything a project holds but its meshes, as `project.json` stores it.
@@ -147,11 +167,8 @@ pub struct Manifest {
     pub drain: DrainState,
     pub cut: CutState,
     pub array: Array,
-    /// One name per plate. A file written before there were plates has none, and opens
-    /// as the single plate every object stood on.
-    #[serde(default)]
+    /// One name per plate, in the order the plate bar shows them.
     pub plates: Vec<String>,
-    #[serde(default)]
     pub active_plate: u32,
     pub objects: Vec<ObjectState>,
 }
@@ -165,28 +182,18 @@ pub struct Chosen<T> {
     pub profile: T,
 }
 
-fn one_sample() -> NonZeroU8 {
-    core_slicer::ONE_SAMPLE
-}
-
 /// How the plate is cut and drawn: layer height, exposures, anti-aliasing, the container.
 #[derive(Debug, Serialize, Deserialize)]
 pub struct SlicingState {
     pub layer_height_mm: Scalar,
     pub adaptive: Option<AdaptiveSettings>,
     pub exposure: Vec<ExposureRange>,
-    /// Absent in a project written before step 16d, which meant one plane a layer.
-    #[serde(default = "one_sample")]
+    /// Planes cut per layer.
     pub samples: NonZeroU8,
     pub anti_alias: bool,
-    /// Absent in a project written before step 16c, which meant all 255 greys.
-    #[serde(default)]
+    /// How many greys a mask may hold, or `None` for all 255.
     pub grey_levels: Option<NonZeroU8>,
-    /// Absent in a project written before step 16f, which meant sharp edges.
-    #[serde(default)]
     pub blur_px: u8,
-    /// Absent in a project written before step 17b, which kept its islands.
-    #[serde(default)]
     pub remove_islands: bool,
     pub format: OutputFormat,
 }
@@ -242,7 +249,6 @@ pub struct CutState {
 #[derive(Debug, Serialize, Deserialize)]
 pub struct ObjectState {
     pub name: String,
-    #[serde(default)]
     pub plate: u32,
     pub transform: Transform,
     pub visible: bool,
@@ -261,29 +267,49 @@ pub struct Summary {
     pub diagnostics: MeshDiagnostics,
 }
 
-/// One model's supports: the points placed, the regions painted and the trees kept.
+/// One model's supports: the points placed, the regions painted, and every tree
+/// standing — the ones an automatic run grew as well as the ones a hand froze.
 #[derive(Debug, Default, Serialize, Deserialize)]
 pub struct ObjectSupportState {
     pub points: Vec<SupportPoint>,
     pub painted: Region,
     pub blocked: Region,
     pub frozen: Vec<SupportTree>,
+    /// The grown trees, in the model's own space, as the run left them. They are not
+    /// grown again on opening: a tree is where the file says it is.
+    pub grown: Vec<SupportTree>,
 }
 
-/// One model's hollowing: its cavity, and the blockers, drains and channels cut into it.
+/// One model's hollowing: the blockers, drains and channels placed on it, and the shell
+/// standing on it.
 #[derive(Debug, Default, Serialize, Deserialize)]
 pub struct ObjectHollowState {
     pub blockers: Vec<Blocker>,
     pub drains: Vec<DrainHole>,
     pub channels: Vec<Channel>,
-    /// What the model was hollowed with, or `None` for a solid one. Absent in a version 1
-    /// file, which kept no cavity at all.
-    #[serde(default)]
-    pub cavity: Option<Cavity>,
+    /// The shell as it was built, or `None` for a model that is still solid. Its geometry
+    /// is the object's `shell.mesh`.
+    pub built: Option<BuiltCavity>,
 }
 
-/// The wall a model was hollowed to, which is all a cavity needs to be built again: its
-/// blockers and channels are already beside it (ADR 0178).
+/// A shell as the run left it: the wall it was asked for, and what came out of the
+/// lattice. Everything here is measured, not asked for again, so the file opens as the
+/// plate that was saved (ADR 0191).
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct BuiltCavity {
+    pub wall: Cavity,
+    /// Which faces of the shell bound the space the resin fills.
+    pub cavity_faces: Range<usize>,
+    pub cavity_mm3: Scalar,
+    /// The lattice the cavity came out on, millimetres, and whether a memory budget made
+    /// it coarser than the precision asked for.
+    pub voxel_mm: Scalar,
+    pub coarsened: bool,
+    /// The scale the model stood at, which the wall was measured under.
+    pub scale: Vec3,
+}
+
+/// The wall a model was hollowed to, as the Hollow panel shows it.
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 pub struct Cavity {
     pub thickness_mm: Scalar,
@@ -324,9 +350,13 @@ pub fn write_to<W: Write + Seek>(sink: W, project: &Project) -> Result<(), Proje
 
     zip.start_file(MANIFEST, options)?;
     zip.write_all(&serde_json::to_vec_pretty(&project.manifest)?)?;
-    for (index, mesh) in project.meshes.iter().enumerate() {
-        zip.start_file(mesh_name(index), options)?;
-        zip.write_all(&blob::write(mesh))?;
+    for (index, model) in project.models.iter().enumerate() {
+        zip.start_file(source_name(index), options)?;
+        zip.write_all(&blob::write(&model.source))?;
+        if let Some(shell) = &model.shell {
+            zip.start_file(shell_name(index), options)?;
+            zip.write_all(&blob::write(shell))?;
+        }
     }
     zip.finish()?;
     Ok(())
@@ -338,8 +368,8 @@ pub fn save(path: &Path, project: &Project) -> Result<(), ProjectError> {
     write_to(std::io::BufWriter::new(file), project)
 }
 
-/// Reads a project back from `source`. A file from a newer build is refused whole:
-/// reading as far as the manifest parses would silently drop whatever that build added.
+/// Reads a project back from `source`. A file of another format version is refused
+/// whole: reading as far as the manifest parses would drop what it does not have.
 pub fn read_from<R: Read + Seek>(source: R) -> Result<Project, ProjectError> {
     let mut zip = zip::ZipArchive::new(source)
         .map_err(|error| ProjectError::NotAProject(error.to_string()))?;
@@ -351,26 +381,25 @@ pub fn read_from<R: Read + Seek>(source: R) -> Result<Project, ProjectError> {
         let mut text = String::new();
         entry.read_to_string(&mut text)?;
         let version: Version = serde_json::from_str(&text)?;
-        if version.version > VERSION {
-            return Err(ProjectError::TooNew {
+        if version.version != VERSION {
+            return Err(ProjectError::WrongVersion {
                 found: version.version,
             });
         }
         serde_json::from_str(&text)?
     };
 
-    let mut meshes = Vec::with_capacity(manifest.objects.len());
-    for index in 0..manifest.objects.len() {
-        let name = mesh_name(index);
-        let mut entry = zip
-            .by_name(&name)
-            .map_err(|_| ProjectError::BadMesh { name: name.clone() })?;
-        let mut bytes = Vec::new();
-        entry.read_to_end(&mut bytes)?;
-        meshes.push(Arc::new(blob::read(&name, &bytes)?));
+    let mut models = Vec::with_capacity(manifest.objects.len());
+    for (index, object) in manifest.objects.iter().enumerate() {
+        let source = Arc::new(mesh_at(&mut zip, &source_name(index))?);
+        let shell = match object.hollow.built {
+            Some(_) => Some(Arc::new(mesh_at(&mut zip, &shell_name(index))?)),
+            None => None,
+        };
+        models.push(ModelMeshes { source, shell });
     }
 
-    Ok(Project { manifest, meshes })
+    Ok(Project { manifest, models })
 }
 
 /// Reads a project back from a file at `path`.
@@ -379,15 +408,29 @@ pub fn load(path: &Path) -> Result<Project, ProjectError> {
     read_from(std::io::BufReader::new(file))
 }
 
-/// The version alone, read before the rest so that a manifest from a newer build is
+/// The version alone, read before the rest so that a manifest of another format is
 /// refused by its number rather than by a field it happens to have renamed.
 #[derive(Deserialize)]
 struct Version {
     version: u32,
 }
 
-fn mesh_name(index: usize) -> String {
-    format!("models/{index}.mesh")
+/// One mesh blob out of the archive, by the name the manifest implies it has.
+fn mesh_at<R: Read + Seek>(zip: &mut zip::ZipArchive<R>, name: &str) -> Result<Mesh, ProjectError> {
+    let mut entry = zip.by_name(name).map_err(|_| ProjectError::BadMesh {
+        name: name.to_owned(),
+    })?;
+    let mut bytes = Vec::new();
+    entry.read_to_end(&mut bytes)?;
+    blob::read(name, &bytes)
+}
+
+fn source_name(index: usize) -> String {
+    format!("models/{index}/source.mesh")
+}
+
+fn shell_name(index: usize) -> String {
+    format!("models/{index}/shell.mesh")
 }
 
 impl From<zip::result::ZipError> for ProjectError {
@@ -406,6 +449,8 @@ mod tests {
     use super::*;
     use core_geometry::Vec3;
 
+    /// A plate of `objects` models, each hollowed, so every part of the format is in it:
+    /// a manifest, a source mesh and a shell beside it.
     fn project(objects: usize) -> Project {
         let mesh = Mesh::new(vec![Vec3::ZERO, Vec3::X, Vec3::Y], vec![[0, 1, 2]]);
         Project {
@@ -417,7 +462,7 @@ mod tests {
                     layer_height_mm: 0.05,
                     adaptive: Some(AdaptiveSettings::default()),
                     exposure: vec![ExposureRange::new(0.0, 4.0, 9.5)],
-                    samples: one_sample(),
+                    samples: core_slicer::ONE_SAMPLE,
                     anti_alias: true,
                     grey_levels: None,
                     blur_px: 0,
@@ -455,56 +500,73 @@ mod tests {
                 array: Array::default(),
                 plates: vec!["Plate 1".to_owned()],
                 active_plate: 0,
-                objects: (0..objects)
-                    .map(|index| ObjectState {
-                        name: format!("model {index}"),
-                        plate: 0,
-                        transform: Transform::from_translation(Vec3::new(1.0, 2.0, 3.0)),
-                        visible: true,
-                        summary: Summary {
-                            vertices_merged: 7,
-                            faces_removed: 1,
-                            orientation: Orientation {
-                                flipped_faces: 2,
-                                inverted_shells: 0,
-                                orientable: true,
-                            },
-                            diagnostics: MeshDiagnostics {
-                                vertices: 3,
-                                faces: 1,
-                                degenerate_faces: 0,
-                                duplicate_faces: 0,
-                                unreferenced_vertices: 0,
-                                boundary_edges: 3,
-                                non_manifold_edges: 0,
-                                shells: 1,
-                                euler_characteristic: 1,
-                            },
-                        },
-                        supports: ObjectSupportState {
-                            points: vec![SupportPoint::new(Vec3::Z).in_group(1)],
-                            painted: marked(&[0]),
-                            blocked: Region::default(),
-                            frozen: Vec::new(),
-                        },
-                        hollow: ObjectHollowState {
-                            blockers: vec![Blocker::ball(Vec3::ZERO, 1.5)],
-                            drains: Vec::new(),
-                            channels: vec![Channel {
-                                points: vec![Vec3::ZERO, Vec3::Z],
-                                diameter_mm: 3.0,
-                            }],
-                            cavity: Some(Cavity {
-                                thickness_mm: 1.5,
-                                mode: HollowMode::External,
-                                precision: 0.25,
-                                infill: None,
-                            }),
-                        },
-                    })
-                    .collect(),
+                objects: (0..objects).map(object).collect(),
             },
-            meshes: (0..objects).map(|_| Arc::new(mesh.clone())).collect(),
+            models: (0..objects)
+                .map(|_| ModelMeshes {
+                    source: Arc::new(mesh.clone()),
+                    shell: Some(Arc::new(mesh.clone())),
+                })
+                .collect(),
+        }
+    }
+
+    /// One model on the plate, with a point, a painted face, a blocker, a channel and a
+    /// built cavity, so every part of an object's state is written and read back.
+    fn object(index: usize) -> ObjectState {
+        ObjectState {
+            name: format!("model {index}"),
+            plate: 0,
+            transform: Transform::from_translation(Vec3::new(1.0, 2.0, 3.0)),
+            visible: true,
+            summary: Summary {
+                vertices_merged: 7,
+                faces_removed: 1,
+                orientation: Orientation {
+                    flipped_faces: 2,
+                    inverted_shells: 0,
+                    orientable: true,
+                },
+                diagnostics: MeshDiagnostics {
+                    vertices: 3,
+                    faces: 1,
+                    degenerate_faces: 0,
+                    duplicate_faces: 0,
+                    unreferenced_vertices: 0,
+                    boundary_edges: 3,
+                    non_manifold_edges: 0,
+                    shells: 1,
+                    euler_characteristic: 1,
+                },
+            },
+            supports: ObjectSupportState {
+                points: vec![SupportPoint::new(Vec3::Z).in_group(1)],
+                painted: marked(&[0]),
+                blocked: Region::default(),
+                frozen: Vec::new(),
+                grown: Vec::new(),
+            },
+            hollow: ObjectHollowState {
+                blockers: vec![Blocker::ball(Vec3::ZERO, 1.5)],
+                drains: Vec::new(),
+                channels: vec![Channel {
+                    points: vec![Vec3::ZERO, Vec3::Z],
+                    diameter_mm: 3.0,
+                }],
+                built: Some(BuiltCavity {
+                    wall: Cavity {
+                        thickness_mm: 1.5,
+                        mode: HollowMode::External,
+                        precision: 0.25,
+                        infill: None,
+                    },
+                    cavity_faces: 0..1,
+                    cavity_mm3: 12.5,
+                    voxel_mm: 0.2,
+                    coarsened: false,
+                    scale: Vec3::ONE,
+                }),
+            },
         }
     }
 
@@ -529,7 +591,7 @@ mod tests {
         let back = round_trip(&saved);
 
         assert_eq!(back.manifest.objects.len(), 2);
-        assert_eq!(back.meshes, saved.meshes);
+        assert_eq!(back.models[0].source, saved.models[0].source);
         let object = &back.manifest.objects[0];
         assert_eq!(object.transform, saved.manifest.objects[0].transform);
         assert_eq!(
@@ -544,62 +606,53 @@ mod tests {
             object.hollow.channels,
             saved.manifest.objects[0].hollow.channels
         );
-        assert_eq!(
-            object.hollow.cavity,
-            saved.manifest.objects[0].hollow.cavity
-        );
         assert_eq!(back.manifest.slicing.format, OutputFormat::Ctb5);
         assert_eq!(back.manifest.hollow.mode, HollowMode::External);
     }
 
     #[test]
-    fn a_version_1_file_opens_with_every_model_solid() {
+    fn a_hollowed_model_brings_its_shell_back_with_what_it_was_measured_at() {
         let saved = project(1);
-        let mut manifest = serde_json::to_value(&saved.manifest).expect("the manifest serialises");
-        manifest["version"] = 1.into();
-        let hollow = manifest["objects"][0]["hollow"]
-            .as_object_mut()
-            .expect("an object carries its hollow state");
-        hollow.remove("cavity");
+        let back = round_trip(&saved);
 
-        let mut bytes = Cursor::new(Vec::new());
-        {
-            let mut zip = zip::ZipWriter::new(&mut bytes);
-            let options = zip::write::SimpleFileOptions::default();
-            zip.start_file(MANIFEST, options)
-                .expect("a zip in memory takes an entry");
-            zip.write_all(&serde_json::to_vec(&manifest).expect("the manifest serialises"))
-                .expect("a zip in memory takes bytes");
-            zip.start_file(mesh_name(0), options)
-                .expect("a zip in memory takes an entry");
-            zip.write_all(&blob::write(&saved.meshes[0]))
-                .expect("a zip in memory takes bytes");
-            zip.finish().expect("a zip in memory finishes");
-        }
-        bytes.set_position(0);
+        assert_eq!(back.models[0].shell, saved.models[0].shell);
+        assert_eq!(
+            back.manifest.objects[0].hollow.built,
+            saved.manifest.objects[0].hollow.built
+        );
+    }
 
-        let back = read_from(bytes).expect("a version 1 file still opens");
-        assert_eq!(back.manifest.objects[0].hollow.cavity, None);
+    #[test]
+    fn a_solid_model_carries_one_mesh() {
+        let mut saved = project(1);
+        saved.manifest.objects[0].hollow.built = None;
+        saved.models[0].shell = None;
+
+        let back = round_trip(&saved);
+        assert!(back.models[0].shell.is_none());
+        assert_eq!(back.models[0].printed(), &back.models[0].source);
     }
 
     #[test]
     fn an_empty_plate_round_trips() {
         let back = round_trip(&project(0));
         assert!(back.manifest.objects.is_empty());
-        assert!(back.meshes.is_empty());
+        assert!(back.models.is_empty());
     }
 
     #[test]
-    fn a_project_from_a_newer_build_is_refused() {
-        let mut saved = project(1);
-        saved.manifest.version = VERSION + 1;
+    fn a_project_of_another_format_version_is_refused() {
+        for found in [VERSION - 1, VERSION + 1] {
+            let mut saved = project(1);
+            saved.manifest.version = found;
 
-        let mut bytes = Cursor::new(Vec::new());
-        write_to(&mut bytes, &saved).expect("a project in memory writes");
-        bytes.set_position(0);
+            let mut bytes = Cursor::new(Vec::new());
+            write_to(&mut bytes, &saved).expect("a project in memory writes");
+            bytes.set_position(0);
 
-        let error = read_from(bytes).expect_err("the format is newer than this build");
-        assert!(matches!(error, ProjectError::TooNew { found } if found == VERSION + 1));
+            let error = read_from(bytes).expect_err("the format is not this one");
+            assert!(matches!(error, ProjectError::WrongVersion { found: it } if it == found));
+        }
     }
 
     #[test]
@@ -610,7 +663,7 @@ mod tests {
 
         let back = load(&path).expect("what was just written reads");
         assert_eq!(back.manifest.objects.len(), 1);
-        assert_eq!(back.meshes, saved.meshes);
+        assert_eq!(back.models[0].source, saved.models[0].source);
         std::fs::remove_file(&path).expect("the file was just written");
     }
 
@@ -645,15 +698,15 @@ mod tests {
                 .expect("a zip in memory takes an entry");
             zip.write_all(&serde_json::to_vec(&saved.manifest).expect("the manifest serialises"))
                 .expect("a zip in memory takes bytes");
-            zip.start_file(mesh_name(0), options)
+            zip.start_file(source_name(0), options)
                 .expect("a zip in memory takes an entry");
-            zip.write_all(&blob::write(&saved.meshes[0]))
+            zip.write_all(&blob::write(&saved.models[0].source))
                 .expect("a zip in memory takes bytes");
             zip.finish().expect("a zip in memory finishes");
         }
         bytes.set_position(0);
 
-        let error = read_from(bytes).expect_err("the second model is not in the file");
+        let error = read_from(bytes).expect_err("the first model has no shell in the file");
         assert!(matches!(error, ProjectError::BadMesh { .. }));
     }
 }

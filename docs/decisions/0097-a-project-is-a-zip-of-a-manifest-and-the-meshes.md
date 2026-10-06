@@ -1,6 +1,6 @@
 # 0097. A project is a zip of a JSON manifest and the meshes, holding only what was asked for
 
-- **Status:** Accepted
+- **Status:** Superseded by 0191
 - **Date:** 2026-09-26
 
 ## Context

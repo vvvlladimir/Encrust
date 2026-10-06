@@ -28,6 +28,7 @@ pub enum Action {
     Step(i64),
     Play,
     NewPlate,
+    NewProject,
     OpenProject,
     SaveProject,
     SaveProjectAs,
@@ -57,6 +58,7 @@ impl Action {
             Self::Step(_) => "Ten layers back",
             Self::Play => "Play the stack",
             Self::NewPlate => "New plate",
+            Self::NewProject => "New project",
             Self::OpenProject => "Open a project",
             Self::SaveProject => "Save the project",
             Self::SaveProjectAs => "Save the project as",
@@ -189,6 +191,7 @@ pub const BINDINGS: &[Binding] = &[
     bind(Group::Layers, Action::Step(-10), &[shift(Key::ArrowDown)]),
     bind(Group::Layers, Action::Play, &[plain(Key::Space)]),
     bind(Group::Files, Action::NewPlate, &[cmd(Key::N)]),
+    bind(Group::Files, Action::NewProject, &[cmd_shift(Key::N)]),
     bind(Group::Files, Action::OpenProject, &[cmd(Key::O)]),
     bind(Group::Files, Action::SaveProject, &[cmd(Key::S)]),
     bind(Group::Files, Action::SaveProjectAs, &[cmd_shift(Key::S)]),
@@ -387,10 +390,17 @@ pub fn act(window: &mut Window, action: Action) {
         Action::Sheet => window.view.options.sheet = true,
         Action::Step(layers) => step(window, layers),
         Action::Play => play(window),
-        Action::NewPlate => crate::project::clear(window),
+        Action::NewPlate => {
+            window.doc.scene.add_plate();
+        }
+        Action::NewProject => crate::project::new_project(window),
         Action::OpenProject => crate::project::open_dialog(window),
-        Action::SaveProject => crate::project::save_open(window),
-        Action::SaveProjectAs => crate::project::save_dialog(window),
+        Action::SaveProject => {
+            crate::project::save_open(window);
+        }
+        Action::SaveProjectAs => {
+            crate::project::save_dialog(window);
+        }
         Action::OpenModel => window
             .doc
             .imports
