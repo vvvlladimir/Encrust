@@ -5,11 +5,11 @@ use egui::{PointerButton, Sense};
 use crate::camera::OrbitCamera;
 use crate::drain::Placing;
 use crate::measure;
-use crate::panels::{Overlays, Window, section};
+use crate::panels::{Window, section};
 use crate::pick::{occluded, pick, pick_surface, ray_through};
 use crate::plate::BuildPlate;
 use crate::render::{Banding, CutLine, Shading, ViewportCallback};
-use crate::scene::Scene;
+use crate::scene::{ObjectId, Scene};
 use crate::state::{Doc, Tools, View};
 use crate::supports::Picked;
 use crate::ui::theme;
@@ -66,7 +66,7 @@ pub fn ui(ui: &mut egui::Ui, window: &mut Window) -> egui::Rect {
     let pointer = if window.view.options.sheet {
         Pointer::idle()
     } else {
-        pointer_state(ui, rect, &window.view.overlays)
+        pointer_state(ui, rect)
     };
     // What the gizmo reports is one frame old, because it is drawn after the input that
     // has to yield to it is read. That only matters on the frame a handle is crossed.
@@ -124,6 +124,9 @@ fn steer_camera(view: &mut View, rect: egui::Rect, pointer: &Pointer, drag: Drag
 
 /// What a click on the plate does, which is the tool's to say.
 fn click(ui: &egui::Ui, window: &mut Window, rect: egui::Rect, cursor: egui::Pos2) {
+    if *window.tool != Tool::Select && takes_the_pick(window, rect, cursor) {
+        return;
+    }
     match *window.tool {
         // Alt is what every modelling tool uses for "the opposite of this click", and
         // the other buttons are already spoken for by the camera.
@@ -473,15 +476,21 @@ pub fn frame_view(scene: &Scene, plate: &BuildPlate, camera: &mut OrbitCamera) {
     }
 }
 
-/// Reads this frame's pointer, in panel points, and whether it is over the 3D view. A
-/// pointer over a floating card is over the card, not over the model behind it.
-fn pointer_state(ui: &egui::Ui, rect: egui::Rect, overlays: &Overlays) -> Pointer {
+/// Reads this frame's pointer, in panel points, and whether it is over the 3D view.
+fn pointer_state(ui: &egui::Ui, rect: egui::Rect) -> Pointer {
+    // Read before the input is borrowed below: asking egui which layer is under a point
+    // takes the same lock.
+    let position = ui.ctx().input(|input| input.pointer.hover_pos());
+    let over_viewport = over_the_model(
+        rect,
+        position,
+        position.and_then(|at| ui.ctx().layer_id_at(at)),
+        ui.layer_id(),
+    );
     ui.input(|input| {
-        let position = input.pointer.hover_pos();
         let delta = input.pointer.delta();
         Pointer {
-            over_viewport: position
-                .is_some_and(|position| rect.contains(position) && !overlays.covers(position)),
+            over_viewport,
             position: position.map(|position| Vec2::new(position.x, position.y)),
             pressed: input.pointer.any_pressed(),
             primary_down: input.pointer.button_down(PointerButton::Primary),
@@ -494,9 +503,24 @@ fn pointer_state(ui: &egui::Ui, rect: egui::Rect, overlays: &Overlays) -> Pointe
     })
 }
 
+/// Whether the pointer is on the model rather than on something drawn over it.
+///
+/// A card, a popup, a menu or a floating window is its own egui layer above the
+/// viewport's, and whatever egui has at this point owns the pointer: the camera must not
+/// read a drag meant for a field in a popup. See `docs/decisions/0193`.
+fn over_the_model(
+    rect: egui::Rect,
+    position: Option<egui::Pos2>,
+    over: Option<egui::LayerId>,
+    own: egui::LayerId,
+) -> bool {
+    position
+        .is_some_and(|position| rect.contains(position) && over.is_none_or(|layer| layer == own))
+}
+
 /// Draws the handles over the selected objects and writes back what the user dragged.
 fn show_gizmo(ui: &egui::Ui, window: &mut Window, viewport: egui::Rect) {
-    let picked: Vec<crate::scene::ObjectId> = window.doc.scene.selection().to_vec();
+    let picked: Vec<ObjectId> = window.doc.scene.selection().to_vec();
     let pivots: Vec<core_geometry::Transform> = picked
         .iter()
         .filter_map(|id| window.doc.scene.get(*id))
@@ -599,6 +623,27 @@ fn select_under_cursor(
         (true, None) => {}
         (false, hit) => scene.select(hit),
     }
+}
+
+/// Whether this click only picks the model it landed on, which is what a click outside
+/// the selection does: a tool works on what is picked, so the first click on another part
+/// changes what is aimed at and the next one acts on it. See `docs/decisions/0193`.
+///
+/// With nothing picked a tool has the whole plate (ADR 0101), so there is nothing to aim
+/// and the click goes through.
+fn takes_the_pick(window: &mut Window, viewport: egui::Rect, cursor: egui::Pos2) -> bool {
+    let hit = pick(&window.doc.scene, &window.view.camera, viewport, cursor);
+    if !aims_elsewhere(&window.doc.scene, hit) {
+        return false;
+    }
+    window.doc.scene.select(hit);
+    true
+}
+
+/// Whether `hit` is a model the tools are not working on while they are working on
+/// something.
+fn aims_elsewhere(scene: &Scene, hit: Option<ObjectId>) -> bool {
+    hit.is_some_and(|id| scene.has_selection() && !scene.is_selected(id))
 }
 
 /// Stands a support where the model was clicked, and selects what it was put on so that
@@ -865,8 +910,8 @@ fn carry_parts(window: &mut Window, step: Vec3) -> bool {
 }
 
 /// Every frozen tree something is held on, each once.
-fn held_trees(tools: &Tools) -> Vec<(crate::scene::ObjectId, usize)> {
-    let mut held: Vec<(crate::scene::ObjectId, usize)> = tools
+fn held_trees(tools: &Tools) -> Vec<(ObjectId, usize)> {
+    let mut held: Vec<(ObjectId, usize)> = tools
         .supports
         .picked
         .iter()
@@ -1167,6 +1212,8 @@ fn draw_picked(ui: &egui::Ui, window: &Window, viewport: egui::Rect) {
 
 #[cfg(test)]
 mod tests {
+    use std::sync::Arc;
+
     use super::*;
 
     #[test]
@@ -1175,5 +1222,82 @@ mod tests {
         let mut camera = OrbitCamera::default();
         frame_view(&Scene::default(), &plate, &mut camera);
         assert_eq!(camera.target, plate.center());
+    }
+
+    fn viewport() -> egui::Rect {
+        egui::Rect::from_min_size(egui::pos2(100.0, 50.0), egui::vec2(400.0, 300.0))
+    }
+
+    #[test]
+    fn the_plate_is_under_the_pointer_only_where_nothing_is_drawn_over_it() {
+        let stage = egui::LayerId::background();
+        let card = egui::LayerId::new(egui::Order::Middle, egui::Id::new("a card"));
+        let inside = Some(egui::pos2(200.0, 100.0));
+
+        assert!(over_the_model(viewport(), inside, Some(stage), stage));
+        assert!(
+            over_the_model(viewport(), inside, None, stage),
+            "a point with no layer at all is the plate"
+        );
+        assert!(
+            !over_the_model(viewport(), inside, Some(card), stage),
+            "a card over the plate owns the pointer"
+        );
+        assert!(
+            !over_the_model(viewport(), Some(egui::pos2(10.0, 10.0)), Some(stage), stage),
+            "a panel beside the viewport is not the viewport"
+        );
+        assert!(!over_the_model(viewport(), None, None, stage));
+    }
+
+    #[test]
+    fn a_click_outside_the_selection_only_aims_the_tool() {
+        let mut scene = Scene::default();
+        let cube = Arc::new(core_geometry::Mesh::new(
+            vec![Vec3::ZERO, Vec3::X, Vec3::Y],
+            vec![[0, 1, 2]],
+        ));
+        let summary = crate::scene::ImportSummary {
+            vertices_merged: 0,
+            faces_removed: 0,
+            orientation: core_geometry::Orientation {
+                flipped_faces: 0,
+                inverted_shells: 0,
+                orientable: true,
+            },
+            diagnostics: core_geometry::diagnose(&cube),
+        };
+        let first = scene.insert(crate::scene::Imported::new(
+            "first".to_owned(),
+            Arc::clone(&cube),
+            core_geometry::Transform::default(),
+            summary.clone(),
+        ));
+        let second = scene.insert(crate::scene::Imported::new(
+            "second".to_owned(),
+            cube,
+            core_geometry::Transform::default(),
+            summary,
+        ));
+
+        scene.select(Some(first));
+        assert!(
+            aims_elsewhere(&scene, Some(second)),
+            "the click lands on a model the tool is not working on"
+        );
+        assert!(
+            !aims_elsewhere(&scene, Some(first)),
+            "a second click on what is picked is the tool's"
+        );
+        assert!(
+            !aims_elsewhere(&scene, None),
+            "a click on empty plate is not an aim"
+        );
+
+        scene.clear_selection();
+        assert!(
+            !aims_elsewhere(&scene, Some(second)),
+            "with nothing picked the tool has the whole plate"
+        );
     }
 }

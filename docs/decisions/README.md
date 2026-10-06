@@ -287,3 +287,4 @@ Grouped by what the decision governs; the number is still the order it was taken
 | [0151](0151-the-preview-shows-a-source-not-a-plate.md) | Let the preview show a source, which is either a plate or a file | Accepted |
 | [0157](0157-the-slice-row-carries-two-actions.md) | The Slice row carries two actions, not a destination | Accepted |
 | [0192](0192-a-tool-value-is-remembered-and-taken-back-on-its-own-entry.md) | A tool value is remembered between runs and taken back on its own entry | Accepted |
+| [0193](0193-the-window-reads-its-own-input-before-egui-does.md) | The window reads its own input before egui does | Accepted |

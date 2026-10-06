@@ -69,18 +69,14 @@ fn selection(ui: &mut egui::Ui, doc: &mut Doc) {
         |ui| {
             describe(
                 ui,
-                "Click a model to pick it. Shift-click or cmd-click adds to the \
-                 selection, and every tool then works on what is picked.",
+                "Click a model to pick it. Cmd-click adds one to the selection and \
+                 shift-click takes everything between, and every tool then works on what \
+                 is picked.",
             );
             ui.add_space(8.0);
-            ui.columns(2, |columns| {
-                if secondary_button(&mut columns[0], icon::SELECT, "Select all").clicked() {
-                    doc.scene.select_here();
-                }
-                if secondary_button(&mut columns[1], icon::CANCEL, "None").clicked() {
-                    doc.scene.clear_selection();
-                }
-            });
+            if secondary_button(ui, icon::SELECT, "Select all").clicked() {
+                doc.scene.select_here();
+            }
         },
     );
 }

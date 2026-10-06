@@ -409,6 +409,11 @@ fn footer(ui: &mut egui::Ui, window: &mut Window) {
                 window.machine.preview.set_playing(!playing);
             }
         }
+        Mode::Prepare if window.view.section.playing => {
+            if icon_button(ui, icon::PAUSE, "Pause").clicked() {
+                window.view.section.playing = false;
+            }
+        }
         Mode::Prepare => {
             if icon_button(ui, icon::SECTION, "Show the whole model").clicked() {
                 window.view.section.height_mm = None;
@@ -418,8 +423,9 @@ fn footer(ui: &mut egui::Ui, window: &mut Window) {
 }
 
 /// Moves the cut by `layers`, which is a layer of the stack in the preview and a layer
-/// height of the print in the prepare mode.
-fn step(window: &mut Window, layers: i64) {
+/// height of the print in the prepare mode. The rail is one in both modes, so the keys
+/// and the buttons that step it come here; see `docs/decisions/0061`.
+pub(crate) fn step(window: &mut Window, layers: i64) {
     match *window.mode {
         Mode::Preview => {
             window.machine.preview.step(layers);
@@ -432,8 +438,60 @@ fn step(window: &mut Window, layers: i64) {
             let height = window.view.section.height_mm.unwrap_or(top);
             let moved = height + layers as Scalar * window.machine.slicing.layer_height_mm();
             window.view.section.height_mm = Some(moved.clamp(bottom, top)).filter(|z| *z < top);
+            window.view.section.playing = false;
         }
     }
+}
+
+/// Starts or stops the transport: the stack in the preview, the cut up the model in the
+/// prepare mode.
+pub(crate) fn play(window: &mut Window) {
+    match *window.mode {
+        Mode::Preview => {
+            let playing = window.machine.preview.is_playing();
+            window.machine.preview.set_playing(!playing);
+        }
+        Mode::Prepare => {
+            let running = window.view.section.playing;
+            window.view.section.playing = !running && height_range(window.doc).is_some();
+        }
+    }
+}
+
+/// Where the cut goes on the next frame of play, or `None` once it has run past the top:
+/// the whole model is shown again there, which is also where the play stops.
+///
+/// A cut parked at the top starts again from the bottom, so pressing play twice over runs
+/// the model through twice rather than doing nothing the second time.
+fn run_up(
+    height_mm: Option<Scalar>,
+    (bottom, top): (Scalar, Scalar),
+    step_mm: Scalar,
+) -> Option<Scalar> {
+    let from = height_mm.unwrap_or(bottom - step_mm);
+    let next = from + step_mm;
+    (next < top).then(|| next.max(bottom))
+}
+
+/// Runs the cut up the model while the prepare mode is playing. Returns whether the
+/// window has to keep repainting, the way `animate` does for the stack.
+pub fn animate_section(
+    ctx: &egui::Context,
+    section: &mut Section,
+    doc: &Doc,
+    layer_height_mm: Scalar,
+) -> bool {
+    if !section.playing {
+        return false;
+    }
+    let Some(range) = height_range(doc) else {
+        section.playing = false;
+        return false;
+    };
+    let step_mm = ctx.input(|input| input.stable_dt) * PLAY_LAYERS_PER_S * layer_height_mm;
+    section.height_mm = run_up(section.height_mm, range, step_mm);
+    section.playing = section.height_mm.is_some();
+    true
 }
 
 /// The height the cut may be moved between: the bottom and the top of everything visible
@@ -492,6 +550,7 @@ mod tests {
     fn the_prepare_mode_cuts_where_the_slider_was_left() {
         let section = Section {
             height_mm: Some(3.5),
+            playing: false,
         };
         let preview = Preview::default();
         assert_eq!(
@@ -507,6 +566,7 @@ mod tests {
         // prepare mode was left at.
         let section = Section {
             height_mm: Some(3.5),
+            playing: false,
         };
         assert_eq!(
             cut_height(Mode::Preview, &section, &Preview::default()),
@@ -553,6 +613,22 @@ mod tests {
         assert!(
             (middle - rect.center().y).abs() < 0.5,
             "half of the range is the middle of the rail"
+        );
+    }
+
+    #[test]
+    fn the_cut_runs_up_the_model_and_stops_at_the_top() {
+        let range = (0.0, 10.0);
+        assert_eq!(
+            run_up(None, range, 1.0),
+            Some(0.0),
+            "a cut parked at the top starts again from the bottom"
+        );
+        assert_eq!(run_up(Some(4.0), range, 1.0), Some(5.0));
+        assert_eq!(
+            run_up(Some(9.5), range, 1.0),
+            None,
+            "past the top the whole model is shown again, and the play stops"
         );
     }
 

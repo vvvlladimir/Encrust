@@ -5,7 +5,9 @@
 
 use egui::{Key, KeyboardShortcut, Modifiers};
 
-use crate::panels::{Window, duplicate_selection, frame_view, slice_this_plate, toggle_settings};
+use crate::panels::{
+    Window, duplicate_selection, frame_view, section, slice_this_plate, toggle_settings,
+};
 use crate::status::Status;
 use crate::workspace::{Mode, Tool};
 
@@ -56,7 +58,7 @@ impl Action {
             Self::Step(-1) => "One layer back",
             Self::Step(layers) if layers > 0 => "Ten layers on",
             Self::Step(_) => "Ten layers back",
-            Self::Play => "Play the stack",
+            Self::Play => "Play",
             Self::NewPlate => "New plate",
             Self::NewProject => "New project",
             Self::OpenProject => "Open a project",
@@ -203,6 +205,11 @@ pub const GESTURES: &[Gesture] = &[
     Gesture {
         group: Group::Plate,
         label: "Add to the selection",
+        keys: "Cmd click",
+    },
+    Gesture {
+        group: Group::Plate,
+        label: "Pick everything between, in the list",
         keys: "Shift click",
     },
     Gesture {
@@ -237,34 +244,62 @@ pub const GESTURES: &[Gesture] = &[
     },
 ];
 
-/// How many modifiers the busiest chord in the table carries.
-const MOST_MODIFIERS: u32 = 2;
-
-/// The actions whose keys were pressed this frame.
+/// The actions whose keys were pressed, taken out of the raw input before egui reads it.
 ///
-/// egui ignores an extra Shift or Alt when matching a chord, so the busier chord has to be
-/// offered first: Cmd Shift S before Cmd S.
-pub fn pressed(ctx: &egui::Context) -> Vec<Action> {
-    // A field being typed into owns the keyboard: S is an S, not Slice.
-    if ctx.egui_wants_keyboard_input() {
+/// The window's own keys never reach egui, because egui answers several of them itself:
+/// Tab and the arrows walk its ring of focusable widgets, and a widget that then holds
+/// the focus swallows every key in this table. See `docs/decisions/0193`.
+///
+/// A field being typed into owns the keyboard whole: an S is an S there, not Slice, and
+/// Tab belongs to the ring of fields.
+pub fn take(ctx: &egui::Context, raw_input: &mut egui::RawInput) -> Vec<Action> {
+    if ctx.text_edit_focused() {
         return Vec::new();
     }
     let mut fired = Vec::new();
-    ctx.input_mut(|input| {
-        for count in (0..=MOST_MODIFIERS).rev() {
-            for binding in BINDINGS {
-                let hit = binding
-                    .keys
-                    .iter()
-                    .filter(|chord| modifiers(chord) == count)
-                    .any(|chord| input.consume_shortcut(chord));
-                if hit {
-                    fired.push(binding.action);
-                }
+    raw_input.events.retain(|event| {
+        let egui::Event::Key {
+            key,
+            pressed: true,
+            modifiers,
+            ..
+        } = event
+        else {
+            return true;
+        };
+        match action_of(*key, *modifiers) {
+            Some(action) => {
+                fired.push(action);
+                false
             }
+            None => true,
         }
     });
     fired
+}
+
+/// What this chord asks for, or `None` when the table does not bind it.
+///
+/// An extra Shift or Alt does not stop a chord matching, because a layout may need one to
+/// reach the key at all — '?' is Shift and a slash on most of them. The busiest match
+/// therefore wins: Cmd Shift S is Save as, not Save.
+fn action_of(key: Key, modifiers: Modifiers) -> Option<Action> {
+    BINDINGS
+        .iter()
+        .flat_map(|binding| binding.keys.iter().map(move |chord| (binding, chord)))
+        .filter(|(_, chord)| {
+            chord.logical_key == key && modifiers.matches_logically(chord.modifiers)
+        })
+        .max_by_key(|(_, chord)| held(chord))
+        .map(|(binding, _)| binding.action)
+}
+
+/// How many modifiers a chord carries, which is what makes one busier than another.
+fn held(chord: &KeyboardShortcut) -> u32 {
+    let modifiers = chord.modifiers;
+    u32::from(modifiers.alt)
+        + u32::from(modifiers.shift)
+        + u32::from(modifiers.ctrl || modifiers.command || modifiers.mac_cmd)
 }
 
 /// Every chord that fires an action, in the order the sheet shows them.
@@ -347,13 +382,6 @@ pub fn tooltip(action: Action) -> String {
     format!("{}  {keys}", action.label())
 }
 
-fn modifiers(keys: &KeyboardShortcut) -> u32 {
-    let modifiers = keys.modifiers;
-    u32::from(modifiers.alt)
-        + u32::from(modifiers.shift)
-        + u32::from(modifiers.ctrl || modifiers.command || modifiers.mac_cmd)
-}
-
 /// Does what a key asked for. Every action of the table is answered here, so a binding
 /// cannot be added without the work behind it.
 pub fn act(window: &mut Window, action: Action) {
@@ -396,8 +424,8 @@ pub fn act(window: &mut Window, action: Action) {
         ),
         Action::Settings => toggle_settings(window.machine),
         Action::Sheet => window.view.options.sheet = true,
-        Action::Step(layers) => step(window, layers),
-        Action::Play => play(window),
+        Action::Step(layers) => section::step(window, layers),
+        Action::Play => section::play(window),
         Action::NewPlate => {
             window.doc.scene.add_plate();
         }
@@ -435,21 +463,6 @@ fn remove(window: &mut Window) {
     if gone > 0 {
         window.machine.status = Status::Info(format!("Removed {gone} model(s)"));
     }
-}
-
-/// The transport only means anything against a stack, which is what Preview shows.
-fn step(window: &mut Window, layers: i64) {
-    if *window.mode == Mode::Preview {
-        window.machine.preview.step(layers);
-    }
-}
-
-fn play(window: &mut Window) {
-    if *window.mode != Mode::Preview {
-        return;
-    }
-    let playing = window.machine.preview.is_playing();
-    window.machine.preview.set_playing(!playing);
 }
 
 #[cfg(test)]
@@ -521,18 +534,6 @@ mod tests {
         }
     }
 
-    /// The handler walks the modifier counts it knows about, so a busier chord than that
-    /// would never be offered first, and its looser twin would fire instead.
-    #[test]
-    fn the_handler_looks_for_every_chord_the_table_carries() {
-        let busiest = every_chord()
-            .iter()
-            .map(|(_, chord)| modifiers(chord))
-            .max()
-            .expect("the table is not empty");
-        assert_eq!(busiest, MOST_MODIFIERS);
-    }
-
     /// egui spells its key names out. A sheet that says "Questionmark" does not tell the
     /// user which key to press.
     #[test]
@@ -558,21 +559,23 @@ mod tests {
         assert_eq!(chords(Action::Sheet).len(), 3);
     }
 
-    /// Feeds one key press through a context, which is what the window does with it.
+    fn key_event(key: Key, modifiers: Modifiers) -> egui::Event {
+        egui::Event::Key {
+            key,
+            physical_key: None,
+            pressed: true,
+            repeat: false,
+            modifiers,
+        }
+    }
+
+    /// Feeds one key press through the hook, which is what the window does with it.
     fn press(key: Key, modifiers: Modifiers) -> Vec<Action> {
-        let ctx = egui::Context::default();
-        let input = egui::RawInput {
-            events: vec![egui::Event::Key {
-                key,
-                physical_key: None,
-                pressed: true,
-                repeat: false,
-                modifiers,
-            }],
+        let mut input = egui::RawInput {
+            events: vec![key_event(key, modifiers)],
             ..Default::default()
         };
-        ctx.begin_pass(input);
-        pressed(&ctx)
+        take(&egui::Context::default(), &mut input)
     }
 
     #[test]
@@ -598,6 +601,32 @@ mod tests {
             vec![Action::SaveProjectAs]
         );
         assert_eq!(press(Key::S, Modifiers::COMMAND), vec![Action::SaveProject]);
+    }
+
+    /// egui answers Tab and the arrows itself, and a widget left holding the focus would
+    /// swallow every key in the table after that.
+    #[test]
+    fn a_key_the_table_binds_is_taken_out_of_the_input() {
+        let mut input = egui::RawInput {
+            events: vec![
+                key_event(Key::Tab, Modifiers::NONE),
+                key_event(Key::ArrowUp, Modifiers::NONE),
+                key_event(Key::G, Modifiers::NONE),
+            ],
+            ..Default::default()
+        };
+        let fired = take(&egui::Context::default(), &mut input);
+        assert_eq!(fired, vec![Action::ToggleMode, Action::Step(1)]);
+        assert_eq!(input.events, vec![key_event(Key::G, Modifiers::NONE)]);
+    }
+
+    #[test]
+    fn a_key_the_table_does_not_bind_fires_nothing() {
+        assert!(press(Key::G, Modifiers::NONE).is_empty());
+        assert!(
+            press(Key::Tab, Modifiers::COMMAND).is_empty(),
+            "Cmd Tab belongs to the window manager"
+        );
     }
 
     #[test]

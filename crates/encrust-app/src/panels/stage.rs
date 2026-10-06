@@ -1,36 +1,11 @@
-use egui::{Align2, Frame, Id, Pos2, Rect};
+use egui::{Align2, Frame, Id, Rect};
 
 use crate::files::{self, Wanted};
 use crate::panels::{Window, mask_pane, view_column, viewport_panel};
 use crate::ui::{card, icon, primary_button, theme};
 use crate::workspace::Mode;
 
-/// Where the cards over the stage ended up last frame.
-///
-/// The viewport reads the raw pointer before the cards are drawn, so without this a press
-/// on a card would orbit the camera as well as press the card. One frame of lag only
-/// matters on the frame a card moves, and they move when the window is resized.
-#[derive(Debug, Default)]
-pub struct Overlays {
-    rects: Vec<Rect>,
-    /// Where the open floating window is, if there is one. It is drawn before the stage
-    /// rather than after it, so unlike the cards this is not a frame behind.
-    floating: Option<Rect>,
-}
-
-impl Overlays {
-    /// The pointer is over a card rather than over the model behind it.
-    pub fn covers(&self, position: Pos2) -> bool {
-        self.rects.iter().any(|rect| rect.contains(position))
-            || self.floating.is_some_and(|rect| rect.contains(position))
-    }
-
-    /// Where the floating window ended up this frame, or `None` when none is open.
-    pub fn set_floating(&mut self, rect: Option<Rect>) {
-        self.floating = rect;
-    }
-}
-
+/// The stage: the viewport, the mask beside it in Preview, and the cards over it.
 pub fn ui(ui: &mut egui::Ui, window: &mut Window) {
     let stage = ui.max_rect();
 
@@ -46,19 +21,14 @@ pub fn ui(ui: &mut egui::Ui, window: &mut Window) {
     }
 
     let viewport = viewport_panel::ui(ui, window);
-    let mut rects = Vec::new();
-
     if window.doc.scene.is_empty() {
-        rects.push(empty_state(ui, viewport, window));
+        empty_state(ui, viewport, window);
     }
-
-    rects.extend(view_column::ui(ui, window, viewport, stage));
-
-    window.view.overlays.rects = rects;
+    view_column::ui(ui, window, viewport, stage);
 }
 
 /// The whole viewport when there is nothing on the plate: one card, one thing to do.
-fn empty_state(ui: &egui::Ui, viewport: Rect, window: &mut Window) -> Rect {
+fn empty_state(ui: &egui::Ui, viewport: Rect, window: &mut Window) {
     egui::Area::new(Id::new("empty-plate"))
         .order(egui::Order::Middle)
         .fixed_pos(viewport.center())
@@ -96,7 +66,5 @@ fn empty_state(ui: &egui::Ui, viewport: Rect, window: &mut Window) -> Rect {
                         }
                     });
                 });
-        })
-        .response
-        .rect
+        });
 }

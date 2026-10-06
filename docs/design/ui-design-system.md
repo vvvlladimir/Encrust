@@ -160,9 +160,10 @@ painted as a pill beside the handle only while the pointer is on the rail or for
 seconds after it was last moved, so that a number does not sit over the model while nobody
 is scrubbing.
 
-Their rectangles are kept in `panels::Overlays` from the previous frame, because the
-viewport reads the raw pointer before the cards are drawn and a press on a card must not
-orbit the camera.
+The viewport reads the raw pointer rather than its own `Response`, so what is drawn over
+it would otherwise orbit the camera as well. None of these cards reports where it is:
+whichever egui layer is under the pointer owns it, and the plate is only under the pointer
+when that layer is the viewport's own; see `docs/decisions/0193`.
 
 The inspector's footer is a bottom panel of its own rather than the end of the scroll, so
 the slice action is always in the same corner whatever else is on screen. It carries the
@@ -189,6 +190,9 @@ the layer nearest where Prepare was cut, and a switch back cuts Prepare at the l
 `workspace::Tool` is what a click in the viewport does, and the rail groups the tools as
 `PLACING`, `SHAPING` and `PRINTING`. Select shows the gizmo, the pick's bounds brackets and
 a panel of position, rotation and scale together; see `docs/decisions/0118`.
+
+A click on a model that is not picked only picks it, whichever tool is in hand: the tool
+works on what is picked, so aiming it somewhere else is its own click (ADR 0193).
 
 The inspector shows the open tool's panel and nothing else; see `docs/decisions/0105`.
 The machine and the resin stand at the foot of the plate panel, with a row of actions over

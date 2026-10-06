@@ -32,7 +32,7 @@ pub fn ui(ctx: &egui::Context, window: &mut Window) {
         return;
     };
     let mut open = true;
-    let shown = egui::Window::new("Support parameters")
+    egui::Window::new("Support parameters")
         .collapsible(false)
         .resizable(false)
         .open(&mut open)
@@ -51,10 +51,6 @@ pub fn ui(ctx: &egui::Context, window: &mut Window) {
                 show(ui, &mut parameters, profile);
             }
         });
-    // A press on the window is not a press on the plate behind it: the viewport reads the
-    // raw pointer, so it has to be told where the window is.
-    let over = shown.filter(|_| open).map(|shown| shown.response.rect);
-    window.view.overlays.set_floating(over);
     window.tools.supports.parameters = open.then_some(parameters);
 }
 

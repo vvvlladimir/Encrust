@@ -280,6 +280,9 @@ pub struct Scene {
     /// what the inspector reads and writes. Empty means the tools take the whole plate;
     /// see `docs/decisions/0101`.
     selected: Vec<ObjectId>,
+    /// Where a span of the list starts: the model picked without a modifier, which a
+    /// shift-click reaches from.
+    anchor: Option<ObjectId>,
     next_id: u64,
 }
 
@@ -290,6 +293,7 @@ impl Default for Scene {
             plates: vec![plate_name(0)],
             active: 0,
             selected: Vec::new(),
+            anchor: None,
             next_id: 0,
         }
     }
@@ -491,6 +495,7 @@ impl Scene {
             .filter(|id| self.get(*id).is_some())
             .into_iter()
             .collect();
+        self.anchor = self.selected.first().copied();
     }
 
     /// Adds an object to the selection, or takes it out if it is already in: what a
@@ -505,6 +510,28 @@ impl Scene {
             }
             None => self.selected.push(id),
         }
+        self.anchor = Some(id);
+    }
+
+    /// Picks everything standing between the model a span was last started from and `id`,
+    /// in the order the plate lists them: what a shift-click does in a list.
+    ///
+    /// The span is measured from the same model however often it is redrawn, so dragging
+    /// the shift-click back over the list shrinks the selection rather than growing it.
+    pub fn select_span_to(&mut self, id: ObjectId) {
+        let Some(anchor) = self.anchor.filter(|anchor| self.get(*anchor).is_some()) else {
+            return self.select(Some(id));
+        };
+        let here: Vec<ObjectId> = self.here().map(|object| object.id).collect();
+        let (Some(from), Some(to)) = (
+            here.iter().position(|other| *other == anchor),
+            here.iter().position(|other| *other == id),
+        ) else {
+            return self.select(Some(id));
+        };
+        let span = if from <= to { from..=to } else { to..=from };
+        self.selected = here[span].to_vec();
+        self.anchor = Some(anchor);
     }
 
     /// Picks exactly these, dropping anything that is not in the scene.
@@ -514,10 +541,12 @@ impl Scene {
             .copied()
             .filter(|id| self.get(*id).is_some())
             .collect();
+        self.anchor = self.selected.first().copied();
     }
 
     /// Takes every picked model off the plate. Returns how many went.
     pub fn remove_selected(&mut self) -> usize {
+        self.anchor = None;
         let going = std::mem::take(&mut self.selected);
         self.objects.retain(|object| !going.contains(&object.id));
         going.len()
@@ -526,10 +555,12 @@ impl Scene {
     /// Picks everything on the plate being edited.
     pub fn select_here(&mut self) {
         self.selected = self.here().map(|object| object.id).collect();
+        self.anchor = self.selected.first().copied();
     }
 
     pub fn clear_selection(&mut self) {
         self.selected.clear();
+        self.anchor = None;
     }
 
     /// Adds a model, gives it the next identifier, selects it and returns that identifier.
@@ -990,6 +1021,41 @@ mod tests {
             [ids[1], ids[2]],
             "in the order they stand on the plate"
         );
+    }
+
+    /// Shift-click in a list takes everything between what was last picked and this,
+    /// the way every list on the desktop reads it.
+    #[test]
+    fn a_shift_click_takes_the_span_between_two_rows() {
+        let (mut scene, ids) = plate_of(5);
+        scene.select(Some(ids[1]));
+        scene.select_span_to(ids[3]);
+        assert_eq!(scene.selection(), [ids[1], ids[2], ids[3]]);
+
+        scene.select_span_to(ids[0]);
+        assert_eq!(
+            scene.selection(),
+            [ids[0], ids[1]],
+            "a span is measured from the same row, up the list as well as down"
+        );
+    }
+
+    #[test]
+    fn a_span_from_nothing_picks_the_row_it_landed_on() {
+        let (mut scene, ids) = plate_of(3);
+        scene.select_span_to(ids[2]);
+        assert_eq!(scene.selection(), [ids[2]]);
+    }
+
+    /// A span starts at the row a modifier-click landed on, so holding cmd and then
+    /// shift reaches from the one just added.
+    #[test]
+    fn a_modifier_click_moves_where_the_next_span_starts() {
+        let (mut scene, ids) = plate_of(4);
+        scene.select(Some(ids[0]));
+        scene.toggle_selected(ids[3]);
+        scene.select_span_to(ids[2]);
+        assert_eq!(scene.selection(), [ids[2], ids[3]]);
     }
 
     #[test]

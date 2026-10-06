@@ -141,26 +141,31 @@ fn mirror(ui: &mut egui::Ui, doc: &mut Doc, picked: &[ObjectId]) {
 }
 
 /// The grid and the gap it leaves, behind the button that lays it out.
+///
+/// The popup stays open on a click inside it, unlike a menu of actions: a click on one of
+/// its fields opens that field for typing, which closing would take away.
 fn array(ui: &mut egui::Ui, window: &mut Window, picked: &[ObjectId]) {
     let response = icon_button(ui, icon::ARRAY, "Array");
-    egui::Popup::menu(&response).show(|ui| {
-        ui.set_width(POPUP_W);
-        let array = &mut window.tools.array;
-        count_row(ui, "Columns", &mut array.columns, "", 0.05, 1..=ARRAY_MAX);
-        count_row(ui, "Rows", &mut array.rows, "", 0.05, 1..=ARRAY_MAX);
-        number_row(ui, "Gap", &mut array.gap_mm, "mm", 0.1, 0.0..=50.0, 1);
-        ui.add_space(4.0);
-        if secondary_button(ui, icon::ARRAY, "Lay out").clicked()
-            && let Some(id) = picked.first()
-        {
-            window.doc.scene.array(
-                *id,
-                window.tools.array.columns as usize,
-                window.tools.array.rows as usize,
-                window.tools.array.gap_mm,
-            );
-        }
-    });
+    egui::Popup::menu(&response)
+        .close_behavior(egui::PopupCloseBehavior::CloseOnClickOutside)
+        .show(|ui| {
+            ui.set_width(POPUP_W);
+            let array = &mut window.tools.array;
+            count_row(ui, "Columns", &mut array.columns, "", 0.05, 1..=ARRAY_MAX);
+            count_row(ui, "Rows", &mut array.rows, "", 0.05, 1..=ARRAY_MAX);
+            number_row(ui, "Gap", &mut array.gap_mm, "mm", 0.1, 0.0..=50.0, 1);
+            ui.add_space(4.0);
+            if secondary_button(ui, icon::ARRAY, "Lay out").clicked()
+                && let Some(id) = picked.first()
+            {
+                window.doc.scene.array(
+                    *id,
+                    window.tools.array.columns as usize,
+                    window.tools.array.rows as usize,
+                    window.tools.array.gap_mm,
+                );
+            }
+        });
 }
 
 /// Where a single copy goes: one footprint to the right, with the same gap the array
@@ -197,7 +202,9 @@ fn print(ui: &mut egui::Ui, window: &mut Window) {
 }
 
 fn rows(ui: &mut egui::Ui, scene: &mut Scene) {
-    let adding = ui.input(|input| input.modifiers.command || input.modifiers.shift);
+    // What a click means, as every list on the desktop reads it: plain picks one, cmd
+    // adds or drops one, shift takes everything between the last pick and this.
+    let (spanning, adding) = ui.input(|input| (input.modifiers.shift, input.modifiers.command));
     let mut select = None;
     let mut toggle = None;
 
@@ -210,10 +217,10 @@ fn rows(ui: &mut egui::Ui, scene: &mut Scene) {
     }
 
     if let Some(id) = select {
-        if adding {
-            scene.toggle_selected(id);
-        } else {
-            scene.select(Some(id));
+        match (spanning, adding) {
+            (true, _) => scene.select_span_to(id),
+            (false, true) => scene.toggle_selected(id),
+            (false, false) => scene.select(Some(id)),
         }
     }
     if let Some(id) = toggle

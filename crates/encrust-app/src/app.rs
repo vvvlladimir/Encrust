@@ -27,6 +27,8 @@ pub struct SlicerApp {
     machine: Machine,
     /// What the last run was set to, so a change to it is noticed and written once.
     prefs: Preferences,
+    /// The keys this frame asked for, read off the raw input before egui saw it.
+    keys: Vec<shortcuts::Action>,
 }
 
 impl Default for SlicerApp {
@@ -41,6 +43,7 @@ impl Default for SlicerApp {
             tools: Tools::default(),
             machine: Machine::default(),
             prefs: Preferences::default(),
+            keys: Vec::new(),
         }
     }
 }
@@ -220,16 +223,10 @@ impl SlicerApp {
         self.drawn_mode = self.mode;
     }
 
-    /// Answers the keyboard, unless a field has the cursor: Ctrl+Z inside a number is
-    /// the number's own undo. Every key comes from `crate::shortcuts`.
-    ///
-    /// The test is the text cursor rather than `egui_wants_keyboard_input`, which is true
-    /// of any widget merely holding focus — a button clicked a minute ago.
-    fn take_shortcuts(&mut self, ctx: &egui::Context) {
-        if ctx.text_edit_focused() {
-            return;
-        }
-        let fired = shortcuts::pressed(ctx);
+    /// Does what the keys of this frame asked for. They were read off the raw input
+    /// before egui's pass, in `shortcuts::take`.
+    fn take_shortcuts(&mut self) {
+        let fired = std::mem::take(&mut self.keys);
         if fired.is_empty() {
             return;
         }
@@ -237,6 +234,21 @@ impl SlicerApp {
         for action in fired {
             shortcuts::act(&mut window, action);
         }
+    }
+
+    /// One frame of the prepare mode's transport: the cut climbing the model while the
+    /// section rail is playing. Answers whether it has to keep going.
+    fn run_the_cut_up(&mut self, ctx: &egui::Context) -> bool {
+        if self.mode != Mode::Prepare {
+            self.view.section.playing = false;
+            return false;
+        }
+        crate::panels::section::animate_section(
+            ctx,
+            &mut self.view.section,
+            &self.doc,
+            self.machine.slicing.layer_height_mm(),
+        )
     }
 
     /// Every part of the window, borrowed at once, which is what a panel is drawn with.
@@ -312,6 +324,11 @@ pub fn open_by_what_it_is(window: &mut Window, file: Handed) {
 }
 
 impl eframe::App for SlicerApp {
+    /// The window reads its own keys here, before egui does: see `shortcuts::take`.
+    fn raw_input_hook(&mut self, ctx: &egui::Context, raw_input: &mut egui::RawInput) {
+        self.keys.extend(shortcuts::take(ctx, raw_input));
+    }
+
     fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
         self.take_dropped_files(ui.ctx());
         self.take_arrived_files();
@@ -353,7 +370,7 @@ impl eframe::App for SlicerApp {
             | crate::panels::animate_preview(ui.ctx(), &mut self.machine.preview);
         // Started after the polls and counted with them, so the frame a run ends on is
         // also the frame its drainage check starts and asks for the next one.
-        if working | self.check_what_the_plate_traps() {
+        if working | self.check_what_the_plate_traps() | self.run_the_cut_up(ui.ctx()) {
             ui.ctx().request_repaint();
         }
         self.machine.updates.tick();
@@ -364,7 +381,7 @@ impl eframe::App for SlicerApp {
         self.refresh_preview();
         self.carry_height();
         self.refresh_supports();
-        self.take_shortcuts(ui.ctx());
+        self.take_shortcuts();
 
         project::guard_close(ui, &mut self.window());
         self.window().show(ui);

@@ -12,11 +12,11 @@ const GAP: f32 = 8.0;
 const CARD_PAD: i8 = 3;
 
 /// The cards down the right edge: the view tools at the top of the viewport and the
-/// section rail under them. Returns the room they took.
+/// section rail under them.
 ///
 /// In Preview the viewport is the left half of the stage and the rail is parked against
 /// the mask's edge instead (ADR 0103), with the stage's whole height to itself.
-pub fn ui(ui: &egui::Ui, window: &mut Window, viewport: Rect, stage: Rect) -> Vec<Rect> {
+pub fn ui(ui: &egui::Ui, window: &mut Window, viewport: Rect, stage: Rect) {
     let tools = card_at(
         ui,
         "view-tools",
@@ -25,8 +25,6 @@ pub fn ui(ui: &egui::Ui, window: &mut Window, viewport: Rect, stage: Rect) -> Ve
         Align2::RIGHT_TOP,
         |ui| view_tools(ui, window),
     );
-    let mut rects = vec![tools];
-
     if section::is_available(window) {
         let shares_edge = (stage.right() - viewport.right()).abs() < 1.0;
         let top = if shares_edge {
@@ -36,16 +34,15 @@ pub fn ui(ui: &egui::Ui, window: &mut Window, viewport: Rect, stage: Rect) -> Ve
         };
         let bottom = (stage.bottom() - INSET).max(top);
         let slider_h = section::slider_height(bottom - top);
-        rects.push(card_at(
+        card_at(
             ui,
             "section-rail",
             stage,
             Pos2::new(stage.right() - INSET, (top + bottom) / 2.0),
             Align2::RIGHT_CENTER,
             |ui| section::ui(ui, window, slider_h),
-        ));
+        );
     }
-    rects
 }
 
 /// A card pinned by its `pivot` corner to `at`, kept inside `within`.

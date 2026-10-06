@@ -7,7 +7,6 @@ use crate::import::Imports;
 use crate::measure::Measure;
 use crate::network::Network;
 use crate::orient::OrientTool;
-use crate::panels::Overlays;
 use crate::plate::BuildPlate;
 use crate::preview::Preview;
 use crate::project::Opened;
@@ -40,7 +39,6 @@ pub struct View {
     pub gizmo: TransformGizmo,
     pub section: Section,
     pub input: ViewportInput,
-    pub overlays: Overlays,
 }
 
 impl View {
@@ -52,7 +50,6 @@ impl View {
             gizmo: TransformGizmo::default(),
             section: Section::default(),
             input: ViewportInput::default(),
-            overlays: Overlays::default(),
         }
     }
 }

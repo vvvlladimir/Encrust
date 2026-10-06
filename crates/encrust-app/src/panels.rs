@@ -2,7 +2,7 @@ mod inspector;
 mod mask_pane;
 mod plate_bar;
 mod scene_panel;
-mod section;
+pub(crate) mod section;
 mod settings;
 mod shortcuts_sheet;
 mod stage;
@@ -17,7 +17,6 @@ mod viewport_panel;
 pub use inspector::slice_this_plate;
 pub use scene_panel::duplicate_selection;
 pub use section::animate as animate_preview;
-pub use stage::Overlays;
 pub use title_bar::toggle_settings;
 pub use viewport_panel::frame_view;
 

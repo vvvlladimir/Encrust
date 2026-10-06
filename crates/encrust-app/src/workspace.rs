@@ -99,6 +99,9 @@ impl Tool {
 pub struct Section {
     /// Height above the plate, millimetres, or `None` while the whole model is drawn.
     pub height_mm: Option<Scalar>,
+    /// Whether the cut is running up the model on its own, which is what the transport
+    /// does in this mode.
+    pub playing: bool,
 }
 
 /// What the window shows besides the models.
