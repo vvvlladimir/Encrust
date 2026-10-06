@@ -143,8 +143,10 @@ The opened face is capped with the stencil plane, three draws in the viewport's 
 What is counted is the mesh that is drawn, cavity and lattice included: a hollowed model's
 cavity is wound inward, so it subtracts itself from the crossing count exactly as it does
 from the fill rule — the wall caps, the hollow does not, and the infill stays visible
-through the openings. Inside surfaces are lit as if facing the camera and washed 35%
-towards the cap tone so inside reads as inside (ADR 0062).
+through the openings. A model that is not sound counts nothing at all: crossings only
+describe an inside on a closed surface, and the ones a hole swallows would paint the cap
+out into the air beside the model (ADR 0195). Inside surfaces are lit as if facing the
+camera and washed 35% towards the cap tone so inside reads as inside (ADR 0062).
 
 Exposure bands are washed on in the same pass, 45% of the band's own tint over the
 fragment's height, walked backwards so the last band wins as it does when the file is

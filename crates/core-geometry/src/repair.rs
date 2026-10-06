@@ -1,11 +1,38 @@
+//! The repairs that change a mesh only when they are asked to: closing the holes in it,
+//! and dropping the faces laid over one another. See `docs/design/mesh-repair.md`.
+
 use crate::hash::FastMap;
 use crate::topology::{edge_groups, edge_uses};
 use crate::triangulate::triangulate;
+use crate::validate::duplicate_faces;
 use crate::{Mesh, Scalar, Vec2, Vec3};
 
 /// Smallest cross product treated as a direction, mm². Below it the loop is a line and
 /// has no plane to be triangulated in.
 const MIN_NORMAL: Scalar = 1e-12;
+
+/// Drops every face beyond the first that covers the same three vertices, and returns how
+/// many went.
+///
+/// A face drawn twice is never material twice: it only makes the edges round it look as
+/// if the surface branched there, and leaves a section cap counting one crossing too many.
+pub fn remove_duplicate_faces(mesh: &mut Mesh) -> usize {
+    let extra = duplicate_faces(mesh);
+    if extra.is_empty() {
+        return 0;
+    }
+    let mut dropped = vec![false; mesh.faces.len()];
+    for index in &extra {
+        dropped[*index] = true;
+    }
+    let mut at = 0;
+    mesh.faces.retain(|_| {
+        let keep = !dropped[at];
+        at += 1;
+        keep
+    });
+    extra.len()
+}
 
 /// What closing the boundary loops of a mesh added to it.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
@@ -217,6 +244,26 @@ mod tests {
     fn cube_open_both_ends() -> Mesh {
         let whole = cube();
         Mesh::new(whole.vertices, whole.faces[4..].to_vec())
+    }
+
+    #[test]
+    fn a_face_laid_over_another_is_dropped_whichever_way_round_it_is() {
+        let mut mesh = cube();
+        let first = mesh.faces[0];
+        mesh.faces.push(first);
+        mesh.faces.push([first[0], first[2], first[1]]);
+        assert_eq!(diagnose(&mesh).duplicate_faces, 2);
+
+        assert_eq!(remove_duplicate_faces(&mut mesh), 2);
+        assert_eq!(mesh.faces, cube().faces);
+        assert!(diagnose(&mesh).is_closed(), "the edges are manifold again");
+    }
+
+    #[test]
+    fn a_mesh_with_nothing_drawn_twice_keeps_every_face() {
+        let mut mesh = cube();
+        assert_eq!(remove_duplicate_faces(&mut mesh), 0);
+        assert_eq!(mesh.faces.len(), 12);
     }
 
     #[test]

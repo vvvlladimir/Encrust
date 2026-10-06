@@ -3,7 +3,7 @@
 //!
 //! Welding and orientation are done without asking, because both follow from the geometry
 //! (ADR 0005). Closing a hole invents surface that was never in the file, so it is asked
-//! for; see `docs/decisions/0194-a-hole-is-closed-only-when-it-is-asked-for.md`.
+//! for; see `docs/decisions/0194-a-hole-is-closed-only-when-it-is-asked-for.md` and 0195.
 
 use std::sync::Arc;
 
@@ -103,26 +103,50 @@ impl Repairs {
     }
 }
 
-/// Puts a repaired mesh back on the model it came from, and says what closing it did.
+/// Puts a repaired mesh back on the model it came from, and says what repairing it did.
 fn apply(scene: &mut Scene, repaired: &Repaired) -> Status {
     let Some(object) = scene.get_mut(repaired.id) else {
         return Status::Error(format!("{} is no longer on the plate", repaired.name));
     };
     object.reshape(Arc::clone(&repaired.mesh));
+    // What repair did is said in the status bar; the summary keeps describing the file,
+    // so a mended model carries no mark of its own.
     object.summary.orientation = repaired.orientation;
 
     let name = &repaired.name;
-    let filled = repaired.filled;
-    match (filled.loops_filled, filled.loops_left) {
-        (0, 0) => Status::Info(format!("{name} had no holes to close")),
+    let left = repaired.filled.loops_left;
+    match (done(repaired), left) {
+        (0, 0) => Status::Info(format!("{name} had nothing left to repair")),
         (0, left) => Status::Error(format!(
             "{name} has {left} boundaries with no patch that would close them"
         )),
-        (closed, 0) => Status::Info(format!("Closed {closed} hole(s) in {name}")),
-        (closed, left) => Status::Info(format!(
-            "Closed {closed} hole(s) in {name}; {left} could not be closed"
+        (_, 0) => Status::Info(format!("Repaired {name}: {}", what(repaired).join(", "))),
+        (_, left) => Status::Info(format!(
+            "Repaired {name}: {}; {left} boundaries could not be closed",
+            what(repaired).join(", ")
         )),
     }
+}
+
+/// How many things the repair actually changed, which is what decides whether it has
+/// anything to report.
+fn done(repaired: &Repaired) -> usize {
+    repaired.filled.loops_filled + repaired.duplicates_removed
+}
+
+/// What it changed, in the words the status bar says it in.
+fn what(repaired: &Repaired) -> Vec<String> {
+    let mut lines = Vec::new();
+    if repaired.filled.loops_filled > 0 {
+        lines.push(format!("closed {} hole(s)", repaired.filled.loops_filled));
+    }
+    if repaired.duplicates_removed > 0 {
+        lines.push(format!(
+            "dropped {} face(s) drawn twice",
+            repaired.duplicates_removed
+        ));
+    }
+    lines
 }
 
 /// The question about a model that arrived broken, over everything else: its answer
@@ -250,6 +274,78 @@ mod tests {
         assert_eq!(broken_on_the_plate(&scene), 1);
     }
 
+    /// A box with the two triangles of its top missing, diagnosed for real, which is a
+    /// model the window calls broken.
+    fn open_box(scene: &mut Scene) -> ObjectId {
+        let mesh = Arc::new(Mesh::new(
+            vec![
+                Vec3::new(0.0, 0.0, 0.0),
+                Vec3::new(1.0, 0.0, 0.0),
+                Vec3::new(1.0, 1.0, 0.0),
+                Vec3::new(0.0, 1.0, 0.0),
+                Vec3::new(0.0, 0.0, 1.0),
+                Vec3::new(1.0, 0.0, 1.0),
+                Vec3::new(1.0, 1.0, 1.0),
+                Vec3::new(0.0, 1.0, 1.0),
+            ],
+            vec![
+                [0, 2, 1],
+                [0, 3, 2],
+                [0, 1, 5],
+                [0, 5, 4],
+                [1, 2, 6],
+                [1, 6, 5],
+                [2, 3, 7],
+                [2, 7, 6],
+                [3, 0, 4],
+                [3, 4, 7],
+            ],
+        ));
+        scene.insert(Imported::new(
+            "open.stl".to_owned(),
+            Arc::clone(&mesh),
+            Transform::default(),
+            ImportSummary {
+                vertices_merged: 0,
+                faces_removed: 0,
+                orientation: Orientation {
+                    flipped_faces: 0,
+                    inverted_shells: 0,
+                    orientable: true,
+                },
+                diagnostics: diagnose(&mesh),
+            },
+        ))
+    }
+
+    #[test]
+    fn a_model_that_came_back_closed_is_no_longer_called_broken() {
+        let mut scene = Scene::default();
+        let id = open_box(&mut scene);
+        assert_eq!(broken_on_the_plate(&scene), 1);
+
+        let mut mesh = (*scene.get(id).expect("the box is there").mesh).clone();
+        let filled = core_geometry::fill_holes(&mut mesh);
+        let orientation = core_geometry::orient_outward(&mut mesh);
+        let status = apply(
+            &mut scene,
+            &Repaired {
+                id,
+                name: "open.stl".to_owned(),
+                mesh: Arc::new(mesh),
+                filled,
+                duplicates_removed: 0,
+                orientation,
+            },
+        );
+
+        assert!(!status.is_error());
+        let object = scene.get(id).expect("the box is still there");
+        assert!(object.summary.is_sound());
+        assert!(object.summary.defects().is_empty(), "the mark goes with it");
+        assert_eq!(broken_on_the_plate(&scene), 0);
+    }
+
     #[test]
     fn a_repair_of_a_model_that_has_been_deleted_is_reported_rather_than_applied() {
         let mut scene = Scene::default();
@@ -264,6 +360,7 @@ mod tests {
                 name: "model.stl".to_owned(),
                 mesh,
                 filled: core_geometry::Filled::default(),
+                duplicates_removed: 0,
                 orientation: Orientation {
                     flipped_faces: 0,
                     inverted_shells: 0,

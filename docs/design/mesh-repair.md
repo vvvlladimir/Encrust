@@ -2,7 +2,7 @@
 
 What `core-geometry` does to a freshly imported mesh, in this order: weld, inspect,
 orient — and, when the user asks for it, close what is still open. Why it lives there:
-ADR 0005 and ADR 0194.
+ADR 0005, ADR 0194 and ADR 0195.
 
 ## Why welding comes first
 
@@ -97,10 +97,16 @@ order is the only trustworthy signal.
 Step 4 is why `Orientation` reports `inverted_shells` apart from `flipped_faces`: a model
 entirely inside out is a different problem from a few stray faces.
 
-## Closing holes
+## Closing holes and dropping faces drawn twice
 
-`fill_holes(mesh)` is the one part of repair nobody runs without being asked: it adds
-surface the file never had, so the window puts the question to the user first (ADR 0194).
+These two are the parts of repair nobody runs without being asked: one adds surface the
+file never had, the other throws faces away, so the window puts the question to the user
+first (ADR 0194, 0195).
+
+`remove_duplicate_faces(mesh)` keeps the first face over any three vertices and drops the
+rest, winding ignored. It goes first: an edge a duplicate has tripled is neither a
+boundary nor a manifold edge, so neither the walk below nor the orientation pass can get
+through it.
 
 The boundary edges — the groups of one in the edge table — are followed into loops
 *against* the direction the face that owns each edge walks it. A patch triangulated in that

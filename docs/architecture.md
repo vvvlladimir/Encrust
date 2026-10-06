@@ -10,9 +10,9 @@
 1. **Import.** `core-mesh-io` parses a file into a `core_geometry::Mesh` — vertices plus
    triangle indices, millimetres, model space — unwelded. `weld` gives it topology,
    `diagnose` reports what is wrong, `orient_outward` fixes the winding, and `fill_holes`
-   closes what is open when the user asks for it (ADR 0194). A file that
-   carries UVs and an image brings them along in `Loaded`, for `core_volume::press` to
-   turn into relief (ADR 0115, 0116).
+   with `remove_duplicate_faces` mend what is open or drawn twice when the user asks for
+   it (ADR 0194, 0195). A file that carries UVs and an image brings them along in
+   `Loaded`, for `core_volume::press` to turn into relief (ADR 0115, 0116).
    See `docs/design/mesh-repair.md`.
 2. **Placement.** A `Transform` puts the mesh on the plate. Slicing works on transformed
    coordinates; the original is kept so placement stays editable.
@@ -65,7 +65,7 @@ it are in `.claude/rules/architecture.md`.
 
 | Crate | Owns |
 |---|---|
-| `core-geometry` | `Mesh`, `UvMap`, `Heightmap`, `Triangle`, `Aabb`, `Transform`, `Ray`, `PlacedHit`, `Bvh` with `closest`/`faces_within`, `ClosestPoint`, `Adjacency`, `Winding`, `Plane`, `Cut`, `FastHasher`/`FastMap`/`FastSet`, glam re-exports; `weld`, `diagnose`, `orient_outward`, `fill_holes`, `center_of_mass`, `transform_mesh`, raycasts, `closest_point`, `winding_number`, `cut`, `split` |
+| `core-geometry` | `Mesh`, `UvMap`, `Heightmap`, `Triangle`, `Aabb`, `Transform`, `Ray`, `PlacedHit`, `Bvh` with `closest`/`faces_within`, `ClosestPoint`, `Adjacency`, `Winding`, `Plane`, `Cut`, `FastHasher`/`FastMap`/`FastSet`, glam re-exports; `weld`, `diagnose`, `orient_outward`, `fill_holes`, `remove_duplicate_faces`, `center_of_mass`, `transform_mesh`, raycasts, `closest_point`, `winding_number`, `cut`, `split` |
 | `core-mesh-io` | `MeshLoader` reading a `ModelFile` — a name, a `ReadSeek` and the files beside it — or a path, returning `Loaded` with one `Texture` per material and `decode` to a `Heightmap`, `StlLoader`, `ObjLoader` with UVs and `map_Kd`, `ThreeMfLoader` with `texture2dgroup` |
 | `core-slicer` | `SliceSettings`, `LayerPlan`, `AdaptiveSettings`, `Layer`, `Contour`, `Sliced`, `SliceEngine` with `slice_at`, `PlaneSliceEngine`, `layer_heights`, `adaptive_plan`, `offset_contours`, `Windows` sampling several planes a layer |
 | `core-raster` | `RasterSettings`, `Grey`, `Run`, `LayerRuns` with `blurred`, `LayerMask`, `Rastered`, `Rasterizer`, `ScanlineRasterizer`, `downsample` |

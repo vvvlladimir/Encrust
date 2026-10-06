@@ -1,7 +1,9 @@
 use std::sync::Arc;
 use std::sync::mpsc::{self, Receiver, TryRecvError};
 
-use core_geometry::{Filled, Mesh, Orientation, fill_holes, orient_outward};
+use core_geometry::{
+    Filled, Mesh, Orientation, fill_holes, orient_outward, remove_duplicate_faces,
+};
 
 use crate::scene::ObjectId;
 
@@ -19,6 +21,8 @@ pub struct Repaired {
     pub name: String,
     pub mesh: Arc<Mesh>,
     pub filled: Filled,
+    /// Faces that were lying over another face and have gone.
+    pub duplicates_removed: usize,
     /// What the patch had to be turned round, since a new face can come out either way.
     pub orientation: Orientation,
 }
@@ -70,10 +74,15 @@ impl RepairJob {
     }
 }
 
-/// Patches the holes and turns the patches the right way out. The orientation pass is run
-/// again because a patch is new surface, and nothing has decided its side yet.
+/// Drops the faces drawn twice, patches the holes, and turns the patches the right way
+/// out.
+///
+/// The duplicates go first: an edge they double makes the surface look as if it branched
+/// there, and a boundary cannot be followed through it. The orientation pass is last
+/// because a patch is new surface and nothing has decided its side yet.
 fn run(request: RepairRequest) -> RepairOutcome {
     let mut mesh = (*request.mesh).clone();
+    let duplicates_removed = remove_duplicate_faces(&mut mesh);
     let filled = fill_holes(&mut mesh);
     let orientation = orient_outward(&mut mesh);
     RepairOutcome::Done(Box::new(Repaired {
@@ -81,6 +90,7 @@ fn run(request: RepairRequest) -> RepairOutcome {
         name: request.name,
         mesh: Arc::new(mesh),
         filled,
+        duplicates_removed,
         orientation,
     }))
 }
@@ -139,6 +149,37 @@ mod tests {
         assert_eq!(repaired.filled.loops_filled, 1);
         assert!(diagnose(&repaired.mesh).is_closed());
         assert!(repaired.orientation.orientable);
+    }
+
+    #[test]
+    fn a_face_drawn_twice_beside_a_hole_comes_back_sound() {
+        // What a broken exporter leaves: one triangle of a face missing, and one of the
+        // triangles written twice, which makes three edges look as if they branched.
+        let mut mesh = open_box();
+        mesh.faces.push([1, 2, 6]);
+        assert!(!diagnose(&mesh).is_sound());
+
+        let mut job = RepairJob::spawn(RepairRequest {
+            id: ObjectId::for_test(3),
+            name: "broken.stl".to_owned(),
+            mesh: Arc::new(mesh),
+        });
+        let outcome = loop {
+            if let Some(outcome) = job.poll() {
+                break outcome;
+            }
+            std::thread::yield_now();
+        };
+
+        let RepairOutcome::Done(repaired) = outcome else {
+            panic!("the box has both to repair");
+        };
+        assert_eq!(repaired.duplicates_removed, 1);
+        assert_eq!(repaired.filled.loops_filled, 1);
+        assert!(
+            diagnose(&repaired.mesh).is_sound(),
+            "nothing is left for the window to call it broken for"
+        );
     }
 
     #[test]
