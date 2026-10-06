@@ -1,7 +1,8 @@
 use egui::{Align2, Frame, Id, Pos2, Rect};
 
+use crate::files::{self, Wanted};
 use crate::panels::{Window, mask_pane, view_column, viewport_panel};
-use crate::ui::{card, icon, secondary_button, theme};
+use crate::ui::{card, icon, primary_button, theme};
 use crate::workspace::Mode;
 
 /// Where the cards over the stage ended up last frame.
@@ -87,18 +88,12 @@ fn empty_state(ui: &egui::Ui, viewport: Rect, window: &mut Window) -> Rect {
                             .font(theme::label())
                             .color(theme::colors().text_mid),
                         );
-                        ui.add_space(12.0);
-                        ui.horizontal(|ui| {
-                            if secondary_button(ui, icon::OPEN, "Open model").clicked() {
-                                window
-                                    .doc
-                                    .imports
-                                    .open_dialog(&window.doc.plate, &mut window.machine.status);
-                            }
-                            if secondary_button(ui, icon::OPEN, "Open project").clicked() {
-                                crate::project::open_dialog(window);
-                            }
-                        });
+                        ui.add_space(14.0);
+                        if primary_button(ui, icon::OPEN, "Open...", true).clicked()
+                            && let Some(file) = files::pick(Wanted::ModelOrProject)
+                        {
+                            crate::app::open_by_what_it_is(window, file);
+                        }
                     });
                 });
         })

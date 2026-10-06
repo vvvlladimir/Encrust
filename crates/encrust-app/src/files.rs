@@ -73,6 +73,9 @@ impl Handed {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Wanted {
     Model,
+    /// Either, picked from one dialog: what the user has on an empty plate is a file, not
+    /// a decision about which kind of file it is.
+    ModelOrProject,
     Project,
     SlicedFile,
     PrinterProfile,
@@ -80,20 +83,84 @@ pub enum Wanted {
 }
 
 impl Wanted {
-    /// The filter a dialog shows: its name and the extensions under it.
-    pub fn filter(self) -> (&'static str, &'static [&'static str]) {
+    /// The filters a dialog shows, each its name and the extensions under it. The first is
+    /// the one the dialog opens on, so it is the widest.
+    pub fn filters(self) -> &'static [(&'static str, &'static [&'static str])] {
         match self {
-            Self::Model => ("Mesh", &MESHES),
-            Self::Project => ("Encrust project", &[core_engine::project::EXTENSION]),
-            Self::SlicedFile => ("Sliced file", &crate::sliced::EXTENSIONS),
-            Self::PrinterProfile => ("Printer profile", &["toml"]),
-            Self::ResinProfile => ("Resin profile", &["toml"]),
+            Self::Model => &[("Mesh", &MESHES)],
+            Self::ModelOrProject => &[
+                ("Model or project", &OPENABLE),
+                ("Mesh", &MESHES),
+                ("Encrust project", &PROJECTS),
+            ],
+            Self::Project => &[("Encrust project", &PROJECTS)],
+            Self::SlicedFile => &[("Sliced file", &crate::sliced::EXTENSIONS)],
+            Self::PrinterProfile => &[("Printer profile", &["toml"])],
+            Self::ResinProfile => &[("Resin profile", &["toml"])],
         }
+    }
+
+    /// Every extension the dialog lets through, which is the widest of its filters.
+    #[cfg_attr(
+        not(target_arch = "wasm32"),
+        allow(
+            dead_code,
+            reason = "only a browser filters a pick by extension itself"
+        )
+    )]
+    pub fn extensions(self) -> &'static [&'static str] {
+        self.filters()
+            .first()
+            .map_or(&[][..], |(_, extensions)| *extensions)
+    }
+
+    /// Whether `path` is one of the files this dialog asked for.
+    #[cfg_attr(
+        not(target_arch = "wasm32"),
+        allow(
+            dead_code,
+            reason = "only a browser filters a pick by extension itself"
+        )
+    )]
+    pub fn takes(self, path: &Path) -> bool {
+        has_extension(path, self.extensions())
+    }
+
+    /// Whether a pick brings the files beside it: a mesh opens with its materials and its
+    /// textures, and several meshes open at once.
+    #[cfg_attr(
+        not(target_arch = "wasm32"),
+        allow(dead_code, reason = "only a browser picks several files for one model")
+    )]
+    pub fn takes_several(self) -> bool {
+        matches!(self, Self::Model | Self::ModelOrProject)
     }
 }
 
 /// The meshes a model is read from.
 pub const MESHES: [&str; 3] = ["stl", "obj", "3mf"];
+
+/// The project file, which is the one thing the window writes and reads back whole.
+pub const PROJECTS: [&str; 1] = [core_engine::project::EXTENSION];
+
+/// What the plate can be filled from in one dialog: a model or a project.
+pub const OPENABLE: [&str; 4] = [
+    MESHES[0],
+    MESHES[1],
+    MESHES[2],
+    core_engine::project::EXTENSION,
+];
+
+/// Whether `path` ends in one of `extensions`, whatever case it was written in.
+pub fn has_extension(path: &Path, extensions: &[&str]) -> bool {
+    path.extension()
+        .and_then(|extension| extension.to_str())
+        .is_some_and(|extension| {
+            extensions
+                .iter()
+                .any(|known| known.eq_ignore_ascii_case(extension))
+        })
+}
 
 /// What a mesh refers to and is read with: an `.obj`'s materials and its textures.
 #[cfg_attr(
@@ -122,16 +189,7 @@ pub enum Arrived {
     allow(dead_code, reason = "only a browser hands over bytes, and only later")
 )]
 pub fn together(files: Vec<(String, Arc<[u8]>)>) -> Vec<Handed> {
-    let is = |name: &str, extensions: &[&str]| {
-        Path::new(name)
-            .extension()
-            .and_then(|extension| extension.to_str())
-            .is_some_and(|extension| {
-                extensions
-                    .iter()
-                    .any(|known| known.eq_ignore_ascii_case(extension))
-            })
-    };
+    let is = |name: &str, extensions: &[&str]| has_extension(Path::new(name), extensions);
     let (siblings, rest): (Vec<_>, Vec<_>) =
         files.into_iter().partition(|(name, _)| is(name, &SIBLINGS));
     rest.into_iter()
@@ -162,11 +220,11 @@ fn in_folder_of(mesh: &str, siblings: &[(String, Arc<[u8]>)]) -> Arc<[(String, A
 /// file arrives through [`picked`] once the user has chosen it.
 #[cfg(not(target_arch = "wasm32"))]
 pub fn pick(wanted: Wanted) -> Option<Handed> {
-    let (name, extensions) = wanted.filter();
-    rfd::FileDialog::new()
-        .add_filter(name, extensions)
-        .pick_file()
-        .map(Handed::Path)
+    let mut dialog = rfd::FileDialog::new();
+    for (name, extensions) in wanted.filters() {
+        dialog = dialog.add_filter(*name, extensions);
+    }
+    dialog.pick_file().map(Handed::Path)
 }
 
 #[cfg(target_arch = "wasm32")]
@@ -191,6 +249,16 @@ pub fn arrived() -> Vec<Arrived> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn one_dialog_opens_both_a_model_and_a_project() {
+        let wanted = Wanted::ModelOrProject;
+        assert!(wanted.takes(Path::new("boat.STL")), "any case of a mesh");
+        assert!(wanted.takes(Path::new("plate.encrust")));
+        assert!(!wanted.takes(Path::new("plate.goo")));
+        let names: Vec<&str> = wanted.filters().iter().map(|(name, _)| *name).collect();
+        assert_eq!(names, ["Model or project", "Mesh", "Encrust project"]);
+    }
 
     #[test]
     fn a_picked_file_reads_back_its_own_bytes() {

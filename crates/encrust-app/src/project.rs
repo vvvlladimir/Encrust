@@ -30,6 +30,9 @@ pub struct Opened {
     /// What the window is waiting to be told about work that is not saved, or `None`
     /// when it has asked nothing.
     asking: Option<Asking>,
+    /// The answer was to save first, and the dialog that asks where runs on the next
+    /// frame: a modal of our own is still on screen on this one.
+    saving: Option<Asking>,
     /// The answer was to close anyway, so the next close request is not questioned again.
     closing: bool,
 }
@@ -225,36 +228,46 @@ pub fn guard_close(ui: &egui::Ui, window: &mut Window) {
     if window.doc.project.closing {
         return;
     }
-    let asked = ui.ctx().input(|input| input.viewport().close_requested());
-    if asked && window.doc.project.asking.is_none() {
-        if !is_dirty(window) {
+    // The question holds the window open for as long as it stands: every close asked for
+    // under it is cancelled again, not only the first.
+    let waiting = window.doc.project.asking.is_some() || window.doc.project.saving.is_some();
+    if ui.ctx().input(|input| input.viewport().close_requested()) {
+        if !waiting && !is_dirty(window) {
             return;
         }
         ui.ctx()
             .send_viewport_cmd(egui::ViewportCommand::CancelClose);
-        window.doc.project.asking = Some(Asking::Close);
+        window.doc.project.asking.get_or_insert(Asking::Close);
+    }
+    // A dialog the user backed out of writes nothing, and the plate stays as it is with it.
+    if let Some(asking) = window.doc.project.saving.take() {
+        if save_open(window) {
+            go_on(ui.ctx(), window, asking);
+        }
+        return;
     }
     let Some(asking) = window.doc.project.asking else {
         return;
     };
 
-    let mut go_on = false;
+    let mut answered = None;
     egui::Modal::new(egui::Id::new("unsaved")).show(ui.ctx(), |ui| {
         ui.label("This plate has changes that are not in a project file.");
         ui.add_space(8.0);
         ui.horizontal(|ui| {
             let verb = asking.verb();
             if ui.button(format!("Save and {verb}")).clicked() {
-                // A dialog the user backed out of writes nothing, and the plate stays as
-                // it is with it.
-                go_on = save_open(window);
+                // Where to write is asked on the next frame, once this modal is gone:
+                // a file dialog opened from under it never comes back.
+                window.doc.project.saving = Some(asking);
                 window.doc.project.asking = None;
+                ui.ctx().request_repaint();
             }
             if ui
                 .button(format!("{} without saving", first_capital(verb)))
                 .clicked()
             {
-                go_on = true;
+                answered = Some(asking);
                 window.doc.project.asking = None;
             }
             if ui.button("Keep working").clicked() {
@@ -263,13 +276,17 @@ pub fn guard_close(ui: &egui::Ui, window: &mut Window) {
             }
         });
     });
-    if !go_on {
-        return;
+    if let Some(asking) = answered {
+        go_on(ui.ctx(), window, asking);
     }
+}
+
+/// Does what the plate was held back from: closes the window, or empties it.
+fn go_on(ctx: &egui::Context, window: &mut Window, asking: Asking) {
     match asking {
         Asking::Close => {
             window.doc.project.closing = true;
-            ui.ctx().send_viewport_cmd(egui::ViewportCommand::Close);
+            ctx.send_viewport_cmd(egui::ViewportCommand::Close);
         }
         Asking::NewProject => clear(window),
     }

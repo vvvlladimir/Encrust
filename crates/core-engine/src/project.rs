@@ -500,62 +500,7 @@ mod tests {
                 array: Array::default(),
                 plates: vec!["Plate 1".to_owned()],
                 active_plate: 0,
-                objects: (0..objects)
-                    .map(|index| ObjectState {
-                        name: format!("model {index}"),
-                        plate: 0,
-                        transform: Transform::from_translation(Vec3::new(1.0, 2.0, 3.0)),
-                        visible: true,
-                        summary: Summary {
-                            vertices_merged: 7,
-                            faces_removed: 1,
-                            orientation: Orientation {
-                                flipped_faces: 2,
-                                inverted_shells: 0,
-                                orientable: true,
-                            },
-                            diagnostics: MeshDiagnostics {
-                                vertices: 3,
-                                faces: 1,
-                                degenerate_faces: 0,
-                                duplicate_faces: 0,
-                                unreferenced_vertices: 0,
-                                boundary_edges: 3,
-                                non_manifold_edges: 0,
-                                shells: 1,
-                                euler_characteristic: 1,
-                            },
-                        },
-                        supports: ObjectSupportState {
-                            points: vec![SupportPoint::new(Vec3::Z).in_group(1)],
-                            painted: marked(&[0]),
-                            blocked: Region::default(),
-                            frozen: Vec::new(),
-                            grown: Vec::new(),
-                        },
-                        hollow: ObjectHollowState {
-                            blockers: vec![Blocker::ball(Vec3::ZERO, 1.5)],
-                            drains: Vec::new(),
-                            channels: vec![Channel {
-                                points: vec![Vec3::ZERO, Vec3::Z],
-                                diameter_mm: 3.0,
-                            }],
-                            built: Some(BuiltCavity {
-                                wall: Cavity {
-                                    thickness_mm: 1.5,
-                                    mode: HollowMode::External,
-                                    precision: 0.25,
-                                    infill: None,
-                                },
-                                cavity_faces: 0..1,
-                                cavity_mm3: 12.5,
-                                voxel_mm: 0.2,
-                                coarsened: false,
-                                scale: Vec3::ONE,
-                            }),
-                        },
-                    })
-                    .collect(),
+                objects: (0..objects).map(object).collect(),
             },
             models: (0..objects)
                 .map(|_| ModelMeshes {
@@ -563,6 +508,65 @@ mod tests {
                     shell: Some(Arc::new(mesh.clone())),
                 })
                 .collect(),
+        }
+    }
+
+    /// One model on the plate, with a point, a painted face, a blocker, a channel and a
+    /// built cavity, so every part of an object's state is written and read back.
+    fn object(index: usize) -> ObjectState {
+        ObjectState {
+            name: format!("model {index}"),
+            plate: 0,
+            transform: Transform::from_translation(Vec3::new(1.0, 2.0, 3.0)),
+            visible: true,
+            summary: Summary {
+                vertices_merged: 7,
+                faces_removed: 1,
+                orientation: Orientation {
+                    flipped_faces: 2,
+                    inverted_shells: 0,
+                    orientable: true,
+                },
+                diagnostics: MeshDiagnostics {
+                    vertices: 3,
+                    faces: 1,
+                    degenerate_faces: 0,
+                    duplicate_faces: 0,
+                    unreferenced_vertices: 0,
+                    boundary_edges: 3,
+                    non_manifold_edges: 0,
+                    shells: 1,
+                    euler_characteristic: 1,
+                },
+            },
+            supports: ObjectSupportState {
+                points: vec![SupportPoint::new(Vec3::Z).in_group(1)],
+                painted: marked(&[0]),
+                blocked: Region::default(),
+                frozen: Vec::new(),
+                grown: Vec::new(),
+            },
+            hollow: ObjectHollowState {
+                blockers: vec![Blocker::ball(Vec3::ZERO, 1.5)],
+                drains: Vec::new(),
+                channels: vec![Channel {
+                    points: vec![Vec3::ZERO, Vec3::Z],
+                    diameter_mm: 3.0,
+                }],
+                built: Some(BuiltCavity {
+                    wall: Cavity {
+                        thickness_mm: 1.5,
+                        mode: HollowMode::External,
+                        precision: 0.25,
+                        infill: None,
+                    },
+                    cavity_faces: 0..1,
+                    cavity_mm3: 12.5,
+                    voxel_mm: 0.2,
+                    coarsened: false,
+                    scale: Vec3::ONE,
+                }),
+            },
         }
     }
 

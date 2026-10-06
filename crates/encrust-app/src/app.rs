@@ -64,26 +64,12 @@ impl SlicerApp {
         prefs.apply(&mut app.window());
         project::mark_saved(&mut app.window());
         if let Some(path) = initial_model {
-            app.open_dropped(Handed::Path(path.to_path_buf()));
+            open_by_what_it_is(&mut app.window(), Handed::Path(path.to_path_buf()));
         }
         app
     }
 
     /// A sliced file is opened to look at, not imported; anything else is a model.
-    fn open_dropped(&mut self, file: Handed) {
-        let extension = file
-            .path()
-            .extension()
-            .map(|extension| extension.to_ascii_lowercase());
-        if extension.is_some_and(|extension| extension == core_engine::project::EXTENSION) {
-            project::open(&mut self.window(), &file);
-        } else if core_pipeline::reads_sliced_file(file.path()) {
-            self.open_sliced_file(&file);
-        } else {
-            self.open_model(file);
-        }
-    }
-
     fn open_model(&mut self, file: Handed) {
         self.doc
             .imports
@@ -122,7 +108,7 @@ impl SlicerApp {
         let dropped = ctx.input_mut(|input| std::mem::take(&mut input.raw.dropped_files));
         #[cfg(not(target_arch = "wasm32"))]
         for file in dropped {
-            self.open_dropped(Handed::Path(file.path().to_path_buf()));
+            open_by_what_it_is(&mut self.window(), Handed::Path(file.path().to_path_buf()));
         }
         // A browser reads a dropped file by a promise, so it arrives on a later frame.
         #[cfg(target_arch = "wasm32")]
@@ -135,6 +121,9 @@ impl SlicerApp {
         for arrived in crate::files::arrived() {
             match arrived {
                 Arrived::File(Wanted::Model, file) => self.open_model(file),
+                Arrived::File(Wanted::ModelOrProject, file) => {
+                    open_by_what_it_is(&mut self.window(), file);
+                }
                 Arrived::File(Wanted::SlicedFile, file) => self.open_sliced_file(&file),
                 Arrived::File(Wanted::Project, file) => {
                     project::open(&mut self.window(), &file);
@@ -147,7 +136,7 @@ impl SlicerApp {
                     &mut self.machine.status,
                     &file,
                 ),
-                Arrived::Dropped(file) => self.open_dropped(file),
+                Arrived::Dropped(file) => open_by_what_it_is(&mut self.window(), file),
                 Arrived::Failed(message) => self.machine.status = Status::Error(message),
             }
         }
@@ -292,6 +281,26 @@ impl SlicerApp {
                 .supports
                 .refresh(&mesh, &bvh, object.transform, &table);
         }
+    }
+}
+
+/// Opens a file as whatever it turns out to be: a project onto the plate, a sliced file
+/// to look at, or a model. What a drop and the one Open button both go through.
+pub fn open_by_what_it_is(window: &mut Window, file: Handed) {
+    if crate::files::has_extension(file.path(), &crate::files::PROJECTS) {
+        project::open(window, &file);
+    } else if core_pipeline::reads_sliced_file(file.path()) {
+        crate::sliced::open(
+            &mut window.machine.preview,
+            window.mode,
+            &mut window.machine.status,
+            &file,
+        );
+    } else {
+        window
+            .doc
+            .imports
+            .open(file, &window.doc.plate, &mut window.machine.status);
     }
 }
 
