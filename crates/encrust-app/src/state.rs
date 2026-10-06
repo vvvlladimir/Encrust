@@ -11,6 +11,7 @@ use crate::plate::BuildPlate;
 use crate::preview::Preview;
 use crate::project::Opened;
 use crate::relief::ReliefTool;
+use crate::repair::Repairs;
 use crate::scene::Scene;
 use crate::settings::Settings;
 use crate::slicing::Slicing;
@@ -30,6 +31,7 @@ pub struct Doc {
     pub history: History,
     pub project: Opened,
     pub imports: Imports,
+    pub repairs: Repairs,
 }
 
 /// How the plate is looked at: none of it changes what is printed.

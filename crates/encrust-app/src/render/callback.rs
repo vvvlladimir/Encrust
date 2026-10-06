@@ -195,13 +195,21 @@ impl Draws {
         // included: the inward-wound cavity subtracts itself from the count exactly as it
         // does from the fill rule, so the face is filled where there is material and left
         // open where the cut runs through the hollow.
-        self.solid(mesh, object.transform);
+        //
+        // A surface with a hole in it has no inside for the count to be inside of, so a
+        // model that is not sound is left out of it and gets no cap: an open model reads
+        // as open rather than as a cap spilling out into the air beside it (ADR 0195).
+        if object.summary.is_sound() {
+            self.solid(mesh, object.transform);
+        }
     }
 
     fn hollowing(&mut self, object: &SceneObject, colour: Color32) {
         // Counted but never drawn: a cut is wound inward, so it takes itself back out of
         // the count and the cap opens over the bore. See ADR 0074, 0075.
-        if let Some(cuts) = object.hollow.cut_bodies() {
+        if let Some(cuts) = object.hollow.cut_bodies()
+            && object.summary.is_sound()
+        {
             self.solid(Arc::clone(cuts), object.transform);
         }
         // The inside of every hole, drawn like the model and never counted: it is what
@@ -603,6 +611,78 @@ mod tests {
             "a 45 degree surface marks at the sine of 45 degrees"
         );
         assert!(marking(45.0) < marking(46.0), "a slacker angle marks less");
+    }
+
+    /// A box of ten triangles — a cube with the two of its top missing — on a plate of
+    /// its own, which is a model that reaches the viewport open.
+    fn an_open_box() -> Scene {
+        let mesh = Arc::new(Mesh::new(
+            vec![
+                Vec3::new(0.0, 0.0, 0.0),
+                Vec3::new(1.0, 0.0, 0.0),
+                Vec3::new(1.0, 1.0, 0.0),
+                Vec3::new(0.0, 1.0, 0.0),
+                Vec3::new(0.0, 0.0, 1.0),
+                Vec3::new(1.0, 0.0, 1.0),
+                Vec3::new(1.0, 1.0, 1.0),
+                Vec3::new(0.0, 1.0, 1.0),
+            ],
+            vec![
+                [0, 2, 1],
+                [0, 3, 2],
+                [0, 1, 5],
+                [0, 5, 4],
+                [1, 2, 6],
+                [1, 6, 5],
+                [2, 3, 7],
+                [2, 7, 6],
+                [3, 0, 4],
+                [3, 4, 7],
+            ],
+        ));
+        let mut scene = Scene::default();
+        scene.insert(Imported::new(
+            "open.stl".to_owned(),
+            Arc::clone(&mesh),
+            Transform::default(),
+            ImportSummary {
+                vertices_merged: 0,
+                faces_removed: 0,
+                orientation: core_geometry::Orientation {
+                    flipped_faces: 0,
+                    inverted_shells: 0,
+                    orientable: true,
+                },
+                diagnostics: diagnose(&mesh),
+            },
+        ));
+        scene
+    }
+
+    #[test]
+    fn a_model_that_is_not_closed_is_drawn_but_never_counted_into_the_cap() {
+        let scene = an_open_box();
+        let draws = Draws::of(&scene, NOT_MARKED, false);
+
+        assert_eq!(draws.models.len(), 1, "an open model is still drawn");
+        assert!(
+            draws.solids.is_empty(),
+            "a surface with a hole has no inside for the cap to count"
+        );
+    }
+
+    #[test]
+    fn a_closed_model_is_counted_into_the_cap() {
+        let mut scene = an_open_box();
+        let id = scene.objects()[0].id;
+        let mut mesh = (*scene.get(id).expect("the box is there").mesh).clone();
+        core_geometry::fill_holes(&mut mesh);
+        scene
+            .get_mut(id)
+            .expect("the box is there")
+            .reshape(Arc::new(mesh));
+
+        assert_eq!(Draws::of(&scene, NOT_MARKED, false).solids.len(), 1);
     }
 
     #[test]

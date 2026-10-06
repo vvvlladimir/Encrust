@@ -1,6 +1,6 @@
 use egui::{Align2, Rect, Sense, vec2};
 
-use core_geometry::Vec3;
+use core_geometry::{Vec2, Vec3};
 
 use crate::panels::Window;
 use crate::profiles;
@@ -24,6 +24,9 @@ const ARRAY_MAX: u32 = 20;
 
 /// How wide the import report is allowed to get before it wraps.
 const POPUP_W: f32 = 230.0;
+
+/// What the end of the row of a model that will not slice as it stands reads.
+const BROKEN: &str = "broken";
 
 /// The plate down the left of the stage: what stands on it, and what it is printed on.
 ///
@@ -57,7 +60,7 @@ pub fn ui(ui: &mut egui::Ui, window: &mut Window) {
 
     egui::ScrollArea::vertical()
         .auto_shrink([false, false])
-        .show(ui, |ui| rows(ui, &mut window.doc.scene));
+        .show(ui, |ui| rows(ui, window));
 }
 
 /// What can be done to what stands on the plate. These belong to the contents rather
@@ -163,6 +166,7 @@ fn array(ui: &mut egui::Ui, window: &mut Window, picked: &[ObjectId]) {
                     window.tools.array.columns as usize,
                     window.tools.array.rows as usize,
                     window.tools.array.gap_mm,
+                    Vec2::new(window.doc.plate.x_mm, window.doc.plate.y_mm),
                 );
             }
         });
@@ -201,17 +205,21 @@ fn print(ui: &mut egui::Ui, window: &mut Window) {
     hairline(ui);
 }
 
-fn rows(ui: &mut egui::Ui, scene: &mut Scene) {
+fn rows(ui: &mut egui::Ui, window: &mut Window) {
     // What a click means, as every list on the desktop reads it: plain picks one, cmd
     // adds or drops one, shift takes everything between the last pick and this.
     let (spanning, adding) = ui.input(|input| (input.modifiers.shift, input.modifiers.command));
+    let plates: Vec<String> = window.doc.scene.plates().to_vec();
+    let active = window.doc.scene.active_plate();
     let mut select = None;
-    let mut toggle = None;
+    let mut clicked = None;
 
+    let scene = &mut window.doc.scene;
     for object in scene.here() {
-        match row(ui, object, scene.is_selected(object.id)) {
+        let selected = scene.is_selected(object.id);
+        match row(ui, object, selected, &plates, active) {
             Some(Clicked::Select) => select = Some(object.id),
-            Some(Clicked::Visibility) => toggle = Some(object.id),
+            Some(what) => clicked = Some((object.id, what)),
             None => {}
         }
     }
@@ -223,29 +231,64 @@ fn rows(ui: &mut egui::Ui, scene: &mut Scene) {
             (false, false) => scene.select(Some(id)),
         }
     }
-    if let Some(id) = toggle
-        && let Some(object) = scene.get_mut(id)
-    {
-        object.visible = !object.visible;
+    match clicked {
+        Some((id, Clicked::Visibility)) => {
+            if let Some(object) = scene.get_mut(id) {
+                object.visible = !object.visible;
+            }
+        }
+        // What a row's own menu does is done to everything picked, like every button under
+        // the list: a plate of four is not moved one row at a time.
+        Some((id, Clicked::MoveTo(plate))) => {
+            for id in with_the_selection(scene, id) {
+                scene.move_to_plate(id, plate);
+            }
+        }
+        Some((id, Clicked::Repair)) => {
+            window
+                .doc
+                .repairs
+                .start(scene, id, &mut window.machine.status);
+        }
+        Some((_, Clicked::Select)) | None => {}
+    }
+}
+
+/// The models one row's menu works on: everything picked when the row is one of them, and
+/// the row alone when it is not.
+fn with_the_selection(scene: &Scene, id: ObjectId) -> Vec<ObjectId> {
+    if scene.is_selected(id) {
+        scene.selection().to_vec()
+    } else {
+        vec![id]
     }
 }
 
 enum Clicked {
     Select,
     Visibility,
+    MoveTo(u32),
+    Repair,
 }
 
 /// One model: whether it is drawn and what it is called, with what import found about it
 /// at the end of the row.
-fn row(ui: &mut egui::Ui, object: &SceneObject, selected: bool) -> Option<Clicked> {
+fn row(
+    ui: &mut egui::Ui,
+    object: &SceneObject,
+    selected: bool,
+    plates: &[String],
+    active: u32,
+) -> Option<Clicked> {
     let (rect, response) =
         ui.allocate_exact_size(vec2(ui.available_width(), theme::ROW_H), Sense::click());
     row_background(ui.painter(), rect, selected, response.hovered());
+    let asked = row_menu(&response, object, plates, active);
 
     let (eye, eye_response) = visibility_eye(ui, rect, object);
     let end = rect.right() - 10.0;
     let name_right = match trouble(&object.summary) {
-        Some((color, lines)) => import_warning(ui, rect, object, end, color, &lines),
+        Some((mark, lines)) => import_mark(ui, rect, object, end, mark, &lines),
         None => end,
     };
 
@@ -268,6 +311,9 @@ fn row(ui: &mut egui::Ui, object: &SceneObject, selected: bool) -> Option<Clicke
         name_color,
     );
 
+    if let Some(asked) = asked {
+        return Some(asked);
+    }
     if eye_response.clicked() {
         return Some(Clicked::Visibility);
     }
@@ -275,6 +321,38 @@ fn row(ui: &mut egui::Ui, object: &SceneObject, selected: bool) -> Option<Clicke
         return Some(Clicked::Select);
     }
     None
+}
+
+/// The row's own menu, where a model is where the hand already is: sending it to another
+/// plate, and repairing it when it came in broken.
+fn row_menu(
+    response: &egui::Response,
+    object: &SceneObject,
+    plates: &[String],
+    active: u32,
+) -> Option<Clicked> {
+    let mut clicked = None;
+    response.context_menu(|ui| {
+        if !object.summary.is_sound() && ui.button("Repair").clicked() {
+            clicked = Some(Clicked::Repair);
+            ui.close();
+        }
+        ui.add_enabled_ui(plates.len() > 1, |ui| {
+            ui.menu_button("Move to plate", |ui| {
+                for (index, name) in plates.iter().enumerate() {
+                    let plate = index as u32;
+                    if ui
+                        .add_enabled(plate != active, egui::Button::new(name))
+                        .clicked()
+                    {
+                        clicked = Some(Clicked::MoveTo(plate));
+                        ui.close();
+                    }
+                }
+            });
+        });
+    });
+    clicked
 }
 
 fn row_background(painter: &egui::Painter, rect: Rect, selected: bool, hovered: bool) {
@@ -321,30 +399,44 @@ fn visibility_eye(ui: &mut egui::Ui, rect: Rect, object: &SceneObject) -> (Rect,
     (eye, response)
 }
 
-/// The warning at the end of the row, with what import found behind a click. Returns
-/// where it starts.
-fn import_warning(
+/// What the end of a row says about a model: a model that will not slice as it stands is
+/// named broken in words, a model repair only had to tidy gets the quiet sign.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Mark {
+    Repaired,
+    Broken,
+}
+
+/// The mark at the end of the row, with what import found behind a click. Returns where
+/// it starts.
+fn import_mark(
     ui: &mut egui::Ui,
     rect: Rect,
     object: &SceneObject,
     right: f32,
-    color: egui::Color32,
+    mark: Mark,
     lines: &[String],
 ) -> f32 {
-    let spot = Rect::from_center_size(egui::pos2(right - 17.0, rect.center().y), vec2(18.0, 18.0));
-    let warn = ui.interact(spot, ui.id().with((object.id, "import")), Sense::click());
-    ui.painter().text(
-        spot.center(),
-        Align2::CENTER_CENTER,
-        icon::WARNING,
-        theme::icon(14.0),
-        if warn.hovered() {
-            theme::colors().text_high
-        } else {
-            color
-        },
-    );
-    egui::Popup::menu(&warn).show(|ui| {
+    let spot = match mark {
+        Mark::Repaired => {
+            Rect::from_center_size(egui::pos2(right - 17.0, rect.center().y), vec2(18.0, 18.0))
+        }
+        Mark::Broken => {
+            let width = ui.painter().layout_no_wrap(
+                BROKEN.to_owned(),
+                theme::small(),
+                theme::colors().danger,
+            );
+            let width = width.size().x + 8.0;
+            Rect::from_center_size(
+                egui::pos2(right - width / 2.0, rect.center().y),
+                vec2(width, 18.0),
+            )
+        }
+    };
+    let response = ui.interact(spot, ui.id().with((object.id, "import")), Sense::click());
+    paint_mark(ui.painter(), spot, mark, response.hovered());
+    egui::Popup::menu(&response).show(|ui| {
         ui.set_max_width(POPUP_W);
         for line in lines {
             hint(ui, line);
@@ -353,47 +445,37 @@ fn import_warning(
     spot.left()
 }
 
-/// What import had to change and what it could not fix, and how loudly to say so.
-/// `None` when the mesh came in clean, which is most of them.
-fn trouble(summary: &ImportSummary) -> Option<(egui::Color32, Vec<String>)> {
+fn paint_mark(painter: &egui::Painter, spot: Rect, mark: Mark, hovered: bool) {
     let colors = theme::colors();
-    let mut color = colors.text_low;
-    let mut lines = Vec::new();
+    let (text, font, color) = match mark {
+        Mark::Repaired => (icon::WARNING, theme::icon(14.0), colors.text_low),
+        Mark::Broken => (BROKEN, theme::small(), colors.danger),
+    };
+    let color = if hovered { colors.text_high } else { color };
+    painter.text(spot.center(), Align2::CENTER_CENTER, text, font, color);
+}
 
-    for (label, count) in [
-        ("vertices merged", summary.vertices_merged),
-        ("faces removed", summary.faces_removed),
-        ("faces flipped", summary.orientation.flipped_faces),
-        ("shells inverted", summary.orientation.inverted_shells),
-    ] {
-        if count > 0 {
-            lines.push(format!("Repaired {count} {label}"));
-        }
-    }
-    for (label, count) in [
-        ("open edges", summary.diagnostics.boundary_edges),
-        ("branching edges", summary.diagnostics.non_manifold_edges),
-        ("degenerate faces", summary.diagnostics.degenerate_faces),
-        ("duplicate faces", summary.diagnostics.duplicate_faces),
-    ] {
-        if count > 0 {
-            lines.push(format!("{count} {label}"));
-            color = colors.warn;
-        }
-    }
-    if !summary.orientation.orientable {
-        lines.push("No consistent orientation: slicing will be unreliable".to_owned());
-        color = colors.danger;
-    }
-
-    (!lines.is_empty()).then_some((color, lines))
+/// What is wrong with a model and what repair already did, and how loudly to say it.
+/// `None` when the mesh came in clean, which is most of them.
+fn trouble(summary: &ImportSummary) -> Option<(Mark, Vec<String>)> {
+    let defects = summary.defects();
+    let mark = if defects.is_empty() {
+        Mark::Repaired
+    } else {
+        Mark::Broken
+    };
+    let lines = [defects, summary.repairs()].concat();
+    (!lines.is_empty()).then_some((mark, lines))
 }
 
 #[cfg(test)]
 mod tests {
-    use core_geometry::{Mesh, MeshDiagnostics, Orientation, Vec3};
+    use std::sync::Arc;
+
+    use core_geometry::{Mesh, MeshDiagnostics, Orientation, Transform, Vec3};
 
     use super::*;
+    use crate::scene::Imported;
 
     fn summary(orientable: bool, boundary_edges: usize) -> ImportSummary {
         let mesh = Mesh::new(vec![Vec3::ZERO, Vec3::X, Vec3::Y], vec![[0, 1, 2]]);
@@ -412,15 +494,75 @@ mod tests {
         }
     }
 
+    /// A plate of `count` models, none of them selected.
+    fn plate_of(count: usize) -> (Scene, Vec<ObjectId>) {
+        let mesh = Arc::new(Mesh::new(
+            vec![Vec3::ZERO, Vec3::X, Vec3::Y],
+            vec![[0, 1, 2]],
+        ));
+        let mut scene = Scene::default();
+        let ids = (0..count)
+            .map(|at| {
+                scene.insert(Imported::new(
+                    format!("model-{at}.stl"),
+                    Arc::clone(&mesh),
+                    Transform::default(),
+                    summary(true, 0),
+                ))
+            })
+            .collect();
+        scene.clear_selection();
+        (scene, ids)
+    }
+
+    #[test]
+    fn a_rows_menu_moves_everything_picked_when_that_row_is_one_of_them() {
+        let (mut scene, ids) = plate_of(3);
+        scene.select_many(&ids[..2]);
+
+        assert_eq!(with_the_selection(&scene, ids[1]), ids[..2].to_vec());
+    }
+
+    #[test]
+    fn a_rows_menu_moves_that_row_alone_when_it_is_not_picked() {
+        let (mut scene, ids) = plate_of(3);
+        scene.select_many(&ids[..2]);
+
+        assert_eq!(with_the_selection(&scene, ids[2]), vec![ids[2]]);
+    }
+
     #[test]
     fn a_clean_import_says_nothing() {
         assert!(trouble(&summary(true, 0)).is_none());
     }
 
     #[test]
-    fn a_mesh_that_cannot_be_oriented_is_the_loudest_thing_in_the_report() {
-        let (color, lines) = trouble(&summary(false, 4)).expect("a torn mesh has something to say");
-        assert_eq!(color, theme::colors().danger);
+    fn merging_the_vertices_of_an_stl_is_not_trouble() {
+        let merged = ImportSummary {
+            vertices_merged: 28,
+            ..summary(true, 0)
+        };
+        assert!(
+            trouble(&merged).is_none(),
+            "every STL merges vertices, so a mark for it would stand on every row"
+        );
+    }
+
+    #[test]
+    fn a_mesh_that_cannot_be_oriented_is_named_broken() {
+        let (mark, lines) = trouble(&summary(false, 4)).expect("a torn mesh has something to say");
+        assert_eq!(mark, Mark::Broken);
         assert_eq!(lines.len(), 2, "the open edges and the orientation");
+    }
+
+    #[test]
+    fn a_mesh_repair_only_tidied_gets_the_quiet_mark() {
+        let tidied = ImportSummary {
+            faces_removed: 2,
+            ..summary(true, 0)
+        };
+        let (mark, lines) = trouble(&tidied).expect("a dropped face is worth a line");
+        assert_eq!(mark, Mark::Repaired);
+        assert_eq!(lines.len(), 1);
     }
 }

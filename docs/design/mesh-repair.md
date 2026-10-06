@@ -1,7 +1,8 @@
 # Mesh repair and inspection
 
 What `core-geometry` does to a freshly imported mesh, in this order: weld, inspect,
-orient. Why it lives there: ADR 0005.
+orient — and, when the user asks for it, close what is still open. Why it lives there:
+ADR 0005, ADR 0194 and ADR 0195.
 
 ## Why welding comes first
 
@@ -95,6 +96,33 @@ order is the only trustworthy signal.
 
 Step 4 is why `Orientation` reports `inverted_shells` apart from `flipped_faces`: a model
 entirely inside out is a different problem from a few stray faces.
+
+## Closing holes and dropping faces drawn twice
+
+These two are the parts of repair nobody runs without being asked: one adds surface the
+file never had, the other throws faces away, so the window puts the question to the user
+first (ADR 0194, 0195).
+
+`remove_duplicate_faces(mesh)` keeps the first face over any three vertices and drops the
+rest, winding ignored. It goes first: an edge a duplicate has tripled is neither a
+boundary nor a manifold edge, so neither the walk below nor the orientation pass can get
+through it.
+
+The boundary edges — the groups of one in the edge table — are followed into loops
+*against* the direction the face that owns each edge walks it. A patch triangulated in that
+order is therefore wound the same way as the surface around it, and `orient_outward`
+afterwards has nothing to flip.
+
+Each loop is flattened into the plane of its own Newell normal, which is the area-weighted
+normal of a ring that need not be flat and does not depend on where the ring stands. A
+normal of zero means the loop is a line: there is no plane to lay triangles in, so the loop
+is left open and counted in `loops_left`.
+
+A flat ring is filled by `triangulate`, the same `earcutr` call a plane cut caps its halves
+with (ADR 0089). It returns `n - 2` triangles for a ring of `n` corners; anything short of
+that means the projection folds over itself, and the loop is closed instead by a fan from
+one new vertex at its middle. The patch is flat either way: a hole across a curve comes out
+as a chord, which the user can see and undo.
 
 ## Placement
 

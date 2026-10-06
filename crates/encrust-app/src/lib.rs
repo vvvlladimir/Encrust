@@ -24,6 +24,7 @@ mod profiles;
 mod project;
 mod relief;
 mod render;
+mod repair;
 mod scene;
 mod settings;
 mod shortcuts;

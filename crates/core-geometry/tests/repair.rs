@@ -2,7 +2,7 @@
 mod bodies;
 
 use core_geometry::{
-    DEFAULT_WELD_TOLERANCE, Mesh, Vec3, diagnose, orient_outward, signed_volume, weld,
+    DEFAULT_WELD_TOLERANCE, Mesh, Vec3, diagnose, fill_holes, orient_outward, signed_volume, weld,
 };
 
 fn welded(mesh: &Mesh) -> Mesh {
@@ -133,4 +133,56 @@ fn an_open_shell_is_never_inverted() {
         "outwards is undefined without a closed volume"
     );
     assert_eq!(report.flipped_faces, 0);
+}
+
+#[test]
+fn filling_an_open_box_closes_it_at_the_volume_it_bounds() {
+    let mut mesh = bodies::open_box(4.0);
+    assert!(diagnose(&mesh).boundary_edges > 0, "the fixture is open");
+
+    let filled = fill_holes(&mut mesh);
+    let diagnostics = diagnose(&mesh);
+
+    assert_eq!(filled.loops_filled, 1);
+    assert_eq!(filled.loops_left, 0);
+    assert!(diagnostics.is_closed());
+    assert_eq!(diagnostics.euler_characteristic, 2);
+    assert!(
+        (signed_volume(&mesh) - 64.0).abs() < 1e-3,
+        "a 4 mm cube holds 64 mm³, got {}",
+        signed_volume(&mesh)
+    );
+}
+
+#[test]
+fn a_patched_sphere_with_a_hole_keeps_its_orientation() {
+    let mut mesh = bodies::uv_sphere(5.0, 12, 16);
+    let whole = signed_volume(&mesh);
+    mesh.faces.drain(0..4);
+
+    fill_holes(&mut mesh);
+    let report = orient_outward(&mut mesh);
+
+    assert!(report.orientable);
+    assert_eq!(report.flipped_faces, 0, "the patch came out wound outwards");
+    assert!(
+        (signed_volume(&mesh) - whole).abs() < 0.5,
+        "a patch over four faces of a sphere of radius 5 cannot move {whole} far"
+    );
+}
+
+#[test]
+fn a_mobius_strip_has_no_patch_to_close_it() {
+    let mut mesh = bodies::mobius_strip(24);
+    let before = mesh.faces.len();
+    let filled = fill_holes(&mut mesh);
+
+    assert!(
+        filled.loops_filled + filled.loops_left > 0,
+        "the strip has a boundary"
+    );
+    assert!(
+        mesh.faces.len() >= before,
+        "filling never removes a face of its own"
+    );
 }

@@ -6,6 +6,7 @@ use crate::prefs::Preferences;
 use crate::preview::stack_fingerprint;
 use crate::project;
 use crate::render;
+use crate::repair;
 use crate::shortcuts;
 use crate::state::{Doc, Machine, Tools, View};
 use crate::status::Status;
@@ -339,11 +340,16 @@ impl eframe::App for SlicerApp {
             &mut self.doc.scene,
             &self.doc.plate,
             &mut self.view.camera,
+            &mut self.doc.repairs,
             &mut self.machine.status,
         ) | self
-            .machine
-            .slicing
-            .poll(&self.doc.scene, &mut self.machine.status)
+            .doc
+            .repairs
+            .poll(&mut self.doc.scene, &mut self.machine.status)
+            | self
+                .machine
+                .slicing
+                .poll(&self.doc.scene, &mut self.machine.status)
             | self.machine.network.poll(&mut self.machine.status)
             | self.machine.preview.poll(&mut self.machine.status)
             | self.machine.updates.poll(&mut self.machine.status)
@@ -384,6 +390,12 @@ impl eframe::App for SlicerApp {
         self.take_shortcuts();
 
         project::guard_close(ui, &mut self.window());
+        repair::ask(
+            ui,
+            &mut self.doc.repairs,
+            &self.doc.scene,
+            &mut self.machine.status,
+        );
         self.window().show(ui);
 
         // A gesture is one edit, so nothing is recorded until the button is up again and
@@ -438,6 +450,7 @@ mod tests {
             &mut app.doc.scene,
             &app.doc.plate,
             &mut app.view.camera,
+            &mut app.doc.repairs,
             &mut app.machine.status,
         ) {
             std::thread::yield_now();
@@ -487,6 +500,7 @@ mod tests {
             &mut app.doc.scene,
             &app.doc.plate,
             &mut app.view.camera,
+            &mut app.doc.repairs,
             &mut app.machine.status,
         ) {
             std::thread::yield_now();

@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::HashSet;
 
 use serde::{Deserialize, Serialize};
 
@@ -166,13 +166,23 @@ fn count_degenerate(mesh: &Mesh) -> usize {
 }
 
 fn count_duplicates(mesh: &Mesh) -> usize {
-    let mut seen: HashMap<[u32; 3], usize> = HashMap::with_capacity(mesh.faces.len());
-    for face in &mesh.faces {
+    duplicate_faces(mesh).len()
+}
+
+/// Where the faces beyond the first that cover the same three vertices are, ascending.
+/// Winding is not part of the key: a face laid over another the other way round is as
+/// much of a duplicate as one laid over it the same way.
+pub(crate) fn duplicate_faces(mesh: &Mesh) -> Vec<usize> {
+    let mut seen: HashSet<[u32; 3]> = HashSet::with_capacity(mesh.faces.len());
+    let mut extra = Vec::new();
+    for (index, face) in mesh.faces.iter().enumerate() {
         let mut key = *face;
         key.sort_unstable();
-        *seen.entry(key).or_default() += 1;
+        if !seen.insert(key) {
+            extra.push(index);
+        }
     }
-    seen.values().map(|count| count - 1).sum()
+    extra
 }
 
 #[cfg(test)]

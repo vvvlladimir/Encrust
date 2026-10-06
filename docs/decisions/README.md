@@ -69,6 +69,8 @@ Grouped by what the decision governs; the number is still the order it was taken
 | [0075](0075-a-cut-is-its-own-operation.md) | A cut is its own operation, not part of hollowing | Accepted |
 | [0086](0086-an-edit-is-taken-back-by-restoring-a-scene.md) | An edit is taken back by restoring a scene, not by inverting it | Accepted |
 | [0089](0089-a-cut-is-exact-on-the-mesh.md) | A cut is exact on the mesh, capped with `earcutr` | Accepted |
+| [0194](0194-a-hole-is-closed-only-when-it-is-asked-for.md) | A hole is closed only when it is asked for, by the triangulator the cut already uses | Accepted |
+| [0195](0195-a-mended-model-is-sound-and-an-open-one-is-never-capped.md) | Repair drops the faces drawn twice, and an open model is never capped | Accepted |
 
 ### Mesh and texture input
 

@@ -3,6 +3,7 @@ use egui::{Align, Layout, Rect, RichText, UiBuilder, vec2};
 use crate::panels::{Window, frame_view};
 use crate::profiles;
 use crate::project;
+use crate::scene::ObjectId;
 use crate::settings::Section;
 use crate::shortcuts::{self, Action};
 use crate::sliced;
@@ -391,13 +392,13 @@ fn edit_menu(ui: &mut egui::Ui, window: &mut Window) {
     }
 }
 
-/// Sends the selected model to another plate. Greyed out with nothing selected, and with
+/// Sends everything selected to another plate. Greyed out with nothing selected, and with
 /// only one plate to send it to.
 fn move_to_plate(ui: &mut egui::Ui, doc: &mut Doc) {
-    let selected = doc.scene.selected();
+    let selected: Vec<ObjectId> = doc.scene.selection().to_vec();
     let plates: Vec<String> = doc.scene.plates().to_vec();
     let active = doc.scene.active_plate();
-    let enabled = selected.is_some() && plates.len() > 1;
+    let enabled = !selected.is_empty() && plates.len() > 1;
 
     let mut moved = None;
     ui.add_enabled_ui(enabled, |ui| {
@@ -414,8 +415,10 @@ fn move_to_plate(ui: &mut egui::Ui, doc: &mut Doc) {
             }
         });
     });
-    if let (Some(id), Some(plate)) = (selected, moved) {
-        doc.scene.move_to_plate(id, plate);
+    if let Some(plate) = moved {
+        for id in selected {
+            doc.scene.move_to_plate(id, plate);
+        }
     }
 }
 
