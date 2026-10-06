@@ -71,7 +71,13 @@ impl SlicerApp {
 
     /// A sliced file is opened to look at, not imported; anything else is a model.
     fn open_dropped(&mut self, file: Handed) {
-        if core_pipeline::reads_sliced_file(file.path()) {
+        let extension = file
+            .path()
+            .extension()
+            .map(|extension| extension.to_ascii_lowercase());
+        if extension.is_some_and(|extension| extension == core_engine::project::EXTENSION) {
+            project::open(&mut self.window(), &file);
+        } else if core_pipeline::reads_sliced_file(file.path()) {
             self.open_sliced_file(&file);
         } else {
             self.open_model(file);

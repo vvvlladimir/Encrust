@@ -22,12 +22,10 @@ pub struct Sliced {
 
 /// Slices the active plate of the project in `project` into the container it names.
 ///
-/// One cavity may take `hollow_budget_bytes`, and a finer lattice is coarsened to fit; in
-/// a browser that is what keeps a run inside the four gigabytes wasm32 addresses.
-/// `raster_window` layers are drawn at once, one per thread there is to draw them on.
+/// The project carries its own geometry, so nothing here is built again: `raster_window`
+/// layers are drawn at once, one per thread there is to draw them on.
 pub fn slice_project(
     project: &[u8],
-    hollow_budget_bytes: usize,
     raster_window: usize,
     created_unix_s: u64,
 ) -> Result<Sliced, WebError> {
@@ -36,7 +34,6 @@ pub fn slice_project(
         &project,
         &Opening {
             plate: project.manifest.active_plate,
-            hollow_budget_bytes,
             raster_window,
             created_unix_s,
         },

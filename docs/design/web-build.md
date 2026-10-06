@@ -116,18 +116,20 @@ The same `slice_project` runs natively and in wasm, so the two numbers are one r
 targets:
 
 ```sh
-RAYON_NUM_THREADS=1 cargo run --release -p web-engine --example measure -- plate.encrust 1024
-node crates/web-engine/www/measure.mjs crates/web-engine/www/pkg plate.encrust 1024
+RAYON_NUM_THREADS=1 cargo run --release -p web-engine --example measure -- plate.encrust
+node crates/web-engine/www/measure.mjs crates/web-engine/www/pkg plate.encrust
 ```
 
 Natively, peak memory is the live bytes the allocator counts. In wasm it is the linear
 memory after the run, which only grows, so it is the run's peak plus what the allocator
 could not reuse.
 
-### Measured, 2026-10-03
+### Measured, 2026-10-03, on format 2
 
 Saturn 4 Ultra panel (11520 x 5120), 0.05 mm layers, supports grown from automatic points,
-a 2 mm wall where hollowed, a 1 GB cavity budget. 8 cores, Node 24.
+a 2 mm wall where hollowed, a 1 GB cavity budget. 8 cores, Node 24. A project then
+hollowed and grew its supports on opening; since ADR 0191 it does neither, so the hollowed
+rows are an upper bound and their files are larger than they would be now.
 
 | Plate | Faces | File | Native, 1 thread | Native, 8 | Wasm, 1 | Native live | Wasm memory |
 |---|---|---|---|---|---|---|---|

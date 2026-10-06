@@ -14,8 +14,6 @@
   <p>A prototype with no interface: pick a project saved by Encrust, get the sliced file.
     Everything runs on this page; nothing is uploaded.
     <a href="https://github.com/vvvlladimir/Encrust">Source code</a> (AGPL-3.0).</p>
-  <label>Memory one cavity may take, MB
-    <input id="budget" type="number" value="1024" min="64" max="4032" step="64"></label>
   <label>Project <input id="project" type="file" accept=".encrust"></label>
   <output id="status"></output>
   <script type="module">
@@ -41,7 +39,6 @@
       worker.postMessage({
         name: file.name.replace(/\.encrust$/i, ""),
         bytes: new Uint8Array(await file.arrayBuffer()),
-        budget: Number(document.getElementById("budget").value),
       });
     };
   </script>

@@ -1,6 +1,6 @@
 //! The browser's run, natively: time and peak live bytes of `slice_project` on a project.
 //!
-//! `cargo run --release -p web-engine --example measure -- plate.encrust [budget MB]`, with
+//! `cargo run --release -p web-engine --example measure -- plate.encrust`, with
 //! `RAYON_NUM_THREADS=1` for the single thread the browser has. Peak memory is counted by
 //! the allocator, so it is what the run holds and not what the process was given; see
 //! `docs/design/web-build.md`.
@@ -51,16 +51,13 @@ static ALLOCATOR: Counting = Counting;
 
 fn main() -> Result<(), Box<dyn Error>> {
     let mut args = std::env::args().skip(1);
-    let path = args
-        .next()
-        .ok_or("usage: measure <project.encrust> [budget MB]")?;
-    let budget_mb: usize = args.next().map_or(Ok(1024), |text| text.parse())?;
+    let path = args.next().ok_or("usage: measure <project.encrust>")?;
     let threads = rayon_threads();
 
     let project = std::fs::read(&path)?;
     let created_unix_s = SystemTime::now().duration_since(UNIX_EPOCH)?.as_secs();
     let started = Instant::now();
-    let sliced = slice_project(&project, budget_mb << 20, threads, created_unix_s)?;
+    let sliced = slice_project(&project, threads, created_unix_s)?;
     let seconds = started.elapsed().as_secs_f64();
 
     println!(

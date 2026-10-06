@@ -23,22 +23,12 @@ impl SlicedFile {
     }
 }
 
-/// Slices the project in `project`. `hollow_budget_mb` caps what one cavity may take;
-/// `created_unix_s` is `Date.now() / 1000`, because the module has no clock.
+/// Slices the project in `project`. `created_unix_s` is `Date.now() / 1000`, because the
+/// module has no clock.
 #[wasm_bindgen]
-pub fn slice(
-    project: &[u8],
-    hollow_budget_mb: u32,
-    created_unix_s: f64,
-) -> Result<SlicedFile, JsError> {
-    let budget_bytes = budget_bytes(hollow_budget_mb).ok_or_else(|| {
-        JsError::new(&format!(
-            "a cavity budget of {hollow_budget_mb} MB does not fit the module's memory"
-        ))
-    })?;
+pub fn slice(project: &[u8], created_unix_s: f64) -> Result<SlicedFile, JsError> {
     let sliced = slice_project(
         project,
-        budget_bytes,
         // One thread, so one layer at a time; see ADR 0177.
         1,
         created_unix_s.max(0.0) as u64,
@@ -48,13 +38,6 @@ pub fn slice(
         bytes: sliced.bytes,
         extension: sliced.extension.to_owned(),
     })
-}
-
-/// `megabytes` in bytes, or `None` for 0 or for more than 32-bit memory addresses: either
-/// would reach the build as 0, which it reads as no limit at all.
-fn budget_bytes(megabytes: u32) -> Option<usize> {
-    let bytes = u32::try_from(u64::from(megabytes) << 20).ok()?;
-    usize::try_from(bytes).ok().filter(|&bytes| bytes > 0)
 }
 
 /// Bytes of linear memory the module holds. Wasm memory only ever grows, so read after a
@@ -81,29 +64,4 @@ fn chain(error: &dyn std::error::Error) -> String {
         source = cause.source();
     }
     message
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn a_budget_is_megabytes_of_bytes() {
-        assert_eq!(budget_bytes(1024), Some(1 << 30));
-    }
-
-    #[test]
-    fn a_budget_past_32_bit_memory_is_refused_rather_than_wrapped_to_no_limit() {
-        assert_eq!(
-            budget_bytes(4096),
-            None,
-            "4096 MB << 20 wraps to 0 in 32 bits"
-        );
-        assert_eq!(budget_bytes(u32::MAX), None);
-    }
-
-    #[test]
-    fn a_budget_of_nothing_is_refused_rather_than_read_as_no_limit() {
-        assert_eq!(budget_bytes(0), None);
-    }
 }

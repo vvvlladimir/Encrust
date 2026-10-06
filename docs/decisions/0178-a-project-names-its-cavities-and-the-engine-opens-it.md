@@ -1,6 +1,6 @@
 # 0178. A project names its cavities, and the engine opens it into a plate
 
-- **Status:** Accepted
+- **Status:** Superseded by 0191
 - **Date:** 2026-10-03
 
 ## Context

@@ -199,7 +199,8 @@ Grouped by what the decision governs; the number is still the order it was taken
 | [0088](0088-the-plate-is-packed-as-a-bitmap.md) | The plate is packed as a bitmap into the corner, and the block centred | Accepted |
 | [0098](0098-a-plate-is-a-number-on-the-object.md) | A plate is a number on the object, not a scene of its own | Accepted |
 | [0101](0101-a-tool-works-on-the-selection-or-the-plate.md) | A tool works on what is picked, and on the whole plate only when nothing is | Accepted |
-| [0178](0178-a-project-names-its-cavities-and-the-engine-opens-it.md) | A project names its cavities, and the engine opens it into a plate | Accepted |
+| [0178](0178-a-project-names-its-cavities-and-the-engine-opens-it.md) | A project names its cavities, and the engine opens it into a plate | Superseded by 0191 |
+| [0191](0191-a-project-holds-the-plate-as-it-stands.md) | A project holds the plate as it stands, and opening it builds nothing | Accepted |
 
 ### Sliced-file formats
 
@@ -268,7 +269,7 @@ Grouped by what the decision governs; the number is still the order it was taken
 | [0073](0073-the-viewport-subtracts-a-drain-per-fragment.md) | The viewport subtracts a drain per fragment | Superseded by 0188 (a channel's wall only) |
 | [0074](0074-the-section-cap-counts-material-not-crossings.md) | The section cap counts material, not crossings | Accepted |
 | [0184](0184-the-viewport-draws-into-its-own-target.md) | The viewport draws into its own target | Accepted |
-| [0097](0097-a-project-is-a-zip-of-a-manifest-and-the-meshes.md) | A project is a zip of a JSON manifest and the meshes | Accepted |
+| [0097](0097-a-project-is-a-zip-of-a-manifest-and-the-meshes.md) | A project is a zip of a JSON manifest and the meshes | Superseded by 0191 |
 | [0099](0099-unsaved-work-is-a-digest-asked-for-at-the-door.md) | Unsaved work is a digest of the manifest, asked for only at the door | Accepted |
 | [0100](0100-a-batch-is-the-single-run-once-per-model.md) | A batch is the single run, once per model, in the same binary | Accepted |
 | [0102](0102-the-plate-is-a-panel-not-a-card.md) | The plate is a panel, not a card over the viewport | Accepted |

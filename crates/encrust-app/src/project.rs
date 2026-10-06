@@ -9,7 +9,7 @@ pub mod state;
 use std::path::PathBuf;
 
 use anyhow::Context as _;
-use core_engine::project::{Cavity, EXTENSION, Project, ProjectError, digest, load, read_from};
+use core_engine::project::{EXTENSION, Project, ProjectError, digest, load, read_from};
 
 use crate::files::{self, Handed, Wanted};
 use crate::panels::Window;
@@ -27,11 +27,28 @@ pub struct Opened {
     /// The digest of the plate as it was last written or read, or `None` for a plate that
     /// has never been either. Unsaved work is this not matching the plate in hand.
     saved: Option<u64>,
-    /// The window is trying to close and is waiting to be told what to do about the work
-    /// that is not saved.
-    asking: bool,
+    /// What the window is waiting to be told about work that is not saved, or `None`
+    /// when it has asked nothing.
+    asking: Option<Asking>,
     /// The answer was to close anyway, so the next close request is not questioned again.
     closing: bool,
+}
+
+/// What the window is about to do to a plate nobody has written down.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Asking {
+    Close,
+    NewProject,
+}
+
+impl Asking {
+    /// What a button offers to do, and what the modal's line calls it.
+    fn verb(self) -> &'static str {
+        match self {
+            Self::Close => "close",
+            Self::NewProject => "start a new project",
+        }
+    }
 }
 
 impl Opened {
@@ -42,6 +59,15 @@ impl Opened {
     }
 }
 
+/// Starts a project from nothing, asking first about work that is not written down.
+pub fn new_project(window: &mut Window) {
+    if is_dirty(window) {
+        window.doc.project.asking = Some(Asking::NewProject);
+        return;
+    }
+    clear(window);
+}
+
 /// Takes everything off the plate and forgets which file it came from. The chosen
 /// profiles and the tools' own numbers stay: they are how this user works, not what is
 /// on the plate.
@@ -50,7 +76,7 @@ pub fn clear(window: &mut Window) {
     window.doc.history = History::default();
     window.doc.project.path = None;
     window.doc.project.saved = Some(digest(&captured(window).manifest));
-    window.machine.status = Status::Info("New plate".to_owned());
+    window.machine.status = Status::Info("New project".to_owned());
 }
 
 /// Asks for a project and opens it.
@@ -78,12 +104,6 @@ pub fn open(window: &mut Window, file: &Handed) {
         return;
     };
 
-    let cavities: Vec<Option<Cavity>> = project
-        .manifest
-        .objects
-        .iter()
-        .map(|object| object.hollow.cavity)
-        .collect();
     state::apply(
         project,
         state::CapturedMut {
@@ -97,13 +117,7 @@ pub fn open(window: &mut Window, file: &Handed) {
         },
     );
     window.doc.project.path = Some(path);
-    // The cavities are still being built on a worker; the plate counts as saved in the
-    // state it reaches once they are.
-    let mut manifest = captured(window).manifest;
-    for (object, cavity) in manifest.objects.iter_mut().zip(cavities) {
-        object.hollow.cavity = cavity;
-    }
-    window.doc.project.saved = Some(digest(&manifest));
+    window.doc.project.saved = Some(digest(&captured(window).manifest));
     window.doc.history = History::default();
     frame_view(
         &window.doc.scene,
@@ -113,53 +127,57 @@ pub fn open(window: &mut Window, file: &Handed) {
 }
 
 /// Writes over the file the plate came from, or asks for a name when it came from none.
-pub fn save_open(window: &mut Window) {
+/// Answers whether the plate is on disk afterwards.
+pub fn save_open(window: &mut Window) -> bool {
     match window.doc.project.path.clone() {
         Some(path) => write(window, path),
         None => save_dialog(window),
     }
 }
 
+/// Asks for a name and writes the plate under it. Answers whether it was written: a
+/// dialog the user backed out of writes nothing.
 #[cfg(not(target_arch = "wasm32"))]
-pub fn save_dialog(window: &mut Window) {
+pub fn save_dialog(window: &mut Window) -> bool {
     let Some(path) = rfd::FileDialog::new()
         .add_filter("Encrust project", &[EXTENSION])
         .set_file_name(format!("plate.{EXTENSION}"))
         .save_file()
     else {
-        return;
+        return false;
     };
-    write(window, with_extension(path));
+    write(window, with_extension(path))
 }
 
 /// A browser asks where to put a download itself, so the project goes out under the name
 /// it came in with.
 #[cfg(target_arch = "wasm32")]
-pub fn save_dialog(window: &mut Window) {
+pub fn save_dialog(window: &mut Window) -> bool {
     let name = window
         .doc
         .project
         .path
         .clone()
         .unwrap_or_else(|| PathBuf::from(format!("plate.{EXTENSION}")));
-    write(window, name);
+    write(window, name)
 }
 
-fn write(window: &mut Window, path: PathBuf) {
+fn write(window: &mut Window, path: PathBuf) -> bool {
     let project = captured(window);
     let digest = digest(&project.manifest);
     let written = store(&path, &project)
         .map_err(anyhow::Error::new)
         .with_context(|| format!("cannot write the project {}", path.display()));
-    if window
+    let saved = window
         .machine
         .status
         .report(&format!("Saved {}", path.display()), written)
-        .is_some()
-    {
+        .is_some();
+    if saved {
         window.doc.project.path = Some(path);
         window.doc.project.saved = Some(digest);
     }
+    saved
 }
 
 #[cfg(not(target_arch = "wasm32"))]
@@ -201,49 +219,68 @@ fn is_dirty(window: &Window) -> bool {
 }
 
 /// Holds the window open when there is work in it nobody has written down, and asks what
-/// to do about it. Nothing is asked of a plate that matches its file.
+/// to do about it — on the way out, and on the way to a new project. Nothing is asked of
+/// a plate that matches its file.
 pub fn guard_close(ui: &egui::Ui, window: &mut Window) {
     if window.doc.project.closing {
         return;
     }
     let asked = ui.ctx().input(|input| input.viewport().close_requested());
-    if asked && !window.doc.project.asking {
+    if asked && window.doc.project.asking.is_none() {
         if !is_dirty(window) {
             return;
         }
         ui.ctx()
             .send_viewport_cmd(egui::ViewportCommand::CancelClose);
-        window.doc.project.asking = true;
+        window.doc.project.asking = Some(Asking::Close);
     }
-    if !window.doc.project.asking {
+    let Some(asking) = window.doc.project.asking else {
         return;
-    }
+    };
 
-    let mut close = false;
+    let mut go_on = false;
     egui::Modal::new(egui::Id::new("unsaved")).show(ui.ctx(), |ui| {
         ui.label("This plate has changes that are not in a project file.");
         ui.add_space(8.0);
         ui.horizontal(|ui| {
-            if ui.button("Save and close").clicked() {
-                save_open(window);
-                // A dialog the user backed out of leaves the plate unsaved, and the
-                // window open with it.
-                close = !is_dirty(window);
-                window.doc.project.asking = false;
+            let verb = asking.verb();
+            if ui.button(format!("Save and {verb}")).clicked() {
+                // A dialog the user backed out of writes nothing, and the plate stays as
+                // it is with it.
+                go_on = save_open(window);
+                window.doc.project.asking = None;
             }
-            if ui.button("Close without saving").clicked() {
-                close = true;
-                window.doc.project.asking = false;
+            if ui
+                .button(format!("{} without saving", first_capital(verb)))
+                .clicked()
+            {
+                go_on = true;
+                window.doc.project.asking = None;
             }
             if ui.button("Keep working").clicked() {
-                window.doc.project.asking = false;
+                window.doc.project.asking = None;
                 window.machine.updates.cancel_restart();
             }
         });
     });
-    if close {
-        window.doc.project.closing = true;
-        ui.ctx().send_viewport_cmd(egui::ViewportCommand::Close);
+    if !go_on {
+        return;
+    }
+    match asking {
+        Asking::Close => {
+            window.doc.project.closing = true;
+            ui.ctx().send_viewport_cmd(egui::ViewportCommand::Close);
+        }
+        Asking::NewProject => clear(window),
+    }
+}
+
+/// A label that starts a button, from a verb that starts a sentence.
+fn first_capital(verb: &str) -> String {
+    let mut letters = verb.chars();
+    match letters.next() {
+        Some(first) => first.to_uppercase().collect::<String>() + letters.as_str(),
+        None => String::new(),
     }
 }
 

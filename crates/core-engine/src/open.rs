@@ -1,15 +1,15 @@
 use std::sync::Arc;
 
 use core_format::{ExposurePlan, ExposureRange};
-use core_geometry::{Bvh, Mesh};
+use core_geometry::Bvh;
 use core_pipeline::{PanelOverrides, SlicedFormat};
 use core_raster::Shading;
 use core_slicer::WINDOW_LAYERS;
-use core_supports::ModelSupports;
-use core_volume::{ModelHollow, Shell, hollow_at_scale};
 use printer_profiles::{MaterialProfile, SupportProfile};
 
-use crate::project::{Manifest, ObjectState, Project, SlicingState};
+use crate::project::{
+    Manifest, ModelMeshes, ObjectState, Project, SlicingState, hollow_of, supports_of,
+};
 use crate::{Cutting, EngineError, Model, Plate};
 
 /// What opening a project into a plate needs that the file does not say.
@@ -17,16 +17,14 @@ use crate::{Cutting, EngineError, Model, Plate};
 pub struct Opening {
     /// Which of the project's plates is opened.
     pub plate: u32,
-    /// What building one cavity may take, in bytes; a finer lattice is coarsened to fit.
-    pub hollow_budget_bytes: usize,
     /// Layers rasterised at once.
     pub raster_window: usize,
     /// When the file is made, seconds since the Unix epoch.
     pub created_unix_s: u64,
 }
 
-/// One plate of `project` as a run takes it, with every cavity and support tree the file
-/// leaves out built again from what it keeps (ADR 0178).
+/// One plate of `project` as a run takes it: the geometry the file holds, meshed and cut
+/// but never decided again (ADR 0191).
 pub fn open_plate(project: &Project, opening: &Opening) -> Result<Plate, EngineError> {
     let manifest = &project.manifest;
     let printer = manifest.printer.as_ref().ok_or(EngineError::NoPrinter)?;
@@ -37,10 +35,10 @@ pub fn open_plate(project: &Project, opening: &Opening) -> Result<Plate, EngineE
     let models = manifest
         .objects
         .iter()
-        .zip(&project.meshes)
+        .zip(&project.models)
         .filter(|(object, _)| object.plate == opening.plate && object.visible)
-        .map(|(object, mesh)| model(object, mesh, &table, opening.hollow_budget_bytes))
-        .collect::<Result<Vec<_>, _>>()?;
+        .map(|(object, meshes)| model(object, meshes, &table))
+        .collect();
 
     let slicing = &manifest.slicing;
     Ok(Plate {
@@ -110,59 +108,23 @@ fn support_table(manifest: &Manifest) -> Vec<SupportProfile> {
     }
 }
 
-/// One object as it prints: hollowed again when the file says it was, with its holes cut
-/// and its support trees grown from the points it keeps.
-fn model(
-    object: &ObjectState,
-    mesh: &Arc<Mesh>,
-    table: &[SupportProfile],
-    budget_bytes: usize,
-) -> Result<Model, EngineError> {
-    let bvh = Arc::new(Bvh::build(mesh));
-    let state = &object.hollow;
-    let mut cavity = ModelHollow::restored(
-        Arc::clone(mesh),
-        Arc::clone(&bvh),
-        state.blockers.clone(),
-        state.drains.clone(),
-        state.channels.clone(),
+/// One object as it prints: the shell the file holds, the bodies its holes cut, and the
+/// trees it keeps, meshed to the profile of their group.
+fn model(object: &ObjectState, meshes: &ModelMeshes, table: &[SupportProfile]) -> Model {
+    let bvh = Arc::new(Bvh::build(&meshes.source));
+    let hollow = hollow_of(&object.hollow, meshes, Arc::clone(&bvh));
+    let supports = supports_of(
+        &object.supports,
+        &meshes.source,
+        &bvh,
+        object.transform,
+        table,
     );
-    if let Some(wall) = &state.cavity {
-        let settings = cavity.asking(&core_volume::HollowSettings {
-            budget_bytes,
-            ..wall.settings()
-        });
-        let hollowed =
-            hollow_at_scale(mesh, &bvh, &settings, object.transform.scale).map_err(|source| {
-                EngineError::Hollow {
-                    object: object.name.clone(),
-                    source,
-                }
-            })?;
-        cavity.take(Shell {
-            mesh: Arc::new(hollowed.mesh),
-            cavity: hollowed.cavity,
-            cavity_mm3: hollowed.cavity_mm3,
-            voxel_mm: hollowed.voxel_mm,
-            coarsened: hollowed.coarsened,
-            scale: object.transform.scale,
-            settings,
-        });
-    }
 
-    let placed = &object.supports;
-    let mut supports = ModelSupports::restore(
-        placed.points.clone(),
-        placed.painted.clone(),
-        placed.blocked.clone(),
-        placed.frozen.clone(),
-    );
-    supports.refresh(mesh, &bvh, object.transform, table);
-
-    Ok(Model {
-        mesh: Arc::clone(cavity.shell().unwrap_or(mesh)),
+    Model {
+        mesh: Arc::clone(meshes.printed()),
         transform: object.transform,
-        cuts: cavity.cut_bodies().cloned(),
+        cuts: hollow.cut_bodies().cloned(),
         supports: supports.meshes().unwrap_or_default().to_vec(),
-    })
+    }
 }

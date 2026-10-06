@@ -81,17 +81,24 @@ fn empty_state(ui: &egui::Ui, viewport: Rect, window: &mut Window) -> Rect {
                                 .color(theme::colors().text_high),
                         );
                         ui.label(
-                            egui::RichText::new("Open an STL, or drop one into the window.")
-                                .font(theme::label())
-                                .color(theme::colors().text_mid),
+                            egui::RichText::new(
+                                "Open a model or a project, or drop one into the window.",
+                            )
+                            .font(theme::label())
+                            .color(theme::colors().text_mid),
                         );
                         ui.add_space(12.0);
-                        if secondary_button(ui, icon::OPEN, "Open model").clicked() {
-                            window
-                                .doc
-                                .imports
-                                .open_dialog(&window.doc.plate, &mut window.machine.status);
-                        }
+                        ui.horizontal(|ui| {
+                            if secondary_button(ui, icon::OPEN, "Open model").clicked() {
+                                window
+                                    .doc
+                                    .imports
+                                    .open_dialog(&window.doc.plate, &mut window.machine.status);
+                            }
+                            if secondary_button(ui, icon::OPEN, "Open project").clicked() {
+                                crate::project::open_dialog(window);
+                            }
+                        });
                     });
                 });
         })

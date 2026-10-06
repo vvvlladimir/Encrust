@@ -120,6 +120,58 @@ impl ModelSupports {
         self.built.as_ref().map_or(&[], |built| &built.trees)
     }
 
+    /// The trees the automatic run grew, in the model's own space: what a project keeps
+    /// so that opening it stands them up again rather than deciding where they go anew.
+    pub fn grown(&self, transform: Transform) -> Vec<SupportTree> {
+        let matrix = transform.to_matrix();
+        let Some(built) = self.built.as_ref() else {
+            return Vec::new();
+        };
+        if matrix.determinant().abs() < SINGULAR {
+            return Vec::new();
+        }
+        let inverse = matrix.inverse();
+        built.trees[..built.grown]
+            .iter()
+            .map(|tree| tree.moved(inverse))
+            .collect()
+    }
+
+    /// Stands `grown` back up beside the frozen trees and meshes them, without growing
+    /// anything: a project carries what the run decided, so opening it decides nothing.
+    pub fn stand(
+        &mut self,
+        grown: &[SupportTree],
+        model: &Mesh,
+        bvh: &Bvh,
+        transform: Transform,
+        table: &[SupportProfile],
+    ) {
+        self.refresh_patches(model, transform);
+        let Some(profiles) = Profiles::new(table) else {
+            return;
+        };
+        let matrix = transform.to_matrix();
+        let standing = grown.len();
+        let mut trees: Vec<SupportTree> = grown.iter().map(|tree| tree.moved(matrix)).collect();
+        trees.extend(self.frozen.iter().map(|tree| tree.moved(matrix)));
+
+        let keep_out = self.keep_out(model, transform);
+        let placed = Placed::new(model, bvh, transform).blocking(keep_out.as_ref());
+        self.built = Some(Built {
+            meshes: mesh_groups(&trees, &placed, profiles)
+                .into_iter()
+                .map(Arc::new)
+                .collect(),
+            trees,
+            grown: standing,
+            transform,
+            table: table.to_vec(),
+            painted: self.painted.clone(),
+            blocked: self.blocked.clone(),
+        });
+    }
+
     /// Which frozen tree a tree of [`ModelSupports::trees`] is, or `None` when it was
     /// grown from a point and is nobody's to edit until it has been frozen.
     pub fn frozen_of(&self, tree: usize) -> Option<usize> {

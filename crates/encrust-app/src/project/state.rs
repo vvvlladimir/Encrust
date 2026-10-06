@@ -1,29 +1,27 @@
 //! The window's state as a project file, and back again.
 //!
-//! What goes in is what the user chose; what comes out is rebuilt. A load leaves the plate
-//! with no support trees and no slice stack, and starts building every cavity the file
-//! names again (ADR 0178).
+//! What goes in is the plate as it stands, geometry and all; what comes out is that plate
+//! and nothing worked out anew (ADR 0191).
 
 use std::sync::Arc;
 
-use core_geometry::{Bvh, Mesh, Vec3, center_of_mass};
+use core_geometry::{Bvh, Vec3, center_of_mass};
 use rayon::prelude::*;
 
 use crate::cut::CutTool;
 use crate::drain::DrainTool;
-use core_supports::ModelSupports;
-use core_volume::ModelHollow;
 
 use crate::hollow::HollowTool;
-use crate::job::{HollowJob, HollowRequest, HollowTask};
 use crate::scene::{ImportSummary, Imported, Scene, SceneObject};
 use crate::slicing::Slicing;
 use crate::supports::{SupportGroup, SupportTool};
 use crate::workspace::Array;
 use core_engine::project::{
-    Cavity, Chosen, CutState, DrainState, Group, HollowState, Manifest, ObjectHollowState,
-    ObjectState, ObjectSupportState, Project, SlicingState, Summary, SupportState, VERSION,
+    BuiltCavity, Cavity, Chosen, CutState, DrainState, Group, HollowState, Manifest, ModelMeshes,
+    ObjectHollowState, ObjectState, ObjectSupportState, Project, SlicingState, Summary,
+    SupportState, VERSION, hollow_of, supports_of,
 };
+use printer_profiles::SupportProfile;
 
 /// What a project file is written from: the plate, and the numbers each tool is set to.
 pub struct Captured<'a> {
@@ -95,11 +93,16 @@ pub fn capture(plate: Captured<'_>) -> Project {
     };
     Project {
         manifest,
-        meshes: scene
-            .objects()
-            .iter()
-            .map(|object| Arc::clone(&object.mesh))
-            .collect(),
+        models: scene.objects().iter().map(model_meshes).collect(),
+    }
+}
+
+/// The geometry one object is written with: what it was imported as, and the shell
+/// standing on it.
+fn model_meshes(object: &SceneObject) -> ModelMeshes {
+    ModelMeshes {
+        source: Arc::clone(&object.mesh),
+        shell: object.hollow.shell().map(Arc::clone),
     }
 }
 
@@ -152,14 +155,29 @@ fn object_state(object: &SceneObject) -> ObjectState {
             painted: object.supports.painted().clone(),
             blocked: object.supports.blocked().clone(),
             frozen: object.supports.frozen().to_vec(),
+            grown: object.supports.grown(object.transform),
         },
         hollow: ObjectHollowState {
             blockers: object.hollow.blockers().to_vec(),
             drains: object.hollow.drains().to_vec(),
             channels: object.hollow.channels().to_vec(),
-            cavity: object.hollow.asked().map(Cavity::of),
+            built: built_cavity(object),
         },
     }
+}
+
+/// The shell standing on `object` as the file records it, or `None` for a solid model.
+fn built_cavity(object: &SceneObject) -> Option<BuiltCavity> {
+    let asked = object.hollow.asked()?;
+    let (voxel_mm, coarsened) = object.hollow.lattice()?;
+    Some(BuiltCavity {
+        wall: Cavity::of(asked),
+        cavity_faces: object.hollow.cavity_faces()?,
+        cavity_mm3: object.hollow.cavity_mm3(),
+        voxel_mm,
+        coarsened,
+        scale: object.transform.scale,
+    })
 }
 
 /// Puts a loaded project in place of whatever the window was holding.
@@ -173,7 +191,7 @@ pub fn apply(project: Project, plate: CapturedMut<'_>) {
         cut,
         array,
     } = plate;
-    let Project { manifest, meshes } = project;
+    let Project { manifest, models } = project;
 
     if let Some(printer) = manifest.printer {
         slicing.set_printer(printer.profile, printer.id);
@@ -207,8 +225,7 @@ pub fn apply(project: Project, plate: CapturedMut<'_>) {
         }
         scene.rename_plate(index as u32, name.clone());
     }
-    let tasks = restore_objects(scene, manifest.objects, meshes);
-    hollow.job = (!tasks.is_empty()).then(|| HollowJob::spawn(HollowRequest { tasks }));
+    restore_objects(scene, manifest.objects, models, &supports.table());
     scene.select(None);
     scene.show_plate(manifest.active_plate);
 }
@@ -246,31 +263,31 @@ fn restore_supports(state: SupportState, supports: &mut SupportTool) {
     supports.picked.clear();
 }
 
-/// Rebuilds every object onto `scene`, each with the placements the file recorded, and
-/// returns the cavities to be built again.
+/// Puts every object the file holds back on `scene`, with the shell, the cuts and the
+/// trees it was saved with: nothing here is hollowed or grown again.
 fn restore_objects(
     scene: &mut Scene,
     objects: Vec<ObjectState>,
-    meshes: Vec<Arc<Mesh>>,
-) -> Vec<HollowTask> {
+    models: Vec<ModelMeshes>,
+    table: &[SupportProfile],
+) {
     // The hierarchy is the expensive half of opening a model and is per mesh, so the
     // plate's models are built at once rather than one after another.
-    let measured: Vec<(Arc<Bvh>, Vec3)> = meshes
+    let measured: Vec<(Arc<Bvh>, Vec3)> = models
         .par_iter()
-        .map(|mesh| {
+        .map(|model| {
             (
-                Arc::new(Bvh::build(mesh)),
-                center_of_mass(mesh).unwrap_or(Vec3::ZERO),
+                Arc::new(Bvh::build(&model.source)),
+                center_of_mass(&model.source).unwrap_or(Vec3::ZERO),
             )
         })
         .collect();
 
-    let mut tasks = Vec::new();
-    for ((state, mesh), (bvh, center_of_mass)) in objects.into_iter().zip(meshes).zip(measured) {
+    for ((state, meshes), (bvh, center_of_mass)) in objects.into_iter().zip(&models).zip(measured) {
         let id = scene.insert(Imported {
             name: state.name,
             bvh: Arc::clone(&bvh),
-            mesh: Arc::clone(&mesh),
+            mesh: Arc::clone(&meshes.source),
             transform: state.transform,
             center_of_mass,
             summary: ImportSummary {
@@ -288,30 +305,15 @@ fn restore_objects(
         };
         object.visible = state.visible;
         object.plate = state.plate;
-        object.supports = ModelSupports::restore(
-            state.supports.points,
-            state.supports.painted,
-            state.supports.blocked,
-            state.supports.frozen,
+        object.supports = supports_of(
+            &state.supports,
+            &meshes.source,
+            &bvh,
+            state.transform,
+            table,
         );
-        object.hollow = ModelHollow::restored(
-            Arc::clone(&mesh),
-            Arc::clone(&bvh),
-            state.hollow.blockers,
-            state.hollow.drains,
-            state.hollow.channels,
-        );
-        if let Some(cavity) = state.hollow.cavity {
-            tasks.push(HollowTask {
-                id,
-                mesh,
-                bvh,
-                scale: object.transform.scale,
-                settings: object.hollow.asking(&cavity.settings()),
-            });
-        }
+        object.hollow = hollow_of(&state.hollow, meshes, bvh);
     }
-    tasks
 }
 
 #[cfg(test)]
@@ -319,8 +321,8 @@ mod tests {
     use std::io::Cursor;
 
     use core_geometry::{Mesh, Quat, Transform, Vec3, diagnose};
-    use core_supports::SupportPoint;
-    use core_volume::{Blocker, Channel, HollowMode};
+    use core_supports::{ModelSupports, SupportPoint};
+    use core_volume::{Blocker, Channel, HollowMode, ModelHollow};
 
     use crate::cut::Keep;
 
@@ -644,38 +646,98 @@ mod tests {
         );
     }
 
-    #[test]
-    fn an_opened_plate_carries_no_geometry_it_can_rebuild() {
-        let back = round_trip(&bench());
-        let object = &back.scene.objects()[0];
-        assert!(object.supports.trees().is_empty(), "trees are grown again");
-        assert!(!object.hollow.is_hollow(), "nothing was hollowed");
-        assert!(back.hollow.job.is_none(), "so nothing is built on opening");
-    }
-
-    #[test]
-    fn a_hollowed_model_is_hollowed_again_on_opening() {
-        let mut saved = bench();
+    /// A shell as a run would leave it on the bench's only model: its own mesh, which no
+    /// hollowing would produce, so a rebuilt cavity could not be mistaken for this one.
+    fn hollowed(saved: &mut Bench) -> Arc<Mesh> {
         let asked = saved.hollow.settings();
         let object = &mut saved.scene.objects_mut()[0];
         let settings = object.hollow.asking(&asked);
+        let shell = Arc::new(unit_cube());
         object.hollow.take(core_volume::Shell {
-            mesh: Arc::clone(&object.mesh),
-            cavity: 0..0,
-            cavity_mm3: 0.0,
+            mesh: Arc::clone(&shell),
+            cavity: 0..2,
+            cavity_mm3: 1.5,
             voxel_mm: 0.1,
-            coarsened: false,
+            coarsened: true,
             scale: object.transform.scale,
             settings,
         });
+        shell
+    }
+
+    #[test]
+    fn an_opened_plate_stands_as_it_was_saved_and_builds_nothing() {
+        let mut saved = bench();
+        let shell = hollowed(&mut saved);
+
+        let back = round_trip(&saved);
+        let object = &back.scene.objects()[0];
+        assert_eq!(
+            object.hollow.shell().map(|mesh| &**mesh),
+            Some(&*shell),
+            "the shell is read out of the file"
+        );
+        assert_eq!(object.hollow.cavity_faces(), Some(0..2));
+        assert_eq!(object.hollow.lattice(), Some((0.1, true)));
+        assert!(back.hollow.job.is_none(), "nothing is hollowed on opening");
+    }
+
+    #[test]
+    fn the_wall_a_model_was_hollowed_to_is_what_the_panel_reads_back() {
+        let mut saved = bench();
+        let asked = saved.hollow.settings();
+        hollowed(&mut saved);
 
         let project = capture(saved.plate());
-        assert_eq!(
-            project.manifest.objects[0].hollow.cavity,
-            Some(Cavity::of(&asked)),
-            "the file keeps the wall the model was hollowed to"
-        );
+        let built = project.manifest.objects[0]
+            .hollow
+            .built
+            .as_ref()
+            .expect("the model was hollowed");
+        assert_eq!(built.wall, Cavity::of(&asked));
+
         let back = round_trip(&saved);
-        assert!(back.hollow.job.is_some(), "the cavity is being built again");
+        assert!(
+            !back.scene.objects()[0]
+                .hollow
+                .is_stale(&back.hollow.settings(), back.scene.objects()[0].transform),
+            "a plate opened as it was saved is not stale"
+        );
+    }
+
+    #[test]
+    fn the_trees_a_run_grew_stand_again_without_being_grown() {
+        let mut saved = bench();
+        let table = saved.supports.table();
+        let object = &mut saved.scene.objects_mut()[0];
+        // Lifted off the plate, so the underside has room for a column to stand in.
+        object.transform.translation.z = 5.0;
+        let (mesh, bvh, transform) = (
+            Arc::clone(&object.mesh),
+            Arc::clone(&object.bvh),
+            object.transform,
+        );
+        let under = transform
+            .to_matrix()
+            .transform_point3(Vec3::new(0.5, 0.5, 0.0));
+        object.supports.add(under, transform, 0);
+        object.supports.refresh(&mesh, &bvh, transform, &table);
+        let standing = object.supports.trees().to_vec();
+        assert!(!standing.is_empty(), "the points grew into trees");
+
+        let back = round_trip(&saved);
+        let object = &back.scene.objects()[0];
+        assert_eq!(
+            object.supports.trees(),
+            standing,
+            "every tree is the one saved"
+        );
+        assert!(
+            object
+                .supports
+                .meshes()
+                .is_some_and(|groups| groups.iter().any(|mesh| !mesh.is_empty())),
+            "and it is meshed to be seen and sliced"
+        );
     }
 }

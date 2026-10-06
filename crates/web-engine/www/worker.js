@@ -7,7 +7,7 @@ onmessage = async ({ data }) => {
   await ready;
   try {
     const started = performance.now();
-    const sliced = slice(data.bytes, data.budget, Date.now() / 1000);
+    const sliced = slice(data.bytes, Date.now() / 1000);
     const seconds = (performance.now() - started) / 1000;
     const bytes = sliced.takeBytes();
     postMessage(
