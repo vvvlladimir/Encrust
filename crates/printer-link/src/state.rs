@@ -5,6 +5,8 @@ use serde::Serialize;
 pub struct State {
     /// One word for the machine's state, in its own protocol's terms.
     pub state: String,
+    /// What the print is doing at this moment, when the protocol says.
+    pub stage: Option<String>,
     /// The file being printed, when the protocol names it.
     pub file: Option<String>,
     /// Share of the print done, 0 to 1.
@@ -17,8 +19,10 @@ pub struct State {
 impl State {
     pub(crate) fn of_board(status: &net_sdcp::Status) -> Self {
         let info = &status.print_info;
+        let stage = info.stage();
         Self {
             state: status.machine().label().to_owned(),
+            stage: (stage != net_sdcp::Stage::Idle).then(|| stage.label().to_owned()),
             file: (!info.filename.is_empty()).then(|| info.filename.clone()),
             progress: info.fraction(),
             remaining_s: None,
@@ -29,6 +33,7 @@ impl State {
     pub(crate) fn of_prusa(status: net_prusalink::Status) -> Self {
         Self {
             state: status.printer.state.to_lowercase(),
+            stage: None,
             file: None,
             progress: status.job.as_ref().map(|job| job.progress / 100.0),
             remaining_s: status.job.and_then(|job| job.time_remaining),
@@ -50,6 +55,11 @@ mod tests {
         .expect("a version 3 status report");
         let state = State::of_board(&status);
         assert_eq!(state.state, "printing");
+        assert_eq!(
+            state.stage.as_deref(),
+            Some("exposing"),
+            "PrintInfo.Status 3"
+        );
         assert_eq!(state.file.as_deref(), Some("cube.goo"));
         assert_eq!(state.progress, Some(0.25), "50 of 200 layers");
         assert_eq!(state.error, None);

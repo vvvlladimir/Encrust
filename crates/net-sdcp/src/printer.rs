@@ -97,6 +97,11 @@ impl Status {
             .max_by_key(|state| u8::from(*state != Machine::Idle))
             .unwrap_or(Machine::Idle)
     }
+
+    /// Whether the board is still taking in a file it was just sent, which ends on its own.
+    pub fn is_settling(&self) -> bool {
+        self.machine() == Machine::Transferring || self.print_info.stage() == Stage::CheckingFile
+    }
 }
 
 /// The print in progress, kept by the board after it ends.
@@ -116,6 +121,11 @@ pub struct PrintInfo {
 }
 
 impl PrintInfo {
+    /// What the print is doing at this moment.
+    pub fn stage(&self) -> Stage {
+        Stage::from_code(self.status)
+    }
+
     /// How far through the stack the printer is, or `None` before it starts.
     pub fn fraction(&self) -> Option<f32> {
         (self.total_layer > 0).then(|| self.current_layer as f32 / self.total_layer as f32)
@@ -206,6 +216,60 @@ impl Machine {
     }
 }
 
+/// What a print is doing at this moment, as reported in `PrintInfo.Status`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Stage {
+    Idle,
+    Homing,
+    Lowering,
+    Exposing,
+    Lifting,
+    Pausing,
+    Paused,
+    Stopping,
+    Stopped,
+    Complete,
+    CheckingFile,
+    Unknown(u32),
+}
+
+impl Stage {
+    pub(crate) fn from_code(code: u32) -> Self {
+        match code {
+            0 => Self::Idle,
+            1 => Self::Homing,
+            2 => Self::Lowering,
+            3 => Self::Exposing,
+            4 => Self::Lifting,
+            5 => Self::Pausing,
+            6 => Self::Paused,
+            7 => Self::Stopping,
+            8 => Self::Stopped,
+            9 => Self::Complete,
+            10 => Self::CheckingFile,
+            other => Self::Unknown(other),
+        }
+    }
+
+    /// A few words for the status line.
+    pub fn label(self) -> &'static str {
+        match self {
+            Self::Idle => "idle",
+            Self::Homing => "homing",
+            Self::Lowering => "lowering",
+            Self::Exposing => "exposing",
+            Self::Lifting => "lifting",
+            Self::Pausing => "pausing",
+            Self::Paused => "paused",
+            Self::Stopping => "stopping",
+            Self::Stopped => "stopped",
+            Self::Complete => "complete",
+            Self::CheckingFile => "checking the file",
+            Self::Unknown(_) => "unknown",
+        }
+    }
+}
+
 /// Firmware in the field sends `CurrentStatus` as a bare number as often as an array.
 fn one_or_many<'de, D: serde::Deserializer<'de>>(source: D) -> Result<Vec<u32>, D::Error> {
     #[derive(Deserialize)]
@@ -236,6 +300,20 @@ mod tests {
     #[test]
     fn an_empty_status_is_idle() {
         assert_eq!(Status::default().machine(), Machine::Idle);
+    }
+
+    #[test]
+    fn a_board_checking_a_file_it_was_sent_is_settling_rather_than_busy() {
+        let checking: Status =
+            serde_json::from_str(r#"{"CurrentStatus":[0],"PrintInfo":{"Status":10}}"#)
+                .expect("a status report");
+        assert_eq!(checking.print_info.stage(), Stage::CheckingFile);
+        assert!(checking.is_settling());
+        let printing: Status =
+            serde_json::from_str(r#"{"CurrentStatus":[1],"PrintInfo":{"Status":3}}"#)
+                .expect("a status report");
+        assert_eq!(printing.print_info.stage(), Stage::Exposing);
+        assert!(!printing.is_settling());
     }
 
     #[test]

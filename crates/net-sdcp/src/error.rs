@@ -57,11 +57,14 @@ impl From<ureq::Error> for SdcpError {
     }
 }
 
+/// The `Ack` a board answers a print request with while it is doing something else.
+pub(crate) const ACK_BUSY: u32 = 1;
+
 /// The `Ack` a print request comes back with, spelled out for the user.
 pub(crate) fn print_ack(ack: u32) -> Result<(), SdcpError> {
     let reason = match ack {
         0 => return Ok(()),
-        1 => "it is busy",
+        ACK_BUSY => "it is busy",
         2 => "the file is not there",
         3 => "the file failed its MD5 check",
         4 => "the file could not be read",

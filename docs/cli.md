@@ -229,9 +229,9 @@ subcommand into `target/man`.
 `printer discover` broadcasts for Elegoo boards, both SDCP generations, and asks each
 `--address` directly for a network the broadcast does not cross. `printer status` and
 `printer send` take a board's IP address, which is asked who it is before anything else;
-`--wait` is how long it is given, in seconds. `send --start` starts the file once it has
-landed. On a terminal a board's transfer draws a bar over its bytes; Ctrl-C stops it between
-packets and exits 130.
+`--wait` is how long it is given, in seconds. `send --start` starts the file once the
+board has checked it. On a terminal a board's transfer draws a bar over its bytes; Ctrl-C
+stops it between packets and exits 130.
 
 ```sh
 encrust printer discover --address 10.0.4.17

@@ -6,10 +6,10 @@ use tungstenite::client::IntoClientRequest as _;
 use tungstenite::handshake::client::ClientHandshake;
 use tungstenite::{Message, WebSocket};
 
-use crate::error::{SdcpError, print_ack};
+use crate::error::{ACK_BUSY, SdcpError, print_ack};
 use crate::message::{Incoming, Request, request_topic};
 use crate::mqtt::{Broker, Step, Waiting};
-use crate::printer::{Attributes, Printer, Status, Transport};
+use crate::printer::{Attributes, Machine, Printer, Status, Transport};
 
 /// The board serves its control socket here, see docs/formats/sdcp.md.
 const CONTROL_PORT: u16 = 3030;
@@ -33,11 +33,19 @@ const REPLY_WINDOW: Duration = Duration::from_secs(8);
 /// How long a read blocks before the caller's deadline is checked again.
 const POLL: Duration = Duration::from_millis(200);
 
+/// How long a board that has just taken a file is given to check it before it will print.
+const READY_WINDOW: Duration = Duration::from_secs(60);
+
+/// How long to wait before asking a board that is still busy again.
+const RETRY_PAUSE: Duration = Duration::from_secs(2);
+
 /// The control connection to one printer: what it is doing, and what to do next.
 pub struct Control {
     printer: Printer,
     link: Link,
     status: Status,
+    /// Whether a status report arrived since the last time one was asked for.
+    reported: bool,
     attributes: Attributes,
 }
 
@@ -62,6 +70,7 @@ impl Control {
             printer: printer.clone(),
             link,
             status: Status::default(),
+            reported: false,
             attributes: Attributes::default(),
         };
         if matches!(control.printer.transport, Transport::Mqtt) {
@@ -80,8 +89,22 @@ impl Control {
     }
 
     /// Asks for a fresh state and waits for it.
+    ///
+    /// The acknowledgement carries no state: the board sends it afterwards on its status
+    /// topic, so the wait goes on until that report is in.
     pub fn refresh_status(&mut self) -> Result<&Status, SdcpError> {
+        self.reported = false;
         self.request(CMD_STATUS, ())?;
+        let deadline = Instant::now() + REPLY_WINDOW;
+        while !self.reported {
+            if Instant::now() >= deadline {
+                return Err(SdcpError::TimedOut {
+                    what: "the printer's status",
+                    seconds: REPLY_WINDOW.as_secs(),
+                });
+            }
+            self.pump(None, (Instant::now() + POLL).min(deadline))?;
+        }
         Ok(&self.status)
     }
 
@@ -100,12 +123,32 @@ impl Control {
     }
 
     /// Starts a print of a file already on the printer, from the bottom layer up.
+    ///
+    /// A board checks a file it has just taken and refuses to print until it is done, so
+    /// the start waits that out and asks again while the board says it is busy.
     pub fn start_print(&mut self, filename: &str, start_layer: u32) -> Result<(), SdcpError> {
-        let data = StartPrint {
-            filename,
-            start_layer,
-        };
-        print_ack(self.request(CMD_START_PRINT, data)?)
+        let deadline = Instant::now() + READY_WINDOW;
+        loop {
+            let status = self.refresh_status()?;
+            let printing = status.machine() == Machine::Printing && !status.is_settling();
+            if !status.is_settling() {
+                let data = StartPrint {
+                    filename,
+                    start_layer,
+                };
+                let ack = self.request(CMD_START_PRINT, data)?;
+                // A board printing something else stays busy, so asking again only stalls.
+                if ack != ACK_BUSY || printing || Instant::now() >= deadline {
+                    return print_ack(ack);
+                }
+            } else if Instant::now() >= deadline {
+                return Err(SdcpError::TimedOut {
+                    what: "the printer checking the file",
+                    seconds: READY_WINDOW.as_secs(),
+                });
+            }
+            self.pump(None, Instant::now() + RETRY_PAUSE)?;
+        }
     }
 
     /// Takes in whatever the printer has reported since the last call, without waiting.
@@ -154,7 +197,10 @@ impl Control {
     /// Files one report, and reports the acknowledgement the caller is waiting for.
     fn take(&mut self, text: &str, topic: Option<&str>, awaited: Option<&str>) -> Option<u32> {
         match Incoming::parse(text, topic) {
-            Ok(Incoming::Status(status)) => self.status = *status,
+            Ok(Incoming::Status(status)) => {
+                self.status = *status;
+                self.reported = true;
+            }
             Ok(Incoming::Attributes(attributes)) => self.attributes = *attributes,
             Ok(Incoming::Error(code)) => {
                 tracing::warn!(printer = %self.printer.name, code, "the printer reported an error");
