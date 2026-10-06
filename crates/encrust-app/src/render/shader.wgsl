@@ -25,6 +25,10 @@ struct Globals {
     view_projection: mat4x4<f32>,
     // xyz is the direction light travels towards; w is unused padding.
     light_direction: vec4<f32>,
+    // xyz is where the camera stands, plate millimetres; w is how much of itself a surface
+    // keeps at most while the models are drawn seen through, and 0.0 while they are not.
+    // See docs/design/viewport.md.
+    eye: vec4<f32>,
     // x is the height the models are cut at, plate millimetres; y is 1.0 while there is a
     // cut at all. See docs/decisions/0061.
     section: vec4<f32>,
@@ -65,6 +69,9 @@ struct ModelVertex {
     // Sine of the lean a surface may have before it needs holding up, or a negative
     // number on a mesh that is not the model: supports do not mark themselves.
     @location(10) overhang: f32,
+    // 1.0 for a surface of a model, 0.0 for a volume painted in its own colour. 11 and 12
+    // belong to the relief pass.
+    @location(13) surface: f32,
 };
 
 struct ModelFragment {
@@ -75,6 +82,7 @@ struct ModelFragment {
     // Where the fragment stands in plate millimetres: its height is what the section cut
     // is compared against, and the whole point is what a drain cut is.
     @location(3) world: vec3<f32>,
+    @location(4) surface: f32,
 };
 
 // How much lean it takes to go from unmarked to fully marked. A band rather than a step,
@@ -116,6 +124,7 @@ fn model_vertex(in: ModelVertex) -> ModelFragment {
     out.color = in.color;
     out.overhang = in.overhang;
     out.world = world.xyz;
+    out.surface = in.surface;
     return out;
 }
 
@@ -233,15 +242,37 @@ fn model_fragment(in: ModelFragment, @builtin(front_facing) front_facing: bool) 
         base = globals.outside_color.rgb;
     }
 
-    if (!front_facing) {
-        base = mix(base, globals.inside_color.rgb, SECTION_WASH);
+    // A volume is not a surface: it is the space between the two walls that bound it, so
+    // neither the light nor the inside wash has anything to say about it and both walls
+    // lay down the same colour. See docs/design/viewport.md.
+    var lit = base;
+    if (in.surface > 0.5) {
+        if (!front_facing) {
+            lit = mix(base, globals.inside_color.rgb, SECTION_WASH);
+        }
+        let light = normalize(-globals.light_direction.xyz);
+        let diffuse = max(dot(normal, light), 0.0);
+        let ambient = 0.30 + 0.12 * (normal.z * 0.5 + 0.5);
+        lit = lit * (ambient + 0.70 * diffuse);
     }
+    // The token arrives premultiplied, so the wash scales colour and alpha alike and the
+    // result stays premultiplied for the blend.
+    let wash = seen_through(normal, in.world, in.surface);
+    return vec4<f32>(mix(lit, globals.cut_color.rgb, traced) * wash, in.color.a * wash);
+}
 
-    let light = normalize(-globals.light_direction.xyz);
-    let diffuse = max(dot(normal, light), 0.0);
-    let ambient = 0.30 + 0.12 * (normal.z * 0.5 + 0.5);
-    let lit = base * (ambient + 0.70 * diffuse);
-    return vec4<f32>(mix(lit, globals.cut_color.rgb, traced), in.color.a);
+// How much of itself a surface keeps when the models are drawn seen through: least where
+// it faces the camera, so a wall is a pane of glass, and most where it turns away, so
+// every edge — the rim of a cavity, a cell of the lattice — draws itself.
+const XRAY_FLOOR: f32 = 0.35;
+
+fn seen_through(normal: vec3<f32>, world: vec3<f32>, surface: f32) -> f32 {
+    if (globals.eye.w <= 0.0 || surface < 0.5) {
+        return 1.0;
+    }
+    let view = normalize(globals.eye.xyz - world);
+    let rim = 1.0 - abs(dot(normal, view));
+    return globals.eye.w * (XRAY_FLOOR + (1.0 - XRAY_FLOOR) * rim * rim);
 }
 
 // The textured pass: the model washed with the heights a relief would press into it, so

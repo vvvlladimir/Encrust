@@ -114,7 +114,8 @@ fn normalized_or_up(normal: Vec3) -> Vec3 {
     }
 }
 
-/// Placement, colour and overhang marking of one object, read once per instance.
+/// Placement, colour, overhang marking and x-ray behaviour of one object, read once per
+/// instance.
 #[repr(C)]
 #[derive(Debug, Clone, Copy, Pod, Zeroable)]
 pub struct ModelInstance {
@@ -122,6 +123,10 @@ pub struct ModelInstance {
     normal: [[f32; 3]; 3],
     color: [f32; 4],
     overhang: f32,
+    /// 1.0 for a surface of a model, 0.0 for a volume painted in its own colour: the
+    /// space inside a model that fills with resin is not a surface, so no light shades
+    /// it, no inside wash lightens its far wall, and the x-ray does not wash it down.
+    surface: f32,
 }
 
 /// What [`ModelInstance::new`] is given for a mesh that is not marked: no lean can be
@@ -129,7 +134,7 @@ pub struct ModelInstance {
 pub const NOT_MARKED: f32 = -1.0;
 
 impl ModelInstance {
-    const ATTRIBUTES: [wgpu::VertexAttribute; 9] = wgpu::vertex_attr_array![
+    const ATTRIBUTES: [wgpu::VertexAttribute; 10] = wgpu::vertex_attr_array![
         2 => Float32x4,
         3 => Float32x4,
         4 => Float32x4,
@@ -139,6 +144,7 @@ impl ModelInstance {
         8 => Float32x3,
         9 => Float32x4,
         10 => Float32,
+        13 => Float32,
     ];
 
     pub const fn layout() -> wgpu::VertexBufferLayout<'static> {
@@ -159,7 +165,16 @@ impl ModelInstance {
             normal: normal_matrix(&model).to_cols_array_2d(),
             color: theme::gamma(color),
             overhang,
+            surface: 1.0,
         }
+    }
+
+    /// The same instance painted as a volume rather than as a surface: it keeps its own
+    /// colour, unshaded and unwashed, so the space it bounds reads through whatever
+    /// stands in front of it.
+    pub fn as_volume(mut self) -> Self {
+        self.surface = 0.0;
+        self
     }
 
     /// Whether the placement mirrors the model, which turns its winding on screen.
@@ -353,7 +368,7 @@ mod tests {
     fn the_instance_stride_has_no_padding() {
         assert_eq!(
             size_of::<ModelInstance>(),
-            (16 + 9 + 4 + 1) * size_of::<f32>()
+            (16 + 9 + 4 + 2) * size_of::<f32>()
         );
     }
 }

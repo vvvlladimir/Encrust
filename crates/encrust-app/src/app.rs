@@ -256,6 +256,11 @@ impl SlicerApp {
         if self.tools.hollow.take_hollowed() {
             self.tools.drain.ask_for_a_check();
         }
+        // Resin with no way out is inside the model, so the viewport opens the model up
+        // to show where. Closing it again is the user's, and it stays closed.
+        if self.tools.drain.take_appeared() {
+            self.view.options.xray = true;
+        }
         let layer_height_mm = self.machine.slicing.layer_height_mm();
         self.tools
             .drain

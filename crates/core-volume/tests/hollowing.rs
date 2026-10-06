@@ -133,6 +133,33 @@ fn the_cavity_is_the_ball_the_wall_left_room_for() {
     );
 }
 
+/// A viewport paints the space that fills with resin out of the shell's own faces rather
+/// than out of a second mesh, so the range has to be exactly the cavity: wound inward, and
+/// holding what the wall left room for.
+#[test]
+fn the_cavity_range_is_the_space_the_wall_left_room_for() {
+    let mesh = ball(10.0, 96, 96);
+    let bvh = Bvh::build(&mesh);
+    let hollowed =
+        hollow(&mesh, &bvh, &settings(2.0, HollowMode::Internal)).expect("a closed ball hollows");
+
+    assert_eq!(
+        hollowed.cavity.start,
+        mesh.faces.len(),
+        "the model's own faces come first and the cavity's follow them"
+    );
+    let cavity = Mesh::new(
+        hollowed.mesh.vertices.clone(),
+        hollowed.mesh.faces[hollowed.cavity.clone()].to_vec(),
+    );
+    let held = 4.0 / 3.0 * PI * (8.0 as Scalar).powi(3);
+    let measured = signed_volume(&cavity);
+    assert!(
+        (measured + held).abs() / held < 0.03,
+        "the cavity is wound inward around 4/3 pi 8^3 = {held} mm3, got {measured}"
+    );
+}
+
 #[test]
 fn hollowing_leaves_the_outside_of_the_model_alone() {
     let mesh = ball(10.0, 48, 48);

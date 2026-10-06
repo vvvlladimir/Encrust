@@ -105,6 +105,10 @@ pub struct Section {
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct ViewOptions {
     pub grid: bool,
+    /// Whether the models are drawn seen through, so a cavity and what stands in it can be
+    /// looked into. Turned on by a drainage check that finds trapped resin, and off by
+    /// whoever does not want it; see ADR 0190.
+    pub xray: bool,
     /// Whether the plate panel is unfolded down the left of the stage.
     pub plate_panel: bool,
     /// Whether the sheet of keys is up over the window.
@@ -121,6 +125,7 @@ impl Default for ViewOptions {
     fn default() -> Self {
         Self {
             grid: true,
+            xray: false,
             plate_panel: true,
             sheet: false,
             issues: false,

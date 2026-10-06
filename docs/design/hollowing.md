@@ -230,12 +230,15 @@ costs it.
 
 The CLI folds the scan into the pass that writes the file, and reports each pocket with
 what it holds; `--strict` fails on one. The window checks a model at a time on a worker
-thread, marks each pocket in the viewport in its own red and offers to drill a hole into
-every one, from the nearest surface and deep enough to reach it. It starts that check itself
-on the frame a hollow run ends and whenever a hole or a channel goes in or comes out, so a
-cavity says where a hole is needed without being asked and the marks go as the holes drain
-them. A change while a check is running is kept rather than queued, so clicking hole after
-hole costs one check after the one in flight (ADR 0189).
+thread and offers to drill a hole into every pocket it found, from the nearest surface and
+deep enough to reach it. It starts that check itself on the frame a hollow run ends and
+whenever a hole or a channel goes in or comes out, so a cavity says what it holds without
+being asked. A change while a check is running is kept rather than queued, so clicking hole
+after hole costs one check after the one in flight. A model a pocket was found in has its
+whole cavity painted red in the viewport — `Hollowed::cavity` is the face range of the
+shell that bounds it — because that whole space fills unless a hole lets it out. The models
+are opened up to show it, which is the x-ray of `viewport.md`, and the red goes as the holes
+drain them (ADR 0190).
 
 ## What it does not do
 

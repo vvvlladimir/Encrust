@@ -1,6 +1,5 @@
 use core_volume::{HollowMode, InfillPattern, MIN_WALL_MM};
 
-use crate::drain::Placing;
 use crate::job::HollowJob;
 use crate::panels::Window;
 use crate::state::{Doc, Tools};
@@ -8,7 +7,6 @@ use crate::ui::{
     Segment, Segmented, describe, hint, icon, nested, number_row, primary_button, secondary_button,
     section, stats, subheading, switch, theme, tone,
 };
-use crate::workspace::Tool;
 
 /// Per point of drag. A wall is measured in whole millimetres, precision and density in
 /// hundredths of their own range.
@@ -57,8 +55,8 @@ pub fn ui(ui: &mut egui::Ui, window: &mut Window) {
     });
 }
 
-/// What the check after a run found: where the resin cannot get out of the cavity, and
-/// the two ways to let it out. See ADR 0189.
+/// What the check after a run found: whether the resin can get out of the cavity. The
+/// holes themselves are the Drain tool's, not this panel's. See ADR 0190.
 fn drainage(ui: &mut egui::Ui, window: &mut Window) {
     if window.tools.drain.job.is_some() {
         subheading(ui, "Drainage");
@@ -100,20 +98,12 @@ fn drainage(ui: &mut egui::Ui, window: &mut Window) {
         &format!("Resin is trapped in {trapped} place(s) — put a hole in each."),
         theme::colors().danger,
     );
-    ui.add_space(4.0);
-    if secondary_button(ui, icon::DRAIN, "Drill a hole into each").clicked() {
-        let drilled = window.tools.drain.drill_found(&mut window.doc.scene);
-        window.machine.status = crate::status::Status::Info(format!("{drilled} hole(s) placed"));
-    }
-    ui.add_space(4.0);
-    if secondary_button(ui, icon::DRAIN, "Place them by hand").clicked() {
-        *window.tool = Tool::Drain;
-        window.tools.drain.placing = Placing::Hole;
-    }
     ui.add_space(2.0);
     describe(
         ui,
-        "Each pocket is marked in red on the plate, and the mark goes once a hole reaches it.",
+        "The model is shown through, and the space that fills with resin is painted red \
+         inside it. Drain holes go in with the Drain tool, and the red goes once the \
+         resin can get out.",
     );
 }
 

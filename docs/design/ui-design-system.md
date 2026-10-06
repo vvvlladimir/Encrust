@@ -47,13 +47,15 @@ on `accent`.
 
 `theme::Scene` is the other half of the tokens: the grey of printed resin (`object`), the
 cooler `support` and a `support_tint` per group after it, `selected`, `unsound`,
-the translucent `blocker` and the red `trapped` a pocket of resin is marked with,
-`painted` and `blocked`, the `section_cap` and the `section_wash` behind it, the
+the translucent `blocker` and the red `trapped` the space resin cannot leave is painted
+with, `painted` and `blocked`, the `section_cap` and the `section_wash` behind it, the
 `overhang` a leaning face is marked with, the `outside` of what stands past the build
 volume, the `gizmo` handles, and the plate's `grid`, `plate_border`, `volume` and two
-`plate_axis` lines. It is
-separate from the `Palette` because none of it is window chrome and the luminance ladder
-above does not apply.
+`plate_axis` lines. It is separate from the `Palette` because none of it is window chrome
+and the luminance ladder above does not apply.
+
+`SEEN_THROUGH` is the one number beside them: how much of itself a surface keeps at most
+when the viewport is drawing the models through, which is the x-ray view in `viewport.md`.
 
 It reaches the GPU through `theme::gamma`, which is `Color32::to_normalized_gamma_f32` and
 deliberately does **not** decode to linear: `egui-wgpu` writes gamma to a non-sRGB target

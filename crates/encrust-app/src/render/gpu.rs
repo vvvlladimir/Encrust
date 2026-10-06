@@ -1,4 +1,5 @@
 use std::collections::{HashMap, HashSet};
+use std::ops::Range;
 use std::sync::Arc;
 
 use bytemuck::{Pod, Zeroable};
@@ -47,6 +48,10 @@ pub const MAX_BANDS: usize = 8;
 struct Globals {
     view_projection: [[f32; 4]; 4],
     light_direction: [f32; 4],
+    /// `xyz` is where the camera stands, plate millimetres; `w` is how much of itself a
+    /// surface keeps at most while the models are drawn seen through, and 0.0 while they
+    /// are not. See `docs/design/viewport.md`.
+    eye: [f32; 4],
     /// `x` is the height the models are cut at, plate millimetres, and `y` is 1.0 while
     /// there is a cut at all. `z` and `w` pad the field out to a `vec4`.
     section: [f32; 4],
@@ -113,7 +118,47 @@ pub struct DrainCut {
 /// `docs/decisions/0070-a-mesh-is-drawn-in-buffer-sized-pieces.md`.
 struct CachedMesh {
     _mesh: Arc<Mesh>,
-    pieces: Vec<(wgpu::Buffer, u32)>,
+    pieces: Vec<Piece>,
+    /// The breaks the pieces were cut at. A mesh is first seen drawn whole and only later
+    /// drawn in part — the drainage check lands frames after the shell does — so a cache
+    /// entry whose breaks no longer cover what is asked for is uploaded again.
+    splits: Vec<usize>,
+}
+
+/// One mesh to draw this frame: its cache key, whether its placement mirrors it, and
+/// which of its faces to draw.
+struct Drawn {
+    key: usize,
+    mirrored: bool,
+    faces: Range<usize>,
+}
+
+/// Where the pieces of each mesh have to break, by cache key: the ends of every draw that
+/// asks for part of it, and of every range a draw of the whole mesh declares for later.
+fn splits_of<'a>(draws: impl Iterator<Item = &'a ModelDraw>) -> HashMap<usize, Vec<usize>> {
+    let mut splits: HashMap<usize, Vec<usize>> = HashMap::new();
+    for draw in draws {
+        let at = splits.entry(Arc::as_ptr(&draw.mesh) as usize).or_default();
+        at.push(draw.faces.start);
+        at.push(draw.faces.end);
+        at.extend(draw.breaks.iter().flat_map(|at| [at.start, at.end]));
+    }
+    // Sorted and deduplicated, so that two frames asking for the same breaks in a
+    // different order agree and the mesh is not uploaded again for nothing.
+    for at in splits.values_mut() {
+        at.sort_unstable();
+        at.dedup();
+    }
+    splits
+}
+
+/// One buffer of a cached mesh, and the faces of that mesh it holds. A draw asking for
+/// part of a mesh takes the pieces that fall inside it, which is why `pieces` breaks at
+/// the ends of that part as well as at the card's ceiling.
+struct Piece {
+    buffer: wgpu::Buffer,
+    vertices: u32,
+    faces: Range<usize>,
 }
 
 /// One textured model on the card: its triangles with their coordinates, and its images
@@ -135,6 +180,9 @@ const RELIEF_SIDE: u32 = 512;
 /// parallel arguments.
 pub struct FrameInput<'a> {
     pub view_projection: Mat4,
+    /// Where the camera stands, plate millimetres, which is what the x-ray measures a
+    /// surface's lean against.
+    pub eye: Vec3,
     /// Height the models are cut at, plate millimetres, or `None` to draw them whole.
     pub section_mm: Option<Scalar>,
     pub lines: &'a [LineVertex],
@@ -163,6 +211,9 @@ pub struct FrameInput<'a> {
     pub volume_mm: Option<Vec3>,
     /// Where the Cut tool's plane meets the model it is set on, traced over its surface.
     pub cut_line: Option<CutLine>,
+    /// Whether the models are drawn seen through, which is what shows a cavity that holds
+    /// resin; see `docs/design/viewport.md`.
+    pub xray: bool,
 }
 
 /// The Cut tool's plane, traced as a line wherever it crosses the surface inside `bounds`.
@@ -175,10 +226,55 @@ pub struct CutLine {
     pub bounds: Aabb,
 }
 
-/// One object to draw: which cached mesh, and which instance slot holds its placement.
+/// One object to draw: which cached mesh, which of its faces, and which instance slot
+/// holds its placement.
 pub struct ModelDraw {
     pub mesh: Arc<Mesh>,
     pub instance: ModelInstance,
+    faces: Range<usize>,
+    /// A range some later frame may ask for on its own. Declared here so the pieces break
+    /// at its ends from the first upload: a shell reaches the card before the drainage
+    /// check says whether its cavity is to be painted, and re-cutting a mesh of millions
+    /// of triangles for that answer is a stall the user would see.
+    breaks: Option<Range<usize>>,
+}
+
+impl ModelDraw {
+    /// The whole mesh.
+    pub fn whole(mesh: Arc<Mesh>, instance: ModelInstance) -> Self {
+        let faces = 0..mesh.faces.len();
+        Self {
+            mesh,
+            instance,
+            faces,
+            breaks: None,
+        }
+    }
+
+    /// The whole mesh, with `breaks` kept as a range a later frame may draw on its own.
+    pub fn whole_around(mesh: Arc<Mesh>, breaks: Range<usize>, instance: ModelInstance) -> Self {
+        Self {
+            breaks: Some(breaks),
+            ..Self::whole(mesh, instance)
+        }
+    }
+
+    /// Which faces of the mesh this draw covers.
+    #[cfg(test)]
+    pub fn faces(&self) -> Range<usize> {
+        self.faces.clone()
+    }
+
+    /// Only `faces` of the mesh, which is how the cavity inside a shell is painted on its
+    /// own without a second copy of it on the card.
+    pub fn part(mesh: Arc<Mesh>, faces: Range<usize>, instance: ModelInstance) -> Self {
+        Self {
+            mesh,
+            instance,
+            faces,
+            breaks: None,
+        }
+    }
 }
 
 /// One object drawn with the texture a relief would be pressed from, instead of flat.
@@ -196,6 +292,7 @@ pub struct ViewportResources {
     globals: wgpu::Buffer,
     globals_bind_group: wgpu::BindGroup,
     model_pipeline: Facing,
+    xray_pipeline: Facing,
     line_pipeline: wgpu::RenderPipeline,
     /// What caps the section cut.
     capping: Capping,
@@ -232,8 +329,8 @@ struct Frame {
     body_vertices: u32,
     label_vertices: u32,
     /// Each mesh with whether its placement mirrors it, which picks the pipeline.
-    models: Vec<(usize, bool)>,
-    solids: Vec<(usize, bool)>,
+    models: Vec<Drawn>,
+    solids: Vec<Drawn>,
     solid_base: u32,
     /// The textured models, and where their instances start: after the models and the
     /// solids, in the same buffer.
@@ -241,6 +338,7 @@ struct Frame {
     relief_base: u32,
     cap_vertices: u32,
     cutting: bool,
+    xray: bool,
 }
 
 impl ViewportResources {
@@ -270,6 +368,7 @@ impl ViewportResources {
             globals,
             globals_bind_group,
             model_pipeline: solid.model,
+            xray_pipeline: solid.xray,
             line_pipeline: solid.line,
             capping: solid.capping,
             body_pipeline: build.body(),
@@ -296,6 +395,7 @@ impl ViewportResources {
     pub fn prepare(&mut self, device: &wgpu::Device, queue: &wgpu::Queue, frame: FrameInput<'_>) {
         let FrameInput {
             view_projection,
+            eye,
             section_mm,
             lines,
             models,
@@ -310,6 +410,7 @@ impl ViewportResources {
             band_floor_mm,
             volume_mm,
             cut_line,
+            xray,
         } = frame;
         let mut drains = [DrainCut::default(); MAX_CUTS];
         let taken = cuts.len().min(MAX_CUTS);
@@ -323,6 +424,9 @@ impl ViewportResources {
             bytemuck::bytes_of(&Globals {
                 view_projection: view_projection.to_cols_array_2d(),
                 light_direction: LIGHT_DIRECTION,
+                eye: eye
+                    .extend(if xray { theme::SEEN_THROUGH } else { 0.0 })
+                    .to_array(),
                 section: section(section_mm),
                 counts: [taken as f32, banded as f32, band_floor_mm, 0.0],
                 overhang_color: theme::gamma(theme::scene().overhang),
@@ -360,18 +464,33 @@ impl ViewportResources {
         self.frame.label_vertices = label.len() as u32;
         self.frame.cap_vertices = cap.len() as u32;
         self.frame.cutting = section_mm.is_some();
+        self.frame.xray = xray;
         self.frame.solid_base = models.len() as u32;
         self.frame.relief_base = (models.len() + solids.len()) as u32;
         self.frame.models.clear();
         self.frame.solids.clear();
         self.frame.reliefs.clear();
-        for draw in models {
-            let key = self.cache(device, &draw.mesh);
-            self.frame.models.push((key, draw.instance.is_mirrored()));
-        }
-        for draw in solids {
-            let key = self.cache(device, &draw.mesh);
-            self.frame.solids.push((key, draw.instance.is_mirrored()));
+        // Every draw of a mesh is read before any of it is uploaded: a shell drawn whole
+        // and its cavity drawn on its own share one cache entry, whose pieces have to
+        // break where either of them starts and ends.
+        let splits = splits_of(models.iter().chain(solids));
+        for (draws, into) in [(models, false), (solids, true)] {
+            for draw in draws {
+                let key = self.cache(
+                    device,
+                    &draw.mesh,
+                    &splits[&(Arc::as_ptr(&draw.mesh) as usize)],
+                );
+                let drawn = Drawn {
+                    key,
+                    mirrored: draw.instance.is_mirrored(),
+                    faces: draw.faces.clone(),
+                };
+                match into {
+                    true => self.frame.solids.push(drawn),
+                    false => self.frame.models.push(drawn),
+                }
+            }
         }
         for draw in reliefs {
             let key = self.cache_relief(device, queue, draw);
@@ -384,7 +503,7 @@ impl ViewportResources {
             .models
             .iter()
             .chain(&self.frame.solids)
-            .map(|(key, _)| *key)
+            .map(|drawn| drawn.key)
             .collect();
         self.meshes.retain(|key, _| live.contains(key));
         let textured: HashSet<usize> = self.frame.reliefs.iter().map(|(key, _)| *key).collect();
@@ -506,13 +625,27 @@ impl ViewportResources {
         key
     }
 
-    /// Uploads a mesh the first time it is seen and returns its cache key.
-    fn cache(&mut self, device: &wgpu::Device, mesh: &Arc<Mesh>) -> usize {
+    /// Uploads a mesh the first time it is seen, or again once a draw asks for a part of
+    /// it the pieces do not break at, and returns its cache key. `splits` are face indices
+    /// no piece may straddle, so that a draw of part of the mesh is a whole number of
+    /// pieces.
+    fn cache(&mut self, device: &wgpu::Device, mesh: &Arc<Mesh>, splits: &[usize]) -> usize {
         let key = Arc::as_ptr(mesh) as usize;
-        self.meshes.entry(key).or_insert_with(|| CachedMesh {
-            _mesh: Arc::clone(mesh),
-            pieces: pieces(device, mesh),
-        });
+        if self
+            .meshes
+            .get(&key)
+            .is_some_and(|held| held.splits == splits)
+        {
+            return key;
+        }
+        self.meshes.insert(
+            key,
+            CachedMesh {
+                _mesh: Arc::clone(mesh),
+                pieces: pieces(device, mesh, splits),
+                splits: splits.to_vec(),
+            },
+        );
         key
     }
 
@@ -560,7 +693,11 @@ impl ViewportResources {
             );
         }
 
-        self.draw_meshes(render_pass, &self.model_pipeline, &self.frame.models, 0);
+        let models = match self.frame.xray {
+            true => &self.xray_pipeline,
+            false => &self.model_pipeline,
+        };
+        self.draw_meshes(render_pass, models, &self.frame.models, 0);
 
         if !self.frame.reliefs.is_empty() {
             for (index, (key, mirrored)) in self.frame.reliefs.iter().enumerate() {
@@ -609,18 +746,21 @@ impl ViewportResources {
         &self,
         render_pass: &mut wgpu::RenderPass<'static>,
         pipelines: &Facing,
-        keys: &[(usize, bool)],
+        drawn: &[Drawn],
         base: u32,
     ) {
-        for (index, (key, mirrored)) in keys.iter().enumerate() {
-            let Some(mesh) = self.meshes.get(key).filter(|mesh| !mesh.pieces.is_empty()) else {
+        for (index, draw) in drawn.iter().enumerate() {
+            let Some(mesh) = self.meshes.get(&draw.key) else {
                 continue;
             };
             let instance = base + index as u32;
-            render_pass.set_pipeline(pipelines.of(*mirrored));
-            for (buffer, count) in &mesh.pieces {
-                render_pass.set_vertex_buffer(0, buffer.slice(..));
-                render_pass.draw(0..*count, instance..instance + 1);
+            render_pass.set_pipeline(pipelines.of(draw.mirrored));
+            for piece in &mesh.pieces {
+                if piece.faces.start < draw.faces.start || piece.faces.end > draw.faces.end {
+                    continue;
+                }
+                render_pass.set_vertex_buffer(0, piece.buffer.slice(..));
+                render_pass.draw(0..piece.vertices, instance..instance + 1);
             }
         }
     }
@@ -715,6 +855,9 @@ impl Facing {
 /// The pipelines that draw the plate and the models in their own flat colours.
 struct Solid {
     model: Facing,
+    /// The same models seen through: no depth at all, so every surface behind one still
+    /// paints and the cavity inside shows.
+    xray: Facing,
     line: wgpu::RenderPipeline,
     capping: Capping,
 }
@@ -795,6 +938,17 @@ impl<'a> Builder<'a> {
                 vertex_entry: "model_vertex",
                 fragment_entry: "model_fragment",
                 buffers: &[Some(ModelVertex::layout()), Some(ModelInstance::layout())],
+                ..PipelineKind::default()
+            }),
+            xray: self.facing(PipelineKind {
+                label: "viewport_models_seen_through",
+                vertex_entry: "model_vertex",
+                fragment_entry: "model_fragment",
+                buffers: &[Some(ModelVertex::layout()), Some(ModelInstance::layout())],
+                // Nothing hides anything: each surface adds its own translucent wash, so
+                // the wall, the cavity and the lattice behind it all show at once.
+                depth_write: false,
+                depth_compare: wgpu::CompareFunction::Always,
                 ..PipelineKind::default()
             }),
             line: self.plain(PipelineKind {
@@ -1075,23 +1229,31 @@ fn allocate(device: &wgpu::Device, label: &'static str, size: u64) -> wgpu::Buff
 /// Expanded a piece at a time as well as uploaded a piece at a time: a cavity of eleven
 /// million triangles is eight hundred megabytes of vertices, and holding all of them to
 /// hand one buffer over is the same wall from the other side.
-fn pieces(device: &wgpu::Device, mesh: &Mesh) -> Vec<(wgpu::Buffer, u32)> {
+fn pieces(device: &wgpu::Device, mesh: &Mesh, splits: &[usize]) -> Vec<Piece> {
     let ceiling = device.limits().max_buffer_size as usize / size_of::<ModelVertex>();
     let faces_per_piece = (ceiling / 3).max(1);
 
-    (0..mesh.faces.len())
-        .step_by(faces_per_piece)
-        .filter_map(|first| {
-            let last = (first + faces_per_piece).min(mesh.faces.len());
-            let vertices = flat_shaded_vertices(mesh, first..last);
-            (!vertices.is_empty()).then(|| {
-                (
-                    upload(device, "viewport_mesh", &vertices),
-                    vertices.len() as u32,
-                )
-            })
-        })
-        .collect()
+    let mut first = 0;
+    let mut pieces = Vec::new();
+    while first < mesh.faces.len() {
+        let ceiling = (first + faces_per_piece).min(mesh.faces.len());
+        let last = splits
+            .iter()
+            .copied()
+            .filter(|split| (first + 1..ceiling).contains(split))
+            .min()
+            .unwrap_or(ceiling);
+        let vertices = flat_shaded_vertices(mesh, first..last);
+        if !vertices.is_empty() {
+            pieces.push(Piece {
+                buffer: upload(device, "viewport_mesh", &vertices),
+                vertices: vertices.len() as u32,
+                faces: first..last,
+            });
+        }
+        first = last;
+    }
+    pieces
 }
 
 /// The model's images as the layers of one array texture, each resampled to
@@ -1168,4 +1330,55 @@ fn upload<T: Pod>(device: &wgpu::Device, label: &'static str, data: &[T]) -> wgp
         contents: bytemuck::cast_slice(data),
         usage: wgpu::BufferUsages::VERTEX,
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::render::vertex::NOT_MARKED;
+    use crate::ui::theme;
+    use core_geometry::Transform;
+
+    fn instance() -> ModelInstance {
+        ModelInstance::new(Transform::default(), theme::scene().object, NOT_MARKED)
+    }
+
+    /// A hollowed shell reaches the card long before the drainage check says whether the
+    /// cavity in it is to be painted. It declares that range from the start, so the frame
+    /// which does paint it asks for no break the frames before it did not, and a mesh of
+    /// millions of triangles is never cut and uploaded a second time.
+    #[test]
+    fn a_shell_declares_the_cavity_in_it_before_any_frame_paints_it() {
+        let mesh = Arc::new(Mesh::new(vec![Vec3::ZERO; 3], vec![[0, 1, 2]; 8]));
+        let key = Arc::as_ptr(&mesh) as usize;
+        let shell = ModelDraw::whole_around(Arc::clone(&mesh), 3..6, instance());
+        let cavity = ModelDraw::part(Arc::clone(&mesh), 3..6, instance());
+
+        let before = splits_of([&shell].into_iter());
+        let after = splits_of([&shell, &cavity].into_iter());
+        assert_eq!(
+            before[&key],
+            vec![0, 3, 6, 8],
+            "the ends of the cavity and of the mesh"
+        );
+        assert_eq!(
+            before[&key], after[&key],
+            "painting the cavity asks for no break the frame before it did not"
+        );
+    }
+
+    /// Without that, the breaks change under a cache keyed by the mesh alone, which is why
+    /// `cache` compares them rather than taking whatever it already holds.
+    #[test]
+    fn a_shell_that_never_declared_its_cavity_asks_for_a_new_break() {
+        let mesh = Arc::new(Mesh::new(vec![Vec3::ZERO; 3], vec![[0, 1, 2]; 8]));
+        let key = Arc::as_ptr(&mesh) as usize;
+        let shell = ModelDraw::whole(Arc::clone(&mesh), instance());
+        let cavity = ModelDraw::part(Arc::clone(&mesh), 3..6, instance());
+
+        assert_ne!(
+            splits_of([&shell].into_iter())[&key],
+            splits_of([&shell, &cavity].into_iter())[&key]
+        );
+    }
 }

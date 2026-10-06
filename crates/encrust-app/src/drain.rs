@@ -1,9 +1,7 @@
-use std::sync::Arc;
-
 use anyhow::{Result, bail};
-use core_geometry::{Mesh, Scalar};
+use core_geometry::Scalar;
 use core_supports::Trapped;
-use core_volume::{HoleSize, markers};
+use core_volume::HoleSize;
 
 use crate::job::{TrapJob, TrapOutcome, TrapRequest, trap_tasks};
 use crate::scene::Scene;
@@ -37,6 +35,10 @@ pub struct DrainTool {
     /// Whether the plate is waiting for a check: a cavity or a cut has moved and the
     /// pockets on screen are no longer what the models hold. See ADR 0189.
     pub(crate) asked: bool,
+    /// How many pockets the last check found, and whether that went from none to some,
+    /// which is what turns the viewport's x-ray on.
+    pub(crate) found: usize,
+    pub(crate) appeared: bool,
 }
 
 impl Default for DrainTool {
@@ -51,6 +53,8 @@ impl Default for DrainTool {
             job: None,
             checked: false,
             asked: false,
+            found: 0,
+            appeared: false,
         }
     }
 }
@@ -79,6 +83,20 @@ impl DrainTool {
             layer_height_mm,
         }));
         Ok(())
+    }
+
+    /// Remembers what a check found, and notices the turn from none to some: only that
+    /// turn opens the x-ray, so a view closed by hand is not opened again by every check
+    /// after it.
+    fn remember(&mut self, found: usize) {
+        self.appeared = found > 0 && self.found == 0;
+        self.found = found;
+    }
+
+    /// Whether the last check was the one that found resin with no way out, after one
+    /// that found none. Asked once, so the view it opens can then be closed.
+    pub fn take_appeared(&mut self) -> bool {
+        std::mem::take(&mut self.appeared)
     }
 
     /// Says that the plate has moved under the last check: a cavity was cut, or a hole or
@@ -116,6 +134,7 @@ impl DrainTool {
         match outcome {
             TrapOutcome::Checked(models) => {
                 let found: usize = models.iter().map(|model| model.trapped.len()).sum();
+                self.remember(found);
                 for model in models {
                     if let Some(object) = scene.get_mut(model.id) {
                         object.traps.set(model.trapped);
@@ -182,13 +201,13 @@ impl DrainTool {
     }
 }
 
-/// The pockets of resin the last drainage check found in one model, in its own space, and
-/// the balls they are marked with. The check reads the slice stack, which is why these sit
-/// beside the model's `ModelHollow` rather than in it; see `docs/decisions/0129`.
+/// The pockets of resin the last drainage check found in one model, in its own space.
+/// Nothing is drawn per pocket: the viewport paints the whole cavity they stand in, which
+/// is the space a hole has to let out. The check reads the slice stack, which is why these
+/// sit beside the model's `ModelHollow` rather than in it; see `docs/decisions/0129`.
 #[derive(Debug, Clone, Default)]
 pub struct Traps {
     found: Vec<Trapped>,
-    markers: Option<Arc<Mesh>>,
 }
 
 impl Traps {
@@ -196,18 +215,7 @@ impl Traps {
         &self.found
     }
 
-    /// The pockets as balls, each as big as the resin it holds, or `None` for none.
-    pub fn markers(&self) -> Option<&Arc<Mesh>> {
-        self.markers.as_ref()
-    }
-
     pub fn set(&mut self, found: Vec<Trapped>) {
-        self.markers = markers(
-            found
-                .iter()
-                .map(|trap| (trap.at, trap_radius_mm(trap.volume_mm3))),
-        )
-        .map(Arc::new);
         self.found = found;
     }
 
@@ -216,19 +224,11 @@ impl Traps {
     }
 }
 
-/// How wide a marker a pocket of `volume_mm3` is drawn as: the radius of the ball that
-/// would hold it, kept inside what can be seen and not lost on a big plate.
-fn trap_radius_mm(volume_mm3: Scalar) -> Scalar {
-    let ball = (volume_mm3 * 3.0 / (4.0 * std::f32::consts::PI))
-        .max(0.0)
-        .cbrt();
-    ball.clamp(1.0, 5.0)
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
-    use core_geometry::{Orientation, Transform, Vec3, diagnose};
+    use core_geometry::{Mesh, Orientation, Transform, Vec3, diagnose};
+    use std::sync::Arc;
 
     use crate::scene::{ImportSummary, Imported};
 
@@ -285,6 +285,37 @@ mod tests {
         assert!(
             tool.start_if_asked(&scene, 0.05),
             "and what moved under it is checked after it"
+        );
+    }
+
+    #[test]
+    fn only_the_turn_from_nothing_trapped_to_something_opens_the_view() {
+        let mut tool = DrainTool::default();
+
+        tool.remember(0);
+        assert!(
+            !tool.take_appeared(),
+            "nothing is trapped, nothing to look at"
+        );
+
+        tool.remember(2);
+        assert!(
+            tool.take_appeared(),
+            "resin with no way out opens the model up"
+        );
+        assert!(!tool.take_appeared(), "and is reported once");
+
+        tool.remember(3);
+        assert!(
+            !tool.take_appeared(),
+            "a view closed by hand stays closed while the pockets are the same trouble"
+        );
+
+        tool.remember(0);
+        tool.remember(1);
+        assert!(
+            tool.take_appeared(),
+            "trouble that came back opens it again"
         );
     }
 

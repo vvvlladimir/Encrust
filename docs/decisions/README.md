@@ -188,7 +188,8 @@ Grouped by what the decision governs; the number is still the order it was taken
 | [0185](0185-a-wall-is-measured-on-the-plate.md) | A wall is measured on the plate, not in the model's own space | Accepted |
 | [0186](0186-a-cavity-is-a-closed-surface-and-a-slice-follows-it-through-a-branch.md) | A cavity is a closed surface, and a slice follows it through a branch | Accepted |
 | [0188](0188-a-cut-outweighs-what-it-lands-in-and-a-channel-stays-a-pipe.md) | A cut outweighs what it lands in, and a channel stays a pipe | Accepted |
-| [0189](0189-resin-leaves-through-a-hole-and-a-lattice-never-closes-a-cell.md) | Resin leaves through a hole, and a lattice never closes a cell | Accepted |
+| [0189](0189-resin-leaves-through-a-hole-and-a-lattice-never-closes-a-cell.md) | Resin leaves through a hole, and a lattice never closes a cell | Accepted; its marks are replaced by 0190 |
+| [0190](0190-the-space-that-holds-resin-is-painted-and-the-model-is-seen-through.md) | Paint the space that holds resin, and see the model through | Accepted |
 
 ### The plate
 
@@ -263,7 +264,7 @@ Grouped by what the decision governs; the number is still the order it was taken
 | [0061](0061-the-section-slider-is-one-rail-in-both-modes.md) | The section slider is one rail, in both modes | Accepted |
 | [0062](0062-cap-the-section-cut-with-the-stencil-plane.md) | The section cut is capped with the stencil plane | Superseded by 0184 (where the stencil comes from only) |
 | [0068](0068-the-window-holds-no-stack.md) | The window holds no stack: it cuts the window it is showing | Accepted |
-| [0070](0070-a-mesh-is-drawn-in-buffer-sized-pieces.md) | A mesh is drawn in pieces the card will take | Accepted |
+| [0070](0070-a-mesh-is-drawn-in-buffer-sized-pieces.md) | A mesh is drawn in pieces the card will take | Accepted; 0190 breaks a piece at a drawn range too |
 | [0073](0073-the-viewport-subtracts-a-drain-per-fragment.md) | The viewport subtracts a drain per fragment | Superseded by 0188 (a channel's wall only) |
 | [0074](0074-the-section-cap-counts-material-not-crossings.md) | The section cap counts material, not crossings | Accepted |
 | [0184](0184-the-viewport-draws-into-its-own-target.md) | The viewport draws into its own target | Accepted |

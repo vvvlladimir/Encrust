@@ -219,6 +219,7 @@ mod tests {
         insert(&mut scene, Transform::default());
         scene.objects_mut()[0].hollow.take(Shell {
             mesh: Arc::new(shelled_cube()),
+            cavity: 0..0,
             cavity_mm3: 0.125,
             voxel_mm: 0.2,
             coarsened: false,
@@ -370,6 +371,7 @@ mod tests {
         let hollowed = core_volume::hollow(&mesh, &bvh, &asking).expect("a cube hollows");
         object.hollow.take(Shell {
             mesh: Arc::new(hollowed.mesh),
+            cavity: hollowed.cavity,
             cavity_mm3: hollowed.cavity_mm3,
             voxel_mm: hollowed.voxel_mm,
             coarsened: hollowed.coarsened,

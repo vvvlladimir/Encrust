@@ -1,3 +1,4 @@
+use std::ops::Range;
 use std::sync::Arc;
 
 use core_geometry::{Bvh, Mesh, Scalar, Transform, Vec3};
@@ -56,6 +57,8 @@ pub struct ModelHollow {
 pub struct Shell {
     /// The outer surface, the cavity wound inward and its infill.
     pub mesh: Arc<Mesh>,
+    /// Which faces of `mesh` bound the space the resin fills; see [`crate::Hollowed`].
+    pub cavity: Range<usize>,
     pub cavity_mm3: Scalar,
     /// The lattice the cavity came out on, millimetres, and whether the memory budget
     /// made it coarser than the precision asked for.
@@ -175,6 +178,12 @@ impl ModelHollow {
     /// infill — or `None` while the model is still solid.
     pub fn shell(&self) -> Option<&Arc<Mesh>> {
         self.built.as_ref().map(|built| &built.mesh)
+    }
+
+    /// Which faces of [`Self::shell`] bound the space the resin fills, or `None` while the
+    /// model is still solid. It is what a viewport paints to show resin with no way out.
+    pub fn cavity_faces(&self) -> Option<Range<usize>> {
+        self.built.as_ref().map(|built| built.cavity.clone())
     }
 
     /// What the standing shell was built from, or `None` while the model is still solid.
@@ -537,6 +546,7 @@ mod tests {
     fn shell(scale: Vec3, settings: HollowSettings) -> Shell {
         Shell {
             mesh: Arc::new(Mesh::default()),
+            cavity: 0..0,
             cavity_mm3: 1234.0,
             voxel_mm: 0.2,
             coarsened: false,

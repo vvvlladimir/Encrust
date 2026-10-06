@@ -203,6 +203,7 @@ mod tests {
         let built = object.hollow.asking(&tool.settings());
         object.hollow.take(Shell {
             mesh: Arc::new(Mesh::default()),
+            cavity: 0..0,
             cavity_mm3: 0.0,
             voxel_mm: 0.2,
             coarsened: false,

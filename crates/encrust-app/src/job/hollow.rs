@@ -207,6 +207,7 @@ fn shell_each(
                 id: task.id,
                 shell: Shell {
                     mesh: Arc::new(hollowed.mesh),
+                    cavity: hollowed.cavity,
                     cavity_mm3: hollowed.cavity_mm3,
                     voxel_mm: hollowed.voxel_mm,
                     coarsened: hollowed.coarsened,

@@ -160,7 +160,11 @@ pub struct Scene {
     /// Translucent and apart from every colour a model is drawn in, so it never reads as
     /// a lump of the part.
     pub blocker: Color32,
-    /// A pocket of resin with no way out, marked where a hole has to go.
+    /// The space inside a model that fills with resin no hole lets out. Laid down twice —
+    /// the near wall of the cavity and its far wall both paint it — so it is translucent
+    /// enough that the lattice standing in it still reads. Cold rather than warm, so it
+    /// parts from the amber a picked model is drawn in as well as from the grey of one
+    /// that is not.
     pub trapped: Color32,
     /// The patch painted to be filled with supports.
     pub painted: Color32,
@@ -204,7 +208,7 @@ const ENCRUST_SCENE: Scene = Scene {
     selected: Color32::from_rgb(0xf5, 0xb5, 0x4a),
     unsound: Color32::from_rgb(0xd9, 0x6b, 0x61),
     blocker: Color32::from_rgba_premultiplied(0x6a, 0x54, 0xa8, 0xcc),
-    trapped: Color32::from_rgba_premultiplied(0xcc, 0x25, 0x25, 0xd9),
+    trapped: Color32::from_rgba_premultiplied(0x51, 0x0a, 0x1a, 0x59),
     painted: Color32::from_rgb(0x59, 0xb8, 0x94),
     blocked: Color32::from_rgb(0xd9, 0x6b, 0x61),
     section_cap: Color32::from_rgb(0xc2, 0xbd, 0xb8),
@@ -235,6 +239,12 @@ const ENCRUST_SCENE: Scene = Scene {
 pub const fn scene() -> &'static Scene {
     &ENCRUST_SCENE
 }
+
+/// How much of itself a surface keeps at most when the viewport is drawing the models
+/// seen through — on an edge turned away from the camera. A surface facing the camera
+/// keeps a third of this, so a wall is glass rather than a window; the shader's
+/// `XRAY_FLOOR` is that third.
+pub const SEEN_THROUGH: f32 = 0.80;
 
 /// A token as the vertex and uniform buffers want it: gamma-space, not linear.
 ///
@@ -482,11 +492,11 @@ mod tests {
             for surface in [scene.object, scene.selected, scene.support, scene.unsound] {
                 assert_ne!(marker, surface, "a marker is not a surface of the part");
             }
+            assert!(
+                marker.a() < u8::MAX,
+                "a marker is translucent, so what it covers is still there"
+            );
         }
-        assert!(
-            scene.blocker.a() < u8::MAX,
-            "a blocker is translucent, so what it covers is still there"
-        );
     }
 
     #[test]

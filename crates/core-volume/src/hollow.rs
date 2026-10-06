@@ -1,4 +1,5 @@
 use std::collections::HashSet;
+use std::ops::Range;
 
 use core_geometry::{Bvh, Mesh, Scalar, Vec3, glam::IVec3, signed_volume};
 
@@ -213,6 +214,11 @@ pub struct Hollowed {
     /// positive winding rule the rasteriser fills by already subtracts the cavity; see
     /// `docs/decisions/0059-a-hollow-is-the-model-with-its-cavity-appended.md`.
     pub mesh: Mesh,
+    /// Which faces of `mesh` bound the space the resin fills: the cavity's own surface
+    /// for a shell, the model's own for a mould. Empty when nothing was carved. A viewport
+    /// draws that range on its own to show what a drain hole has to let out; see
+    /// `docs/design/hollowing.md`.
+    pub cavity: Range<usize>,
     /// Volume the cavity takes out of the model, in cubic millimetres.
     pub cavity_mm3: Scalar,
     /// The lattice the cavity was actually cut on, in millimetres.
@@ -402,6 +408,7 @@ fn shelled(
         Vec::with_capacity(solid.mesh.faces.len() + cavity_mesh.faces.len() + filling.faces.len()),
     );
     append(&mut whole, solid.mesh);
+    let cavity_faces = whole.faces.len()..whole.faces.len() + cavity_mesh.faces.len();
     append(&mut whole, &flipped(&cavity_mesh));
     drop(cavity_mesh);
     append(&mut whole, &filling);
@@ -411,6 +418,7 @@ fn shelled(
     let filled = settings.infill.map_or(0.0, |infill| infill.density);
     Ok(Hollowed {
         mesh: whole,
+        cavity: cavity_faces,
         cavity_mm3: (hollow_mm3 * (1.0 - filled)).max(0.0),
         voxel_mm: field.voxel_mm,
         coarsened: false,
@@ -421,9 +429,12 @@ fn shelled(
 /// becomes the cavity.
 fn mould(mesh: &Mesh, grown: &Sdf, voxel_mm: Scalar) -> Hollowed {
     let mut whole = extract(grown);
+    // The void of a mould is the model it was taken off, so that is what holds the resin.
+    let cavity = whole.faces.len()..whole.faces.len() + mesh.faces.len();
     append(&mut whole, &flipped(mesh));
     Hollowed {
         mesh: whole,
+        cavity,
         cavity_mm3: volume_of(mesh),
         voxel_mm,
         coarsened: false,

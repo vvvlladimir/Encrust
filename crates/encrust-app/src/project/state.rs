@@ -661,6 +661,7 @@ mod tests {
         let settings = object.hollow.asking(&asked);
         object.hollow.take(core_volume::Shell {
             mesh: Arc::clone(&object.mesh),
+            cavity: 0..0,
             cavity_mm3: 0.0,
             voxel_mm: 0.1,
             coarsened: false,
