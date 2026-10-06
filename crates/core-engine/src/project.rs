@@ -183,7 +183,7 @@ pub struct Chosen<T> {
 }
 
 /// How the plate is cut and drawn: layer height, exposures, anti-aliasing, the container.
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct SlicingState {
     pub layer_height_mm: Scalar,
     pub adaptive: Option<AdaptiveSettings>,
@@ -199,7 +199,7 @@ pub struct SlicingState {
 }
 
 /// The support tool as it was left: its groups and what the next support is drawn with.
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct SupportState {
     /// One entry per group, group 0 first; see `docs/decisions/0094`.
     pub groups: Vec<Group>,
@@ -210,14 +210,14 @@ pub struct SupportState {
 }
 
 /// A named set of support settings that supports are drawn with.
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Group {
     pub name: String,
     pub profile: SupportProfile,
 }
 
 /// What the next hollowing is done with. A hollowed model carries its own [`Cavity`].
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct HollowState {
     pub thickness_mm: Scalar,
     pub mode: HollowMode,
@@ -228,7 +228,7 @@ pub struct HollowState {
 }
 
 /// What the next drain hole is drilled to. The holes standing carry their own sizes.
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct DrainState {
     pub diameter_mm: Scalar,
     pub depth_mm: Scalar,
@@ -236,7 +236,7 @@ pub struct DrainState {
 }
 
 /// Where the cut tool's plane stands and which halves it keeps.
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct CutState {
     pub axis: Axis,
     /// Across Z, millimetres above the plate; across X or Y, millimetres from the model's

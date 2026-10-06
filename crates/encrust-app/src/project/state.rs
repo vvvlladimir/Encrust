@@ -8,18 +8,13 @@ use std::sync::Arc;
 use core_geometry::{Bvh, Vec3, center_of_mass};
 use rayon::prelude::*;
 
-use crate::cut::CutTool;
-use crate::drain::DrainTool;
-
-use crate::hollow::HollowTool;
 use crate::scene::{ImportSummary, Imported, Scene, SceneObject};
 use crate::slicing::Slicing;
-use crate::supports::{SupportGroup, SupportTool};
-use crate::workspace::Array;
+use crate::state::Tools;
+use crate::tool_settings::{ReliefState, ToolSettings};
 use core_engine::project::{
-    BuiltCavity, Cavity, Chosen, CutState, DrainState, Group, HollowState, Manifest, ModelMeshes,
-    ObjectHollowState, ObjectState, ObjectSupportState, Project, SlicingState, Summary,
-    SupportState, VERSION, hollow_of, supports_of,
+    BuiltCavity, Cavity, Chosen, Manifest, ModelMeshes, ObjectHollowState, ObjectState,
+    ObjectSupportState, Project, Summary, VERSION, hollow_of, supports_of,
 };
 use printer_profiles::SupportProfile;
 
@@ -27,22 +22,14 @@ use printer_profiles::SupportProfile;
 pub struct Captured<'a> {
     pub scene: &'a Scene,
     pub slicing: &'a Slicing,
-    pub supports: &'a SupportTool,
-    pub hollow: &'a HollowTool,
-    pub drain: &'a DrainTool,
-    pub cut: &'a CutTool,
-    pub array: &'a Array,
+    pub tools: &'a Tools,
 }
 
 /// The same, to be written into by a load.
 pub struct CapturedMut<'a> {
     pub scene: &'a mut Scene,
     pub slicing: &'a mut Slicing,
-    pub supports: &'a mut SupportTool,
-    pub hollow: &'a mut HollowTool,
-    pub drain: &'a mut DrainTool,
-    pub cut: &'a mut CutTool,
-    pub array: &'a mut Array,
+    pub tools: &'a mut Tools,
 }
 
 /// The whole plate as a project, ready to be written.
@@ -50,12 +37,9 @@ pub fn capture(plate: Captured<'_>) -> Project {
     let Captured {
         scene,
         slicing,
-        supports,
-        hollow,
-        drain,
-        cut,
-        array,
+        tools,
     } = plate;
+    let settings = ToolSettings::of(tools, slicing);
     let manifest = Manifest {
         version: VERSION,
         printer: slicing.printer.clone().map(|profile| Chosen {
@@ -66,27 +50,12 @@ pub fn capture(plate: Captured<'_>) -> Project {
             id: slicing.resin_id.clone(),
             profile: slicing.base_material().clone(),
         }),
-        slicing: slicing_state(slicing),
-        supports: support_state(supports),
-        hollow: HollowState {
-            thickness_mm: hollow.thickness_mm,
-            mode: hollow.mode,
-            precision: hollow.precision,
-            infill_on: hollow.infill_on,
-            infill: hollow.infill,
-            blocker_mm: hollow.blocker_mm,
-        },
-        drain: DrainState {
-            diameter_mm: drain.diameter_mm,
-            depth_mm: drain.depth_mm,
-            taper: drain.taper,
-        },
-        cut: CutState {
-            axis: cut.axis,
-            height_mm: cut.offset_mm,
-            keep: cut.keep,
-        },
-        array: *array,
+        slicing: settings.slicing,
+        supports: settings.supports,
+        hollow: settings.hollow,
+        drain: settings.drain,
+        cut: settings.cut,
+        array: settings.array,
         plates: scene.plates().to_vec(),
         active_plate: scene.active_plate(),
         objects: scene.objects().iter().map(object_state).collect(),
@@ -103,38 +72,6 @@ fn model_meshes(object: &SceneObject) -> ModelMeshes {
     ModelMeshes {
         source: Arc::clone(&object.mesh),
         shell: object.hollow.shell().map(Arc::clone),
-    }
-}
-
-fn slicing_state(slicing: &Slicing) -> SlicingState {
-    SlicingState {
-        layer_height_mm: slicing.layer_height_mm(),
-        adaptive: slicing.adaptive,
-        exposure: slicing.bands_as_measured(),
-        samples: slicing.samples,
-        anti_alias: slicing.anti_alias,
-        grey_levels: slicing.grey_levels,
-        blur_px: slicing.blur_px,
-        remove_islands: slicing.remove_islands,
-        format: slicing.format.into(),
-    }
-}
-
-fn support_state(supports: &SupportTool) -> SupportState {
-    SupportState {
-        groups: supports
-            .groups
-            .iter()
-            .zip(supports.table())
-            .map(|(group, profile)| Group {
-                name: group.name.clone(),
-                profile,
-            })
-            .collect(),
-        active: supports.active,
-        fill: supports.fill,
-        brush_radius_mm: supports.brush_radius_mm,
-        flood_angle_deg: supports.flood_angle_deg,
     }
 }
 
@@ -185,11 +122,7 @@ pub fn apply(project: Project, plate: CapturedMut<'_>) {
     let CapturedMut {
         scene,
         slicing,
-        supports,
-        hollow,
-        drain,
-        cut,
-        array,
+        tools,
     } = plate;
     let Project { manifest, models } = project;
 
@@ -200,23 +133,17 @@ pub fn apply(project: Project, plate: CapturedMut<'_>) {
         slicing.resin_id = resin.id;
         slicing.set_material(resin.profile);
     }
-    restore_slicing(manifest.slicing, slicing);
-    restore_supports(manifest.supports, supports);
-
-    hollow.thickness_mm = manifest.hollow.thickness_mm;
-    hollow.mode = manifest.hollow.mode;
-    hollow.precision = manifest.hollow.precision;
-    hollow.infill_on = manifest.hollow.infill_on;
-    hollow.infill = manifest.hollow.infill;
-    hollow.blocker_mm = manifest.hollow.blocker_mm;
-
-    drain.diameter_mm = manifest.drain.diameter_mm;
-    drain.depth_mm = manifest.drain.depth_mm;
-    drain.taper = manifest.drain.taper;
-    cut.axis = manifest.cut.axis;
-    cut.offset_mm = manifest.cut.height_mm;
-    cut.keep = manifest.cut.keep;
-    *array = manifest.array;
+    ToolSettings {
+        slicing: manifest.slicing,
+        supports: manifest.supports,
+        hollow: manifest.hollow,
+        drain: manifest.drain,
+        cut: manifest.cut,
+        // The manifest has no entry for the Relief tool, so it keeps what it is set to.
+        relief: ReliefState::of(&tools.relief),
+        array: manifest.array,
+    }
+    .apply(tools, slicing);
 
     *scene = Scene::default();
     for (index, name) in manifest.plates.iter().enumerate() {
@@ -225,42 +152,9 @@ pub fn apply(project: Project, plate: CapturedMut<'_>) {
         }
         scene.rename_plate(index as u32, name.clone());
     }
-    restore_objects(scene, manifest.objects, models, &supports.table());
+    restore_objects(scene, manifest.objects, models, &tools.supports.table());
     scene.select(None);
     scene.show_plate(manifest.active_plate);
-}
-
-/// The bands are kept at the height the resin was measured at, so they go in before the
-/// layer height carries them to the one the project was cut at.
-fn restore_slicing(state: SlicingState, slicing: &mut Slicing) {
-    slicing.exposure = state.exposure;
-    slicing.set_layer_height(state.layer_height_mm);
-    slicing.adaptive = state.adaptive;
-    slicing.samples = state.samples;
-    slicing.anti_alias = state.anti_alias;
-    slicing.grey_levels = state.grey_levels;
-    slicing.blur_px = state.blur_px;
-    slicing.remove_islands = state.remove_islands;
-    slicing.format = state.format.into();
-}
-
-fn restore_supports(state: SupportState, supports: &mut SupportTool) {
-    if !state.groups.is_empty() {
-        supports.groups = state
-            .groups
-            .into_iter()
-            .map(|group| SupportGroup {
-                name: group.name,
-                profile: group.profile,
-            })
-            .collect();
-        supports.active = state.active.min(supports.groups.len() as u16 - 1);
-        supports.profile = supports.groups[supports.active as usize].profile.clone();
-    }
-    supports.fill = state.fill;
-    supports.brush_radius_mm = state.brush_radius_mm;
-    supports.flood_angle_deg = state.flood_angle_deg;
-    supports.picked.clear();
 }
 
 /// Puts every object the file holds back on `scene`, with the shell, the cuts and the
@@ -328,6 +222,7 @@ mod tests {
 
     use super::*;
     use crate::scene::ImportSummary;
+    use core_engine::project::Array;
     use core_engine::project::{read_from, write_to};
 
     /// Axis-aligned cube spanning 0..1 on every axis, twelve triangles.
@@ -380,11 +275,7 @@ mod tests {
     struct Bench {
         scene: Scene,
         slicing: Slicing,
-        supports: SupportTool,
-        hollow: HollowTool,
-        drain: DrainTool,
-        cut: CutTool,
-        array: Array,
+        tools: Tools,
     }
 
     impl Bench {
@@ -392,11 +283,7 @@ mod tests {
             Captured {
                 scene: &self.scene,
                 slicing: &self.slicing,
-                supports: &self.supports,
-                hollow: &self.hollow,
-                drain: &self.drain,
-                cut: &self.cut,
-                array: &self.array,
+                tools: &self.tools,
             }
         }
 
@@ -404,11 +291,7 @@ mod tests {
             CapturedMut {
                 scene: &mut self.scene,
                 slicing: &mut self.slicing,
-                supports: &mut self.supports,
-                hollow: &mut self.hollow,
-                drain: &mut self.drain,
-                cut: &mut self.cut,
-                array: &mut self.array,
+                tools: &mut self.tools,
             }
         }
     }
@@ -473,41 +356,30 @@ mod tests {
         slicing.exposure = vec![core_format::ExposureRange::new(0.0, 4.0, 9.5)];
         slicing.adaptive = Some(core_slicer::AdaptiveSettings::default());
 
-        let mut supports = SupportTool {
-            brush_radius_mm: 4.5,
-            flood_angle_deg: 25.0,
-            ..SupportTool::default()
-        };
-        supports.add_group();
-
-        let hollow = HollowTool {
-            thickness_mm: 1.75,
-            mode: HollowMode::External,
-            infill_on: true,
-            ..HollowTool::default()
+        let mut tools = Tools::default();
+        tools.supports.brush_radius_mm = 4.5;
+        tools.supports.flood_angle_deg = 25.0;
+        tools.supports.add_group();
+        tools.hollow.thickness_mm = 1.75;
+        tools.hollow.mode = HollowMode::External;
+        tools.hollow.infill_on = true;
+        tools.drain.diameter_mm = 4.25;
+        tools.drain.depth_mm = 6.0;
+        tools.drain.taper = 0.5;
+        tools.cut.axis = crate::scene::Axis::X;
+        tools.cut.offset_mm = 17.5;
+        tools.cut.keep = Keep::Above;
+        tools.relief.amplitude_mm = 0.8;
+        tools.array = Array {
+            columns: 3,
+            rows: 4,
+            gap_mm: 7.5,
         };
 
         Bench {
             scene,
             slicing,
-            supports,
-            hollow,
-            drain: DrainTool {
-                diameter_mm: 4.25,
-                depth_mm: 6.0,
-                taper: 0.5,
-                ..DrainTool::default()
-            },
-            cut: CutTool {
-                axis: crate::scene::Axis::X,
-                offset_mm: 17.5,
-                keep: Keep::Above,
-            },
-            array: Array {
-                columns: 3,
-                rows: 4,
-                gap_mm: 7.5,
-            },
+            tools,
         }
     }
 
@@ -522,11 +394,7 @@ mod tests {
         let mut back = Bench {
             scene: Scene::default(),
             slicing: Slicing::default(),
-            supports: SupportTool::default(),
-            hollow: HollowTool::default(),
-            drain: DrainTool::default(),
-            cut: CutTool::default(),
-            array: Array::default(),
+            tools: Tools::default(),
         };
         apply(read, back.plate_mut());
         back
@@ -568,26 +436,32 @@ mod tests {
         assert_eq!(back.slicing.samples, saved.slicing.samples);
         assert_eq!(back.slicing.exposure, saved.slicing.exposure);
         assert_eq!(back.slicing.adaptive, saved.slicing.adaptive);
-        assert_eq!(back.supports.groups.len(), saved.supports.groups.len());
-        assert_eq!(back.supports.active, saved.supports.active);
         assert_eq!(
-            back.supports.brush_radius_mm,
-            saved.supports.brush_radius_mm
+            back.tools.supports.groups.len(),
+            saved.tools.supports.groups.len()
+        );
+        assert_eq!(back.tools.supports.active, saved.tools.supports.active);
+        assert_eq!(
+            back.tools.supports.brush_radius_mm,
+            saved.tools.supports.brush_radius_mm
         );
         assert_eq!(
-            back.supports.flood_angle_deg,
-            saved.supports.flood_angle_deg
+            back.tools.supports.flood_angle_deg,
+            saved.tools.supports.flood_angle_deg
         );
-        assert_eq!(back.hollow.thickness_mm, saved.hollow.thickness_mm);
-        assert_eq!(back.hollow.mode, saved.hollow.mode);
-        assert!(back.hollow.infill_on);
-        assert_eq!(back.drain.diameter_mm, saved.drain.diameter_mm);
-        assert_eq!(back.drain.depth_mm, saved.drain.depth_mm);
-        assert_eq!(back.drain.taper, saved.drain.taper);
-        assert_eq!(back.cut.axis, saved.cut.axis);
-        assert_eq!(back.cut.offset_mm, saved.cut.offset_mm);
-        assert_eq!(back.cut.keep, saved.cut.keep);
-        assert_eq!(back.array, saved.array);
+        assert_eq!(
+            back.tools.hollow.thickness_mm,
+            saved.tools.hollow.thickness_mm
+        );
+        assert_eq!(back.tools.hollow.mode, saved.tools.hollow.mode);
+        assert!(back.tools.hollow.infill_on);
+        assert_eq!(back.tools.drain.diameter_mm, saved.tools.drain.diameter_mm);
+        assert_eq!(back.tools.drain.depth_mm, saved.tools.drain.depth_mm);
+        assert_eq!(back.tools.drain.taper, saved.tools.drain.taper);
+        assert_eq!(back.tools.cut.axis, saved.tools.cut.axis);
+        assert_eq!(back.tools.cut.offset_mm, saved.tools.cut.offset_mm);
+        assert_eq!(back.tools.cut.keep, saved.tools.cut.keep);
+        assert_eq!(back.tools.array, saved.tools.array);
     }
 
     #[test]
@@ -649,7 +523,7 @@ mod tests {
     /// A shell as a run would leave it on the bench's only model: its own mesh, which no
     /// hollowing would produce, so a rebuilt cavity could not be mistaken for this one.
     fn hollowed(saved: &mut Bench) -> Arc<Mesh> {
-        let asked = saved.hollow.settings();
+        let asked = saved.tools.hollow.settings();
         let object = &mut saved.scene.objects_mut()[0];
         let settings = object.hollow.asking(&asked);
         let shell = Arc::new(unit_cube());
@@ -679,13 +553,16 @@ mod tests {
         );
         assert_eq!(object.hollow.cavity_faces(), Some(0..2));
         assert_eq!(object.hollow.lattice(), Some((0.1, true)));
-        assert!(back.hollow.job.is_none(), "nothing is hollowed on opening");
+        assert!(
+            back.tools.hollow.job.is_none(),
+            "nothing is hollowed on opening"
+        );
     }
 
     #[test]
     fn the_wall_a_model_was_hollowed_to_is_what_the_panel_reads_back() {
         let mut saved = bench();
-        let asked = saved.hollow.settings();
+        let asked = saved.tools.hollow.settings();
         hollowed(&mut saved);
 
         let project = capture(saved.plate());
@@ -698,9 +575,10 @@ mod tests {
 
         let back = round_trip(&saved);
         assert!(
-            !back.scene.objects()[0]
-                .hollow
-                .is_stale(&back.hollow.settings(), back.scene.objects()[0].transform),
+            !back.scene.objects()[0].hollow.is_stale(
+                &back.tools.hollow.settings(),
+                back.scene.objects()[0].transform
+            ),
             "a plate opened as it was saved is not stale"
         );
     }
@@ -708,7 +586,7 @@ mod tests {
     #[test]
     fn the_trees_a_run_grew_stand_again_without_being_grown() {
         let mut saved = bench();
-        let table = saved.supports.table();
+        let table = saved.tools.supports.table();
         let object = &mut saved.scene.objects_mut()[0];
         // Lifted off the plate, so the underside has room for a column to stand in.
         object.transform.translation.z = 5.0;

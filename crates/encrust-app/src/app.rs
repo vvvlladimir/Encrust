@@ -9,7 +9,9 @@ use crate::render;
 use crate::shortcuts;
 use crate::state::{Doc, Machine, Tools, View};
 use crate::status::Status;
+use crate::tool_settings::ToolSettings;
 use crate::ui::theme;
+use crate::undo::Frame;
 use crate::workspace::{Mode, Tool};
 
 /// Window state: what the user is doing, the scene being edited, and the camera looking
@@ -87,13 +89,18 @@ impl SlicerApp {
         );
     }
 
-    /// The machine, the resin and the container are written the frame they change, so
-    /// the next run opens on them however this one ends.
-    fn remember_choices(&mut self) {
+    /// The machine, the resin, the container and every tool value are written the frame
+    /// they change, so the next run opens on them however this one ends. Only on a
+    /// settled frame: a slider under the pointer is one choice, not one per frame.
+    fn remember_choices(&mut self, settled: bool) {
+        if !settled {
+            return;
+        }
         let now = Preferences::of(
             &self.machine.slicing,
             &self.machine.network,
             &self.machine.updates.prefs,
+            &self.tools,
         );
         if now != self.prefs {
             self.prefs = now;
@@ -362,10 +369,19 @@ impl eframe::App for SlicerApp {
         project::guard_close(ui, &mut self.window());
         self.window().show(ui);
 
-        // A gesture is one edit, so nothing is recorded until the button is up again.
-        let settled = ui.ctx().input(|input| !input.pointer.any_down());
-        self.doc.history.observe(&self.doc.scene, settled);
-        self.remember_choices();
+        // A gesture is one edit, so nothing is recorded until the button is up again and
+        // the field being typed into has been left.
+        let frame = Frame {
+            settled: ui.ctx().input(|input| !input.pointer.any_down()),
+            typing: ui.ctx().memory(|memory| memory.focused().is_some()),
+        };
+        self.doc.history.observe(
+            &self.doc.scene,
+            &ToolSettings::of(&self.tools, &self.machine.slicing),
+            self.machine.slicing.chosen(),
+            frame,
+        );
+        self.remember_choices(frame.settled && !frame.typing);
     }
 
     fn on_exit(&mut self) {

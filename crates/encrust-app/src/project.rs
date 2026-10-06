@@ -112,11 +112,7 @@ pub fn open(window: &mut Window, file: &Handed) {
         state::CapturedMut {
             scene: &mut window.doc.scene,
             slicing: &mut window.machine.slicing,
-            supports: &mut window.tools.supports,
-            hollow: &mut window.tools.hollow,
-            drain: &mut window.tools.drain,
-            cut: &mut window.tools.cut,
-            array: &mut window.tools.array,
+            tools: window.tools,
         },
     );
     window.doc.project.path = Some(path);
@@ -203,11 +199,7 @@ fn captured(window: &Window) -> Project {
     state::capture(state::Captured {
         scene: &window.doc.scene,
         slicing: &window.machine.slicing,
-        supports: &window.tools.supports,
-        hollow: &window.tools.hollow,
-        drain: &window.tools.drain,
-        cut: &window.tools.cut,
-        array: &window.tools.array,
+        tools: window.tools,
     })
 }
 

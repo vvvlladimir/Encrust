@@ -1,5 +1,6 @@
-//! What the window remembers between runs: the machine, the resin, the printer on the
-//! network each machine sends to, and whether to look for updates.
+//! What the window remembers between runs: the machine, the resin, the values every tool
+//! is set to, the printer on the network each machine sends to, and whether to look for
+//! updates.
 
 use std::collections::BTreeMap;
 use std::net::IpAddr;
@@ -15,13 +16,15 @@ use crate::network::{Destination, Network, Prusa};
 use crate::panels::Window;
 use crate::profiles;
 use crate::slicing::Slicing;
+use crate::state::Tools;
+use crate::tool_settings::ToolSettings;
 use crate::updates::UpdatePrefs;
 
 /// The choices carried from one run to the next, beside the user's profile directory.
 ///
 /// Only catalogue ids are kept. A profile opened from a file is not remembered: the file
 /// may have moved, and a silently stale machine is worse than none.
-#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
 pub struct Preferences {
     printer: Option<String>,
     resin: Option<String>,
@@ -43,11 +46,16 @@ pub struct Preferences {
     machines: Vec<Link>,
     #[serde(default)]
     updates: UpdatePrefs,
+    /// What every tool was last set to, or `None` for a file written before they were
+    /// remembered. A value the user chose once is theirs until they change it again; see
+    /// `docs/decisions/0192`.
+    #[serde(default)]
+    tools: Option<ToolSettings>,
 }
 
 impl Preferences {
     /// What the window is set to now.
-    pub fn of(slicing: &Slicing, network: &Network, updates: &UpdatePrefs) -> Self {
+    pub fn of(slicing: &Slicing, network: &Network, updates: &UpdatePrefs, tools: &Tools) -> Self {
         Self {
             printer: slicing.printer_id.clone(),
             resin: slicing.resin_id.clone(),
@@ -60,6 +68,7 @@ impl Preferences {
                 .map(|prusa| prusa.link.clone())
                 .collect(),
             updates: updates.clone(),
+            tools: Some(ToolSettings::of(tools, slicing)),
         }
     }
 
@@ -95,6 +104,11 @@ impl Preferences {
             let resin = entry.profile.clone();
             window.machine.slicing.resin_id = Some(id.to_owned());
             window.machine.slicing.set_material(resin);
+        }
+        // After the resin, which brings a layer height and exposures of its own: what the
+        // user last cut at stands over what the profile was measured at.
+        if let Some(tools) = self.tools.clone() {
+            tools.apply(window.tools, &mut window.machine.slicing);
         }
     }
 
@@ -163,7 +177,12 @@ mod tests {
     fn what_is_remembered_is_what_the_window_is_set_to() {
         let mut slicing = Slicing::default();
         slicing.resin_id = Some("standard-grey".to_owned());
-        let prefs = Preferences::of(&slicing, &Network::default(), &UpdatePrefs::default());
+        let prefs = Preferences::of(
+            &slicing,
+            &Network::default(),
+            &UpdatePrefs::default(),
+            &Tools::default(),
+        );
         assert_eq!(prefs.resin.as_deref(), Some("standard-grey"));
     }
 
@@ -177,7 +196,12 @@ mod tests {
         network.restore(vec![board], BTreeMap::new());
         network.bind("elegoo-saturn-4-ultra", Destination::Printer(key.clone()));
 
-        let prefs = Preferences::of(&Slicing::default(), &network, &UpdatePrefs::default());
+        let prefs = Preferences::of(
+            &Slicing::default(),
+            &network,
+            &UpdatePrefs::default(),
+            &Tools::default(),
+        );
         let text = serde_json::to_string(&prefs).expect("the preferences serialise");
         let read: Preferences = serde_json::from_str(&text).expect("and read back");
 
@@ -194,7 +218,12 @@ mod tests {
     fn a_board_nobody_chose_is_not_written_to_the_file() {
         let mut network = Network::default();
         network.restore(vec![a_board()], BTreeMap::new());
-        let prefs = Preferences::of(&Slicing::default(), &network, &UpdatePrefs::default());
+        let prefs = Preferences::of(
+            &Slicing::default(),
+            &network,
+            &UpdatePrefs::default(),
+            &Tools::default(),
+        );
         assert!(prefs.boards.is_empty());
     }
 
@@ -222,7 +251,12 @@ mod tests {
             net_prusalink::DEFAULT_USER,
             "secret",
         ));
-        let prefs = Preferences::of(&Slicing::default(), &network, &UpdatePrefs::default());
+        let prefs = Preferences::of(
+            &Slicing::default(),
+            &network,
+            &UpdatePrefs::default(),
+            &Tools::default(),
+        );
         let text = serde_json::to_string(&prefs).expect("the preferences serialise");
         let read: Preferences = serde_json::from_str(&text).expect("and read back");
         assert_eq!(read.machines, prefs.machines);
@@ -244,6 +278,35 @@ mod tests {
         );
     }
 
+    /// A wall thickness typed in once is the user's from then on, so it travels through
+    /// the file beside the machine it was typed for; see ADR 0192.
+    #[test]
+    fn the_values_the_tools_were_left_at_survive_the_round_trip() {
+        let mut tools = Tools::default();
+        tools.hollow.thickness_mm = 1.25;
+        tools.drain.depth_mm = 7.5;
+        tools.supports.brush_radius_mm = 4.0;
+
+        let prefs = Preferences::of(
+            &Slicing::default(),
+            &Network::default(),
+            &UpdatePrefs::default(),
+            &tools,
+        );
+        let text = serde_json::to_string(&prefs).expect("the preferences serialise");
+        let read: Preferences = serde_json::from_str(&text).expect("and read back");
+
+        let mut back = Tools::default();
+        let mut slicing = Slicing::default();
+        read.tools
+            .clone()
+            .expect("the tool values were written")
+            .apply(&mut back, &mut slicing);
+        assert_eq!(back.hollow.thickness_mm, 1.25);
+        assert_eq!(back.drain.depth_mm, 7.5);
+        assert_eq!(back.supports.brush_radius_mm, 4.0);
+    }
+
     #[test]
     fn the_update_check_survives_the_round_trip() {
         let updates = UpdatePrefs {
@@ -251,7 +314,12 @@ mod tests {
             checked_at_s: Some(1_700_000_000),
             skipped: Some("0.3.0".to_owned()),
         };
-        let prefs = Preferences::of(&Slicing::default(), &Network::default(), &updates);
+        let prefs = Preferences::of(
+            &Slicing::default(),
+            &Network::default(),
+            &updates,
+            &Tools::default(),
+        );
         let text = serde_json::to_string(&prefs).expect("the preferences serialise");
         let read: Preferences = serde_json::from_str(&text).expect("and read back");
         assert_eq!(read.updates, updates);

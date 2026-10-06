@@ -367,10 +367,18 @@ pub fn act(window: &mut Window, action: Action) {
     match action {
         Action::Pick(tool) => pick(window, tool),
         Action::Undo => {
-            window.doc.history.undo(&mut window.doc.scene);
+            window.doc.history.undo(
+                &mut window.doc.scene,
+                window.tools,
+                &mut window.machine.slicing,
+            );
         }
         Action::Redo => {
-            window.doc.history.redo(&mut window.doc.scene);
+            window.doc.history.redo(
+                &mut window.doc.scene,
+                window.tools,
+                &mut window.machine.slicing,
+            );
         }
         Action::SelectAll => window.doc.scene.select_here(),
         Action::Deselect => {

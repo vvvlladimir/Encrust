@@ -48,6 +48,9 @@ whether that lattice was `coarsened` to fit a memory budget, and the `scale` the
 measured under. A hole is deepened through that wall on opening, so the same wall has to
 come back.
 
+The Relief tool has no entry here: what it is set to is remembered between runs instead,
+in `preferences.json` (ADR 0192).
+
 The profile travels with the file, not only its id: a plate has to open the same on a
 machine whose catalogue never had that printer. The id is kept beside it so the picker
 still shows the profile as the catalogue's when it is.

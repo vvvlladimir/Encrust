@@ -67,6 +67,9 @@ pub struct Slicing {
     written: Option<Written>,
     /// Whether what the running job writes is a file to be sent on.
     to_send: bool,
+    /// How many times a printer or resin has been taken into hand this run; see
+    /// `History::observe`.
+    chosen: u64,
     /// Plates still to cut, most recent last, for a run over the whole project. One job
     /// runs at a time: the machine's cores go into the layers of one plate, not into two
     /// plates at once.
@@ -104,6 +107,7 @@ impl Default for Slicing {
             job: None,
             written: None,
             to_send: false,
+            chosen: 0,
             queued: Vec::new(),
         }
     }
@@ -196,8 +200,16 @@ impl Slicing {
         self.base_material = entry.profile.clone();
     }
 
+    /// How many printers and resins have been taken into hand. The undo stack watches it
+    /// so that the layer height and exposures a profile brings with it are not taken for
+    /// an edit the user made; see `docs/decisions/0192`.
+    pub fn chosen(&self) -> u64 {
+        self.chosen
+    }
+
     /// The resin this printer needs, out of the resin as it was loaded.
     fn retune(&mut self) {
+        self.chosen += 1;
         self.material = match self.printer_id.as_deref() {
             Some(id) => self.base_material.starting_point(id),
             None => self.base_material.clone(),

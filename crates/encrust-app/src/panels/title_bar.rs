@@ -333,12 +333,20 @@ fn edit_menu(ui: &mut egui::Ui, window: &mut Window) {
     let can_undo = window.doc.history.can_undo();
     if item_enabled(ui, "Undo", Action::Undo, can_undo).clicked() {
         ui.close();
-        window.doc.history.undo(&mut window.doc.scene);
+        window.doc.history.undo(
+            &mut window.doc.scene,
+            window.tools,
+            &mut window.machine.slicing,
+        );
     }
     let can_redo = window.doc.history.can_redo();
     if item_enabled(ui, "Redo", Action::Redo, can_redo).clicked() {
         ui.close();
-        window.doc.history.redo(&mut window.doc.scene);
+        window.doc.history.redo(
+            &mut window.doc.scene,
+            window.tools,
+            &mut window.machine.slicing,
+        );
     }
 
     ui.separator();

@@ -255,10 +255,12 @@ lib.rs       the modules, `run` — window options and the model to open on star
 files.rs     Handed: a file the user gave, a path or its bytes; the dialogs that ask for one
 app.rs       SlicerApp: mode, tool, and the four groups of state.rs
 state.rs     Doc, View, Tools, Machine: the window state in the groups it travels in
+tool_settings.rs
+             ToolSettings: every value a tool panel holds, for prefs, project and undo
 workspace.rs Mode, Tool, ViewOptions, Array
 shortcuts.rs every key the window answers, and what each one does
 scene.rs     Scene, SceneObject, ObjectId, ImportSummary, the plates, duplicate, mirror
-undo.rs      History: whole-scene snapshots, found by hashing what can be edited
+undo.rs      History: scene snapshots and tool-value snapshots, found by watching both
 measure.rs   the two picked points, and the corner a click snaps to
 import.rs    the files being opened: load, repair, index, place
 plate.rs     BuildPlate: the build volume, named apart from core_engine::Plate
@@ -278,7 +280,7 @@ job/         worker threads: import, merge, export, preview, measure, supports, 
 panels/      title strip, tool rail, stage, inspector, status strip
 profiles.rs  loading a profile from a file dialog
 network.rs   printers a scan found, where the Slice button sends, and the errand running
-prefs.rs     the machine, resin, format and printer addresses remembered between runs
+prefs.rs     the machine, resin, tool values and printer addresses remembered between runs
 web/         a browser's threads, dialogs, downloads, private storage and page storage
 ui/          design tokens, fonts, icons, widgets
 render/      wgpu pipelines, buffers, paint callback, shader.wgsl

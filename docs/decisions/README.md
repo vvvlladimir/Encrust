@@ -286,3 +286,4 @@ Grouped by what the decision governs; the number is still the order it was taken
 | [0138](0138-the-destination-lives-on-the-slice-button.md) | The destination lives on the Slice button | Superseded by 0157 |
 | [0151](0151-the-preview-shows-a-source-not-a-plate.md) | Let the preview show a source, which is either a plate or a file | Accepted |
 | [0157](0157-the-slice-row-carries-two-actions.md) | The Slice row carries two actions, not a destination | Accepted |
+| [0192](0192-a-tool-value-is-remembered-and-taken-back-on-its-own-entry.md) | A tool value is remembered between runs and taken back on its own entry | Accepted |

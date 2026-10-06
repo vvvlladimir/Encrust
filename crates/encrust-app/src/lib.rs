@@ -32,6 +32,7 @@ mod slicing;
 mod state;
 mod status;
 mod supports;
+mod tool_settings;
 mod ui;
 mod undo;
 mod updates;

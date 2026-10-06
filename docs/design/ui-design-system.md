@@ -193,5 +193,6 @@ a panel of position, rotation and scale together; see `docs/decisions/0118`.
 The inspector shows the open tool's panel and nothing else; see `docs/decisions/0105`.
 The machine and the resin stand at the foot of the plate panel, with a row of actions over
 them — duplicate, mirror, array, arrange, remove — because both are the plate's and not the
-tool's. The machine, the resin and the output format are remembered in `preferences.json`
-beside the user's profile directory.
+tool's. The machine, the resin, the output format and every value a tool panel holds are
+remembered in `preferences.json` beside the user's profile directory, and each of those
+values answers undo; see `docs/decisions/0192`.
