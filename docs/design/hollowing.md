@@ -211,12 +211,18 @@ hollow rebuilds its shell at once, at the numbers it was built at, and a sleeved
 drains its own two mouths, not the cavity it crosses.
 
 What the window draws inside a cut is a second mesh, `bores`: the wall of every tube and
-the floor of every hole that ends in material. It is clipped to the model with one ray per
-sector of the tube — twenty-four per tube, exact where they land and polygonal between them,
-which is what the tube already is — and a hole's is cut short at the wall a cavity left, so
-no part of it stands outside the model or crosses the cavity. A channel runs in its sleeve,
-so its wall goes its whole length, with a ball's wall round each bend. It is drawn and never
-sliced: the cut itself is what the layer sees.
+the floor of every hole that ends in material. Both are clipped to the model with one ray
+per sector — twenty-four along the tube for the wall and twenty-four out from the centre
+for the floor, exact where they land and polygonal between them, which is what the tube
+already is. A strip hangs between two of those lines and is drawn only where both of them
+run through material, so a hole drilled across an edge of the model stops a sector short of
+that edge instead of hanging a sector of itself into the air, and its floor is the half
+disc the material leaves rather than a whole one. A hole's wall is cut short at the wall a
+cavity left, so nothing of it crosses the cavity, and a hole that reaches that far is
+through: it ends in the cavity and takes no floor, which is what keeps a drain from reading
+as a dimple with a coin at the bottom of it. A channel runs in its sleeve, so its wall
+goes its whole length, with a ball's wall round each bend. It is drawn and never sliced:
+the cut itself is what the layer sees.
 
 ## Trapped resin
 
@@ -225,20 +231,20 @@ on the stack rather than in a field: `TrapScan` takes layers in print order, rea
 between the material runs of each one, and joins the runs that touch across a row or across
 a layer. A pocket that reaches the edge of the grid, the first layer or the top of the
 stack has somewhere to drain; one that closes without ever doing so is trapped, and its
-lowest layer is where a hole goes. See ADR 0072 for why it lives there and what the grid
+lowest layer is where a hole goes. Each one carries what it holds, where its hole goes and
+the box it fills. See ADR 0072 for why it lives there and what the grid
 costs it.
 
 The CLI folds the scan into the pass that writes the file, and reports each pocket with
 what it holds; `--strict` fails on one. The window checks a model at a time on a worker
-thread and offers to drill a hole into every pocket it found, from the nearest surface and
-deep enough to reach it. It starts that check itself on the frame a hollow run ends and
-whenever a hole or a channel goes in or comes out, so a cavity says what it holds without
-being asked. A change while a check is running is kept rather than queued, so clicking hole
-after hole costs one check after the one in flight. A model a pocket was found in has its
-whole cavity painted red in the viewport — `Hollowed::cavity` is the face range of the
-shell that bounds it — because that whole space fills unless a hole lets it out. The models
-are opened up to show it, which is the x-ray of `viewport.md`, and the red goes as the holes
-drain them (ADR 0190).
+thread, when the Drain panel is asked to and at no other time, and offers to drill a hole
+into every pocket it found, from the nearest surface and deep enough to reach it. A hollow
+run, a hole or a channel leaves the last check out of date rather than starting another,
+and a run drops what the last one found, since the cavity it stood in is a new mesh
+(ADR 0198). A model a pocket was found in has its cavity painted red in the viewport
+wherever a pocket stands in it — `Hollowed::cavity` is the face range of the shell that
+bounds the lot, and each pocket's own box is what the shader keeps the red inside
+(ADR 0190, 0200). The x-ray of `viewport.md` is what shows it, turned on by hand.
 
 ## What it does not do
 

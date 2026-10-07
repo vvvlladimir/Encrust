@@ -95,7 +95,8 @@ Grouped by what the decision governs; the number is still the order it was taken
 | [0091](0091-a-stack-is-planned-not-counted.md) | A stack is a plan of boundaries, not a count times a height | Accepted |
 | [0114](0114-unite-a-layers-planes-by-brightness.md) | A layer is sampled at several planes, united by brightness on the runs | Accepted |
 | [0134](0134-a-layer-starts-at-the-near-edge-of-the-plate.md) | Write the plate as it stands, and leave mirroring to the header | Accepted |
-| [0187](0187-nothing-under-the-plate-is-cut.md) | Nothing under the plate is cut | Accepted |
+| [0187](0187-nothing-under-the-plate-is-cut.md) | Nothing under the plate is cut | Accepted; the top is clamped the same way by 0199 |
+| [0199](0199-a-bake-says-how-high-the-material-stands.md) | A bake says how high the material stands, and the stack stops there | Accepted |
 
 ### Rasterisation
 
@@ -190,8 +191,10 @@ Grouped by what the decision governs; the number is still the order it was taken
 | [0185](0185-a-wall-is-measured-on-the-plate.md) | A wall is measured on the plate, not in the model's own space | Accepted |
 | [0186](0186-a-cavity-is-a-closed-surface-and-a-slice-follows-it-through-a-branch.md) | A cavity is a closed surface, and a slice follows it through a branch | Accepted |
 | [0188](0188-a-cut-outweighs-what-it-lands-in-and-a-channel-stays-a-pipe.md) | A cut outweighs what it lands in, and a channel stays a pipe | Accepted |
-| [0189](0189-resin-leaves-through-a-hole-and-a-lattice-never-closes-a-cell.md) | Resin leaves through a hole, and a lattice never closes a cell | Accepted; its marks are replaced by 0190 |
-| [0190](0190-the-space-that-holds-resin-is-painted-and-the-model-is-seen-through.md) | Paint the space that holds resin, and see the model through | Accepted |
+| [0189](0189-resin-leaves-through-a-hole-and-a-lattice-never-closes-a-cell.md) | Resin leaves through a hole, and a lattice never closes a cell | Accepted; its marks are replaced by 0190, its automatic check by 0198 |
+| [0190](0190-the-space-that-holds-resin-is-painted-and-the-model-is-seen-through.md) | Paint the space that holds resin, and see the model through | Accepted; what opens the x-ray is amended by 0198, what is painted by 0200 |
+| [0200](0200-a-pocket-is-painted-on-its-own.md) | A pocket of trapped resin is painted on its own | Accepted |
+| [0198](0198-a-drainage-check-is-asked-for.md) | A drainage check is asked for, and the view it needs is the user's | Accepted |
 
 ### The plate
 

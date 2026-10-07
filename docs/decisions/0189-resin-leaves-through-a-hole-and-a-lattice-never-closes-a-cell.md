@@ -1,6 +1,6 @@
 # 0189. Resin leaves through a hole, and a lattice never closes a cell
 
-- **Status:** Accepted
+- **Status:** Accepted; the check it ran after every run and cut is dropped by 0198
 - **Date:** 2026-10-05
 
 ## Context

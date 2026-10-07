@@ -3,7 +3,7 @@ use crate::panels::Window;
 use crate::panels::inspector::hollow;
 use crate::state::Tools;
 use crate::ui::{
-    Segment, Segmented, describe, hint, icon, number_row, primary_button, secondary_button,
+    Segment, Segmented, describe, hint, icon, notice, number_row, primary_button, secondary_button,
     section, stats, subheading, theme, tone,
 };
 
@@ -146,7 +146,7 @@ fn placed(ui: &mut egui::Ui, window: &mut Window) {
             object.hollow.clear_drains();
             object.hollow.clear_channels();
         }
-        window.tools.drain.ask_for_a_check();
+        window.tools.drain.stale();
         rebuild_around_cuts(window);
     }
 }
@@ -204,6 +204,16 @@ fn drainage(ui: &mut egui::Ui, window: &mut Window) {
     }
 
     let held: f32 = pockets.iter().sum();
+    let colors = theme::colors();
+    notice(
+        ui,
+        icon::WARNING,
+        colors.danger,
+        colors.danger_wash,
+        &format!("Resin is trapped in {} place(s)", pockets.len()),
+        "Each one is painted red under the x-ray, and each needs a hole of its own.",
+    );
+    ui.add_space(4.0);
     stats(
         ui,
         &[

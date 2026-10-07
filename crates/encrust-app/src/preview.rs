@@ -332,13 +332,13 @@ impl Preview {
 
     /// Starts cutting everything visible on the plate. Fails when there is nothing there.
     pub fn build(&mut self, scene: &Scene, cutting: Cutting) -> Result<()> {
-        let mesh = bake(
+        let baked = bake(
             &models_of(scene, scene.active_plate()),
             &cutting.compensation,
         )
         .context("nothing visible on the plate to preview")?;
         self.job = Some(Build {
-            job: PreviewJob::spawn(mesh, cutting),
+            job: PreviewJob::spawn(baked, cutting),
             fingerprint: stack_fingerprint(scene, cutting),
         });
         Ok(())

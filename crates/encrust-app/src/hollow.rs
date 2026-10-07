@@ -24,8 +24,8 @@ pub struct HollowTool {
     /// Radius of the blocker the next click drops.
     pub blocker_mm: Scalar,
     pub job: Option<HollowJob>,
-    /// Whether a run has just put a cavity on the plate, which is what asks for the
-    /// drainage check that follows every one; see ADR 0189.
+    /// Whether a run has just put a cavity on the plate, which is what takes the pockets
+    /// an older check found off it; see ADR 0198.
     pub(crate) hollowed: bool,
 }
 
@@ -89,8 +89,8 @@ impl HollowTool {
         true
     }
 
-    /// Whether a cavity has been cut since this was last asked, so the resin it traps is
-    /// looked for once per run rather than once per frame.
+    /// Whether a cavity has been cut since this was last asked, so what an older check
+    /// found is forgotten once per run rather than once per frame.
     pub fn take_hollowed(&mut self) -> bool {
         std::mem::take(&mut self.hollowed)
     }
@@ -181,8 +181,7 @@ mod tests {
 
         assert!(
             tool.take_hollowed(),
-            "a cavity is only finished once the resin can get out of it, so the window \
-             looks for what it traps"
+            "a run put a new cavity on the plate, so what an older check found is stale"
         );
         assert!(
             !tool.take_hollowed(),

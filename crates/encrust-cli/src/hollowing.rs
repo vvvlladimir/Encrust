@@ -205,35 +205,29 @@ pub fn placed(mesh: &Mesh, args: &HollowArgs) -> Result<(Vec<DrainHole>, Vec<Cha
     Ok((args.drains(mesh, &Bvh::build(mesh))?, args.dug()))
 }
 
-/// Cuts `placed` into `mesh`, and says how many of each it took out.
+/// The bodies `placed` cuts out of a model hollowed to `wall`, and how many of each.
 ///
-/// The bodies are appended wound inward, which is what subtracts them (ADR 0071, 0075), so
-/// this needs no cavity: a hole is a hole in a solid model too. `wall` is the cavity the
-/// model was hollowed to, and deepens a hole that would otherwise stop inside that wall.
+/// They are wound inward, which is what subtracts them wherever they are appended
+/// (ADR 0071, 0075), so this needs no cavity: a hole is a hole in a solid model too.
+/// `wall` is the cavity the model was hollowed to, and deepens a hole that would
+/// otherwise stop inside that wall.
 pub fn cut(
-    mesh: &mut Mesh,
     placed: (Vec<DrainHole>, Vec<Channel>),
     wall: Option<(Scalar, Scalar)>,
-) -> Result<Cuts> {
+) -> Result<(Cuts, Mesh)> {
     let (holes, channels) = placed;
     let holes = match wall {
         Some((thickness_mm, voxel_mm)) => pierce(&holes, thickness_mm, voxel_mm),
         None => holes,
     };
     let bodies = drill(&holes, &channels).context("drilling the drains")?;
-
-    let offset = mesh.vertices.len() as u32;
-    mesh.vertices.extend_from_slice(&bodies.vertices);
-    mesh.faces.extend(
-        bodies
-            .faces
-            .iter()
-            .map(|[a, b, c]| [a + offset, b + offset, c + offset]),
-    );
-    Ok(Cuts {
-        holes: holes.len(),
-        channels: channels.len(),
-    })
+    Ok((
+        Cuts {
+            holes: holes.len(),
+            channels: channels.len(),
+        },
+        bodies,
+    ))
 }
 
 /// What the cuts took out of the model.

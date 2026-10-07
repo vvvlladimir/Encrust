@@ -109,8 +109,8 @@ pub struct Section {
 pub struct ViewOptions {
     pub grid: bool,
     /// Whether the models are drawn seen through, so a cavity and what stands in it can be
-    /// looked into. Turned on by a drainage check that finds trapped resin, and off by
-    /// whoever does not want it; see ADR 0190.
+    /// looked into. The view card and the View menu are the only things that turn it on;
+    /// see ADR 0190, 0198.
     pub xray: bool,
     /// Whether the plate panel is unfolded down the left of the stage.
     pub plate_panel: bool,

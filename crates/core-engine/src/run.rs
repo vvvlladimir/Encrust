@@ -31,11 +31,11 @@ pub struct Run {
 impl Run {
     /// Bakes `plate`, works out its layers and builds the header its file will carry.
     pub fn of(plate: &Plate) -> Result<Self, EngineError> {
-        let mesh =
+        let baked =
             bake(&plate.models, &plate.cutting.compensation).ok_or(EngineError::EmptyPlate)?;
         let panel = raster_settings(&plate.printer, plate.panel);
         panel.validate().map_err(EngineError::Panel)?;
-        let windows = cut(&mesh, &plate.cutting)?;
+        let windows = cut(&baked, &plate.cutting)?;
 
         let mut fold = Measured::new(plate.material.bottom_layers as usize);
         if plate.remove_islands {
@@ -56,7 +56,7 @@ impl Run {
         };
 
         Ok(Self {
-            mesh,
+            mesh: baked.mesh,
             windows,
             job,
             panel,

@@ -35,7 +35,7 @@ mod tests {
 
     /// What the window hands the engine for `plate`, baked into one mesh.
     fn merge_plate(scene: &Scene, plate: u32) -> Option<Mesh> {
-        bake(&models_of(scene, plate), &Compensation::default())
+        bake(&models_of(scene, plate), &Compensation::default()).map(|baked| baked.mesh)
     }
 
     /// Axis-aligned cube spanning 0..1 on every axis, twelve triangles.

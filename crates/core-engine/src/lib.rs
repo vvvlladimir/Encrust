@@ -17,7 +17,7 @@ mod plate;
 pub mod project;
 mod run;
 
-pub use bake::{bake, parts};
+pub use bake::{Baked, bake, parts};
 pub use cut::{Cutting, cut};
 pub use error::EngineError;
 pub use open::{Opening, open_plate};

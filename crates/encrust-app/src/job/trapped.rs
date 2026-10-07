@@ -1,10 +1,10 @@
 use std::sync::Arc;
 use std::sync::mpsc::{self, Receiver, TryRecvError};
 
-use core_geometry::{Mesh, Scalar, Transform, transform_mesh};
+use core_geometry::{Aabb, Mat4, Mesh, Scalar, Transform, Vec3, transform_mesh};
 use core_supports::{TrapScan, Trapped};
 
-use core_engine::{Cutting, cut};
+use core_engine::{Baked, Cutting, cut};
 
 use crate::job::pipeline::{thread_pool, worker_threads};
 use crate::scene::{ObjectId, Scene};
@@ -15,6 +15,9 @@ pub struct TrapTask {
     /// What will actually be printed — the shell, where the model has been hollowed — in
     /// the model's own space.
     pub mesh: Arc<Mesh>,
+    /// Its holes and channels, wound inward, in the same space: the check is about what
+    /// the resin can get out through, so it looks at the cuts as well as the cavity.
+    pub cuts: Option<Arc<Mesh>>,
     pub transform: Transform,
 }
 
@@ -77,30 +80,11 @@ pub fn trap_tasks(scene: &Scene) -> Vec<TrapTask> {
         .filter(|object| !object.mesh.is_empty())
         .map(|object| TrapTask {
             id: object.id,
-            // The cuts go in with the model: the check is about what the resin can get
-            // out through, so it has to look at the holes as well as the cavity.
-            mesh: Arc::new(drained(object)),
+            mesh: Arc::clone(object.hollow.shell().unwrap_or(&object.mesh)),
+            cuts: object.hollow.cut_bodies().map(Arc::clone),
             transform: object.transform,
         })
         .collect()
-}
-
-/// One model as it will be sliced: its shell, or its own mesh, with its cuts appended.
-fn drained(object: &crate::scene::SceneObject) -> Mesh {
-    let mesh = object.hollow.shell().unwrap_or(&object.mesh);
-    let Some(cuts) = object.hollow.cut_bodies() else {
-        return mesh.as_ref().clone();
-    };
-
-    let mut drained = mesh.as_ref().clone();
-    let offset = drained.vertices.len() as u32;
-    drained.vertices.extend_from_slice(&cuts.vertices);
-    drained.faces.extend(
-        cuts.faces
-            .iter()
-            .map(|[a, b, c]| [a + offset, b + offset, c + offset]),
-    );
-    drained
 }
 
 fn check(request: &TrapRequest) -> TrapOutcome {
@@ -124,14 +108,33 @@ fn check(request: &TrapRequest) -> TrapOutcome {
     })
 }
 
+/// The bodies a cut is made of are appended to whatever they cut; see ADR 0075.
+fn append(whole: &mut Mesh, part: &Mesh) {
+    let offset = whole.vertices.len() as u32;
+    whole.vertices.extend_from_slice(&part.vertices);
+    whole.faces.extend(
+        part.faces
+            .iter()
+            .map(|[a, b, c]| [a + offset, b + offset, c + offset]),
+    );
+}
+
 /// Cuts one model where it stands and answers with the pockets in it, brought back into
 /// the model's own space.
 fn look_through(task: &TrapTask, layer_height_mm: Scalar) -> Result<Vec<Trapped>, String> {
-    let placed = transform_mesh(&task.mesh, task.transform);
-    let Some(bounds) = placed.aabb() else {
+    let mut placed = transform_mesh(&task.mesh, task.transform);
+    let Some(material) = placed.aabb() else {
         return Ok(Vec::new());
     };
-    let windows = cut(&placed, &Cutting::uniform(layer_height_mm)).map_err(|error| {
+    if let Some(cuts) = &task.cuts {
+        append(&mut placed, &transform_mesh(cuts, task.transform));
+    }
+    let bounds = placed.aabb().unwrap_or(material);
+    let baked = Baked {
+        mesh: placed,
+        ceiling_mm: material.maxs.z,
+    };
+    let windows = cut(&baked, &Cutting::uniform(layer_height_mm)).map_err(|error| {
         anyhow::Error::new(error)
             .chain()
             .map(ToString::to_string)
@@ -145,7 +148,7 @@ fn look_through(task: &TrapTask, layer_height_mm: Scalar) -> Result<Vec<Trapped>
         layer_height_mm,
     );
     windows
-        .stream(&placed, |sliced| {
+        .stream(&baked.mesh, |sliced| {
             for layer in &sliced.layers {
                 scan.push(layer);
             }
@@ -167,8 +170,26 @@ fn look_through(task: &TrapTask, layer_height_mm: Scalar) -> Result<Vec<Trapped>
         .map(|found| Trapped {
             at: inverse.transform_point3(found.at),
             volume_mm3: found.volume_mm3 / volume,
+            bounds: carried(&found.bounds, inverse),
         })
         .collect())
+}
+
+/// `bounds` taken through `matrix` as the box of its own eight corners, so a pocket of a
+/// model that was turned still covers the pocket.
+fn carried(bounds: &Aabb, matrix: Mat4) -> Aabb {
+    let corner = |index: usize| {
+        let pick = |axis: usize| match index >> axis & 1 {
+            0 => bounds.mins[axis],
+            _ => bounds.maxs[axis],
+        };
+        matrix.transform_point3(Vec3::new(pick(0), pick(1), pick(2)))
+    };
+    let mut box_of = Aabb::new(corner(0), corner(0));
+    for index in 1..8 {
+        box_of.take_point(corner(index));
+    }
+    box_of
 }
 
 #[cfg(test)]
@@ -236,6 +257,7 @@ mod tests {
             tasks: vec![TrapTask {
                 id: ObjectId::for_test(1),
                 mesh: Arc::new(sealed_box()),
+                cuts: None,
                 transform: Transform::default(),
             }],
             layer_height_mm: 0.5,
@@ -265,6 +287,7 @@ mod tests {
             tasks: vec![TrapTask {
                 id: ObjectId::for_test(2),
                 mesh: Arc::new(box_mesh(Vec3::ZERO, Vec3::splat(10.0))),
+                cuts: None,
                 transform: Transform::default(),
             }],
             layer_height_mm: 0.5,

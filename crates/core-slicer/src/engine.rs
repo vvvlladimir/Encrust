@@ -22,10 +22,23 @@ pub trait SliceEngine {
 /// A caller that wants the stack a window at a time asks for these first, hands chunks of
 /// them to [`SliceEngine::slice_at`], and never holds more than one chunk's contours.
 pub fn layer_heights(mesh: &Mesh, settings: &SliceSettings) -> Result<Vec<Scalar>, SliceError> {
+    layer_heights_under(mesh, settings, Scalar::INFINITY)
+}
+
+/// The same, with nothing planned above `ceiling_mm`.
+///
+/// A plate carries bodies that only subtract, and a cut reaches past the surface it
+/// pierces (ADR 0071), so the baked mesh can stand taller than anything that prints. The
+/// caller that merged it is the one that knows how far the material goes.
+pub fn layer_heights_under(
+    mesh: &Mesh,
+    settings: &SliceSettings,
+    ceiling_mm: Scalar,
+) -> Result<Vec<Scalar>, SliceError> {
     if settings.layer_height <= 0.0 {
         return Err(SliceError::NonPositiveLayerHeight(settings.layer_height));
     }
-    let (z_min, z_max) = on_the_plate(mesh)?;
+    let (z_min, z_max) = on_the_plate(mesh, ceiling_mm)?;
     Ok(settings.plane_heights(z_min, z_max))
 }
 
@@ -34,16 +47,19 @@ pub fn layer_heights(mesh: &Mesh, settings: &SliceSettings) -> Result<Vec<Scalar
 const PLATE_MM: Scalar = 0.0;
 
 /// The heights of `mesh` a stack covers: from its bottom, or from the plate where it reaches
-/// under it, to its top. Whatever stands under the plate is not cut.
-pub(crate) fn on_the_plate(mesh: &Mesh) -> Result<(Scalar, Scalar), SliceError> {
+/// under it, to its top or `ceiling_mm`, whichever is lower. Whatever stands under the
+/// plate or over the ceiling is not cut.
+pub(crate) fn on_the_plate(
+    mesh: &Mesh,
+    ceiling_mm: Scalar,
+) -> Result<(Scalar, Scalar), SliceError> {
     let aabb = mesh
         .aabb()
         .filter(|_| !mesh.is_empty())
         .ok_or(SliceError::EmptyMesh)?;
-    if aabb.maxs.z <= PLATE_MM {
-        return Err(SliceError::UnderThePlate {
-            top_mm: aabb.maxs.z,
-        });
+    let top_mm = aabb.maxs.z.min(ceiling_mm);
+    if top_mm <= PLATE_MM {
+        return Err(SliceError::UnderThePlate { top_mm });
     }
     if aabb.mins.z < PLATE_MM {
         tracing::warn!(
@@ -51,7 +67,7 @@ pub(crate) fn on_the_plate(mesh: &Mesh) -> Result<(Scalar, Scalar), SliceError> 
             "the model reaches under the plate, and what is under it is not cut"
         );
     }
-    Ok((aabb.mins.z.max(PLATE_MM), aabb.maxs.z))
+    Ok((aabb.mins.z.max(PLATE_MM), top_mm))
 }
 
 /// Slices by intersecting every face with each Z plane and stitching the crossings into

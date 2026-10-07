@@ -11,7 +11,7 @@ use crate::camera::OrbitCamera;
 use crate::plate::BuildPlate;
 use crate::render::callback::cuts_of;
 use crate::render::gpu::{
-    CutLine, DEPTH_FORMAT, DrainCut, ExposureBand, FrameInput, ModelDraw, ReliefDraw,
+    CutLine, DEPTH_FORMAT, DrainCut, ExposureBand, FrameInput, ModelDraw, ReliefDraw, TrapBox,
     ViewportResources,
 };
 use crate::render::machine::machine_faces;
@@ -322,6 +322,8 @@ fn render(drilled: bool) -> Option<Vec<u8>> {
 #[derive(Clone, Copy, Default)]
 struct Marks<'a> {
     cuts: &'a [DrainCut],
+    /// Where the drainage check found resin, which is the only place a volume paints.
+    pockets: &'a [TrapBox],
     bands: &'a [ExposureBand],
     band_floor_mm: f32,
     volume_mm: Option<Vec3>,
@@ -371,6 +373,7 @@ fn a_model_seen_through_keeps_less_of_itself_than_a_solid_one() {
 fn the_cavity_that_holds_resin_is_painted_through_the_wall_in_front_of_it() {
     let seen_through = Marks {
         xray: true,
+        pockets: &pocket(-5.0),
         ..Marks::default()
     };
     let Some(plain) = paint_ball_around(Vec::new(), seen_through) else {
@@ -409,6 +412,7 @@ fn the_cavity_that_holds_resin_is_painted_through_the_wall_in_front_of_it() {
 fn the_cavity_paints_on_a_frame_after_the_shell_reached_the_card() {
     let seen_through = Marks {
         xray: true,
+        pockets: &pocket(-5.0),
         ..Marks::default()
     };
     let Some(plain) = paint_ball_cached(Vec::new(), seen_through, true) else {
@@ -421,6 +425,49 @@ fn the_cavity_paints_on_a_frame_after_the_shell_reached_the_card() {
     assert!(
         red > 10_000,
         "the cavity reads red on a frame after its mesh was cached: {red} pixels"
+    );
+}
+
+/// A pocket is painted on its own: the cavity reads red where one stands in it, nowhere
+/// else, and not at all while the check has found none. See ADR 0200.
+#[test]
+fn a_pocket_paints_only_the_cavity_it_stands_in() {
+    fn marks(pockets: &[TrapBox]) -> Marks<'_> {
+        Marks {
+            xray: true,
+            pockets,
+            ..Marks::default()
+        }
+    }
+    let whole = pocket(-5.0);
+    // The same pocket cut off at the ball's own middle, so it holds the lower cavity alone.
+    let [mut lower] = whole;
+    lower.high[2] = 45.0;
+
+    let Some(plain) = paint_ball_around(Vec::new(), marks(&whole)) else {
+        return;
+    };
+    let frame = |pockets: &[TrapBox]| {
+        paint_ball_around(vec![trapped_cavity(true)], marks(pockets))
+            .expect("the later frames draw on the adapter the first one drew on")
+    };
+    let unpocketed = redder_than(&frame(&[]), &plain);
+    let all = redder_than(&frame(&whole), &plain);
+    let half = redder_than(&frame(&[lower]), &plain);
+
+    assert_eq!(
+        unpocketed, 0,
+        "a cavity the check found nothing in is not painted at all"
+    );
+    assert!(
+        half > 1_000,
+        "the pocket that is there paints: {half} pixels"
+    );
+    // The camera looks down on the ball, so the lower half of the cavity is the greater
+    // part of what is on screen; what matters is that it is not the whole of it.
+    assert!(
+        half * 4 < all * 3,
+        "the lower pocket paints its own half and not the cavity: {half} against {all}"
     );
 }
 
@@ -439,6 +486,17 @@ fn redder_than(frame: &[u8], against: &[u8]) -> usize {
         .zip(against.as_chunks::<4>().0)
         .filter(|(marked, plain)| lead(marked) - lead(plain) >= RED_LEAD)
         .count()
+}
+
+/// The box of a pocket standing in the hollow ball's cavity, its own bounds grown by
+/// `slack_mm`: what the drainage check hands a frame for the resin it found. See ADR 0200.
+fn pocket(slack_mm: f32) -> [TrapBox; 1] {
+    let centre = Vec3::new(75.0, 40.0, 45.0);
+    let reach = Vec3::splat(40.0 + slack_mm);
+    [TrapBox {
+        low: (centre - reach).extend(0.0).to_array(),
+        high: (centre + reach).extend(0.0).to_array(),
+    }]
 }
 
 /// The cavity of the hollow ball, painted in the red of resin with no way out. `volume` is
@@ -560,6 +618,7 @@ fn paint_textured(camera: OrbitCamera, draw: &ReliefDraw) -> Option<Vec<u8>> {
             label: &[],
             atlas: None,
             cuts: &[],
+            pockets: &[],
             bands: &[],
             band_floor_mm: 0.0,
             volume_mm: None,
@@ -598,6 +657,7 @@ fn paint_after<'a>(
 ) -> Option<Vec<u8>> {
     let Marks {
         cuts,
+        pockets,
         bands,
         band_floor_mm,
         volume_mm,
@@ -621,6 +681,7 @@ fn paint_after<'a>(
         label: &[],
         atlas: None,
         cuts,
+        pockets,
         bands,
         band_floor_mm,
         volume_mm,

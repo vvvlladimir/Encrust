@@ -4,8 +4,8 @@ use crate::job::HollowJob;
 use crate::panels::Window;
 use crate::state::{Doc, Tools};
 use crate::ui::{
-    Segment, Segmented, describe, hint, icon, nested, number_row, primary_button, secondary_button,
-    section, stats, subheading, switch, theme, tone,
+    Segment, Segmented, describe, hint, icon, nested, notice, number_row, primary_button,
+    secondary_button, section, stats, subheading, switch, theme, tone,
 };
 
 /// Per point of drag. A wall is measured in whole millimetres, precision and density in
@@ -55,8 +55,8 @@ pub fn ui(ui: &mut egui::Ui, window: &mut Window) {
     });
 }
 
-/// What the check after a run found: whether the resin can get out of the cavity. The
-/// holes themselves are the Drain tool's, not this panel's. See ADR 0190.
+/// What the last drainage check found, where the cavity it was found in is. The check
+/// itself and the holes are the Drain tool's; see ADR 0190, 0198.
 fn drainage(ui: &mut egui::Ui, window: &mut Window) {
     if window.tools.drain.job.is_some() {
         subheading(ui, "Drainage");
@@ -75,13 +75,8 @@ fn drainage(ui: &mut egui::Ui, window: &mut Window) {
         .targets()
         .map(|object| object.traps.found().len())
         .sum();
-    let hollowed = window
-        .doc
-        .scene
-        .targets()
-        .any(|object| object.hollow.is_hollow());
     if trapped == 0 {
-        if window.tools.drain.checked && hollowed {
+        if window.tools.drain.checked {
             subheading(ui, "Drainage");
             tone(
                 ui,
@@ -92,18 +87,16 @@ fn drainage(ui: &mut egui::Ui, window: &mut Window) {
         return;
     }
 
+    let colors = theme::colors();
     subheading(ui, "Drainage");
-    tone(
+    notice(
         ui,
-        &format!("Resin is trapped in {trapped} place(s) — put a hole in each."),
-        theme::colors().danger,
-    );
-    ui.add_space(2.0);
-    describe(
-        ui,
-        "The model is shown through, and the space that fills with resin is painted red \
-         inside it. Drain holes go in with the Drain tool, and the red goes once the \
-         resin can get out.",
+        icon::WARNING,
+        colors.danger,
+        colors.danger_wash,
+        &format!("Resin is trapped in {trapped} place(s)"),
+        "Each one needs a hole of its own. Turn the x-ray on to see the space it fills, \
+         and put the holes in with the Drain tool.",
     );
 }
 

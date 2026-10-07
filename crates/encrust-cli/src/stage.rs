@@ -220,25 +220,34 @@ pub fn plate_of(
     let mut parts = Vec::with_capacity(entries.len());
     let mut models = Vec::with_capacity(entries.len());
     for ((mut mesh, import, oriented), (path, shaping)) in placed.into_iter().zip(entries) {
-        let hollow = hollow_and_cut(
+        let (hollow, mut cuts) = hollow_and_cut(
             &mut mesh,
             &shaping.hollow,
             shaping.import.precision,
             watch.talk,
         )?;
         watch.stop.check()?;
-        let supports = shaping
+        let stood = shaping
             .supports
             .as_ref()
-            .map(|profile| stand_under(&mut mesh, profile, layer_height))
+            .map(|profile| stand_under(&mut mesh, &mut cuts, profile, layer_height))
             .transpose()?;
+        let (supports, columns) = match stood {
+            Some((report, mesh)) => (Some(report), vec![Arc::new(mesh)]),
+            None => (None, Vec::new()),
+        };
         if watch.talk
             && let Some(report) = &supports
         {
             print!("{report}");
         }
         watch.stop.check()?;
-        models.push(Model::placed(Arc::new(mesh), Transform::default()));
+        models.push(Model {
+            mesh: Arc::new(mesh),
+            transform: Transform::default(),
+            cuts: cuts.map(Arc::new),
+            supports: columns,
+        });
         parts.push(Part {
             input: path.clone(),
             import: Some(import),

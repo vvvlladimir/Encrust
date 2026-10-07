@@ -2,7 +2,7 @@ use std::num::NonZeroU8;
 
 use core_geometry::{Mesh, Scalar};
 
-use crate::engine::{PlaneSliceEngine, SliceEngine, layer_heights, on_the_plate};
+use crate::engine::{PlaneSliceEngine, SliceEngine, layer_heights_under, on_the_plate};
 use crate::{Layer, LayerPlan, SliceError, SliceSettings, Sliced};
 
 /// Layers cut in one go before their contours are handed on and dropped.
@@ -23,10 +23,21 @@ pub struct Windows {
 
 impl Windows {
     pub fn new(mesh: &Mesh, settings: SliceSettings, window: usize) -> Result<Self, SliceError> {
+        Self::under(mesh, settings, window, Scalar::INFINITY)
+    }
+
+    /// A run that plans nothing above `ceiling_mm`, for a mesh carrying bodies that only
+    /// subtract; see [`crate::layer_heights_under`].
+    pub fn under(
+        mesh: &Mesh,
+        settings: SliceSettings,
+        window: usize,
+        ceiling_mm: Scalar,
+    ) -> Result<Self, SliceError> {
         // Asking for the heights first is what rejects a zero layer height and an empty
         // mesh, which a plan built from bounds alone could not.
-        let heights = layer_heights(mesh, &settings)?;
-        let (z_min, z_max) = on_the_plate(mesh)?;
+        let heights = layer_heights_under(mesh, &settings, ceiling_mm)?;
+        let (z_min, z_max) = on_the_plate(mesh, ceiling_mm)?;
         Ok(Self {
             settings,
             plan: LayerPlan::uniform(&settings, z_min, z_max),

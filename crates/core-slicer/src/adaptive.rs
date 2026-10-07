@@ -71,8 +71,17 @@ const APART_MM: Scalar = 1e-4;
 /// the thinnest. A flat face does not stair-step at all — it asks for a boundary of its
 /// own, and gets one. See `docs/design/slicing.md`.
 pub fn plan(mesh: &Mesh, settings: &AdaptiveSettings) -> Result<LayerPlan, SliceError> {
+    plan_under(mesh, settings, Scalar::INFINITY)
+}
+
+/// The same, with nothing planned above `ceiling_mm`; see [`crate::layer_heights_under`].
+pub fn plan_under(
+    mesh: &Mesh,
+    settings: &AdaptiveSettings,
+    ceiling_mm: Scalar,
+) -> Result<LayerPlan, SliceError> {
     settings.validate()?;
-    let (z_min, z_max) = on_the_plate(mesh)?;
+    let (z_min, z_max) = on_the_plate(mesh, ceiling_mm)?;
     if z_max <= z_min {
         return Ok(LayerPlan::from_bounds(Vec::new(), z_max));
     }

@@ -68,6 +68,12 @@ is cut: a layer there would drive the plate into the vat floor. A mesh reaching 
 cut from the plate up, with a warning, and one wholly under it is
 `SliceError::UnderThePlate` rather than an empty stack (ADR 0187).
 
+`z_max` is the mesh's top, or the ceiling the caller named, whichever stands lower:
+`Windows::under`, `adaptive_plan_under` and `layer_heights_under`. A plate carries bodies
+that only subtract and a drain hole reaches past the surface it pierces (ADR 0071), so a
+hole near the top of a model stands over everything that prints; `bake` measures the
+material without them and hands the height over (ADR 0199).
+
 Sampling the middle rather than an edge matters because model vertices land on layer
 boundaries all the time: CAD work is done on a 0.05 mm grid and printed at 0.05 mm layers.
 A plane on the boundary would meet those vertices head on. A plane in the middle of the

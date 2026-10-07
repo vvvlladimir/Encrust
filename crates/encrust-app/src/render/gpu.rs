@@ -43,6 +43,12 @@ pub const MAX_CUTS: usize = 64;
 /// `shader.wgsl`.
 pub const MAX_BANDS: usize = 8;
 
+/// How many pockets of trapped resin the globals carry room for. Must match
+/// `MAX_POCKETS` in `shader.wgsl`. A plate with more than this many pockets in it has a
+/// cavity to rethink rather than a picture; what is past it goes unpainted, never
+/// unreported. See `docs/decisions/0200`.
+pub const MAX_POCKETS: usize = 32;
+
 #[repr(C)]
 #[derive(Debug, Clone, Copy, Pod, Zeroable)]
 struct Globals {
@@ -76,6 +82,18 @@ struct Globals {
     cut_color: [f32; 4],
     cuts: [DrainCut; MAX_CUTS],
     bands: [ExposureBand; MAX_BANDS],
+    pockets: [TrapBox; MAX_POCKETS],
+}
+
+/// The box one pocket of trapped resin stands in, plate millimetres: what the cavity is
+/// painted red inside of, and nowhere else. See ADR 0200.
+#[repr(C)]
+#[derive(Debug, Clone, Copy, Default, Pod, Zeroable)]
+pub struct TrapBox {
+    /// `xyz` is the near corner; `w` is unused padding.
+    pub low: [f32; 4],
+    /// `xyz` is the far corner; `w` is unused padding.
+    pub high: [f32; 4],
 }
 
 /// One band of print height that takes an exposure of its own, for the fragment shader to
@@ -200,6 +218,9 @@ pub struct FrameInput<'a> {
     /// The holes and channels already cut into the models being drawn, subtracted per
     /// fragment because the meshes themselves are never cut; see ADR 0071, 0073.
     pub cuts: &'a [DrainCut],
+    /// The pockets of resin the last drainage check found, which is where the cavity is
+    /// painted red and nowhere else; see ADR 0200.
+    pub pockets: &'a [TrapBox],
     /// The models drawn with their own texture on them rather than flat, which is what
     /// the Relief tool shows; see ADR 0116.
     pub reliefs: &'a [ReliefDraw],
@@ -405,6 +426,7 @@ impl ViewportResources {
             label,
             atlas,
             cuts,
+            pockets,
             reliefs,
             bands,
             band_floor_mm,
@@ -418,6 +440,9 @@ impl ViewportResources {
         let mut washes = [ExposureBand::default(); MAX_BANDS];
         let banded = bands.len().min(MAX_BANDS);
         washes[..banded].copy_from_slice(&bands[..banded]);
+        let mut trapped = [TrapBox::default(); MAX_POCKETS];
+        let held = pockets.len().min(MAX_POCKETS);
+        trapped[..held].copy_from_slice(&pockets[..held]);
         queue.write_buffer(
             &self.globals,
             0,
@@ -428,7 +453,7 @@ impl ViewportResources {
                     .extend(if xray { theme::SEEN_THROUGH } else { 0.0 })
                     .to_array(),
                 section: section(section_mm),
-                counts: [taken as f32, banded as f32, band_floor_mm, 0.0],
+                counts: [taken as f32, banded as f32, band_floor_mm, held as f32],
                 overhang_color: theme::gamma(theme::scene().overhang),
                 inside_color: theme::gamma(theme::scene().section_wash),
                 volume: volume_mm.map_or([0.0; 4], |volume| volume.extend(1.0).to_array()),
@@ -441,6 +466,7 @@ impl ViewportResources {
                 cut_color: theme::gamma(theme::scene().cut_line),
                 cuts: drains,
                 bands: washes,
+                pockets: trapped,
             }),
         );
 

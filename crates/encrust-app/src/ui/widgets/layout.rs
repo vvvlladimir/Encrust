@@ -183,6 +183,41 @@ pub fn nested<R>(ui: &mut Ui, add: impl FnOnce(&mut Ui) -> R) -> R {
     shown.inner
 }
 
+/// A verdict that has to be seen before anything else in its block: a glyph in `tint`, a
+/// title and a line saying what to do about it, on a wash of the same colour.
+pub fn notice(
+    ui: &mut Ui,
+    glyph: &str,
+    tint: egui::Color32,
+    wash: egui::Color32,
+    title: &str,
+    why: &str,
+) {
+    Frame::new()
+        .fill(wash)
+        .corner_radius(theme::R_SURFACE)
+        .inner_margin(theme::CARD_MARGIN)
+        .show(ui, |ui| {
+            ui.set_width(ui.available_width());
+            ui.horizontal_top(|ui| {
+                ui.label(RichText::new(glyph).font(theme::icon(22.0)).color(tint));
+                ui.vertical(|ui| {
+                    ui.spacing_mut().item_spacing.y = 3.0;
+                    ui.label(
+                        RichText::new(title)
+                            .heading()
+                            .color(theme::colors().text_high),
+                    );
+                    ui.label(
+                        RichText::new(why)
+                            .font(theme::small())
+                            .color(theme::colors().text_mid),
+                    );
+                });
+            });
+        });
+}
+
 /// The frame of anything that floats over the viewport.
 pub fn card() -> Frame {
     Frame::new()

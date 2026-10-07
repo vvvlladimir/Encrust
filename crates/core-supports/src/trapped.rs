@@ -1,4 +1,4 @@
-use core_geometry::{FastMap, Scalar, Vec2, Vec3};
+use core_geometry::{Aabb, FastMap, Scalar, Vec2, Vec3};
 use core_slicer::Layer;
 
 use crate::config::GRID_PITCH_MM;
@@ -16,6 +16,9 @@ pub struct Trapped {
     pub at: Vec3,
     /// What the pocket holds, cubic millimetres.
     pub volume_mm3: Scalar,
+    /// The box it stands in, plate millimetres, out to the edge of the cells it filled.
+    /// What marks this pocket on screen and nothing else; see ADR 0200.
+    pub bounds: Aabb,
 }
 
 /// Finds the trapped resin in a stack, a layer at a time and in print order.
@@ -59,6 +62,12 @@ impl Air {
 #[derive(Debug)]
 struct Pocket {
     cells: u64,
+    /// The cells it has reached, and the heights it was seen at: `x0`..`x1` across,
+    /// `row` up, in the grid's own numbering.
+    box_low: Air,
+    box_high: Air,
+    low_z: Scalar,
+    high_z: Scalar,
     /// The pocket has reached the edge of the grid or the plate, so the resin in it has
     /// somewhere to go.
     open: bool,
@@ -203,6 +212,18 @@ impl TrapScan {
         };
         kept.cells += gone.cells;
         kept.open |= gone.open;
+        kept.box_low = Air::new(
+            kept.box_low.row.min(gone.box_low.row),
+            kept.box_low.x0.min(gone.box_low.x0),
+            kept.box_low.x1.min(gone.box_low.x1),
+        );
+        kept.box_high = Air::new(
+            kept.box_high.row.max(gone.box_high.row),
+            kept.box_high.x0.max(gone.box_high.x0),
+            kept.box_high.x1.max(gone.box_high.x1),
+        );
+        kept.low_z = kept.low_z.min(gone.low_z);
+        kept.high_z = kept.high_z.max(gone.high_z);
         let deeper = gone.floor_layer < kept.floor_layer;
         let wider = gone.floor_layer == kept.floor_layer && gone.floor.width() > kept.floor.width();
         if deeper || wider {
@@ -218,6 +239,10 @@ impl TrapScan {
     fn open_pocket(&mut self) -> usize {
         let pocket = Pocket {
             cells: 0,
+            box_low: Air::new(i32::MAX, i32::MAX, i32::MAX),
+            box_high: Air::new(i32::MIN, i32::MIN, i32::MIN),
+            low_z: Scalar::INFINITY,
+            high_z: Scalar::NEG_INFINITY,
             // The first layer of a stack stands on the plate, so air inside it drains
             // straight out onto it.
             open: self.layers == 0,
@@ -246,6 +271,18 @@ impl TrapScan {
         };
         pocket.cells += run.width().max(0) as u64;
         pocket.open |= on_edge;
+        pocket.box_low = Air::new(
+            pocket.box_low.row.min(run.row),
+            pocket.box_low.x0.min(run.x0),
+            pocket.box_low.x1.min(run.x1),
+        );
+        pocket.box_high = Air::new(
+            pocket.box_high.row.max(run.row),
+            pocket.box_high.x0.max(run.x0),
+            pocket.box_high.x1.max(run.x1),
+        );
+        pocket.low_z = pocket.low_z.min(z);
+        pocket.high_z = pocket.high_z.max(z);
         if pocket.floor_layer == layer {
             pocket.floor_z = z;
             if run.width() > pocket.floor.width() {
@@ -285,6 +322,19 @@ impl TrapScan {
         }
     }
 
+    /// The box one pocket fills, plate millimetres: the cells it reached out to their
+    /// own edges, and half a layer past the heights it was seen at.
+    fn box_of(&self, pocket: &Pocket) -> Aabb {
+        let half = self.layer_height_mm / 2.0;
+        let low = self.grid.centre_mm(pocket.box_low.x0, pocket.box_low.row);
+        let high = self.grid.centre_mm(pocket.box_high.x1, pocket.box_high.row);
+        let cell = self.grid.millimetres_of(1) / 2.0;
+        Aabb::new(
+            Vec3::new(low.x - cell, low.y - cell, pocket.low_z - half),
+            Vec3::new(high.x + cell, high.y + cell, pocket.high_z + half),
+        )
+    }
+
     /// Retires every pocket this layer did not reach: the stack has closed over it, and
     /// one that never found a way out is trapped resin.
     fn close_unseen(&mut self, seen: &[bool]) {
@@ -307,6 +357,7 @@ impl TrapScan {
             self.found.push(Trapped {
                 at: Vec3::new(middle.x, middle.y, pocket.floor_z),
                 volume_mm3,
+                bounds: self.box_of(&pocket),
             });
         }
     }
@@ -500,6 +551,35 @@ mod tests {
         let found = scan(&[false, true, true, false, true, true, false]);
         assert_eq!(found.len(), 2, "one pocket each side of the floor between");
         assert!(found[0].at.z < found[1].at.z || found[1].at.z < found[0].at.z);
+    }
+
+    /// Each pocket carries the space it fills, not the cavity it is part of: that box is
+    /// what marks it on screen, so two pockets that stand apart may not overlap. See
+    /// ADR 0200.
+    #[test]
+    fn each_pocket_carries_the_box_it_fills() {
+        let found = scan(&[false, true, true, false, true, true, false]);
+        let (low, high) = if found[0].at.z < found[1].at.z {
+            (found[0].bounds, found[1].bounds)
+        } else {
+            (found[1].bounds, found[0].bounds)
+        };
+
+        assert!(
+            low.maxs.z <= high.mins.z,
+            "the floor between them keeps the boxes apart, got {low:?} and {high:?}"
+        );
+        // The 10 mm hole in the middle of the square, over two 0.5 mm layers each.
+        for pocket in [low, high] {
+            assert!(
+                pocket.mins.x >= 14.0 && pocket.maxs.x <= 26.0,
+                "a 10 mm pocket at 15..25 mm is held within a cell of itself, got {pocket:?}"
+            );
+            assert!(
+                (pocket.maxs.z - pocket.mins.z - 1.0).abs() < 0.3,
+                "two 0.5 mm layers of air is a millimetre tall, got {pocket:?}"
+            );
+        }
     }
 
     #[test]

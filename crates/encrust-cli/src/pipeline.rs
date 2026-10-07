@@ -130,13 +130,15 @@ pub fn import(
     Ok((mesh, import, oriented))
 }
 
-/// Shells the model when asked to, then cuts its drain holes and channels.
+/// Shells the model when asked to, then meshes the bodies its drain holes and channels
+/// cut out of it. Those stay apart from the model: they only subtract, so they are no
+/// part of what the stack has to be tall enough for (ADR 0199).
 pub fn hollow_and_cut(
     mesh: &mut Mesh,
     args: &HollowArgs,
     precision: Scalar,
     talk: bool,
-) -> Result<Option<HollowReport>> {
+) -> Result<(Option<HollowReport>, Option<Mesh>)> {
     // Where the cuts land is read off the model as it was imported; what they are cut
     // into may be the shell. See ADR 0075.
     let placed = args
@@ -155,13 +157,15 @@ pub fn hollow_and_cut(
         *mesh = shelled;
         hollow = Some(report);
     }
+    let mut bodies = None;
     if let Some(placed) = placed {
-        let cuts = hollowing::cut(mesh, placed, wall)?;
+        let (cuts, meshed) = hollowing::cut(placed, wall)?;
         if talk {
             print!("{cuts}");
         }
+        bodies = Some(meshed);
     }
-    Ok(hollow)
+    Ok((hollow, bodies))
 }
 
 /// How the stack is cut, and what the resin's shrinkage does to it on the way in.
@@ -230,13 +234,14 @@ fn cut_without_a_container(
 ) -> Result<(SliceReport, Option<RasterReport>)> {
     let material = &staged.material;
     let cutting = &staged.cutting;
-    let mesh = bake(&staged.models, &cutting.compensation).context("nothing to slice")?;
-    let windows = cut(&mesh, cutting)?;
-    let mut slice = report_of(&mesh, &windows, staged.drainage);
+    let baked = bake(&staged.models, &cutting.compensation).context("nothing to slice")?;
+    let windows = cut(&baked, cutting)?;
+    let mesh = &baked.mesh;
+    let mut slice = report_of(mesh, &windows, staged.drainage);
 
     let Some(profile) = staged.printer.as_ref() else {
         tracing::warn!("rasterisation needs --profile to know the panel; nothing was written");
-        measure(&mesh, &windows, &mut slice, stop)?;
+        measure(mesh, &windows, &mut slice, stop)?;
         return Ok((slice, None));
     };
 
@@ -245,7 +250,7 @@ fn cut_without_a_container(
         .validate()
         .context("the panel cannot produce a usable mask")?;
     let report = write_stack(
-        &mesh,
+        mesh,
         &windows,
         &mut slice,
         &settings,

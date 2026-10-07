@@ -103,11 +103,12 @@ fn weighted(body: &Mesh) -> Mesh {
 /// the material it actually runs through, and the floor of a hole that stops in it.
 ///
 /// Drawn, never sliced. The cut itself reaches out past the surface so that no film is left
-/// over a mouth; a wall that did the same would stand out of the model as a boss, and one
-/// carried across a cavity would read as a rod. So each sector of each tube is cast along
-/// `mesh` and kept only where it is inside, and a hole's only for `wall_mm` past each entry
-/// when the model has been hollowed to that wall. A channel runs through the sleeve of wall
-/// its cavity keeps off it, so its wall is drawn its whole length and round every bend. See
+/// over a mouth; a wall that did the same would stand out of the model as a boss, a floor
+/// would stand out of it as a coin, and either carried across a cavity would read as a rod.
+/// So the wall and the floor alike are cast along `mesh` a line per sector and kept only
+/// where they are inside, and a hole's wall only for `wall_mm` past each entry when the
+/// model has been hollowed to that wall. A channel runs through the sleeve of wall its
+/// cavity keeps off it, so its wall is drawn its whole length and round every bend. See
 /// ADR 0073 and 0188.
 pub fn bores(
     mesh: &Mesh,
@@ -190,59 +191,121 @@ fn wall(
         from + (to - from) * along + (right * cos + up * sin) * radius
     };
 
+    let reach = wall_mm.map(|wall| wall / length);
+    let edges: Vec<Vec<(Scalar, Scalar)>> = (0..SIDES)
+        .map(|side| {
+            let across = around(right, up, side as Scalar);
+            solid_runs(
+                mesh,
+                bvh,
+                from + across * radius_from,
+                to + across * radius_to,
+                reach,
+            )
+        })
+        .collect();
+
+    // A run ending where its reach ran out ended in the cavity, not in material: the tube
+    // is through it, and a floor drawn there is a coin standing in the hollow.
+    let slack = 2.0 * SKIN_MM / length;
+    let stops_in_material =
+        |run: Run| run.1 >= 1.0 && reach.is_none_or(|reach| run.0 + reach > 1.0 + slack);
+
     let mut walls = Mesh::default();
     let mut floored = false;
     for side in 0..SIDES {
-        let middle = side as Scalar + 0.5;
-        let angle = std::f32::consts::TAU * middle / SIDES as Scalar;
-        let (sin, cos) = angle.sin_cos();
-        let across = right * cos + up * sin;
-        let runs = solid_runs(
-            mesh,
-            bvh,
-            from + across * radius_from,
-            to + across * radius_to,
-            wall_mm.map(|wall| wall / length),
-        );
-
         let next = (side + 1) % SIDES;
-        for (start, end) in &runs {
+        for (here, there) in paired(&edges[side], &edges[next]) {
             let quad = [
-                at(side, *start),
-                at(next, *start),
-                at(next, *end),
-                at(side, *end),
+                at(side, here.0),
+                at(next, there.0),
+                at(next, there.1),
+                at(side, here.1),
             ];
             let base = walls.vertices.len() as u32;
             walls.vertices.extend_from_slice(&quad);
             // Wound so the surface faces the axis: a bore is looked into, not at.
             walls.faces.push([base, base + 2, base + 1]);
             walls.faces.push([base, base + 3, base + 2]);
-            floored |= floor && *end >= 1.0;
+            floored |= floor && stops_in_material(here) && stops_in_material(there);
         }
     }
     if floored {
-        append(&mut walls, &disc(to, from - to, radius_to));
+        append(&mut walls, &disc(mesh, bvh, to, from - to, radius_to));
     }
     walls
 }
 
-/// A flat cap of `radius_mm` at `center`, facing `towards`.
-fn disc(center: Vec3, towards: Vec3, radius_mm: Scalar) -> Mesh {
+/// The unit vector `side` steps round `right` and `up`, `SIDES` to the turn.
+fn around(right: Vec3, up: Vec3, side: Scalar) -> Vec3 {
+    let (sin, cos) = (std::f32::consts::TAU * side / SIDES as Scalar).sin_cos();
+    right * cos + up * sin
+}
+
+/// The runs of two sorted lists of disjoint runs that overlap, each kept as it stands.
+///
+/// A strip hangs between two lines and is drawn only where both of them run through
+/// material, so a bore across an edge of the model stops a sector short of that edge
+/// rather than hanging a sector of itself out into the air; within a sector each end
+/// follows its own line, so the strip meets the surface where the surface is. Being short
+/// reads as the hole it is; standing proud reads as added material.
+type Run = (Scalar, Scalar);
+
+fn paired(left: &[Run], right: &[Run]) -> Vec<(Run, Run)> {
+    let (mut here, mut there) = (0, 0);
+    let mut both = Vec::new();
+    while let (Some(one), Some(other)) = (left.get(here), right.get(there)) {
+        if one.1.min(other.1) - one.0.max(other.0) > 1e-4 {
+            both.push((*one, *other));
+        }
+        if one.1 < other.1 {
+            here += 1;
+        } else {
+            there += 1;
+        }
+    }
+    both
+}
+
+/// The flat cap of `radius_mm` at `center` facing `towards`, kept only over the stretches
+/// of each radius that run through `mesh`.
+///
+/// A hole drilled across an edge of the model ends half in the air, and a whole disc drawn
+/// there stands out of the part as a coin. So each sector is cast outward from the centre
+/// the way [`wall`] casts along the tube, and only what lands in material is drawn.
+fn disc(mesh: &Mesh, bvh: &Bvh, center: Vec3, towards: Vec3, radius_mm: Scalar) -> Mesh {
     let Some(axis) = towards.try_normalize() else {
         return Mesh::default();
     };
     let (right, up) = frame(axis);
-    let mut vertices = vec![center];
-    for side in 0..SIDES {
-        let angle = std::f32::consts::TAU * side as Scalar / SIDES as Scalar;
-        let (sin, cos) = angle.sin_cos();
-        vertices.push(center + (right * cos + up * sin) * radius_mm);
-    }
-    let faces = (0..SIDES as u32)
-        .map(|side| [0, 1 + side, 1 + (side + 1) % SIDES as u32])
+    let at =
+        |side: usize, along: Scalar| center + around(right, up, side as Scalar) * radius_mm * along;
+
+    let spokes: Vec<Vec<(Scalar, Scalar)>> = (0..SIDES)
+        .map(|side| {
+            let across = around(right, up, side as Scalar);
+            solid_runs(mesh, bvh, center, center + across * radius_mm, None)
+        })
         .collect();
-    Mesh::new(vertices, faces)
+
+    let mut cap = Mesh::default();
+    for side in 0..SIDES {
+        let next = (side + 1) % SIDES;
+        for (here, there) in paired(&spokes[side], &spokes[next]) {
+            let base = cap.vertices.len() as u32;
+            cap.vertices.extend_from_slice(&[
+                at(side, here.0),
+                at(next, there.0),
+                at(next, there.1),
+                at(side, here.1),
+            ]);
+            cap.faces.push([base, base + 3, base + 2]);
+            if here.0.max(there.0) > 0.0 {
+                cap.faces.push([base, base + 2, base + 1]);
+            }
+        }
+    }
+    cap
 }
 
 /// Where the segment from `from` to `to` runs inside `mesh`, as fractions of its length.
@@ -662,6 +725,62 @@ mod tests {
     }
 
     #[test]
+    fn a_bore_across_an_edge_of_the_model_is_drawn_only_inside_it() {
+        let mesh = box_mesh();
+        let bvh = Bvh::build(&mesh);
+        // Half a radius in from the corner: half of this tube stands in the air beside
+        // the box, and the floor it ends on is a half disc.
+        let hole = DrainHole {
+            at: Vec3::new(0.5, 5.0, 10.0),
+            axis: Vec3::NEG_Z,
+            diameter_mm: 2.0,
+            depth_mm: 4.0,
+            taper: 1.0,
+            lift_mm: 0.0,
+        };
+
+        let bore = bores(&mesh, &bvh, &[hole], &[], None).expect("a 2 mm hole has a wall");
+        assert!(
+            !bore.is_empty(),
+            "the half of the tube that is in material still has a wall and a floor"
+        );
+        // Each cast steps SKIN_MM past the face it crossed, which is as far outside the
+        // box as a boundary found that way can land.
+        let outside = bore
+            .vertices
+            .iter()
+            .filter(|vertex| vertex.x < -2.0 * SKIN_MM)
+            .count();
+        assert_eq!(
+            outside, 0,
+            "{outside} vertices of the bore stand outside the box it is drilled in"
+        );
+    }
+
+    #[test]
+    fn a_blind_hole_is_floored_to_its_middle() {
+        let mesh = box_mesh();
+        let bvh = Bvh::build(&mesh);
+        let hole = DrainHole {
+            at: Vec3::new(5.0, 5.0, 10.0),
+            axis: Vec3::NEG_Z,
+            diameter_mm: 2.0,
+            depth_mm: 4.0,
+            taper: 1.0,
+            lift_mm: 0.0,
+        };
+
+        let bore = bores(&mesh, &bvh, &[hole], &[], None).expect("a 2 mm hole has a wall");
+        let middle = Vec3::new(5.0, 5.0, 6.0);
+        assert!(
+            bore.vertices
+                .iter()
+                .any(|vertex| (*vertex - middle).length() < 0.01),
+            "the floor of a hole that ends in material reaches its own axis"
+        );
+    }
+
+    #[test]
     fn a_wall_is_drawn_only_where_the_tube_runs_through_material() {
         let mesh = box_mesh();
         let bvh = Bvh::build(&mesh);
@@ -702,6 +821,41 @@ mod tests {
         assert!(
             !carried,
             "a wall carried across the cavity reads as a rod standing in it"
+        );
+    }
+
+    /// A hole deepened to go through the wall ends in the cavity, and the floor it would
+    /// be given there is a coin capping the hole: the hole reads as a dimple instead of
+    /// opening into what it drains.
+    #[test]
+    fn a_hole_through_the_wall_of_a_hollow_model_has_no_floor() {
+        let mesh = box_mesh();
+        let bvh = Bvh::build(&mesh);
+        let wall_mm = 2.4;
+        let floor = |depth_mm| {
+            let hole = DrainHole {
+                at: Vec3::new(5.0, 5.0, 10.0),
+                axis: Vec3::NEG_Z,
+                diameter_mm: 2.0,
+                depth_mm,
+                taper: 1.0,
+                lift_mm: 0.0,
+            };
+            let bore = bores(&mesh, &bvh, &[hole], &[], Some(wall_mm)).expect("the hole drills");
+            // Only a floor reaches the axis of the tube; a wall stands at its radius.
+            let tip = Vec3::new(5.0, 5.0, 10.0 - depth_mm);
+            bore.vertices
+                .iter()
+                .any(|vertex| (*vertex - tip).length() < 0.01)
+        };
+
+        assert!(
+            !floor(wall_mm),
+            "a hole as deep as the wall is through it and opens into the cavity"
+        );
+        assert!(
+            floor(wall_mm / 2.0),
+            "a hole that stops inside the wall still ends on material"
         );
     }
 

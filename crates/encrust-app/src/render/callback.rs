@@ -10,7 +10,8 @@ use egui_wgpu::{CallbackResources, CallbackTrait, ScreenDescriptor};
 use crate::camera::OrbitCamera;
 use crate::plate::BuildPlate;
 use crate::render::gpu::{
-    CutLine, DrainCut, ExposureBand, FrameInput, MAX_BANDS, MAX_CUTS, ModelDraw, ReliefDraw,
+    CutLine, DrainCut, ExposureBand, FrameInput, MAX_BANDS, MAX_CUTS, MAX_POCKETS, ModelDraw,
+    ReliefDraw, TrapBox,
 };
 use crate::render::grid::plate_lines;
 use crate::render::label;
@@ -49,6 +50,9 @@ pub struct ViewportCallback {
     /// meshes still carry every triangle they had, so the shader is what subtracts them;
     /// see `docs/decisions/0073`.
     cuts: Vec<DrainCut>,
+    /// Where the last drainage check found resin with no way out, in plate millimetres:
+    /// the cavity is painted red inside these boxes and nowhere else; see ADR 0200.
+    pockets: Vec<TrapBox>,
     /// The models drawn with their own texture on them: only the Relief tool asks for it,
     /// and only a model that still carries one can be drawn that way.
     reliefs: Vec<ReliefDraw>,
@@ -106,6 +110,7 @@ impl ViewportCallback {
             models,
             solids,
             cuts,
+            pockets,
             reliefs,
         } = Draws::of(scene, overhang_deg.map_or(NOT_MARKED, marking), textured);
 
@@ -125,6 +130,7 @@ impl ViewportCallback {
             label,
             atlas,
             cuts,
+            pockets,
             reliefs,
             bands: bands_of(banding.ranges),
             band_floor_mm: banding.floor_mm,
@@ -141,6 +147,7 @@ struct Draws {
     models: Vec<ModelDraw>,
     solids: Vec<ModelDraw>,
     cuts: Vec<DrainCut>,
+    pockets: Vec<TrapBox>,
     reliefs: Vec<ReliefDraw>,
 }
 
@@ -228,9 +235,10 @@ impl Draws {
     }
 
     /// The cavity of a model the last drainage check found resin in, painted in its own
-    /// red: that whole space fills with resin unless a hole is drilled into it. It is the
-    /// shell's own cavity faces rather than a mesh of its own, so nothing is uploaded
-    /// twice, and the x-ray never washes it down. See ADR 0190.
+    /// red where a pocket stands in it: that space fills with resin unless a hole is
+    /// drilled into it. It is the shell's own cavity faces rather than a mesh of its own,
+    /// so nothing is uploaded twice, and the x-ray never washes it down; which part of
+    /// them paints is the shader's own test against the pockets. See ADR 0190, 0200.
     fn traps(&mut self, object: &SceneObject) {
         if object.traps.found().is_empty() {
             return;
@@ -239,6 +247,9 @@ impl Draws {
         else {
             return;
         };
+        self.pockets
+            .extend(pockets_of(object.traps.found(), object.transform));
+        self.pockets.truncate(MAX_POCKETS);
         self.models.push(ModelDraw::part(
             Arc::clone(shell),
             cavity,
@@ -352,6 +363,32 @@ pub(crate) fn cuts_of(
     cuts
 }
 
+/// The boxes of the pockets found in one model, carried onto the plate: a pocket travels
+/// with the model it was found in, the way a hole does.
+fn pockets_of(found: &[core_supports::Trapped], transform: Transform) -> Vec<TrapBox> {
+    let matrix = transform.to_matrix();
+    found
+        .iter()
+        .map(|pocket| {
+            let mut placed = core_geometry::Aabb::new(
+                matrix.transform_point3(pocket.bounds.mins),
+                matrix.transform_point3(pocket.bounds.mins),
+            );
+            for index in 1..8 {
+                let pick = |axis: usize| match index >> axis & 1 {
+                    0 => pocket.bounds.mins[axis],
+                    _ => pocket.bounds.maxs[axis],
+                };
+                placed.take_point(matrix.transform_point3(Vec3::new(pick(0), pick(1), pick(2))));
+            }
+            TrapBox {
+                low: placed.mins.extend(0.0).to_array(),
+                high: placed.maxs.extend(0.0).to_array(),
+            }
+        })
+        .collect()
+}
+
 /// Two triangles lying in the cutting plane, covering everything that could be cut. The
 /// stencil decides which of their fragments survive, so the quad only has to be big
 /// enough, never exact.
@@ -420,6 +457,7 @@ impl CallbackTrait for ViewportCallback {
                     label: &self.label,
                     atlas: self.atlas.clone(),
                     cuts: &self.cuts,
+                    pockets: &self.pockets,
                     reliefs: &self.reliefs,
                     bands: &self.bands,
                     band_floor_mm: self.band_floor_mm,
@@ -498,6 +536,7 @@ mod tests {
         object.traps.set(vec![Trapped {
             at: Vec3::splat(10.0),
             volume_mm3: 100.0,
+            bounds: core_geometry::Aabb::new(Vec3::splat(-50.0), Vec3::splat(50.0)),
         }]);
         scene
     }

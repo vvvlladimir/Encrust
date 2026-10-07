@@ -4,7 +4,7 @@ use std::sync::mpsc::{self, Receiver, TryRecvError};
 use core_geometry::Mesh;
 use core_slicer::Windows;
 
-use core_engine::{Cutting, cut};
+use core_engine::{Baked, Cutting, cut};
 
 use crate::job::pipeline::{thread_pool, worker_threads};
 
@@ -28,12 +28,12 @@ pub struct PreviewJob {
 }
 
 impl PreviewJob {
-    /// Starts cutting `mesh`, which already stands in plate coordinates.
-    pub fn spawn(mesh: Mesh, cutting: Cutting) -> Self {
+    /// Starts cutting `baked`, which already stands in plate coordinates.
+    pub fn spawn(baked: Baked, cutting: Cutting) -> Self {
         let (sender, result) = mpsc::channel();
 
         crate::job::spawn(move || {
-            let _ = sender.send(build(mesh, cutting));
+            let _ = sender.send(build(baked, cutting));
         });
 
         Self { result }
@@ -51,14 +51,14 @@ impl PreviewJob {
     }
 }
 
-fn build(mesh: Mesh, cutting: Cutting) -> PreviewOutcome {
+fn build(baked: Baked, cutting: Cutting) -> PreviewOutcome {
     let pool = match thread_pool(worker_threads()) {
         Ok(pool) => pool,
         Err(error) => return PreviewOutcome::Failed(error.to_string()),
     };
 
-    match pool.install(|| cut(&mesh, &cutting)) {
-        Ok(windows) => PreviewOutcome::Built(Arc::new(mesh), windows),
+    match pool.install(|| cut(&baked, &cutting)) {
+        Ok(windows) => PreviewOutcome::Built(Arc::new(baked.mesh), windows),
         Err(error) => PreviewOutcome::Failed(
             anyhow::Error::new(error)
                 .chain()
@@ -100,7 +100,10 @@ mod tests {
 
     #[test]
     fn a_build_comes_back_as_the_layers_the_plate_will_be_cut_into() {
-        let mut job = PreviewJob::spawn(tetrahedron(), Cutting::uniform(0.25));
+        let mut job = PreviewJob::spawn(
+            Baked::of(tetrahedron()).expect("a tetrahedron has geometry"),
+            Cutting::uniform(0.25),
+        );
         let PreviewOutcome::Built(mesh, windows) = wait(&mut job) else {
             panic!("a sound mesh slices");
         };
@@ -112,7 +115,10 @@ mod tests {
 
     #[test]
     fn a_layer_height_of_zero_comes_back_as_a_failure() {
-        let mut job = PreviewJob::spawn(tetrahedron(), Cutting::uniform(0.0));
+        let mut job = PreviewJob::spawn(
+            Baked::of(tetrahedron()).expect("a tetrahedron has geometry"),
+            Cutting::uniform(0.0),
+        );
         let PreviewOutcome::Failed(message) = wait(&mut job) else {
             panic!("a layer height of zero cannot produce a stack");
         };

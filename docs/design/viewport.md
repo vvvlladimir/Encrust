@@ -161,9 +161,9 @@ that decides.
 
 ## Seeing through the models
 
-The x-ray is a view of its own, not a tool: the view card and the View menu toggle it, and
-a drainage check that finds trapped resin opens it. The models are drawn by the same shader
-through a second pipeline with no depth at all — `depth_write` off and `depth_compare`
+The x-ray is a view of its own, not a tool: the view card and the View menu toggle it and
+nothing else ever does (ADR 0198). The models are drawn by the same shader through a
+second pipeline with no depth at all — `depth_write` off and `depth_compare`
 `Always` — so nothing hides anything and the wall, the cavity behind it, the lattice
 standing in it and the drain holes all paint, each adding its own wash. The more material
 a ray crosses, the brighter it reads.
@@ -188,6 +188,11 @@ Everything else applies to the flat pass alone: the plate, the machine, the sect
 a model drawn with its own texture are unchanged, so a relief still shows what it would
 press in.
 
+That red is kept to the pockets the check found: the globals carry up to `MAX_POCKETS`
+boxes in plate millimetres, and a volume fragment standing in none of them is discarded.
+A cavity is one mesh however many pockets stand in it, so without that test draining one
+of three would change nothing on screen (ADR 0200).
+
 That red is the shell's own cavity faces drawn a second time, not a mesh of its own: a
 `ModelDraw` names a face range, and `pieces` breaks a cached mesh at the ends of every
 range drawn from it as well as at the card's ceiling, so part of a mesh is a whole number
@@ -201,9 +206,6 @@ painted, so the draw of the whole shell *declares* that range as well — `Model
 holds against the ones asked for and uploads again when they differ, which is the net under
 that: without it the later frame asks for a range no piece lines up with and paints
 nothing at all.
-
-The turn from no trapped resin to some is what opens the view, never a later check with the
-same trouble, so a view closed by hand stays closed (ADR 0190).
 
 ## The Cut tool's plane
 

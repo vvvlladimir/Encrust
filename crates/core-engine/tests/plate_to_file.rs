@@ -8,7 +8,7 @@ use std::io::Cursor;
 use std::path::Path;
 use std::sync::Arc;
 
-use core_engine::{Cutting, Model, Plate, Run, bake, cut, parts};
+use core_engine::{Baked, Cutting, Model, Plate, Run, bake, cut, parts};
 use core_format::ExposurePlan;
 use core_geometry::{Aabb, Mesh, Scalar, Transform, Vec3};
 use core_pipeline::{Observer, PanelOverrides, SlicedFormat};
@@ -102,11 +102,46 @@ fn two_models_keep_all_their_faces_and_their_places() {
     let merged = bake(&[cube_at(0.0), cube_at(5.0)], &Compensation::default())
         .expect("two cubes have geometry");
 
-    assert_eq!(merged.faces.len(), 24);
-    assert_eq!(merged.vertices.len(), 16);
-    let bounds = merged.aabb().expect("the bake has vertices");
+    assert_eq!(merged.mesh.faces.len(), 24);
+    assert_eq!(merged.mesh.vertices.len(), 16);
+    let bounds = merged.mesh.aabb().expect("the bake has vertices");
     assert!(bounds.mins.abs_diff_eq(Vec3::ZERO, 1e-5));
     assert!(bounds.maxs.abs_diff_eq(Vec3::new(6.0, 1.0, 1.0), 1e-5));
+}
+
+/// A drain hole reaches past the surface it pierces so that no film is left over its
+/// mouth (ADR 0071), so one drilled near the top of a model stands over everything that
+/// prints. Cutting to the baked mesh would plan layers there, and they come out empty.
+#[test]
+fn a_cut_standing_over_the_model_adds_no_layer_to_the_stack() {
+    let model = Model {
+        mesh: Arc::new(box_mesh(Vec3::ZERO, Vec3::ONE)),
+        transform: Transform::default(),
+        cuts: Some(Arc::new(box_mesh(
+            Vec3::new(0.4, 0.4, 0.9),
+            Vec3::new(0.6, 0.6, 2.0),
+        ))),
+        supports: Vec::new(),
+    };
+
+    let baked = bake(std::slice::from_ref(&model), &Compensation::default())
+        .expect("the plate has geometry");
+    assert!(
+        (baked.ceiling_mm - 1.0).abs() < 1e-6,
+        "the cube is a millimetre tall whatever stands over it, got {}",
+        baked.ceiling_mm
+    );
+    assert!(
+        baked.mesh.aabb().expect("the bake has vertices").maxs.z > 1.5,
+        "the cut itself is still there to subtract with"
+    );
+
+    let windows = cut(&baked, &Cutting::uniform(0.1)).expect("a cube slices");
+    assert_eq!(
+        windows.layer_count(),
+        10,
+        "ten layers of a one millimetre cube, and nothing over it"
+    );
 }
 
 #[test]
@@ -114,7 +149,7 @@ fn the_second_models_faces_point_at_its_own_vertices() {
     let merged = bake(&[cube_at(0.0), cube_at(5.0)], &Compensation::default())
         .expect("two cubes have geometry");
 
-    for face in &merged.faces[12..] {
+    for face in &merged.mesh.faces[12..] {
         assert!(
             face.iter().all(|index| *index >= 8),
             "the second cube must index its own vertices"
@@ -142,8 +177,8 @@ fn a_support_goes_in_where_it_already_stands() {
 
     let merged = bake(std::slice::from_ref(&model), &Compensation::default())
         .expect("the plate has geometry");
-    assert_eq!(merged.faces.len(), 24, "the cube and the pillar");
-    let bounds = merged.aabb().expect("the bake has vertices");
+    assert_eq!(merged.mesh.faces.len(), 24, "the cube and the pillar");
+    let bounds = merged.mesh.aabb().expect("the bake has vertices");
     assert!(
         bounds.mins.z <= 0.0,
         "the pillar reaches the plate, so the bake starts at z = 0, got {}",
@@ -165,8 +200,8 @@ fn a_shrinking_resin_prints_the_part_larger_where_it_already_stood() {
     )
     .expect("a cube is there");
 
-    let before = plain.aabb().expect("a cube has bounds");
-    let after = grown.aabb().expect("a cube has bounds");
+    let before = plain.mesh.aabb().expect("a cube has bounds");
+    let after = grown.mesh.aabb().expect("a cube has bounds");
     let width = |bounds: &Aabb| bounds.maxs.x - bounds.mins.x;
     let middle = |bounds: &Aabb| Scalar::midpoint(bounds.mins.x, bounds.maxs.x);
     assert!(
@@ -210,7 +245,7 @@ fn every_layer_comes_through_exactly_once_whatever_the_window() {
     let mesh = box_mesh(Vec3::ZERO, Vec3::ONE);
     let collect = |slice_window: usize| {
         let windows = cut(
-            &mesh,
+            &Baked::of(mesh.clone()).expect("a cube has geometry"),
             &Cutting {
                 slice_window,
                 ..Cutting::uniform(0.1)

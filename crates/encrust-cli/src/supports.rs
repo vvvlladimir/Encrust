@@ -48,24 +48,31 @@ impl fmt::Display for SupportReport {
     }
 }
 
-/// Stands supports under `mesh`, in plate coordinates, and appends them to it.
+/// Stands supports under `mesh`, in plate coordinates, and answers with them.
 ///
 /// The model is lifted off the plate first, by the profile's own `z_lift_mm`: a part
 /// sitting on the plate has no room under it for a support, and the command line has no
-/// Lift button to press. See `docs/design/supports.md`.
+/// Lift button to press. `cuts` rides the lift with it and is answered where it ends up.
+/// See `docs/design/supports.md`.
 ///
 /// The model is cut once here to find the contacts, and again by the caller to write the
 /// file: the second pass is over the model and its supports together, which is the only
-/// way what is printed matches what was measured.
+/// way what is printed matches what was measured. The drilled model is what a contact is
+/// found on, so nothing stands under a surface a hole has taken away.
 pub fn stand_under(
     mesh: &mut Mesh,
+    cuts: &mut Option<Mesh>,
     profile: &SupportProfile,
     layer_height_mm: Scalar,
-) -> Result<SupportReport> {
-    let lifted_mm = lift(mesh, profile.z_lift_mm)?;
+) -> Result<(SupportReport, Mesh)> {
+    let lifted_mm = lift(mesh, cuts, profile.z_lift_mm)?;
+    let mut drilled = mesh.clone();
+    if let Some(cuts) = cuts.as_ref() {
+        append(&mut drilled, cuts);
+    }
     let stack = PlaneSliceEngine
         .slice(
-            mesh,
+            &drilled,
             &SliceSettings {
                 layer_height: layer_height_mm,
                 ..SliceSettings::default()
@@ -79,8 +86,8 @@ pub fn stand_under(
         });
     let points: Vec<SupportPoint> = contacts.iter().copied().map(SupportPoint::new).collect();
 
-    let bvh = Bvh::build(mesh);
-    let placed = Placed::new(mesh, &bvh, Transform::default());
+    let bvh = Bvh::build(&drilled);
+    let placed = Placed::new(&drilled, &bvh, Transform::default());
     let table = std::slice::from_ref(profile);
     let profiles = Profiles::new(table).context("a support profile is needed to build one")?;
 
@@ -99,20 +106,23 @@ pub fn stand_under(
         trees: trees.len(),
         faces: supports.faces.len(),
     };
-    append(mesh, &supports);
-    Ok(report)
+    Ok((report, supports))
 }
 
-/// Stands `mesh` `lift_mm` clear of the plate and answers how far it moved. A model
-/// already standing at least that high is left where it is: the lift makes room under a
-/// part, it does not place it.
-fn lift(mesh: &mut Mesh, lift_mm: Scalar) -> Result<Scalar> {
+/// Stands `mesh` and what is cut out of it `lift_mm` clear of the plate, and answers how
+/// far they moved. A model already standing at least that high is left where it is: the
+/// lift makes room under a part, it does not place it.
+fn lift(mesh: &mut Mesh, cuts: &mut Option<Mesh>, lift_mm: Scalar) -> Result<Scalar> {
     let bounds = mesh.aabb().context("mesh has no vertices")?;
     if bounds.mins.z >= lift_mm {
         return Ok(0.0);
     }
     let offset = lift_over_plate(&bounds, lift_mm);
-    *mesh = transform_mesh(mesh, Transform::from_translation(offset));
+    let moved = Transform::from_translation(offset);
+    *mesh = transform_mesh(mesh, moved);
+    if let Some(cuts) = cuts.as_mut() {
+        *cuts = transform_mesh(cuts, moved);
+    }
     Ok(offset.z)
 }
 
@@ -167,19 +177,17 @@ mod tests {
     }
 
     #[test]
-    fn an_overhang_gets_columns_under_it_and_they_go_into_the_mesh() {
+    fn an_overhang_gets_columns_under_it_and_they_come_back_as_a_mesh() {
         let mut mesh = overhang();
-        let faces_before = mesh.faces.len();
-
-        let report = stand_under(&mut mesh, &SupportProfile::medium(), 0.05)
+        let (report, supports) = stand_under(&mut mesh, &mut None, &SupportProfile::medium(), 0.05)
             .expect("a slab slices and supports");
 
         assert!(report.contacts > 0, "a hanging slab needs holding");
         assert!(report.standing > 0, "and there is empty plate under it");
         assert_eq!(
-            mesh.faces.len(),
-            faces_before + report.faces,
-            "the columns are part of what gets sliced"
+            supports.faces.len(),
+            report.faces,
+            "the columns come back to be sliced with the model"
         );
     }
 
@@ -218,7 +226,8 @@ mod tests {
         let mut mesh = slab_on_the_plate();
         let profile = SupportProfile::medium();
 
-        let report = stand_under(&mut mesh, &profile, 0.05).expect("a slab slices and supports");
+        let (report, _) =
+            stand_under(&mut mesh, &mut None, &profile, 0.05).expect("a slab slices and supports");
 
         assert!(
             (report.lifted_mm - profile.z_lift_mm).abs() < 1e-4,
@@ -226,7 +235,6 @@ mod tests {
             profile.z_lift_mm,
             report.lifted_mm
         );
-        // The slab's own eight corners, before the columns appended after them.
         let lowest = mesh.vertices[..8]
             .iter()
             .fold(Scalar::MAX, |low, corner| low.min(corner.z));
@@ -243,7 +251,7 @@ mod tests {
     #[test]
     fn a_part_already_standing_clear_of_the_plate_is_not_moved() {
         let mut mesh = overhang();
-        let report = stand_under(&mut mesh, &SupportProfile::medium(), 0.05)
+        let (report, _) = stand_under(&mut mesh, &mut None, &SupportProfile::medium(), 0.05)
             .expect("a slab slices and supports");
 
         assert!(

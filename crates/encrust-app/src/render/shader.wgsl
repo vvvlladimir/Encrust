@@ -8,6 +8,10 @@ const MAX_CUTS = 64u;
 // How many exposure bands the globals carry room for. Must match MAX_BANDS in gpu.rs.
 const MAX_BANDS = 8u;
 
+// How many pockets of trapped resin the globals carry room for. Must match MAX_POCKETS
+// in gpu.rs.
+const MAX_POCKETS = 32u;
+
 // One drain hole or channel segment in plate millimetres: xyz is an end, w its radius.
 struct DrainCut {
     mouth: vec4<f32>,
@@ -19,6 +23,13 @@ struct DrainCut {
 struct ExposureBand {
     span: vec4<f32>,
     tint: vec4<f32>,
+};
+
+// The box one pocket of trapped resin stands in, plate millimetres. See
+// docs/decisions/0200.
+struct TrapBox {
+    low: vec4<f32>,
+    high: vec4<f32>,
 };
 
 struct Globals {
@@ -33,7 +44,8 @@ struct Globals {
     // cut at all. See docs/decisions/0061.
     section: vec4<f32>,
     // x is how many of `cuts` carry a drain this frame, y how many of `bands` carry an
-    // exposure, and z the height below which a band has no effect.
+    // exposure, z the height below which a band has no effect, and w how many of
+    // `pockets` hold trapped resin.
     counts: vec4<f32>,
     // rgb of what a surface needing support and a model's exposed inside are washed with;
     // w is unused padding. Both come from ui::theme, see docs/design/ui-design-system.md.
@@ -51,6 +63,7 @@ struct Globals {
     cut_color: vec4<f32>,
     cuts: array<DrainCut, MAX_CUTS>,
     bands: array<ExposureBand, MAX_BANDS>,
+    pockets: array<TrapBox, MAX_POCKETS>,
 };
 
 @group(0) @binding(0) var<uniform> globals: Globals;
@@ -162,6 +175,21 @@ fn cut_away(world: vec3<f32>) -> bool {
     return false;
 }
 
+// Whether a point stands in a pocket the last drainage check found. The cavity is one
+// mesh however many pockets it holds, so this is what keeps the red to the ones that are
+// still trapped: drill into one and it goes out, the others stay. See
+// docs/decisions/0200.
+fn in_a_pocket(world: vec3<f32>) -> bool {
+    let count = i32(globals.counts.w);
+    for (var index = 0; index < count; index = index + 1) {
+        let pocket = globals.pockets[index];
+        if (all(world >= pocket.low.xyz) && all(world <= pocket.high.xyz)) {
+            return true;
+        }
+    }
+    return false;
+}
+
 // Half the width of the line the Cut tool's plane is traced with, in pixels, and how far
 // past the model's box a fragment may stand and still be traced, in millimetres.
 const CUT_LINE_HALF_PX = 1.5;
@@ -214,6 +242,11 @@ fn model_fragment(in: ModelFragment, @builtin(front_facing) front_facing: bool) 
         discard;
     }
     if (cut_away(in.world)) {
+        discard;
+    }
+    // A volume is the space a pocket of resin fills, drawn out of the whole cavity's
+    // faces: only the part of them standing in a pocket is that space.
+    if (in.surface < 0.5 && !in_a_pocket(in.world)) {
         discard;
     }
 

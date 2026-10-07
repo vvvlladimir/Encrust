@@ -30,15 +30,9 @@ pub struct DrainTool {
     pub taper: Scalar,
     pub placing: Placing,
     pub job: Option<TrapJob>,
-    /// Whether a check has finished since the plate last changed under it.
+    /// Whether a check has finished since the plate last changed under it. A check is
+    /// asked for by hand and never follows a run; see ADR 0198.
     pub checked: bool,
-    /// Whether the plate is waiting for a check: a cavity or a cut has moved and the
-    /// pockets on screen are no longer what the models hold. See ADR 0189.
-    pub(crate) asked: bool,
-    /// How many pockets the last check found, and whether that went from none to some,
-    /// which is what turns the viewport's x-ray on.
-    pub(crate) found: usize,
-    pub(crate) appeared: bool,
 }
 
 impl Default for DrainTool {
@@ -52,9 +46,6 @@ impl Default for DrainTool {
             placing: Placing::default(),
             job: None,
             checked: false,
-            asked: false,
-            found: 0,
-            appeared: false,
         }
     }
 }
@@ -77,7 +68,6 @@ impl DrainTool {
         }
 
         self.checked = false;
-        self.asked = false;
         self.job = Some(TrapJob::spawn(TrapRequest {
             tasks,
             layer_height_mm,
@@ -85,39 +75,10 @@ impl DrainTool {
         Ok(())
     }
 
-    /// Remembers what a check found, and notices the turn from none to some: only that
-    /// turn opens the x-ray, so a view closed by hand is not opened again by every check
-    /// after it.
-    fn remember(&mut self, found: usize) {
-        self.appeared = found > 0 && self.found == 0;
-        self.found = found;
-    }
-
-    /// Whether the last check was the one that found resin with no way out, after one
-    /// that found none. Asked once, so the view it opens can then be closed.
-    pub fn take_appeared(&mut self) -> bool {
-        std::mem::take(&mut self.appeared)
-    }
-
     /// Says that the plate has moved under the last check: a cavity was cut, or a hole or
-    /// a channel went in or came out.
-    pub fn ask_for_a_check(&mut self) {
-        self.asked = true;
-    }
-
-    /// Starts the check the plate is waiting for, and says whether one is now going.
-    ///
-    /// A change while a check is running is kept rather than queued, so clicking hole
-    /// after hole costs one check after the one in flight and not one each.
-    pub fn start_if_asked(&mut self, scene: &Scene, layer_height_mm: Scalar) -> bool {
-        if !self.asked || self.job.is_some() {
-            return false;
-        }
-        if trap_tasks(scene).is_empty() {
-            self.asked = false;
-            return false;
-        }
-        self.start(scene, layer_height_mm).is_ok()
+    /// a channel went in or came out, so what the panel shows is no longer current.
+    pub fn stale(&mut self) {
+        self.checked = false;
     }
 
     /// Drains a running check into the scene and the status bar. Returns whether one is
@@ -134,7 +95,6 @@ impl DrainTool {
         match outcome {
             TrapOutcome::Checked(models) => {
                 let found: usize = models.iter().map(|model| model.trapped.len()).sum();
-                self.remember(found);
                 for model in models {
                     if let Some(object) = scene.get_mut(model.id) {
                         object.traps.set(model.trapped);
@@ -153,7 +113,7 @@ impl DrainTool {
 
     /// Digs the channel every model has been laying out, and says how many were dug.
     pub fn finish_channels(&mut self, scene: &mut Scene) -> usize {
-        self.ask_for_a_check();
+        self.stale();
         let diameter_mm = self.diameter_mm;
         let mut dug = 0;
         for object in scene.targets_mut() {
@@ -169,10 +129,10 @@ impl DrainTool {
 
     /// Drills a hole into every pocket the last check found, and says how many it put in.
     ///
-    /// The check runs again after it, which is what takes the marks off the pockets the
-    /// holes have drained and leaves the ones they have not.
+    /// The marks come off with them: whether the holes drained what they were put in is
+    /// the next check's answer, not this one's.
     pub fn drill_found(&mut self, scene: &mut Scene) -> usize {
-        self.ask_for_a_check();
+        self.stale();
         let (diameter_mm, taper) = (self.diameter_mm, self.taper);
         let mut drilled = 0;
 
@@ -202,9 +162,10 @@ impl DrainTool {
 }
 
 /// The pockets of resin the last drainage check found in one model, in its own space.
-/// Nothing is drawn per pocket: the viewport paints the whole cavity they stand in, which
-/// is the space a hole has to let out. The check reads the slice stack, which is why these
-/// sit beside the model's `ModelHollow` rather than in it; see `docs/decisions/0129`.
+/// Each carries the box it fills, and the viewport paints the cavity red inside those
+/// boxes alone, so draining one pocket takes its own red away (ADR 0200). The check reads
+/// the slice stack, which is why these sit beside the model's `ModelHollow` rather than in
+/// it; see `docs/decisions/0129`.
 #[derive(Debug, Clone, Default)]
 pub struct Traps {
     found: Vec<Trapped>,
@@ -262,69 +223,47 @@ mod tests {
     }
 
     #[test]
-    fn a_cut_that_moved_is_checked_once_however_many_moved_while_one_ran() {
+    fn a_check_runs_only_when_it_is_asked_for() {
         let mut scene = scene_with_a_tetrahedron();
         let mut tool = DrainTool::default();
         let mut status = Status::default();
 
+        tool.stale();
         assert!(
-            !tool.start_if_asked(&scene, 0.05),
-            "nothing has moved, so nothing is checked"
+            tool.job.is_none(),
+            "a cut that moved says the last check is out of date and starts no new one"
         );
 
-        tool.ask_for_a_check();
-        assert!(tool.start_if_asked(&scene, 0.05), "a cut moved");
-        tool.ask_for_a_check();
-        assert!(
-            !tool.start_if_asked(&scene, 0.05),
-            "the check in flight is the one that answers for it"
-        );
+        tool.start(&scene, 0.05).expect("a closed mesh checks");
         while tool.poll(&mut scene, &mut status) {
             std::thread::yield_now();
         }
-        assert!(
-            tool.start_if_asked(&scene, 0.05),
-            "and what moved under it is checked after it"
-        );
+        assert!(tool.checked, "the check that was asked for answered");
     }
 
     #[test]
-    fn only_the_turn_from_nothing_trapped_to_something_opens_the_view() {
+    fn a_cut_leaves_the_last_check_out_of_date() {
+        let mut scene = scene_with_a_tetrahedron();
         let mut tool = DrainTool::default();
+        let mut status = Status::default();
 
-        tool.remember(0);
-        assert!(
-            !tool.take_appeared(),
-            "nothing is trapped, nothing to look at"
-        );
+        tool.start(&scene, 0.05).expect("a closed mesh checks");
+        while tool.poll(&mut scene, &mut status) {
+            std::thread::yield_now();
+        }
+        assert!(tool.checked);
 
-        tool.remember(2);
+        tool.stale();
         assert!(
-            tool.take_appeared(),
-            "resin with no way out opens the model up"
-        );
-        assert!(!tool.take_appeared(), "and is reported once");
-
-        tool.remember(3);
-        assert!(
-            !tool.take_appeared(),
-            "a view closed by hand stays closed while the pockets are the same trouble"
-        );
-
-        tool.remember(0);
-        tool.remember(1);
-        assert!(
-            tool.take_appeared(),
-            "trouble that came back opens it again"
+            !tool.checked,
+            "the plate moved, so what the panel reports is no longer what it holds"
         );
     }
 
     #[test]
-    fn an_empty_plate_forgets_the_check_it_was_asked_for() {
+    fn an_empty_plate_has_nothing_to_check() {
         let scene = Scene::default();
         let mut tool = DrainTool::default();
-        tool.ask_for_a_check();
-        assert!(!tool.start_if_asked(&scene, 0.05));
-        assert!(!tool.asked, "there is nothing left to check it against");
+        assert!(tool.start(&scene, 0.05).is_err());
     }
 }

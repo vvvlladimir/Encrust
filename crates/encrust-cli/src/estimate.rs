@@ -69,12 +69,13 @@ pub fn estimate(
         }
         None => {
             tracing::warn!("without a printer only the stack is counted: no time, weight or risks");
-            let mesh =
+            let baked =
                 bake(&staged.models, &staged.cutting.compensation).context("nothing to slice")?;
-            let windows = cut(&mesh, &staged.cutting)?;
-            let mut slice = report_of(&mesh, &windows, staged.drainage);
+            let windows = cut(&baked, &staged.cutting)?;
+            let mesh = &baked.mesh;
+            let mut slice = report_of(mesh, &windows, staged.drainage);
             windows
-                .stream(&mesh, |sliced| {
+                .stream(mesh, |sliced| {
                     watch.stop.check()?;
                     slice.absorb(sliced);
                     Ok::<(), anyhow::Error>(())

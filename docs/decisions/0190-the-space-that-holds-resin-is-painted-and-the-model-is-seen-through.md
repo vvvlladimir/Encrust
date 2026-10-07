@@ -1,6 +1,6 @@
 # 0190. Paint the space that holds resin, and see the model through
 
-- **Status:** Accepted
+- **Status:** Accepted; what opens the x-ray is amended by 0198, what is painted by 0200
 - **Date:** 2026-10-06
 
 ## Context

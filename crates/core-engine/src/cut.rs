@@ -1,11 +1,12 @@
 use std::num::NonZeroU8;
 
-use core_geometry::{Mesh, Scalar};
+use core_geometry::Scalar;
 use core_slicer::{
-    AdaptiveSettings, ONE_SAMPLE, SliceSettings, WINDOW_LAYERS, Windows, adaptive_plan,
+    AdaptiveSettings, ONE_SAMPLE, SliceSettings, WINDOW_LAYERS, Windows, adaptive_plan_under,
 };
 use printer_profiles::Compensation;
 
+use crate::bake::Baked;
 use crate::error::EngineError;
 
 /// How a stack is cut: one thickness throughout, or as thick as the surface allows.
@@ -37,21 +38,28 @@ impl Cutting {
     }
 }
 
-/// The windows `mesh`, standing in plate coordinates, will be cut in.
-pub fn cut(mesh: &Mesh, cutting: &Cutting) -> Result<Windows, EngineError> {
+/// The windows a baked plate will be cut in. Nothing is planned over its ceiling, so a
+/// cut standing clear of the model it was drilled in adds no layer to the stack.
+pub fn cut(baked: &Baked, cutting: &Cutting) -> Result<Windows, EngineError> {
     let Some(adaptive) = cutting.adaptive else {
         let settings = SliceSettings {
             layer_height: cutting.layer_height_mm,
             samples: cutting.samples,
         };
-        return Ok(Windows::new(mesh, settings, cutting.slice_window)?);
+        return Ok(Windows::under(
+            &baked.mesh,
+            settings,
+            cutting.slice_window,
+            baked.ceiling_mm,
+        )?);
     };
-    let plan = adaptive_plan(
-        mesh,
+    let plan = adaptive_plan_under(
+        &baked.mesh,
         &AdaptiveSettings {
             max_height_mm: cutting.layer_height_mm,
             ..adaptive
         },
+        baked.ceiling_mm,
     )?;
     Ok(Windows::planned(
         plan,

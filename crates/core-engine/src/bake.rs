@@ -5,6 +5,27 @@ use printer_profiles::Compensation;
 
 use crate::plate::Model;
 
+/// A plate baked into one mesh, with the height the material in it reaches.
+#[derive(Debug, Clone, PartialEq)]
+pub struct Baked {
+    pub mesh: Mesh,
+    /// Top of what prints, plate millimetres: the models and the supports, leaving out
+    /// the bodies that only subtract.
+    ///
+    /// A cut reaches past the surface it pierces so that no film is left over its mouth
+    /// (ADR 0071), so a hole drilled near the top of a model stands above everything that
+    /// prints. Cutting to the baked mesh's own box would plan empty layers over the plate.
+    pub ceiling_mm: Scalar,
+}
+
+impl Baked {
+    /// A mesh that carries nothing but material, so the stack reaches its own top.
+    pub fn of(mesh: Mesh) -> Option<Self> {
+        let ceiling_mm = mesh.aabb()?.maxs.z;
+        Some(Self { mesh, ceiling_mm })
+    }
+}
+
 /// Bakes every model and the supports under it into one mesh in plate coordinates, ready
 /// to slice. `None` when nothing handed over has any geometry.
 ///
@@ -17,34 +38,48 @@ use crate::plate::Model;
 /// Each model is scaled about its own footprint and about the plate, not about the plate's
 /// contents: a part shrinks towards itself and is held at the plate while it prints, so a
 /// correction must not move its neighbours; see `docs/design/compensation.md`.
-pub fn bake(models: &[Model], compensation: &Compensation) -> Option<Mesh> {
+pub fn bake(models: &[Model], compensation: &Compensation) -> Option<Baked> {
     let mut merged = Mesh::default();
+    let mut ceiling_mm = Scalar::NEG_INFINITY;
     for model in models {
         let part = compensated(placed(model), compensation);
+        if let Some(top) = part.material.aabb().map(|box_of| box_of.maxs.z) {
+            ceiling_mm = ceiling_mm.max(top);
+        }
         // The first part becomes the bake rather than being copied into it.
         if merged.vertices.is_empty() {
-            merged = part;
+            merged = part.material;
         } else {
-            append(&mut merged, &part);
+            append(&mut merged, &part.material);
         }
+        append(&mut merged, &part.cuts);
     }
-    (!merged.is_empty()).then_some(merged)
+    (!merged.is_empty()).then_some(Baked {
+        mesh: merged,
+        ceiling_mm,
+    })
 }
 
-/// One model with its cuts and supports, in plate coordinates.
-fn placed(model: &Model) -> Mesh {
-    let mut part = if model.transform == Transform::default() {
+/// One model in plate coordinates, with what prints kept apart from what only subtracts.
+struct Placed {
+    material: Mesh,
+    cuts: Mesh,
+}
+
+fn placed(model: &Model) -> Placed {
+    let mut material = if model.transform == Transform::default() {
         model.mesh.as_ref().clone()
     } else {
         transform_mesh(&model.mesh, model.transform)
     };
-    if let Some(cuts) = &model.cuts {
-        append(&mut part, &transform_mesh(cuts, model.transform));
-    }
     for supports in &model.supports {
-        append(&mut part, supports);
+        append(&mut material, supports);
     }
-    part
+    let cuts = match &model.cuts {
+        Some(cuts) => transform_mesh(cuts, model.transform),
+        None => Mesh::default(),
+    };
+    Placed { material, cuts }
 }
 
 /// Every mesh on the plate and where it stands, without copying any of them.
@@ -65,8 +100,15 @@ pub fn parts(models: &[Model]) -> Vec<(Arc<Mesh>, Transform)> {
 
 /// `part` grown or shrunk to come out at the size it was modelled at, held where it
 /// stands: the scale is taken about the middle of its footprint and about the plate.
-fn compensated(part: Mesh, compensation: &Compensation) -> Mesh {
-    let Some(bounds) = part.aabb().filter(|_| !compensation.scales_nothing()) else {
+///
+/// The footprint is the material's, so a cut riding out past the surface cannot move the
+/// part it was drilled in.
+fn compensated(part: Placed, compensation: &Compensation) -> Placed {
+    let Some(bounds) = part
+        .material
+        .aabb()
+        .filter(|_| !compensation.scales_nothing())
+    else {
         return part;
     };
     let (scale, translation) = compensation.placement(
@@ -81,7 +123,12 @@ fn compensated(part: Mesh, compensation: &Compensation) -> Mesh {
     .to_matrix();
     // In place: a shrink factor is never negative, so no face turns inside out.
     let mut part = part;
-    for vertex in &mut part.vertices {
+    for vertex in part
+        .material
+        .vertices
+        .iter_mut()
+        .chain(&mut part.cuts.vertices)
+    {
         *vertex = matrix.transform_point3(*vertex);
     }
     part
