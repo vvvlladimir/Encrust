@@ -96,32 +96,14 @@ pub struct TransformArgs {
 #[derive(Debug, clap::Args)]
 #[command(next_help_heading = "Supports")]
 pub struct SupportArgs {
-    /// Stand supports under the model before slicing it, built to a shipped preset.
-    #[arg(long, value_name = "PRESET")]
-    pub supports: Option<SupportPreset>,
+    /// Stand supports under the model before slicing it, built to a profile of the
+    /// catalogue: light, medium, heavy or one saved in the window.
+    #[arg(long, value_name = "ID")]
+    pub supports: Option<String>,
 
     /// Support profile as a TOML file. Wins over --supports.
     #[arg(long, value_name = "PATH")]
     pub support_profile: Option<PathBuf>,
-}
-
-/// A shipped support preset, for a run that has no profile of its own to point at.
-#[derive(Clone, Copy, Debug, clap::ValueEnum, serde::Deserialize)]
-#[serde(rename_all = "kebab-case")]
-pub enum SupportPreset {
-    Light,
-    Medium,
-    Heavy,
-}
-
-impl SupportPreset {
-    pub fn profile(self) -> SupportProfile {
-        match self {
-            Self::Light => SupportProfile::light(),
-            Self::Medium => SupportProfile::medium(),
-            Self::Heavy => SupportProfile::heavy(),
-        }
-    }
 }
 
 impl SupportArgs {
@@ -132,7 +114,10 @@ impl SupportArgs {
                 .with_context(|| format!("cannot load {}", path.display()))
                 .map(Some);
         }
-        Ok(self.supports.map(SupportPreset::profile))
+        self.supports
+            .as_deref()
+            .map(crate::profiles::support)
+            .transpose()
     }
 }
 

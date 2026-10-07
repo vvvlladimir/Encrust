@@ -59,6 +59,9 @@ pub struct Draft<T> {
     pub id: String,
     pub values: T,
     saved: T,
+    /// What this build ships under the same id, when it ships anything. A copy taken out
+    /// of the library by an older release stands over it and says nothing; see ADR 0196.
+    shipped: Option<T>,
 }
 
 impl<T: Clone + PartialEq> Draft<T> {
@@ -67,6 +70,15 @@ impl<T: Clone + PartialEq> Draft<T> {
             id,
             saved: values.clone(),
             values,
+            shipped: None,
+        }
+    }
+
+    /// The same, over the profile the build ships under that id.
+    fn over_shipped(id: String, values: T, shipped: Option<T>) -> Self {
+        Self {
+            shipped,
+            ..Self::new(id, values)
         }
     }
 
@@ -77,6 +89,13 @@ impl<T: Clone + PartialEq> Draft<T> {
 
     pub fn mark_saved(&mut self) {
         self.saved = self.values.clone();
+    }
+
+    /// The profile the build ships under this id, while the user's copy differs from it.
+    pub fn shipped(&self) -> Option<&T> {
+        self.shipped
+            .as_ref()
+            .filter(|shipped| **shipped != self.saved)
     }
 }
 
@@ -200,6 +219,18 @@ impl Calculators {
     }
 }
 
+/// A deletion waiting to be answered for. Nothing this screen writes can be taken back,
+/// so what cannot be undone is asked first; see ADR 0196.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Deleting {
+    /// The user's copy of a machine. Its resins stay in the pool.
+    Printer(String),
+    /// A resin off one printer, and out of the catalogue when no other printer has it.
+    ResinOff { printer: String, resin: String },
+    /// A resin and its file, off every printer that has it.
+    Resin(String),
+}
+
 /// What the machine library has open: a brand, and what its models are filtered by.
 #[derive(Default)]
 pub struct Library {
@@ -221,6 +252,8 @@ pub struct Settings {
     pub resin: Option<ResinDraft>,
     pub support: Option<Draft<SupportProfile>>,
     pub calculators: Calculators,
+    /// The deletion the screen is waiting for an answer on.
+    pub confirm: Option<Deleting>,
 }
 
 impl Settings {
@@ -285,10 +318,13 @@ impl Settings {
 
     /// Opens a printer or one of its resins in the form.
     pub fn pick(&mut self, catalogue: &Catalogue, node: Node) {
-        self.printer = catalogue
-            .printer(node.printer())
-            .ok()
-            .map(|entry| Draft::new(entry.id.clone(), entry.profile.clone()));
+        self.printer = catalogue.printer(node.printer()).ok().map(|entry| {
+            Draft::over_shipped(
+                entry.id.clone(),
+                entry.profile.clone(),
+                catalogue.shipped_printer(&entry.id),
+            )
+        });
         self.resin = match &node {
             Node::Printer(_) => None,
             Node::Resin { printer, resin } => catalogue.resin(resin).ok().map(|entry| {
@@ -369,6 +405,43 @@ pub fn duplicate_resin(
     let mut copy = catalogue.resin(resin)?.profile.for_printer(printer);
     copy.name = format!("{} copy", copy.name);
     save_as_own(catalogue, printer, copy)
+}
+
+/// Takes a resin off `printer`, and out of the catalogue when it was the only printer
+/// that had it: a resin measured on nothing is in nobody's pool (ADR 0196).
+pub fn take_resin_off(
+    catalogue: &mut Catalogue,
+    printer: &str,
+    resin: &str,
+) -> Result<(), ProfileError> {
+    match other_printers(catalogue, printer, resin)?.is_empty() {
+        true => delete_resin(catalogue, resin),
+        false => remove_resin(catalogue, printer, resin),
+    }
+}
+
+/// Throws a resin away, off every printer that had it and out of the user's directory.
+pub fn delete_resin(catalogue: &mut Catalogue, resin: &str) -> Result<(), ProfileError> {
+    catalogue.forget_user_copy(Kind::Resin, resin)
+}
+
+/// The printers other than `printer` a resin carries numbers for, by name, which is what
+/// a question about deleting it has to say out loud.
+pub fn other_printers(
+    catalogue: &Catalogue,
+    printer: &str,
+    resin: &str,
+) -> Result<Vec<String>, ProfileError> {
+    let profile = &catalogue.resin(resin)?.profile;
+    Ok(profile
+        .printers
+        .keys()
+        .filter(|id| id.as_str() != printer)
+        .map(|id| match catalogue.printer(id) {
+            Ok(entry) => format!("{} {}", entry.profile.manufacturer, entry.profile.name),
+            Err(_) => id.clone(),
+        })
+        .collect())
 }
 
 /// Takes a resin off `printer`. It stays in the pool for any printer to take back.
@@ -533,6 +606,31 @@ mod tests {
         Catalogue::with_root(&dir).expect("a missing directory reads as empty")
     }
 
+    /// The same, with one resin the user measured on both machines: nothing ships an
+    /// exposure, so a test that needs a resin makes one (ADR 0196).
+    fn with_grey(name: &str) -> Catalogue {
+        let mut catalogue = writable(name);
+        let mut resin = MaterialProfile {
+            name: "Standard grey".to_owned(),
+            exposure_s: 2.6,
+            ..MaterialProfile::default()
+        };
+        for (printer, exposure_s) in [(MARS, 3.2), (SATURN, 2.3)] {
+            resin.printers.insert(
+                printer.to_owned(),
+                PrinterTuning {
+                    exposure_s: Some(exposure_s),
+                    ..PrinterTuning::default()
+                },
+            );
+        }
+        resin.last_printer = Some(MARS.to_owned());
+        catalogue
+            .save_resin("standard-grey", &resin)
+            .expect("the directory is writable");
+        catalogue
+    }
+
     #[test]
     fn a_name_makes_a_file_stem() {
         assert_eq!(slug("Saturn 4 Ultra"), "saturn-4-ultra");
@@ -545,17 +643,73 @@ mod tests {
     }
 
     #[test]
-    fn a_shipped_resin_is_in_the_pool_until_it_is_added_to_the_printer() {
+    fn a_resin_of_another_printer_is_in_the_pool_until_it_is_added_to_this_one() {
         let mut catalogue = writable("installed");
         assert!(
             resins_of(&catalogue, SATURN).next().is_none(),
-            "a first run has no resin of its own"
+            "a first run has no resin at all"
         );
         assert!(
-            pool_for(&catalogue, SATURN).any(|(id, _)| id == "standard-grey"),
-            "the shipped resins are what the pool offers"
+            pool_for(&catalogue, SATURN).next().is_none(),
+            "and nothing is shipped to put in the pool"
         );
 
+        let mine = new_resin(&mut catalogue, MARS).expect("the directory is writable");
+        assert!(
+            pool_for(&catalogue, SATURN).any(|(id, _)| id == mine),
+            "a resin measured on another machine is what the pool offers"
+        );
+
+        add_resin(&mut catalogue, SATURN, &mine).expect("the directory is writable");
+        assert!(resins_of(&catalogue, SATURN).any(|(id, _)| id == mine));
+        assert!(
+            !pool_for(&catalogue, SATURN).any(|(id, _)| id == mine),
+            "a resin on this printer is no longer offered for it"
+        );
+    }
+
+    /// BUG-16: a resin on no printer is in nobody's pool, so taking it off its last one
+    /// takes it away rather than leaving a file nothing reaches.
+    #[test]
+    fn a_resin_off_its_last_printer_goes_with_it() {
+        let mut catalogue = with_grey("last-printer");
+        take_resin_off(&mut catalogue, MARS, "standard-grey").expect("writable");
+        assert!(
+            catalogue.resin("standard-grey").is_ok(),
+            "the Saturn still has it"
+        );
+        assert_eq!(
+            other_printers(&catalogue, SATURN, "standard-grey").expect("there"),
+            Vec::<String>::new()
+        );
+
+        take_resin_off(&mut catalogue, SATURN, "standard-grey").expect("writable");
+        assert!(
+            catalogue.resin("standard-grey").is_err(),
+            "and now it is gone"
+        );
+    }
+
+    /// What the question before a deletion has to say: who else loses the resin.
+    #[test]
+    fn the_printers_a_resin_is_shared_with_are_named() {
+        let catalogue = with_grey("shared");
+        let others = other_printers(&catalogue, MARS, "standard-grey").expect("there");
+        assert_eq!(others, ["Elegoo Saturn 4 Ultra"]);
+    }
+
+    #[test]
+    fn a_resin_deleted_from_the_pool_leaves_every_printer() {
+        let mut catalogue = with_grey("delete-resin");
+        delete_resin(&mut catalogue, "standard-grey").expect("writable");
+        assert!(catalogue.resin("standard-grey").is_err());
+        assert!(resins_of(&catalogue, MARS).next().is_none());
+        assert!(resins_of(&catalogue, SATURN).next().is_none());
+    }
+
+    #[test]
+    fn a_resin_added_to_a_second_printer_is_on_both() {
+        let mut catalogue = with_grey("both");
         add_resin(&mut catalogue, SATURN, "standard-grey").expect("the directory is writable");
         assert!(resins_of(&catalogue, SATURN).any(|(id, _)| id == "standard-grey"));
         assert!(
@@ -566,7 +720,7 @@ mod tests {
 
     #[test]
     fn the_screen_opens_on_the_resin_the_plate_uses() {
-        let catalogue = writable("open");
+        let catalogue = with_grey("open");
         let mut settings = Settings::default();
         settings.open(&catalogue, Some(MARS), Some("standard-grey"));
         let resin = settings.resin.as_ref().expect("a resin is open");
@@ -579,7 +733,7 @@ mod tests {
 
     #[test]
     fn an_edit_for_one_printer_leaves_every_other_alone() {
-        let catalogue = writable("edit");
+        let catalogue = with_grey("edit");
         let mut settings = Settings::default();
         settings.open(&catalogue, Some(MARS), Some("standard-grey"));
         let resin = settings.resin.as_mut().expect("open");
@@ -594,7 +748,7 @@ mod tests {
 
     #[test]
     fn a_resin_taken_off_a_printer_stays_in_the_pool_and_comes_back() {
-        let mut catalogue = writable("pool");
+        let mut catalogue = with_grey("pool");
         remove_resin(&mut catalogue, MARS, "standard-grey").expect("writable");
         assert!(resins_of(&catalogue, MARS).all(|(id, _)| id != "standard-grey"));
         assert!(pool_for(&catalogue, MARS).any(|(id, _)| id == "standard-grey"));
@@ -609,7 +763,7 @@ mod tests {
 
     #[test]
     fn a_duplicate_belongs_to_the_printer_it_was_made_on() {
-        let mut catalogue = writable("duplicate");
+        let mut catalogue = with_grey("duplicate");
         let id = duplicate_resin(&mut catalogue, MARS, "standard-grey").expect("writable");
         assert_eq!(id, "standard-grey-copy");
         let copy = &catalogue.resin(&id).expect("saved").profile;
@@ -622,7 +776,7 @@ mod tests {
 
     #[test]
     fn renaming_a_shared_resin_splits_it_off_this_printer() {
-        let mut catalogue = writable("rename");
+        let mut catalogue = with_grey("rename");
         let id =
             rename_resin(&mut catalogue, MARS, "standard-grey", "Grey fast").expect("writable");
         assert_eq!(id, "grey-fast");
@@ -642,6 +796,44 @@ mod tests {
             catalogue.resin(&id).expect("there").profile.name,
             "Grey faster"
         );
+    }
+
+    /// P-11: a copy made by an older release stands over the shipped profile and nothing
+    /// in it says so, so the form is told what the build ships under the same id.
+    #[test]
+    fn a_copy_that_differs_from_the_shipped_machine_carries_it() {
+        let mut catalogue = writable("own-copy");
+        let shipped = catalogue
+            .shipped_printer(SATURN)
+            .expect("a shipped machine");
+        let edited = PrinterProfile {
+            name: "Saturn, as I measured it".to_owned(),
+            ..shipped.clone()
+        };
+        catalogue.save_printer(SATURN, &edited).expect("writable");
+
+        let mut settings = Settings::default();
+        settings.pick(&catalogue, Node::Printer(SATURN.to_owned()));
+        let draft = settings.printer.as_ref().expect("a printer is open");
+        assert_eq!(draft.shipped(), Some(&shipped));
+
+        catalogue.save_printer(SATURN, &shipped).expect("writable");
+        settings.pick(&catalogue, Node::Printer(SATURN.to_owned()));
+        let draft = settings.printer.as_ref().expect("a printer is open");
+        assert_eq!(
+            draft.shipped(),
+            None,
+            "a copy that matches what is shipped has nothing to say"
+        );
+    }
+
+    #[test]
+    fn a_machine_nobody_shipped_has_no_shipped_profile_behind_it() {
+        let mut catalogue = writable("own-machine");
+        let id = new_printer(&mut catalogue).expect("writable");
+        let mut settings = Settings::default();
+        settings.pick(&catalogue, Node::Printer(id));
+        assert!(settings.printer.as_ref().expect("open").shipped().is_none());
     }
 
     #[test]

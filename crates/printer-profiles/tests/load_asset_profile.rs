@@ -1,8 +1,6 @@
 use std::path::{Path, PathBuf};
 
-use printer_profiles::{
-    Catalogue, Connection, MaterialProfile, OutputFormat, PrinterProfile, SupportProfile,
-};
+use printer_profiles::{Catalogue, Connection, OutputFormat, PrinterProfile, SupportProfile};
 
 fn asset(name: &str) -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR"))
@@ -98,27 +96,6 @@ fn the_saturn_4_ultra_reads_the_header_alone() {
     assert!(
         !entry.profile.firmware.per_layer_settings,
         "a tilting vat stalls on the per-layer lift, see ADR 0142"
-    );
-}
-
-#[test]
-fn shipped_resin_parses_and_its_transition_layers_ramp() {
-    let material =
-        MaterialProfile::load(&asset("resins/generic-resin.toml")).expect("shipped resin is valid");
-
-    assert_eq!(material.bottom_layers, 6);
-    assert_eq!(material.light_pwm, 255);
-    assert!(
-        (material.exposure_of_layer_s(5) - material.bottom_exposure_s).abs() < 1e-6,
-        "layer 5 is still a bottom layer"
-    );
-    assert!(
-        material.exposure_of_layer_s(6) < material.bottom_exposure_s,
-        "the ramp starts once the bottom block ends"
-    );
-    assert!(
-        (material.exposure_of_layer_s(14) - material.exposure_s).abs() < 1e-6,
-        "eight transition layers after six bottom ones puts layer 14 at the normal exposure"
     );
 }
 

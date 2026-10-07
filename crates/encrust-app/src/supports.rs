@@ -120,6 +120,9 @@ pub struct SupportTool {
     pub job: Option<SupportJob>,
     /// The drawing of a support, while it is open.
     pub parameters: Option<Parameters>,
+    /// The group the panel is asking about before it takes it away, and the supports it
+    /// holds, or `None` when it is asking nothing.
+    pub dropping: Option<(u16, usize)>,
 }
 
 impl Default for SupportTool {
@@ -141,6 +144,7 @@ impl Default for SupportTool {
             last_daub: None,
             job: None,
             parameters: None,
+            dropping: None,
         }
     }
 }
@@ -244,21 +248,36 @@ impl SupportTool {
         self.active = (self.groups.len() - 1) as u16;
     }
 
-    /// Takes a group away and hands its supports back to the default one. The default
-    /// group itself cannot go: something has to hold the raft's numbers.
-    pub fn remove_group(&mut self, group: u16, scene: &mut Scene) {
+    /// How many supports stand in `group`, which is what dropping it would take away.
+    pub fn group_holds(&self, group: u16, scene: &Scene) -> usize {
+        scene
+            .objects()
+            .iter()
+            .map(|object| object.supports.group_count(group))
+            .sum()
+    }
+
+    /// Takes a group away, and with it every support built to it. The default group
+    /// itself cannot go: something has to hold the raft's numbers.
+    ///
+    /// Returns how many supports went. A group is a shape, so its supports leave with it
+    /// rather than being rebuilt to another group's numbers; `Cmd+Z` puts them back.
+    pub fn remove_group(&mut self, group: u16, scene: &mut Scene) -> usize {
         if group == 0 || group as usize >= self.groups.len() {
-            return;
+            return 0;
         }
         if self.active != group {
             self.groups[self.active as usize].profile = self.profile.clone();
         }
         self.groups.remove(group as usize);
-        for object in scene.objects_mut() {
-            object.supports.regroup(group);
-        }
+        let gone = scene
+            .objects_mut()
+            .iter_mut()
+            .map(|object| object.supports.drop_group(group))
+            .sum();
         self.active = 0;
         self.profile = self.groups[0].profile.clone();
+        gone
     }
 
     /// Fills every painted patch on the plate with supports, and returns how many were
@@ -291,6 +310,7 @@ impl SupportTool {
                         object.supports.painted(),
                         &self.fill,
                         &standing,
+                        self.profile.max_overhang_deg,
                     ),
                 )
             })
@@ -554,26 +574,48 @@ mod tests {
     }
 
     #[test]
-    fn dropping_a_group_hands_its_supports_back_to_the_default_one() {
+    fn dropping_a_group_takes_its_supports_away_with_it() {
         let mut scene = one_cube();
         let mut tool = SupportTool::default();
         tool.add_group();
         scene.objects_mut()[0]
             .supports
             .add(Vec3::new(0.5, 0.5, 5.0), Transform::default(), 1);
+        assert_eq!(
+            tool.group_holds(1, &scene),
+            1,
+            "the group holds one support"
+        );
 
-        tool.remove_group(1, &mut scene);
+        assert_eq!(tool.remove_group(1, &mut scene), 1);
 
         assert_eq!(tool.groups.len(), 1);
         assert_eq!(tool.active, 0);
+        assert!(
+            scene.objects()[0].supports.points().is_empty(),
+            "a support of a group that is gone is gone with it, not handed to another \
+             group to be rebuilt in its shape"
+        );
+    }
+
+    #[test]
+    fn a_support_of_another_group_survives_the_one_that_is_dropped() {
+        let mut scene = one_cube();
+        let mut tool = SupportTool::default();
+        tool.add_group();
+        let object = &mut scene.objects_mut()[0];
+        object
+            .supports
+            .add(Vec3::new(0.5, 0.5, 5.0), Transform::default(), 0);
+        object
+            .supports
+            .add(Vec3::new(0.6, 0.6, 5.0), Transform::default(), 1);
+
+        assert_eq!(tool.remove_group(1, &mut scene), 1);
         assert_eq!(
-            scene.objects()[0]
-                .supports
-                .points()
-                .first()
-                .map(|point| point.group),
-            Some(0),
-            "a support whose group is gone belongs to the default one"
+            scene.objects()[0].supports.point_count(),
+            1,
+            "the default group's own support stayed"
         );
     }
 

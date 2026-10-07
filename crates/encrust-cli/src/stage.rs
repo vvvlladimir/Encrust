@@ -202,6 +202,7 @@ pub fn plate_of(
     chosen: &Chosen,
     watch: &Watch,
 ) -> Result<Staged> {
+    chosen.measured()?;
     let printer = chosen.printer.as_ref();
     let mut placed = Vec::with_capacity(entries.len());
     for (path, shaping) in entries {

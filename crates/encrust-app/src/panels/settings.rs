@@ -5,6 +5,7 @@
 //! See `docs/design/profiles.md`.
 
 mod compensation;
+mod confirm;
 mod machines;
 mod printer;
 mod resin;
@@ -201,6 +202,25 @@ pub(super) fn calculators(ctx: &egui::Context, machine: &mut crate::state::Machi
         &mut settings.calculators,
         &mut resin.draft.values.compensation,
     );
+}
+
+/// The question over the Settings screen, while a deletion is waiting to be answered for.
+pub(super) fn confirm(ctx: &egui::Context, window: &mut Window) {
+    // A question nobody answered does not follow the user back to the plate.
+    if !window.machine.settings.open {
+        window.machine.settings.confirm = None;
+        return;
+    }
+    let Some(deleting) = window.machine.settings.confirm.clone() else {
+        return;
+    };
+    let Some(answer) = confirm::ask(ctx, &window.machine.slicing.catalogue, &deleting) else {
+        return;
+    };
+    window.machine.settings.confirm = None;
+    if matches!(answer, confirm::Answer::Confirmed) {
+        machines::delete(window, deleting);
+    }
 }
 
 pub(super) fn form_card<R>(

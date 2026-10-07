@@ -67,7 +67,7 @@ Slicing without a window:
 
 ```sh
 cargo run --release -p encrust-cli --bin encrust -- slice model.stl \
-  --printer elegoo-saturn-4-ultra --resin standard-grey --center -o model.goo
+  --printer elegoo-saturn-4-ultra --resin my-grey --center -o model.goo
 ```
 
 Every flag is described in [`docs/cli.md`](docs/cli.md), and
@@ -77,7 +77,9 @@ Every flag is described in [`docs/cli.md`](docs/cli.md), and
 
 ## Printers
 
-Encrust ships with profiles for **100 printers** from 14 makers, plus four resin profiles:
+Encrust ships with profiles for **100 printers** from 14 makers. It ships no resin: an
+exposure is measured on the machine in your room, so the first resin is one you make, in
+the window or as a TOML file.
 
 | Maker | Printers | Formats |
 |---|---|---|

@@ -7,7 +7,7 @@ use anyhow::{Context, Result, bail};
 use core_geometry::{Scalar, Vec2, Vec3};
 use serde::Deserialize;
 
-use crate::args::{JobArgs, SupportPreset};
+use crate::args::JobArgs;
 use crate::hollowing::Mode;
 use crate::pipeline::Watch;
 use crate::profiles::{self, Selection};
@@ -38,7 +38,8 @@ pub struct ModelEntry {
     pub scale: Option<Scale>,
     /// Where the middle of the footprint goes, plate millimetres.
     pub position: Option<[Scalar; 2]>,
-    pub supports: Option<SupportPreset>,
+    /// The support profile this model is held up by, by catalogue id.
+    pub supports: Option<String>,
     pub hollow: Option<Wall>,
 }
 
@@ -100,14 +101,14 @@ pub fn stage(path: &Path, arrange: bool, job: &JobArgs, watch: &Watch) -> Result
     let entries: Vec<_> = plate
         .models
         .iter()
-        .map(|model| (beside.join(&model.path), shaping_of(&base, model)))
-        .collect();
+        .map(|model| Ok((beside.join(&model.path), shaping_of(&base, model)?)))
+        .collect::<Result<_>>()?;
     plate_of(&entries, arrange, layer_height, job, &chosen, watch)
 }
 
 /// What the flags ask of every model, with this entry's own settings where a flag was not
 /// given.
-fn shaping_of(flags: &Shaping, model: &ModelEntry) -> Shaping {
+fn shaping_of(flags: &Shaping, model: &ModelEntry) -> Result<Shaping> {
     let mut shaping = flags.clone();
     let transform = &mut shaping.import.transform;
     transform.rotate = transform.rotate.or(model.rotate.map(Vec3::from_array));
@@ -115,8 +116,10 @@ fn shaping_of(flags: &Shaping, model: &ModelEntry) -> Shaping {
         Scale::Uniform(factor) => Vec3::splat(factor),
         Scale::PerAxis(factors) => Vec3::from_array(factors),
     }));
-    if shaping.supports.is_none() {
-        shaping.supports = model.supports.map(SupportPreset::profile);
+    if shaping.supports.is_none()
+        && let Some(id) = model.supports.as_deref()
+    {
+        shaping.supports = Some(crate::profiles::support(id)?);
     }
     if !shaping.hollow.wanted()
         && let Some(wall) = model.hollow
@@ -125,7 +128,7 @@ fn shaping_of(flags: &Shaping, model: &ModelEntry) -> Shaping {
         shaping.hollow.mode = wall.mode;
     }
     shaping.position = model.position.map(Vec2::from_array);
-    shaping
+    Ok(shaping)
 }
 
 #[cfg(test)]
@@ -137,7 +140,7 @@ mod tests {
         let plate: PlateFile = toml::from_str(
             r#"
             printer = "elegoo-mars-4-ultra"
-            resin = "standard-grey"
+            resin = "my-grey"
             layer_height_mm = 0.03
             [[model]]
             path = "a.stl"

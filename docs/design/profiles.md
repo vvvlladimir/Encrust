@@ -12,14 +12,15 @@ assets/profiles/
 ├── printers/          one file per machine, id = file stem
 │   ├── elegoo-mars-4-ultra.toml
 │   └── ...
-├── resins/            one file per resin, tuned per machine where measured
-│   ├── standard-grey.toml
-│   └── ...
 └── supports/          one file per support profile, id = file stem
 ```
 
-Every file under `printers/`, `resins/` and `supports/` is embedded into `printer-profiles` by its
-build script, which emits an `include_str!` table sorted by id. Adding a machine is adding
+There is no `resins/`: an exposure is measured on the machine in the room, so the
+catalogue ships none and the first resin is the user's own (ADR 0196).
+
+Every file under `printers/` and `supports/` is embedded into `printer-profiles` by its
+build script, which emits an `include_str!` table sorted by id; a kind with no directory
+ships an empty table. Adding a machine is adding
 a file; nothing else has to be edited. Most of `printers/` is written by the generator at
 the end of this page; a file without its marker line was written by hand and the generator
 leaves it alone.
@@ -39,6 +40,9 @@ profile. Nothing is merged inside a file: the user's file is the whole profile.
 That directory is also what the user **has**: the window lists a profile only once it is
 there, and the shipped catalogue is the library it is installed from, so a first run has
 no printer and no resin (ADR 0158). The CLI resolves any catalogue id, installed or not.
+
+A copy under a shipped id is a copy: a later release correcting the shipped numbers does
+not reach it. The printer form says so and offers the shipped profile back (ADR 0196).
 
 ## Resolving
 
@@ -96,7 +100,8 @@ exposure hidden in one machine's table is caught when the file is read, naming t
 
 `encrust slice --printer <id> --resin <id>` resolves both through the catalogue; `--profile` and
 `--material` take paths and win over the ids. `encrust profiles list` prints the catalogue
-and exits. A printer alone still gets a resin: the first one measured on that machine.
+and exits. A machine named without a resin is refused: nothing ships an exposure, so there
+is nothing to fall back on (ADR 0196). A report over geometry — `inspect` — still runs.
 
 The window keeps the catalogue in `Slicing`, along with the resin as loaded and the resin
 as resolved. Picking a printer sets the plate, the container it writes, the machine on the
@@ -113,7 +118,8 @@ The third page, Updates, holds no profile: see `docs/design/updates.md`.
 
 - **Printers** lists the machines the user has installed, by brand, over a search line.
   The form carries the panel, the volume, the container
-  `output` names, how the machine is reached, and the firmware table. The one open shows
+  `output` names, how the machine is reached, and the firmware table, and says when it
+  differs from the machine of the same id this build ships. The one open shows
   the resins set up on it, each with
   buttons to duplicate it or take it off, and **Add resin**: a new one, or one from the
   pool of every resin some printer has, which opens on `starting_point`.
@@ -121,9 +127,12 @@ The third page, Updates, holds no profile: see `docs/design/updates.md`.
   machine there is, a card per brand, and that brand's models behind it. Picking one
   copies the shipped profile into the user's directory and closes the library onto it;
   **Custom printer** does the same with an empty profile. Removing a machine deletes that
-  copy, and a shipped one is back in the library to install again.
-- **Add resin** offers every resin the catalogue has that this printer is not set up with,
-  the shipped ones included; adding one writes a user copy tuned for that printer.
+  copy — asked about first — and a shipped one is back in the library to install again.
+  The window moves to the machine under it in the list, or to none when it was the last.
+- **Add resin** offers every resin on another printer, and **New resin** makes one. A
+  printer with none says so and offers the first; deleting one, here or from the pool, is
+  asked about first, because nothing on this screen can be undone (ADR 0196). A resin taken
+  off its last printer goes with it.
 - A resin's form edits it **on that printer**: numbers go into its `[printers.<id>]`
   table and make it `last_printer`; name, type, colour, density and price go on the resin.
   Renaming one other printers share splits it off as this printer's own file.

@@ -4,7 +4,7 @@ use std::fmt;
 use std::path::Path;
 
 use anyhow::{Context, Result};
-use printer_profiles::{Catalogue, Kind, MaterialProfile, PrinterProfile};
+use printer_profiles::{Catalogue, Kind, MaterialProfile, PrinterProfile, SupportProfile};
 use serde::Serialize;
 
 /// What the four profile arguments name, before any of it is loaded.
@@ -19,6 +19,24 @@ pub struct Selection<'a> {
 pub struct Chosen {
     pub printer: Option<PrinterProfile>,
     pub material: MaterialProfile,
+    /// Whether the exposure in `material` is one nobody measured: a machine taken out of
+    /// the catalogue with no resin named for it. Nothing ships a resin (ADR 0196), so
+    /// there is nothing to fall back on; see [`Chosen::measured`].
+    pub invented_exposure: bool,
+}
+
+impl Chosen {
+    /// Refuses a job that would print at an exposure nobody measured.
+    pub fn measured(&self) -> Result<()> {
+        if !self.invented_exposure {
+            return Ok(());
+        }
+        anyhow::bail!(
+            "no resin to print with: pass --resin <id> or --material <file.toml>. An \
+             exposure is measured on your own machine, not shipped, so none is assumed \
+             here; `encrust profiles list` shows the resins you have"
+        )
+    }
 }
 
 /// Resolves both profiles. A path always wins over a catalogue id, so a profile being
@@ -44,7 +62,12 @@ pub fn resolve(selection: &Selection) -> Result<Chosen> {
         .then_some(selection.printer_id)
         .flatten();
     let material = resolve_material(catalogue.as_ref(), selection, printer_id)?;
-    Ok(Chosen { printer, material })
+    let named_a_resin = selection.resin_path.is_some() || selection.resin_id.is_some();
+    Ok(Chosen {
+        printer,
+        material,
+        invented_exposure: printer_id.is_some() && !named_a_resin,
+    })
 }
 
 fn printer_from(catalogue: Option<&Catalogue>, id: &str) -> Result<PrinterProfile> {
@@ -77,19 +100,17 @@ fn resolve_material(
     let Some(catalogue) = catalogue else {
         return Ok(MaterialProfile::default());
     };
-    let entry = match selection.resin_id {
-        Some(id) => catalogue.resin(id).with_context(|| {
-            format!(
-                "run `encrust profiles list` to see the {} resins there are",
-                catalogue.resins().count()
-            )
-        })?,
-        // A printer alone still needs a resin: the one the catalogue measured for it.
-        None => match printer_id.and_then(|id| catalogue.default_resin_for(id)) {
-            Some(entry) => entry,
-            None => return Ok(MaterialProfile::default()),
-        },
+    let Some(id) = selection.resin_id else {
+        // Nothing is shipped to fall back on. The stock numbers stand so that a report
+        // over geometry still runs; a job that exposes resin is refused in `Chosen`.
+        return Ok(MaterialProfile::default());
     };
+    let entry = catalogue.resin(id).with_context(|| {
+        format!(
+            "run `encrust profiles list` to see the {} resins there are",
+            catalogue.resins().count()
+        )
+    })?;
 
     let Some(printer_id) = printer_id else {
         tracing::warn!(
@@ -105,6 +126,18 @@ fn resolve_material(
         );
     }
     Ok(entry.profile.starting_point(printer_id))
+}
+
+/// The support profile `id` names in the catalogue, shipped or the user's own.
+pub fn support(id: &str) -> Result<SupportProfile> {
+    let catalogue = Catalogue::load().context("cannot read the profile catalogue")?;
+    let entry = catalogue.support(id).with_context(|| {
+        format!(
+            "run `encrust profiles list` to see the {} support profiles there are",
+            catalogue.supports().count()
+        )
+    })?;
+    Ok(entry.profile.clone())
 }
 
 /// One profile of the catalogue as the TOML it is kept in, and which kind it turned out to
@@ -138,6 +171,7 @@ pub fn show(id: &str, kind: Option<Kind>) -> Result<(Kind, String)> {
 pub struct Listing {
     printers: Vec<PrinterLine>,
     resins: Vec<ResinLine>,
+    supports: Vec<SupportLine>,
 }
 
 #[derive(Serialize)]
@@ -159,6 +193,17 @@ struct ResinLine {
     layer_height_mm: f32,
     /// Printers in the catalogue this resin carries measured numbers for.
     tuned_for: usize,
+    user: bool,
+}
+
+#[derive(Serialize)]
+struct SupportLine {
+    id: String,
+    name: String,
+    /// How far the lowest point of a part stands off the plate for this profile, mm.
+    z_lift_mm: f32,
+    max_overhang_deg: f32,
+    density: f32,
     user: bool,
 }
 
@@ -195,7 +240,22 @@ pub fn list() -> Result<Listing> {
             user: is_user(&entry.source),
         })
         .collect();
-    Ok(Listing { printers, resins })
+    let supports = catalogue
+        .supports()
+        .map(|entry| SupportLine {
+            id: entry.id.clone(),
+            name: entry.profile.name.clone(),
+            z_lift_mm: entry.profile.z_lift_mm,
+            max_overhang_deg: entry.profile.max_overhang_deg,
+            density: entry.profile.density,
+            user: is_user(&entry.source),
+        })
+        .collect();
+    Ok(Listing {
+        printers,
+        resins,
+        supports,
+    })
 }
 
 impl fmt::Display for Listing {
@@ -227,6 +287,20 @@ impl fmt::Display for Listing {
                 resin.tuned_for,
                 self.printers.len(),
                 origin(resin.user),
+            )?;
+        }
+
+        writeln!(f, "\nSupports:")?;
+        for support in &self.supports {
+            writeln!(
+                f,
+                "  {:<24} {} — {:.1} mm lift, {:.0} deg overhang, density {:.1}{}",
+                support.id,
+                support.name,
+                support.z_lift_mm,
+                support.max_overhang_deg,
+                support.density,
+                origin(support.user),
             )?;
         }
         Ok(())

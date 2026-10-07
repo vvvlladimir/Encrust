@@ -185,6 +185,15 @@ impl Catalogue {
         table.iter().any(|(name, _)| *name == id)
     }
 
+    /// The printer this build ships under `id`, whatever the user's copy of it says. It
+    /// is what tells a copy made by an older release from the profile beside it, and what
+    /// *Restore* writes back; see `docs/decisions/0196`.
+    pub fn shipped_printer(&self, id: &str) -> Option<PrinterProfile> {
+        let (_, source) = BUNDLED_PRINTERS.iter().find(|(name, _)| *name == id)?;
+        let path = PathBuf::from(format!("<bundled>/printers/{id}.toml"));
+        PrinterProfile::from_toml_str(source, &path).ok()
+    }
+
     /// The store a profile of `id` is written to, once the id is known to be usable.
     fn store_for(&self, id: &str) -> Result<&dyn ProfileStore, ProfileError> {
         if !is_valid_id(id) {
@@ -291,14 +300,6 @@ impl Catalogue {
             ),
         }
     }
-
-    /// The resin a printer starts on: the first one carrying numbers for that machine,
-    /// or the first in the catalogue when none does.
-    pub fn default_resin_for(&self, printer_id: &str) -> Option<&Entry<MaterialProfile>> {
-        self.resins()
-            .find(|entry| entry.profile.is_tuned_for(printer_id))
-            .or_else(|| self.resins().next())
-    }
 }
 
 /// Whether `id` can be a file stem in the profile directory.
@@ -396,6 +397,7 @@ fn overlay<T>(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::PrinterTuning;
 
     #[test]
     fn every_bundled_profile_parses() {
@@ -405,7 +407,6 @@ mod tests {
             catalogue.printers().count() >= 5,
             "the catalogue ships at least five machines"
         );
-        assert!(catalogue.resins().count() >= 4);
         assert!(
             catalogue
                 .printers()
@@ -413,33 +414,13 @@ mod tests {
         );
     }
 
+    /// An exposure is measured on the machine in the room, and an invented one costs a
+    /// tank of resin, so the catalogue ships none; see ADR 0196.
     #[test]
-    fn every_bundled_resin_is_tuned_for_a_machine_and_resolves_for_the_rest() {
+    fn the_catalogue_ships_no_resin() {
         let catalogue = Catalogue::bundled().expect("the shipped catalogue is valid");
-
-        // Nobody has measured these resins on 150 machines, and an invented exposure
-        // costs a tank of resin, so a resin is tuned where it was measured and every
-        // other machine resolves to the numbers it was last measured with.
-        for resin in catalogue.resins() {
-            assert!(
-                catalogue
-                    .printers()
-                    .any(|printer| resin.profile.is_tuned_for(&printer.id)),
-                "{} is tuned for no shipped machine",
-                resin.id
-            );
-            for printer in catalogue.printers() {
-                let resolved = catalogue
-                    .resin_for(&resin.id, &printer.id)
-                    .expect("a shipped resin and a shipped machine");
-                assert!(
-                    resolved.exposure_s > 0.0 && resolved.bottom_exposure_s > 0.0,
-                    "{} resolves to no exposure on {}",
-                    resin.id,
-                    printer.id
-                );
-            }
-        }
+        assert_eq!(catalogue.resins().count(), 0);
+        assert!(!catalogue.is_shipped(Kind::Resin, "standard-grey"));
     }
 
     #[test]
@@ -516,19 +497,30 @@ z = 100.0
 
     #[test]
     fn a_resin_comes_out_carrying_the_printers_numbers() {
-        let catalogue = Catalogue::bundled().expect("the shipped catalogue is valid");
+        in_its_own_dir("resolve-resin", |_, mut catalogue| {
+            let mut resin = MaterialProfile {
+                exposure_s: 2.6,
+                ..MaterialProfile::default()
+            };
+            resin.printers.insert(
+                MARS.to_owned(),
+                PrinterTuning {
+                    exposure_s: Some(3.2),
+                    ..PrinterTuning::default()
+                },
+            );
+            catalogue.save_resin("mine", &resin).expect("writable");
 
-        let base = &catalogue.resin("generic-resin").expect("shipped").profile;
-        let tuned = catalogue
-            .resin_for("generic-resin", "elegoo-mars-3-pro")
-            .expect("shipped");
-
-        assert!(
-            tuned.exposure_s > base.exposure_s,
-            "an older LED matrix needs longer than the untuned starting point"
-        );
-        assert!(tuned.printers.is_empty(), "a resolved resin carries no map");
+            let tuned = catalogue.resin_for("mine", MARS).expect("saved");
+            assert!(
+                (tuned.exposure_s - 3.2).abs() < 1e-6,
+                "the machine's own measured exposure"
+            );
+            assert!(tuned.printers.is_empty(), "a resolved resin carries no map");
+        });
     }
+
+    const MARS: &str = "elegoo-mars-3-pro";
 
     /// A catalogue writing into a directory of this test's own, so nothing reads or
     /// writes the profile directory the user actually keeps.
@@ -632,9 +624,39 @@ z = 100.0
     #[test]
     fn only_a_shipped_id_is_shipped() {
         let catalogue = Catalogue::bundled().expect("the shipped catalogue is valid");
-        assert!(catalogue.is_shipped(Kind::Resin, "standard-grey"));
-        assert!(!catalogue.is_shipped(Kind::Resin, "my-resin"));
+        assert!(catalogue.is_shipped(Kind::Printer, "elegoo-mars-4-ultra"));
+        assert!(!catalogue.is_shipped(Kind::Printer, "my-printer"));
         assert!(catalogue.is_shipped(Kind::Support, "medium"));
+    }
+
+    /// What P-11 costs the user: a copy made by an older release stands over the shipped
+    /// profile, and nothing in the file says so.
+    #[test]
+    fn the_shipped_printer_is_still_reachable_under_an_edited_id() {
+        in_its_own_dir("shipped-printer", |_, mut catalogue| {
+            let shipped = catalogue
+                .shipped_printer("elegoo-saturn-4-ultra")
+                .expect("a shipped machine");
+            // The one thing ADR 0142 forbids on a tilting vat, which is what a copy made
+            // before that decision keeps.
+            let edited = PrinterProfile {
+                firmware: crate::Firmware {
+                    per_layer_settings: true,
+                    ..shipped.firmware
+                },
+                ..shipped.clone()
+            };
+            catalogue
+                .save_printer("elegoo-saturn-4-ultra", &edited)
+                .expect("writable");
+
+            assert_eq!(
+                catalogue.shipped_printer("elegoo-saturn-4-ultra"),
+                Some(shipped),
+                "the user's copy does not hide what the build ships"
+            );
+            assert!(catalogue.shipped_printer("my-printer").is_none());
+        });
     }
 
     #[test]

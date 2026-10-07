@@ -168,7 +168,8 @@ pub struct Scene {
     pub trapped: Color32,
     /// The patch painted to be filled with supports.
     pub painted: Color32,
-    /// The patch painted to keep supports off.
+    /// The patch painted to keep supports off. Violet, not red: an overhang is already
+    /// washed red, and what is closed to supports has to read apart from what hangs.
     pub blocked: Color32,
     /// The face a cut leaves behind, flat-lit. See `docs/decisions/0062`.
     pub section_cap: Color32,
@@ -210,7 +211,7 @@ const ENCRUST_SCENE: Scene = Scene {
     blocker: Color32::from_rgba_premultiplied(0x6a, 0x54, 0xa8, 0xcc),
     trapped: Color32::from_rgba_premultiplied(0x51, 0x0a, 0x1a, 0x59),
     painted: Color32::from_rgb(0x59, 0xb8, 0x94),
-    blocked: Color32::from_rgb(0xd9, 0x6b, 0x61),
+    blocked: Color32::from_rgb(0xb0, 0x5c, 0xd9),
     section_cap: Color32::from_rgb(0xc2, 0xbd, 0xb8),
     section_wash: Color32::from_rgb(0xed, 0xe6, 0xdb),
     overhang: Color32::from_rgb(0xf0, 0x61, 0x40),

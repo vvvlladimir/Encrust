@@ -5,7 +5,11 @@ authoritative; this file is the worked examples and the contract a script can re
 window reaches the same code through `core-engine`. In a checkout, `encrust` below is
 `cargo run --release -p encrust-cli --bin encrust --`.
 
-`--profile` and `--material` take a TOML path and win over the catalogue ids.
+`--profile` and `--material` take a TOML path and win over the catalogue ids. The
+catalogue ships machines and support profiles but **no resin**: an exposure is measured on
+your own machine, so the first resin is yours to make, in the window or as a TOML file
+(ADR 0196). `my-grey` below is one of yours; `profiles list` says what you have. A machine
+named without a resin is refused rather than given stock numbers.
 `--slice-window` trades memory for time on a dense stack (ADR 0066). The dev profile is
 optimised (ADR 0037); every quoted timing is a release timing.
 
@@ -17,15 +21,16 @@ encrust inspect model.stl --printer elegoo-mars-4-ultra
 encrust slice model.stl -o out               # PNG stack
 
 encrust slice model.stl \
-  --printer elegoo-mars-4-ultra --resin standard-grey --center -o model.goo
+  --printer elegoo-mars-4-ultra --resin my-grey --center -o model.goo
 
 encrust slice model.stl \
-  --printer elegoo-mars-3-pro --center --ctb-version 5 -o model.ctb
+  --printer elegoo-mars-3-pro --material my-grey.toml --center --ctb-version 5 -o model.ctb
 
 encrust slice model.stl \
-  --printer elegoo-mars-3-pro --center -o model.cbddlp     # or .photon
+  --printer elegoo-mars-3-pro --resin my-grey --center -o model.cbddlp     # or .photon
 
-encrust estimate model.stl --printer elegoo-mars-4-ultra   # time, resin, price; writes nothing
+encrust estimate model.stl \
+  --printer elegoo-mars-4-ultra --resin my-grey   # time, resin, price; writes nothing
 encrust convert plate.ctb --printer elegoo-mars-4-ultra -o plate.goo
 encrust printer send model.goo 192.168.1.42 --start      # to an Elegoo board
 ```
@@ -128,7 +133,8 @@ encrust slice model.stl \
 ```
 
 Turn the model the way it prints best before anything else is done to it, and build
-supports to a shipped preset or to your own profile:
+supports to a profile of the catalogue — `light`, `medium`, `heavy` or one saved in the
+window, as `profiles list` names them — or to your own TOML with `--support-profile`:
 
 ```sh
 encrust slice model.stl \
@@ -138,6 +144,11 @@ encrust slice model.stl \
   --printer elegoo-mars-4-ultra --supports medium --center -o model.goo
 ```
 
+A model is stood off the plate by the profile's own `z_lift_mm` before anything is put
+under it, the way the window's **Lift models** does it: a part sitting on the plate has no
+room for a support. One already standing that high is left where it is, and a profile with
+`z_lift_mm = 0` lifts nothing. The report says how far it moved.
+
 ## Plates: several models, a plate file, a project
 
 Several models go on one plate. `--arrange` spreads them, biggest first; without it each
@@ -145,7 +156,8 @@ stands where its file put it. `--center` and `--drain-at` point at one model, so
 refused for several:
 
 ```sh
-encrust slice a.stl b.stl c.stl --printer elegoo-mars-4-ultra --arrange --supports light -o plate.goo
+encrust slice a.stl b.stl c.stl \
+  --printer elegoo-mars-4-ultra --resin my-grey --arrange --supports light -o plate.goo
 ```
 
 A plate file says the same per model. Paths are relative to it, every key is optional but
@@ -153,7 +165,7 @@ A plate file says the same per model. Paths are relative to it, every key is opt
 
 ```toml
 printer = "elegoo-mars-4-ultra"
-resin = "standard-grey"
+resin = "my-grey"
 layer_height_mm = 0.05
 arrange = false                 # true spreads every model; it cannot be mixed with position
 
@@ -162,7 +174,7 @@ path = "a.stl"
 rotate = [0, 0, 45]             # degrees around X, Y, Z
 scale = 1.2                     # or [x, y, z]
 position = [60, 40]             # where the middle of the footprint goes, plate mm
-supports = "medium"             # light, medium or heavy
+supports = "medium"             # any support profile `profiles list` names
 
 [[model]]
 path = "b.stl"
@@ -176,7 +188,7 @@ replace the project's own, and `--slice-window` applies as to a model:
 
 ```sh
 encrust slice plate.toml -o plate.goo
-encrust slice plate.encrust --resin standard-grey -o plate.goo
+encrust slice plate.encrust --resin my-grey -o plate.goo
 ```
 
 A flag wins over the plate file or project, which wins over the profiles' own numbers.
@@ -198,9 +210,13 @@ the new file's previews are blank (ADR 0180).
 
 ## Profiles, a config file, completions
 
-`profiles show <id>` prints a printer, resin or support profile as the TOML it is kept in, or
-writes it with `-o`; edited, it is what `--profile` and `--material` take. `--kind` picks
-one when two kinds share an id.
+`profiles list` prints the catalogue in three blocks — printers, resins and support
+profiles — marking what came from your own folder; the resin block holds only what you
+made, since none is shipped; a support profile saved in the window is
+in that third block and `--supports` takes its id. `profiles show <id>` prints a printer,
+resin or support profile as the TOML it is kept in, or writes it with `-o`; edited, it is
+what `--profile`, `--material` and `--support-profile` take. `--kind` picks one when two
+kinds share an id.
 
 `--config FILE` holds flags written down: a key is a flag's long name, `true` the bare flag,
 `false` nothing, an array the flag once per element. Keys at the top are the global flags,
@@ -215,7 +231,7 @@ no-progress = true
 
 [slice]
 printer = "elegoo-mars-4-ultra"
-resin = "standard-grey"
+resin = "my-grey"
 center = true
 
 [printer.send]
