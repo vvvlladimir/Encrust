@@ -19,6 +19,24 @@ pub struct Selection<'a> {
 pub struct Chosen {
     pub printer: Option<PrinterProfile>,
     pub material: MaterialProfile,
+    /// Whether the exposure in `material` is one nobody measured: a machine taken out of
+    /// the catalogue with no resin named for it. Nothing ships a resin (ADR 0196), so
+    /// there is nothing to fall back on; see [`Chosen::measured`].
+    pub invented_exposure: bool,
+}
+
+impl Chosen {
+    /// Refuses a job that would print at an exposure nobody measured.
+    pub fn measured(&self) -> Result<()> {
+        if !self.invented_exposure {
+            return Ok(());
+        }
+        anyhow::bail!(
+            "no resin to print with: pass --resin <id> or --material <file.toml>. An \
+             exposure is measured on your own machine, not shipped, so none is assumed \
+             here; `encrust profiles list` shows the resins you have"
+        )
+    }
 }
 
 /// Resolves both profiles. A path always wins over a catalogue id, so a profile being
@@ -44,7 +62,12 @@ pub fn resolve(selection: &Selection) -> Result<Chosen> {
         .then_some(selection.printer_id)
         .flatten();
     let material = resolve_material(catalogue.as_ref(), selection, printer_id)?;
-    Ok(Chosen { printer, material })
+    let named_a_resin = selection.resin_path.is_some() || selection.resin_id.is_some();
+    Ok(Chosen {
+        printer,
+        material,
+        invented_exposure: printer_id.is_some() && !named_a_resin,
+    })
 }
 
 fn printer_from(catalogue: Option<&Catalogue>, id: &str) -> Result<PrinterProfile> {
@@ -77,19 +100,17 @@ fn resolve_material(
     let Some(catalogue) = catalogue else {
         return Ok(MaterialProfile::default());
     };
-    let entry = match selection.resin_id {
-        Some(id) => catalogue.resin(id).with_context(|| {
-            format!(
-                "run `encrust profiles list` to see the {} resins there are",
-                catalogue.resins().count()
-            )
-        })?,
-        // A printer alone still needs a resin: the one the catalogue measured for it.
-        None => match printer_id.and_then(|id| catalogue.default_resin_for(id)) {
-            Some(entry) => entry,
-            None => return Ok(MaterialProfile::default()),
-        },
+    let Some(id) = selection.resin_id else {
+        // Nothing is shipped to fall back on. The stock numbers stand so that a report
+        // over geometry still runs; a job that exposes resin is refused in `Chosen`.
+        return Ok(MaterialProfile::default());
     };
+    let entry = catalogue.resin(id).with_context(|| {
+        format!(
+            "run `encrust profiles list` to see the {} resins there are",
+            catalogue.resins().count()
+        )
+    })?;
 
     let Some(printer_id) = printer_id else {
         tracing::warn!(

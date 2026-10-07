@@ -18,6 +18,10 @@ const OFFSET_RANGE: std::ops::RangeInclusive<f32> = -0.2..=0.2;
 /// The widest correction worth offering: a resin off by a twentieth is a resin to replace.
 const PCT_RANGE: std::ops::RangeInclusive<f32> = 95.0..=105.0;
 
+/// Seconds a layer costs beyond what the settings account for. It goes negative: a print
+/// that came in under its estimate is one the settings over-charge (BUG-47).
+const LAYER_TIME_RANGE: std::ops::RangeInclusive<f32> = -30.0..=60.0;
+
 /// The rows of the Compensation card: what the print comes out at, and the clock.
 pub(super) fn rows(
     ui: &mut egui::Ui,
@@ -59,13 +63,13 @@ pub(super) fn rows(
         &mut values.layer_time_s,
         "s",
         SECOND_STEP,
-        0.0..=60.0,
+        LAYER_TIME_RANGE,
         2,
     );
     describe(
         ui,
         "Seconds the machine spends on a layer beyond exposure, waits and travel. \
-         It only moves the estimate.",
+         Negative where the estimate runs long. It only moves the estimate.",
     );
     if secondary_button(ui, "", "Work it out from a finished print").clicked() {
         calculators.open = Some(Calculator::LayerTime);
@@ -184,13 +188,21 @@ fn shrinkage(
 
     let found = worked_out(calculators);
     match found {
-        Some(percentages) => hint(
-            ui,
-            &format!(
-                "{:.3} %, {:.3} % and {:.3} %.",
-                percentages[0], percentages[1], percentages[2]
-            ),
-        ),
+        Some(percentages) => {
+            hint(
+                ui,
+                &format!(
+                    "{:.3} %, {:.3} % and {:.3} %.",
+                    percentages[0], percentages[1], percentages[2]
+                ),
+            );
+            for percent in percentages {
+                if let Some(note) = limit_note(percent, &PCT_RANGE, "%") {
+                    hint(ui, &note);
+                    break;
+                }
+            }
+        }
         None => hint(ui, "Every measurement has to be above zero."),
     }
     ui.add_space(6.0);
@@ -198,12 +210,30 @@ fn shrinkage(
         .horizontal(|ui| inline_button(ui, "", "Use these", true, found.is_some()).clicked())
         .inner;
     if let (true, Some([x, y, z])) = (take, found) {
-        compensation.shrink_x_pct = x;
-        compensation.shrink_y_pct = y;
-        compensation.shrink_z_pct = z;
+        compensation.shrink_x_pct = held(x, &PCT_RANGE);
+        compensation.shrink_y_pct = held(y, &PCT_RANGE);
+        compensation.shrink_z_pct = held(z, &PCT_RANGE);
         return true;
     }
     false
+}
+
+/// `value` as the field will hold it. A correction past the field's range is held at its
+/// limit, and `limit_note` is what says so rather than letting it happen quietly.
+fn held(value: f32, range: &std::ops::RangeInclusive<f32>) -> f32 {
+    value.clamp(*range.start(), *range.end())
+}
+
+/// What a worked-out value loses to the field it is going into, if it loses anything.
+fn limit_note(value: f32, range: &std::ops::RangeInclusive<f32>, unit: &str) -> Option<String> {
+    let kept = held(value, range);
+    (kept != value).then(|| {
+        format!(
+            "The field takes {} to {} {unit}, so it will be held at {kept:.2}.",
+            range.start(),
+            range.end()
+        )
+    })
 }
 
 /// The three percentages, or `None` while a measurement is missing.
@@ -245,7 +275,12 @@ fn layer_time(
         calculators.layers as u32,
     );
     match found {
-        Some(seconds) => hint(ui, &format!("{seconds:.2} s a layer.")),
+        Some(seconds) => {
+            hint(ui, &format!("{seconds:.2} s a layer."));
+            if let Some(note) = limit_note(seconds, &LAYER_TIME_RANGE, "s") {
+                hint(ui, &note);
+            }
+        }
         None => hint(ui, "A stack of no layers spreads nothing."),
     }
     ui.add_space(6.0);
@@ -253,7 +288,9 @@ fn layer_time(
         .horizontal(|ui| inline_button(ui, "", "Use this", true, found.is_some()).clicked())
         .inner;
     if let (true, Some(seconds)) = (take, found) {
-        compensation.layer_time_s = seconds.max(0.0);
+        // A print that beat its estimate gives a negative correction, and clamping it at
+        // zero leaves the estimate wrong in the same direction for ever (BUG-47).
+        compensation.layer_time_s = held(seconds, &LAYER_TIME_RANGE);
         return true;
     }
     false

@@ -140,7 +140,7 @@ mod tests {
         let plate: PlateFile = toml::from_str(
             r#"
             printer = "elegoo-mars-4-ultra"
-            resin = "standard-grey"
+            resin = "my-grey"
             layer_height_mm = 0.03
             [[model]]
             path = "a.stl"

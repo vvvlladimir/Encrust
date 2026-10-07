@@ -10,7 +10,7 @@ use std::time::{Duration, Instant};
 
 use encrust_app::{BuildPlate, Handed, Scene, Slicing, Status, prepare};
 use format_goo::decode;
-use printer_profiles::Catalogue;
+use printer_profiles::{Catalogue, MaterialProfile};
 
 const PRINTER: &str = "elegoo-mars-4-ultra";
 
@@ -116,6 +116,9 @@ fn a_cube_imported_and_sliced_as_the_window_does_reaches_the_file_whole() {
 
     let mut slicing = Slicing::default();
     slicing.set_printer(printer.profile.clone(), Some(printer.id.clone()));
+    // Nothing ships a resin, so the window is handed one as a user who measured it would
+    // be (ADR 0196).
+    slicing.set_material(MaterialProfile::default());
     assert_eq!(slicing.blocker(&scene), None, "the plate is ready to slice");
 
     let output = temp("cube", "goo");

@@ -76,6 +76,7 @@ impl Window<'_> {
         }
         support_diagram::ui(ui.ctx(), self);
         settings::calculators(ui.ctx(), self.machine);
+        settings::confirm(ui.ctx(), self);
 
         // The Settings screen takes the whole window under the strips: a profile is
         // edited instead of the plate, not beside it.

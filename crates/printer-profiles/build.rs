@@ -1,5 +1,7 @@
 //! Embeds every profile under `assets/profiles/` into the crate, so a fresh install has a
-//! catalogue before it has any files on disk. See docs/decisions/0049.
+//! catalogue before it has any files on disk. See docs/decisions/0049. A kind with no
+//! directory ships nothing, which is what a resin does: it is measured, not shipped
+//! (docs/decisions/0196).
 #![expect(
     clippy::expect_used,
     reason = "a build script reports failure by panicking"
@@ -24,14 +26,17 @@ fn main() {
 fn emit(source: &mut String, name: &str, dir: &Path) {
     println!("cargo:rerun-if-changed={}", dir.display());
 
-    let mut files: Vec<_> = std::fs::read_dir(dir)
-        .unwrap_or_else(|error| panic!("cannot read {}: {error}", dir.display()))
-        .map(|entry| entry.expect("a readable directory entry").path())
-        .filter(|path| {
-            path.extension()
-                .is_some_and(|extension| extension == "toml")
-        })
-        .collect();
+    let mut files: Vec<_> = match std::fs::read_dir(dir) {
+        Ok(entries) => entries
+            .map(|entry| entry.expect("a readable directory entry").path())
+            .filter(|path| {
+                path.extension()
+                    .is_some_and(|extension| extension == "toml")
+            })
+            .collect(),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Vec::new(),
+        Err(error) => panic!("cannot read {}: {error}", dir.display()),
+    };
     files.sort();
 
     writeln!(source, "const {name}: &[(&str, &str)] = &[").expect("writing to a String");

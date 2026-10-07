@@ -194,6 +194,7 @@ mod tests {
     use super::*;
     use crate::ExposureRange;
     use crate::fixtures::sample_job;
+    use printer_profiles::Compensation;
 
     #[test]
     fn a_job_is_stamped_with_the_time_its_caller_gave() {
@@ -465,5 +466,33 @@ mod tests {
 
         // 2 * 30 s + 2 * 2 s exposure, plus 6 mm up and down at 1 mm/s on all four layers.
         assert_eq!(job.print_time_s(), (60.0 + 4.0 + 4.0 * 12.0) as u32);
+    }
+
+    /// A print that came in under its estimate gives a negative correction, which has to
+    /// shorten the estimate rather than being clamped away; see BUG-47 and ADR 0144.
+    #[test]
+    fn a_negative_unaccounted_time_shortens_the_estimate_and_never_goes_under_zero() {
+        let job = |layer_time_s| PrintJob {
+            material: MaterialProfile {
+                exposure_s: 2.0,
+                bottom_layers: 0,
+                light_off_delay_s: 0.0,
+                lift_distance_mm: 0.1,
+                retract_distance_mm: 0.1,
+                compensation: Compensation {
+                    layer_time_s,
+                    ..Compensation::default()
+                },
+                ..MaterialProfile::default()
+            },
+            ..sample_job(10)
+        };
+
+        let plain = job(0.0).print_time_s();
+        assert!(
+            job(-1.0).print_time_s() < plain,
+            "ten layers a second shorter"
+        );
+        assert_eq!(job(-1000.0).print_time_s(), 0, "and never a negative clock");
     }
 }

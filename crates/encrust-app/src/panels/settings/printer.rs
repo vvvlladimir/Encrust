@@ -9,7 +9,7 @@ use printer_profiles::PrinterProfile;
 use crate::job::label_of;
 use crate::panels::Window;
 use crate::panels::settings::{form_card, report, settled};
-use crate::ui::{count_row, hint, icon, number_row, picker, switch, text_row};
+use crate::ui::{count_row, hint, icon, number_row, picker, secondary_button, switch, text_row};
 
 /// Millimetres per point of drag. A panel is measured in tenths, a build volume in whole
 /// millimetres.
@@ -25,10 +25,15 @@ pub fn form(ui: &mut egui::Ui, window: &mut Window) {
     let Some(draft) = machine.settings.printer.as_mut() else {
         return;
     };
+    let shipped = draft.shipped().cloned();
     let (id, profile) = (draft.id.clone(), &mut draft.values);
+    let mut restore = false;
     form_card(ui, "Machine", |ui| {
         text_row(ui, "Name", &mut profile.name);
         text_row(ui, "Manufacturer", &mut profile.manufacturer);
+        if shipped.is_some() {
+            restore = own_copy_note(ui);
+        }
     });
     form_card(ui, "Display", |ui| display(ui, profile));
     form_card(ui, "Build volume", |ui| volume(ui, profile));
@@ -40,8 +45,56 @@ pub fn form(ui: &mut egui::Ui, window: &mut Window) {
     });
     form_card(ui, "Firmware", |ui| firmware(ui, profile));
 
+    if restore {
+        if let Some(shipped) = shipped {
+            put_shipped_back(window, &id, shipped);
+        }
+        return;
+    }
     if settled(ui) {
         autosave(window);
+    }
+}
+
+/// Says that this machine is the user's copy of a shipped one and no longer matches it,
+/// which is what a copy taken out of the library by an older release never said (P-11).
+/// Answers whether the shipped profile was asked for back.
+fn own_copy_note(ui: &mut egui::Ui) -> bool {
+    ui.add_space(4.0);
+    hint(
+        ui,
+        "Your copy of a machine this build also ships, and the two differ. Yours wins, \
+         including where a later release corrected the shipped numbers.",
+    );
+    ui.add_space(4.0);
+    secondary_button(ui, icon::UPDATE, "Use the shipped profile").clicked()
+}
+
+/// Writes the shipped profile back over the user's copy, and stands the plate under it
+/// when it is the machine in hand.
+fn put_shipped_back(window: &mut Window, id: &str, shipped: PrinterProfile) {
+    let outcome = window
+        .machine
+        .slicing
+        .catalogue
+        .save_printer(id, &shipped)
+        .map(drop);
+    if report(
+        &mut window.machine.status,
+        "cannot put the shipped profile back",
+        outcome,
+    )
+    .is_none()
+    {
+        return;
+    }
+    let node = crate::settings::Node::Printer(id.to_owned());
+    window
+        .machine
+        .settings
+        .pick(&window.machine.slicing.catalogue, node);
+    if window.machine.slicing.printer_id.as_deref() == Some(id) {
+        crate::profiles::apply_printer(window, shipped, Some(id.to_owned()));
     }
 }
 

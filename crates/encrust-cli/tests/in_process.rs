@@ -64,11 +64,22 @@ fn temp(name: &str, extension: &str) -> PathBuf {
 }
 
 /// `encrust slice` as a user would type it, parsed the way `main` parses it and run
-/// until `stop` is asked for.
+/// until `stop` is asked for. Every run names a resin of its own: the catalogue ships
+/// none, so a machine without one is refused (ADR 0196).
 fn slice_until(arguments: &[&str], stop: &Stop) -> anyhow::Result<Exit> {
+    let resin = test_resin();
     let mut argv = vec!["encrust", "slice"];
     argv.extend_from_slice(arguments);
+    argv.extend_from_slice(&["--material", &resin]);
     run(&Cli::parse_from(argv), stop)
+}
+
+fn test_resin() -> String {
+    Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("tests/fixtures/test-resin.toml")
+        .to_str()
+        .expect("the fixture path is UTF-8")
+        .to_owned()
 }
 
 fn slice(arguments: &[&str]) -> anyhow::Result<Exit> {

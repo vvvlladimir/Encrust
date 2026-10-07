@@ -205,6 +205,7 @@ mod tests {
         let chosen = crate::profiles::Chosen {
             printer: None,
             material: printer_profiles::MaterialProfile::default(),
+            invented_exposure: false,
         };
         let watch = Watch {
             talk: false,
@@ -240,6 +241,7 @@ mod tests {
         let chosen = crate::profiles::Chosen {
             printer: None,
             material: printer_profiles::MaterialProfile::default(),
+            invented_exposure: false,
         };
         let stop = Stop::default();
         stop.request();

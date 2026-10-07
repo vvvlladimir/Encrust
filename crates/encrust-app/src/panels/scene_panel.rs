@@ -193,10 +193,11 @@ fn print(ui: &mut egui::Ui, window: &mut Window) {
             egui::Popup::menu(&response).show(|ui| profiles::printer_menu(ui, window));
 
             ui.add_space(theme::ITEM_GAP);
-            let response = picker(ui, icon::RESIN, &window.machine.slicing.material.name);
+            let response = picker(ui, icon::RESIN, window.machine.slicing.resin_name());
             egui::Popup::menu(&response).show(|ui| profiles::resin_menu(ui, window.machine));
 
             if window.machine.slicing.printer_id.is_some()
+                && window.machine.slicing.has_resin()
                 && !window.machine.slicing.resin_is_tuned()
             {
                 meta(ui, &["not measured on this printer".to_owned()]);

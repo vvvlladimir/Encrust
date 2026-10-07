@@ -9,11 +9,11 @@ mod library;
 use crate::panels::Window;
 use crate::panels::settings::{printer, report, resin};
 use crate::settings::{
-    Library, Node, add_resin, duplicate_resin, installed, installed_printers, new_printer,
-    new_resin, pool_for, remove_resin, resins_of,
+    Deleting, Library, Node, add_resin, delete_resin, duplicate_resin, installed, new_printer,
+    new_resin, pool_for, resins_of, take_resin_off,
 };
 use crate::state::Machine;
-use crate::ui::{describe, icon, icon_button, theme};
+use crate::ui::{describe, icon, icon_button, secondary_button, theme};
 
 const ROW_H: f32 = 32.0;
 const INDENT: f32 = 18.0;
@@ -24,7 +24,6 @@ enum Action {
     NewPrinter,
     /// A machine taken out of the library, which is a copy of it in the user's directory.
     InstallPrinter(String),
-    DeletePrinter(String),
     NewResin(String),
     AddResin {
         printer: String,
@@ -34,10 +33,8 @@ enum Action {
         printer: String,
         resin: String,
     },
-    RemoveResin {
-        printer: String,
-        resin: String,
-    },
+    /// Something that cannot be undone, which the screen asks about before doing it.
+    Ask(Deleting),
 }
 
 /// The printers, and under the one open, its resins and the way to add another.
@@ -86,7 +83,7 @@ pub fn list(ui: &mut Ui, window: &mut Window) {
             action = Some(Action::Pick(Node::Printer(id.clone())));
         }
         if row.delete {
-            action = Some(Action::DeletePrinter(id.clone()));
+            action = Some(Action::Ask(Deleting::Printer(id.clone())));
         }
         if id == open {
             resins(ui, window, &id, &node, &mut action);
@@ -94,7 +91,7 @@ pub fn list(ui: &mut Ui, window: &mut Window) {
     }
 
     if let Some(action) = action {
-        apply(window.machine, action);
+        apply(window, action);
     }
 }
 
@@ -150,6 +147,7 @@ fn resins(
     action: &mut Option<Action>,
 ) {
     let catalogue = &window.machine.slicing.catalogue;
+    let mut listed = false;
     for (id, resin) in resins_of(catalogue, printer) {
         let this = Node::Resin {
             printer: printer.to_owned(),
@@ -178,11 +176,34 @@ fn resins(
         }
         if row.delete {
             let (printer, resin) = pair();
-            *action = Some(Action::RemoveResin { printer, resin });
+            *action = Some(Action::Ask(Deleting::ResinOff { printer, resin }));
         }
+        listed = true;
+    }
+    if !listed {
+        first_resin(ui, printer, action);
     }
     add_menu(ui, window.machine, printer, action);
     ui.add_space(6.0);
+}
+
+/// What a printer with no resin on it offers. An exposure is measured on the machine in
+/// the room, so the first resin is the user's to make (ADR 0196).
+fn first_resin(ui: &mut Ui, printer: &str, action: &mut Option<Action>) {
+    ui.horizontal(|ui| {
+        ui.add_space(INDENT + 6.0);
+        ui.vertical(|ui| {
+            describe(
+                ui,
+                "No resin on this printer. An exposure is measured on your machine, not \
+                 shipped, so the first one is yours to type in from a test print.",
+            );
+            if secondary_button(ui, icon::RESIN, "Add the first resin").clicked() {
+                *action = Some(Action::NewResin(printer.to_owned()));
+            }
+        });
+    });
+    ui.add_space(4.0);
 }
 
 /// A new resin, or one out of the pool of every resin some printer has.
@@ -206,21 +227,29 @@ fn add_menu(ui: &mut Ui, machine: &Machine, printer: &str, action: &mut Option<A
             let mut empty = true;
             for (id, resin) in pool_for(&machine.slicing.catalogue, printer) {
                 empty = false;
-                if ui.button(&resin.name).clicked() {
-                    *action = Some(Action::AddResin {
-                        printer: printer.to_owned(),
-                        resin: id.to_owned(),
+                ui.horizontal(|ui| {
+                    if ui.button(&resin.name).clicked() {
+                        *action = Some(Action::AddResin {
+                            printer: printer.to_owned(),
+                            resin: id.to_owned(),
+                        });
+                    }
+                    ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
+                        if icon_button(ui, icon::REMOVE, "Delete this resin").clicked() {
+                            *action = Some(Action::Ask(Deleting::Resin(id.to_owned())));
+                        }
                     });
-                }
+                });
             }
             if empty {
-                describe(ui, "Every resin there is is already on this printer.");
+                describe(ui, "Every resin you have is already on this printer.");
             }
         });
     });
 }
 
-fn apply(machine: &mut Machine, action: Action) {
+fn apply(window: &mut Window, action: Action) {
+    let machine = &mut *window.machine;
     // Anything picked anywhere is what the form shows next, so the library gets out of
     // the way whether the pick came from it or from the list beside it.
     machine.settings.library = None;
@@ -234,13 +263,6 @@ fn apply(machine: &mut Machine, action: Action) {
         Action::InstallPrinter(id) => {
             let outcome = install_printer(catalogue, &id);
             report(status, "cannot add the machine", outcome).map(|()| Node::Printer(id))
-        }
-        Action::DeletePrinter(id) => {
-            let outcome = catalogue.forget_user_copy(Kind::Printer, &id);
-            report(status, "cannot remove the machine", outcome);
-            installed_printers(catalogue)
-                .next()
-                .map(|entry| Node::Printer(entry.id.clone()))
         }
         Action::NewResin(printer) => {
             let outcome = new_resin(catalogue, &printer);
@@ -256,16 +278,84 @@ fn apply(machine: &mut Machine, action: Action) {
             report(status, "cannot duplicate the resin", outcome)
                 .map(|resin| Node::Resin { printer, resin })
         }
-        Action::RemoveResin { printer, resin } => {
-            let outcome = remove_resin(catalogue, &printer, &resin);
-            report(status, "cannot take the resin off", outcome);
-            Some(Node::Printer(printer))
+        Action::Ask(deleting) => {
+            machine.settings.confirm = Some(deleting);
+            None
         }
     };
     machine.slicing.reload_resin();
-    if let Some(node) = picked {
+    pick(window, picked);
+}
+
+/// Carries out a deletion the question was answered for. Everything here writes the
+/// user's directory and cannot be taken back; see `confirm`.
+pub(super) fn delete(window: &mut Window, deleting: Deleting) {
+    let picked = match deleting {
+        Deleting::Printer(id) => {
+            let machine = &mut *window.machine;
+            // Where the list goes next is read while the machine is still in it.
+            let next = neighbour(&machine.slicing.catalogue, &id);
+            let outcome = machine
+                .slicing
+                .catalogue
+                .forget_user_copy(Kind::Printer, &id);
+            report(&mut machine.status, "cannot remove the machine", outcome);
+            let in_hand = machine.slicing.printer_id.as_deref() == Some(id.as_str());
+            if in_hand {
+                stand_under(window, next.clone());
+            }
+            next.map(Node::Printer)
+        }
+        Deleting::ResinOff { printer, resin } => {
+            let machine = &mut *window.machine;
+            let outcome = take_resin_off(&mut machine.slicing.catalogue, &printer, &resin);
+            report(&mut machine.status, "cannot take the resin off", outcome);
+            Some(Node::Printer(printer))
+        }
+        Deleting::Resin(resin) => {
+            let machine = &mut *window.machine;
+            let outcome = delete_resin(&mut machine.slicing.catalogue, &resin);
+            report(&mut machine.status, "cannot delete the resin", outcome);
+            // The pool holds what this printer is not set up with, so what the form has
+            // open is never the resin that just went.
+            None
+        }
+    };
+    window.machine.slicing.reload_resin();
+    pick(window, picked);
+}
+
+/// Opens `node` in the form, and leaves the form as it is when nothing was picked.
+fn pick(window: &mut Window, node: Option<Node>) {
+    let machine = &mut *window.machine;
+    if let Some(node) = node {
         machine.settings.pick(&machine.slicing.catalogue, node);
     }
+}
+
+/// Stands the plate under the machine the list moved to, or under none when the last one
+/// has been removed: the window prints with the machine it has, not with one that is gone
+/// (BUG-14).
+fn stand_under(window: &mut Window, id: Option<String>) {
+    let profile = id
+        .as_deref()
+        .and_then(|id| window.machine.slicing.catalogue.printer(id).ok())
+        .map(|entry| entry.profile.clone());
+    match profile {
+        Some(profile) => crate::profiles::apply_printer(window, profile, id),
+        None => crate::profiles::clear_printer(window),
+    }
+}
+
+/// What the list moves to when `id` leaves it: the machine under it, or the one over it
+/// when it was the last.
+fn neighbour(catalogue: &Catalogue, id: &str) -> Option<String> {
+    let listed = mine(catalogue, "");
+    let at = listed.iter().position(|entry| entry.id == id)?;
+    listed
+        .get(at + 1)
+        .or_else(|| at.checked_sub(1).and_then(|over| listed.get(over)))
+        .map(|entry| entry.id.clone())
 }
 
 /// Takes a machine out of the library: a copy of the shipped profile under its own id,
@@ -282,7 +372,7 @@ fn install_printer(catalogue: &mut Catalogue, id: &str) -> Result<(), ProfileErr
 /// The library while it is open, otherwise the form of what the list has picked.
 pub fn form(ui: &mut Ui, window: &mut Window) {
     if window.machine.settings.library.is_some() {
-        shop(ui, window.machine);
+        shop(ui, window);
         return;
     }
     match window.machine.settings.node {
@@ -294,7 +384,8 @@ pub fn form(ui: &mut Ui, window: &mut Window) {
 
 /// The library page, and what a pick in it does: either way the library closes, because
 /// what was picked is what the user wants to look at next.
-fn shop(ui: &mut Ui, machine: &mut Machine) {
+fn shop(ui: &mut Ui, window: &mut Window) {
+    let machine = &mut *window.machine;
     let Some(library) = machine.settings.library.as_mut() else {
         return;
     };
@@ -303,8 +394,8 @@ fn shop(ui: &mut Ui, machine: &mut Machine) {
     };
     machine.settings.library = None;
     match picked {
-        library::Picked::Custom => apply(machine, Action::NewPrinter),
-        library::Picked::Printer(id) => apply(machine, Action::InstallPrinter(id)),
+        library::Picked::Custom => apply(window, Action::NewPrinter),
+        library::Picked::Printer(id) => apply(window, Action::InstallPrinter(id)),
     }
 }
 
@@ -451,6 +542,46 @@ mod tests {
         assert!(
             mine(&catalogue, "").is_empty(),
             "removing the copy puts the machine back in the library"
+        );
+    }
+
+    /// BUG-14: the window prints with the machine the list moved to, so where the list
+    /// goes has to be an answer and never the machine that was just removed.
+    #[test]
+    fn removing_a_machine_moves_the_list_to_the_one_under_it() {
+        let mut catalogue = writable("neighbour");
+        for id in [
+            "elegoo-mars-3-pro",
+            "elegoo-mars-4-ultra",
+            "elegoo-saturn-4-ultra",
+        ] {
+            install_printer(&mut catalogue, id).expect("the directory is writable");
+        }
+        let listed: Vec<String> = mine(&catalogue, "")
+            .iter()
+            .map(|entry| entry.id.clone())
+            .collect();
+
+        assert_eq!(
+            neighbour(&catalogue, &listed[0]).as_deref(),
+            Some(listed[1].as_str()),
+            "the machine under it"
+        );
+        assert_eq!(
+            neighbour(&catalogue, &listed[2]).as_deref(),
+            Some(listed[1].as_str()),
+            "and the one over it when it was the last"
+        );
+        assert!(neighbour(&catalogue, "no-such-machine").is_none());
+
+        for id in &listed {
+            catalogue
+                .forget_user_copy(Kind::Printer, id)
+                .expect("the copy is the user's to remove");
+        }
+        assert!(
+            neighbour(&catalogue, &listed[0]).is_none(),
+            "nothing installed leaves the window with no machine at all"
         );
     }
 

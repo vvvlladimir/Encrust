@@ -504,9 +504,9 @@ fn output_file(name: &str) -> PathBuf {
     path
 }
 
-fn shipped_resin() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("../../assets/profiles/resins/generic-resin.toml")
+/// A resin of the tests' own: the catalogue ships none (ADR 0196).
+fn test_resin() -> PathBuf {
+    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/test-resin.toml")
 }
 
 fn be_u32(bytes: &[u8], offset: usize) -> u32 {
@@ -579,7 +579,7 @@ fn a_cube_becomes_a_printable_goo_file() {
         "--profile",
         test_panel().to_str().unwrap(),
         "--material",
-        shipped_resin().to_str().unwrap(),
+        test_resin().to_str().unwrap(),
         "--layer-height",
         "1",
         "-o",
@@ -633,7 +633,7 @@ fn the_goo_layers_carry_the_bottom_and_transition_exposures() {
         "--profile",
         test_panel().to_str().unwrap(),
         "--material",
-        shipped_resin().to_str().unwrap(),
+        test_resin().to_str().unwrap(),
         "--layer-height",
         "1",
         "-o",
@@ -737,7 +737,7 @@ fn a_cube_becomes_a_printable_ctb_file() {
         "--profile",
         test_panel().to_str().unwrap(),
         "--material",
-        shipped_resin().to_str().unwrap(),
+        test_resin().to_str().unwrap(),
         "--layer-height",
         "1",
         "-o",
@@ -785,7 +785,7 @@ fn the_ctb_version_flag_picks_the_revision() {
         "--profile",
         test_panel().to_str().unwrap(),
         "--material",
-        shipped_resin().to_str().unwrap(),
+        test_resin().to_str().unwrap(),
         "--layer-height",
         "2",
         "--ctb-version",
@@ -803,13 +803,18 @@ fn the_ctb_version_flag_picks_the_revision() {
 
 #[test]
 fn the_catalogue_is_listed_without_a_mesh() {
-    let output = encrust(&["profiles", "list"]);
+    let dir = resin_dir("listing");
+    let output = encrust_with_profiles(&dir, &["profiles", "list"]);
     assert!(output.status.success(), "{}", stdout(&output));
 
     let text = stdout(&output);
     assert!(text.contains("elegoo-mars-4-ultra"), "{text}");
     assert!(text.contains("phrozen-sonic-mini-8k"), "{text}");
-    assert!(text.contains("generic-resin"), "{text}");
+    // The catalogue ships no resin, so what is listed is the user's own (ADR 0196).
+    assert!(
+        text.contains("my-grey") && text.contains("[user]"),
+        "{text}"
+    );
 }
 
 #[test]
@@ -841,28 +846,70 @@ fn an_unknown_printer_id_is_refused() {
 
 #[test]
 fn a_resin_id_arrives_tuned_for_the_chosen_printer() {
+    let dir = resin_dir("tuned-resin");
     let path = write_box_stl("tuned-resin", 10.0, 12, 0);
     let out = output_file("tuned.goo");
-    let output = slice(&[
-        path.to_str().unwrap(),
-        "--profile",
-        test_panel().to_str().unwrap(),
-        "--resin",
-        "standard-grey",
-        "--printer",
-        "elegoo-mars-3-pro",
-        "--layer-height",
-        "2",
-        "-o",
-        out.to_str().unwrap(),
-    ]);
+    let output = encrust_with_profiles(
+        &dir,
+        &[
+            "slice",
+            path.to_str().unwrap(),
+            "--profile",
+            test_panel().to_str().unwrap(),
+            "--resin",
+            "my-grey",
+            "--printer",
+            "elegoo-mars-3-pro",
+            "--layer-height",
+            "2",
+            "-o",
+            out.to_str().unwrap(),
+        ],
+    );
     assert!(output.status.success(), "{}", stdout(&output));
 
     // The path wins for the panel, so the file is the 200 px test panel, while the
-    // exposure is the 3.2 s standard grey was tuned to on a Mars 3 Pro.
+    // exposure is the 3.0 s the resin was measured at on a Mars 3 Pro.
     let file = fs::read(&out).expect("the goo file was written");
     let text = String::from_utf8_lossy(&file[0..1000]).to_string();
     assert!(text.contains("Test panel"), "{text}");
+}
+
+/// A machine named out of the catalogue needs a resin named with it: nothing ships one,
+/// so there is no exposure to fall back on (ADR 0196).
+#[test]
+fn a_printer_without_a_resin_is_refused_rather_than_given_stock_numbers() {
+    let dir = resin_dir("no-resin");
+    let path = write_box_stl("no-resin", 10.0, 12, 0);
+    let out = output_file("no-resin.goo");
+    let output = encrust_with_profiles(
+        &dir,
+        &[
+            "slice",
+            path.to_str().unwrap(),
+            "--printer",
+            "elegoo-mars-3-pro",
+            "--layer-height",
+            "2",
+            "-o",
+            out.to_str().unwrap(),
+        ],
+    );
+    assert_eq!(output.status.code(), Some(1));
+    let errors = stderr(&output);
+    assert!(errors.contains("--resin"), "{errors}");
+    assert!(!out.exists(), "and nothing is written at invented numbers");
+}
+
+/// A profile directory of this test's own holding one resin, `my-grey`, which is what a
+/// user who has measured one has.
+fn resin_dir(name: &str) -> PathBuf {
+    let dir = std::env::temp_dir().join(format!("encrust-cli-resins-{name}"));
+    let resins = dir.join("resins");
+    let _ = fs::remove_dir_all(&dir);
+    fs::create_dir_all(&resins).expect("a writable temporary directory");
+    fs::copy(test_resin(), resins.join("my-grey.toml")).expect("copy the resin");
+    dir
 }
 
 #[test]
@@ -901,6 +948,8 @@ fn a_goo_name_on_a_chitu_machine_is_written_but_reported() {
         path.to_str().unwrap(),
         "--printer",
         "elegoo-mars-3-pro",
+        "--material",
+        test_resin().to_str().unwrap(),
         "--layer-height",
         "2",
         "-o",

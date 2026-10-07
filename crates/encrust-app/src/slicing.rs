@@ -42,6 +42,9 @@ pub struct Slicing {
     /// The resin as it was loaded, tuning tables and all, so a new printer can retune it.
     base_material: MaterialProfile,
     pub resin_id: Option<String>,
+    /// Whether a resin was ever chosen. Nothing ships an exposure, so without one the
+    /// window refuses to slice rather than printing at invented numbers (ADR 0196).
+    chosen_resin: bool,
     /// Every printer and resin the picker offers.
     pub catalogue: Catalogue,
     /// The rules an adaptive stack follows, or `None` for one thickness throughout.
@@ -92,6 +95,7 @@ impl Default for Slicing {
             base_material: material.clone(),
             material,
             resin_id: None,
+            chosen_resin: false,
             // The shipped catalogue is pinned by a test in printer-profiles; a build that
             // broke one of its files opens with an empty picker rather than not at all.
             catalogue: Catalogue::bundled().unwrap_or_default(),
@@ -151,6 +155,7 @@ impl Slicing {
     /// height it was measured at with it.
     pub fn set_material(&mut self, material: MaterialProfile) {
         self.base_material = material;
+        self.chosen_resin = true;
         self.retune();
     }
 
@@ -164,15 +169,43 @@ impl Slicing {
         self.retune();
     }
 
+    /// No machine in hand, which is what removing the last one leaves. The resin stays:
+    /// it is the user's, and the next machine retunes it.
+    pub fn clear_printer(&mut self) {
+        self.printer = None;
+        self.printer_id = None;
+        self.format = SlicedFormat::default();
+        self.retune();
+    }
+
+    /// Whether a resin was chosen. Without one there is no measured exposure to print at.
+    pub fn has_resin(&self) -> bool {
+        self.chosen_resin
+    }
+
+    /// What the resin picker shows: not having one is a state, not a resin called "no
+    /// resin".
+    pub fn resin_name(&self) -> &str {
+        match self.chosen_resin {
+            true => &self.material.name,
+            false => "Select a resin",
+        }
+    }
+
     /// Reads the resin in hand back out of the catalogue after it was edited there, and
     /// trades it for one of the printer's own if it is no longer set up on this printer.
     pub fn reload_resin(&mut self) {
-        if let Some(entry) = self
-            .resin_id
-            .as_deref()
-            .and_then(|id| self.catalogue.resin(id).ok())
-        {
-            self.base_material = entry.profile.clone();
+        if let Some(id) = self.resin_id.clone() {
+            match self.catalogue.resin(&id) {
+                Ok(entry) => self.base_material = entry.profile.clone(),
+                // A resin deleted in Settings is no longer the resin in hand, and there
+                // is no measured exposure to fall back on (ADR 0196).
+                Err(_) => {
+                    self.resin_id = None;
+                    self.chosen_resin = false;
+                    self.base_material = MaterialProfile::default();
+                }
+            }
         }
         self.adopt_default_resin();
         self.retune();
@@ -198,6 +231,7 @@ impl Slicing {
         };
         self.resin_id = Some(entry.id.clone());
         self.base_material = entry.profile.clone();
+        self.chosen_resin = true;
     }
 
     /// How many printers and resins have been taken into hand. The undo stack watches it
@@ -332,6 +366,9 @@ impl Slicing {
         if self.printer.is_none() {
             return Some("Load a printer profile to know the panel to slice for.");
         }
+        if !self.chosen_resin {
+            return Some("Add a resin to this printer: an exposure is measured on your machine.");
+        }
         if !scene.has_printable(scene.active_plate()) {
             return Some("Nothing visible on the plate to slice.");
         }
@@ -349,6 +386,9 @@ impl Slicing {
         let Some(printer) = self.printer.clone() else {
             bail!("no printer profile is loaded");
         };
+        if !self.chosen_resin {
+            bail!("no resin is chosen, and an exposure is measured rather than shipped");
+        }
         let models = models_of(scene, plate);
         if models.is_empty() {
             bail!("nothing visible on the plate to slice");
@@ -560,6 +600,7 @@ mod tests {
     use super::*;
     use core_geometry::{Mesh, Orientation, Transform, Vec3, diagnose};
     use format_chitu::CtbVersion;
+    use printer_profiles::PrinterTuning;
     use std::path::Path;
     use std::sync::Arc;
 
@@ -615,13 +656,16 @@ z = 10.0
     }
 
     fn with_printer() -> Slicing {
-        Slicing {
+        let mut slicing = Slicing {
             printer: Some(
                 PrinterProfile::from_toml_str(PROFILE, Path::new("inline.toml"))
                     .expect("the inline profile is valid"),
             ),
             ..Slicing::default()
-        }
+        };
+        // Nothing ships an exposure, so a cut needs a resin in hand as much as a panel.
+        slicing.set_material(MaterialProfile::default());
+        slicing
     }
 
     /// A resin measured at 0.05 mm for 2.5 s, with one band of 4 s over it.
@@ -960,35 +1004,54 @@ z = 10.0
         );
     }
 
-    /// The shipped catalogue with its resins taken as the user's own, which is what a
-    /// window someone has set a machine up in looks like; see `docs/decisions/0158`.
-    fn resins_installed(name: &str) -> Catalogue {
+    const MARS: &str = "elegoo-mars-3-pro";
+    const SATURN: &str = "elegoo-saturn-4-ultra";
+
+    /// A catalogue of its own holding one resin the user measured on both Elegoo
+    /// machines, which is what a window someone has set a machine up in looks like.
+    /// Nothing is shipped to install; see `docs/decisions/0196`.
+    fn with_a_measured_resin(name: &str) -> Catalogue {
         let dir =
             std::env::temp_dir().join(format!("encrust-slicing-{name}-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&dir);
         let mut catalogue = Catalogue::with_root(&dir).expect("a missing directory reads as empty");
-        let resins: Vec<(String, MaterialProfile)> = catalogue
-            .resins()
-            .map(|entry| (entry.id.clone(), entry.profile.clone()))
-            .collect();
-        for (id, resin) in resins {
-            catalogue
-                .save_resin(&id, &resin)
-                .expect("the directory is writable");
-        }
         catalogue
+            .save_resin("grey", &measured_on_both())
+            .expect("the directory is writable");
+        catalogue
+    }
+
+    /// 2.6 s of its own, 3.2 s on the Mars 3 Pro's LED matrix and 2.3 s on the Saturn's
+    /// COB engine, as an exposure test on the two machines gives.
+    fn measured_on_both() -> MaterialProfile {
+        let mut resin = MaterialProfile {
+            name: "Grey".to_owned(),
+            exposure_s: 2.6,
+            ..MaterialProfile::default()
+        };
+        for (printer, exposure_s) in [(MARS, 3.2), (SATURN, 2.3)] {
+            resin.printers.insert(
+                printer.to_owned(),
+                PrinterTuning {
+                    exposure_s: Some(exposure_s),
+                    ..PrinterTuning::default()
+                },
+            );
+        }
+        resin.last_printer = Some(MARS.to_owned());
+        resin
     }
 
     #[test]
     fn picking_a_printer_takes_the_format_its_firmware_reads_and_a_resin_measured_on_it() {
         let mut slicing = Slicing {
-            catalogue: resins_installed("picking"),
+            catalogue: with_a_measured_resin("picking"),
             ..Slicing::default()
         };
-        let catalogue = Catalogue::bundled().expect("the shipped catalogue is valid");
-        let chitu = catalogue.printer("elegoo-mars-3-pro").expect("shipped");
+        let chitu = slicing.catalogue.printer(MARS).expect("shipped");
+        let (profile, id) = (chitu.profile.clone(), chitu.id.clone());
 
-        slicing.set_printer(chitu.profile.clone(), Some(chitu.id.clone()));
+        slicing.set_printer(profile, Some(id));
 
         assert_eq!(slicing.format, SlicedFormat::Ctb(CtbVersion::V4));
         assert!(slicing.resin_id.is_some(), "a printer brings a resin");
@@ -1000,52 +1063,104 @@ z = 10.0
 
     #[test]
     fn a_resin_is_retuned_when_the_printer_under_it_changes() {
-        let mut slicing = Slicing::default();
-        let catalogue = Catalogue::bundled().expect("the shipped catalogue is valid");
-        let grey = catalogue.resin("standard-grey").expect("shipped");
-        slicing.resin_id = Some(grey.id.clone());
-        slicing.set_material(grey.profile.clone());
+        let mut slicing = Slicing {
+            catalogue: with_a_measured_resin("retune"),
+            ..Slicing::default()
+        };
+        slicing.resin_id = Some("grey".to_owned());
+        slicing.set_material(measured_on_both());
 
-        let saturn = catalogue.printer("elegoo-saturn-4-ultra").expect("shipped");
-        slicing.set_printer(saturn.profile.clone(), Some(saturn.id.clone()));
+        let saturn = slicing.catalogue.printer(SATURN).expect("shipped");
+        let (profile, id) = (saturn.profile.clone(), saturn.id.clone());
+        slicing.set_printer(profile, Some(id));
         let fast = slicing.material.exposure_s;
 
-        let mars_three = catalogue.printer("elegoo-mars-3-pro").expect("shipped");
-        slicing.set_printer(mars_three.profile.clone(), Some(mars_three.id.clone()));
+        let mars_three = slicing.catalogue.printer(MARS).expect("shipped");
+        let (profile, id) = (mars_three.profile.clone(), mars_three.id.clone());
+        slicing.set_printer(profile, Some(id));
 
         assert!(
             slicing.material.exposure_s > fast,
             "an older LED matrix needs longer than a COB engine for the same resin"
         );
-        assert_eq!(slicing.resin_id.as_deref(), Some("standard-grey"));
+        assert_eq!(slicing.resin_id.as_deref(), Some("grey"));
     }
 
     #[test]
     fn a_printer_the_resin_is_not_set_up_on_brings_its_own() {
         let mut slicing = Slicing {
-            catalogue: resins_installed("its-own"),
+            catalogue: with_a_measured_resin("its-own"),
             ..Slicing::default()
         };
-        let mut grey = slicing
+        // A second resin the user never measured on the Mars, held in hand.
+        let mut only_saturn = measured_on_both();
+        only_saturn.printers.remove(MARS);
+        slicing.resin_id = Some("saturn-only".to_owned());
+        slicing
             .catalogue
-            .resin("standard-grey")
-            .expect("shipped")
-            .profile
-            .clone();
-        grey.printers.remove("elegoo-mars-3-pro");
-        slicing.resin_id = Some("standard-grey".to_owned());
-        slicing.set_material(grey);
+            .save_resin("saturn-only", &only_saturn)
+            .expect("writable");
+        slicing.set_material(only_saturn);
 
-        let mars = slicing
-            .catalogue
-            .printer("elegoo-mars-3-pro")
-            .expect("shipped");
+        let mars = slicing.catalogue.printer(MARS).expect("shipped");
         let (profile, id) = (mars.profile.clone(), mars.id.clone());
         slicing.set_printer(profile, Some(id));
-        assert!(
-            slicing.resin_is_tuned(),
+        assert_eq!(
+            slicing.resin_id.as_deref(),
+            Some("grey"),
             "a resin of the Mars' own replaces one it has none of"
         );
+        assert!(slicing.resin_is_tuned());
+    }
+
+    /// An exposure is measured, so a machine alone is not enough to cut with (ADR 0196).
+    #[test]
+    fn slicing_without_a_resin_is_blocked() {
+        let mut slicing = Slicing {
+            printer: Some(
+                PrinterProfile::from_toml_str(PROFILE, Path::new("inline.toml"))
+                    .expect("the inline profile is valid"),
+            ),
+            ..Slicing::default()
+        };
+        let scene = scene_with_a_model();
+        assert!(!slicing.has_resin());
+        assert!(slicing.blocker(&scene).is_some());
+        assert!(slicing.start(&scene, 0, PathBuf::from("out.goo")).is_err());
+        assert!(slicing.job.is_none(), "a rejected start runs nothing");
+    }
+
+    /// What the picker reads before a resin is chosen: not having one is a state.
+    #[test]
+    fn the_resin_picker_asks_for_one_until_there_is_one() {
+        let mut slicing = Slicing::default();
+        assert_eq!(slicing.resin_name(), "Select a resin");
+        slicing.set_material(MaterialProfile {
+            name: "Grey".to_owned(),
+            ..MaterialProfile::default()
+        });
+        assert_eq!(slicing.resin_name(), "Grey");
+    }
+
+    /// A resin deleted in Settings is not the resin in hand any anymore.
+    #[test]
+    fn a_resin_that_is_gone_leaves_the_window_without_one() {
+        let mut slicing = Slicing {
+            catalogue: with_a_measured_resin("deleted"),
+            ..Slicing::default()
+        };
+        slicing.resin_id = Some("grey".to_owned());
+        slicing.set_material(measured_on_both());
+        assert!(slicing.has_resin());
+
+        slicing
+            .catalogue
+            .forget_user_copy(printer_profiles::Kind::Resin, "grey")
+            .expect("the user's own resin goes away");
+        slicing.reload_resin();
+
+        assert!(slicing.resin_id.is_none());
+        assert!(!slicing.has_resin(), "and there is nothing to slice with");
     }
 
     #[test]

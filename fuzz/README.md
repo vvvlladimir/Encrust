@@ -49,13 +49,13 @@ printf '\x00' | cat - ../crates/core-mesh-io/tests/fixtures/tetrahedron.stl > co
 
 For the sliced containers there is nothing checked in, because the writer tests build their fixtures
 in memory. Seed them from the CLI instead, one small file per format. Slice on the smallest panel in
-the catalogue and a thick layer: a seed off a 16K machine is sixty megabytes, which is a file the
+the catalogue and a thick layer, with a resin of your own (the catalogue ships none): a seed off a 16K machine is sixty megabytes, which is a file the
 fuzzer spends its session copying rather than mutating.
 
 ```sh
 cd .. && mkdir -p /tmp/seed && for fmt in goo ctb cbddlp sl1 zip svgx cws pwmx; do
   cargo run --release -p encrust-cli --bin encrust -- slice crates/encrust-app/tests/fixtures/cube.stl \
-    --printer anycubic-photon-zero --resin standard-grey --center --layer-height 0.5 \
+    --printer anycubic-photon-zero --material my-grey.toml --center --layer-height 0.5 \
     -o "/tmp/seed/cube.$fmt"
 done
 ```
