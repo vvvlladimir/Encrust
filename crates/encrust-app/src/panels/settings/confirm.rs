@@ -4,7 +4,7 @@
 
 use printer_profiles::Catalogue;
 
-use crate::settings::{Deleting, other_printers};
+use crate::settings::{Deleting, is_thrown_away_with_the_printer, other_printers};
 use crate::ui::{card, describe, inline_button, secondary_button, theme};
 
 /// What the dialog is asking, in the words the user needs to answer it.
@@ -14,6 +14,10 @@ struct Question {
     what: String,
     /// What else it takes with it, when it takes anything.
     cost: Option<String>,
+    /// What the button that answers yes says, which is the verb of the question.
+    verb: &'static str,
+    /// Whether what goes is gone for good, rather than kept somewhere it comes back from.
+    gone: bool,
 }
 
 /// The dialog over the screen, if a deletion is waiting. Answers with what was confirmed.
@@ -28,6 +32,9 @@ pub(super) fn ask(
     egui::Window::new(question.title)
         .collapsible(false)
         .resizable(false)
+        // A question about something that cannot be undone stands in the middle of the
+        // window, not wherever egui last put a window of that name.
+        .anchor(egui::Align2::CENTER_CENTER, egui::Vec2::ZERO)
         .frame(card().inner_margin(theme::PANEL_MARGIN))
         .open(&mut open)
         .show(ctx, |ui| {
@@ -36,10 +43,12 @@ pub(super) fn ask(
             if let Some(cost) = &question.cost {
                 describe(ui, cost);
             }
-            describe(ui, "This cannot be undone.");
+            if question.gone {
+                describe(ui, "This cannot be undone.");
+            }
             ui.add_space(8.0);
             ui.horizontal(|ui| {
-                if inline_button(ui, "", "Delete", true, true).clicked() {
+                if inline_button(ui, "", question.verb, true, true).clicked() {
                     answer = Some(Answer::Confirmed);
                 }
                 if secondary_button(ui, "", "Cancel").clicked() {
@@ -70,6 +79,8 @@ fn question(catalogue: &Catalogue, deleting: &Deleting) -> Question {
             Question {
                 title: "Remove this machine",
                 what: format!("Remove {name} and everything you changed on it?"),
+                verb: "Remove",
+                gone: true,
                 cost: catalogue
                     .is_shipped(printer_profiles::Kind::Printer, id)
                     .then(|| {
@@ -82,23 +93,31 @@ fn question(catalogue: &Catalogue, deleting: &Deleting) -> Question {
         Deleting::ResinOff { printer, resin } => {
             let name = resin_name(catalogue, resin);
             let others = other_printers(catalogue, printer, resin).unwrap_or_default();
-            match others.is_empty() {
+            let thrown_away =
+                is_thrown_away_with_the_printer(catalogue, printer, resin).unwrap_or(false);
+            match thrown_away {
                 true => Question {
                     title: "Take this resin off",
                     what: format!("Delete {name}?"),
+                    verb: "Delete",
+                    gone: true,
                     cost: Some(
-                        "No other printer has it, so it goes with its exposures rather \
-                         than into the pool."
-                            .to_owned(),
+                        "Nothing was ever typed into it, so it is not kept in the pool.".to_owned(),
                     ),
                 },
                 false => Question {
                     title: "Take this resin off",
                     what: format!("Take {name} off this printer?"),
-                    cost: Some(format!(
-                        "It stays in the pool, measured on {}.",
-                        others.join(", ")
-                    )),
+                    verb: "Take off",
+                    gone: false,
+                    cost: Some(match others.is_empty() {
+                        true => "It stays in the pool, for this or any other printer to \
+                                 take back."
+                            .to_owned(),
+                        false => {
+                            format!("It stays in the pool, measured on {}.", others.join(", "))
+                        }
+                    }),
                 },
             }
         }
@@ -108,6 +127,8 @@ fn question(catalogue: &Catalogue, deleting: &Deleting) -> Question {
             Question {
                 title: "Delete this resin",
                 what: format!("Delete {name} and the exposures measured for it?"),
+                verb: "Delete",
+                gone: true,
                 cost: (!others.is_empty())
                     .then(|| format!("It comes off {} as well.", others.join(", "))),
             }

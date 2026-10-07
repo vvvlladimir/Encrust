@@ -538,6 +538,23 @@ mod tests {
         assert!(!app.view.options.sheet, "Escape closes it");
     }
 
+    /// The Settings screen stands in the plate's place, so Escape is the way out of it:
+    /// the question over it first, then the screen.
+    #[test]
+    fn escape_leaves_the_settings_screen_and_the_question_over_it() {
+        let mut app = SlicerApp::default();
+        shortcuts::act(&mut app.window(), shortcuts::Action::Settings);
+        assert!(app.machine.settings.open);
+
+        app.machine.settings.confirm = Some(crate::settings::Deleting::Resin("grey".to_owned()));
+        shortcuts::act(&mut app.window(), shortcuts::Action::Deselect);
+        assert!(app.machine.settings.confirm.is_none());
+        assert!(app.machine.settings.open, "the screen is still there");
+
+        shortcuts::act(&mut app.window(), shortcuts::Action::Deselect);
+        assert!(!app.machine.settings.open);
+    }
+
     #[test]
     fn a_switch_back_to_prepare_without_a_stack_keeps_its_own_height() {
         let mut app = SlicerApp::default();

@@ -382,6 +382,14 @@ pub fn tooltip(action: Action) -> String {
     format!("{}  {keys}", action.label())
 }
 
+/// Esc on the Settings screen: the question over it first, then the screen itself.
+fn leave_settings(machine: &mut crate::state::Machine) {
+    if machine.settings.confirm.take().is_some() {
+        return;
+    }
+    machine.settings.open = false;
+}
+
 /// Does what a key asked for. Every action of the table is answered here, so a binding
 /// cannot be added without the work behind it.
 pub fn act(window: &mut Window, action: Action) {
@@ -390,6 +398,12 @@ pub fn act(window: &mut Window, action: Action) {
         if matches!(action, Action::Sheet | Action::Deselect) {
             window.view.options.sheet = false;
         }
+        return;
+    }
+    // The Settings screen stands in the plate's place, so Esc leaves it rather than
+    // clearing a selection nobody can see. Everything else there is typed, not pressed.
+    if window.machine.settings.open && matches!(action, Action::Deselect) {
+        leave_settings(window.machine);
         return;
     }
     match action {

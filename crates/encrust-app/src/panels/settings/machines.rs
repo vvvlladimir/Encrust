@@ -180,28 +180,24 @@ fn resins(
         }
         listed = true;
     }
-    if !listed {
-        first_resin(ui, printer, action);
+    // With nothing on the printer and nothing in the pool there is one thing to do, so
+    // the menu of one is a button instead (ADR 0197).
+    let empty_pool = pool_for(catalogue, printer).next().is_none();
+    match !listed && empty_pool {
+        true => first_resin(ui, printer, action),
+        false => add_menu(ui, window.machine, printer, action),
     }
-    add_menu(ui, window.machine, printer, action);
     ui.add_space(6.0);
 }
 
-/// What a printer with no resin on it offers. An exposure is measured on the machine in
-/// the room, so the first resin is the user's to make (ADR 0196).
+/// The one thing a printer with no resin and an empty pool offers: an exposure is
+/// measured on the machine in the room, so the first resin is the user's to make.
 fn first_resin(ui: &mut Ui, printer: &str, action: &mut Option<Action>) {
     ui.horizontal(|ui| {
         ui.add_space(INDENT + 6.0);
-        ui.vertical(|ui| {
-            describe(
-                ui,
-                "No resin on this printer. An exposure is measured on your machine, not \
-                 shipped, so the first one is yours to type in from a test print.",
-            );
-            if secondary_button(ui, icon::RESIN, "Add the first resin").clicked() {
-                *action = Some(Action::NewResin(printer.to_owned()));
-            }
-        });
+        if secondary_button(ui, icon::RESIN, "Add the first resin").clicked() {
+            *action = Some(Action::NewResin(printer.to_owned()));
+        }
     });
     ui.add_space(4.0);
 }
