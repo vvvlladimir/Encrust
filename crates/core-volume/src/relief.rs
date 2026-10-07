@@ -2,6 +2,7 @@ use core_geometry::{Bvh, Heightmap, Mesh, Scalar, UvMap};
 use serde::{Deserialize, Serialize};
 
 use crate::build::{DEFAULT_BUDGET_BYTES, FieldSettings, build};
+use crate::cancel::Cancel;
 use crate::csg::assemble;
 use crate::error::VolumeError;
 use crate::extract::extract;
@@ -130,6 +131,7 @@ fn pressed(
             clip: None,
             budget_bytes: settings.budget_bytes,
         },
+        Cancel::never(),
     )?;
 
     let grid = field.grid();
@@ -155,7 +157,7 @@ fn pressed(
         value - settings.amplitude_mm * heights.sample(uv)
     });
 
-    Ok(extract(&displaced))
+    Ok(extract(&displaced, Cancel::never()))
 }
 
 #[cfg(test)]

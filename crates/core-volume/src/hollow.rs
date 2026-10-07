@@ -6,6 +6,7 @@ use core_geometry::{Bvh, Mesh, Scalar, Vec3, glam::IVec3, signed_volume};
 use serde::{Deserialize, Serialize};
 
 use crate::build::{DEFAULT_BUDGET_BYTES, FieldSettings, build};
+use crate::cancel::Cancel;
 use crate::csg::assemble;
 use crate::drain::Channel;
 use crate::error::VolumeError;
@@ -232,7 +233,13 @@ pub struct Hollowed {
 ///
 /// The model itself is never remeshed: only the cavity comes out of a field, so the
 /// outside keeps every triangle it was imported with. See `docs/design/hollowing.md`.
-pub fn hollow(mesh: &Mesh, bvh: &Bvh, settings: &HollowSettings) -> Result<Hollowed, VolumeError> {
+/// `cancel` stops the run inside the field it builds, with [`VolumeError::Cancelled`].
+pub fn hollow(
+    mesh: &Mesh,
+    bvh: &Bvh,
+    settings: &HollowSettings,
+    cancel: Cancel<'_>,
+) -> Result<Hollowed, VolumeError> {
     match outer_shells(mesh) {
         Some(surface) => {
             let bvh = Bvh::build(&surface);
@@ -241,7 +248,7 @@ pub fn hollow(mesh: &Mesh, bvh: &Bvh, settings: &HollowSettings) -> Result<Hollo
                 surface: &surface,
                 bvh: &bvh,
             };
-            shelled_to_budget(&solid, settings)
+            shelled_to_budget(&solid, settings, cancel)
         }
         None => shelled_to_budget(
             &Solid {
@@ -250,6 +257,7 @@ pub fn hollow(mesh: &Mesh, bvh: &Bvh, settings: &HollowSettings) -> Result<Hollo
                 bvh,
             },
             settings,
+            cancel,
         ),
     }
 }
@@ -273,11 +281,12 @@ pub fn hollow_at_scale(
     bvh: &Bvh,
     settings: &HollowSettings,
     scale: Vec3,
+    cancel: Cancel<'_>,
 ) -> Result<Hollowed, VolumeError> {
     // A mirror is an isometry, so only the size of the scale reaches the field.
     let scale = scale.abs();
     if scale == Vec3::ONE {
-        return hollow(mesh, bvh, settings);
+        return hollow(mesh, bvh, settings, cancel);
     }
     if !scale.is_finite() || scale.min_element() <= 0.0 {
         return Err(VolumeError::BadScale(scale));
@@ -306,6 +315,7 @@ pub fn hollow_at_scale(
             blockers,
             ..settings.clone()
         },
+        cancel,
     )?;
     for vertex in &mut hollowed.mesh.vertices {
         *vertex /= scale;
@@ -317,6 +327,7 @@ pub fn hollow_at_scale(
 fn shelled_to_budget(
     solid: &Solid<'_>,
     settings: &HollowSettings,
+    cancel: Cancel<'_>,
 ) -> Result<Hollowed, VolumeError> {
     solid.surface.aabb().ok_or(VolumeError::EmptyMesh)?;
     if !settings.thickness_mm.is_finite() || settings.thickness_mm <= 0.0 {
@@ -326,7 +337,7 @@ fn shelled_to_budget(
     let asked_mm = settings.voxel_mm(solid.surface.surface_area());
     let mut voxel_mm = asked_mm;
     for _ in 0..COARSENINGS {
-        match cut(solid, settings, voxel_mm) {
+        match cut(solid, settings, voxel_mm, cancel) {
             // The lattice the field priced is the one that fits, taken a twentieth
             // coarser still: the second run has the blockers to pay for as well, and a
             // run refused twice over is worse than one voxel blunter.
@@ -339,7 +350,7 @@ fn shelled_to_budget(
             }
         }
     }
-    cut(solid, settings, voxel_mm)
+    cut(solid, settings, voxel_mm, cancel)
 }
 
 /// How many times a lattice may be coarsened before the run is given up on.
@@ -354,6 +365,7 @@ fn cut(
     solid: &Solid<'_>,
     settings: &HollowSettings,
     voxel_mm: Scalar,
+    cancel: Cancel<'_>,
 ) -> Result<Hollowed, VolumeError> {
     let field = FieldSettings {
         voxel_mm,
@@ -368,11 +380,11 @@ fn cut(
         clip: None,
         budget_bytes: settings.budget_bytes,
     };
-    let offset = build(solid.surface, solid.bvh, &field)?;
+    let offset = build(solid.surface, solid.bvh, &field, cancel)?;
 
     match settings.mode {
-        HollowMode::External => Ok(mould(solid.surface, &offset, voxel_mm)),
-        HollowMode::Internal => shelled(solid, offset, &field, settings),
+        HollowMode::External => mould(solid.surface, &offset, voxel_mm, cancel),
+        HollowMode::Internal => shelled(solid, offset, &field, settings, cancel),
     }
 }
 
@@ -383,10 +395,14 @@ fn shelled(
     offset: Sdf,
     field: &FieldSettings,
     settings: &HollowSettings,
+    cancel: Cancel<'_>,
 ) -> Result<Hollowed, VolumeError> {
     let cavity = blocked(offset, &settings.blockers);
 
-    let cavity_mesh = extract(&cavity);
+    let cavity_mesh = extract(&cavity, cancel);
+    if cancel.asked() {
+        return Err(VolumeError::Cancelled);
+    }
     let hollow_mm3 = volume_of(&cavity_mesh);
     // Half the wall, so a strut is fused into the shell rather than left touching it, and
     // never so far that it could reach out through the wall.
@@ -427,18 +443,26 @@ fn shelled(
 
 /// The model turned inside out: the grown surface becomes the outside and the model's own
 /// becomes the cavity.
-fn mould(mesh: &Mesh, grown: &Sdf, voxel_mm: Scalar) -> Hollowed {
-    let mut whole = extract(grown);
+fn mould(
+    mesh: &Mesh,
+    grown: &Sdf,
+    voxel_mm: Scalar,
+    cancel: Cancel<'_>,
+) -> Result<Hollowed, VolumeError> {
+    let mut whole = extract(grown, cancel);
+    if cancel.asked() {
+        return Err(VolumeError::Cancelled);
+    }
     // The void of a mould is the model it was taken off, so that is what holds the resin.
     let cavity = whole.faces.len()..whole.faces.len() + mesh.faces.len();
     append(&mut whole, &flipped(mesh));
-    Hollowed {
+    Ok(Hollowed {
         mesh: whole,
         cavity,
         cavity_mm3: volume_of(mesh),
         voxel_mm,
         coarsened: false,
-    }
+    })
 }
 
 /// The cavity with every blocker taken out of it.

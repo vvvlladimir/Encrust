@@ -133,6 +133,7 @@ fn look_through(task: &TrapTask, layer_height_mm: Scalar) -> Result<Vec<Trapped>
     let baked = Baked {
         mesh: placed,
         ceiling_mm: material.maxs.z,
+        floor_mm: material.mins.z,
     };
     let windows = cut(&baked, &Cutting::uniform(layer_height_mm)).map_err(|error| {
         anyhow::Error::new(error)

@@ -38,9 +38,20 @@ impl Cutting {
     }
 }
 
+/// Height of the plate, plate millimetres: a stack never starts under it.
+const PLATE_MM: Scalar = 0.0;
+
 /// The windows a baked plate will be cut in. Nothing is planned over its ceiling, so a
 /// cut standing clear of the model it was drilled in adds no layer to the stack.
 pub fn cut(baked: &Baked, cutting: &Cutting) -> Result<Windows, EngineError> {
+    // Said here rather than in the slicer, because only what prints is material: a hole
+    // drilled into the underside of a model reaches below the plate by design.
+    if baked.floor_mm < PLATE_MM {
+        tracing::warn!(
+            bottom_mm = baked.floor_mm,
+            "the model reaches under the plate, and what is under it is not cut"
+        );
+    }
     let Some(adaptive) = cutting.adaptive else {
         let settings = SliceSettings {
             layer_height: cutting.layer_height_mm,

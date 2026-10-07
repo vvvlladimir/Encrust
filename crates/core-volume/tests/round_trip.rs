@@ -6,7 +6,9 @@
 )]
 
 use core_geometry::{Bvh, Mesh, Scalar, Vec3, diagnose, glam::IVec3, signed_volume, weld};
-use core_volume::{FieldSettings, SignMode, VolumeError, build, difference, extract, shell};
+use core_volume::{
+    Cancel, FieldSettings, SignMode, VolumeError, build, difference, extract, shell,
+};
 
 const PI: Scalar = std::f32::consts::PI;
 
@@ -90,7 +92,7 @@ fn ball(radius: Scalar, rings: usize, segments: usize) -> Mesh {
 
 fn field_of(mesh: &Mesh, settings: &FieldSettings) -> core_volume::Sdf {
     let bvh = Bvh::build(mesh);
-    build(mesh, &bvh, settings).expect("the mesh has faces")
+    build(mesh, &bvh, settings, Cancel::never()).expect("the mesh has faces")
 }
 
 #[test]
@@ -130,7 +132,7 @@ fn a_ball_survives_the_round_trip_within_a_voxel() {
         voxel_mm: 0.25,
         ..FieldSettings::default()
     };
-    let extracted = extract(&field_of(&mesh, &settings));
+    let extracted = extract(&field_of(&mesh, &settings), Cancel::never());
 
     let diagnostics = diagnose(&extracted);
     assert!(
@@ -158,7 +160,7 @@ fn a_cube_survives_the_round_trip_within_a_voxel() {
         voxel_mm: 0.2,
         ..FieldSettings::default()
     };
-    let extracted = extract(&field_of(&mesh, &settings));
+    let extracted = extract(&field_of(&mesh, &settings), Cancel::never());
 
     assert!(diagnose(&extracted).is_closed());
     let exact = side.powi(3);
@@ -182,8 +184,8 @@ fn the_winding_number_signs_the_same_field_as_the_pseudonormal() {
         ..coarse
     };
 
-    let one = signed_volume(&extract(&field_of(&mesh, &coarse)));
-    let other = signed_volume(&extract(&field_of(&mesh, &by_winding)));
+    let one = signed_volume(&extract(&field_of(&mesh, &coarse), Cancel::never()));
+    let other = signed_volume(&extract(&field_of(&mesh, &by_winding), Cancel::never()));
     assert!(
         (one - other).abs() < 1.0,
         "the two signs disagree: {one} mm3 against {other} mm3"
@@ -213,7 +215,7 @@ fn shelling_a_cube_hollows_it_and_leaves_the_wall_it_was_asked_for() {
         "the wall itself has gone hollow at {in_the_wall}"
     );
 
-    let extracted = extract(&hollow);
+    let extracted = extract(&hollow, Cancel::never());
     assert_eq!(
         diagnose(&extracted).shells,
         2,
@@ -239,7 +241,7 @@ fn a_ball_taken_out_of_a_bigger_one_leaves_a_shell() {
     let inner = field_of(&ball(3.0, 64, 64), &settings);
 
     let hollow = difference(&outer, &inner).expect("both fields share the lattice");
-    let extracted = extract(&hollow);
+    let extracted = extract(&hollow, Cancel::never());
 
     assert_eq!(diagnose(&extracted).shells, 2);
     let exact = 4.0 / 3.0 * PI * (6.0f32.powi(3) - 3.0f32.powi(3));
@@ -255,7 +257,13 @@ fn a_ball_taken_out_of_a_bigger_one_leaves_a_shell() {
 fn a_mesh_with_no_faces_has_no_field() {
     let bvh = Bvh::build(&Mesh::default());
     assert_eq!(
-        build(&Mesh::default(), &bvh, &FieldSettings::default()).unwrap_err(),
+        build(
+            &Mesh::default(),
+            &bvh,
+            &FieldSettings::default(),
+            Cancel::never()
+        )
+        .unwrap_err(),
         VolumeError::EmptyMesh
     );
 }
@@ -269,7 +277,7 @@ fn a_voxel_with_no_size_is_refused() {
         ..FieldSettings::default()
     };
     assert_eq!(
-        build(&mesh, &bvh, &settings).unwrap_err(),
+        build(&mesh, &bvh, &settings, Cancel::never()).unwrap_err(),
         VolumeError::BadVoxelSize(0.0)
     );
 }
@@ -283,7 +291,7 @@ fn a_band_narrower_than_a_voxel_is_refused() {
         ..FieldSettings::default()
     };
     assert_eq!(
-        build(&mesh, &bvh, &settings).unwrap_err(),
+        build(&mesh, &bvh, &settings, Cancel::never()).unwrap_err(),
         VolumeError::BadBand(0.5)
     );
 }
@@ -333,7 +341,7 @@ fn a_surface_crossing_tiles_shares_its_seam_vertices() {
         voxel_mm: 0.2,
         ..FieldSettings::default()
     };
-    let extracted = extract(&field_of(&mesh, &settings));
+    let extracted = extract(&field_of(&mesh, &settings), Cancel::never());
 
     let welded = weld(&extracted, settings.voxel_mm * 1e-3);
     assert_eq!(
@@ -363,7 +371,7 @@ fn the_sweep_answers_what_the_hierarchy_would() {
             iso_mm,
             ..FieldSettings::default()
         };
-        let field = build(&mesh, &bvh, &settings).expect("the ball has faces");
+        let field = build(&mesh, &bvh, &settings, Cancel::never()).expect("the ball has faces");
         let grid = field.grid();
         let band_mm = field.band_mm();
 
@@ -417,7 +425,10 @@ fn a_smooth_cavity_costs_far_fewer_triangles_than_the_cells_it_crosses() {
         iso_mm: -2.0,
         ..FieldSettings::default()
     };
-    let extracted = extract(&build(&mesh, &bvh, &settings).expect("the ball has faces"));
+    let extracted = extract(
+        &build(&mesh, &bvh, &settings, Cancel::never()).expect("the ball has faces"),
+        Cancel::never(),
+    );
 
     let diagnostics = diagnose(&extracted);
     assert!(

@@ -541,7 +541,8 @@ mod tests {
         let asking = object
             .hollow
             .asking(&crate::hollow::HollowTool::default().settings());
-        let hollowed = core_volume::hollow(&mesh, &bvh, &asking).expect("a ball hollows");
+        let hollowed = core_volume::hollow(&mesh, &bvh, &asking, core_volume::Cancel::never())
+            .expect("a ball hollows");
         object.hollow.take(core_volume::Shell {
             mesh: Arc::new(hollowed.mesh),
             cavity: hollowed.cavity,

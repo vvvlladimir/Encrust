@@ -156,11 +156,15 @@ pub struct Fit {
     pub printer: String,
     pub fits: bool,
     pub overflow_mm: [Scalar; 3],
+    /// How far the model reaches past the envelope where it stands, per axis.
+    pub outside_mm: [Scalar; 3],
 }
 
 #[derive(Debug, Serialize)]
 pub struct Oriented {
     pub degrees: Scalar,
+    /// The angles `--rotate X,Y,Z` repeats the turn with, degrees.
+    pub rotate_deg: [Scalar; 3],
     pub peak_section_mm2: Scalar,
     pub overhang_mm2: Scalar,
 }
@@ -248,7 +252,8 @@ impl PartReport {
             repair: import.map(repair_of),
             fit: import.and_then(fit_of),
             oriented: part.oriented.as_ref().map(|found| Oriented {
-                degrees: found.degrees,
+                degrees: found.degrees(),
+                rotate_deg: found.rotate_degrees().to_array(),
                 peak_section_mm2: found.peak_mm2,
                 overhang_mm2: found.overhang_mm2,
             }),
@@ -286,7 +291,12 @@ impl Slicing {
             layer_height_mm: slice.settings.layer_height,
             resin_mm3: slice.resin_volume_mm3(),
             trapped_pockets: slice.trapped().len(),
-            trapped_mm3: slice.trapped().iter().map(|pocket| pocket.volume_mm3).sum(),
+            trapped_mm3: slice
+                .trapped()
+                .iter()
+                .map(|pocket| pocket.volume_mm3)
+                .sum::<Scalar>()
+                .max(0.0),
             open_contours: slice.open_contours(),
         }
     }
@@ -393,10 +403,19 @@ impl ModelReport {
                     (None, Some(model)) => format!("{} triangles, not sliced", model.faces),
                     (None, None) => "nothing to report".to_owned(),
                 };
-                format!("  {mark:<8} {name}  {what}, {:.1} s", self.seconds)
+                format!("  {mark:<8} {name}  {what}, {}", took(self.seconds))
             }
         }
     }
+}
+
+/// How long one model took, in the unit that says something: a small model is sliced in
+/// milliseconds, and a column of `0.0 s` says nothing at all.
+fn took(seconds: f64) -> String {
+    if seconds < 1.0 {
+        return format!("{:.0} ms", seconds * 1000.0);
+    }
+    format!("{seconds:.1} s")
 }
 
 /// Every model of one run, and what the run came to.
@@ -409,6 +428,7 @@ pub struct Summary {
     pub unclean: usize,
     pub failed: usize,
     pub seconds: f64,
+    /// What the models that would print take, cubic millimetres.
     pub resin_mm3: Scalar,
     pub reports: Vec<ModelReport>,
 }
@@ -426,10 +446,13 @@ impl Summary {
             // Wall time is not the sum when models run at once, so this is the work done
             // rather than how long the run took.
             seconds: reports.iter().map(|report| report.seconds).sum(),
-            // Rust sums floats from -0.0, so a run that sliced nothing would report a
-            // negative volume.
+            // Only what would print: a model that does not fit was cut as it stands and
+            // clipped by the panel, so its resin is not resin the batch will use. Rust
+            // sums floats from -0.0, so a run that sliced nothing would report a negative
+            // volume.
             resin_mm3: reports
                 .iter()
+                .filter(|report| report.status == Status::Ok)
                 .filter_map(|report| report.slicing.as_ref())
                 .map(|slicing| slicing.resin_mm3)
                 .sum::<Scalar>()
@@ -439,8 +462,12 @@ impl Summary {
     }
 
     pub fn line(&self, path: &Path) -> String {
+        let over = match self.ok == self.models {
+            true => String::new(),
+            false => format!(" over the {} that would print", self.ok),
+        };
         format!(
-            "{} ok, {} unclean, {} failed; {:.1} ml of resin. Report: {}",
+            "{} ok, {} unclean, {} failed; {:.1} ml of resin{over}. Report: {}",
             self.ok,
             self.unclean,
             self.failed,
@@ -486,6 +513,7 @@ fn fit_of(import: &ImportReport) -> Option<Fit> {
         printer: fit.printer.clone(),
         fits: fit.fits(),
         overflow_mm: [fit.overflow.x, fit.overflow.y, fit.overflow.z],
+        outside_mm: [fit.outside.x, fit.outside.y, fit.outside.z],
     })
 }
 
@@ -493,4 +521,61 @@ pub fn write<T: Serialize>(path: &Path, report: &T) -> Result<()> {
     let text = serde_json::to_vec_pretty(report)?;
     std::fs::write(path, text)?;
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// A model whose file was written, carrying `resin_mm3` of stack.
+    fn reported(name: &str, status: Status, resin_mm3: Scalar) -> ModelReport {
+        ModelReport {
+            part: PartReport::named(Path::new(name)),
+            output: Some(name.to_owned()),
+            status,
+            error: None,
+            seconds: 0.5,
+            slicing: Some(Slicing {
+                layers: 10,
+                layer_height_mm: 0.05,
+                resin_mm3,
+                trapped_pockets: 0,
+                trapped_mm3: 0.0,
+                open_contours: 0,
+            }),
+            cured: None,
+        }
+    }
+
+    #[test]
+    fn the_batch_total_leaves_out_a_model_that_would_not_print() {
+        let summary = Summary::of(
+            Path::new("in"),
+            Path::new("out"),
+            vec![
+                reported("small.stl", Status::Ok, 1_000.0),
+                reported("too-big.stl", Status::Unclean, 600_000.0),
+            ],
+        );
+
+        assert!(
+            (summary.resin_mm3 - 1_000.0).abs() < 1.0e-3,
+            "a model clipped by the panel does not spend its resin: {}",
+            summary.resin_mm3
+        );
+        assert!(
+            summary
+                .line(Path::new("out/batch.json"))
+                .contains("1.0 ml of resin over the 1 that would print"),
+            "{}",
+            summary.line(Path::new("out/batch.json"))
+        );
+    }
+
+    #[test]
+    fn a_model_sliced_in_milliseconds_is_timed_in_them() {
+        assert_eq!(took(0.017), "17 ms", "a column of 0.0 s says nothing");
+        assert_eq!(took(1.0), "1.0 s");
+        assert_eq!(took(123.45), "123.5 s");
+    }
 }

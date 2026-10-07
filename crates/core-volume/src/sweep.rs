@@ -3,6 +3,7 @@ use std::collections::{HashMap, HashSet};
 use core_geometry::{Bvh, ClosestPoint, FastMap, Mesh, Scalar, Vec3, glam::IVec3};
 use rayon::prelude::*;
 
+use crate::cancel::Cancel;
 use crate::grid::{TILE, VoxelGrid, index_in_tile, tile_of};
 use crate::scatter::{Faces, Nearest, UNSET};
 use crate::sdf::{Quantised, TILE_VALUES, encode};
@@ -51,13 +52,17 @@ pub(crate) fn fill(
     rings: Vec<Vec<IVec3>>,
     wanted: &HashSet<IVec3>,
     seeds: &FastMap<IVec3, Work>,
+    cancel: Cancel<'_>,
 ) -> HashMap<IVec3, Box<[Quantised]>> {
     let coarse = carrier_grid(grid);
-    let carrier = carry(mesh, faces, bvh, coarse, coarsened(rings), seeds);
+    let carrier = carry(mesh, faces, bvh, coarse, coarsened(rings), seeds, cancel);
 
     // A stored tile reads the carrier and nothing else, so there is no order between them.
+    // A run given up on fills no further tile and comes back with what it had; the caller
+    // is the one that turns that into an error.
     wanted
         .par_iter()
+        .filter(|_| !cancel.asked())
         .filter_map(|tile| {
             let work = refine(mesh, faces, bvh, grid, &carrier, *tile, (band_mm, iso_mm));
             let values = tile_values(
@@ -110,6 +115,7 @@ fn coarsened(rings: Vec<Vec<IVec3>>) -> Vec<Vec<IVec3>> {
 ///
 /// Only the two rings a ring can read from are kept as halo, so the shell is only ever
 /// resident as the carrier itself, which is `CARRY` cubed smaller than it looks.
+#[allow(clippy::too_many_arguments)]
 fn carry(
     mesh: &Mesh,
     faces: &Faces,
@@ -117,6 +123,7 @@ fn carry(
     coarse: VoxelGrid,
     rings: Vec<Vec<IVec3>>,
     seeds: &FastMap<IVec3, Work>,
+    cancel: Cancel<'_>,
 ) -> FastMap<IVec3, Work> {
     let mut carrier: FastMap<IVec3, Work> = FastMap::default();
     let mut previous: FastMap<IVec3, Work> = FastMap::default();
@@ -124,6 +131,9 @@ fn carry(
     let mut deferred: Vec<IVec3> = Vec::new();
 
     for mut ring in rings {
+        if cancel.asked() {
+            return carrier;
+        }
         ring.append(&mut deferred);
         let swept: Vec<Carried> = ring
             .par_iter()
@@ -151,6 +161,9 @@ fn carry(
     }
 
     for _ in 1..PASSES {
+        if cancel.asked() {
+            return carrier;
+        }
         settle(mesh, faces, bvh, coarse, &mut carrier, seeds);
     }
     carrier

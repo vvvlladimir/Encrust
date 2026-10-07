@@ -5,8 +5,8 @@
 
 use core_geometry::{Bvh, Heightmap, Mesh, Scalar, UvMap, Vec2, Vec3};
 use core_volume::{
-    FieldSettings, HollowMode, HollowSettings, InfillPattern, InfillSettings, ReliefSettings,
-    SignMode, build, extract, hollow, offset, press, shell,
+    Cancel, FieldSettings, HollowMode, HollowSettings, InfillPattern, InfillSettings,
+    ReliefSettings, SignMode, build, extract, hollow, offset, press, shell,
 };
 use criterion::{Criterion, criterion_group, criterion_main};
 
@@ -67,18 +67,25 @@ fn benchmarks(c: &mut Criterion) {
         ..coarse
     };
 
-    let field = build(&mesh, &bvh, &fine).expect("the sphere has faces");
+    let field = build(&mesh, &bvh, &fine, Cancel::never()).expect("the sphere has faces");
 
     c.bench_function("build a 0.4 mm field of a 40 mm ball", |b| {
-        b.iter(|| build(std::hint::black_box(&mesh), &bvh, &coarse));
+        b.iter(|| build(std::hint::black_box(&mesh), &bvh, &coarse, Cancel::never()));
     });
 
     c.bench_function("build a 0.1 mm field of a 40 mm ball", |b| {
-        b.iter(|| build(std::hint::black_box(&mesh), &bvh, &fine));
+        b.iter(|| build(std::hint::black_box(&mesh), &bvh, &fine, Cancel::never()));
     });
 
     c.bench_function("build a 0.4 mm field, signed by winding number", |b| {
-        b.iter(|| build(std::hint::black_box(&mesh), &bvh, &by_winding));
+        b.iter(|| {
+            build(
+                std::hint::black_box(&mesh),
+                &bvh,
+                &by_winding,
+                Cancel::never(),
+            )
+        });
     });
 
     // A wall is the case hollowing actually builds, and the one that costs: the band sits
@@ -89,7 +96,7 @@ fn benchmarks(c: &mut Criterion) {
         ..FieldSettings::default()
     };
     c.bench_function("build a 0.1 mm field 2 mm inside a 40 mm ball", |b| {
-        b.iter(|| build(std::hint::black_box(&mesh), &bvh, &wall));
+        b.iter(|| build(std::hint::black_box(&mesh), &bvh, &wall, Cancel::never()));
     });
 
     c.bench_function("build that wall signed by winding number", |b| {
@@ -101,6 +108,7 @@ fn benchmarks(c: &mut Criterion) {
                     sign: SignMode::Winding,
                     ..wall
                 },
+                Cancel::never(),
             )
         });
     });
@@ -114,9 +122,14 @@ fn benchmarks(c: &mut Criterion) {
     });
 
     c.bench_function("extract a 0.1 mm field", |b| {
-        b.iter(|| extract(std::hint::black_box(&field)));
+        b.iter(|| extract(std::hint::black_box(&field), Cancel::never()));
     });
 
+    hollowing(c, &mesh, &bvh);
+}
+
+/// What a cavity, its infill and a relief cost on the same ball.
+fn hollowing(c: &mut Criterion, mesh: &Mesh, bvh: &Bvh) {
     let empty = HollowSettings {
         thickness_mm: 2.0,
         mode: HollowMode::Internal,
@@ -133,16 +146,16 @@ fn benchmarks(c: &mut Criterion) {
     };
 
     c.bench_function("hollow a 40 mm ball with a 2 mm wall", |b| {
-        b.iter(|| hollow(std::hint::black_box(&mesh), &bvh, &empty));
+        b.iter(|| hollow(std::hint::black_box(mesh), bvh, &empty, Cancel::never()));
     });
 
     c.bench_function("hollow a 40 mm ball and fill it with a gyroid", |b| {
-        b.iter(|| hollow(std::hint::black_box(&mesh), &bvh, &filled));
+        b.iter(|| hollow(std::hint::black_box(mesh), bvh, &filled, Cancel::never()));
     });
 
     // A relief is a field of its own plus a nearest-point query per lattice point, so it
     // is priced against the build it is built on.
-    let spherical = spherical_uvs(&mesh);
+    let spherical = spherical_uvs(mesh);
     let checks = Heightmap::new(64, 64, checkerboard(64)).expect("one sample per pixel");
     let relief = ReliefSettings {
         amplitude_mm: 0.4,
@@ -152,8 +165,8 @@ fn benchmarks(c: &mut Criterion) {
     c.bench_function("press a 0.4 mm relief into a 40 mm ball", |b| {
         b.iter(|| {
             press(
-                std::hint::black_box(&mesh),
-                &bvh,
+                std::hint::black_box(mesh),
+                bvh,
                 &spherical,
                 std::slice::from_ref(&checks),
                 &relief,
@@ -165,7 +178,14 @@ fn benchmarks(c: &mut Criterion) {
     let dense = sphere(20.0, 500, 500);
     let dense_bvh = Bvh::build(&dense);
     c.bench_function("hollow a 500k-triangle ball with a 2 mm wall", |b| {
-        b.iter(|| hollow(std::hint::black_box(&dense), &dense_bvh, &empty));
+        b.iter(|| {
+            hollow(
+                std::hint::black_box(&dense),
+                &dense_bvh,
+                &empty,
+                Cancel::never(),
+            )
+        });
     });
 }
 

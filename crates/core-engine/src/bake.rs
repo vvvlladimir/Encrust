@@ -16,13 +16,21 @@ pub struct Baked {
     /// (ADR 0071), so a hole drilled near the top of a model stands above everything that
     /// prints. Cutting to the baked mesh's own box would plan empty layers over the plate.
     pub ceiling_mm: Scalar,
+    /// Bottom of what prints, plate millimetres, by the same rule as `ceiling_mm`: a hole
+    /// drilled into the underside of a model reaches below it and is no part of the stack,
+    /// so only material under the plate is material lost.
+    pub floor_mm: Scalar,
 }
 
 impl Baked {
-    /// A mesh that carries nothing but material, so the stack reaches its own top.
+    /// A mesh that carries nothing but material, so the stack spans its own box.
     pub fn of(mesh: Mesh) -> Option<Self> {
-        let ceiling_mm = mesh.aabb()?.maxs.z;
-        Some(Self { mesh, ceiling_mm })
+        let bounds = mesh.aabb()?;
+        Some(Self {
+            mesh,
+            ceiling_mm: bounds.maxs.z,
+            floor_mm: bounds.mins.z,
+        })
     }
 }
 
@@ -41,10 +49,12 @@ impl Baked {
 pub fn bake(models: &[Model], compensation: &Compensation) -> Option<Baked> {
     let mut merged = Mesh::default();
     let mut ceiling_mm = Scalar::NEG_INFINITY;
+    let mut floor_mm = Scalar::INFINITY;
     for model in models {
         let part = compensated(placed(model), compensation);
-        if let Some(top) = part.material.aabb().map(|box_of| box_of.maxs.z) {
-            ceiling_mm = ceiling_mm.max(top);
+        if let Some(bounds) = part.material.aabb() {
+            ceiling_mm = ceiling_mm.max(bounds.maxs.z);
+            floor_mm = floor_mm.min(bounds.mins.z);
         }
         // The first part becomes the bake rather than being copied into it.
         if merged.vertices.is_empty() {
@@ -57,6 +67,7 @@ pub fn bake(models: &[Model], compensation: &Compensation) -> Option<Baked> {
     (!merged.is_empty()).then_some(Baked {
         mesh: merged,
         ceiling_mm,
+        floor_mm,
     })
 }
 

@@ -3,6 +3,7 @@ use std::collections::{HashMap, HashSet};
 use core_geometry::{FastMap, Mesh, Scalar, Vec3, glam::IVec3};
 use rayon::prelude::*;
 
+use crate::cancel::Cancel;
 use crate::grid::TILE;
 use crate::sdf::Sdf;
 
@@ -62,7 +63,10 @@ const CLUSTER_MIN_COSINE: Scalar = 0.0;
 /// neither the whole field's parts nor a table over the whole surface is ever resident;
 /// see `docs/decisions/0084-a-cavity-is-clustered-surface-nets.md` and ADR 0064,
 /// whose merge this keeps.
-pub fn extract(field: &Sdf) -> Mesh {
+///
+/// `cancel` is asked between the layers of tiles; a run given up on comes back with an
+/// empty mesh, and the caller that asked for the stop is the one that reports it.
+pub fn extract(field: &Sdf, cancel: Cancel<'_>) -> Mesh {
     let mut layers: HashMap<i32, Vec<IVec3>> = HashMap::new();
     for tile in meshed_tiles(field) {
         layers.entry(tile.z).or_default().push(tile);
@@ -74,6 +78,9 @@ pub fn extract(field: &Sdf) -> Mesh {
     let mut shared: FastMap<u64, u32> = FastMap::default();
     let mut written = Written::default();
     for level in levels {
+        if cancel.asked() {
+            return Mesh::default();
+        }
         let Some(mut tiles) = layers.remove(&level) else {
             continue;
         };
@@ -530,7 +537,7 @@ mod tests {
             HashMap::new(),
         );
 
-        let mesh = extract(&field);
+        let mesh = extract(&field, Cancel::never());
         assert!(!mesh.is_empty(), "the inside layer has a surface around it");
         assert_eq!(diagnose(&mesh).boundary_edges, 0, "the surface is closed");
         assert!(

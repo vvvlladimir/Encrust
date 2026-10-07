@@ -220,12 +220,13 @@ pub fn plate_of(
     let mut parts = Vec::with_capacity(entries.len());
     let mut models = Vec::with_capacity(entries.len());
     for ((mut mesh, import, oriented), (path, shaping)) in placed.into_iter().zip(entries) {
-        let (hollow, mut cuts) = hollow_and_cut(
-            &mut mesh,
-            &shaping.hollow,
-            shaping.import.precision,
-            watch.talk,
-        )?;
+        // The imports are all reported before the first model is shaped, so on a plate
+        // these lines would otherwise read as the last model's.
+        if watch.talk && entries.len() > 1 && shapes_anything(shaping) {
+            println!("{}", path.display());
+        }
+        let (hollow, mut cuts) =
+            hollow_and_cut(&mut mesh, &shaping.hollow, shaping.import.precision, watch)?;
         watch.stop.check()?;
         let stood = shaping
             .supports
@@ -272,6 +273,11 @@ pub fn plate_of(
         remove_islands: job.raster.remove_islands,
         drainage,
     })
+}
+
+/// Whether anything done to this model past import has a report of its own to print.
+fn shapes_anything(shaping: &Shaping) -> bool {
+    shaping.hollow.wanted() || shaping.hollow.cutting() || shaping.supports.is_some()
 }
 
 /// The model moved so the middle of its footprint is over `position` and its lowest

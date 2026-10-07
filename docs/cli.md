@@ -51,19 +51,28 @@ resin, weight, cost and the risks — when there is a printer to draw the masks 
 | 0 | Done |
 | 1 | The run failed |
 | 2 | The arguments were wrong |
-| 3 | `--strict`, and a model has defects or does not fit |
+| 3 | `--strict`, and a model has defects or does not fit; nothing is left on disk |
 | 4 | A batch in which at least one model failed |
 | 130 | Stopped by Ctrl-C |
 
+`--strict` keeps nothing it would not print: the file or the PNG directory of a run that
+ends in code 3 is taken off the disk again, so the exit code and what is there say the same
+thing. The report still names every defect that led to it.
+
+A number typed after a flag may be negative — `--rotate -90,0,0`, `--relief -0.5`,
+`--drain-at -5,0,0` — and `--rotate=-90,0,0` is the same thing.
+
 On a terminal `slice` draws a bar over the layers on stderr, and `batch` one over the
 models; `--no-progress`, `--quiet` and `--json` turn it off. The first Ctrl-C stops the run
-between layers and removes the file it was writing, and a batch starts no further model; a
-second one exits at once. `inspect`, `info` and `profiles` write nothing, so one Ctrl-C ends
-them.
+between layers, inside the cavity a `--hollow` run is building and between the models of a
+batch, and removes the file it was writing; a second one exits at once. `inspect`, `info`
+and `profiles` write nothing, so one Ctrl-C ends them.
 
 The output extension picks the format (ADR 0047): `.goo`, `.ctb`, `.cbddlp`, `.photon`,
 `.sl1`, `.sl1s`, `.zip`, `.cxdlp`, `.svgx`, `.cws`, one of the seven Anycubic extensions in
-`docs/formats/anycubic.md`, or a name with no extension for a directory of PNGs.
+`docs/formats/anycubic.md`, or a name with no extension for a directory of PNGs. A container
+name is refused without `--printer` or `--profile`: the panel is what the masks are drawn on,
+and a run that cannot write the file it was asked for fails rather than reports success.
 `--ctb-version` is read only by a `.ctb` name. A `.cxdlp` name is written at version 3 unless
 the printer profile names version 4, as the Halot Mage line does (ADR 0168).
 
@@ -94,7 +103,10 @@ encrust slice model.stl \
 ```
 
 A hole into the surface nearest a point, cut with or without a cavity behind it, and the
-check that says whether any resin is still stuck. `--check-drainage` asks for it alone:
+check that says whether any resin is still stuck. `--check-drainage` asks for it alone. The
+point is in plate millimetres from the plate's front left corner, after `--center` and the
+rest of the placement; `encrust inspect model.stl --center --printer …` prints the bounds to
+pick it out of:
 
 ```sh
 encrust slice model.stl \
@@ -132,9 +144,10 @@ encrust slice model.stl \
   --printer elegoo-mars-4-ultra --remove-islands -o model.goo
 ```
 
-Turn the model the way it prints best before anything else is done to it, and build
-supports to a profile of the catalogue — `light`, `medium`, `heavy` or one saved in the
-window, as `profiles list` names them — or to your own TOML with `--support-profile`:
+Turn the model the way it prints best before anything else is done to it, reported as the
+`--rotate` that repeats the turn, and build supports to a profile of the catalogue —
+`light`, `medium`, `heavy` or one saved in the window, as `profiles list` names them — or to
+your own TOML with `--support-profile`:
 
 ```sh
 encrust slice model.stl \
@@ -197,7 +210,10 @@ A flag wins over the plate file or project, which wins over the profiles' own nu
 
 `estimate` takes what `slice` takes and writes nothing. It prints what the stack is and,
 with a printer, what the print takes: time, resin by volume and weight, price where the
-resin has one, and the layers likely to fail. `--strict` fails it on the same defects.
+resin has one, and the layers likely to fail. `--strict` fails it on the same defects. The
+`fits` line answers for the model where it stands, not only for its size: one small enough
+to print but hanging off the plate is named as off it, because the panel clips whatever
+hangs over and the resin figure then counts material no machine would cure.
 
 `info --layer N --png out.png` takes one layer out of a sliced file, counted from one as a
 printer's screen counts.

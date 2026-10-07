@@ -49,6 +49,12 @@ pub fn layer_png(path: &Path, number: u32) -> Result<Vec<u8>> {
     let mut opened = open(path, std::io::BufReader::new(file))
         .with_context(|| format!("cannot read {} as a sliced file", path.display()))?;
     let (width_px, height_px) = (opened.facts().width_px, opened.facts().height_px);
+    // Checked here, because a reader counts its layers from zero and the flag counts them
+    // from one: its own number is the one to answer in.
+    let layers = opened.facts().layer_count();
+    if number > layers {
+        anyhow::bail!("layer {number} was asked for in a file of {layers} layers");
+    }
     let runs = opened
         .layer(number.saturating_sub(1))
         .with_context(|| format!("cannot decode layer {number}"))?;

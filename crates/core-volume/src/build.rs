@@ -3,6 +3,7 @@ use std::collections::HashSet;
 use core_geometry::{Aabb, Bvh, ClosestPoint, Mesh, Scalar, Vec3, glam::IVec3};
 use rayon::prelude::*;
 
+use crate::cancel::Cancel;
 use crate::error::VolumeError;
 use crate::grid::{VoxelGrid, tile_of, within};
 use crate::scatter::{Faces, seeds};
@@ -72,8 +73,14 @@ impl Default for FieldSettings {
 /// Builds the narrow-band field of `mesh`, through the hierarchy already built over it.
 ///
 /// Only the tiles the band crosses are filled; what is deep inside is kept as runs of
-/// whole tiles. See `docs/design/volume.md`.
-pub fn build(mesh: &Mesh, bvh: &Bvh, settings: &FieldSettings) -> Result<Sdf, VolumeError> {
+/// whole tiles. See `docs/design/volume.md`. `cancel` is asked before and between the
+/// phases and once a tile, and a run given up on returns [`VolumeError::Cancelled`].
+pub fn build(
+    mesh: &Mesh,
+    bvh: &Bvh,
+    settings: &FieldSettings,
+    cancel: Cancel<'_>,
+) -> Result<Sdf, VolumeError> {
     if mesh.aabb().is_none() {
         return Err(VolumeError::EmptyMesh);
     }
@@ -106,6 +113,9 @@ pub fn build(mesh: &Mesh, bvh: &Bvh, settings: &FieldSettings) -> Result<Sdf, Vo
         keep,
     );
     affordable(candidates.len(), sweep::carrier_tiles(&rings), settings)?;
+    if cancel.asked() {
+        return Err(VolumeError::Cancelled);
+    }
 
     let faces = Faces::of(mesh);
     let wanted: HashSet<IVec3> = candidates.into_iter().collect();
@@ -121,7 +131,11 @@ pub fn build(mesh: &Mesh, bvh: &Bvh, settings: &FieldSettings) -> Result<Sdf, Vo
         rings,
         &wanted,
         &seeds(mesh, &faces, sweep::carrier_grid(grid), keep),
+        cancel,
     );
+    if cancel.asked() {
+        return Err(VolumeError::Cancelled);
+    }
 
     let solid = gap_runs(walls(tiles.keys().copied(), settings.clip, grid), |tile| {
         let point = grid.tile_center(tile);

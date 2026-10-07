@@ -61,12 +61,6 @@ pub(crate) fn on_the_plate(
     if top_mm <= PLATE_MM {
         return Err(SliceError::UnderThePlate { top_mm });
     }
-    if aabb.mins.z < PLATE_MM {
-        tracing::warn!(
-            bottom_mm = aabb.mins.z,
-            "the model reaches under the plate, and what is under it is not cut"
-        );
-    }
     Ok((aabb.mins.z.max(PLATE_MM), top_mm))
 }
 
@@ -122,9 +116,15 @@ fn collect(heights: Vec<Scalar>, stitched: Vec<Stitched>) -> Sliced {
         ..Sliced::default()
     };
     for (z, plane) in heights.into_iter().zip(stitched) {
-        if plane.open > 0 {
-            tracing::warn!(z, open = plane.open, "layer closed over a hole in the mesh");
-        }
+        // One line a layer, at trace, because a mesh with a hole in it has one on every
+        // layer the hole reaches: what a reader needs is the count, and that is in the
+        // caller's report.
+        tracing::trace!(
+            z,
+            contours = plane.contours.len(),
+            open = plane.open,
+            "layer sliced"
+        );
         sliced.open_contours += plane.open;
         sliced.degenerate_contours += plane.degenerate;
         sliced.unlinked_segments += plane.unlinked;

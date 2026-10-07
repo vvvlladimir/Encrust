@@ -13,8 +13,8 @@ use anyhow::{Context, Result};
 use core_geometry::{Bvh, Mesh, Scalar, orient_outward, weld};
 use core_mesh_io::{MeshLoader, StlLoader};
 use core_volume::{
-    FieldSettings, HollowMode, HollowSettings, InfillPattern, InfillSettings, SignMode, build,
-    extract, hollow,
+    Cancel, FieldSettings, HollowMode, HollowSettings, InfillPattern, InfillSettings, SignMode,
+    build, extract, hollow,
 };
 
 /// Live bytes now and the most there have ever been.
@@ -268,6 +268,7 @@ fn run(mesh: &Mesh, bvh: &Bvh, case: &Case) -> Result<()> {
             sign: settings.sign,
             ..FieldSettings::default()
         },
+        Cancel::never(),
     );
     match field {
         Ok(field) => {
@@ -281,7 +282,7 @@ fn run(mesh: &Mesh, bvh: &Bvh, case: &Case) -> Result<()> {
 
             take_peak_mb();
             let started = Instant::now();
-            let cavity = extract(&field);
+            let cavity = extract(&field, Cancel::never());
             row(
                 case.label,
                 voxel_mm,
@@ -300,7 +301,7 @@ fn run(mesh: &Mesh, bvh: &Bvh, case: &Case) -> Result<()> {
 
     take_peak_mb();
     let started = Instant::now();
-    match hollow(mesh, bvh, &settings) {
+    match hollow(mesh, bvh, &settings, Cancel::never()) {
         Ok(hollowed) => row(
             case.label,
             hollowed.voxel_mm,

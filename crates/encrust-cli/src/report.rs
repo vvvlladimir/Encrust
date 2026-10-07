@@ -7,26 +7,44 @@ use printer_profiles::PrinterProfile;
 
 use crate::stats::MeshStats;
 
-/// Whether the model fits the machine it is meant for.
+/// Whether the model fits the machine it is meant for, and whether it stands inside it.
 pub struct FitCheck {
     pub printer: String,
+    /// How much larger than the build envelope the model is, per axis, millimetres.
     pub overflow: Vec3,
+    /// How far the model reaches outside the envelope where it stands, per axis,
+    /// millimetres. A model small enough to print can still hang off the plate, and
+    /// whatever hangs off it is clipped off the masks.
+    pub outside: Vec3,
 }
+
+/// How far past the envelope counts as past it, millimetres. Under a micron is float dust
+/// from the placement, not a model hanging off the plate.
+const PAST_THE_PLATE_MM: Scalar = 1.0e-3;
 
 impl FitCheck {
     pub fn of(stats: &MeshStats, profile: &PrinterProfile) -> Self {
         let volume = &profile.build_volume;
-        let size = stats.size();
+        let plate = Vec3::new(volume.x, volume.y, volume.z);
         Self {
             printer: profile.name.clone(),
-            overflow: Vec3::new(size.x - volume.x, size.y - volume.y, size.z - volume.z)
-                .max(Vec3::ZERO),
+            overflow: past(stats.size() - plate),
+            outside: past((-stats.min).max(stats.max - plate)),
         }
     }
 
     pub fn fits(&self) -> bool {
-        self.overflow == Vec3::ZERO
+        self.overflow == Vec3::ZERO && self.outside == Vec3::ZERO
     }
+}
+
+/// What is left of `amount` once the axes inside the envelope, and the dust, are dropped.
+fn past(amount: Vec3) -> Vec3 {
+    Vec3::select(
+        amount.cmpgt(Vec3::splat(PAST_THE_PLATE_MM)),
+        amount,
+        Vec3::ZERO,
+    )
 }
 
 /// Everything import learned about a model, ready to print.
@@ -150,17 +168,29 @@ fn describe_orientation(orientation: &Orientation) -> String {
     "consistent".to_owned()
 }
 
+/// An axis the model is too big for is named as that; one it merely stands off is named
+/// as where it stands, because the two ask for different things of the user.
 fn describe_fit(fit: &FitCheck) -> String {
     if fit.fits() {
         return format!("{}: yes", fit.printer);
     }
-    let over = fit.overflow;
-    let axes: Vec<String> = [("X", over.x), ("Y", over.y), ("Z", over.z)]
-        .into_iter()
-        .filter(|(_, amount)| *amount > 0.0)
-        .map(|(axis, amount)| format!("{axis} by {amount:.3} mm"))
-        .collect();
-    format!("{}: no, over {}", fit.printer, axes.join(", "))
+    let mut over = Vec::new();
+    let mut outside = Vec::new();
+    for (axis, index) in [("X", 0), ("Y", 1), ("Z", 2)] {
+        if fit.overflow[index] > 0.0 {
+            over.push(format!("{axis} by {:.3} mm", fit.overflow[index]));
+        } else if fit.outside[index] > 0.0 {
+            outside.push(format!("{axis} by {:.3} mm", fit.outside[index]));
+        }
+    }
+    let mut parts = Vec::new();
+    if !over.is_empty() {
+        parts.push(format!("over {}", over.join(", ")));
+    }
+    if !outside.is_empty() {
+        parts.push(format!("off the plate in {}", outside.join(", ")));
+    }
+    format!("{}: no, {}", fit.printer, parts.join(", "))
 }
 
 /// Parses `1.5` as uniform and `1,2,3` as per-axis.
@@ -262,11 +292,15 @@ z = {z}
     }
 
     fn stats(size: Vec3) -> MeshStats {
+        standing(Vec3::ZERO, size)
+    }
+
+    fn standing(min: Vec3, max: Vec3) -> MeshStats {
         MeshStats {
             vertices: 0,
             faces: 0,
-            min: Vec3::ZERO,
-            max: size,
+            min,
+            max,
             surface_area: 0.0,
             volume: 0.0,
         }
@@ -293,6 +327,31 @@ z = {z}
             describe_fit(&fit),
             "Test: no, over X by 10.000 mm, Z by 5.000 mm"
         );
+    }
+
+    #[test]
+    fn a_model_small_enough_but_off_the_edge_does_not_fit() {
+        let fit = FitCheck::of(
+            &standing(Vec3::new(-3.0, 5.0, 0.0), Vec3::new(7.0, 15.0, 10.0)),
+            &profile(20.0, 20.0, 20.0),
+        );
+        assert!(
+            !fit.fits(),
+            "what hangs off the plate is clipped off the mask"
+        );
+        assert_eq!(
+            describe_fit(&fit),
+            "Test: no, off the plate in X by 3.000 mm"
+        );
+    }
+
+    #[test]
+    fn float_dust_under_the_plate_is_not_a_model_off_it() {
+        let fit = FitCheck::of(
+            &standing(Vec3::new(0.0, 0.0, -1.0e-5), Vec3::new(10.0, 10.0, 10.0)),
+            &profile(20.0, 20.0, 20.0),
+        );
+        assert!(fit.fits(), "{} mm is placement dust", 1.0e-5);
     }
 
     #[test]

@@ -12,7 +12,7 @@ use core_analysis::Measured;
 use core_engine::{Cutting, bake, cut};
 use core_geometry::{
     Bvh, Mesh, Quat, Scalar, Transform, Vec3, Welded, center_over_plate, diagnose, drop_to_plate,
-    orient_outward, transform_mesh, weld,
+    glam::EulerRot, orient_outward, transform_mesh, weld,
 };
 use core_mesh_io::{Loaded, loader_for_extension};
 use core_pipeline::{PanelOverrides, Tolerance, raster_settings};
@@ -63,9 +63,48 @@ impl Outcome {
 
 /// The turn auto-orientation applied, and why it chose it.
 pub struct OrientSummary {
-    pub degrees: Scalar,
+    pub rotation: Quat,
     pub peak_mm2: Scalar,
     pub overhang_mm2: Scalar,
+}
+
+impl OrientSummary {
+    /// How far the turn goes, degrees.
+    pub fn degrees(&self) -> Scalar {
+        self.rotation.to_axis_angle().1.to_degrees()
+    }
+
+    /// The angles `--rotate X,Y,Z` repeats the turn with, degrees. Zero is added to each,
+    /// so float dust never reads as a turn of minus nothing.
+    pub fn rotate_degrees(&self) -> Vec3 {
+        let (x, y, z) = self.rotation.to_euler(EulerRot::XYZEx);
+        Vec3::new(x.to_degrees(), y.to_degrees(), z.to_degrees()).round() + 0.0
+    }
+
+    /// The turn in words: its axis where that is one of the plate's own, and the flag that
+    /// repeats it.
+    fn describe(&self) -> String {
+        let flag = {
+            let turn = self.rotate_degrees();
+            format!("--rotate {:.0},{:.0},{:.0}", turn.x, turn.y, turn.z)
+        };
+        match self.axis_name() {
+            Some(axis) => format!(
+                "turned {:.0} degrees around {axis} ({flag})",
+                self.degrees()
+            ),
+            None => format!("turned {:.0} degrees ({flag})", self.degrees()),
+        }
+    }
+
+    /// X, Y or Z when the turn is about that axis of the plate, `None` for any other.
+    fn axis_name(&self) -> Option<&'static str> {
+        let axis = self.rotation.to_axis_angle().0;
+        [("X", Vec3::X), ("Y", Vec3::Y), ("Z", Vec3::Z)]
+            .into_iter()
+            .find(|(_, about)| axis.dot(*about).abs() > 1.0 - 1.0e-3)
+            .map(|(name, _)| name)
+    }
 }
 
 /// Loads, repairs, places, hollows, supports and slices one model into `output`, asking
@@ -102,8 +141,10 @@ pub fn import(
     let (mesh, oriented) = place(welded.mesh.clone(), args, profile)?;
     if talk && let Some(summary) = &oriented {
         println!(
-            "Oriented: turned {:.0} degrees, {:.1} mm2 largest section, {:.1} mm2 overhang\n",
-            summary.degrees, summary.peak_mm2, summary.overhang_mm2
+            "Oriented: {}, {:.1} mm2 largest section, {:.1} mm2 overhang\n",
+            summary.describe(),
+            summary.peak_mm2,
+            summary.overhang_mm2
         );
     }
 
@@ -111,6 +152,9 @@ pub fn import(
     // whatever unit the file was drawn in; before the orientation fix, which renumbers
     // nothing but rewinds the faces the map is indexed by.
     let mut mesh = press_relief(mesh, &welded, &loaded, args, talk)?;
+    if args.transform.center {
+        mesh = centred(mesh, profile)?;
+    }
     let orientation = (!args.no_validate).then(|| orient_outward(&mut mesh));
     let diagnostics = (!args.no_validate).then(|| diagnose(&mesh));
     let stats = MeshStats::of(&mesh).context("mesh has no vertices")?;
@@ -137,8 +181,9 @@ pub fn hollow_and_cut(
     mesh: &mut Mesh,
     args: &HollowArgs,
     precision: Scalar,
-    talk: bool,
+    watch: &Watch,
 ) -> Result<(Option<HollowReport>, Option<Mesh>)> {
+    let talk = watch.talk;
     // Where the cuts land is read off the model as it was imported; what they are cut
     // into may be the shell. See ADR 0075.
     let placed = args
@@ -149,7 +194,7 @@ pub fn hollow_and_cut(
     let mut hollow = None;
     let mut wall = None;
     if args.wanted() {
-        let (shelled, report) = hollowing::run(mesh, args, precision)?;
+        let (shelled, report) = hollowing::run(mesh, args, precision, watch.stop)?;
         if talk {
             print!("{report}");
         }
@@ -207,6 +252,12 @@ pub fn slice_staged(
 ) -> Result<(SliceReport, Option<RasterReport>)> {
     let format = format_of(output, job.raster.ctb_version);
     let window = raster_window(&job.raster);
+    if format.is_some() && staged.printer.is_none() {
+        anyhow::bail!(
+            "writing {} needs the machine it is for: name it with --printer or --profile",
+            output.display()
+        );
+    }
     let plate = format.and_then(|format| staged.take_plate(Some(format), window));
     let (mut slice, raster) = match plate {
         Some(plate) => write_plate(plate, output, staged.drainage, watch)
@@ -221,7 +272,34 @@ pub fn slice_staged(
             print!("{raster}");
         }
     }
+    if job.strict {
+        let clean = staged.parts.iter().all(Part::is_clean)
+            && slice.is_clean()
+            && raster.as_ref().is_none_or(RasterReport::is_clean);
+        if !clean {
+            discard(output, watch.talk);
+        }
+    }
     Ok((slice, raster))
+}
+
+/// Takes the output of a `--strict` run that found something off the disk, so that the
+/// exit code and what is left behind say the same thing: a file nobody should print is
+/// not one to be found later and sent to a machine.
+fn discard(output: &Path, talk: bool) {
+    let taken = match output.is_dir() {
+        true => std::fs::remove_dir_all(output),
+        false => std::fs::remove_file(output),
+    };
+    match taken {
+        Ok(()) => {
+            if talk {
+                println!("\n--strict: {} was not kept", output.display());
+            }
+        }
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+        Err(error) => tracing::warn!("cannot remove {}: {error}", output.display()),
+    }
 }
 
 /// The stack cut for a PNG directory, or only counted when no profile leaves nothing to
@@ -385,6 +463,9 @@ pub fn inspect(input: &Path, args: &ImportArgs, chosen: &Chosen) -> Result<Impor
     let (mesh, _) = place(welded.mesh.clone(), args, profile)?;
     // Pressed here too, so that what `inspect` measures is what would be printed.
     let mut mesh = press_relief(mesh, &welded, &loaded, args, false)?;
+    if args.transform.center {
+        mesh = centred(mesh, profile)?;
+    }
 
     let orientation = (!args.no_validate).then(|| orient_outward(&mut mesh));
     let diagnostics = (!args.no_validate).then(|| diagnose(&mesh));
@@ -468,7 +549,7 @@ fn place(
         let found = orient(&mesh, &OrientSettings::default())
             .context("cannot find an orientation for this model")?;
         let summary = OrientSummary {
-            degrees: found.rotation.to_axis_angle().1.to_degrees(),
+            rotation: found.rotation,
             peak_mm2: found.score.peak_mm2.unwrap_or_default(),
             overhang_mm2: found.score.overhang_mm2,
         };
@@ -499,14 +580,26 @@ fn place(
     };
 
     if transform.center {
-        let bounds = mesh.aabb().context("mesh has no vertices")?;
-        let plate = profile.map_or(Vec3::ZERO, |p| {
-            Vec3::new(p.build_volume.x, p.build_volume.y, 0.0)
-        });
-        let offset = drop_to_plate(&bounds) + center_over_plate(&bounds, plate.x, plate.y);
-        mesh = transform_mesh(&mesh, Transform::from_translation(offset));
+        mesh = centred(mesh, profile)?;
     }
     Ok((mesh, oriented))
+}
+
+/// The model stood in the middle of the plate and on z = 0.
+///
+/// Called again after relief, which moves the surface the first call centred: a texture
+/// pressed in sinks the model's own bottom under the plate, and what is under the plate is
+/// not cut.
+fn centred(mesh: Mesh, profile: Option<&PrinterProfile>) -> Result<Mesh> {
+    let bounds = mesh.aabb().context("mesh has no vertices")?;
+    let plate = profile.map_or(Vec3::ZERO, |p| {
+        Vec3::new(p.build_volume.x, p.build_volume.y, 0.0)
+    });
+    let offset = drop_to_plate(&bounds) + center_over_plate(&bounds, plate.x, plate.y);
+    if offset == Vec3::ZERO {
+        return Ok(mesh);
+    }
+    Ok(transform_mesh(&mesh, Transform::from_translation(offset)))
 }
 
 fn euler_degrees(angles: Vec3) -> Quat {
@@ -514,4 +607,58 @@ fn euler_degrees(angles: Vec3) -> Quat {
     Quat::from_rotation_z(radians.z)
         * Quat::from_rotation_y(radians.y)
         * Quat::from_rotation_x(radians.x)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn summary(rotation: Quat) -> OrientSummary {
+        OrientSummary {
+            rotation,
+            peak_mm2: 0.0,
+            overhang_mm2: 0.0,
+        }
+    }
+
+    #[test]
+    fn a_model_pushed_under_the_plate_is_stood_back_on_it() {
+        // What relief does to a model's own bottom, which is why centring is redone after it.
+        let sunk = Mesh::new(
+            vec![
+                Vec3::new(0.0, 0.0, -0.5),
+                Vec3::new(1.0, 0.0, -0.5),
+                Vec3::new(0.0, 1.0, 2.0),
+            ],
+            vec![[0, 1, 2]],
+        );
+        let stood = centred(sunk, None).expect("the mesh has vertices");
+        let bounds = stood.aabb().expect("the mesh has vertices");
+
+        assert!(
+            bounds.mins.z.abs() < 1.0e-6,
+            "nothing under the plate is cut, so --center has to end on it: {}",
+            bounds.mins.z
+        );
+    }
+
+    #[test]
+    fn a_turn_about_one_axis_names_it_and_the_flag_that_repeats_it() {
+        let quarter = summary(Quat::from_rotation_x(std::f32::consts::FRAC_PI_2));
+        assert_eq!(
+            quarter.describe(),
+            "turned 90 degrees around X (--rotate 90,0,0)"
+        );
+    }
+
+    #[test]
+    fn the_angles_reported_are_the_angles_rotate_would_apply() {
+        let turn = Vec3::new(-30.0, 0.0, 45.0);
+        let summary = summary(euler_degrees(turn));
+        assert_eq!(summary.rotate_degrees(), turn, "--rotate repeats the turn");
+        assert!(
+            summary.axis_name().is_none(),
+            "two axes are not one of them"
+        );
+    }
 }

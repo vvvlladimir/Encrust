@@ -3,7 +3,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::{self, Receiver, TryRecvError};
 
 use core_geometry::{Bvh, Mesh, Scalar, Vec3};
-use core_volume::{HollowSettings, Shell, hollow_at_scale};
+use core_volume::{Cancel, HollowSettings, Shell, hollow_at_scale};
 
 use crate::job::pipeline::{thread_pool, worker_threads};
 use crate::scene::{ObjectId, Scene};
@@ -215,7 +215,13 @@ fn shell_each(
         }
         report(index, models);
 
-        match hollow_at_scale(&task.mesh, &task.bvh, &task.settings, task.scale) {
+        match hollow_at_scale(
+            &task.mesh,
+            &task.bvh,
+            &task.settings,
+            task.scale,
+            Cancel::never(),
+        ) {
             Ok(hollowed) => shells.push(Shelled {
                 id: task.id,
                 shell: Shell {

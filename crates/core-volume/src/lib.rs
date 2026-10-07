@@ -5,6 +5,7 @@
 //! `docs/design/volume.md`, and `docs/design/hollowing.md` for what is built on it.
 
 mod build;
+mod cancel;
 mod csg;
 mod drain;
 mod error;
@@ -21,6 +22,7 @@ mod sign;
 mod sweep;
 
 pub use build::{FieldSettings, build};
+pub use cancel::Cancel;
 pub use csg::{difference, intersection, offset, shell, union};
 pub use drain::{
     CUT_WEIGHT, Channel, DrainHole, MOUTH_LIFT_MM, channel_under, drill, hole_at, lift_for, pierce,

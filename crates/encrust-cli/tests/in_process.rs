@@ -171,8 +171,11 @@ fn an_open_mesh_fails_a_strict_run_without_an_error() {
         Exit::Unclean,
         "--strict has to notice the missing faces"
     );
+    assert!(
+        !out.exists(),
+        "a strict run keeps no file: code 3 and a printable file say different things"
+    );
     let _ = fs::remove_file(&model);
-    let _ = fs::remove_file(&out);
 }
 
 #[test]

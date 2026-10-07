@@ -207,6 +207,44 @@ fn a_missing_wall_is_reported_as_a_slice_defect() {
 }
 
 #[test]
+fn a_hole_in_the_mesh_is_counted_once_and_not_warned_about_per_layer() {
+    let path = write_box_stl("hole-once", 10.0, 10, 0);
+    let output = slice(&[path.to_str().unwrap(), "--layer-height", "0.5"]);
+
+    assert!(output.status.success());
+    assert!(
+        !stderr(&output).contains("layer"),
+        "twenty layers over one hole are one line of report, not twenty of log: {}",
+        stderr(&output)
+    );
+    assert!(
+        stdout(&output).contains("contours closed over a gap"),
+        "{}",
+        stdout(&output)
+    );
+}
+
+#[test]
+fn trace_says_more_than_debug_does() {
+    let path = write_box_stl("two-levels", 10.0, 12, 0);
+    let run = |level: &str| {
+        stderr(&slice(&[
+            path.to_str().unwrap(),
+            "--layer-height",
+            "2",
+            level,
+        ]))
+    };
+
+    let debug = run("-v");
+    let trace = run("-vv");
+    assert!(
+        !debug.contains("layer sliced") && trace.contains("layer sliced"),
+        "-vv promises trace and has to deliver it\ndebug:\n{debug}\ntrace:\n{trace}"
+    );
+}
+
+#[test]
 fn strict_fails_on_an_open_mesh_and_passes_on_a_closed_one() {
     let open = write_box_stl("strict-open", 10.0, 10, 0);
     let closed = write_box_stl("strict-closed", 10.0, 12, 0);
@@ -235,6 +273,29 @@ fn scale_and_rotation_change_the_reported_size() {
 }
 
 #[test]
+fn a_negative_number_after_a_flag_is_a_number_and_not_a_flag() {
+    let path = write_box_stl("negative-angle", 10.0, 12, 0);
+    let spaced = estimate(&[path.to_str().unwrap(), "--center", "--rotate", "-45,0,0"]);
+
+    assert!(
+        spaced.status.success(),
+        "a turn back is an everyday rotation: {}",
+        stderr(&spaced)
+    );
+    // A 10 mm cube turned 45 degrees about X stands root two taller and deeper.
+    assert_eq!(
+        field(&stdout(&spaced), "size"),
+        "10.000 x 14.142 x 14.142 mm"
+    );
+    let attached = estimate(&[path.to_str().unwrap(), "--center", "--rotate=-45,0,0"]);
+    assert_eq!(
+        stdout(&spaced),
+        stdout(&attached),
+        "the two spellings of one flag say the same thing"
+    );
+}
+
+#[test]
 fn center_sits_the_model_on_the_plate() {
     let path = write_box_stl("centered", 10.0, 12, 0);
     let text = stdout(&estimate(&[
@@ -250,6 +311,31 @@ fn center_sits_the_model_on_the_plate() {
         "got {bounds}"
     );
     assert_eq!(field(&text, "fits"), "Mars 4 Ultra: yes");
+}
+
+#[test]
+fn a_model_small_enough_but_standing_off_the_plate_is_reported_by_estimate() {
+    // Turned a quarter about X without --center, so the box hangs off the front edge.
+    let path = write_box_stl("off-the-edge", 10.0, 12, 0);
+    let output = estimate(&[
+        path.to_str().unwrap(),
+        "--rotate",
+        "90,0,0",
+        "--profile",
+        shipped_profile().to_str().unwrap(),
+        "--strict",
+    ]);
+    let text = stdout(&output);
+
+    assert_eq!(
+        field(&text, "fits"),
+        "Mars 4 Ultra: no, off the plate in Y by 10.000 mm"
+    );
+    assert_eq!(
+        output.status.code(),
+        Some(3),
+        "--strict has to notice what the panel would clip: {text}"
+    );
 }
 
 #[test]
@@ -456,7 +542,11 @@ fn a_model_hanging_off_the_display_is_clipped_and_fails_strict() {
         Some(3),
         "--strict must fail on a layer that does not fit the display"
     );
-    assert_eq!(written_layers(&out), 6, "a clipped layer is still written");
+    assert!(
+        !out.exists(),
+        "--strict keeps nothing: code 3 and a stack on disk would contradict each other"
+    );
+    assert!(text.contains("was not kept"), "{text}");
 }
 
 #[test]
@@ -657,12 +747,18 @@ fn the_goo_layers_carry_the_bottom_and_transition_exposures() {
 }
 
 #[test]
-fn a_goo_file_needs_a_printer_profile() {
+fn a_goo_name_without_a_machine_is_refused_rather_than_left_unwritten() {
     let path = write_box_stl("goo-no-profile", 10.0, 12, 0);
     let out = output_file("no-profile.goo");
     let output = slice(&[path.to_str().unwrap(), "-o", out.to_str().unwrap()]);
 
-    assert!(output.status.success());
+    assert_eq!(
+        output.status.code(),
+        Some(1),
+        "a run that wrote no file must not report success: {}",
+        stderr(&output)
+    );
+    assert!(stderr(&output).contains("--printer"), "{}", stderr(&output));
     assert!(!out.exists(), "without a panel there is nothing to write");
 }
 
@@ -1743,6 +1839,43 @@ fn a_plate_file_places_each_model_where_it_says() {
 }
 
 #[test]
+fn a_plate_names_the_model_each_cavity_belongs_to() {
+    let plate = plate_file(
+        "named-hollow",
+        r#"
+        layer_height_mm = 5
+        [[model]]
+        path = "CUBE"
+        position = [30, 30]
+        [[model]]
+        path = "CUBE"
+        position = [60, 30]
+        hollow = { wall_mm = 1.0 }
+        "#,
+    );
+    let text = stdout(&estimate(&[
+        plate.to_str().unwrap(),
+        "--profile",
+        shipped_profile().to_str().unwrap(),
+        "--precision",
+        "0.1",
+    ]));
+
+    let named = text
+        .lines()
+        .position(|line| line.ends_with("named-hollow-cube.stl"))
+        .map(|first| {
+            text.lines()
+                .skip(first + 1)
+                .position(|line| line.trim_start().starts_with("wall "))
+        });
+    assert!(
+        matches!(named, Some(Some(_))),
+        "the cavity stands under the model it was cut into:\n{text}"
+    );
+}
+
+#[test]
 fn a_flag_wins_over_the_plate_file() {
     let plate = plate_file(
         "flag-wins",
@@ -1870,6 +2003,11 @@ fn info_takes_one_layer_out_as_a_png() {
         png.to_str().unwrap(),
     ]);
     assert_eq!(past.status.code(), Some(1), "the stack has ten layers");
+    assert!(
+        stderr(&past).contains("layer 99 was asked for in a file of 10 layers"),
+        "the number answered is the number asked for: {}",
+        stderr(&past)
+    );
 }
 
 #[test]

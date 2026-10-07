@@ -96,7 +96,8 @@ Grouped by what the decision governs; the number is still the order it was taken
 | [0114](0114-unite-a-layers-planes-by-brightness.md) | A layer is sampled at several planes, united by brightness on the runs | Accepted |
 | [0134](0134-a-layer-starts-at-the-near-edge-of-the-plate.md) | Write the plate as it stands, and leave mirroring to the header | Accepted |
 | [0187](0187-nothing-under-the-plate-is-cut.md) | Nothing under the plate is cut | Accepted; the top is clamped the same way by 0199 |
-| [0199](0199-a-bake-says-how-high-the-material-stands.md) | A bake says how high the material stands, and the stack stops there | Accepted |
+| [0199](0199-a-bake-says-how-high-the-material-stands.md) | A bake says how high the material stands, and the stack stops there | Accepted; the floor is answered the same way by 0203 |
+| [0203](0203-a-bake-says-how-low-the-material-stands.md) | A bake says how low the material stands, and the plate is warned about that | Accepted |
 
 ### Rasterisation
 
@@ -196,6 +197,7 @@ Grouped by what the decision governs; the number is still the order it was taken
 | [0200](0200-a-pocket-is-painted-on-its-own.md) | A pocket of trapped resin is painted on its own | Accepted |
 | [0198](0198-a-drainage-check-is-asked-for.md) | A drainage check is asked for, and the view it needs is the user's | Accepted |
 | [0201](0201-the-surface-of-a-cut-is-the-cut-itself.md) | The surface of a cut is the cut's own body, kept where it stands in material | Accepted |
+| [0204](0204-a-field-build-is-given-up-on-between-tiles.md) | A field build is given up on between tiles | Accepted |
 
 ### The plate
 

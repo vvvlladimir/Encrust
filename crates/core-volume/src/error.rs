@@ -7,6 +7,9 @@ pub enum VolumeError {
     #[error("a field needs a mesh with at least one face")]
     EmptyMesh,
 
+    #[error("the run was stopped")]
+    Cancelled,
+
     #[error("the voxel size must be a positive length, got {0} mm")]
     BadVoxelSize(Scalar),
 

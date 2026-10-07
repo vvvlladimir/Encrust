@@ -4,9 +4,11 @@ use std::time::{Duration, Instant};
 use anyhow::{Context, Result, bail};
 use core_geometry::{Bvh, Mesh, Scalar, Vec3};
 use core_volume::{
-    Channel, DrainHole, HollowMode, HollowSettings, InfillPattern, InfillSettings, drill, hole_at,
-    hollow, pierce, sleeves,
+    Cancel, Channel, DrainHole, HollowMode, HollowSettings, InfillPattern, InfillSettings,
+    VolumeError, drill, hole_at, hollow, pierce, sleeves,
 };
+
+use crate::exit::{Cancelled, Stop};
 
 /// Which surface `--hollow-mode` measures the wall from.
 #[derive(Debug, Default, Clone, Copy, clap::ValueEnum, serde::Deserialize)]
@@ -72,9 +74,10 @@ pub struct HollowArgs {
     #[arg(long = "drain", value_name = "MM", default_value_t = 3.0)]
     pub drain_mm: Scalar,
 
-    /// Drill a drain hole into the surface nearest this point, in plate millimetres after
-    /// any placement. Repeat for more than one hole.
-    #[arg(long = "drain-at", value_name = "X,Y,Z", value_parser = point)]
+    /// Drill a drain hole into the surface nearest this point, in plate millimetres from
+    /// the plate's front left corner, after any placement; `inspect` prints a model's own
+    /// bounds. Repeat for more than one hole.
+    #[arg(long = "drain-at", value_name = "X,Y,Z", value_parser = point, allow_hyphen_values = true)]
     pub drain_at: Vec<Vec3>,
 
     /// How far past the surface a drain hole reaches, millimetres.
@@ -85,9 +88,9 @@ pub struct HollowArgs {
     #[arg(long = "drain-taper", value_name = "0..1", default_value_t = 1.0)]
     pub drain_taper: Scalar,
 
-    /// Dig a drainage channel along a polyline of points, `x,y,z:x,y,z:...`, in plate
-    /// millimetres. Repeat for more than one channel.
-    #[arg(long = "channel", value_name = "X,Y,Z:...", value_parser = polyline)]
+    /// Dig a drainage channel along a polyline of points, `x,y,z:x,y,z:...`, in the same
+    /// plate millimetres as --drain-at. Repeat for more than one channel.
+    #[arg(long = "channel", value_name = "X,Y,Z:...", value_parser = polyline, allow_hyphen_values = true)]
     pub channels: Vec<Vec<Vec3>>,
 
     /// Diameter of the drainage channels, millimetres.
@@ -176,14 +179,24 @@ impl HollowArgs {
     }
 }
 
-/// Hollows the mesh and says what that cost and what it saved.
-pub fn run(mesh: &Mesh, args: &HollowArgs, precision: Scalar) -> Result<(Mesh, HollowReport)> {
+/// Hollows the mesh and says what that cost and what it saved. `stop` is asked while the
+/// field is built, so a Ctrl-C lands inside the cavity rather than after it.
+pub fn run(
+    mesh: &Mesh,
+    args: &HollowArgs,
+    precision: Scalar,
+    stop: &Stop,
+) -> Result<(Mesh, HollowReport)> {
     let started = Instant::now();
     let bvh = Bvh::build(mesh);
     let Some(settings) = args.settings(precision) else {
         bail!("--hollow was not given, so there is nothing to hollow");
     };
-    let hollowed = hollow(mesh, &bvh, &settings).context("hollowing the model")?;
+    let asked = || stop.requested();
+    let hollowed = match hollow(mesh, &bvh, &settings, Cancel::when(&asked)) {
+        Err(VolumeError::Cancelled) => return Err(Cancelled.into()),
+        other => other.context("hollowing the model")?,
+    };
 
     let report = HollowReport {
         settings,

@@ -24,6 +24,7 @@ pub enum PrinterCommand {
 }
 
 #[derive(clap::Args, Debug)]
+#[command(next_help_heading = "Printer")]
 pub struct DiscoverArgs {
     /// A board to ask by address, for a network the broadcast does not cross. Repeatable.
     #[arg(long, value_name = "IP")]
@@ -36,8 +37,10 @@ pub struct DiscoverArgs {
 
 /// Which printer, and how it is reached.
 #[derive(clap::Args, Debug)]
+#[command(next_help_heading = "Printer")]
 pub struct MachineArgs {
     /// An Elegoo board's IP address, or with --prusalink a Prusa machine's host.
+    #[arg(help_heading = "Arguments")]
     pub address: String,
 
     /// The printer speaks PrusaLink, not SDCP: give --key, or --password and --user.
@@ -49,7 +52,12 @@ pub struct MachineArgs {
     pub key: Option<String>,
 
     /// The digest login's user.
-    #[arg(long, env = "ENCRUST_PRUSALINK_USER", default_value = net_prusalink::DEFAULT_USER)]
+    #[arg(
+        long,
+        env = "ENCRUST_PRUSALINK_USER",
+        hide_env_values = true,
+        default_value = net_prusalink::DEFAULT_USER
+    )]
     pub user: String,
 
     /// The digest login's password, as the machine's screen shows it. Prefer the variable,
@@ -63,8 +71,10 @@ pub struct MachineArgs {
 }
 
 #[derive(clap::Args, Debug)]
+#[command(next_help_heading = "Printer")]
 pub struct SendArgs {
     /// The sliced file to send. It lands under its own name.
+    #[arg(help_heading = "Arguments")]
     pub file: PathBuf,
 
     #[command(flatten)]

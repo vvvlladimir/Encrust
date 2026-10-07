@@ -5,7 +5,7 @@
 use std::sync::{Arc, OnceLock};
 
 use core_geometry::{Bvh, Heightmap, Mesh, Scalar, Transform, UvMap, Vec2, Vec3};
-use core_volume::{CUT_WEIGHT, DrainHole, HollowSettings, drill, hollow};
+use core_volume::{CUT_WEIGHT, Cancel, DrainHole, HollowSettings, drill, hollow};
 
 use crate::camera::OrbitCamera;
 use crate::plate::BuildPlate;
@@ -40,6 +40,7 @@ fn hollowed_ball() -> &'static (Mesh, Bvh, Arc<Mesh>, std::ops::Range<usize>) {
                 precision: 0.6,
                 ..HollowSettings::default()
             },
+            Cancel::never(),
         )
         .expect("the ball hollows");
         (mesh, bvh, Arc::new(hollowed.mesh), hollowed.cavity)
@@ -879,7 +880,7 @@ fn zz_scratch() {
         infill: (var("ZZ_INFILL", 1.0) > 0.0).then(InfillSettings::default),
         ..HollowSettings::default()
     };
-    let hollowed = hollow(&mesh, &bvh, &settings).expect("the bracket hollows");
+    let hollowed = hollow(&mesh, &bvh, &settings, Cancel::never()).expect("the bracket hollows");
     model.take(Shell {
         mesh: Arc::new(hollowed.mesh),
         cavity: hollowed.cavity,
@@ -940,7 +941,8 @@ fn zz_scratch() {
         return;
     };
     let out = std::env::var("ZZ_OUT").unwrap_or("/tmp/zz_scratch.png".to_owned());
-    image::save_buffer(&out, &frame, SIZE, SIZE, image::ColorType::Rgba8).expect("the frame writes");
+    image::save_buffer(&out, &frame, SIZE, SIZE, image::ColorType::Rgba8)
+        .expect("the frame writes");
 }
 
 /// The one device the frames of this file are drawn on, or `None` on a machine with no

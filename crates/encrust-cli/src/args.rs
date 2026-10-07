@@ -63,7 +63,7 @@ pub struct ImportArgs {
 
     /// Press the file's own texture into the model as relief, this many millimetres deep.
     /// Negative sinks it in. Needs a model carrying UVs and an image beside it.
-    #[arg(long, value_name = "MM")]
+    #[arg(long, value_name = "MM", allow_hyphen_values = true)]
     pub relief: Option<Scalar>,
 
     /// How fine the lattice --relief and --hollow are cut on, 0 to 1. Not the layer height:
@@ -76,11 +76,11 @@ pub struct ImportArgs {
 #[derive(Debug, Clone, clap::Args)]
 pub struct TransformArgs {
     /// Rotation in degrees around X, Y and Z, applied in that order.
-    #[arg(long, value_name = "X,Y,Z", value_parser = parse_rotation)]
+    #[arg(long, value_name = "X,Y,Z", value_parser = parse_rotation, allow_hyphen_values = true)]
     pub rotate: Option<Vec3>,
 
     /// Uniform factor, or per-axis factors as X,Y,Z.
-    #[arg(long, value_name = "S", value_parser = parse_scale)]
+    #[arg(long, value_name = "S", value_parser = parse_scale, allow_hyphen_values = true)]
     pub scale: Option<Vec3>,
 
     /// Centre the model on the plate and sit it on z = 0.
