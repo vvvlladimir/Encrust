@@ -204,6 +204,7 @@ pub fn plate_of(
 ) -> Result<Staged> {
     chosen.measured()?;
     let printer = chosen.printer.as_ref();
+    check_adaptive(job, printer)?;
     let mut placed = Vec::with_capacity(entries.len());
     for (path, shaping) in entries {
         let (mut mesh, import, oriented) = import(path, &shaping.import, printer, watch.talk)?;
@@ -273,6 +274,23 @@ pub fn plate_of(
         remove_islands: job.raster.remove_islands,
         drainage,
     })
+}
+
+/// Refuses an adaptive run on a machine that steps the plate by the header's layer
+/// height, before the stack is cut rather than when the file comes to be written.
+fn check_adaptive(job: &JobArgs, printer: Option<&PrinterProfile>) -> Result<()> {
+    let Some(printer) = printer.filter(|_| job.slicing.adaptive) else {
+        return Ok(());
+    };
+    if printer.firmware.variable_layer_height {
+        return Ok(());
+    }
+    bail!(
+        "{} steps the plate by the header's layer height, so a stack of layers of \
+         different thicknesses cannot be printed on it; --adaptive needs a profile whose \
+         [firmware] claims variable_layer_height",
+        printer.name
+    )
 }
 
 /// Whether anything done to this model past import has a report of its own to print.

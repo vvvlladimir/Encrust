@@ -82,6 +82,9 @@ of it in one pass, which costs nothing but loses an edge dimmer than 16 (ADR 014
 carries all eight bits and loses nothing, because its layers are PNGs, and so do a `.zip` and
 a `.cws`. A `.cxdlp` carries eight bits at version 3 and seven at version 4. An `.svgx` carries
 none at all: its layers are polygons, and a pixel is lit or dark at half coverage (ADR 0169).
+Those two cost by the panel rather than by the model, so a run writing one for a panel larger
+than any of its own machines have — a `.cbddlp` above 1440 x 2560 px, an `.svgx` above
+3840 x 2400 — says so before it writes a layer.
 
 An `.sl1` states one exposure and one layer height for the whole stack, so `--exposure-at`
 and `--adaptive` are refused rather than flattened under an `.sl1` name (ADR 0148). A `.zip`
@@ -130,11 +133,17 @@ encrust slice model.stl \
 ```
 
 Thick layers on a vertical wall, thin on a shallow slope, against a cusp target. Needs a
-printer profile whose `[firmware]` claims `variable_layer_height`:
+printer profile whose `[firmware]` claims `variable_layer_height`, which no profile of the
+catalogue claims — the plate has to step to each layer's own Z, and that is a property of a
+machine's firmware rather than of its container. Run it against a profile of your own, and
+the refusal comes before the stack is cut rather than when the file is written.
+`--min-layer-height` defaults to half the layer height, because every thickness is a whole
+number of it: a floor the layer height is not a multiple of lowers the thickest layer the
+run can reach, and the run says so.
 
 ```sh
 encrust slice model.stl \
-  --printer elegoo-mars-4-ultra --adaptive --cusp 0.03 --min-layer-height 0.02 -o model.goo
+  --profile my-printer.toml --adaptive --cusp 0.03 --min-layer-height 0.025 -o model.goo
 ```
 
 Every island taken out of the file, and whatever stood only on one:
@@ -215,13 +224,22 @@ resin has one, and the layers likely to fail. `--strict` fails it on the same de
 to print but hanging off the plate is named as off it, because the panel clips whatever
 hangs over and the resin figure then counts material no machine would cure.
 
-`info --layer N --png out.png` takes one layer out of a sliced file, counted from one as a
-printer's screen counts.
+`info --layer N` reports one layer of a sliced file, counted from one as a printer's screen
+counts: where it tops out, how thick it is, how long it burns and how much of the panel it
+lights. `--png out.png` writes that layer's mask beside the report.
+
+Over the whole file, `info` names every run of layers exposed differently from the header —
+a resin's transition ramp is one such run, an `--exposure-at` band another — and for a stack
+that does not keep one height, its thinnest and thickest layer in place of the header's one
+number.
 
 `convert` writes a sliced file again in the container its output names, for the printer
 given. The masks are copied, never resampled, so the printer's panel must be the size the
 file was drawn for, in pixels and, where the file records it, in millimetres; the layer heights and every exposure are the file's own, and the resin
-gives the lifts, waits and price. A stack of varying layer heights is refused for now, and
+gives the lifts, waits and price. A ramp above the bottom block is read back as the resin
+transition it is and stated again as one, so a machine that reads the header alone still
+takes the file; any other run of exposures becomes a band of height, which such a machine
+refuses. A stack of varying layer heights is refused for now, and
 the new file's previews are blank (ADR 0180).
 
 ## Profiles, a config file, completions

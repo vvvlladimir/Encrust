@@ -144,9 +144,9 @@ pub struct SliceArgs {
     pub cusp: Scalar,
 
     /// Thinnest layer an adaptive stack may use, millimetres. Every thickness is a whole
-    /// number of it.
-    #[arg(long, value_name = "MM", default_value_t = AdaptiveSettings::default().min_height_mm)]
-    pub min_layer_height: Scalar,
+    /// number of it; defaults to half the layer height, which always is one.
+    #[arg(long, value_name = "MM")]
+    pub min_layer_height: Option<Scalar>,
 
     /// Sample this many planes inside each layer, so a feature thinner than a layer is
     /// not lost to which side of the middle it fell on. Costs its own slicing pass each.

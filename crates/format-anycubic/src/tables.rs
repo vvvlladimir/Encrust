@@ -11,7 +11,7 @@ use crate::writer::{AnycubicFlavour, AnycubicVersion};
 pub(crate) const NAME_BYTES: usize = 12;
 
 /// Bytes every named table spends on its own name and length.
-const TABLE_BASE_BYTES: u32 = NAME_BYTES as u32 + 4;
+pub(crate) const TABLE_BASE_BYTES: u32 = NAME_BYTES as u32 + 4;
 
 /// The mark at the front of every file.
 const FILE_MARK: &str = "ANYCUBIC";

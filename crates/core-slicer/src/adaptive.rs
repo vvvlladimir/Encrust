@@ -91,6 +91,10 @@ pub fn plan_under(
     let flats = flat_heights(mesh, z_min, z_max);
 
     let mut bounds = vec![z_min];
+    // Counted from the last boundary off the step grid: adding a thousand f32 thicknesses
+    // drifts enough to leave the model's top short and buy a layer with nothing in it.
+    let mut anchor = z_min;
+    let mut steps_above = 0usize;
     let mut z = z_min;
     let mut next_flat = 0;
     while z < z_max {
@@ -100,41 +104,48 @@ pub fn plan_under(
         {
             next_flat += 1;
         }
-        let thickness = reach_flat(
-            walk(&lean, z, z_min, step, settings),
+        let steps = walk(&lean, z, z_min, step, settings);
+        if let Some(reach) = reach_flat(
+            steps as Scalar * step,
             flats.get(next_flat).map(|&flat| flat - z),
             settings,
-        );
-        z += thickness;
+        ) {
+            anchor = z + reach;
+            steps_above = 0;
+            z = anchor;
+        } else {
+            steps_above += steps;
+            z = anchor + steps_above as Scalar * step;
+        }
         bounds.push(z);
     }
     Ok(LayerPlan::from_bounds(bounds, z_max))
 }
 
-/// A layer that could land exactly on a flat face does, because a boundary on a flat face
-/// reproduces it with no error at all, which no thickness can do.
+/// How far a layer standing below a flat face has to reach to land on it, or `None` where
+/// the thickness the surface allows stands.
 ///
-/// Only ever a shorter layer: stretching one to reach a flat face would skip the thin
-/// layers the surface below it asked for.
-fn reach_flat(thickness: Scalar, to_flat: Option<Scalar>, settings: &AdaptiveSettings) -> Scalar {
-    let Some(reach) = to_flat else {
-        return thickness;
-    };
-    if reach >= settings.min_height_mm && reach < thickness {
-        return reach;
-    }
-    thickness
+/// A boundary on a flat face reproduces the surface with no error at all, which no
+/// thickness can do. Only ever a shorter layer: stretching one to reach a flat face would
+/// skip the thin layers the surface below it asked for.
+fn reach_flat(
+    thickness: Scalar,
+    to_flat: Option<Scalar>,
+    settings: &AdaptiveSettings,
+) -> Option<Scalar> {
+    let reach = to_flat?;
+    (reach >= settings.min_height_mm && reach < thickness).then_some(reach)
 }
 
-/// How thick the layer standing on `z` may be: the thinnest the surface over the whole
-/// band allows, rounded down to a whole number of `step`.
+/// How many whole `step`s thick the layer standing on `z` may be: the thinnest the surface
+/// over the whole band allows, rounded down.
 fn walk(
     lean: &[Scalar],
     z: Scalar,
     z_min: Scalar,
     step: Scalar,
     settings: &AdaptiveSettings,
-) -> Scalar {
+) -> usize {
     let steps = (settings.max_height_mm / step).floor().max(1.0) as usize;
     let first = ((z - z_min) / step).floor().max(0.0) as usize;
 
@@ -150,7 +161,7 @@ fn walk(
         }
         taken = offset + 1;
     }
-    taken.max(1) as Scalar * step
+    taken.max(1)
 }
 
 /// For each `step`-tall slot of the model, the sine of the steepest lean any face
@@ -333,6 +344,27 @@ mod tests {
         let mut faces = lower.faces;
         faces.extend(upper.faces.iter().map(|face| face.map(|i| i + offset)));
         Mesh::new(vertices, faces)
+    }
+
+    #[test]
+    fn a_tall_stack_does_not_drift_into_a_layer_above_the_model() {
+        let settings = AdaptiveSettings {
+            cusp_mm: 0.05,
+            min_height_mm: 0.025,
+            max_height_mm: 0.05,
+        };
+        let plan = plan(&box_mesh(Vec3::new(2.0, 2.0, 30.0)), &settings).expect("a tall box plans");
+
+        assert_eq!(
+            plan.layer_count(),
+            600,
+            "30 mm of vertical wall at the 0.05 mm ceiling is 600 layers and no more"
+        );
+        let top = plan.top_of(599).expect("the top layer");
+        assert!(
+            (top - 30.0).abs() < 1e-3,
+            "the stack tops out at {top} mm over a model 30 mm tall"
+        );
     }
 
     #[test]

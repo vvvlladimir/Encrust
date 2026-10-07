@@ -283,3 +283,48 @@ fn the_vector_container_keeps_what_it_can_carry() {
         .sum();
     assert_eq!(lit, 46 * 22, "the border falls below the cut");
 }
+
+#[test]
+fn the_older_chitu_container_is_named_as_the_file_was_opened() {
+    let bytes = write_with(&format_chitu::CbddlpWriter::new(
+        format_chitu::CbddlpFlavour::Photon,
+    ));
+    for (name, format) in [
+        ("plate.photon", "photon"),
+        ("plate.cbddlp", "cbddlp"),
+        // Renamed, the bytes alone name the family and `.cbddlp` is what they are.
+        ("plate.bin", "cbddlp"),
+    ] {
+        let mut source = Cursor::new(bytes.clone());
+        let opened = open(Path::new(name), &mut source).expect("the file opens");
+        assert_eq!(
+            opened.facts().format,
+            format,
+            "{name} must not be reported under another extension"
+        );
+    }
+}
+
+#[test]
+fn an_anycubic_revision_with_a_machine_block_names_the_machine_back() {
+    let bytes = write_with(&format_anycubic::AnycubicWriter::new(
+        format_anycubic::AnycubicFlavour::Pwmx,
+        format_anycubic::AnycubicVersion::V516,
+    ));
+    let mut source = Cursor::new(bytes);
+    let opened = open(Path::new("plate.pwmx"), &mut source).expect("a .pwmx we wrote opens");
+    assert_eq!(
+        opened.facts().machine.as_deref(),
+        Some(printer().machine_name()),
+        "the machine block carries the name the firmware matches its own against"
+    );
+
+    let older = write_with(&format_anycubic::AnycubicWriter::default());
+    let mut source = Cursor::new(older);
+    let opened = open(Path::new("plate.pw0"), &mut source).expect("a version 1 file opens");
+    assert_eq!(
+        opened.facts().machine,
+        None,
+        "revision 1 carries no machine block to read a name out of"
+    );
+}

@@ -28,7 +28,7 @@ pub(crate) const EXTRA_BYTES: u32 = NAME_BYTES as u32 + 4 + EXTRA_FIELD_BYTES;
 pub(crate) const MACHINE_BYTES: u32 = 156;
 
 /// Bytes of the machine's name and of the name of its layer-data codec.
-const MACHINE_NAME_BYTES: usize = 96;
+pub(crate) const MACHINE_NAME_BYTES: usize = 96;
 const CODEC_NAME_BYTES: usize = 16;
 
 /// Bytes of the slicer block. Unnamed, and it states its own length in the middle.

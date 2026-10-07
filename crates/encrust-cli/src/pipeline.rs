@@ -486,7 +486,9 @@ pub fn inspect(input: &Path, args: &ImportArgs, chosen: &Chosen) -> Result<Impor
 fn adaptive_settings(job: &JobArgs, layer_height: Scalar, talk: bool) -> AdaptiveSettings {
     let settings = AdaptiveSettings {
         cusp_mm: job.slicing.cusp,
-        min_height_mm: job.slicing.min_layer_height,
+        // Half the layer height is a whole divisor of it whatever it is, so the thickest
+        // layer the run can reach is the one that was asked for.
+        min_height_mm: job.slicing.min_layer_height.unwrap_or(layer_height / 2.0),
         max_height_mm: layer_height,
     };
     let reachable = settings.reachable_max_mm();

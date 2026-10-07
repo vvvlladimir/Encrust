@@ -38,6 +38,13 @@ z = 10.0
         .expect("the inline profile is valid")
 }
 
+/// The same machine with firmware that obeys the header alone, which is what refuses an
+/// exposure by height.
+fn header_only(mut profile: PrinterProfile) -> PrinterProfile {
+    profile.firmware.per_layer_settings = false;
+    profile
+}
+
 /// A file somebody else wrote, held in memory: a header and the runs of each layer.
 struct Written {
     facts: SlicedFile,
@@ -229,4 +236,65 @@ fn a_layer_that_does_not_decode_fails_the_file_and_leaves_none() {
 
     assert!(matches!(error, PipelineError::Decode { layer: 2, .. }));
     assert!(!path.exists(), "a file stopped half way is removed");
+}
+
+/// The same stack with the resin's own ramp above the bottom layer: 20 s, then 14 s and
+/// 8 s, then the header's 2 s.
+fn with_a_ramp() -> Written {
+    let mut source = written();
+    for (index, exposure_s) in [14.0, 8.0, 2.0].into_iter().enumerate() {
+        source.facts.layers[index + 1].exposure_s = exposure_s;
+    }
+    source
+}
+
+#[test]
+fn a_resin_ramp_read_back_is_a_transition_the_header_states() {
+    let mut source = with_a_ramp();
+    let mut sink = Cursor::new(Vec::new());
+    let resin = MaterialProfile::default();
+    let printer = header_only(printer(WIDTH_PX));
+    convert_to(
+        &mut source,
+        &converting(&printer, &resin),
+        &mut sink,
+        &mut (),
+    )
+    .expect("a ramp is no band, so a machine reading the header alone takes it")
+    .expect("nothing cancelled it");
+
+    sink.set_position(0);
+    let back = open(Path::new("converted.goo"), sink).expect("the new file reads");
+    let exposures: Vec<f32> = back
+        .facts()
+        .layers
+        .iter()
+        .map(|entry| entry.exposure_s)
+        .collect();
+    for (index, expected) in [20.0, 14.0, 8.0, 2.0].into_iter().enumerate() {
+        assert!(
+            (exposures[index] - expected).abs() < 1e-3,
+            "the ramp is stated again layer by layer, got {exposures:?}"
+        );
+    }
+}
+
+#[test]
+fn a_band_of_height_is_still_refused_on_a_machine_reading_the_header_alone() {
+    let resin = MaterialProfile::default();
+    let printer = header_only(printer(WIDTH_PX));
+    let error = convert_to(
+        &mut written(),
+        &converting(&printer, &resin),
+        &mut Cursor::new(Vec::new()),
+        &mut (),
+    )
+    .expect_err("the third layer takes 3 s where the header says 2 s");
+    assert!(matches!(
+        error,
+        PipelineError::Write {
+            source: FormatError::PerLayerUnsupported { .. },
+            ..
+        }
+    ));
 }

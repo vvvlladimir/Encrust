@@ -4,6 +4,7 @@ use core_format::{
 };
 use core_raster::Run;
 
+use crate::cbddlp::CbddlpFlavour;
 use crate::crypt::layer_crypt;
 use crate::layer::LAYER_DEF_BYTES;
 use crate::rle1;
@@ -34,7 +35,17 @@ enum Family {
 
 /// Reads the Chitu container family. Layout is in `docs/formats/chitu.md`.
 #[derive(Debug, Default, Clone, Copy)]
-pub struct ChituReader;
+pub struct ChituReader {
+    /// Which name the older container was opened under, which is all that tells a
+    /// `.cbddlp` from a `.photon`: the bytes are the same either way.
+    pub flavour: CbddlpFlavour,
+}
+
+impl ChituReader {
+    pub fn new(flavour: CbddlpFlavour) -> Self {
+        Self { flavour }
+    }
+}
 
 impl SlicedFileReader for ChituReader {
     type Open<S: ReadSeek> = OpenChitu<S>;
@@ -110,7 +121,7 @@ impl SlicedFileReader for ChituReader {
             reads,
             facts: SlicedFile {
                 format: match family {
-                    Family::Cbddlp => "cbddlp",
+                    Family::Cbddlp => self.flavour.extension(),
                     Family::Ctb => "ctb",
                 },
                 version: Some(version),
@@ -256,7 +267,7 @@ mod tests {
     #[test]
     fn a_file_of_another_family_is_refused_by_its_magic() {
         let mut source = Cursor::new(0x1234_5678u32.to_le_bytes().to_vec());
-        let err = ChituReader
+        let err = ChituReader::default()
             .open(&mut source)
             .err()
             .expect("the magic does not match");
@@ -272,7 +283,7 @@ mod tests {
     #[test]
     fn a_header_that_stops_short_is_an_error_rather_than_a_guess() {
         let mut source = Cursor::new(MAGIC_CTB_V4.to_le_bytes().to_vec());
-        assert!(ChituReader.open(&mut source).is_err());
+        assert!(ChituReader::default().open(&mut source).is_err());
     }
 
     #[test]
@@ -285,7 +296,7 @@ mod tests {
         header[0x44..0x48].copy_from_slice(&1u32.to_le_bytes());
 
         let mut source = Cursor::new(header);
-        let err = ChituReader
+        let err = ChituReader::default()
             .open(&mut source)
             .err()
             .expect("the table is not in the file");
@@ -304,7 +315,7 @@ mod tests {
         header[0x44..0x48].copy_from_slice(&u32::MAX.to_le_bytes());
 
         let mut source = Cursor::new(header);
-        let err = ChituReader
+        let err = ChituReader::default()
             .open(&mut source)
             .err()
             .expect("a header-sized file holds no such table");

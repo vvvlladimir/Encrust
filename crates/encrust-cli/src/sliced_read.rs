@@ -41,29 +41,228 @@ pub fn read(path: &Path) -> Result<Info> {
     })
 }
 
-/// Layer `number` of the file at `path`, counted from one as a printer's screen counts, as
-/// an eight-bit greyscale PNG of the whole panel.
-pub fn layer_png(path: &Path, number: u32) -> Result<Vec<u8>> {
+/// One layer of a sliced file: what its table row states and what its mask covers.
+pub struct Layer {
+    facts: LayerFacts,
+    mask: LayerRuns,
+}
+
+/// What `info --layer N` states about one layer, counted from one as a screen counts.
+#[derive(Serialize)]
+struct LayerFacts {
+    layer: u32,
+    of: u32,
+    z_mm: f32,
+    thickness_mm: f32,
+    exposure_s: f32,
+    lit_px: u64,
+    panel_px: u64,
+}
+
+/// Layer `number` of the file at `path`, counted from one as a printer's screen counts.
+pub fn layer(path: &Path, number: u32) -> Result<Layer> {
     let file =
         std::fs::File::open(path).with_context(|| format!("cannot open {}", path.display()))?;
     let mut opened = open(path, std::io::BufReader::new(file))
         .with_context(|| format!("cannot read {} as a sliced file", path.display()))?;
-    let (width_px, height_px) = (opened.facts().width_px, opened.facts().height_px);
+    let facts = opened.facts().clone();
     // Checked here, because a reader counts its layers from zero and the flag counts them
     // from one: its own number is the one to answer in.
-    let layers = opened.facts().layer_count();
-    if number > layers {
+    let layers = facts.layer_count();
+    if number > layers || number == 0 {
         anyhow::bail!("layer {number} was asked for in a file of {layers} layers");
     }
+    let index = number - 1;
     let runs = opened
-        .layer(number.saturating_sub(1))
+        .layer(index)
         .with_context(|| format!("cannot decode layer {number}"))?;
 
-    let mut layer = LayerRuns::builder(width_px, height_px);
-    for run in runs {
-        layer.push(run.length, run.value);
+    let mut mask = LayerRuns::builder(facts.width_px, facts.height_px);
+    for run in &runs {
+        mask.push(run.length, run.value);
     }
-    Ok(encode_grey(&layer.finish())?)
+    let entry = facts.layers[index as usize];
+    Ok(Layer {
+        facts: LayerFacts {
+            layer: number,
+            of: layers,
+            z_mm: entry.z_mm,
+            thickness_mm: thickness_of(&facts, index),
+            exposure_s: entry.exposure_s,
+            lit_px: runs
+                .iter()
+                .filter(|run| run.value > 0)
+                .map(|run| u64::from(run.length))
+                .sum(),
+            panel_px: u64::from(facts.width_px) * u64::from(facts.height_px),
+        },
+        mask: mask.finish(),
+    })
+}
+
+impl Layer {
+    /// The whole panel as an eight-bit greyscale PNG.
+    pub fn png(&self) -> Result<Vec<u8>> {
+        Ok(encode_grey(&self.mask)?)
+    }
+
+    /// The same facts as the text, as `info --layer N --json` prints them.
+    pub fn document(&self) -> impl Serialize + '_ {
+        &self.facts
+    }
+}
+
+impl fmt::Display for Layer {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let facts = &self.facts;
+        let line = |f: &mut fmt::Formatter<'_>, name: &str, value: String| {
+            writeln!(f, "  {name:<14}{value}")
+        };
+        line(f, "layer", format!("{} of {}", facts.layer, facts.of))?;
+        line(
+            f,
+            "top",
+            format!(
+                "{:.3} mm above the plate, {:.4} mm thick",
+                facts.z_mm, facts.thickness_mm
+            ),
+        )?;
+        line(f, "exposure", format!("{:.2} s", facts.exposure_s))?;
+        let share = match facts.panel_px {
+            0 => 0.0,
+            panel => facts.lit_px as f64 / panel as f64 * 100.0,
+        };
+        line(
+            f,
+            "lit pixels",
+            format!("{} of {} ({share:.2} %)", facts.lit_px, facts.panel_px),
+        )
+    }
+}
+
+/// Thickness of layer `index`, millimetres: the step up from the layer below, or the
+/// header's own height where the container records no Z per layer.
+fn thickness_of(facts: &SlicedFile, index: u32) -> f32 {
+    let top = facts.layers[index as usize].z_mm;
+    let below = match index {
+        0 => 0.0,
+        _ => facts.layers[index as usize - 1].z_mm,
+    };
+    match top > below {
+        true => top - below,
+        false => facts.layer_height_mm,
+    }
+}
+
+/// The thinnest and thickest layer of the stack, millimetres, or `None` for a stack of one
+/// thickness — which is what the header already states.
+///
+/// A tenth of a micron apart is the same thickness: a container states Z per layer as an
+/// `f32`, and adding those up leaves dust well below what any machine steps.
+fn varying_thickness(facts: &SlicedFile) -> Option<(f32, f32)> {
+    let (thin, thick) = (0..facts.layer_count())
+        .map(|index| thickness_of(facts, index))
+        .fold((f32::MAX, 0.0f32), |(thin, thick), mm| {
+            (thin.min(mm), thick.max(mm))
+        });
+    (thick - thin > 1e-4).then_some((thin, thick))
+}
+
+/// One run of layers above the bottom block whose own exposure is not the header's.
+///
+/// A resin's transition ramp is one such run, and so is every `--exposure-at` band: what
+/// the container records is an exposure per layer, and a run of them is what a reader can
+/// say about it.
+#[derive(Serialize)]
+pub struct Band {
+    from_layer: u32,
+    to_layer: u32,
+    from_mm: f32,
+    to_mm: f32,
+    from_exposure_s: f32,
+    to_exposure_s: f32,
+}
+
+fn bands_of(facts: &SlicedFile) -> Vec<Band> {
+    let mut bands: Vec<Band> = Vec::new();
+    let differs = |exposure_s: f32| (exposure_s - facts.exposure_s).abs() > 1e-3;
+    // The way the last layer's exposure moved, so a ramp down and a band of its own above
+    // it stay two runs rather than reading as one long slide.
+    let mut falling: Option<bool> = None;
+    for (index, entry) in facts
+        .layers
+        .iter()
+        .enumerate()
+        .skip(facts.bottom_layers as usize)
+    {
+        if entry.exposure_s <= 0.0 || !differs(entry.exposure_s) {
+            continue;
+        }
+        let number = index as u32 + 1;
+        let carries_on = |band: &Band| {
+            if band.to_layer + 1 != number {
+                return false;
+            }
+            let step = entry.exposure_s - band.to_exposure_s;
+            match (falling, step.abs() > 1e-3) {
+                (_, false) => falling.is_none(),
+                (None, true) => true,
+                (Some(down), true) => down == (step < 0.0),
+            }
+        };
+        match bands.last_mut() {
+            Some(band) if carries_on(band) => {
+                if (entry.exposure_s - band.to_exposure_s).abs() > 1e-3 {
+                    falling = Some(entry.exposure_s < band.to_exposure_s);
+                }
+                band.to_layer = number;
+                band.to_mm = entry.z_mm;
+                band.to_exposure_s = entry.exposure_s;
+            }
+            _ => {
+                falling = None;
+                bands.push(Band {
+                    from_layer: number,
+                    to_layer: number,
+                    from_mm: entry.z_mm,
+                    to_mm: entry.z_mm,
+                    from_exposure_s: entry.exposure_s,
+                    to_exposure_s: entry.exposure_s,
+                });
+            }
+        }
+    }
+    bands
+}
+
+/// How many runs of exposure the text prints before it stops naming them one by one.
+const BANDS_SHOWN: usize = 6;
+
+impl Band {
+    /// The run as one line under the exposure the header states.
+    fn line(&self) -> String {
+        let exposure = if self.to_exposure_s < self.from_exposure_s - 1e-3 {
+            format!(
+                "from {:.2} s down to {:.2} s",
+                self.from_exposure_s, self.to_exposure_s
+            )
+        } else if self.to_exposure_s > self.from_exposure_s + 1e-3 {
+            format!(
+                "from {:.2} s up to {:.2} s",
+                self.from_exposure_s, self.to_exposure_s
+            )
+        } else {
+            format!("at {:.2} s", self.from_exposure_s)
+        };
+        let layers = match self.from_layer == self.to_layer {
+            true => format!("layer {}", self.from_layer),
+            false => format!("layers {}-{}", self.from_layer, self.to_layer),
+        };
+        format!(
+            "{layers} {exposure} ({:.3} to {:.3} mm)",
+            self.from_mm, self.to_mm
+        )
+    }
 }
 
 #[derive(Serialize)]
@@ -79,6 +278,12 @@ struct Header<'a> {
     display_mm: Option<[f32; 2]>,
     layers: u32,
     layer_height_mm: f32,
+    /// Thinnest and thickest layer of the stack, millimetres, where they differ from the
+    /// height the header states for all of them.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    thinnest_layer_mm: Option<f32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    thickest_layer_mm: Option<f32>,
     height_mm: f32,
     exposure_s: f32,
     bottom_exposure_s: f32,
@@ -91,6 +296,8 @@ struct Header<'a> {
 #[derive(Serialize)]
 struct Document<'a> {
     file: Header<'a>,
+    /// Every run of layers exposed differently from the header, in print order.
+    exposure_bands: Vec<Band>,
     stack: &'a Stack,
 }
 
@@ -98,6 +305,7 @@ impl Info {
     /// The same facts as the text, as `info --json` prints them.
     pub fn document(&self) -> impl Serialize + '_ {
         let facts = &self.facts;
+        let varying = varying_thickness(facts);
         Document {
             file: Header {
                 format: facts.format,
@@ -110,6 +318,8 @@ impl Info {
                 display_mm: facts.display_mm.map(|(width, height)| [width, height]),
                 layers: facts.layer_count(),
                 layer_height_mm: facts.layer_height_mm,
+                thinnest_layer_mm: varying.map(|(thin, _)| thin),
+                thickest_layer_mm: varying.map(|(_, thick)| thick),
                 height_mm: facts.height_mm(),
                 exposure_s: facts.exposure_s,
                 bottom_exposure_s: facts.bottom_exposure_s,
@@ -118,6 +328,7 @@ impl Info {
                 print_time_s: facts.print_time_s,
                 volume_mm3: facts.volume_mm3,
             },
+            exposure_bands: bands_of(facts),
             stack: &self.stack,
         }
     }
@@ -175,12 +386,19 @@ fn facts_of(facts: &SlicedFile) -> String {
     line(
         &mut out,
         "layers",
-        format!(
-            "{} at {:.4} mm, {:.3} mm tall",
-            facts.layer_count(),
-            facts.layer_height_mm,
-            facts.height_mm()
-        ),
+        match varying_thickness(facts) {
+            Some((thin, thick)) => format!(
+                "{}, {thin:.4} to {thick:.4} mm, {:.3} mm tall",
+                facts.layer_count(),
+                facts.height_mm()
+            ),
+            None => format!(
+                "{} at {:.4} mm, {:.3} mm tall",
+                facts.layer_count(),
+                facts.layer_height_mm,
+                facts.height_mm()
+            ),
+        },
     );
     line(
         &mut out,
@@ -190,6 +408,17 @@ fn facts_of(facts: &SlicedFile) -> String {
             facts.exposure_s, facts.bottom_exposure_s, facts.bottom_layers
         ),
     );
+    let bands = bands_of(facts);
+    for band in bands.iter().take(BANDS_SHOWN) {
+        line(&mut out, "", band.line());
+    }
+    if let Some(rest) = bands
+        .len()
+        .checked_sub(BANDS_SHOWN)
+        .filter(|rest| *rest > 0)
+    {
+        line(&mut out, "", format!("and {rest} more runs of their own"));
+    }
     line(&mut out, "greys", format!("{}", facts.grey_steps));
     if let Some(seconds) = facts.print_time_s {
         line(&mut out, "print time", format!("{seconds} s"));

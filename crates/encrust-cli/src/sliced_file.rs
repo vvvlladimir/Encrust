@@ -51,6 +51,9 @@ pub fn write_plate(
     watch: &Watch,
 ) -> Result<(SliceReport, RasterReport)> {
     warn_if_the_machine_reads_another_container(&plate.printer, plate.format);
+    if let Some(cost) = panel_too_big_for(plate.format, &plate.printer) {
+        tracing::warn!("{cost}");
+    }
     let run = Run::of(&plate)?;
     // The run holds the baked plate; the models it was baked from are not needed again.
     drop(plate.models);
@@ -86,6 +89,39 @@ fn warn_if_the_machine_reads_another_container(printer: &PrinterProfile, format:
     }
 }
 
+/// Why the container the output names is dear on this machine's panel, or `None` where the
+/// panel is one its machines have.
+///
+/// A `.cbddlp` carries grey in eight one-bit passes over the whole panel (ADR 0146) and an
+/// `.svgx` traces every lit run into polygons (ADR 0169): both cost by the panel and not by
+/// the model, so on a panel ten times the one they were made for a plate takes minutes and
+/// gigabytes.
+fn panel_too_big_for(format: SlicedFormat, printer: &PrinterProfile) -> Option<String> {
+    let made_for: (u32, u32) = match format {
+        // The Photon, at 1440 x 2560, is the largest panel of the machines reading it.
+        SlicedFormat::Cbddlp(_) => (1440, 2560),
+        // The Foto 8.9S, at 3840 x 2400.
+        SlicedFormat::Svgx => (3840, 2400),
+        _ => return None,
+    };
+    let display = &printer.display;
+    let panel = u64::from(display.width_px) * u64::from(display.height_px);
+    if panel <= u64::from(made_for.0) * u64::from(made_for.1) {
+        return None;
+    }
+    Some(format!(
+        "no machine reading a {} has a panel over {} x {} px and {} has {} x {} px, so \
+         this file costs minutes and gigabytes where the {} it reads does not",
+        OutputFormat::from(format).label(),
+        made_for.0,
+        made_for.1,
+        printer.name,
+        display.width_px,
+        display.height_px,
+        printer.output.label()
+    ))
+}
+
 /// Exposure follows the layer height, so a stack cut off the height the resin was
 /// measured at is not printed at the seconds the resin profile states.
 fn warn_if_exposure_was_measured_elsewhere(job: &PrintJob, material: &MaterialProfile) {
@@ -113,6 +149,9 @@ pub fn now_unix_s() -> u64 {
 
 #[cfg(test)]
 mod tests {
+    use format_chitu::CbddlpFlavour;
+    use printer_profiles::Display;
+
     use super::*;
 
     #[test]
@@ -130,6 +169,42 @@ mod tests {
         assert!(
             of("out").is_none(),
             "a name without an extension is a PNG directory"
+        );
+    }
+
+    fn panel(width_px: u32, height_px: u32) -> PrinterProfile {
+        let blank = PrinterProfile::default();
+        PrinterProfile {
+            name: "Test".to_owned(),
+            display: Display {
+                width_px,
+                height_px,
+                ..blank.display
+            },
+            ..blank
+        }
+    }
+
+    #[test]
+    fn a_container_made_for_a_small_panel_is_named_as_dear_on_a_large_one() {
+        let big = panel(11520, 5120);
+        let cost = panel_too_big_for(SlicedFormat::Cbddlp(CbddlpFlavour::Photon), &big)
+            .expect("a 59 megapixel panel is far past the 1440 x 2560 its machines have");
+        assert!(cost.contains("1440 x 2560 px"), "{cost}");
+        assert!(cost.contains("11520 x 5120 px"), "{cost}");
+        assert!(panel_too_big_for(SlicedFormat::Svgx, &big).is_some());
+
+        assert!(
+            panel_too_big_for(SlicedFormat::Goo, &big).is_none(),
+            "the container every one of those machines reads costs by the model"
+        );
+        assert!(
+            panel_too_big_for(
+                SlicedFormat::Cbddlp(CbddlpFlavour::Cbddlp),
+                &panel(1440, 2560)
+            )
+            .is_none(),
+            "the panel it was made for is no warning"
         );
     }
 }

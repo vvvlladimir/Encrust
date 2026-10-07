@@ -4,16 +4,19 @@ use core_format::{
 };
 use core_raster::Run;
 
+use crate::blocks::MACHINE_NAME_BYTES;
 use crate::rle;
-use crate::tables::{LAYER_DEF_BYTES, LAYER_TABLE_HEAD_BYTES};
+use crate::tables::{LAYER_DEF_BYTES, LAYER_TABLE_HEAD_BYTES, TABLE_BASE_BYTES};
 use crate::writer::AnycubicVersion;
 
 /// The mark at the front of the file, without the nul padding that fills its field.
 const FILE_MARK: &[u8] = b"ANYCUBIC";
 
-/// Where the mark states each table is, by its own offset.
+/// Where the mark states each table is, by its own offset. The machine address is there
+/// from revision 516 on; see `docs/formats/anycubic.md`.
 const HEADER_ADDRESS: u64 = 0x14;
 const LAYER_TABLE_ADDRESS: u64 = 0x24;
+const MACHINE_ADDRESS: u64 = 0x2C;
 
 /// Grey the four-bit runs decode to: sixteen steps of seventeen.
 const GREY_STEPS: u16 = 16;
@@ -52,12 +55,16 @@ impl SlicedFileReader for AnycubicReader {
         let version = reads.u32_le()?;
         // Every revision puts the header's own address in the same slot and its first
         // twenty fields in the same order, so one pass reads all three.
-        if !READ_VERSIONS.iter().any(|known| known.number() == version) {
+        let Some(revision) = READ_VERSIONS
+            .iter()
+            .copied()
+            .find(|known| known.number() == version)
+        else {
             return Err(FormatError::UnsupportedVersion {
                 format: "pwmx",
                 version,
             });
-        }
+        };
 
         reads.seek_to(HEADER_ADDRESS)?;
         let header = u64::from(reads.u32_le()?);
@@ -87,6 +94,7 @@ impl SlicedFileReader for AnycubicReader {
         reads.seek_to(table + LAYER_TABLE_HEAD_BYTES - 4)?;
         let layer_count = reads.u32_le()?;
         let layers = read_table(&mut reads, table, layer_count)?;
+        let machine = read_machine_name(&mut reads, revision)?;
 
         let display_mm = (
             width_px as f32 * pitch_um / 1000.0,
@@ -97,7 +105,7 @@ impl SlicedFileReader for AnycubicReader {
             facts: SlicedFile {
                 format: "pwmx",
                 version: Some(version),
-                machine: None,
+                machine,
                 slicer: None,
                 resin: None,
                 width_px,
@@ -114,6 +122,27 @@ impl SlicedFileReader for AnycubicReader {
             },
         })
     }
+}
+
+/// The name the machine block carries, which is what the firmware matches its own against.
+///
+/// The header states no machine at all, and revisions below 516 carry no such block, so a
+/// file written for an older machine names none.
+fn read_machine_name<S: ReadSeek>(
+    reads: &mut Reads<S>,
+    revision: AnycubicVersion,
+) -> Result<Option<String>, FormatError> {
+    if !revision.has_machine_block() {
+        return Ok(None);
+    }
+    reads.seek_to(MACHINE_ADDRESS)?;
+    let block = u64::from(reads.u32_le()?);
+    if block == 0 {
+        return Ok(None);
+    }
+    reads.seek_to(block + u64::from(TABLE_BASE_BYTES))?;
+    let name = reads.text(MACHINE_NAME_BYTES)?;
+    Ok((!name.is_empty()).then_some(name))
 }
 
 /// The layer table, whose rows carry a thickness rather than a height above the plate, so

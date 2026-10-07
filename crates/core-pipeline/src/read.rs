@@ -5,7 +5,7 @@ use std::path::Path;
 use core_format::{FormatError, OpenFile, ReadSeek, SlicedFile, SlicedFileReader};
 use core_raster::Run;
 use format_anycubic::AnycubicReader;
-use format_chitu::ChituReader;
+use format_chitu::{CbddlpFlavour, ChituReader};
 use format_creality::{CxdlpReader, CxdlpV4Reader};
 use format_cws::CwsReader;
 use format_gcode_zip::GcodeZipReader;
@@ -128,7 +128,8 @@ fn sniff<S: ReadSeek>(source: &mut S) -> Result<Family, FormatError> {
     if head.len() >= 4 {
         let magic = u32::from_le_bytes([head[0], head[1], head[2], head[3]]);
         if CHITU_MAGICS.contains(&magic) {
-            return Ok(Family::Chitu);
+            // A renamed file carries no flavour, and `.cbddlp` is the name of these bytes.
+            return Ok(Family::Chitu(CbddlpFlavour::Cbddlp));
         }
     }
     Err(FormatError::UnknownContainer)
@@ -166,7 +167,9 @@ const CHITU_MAGICS: [u32; 3] = [0x12FD_0019, 0x12FD_0086, 0x12FD_0106];
 #[derive(Debug, Clone, Copy)]
 enum Family {
     Goo,
-    Chitu,
+    /// The flavour is the name the older container was opened under, which is the only
+    /// thing that tells a `.cbddlp` from a `.photon`.
+    Chitu(CbddlpFlavour),
     Anycubic,
     Sl1,
     GcodeZip,
@@ -179,7 +182,7 @@ impl Family {
     fn open_from<S: ReadSeek>(self, mut source: S) -> Result<Opened<S>, FormatError> {
         match self {
             Self::Goo => GooReader.open(source).map(Opened::Goo),
-            Self::Chitu => ChituReader.open(source).map(Opened::Chitu),
+            Self::Chitu(flavour) => ChituReader::new(flavour).open(source).map(Opened::Chitu),
             Self::Anycubic => AnycubicReader.open(source).map(Opened::Anycubic),
             Self::Sl1 => Sl1Reader.open(source).map(Opened::Sl1),
             Self::GcodeZip => GcodeZipReader.open(source).map(Opened::GcodeZip),
@@ -206,7 +209,8 @@ fn claimed_by(path: &Path) -> Option<Family> {
     let extension = path.extension()?.to_string_lossy().to_lowercase();
     match extension.as_str() {
         "goo" => Some(Family::Goo),
-        "ctb" | "cbddlp" | "photon" => Some(Family::Chitu),
+        "ctb" | "cbddlp" => Some(Family::Chitu(CbddlpFlavour::Cbddlp)),
+        "photon" => Some(Family::Chitu(CbddlpFlavour::Photon)),
         "sl1" | "sl1s" => Some(Family::Sl1),
         "zip" => Some(Family::GcodeZip),
         "cxdlp" => Some(Family::Cxdlp),
@@ -237,7 +241,7 @@ mod tests {
     fn an_extension_is_taken_whatever_its_case() {
         assert!(matches!(
             claimed_by(Path::new("a.CBDDLP")),
-            Some(Family::Chitu)
+            Some(Family::Chitu(CbddlpFlavour::Cbddlp))
         ));
     }
 
@@ -262,7 +266,7 @@ mod tests {
         assert!(matches!(sniff(&mut anycubic), Ok(Family::Anycubic)));
 
         let mut chitu = std::io::Cursor::new(0x12FD_0106u32.to_le_bytes().to_vec());
-        assert!(matches!(sniff(&mut chitu), Ok(Family::Chitu)));
+        assert!(matches!(sniff(&mut chitu), Ok(Family::Chitu(_))));
 
         let mut goo = std::io::Cursor::new([b"V3.0".as_slice(), &GOO_MAGIC_TAG].concat());
         assert!(matches!(sniff(&mut goo), Ok(Family::Goo)));

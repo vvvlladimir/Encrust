@@ -132,8 +132,9 @@ Offsets are from the end of the table's 16-byte head.
 | 0x48 | transition layers, `u32` | |
 | 0x4C | transition layer type, `u32` | 0, the linear ramp |
 
-There is no build volume and no machine name: the container does not record what it was
-sliced for. There is no mirroring field either, and the masks go in as they stand — a
+There is no build volume and no machine name here: the machine block revisions 516 and 517
+add carries the name, and below 516 the container records nothing about what it was sliced
+for. There is no mirroring field either, and the masks go in as they stand — a
 reference file converted from a `.sl1` matches the source layer for layer with no flip, so
 the panel's mounting stays a property of the profile (ADR 0134).
 

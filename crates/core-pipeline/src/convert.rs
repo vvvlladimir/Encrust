@@ -110,8 +110,7 @@ fn job_of(facts: &SlicedFile, converting: &Converting<'_>) -> Result<PrintJob, P
     material.exposure_s = facts.exposure_s;
     material.bottom_exposure_s = facts.bottom_exposure_s;
     material.bottom_layers = facts.bottom_layers;
-    // Whatever ramp the file had is in its per-layer exposures, which become bands.
-    material.transition_layers = 0;
+    material.transition_layers = transition_of(facts);
 
     let shading = if facts.grey_steps <= 2 {
         Shading::Binary
@@ -127,7 +126,7 @@ fn job_of(facts: &SlicedFile, converting: &Converting<'_>) -> Result<PrintJob, P
                 ..PanelOverrides::default()
             },
         ),
-        exposure: bands_of(facts, &plan),
+        exposure: bands_of(facts, &plan, material.transition_layers),
         plan,
         material,
         volume_mm3: facts.volume_mm3.unwrap_or(0.0),
@@ -170,18 +169,48 @@ fn plan_of(facts: &SlicedFile) -> LayerPlan {
     LayerPlan::from_bounds(bounds, ceiling)
 }
 
-/// One band per run of layers above the bottom block exposed differently from the header,
-/// each reaching half a layer either side of the tops it covers.
-fn bands_of(facts: &SlicedFile, plan: &LayerPlan) -> ExposurePlan {
+/// Layers right above the bottom block carrying the resin's own ramp down to the normal
+/// exposure, which every header states as a transition count and no band can.
+///
+/// Read back as bands they would make a file a header-only machine has to refuse (ADR
+/// 0090), and the new file's own header states the ramp again.
+fn transition_of(facts: &SlicedFile) -> u16 {
+    let above = facts
+        .layers
+        .get(facts.bottom_layers as usize..)
+        .unwrap_or_default();
+    let ramp = above
+        .iter()
+        .take_while(|entry| differs_from(facts, entry.exposure_s))
+        .count();
+    let Ok(count) = u16::try_from(ramp) else {
+        return 0;
+    };
+    let linear = |step: usize| {
+        let fraction = (step + 1) as f32 / (ramp + 1) as f32;
+        facts.bottom_exposure_s + (facts.exposure_s - facts.bottom_exposure_s) * fraction
+    };
+    let is_ramp = (0..ramp).all(|step| (above[step].exposure_s - linear(step)).abs() <= 1e-3);
+    if is_ramp { count } else { 0 }
+}
+
+/// Whether a layer's own exposure is not the one the header states for the stack.
+fn differs_from(facts: &SlicedFile, exposure_s: f32) -> bool {
+    exposure_s > 0.0 && (exposure_s - facts.exposure_s).abs() > 1e-3
+}
+
+/// One band per run of layers above the bottom block and its transition exposed
+/// differently from the header, each reaching half a layer either side of the tops it
+/// covers.
+fn bands_of(facts: &SlicedFile, plan: &LayerPlan, transition: u16) -> ExposurePlan {
     let mut bands: Vec<ExposureRange> = Vec::new();
     let half = plan.nominal_thickness() / 2.0;
-    let differs =
-        |exposure_s: f32| exposure_s > 0.0 && (exposure_s - facts.exposure_s).abs() > 1e-3;
+    let differs = |exposure_s: f32| differs_from(facts, exposure_s);
     for (index, entry) in facts
         .layers
         .iter()
         .enumerate()
-        .skip(facts.bottom_layers as usize)
+        .skip(facts.bottom_layers as usize + usize::from(transition))
     {
         let Some(top) = plan.top_of(index) else { break };
         if !differs(entry.exposure_s) {

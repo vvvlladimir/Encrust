@@ -18,7 +18,7 @@ fn refusal_of(name: &str) -> FormatError {
         .join(name);
     let bytes = std::fs::read(&path).expect("the fixture is checked in beside the test");
 
-    ChituReader
+    ChituReader::default()
         .open(&mut Cursor::new(bytes))
         .err()
         .expect("a hostile file is refused rather than read")

@@ -2011,6 +2011,91 @@ fn info_takes_one_layer_out_as_a_png() {
 }
 
 #[test]
+fn info_reports_one_layer_on_its_own_and_every_run_of_exposures() {
+    let path = write_box_stl("layer-facts", 10.0, 12, 0);
+    let goo = output_file("layer-facts.goo");
+    let written = slice(&[
+        path.to_str().unwrap(),
+        "--profile",
+        test_panel().to_str().unwrap(),
+        "--material",
+        test_resin().to_str().unwrap(),
+        "--layer-height",
+        "1",
+        "-o",
+        goo.to_str().unwrap(),
+    ]);
+    assert!(written.status.success(), "{}", stderr(&written));
+
+    let one = encrust(&["info", goo.to_str().unwrap(), "--layer", "3"]);
+    assert!(one.status.success(), "{}", stderr(&one));
+    let text = stdout(&one);
+    assert!(text.contains("layer         3 of 10"), "{text}");
+    assert!(text.contains("3.000 mm above the plate"), "{text}");
+    assert!(text.contains("1.0000 mm thick"), "{text}");
+    assert!(text.contains("lit pixels"), "{text}");
+
+    let document = json(&encrust(&[
+        "info",
+        goo.to_str().unwrap(),
+        "--layer",
+        "3",
+        "--json",
+    ]));
+    assert_eq!(document["layer"]["layer"], 3);
+    assert_eq!(document["layer"]["of"], 10);
+    assert!(
+        document["layer"]["exposure_s"].as_f64().unwrap_or(0.0) > 0.0,
+        "{document}"
+    );
+    assert!(
+        document["layer"].get("png").is_none(),
+        "no image was asked for: {document}"
+    );
+
+    // The test resin ramps over the eight layers above its six bottom ones, so the last
+    // four layers of a ten-layer stack carry an exposure of their own.
+    let whole = encrust(&["info", goo.to_str().unwrap()]);
+    assert!(whole.status.success(), "{}", stderr(&whole));
+    assert!(stdout(&whole).contains("layers 7-10"), "{}", stdout(&whole));
+
+    let document = json(&encrust(&["info", goo.to_str().unwrap(), "--json"]));
+    let bands = document["exposure_bands"]
+        .as_array()
+        .expect("a list of runs");
+    assert_eq!(bands.len(), 1, "{document}");
+    assert_eq!(bands[0]["from_layer"], 7);
+    assert_eq!(bands[0]["to_layer"], 10);
+}
+
+#[test]
+fn adaptive_is_refused_before_the_stack_is_cut_on_a_machine_that_steps_by_the_header() {
+    let path = write_box_stl("adaptive-refused", 10.0, 12, 0);
+    let out = output_file("adaptive-refused.goo");
+    let output = slice(&[
+        path.to_str().unwrap(),
+        "--profile",
+        test_panel().to_str().unwrap(),
+        "--layer-height",
+        "1",
+        "--adaptive",
+        "-o",
+        out.to_str().unwrap(),
+    ]);
+
+    assert_eq!(output.status.code(), Some(1), "{}", stdout(&output));
+    assert!(
+        stderr(&output).contains("variable_layer_height"),
+        "the refusal names the profile field that allows it: {}",
+        stderr(&output)
+    );
+    assert!(
+        !out.exists(),
+        "nothing was written on the way to the refusal"
+    );
+}
+
+#[test]
 fn convert_writes_the_same_masks_into_another_container() {
     let path = write_box_stl("convert-me", 10.0, 12, 0);
     let goo = output_file("convert-me.goo");
