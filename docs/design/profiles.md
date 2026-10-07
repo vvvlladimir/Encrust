@@ -112,7 +112,7 @@ the window had before, which sets no id and therefore tunes nothing.
 ## Editing in the window
 
 The gear at the right of the title strip opens the Settings screen, which replaces the
-plate. Its profile pages, Printers and Supports, are each a list beside a form, and every
+plate; Esc leaves it. Its profile pages, Printers and Supports, are each a list beside a form, and every
 edit is written to the user's directory as soon as the value settles — no Save. ADR 0120.
 The third page, Updates, holds no profile: see `docs/design/updates.md`.
 
@@ -129,10 +129,12 @@ The third page, Updates, holds no profile: see `docs/design/updates.md`.
   **Custom printer** does the same with an empty profile. Removing a machine deletes that
   copy — asked about first — and a shipped one is back in the library to install again.
   The window moves to the machine under it in the list, or to none when it was the last.
-- **Add resin** offers every resin on another printer, and **New resin** makes one. A
-  printer with none says so and offers the first; deleting one, here or from the pool, is
-  asked about first, because nothing on this screen can be undone (ADR 0196). A resin taken
-  off its last printer goes with it.
+- **Add resin** offers every resin on another printer, and **New resin** makes one; a
+  printer with none and an empty pool offers that one button instead of the menu. A resin
+  taken off a printer waits in the pool, and the pool is where it is deleted for good —
+  except one nobody typed into, which goes with the printer it was made on (ADR 0197).
+  Every deletion is asked about first, because the only one this screen takes back is a
+  resin added again from the pool (ADR 0196).
 - A resin's form edits it **on that printer**: numbers go into its `[printers.<id>]`
   table and make it `last_printer`; name, type, colour, density and price go on the resin.
   Renaming one other printers share splits it off as this printer's own file.

@@ -1,6 +1,6 @@
 # 0196. A resin is measured, not shipped, and a copy says where it came from
 
-- **Status:** Accepted
+- **Status:** Superseded by 0197 (what a resin taken off a printer does only)
 - **Date:** 2026-10-07
 
 ## Context

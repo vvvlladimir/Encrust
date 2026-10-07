@@ -219,13 +219,13 @@ impl Calculators {
     }
 }
 
-/// A deletion waiting to be answered for. Nothing this screen writes can be taken back,
-/// so what cannot be undone is asked first; see ADR 0196.
+/// A deletion waiting to be answered for. The only one this screen takes back is a resin
+/// added again from the pool, so each is asked first; see ADR 0196 and 0197.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Deleting {
     /// The user's copy of a machine. Its resins stay in the pool.
     Printer(String),
-    /// A resin off one printer, and out of the catalogue when no other printer has it.
+    /// A resin off one printer. It waits in the pool unless nobody ever typed into it.
     ResinOff { printer: String, resin: String },
     /// A resin and its file, off every printer that has it.
     Resin(String),
@@ -389,11 +389,30 @@ pub fn add_resin(
 
 /// A new resin on `printer` alone, with the stock numbers. Returns its id.
 pub fn new_resin(catalogue: &mut Catalogue, printer: &str) -> Result<String, ProfileError> {
-    let resin = MaterialProfile {
+    save_as_own(catalogue, printer, stock_resin())
+}
+
+/// What **New resin** makes: the stock numbers under a name that says it is new.
+fn stock_resin() -> MaterialProfile {
+    MaterialProfile {
         name: "New resin".to_owned(),
         ..MaterialProfile::default()
+    }
+}
+
+/// Whether nothing has been typed into a resin since it was made: the stock numbers, the
+/// stock name, and no machine's table carrying a change.
+pub fn is_untouched(resin: &MaterialProfile) -> bool {
+    let bare = MaterialProfile {
+        printers: BTreeMap::new(),
+        last_printer: None,
+        ..resin.clone()
     };
-    save_as_own(catalogue, printer, resin)
+    bare == stock_resin()
+        && resin
+            .printers
+            .values()
+            .all(|tuning| *tuning == PrinterTuning::default())
 }
 
 /// A copy of a resin as `printer` has it, on that printer alone. Returns its id.
@@ -407,17 +426,30 @@ pub fn duplicate_resin(
     save_as_own(catalogue, printer, copy)
 }
 
-/// Takes a resin off `printer`, and out of the catalogue when it was the only printer
-/// that had it: a resin measured on nothing is in nobody's pool (ADR 0196).
+/// Takes a resin off `printer`. It stays in the pool for any printer to take back, and is
+/// deleted from there; one nobody ever typed into is not worth keeping, so taking that
+/// off its last printer throws it away (ADR 0197).
 pub fn take_resin_off(
     catalogue: &mut Catalogue,
     printer: &str,
     resin: &str,
 ) -> Result<(), ProfileError> {
-    match other_printers(catalogue, printer, resin)?.is_empty() {
+    match is_thrown_away_with_the_printer(catalogue, printer, resin)? {
         true => delete_resin(catalogue, resin),
         false => remove_resin(catalogue, printer, resin),
     }
+}
+
+/// Whether taking this resin off `printer` takes it away altogether rather than leaving
+/// it in the pool, which is what the question before it has to say.
+pub fn is_thrown_away_with_the_printer(
+    catalogue: &Catalogue,
+    printer: &str,
+    resin: &str,
+) -> Result<bool, ProfileError> {
+    let profile = &catalogue.resin(resin)?.profile;
+    let last = profile.printers.keys().all(|id| id == printer);
+    Ok(last && is_untouched(profile))
 }
 
 /// Throws a resin away, off every printer that had it and out of the user's directory.
@@ -668,25 +700,58 @@ mod tests {
         );
     }
 
-    /// BUG-16: a resin on no printer is in nobody's pool, so taking it off its last one
-    /// takes it away rather than leaving a file nothing reaches.
+    /// A resin somebody measured is theirs: off every printer it still waits in the pool,
+    /// and the pool is where it is deleted from.
     #[test]
-    fn a_resin_off_its_last_printer_goes_with_it() {
+    fn a_measured_resin_off_its_last_printer_waits_in_the_pool() {
         let mut catalogue = with_grey("last-printer");
-        take_resin_off(&mut catalogue, MARS, "standard-grey").expect("writable");
+        for printer in [MARS, SATURN] {
+            take_resin_off(&mut catalogue, printer, "standard-grey").expect("writable");
+        }
+        assert!(resins_of(&catalogue, MARS).next().is_none());
         assert!(
-            catalogue.resin("standard-grey").is_ok(),
-            "the Saturn still has it"
-        );
-        assert_eq!(
-            other_printers(&catalogue, SATURN, "standard-grey").expect("there"),
-            Vec::<String>::new()
+            pool_for(&catalogue, MARS).any(|(id, _)| id == "standard-grey"),
+            "on no printer, so every printer is offered it"
         );
 
-        take_resin_off(&mut catalogue, SATURN, "standard-grey").expect("writable");
+        add_resin(&mut catalogue, MARS, "standard-grey").expect("writable");
+        assert!(resins_of(&catalogue, MARS).any(|(id, _)| id == "standard-grey"));
+    }
+
+    /// BUG-16: a resin made and never typed into is not worth a file, so taking it off
+    /// the only printer it was ever on throws it away instead.
+    #[test]
+    fn a_resin_nobody_typed_into_goes_with_the_printer_it_was_made_on() {
+        let mut catalogue = writable("untouched");
+        let id = new_resin(&mut catalogue, MARS).expect("writable");
+        assert!(is_thrown_away_with_the_printer(&catalogue, MARS, &id).expect("there"));
+
+        take_resin_off(&mut catalogue, MARS, &id).expect("writable");
         assert!(
-            catalogue.resin("standard-grey").is_err(),
-            "and now it is gone"
+            catalogue.resin(&id).is_err(),
+            "no file, nothing in the pool"
+        );
+    }
+
+    #[test]
+    fn one_number_typed_into_a_new_resin_keeps_it() {
+        let mut catalogue = writable("touched");
+        let id = new_resin(&mut catalogue, MARS).expect("writable");
+        let mut edited = catalogue.resin(&id).expect("saved").profile.clone();
+        edited.printers.insert(
+            MARS.to_owned(),
+            PrinterTuning {
+                exposure_s: Some(2.9),
+                ..PrinterTuning::default()
+            },
+        );
+        catalogue.save_resin(&id, &edited).expect("writable");
+        assert!(!is_thrown_away_with_the_printer(&catalogue, MARS, &id).expect("there"));
+
+        take_resin_off(&mut catalogue, MARS, &id).expect("writable");
+        assert!(
+            pool_for(&catalogue, MARS).any(|(other, _)| other == id),
+            "a measured exposure waits in the pool"
         );
     }
 
