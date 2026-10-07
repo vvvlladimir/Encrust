@@ -190,11 +190,12 @@ Grouped by what the decision governs; the number is still the order it was taken
 | [0122](0122-a-reliefs-depth-is-a-plate-millimetre.md) | A relief's depth is a plate millimetre, pressed after placement | Accepted |
 | [0185](0185-a-wall-is-measured-on-the-plate.md) | A wall is measured on the plate, not in the model's own space | Accepted |
 | [0186](0186-a-cavity-is-a-closed-surface-and-a-slice-follows-it-through-a-branch.md) | A cavity is a closed surface, and a slice follows it through a branch | Accepted |
-| [0188](0188-a-cut-outweighs-what-it-lands-in-and-a-channel-stays-a-pipe.md) | A cut outweighs what it lands in, and a channel stays a pipe | Accepted |
+| [0188](0188-a-cut-outweighs-what-it-lands-in-and-a-channel-stays-a-pipe.md) | A cut outweighs what it lands in, and a channel stays a pipe | Accepted; the wall it drew is replaced by 0201 |
 | [0189](0189-resin-leaves-through-a-hole-and-a-lattice-never-closes-a-cell.md) | Resin leaves through a hole, and a lattice never closes a cell | Accepted; its marks are replaced by 0190, its automatic check by 0198 |
 | [0190](0190-the-space-that-holds-resin-is-painted-and-the-model-is-seen-through.md) | Paint the space that holds resin, and see the model through | Accepted; what opens the x-ray is amended by 0198, what is painted by 0200 |
 | [0200](0200-a-pocket-is-painted-on-its-own.md) | A pocket of trapped resin is painted on its own | Accepted |
 | [0198](0198-a-drainage-check-is-asked-for.md) | A drainage check is asked for, and the view it needs is the user's | Accepted |
+| [0201](0201-the-surface-of-a-cut-is-the-cut-itself.md) | The surface of a cut is the cut's own body, kept where it stands in material | Accepted |
 
 ### The plate
 
@@ -273,7 +274,7 @@ Grouped by what the decision governs; the number is still the order it was taken
 | [0062](0062-cap-the-section-cut-with-the-stencil-plane.md) | The section cut is capped with the stencil plane | Superseded by 0184 (where the stencil comes from only) |
 | [0068](0068-the-window-holds-no-stack.md) | The window holds no stack: it cuts the window it is showing | Accepted |
 | [0070](0070-a-mesh-is-drawn-in-buffer-sized-pieces.md) | A mesh is drawn in pieces the card will take | Accepted; 0190 breaks a piece at a drawn range too |
-| [0073](0073-the-viewport-subtracts-a-drain-per-fragment.md) | The viewport subtracts a drain per fragment | Superseded by 0188 (a channel's wall only) |
+| [0073](0073-the-viewport-subtracts-a-drain-per-fragment.md) | The viewport subtracts a drain per fragment | Superseded by 0188 (a channel's wall only); the bore it drew is replaced by 0201 |
 | [0074](0074-the-section-cap-counts-material-not-crossings.md) | The section cap counts material, not crossings | Accepted |
 | [0184](0184-the-viewport-draws-into-its-own-target.md) | The viewport draws into its own target | Accepted |
 | [0097](0097-a-project-is-a-zip-of-a-manifest-and-the-meshes.md) | A project is a zip of a JSON manifest and the meshes | Superseded by 0191 |

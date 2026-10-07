@@ -234,6 +234,52 @@ fn section_crossing_fragment(in: ModelFragment) -> @location(0) vec4<f32> {
     return vec4<f32>(0.0);
 }
 
+// Whether a fragment of a cut's own body is there to be drawn at all: what the section cut
+// took away is gone, and so is what another cut took out of this one, or two holes drilled
+// side by side would each lay down a depth the other's test then refuses to paint — a black
+// band between them. See docs/decisions/0201.
+fn cut_surface_gone(world: vec3<f32>) -> bool {
+    return (globals.section.y > 0.5 && world.z > globals.section.x) || cut_away(world);
+}
+
+// The pass that lays the far wall of a cut body into the depth plane, painting nothing.
+@fragment
+fn cut_candidate_fragment(in: ModelFragment) -> @location(0) vec4<f32> {
+    if (cut_surface_gone(in.world)) {
+        discard;
+    }
+    return vec4<f32>(0.0);
+}
+
+// The pass that counts the material standing in front of that wall. It subtracts no cut: a
+// crossing inside a hole is still a crossing of the solid the count is about. Only the
+// section cut applies, because what it took away is not there to be counted.
+@fragment
+fn cut_crossing_fragment(in: ModelFragment) -> @location(0) vec4<f32> {
+    if (globals.section.y > 0.5 && in.world.z > globals.section.x) {
+        discard;
+    }
+    return vec4<f32>(0.0);
+}
+
+struct WipedFragment {
+    @builtin(frag_depth) depth: f32,
+    @location(0) color: vec4<f32>,
+};
+
+// The pass that takes the cut's own depth back out where no material stood in front of it:
+// the far wall of a tube hanging in the air would otherwise hide the plate behind it.
+@fragment
+fn cut_wipe_fragment(in: ModelFragment) -> WipedFragment {
+    if (cut_surface_gone(in.world)) {
+        discard;
+    }
+    var out: WipedFragment;
+    out.depth = 1.0;
+    out.color = vec4<f32>(0.0);
+    return out;
+}
+
 @fragment
 fn model_fragment(in: ModelFragment, @builtin(front_facing) front_facing: bool) -> @location(0) vec4<f32> {
     let traced = cut_line(in.world);
@@ -483,4 +529,18 @@ fn line_vertex(in: LineVertex) -> LineFragment {
 @fragment
 fn line_fragment(in: LineFragment) -> @location(0) vec4<f32> {
     return in.color;
+}
+
+// Three vertices covering the screen: what the stencil is put back to zero with between
+// one object's cuts and the next. It paints nothing and takes no depth.
+@vertex
+fn screen_vertex(@builtin(vertex_index) index: u32) -> @builtin(position) vec4<f32> {
+    let x = f32(i32(index) / 2) * 4.0 - 1.0;
+    let y = f32(i32(index) & 1) * 4.0 - 1.0;
+    return vec4<f32>(x, y, 0.0, 1.0);
+}
+
+@fragment
+fn screen_fragment() -> @location(0) vec4<f32> {
+    return vec4<f32>(0.0);
 }

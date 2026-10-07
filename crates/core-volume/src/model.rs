@@ -4,8 +4,8 @@ use std::sync::Arc;
 use core_geometry::{Bvh, Mesh, Scalar, Transform, Vec3};
 
 use crate::{
-    Blocker, Channel, DrainHole, HollowSettings, bores, channel_under, drill, hole_at, lift_for,
-    pierce, sleeves,
+    Blocker, Channel, DrainHole, HollowSettings, channel_under, drill, hole_at, lift_for, pierce,
+    sleeves,
 };
 
 /// A transform this close to singular has flattened its model, and a click on it cannot
@@ -43,12 +43,6 @@ pub struct ModelHollow {
     /// A cut is its own operation and does not wait for a cavity; see ADR 0075.
     deepened: Vec<DrainHole>,
     cuts: Option<Arc<Mesh>>,
-    /// The same cuts seen from inside, for the viewport alone: a hole with no wall drawn
-    /// in it is a window rather than a hole. See ADR 0073.
-    bores: Option<Arc<Mesh>>,
-    /// The model those walls are clipped against, shared with the object that owns it. A
-    /// cut is placed on the model as it was imported, and so is what is drawn inside it.
-    model: Option<(Arc<Mesh>, Arc<Bvh>)>,
     built: Option<Shell>,
 }
 
@@ -79,20 +73,9 @@ pub struct HoleSize {
 }
 
 impl ModelHollow {
-    /// The model every cut on it is measured against. Given once, when the object is
-    /// imported, because a wall drawn inside a hole has to be clipped to it.
-    pub fn on(mesh: Arc<Mesh>, bvh: Arc<Bvh>) -> Self {
-        Self {
-            model: Some((mesh, bvh)),
-            ..Self::default()
-        }
-    }
-
-    /// The cuts a project file was saved with, on the model they were placed on. The
-    /// cavity itself is not in the file: it is asked for again by the Hollow tool.
+    /// The cuts a project file was saved with. The cavity itself is not in the file: it is
+    /// asked for again by the Hollow tool.
     pub fn restored(
-        mesh: Arc<Mesh>,
-        bvh: Arc<Bvh>,
         blockers: Vec<Blocker>,
         drains: Vec<DrainHole>,
         channels: Vec<Channel>,
@@ -101,7 +84,7 @@ impl ModelHollow {
             blockers,
             drains,
             channels,
-            ..Self::on(mesh, bvh)
+            ..Self::default()
         };
         hollow.recut();
         hollow
@@ -125,12 +108,6 @@ impl ModelHollow {
     /// space, or `None` when nothing has been placed.
     pub fn cut_bodies(&self) -> Option<&Arc<Mesh>> {
         self.cuts.as_ref()
-    }
-
-    /// The walls and floors of those cuts, in the same space: what the viewport draws
-    /// inside a hole, and what nothing else ever sees.
-    pub fn bore(&self) -> Option<&Arc<Mesh>> {
-        self.bores.as_ref()
     }
 
     /// Drills a hole from the nearest surface into `target`, a point in the model's own
@@ -408,17 +385,6 @@ impl ModelHollow {
         self.cuts = drill(&self.deepened, &self.channels)
             .ok()
             .filter(|bodies| !bodies.is_empty())
-            .map(Arc::new);
-        // The wall a cavity left is what a bore may be drawn on, and nothing past it.
-        let wall_mm = self
-            .built
-            .as_ref()
-            .map(|built| built.settings.thickness_mm + 2.0 * built.voxel_mm);
-        self.bores = self
-            .model
-            .as_ref()
-            .and_then(|(mesh, bvh)| bores(mesh, bvh, &self.deepened, &self.channels, wall_mm).ok())
-            .filter(|walls| !walls.is_empty())
             .map(Arc::new);
         // Digging a channel takes the points it was laid out from, which are markers.
         self.remesh_markers();

@@ -268,7 +268,7 @@ impl SceneObject {
             ..self.summary.clone()
         };
         self.supports = ModelSupports::default();
-        self.hollow = ModelHollow::on(Arc::clone(&mesh), Arc::clone(&self.bvh));
+        self.hollow = ModelHollow::default();
         self.traps.clear();
         self.mapped = None;
         self.mesh = mesh;
@@ -642,7 +642,7 @@ impl Scene {
             summary: imported.summary,
             visible: true,
             supports: ModelSupports::default(),
-            hollow: ModelHollow::on(imported.mesh, imported.bvh),
+            hollow: ModelHollow::default(),
             traps: Traps::default(),
             mapped: imported.mapped,
             bounds: PlacedBounds::default(),

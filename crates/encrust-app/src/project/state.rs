@@ -206,7 +206,7 @@ fn restore_objects(
             state.transform,
             table,
         );
-        object.hollow = hollow_of(&state.hollow, meshes, bvh);
+        object.hollow = hollow_of(&state.hollow, meshes);
     }
 }
 
@@ -336,8 +336,6 @@ mod tests {
             Vec::new(),
         );
         object.hollow = ModelHollow::restored(
-            Arc::clone(&object.mesh),
-            Arc::clone(&object.bvh),
             vec![Blocker::ball(Vec3::splat(0.5), 0.2)],
             Vec::new(),
             vec![Channel {

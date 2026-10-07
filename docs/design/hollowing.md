@@ -210,19 +210,14 @@ is therefore the wall of the model. A channel dug or cleared on a model that is 
 hollow rebuilds its shell at once, at the numbers it was built at, and a sleeved channel
 drains its own two mouths, not the cavity it crosses.
 
-What the window draws inside a cut is a second mesh, `bores`: the wall of every tube and
-the floor of every hole that ends in material. Both are clipped to the model with one ray
-per sector — twenty-four along the tube for the wall and twenty-four out from the centre
-for the floor, exact where they land and polygonal between them, which is what the tube
-already is. A strip hangs between two of those lines and is drawn only where both of them
-run through material, so a hole drilled across an edge of the model stops a sector short of
-that edge instead of hanging a sector of itself into the air, and its floor is the half
-disc the material leaves rather than a whole one. A hole's wall is cut short at the wall a
-cavity left, so nothing of it crosses the cavity, and a hole that reaches that far is
-through: it ends in the cavity and takes no floor, which is what keeps a drain from reading
-as a dimple with a coin at the bottom of it. A channel runs in its sleeve, so its wall
-goes its whole length, with a ball's wall round each bend. It is drawn and never sliced:
-the cut itself is what the layer sees.
+What the window draws inside a cut is the cut's own body. Nothing meshes the surface of a
+hole: the bodies are already there, wound inward, so the face that survives culling is the
+far wall of the tube — the one a hole is looked into. Four passes resolve it per object:
+the bodies into the depth plane, the object itself counted into the stencil against that
+depth, the bodies again wherever the count says material stood in front of them, and once
+more to take their depth back out where it did not. The opening is therefore closed by a
+silhouette resolved per pixel, and nothing approximates where the tube meets the surface.
+See ADR 0201, and `local-docs/PLAN-viewport-cuts.md` for what the alternatives cost.
 
 ## Trapped resin
 

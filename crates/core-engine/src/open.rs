@@ -112,7 +112,7 @@ fn support_table(manifest: &Manifest) -> Vec<SupportProfile> {
 /// trees it keeps, meshed to the profile of their group.
 fn model(object: &ObjectState, meshes: &ModelMeshes, table: &[SupportProfile]) -> Model {
     let bvh = Arc::new(Bvh::build(&meshes.source));
-    let hollow = hollow_of(&object.hollow, meshes, Arc::clone(&bvh));
+    let hollow = hollow_of(&object.hollow, meshes);
     let supports = supports_of(
         &object.supports,
         &meshes.source,

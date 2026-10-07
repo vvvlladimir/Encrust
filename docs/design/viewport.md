@@ -140,6 +140,27 @@ The opened face is capped with the stencil plane, three draws in the viewport's 
    `NotEqual` against zero plus the ordinary depth test, so it is trimmed to exactly the
    material the plane runs through and hides what is behind it.
 
+## The inside of a cut
+
+A drain hole or a channel never cuts the mesh: the fragment shader drops what stands inside
+the tube (ADR 0073) and the fill rule subtracts the same body when the layer is rasterised.
+What closes the opening is the cut's own body, drawn with the stencil the same way the cap
+is, four draws per object that carries cuts and before anything else in the pass (ADR 0201):
+
+1. **Lay the candidate.** The bodies, one copy, into the depth plane with no colour. They
+   are wound inward, so the face that survives culling is the far wall of the tube — the
+   one a hole is looked into.
+2. **Count the material.** The object itself with the counting stencil, depth-tested `Less`
+   against that candidate and writing neither colour nor depth: how much material stands
+   between the eye and the cut's own surface.
+3. **Draw the surface** where the count ran negative, with the model's own shading.
+4. **Wipe the depth** where it did not, writing a depth of 1, so a tube hanging in the air
+   beside the model leaves no ghost over what stands behind it.
+
+The stencil goes back to zero between objects, and the section cap counts from zero after
+them. Nothing meshes the surface of a hole, so there is no curve to approximate and no
+crack where one would have been.
+
 What is counted is the mesh that is drawn, cavity and lattice included: a hollowed model's
 cavity is wound inward, so it subtracts itself from the crossing count exactly as it does
 from the fill rule — the wall caps, the hollow does not, and the infill stays visible

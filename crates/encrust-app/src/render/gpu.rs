@@ -207,6 +207,9 @@ pub struct FrameInput<'a> {
     pub models: &'a [ModelDraw],
     /// The solids the cut is capped against, counted into the stencil plane.
     pub solids: &'a [ModelDraw],
+    /// The bodies cut out of each object, and the object they are cut into: what the
+    /// inside of a hole is drawn from. See ADR 0201.
+    pub cut_surfaces: &'a [CutDraw],
     /// The quad lying in the cutting plane the cap is painted with.
     pub cap: &'a [LineVertex],
     /// The machine under the plate, drawn last and translucent.
@@ -298,6 +301,13 @@ impl ModelDraw {
     }
 }
 
+/// One object's cuts and the object itself: the bodies are drawn where this solid says
+/// there is material in front of them.
+pub struct CutDraw {
+    pub body: ModelDraw,
+    pub solid: ModelDraw,
+}
+
 /// One object drawn with the texture a relief would be pressed from, instead of flat.
 pub struct ReliefDraw {
     pub mesh: Arc<Mesh>,
@@ -317,6 +327,8 @@ pub struct ViewportResources {
     line_pipeline: wgpu::RenderPipeline,
     /// What caps the section cut.
     capping: Capping,
+    /// What draws the inside of every cut.
+    cutting: Cutting,
     /// Draws the translucent machine over everything already painted.
     body_pipeline: wgpu::RenderPipeline,
     /// Draws the word the machine carries, sampled out of the font atlas.
@@ -353,6 +365,10 @@ struct Frame {
     models: Vec<Drawn>,
     solids: Vec<Drawn>,
     solid_base: u32,
+    /// Each object's cut bodies with the object itself, and where the pair's instances
+    /// start: after the models, the solids and the reliefs, in the same buffer.
+    cuts: Vec<(Drawn, Drawn)>,
+    cut_base: u32,
     /// The textured models, and where their instances start: after the models and the
     /// solids, in the same buffer.
     reliefs: Vec<(usize, bool)>,
@@ -392,6 +408,7 @@ impl ViewportResources {
             xray_pipeline: solid.xray,
             line_pipeline: solid.line,
             capping: solid.capping,
+            cutting: solid.cutting,
             body_pipeline: build.body(),
             label_pipeline: label.pipelines,
             label_layout: label.layout,
@@ -421,6 +438,7 @@ impl ViewportResources {
             lines,
             models,
             solids,
+            cut_surfaces,
             cap,
             body,
             label,
@@ -477,11 +495,17 @@ impl ViewportResources {
         if let Some(atlas) = atlas {
             self.upload_atlas(device, queue, &atlas);
         }
+        let cut_draws = || {
+            cut_surfaces
+                .iter()
+                .flat_map(|cut| [&cut.body, &cut.solid].into_iter())
+        };
         let instances: Vec<ModelInstance> = models
             .iter()
             .chain(solids)
             .map(|draw| draw.instance)
             .chain(reliefs.iter().map(|draw| draw.instance))
+            .chain(cut_draws().map(|draw| draw.instance))
             .collect();
         self.instances.write(device, queue, &instances);
 
@@ -493,13 +517,15 @@ impl ViewportResources {
         self.frame.xray = xray;
         self.frame.solid_base = models.len() as u32;
         self.frame.relief_base = (models.len() + solids.len()) as u32;
+        self.frame.cut_base = self.frame.relief_base + reliefs.len() as u32;
         self.frame.models.clear();
         self.frame.solids.clear();
         self.frame.reliefs.clear();
+        self.frame.cuts.clear();
         // Every draw of a mesh is read before any of it is uploaded: a shell drawn whole
         // and its cavity drawn on its own share one cache entry, whose pieces have to
         // break where either of them starts and ends.
-        let splits = splits_of(models.iter().chain(solids));
+        let splits = splits_of(models.iter().chain(solids).chain(cut_draws()));
         for (draws, into) in [(models, false), (solids, true)] {
             for draw in draws {
                 let key = self.cache(
@@ -522,6 +548,23 @@ impl ViewportResources {
             let key = self.cache_relief(device, queue, draw);
             self.frame.reliefs.push((key, draw.instance.is_mirrored()));
         }
+        for cut in cut_surfaces {
+            let drawn = |draw: &ModelDraw, resources: &mut Self| {
+                let key = resources.cache(
+                    device,
+                    &draw.mesh,
+                    &splits[&(Arc::as_ptr(&draw.mesh) as usize)],
+                );
+                Drawn {
+                    key,
+                    mirrored: draw.instance.is_mirrored(),
+                    faces: draw.faces.clone(),
+                }
+            };
+            let body = drawn(&cut.body, self);
+            let solid = drawn(&cut.solid, self);
+            self.frame.cuts.push((body, solid));
+        }
 
         // A mesh nobody drew this frame was removed from the scene or replaced.
         let live: HashSet<usize> = self
@@ -529,6 +572,12 @@ impl ViewportResources {
             .models
             .iter()
             .chain(&self.frame.solids)
+            .chain(
+                self.frame
+                    .cuts
+                    .iter()
+                    .flat_map(|(body, solid)| [body, solid]),
+            )
             .map(|drawn| drawn.key)
             .collect();
         self.meshes.retain(|key, _| live.contains(key));
@@ -705,6 +754,10 @@ impl ViewportResources {
 
         render_pass.set_vertex_buffer(1, self.instances.buffer.slice(..));
 
+        // First of all, because these passes own the depth and stencil planes while they
+        // run and hand them back empty.
+        self.paint_cuts(render_pass);
+
         // The cut is capped rather than left open, and the cap is stencilled: what the
         // cut took away is counted first, the models are drawn, and the face is filled
         // wherever the count says the plane runs through a solid. See
@@ -767,6 +820,23 @@ impl ViewportResources {
         }
     }
 
+    /// Draws the inside of every cut: the far wall of each body, kept where the object it
+    /// is cut into stands in front of it. Four passes over a pair and the stencil back to
+    /// zero; see ADR 0201.
+    fn paint_cuts(&self, render_pass: &mut wgpu::RenderPass<'static>) {
+        for (index, (body, solid)) in self.frame.cuts.iter().enumerate() {
+            let pair = self.frame.cut_base + 2 * index as u32;
+            let cutting = &self.cutting;
+            self.draw_mesh(render_pass, &cutting.candidate, body, pair);
+            self.draw_mesh(render_pass, &cutting.counting, solid, pair + 1);
+            render_pass.set_stencil_reference(MATERIAL_ABOVE);
+            self.draw_mesh(render_pass, &cutting.surface, body, pair);
+            self.draw_mesh(render_pass, &cutting.wipe, body, pair);
+            render_pass.set_pipeline(&cutting.reset);
+            render_pass.draw(0..3, 0..1);
+        }
+    }
+
     /// Draws one mesh per entry, each with the instance that many slots past `base`.
     fn draw_meshes(
         &self,
@@ -776,18 +846,28 @@ impl ViewportResources {
         base: u32,
     ) {
         for (index, draw) in drawn.iter().enumerate() {
-            let Some(mesh) = self.meshes.get(&draw.key) else {
+            self.draw_mesh(render_pass, pipelines, draw, base + index as u32);
+        }
+    }
+
+    /// Draws the pieces of one mesh that lie inside the range the draw covers.
+    fn draw_mesh(
+        &self,
+        render_pass: &mut wgpu::RenderPass<'static>,
+        pipelines: &Facing,
+        draw: &Drawn,
+        instance: u32,
+    ) {
+        let Some(mesh) = self.meshes.get(&draw.key) else {
+            return;
+        };
+        render_pass.set_pipeline(pipelines.of(draw.mirrored));
+        for piece in &mesh.pieces {
+            if piece.faces.start < draw.faces.start || piece.faces.end > draw.faces.end {
                 continue;
-            };
-            let instance = base + index as u32;
-            render_pass.set_pipeline(pipelines.of(draw.mirrored));
-            for piece in &mesh.pieces {
-                if piece.faces.start < draw.faces.start || piece.faces.end > draw.faces.end {
-                    continue;
-                }
-                render_pass.set_vertex_buffer(0, piece.buffer.slice(..));
-                render_pass.draw(0..piece.vertices, instance..instance + 1);
             }
+            render_pass.set_vertex_buffer(0, piece.buffer.slice(..));
+            render_pass.draw(0..piece.vertices, instance..instance + 1);
         }
     }
 }
@@ -831,6 +911,40 @@ fn inside_only_stencil() -> wgpu::StencilState {
         back: face,
         read_mask: 0xff,
         write_mask: 0x00,
+    }
+}
+
+/// The other half of [`inside_only_stencil`]: drawing only where the count says there was
+/// no material in front of the cut, which is where its own depth has to go back out.
+fn outside_only_stencil() -> wgpu::StencilState {
+    let face = wgpu::StencilFaceState {
+        compare: wgpu::CompareFunction::GreaterEqual,
+        fail_op: wgpu::StencilOperation::Keep,
+        depth_fail_op: wgpu::StencilOperation::Keep,
+        pass_op: wgpu::StencilOperation::Keep,
+    };
+    wgpu::StencilState {
+        front: face,
+        back: face,
+        read_mask: 0xff,
+        write_mask: 0x00,
+    }
+}
+
+/// Putting the count back to nothing, so the next object counts from zero and the section
+/// cap after them counts from zero too.
+fn clearing_stencil() -> wgpu::StencilState {
+    let face = wgpu::StencilFaceState {
+        compare: wgpu::CompareFunction::Always,
+        fail_op: wgpu::StencilOperation::Keep,
+        depth_fail_op: wgpu::StencilOperation::Keep,
+        pass_op: wgpu::StencilOperation::Zero,
+    };
+    wgpu::StencilState {
+        front: face,
+        back: face,
+        read_mask: 0xff,
+        write_mask: 0xff,
     }
 }
 
@@ -878,8 +992,24 @@ impl Facing {
     }
 }
 
+/// The passes that resolve the surface of a cut: the far wall of the cut body, kept where
+/// material stands in front of it. See ADR 0201.
+struct Cutting {
+    /// Lays that far wall into the depth plane, painting nothing.
+    candidate: Facing,
+    /// Counts the material standing in front of it, into the stencil plane.
+    counting: Facing,
+    /// Draws it where the count says there was material.
+    surface: Facing,
+    /// Takes its depth back out where the count says there was none.
+    wipe: Facing,
+    /// Puts the stencil back to zero between one object and the next.
+    reset: wgpu::RenderPipeline,
+}
+
 /// The pipelines that draw the plate and the models in their own flat colours.
 struct Solid {
+    cutting: Cutting,
     model: Facing,
     /// The same models seen through: no depth at all, so every surface behind one still
     /// paints and the cavity inside shows.
@@ -986,6 +1116,79 @@ impl<'a> Builder<'a> {
                 ..PipelineKind::default()
             }),
             capping: self.capping(),
+            cutting: self.cutting(),
+        }
+    }
+
+    /// Four passes over one object's cut bodies and the object itself; see ADR 0201. The
+    /// bodies are wound inward, so the face that survives culling is the far wall of the
+    /// tube — the one a hole is looked at through.
+    fn cutting(&self) -> Cutting {
+        let body = |label, fragment_entry, kind: PipelineKind<'_>| {
+            self.facing(PipelineKind {
+                label,
+                vertex_entry: "model_vertex",
+                fragment_entry,
+                buffers: &[Some(ModelVertex::layout()), Some(ModelInstance::layout())],
+                cull: Some(wgpu::Face::Back),
+                ..kind
+            })
+        };
+        Cutting {
+            candidate: body(
+                "viewport_cut_candidate",
+                "cut_candidate_fragment",
+                PipelineKind {
+                    writes_color: false,
+                    ..PipelineKind::default()
+                },
+            ),
+            counting: self.facing(PipelineKind {
+                label: "viewport_cut_crossings",
+                vertex_entry: "model_vertex",
+                fragment_entry: "cut_crossing_fragment",
+                buffers: &[Some(ModelVertex::layout()), Some(ModelInstance::layout())],
+                writes_color: false,
+                // Only what stands in front of the cut's own surface counts, and the
+                // counting leaves that surface where it is.
+                depth_write: false,
+                depth_compare: wgpu::CompareFunction::Less,
+                stencil: counting_stencil(),
+                ..PipelineKind::default()
+            }),
+            surface: body(
+                "viewport_cut_surface",
+                "model_fragment",
+                PipelineKind {
+                    // The candidate pass already wrote this depth, so only the fragment
+                    // that laid it down is drawn.
+                    depth_compare: wgpu::CompareFunction::Equal,
+                    stencil: inside_only_stencil(),
+                    ..PipelineKind::default()
+                },
+            ),
+            wipe: body(
+                "viewport_cut_wipe",
+                "cut_wipe_fragment",
+                PipelineKind {
+                    writes_color: false,
+                    // The shader writes the depth, so the test cannot be made against the
+                    // fragment's own: the stencil is what picks the pixels to wipe.
+                    depth_compare: wgpu::CompareFunction::Always,
+                    stencil: outside_only_stencil(),
+                    ..PipelineKind::default()
+                },
+            ),
+            reset: self.plain(PipelineKind {
+                label: "viewport_cut_stencil_reset",
+                vertex_entry: "screen_vertex",
+                fragment_entry: "screen_fragment",
+                writes_color: false,
+                depth_write: false,
+                depth_compare: wgpu::CompareFunction::Always,
+                stencil: clearing_stencil(),
+                ..PipelineKind::default()
+            }),
         }
     }
 
@@ -1139,6 +1342,9 @@ struct PipelineKind<'a> {
     depth_write: bool,
     depth_compare: wgpu::CompareFunction,
     stencil: wgpu::StencilState,
+    /// Which side of a face is dropped, or `None` to keep both. Only the passes that
+    /// resolve a cut ask for it: there the near wall of a tube is never what is looked at.
+    cull: Option<wgpu::Face>,
 }
 
 impl Default for PipelineKind<'_> {
@@ -1154,6 +1360,7 @@ impl Default for PipelineKind<'_> {
             depth_write: true,
             depth_compare: wgpu::CompareFunction::Less,
             stencil: wgpu::StencilState::default(),
+            cull: None,
         }
     }
 }
@@ -1193,7 +1400,7 @@ fn pipeline(
         primitive: wgpu::PrimitiveState {
             topology: kind.topology,
             front_face: kind.front_face,
-            cull_mode: None,
+            cull_mode: kind.cull,
             ..Default::default()
         },
         depth_stencil: Some(wgpu::DepthStencilState {

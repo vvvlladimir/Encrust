@@ -12,10 +12,8 @@ use super::{ModelMeshes, ObjectHollowState, ObjectSupportState};
 
 /// The cavity an object carries, as the file left it: its shell is read, not hollowed
 /// again, and the holes are cut against the wall that shell stands at.
-pub fn hollow_of(state: &ObjectHollowState, meshes: &ModelMeshes, bvh: Arc<Bvh>) -> ModelHollow {
+pub fn hollow_of(state: &ObjectHollowState, meshes: &ModelMeshes) -> ModelHollow {
     let mut hollow = ModelHollow::restored(
-        Arc::clone(&meshes.source),
-        bvh,
         state.blockers.clone(),
         state.drains.clone(),
         state.channels.clone(),

@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use core_format::ExposureRange;
 use core_geometry::{Mat4, Mesh, Scalar, Transform, Vec3};
-use core_volume::{Channel, DrainHole, MOUTH_LIFT_MM};
+use core_volume::{CUT_WEIGHT, Channel, DrainHole, MOUTH_LIFT_MM};
 use egui::Color32;
 use egui::epaint::ViewportInPixels;
 use egui_wgpu::{CallbackResources, CallbackTrait, ScreenDescriptor};
@@ -10,8 +10,8 @@ use egui_wgpu::{CallbackResources, CallbackTrait, ScreenDescriptor};
 use crate::camera::OrbitCamera;
 use crate::plate::BuildPlate;
 use crate::render::gpu::{
-    CutLine, DrainCut, ExposureBand, FrameInput, MAX_BANDS, MAX_CUTS, MAX_POCKETS, ModelDraw,
-    ReliefDraw, TrapBox,
+    CutDraw, CutLine, DrainCut, ExposureBand, FrameInput, MAX_BANDS, MAX_CUTS, MAX_POCKETS,
+    ModelDraw, ReliefDraw, TrapBox,
 };
 use crate::render::grid::plate_lines;
 use crate::render::label;
@@ -50,6 +50,9 @@ pub struct ViewportCallback {
     /// meshes still carry every triangle they had, so the shader is what subtracts them;
     /// see `docs/decisions/0073`.
     cuts: Vec<DrainCut>,
+    /// The bodies of those cuts with the objects they are cut into: what the inside of a
+    /// hole is drawn from, in place of a mesh of its own; see ADR 0201.
+    cut_surfaces: Vec<CutDraw>,
     /// Where the last drainage check found resin with no way out, in plate millimetres:
     /// the cavity is painted red inside these boxes and nowhere else; see ADR 0200.
     pockets: Vec<TrapBox>,
@@ -110,6 +113,7 @@ impl ViewportCallback {
             models,
             solids,
             cuts,
+            cut_surfaces,
             pockets,
             reliefs,
         } = Draws::of(scene, overhang_deg.map_or(NOT_MARKED, marking), textured);
@@ -130,6 +134,7 @@ impl ViewportCallback {
             label,
             atlas,
             cuts,
+            cut_surfaces,
             pockets,
             reliefs,
             bands: bands_of(banding.ranges),
@@ -147,6 +152,7 @@ struct Draws {
     models: Vec<ModelDraw>,
     solids: Vec<ModelDraw>,
     cuts: Vec<DrainCut>,
+    cut_surfaces: Vec<CutDraw>,
     pockets: Vec<TrapBox>,
     reliefs: Vec<ReliefDraw>,
 }
@@ -219,10 +225,21 @@ impl Draws {
         {
             self.solid(Arc::clone(cuts), object.transform);
         }
-        // The inside of every hole, drawn like the model and never counted: it is what
-        // the fragment test leaves a window into. See ADR 0073.
-        if let Some(bore) = object.hollow.bore() {
-            self.flat(Arc::clone(bore), object.transform, colour);
+        // The inside of every hole: the far wall of the cut's own body, drawn where the
+        // object stands in front of it. Nothing meshes what that looks like; see ADR 0201.
+        if let Some(cuts) = object.hollow.cut_bodies() {
+            let mesh = object.hollow.shell().unwrap_or(&object.mesh);
+            self.cut_surfaces.push(CutDraw {
+                body: ModelDraw::part(
+                    Arc::clone(cuts),
+                    0..cuts.faces.len() / CUT_WEIGHT,
+                    ModelInstance::new(object.transform, colour, NOT_MARKED),
+                ),
+                solid: ModelDraw::whole(
+                    Arc::clone(mesh),
+                    ModelInstance::new(object.transform, colour, NOT_MARKED),
+                ),
+            });
         }
         // Blockers are kept in the model's own space, so they ride its placement.
         if let Some(markers) = object.hollow.markers() {
@@ -457,6 +474,7 @@ impl CallbackTrait for ViewportCallback {
                     label: &self.label,
                     atlas: self.atlas.clone(),
                     cuts: &self.cuts,
+                    cut_surfaces: &self.cut_surfaces,
                     pockets: &self.pockets,
                     reliefs: &self.reliefs,
                     bands: &self.bands,

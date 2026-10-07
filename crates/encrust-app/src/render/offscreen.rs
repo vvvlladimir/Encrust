@@ -5,14 +5,14 @@
 use std::sync::{Arc, OnceLock};
 
 use core_geometry::{Bvh, Heightmap, Mesh, Scalar, Transform, UvMap, Vec2, Vec3};
-use core_volume::{DrainHole, HollowSettings, bores, drill, hollow};
+use core_volume::{CUT_WEIGHT, DrainHole, HollowSettings, drill, hollow};
 
 use crate::camera::OrbitCamera;
 use crate::plate::BuildPlate;
 use crate::render::callback::cuts_of;
 use crate::render::gpu::{
-    CutLine, DEPTH_FORMAT, DrainCut, ExposureBand, FrameInput, ModelDraw, ReliefDraw, TrapBox,
-    ViewportResources,
+    CutDraw, CutLine, DEPTH_FORMAT, DrainCut, ExposureBand, FrameInput, ModelDraw, ReliefDraw,
+    TrapBox, ViewportResources,
 };
 use crate::render::machine::machine_faces;
 use crate::render::vertex::{BodyVertex, LineVertex, ModelInstance, NOT_MARKED};
@@ -47,12 +47,11 @@ fn hollowed_ball() -> &'static (Mesh, Bvh, Arc<Mesh>, std::ops::Range<usize>) {
 }
 
 /// A hollow ball, with the holes of [`holes`] in it or without them.
-fn drilled_ball(drilled: bool) -> (Arc<Mesh>, Arc<Mesh>, Arc<Mesh>, Vec<DrainHole>) {
-    let (mesh, bvh, shell, _) = hollowed_ball();
+fn drilled_ball(drilled: bool) -> (Arc<Mesh>, Arc<Mesh>, Vec<DrainHole>) {
+    let (_, _, shell, _) = hollowed_ball();
     let holes = if drilled { holes() } else { Vec::new() };
     let bodies = drill(&holes, &[]).expect("the holes drill");
-    let walls = bores(mesh, bvh, &holes, &[], Some(2.4)).expect("the walls mesh");
-    (Arc::clone(shell), Arc::new(bodies), Arc::new(walls), holes)
+    (Arc::clone(shell), Arc::new(bodies), holes)
 }
 
 /// Both mouths stand eight millimetres clear of the surface, the way `lift_for` puts them
@@ -100,6 +99,69 @@ fn drilling_a_model_paints_nothing_where_the_model_was_not() {
     assert_eq!(
         painted, 0,
         "{painted} pixel(s) stand in the air around a hole"
+    );
+}
+
+/// A hole is drawn from the cut's own body, so what shows inside it is the far wall of
+/// that body rather than whatever of the model stands behind the opening. See ADR 0201.
+#[test]
+fn a_hole_shows_the_wall_of_the_cut_that_made_it() {
+    // Head-on at the hole on the equator, close enough that its four millimetres cover a
+    // good part of the frame.
+    let camera = OrbitCamera {
+        target: Vec3::new(110.0, 40.0, 50.0),
+        distance_mm: 22.0,
+        yaw_rad: std::f32::consts::PI,
+        pitch_rad: 0.1,
+        ..OrbitCamera::default()
+    };
+    let frame = |walled| {
+        let (mesh, bodies, holes) = drilled_ball(true);
+        let object = ModelInstance::new(Transform::default(), theme::scene().object, NOT_MARKED);
+        let models = [ModelDraw::whole(Arc::clone(&mesh), object)];
+        let surfaces = match walled {
+            true => cut_surfaces(&mesh, &bodies, object),
+            false => Vec::new(),
+        };
+        let cuts = cuts_of(&holes, &[], Transform::default());
+        paint(
+            camera,
+            None,
+            &models,
+            &[],
+            Marks {
+                cuts: &cuts,
+                cut_surfaces: &surfaces,
+                ..Marks::default()
+            },
+            &[],
+        )
+    };
+
+    let Some(bare) = frame(false) else {
+        return;
+    };
+    let walled = frame(true).expect("the second frame draws too");
+
+    let background = |pixel: &[u8; 4]| pixel[..3] == [0, 0, 0];
+    let (changed, painted) = bare
+        .as_chunks::<4>()
+        .0
+        .iter()
+        .zip(walled.as_chunks::<4>().0)
+        .fold((0, 0), |(changed, painted), (bare, walled)| {
+            (
+                changed + usize::from(bare != walled),
+                painted + usize::from(background(bare) && !background(walled)),
+            )
+        });
+    assert!(
+        changed > 2_000,
+        "a 4 mm hole seen from 22 mm away is wide on screen: {changed} pixels"
+    );
+    assert_eq!(
+        painted, 0,
+        "{painted} pixel(s) of a wall stand where the model was not"
     );
 }
 
@@ -260,7 +322,7 @@ fn paint_ball_around(inside: Vec<ModelDraw>, marks: Marks<'_>) -> Option<Vec<u8>
 /// order the window draws in: a shell is on screen long before the drainage check says
 /// what is trapped in it.
 fn paint_ball_cached(inside: Vec<ModelDraw>, marks: Marks<'_>, cached: bool) -> Option<Vec<u8>> {
-    let (mesh, _, _, _) = drilled_ball(false);
+    let (mesh, _, _) = drilled_ball(false);
     let ball = || {
         ModelDraw::whole(
             Arc::clone(&mesh),
@@ -285,26 +347,25 @@ fn paint_ball_cached(inside: Vec<ModelDraw>, marks: Marks<'_>, cached: bool) -> 
 /// The frame as the window would draw it, or `None` on a machine with no adapter to draw
 /// it with.
 fn render(drilled: bool) -> Option<Vec<u8>> {
-    let (mesh, bodies, walls, drilled) = drilled_ball(drilled);
+    painted_ball(drilled, true)
+}
+
+/// The same frame, with the inside of the cuts drawn or left out of it.
+fn painted_ball(drilled: bool, walled: bool) -> Option<Vec<u8>> {
+    let (mesh, bodies, drilled) = drilled_ball(drilled);
+    let object = ModelInstance::new(Transform::default(), theme::scene().object, NOT_MARKED);
     let cap_colour =
         ModelInstance::new(Transform::default(), theme::scene().section_cap, NOT_MARKED);
-    let models = vec![ModelDraw::whole(
-        Arc::clone(&mesh),
-        ModelInstance::new(Transform::default(), theme::scene().object, NOT_MARKED),
-    )];
+    let models = vec![ModelDraw::whole(Arc::clone(&mesh), object)];
     // The window counts the cut bodies into the cap without drawing them; see ADR 0075.
     let solids = vec![
-        ModelDraw::whole(mesh, cap_colour),
-        ModelDraw::whole(bodies, cap_colour),
+        ModelDraw::whole(Arc::clone(&mesh), cap_colour),
+        ModelDraw::whole(Arc::clone(&bodies), cap_colour),
     ];
     let cuts: Vec<DrainCut> = cuts_of(&drilled, &[], Transform::default());
-    let models = {
-        let mut models = models;
-        models.push(ModelDraw::whole(
-            walls,
-            ModelInstance::new(Transform::default(), theme::scene().object, NOT_MARKED),
-        ));
-        models
+    let cut_surfaces = match walled {
+        true => cut_surfaces(&mesh, &bodies, object),
+        false => Vec::new(),
     };
     let camera = OrbitCamera {
         target: Vec3::new(75.0, 40.0, 45.0),
@@ -313,15 +374,35 @@ fn render(drilled: bool) -> Option<Vec<u8>> {
     };
     let marks = Marks {
         cuts: &cuts,
+        cut_surfaces: &cut_surfaces,
         ..Marks::default()
     };
     paint(camera, Some(SECTION_MM), &models, &solids, marks, &[])
+}
+
+/// The inside of the cuts `bodies` take out of `mesh`, the way the window hands them over:
+/// one copy of the bodies, which are laid `CUT_WEIGHT` deep for the slicer.
+fn cut_surfaces(mesh: &Arc<Mesh>, bodies: &Arc<Mesh>, instance: ModelInstance) -> Vec<CutDraw> {
+    if bodies.faces.is_empty() {
+        return Vec::new();
+    }
+    vec![CutDraw {
+        body: ModelDraw::part(
+            Arc::clone(bodies),
+            0..bodies.faces.len() / CUT_WEIGHT,
+            instance,
+        ),
+        solid: ModelDraw::whole(Arc::clone(mesh), instance),
+    }]
 }
 
 /// What the shader lays over the models besides their own colour.
 #[derive(Clone, Copy, Default)]
 struct Marks<'a> {
     cuts: &'a [DrainCut],
+    /// The bodies those cuts take out, with the objects they are cut into: what the inside
+    /// of a hole is drawn from. See ADR 0201.
+    cut_surfaces: &'a [CutDraw],
     /// Where the drainage check found resin, which is the only place a volume paints.
     pockets: &'a [TrapBox],
     bands: &'a [ExposureBand],
@@ -618,6 +699,7 @@ fn paint_textured(camera: OrbitCamera, draw: &ReliefDraw) -> Option<Vec<u8>> {
             label: &[],
             atlas: None,
             cuts: &[],
+            cut_surfaces: &[],
             pockets: &[],
             bands: &[],
             band_floor_mm: 0.0,
@@ -657,6 +739,7 @@ fn paint_after<'a>(
 ) -> Option<Vec<u8>> {
     let Marks {
         cuts,
+        cut_surfaces,
         pockets,
         bands,
         band_floor_mm,
@@ -681,6 +764,7 @@ fn paint_after<'a>(
         label: &[],
         atlas: None,
         cuts,
+        cut_surfaces,
         pockets,
         bands,
         band_floor_mm,
@@ -768,6 +852,95 @@ fn read_back(
     let _ = device.poll(wgpu::PollType::wait_indefinitely());
     let pixels = slice.get_mapped_range().expect("the readback is mapped");
     pixels.to_vec()
+}
+
+#[test]
+fn zz_scratch() {
+    use core_mesh_io::{MeshLoader, StlLoader};
+    use core_volume::{CUT_WEIGHT, HoleSize, InfillSettings, ModelHollow, Shell};
+    let var = |name: &str, fallback: f32| {
+        std::env::var(name)
+            .ok()
+            .and_then(|v| v.parse().ok())
+            .unwrap_or(fallback)
+    };
+    let loaded = StlLoader
+        .load(std::path::Path::new(
+            "/Volumes/VAULT-1TB/Projects/Encrust/local-docs/test-run/models/desk/bracket.stl",
+        ))
+        .expect("the bracket loads");
+    let mesh = Arc::new(loaded.mesh);
+    let bvh = Arc::new(Bvh::build(&mesh));
+    let bounds = mesh.aabb().expect("the bracket has faces");
+
+    let mut model = ModelHollow::default();
+    let settings = HollowSettings {
+        thickness_mm: var("ZZ_WALL", 1.0),
+        infill: (var("ZZ_INFILL", 1.0) > 0.0).then(InfillSettings::default),
+        ..HollowSettings::default()
+    };
+    let hollowed = hollow(&mesh, &bvh, &settings).expect("the bracket hollows");
+    model.take(Shell {
+        mesh: Arc::new(hollowed.mesh),
+        cavity: hollowed.cavity,
+        cavity_mm3: hollowed.cavity_mm3,
+        voxel_mm: hollowed.voxel_mm,
+        coarsened: hollowed.coarsened,
+        scale: Vec3::ONE,
+        settings,
+    });
+    let size = HoleSize {
+        diameter_mm: 3.2,
+        depth_mm: 2.4,
+        taper: 1.0,
+    };
+    let at = Vec3::new(var("ZZ_X", 16.0), var("ZZ_Y", 5.0), bounds.maxs.z);
+    let apart = var("ZZ_APART", 3.4);
+    for step in 0..2 {
+        model.add_drain(
+            &mesh,
+            &bvh,
+            at - Vec3::X * apart * step as f32,
+            Vec3::Z,
+            size,
+            Transform::default(),
+        );
+    }
+
+    let shown = model.shell().cloned().unwrap_or(Arc::clone(&mesh));
+    let instance = ModelInstance::new(Transform::default(), theme::scene().object, NOT_MARKED);
+    let models = vec![match model.cavity_faces() {
+        Some(cavity) => ModelDraw::whole_around(Arc::clone(&shown), cavity, instance),
+        None => ModelDraw::whole(Arc::clone(&shown), instance),
+    }];
+    let bodies = model.cut_bodies().cloned().expect("holes were placed");
+    let surfaces = vec![CutDraw {
+        body: ModelDraw::part(
+            Arc::clone(&bodies),
+            0..bodies.faces.len() / CUT_WEIGHT,
+            instance,
+        ),
+        solid: ModelDraw::whole(Arc::clone(&shown), instance),
+    }];
+    let (drains, channels) = model.cut();
+    let cuts = cuts_of(drains, channels, Transform::default());
+    let camera = OrbitCamera {
+        target: at - Vec3::X * apart / 2.0,
+        distance_mm: var("ZZ_DIST", 16.0),
+        yaw_rad: var("ZZ_YAW", -1.35),
+        pitch_rad: var("ZZ_PITCH", 0.5),
+        ..OrbitCamera::default()
+    };
+    let marks = Marks {
+        cuts: &cuts,
+        cut_surfaces: &surfaces,
+        ..Marks::default()
+    };
+    let Some(frame) = paint(camera, None, &models, &[], marks, &[]) else {
+        return;
+    };
+    let out = std::env::var("ZZ_OUT").unwrap_or("/tmp/zz_scratch.png".to_owned());
+    image::save_buffer(&out, &frame, SIZE, SIZE, image::ColorType::Rgba8).expect("the frame writes");
 }
 
 /// The one device the frames of this file are drawn on, or `None` on a machine with no
