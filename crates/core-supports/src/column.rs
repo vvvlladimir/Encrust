@@ -410,6 +410,18 @@ mod tests {
     }
 
     #[test]
+    fn the_light_preset_stands_a_support_under_a_part_at_its_own_lift() {
+        let profile = SupportProfile::light();
+        let contact = Vec3::new(1.0, 1.0, profile.z_lift_mm);
+        assert!(
+            landing_on(&Mesh::default(), Transform::default(), contact, &profile).is_some(),
+            "the pad, the flare and the top segment have to stand inside the {} mm this \
+             profile lifts a part by",
+            profile.z_lift_mm
+        );
+    }
+
+    #[test]
     fn a_contact_with_no_room_under_it_has_no_landing() {
         let profile = profile();
         // The foot alone is taller than this contact stands.

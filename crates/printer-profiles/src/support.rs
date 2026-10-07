@@ -451,18 +451,20 @@ impl SupportProfile {
                 contact_diameter_mm: 0.5,
                 contact_depth_mm: 0.3,
             },
+            // The pad, the flare and the top segment together stand inside the 2 mm
+            // lift this profile asks for; see `docs/design/supports.md`.
             top: TopSegment {
                 upper_diameter_mm: 0.5,
                 lower_diameter_mm: 0.9,
-                length_mm: 2.0,
+                length_mm: 1.0,
             },
             middle: MiddleSegment { diameter_mm: 0.9 },
             bottom: BottomSegment {
                 shape: PlatformShape::Cylinder,
                 platform_diameter_mm: 7.0,
-                platform_thickness_mm: 0.8,
+                platform_thickness_mm: 0.5,
                 upper_diameter_mm: 0.9,
-                lower_diameter_mm: 2.2,
+                lower_diameter_mm: 1.5,
             },
             land_on_model: default_land_on_model(),
             small_pillar: SmallPillar {

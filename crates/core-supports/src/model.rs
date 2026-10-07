@@ -97,6 +97,21 @@ impl ModelSupports {
                 .sum::<usize>()
     }
 
+    /// How many supports are built to `group`: its points and the tips of its frozen
+    /// trees, which is what dropping that group would take away.
+    pub fn group_count(&self, group: u16) -> usize {
+        self.points
+            .iter()
+            .filter(|support| support.group == group)
+            .count()
+            + self
+                .frozen
+                .iter()
+                .filter(|tree| tree.group() == group)
+                .map(SupportTree::tip_count)
+                .sum::<usize>()
+    }
+
     /// Where every support touches the model, in plate coordinates: the points and the
     /// tips of the frozen trees alike. What an automatic run is handed as seeds.
     pub fn contacts(&self, transform: Transform) -> Vec<Vec3> {
@@ -377,17 +392,34 @@ impl ModelSupports {
         self.built = None;
     }
 
-    /// Hands every support of `group` back to the default one, and shifts the groups
-    /// above it down, for a group that has been taken away.
-    pub fn regroup(&mut self, group: u16) {
+    /// Takes every support built to `group` away with it, and shifts the groups above it
+    /// down. Returns how many supports went.
+    ///
+    /// A group is a shape, so its supports go with it rather than being handed to another
+    /// group to be rebuilt in a shape nobody asked for; the window asks first and the
+    /// history takes it back.
+    pub fn drop_group(&mut self, group: u16) -> usize {
+        let before = self.point_count();
+        self.points.retain(|support| support.group != group);
+        self.frozen.retain(|tree| tree.group() != group);
+        let mut moved = false;
         for support in &mut self.points {
-            support.group = match support.group {
-                at if at == group => 0,
-                at if at > group => at - 1,
-                at => at,
-            };
+            if support.group > group {
+                support.group -= 1;
+                moved = true;
+            }
         }
-        self.built = None;
+        for tree in &mut self.frozen {
+            if tree.group() > group {
+                tree.set_group(tree.group() - 1);
+                moved = true;
+            }
+        }
+        let gone = before - self.point_count();
+        if gone > 0 || moved {
+            self.built = None;
+        }
+        gone
     }
 
     /// Takes away the point a support grew from. Out of range does nothing, which is what
@@ -580,6 +612,34 @@ mod tests {
         assert!(
             Arc::ptr_eq(&first, &supports.meshes().expect("still built")[0]),
             "an unchanged object must not churn the GPU cache every frame"
+        );
+    }
+
+    #[test]
+    fn dropping_a_group_takes_its_supports_with_it() {
+        let mut supports = ModelSupports::default();
+        supports.add(Vec3::new(10.0, 10.0, 20.0), Transform::default(), 0);
+        supports.add(Vec3::new(20.0, 10.0, 20.0), Transform::default(), 1);
+
+        assert_eq!(supports.drop_group(1), 1, "the group held one support");
+        assert_eq!(supports.point_count(), 1);
+        assert!(
+            supports.points().iter().all(|point| point.group == 0),
+            "the support of the group that stayed is untouched"
+        );
+    }
+
+    #[test]
+    fn dropping_a_group_shifts_the_groups_above_it_down() {
+        let mut supports = ModelSupports::default();
+        supports.add(Vec3::new(10.0, 10.0, 20.0), Transform::default(), 1);
+        supports.add(Vec3::new(20.0, 10.0, 20.0), Transform::default(), 2);
+
+        assert_eq!(supports.drop_group(1), 1);
+        assert_eq!(
+            supports.points()[0].group,
+            1,
+            "the group above the one taken away moved down into its number"
         );
     }
 

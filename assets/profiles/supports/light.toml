@@ -30,10 +30,12 @@ shape = "cone"
 contact_diameter_mm = 0.5
 contact_depth_mm = 0.3
 
+# The pad, the flare and this segment together stand inside the lift above, so a part
+# lifted by it has room for its own supports: docs/design/supports.md.
 [top]
 upper_diameter_mm = 0.5
 lower_diameter_mm = 0.9
-length_mm = 2.0
+length_mm = 1.0
 
 [middle]
 diameter_mm = 0.9
@@ -42,12 +44,12 @@ diameter_mm = 0.9
 # cylinder, cone, prism or cube.
 shape = "cylinder"
 platform_diameter_mm = 7.0
-platform_thickness_mm = 0.8
+platform_thickness_mm = 0.5
 
 # The flare between the pillar and the pad. It rises as far as it widens, so these
 # two also set its height.
 upper_diameter_mm = 0.9
-lower_diameter_mm = 2.2
+lower_diameter_mm = 1.5
 
 # The thin strut used where a support runs from one part of the model to another rather
 # than down to the plate. Both of its ends sink into a surface.

@@ -1,4 +1,4 @@
-use core_geometry::{Adjacency, FastMap, Mesh, Scalar, Vec2, Vec3};
+use core_geometry::{Adjacency, FastMap, Mat3, Mesh, Scalar, Vec2, Vec3};
 
 use serde::{Deserialize, Serialize};
 
@@ -17,6 +17,10 @@ const ON_EDGE: Scalar = 1e-5;
 /// A spacing under this would fill a patch with more supports than resin; it is a tenth
 /// of the narrowest head any profile ships.
 const MIN_SPACING_MM: Scalar = 0.05;
+
+/// A transform this close to singular has flattened its model, and a face of it has no
+/// normal on the plate to measure.
+const SINGULAR: Scalar = 1e-12;
 
 /// How a painted patch is filled with supports.
 ///
@@ -43,12 +47,14 @@ impl Default for ProjectSettings {
 
 /// Where supports go to hold up `region` of the model, in plate coordinates.
 ///
-/// A face the same model has blocked is left out of the fill, so painting over a patch
-/// that is partly forbidden fills the rest of it.
+/// A face the same model has blocked is left out of the fill, and so is one leaning
+/// further from a ceiling than `max_overhang_deg`: paint says where a support may go, the
+/// profile's overhang angle says whether one is needed. So painting over a patch that is
+/// partly forbidden, or over a wall that holds itself up, fills the rest of it.
 ///
 /// The inside is sampled on a grid of the plate rather than over the triangles, so the
 /// spacing is the spacing the print sees however finely the patch is meshed, and the rim
-/// is walked along the edges the region ends on — the boundary of a set of faces, not an
+/// is walked along the edges the fill ends on — the boundary of a set of faces, not an
 /// offset polygon. See `docs/decisions/0092`.
 pub fn project(
     placed: &Placed,
@@ -56,6 +62,7 @@ pub fn project(
     region: &Region,
     settings: &ProjectSettings,
     seeds: &[Vec3],
+    max_overhang_deg: Scalar,
 ) -> Vec<Vec3> {
     let matrix = placed.transform.to_matrix();
     let rim_mm = settings
@@ -74,6 +81,8 @@ pub fn project(
     else {
         return Vec::new();
     };
+
+    let region = &hanging(placed, region, max_overhang_deg);
 
     // The supports already standing come first, so a second fill of the same patch adds
     // nothing on top of the first.
@@ -103,6 +112,36 @@ pub fn project(
     points
 }
 
+/// The faces of `region` a support may be put under: the ones the model has not blocked,
+/// hanging over nothing as far as `max_overhang_deg` says.
+///
+/// A face's lean is the downward part of its own normal on the plate, which is the test
+/// the viewport washes an overhang with; see `docs/decisions/0034`.
+fn hanging(placed: &Placed, region: &Region, max_overhang_deg: Scalar) -> Region {
+    let matrix = placed.transform.to_matrix();
+    if matrix.determinant().abs() < SINGULAR {
+        return Region::default();
+    }
+    // A normal does not survive a non-uniform scale under the model matrix, but it does
+    // under the inverse transpose of that matrix's upper 3x3.
+    let normals = Mat3::from_mat4(matrix.inverse()).transpose();
+    let holds_itself_up = max_overhang_deg.clamp(0.0, 90.0).to_radians().sin();
+
+    let mut hanging = Region::default();
+    for face in region.faces().filter(|face| !placed.blocks_face(*face)) {
+        let Some(triangle) = placed.model.triangle(face) else {
+            continue;
+        };
+        let lean = -(normals * triangle.normal_unnormalized())
+            .normalize_or_zero()
+            .z;
+        if lean >= holds_itself_up {
+            hanging.set(face, true);
+        }
+    }
+    hanging
+}
+
 /// The lowest point of the patch over each cell of a grid `pitch_mm` across.
 ///
 /// Lowest because a patch that folds over itself is being held from underneath: the
@@ -110,7 +149,7 @@ pub fn project(
 fn infill_points(placed: &Placed, region: &Region, pitch_mm: Scalar) -> Vec<Vec3> {
     let matrix = placed.transform.to_matrix();
     let mut lowest: FastMap<[i32; 2], Scalar> = FastMap::default();
-    for face in region.faces().filter(|face| !placed.blocks_face(*face)) {
+    for face in region.faces() {
         let Some(triangle) = placed.model.triangle(face) else {
             continue;
         };
@@ -160,7 +199,7 @@ fn border_points(
 ) -> Vec<Vec3> {
     let model = placed.model;
     let mut points = Vec::new();
-    for face in region.faces().filter(|face| !placed.blocks_face(*face)) {
+    for face in region.faces() {
         let Some(corners) = model.faces.get(face) else {
             continue;
         };
@@ -257,6 +296,10 @@ mod tests {
     use crate::tests::box_mesh;
     use core_geometry::{Bvh, Transform};
 
+    /// The overhang angle the shipped profiles are around, so a ceiling is held and a
+    /// wall is not.
+    const OVERHANG_DEG: Scalar = 45.0;
+
     /// A model standing where it was modelled, with nothing blocked.
     fn standing<'a>(model: &'a Mesh, bvh: &'a Bvh) -> Placed<'a> {
         Placed::new(model, bvh, Transform::default())
@@ -292,6 +335,7 @@ mod tests {
             &whole(model),
             settings,
             &[],
+            OVERHANG_DEG,
         )
     }
 
@@ -305,6 +349,7 @@ mod tests {
             &Region::default(),
             &ProjectSettings::default(),
             &[],
+            OVERHANG_DEG,
         );
         assert!(points.is_empty());
     }
@@ -345,6 +390,7 @@ mod tests {
                 border_spacing_mm: None,
             },
             &[],
+            OVERHANG_DEG,
         );
 
         assert_eq!(points.len(), 25);
@@ -374,8 +420,9 @@ mod tests {
         );
     }
 
-    /// The same square, meshed as a fan of many small triangles: the rim is then made of
-    /// edges far shorter than the spacing asked for.
+    /// The same square, meshed as a fan of many small triangles, looking down like the
+    /// square it stands for: the rim is then made of edges far shorter than the spacing
+    /// asked for.
     fn fine_ceiling(z: Scalar, steps: usize) -> Mesh {
         let mut vertices = vec![Vec3::new(5.0, 5.0, z)];
         for step in 0..steps {
@@ -389,7 +436,7 @@ mod tests {
             vertices.push(Vec3::new(x, y, z));
         }
         let faces = (0..steps)
-            .map(|step| [0, 1 + step as u32, 1 + ((step + 1) % steps) as u32])
+            .map(|step| [0, 1 + ((step + 1) % steps) as u32, 1 + step as u32])
             .collect();
         Mesh::new(vertices, faces)
     }
@@ -465,6 +512,7 @@ mod tests {
                 border_spacing_mm: None,
             },
             &[],
+            OVERHANG_DEG,
         );
 
         assert!(
@@ -488,6 +536,7 @@ mod tests {
             &whole(&model),
             &settings,
             &[],
+            OVERHANG_DEG,
         );
         let twice = project(
             &standing(&model, &bvh),
@@ -495,12 +544,64 @@ mod tests {
             &whole(&model),
             &settings,
             &once,
+            OVERHANG_DEG,
         );
 
         assert!(
             twice.is_empty(),
             "filling the same patch again added {} more supports",
             twice.len()
+        );
+    }
+
+    /// A 10 mm square standing on its edge, wound so it looks along x: a wall holds
+    /// itself up whatever is painted on it.
+    fn wall() -> Mesh {
+        Mesh::new(
+            vec![
+                Vec3::new(0.0, 0.0, 0.0),
+                Vec3::new(0.0, 10.0, 0.0),
+                Vec3::new(0.0, 10.0, 10.0),
+                Vec3::new(0.0, 0.0, 10.0),
+            ],
+            vec![[0, 1, 2], [0, 2, 3]],
+        )
+    }
+
+    #[test]
+    fn a_painted_wall_is_not_filled() {
+        let points = filled(
+            &wall(),
+            &ProjectSettings {
+                infill_spacing_mm: Some(2.0),
+                border_spacing_mm: Some(2.0),
+            },
+        );
+        assert!(
+            points.is_empty(),
+            "a wall leaning nothing at all took {} supports at {OVERHANG_DEG} degrees",
+            points.len()
+        );
+    }
+
+    #[test]
+    fn a_wall_is_filled_once_the_angle_asks_for_it() {
+        let model = wall();
+        let bvh = Bvh::build(&model);
+        let points = project(
+            &standing(&model, &bvh),
+            &Adjacency::of(&model),
+            &whole(&model),
+            &ProjectSettings {
+                infill_spacing_mm: None,
+                border_spacing_mm: Some(2.0),
+            },
+            &[],
+            0.0,
+        );
+        assert!(
+            !points.is_empty(),
+            "an angle of zero holds up every face that is painted"
         );
     }
 

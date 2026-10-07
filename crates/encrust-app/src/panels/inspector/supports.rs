@@ -30,12 +30,13 @@ const DEFAULT_SPACING_MM: f32 = 3.0;
 const MIN_FLOOD_DEG: f32 = 1.0;
 const MAX_FLOOD_DEG: f32 = 180.0;
 
-/// What each of the placing modes does, in the order they are drawn.
+/// What each of the placing modes does, in the order they are drawn. Short, because it
+/// stays on screen under the pill for as long as the tool is in hand.
 const PAINT_HINT: [&str; 4] = [
-    "Click the model to stand a support under it, alt-click one to take it away.",
-    "Drag to paint what needs holding up, ctrl-click for the whole surface, alt to erase.",
-    "Drag to paint where no support may go, ctrl-click for the whole surface, alt to erase.",
-    "Click a part to pick it, drag a picked part to carry it, shift adds, alt removes.",
+    "Click to place, alt-click to remove.",
+    "Drag to paint, ctrl-click a surface, alt to erase.",
+    "Drag to block, ctrl-click a surface, alt to erase.",
+    "Click to pick, drag to carry, shift adds, alt removes.",
 ];
 
 /// What a support is made of, and what the plate has on it.
@@ -200,11 +201,54 @@ fn groups(ui: &mut egui::Ui, window: &mut Window) {
     }
     window.tools.supports.choose_group(chosen);
     if let Some(group) = drop {
-        window
-            .tools
-            .supports
-            .remove_group(group, &mut window.doc.scene);
+        let holds = window.tools.supports.group_holds(group, &window.doc.scene);
+        if holds == 0 {
+            window
+                .tools
+                .supports
+                .remove_group(group, &mut window.doc.scene);
+        } else {
+            window.tools.supports.dropping = Some((group, holds));
+        }
     }
+    dropping(ui, window);
+}
+
+/// The question a group holding supports is taken away behind: they go with it, and only
+/// `Cmd+Z` brings them back.
+fn dropping(ui: &mut egui::Ui, window: &mut Window) {
+    let Some((group, holds)) = window.tools.supports.dropping else {
+        return;
+    };
+    // An undo under the open question can take the group away itself.
+    let Some(entry) = window.tools.supports.groups.get(group as usize) else {
+        window.tools.supports.dropping = None;
+        return;
+    };
+    let name = entry.name.clone();
+    egui::Modal::new(egui::Id::new("drop-support-group")).show(ui.ctx(), |ui| {
+        ui.label(match holds {
+            1 => format!("{name} holds 1 support, which goes with it."),
+            holds => format!("{name} holds {holds} supports, which go with it."),
+        });
+        ui.add_space(8.0);
+        ui.horizontal(|ui| {
+            if ui.button("Drop the group").clicked() {
+                let gone = window
+                    .tools
+                    .supports
+                    .remove_group(group, &mut window.doc.scene);
+                window.machine.status = Status::Info(match gone {
+                    1 => format!("Dropped {name} and 1 support"),
+                    gone => format!("Dropped {name} and {gone} supports"),
+                });
+                window.tools.supports.dropping = None;
+            }
+            if ui.button("Keep it").clicked() {
+                window.tools.supports.dropping = None;
+            }
+        });
+    });
 }
 
 /// What the Edit mode is holding: how much of it, which groups it belongs to, and the
@@ -276,7 +320,7 @@ fn painting(ui: &mut egui::Ui, window: &mut Window) {
     }
 
     ui.add_space(4.0);
-    describe(ui, PAINT_HINT[window.tools.supports.placing as usize]);
+    hint(ui, PAINT_HINT[window.tools.supports.placing as usize]);
 
     if window.tools.supports.placing.edits() {
         ui.add_space(4.0);

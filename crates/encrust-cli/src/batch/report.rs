@@ -173,6 +173,8 @@ pub struct Hollow {
 
 #[derive(Debug, Serialize)]
 pub struct Supports {
+    /// How far the model was stood off the plate to make room for them, millimetres.
+    pub lifted_mm: Scalar,
     pub contacts: usize,
     pub standing: usize,
     pub trunks: usize,
@@ -255,6 +257,7 @@ impl PartReport {
                 cavity_mm3: report.cavity_mm3(),
             }),
             supports: part.supports.as_ref().map(|report| Supports {
+                lifted_mm: report.lifted_mm,
                 contacts: report.contacts,
                 standing: report.standing,
                 trunks: report.trees,

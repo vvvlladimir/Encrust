@@ -116,7 +116,13 @@ that is not beam-checked — it is a slab, not a body, and clipping it is a plat
 operation.
 
 **Lift.** `z_lift_mm` is how far the lowest point of a part stands off the plate, applied
-by `core_geometry::lift_over_plate`; lifting twice is a no-op.
+by `core_geometry::lift_over_plate`; lifting twice is a no-op. The window applies it from
+its **Lift models** button and the command line applies it inside `stand_under`, before it
+cuts the model, leaving a part that already stands that high where it is. Whether the
+lowest contact of a lifted part can stand at all is arithmetic: the pad, the top segment
+and `MIN_PILLAR_HEIGHT_MM` have to fit under that contact, the segment being shortened
+rather than allowed to eat the body's room. Light is sized to meet that at its own 2 mm —
+a 0.5 mm pad, a 0.3 mm flare and a 1 mm top segment.
 
 ## Keeping the mesh closed
 
@@ -290,6 +296,12 @@ tree to its group while the raft and the bracing come from group 0. A tree also 
 The table lives in the window's Supports tool: the panel's fields edit the group in hand,
 and the scene stores only the number each support carries.
 
+Dropping a group takes every support built to it away — a group is a shape, so its supports
+do not survive it to be rebuilt to another group's numbers — and shifts the groups above it
+down into its number. The window asks first when the group holds anything, and the history
+takes the whole thing back. Group 0 cannot go: it holds the raft's and the bracing's
+numbers.
+
 ## Editing a support
 
 A support taken hold of is frozen: the tree as it stands is copied into the object in the
@@ -316,6 +328,12 @@ A `Region` is one bit per face of the model. It is painted with a brush — a ra
 plate, measured against each candidate face in the model's own space — or flooded from one
 face across shared edges while the normal stays within an angle of the one that was
 clicked. The face adjacency a flood walks is built for that click and thrown away.
+
+Paint says where a support may go; `max_overhang_deg` says whether one is needed. `project`
+drops every face of the region leaning further from a ceiling than that angle — the same
+test the viewport washes an overhang with (ADR 0034) — so a brush that strayed onto a
+vertical wall does not line it with supports, and the rim it walks is the rim of what is
+left.
 
 `project` turns the painted region into contacts in two halves, both optional:
 
@@ -345,7 +363,8 @@ its hierarchy, its placement and this patch — travel together as `Placed`.
 
 Supports are drawn as a second mesh per object with an identity transform — they are
 already in plate coordinates — in a cooler, darker colour; a painted patch is drawn the
-same way, lifted 0.05 mm off the faces it covers, green for a fill and red for a blocker.
+same way, lifted 0.05 mm off the faces it covers, green for a fill and violet for a
+blocker, which is a colour no overhang wash is.
 While a brush is out, a press that lands on a model paints until the button comes up and a
 press that misses one still turns the camera; under **Edit** a press picks the part it landed
 on and draws it green, the press after that carries it, shift adds to what is picked, and
@@ -356,7 +375,8 @@ paint, ctrl-click for the whole surface, alt to erase. The inspector's Supports 
 carries the group picker with its name, New and Drop, the preset pill, a **Regular
 Support** / **Small Pillar** tab pair, and below them
 branching, raft, bracing, the lift and its button, a **Place** / **Paint** / **Block** pill
-with the brush, the surface angle, the two fill spacings and Fill — and, under **Edit**,
+with the mode's own one-line hint under it, the brush, the surface angle, the two fill
+spacings and Fill — and, under **Edit**,
 how many parts of how many supports are held and the three buttons that move them to the
 group in hand, grow them again or take them away — the overhang angle, the density,
 Generate with its progress bar and cancel, the standing-against-placed count, and Save and

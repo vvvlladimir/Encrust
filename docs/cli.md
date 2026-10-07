@@ -128,7 +128,8 @@ encrust slice model.stl \
 ```
 
 Turn the model the way it prints best before anything else is done to it, and build
-supports to a shipped preset or to your own profile:
+supports to a profile of the catalogue — `light`, `medium`, `heavy` or one saved in the
+window, as `profiles list` names them — or to your own TOML with `--support-profile`:
 
 ```sh
 encrust slice model.stl \
@@ -137,6 +138,11 @@ encrust slice model.stl \
 encrust slice model.stl \
   --printer elegoo-mars-4-ultra --supports medium --center -o model.goo
 ```
+
+A model is stood off the plate by the profile's own `z_lift_mm` before anything is put
+under it, the way the window's **Lift models** does it: a part sitting on the plate has no
+room for a support. One already standing that high is left where it is, and a profile with
+`z_lift_mm = 0` lifts nothing. The report says how far it moved.
 
 ## Plates: several models, a plate file, a project
 
@@ -162,7 +168,7 @@ path = "a.stl"
 rotate = [0, 0, 45]             # degrees around X, Y, Z
 scale = 1.2                     # or [x, y, z]
 position = [60, 40]             # where the middle of the footprint goes, plate mm
-supports = "medium"             # light, medium or heavy
+supports = "medium"             # any support profile `profiles list` names
 
 [[model]]
 path = "b.stl"
@@ -198,9 +204,12 @@ the new file's previews are blank (ADR 0180).
 
 ## Profiles, a config file, completions
 
-`profiles show <id>` prints a printer, resin or support profile as the TOML it is kept in, or
-writes it with `-o`; edited, it is what `--profile` and `--material` take. `--kind` picks
-one when two kinds share an id.
+`profiles list` prints the catalogue in three blocks — printers, resins and support
+profiles — marking what came from your own folder; a support profile saved in the window is
+in that third block and `--supports` takes its id. `profiles show <id>` prints a printer,
+resin or support profile as the TOML it is kept in, or writes it with `-o`; edited, it is
+what `--profile`, `--material` and `--support-profile` take. `--kind` picks one when two
+kinds share an id.
 
 `--config FILE` holds flags written down: a key is a flag's long name, `true` the bare flag,
 `false` nothing, an array the flag once per element. Keys at the top are the global flags,
