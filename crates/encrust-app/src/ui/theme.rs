@@ -286,6 +286,8 @@ pub const TOOL_SIZE: f32 = 40.0;
 pub const ICON_SIZE: f32 = 28.0;
 pub const PRIMARY_H: f32 = 38.0;
 pub const BUTTON_H: f32 = 30.0;
+/// Height of a running job's progress bar.
+pub const BAR_H: f32 = 6.0;
 
 /// Inner margin of an inspector block, a floating card and a card's header row.
 pub const PANEL_MARGIN: Margin = Margin::same(12);

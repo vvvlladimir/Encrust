@@ -90,6 +90,7 @@ impl SlicerApp {
             &mut self.mode,
             &mut self.machine.status,
             file,
+            &self.doc.scene,
         );
     }
 
@@ -310,6 +311,7 @@ pub fn open_by_what_it_is(window: &mut Window, file: Handed) {
             window.mode,
             &mut window.machine.status,
             &file,
+            &window.doc.scene,
         );
     } else {
         window
@@ -378,6 +380,11 @@ impl eframe::App for SlicerApp {
             ui.ctx().send_viewport_cmd(egui::ViewportCommand::Close);
         }
         self.hand_written_file_to_the_network();
+        crate::sliced::close_if_the_plate_moved_on(
+            &mut self.machine.preview,
+            &mut self.machine.status,
+            &self.doc.scene,
+        );
         self.refresh_preview();
         self.carry_height();
         self.refresh_supports();

@@ -1,7 +1,8 @@
 use crate::panels::Window;
 use crate::state::Doc;
 use crate::ui::{
-    describe, icon, meta, number_row, primary_button, section, stats, subheading, theme, tone,
+    describe, icon, meta, number_row, primary_button, progress_bar, section, stats, subheading,
+    theme, tone,
 };
 
 /// Per point of drag: a relief is measured in tenths of a millimetre, precision in
@@ -123,12 +124,7 @@ fn truncated(name: &str) -> String {
 fn action(ui: &mut egui::Ui, window: &mut Window) {
     if window.tools.relief.is_busy() {
         tone(ui, "Pressing...", theme::colors().text_mid);
-        ui.add(
-            egui::ProgressBar::new(0.0)
-                .animate(true)
-                .desired_height(6.0)
-                .corner_radius(theme::R_CONTROL),
-        );
+        progress_bar(ui, None);
         return;
     }
 

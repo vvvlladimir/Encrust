@@ -54,8 +54,11 @@ impl HollowOutcome {
 
 #[derive(Debug)]
 enum Report {
-    /// Share of the models done, and the name of the one in hand.
-    Progress(f32),
+    /// Models whose shell is built, of the models the run was given.
+    Progress {
+        done: usize,
+        total: usize,
+    },
     Finished(HollowOutcome),
 }
 
@@ -67,7 +70,8 @@ enum Report {
 pub struct HollowJob {
     reports: Receiver<Report>,
     cancel: Arc<AtomicBool>,
-    fraction: f32,
+    done: usize,
+    total: usize,
 }
 
 impl HollowJob {
@@ -79,8 +83,8 @@ impl HollowJob {
         let worker_cancel = Arc::clone(&cancel);
 
         crate::job::spawn(move || {
-            let outcome = run(&request, &worker_cancel, &mut |fraction| {
-                let _ = sender.send(Report::Progress(fraction));
+            let outcome = run(&request, &worker_cancel, &mut |done, total| {
+                let _ = sender.send(Report::Progress { done, total });
             });
             let _ = sender.send(Report::Finished(outcome));
         });
@@ -88,7 +92,8 @@ impl HollowJob {
         Self {
             reports,
             cancel,
-            fraction: 0.0,
+            done: 0,
+            total: 0,
         }
     }
 
@@ -97,7 +102,10 @@ impl HollowJob {
     pub fn poll(&mut self) -> Option<HollowOutcome> {
         loop {
             match self.reports.try_recv() {
-                Ok(Report::Progress(fraction)) => self.fraction = fraction,
+                Ok(Report::Progress { done, total }) => {
+                    self.done = done;
+                    self.total = total;
+                }
                 Ok(Report::Finished(outcome)) => return Some(outcome),
                 Err(TryRecvError::Empty) => return None,
                 Err(TryRecvError::Disconnected) => {
@@ -118,15 +126,20 @@ impl HollowJob {
         self.cancel.load(Ordering::Relaxed)
     }
 
-    pub fn fraction(&self) -> f32 {
-        self.fraction
+    /// Share of the models shelled, or `None` where there is nothing honest to show: a
+    /// cavity is built in one call, so a single model is either going or done.
+    pub fn fraction(&self) -> Option<f32> {
+        (self.total > 1).then(|| self.done as f32 / self.total as f32)
     }
 
     pub fn label(&self) -> String {
         if self.is_cancelling() {
             return "Stopping after this model".to_owned();
         }
-        format!("Hollowing, {:.0} %", self.fraction * 100.0)
+        match self.fraction() {
+            Some(_) => format!("Hollowing model {} of {}", self.done + 1, self.total),
+            None => "Hollowing...".to_owned(),
+        }
     }
 }
 
@@ -178,7 +191,7 @@ pub fn rebuild_tasks(scene: &Scene) -> Vec<HollowTask> {
 fn run(
     request: &HollowRequest,
     cancel: &AtomicBool,
-    report: &mut (dyn FnMut(f32) + Send),
+    report: &mut (dyn FnMut(usize, usize) + Send),
 ) -> HollowOutcome {
     let pool = match thread_pool(worker_threads()) {
         Ok(pool) => pool,
@@ -190,17 +203,17 @@ fn run(
 fn shell_each(
     request: &HollowRequest,
     cancel: &AtomicBool,
-    report: &mut (dyn FnMut(f32) + Send),
+    report: &mut (dyn FnMut(usize, usize) + Send),
 ) -> HollowOutcome {
-    let models = request.tasks.len().max(1) as f32;
-    let mut shells = Vec::with_capacity(request.tasks.len());
+    let models = request.tasks.len();
+    let mut shells = Vec::with_capacity(models);
 
     for (index, task) in request.tasks.iter().enumerate() {
         // The field is built in one call, so a run can only be stopped between models.
         if cancel.load(Ordering::Relaxed) {
             return HollowOutcome::Cancelled;
         }
-        report(index as f32 / models);
+        report(index, models);
 
         match hollow_at_scale(&task.mesh, &task.bvh, &task.settings, task.scale) {
             Ok(hollowed) => shells.push(Shelled {
@@ -219,6 +232,45 @@ fn shell_each(
         }
     }
 
-    report(1.0);
+    report(models, models);
     HollowOutcome::Hollowed(shells)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// A handle with no worker behind it, so that the counters can be driven by hand.
+    fn job(done: usize, total: usize) -> HollowJob {
+        let (_sender, reports) = mpsc::channel();
+        HollowJob {
+            reports,
+            cancel: Arc::new(AtomicBool::new(false)),
+            done,
+            total,
+        }
+    }
+
+    /// The bar runs rather than standing at nought for the whole of a run it cannot
+    /// honestly take a share of.
+    #[test]
+    fn one_model_has_no_share_to_show() {
+        let job = job(0, 1);
+        assert_eq!(job.fraction(), None);
+        assert_eq!(job.label(), "Hollowing...");
+    }
+
+    #[test]
+    fn a_plate_of_models_counts_the_one_in_hand() {
+        let job = job(1, 4);
+        assert_eq!(job.fraction(), Some(0.25));
+        assert_eq!(job.label(), "Hollowing model 2 of 4");
+    }
+
+    #[test]
+    fn cancelling_shows_in_the_label() {
+        let job = job(1, 4);
+        job.cancel();
+        assert_eq!(job.label(), "Stopping after this model");
+    }
 }

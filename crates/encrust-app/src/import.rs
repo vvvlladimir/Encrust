@@ -106,13 +106,13 @@ pub fn prepare(
     stage: &mut dyn FnMut(ImportStage),
 ) -> Result<Imported> {
     let path = file.path();
+    let name = file_name(path);
     let extension = path
         .extension()
         .and_then(|e| e.to_str())
-        .with_context(|| format!("{} has no file extension", path.display()))?;
+        .with_context(|| format!("{name} has no file extension"))?;
 
-    let loader = loader_for_extension(extension)
-        .with_context(|| format!("cannot load {}", path.display()))?;
+    let loader = loader_for_extension(extension).with_context(|| format!("cannot load {name}"))?;
 
     stage(ImportStage::Reading);
     let loaded = match file {
@@ -123,7 +123,7 @@ pub fn prepare(
             beside: &|name| file.beside(name),
         }),
     }
-    .with_context(|| format!("cannot load {}", path.display()))?;
+    .with_context(|| format!("cannot load {name}"))?;
 
     stage(ImportStage::Repairing);
     // Repaired in place and moved out at the end, so a mesh of tens of megabytes is
@@ -140,15 +140,8 @@ pub fn prepare(
 
     let bounds = mesh
         .aabb()
-        .with_context(|| format!("{} has no vertices", path.display()))?;
+        .with_context(|| format!("{name} has no vertices"))?;
     let placement = drop_to_plate(&bounds) + center_over_plate(&bounds, plate.x_mm, plate.y_mm);
-
-    // The file's own name, extension and all: three copies of one cube opened from an
-    // STL, an OBJ and a 3MF are otherwise one name three times over.
-    let name = path.file_name().map_or_else(
-        || path.display().to_string(),
-        |name| name.to_string_lossy().into_owned(),
-    );
 
     stage(ImportStage::Indexing);
     Ok(Imported {
@@ -160,6 +153,16 @@ pub fn prepare(
             summary,
         )
     })
+}
+
+/// The file's own name, extension and all: three copies of one cube opened from an STL, an
+/// OBJ and a 3MF are otherwise one name three times over. It is also what a failure is
+/// reported under, since a reader's own error already carries the whole path.
+fn file_name(path: &std::path::Path) -> String {
+    path.file_name().map_or_else(
+        || path.display().to_string(),
+        |name| name.to_string_lossy().into_owned(),
+    )
 }
 
 /// The file's textures, over the mesh as the repair left it.
@@ -242,6 +245,19 @@ mod tests {
     #[test]
     fn an_unsupported_extension_is_rejected() {
         assert!(prepared(&fixture("model.gcode")).is_err());
+    }
+
+    /// BUG-23: the status bar has one line, and a reader's own error already carries the
+    /// whole path, so what we add to it names the file alone.
+    #[test]
+    fn a_failure_names_the_file_and_not_the_path_it_was_opened_from() {
+        let error = prepared(&fixture("model.gcode")).expect_err("no loader reads a program");
+        let first = error.to_string();
+        assert_eq!(first, "cannot load model.gcode");
+        assert!(
+            !first.contains(std::path::MAIN_SEPARATOR),
+            "the path is the reader's to state, got {first}"
+        );
     }
 
     #[test]

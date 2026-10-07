@@ -1,6 +1,6 @@
 # 0151. Let the preview show a source, which is either a plate or a file
 
-- **Status:** Accepted
+- **Status:** Accepted; what ends a file's turn is amended by 0202
 - **Date:** 2026-09-30
 
 ## Context

@@ -10,7 +10,9 @@ use crate::scene::Scene;
 use crate::slicing::Slicing;
 use crate::state::Machine;
 use crate::status::Status;
-use crate::ui::{companion_button, icon, primary_button, secondary_button, theme, tone};
+use crate::ui::{
+    companion_button, icon, primary_button, progress_bar, secondary_button, theme, tone,
+};
 
 use super::estimate;
 
@@ -166,12 +168,9 @@ fn progress(ui: &mut egui::Ui, label: &str, fraction: Option<f32>) {
         }
         one_line(ui, label, colors.text_mid);
     });
-    let bar = match fraction {
-        Some(fraction) => egui::ProgressBar::new(fraction),
-        // Slicing reports no layer counts, so the bar animates rather than lies.
-        None => egui::ProgressBar::new(0.0).animate(true),
-    };
-    ui.add(bar.desired_height(6.0).corner_radius(theme::R_CONTROL));
+    // Slicing reports no layer counts until the stack is cut, so the bar runs rather
+    // than lies.
+    progress_bar(ui, fraction);
 }
 
 fn one_line(ui: &mut egui::Ui, text: &str, color: egui::Color32) {

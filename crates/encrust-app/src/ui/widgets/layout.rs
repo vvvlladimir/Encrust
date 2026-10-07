@@ -360,29 +360,63 @@ fn cell(ui: &mut Ui, width: f32, key: &str, value: &str) {
         });
 }
 
+/// Points between the name and the value of a reading, which is the least that still
+/// reads as two columns.
+const READING_GAP: f32 = 10.0;
+
+/// Lines a value may wrap to before it is cut: a panel size states pixels and
+/// millimetres, which is two lines in a column this narrow.
+const VALUE_ROWS: usize = 2;
+
 /// Rows of one reading each, the name at the left and the value at the right, for a
 /// summary read top to bottom rather than compared across.
+///
+/// A value too long for the row wraps and then is cut, so that the name beside it stays
+/// readable: nothing here is drawn over anything else.
 pub fn readings(ui: &mut Ui, entries: &[(&str, String)]) {
     let colors = theme::colors();
     for (key, value) in entries {
-        let (rect, _) =
-            ui.allocate_exact_size(vec2(ui.available_width(), theme::ROW_H), Sense::hover());
+        let name = ui
+            .painter()
+            .layout_no_wrap((*key).to_owned(), theme::label(), colors.text_mid);
+        let room = ui.available_width() - name.size().x - READING_GAP;
+        let mut job = egui::text::LayoutJob::simple(
+            value.clone(),
+            theme::mono(12.0),
+            colors.text_high,
+            room.max(READING_GAP),
+        );
+        job.wrap.max_rows = VALUE_ROWS;
+        job.halign = egui::Align::RIGHT;
+        let reading = ui.painter().layout_job(job);
+
+        let height = theme::ROW_H.max(reading.size().y + READING_GAP);
+        let (rect, _) = ui.allocate_exact_size(vec2(ui.available_width(), height), Sense::hover());
         let painter = ui.painter();
-        painter.text(
-            rect.left_center(),
-            egui::Align2::LEFT_CENTER,
-            key,
-            theme::label(),
+        painter.galley(
+            rect.left_center() - vec2(0.0, name.size().y / 2.0),
+            name,
             colors.text_mid,
         );
-        painter.text(
-            rect.right_center(),
-            egui::Align2::RIGHT_CENTER,
-            value,
-            theme::mono(12.0),
+        painter.galley(
+            rect.right_center() - vec2(0.0, reading.size().y / 2.0),
+            reading,
             colors.text_high,
         );
     }
+}
+
+/// The bar of a running job: filled to `fraction` where it is known, and running on its
+/// own where it is not, which is a job that cannot honestly count its work.
+pub fn progress_bar(ui: &mut Ui, fraction: Option<f32>) {
+    let bar = match fraction {
+        Some(fraction) => egui::ProgressBar::new(fraction),
+        None => egui::ProgressBar::new(0.0).animate(true),
+    };
+    ui.add(
+        bar.desired_height(theme::BAR_H)
+            .corner_radius(theme::R_CONTROL),
+    );
 }
 
 /// A one pixel divider across the full width of whatever is drawing it.

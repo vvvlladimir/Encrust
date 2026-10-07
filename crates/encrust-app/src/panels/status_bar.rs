@@ -26,24 +26,37 @@ pub fn ui(ui: &mut egui::Ui, status: &Status, tally: &Tally, material: &Material
         (icon::INFO, theme::colors().text_low)
     };
 
-    ui.with_layout(Layout::left_to_right(Align::Center), |ui| {
-        ui.spacing_mut().item_spacing.x = 6.0;
-        ui.label(RichText::new(glyph).font(theme::icon(13.0)).color(color));
-        ui.label(
-            RichText::new(status.text())
-                .font(theme::small())
-                .color(color),
-        );
-        if tally.triangles == 0 {
-            return;
-        }
-        ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
-            ui.spacing_mut().item_spacing.x = 14.0;
+    // The readings take their room first, so the message is cut at them rather than
+    // drawn over them.
+    ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
+        ui.spacing_mut().item_spacing.x = 14.0;
+        if tally.triangles > 0 {
             for (key, value) in readings(tally, material).iter().rev() {
                 reading(ui, key, value);
             }
+        }
+        ui.with_layout(Layout::left_to_right(Align::Center), |ui| {
+            ui.spacing_mut().item_spacing.x = 6.0;
+            ui.label(RichText::new(glyph).font(theme::icon(13.0)).color(color));
+            message(ui, status.text(), color);
         });
     });
+}
+
+/// The message in what is left of the strip: cut with an ellipsis where it does not fit,
+/// and the whole of it on hover, since a cause chain is as long as it is.
+fn message(ui: &mut egui::Ui, text: &str, color: egui::Color32) {
+    let needed = ui
+        .painter()
+        .layout_no_wrap(text.to_owned(), theme::small(), color)
+        .size()
+        .x;
+    let cut = needed > ui.available_width();
+    let label = egui::Label::new(RichText::new(text).font(theme::small()).color(color)).truncate();
+    let response = ui.add(label);
+    if cut {
+        response.on_hover_text(text);
+    }
 }
 
 fn reading(ui: &mut egui::Ui, key: &str, value: &str) {

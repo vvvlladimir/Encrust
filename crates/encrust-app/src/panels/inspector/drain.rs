@@ -3,8 +3,8 @@ use crate::panels::Window;
 use crate::panels::inspector::hollow;
 use crate::state::Tools;
 use crate::ui::{
-    Segment, Segmented, describe, hint, icon, notice, number_row, primary_button, secondary_button,
-    section, stats, subheading, theme, tone,
+    Segment, Segmented, describe, hint, icon, notice, number_row, primary_button, progress_bar,
+    secondary_button, section, stats, subheading, theme, tone,
 };
 
 /// Per point of drag, in millimetres for the sizes and hundredths for the taper.
@@ -164,11 +164,7 @@ fn rebuild_around_cuts(window: &mut Window) {
 fn drainage(ui: &mut egui::Ui, window: &mut Window) {
     if window.tools.drain.job.is_some() {
         tone(ui, "Looking for trapped resin", theme::colors().text_mid);
-        ui.add(
-            egui::ProgressBar::new(0.0)
-                .desired_height(6.0)
-                .corner_radius(theme::R_CONTROL),
-        );
+        progress_bar(ui, None);
         return;
     }
 

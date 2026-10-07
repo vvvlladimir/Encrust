@@ -117,6 +117,9 @@ struct ReadFile {
     facts: SlicedFile,
     open: Opened<Box<dyn ReadSeek>>,
     fingerprint: u64,
+    /// What stood on the plate when the file was opened. The plate moving on is what ends
+    /// the file's turn under the slider, so that no reading comes from the other source.
+    plate: u64,
 }
 
 impl Source {
@@ -260,7 +263,7 @@ impl Preview {
     ///
     /// Only its tables are read: a layer is decoded when the slider lands on it, so opening
     /// a stack of thousands costs the same as opening one of ten.
-    pub fn read_file(&mut self, file: &Handed) -> Result<()> {
+    pub fn read_file(&mut self, file: &Handed, plate: u64) -> Result<()> {
         let path = file.path();
         let source: Box<dyn ReadSeek> = file
             .reader()
@@ -283,6 +286,7 @@ impl Preview {
             path: path.to_owned(),
             facts,
             open,
+            plate,
         })));
         Ok(())
     }
@@ -584,6 +588,22 @@ impl Preview {
         Some((double_area / 2.0).max(0.0))
     }
 
+    /// The file being shown was opened over another plate than the one standing now, so
+    /// what the window states about the plate and what the file states are two sources at
+    /// once; see `docs/decisions/0151`.
+    pub fn file_is_over_an_old_plate(&self, plate: u64) -> bool {
+        match self.source.as_ref() {
+            Some(Source::Read(read)) => read.plate != plate,
+            Some(Source::Cut(_)) | None => false,
+        }
+    }
+
+    /// Exposure of the layer being shown as the file's own table states it, seconds.
+    pub fn read_layer_exposure_s(&self) -> Option<f32> {
+        let facts = self.read_facts()?;
+        Some(facts.layers.get(self.layer)?.exposure_s)
+    }
+
     /// The stack no longer matches the scene it was cut from.
     pub fn is_stale(&self, fingerprint: u64) -> bool {
         self.source
@@ -861,7 +881,14 @@ pub fn stack_fingerprint(scene: &Scene, cutting: Cutting) -> u64 {
             value.to_bits().hash(&mut hasher);
         }
     }
+    plate_fingerprint(scene).hash(&mut hasher);
+    hasher.finish()
+}
 
+/// Identifies what stands on the plate, without the numbers it would be cut with: the
+/// half of [`stack_fingerprint`] a sliced file open in the window is held against.
+pub fn plate_fingerprint(scene: &Scene) -> u64 {
+    let mut hasher = DefaultHasher::new();
     scene.active_plate().hash(&mut hasher);
     for object in scene.printable(scene.active_plate()) {
         object.id.hash(&mut hasher);
@@ -901,7 +928,7 @@ pub(crate) mod tests {
     use core_raster::Grey;
     use core_raster::{PixelPitch, Shading};
 
-    use crate::scene::ImportSummary;
+    use crate::scene::{ImportSummary, Imported};
 
     /// Panel of 64 x 32 pixels at a 0.2 mm pitch: 12.8 x 6.4 mm of build area.
     fn settings() -> RasterSettings {
@@ -1479,7 +1506,7 @@ z = 10.0
         let path = written_goo("states", 4);
         let mut preview = Preview::default();
         preview
-            .read_file(&Handed::Path(path.clone()))
+            .read_file(&Handed::Path(path.clone()), 0)
             .expect("a .goo we wrote opens");
 
         let facts = preview.read_facts().expect("a file is open");
@@ -1504,7 +1531,7 @@ z = 10.0
         let path = written_goo("decode", 3);
         let mut preview = Preview::default();
         preview
-            .read_file(&Handed::Path(path.clone()))
+            .read_file(&Handed::Path(path.clone()), 0)
             .expect("a .goo we wrote opens");
         let panel = preview.read_panel().expect("a .goo records its panel");
 
@@ -1530,7 +1557,7 @@ z = 10.0
         let path = written_goo("heights", 4);
         let mut preview = Preview::default();
         preview
-            .read_file(&Handed::Path(path.clone()))
+            .read_file(&Handed::Path(path.clone()), 0)
             .expect("a .goo we wrote opens");
 
         assert!(
@@ -1554,12 +1581,70 @@ z = 10.0
         assert!((last - 0.2).abs() < 1e-4, "got {last}");
     }
 
+    /// BUG-51: importing a model while a file is open left the panel, the slider and the
+    /// footer stating two stacks at once.
+    #[test]
+    fn a_file_is_over_an_old_plate_once_what_stands_on_it_changes() {
+        let path = written_goo("plate", 2);
+        let mut scene = Scene::default();
+        let mut preview = Preview::default();
+        preview
+            .read_file(&Handed::Path(path.clone()), plate_fingerprint(&scene))
+            .expect("a .goo we wrote opens");
+        assert!(
+            !preview.file_is_over_an_old_plate(plate_fingerprint(&scene)),
+            "the plate it was opened over is the plate it is shown over"
+        );
+
+        scene.insert(Imported::new(
+            "box".to_owned(),
+            Arc::new(box_mesh(2.0)),
+            Transform::default(),
+            ImportSummary {
+                vertices_merged: 0,
+                faces_removed: 0,
+                orientation: Orientation {
+                    flipped_faces: 0,
+                    inverted_shells: 0,
+                    orientable: true,
+                },
+                diagnostics: diagnose(&box_mesh(2.0)),
+            },
+        ));
+        assert!(preview.file_is_over_an_old_plate(plate_fingerprint(&scene)));
+    }
+
+    /// The exposure of a file's layer is the file's own, not the window resin's ramp.
+    #[test]
+    fn an_opened_file_states_its_own_exposure_for_the_layer_being_shown() {
+        let path = written_goo("exposure", 3);
+        let mut preview = Preview::default();
+        preview
+            .read_file(&Handed::Path(path.clone()), 0)
+            .expect("a .goo we wrote opens");
+        let facts = preview.read_facts().expect("a file is open").clone();
+
+        preview.set_layer(2);
+        let exposure_s = preview
+            .read_layer_exposure_s()
+            .expect("the table states every layer's exposure");
+        assert!(
+            (exposure_s - facts.layers[2].exposure_s).abs() < 1e-6,
+            "the row of the layer being shown, got {exposure_s}"
+        );
+        assert_eq!(
+            Preview::default().read_layer_exposure_s(),
+            None,
+            "a plate under the slider has no file to read"
+        );
+    }
+
     #[test]
     fn closing_a_file_leaves_nothing_of_it_behind() {
         let path = written_goo("close", 2);
         let mut preview = Preview::default();
         preview
-            .read_file(&Handed::Path(path.clone()))
+            .read_file(&Handed::Path(path.clone()), 0)
             .expect("a .goo we wrote opens");
         preview.close_file();
 

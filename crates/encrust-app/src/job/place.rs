@@ -83,7 +83,9 @@ enum Report {
 pub struct SupportJob {
     reports: Receiver<Report>,
     cancel: Arc<AtomicBool>,
-    fraction: f32,
+    /// `None` until the first layer is reported: the stack of the first model is cut
+    /// before anything is placed, which is work no share can be taken of.
+    fraction: Option<f32>,
 }
 
 impl SupportJob {
@@ -104,7 +106,7 @@ impl SupportJob {
         Self {
             reports,
             cancel,
-            fraction: 0.0,
+            fraction: None,
         }
     }
 
@@ -113,7 +115,7 @@ impl SupportJob {
     pub fn poll(&mut self) -> Option<SupportOutcome> {
         loop {
             match self.reports.try_recv() {
-                Ok(Report::Progress(fraction)) => self.fraction = fraction,
+                Ok(Report::Progress(fraction)) => self.fraction = Some(fraction),
                 Ok(Report::Finished(outcome)) => return Some(outcome),
                 Err(TryRecvError::Empty) => return None,
                 Err(TryRecvError::Disconnected) => {
@@ -134,7 +136,7 @@ impl SupportJob {
         self.cancel.load(Ordering::Relaxed)
     }
 
-    pub fn fraction(&self) -> f32 {
+    pub fn fraction(&self) -> Option<f32> {
         self.fraction
     }
 
@@ -142,7 +144,10 @@ impl SupportJob {
         if self.is_cancelling() {
             return "Cancelling".to_owned();
         }
-        format!("Placing supports, {:.0} %", self.fraction * 100.0)
+        match self.fraction {
+            Some(fraction) => format!("Placing supports, {:.0} %", fraction * 100.0),
+            None => "Cutting the plate...".to_owned(),
+        }
     }
 }
 
@@ -440,7 +445,7 @@ mod tests {
         let mut job = SupportJob {
             reports,
             cancel: Arc::new(AtomicBool::new(false)),
-            fraction: 0.0,
+            fraction: None,
         };
         assert_eq!(job.poll(), None, "an empty channel means still running");
 
@@ -457,12 +462,25 @@ mod tests {
         let job = SupportJob {
             reports,
             cancel: Arc::new(AtomicBool::new(false)),
-            fraction: 0.5,
+            fraction: Some(0.5),
         };
         assert_eq!(job.label(), "Placing supports, 50 %");
 
         job.cancel();
         assert!(job.is_cancelling());
         assert_eq!(job.label(), "Cancelling");
+    }
+
+    /// The bar runs rather than standing at nought while the first stack is cut.
+    #[test]
+    fn a_run_with_nothing_reported_yet_has_no_share_to_show() {
+        let (_sender, reports) = mpsc::channel();
+        let job = SupportJob {
+            reports,
+            cancel: Arc::new(AtomicBool::new(false)),
+            fraction: None,
+        };
+        assert_eq!(job.fraction(), None);
+        assert_eq!(job.label(), "Cutting the plate...");
     }
 }

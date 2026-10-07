@@ -7,8 +7,8 @@ use crate::plate::BuildPlate;
 use crate::scene::{ObjectId, Scene, SceneObject};
 use crate::state::Tools;
 use crate::ui::{
-    axis_label, compact_button, field_label, icon, icon_toggle, number_field, secondary_button,
-    section_with_action, theme,
+    axis_label, compact_button, field_label, icon, icon_toggle, number_field, progress_bar,
+    secondary_button, section_with_action, theme,
 };
 
 /// Millimetres, degrees and percent per point of drag on the transform fields.
@@ -294,6 +294,11 @@ fn auto_orient(ui: &mut egui::Ui, window: &mut Window, id: ObjectId) {
         .inner
         .clicked();
 
+    if running {
+        // The search measures every candidate over the whole mesh, which is no share to
+        // count: the bar runs rather than standing at nought.
+        progress_bar(ui, None);
+    }
     if clicked && let Err(error) = window.tools.orient.start(&window.doc.scene, Some(id)) {
         window.machine.status = crate::status::Status::failed(&error);
     }

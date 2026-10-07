@@ -14,8 +14,8 @@ pub use field::{
     Carried, axis_label, carried_row, count_row, field_label, number_field, number_row, text_row,
 };
 pub use layout::{
-    card, describe, fold, hairline, heading, hint, meta, nested, notice, readings, section,
-    section_with_action, stats, subheading,
+    card, describe, fold, hairline, heading, hint, meta, nested, notice, progress_bar, readings,
+    section, section_with_action, stats, subheading,
 };
 pub use list::{issue_row, list, list_row};
 pub use toggle::{Segment, Segmented, switch, tone};

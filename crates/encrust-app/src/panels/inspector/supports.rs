@@ -10,7 +10,8 @@ use crate::status::Status;
 use crate::supports::{Editing, Parameters, Placing};
 use crate::ui::{
     Segment, Segmented, describe, fold, hint, icon, icon_button, list, list_row, nested,
-    number_row, primary_button, secondary_button, section, stats, subheading, switch, theme, tone,
+    number_row, primary_button, progress_bar, secondary_button, section, stats, subheading, switch,
+    theme, tone,
 };
 
 /// Millimetres per point of drag on the brush and the fill.
@@ -438,11 +439,7 @@ fn generate(ui: &mut egui::Ui, window: &mut Window) {
 /// The progress bar and the cancel button of the run that is going.
 fn running(ui: &mut egui::Ui, job: &SupportJob) {
     tone(ui, &job.label(), theme::colors().text_mid);
-    ui.add(
-        egui::ProgressBar::new(job.fraction())
-            .desired_height(6.0)
-            .corner_radius(theme::R_CONTROL),
-    );
+    progress_bar(ui, job.fraction());
 
     ui.add_space(4.0);
     ui.add_enabled_ui(!job.is_cancelling(), |ui| {

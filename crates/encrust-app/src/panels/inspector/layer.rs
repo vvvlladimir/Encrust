@@ -1,4 +1,4 @@
-use core_analysis::equivalent_disc_mm;
+use core_analysis::{Measured, equivalent_disc_mm};
 use core_format::{ExposurePlan, PrintJob};
 
 use crate::panels::Window;
@@ -23,8 +23,7 @@ pub fn ui(ui: &mut egui::Ui, window: &mut Window) {
     // A file being shown states its own numbers; ours describe a plate it knows nothing of.
     if window.machine.preview.read_facts().is_some() {
         super::opened::ui(ui, window);
-        let layer = window.machine.preview.layer();
-        section(ui, "This layer", Some(block(window.machine, layer)), |ui| {
+        section(ui, "This layer", None, |ui| {
             stats(ui, &layer_readings(window));
         });
         return;
@@ -83,25 +82,38 @@ fn print_readings(window: &Window) -> Vec<(&'static str, String)> {
 }
 
 /// Which layers pull hardest on the film as the plate lifts, above the bottom block.
+///
+/// Every row is listed whether its peak is known or not: a print setting edited here is
+/// measured again, and a block that comes and goes takes the field under it out from
+/// under the pointer.
 fn pull(ui: &mut egui::Ui, window: &mut Window) {
-    let Some(measured) = window.measured() else {
+    let measured = window.measured();
+    if measured.is_none() && !window.machine.preview.is_measuring() {
         return;
-    };
-    let mut rows = Vec::new();
-    if let Some(peak) = measured.hardest_pull() {
-        rows.push(("Hardest pull", format!("layer {}", peak.layer + 1)));
-        rows.push((
+    }
+    let waiting = || "measuring".to_owned();
+    let hardest = measured.and_then(Measured::hardest_pull);
+    let widest = measured.and_then(Measured::largest_growth);
+    let rows = vec![
+        (
+            "Hardest pull",
+            hardest.map_or_else(waiting, |peak| format!("layer {}", peak.layer + 1)),
+        ),
+        (
             "Pulls like a disc of",
-            format!("{:.1} mm", equivalent_disc_mm(peak.value)),
-        ));
-    }
-    if let Some(peak) = measured.largest_growth() {
-        rows.push(("Widest step", format!("layer {}", peak.layer + 1)));
-        rows.push(("Grows by", format!("{:.0} mm2", peak.value)));
-    }
-    if rows.is_empty() {
-        return;
-    }
+            hardest.map_or_else(waiting, |peak| {
+                format!("{:.1} mm", equivalent_disc_mm(peak.value))
+            }),
+        ),
+        (
+            "Widest step",
+            widest.map_or_else(waiting, |peak| format!("layer {}", peak.layer + 1)),
+        ),
+        (
+            "Grows by",
+            widest.map_or_else(waiting, |peak| format!("{:.0} mm2", peak.value)),
+        ),
+    ];
     section(ui, "Peel", None, |ui| readings(ui, &rows));
 }
 
@@ -149,7 +161,11 @@ fn layer_exposure_s(machine: &Machine, layer: usize) -> f32 {
 
 fn layer_readings(window: &Window) -> Vec<(&'static str, String)> {
     let preview = &window.machine.preview;
-    let exposure_s = layer_exposure_s(window.machine, preview.layer());
+    // A file's own table, where one is open: the window's resin says nothing about a
+    // stack somebody else exposed.
+    let exposure_s = preview
+        .read_layer_exposure_s()
+        .unwrap_or_else(|| layer_exposure_s(window.machine, preview.layer()));
 
     vec![
         ("Layer", format!("{}", preview.layer() + 1)),

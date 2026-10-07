@@ -6,7 +6,8 @@
 
 use crate::files::{self, Handed, Wanted};
 use crate::panels::Window;
-use crate::preview::Preview;
+use crate::preview::{Preview, plate_fingerprint};
+use crate::scene::Scene;
 use crate::status::Status;
 use crate::workspace::Mode;
 
@@ -24,13 +25,22 @@ pub fn open_dialog(window: &mut Window) {
             window.mode,
             &mut window.machine.status,
             &file,
+            &window.doc.scene,
         );
     }
 }
 
 /// Opens `file` and moves to the mode that shows it. The one way a file reaches the slider.
-pub fn open(preview: &mut Preview, mode: &mut Mode, status: &mut Status, file: &Handed) {
-    match preview.read_file(file) {
+///
+/// The plate is noted as it stands, because the file is shown only until it changes.
+pub fn open(
+    preview: &mut Preview,
+    mode: &mut Mode,
+    status: &mut Status,
+    file: &Handed,
+    scene: &Scene,
+) {
+    match preview.read_file(file, plate_fingerprint(scene)) {
         Ok(()) => {
             *mode = Mode::Preview;
             *status = Status::Info(format!("Opened {}", file.path().display()));
@@ -45,5 +55,14 @@ pub fn close(preview: &mut Preview, status: &mut Status) {
     if preview.read_path().is_some() {
         preview.close_file();
         *status = Status::Idle;
+    }
+}
+
+/// Closes the file the moment the plate it was opened over changes, so that the slider,
+/// the panel and the footer never state two stacks at once.
+pub fn close_if_the_plate_moved_on(preview: &mut Preview, status: &mut Status, scene: &Scene) {
+    if preview.file_is_over_an_old_plate(plate_fingerprint(scene)) {
+        preview.close_file();
+        *status = Status::Info("The plate changed, so the opened file was closed".to_owned());
     }
 }
