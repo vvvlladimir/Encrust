@@ -302,7 +302,7 @@ fn start(scene: &Scene, slicing: &mut Slicing, status: &mut Status, run: Run, vi
         let _ = status.report("Slicing", started);
         return;
     }
-    let Some(path) = save_path(scene, format) else {
+    let Some(path) = save_path(scene, format, slicing.printer.as_ref()) else {
         return;
     };
 
@@ -321,11 +321,19 @@ fn start(scene: &Scene, slicing: &mut Slicing, status: &mut Status, run: Run, vi
 }
 
 #[cfg(not(target_arch = "wasm32"))]
-fn save_path(scene: &Scene, format: SlicedFormat) -> Option<std::path::PathBuf> {
-    // The chosen format goes first, so the dialog offers it; the others stay reachable,
-    // because the name is what decides in the end.
+fn save_path(
+    scene: &Scene,
+    format: SlicedFormat,
+    printer: Option<&printer_profiles::PrinterProfile>,
+) -> Option<std::path::PathBuf> {
+    // The chosen format goes first, so the dialog offers it; the others this machine can
+    // be written into stay reachable, because the name is what decides in the end.
     let mut dialog = rfd::FileDialog::new().set_file_name(default_file_name(scene, format));
-    for choice in [format].into_iter().chain(SlicedFormat::CHOICES) {
+    let offered = printer.map_or_else(
+        || SlicedFormat::CHOICES.to_vec(),
+        |printer| SlicedFormat::choices_for(printer).collect(),
+    );
+    for choice in [format].into_iter().chain(offered) {
         dialog = dialog.add_filter(label_of(choice), &[choice.extension()]);
     }
     Some(applied_to(format, dialog.save_file()?))
@@ -333,7 +341,11 @@ fn save_path(scene: &Scene, format: SlicedFormat) -> Option<std::path::PathBuf> 
 
 /// A browser asks where a download goes itself, so the file is only named.
 #[cfg(target_arch = "wasm32")]
-fn save_path(scene: &Scene, format: SlicedFormat) -> Option<std::path::PathBuf> {
+fn save_path(
+    scene: &Scene,
+    format: SlicedFormat,
+    _printer: Option<&printer_profiles::PrinterProfile>,
+) -> Option<std::path::PathBuf> {
     Some(default_file_name(scene, format).into())
 }
 

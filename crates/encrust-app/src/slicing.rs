@@ -162,11 +162,22 @@ impl Slicing {
     /// A new printer. The resin in hand is retuned for it, because an exposure measured
     /// on another machine's light engine is not a calibration for this one.
     pub fn set_printer(&mut self, printer: PrinterProfile, id: Option<String>) {
-        self.format = printer.output.into();
+        let output = printer.output.into();
         self.printer = Some(printer);
         self.printer_id = id;
+        self.set_format(output);
         self.adopt_default_resin();
         self.retune();
+    }
+
+    /// The container to slice into. One the machine in hand cannot be written — a
+    /// `.cxdlp` for a name carrying no model code — gives way to the default, so a
+    /// profile or a restored session never arms a button that can only fail.
+    pub fn set_format(&mut self, format: SlicedFormat) {
+        self.format = match self.printer.as_ref() {
+            Some(printer) if !format.writable_for(printer) => SlicedFormat::default(),
+            _ => format,
+        };
     }
 
     /// No machine in hand, which is what removing the last one leaves. The resin stays:

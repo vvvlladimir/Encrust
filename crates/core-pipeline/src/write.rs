@@ -42,8 +42,8 @@ impl Observer for () {}
 /// One run from a cut stack to a sliced file, wherever that file is being written.
 pub struct Writing<'a> {
     pub format: SlicedFormat,
-    /// What the file is called, without its directory or its extension: the name an
-    /// `.sl1` gives its layer entries, and the one an error quotes.
+    /// What the file is called, without its directory or its extension, which is what an
+    /// `.sl1` gives its layer entries.
     pub name: &'a str,
     /// Everything the file carries but the masks.
     pub job: &'a PrintJob,
@@ -102,7 +102,6 @@ pub(crate) trait Feed {
     fn feed<S: LayerSink>(
         &mut self,
         sink: &mut S,
-        name: &str,
         observer: &mut dyn Observer,
     ) -> Result<Option<Self::Done>, PipelineError>;
 
@@ -158,15 +157,11 @@ impl Destination<'_> {
         W: SlicedFileWriter + 'w,
         F: Feed,
     {
-        let failed = |source| PipelineError::Write {
-            name: self.name.to_owned(),
-            source,
-        };
-        let mut sink = writer.begin(self.job, file).map_err(failed)?;
-        let Some(done) = feed.feed(&mut sink, self.name, observer)? else {
+        let mut sink = writer.begin(self.job, file)?;
+        let Some(done) = feed.feed(&mut sink, observer)? else {
             return Ok(None);
         };
-        sink.finish(F::volume_mm3(&done)).map_err(failed)?;
+        sink.finish(F::volume_mm3(&done))?;
         Ok(Some(done))
     }
 }
@@ -180,7 +175,6 @@ impl Feed for Cut<'_, '_> {
     fn feed<S: LayerSink>(
         &mut self,
         sink: &mut S,
-        _name: &str,
         observer: &mut dyn Observer,
     ) -> Result<Option<Written>, PipelineError> {
         stream_layers(sink, self.0, observer)
@@ -279,10 +273,7 @@ fn stream_layers<S: LayerSink>(
                     .collect();
 
                 for (layer, overflow_px) in encoded {
-                    sink.push(layer).map_err(|source| PipelineError::Write {
-                        name: request.name.to_owned(),
-                        source,
-                    })?;
+                    sink.push(layer).map_err(PipelineError::from)?;
                     written.layers += 1;
                     if overflow_px > 0.0 {
                         written.clipped_layers += 1;

@@ -242,7 +242,6 @@ impl<O: OpenFile> Feed for Layers<'_, O> {
     fn feed<S: LayerSink>(
         &mut self,
         sink: &mut S,
-        name: &str,
         observer: &mut dyn Observer,
     ) -> Result<Option<Converted>, PipelineError> {
         let facts = self.source.facts();
@@ -281,10 +280,7 @@ impl<O: OpenFile> Feed for Layers<'_, O> {
                 })
                 .collect();
             for (layer, volume_mm3) in encoded {
-                sink.push(layer).map_err(|source| PipelineError::Write {
-                    name: name.to_owned(),
-                    source,
-                })?;
+                sink.push(layer).map_err(PipelineError::from)?;
                 converted.layers += 1;
                 converted.volume_mm3 += volume_mm3;
             }

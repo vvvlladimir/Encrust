@@ -37,8 +37,8 @@ impl SlicedFileWriter for CxdlpWriter {
             });
         }
 
-        let model = model_code(job).ok_or_else(|| FormatError::Missing {
-            what: "a CL or CT model code in the machine name".to_owned(),
+        let model = model_code(job.printer.machine_name()).ok_or_else(|| FormatError::Missing {
+            what: "a CL or CT model code in the machine name, as in Halot One CL-60".to_owned(),
         })?;
 
         // The blocks in front of the layers are built once in memory — a few hundred

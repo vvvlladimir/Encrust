@@ -99,7 +99,7 @@ fn restore_slicing(state: SlicingState, slicing: &mut Slicing) {
     slicing.grey_levels = state.grey_levels;
     slicing.blur_px = state.blur_px;
     slicing.remove_islands = state.remove_islands;
-    slicing.format = state.format.into();
+    slicing.set_format(state.format.into());
 }
 
 fn restore_supports(state: SupportState, supports: &mut SupportTool) {

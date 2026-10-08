@@ -26,11 +26,10 @@ pub enum PipelineError {
         source: std::io::Error,
     },
 
-    #[error("cannot write {name}")]
+    // The caller names the file it asked for, so a second name here only says it twice.
+    #[error(transparent)]
     Write {
-        /// What the file being written is called, without its directory or extension.
-        name: String,
-        #[source]
+        #[from]
         source: FormatError,
     },
 

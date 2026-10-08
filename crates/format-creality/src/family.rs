@@ -3,7 +3,7 @@
 
 use std::io::{self, Cursor};
 
-use core_format::{Fields, FormatError, PrintJob};
+use core_format::{Fields, FormatError};
 
 /// What every file of this family is headed by, nul included.
 pub(crate) const MAGIC: &[u8] = b"CXSW3DV2\0";
@@ -20,13 +20,13 @@ pub enum CxdlpVersion {
     V4,
 }
 
-/// The `CL` or `CT` code the header must carry, picked out of the machine's name.
+/// The `CL` or `CT` code the header must carry, picked out of `name`.
 ///
 /// The firmware matches this and nothing else, and a profile states the model the way a
 /// user reads it — `Halot One CL-60`. A name carrying no code is refused rather than
-/// guessed at, because a machine that does not recognise its own model does not print.
-pub(crate) fn model_code(job: &PrintJob) -> Option<String> {
-    let name = job.printer.machine_name();
+/// guessed at, because a machine that does not recognise its own model does not print,
+/// which is also what tells a front end not to offer this container at all.
+pub fn model_code(name: &str) -> Option<String> {
     let bytes = name.as_bytes();
     for start in 0..bytes.len().saturating_sub(2) {
         let prefix = &name[start..start + 2];
@@ -76,16 +76,9 @@ pub(crate) fn block_at<T>(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::fixtures::sample_job;
-
     #[test]
     fn a_model_code_is_picked_out_of_the_name_however_it_is_spelt() {
-        let code = |name: &str| {
-            let mut job = sample_job(1);
-            job.printer.name = name.to_owned();
-            job.printer.machine_name = None;
-            model_code(&job)
-        };
+        let code = model_code;
         assert_eq!(code("Halot One CL-60").as_deref(), Some("CL-60"));
         assert_eq!(code("Halot Ray CL925").as_deref(), Some("CL-925"));
         assert_eq!(code("Halot Lite CL-89L").as_deref(), Some("CL-89L"));

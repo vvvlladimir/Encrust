@@ -14,75 +14,157 @@ const THRESHOLD: u8 = 128;
 /// runs one way round and a hole in it the other, which is what tells them apart.
 pub(crate) type Ring = Vec<(u32, u32)>;
 
+/// A corner of the pixel grid.
+type Corner = (u32, u32);
+
+/// A lit stretch of one row, `[start, end)` in pixel columns.
+type Span = (u32, u32);
+
+/// One directed step along the boundary, material on its left.
+type Edge = (Corner, Corner);
+
 /// The rings of one layer, holes included, each closed and without its first corner
 /// repeated at the end.
+///
+/// The work is proportional to the runs of the layer rather than to the panel, which is
+/// what keeps a stack of empty 4K layers from costing a second each.
 pub(crate) fn rings_of(layer: &LayerRuns) -> Vec<Ring> {
-    let (width, height) = (layer.width(), layer.height());
-    let mask = layer.to_mask();
-    let pixels = mask.pixels();
-    let lit = |x: u32, y: u32| pixels[(y * width + x) as usize] >= THRESHOLD;
-
-    // A corner of the grid is a vertex, and every boundary step is one directed edge out
-    // of it. Material on the left of the step is what makes a ring positive.
-    let corners = (width + 1) as usize;
-    let mut out: Vec<Vec<(u32, u32)>> = vec![Vec::new(); corners * (height + 1) as usize];
-    let mut push = |from: (u32, u32), to: (u32, u32)| {
-        out[from.1 as usize * corners + from.0 as usize].push(to);
-    };
-
-    for y in 0..height {
-        for x in 0..width {
-            if !lit(x, y) {
-                continue;
-            }
-            if y == 0 || !lit(x, y - 1) {
-                push((x, y), (x + 1, y));
-            }
-            if x + 1 == width || !lit(x + 1, y) {
-                push((x + 1, y), (x + 1, y + 1));
-            }
-            if y + 1 == height || !lit(x, y + 1) {
-                push((x + 1, y + 1), (x, y + 1));
-            }
-            if x == 0 || !lit(x - 1, y) {
-                push((x, y + 1), (x, y));
-            }
-        }
-    }
-
-    stitch(out, corners)
+    stitch(boundary_edges(&lit_spans(layer)))
 }
 
-/// Follows the directed steps out of each corner into closed rings, taking each step once.
-fn stitch(mut out: Vec<Vec<(u32, u32)>>, corners: usize) -> Vec<Ring> {
+/// The lit stretches of every row, in order, with neighbouring ones joined.
+fn lit_spans(layer: &LayerRuns) -> Vec<Vec<Span>> {
+    let (width, height) = (u64::from(layer.width()), u64::from(layer.height()));
+    let mut rows = vec![Vec::new(); height as usize];
+    let (mut at, total) = (0u64, width * height);
+
+    for run in layer.runs() {
+        let end = (at + u64::from(run.length)).min(total);
+        if run.value >= THRESHOLD {
+            push_span(&mut rows, width, at, end);
+        }
+        at = end;
+    }
+    rows
+}
+
+/// Adds the pixels `[from, to)` of the reading order to the rows they fall in.
+fn push_span(rows: &mut [Vec<Span>], width: u64, from: u64, to: u64) {
+    let mut at = from;
+    while at < to {
+        let row = at / width;
+        let end = to.min((row + 1) * width);
+        let (x0, x1) = ((at - row * width) as u32, (end - row * width) as u32);
+        match rows[row as usize].last_mut() {
+            Some(last) if last.1 == x0 => last.1 = x1,
+            _ => rows[row as usize].push((x0, x1)),
+        }
+        at = end;
+    }
+}
+
+/// Every step along the boundary, a whole stretch at a time.
+///
+/// A corner the outline has to turn at is always an end of one of these stretches: a
+/// vertical step can only meet a horizontal one where the row above or below changes,
+/// which is where the difference below is cut.
+fn boundary_edges(rows: &[Vec<Span>]) -> Vec<Edge> {
+    let none: [Span; 0] = [];
+    let mut edges = Vec::new();
+
+    for (index, spans) in rows.iter().enumerate() {
+        let y = index as u32;
+        let above = index.checked_sub(1).map_or(&none[..], |row| &rows[row][..]);
+        let below = rows.get(index + 1).map_or(&none[..], Vec::as_slice);
+
+        each_difference(spans, above, |(x0, x1)| edges.push(((x0, y), (x1, y))));
+        for &(x0, x1) in spans {
+            edges.push(((x1, y), (x1, y + 1)));
+            edges.push(((x0, y + 1), (x0, y)));
+        }
+        each_difference(spans, below, |(x0, x1)| {
+            edges.push(((x1, y + 1), (x0, y + 1)));
+        });
+    }
+    edges
+}
+
+/// The parts of `spans` that no span of `other` covers, in order. Both are sorted and
+/// neither holds two spans that touch.
+fn each_difference(spans: &[Span], other: &[Span], mut each: impl FnMut(Span)) {
+    let mut index = 0;
+    for &(start, end) in spans {
+        let mut at = start;
+        while other.get(index).is_some_and(|cut| cut.1 <= at) {
+            index += 1;
+        }
+        while at < end {
+            let Some(&(cut_start, cut_end)) = other.get(index) else {
+                break;
+            };
+            if cut_start >= end {
+                break;
+            }
+            if cut_start > at {
+                each((at, cut_start));
+            }
+            at = at.max(cut_end);
+            if cut_end > end {
+                break;
+            }
+            index += 1;
+        }
+        if at < end {
+            each((at, end));
+        }
+    }
+}
+
+/// Follows the steps into closed rings, taking each one once. A ring begins at the first
+/// corner reading order finds a step out of, which is what fixes the order they come in.
+fn stitch(mut edges: Vec<Edge>) -> Vec<Ring> {
+    edges.sort_by_key(|&((x, y), _)| (y, x));
+    let mut taken = vec![false; edges.len()];
     let mut rings = Vec::new();
-    for index in 0..out.len() {
-        while !out[index].is_empty() {
-            let start = ((index % corners) as u32, (index / corners) as u32);
-            let mut ring: Ring = vec![start];
-            let mut at = start;
-            while let Some(next) = out[at.1 as usize * corners + at.0 as usize].pop() {
-                at = next;
-                if at == start {
-                    break;
-                }
-                push_corner(&mut ring, at);
+
+    for index in 0..edges.len() {
+        if taken[index] {
+            continue;
+        }
+        let start = edges[index].0;
+        let mut ring: Ring = vec![start];
+        let mut step = Some(index);
+        while let Some(at) = step {
+            taken[at] = true;
+            let to = edges[at].1;
+            if to == start {
+                break;
             }
-            // A step along the ring that only continues the one before it is not a corner,
-            // and the ring's last point can turn out to be one of those.
-            if ring.len() > 2 && collinear(ring[ring.len() - 2], ring[ring.len() - 1], ring[0]) {
-                ring.pop();
-            }
-            if ring.len() >= 4 {
-                rings.push(ring);
-            }
+            push_corner(&mut ring, to);
+            step = next_step(&edges, &taken, to);
+        }
+        // A step along the ring that only continues the one before it is not a corner,
+        // and the ring's last point can turn out to be one of those.
+        if ring.len() > 2 && collinear(ring[ring.len() - 2], ring[ring.len() - 1], ring[0]) {
+            ring.pop();
+        }
+        if ring.len() >= 4 {
+            rings.push(ring);
         }
     }
     rings
 }
 
+/// The first step out of `at` that no ring has taken, found in the sorted steps.
+fn next_step(edges: &[Edge], taken: &[bool], at: Corner) -> Option<usize> {
+    let from = edges.partition_point(|&((x, y), _)| (y, x) < (at.1, at.0));
+    (from..edges.len())
+        .take_while(|&index| edges[index].0 == at)
+        .find(|&index| !taken[index])
+}
+
 /// Adds a corner, dropping the one before it where the two steps run the same way.
-fn push_corner(ring: &mut Ring, corner: (u32, u32)) {
+fn push_corner(ring: &mut Ring, corner: Corner) {
     if ring.len() >= 2 && collinear(ring[ring.len() - 2], ring[ring.len() - 1], corner) {
         ring.pop();
     }
@@ -90,7 +172,7 @@ fn push_corner(ring: &mut Ring, corner: (u32, u32)) {
 }
 
 /// Whether three corners of the grid stand on one horizontal or vertical line.
-fn collinear(a: (u32, u32), b: (u32, u32), c: (u32, u32)) -> bool {
+fn collinear(a: Corner, b: Corner, c: Corner) -> bool {
     (a.0 == b.0 && b.0 == c.0) || (a.1 == b.1 && b.1 == c.1)
 }
 
@@ -155,6 +237,20 @@ mod tests {
     }
 
     #[test]
+    fn a_step_in_the_row_above_turns_the_outline_where_it_stands() {
+        // A two-row L: the wide row below reaches past the narrow row above, so the top
+        // of the shape is two stretches with the step between them.
+        let pixels = [255, 255, 0, 0, 255, 255, 255, 255];
+        let rings = rings_of(&runs_of(4, 2, &pixels));
+        assert_eq!(rings.len(), 1);
+        assert_eq!(
+            rings[0],
+            [(0, 0), (2, 0), (2, 1), (4, 1), (4, 2), (0, 2)],
+            "the outline turns where the row above ends"
+        );
+    }
+
+    #[test]
     fn a_hole_is_its_own_ring_the_other_way_round() {
         let mut pixels = vec![255u8; 5 * 5];
         pixels[2 * 5 + 2] = 0;
@@ -180,6 +276,16 @@ mod tests {
         let rings = rings_of(&runs_of(3, 1, &[0, 100, 0]));
         assert!(rings.is_empty(), "a tenth-lit pixel is not a wall");
         assert_eq!(rings_of(&runs_of(3, 1, &[0, 128, 0])).len(), 1);
+    }
+
+    #[test]
+    fn a_run_crossing_the_end_of_a_row_is_two_stretches() {
+        // One run of six lit pixels over a four-wide panel: the rows share no boundary
+        // down the middle, so the shape is one ring and not two.
+        let pixels = [0, 0, 255, 255, 255, 255, 255, 255, 0, 0, 0, 0];
+        let rings = rings_of(&runs_of(4, 3, &pixels));
+        assert_eq!(rings.len(), 1);
+        assert_eq!(rings[0], [(2, 0), (4, 0), (4, 2), (0, 2), (0, 1), (2, 1)]);
     }
 
     #[test]

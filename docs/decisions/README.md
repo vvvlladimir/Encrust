@@ -233,6 +233,7 @@ Grouped by what the decision governs; the number is still the order it was taken
 | [0170](0170-the-cws-is-its-own-crate-and-only-the-plain-variant-is-written.md) | Write the `.cws` from its own crate, and only the plain variant | Accepted |
 | [0171](0171-a-count-read-from-a-file-is-checked-against-the-file.md) | Check every count a file states against the file before reserving for it | Accepted |
 | [0180](0180-a-sliced-file-is-converted-in-the-write-stage.md) | A sliced file is converted in the write stage, never resampled | Accepted |
+| [0210](0210-a-picker-offers-only-what-the-machine-can-be-written.md) | A picker offers only the containers the machine in hand can be written | Accepted |
 
 ### Printer and material profiles
 

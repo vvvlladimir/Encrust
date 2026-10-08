@@ -1,6 +1,6 @@
 use std::path::Path;
 
-use printer_profiles::{AnycubicExtension, OutputFormat, PhotonRevision};
+use printer_profiles::{AnycubicExtension, OutputFormat, PhotonRevision, PrinterProfile};
 
 // The variants below carry them, so a front end naming a container gets the type from
 // here and takes no dependency on the crate that writes it; the same reason
@@ -97,6 +97,29 @@ impl SlicedFormat {
             }
             (Self::Cxdlp(_), Self::Cxdlp(revision)) => Self::Cxdlp(revision),
             _ => self,
+        }
+    }
+
+    /// The choices `printer` can be written into, in the order a picker offers them.
+    ///
+    /// A front end offers these and nothing else: a container the machine's own fields
+    /// cannot fill is a file it would refuse at the end of a run, with the stack already
+    /// cut (ADR 0210).
+    pub fn choices_for(printer: &PrinterProfile) -> impl Iterator<Item = Self> + '_ {
+        Self::CHOICES
+            .into_iter()
+            .filter(|choice| choice.writable_for(printer))
+    }
+
+    /// Whether a file of this format can carry what `printer` states.
+    ///
+    /// Only the `.cxdlp` family asks for anything a profile may not have: its header
+    /// names the machine's own CL or CT code and the firmware matches nothing else, so a
+    /// machine whose name carries no code cannot be written one.
+    pub fn writable_for(self, printer: &PrinterProfile) -> bool {
+        match self {
+            Self::Cxdlp(_) => format_creality::model_code(printer.machine_name()).is_some(),
+            _ => true,
         }
     }
 
@@ -341,6 +364,49 @@ mod tests {
                 entry.id
             );
         }
+    }
+
+    #[test]
+    fn every_shipped_machine_is_offered_the_container_it_states() {
+        let catalogue =
+            printer_profiles::Catalogue::bundled().expect("the shipped catalogue is valid");
+
+        for entry in catalogue.printers() {
+            let stated = SlicedFormat::from(entry.profile.output);
+            assert!(
+                stated.writable_for(&entry.profile),
+                "{} states {} and cannot be written one",
+                entry.id,
+                stated.extension()
+            );
+        }
+    }
+
+    #[test]
+    fn a_machine_whose_name_carries_no_model_code_is_offered_no_cxdlp() {
+        let mut printer = PrinterProfile {
+            name: "Mars 4 Ultra".to_owned(),
+            machine_name: None,
+            ..Default::default()
+        };
+
+        let offered: Vec<_> = SlicedFormat::choices_for(&printer).collect();
+        assert!(
+            !offered.iter().any(|choice| choice.extension() == "cxdlp"),
+            "the firmware matches a CL or CT code this name has none of"
+        );
+        assert_eq!(
+            offered.len(),
+            SlicedFormat::CHOICES.len() - 2,
+            "only the two .cxdlp revisions come off the list"
+        );
+
+        printer.machine_name = Some("Halot One CL-60".to_owned());
+        assert_eq!(
+            SlicedFormat::choices_for(&printer).count(),
+            SlicedFormat::CHOICES.len(),
+            "a name with a code is offered every container"
+        );
     }
 
     #[test]

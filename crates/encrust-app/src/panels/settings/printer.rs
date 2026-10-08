@@ -270,13 +270,15 @@ fn firmware(ui: &mut egui::Ui, profile: &mut PrinterProfile) {
     );
 }
 
-/// The container this machine's firmware reads. Every one the window writes is on the
-/// list: a machine reads one of them and the eight do not fit across a card.
+/// The container this machine's firmware reads. Every one the window can write *for this
+/// machine* is on the list, and nothing else: a `.cxdlp` asks for a CL or CT code in the
+/// name, so a machine without one is never offered it.
 fn output(ui: &mut egui::Ui, profile: &mut PrinterProfile) {
     let chosen = SlicedFormat::from(profile.output);
+    let offered: Vec<SlicedFormat> = SlicedFormat::choices_for(profile).collect();
     let response = picker(ui, icon::SLICE, label_of(chosen));
     egui::Popup::menu(&response).show(|ui| {
-        for choice in SlicedFormat::CHOICES {
+        for choice in offered {
             if ui
                 .selectable_label(choice == chosen, label_of(choice))
                 .clicked()

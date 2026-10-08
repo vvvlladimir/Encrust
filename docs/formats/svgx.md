@@ -80,12 +80,18 @@ that is handed one layer at a time, and the field is informational.
 
 ## Writing a layer
 
-Our pipeline hands a writer an exposure mask, so the polygons are traced out of it. Every
-boundary between a lit pixel and a dark one is a unit step on the pixel grid; the steps are
-oriented so that material lies to one side, stitched into closed rings, and a step that only
-continues the one before it is dropped — a rectangle comes out as four corners. A ring that
-encloses material runs one way round and a hole the other, which is what the reader takes
-the winding from.
+Our pipeline hands a writer an exposure mask, so the polygons are traced out of it. The
+boundary between a lit pixel and a dark one is a step on the pixel grid, oriented so that
+material lies to its left; the steps are stitched into closed rings and one that only
+continues the step before it is dropped — a rectangle comes out as four corners. A ring
+that encloses material runs one way round and a hole the other, which is what the reader
+takes the winding from.
+
+The mask is never expanded: the lit stretches of a row come straight off the runs, a
+horizontal step is a whole stretch the row above or below does not cover, and a vertical
+one stands at a stretch's end. A turn can only fall where one of those stretches ends, so
+the rings are the same as a walk pixel by pixel would give — at a cost that follows the
+outline rather than the panel, which is what a stack of 4K layers needs.
 
 A mask shaded by coverage is cut at a grey of 128: half a pixel's worth of coverage is
 material and less is not, because the container has nowhere to put the difference.

@@ -2021,6 +2021,7 @@ dependencies = [
  "core-format",
  "core-raster",
  "core-slicer",
+ "criterion",
  "glam 0.33.12",
  "printer-profiles",
  "tracing",
