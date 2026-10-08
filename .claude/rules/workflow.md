@@ -17,7 +17,10 @@ keep going.
 
 ## Before it is done
 
-Run the three checks in `AGENTS.md` — fmt, clippy with `-D warnings`, tests. Then update
+Run the three checks in `AGENTS.md` — fmt, clippy with `-D warnings`, tests — once, at the
+end; while working, check the crate you touched with `-p`. They run on the compiler
+`rust-toolchain.toml` pins: never `rustup update` or move that pin to clear a lint, and
+never because a check is slow (0211). Then update
 `docs/architecture.md` if a crate changed, make sure each architectural decision has its ADR,
 and propose a commit message. Do not commit or push unless asked.
 

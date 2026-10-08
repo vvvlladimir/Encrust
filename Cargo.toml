@@ -112,6 +112,7 @@ similar_names = "allow"
 cast_precision_loss = "allow"
 cast_possible_truncation = "allow"
 cast_sign_loss = "allow"
+assert_is_empty = "allow"
 
 # An unoptimised build of this workspace is nine times slower on a real model, which is
 # long enough that the window looks hung. Dependencies carry no debug work of ours, so

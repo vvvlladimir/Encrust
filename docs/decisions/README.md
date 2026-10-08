@@ -57,6 +57,7 @@ Grouped by what the decision governs; the number is still the order it was taken
 | [0181](0181-the-window-runs-in-a-browser-on-workers.md) | The window runs in a browser, on workers sharing its memory | Accepted |
 | [0183](0183-the-web-build-works-offline-and-the-command-line-completes-and-remembers.md) | The web build works offline, and the command line completes and remembers its flags | Accepted |
 | [0207](0207-a-test-run-rebuilds-nothing-it-does-not-have-to.md) | A test run rebuilds nothing it does not have to | Accepted |
+| [0211](0211-the-compiler-is-pinned-to-a-version-not-a-channel.md) | The compiler is pinned to a version, not a channel | Accepted |
 
 ### Geometry
 
