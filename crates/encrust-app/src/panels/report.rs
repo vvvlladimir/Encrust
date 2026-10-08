@@ -46,6 +46,7 @@ pub fn ui(ctx: &egui::Context, scene: &Scene, tools: &Tools, machine: &mut Machi
     }
     let Machine {
         slicing,
+        network,
         status,
         report,
         ..
@@ -54,6 +55,9 @@ pub fn ui(ctx: &egui::Context, scene: &Scene, tools: &Tools, machine: &mut Machi
     // Composed from the profiles in hand, which is why they are gathered before the sheet
     // and not inside it.
     let settings = ToolSettings::of(tools, slicing);
+    // The addresses are gathered here for the same reason: a failure that quotes one is
+    // scrubbed of it before the report states it.
+    let hosts = network.hosts();
     let facts = Facts {
         printer: slicing.printer.as_ref(),
         printer_id: slicing.printer_id.as_deref(),
@@ -61,6 +65,7 @@ pub fn ui(ctx: &egui::Context, scene: &Scene, tools: &Tools, machine: &mut Machi
         resin_id: slicing.resin_id.as_deref(),
         format: slicing.format.extension(),
         message: status.is_error().then(|| status.text().to_owned()),
+        hosts: &hosts,
         plate: counted(scene),
         settings: &settings,
     };
@@ -242,6 +247,8 @@ fn save(text: &str, status: &mut Status) {
 /// A browser asks where a download goes itself, so the report is only named.
 #[cfg(target_arch = "wasm32")]
 fn save(text: &str, status: &mut Status) {
+    use anyhow::Context as _;
+
     let handed = crate::web::files::download(FILE_NAME, text.as_bytes())
         .map_err(|error| anyhow::Error::new(crate::web::opfs::failed(error)))
         .context("cannot hand over the report");

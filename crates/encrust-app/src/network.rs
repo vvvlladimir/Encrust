@@ -151,6 +151,19 @@ pub struct Network {
 }
 
 impl Network {
+    /// Every address and name the window knows a machine by, including the ones being
+    /// typed. A bug report keeps all of them out of the failure it quotes, which is the
+    /// only reason this list exists; see `crate::report`.
+    pub fn hosts(&self) -> Vec<String> {
+        self.printers
+            .iter()
+            .map(|printer| printer.address.to_string())
+            .chain(self.prusa.iter().map(|prusa| prusa.link.host.clone()))
+            .chain(self.manual.iter().map(ToString::to_string))
+            .chain([self.draft.clone(), self.prusa_draft.host.clone()])
+            .collect()
+    }
+
     /// Every printer the window could send to, boards first.
     pub fn targets(&self) -> Vec<Target<'_>> {
         let boards = self.printers.iter().map(Target::Sdcp);

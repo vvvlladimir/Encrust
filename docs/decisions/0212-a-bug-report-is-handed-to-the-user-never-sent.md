@@ -30,8 +30,11 @@ with the short fields that fit under 6000 characters of URL — opening the form
 report as well, because the report itself does not fit in one.
 
 The report carries no model, no file name and no printer address. A path quoted in the
-failure on the status strip is cut to its extension, `.../*.stl`, and the plate is stated
-as counts. Three switches leave out the profiles, the tool values and those counts.
+failure on the status strip is cut to its extension, `.../*.stl`, an address or host name
+in it is cut away altogether — the ones the window knows a machine by, anything shaped like
+an address, and a URL that does not point at this project, which keeps only its scheme —
+and the plate is stated as counts. Three switches leave out the profiles, the tool values
+and those counts.
 
 There is no endpoint, no account, no key, no rate limit and no retention policy, because
 nothing is received.
