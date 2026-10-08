@@ -388,7 +388,7 @@ mod tests {
         let scene = scene_with_a_model("bracket");
         assert_eq!(default_file_name(&scene, SlicedFormat::Goo), "bracket.goo");
         assert_eq!(
-            default_file_name(&scene, SlicedFormat::Ctb(format_chitu::CtbVersion::V5)),
+            default_file_name(&scene, SlicedFormat::Ctb(core_pipeline::CtbVersion::V5)),
             "bracket.ctb",
             "the chosen format names the file the dialog opens on"
         );

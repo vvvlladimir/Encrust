@@ -54,6 +54,10 @@ jobs:
       - name: Clippy
         run: cargo clippy --workspace --all-targets --locked -- -D warnings
 
+      # The dependency graph docs/architecture.md draws, against what the manifests declare.
+      - name: Architecture
+        run: cargo run -q -p xtask --locked -- arch
+
       # There is no GPU on a runner, so nothing here opens a window: these are the cores' tests,
       # and the app is only compiled, by the clippy step above.
       - name: Test

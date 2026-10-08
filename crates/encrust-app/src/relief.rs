@@ -1,10 +1,21 @@
 use anyhow::{Result, bail};
 use core_geometry::{Scalar, Vec3};
 use core_volume::ReliefSettings;
+use serde::{Deserialize, Serialize};
 
 use crate::job::{ReliefJob, ReliefOutcome, ReliefRequest, relief_tasks};
 use crate::scene::Scene;
 use crate::status::Status;
+
+/// What the Relief tool presses with. It is the window's own record: the project manifest
+/// has no entry for this tool (ADR 0191).
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+pub struct ReliefState {
+    /// How far the surface moves where the texture is white, millimetres. Negative sinks
+    /// the relief in rather than raising it.
+    pub amplitude_mm: Scalar,
+    pub precision: Scalar,
+}
 
 /// What the Relief tool is set to, and the run it has going.
 ///
@@ -13,10 +24,7 @@ use crate::status::Status;
 /// `docs/decisions/0116-a-texture-is-pressed-into-the-field.md`.
 #[derive(Debug)]
 pub struct ReliefTool {
-    /// How far the surface moves where the texture is white, millimetres. Negative sinks
-    /// the relief in rather than raising it.
-    pub amplitude_mm: Scalar,
-    pub precision: Scalar,
+    pub state: ReliefState,
     pub job: Option<ReliefJob>,
 }
 
@@ -24,8 +32,10 @@ impl Default for ReliefTool {
     fn default() -> Self {
         let asked = ReliefSettings::default();
         Self {
-            amplitude_mm: asked.amplitude_mm,
-            precision: asked.precision,
+            state: ReliefState {
+                amplitude_mm: asked.amplitude_mm,
+                precision: asked.precision,
+            },
             job: None,
         }
     }
@@ -34,8 +44,8 @@ impl Default for ReliefTool {
 impl ReliefTool {
     pub fn settings(&self) -> ReliefSettings {
         ReliefSettings {
-            amplitude_mm: self.amplitude_mm,
-            precision: self.precision,
+            amplitude_mm: self.state.amplitude_mm,
+            precision: self.state.precision,
             ..ReliefSettings::default()
         }
     }
@@ -91,7 +101,7 @@ impl ReliefTool {
                         object.transform.scale = Vec3::ONE;
                     }
                 }
-                let depth = self.amplitude_mm;
+                let depth = self.state.amplitude_mm;
                 *status = match coarsened {
                     0 => Status::Info(format!(
                         "Pressed {depth:.2} mm of relief into {count} model(s)"
@@ -129,8 +139,10 @@ mod tests {
     #[test]
     fn the_settings_are_what_the_panel_is_set_to() {
         let tool = ReliefTool {
-            amplitude_mm: -0.3,
-            precision: 0.8,
+            state: ReliefState {
+                amplitude_mm: -0.3,
+                precision: 0.8,
+            },
             job: None,
         };
         let settings = tool.settings();

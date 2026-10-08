@@ -11,7 +11,7 @@ use rayon::prelude::*;
 use crate::scene::{ImportSummary, Imported, Scene, SceneObject};
 use crate::slicing::Slicing;
 use crate::state::Tools;
-use crate::tool_settings::{ReliefState, ToolSettings};
+use crate::tool_settings::ToolSettings;
 use core_engine::project::{
     BuiltCavity, Cavity, Chosen, Manifest, ModelMeshes, ObjectHollowState, ObjectState,
     ObjectSupportState, Project, Summary, VERSION, hollow_of, supports_of,
@@ -140,7 +140,7 @@ pub fn apply(project: Project, plate: CapturedMut<'_>) {
         drain: manifest.drain,
         cut: manifest.cut,
         // The manifest has no entry for the Relief tool, so it keeps what it is set to.
-        relief: ReliefState::of(&tools.relief),
+        relief: tools.relief.state,
         array: manifest.array,
     }
     .apply(tools, slicing);
@@ -358,16 +358,16 @@ mod tests {
         tools.supports.brush_radius_mm = 4.5;
         tools.supports.flood_angle_deg = 25.0;
         tools.supports.add_group();
-        tools.hollow.thickness_mm = 1.75;
-        tools.hollow.mode = HollowMode::External;
-        tools.hollow.infill_on = true;
-        tools.drain.diameter_mm = 4.25;
-        tools.drain.depth_mm = 6.0;
-        tools.drain.taper = 0.5;
-        tools.cut.axis = crate::scene::Axis::X;
-        tools.cut.offset_mm = 17.5;
-        tools.cut.keep = Keep::Above;
-        tools.relief.amplitude_mm = 0.8;
+        tools.hollow.state.thickness_mm = 1.75;
+        tools.hollow.state.mode = HollowMode::External;
+        tools.hollow.state.infill_on = true;
+        tools.drain.state.diameter_mm = 4.25;
+        tools.drain.state.depth_mm = 6.0;
+        tools.drain.state.taper = 0.5;
+        tools.cut.state.axis = crate::scene::Axis::X;
+        tools.cut.state.height_mm = 17.5;
+        tools.cut.state.keep = Keep::Above;
+        tools.relief.state.amplitude_mm = 0.8;
         tools.array = Array {
             columns: 3,
             rows: 4,
@@ -448,17 +448,26 @@ mod tests {
             saved.tools.supports.flood_angle_deg
         );
         assert_eq!(
-            back.tools.hollow.thickness_mm,
-            saved.tools.hollow.thickness_mm
+            back.tools.hollow.state.thickness_mm,
+            saved.tools.hollow.state.thickness_mm
         );
-        assert_eq!(back.tools.hollow.mode, saved.tools.hollow.mode);
-        assert!(back.tools.hollow.infill_on);
-        assert_eq!(back.tools.drain.diameter_mm, saved.tools.drain.diameter_mm);
-        assert_eq!(back.tools.drain.depth_mm, saved.tools.drain.depth_mm);
-        assert_eq!(back.tools.drain.taper, saved.tools.drain.taper);
-        assert_eq!(back.tools.cut.axis, saved.tools.cut.axis);
-        assert_eq!(back.tools.cut.offset_mm, saved.tools.cut.offset_mm);
-        assert_eq!(back.tools.cut.keep, saved.tools.cut.keep);
+        assert_eq!(back.tools.hollow.state.mode, saved.tools.hollow.state.mode);
+        assert!(back.tools.hollow.state.infill_on);
+        assert_eq!(
+            back.tools.drain.state.diameter_mm,
+            saved.tools.drain.state.diameter_mm
+        );
+        assert_eq!(
+            back.tools.drain.state.depth_mm,
+            saved.tools.drain.state.depth_mm
+        );
+        assert_eq!(back.tools.drain.state.taper, saved.tools.drain.state.taper);
+        assert_eq!(back.tools.cut.state.axis, saved.tools.cut.state.axis);
+        assert_eq!(
+            back.tools.cut.state.height_mm,
+            saved.tools.cut.state.height_mm
+        );
+        assert_eq!(back.tools.cut.state.keep, saved.tools.cut.state.keep);
         assert_eq!(back.tools.array, saved.tools.array);
     }
 

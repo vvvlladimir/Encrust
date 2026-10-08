@@ -3,8 +3,8 @@ use std::path::Path;
 use anyhow::{Context, Result};
 use core_engine::{Plate, Run};
 use core_format::PrintJob;
+use core_pipeline::CtbVersion;
 use core_pipeline::SlicedFormat;
-use format_chitu::CtbVersion;
 use printer_profiles::{MaterialProfile, OutputFormat, PrinterProfile};
 
 use crate::exit::Cancelled;
@@ -149,7 +149,7 @@ pub fn now_unix_s() -> u64 {
 
 #[cfg(test)]
 mod tests {
-    use format_chitu::CbddlpFlavour;
+    use core_pipeline::CbddlpFlavour;
     use printer_profiles::Display;
 
     use super::*;

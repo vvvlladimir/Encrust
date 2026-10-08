@@ -1,4 +1,5 @@
 use anyhow::{Result, bail};
+use core_engine::project::DrainState;
 use core_geometry::Scalar;
 use core_supports::Trapped;
 use core_volume::HoleSize;
@@ -22,12 +23,8 @@ pub enum Placing {
 /// was dropped at, so moving a slider changes the next hole and not the ones standing.
 #[derive(Debug)]
 pub struct DrainTool {
-    /// Diameter of the mouth the next click drills, in millimetres of the plate.
-    pub diameter_mm: Scalar,
-    /// How far past the surface that hole reaches, millimetres.
-    pub depth_mm: Scalar,
-    /// Diameter of its far end as a fraction of its mouth: 1 is a cylinder.
-    pub taper: Scalar,
+    /// What the panel is set to, in the shape a project writes it down in (ADR 0191).
+    pub state: DrainState,
     pub placing: Placing,
     pub job: Option<TrapJob>,
     /// Whether a check has finished since the plate last changed under it. A check is
@@ -38,11 +35,13 @@ pub struct DrainTool {
 impl Default for DrainTool {
     fn default() -> Self {
         Self {
-            // Three millimetres is what a resin slicer offers by default, and drains a
-            // cavity of any size the machine can print.
-            diameter_mm: 3.0,
-            depth_mm: 3.0,
-            taper: 1.0,
+            state: DrainState {
+                // Three millimetres is what a resin slicer offers by default, and drains
+                // a cavity of any size the machine can print.
+                diameter_mm: 3.0,
+                depth_mm: 3.0,
+                taper: 1.0,
+            },
             placing: Placing::default(),
             job: None,
             checked: false,
@@ -54,9 +53,9 @@ impl DrainTool {
     /// The hole the next click drills.
     pub fn size(&self) -> HoleSize {
         HoleSize {
-            diameter_mm: self.diameter_mm,
-            depth_mm: self.depth_mm,
-            taper: self.taper,
+            diameter_mm: self.state.diameter_mm,
+            depth_mm: self.state.depth_mm,
+            taper: self.state.taper,
         }
     }
 
@@ -114,7 +113,7 @@ impl DrainTool {
     /// Digs the channel every model has been laying out, and says how many were dug.
     pub fn finish_channels(&mut self, scene: &mut Scene) -> usize {
         self.stale();
-        let diameter_mm = self.diameter_mm;
+        let diameter_mm = self.state.diameter_mm;
         let mut dug = 0;
         for object in scene.targets_mut() {
             let transform = object.transform;
@@ -133,7 +132,7 @@ impl DrainTool {
     /// the next check's answer, not this one's.
     pub fn drill_found(&mut self, scene: &mut Scene) -> usize {
         self.stale();
-        let (diameter_mm, taper) = (self.diameter_mm, self.taper);
+        let (diameter_mm, taper) = (self.state.diameter_mm, self.state.taper);
         let mut drilled = 0;
 
         for object in scene.targets_mut() {

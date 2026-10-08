@@ -7,31 +7,12 @@
 use core_engine::project::{
     Array, CutState, DrainState, Group, HollowState, SlicingState, SupportState,
 };
-use core_geometry::Scalar;
 use serde::{Deserialize, Serialize};
 
-use crate::relief::ReliefTool;
+use crate::relief::ReliefState;
 use crate::slicing::Slicing;
 use crate::state::Tools;
 use crate::supports::{SupportGroup, SupportTool};
-
-/// What the Relief tool presses with. The states beside it are the project manifest's own
-/// (ADR 0191), which has no entry for the Relief tool.
-#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
-pub struct ReliefState {
-    pub amplitude_mm: Scalar,
-    pub precision: Scalar,
-}
-
-impl ReliefState {
-    /// What the tool is set to now.
-    pub fn of(relief: &ReliefTool) -> Self {
-        Self {
-            amplitude_mm: relief.amplitude_mm,
-            precision: relief.precision,
-        }
-    }
-}
 
 /// The numbers every tool is set to, and the slicing settings the panels edit.
 ///
@@ -54,25 +35,10 @@ impl ToolSettings {
         Self {
             slicing: slicing_state(slicing),
             supports: support_state(&tools.supports),
-            hollow: HollowState {
-                thickness_mm: tools.hollow.thickness_mm,
-                mode: tools.hollow.mode,
-                precision: tools.hollow.precision,
-                infill_on: tools.hollow.infill_on,
-                infill: tools.hollow.infill,
-                blocker_mm: tools.hollow.blocker_mm,
-            },
-            drain: DrainState {
-                diameter_mm: tools.drain.diameter_mm,
-                depth_mm: tools.drain.depth_mm,
-                taper: tools.drain.taper,
-            },
-            cut: CutState {
-                axis: tools.cut.axis,
-                height_mm: tools.cut.offset_mm,
-                keep: tools.cut.keep,
-            },
-            relief: ReliefState::of(&tools.relief),
+            hollow: tools.hollow.state.clone(),
+            drain: tools.drain.state.clone(),
+            cut: tools.cut.state.clone(),
+            relief: tools.relief.state,
             array: tools.array,
         }
     }
@@ -82,24 +48,10 @@ impl ToolSettings {
         restore_slicing(self.slicing, slicing);
         restore_supports(self.supports, &mut tools.supports);
 
-        tools.hollow.thickness_mm = self.hollow.thickness_mm;
-        tools.hollow.mode = self.hollow.mode;
-        tools.hollow.precision = self.hollow.precision;
-        tools.hollow.infill_on = self.hollow.infill_on;
-        tools.hollow.infill = self.hollow.infill;
-        tools.hollow.blocker_mm = self.hollow.blocker_mm;
-
-        tools.drain.diameter_mm = self.drain.diameter_mm;
-        tools.drain.depth_mm = self.drain.depth_mm;
-        tools.drain.taper = self.drain.taper;
-
-        tools.cut.axis = self.cut.axis;
-        tools.cut.offset_mm = self.cut.height_mm;
-        tools.cut.keep = self.cut.keep;
-
-        tools.relief.amplitude_mm = self.relief.amplitude_mm;
-        tools.relief.precision = self.relief.precision;
-
+        tools.hollow.state = self.hollow;
+        tools.drain.state = self.drain;
+        tools.cut.state = self.cut;
+        tools.relief.state = self.relief;
         tools.array = self.array;
     }
 }
@@ -178,12 +130,12 @@ mod tests {
     /// Tools set to something other than their defaults, one value per tool.
     fn edited() -> Tools {
         let mut tools = Tools::default();
-        tools.hollow.thickness_mm = 3.5;
-        tools.hollow.mode = HollowMode::External;
-        tools.drain.diameter_mm = 4.25;
-        tools.cut.axis = Axis::X;
-        tools.cut.keep = Keep::Above;
-        tools.relief.amplitude_mm = -0.75;
+        tools.hollow.state.thickness_mm = 3.5;
+        tools.hollow.state.mode = HollowMode::External;
+        tools.drain.state.diameter_mm = 4.25;
+        tools.cut.state.axis = Axis::X;
+        tools.cut.state.keep = Keep::Above;
+        tools.relief.state.amplitude_mm = -0.75;
         tools.array.columns = 5;
         tools.supports.brush_radius_mm = 6.0;
         tools.supports.profile.name = "Heavy".to_owned();

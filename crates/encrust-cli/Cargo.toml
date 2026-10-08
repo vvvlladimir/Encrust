@@ -34,10 +34,6 @@ core-volume.workspace = true
 printer-profiles.workspace = true
 core-format.workspace = true
 core-thumbnail.workspace = true
-format-goo.workspace = true
-format-chitu.workspace = true
-format-anycubic.workspace = true
-format-sl1.workspace = true
 net-prusalink.workspace = true
 net-sdcp.workspace = true
 printer-link.workspace = true
@@ -54,4 +50,6 @@ tracing.workspace = true
 tracing-subscriber.workspace = true
 
 [dev-dependencies]
+# The test reads back a `.goo` it asked for: its checksum and its layer codec.
+format-goo.workspace = true
 png.workspace = true

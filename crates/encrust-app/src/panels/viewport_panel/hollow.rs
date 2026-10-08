@@ -16,7 +16,7 @@ pub(super) fn place_blocker_under_cursor(
         return;
     };
     window.doc.scene.select(Some(id));
-    let radius_mm = window.tools.hollow.blocker_mm;
+    let radius_mm = window.tools.hollow.state.blocker_mm;
     if let Some(object) = window.doc.scene.get_mut(id) {
         let transform = object.transform;
         object.hollow.add_blocker(hit.point, radius_mm, transform);

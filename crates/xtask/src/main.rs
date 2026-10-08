@@ -1,6 +1,7 @@
 //! Repository tasks run by hand. What `gen-profiles` reads and may invent is in
 //! `docs/design/profiles.md`; how `web` builds the browser window, `docs/design/web-build.md`.
 
+mod arch;
 mod containers;
 mod cross_check;
 mod ini;
@@ -27,6 +28,8 @@ enum Command {
     Web(web::Args),
     /// Writes the command line's man pages.
     Man(man::Args),
+    /// Checks the dependency graph `docs/architecture.md` draws against the manifests.
+    Arch(arch::Args),
 }
 
 fn main() -> Result<()> {
@@ -34,5 +37,6 @@ fn main() -> Result<()> {
         Command::GenProfiles(args) => profiles::run(&args),
         Command::Web(args) => web::run(&args),
         Command::Man(args) => man::run(&args),
+        Command::Arch(args) => arch::run(&args),
     }
 }

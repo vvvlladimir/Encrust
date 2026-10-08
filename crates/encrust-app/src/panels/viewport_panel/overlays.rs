@@ -120,7 +120,7 @@ pub(super) fn draw_cut_plane(ui: &egui::Ui, window: &Window, viewport: egui::Rec
         return;
     };
     let tool = &window.tools.cut;
-    let (axis, across, along) = match tool.axis {
+    let (axis, across, along) = match tool.state.axis {
         crate::scene::Axis::X => (0, 1, 2),
         crate::scene::Axis::Y => (1, 0, 2),
         crate::scene::Axis::Z => (2, 0, 1),

@@ -283,8 +283,8 @@ mod tests {
     #[test]
     fn the_values_the_tools_were_left_at_survive_the_round_trip() {
         let mut tools = Tools::default();
-        tools.hollow.thickness_mm = 1.25;
-        tools.drain.depth_mm = 7.5;
+        tools.hollow.state.thickness_mm = 1.25;
+        tools.drain.state.depth_mm = 7.5;
         tools.supports.brush_radius_mm = 4.0;
 
         let prefs = Preferences::of(
@@ -302,8 +302,8 @@ mod tests {
             .clone()
             .expect("the tool values were written")
             .apply(&mut back, &mut slicing);
-        assert_eq!(back.hollow.thickness_mm, 1.25);
-        assert_eq!(back.drain.depth_mm, 7.5);
+        assert_eq!(back.hollow.state.thickness_mm, 1.25);
+        assert_eq!(back.drain.state.depth_mm, 7.5);
         assert_eq!(back.supports.brush_radius_mm, 4.0);
     }
 

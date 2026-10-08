@@ -530,20 +530,20 @@ mod tests {
     #[test]
     fn a_tool_setting_is_taken_back_and_put_again() {
         let mut bench = Bench::default();
-        let opened_with = bench.tools.hollow.thickness_mm;
+        let opened_with = bench.tools.hollow.state.thickness_mm;
         bench.observe(true);
 
-        bench.tools.hollow.thickness_mm = 2.5;
+        bench.tools.hollow.state.thickness_mm = 2.5;
         bench.observe(true);
-        bench.tools.hollow.thickness_mm = 4.0;
+        bench.tools.hollow.state.thickness_mm = 4.0;
         bench.observe(true);
 
         assert!(bench.undo());
-        assert_eq!(bench.tools.hollow.thickness_mm, 2.5);
+        assert_eq!(bench.tools.hollow.state.thickness_mm, 2.5);
         assert!(bench.undo());
-        assert_eq!(bench.tools.hollow.thickness_mm, opened_with);
+        assert_eq!(bench.tools.hollow.state.thickness_mm, opened_with);
         assert!(bench.redo());
-        assert_eq!(bench.tools.hollow.thickness_mm, 2.5);
+        assert_eq!(bench.tools.hollow.state.thickness_mm, 2.5);
     }
 
     /// The wall the panel shows is the Hollow tool's, and the plate is the models on it:
@@ -556,13 +556,13 @@ mod tests {
         bench.move_to(id, 7.0);
         bench.observe(true);
 
-        bench.tools.drain.diameter_mm = 5.0;
+        bench.tools.drain.state.diameter_mm = 5.0;
         bench.observe(true);
 
         assert!(bench.undo());
         assert_eq!(
-            bench.tools.drain.diameter_mm,
-            DrainTool::default().diameter_mm
+            bench.tools.drain.state.diameter_mm,
+            DrainTool::default().state.diameter_mm
         );
         assert_eq!(bench.x_of(id), Some(7.0), "the model stayed where it was");
     }
@@ -570,7 +570,7 @@ mod tests {
     #[test]
     fn what_the_window_opens_with_is_not_an_edit() {
         let mut bench = Bench::default();
-        bench.tools.cut.offset_mm = 42.0;
+        bench.tools.cut.state.height_mm = 42.0;
         bench.observe(true);
         assert!(
             !bench.history.can_undo(),
@@ -603,7 +603,7 @@ mod tests {
         bench.observe(true);
 
         for value in [4.0, 4.2, 4.25] {
-            bench.tools.drain.diameter_mm = value;
+            bench.tools.drain.state.diameter_mm = value;
             bench.observe_while_typing();
         }
         bench.observe(true);
@@ -611,8 +611,8 @@ mod tests {
         assert_eq!(bench.history.past.len(), 1);
         assert!(bench.undo());
         assert_eq!(
-            bench.tools.drain.diameter_mm,
-            DrainTool::default().diameter_mm,
+            bench.tools.drain.state.diameter_mm,
+            DrainTool::default().state.diameter_mm,
             "the whole number goes back, not its last digit"
         );
     }

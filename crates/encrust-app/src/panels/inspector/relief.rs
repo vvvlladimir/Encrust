@@ -38,7 +38,7 @@ fn depth(ui: &mut egui::Ui, window: &mut Window) {
     number_row(
         ui,
         "Depth",
-        &mut window.tools.relief.amplitude_mm,
+        &mut window.tools.relief.state.amplitude_mm,
         "mm",
         DEPTH_STEP,
         -MAX_DEPTH_MM..=MAX_DEPTH_MM,
@@ -47,7 +47,7 @@ fn depth(ui: &mut egui::Ui, window: &mut Window) {
     number_row(
         ui,
         "Precision",
-        &mut window.tools.relief.precision,
+        &mut window.tools.relief.state.precision,
         "",
         FINE_STEP,
         0.0..=1.0,

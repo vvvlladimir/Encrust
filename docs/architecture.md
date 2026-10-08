@@ -76,7 +76,7 @@ it are in `.claude/rules/architecture.md`.
 | `printer-profiles` | `PrinterProfile`/`OutputFormat`/`AnycubicExtension`/`PhotonRevision`/`Connection`/`Firmware`, `MaterialProfile`/`PrinterTuning`/`Compensation` and `exposure_for_mm`, `SupportProfile` and its segments, TOML load/save, `Catalogue` of printers, resins and support profiles, the `ProfileStore` it writes edits through with `DirStore` over a directory (ADR 0181), and `user_dir` |
 | `core-thumbnail` | `Thumbnail`, `Part`, `ThumbnailSettings`, `render` (CPU only) |
 | `core-format` | `PrintJob`, `ExposureRange`/`ExposurePlan`, `SlicedFileWriter`, `LayerSink`, `Fields`, `FormatError`, the greyscale and colour PNG codec the archive containers share (ADR 0167), and `Rle7Layer`/`decode_rle7` with the RGB15 preview record two binary families share (ADR 0168); `Reads::claim`, `panel_in_range` and `read_entry`, the bounds every reader puts a header's counts through (ADR 0171) |
-| `core-pipeline` | The write stage every front end shares (ADR 0127): `SlicedFormat` and the extension that picks it, `PanelOverrides`/`raster_settings`, `Folded`/`Tolerance`/`fold_group`, `Writing`/`Written`/`write_to` streaming a stack into a sink with `write` wrapping it for a path (ADR 0175), `measure` doing the same without writing, `convert`/`convert_to` with `Converting`/`Converted` writing a read file again in another container (ADR 0180), `Observer` for a window arriving, layers landing and whether to stop, `PipelineError` |
+| `core-pipeline` | The write stage every front end shares (ADR 0127): `SlicedFormat` and the extension that picks it, with the container flavours its variants carry re-exported (ADR 0209), `PanelOverrides`/`raster_settings`, `Folded`/`Tolerance`/`fold_group`, `Writing`/`Written`/`write_to` streaming a stack into a sink with `write` wrapping it for a path (ADR 0175), `measure` doing the same without writing, `convert`/`convert_to` with `Converting`/`Converted` writing a read file again in another container (ADR 0180), `Observer` for a window arriving, layers landing and whether to stop, `PipelineError` |
 | `core-engine` | The plate every front end runs (ADR 0174): `Model`/`Plate`, `Cutting` and `cut`, `bake` merging the plate into one `Baked` — one mesh with the resin's shrinkage applied, and the height the material in it reaches, which is what the stack stops at (ADR 0199) — and `parts` listing it for a thumbnail, `Run` with `write`/`write_file`/`measure`, `EngineError`; `open_plate` with `Opening`, one plate of a project as the file holds it; and `project` — the `.encrust` manifest with each model's `BuiltCavity` and trees, its source and shell blobs, `read_from`/`write_to`, `hollow_of`/`supports_of`, `digest`, `Axis`/`Keep`/`Array` (ADR 0191) |
 | `format-goo` | `GooWriter`, `GooReader` and the `.goo` codec |
 | `format-chitu` | `CtbWriter`, `CtbVersion` v4/v5; `CbddlpWriter`, `CbddlpFlavour` and the eight-pass RLE1 codec (ADR 0146); `ChituReader` and `layer_crypt` (ADR 0149) |
@@ -92,25 +92,27 @@ it are in `.claude/rules/architecture.md`.
 | `encrust-cli` | `encrust` binary, one subcommand per module in `commands/` (ADR 0176): `stage` assembles a plate from models, a plate file (`plate_file`, ADR 0179) or a project (`project`, ADR 0191); `pipeline` runs a model through orient, hollow and supports and writes a staged plate through `core-engine`, or cuts it here for a PNG stack; `estimate` measures one without writing; `convert`; `printer` discovers, asks and sends through `printer-link`; `profiles show`; `completions`; `config`, the flags a `--config` file holds; `batch` runs one model at a time over a directory with a JSON report each; `--json`, exit codes, the progress bar and Ctrl-C |
 | `encrust-web` | The window's browser front end (ADR 0181): `start`, the window on a canvas; `www/` the page, its headers, its manifest and `sw.js`, the service worker that isolates it where a host sends no headers and keeps the build for working offline (ADR 0183) |
 | `web-engine` | The browser's front end without a window (ADR 0177): `slice_project`, the bytes of a project into the bytes of a sliced file with no file system, thread or clock, and the `wasm-bindgen` exports of it; `www/` the page, its worker and the Node measurement |
-| `xtask` | `xtask` binary: `gen-profiles`, the printer catalogue transcribed from a directory of source profiles, run by hand and never from a build script (ADR 0165); `web`, the browser build; `man`, the command line's man pages from its own clap definition (ADR 0183) |
+| `xtask` | `xtask` binary: `gen-profiles`, the printer catalogue transcribed from a directory of source profiles, run by hand and never from a build script (ADR 0165); `web`, the browser build; `man`, the command line's man pages from its own clap definition (ADR 0183); `arch`, the dependency graph below against every crate's manifest |
 | `encrust-app` | `encrust-gui` binary: egui/wgpu window — plate panel left, one inspector panel per tool and the rail beside it, plate tabs on their own strip, Preview splitting the stage between model and mask; `Scene` with `duplicate`/`mirror`/`array`, `BuildPlate` — the machine's platform, named apart from `core_engine::Plate` — `OrbitCamera`, picking, gizmo, `History`, `Measure`, `Cutting`, jobs that hold no stack, `Settings`, `shortcuts`, `ui/theme`, `prefs`, `project` — the dialogs and the `Scene` ↔ `Manifest` conversion over `core_engine::project` — `updates`; `files` and, for a browser, `web` (ADR 0181) |
 
 ## The allowed dependency graph
 
-Arrows point at what a crate may depend on. Anything not drawn is forbidden.
+Arrows point at what a crate may depend on. Anything not drawn is forbidden, and
+`cargo xtask arch` fails if this block and the manifests disagree. Dev-dependencies are
+not drawn: a test may reach for a fixture the crate itself must not.
 
 ```
-encrust-app ──> core-engine, every core-*, printer-profiles, every format-*, printer-link,
+encrust-app ──> core-engine, every core-*, printer-profiles, printer-link,
                net-sdcp, net-prusalink,
-               egui, eframe, egui_dock, egui-wgpu, wgpu, transform-gizmo-egui,
+               egui, eframe, egui-wgpu, wgpu, transform-gizmo-egui,
                bytemuck, image, rfd, rayon, serde, serde_json, zip,
                ureq (with TLS at the desk), minisign-verify, tar, flate2, web-time;
                in a browser wasm-bindgen, wasm-bindgen-futures, js-sys, web-sys;
                winresource at build time, for the Windows icon
 encrust-web ──> encrust-app, wasm-bindgen, wasm-bindgen-futures, web-sys, getrandom
-encrust-cli ──> core-engine, every core-*, printer-profiles, every format-*, printer-link,
-               net-sdcp, net-prusalink, rayon, clap, clap_complete, serde, serde_json, toml,
-               indicatif, ctrlc
+encrust-cli ──> core-engine, every core-*, printer-profiles, printer-link,
+               net-sdcp, net-prusalink, rayon, clap, clap_complete, serde, serde_json,
+               toml, indicatif, ctrlc
 web-engine ──> core-engine, core-pipeline, wasm-bindgen
 xtask ──> printer-profiles, encrust-cli, toml, clap, clap_mangen
 
@@ -137,6 +139,12 @@ core-mesh-io ──> core-geometry, zip
 printer-profiles ──> (nothing in this workspace)
 core-geometry ──> (nothing in this workspace)
 ```
+
+No front end names the crate that writes a container: the flavour a `SlicedFormat` carries
+— `CtbVersion`, `CbddlpFlavour`, `AnycubicFlavour`, `AnycubicVersion`, `Sl1Flavour`,
+`CxdlpVersion` — is re-exported by `core-pipeline`, which is what picks the writer anyway
+(ADR 0209). Only a test that reads back a file it asked for takes `format-goo`, as a
+dev-dependency.
 
 Only the front ends — the two binaries and `encrust-web` — may depend on graphics crates.
 Spanning core layers is what `core-pipeline` and `core-engine` are for, and each stays its own stage: `core-pipeline`

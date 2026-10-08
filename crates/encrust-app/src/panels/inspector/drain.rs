@@ -95,7 +95,7 @@ fn sizes(ui: &mut egui::Ui, tools: &mut Tools) {
     number_row(
         ui,
         "Hole size",
-        &mut tools.drain.diameter_mm,
+        &mut tools.drain.state.diameter_mm,
         "mm",
         COARSE_STEP,
         MIN_HOLE_MM..=MAX_HOLE_MM,
@@ -104,7 +104,7 @@ fn sizes(ui: &mut egui::Ui, tools: &mut Tools) {
     number_row(
         ui,
         "Depth",
-        &mut tools.drain.depth_mm,
+        &mut tools.drain.state.depth_mm,
         "mm",
         COARSE_STEP,
         MIN_DEPTH_MM..=MAX_DEPTH_MM,
@@ -113,7 +113,7 @@ fn sizes(ui: &mut egui::Ui, tools: &mut Tools) {
     number_row(
         ui,
         "Taper",
-        &mut tools.drain.taper,
+        &mut tools.drain.state.taper,
         "",
         FINE_STEP,
         0.1..=1.0,

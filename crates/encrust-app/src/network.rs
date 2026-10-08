@@ -473,7 +473,7 @@ fn is_temporary(path: &Path) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use format_sl1::Sl1Flavour;
+    use core_pipeline::Sl1Flavour;
 
     fn a_printer(id: &str) -> Printer {
         Printer {

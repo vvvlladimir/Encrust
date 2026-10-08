@@ -24,7 +24,7 @@
 
 The allowed dependency graph is in `docs/architecture.md`, with why each edge is there and the
 ADR behind it. Anything it does not draw is forbidden; read it before moving a type or adding
-a crate.
+a crate, and `cargo xtask arch` fails if the two disagree.
 
 A new sliced-file format is a new `format-*` crate on `core-format` alone, plus its
 container's crate if the container is someone else's (ADR 0148). A new printer protocol is a

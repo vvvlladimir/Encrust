@@ -103,15 +103,15 @@ fn modes(ui: &mut egui::Ui, tools: &mut Tools) {
         Segment::new(HollowMode::External, "Outside"),
     ];
     let width = ui.available_width();
-    let mut chosen = tools.hollow.mode;
+    let mut chosen = tools.hollow.state.mode;
     if Segmented::new(&segments).width(width).show(ui, &mut chosen) {
-        tools.hollow.mode = chosen;
+        tools.hollow.state.mode = chosen;
     }
 
     ui.add_space(2.0);
     describe(
         ui,
-        match tools.hollow.mode {
+        match tools.hollow.state.mode {
             HollowMode::Internal => "The wall grows inward; the outside is untouched.",
             HollowMode::External => "The wall grows outward, making a mould of the model.",
         },
@@ -122,7 +122,7 @@ fn wall(ui: &mut egui::Ui, window: &mut Window) {
     number_row(
         ui,
         "Wall",
-        &mut window.tools.hollow.thickness_mm,
+        &mut window.tools.hollow.state.thickness_mm,
         "mm",
         COARSE_STEP,
         MIN_WALL_MM..=MAX_WALL_MM,
@@ -131,7 +131,7 @@ fn wall(ui: &mut egui::Ui, window: &mut Window) {
     number_row(
         ui,
         "Precision",
-        &mut window.tools.hollow.precision,
+        &mut window.tools.hollow.state.precision,
         "",
         FINE_STEP,
         0.0..=1.0,
@@ -139,8 +139,8 @@ fn wall(ui: &mut egui::Ui, window: &mut Window) {
     );
     ui.add_space(2.0);
     let lattice_mm = core_volume::lattice_mm(
-        window.tools.hollow.thickness_mm,
-        window.tools.hollow.precision,
+        window.tools.hollow.state.thickness_mm,
+        window.tools.hollow.state.precision,
         widest(window.doc),
     );
     describe(
@@ -166,8 +166,8 @@ fn widest(doc: &Doc) -> f32 {
 
 /// What stands in the cavity, if anything.
 fn infill(ui: &mut egui::Ui, tools: &mut Tools) {
-    switch(ui, &mut tools.hollow.infill_on, "Infill");
-    if !tools.hollow.infill_on {
+    switch(ui, &mut tools.hollow.state.infill_on, "Infill");
+    if !tools.hollow.state.infill_on {
         ui.add_space(2.0);
         describe(ui, "The cavity is left empty.");
         return;
@@ -183,19 +183,19 @@ fn infill(ui: &mut egui::Ui, tools: &mut Tools) {
         let width = ui.available_width();
         Segmented::new(&segments)
             .width(width)
-            .show(ui, &mut tools.hollow.infill.pattern);
+            .show(ui, &mut tools.hollow.state.infill.pattern);
 
         ui.add_space(2.0);
         number_row(
             ui,
             "Cell",
-            &mut tools.hollow.infill.size_mm,
+            &mut tools.hollow.state.infill.size_mm,
             "mm",
             COARSE_STEP,
             MIN_CELL_MM..=MAX_CELL_MM,
             1,
         );
-        let mut percent = tools.hollow.infill.density * 100.0;
+        let mut percent = tools.hollow.state.infill.density * 100.0;
         number_row(
             ui,
             "Density",
@@ -205,7 +205,7 @@ fn infill(ui: &mut egui::Ui, tools: &mut Tools) {
             MIN_DENSITY * 100.0..=MAX_DENSITY * 100.0,
             0,
         );
-        tools.hollow.infill.density = percent / 100.0;
+        tools.hollow.state.infill.density = percent / 100.0;
 
         ui.add_space(2.0);
         describe(
@@ -213,7 +213,7 @@ fn infill(ui: &mut egui::Ui, tools: &mut Tools) {
             &format!(
                 "{:.2} mm walls. Hive and Grid stand on the plate and drain; Scaffold also \
                  braces sideways.",
-                tools.hollow.infill.thickness_mm()
+                tools.hollow.state.infill.thickness_mm()
             ),
         );
     });
@@ -224,7 +224,7 @@ fn blockers(ui: &mut egui::Ui, window: &mut Window) {
     number_row(
         ui,
         "Blocker size",
-        &mut window.tools.hollow.blocker_mm,
+        &mut window.tools.hollow.state.blocker_mm,
         "mm",
         COARSE_STEP,
         0.5..=40.0,

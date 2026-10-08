@@ -42,6 +42,7 @@ Grouped by what the decision governs; the number is still the order it was taken
 | [0037](0037-the-dev-profile-is-optimised.md) | The dev profile is optimised | Accepted |
 | [0096](0096-the-product-is-encrust.md) | The product is Encrust, and its project file `.encrust` | Accepted |
 | [0127](0127-orchestration-is-a-crate-not-a-binary.md) | Orchestration is a crate, not a binary | Accepted |
+| [0209](0209-a-front-end-names-a-container-through-core-pipeline.md) | A front end names a container through `core-pipeline` | Accepted |
 | [0129](0129-what-a-model-carries-lives-in-its-core.md) | What a model carries lives in the core that makes it | Accepted |
 | [0159](0159-agpl-with-a-contributor-licence-agreement.md) | AGPL-3.0 with a contributor licence agreement | Accepted |
 | [0160](0160-a-release-is-an-installer-per-platform.md) | A release is an installer per platform, built in CI | Superseded by 0162 (the trigger only) |

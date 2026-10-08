@@ -1,6 +1,7 @@
 use anyhow::{Result, bail};
+use core_engine::project::HollowState;
 use core_geometry::Scalar;
-use core_volume::{HollowMode, HollowSettings, InfillSettings};
+use core_volume::{HollowSettings, InfillSettings};
 
 use crate::job::{HollowJob, HollowOutcome, HollowRequest, hollow_tasks, rebuild_tasks};
 use crate::scene::Scene;
@@ -16,13 +17,8 @@ pub const DEFAULT_BLOCKER_MM: Scalar = 4.0;
 /// `docs/decisions/0059-a-hollow-is-the-model-with-its-cavity-appended.md`.
 #[derive(Debug)]
 pub struct HollowTool {
-    pub thickness_mm: Scalar,
-    pub mode: HollowMode,
-    pub precision: Scalar,
-    pub infill_on: bool,
-    pub infill: InfillSettings,
-    /// Radius of the blocker the next click drops.
-    pub blocker_mm: Scalar,
+    /// What the panel is set to, in the shape a project writes it down in (ADR 0191).
+    pub state: HollowState,
     pub job: Option<HollowJob>,
     /// Whether a run has just put a cavity on the plate, which is what takes the pockets
     /// an older check found off it; see ADR 0198.
@@ -33,12 +29,14 @@ impl Default for HollowTool {
     fn default() -> Self {
         let asked = HollowSettings::default();
         Self {
-            thickness_mm: asked.thickness_mm,
-            mode: asked.mode,
-            precision: asked.precision,
-            infill_on: false,
-            infill: InfillSettings::default(),
-            blocker_mm: DEFAULT_BLOCKER_MM,
+            state: HollowState {
+                thickness_mm: asked.thickness_mm,
+                mode: asked.mode,
+                precision: asked.precision,
+                infill_on: false,
+                infill: InfillSettings::default(),
+                blocker_mm: DEFAULT_BLOCKER_MM,
+            },
             job: None,
             hollowed: false,
         }
@@ -50,10 +48,10 @@ impl HollowTool {
     /// holes — is laid over this per model, in `hollow_tasks` and in `is_stale`.
     pub fn settings(&self) -> HollowSettings {
         HollowSettings {
-            thickness_mm: self.thickness_mm,
-            mode: self.mode,
-            precision: self.precision,
-            infill: self.infill_on.then_some(self.infill),
+            thickness_mm: self.state.thickness_mm,
+            mode: self.state.mode,
+            precision: self.state.precision,
+            infill: self.state.infill_on.then_some(self.state.infill),
             ..HollowSettings::default()
         }
     }

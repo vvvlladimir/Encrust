@@ -4,10 +4,7 @@
 #[cfg(not(target_arch = "wasm32"))]
 use std::path::PathBuf;
 
-use core_pipeline::SlicedFormat;
-use format_chitu::{CbddlpFlavour, CtbVersion};
-use format_creality::CxdlpVersion;
-use format_sl1::Sl1Flavour;
+use core_pipeline::{CbddlpFlavour, CtbVersion, CxdlpVersion, Sl1Flavour, SlicedFormat};
 
 /// What the picker segment says. The revision is on it because it is the only thing
 /// telling the two `.ctb` choices apart.

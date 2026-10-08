@@ -28,13 +28,6 @@ core-supports.workspace = true
 core-volume.workspace = true
 core-format.workspace = true
 core-thumbnail.workspace = true
-format-goo.workspace = true
-format-chitu.workspace = true
-format-anycubic.workspace = true
-format-sl1.workspace = true
-format-creality.workspace = true
-format-svgx.workspace = true
-format-cws.workspace = true
 net-prusalink.workspace = true
 net-sdcp.workspace = true
 printer-link.workspace = true
@@ -60,6 +53,11 @@ bytemuck.workspace = true
 image.workspace = true
 tracing.workspace = true
 tracing-subscriber.workspace = true
+
+[dev-dependencies]
+# One test writes a `.goo` for the preview to open again; nothing else here names a
+# container's crate (ADR 0209).
+format-goo.workspace = true
 
 # A browser has no TLS stack to build and no native dialogs; see docs/decisions/0181.
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]

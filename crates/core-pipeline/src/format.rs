@@ -1,10 +1,14 @@
 use std::path::Path;
 
-use format_anycubic::{AnycubicFlavour, AnycubicVersion};
-use format_chitu::{CbddlpFlavour, CtbVersion};
-use format_creality::CxdlpVersion;
-use format_sl1::Sl1Flavour;
 use printer_profiles::{AnycubicExtension, OutputFormat, PhotonRevision};
+
+// The variants below carry them, so a front end naming a container gets the type from
+// here and takes no dependency on the crate that writes it; the same reason
+// `core-format` re-exports `LayerPlan` (ADR 0091, 0209).
+pub use format_anycubic::{AnycubicFlavour, AnycubicVersion};
+pub use format_chitu::{CbddlpFlavour, CtbVersion};
+pub use format_creality::CxdlpVersion;
+pub use format_sl1::Sl1Flavour;
 
 /// A sliced-file format, and for `.ctb` the revision of it.
 ///

@@ -599,7 +599,7 @@ fn now_unix_s() -> u64 {
 mod tests {
     use super::*;
     use core_geometry::{Mesh, Orientation, Transform, Vec3, diagnose};
-    use format_chitu::CtbVersion;
+    use core_pipeline::CtbVersion;
     use printer_profiles::PrinterTuning;
     use std::path::Path;
     use std::sync::Arc;

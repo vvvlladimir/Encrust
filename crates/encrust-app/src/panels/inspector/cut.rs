@@ -27,9 +27,9 @@ pub fn ui(ui: &mut egui::Ui, window: &mut Window) {
             .map(|axis| Segment::new(*axis, axis.label()))
             .collect();
         let width = ui.available_width();
-        let mut axis = window.tools.cut.axis;
+        let mut axis = window.tools.cut.state.axis;
         Segmented::new(&axes).width(width).show(ui, &mut axis);
-        if axis != window.tools.cut.axis
+        if axis != window.tools.cut.state.axis
             && let Some(object) = window.doc.scene.get(id)
         {
             window.tools.cut.set_axis(axis, object);
@@ -38,20 +38,20 @@ pub fn ui(ui: &mut egui::Ui, window: &mut Window) {
         ui.add_space(4.0);
         let plate = &window.doc.plate;
         let across = plate.x_mm.max(plate.y_mm);
-        let (label, range) = match window.tools.cut.axis {
+        let (label, range) = match window.tools.cut.state.axis {
             Axis::Z => ("Height", 0.0..=plate.z_mm),
             Axis::X | Axis::Y => ("Offset", -across..=across),
         };
         number_row(
             ui,
             label,
-            &mut window.tools.cut.offset_mm,
+            &mut window.tools.cut.state.height_mm,
             "mm",
             OFFSET_STEP,
             range,
             2,
         );
-        let from = match window.tools.cut.axis {
+        let from = match window.tools.cut.state.axis {
             Axis::Z => "Measured from the plate.",
             Axis::X | Axis::Y => "Measured from the model's centre of mass.",
         };
@@ -64,7 +64,7 @@ pub fn ui(ui: &mut egui::Ui, window: &mut Window) {
             .collect();
         Segmented::new(&keeps)
             .width(width)
-            .show(ui, &mut window.tools.cut.keep);
+            .show(ui, &mut window.tools.cut.state.keep);
 
         ui.add_space(8.0);
         ui.columns(2, |columns| {
