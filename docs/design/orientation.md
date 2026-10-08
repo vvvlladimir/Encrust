@@ -41,7 +41,9 @@ The peel term needs the model cut; the other three are read off the faces withou
 the mesh at all, since area and normals do not turn with it. So every candidate is scored
 on the three cheap terms plus a **shadow** — half the area the faces project onto the
 plate, which is the cross-section exactly for a convex model and an upper bound otherwise
-— and only the best few are cut at 24 heights to measure the section for real.
+— and only the best few are cut at 24 heights to measure the section for real: the area its
+contours cover, by the rule the rasteriser fills by, so bodies overlapping at that height
+are counted once (ADR 0206).
 
 Without the shadow the first pass would rank on footprint and height alone, and would send
 a slab into the second pass lying flat, which is the one orientation the peel cannot take.

@@ -22,6 +22,9 @@ pub struct Piece {
     /// Centre of the cured area, panel millimetres from the top-left pixel.
     pub centre_mm: [f32; 2],
     pub peel_mm4: f32,
+    /// Radius of gyration of the cured area about its centre, millimetres: how far off
+    /// that centre the pull acts while the film still holds half the piece.
+    pub gyration_mm: f32,
 }
 
 /// A layer's lit pixels grouped into pieces: what the stack is read from.
@@ -114,37 +117,60 @@ impl Cured {
         &self.spans
     }
 
-    /// This layer with the pieces `dropped` flags taken out, and the stretches they
-    /// covered, in reading order.
-    pub(crate) fn without(self, dropped: &[bool]) -> (Self, Vec<Stretch>) {
-        let mut renumbered = vec![u32::MAX; self.pieces.len()];
-        let mut pieces = Vec::with_capacity(self.pieces.len());
-        for (index, piece) in self.pieces.iter().enumerate() {
-            if !dropped[index] {
-                renumbered[index] = pieces.len() as u32;
-                pieces.push(*piece);
-            }
+    /// This layer in two: the pieces `dropped` flags, and everything else. Both keep the
+    /// panel they were cured on, so either can be read against another layer.
+    pub(crate) fn split(self, dropped: &[bool]) -> (Self, Self) {
+        let Self {
+            width,
+            height,
+            pitch,
+            spans,
+            pieces,
+        } = self;
+        let mut renumbered = vec![0u32; pieces.len()];
+        let mut halves: [(Vec<Piece>, Vec<Span>); 2] =
+            [(Vec::new(), Vec::new()), (Vec::new(), Vec::new())];
+        for (index, piece) in pieces.iter().enumerate() {
+            let (pieces, _) = &mut halves[usize::from(dropped[index])];
+            renumbered[index] = pieces.len() as u32;
+            pieces.push(*piece);
         }
-        let mut spans = Vec::with_capacity(self.spans.len());
-        let mut taken = Vec::new();
-        for span in self.spans {
-            match renumbered[span.piece as usize] {
-                u32::MAX => taken.push(Stretch {
-                    row: span.row,
-                    x0: span.x0,
-                    x1: span.x1,
-                }),
-                piece => spans.push(Span { piece, ..span }),
-            }
+        for span in spans {
+            let (_, spans) = &mut halves[usize::from(dropped[span.piece as usize])];
+            spans.push(Span {
+                piece: renumbered[span.piece as usize],
+                ..span
+            });
         }
+        let [(kept, kept_spans), (taken, taken_spans)] = halves;
         (
             Self {
-                spans,
-                pieces,
-                ..self
+                width,
+                height,
+                pitch,
+                spans: kept_spans,
+                pieces: kept,
             },
-            taken,
+            Self {
+                width,
+                height,
+                pitch,
+                spans: taken_spans,
+                pieces: taken,
+            },
         )
+    }
+
+    /// The stretches of panel this layer's pixels cover, in reading order.
+    pub(crate) fn stretches(&self) -> Vec<Stretch> {
+        self.spans
+            .iter()
+            .map(|span| Stretch {
+                row: span.row,
+                x0: span.x0,
+                x1: span.x1,
+            })
+            .collect()
     }
 
     /// The pixels of the pieces `wanted` names, lit, and everything else dark.
@@ -334,16 +360,23 @@ impl Moments {
     }
 
     fn piece(&self) -> Piece {
+        let polar = self.polar();
         Piece {
             area_mm2: self.area as f32,
             centre_mm: [(self.x / self.area) as f32, (self.y / self.area) as f32],
-            peel_mm4: self.torsion() as f32,
+            peel_mm4: self.torsion(polar) as f32,
+            gyration_mm: (polar / self.area).sqrt() as f32,
         }
     }
 
-    /// Saint-Venant's torsion constant, `A^4 / (4 pi^2 I_p)`, which is exact for a disc.
-    fn torsion(&self) -> f64 {
+    /// Second moment of the area about its own centre, mm^4.
+    fn polar(&self) -> f64 {
         let polar = self.xx + self.yy - (self.x * self.x + self.y * self.y) / self.area;
+        polar.max(0.0)
+    }
+
+    /// Saint-Venant's torsion constant, `A^4 / (4 pi^2 I_p)`, which is exact for a disc.
+    fn torsion(&self, polar: f64) -> f64 {
         if polar <= 0.0 {
             return 0.0;
         }
@@ -502,17 +535,34 @@ pub(crate) mod tests {
     #[test]
     fn a_piece_taken_out_leaves_the_rest_renumbered() {
         let layer = paint(6, 1, |x, _| u8::from(x == 0 || x >= 3) * 255);
-        let (kept, taken) = cure(&layer, UNIT).without(&[true, false]);
+        let (kept, taken) = cure(&layer, UNIT).split(&[true, false]);
         assert_eq!(
-            taken,
+            taken.stretches(),
             vec![Stretch {
                 row: 0,
                 x0: 0,
                 x1: 1
             }]
         );
+        assert_eq!(taken.pieces().len(), 1);
         assert_eq!(kept.pieces().len(), 1);
         assert!(kept.spans().iter().all(|span| span.piece == 0));
+    }
+
+    #[test]
+    fn a_disc_gyrates_about_its_centre_as_its_radius_over_root_two() {
+        // A disc of radius R has I_p = pi R^4 / 2 over A = pi R^2, so R / sqrt(2).
+        let pitch = PixelPitch { x: 0.05, y: 0.05 };
+        let disc = paint(400, 400, |x, y| {
+            let (dx, dy) = (f64::from(x) + 0.5 - 200.0, f64::from(y) + 0.5 - 200.0);
+            u8::from(dx * dx + dy * dy <= 200.0 * 200.0) * 255
+        });
+        let gyration = cure(&disc, pitch).pieces()[0].gyration_mm;
+        let expected = 10.0 / std::f32::consts::SQRT_2;
+        assert!(
+            (gyration - expected).abs() / expected < 0.01,
+            "{gyration} against R / sqrt(2) = {expected}"
+        );
     }
 
     #[test]

@@ -136,6 +136,7 @@ Grouped by what the decision governs; the number is still the order it was taken
 |---|---|---|
 | [0163](0163-the-stack-is-measured-from-its-runs.md) | The stack is measured from its runs, in a crate of its own | Accepted |
 | [0164](0164-risks-are-read-off-the-stack-with-a-neck-carried-up.md) | Risks are read off the stack, each piece carrying the narrowest neck under it | Accepted |
+| [0206](0206-a-report-counts-what-is-there-once.md) | A report counts what is there once, and resin only from the masks | Accepted |
 
 ### Supports
 

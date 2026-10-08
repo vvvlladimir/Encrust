@@ -47,9 +47,12 @@ the risks are read this way: ADR 0164.
   plate. It is the piece's own contact where that is under 0.9 of the necks it stands on,
   and otherwise those necks together, their areas summed and their centres weighted.
 - The layer's pull on a piece is `F = J * PEEL_N_PER_MM4`. On a neck of area `A` and
-  radius `r`, off by the lever `L` from the piece's centre, the stress is
-  `F / A + F L / (pi r^3 / 4)`: tension, and bending over a round section. Past
-  `NECK_LIMIT_MPA` it is a **lever**, kept once per neck at its worst.
+  radius `r` the stress is `F / A + F L / (pi r^3 / 4)`: tension, and bending over a round
+  section. The lever `L` is how far off the neck the pull acts: the piece's centre off the
+  neck's, plus half the piece's own radius of gyration `sqrt(I_p / A)`, because the film
+  lets go from one edge and the pull is then carried by the half still stuck. Without that
+  term a plate centred over a wire broke nothing. Past `NECK_LIMIT_MPA` it is a **lever**,
+  kept once per neck at its worst.
 - A layer whose whole pull `F` passes `PEEL_LIMIT_N` is a **peel**; a run of them is
   named once, at the hardest.
 
@@ -59,9 +62,12 @@ the plate; failing that, the most stressed neck, then the hardest peel.
 ## Removing islands
 
 A fold that removes islands takes every piece touching nothing below out of its layer,
-whatever its size, and hands back the stretches it covered. The writer erases them from
-the runs before encoding, and the next layer is judged against the layer as written, so
-whatever stood only on an island becomes one and goes too. A write therefore runs in four
-stages a window at a time: rasterise and cure in parallel, fold in order, erase and encode
-in parallel, push in order. `Measured` keeps the stretches per layer, which is what
-Preview erases from its picture.
+whatever its size, and hands back the stretches it covered. The layer is split rather than
+pruned, so what came out is a layer of its own: a piece of the next one that touches it
+carries the same part on, and only a piece touching none of it is a new island. That is
+what makes a part floating over sixty layers one island and not sixty (ADR 0206). The
+writer erases them from the runs before encoding, and the next layer is judged against the
+layer as written, so whatever stood only on an island becomes one and goes too. A write
+therefore runs in four stages a window at a time: rasterise and cure in parallel, fold in
+order, erase and encode in parallel, push in order. `Measured` keeps the stretches per
+layer, which is what Preview erases from its picture.

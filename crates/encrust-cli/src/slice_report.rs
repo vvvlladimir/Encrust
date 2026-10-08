@@ -16,9 +16,6 @@ pub struct SliceReport {
     empty_layers: usize,
     first_z: Option<Scalar>,
     last_z: Option<Scalar>,
-    /// Resin folded in a layer at a time, because a layer is priced at its own thickness
-    /// and that is not one number on an adaptive plan.
-    volume_mm3: Scalar,
     open_contours: usize,
     degenerate_contours: usize,
     unlinked_segments: usize,
@@ -39,7 +36,6 @@ impl SliceReport {
             empty_layers: 0,
             first_z: None,
             last_z: None,
-            volume_mm3: 0.0,
             open_contours: 0,
             degenerate_contours: 0,
             unlinked_segments: 0,
@@ -63,7 +59,6 @@ impl SliceReport {
 
     /// Folds one window of the stack in. Windows arrive in print order.
     pub fn absorb(&mut self, sliced: &Sliced) {
-        self.volume_mm3 += sliced.resin_volume_mm3(&self.plan, self.layers);
         for layer in &sliced.layers {
             if let Some(scan) = self.drainage.as_mut() {
                 scan.push(layer);
@@ -105,13 +100,6 @@ impl SliceReport {
     pub fn trapped(&self) -> &[Trapped] {
         &self.trapped
     }
-
-    /// Resin the part consumes, cubic millimetres.
-    ///
-    /// Contour areas are signed, so a hole runs clockwise and subtracts itself.
-    pub fn resin_volume_mm3(&self) -> Scalar {
-        self.volume_mm3.max(0.0)
-    }
 }
 
 impl fmt::Display for SliceReport {
@@ -142,7 +130,9 @@ impl fmt::Display for SliceReport {
         if let (Some(first), Some(last)) = (self.first_z, self.last_z) {
             writeln!(f, "  sliced from   {first:.3} to {last:.3} mm")?;
         }
-        writeln!(f, "  sliced volume {:.3} mm^3", self.resin_volume_mm3())?;
+        if self.empty_layers > 0 {
+            writeln!(f, "  empty layers  {}", self.empty_layers)?;
+        }
 
         for trapped in &self.trapped {
             writeln!(
@@ -164,7 +154,6 @@ impl SliceReport {
             (self.open_contours, "contours closed over a gap"),
             (self.degenerate_contours, "contours with no area"),
             (self.unlinked_segments, "segments on a branching edge"),
-            (self.empty_layers, "empty layers"),
         ];
         counts
             .into_iter()
@@ -216,9 +205,8 @@ mod tests {
         .to_string();
 
         assert!(text.contains("layers        2"));
-        // Two 2x2 mm squares 0.5 mm apart enclose 4 mm^3.
-        assert!(text.contains("sliced volume 4.000 mm^3"), "{text}");
         assert!(!text.contains("slice defect"));
+        assert!(!text.contains("empty layers"));
     }
 
     #[test]
@@ -251,31 +239,24 @@ mod tests {
     }
 
     #[test]
-    fn a_hole_is_subtracted_from_the_volume() {
-        let mut layer = square_layer(0.25);
-        // A 1x1 mm hole inside the 2x2 mm square, wound clockwise.
-        layer.contours.push(Contour::new(
-            vec![
-                Vec2::new(0.5, 0.5),
-                Vec2::new(0.5, 1.5),
-                Vec2::new(1.5, 1.5),
-                Vec2::new(1.5, 0.5),
-            ],
-            Winding::Inner,
-        ));
-
-        let report = report(Sliced {
-            layers: vec![layer],
+    fn a_gap_in_the_stack_is_counted_and_is_not_a_defect() {
+        let text = report(Sliced {
+            layers: vec![square_layer(0.25), Layer::empty(0.75), Layer::empty(1.25)],
             ..Sliced::default()
-        });
-        // (4 - 1) mm^2 over one 0.5 mm layer.
-        assert!((report.resin_volume_mm3() - 1.5).abs() < 1e-5);
+        })
+        .to_string();
+
+        assert!(text.contains("empty layers  2"), "{text}");
+        assert!(
+            !text.contains("slice defect"),
+            "a part floating over a gap cures nothing there, which is not a defect"
+        );
     }
 
     #[test]
     fn every_kind_of_defect_is_named() {
         let text = report(Sliced {
-            layers: vec![square_layer(0.25), Layer::empty(0.75)],
+            layers: vec![square_layer(0.25)],
             open_contours: 2,
             degenerate_contours: 3,
             unlinked_segments: 4,
@@ -285,7 +266,6 @@ mod tests {
         assert!(text.contains("2 contours closed over a gap"));
         assert!(text.contains("3 contours with no area"));
         assert!(text.contains("4 segments on a branching edge"));
-        assert!(text.contains("1 empty layers"));
     }
 
     #[test]

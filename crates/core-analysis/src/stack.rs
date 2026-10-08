@@ -41,6 +41,7 @@ pub enum RiskKind {
     /// Pulled hard enough, far enough from the narrowest neck under it, to break it.
     Lever {
         stress_mpa: f32,
+        /// How far off the neck the pull acts, millimetres.
         lever_mm: f32,
         neck_mm2: f32,
     },
@@ -73,7 +74,10 @@ pub struct Measured {
     peeling: Option<Risk>,
     /// What was taken out of each layer that lost an island, in print order.
     removed: Vec<(usize, Vec<Stretch>)>,
-    removed_pieces: usize,
+    /// What the layer below lost, so a part taken out over many layers counts as one
+    /// island and not as one a layer.
+    taken_below: Option<Cured>,
+    removed_parts: usize,
 }
 
 /// What a piece of the layer below hands up: whether it reaches the plate, and the
@@ -167,9 +171,15 @@ impl Measured {
         self.largest_growth
     }
 
-    /// Pieces taken out as islands, counting each layer of a floating part.
+    /// Parts taken out as islands: a piece floating on its own and whatever stood only
+    /// on it, however many layers that went on for.
     pub fn removed_islands(&self) -> usize {
-        self.removed_pieces
+        self.removed_parts
+    }
+
+    /// Layers something was taken out of.
+    pub fn removed_layers(&self) -> usize {
+        self.removed.len()
     }
 
     /// What was taken out of `layer`, in reading order.
@@ -208,12 +218,29 @@ impl Measured {
         for contact in contacts(&layer, below) {
             dropped[contact.above as usize] = false;
         }
-        let count = dropped.iter().filter(|dropped| **dropped).count();
-        if count == 0 {
+        if !dropped.iter().any(|dropped| *dropped) {
+            self.taken_below = None;
             return (layer, Vec::new());
         }
-        self.removed_pieces += count;
-        layer.without(&dropped)
+        let (kept, taken) = layer.split(&dropped);
+        self.count_parts(&taken);
+        let stretches = taken.stretches();
+        self.taken_below = Some(taken);
+        (kept, stretches)
+    }
+
+    /// Counts the pieces of `taken` that start a part rather than carry on one the layer
+    /// below lost, since what stood only on an island is the same island.
+    fn count_parts(&mut self, taken: &Cured) {
+        let Some(below) = self.taken_below.take() else {
+            self.removed_parts += taken.pieces().len();
+            return;
+        };
+        let mut carried = vec![false; taken.pieces().len()];
+        for contact in contacts(taken, &below) {
+            carried[contact.above as usize] = true;
+        }
+        self.removed_parts += carried.iter().filter(|carried| !**carried).count();
     }
 
     /// The layer's own readings: its area and volume, and whether it pulls too hard.
@@ -374,7 +401,10 @@ impl Measured {
         let force_n = f64::from(piece.peel_mm4) * PEEL_N_PER_MM4;
         let radius_mm = (neck.area_mm2 / PI).sqrt();
         let [cx, cy] = piece.centre_mm.map(f64::from);
-        let lever_mm = (cx - neck.at_mm[0]).hypot(cy - neck.at_mm[1]);
+        let offset_mm = (cx - neck.at_mm[0]).hypot(cy - neck.at_mm[1]);
+        // The film lets go from one edge, so at the worst moment the pull is carried by
+        // what is still stuck: half the piece, off its own centre by its gyration.
+        let lever_mm = offset_mm + f64::from(piece.gyration_mm) / 2.0;
         let section_modulus = PI * radius_mm.powi(3) / 4.0;
         let stress_mpa = force_n / neck.area_mm2 + force_n * lever_mm / section_modulus;
         if stress_mpa < NECK_LIMIT_MPA {
@@ -527,9 +557,12 @@ mod tests {
             (neck_mm2 - 0.25).abs() < 1e-4,
             "the pin is the neck: {neck_mm2}"
         );
-        // From the pin's centre at 0.25 mm to the slab's at 10 mm, on both axes.
+        // The slab's centre is 9.75 mm off the pin on both axes, and half its gyration —
+        // a 20 mm square gyrates 20 / sqrt(6) about its centre — is added to that.
+        let offset = 9.75 * std::f32::consts::SQRT_2;
+        let gyration = 20.0 / 6.0_f32.sqrt();
         assert!(
-            (lever_mm - 9.75 * std::f32::consts::SQRT_2).abs() < 1e-3,
+            (lever_mm - offset - gyration / 2.0).abs() < 0.05,
             "the slab's centre is far off the pin: {lever_mm}"
         );
     }
@@ -547,9 +580,10 @@ mod tests {
         assert_eq!(taken, vec![0, 30, 30]);
         assert_eq!(
             measured.removed_islands(),
-            2,
-            "its first layer and the one on it"
+            1,
+            "one part, taken out over both its layers"
         );
+        assert_eq!(measured.removed_layers(), 2);
         assert!(measured.risks().is_empty());
         assert_eq!(measured.removed_from(2).len(), 30);
         assert!(measured.removed_from(0).is_empty());
@@ -582,6 +616,78 @@ mod tests {
             vec![2, 5],
             "one run peaking at layer 2, and layer 5 alone"
         );
+    }
+
+    #[test]
+    fn a_plate_centred_on_a_stem_as_thin_as_a_wire_is_still_a_lever() {
+        // The coupon of the manual run: a 30 x 30 mm plate on a 1.5 mm stem. Its centre
+        // sits over the stem, so only the peel's own arm finds it (P-08).
+        let pitch = PixelPitch { x: 0.05, y: 0.05 };
+        let round = |cx: f64, cy: f64, radius: f64| {
+            cure(
+                &paint(700, 700, |x, y| {
+                    let (dx, dy) = (f64::from(x) + 0.5 - cx, f64::from(y) + 0.5 - cy);
+                    u8::from(dx * dx + dy * dy <= radius * radius) * 255
+                }),
+                pitch,
+            )
+        };
+        let square = |side: u32| {
+            cure(
+                &paint(700, 700, |x, y| {
+                    let inside = (350 - side / 2..350 + side / 2).contains(&x)
+                        && (350 - side / 2..350 + side / 2).contains(&y);
+                    u8::from(inside) * 255
+                }),
+                pitch,
+            )
+        };
+        let mut measured = Measured::new(0);
+        for _ in 0..3 {
+            measured.push(round(350.0, 350.0, 15.0), 0.05);
+        }
+        measured.push(square(600), 0.05);
+
+        let risks = measured.risks();
+        assert_eq!(risks.len(), 1, "{risks:?}");
+        let RiskKind::Lever {
+            stress_mpa,
+            neck_mm2,
+            ..
+        } = risks[0].kind
+        else {
+            panic!("a lever, not {:?}", risks[0].kind);
+        };
+        assert!(
+            (neck_mm2 - 1.77).abs() < 0.05,
+            "the stem is the neck: {neck_mm2}"
+        );
+        assert!(
+            stress_mpa > NECK_LIMIT_MPA as f32,
+            "past the limit: {stress_mpa} MPa"
+        );
+    }
+
+    #[test]
+    fn a_floating_part_is_one_island_however_many_layers_it_has() {
+        let base = square(0, 0, 10);
+        let floating = layer(|x, y| (x < 10 && y < 10) || (x >= 30 && y >= 30));
+        let mut measured = Measured::new(0).removing_islands();
+        // The base alone, then four layers with a second part beside it, then the base
+        // alone again, then the part back: two parts, over five layers.
+        for layer in [
+            base.clone(),
+            floating.clone(),
+            floating.clone(),
+            floating.clone(),
+            floating.clone(),
+            base,
+            floating,
+        ] {
+            measured.push(layer, 0.05);
+        }
+        assert_eq!(measured.removed_islands(), 2);
+        assert_eq!(measured.removed_layers(), 5);
     }
 
     #[test]

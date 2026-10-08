@@ -179,13 +179,31 @@ fn an_open_mesh_is_reported_but_still_succeeds() {
 #[test]
 fn a_cube_is_sliced_into_layers_that_add_back_up_to_its_volume() {
     let path = write_box_stl("sliced", 10.0, 12, 0);
-    let output = slice(&[path.to_str().unwrap(), "--layer-height", "0.1"]);
+    let out = output_dir("sliced-cube");
+    let output = slice(&[
+        path.to_str().unwrap(),
+        "--profile",
+        test_panel().to_str().unwrap(),
+        "--layer-height",
+        "0.1",
+        "-o",
+        out.to_str().unwrap(),
+    ]);
     let text = stdout(&output);
 
     assert!(output.status.success());
     assert_eq!(field(&text, "layers"), "100");
     assert_eq!(field(&text, "contours"), "100 (up to 1 per layer)");
-    assert_eq!(field(&text, "sliced volume"), "1000.000 mm^3");
+    // The resin figure is the masks', not the contours' (ADR 0206).
+    let cured = field(&text, "cured volume")
+        .trim()
+        .trim_end_matches(" mm^3")
+        .parse::<f32>()
+        .expect("the cured volume is a number");
+    assert!(
+        (cured - 1000.0).abs() < 1.0,
+        "a 10 mm cube cures 1000 mm^3: {cured}"
+    );
     assert!(!text.contains("slice defect"));
 }
 

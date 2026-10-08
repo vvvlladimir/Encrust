@@ -46,6 +46,11 @@ model of a batch share one report shape; `slice` of a plate prints one entry per
 `models` beside the stack they make, and `estimate` adds `print` — layers, height, time,
 resin, weight, cost and the risks — when there is a printer to draw the masks for.
 
+Resin is counted from the masks and nowhere else — `cured volume` in the text, `cured` in
+the JSON — so a run without a printer reports layers and no resin at all (ADR 0206). The
+`volume` an `inspect` of a model with several shells prints is their sum, and says so where
+they can overlap.
+
 | Code | Meaning |
 |---|---|
 | 0 | Done |

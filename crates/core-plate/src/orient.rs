@@ -1,5 +1,5 @@
 use core_geometry::{Mesh, Quat, Scalar, Transform, Vec3, transform_mesh};
-use core_slicer::{PlaneSliceEngine, SliceEngine, Winding};
+use core_slicer::{PlaneSliceEngine, SliceEngine, covered_area};
 use rayon::prelude::*;
 
 use crate::candidates::directions;
@@ -99,6 +99,8 @@ pub fn rotation_for(down: Vec3) -> Quat {
 /// This is the peel force the film sees, which is what an MSLA print fails on before it
 /// fails on a support; the model is cut at `sections` heights rather than at every layer,
 /// because the largest section is a property of the shape and not of the layer height.
+/// Each section is the area its contours cover, not their areas added up: bodies that
+/// overlap there pull the film once (ADR 0206).
 fn peak_section_mm2(mesh: &Mesh, down: Vec3, sections: usize) -> Result<Scalar, PlateError> {
     let placed = transform_mesh(
         mesh,
@@ -122,17 +124,7 @@ fn peak_section_mm2(mesh: &Mesh, down: Vec3, sections: usize) -> Result<Scalar, 
     Ok(sliced
         .layers
         .iter()
-        .map(|layer| {
-            layer
-                .contours
-                .iter()
-                .map(|contour| match contour.winding {
-                    Winding::Outer => contour.area(),
-                    Winding::Inner => -contour.area(),
-                })
-                .sum::<Scalar>()
-                .max(0.0)
-        })
+        .map(|layer| covered_area(&layer.contours))
         .fold(0.0, Scalar::max))
 }
 
@@ -238,6 +230,30 @@ mod tests {
         let mesh = cuboid(Vec3::new(10.0, 6.0, 20.0));
         let peak = peak_section_mm2(&mesh, Vec3::NEG_Z, 8).expect("a box slices");
         assert!((peak - 60.0).abs() < 1e-2, "a 10 by 6 section, got {peak}");
+    }
+
+    #[test]
+    fn the_peak_section_counts_overlapping_bodies_once() {
+        // Two 10 mm boxes sharing a 2 x 2 mm corner over their whole height: the section
+        // is 100 + 100 - 4, not the 200 their contour areas add up to (ADR 0206).
+        let mut mesh = cuboid(Vec3::splat(10.0));
+        let second = cuboid(Vec3::splat(10.0));
+        let offset = mesh.vertices.len() as u32;
+        mesh.vertices.extend(
+            second
+                .vertices
+                .iter()
+                .map(|v| *v + Vec3::new(8.0, 8.0, 0.0)),
+        );
+        mesh.faces.extend(
+            second
+                .faces
+                .iter()
+                .map(|[a, b, c]| [a + offset, b + offset, c + offset]),
+        );
+
+        let peak = peak_section_mm2(&mesh, Vec3::NEG_Z, 4).expect("two boxes slice");
+        assert!((peak - 196.0).abs() < 1e-2, "{peak}");
     }
 
     #[test]

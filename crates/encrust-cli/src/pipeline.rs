@@ -157,7 +157,8 @@ pub fn import(
     }
     let orientation = (!args.no_validate).then(|| orient_outward(&mut mesh));
     let diagnostics = (!args.no_validate).then(|| diagnose(&mesh));
-    let stats = MeshStats::of(&mesh).context("mesh has no vertices")?;
+    let shells = diagnostics.as_ref().map(|found| found.shells);
+    let stats = MeshStats::of(&mesh, shells).context("mesh has no vertices")?;
     let fit = profile.map(|p| FitCheck::of(&stats, p));
 
     let import = ImportReport {
@@ -469,7 +470,8 @@ pub fn inspect(input: &Path, args: &ImportArgs, chosen: &Chosen) -> Result<Impor
 
     let orientation = (!args.no_validate).then(|| orient_outward(&mut mesh));
     let diagnostics = (!args.no_validate).then(|| diagnose(&mesh));
-    let stats = MeshStats::of(&mesh).context("mesh has no vertices")?;
+    let shells = diagnostics.as_ref().map(|found| found.shells);
+    let stats = MeshStats::of(&mesh, shells).context("mesh has no vertices")?;
     let fit = profile.map(|p| FitCheck::of(&stats, p));
 
     Ok(ImportReport {

@@ -138,8 +138,9 @@ pub fn write_risks(f: &mut fmt::Formatter<'_>, measured: &Measured) -> fmt::Resu
     if measured.removed_islands() > 0 {
         writeln!(
             f,
-            "  islands       {} taken out of the file",
-            measured.removed_islands()
+            "  islands       {} taken out of the file, over {} layers",
+            measured.removed_islands(),
+            measured.removed_layers()
         )?;
     }
     if let Some(worst) = measured.worst() {
@@ -295,7 +296,7 @@ mod tests {
         assert_eq!(taken.len(), 1, "the island's one row");
         let text = report.to_string();
         assert!(
-            text.contains("islands       1 taken out of the file"),
+            text.contains("islands       1 taken out of the file, over 1 layers"),
             "{text}"
         );
         assert!(!text.contains("risk"), "{text}");

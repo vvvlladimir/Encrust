@@ -103,7 +103,16 @@ impl fmt::Display for ImportReport {
 
         if let Some(diagnostics) = &self.diagnostics {
             if diagnostics.is_closed() {
-                writeln!(f, "  volume        {:.3} mm^3", stats.volume)?;
+                write!(f, "  volume        {:.3} mm^3", stats.volume)?;
+                if stats.shells_overlap {
+                    // The sum of the shells, since nothing here unites them: ADR 0206.
+                    write!(
+                        f,
+                        " ({} shells added up, so what they share counts twice)",
+                        diagnostics.shells
+                    )?;
+                }
+                writeln!(f)?;
             }
             writeln!(f, "  closed        {}", describe_closure(diagnostics))?;
             for defect in defects(diagnostics) {
@@ -315,6 +324,7 @@ z = {z}
             max,
             surface_area: 0.0,
             volume: 0.0,
+            shells_overlap: false,
         }
     }
 

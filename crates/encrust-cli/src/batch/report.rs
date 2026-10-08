@@ -189,7 +189,6 @@ pub struct Supports {
 pub struct Slicing {
     pub layers: usize,
     pub layer_height_mm: Scalar,
-    pub resin_mm3: Scalar,
     /// Pockets the drainage scan found with no way out, and what they hold.
     pub trapped_pockets: usize,
     pub trapped_mm3: Scalar,
@@ -211,11 +210,12 @@ pub struct Cured {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub widest_step_mm2: Option<f32>,
     /// Pieces cured over nothing, necks pulled past their limit, layers pulling the film
-    /// past its, and islands taken out of the file.
+    /// past its, and the parts taken out of the file as islands.
     pub islands: usize,
     pub levers: usize,
     pub peels: usize,
     pub islands_removed: usize,
+    pub islands_removed_layers: usize,
     /// The layer the print most likely fails on: the first island, or the worst lever.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub likely_fails_layer: Option<usize>,
@@ -238,6 +238,7 @@ impl Cured {
             levers: count(|kind| matches!(kind, RiskKind::Lever { .. })),
             peels: count(|kind| matches!(kind, RiskKind::Peel { .. })),
             islands_removed: measured.removed_islands(),
+            islands_removed_layers: measured.removed_layers(),
             likely_fails_layer: measured.worst().map(|risk| risk.layer + 1),
         }
     }
@@ -289,7 +290,6 @@ impl Slicing {
         Self {
             layers: slice.layer_count(),
             layer_height_mm: slice.settings.layer_height,
-            resin_mm3: slice.resin_volume_mm3(),
             trapped_pockets: slice.trapped().len(),
             trapped_mm3: slice
                 .trapped()
@@ -395,11 +395,14 @@ impl ModelReport {
                     "unclean"
                 };
                 let what = match (&self.slicing, &self.part.model) {
-                    (Some(slicing), _) => format!(
-                        "{} layers, {:.1} ml",
-                        slicing.layers,
-                        slicing.resin_mm3 / 1000.0
-                    ),
+                    (Some(slicing), _) => match &self.cured {
+                        Some(cured) => format!(
+                            "{} layers, {:.1} ml",
+                            slicing.layers,
+                            cured.resin_mm3 / 1000.0
+                        ),
+                        None => format!("{} layers, no panel to cure them on", slicing.layers),
+                    },
                     (None, Some(model)) => format!("{} triangles, not sliced", model.faces),
                     (None, None) => "nothing to report".to_owned(),
                 };
@@ -453,8 +456,8 @@ impl Summary {
             resin_mm3: reports
                 .iter()
                 .filter(|report| report.status == Status::Ok)
-                .filter_map(|report| report.slicing.as_ref())
-                .map(|slicing| slicing.resin_mm3)
+                .filter_map(|report| report.cured.as_ref())
+                .map(|cured| Scalar::from(cured.resin_mm3))
                 .sum::<Scalar>()
                 .max(0.0),
             reports,
@@ -527,8 +530,8 @@ pub fn write<T: Serialize>(path: &Path, report: &T) -> Result<()> {
 mod tests {
     use super::*;
 
-    /// A model whose file was written, carrying `resin_mm3` of stack.
-    fn reported(name: &str, status: Status, resin_mm3: Scalar) -> ModelReport {
+    /// A model whose file was written, whose masks cure `resin_mm3`.
+    fn reported(name: &str, status: Status, resin_mm3: f32) -> ModelReport {
         ModelReport {
             part: PartReport::named(Path::new(name)),
             output: Some(name.to_owned()),
@@ -538,12 +541,23 @@ mod tests {
             slicing: Some(Slicing {
                 layers: 10,
                 layer_height_mm: 0.05,
-                resin_mm3,
                 trapped_pockets: 0,
                 trapped_mm3: 0.0,
                 open_contours: 0,
             }),
-            cured: None,
+            cured: Some(Cured {
+                resin_mm3,
+                hardest_pull_layer: None,
+                hardest_pull_disc_mm: None,
+                widest_step_layer: None,
+                widest_step_mm2: None,
+                islands: 0,
+                levers: 0,
+                peels: 0,
+                islands_removed: 0,
+                islands_removed_layers: 0,
+                likely_fails_layer: None,
+            }),
         }
     }
 
