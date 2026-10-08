@@ -25,6 +25,7 @@ mod project;
 mod relief;
 mod render;
 mod repair;
+mod report;
 mod scene;
 mod settings;
 mod shortcuts;

@@ -62,6 +62,7 @@ pub fn ui(ui: &mut egui::Ui, window: &mut Window) {
             settings_button(ui, window);
             sheet_button(ui, window.view);
             update_badge(ui, window.machine);
+            alpha_badge(ui, window.machine);
         },
     );
 
@@ -174,28 +175,7 @@ fn update_badge(ui: &mut egui::Ui, machine: &mut Machine) {
         format!("Encrust {}", offer.version)
     };
     let colors = theme::colors();
-    let label = ui
-        .painter()
-        .layout_no_wrap(text, theme::small(), colors.accent);
-    let size = vec2(label.size().x + 34.0, theme::TITLE_H - 8.0);
-    let (rect, response) = ui.allocate_exact_size(size, egui::Sense::click());
-    let fill = if response.hovered() {
-        colors.accent_wash.gamma_multiply(1.6)
-    } else {
-        colors.accent_wash
-    };
-    let painter = ui.painter();
-    painter.rect_filled(rect, egui::CornerRadius::same(255), fill);
-    let glyph_at = rect.left_center() + vec2(10.0, 0.0);
-    painter.text(
-        glyph_at,
-        egui::Align2::LEFT_CENTER,
-        icon::UPDATE,
-        theme::icon(13.0),
-        colors.accent,
-    );
-    let text_at = rect.left_center() + vec2(26.0, -label.size().y / 2.0);
-    painter.galley(text_at, label, colors.accent);
+    let response = pill(ui, icon::UPDATE, &text, colors.accent, colors.accent_wash);
     let tooltip = if installed {
         "Close the window and start the new build"
     } else {
@@ -212,6 +192,55 @@ fn update_badge(ui: &mut egui::Ui, machine: &mut Machine) {
         }
     }
     ui.add_space(6.0);
+}
+
+/// What this build is, where it can be acted on: a click opens the sheet that writes a
+/// bug report. See `crate::report`.
+fn alpha_badge(ui: &mut egui::Ui, machine: &mut Machine) {
+    let colors = theme::colors();
+    let response = pill(ui, icon::BUG, "Alpha", colors.warn, colors.warn_wash);
+    if response
+        .on_hover_text("Encrust is in alpha: say what went wrong")
+        .clicked()
+    {
+        machine.report.open = true;
+    }
+    ui.add_space(6.0);
+}
+
+/// A rounded tag in the strip, the one shape both badges are drawn as.
+fn pill(
+    ui: &mut egui::Ui,
+    glyph: &str,
+    text: &str,
+    tint: egui::Color32,
+    wash: egui::Color32,
+) -> egui::Response {
+    let label = ui
+        .painter()
+        .layout_no_wrap(text.to_owned(), theme::small(), tint);
+    let size = vec2(label.size().x + 34.0, theme::TITLE_H - 8.0);
+    let (rect, response) = ui.allocate_exact_size(size, egui::Sense::click());
+    let fill = if response.hovered() {
+        wash.gamma_multiply(1.6)
+    } else {
+        wash
+    };
+    let painter = ui.painter();
+    painter.rect_filled(rect, egui::CornerRadius::same(255), fill);
+    painter.text(
+        rect.left_center() + vec2(10.0, 0.0),
+        egui::Align2::LEFT_CENTER,
+        glyph,
+        theme::icon(13.0),
+        tint,
+    );
+    painter.galley(
+        rect.left_center() + vec2(26.0, -label.size().y / 2.0),
+        label,
+        tint,
+    );
+    response
 }
 
 /// Opens the Settings screen on the profiles the plate is using, or closes it.

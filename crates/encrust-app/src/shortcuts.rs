@@ -400,6 +400,14 @@ pub fn act(window: &mut Window, action: Action) {
         }
         return;
     }
+    // The report sheet is modal as well, and Esc has to reach it here: egui never sees
+    // the key, because this is read before its pass.
+    if window.machine.report.open {
+        if matches!(action, Action::Deselect) {
+            window.machine.report.open = false;
+        }
+        return;
+    }
     // The Settings screen stands in the plate's place, so Esc leaves it rather than
     // clearing a selection nobody can see. Everything else there is typed, not pressed.
     if window.machine.settings.open && matches!(action, Action::Deselect) {

@@ -12,6 +12,7 @@ use crate::preview::Preview;
 use crate::project::Opened;
 use crate::relief::ReliefTool;
 use crate::repair::Repairs;
+use crate::report::Report;
 use crate::scene::Scene;
 use crate::settings::Settings;
 use crate::slicing::Slicing;
@@ -78,4 +79,6 @@ pub struct Machine {
     pub preview: Preview,
     pub status: Status,
     pub updates: Updates,
+    /// The bug report being written, while the sheet for it is open.
+    pub report: Report,
 }

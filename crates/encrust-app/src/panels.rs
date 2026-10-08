@@ -1,6 +1,7 @@
 mod inspector;
 mod mask_pane;
 mod plate_bar;
+mod report;
 mod scene_panel;
 pub(crate) mod section;
 mod settings;
@@ -74,6 +75,7 @@ impl Window<'_> {
         if self.view.options.sheet {
             shortcuts_sheet::ui(ui.ctx(), &mut self.view.options.sheet);
         }
+        report::ui(ui.ctx(), &self.doc.scene, self.tools, self.machine);
         support_diagram::ui(ui.ctx(), self);
         settings::calculators(ui.ctx(), self.machine);
         settings::confirm(ui.ctx(), self);

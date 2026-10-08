@@ -42,8 +42,6 @@ account and no cloud.
 - **Hollowing that drains** — infill, drain holes, and a warning when resin would be trapped.
 - **A layer-by-layer check before you print** — islands, suction cups and thin cross-sections
   found in what the file really cures, not in the model.
-- **Nothing leaves your computer** — no account, no cloud, no analytics. Profiles and projects are
-  plain TOML you can open in any editor.
 - **A command line for the same pipeline** — slice a folder of models without opening a window.
 
 ## Get it

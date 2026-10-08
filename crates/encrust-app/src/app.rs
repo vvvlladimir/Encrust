@@ -539,6 +539,21 @@ mod tests {
         assert!(!app.view.options.sheet, "Escape closes it");
     }
 
+    /// The report sheet is modal too, and Escape closes it: `shortcuts::take` reads the
+    /// key before egui's pass, so the sheet would never see it otherwise.
+    #[test]
+    fn the_report_sheet_holds_the_keyboard_until_it_is_closed() {
+        let mut app = SlicerApp::default();
+        app.machine.report.open = true;
+
+        shortcuts::act(&mut app.window(), shortcuts::Action::Pick(Tool::Hollow));
+        assert_eq!(app.tool, Tool::Select, "the tool is not reached under it");
+        assert!(app.machine.report.open);
+
+        shortcuts::act(&mut app.window(), shortcuts::Action::Deselect);
+        assert!(!app.machine.report.open, "Escape closes it");
+    }
+
     /// The Settings screen stands in the plate's place, so Escape is the way out of it:
     /// the question over it first, then the screen.
     #[test]

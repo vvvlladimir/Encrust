@@ -93,7 +93,7 @@ it are in `.claude/rules/architecture.md`.
 | `encrust-web` | The window's browser front end (ADR 0181): `start`, the window on a canvas; `www/` the page, its headers, its manifest and `sw.js`, the service worker that isolates it where a host sends no headers and keeps the build for working offline (ADR 0183) |
 | `web-engine` | The browser's front end without a window (ADR 0177): `slice_project`, the bytes of a project into the bytes of a sliced file with no file system, thread or clock, and the `wasm-bindgen` exports of it; `www/` the page, its worker and the Node measurement |
 | `xtask` | `xtask` binary: `gen-profiles`, the printer catalogue transcribed from a directory of source profiles, run by hand and never from a build script (ADR 0165); `web`, the browser build; `man`, the command line's man pages from its own clap definition (ADR 0183); `arch`, the dependency graph below against every crate's manifest |
-| `encrust-app` | `encrust-gui` binary: egui/wgpu window — plate panel left, one inspector panel per tool and the rail beside it, plate tabs on their own strip, Preview splitting the stage between model and mask; `Scene` with `duplicate`/`mirror`/`array`, `BuildPlate` — the machine's platform, named apart from `core_engine::Plate` — `OrbitCamera`, picking, gizmo, `History`, `Measure`, `Cutting`, jobs that hold no stack, `Settings`, `shortcuts`, `ui/theme`, `prefs`, `project` — the dialogs and the `Scene` ↔ `Manifest` conversion over `core_engine::project` — `updates`; `files` and, for a browser, `web` (ADR 0181) |
+| `encrust-app` | `encrust-gui` binary: egui/wgpu window — plate panel left, one inspector panel per tool and the rail beside it, plate tabs on their own strip, Preview splitting the stage between model and mask; `Scene` with `duplicate`/`mirror`/`array`, `BuildPlate` — the machine's platform, named apart from `core_engine::Plate` — `OrbitCamera`, picking, gizmo, `History`, `Measure`, `Cutting`, jobs that hold no stack, `Settings`, `shortcuts`, `ui/theme`, `prefs`, `project` — the dialogs and the `Scene` ↔ `Manifest` conversion over `core_engine::project` — `updates`, `report` — the markdown a user hands to an issue themselves (ADR 0212); `files` and, for a browser, `web` (ADR 0181) |
 
 ## The allowed dependency graph
 
@@ -293,6 +293,7 @@ panels/      title strip, tool rail, stage, inspector, status strip
 profiles.rs  loading a profile from a file dialog
 network.rs   printers a scan found, where the Slice button sends, and the errand running
 prefs.rs     the machine, resin, tool values and printer addresses remembered between runs
+report.rs    the bug report the window writes, and the issue it is carried into (ADR 0212)
 web/         a browser's threads, dialogs, downloads, private storage and page storage
 ui/          design tokens, fonts, icons, widgets
 render/      wgpu resources and the frame they prepare, its pipelines, buffers and

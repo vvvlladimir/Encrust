@@ -357,7 +357,8 @@ mod tests {
     /// cut open, as a model does whose surface was already torn.
     fn open_cuboid(size: Vec3) -> Mesh {
         let mut mesh = cuboid(size);
-        mesh.faces.retain(|face| !matches!(face, [4, 5, 6] | [4, 6, 7]));
+        mesh.faces
+            .retain(|face| !matches!(face, [4, 5, 6] | [4, 6, 7]));
         mesh
     }
 
