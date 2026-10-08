@@ -32,7 +32,7 @@ mod tree;
 
 pub use branch::grow;
 pub use column::{Column, Landing, SupportPoint, columns, landing, neck_of};
-pub use edit::{fits, on_model};
+pub use edit::{carried, fits, on_model};
 pub use generate::generate_supports;
 pub use group::Profiles;
 pub use mesher::{FOOT_BEVEL, mesh_groups, mesh_trees};

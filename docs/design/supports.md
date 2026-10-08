@@ -316,11 +316,13 @@ a part and the press after that carries it, by the step the cursor takes on the 
 through it facing the camera; everything else picked takes the same step. A node bends
 what meets there, a strut moves both its ends, and the foot stays on the plate.
 
-Every step is then held to the rule the automatic run places by: `on_model` pulls each tip
-back onto the nearest surface it holds, `fits` sweeps the whole tree as beams with the
-profile's clearance — tip heads apart, since a tip is meant to touch — and a step that
-sinks any part of it into the model or lands a tip on a blocked face is dropped, cursor
-and support staying where they were.
+Every step is then held to the rule the automatic run places by, which is what `carried`
+answers with: `on_model` pulls each tip back onto the nearest surface it holds, `fits`
+sweeps the whole tree as beams with the profile's clearance — tip heads apart, since a tip
+is meant to touch — and a step that sinks any part of it into the model or lands a tip on a
+blocked face is dropped, cursor and support staying where they were. Which nodes a `Part`
+moves, and that the foot stays on the plate, are settled there too and not in the panel
+that reads the drag (ADR 0208).
 
 ## Painting a patch
 

@@ -1,32 +1,27 @@
 use std::hash::{DefaultHasher, Hash, Hasher};
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::sync::Arc;
 
 use std::ops::Range;
 
-use anyhow::{Context as _, Result, bail};
-use core_analysis::{Measured, erase, island_runs};
-use core_format::{OpenFile, ReadSeek, SlicedFile};
+use anyhow::Context as _;
+use core_analysis::Measured;
+use core_format::{ReadSeek, SlicedFile};
 use core_geometry::{Mesh, Scalar};
-use core_raster::{
-    Grey, LayerMask, LayerRuns, PixelPitch, RasterSettings, Rasterizer, ScanlineRasterizer,
-    Shading, crop, downsample, shrink_factor,
-};
+use core_raster::{LayerRuns, RasterSettings};
 use core_slicer::{Contour, LayerPlan, Sliced, Windows};
 
-use core_engine::{Cutting, bake};
-use core_pipeline::{Opened, Tolerance, open};
+use core_engine::Cutting;
+use core_pipeline::{Opened, Tolerance};
 
-use crate::files::Handed;
-use crate::job::{MeasureJob, MeasureOutcome, PreviewJob, PreviewOutcome, models_of};
+use crate::job::{MeasureJob, PreviewJob};
 use crate::scene::Scene;
-use crate::status::Status;
-use crate::ui::theme;
 
-/// Widest preview mask handed to egui, pixels. A 5760 x 3600 panel is 83 MB once it has
-/// become RGBA, which no slider drag can upload a frame of; see
-/// `docs/decisions/0023-preview-masks-are-downsampled.md`.
-pub const MAX_PREVIEW_PX: u32 = 2048;
+mod file;
+mod job;
+mod picture;
+
+pub use picture::{MaskView, PixelRect};
 
 /// The sliced stack the preview panel is showing, and the build that produces it.
 #[derive(Default)]
@@ -111,17 +106,6 @@ enum Source {
     Read(Box<ReadFile>),
 }
 
-/// A sliced file open in the window, and what it says about itself.
-struct ReadFile {
-    path: PathBuf,
-    facts: SlicedFile,
-    open: Opened<Box<dyn ReadSeek>>,
-    fingerprint: u64,
-    /// What stood on the plate when the file was opened. The plate moving on is what ends
-    /// the file's turn under the slider, so that no reading comes from the other source.
-    plate: u64,
-}
-
 impl Source {
     fn stack(&self) -> Option<&Stack> {
         match self {
@@ -145,6 +129,17 @@ impl Source {
     }
 }
 
+/// A sliced file open in the window, and what it says about itself.
+struct ReadFile {
+    path: PathBuf,
+    facts: SlicedFile,
+    open: Opened<Box<dyn ReadSeek>>,
+    fingerprint: u64,
+    /// What stood on the plate when the file was opened. The plate moving on is what ends
+    /// the file's turn under the slider, so that no reading comes from the other source.
+    plate: u64,
+}
+
 /// A running build and the fingerprint its stack will carry.
 struct Build {
     job: PreviewJob,
@@ -161,298 +156,67 @@ struct TextureKey {
     cleaned: bool,
 }
 
-/// A rectangle of panel pixels, `x0..x1` by `y0..y1`.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct PixelRect {
-    pub x0: u32,
-    pub y0: u32,
-    pub x1: u32,
-    pub y1: u32,
-}
-
-impl PixelRect {
-    pub fn width(self) -> u32 {
-        self.x1 - self.x0
-    }
-
-    pub fn height(self) -> u32 {
-        self.y1 - self.y0
-    }
-
-    fn contains(self, other: Self) -> bool {
-        self.x0 <= other.x0 && self.y0 <= other.y0 && self.x1 >= other.x1 && self.y1 >= other.y1
-    }
-
-    /// Grown by up to half its size each way, no wider than `most` and inside the panel.
-    fn padded(self, most: u32, width_px: u32, height_px: u32) -> Self {
-        let grow = |from: u32, to: u32, extent: u32| {
-            let length = to - from;
-            let pad = (length / 2).min(most.saturating_sub(length) / 2);
-            (from.saturating_sub(pad), (to + pad).min(extent))
-        };
-        let (x0, x1) = grow(self.x0, self.x1, width_px);
-        let (y0, y1) = grow(self.y0, self.y1, height_px);
-        Self { x0, y0, x1, y1 }
-    }
-}
-
-/// How far into the mask the pane is zoomed, and the panel pixel at the middle of it.
+/// Identifies the stack a scene would slice into.
 ///
-/// Kept across layers, so stepping through the stack looks at the same spot of each.
-#[derive(Debug, Clone, Copy, PartialEq)]
-pub struct MaskView {
-    /// 1 shows the whole panel.
-    pub zoom: f32,
-    /// Panel pixel at the middle of the pane, or `None` for the middle of the panel.
-    centre: Option<egui::Vec2>,
-}
-
-impl Default for MaskView {
-    fn default() -> Self {
-        Self {
-            zoom: 1.0,
-            centre: None,
+/// Placement, visibility, which meshes are loaded, the cuts in them and the layer height
+/// all change the contours; selecting an object or moving the camera does not, and must not cost a
+/// rebuild.
+pub fn stack_fingerprint(scene: &Scene, cutting: Cutting) -> u64 {
+    let mut hasher = DefaultHasher::new();
+    cutting.layer_height_mm.to_bits().hash(&mut hasher);
+    for factor in cutting.compensation.scale() {
+        factor.to_bits().hash(&mut hasher);
+    }
+    if let Some(adaptive) = cutting.adaptive {
+        for value in [
+            adaptive.cusp_mm,
+            adaptive.min_height_mm,
+            adaptive.max_height_mm,
+        ] {
+            value.to_bits().hash(&mut hasher);
         }
     }
+    plate_fingerprint(scene).hash(&mut hasher);
+    hasher.finish()
 }
 
-/// Deepest zoom: a panel pixel this many points across at the least.
-const MOST_POINTS_A_PIXEL: f32 = 48.0;
-
-impl MaskView {
-    /// Where the whole panel lands on screen, given the rectangle it fills at zoom 1.
-    pub fn placement(&self, fit: egui::Rect, panel_px: egui::Vec2) -> egui::Rect {
-        let scale = fit.size() / panel_px * self.zoom;
-        let centre = self.centre.unwrap_or(panel_px / 2.0);
-        egui::Rect::from_min_size(fit.center() - centre * scale, panel_px * scale)
-    }
-
-    /// The panel pixel, fractional, at a point on screen.
-    pub fn pixel_at(&self, at: egui::Pos2, fit: egui::Rect, panel_px: egui::Vec2) -> egui::Vec2 {
-        let placed = self.placement(fit, panel_px);
-        (at - placed.min) / placed.size() * panel_px
-    }
-
-    /// Zooms by `factor`, keeping the pixel under `at` where it is on screen.
-    pub fn zoom_at(&mut self, factor: f32, at: egui::Pos2, fit: egui::Rect, panel_px: egui::Vec2) {
-        let most = (MOST_POINTS_A_PIXEL * panel_px.x / fit.width()).max(1.0);
-        let zoom = (self.zoom * factor).clamp(1.0, most);
-        let held = self.pixel_at(at, fit, panel_px);
-        let scale = fit.size() / panel_px * zoom;
-        self.zoom = zoom;
-        self.centre = Some(held - (at - fit.center()) / scale);
-        self.clamp(panel_px);
-    }
-
-    /// Moves the picture by `delta` points, as a drag does.
-    pub fn pan(&mut self, delta: egui::Vec2, fit: egui::Rect, panel_px: egui::Vec2) {
-        let scale = fit.size() / panel_px * self.zoom;
-        self.centre = Some(self.centre.unwrap_or(panel_px / 2.0) - delta / scale);
-        self.clamp(panel_px);
-    }
-
-    fn clamp(&mut self, panel_px: egui::Vec2) {
-        if let Some(centre) = self.centre.as_mut() {
-            *centre = centre.clamp(egui::Vec2::ZERO, panel_px);
+/// Identifies what stands on the plate, without the numbers it would be cut with: the
+/// half of [`stack_fingerprint`] a sliced file open in the window is held against.
+pub fn plate_fingerprint(scene: &Scene) -> u64 {
+    let mut hasher = DefaultHasher::new();
+    scene.active_plate().hash(&mut hasher);
+    for object in scene.printable(scene.active_plate()) {
+        object.id.hash(&mut hasher);
+        Arc::as_ptr(&object.mesh).hash(&mut hasher);
+        object.hollow.shell().map(Arc::as_ptr).hash(&mut hasher);
+        object
+            .hollow
+            .cut_bodies()
+            .map(Arc::as_ptr)
+            .hash(&mut hasher);
+        for supports in object.supports.meshes().unwrap_or_default() {
+            Arc::as_ptr(supports).hash(&mut hasher);
+        }
+        let transform = object.transform;
+        for value in [
+            transform.translation.x,
+            transform.translation.y,
+            transform.translation.z,
+            transform.rotation.x,
+            transform.rotation.y,
+            transform.rotation.z,
+            transform.rotation.w,
+            transform.scale.x,
+            transform.scale.y,
+            transform.scale.z,
+        ] {
+            value.to_bits().hash(&mut hasher);
         }
     }
+    hasher.finish()
 }
 
 impl Preview {
-    /// Opens a sliced file and shows it in place of the plate.
-    ///
-    /// Only its tables are read: a layer is decoded when the slider lands on it, so opening
-    /// a stack of thousands costs the same as opening one of ten.
-    pub fn read_file(&mut self, file: &Handed, plate: u64) -> Result<()> {
-        let path = file.path();
-        let source: Box<dyn ReadSeek> = file
-            .reader()
-            .with_context(|| format!("cannot read {}", path.display()))?;
-        let open = open(path, source).with_context(|| format!("cannot open {}", path.display()))?;
-        let facts = open.facts().clone();
-        if facts.layer_count() == 0 {
-            bail!("{} has no layers", path.display());
-        }
-        self.job = None;
-        self.full = None;
-        self.detail = None;
-        self.texture = None;
-        self.measured = None;
-        self.measuring = None;
-        self.layer = facts.layer_count() as usize - 1;
-        self.view = MaskView::default();
-        self.source = Some(Source::Read(Box::new(ReadFile {
-            fingerprint: file_fingerprint(file),
-            path: path.to_owned(),
-            facts,
-            open,
-            plate,
-        })));
-        Ok(())
-    }
-
-    /// What the file being shown says about itself, or `None` while a plate is being shown.
-    pub fn read_facts(&self) -> Option<&SlicedFile> {
-        match self.source.as_ref()? {
-            Source::Read(read) => Some(&read.facts),
-            Source::Cut(_) => None,
-        }
-    }
-
-    /// The file being shown, by the name it was opened under.
-    pub fn read_path(&self) -> Option<&Path> {
-        match self.source.as_ref()? {
-            Source::Read(read) => Some(&read.path),
-            Source::Cut(_) => None,
-        }
-    }
-
-    /// The panel the file was written for, which is what its layers have to be drawn on: a
-    /// profile loaded in the window says nothing about a file another slicer wrote.
-    pub fn read_panel(&self) -> Option<RasterSettings> {
-        let facts = self.read_facts()?;
-        let (width_mm, height_mm) = facts.display_mm?;
-        Some(RasterSettings {
-            width_px: facts.width_px,
-            height_px: facts.height_px,
-            pitch: PixelPitch {
-                x: Scalar::from(width_mm) / facts.width_px as Scalar,
-                y: Scalar::from(height_mm) / facts.height_px as Scalar,
-            },
-            mirror_x: false,
-            mirror_y: false,
-            shading: Shading::Coverage,
-            grey: Grey::default(),
-            blur_px: 0,
-        })
-    }
-
-    /// Closes whatever file is open and leaves the panel empty.
-    pub fn close_file(&mut self) {
-        if matches!(self.source, Some(Source::Read(_))) {
-            *self = Self::default();
-        }
-    }
-
-    /// Starts cutting everything visible on the plate. Fails when there is nothing there.
-    pub fn build(&mut self, scene: &Scene, cutting: Cutting) -> Result<()> {
-        let baked = bake(
-            &models_of(scene, scene.active_plate()),
-            &cutting.compensation,
-        )
-        .context("nothing visible on the plate to preview")?;
-        self.job = Some(Build {
-            job: PreviewJob::spawn(baked, cutting),
-            fingerprint: stack_fingerprint(scene, cutting),
-        });
-        Ok(())
-    }
-
-    /// Drains a running build and measurement. Returns whether one is still going, which
-    /// is what tells the window to keep repainting.
-    pub fn poll(&mut self, status: &mut Status) -> bool {
-        let building = self.poll_build(status);
-        self.poll_measure(status) || building
-    }
-
-    /// Starts measuring the stack as `settings` would write it, unless that measurement is
-    /// already held or under way.
-    pub fn measure(&mut self, settings: &RasterSettings, fold: Fold) {
-        self.fold = fold;
-        let Some(key) = self.measure_key(settings, fold) else {
-            return;
-        };
-        let known = |held: Option<MeasureKey>| held == Some(key);
-        if known(self.measured.as_ref().map(|(key, _)| *key))
-            || known(self.measuring.as_ref().map(|(key, _)| *key))
-        {
-            return;
-        }
-        // Only a plate being cut is measured this way. A file's masks are already
-        // written, so what they cure is read off them instead; see `read_measured`.
-        let Some(stack) = self.source.as_ref().and_then(Source::stack) else {
-            return;
-        };
-        // Measured as the picture shows it, so a risk's position lands on the picture.
-        let job = MeasureJob::spawn(
-            Arc::clone(&stack.mesh),
-            stack.windows.clone(),
-            as_seen(settings),
-            fold.tolerance,
-            fold.start(),
-        );
-        self.measuring = Some((key, job));
-    }
-
-    /// What the stack cures, once it has been measured for the panel as it now is.
-    pub fn measured(&self, settings: &RasterSettings, fold: Fold) -> Option<&Measured> {
-        let key = self.measure_key(settings, fold)?;
-        let (measured_key, measured) = self.measured.as_ref()?;
-        (*measured_key == key).then_some(measured)
-    }
-
-    pub fn is_measuring(&self) -> bool {
-        self.measuring.is_some()
-    }
-
-    fn measure_key(&self, settings: &RasterSettings, fold: Fold) -> Option<MeasureKey> {
-        Some(MeasureKey {
-            fingerprint: self.source.as_ref()?.fingerprint(),
-            settings: *settings,
-            fold,
-        })
-    }
-
-    fn poll_measure(&mut self, status: &mut Status) -> bool {
-        let Some((key, job)) = self.measuring.as_mut() else {
-            return false;
-        };
-        let Some(outcome) = job.poll() else {
-            return true;
-        };
-        let key = *key;
-        self.measuring = None;
-        match outcome {
-            MeasureOutcome::Measured(measured) => self.measured = Some((key, *measured)),
-            MeasureOutcome::Failed(message) => *status = Status::Error(message),
-        }
-        false
-    }
-
-    fn poll_build(&mut self, status: &mut Status) -> bool {
-        let Some(build) = self.job.as_mut() else {
-            return false;
-        };
-        let Some(outcome) = build.job.poll() else {
-            return true;
-        };
-
-        let fingerprint = build.fingerprint;
-        self.job = None;
-        match outcome {
-            PreviewOutcome::Built(mesh, windows) => {
-                self.layer = self.layer.min(windows.layer_count().saturating_sub(1));
-                self.source = Some(Source::Cut(Stack {
-                    mesh,
-                    windows,
-                    fingerprint,
-                    cut: None,
-                }));
-                if let Some(height_mm) = self.parked.take() {
-                    self.show_height(height_mm);
-                }
-            }
-            PreviewOutcome::Failed(message) => *status = Status::Error(message),
-        }
-        false
-    }
-
-    /// Stops waiting for the build. The thread it left behind finishes into a channel
-    /// nobody reads; a slicing run has no point inside it to stop at.
-    pub fn cancel(&mut self) {
-        self.job = None;
-    }
-
     /// Moves the slider to the layer nearest `height_mm`, or to the top for `None`: the
     /// height the Prepare mode was cut at. Waits for a stack still being built.
     pub fn show_height(&mut self, height_mm: Option<Scalar>) {
@@ -497,10 +261,6 @@ impl Preview {
         Some(self.layer_z().filter(|_| self.layer + 1 < count))
     }
 
-    pub fn is_building(&self) -> bool {
-        self.job.is_some()
-    }
-
     pub fn is_playing(&self) -> bool {
         self.playing && self.layer_count() > 0
     }
@@ -514,17 +274,6 @@ impl Preview {
         let last = self.layer_count().saturating_sub(1) as i64;
         let target = (self.layer as i64 + layers).clamp(0, last.max(0));
         self.layer = target as usize;
-    }
-
-    /// How many panel pixels one preview pixel stands for, which is what the mask panel
-    /// puts in its heading. See `docs/decisions/0023-preview-masks-are-downsampled.md`.
-    pub fn downsample_factor(&self, settings: &RasterSettings) -> u32 {
-        shrink_factor(
-            settings.width_px,
-            settings.height_px,
-            MAX_PREVIEW_PX,
-            MAX_PREVIEW_PX,
-        )
     }
 
     pub fn layer_count(&self) -> usize {
@@ -588,22 +337,6 @@ impl Preview {
         Some((double_area / 2.0).max(0.0))
     }
 
-    /// The file being shown was opened over another plate than the one standing now, so
-    /// what the window states about the plate and what the file states are two sources at
-    /// once; see `docs/decisions/0151`.
-    pub fn file_is_over_an_old_plate(&self, plate: u64) -> bool {
-        match self.source.as_ref() {
-            Some(Source::Read(read)) => read.plate != plate,
-            Some(Source::Cut(_)) | None => false,
-        }
-    }
-
-    /// Exposure of the layer being shown as the file's own table states it, seconds.
-    pub fn read_layer_exposure_s(&self) -> Option<f32> {
-        let facts = self.read_facts()?;
-        Some(facts.layers.get(self.layer)?.exposure_s)
-    }
-
     /// The stack no longer matches the scene it was cut from.
     pub fn is_stale(&self, fingerprint: u64) -> bool {
         self.source
@@ -611,324 +344,21 @@ impl Preview {
             .and_then(Source::stack)
             .is_some_and(|stack| stack.fingerprint != fingerprint)
     }
-
-    /// Rasterises the layer being shown, cutting its window first if that has not
-    /// happened yet, and shrinks it to something a screen can hold.
-    #[cfg(test)]
-    pub fn mask(&mut self, settings: &RasterSettings) -> Result<LayerMask> {
-        let shown = self.full(settings)?;
-        Ok(downsample(&shown.runs, MAX_PREVIEW_PX, MAX_PREVIEW_PX))
-    }
-
-    /// The layer being shown at the panel's own resolution, rasterised once for each
-    /// layer, scene and panel, with the islands on it against the layer below.
-    fn full(&mut self, settings: &RasterSettings) -> Result<&Shown> {
-        let Some(key) = self.key(settings) else {
-            bail!("no sliced stack to preview");
-        };
-        if self.full.as_ref().is_none_or(|(cached, _)| *cached != key) {
-            self.cut_window()?;
-            let seen = as_seen(settings);
-            let layer = self.layer;
-            let under = layer.checked_sub(1);
-
-            // Taken before the layers, because decoding one needs the source mutably.
-            let taken = |preview: &Self, at: usize| {
-                preview
-                    .cleaned(settings)
-                    .map_or(Vec::new(), |measured| measured.removed_from(at).to_vec())
-            };
-            let (taken_here, taken_under) = (taken(self, layer), under.map(|at| taken(self, at)));
-
-            let runs = erase(&self.runs_of(layer, &seen)?, &taken_here);
-            let islands = match (under, taken_under) {
-                (Some(under), Some(taken_under)) => {
-                    let below = erase(&self.runs_of(under, &seen)?, &taken_under);
-                    island_runs(&runs, &below, seen.pitch)
-                }
-                _ => LayerRuns::builder(runs.width(), runs.height()).finish(),
-            };
-            self.full = Some((key, Shown { runs, islands }));
-        }
-        match &self.full {
-            Some((_, shown)) => Ok(shown),
-            None => bail!("no sliced stack to preview"),
-        }
-    }
-
-    /// The runs of layer `index` at the panel's own resolution.
-    ///
-    /// A plate is rasterised from the window already cut when it is there and cut on its own
-    /// when it is not: the layer under a window's first is in the one before. A file is
-    /// decoded, which needs no rasteriser at all — the runs are what it holds.
-    fn runs_of(&mut self, index: usize, settings: &RasterSettings) -> Result<LayerRuns> {
-        match self.source.as_mut() {
-            Some(Source::Read(read)) => {
-                let runs = read
-                    .open
-                    .layer(index as u32)
-                    .with_context(|| format!("cannot decode layer {index}"))?;
-                let mut builder = LayerRuns::builder(read.facts.width_px, read.facts.height_px);
-                for run in runs {
-                    builder.push(run.length, run.value);
-                }
-                Ok(builder.finish())
-            }
-            _ => self.rasterised(index, settings),
-        }
-    }
-
-    /// Layer `index` rasterised off the plate being cut.
-    fn rasterised(&self, index: usize, settings: &RasterSettings) -> Result<LayerRuns> {
-        let Some(stack) = self.source.as_ref().and_then(Source::stack) else {
-            bail!("no plate to preview");
-        };
-        let held = stack
-            .cut
-            .as_ref()
-            .and_then(|(window, sliced)| sliced.layers.get(index.checked_sub(window.start)?));
-        let alone;
-        let layer = match held {
-            Some(layer) => layer,
-            None => {
-                alone = stack
-                    .windows
-                    .cut(&stack.mesh, index..index + 1)
-                    .context("cannot cut the layer under the one being previewed")?;
-                let Some(layer) = alone.layers.first() else {
-                    bail!("layer {index} is not in the stack");
-                };
-                layer
-            }
-        };
-        let rastered = ScanlineRasterizer
-            .rasterize(layer, settings)
-            .with_context(|| format!("cannot rasterise the layer at z = {:.3} mm", layer.z))?;
-        Ok(rastered.runs)
-    }
-
-    fn key(&self, settings: &RasterSettings) -> Option<TextureKey> {
-        Some(TextureKey {
-            fingerprint: self.source.as_ref()?.fingerprint(),
-            layer: self.layer,
-            settings: *settings,
-            cleaned: self.cleaned(settings).is_some(),
-        })
-    }
-
-    /// The measurement that took islands out of this stack, once there is one.
-    fn cleaned(&self, settings: &RasterSettings) -> Option<&Measured> {
-        self.measured(settings, self.fold)
-            .filter(|_| self.fold.remove_islands)
-    }
-
-    /// The layer at full resolution over at least `visible`, or `None` when that is more
-    /// of the panel than a texture is allowed to hold, and the shrunk one has to do.
-    ///
-    /// Cut with room around it, so a small pan reuses the texture instead of cutting again.
-    pub fn detail(
-        &mut self,
-        ctx: &egui::Context,
-        settings: &RasterSettings,
-        visible: PixelRect,
-    ) -> Result<Option<(PixelRect, egui::TextureHandle)>> {
-        let fits = |length: u32| (1..=MAX_PREVIEW_PX).contains(&length);
-        if !fits(visible.width()) || !fits(visible.height()) {
-            return Ok(None);
-        }
-        let Some(key) = self.key(settings) else {
-            bail!("no sliced stack to preview");
-        };
-        if let Some(((cached, region), handle)) = self.detail.as_ref()
-            && *cached == key
-            && region.contains(visible)
-        {
-            return Ok(Some((*region, handle.clone())));
-        }
-
-        let region = visible.padded(MAX_PREVIEW_PX, settings.width_px, settings.height_px);
-        let (width, height) = (region.width(), region.height());
-        let shown = self.full(settings)?;
-        let image = tinted(
-            &crop(&shown.runs, region.x0, region.y0, width, height),
-            &crop(&shown.islands, region.x0, region.y0, width, height),
-        );
-        let handle = ctx.load_texture("layer-detail", image, egui::TextureOptions::NEAREST);
-        self.detail = Some(((key, region), handle.clone()));
-        Ok(Some((region, handle)))
-    }
-
-    /// Cuts the window the layer being shown falls in, unless it is the one already cut.
-    /// A file being read has nothing to cut.
-    fn cut_window(&mut self) -> Result<()> {
-        let layer = self.layer;
-        let stack = match self.source.as_mut() {
-            Some(Source::Cut(stack)) => stack,
-            Some(Source::Read(_)) => return Ok(()),
-            None => bail!("no plate to preview"),
-        };
-        let wanted = stack.windows.window_of(layer);
-        if stack
-            .cut
-            .as_ref()
-            .is_some_and(|(cached, _)| *cached == wanted)
-        {
-            return Ok(());
-        }
-
-        let sliced = stack
-            .windows
-            .cut(&stack.mesh, wanted.clone())
-            .context("cannot cut the layers being previewed")?;
-        stack.cut = Some((wanted, sliced));
-        Ok(())
-    }
-
-    /// The layer being shown as a texture, rasterised only when the layer, the scene or
-    /// the panel has changed since the last frame.
-    pub fn texture(
-        &mut self,
-        ctx: &egui::Context,
-        settings: &RasterSettings,
-    ) -> Result<egui::TextureHandle> {
-        let Some(key) = self.key(settings) else {
-            bail!("no sliced stack to preview");
-        };
-        if let Some((cached, handle)) = self.texture.as_ref()
-            && *cached == key
-        {
-            return Ok(handle.clone());
-        }
-
-        let shown = self.full(settings)?;
-        let image = tinted(
-            &downsample(&shown.runs, MAX_PREVIEW_PX, MAX_PREVIEW_PX),
-            &downsample(&shown.islands, MAX_PREVIEW_PX, MAX_PREVIEW_PX),
-        );
-        // Nearest, or a wall one pixel wide would be blurred away by the magnification
-        // the panel is drawn at.
-        let handle = ctx.load_texture("layer-preview", image, egui::TextureOptions::NEAREST);
-        self.texture = Some((key, handle.clone()));
-        Ok(handle)
-    }
-
-    fn current(&self) -> Option<&core_slicer::Layer> {
-        let stack = self.source.as_ref()?.stack()?;
-        let (window, sliced) = stack.cut.as_ref()?;
-        sliced.layers.get(self.layer.checked_sub(window.start)?)
-    }
-}
-
-/// A file's own fingerprint for the texture cache: its name, and what it was last written —
-/// or, for bytes handed over, which bytes they are.
-///
-/// A file opened twice over an edit must not show the first one's cached picture.
-fn file_fingerprint(file: &Handed) -> u64 {
-    let mut hasher = DefaultHasher::new();
-    let path = file.path();
-    path.hash(&mut hasher);
-    if let Handed::Bytes { bytes, .. } = file {
-        bytes.as_ptr().hash(&mut hasher);
-        bytes.len().hash(&mut hasher);
-    } else if let Ok(meta) = std::fs::metadata(path) {
-        meta.len().hash(&mut hasher);
-        if let Ok(modified) = meta.modified() {
-            modified.hash(&mut hasher);
-        }
-    }
-    hasher.finish()
-}
-
-/// The mask with the pixels that stand on nothing picked out.
-fn tinted(mask: &LayerMask, islands: &LayerMask) -> egui::ColorImage {
-    let pixels = mask
-        .pixels()
-        .iter()
-        .zip(islands.pixels())
-        .map(|(&grey, &island)| theme::mask_pixel(grey, island > 0))
-        .collect();
-    egui::ColorImage::new([mask.width() as usize, mask.height() as usize], pixels)
-}
-
-/// The same panel read against the plate rather than against the machine: no panel
-/// mirroring (ADR 0109), and the rows flipped, because a file starts at the near edge of
-/// the plate while a picture starts at the far one (ADR 0134).
-fn as_seen(settings: &RasterSettings) -> RasterSettings {
-    RasterSettings {
-        mirror_x: false,
-        mirror_y: true,
-        ..*settings
-    }
-}
-
-/// Identifies the stack a scene would slice into.
-///
-/// Placement, visibility, which meshes are loaded, the cuts in them and the layer height
-/// all change the contours; selecting an object or moving the camera does not, and must not cost a
-/// rebuild.
-pub fn stack_fingerprint(scene: &Scene, cutting: Cutting) -> u64 {
-    let mut hasher = DefaultHasher::new();
-    cutting.layer_height_mm.to_bits().hash(&mut hasher);
-    for factor in cutting.compensation.scale() {
-        factor.to_bits().hash(&mut hasher);
-    }
-    if let Some(adaptive) = cutting.adaptive {
-        for value in [
-            adaptive.cusp_mm,
-            adaptive.min_height_mm,
-            adaptive.max_height_mm,
-        ] {
-            value.to_bits().hash(&mut hasher);
-        }
-    }
-    plate_fingerprint(scene).hash(&mut hasher);
-    hasher.finish()
-}
-
-/// Identifies what stands on the plate, without the numbers it would be cut with: the
-/// half of [`stack_fingerprint`] a sliced file open in the window is held against.
-pub fn plate_fingerprint(scene: &Scene) -> u64 {
-    let mut hasher = DefaultHasher::new();
-    scene.active_plate().hash(&mut hasher);
-    for object in scene.printable(scene.active_plate()) {
-        object.id.hash(&mut hasher);
-        Arc::as_ptr(&object.mesh).hash(&mut hasher);
-        object.hollow.shell().map(Arc::as_ptr).hash(&mut hasher);
-        object
-            .hollow
-            .cut_bodies()
-            .map(Arc::as_ptr)
-            .hash(&mut hasher);
-        for supports in object.supports.meshes().unwrap_or_default() {
-            Arc::as_ptr(supports).hash(&mut hasher);
-        }
-        let transform = object.transform;
-        for value in [
-            transform.translation.x,
-            transform.translation.y,
-            transform.translation.z,
-            transform.rotation.x,
-            transform.rotation.y,
-            transform.rotation.z,
-            transform.rotation.w,
-            transform.scale.x,
-            transform.scale.y,
-            transform.scale.z,
-        ] {
-            value.to_bits().hash(&mut hasher);
-        }
-    }
-    hasher.finish()
 }
 
 #[cfg(test)]
 pub(crate) mod tests {
+    use std::path::Path;
+
+    use super::picture::MAX_PREVIEW_PX;
     use super::*;
     use core_geometry::{Mesh, Orientation, Transform, Vec3, diagnose};
-    use core_raster::Grey;
+    use core_raster::{Grey, LayerMask};
     use core_raster::{PixelPitch, Shading};
 
+    use crate::files::Handed;
     use crate::scene::{ImportSummary, Imported};
+    use crate::status::Status;
 
     /// Panel of 64 x 32 pixels at a 0.2 mm pitch: 12.8 x 6.4 mm of build area.
     fn settings() -> RasterSettings {

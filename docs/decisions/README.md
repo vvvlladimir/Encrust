@@ -166,6 +166,7 @@ Grouped by what the decision governs; the number is still the order it was taken
 | [0093](0093-a-blocker-is-a-keep-out-not-a-hint.md) | A support blocker is a keep-out, not a hint | Accepted |
 | [0094](0094-a-supports-parameters-are-its-groups.md) | A support's parameters are its group's | Accepted |
 | [0095](0095-a-support-the-hand-touched-is-frozen.md) | A support the hand has touched is frozen into the scene | Accepted |
+| [0208](0208-carrying-a-support-is-settled-in-core-supports.md) | Carrying a support by hand is settled in `core-supports` | Accepted |
 | [0119](0119-support-profiles-join-the-catalogue.md) | Support profiles join the catalogue; a group tunes a copy | Accepted |
 | [0124](0124-a-support-standing-on-the-part-ends-in-a-contact.md) | End a support that stands on the part in a contact, and let a profile refuse one | Accepted |
 | [0125](0125-a-tip-leaves-the-surface-along-its-normal.md) | Leave the surface along its normal, and merge from the neck | Accepted |

@@ -70,7 +70,7 @@ it are in `.claude/rules/architecture.md`.
 | `core-slicer` | `SliceSettings`, `LayerPlan`, `AdaptiveSettings`, `Layer`, `Contour`, `Sliced`, `SliceEngine` with `slice_at`, `PlaneSliceEngine`, `layer_heights`, `adaptive_plan`, `offset_contours`, `covered_area`, `Windows` sampling several planes a layer |
 | `core-raster` | `RasterSettings`, `Grey`, `Run`, `LayerRuns` with `blurred`, `LayerMask`, `Rastered`, `Rasterizer`, `ScanlineRasterizer`, `downsample` |
 | `core-analysis` | `cure` into a `Cured` layer of `Piece`s with area, centre and pull after Stefan; `Measured` folding volume, hardest pull, widest step and `Risk`s — islands, levers on the narrowest neck under a piece, peels — or taking islands out as it goes, part by part; `erase`, `island_runs`, `equivalent_disc_mm` |
-| `core-supports` | `Placed`, `Profiles`, `SupportPoint`, `Landing`, `Column`, `SupportTree`; `columns`, `grow`, `mesh_trees`/`mesh_groups`, `grab`/`Grab`/`Part`, `support_under`, `generate_supports`; `Region`/`Blocked` and `project`/`ProjectSettings` for a painted patch; `ModelSupports`, the supports one model carries; `TrapScan`/`Trapped` for resin with no way out |
+| `core-supports` | `Placed`, `Profiles`, `SupportPoint`, `Landing`, `Column`, `SupportTree`; `columns`, `grow`, `mesh_trees`/`mesh_groups`, `grab`/`Grab`/`Part`, `support_under`, `generate_supports`; `carried`/`fits`/`on_model`, the rule a support edited by hand is held to (ADR 0208); `Region`/`Blocked` and `project`/`ProjectSettings` for a painted patch; `ModelSupports`, the supports one model carries; `TrapScan`/`Trapped` for resin with no way out |
 | `core-plate` | `OrientSettings`, `Oriented`, `Score`, `Footprint`, `ArrangeSettings`, `Arranged`, `Placed`, `PlateError`; `orient` — flat faces and a Fibonacci sphere scored on overhang, peel, height and footprint, the best few cut to measure the section; `arrange` — footprint bitmaps packed into the corner and centred |
 | `core-volume` | `Sdf`, `VoxelGrid`, `FieldSettings`, `SignMode`, `VolumeError`; `build` — scattered from the faces, carried coarse across the wall, refined where it is stored — CSG operators, `extract` — clustered surface nets; `hollow` with `HollowSettings`, `HollowMode`, `Blocker`, `Hollowed`, `lattice_mm`, `MIN_WALL_MM`, `sleeves`, `InfillSettings`/`InfillPattern`; `DrainHole`, `Channel`, `drill`, `channel_under`, `hole_at`, `lift_for`, `pierce`; `ModelHollow` with `Shell`, `HoleSize`, `markers` — what one model carries; `press` with `ReliefSettings`/`Relief` |
 | `printer-profiles` | `PrinterProfile`/`OutputFormat`/`AnycubicExtension`/`PhotonRevision`/`Connection`/`Firmware`, `MaterialProfile`/`PrinterTuning`/`Compensation` and `exposure_for_mm`, `SupportProfile` and its segments, TOML load/save, `Catalogue` of printers, resins and support profiles, the `ProfileStore` it writes edits through with `DirStore` over a directory (ADR 0181), and `user_dir` |
@@ -275,7 +275,8 @@ drain.rs     the drain tool, and `Traps`: what the last drainage check found in 
 orient.rs    the auto-orient run, and the turn it applies to the scene
 arrange.rs   packing everything visible onto the plate
 cut.rs       the cut plane, the halves it leaves, and splitting into parts
-preview.rs   the sliced stack, the texture of one layer, and what the stack cures
+preview/     the sliced stack and the slider over it, the file it may be read from, the
+             runs that cut and measure it, and the picture of one layer
 project/     the .encrust dialogs, and the plate captured into and applied from
              core_engine::project
 job/         worker threads: import, repair, merge, export, preview, measure, supports,
@@ -286,7 +287,8 @@ network.rs   printers a scan found, where the Slice button sends, and the errand
 prefs.rs     the machine, resin, tool values and printer addresses remembered between runs
 web/         a browser's threads, dialogs, downloads, private storage and page storage
 ui/          design tokens, fonts, icons, widgets
-render/      wgpu pipelines, buffers, paint callback, shader.wgsl
+render/      wgpu resources and the frame they prepare, its pipelines, buffers and
+             textures, the paint callback, shader.wgsl
 ```
 
 Scene and camera are plain data owned by `SlicerApp`; panels borrow them through
