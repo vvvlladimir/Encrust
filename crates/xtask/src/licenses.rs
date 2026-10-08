@@ -56,7 +56,15 @@ fn generated(root: &Path) -> Result<String> {
         let said = String::from_utf8_lossy(&run.stderr);
         bail!("cargo-about failed with {}:\n{}", run.status, said.trim());
     }
-    String::from_utf8(run.stdout).context("cargo-about wrote something that is not UTF-8")
+    let text =
+        String::from_utf8(run.stdout).context("cargo-about wrote something that is not UTF-8")?;
+    Ok(unix_endings(&text))
+}
+
+/// Licence texts quoted verbatim carry the line endings their crate shipped, and git stores
+/// the file with `\n`: without this the check fails on a fresh checkout.
+fn unix_endings(text: &str) -> String {
+    text.replace("\r\n", "\n")
 }
 
 fn workspace_root() -> Result<PathBuf> {
@@ -66,4 +74,17 @@ fn workspace_root() -> Result<PathBuf> {
         .nth(2)
         .map(Path::to_path_buf)
         .context("xtask is not inside the workspace")
+}
+
+#[cfg(test)]
+mod tests {
+    use super::unix_endings;
+
+    #[test]
+    fn carriage_returns_are_dropped_from_quoted_licence_text() {
+        assert_eq!(
+            unix_endings("MIT License\r\n\r\nCopyright\n"),
+            "MIT License\n\nCopyright\n"
+        );
+    }
 }
