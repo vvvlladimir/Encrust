@@ -441,7 +441,10 @@ mod tests {
             scrubbed(r"cannot write C:\Users\Ada\plate.goo", &[]),
             "cannot write .../*.goo"
         );
-        assert_eq!(scrubbed("cannot load patient.3MF", &[]), "cannot load *.3mf");
+        assert_eq!(
+            scrubbed("cannot load patient.3MF", &[]),
+            "cannot load *.3mf"
+        );
         assert_eq!(scrubbed("cannot read ../out", &[]), "cannot read .../*");
     }
 
