@@ -131,7 +131,7 @@ fn apply(scene: &mut Scene, repaired: &Repaired) -> Status {
 /// How many things the repair actually changed, which is what decides whether it has
 /// anything to report.
 fn done(repaired: &Repaired) -> usize {
-    repaired.filled.loops_filled + repaired.duplicates_removed
+    repaired.filled.loops_filled + repaired.duplicates_removed + repaired.tangles_removed
 }
 
 /// What it changed, in the words the status bar says it in.
@@ -144,6 +144,12 @@ fn what(repaired: &Repaired) -> Vec<String> {
         lines.push(format!(
             "dropped {} face(s) drawn twice",
             repaired.duplicates_removed
+        ));
+    }
+    if repaired.tangles_removed > 0 {
+        lines.push(format!(
+            "dropped {} face(s) nothing could be wound round",
+            repaired.tangles_removed
         ));
     }
     lines
@@ -222,6 +228,7 @@ mod tests {
                 },
                 diagnostics: MeshDiagnostics {
                     boundary_edges,
+                    unbalanced_edges: boundary_edges,
                     ..diagnose(&mesh)
                 },
             },
@@ -335,6 +342,7 @@ mod tests {
                 mesh: Arc::new(mesh),
                 filled,
                 duplicates_removed: 0,
+                tangles_removed: 0,
                 orientation,
             },
         );
@@ -361,6 +369,7 @@ mod tests {
                 mesh,
                 filled: core_geometry::Filled::default(),
                 duplicates_removed: 0,
+                tangles_removed: 0,
                 orientation: Orientation {
                     flipped_faces: 0,
                     inverted_shells: 0,

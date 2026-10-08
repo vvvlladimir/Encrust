@@ -2,7 +2,7 @@ use std::collections::HashSet;
 
 use serde::{Deserialize, Serialize};
 
-use crate::topology::{Components, edge_groups, edge_uses};
+use crate::topology::{Components, EdgeUse, edge_groups, edge_uses};
 use crate::{Mesh, Scalar, Vec3};
 
 /// What is structurally wrong, or right, with a mesh.
@@ -22,6 +22,8 @@ pub struct MeshDiagnostics {
     pub boundary_edges: usize,
     /// Edges used by three or more faces: the surface branches there.
     pub non_manifold_edges: usize,
+    /// Edges more faces walk one way than the other: the surface does not close there.
+    pub unbalanced_edges: usize,
     /// Connected groups of faces.
     pub shells: usize,
     /// V - E + F over referenced vertices. A closed sphere-like shell gives 2.
@@ -29,9 +31,13 @@ pub struct MeshDiagnostics {
 }
 
 impl MeshDiagnostics {
-    /// A watertight surface: no open edges, no branching.
+    /// A surface that closes a volume: every edge walked as often one way as the other.
+    ///
+    /// Branching alone does not open a mesh. Two sheets meeting along a seam use its edge
+    /// four times, twice each way, and each sheet still has an inside; see
+    /// `docs/design/mesh-repair.md`.
     pub fn is_closed(&self) -> bool {
-        self.boundary_edges == 0 && self.non_manifold_edges == 0
+        self.unbalanced_edges == 0
     }
 
     /// Nothing that would make slicing produce garbage.
@@ -43,10 +49,12 @@ impl MeshDiagnostics {
 /// Inspects the topology of a mesh without modifying it.
 pub fn diagnose(mesh: &Mesh) -> MeshDiagnostics {
     let uses = edge_uses(mesh);
+    let degenerate = degenerate_faces(mesh);
     let mut components = Components::new(mesh.faces.len());
 
     let mut boundary_edges = 0;
     let mut non_manifold_edges = 0;
+    let mut unbalanced_edges = 0;
     let mut edges: usize = 0;
     for group in edge_groups(&uses) {
         edges += 1;
@@ -54,6 +62,9 @@ pub fn diagnose(mesh: &Mesh) -> MeshDiagnostics {
             1 => boundary_edges += 1,
             2 => {}
             _ => non_manifold_edges += 1,
+        }
+        if !balanced(group, &degenerate) {
+            unbalanced_edges += 1;
         }
         for other in &group[1..] {
             components.union(group[0].face, other.face);
@@ -70,14 +81,32 @@ pub fn diagnose(mesh: &Mesh) -> MeshDiagnostics {
     MeshDiagnostics {
         vertices: mesh.vertices.len(),
         faces: mesh.faces.len(),
-        degenerate_faces: count_degenerate(mesh),
+        degenerate_faces: degenerate.iter().filter(|face| **face).count(),
         duplicate_faces: count_duplicates(mesh),
         unreferenced_vertices: mesh.vertices.len() - referenced,
         boundary_edges,
         non_manifold_edges,
+        unbalanced_edges,
         shells,
         euler_characteristic: count(referenced) - count(edges) + count(mesh.faces.len()),
     }
+}
+
+/// Whether one edge's uses pair off, as many faces walking it one way as the other.
+///
+/// A face with no area has no side to be on, so it counts as whichever direction the edge
+/// is short of: a plane cut leaves one along every edge it splits, wound as it falls.
+pub(crate) fn balanced(group: &[EdgeUse], degenerate: &[bool]) -> bool {
+    let (mut forward, mut backward, mut either) = (0usize, 0usize, 0usize);
+    for edge_use in group {
+        match (degenerate[edge_use.face as usize], edge_use.forward) {
+            (true, _) => either += 1,
+            (false, true) => forward += 1,
+            (false, false) => backward += 1,
+        }
+    }
+    let gap = forward.abs_diff(backward);
+    gap <= either && (either - gap) % 2 == 0
 }
 
 /// Six times the volume enclosed by the mesh, positive when faces wind outwards.
@@ -148,21 +177,23 @@ fn referenced_vertices(mesh: &Mesh) -> usize {
     seen.iter().filter(|s| **s).count()
 }
 
-// A sliver with a tiny but non-zero area is not counted here: choosing that threshold is
-// a slicing concern, see docs/design/slicing.md when step 2 lands.
-fn count_degenerate(mesh: &Mesh) -> usize {
+/// Which faces have a repeated vertex or no area, one flag per face.
+///
+/// A sliver with a tiny but non-zero area is not one: choosing that threshold is a slicing
+/// concern, see docs/design/slicing.md when step 2 lands.
+pub(crate) fn degenerate_faces(mesh: &Mesh) -> Vec<bool> {
     mesh.faces
         .iter()
         .enumerate()
-        .filter(|(index, face)| {
+        .map(|(index, face)| {
             face[0] == face[1]
                 || face[1] == face[2]
                 || face[0] == face[2]
                 || mesh
-                    .triangle(*index)
+                    .triangle(index)
                     .is_none_or(|t| t.normal_unnormalized().length_squared() == 0.0)
         })
-        .count()
+        .collect()
 }
 
 fn count_duplicates(mesh: &Mesh) -> usize {
@@ -347,6 +378,41 @@ mod tests {
         assert_eq!(diagnostics.boundary_edges, 4);
         assert_eq!(diagnostics.non_manifold_edges, 0);
         assert_eq!(diagnostics.shells, 1);
+        assert!(!diagnostics.is_closed());
+    }
+
+    /// Two boxes meeting along one vertical edge: the four faces at it pair off, two
+    /// walking it each way, so each box still has an inside.
+    #[test]
+    fn two_boxes_sharing_an_edge_branch_there_and_still_close() {
+        let mut mesh = box_mesh(Vec3::ZERO, Vec3::splat(2.0));
+        let other = box_mesh(Vec3::new(2.0, 2.0, 0.0), Vec3::new(4.0, 4.0, 2.0));
+        let offset = mesh.vertices.len() as u32;
+        mesh.vertices.extend(other.vertices);
+        mesh.faces
+            .extend(other.faces.iter().map(|f| f.map(|i| i + offset)));
+        let mesh = crate::weld(&mesh, crate::DEFAULT_WELD_TOLERANCE).mesh;
+
+        let diagnostics = diagnose(&mesh);
+        assert_eq!(
+            diagnostics.non_manifold_edges, 1,
+            "the shared edge branches"
+        );
+        assert_eq!(diagnostics.unbalanced_edges, 0);
+        assert!(diagnostics.is_closed(), "two solids, no hole in either");
+    }
+
+    /// One face turned round leaves its three edges walked twice the same way, which is
+    /// where a surface stops having one inside.
+    #[test]
+    fn a_face_turned_round_leaves_its_edges_unbalanced() {
+        let mut mesh = box_mesh(Vec3::ZERO, Vec3::splat(2.0));
+        mesh.faces[0].swap(1, 2);
+
+        let diagnostics = diagnose(&mesh);
+        assert_eq!(diagnostics.boundary_edges, 0);
+        assert_eq!(diagnostics.non_manifold_edges, 0);
+        assert_eq!(diagnostics.unbalanced_edges, 3);
         assert!(!diagnostics.is_closed());
     }
 

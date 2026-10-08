@@ -27,9 +27,9 @@ use serde::{Deserialize, Serialize};
 /// What a project file is called, and what an open or save dialog filters on.
 pub const EXTENSION: &str = "encrust";
 
-/// The manifest this build writes. A file of any other version is refused: the format
-/// carries built geometry, which an older one has none of (ADR 0191).
-pub const VERSION: u32 = 3;
+/// The manifest this build writes. A file of any other version is refused: it carries
+/// built geometry and diagnostics an older build cannot supply (ADR 0191, 0205).
+pub const VERSION: u32 = 4;
 
 const MANIFEST: &str = "project.json";
 
@@ -535,6 +535,7 @@ mod tests {
                     unreferenced_vertices: 0,
                     boundary_edges: 3,
                     non_manifold_edges: 0,
+                    unbalanced_edges: 3,
                     shells: 1,
                     euler_characteristic: 1,
                 },

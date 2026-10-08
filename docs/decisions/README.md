@@ -71,6 +71,7 @@ Grouped by what the decision governs; the number is still the order it was taken
 | [0089](0089-a-cut-is-exact-on-the-mesh.md) | A cut is exact on the mesh, capped with `earcutr` | Accepted |
 | [0194](0194-a-hole-is-closed-only-when-it-is-asked-for.md) | A hole is closed only when it is asked for, by the triangulator the cut already uses | Accepted |
 | [0195](0195-a-mended-model-is-sound-and-an-open-one-is-never-capped.md) | Repair drops the faces drawn twice, and an open model is never capped | Accepted |
+| [0205](0205-a-surface-closes-when-its-edges-pair-off.md) | A surface closes when its edges pair off, and repair drops what no winding covers | Accepted |
 
 ### Mesh and texture input
 

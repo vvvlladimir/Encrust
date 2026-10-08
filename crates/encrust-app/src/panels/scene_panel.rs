@@ -490,6 +490,7 @@ mod tests {
             },
             diagnostics: MeshDiagnostics {
                 boundary_edges,
+                unbalanced_edges: boundary_edges,
                 ..core_geometry::diagnose(&mesh)
             },
         }

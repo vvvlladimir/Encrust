@@ -50,7 +50,15 @@ the edge low-to-high. Sorting groups an edge's uses, so one pass yields every fa
 
 - one use: a boundary edge, the surface is open;
 - two: an ordinary manifold edge;
-- three or more: the surface branches, which no printer can interpret.
+- three or more: the surface branches.
+
+Branching is not the same as being open. Two solids meeting along a seam use its edge four
+times, twice each way, and each of them still has an inside. What decides whether a surface
+closes is whether every edge is walked **as often one way as the other** — that is what
+makes the enclosed volume, the winding number of ADR 0054 and the section cap's crossing
+count well defined, and `is_closed` is that and nothing else (ADR 0205). A face with no
+area has no side to be on and counts as whichever direction its edge is short of, because
+a plane cut leaves collinear slivers along every edge it splits.
 
 The sort is a counting sort on the edge's lower vertex, then an ordinary sort within each
 run. Every use of one edge shares that vertex, so runs are short — the valence, about six
@@ -65,8 +73,9 @@ directions. That single predicate drives the orientation pass.
 ## Diagnostics
 
 `diagnose` reports counts, not verdicts, because the CLI and the window react differently:
-the edge counts, degenerate and duplicate faces, unreferenced vertices, connected shells,
-and the Euler characteristic `V - E + F` over referenced vertices.
+the edge counts — boundary, branching and unbalanced — degenerate and duplicate faces,
+unreferenced vertices, connected shells, and the Euler characteristic `V - E + F` over
+referenced vertices.
 
 Euler is the cheapest sanity check there is — 2 for a closed shell with no handles, 1 for
 a disc — and anything else on a closed mesh means the counts disagree with each other.
@@ -97,16 +106,24 @@ order is the only trustworthy signal.
 Step 4 is why `Orientation` reports `inverted_shells` apart from `flipped_faces`: a model
 entirely inside out is a different problem from a few stray faces.
 
-## Closing holes and dropping faces drawn twice
+## Closing holes and dropping faces
 
-These two are the parts of repair nobody runs without being asked: one adds surface the
-file never had, the other throws faces away, so the window puts the question to the user
-first (ADR 0194, 0195).
+These are the parts of repair nobody runs without being asked: one adds surface the file
+never had, the others throw faces away, so the window puts the question to the user first
+(ADR 0194, 0195, 0205). The order is drop the duplicates, orient, drop the unbalanced,
+fill, orient.
 
 `remove_duplicate_faces(mesh)` keeps the first face over any three vertices and drops the
 rest, winding ignored. It goes first: an edge a duplicate has tripled is neither a
 boundary nor a manifold edge, so neither the walk below nor the orientation pass can get
 through it.
+
+`remove_unbalanced_faces(mesh)` drops every face at an edge that does not pair off, and
+repeats until a pass finds nothing, since dropping a face can unbalance a neighbouring
+edge. What is left is wound consistently everywhere — an orientation can only fail where
+two faces walk one edge the same way — and the holes it opens are loops the fill closes.
+Faces along a boundary edge are kept: a hole is not a tangle. Orientation runs before it so
+that a shell written inside out is turned round rather than taken apart.
 
 The boundary edges — the groups of one in the edge table — are followed into loops
 *against* the direction the face that owns each edge walks it. A patch triangulated in that

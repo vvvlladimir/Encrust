@@ -126,14 +126,20 @@ fn describe_closure(diagnostics: &MeshDiagnostics) -> String {
     let shells = diagnostics.shells;
     let plural = if shells == 1 { "shell" } else { "shells" };
     if diagnostics.is_closed() {
+        // Branching is reported here rather than as a defect: a seam two solids share
+        // pairs off and closes, see ADR 0205.
+        let branching = match diagnostics.non_manifold_edges {
+            0 => String::new(),
+            count => format!(", {count} branching edges"),
+        };
         format!(
-            "yes ({shells} {plural}, euler {})",
+            "yes ({shells} {plural}, euler {}{branching})",
             diagnostics.euler_characteristic
         )
     } else {
         format!(
-            "no ({shells} {plural}, {} open edges)",
-            diagnostics.boundary_edges
+            "no ({shells} {plural}, {} edges that do not close)",
+            diagnostics.unbalanced_edges
         )
     }
 }
@@ -141,7 +147,13 @@ fn describe_closure(diagnostics: &MeshDiagnostics) -> String {
 fn defects(diagnostics: &MeshDiagnostics) -> Vec<String> {
     let counts = [
         (diagnostics.boundary_edges, "open edges"),
-        (diagnostics.non_manifold_edges, "non-manifold edges"),
+        (
+            // A boundary edge is unbalanced too, and is already counted as open.
+            diagnostics
+                .unbalanced_edges
+                .saturating_sub(diagnostics.boundary_edges),
+            "edges the surface cannot be wound round",
+        ),
         (diagnostics.degenerate_faces, "degenerate faces"),
         (diagnostics.duplicate_faces, "duplicate faces"),
         (diagnostics.unreferenced_vertices, "unused vertices"),

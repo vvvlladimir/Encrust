@@ -64,8 +64,11 @@ impl ImportSummary {
         }
         for (count, line) in [
             (
-                diagnostics.non_manifold_edges,
-                "edges where more than two faces meet",
+                // A boundary edge is unbalanced too, and is already named above as open.
+                diagnostics
+                    .unbalanced_edges
+                    .saturating_sub(diagnostics.boundary_edges),
+                "edges the surface cannot be wound round",
             ),
             (diagnostics.degenerate_faces, "faces with no area"),
             (diagnostics.duplicate_faces, "faces drawn twice over"),

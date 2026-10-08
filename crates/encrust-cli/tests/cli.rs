@@ -163,7 +163,10 @@ fn an_open_mesh_is_reported_but_still_succeeds() {
         output.status.success(),
         "a defect alone must not fail the run"
     );
-    assert_eq!(field(&text, "closed"), "no (1 shell, 4 open edges)");
+    assert_eq!(
+        field(&text, "closed"),
+        "no (1 shell, 4 edges that do not close)"
+    );
     assert_eq!(field(&text, "defect"), "4 open edges");
     assert!(
         !text

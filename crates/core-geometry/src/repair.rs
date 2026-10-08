@@ -4,7 +4,7 @@
 use crate::hash::FastMap;
 use crate::topology::{edge_groups, edge_uses};
 use crate::triangulate::triangulate;
-use crate::validate::duplicate_faces;
+use crate::validate::{balanced, degenerate_faces, duplicate_faces};
 use crate::{Mesh, Scalar, Vec2, Vec3};
 
 /// Smallest cross product treated as a direction, mm². Below it the loop is a line and
@@ -32,6 +32,54 @@ pub fn remove_duplicate_faces(mesh: &mut Mesh) -> usize {
         keep
     });
     extra.len()
+}
+
+/// Drops every face at an edge more faces walk one way than the other, and returns how
+/// many went.
+///
+/// What is left is wound consistently everywhere and closes wherever it did before, so
+/// what the drop opens is a boundary loop [`fill_holes`] closes. A boundary edge is a
+/// hole rather than a tangle, and the faces along one are kept.
+///
+/// Dropping a face can unbalance an edge that was balanced, so the pass repeats until one
+/// finds nothing; it ends because faces only ever go.
+pub fn remove_unbalanced_faces(mesh: &mut Mesh) -> usize {
+    let mut removed = 0;
+    loop {
+        let gone = drop_unbalanced(mesh);
+        if gone == 0 {
+            return removed;
+        }
+        removed += gone;
+    }
+}
+
+/// One pass of [`remove_unbalanced_faces`].
+fn drop_unbalanced(mesh: &mut Mesh) -> usize {
+    let uses = edge_uses(mesh);
+    let degenerate = degenerate_faces(mesh);
+    let mut dropped = vec![false; mesh.faces.len()];
+    let mut gone = 0;
+    for group in edge_groups(&uses) {
+        if group.len() == 1 || balanced(group, &degenerate) {
+            continue;
+        }
+        for edge_use in group {
+            let slot = &mut dropped[edge_use.face as usize];
+            gone += usize::from(!*slot);
+            *slot = true;
+        }
+    }
+    if gone == 0 {
+        return 0;
+    }
+    let mut at = 0;
+    mesh.faces.retain(|_| {
+        let keep = !dropped[at];
+        at += 1;
+        keep
+    });
+    gone
 }
 
 /// What closing the boundary loops of a mesh added to it.
@@ -244,6 +292,52 @@ mod tests {
     fn cube_open_both_ends() -> Mesh {
         let whole = cube();
         Mesh::new(whole.vertices, whole.faces[4..].to_vec())
+    }
+
+    /// A fin standing on one edge of the cube, which is what a boolean leaves behind: the
+    /// edge is walked twice one way and once the other, and no winding covers all three.
+    fn cube_with_a_fin() -> Mesh {
+        let mut mesh = cube();
+        mesh.vertices.push(Vec3::new(1.0, 1.0, 4.0));
+        mesh.faces.push([4, 5, 8]);
+        mesh
+    }
+
+    #[test]
+    fn a_face_nothing_can_be_wound_round_is_dropped_and_what_it_opens_is_closed() {
+        let mut mesh = cube_with_a_fin();
+        assert!(!diagnose(&mesh).is_closed(), "the tangle opens the surface");
+
+        let removed = remove_unbalanced_faces(&mut mesh);
+        let filled = fill_holes(&mut mesh);
+        let orientation = orient_outward(&mut mesh);
+
+        assert!(removed > 0, "the tangled faces go");
+        assert_eq!(filled.loops_left, 0);
+        assert!(diagnose(&mesh).is_closed(), "and what went is closed again");
+        assert!(orientation.orientable);
+        assert!(
+            (signed_volume(&mesh) - 8.0).abs() < 1e-4,
+            "a 2 mm cube holds 8 mm^3 whatever was laid over it"
+        );
+    }
+
+    #[test]
+    fn a_mesh_that_closes_everywhere_keeps_every_face() {
+        let mut mesh = cube();
+        assert_eq!(remove_unbalanced_faces(&mut mesh), 0);
+        assert_eq!(mesh.faces, cube().faces);
+    }
+
+    #[test]
+    fn an_open_mesh_keeps_the_faces_along_its_hole() {
+        let mut mesh = cube_missing_top();
+        assert_eq!(
+            remove_unbalanced_faces(&mut mesh),
+            0,
+            "a hole is not a tangle"
+        );
+        assert_eq!(mesh.faces, cube_missing_top().faces);
     }
 
     #[test]
