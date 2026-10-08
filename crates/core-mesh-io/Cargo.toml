@@ -8,6 +8,9 @@ license.workspace = true
 repository.workspace = true
 authors.workspace = true
 
+[lib]
+doctest = false
+
 [dependencies]
 core-geometry.workspace = true
 image.workspace = true

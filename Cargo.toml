@@ -122,6 +122,11 @@ opt-level = 1
 [profile.dev.package."*"]
 opt-level = 3
 
+# Test binaries are linked once per crate target and never debugged in a debugger, so they
+# carry line tables only: full debuginfo is most of what a test build writes to disk.
+[profile.test]
+debug = "line-tables-only"
+
 [profile.release]
 lto = "thin"
 codegen-units = 1

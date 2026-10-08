@@ -19,3 +19,6 @@
 - Test what the behaviour needs and stop. No test that only restates a getter.
 - `cargo test --workspace` passes before a step is done. Never `#[ignore]` a test to get there:
   fix it, or delete it and say so.
+- A run that changed nothing takes about 23 s. Minutes means something rebuilt that did not
+  have to — a new library crate missing `[lib] doctest = false`, or a build script watching a
+  path that does not exist; both in docs/decisions/0207.

@@ -12,6 +12,9 @@ use std::path::Path;
 
 fn main() {
     let assets = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../assets/profiles");
+    // Watching the root, not a kind that may be absent: cargo reruns a script every time one
+    // of its watched paths does not exist, which rebuilds half the workspace on every call.
+    println!("cargo:rerun-if-changed={}", assets.display());
     let mut source = String::new();
     emit(&mut source, "BUNDLED_PRINTERS", &assets.join("printers"));
     emit(&mut source, "BUNDLED_RESINS", &assets.join("resins"));
@@ -24,7 +27,9 @@ fn main() {
 
 /// Writes one `&[(id, contents)]` table, sorted so the catalogue order is deterministic.
 fn emit(source: &mut String, name: &str, dir: &Path) {
-    println!("cargo:rerun-if-changed={}", dir.display());
+    if dir.is_dir() {
+        println!("cargo:rerun-if-changed={}", dir.display());
+    }
 
     let mut files: Vec<_> = match std::fs::read_dir(dir) {
         Ok(entries) => entries

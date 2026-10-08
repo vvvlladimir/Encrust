@@ -10,6 +10,7 @@ authors.workspace = true
 publish = false
 
 [lib]
+doctest = false
 crate-type = ["cdylib", "rlib"]
 
 [dependencies]

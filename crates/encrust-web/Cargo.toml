@@ -10,6 +10,7 @@ authors.workspace = true
 publish = false
 
 [lib]
+doctest = false
 crate-type = ["cdylib", "rlib"]
 
 # Nothing but a browser build has anything to compile here; see docs/decisions/0181.
