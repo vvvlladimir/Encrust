@@ -77,6 +77,29 @@ impl RepairJob {
     }
 }
 
+fn run(request: RepairRequest) -> RepairOutcome {
+    let mut mesh = (*request.mesh).clone();
+    let mended = mend(&mut mesh);
+    RepairOutcome::Done(Box::new(Repaired {
+        id: request.id,
+        name: request.name,
+        mesh: Arc::new(mesh),
+        filled: mended.filled,
+        duplicates_removed: mended.duplicates_removed,
+        tangles_removed: mended.tangles_removed,
+        orientation: mended.orientation,
+    }))
+}
+
+/// What mending one mesh changed.
+#[derive(Debug, Clone, PartialEq)]
+pub struct Mended {
+    pub filled: Filled,
+    pub duplicates_removed: usize,
+    pub tangles_removed: usize,
+    pub orientation: Orientation,
+}
+
 /// Drops the faces drawn twice and the ones nothing can be wound round, patches the holes
 /// both leave, and turns the patches the right way out.
 ///
@@ -85,22 +108,18 @@ impl RepairJob {
 /// the mesh allows before the tangles are judged, or a shell written inside out would read
 /// as one tangle per edge. The orientation pass is last because a patch is new surface and
 /// nothing has decided its side yet.
-fn run(request: RepairRequest) -> RepairOutcome {
-    let mut mesh = (*request.mesh).clone();
-    let duplicates_removed = remove_duplicate_faces(&mut mesh);
-    orient_outward(&mut mesh);
-    let tangles_removed = remove_unbalanced_faces(&mut mesh);
-    let filled = fill_holes(&mut mesh);
-    let orientation = orient_outward(&mut mesh);
-    RepairOutcome::Done(Box::new(Repaired {
-        id: request.id,
-        name: request.name,
-        mesh: Arc::new(mesh),
+pub fn mend(mesh: &mut Mesh) -> Mended {
+    let duplicates_removed = remove_duplicate_faces(mesh);
+    orient_outward(mesh);
+    let tangles_removed = remove_unbalanced_faces(mesh);
+    let filled = fill_holes(mesh);
+    let orientation = orient_outward(mesh);
+    Mended {
         filled,
         duplicates_removed,
         tangles_removed,
         orientation,
-    }))
+    }
 }
 
 #[cfg(test)]

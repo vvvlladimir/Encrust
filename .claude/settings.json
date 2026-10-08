@@ -20,5 +20,20 @@
       "Bash(git commit:*)"
     ],
     "additionalDirectories": []
+  },
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash|Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"$CLAUDE_PROJECT_DIR\"/.claude/hooks/guard-slow-commands.sh",
+            "timeout": 10,
+            "statusMessage": "Checking the command is not a full rebuild"
+          }
+        ]
+      }
+    ]
   }
 }

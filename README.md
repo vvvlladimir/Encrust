@@ -4,18 +4,25 @@
 
 # Encrust
 
-### A resin slicer that lives on your computer and answers to you.
+### The resin slicer that answers to you.
 
-Free and open source, for MSLA and SLA printers.
+Free and open source, for MSLA and SLA printers. Supports, hollowing and a layer-by-layer check
+that catches a failed print before it costs you resin — all of it on your own computer, with no
+account and no cloud.
 
-[**Download**](https://github.com/vvvlladimir/Encrust/releases/latest)
+[**Download**](https://encrust.app/download/)
+&nbsp;·&nbsp; [**Try it in a browser**](https://encrust.app/app/)
+&nbsp;·&nbsp; [Website](https://encrust.app)
+&nbsp;·&nbsp; [Guides](https://encrust.app/guides/)
+&nbsp;·&nbsp; [Printers](https://encrust.app/printers/)
 &nbsp;·&nbsp; [What's new](CHANGELOG.md)
 &nbsp;·&nbsp; [Discussions](https://github.com/vvvlladimir/Encrust/discussions)
 &nbsp;·&nbsp; [Report a bug](https://github.com/vvvlladimir/Encrust/issues)
 
 [![CI](https://github.com/vvvlladimir/Encrust/actions/workflows/ci.yml/badge.svg)](https://github.com/vvvlladimir/Encrust/actions/workflows/ci.yml)
+[![Latest release](https://img.shields.io/github/v/release/vvvlladimir/Encrust?display_name=tag&color=brightgreen)](https://github.com/vvvlladimir/Encrust/releases/latest)
 [![Status: alpha](https://img.shields.io/badge/status-alpha-orange.svg)](#where-it-stands)
-[![Platforms](https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-lightgrey.svg)](#try-it)
+[![Platforms](https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux%20%7C%20Browser-lightgrey.svg)](#get-it)
 [![License: AGPL v3](https://img.shields.io/badge/license-AGPL--3.0-blue.svg)](LICENSE)
 
 </div>
@@ -27,10 +34,29 @@ Free and open source, for MSLA and SLA printers.
 > parts. It is also young, so keep a slicer you trust installed alongside it while it grows up.
 > [Here is exactly where it stands.](#where-it-stands)
 
-## Try it
+## What you get
 
-Grab the build for your system from the
-[**latest release**](https://github.com/vvvlladimir/Encrust/releases/latest):
+- **A sliced file your printer accepts** — 100 printer profiles, 20-odd container formats, written
+  and read back by the same code.
+- **Supports that hold** — automatic branching trunks, manual placement, painted patches, rafts.
+- **Hollowing that drains** — infill, drain holes, and a warning when resin would be trapped.
+- **A layer-by-layer check before you print** — islands, suction cups and thin cross-sections
+  found in what the file really cures, not in the model.
+- **Nothing leaves your computer** — no account, no cloud, no analytics. Profiles and projects are
+  plain TOML you can open in any editor.
+- **A command line for the same pipeline** — slice a folder of models without opening a window.
+
+## Get it
+
+**In a browser, with nothing to install:** open [**encrust.app/app**](https://encrust.app/app/).
+It is the same Rust core compiled to WebAssembly and drawn with WebGPU; your model is opened and
+sliced on your machine and nothing is uploaded. It needs a browser with WebGPU — a recent Chrome
+or Edge is the safe bet — and it keeps working offline after the first visit. This browser build
+is younger than the desktop one and still catching up to it; for a print you care about, use the
+desktop app.
+
+**On your desktop**, from [encrust.app/download](https://encrust.app/download/) or the
+[latest release](https://github.com/vvvlladimir/Encrust/releases/latest):
 
 | System | Download |
 |---|---|
@@ -48,38 +74,21 @@ what that update downloads.
 > choose *More info › Run anyway*. On macOS, drag Encrust to Applications, then run
 > `xattr -dr com.apple.quarantine /Applications/Encrust.app` in Terminal.
 
-**A good first print:** pick your printer and resin, load something small, and look at the
-analysis view before you send it. Unless your printer is the one verified below, start with a
-calibration piece rather than the model you care about.
+## Your first print
 
-<details>
-<summary><b>Prefer the command line, or building from source?</b></summary>
+1. Pick your printer and your resin — the printer from the list, the resin as one you make, since
+   Encrust ships none (an exposure is measured on the machine in your room).
+2. Load something small, orient it, add supports, hollow it if it is solid.
+3. **Open the analysis view before you send it** — islands and suction cups are cheaper to fix here
+   than on the plate.
+4. Unless your printer is [the one verified below](#printers), print a calibration piece first.
 
-With a recent stable Rust toolchain (`rust-toolchain.toml` pins the version):
-
-```sh
-git clone https://github.com/vvvlladimir/Encrust.git
-cd Encrust
-cargo run --release -p encrust-app --bin encrust-gui
-```
-
-Slicing without a window:
-
-```sh
-cargo run --release -p encrust-cli --bin encrust -- slice model.stl \
-  --printer elegoo-saturn-4-ultra --resin my-grey --center -o model.goo
-```
-
-Every flag is described in [`docs/cli.md`](docs/cli.md), and
-[CONTRIBUTING.md](CONTRIBUTING.md#getting-set-up) covers the full development setup.
-
-</details>
+Step by step: [encrust.app/guides](https://encrust.app/guides/).
 
 ## Printers
 
-Encrust ships with profiles for **100 printers** from 14 makers. It ships no resin: an
-exposure is measured on the machine in your room, so the first resin is one you make, in
-the window or as a TOML file.
+Encrust ships with profiles for **100 printers** from 14 makers — the full list, searchable, is at
+[encrust.app/printers](https://encrust.app/printers/).
 
 | Maker | Printers | Formats |
 |---|---|---|
@@ -96,7 +105,7 @@ the window or as a TOML file.
 | Prusa | 2 | `.sl1`, `.sl1s` |
 | Kelant, UniFormation, Voxelab | 1 each | `.zip`, `.ctb`, `.svgx` |
 
-**So far, only one has actually printed a file Encrust wrote: the ELEGOO Saturn 4 Ultra.**
+
 Every other profile is built from the printer's published specification, and its files are
 checked by reading them back — but nobody has cured resin with them yet. They are very
 likely close, so start with a small calibration piece and check the build area and mirroring.
@@ -155,6 +164,33 @@ thing you can give this project — see [Help it grow](#help-it-grow).
 
 </details>
 
+## From the command line
+
+The same pipeline without a window, for batches and scripts:
+
+```sh
+encrust slice model.stl --printer elegoo-saturn-4-ultra --resin my-grey --center -o model.goo
+```
+
+Every flag, with worked examples, is in [`docs/cli.md`](docs/cli.md).
+
+<details>
+<summary><b>Building from source</b></summary>
+
+With the toolchain `rust-toolchain.toml` pins:
+
+```sh
+git clone https://github.com/vvvlladimir/Encrust.git
+cd Encrust
+cargo run --release -p encrust-app --bin encrust-gui   # the window
+cargo run --release -p encrust-cli --bin encrust -- --help
+```
+
+[CONTRIBUTING.md](CONTRIBUTING.md#getting-set-up) covers the full development setup, and
+[`docs/design/web-build.md`](docs/design/web-build.md) the browser build.
+
+</details>
+
 ## Where it stands
 
 **Alpha.** Every stage of the pipeline is in place and covered by around 1,500 unit, property and
@@ -166,6 +202,7 @@ Being honest about what alpha means here:
   file Encrust wrote. The rest are very likely close, but unconfirmed.
 - **Resin settings are a starting point.** Exposure and lift values in the bundled profiles aren't
   calibrated for your bottle — run a calibration print first.
+- **The browser build trails the desktop one.** It runs the same core, and it is newer.
 - **There will be bugs.** Encrust hasn't yet had the thousands of hours of real-world use that
   shake out the last ones. Before a long print, it's worth comparing its output with a slicer you
   already trust.
@@ -173,21 +210,6 @@ Being honest about what alpha means here:
 The worst case is a failed print: a few hours and a few millilitres of resin. If that sounds like a
 fair trade for trying something new, you're exactly who this release is for — and every report
 you send makes the next one better.
-
-## Your data stays yours
-
-These are the only network connections Encrust ever makes:
-
-| What | Where | When |
-|---|---|---|
-| Sending a sliced file | Your printer's IP on your own network (SDCP or PrusaLink) | Only when you press *Send* |
-| Finding printers | A UDP broadcast on your local network | Only when you ask it to look |
-| Checking for updates | `github.com`, over HTTPS | Off by default; daily once enabled, or when you press *Check now* |
-| Downloading an update | `github.com`, the archive for your platform | Only when you press *Install and restart* |
-
-An update check sends nothing but the request itself, and an update is installed only if it
-carries the project's own signature. No analytics, no crash reporting, no licence checks, no
-account, no cloud. Your models, profiles and projects are just files on your disk.
 
 ## Help it grow
 

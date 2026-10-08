@@ -4,6 +4,7 @@ pub use core_engine::project::Keep;
 
 use core_engine::project::{Axis, CutState};
 
+use crate::job::mend;
 use crate::scene::{ImportSummary, Imported, ObjectId, Scene, SceneObject};
 use crate::status::Status;
 
@@ -89,16 +90,19 @@ impl CutTool {
             Keep::Above => vec![(name.clone(), halves.above)],
         };
         scene.remove(id);
+        let mut mended = 0;
         for (name, mesh) in pieces {
-            place(scene, name, mesh);
+            mended += usize::from(place(scene, name, mesh));
         }
         match halves.open_loops {
             0 => Status::Info(format!(
-                "Cut {name} at {} {position_mm:.1} mm",
-                self.state.axis.label()
+                "Cut {name} at {} {position_mm:.1} mm{}",
+                self.state.axis.label(),
+                mending(mended)
             )),
             open => Status::Info(format!(
-                "Cut {name}; {open} cut loops were open and left uncapped"
+                "Cut {name}; {open} cut loops were open and left uncapped{}",
+                mending(mended)
             )),
         }
     }
@@ -121,15 +125,33 @@ pub fn split_parts(scene: &mut Scene, id: ObjectId) -> Status {
 
     let count = parts.len();
     scene.remove(id);
+    let mut mended = 0;
     for (index, part) in parts.into_iter().enumerate() {
-        place(scene, format!("{name} (part {})", index + 1), part);
+        mended += usize::from(place(scene, format!("{name} (part {})", index + 1), part));
     }
-    Status::Info(format!("Split {name} into {count} parts"))
+    Status::Info(format!(
+        "Split {name} into {count} parts{}",
+        mending(mended)
+    ))
 }
 
-/// Puts a mesh that came out of a cut on the plate. It is already in plate coordinates,
-/// so it goes down with no placement of its own.
-fn place(scene: &mut Scene, name: String, mesh: Mesh) {
+/// Puts a mesh that came out of a cut on the plate, mending it first if it did not come
+/// out sound, and says whether it had to be. It is already in plate coordinates, so it
+/// goes down with no placement of its own.
+///
+/// Mending is not asked for the way an imported model's is (ADR 0194): the surface in
+/// question is surface this tool just invented, not surface a file brought in. What it
+/// did is said in the status bar, so a mended piece carries no mark of its own; a piece it
+/// could not close keeps the diagnostics that say so.
+fn place(scene: &mut Scene, name: String, mesh: Mesh) -> bool {
+    let mut mesh = mesh;
+    let mut diagnostics = diagnose(&mesh);
+    let mended = !diagnostics.is_sound();
+    if mended {
+        mend(&mut mesh);
+        diagnostics = diagnose(&mesh);
+    }
+
     let summary = ImportSummary {
         vertices_merged: 0,
         faces_removed: 0,
@@ -138,7 +160,7 @@ fn place(scene: &mut Scene, name: String, mesh: Mesh) {
             inverted_shells: 0,
             orientable: true,
         },
-        diagnostics: diagnose(&mesh),
+        diagnostics,
     };
     scene.insert(Imported::new(
         name,
@@ -146,6 +168,16 @@ fn place(scene: &mut Scene, name: String, mesh: Mesh) {
         Transform::default(),
         summary,
     ));
+    mended
+}
+
+/// What the status bar adds about the pieces that had to be mended on their way down.
+fn mending(pieces: usize) -> String {
+    match pieces {
+        0 => String::new(),
+        1 => "; one piece was mended to close it".to_owned(),
+        pieces => format!("; {pieces} pieces were mended to close them"),
+    }
 }
 
 fn normal(axis: Axis) -> Vec3 {
@@ -319,6 +351,47 @@ mod tests {
             (tool.position_mm(object) - 5.0).abs() < 1e-4,
             "the cube spans 0..10 in Y"
         );
+    }
+
+    /// The cuboid with the two faces of its top missing: every half of it comes off the
+    /// cut open, as a model does whose surface was already torn.
+    fn open_cuboid(size: Vec3) -> Mesh {
+        let mut mesh = cuboid(size);
+        mesh.faces.retain(|face| !matches!(face, [4, 5, 6] | [4, 6, 7]));
+        mesh
+    }
+
+    #[test]
+    fn a_half_that_comes_off_the_cut_broken_is_mended_before_it_lands() {
+        let open = open_cuboid(Vec3::splat(10.0));
+        assert!(
+            !diagnose(&open).is_sound(),
+            "the model is open before it is cut"
+        );
+        let (mut scene, id) = scene_with(open, Transform::default());
+
+        let status = at(Axis::Z, 4.0, Keep::Both).apply(&mut scene, id);
+
+        assert!(!status.is_error());
+        assert_eq!(scene.objects().len(), 2);
+        for object in scene.objects() {
+            assert!(
+                object.summary.is_sound(),
+                "{} came down mended, got {:?}",
+                object.name,
+                object.summary.defects()
+            );
+        }
+    }
+
+    #[test]
+    fn a_half_that_comes_off_the_cut_sound_is_left_alone() {
+        let (mut scene, id) = scene_with(cuboid(Vec3::splat(10.0)), Transform::default());
+
+        let Status::Info(message) = at(Axis::Z, 4.0, Keep::Both).apply(&mut scene, id) else {
+            panic!("a cube through the middle is a cut");
+        };
+        assert!(!message.contains("mended"), "got {message}");
     }
 
     #[test]

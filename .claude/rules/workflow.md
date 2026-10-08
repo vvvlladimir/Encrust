@@ -17,10 +17,11 @@ keep going.
 
 ## Before it is done
 
-Run the three checks in `AGENTS.md` — fmt, clippy with `-D warnings`, tests — once, at the
-end; while working, check the crate you touched with `-p`. They run on the compiler
-`rust-toolchain.toml` pins: never `rustup update` or move that pin to clear a lint, and
-never because a check is slow (0211). Then update
+Run `cargo fmt --all`, then clippy with `-D warnings` and the tests of each crate you
+touched, by `-p`. The workspace-wide forms in `AGENTS.md` are CI's gate, not yours: they
+rebuild the whole graph, and they are run here only when the user asks for them. All of it
+runs on the compiler `rust-toolchain.toml` pins: never `rustup update` or move that pin to
+clear a lint, and never because a check is slow. Then update
 `docs/architecture.md` if a crate changed, make sure each architectural decision has its ADR,
 and propose a commit message. Do not commit or push unless asked.
 

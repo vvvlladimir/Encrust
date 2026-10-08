@@ -17,7 +17,10 @@ cargo xtask man   # the command line's man pages, into target/man
 cargo xtask arch  # the drawn dependency graph against the manifests
 ```
 
-The first three pass before any piece of work is done.
+The first three are what CI runs over the whole workspace. Locally a piece of work is done
+when `cargo fmt --all` passes and clippy and the tests pass for each crate it touched, by
+`-p`; the workspace-wide forms are run here only on request, because they rebuild the
+graph under every crate that changed.
 
 **The rules bind every edit and live in [`.claude/rules/`](.claude/rules/):**
 `architecture.md`, `code-style.md`, `testing.md`, `documentation.md`, `workflow.md`. Read
