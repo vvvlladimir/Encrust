@@ -13,12 +13,21 @@ use crate::status::Status;
 use crate::tool_settings::ToolSettings;
 use crate::ui::{hairline, hint, icon, inline_button, switch, theme};
 
+/// The sheet's width where there is room for it, and the narrowest it is still drawn at.
 const SHEET_W: f32 = 520.0;
-/// How tall a typed answer and the report itself are drawn before they scroll.
-const ANSWER_H: f32 = 56.0;
-const REPORT_H: f32 = 190.0;
-/// Left above and below the sheet so it never reaches past the window's own edges.
+const SHEET_MIN_W: f32 = 300.0;
+/// Left around the sheet so it never reaches the window's own edges.
 const SCREEN_MARGIN: f32 = 96.0;
+/// How tall a typed answer is drawn before it scrolls.
+const ANSWER_H: f32 = 56.0;
+/// The scrolling body between the header and the buttons: its bounds, and the height those
+/// two take out of the window before it is measured.
+const BODY_MAX_H: f32 = 420.0;
+const BODY_MIN_H: f32 = 160.0;
+const CHROME_H: f32 = 110.0;
+/// The report pane's share of the body, and the least it is left with on a short window.
+const REPORT_SHARE: f32 = 0.45;
+const REPORT_MIN_H: f32 = 120.0;
 
 /// What the sheet says above the fields. It is the privacy notice as well, which is why it
 /// states what does not happen before it asks for anything; see `docs/decisions/0212`.
@@ -56,7 +65,12 @@ pub fn ui(ctx: &egui::Context, scene: &Scene, tools: &Tools, machine: &mut Machi
         settings: &settings,
     };
 
-    let body_h = ctx.viewport_rect().height() - SCREEN_MARGIN;
+    // The sheet is sized to the window first: it is capped well short of the full height so
+    // it stays a sheet, and shrinks with its panes on a screen that cannot hold the cap.
+    let screen = ctx.viewport_rect();
+    let sheet_w = (screen.width() - SCREEN_MARGIN).clamp(SHEET_MIN_W, SHEET_W);
+    let body_h = (screen.height() - SCREEN_MARGIN - CHROME_H).clamp(BODY_MIN_H, BODY_MAX_H);
+    let report_h = (body_h * REPORT_SHARE).max(REPORT_MIN_H);
     let sheet = egui::Modal::new(egui::Id::new("report"))
         .frame(
             egui::Frame::new()
@@ -66,7 +80,7 @@ pub fn ui(ctx: &egui::Context, scene: &Scene, tools: &Tools, machine: &mut Machi
                 .shadow(theme::shadow()),
         )
         .show(ctx, |ui| {
-            ui.set_width(SHEET_W);
+            ui.set_width(sheet_w);
             header(ui, report);
             ui.add_space(10.0);
 
@@ -89,7 +103,7 @@ pub fn ui(ctx: &egui::Context, scene: &Scene, tools: &Tools, machine: &mut Machi
 
                     // Drawn after the fields so that a key pressed this frame is already in it.
                     let text = report.markdown(&facts);
-                    shown(ui, &text);
+                    shown(ui, &text, report_h);
                     text
                 })
                 .inner;
@@ -146,7 +160,7 @@ fn carried(ui: &mut egui::Ui, report: &mut Report) {
 
 /// The report itself, whole and scrollable: a user who can read what they are handing
 /// over does not have to trust this window about it.
-fn shown(ui: &mut egui::Ui, text: &str) {
+fn shown(ui: &mut egui::Ui, text: &str, height: f32) {
     crate::ui::heading(ui, "The report", None);
     ui.add_space(4.0);
     egui::Frame::new()
@@ -156,7 +170,7 @@ fn shown(ui: &mut egui::Ui, text: &str) {
         .inner_margin(egui::Margin::same(8))
         .show(ui, |ui| {
             egui::ScrollArea::vertical()
-                .max_height(REPORT_H)
+                .max_height(height)
                 .auto_shrink([false, false])
                 .show(ui, |ui| {
                     ui.label(

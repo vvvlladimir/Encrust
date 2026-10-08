@@ -119,12 +119,13 @@ assert_is_empty = "allow"
 # they go to full speed; see docs/decisions/0037.
 [profile.dev]
 opt-level = 1
+debug = "line-tables-only"
 
 [profile.dev.package."*"]
 opt-level = 3
 
-# Test binaries are linked once per crate target and never debugged in a debugger, so they
-# carry line tables only: full debuginfo is most of what a test build writes to disk.
+# Nothing here is debugged in a debugger, so every build carries line tables only: full
+# debuginfo is most of what a build writes to disk, see docs/decisions/0207.
 [profile.test]
 debug = "line-tables-only"
 

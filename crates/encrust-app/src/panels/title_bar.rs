@@ -151,13 +151,7 @@ fn settings_button(ui: &mut egui::Ui, window: &mut Window) {
     } else {
         shortcuts::tooltip(Action::Settings)
     };
-    if icon_button(
-        ui,
-        if open { icon::CANCEL } else { icon::SETTINGS },
-        &tooltip,
-    )
-    .clicked()
-    {
+    if icon_button(ui, icon::SETTINGS, &tooltip).clicked() {
         toggle_settings(window.machine);
     }
 }
