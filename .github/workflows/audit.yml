@@ -1,8 +1,9 @@
 name: Audit
 
 # What the dependency tree drags in: known vulnerabilities, licences AGPL cannot take, and crates
-# from anywhere but crates.io. On a schedule as well as on a change, because an advisory is
-# published against code that has been sitting still. The rules are in deny.toml.
+# from anywhere but crates.io, and whether the file stating those licences to a user is still the
+# one the lockfile describes. On a schedule as well as on a change, because an advisory is
+# published against code that has been sitting still. The rules are in deny.toml and about.toml.
 
 on:
   push:
@@ -11,12 +12,18 @@ on:
       - Cargo.toml
       - Cargo.lock
       - deny.toml
+      - about.toml
+      - about.hbs
+      - THIRD-PARTY-LICENSES.md
       - .github/workflows/audit.yml
   pull_request:
     paths:
       - Cargo.toml
       - Cargo.lock
       - deny.toml
+      - about.toml
+      - about.hbs
+      - THIRD-PARTY-LICENSES.md
       - .github/workflows/audit.yml
   schedule:
     - cron: "0 6 * * 1"
@@ -36,3 +43,23 @@ jobs:
       - uses: EmbarkStudios/cargo-deny-action@v2
         with:
           command: check advisories licenses bans sources
+
+  # THIRD-PARTY-LICENSES.md ships in every archive and installer, so a dependency added without
+  # regenerating it would hand a user terms that no longer match the binary. See ADR 0214.
+  notices:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Install the pinned toolchain
+        run: rustup show
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: notices
+
+      # The binary is behind a feature that is not on by default.
+      - name: Install cargo-about
+        run: cargo install cargo-about --locked --features cli
+
+      - run: cargo run -q -p xtask --locked -- licenses --check

@@ -48,7 +48,8 @@ Grouped by what the decision governs; the number is still the order it was taken
 | [0160](0160-a-release-is-an-installer-per-platform.md) | A release is an installer per platform, built in CI | Superseded by 0162 (the trigger only) |
 | [0161](0161-the-readers-are-fuzzed-outside-the-workspace.md) | The readers are fuzzed from a crate outside the workspace | Superseded by 0173 (the CI trigger only) |
 | [0162](0162-release-please-cuts-the-release.md) | release-please cuts the release, and the build workflow is called by it | Accepted |
-| [0172](0172-the-window-offers-a-signed-update-and-never-applies-one.md) | The window offers a signed update, and never applies one by itself | Accepted |
+| [0172](0172-the-window-offers-a-signed-update-and-never-applies-one.md) | The window offers a signed update, and never applies one by itself | Accepted; the default of the daily check is amended by 0213 |
+| [0213](0213-the-daily-update-check-is-on-by-default.md) | The daily update check is on by default | Accepted |
 | [0173](0173-a-pull-request-runs-linux-and-main-runs-the-rest.md) | A pull request runs Linux, and main runs the rest | Accepted |
 | [0174](0174-a-plate-is-a-crate-live-and-written-down.md) | A plate is a crate, live and written down | Accepted |
 | [0176](0176-the-command-line-is-encrust-with-subcommands.md) | The command line is `encrust`, with subcommands, JSON and a clean Ctrl-C | Accepted |
@@ -57,6 +58,7 @@ Grouped by what the decision governs; the number is still the order it was taken
 | [0181](0181-the-window-runs-in-a-browser-on-workers.md) | The window runs in a browser, on workers sharing its memory | Accepted |
 | [0183](0183-the-web-build-works-offline-and-the-command-line-completes-and-remembers.md) | The web build works offline, and the command line completes and remembers its flags | Accepted |
 | [0207](0207-a-test-run-rebuilds-nothing-it-does-not-have-to.md) | A test run rebuilds nothing it does not have to | Accepted |
+| [0214](0214-the-libraries-terms-ship-generated-from-the-lockfile.md) | The libraries' terms ship with the binary, generated from the lockfile | Accepted |
 
 ### Geometry
 

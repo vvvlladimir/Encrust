@@ -97,6 +97,8 @@ description = "Slicer for MSLA and SLA resin 3D printers"
 homepage = "https://github.com/vvvlladimir/Encrust"
 publisher = "Encrust contributors"
 license-file = "../../LICENSE"
+# Beside the binary in every installer: the terms of the libraries compiled into it (ADR 0214).
+resources = ["../../THIRD-PARTY-LICENSES.md"]
 category = "GraphicsAndDesign"
 # The .icns is the squircled macOS grid (ADR 0135); Linux takes the PNG, Windows the .ico.
 icons = ["../../assets/icon/encrust.icns", "../../assets/icon/encrust-256.png", "../../assets/icon/encrust.ico"]

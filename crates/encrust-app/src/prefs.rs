@@ -273,8 +273,8 @@ mod tests {
         assert!(read.machines.is_empty());
         assert!(read.bound.is_empty());
         assert!(
-            !read.updates.check,
-            "the update check stays off until turned on"
+            read.updates.check,
+            "the update check is on in a file written before it existed"
         );
     }
 

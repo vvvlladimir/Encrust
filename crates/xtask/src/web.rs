@@ -97,6 +97,15 @@ pub fn run(args: &Args) -> Result<()> {
     }
     copy_page(&root.join("crates/encrust-web/www"), &pkg)?;
     copy_icons(&root.join("assets/icon"), &pkg.join("icons"))?;
+    // Served over a network is still handed over: the terms of the libraries in the module
+    // go with it, as they do in the desktop archives. See ADR 0214.
+    let notices = root.join(crate::licenses::FILE);
+    std::fs::copy(&notices, pkg.join(crate::licenses::FILE)).with_context(|| {
+        format!(
+            "cannot copy {}; run `cargo xtask licenses`",
+            notices.display()
+        )
+    })?;
     stamp_worker(&pkg)?;
     println!("{}", pkg.display());
     Ok(())
@@ -145,7 +154,9 @@ fn copy_icons(from: &Path, to: &Path) -> Result<()> {
 fn stamp_worker(pkg: &Path) -> Result<()> {
     let mut files = Vec::new();
     listed(pkg, pkg, &mut files)?;
-    files.retain(|file| file != "sw.js" && file != "_headers");
+    // The worker itself and the header file are not pages, and the licence file is read
+    // once by someone looking for it rather than needed offline.
+    files.retain(|file| file != "sw.js" && file != "_headers" && file != crate::licenses::FILE);
     files.sort();
     let mut hasher = DefaultHasher::new();
     for file in &files {

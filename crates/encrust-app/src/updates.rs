@@ -1,5 +1,5 @@
-//! The update the window offers: a look at the release feed once a day, off until the user
-//! turns it on, and an install that only a click starts. See `docs/design/updates.md`.
+//! The update the window offers: a look at the release feed once a day, on until the user
+//! turns it off, and an install that only a click starts. See `docs/design/updates.md`.
 
 mod feed;
 mod install;
@@ -54,10 +54,10 @@ pub enum UpdateError {
 }
 
 /// What the window remembers of updates between runs.
-#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct UpdatePrefs {
-    /// Whether the window looks at the feed by itself. Off until the user turns it on.
-    #[serde(default)]
+    /// Whether the window looks at the feed by itself. On until the user turns it off.
+    #[serde(default = "looking")]
     pub check: bool,
     /// When the feed was last read, seconds since the Unix epoch.
     #[serde(default)]
@@ -65,6 +65,21 @@ pub struct UpdatePrefs {
     /// A version the user asked not to be shown in the title strip again.
     #[serde(default)]
     pub skipped: Option<String>,
+}
+
+impl Default for UpdatePrefs {
+    fn default() -> Self {
+        Self {
+            check: looking(),
+            checked_at_s: None,
+            skipped: None,
+        }
+    }
+}
+
+/// The daily look is on by default, here and in a file written before it was; see ADR 0213.
+fn looking() -> bool {
+    true
 }
 
 /// Where the update is up to.
@@ -321,8 +336,19 @@ mod tests {
     }
 
     #[test]
-    fn the_window_looks_at_nothing_until_the_user_turns_the_check_on() {
-        let mut updates = Updates::default();
+    fn a_window_nobody_has_set_up_looks_by_itself() {
+        assert!(UpdatePrefs::default().check);
+    }
+
+    #[test]
+    fn the_window_looks_at_nothing_once_the_user_turns_the_check_off() {
+        let mut updates = Updates {
+            prefs: UpdatePrefs {
+                check: false,
+                ..UpdatePrefs::default()
+            },
+            ..Updates::default()
+        };
         updates.tick();
         assert!(matches!(updates.stage, Stage::Idle));
         assert_eq!(updates.prefs.checked_at_s, None);

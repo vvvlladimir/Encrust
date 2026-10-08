@@ -117,7 +117,8 @@ jobs:
           -p encrust-app -p encrust-cli
 
       # The profiles are compiled into printer-profiles, so the archive needs no asset directory.
-      # The licence it does need: handing somebody the binary is what obliges us to pass it on.
+      # The licences it does need: handing somebody the binary is what obliges us to pass on both
+      # ours and those of the libraries compiled into it (ADR 0214).
       - name: Collect the archive
         shell: bash
         env:
@@ -130,7 +131,7 @@ jobs:
           if [ "$RUNNER_OS" = "Windows" ]; then ext=.exe; else ext=""; fi
           cp "target/$TARGET/release/encrust-gui$ext" "$out/"
           cp "target/$TARGET/release/encrust$ext" "$out/"
-          cp LICENSE README.md "$out/"
+          cp LICENSE THIRD-PARTY-LICENSES.md README.md "$out/"
           case "$ARCHIVE" in
             *.zip) (cd staging && 7z a "../$ARCHIVE" Encrust) ;;
             *) tar -czf "$ARCHIVE" -C staging Encrust ;;

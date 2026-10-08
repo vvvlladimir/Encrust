@@ -1,6 +1,6 @@
 # 0172. The window offers a signed update, and never applies one by itself
 
-- **Status:** Accepted
+- **Status:** Accepted; the default of the daily check is amended by [0213](0213-the-daily-update-check-is-on-by-default.md)
 - **Date:** 2026-10-02
 
 ## Context

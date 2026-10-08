@@ -5,6 +5,7 @@ mod arch;
 mod containers;
 mod cross_check;
 mod ini;
+mod licenses;
 mod machine;
 mod man;
 mod profiles;
@@ -30,6 +31,8 @@ enum Command {
     Man(man::Args),
     /// Checks the dependency graph `docs/architecture.md` draws against the manifests.
     Arch(arch::Args),
+    /// Writes the terms of every library a release ships, from the lockfile.
+    Licenses(licenses::Args),
 }
 
 fn main() -> Result<()> {
@@ -38,5 +41,6 @@ fn main() -> Result<()> {
         Command::Web(args) => web::run(&args),
         Command::Man(args) => man::run(&args),
         Command::Arch(args) => arch::run(&args),
+        Command::Licenses(args) => licenses::run(&args),
     }
 }

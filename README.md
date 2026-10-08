@@ -64,9 +64,8 @@ desktop app.
 | Linux, x86-64 | `Encrust-linux-x86_64.AppImage` or `encrust_amd64.deb` |
 
 Install it like any other application. You'll need a GPU with Vulkan, Metal or DirectX 12 — anything
-from the last several years will do. Encrust can update itself from Settings › Updates once you turn
-that on. The `encrust-*.tar.gz` and `.zip` archives beside the installers are portable copies, and
-what that update downloads.
+from the last several years will do. Encrust looks for a new release once a day and updates itself
+from Settings › Updates, where that daily look is also turned off.
 
 > **The builds aren't code-signed yet**, so the first launch needs one extra step. On Windows,
 > choose *More info › Run anyway*. On macOS, drag Encrust to Applications, then run
