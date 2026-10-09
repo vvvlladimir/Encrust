@@ -300,17 +300,23 @@ fn row(
     } else {
         colors.text_low
     };
-    let name = painter.layout(
-        object.name.clone(),
-        theme::label(),
-        name_color,
-        (name_right - 8.0 - eye.right()).max(0.0),
+    // A row is one line tall, so a name longer than it is cut rather than wrapped over
+    // the row below it; the whole of it is on the tooltip.
+    let mut job =
+        egui::text::LayoutJob::simple_singleline(object.name.clone(), theme::label(), name_color);
+    job.wrap = egui::text::TextWrapping::truncate_at_width(
+        (name_right - 8.0 - eye.right() - 4.0).max(0.0),
     );
+    let name = painter.layout_job(job);
+    let elided = name.elided;
     painter.galley(
         egui::pos2(eye.right() + 4.0, rect.center().y - name.size().y / 2.0),
         name,
         name_color,
     );
+    if elided {
+        response.clone().on_hover_text(&object.name);
+    }
 
     if let Some(asked) = asked {
         return Some(asked);
