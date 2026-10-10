@@ -86,7 +86,9 @@ Row 30 points, field 28, a named field's box 128 wide, button 32, primary button
 section heading 36, panel padding 12, item gap 8. Tool rail 68 with 46 point buttons, plate
 panel 272, plate strip 44, inspector 328, top bar 44, layer strip 52, a chip in either 32.
 The two side columns are the widths a drag on their edge leaves them at; everything else is
-fixed. Controls are rounded by 6 points, cards by 8, windows by
+fixed. A form block's title column is 180 wide beside at most 460 of fields; a window over
+the plate is at most 1080 by 720, its title row 48 and its list 260; a table row is 36 and a
+two-line row 48. Controls are rounded by 6 points, cards by 8, windows by
 10, and pills are fully round. Nothing else is rounded.
 
 ## Widgets
@@ -109,6 +111,10 @@ paints from tokens only.
 | `picker` | A row that opens a chooser: glyph, what is chosen, caret |
 | `primary_button` | The one action a screen is for. There is never a second in view |
 | `secondary_button` | The ordinary full-width button |
+| `quiet_button` | A lesser action of a row with no surface until hovered, in `danger` when it cannot be taken back |
+| `filter_chip` | One of a row of filters, bordered, washed in the accent while on |
+| `dialog_frame`, `dialog_head` | A window over the plate: its frame, and its glyph, name and close button |
+| `two_lines` | A name over the line that says more about it, in a list row |
 | `compact_button` | A button as tall as a field, to stand in a row of them |
 | `icon_button`, `icon_toggle` | A borderless square with one glyph; the toggle stays lit while on |
 | `rail_button` | A rail button, a glyph over the tool's name, raised in `accent_soft` when it is the tool in use, with a dot while the tool needs attention |
@@ -175,15 +181,24 @@ it would otherwise orbit the camera as well. None of these cards reports where i
 whichever egui layer is under the pointer owns it, and the plate is only under the pointer
 when that layer is the viewport's own; see `docs/decisions/0193`.
 
-## The Settings screen
+## The Settings screen, the Machine and resin window and the start page
 
-One arrangement sits beside the plate's: with `Settings::open` the rail, the inspector and
-the stage are not drawn at all, and everything under the top bar is the Settings
-screen — a list of sections down the left, the form for the open section beside it. It is
-a screen rather than a dialog because a profile is edited instead of the plate, not over
-it, and because the sections keep growing. The gear at the foot of the rail opens it,
-and its own close button or Esc leaves it. See `docs/design/profiles.md` and
-`docs/decisions/0052`.
+Three arrangements sit beside the plate's. With `Settings::open` the rail, the inspector
+and the stage are not drawn, and everything under the top bar is the Settings screen: its
+pages down the left, the open page's list and form beside them. A form is blocks — a title in
+a column of its own, the fields beside it, a hairline under them — and a title stands over
+its fields where the form is too narrow for both. It is a screen because a support profile
+is edited instead of the plate; the gear at the foot of the rail opens it, and its close
+button or Esc leaves it.
+
+**Machine and resin** is a modal over the plate instead, because a machine and a resin are
+picked for the plate in view: the machines down its left, the picked one's Resins, Machine
+and Network tabs beside them, an action bar along the tabs' foot. A question or a
+calculator over it is a modal of its own.
+
+Until the first model, project or sliced file arrives, or a tool is picked, everything under
+the top bar is the **start page** instead: a drop zone, the machine, and the files opened
+lately. See `docs/design/profiles.md` and `docs/decisions/0052`, `0220`.
 
 ## Modes and tools
 

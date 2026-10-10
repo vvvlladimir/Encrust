@@ -4,14 +4,14 @@
 //! The report is composed again every frame the sheet is open, so what is shown is what
 //! the buttons hand over; see `docs/decisions/0212`.
 
-use egui::{Align, Layout, RichText};
+use egui::RichText;
 
 use crate::report::{FILE_NAME, Facts, Plate, Report};
 use crate::scene::Scene;
 use crate::state::{Machine, Tools};
 use crate::status::Status;
 use crate::tool_settings::ToolSettings;
-use crate::ui::{hairline, hint, icon, inline_button, switch, theme};
+use crate::ui::{dialog_frame, dialog_head, hairline, hint, icon, inline_button, switch, theme};
 
 /// The sheet's width where there is room for it, and the narrowest it is still drawn at.
 const SHEET_W: f32 = 520.0;
@@ -77,13 +77,7 @@ pub fn ui(ctx: &egui::Context, scene: &Scene, tools: &Tools, machine: &mut Machi
     let body_h = (screen.height() - SCREEN_MARGIN - CHROME_H).clamp(BODY_MIN_H, BODY_MAX_H);
     let report_h = (body_h * REPORT_SHARE).max(REPORT_MIN_H);
     let sheet = egui::Modal::new(egui::Id::new("report"))
-        .frame(
-            egui::Frame::new()
-                .fill(theme::colors().panel)
-                .corner_radius(theme::R_SURFACE)
-                .inner_margin(egui::Margin::same(18))
-                .shadow(theme::shadow()),
-        )
+        .frame(dialog_frame().inner_margin(egui::Margin::same(18)))
         .show(ctx, |ui| {
             ui.set_width(sheet_w);
             header(ui, report);
@@ -122,18 +116,9 @@ pub fn ui(ctx: &egui::Context, scene: &Scene, tools: &Tools, machine: &mut Machi
 }
 
 fn header(ui: &mut egui::Ui, report: &mut Report) {
-    ui.horizontal(|ui| {
-        ui.label(
-            RichText::new("Report a problem")
-                .font(theme::body())
-                .color(theme::colors().text_high),
-        );
-        ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
-            if crate::ui::icon_button(ui, icon::CANCEL, "Close").clicked() {
-                report.open = false;
-            }
-        });
-    });
+    if dialog_head(ui, icon::BUG, "Report a problem") {
+        report.open = false;
+    }
     ui.add_space(8.0);
     hairline(ui);
 }

@@ -448,19 +448,27 @@ fn pill(
     response
 }
 
-/// Opens the Settings screen on the profiles the plate is using, or closes it.
+/// Opens the Settings screen, on the first support profile when none is open yet, or
+/// closes it.
 pub fn toggle_settings(machine: &mut Machine) {
-    if machine.settings.open {
-        machine.settings.open = false;
-        return;
+    let settings = &mut machine.settings;
+    settings.open = !settings.open;
+    let catalogue = &machine.slicing.catalogue;
+    if settings.open
+        && settings.support.is_none()
+        && let Some(first) = catalogue.supports().next()
+    {
+        let id = first.id.clone();
+        settings.pick_support(catalogue, &id);
     }
+}
+
+/// Opens the Machine and resin window on the machine the plate is printed on.
+pub fn open_machines(machine: &mut Machine) {
     let printer = machine.slicing.printer_id.clone();
-    let resin = machine.slicing.resin_id.clone();
-    machine.settings.open(
-        &machine.slicing.catalogue,
-        printer.as_deref(),
-        resin.as_deref(),
-    );
+    machine
+        .settings
+        .open_machines(&machine.slicing.catalogue, printer.as_deref(), None);
 }
 
 /// What project is open, if one is. The window has no other place to say so.
@@ -534,6 +542,10 @@ fn file_menu(ui: &mut egui::Ui, window: &mut Window) {
         profiles::open_material(&mut window.machine.slicing, &mut window.machine.status);
     }
     ui.separator();
+    if ui.button("Machine and resin...").clicked() {
+        ui.close();
+        open_machines(window.machine);
+    }
     if item(ui, "Settings...", Action::Settings).clicked() {
         ui.close();
         toggle_settings(window.machine);

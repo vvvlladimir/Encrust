@@ -154,3 +154,24 @@ pub fn issue_row(
     );
     response.on_hover_cursor(egui::CursorIcon::PointingHand)
 }
+
+/// A name over the line that says more about it, drawn from `left_center`: a machine over
+/// its maker and the file it is sliced into.
+pub fn two_lines(painter: &egui::Painter, left_center: egui::Pos2, title: &str, detail: &str) {
+    let colors = theme::colors();
+    let (title_at, detail_at) = (left_center - vec2(0.0, 8.0), left_center + vec2(0.0, 9.0));
+    painter.text(
+        title_at,
+        Align2::LEFT_CENTER,
+        title,
+        theme::label(),
+        colors.text_high,
+    );
+    painter.text(
+        detail_at,
+        Align2::LEFT_CENTER,
+        detail,
+        theme::small(),
+        colors.text_low,
+    );
+}

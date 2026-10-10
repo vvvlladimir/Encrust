@@ -10,6 +10,7 @@ mod shortcuts_sheet;
 mod slice;
 mod stage;
 mod stage_notice;
+mod start;
 mod support_diagram;
 mod support_fields;
 mod title_bar;
@@ -21,7 +22,8 @@ mod viewport_panel;
 pub use scene_panel::duplicate_selection;
 pub use section::animate as animate_preview;
 pub use slice::slice_this_plate;
-pub use title_bar::{layers_and_exposure, toggle_settings};
+pub use start::still_starting;
+pub use title_bar::{layers_and_exposure, open_machines, toggle_settings};
 pub use viewport_panel::{frame_view, set_orthographic};
 
 use crate::state::{Doc, Machine, Tools, View};
@@ -67,8 +69,7 @@ impl Window<'_> {
         }
         report::ui(ui.ctx(), &self.doc.scene, self.tools, self.machine);
         support_diagram::ui(ui.ctx(), self);
-        settings::calculators(ui.ctx(), self.machine);
-        settings::confirm(ui.ctx(), self);
+        settings::machines::window(ui.ctx(), self);
 
         // The Settings screen takes the whole window under the bar: a profile is edited
         // instead of the plate, not beside it.
@@ -76,6 +77,12 @@ impl Window<'_> {
             egui::CentralPanel::default()
                 .frame(egui::Frame::new())
                 .show(ui, |ui| settings::ui(ui, self));
+            return;
+        }
+        if still_starting(self) {
+            egui::CentralPanel::default()
+                .frame(egui::Frame::new().fill(theme::colors().base))
+                .show(ui, |ui| start::ui(ui, self));
             return;
         }
 

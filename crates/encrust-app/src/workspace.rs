@@ -138,6 +138,8 @@ pub struct ViewOptions {
     pub plate_panel: bool,
     /// Whether the sheet of keys is up over the window.
     pub sheet: bool,
+    /// Whether the window has left the start page, which it does once for good.
+    pub started: bool,
     /// Whether Preview gives the whole stage to the layer mask rather than half of it.
     pub mask_only: bool,
     /// Whether Preview's column shows the issues found in the stack instead of the layer.
@@ -155,6 +157,7 @@ impl Default for ViewOptions {
             xray: false,
             plate_panel: true,
             sheet: false,
+            started: false,
             mask_only: false,
             issues: false,
             plate_w: theme::SCENE_W,

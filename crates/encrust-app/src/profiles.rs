@@ -28,17 +28,13 @@ pub fn printer_menu(ui: &mut egui::Ui, window: &mut Window) {
         }
     }
     if !listed {
-        ui.label("No machine yet. Add one in Settings.");
+        ui.label("No machine yet. Add one in Machine and resin.");
     }
 
     ui.separator();
-    if ui.button("Printer settings...").clicked() {
+    if ui.button("Machine and resin...").clicked() {
         ui.close();
-        let printer = window.machine.slicing.printer_id.clone();
-        window
-            .machine
-            .settings
-            .open(&window.machine.slicing.catalogue, printer.as_deref(), None);
+        crate::panels::open_machines(window.machine);
         return;
     }
     if let Some((id, profile)) = picked {
@@ -73,16 +69,16 @@ pub fn resin_menu(ui: &mut egui::Ui, machine: &mut Machine) {
         }
     }
     if !listed {
-        ui.label("No resins on this printer yet. Add them in Settings.");
+        ui.label("No resins on this printer yet. Add them in Machine and resin.");
     }
 
     ui.separator();
-    if ui.button("Resin settings...").clicked() {
+    if ui.button("Edit this resin...").clicked() {
         ui.close();
         let (printer, resin) = (slicing.printer_id.clone(), slicing.resin_id.clone());
         machine
             .settings
-            .open(&slicing.catalogue, printer.as_deref(), resin.as_deref());
+            .open_machines(&slicing.catalogue, printer.as_deref(), resin.as_deref());
         return;
     }
     if let Some((id, resin)) = picked {

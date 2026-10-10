@@ -13,9 +13,7 @@ use crate::slicing::Rescaled;
 /// A page of the Settings screen.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum Section {
-    /// The printers, each with the resins set up on it.
     #[default]
-    Printers,
     Supports,
     /// Whether to look for a new release, and the one found.
     Updates,
@@ -23,22 +21,45 @@ pub enum Section {
 
 impl Section {
     #[cfg(not(target_arch = "wasm32"))]
-    pub const ALL: [Self; 3] = [Self::Printers, Self::Supports, Self::Updates];
+    pub const ALL: [Self; 2] = [Self::Supports, Self::Updates];
 
     /// A page loads the latest release every time it is opened, so it has nothing to update.
     #[cfg(target_arch = "wasm32")]
-    pub const ALL: [Self; 2] = [Self::Printers, Self::Supports];
+    pub const ALL: [Self; 1] = [Self::Supports];
 
     pub fn label(self) -> &'static str {
         match self {
-            Self::Printers => "Printers",
             Self::Supports => "Supports",
             Self::Updates => "Updates",
         }
     }
 }
 
-/// What the printer page has open: a printer, or one of the resins set up on it.
+/// A tab of the Machine and resin window, over the machine picked down its left.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum Tab {
+    /// The resins set up on the machine, as a table.
+    #[default]
+    Resins,
+    /// The machine's own profile: panel, volume, output and firmware.
+    Machine,
+    /// What the machine takes a file over, and which one on the network it is.
+    Network,
+}
+
+impl Tab {
+    pub const ALL: [Self; 3] = [Self::Resins, Self::Machine, Self::Network];
+
+    pub fn label(self) -> &'static str {
+        match self {
+            Self::Resins => "Resins",
+            Self::Machine => "Machine",
+            Self::Network => "Network",
+        }
+    }
+}
+
+/// What the Machine and resin window has open: a printer, or one of the resins set up on it.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Node {
     Printer(String),
@@ -238,35 +259,45 @@ pub struct Library {
     pub search: String,
 }
 
-/// What the Settings screen is showing.
+/// What the Settings screen and the Machine and resin window are showing.
 #[derive(Default)]
 pub struct Settings {
+    /// Whether the Settings screen stands in the plate's place.
     pub open: bool,
     pub section: Section,
+    /// Whether the Machine and resin window is over the window.
+    pub machines: bool,
+    pub tab: Tab,
+    /// The resin type the table is narrowed to, by the name on the bottle.
+    pub kind: Option<String>,
+    /// Whether the resin picked in the table is open in its form instead of the table.
+    pub editing_resin: bool,
     pub node: Option<Node>,
     /// What the machine list is filtered by, as it is being typed.
     pub search: String,
-    /// The machine library, while it stands in the form's place.
+    /// The machine library, while it stands in the tabs' place.
     pub library: Option<Library>,
     pub printer: Option<Draft<PrinterProfile>>,
     pub resin: Option<ResinDraft>,
     pub support: Option<Draft<SupportProfile>>,
     pub calculators: Calculators,
-    /// The deletion the screen is waiting for an answer on.
+    /// The deletion the window is waiting for an answer on.
     pub confirm: Option<Deleting>,
 }
 
 impl Settings {
-    /// Opens the screen on what the plate is using: its resin when that is set up on its
-    /// printer, the printer otherwise.
-    pub fn open(
+    /// Opens the Machine and resin window on what the plate is using: its resin, open in
+    /// its form, when that is set up on its printer, the printer's resins otherwise.
+    pub fn open_machines(
         &mut self,
         catalogue: &Catalogue,
         printer_id: Option<&str>,
         resin_id: Option<&str>,
     ) {
-        self.open = true;
-        self.section = Section::Printers;
+        self.machines = true;
+        self.tab = Tab::Resins;
+        self.kind = None;
+        self.library = None;
         let printer = printer_id
             .filter(|id| catalogue.printer(id).is_ok())
             .map(str::to_owned)
@@ -276,7 +307,7 @@ impl Settings {
                     .map(|entry| entry.id.clone())
             });
         let Some(printer) = printer else {
-            // Nothing installed yet, so the screen opens on the only thing there is to do.
+            // Nothing installed yet, so the window opens on the only thing there is to do.
             self.library = Some(Library::default());
             return;
         };
@@ -285,6 +316,7 @@ impl Settings {
                 .resin(id)
                 .is_ok_and(|entry| entry.profile.is_tuned_for(&printer))
         });
+        self.editing_resin = resin.is_some();
         let node = match resin {
             Some(resin) => Node::Resin {
                 printer,
@@ -293,6 +325,15 @@ impl Settings {
             None => Node::Printer(printer),
         };
         self.pick(catalogue, node);
+    }
+
+    /// Closes the Machine and resin window, and the question and calculator over it.
+    pub fn close_machines(&mut self) {
+        self.machines = false;
+        self.editing_resin = false;
+        self.library = None;
+        self.confirm = None;
+        self.calculators.open = None;
     }
 
     /// Opens the screen on the support profiles, at the one `profile` was taken from.
@@ -318,6 +359,12 @@ impl Settings {
 
     /// Opens a printer or one of its resins in the form.
     pub fn pick(&mut self, catalogue: &Catalogue, node: Node) {
+        if self.node.as_ref().map(Node::printer) != Some(node.printer()) {
+            self.kind = None;
+        }
+        if matches!(node, Node::Printer(_)) {
+            self.editing_resin = false;
+        }
         self.printer = catalogue.printer(node.printer()).ok().map(|entry| {
             Draft::over_shipped(
                 entry.id.clone(),
@@ -333,6 +380,15 @@ impl Settings {
         };
         self.node = Some(node);
     }
+}
+
+/// How many machines the library holds, and by how many makers.
+pub fn library_size(catalogue: &Catalogue) -> (usize, usize) {
+    let makers: std::collections::BTreeSet<&str> = catalogue
+        .printers()
+        .map(|entry| entry.profile.manufacturer.as_str())
+        .collect();
+    (catalogue.printers().count(), makers.len())
 }
 
 /// The resins set up on `printer`, in the catalogue's order.
@@ -784,10 +840,10 @@ mod tests {
     }
 
     #[test]
-    fn the_screen_opens_on_the_resin_the_plate_uses() {
+    fn the_window_opens_on_the_resin_the_plate_uses() {
         let catalogue = with_grey("open");
         let mut settings = Settings::default();
-        settings.open(&catalogue, Some(MARS), Some("standard-grey"));
+        settings.open_machines(&catalogue, Some(MARS), Some("standard-grey"));
         let resin = settings.resin.as_ref().expect("a resin is open");
         assert_eq!(resin.draft.id, "standard-grey");
         assert!(
@@ -800,7 +856,7 @@ mod tests {
     fn an_edit_for_one_printer_leaves_every_other_alone() {
         let catalogue = with_grey("edit");
         let mut settings = Settings::default();
-        settings.open(&catalogue, Some(MARS), Some("standard-grey"));
+        settings.open_machines(&catalogue, Some(MARS), Some("standard-grey"));
         let resin = settings.resin.as_mut().expect("open");
         let saturn_before = resin.base.for_printer(SATURN).exposure_s;
 

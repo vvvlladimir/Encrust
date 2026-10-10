@@ -4,7 +4,9 @@
 use printer_profiles::{Compensation, layer_time_between, shrink_pct_between};
 
 use crate::settings::{Calculator, Calculators};
-use crate::ui::{card, describe, hint, inline_button, number_row, secondary_button, theme};
+use crate::ui::{
+    card, describe, hint, icon, icon_button, inline_button, number_row, secondary_button, theme,
+};
 
 /// Millimetres, percent and seconds per point of drag on the fields here.
 const PCT_STEP: f64 = 0.01;
@@ -128,25 +130,33 @@ pub(super) fn calculator(
     let Some(which) = calculators.open else {
         return false;
     };
-    let mut open = true;
-    let mut taken = false;
+    let (mut taken, mut closed) = (false, false);
     let title = match which {
         Calculator::Shrinkage => "Shrinkage from a measured part",
         Calculator::LayerTime => "Unaccounted time from a print",
     };
-    egui::Window::new(title)
-        .collapsible(false)
-        .resizable(false)
-        .open(&mut open)
+    // A modal of its own, so it stands over the Machine and resin window.
+    let modal = egui::Modal::new(egui::Id::new("compensation-calculator"))
         .frame(card().inner_margin(theme::PANEL_MARGIN))
         .show(ctx, |ui| {
             ui.set_width(380.0);
+            ui.horizontal(|ui| {
+                ui.label(
+                    egui::RichText::new(title)
+                        .font(theme::dialog_title())
+                        .color(theme::colors().text_high),
+                );
+                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                    closed = icon_button(ui, icon::CANCEL, "Close  Esc").clicked();
+                });
+            });
+            ui.add_space(6.0);
             taken = match which {
                 Calculator::Shrinkage => shrinkage(ui, calculators, compensation),
                 Calculator::LayerTime => layer_time(ui, calculators, compensation),
             };
         });
-    if !open || taken {
+    if modal.should_close() || closed || taken {
         calculators.open = None;
     }
     taken

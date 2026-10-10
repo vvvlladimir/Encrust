@@ -3,7 +3,7 @@
 use egui::{RichText, Ui};
 
 use crate::panels::settings::form_card;
-use crate::ui::{hint, icon, inline_button, primary_button, switch, theme};
+use crate::ui::{ago, hint, icon, inline_button, primary_button, switch, theme};
 use crate::updates::{Note, Offer, RELEASES, Stage, Updates, now_s};
 
 /// How many lines of the release notes the page shows; the rest is on the release page. A
@@ -152,36 +152,4 @@ fn failure(ui: &mut Ui, message: &str) {
             .font(theme::small())
             .color(theme::colors().danger),
     );
-}
-
-/// When the feed was last read, as a person says it.
-fn ago(checked_at_s: Option<u64>, now_s: u64) -> String {
-    let Some(at) = checked_at_s else {
-        return "never".to_owned();
-    };
-    match now_s.saturating_sub(at) {
-        0..60 => "just now".to_owned(),
-        seconds @ 60..3_600 => format!("{} min ago", seconds / 60),
-        seconds @ 3_600..86_400 => format!("{} h ago", seconds / 3_600),
-        seconds => match seconds / 86_400 {
-            1 => "yesterday".to_owned(),
-            days => format!("{days} days ago"),
-        },
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn the_last_look_reads_as_a_person_says_it() {
-        let now = 10_000_000;
-        assert_eq!(ago(None, now), "never");
-        assert_eq!(ago(Some(now - 5), now), "just now");
-        assert_eq!(ago(Some(now - 600), now), "10 min ago");
-        assert_eq!(ago(Some(now - 7_200), now), "2 h ago");
-        assert_eq!(ago(Some(now - 90_000), now), "yesterday");
-        assert_eq!(ago(Some(now - 3 * 86_400), now), "3 days ago");
-    }
 }

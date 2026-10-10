@@ -1,3 +1,4 @@
+use std::path::PathBuf;
 use std::sync::Arc;
 
 use anyhow::{Context, Result};
@@ -23,6 +24,8 @@ use crate::status::Status;
 #[derive(Debug, Default)]
 pub struct Imports {
     jobs: Vec<ImportJob>,
+    /// The files handed over since the window last took them, for the recent list.
+    opened: Vec<PathBuf>,
 }
 
 impl Imports {
@@ -36,7 +39,15 @@ impl Imports {
     /// Starts opening a mesh. The one way a model reaches the plate.
     pub fn open(&mut self, file: Handed, plate: &BuildPlate, status: &mut Status) {
         *status = Status::Info(format!("Opening {}", file.path().display()));
+        if let Handed::Path(path) = &file {
+            self.opened.push(path.clone());
+        }
         self.jobs.push(ImportJob::spawn(file, plate.clone()));
+    }
+
+    /// The files handed over since the last call.
+    pub fn take_opened(&mut self) -> Vec<PathBuf> {
+        std::mem::take(&mut self.opened)
     }
 
     pub fn is_busy(&self) -> bool {

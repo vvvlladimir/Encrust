@@ -197,6 +197,64 @@ pub fn inline_button(
     filled_button(ui, glyph, text, size, &skin, enabled)
 }
 
+/// A button with no surface until it is hovered, for the lesser actions of a row: as wide
+/// as what it says, and `danger` when what it does cannot be taken back.
+pub fn quiet_button(ui: &mut Ui, glyph: &str, text: &str, danger: bool, enabled: bool) -> Response {
+    let colors = theme::colors();
+    let text_w = ui
+        .painter()
+        .layout_no_wrap(text.to_owned(), theme::label(), colors.text_high)
+        .size()
+        .x;
+    let glyph_w = if glyph.is_empty() { 0.0 } else { 22.0 };
+    let size = vec2(text_w + glyph_w + 24.0, theme::BUTTON_H);
+    let (foreground, hovered) = match (danger, enabled) {
+        (_, false) => (colors.text_low, Color32::TRANSPARENT),
+        (true, true) => (colors.danger, colors.danger_wash),
+        (false, true) => (colors.text_mid, colors.hover),
+    };
+    let skin = Skin {
+        fill: Color32::TRANSPARENT,
+        foreground,
+        border: None,
+        hovered,
+        pressed: if enabled {
+            colors.active
+        } else {
+            Color32::TRANSPARENT
+        },
+    };
+    filled_button(ui, glyph, text, size, &skin, enabled)
+}
+
+/// One of a row of filters: bordered, and washed in the accent while it is the one on.
+pub fn filter_chip(ui: &mut Ui, text: &str, on: bool) -> Response {
+    let colors = theme::colors();
+    let text_w = ui
+        .painter()
+        .layout_no_wrap(text.to_owned(), theme::label(), colors.text_high)
+        .size()
+        .x;
+    let size = vec2(text_w + 20.0, theme::FIELD_H);
+    let skin = match on {
+        true => Skin {
+            fill: colors.accent_wash,
+            foreground: colors.accent_soft,
+            border: Some(colors.accent_deep),
+            hovered: colors.accent_wash,
+            pressed: colors.accent_wash,
+        },
+        false => Skin {
+            fill: Color32::TRANSPARENT,
+            foreground: colors.text_mid,
+            border: Some(colors.line),
+            hovered: colors.hover,
+            pressed: colors.active,
+        },
+    };
+    filled_button(ui, "", text, size, &skin, true)
+}
+
 /// A button as tall as a field and `width` wide, to stand in a row of fields.
 pub fn compact_button(ui: &mut Ui, text: &str, width: f32) -> Response {
     filled_button(

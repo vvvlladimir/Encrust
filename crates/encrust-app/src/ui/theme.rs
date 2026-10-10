@@ -329,6 +329,18 @@ pub const PRIMARY_H: f32 = 40.0;
 pub const BUTTON_H: f32 = 32.0;
 /// Height of a running job's progress bar.
 pub const BAR_H: f32 = 6.0;
+/// A form block: its title's column, the most its fields take, and the room between them.
+pub const BLOCK_TITLE_W: f32 = 180.0;
+pub const BLOCK_FIELDS_W: f32 = 460.0;
+pub const BLOCK_GAP: f32 = 24.0;
+/// A window over the plate: its title row, the most it takes of the screen, and the list
+/// down its left.
+pub const DIALOG_HEAD_H: f32 = 48.0;
+pub const DIALOG_SHARE: f32 = 0.92;
+pub const DIALOG_LIST_W: f32 = 260.0;
+/// A row of a table, and of a list whose entries carry a second line.
+pub const TABLE_ROW_H: f32 = 36.0;
+pub const TWO_LINE_ROW_H: f32 = 48.0;
 
 /// Inner margin of an inspector block, a floating card and a card's header row.
 pub const PANEL_MARGIN: Margin = Margin::same(12);
@@ -374,6 +386,26 @@ pub fn unit() -> FontId {
 /// A section heading in the inspector or on a floating card.
 pub fn section() -> FontId {
     FontId::new(12.0, FontFamily::Name(SEMIBOLD.into()))
+}
+
+/// The title of a form block, in the column beside its fields.
+pub fn block_title() -> FontId {
+    FontId::new(13.0, FontFamily::Name(MEDIUM.into()))
+}
+
+/// The name of a window over the plate, and of a page of the Settings screen.
+pub fn dialog_title() -> FontId {
+    FontId::new(15.0, FontFamily::Name(SEMIBOLD.into()))
+}
+
+/// What a page or a window is about, set over everything on it.
+pub fn page_title(size_pt: f32) -> FontId {
+    FontId::new(size_pt, FontFamily::Name(SEMIBOLD.into()))
+}
+
+/// The line under a page's title that says what the page is for.
+pub fn lede() -> FontId {
+    FontId::proportional(14.0)
 }
 
 /// The open tool's name, at the head of the inspector.

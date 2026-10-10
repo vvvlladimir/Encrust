@@ -111,29 +111,31 @@ the window had before, which sets no id and therefore tunes nothing.
 
 ## Editing in the window
 
-The gear at the foot of the tool rail opens the Settings screen, which replaces the
-plate; Esc leaves it. Its profile pages, Printers and Supports, are each a list beside a form, and every
-edit is written to the user's directory as soon as the value settles — no Save. ADR 0120.
-The third page, Updates, holds no profile: see `docs/design/updates.md`.
+The machines and their resins are edited in the **Machine and resin** window, a modal over
+the plate opened from the top bar's chip, the File menu, the Settings screen and the start
+page; Esc closes it. The support profiles are edited on the Settings screen, which the gear
+at the foot of the rail opens in the plate's place, a list beside a form. Either way every
+edit is written to the user's directory as soon as the value settles — no Save. ADR 0120,
+0220. The screen's other page, Updates, holds no profile: see `docs/design/updates.md`.
 
-- **Printers** lists the machines the user has installed, by brand, over a search line.
-  The form carries the panel, the volume, the container
-  `output` names, how the machine is reached, and the firmware table, and says when it
-  differs from the machine of the same id this build ships. The one open shows
-  the resins set up on it, each with
-  buttons to duplicate it or take it off, and **Add resin**: a new one, or one from the
-  pool of every resin some printer has, which opens on `starting_point`.
-- The `+` over the list opens the **library** in the form's place: a search over every
+- The window lists the machines the user has installed down its left, over a search line.
+  The one picked has three tabs. **Resins** is a table of the resins set up on it, their
+  layer and exposures as this machine has them, narrowed by type; a double click or
+  **Edit** opens a resin's form in the table's place. **Machine** carries the panel, the
+  volume, the container `output` names and the firmware table, and says when the profile
+  differs from the machine of the same id this build ships. **Network** says how the
+  machine is reached. **Use this resin** and **Use this machine** put them under the plate.
+- **Add a machine** under the list opens the **library** in the tabs' place: a search over every
   machine there is, a card per brand, and that brand's models behind it. Picking one
   copies the shipped profile into the user's directory and closes the library onto it;
   **Custom printer** does the same with an empty profile. Removing a machine deletes that
   copy — asked about first — and a shipped one is back in the library to install again.
   The window moves to the machine under it in the list, or to none when it was the last.
-- **Add resin** offers every resin on another printer, and **New resin** makes one; a
+- **Add a resin** offers every resin on another printer, and **New resin** makes one; a
   printer with none and an empty pool offers that one button instead of the menu. A resin
   taken off a printer waits in the pool, and the pool is where it is deleted for good —
   except one nobody typed into, which goes with the printer it was made on (ADR 0197).
-  Every deletion is asked about first, because the only one this screen takes back is a
+  Every deletion is asked about first, because the only one the window takes back is a
   resin added again from the pool (ADR 0196).
 - A resin's form edits it **on that printer**: numbers go into its `[printers.<id>]`
   table and make it `last_printer`; name, type, colour, density and price go on the resin.

@@ -364,3 +364,36 @@ pub fn hairline(ui: &mut Ui) {
     ui.painter()
         .rect_filled(rect, 0.0, theme::colors().hairline);
 }
+
+/// The title row of a window over the plate: its glyph, its name, and the way out.
+/// Answers whether the way out was taken.
+pub fn dialog_head(ui: &mut Ui, glyph: &str, title: &str) -> bool {
+    let colors = theme::colors();
+    ui.horizontal(|ui| {
+        ui.label(
+            RichText::new(glyph)
+                .font(theme::icon(15.0))
+                .color(colors.text_low),
+        );
+        ui.add_space(2.0);
+        ui.label(
+            RichText::new(title)
+                .font(theme::dialog_title())
+                .color(colors.text_high),
+        );
+        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+            super::icon_button(ui, crate::ui::icon::CANCEL, "Close  Esc").clicked()
+        })
+        .inner
+    })
+    .inner
+}
+
+/// The frame of a window over the plate: the panel's fill, a hairline edge, the shadow.
+pub fn dialog_frame() -> Frame {
+    Frame::new()
+        .fill(theme::colors().panel)
+        .stroke(egui::Stroke::new(1.0, theme::colors().hairline))
+        .corner_radius(theme::R_PANEL)
+        .shadow(theme::shadow())
+}

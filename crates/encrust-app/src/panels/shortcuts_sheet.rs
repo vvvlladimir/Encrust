@@ -3,7 +3,7 @@
 use egui::{Align, Align2, Layout, RichText, Sense, StrokeKind, vec2};
 
 use crate::shortcuts::{BINDINGS, GESTURES, Group, chord_text};
-use crate::ui::{hairline, icon, icon_button, theme};
+use crate::ui::{dialog_frame, dialog_head, hairline, icon, theme};
 
 /// The groups down each column, split so the two columns come out about even.
 const LEFT: [Group; 2] = [Group::Tools, Group::Plate];
@@ -20,13 +20,7 @@ const CAP_MIN_W: f32 = 22.0;
 /// Shows the sheet over the window, and closes it on Escape or a click outside.
 pub fn ui(ctx: &egui::Context, open: &mut bool) {
     let sheet = egui::Modal::new(egui::Id::new("shortcuts"))
-        .frame(
-            egui::Frame::new()
-                .fill(theme::colors().panel)
-                .corner_radius(theme::R_SURFACE)
-                .inner_margin(egui::Margin::same(18))
-                .shadow(theme::shadow()),
-        )
+        .frame(dialog_frame().inner_margin(egui::Margin::same(18)))
         .show(ctx, |ui| {
             ui.set_width(COLUMN_W * 2.0 + COLUMN_GAP);
             header(ui, open);
@@ -54,18 +48,9 @@ pub fn ui(ctx: &egui::Context, open: &mut bool) {
 }
 
 fn header(ui: &mut egui::Ui, open: &mut bool) {
-    ui.horizontal(|ui| {
-        ui.label(
-            RichText::new("Keyboard shortcuts")
-                .font(theme::body())
-                .color(theme::colors().text_high),
-        );
-        ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
-            if icon_button(ui, icon::CANCEL, "Close").clicked() {
-                *open = false;
-            }
-        });
-    });
+    if dialog_head(ui, icon::KEYBOARD, "Keyboard shortcuts") {
+        *open = false;
+    }
     ui.add_space(8.0);
     hairline(ui);
 }
@@ -111,6 +96,11 @@ fn row(ui: &mut egui::Ui, label: &str, caps: &[String]) {
     for cap in caps.iter().rev() {
         right = keycap(ui, cap, right, rect.center().y) - 5.0;
     }
+    ui.painter().hline(
+        rect.x_range(),
+        rect.bottom() - 0.5,
+        egui::Stroke::new(1.0, colors.hairline),
+    );
 }
 
 /// One keycap, drawn from its right edge leftwards. Returns the edge it ended on, so the

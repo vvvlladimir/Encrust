@@ -15,6 +15,7 @@ use net_sdcp::Printer;
 use crate::network::{Destination, Network, Prusa};
 use crate::panels::Window;
 use crate::profiles;
+use crate::recent::Recent;
 use crate::slicing::Slicing;
 use crate::state::Tools;
 use crate::tool_settings::ToolSettings;
@@ -51,6 +52,9 @@ pub struct Preferences {
     /// `docs/decisions/0192`.
     #[serde(default)]
     tools: Option<ToolSettings>,
+    /// The files opened lately, newest first.
+    #[serde(default)]
+    recent: Recent,
 }
 
 impl Preferences {
@@ -69,6 +73,15 @@ impl Preferences {
                 .collect(),
             updates: updates.clone(),
             tools: Some(ToolSettings::of(tools, slicing)),
+            recent: Recent::default(),
+        }
+    }
+
+    /// The same, with the files opened lately.
+    pub fn with_recent(self, recent: &Recent) -> Self {
+        Self {
+            recent: recent.clone(),
+            ..self
         }
     }
 
@@ -76,6 +89,7 @@ impl Preferences {
     /// dropped rather than reported: the user did not ask for it this run.
     pub fn apply(&self, window: &mut Window) {
         window.machine.updates.prefs.clone_from(&self.updates);
+        window.machine.recent.clone_from(&self.recent);
         // Before the printer, so that applying it points the window at the machine this
         // profile was last sent to.
         window.machine.network.manual.clone_from(&self.addresses);

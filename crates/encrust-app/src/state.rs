@@ -10,6 +10,7 @@ use crate::orient::OrientTool;
 use crate::plate::BuildPlate;
 use crate::preview::Preview;
 use crate::project::Opened;
+use crate::recent::Recent;
 use crate::relief::ReliefTool;
 use crate::repair::Repairs;
 use crate::report::Report;
@@ -84,4 +85,6 @@ pub struct Machine {
     pub updates: Updates,
     /// The bug report being written, while the sheet for it is open.
     pub report: Report,
+    /// The files opened lately, for the start page.
+    pub recent: Recent,
 }

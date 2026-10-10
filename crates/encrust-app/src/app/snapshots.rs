@@ -101,8 +101,22 @@ fn picture(name: &str, app: SlicerApp) -> SnapshotResults {
 }
 
 #[test]
+fn the_start_page() {
+    let mut app = app(false);
+    let yesterday = crate::updates::now_s() - 90_000;
+    for name in ["Hex tray.stl", "Dragon bust.encrust", "Bench.encrust"] {
+        app.machine
+            .recent
+            .note(&PathBuf::from("/plates").join(name), yesterday);
+    }
+    picture("start", app);
+}
+
+#[test]
 fn an_empty_plate() {
-    picture("empty_plate", app(false));
+    let mut app = app(false);
+    app.view.options.started = true;
+    picture("empty_plate", app);
 }
 
 #[test]
@@ -123,6 +137,7 @@ fn every_tool_on_a_picked_model() {
 #[test]
 fn the_preview_of_an_empty_plate() {
     let mut app = app(false);
+    app.view.options.started = true;
     app.mode = Mode::Preview;
     picture("preview", app);
 }
@@ -130,13 +145,82 @@ fn the_preview_of_an_empty_plate() {
 #[test]
 fn the_settings_screen() {
     let mut app = app(false);
-    app.machine.settings.open = true;
+    crate::panels::toggle_settings(&mut app.machine);
     picture("settings", app);
 }
 
 #[test]
 fn the_sheet_of_keys() {
     let mut app = app(false);
+    app.view.options.started = true;
     app.view.options.sheet = true;
     picture("sheet", app);
+}
+
+/// The pictured machine and two resins on it, in a directory of the test's own, so the
+/// pictures never read or write the user's profiles.
+fn with_machines(mut app: SlicerApp, name: &str) -> SlicerApp {
+    use printer_profiles::{Catalogue, MaterialProfile, PrinterTuning, ResinDetails};
+
+    let dir = std::env::temp_dir().join(format!("encrust-snapshots-{name}-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    let mut catalogue = Catalogue::with_root(&dir).expect("a missing directory reads as empty");
+    let printer = catalogue
+        .printer(PRINTER)
+        .expect("the pictured printer ships")
+        .profile
+        .clone();
+    catalogue
+        .save_printer(PRINTER, &printer)
+        .expect("the directory is writable");
+    let resins = [
+        (
+            "standard-grey",
+            "Standard grey",
+            "Standard",
+            [0x8a, 0x8f, 0x96],
+            2.2,
+        ),
+        (
+            "abs-like-tough",
+            "ABS-like tough",
+            "ABS-like",
+            [0x5d, 0x6f, 0x7e],
+            2.4,
+        ),
+    ];
+    for (id, resin_name, kind, color, exposure_s) in resins {
+        let mut resin = MaterialProfile {
+            name: resin_name.to_owned(),
+            details: ResinDetails {
+                kind: kind.to_owned(),
+                color,
+                ..ResinDetails::default()
+            },
+            ..MaterialProfile::default()
+        };
+        let tuning = PrinterTuning {
+            exposure_s: Some(exposure_s),
+            ..PrinterTuning::default()
+        };
+        resin.printers.insert(PRINTER.to_owned(), tuning);
+        catalogue
+            .save_resin(id, &resin)
+            .expect("the directory is writable");
+    }
+    app.machine.slicing.catalogue = catalogue;
+    crate::panels::open_machines(&mut app.machine);
+    app
+}
+
+#[test]
+fn the_machine_and_resin_window() {
+    let mut results = SnapshotResults::new();
+    results.extend(picture(
+        "machines_resins",
+        with_machines(app(false), "resins"),
+    ));
+    let mut machine = with_machines(app(false), "machine");
+    machine.machine.settings.tab = crate::settings::Tab::Machine;
+    results.extend(picture("machines_machine", machine));
 }

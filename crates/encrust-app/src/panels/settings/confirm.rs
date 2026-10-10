@@ -27,18 +27,18 @@ pub(super) fn ask(
     deleting: &Deleting,
 ) -> Option<Answer> {
     let question = question(catalogue, deleting);
-    let mut open = true;
     let mut answer = None;
-    egui::Window::new(question.title)
-        .collapsible(false)
-        .resizable(false)
-        // A question about something that cannot be undone stands in the middle of the
-        // window, not wherever egui last put a window of that name.
-        .anchor(egui::Align2::CENTER_CENTER, egui::Vec2::ZERO)
+    // A modal of its own, so it stands over the window it was asked from.
+    let modal = egui::Modal::new(egui::Id::new("confirm-deletion"))
         .frame(card().inner_margin(theme::PANEL_MARGIN))
-        .open(&mut open)
         .show(ctx, |ui| {
             ui.set_width(380.0);
+            ui.label(
+                egui::RichText::new(question.title)
+                    .font(theme::dialog_title())
+                    .color(theme::colors().text_high),
+            );
+            ui.add_space(6.0);
             ui.label(egui::RichText::new(&question.what).font(theme::label()));
             if let Some(cost) = &question.cost {
                 describe(ui, cost);
@@ -56,9 +56,9 @@ pub(super) fn ask(
                 }
             });
         });
-    match open {
-        true => answer,
-        false => Some(Answer::Cancelled),
+    match modal.should_close() {
+        true => Some(Answer::Cancelled),
+        false => answer,
     }
 }
 

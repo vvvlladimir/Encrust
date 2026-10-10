@@ -22,6 +22,7 @@ mod prefs;
 mod preview;
 mod profiles;
 mod project;
+mod recent;
 mod relief;
 mod render;
 mod repair;

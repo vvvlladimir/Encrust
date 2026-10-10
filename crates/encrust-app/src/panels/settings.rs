@@ -1,16 +1,19 @@
-//! The Settings screen: the profiles the plate prints with, opened for editing.
+//! The Settings screen: the support profiles and the updates, opened for editing.
 //!
-//! The screen replaces the plate rather than floating over it, because editing a printer
-//! is not something done while dragging a model. Every edit is written as it is made.
-//! See `docs/design/profiles.md`.
+//! The screen replaces the plate rather than floating over it, because editing a profile
+//! is not something done while dragging a model. Every edit is written as it is made. The
+//! machines and their resins are the Machine and resin window instead (ADR 0220). See
+//! `docs/design/profiles.md`.
 
 mod compensation;
 mod confirm;
-mod machines;
+pub(super) mod machines;
 mod printer;
 mod resin;
 mod supports;
 mod updates;
+
+use egui::vec2;
 
 use crate::panels::Window;
 use crate::settings::Section;
@@ -19,17 +22,16 @@ use crate::status::Status;
 use crate::ui::{hairline, icon, icon_button, theme};
 
 /// How wide the list of sections down the left is, and the list of profiles beside it.
-const SECTIONS_W: f32 = 196.0;
+const SECTIONS_W: f32 = 230.0;
 pub(super) const LIST_W: f32 = 290.0;
 
-/// How wide the form grows: one column of fields reads best at a form's width, and the
+/// How wide the form grows: one column of blocks reads best at a form's width, and the
 /// support form sets two of them side by side.
-const FORM_W: f32 = 680.0;
+const FORM_W: f32 = theme::BLOCK_TITLE_W + theme::BLOCK_GAP + theme::BLOCK_FIELDS_W;
 const WIDE_FORM_W: f32 = 980.0;
 
-/// Room between the cards of a page, and inside each.
-const CARD_GAP: f32 = 12.0;
-const CARD_MARGIN: egui::Margin = egui::Margin::symmetric(16, 14);
+/// Room above and below the fields of a block.
+const BLOCK_PAD: f32 = 18.0;
 
 pub fn ui(ui: &mut egui::Ui, window: &mut Window) {
     egui::Panel::left("settings-sections")
@@ -38,7 +40,7 @@ pub fn ui(ui: &mut egui::Ui, window: &mut Window) {
         .frame(
             egui::Frame::new()
                 .fill(theme::colors().base)
-                .inner_margin(egui::Margin::symmetric(10, 14)),
+                .inner_margin(egui::Margin::symmetric(12, 14)),
         )
         .show(ui, |ui| sections(ui, window));
 
@@ -46,12 +48,12 @@ pub fn ui(ui: &mut egui::Ui, window: &mut Window) {
         .frame(
             egui::Frame::new()
                 .fill(theme::colors().panel)
-                .inner_margin(egui::Margin::symmetric(20, 14)),
+                .inner_margin(egui::Margin::symmetric(32, 18)),
         )
         .show(ui, |ui| title(ui, window.machine));
 
     // Updates is one page with nothing to pick from, so it has no list.
-    if window.machine.settings.section != Section::Updates {
+    if window.machine.settings.section == Section::Supports {
         egui::Panel::left("settings-list")
             .exact_size(LIST_W)
             .resizable(false)
@@ -63,11 +65,7 @@ pub fn ui(ui: &mut egui::Ui, window: &mut Window) {
             .show(ui, |ui| {
                 egui::ScrollArea::vertical()
                     .auto_shrink([false, false])
-                    .show(ui, |ui| match window.machine.settings.section {
-                        Section::Printers => machines::list(ui, window),
-                        Section::Supports => supports::list(ui, window.machine),
-                        Section::Updates => {}
-                    });
+                    .show(ui, |ui| supports::list(ui, window.machine));
             });
     }
 
@@ -76,15 +74,9 @@ pub fn ui(ui: &mut egui::Ui, window: &mut Window) {
         .show(ui, |ui| form(ui, window));
 }
 
-/// The pages of the screen, and the sheet of keys under them.
+/// The pages of the screen, and the window and the sheet the rest of the setup lives in.
 fn sections(ui: &mut egui::Ui, window: &mut Window) {
     ui.spacing_mut().item_spacing.y = 2.0;
-    ui.label(
-        egui::RichText::new("Settings")
-            .font(theme::section())
-            .color(theme::colors().text_low),
-    );
-    ui.add_space(8.0);
     for section in Section::ALL {
         let active = window.machine.settings.section == section;
         if nav_row(ui, section_icon(section), section.label(), active).clicked() {
@@ -94,6 +86,9 @@ fn sections(ui: &mut egui::Ui, window: &mut Window) {
     ui.add_space(10.0);
     hairline(ui);
     ui.add_space(10.0);
+    if nav_row(ui, icon::PRINTER, "Machine and resin", false).clicked() {
+        crate::panels::open_machines(window.machine);
+    }
     // The keys are a sheet rather than a page: there is nothing to edit, and one listing
     // is enough. See `crate::shortcuts`.
     if nav_row(ui, icon::KEYBOARD, "Shortcuts", false).clicked() {
@@ -103,16 +98,15 @@ fn sections(ui: &mut egui::Ui, window: &mut Window) {
 
 fn section_icon(section: Section) -> &'static str {
     match section {
-        Section::Printers => icon::PRINTER,
         Section::Supports => icon::SUPPORTS,
         Section::Updates => icon::UPDATE,
     }
 }
 
 /// One entry of the list of pages: a glyph and a name, washed while it is the page open.
-fn nav_row(ui: &mut egui::Ui, glyph: &str, label: &str, active: bool) -> egui::Response {
+pub(super) fn nav_row(ui: &mut egui::Ui, glyph: &str, label: &str, active: bool) -> egui::Response {
     let colors = theme::colors();
-    let size = egui::vec2(ui.available_width(), 32.0);
+    let size = vec2(ui.available_width(), theme::BUTTON_H + 4.0);
     let (rect, response) = ui.allocate_exact_size(size, egui::Sense::click());
     let (fill, text) = match (active, response.hovered()) {
         (true, _) => (colors.accent_wash, colors.accent_soft),
@@ -121,7 +115,7 @@ fn nav_row(ui: &mut egui::Ui, glyph: &str, label: &str, active: bool) -> egui::R
     };
     let painter = ui.painter();
     painter.rect_filled(rect, theme::R_CONTROL, fill);
-    let glyph_at = rect.left_center() + egui::vec2(12.0, 0.0);
+    let glyph_at = rect.left_center() + vec2(12.0, 0.0);
     painter.text(
         glyph_at,
         egui::Align2::LEFT_CENTER,
@@ -129,12 +123,12 @@ fn nav_row(ui: &mut egui::Ui, glyph: &str, label: &str, active: bool) -> egui::R
         theme::icon(15.0),
         text,
     );
-    let label_at = rect.left_center() + egui::vec2(36.0, 0.0);
+    let label_at = rect.left_center() + vec2(36.0, 0.0);
     painter.text(
         label_at,
         egui::Align2::LEFT_CENTER,
         label,
-        theme::label(),
+        theme::body(),
         text,
     );
     response
@@ -144,20 +138,18 @@ fn nav_row(ui: &mut egui::Ui, glyph: &str, label: &str, active: bool) -> egui::R
 fn form(ui: &mut egui::Ui, window: &mut Window) {
     let widest = match window.machine.settings.section {
         Section::Supports => WIDE_FORM_W,
-        Section::Printers | Section::Updates => FORM_W,
+        Section::Updates => FORM_W,
     };
     egui::ScrollArea::vertical()
         .auto_shrink([false, false])
         .show(ui, |ui| {
-            let width = (ui.available_width() - 40.0).min(widest);
-            ui.add_space(8.0);
+            let width = (ui.available_width() - 64.0).min(widest);
             ui.horizontal(|ui| {
-                ui.add_space(20.0);
+                ui.add_space(32.0);
                 ui.vertical(|ui| {
                     ui.set_width(width);
                     ui.spacing_mut().item_spacing.y = theme::ITEM_GAP;
                     match window.machine.settings.section {
-                        Section::Printers => machines::form(ui, window),
                         Section::Supports => supports::form(ui, window),
                         Section::Updates => updates::form(ui, &mut window.machine.updates),
                     }
@@ -172,10 +164,7 @@ fn title(ui: &mut egui::Ui, machine: &mut Machine) {
     ui.horizontal(|ui| {
         ui.label(
             egui::RichText::new(machine.settings.section.label())
-                .font(egui::FontId::new(
-                    18.0,
-                    egui::FontFamily::Name(theme::SEMIBOLD.into()),
-                ))
+                .font(theme::page_title(22.0))
                 .color(theme::colors().text_high),
         );
         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
@@ -186,65 +175,45 @@ fn title(ui: &mut egui::Ui, machine: &mut Machine) {
     });
 }
 
-/// One category of a page: a titled card the fields of that category sit in.
-/// The compensation calculator floating over the Settings screen, when one is open.
-pub(super) fn calculators(ctx: &egui::Context, machine: &mut crate::state::Machine) {
-    if !machine.settings.open {
-        return;
-    }
-    let settings = &mut machine.settings;
-    let Some(resin) = settings.resin.as_mut() else {
-        settings.calculators.open = None;
-        return;
-    };
-    compensation::calculator(
-        ctx,
-        &mut settings.calculators,
-        &mut resin.draft.values.compensation,
-    );
-}
-
-/// The question over the Settings screen, while a deletion is waiting to be answered for.
-pub(super) fn confirm(ctx: &egui::Context, window: &mut Window) {
-    // A question nobody answered does not follow the user back to the plate.
-    if !window.machine.settings.open {
-        window.machine.settings.confirm = None;
-        return;
-    }
-    let Some(deleting) = window.machine.settings.confirm.clone() else {
-        return;
-    };
-    let Some(answer) = confirm::ask(ctx, &window.machine.slicing.catalogue, &deleting) else {
-        return;
-    };
-    window.machine.settings.confirm = None;
-    if matches!(answer, confirm::Answer::Confirmed) {
-        machines::delete(window, deleting);
-    }
-}
-
+/// One category of a form: its title in a column of its own beside its fields, over a
+/// hairline. Where the form is too narrow for both, the title stands over the fields.
 pub(super) fn form_card<R>(
     ui: &mut egui::Ui,
     title: &str,
     add: impl FnOnce(&mut egui::Ui) -> R,
 ) -> R {
-    let inner = egui::Frame::new()
-        .fill(theme::colors().base)
-        .stroke(egui::Stroke::new(1.0, theme::colors().hairline))
-        .corner_radius(theme::R_SURFACE)
-        .inner_margin(CARD_MARGIN)
-        .show(ui, |ui| {
-            ui.set_width(ui.available_width());
-            ui.label(
-                egui::RichText::new(title)
-                    .font(theme::section())
-                    .color(theme::colors().text_mid),
+    let title_text = egui::RichText::new(title)
+        .font(theme::block_title())
+        .color(theme::colors().text_mid);
+    let beside = theme::BLOCK_TITLE_W + theme::BLOCK_GAP + theme::FIELD_W * 2.0;
+    ui.add_space(BLOCK_PAD);
+    let inner = if ui.available_width() < beside {
+        ui.label(title_text);
+        ui.add_space(4.0);
+        add(ui)
+    } else {
+        ui.horizontal_top(|ui| {
+            ui.allocate_ui_with_layout(
+                vec2(theme::BLOCK_TITLE_W, 0.0),
+                egui::Layout::top_down(egui::Align::Min),
+                |ui| {
+                    ui.set_width(theme::BLOCK_TITLE_W);
+                    ui.add_space(4.0);
+                    ui.label(title_text);
+                },
             );
-            ui.add_space(6.0);
-            add(ui)
+            ui.add_space(theme::BLOCK_GAP);
+            ui.vertical(|ui| {
+                ui.set_width(ui.available_width().min(theme::BLOCK_FIELDS_W));
+                ui.spacing_mut().item_spacing.y = theme::ITEM_GAP;
+                add(ui)
+            })
+            .inner
         })
-        .inner;
-    ui.add_space(CARD_GAP);
+        .inner
+    };
+    ui.add_space(BLOCK_PAD);
+    hairline(ui);
     inner
 }
 

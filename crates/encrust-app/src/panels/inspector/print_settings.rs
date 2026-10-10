@@ -33,7 +33,7 @@ pub fn ui(ui: &mut egui::Ui, machine: &mut Machine) {
     if to_the_printer {
         let printer = machine.slicing.printer_id.clone();
         let resin = machine.slicing.resin_id.clone();
-        machine.settings.open(
+        machine.settings.open_machines(
             &machine.slicing.catalogue,
             printer.as_deref(),
             resin.as_deref(),

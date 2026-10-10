@@ -106,7 +106,8 @@ impl SlicerApp {
             &self.machine.network,
             &self.machine.updates.prefs,
             &self.tools,
-        );
+        )
+        .with_recent(&self.machine.recent);
         if now != self.prefs {
             self.prefs = now;
             self.prefs.save();
@@ -336,6 +337,9 @@ impl eframe::App for SlicerApp {
         let _ = frame;
         self.take_dropped_files(ui.ctx());
         self.take_arrived_files();
+        for path in self.doc.imports.take_opened() {
+            self.machine.recent.note(&path, crate::updates::now_s());
+        }
 
         // A background job reports over a channel, which wakes nothing on its own, so the
         // window has to keep asking for frames while one is running.
@@ -632,21 +636,49 @@ mod tests {
         assert!(!app.machine.report.open, "Escape closes it");
     }
 
-    /// The Settings screen stands in the plate's place, so Escape is the way out of it:
-    /// the question over it first, then the screen.
+    /// The start page is left once and for good: a tool picked and put back does not
+    /// bring it back over an empty plate.
     #[test]
-    fn escape_leaves_the_settings_screen_and_the_question_over_it() {
+    fn the_start_page_is_left_for_good() {
+        let mut app = SlicerApp::default();
+        assert!(crate::panels::still_starting(&mut app.window()));
+        app.tool = Tool::Position;
+        assert!(!crate::panels::still_starting(&mut app.window()));
+        app.tool = Tool::default();
+        assert!(!crate::panels::still_starting(&mut app.window()));
+    }
+
+    /// The Settings screen stands in the plate's place, so Escape is the way out of it.
+    #[test]
+    fn escape_leaves_the_settings_screen() {
         let mut app = SlicerApp::default();
         shortcuts::act(&mut app.window(), shortcuts::Action::Settings);
         assert!(app.machine.settings.open);
+        shortcuts::act(&mut app.window(), shortcuts::Action::Deselect);
+        assert!(!app.machine.settings.open);
+    }
+
+    /// The Machine and resin window holds the keyboard, and Escape takes down the question
+    /// over it before the window itself.
+    #[test]
+    fn escape_closes_the_question_and_then_the_machine_and_resin_window() {
+        let mut app = SlicerApp::default();
+        crate::panels::open_machines(&mut app.machine);
+        assert!(app.machine.settings.machines);
 
         app.machine.settings.confirm = Some(crate::settings::Deleting::Resin("grey".to_owned()));
         shortcuts::act(&mut app.window(), shortcuts::Action::Deselect);
         assert!(app.machine.settings.confirm.is_none());
-        assert!(app.machine.settings.open, "the screen is still there");
+        assert!(app.machine.settings.machines, "the window is still there");
+
+        shortcuts::act(&mut app.window(), shortcuts::Action::SelectAll);
+        assert!(
+            app.machine.settings.machines,
+            "a key meant for the plate is held"
+        );
 
         shortcuts::act(&mut app.window(), shortcuts::Action::Deselect);
-        assert!(!app.machine.settings.open);
+        assert!(!app.machine.settings.machines);
     }
 
     #[test]

@@ -385,12 +385,14 @@ pub fn tooltip(action: Action) -> String {
     format!("{}  {keys}", action.label())
 }
 
-/// Esc on the Settings screen: the question over it first, then the screen itself.
-fn leave_settings(machine: &mut crate::state::Machine) {
-    if machine.settings.confirm.take().is_some() {
+/// Esc over the Machine and resin window: the question or the calculator over it first,
+/// then the window itself.
+fn leave_machines(machine: &mut crate::state::Machine) {
+    let settings = &mut machine.settings;
+    if settings.confirm.take().is_some() || settings.calculators.open.take().is_some() {
         return;
     }
-    machine.settings.open = false;
+    settings.close_machines();
 }
 
 /// Does what a key asked for. Every action of the table is answered here, so a binding
@@ -411,10 +413,18 @@ pub fn act(window: &mut Window, action: Action) {
         }
         return;
     }
+    // The Machine and resin window is modal as well: it holds the keyboard, and Esc
+    // takes down whatever stands over it first.
+    if window.machine.settings.machines {
+        if matches!(action, Action::Deselect) {
+            leave_machines(window.machine);
+        }
+        return;
+    }
     // The Settings screen stands in the plate's place, so Esc leaves it rather than
     // clearing a selection nobody can see. Everything else there is typed, not pressed.
     if window.machine.settings.open && matches!(action, Action::Deselect) {
-        leave_settings(window.machine);
+        window.machine.settings.open = false;
         return;
     }
     match action {

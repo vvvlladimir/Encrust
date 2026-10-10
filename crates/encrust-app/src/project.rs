@@ -115,6 +115,7 @@ pub fn open(window: &mut Window, file: &Handed) {
             tools: window.tools,
         },
     );
+    window.machine.recent.note(&path, crate::updates::now_s());
     window.doc.project.path = Some(path);
     window.doc.project.saved = Some(digest(&captured(window).manifest));
     window.doc.history = History::default();
@@ -173,6 +174,7 @@ fn write(window: &mut Window, path: PathBuf) -> bool {
         .report(&format!("Saved {}", path.display()), written)
         .is_some();
     if saved {
+        window.machine.recent.note(&path, crate::updates::now_s());
         window.doc.project.path = Some(path);
         window.doc.project.saved = Some(digest);
     }
