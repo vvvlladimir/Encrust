@@ -19,34 +19,30 @@ pub use check::tint as risk_tint;
 use egui::{Align, Layout, RichText, Sense, UiBuilder, vec2};
 
 use crate::panels::Window;
-use crate::ui::{hairline, icon, icon_button, later, theme};
+use crate::ui::{body_and_foot, card_foot, hairline, icon, icon_button, later, theme};
 use crate::workspace::Tool;
 
-/// The column beside the rail: the open tool, whatever the stage shows. A heading names
-/// it, its sections scroll, and its action stays pinned to the foot; see
-/// `docs/decisions/0218`.
-pub fn ui(ui: &mut egui::Ui, window: &mut Window) {
+/// The card beside the rail: the open tool, whatever the stage shows, no taller than
+/// `max_h` points. A heading names it, its sections scroll once they outgrow the card,
+/// and its action stays pinned to the foot; see `docs/decisions/0218`, `0221`.
+pub fn ui(ui: &mut egui::Ui, window: &mut Window, max_h: f32) {
     let tool = *window.tool;
     header(ui, window, tool);
-    if has_action(tool) {
-        egui::Panel::bottom("inspector-action")
-            .resizable(false)
-            .frame(
-                egui::Frame::new()
-                    .fill(theme::colors().base)
-                    .inner_margin(theme::PANEL_MARGIN),
-            )
-            .show(ui, |ui| {
-                ui.spacing_mut().item_spacing.y = 6.0;
-                action(ui, window, tool);
-            });
-    }
-    egui::ScrollArea::vertical()
-        .auto_shrink([false, false])
-        .show(ui, |ui| {
-            ui.spacing_mut().item_spacing.y = 0.0;
-            body(ui, window, tool);
-        });
+    body_and_foot(
+        ui,
+        max_h,
+        window,
+        |ui, window| body(ui, window, tool),
+        |ui, window| {
+            if has_action(tool) {
+                card_foot().show(ui, |ui| {
+                    ui.set_width(ui.available_width());
+                    ui.spacing_mut().item_spacing.y = 6.0;
+                    action(ui, window, tool);
+                });
+            }
+        },
+    );
 }
 
 fn body(ui: &mut egui::Ui, window: &mut Window, tool: Tool) {

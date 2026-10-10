@@ -26,8 +26,10 @@ pub use start::still_starting;
 pub use title_bar::{layers_and_exposure, open_machines, toggle_settings};
 pub use viewport_panel::{frame_view, set_orthographic};
 
+use egui::{Align2, Id, Pos2, Rect, Sense, pos2, vec2};
+
 use crate::state::{Doc, Machine, Tools, View};
-use crate::ui::theme;
+use crate::ui::{card, theme};
 use crate::workspace::{Mode, Tool};
 
 /// Everything the chrome draws against, borrowed for one frame.
@@ -53,9 +55,8 @@ impl Window<'_> {
             .measured(&settings, self.machine.slicing.fold())
     }
 
-    /// Lays the window out: the top bar, the rail and the inspector down the right, the
-    /// plates and the plate panel down the left, and the stage in what is left. Fixed, in that order; see
-    /// `docs/decisions/0217`.
+    /// Lays the window out: the top bar, then the stage under it with the cards floating
+    /// over it, each as tall as what it holds. See `docs/decisions/0221`.
     pub fn show(&mut self, ui: &mut egui::Ui) {
         egui::Panel::top("title")
             .exact_size(theme::TOP_BAR_H)
@@ -86,72 +87,141 @@ impl Window<'_> {
             return;
         }
 
-        // The rail goes in before the inspector so that it ends up the outermost of the
-        // two: a tool and the panel it owns are one control and belong side by side.
-        egui::Panel::right("rail")
-            .exact_size(theme::RAIL_W)
-            .resizable(false)
-            .frame(egui::Frame::new().fill(theme::colors().base))
-            .show(ui, |ui| tool_rail::ui(ui, self));
-
-        let inspector = egui::Panel::right("inspector")
-            .exact_size(self.view.options.inspector_w)
-            .resizable(false)
-            .frame(panel_frame())
-            .show(ui, |ui| inspector::ui(ui, self))
-            .response
-            .rect;
-
-        // Outermost on the left, so the plates stay put while the plate panel folds.
-        egui::Panel::left("plates")
-            .exact_size(theme::PLATE_STRIP_W)
-            .resizable(false)
-            .frame(
-                egui::Frame::new()
-                    .fill(theme::colors().base)
-                    .inner_margin(egui::Margin::symmetric(0, 6)),
-            )
-            .show(ui, |ui| plate_strip::ui(ui, &mut self.doc.scene));
-
-        let mut plate = None;
-        if self.view.options.plate_panel {
-            plate = Some(
-                egui::Panel::left("plate")
-                    .exact_size(self.view.options.plate_w)
-                    .resizable(false)
-                    .frame(panel_frame())
-                    .show(ui, |ui| scene_panel::ui(ui, self))
-                    .response
-                    .rect,
-            );
-        } else {
-            folded_plate_edge(ui, &mut self.view.options.plate_panel);
-        }
-
+        let stage = ui.available_rect_before_wrap();
+        let room = self.columns(ui.ctx(), stage);
         egui::CentralPanel::default()
             .frame(egui::Frame::new())
-            .show(ui, |ui| stage::ui(ui, self));
+            .show(ui, |ui| stage::ui(ui, self, room));
+    }
 
-        // The handles go on last so that a scroll area against the boundary cannot eat
-        // the drag, which is what egui's own resizable panels do.
-        if let Some(rect) = plate
-            && let Some(raw) = drag_edge(ui, "plate-edge", rect, true)
-        {
-            match plate_width(raw) {
-                Some(width) => self.view.options.plate_w = width,
-                None => self.view.options.plate_panel = false,
-            }
-        }
-        if let Some(raw) = drag_edge(ui, "inspector-edge", inspector, false) {
+    /// The cards over the stage: the rail and the inspector down its left, the layer strip
+    /// and the plate down its right. Answers the room they leave between them, which the
+    /// stage's own cards are placed in.
+    fn columns(&mut self, ctx: &egui::Context, stage: Rect) -> Rect {
+        let gap = theme::FLOAT_GAP;
+        let options = self.view.options;
+        let top = stage.top() + gap;
+        let max_h = stage.height() - 2.0 * gap - 2.0 * CARD_STROKE;
+
+        let corner = pos2(stage.left() + gap, top);
+        let rail = card_at(ctx, "rail", corner, Align2::LEFT_TOP, max_h, |ui| {
+            tool_rail::ui(ui, self, max_h);
+        });
+        let corner = pos2(rail.right() + gap, top);
+        let inspector = card_at(ctx, "inspector", corner, Align2::LEFT_TOP, max_h, |ui| {
+            ui.set_width(options.inspector_w);
+            inspector::ui(ui, self, max_h);
+        });
+        if let Some(raw) = drag_edge(ctx, "inspector-edge", inspector, true) {
             self.view.options.inspector_w = raw.clamp(
                 *theme::INSPECTOR_W_RANGE.start(),
                 *theme::INSPECTOR_W_RANGE.end(),
             );
         }
+
+        let corner = pos2(stage.right() - gap, top);
+        let strip = card_at(ctx, "layer-strip", corner, Align2::RIGHT_TOP, max_h, |ui| {
+            egui::Frame::new().inner_margin(STRIP_PAD).show(ui, |ui| {
+                let pad = f32::from(2 * STRIP_PAD);
+                ui.set_width(theme::LAYER_STRIP_W - pad - 2.0 * CARD_STROKE);
+                ui.set_height(max_h - pad);
+                section::ui(ui, self);
+            });
+        });
+        let (models, plate) = self.plate_cards(ctx, pos2(strip.left() - gap, top), stage);
+        for (id, card) in [("models-edge", Some(models)), ("plate-edge", plate)] {
+            if let Some(card) = card
+                && let Some(raw) = drag_edge(ctx, id, card, false)
+            {
+                match plate_width(raw) {
+                    Some(width) => self.view.options.plate_w = width,
+                    None => self.view.options.plate_panel = false,
+                }
+            }
+        }
+
+        let left = inspector.right() + gap;
+        let right = (models.left() - gap).max(left);
+        Rect::from_x_y_ranges(left..=right, top..=stage.bottom() - gap)
     }
 }
 
-/// Points of grab either side of a panel's inner edge.
+impl Window<'_> {
+    /// The models from `corner` down, and this plate's figures and Slice standing on the
+    /// stage's foot under them, both as wide as the plate panel; folded, the models card
+    /// keeps only the plates. Answers the two cards, the second only while unfolded.
+    fn plate_cards(
+        &mut self,
+        ctx: &egui::Context,
+        corner: Pos2,
+        stage: Rect,
+    ) -> (Rect, Option<Rect>) {
+        let gap = theme::FLOAT_GAP;
+        let options = self.view.options;
+        let mut bottom = stage.bottom() - gap;
+        let mut plate = None;
+        if options.plate_panel {
+            let foot = pos2(corner.x, bottom);
+            let card = card_at(
+                ctx,
+                "this-plate",
+                foot,
+                Align2::RIGHT_BOTTOM,
+                f32::INFINITY,
+                |ui| {
+                    ui.set_width(options.plate_w);
+                    scene_panel::this_plate(ui, self);
+                },
+            );
+            bottom = card.top() - gap;
+            plate = Some(card);
+        }
+        let max_h = bottom - corner.y - 2.0 * CARD_STROKE;
+        let models = card_at(ctx, "models", corner, Align2::RIGHT_TOP, max_h, |ui| {
+            if options.plate_panel {
+                ui.set_width(options.plate_w);
+            }
+            scene_panel::ui(ui, self, max_h);
+        });
+        (models, plate)
+    }
+}
+
+/// Points between the layer strip and the edge of its card.
+const STRIP_PAD: i8 = 4;
+
+/// The width of a card's outline, which the room inside it is short of.
+const CARD_STROKE: f32 = 1.0;
+
+/// One card floating over the stage, its `pivot` corner at `corner`, no taller than
+/// `max_h` points. Answers the rectangle it took.
+///
+/// An area offers its contents last frame's size, so a card would never grow; the room
+/// is set to the most the card may take instead.
+fn card_at(
+    ctx: &egui::Context,
+    id: &str,
+    corner: Pos2,
+    pivot: Align2,
+    max_h: f32,
+    add: impl FnOnce(&mut egui::Ui),
+) -> Rect {
+    egui::Area::new(Id::new(id))
+        .order(egui::Order::Middle)
+        .fixed_pos(corner)
+        .pivot(pivot)
+        .show(ctx, |ui| {
+            card().inner_margin(0).show(ui, |ui| {
+                ui.set_max_height(max_h);
+                ui.spacing_mut().item_spacing.y = 0.0;
+                add(ui);
+            });
+        })
+        .response
+        .rect
+}
+
+/// Points of grab beside a card's inner edge.
 const GRAB_W: f32 = 6.0;
 
 /// Where a drag to `raw` points leaves the plate panel: a width, or `None` once the drag
@@ -160,62 +230,45 @@ fn plate_width(raw: f32) -> Option<f32> {
     (raw >= *theme::SCENE_W_RANGE.start()).then(|| raw.min(*theme::SCENE_W_RANGE.end()))
 }
 
-/// A drag on the inner edge of a column. Returns the width the pointer is asking for,
+/// A drag on the inner edge of a card. Returns the width the pointer is asking for,
 /// unclamped, so that the caller can read a drag past the floor as a fold.
-fn drag_edge(ui: &egui::Ui, id: &str, panel: egui::Rect, fixed_left: bool) -> Option<f32> {
+///
+/// The handle is its own area just outside the card, so the camera under it does not
+/// take the drag as an orbit.
+fn drag_edge(ctx: &egui::Context, id: &str, card: Rect, fixed_left: bool) -> Option<f32> {
     let edge = if fixed_left {
-        panel.right()
+        card.right()
     } else {
-        panel.left()
+        card.left()
     };
-    let strip = egui::Rect::from_x_y_ranges(
-        egui::Rangef::new(edge - GRAB_W / 2.0, edge + GRAB_W / 2.0),
-        panel.y_range(),
-    );
-    let response = ui.interact(strip, egui::Id::new(id), egui::Sense::drag());
-
-    if response.hovered() || response.dragged() {
-        ui.ctx().set_cursor_icon(egui::CursorIcon::ResizeHorizontal);
-        ui.painter().vline(
-            edge,
-            panel.y_range(),
-            egui::Stroke::new(1.0, theme::colors().accent),
-        );
-    }
-
-    let pointer = response.interact_pointer_pos()?;
-    Some(if fixed_left {
-        pointer.x - panel.left()
-    } else {
-        panel.right() - pointer.x
-    })
-}
-
-/// The folded plate keeps its edge: a hairline that lights up under the pointer and
-/// brings the panel back on a click.
-fn folded_plate_edge(ui: &mut egui::Ui, open: &mut bool) {
-    egui::Panel::left("plate-folded")
-        .exact_size(theme::EDGE_W)
-        .resizable(false)
-        .frame(egui::Frame::new().fill(theme::colors().base))
-        .show(ui, |ui| {
-            let rect = ui.max_rect();
-            let response = ui.interact(rect, ui.id().with("grab"), egui::Sense::click());
-            let colors = theme::colors();
-            if response.hovered() {
-                ui.painter().rect_filled(rect, 0.0, colors.accent);
-                ui.ctx().set_cursor_icon(egui::CursorIcon::PointingHand);
-            } else {
+    let left = if fixed_left { edge } else { edge - GRAB_W };
+    egui::Area::new(Id::new(id))
+        .order(egui::Order::Middle)
+        .fixed_pos(pos2(left, card.top()))
+        .show(ctx, |ui| {
+            let size = vec2(GRAB_W, card.height());
+            let (strip, response) = ui.allocate_exact_size(size, Sense::drag());
+            if response.hovered() || response.dragged() {
+                ui.ctx().set_cursor_icon(egui::CursorIcon::ResizeHorizontal);
+                let x = if fixed_left {
+                    strip.left()
+                } else {
+                    strip.right()
+                };
                 ui.painter().vline(
-                    rect.center().x,
-                    rect.y_range(),
-                    egui::Stroke::new(1.0, colors.hairline),
+                    x,
+                    strip.y_range().shrink(theme::R_SURFACE.nw.into()),
+                    egui::Stroke::new(1.0, theme::colors().accent),
                 );
             }
-            if response.clicked() {
-                *open = true;
-            }
-        });
+            let pointer = response.interact_pointer_pos()?;
+            Some(if fixed_left {
+                pointer.x - card.left()
+            } else {
+                card.right() - pointer.x
+            })
+        })
+        .inner
 }
 
 /// The top bar sits on the window's own colour, with a hairline between it and the work.
@@ -223,10 +276,6 @@ fn strip_frame() -> egui::Frame {
     egui::Frame::new()
         .fill(theme::colors().base)
         .inner_margin(theme::STRIP_MARGIN)
-}
-
-fn panel_frame() -> egui::Frame {
-    egui::Frame::new().fill(theme::colors().panel)
 }
 
 #[cfg(test)]

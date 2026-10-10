@@ -1,6 +1,7 @@
 # 0217. The window is a top bar, a flat rail, a docked inspector and a layer strip
 
-- **Status:** Accepted; the return to the model on a tool press is superseded by 0218
+- **Status:** Accepted; the return to the model on a tool press is superseded by 0218, the
+  docked columns and layer strip by 0221
 - **Date:** 2026-10-10
 
 ## Context

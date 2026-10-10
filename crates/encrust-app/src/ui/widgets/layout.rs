@@ -214,6 +214,33 @@ pub fn notice(ui: &mut Ui, glyph: &str, tint: egui::Color32, title: &str, why: &
     });
 }
 
+/// A body that scrolls once it outgrows the card, and a foot under it that stays in
+/// view. `max_h` is the card's whole height, points, what is already drawn in it included.
+///
+/// The foot is measured as it is drawn, so the body is held to last frame's measure, and
+/// a frame whose foot changed height is drawn again.
+pub fn body_and_foot<T>(
+    ui: &mut Ui,
+    max_h: f32,
+    state: &mut T,
+    body: impl FnOnce(&mut Ui, &mut T),
+    foot: impl FnOnce(&mut Ui, &mut T),
+) {
+    let id = ui.id().with("foot-h");
+    let foot_h = ui.data(|data| data.get_temp::<f32>(id)).unwrap_or(0.0);
+    let room = (max_h - ui.min_rect().height() - foot_h).max(0.0);
+    egui::ScrollArea::vertical()
+        .max_height(room)
+        .auto_shrink([false, true])
+        .show(ui, |ui| body(ui, state));
+    let drawn = ui.scope(|ui| foot(ui, state)).response.rect.height();
+    if (drawn - foot_h).abs() > 0.5 {
+        ui.data_mut(|data| data.insert_temp(id, drawn));
+        ui.ctx()
+            .request_discard("the foot of a card changed height");
+    }
+}
+
 /// The frame of anything that floats over the viewport.
 pub fn card() -> Frame {
     Frame::new()
@@ -221,6 +248,21 @@ pub fn card() -> Frame {
         .stroke(egui::Stroke::new(1.0, theme::colors().hairline))
         .corner_radius(theme::R_SURFACE)
         .shadow(theme::shadow())
+}
+
+/// The foot of a card down a side of the stage, set apart on the window's colour and
+/// rounded to fit inside the card's outline.
+pub fn card_foot() -> Frame {
+    let r = theme::R_SURFACE.sw.saturating_sub(1);
+    Frame::new()
+        .fill(theme::colors().base)
+        .inner_margin(theme::PANEL_MARGIN)
+        .corner_radius(egui::CornerRadius {
+            nw: 0,
+            ne: 0,
+            sw: r,
+            se: r,
+        })
 }
 
 /// A section heading, used by the inspector and by the header row of a floating card.

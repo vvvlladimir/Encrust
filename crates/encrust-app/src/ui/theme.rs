@@ -305,23 +305,24 @@ pub const PANEL_PAD: f32 = 12.0;
 pub const ITEM_GAP: f32 = 8.0;
 /// Height of a section's heading row, which folds it.
 pub const SECTION_H: f32 = 36.0;
-pub const RAIL_W: f32 = 68.0;
-/// The column of plates at the window's left edge.
-pub const PLATE_STRIP_W: f32 = 44.0;
+pub const RAIL_W: f32 = 60.0;
 pub const SCENE_W: f32 = 272.0;
 pub const INSPECTOR_W: f32 = 328.0;
 /// The inspector's heading row, which names the open tool.
 pub const INSPECTOR_HEAD_H: f32 = 48.0;
-/// How far either column may be dragged, and how thin the folded plate's own edge is.
+/// How far either column may be dragged.
 pub const SCENE_W_RANGE: RangeInclusive<f32> = 170.0..=420.0;
 pub const INSPECTOR_W_RANGE: RangeInclusive<f32> = 260.0..=440.0;
-pub const EDGE_W: f32 = 6.0;
-/// The top bar, and the layer strip under the stage. On macOS the system draws its window
-/// buttons over the bar's left end, so the bar is tall enough to hold them.
+/// Points between a card floating over the stage and the stage's edge, and between two
+/// cards.
+pub const FLOAT_GAP: f32 = 8.0;
+/// The top bar, and the layer strip down the stage's right edge. On macOS the system
+/// draws its window buttons over the bar's left end, so the bar is tall enough for them.
 pub const TOP_BAR_H: f32 = 44.0;
-pub const LAYER_STRIP_H: f32 = 52.0;
-/// A rail button holds a glyph over its name.
+pub const LAYER_STRIP_W: f32 = 56.0;
+/// A rail button holds a glyph over its name, or the glyph alone on a short screen.
 pub const RAIL_BUTTON_H: f32 = 46.0;
+pub const RAIL_ICON_H: f32 = 34.0;
 /// The chips and buttons standing in the top bar and the layer strip.
 pub const CHIP_H: f32 = 32.0;
 pub const ICON_SIZE: f32 = 28.0;

@@ -8,7 +8,7 @@ use crate::settings::Section;
 use crate::shortcuts::{self, Action};
 use crate::sliced;
 use crate::state::{Doc, Machine};
-use crate::ui::{icon, theme};
+use crate::ui::{icon, icon_button, theme};
 use crate::updates::Stage;
 use crate::workspace::Tool;
 
@@ -44,6 +44,7 @@ pub fn ui(ui: &mut egui::Ui, window: &mut Window) {
             |ui| {
                 ui.spacing_mut().item_spacing.x = 6.0;
                 window_buttons(ui);
+                window_controls(ui, window);
                 find_button(ui);
                 if !window.machine.settings.open {
                     print_chip(ui, window);
@@ -68,6 +69,17 @@ pub fn ui(ui: &mut egui::Ui, window: &mut Window) {
             project_name(ui, &window.doc.project);
         },
     );
+}
+
+/// What belongs to the whole window rather than to the plate: the sheet of keys and the
+/// Settings screen.
+fn window_controls(ui: &mut egui::Ui, window: &mut Window) {
+    if icon_button(ui, icon::SETTINGS, &shortcuts::tooltip(Action::Settings)).clicked() {
+        toggle_settings(window.machine);
+    }
+    if icon_button(ui, icon::KEYBOARD, &shortcuts::tooltip(Action::Sheet)).clicked() {
+        window.view.options.sheet = true;
+    }
 }
 
 const MENUS: [&str; 3] = ["File", "Edit", "View"];

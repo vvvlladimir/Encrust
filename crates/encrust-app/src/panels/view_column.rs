@@ -4,17 +4,16 @@ use crate::panels::{Window, frame_view, set_orthographic};
 use crate::shortcuts::{self, Action};
 use crate::ui::{card, icon, icon_button, icon_toggle};
 
-/// Points between the card and the corner of the viewport it is anchored to, and the
-/// margin inside it.
-const INSET: f32 = 12.0;
+/// The margin inside the card.
 const CARD_PAD: i8 = 3;
 
-/// Top left of the viewport: how it is looked at.
+/// The bottom right of the viewport, beside this plate's card: how the viewport is looked
+/// at.
 pub fn ui(ui: &egui::Ui, window: &mut Window, viewport: Rect) {
     egui::Area::new(Id::new("view-tools"))
         .order(egui::Order::Middle)
-        .fixed_pos(viewport.left_top() + vec2(INSET, INSET))
-        .pivot(Align2::LEFT_TOP)
+        .fixed_pos(viewport.right_bottom())
+        .pivot(Align2::RIGHT_BOTTOM)
         .constrain_to(viewport)
         .show(ui.ctx(), |ui| {
             card()

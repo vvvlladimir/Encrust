@@ -1,59 +1,64 @@
-use egui::{Align2, Frame, Id, Rect};
+use egui::{Align2, Id, Rect, UiBuilder};
 
 use crate::files::{self, Wanted};
-use crate::panels::{
-    Window, mask_pane, section, stage_notice, view_column, view_cube, viewport_panel,
-};
+use crate::panels::{Window, mask_pane, stage_notice, view_column, view_cube, viewport_panel};
 use crate::ui::{card, icon, primary_button, theme};
 use crate::workspace::Mode;
 
-/// The stage: the layer strip along its foot, the viewport, the mask beside it or in its
-/// place, and the cards over them.
-pub fn ui(ui: &mut egui::Ui, window: &mut Window) {
-    egui::Panel::bottom("layer-strip")
-        .exact_size(theme::LAYER_STRIP_H)
-        .resizable(false)
-        .frame(
-            Frame::new()
-                .fill(theme::colors().base)
-                .inner_margin(theme::STRIP_MARGIN),
-        )
-        .show(ui, |ui| section::ui(ui, window));
+/// The stage: the viewport under the whole of it, the mask beside the model or in its
+/// place, and the cards over them, which keep to `clear`, the room the side cards leave.
+pub fn ui(ui: &mut egui::Ui, window: &mut Window, clear: Rect) {
     let stage = ui.available_rect_before_wrap();
 
     if *window.mode == Mode::Preview && window.view.options.mask_only {
-        egui::CentralPanel::default()
-            .frame(Frame::new().fill(theme::colors().sunken))
-            .show(ui, |ui| mask_pane::ui(ui, window.machine));
-        stage_notice::ui(ui, window, stage);
+        ui.painter().rect_filled(stage, 0.0, theme::colors().sunken);
+        mask(ui, window, clear);
+        stage_notice::ui(ui, window, clear);
         return;
     }
 
     // Preview gives the mask the same room as the model: a 300 point column cannot show
     // an 8520 pixel panel. See `docs/decisions/0103`.
+    let mut seen = stage;
     if *window.mode == Mode::Preview {
-        let half = (ui.available_width() * 0.5).floor();
-        egui::Panel::right("mask-pane")
-            .exact_size(half)
-            .resizable(false)
-            .frame(Frame::new().fill(theme::colors().sunken))
-            .show(ui, |ui| mask_pane::ui(ui, window.machine));
+        let middle = clear.center().x.floor();
+        seen.max.x = middle;
+        let pane = Rect::from_x_y_ranges(middle..=stage.right(), stage.y_range());
+        ui.painter().rect_filled(pane, 0.0, theme::colors().sunken);
+        mask(
+            ui,
+            window,
+            Rect::from_x_y_ranges(middle..=clear.right(), clear.y_range()),
+        );
     }
 
-    let viewport = viewport_panel::ui(ui, window);
+    let viewport = ui
+        .scope_builder(UiBuilder::new().max_rect(seen), |ui| {
+            viewport_panel::ui(ui, window)
+        })
+        .inner;
+    let clear = clear.intersect(viewport);
     if window.doc.scene.is_empty() {
-        empty_state(ui, viewport, window);
+        empty_state(ui, clear.center(), viewport, window);
     }
-    view_column::ui(ui, window, viewport);
-    view_cube::ui(ui, window, viewport);
-    stage_notice::ui(ui, window, stage);
+    view_cube::ui(ui, window, clear);
+    view_column::ui(ui, window, clear);
+    stage_notice::ui(ui, window, clear);
 }
 
-/// The whole viewport when there is nothing on the plate: one card, one thing to do.
-fn empty_state(ui: &egui::Ui, viewport: Rect, window: &mut Window) {
+/// The exposure mask, drawn in `rect`.
+fn mask(ui: &mut egui::Ui, window: &mut Window, rect: Rect) {
+    ui.scope_builder(UiBuilder::new().max_rect(rect), |ui| {
+        mask_pane::ui(ui, window.machine);
+    });
+}
+
+/// The whole viewport when there is nothing on the plate: one card, one thing to do,
+/// centred on `at` and kept inside the viewport.
+fn empty_state(ui: &egui::Ui, at: egui::Pos2, viewport: Rect, window: &mut Window) {
     egui::Area::new(Id::new("empty-plate"))
         .order(egui::Order::Middle)
-        .fixed_pos(viewport.center())
+        .fixed_pos(at)
         .pivot(Align2::CENTER_CENTER)
         .constrain_to(viewport)
         .show(ui.ctx(), |ui| {

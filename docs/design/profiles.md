@@ -114,7 +114,7 @@ the window had before, which sets no id and therefore tunes nothing.
 The machines and their resins are edited in the **Machine and resin** window, a modal over
 the plate opened from the top bar's chip, the File menu, the Settings screen and the start
 page; Esc closes it. The support profiles are edited on the Settings screen, which the gear
-at the foot of the rail opens in the plate's place, a list beside a form. Either way every
+in the top bar opens in the plate's place, a list beside a form. Either way every
 edit is written to the user's directory as soon as the value settles — no Save. ADR 0120,
 0220. The screen's other page, Updates, holds no profile: see `docs/design/updates.md`.
 

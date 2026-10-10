@@ -7,21 +7,22 @@ use crate::ui::{icon, icon_button, theme};
 /// How big a plate's square is.
 const PLATE_SIZE: f32 = 32.0;
 
-/// The thin column at the window's left edge: one square per plate, numbered, and the way
-/// to add another. A project of one plate still shows it: the strip is where a second one
-/// is reached from.
-pub fn ui(ui: &mut egui::Ui, scene: &mut Scene) {
+/// The row at the head of the plate panel: one square per plate, numbered, and the way to
+/// add another, scrolling past `max_w` points. A project of one plate still
+/// shows it: the strip is where a second one is reached from.
+pub fn ui(ui: &mut egui::Ui, scene: &mut Scene, max_w: f32) {
     let names: Vec<String> = scene.plates().to_vec();
     let active = scene.active_plate();
     let picked = !scene.selection().is_empty();
     let mut asked = None;
 
-    egui::ScrollArea::vertical()
-        .auto_shrink([false, false])
+    egui::ScrollArea::horizontal()
+        .max_width(max_w)
+        .auto_shrink([true, true])
         .scroll_bar_visibility(egui::scroll_area::ScrollBarVisibility::AlwaysHidden)
         .show(ui, |ui| {
-            ui.vertical_centered(|ui| {
-                ui.spacing_mut().item_spacing.y = 4.0;
+            ui.horizontal(|ui| {
+                ui.spacing_mut().item_spacing.x = 4.0;
                 for (index, name) in names.iter().enumerate() {
                     let plate = index as u32;
                     let place = Place {

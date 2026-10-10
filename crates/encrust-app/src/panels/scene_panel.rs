@@ -2,16 +2,14 @@ use egui::{Align2, Rect, Sense, vec2};
 
 use core_geometry::{Vec2, Vec3};
 
-use crate::panels::{Window, plate_summary, slice};
+use crate::panels::plate_summary;
+use crate::panels::{Window, plate_strip, slice};
 use crate::scene::{ImportSummary, ObjectId, Scene, SceneObject};
 use crate::shortcuts::{self, Action};
 use crate::ui::{
-    count_row, hairline, hint, icon, icon_button, number_row, secondary_button, theme,
+    body_and_foot, count_row, hairline, hint, icon, icon_button, number_row, secondary_button,
+    theme,
 };
-
-/// The row of actions under the list: one line of icon buttons, inset like the
-/// inspector's own margin, plus the line above it.
-const ACTIONS_H: f32 = theme::ICON_SIZE + 25.0;
 
 /// The heading over the list, as tall as an inspector's.
 const HEADER_H: f32 = 40.0;
@@ -25,49 +23,51 @@ const POPUP_W: f32 = 230.0;
 /// What the end of the row of a model that will not slice as it stands reads.
 const BROKEN: &str = "broken";
 
-/// The plate down the left of the stage: what stands on it, what can be done to it, what
-/// it comes to, and the button that makes the file.
-///
-/// A panel rather than a card over the viewport, so the list may be as long as the plate
-/// is full and a press on it can never orbit the camera; see `docs/decisions/0102`.
-pub fn ui(ui: &mut egui::Ui, window: &mut Window) {
-    let summary = egui::Panel::bottom("plate-summary")
-        .resizable(false)
-        .show_separator_line(false)
-        .frame(
-            egui::Frame::new()
-                .fill(theme::colors().base)
-                .inner_margin(theme::PANEL_MARGIN),
-        )
+/// The models card at the right of the stage: which plate, what stands on it and what can
+/// be done to it. As tall as the list, which scrolls once the card would pass `max_h`
+/// points; see `docs/decisions/0221`. Folded, only the plates are left, with the way back.
+pub fn ui(ui: &mut egui::Ui, window: &mut Window, max_h: f32) {
+    if !window.view.options.plate_panel {
+        egui::Frame::new()
+            .inner_margin(PLATES_MARGIN)
+            .show(ui, |ui| {
+                ui.horizontal(|ui| {
+                    plate_strip::ui(ui, &mut window.doc.scene, theme::SCENE_W);
+                    let tooltip = shortcuts::tooltip(Action::PlatePanel);
+                    if icon_button(ui, icon::FOLD, &tooltip).clicked() {
+                        window.view.options.plate_panel = true;
+                    }
+                });
+            });
+        return;
+    }
+    egui::Frame::new()
+        .inner_margin(PLATES_MARGIN)
         .show(ui, |ui| {
-            ui.spacing_mut().item_spacing.y = 0.0;
+            let room = ui.available_width();
+            plate_strip::ui(ui, &mut window.doc.scene, room);
+        });
+    hairline(ui);
+    header(ui, window);
+    hairline(ui);
+    body_and_foot(ui, max_h, window, rows, actions);
+}
+
+/// What the plate comes to, and the button that makes the file: a card of its own on the
+/// stage's foot, under the models.
+pub fn this_plate(ui: &mut egui::Ui, window: &mut Window) {
+    egui::Frame::new()
+        .inner_margin(theme::PANEL_MARGIN)
+        .show(ui, |ui| {
+            ui.set_width(ui.available_width());
             plate_summary::ui(ui, window);
             ui.add_space(theme::ITEM_GAP);
             slice::ui(ui, window);
-        })
-        .response
-        .rect;
-    ui.painter().hline(
-        summary.x_range(),
-        summary.top(),
-        egui::Stroke::new(1.0, theme::colors().hairline),
-    );
-
-    egui::Panel::bottom("plate-actions")
-        .exact_size(ACTIONS_H)
-        .resizable(false)
-        .show_separator_line(false)
-        .frame(egui::Frame::new().fill(theme::colors().panel))
-        .show(ui, |ui| actions(ui, window));
-
-    ui.spacing_mut().item_spacing.y = 0.0;
-    header(ui, window);
-    hairline(ui);
-
-    egui::ScrollArea::vertical()
-        .auto_shrink([false, false])
-        .show(ui, |ui| rows(ui, window));
+        });
 }
+
+/// Points around the row of plates at the card's head.
+const PLATES_MARGIN: egui::Margin = egui::Margin::symmetric(12, 8);
 
 /// What the plate holds and how much of it the tools are aimed at, with the way to add
 /// another model.

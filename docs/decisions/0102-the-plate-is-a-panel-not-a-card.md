@@ -1,6 +1,6 @@
 # 0102. The plate is a panel, not a card over the viewport
 
-- **Status:** Accepted, the plate strip and the pickers superseded by 0217
+- **Status:** Accepted, the plate strip and the pickers superseded by 0217, the panel by 0221
 - **Date:** 2026-09-26
 
 ## Context

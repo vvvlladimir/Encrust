@@ -19,8 +19,8 @@ accent, and colours kept for state. Why these values and this face: ADR 0216.
 | Token | Hex | Where |
 |---|---|---|
 | `sunken` | `#0c0e11` | The viewport backdrop, the mask frame, and the box a value is typed in |
-| `base` | `#111418` | Top bar, tool rail, layer strip, the plate's summary |
-| `panel` | `#161a1f` | Inspector, plate column, floating cards |
+| `base` | `#111418` | Top bar, the foot of a side card: a tool's action, the plate's summary |
+| `panel` | `#161a1f` | Every card over the stage: the rail, the inspector, the plate, the layer strip |
 | `raised` | `#1e2329` | Unpressed buttons, list rows, the tool in use |
 | `hover` | `#272d34` | Hover state |
 | `active` | `#313840` | A pressed control, the track of a switch that is off |
@@ -83,10 +83,10 @@ a codepoint pasted into a panel.
 ### Density
 
 Row 30 points, field 28, a named field's box 128 wide, button 32, primary button 40,
-section heading 36, panel padding 12, item gap 8. Tool rail 68 with 46 point buttons, plate
-panel 272, plate strip 44, inspector 328, top bar 44, layer strip 52, a chip in either 32.
+section heading 36, panel padding 12, item gap 8. Tool rail 60 with 46 point buttons, 34 without their names, plate
+panel 272, inspector 328, top bar 44, layer strip 56, a chip 32.
 The two side columns are the widths a drag on their edge leaves them at; everything else is
-fixed. A form block's title column is 180 wide beside at most 460 of fields; a window over
+fixed. A card over the stage stands 8 from its edge and from the next card. A form block's title column is 180 wide beside at most 460 of fields; a window over
 the plate is at most 1080 by 720, its title row 48 and its list 260; a table row is 36 and a
 two-line row 48. Controls are rounded by 6 points, cards by 8, windows by
 10, and pills are fully round. Nothing else is rounded.
@@ -130,18 +130,25 @@ a `field_label` of its own carries the unit in that label's brackets instead.
 
 ## Layout
 
-`panels::Window::show` builds the window in a fixed order. Nothing is dockable.
+`panels::Window::show` builds the window in a fixed order. Nothing is dockable. Under the
+top bar the viewport takes the whole window, and every column is a card floating over it,
+as tall as what it holds; see `docs/decisions/0221`.
 
 ```
 ┌──────────────────────────────────────────────────────────────────────────┐
-│ top 44:  ● ● ●  File Edit View          printer / resin │ 50 µm   Find     │
-├────┬───────────┬──────────────────────────────────┬───────────────┬──────┤
-│ 1  │ Models  + │ ╭view╮    ╭ job, notice ╮        │ the open tool │ rail │
-│ 2  │ list 272  │ ╰────╯                           │ 328           │ 68   │
-│ +  │           │            the stage             │               │      │
-│    │ ⧉ ⊞ ≡ ␡   ├──────────────────────────────────┤               │ ⌨    │
-│ 44 │ Slice  ⌄  │ layers 52: views ‹ ▶ › ━━━●── 650│               │ ⚙    │
-└────┴───────────┴──────────────────────────────────┴───────────────┴──────┘
+│ top 44:  ● ● ●  File Edit View     printer / resin │ 50 µm   Find   ⌨  ⚙   │
+├──────────────────────────────────────────────────────────────────────────┤
+│ ╭────╮╭─────────────╮                       ╭cube╮ ╭────────────╮ ╭────╮ │
+│ │rail││ the open    │   ╭ job, notice ╮     ╰────╯ │ 1  2  +    │ │view│ │
+│ │ 60 ││ tool 328    │                              │ Models   + │ │ 650│ │
+│ │    ││ action      │                              │ list 272   │ │  ▲ │ │
+│ │    │╰─────────────╯                              │ ⧉ ⊞ ≡ ␡    │ │  ┃ │ │
+│ │    │                                             ╰────────────╯ │  ● │ │
+│ │    │            the stage, everywhere            ╭────────────╮ │  ┃ │ │
+│ │    │                                      ╭view╮ │ This plate │ │  ▼ │ │
+│ │    │                                      ╰────╯ │ Slice  ⌄   │ │  ▶ │ │
+│ ╰────╯                                             ╰────────────╯ ╰────╯ │
+└──────────────────────────────────────────────────────────────────────────┘
 ```
 
 The top bar is the window's own title bar rather than a band under one: it drags the
@@ -151,29 +158,33 @@ and `0217`. The File, Edit and View menus stand at its left end. The chip at the
 names the machine and the resin, each opening its list, and the layer height and exposure,
 which open the print settings.
 
-The plates are a strip of numbered squares at the window's left edge, outside the plate
-panel so they stay when it folds; a right click on one duplicates, removes or gathers the
-selection onto it. The sheet of keys and the gear stand at the foot of the
-rail.
+The tools are a rail at the stage's left edge with the inspector beside it: what is picked
+opens next to where it was picked. The rail is always the stage's height; a tall screen
+spreads its gaps up to a ceiling, a short one drops the names, then closes the gaps, and
+only then scrolls. The plates are a row of numbered squares at the head of
+the models card, which keeps only them when it folds; a right click on one duplicates,
+removes or gathers the selection onto it. The sheet of keys and the gear stand at the top bar's right end.
 
-The plate's contents are a panel rather than a card over the model, and the rail stands
-beside the panel it drives; see `docs/decisions/0102`. Both side columns are dragged by
-their inner edge, and the plate folds away when that drag goes past its floor, leaving a
-hairline that lights up and brings it back on a click. At the foot of the plate column the
-summary states the plate's figures, or the layer's own in Preview, over Slice; the caret
-beside Slice holds every plate at once and the bound machine.
+A side card past the room it has scrolls its list — the tool's sections, the plate's
+models — and keeps its foot in view (`ui::body_and_foot`). Both side cards are dragged by
+their inner edge, and the plate folds away when that drag goes past its floor; a button
+beside the plates brings it back. Under the models, standing on the stage's foot, a card of
+its own states the plate's figures, or the layer's own in Preview, over Slice; the caret beside Slice holds
+every plate at once and the bound machine.
 
-The layer strip along the foot of the stage is drawn in every view. It switches the view —
-the model, the model beside its layer, the layer alone — steps and plays, and its track
-moves the cut, carrying the exposure bands along its top, the cured area as a profile
-either side of the rule and a tick at each risk; a click on the layer figure opens it for
-typing, and Enter goes there. See `docs/decisions/0061` and `0217`.
+The layer strip stands the stage's full height at its right edge, in every view, its top
+the top of the print. It switches the view — the model, the model beside its layer, the
+layer alone — reads the layer and its height, and its track moves the cut, with a layer
+up over it and a layer down and play under it. The track carries the exposure bands down
+its left, the cured area as a profile either side of the rule and a tick at each risk; a
+click on the layer figure opens it for typing, and Enter goes there. The profile and the risks show in the model view too while
+the stack is still the plate's. See `docs/decisions/0061` and `0217`.
 
-What floats over the stage is `egui::Area`s anchored to a rectangle by their corner: the
-view tools at the top left of the viewport (`panels/view_column.rs`), the view cube and
-the home view at its top right (`panels/view_cube.rs`), and top centre of
-the stage the running jobs with their Cancel, a sent file waiting to be started, and the
-last message (`panels/stage_notice.rs`). A failure stays there until it is put away; any
+Everything over the stage is an `egui::Area` anchored to a rectangle by its corner. Between
+the side cards stand the view cube and the home view at the top right
+(`panels/view_cube.rs`), the view tools at the bottom right beside this plate's card
+(`panels/view_column.rs`), and top centre the running jobs with their Cancel, a sent file waiting to be started, and the last
+message (`panels/stage_notice.rs`). A failure stays there until it is put away; any
 other message stands for four seconds. There is no status line.
 
 The viewport reads the raw pointer rather than its own `Response`, so what is drawn over
@@ -188,7 +199,7 @@ and the stage are not drawn, and everything under the top bar is the Settings sc
 pages down the left, the open page's list and form beside them. A form is blocks — a title in
 a column of its own, the fields beside it, a hairline under them — and a title stands over
 its fields where the form is too narrow for both. It is a screen because a support profile
-is edited instead of the plate; the gear at the foot of the rail opens it, and its close
+is edited instead of the plate; the gear in the top bar opens it, and its close
 button or Esc leaves it.
 
 **Machine and resin** is a modal over the plate instead, because a machine and a resin are

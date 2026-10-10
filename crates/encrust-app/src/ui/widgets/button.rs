@@ -20,17 +20,22 @@ pub fn icon_toggle(ui: &mut Ui, glyph: &str, tooltip: &str, on: bool) -> Respons
     )
 }
 
-/// A rail button: a glyph over the tool's name, raised with both in the accent while it is
-/// the tool in use, and a dot in `badge` at its corner while the tool needs attention.
+/// A rail button: a glyph over the tool's name, or the glyph alone where the rail is short
+/// of room, raised in the accent while it is the tool in use, and a dot in `badge` at its
+/// corner while the tool needs attention.
 pub fn rail_button(
     ui: &mut Ui,
     glyph: &str,
-    name: &str,
+    name: Option<&str>,
     tooltip: &str,
     active: bool,
     badge: Option<Color32>,
 ) -> Response {
-    let size = vec2(ui.available_width(), theme::RAIL_BUTTON_H);
+    let height = match name {
+        Some(_) => theme::RAIL_BUTTON_H,
+        None => theme::RAIL_ICON_H,
+    };
+    let size = vec2(ui.available_width(), height);
     let (rect, response) = ui.allocate_exact_size(size, Sense::click());
     let colors = theme::colors();
     let (fill, foreground) = match (active, response.hovered()) {
@@ -40,22 +45,28 @@ pub fn rail_button(
     };
     let painter = ui.painter();
     painter.rect_filled(rect, theme::R_CONTROL, fill);
+    let glyph_at = match name {
+        Some(_) => rect.center_top() + vec2(0.0, 16.0),
+        None => rect.center(),
+    };
     painter.text(
-        rect.center_top() + vec2(0.0, 16.0),
+        glyph_at,
         Align2::CENTER_CENTER,
         glyph,
         theme::icon(17.0),
         foreground,
     );
-    painter.text(
-        rect.center_bottom() - vec2(0.0, 9.0),
-        Align2::CENTER_CENTER,
-        name,
-        theme::rail_name(),
-        foreground,
-    );
+    if let Some(name) = name {
+        painter.text(
+            rect.center_bottom() - vec2(0.0, 9.0),
+            Align2::CENTER_CENTER,
+            name,
+            theme::rail_name(),
+            foreground,
+        );
+    }
     if let Some(badge) = badge {
-        let at = rect.center_top() + vec2(RAIL_BADGE_OFFSET.x, RAIL_BADGE_OFFSET.y);
+        let at = glyph_at + vec2(RAIL_BADGE_OFFSET.x, RAIL_BADGE_OFFSET.y - 16.0);
         painter.circle_filled(at, RAIL_BADGE_R + 1.5, colors.base);
         painter.circle_filled(at, RAIL_BADGE_R, badge);
     }
