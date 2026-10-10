@@ -52,9 +52,11 @@ warm grey `support` and a `support_tint` per group after it, `selected`, `unsoun
 the translucent `blocker` and the red `trapped` the space resin cannot leave is painted
 with, `painted` and `blocked`, the `section_cap` and the `section_wash` behind it, the
 `overhang` a leaning face is marked with, the `outside` of what stands past the build
-volume, the `gizmo` handles, and the plate's `grid`, `plate_border`, `volume` and two
-`plate_axis` lines. It is separate from the `Palette` because none of it is window chrome
-and the luminance ladder above does not apply.
+volume, the `gizmo` handles, the plate's `grid_minor` and `grid_major`, the translucent
+`plate_border` and `volume`, the `plate` the plate is filled with, the dashed `section_frame`, the three `plate_axis` arrows, the
+`shadow` the models cast, and the `light` they are lit by: a sky and a ground, a key and a
+fill, with the directions the two lights travel. It is separate from the `Palette` because
+none of it is window chrome and the luminance ladder above does not apply.
 
 `SEEN_THROUGH` is the one number beside them: how much of itself a surface keeps at most
 when the viewport is drawing the models through, which is the x-ray view in `viewport.md`.
@@ -63,7 +65,7 @@ It reaches the GPU through `theme::gamma`, which is `Color32::to_normalized_gamm
 deliberately does **not** decode to linear: `egui-wgpu` writes gamma to a non-sRGB target
 and our pipeline shares egui's `target_format`, so a decode here would wash the viewport
 out. `ModelInstance::new`, `LineVertex::new` and `ExposureBand::new` take the token and
-call it; the shader's two colours arrive as `Globals` fields.
+call it; the shader's own colours and the lights arrive as `Globals` fields.
 
 ### Type
 
@@ -162,7 +164,8 @@ either side of the rule and a tick at each risk; a click on the layer figure ope
 typing, and Enter goes there. See `docs/decisions/0061` and `0217`.
 
 What floats over the stage is `egui::Area`s anchored to a rectangle by their corner: the
-view tools at the top left of the viewport (`panels/view_column.rs`), and top centre of
+view tools at the top left of the viewport (`panels/view_column.rs`), the view cube and
+the home view at its top right (`panels/view_cube.rs`), and top centre of
 the stage the running jobs with their Cancel, a sent file waiting to be started, and the
 last message (`panels/stage_notice.rs`). A failure stays there until it is put away; any
 other message stands for four seconds. There is no status line.

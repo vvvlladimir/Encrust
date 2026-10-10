@@ -6,9 +6,9 @@ use std::ops::Range;
 use std::sync::Arc;
 
 use bytemuck::{Pod, Zeroable};
-use core_geometry::{Aabb, Mat4, Mesh, Scalar, Vec3};
+use core_geometry::{Aabb, Mat4, Mesh, Scalar, Vec2, Vec3};
 
-use crate::render::vertex::{BodyVertex, LabelVertex, LineVertex, ModelInstance};
+use crate::render::vertex::{LabelVertex, LineVertex, ModelInstance};
 use crate::scene::Mapped;
 use crate::ui::theme;
 
@@ -73,9 +73,7 @@ pub struct FrameInput<'a> {
     pub cut_surfaces: &'a [CutDraw],
     /// The quad lying in the cutting plane the cap is painted with.
     pub cap: &'a [LineVertex],
-    /// The machine under the plate, drawn last and translucent.
-    pub body: &'a [BodyVertex],
-    /// The word lying on the machine, and the font atlas its triangles sample. The atlas
+    /// The word lying in front of the plate, and the font atlas its triangles sample. The atlas
     /// goes to the card the first time it is seen and is kept by its address after that.
     pub label: &'a [LabelVertex],
     pub atlas: Option<Arc<egui::ColorImage>>,
@@ -99,6 +97,29 @@ pub struct FrameInput<'a> {
     /// Whether the models are drawn seen through, which is what shows a cavity that holds
     /// resin; see `docs/design/viewport.md`.
     pub xray: bool,
+    /// The plate the models stand and cast their contact shadow on, or `None` for none.
+    pub floor: Option<Floor>,
+    /// Whether the plate's grid is drawn into it.
+    pub grid: bool,
+}
+
+/// The rectangle the contact shadow is laid on, plate millimetres, at the plate's height.
+#[derive(Debug, Clone, Copy)]
+pub struct Floor {
+    pub near_corner_mm: Vec2,
+    pub size_mm: Vec2,
+}
+
+impl Floor {
+    /// The corner and the size in one `vec4`, as the shader reads them.
+    pub(super) fn area(self) -> [f32; 4] {
+        [
+            self.near_corner_mm.x,
+            self.near_corner_mm.y,
+            self.size_mm.x,
+            self.size_mm.y,
+        ]
+    }
 }
 
 /// The Cut tool's plane, traced as a line wherever it crosses the surface inside `bounds`.

@@ -197,7 +197,7 @@ fn on_camera_plane(
     anchor: Vec3,
 ) -> Option<Vec3> {
     let ray = ray_through(camera, viewport, cursor)?;
-    let normal = (camera.eye() - anchor).normalize_or_zero();
+    let normal = (camera.sight_to(anchor) - anchor).normalize_or_zero();
     let facing = ray.direction.dot(normal);
     if facing.abs() < PLATE_GRAZE {
         return None;

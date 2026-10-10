@@ -1,6 +1,6 @@
 use egui::{Align2, Id, Rect, vec2};
 
-use crate::panels::{Window, frame_view};
+use crate::panels::{Window, frame_view, set_orthographic};
 use crate::shortcuts::{self, Action};
 use crate::ui::{card, icon, icon_button, icon_toggle};
 
@@ -41,6 +41,10 @@ fn view_tools(ui: &mut egui::Ui, window: &mut Window) {
         let xray = &mut window.view.options.xray;
         if icon_toggle(ui, icon::XRAY, "See through models", *xray).clicked() {
             *xray = !*xray;
+        }
+        let flat = window.view.camera.orthographic;
+        if icon_toggle(ui, icon::PERSPECTIVE, "Orthographic view", flat).clicked() {
+            set_orthographic(window.view, !flat);
         }
     });
 }

@@ -654,6 +654,10 @@ fn view_menu(ui: &mut egui::Ui, window: &mut Window) {
     }
     ui.checkbox(&mut window.view.options.grid, "Plate grid");
     ui.checkbox(&mut window.view.options.xray, "See through models");
+    let mut flat = window.view.camera.orthographic;
+    if ui.checkbox(&mut flat, "Orthographic view").changed() {
+        crate::panels::set_orthographic(window.view, flat);
+    }
     ui.separator();
     if item(ui, "Keyboard shortcuts", Action::Sheet).clicked() {
         ui.close();

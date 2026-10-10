@@ -8,14 +8,12 @@ use core_geometry::{Bvh, Heightmap, Mesh, Scalar, Transform, UvMap, Vec2, Vec3};
 use core_volume::{CUT_WEIGHT, Cancel, DrainHole, HollowSettings, drill, hollow};
 
 use crate::camera::OrbitCamera;
-use crate::plate::BuildPlate;
 use crate::render::callback::cuts_of;
 use crate::render::gpu::{
-    CutDraw, CutLine, DEPTH_FORMAT, DrainCut, ExposureBand, FrameInput, ModelDraw, ReliefDraw,
-    TrapBox, ViewportResources,
+    CutDraw, CutLine, DEPTH_FORMAT, DrainCut, ExposureBand, Floor, FrameInput, ModelDraw,
+    ReliefDraw, TrapBox, ViewportResources,
 };
-use crate::render::machine::machine_faces;
-use crate::render::vertex::{BodyVertex, LineVertex, ModelInstance, NOT_MARKED};
+use crate::render::vertex::{LineVertex, ModelInstance, NOT_MARKED};
 use crate::scene::Mapped;
 use crate::ui::theme;
 
@@ -135,7 +133,6 @@ fn a_hole_shows_the_wall_of_the_cut_that_made_it() {
                 cut_surfaces: &surfaces,
                 ..Marks::default()
             },
-            &[],
         )
     };
 
@@ -262,36 +259,91 @@ fn the_cut_plane_is_traced_across_the_model_it_is_set_on() {
     );
 }
 
-/// The machine is the only thing on an empty plate, so if the pass that paints it is
-/// wrong there is nothing else on screen to hide that.
+/// A model standing a little over the plate darkens the plate under it, and only darkens:
+/// the shadow is black laid over what is there. Only what the frame without a floor
+/// already paints is compared, since the floor also fills the plate where nothing stands. Lifted well clear of the plate, the same
+/// model casts nothing, because the shadow is a contact shadow and not the key light's.
 #[test]
-fn the_machine_shows_under_an_empty_plate() {
-    let camera = OrbitCamera {
-        target: Vec3::new(75.0, 40.0, 0.0),
-        distance_mm: 320.0,
-        ..OrbitCamera::default()
+fn a_model_near_the_plate_darkens_it_and_one_high_above_does_not() {
+    let floor = Floor {
+        near_corner_mm: Vec2::ZERO,
+        size_mm: Vec2::new(150.0, 80.0),
     };
-    let Some(empty) = paint(camera, None, &[], &[], Marks::default(), &[]) else {
+    let Some(bare) = paint_over_a_lit_plate(10.0, None) else {
         return;
     };
-    let machine = paint(
-        camera,
-        None,
-        &[],
-        &[],
-        Marks::default(),
-        &machine_faces(&BuildPlate::default()),
-    )
-    .expect("the second frame draws too");
-
-    let painted = empty
+    let shaded = paint_over_a_lit_plate(10.0, Some(floor)).expect("the second frame draws");
+    let changed: Vec<_> = bare
         .as_chunks::<4>()
         .0
         .iter()
-        .zip(machine.as_chunks::<4>().0)
-        .filter(|(before, after)| before != after)
+        .zip(shaded.as_chunks::<4>().0)
+        .filter(|(before, after)| before[..3] != [0, 0, 0] && before != after)
+        .collect();
+    assert!(
+        !changed.is_empty(),
+        "the shadow has to reach the plate at all"
+    );
+    assert!(
+        changed
+            .iter()
+            .all(|(before, after)| (0..3).all(|channel| after[channel] <= before[channel])),
+        "a shadow only takes light away"
+    );
+
+    let high_bare = paint_over_a_lit_plate(80.0, None).expect("the third frame draws");
+    let high_shaded = paint_over_a_lit_plate(80.0, Some(floor)).expect("the fourth frame draws");
+    let darkened = high_bare
+        .as_chunks::<4>()
+        .0
+        .iter()
+        .zip(high_shaded.as_chunks::<4>().0)
+        .filter(|(before, after)| before[..3] != [0, 0, 0] && before != after)
         .count();
-    assert!(painted > 0, "the machine has to reach the screen at all");
+    assert_eq!(
+        darkened, 0,
+        "a model past the shadow's reach casts nothing on the plate"
+    );
+}
+
+/// A disc 40 mm across hanging `height_mm` over a wide lit disc lying just under the
+/// plate, which stands in for the plate the shadow is laid on; seen from the front, so
+/// the plate under the hanging disc shows past its front edge.
+fn paint_over_a_lit_plate(height_mm: f32, floor: Option<Floor>) -> Option<Vec<u8>> {
+    let disc = Arc::new(ball(40.0, 16, 24));
+    let placed = |translation, scale| {
+        ModelDraw::whole(
+            Arc::clone(&disc),
+            ModelInstance::new(
+                Transform {
+                    translation,
+                    scale,
+                    ..Transform::default()
+                },
+                theme::scene().object,
+                NOT_MARKED,
+            ),
+        )
+    };
+    let models = [
+        placed(Vec3::new(75.0, 40.0, -1.0), Vec3::new(2.5, 1.5, 0.01)),
+        placed(Vec3::new(75.0, 40.0, height_mm), Vec3::new(0.5, 0.5, 0.02)),
+    ];
+    let camera = OrbitCamera {
+        target: Vec3::new(75.0, 40.0, 0.0),
+        distance_mm: 200.0,
+        ..OrbitCamera::default()
+    };
+    paint(
+        camera,
+        None,
+        &models,
+        &[],
+        Marks {
+            floor,
+            ..Marks::default()
+        },
+    )
 }
 
 /// The ball of [`drilled_ball`] undrilled and uncut, painted with `bands`.
@@ -342,7 +394,7 @@ fn paint_ball_cached(inside: Vec<ModelDraw>, marks: Marks<'_>, cached: bool) -> 
         distance_mm: 170.0,
         ..OrbitCamera::default()
     };
-    paint_after(camera, None, before, &models, &[], marks, &[])
+    paint_after(camera, None, before, &models, &[], marks)
 }
 
 /// The frame as the window would draw it, or `None` on a machine with no adapter to draw
@@ -378,7 +430,7 @@ fn painted_ball(drilled: bool, walled: bool) -> Option<Vec<u8>> {
         cut_surfaces: &cut_surfaces,
         ..Marks::default()
     };
-    paint(camera, Some(SECTION_MM), &models, &solids, marks, &[])
+    paint(camera, Some(SECTION_MM), &models, &solids, marks)
 }
 
 /// The inside of the cuts `bodies` take out of `mesh`, the way the window hands them over:
@@ -412,6 +464,7 @@ struct Marks<'a> {
     cut_line: Option<CutLine>,
     /// Whether the models are drawn seen through; see `docs/design/viewport.md`.
     xray: bool,
+    floor: Option<Floor>,
 }
 
 /// Seen through, a model is a wash rather than a surface: it keeps less of itself than it
@@ -632,7 +685,6 @@ fn a_texture_shows_on_the_model_it_would_be_pressed_into() {
         &[ModelDraw::whole(Arc::clone(&mesh), instance)],
         &[],
         Marks::default(),
-        &[],
     ) else {
         return;
     };
@@ -696,7 +748,6 @@ fn paint_textured(camera: OrbitCamera, draw: &ReliefDraw) -> Option<Vec<u8>> {
             models: &[],
             solids: &[],
             cap: &[],
-            body: &[],
             label: &[],
             atlas: None,
             cuts: &[],
@@ -707,9 +758,11 @@ fn paint_textured(camera: OrbitCamera, draw: &ReliefDraw) -> Option<Vec<u8>> {
             volume_mm: None,
             cut_line: None,
             xray: false,
+            floor: None,
+            grid: false,
         },
     );
-    Some(read_back(device, queue, format, &resources))
+    Some(read_back(device, queue, format, &mut resources))
 }
 
 /// One frame as the window would paint it, read back, or `None` with no adapter to paint
@@ -720,9 +773,8 @@ fn paint(
     models: &[ModelDraw],
     solids: &[ModelDraw],
     marks: Marks<'_>,
-    body: &[BodyVertex],
 ) -> Option<Vec<u8>> {
-    paint_after(camera, section_mm, &[], models, solids, marks, body)
+    paint_after(camera, section_mm, &[], models, solids, marks)
 }
 
 /// The same, with each frame of `before` prepared against the same resources first and
@@ -736,7 +788,6 @@ fn paint_after<'a>(
     models: &'a [ModelDraw],
     solids: &'a [ModelDraw],
     marks: Marks<'a>,
-    body: &'a [BodyVertex],
 ) -> Option<Vec<u8>> {
     let Marks {
         cuts,
@@ -747,6 +798,7 @@ fn paint_after<'a>(
         volume_mm,
         cut_line,
         xray,
+        floor,
     } = marks;
     let (device, queue) = gpu()?;
     let format = wgpu::TextureFormat::Rgba8UnormSrgb;
@@ -761,7 +813,6 @@ fn paint_after<'a>(
         models,
         solids,
         cap: &cap,
-        body,
         label: &[],
         atlas: None,
         cuts,
@@ -772,13 +823,15 @@ fn paint_after<'a>(
         volume_mm,
         cut_line,
         xray,
+        floor,
+        grid: false,
     };
     for earlier in before {
         resources.prepare(device, queue, input(earlier));
     }
     resources.prepare(device, queue, input(models));
 
-    Some(read_back(device, queue, format, &resources))
+    Some(read_back(device, queue, format, &mut resources))
 }
 
 /// Paints what `resources` recorded into an offscreen target and reads the pixels back.
@@ -786,7 +839,7 @@ fn read_back(
     device: &wgpu::Device,
     queue: &wgpu::Queue,
     format: wgpu::TextureFormat,
-    resources: &ViewportResources,
+    resources: &mut ViewportResources,
 ) -> Vec<u8> {
     let (colour, depth) = (
         target(device, format, wgpu::TextureUsages::COPY_SRC),
@@ -796,6 +849,7 @@ fn read_back(
     let depth_view = depth.create_view(&wgpu::TextureViewDescriptor::default());
 
     let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor::default());
+    resources.bake_shadow(&mut encoder);
     {
         let pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
             label: None,

@@ -194,40 +194,8 @@ fn normal_matrix(model: &core_geometry::Mat4) -> Mat3 {
     linear.inverse().transpose()
 }
 
-/// One corner of the machine under the plate: lit like a model, but carrying its own
-/// colour rather than taking one from an instance row.
-#[repr(C)]
-#[derive(Debug, Clone, Copy, Pod, Zeroable)]
-pub struct BodyVertex {
-    pub position: [f32; 3],
-    normal: [f32; 3],
-    color: [f32; 4],
-}
-
-impl BodyVertex {
-    const ATTRIBUTES: [wgpu::VertexAttribute; 3] =
-        wgpu::vertex_attr_array![0 => Float32x3, 1 => Float32x3, 2 => Float32x4];
-
-    pub const fn layout() -> wgpu::VertexBufferLayout<'static> {
-        wgpu::VertexBufferLayout {
-            array_stride: size_of::<Self>() as wgpu::BufferAddress,
-            step_mode: wgpu::VertexStepMode::Vertex,
-            attributes: &Self::ATTRIBUTES,
-        }
-    }
-
-    /// Takes a token rather than floats so that no colour can be spelled in the renderer.
-    pub fn new(position: Vec3, normal: Vec3, color: Color32) -> Self {
-        Self {
-            position: position.to_array(),
-            normal: normal.to_array(),
-            color: theme::gamma(color),
-        }
-    }
-}
-
-/// One corner of the word lying on the platform's lip: a place on the machine and a place
-/// in the font atlas.
+/// One corner of the word lying in front of the plate: a place in plate millimetres and a
+/// place in the font atlas.
 #[repr(C)]
 #[derive(Debug, Clone, Copy, Pod, Zeroable)]
 pub struct LabelVertex {

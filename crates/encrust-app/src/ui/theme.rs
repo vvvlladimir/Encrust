@@ -186,14 +186,22 @@ pub struct Scene {
     pub overhang: Color32,
     /// Whatever stands past the build volume, which the printer cannot reach.
     pub outside: Color32,
-    /// The plate's own grid, its outline, and the wireframe of the build volume.
-    pub grid: Color32,
+    /// The plate's grid: a line every centimetre, and a stronger one every five.
+    pub grid_minor: Color32,
+    pub grid_major: Color32,
+    /// The plate's outline, and the wireframe of the build volume, both translucent so
+    /// they recede behind the models.
     pub plate_border: Color32,
     pub volume: Color32,
-    /// The build platform the models stand on, and the arm it hangs from. Translucent,
-    /// so what stands on the plate is never hidden by it.
-    pub platform: Color32,
-    /// The word written on the platform's front lip.
+    /// The dashed outline of the plate drawn at the height the section cuts at.
+    pub section_frame: Color32,
+    /// The plate's own surface: a shade off the backdrop, so the plate reads as a floor.
+    pub plate: Color32,
+    /// How dark the plate goes under a model standing on it, as black at that alpha.
+    pub shadow: Color32,
+    /// What the models are lit by; see `docs/design/viewport.md`.
+    pub light: Lighting,
+    /// The word written in front of the plate.
     pub label: Color32,
     /// The brackets on the corners of a picked model's bounds.
     pub bounds: Color32,
@@ -202,12 +210,25 @@ pub struct Scene {
     /// Where the Cut tool's plane crosses the model: darker than the selection it is
     /// traced over, and apart from the red that marks a model past the build volume.
     pub cut_line: Color32,
-    /// The plate's X and Y lines, in the same CAD convention as `Palette::axis`.
-    pub plate_axis: [Color32; 2],
+    /// The X, Y and Z arrows in the plate's corner, in the same CAD convention as
+    /// `Palette::axis`.
+    pub plate_axis: [Color32; 3],
     /// The move and rotate handles, per axis, and the one being hovered or dragged:
     /// brighter than the field letters, since they are drawn over a lit model.
     pub gizmo: [Color32; 3],
     pub gizmo_hot: Color32,
+}
+
+/// A sky and a ground the ambient light is mixed from by how far a surface faces up, a key
+/// light from above the front left and a weak warm fill from the back right.
+pub struct Lighting {
+    pub sky: Color32,
+    pub ground: Color32,
+    pub key: Color32,
+    pub fill: Color32,
+    /// Directions the two lights travel towards, in plate coordinates, Z up.
+    pub key_towards: [f32; 3],
+    pub fill_towards: [f32; 3],
 }
 
 const ENCRUST_SCENE: Scene = Scene {
@@ -223,18 +244,26 @@ const ENCRUST_SCENE: Scene = Scene {
     section_wash: Color32::from_rgb(0xed, 0xe6, 0xdb),
     overhang: Color32::from_rgb(0xf0, 0x61, 0x40),
     outside: Color32::from_rgb(0xe0, 0x2f, 0x2f),
-    grid: Color32::from_rgb(0x4d, 0x52, 0x5c),
-    plate_border: Color32::from_rgb(0xb3, 0xb8, 0xc7),
-    volume: Color32::from_rgb(0x3d, 0x42, 0x4d),
-    platform: Color32::from_rgba_premultiplied(0x34, 0x36, 0x3b, 0x4d),
+    grid_minor: Color32::from_rgb(0x26, 0x2c, 0x34),
+    grid_major: Color32::from_rgb(0x39, 0x41, 0x4b),
+    plate_border: Color32::from_rgba_unmultiplied_const(0x8a, 0x93, 0xa3, 0xb3),
+    volume: Color32::from_rgba_unmultiplied_const(0x59, 0x61, 0x6d, 0x59),
+    section_frame: Color32::from_rgb(0x8a, 0x8e, 0x94),
+    plate: Color32::from_rgb(0x14, 0x18, 0x1d),
+    shadow: Color32::from_black_alpha(0x8c),
+    light: Lighting {
+        sky: Color32::from_rgb(0xdf, 0xe7, 0xf2),
+        ground: Color32::from_rgb(0x1a, 0x14, 0x10),
+        key: Color32::from_rgb(0xff, 0xff, 0xff),
+        fill: Color32::from_rgb(0xff, 0xc9, 0xa8),
+        key_towards: [0.4, 0.55, -0.85],
+        fill_towards: [-0.75, -0.55, -0.3],
+    },
     label: Color32::from_rgba_premultiplied(0x96, 0x9b, 0xa6, 0xc8),
     bounds: Color32::from_rgb(0xf2, 0xf2, 0xf2),
     facet: Color32::from_rgba_premultiplied(0xd9, 0x6b, 0x33, 0xd9),
     cut_line: Color32::from_rgb(0xa8, 0x3a, 0x12),
-    plate_axis: [
-        Color32::from_rgb(0xcc, 0x4d, 0x4d),
-        Color32::from_rgb(0x59, 0xb3, 0x59),
-    ],
+    plate_axis: ENCRUST.axis,
     gizmo: [
         Color32::from_rgb(0xff, 0x4f, 0x4f),
         Color32::from_rgb(0x5f, 0xe0, 0x5f),
@@ -350,6 +379,11 @@ pub fn section() -> FontId {
 /// The open tool's name, at the head of the inspector.
 pub fn tool_title() -> FontId {
     FontId::new(14.0, FontFamily::Name(SEMIBOLD.into()))
+}
+
+/// X, Y or Z beside the arrows in the corner of the plate.
+pub fn axis_letter() -> FontId {
+    FontId::new(11.0, FontFamily::Name(SEMIBOLD.into()))
 }
 
 /// A tool's name under its glyph on the rail.

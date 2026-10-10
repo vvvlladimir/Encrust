@@ -1,4 +1,4 @@
-use crate::camera::OrbitCamera;
+use crate::camera::{CameraTurn, OrbitCamera};
 use crate::cut::CutTool;
 use crate::drain::DrainTool;
 use crate::gizmo::TransformGizmo;
@@ -42,6 +42,8 @@ pub struct View {
     pub gizmo: TransformGizmo,
     pub section: Section,
     pub input: ViewportInput,
+    /// The swing the view cube asked for, while it is still under way.
+    pub turn: Option<CameraTurn>,
 }
 
 impl View {
@@ -53,6 +55,7 @@ impl View {
             gizmo: TransformGizmo::default(),
             section: Section::default(),
             input: ViewportInput::default(),
+            turn: None,
         }
     }
 }

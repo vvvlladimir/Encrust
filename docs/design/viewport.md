@@ -1,21 +1,29 @@
 # The viewport
 
 How `encrust-app` draws the plate and the models on it, and how the mouse orbits, selects
-and drags. Decisions: ADR 0014, 0015, 0016, 0017, 0036, 0062, 0108, 0184.
+and drags. Decisions: ADR 0014, 0015, 0016, 0017, 0036, 0062, 0184, 0219.
 
 ## Coordinates
 
 Plate millimetres, Z up, origin at the front left corner, so a model on the plate has
 `z >= 0` inside `0..x_mm` by `0..y_mm`. This is the frame `core-raster` maps onto the
-panel, so a model that looks placed is placed. X and Y are drawn along the two plate edges
-in red and green, the grid is one line per centimetre, and a faint wireframe box marks the
-top of the build volume. Under the plate is the build platform: a lipped deck and the arm
-it hangs from, generated from the plate's own extents and painted last and translucent
-with depth writes off, so what stands on the plate is never hidden by it. The machine
-cures downwards, so its structure is on the far side from the print and nothing it draws
-is above `z = 0`. `Front` is painted on the deck's front lip: laid out by the font, mapped
-from points onto the lip in millimetres and drawn in the 3D pass against egui's own font
-atlas, so it takes the machine's perspective (ADR 0108).
+panel, so a model that looks placed is placed. The viewport stands on a flat `sunken`
+backdrop, and the plate is one surface, with no model of the machine under it: a fill of
+`plate` a shade off the backdrop with the grid drawn into it by the same fragment shader,
+a line every centimetre and a stronger one every five. Each line is measured in pixels with
+`fwidth`, so it keeps its width at any zoom and is smoothed over its edge, and the
+centimetre lines fade out once they close to within a few pixels of each other. Drawn into
+the surface, the grid can never fight it for depth. The surface is drawn first and takes no
+depth, so the lines over it never tie with it and a model seen through still shows over it.
+Three arrows 30 mm long start at
+the origin corner, X and Y along the plate's edges, X red, Y green and Z blue, their letters
+drawn over the 3D pass so they face the camera; they are the first lines drawn, so where
+they run along the outline they win the depth tie. The plate's outline and the wireframe of
+the build volume are translucent. While the section cuts, the plate's
+outline is drawn again at its height, dashed 3 mm on and 2 mm off. `Front` lies in a 12 mm
+band in front of the plate: laid out by the font, mapped from points onto the plate's plane
+in millimetres and drawn in the 3D pass against egui's own font atlas, so it takes the
+plate's perspective.
 
 ## The camera
 
@@ -84,11 +92,11 @@ since hovering focuses it.
 `ViewportCallback` is built during the UI pass while the scene is borrowed, carrying plain
 data: the view-projection, the plate's lines and one `ModelDraw` per visible object. egui
 calls it back when the app state is no longer borrowed. `prepare` borrows the resources
-mutably and uploads the globals uniform (view-projection, light direction, section cut),
+mutably and uploads the globals uniform (view-projection, lights, section cut, shadow),
 the plate lines into a buffer that grows and never shrinks, one instance row per object,
 any mesh not already on the GPU keyed by its `Arc` address, and the draw list. `paint`
 borrows immutably and replays it: the line pipeline once, then the model pipeline per
-object, and the machine last.
+object, the word, and the shadow last.
 
 ## Vertex layouts
 
@@ -101,13 +109,8 @@ and round off exactly the facets a sliceable model is made of.
 | 0 | vertex | `position: vec3`, `normal: vec3` |
 | 1 | instance | `model: mat4`, `normal: mat3`, `color: vec4` |
 
-The machine has a vertex layout of its own — `position`, `normal`, `color` — because it
-is one draw of one buffer rather than instances of a cached mesh, and a lit pass of its
-own, because the model shader is the print's: it cuts at the section plane, subtracts
-drain holes and washes exposure bands, none of which a printer wants. Its deck covers the
-plate, and stays under the grid by being drawn after it and losing every depth tie. The
-word on its lip is a third layout — `position`, `uv`, `color` — and the only pass with a
-second bind group, holding the font atlas and its sampler.
+The word in front of the plate is a layout of its own — `position`, `uv`, `color` — with a
+second bind group holding the font atlas and its sampler.
 
 The instance normal matrix is the inverse transpose of the model matrix's upper 3×3, so
 normals stay perpendicular under a non-uniform scale; a scale with a zero axis is not
@@ -180,6 +183,82 @@ egui's pass, the same in a browser as at the desk (ADR 0184). Which height the
 rail hands over depends on the mode, and `panels::section::cut_height` is the one place
 that decides.
 
+## Light
+
+Every lit pass shares one `lit` function, in the gamma space the target is written in
+(see `ui-design-system.md`), from the tokens in `theme::Scene::light`:
+
+```
+colour = base * (floor + sky_share * mix(ground, sky, n.z / 2 + 1/2)
+                 + key_share * key * max(n · key, 0) + fill_share * fill * max(n · fill, 0))
+       + specular_share * key * max(n · h, 0)^24
+```
+
+The ambient is a hemisphere, cool from above and warm-dark from below, over a floor of
+0.26, so a face turned from both lights still reads as resin rather than as a hole. The key
+comes from above the front left and the fill, weak and warm, from the back right. The
+highlight is Blinn-Phong with `h` halfway between the key and the eye, small and broad as on
+a matt resin, scaled by the fragment's alpha so a translucent surface stays premultiplied.
+The shares are shader constants; the colours and directions are tokens.
+
+A surface leaning past the overhang angle, and whatever stands past the build volume, is
+hatched rather than filled: stripes 3.4 mm apart along `x + y - z`, so they run diagonally
+on any face, smoothed over a pixel with `fwidth` and evened out to half where they are
+closer together than pixels. Between the stripes the mark keeps a light wash, so a patch
+narrower than the pitch still shows.
+
+## The contact shadow
+
+The models darken the plate under them with a shadow baked into a 512 by 512 one-channel
+texture over the plate. The silhouette pass lays every model flat onto
+it from above, both faces and no depth, each fragment as dark as its height leaves it —
+`1 - smoothstep(0, 30 mm, z)` — and a blend of `Max`, so the surface nearest the plate
+over a texel decides it. A volume casts nothing, a translucent marker as much as it covers,
+and nothing under the plate shades its top. One blur pass, a 7 by 7 Gaussian 1.5 texels
+apart, softens it into the second texture.
+
+The bake runs only when what casts it changes: `prepare` hashes the plate's rectangle and
+each model's mesh address, faces and instance row, which costs the same for a model of
+millions of triangles as for one of twelve, and `draw` bakes again only when that number
+moved. An orbit, a zoom, a scrub of the layer strip or the x-ray bakes nothing; a drag of
+the gizmo bakes every frame it moves a model.
+
+Every frame a quad over the same rectangle at `z = 0` reads the blurred texture and lays
+black at `shadow`'s alpha times what it reads, over the backdrop the viewport is presented
+on. It is drawn last, with the depth test on and depth writes off, so whatever stands in
+front of the plate keeps it off and the grid lines stay crisp. From under the plate it
+discards.
+
+## The view cube
+
+The cube at the viewport's top right is egui shapes in an `Area` of its own, so the camera
+never reads a press on it. It is drawn without perspective, turned by the camera's view
+matrix alone. Each face is cut into nine cells at half its half-width: the middle stands
+for the face, the bands for the twelve edges and the corners for the eight corners, each
+cell's view the sum of the normals it touches. The cell under the pointer lights up with
+every other cell of the same view. A click swings the camera round its target to look
+from there with `OrbitCamera::seen_from`; straight up or down keeps the yaw, which is
+undefined there. Each face's name is laid out by the font and its triangles carried onto
+the face's plane before they are projected, so it lies on the face and foreshortens with
+it. A face turned less than 0.08 towards the camera is not drawn: seen edge on it would
+be a hairline down the cube's side. Under the cube, while the pointer is over it, Home
+swings back to the view an empty window opens with; its room is kept whether it shows or
+not, so it does not vanish on the way down to it.
+
+The swing is a `CameraTurn` on `View`, eased with a smoothstep over 0.35 s and taking the
+short way round in yaw. Any drag or scroll of the camera ends it where it stands.
+
+## Without perspective
+
+`OrbitCamera::orthographic` draws the view with parallel lines staying parallel; the view
+tools and the View menu switch it. The orthographic view is as tall as the perspective one
+is at the target, `2 · distance · tan(fov / 2)`, so switching keeps what stands there the
+same size and zoom and pan work unchanged. Its near plane stands ten distances behind the
+eye, so a model the eye is zoomed into is still drawn whole. Picking unprojects through the
+same matrix and needs nothing else; what asks where a line of sight starts — whether a
+bracket is hidden, the plane a dragged tip moves in — asks `sight_to`, which is the eye in
+perspective and a point far back along the view axis without it.
+
 ## Seeing through the models
 
 The x-ray is a view of its own, not a tool: the view card and the View menu toggle it and
@@ -205,7 +284,7 @@ more translucent than it looks: head-on it is laid twice, where a surface in the
 would be down to `XRAY_FLOOR` of itself. Volumes are gathered after every model, so a
 second model standing in front cannot wash one out.
 
-Everything else applies to the flat pass alone: the plate, the machine, the section cap and
+Everything else applies to the flat pass alone: the plate, the section cap and
 a model drawn with its own texture are unchanged, so a relief still shows what it would
 press in.
 
@@ -240,8 +319,9 @@ independent of the layer strip.
 
 ## What is not tested
 
-The rendered pixels and the gizmo's interaction. Everything above those boundaries —
-camera matrices, framing, grid geometry, vertex expansion, normal matrices, ray casting,
+The rendered pixels beyond what `render/offscreen.rs` asks of them, and the gizmo's and
+the view cube's interaction. Everything above those boundaries — camera matrices, framing,
+turns, grid geometry, the cube's cells, vertex expansion, normal matrices, ray casting,
 picking, the gizmo's conversions — has headless unit tests. Asserting on the draw would
 mean an image-comparison harness and a GPU in CI; asserting on a drag would mean feeding
 synthetic pointer events through egui to test a third-party crate's arithmetic.

@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use core_format::ExposureRange;
-use core_geometry::{Mat4, Mesh, Scalar, Transform, Vec3};
+use core_geometry::{Mat4, Mesh, Scalar, Transform, Vec2, Vec3};
 use core_volume::{CUT_WEIGHT, Channel, DrainHole, MOUTH_LIFT_MM};
 use egui::Color32;
 use egui::epaint::ViewportInPixels;
@@ -10,13 +10,12 @@ use egui_wgpu::{CallbackResources, CallbackTrait, ScreenDescriptor};
 use crate::camera::OrbitCamera;
 use crate::plate::BuildPlate;
 use crate::render::gpu::{
-    CutDraw, CutLine, DrainCut, ExposureBand, FrameInput, MAX_BANDS, MAX_CUTS, MAX_POCKETS,
+    CutDraw, CutLine, DrainCut, ExposureBand, Floor, FrameInput, MAX_BANDS, MAX_CUTS, MAX_POCKETS,
     ModelDraw, ReliefDraw, TrapBox,
 };
-use crate::render::grid::plate_lines;
+use crate::render::grid::{plate_lines, section_frame};
 use crate::render::label;
-use crate::render::machine::machine_faces;
-use crate::render::vertex::{BodyVertex, LabelVertex, LineVertex, ModelInstance, NOT_MARKED};
+use crate::render::vertex::{LabelVertex, LineVertex, ModelInstance, NOT_MARKED};
 use crate::scene::{Scene, SceneObject};
 use crate::ui::theme;
 use crate::workspace::ViewOptions;
@@ -41,9 +40,7 @@ pub struct ViewportCallback {
     /// stencil plane so that the cap covers the material the plane runs through.
     solids: Vec<ModelDraw>,
     cap: Vec<LineVertex>,
-    /// The machine under the plate: the platform and the arm it hangs from.
-    body: Vec<BodyVertex>,
-    /// The word lying on the platform, and the font atlas it samples.
+    /// The word lying in front of the plate, and the font atlas it samples.
     label: Vec<LabelVertex>,
     atlas: Option<std::sync::Arc<egui::ColorImage>>,
     /// The holes already cut into the models being drawn, in plate millimetres. The
@@ -66,6 +63,10 @@ pub struct ViewportCallback {
     /// Whether the models are drawn seen through, so a cavity that holds resin can be
     /// looked into; see `docs/design/viewport.md`.
     xray: bool,
+    /// Whether the plate's grid is drawn into it.
+    grid: bool,
+    /// The plate the models cast their shadow on.
+    floor: Floor,
 }
 
 /// The exposure bands washed over the models, and the height below which one shows
@@ -119,18 +120,21 @@ impl ViewportCallback {
         } = Draws::of(scene, overhang_deg.map_or(NOT_MARKED, marking), textured);
 
         let (label, atlas) = label::front(plate);
+        let mut lines = plate_lines(plate);
+        if let Some(height) = section_mm {
+            lines.extend(section_frame(plate, height));
+        }
         Self {
             rect,
             view_projection: camera.view_projection(rect.width() / rect.height()),
             eye: camera.eye(),
             section_mm,
-            lines: plate_lines(plate, view.grid),
+            lines,
             models,
             solids,
             cap: section_mm
                 .map(|height| cap_quad(scene, plate, height))
                 .unwrap_or_default(),
-            body: machine_faces(plate),
             label,
             atlas,
             cuts,
@@ -142,6 +146,11 @@ impl ViewportCallback {
             volume_mm: Vec3::new(plate.x_mm, plate.y_mm, plate.z_mm),
             cut_line,
             xray: view.xray,
+            grid: view.grid,
+            floor: Floor {
+                near_corner_mm: Vec2::ZERO,
+                size_mm: Vec2::new(plate.x_mm, plate.y_mm),
+            },
         }
     }
 }
@@ -470,7 +479,6 @@ impl CallbackTrait for ViewportCallback {
                     models: &self.models,
                     solids: &self.solids,
                     cap: &self.cap,
-                    body: &self.body,
                     label: &self.label,
                     atlas: self.atlas.clone(),
                     cuts: &self.cuts,
@@ -482,6 +490,8 @@ impl CallbackTrait for ViewportCallback {
                     volume_mm: Some(self.volume_mm),
                     cut_line: self.cut_line,
                     xray: self.xray,
+                    floor: Some(self.floor),
+                    grid: self.grid,
                 },
             );
             // The same pixels egui hands `paint` its viewport for, so the copy lands

@@ -13,6 +13,7 @@ impl ViewportResources {
         size_px: [u32; 2],
         viewport: egui::epaint::ViewportInPixels,
     ) {
+        self.bake_shadow(encoder);
         let mut pass = self.target.begin(device, encoder, size_px, viewport);
         self.paint(&mut pass);
     }
@@ -25,6 +26,7 @@ impl ViewportResources {
     /// Records the scene into a pass whose depth plane is [`DEPTH_FORMAT`].
     pub fn paint(&self, render_pass: &mut wgpu::RenderPass<'static>) {
         render_pass.set_bind_group(0, &self.globals_bind_group, &[]);
+        self.paint_plate(render_pass);
 
         if self.frame.line_vertices > 0 {
             render_pass.set_pipeline(&self.line_pipeline);
@@ -80,14 +82,6 @@ impl ViewportResources {
             render_pass.draw(0..self.frame.cap_vertices, 0..1);
         }
 
-        // Last, so the models are already in the depth buffer and the near wall of the
-        // vat washes over whatever stands in front of it.
-        if self.frame.body_vertices > 0 {
-            render_pass.set_pipeline(&self.body_pipeline);
-            render_pass.set_vertex_buffer(0, self.body.buffer.slice(..));
-            render_pass.draw(0..self.frame.body_vertices, 0..1);
-        }
-
         if let Some((_, atlas)) = self
             .atlas
             .as_ref()
@@ -98,6 +92,9 @@ impl ViewportResources {
             render_pass.set_vertex_buffer(0, self.label.buffer.slice(..));
             render_pass.draw(0..self.frame.label_vertices, 0..1);
         }
+
+        // Last, so the models' depth keeps it off whatever stands in front of the plate.
+        self.paint_shadow(render_pass);
     }
 
     /// Draws the inside of every cut: the far wall of each body, kept where the object it

@@ -1,7 +1,9 @@
 use egui::{Align2, Frame, Id, Rect};
 
 use crate::files::{self, Wanted};
-use crate::panels::{Window, mask_pane, section, stage_notice, view_column, viewport_panel};
+use crate::panels::{
+    Window, mask_pane, section, stage_notice, view_column, view_cube, viewport_panel,
+};
 use crate::ui::{card, icon, primary_button, theme};
 use crate::workspace::Mode;
 
@@ -43,6 +45,7 @@ pub fn ui(ui: &mut egui::Ui, window: &mut Window) {
         empty_state(ui, viewport, window);
     }
     view_column::ui(ui, window, viewport);
+    view_cube::ui(ui, window, viewport);
     stage_notice::ui(ui, window, stage);
 }
 

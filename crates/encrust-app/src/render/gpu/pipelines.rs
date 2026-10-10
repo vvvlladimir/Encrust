@@ -1,9 +1,7 @@
 //! Every render pipeline the viewport builds, and the stencil states that decide what
 //! each pass is allowed to touch; see `docs/decisions/0062`, `0074` and `0184`.
 
-use crate::render::vertex::{
-    BodyVertex, LabelVertex, LineVertex, ModelInstance, ModelVertex, ReliefVertex,
-};
+use crate::render::vertex::{LabelVertex, LineVertex, ModelInstance, ModelVertex, ReliefVertex};
 
 use super::*;
 
@@ -151,6 +149,23 @@ pub(super) struct Capping {
     /// Fills the cut wherever that count says the plane is inside a solid.
     pub(super) cap: wgpu::RenderPipeline,
 }
+
+/// The contact shadow: the passes that bake it into a texture over the plate, and the one
+/// that lays it on the plate every frame.
+pub(super) struct Shadowing {
+    /// Lays every model flat onto the texture, from the flat and the textured vertices.
+    pub(super) silhouette: wgpu::RenderPipeline,
+    pub(super) silhouette_relief: wgpu::RenderPipeline,
+    /// Softens what the silhouette pass laid down into the second texture.
+    pub(super) blur: wgpu::RenderPipeline,
+    /// Darkens the plate by what the blur left.
+    pub(super) floor: Textured<wgpu::RenderPipeline>,
+    /// Fills the plate's surface under everything else.
+    pub(super) plate: wgpu::RenderPipeline,
+}
+
+/// What the shadow is baked into: one channel, enough for how dark the plate goes.
+pub(super) const SHADOW_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::R8Unorm;
 
 /// A pipeline that samples one texture, with the layout its bind group is built against
 /// and the sampler it reads through.
@@ -344,21 +359,7 @@ impl<'a> Builder<'a> {
         }
     }
 
-    /// Draws the translucent machine over everything already painted.
-    pub(super) fn body(&self) -> wgpu::RenderPipeline {
-        self.plain(PipelineKind {
-            label: "viewport_machine",
-            vertex_entry: "body_vertex",
-            fragment_entry: "body_fragment",
-            buffers: &[Some(BodyVertex::layout())],
-            // Painted last and see-through, so it must take no depth of its own: a near
-            // wall would otherwise hide the far one it is meant to show.
-            depth_write: false,
-            ..PipelineKind::default()
-        })
-    }
-
-    /// Draws the word the machine carries, sampled out of the font atlas.
+    /// Draws the word in front of the plate, sampled out of the font atlas.
     pub(super) fn label(&self) -> Textured<wgpu::RenderPipeline> {
         self.textured(
             wgpu::TextureViewDimension::D2,
@@ -369,12 +370,94 @@ impl<'a> Builder<'a> {
                 vertex_entry: "label_vertex",
                 fragment_entry: "label_fragment",
                 buffers: &[Some(LabelVertex::layout())],
-                // Lies on the machine, which takes no depth of its own, so neither does
-                // the word: what hides it is the model standing in front of it.
+                // Takes no depth of its own: what hides it is the model standing in front
+                // of it.
                 depth_write: false,
                 ..PipelineKind::default()
             },
         )
+    }
+
+    /// The contact shadow's passes. The floor is drawn over the plate and under nothing
+    /// that stands on it, so it takes no depth of its own.
+    pub(super) fn shadowing(&self) -> Shadowing {
+        let floor = self.textured(
+            wgpu::TextureViewDimension::D2,
+            wgpu::AddressMode::ClampToEdge,
+            Self::on,
+            PipelineKind {
+                label: "viewport_shadow_floor",
+                vertex_entry: "floor_vertex",
+                fragment_entry: "floor_fragment",
+                depth_write: false,
+                ..PipelineKind::default()
+            },
+        );
+        let sampled = self
+            .device
+            .create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+                label: Some("viewport_shadow_blur"),
+                bind_group_layouts: &[Some(self.globals_layout), Some(&floor.layout)],
+                immediate_size: 0,
+            });
+        // The nearest surface over a texel decides how dark it goes, whatever order the
+        // models arrive in.
+        let nearest = wgpu::BlendComponent {
+            src_factor: wgpu::BlendFactor::One,
+            dst_factor: wgpu::BlendFactor::One,
+            operation: wgpu::BlendOperation::Max,
+        };
+        let bake = |label, layout, vertex_entry, fragment_entry, buffers, blend| {
+            baking(
+                self.device,
+                &self.shader,
+                Baking {
+                    label,
+                    layout,
+                    vertex_entry,
+                    fragment_entry,
+                    buffers,
+                    blend,
+                },
+            )
+        };
+        Shadowing {
+            silhouette: bake(
+                "viewport_shadow_silhouette",
+                &self.layout,
+                "silhouette_vertex",
+                "silhouette_fragment",
+                &[Some(ModelVertex::layout()), Some(ModelInstance::layout())],
+                Some(nearest),
+            ),
+            silhouette_relief: bake(
+                "viewport_shadow_silhouette_relief",
+                &self.layout,
+                "silhouette_vertex",
+                "silhouette_fragment",
+                &[Some(ReliefVertex::layout()), Some(ModelInstance::layout())],
+                Some(nearest),
+            ),
+            blur: bake(
+                "viewport_shadow_blur",
+                &sampled,
+                "blur_vertex",
+                "blur_fragment",
+                &[],
+                None,
+            ),
+            floor,
+            // First of all and taking no depth: the lines over it never tie with it, and a
+            // model seen through still shows over it.
+            plate: self.plain(PipelineKind {
+                label: "viewport_plate",
+                vertex_entry: "floor_vertex",
+                fragment_entry: "plate_fragment",
+                depth_write: false,
+                depth_compare: wgpu::CompareFunction::Always,
+                ..PipelineKind::default()
+            }),
+        }
     }
 
     /// Draws a model with its own texture washed over it, for the Relief tool.
@@ -453,6 +536,54 @@ fn texture_layout(
                 count: None,
             },
         ],
+    })
+}
+
+/// A pass that draws into the shadow's texture rather than the viewport's planes.
+struct Baking<'a> {
+    label: &'a str,
+    layout: &'a wgpu::PipelineLayout,
+    vertex_entry: &'a str,
+    fragment_entry: &'a str,
+    buffers: &'a [Option<wgpu::VertexBufferLayout<'a>>],
+    /// How a texel takes what is drawn over it, or `None` to replace it.
+    blend: Option<wgpu::BlendComponent>,
+}
+
+/// Both faces drawn and no depth: the shadow wants every surface over a texel, and the
+/// blend is what picks among them.
+fn baking(
+    device: &wgpu::Device,
+    shader: &wgpu::ShaderModule,
+    kind: Baking<'_>,
+) -> wgpu::RenderPipeline {
+    device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+        label: Some(kind.label),
+        layout: Some(kind.layout),
+        vertex: wgpu::VertexState {
+            module: shader,
+            entry_point: Some(kind.vertex_entry),
+            compilation_options: wgpu::PipelineCompilationOptions::default(),
+            buffers: kind.buffers,
+        },
+        fragment: Some(wgpu::FragmentState {
+            module: shader,
+            entry_point: Some(kind.fragment_entry),
+            compilation_options: wgpu::PipelineCompilationOptions::default(),
+            targets: &[Some(wgpu::ColorTargetState {
+                format: SHADOW_FORMAT,
+                blend: kind.blend.map(|component| wgpu::BlendState {
+                    color: component,
+                    alpha: component,
+                }),
+                write_mask: wgpu::ColorWrites::ALL,
+            })],
+        }),
+        primitive: wgpu::PrimitiveState::default(),
+        depth_stencil: None,
+        multisample: wgpu::MultisampleState::default(),
+        cache: None,
+        multiview_mask: None,
     })
 }
 

@@ -7,7 +7,7 @@ use core_supports::Part;
 use crate::camera::OrbitCamera;
 use crate::panels::Window;
 use crate::pick::occluded;
-use crate::render::CutLine;
+use crate::render::{AXIS_LENGTH_MM, CutLine};
 use crate::ui::theme;
 use crate::workspace::Tool;
 
@@ -34,6 +34,30 @@ const CUT_PLANE_MARGIN_MIN_MM: f32 = 3.0;
 const PICKED_WIDTH: f32 = 3.0;
 
 const PICKED_DOT_R: f32 = 5.0;
+
+/// How far past the tip of each axis arrow its letter stands, millimetres.
+const AXIS_LETTER_GAP_MM: f32 = 5.0;
+
+/// X, Y and Z past the tips of the arrows in the plate's origin corner. Drawn over the 3D pass
+/// rather than in it, so a letter always faces the camera.
+pub(super) fn draw_axis_letters(ui: &egui::Ui, window: &Window, viewport: egui::Rect) {
+    let project = projector(&window.view.camera, viewport);
+    for ((axis, letter), colour) in [(Vec3::X, "X"), (Vec3::Y, "Y"), (Vec3::Z, "Z")]
+        .into_iter()
+        .zip(theme::scene().plate_axis)
+    {
+        let tip = axis * (AXIS_LENGTH_MM + AXIS_LETTER_GAP_MM);
+        if let Some(at) = project(tip).filter(|at| viewport.contains(*at)) {
+            ui.painter().text(
+                at,
+                egui::Align2::CENTER_CENTER,
+                letter,
+                theme::axis_letter(),
+                colour,
+            );
+        }
+    }
+}
 
 /// Where a point of the plate lands in the panel, or `None` when it is behind the camera.
 pub(super) fn projector(
@@ -153,8 +177,10 @@ pub(super) fn draw_cut_plane(ui: &egui::Ui, window: &Window, viewport: egui::Rec
 /// way a slicer shows what a model measures without hiding it inside a box.
 pub(super) fn draw_bounds(ui: &egui::Ui, window: &Window, viewport: egui::Rect) {
     let on_screen = projector(&window.view.camera, viewport);
-    let eye = window.view.camera.eye();
-    let seen = |point: Vec3| on_screen(point).filter(|_| !occluded(&window.doc.scene, eye, point));
+    let camera = &window.view.camera;
+    let seen = |point: Vec3| {
+        on_screen(point).filter(|_| !occluded(&window.doc.scene, camera.sight_to(point), point))
+    };
     let painter = ui.painter_at(viewport);
     let stroke = egui::Stroke::new(1.5, theme::scene().bounds);
     let picked = window.doc.scene.selection().iter();

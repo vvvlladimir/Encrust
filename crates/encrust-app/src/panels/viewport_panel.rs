@@ -8,6 +8,7 @@ use crate::plate::BuildPlate;
 use crate::render::{Banding, Shading, ViewportCallback};
 use crate::scene::{ObjectId, Scene};
 use crate::state::View;
+use crate::ui::theme;
 use crate::viewport_input::{Drag, Pointer};
 use crate::workspace::Tool;
 
@@ -21,7 +22,9 @@ use hollow::{
     add_channel_point_under_cursor, place_blocker_under_cursor, place_drain_under_cursor,
     remove_blocker_under_cursor, remove_drain_under_cursor,
 };
-use overlays::{cut_line, draw_bounds, draw_cut_plane, draw_facet, draw_measure, draw_picked};
+use overlays::{
+    cut_line, draw_axis_letters, draw_bounds, draw_cut_plane, draw_facet, draw_measure, draw_picked,
+};
 use paint::{draw_brush, paint_stroke};
 use picking::{
     lay_face_under_cursor, measure_under_cursor, point_at_face, select_under_cursor, takes_the_pick,
@@ -62,6 +65,7 @@ pub fn ui(ui: &mut egui::Ui, window: &mut Window) -> egui::Rect {
     // camera while either is out.
     let painting = paint_stroke(ui, window, rect, &pointer) || drag_support(window, rect, &pointer);
 
+    follow_turn(ui, window.view);
     steer_camera(window.view, rect, &pointer, gesture.drag, painting);
     if gesture.clicked
         && let Some(position) = pointer.position
@@ -86,8 +90,25 @@ pub fn ui(ui: &mut egui::Ui, window: &mut Window) -> egui::Rect {
     rect
 }
 
-/// Orbits, pans and zooms the camera.
+/// Moves the camera along the swing the view cube started, until it is over.
+fn follow_turn(ui: &egui::Ui, view: &mut View) {
+    let Some(turn) = view.turn else {
+        return;
+    };
+    let (camera, over) = turn.at(ui.input(|input| input.time));
+    view.camera = camera;
+    match over {
+        true => view.turn = None,
+        false => ui.ctx().request_repaint(),
+    }
+}
+
+/// Orbits, pans and zooms the camera. Taking hold of it ends any swing still under way.
 fn steer_camera(view: &mut View, rect: egui::Rect, pointer: &Pointer, drag: Drag, painting: bool) {
+    let scrolled = pointer.over_viewport && pointer.scroll != 0.0;
+    if scrolled || (drag != Drag::None && !painting) {
+        view.turn = None;
+    }
     match drag {
         Drag::Orbit if painting => {}
         Drag::Orbit => view.camera.orbit(
@@ -98,7 +119,7 @@ fn steer_camera(view: &mut View, rect: egui::Rect, pointer: &Pointer, drag: Drag
         Drag::None => {}
     }
 
-    if pointer.over_viewport && pointer.scroll != 0.0 {
+    if scrolled {
         view.camera
             .zoom((-pointer.scroll * ZOOM_PER_SCROLL_POINT).exp());
     }
@@ -159,6 +180,7 @@ fn paint_plate(ui: &egui::Ui, window: &Window, rect: egui::Rect) {
         .shows_overhangs()
         .then_some(window.tools.supports.profile.max_overhang_deg);
     crate::render::prime_label(ui.painter());
+    ui.painter().rect_filled(rect, 0.0, theme::colors().sunken);
     let callback = ViewportCallback::new(
         &window.doc.scene,
         &window.doc.plate,
@@ -182,6 +204,7 @@ fn paint_plate(ui: &egui::Ui, window: &Window, rect: egui::Rect) {
     );
     ui.painter()
         .add(egui_wgpu::Callback::new_paint_callback(rect, callback));
+    draw_axis_letters(ui, window, rect);
 }
 
 /// The chrome each tool draws over the 3D pass: bounds, gizmo, measurement, brush.
@@ -215,11 +238,22 @@ fn draw_tool_overlays(ui: &egui::Ui, window: &mut Window, rect: egui::Rect, poin
     }
 }
 
+/// Draws the view with or without perspective, ending any swing that would put it back.
+pub fn set_orthographic(view: &mut View, orthographic: bool) {
+    view.turn = None;
+    view.camera.orthographic = orthographic;
+}
+
 /// Points the camera at everything on the plate, or at the plate itself when it is empty.
 pub fn frame_view(scene: &Scene, plate: &BuildPlate, camera: &mut OrbitCamera) {
     match scene.world_bounds() {
         Some(bounds) => camera.frame(&bounds),
-        None => *camera = OrbitCamera::framing_plate(plate),
+        None => {
+            *camera = OrbitCamera {
+                orthographic: camera.orthographic,
+                ..OrbitCamera::framing_plate(plate)
+            }
+        }
     }
 }
 

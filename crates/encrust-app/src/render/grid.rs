@@ -5,51 +5,66 @@ use crate::plate::BuildPlate;
 use crate::render::vertex::LineVertex;
 use crate::ui::theme;
 
-/// One grid square is a centimetre, which is the unit people judge a print by.
+/// One grid square is a centimetre, which is the unit people judge a print by, and every
+/// fifth line is stronger, so a distance can be counted off in fives. The shader draws
+/// both into the plate's own surface.
 pub const GRID_SPACING_MM: f32 = 10.0;
+pub const GRID_MAJOR_MM: f32 = 50.0;
 
-/// Line list for the plate surface, the build volume outline, and the centimetre grid
-/// when it is switched on.
-///
-/// The two axes are drawn along the plate edges that start at the origin, so the
-/// coordinates in the Settings panel can be read straight off the picture.
-pub fn plate_lines(plate: &BuildPlate, grid: bool) -> Vec<LineVertex> {
+/// How long each axis arrow from the plate's origin corner is, millimetres.
+pub const AXIS_LENGTH_MM: f32 = 30.0;
+
+/// The dashes of the outline drawn at the section's height, millimetres.
+const DASH_MM: f32 = 3.0;
+const DASH_GAP_MM: f32 = 2.0;
+
+/// Line list for the plate's outline, the build volume and the axis arrows. The grid is
+/// not here: it is drawn into the plate's surface, see `docs/design/viewport.md`.
+pub fn plate_lines(plate: &BuildPlate) -> Vec<LineVertex> {
     let scene = theme::scene();
-    let [axis_x, axis_y] = scene.plate_axis;
+    // First, so that where X and Y run along the plate's edges they win the depth test
+    // the outline drawn over them ties.
     let mut lines = Vec::new();
+    push_axes(&mut lines);
 
-    if grid {
-        for x in interior_offsets(plate.x_mm) {
-            push(&mut lines, [x, 0.0, 0.0], [x, plate.y_mm, 0.0], scene.grid);
-        }
-        for y in interior_offsets(plate.y_mm) {
-            push(&mut lines, [0.0, y, 0.0], [plate.x_mm, y, 0.0], scene.grid);
-        }
+    let corners = [
+        [0.0, 0.0],
+        [plate.x_mm, 0.0],
+        [plate.x_mm, plate.y_mm],
+        [0.0, plate.y_mm],
+    ];
+    for i in 0..corners.len() {
+        let [ax, ay] = corners[i];
+        let [bx, by] = corners[(i + 1) % corners.len()];
+        push(&mut lines, [ax, ay, 0.0], [bx, by, 0.0], scene.plate_border);
     }
-
-    push(&mut lines, [0.0, 0.0, 0.0], [plate.x_mm, 0.0, 0.0], axis_x);
-    push(&mut lines, [0.0, 0.0, 0.0], [0.0, plate.y_mm, 0.0], axis_y);
-    push(
-        &mut lines,
-        [plate.x_mm, 0.0, 0.0],
-        [plate.x_mm, plate.y_mm, 0.0],
-        scene.plate_border,
-    );
-    push(
-        &mut lines,
-        [0.0, plate.y_mm, 0.0],
-        [plate.x_mm, plate.y_mm, 0.0],
-        scene.plate_border,
-    );
 
     push_volume(&mut lines, plate);
     lines
 }
 
-/// Grid offsets strictly inside the plate; the edges are drawn as the border instead.
-fn interior_offsets(extent_mm: f32) -> impl Iterator<Item = f32> {
-    let count = (extent_mm / GRID_SPACING_MM).ceil() as i32;
-    (1..count).map(|i| i as f32 * GRID_SPACING_MM)
+/// The plate's outline at `height_mm`, dashed, which is where the section cuts.
+pub fn section_frame(plate: &BuildPlate, height_mm: f32) -> Vec<LineVertex> {
+    let colour = theme::scene().section_frame;
+    let corners = [
+        Vec3::new(0.0, 0.0, height_mm),
+        Vec3::new(plate.x_mm, 0.0, height_mm),
+        Vec3::new(plate.x_mm, plate.y_mm, height_mm),
+        Vec3::new(0.0, plate.y_mm, height_mm),
+    ];
+    let mut lines = Vec::new();
+    for i in 0..corners.len() {
+        let (from, to) = (corners[i], corners[(i + 1) % corners.len()]);
+        let length = from.distance(to);
+        let mut at = 0.0;
+        while at < length {
+            let end = (at + DASH_MM).min(length);
+            lines.push(LineVertex::new(from.lerp(to, at / length), colour));
+            lines.push(LineVertex::new(from.lerp(to, end / length), colour));
+            at += DASH_MM + DASH_GAP_MM;
+        }
+    }
+    lines
 }
 
 fn push_volume(lines: &mut Vec<LineVertex>, plate: &BuildPlate) {
@@ -64,6 +79,17 @@ fn push_volume(lines: &mut Vec<LineVertex>, plate: &BuildPlate) {
         let [ax, ay] = corners[i];
         let [bx, by] = corners[(i + 1) % corners.len()];
         push(lines, [ax, ay, z], [bx, by, z], volume);
+    }
+}
+
+/// X, Y and Z from the plate's origin corner, X and Y along its edges, each in its own
+/// axis colour.
+fn push_axes(lines: &mut Vec<LineVertex>) {
+    for (axis, colour) in [Vec3::X, Vec3::Y, Vec3::Z]
+        .into_iter()
+        .zip(theme::scene().plate_axis)
+    {
+        push(lines, [0.0; 3], (axis * AXIS_LENGTH_MM).to_array(), colour);
     }
 }
 
@@ -85,41 +111,45 @@ mod tests {
         }
     }
 
-    #[test]
-    fn a_plate_of_whole_centimetres_has_the_expected_line_count() {
-        // 50 x 30 mm: four interior lines along X, two along Y, four plate edges,
-        // four uprights and four lines closing the top of the volume.
-        let lines = plate_lines(&plate(50.0, 30.0), true);
-        assert_eq!(lines.len() / 2, 4 + 2 + 4 + 4 + 4);
-    }
+    /// The three arrows standing in the plate's origin corner.
+    const AXES: usize = 3;
 
     #[test]
-    fn switching_the_grid_off_leaves_the_plate_and_the_volume() {
-        // The four plate edges, four uprights and four lines closing the top.
-        let lines = plate_lines(&plate(50.0, 30.0), false);
-        assert_eq!(lines.len() / 2, 4 + 4 + 4);
-    }
-
-    #[test]
-    fn a_partial_last_square_still_gets_its_grid_line() {
-        // 25 mm fits two whole squares and a remainder, so lines land at 10 and 20.
-        let interior: Vec<f32> = interior_offsets(25.0).collect();
-        assert_eq!(interior, vec![10.0, 20.0]);
-    }
-
-    #[test]
-    fn a_plate_smaller_than_one_square_has_no_interior_lines() {
-        assert_eq!(interior_offsets(6.0).count(), 0);
+    fn the_plate_is_its_outline_the_volume_and_the_axes() {
+        // Four plate edges, four uprights and four lines closing the top of the volume.
+        let lines = plate_lines(&plate(50.0, 30.0));
+        assert_eq!(lines.len() / 2, 4 + 4 + 4 + AXES);
     }
 
     #[test]
     fn every_line_is_inside_the_build_volume() {
         let plate = plate(50.0, 30.0);
-        for vertex in plate_lines(&plate, true) {
+        for vertex in &plate_lines(&plate) {
             let [x, y, z] = vertex.position;
             assert!((0.0..=plate.x_mm).contains(&x));
             assert!((0.0..=plate.y_mm).contains(&y));
             assert!((0.0..=plate.z_mm).contains(&z));
         }
+    }
+
+    #[test]
+    fn the_section_frame_is_dashed_around_the_plate_at_the_cut() {
+        let plate = plate(50.0, 30.0);
+        let frame = section_frame(&plate, 12.5);
+        assert!(frame.iter().all(|vertex| vertex.position[2] == 12.5));
+
+        // A 50 mm side holds ten dashes of 3 mm with 2 mm between them, a 30 mm side six:
+        // a dash every 5 mm all the way round, so the outline is 160 mm of dashes and gaps.
+        assert_eq!(frame.len() / 2, 10 + 6 + 10 + 6);
+        let drawn: f32 = frame
+            .chunks(2)
+            .map(|dash| {
+                Vec3::from_array(dash[0].position).distance(Vec3::from_array(dash[1].position))
+            })
+            .sum();
+        assert!(
+            (drawn - 32.0 * DASH_MM).abs() < 1e-3,
+            "three fifths of the outline is drawn, got {drawn} mm"
+        );
     }
 }

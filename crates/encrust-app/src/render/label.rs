@@ -4,22 +4,24 @@ use core_geometry::Vec3;
 use egui::ColorImage;
 
 use crate::plate::BuildPlate;
-use crate::render::machine::LIP_MM;
 use crate::render::vertex::LabelVertex;
 use crate::ui::theme;
 
-/// The word the platform's front lip carries.
+/// The word lying in front of the plate.
 const WORD: &str = "Front";
 
+/// The depth of the band in front of the plate the word is centred in, millimetres.
+const BAND_MM: f32 = 12.0;
+
 /// Point size the word is laid out at. Only the resolution of the atlas glyphs depends on
-/// it; the word is scaled to the lip afterwards.
+/// it; the word is scaled to the band afterwards.
 const LAYOUT_PT: f32 = 48.0;
 
-/// How much of the lip's depth the word's line height fills.
+/// How much of the band's depth the word's line height fills.
 const FILL: f32 = 0.7;
 
-/// How far the word stands off the lip it lies on, millimetres: enough that no rounding
-/// puts it inside the face under it.
+/// How far the word stands over the plate, millimetres: enough that no rounding puts it
+/// level with the plate's own lines.
 const RELIEF_MM: f32 = 0.02;
 
 /// The word as the font laid it out, in line heights about its own middle, and the slice
@@ -48,7 +50,7 @@ fn lay_out(painter: &egui::Painter) -> Word {
     let [width_px, height_px] = size;
 
     // Points to line heights, about the middle of the word: what is left depends on the
-    // lip it is put on, not on the size it happened to be laid out at.
+    // band it is put in, not on the size it happened to be laid out at.
     let scale = 1.0 / galley.rect.height().max(f32::EPSILON);
     let middle = galley.rect.center();
 
@@ -72,17 +74,17 @@ fn lay_out(painter: &egui::Painter) -> Word {
     Word { corners, atlas }
 }
 
-/// The word lying on the front lip of `plate`'s deck, and the atlas its triangles sample.
+/// The word lying in front of `plate`, and the atlas its triangles sample.
 ///
-/// Geometry rather than an overlay: it is painted on the machine, so it keeps the
-/// machine's perspective and stays put when the camera moves.
+/// Geometry rather than an overlay: it lies on the plate's plane, so it keeps the plate's
+/// perspective and stays put when the camera moves.
 pub fn front(plate: &BuildPlate) -> (Vec<LabelVertex>, Option<Arc<ColorImage>>) {
     let Some(word) = LAID_OUT.get() else {
         return (Vec::new(), None);
     };
     let colour = theme::scene().label;
-    let scale = LIP_MM * FILL;
-    let middle = Vec3::new(plate.x_mm / 2.0, -LIP_MM / 2.0, RELIEF_MM);
+    let scale = BAND_MM * FILL;
+    let middle = Vec3::new(plate.x_mm / 2.0, -BAND_MM / 2.0, RELIEF_MM);
 
     let vertices = word
         .corners
