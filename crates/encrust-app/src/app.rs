@@ -419,6 +419,9 @@ impl eframe::App for SlicerApp {
     }
 }
 
+#[cfg(all(test, feature = "snapshots"))]
+mod snapshots;
+
 #[cfg(test)]
 mod tests {
     use super::*;

@@ -58,6 +58,12 @@ tracing-subscriber.workspace = true
 # One test writes a `.goo` for the preview to open again; nothing else here names a
 # container's crate (ADR 0209).
 format-goo.workspace = true
+# Pictures of the panels, compared against the ones committed; see docs/decisions/0215.
+egui_kittest.workspace = true
+
+[features]
+# The panel snapshots need a GPU, which no CI runner has, so they run by hand.
+snapshots = []
 
 # A browser has no TLS stack to build and no native dialogs; see docs/decisions/0181.
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
