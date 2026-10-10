@@ -68,7 +68,7 @@ pub(super) fn paint_stroke(
     viewport: egui::Rect,
     pointer: &Pointer,
 ) -> bool {
-    let out = *window.tool == Tool::Supports && window.tools.supports.placing.paints();
+    let out = *window.tool == Tool::Paint && window.tools.supports.placing.paints();
     let Some(position) = pointer.position.filter(|_| {
         out && pointer.primary_down
             && pointer.over_viewport

@@ -14,7 +14,7 @@ pub use field::{
     Carried, axis_label, carried_row, count_row, field_label, number_field, number_row, text_row,
 };
 pub use layout::{
-    card, describe, fold, hairline, heading, hint, meta, nested, notice, progress_bar, readings,
+    card, describe, hairline, heading, hint, later, meta, nested, notice, progress_bar, readings,
     section, section_with_action, stats, subheading,
 };
 pub use list::{issue_row, list, list_row};

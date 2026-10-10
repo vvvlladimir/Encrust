@@ -281,6 +281,8 @@ pub const RAIL_W: f32 = 68.0;
 pub const PLATE_STRIP_W: f32 = 44.0;
 pub const SCENE_W: f32 = 272.0;
 pub const INSPECTOR_W: f32 = 328.0;
+/// The inspector's heading row, which names the open tool.
+pub const INSPECTOR_HEAD_H: f32 = 48.0;
 /// How far either column may be dragged, and how thin the folded plate's own edge is.
 pub const SCENE_W_RANGE: RangeInclusive<f32> = 170.0..=420.0;
 pub const INSPECTOR_W_RANGE: RangeInclusive<f32> = 260.0..=440.0;
@@ -343,6 +345,11 @@ pub fn unit() -> FontId {
 /// A section heading in the inspector or on a floating card.
 pub fn section() -> FontId {
     FontId::new(12.0, FontFamily::Name(SEMIBOLD.into()))
+}
+
+/// The open tool's name, at the head of the inspector.
+pub fn tool_title() -> FontId {
+    FontId::new(14.0, FontFamily::Name(SEMIBOLD.into()))
 }
 
 /// A tool's name under its glyph on the rail.

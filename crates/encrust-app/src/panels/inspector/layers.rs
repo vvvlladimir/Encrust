@@ -6,8 +6,8 @@ use core_slicer::{AdaptiveSettings, ONE_SAMPLE};
 use crate::slicing::{MAX_LAYER_HEIGHT_MM, MIN_LAYER_HEIGHT_MM};
 use crate::state::Machine;
 use crate::ui::{
-    Carried, carried_row, describe, hint, icon, icon_button, nested, number_row, secondary_button,
-    section, subheading, switch, theme, tone,
+    Carried, Segment, Segmented, carried_row, describe, hint, icon, icon_button, later, nested,
+    number_row, secondary_button, section, subheading, switch, theme, tone,
 };
 
 /// Eight greys is what other slicers call anti-aliasing level 8, and the most a panel
@@ -25,12 +25,11 @@ const EXPOSURE_STEP: f64 = 0.05;
 /// millimetres, which is where a bottom-heavy model needs the extra exposure.
 const NEW_BAND_MM: f32 = 10.0;
 
-/// The Layers tool: how thick a layer is and how long it is exposed for. Which file the
-/// result lands in belongs to the Slice button, not here.
-pub fn ui(ui: &mut egui::Ui, machine: &mut Machine) {
-    let mut to_the_printer = false;
+/// How thick a layer is, how many planes it samples, and whether its height follows the
+/// surface. Answers whether the way to the printer's settings was taken.
+pub fn layers(ui: &mut egui::Ui, machine: &mut Machine) -> bool {
+    let slicing = &mut machine.slicing;
     section(ui, "Layers", None, |ui| {
-        let slicing = &mut machine.slicing;
         let ceiling = slicing.adaptive.is_some();
         let mut layer_height_mm = slicing.layer_height_mm();
         let label = if ceiling {
@@ -52,6 +51,41 @@ pub fn ui(ui: &mut egui::Ui, machine: &mut Machine) {
         carried_note(ui, slicing);
         exposure_note(ui, slicing);
         samples_row(ui, &mut slicing.samples);
+
+        subheading(ui, "Adaptive height");
+        adaptive_rows(ui, slicing)
+    })
+    .unwrap_or_default()
+}
+
+/// The bands of height that take an exposure of their own. Answers whether the way to the
+/// printer's settings was taken.
+pub fn bands(ui: &mut egui::Ui, machine: &mut Machine) -> bool {
+    let count = machine.slicing.exposure.len();
+    let aside = (count > 0).then(|| format!("{count} band(s)"));
+    section(ui, "By height", aside.as_deref(), |ui| {
+        exposure_bands(ui, &mut machine.slicing)
+    })
+    .unwrap_or_default()
+}
+
+/// The greys a mask's edge is rounded with, to hide the steps of the pixels.
+pub fn edges(ui: &mut egui::Ui, machine: &mut Machine) {
+    let slicing = &mut machine.slicing;
+    section(ui, "Edge smoothing", None, |ui| {
+        describe(
+            ui,
+            "Grey levels on the mask edge, to hide the pixel stairs.",
+        );
+        // TODO(step-8): choose the smoothing by its look, from named presets, as well as
+        // by its numbers.
+        later(ui, |ui| {
+            let mut by_look = false;
+            let choices = [Segment::new(true, "Look"), Segment::new(false, "Number")];
+            Segmented::new(&choices)
+                .width(ui.available_width())
+                .show(ui, &mut by_look);
+        });
         switch(ui, &mut slicing.anti_alias, "Anti-aliased masks");
         if slicing.anti_alias {
             nested(ui, |ui| {
@@ -59,22 +93,7 @@ pub fn ui(ui: &mut egui::Ui, machine: &mut Machine) {
                 blur_row(ui, &mut slicing.blur_px);
             });
         }
-
-        subheading(ui, "Adaptive height");
-        to_the_printer |= adaptive_rows(ui, slicing);
-
-        subheading(ui, "Exposure by height");
-        to_the_printer |= exposure_bands(ui, slicing);
     });
-    if to_the_printer {
-        let printer = machine.slicing.printer_id.clone();
-        let resin = machine.slicing.resin_id.clone();
-        machine.settings.open(
-            &machine.slicing.catalogue,
-            printer.as_deref(),
-            resin.as_deref(),
-        );
-    }
 }
 
 /// Why a setting here cannot be used on the printer in hand, and the way to the firmware
@@ -282,7 +301,7 @@ fn exposure_bands(ui: &mut egui::Ui, slicing: &mut crate::slicing::Slicing) -> b
             "This printer reads the header alone, so exposure cannot vary by height.",
         );
     }
-    if secondary_button(ui, icon::ADD, "Add band").clicked() {
+    if secondary_button(ui, icon::ADD, "Add a band").clicked() {
         let from_mm = bands.last().map_or(0.0, |last| last.to_mm);
         let resin_exposure_s = slicing.material.exposure_s;
         slicing.exposure.push(ExposureRange::new(

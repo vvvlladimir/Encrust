@@ -7,6 +7,7 @@ use crate::ui::{
     Segment, Segmented, describe, hint, icon, nested, notice, number_row, primary_button,
     progress_bar, secondary_button, section, stats, subheading, switch, theme, tone,
 };
+use crate::workspace::Tool;
 
 /// Per point of drag. A wall is measured in whole millimetres, precision and density in
 /// hundredths of their own range.
@@ -29,27 +30,19 @@ const MAX_DENSITY: f32 = 0.5;
 
 /// The cavity inside the models on the plate, and what stands in it.
 pub fn ui(ui: &mut egui::Ui, window: &mut Window) {
-    section(ui, "Hollow", None, |ui| {
+    section(ui, "Shell", None, |ui| {
+        modes(ui, window.tools);
+        wall(ui, window);
+    });
+    section(ui, "Infill", None, |ui| infill(ui, window.tools));
+    section(ui, "Keep solid", None, |ui| {
         describe(
             ui,
             "Click the model to keep its wall solid there, alt-click a blocker to take it away.",
         );
-        ui.add_space(4.0);
-
-        modes(ui, window.tools);
-        ui.add_space(4.0);
-        wall(ui, window);
-
-        subheading(ui, "Infill");
-        infill(ui, window.tools);
-
-        subheading(ui, "Blockers");
         blockers(ui, window);
-
-        ui.add_space(8.0);
-        action(ui, window);
-
-        subheading(ui, "On the plate");
+    });
+    section(ui, "Already done", None, |ui| {
         done(ui, window);
         drainage(ui, window);
     });
@@ -90,9 +83,11 @@ fn drainage(ui: &mut egui::Ui, window: &mut Window) {
         icon::WARNING,
         colors.danger,
         &format!("Resin is trapped in {trapped} place(s)"),
-        "Each one needs a hole of its own. Turn the x-ray on to see the space it fills, \
-         and put the holes in with the Drain tool.",
+        "Each one needs a hole of its own. Turn the x-ray on to see the space it fills.",
     );
+    if secondary_button(ui, icon::DRAIN, "Drain the trapped resin").clicked() {
+        crate::shortcuts::pick(window, Tool::Drain);
+    }
 }
 
 /// Which surface the wall is measured from.
@@ -107,7 +102,6 @@ fn modes(ui: &mut egui::Ui, tools: &mut Tools) {
         tools.hollow.state.mode = chosen;
     }
 
-    ui.add_space(2.0);
     describe(
         ui,
         match tools.hollow.state.mode {
@@ -248,9 +242,8 @@ fn blockers(ui: &mut egui::Ui, window: &mut Window) {
     }
 }
 
-/// The Hollow button, or the progress of the run that is going. The Drain tool shows the
-/// same one: a hole is cut by the hollow run.
-pub(super) fn action(ui: &mut egui::Ui, window: &mut Window) {
+/// The Hollow button, or the progress of the run that is going.
+pub fn action(ui: &mut egui::Ui, window: &mut Window) {
     match window.tools.hollow.job.as_ref() {
         Some(job) => running(ui, job),
         None => start(ui, window),
@@ -264,7 +257,6 @@ fn start(ui: &mut egui::Ui, window: &mut Window) {
         window.machine.status.report("Hollowing", started);
     }
 
-    ui.add_space(4.0);
     match blocked {
         Some(reason) => {
             ui.vertical_centered(|ui| tone(ui, reason, theme::colors().text_low));
@@ -276,8 +268,9 @@ fn start(ui: &mut egui::Ui, window: &mut Window) {
     }
 }
 
-/// The progress bar and the cancel button of the run that is going.
-fn running(ui: &mut egui::Ui, job: &HollowJob) {
+/// The progress bar and the cancel button of the run that is going. The Drain tool shows
+/// it too, since a channel dug into a hollow model runs the shell again.
+pub(super) fn running(ui: &mut egui::Ui, job: &HollowJob) {
     tone(ui, &job.label(), theme::colors().text_mid);
     progress_bar(ui, job.fraction());
 

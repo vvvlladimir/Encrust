@@ -1,6 +1,6 @@
 # 0118. One placing panel, and a gizmo that is always out
 
-- **Status:** Accepted
+- **Status:** Accepted; the gizmo on Select is superseded by 0218
 - **Date:** 2026-09-28
 
 ## Context

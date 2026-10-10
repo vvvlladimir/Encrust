@@ -1,4 +1,4 @@
-use egui::{Align2, Frame, RichText, Sense, Ui, UiBuilder, vec2};
+use egui::{Frame, RichText, Sense, Ui, UiBuilder, vec2};
 
 use crate::ui::theme;
 
@@ -223,51 +223,6 @@ pub fn card() -> Frame {
         .shadow(theme::shadow())
 }
 
-/// A group of fields under a title that folds them away, so a long form reads as its
-/// headings. Starts folded; which are open is kept per title.
-pub fn fold(ui: &mut Ui, title: &str, add: impl FnOnce(&mut Ui)) {
-    let id = ui.id().with(("fold", title));
-    let open = ui.data(|data| data.get_temp::<bool>(id)) == Some(true);
-    let colors = theme::colors();
-    let (rect, response) =
-        ui.allocate_exact_size(vec2(ui.available_width(), theme::ROW_H), Sense::click());
-    if response.hovered() {
-        ui.painter()
-            .rect_filled(rect, theme::R_CONTROL, colors.hover);
-    }
-    let glyph = if open {
-        crate::ui::icon::CARET_DOWN
-    } else {
-        crate::ui::icon::CARET_RIGHT
-    };
-    let left = rect.left_center() + vec2(4.0, 0.0);
-    let painter = ui.painter();
-    painter.text(
-        left,
-        Align2::LEFT_CENTER,
-        glyph,
-        theme::icon(11.0),
-        colors.text_mid,
-    );
-    let title_at = left + vec2(17.0, 0.0);
-    painter.text(
-        title_at,
-        Align2::LEFT_CENTER,
-        title,
-        theme::section(),
-        colors.text_high,
-    );
-    let response = response.on_hover_cursor(egui::CursorIcon::PointingHand);
-    if response.clicked() {
-        ui.data_mut(|data| data.insert_temp(id, !open));
-    }
-    if open {
-        ui.add_space(2.0);
-        add(ui);
-        ui.add_space(6.0);
-    }
-}
-
 /// A section heading, used by the inspector and by the header row of a floating card.
 pub fn heading(ui: &mut Ui, title: &str, hint_text: Option<&str>) {
     ui.horizontal(|ui| {
@@ -390,6 +345,17 @@ pub fn progress_bar(ui: &mut Ui, fraction: Option<f32>) {
         bar.desired_height(theme::BAR_H)
             .corner_radius(theme::R_CONTROL),
     );
+}
+
+/// What a control the design has and the window cannot do yet says on hover.
+const LATER: &str = "Not available yet";
+
+/// A control the design has and the window cannot do yet: drawn greyed out, and saying so
+/// on hover, so the layout is final before the work behind it is.
+pub fn later<R>(ui: &mut Ui, add: impl FnOnce(&mut Ui) -> R) -> R {
+    let shown = ui.add_enabled_ui(false, add);
+    shown.response.on_disabled_hover_text(LATER);
+    shown.inner
 }
 
 /// A one pixel divider across the full width of whatever is drawing it.

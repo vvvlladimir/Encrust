@@ -10,7 +10,7 @@ use crate::sliced;
 use crate::state::{Doc, Machine};
 use crate::ui::{icon, theme};
 use crate::updates::Stage;
-use crate::workspace::{Mode, Tool};
+use crate::workspace::Tool;
 
 /// The room either side of what a bar control says, and the room kept between the two
 /// ends of the bar.
@@ -119,11 +119,7 @@ fn print_chip(ui: &mut egui::Ui, window: &mut Window) {
     } else {
         colors.text_mid
     };
-    let layers = format!(
-        "{:.0} \u{b5}m, {:.2} s",
-        slicing.layer_height_mm() * 1000.0,
-        slicing.material.exposure_s
-    );
+    let layers = layers_and_exposure(window.machine);
     let parts = [
         Part::new(
             ui,
@@ -151,7 +147,7 @@ fn print_chip(ui: &mut egui::Ui, window: &mut Window) {
         zones[index] = Rect::from_x_y_ranges(x..=x + part.width, rect.y_range());
         x += part.width + if index == 0 { slash_w } else { 0.0 };
     }
-    let open = *window.tool == Tool::Layers && *window.mode == Mode::Prepare;
+    let open = *window.tool == Tool::PrintSettings;
     let responses: Vec<egui::Response> = zones
         .iter()
         .enumerate()
@@ -194,13 +190,19 @@ fn print_chip(ui: &mut egui::Ui, window: &mut Window) {
         resin.on_hover_text("The resin")
     };
     egui::Popup::menu(&resin).show(|ui| profiles::resin_menu(ui, window.machine));
-    let tooltip = format!(
-        "Layers and exposure  {}",
-        shortcuts::text(Action::Pick(Tool::Layers))
-    );
-    if layers.on_hover_text(tooltip).clicked() {
-        shortcuts::pick(window, Tool::Layers);
+    if layers.on_hover_text(Tool::PrintSettings.label()).clicked() {
+        shortcuts::pick(window, Tool::PrintSettings);
     }
+}
+
+/// The layer height and the exposure a plate is cut with, as the chip and the print
+/// settings' heading both read them.
+pub fn layers_and_exposure(machine: &Machine) -> String {
+    format!(
+        "{:.0} \u{b5}m, {:.2} s",
+        machine.slicing.layer_height_mm() * 1000.0,
+        machine.slicing.material.exposure_s
+    )
 }
 
 /// One stretch of the print chip: a glyph, what is chosen, and a caret where it opens a

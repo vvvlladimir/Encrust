@@ -140,7 +140,7 @@ fn more_menu(
 
 /// A model left broken is a reminder here rather than a blocker: what is sliced from it
 /// may be nothing like the model, and this is the last place to turn back.
-fn broken_reminder(ui: &mut egui::Ui, scene: &Scene) {
+pub(super) fn broken_reminder(ui: &mut egui::Ui, scene: &Scene) {
     let broken = crate::repair::broken_on_the_plate(scene);
     if broken == 0 {
         return;
@@ -159,14 +159,14 @@ fn broken_reminder(ui: &mut egui::Ui, scene: &Scene) {
 
 /// The machine the printer in hand is bound to, as the row needs it: a profile that
 /// states no connection, or names no machine, offers no sending at all.
-struct Bound {
-    name: String,
-    reach: Reach,
+pub(super) struct Bound {
+    pub name: String,
+    pub reach: Reach,
     /// Why this machine cannot take what the window is set to write.
-    blocker: Option<&'static str>,
+    pub blocker: Option<&'static str>,
 }
 
-fn bound_machine(machine: &mut Machine) -> Option<Bound> {
+pub(super) fn bound_machine(machine: &mut Machine) -> Option<Bound> {
     // A browser reaches no printer, so the file is only ever downloaded (ADR 0182).
     if cfg!(target_arch = "wasm32") {
         return None;
@@ -191,7 +191,7 @@ fn bound_machine(machine: &mut Machine) -> Option<Bound> {
 }
 
 /// Whether the bound machine answered the last scan, as a dot.
-fn reach_dot(ui: &mut egui::Ui, reach: Reach) {
+pub(super) fn reach_dot(ui: &mut egui::Ui, reach: Reach) {
     let (rect, _) = ui.allocate_exact_size(egui::vec2(DOT_W, DOT_W), egui::Sense::hover());
     let colors = theme::colors();
     let colour = match reach {
@@ -204,19 +204,19 @@ fn reach_dot(ui: &mut egui::Ui, reach: Reach) {
 
 /// Where what the press writes goes.
 #[derive(Clone, Copy, PartialEq, Eq)]
-enum Via {
+pub(super) enum Via {
     File,
     Printer,
 }
 
 /// Whether the Slice button cuts what is in front of the user or the whole project.
 #[derive(Clone, Copy, PartialEq, Eq)]
-enum Run {
+pub(super) enum Run {
     ThisPlate,
     EveryPlate,
 }
 
-fn start(scene: &Scene, slicing: &mut Slicing, status: &mut Status, run: Run, via: Via) {
+pub(super) fn start(scene: &Scene, slicing: &mut Slicing, status: &mut Status, run: Run, via: Via) {
     let format = slicing.format;
     if via == Via::Printer {
         let path = temporary_path(&default_file_name(scene, format));

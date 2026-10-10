@@ -1,5 +1,6 @@
 use printer_profiles::{MaterialProfile, WaitMode};
 
+use super::layers;
 use crate::slicing::Slicing;
 use crate::state::Machine;
 use crate::ui::{
@@ -7,31 +8,42 @@ use crate::ui::{
     section, subheading,
 };
 
-/// The resin's numbers for this print, edited where the print is looked at. They change the
-/// copy the plate is sliced with, never the profile: a new printer or resin puts them back.
+/// How this plate is cut and exposed: a form rather than a tool, opened from the top bar.
+/// The exposure, waits and motion change the copy the plate is sliced with, never the resin
+/// profile: a new printer or resin puts them back.
 pub fn ui(ui: &mut egui::Ui, machine: &mut Machine) {
-    let layer_height_mm = machine.slicing.layer_height_mm();
-    let slicing = &mut machine.slicing;
-    section(ui, "Print settings", Some("this session"), |ui| {
+    let mut to_the_printer = layers::layers(ui, machine);
+    section(ui, "Exposure", Some("this session"), |ui| {
         describe(
             ui,
-            "What this print is exposed and moved with. Edits change this session's slices \
-             only; the resin profile keeps its own numbers.",
+            "From the resin profile. Edits change this session's slices only; the resin \
+             profile keeps its own numbers.",
         );
-        readings(ui, &[("Layer height", format!("{layer_height_mm:.3} mm"))]);
-
-        exposure(ui, slicing);
-        let material = &mut slicing.material;
-        transition(ui, material);
-        waiting(ui, material);
-        motion(ui, material);
+        exposure(ui, &mut machine.slicing);
+        transition(ui, &mut machine.slicing.material);
     });
+    to_the_printer |= layers::bands(ui, machine);
+    layers::edges(ui, machine);
+    section(ui, "Waiting", None, |ui| {
+        waiting(ui, &mut machine.slicing.material)
+    });
+    section(ui, "Motion", None, |ui| {
+        motion(ui, &mut machine.slicing.material)
+    });
+    if to_the_printer {
+        let printer = machine.slicing.printer_id.clone();
+        let resin = machine.slicing.resin_id.clone();
+        machine.settings.open(
+            &machine.slicing.catalogue,
+            printer.as_deref(),
+            resin.as_deref(),
+        );
+    }
 }
 
 /// The normal exposure follows the layer height, and says so until it is touched; see
 /// `docs/decisions/0128`.
 fn exposure(ui: &mut egui::Ui, slicing: &mut Slicing) {
-    subheading(ui, "Exposure");
     let was = slicing.rescaled().map(|rescaled| rescaled.exposure_s);
     let material = &mut slicing.material;
     count_row(
@@ -98,7 +110,6 @@ fn transition(ui: &mut egui::Ui, material: &mut MaterialProfile) {
 
 /// What the printer waits for between moves: one light-off delay, or a rest at each stop.
 fn waiting(ui: &mut egui::Ui, material: &mut MaterialProfile) {
-    subheading(ui, "Waiting");
     let mut mode = material.waits.mode;
     let modes = [
         Segment::new(WaitMode::LightOff, "Light off"),
@@ -156,7 +167,6 @@ fn waiting(ui: &mut egui::Ui, material: &mut MaterialProfile) {
 }
 
 fn motion(ui: &mut egui::Ui, material: &mut MaterialProfile) {
-    subheading(ui, "Motion");
     number_row(
         ui,
         "Lift",

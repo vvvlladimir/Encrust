@@ -1,8 +1,8 @@
 use crate::panels::Window;
 use crate::state::Doc;
 use crate::ui::{
-    describe, icon, meta, number_row, primary_button, progress_bar, section, stats, subheading,
-    theme, tone,
+    describe, hint, icon, later, meta, number_row, primary_button, progress_bar, secondary_button,
+    section, stats, theme, tone,
 };
 
 /// Per point of drag: a relief is measured in tenths of a millimetre, precision in
@@ -16,21 +16,33 @@ const MAX_DEPTH_MM: f32 = 2.0;
 
 /// The texture the models on the plate came with, and how deep it is pressed into them.
 pub fn ui(ui: &mut egui::Ui, window: &mut Window) {
-    section(ui, "Relief", None, |ui| {
+    section(ui, "Image", None, |ui| {
         describe(
             ui,
             "A model's own texture becomes geometry: white moves the surface out, black \
              leaves it where it is.",
         );
-        ui.add_space(4.0);
-
-        depth(ui, window);
-
-        subheading(ui, "On the plate");
         carried(ui, window.doc);
-
-        ui.add_space(8.0);
-        action(ui, window);
+        // TODO(step-8): a greyscale image chosen from a file, shown here as a thumbnail.
+        later(ui, |ui| secondary_button(ui, icon::OPEN, "Choose"));
+    });
+    section(ui, "Depth", None, |ui| {
+        depth(ui, window);
+        // TODO(step-8): tile the image over the surface, at a size and a turn of its own.
+        later(ui, |ui| {
+            let mut tile_mm = 12.0_f32;
+            number_row(
+                ui,
+                "Tile size",
+                &mut tile_mm,
+                "mm",
+                DEPTH_STEP,
+                1.0..=100.0,
+                1,
+            );
+            let mut angle_deg = 0.0_f32;
+            number_row(ui, "Angle", &mut angle_deg, "\u{b0}", 1.0, 0.0..=360.0, 0);
+        });
     });
 }
 
@@ -54,7 +66,6 @@ fn depth(ui: &mut egui::Ui, window: &mut Window) {
         2,
     );
 
-    ui.add_space(2.0);
     let lattice_mm = window.tools.relief.settings().voxel_mm(
         window
             .doc
@@ -121,7 +132,8 @@ fn truncated(name: &str) -> String {
     format!("{head}…{tail}")
 }
 
-fn action(ui: &mut egui::Ui, window: &mut Window) {
+/// Pressing the texture in, or the progress of the run that is going.
+pub fn action(ui: &mut egui::Ui, window: &mut Window) {
     if window.tools.relief.is_busy() {
         tone(ui, "Pressing...", theme::colors().text_mid);
         progress_bar(ui, None);
@@ -129,17 +141,15 @@ fn action(ui: &mut egui::Ui, window: &mut Window) {
     }
 
     let blocked = window.tools.relief.blocker(&window.doc.scene);
-    if primary_button(ui, icon::RELIEF, "Press", blocked.is_none()).clicked() {
+    if primary_button(ui, icon::RELIEF, "Press it in", blocked.is_none()).clicked() {
         let started = window.tools.relief.start(&window.doc.scene);
         window.machine.status.report("Pressing the relief", started);
     }
 
-    ui.add_space(4.0);
     let scope = format!(
         "Presses the texture into {}. The model is replaced, so its supports and its \
          cavity go with it.",
         window.doc.scene.scope()
     );
-    let text = blocked.unwrap_or(&scope);
-    ui.vertical_centered(|ui| tone(ui, text, theme::colors().text_low));
+    hint(ui, blocked.unwrap_or(&scope));
 }

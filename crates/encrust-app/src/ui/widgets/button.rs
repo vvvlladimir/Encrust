@@ -21,8 +21,15 @@ pub fn icon_toggle(ui: &mut Ui, glyph: &str, tooltip: &str, on: bool) -> Respons
 }
 
 /// A rail button: a glyph over the tool's name, raised with both in the accent while it is
-/// the tool in use.
-pub fn rail_button(ui: &mut Ui, glyph: &str, name: &str, tooltip: &str, active: bool) -> Response {
+/// the tool in use, and a dot in `badge` at its corner while the tool needs attention.
+pub fn rail_button(
+    ui: &mut Ui,
+    glyph: &str,
+    name: &str,
+    tooltip: &str,
+    active: bool,
+    badge: Option<Color32>,
+) -> Response {
     let size = vec2(ui.available_width(), theme::RAIL_BUTTON_H);
     let (rect, response) = ui.allocate_exact_size(size, Sense::click());
     let colors = theme::colors();
@@ -47,8 +54,17 @@ pub fn rail_button(ui: &mut Ui, glyph: &str, name: &str, tooltip: &str, active: 
         theme::rail_name(),
         foreground,
     );
+    if let Some(badge) = badge {
+        let at = rect.center_top() + vec2(RAIL_BADGE_OFFSET.x, RAIL_BADGE_OFFSET.y);
+        painter.circle_filled(at, RAIL_BADGE_R + 1.5, colors.base);
+        painter.circle_filled(at, RAIL_BADGE_R, badge);
+    }
     response.on_hover_text(tooltip)
 }
+
+/// Where a rail button's dot sits from the top of its glyph, and its radius, points.
+const RAIL_BADGE_OFFSET: egui::Vec2 = vec2(10.0, 8.0);
+const RAIL_BADGE_R: f32 = 3.0;
 
 /// Every square icon control is the same drawing with different numbers.
 struct Square {

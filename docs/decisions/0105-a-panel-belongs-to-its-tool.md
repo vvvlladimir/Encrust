@@ -1,6 +1,6 @@
 # 0105. A panel belongs to its tool
 
-- **Status:** Superseded by 0118 (the transform switch only) and 0217 (the footer only)
+- **Status:** Superseded by 0118 (the transform switch only), 0217 (the footer only) and 0218 (the Layers tool and the Mirror action)
 - **Date:** 2026-09-27
 
 ## Context

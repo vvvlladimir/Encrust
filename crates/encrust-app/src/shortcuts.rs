@@ -134,6 +134,7 @@ const fn bind(group: Group, action: Action, keys: &'static [KeyboardShortcut]) -
 
 /// The table, in the order the sheet lists it.
 pub const BINDINGS: &[Binding] = &[
+    // The first ten tools of the rail, in its order. The rest are reached by the pointer.
     bind(
         Group::Tools,
         Action::Pick(Tool::Select),
@@ -141,31 +142,33 @@ pub const BINDINGS: &[Binding] = &[
     ),
     bind(
         Group::Tools,
-        Action::Pick(Tool::Supports),
+        Action::Pick(Tool::Position),
         &[plain(Key::Num2)],
     ),
     bind(
         Group::Tools,
-        Action::Pick(Tool::Hollow),
+        Action::Pick(Tool::Measure),
         &[plain(Key::Num3)],
     ),
-    bind(Group::Tools, Action::Pick(Tool::Drain), &[plain(Key::Num4)]),
-    bind(Group::Tools, Action::Pick(Tool::Cut), &[plain(Key::Num5)]),
+    bind(
+        Group::Tools,
+        Action::Pick(Tool::Hollow),
+        &[plain(Key::Num4)],
+    ),
+    bind(Group::Tools, Action::Pick(Tool::Drain), &[plain(Key::Num5)]),
+    bind(Group::Tools, Action::Pick(Tool::Cut), &[plain(Key::Num6)]),
     bind(
         Group::Tools,
         Action::Pick(Tool::Relief),
-        &[plain(Key::Num6)],
-    ),
-    bind(
-        Group::Tools,
-        Action::Pick(Tool::Layers),
         &[plain(Key::Num7)],
     ),
     bind(
         Group::Tools,
-        Action::Pick(Tool::Measure),
+        Action::Pick(Tool::Supports),
         &[plain(Key::Num8)],
     ),
+    bind(Group::Tools, Action::Pick(Tool::Paint), &[plain(Key::Num9)]),
+    bind(Group::Tools, Action::Pick(Tool::Shape), &[plain(Key::Num0)]),
     bind(Group::Plate, Action::SelectAll, &[cmd(Key::A)]),
     bind(Group::Plate, Action::Deselect, &[plain(Key::Escape)]),
     bind(Group::Plate, Action::Duplicate, &[cmd(Key::D)]),
@@ -470,9 +473,9 @@ pub fn act(window: &mut Window, action: Action) {
     }
 }
 
-/// Reaching for a tool is an editing act, so it brings the plate back into view.
+/// Opens a tool in the inspector. The view stays as it is: the layer strip alone switches
+/// it; see `docs/decisions/0218`.
 pub(crate) fn pick(window: &mut Window, tool: Tool) {
-    *window.mode = Mode::Prepare;
     *window.tool = tool;
 }
 
@@ -517,25 +520,10 @@ mod tests {
         }
     }
 
-    /// A tool with no key would be reachable by the pointer alone.
-    #[test]
-    fn every_tool_has_a_key() {
-        for tool in Tool::ALL {
-            assert!(
-                !chords(Action::Pick(tool)).is_empty(),
-                "{} is bound to nothing",
-                tool.label()
-            );
-        }
-    }
-
+    /// Ten digits key the first ten tools of the rail, in its order; see
+    /// `docs/decisions/0218`.
     #[test]
     fn the_rail_order_is_the_digit_order() {
-        let rail: Vec<Tool> = Tool::PLACING
-            .into_iter()
-            .chain(Tool::SHAPING)
-            .chain(Tool::PRINTING)
-            .collect();
         let digits = [
             Key::Num1,
             Key::Num2,
@@ -544,18 +532,25 @@ mod tests {
             Key::Num5,
             Key::Num6,
             Key::Num7,
+            Key::Num8,
+            Key::Num9,
+            Key::Num0,
         ];
+        let rail: Vec<Tool> = Tool::on_rail().collect();
         for (tool, digit) in rail.iter().zip(digits) {
             let chord = chords(Action::Pick(*tool))
                 .first()
                 .copied()
-                .expect("every tool is in the table");
+                .expect("each of the first ten tools is in the table");
             assert_eq!(
                 chord.logical_key,
                 digit,
                 "{} is not on the digit of its place on the rail",
                 tool.label()
             );
+        }
+        for tool in &rail[digits.len()..] {
+            assert!(chords(Action::Pick(*tool)).is_empty());
         }
     }
 

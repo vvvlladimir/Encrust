@@ -106,20 +106,21 @@ fn steer_camera(view: &mut View, rect: egui::Rect, pointer: &Pointer, drag: Drag
 
 /// What a click on the plate does, which is the tool's to say.
 fn click(ui: &egui::Ui, window: &mut Window, rect: egui::Rect, cursor: egui::Pos2) {
-    if *window.tool != Tool::Select && takes_the_pick(window, rect, cursor) {
+    let picking = matches!(*window.tool, Tool::Select | Tool::Position);
+    if !picking && takes_the_pick(window, rect, cursor) {
         return;
     }
     match *window.tool {
         // Alt is what every modelling tool uses for "the opposite of this click", and
         // the other buttons are already spoken for by the camera.
         // A stroke of the brush has already painted whatever the click landed on.
-        Tool::Supports if window.tools.supports.placing.paints() => {}
-        Tool::Supports if ui.input(|input| input.modifiers.alt) => {
+        Tool::Paint if window.tools.supports.placing.paints() => {}
+        Tool::Paint if ui.input(|input| input.modifiers.alt) => {
             remove_support_under_cursor(window, rect, cursor);
         }
-        // The drag has already taken hold of whatever the press landed on.
-        Tool::Supports if window.tools.supports.placing.edits() => {}
-        Tool::Supports => place_support_under_cursor(window, rect, cursor),
+        Tool::Paint => place_support_under_cursor(window, rect, cursor),
+        // The drag has already taken hold of whatever part the press landed on.
+        Tool::Supports => {}
         Tool::Hollow if ui.input(|input| input.modifiers.alt) => {
             remove_blocker_under_cursor(window, rect, cursor);
         }
@@ -133,7 +134,7 @@ fn click(ui: &egui::Ui, window: &mut Window, rect: egui::Rect, cursor: egui::Pos
         Tool::Drain => place_drain_under_cursor(window, rect, cursor),
         Tool::Measure if ui.input(|input| input.modifiers.alt) => window.tools.measure.clear(),
         Tool::Measure => measure_under_cursor(window, rect, cursor),
-        Tool::Select if window.tools.orient.picking_face => {
+        Tool::Position if window.tools.orient.picking_face => {
             lay_face_under_cursor(window, rect, cursor);
         }
         _ => {
@@ -153,8 +154,10 @@ fn click(ui: &egui::Ui, window: &mut Window, rect: egui::Rect, cursor: egui::Pos
 fn paint_plate(ui: &egui::Ui, window: &Window, rect: egui::Rect) {
     // What needs holding up is shown while the Supports tool is the one in hand, at the
     // angle its own profile is set to; see `docs/decisions/0034`.
-    let overhang_deg =
-        (*window.tool == Tool::Supports).then_some(window.tools.supports.profile.max_overhang_deg);
+    let overhang_deg = window
+        .tool
+        .shows_overhangs()
+        .then_some(window.tools.supports.profile.max_overhang_deg);
     crate::render::prime_label(ui.painter());
     let callback = ViewportCallback::new(
         &window.doc.scene,
@@ -183,17 +186,17 @@ fn paint_plate(ui: &egui::Ui, window: &Window, rect: egui::Rect) {
 
 /// The chrome each tool draws over the 3D pass: bounds, gizmo, measurement, brush.
 fn draw_tool_overlays(ui: &egui::Ui, window: &mut Window, rect: egui::Rect, pointer: &Pointer) {
-    if *window.tool == Tool::Select {
+    if matches!(*window.tool, Tool::Select | Tool::Position) {
         draw_bounds(ui, window, rect);
     }
-    if *window.tool == Tool::Select && window.tools.orient.picking_face {
+    if *window.tool == Tool::Position && window.tools.orient.picking_face {
         let hovered = pointer.over_viewport.then_some(pointer.position).flatten();
         point_at_face(window, rect, hovered.map(|at| egui::pos2(at.x, at.y)));
         draw_facet(ui, window, rect);
     }
     // While a face is being picked the click is for the model, not for a handle over it.
     if !window.view.options.sheet
-        && *window.tool == Tool::Select
+        && *window.tool == Tool::Position
         && !window.tools.orient.picking_face
     {
         show_gizmo(ui, window, rect);
@@ -204,10 +207,10 @@ fn draw_tool_overlays(ui: &egui::Ui, window: &mut Window, rect: egui::Rect, poin
     if *window.tool == Tool::Cut {
         draw_cut_plane(ui, window, rect);
     }
-    if *window.tool == Tool::Supports && window.tools.supports.placing.paints() {
+    if *window.tool == Tool::Paint && window.tools.supports.placing.paints() {
         draw_brush(ui, window, rect);
     }
-    if *window.tool == Tool::Supports && window.tools.supports.placing.edits() {
+    if *window.tool == Tool::Supports {
         draw_picked(ui, window, rect);
     }
 }

@@ -13,80 +13,102 @@ pub enum Mode {
     Preview,
 }
 
-/// What a click in the viewport does, and which section of the inspector it opens.
+/// What a click in the viewport does, and what the inspector beside the rail shows.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum Tool {
     #[default]
     Select,
-    Supports,
+    Position,
+    Measure,
     Hollow,
     Drain,
     Cut,
     Relief,
-    Layers,
-    Measure,
+    /// Growing supports automatically, and picking the parts of those already standing.
+    Supports,
+    /// Placing supports by hand, painting where they go and where they must not.
+    Paint,
+    /// The shape of one support, part by part, in the profile of the group in hand.
+    Shape,
+    Check,
+    Export,
+    /// A form rather than a tool: opened from the top bar, never from the rail.
+    PrintSettings,
 }
 
 impl Tool {
-    /// The groups of the rail, in the order it draws them, with a rule between each.
-    pub const PLACING: [Self; 1] = [Self::Select];
-    pub const SHAPING: [Self; 5] = [
-        Self::Supports,
-        Self::Hollow,
-        Self::Drain,
-        Self::Cut,
-        Self::Relief,
+    /// The groups of the rail, in the order it draws them, with a rule between each; see
+    /// `docs/decisions/0218`.
+    pub const RAIL: [&'static [Self]; 4] = [
+        &[Self::Select, Self::Position, Self::Measure],
+        &[Self::Hollow, Self::Drain, Self::Cut, Self::Relief],
+        &[Self::Supports, Self::Paint, Self::Shape],
+        &[Self::Check, Self::Export],
     ];
-    /// What the stack is cut with, and what only reads the plate.
-    pub const PRINTING: [Self; 2] = [Self::Layers, Self::Measure];
 
     /// Every variant, which is what a test walks to prove none was left unplaced.
     #[cfg(test)]
-    pub const ALL: [Self; 8] = [
+    pub const ALL: [Self; 13] = [
         Self::Select,
-        Self::Supports,
+        Self::Position,
+        Self::Measure,
         Self::Hollow,
         Self::Drain,
         Self::Cut,
         Self::Relief,
-        Self::Layers,
-        Self::Measure,
+        Self::Supports,
+        Self::Paint,
+        Self::Shape,
+        Self::Check,
+        Self::Export,
+        Self::PrintSettings,
     ];
+
+    /// The tools of the rail, top to bottom.
+    #[cfg(test)]
+    pub fn on_rail() -> impl Iterator<Item = Self> {
+        Self::RAIL.into_iter().flatten().copied()
+    }
 
     pub fn label(self) -> &'static str {
         match self {
             Self::Select => "Select",
-            Self::Supports => "Supports",
-            Self::Hollow => "Hollow",
-            Self::Drain => "Drain holes",
-            Self::Cut => "Cut and split",
-            Self::Relief => "Relief",
-            Self::Layers => "Layers and exposure",
+            Self::Position => "Position",
             Self::Measure => "Measure",
-        }
-    }
-
-    /// The name under the glyph on the rail, which has room for one short word.
-    pub fn rail_name(self) -> &'static str {
-        match self {
+            Self::Hollow => "Hollow",
             Self::Drain => "Drain",
             Self::Cut => "Cut",
-            Self::Layers => "Layers",
-            tool => tool.label(),
+            Self::Relief => "Relief",
+            Self::Supports => "Supports",
+            Self::Paint => "Paint",
+            Self::Shape => "Shape",
+            Self::Check => "Check",
+            Self::Export => "Export",
+            Self::PrintSettings => "Print settings",
         }
     }
 
     pub fn glyph(self) -> &'static str {
         match self {
             Self::Select => icon::SELECT,
-            Self::Supports => icon::SUPPORTS,
+            Self::Position => icon::POSITION,
+            Self::Measure => icon::MEASURE,
             Self::Hollow => icon::HOLLOW,
             Self::Drain => icon::DRAIN,
             Self::Cut => icon::CUT,
             Self::Relief => icon::RELIEF,
-            Self::Layers => icon::SLICE,
-            Self::Measure => icon::MEASURE,
+            Self::Supports => icon::SUPPORTS,
+            Self::Paint => icon::PAINT,
+            Self::Shape => icon::SHAPE,
+            Self::Check => icon::CHECK,
+            Self::Export => icon::EXPORT,
+            Self::PrintSettings => icon::PARAMETERS,
         }
+    }
+
+    /// Whether the plate is shaded by what needs holding up while this tool is in hand.
+    pub fn shows_overhangs(self) -> bool {
+        matches!(self, Self::Supports | Self::Paint)
     }
 }
 
@@ -151,19 +173,22 @@ mod tests {
             for other in &Tool::ALL[index + 1..] {
                 assert_ne!(tool.glyph(), other.glyph());
                 assert_ne!(tool.label(), other.label());
-                assert_ne!(tool.rail_name(), other.rail_name());
             }
         }
     }
 
-    /// A variant added and not placed would silently never be reachable.
+    /// A variant added and not placed would silently never be reachable; the print
+    /// settings alone are opened from the top bar instead.
     #[test]
-    fn every_tool_is_on_the_rail() {
+    fn every_tool_but_the_print_settings_is_on_the_rail() {
         for tool in Tool::ALL {
-            let on_rail = Tool::PLACING.contains(&tool)
-                || Tool::SHAPING.contains(&tool)
-                || Tool::PRINTING.contains(&tool);
-            assert!(on_rail, "{} is on no rail group", tool.label());
+            let on_rail = Tool::on_rail().any(|placed| placed == tool);
+            assert_eq!(
+                on_rail,
+                tool != Tool::PrintSettings,
+                "{} is in the wrong place",
+                tool.label()
+            );
         }
     }
 }

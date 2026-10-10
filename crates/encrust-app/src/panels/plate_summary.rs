@@ -63,6 +63,16 @@ fn plate_readings(scene: &Scene, slicing: &Slicing, tally: &Tally) -> Vec<(&'sta
     rows
 }
 
+/// What the file the plate is sliced into comes to: its layers, then its resin, price and
+/// time once the stack is measured.
+pub fn file_readings(ctx: &egui::Context, window: &Window) -> Vec<(&'static str, String)> {
+    let tally = tally(ctx, &window.doc.scene);
+    let mut rows = plate_readings(&window.doc.scene, &window.machine.slicing, &tally);
+    rows.truncate(2);
+    rows.extend(print_readings(window));
+    rows
+}
+
 fn tally_readings(tally: &Tally, material: &MaterialProfile) -> Vec<(&'static str, String)> {
     let mut readings = vec![
         ("Vertices", tally.vertices.to_string()),

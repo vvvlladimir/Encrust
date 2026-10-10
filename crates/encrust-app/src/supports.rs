@@ -15,24 +15,17 @@ pub enum Placing {
     Point,
     Paint,
     Block,
-    Edit,
 }
 
 impl Placing {
-    pub const ALL: [Self; 4] = [Self::Point, Self::Paint, Self::Block, Self::Edit];
+    pub const ALL: [Self; 3] = [Self::Point, Self::Paint, Self::Block];
 
     pub fn label(self) -> &'static str {
         match self {
             Self::Point => "Place",
             Self::Paint => "Paint",
             Self::Block => "Block",
-            Self::Edit => "Edit",
         }
-    }
-
-    /// Whether a click picks a support already standing rather than putting one down.
-    pub fn edits(self) -> bool {
-        self == Self::Edit
     }
 
     /// Whether this paints a patch rather than working on a single support.
@@ -530,13 +523,7 @@ mod tests {
     fn only_the_two_brushes_paint() {
         assert!(Placing::Paint.paints());
         assert!(Placing::Block.paints());
-        assert!(
-            !Placing::Edit.paints(),
-            "Edit works on a support already standing, it does not paint the model"
-        );
         assert!(!Placing::Point.paints());
-        assert!(Placing::Edit.edits());
-        assert!(!Placing::Paint.edits());
     }
 
     #[test]

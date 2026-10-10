@@ -3,9 +3,8 @@ use egui::{Align2, Rect, Sense, vec2};
 use core_geometry::{Vec2, Vec3};
 
 use crate::panels::{Window, plate_summary, slice};
-use crate::scene::{Axis, ImportSummary, ObjectId, Scene, SceneObject};
+use crate::scene::{ImportSummary, ObjectId, Scene, SceneObject};
 use crate::shortcuts::{self, Action};
-use crate::state::Doc;
 use crate::ui::{
     count_row, hairline, hint, icon, icon_button, number_row, secondary_button, theme,
 };
@@ -132,11 +131,10 @@ fn actions(ui: &mut egui::Ui, window: &mut Window) {
             let picked: Vec<ObjectId> = window.doc.scene.selection().to_vec();
             let aimed = !picked.is_empty();
             ui.spacing_mut().item_spacing.x = 2.0;
-            ui.columns(5, |columns| {
+            ui.columns(4, |columns| {
                 cell(&mut columns[0], aimed, |ui| duplicate(ui, window, &picked));
-                cell(&mut columns[1], aimed, |ui| mirror(ui, window.doc, &picked));
-                cell(&mut columns[2], aimed, |ui| array(ui, window, &picked));
-                cell(&mut columns[3], true, |ui| {
+                cell(&mut columns[1], aimed, |ui| array(ui, window, &picked));
+                cell(&mut columns[2], true, |ui| {
                     if icon_button(ui, icon::ARRANGE, "Arrange the plate").clicked() {
                         window.machine.status = crate::arrange::arrange_plate(
                             &mut window.doc.scene,
@@ -145,7 +143,7 @@ fn actions(ui: &mut egui::Ui, window: &mut Window) {
                         );
                     }
                 });
-                cell(&mut columns[4], aimed, |ui| {
+                cell(&mut columns[3], aimed, |ui| {
                     let tooltip = shortcuts::tooltip(Action::Remove);
                     if icon_button(ui, icon::REMOVE, &tooltip).clicked() {
                         window.doc.scene.remove_selected();
@@ -162,7 +160,7 @@ fn cell(ui: &mut egui::Ui, enabled: bool, add: impl FnOnce(&mut egui::Ui)) {
     });
 }
 
-/// Every copy and every flip works on the whole selection, so a plate of four does not
+/// Every copy works on the whole selection, so a plate of four does not
 /// need the same button pressed four times.
 fn duplicate(ui: &mut egui::Ui, window: &mut Window, picked: &[ObjectId]) {
     let tooltip = if picked.len() > 1 {
@@ -186,20 +184,6 @@ pub fn duplicate_selection(window: &mut Window) {
         })
         .collect();
     window.doc.scene.select_many(&copies);
-}
-
-/// Three axes on one button: a flip is rare enough not to be worth three of them.
-fn mirror(ui: &mut egui::Ui, doc: &mut Doc, picked: &[ObjectId]) {
-    let response = icon_button(ui, icon::MIRROR, "Mirror");
-    egui::Popup::menu(&response).show(|ui| {
-        for axis in Axis::ALL {
-            if ui.button(axis.label()).clicked() {
-                for id in picked {
-                    doc.scene.mirror(*id, axis);
-                }
-            }
-        }
-    });
 }
 
 /// The grid and the gap it leaves, behind the button that lays it out.

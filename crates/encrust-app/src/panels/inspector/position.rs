@@ -4,11 +4,11 @@ use core_geometry::{Quat, Transform, Vec3};
 use crate::import::recenter;
 use crate::panels::Window;
 use crate::plate::BuildPlate;
-use crate::scene::{ObjectId, Scene, SceneObject};
+use crate::scene::{Axis, ObjectId, Scene, SceneObject};
 use crate::state::Tools;
 use crate::ui::{
-    axis_label, compact_button, field_label, icon, icon_toggle, number_field, progress_bar,
-    secondary_button, section_with_action, theme,
+    axis_label, compact_button, describe, field_label, hint, icon, icon_toggle, later,
+    number_field, progress_bar, secondary_button, section, section_with_action, switch, theme,
 };
 
 /// Millimetres, degrees and percent per point of drag on the transform fields.
@@ -34,11 +34,18 @@ const ANY: std::ops::RangeInclusive<f32> = f32::MIN..=f32::MAX;
 /// the origin its file was authored around. See `docs/decisions/0110`.
 pub fn ui(ui: &mut egui::Ui, window: &mut Window) {
     let Some(id) = window.doc.scene.selected() else {
+        section(ui, "Position", None, |ui| {
+            hint(ui, "Select a model to move it.");
+        });
         return;
     };
     position(ui, &mut window.doc.scene, &window.doc.plate, id);
     rotation(ui, window, id);
-    scale(ui, &mut window.doc.scene, &window.doc.plate, id);
+    scale(ui, &mut window.doc.scene, id);
+    place(ui, &mut window.doc.scene, &window.doc.plate, id);
+    orient(ui, window, id);
+    lay_flat(ui, window.tools);
+    mirror(ui, &mut window.doc.scene);
 }
 
 fn position(ui: &mut egui::Ui, scene: &mut Scene, plate: &BuildPlate, id: ObjectId) {
@@ -62,19 +69,9 @@ fn position(ui: &mut egui::Ui, scene: &mut Scene, plate: &BuildPlate, id: Object
         if changed {
             object.settle(pivot);
         }
-        ui.add_space(4.0);
-        if secondary_button(ui, "", "Center").clicked()
-            && let Some(bounds) = object.world_bounds()
-        {
-            let offset = plate.center() - bounds.center();
-            object.transform.translation += offset * Vec3::new(1.0, 1.0, 0.0);
-        }
-        if secondary_button(ui, "", "On Platform").clicked() {
-            object.stand_on_plate();
-        }
     });
     if reset {
-        place(scene, plate, id);
+        recentre(scene, plate, id);
     }
 }
 
@@ -90,9 +87,6 @@ fn rotation(ui: &mut egui::Ui, window: &mut Window, id: ObjectId) {
                 object.settle(pivot);
             }
         }
-        ui.add_space(4.0);
-        orient_to_face(ui, window.tools);
-        auto_orient(ui, window, id);
     });
     if reset && let Some(object) = window.doc.scene.get_mut(id) {
         object.settle(Transform {
@@ -143,7 +137,7 @@ fn rotation_rows(ui: &mut egui::Ui, pivot: &mut Transform) -> bool {
 
 /// Size in the model's own axes, stretched: what the model measures before it is turned,
 /// so a number typed here stays put however it is rotated afterwards.
-fn scale(ui: &mut egui::Ui, scene: &mut Scene, plate: &BuildPlate, id: ObjectId) {
+fn scale(ui: &mut egui::Ui, scene: &mut Scene, id: ObjectId) {
     let linked_id = ui.id().with("scale-linked");
     let mut linked = ui.memory(|memory| memory.data.get_temp(linked_id).unwrap_or(true));
     let tooltip = "Back to the size the model was imported at";
@@ -168,11 +162,6 @@ fn scale(ui: &mut egui::Ui, scene: &mut Scene, plate: &BuildPlate, id: ObjectId)
         if changed {
             pivot.scale = keeping_mirror(pivot.scale, factors);
             object.settle(pivot);
-        }
-        ui.add_space(4.0);
-        if secondary_button(ui, "", "Scale to Fit").clicked() {
-            fit(object, plate);
-            place(scene, plate, id);
         }
     });
     ui.memory_mut(|memory| memory.data.insert_temp(linked_id, linked));
@@ -262,22 +251,111 @@ fn label_column(ui: &mut egui::Ui, axis: usize, unit: &str) {
     );
 }
 
+/// Standing the selection on the plate, over its middle, or as large as the volume takes.
+fn place(ui: &mut egui::Ui, scene: &mut Scene, plate: &BuildPlate, id: ObjectId) {
+    section(ui, "Place", None, |ui| {
+        let mut fitted = false;
+        ui.columns(3, |columns| {
+            let Some(object) = scene.get_mut(id) else {
+                return;
+            };
+            if secondary_button(&mut columns[0], "", "On the plate").clicked() {
+                object.stand_on_plate();
+            }
+            if secondary_button(&mut columns[1], "", "Centre").clicked()
+                && let Some(bounds) = object.world_bounds()
+            {
+                let offset = plate.center() - bounds.center();
+                object.transform.translation += offset * Vec3::new(1.0, 1.0, 0.0);
+            }
+            if secondary_button(&mut columns[2], "", "Scale to fit").clicked() {
+                fit(object, plate);
+                fitted = true;
+            }
+        });
+        if fitted {
+            recentre(scene, plate, id);
+        }
+        // TODO(step-8): a lift off the plate kept per model, typed here.
+        later(ui, |ui| {
+            let mut lift_mm = 0.0_f32;
+            crate::ui::number_row(
+                ui,
+                "Lift off the plate",
+                &mut lift_mm,
+                "mm",
+                0.1,
+                0.0..=50.0,
+                2,
+            );
+        });
+    });
+}
+
+/// Turning the selection the way it prints best, and the goals that search will weigh.
+fn orient(ui: &mut egui::Ui, window: &mut Window, id: ObjectId) {
+    section(ui, "Orient", None, |ui| {
+        describe(ui, "Turn the selection the way it prints best.");
+        // TODO(step-8): a goal for the search, the tilt it may reach, and faces kept off
+        // the plate by the blockers.
+        later(ui, |ui| {
+            egui::ComboBox::from_id_salt("orient-goal")
+                .width(ui.available_width())
+                .selected_text("Fewest supports")
+                .show_ui(ui, |_| {});
+            let mut tilt_deg = 45.0_f32;
+            crate::ui::number_row(ui, "Max tilt", &mut tilt_deg, "\u{b0}", 1.0, 0.0..=90.0, 0);
+            let mut respect = true;
+            switch(ui, &mut respect, "Respect blockers");
+        });
+        auto_orient(ui, window, id);
+    });
+}
+
 /// Waits for a click on a model, then lays the face under it on the plate. Pressed again,
 /// or Esc, stops waiting.
-fn orient_to_face(ui: &mut egui::Ui, tools: &mut Tools) {
-    let picking = tools.orient.picking_face;
-    let label = if picking {
-        "Click a face to lay down"
-    } else {
-        "Orient to Face"
-    };
-    if secondary_button(ui, icon::SELECT, label).clicked() {
-        if picking {
-            tools.orient.stop_picking();
+fn lay_flat(ui: &mut egui::Ui, tools: &mut Tools) {
+    section(ui, "Lay flat", None, |ui| {
+        describe(ui, "Turn the model so a face rests on the plate.");
+        let picking = tools.orient.picking_face;
+        let label = if picking {
+            "Click a face to lay down"
         } else {
-            tools.orient.picking_face = true;
+            "Pick a face on the model"
+        };
+        if secondary_button(ui, icon::SELECT, label).clicked() {
+            if picking {
+                tools.orient.stop_picking();
+            } else {
+                tools.orient.picking_face = true;
+            }
         }
-    }
+        // TODO(step-8): the model's largest flat faces listed here, each laid down on a
+        // click.
+    });
+}
+
+/// Every flip works on the whole selection, so a plate of four does not need the same
+/// button pressed four times.
+fn mirror(ui: &mut egui::Ui, scene: &mut Scene) {
+    section(ui, "Mirror", None, |ui| {
+        let picked = scene.selection().to_vec();
+        ui.columns(Axis::ALL.len(), |columns| {
+            for (column, axis) in columns.iter_mut().zip(Axis::ALL) {
+                let label = format!("Across {}", axis.label());
+                if secondary_button(column, "", &label).clicked() {
+                    for id in &picked {
+                        scene.mirror(*id, axis);
+                    }
+                }
+            }
+        });
+        // TODO(step-8): mirror a copy and keep the original where it stands.
+        later(ui, |ui| {
+            let mut keep = false;
+            switch(ui, &mut keep, "Keep the original");
+        });
+    });
 }
 
 /// Turns the model the way it prints best, on a worker thread: the search measures every
@@ -326,7 +404,7 @@ fn keeping_mirror(scale: Vec3, sizes: Vec3) -> Vec3 {
 }
 
 /// Centres the model over the plate and stands it on it, in one move.
-fn place(scene: &mut Scene, plate: &BuildPlate, id: ObjectId) {
+fn recentre(scene: &mut Scene, plate: &BuildPlate, id: ObjectId) {
     if let Some(index) = scene.objects().iter().position(|object| object.id == id) {
         recenter(scene, plate, index);
     }

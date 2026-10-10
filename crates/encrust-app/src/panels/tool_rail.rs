@@ -1,9 +1,9 @@
-use egui::{Align, Layout};
+use egui::{Align, Color32, Layout};
 
 use crate::panels::{Window, toggle_settings};
 use crate::shortcuts::{self, Action};
-use crate::ui::{hairline, icon, icon_button, rail_button};
-use crate::workspace::{Mode, Tool};
+use crate::ui::{hairline, icon, icon_button, rail_button, theme};
+use crate::workspace::Tool;
 
 /// Points between the rail's edge and its buttons, and between one group and the next.
 const RAIL_PAD: i8 = 6;
@@ -16,8 +16,7 @@ pub fn ui(ui: &mut egui::Ui, window: &mut Window) {
         .inner_margin(egui::Margin::symmetric(RAIL_PAD, RAIL_PAD))
         .show(ui, |ui| {
             ui.spacing_mut().item_spacing.y = 2.0;
-            let groups: [&[Tool]; 3] = [&Tool::PLACING, &Tool::SHAPING, &Tool::PRINTING];
-            for (index, group) in groups.into_iter().enumerate() {
+            for (index, group) in Tool::RAIL.into_iter().enumerate() {
                 if index > 0 {
                     ui.add_space(GROUP_GAP);
                     hairline(ui);
@@ -40,12 +39,36 @@ pub fn ui(ui: &mut egui::Ui, window: &mut Window) {
         });
 }
 
-/// A tool is lit only while the plate is being edited with it: the layer views have no
-/// tool in hand, and a press on one brings the model back.
 fn button(ui: &mut egui::Ui, window: &mut Window, tool: Tool) {
-    let active = *window.tool == tool && *window.mode == Mode::Prepare;
+    let active = *window.tool == tool;
     let tooltip = shortcuts::tooltip(Action::Pick(tool));
-    if rail_button(ui, tool.glyph(), tool.rail_name(), &tooltip, active).clicked() {
+    let badge = badge(window, tool);
+    if rail_button(ui, tool.glyph(), tool.label(), &tooltip, active, badge).clicked() {
         shortcuts::pick(window, tool);
+    }
+}
+
+/// The dot a tool carries while it has something the user must deal with. Only the tools
+/// that finish a plate carry one, so a dot is never noise; see `docs/decisions/0218`.
+fn badge(window: &Window, tool: Tool) -> Option<Color32> {
+    let colors = theme::colors();
+    match tool {
+        Tool::Drain => window
+            .doc
+            .scene
+            .targets()
+            .any(|object| !object.traps.found().is_empty())
+            .then_some(colors.danger),
+        Tool::Check => window
+            .measured()
+            .and_then(core_analysis::Measured::worst)
+            .map(|worst| super::inspector::risk_tint(&worst)),
+        Tool::Export => window
+            .machine
+            .network
+            .sent
+            .is_some()
+            .then_some(colors.accent),
+        _ => None,
     }
 }

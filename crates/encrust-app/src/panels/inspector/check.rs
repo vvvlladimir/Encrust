@@ -1,12 +1,13 @@
-use core_analysis::{Risk, RiskKind};
+use core_analysis::{Measured, Risk, RiskKind, equivalent_disc_mm};
 use egui::{Color32, RichText};
 
 use crate::panels::Window;
-use crate::state::{Machine, View};
+use crate::state::Machine;
 use crate::ui::{
-    Segment, Segmented, describe, hint, icon, icon_button, issue_row, list, secondary_button,
-    section, summary_button, theme,
+    Segment, Segmented, describe, hint, icon, issue_row, list, readings, secondary_button, section,
+    theme,
 };
+use crate::workspace::Mode;
 
 /// Rows listed before the rest are only counted: a stack with hundreds of islands needs
 /// supports, not scrolling.
@@ -51,50 +52,9 @@ impl Filter {
     }
 }
 
-/// The card in Preview's column that says what the check found and opens the list of it.
-pub fn entry(ui: &mut egui::Ui, window: &mut Window) {
-    let colors = theme::colors();
-    let (glyph, tint, title, subtitle) = match window.measured() {
-        None if window.machine.preview.is_measuring() => (
-            icon::INFO,
-            colors.text_low,
-            "Issues".to_owned(),
-            "Checking the stack...".to_owned(),
-        ),
-        None => return,
-        Some(measured) => {
-            let risks = measured.risks();
-            let removed = removed_note(measured.removed_islands());
-            match measured.worst() {
-                None => (
-                    icon::CLEAR,
-                    colors.text_mid,
-                    "No issues".to_owned(),
-                    removed.unwrap_or_else(|| "Nothing found to fail on".to_owned()),
-                ),
-                Some(worst) => (
-                    icon::WARNING,
-                    tint(&worst),
-                    count(risks.len(), "issue", "issues"),
-                    format!("{} at layer {}", verdict_word(&worst), worst.layer + 1),
-                ),
-            }
-        }
-    };
-    ui.add_space(theme::ITEM_GAP);
-    egui::Frame::new()
-        .inner_margin(theme::PANEL_MARGIN)
-        .show(ui, |ui| {
-            if summary_button(ui, glyph, tint, &title, &subtitle).clicked() {
-                window.view.options.issues = true;
-            }
-        });
-}
-
-/// The view the card opens: the verdict, a way to take the islands out, and every issue a
-/// click away from its layer.
+/// What the stack will fail on: the verdict, a way to take the islands out, every issue a
+/// click away from its layer, and what pulls hardest on the film.
 pub fn ui(ui: &mut egui::Ui, window: &mut Window) {
-    header(ui, window.view);
     let Some((risks, worst, removed)) = window.measured().map(|measured| {
         (
             measured.risks(),
@@ -102,12 +62,7 @@ pub fn ui(ui: &mut egui::Ui, window: &mut Window) {
             measured.removed_islands(),
         )
     }) else {
-        section(ui, "Checking", None, |ui| {
-            ui.horizontal(|ui| {
-                ui.spinner();
-                hint(ui, "Reading every layer of the stack...");
-            });
-        });
+        waiting(ui, window);
         return;
     };
 
@@ -117,25 +72,104 @@ pub fn ui(ui: &mut egui::Ui, window: &mut Window) {
         }
         islands_action(ui, window.machine, &risks, removed);
     });
-    if risks.is_empty() {
+    if !risks.is_empty() {
+        let layers = rows(&risks)
+            .iter()
+            .map(|row| row.layer)
+            .collect::<std::collections::BTreeSet<_>>()
+            .len();
+        let found = format!(
+            "{} on {}",
+            count(risks.len(), "issue", "issues"),
+            count(layers, "layer", "layers")
+        );
+        section(ui, "Issues", Some(&found), |ui| {
+            let filter = filter(ui, &risks);
+            if let Some(layer) = listing(ui, window.machine.preview.layer(), &risks, filter) {
+                go_to(window.machine, layer);
+            }
+        });
+    }
+    pull(ui, window);
+}
+
+/// What the check has found so far, for the inspector's heading, and its colour.
+pub fn fact(window: &Window) -> Option<(String, Color32)> {
+    let colors = theme::colors();
+    let Some(measured) = window.measured() else {
+        return window
+            .machine
+            .preview
+            .is_measuring()
+            .then(|| ("checking".to_owned(), colors.text_low));
+    };
+    Some(match measured.worst() {
+        None => ("no issues".to_owned(), colors.text_mid),
+        Some(worst) => (
+            count(measured.risks().len(), "issue", "issues"),
+            tint(&worst),
+        ),
+    })
+}
+
+/// Before there is anything to read: the stack being read, or the way to have it cut.
+fn waiting(ui: &mut egui::Ui, window: &mut Window) {
+    if window.machine.preview.is_measuring() || window.machine.preview.is_building() {
+        section(ui, "Checking", None, |ui| {
+            ui.horizontal(|ui| {
+                ui.spinner();
+                hint(ui, "Reading every layer of the stack...");
+            });
+        });
         return;
     }
-    let layers = rows(&risks)
-        .iter()
-        .map(|row| row.layer)
-        .collect::<std::collections::BTreeSet<_>>()
-        .len();
-    let found = format!(
-        "{} on {}",
-        count(risks.len(), "issue", "issues"),
-        count(layers, "layer", "layers")
-    );
-    section(ui, "Found", Some(&found), |ui| {
-        let filter = filter(ui, &risks);
-        if let Some(layer) = listing(ui, window.machine.preview.layer(), &risks, filter) {
-            go_to(window.machine, layer);
+    section(ui, "Checking", None, |ui| {
+        hint(
+            ui,
+            "The check reads the layers, which are cut once the model is shown beside its \
+             layer.",
+        );
+        if secondary_button(ui, icon::SIDE_BY_SIDE, "Cut the layers").clicked() {
+            *window.mode = Mode::Preview;
+            window.view.options.mask_only = false;
         }
     });
+}
+
+/// Which layers pull hardest on the film as the plate lifts, above the bottom block.
+///
+/// Every row is listed whether its peak is known or not: a print setting edited meanwhile
+/// is measured again, and a block that comes and goes takes the field under it out from
+/// under the pointer.
+fn pull(ui: &mut egui::Ui, window: &mut Window) {
+    let measured = window.measured();
+    if measured.is_none() && !window.machine.preview.is_measuring() {
+        return;
+    }
+    let waiting = || "measuring".to_owned();
+    let hardest = measured.and_then(Measured::hardest_pull);
+    let widest = measured.and_then(Measured::largest_growth);
+    let rows = vec![
+        (
+            "Hardest pull",
+            hardest.map_or_else(waiting, |peak| format!("layer {}", peak.layer + 1)),
+        ),
+        (
+            "Pulls like a disc of",
+            hardest.map_or_else(waiting, |peak| {
+                format!("{:.1} mm", equivalent_disc_mm(peak.value))
+            }),
+        ),
+        (
+            "Widest step",
+            widest.map_or_else(waiting, |peak| format!("layer {}", peak.layer + 1)),
+        ),
+        (
+            "Grows by",
+            widest.map_or_else(waiting, |peak| format!("{:.0} mm2", peak.value)),
+        ),
+    ];
+    section(ui, "Peel", None, |ui| readings(ui, &rows));
 }
 
 /// The colour an issue is drawn in: islands in the colour the mask paints them, the rest
@@ -146,19 +180,6 @@ pub fn tint(risk: &Risk) -> Color32 {
         RiskKind::Island { .. } => colors.danger,
         RiskKind::Lever { .. } | RiskKind::Peel { .. } => colors.warn,
     }
-}
-
-fn header(ui: &mut egui::Ui, view: &mut View) {
-    egui::Frame::new()
-        .inner_margin(theme::PANEL_MARGIN)
-        .show(ui, |ui| {
-            ui.horizontal(|ui| {
-                if icon_button(ui, icon::BACK, "Back to the layer").clicked() {
-                    view.options.issues = false;
-                }
-                ui.label(RichText::new("Issues").heading());
-            });
-        });
 }
 
 /// The layer the print fails on, and why, on a card that goes there when clicked. Answers

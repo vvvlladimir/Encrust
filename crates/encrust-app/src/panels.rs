@@ -20,7 +20,7 @@ mod viewport_panel;
 pub use scene_panel::duplicate_selection;
 pub use section::animate as animate_preview;
 pub use slice::slice_this_plate;
-pub use title_bar::toggle_settings;
+pub use title_bar::{layers_and_exposure, toggle_settings};
 pub use viewport_panel::frame_view;
 
 use crate::state::{Doc, Machine, Tools, View};

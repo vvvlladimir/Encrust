@@ -295,18 +295,19 @@ Grouped by what the decision governs; the number is still the order it was taken
 | [0102](0102-the-plate-is-a-panel-not-a-card.md) | The plate is a panel, not a card over the viewport | Accepted; the plate strip and the pickers are superseded by 0217 |
 | [0103](0103-preview-splits-the-stage.md) | Preview splits the stage between the model and the mask | Accepted; hiding the columns is superseded by 0217 |
 | [0104](0104-the-title-strip-is-the-title-bar.md) | The title strip is the window's title bar | Accepted; its height is superseded by 0217 |
-| [0105](0105-a-panel-belongs-to-its-tool.md) | A panel belongs to its tool | Superseded by 0118 (the transform switch only) and 0217 (the footer only) |
+| [0105](0105-a-panel-belongs-to-its-tool.md) | A panel belongs to its tool | Superseded by 0118 (the transform switch only), 0217 (the footer only) and 0218 (the Layers tool and the Mirror action) |
 | [0106](0106-a-shortcut-lives-in-the-table.md) | Every key the window answers lives in one table | Accepted |
 | [0107](0107-take-a-colour-token-not-floats.md) | A colour crosses into the renderer as a token, not as floats | Accepted |
 | [0108](0108-the-machine-is-drawn-from-the-build-volume.md) | The build platform is drawn from the build volume, not loaded from a model | Accepted |
 | [0109](0109-the-preview-is-read-against-the-plate.md) | The preview is read against the plate, not against the panel | Accepted |
 | [0110](0110-the-gizmo-stands-on-the-centre-of-mass.md) | The gizmo stands on the model's centre of mass | Accepted |
-| [0118](0118-one-placing-panel-and-a-standing-gizmo.md) | One placing panel, and a gizmo that is always out | Accepted |
+| [0118](0118-one-placing-panel-and-a-standing-gizmo.md) | One placing panel, and a gizmo that is always out | Accepted; the gizmo on Select is superseded by 0218 |
 | [0135](0135-the-macos-icon-is-squircled-at-source.md) | The macOS icon is squircled at source, not only in the bundle | Accepted |
 | [0138](0138-the-destination-lives-on-the-slice-button.md) | The destination lives on the Slice button | Superseded by 0157 |
 | [0151](0151-the-preview-shows-a-source-not-a-plate.md) | Let the preview show a source, which is either a plate or a file | Accepted; what ends a file's turn is amended by 0202 |
 | [0157](0157-the-slice-row-carries-two-actions.md) | The Slice row carries two actions, not a destination | Accepted; the Send button is superseded by 0217 |
-| [0217](0217-the-window-is-a-top-bar-a-flat-rail-and-a-layer-strip.md) | The window is a top bar, a flat rail, a docked inspector and a layer strip | Accepted |
+| [0217](0217-the-window-is-a-top-bar-a-flat-rail-and-a-layer-strip.md) | The window is a top bar, a flat rail, a docked inspector and a layer strip | Accepted; the return to the model on a tool press is superseded by 0218 |
+| [0218](0218-twelve-tools-on-the-rail-and-print-settings-as-a-form.md) | Twelve tools on the rail, and the print settings as a form | Accepted |
 | [0192](0192-a-tool-value-is-remembered-and-taken-back-on-its-own-entry.md) | A tool value is remembered between runs and taken back on its own entry | Accepted |
 | [0193](0193-the-window-reads-its-own-input-before-egui-does.md) | The window reads its own input before egui does | Accepted |
 | [0202](0202-an-opened-file-closes-when-the-plate-changes.md) | An opened sliced file closes when the plate changes | Accepted |

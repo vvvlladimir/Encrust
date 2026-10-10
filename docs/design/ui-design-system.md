@@ -101,6 +101,7 @@ paints from tokens only.
 | `nested` | What a switch reveals, set in under it with a rule down its left edge |
 | `list`, `list_row` | Rows a panel adds to — support groups, bands, holes — on one hairline |
 | `card` | The frame of anything floating over the viewport |
+| `later` | A control the design has and the window cannot do yet: greyed out, "Not available yet" on hover |
 | `readings`, `stats` | Measured values, one to a row: name, dotted leader, figure |
 | `notice` | A verdict: a glyph in its colour, the verdict in plain ink, what to do under it |
 | `picker` | A row that opens a chooser: glyph, what is chosen, caret |
@@ -108,7 +109,7 @@ paints from tokens only.
 | `secondary_button` | The ordinary full-width button |
 | `compact_button` | A button as tall as a field, to stand in a row of them |
 | `icon_button`, `icon_toggle` | A borderless square with one glyph; the toggle stays lit while on |
-| `rail_button` | A rail button, a glyph over the tool's name, raised in `accent_soft` when it is the tool in use |
+| `rail_button` | A rail button, a glyph over the tool's name, raised in `accent_soft` when it is the tool in use, with a dot while the tool needs attention |
 | `Segmented` | Mutually exclusive choices in one bordered box, split by hairlines, the chosen one washed |
 | `switch` | A labelled toggle with an animated knob |
 | `field_label` | The name of a field with its unit in brackets after it: `Gap (mm)` |
@@ -130,7 +131,7 @@ a `field_label` of its own carries the unit in that label's brackets instead.
 │ 1  │ Models  + │ ╭view╮    ╭ job, notice ╮        │ the open tool │ rail │
 │ 2  │ list 272  │ ╰────╯                           │ 328           │ 68   │
 │ +  │           │            the stage             │               │      │
-│    │ ⧉ ⇋ ⊞ ≡ ␡ ├──────────────────────────────────┤               │ ⌨    │
+│    │ ⧉ ⊞ ≡ ␡   ├──────────────────────────────────┤               │ ⌨    │
 │ 44 │ Slice  ⌄  │ layers 52: views ‹ ▶ › ━━━●── 650│               │ ⚙    │
 └────┴───────────┴──────────────────────────────────┴───────────────┴──────┘
 ```
@@ -140,7 +141,7 @@ window, double-clicks to maximise, and on every platform but macOS draws its own
 buttons; on macOS the system's are moved onto its centre line. See `docs/decisions/0104`
 and `0217`. The File, Edit and View menus stand at its left end. The chip at the right
 names the machine and the resin, each opening its list, and the layer height and exposure,
-which open the Layers tool.
+which open the print settings.
 
 The plates are a strip of numbered squares at the window's left edge, outside the plate
 panel so they stay when it folds; a right click on one duplicates, removes or gathers the
@@ -189,16 +190,18 @@ layers if the stack is stale or missing. Both modes carry the layer strip and cu
 height: a switch into Preview parks on
 the layer nearest where Prepare was cut, and a switch back cuts Prepare at the layer shown.
 
-`workspace::Tool` is what a click in the viewport does, and the rail groups the tools as
-`PLACING`, `SHAPING` and `PRINTING`. Select shows the gizmo, the pick's bounds brackets and
-a panel of position, rotation and scale together; see `docs/decisions/0118`.
+`workspace::Tool` is what a click in the viewport does and what the inspector shows, in
+every view. `Tool::RAIL` groups twelve of them as Place, Modify, Supports and Finish; the
+print settings are a form the top bar opens. Position carries the gizmo and the transform
+fields; Select only says what is picked. See `docs/decisions/0218`.
 
 A click on a model that is not picked only picks it, whichever tool is in hand: the tool
 works on what is picked, so aiming it somewhere else is its own click (ADR 0193).
 
-The inspector shows the open tool's panel and nothing else; see `docs/decisions/0105`.
-The machine and the resin stand at the foot of the plate panel, with a row of actions over
-them — duplicate, mirror, array, arrange, remove — because both are the plate's and not the
+The inspector shows the open tool and nothing else: a heading with its one fact, its
+sections, and its action pinned to the foot; see `docs/decisions/0105` and `0218`. A
+control the design has and the window cannot do yet is drawn by `ui::later`, greyed out.
+The plate's row of actions — duplicate, array, arrange, remove — is the plate's and not a
 tool's. The machine, the resin, the output format and every value a tool panel holds are
 remembered in `preferences.json` beside the user's profile directory, and each of those
 values answers undo; see `docs/decisions/0192`.

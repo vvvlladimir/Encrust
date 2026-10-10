@@ -586,6 +586,18 @@ mod tests {
         assert_eq!(app.mode, Mode::Prepare);
     }
 
+    /// Only the layer strip switches the view; a tool opens in the inspector beside it.
+    #[test]
+    fn picking_a_tool_leaves_the_view_alone() {
+        let mut app = SlicerApp {
+            mode: Mode::Preview,
+            ..SlicerApp::default()
+        };
+        shortcuts::act(&mut app.window(), shortcuts::Action::Pick(Tool::Hollow));
+        assert_eq!(app.tool, Tool::Hollow);
+        assert_eq!(app.mode, Mode::Preview);
+    }
+
     /// The sheet is modal: a key pressed under it moves nothing on the plate.
     #[test]
     fn the_sheet_holds_the_keyboard_until_it_is_closed() {

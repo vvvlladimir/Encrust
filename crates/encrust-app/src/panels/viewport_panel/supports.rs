@@ -83,7 +83,7 @@ pub(super) fn remove_support_under_cursor(
 /// alongside what was already held — and drags it until the button comes up; one that
 /// misses lets go and leaves the drag to the camera.
 pub(super) fn drag_support(window: &mut Window, viewport: egui::Rect, pointer: &Pointer) -> bool {
-    let out = *window.tool == Tool::Supports && window.tools.supports.placing.edits();
+    let out = *window.tool == Tool::Supports;
     let Some(position) = pointer.position.filter(|_| {
         out && pointer.primary_down && pointer.over_viewport && !window.view.gizmo.is_focused()
     }) else {
