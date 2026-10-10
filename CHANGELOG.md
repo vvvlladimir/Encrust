@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.2.1](https://github.com/vvvlladimir/Encrust/compare/v0.2.0...v0.2.1) (2026-10-10)
+
+
+### 🐛 Fixed
+
+* **app:** truncate long scene object names with ellipsis and tooltip ([71bee8c](https://github.com/vvvlladimir/Encrust/commit/71bee8c68aa70a739921dc322ac96199a21ba300))
+
 ## [0.2.0](https://github.com/vvvlladimir/Encrust/compare/v0.1.0...v0.2.0) (2026-10-08)
 
 
