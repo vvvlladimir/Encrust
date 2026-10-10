@@ -117,7 +117,7 @@ fn row(ui: &mut egui::Ui, label: &str, caps: &[String]) {
 /// next cap of the same row knows where to go.
 fn keycap(ui: &egui::Ui, text: &str, right: f32, center_y: f32) -> f32 {
     let colors = theme::colors();
-    let font = theme::mono(11.0);
+    let font = theme::figures(11.0);
     let galley = ui
         .painter()
         .layout_no_wrap(text.to_owned(), font, colors.text_mid);

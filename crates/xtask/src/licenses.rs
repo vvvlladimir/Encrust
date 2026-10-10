@@ -58,7 +58,28 @@ fn generated(root: &Path) -> Result<String> {
     }
     let text =
         String::from_utf8(run.stdout).context("cargo-about wrote something that is not UTF-8")?;
-    Ok(unix_endings(&text))
+    Ok(unix_endings(&text) + &typefaces(root)?)
+}
+
+/// The faces compiled into the window, each with the licence file beside it. They are not
+/// crates, so cargo-about never sees them; see docs/decisions/0216.
+const TYPEFACES: &[(&str, &str)] = &[(
+    "IBM Plex Sans and IBM Plex Mono",
+    "assets/fonts/IBMPlex-OFL.txt",
+)];
+
+/// The typefaces' terms, as a last section of the file.
+fn typefaces(root: &Path) -> Result<String> {
+    let mut text =
+        String::from("## Typefaces\n\nCompiled into the window from `assets/fonts/`.\n\n");
+    for (name, licence) in TYPEFACES {
+        let path = root.join(licence);
+        let terms = std::fs::read_to_string(&path)
+            .with_context(|| format!("cannot read {}", path.display()))?;
+        let terms = unix_endings(&terms);
+        text += &["### ", name, "\n\n```text\n", terms.trim_end(), "\n```\n"].concat();
+    }
+    Ok(text)
 }
 
 /// Licence texts quoted verbatim carry the line endings their crate shipped, and git stores

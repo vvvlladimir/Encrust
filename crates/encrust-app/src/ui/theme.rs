@@ -8,16 +8,16 @@ use egui::{Color32, CornerRadius, FontFamily, FontId, Margin, Stroke, TextStyle}
 use crate::ui::fonts;
 
 /// Named font families the bundled faces are registered under.
-pub const MEDIUM: &str = "geist-medium";
-pub const SEMIBOLD: &str = "geist-semibold";
+pub const MEDIUM: &str = "plex-sans-medium";
+pub const SEMIBOLD: &str = "plex-sans-semibold";
 
 /// Text styles this application adds to egui's own, addressed by name.
 pub const SECTION: &str = "section";
 
 /// Every colour the window is allowed to paint with.
 ///
-/// Derived from the three in the logo: the plate `#151618`, the light face `#eee7e1` and
-/// the layer gradient `#ea7032` to `#be4925`. See `docs/design/ui-design-system.md`.
+/// Graphite surfaces, one ember accent, and colours kept for state. See
+/// `docs/design/ui-design-system.md`.
 pub struct Palette {
     /// Viewport backdrop and any trough a control is sunk into.
     pub sunken: Color32,
@@ -28,6 +28,8 @@ pub struct Palette {
     /// Inputs, unpressed buttons, list rows.
     pub raised: Color32,
     pub hover: Color32,
+    /// A pressed control, and the track of a switch that is off.
+    pub active: Color32,
     /// Section dividers and panel edges.
     pub hairline: Color32,
     /// Input borders and the base of a focus ring.
@@ -42,6 +44,8 @@ pub struct Palette {
     pub accent: Color32,
     /// Pressed state and the far stop of the accent gradient.
     pub accent_deep: Color32,
+    /// The accent as text or a glyph on a dark surface: the open tool, the active segment.
+    pub accent_soft: Color32,
     /// Selected row background and active segment.
     pub accent_wash: Color32,
     /// Text drawn on an accent fill.
@@ -60,38 +64,40 @@ pub struct Palette {
     /// A picked model: the part of a support the pointer has hold of, the row of a
     /// selected model, and the tally that counts them.
     pub picked: Color32,
-    /// The wash behind a selected row, 14 % of `picked`.
+    /// The wash behind a selected row, 10 % of the accent.
     pub picked_wash: Color32,
 }
 
 const ENCRUST: Palette = Palette {
-    sunken: Color32::from_rgb(0x0f, 0x10, 0x12),
-    base: Color32::from_rgb(0x15, 0x16, 0x18),
-    panel: Color32::from_rgb(0x1b, 0x1d, 0x20),
-    raised: Color32::from_rgb(0x23, 0x26, 0x29),
-    hover: Color32::from_rgb(0x2b, 0x2f, 0x33),
-    hairline: Color32::from_rgb(0x26, 0x29, 0x2d),
-    line: Color32::from_rgb(0x33, 0x38, 0x3d),
-    text_high: Color32::from_rgb(0xee, 0xe7, 0xe1),
-    text_mid: Color32::from_rgb(0xa6, 0xa3, 0x9f),
-    text_low: Color32::from_rgb(0x74, 0x77, 0x7b),
-    accent: Color32::from_rgb(0xea, 0x70, 0x32),
-    accent_deep: Color32::from_rgb(0xbe, 0x49, 0x25),
-    // 14 % of the accent: the wash behind a selected row or an active segment.
-    accent_wash: Color32::from_rgba_unmultiplied_const(0xea, 0x70, 0x32, 36),
-    on_accent: Color32::from_rgb(0x15, 0x16, 0x18),
-    ok: Color32::from_rgb(0x4c, 0xd1, 0x84),
-    warn: Color32::from_rgb(0xe0, 0xa3, 0x3a),
-    danger: Color32::from_rgb(0xe0, 0x57, 0x4a),
-    danger_wash: Color32::from_rgba_unmultiplied_const(0xe0, 0x57, 0x4a, 36),
-    warn_wash: Color32::from_rgba_unmultiplied_const(0xe0, 0xa3, 0x3a, 36),
+    sunken: Color32::from_rgb(0x0c, 0x0e, 0x11),
+    base: Color32::from_rgb(0x11, 0x14, 0x18),
+    panel: Color32::from_rgb(0x16, 0x1a, 0x1f),
+    raised: Color32::from_rgb(0x1e, 0x23, 0x29),
+    hover: Color32::from_rgb(0x27, 0x2d, 0x34),
+    active: Color32::from_rgb(0x31, 0x38, 0x40),
+    hairline: Color32::from_rgb(0x25, 0x2a, 0x31),
+    line: Color32::from_rgb(0x39, 0x41, 0x4b),
+    text_high: Color32::from_rgb(0xef, 0xeb, 0xe5),
+    text_mid: Color32::from_rgb(0xa9, 0xa7, 0xa3),
+    text_low: Color32::from_rgb(0x8a, 0x8e, 0x94),
+    accent: Color32::from_rgb(0xf2, 0x76, 0x3a),
+    accent_deep: Color32::from_rgb(0xc9, 0x53, 0x1f),
+    accent_soft: Color32::from_rgb(0xff, 0xb1, 0x84),
+    // 14 % of the accent: the wash behind an active segment or tool.
+    accent_wash: Color32::from_rgba_unmultiplied_const(0xf2, 0x76, 0x3a, 36),
+    on_accent: Color32::from_rgb(0x1a, 0x0e, 0x07),
+    ok: Color32::from_rgb(0x4f, 0xcf, 0x8a),
+    warn: Color32::from_rgb(0xe8, 0xb0, 0x43),
+    danger: Color32::from_rgb(0xef, 0x5b, 0x4b),
+    danger_wash: Color32::from_rgba_unmultiplied_const(0xef, 0x5b, 0x4b, 36),
+    warn_wash: Color32::from_rgba_unmultiplied_const(0xe8, 0xb0, 0x43, 36),
     axis: [
-        Color32::from_rgb(0xd1, 0x58, 0x4c),
-        Color32::from_rgb(0x7a, 0xa8, 0x5c),
-        Color32::from_rgb(0x4f, 0x8e, 0xc9),
+        Color32::from_rgb(0xe0, 0x57, 0x4f),
+        Color32::from_rgb(0x5f, 0xbf, 0x62),
+        Color32::from_rgb(0x4f, 0x9c, 0xff),
     ],
-    picked: Color32::from_rgb(0x4c, 0xd1, 0x84),
-    picked_wash: Color32::from_rgba_unmultiplied_const(0x4c, 0xd1, 0x84, 36),
+    picked: Color32::from_rgb(0xff, 0xb1, 0x84),
+    picked_wash: Color32::from_rgba_unmultiplied_const(0xf2, 0x76, 0x3a, 26),
 };
 
 /// What an exposure band is tinted with, on the model and beside its own fields. Six
@@ -148,9 +154,10 @@ pub fn mask_pixel(grey: u8, island: bool) -> Color32 {
 /// printed resin and the marks laid over it, and the luminance ladder the surfaces are
 /// tested against does not apply. Reaches the shader through `gamma`.
 pub struct Scene {
-    /// Unmarked model surface.
+    /// Unmarked model surface: a cool resin, so the warm marks and the selection read on it.
     pub object: Color32,
-    /// Cooler and darker than the model, so scaffolding does not read as part of the part.
+    /// A warm light grey apart from the model's blue, so scaffolding does not read as part
+    /// of the part.
     pub support: Color32,
     /// A model or a support in the selection.
     pub selected: Color32,
@@ -204,15 +211,15 @@ pub struct Scene {
 }
 
 const ENCRUST_SCENE: Scene = Scene {
-    object: Color32::from_rgb(0x9e, 0xa8, 0xb8),
-    support: Color32::from_rgb(0x5c, 0x70, 0x8a),
+    object: Color32::from_rgb(0x7f, 0xa6, 0xb6),
+    support: Color32::from_rgb(0xc9, 0xc2, 0xb6),
     selected: Color32::from_rgb(0xf5, 0xb5, 0x4a),
     unsound: Color32::from_rgb(0xd9, 0x6b, 0x61),
     blocker: Color32::from_rgba_premultiplied(0x6a, 0x54, 0xa8, 0xcc),
     trapped: Color32::from_rgba_premultiplied(0x51, 0x0a, 0x1a, 0x59),
     painted: Color32::from_rgb(0x59, 0xb8, 0x94),
-    blocked: Color32::from_rgb(0xb0, 0x5c, 0xd9),
-    section_cap: Color32::from_rgb(0xc2, 0xbd, 0xb8),
+    blocked: Color32::from_rgb(0xa7, 0x64, 0xd6),
+    section_cap: Color32::from_rgb(0xff, 0xb1, 0x84),
     section_wash: Color32::from_rgb(0xed, 0xe6, 0xdb),
     overhang: Color32::from_rgb(0xf0, 0x61, 0x40),
     outside: Color32::from_rgb(0xe0, 0x2f, 0x2f),
@@ -261,15 +268,17 @@ pub const fn colors() -> &'static Palette {
 }
 
 /// Heights, widths and gaps, in points. One density, applied everywhere.
-pub const ROW_H: f32 = 28.0;
-pub const FIELD_H: f32 = 26.0;
+pub const ROW_H: f32 = 30.0;
+pub const FIELD_H: f32 = 28.0;
 /// Width of the value box in a named row.
-pub const FIELD_W: f32 = 74.0;
+pub const FIELD_W: f32 = 128.0;
 pub const PANEL_PAD: f32 = 12.0;
-pub const ITEM_GAP: f32 = 6.0;
-pub const RAIL_W: f32 = 56.0;
-pub const SCENE_W: f32 = 228.0;
-pub const INSPECTOR_W: f32 = 300.0;
+pub const ITEM_GAP: f32 = 8.0;
+/// Height of a section's heading row, which folds it.
+pub const SECTION_H: f32 = 36.0;
+pub const RAIL_W: f32 = 68.0;
+pub const SCENE_W: f32 = 272.0;
+pub const INSPECTOR_W: f32 = 328.0;
 /// How far either column may be dragged, and how thin the folded plate's own edge is.
 pub const SCENE_W_RANGE: RangeInclusive<f32> = 170.0..=420.0;
 pub const INSPECTOR_W_RANGE: RangeInclusive<f32> = 260.0..=440.0;
@@ -284,8 +293,8 @@ pub const PLATE_BAR_H: f32 = 30.0;
 pub const STATUS_H: f32 = 26.0;
 pub const TOOL_SIZE: f32 = 40.0;
 pub const ICON_SIZE: f32 = 28.0;
-pub const PRIMARY_H: f32 = 38.0;
-pub const BUTTON_H: f32 = 30.0;
+pub const PRIMARY_H: f32 = 40.0;
+pub const BUTTON_H: f32 = 32.0;
 /// Height of a running job's progress bar.
 pub const BAR_H: f32 = 6.0;
 
@@ -295,9 +304,10 @@ pub const CARD_MARGIN: Margin = Margin::symmetric(10, 8);
 /// Side padding of the title and status strips.
 pub const STRIP_MARGIN: Margin = Margin::symmetric(10, 0);
 
-/// Controls are rounded by 6 points, surfaces by 8, and nothing else is rounded at all.
+/// Controls are rounded by 6 points, cards by 8 and windows by 10; nothing else is rounded.
 pub const R_CONTROL: CornerRadius = CornerRadius::same(6);
 pub const R_SURFACE: CornerRadius = CornerRadius::same(8);
+pub const R_PANEL: CornerRadius = CornerRadius::same(10);
 
 /// Body text.
 pub fn body() -> FontId {
@@ -314,13 +324,34 @@ pub fn small() -> FontId {
     FontId::proportional(11.0)
 }
 
+/// Both halves of a reading: the name and the figure after its leader.
+pub fn reading() -> FontId {
+    FontId::proportional(12.0)
+}
+
+/// The label of a segment in a row of choices.
+pub fn segment() -> FontId {
+    FontId::proportional(11.5)
+}
+
+/// A unit inside a number's box.
+pub fn unit() -> FontId {
+    FontId::proportional(10.5)
+}
+
 /// A section heading in the inspector or on a floating card.
 pub fn section() -> FontId {
     FontId::new(12.0, FontFamily::Name(SEMIBOLD.into()))
 }
 
-/// Every millimetre, second, layer index, triangle count and byte size is set in this.
-pub fn mono(size_pt: f32) -> FontId {
+/// Every millimetre, second, layer index, triangle count and byte size: the text face,
+/// whose digits are all one width, so a column of them lines up.
+pub fn figures(size_pt: f32) -> FontId {
+    FontId::proportional(size_pt)
+}
+
+/// What is read or typed as code: an address, a file name, a report to paste.
+pub fn code(size_pt: f32) -> FontId {
     FontId::monospace(size_pt)
 }
 
@@ -342,7 +373,7 @@ fn style(style: &mut egui::Style) {
         (TextStyle::Body, body()),
         (TextStyle::Button, label()),
         (TextStyle::Small, small()),
-        (TextStyle::Monospace, mono(12.0)),
+        (TextStyle::Monospace, code(12.0)),
         (
             TextStyle::Heading,
             FontId::new(15.0, FontFamily::Name(MEDIUM.into())),
@@ -374,7 +405,7 @@ fn visuals(colors: &Palette) -> egui::Visuals {
     visuals.panel_fill = colors.panel;
     visuals.window_fill = colors.panel;
     visuals.window_stroke = Stroke::new(1.0, colors.hairline);
-    visuals.window_corner_radius = R_SURFACE;
+    visuals.window_corner_radius = R_PANEL;
     visuals.menu_corner_radius = R_SURFACE;
     visuals.faint_bg_color = colors.raised;
     visuals.extreme_bg_color = colors.sunken;
@@ -395,9 +426,9 @@ fn visuals(colors: &Palette) -> egui::Visuals {
 
     let widgets = &mut visuals.widgets;
     widgets.noninteractive = widget(colors.panel, colors.hairline, colors.text_mid);
-    widgets.inactive = widget(colors.raised, colors.line, colors.text_high);
+    widgets.inactive = widget(colors.raised, colors.hairline, colors.text_high);
     widgets.hovered = widget(colors.hover, colors.line, colors.text_high);
-    widgets.active = widget(colors.hover, colors.accent, colors.text_high);
+    widgets.active = widget(colors.active, colors.accent, colors.text_high);
     widgets.open = widget(colors.raised, colors.line, colors.text_high);
     // egui grows a hovered widget by default, which shifts a row of fields about.
     for widget in [
@@ -511,6 +542,7 @@ mod tests {
             colors.panel,
             colors.raised,
             colors.hover,
+            colors.active,
         ];
         for pair in ladder.windows(2) {
             assert!(

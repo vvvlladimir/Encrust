@@ -70,7 +70,7 @@ fn reading(ui: &mut egui::Ui, key: &str, value: &str) {
         );
         ui.label(
             RichText::new(value)
-                .font(theme::mono(11.0))
+                .font(theme::figures(11.0))
                 .color(colors.text_mid),
         );
     });

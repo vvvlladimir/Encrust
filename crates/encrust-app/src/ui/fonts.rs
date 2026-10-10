@@ -4,41 +4,41 @@ use crate::ui::theme::{MEDIUM, SEMIBOLD};
 
 /// The faces are compiled in rather than loaded from disk, so the window looks the same on
 /// a machine that has none of them installed and needs no files beside the binary.
-const GEIST: &[u8] = include_bytes!(concat!(
+const SANS: &[u8] = include_bytes!(concat!(
     env!("CARGO_MANIFEST_DIR"),
-    "/../../assets/fonts/Geist-Regular.ttf"
+    "/../../assets/fonts/IBMPlexSans-Regular.ttf"
 ));
-const GEIST_MEDIUM: &[u8] = include_bytes!(concat!(
+const SANS_MEDIUM: &[u8] = include_bytes!(concat!(
     env!("CARGO_MANIFEST_DIR"),
-    "/../../assets/fonts/Geist-Medium.ttf"
+    "/../../assets/fonts/IBMPlexSans-Medium.ttf"
 ));
-const GEIST_SEMIBOLD: &[u8] = include_bytes!(concat!(
+const SANS_SEMIBOLD: &[u8] = include_bytes!(concat!(
     env!("CARGO_MANIFEST_DIR"),
-    "/../../assets/fonts/Geist-SemiBold.ttf"
+    "/../../assets/fonts/IBMPlexSans-SemiBold.ttf"
 ));
-const GEIST_MONO: &[u8] = include_bytes!(concat!(
+const MONO: &[u8] = include_bytes!(concat!(
     env!("CARGO_MANIFEST_DIR"),
-    "/../../assets/fonts/GeistMono-Regular.ttf"
+    "/../../assets/fonts/IBMPlexMono-Regular.ttf"
 ));
 
-/// Geist for text, Geist Mono for numbers, Phosphor merged in as a fallback so an icon is
-/// a glyph in an ordinary text run rather than a second widget.
+/// IBM Plex Sans for text and figures, Plex Mono for code, Phosphor merged in as a fallback
+/// so an icon is a glyph in an ordinary text run rather than a second widget.
 pub fn definitions() -> FontDefinitions {
     let mut fonts = FontDefinitions::default();
 
     for (name, bytes) in [
-        ("geist", GEIST),
-        (MEDIUM, GEIST_MEDIUM),
-        (SEMIBOLD, GEIST_SEMIBOLD),
-        ("geist-mono", GEIST_MONO),
+        ("plex-sans", SANS),
+        (MEDIUM, SANS_MEDIUM),
+        (SEMIBOLD, SANS_SEMIBOLD),
+        ("plex-mono", MONO),
     ] {
         fonts
             .font_data
             .insert(name.to_owned(), FontData::from_static(bytes).into());
     }
 
-    put_first(&mut fonts, FontFamily::Proportional, "geist");
-    put_first(&mut fonts, FontFamily::Monospace, "geist-mono");
+    put_first(&mut fonts, FontFamily::Proportional, "plex-sans");
+    put_first(&mut fonts, FontFamily::Monospace, "plex-mono");
     for weight in [MEDIUM, SEMIBOLD] {
         let family = fonts
             .families
@@ -48,7 +48,7 @@ pub fn definitions() -> FontDefinitions {
     }
 
     egui_phosphor::add_to_fonts(&mut fonts, egui_phosphor::Variant::Regular);
-    // The icons have to reach the numeric family too: a mono readout carries them.
+    // The icons have to reach the code family too: an address may carry one.
     put_last(&mut fonts, FontFamily::Monospace, "phosphor");
     for weight in [MEDIUM, SEMIBOLD] {
         put_last(&mut fonts, FontFamily::Name(weight.into()), "phosphor");
@@ -58,7 +58,7 @@ pub fn definitions() -> FontDefinitions {
 }
 
 /// Puts `name` ahead of whatever egui ships, keeping the rest as a fallback for the
-/// glyphs Geist does not carry.
+/// glyphs Plex does not carry.
 fn put_first(fonts: &mut FontDefinitions, family: FontFamily, name: &str) {
     fonts
         .families
@@ -82,8 +82,8 @@ mod tests {
     fn every_family_starts_with_its_bundled_face_and_can_still_draw_an_icon() {
         let fonts = definitions();
         for (family, first) in [
-            (FontFamily::Proportional, "geist"),
-            (FontFamily::Monospace, "geist-mono"),
+            (FontFamily::Proportional, "plex-sans"),
+            (FontFamily::Monospace, "plex-mono"),
             (FontFamily::Name(MEDIUM.into()), MEDIUM),
             (FontFamily::Name(SEMIBOLD.into()), SEMIBOLD),
         ] {

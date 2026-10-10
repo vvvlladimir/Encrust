@@ -43,7 +43,7 @@ pub fn ui(ui: &mut egui::Ui, window: &mut Window) {
 
 fn position(ui: &mut egui::Ui, scene: &mut Scene, plate: &BuildPlate, id: ObjectId) {
     let tooltip = "Back to the middle of the plate";
-    let (reset, ()) = section_with_action(ui, "Move", (icon::RESET, tooltip), |ui| {
+    let (reset, _) = section_with_action(ui, "Move", (icon::RESET, tooltip), |ui| {
         let Some(object) = scene.get_mut(id) else {
             return;
         };
@@ -83,7 +83,7 @@ fn position(ui: &mut egui::Ui, scene: &mut Scene, plate: &BuildPlate, id: Object
 /// gimbal lock the three numbers would drift on their own.
 fn rotation(ui: &mut egui::Ui, window: &mut Window, id: ObjectId) {
     let tooltip = "Back to the way the model was imported";
-    let (reset, ()) = section_with_action(ui, "Rotation", (icon::RESET, tooltip), |ui| {
+    let (reset, _) = section_with_action(ui, "Rotation", (icon::RESET, tooltip), |ui| {
         if let Some(object) = window.doc.scene.get_mut(id) {
             let mut pivot = object.pivot();
             if rotation_rows(ui, &mut pivot) {
@@ -147,7 +147,7 @@ fn scale(ui: &mut egui::Ui, scene: &mut Scene, plate: &BuildPlate, id: ObjectId)
     let linked_id = ui.id().with("scale-linked");
     let mut linked = ui.memory(|memory| memory.data.get_temp(linked_id).unwrap_or(true));
     let tooltip = "Back to the size the model was imported at";
-    let (reset, ()) = section_with_action(ui, "Scale", (icon::RESET, tooltip), |ui| {
+    let (reset, _) = section_with_action(ui, "Scale", (icon::RESET, tooltip), |ui| {
         let Some(object) = scene.get_mut(id) else {
             return;
         };

@@ -21,13 +21,13 @@ pub fn ui(ui: &mut egui::Ui, doc: &mut Doc) {
         if let Some(picked) = picked {
             ui.label(
                 RichText::new(picked)
-                    .font(theme::mono(11.0))
+                    .font(theme::figures(11.0))
                     .color(theme::colors().picked),
             );
         }
         ui.label(
             RichText::new(models)
-                .font(theme::mono(11.0))
+                .font(theme::figures(11.0))
                 .color(theme::colors().text_low),
         );
         ui.add_space(theme::ITEM_GAP);

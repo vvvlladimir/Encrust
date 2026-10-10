@@ -279,7 +279,8 @@ Grouped by what the decision governs; the number is still the order it was taken
 | [0017](0017-transform-gizmo-crate.md) | transform-gizmo-egui for the transform handles | Accepted |
 | [0018](0018-background-slicing-job.md) | Slicing runs on a worker thread and reports over a channel | Accepted |
 | [0019](0019-slicing-job-thread-budget.md) | A background job runs on its own pool, one thread short of the machine | Accepted |
-| [0024](0024-design-tokens-and-bundled-typeface.md) | One token module paints the window; the typeface is compiled in | Accepted |
+| [0024](0024-design-tokens-and-bundled-typeface.md) | One token module paints the window; the typeface is compiled in | Superseded by 0216 (the typeface and the palette's values) |
+| [0216](0216-the-window-is-set-in-plex-on-graphite.md) | The window is set in IBM Plex, on graphite, with figures in the text face | Accepted |
 | [0025](0025-fixed-window-layout.md) | Fixed panels instead of egui_dock | Accepted |
 | [0061](0061-the-section-slider-is-one-rail-in-both-modes.md) | The section slider is one rail, in both modes | Accepted |
 | [0062](0062-cap-the-section-cut-with-the-stencil-plane.md) | The section cut is capped with the stencil plane | Superseded by 0184 (where the stencil comes from only) |

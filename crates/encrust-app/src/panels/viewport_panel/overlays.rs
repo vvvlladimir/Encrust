@@ -211,7 +211,7 @@ fn size_labels(
             continue;
         };
         let text = format!("{:.2}", size[axis]);
-        let galley = painter.layout_no_wrap(text, theme::mono(11.0), theme::colors().axis[axis]);
+        let galley = painter.layout_no_wrap(text, theme::figures(11.0), theme::colors().axis[axis]);
         let plate = egui::Rect::from_center_size(at, galley.size() + egui::vec2(8.0, 4.0));
         painter.rect_filled(plate, theme::R_CONTROL, theme::colors().panel);
         painter.galley(

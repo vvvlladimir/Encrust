@@ -115,7 +115,7 @@ fn nav_row(ui: &mut egui::Ui, glyph: &str, label: &str, active: bool) -> egui::R
     let size = egui::vec2(ui.available_width(), 32.0);
     let (rect, response) = ui.allocate_exact_size(size, egui::Sense::click());
     let (fill, text) = match (active, response.hovered()) {
-        (true, _) => (colors.accent_wash, colors.accent),
+        (true, _) => (colors.accent_wash, colors.accent_soft),
         (false, true) => (colors.hover, colors.text_high),
         (false, false) => (egui::Color32::TRANSPARENT, colors.text_mid),
     };

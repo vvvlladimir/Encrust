@@ -20,7 +20,7 @@ pub fn icon_toggle(ui: &mut Ui, glyph: &str, tooltip: &str, on: bool) -> Respons
     )
 }
 
-/// A rail button: bigger, and marked with a bar down its left edge when it is the tool in
+/// A rail button: bigger, and raised with its glyph in the accent when it is the tool in
 /// use. A tool a later step will fill in is drawn disabled rather than hidden, so the rail
 /// keeps its shape.
 pub fn tool_button(
@@ -37,7 +37,7 @@ pub fn tool_button(
         Square {
             size: theme::TOOL_SIZE,
             glyph_size: 19.0,
-            marker: true,
+            raised: true,
             active,
             enabled,
         },
@@ -48,8 +48,8 @@ pub fn tool_button(
 struct Square {
     size: f32,
     glyph_size: f32,
-    /// Paint the accent bar to the left of an active button.
-    marker: bool,
+    /// Mark an active button by raising it rather than by washing it in the accent.
+    raised: bool,
     active: bool,
     enabled: bool,
 }
@@ -59,7 +59,7 @@ impl Square {
         Self {
             size: theme::ICON_SIZE,
             glyph_size: 16.0,
-            marker: false,
+            raised: false,
             active: false,
             enabled: true,
         }
@@ -75,22 +75,20 @@ fn square(ui: &mut Ui, glyph: &str, tooltip: &str, config: Square) -> Response {
     let (rect, response) = ui.allocate_exact_size(vec2(config.size, config.size), sense);
     let colors = theme::colors();
 
+    let active_fill = if config.raised {
+        colors.raised
+    } else {
+        colors.accent_wash
+    };
     let (fill, foreground) = match (config.enabled, config.active, response.hovered()) {
         (false, _, _) => (Color32::TRANSPARENT, colors.text_low.gamma_multiply(0.6)),
-        (true, true, _) => (colors.accent_wash, colors.accent),
-        (true, false, true) => (colors.raised, colors.text_high),
+        (true, true, _) => (active_fill, colors.accent_soft),
+        (true, false, true) => (colors.hover, colors.text_high),
         (true, false, false) => (Color32::TRANSPARENT, colors.text_mid),
     };
 
     let painter = ui.painter();
     painter.rect_filled(rect, theme::R_CONTROL, fill);
-    if config.marker && config.active {
-        let bar = Rect::from_min_size(
-            egui::pos2(rect.left() - 8.0, rect.center().y - 10.0),
-            vec2(2.0, 20.0),
-        );
-        painter.rect_filled(bar, theme::R_CONTROL, colors.accent);
-    }
     painter.text(
         rect.center(),
         Align2::CENTER_CENTER,
@@ -118,7 +116,8 @@ pub fn secondary_button(ui: &mut Ui, glyph: &str, text: &str) -> Response {
             fill: theme::colors().raised,
             foreground: theme::colors().text_high,
             border: Some(theme::colors().line),
-            pressed: theme::colors().hover,
+            hovered: theme::colors().hover,
+            pressed: theme::colors().active,
         },
         true,
     )
@@ -142,7 +141,8 @@ pub fn companion_button(ui: &mut Ui, glyph: &str, text: &str, enabled: bool) -> 
             fill: colors.raised,
             foreground,
             border: Some(colors.line),
-            pressed: colors.hover,
+            hovered: colors.hover,
+            pressed: colors.active,
         },
         enabled,
     )
@@ -170,19 +170,22 @@ pub fn inline_button(
             fill: colors.accent,
             foreground: colors.on_accent,
             border: None,
+            hovered: colors.accent_soft,
             pressed: colors.accent_deep,
         },
         (_, false) => Skin {
             fill: colors.raised,
             foreground: colors.text_low,
             border: Some(colors.line),
+            hovered: colors.raised,
             pressed: colors.raised,
         },
         (false, true) => Skin {
             fill: colors.raised,
             foreground: colors.text_high,
             border: Some(colors.line),
-            pressed: colors.hover,
+            hovered: colors.hover,
+            pressed: colors.active,
         },
     };
     filled_button(ui, glyph, text, size, &skin, enabled)
@@ -199,7 +202,8 @@ pub fn compact_button(ui: &mut Ui, text: &str, width: f32) -> Response {
             fill: theme::colors().raised,
             foreground: theme::colors().text_high,
             border: Some(theme::colors().line),
-            pressed: theme::colors().hover,
+            hovered: theme::colors().hover,
+            pressed: theme::colors().active,
         },
         true,
     )
@@ -222,6 +226,7 @@ pub fn primary_button(ui: &mut Ui, glyph: &str, text: &str, enabled: bool) -> Re
             fill,
             foreground,
             border: None,
+            hovered: colors.accent_soft,
             pressed: colors.accent_deep,
         },
         enabled,
@@ -233,17 +238,17 @@ pub fn picker(ui: &mut Ui, glyph: &str, label: &str) -> Response {
     let colors = theme::colors();
     let (rect, response) = ui.allocate_exact_size(vec2(ui.available_width(), 32.0), Sense::click());
 
-    let fill = if response.hovered() {
-        colors.hover
+    let border = if response.hovered() {
+        colors.line
     } else {
-        colors.raised
+        colors.hairline
     };
     let painter = ui.painter();
     painter.rect(
         rect,
         theme::R_CONTROL,
-        fill,
-        egui::Stroke::new(1.0, colors.line),
+        colors.sunken,
+        egui::Stroke::new(1.0, border),
         StrokeKind::Inside,
     );
     painter.text(
@@ -290,6 +295,7 @@ struct Skin {
     fill: Color32,
     foreground: Color32,
     border: Option<Color32>,
+    hovered: Color32,
     pressed: Color32,
 }
 
@@ -306,6 +312,7 @@ fn filled_button(
         fill,
         foreground,
         border,
+        hovered,
         pressed,
     } = *skin;
     let sense = if enabled {
@@ -322,7 +329,7 @@ fn filled_button(
     ) {
         (false, _, _) => fill,
         (true, true, _) => pressed,
-        (true, false, true) => fill.gamma_multiply(1.12),
+        (true, false, true) => hovered,
         (true, false, false) => fill,
     };
 

@@ -180,7 +180,7 @@ fn shown(ui: &mut egui::Ui, text: &str, height: f32) {
                 .show(ui, |ui| {
                     ui.label(
                         RichText::new(text)
-                            .font(theme::mono(11.0))
+                            .font(theme::code(11.0))
                             .color(theme::colors().text_mid),
                     );
                 });

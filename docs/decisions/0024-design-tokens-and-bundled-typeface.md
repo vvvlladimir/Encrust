@@ -1,6 +1,6 @@
 # 0024. Paint the window from one token module, with the typeface compiled in
 
-- **Status:** Accepted
+- **Status:** Superseded by 0216 (the typeface and the palette's values)
 - **Date:** 2026-09-18
 
 ## Context

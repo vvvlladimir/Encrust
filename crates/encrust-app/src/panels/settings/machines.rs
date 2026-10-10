@@ -448,7 +448,7 @@ fn row(
         ui.allocate_exact_size(vec2(ui.available_width(), ROW_H), Sense::click());
     let hovered = ui.rect_contains_pointer(rect);
     let (fill, text) = match (picked, hovered) {
-        (true, _) => (colors.accent_wash, colors.accent),
+        (true, _) => (colors.accent_wash, colors.accent_soft),
         (false, true) => (colors.hover, colors.text_high),
         (false, false) => (Color32::TRANSPARENT, colors.text_high),
     };

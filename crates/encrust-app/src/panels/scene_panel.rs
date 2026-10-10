@@ -366,11 +366,6 @@ fn row_background(painter: &egui::Painter, rect: Rect, selected: bool, hovered: 
     let colors = theme::colors();
     if selected {
         painter.rect_filled(rect, 0.0, colors.picked_wash);
-        let marker = Rect::from_min_size(
-            egui::pos2(rect.left(), rect.top() + 4.0),
-            vec2(2.0, rect.height() - 8.0),
-        );
-        painter.rect_filled(marker, 0.0, colors.picked);
     } else if hovered {
         painter.rect_filled(rect, 0.0, colors.raised);
     }

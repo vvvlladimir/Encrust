@@ -178,7 +178,7 @@ fn readout(ui: &egui::Ui, window: &Window, scrub: &Scrub) {
 
     let colors = theme::colors();
     let painter = ui.painter();
-    let galley = painter.layout_no_wrap(text, theme::mono(11.0), colors.text_high);
+    let galley = painter.layout_no_wrap(text, theme::figures(11.0), colors.text_high);
     let center = egui::pos2(
         ui.min_rect().left() - READOUT_GAP - galley.size().x / 2.0 - READOUT_PAD.x,
         scrub.handle_y,

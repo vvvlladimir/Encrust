@@ -89,7 +89,6 @@ fn drainage(ui: &mut egui::Ui, window: &mut Window) {
         ui,
         icon::WARNING,
         colors.danger,
-        colors.danger_wash,
         &format!("Resin is trapped in {trapped} place(s)"),
         "Each one needs a hole of its own. Turn the x-ray on to see the space it fills, \
          and put the holes in with the Drain tool.",

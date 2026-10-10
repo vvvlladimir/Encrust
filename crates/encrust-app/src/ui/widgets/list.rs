@@ -47,7 +47,7 @@ pub fn list_row(
     let (rect, row) =
         ui.allocate_exact_size(vec2(ui.available_width(), theme::ROW_H), Sense::click());
     let (fill, text) = match (selected, row.hovered()) {
-        (true, _) => (colors.accent_wash, colors.accent),
+        (true, _) => (colors.picked_wash, colors.accent_soft),
         (false, true) => (colors.hover, colors.text_high),
         (false, false) => (colors.raised, colors.text_high),
     };
@@ -124,7 +124,7 @@ pub fn issue_row(
     let (rect, response) =
         ui.allocate_exact_size(vec2(ui.available_width(), theme::ROW_H), Sense::click());
     let fill = match (selected, response.hovered()) {
-        (true, _) => colors.accent_wash,
+        (true, _) => colors.picked_wash,
         (false, true) => colors.hover,
         (false, false) => colors.raised,
     };
@@ -134,7 +134,7 @@ pub fn issue_row(
     let dot = rect.left_center() + vec2(14.0, 0.0);
     painter.circle_filled(dot, 3.5, tint);
     let place_color = if selected {
-        colors.accent
+        colors.accent_soft
     } else {
         colors.text_high
     };
@@ -149,7 +149,7 @@ pub fn issue_row(
         rect.right_center() - vec2(12.0, 0.0),
         Align2::RIGHT_CENTER,
         detail,
-        theme::mono(11.0),
+        theme::figures(11.0),
         colors.text_mid,
     );
     response.on_hover_cursor(egui::CursorIcon::PointingHand)

@@ -11,30 +11,32 @@ token rather than floats so a raw colour does not type-check. See `docs/decision
 
 ## Tokens
 
-`ui::theme` holds one `Palette` and a set of density constants, all derived from the three
-colours in the logo — the plate `#151618`, the light face `#eee7e1`, and the layer gradient
-`#ea7032` to `#be4925`.
+`ui::theme` holds one `Palette` and a set of density constants: graphite surfaces, one ember
+accent, and colours kept for state. Why these values and this face: ADR 0216.
 
 ### Surfaces, lightest last
 
 | Token | Hex | Where |
 |---|---|---|
-| `sunken` | `#0f1012` | The viewport backdrop and the mask frame |
-| `base` | `#151618` | Title and status strips |
-| `panel` | `#1b1d20` | Inspector, tool rail, floating cards |
-| `raised` | `#232629` | Inputs, unpressed buttons, list rows |
-| `hover` | `#2b2f33` | Hover state |
-| `hairline` | `#26292d` | Section dividers, panel edges |
-| `line` | `#33383d` | Input borders |
+| `sunken` | `#0c0e11` | The viewport backdrop, the mask frame, and the box a value is typed in |
+| `base` | `#111418` | Title and status strips |
+| `panel` | `#161a1f` | Inspector, tool rail, floating cards |
+| `raised` | `#1e2329` | Unpressed buttons, list rows, the tool in use |
+| `hover` | `#272d34` | Hover state |
+| `active` | `#313840` | A pressed control, the track of a switch that is off |
+| `hairline` | `#252a31` | Section dividers, panel edges, a box's border at rest |
+| `line` | `#39414b` | A box's border under the pointer, rules |
 
 A test asserts this ladder is monotonic in luminance: a surface is always lighter than the
 one it sits on.
 
 ### Text and accent
 
-`text_high` for values and headings, `text_mid` for labels, `text_low` for units and hints
-and nothing else. One accent, with `accent_deep` pressed and `accent_wash` (14%) behind a
-selected row or active segment; `on_accent` is the only thing drawn on an accent fill.
+`text_high` for values and headings, `text_mid` for labels, `text_low` for units, hints and
+the names of readings. One accent, with `accent_deep` pressed, `accent_soft` for the accent as
+text or a glyph — the tool in use, the active segment, a picked row — and `accent_wash` (14%)
+behind an active segment; `picked_wash` (10%) is the selection. `on_accent` is the only thing
+drawn on an accent fill.
 `ok`, `warn` and `danger` are functional — a machine that answered, a repair notice, a
 mesh that cannot be oriented. The
 axis colours are the CAD convention (X red, Y green, Z blue) and are used for the
@@ -45,8 +47,8 @@ on `accent`.
 
 ### The viewport
 
-`theme::Scene` is the other half of the tokens: the grey of printed resin (`object`), the
-cooler `support` and a `support_tint` per group after it, `selected`, `unsound`,
+`theme::Scene` is the other half of the tokens: the cool resin of the model (`object`), the
+warm grey `support` and a `support_tint` per group after it, `selected`, `unsound`,
 the translucent `blocker` and the red `trapped` the space resin cannot leave is painted
 with, `painted` and `blocked`, the `section_cap` and the `section_wash` behind it, the
 `overhang` a leaning face is marked with, the `outside` of what stands past the build
@@ -65,11 +67,12 @@ call it; the shader's two colours arrive as `Globals` fields.
 
 ### Type
 
-Geist for text, Geist Mono for numbers, both compiled in from `assets/fonts/` so the
-window looks the same on any machine. Three weights are named families: regular, Medium
-for headings, SemiBold for section titles and the brand. Every millimetre, second, layer
-index, triangle count and byte size is Geist Mono with tabular figures, without
-exception — that is what makes a column of fields line up.
+IBM Plex Sans for text and figures, IBM Plex Mono for what is read as code — an address, a
+file name, a report — both compiled in from `assets/fonts/` so the window looks the same on
+any machine. Three weights of the sans are named families: regular, Medium for headings,
+SemiBold for section titles and the brand. Every millimetre, second, layer index, triangle
+count and byte size goes through `theme::figures`: Plex Sans draws its digits at one width,
+which is what makes a column of fields line up without a mono face.
 
 Phosphor is merged into the same `FontDefinitions` as a fallback, so an icon is a glyph in
 an ordinary text run. `ui::icon` names the ones in use; a new icon is a name there, never
@@ -77,12 +80,12 @@ a codepoint pasted into a panel.
 
 ### Density
 
-Row 28 points, input 26, panel padding 12, item gap 6. Tool rail 56, plate panel 228,
-inspector 300, title strip 28 on macOS and 36 elsewhere, plate strip 30, status strip 26,
-section rail 30 wide with a
-4 point trough. The two side columns are the widths a drag on their edge leaves them at;
-everything else is fixed. Controls are rounded by 6 points, surfaces by 8, and pills are
-fully round. Nothing else is rounded.
+Row 30 points, field 28, a named field's box 128 wide, button 32, primary button 40,
+section heading 36, panel padding 12, item gap 8. Tool rail 68, plate panel 272, inspector
+328, title strip 28 on macOS and 36 elsewhere, plate strip 30, status strip 26, section rail
+30 wide with a 4 point trough. The two side columns are the widths a drag on their edge leaves
+them at; everything else is fixed. Controls are rounded by 6 points, cards by 8, windows by
+10, and pills are fully round. Nothing else is rounded.
 
 ## Widgets
 
@@ -91,29 +94,30 @@ paints from tokens only.
 
 | Widget | What it is |
 |---|---|
-| `section` | An inspector block: heading, optional hint, body, hairline under it; rows spaced `ITEM_GAP` |
+| `section` | An inspector block: a caret and title that fold it, optional hint, body, hairline under it; rows spaced `ITEM_GAP` |
 | `section_with_action` | A `section` with one icon button in its heading, such as a reset |
 | `subheading` | A group of fields inside a block, named in the quietest tone |
-| `describe` | What a block or a setting is for, kept out of the panel and shown under the block's title when the title is clicked |
+| `describe` | What a block or a setting is for, kept out of the panel and read from a question mark beside the block's title |
 | `nested` | What a switch reveals, set in under it with a rule down its left edge |
 | `list`, `list_row` | Rows a panel adds to — support groups, bands, holes — on one hairline |
 | `card` | The frame of anything floating over the viewport |
-| `stats` | Two columns of measured values, the cells separated by hairlines |
+| `readings`, `stats` | Measured values, one to a row: name, dotted leader, figure |
+| `notice` | A verdict: a glyph in its colour, the verdict in plain ink, what to do under it |
 | `picker` | A row that opens a chooser: glyph, what is chosen, caret |
 | `primary_button` | The one action a screen is for. There is never a second in view |
 | `secondary_button` | The ordinary full-width button |
 | `compact_button` | A button as tall as a field, to stand in a row of them |
 | `icon_button`, `icon_toggle` | A borderless square with one glyph; the toggle stays lit while on |
-| `tool_button` | A rail button, marked with an accent bar when it is the tool in use |
-| `Segmented` | A pill of mutually exclusive choices, filled or washed |
+| `tool_button` | A rail button, raised with its glyph in `accent_soft` when it is the tool in use |
+| `Segmented` | Mutually exclusive choices in one bordered box, split by hairlines, filled or washed |
 | `switch` | A labelled toggle with an animated knob |
 | `field_label` | The name of a field with its unit in brackets after it: `Gap (mm)` |
 | `axis_label` | The same, the name an axis letter in its axis colour: `X (mm)` |
-| `number_field` | The one box a number is typed or dragged in: mono, `FIELD_H` tall |
-| `number_row`, `count_row` | A `field_label` on the left, a `FIELD_W` `number_field` on the right |
+| `number_field` | The one box a number is typed or dragged in: sunken, `FIELD_H` tall, the figure at its right |
+| `number_row`, `count_row` | The name on the left, a `FIELD_W` box on the right with the unit inside it after the figure |
 
-A number is always a `number_field` under a `field_label`; the unit is never written after
-the box.
+A named number is a `number_row`, its unit inside the box in `text_low`; a box standing under
+a `field_label` of its own carries the unit in that label's brackets instead.
 
 The filled `Segmented` is reserved for the one switch that changes what the whole window
 is doing. Everything else uses the wash.
@@ -130,7 +134,7 @@ is doing. Everything else uses the wash.
 ├──────────┬─────────────────────────────┬────────────────┬─────┤
 │ Plate    │                             │  Transform     │     │
 │ contents │                     ╭ view ╮│                │rail │
-│ 228      │      the stage      ╰──────╯│                │ 56  │
+│ 272      │      the stage      ╰──────╯│                │ 68  │
 │          │                       ╭────╮│                │     │
 │ ⧉ ⇋ ⊞ ≡ ␡ │                      │ 30 ││  ───────────   │     │
 │ Printer  │                       ╰────╯│  Height Layers │     │
