@@ -472,6 +472,30 @@ impl Scene {
         self.selected.retain(|id| left.contains(id));
     }
 
+    /// Adds a copy of `plate` and of everything standing on it at the end, and makes it the
+    /// one being edited.
+    pub fn duplicate_plate(&mut self, plate: u32) -> Option<u32> {
+        let name = self.plates.get(plate as usize)?;
+        let name = (1..)
+            .map(|count| match count {
+                1 => format!("{name} copy"),
+                count => format!("{name} copy {count}"),
+            })
+            .find(|name| !self.plates.contains(name))?;
+        self.plates.push(name);
+        let copy = (self.plates.len() - 1) as u32;
+        let models: Vec<SceneObject> = self.on_plate(plate).cloned().collect();
+        for mut model in models {
+            model.id = ObjectId(self.next_id);
+            self.next_id += 1;
+            model.plate = copy;
+            self.objects.push(model);
+        }
+        self.active = copy;
+        self.selected.clear();
+        Some(copy)
+    }
+
     /// Moves a model to another plate. It keeps where it stands, so a plate it does not
     /// fit is the arranger's problem rather than this one's.
     pub fn move_to_plate(&mut self, id: ObjectId, plate: u32) {
@@ -1019,6 +1043,26 @@ mod tests {
             "shifted down"
         );
         assert_eq!(scene.plates().len(), 2);
+    }
+
+    #[test]
+    fn a_duplicated_plate_carries_copies_of_its_models_under_a_name_of_its_own() {
+        let (mut scene, original) = scene_with_cube();
+        let copy = scene.duplicate_plate(0).expect("plate 0 exists");
+        assert_eq!(scene.plates(), ["Plate 1", "Plate 1 copy"]);
+        assert_eq!(scene.active_plate(), copy, "the copy is the plate in front");
+        let copied: Vec<ObjectId> = scene.here().map(|object| object.id).collect();
+        assert_eq!(copied.len(), 1);
+        assert_ne!(copied[0], original, "a copy is a model of its own");
+        assert_eq!(
+            scene.on_plate(0).count(),
+            1,
+            "the original stays where it was"
+        );
+
+        scene.duplicate_plate(0);
+        assert_eq!(scene.plates()[2], "Plate 1 copy 2");
+        assert_eq!(scene.duplicate_plate(7), None);
     }
 
     #[test]

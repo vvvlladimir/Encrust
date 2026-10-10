@@ -176,7 +176,7 @@ impl SupportTool {
         Ok(())
     }
 
-    /// Drains a running placement run into the scene and the status bar. Returns whether
+    /// Drains a running placement run into the scene and the stage notice. Returns whether
     /// one is still going, which is what tells the window to keep repainting.
     pub fn poll(&mut self, scene: &mut Scene, status: &mut Status) -> bool {
         let Some(job) = self.job.as_mut() else {

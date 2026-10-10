@@ -21,7 +21,7 @@ pub const SECTION: &str = "section";
 pub struct Palette {
     /// Viewport backdrop and any trough a control is sunk into.
     pub sunken: Color32,
-    /// The logo's own background: window chrome, title and status strips.
+    /// The logo's own background: window chrome, the top bar, the rail and the layer strip.
     pub base: Color32,
     /// Inspector, tool rail and floating cards.
     pub panel: Color32,
@@ -277,21 +277,22 @@ pub const ITEM_GAP: f32 = 8.0;
 /// Height of a section's heading row, which folds it.
 pub const SECTION_H: f32 = 36.0;
 pub const RAIL_W: f32 = 68.0;
+/// The column of plates at the window's left edge.
+pub const PLATE_STRIP_W: f32 = 44.0;
 pub const SCENE_W: f32 = 272.0;
 pub const INSPECTOR_W: f32 = 328.0;
 /// How far either column may be dragged, and how thin the folded plate's own edge is.
 pub const SCENE_W_RANGE: RangeInclusive<f32> = 170.0..=420.0;
 pub const INSPECTOR_W_RANGE: RangeInclusive<f32> = 260.0..=440.0;
 pub const EDGE_W: f32 = 6.0;
-/// On macOS the strip is exactly the native title bar the system still lays the traffic
-/// lights out in, so our menus sit on their line. Elsewhere it holds our own buttons.
-#[cfg(target_os = "macos")]
-pub const TITLE_H: f32 = 28.0;
-#[cfg(not(target_os = "macos"))]
-pub const TITLE_H: f32 = 36.0;
-pub const PLATE_BAR_H: f32 = 30.0;
-pub const STATUS_H: f32 = 26.0;
-pub const TOOL_SIZE: f32 = 40.0;
+/// The top bar, and the layer strip under the stage. On macOS the system draws its window
+/// buttons over the bar's left end, so the bar is tall enough to hold them.
+pub const TOP_BAR_H: f32 = 44.0;
+pub const LAYER_STRIP_H: f32 = 52.0;
+/// A rail button holds a glyph over its name.
+pub const RAIL_BUTTON_H: f32 = 46.0;
+/// The chips and buttons standing in the top bar and the layer strip.
+pub const CHIP_H: f32 = 32.0;
 pub const ICON_SIZE: f32 = 28.0;
 pub const PRIMARY_H: f32 = 40.0;
 pub const BUTTON_H: f32 = 32.0;
@@ -301,8 +302,8 @@ pub const BAR_H: f32 = 6.0;
 /// Inner margin of an inspector block, a floating card and a card's header row.
 pub const PANEL_MARGIN: Margin = Margin::same(12);
 pub const CARD_MARGIN: Margin = Margin::symmetric(10, 8);
-/// Side padding of the title and status strips.
-pub const STRIP_MARGIN: Margin = Margin::symmetric(10, 0);
+/// Side padding of the top bar and the layer strip.
+pub const STRIP_MARGIN: Margin = Margin::symmetric(8, 0);
 
 /// Controls are rounded by 6 points, cards by 8 and windows by 10; nothing else is rounded.
 pub const R_CONTROL: CornerRadius = CornerRadius::same(6);
@@ -342,6 +343,11 @@ pub fn unit() -> FontId {
 /// A section heading in the inspector or on a floating card.
 pub fn section() -> FontId {
     FontId::new(12.0, FontFamily::Name(SEMIBOLD.into()))
+}
+
+/// A tool's name under its glyph on the rail.
+pub fn rail_name() -> FontId {
+    FontId::proportional(10.0)
 }
 
 /// Every millimetre, second, layer index, triangle count and byte size: the text face,

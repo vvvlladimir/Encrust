@@ -93,7 +93,7 @@ impl HollowTool {
         std::mem::take(&mut self.hollowed)
     }
 
-    /// Drains a running job into the scene and the status bar. Returns whether one is
+    /// Drains a running job into the scene and the stage notice. Returns whether one is
     /// still going, which is what tells the window to keep repainting.
     pub fn poll(&mut self, scene: &mut Scene, status: &mut Status) -> bool {
         let Some(job) = self.job.as_mut() else {

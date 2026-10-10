@@ -2,7 +2,7 @@ use egui::{Align2, Color32, Rect, Response, Sense, StrokeKind, Ui, vec2};
 
 use crate::ui::theme;
 
-/// A borderless square with one glyph in it: the title strip and the overlay cards.
+/// A borderless square with one glyph in it: the top bar and the overlay cards.
 pub fn icon_button(ui: &mut Ui, glyph: &str, tooltip: &str) -> Response {
     square(ui, glyph, tooltip, Square::icon())
 }
@@ -20,38 +20,41 @@ pub fn icon_toggle(ui: &mut Ui, glyph: &str, tooltip: &str, on: bool) -> Respons
     )
 }
 
-/// A rail button: bigger, and raised with its glyph in the accent when it is the tool in
-/// use. A tool a later step will fill in is drawn disabled rather than hidden, so the rail
-/// keeps its shape.
-pub fn tool_button(
-    ui: &mut Ui,
-    glyph: &str,
-    tooltip: &str,
-    active: bool,
-    enabled: bool,
-) -> Response {
-    square(
-        ui,
+/// A rail button: a glyph over the tool's name, raised with both in the accent while it is
+/// the tool in use.
+pub fn rail_button(ui: &mut Ui, glyph: &str, name: &str, tooltip: &str, active: bool) -> Response {
+    let size = vec2(ui.available_width(), theme::RAIL_BUTTON_H);
+    let (rect, response) = ui.allocate_exact_size(size, Sense::click());
+    let colors = theme::colors();
+    let (fill, foreground) = match (active, response.hovered()) {
+        (true, _) => (colors.raised, colors.accent_soft),
+        (false, true) => (colors.hover, colors.text_high),
+        (false, false) => (Color32::TRANSPARENT, colors.text_mid),
+    };
+    let painter = ui.painter();
+    painter.rect_filled(rect, theme::R_CONTROL, fill);
+    painter.text(
+        rect.center_top() + vec2(0.0, 16.0),
+        Align2::CENTER_CENTER,
         glyph,
-        tooltip,
-        Square {
-            size: theme::TOOL_SIZE,
-            glyph_size: 19.0,
-            raised: true,
-            active,
-            enabled,
-        },
-    )
+        theme::icon(17.0),
+        foreground,
+    );
+    painter.text(
+        rect.center_bottom() - vec2(0.0, 9.0),
+        Align2::CENTER_CENTER,
+        name,
+        theme::rail_name(),
+        foreground,
+    );
+    response.on_hover_text(tooltip)
 }
 
 /// Every square icon control is the same drawing with different numbers.
 struct Square {
     size: f32,
     glyph_size: f32,
-    /// Mark an active button by raising it rather than by washing it in the accent.
-    raised: bool,
     active: bool,
-    enabled: bool,
 }
 
 impl Square {
@@ -59,32 +62,19 @@ impl Square {
         Self {
             size: theme::ICON_SIZE,
             glyph_size: 16.0,
-            raised: false,
             active: false,
-            enabled: true,
         }
     }
 }
 
 fn square(ui: &mut Ui, glyph: &str, tooltip: &str, config: Square) -> Response {
-    let sense = if config.enabled {
-        Sense::click()
-    } else {
-        Sense::hover()
-    };
-    let (rect, response) = ui.allocate_exact_size(vec2(config.size, config.size), sense);
+    let (rect, response) = ui.allocate_exact_size(vec2(config.size, config.size), Sense::click());
     let colors = theme::colors();
 
-    let active_fill = if config.raised {
-        colors.raised
-    } else {
-        colors.accent_wash
-    };
-    let (fill, foreground) = match (config.enabled, config.active, response.hovered()) {
-        (false, _, _) => (Color32::TRANSPARENT, colors.text_low.gamma_multiply(0.6)),
-        (true, true, _) => (active_fill, colors.accent_soft),
-        (true, false, true) => (colors.hover, colors.text_high),
-        (true, false, false) => (Color32::TRANSPARENT, colors.text_mid),
+    let (fill, foreground) = match (config.active, response.hovered()) {
+        (true, _) => (colors.accent_wash, colors.accent_soft),
+        (false, true) => (colors.hover, colors.text_high),
+        (false, false) => (Color32::TRANSPARENT, colors.text_mid),
     };
 
     let painter = ui.painter();

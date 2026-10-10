@@ -111,7 +111,7 @@ the window had before, which sets no id and therefore tunes nothing.
 
 ## Editing in the window
 
-The gear at the right of the title strip opens the Settings screen, which replaces the
+The gear at the foot of the tool rail opens the Settings screen, which replaces the
 plate; Esc leaves it. Its profile pages, Printers and Supports, are each a list beside a form, and every
 edit is written to the user's directory as soon as the value settles — no Save. ADR 0120.
 The third page, Updates, holds no profile: see `docs/design/updates.md`.

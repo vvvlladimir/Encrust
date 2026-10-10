@@ -77,41 +77,23 @@ impl<'a, T> Segment<'a, T> {
     }
 }
 
-/// A row of mutually exclusive choices in one bordered box, such as the mode switch.
-///
-/// The filled flavour marks the chosen segment with the accent itself and is for the one
-/// switch that changes what the whole window is doing. Everything else uses the wash.
+/// A row of mutually exclusive choices in one bordered box, the chosen one in the wash.
 pub struct Segmented<'a, T> {
     segments: &'a [Segment<'a, T>],
-    filled: bool,
     width: Option<f32>,
-    height: f32,
 }
 
 impl<'a, T: Copy + PartialEq> Segmented<'a, T> {
     pub fn new(segments: &'a [Segment<'a, T>]) -> Self {
         Self {
             segments,
-            filled: false,
             width: None,
-            height: theme::FIELD_H,
         }
-    }
-
-    pub fn filled(mut self) -> Self {
-        self.filled = true;
-        self
     }
 
     /// Spreads the segments evenly over `width` instead of sizing them to their labels.
     pub fn width(mut self, width: f32) -> Self {
         self.width = Some(width);
-        self
-    }
-
-    /// Makes the group `height` points tall instead of a field's height.
-    pub fn height(mut self, height: f32) -> Self {
-        self.height = height;
         self
     }
 
@@ -123,13 +105,13 @@ impl<'a, T: Copy + PartialEq> Segmented<'a, T> {
 
         // Segments hang off the group's own allocation: `ui.id()` is shared by every
         // widget in the parent, and a label by any two segments that read the same.
-        let (rect, group) = ui.allocate_exact_size(vec2(total, self.height), Sense::hover());
+        let (rect, group) = ui.allocate_exact_size(vec2(total, theme::FIELD_H), Sense::hover());
         let under = ui.painter().add(egui::Shape::Noop);
 
         let mut changed = false;
         let mut left = rect.left();
         for (index, (segment, width)) in self.segments.iter().zip(widths).enumerate() {
-            let slot = Rect::from_min_size(pos2(left, rect.top()), vec2(width, self.height));
+            let slot = Rect::from_min_size(pos2(left, rect.top()), vec2(width, theme::FIELD_H));
             left += width;
 
             let response = ui.interact(slot, group.id.with(index), Sense::click());
@@ -161,11 +143,10 @@ impl<'a, T: Copy + PartialEq> Segmented<'a, T> {
         hovered: bool,
     ) {
         let colors = theme::colors();
-        let (fill, foreground) = match (active, self.filled, hovered) {
-            (true, true, _) => (colors.accent, colors.on_accent),
-            (true, false, _) => (colors.accent_wash, colors.accent_soft),
-            (false, _, true) => (colors.hover, colors.text_high),
-            (false, _, false) => (egui::Color32::TRANSPARENT, colors.text_mid),
+        let (fill, foreground) = match (active, hovered) {
+            (true, _) => (colors.accent_wash, colors.accent_soft),
+            (false, true) => (colors.hover, colors.text_high),
+            (false, false) => (egui::Color32::TRANSPARENT, colors.text_mid),
         };
 
         let painter = ui.painter();

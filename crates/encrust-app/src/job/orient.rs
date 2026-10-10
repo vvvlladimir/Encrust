@@ -27,7 +27,7 @@ pub struct OrientRequest {
 pub struct Turn {
     pub id: ObjectId,
     pub rotation: Quat,
-    /// Degrees the model turns from where it stood, so the status bar can say whether
+    /// Degrees the model turns from where it stood, so the stage notice can say whether
     /// anything moved.
     pub angle_deg: f32,
 }

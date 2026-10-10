@@ -8,7 +8,7 @@ mod toggle;
 
 pub use button::{
     compact_button, companion_button, icon_button, icon_toggle, inline_button, picker,
-    primary_button, secondary_button, summary_button, tool_button,
+    primary_button, rail_button, secondary_button, summary_button,
 };
 pub use field::{
     Carried, axis_label, carried_row, count_row, field_label, number_field, number_row, text_row,

@@ -35,6 +35,8 @@ mod state;
 mod status;
 mod supports;
 mod tool_settings;
+#[cfg(target_os = "macos")]
+mod traffic_lights;
 mod ui;
 mod undo;
 mod updates;
@@ -104,7 +106,7 @@ const ICON: &[u8] = include_bytes!(concat!(
     "/../../assets/icon/encrust-256.png"
 ));
 
-/// The title strip is the window's own title bar: macOS keeps its buttons over a
+/// The top bar is the window's own title bar: macOS keeps its buttons over a
 /// full-size content view, every other platform draws none. See `docs/decisions/0104`.
 #[cfg(not(target_arch = "wasm32"))]
 fn viewport() -> anyhow::Result<egui::ViewportBuilder> {

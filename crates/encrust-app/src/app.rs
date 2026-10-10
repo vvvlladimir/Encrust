@@ -239,7 +239,7 @@ impl SlicerApp {
     }
 
     /// One frame of the prepare mode's transport: the cut climbing the model while the
-    /// section rail is playing. Answers whether it has to keep going.
+    /// layer strip is playing. Answers whether it has to keep going.
     fn run_the_cut_up(&mut self, ctx: &egui::Context) -> bool {
         if self.mode != Mode::Prepare {
             self.view.section.playing = false;
@@ -327,7 +327,13 @@ impl eframe::App for SlicerApp {
         self.keys.extend(shortcuts::take(ctx, raw_input));
     }
 
-    fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
+    fn ui(&mut self, ui: &mut egui::Ui, frame: &mut eframe::Frame) {
+        #[cfg(target_os = "macos")]
+        if !ui.input(|input| input.viewport().fullscreen.unwrap_or(false)) {
+            crate::traffic_lights::centre(frame, crate::ui::theme::TOP_BAR_H);
+        }
+        #[cfg(not(target_os = "macos"))]
+        let _ = frame;
         self.take_dropped_files(ui.ctx());
         self.take_arrived_files();
 
@@ -435,6 +441,63 @@ mod tests {
             app.view.options.grid,
             "the plate grid is on until it is turned off"
         );
+    }
+
+    /// BUG: the gizmo of a picked model took every press on the stage, the layer strip's
+    /// included, because it listened wherever the stage did.
+    #[test]
+    fn the_layer_strip_takes_a_press_while_a_model_is_picked() {
+        use core_geometry::{Mesh, Orientation, Transform, Vec3, diagnose};
+        use egui_kittest::kittest::Queryable as _;
+
+        let mesh = Mesh::new(
+            vec![
+                Vec3::new(0.0, 0.0, 0.0),
+                Vec3::new(10.0, 0.0, 0.0),
+                Vec3::new(0.0, 10.0, 0.0),
+                Vec3::new(0.0, 0.0, 10.0),
+            ],
+            vec![[0, 2, 1], [0, 1, 3], [1, 2, 3], [2, 0, 3]],
+        );
+        let mut app = SlicerApp::default();
+        let id = app.doc.scene.insert(crate::scene::Imported::new(
+            "tetra".to_owned(),
+            std::sync::Arc::new(mesh.clone()),
+            Transform::default(),
+            crate::scene::ImportSummary {
+                vertices_merged: 0,
+                faces_removed: 0,
+                orientation: Orientation {
+                    flipped_faces: 0,
+                    inverted_shells: 0,
+                    orientable: true,
+                },
+                diagnostics: diagnose(&mesh),
+            },
+        ));
+        app.doc.scene.select(Some(id));
+
+        // The faces a context is given reach it a frame later, so the first frame only
+        // dresses it.
+        let mut dressed = false;
+        let mut harness = egui_kittest::Harness::builder()
+            .with_size(egui::vec2(1280.0, 800.0))
+            .build_ui_state(
+                move |ui, app: &mut SlicerApp| {
+                    if dressed {
+                        app.window().show(ui);
+                    } else {
+                        crate::ui::theme::apply(ui.ctx());
+                        dressed = true;
+                    }
+                },
+                app,
+            );
+        harness.run_steps(3);
+        harness.get_by_label("Model and layer side by side").click();
+        harness.run_steps(3);
+
+        assert_eq!(harness.state().mode, Mode::Preview);
     }
 
     #[test]

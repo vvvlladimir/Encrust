@@ -301,6 +301,11 @@ impl Preview {
         self.top_of(self.layer)
     }
 
+    /// Top of the last layer above the plate, millimetres: how tall the stack stands.
+    pub fn stack_top_mm(&self) -> Option<Scalar> {
+        self.top_of(self.layer_count().checked_sub(1)?)
+    }
+
     /// Top of layer `index` above the plate, millimetres: the plan's for a plate being cut,
     /// and the layer table's own for a file being read.
     fn top_of(&self, index: usize) -> Option<Scalar> {

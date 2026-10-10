@@ -6,17 +6,15 @@ use crate::state::Machine;
 use crate::status::Status;
 use crate::ui::theme;
 
-/// Points between the mask and the edge of the pane it is centred in, and the room kept
-/// clear down the right for the section rail parked against it.
+/// Points between the mask and the edge of the pane it is centred in.
 const INSET: f32 = 18.0;
-const RAIL_ROOM: f32 = 44.0;
 /// How much a point of scrolling zooms by: a notch of a wheel is about a fifth.
 const ZOOM_PER_POINT: f32 = 0.004;
 
 /// The exposure mask, beside the model rather than under the inspector.
 ///
 /// A 300 point column cannot show an 8520 pixel panel, so Preview gives the mask half the
-/// stage; see `docs/decisions/0103`.
+/// stage, or all of it; see `docs/decisions/0103`.
 pub fn ui(ui: &mut egui::Ui, machine: &mut Machine) {
     // A file being read names the panel it was written for; a profile loaded here says
     // nothing about a file another slicer wrote.
@@ -65,7 +63,7 @@ fn caption(ui: &egui::Ui, text: &str) {
 /// Draws the mask as the view has it and answers the pointer. Returns whether what is on
 /// screen is the panel's own pixels rather than the shrunk picture.
 ///
-/// Only a failure reaches the status bar: a picture that is drawn says so by being there,
+/// Only a failure reaches the stage notice: a picture that is drawn says so by being there,
 /// and reporting it every frame would wipe out whatever else is written.
 fn picture(
     ui: &mut egui::Ui,
@@ -86,10 +84,6 @@ fn picture(
     let panel_px = Vec2::new(settings.width_px as f32, settings.height_px as f32);
     let panel_mm = panel_px * Vec2::new(settings.pitch.x, settings.pitch.y);
     let room = ui.max_rect().shrink(INSET);
-    let room = Rect::from_min_max(
-        room.min,
-        egui::pos2(room.max.x - RAIL_ROOM + INSET, room.max.y),
-    );
     let fit_rect = Rect::from_center_size(room.center(), fit(room.size(), panel_mm.x / panel_mm.y));
 
     steer(ui, preview, room, fit_rect, panel_px);

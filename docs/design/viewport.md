@@ -123,7 +123,7 @@ as its own inside and would count the wrong way into the stencil.
 
 ## The section cut
 
-Models are drawn up to the height the section rail is parked at. The globals uniform
+Models are drawn up to the height the layer strip is parked at. The globals uniform
 carries `section = (height_mm, on, 0, 0)` — a height alone could not say "no cut", since a
 model below the plate is legal — and the model fragment shader discards anything whose
 world `z` is above it. The plate and grid go through the line pipeline and are never cut.
@@ -236,7 +236,7 @@ and the model fragment shader darkens whatever lies within a pixel and a half of
 measured with `fwidth` so the line keeps its width at any zoom. The derivative is taken
 before any `discard`, as WGSL requires. The box keeps the line off every other model; an
 outline painted over the frame shows the plane where it misses the model. It is
-independent of the section rail.
+independent of the layer strip.
 
 ## What is not tested
 

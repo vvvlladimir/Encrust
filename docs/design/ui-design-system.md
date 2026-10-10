@@ -19,8 +19,8 @@ accent, and colours kept for state. Why these values and this face: ADR 0216.
 | Token | Hex | Where |
 |---|---|---|
 | `sunken` | `#0c0e11` | The viewport backdrop, the mask frame, and the box a value is typed in |
-| `base` | `#111418` | Title and status strips |
-| `panel` | `#161a1f` | Inspector, tool rail, floating cards |
+| `base` | `#111418` | Top bar, tool rail, layer strip, the plate's summary |
+| `panel` | `#161a1f` | Inspector, plate column, floating cards |
 | `raised` | `#1e2329` | Unpressed buttons, list rows, the tool in use |
 | `hover` | `#272d34` | Hover state |
 | `active` | `#313840` | A pressed control, the track of a switch that is off |
@@ -70,7 +70,7 @@ call it; the shader's two colours arrive as `Globals` fields.
 IBM Plex Sans for text and figures, IBM Plex Mono for what is read as code — an address, a
 file name, a report — both compiled in from `assets/fonts/` so the window looks the same on
 any machine. Three weights of the sans are named families: regular, Medium for headings,
-SemiBold for section titles and the brand. Every millimetre, second, layer index, triangle
+SemiBold for section titles. Every millimetre, second, layer index, triangle
 count and byte size goes through `theme::figures`: Plex Sans draws its digits at one width,
 which is what makes a column of fields line up without a mono face.
 
@@ -81,10 +81,10 @@ a codepoint pasted into a panel.
 ### Density
 
 Row 30 points, field 28, a named field's box 128 wide, button 32, primary button 40,
-section heading 36, panel padding 12, item gap 8. Tool rail 68, plate panel 272, inspector
-328, title strip 28 on macOS and 36 elsewhere, plate strip 30, status strip 26, section rail
-30 wide with a 4 point trough. The two side columns are the widths a drag on their edge leaves
-them at; everything else is fixed. Controls are rounded by 6 points, cards by 8, windows by
+section heading 36, panel padding 12, item gap 8. Tool rail 68 with 46 point buttons, plate
+panel 272, plate strip 44, inspector 328, top bar 44, layer strip 52, a chip in either 32.
+The two side columns are the widths a drag on their edge leaves them at; everything else is
+fixed. Controls are rounded by 6 points, cards by 8, windows by
 10, and pills are fully round. Nothing else is rounded.
 
 ## Widgets
@@ -108,8 +108,8 @@ paints from tokens only.
 | `secondary_button` | The ordinary full-width button |
 | `compact_button` | A button as tall as a field, to stand in a row of them |
 | `icon_button`, `icon_toggle` | A borderless square with one glyph; the toggle stays lit while on |
-| `tool_button` | A rail button, raised with its glyph in `accent_soft` when it is the tool in use |
-| `Segmented` | Mutually exclusive choices in one bordered box, split by hairlines, filled or washed |
+| `rail_button` | A rail button, a glyph over the tool's name, raised in `accent_soft` when it is the tool in use |
+| `Segmented` | Mutually exclusive choices in one bordered box, split by hairlines, the chosen one washed |
 | `switch` | A labelled toggle with an animated knob |
 | `field_label` | The name of a field with its unit in brackets after it: `Gap (mm)` |
 | `axis_label` | The same, the name an axis letter in its axis colour: `X (mm)` |
@@ -119,76 +119,74 @@ paints from tokens only.
 A named number is a `number_row`, its unit inside the box in `text_low`; a box standing under
 a `field_label` of its own carries the unit in that label's brackets instead.
 
-The filled `Segmented` is reserved for the one switch that changes what the whole window
-is doing. Everything else uses the wash.
-
 ## Layout
 
 `panels::Window::show` builds the window in a fixed order. Nothing is dockable.
 
 ```
-┌───────────────────────────────────────────────────────────────┐
-│ title:  File Edit View       [ Prepare | Preview ]      ⚙     │
-├───────────────────────────────────────────────────────────────┤
-│ plates 30:  Bench │ Brackets │ +          4 models, 2 selected │
-├──────────┬─────────────────────────────┬────────────────┬─────┤
-│ Plate    │                             │  Transform     │     │
-│ contents │                     ╭ view ╮│                │rail │
-│ 272      │      the stage      ╰──────╯│                │ 68  │
-│          │                       ╭────╮│                │     │
-│ ⧉ ⇋ ⊞ ≡ ␡ │                      │ 30 ││  ───────────   │     │
-│ Printer  │                       ╰────╯│  Height Layers │     │
-│ Resin    │                             │  Slice .goo  ⌄ │     │
-├──────────┴─────────────────────────────┴────────────────┴─────┤
-│ status 26                                                     │
-└───────────────────────────────────────────────────────────────┘
+┌──────────────────────────────────────────────────────────────────────────┐
+│ top 44:  ● ● ●  File Edit View          printer / resin │ 50 µm   Find     │
+├────┬───────────┬──────────────────────────────────┬───────────────┬──────┤
+│ 1  │ Models  + │ ╭view╮    ╭ job, notice ╮        │ the open tool │ rail │
+│ 2  │ list 272  │ ╰────╯                           │ 328           │ 68   │
+│ +  │           │            the stage             │               │      │
+│    │ ⧉ ⇋ ⊞ ≡ ␡ ├──────────────────────────────────┤               │ ⌨    │
+│ 44 │ Slice  ⌄  │ layers 52: views ‹ ▶ › ━━━●── 650│               │ ⚙    │
+└────┴───────────┴──────────────────────────────────┴───────────────┴──────┘
 ```
 
-The title strip is the window's own title bar rather than a band under one: it drags the
+The top bar is the window's own title bar rather than a band under one: it drags the
 window, double-clicks to maximise, and on every platform but macOS draws its own window
-buttons; see `docs/decisions/0104`. The plate's contents are a panel rather than a card
-over the model, and the rail stands beside the panel it drives; see `docs/decisions/0102`.
-Both side columns are dragged by their inner edge, and the plate folds away when that drag
-goes past its floor, leaving a hairline that lights up and brings it back on a click. Neither is drawn in Preview, which
-has nothing to edit, and the stage splits in two there — the model on one half, the
-exposure mask on the other; see `docs/decisions/0103`.
+buttons; on macOS the system's are moved onto its centre line. See `docs/decisions/0104`
+and `0217`. The File, Edit and View menus stand at its left end. The chip at the right
+names the machine and the resin, each opening its list, and the layer height and exposure,
+which open the Layers tool.
 
-What still floats over the stage is `egui::Area`s anchored to a rectangle by their corner,
-laid out together in `panels/view_column.rs`: the view tools at the top right of the
-viewport, and the section rail under them, one card width and centred in the height left.
-In Preview the rail stands against the mask's edge instead, centred on the stage. The mode switch is not one of them: it sits in the title strip,
-centred on the window, so it stays put whichever columns the mode draws. The section rail is the layer
-scrubber, drawn in both modes and cutting the models at its own height; see
-`docs/decisions/0061`. It is one column of controls wide, and the height it is parked at is
-painted as a pill beside the handle only while the pointer is on the rail or for 1.4
-seconds after it was last moved, so that a number does not sit over the model while nobody
-is scrubbing.
+The plates are a strip of numbered squares at the window's left edge, outside the plate
+panel so they stay when it folds; a right click on one duplicates, removes or gathers the
+selection onto it. The sheet of keys and the gear stand at the foot of the
+rail.
+
+The plate's contents are a panel rather than a card over the model, and the rail stands
+beside the panel it drives; see `docs/decisions/0102`. Both side columns are dragged by
+their inner edge, and the plate folds away when that drag goes past its floor, leaving a
+hairline that lights up and brings it back on a click. At the foot of the plate column the
+summary states the plate's figures, or the layer's own in Preview, over Slice; the caret
+beside Slice holds every plate at once and the bound machine.
+
+The layer strip along the foot of the stage is drawn in every view. It switches the view —
+the model, the model beside its layer, the layer alone — steps and plays, and its track
+moves the cut, carrying the exposure bands along its top, the cured area as a profile
+either side of the rule and a tick at each risk; a click on the layer figure opens it for
+typing, and Enter goes there. See `docs/decisions/0061` and `0217`.
+
+What floats over the stage is `egui::Area`s anchored to a rectangle by their corner: the
+view tools at the top left of the viewport (`panels/view_column.rs`), and top centre of
+the stage the running jobs with their Cancel, a sent file waiting to be started, and the
+last message (`panels/stage_notice.rs`). A failure stays there until it is put away; any
+other message stands for four seconds. There is no status line.
 
 The viewport reads the raw pointer rather than its own `Response`, so what is drawn over
 it would otherwise orbit the camera as well. None of these cards reports where it is:
 whichever egui layer is under the pointer owns it, and the plate is only under the pointer
 when that layer is the viewport's own; see `docs/decisions/0193`.
 
-The inspector's footer is a bottom panel of its own rather than the end of the scroll, so
-the slice action is always in the same corner whatever else is on screen. It carries the
-stack's height and layer count over the button, and the output format on it; see
-`docs/decisions/0105`.
-
 ## The Settings screen
 
 One arrangement sits beside the plate's: with `Settings::open` the rail, the inspector and
-the stage are not drawn at all, and everything between the two strips is the Settings
+the stage are not drawn at all, and everything under the top bar is the Settings
 screen — a list of sections down the left, the form for the open section beside it. It is
 a screen rather than a dialog because a profile is edited instead of the plate, not over
-it, and because the sections keep growing. The gear at the right end of the title strip
-turns into a close button while it is open. See `docs/design/profiles.md` and
+it, and because the sections keep growing. The gear at the foot of the rail opens it,
+and its own close button or Esc leaves it. See `docs/design/profiles.md` and
 `docs/decisions/0052`.
 
 ## Modes and tools
 
 `workspace::Mode` is Prepare or Preview: the editing half of the application and the
-reading half. Entering Preview cuts the plate into layers if the stack is stale or missing.
-Both modes carry the section rail and cut at one height: a switch into Preview parks on
+reading half, switched from the layer strip's views. Entering Preview cuts the plate into
+layers if the stack is stale or missing. Both modes carry the layer strip and cut at one
+height: a switch into Preview parks on
 the layer nearest where Prepare was cut, and a switch back cuts Prepare at the layer shown.
 
 `workspace::Tool` is what a click in the viewport does, and the rail groups the tools as

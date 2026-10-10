@@ -10,46 +10,10 @@ use crate::scene::Scene;
 use crate::slicing::Slicing;
 use crate::state::Machine;
 use crate::status::Status;
-use crate::ui::{
-    companion_button, icon, primary_button, progress_bar, secondary_button, theme, tone,
-};
+use crate::ui::{companion_button, icon, primary_button, theme, tone};
 
-use super::estimate;
-
-/// The footer is a block at the foot of the column rather than the end of the scroll, so
-/// the one action the window is for is always in the same corner. The estimate stands
-/// over it, because what the stack comes to is what decides whether to press the button.
-///
-/// This is only what the panel opens at: it takes the height of its contents from there.
-pub const IDLE_H: f32 = 138.0;
-
-/// Width of the Send button beside Slice, and of the dot that says whether its machine
-/// answered.
-const SEND_W: f32 = 112.0;
+/// The dot that says whether the bound machine answered.
 const DOT_W: f32 = 14.0;
-
-pub fn ui(ui: &mut egui::Ui, window: &mut Window) {
-    egui::Frame::new()
-        .inner_margin(theme::PANEL_MARGIN)
-        .show(ui, |ui| {
-            estimate::row(ui, window);
-            ui.add_space(6.0);
-            if let Some(job) = window.machine.network.job.as_ref() {
-                if running(ui, &job.label(), job.fraction(), job.is_cancelling()) {
-                    job.cancel();
-                }
-                return;
-            }
-            match window.machine.slicing.job.as_ref() {
-                Some(job) => {
-                    if running(ui, &job.label(), job.fraction(), job.is_cancelling()) {
-                        job.cancel();
-                    }
-                }
-                None => action(ui, window),
-            }
-        });
-}
 
 /// What the keyboard shortcut does: the primary button's own action, a file, refused for
 /// the same reasons that button is greyed out.
@@ -68,40 +32,110 @@ pub fn slice_this_plate(window: &mut Window) {
     );
 }
 
-fn action(ui: &mut egui::Ui, window: &mut Window) {
+/// The one action the window is for, at the foot of the plate column: Slice, and beside it
+/// a caret for every plate at once and for the bound machine.
+pub fn ui(ui: &mut egui::Ui, window: &mut Window) {
     let blocker = window.machine.slicing.blocker(&window.doc.scene);
-    // Nothing on the plate means nothing to start either: the row would outlive what
-    // the user was looking at when they sent it.
+    // Nothing on the plate means nothing to start either.
     if blocker.is_none() {
         broken_reminder(ui, &window.doc.scene);
-        waiting_to_print(ui, window);
     }
-    if let Some(via) = slice_row(ui, window.machine, blocker) {
+    let busy = window.machine.slicing.job.is_some() || window.machine.network.job.is_some();
+    let bound = bound_machine(window.machine);
+    let plates = window.doc.scene.plates().len();
+    let more = bound.is_some() || plates > 1;
+
+    let mut pressed = None;
+    ui.horizontal(|ui| {
+        ui.spacing_mut().item_spacing.x = 2.0;
+        let beside = if more { theme::PRIMARY_H + 2.0 } else { 0.0 };
+        let label = format!("Slice to .{}", window.machine.slicing.format.extension());
+        let hint = blocker.unwrap_or("Rasterise the plate into a printable file");
+        ui.allocate_ui(
+            egui::vec2(ui.available_width() - beside, theme::PRIMARY_H),
+            |ui| {
+                let enabled = blocker.is_none() && !busy;
+                if primary_button(ui, icon::SLICE, &label, enabled)
+                    .on_hover_text(hint)
+                    .clicked()
+                {
+                    pressed = Some((Run::ThisPlate, Via::File));
+                }
+            },
+        );
+        if more {
+            pressed = pressed.or(more_menu(ui, window, bound.as_ref(), blocker, busy));
+        }
+    });
+    if let Some((run, via)) = pressed {
         start(
             &window.doc.scene,
             &mut window.machine.slicing,
             &mut window.machine.status,
-            Run::ThisPlate,
+            run,
             via,
         );
     }
+}
 
-    // A project of one plate has nothing to offer here, and the button would only ask a
-    // question with one answer.
-    let plates = window.doc.scene.plates().len();
-    if plates > 1 {
-        ui.add_space(4.0);
-        let label = format!("Slice all {plates} plates");
-        if secondary_button(ui, icon::SLICE, &label).clicked() {
-            start(
-                &window.doc.scene,
-                &mut window.machine.slicing,
-                &mut window.machine.status,
-                Run::EveryPlate,
-                Via::File,
-            );
+/// The caret beside Slice: every plate at once, and the machine this printer is bound
+/// to, with whether it answered. See `docs/decisions/0157`.
+fn more_menu(
+    ui: &mut egui::Ui,
+    window: &mut Window,
+    bound: Option<&Bound>,
+    blocker: Option<&'static str>,
+    busy: bool,
+) -> Option<(Run, Via)> {
+    let response = ui
+        .allocate_ui(egui::vec2(theme::PRIMARY_H, theme::PRIMARY_H), |ui| {
+            companion_button(ui, "", icon::CARET_DOWN, true)
+        })
+        .inner
+        .on_hover_text("Slice every plate, or slice and send");
+    let mut pressed = None;
+    let mut rescan = false;
+    egui::Popup::menu(&response).show(|ui| {
+        let plates = window.doc.scene.plates().len();
+        let free = blocker.is_none() && !busy;
+        if plates > 1
+            && ui
+                .add_enabled(
+                    free,
+                    egui::Button::new(format!("Slice all {plates} plates")),
+                )
+                .clicked()
+        {
+            pressed = Some((Run::EveryPlate, Via::File));
         }
+        let Some(bound) = bound else {
+            return;
+        };
+        let hint = bound.blocker.map_or_else(
+            || format!("Slice and send to {}", bound.name),
+            str::to_owned,
+        );
+        let send = egui::Button::new(format!("{}  Slice and send to {}", icon::SEND, bound.name));
+        if ui
+            .add_enabled(free && bound.blocker.is_none(), send)
+            .on_hover_text(&hint)
+            .on_disabled_hover_text(blocker.unwrap_or(&hint))
+            .clicked()
+        {
+            pressed = Some((Run::ThisPlate, Via::Printer));
+        }
+        ui.horizontal(|ui| {
+            reach_dot(ui, bound.reach);
+            rescan = ui
+                .button("Scan again")
+                .on_hover_text(bound.reach.hint(&bound.name))
+                .clicked();
+        });
+    });
+    if rescan {
+        window.machine.network.scan();
     }
+    pressed
 }
 
 /// A model left broken is a reminder here rather than a blocker: what is sliced from it
@@ -123,114 +157,8 @@ fn broken_reminder(ui: &mut egui::Ui, scene: &Scene) {
     ui.add_space(4.0);
 }
 
-/// A stack that reached the printer is not printing yet: starting it is a second,
-/// deliberate press, because nobody is standing at the machine when the first one lands.
-fn waiting_to_print(ui: &mut egui::Ui, window: &mut Window) {
-    let Some(sent) = window.machine.network.sent.clone() else {
-        return;
-    };
-    let hint = format!("{} is on {}", sent.filename, sent.printer);
-    if secondary_button(ui, icon::PLAY, "Start print")
-        .on_hover_text(hint)
-        .clicked()
-    {
-        window
-            .machine
-            .network
-            .start_print(&mut window.machine.status);
-    }
-    ui.add_space(4.0);
-}
-
-/// Slicing and sending both report the same three things, so they are drawn the same
-/// way: what is happening, how far along, and a way out. Answers whether to stop.
-fn running(ui: &mut egui::Ui, label: &str, fraction: Option<f32>, cancelling: bool) -> bool {
-    progress(ui, label, fraction);
-    ui.add_space(4.0);
-    let mut cancel = false;
-    ui.add_enabled_ui(!cancelling, |ui| {
-        cancel = secondary_button(ui, icon::CANCEL, "Cancel").clicked();
-    });
-    cancel
-}
-
-/// What is running and how far along, on one line over the bar. The line is cut rather
-/// than wrapped: the block has a fixed height and a printer can be called anything.
-fn progress(ui: &mut egui::Ui, label: &str, fraction: Option<f32>) {
-    let colors = theme::colors();
-    ui.horizontal(|ui| {
-        if let Some(fraction) = fraction {
-            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                tone(ui, &format!("{:.0} %", fraction * 100.0), colors.text_high);
-                one_line(ui, label, colors.text_mid);
-            });
-            return;
-        }
-        one_line(ui, label, colors.text_mid);
-    });
-    // Slicing reports no layer counts until the stack is cut, so the bar runs rather
-    // than lies.
-    progress_bar(ui, fraction);
-}
-
-fn one_line(ui: &mut egui::Ui, text: &str, color: egui::Color32) {
-    let text = egui::RichText::new(text).font(theme::small()).color(color);
-    ui.add(egui::Label::new(text).truncate());
-}
-
-/// Slice to a file, and beside it the machine this printer profile is bound to, with
-/// whether it answered the last scan. See `docs/decisions/0157`.
-fn slice_row(
-    ui: &mut egui::Ui,
-    machine: &mut Machine,
-    blocker: Option<&'static str>,
-) -> Option<Via> {
-    let bound = bound_machine(machine);
-    let label = format!("Slice to .{}", machine.slicing.format.extension());
-    let hint = blocker.unwrap_or("Rasterise the plate into a printable file");
-    let mut pressed = None;
-    let mut rescan = false;
-    ui.horizontal(|ui| {
-        ui.spacing_mut().item_spacing.x = 4.0;
-        let beside = match bound {
-            Some(_) => SEND_W + DOT_W + 8.0,
-            None => 0.0,
-        };
-        let width = ui.available_width() - beside;
-        ui.allocate_ui(egui::vec2(width, theme::PRIMARY_H), |ui| {
-            if primary_button(ui, icon::SLICE, &label, blocker.is_none())
-                .on_hover_text(hint)
-                .clicked()
-            {
-                pressed = Some(Via::File);
-            }
-        });
-        let Some(bound) = &bound else {
-            return;
-        };
-        rescan = reach_dot(ui, bound).clicked();
-        let enabled = blocker.is_none() && bound.blocker.is_none();
-        let hint = bound.blocker.map_or_else(
-            || format!("Slice and send to {}", bound.name),
-            str::to_owned,
-        );
-        ui.allocate_ui(egui::vec2(SEND_W, theme::PRIMARY_H), |ui| {
-            if companion_button(ui, icon::SEND, "Send", enabled)
-                .on_hover_text(hint)
-                .clicked()
-            {
-                pressed = Some(Via::Printer);
-            }
-        });
-    });
-    if rescan {
-        machine.network.scan();
-    }
-    pressed
-}
-
 /// The machine the printer in hand is bound to, as the row needs it: a profile that
-/// states no connection, or names no machine, has no Send button at all.
+/// states no connection, or names no machine, offers no sending at all.
 struct Bound {
     name: String,
     reach: Reach,
@@ -262,19 +190,16 @@ fn bound_machine(machine: &mut Machine) -> Option<Bound> {
     })
 }
 
-/// Whether the bound machine answered, as a dot that asks again when it is pressed.
-fn reach_dot(ui: &mut egui::Ui, bound: &Bound) -> egui::Response {
-    let (rect, response) =
-        ui.allocate_exact_size(egui::vec2(DOT_W, theme::PRIMARY_H), egui::Sense::click());
+/// Whether the bound machine answered the last scan, as a dot.
+fn reach_dot(ui: &mut egui::Ui, reach: Reach) {
+    let (rect, _) = ui.allocate_exact_size(egui::vec2(DOT_W, DOT_W), egui::Sense::hover());
     let colors = theme::colors();
-    let colour = match bound.reach {
+    let colour = match reach {
         Reach::Answered => colors.ok,
         Reach::Silent => colors.danger,
         Reach::Unasked => colors.text_low,
     };
     ui.painter().circle_filled(rect.center(), 4.0, colour);
-    let hint = format!("{}. Press to scan again", bound.reach.hint(&bound.name));
-    response.on_hover_text(hint)
 }
 
 /// Where what the press writes goes.

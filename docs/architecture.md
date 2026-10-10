@@ -108,6 +108,7 @@ encrust-app ──> core-engine, every core-*, printer-profiles, printer-link,
                bytemuck, image, rfd, rayon, serde, serde_json, zip,
                ureq (with TLS at the desk), minisign-verify, tar, flate2, web-time;
                in a browser wasm-bindgen, wasm-bindgen-futures, js-sys, web-sys;
+               on macOS objc2-app-kit, objc2-foundation, raw-window-handle;
                winresource at build time, for the Windows icon
 encrust-web ──> encrust-app, wasm-bindgen, wasm-bindgen-futures, web-sys, getrandom
 encrust-cli ──> core-engine, every core-*, printer-profiles, printer-link,
@@ -289,7 +290,7 @@ project/     the .encrust dialogs, and the plate captured into and applied from
              core_engine::project
 job/         worker threads: import, repair, merge, export, preview, measure, supports,
              hollow, orient, send
-panels/      title strip, tool rail, stage, inspector, status strip
+panels/      top bar, tool rail, inspector, plate column, stage and its layer strip
 profiles.rs  loading a profile from a file dialog
 network.rs   printers a scan found, where the Slice button sends, and the errand running
 prefs.rs     the machine, resin, tool values and printer addresses remembered between runs

@@ -109,7 +109,7 @@ fn apply(scene: &mut Scene, repaired: &Repaired) -> Status {
         return Status::Error(format!("{} is no longer on the plate", repaired.name));
     };
     object.reshape(Arc::clone(&repaired.mesh));
-    // What repair did is said in the status bar; the summary keeps describing the file,
+    // What repair did is said in the stage notice; the summary keeps describing the file,
     // so a mended model carries no mark of its own.
     object.summary.orientation = repaired.orientation;
 
@@ -134,7 +134,7 @@ fn done(repaired: &Repaired) -> usize {
     repaired.filled.loops_filled + repaired.duplicates_removed + repaired.tangles_removed
 }
 
-/// What it changed, in the words the status bar says it in.
+/// What it changed, in the words the stage notice says it in.
 fn what(repaired: &Repaired) -> Vec<String> {
     let mut lines = Vec::new();
     if repaired.filled.loops_filled > 0 {

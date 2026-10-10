@@ -351,7 +351,7 @@ impl Network {
         }));
     }
 
-    /// Drains the scan and the errand into the status bar. Returns whether either is
+    /// Drains the scan and the errand into the stage notice. Returns whether either is
     /// still running, which is what tells the window to keep repainting.
     pub fn poll(&mut self, status: &mut Status) -> bool {
         self.take_scan() | self.take_job(status)

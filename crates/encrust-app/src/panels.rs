@@ -1,13 +1,15 @@
 mod inspector;
 mod mask_pane;
-mod plate_bar;
+mod plate_strip;
+mod plate_summary;
 mod report;
 mod scene_panel;
 pub(crate) mod section;
 mod settings;
 mod shortcuts_sheet;
+mod slice;
 mod stage;
-mod status_bar;
+mod stage_notice;
 mod support_diagram;
 mod support_fields;
 mod title_bar;
@@ -15,9 +17,9 @@ mod tool_rail;
 mod view_column;
 mod viewport_panel;
 
-pub use inspector::slice_this_plate;
 pub use scene_panel::duplicate_selection;
 pub use section::animate as animate_preview;
+pub use slice::slice_this_plate;
 pub use title_bar::toggle_settings;
 pub use viewport_panel::frame_view;
 
@@ -48,27 +50,14 @@ impl Window<'_> {
             .measured(&settings, self.machine.slicing.fold())
     }
 
-    /// Lays the window out: the strips top and bottom, the plate down the left, the
-    /// inspector and the rail down the right, and the stage in what is left. Fixed, in
-    /// that order; see `docs/decisions/0025`, `0102` and `0103`.
+    /// Lays the window out: the top bar, the rail and the inspector down the right, the
+    /// plates and the plate panel down the left, and the stage in what is left. Fixed, in that order; see
+    /// `docs/decisions/0217`.
     pub fn show(&mut self, ui: &mut egui::Ui) {
         egui::Panel::top("title")
-            .exact_size(theme::TITLE_H)
+            .exact_size(theme::TOP_BAR_H)
             .frame(strip_frame())
             .show(ui, |ui| title_bar::ui(ui, self));
-
-        egui::Panel::bottom("status")
-            .exact_size(theme::STATUS_H)
-            .frame(strip_frame())
-            .show(ui, |ui| {
-                let tally = status_bar::tally(ui.ctx(), &self.doc.scene);
-                status_bar::ui(
-                    ui,
-                    &self.machine.status,
-                    &tally,
-                    &self.machine.slicing.material,
-                );
-            });
 
         // Over everything, the Settings screen included: the keys it lists belong to both
         // halves of the window.
@@ -80,8 +69,8 @@ impl Window<'_> {
         settings::calculators(ui.ctx(), self.machine);
         settings::confirm(ui.ctx(), self);
 
-        // The Settings screen takes the whole window under the strips: a profile is
-        // edited instead of the plate, not beside it.
+        // The Settings screen takes the whole window under the bar: a profile is edited
+        // instead of the plate, not beside it.
         if self.machine.settings.open {
             egui::CentralPanel::default()
                 .frame(egui::Frame::new())
@@ -89,24 +78,13 @@ impl Window<'_> {
             return;
         }
 
-        egui::Panel::top("plates")
-            .exact_size(theme::PLATE_BAR_H)
-            .frame(strip_frame())
-            .show(ui, |ui| plate_bar::ui(ui, self.doc));
-
-        // Preview reads the stack rather than editing the plate, so neither the rail nor
-        // the plate panel has anything to offer it, and the stage takes their room.
-        let editing = *self.mode == Mode::Prepare;
-
         // The rail goes in before the inspector so that it ends up the outermost of the
         // two: a tool and the panel it owns are one control and belong side by side.
-        if editing {
-            egui::Panel::right("rail")
-                .exact_size(theme::RAIL_W)
-                .resizable(false)
-                .frame(panel_frame())
-                .show(ui, |ui| tool_rail::ui(ui, self));
-        }
+        egui::Panel::right("rail")
+            .exact_size(theme::RAIL_W)
+            .resizable(false)
+            .frame(egui::Frame::new().fill(theme::colors().base))
+            .show(ui, |ui| tool_rail::ui(ui, self));
 
         let inspector = egui::Panel::right("inspector")
             .exact_size(self.view.options.inspector_w)
@@ -116,8 +94,19 @@ impl Window<'_> {
             .response
             .rect;
 
+        // Outermost on the left, so the plates stay put while the plate panel folds.
+        egui::Panel::left("plates")
+            .exact_size(theme::PLATE_STRIP_W)
+            .resizable(false)
+            .frame(
+                egui::Frame::new()
+                    .fill(theme::colors().base)
+                    .inner_margin(egui::Margin::symmetric(0, 6)),
+            )
+            .show(ui, |ui| plate_strip::ui(ui, &mut self.doc.scene));
+
         let mut plate = None;
-        if editing && self.view.options.plate_panel {
+        if self.view.options.plate_panel {
             plate = Some(
                 egui::Panel::left("plate")
                     .exact_size(self.view.options.plate_w)
@@ -127,7 +116,7 @@ impl Window<'_> {
                     .response
                     .rect,
             );
-        } else if editing {
+        } else {
             folded_plate_edge(ui, &mut self.view.options.plate_panel);
         }
 
@@ -221,8 +210,7 @@ fn folded_plate_edge(ui: &mut egui::Ui, open: &mut bool) {
         });
 }
 
-/// The title and status strips sit on the window's own colour, with a hairline between
-/// them and the work.
+/// The top bar sits on the window's own colour, with a hairline between it and the work.
 fn strip_frame() -> egui::Frame {
     egui::Frame::new()
         .fill(theme::colors().base)

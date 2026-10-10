@@ -43,7 +43,7 @@ impl Imports {
         !self.jobs.is_empty()
     }
 
-    /// What the status bar says while files are being read.
+    /// What the stage notice says while files are being read.
     pub fn label(&self) -> Option<String> {
         let first = self.jobs.first()?;
         Some(match self.jobs.len() {
@@ -247,7 +247,7 @@ mod tests {
         assert!(prepared(&fixture("model.gcode")).is_err());
     }
 
-    /// BUG-23: the status bar has one line, and a reader's own error already carries the
+    /// BUG-23: the stage notice has one line, and a reader's own error already carries the
     /// whole path, so what we add to it names the file alone.
     #[test]
     fn a_failure_names_the_file_and_not_the_path_it_was_opened_from() {

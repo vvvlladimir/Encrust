@@ -62,7 +62,7 @@ pub struct UpdatePrefs {
     /// When the feed was last read, seconds since the Unix epoch.
     #[serde(default)]
     pub checked_at_s: Option<u64>,
-    /// A version the user asked not to be shown in the title strip again.
+    /// A version the user asked not to be shown in the top bar again.
     #[serde(default)]
     pub skipped: Option<String>,
 }
@@ -177,14 +177,14 @@ impl Updates {
         self.stage = Stage::Installing { offer, reply };
     }
 
-    /// Stops the title strip offering this version; the Updates page still shows it.
+    /// Stops the top bar offering this version; the Updates page still shows it.
     pub fn skip(&mut self) {
         if let Stage::Offered(offer) = &self.stage {
             self.prefs.skipped = Some(offer.version.to_string());
         }
     }
 
-    /// The version the title strip offers, if one is waiting and was not skipped.
+    /// The version the top bar offers, if one is waiting and was not skipped.
     pub fn waiting(&self) -> Option<&Offer> {
         match &self.stage {
             Stage::Offered(offer) | Stage::Installed(offer)

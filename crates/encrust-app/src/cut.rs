@@ -141,7 +141,7 @@ pub fn split_parts(scene: &mut Scene, id: ObjectId) -> Status {
 ///
 /// Mending is not asked for the way an imported model's is (ADR 0194): the surface in
 /// question is surface this tool just invented, not surface a file brought in. What it
-/// did is said in the status bar, so a mended piece carries no mark of its own; a piece it
+/// did is said in the stage notice, so a mended piece carries no mark of its own; a piece it
 /// could not close keeps the diagnostics that say so.
 fn place(scene: &mut Scene, name: String, mesh: Mesh) -> bool {
     let mut mesh = mesh;
@@ -171,7 +171,7 @@ fn place(scene: &mut Scene, name: String, mesh: Mesh) -> bool {
     mended
 }
 
-/// What the status bar adds about the pieces that had to be mended on their way down.
+/// What the stage notice adds about the pieces that had to be mended on their way down.
 fn mending(pieces: usize) -> String {
     match pieces {
         0 => String::new(),

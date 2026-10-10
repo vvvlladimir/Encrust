@@ -49,7 +49,7 @@ impl Action {
             Self::Deselect => "Deselect",
             Self::Duplicate => "Duplicate",
             Self::Remove => "Remove from the plate",
-            Self::ToggleMode => "Prepare or Preview",
+            Self::ToggleMode => "Model, or model and layer",
             Self::PlatePanel => "Plate contents",
             Self::FrameView => "Frame the view",
             Self::Settings => "Settings",
@@ -437,7 +437,10 @@ pub fn act(window: &mut Window, action: Action) {
         }
         Action::Duplicate => duplicate_selection(window),
         Action::Remove => remove(window),
-        Action::ToggleMode => *window.mode = other_mode(*window.mode),
+        Action::ToggleMode => {
+            *window.mode = other_mode(*window.mode);
+            window.view.options.mask_only = false;
+        }
         Action::PlatePanel => window.view.options.plate_panel = !window.view.options.plate_panel,
         Action::FrameView => frame_view(
             &window.doc.scene,
@@ -468,7 +471,7 @@ pub fn act(window: &mut Window, action: Action) {
 }
 
 /// Reaching for a tool is an editing act, so it brings the plate back into view.
-fn pick(window: &mut Window, tool: Tool) {
+pub(crate) fn pick(window: &mut Window, tool: Tool) {
     *window.mode = Mode::Prepare;
     *window.tool = tool;
 }

@@ -274,10 +274,21 @@ fn show_gizmo(ui: &egui::Ui, window: &mut Window, viewport: egui::Rect) {
         return;
     }
 
-    let Some(moved) = window
-        .view
-        .gizmo
-        .show(ui, viewport, &window.view.camera, &pivots)
+    // The crate listens wherever the pointer is, within the clip of the `Ui` it is handed;
+    // the stage's would take every press on the layer strip as well.
+    let mut over_viewport = egui::Ui::new(
+        ui.ctx().clone(),
+        ui.id().with("gizmo"),
+        egui::UiBuilder::new()
+            .layer_id(ui.layer_id())
+            .max_rect(viewport),
+    );
+    over_viewport.set_clip_rect(viewport.intersect(ui.clip_rect()));
+    let Some(moved) =
+        window
+            .view
+            .gizmo
+            .show(&over_viewport, viewport, &window.view.camera, &pivots)
     else {
         return;
     };

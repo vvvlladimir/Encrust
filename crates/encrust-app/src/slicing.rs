@@ -464,7 +464,7 @@ impl Slicing {
         }
     }
 
-    /// Drains the running job into the status bar. Returns whether one is still running,
+    /// Drains the running job into the stage notice. Returns whether one is still running,
     /// which is what tells the window it has to keep repainting.
     pub fn poll(&mut self, scene: &Scene, status: &mut Status) -> bool {
         let Some(job) = self.job.as_mut() else {
@@ -567,7 +567,7 @@ fn beside(output: &Path, suffix: &str) -> PathBuf {
     path
 }
 
-/// Turns a finished job into the line the status bar shows.
+/// Turns a finished job into the line the stage notice shows.
 fn report(outcome: Outcome, material: &MaterialProfile) -> Status {
     match outcome {
         Outcome::Written {

@@ -4,23 +4,13 @@ use core_geometry::Scalar;
 use crate::ui::{icon, theme};
 
 /// What the window is doing with the plate: laying it out, or looking at the layers it
-/// will print. One is the editing half of the application, the other the reading half.
+/// will print. The layer strip's views switch it: the model alone is Prepare, the model
+/// beside its layer and the layer alone are Preview.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum Mode {
     #[default]
     Prepare,
     Preview,
-}
-
-impl Mode {
-    pub const ALL: [Self; 2] = [Self::Prepare, Self::Preview];
-
-    pub fn label(self) -> &'static str {
-        match self {
-            Self::Prepare => "Prepare",
-            Self::Preview => "Preview",
-        }
-    }
 }
 
 /// What a click in the viewport does, and which section of the inspector it opens.
@@ -76,6 +66,16 @@ impl Tool {
         }
     }
 
+    /// The name under the glyph on the rail, which has room for one short word.
+    pub fn rail_name(self) -> &'static str {
+        match self {
+            Self::Drain => "Drain",
+            Self::Cut => "Cut",
+            Self::Layers => "Layers",
+            tool => tool.label(),
+        }
+    }
+
     pub fn glyph(self) -> &'static str {
         match self {
             Self::Select => icon::SELECT,
@@ -90,8 +90,8 @@ impl Tool {
     }
 }
 
-/// Where the viewport cuts the plate's contents, so that the slider down the right of the
-/// stage reads as a section through the part rather than as a layer counter alone.
+/// Where the viewport cuts the plate's contents, so that the layer strip under the stage
+/// reads as a section through the part rather than as a layer counter alone.
 ///
 /// Only the Prepare mode keeps a height here. The Preview mode cuts at the layer it is
 /// showing, which the preview already owns; see `docs/decisions/0061`.
@@ -99,8 +99,8 @@ impl Tool {
 pub struct Section {
     /// Height above the plate, millimetres, or `None` while the whole model is drawn.
     pub height_mm: Option<Scalar>,
-    /// Whether the cut is running up the model on its own, which is what the transport
-    /// does in this mode.
+    /// Whether the cut is running up the model on its own, which is what Play does in
+    /// this mode.
     pub playing: bool,
 }
 
@@ -109,13 +109,15 @@ pub struct Section {
 pub struct ViewOptions {
     pub grid: bool,
     /// Whether the models are drawn seen through, so a cavity and what stands in it can be
-    /// looked into. The view card and the View menu are the only things that turn it on;
+    /// looked into. The view tools and the View menu are the only things that turn it on;
     /// see ADR 0190, 0198.
     pub xray: bool,
     /// Whether the plate panel is unfolded down the left of the stage.
     pub plate_panel: bool,
     /// Whether the sheet of keys is up over the window.
     pub sheet: bool,
+    /// Whether Preview gives the whole stage to the layer mask rather than half of it.
+    pub mask_only: bool,
     /// Whether Preview's column shows the issues found in the stack instead of the layer.
     pub issues: bool,
     /// Width of the plate panel and of the inspector, points. Both are the user's: a
@@ -131,6 +133,7 @@ impl Default for ViewOptions {
             xray: false,
             plate_panel: true,
             sheet: false,
+            mask_only: false,
             issues: false,
             plate_w: theme::SCENE_W,
             inspector_w: theme::INSPECTOR_W,
@@ -148,6 +151,7 @@ mod tests {
             for other in &Tool::ALL[index + 1..] {
                 assert_ne!(tool.glyph(), other.glyph());
                 assert_ne!(tool.label(), other.label());
+                assert_ne!(tool.rail_name(), other.rail_name());
             }
         }
     }

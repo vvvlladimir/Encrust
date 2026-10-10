@@ -281,8 +281,8 @@ Grouped by what the decision governs; the number is still the order it was taken
 | [0019](0019-slicing-job-thread-budget.md) | A background job runs on its own pool, one thread short of the machine | Accepted |
 | [0024](0024-design-tokens-and-bundled-typeface.md) | One token module paints the window; the typeface is compiled in | Superseded by 0216 (the typeface and the palette's values) |
 | [0216](0216-the-window-is-set-in-plex-on-graphite.md) | The window is set in IBM Plex, on graphite, with figures in the text face | Accepted |
-| [0025](0025-fixed-window-layout.md) | Fixed panels instead of egui_dock | Accepted |
-| [0061](0061-the-section-slider-is-one-rail-in-both-modes.md) | The section slider is one rail, in both modes | Accepted |
+| [0025](0025-fixed-window-layout.md) | Fixed panels instead of egui_dock | Accepted; the status strip is superseded by 0217 |
+| [0061](0061-the-section-slider-is-one-rail-in-both-modes.md) | The section slider is one rail, in both modes | Accepted; the floating rail is superseded by 0217 |
 | [0062](0062-cap-the-section-cut-with-the-stencil-plane.md) | The section cut is capped with the stencil plane | Superseded by 0184 (where the stencil comes from only) |
 | [0068](0068-the-window-holds-no-stack.md) | The window holds no stack: it cuts the window it is showing | Accepted |
 | [0070](0070-a-mesh-is-drawn-in-buffer-sized-pieces.md) | A mesh is drawn in pieces the card will take | Accepted; 0190 breaks a piece at a drawn range too |
@@ -292,10 +292,10 @@ Grouped by what the decision governs; the number is still the order it was taken
 | [0097](0097-a-project-is-a-zip-of-a-manifest-and-the-meshes.md) | A project is a zip of a JSON manifest and the meshes | Superseded by 0191 |
 | [0099](0099-unsaved-work-is-a-digest-asked-for-at-the-door.md) | Unsaved work is a digest of the manifest, asked for only at the door | Accepted |
 | [0100](0100-a-batch-is-the-single-run-once-per-model.md) | A batch is the single run, once per model, in the same binary | Accepted |
-| [0102](0102-the-plate-is-a-panel-not-a-card.md) | The plate is a panel, not a card over the viewport | Accepted |
-| [0103](0103-preview-splits-the-stage.md) | Preview splits the stage between the model and the mask | Accepted |
-| [0104](0104-the-title-strip-is-the-title-bar.md) | The title strip is the window's title bar | Accepted |
-| [0105](0105-a-panel-belongs-to-its-tool.md) | A panel belongs to its tool | Superseded by 0118 (the transform switch only) |
+| [0102](0102-the-plate-is-a-panel-not-a-card.md) | The plate is a panel, not a card over the viewport | Accepted; the plate strip and the pickers are superseded by 0217 |
+| [0103](0103-preview-splits-the-stage.md) | Preview splits the stage between the model and the mask | Accepted; hiding the columns is superseded by 0217 |
+| [0104](0104-the-title-strip-is-the-title-bar.md) | The title strip is the window's title bar | Accepted; its height is superseded by 0217 |
+| [0105](0105-a-panel-belongs-to-its-tool.md) | A panel belongs to its tool | Superseded by 0118 (the transform switch only) and 0217 (the footer only) |
 | [0106](0106-a-shortcut-lives-in-the-table.md) | Every key the window answers lives in one table | Accepted |
 | [0107](0107-take-a-colour-token-not-floats.md) | A colour crosses into the renderer as a token, not as floats | Accepted |
 | [0108](0108-the-machine-is-drawn-from-the-build-volume.md) | The build platform is drawn from the build volume, not loaded from a model | Accepted |
@@ -305,7 +305,8 @@ Grouped by what the decision governs; the number is still the order it was taken
 | [0135](0135-the-macos-icon-is-squircled-at-source.md) | The macOS icon is squircled at source, not only in the bundle | Accepted |
 | [0138](0138-the-destination-lives-on-the-slice-button.md) | The destination lives on the Slice button | Superseded by 0157 |
 | [0151](0151-the-preview-shows-a-source-not-a-plate.md) | Let the preview show a source, which is either a plate or a file | Accepted; what ends a file's turn is amended by 0202 |
-| [0157](0157-the-slice-row-carries-two-actions.md) | The Slice row carries two actions, not a destination | Accepted |
+| [0157](0157-the-slice-row-carries-two-actions.md) | The Slice row carries two actions, not a destination | Accepted; the Send button is superseded by 0217 |
+| [0217](0217-the-window-is-a-top-bar-a-flat-rail-and-a-layer-strip.md) | The window is a top bar, a flat rail, a docked inspector and a layer strip | Accepted |
 | [0192](0192-a-tool-value-is-remembered-and-taken-back-on-its-own-entry.md) | A tool value is remembered between runs and taken back on its own entry | Accepted |
 | [0193](0193-the-window-reads-its-own-input-before-egui-does.md) | The window reads its own input before egui does | Accepted |
 | [0202](0202-an-opened-file-closes-when-the-plate-changes.md) | An opened sliced file closes when the plate changes | Accepted |

@@ -1,4 +1,4 @@
-use egui::{Align, Layout, Rect, RichText, UiBuilder, vec2};
+use egui::{Align, Align2, Layout, Rect, Sense, Stroke, UiBuilder, pos2, vec2};
 
 use crate::panels::{Window, frame_view};
 use crate::profiles;
@@ -7,28 +7,24 @@ use crate::scene::ObjectId;
 use crate::settings::Section;
 use crate::shortcuts::{self, Action};
 use crate::sliced;
-use crate::state::{Doc, Machine, View};
-use crate::ui::{Segment, Segmented, icon, icon_button, theme};
+use crate::state::{Doc, Machine};
+use crate::ui::{icon, theme};
 use crate::updates::Stage;
-use crate::workspace::Mode;
+use crate::workspace::{Mode, Tool};
 
-/// Room kept clear on macOS for the window buttons the system still draws over the strip.
-#[cfg(target_os = "macos")]
-const TRAFFIC_LIGHTS_W: f32 = 68.0;
+/// The room either side of what a bar control says, and the room kept between the two
+/// ends of the bar.
+const PAD: f32 = 10.0;
+const ENDS_GAP: f32 = 12.0;
 
-/// How wide the mode switch is drawn, so it reads the same whatever its labels measure,
-/// and the room it leaves above and below itself in the strip.
-const MODE_SWITCH_W: f32 = 200.0;
-const MODE_SWITCH_MARGIN: f32 = 3.0;
-
-/// The strip is the window's own title bar rather than a band under one; see
-/// `docs/decisions/0104`.
+/// The bar is the window's own title bar rather than a band under one; see
+/// `docs/decisions/0104` and `0217`.
 pub fn ui(ui: &mut egui::Ui, window: &mut Window) {
-    let strip = ui.max_rect();
+    let bar = ui.max_rect();
 
     // Interacted with first so that every control drawn after it takes the press instead.
     let drag = ui.interact(
-        strip,
+        bar,
         ui.id().with("title-drag"),
         egui::Sense::click_and_drag(),
     );
@@ -39,56 +35,291 @@ pub fn ui(ui: &mut egui::Ui, window: &mut Window) {
         toggle_maximised(ui.ctx());
     }
 
-    // Both ends are laid out in the strip itself rather than in the row each would
-    // allocate, so the menus, the gear and the traffic lights share one centre line.
+    // The right end goes first, so the tabs know how far they may run.
+    let right = ui
+        .scope_builder(
+            UiBuilder::new()
+                .max_rect(bar)
+                .layout(Layout::right_to_left(Align::Center)),
+            |ui| {
+                ui.spacing_mut().item_spacing.x = 6.0;
+                window_buttons(ui);
+                find_button(ui);
+                if !window.machine.settings.open {
+                    print_chip(ui, window);
+                }
+                update_badge(ui, window.machine);
+                alpha_badge(ui, window.machine);
+            },
+        )
+        .response
+        .rect;
+
+    let left = bar.with_max_x((right.left() - ENDS_GAP).max(bar.left()));
     ui.scope_builder(
         UiBuilder::new()
-            .max_rect(strip)
+            .max_rect(left)
             .layout(Layout::left_to_right(Align::Center)),
         |ui| {
+            ui.spacing_mut().item_spacing.x = 0.0;
             #[cfg(target_os = "macos")]
-            ui.add_space(TRAFFIC_LIGHTS_W);
+            ui.add_space(crate::traffic_lights::ROOM);
             menu(ui, window);
             project_name(ui, &window.doc.project);
         },
     );
-
-    ui.scope_builder(
-        UiBuilder::new()
-            .max_rect(strip)
-            .layout(Layout::right_to_left(Align::Center)),
-        |ui| {
-            window_buttons(ui);
-            settings_button(ui, window);
-            sheet_button(ui, window.view);
-            update_badge(ui, window.machine);
-            alpha_badge(ui, window.machine);
-        },
-    );
-
-    // Centred on the window rather than on what is left between the two ends, so it stays
-    // put while the menus and the project name change.
-    let height = strip.height() - 2.0 * MODE_SWITCH_MARGIN;
-    ui.scope_builder(
-        UiBuilder::new().max_rect(Rect::from_center_size(
-            strip.center(),
-            vec2(MODE_SWITCH_W, height),
-        )),
-        |ui| mode_switch(ui, window.mode, height),
-    );
 }
 
-/// Prepare is the editing half of the application, Preview the reading half.
-fn mode_switch(ui: &mut egui::Ui, mode: &mut Mode, height: f32) {
-    let segments: Vec<Segment<'_, Mode>> = Mode::ALL
+const MENUS: [&str; 3] = ["File", "Edit", "View"];
+
+/// egui draws its own menu bar: there is no native one on the platforms this runs on.
+fn menu(ui: &mut egui::Ui, window: &mut Window) {
+    ui.scope(|ui| {
+        let visuals = ui.visuals_mut();
+        visuals.widgets.inactive.weak_bg_fill = egui::Color32::TRANSPARENT;
+        visuals.widgets.inactive.bg_stroke = egui::Stroke::NONE;
+        visuals.widgets.inactive.fg_stroke.color = theme::colors().text_mid;
+        visuals.widgets.hovered.bg_stroke = egui::Stroke::NONE;
+        visuals.widgets.active.bg_stroke = egui::Stroke::NONE;
+
+        // A menu bar takes every point it is offered, so it is offered what its titles need.
+        let font = egui::TextStyle::Button.resolve(ui.style());
+        let pad = ui.spacing().button_padding.x * 2.0 + ui.spacing().item_spacing.x;
+        let width: f32 = MENUS
+            .iter()
+            .map(|title| {
+                let galley = ui.painter().layout_no_wrap(
+                    (*title).to_owned(),
+                    font.clone(),
+                    egui::Color32::WHITE,
+                );
+                galley.size().x + pad
+            })
+            .sum();
+        let size = vec2(width, ui.available_height());
+        ui.allocate_ui_with_layout(size, Layout::left_to_right(Align::Center), |ui| {
+            egui::MenuBar::new().ui(ui, |ui| {
+                ui.menu_button(MENUS[0], |ui| file_menu(ui, window));
+                ui.menu_button(MENUS[1], |ui| edit_menu(ui, window));
+                ui.menu_button(MENUS[2], |ui| view_menu(ui, window));
+            });
+        });
+    });
+    ui.add_space(PAD);
+}
+
+/// The machine and the resin the plate is printed on, and the layers and exposure it is
+/// cut with: they belong to the plate rather than to a tool, so they stand over it.
+fn print_chip(ui: &mut egui::Ui, window: &mut Window) {
+    let colors = theme::colors();
+    let slicing = &window.machine.slicing;
+    let untuned = slicing.printer_id.is_some() && slicing.has_resin() && !slicing.resin_is_tuned();
+    let resin_tint = if untuned {
+        colors.warn
+    } else {
+        colors.text_mid
+    };
+    let layers = format!(
+        "{:.0} \u{b5}m, {:.2} s",
+        slicing.layer_height_mm() * 1000.0,
+        slicing.material.exposure_s
+    );
+    let parts = [
+        Part::new(
+            ui,
+            icon::PRINTER,
+            window.doc.plate.display_name(),
+            colors.text_high,
+            "",
+        ),
+        Part::new(
+            ui,
+            icon::RESIN,
+            slicing.resin_name(),
+            resin_tint,
+            icon::CARET_DOWN,
+        ),
+        Part::new(ui, icon::PARAMETERS, &layers, colors.text_mid, ""),
+    ];
+    let slash_w = 10.0;
+    let width: f32 = parts.iter().map(|part| part.width).sum::<f32>() + slash_w;
+    let (rect, _) = ui.allocate_exact_size(vec2(width, theme::CHIP_H), Sense::hover());
+
+    let mut x = rect.left();
+    let mut zones = [Rect::NOTHING; 3];
+    for (index, part) in parts.iter().enumerate() {
+        zones[index] = Rect::from_x_y_ranges(x..=x + part.width, rect.y_range());
+        x += part.width + if index == 0 { slash_w } else { 0.0 };
+    }
+    let open = *window.tool == Tool::Layers && *window.mode == Mode::Prepare;
+    let responses: Vec<egui::Response> = zones
         .iter()
-        .map(|mode| Segment::new(*mode, mode.label()))
+        .enumerate()
+        .map(|(index, zone)| {
+            ui.interact(*zone, ui.id().with(("print-chip", index)), Sense::click())
+        })
         .collect();
-    Segmented::new(&segments)
-        .filled()
-        .width(MODE_SWITCH_W)
-        .height(height)
-        .show(ui, mode);
+
+    let painter = ui.painter();
+    for (index, (part, zone)) in parts.into_iter().zip(zones).enumerate() {
+        let lit = index == 2 && open;
+        part.paint(painter, zone, lit, responses[index].hovered());
+    }
+    painter.text(
+        pos2(zones[0].right() + slash_w / 2.0, rect.center().y),
+        Align2::CENTER_CENTER,
+        "/",
+        theme::label(),
+        colors.text_low,
+    );
+    painter.vline(
+        zones[2].left(),
+        rect.y_range(),
+        Stroke::new(1.0, colors.hairline),
+    );
+    painter.rect_stroke(
+        rect,
+        theme::R_CONTROL,
+        Stroke::new(1.0, colors.hairline),
+        egui::StrokeKind::Inside,
+    );
+
+    let [printer, resin, layers] = <[egui::Response; 3]>::try_from(responses)
+        .unwrap_or_else(|_| unreachable!("three zones, three responses"));
+    let printer = printer.on_hover_text("The machine this plate is printed on");
+    egui::Popup::menu(&printer).show(|ui| profiles::printer_menu(ui, window));
+    let resin = if untuned {
+        resin.on_hover_text("The resin, not measured on this printer")
+    } else {
+        resin.on_hover_text("The resin")
+    };
+    egui::Popup::menu(&resin).show(|ui| profiles::resin_menu(ui, window.machine));
+    let tooltip = format!(
+        "Layers and exposure  {}",
+        shortcuts::text(Action::Pick(Tool::Layers))
+    );
+    if layers.on_hover_text(tooltip).clicked() {
+        shortcuts::pick(window, Tool::Layers);
+    }
+}
+
+/// One stretch of the print chip: a glyph, what is chosen, and a caret where it opens a
+/// list.
+struct Part {
+    glyph: &'static str,
+    text: std::sync::Arc<egui::Galley>,
+    caret: &'static str,
+    width: f32,
+}
+
+impl Part {
+    fn new(
+        ui: &egui::Ui,
+        glyph: &'static str,
+        text: &str,
+        tint: egui::Color32,
+        caret: &'static str,
+    ) -> Self {
+        let text = ui
+            .painter()
+            .layout_no_wrap(text.to_owned(), theme::label(), tint);
+        let caret_w = if caret.is_empty() { 0.0 } else { 16.0 };
+        let width = PAD + 20.0 + text.size().x + caret_w + PAD;
+        Self {
+            glyph,
+            text,
+            caret,
+            width,
+        }
+    }
+
+    fn paint(self, painter: &egui::Painter, zone: Rect, lit: bool, hovered: bool) {
+        let colors = theme::colors();
+        if lit {
+            painter.rect_filled(zone, theme::R_CONTROL, colors.raised);
+        } else if hovered {
+            painter.rect_filled(zone, theme::R_CONTROL, colors.hover);
+        }
+        let glyph_tint = if lit {
+            colors.accent_soft
+        } else {
+            colors.text_low
+        };
+        painter.text(
+            pos2(zone.left() + PAD + 7.0, zone.center().y),
+            Align2::CENTER_CENTER,
+            self.glyph,
+            theme::icon(14.0),
+            glyph_tint,
+        );
+        let at = pos2(
+            zone.left() + PAD + 20.0,
+            zone.center().y - self.text.size().y / 2.0,
+        );
+        let text_w = self.text.size().x;
+        let fallback = if lit {
+            colors.accent_soft
+        } else {
+            colors.text_high
+        };
+        painter.galley(at, self.text, fallback);
+        if !self.caret.is_empty() {
+            painter.text(
+                pos2(at.x + text_w + 9.0, zone.center().y),
+                Align2::CENTER_CENTER,
+                self.caret,
+                theme::icon(11.0),
+                colors.text_low,
+            );
+        }
+    }
+}
+
+/// Where the search over every tool, field and setting will open. Drawn already, so the
+/// bar keeps its shape. TODO(step-5): the palette behind it, with its own ADR.
+fn find_button(ui: &mut egui::Ui) {
+    let colors = theme::colors();
+    let tint = colors.text_low.gamma_multiply(0.6);
+    let label = ui
+        .painter()
+        .layout_no_wrap("Find".to_owned(), theme::label(), tint);
+    let keys = ui
+        .painter()
+        .layout_no_wrap("\u{2318}K".to_owned(), theme::small(), tint);
+    let width = PAD + 18.0 + label.size().x + 16.0 + keys.size().x + PAD;
+    let (rect, response) = ui.allocate_exact_size(vec2(width, theme::CHIP_H), Sense::hover());
+    let painter = ui.painter();
+    painter.rect_stroke(
+        rect,
+        theme::R_CONTROL,
+        Stroke::new(1.0, colors.hairline),
+        egui::StrokeKind::Inside,
+    );
+    painter.text(
+        pos2(rect.left() + PAD + 6.0, rect.center().y),
+        Align2::CENTER_CENTER,
+        icon::FIND,
+        theme::icon(13.0),
+        tint,
+    );
+    let label_w = label.size().x;
+    painter.galley(
+        pos2(
+            rect.left() + PAD + 18.0,
+            rect.center().y - label.size().y / 2.0,
+        ),
+        label,
+        tint,
+    );
+    painter.galley(
+        pos2(
+            rect.left() + PAD + 18.0 + label_w + 16.0,
+            rect.center().y - keys.size().y / 2.0,
+        ),
+        keys,
+        tint,
+    );
+    response.on_hover_text("Finding any tool, field or setting is still to come");
 }
 
 fn toggle_maximised(ctx: &egui::Context) {
@@ -120,39 +351,17 @@ fn window_buttons(ui: &mut egui::Ui) {
 
 #[cfg(not(any(target_os = "macos", target_arch = "wasm32")))]
 fn window_buttons(ui: &mut egui::Ui) {
-    if icon_button(ui, icon::CANCEL, "Close").clicked() {
+    if crate::ui::icon_button(ui, icon::CANCEL, "Close").clicked() {
         ui.ctx().send_viewport_cmd(egui::ViewportCommand::Close);
     }
     let maximised = ui.input(|input| input.viewport().maximized.unwrap_or(false));
     let tooltip = if maximised { "Restore" } else { "Maximise" };
-    if icon_button(ui, icon::MAXIMISE, tooltip).clicked() {
+    if crate::ui::icon_button(ui, icon::MAXIMISE, tooltip).clicked() {
         toggle_maximised(ui.ctx());
     }
-    if icon_button(ui, icon::MINIMISE, "Minimise").clicked() {
+    if crate::ui::icon_button(ui, icon::MINIMISE, "Minimise").clicked() {
         ui.ctx()
             .send_viewport_cmd(egui::ViewportCommand::Minimized(true));
-    }
-}
-
-/// The way into the sheet of keys, beside the gear: an overlay is what an application of
-/// this many shortcuts owes the user.
-fn sheet_button(ui: &mut egui::Ui, view: &mut View) {
-    let tooltip = shortcuts::tooltip(Action::Sheet);
-    if icon_button(ui, icon::KEYBOARD, &tooltip).clicked() {
-        view.options.sheet = true;
-    }
-}
-
-/// The way into the Settings screen, at the right end of the strip.
-fn settings_button(ui: &mut egui::Ui, window: &mut Window) {
-    let open = window.machine.settings.open;
-    let tooltip = if open {
-        "Back to the plate".to_owned()
-    } else {
-        shortcuts::tooltip(Action::Settings)
-    };
-    if icon_button(ui, icon::SETTINGS, &tooltip).clicked() {
-        toggle_settings(window.machine);
     }
 }
 
@@ -202,7 +411,7 @@ fn alpha_badge(ui: &mut egui::Ui, machine: &mut Machine) {
     ui.add_space(6.0);
 }
 
-/// A rounded tag in the strip, the one shape both badges are drawn as.
+/// A rounded tag in the bar, the one shape both badges are drawn as.
 fn pill(
     ui: &mut egui::Ui,
     glyph: &str,
@@ -213,7 +422,7 @@ fn pill(
     let label = ui
         .painter()
         .layout_no_wrap(text.to_owned(), theme::small(), tint);
-    let size = vec2(label.size().x + 34.0, theme::TITLE_H - 8.0);
+    let size = vec2(label.size().x + 34.0, theme::CHIP_H - 6.0);
     let (rect, response) = ui.allocate_exact_size(size, egui::Sense::click());
     let fill = if response.hovered() {
         wash.gamma_multiply(1.6)
@@ -257,30 +466,13 @@ fn project_name(ui: &mut egui::Ui, opened: &project::Opened) {
     let Some(name) = opened.name() else {
         return;
     };
-    ui.add_space(8.0);
+    ui.add_space(PAD);
     ui.label(
-        RichText::new(name)
+        egui::RichText::new(name)
             .font(theme::label())
             .color(theme::colors().text_low),
     );
-}
-
-/// egui draws its own menu bar: there is no native one on the platforms this runs on.
-fn menu(ui: &mut egui::Ui, window: &mut Window) {
-    ui.scope(|ui| {
-        let visuals = ui.visuals_mut();
-        visuals.widgets.inactive.weak_bg_fill = egui::Color32::TRANSPARENT;
-        visuals.widgets.inactive.bg_stroke = egui::Stroke::NONE;
-        visuals.widgets.inactive.fg_stroke.color = theme::colors().text_mid;
-        visuals.widgets.hovered.bg_stroke = egui::Stroke::NONE;
-        visuals.widgets.active.bg_stroke = egui::Stroke::NONE;
-
-        egui::MenuBar::new().ui(ui, |ui| {
-            ui.menu_button("File", |ui| file_menu(ui, window));
-            ui.menu_button("Edit", |ui| edit_menu(ui, window));
-            ui.menu_button("View", |ui| view_menu(ui, window));
-        });
-    });
+    ui.add_space(PAD);
 }
 
 /// A menu row that names its key beside itself: the menu is where a shortcut is learned.

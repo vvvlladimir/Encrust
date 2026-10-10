@@ -1,13 +1,31 @@
 use egui::{Align2, Frame, Id, Rect};
 
 use crate::files::{self, Wanted};
-use crate::panels::{Window, mask_pane, view_column, viewport_panel};
+use crate::panels::{Window, mask_pane, section, stage_notice, view_column, viewport_panel};
 use crate::ui::{card, icon, primary_button, theme};
 use crate::workspace::Mode;
 
-/// The stage: the viewport, the mask beside it in Preview, and the cards over it.
+/// The stage: the layer strip along its foot, the viewport, the mask beside it or in its
+/// place, and the cards over them.
 pub fn ui(ui: &mut egui::Ui, window: &mut Window) {
-    let stage = ui.max_rect();
+    egui::Panel::bottom("layer-strip")
+        .exact_size(theme::LAYER_STRIP_H)
+        .resizable(false)
+        .frame(
+            Frame::new()
+                .fill(theme::colors().base)
+                .inner_margin(theme::STRIP_MARGIN),
+        )
+        .show(ui, |ui| section::ui(ui, window));
+    let stage = ui.available_rect_before_wrap();
+
+    if *window.mode == Mode::Preview && window.view.options.mask_only {
+        egui::CentralPanel::default()
+            .frame(Frame::new().fill(theme::colors().sunken))
+            .show(ui, |ui| mask_pane::ui(ui, window.machine));
+        stage_notice::ui(ui, window, stage);
+        return;
+    }
 
     // Preview gives the mask the same room as the model: a 300 point column cannot show
     // an 8520 pixel panel. See `docs/decisions/0103`.
@@ -24,7 +42,8 @@ pub fn ui(ui: &mut egui::Ui, window: &mut Window) {
     if window.doc.scene.is_empty() {
         empty_state(ui, viewport, window);
     }
-    view_column::ui(ui, window, viewport, stage);
+    view_column::ui(ui, window, viewport);
+    stage_notice::ui(ui, window, stage);
 }
 
 /// The whole viewport when there is nothing on the plate: one card, one thing to do.

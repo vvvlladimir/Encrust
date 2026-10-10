@@ -1,6 +1,6 @@
 # 0103. Preview splits the stage between the model and the mask
 
-- **Status:** Accepted
+- **Status:** Accepted, hiding the columns superseded by 0217
 - **Date:** 2026-09-26
 
 ## Context
