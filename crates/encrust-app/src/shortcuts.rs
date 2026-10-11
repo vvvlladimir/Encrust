@@ -444,6 +444,10 @@ pub fn act(window: &mut Window, action: Action) {
             );
         }
         Action::SelectAll => window.doc.scene.select_here(),
+        // A measurement in hand goes first, so Esc on the ruler does not drop the selection.
+        Action::Deselect if *window.tool == Tool::Measure && !window.tools.measure.is_empty() => {
+            window.tools.measure.clear();
+        }
         Action::Deselect => {
             window.tools.orient.stop_picking();
             window.doc.scene.clear_selection();
@@ -483,9 +487,12 @@ pub fn act(window: &mut Window, action: Action) {
     }
 }
 
-/// Opens a tool in the inspector. The view stays as it is: the layer strip alone switches
-/// it; see `docs/decisions/0218`.
+/// Opens a tool in the inspector, or folds the inspector away when the tool is open
+/// already. The view stays as it is: the layer strip alone switches it; see
+/// `docs/decisions/0218`.
 pub(crate) fn pick(window: &mut Window, tool: Tool) {
+    let options = &mut window.view.options;
+    options.inspector = *window.tool != tool || !options.inspector;
     *window.tool = tool;
 }
 

@@ -603,6 +603,24 @@ mod tests {
         assert_eq!(app.mode, Mode::Preview);
     }
 
+    #[test]
+    fn picking_the_open_tool_again_folds_the_inspector() {
+        let mut app = SlicerApp::default();
+        let pick = |app: &mut SlicerApp, tool| {
+            shortcuts::act(&mut app.window(), shortcuts::Action::Pick(tool));
+        };
+        pick(&mut app, Tool::Hollow);
+        assert!(app.view.options.inspector);
+        pick(&mut app, Tool::Hollow);
+        assert!(!app.view.options.inspector, "a second press folds it");
+        pick(&mut app, Tool::Hollow);
+        assert!(app.view.options.inspector, "a third unfolds it");
+        pick(&mut app, Tool::Hollow);
+        pick(&mut app, Tool::Cut);
+        assert!(app.view.options.inspector, "another tool always opens");
+        assert_eq!(app.tool, Tool::Cut);
+    }
+
     /// The sheet is modal: a key pressed under it moves nothing on the plate.
     #[test]
     fn the_sheet_holds_the_keyboard_until_it_is_closed() {

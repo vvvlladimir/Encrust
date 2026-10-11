@@ -108,7 +108,7 @@ impl Window<'_> {
             tool_rail::ui(ui, self, max_h);
         });
         // The whole stage given to the mask has nothing for a tool to work on.
-        let left = if *self.mode == Mode::Preview && options.mask_only {
+        let left = if (*self.mode == Mode::Preview && options.mask_only) || !options.inspector {
             rail
         } else {
             self.inspector(ctx, pos2(rail.right() + gap, top), max_h)

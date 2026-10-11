@@ -7,7 +7,7 @@ use crate::ui::{
     Segment, Segmented, describe, hint, icon, issue_row, list, readings, secondary_button, section,
     theme,
 };
-use crate::workspace::Mode;
+use crate::workspace::{Mode, Tool};
 
 /// Rows listed before the rest are only counted: a stack with hundreds of islands needs
 /// supports, not scrolling.
@@ -71,6 +71,10 @@ pub fn ui(ui: &mut egui::Ui, window: &mut Window) {
             go_to(window.machine, layer);
         }
         islands_action(ui, window.machine, &risks, removed);
+        let islands = risks.iter().any(|risk| Filter::Islands.admits(&risk.kind));
+        if islands && secondary_button(ui, icon::SUPPORTS, "Support every island").clicked() {
+            crate::shortcuts::pick(window, Tool::Supports);
+        }
     });
     if !risks.is_empty() {
         let layers = rows(&risks)

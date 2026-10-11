@@ -5,10 +5,10 @@ use crate::import::recenter;
 use crate::panels::Window;
 use crate::plate::BuildPlate;
 use crate::scene::{Axis, ObjectId, Scene, SceneObject};
-use crate::state::Tools;
 use crate::ui::{
     axis_label, compact_button, describe, field_label, hint, icon, icon_toggle, later,
-    number_field, progress_bar, secondary_button, section, section_with_action, switch, theme,
+    number_field, number_row, progress_bar, secondary_button, section, section_with_action, switch,
+    theme,
 };
 
 /// Millimetres, degrees and percent per point of drag on the transform fields.
@@ -27,6 +27,16 @@ const TURN_DEG: f32 = 45.0;
 /// picked nor sliced.
 const MIN_SCALE: f32 = 1e-3;
 
+/// The highest a model may be lifted off the plate by typing, millimetres.
+const MAX_LIFT_MM: f32 = 100.0;
+
+/// The gap between a model and the mirrored copy stood beside it, millimetres.
+const COPY_GAP_MM: f32 = 5.0;
+
+/// How near a face's normal has to be to an axis to be named for it alone: within about
+/// eighteen degrees.
+const STRAIGHT: f32 = 0.95;
+
 /// Position and angle take any value.
 const ANY: std::ops::RangeInclusive<f32> = f32::MIN..=f32::MAX;
 
@@ -44,7 +54,7 @@ pub fn ui(ui: &mut egui::Ui, window: &mut Window) {
     scale(ui, &mut window.doc.scene, id);
     place(ui, &mut window.doc.scene, &window.doc.plate, id);
     orient(ui, window, id);
-    lay_flat(ui, window.tools);
+    lay_flat(ui, window, id);
     mirror(ui, &mut window.doc.scene);
 }
 
@@ -276,20 +286,32 @@ fn place(ui: &mut egui::Ui, scene: &mut Scene, plate: &BuildPlate, id: ObjectId)
         if fitted {
             recentre(scene, plate, id);
         }
-        // TODO(step-8): a lift off the plate kept per model, typed here.
-        later(ui, |ui| {
-            let mut lift_mm = 0.0_f32;
-            crate::ui::number_row(
-                ui,
-                "Lift off the plate",
-                &mut lift_mm,
-                "mm",
-                0.1,
-                0.0..=50.0,
-                2,
-            );
-        });
+        lift(ui, scene, id);
     });
+}
+
+/// How high the model's lowest point stands over the plate. Typing a height moves the
+/// model there; it is the model's place, so nothing else remembers it.
+fn lift(ui: &mut egui::Ui, scene: &mut Scene, id: ObjectId) {
+    let Some(object) = scene.get_mut(id) else {
+        return;
+    };
+    let Some(bottom_mm) = object.world_bounds().map(|bounds| bounds.mins.z) else {
+        return;
+    };
+    let mut lift_mm = bottom_mm;
+    let typed = number_row(
+        ui,
+        "Lift off the plate",
+        &mut lift_mm,
+        "mm",
+        POSITION_DRAG,
+        0.0..=MAX_LIFT_MM,
+        2,
+    );
+    if typed {
+        object.transform.translation.z += lift_mm - bottom_mm;
+    }
 }
 
 /// Turning the selection the way it prints best, and the goals that search will weigh.
@@ -312,16 +334,35 @@ fn orient(ui: &mut egui::Ui, window: &mut Window, id: ObjectId) {
     });
 }
 
-/// Waits for a click on a model, then lays the face under it on the plate. Pressed again,
-/// or Esc, stops waiting.
-fn lay_flat(ui: &mut egui::Ui, tools: &mut Tools) {
+/// The model's largest flat faces, each laid on the plate by a press, and a wait for a
+/// click on any other face. Pressed again, or Esc, stops waiting.
+fn lay_flat(ui: &mut egui::Ui, window: &mut Window, id: ObjectId) {
     section(ui, "Lay flat", None, |ui| {
         describe(ui, "Turn the model so a face rests on the plate.");
+        let Some(object) = window.doc.scene.get(id) else {
+            return;
+        };
+        let flats = window.tools.orient.flat_faces(object);
+        let mut laid = None;
+        for flat in flats.iter() {
+            let normal = object.world_normal(flat.normal);
+            let area_mm2 = world_area_mm2(flat.area_mm2, flat.normal, object.transform.scale);
+            if face_row(ui, &facing(normal), area_mm2).clicked() {
+                laid = Some(normal);
+            }
+        }
+        if let Some(normal) = laid
+            && let Some(object) = window.doc.scene.get_mut(id)
+        {
+            object.lay_face_down(normal);
+        }
+
+        let tools = &mut window.tools;
         let picking = tools.orient.picking_face;
         let label = if picking {
             "Click a face to lay down"
         } else {
-            "Pick a face on the model"
+            "Pick another face on the model"
         };
         if secondary_button(ui, icon::SELECT, label).clicked() {
             if picking {
@@ -330,32 +371,93 @@ fn lay_flat(ui: &mut egui::Ui, tools: &mut Tools) {
                 tools.orient.picking_face = true;
             }
         }
-        // TODO(step-8): the model's largest flat faces listed here, each laid down on a
-        // click.
     });
 }
 
+/// One flat face: which way it looks now, and how much of it there is.
+fn face_row(ui: &mut egui::Ui, name: &str, area_mm2: f32) -> egui::Response {
+    let colors = theme::colors();
+    let button = egui::Button::new(
+        egui::RichText::new(name)
+            .font(theme::label())
+            .color(colors.text_high),
+    )
+    .right_text(
+        egui::RichText::new(format!("{area_mm2:.0} mm\u{b2}"))
+            .font(theme::figures(11.5))
+            .color(colors.text_low),
+    )
+    .min_size(egui::vec2(ui.available_width(), theme::FIELD_H));
+    ui.add(button)
+}
+
+/// The side of the plate a face looks towards, in plate coordinates.
+fn facing(normal: Vec3) -> String {
+    let along = normal.abs();
+    let tilted = along.max_element() < STRAIGHT;
+    let side = if along.z >= along.x && along.z >= along.y {
+        if normal.z < 0.0 { "Underside" } else { "Top" }
+    } else if along.y >= along.x {
+        if normal.y < 0.0 { "Front" } else { "Back" }
+    } else if normal.x < 0.0 {
+        "Left side"
+    } else {
+        "Right side"
+    };
+    if tilted {
+        format!("{side}, tilted")
+    } else {
+        side.to_owned()
+    }
+}
+
+/// An area measured in the model's own space, as it stands stretched by `scale`: a face
+/// with unit normal `n` grows by `|sx sy sz| * |n / s|`.
+fn world_area_mm2(area_mm2: f32, normal: Vec3, scale: Vec3) -> f32 {
+    let scale = scale.abs().max(Vec3::splat(MIN_SCALE));
+    area_mm2 * scale.x * scale.y * scale.z * (normal / scale).length()
+}
+
 /// Every flip works on the whole selection, so a plate of four does not need the same
-/// button pressed four times.
+/// button pressed four times. Keeping the original flips a copy stood beside it instead.
 fn mirror(ui: &mut egui::Ui, scene: &mut Scene) {
+    let keep_id = ui.id().with("mirror-keep");
+    let mut keep = ui.data(|data| data.get_temp(keep_id).unwrap_or(false));
     section(ui, "Mirror", None, |ui| {
         let picked = scene.selection().to_vec();
+        let mut flipped = None;
         ui.columns(Axis::ALL.len(), |columns| {
             for (column, axis) in columns.iter_mut().zip(Axis::ALL) {
                 let label = format!("Across {}", axis.label());
                 if secondary_button(column, "", &label).clicked() {
-                    for id in &picked {
-                        scene.mirror(*id, axis);
-                    }
+                    flipped = Some(axis);
                 }
             }
         });
-        // TODO(step-8): mirror a copy and keep the original where it stands.
-        later(ui, |ui| {
-            let mut keep = false;
-            switch(ui, &mut keep, "Keep the original");
-        });
+        if let Some(axis) = flipped {
+            let flipped = if keep { copies(scene, &picked) } else { picked };
+            for id in &flipped {
+                scene.mirror(*id, axis);
+            }
+        }
+        switch(ui, &mut keep, "Keep the original");
+        describe(ui, "Mirror a copy beside it instead.");
     });
+    ui.data_mut(|data| data.insert_temp(keep_id, keep));
+}
+
+/// A copy of each of `ids` stood clear of it to the right, all of them selected.
+fn copies(scene: &mut Scene, ids: &[ObjectId]) -> Vec<ObjectId> {
+    let copied: Vec<ObjectId> = ids
+        .iter()
+        .filter_map(|id| {
+            let bounds = scene.get(*id)?.world_bounds()?;
+            let width = bounds.maxs.x - bounds.mins.x;
+            scene.duplicate(*id, Vec3::new(width + COPY_GAP_MM, 0.0, 0.0))
+        })
+        .collect();
+    scene.select_many(&copied);
+    copied
 }
 
 /// Turns the model the way it prints best, on a worker thread: the search measures every
@@ -413,6 +515,14 @@ fn recentre(scene: &mut Scene, plate: &BuildPlate, id: ObjectId) {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_stretched_face_grows_by_the_two_axes_it_spans() {
+        let scale = Vec3::new(2.0, -3.0, 4.0);
+        // A unit square facing up spans X and Y: 2 by 3 once stretched, mirror or not.
+        assert!((world_area_mm2(1.0, Vec3::Z, scale) - 6.0).abs() < 1e-5);
+        assert!((world_area_mm2(1.0, Vec3::X, scale) - 12.0).abs() < 1e-5);
+    }
 
     #[test]
     fn a_new_size_keeps_the_axes_a_mirror_flipped() {

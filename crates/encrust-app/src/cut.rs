@@ -15,6 +15,9 @@ pub struct CutTool {
     /// Its `height_mm` is where the plane crosses the axis: across Z the height above the
     /// plate, across X or Y the distance from the model's centre of mass.
     pub state: CutState,
+    /// Whether each half is turned to stand on the face the cut left. The window's own,
+    /// like a view switch: a project does not write it down.
+    pub lay_flat: bool,
 }
 
 impl Default for CutTool {
@@ -25,6 +28,7 @@ impl Default for CutTool {
                 height_mm: 10.0,
                 keep: Keep::Both,
             },
+            lay_flat: false,
         }
     }
 }
@@ -81,18 +85,26 @@ impl CutTool {
             ));
         }
 
-        let pieces: Vec<(String, Mesh)> = match self.state.keep {
+        // Each half with the way its cut face looks: up the axis for the lower one.
+        let up = plane.normal;
+        let pieces: Vec<(String, Mesh, Vec3)> = match self.state.keep {
             Keep::Both => vec![
-                (format!("{name} (lower)"), halves.below),
-                (format!("{name} (upper)"), halves.above),
+                (format!("{name} (lower)"), halves.below, up),
+                (format!("{name} (upper)"), halves.above, -up),
             ],
-            Keep::Below => vec![(name.clone(), halves.below)],
-            Keep::Above => vec![(name.clone(), halves.above)],
+            Keep::Below => vec![(name.clone(), halves.below, up)],
+            Keep::Above => vec![(name.clone(), halves.above, -up)],
         };
         scene.remove(id);
         let mut mended = 0;
-        for (name, mesh) in pieces {
-            mended += usize::from(place(scene, name, mesh));
+        for (name, mesh, cut_face) in pieces {
+            let (piece, was_mended) = place(scene, name, mesh);
+            mended += usize::from(was_mended);
+            if self.lay_flat
+                && let Some(object) = scene.get_mut(piece)
+            {
+                object.lay_face_down(cut_face);
+            }
         }
         match halves.open_loops {
             0 => Status::Info(format!(
@@ -127,7 +139,8 @@ pub fn split_parts(scene: &mut Scene, id: ObjectId) -> Status {
     scene.remove(id);
     let mut mended = 0;
     for (index, part) in parts.into_iter().enumerate() {
-        mended += usize::from(place(scene, format!("{name} (part {})", index + 1), part));
+        let (_, was_mended) = place(scene, format!("{name} (part {})", index + 1), part);
+        mended += usize::from(was_mended);
     }
     Status::Info(format!(
         "Split {name} into {count} parts{}",
@@ -136,14 +149,14 @@ pub fn split_parts(scene: &mut Scene, id: ObjectId) -> Status {
 }
 
 /// Puts a mesh that came out of a cut on the plate, mending it first if it did not come
-/// out sound, and says whether it had to be. It is already in plate coordinates, so it
+/// out sound. Answers the model it became, and whether it had to be mended. It is already in plate coordinates, so it
 /// goes down with no placement of its own.
 ///
 /// Mending is not asked for the way an imported model's is (ADR 0194): the surface in
 /// question is surface this tool just invented, not surface a file brought in. What it
 /// did is said in the stage notice, so a mended piece carries no mark of its own; a piece it
 /// could not close keeps the diagnostics that say so.
-fn place(scene: &mut Scene, name: String, mesh: Mesh) -> bool {
+fn place(scene: &mut Scene, name: String, mesh: Mesh) -> (ObjectId, bool) {
     let mut mesh = mesh;
     let mut diagnostics = diagnose(&mesh);
     let mended = !diagnostics.is_sound();
@@ -162,13 +175,13 @@ fn place(scene: &mut Scene, name: String, mesh: Mesh) -> bool {
         },
         diagnostics,
     };
-    scene.insert(Imported::new(
+    let id = scene.insert(Imported::new(
         name,
         std::sync::Arc::new(mesh),
         Transform::default(),
         summary,
     ));
-    mended
+    (id, mended)
 }
 
 /// What the stage notice adds about the pieces that had to be mended on their way down.
@@ -203,6 +216,7 @@ mod tests {
                 height_mm,
                 keep,
             },
+            lay_flat: false,
         }
     }
 
@@ -286,6 +300,24 @@ mod tests {
             "a plane that misses the model cuts nothing"
         );
         assert_eq!(scene.objects().len(), 1, "and the model is left alone");
+    }
+
+    #[test]
+    fn a_half_laid_flat_stands_on_its_cut_face() {
+        let (mut scene, id) = scene_with(cuboid(Vec3::new(10.0, 10.0, 20.0)), Transform::default());
+        let tool = CutTool {
+            lay_flat: true,
+            ..at(Axis::X, 0.0, Keep::Below)
+        };
+        tool.apply(&mut scene, id);
+
+        // The half is 5 mm across X; lying on the face the cut left, that is its height.
+        let bounds = scene.objects()[0]
+            .world_bounds()
+            .expect("a half has bounds");
+        let height = bounds.maxs.z - bounds.mins.z;
+        assert!((height - 5.0).abs() < 1e-3, "got {height}");
+        assert!(bounds.mins.z.abs() < 1e-3, "and stands on the plate");
     }
 
     #[test]

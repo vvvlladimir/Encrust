@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use anyhow::{Result, bail};
 use core_geometry::{Adjacency, Mesh, Vec3, drop_to_plate};
-use core_plate::OrientSettings;
+use core_plate::{FlatFace, OrientSettings, flat_faces};
 use core_supports::Region;
 
 use crate::job::{OrientJob, OrientOutcome, OrientRequest, orient_tasks};
@@ -28,7 +28,12 @@ pub struct OrientTool {
     /// The edges of the last mesh pointed at, which finding a face walks. Built once per
     /// mesh, since a mesh of a million faces takes a moment.
     adjacency: Option<(usize, Arc<Adjacency>)>,
+    /// The largest flat faces of the last mesh Lay flat listed, kept for the same reason.
+    flats: Option<(usize, Arc<[FlatFace]>)>,
 }
+
+/// Flat faces Lay flat offers by name. Past these, a face is too small to rest on.
+const FLATS_LISTED: usize = 4;
 
 /// The flat face a click would lay on the plate: every triangle joined to the one
 /// pointed at within `FACET_DEG`, and the way they face together.
@@ -85,6 +90,22 @@ impl OrientTool {
             }
         };
         self.facet = Facet::of(object.id, &object.mesh, &adjacency, seed);
+    }
+
+    /// The largest flat faces of `object`'s mesh, in its own space, biggest first.
+    pub fn flat_faces(&mut self, object: &SceneObject) -> Arc<[FlatFace]> {
+        let key = Arc::as_ptr(&object.mesh) as usize;
+        if let Some((built_for, flats)) = &self.flats
+            && *built_for == key
+        {
+            return Arc::clone(flats);
+        }
+        let flats: Arc<[FlatFace]> = flat_faces(&object.mesh)
+            .into_iter()
+            .take(FLATS_LISTED)
+            .collect();
+        self.flats = Some((key, Arc::clone(&flats)));
+        flats
     }
 
     /// Stops waiting for a face, and lets go of what finding one kept.

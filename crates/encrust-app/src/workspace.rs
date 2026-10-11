@@ -136,6 +136,8 @@ pub struct ViewOptions {
     pub xray: bool,
     /// Whether the plate panel is unfolded down the left of the stage.
     pub plate_panel: bool,
+    /// Whether the open tool's inspector is unfolded beside the rail.
+    pub inspector: bool,
     /// Whether the sheet of keys is up over the window.
     pub sheet: bool,
     /// Whether the window has left the start page, which it does once for good.
@@ -159,6 +161,7 @@ impl Default for ViewOptions {
             grid: true,
             xray: false,
             plate_panel: true,
+            inspector: true,
             sheet: false,
             started: false,
             mask_only: false,

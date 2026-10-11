@@ -7,30 +7,33 @@ use crate::job::{SupportJob, SupportOutcome, SupportRequest, tasks_of};
 use crate::scene::Scene;
 use crate::status::Status;
 
-/// What a click on the model does while the Supports tool is in hand: stand one support,
-/// paint the patch a fill covers, or paint the patch supports keep out of.
+/// What a click on the model does while the Paint tool is in hand: stand one support,
+/// paint the patch a fill covers, paint the patch supports keep out of, or take either
+/// paint off.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum Placing {
     #[default]
     Point,
     Paint,
     Block,
+    Erase,
 }
 
 impl Placing {
-    pub const ALL: [Self; 3] = [Self::Point, Self::Paint, Self::Block];
+    pub const ALL: [Self; 4] = [Self::Point, Self::Paint, Self::Block, Self::Erase];
 
     pub fn label(self) -> &'static str {
         match self {
             Self::Point => "Place",
-            Self::Paint => "Paint",
+            Self::Paint => "Fill",
             Self::Block => "Block",
+            Self::Erase => "Erase",
         }
     }
 
-    /// Whether this paints a patch rather than working on a single support.
+    /// Whether this works the brush over a patch rather than on a single support.
     pub fn paints(self) -> bool {
-        matches!(self, Self::Paint | Self::Block)
+        matches!(self, Self::Paint | Self::Block | Self::Erase)
     }
 
     /// Whether what it paints is the patch supports keep out of.
@@ -524,6 +527,7 @@ mod tests {
         assert!(Placing::Paint.paints());
         assert!(Placing::Block.paints());
         assert!(!Placing::Point.paints());
+        assert!(Placing::Erase.paints() && !Placing::Erase.blocks());
     }
 
     #[test]

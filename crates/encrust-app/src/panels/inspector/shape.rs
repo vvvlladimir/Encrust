@@ -5,8 +5,7 @@ use crate::panels::support_fields::Group;
 use crate::settings::keep_support;
 use crate::supports::{Editing, Parameters};
 use crate::ui::{
-    Segment, Segmented, describe, icon, icon_button, inline_button, later, secondary_button,
-    section, subheading, theme,
+    Segment, Segmented, describe, icon, icon_button, secondary_button, section, subheading, theme,
 };
 
 /// One part of a support, which is what the Part switch shows the fields of.
@@ -58,17 +57,6 @@ pub fn ui(ui: &mut egui::Ui, window: &mut Window) {
             }
             group.show(ui, &mut window.tools.supports.profile);
         }
-    });
-    section(ui, "Presets", None, |ui| {
-        // TODO(step-8): presets of a whole support shape, and saving the one in hand as
-        // another.
-        later(ui, |ui| {
-            ui.horizontal_wrapped(|ui| {
-                for name in ["Detail", "Structure", "Anchor", "Save current"] {
-                    inline_button(ui, "", name, false, true);
-                }
-            });
-        });
     });
 }
 

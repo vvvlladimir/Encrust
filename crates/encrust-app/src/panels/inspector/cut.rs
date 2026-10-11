@@ -66,11 +66,10 @@ pub fn ui(ui: &mut egui::Ui, window: &mut Window) {
         Segmented::new(&keeps)
             .width(width)
             .show(ui, &mut window.tools.cut.state.keep);
-        // TODO(step-8): lay each half on its cut face, and pegs and sockets so the halves
-        // glue back true.
+        switch(ui, &mut window.tools.cut.lay_flat, "Lay the halves flat");
+        describe(ui, "Each half stands on the face the cut left.");
+        // TODO(step-8): pegs and sockets so the halves glue back true.
         later(ui, |ui| {
-            let mut flat = false;
-            switch(ui, &mut flat, "Lay the halves flat");
             let mut pins = false;
             switch(ui, &mut pins, "Alignment pins");
         });

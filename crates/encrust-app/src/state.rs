@@ -71,6 +71,7 @@ pub struct Tools {
     pub relief: ReliefTool,
     pub orient: OrientTool,
     pub measure: Measure,
+    pub measure_edges: crate::measure::EdgeCache,
     pub array: Array,
 }
 

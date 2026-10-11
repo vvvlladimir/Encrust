@@ -1,35 +1,73 @@
+use core_analysis::RiskKind;
+
 use crate::job::SupportJob;
 use crate::panels::Window;
 use crate::panels::support_fields::Group;
 use crate::state::Doc;
 use crate::status::Status;
 use crate::ui::{
-    describe, hint, icon, later, primary_button, progress_bar, secondary_button, section, stats,
-    theme, tone,
+    describe, hint, icon, primary_button, progress_bar, secondary_button, section, stats, theme,
+    tone,
 };
+use crate::workspace::{Mode, Tool};
 
 /// Growing supports under whatever hangs over nothing, and the parts of those already
 /// standing, which a click in this tool picks.
 pub fn ui(ui: &mut egui::Ui, window: &mut Window) {
-    section(ui, "Islands", None, |ui| {
-        describe(
-            ui,
-            "Layer parts with nothing under them. They cure loose in the vat.",
-        );
-        hint(
-            ui,
-            "Not scanned yet. Check finds them once the layers are cut.",
-        );
-        // TODO(step-8): scan the plate for islands before it is sliced, and count the ones
-        // the supports hold.
-        later(ui, |ui| secondary_button(ui, icon::CHECK, "Scan"));
-    });
+    section(ui, "Islands", None, |ui| islands(ui, window));
     section(ui, "Where", None, |ui| {
         Group::Automatic.show(ui, &mut window.tools.supports.profile);
         lift(ui, window);
     });
     section(ui, "Picked", None, |ui| editing(ui, window));
     section(ui, "Already done", None, |ui| placed(ui, window.doc));
+}
+
+/// Layer parts with nothing under them, read from the same cut stack the Check tool reads,
+/// supports and all: an island counted here is one the supports do not hold yet.
+fn islands(ui: &mut egui::Ui, window: &mut Window) {
+    describe(
+        ui,
+        "Layer parts with nothing under them. They cure loose in the vat.",
+    );
+    let colors = theme::colors();
+    let found = window.measured().map(|measured| {
+        let islands: Vec<usize> = measured
+            .risks()
+            .iter()
+            .filter(|risk| matches!(risk.kind, RiskKind::Island { .. }))
+            .map(|risk| risk.layer)
+            .collect();
+        (islands.len(), islands.first().copied())
+    });
+    match found {
+        Some((0, _)) => tone(ui, "Every island is held.", colors.ok),
+        Some((loose, first)) => {
+            let from = first.map_or(String::new(), |layer| {
+                format!(", the first at layer {}", layer + 1)
+            });
+            tone(ui, &format!("{loose} cure loose{from}."), colors.danger);
+            if secondary_button(ui, icon::CHECK, "Show them in Check").clicked() {
+                crate::shortcuts::pick(window, Tool::Check);
+            }
+        }
+        None if window.machine.preview.is_measuring() || window.machine.preview.is_building() => {
+            ui.horizontal(|ui| {
+                ui.spinner();
+                hint(ui, "Reading every layer of the stack...");
+            });
+        }
+        None => {
+            hint(
+                ui,
+                "Not scanned yet. Scanning cuts the layers and shows them beside the model.",
+            );
+            if secondary_button(ui, icon::CHECK, "Scan").clicked() {
+                *window.mode = Mode::Preview;
+                window.view.options.mask_only = false;
+            }
+        }
+    }
 }
 
 /// How many supports stand on the plate, for the inspector's heading.

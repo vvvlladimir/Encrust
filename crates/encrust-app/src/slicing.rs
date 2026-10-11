@@ -77,6 +77,9 @@ pub struct Slicing {
     /// runs at a time: the machine's cores go into the layers of one plate, not into two
     /// plates at once.
     queued: Vec<(u32, PathBuf)>,
+    /// The name the file is offered under, without its extension; empty offers the
+    /// selected model's.
+    pub file_stem: String,
 }
 
 /// A file a job wrote, and what it was written for.
@@ -111,6 +114,7 @@ impl Default for Slicing {
             job: None,
             written: None,
             to_send: false,
+            file_stem: String::new(),
             chosen: 0,
             queued: Vec::new(),
         }

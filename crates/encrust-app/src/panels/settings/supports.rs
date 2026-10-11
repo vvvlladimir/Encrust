@@ -50,7 +50,7 @@ pub fn list(ui: &mut Ui, machine: &mut Machine) {
             let remove = can_delete(catalogue, Kind::Support, &entry.id)
                 .then_some((icon::REMOVE, "Delete this profile"));
             let chosen = open.as_deref() == Some(entry.id.as_str());
-            let action = list_row(ui, &entry.profile.name, None, chosen, remove, None);
+            let action = list_row(ui, &entry.profile.name, None, chosen, remove, None, None);
             if action.picked {
                 picked = Some(entry.id.clone());
             }

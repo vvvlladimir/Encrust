@@ -5,6 +5,7 @@ use core_supports::Placed;
 
 use crate::panels::Window;
 use crate::pick::pick_surface;
+use crate::supports::Placing;
 use crate::ui::theme;
 use crate::viewport_input::Pointer;
 use crate::workspace::Tool;
@@ -45,10 +46,10 @@ pub(super) fn draw_brush(ui: &egui::Ui, window: &Window, viewport: egui::Rect) {
     }
 
     let colors = theme::colors();
-    let colour = if window.tools.supports.placing.blocks() {
-        colors.danger
-    } else {
-        colors.accent
+    let colour = match window.tools.supports.placing {
+        Placing::Block => colors.danger,
+        Placing::Erase => colors.text_mid,
+        Placing::Point | Placing::Paint => colors.accent,
     };
     let painter = ui.painter_at(viewport);
     painter.add(egui::Shape::closed_line(
@@ -122,7 +123,8 @@ pub(super) fn paint_stroke(
 /// Paints the model under the cursor, with the brush or — while `whole_face` is held —
 /// with the surface the face it hit belongs to.
 ///
-/// `marked` is false for the alt-click that takes the paint off again.
+/// `marked` is false for the alt-click that takes the paint off again. The eraser takes
+/// both paints off, whatever is held.
 fn paint_under_cursor(
     window: &mut Window,
     viewport: egui::Rect,
@@ -134,7 +136,11 @@ fn paint_under_cursor(
     else {
         return;
     };
-    let blocking = window.tools.supports.placing.blocks();
+    let placing = window.tools.supports.placing;
+    let (layers, marked): (&[bool], bool) = match placing {
+        Placing::Erase => (&[false, true], false),
+        _ => (&[placing.blocks()][..], marked),
+    };
     let radius_mm = window.tools.supports.brush_radius_mm;
     let angle_deg = window.tools.supports.flood_angle_deg;
     let Some(object) = window.doc.scene.get_mut(id) else {
@@ -143,18 +149,22 @@ fn paint_under_cursor(
 
     if whole_face {
         let adjacency = Adjacency::of(&object.mesh);
-        object.supports.paint_face(
-            &object.mesh,
-            &adjacency,
-            hit.face,
-            angle_deg,
-            blocking,
-            marked,
-        );
+        for blocking in layers {
+            object.supports.paint_face(
+                &object.mesh,
+                &adjacency,
+                hit.face,
+                angle_deg,
+                *blocking,
+                marked,
+            );
+        }
     } else {
         let placed = Placed::new(&object.mesh, &object.bvh, object.transform);
-        object
-            .supports
-            .paint(&placed, hit.point, radius_mm, blocking, marked);
+        for blocking in layers {
+            object
+                .supports
+                .paint(&placed, hit.point, radius_mm, *blocking, marked);
+        }
     }
 }

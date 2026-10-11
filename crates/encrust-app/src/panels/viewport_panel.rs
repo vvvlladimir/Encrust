@@ -153,8 +153,10 @@ fn click(ui: &egui::Ui, window: &mut Window, rect: egui::Rect, cursor: egui::Pos
             add_channel_point_under_cursor(window, rect, cursor);
         }
         Tool::Drain => place_drain_under_cursor(window, rect, cursor),
-        Tool::Measure if ui.input(|input| input.modifiers.alt) => window.tools.measure.clear(),
-        Tool::Measure => measure_under_cursor(window, rect, cursor),
+        Tool::Measure => {
+            let free = ui.input(|input| input.modifiers.alt);
+            measure_under_cursor(window, rect, cursor, free);
+        }
         Tool::Position if window.tools.orient.picking_face => {
             lay_face_under_cursor(window, rect, cursor);
         }

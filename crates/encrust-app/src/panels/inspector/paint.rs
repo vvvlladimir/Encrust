@@ -25,13 +25,16 @@ const DEFAULT_SPACING_MM: f32 = 3.0;
 const MIN_FLOOD_DEG: f32 = 1.0;
 const MAX_FLOOD_DEG: f32 = 180.0;
 
-/// What each of the placing modes does, in the order they are drawn. Short, because it
-/// stays on screen under the pill for as long as the tool is in hand.
-const PAINT_HINT: [&str; 3] = [
-    "Click to place, alt-click to remove.",
-    "Drag to paint, ctrl-click a surface, alt to erase.",
-    "Drag to block, ctrl-click a surface, alt to erase.",
-];
+/// What a placing mode does. Short, because it stays on screen under the switch for as
+/// long as the tool is in hand.
+fn paint_hint(placing: Placing) -> &'static str {
+    match placing {
+        Placing::Point => "Click to place, alt-click to remove.",
+        Placing::Paint => "Drag to paint, ctrl-click a surface, alt to erase.",
+        Placing::Block => "Drag to block, ctrl-click a surface, alt to erase.",
+        Placing::Erase => "Drag to take paint and blocks off, ctrl-click a surface.",
+    }
+}
 
 /// Supports by hand: placed one at a time, or filled into a painted patch, in the group
 /// the next ones join.
@@ -67,17 +70,18 @@ pub fn action(ui: &mut egui::Ui, window: &mut Window) {
     }
 }
 
-/// Taking the paint, or the blocking, off again.
+/// Taking the paint, or the blocking, off again; with the eraser in hand, both.
 fn clear(ui: &mut egui::Ui, window: &mut Window) {
-    let blocking = window.tools.supports.placing.blocks();
-    let label = if blocking {
-        "Clear blocked areas"
-    } else {
-        "Clear painted areas"
+    let (label, layers): (&str, &[bool]) = match window.tools.supports.placing {
+        Placing::Block => ("Clear blocked areas", &[true]),
+        Placing::Erase => ("Clear painted and blocked areas", &[false, true]),
+        Placing::Point | Placing::Paint => ("Clear painted areas", &[false]),
     };
     if secondary_button(ui, icon::REMOVE, label).clicked() {
         for object in window.doc.scene.targets_mut() {
-            object.supports.clear_paint(blocking);
+            for blocking in layers {
+                object.supports.clear_paint(*blocking);
+            }
         }
     }
 }
@@ -92,7 +96,7 @@ fn painting(ui: &mut egui::Ui, window: &mut Window) {
     }
 
     ui.add_space(4.0);
-    hint(ui, PAINT_HINT[window.tools.supports.placing as usize]);
+    hint(ui, paint_hint(window.tools.supports.placing));
 
     if window.tools.supports.placing.paints() {
         ui.add_space(4.0);
@@ -162,7 +166,9 @@ fn groups(ui: &mut egui::Ui, window: &mut Window) {
             let remove = (group != 0).then_some((icon::CANCEL, "Drop this group"));
             let tint = Some(theme::support_tint(group as usize));
             let rename = Some(egui::Id::new(("support-group-name", group)));
-            let action = list_row(ui, name, tint, group == active, remove, rename);
+            let holds = window.tools.supports.group_holds(group, &window.doc.scene);
+            let count = holds.to_string();
+            let action = list_row(ui, name, tint, group == active, remove, rename, Some(&count));
             if action.picked {
                 chosen = group;
             }

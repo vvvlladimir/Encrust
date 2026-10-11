@@ -9,9 +9,14 @@ use crate::panels::Window;
 use crate::pick::{pick, pick_surface, ray_through};
 use crate::scene::{ObjectId, Scene};
 
-/// Takes the point the click landed on, snapped to the nearest corner of the model it
-/// landed on.
-pub(super) fn measure_under_cursor(window: &mut Window, viewport: egui::Rect, cursor: egui::Pos2) {
+/// Takes the point the click landed on, snapped to the nearest corner or edge of the
+/// model it landed on unless `free`.
+pub(super) fn measure_under_cursor(
+    window: &mut Window,
+    viewport: egui::Rect,
+    cursor: egui::Pos2,
+    free: bool,
+) {
     let Some((id, hit)) = pick_surface(&window.doc.scene, &window.view.camera, viewport, cursor)
     else {
         return;
@@ -19,8 +24,13 @@ pub(super) fn measure_under_cursor(window: &mut Window, viewport: egui::Rect, cu
     let Some(object) = window.doc.scene.get(id) else {
         return;
     };
-    let point = measure::snap(&object.mesh, &object.bvh, object.transform, hit.point);
-    window.tools.measure.pick(point);
+    let (point, snapped) = if free {
+        (hit.point, measure::Snapped::Free)
+    } else {
+        let adjacency = window.tools.measure_edges.of(&object.mesh);
+        measure::snap(&object.mesh, &object.bvh, &adjacency, object.transform, hit.point)
+    };
+    window.tools.measure.pick(point, snapped);
 }
 
 /// Lays the face under the cursor on the plate, and picks the model it belongs to. A

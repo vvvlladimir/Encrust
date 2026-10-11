@@ -219,7 +219,7 @@ pub(super) enum Run {
 pub(super) fn start(scene: &Scene, slicing: &mut Slicing, status: &mut Status, run: Run, via: Via) {
     let format = slicing.format;
     if via == Via::Printer {
-        let path = temporary_path(&default_file_name(scene, format));
+        let path = temporary_path(&default_file_name(scene, format, &slicing.file_stem));
         slicing.send_when_written();
         let started = slicing
             .start(scene, scene.active_plate(), path)
@@ -227,7 +227,8 @@ pub(super) fn start(scene: &Scene, slicing: &mut Slicing, status: &mut Status, r
         let _ = status.report("Slicing", started);
         return;
     }
-    let Some(path) = save_path(scene, format, slicing.printer.as_ref()) else {
+    let name = default_file_name(scene, format, &slicing.file_stem);
+    let Some(path) = save_path(&name, format, slicing.printer.as_ref()) else {
         return;
     };
 
@@ -247,13 +248,13 @@ pub(super) fn start(scene: &Scene, slicing: &mut Slicing, status: &mut Status, r
 
 #[cfg(not(target_arch = "wasm32"))]
 fn save_path(
-    scene: &Scene,
+    name: &str,
     format: SlicedFormat,
     printer: Option<&printer_profiles::PrinterProfile>,
 ) -> Option<std::path::PathBuf> {
     // The chosen format goes first, so the dialog offers it; the others this machine can
     // be written into stay reachable, because the name is what decides in the end.
-    let mut dialog = rfd::FileDialog::new().set_file_name(default_file_name(scene, format));
+    let mut dialog = rfd::FileDialog::new().set_file_name(name);
     let offered = printer.map_or_else(
         || SlicedFormat::CHOICES.to_vec(),
         |printer| SlicedFormat::choices_for(printer).collect(),
@@ -267,21 +268,24 @@ fn save_path(
 /// A browser asks where a download goes itself, so the file is only named.
 #[cfg(target_arch = "wasm32")]
 fn save_path(
-    scene: &Scene,
-    format: SlicedFormat,
+    name: &str,
+    _format: SlicedFormat,
     _printer: Option<&printer_profiles::PrinterProfile>,
 ) -> Option<std::path::PathBuf> {
-    Some(default_file_name(scene, format).into())
+    Some(name.into())
 }
 
-/// The selected model's name, or the first one's, so the dialog opens on something
-/// recognisable.
-fn default_file_name(scene: &Scene, format: SlicedFormat) -> String {
+/// The name typed in Export, or else the selected model's, or the first one's, so the
+/// dialog opens on something recognisable.
+pub(super) fn default_file_name(scene: &Scene, format: SlicedFormat, typed: &str) -> String {
     let named = scene
         .selected()
         .and_then(|id| scene.get(id))
         .or_else(|| scene.objects().first());
-    let stem = named.map_or("model", |object| object.name.as_str());
+    let stem = match typed.trim() {
+        "" => named.map_or("model", |object| object.name.as_str()),
+        typed => typed,
+    };
     format!("{stem}.{}", format.extension())
 }
 
@@ -323,15 +327,27 @@ mod tests {
     #[test]
     fn the_save_dialog_opens_on_the_selected_models_name() {
         let scene = scene_with_a_model("bracket");
-        assert_eq!(default_file_name(&scene, SlicedFormat::Goo), "bracket.goo");
         assert_eq!(
-            default_file_name(&scene, SlicedFormat::Ctb(core_pipeline::CtbVersion::V5)),
+            default_file_name(&scene, SlicedFormat::Goo, ""),
+            "bracket.goo"
+        );
+        assert_eq!(
+            default_file_name(&scene, SlicedFormat::Ctb(core_pipeline::CtbVersion::V5), ""),
             "bracket.ctb",
             "the chosen format names the file the dialog opens on"
         );
         assert_eq!(
-            default_file_name(&Scene::default(), SlicedFormat::Goo),
+            default_file_name(&Scene::default(), SlicedFormat::Goo, ""),
             "model.goo"
+        );
+    }
+
+    #[test]
+    fn a_name_typed_in_export_wins_over_the_models() {
+        let scene = scene_with_a_model("bracket");
+        assert_eq!(
+            default_file_name(&scene, SlicedFormat::Goo, " Bench plate "),
+            "Bench plate.goo"
         );
     }
 }

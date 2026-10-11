@@ -30,8 +30,9 @@ pub fn list<R>(ui: &mut Ui, add: impl FnOnce(&mut Ui) -> R) -> R {
         .inner
 }
 
-/// One row of that list: what it is, the colour it is drawn in, and the button that drops it.
-/// Given a `rename` id, a double click turns the label into a field, as a plate tab does.
+/// One row of that list: what it is, the colour it is drawn in, a figure at its right, and
+/// the button that drops it. Given a `rename` id, a double click turns the label into a
+/// field, as a plate tab does.
 ///
 /// The row takes its click before its contents are laid out, so the button over it is the
 /// later widget and wins the press it sits under.
@@ -42,6 +43,7 @@ pub fn list_row(
     selected: bool,
     remove: Option<(&str, &str)>,
     rename: Option<Id>,
+    aside: Option<&str>,
 ) -> RowAction {
     let colors = theme::colors();
     let (rect, row) =
@@ -66,6 +68,10 @@ pub fn list_row(
             ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
                 if let Some((glyph, tooltip)) = remove {
                     action.removed = super::icon_button(ui, glyph, tooltip).clicked();
+                }
+                if let Some(aside) = aside {
+                    let figure = RichText::new(aside).font(theme::figures(11.5));
+                    ui.label(figure.color(colors.text_low));
                 }
                 ui.with_layout(Layout::left_to_right(Align::Center), |ui| {
                     match rename.filter(|id| is_renaming(ui, *id)) {

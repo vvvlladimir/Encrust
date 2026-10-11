@@ -6,13 +6,18 @@ use core_slicer::{AdaptiveSettings, ONE_SAMPLE};
 use crate::slicing::{MAX_LAYER_HEIGHT_MM, MIN_LAYER_HEIGHT_MM};
 use crate::state::Machine;
 use crate::ui::{
-    Carried, Segment, Segmented, carried_row, describe, hint, icon, icon_button, later, nested,
+    Carried, Segment, Segmented, carried_row, describe, hint, icon, icon_button, nested,
     number_row, secondary_button, section, subheading, switch, theme, tone,
 };
 
 /// Eight greys is what other slicers call anti-aliasing level 8, and the most a panel
 /// holds; see `docs/decisions/0113`.
 const DEFAULT_GREY_LEVELS: NonZeroU8 = NonZeroU8::new(8).expect("eight is not zero");
+
+/// The greys a sharp edge is rounded to: few enough that small lettering keeps its corners.
+const SHARP_GREY_LEVELS: u8 = 4;
+/// The blur a soft edge is faded over, pixels: past two it dims the wall inside the edge.
+const SOFT_BLUR_PX: u8 = 2;
 
 /// Millimetres per point of drag on the layer height field: a micron a point.
 const LAYER_HEIGHT_STEP: f64 = 0.001;
@@ -69,23 +74,31 @@ pub fn bands(ui: &mut egui::Ui, machine: &mut Machine) -> bool {
     .unwrap_or_default()
 }
 
-/// The greys a mask's edge is rounded with, to hide the steps of the pixels.
+/// The greys a mask's edge is rounded with, to hide the steps of the pixels: one of four
+/// looks, or the numbers behind them.
 pub fn edges(ui: &mut egui::Ui, machine: &mut Machine) {
     let slicing = &mut machine.slicing;
-    section(ui, "Edge smoothing", None, |ui| {
+    let look = Look::of(slicing.anti_alias, slicing.grey_levels, slicing.blur_px);
+    let aside = slicing.grey_levels.map(|levels| format!("{levels} levels"));
+    section(ui, "Edge smoothing", aside.as_deref(), |ui| {
         describe(
             ui,
             "Grey levels on the mask edge, to hide the pixel stairs.",
         );
-        // TODO(step-8): choose the smoothing by its look, from named presets, as well as
-        // by its numbers.
-        later(ui, |ui| {
-            let mut by_look = false;
-            let choices = [Segment::new(true, "Look"), Segment::new(false, "Number")];
-            Segmented::new(&choices)
-                .width(ui.available_width())
-                .show(ui, &mut by_look);
-        });
+        let by_look_id = ui.id().with("edges-by-look");
+        let mut by_look = ui.data(|data| data.get_temp(by_look_id).unwrap_or(look.is_some()));
+        let choices = [Segment::new(true, "Look"), Segment::new(false, "Number")];
+        Segmented::new(&choices)
+            .width(ui.available_width())
+            .show(ui, &mut by_look);
+        ui.data_mut(|data| data.insert_temp(by_look_id, by_look));
+
+        if by_look {
+            if let Some(picked) = looks(ui, look) {
+                picked.apply(slicing);
+            }
+            return;
+        }
         switch(ui, &mut slicing.anti_alias, "Anti-aliased masks");
         if slicing.anti_alias {
             nested(ui, |ui| {
@@ -94,6 +107,97 @@ pub fn edges(ui: &mut egui::Ui, machine: &mut Machine) {
             });
         }
     });
+}
+
+/// A named way for an edge to come out, standing for the numbers that make it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Look {
+    Off,
+    Sharp,
+    Balanced,
+    Soft,
+}
+
+impl Look {
+    const ALL: [Self; 4] = [Self::Off, Self::Sharp, Self::Balanced, Self::Soft];
+
+    fn name(self) -> &'static str {
+        match self {
+            Self::Off => "Off",
+            Self::Sharp => "Sharp",
+            Self::Balanced => "Balanced",
+            Self::Soft => "Soft",
+        }
+    }
+
+    fn line(self) -> &'static str {
+        match self {
+            Self::Off => "Raw masks",
+            Self::Sharp => "Crisp text",
+            Self::Balanced => "The default",
+            Self::Soft => "Organic curves",
+        }
+    }
+
+    /// The greys an edge is rounded to and its blur in pixels, or `None` for no smoothing,
+    /// which leaves the numbers as they were for the next time it is turned on.
+    fn settings(self) -> Option<(Option<NonZeroU8>, u8)> {
+        match self {
+            Self::Off => None,
+            Self::Sharp => Some((NonZeroU8::new(SHARP_GREY_LEVELS), 0)),
+            Self::Balanced => Some((None, 0)),
+            Self::Soft => Some((None, SOFT_BLUR_PX)),
+        }
+    }
+
+    fn apply(self, slicing: &mut crate::slicing::Slicing) {
+        slicing.anti_alias = self.settings().is_some();
+        if let Some((grey_levels, blur_px)) = self.settings() {
+            (slicing.grey_levels, slicing.blur_px) = (grey_levels, blur_px);
+        }
+    }
+
+    /// The look these numbers make, or `None` for numbers typed by hand.
+    fn of(anti_alias: bool, grey_levels: Option<NonZeroU8>, blur_px: u8) -> Option<Self> {
+        if !anti_alias {
+            return Some(Self::Off);
+        }
+        Self::ALL
+            .into_iter()
+            .find(|look| look.settings() == Some((grey_levels, blur_px)))
+    }
+}
+
+/// The four looks as a column of choices, the one in use lit. Answers the one pressed.
+fn looks(ui: &mut egui::Ui, current: Option<Look>) -> Option<Look> {
+    let colors = theme::colors();
+    let mut picked = None;
+    for look in Look::ALL {
+        let on = current == Some(look);
+        let name = egui::RichText::new(look.name())
+            .font(theme::label())
+            .color(if on {
+                colors.accent_soft
+            } else {
+                colors.text_high
+            });
+        let line = egui::RichText::new(look.line())
+            .font(theme::small())
+            .color(colors.text_low);
+        let button = egui::Button::selectable(on, name)
+            .right_text(line)
+            .min_size(egui::vec2(ui.available_width(), theme::FIELD_H));
+        if ui.add(button).clicked() {
+            picked = Some(look);
+        }
+    }
+    if current.is_none() {
+        hint(
+            ui,
+            "The numbers were set by hand. Pick a look to replace them.",
+        );
+    }
+    picked
 }
 
 /// Why a setting here cannot be used on the printer in hand, and the way to the firmware
@@ -362,4 +466,38 @@ fn band_rows(
 fn chip(ui: &mut egui::Ui, tint: egui::Color32) {
     let (rect, _) = ui.allocate_exact_size(egui::vec2(10.0, 10.0), egui::Sense::hover());
     ui.painter().rect_filled(rect, 2.0, tint);
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn every_look_is_read_back_from_the_numbers_it_sets() {
+        let mut slicing = crate::slicing::Slicing::default();
+        for look in Look::ALL {
+            look.apply(&mut slicing);
+            let read = Look::of(slicing.anti_alias, slicing.grey_levels, slicing.blur_px);
+            assert_eq!(read, Some(look), "{} did not survive", look.name());
+        }
+    }
+
+    #[test]
+    fn turning_smoothing_off_keeps_the_numbers_for_later() {
+        let mut slicing = crate::slicing::Slicing::default();
+        Look::Soft.apply(&mut slicing);
+        Look::Off.apply(&mut slicing);
+        assert!(!slicing.anti_alias);
+        assert_eq!(
+            slicing.blur_px, SOFT_BLUR_PX,
+            "the soft blur waits to be turned on again"
+        );
+    }
+
+    #[test]
+    fn a_new_plate_starts_on_the_balanced_look() {
+        let slicing = crate::slicing::Slicing::default();
+        let look = Look::of(slicing.anti_alias, slicing.grey_levels, slicing.blur_px);
+        assert_eq!(look, Some(Look::Balanced));
+    }
 }

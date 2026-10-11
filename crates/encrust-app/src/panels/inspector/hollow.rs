@@ -204,8 +204,9 @@ fn infill(ui: &mut egui::Ui, tools: &mut Tools) {
         describe(
             ui,
             &format!(
-                "{:.2} mm walls. Hive and Grid stand on the plate and drain; Scaffold also \
-                 braces sideways.",
+                "{:.2} mm walls. Hive and Grid stand on the plate; Scaffold also braces \
+                 sideways. Every cell is open at the cavity's floor and ceiling, so resin \
+                 runs from cell to cell towards a hole.",
                 tools.hollow.state.infill.thickness_mm()
             ),
         );

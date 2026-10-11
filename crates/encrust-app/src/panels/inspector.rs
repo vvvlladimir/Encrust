@@ -19,7 +19,7 @@ pub use check::tint as risk_tint;
 use egui::{Align, Layout, RichText, Sense, UiBuilder, vec2};
 
 use crate::panels::Window;
-use crate::ui::{body_and_foot, card_foot, hairline, icon, icon_button, later, theme};
+use crate::ui::{body_and_foot, card_foot, hairline, icon, icon_button, theme};
 use crate::workspace::Tool;
 
 /// The card beside the rail: the open tool, whatever the stage shows, no taller than
@@ -111,7 +111,12 @@ fn fact(window: &Window, tool: Tool) -> Option<(String, egui::Color32)> {
         Tool::Check => check::fact(window),
         Tool::Export => export::fact(window),
         Tool::PrintSettings => plain(crate::panels::layers_and_exposure(window.machine)),
-        Tool::Measure | Tool::Cut | Tool::Relief => None,
+        Tool::Measure => window
+            .tools
+            .measure
+            .snapped()
+            .and_then(|snapped| plain(snapped.label().to_owned())),
+        Tool::Cut | Tool::Relief => None,
     }
 }
 
@@ -135,7 +140,7 @@ fn help(tool: Tool) -> &'static str {
 }
 
 /// The tool's glyph, name and help, its fact at the right, and the fold beside it.
-fn header(ui: &mut egui::Ui, window: &Window, tool: Tool) {
+fn header(ui: &mut egui::Ui, window: &mut Window, tool: Tool) {
     let colors = theme::colors();
     let (rect, _) = ui.allocate_exact_size(
         vec2(ui.available_width(), theme::INSPECTOR_HEAD_H),
@@ -163,8 +168,10 @@ fn header(ui: &mut egui::Ui, window: &Window, tool: Tool) {
         )
         .on_hover_text(help(tool));
     child.with_layout(Layout::right_to_left(Align::Center), |ui| {
-        // TODO(step-8): fold the inspector away, and a second press on the open tool too.
-        later(ui, |ui| icon_button(ui, icon::FOLD, "Fold the inspector"));
+        let tooltip = "Fold the inspector (press the tool again)";
+        if icon_button(ui, icon::FOLD, tooltip).clicked() {
+            window.view.options.inspector = false;
+        }
         if let Some((text, color)) = fact(window, tool) {
             ui.add(
                 egui::Label::new(RichText::new(text).font(theme::figures(11.5)).color(color))

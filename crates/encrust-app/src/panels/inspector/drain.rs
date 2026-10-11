@@ -1,10 +1,11 @@
 use crate::drain::Placing;
 use crate::panels::Window;
 use crate::panels::inspector::hollow;
+use crate::scene::ObjectId;
 use crate::state::Tools;
 use crate::ui::{
-    Segment, Segmented, describe, hint, icon, inline_button, later, notice, number_row,
-    primary_button, progress_bar, secondary_button, section, theme, tone,
+    Segment, Segmented, describe, hint, icon, inline_button, notice, number_row, primary_button,
+    progress_bar, secondary_button, section, theme, tone,
 };
 
 /// Per point of drag, in millimetres for the sizes and hundredths for the taper.
@@ -94,14 +95,18 @@ fn channel_points(window: &Window) -> usize {
         .sum()
 }
 
-/// The volume of every pocket of resin the last check found, cubic millimetres.
-fn pockets(window: &Window) -> Vec<f32> {
+/// Every pocket of resin the last check found: the model it is in, its place among that
+/// model's pockets, and its volume, cubic millimetres.
+fn pockets(window: &Window) -> Vec<(ObjectId, usize, f32)> {
     window
         .doc
         .scene
         .targets()
-        .flat_map(|object| object.traps.found())
-        .map(|trapped| trapped.volume_mm3)
+        .flat_map(|object| {
+            let id = object.id;
+            let found = object.traps.found().iter().enumerate();
+            found.map(move |(index, trapped)| (id, index, trapped.volume_mm3))
+        })
         .collect()
 }
 
@@ -207,7 +212,7 @@ fn drainage(ui: &mut egui::Ui, window: &mut Window) {
         return;
     }
 
-    let held: f32 = pockets.iter().sum();
+    let held: f32 = pockets.iter().map(|(_, _, volume_mm3)| volume_mm3).sum();
     let colors = theme::colors();
     notice(
         ui,
@@ -217,8 +222,19 @@ fn drainage(ui: &mut egui::Ui, window: &mut Window) {
         "It cures inside and adds weight the peel has to pull. Each pocket is painted red \
          under the x-ray, and each needs a hole of its own.",
     );
-    for (index, volume_mm3) in pockets.iter().enumerate() {
-        pocket_row(ui, index, *volume_mm3);
+    let mut drill = None;
+    for (row, (id, index, volume_mm3)) in pockets.iter().enumerate() {
+        if pocket_row(ui, row, *volume_mm3) {
+            drill = Some((*id, *index));
+        }
+    }
+    if let Some((id, index)) = drill
+        && window
+            .tools
+            .drain
+            .drill_pocket(&mut window.doc.scene, id, index)
+    {
+        window.machine.status = crate::status::Status::Info("1 hole placed".to_owned());
     }
     if secondary_button(ui, icon::DRAIN, "Drill a hole into each").clicked() {
         let drilled = window.tools.drain.drill_found(&mut window.doc.scene);
@@ -227,9 +243,11 @@ fn drainage(ui: &mut egui::Ui, window: &mut Window) {
     describe(ui, "Each hole goes in at the lowest point of its pocket.");
 }
 
-/// One pocket: a dot, how much it holds, and a drill of its own.
-fn pocket_row(ui: &mut egui::Ui, index: usize, volume_mm3: f32) {
+/// One pocket: a dot, how much it holds, and a drill of its own. Answers whether the
+/// drill was pressed.
+fn pocket_row(ui: &mut egui::Ui, index: usize, volume_mm3: f32) -> bool {
     let colors = theme::colors();
+    let mut drill = false;
     ui.horizontal(|ui| {
         let (dot, _) = ui.allocate_exact_size(egui::vec2(8.0, 8.0), egui::Sense::hover());
         ui.painter().circle_filled(dot.center(), 3.5, colors.danger);
@@ -240,10 +258,10 @@ fn pocket_row(ui: &mut egui::Ui, index: usize, volume_mm3: f32) {
         );
         tone(ui, &format!("pocket {}", index + 1), colors.text_mid);
         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-            // TODO(step-8): drill this pocket alone, at its lowest point.
-            later(ui, |ui| {
-                inline_button(ui, icon::DRAIN, "Drill", false, true)
-            });
+            drill = inline_button(ui, icon::DRAIN, "Drill", false, true)
+                .on_hover_text("A hole at this pocket's lowest point")
+                .clicked();
         });
     });
+    drill
 }

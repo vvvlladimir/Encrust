@@ -5,7 +5,7 @@ use core_supports::Trapped;
 use core_volume::HoleSize;
 
 use crate::job::{TrapJob, TrapOutcome, TrapRequest, trap_tasks};
-use crate::scene::Scene;
+use crate::scene::{ObjectId, Scene};
 use crate::status::Status;
 
 /// What a click in the viewport puts down.
@@ -126,6 +126,28 @@ impl DrainTool {
         dug
     }
 
+    /// Drills a hole into pocket `index` of model `id` alone, at its lowest point, and
+    /// takes its mark off. Answers whether a hole went in.
+    pub fn drill_pocket(&mut self, scene: &mut Scene, id: ObjectId, index: usize) -> bool {
+        let Some(object) = scene.get_mut(id) else {
+            return false;
+        };
+        let Some(target) = object.traps.found().get(index).map(|trapped| trapped.at) else {
+            return false;
+        };
+        self.stale();
+        let drilled = object.hollow.drill_into(
+            &object.mesh,
+            &object.bvh,
+            target,
+            self.state.diameter_mm,
+            self.state.taper,
+            object.transform,
+        );
+        object.traps.remove(index);
+        drilled
+    }
+
     /// Drills a hole into every pocket the last check found, and says how many it put in.
     ///
     /// The marks come off with them: whether the holes drained what they were put in is
@@ -181,6 +203,13 @@ impl Traps {
 
     pub fn clear(&mut self) {
         *self = Self::default();
+    }
+
+    /// Takes the mark off pocket `index` alone.
+    pub fn remove(&mut self, index: usize) {
+        if index < self.found.len() {
+            self.found.remove(index);
+        }
     }
 }
 
@@ -256,6 +285,29 @@ mod tests {
         assert!(
             !tool.checked,
             "the plate moved, so what the panel reports is no longer what it holds"
+        );
+    }
+
+    #[test]
+    fn drilling_one_pocket_leaves_the_others_marked() {
+        let mut scene = scene_with_a_tetrahedron();
+        let id = scene.objects()[0].id;
+        let pocket = |x: f32, volume_mm3: f32| Trapped {
+            at: Vec3::new(x, 2.0, 2.0),
+            volume_mm3,
+            bounds: core_geometry::Aabb::new(Vec3::ZERO, Vec3::splat(4.0)),
+        };
+        let found = vec![pocket(2.0, 10.0), pocket(3.0, 20.0)];
+        scene.get_mut(id).expect("just inserted").traps.set(found);
+
+        let mut tool = DrainTool::default();
+        tool.drill_pocket(&mut scene, id, 0);
+        let left = scene.get(id).expect("still there").traps.found().to_vec();
+        assert_eq!(left.len(), 1, "the drilled pocket alone loses its mark");
+        assert_eq!(left[0].volume_mm3, 20.0, "the second pocket stays");
+        assert!(
+            !tool.drill_pocket(&mut scene, id, 5),
+            "no pocket five to drill"
         );
     }
 
