@@ -134,12 +134,12 @@ pub struct ViewOptions {
     /// looked into. The view tools and the View menu are the only things that turn it on;
     /// see ADR 0190, 0198.
     pub xray: bool,
-    /// Whether the plate panel is unfolded down the left of the stage.
-    pub plate_panel: bool,
     /// Whether the open tool's inspector is unfolded beside the rail.
     pub inspector: bool,
     /// Whether the sheet of keys is up over the window.
     pub sheet: bool,
+    /// Whether the Find palette is up over the window.
+    pub find: bool,
     /// Whether the window has left the start page, which it does once for good.
     pub started: bool,
     /// Whether Preview gives the whole stage to the layer mask rather than half of it.
@@ -155,14 +155,21 @@ pub struct ViewOptions {
     pub mask_split: f32,
 }
 
+impl ViewOptions {
+    /// Whether a sheet over the window holds the pointer, so the plate under it takes none.
+    pub fn modal(&self) -> bool {
+        self.sheet || self.find
+    }
+}
+
 impl Default for ViewOptions {
     fn default() -> Self {
         Self {
             grid: true,
             xray: false,
-            plate_panel: true,
             inspector: true,
             sheet: false,
+            find: false,
             started: false,
             mask_only: false,
             issues: false,

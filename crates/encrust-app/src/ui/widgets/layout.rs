@@ -17,7 +17,7 @@ pub fn section<R>(
     hint_text: Option<&str>,
     add: impl FnOnce(&mut Ui) -> R,
 ) -> Option<R> {
-    block(ui, title, hint_text, None, add).1
+    block(ui, title, hint_text, Trailing::Nothing, add).1
 }
 
 /// A block like `section` with one icon button at the right of its heading, for the
@@ -28,7 +28,26 @@ pub fn section_with_action<R>(
     action: (&str, &str),
     add: impl FnOnce(&mut Ui) -> R,
 ) -> (bool, Option<R>) {
-    block(ui, title, None, Some(action), add)
+    block(ui, title, None, Trailing::Action(action), add)
+}
+
+/// A block whose heading carries the switch that turns the whole of it on, so the switch
+/// is not named a second time under it. Returns whether it was flipped.
+pub fn section_with_switch<R>(
+    ui: &mut Ui,
+    title: &str,
+    on: &mut bool,
+    add: impl FnOnce(&mut Ui) -> R,
+) -> (bool, Option<R>) {
+    block(ui, title, None, Trailing::Switch(on), add)
+}
+
+/// What stands at the right end of a block's heading.
+enum Trailing<'a> {
+    Nothing,
+    /// An icon button: its glyph and its tooltip.
+    Action((&'a str, &'a str)),
+    Switch(&'a mut bool),
 }
 
 /// Body margin of a block: the heading row carries its own top, so the body has none.
@@ -43,12 +62,12 @@ fn block<R>(
     ui: &mut Ui,
     title: &str,
     hint_text: Option<&str>,
-    action: Option<(&str, &str)>,
+    trailing: Trailing<'_>,
     add: impl FnOnce(&mut Ui) -> R,
 ) -> (bool, Option<R>) {
     let id = ui.id().with(("section", title));
     let open = ui.data(|data| data.get_temp::<bool>(id.with("open"))) != Some(false);
-    let pressed = block_heading(ui, id, title, open, hint_text, action);
+    let pressed = block_heading(ui, id, title, open, hint_text, trailing);
     let inner = open.then(|| {
         Frame::new()
             .inner_margin(BODY_MARGIN)
@@ -72,7 +91,7 @@ fn block_heading(
     title: &str,
     open: bool,
     hint_text: Option<&str>,
-    action: Option<(&str, &str)>,
+    trailing: Trailing<'_>,
 ) -> bool {
     let colors = theme::colors();
     let (rect, _) =
@@ -108,28 +127,22 @@ fn block_heading(
 
     let texts = child.data(|data| data.get_temp::<Vec<String>>(id.with("texts")));
     if let Some(texts) = texts.filter(|texts| !texts.is_empty()) {
-        let glyph = RichText::new(crate::ui::icon::QUESTION)
-            .font(theme::icon(12.0))
-            .color(colors.text_low);
-        child
-            .add(egui::Label::new(glyph).selectable(false))
-            .on_hover_ui(|ui| {
-                ui.set_max_width(inner.width());
-                for text in &texts {
-                    ui.label(
-                        RichText::new(text)
-                            .font(theme::small())
-                            .color(colors.text_mid),
-                    );
-                }
-            });
+        help_mark(&mut child, &texts);
     }
 
     child
         .with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-            let pressed = action.is_some_and(|(glyph, tooltip)| {
-                crate::ui::icon_button(ui, glyph, tooltip).clicked()
-            });
+            let pressed = match trailing {
+                Trailing::Nothing => false,
+                Trailing::Action((glyph, tooltip)) => {
+                    crate::ui::icon_button(ui, glyph, tooltip).clicked()
+                }
+                Trailing::Switch(on) => {
+                    // In line with the switches of the body, which sit a full pad in.
+                    ui.add_space(4.0);
+                    super::bare_switch(ui, on, title).changed()
+                }
+            };
             if let Some(hint_text) = hint_text {
                 hint(ui, hint_text);
             }
@@ -176,6 +189,57 @@ pub fn describe(ui: &mut Ui, text: &str) {
         }),
         None => hint(ui, text),
     }
+}
+
+/// Diameter of the help mark, and the most its text runs across before wrapping, points.
+const HELP_D: f32 = 13.0;
+const HELP_W: f32 = 280.0;
+
+/// The ringed question mark beside a title that reads out `texts`: on hover, and in a
+/// popup a click keeps open until the next click.
+pub fn help_mark<T: AsRef<str>>(ui: &mut Ui, texts: &[T]) {
+    let colors = theme::colors();
+    let (rect, response) = ui.allocate_exact_size(vec2(HELP_D, HELP_D), Sense::click());
+    let joined: Vec<&str> = texts.iter().map(AsRef::as_ref).collect();
+    response.widget_info(|| {
+        egui::WidgetInfo::labeled(egui::WidgetType::Button, true, joined.join(" "))
+    });
+    let ink = if response.hovered() {
+        colors.text_mid
+    } else {
+        colors.text_low
+    };
+    let painter = ui.painter();
+    painter.circle_stroke(
+        rect.center(),
+        HELP_D / 2.0 - 0.5,
+        egui::Stroke::new(1.0, ink),
+    );
+    painter.text(
+        rect.center(),
+        egui::Align2::CENTER_CENTER,
+        "?",
+        theme::help_mark(),
+        ink,
+    );
+    super::focus_ring(ui, &response, egui::CornerRadius::same(255));
+    let show = |ui: &mut Ui| {
+        ui.set_max_width(HELP_W);
+        for text in &joined {
+            ui.label(
+                RichText::new(*text)
+                    .font(theme::small())
+                    .color(colors.text_mid),
+            );
+        }
+    };
+    let popup = egui::Popup::menu(&response);
+    let response = if popup.is_open() {
+        response
+    } else {
+        response.on_hover_ui(show)
+    };
+    egui::Popup::menu(&response).show(show);
 }
 
 /// What a switch reveals, set in under it with a rule down its left edge, so it reads as
@@ -294,6 +358,27 @@ pub fn subheading(ui: &mut Ui, title: &str) {
             .color(theme::colors().text_low),
     );
     ui.add_space(2.0);
+}
+
+/// A `subheading` carrying the switch that turns its group on. Returns whether it was
+/// flipped.
+pub fn subheading_with_switch(ui: &mut Ui, title: &str, on: &mut bool) -> bool {
+    ui.add_space(8.0);
+    let flipped = ui
+        .horizontal(|ui| {
+            ui.label(
+                RichText::new(title)
+                    .font(theme::small())
+                    .color(theme::colors().text_low),
+            );
+            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                super::bare_switch(ui, on, title).changed()
+            })
+            .inner
+        })
+        .inner;
+    ui.add_space(2.0);
+    flipped
 }
 
 /// A quiet aside: a unit, a count, a reason something is greyed out.

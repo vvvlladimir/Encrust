@@ -251,6 +251,20 @@ fn row(ui: &mut Ui, label: &str, field: impl FnOnce(&mut Ui) -> bool) -> bool {
     .inner
 }
 
+/// The box an IP address is typed into, as tall as the buttons beside it and `width`
+/// points wide.
+pub fn address_field(ui: &mut Ui, text: &mut String, hint: &str, width: f32) -> egui::Response {
+    let field = egui::TextEdit::singleline(text)
+        .hint_text(hint)
+        .font(theme::figures(13.0))
+        .vertical_align(Align::Center)
+        .margin(egui::Margin::symmetric(10, 0))
+        .background_color(theme::colors().sunken);
+    let response = ui.add_sized(vec2(width, theme::BUTTON_H), field);
+    name_for_reader(ui, response.id, "Printer address");
+    response
+}
+
 /// A named line of text: the label on the left, the field taking what is left.
 pub fn text_row(ui: &mut Ui, label: &str, value: &mut String) -> bool {
     let mut changed = false;

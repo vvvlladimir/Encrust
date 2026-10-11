@@ -75,20 +75,16 @@ pub fn ui(ui: &mut egui::Ui, window: &mut Window) {
 /// side, and the layer alone. The two that read the layers are the Preview mode.
 fn views(ui: &mut egui::Ui, window: &mut Window) {
     let colors = theme::colors();
-    let showing = match (*window.mode, window.view.options.mask_only) {
-        (Mode::Prepare, _) => 0,
-        (Mode::Preview, false) => 1,
-        (Mode::Preview, true) => 2,
-    };
-    let toggle = shortcuts::text(Action::ToggleMode);
+    let showing = showing(window);
+    let keys = shortcuts::text(Action::View(1));
     let views = [
-        (icon::MODEL, "Model", toggle.as_str()),
+        (icon::MODEL, "Model", keys.as_str()),
         (
             icon::SIDE_BY_SIDE,
             "Model and layer side by side",
-            toggle.as_str(),
+            keys.as_str(),
         ),
-        (icon::MASK, "Layer mask", ""),
+        (icon::MASK, "Layer mask", keys.as_str()),
     ];
     let width = ui.available_width();
     let (rect, _) = ui.allocate_exact_size(vec2(width, VIEW_H * 3.0), Sense::hover());
@@ -134,14 +130,33 @@ fn views(ui: &mut egui::Ui, window: &mut Window) {
         Stroke::new(1.0, colors.hairline),
         egui::StrokeKind::Inside,
     );
-    match picked {
-        Some(0) => *window.mode = Mode::Prepare,
-        Some(index) => {
-            *window.mode = Mode::Preview;
-            window.view.options.mask_only = index == 2;
-        }
-        None => {}
+    if let Some(index) = picked {
+        show_view(window, index);
     }
+}
+
+/// Which of the three views is up: the model, the two side by side, or the layer alone.
+fn showing(window: &Window) -> usize {
+    match (*window.mode, window.view.options.mask_only) {
+        (Mode::Prepare, _) => 0,
+        (Mode::Preview, false) => 1,
+        (Mode::Preview, true) => 2,
+    }
+}
+
+fn show_view(window: &mut Window, index: usize) {
+    *window.mode = if index == 0 {
+        Mode::Prepare
+    } else {
+        Mode::Preview
+    };
+    window.view.options.mask_only = index == 2;
+}
+
+/// Moves `step` views along the three, wrapping round at either end.
+pub(crate) fn turn_view(window: &mut Window, step: i8) {
+    let index = (showing(window) as i64 + i64::from(step)).rem_euclid(3);
+    show_view(window, index as usize);
 }
 
 /// A layer up over the track, or a layer down under it.

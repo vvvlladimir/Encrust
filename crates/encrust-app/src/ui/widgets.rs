@@ -12,14 +12,16 @@ pub use button::{
     summary_button,
 };
 pub use field::{
-    Carried, axis_label, carried_row, count_row, field_label, number_field, number_row, text_row,
+    Carried, address_field, axis_label, carried_row, count_row, field_label, number_field,
+    number_row, text_row,
 };
 pub use layout::{
-    body_and_foot, card, card_foot, describe, dialog_frame, dialog_head, hairline, heading, hint,
-    meta, nested, notice, progress_bar, readings, section, section_with_action, stats, subheading,
+    body_and_foot, card, card_foot, describe, dialog_frame, dialog_head, hairline, heading,
+    help_mark, hint, meta, nested, notice, progress_bar, readings, section, section_with_action,
+    section_with_switch, stats, subheading, subheading_with_switch,
 };
 pub use list::{issue_row, list, list_row, two_lines};
-pub use toggle::{Segment, Segmented, switch, tone};
+pub use toggle::{Segment, Segmented, bare_switch, switch, tone};
 
 /// `6h36m39s`, as a printer's own screen states it.
 ///

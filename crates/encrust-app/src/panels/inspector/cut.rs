@@ -127,14 +127,17 @@ fn pins(ui: &mut egui::Ui, tool: &mut CutTool) {
 /// already made of.
 pub fn action(ui: &mut egui::Ui, window: &mut Window) {
     let picked = window.doc.scene.selected();
-    if primary_button(ui, icon::SECTION, "Cut", picked.is_some()).clicked()
+    let what = "Two models replace one. Undo puts it back.";
+    if primary_button(ui, icon::SECTION, "Cut", picked.is_some())
+        .on_hover_text(what)
+        .clicked()
         && let Some(id) = picked
     {
         window.machine.status = window.tools.cut.apply(&mut window.doc.scene, id);
     }
     let split = ui
         .add_enabled_ui(picked.is_some(), |ui| {
-            secondary_button(ui, icon::SPLIT, "Split into its parts")
+            secondary_button(ui, icon::SPLIT, "Split into its parts").on_hover_text(what)
         })
         .inner;
     if split.clicked()
@@ -142,5 +145,4 @@ pub fn action(ui: &mut egui::Ui, window: &mut Window) {
     {
         window.machine.status = split_parts(&mut window.doc.scene, id);
     }
-    hint(ui, "Two models replace one. Undo puts it back.");
 }

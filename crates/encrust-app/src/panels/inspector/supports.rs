@@ -184,20 +184,23 @@ fn generate(ui: &mut egui::Ui, window: &mut Window) {
     } else {
         "Grow the supports"
     };
-    if primary_button(ui, icon::SUPPORTS, label, blocker.is_none()).clicked() {
+    let what = format!(
+        "Cuts {} to find what hangs over nothing.",
+        window.doc.scene.scope()
+    );
+    if primary_button(ui, icon::SUPPORTS, label, blocker.is_none())
+        .on_hover_text(what)
+        .clicked()
+    {
         let started = window
             .tools
             .supports
             .start(&window.doc.scene, window.machine.slicing.layer_height_mm());
         window.machine.status.report("Placing supports", started);
     }
-
-    let scope = format!(
-        "Cuts {} to find what hangs over nothing.",
-        window.doc.scene.scope()
-    );
-    let text = blocker.unwrap_or(&scope);
-    ui.vertical_centered(|ui| tone(ui, text, theme::colors().text_low));
+    if let Some(reason) = blocker {
+        ui.vertical_centered(|ui| tone(ui, reason, theme::colors().text_low));
+    }
 }
 
 /// The progress bar and the cancel button of the run that is going.

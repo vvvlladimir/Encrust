@@ -9,7 +9,7 @@ use crate::panels::Window;
 use crate::state::{Doc, Tools};
 use crate::ui::{
     Segment, Segmented, describe, hint, icon, nested, notice, number_row, primary_button,
-    progress_bar, secondary_button, section, stats, subheading, switch, theme, tone,
+    progress_bar, secondary_button, section, section_with_switch, stats, subheading, theme, tone,
 };
 use crate::workspace::Tool;
 
@@ -66,7 +66,11 @@ fn settings(ui: &mut egui::Ui, window: &mut Window) {
         modes(ui, window.tools);
         wall(ui, window);
     });
-    section(ui, "Infill", None, |ui| infill(ui, window.tools));
+    // The body reads the switch as it stood before this frame's click; the knob's slide
+    // draws the frame after, which catches it up.
+    let mut on = window.tools.hollow.state.infill_on;
+    section_with_switch(ui, "Infill", &mut on, |ui| infill(ui, window.tools));
+    window.tools.hollow.state.infill_on = on;
     section(ui, "Keep solid", None, |ui| {
         describe(
             ui,
@@ -187,7 +191,6 @@ fn widest(doc: &Doc) -> f32 {
 
 /// What stands in the cavity, if anything.
 fn infill(ui: &mut egui::Ui, tools: &mut Tools) {
-    switch(ui, &mut tools.hollow.state.infill_on, "Infill");
     if !tools.hollow.state.infill_on {
         ui.add_space(2.0);
         describe(ui, "The cavity is left empty.");
@@ -281,19 +284,16 @@ pub fn action(ui: &mut egui::Ui, window: &mut Window) {
 
 fn start(ui: &mut egui::Ui, window: &mut Window) {
     let blocked = window.tools.hollow.blocker(&window.doc.scene);
-    if primary_button(ui, icon::HOLLOW, "Hollow", blocked.is_none()).clicked() {
+    let what = format!("Cuts a cavity inside {}.", window.doc.scene.scope());
+    if primary_button(ui, icon::HOLLOW, "Hollow", blocked.is_none())
+        .on_hover_text(what)
+        .clicked()
+    {
         let started = window.tools.hollow.start(&window.doc.scene);
         window.machine.status.report("Hollowing", started);
     }
-
-    match blocked {
-        Some(reason) => {
-            ui.vertical_centered(|ui| tone(ui, reason, theme::colors().text_low));
-        }
-        None => describe(
-            ui,
-            &format!("Cuts a cavity inside {}.", window.doc.scene.scope()),
-        ),
+    if let Some(reason) = blocked {
+        ui.vertical_centered(|ui| tone(ui, reason, theme::colors().text_low));
     }
 }
 

@@ -1,3 +1,4 @@
+mod find;
 mod inspector;
 mod mask_pane;
 mod plate_strip;
@@ -68,6 +69,9 @@ impl Window<'_> {
         if self.view.options.sheet {
             shortcuts_sheet::ui(ui.ctx(), &mut self.view.options.sheet);
         }
+        if self.view.options.find {
+            find::ui(ui.ctx(), self);
+        }
         report::ui(ui.ctx(), &self.doc.scene, self.tools, self.machine);
         settings::machines::window(ui.ctx(), self);
 
@@ -123,14 +127,10 @@ impl Window<'_> {
             });
         });
         let (models, plate) = self.plate_cards(ctx, pos2(strip.left() - gap, top), stage);
-        for (id, card) in [("models-edge", Some(models)), ("plate-edge", plate)] {
-            if let Some(card) = card
-                && let Some(raw) = drag_edge(ctx, id, card, false)
-            {
-                match plate_width(raw) {
-                    Some(width) => self.view.options.plate_w = width,
-                    None => self.view.options.plate_panel = false,
-                }
+        for (id, card) in [("models-edge", models), ("plate-edge", plate)] {
+            if let Some(raw) = drag_edge(ctx, id, card, false) {
+                self.view.options.plate_w =
+                    raw.clamp(*theme::SCENE_W_RANGE.start(), *theme::SCENE_W_RANGE.end());
             }
         }
 
@@ -158,39 +158,25 @@ impl Window<'_> {
     }
 
     /// The models from `corner` down, and this plate's figures and Slice standing on the
-    /// stage's foot under them, both as wide as the plate panel; folded, the models card
-    /// keeps only the plates. Answers the two cards, the second only while unfolded.
-    fn plate_cards(
-        &mut self,
-        ctx: &egui::Context,
-        corner: Pos2,
-        stage: Rect,
-    ) -> (Rect, Option<Rect>) {
+    /// stage's foot under them, both as wide as the plate panel. Answers the two cards.
+    fn plate_cards(&mut self, ctx: &egui::Context, corner: Pos2, stage: Rect) -> (Rect, Rect) {
         let gap = theme::FLOAT_GAP;
-        let options = self.view.options;
-        let mut bottom = stage.bottom() - gap;
-        let mut plate = None;
-        if options.plate_panel {
-            let foot = pos2(corner.x, bottom);
-            let card = card_at(
-                ctx,
-                "this-plate",
-                foot,
-                Align2::RIGHT_BOTTOM,
-                f32::INFINITY,
-                |ui| {
-                    ui.set_width(options.plate_w);
-                    scene_panel::this_plate(ui, self);
-                },
-            );
-            bottom = card.top() - gap;
-            plate = Some(card);
-        }
-        let max_h = bottom - corner.y - 2.0 * CARD_STROKE;
+        let width = self.view.options.plate_w;
+        let foot = pos2(corner.x, stage.bottom() - gap);
+        let plate = card_at(
+            ctx,
+            "this-plate",
+            foot,
+            Align2::RIGHT_BOTTOM,
+            f32::INFINITY,
+            |ui| {
+                ui.set_width(width);
+                scene_panel::this_plate(ui, self);
+            },
+        );
+        let max_h = plate.top() - gap - corner.y - 2.0 * CARD_STROKE;
         let models = card_at(ctx, "models", corner, Align2::RIGHT_TOP, max_h, |ui| {
-            if options.plate_panel {
-                ui.set_width(options.plate_w);
-            }
+            ui.set_width(width);
             scene_panel::ui(ui, self, max_h);
         });
         (models, plate)
@@ -234,14 +220,8 @@ fn card_at(
 /// Points of grab beside a card's inner edge.
 const GRAB_W: f32 = 6.0;
 
-/// Where a drag to `raw` points leaves the plate panel: a width, or `None` once the drag
-/// has gone past the floor, which is how the panel is folded away.
-fn plate_width(raw: f32) -> Option<f32> {
-    (raw >= *theme::SCENE_W_RANGE.start()).then(|| raw.min(*theme::SCENE_W_RANGE.end()))
-}
-
 /// A drag on the inner edge of a card. Returns the width the pointer is asking for,
-/// unclamped, so that the caller can read a drag past the floor as a fold.
+/// unclamped; the caller holds it to the card's range.
 ///
 /// The handle is its own area just outside the card, so the camera under it does not
 /// take the drag as an orbit.
@@ -287,22 +267,4 @@ fn strip_frame() -> egui::Frame {
     egui::Frame::new()
         .fill(theme::colors().base)
         .inner_margin(theme::STRIP_MARGIN)
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn a_drag_past_the_floor_folds_the_plate_away() {
-        let floor = *theme::SCENE_W_RANGE.start();
-        assert_eq!(plate_width(floor - 1.0), None);
-        assert_eq!(plate_width(floor), Some(floor));
-    }
-
-    #[test]
-    fn a_drag_past_the_ceiling_stops_at_it() {
-        let ceiling = *theme::SCENE_W_RANGE.end();
-        assert_eq!(plate_width(ceiling + 200.0), Some(ceiling));
-    }
 }

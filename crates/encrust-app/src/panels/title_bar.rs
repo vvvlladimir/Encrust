@@ -42,11 +42,8 @@ pub fn ui(ui: &mut egui::Ui, window: &mut Window) {
             |ui| {
                 ui.spacing_mut().item_spacing.x = 6.0;
                 window_buttons(ui);
+                find_button(ui, window);
                 window_controls(ui, window);
-                find_button(ui);
-                if !window.machine.settings.open {
-                    print_chip(ui, window);
-                }
                 update_badge(ui, window.machine);
                 alpha_badge(ui, window.machine);
             },
@@ -54,7 +51,11 @@ pub fn ui(ui: &mut egui::Ui, window: &mut Window) {
         .response
         .rect;
 
-    let left = bar.with_max_x((right.left() - ENDS_GAP).max(bar.left()));
+    let mut left_end = right.left();
+    if !window.machine.settings.open {
+        left_end = centred_chip(ui, window, bar, right.left());
+    }
+    let left = bar.with_max_x((left_end - ENDS_GAP).max(bar.left()));
     ui.scope_builder(
         UiBuilder::new()
             .max_rect(left)
@@ -69,6 +70,32 @@ pub fn ui(ui: &mut egui::Ui, window: &mut Window) {
     );
 }
 
+/// The print chip in the middle of the window, or as near it as the right end lets it
+/// stand. Answers where it starts, which is as far as the left end may run.
+///
+/// It is placed by last frame's width, and a frame whose width changed is drawn again.
+fn centred_chip(ui: &mut egui::Ui, window: &mut Window, bar: Rect, right_end: f32) -> f32 {
+    let id = ui.id().with("print-chip-w");
+    let width = ui.data(|data| data.get_temp::<f32>(id)).unwrap_or(0.0);
+    let x = (bar.center().x - width / 2.0).min(right_end - ENDS_GAP - width);
+    let room = Rect::from_x_y_ranges(x..=right_end, bar.y_range());
+    let drawn = ui
+        .scope_builder(
+            UiBuilder::new()
+                .max_rect(room)
+                .layout(Layout::left_to_right(Align::Center)),
+            |ui| print_chip(ui, window),
+        )
+        .response
+        .rect
+        .width();
+    if (drawn - width).abs() > 0.5 {
+        ui.data_mut(|data| data.insert_temp(id, drawn));
+        ui.ctx().request_discard("the print chip changed width");
+    }
+    x
+}
+
 /// What belongs to the whole window rather than to the plate: the sheet of keys and the
 /// Settings screen.
 fn window_controls(ui: &mut egui::Ui, window: &mut Window) {
@@ -81,6 +108,9 @@ fn window_controls(ui: &mut egui::Ui, window: &mut Window) {
 }
 
 const MENUS: [&str; 3] = ["File", "Edit", "View"];
+/// Points inside a menu title either side of its name, and between two titles.
+const MENU_PAD: f32 = 8.0;
+const MENU_GAP: f32 = 4.0;
 
 /// egui draws its own menu bar: there is no native one on the platforms this runs on.
 fn menu(ui: &mut egui::Ui, window: &mut Window) {
@@ -91,6 +121,9 @@ fn menu(ui: &mut egui::Ui, window: &mut Window) {
         visuals.widgets.inactive.fg_stroke.color = theme::colors().text_mid;
         visuals.widgets.hovered.bg_stroke = egui::Stroke::NONE;
         visuals.widgets.active.bg_stroke = egui::Stroke::NONE;
+        // Room inside and between the titles, so each reads as a button of its own.
+        ui.spacing_mut().button_padding.x = MENU_PAD;
+        ui.spacing_mut().item_spacing.x = MENU_GAP;
 
         // A menu bar takes every point it is offered, so it is offered what its titles need.
         let font = egui::TextStyle::Button.resolve(ui.style());
@@ -178,7 +211,14 @@ fn print_chip(ui: &mut egui::Ui, window: &mut Window) {
     let painter = ui.painter();
     for (index, (part, zone)) in parts.into_iter().zip(zones).enumerate() {
         let lit = index == 2 && open;
-        part.paint(painter, zone, lit, responses[index].hovered());
+        // Square where a part meets the rule between the resin and the settings.
+        let mut radius = theme::R_CONTROL;
+        match index {
+            1 => (radius.ne, radius.se) = (0, 0),
+            2 => (radius.nw, radius.sw) = (0, 0),
+            _ => {}
+        }
+        part.paint(painter, zone, radius, lit, responses[index].hovered());
     }
     painter.text(
         pos2(zones[0].right() + slash_w / 2.0, rect.center().y),
@@ -257,12 +297,19 @@ impl Part {
         }
     }
 
-    fn paint(self, painter: &egui::Painter, zone: Rect, lit: bool, hovered: bool) {
+    fn paint(
+        self,
+        painter: &egui::Painter,
+        zone: Rect,
+        radius: egui::CornerRadius,
+        lit: bool,
+        hovered: bool,
+    ) {
         let colors = theme::colors();
         if lit {
-            painter.rect_filled(zone, theme::R_CONTROL, colors.raised);
+            painter.rect_filled(zone, radius, colors.raised);
         } else if hovered {
-            painter.rect_filled(zone, theme::R_CONTROL, colors.hover);
+            painter.rect_filled(zone, radius, colors.hover);
         }
         let glyph_tint = if lit {
             colors.accent_soft
@@ -301,21 +348,28 @@ impl Part {
 
 /// Where the search over every tool, field and setting will open. Drawn already, so the
 /// bar keeps its shape. TODO(step-5): the palette behind it, with its own ADR.
-fn find_button(ui: &mut egui::Ui) {
+fn find_button(ui: &mut egui::Ui, window: &mut Window) {
     let colors = theme::colors();
-    let tint = colors.text_low.gamma_multiply(0.6);
+    let tint = colors.text_low;
     let label = ui
         .painter()
         .layout_no_wrap("Find".to_owned(), theme::label(), tint);
     let keys = ui
         .painter()
-        .layout_no_wrap("\u{2318}K".to_owned(), theme::small(), tint);
+        .layout_no_wrap(shortcuts::text(Action::Find), theme::small(), tint);
     let width = PAD + 18.0 + label.size().x + 16.0 + keys.size().x + PAD;
-    let (rect, response) = ui.allocate_exact_size(vec2(width, theme::CHIP_H), Sense::hover());
+    let (rect, response) = ui.allocate_exact_size(vec2(width, theme::CHIP_H), Sense::click());
+    response.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Button, true, "Find"));
     let painter = ui.painter();
-    painter.rect_stroke(
+    let fill = if response.hovered() {
+        colors.hover
+    } else {
+        egui::Color32::TRANSPARENT
+    };
+    painter.rect(
         rect,
         theme::R_CONTROL,
+        fill,
         Stroke::new(1.0, colors.hairline),
         egui::StrokeKind::Inside,
     );
@@ -343,7 +397,13 @@ fn find_button(ui: &mut egui::Ui) {
         keys,
         tint,
     );
-    response.on_hover_text("Finding any tool, field or setting is still to come");
+    focus_ring(ui, &response, theme::R_CONTROL);
+    if response
+        .on_hover_text("Find a tool, an action or a model")
+        .clicked()
+    {
+        window.view.options.find = true;
+    }
 }
 
 fn toggle_maximised(ctx: &egui::Context) {
@@ -683,10 +743,6 @@ fn view_menu(ui: &mut egui::Ui, window: &mut Window) {
             &window.doc.plate,
             &mut window.view.camera,
         );
-    }
-    if item(ui, "Plate contents", Action::PlatePanel).clicked() {
-        ui.close();
-        window.view.options.plate_panel = !window.view.options.plate_panel;
     }
     ui.checkbox(&mut window.view.options.grid, "Plate grid");
     ui.checkbox(&mut window.view.options.xray, "See through models");

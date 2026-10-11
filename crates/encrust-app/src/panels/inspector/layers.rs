@@ -7,7 +7,7 @@ use crate::slicing::{MAX_LAYER_HEIGHT_MM, MIN_LAYER_HEIGHT_MM};
 use crate::state::Machine;
 use crate::ui::{
     Carried, Segment, Segmented, carried_row, describe, hint, icon, icon_button, nested,
-    number_row, secondary_button, section, subheading, switch, theme, tone,
+    number_row, secondary_button, section, subheading_with_switch, switch, theme, tone,
 };
 
 /// Eight greys is what other slicers call anti-aliasing level 8, and the most a panel
@@ -57,7 +57,6 @@ pub fn layers(ui: &mut egui::Ui, machine: &mut Machine) -> bool {
         exposure_note(ui, slicing);
         samples_row(ui, &mut slicing.samples);
 
-        subheading(ui, "Adaptive height");
         adaptive_rows(ui, slicing)
     })
     .unwrap_or_default()
@@ -317,7 +316,7 @@ fn adaptive_rows(ui: &mut egui::Ui, slicing: &mut crate::slicing::Slicing) -> bo
     let mut on = slicing.adaptive.is_some();
     let flipped = ui
         .add_enabled_ui(!refused, |ui| {
-            switch(ui, &mut on, "Against a cusp target").changed()
+            subheading_with_switch(ui, "Adaptive height", &mut on)
         })
         .inner;
     if flipped {

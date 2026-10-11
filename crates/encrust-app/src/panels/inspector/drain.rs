@@ -76,15 +76,15 @@ pub fn action(ui: &mut egui::Ui, window: &mut Window) {
     let points = channel_points(window);
     if window.tools.drain.placing == Placing::Channel && points > 0 {
         let label = format!("Dig the channel ({points} points)");
-        if primary_button(ui, icon::DRAIN, &label, true).clicked() {
+        let what = "A tube of the hole size runs under every point, open at its two ends alone.";
+        if primary_button(ui, icon::DRAIN, &label, true)
+            .on_hover_text(what)
+            .clicked()
+        {
             let dug = window.tools.drain.finish_channels(&mut window.doc.scene);
             window.machine.status = crate::status::Status::Info(format!("{dug} channel(s) dug"));
             rebuild_around_cuts(window);
         }
-        hint(
-            ui,
-            "A tube of the hole size runs under every point, open at its two ends alone.",
-        );
         return;
     }
     if window.tools.drain.job.is_some() {
@@ -98,14 +98,14 @@ pub fn action(ui: &mut egui::Ui, window: &mut Window) {
     } else {
         "Check drainage"
     };
-    if primary_button(ui, icon::DRAIN, label, !window.doc.scene.is_empty()).clicked() {
+    let what = "Cuts the plate and follows the air through it, looking for resin with no way out.";
+    if primary_button(ui, icon::DRAIN, label, !window.doc.scene.is_empty())
+        .on_hover_text(what)
+        .clicked()
+    {
         let started = window.tools.drain.start(&window.doc.scene, layer_height_mm);
         window.machine.status.report("Checking drainage", started);
     }
-    hint(
-        ui,
-        "Cuts the plate and follows the air through it, looking for resin with no way out.",
-    );
 }
 
 /// The points a channel is laid out along, not dug yet.

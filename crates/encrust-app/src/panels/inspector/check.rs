@@ -7,7 +7,7 @@ use crate::ui::{
     Segment, Segmented, describe, focus_ring, hint, icon, issue_row, list, readings,
     secondary_button, section, theme,
 };
-use crate::workspace::{Mode, Tool};
+use crate::workspace::Tool;
 
 /// Rows listed before the rest are only counted: a stack with hundreds of islands needs
 /// supports, not scrolling.
@@ -145,13 +145,9 @@ fn waiting(ui: &mut egui::Ui, window: &mut Window) {
     section(ui, "Checking", None, |ui| {
         hint(
             ui,
-            "The check reads the layers, which are cut once the model is shown beside its \
-             layer.",
+            "The check reads the layers, which are cut as soon as there is a model on the \
+             plate and a machine to cut it for.",
         );
-        if secondary_button(ui, icon::SIDE_BY_SIDE, "Cut the layers").clicked() {
-            *window.mode = Mode::Preview;
-            window.view.options.mask_only = false;
-        }
     });
 }
 

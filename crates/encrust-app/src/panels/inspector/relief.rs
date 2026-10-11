@@ -240,19 +240,23 @@ pub fn action(ui: &mut egui::Ui, window: &mut Window) {
     }
 
     let blocked = window.tools.relief.blocker(&window.doc.scene);
-    if primary_button(ui, icon::RELIEF, "Press it in", blocked.is_none()).clicked() {
-        let started = window.tools.relief.start(&window.doc.scene);
-        window.machine.status.report("Pressing the relief", started);
-    }
-
-    let what = match &window.tools.relief.picture {
+    let picture = match &window.tools.relief.picture {
         Some(picture) => picture.name.as_str(),
         None => "the texture",
     };
-    let scope = format!(
-        "Presses {what} into {}. The model is replaced, so its supports and its cavity go \
-         with it.",
+    let what = format!(
+        "Presses {picture} into {}. The model is replaced, so its supports and its cavity \
+         go with it.",
         window.doc.scene.scope()
     );
-    hint(ui, blocked.unwrap_or(&scope));
+    if primary_button(ui, icon::RELIEF, "Press it in", blocked.is_none())
+        .on_hover_text(what)
+        .clicked()
+    {
+        let started = window.tools.relief.start(&window.doc.scene);
+        window.machine.status.report("Pressing the relief", started);
+    }
+    if let Some(reason) = blocked {
+        hint(ui, reason);
+    }
 }

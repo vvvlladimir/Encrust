@@ -134,6 +134,13 @@ and a screen reader can name it. A `number_field` is given its name, since the l
 it is painted separately. A surface steered only by the pointer senses `Sense::DRAG` or
 `Sense::CLICK`, which Tab skips (ADR 0229).
 
+What a block `describe`s is read from the ringed question mark beside its title
+(`help_mark`), on hover and in a popup a click holds open; nothing describing a block is
+printed in it. A block or a group turned on by one switch carries that switch in its
+heading (`section_with_switch`, `subheading_with_switch`) rather than naming it twice. A
+tool's action stands at the card's foot with no caption: what it does is its tooltip, and
+only the reason it cannot run is written under it (ADR 0230).
+
 ## Layout
 
 `panels::Window::show` builds the window in a fixed order. Nothing is dockable. Under the
@@ -160,27 +167,28 @@ as tall as what it holds; see `docs/decisions/0221`.
 The top bar is the window's own title bar rather than a band under one: it drags the
 window, double-clicks to maximise, and on every platform but macOS draws its own window
 buttons; on macOS the system's are moved onto its centre line. See `docs/decisions/0104`
-and `0217`. The File, Edit and View menus stand at its left end. The chip at the right
-names the machine and the resin, each opening its list, and the layer height and exposure,
-which open the print settings.
+and `0217`. The File, Edit and View menus stand at its left end. The chip in the middle of
+the window names the machine and the resin, each opening its list, and the layer height
+and exposure, which open the print settings. Find, at the right, opens a palette of every
+tool, every action of the key table and every model on the plate (`panels/find.rs`,
+`docs/decisions/0230`).
 
 The tools are a rail at the stage's left edge with the inspector beside it: what is picked
 opens next to where it was picked. The rail is always the stage's height; a tall screen
 spreads its gaps up to a ceiling, a short one drops the names, then closes the gaps, and
 only then scrolls. The plates are a row of numbered squares at the head of
-the models card, which keeps only them when it folds; a right click on one duplicates,
+the models card; a right click on one duplicates,
 removes or gathers the selection onto it. The sheet of keys and the gear stand at the top bar's right end.
 
 A side card past the room it has scrolls its list — the tool's sections, the plate's
 models — and keeps its foot in view (`ui::body_and_foot`). Both side cards are dragged by
-their inner edge, and the plate folds away when that drag goes past its floor; a button
-beside the plates brings it back. Under the models, standing on the stage's foot, a card of
+their inner edge, between a floor and a ceiling; neither folds away. Under the models, standing on the stage's foot, a card of
 its own states the plate's figures, or the layer's own in Preview, over Slice; the caret beside Slice holds
 every plate at once and the bound machine.
 
 The layer strip stands the stage's full height at its right edge, in every view, its top
 the top of the print. It switches the view — the model, the model beside its layer, the
-layer alone — reads the layer and its height, and its track moves the cut, with a layer
+layer alone, which M steps through and Shift M steps back — reads the layer and its height, and its track moves the cut, with a layer
 up over it and a layer down and play under it. The track carries the exposure bands down
 its left, the cured area as a profile either side of the rule and a tick at each risk; a
 click on the layer figure opens it for typing, and Enter goes there. The profile and the risks show in the model view too while

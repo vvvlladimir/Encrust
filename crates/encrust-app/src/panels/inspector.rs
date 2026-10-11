@@ -21,7 +21,7 @@ pub use check::tint as risk_tint;
 use egui::{Align, Layout, RichText, Sense, UiBuilder, vec2};
 
 use crate::panels::Window;
-use crate::ui::{body_and_foot, card_foot, hairline, icon, icon_button, theme};
+use crate::ui::{body_and_foot, card_foot, hairline, help_mark, theme};
 use crate::workspace::Tool;
 
 /// The card beside the rail: the open tool, whatever the stage shows, no taller than
@@ -170,18 +170,8 @@ fn header(ui: &mut egui::Ui, window: &mut Window, tool: Tool) {
             .font(theme::tool_title())
             .color(colors.text_high),
     );
-    child
-        .label(
-            RichText::new(icon::QUESTION)
-                .font(theme::icon(13.0))
-                .color(colors.text_low),
-        )
-        .on_hover_text(help(tool));
+    help_mark(&mut child, &[help(tool)]);
     child.with_layout(Layout::right_to_left(Align::Center), |ui| {
-        let tooltip = "Fold the inspector (press the tool again)";
-        if icon_button(ui, icon::FOLD, tooltip).clicked() {
-            window.view.options.inspector = false;
-        }
         if let Some((text, color)) = fact(window, tool) {
             ui.add(
                 egui::Label::new(RichText::new(text).font(theme::figures(11.5)).color(color))

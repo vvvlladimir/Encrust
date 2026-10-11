@@ -46,9 +46,9 @@ pub fn ui(ui: &mut egui::Ui, window: &mut Window) -> egui::Rect {
     // gizmo takes the pointer away from it. See `viewport_input.rs`.
     let (rect, _) = ui.allocate_exact_size(ui.available_size(), Sense::hover());
 
-    // The sheet is modal: a click meant for it must not orbit the plate or drill a hole
+    // The sheet and Find are modal: a click meant for them must not orbit the plate or drill a hole
     // in the model. The pointer is read from the raw input, which no modal layer covers.
-    let pointer = if window.view.options.sheet {
+    let pointer = if window.view.options.modal() {
         Pointer::idle()
     } else {
         pointer_state(ui, rect)
@@ -222,7 +222,7 @@ fn draw_tool_overlays(ui: &egui::Ui, window: &mut Window, rect: egui::Rect, poin
         draw_facet(ui, window, rect);
     }
     // While a face is being picked the click is for the model, not for a handle over it.
-    if !window.view.options.sheet
+    if !window.view.options.modal()
         && *window.tool == Tool::Position
         && !window.tools.orient.picking_face
     {

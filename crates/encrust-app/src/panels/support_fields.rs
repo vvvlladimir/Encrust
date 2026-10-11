@@ -67,6 +67,14 @@ impl Group {
         }
     }
 
+    /// The switch that turns the whole group on, which its heading carries.
+    pub fn switch(self, profile: &mut SupportProfile) -> Option<&mut bool> {
+        match self {
+            Self::Branching => Some(&mut profile.branching.enabled),
+            _ => None,
+        }
+    }
+
     /// Draws the group's fields, then puts the widths back in order.
     pub fn show(self, ui: &mut egui::Ui, profile: &mut SupportProfile) {
         match self {
@@ -248,7 +256,6 @@ fn small_pillar(ui: &mut egui::Ui, profile: &mut SupportProfile) {
 /// How nearby tips merge into shared trunks on the way down.
 fn branching(ui: &mut egui::Ui, profile: &mut SupportProfile) {
     let branching = &mut profile.branching;
-    switch(ui, &mut branching.enabled, "Branching");
     if !branching.enabled {
         describe(ui, "Every tip stands on a column of its own.");
         return;

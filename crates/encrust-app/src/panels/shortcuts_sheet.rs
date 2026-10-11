@@ -2,16 +2,21 @@
 
 use egui::{Align, Align2, Layout, RichText, Sense, StrokeKind, vec2};
 
-use crate::shortcuts::{BINDINGS, GESTURES, Group, chord_text};
+use crate::shortcuts::{BINDINGS, GESTURES, Group, chord_keys};
 use crate::ui::{dialog_frame, dialog_head, hairline, icon, theme};
 
 /// The groups down each column, split so the two columns come out about even.
 const LEFT: [Group; 2] = [Group::Tools, Group::Plate];
 const RIGHT: [Group; 3] = [Group::Window, Group::Layers, Group::Files];
 
-const COLUMN_W: f32 = 268.0;
+const COLUMN_W: f32 = 300.0;
 const COLUMN_GAP: f32 = 32.0;
-const ROW_H: f32 = 24.0;
+const ROW_H: f32 = 28.0;
+/// Points between the keys of one chord, and either side of the "or" between two chords.
+const KEY_GAP: f32 = 3.0;
+const OR_GAP: f32 = 6.0;
+/// What the sheet leaves of the window's height for its head, its foot and its margin.
+const CHROME_H: f32 = 200.0;
 
 /// Padding inside a keycap, and the smallest one a single character gets.
 const CAP_PAD: egui::Vec2 = vec2(7.0, 3.0);
@@ -25,11 +30,17 @@ pub fn ui(ctx: &egui::Context, open: &mut bool) {
             ui.set_width(COLUMN_W * 2.0 + COLUMN_GAP);
             header(ui, open);
             ui.add_space(10.0);
-            ui.horizontal_top(|ui| {
-                column(ui, &LEFT);
-                ui.add_space(COLUMN_GAP);
-                column(ui, &RIGHT);
-            });
+            let room = (ui.ctx().content_rect().height() - CHROME_H).max(ROW_H * 4.0);
+            egui::ScrollArea::vertical()
+                .max_height(room)
+                .auto_shrink([false, true])
+                .show(ui, |ui| {
+                    ui.horizontal_top(|ui| {
+                        column(ui, &LEFT);
+                        ui.add_space(COLUMN_GAP);
+                        column(ui, &RIGHT);
+                    });
+                });
             ui.add_space(14.0);
             hairline(ui);
             ui.add_space(8.0);
@@ -70,18 +81,19 @@ fn column(ui: &mut egui::Ui, groups: &[Group]) {
             );
             ui.add_space(4.0);
             for binding in BINDINGS.iter().filter(|binding| binding.group == *group) {
-                let caps: Vec<String> = binding.keys.iter().map(chord_text).collect();
-                row(ui, binding.action.label(), &caps);
+                let chords: Vec<Vec<&str>> = binding.keys.iter().map(chord_keys).collect();
+                row(ui, binding.action.label(), &chords);
             }
             for gesture in GESTURES.iter().filter(|gesture| gesture.group == *group) {
-                row(ui, gesture.label, &[gesture.keys.to_owned()]);
+                row(ui, gesture.label, &[vec![gesture.keys]]);
             }
         }
     });
 }
 
-/// What the keys do on the left, the keycaps themselves on the right.
-fn row(ui: &mut egui::Ui, label: &str, caps: &[String]) {
+/// What the keys do on the left, the keycaps themselves on the right: one cap a key, and
+/// "or" between two chords that do the same.
+fn row(ui: &mut egui::Ui, label: &str, chords: &[Vec<&str>]) {
     let (rect, _) = ui.allocate_exact_size(vec2(COLUMN_W, ROW_H), Sense::hover());
     let colors = theme::colors();
     ui.painter().text(
@@ -93,8 +105,14 @@ fn row(ui: &mut egui::Ui, label: &str, caps: &[String]) {
     );
 
     let mut right = rect.right();
-    for cap in caps.iter().rev() {
-        right = keycap(ui, cap, right, rect.center().y) - 5.0;
+    for (index, chord) in chords.iter().rev().enumerate() {
+        if index > 0 {
+            right = or(ui, right - OR_GAP, rect.center().y) - OR_GAP;
+        }
+        for key in chord.iter().rev() {
+            right = keycap(ui, key, right, rect.center().y) - KEY_GAP;
+        }
+        right += KEY_GAP;
     }
     ui.painter().hline(
         rect.x_range(),
@@ -103,11 +121,22 @@ fn row(ui: &mut egui::Ui, label: &str, caps: &[String]) {
     );
 }
 
+/// The word between two chords, drawn from its right edge leftwards. Returns its left.
+fn or(ui: &egui::Ui, right: f32, center_y: f32) -> f32 {
+    let galley =
+        ui.painter()
+            .layout_no_wrap("or".to_owned(), theme::small(), theme::colors().text_low);
+    let left = right - galley.size().x;
+    let at = egui::pos2(left, center_y - galley.size().y / 2.0);
+    ui.painter().galley(at, galley, theme::colors().text_low);
+    left
+}
+
 /// One keycap, drawn from its right edge leftwards. Returns the edge it ended on, so the
 /// next cap of the same row knows where to go.
 fn keycap(ui: &egui::Ui, text: &str, right: f32, center_y: f32) -> f32 {
     let colors = theme::colors();
-    let font = theme::figures(11.0);
+    let font = theme::figures(12.0);
     let galley = ui
         .painter()
         .layout_no_wrap(text.to_owned(), font, colors.text_mid);

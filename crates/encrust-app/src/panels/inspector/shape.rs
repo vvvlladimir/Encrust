@@ -5,7 +5,8 @@ use crate::panels::support_diagram::{self, Part};
 use crate::panels::support_fields::Group;
 use crate::settings::keep_support;
 use crate::ui::{
-    Segment, Segmented, icon, icon_button, secondary_button, section, subheading, theme,
+    Segment, Segmented, icon, icon_button, secondary_button, section, subheading,
+    subheading_with_switch, theme,
 };
 
 /// The groups of the profile's fields a part is drawn from, tip down to plate.
@@ -41,7 +42,12 @@ pub fn ui(ui: &mut egui::Ui, window: &mut Window) {
         ui.add_space(6.0);
         for group in groups(part) {
             if groups(part).len() > 1 {
-                subheading(ui, group.label());
+                match group.switch(profile) {
+                    Some(on) => {
+                        subheading_with_switch(ui, group.label(), on);
+                    }
+                    None => subheading(ui, group.label()),
+                }
             }
             group.show(ui, profile);
         }

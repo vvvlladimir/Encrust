@@ -9,7 +9,7 @@ use crate::panels::{
     Window, duplicate_selection, frame_view, section, slice_this_plate, toggle_settings,
 };
 use crate::status::Status;
-use crate::workspace::{Mode, Tool};
+use crate::workspace::Tool;
 
 /// What a key asks the window to do.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -21,11 +21,12 @@ pub enum Action {
     Deselect,
     Duplicate,
     Remove,
-    ToggleMode,
-    PlatePanel,
+    /// Views to move along the strip's three, wrapping: the next is positive.
+    View(i8),
     FrameView,
     Settings,
     Sheet,
+    Find,
     /// Layers to move through the stack, signed: up the stack is positive.
     Step(i64),
     Play,
@@ -49,11 +50,12 @@ impl Action {
             Self::Deselect => "Deselect",
             Self::Duplicate => "Duplicate",
             Self::Remove => "Remove from the plate",
-            Self::ToggleMode => "Model, or model and layer",
-            Self::PlatePanel => "Plate contents",
+            Self::View(step) if step > 0 => "Next view",
+            Self::View(_) => "Previous view",
             Self::FrameView => "Frame the view",
             Self::Settings => "Settings",
             Self::Sheet => "This sheet",
+            Self::Find => "Find",
             Self::Step(1) => "One layer on",
             Self::Step(-1) => "One layer back",
             Self::Step(layers) if layers > 0 => "Ten layers on",
@@ -179,10 +181,11 @@ pub const BINDINGS: &[Binding] = &[
     ),
     bind(Group::Plate, Action::Undo, &[cmd(Key::Z)]),
     bind(Group::Plate, Action::Redo, &[cmd_shift(Key::Z)]),
-    bind(Group::Window, Action::ToggleMode, &[plain(Key::M)]),
-    bind(Group::Window, Action::PlatePanel, &[plain(Key::Backslash)]),
+    bind(Group::Window, Action::View(1), &[plain(Key::M)]),
+    bind(Group::Window, Action::View(-1), &[shift(Key::M)]),
     bind(Group::Window, Action::FrameView, &[plain(Key::F)]),
     bind(Group::Window, Action::Settings, &[cmd(Key::Comma)]),
+    bind(Group::Window, Action::Find, &[cmd(Key::K)]),
     bind(
         Group::Window,
         Action::Sheet,
@@ -345,53 +348,54 @@ pub fn chords(action: Action) -> &'static [KeyboardShortcut] {
         .map_or(&[], |binding| binding.keys)
 }
 
-/// What one chord reads as. egui spells its key names out — "Questionmark", "Backslash" —
-/// which is not what a keycap says.
+/// What one chord reads as, all its keys run together as a tooltip shows them.
 pub fn chord_text(chord: &KeyboardShortcut) -> String {
-    let modifiers = chord.modifiers;
-    let mut text = String::new();
-    if cfg!(target_os = "macos") {
-        // Apple's order, and no separator: the glyphs are the separator.
-        for (held, glyph) in [
-            (modifiers.ctrl, "Ctrl "),
-            (modifiers.alt, "Alt "),
-            (modifiers.shift, "\u{21e7}"),
-            (modifiers.command || modifiers.mac_cmd, "\u{2318}"),
-        ] {
-            if held {
-                text.push_str(glyph);
-            }
-        }
-    } else {
-        for (held, name) in [
-            (modifiers.ctrl || modifiers.command, "Ctrl+"),
-            (modifiers.alt, "Alt+"),
-            (modifiers.shift, "Shift+"),
-        ] {
-            if held {
-                text.push_str(name);
-            }
-        }
-    }
-    text.push_str(key_text(chord.logical_key));
-    text
+    let separator = if cfg!(target_os = "macos") { "" } else { "+" };
+    chord_keys(chord).join(separator)
 }
 
-/// The face of a keycap. Only the keys the table uses need one of their own; everything
-/// else is already what egui calls it.
+/// The face of each key a chord holds down, modifiers first, one keycap each.
+///
+/// The Mac's key symbols are Phosphor glyphs: the text fonts have no ⇧, ⌥ or ⏎, and a
+/// missing glyph draws as an empty box.
+pub fn chord_keys(chord: &KeyboardShortcut) -> Vec<&'static str> {
+    let modifiers = chord.modifiers;
+    let held = if cfg!(target_os = "macos") {
+        // Apple's order.
+        vec![
+            (modifiers.ctrl, crate::ui::icon::KEY_CONTROL),
+            (modifiers.alt, crate::ui::icon::KEY_OPTION),
+            (modifiers.shift, crate::ui::icon::KEY_SHIFT),
+            (
+                modifiers.command || modifiers.mac_cmd,
+                crate::ui::icon::KEY_COMMAND,
+            ),
+        ]
+    } else {
+        vec![
+            (modifiers.ctrl || modifiers.command, "Ctrl"),
+            (modifiers.alt, "Alt"),
+            (modifiers.shift, "Shift"),
+        ]
+    };
+    held.into_iter()
+        .filter_map(|(held, face)| held.then_some(face))
+        .chain([key_text(chord.logical_key)])
+        .collect()
+}
+
+/// The face of a keycap. egui spells its key names out — "Questionmark", "Backslash" —
+/// which is not what a keycap says; only the keys the table uses need one of their own.
 fn key_text(key: Key) -> &'static str {
+    let mac = cfg!(target_os = "macos");
     match key {
         Key::Escape => "Esc",
-        Key::Backspace => "\u{232b}",
-        Key::Delete => {
-            if cfg!(target_os = "macos") {
-                "\u{2326}"
-            } else {
-                "Del"
-            }
-        }
-        Key::Enter => "\u{23ce}",
-        Key::Space => "\u{2423}",
+        Key::Backspace if mac => crate::ui::icon::KEY_BACKSPACE,
+        Key::Backspace => "Backspace",
+        Key::Delete => "Del",
+        Key::Enter if mac => crate::ui::icon::KEY_RETURN,
+        Key::Enter => "Enter",
+        Key::Space => "Space",
         Key::ArrowUp => "\u{2191}",
         Key::ArrowDown => "\u{2193}",
         Key::Questionmark => "?",
@@ -485,11 +489,7 @@ pub fn act(window: &mut Window, action: Action) {
         }
         Action::Duplicate => duplicate_selection(window),
         Action::Remove => remove(window),
-        Action::ToggleMode => {
-            *window.mode = other_mode(*window.mode);
-            window.view.options.mask_only = false;
-        }
-        Action::PlatePanel => window.view.options.plate_panel = !window.view.options.plate_panel,
+        Action::View(step) => section::turn_view(window, step),
         Action::FrameView => frame_view(
             &window.doc.scene,
             &window.doc.plate,
@@ -497,6 +497,7 @@ pub fn act(window: &mut Window, action: Action) {
         ),
         Action::Settings => toggle_settings(window.machine),
         Action::Sheet => window.view.options.sheet = true,
+        Action::Find => window.view.options.find = true,
         Action::Step(layers) => section::step(window, layers),
         Action::Play => section::play(window),
         Action::NewPlate => {
@@ -525,13 +526,6 @@ pub(crate) fn pick(window: &mut Window, tool: Tool) {
     let options = &mut window.view.options;
     options.inspector = *window.tool != tool || !options.inspector;
     *window.tool = tool;
-}
-
-fn other_mode(mode: Mode) -> Mode {
-    match mode {
-        Mode::Prepare => Mode::Preview,
-        Mode::Preview => Mode::Prepare,
-    }
 }
 
 fn remove(window: &mut Window) {
@@ -657,8 +651,9 @@ mod tests {
     }
 
     #[test]
-    fn m_asks_for_the_other_mode() {
-        assert_eq!(press(Key::M, Modifiers::NONE), vec![Action::ToggleMode]);
+    fn m_turns_the_view_and_shift_m_turns_it_back() {
+        assert_eq!(press(Key::M, Modifiers::NONE), vec![Action::View(1)]);
+        assert_eq!(press(Key::M, Modifiers::SHIFT), vec![Action::View(-1)]);
     }
 
     /// Tab walks egui's ring of controls, so the table must never bind it.
@@ -692,7 +687,7 @@ mod tests {
             ..Default::default()
         };
         let fired = take(&ctx, &mut input);
-        assert_eq!(fired, vec![Action::Step(10), Action::ToggleMode]);
+        assert_eq!(fired, vec![Action::Step(10), Action::View(1)]);
         assert_eq!(input.events.len(), 3, "Space, Esc and the bare arrow stay");
     }
 
@@ -718,7 +713,7 @@ mod tests {
             ..Default::default()
         };
         let fired = take(&egui::Context::default(), &mut input);
-        assert_eq!(fired, vec![Action::ToggleMode, Action::Step(1)]);
+        assert_eq!(fired, vec![Action::View(1), Action::Step(1)]);
         assert_eq!(input.events, vec![key_event(Key::G, Modifiers::NONE)]);
     }
 

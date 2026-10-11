@@ -175,10 +175,13 @@ impl SlicerApp {
     }
 
     /// The preview shows the plate as it is, so entering the mode with a stale stack, or
-    /// none, cuts one. Nothing to cut, or nothing to cut it for, and it stays empty: the
-    /// transport says which.
+    /// none, cuts one; so does opening Check or Export, which read their figures off the
+    /// stack. Nothing to cut, or nothing to cut it for, and it stays empty: the transport
+    /// says which.
     fn refresh_preview(&mut self) {
-        if self.mode != Mode::Preview || self.machine.preview.is_building() {
+        let reads_the_stack =
+            self.mode == Mode::Preview || matches!(self.tool, Tool::Check | Tool::Export);
+        if !reads_the_stack || self.machine.preview.is_building() {
             return;
         }
         // A file being shown is the file, not the plate: nothing about the scene makes it
@@ -621,12 +624,24 @@ mod tests {
     }
 
     #[test]
-    fn the_mode_key_switches_between_preparing_and_previewing() {
+    fn the_view_key_runs_through_the_three_views_and_back() {
         let mut app = SlicerApp::default();
-        shortcuts::act(&mut app.window(), shortcuts::Action::ToggleMode);
-        assert_eq!(app.mode, Mode::Preview);
-        shortcuts::act(&mut app.window(), shortcuts::Action::ToggleMode);
-        assert_eq!(app.mode, Mode::Prepare);
+        let turn = |app: &mut SlicerApp, step| {
+            shortcuts::act(&mut app.window(), shortcuts::Action::View(step));
+            (app.mode, app.view.options.mask_only)
+        };
+        assert_eq!(turn(&mut app, 1), (Mode::Preview, false), "side by side");
+        assert_eq!(turn(&mut app, 1), (Mode::Preview, true), "the layer alone");
+        assert_eq!(
+            turn(&mut app, 1),
+            (Mode::Prepare, false),
+            "round to the model"
+        );
+        assert_eq!(
+            turn(&mut app, -1),
+            (Mode::Preview, true),
+            "and back the other way"
+        );
     }
 
     /// Only the layer strip switches the view; a tool opens in the inspector beside it.
@@ -747,6 +762,51 @@ mod tests {
         app.mode = Mode::Prepare;
         app.carry_height();
         assert_eq!(app.view.section.height_mm, Some(3.5));
+    }
+
+    /// Check and Export read their figures off the stack, so opening either cuts it
+    /// without the user having to look at a layer first.
+    #[test]
+    fn opening_check_or_export_cuts_the_stack_in_the_model_view() {
+        for tool in [Tool::Check, Tool::Export] {
+            let fixture = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+                .join("tests/fixtures/cube.stl");
+            let mut app = SlicerApp::default();
+            let profile = app
+                .machine
+                .slicing
+                .catalogue
+                .printer("elegoo-saturn-4-ultra")
+                .expect("the printer ships")
+                .profile
+                .clone();
+            let id = Some("elegoo-saturn-4-ultra".to_owned());
+            crate::profiles::apply_printer(&mut app.window(), profile, id);
+            app.open_model(Handed::Path(fixture));
+            while app.doc.imports.poll(
+                &mut app.doc.scene,
+                &app.doc.plate,
+                &mut app.view.camera,
+                &mut app.doc.repairs,
+                &mut app.machine.status,
+            ) {
+                std::thread::yield_now();
+            }
+
+            app.refresh_preview();
+            assert!(
+                !app.machine.preview.is_building(),
+                "the model view alone cuts nothing"
+            );
+            app.tool = tool;
+            app.refresh_preview();
+            assert!(
+                app.machine.preview.is_building(),
+                "{} cuts the stack",
+                tool.label()
+            );
+            assert_eq!(app.mode, Mode::Prepare, "and the view stays on the model");
+        }
     }
 
     #[test]

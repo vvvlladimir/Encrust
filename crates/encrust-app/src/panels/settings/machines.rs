@@ -24,6 +24,8 @@ const MOST: egui::Vec2 = vec2(1080.0, 720.0);
 /// The machine's name and the tabs over the right side, and the action bar under it.
 const HEADER_H: f32 = 64.0;
 const FOOTER_H: f32 = 52.0;
+/// The foot of the machine list: Add a machine and the room either side of it.
+const LIST_FOOT_H: f32 = theme::BUTTON_H + 24.0;
 /// Room either side of what the right side shows.
 const SIDE_PAD: f32 = 20.0;
 
@@ -142,7 +144,7 @@ fn machine_list(ui: &mut Ui, window: &mut Window, action: &mut Option<Action>) {
         );
     });
     ui.add_space(8.0);
-    let footer_top = ui.max_rect().bottom() - FOOTER_H - 30.0;
+    let footer_top = ui.max_rect().bottom() - LIST_FOOT_H;
     let rows = Rect::from_min_max(ui.cursor().min, pos2(ui.max_rect().right(), footer_top));
     let catalogue = &window.machine.slicing.catalogue;
     let open = settings
@@ -168,7 +170,7 @@ fn machine_list(ui: &mut Ui, window: &mut Window, action: &mut Option<Action>) {
     });
     let foot = Rect::from_min_max(pos2(ui.max_rect().left(), footer_top), ui.max_rect().max);
     ui.painter().hline(foot.x_range(), foot.top(), stroke());
-    add_machine(&mut child(ui, foot.shrink(12.0)), catalogue, action);
+    add_machine(&mut child(ui, foot.shrink(12.0)), action);
 }
 
 fn empty_list(ui: &mut Ui, unsearched: bool) {
@@ -236,20 +238,11 @@ fn machine_row(
     response
 }
 
-/// The way into the library, and how much of it there is.
-fn add_machine(ui: &mut Ui, catalogue: &Catalogue, action: &mut Option<Action>) {
+/// The way into the library.
+fn add_machine(ui: &mut Ui, action: &mut Option<Action>) {
     if crate::ui::secondary_button(ui, icon::ADD, "Add a machine").clicked() {
         *action = Some(Action::OpenLibrary);
     }
-    let (shipped, makers) = crate::settings::library_size(catalogue);
-    ui.add_space(4.0);
-    ui.vertical_centered(|ui| {
-        ui.label(
-            RichText::new(format!("From {shipped} profiles by {makers} makers"))
-                .font(theme::small())
-                .color(theme::colors().text_low),
-        );
-    });
 }
 
 /// The machine picked in the list: its name and the tabs over what the open tab shows.

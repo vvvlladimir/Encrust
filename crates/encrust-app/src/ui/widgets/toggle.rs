@@ -14,36 +14,54 @@ const KNOB: f32 = 12.0;
 /// disabled one still shows its state, dimmed, rather than disappearing.
 pub fn switch(ui: &mut Ui, on: &mut bool, label: &str) -> Response {
     let colors = theme::colors();
-    let enabled = ui.is_enabled();
-    let (rect, mut response) =
-        ui.allocate_exact_size(vec2(ui.available_width(), theme::ROW_H), Sense::click());
-    if response.clicked() {
-        *on = !*on;
-        response.mark_changed();
-    }
-    response.widget_info(|| WidgetInfo::selected(WidgetType::Checkbox, enabled, *on, label));
-
-    let how_on = ui.ctx().animate_bool_with_time(response.id, *on, SLIDE_S);
-
-    let painter = ui.painter();
-    painter.text(
+    let size = vec2(ui.available_width(), theme::ROW_H);
+    let (rect, response) = flip(ui, size, on, label);
+    let ink = if ui.is_enabled() {
+        colors.text_mid
+    } else {
+        colors.text_low
+    };
+    ui.painter().text(
         pos2(rect.left(), rect.center().y),
         Align2::LEFT_CENTER,
         label,
         theme::label(),
-        if enabled {
-            colors.text_mid
-        } else {
-            colors.text_low
-        },
+        ink,
     );
-
     let track = Rect::from_min_size(
         pos2(rect.right() - TRACK.x, rect.center().y - TRACK.y / 2.0),
         TRACK,
     );
+    paint_track(ui, &response, track, *on);
+    response
+}
+
+/// The track alone, for a heading that already names what it turns on.
+pub fn bare_switch(ui: &mut Ui, on: &mut bool, name: &str) -> Response {
+    let (track, response) = flip(ui, TRACK, on, name);
+    paint_track(ui, &response, track, *on);
+    response
+}
+
+/// Takes the room a switch needs and turns `on` over when it is clicked.
+fn flip(ui: &mut Ui, size: egui::Vec2, on: &mut bool, name: &str) -> (Rect, Response) {
+    let enabled = ui.is_enabled();
+    let (rect, mut response) = ui.allocate_exact_size(size, Sense::click());
+    if response.clicked() {
+        *on = !*on;
+        response.mark_changed();
+    }
+    response.widget_info(|| WidgetInfo::selected(WidgetType::Checkbox, enabled, *on, name));
+    (rect, response)
+}
+
+fn paint_track(ui: &Ui, response: &Response, track: Rect, on: bool) {
+    let colors = theme::colors();
+    let enabled = ui.is_enabled();
+    let how_on = ui.ctx().animate_bool_with_time(response.id, on, SLIDE_S);
     let reached = if enabled { colors.accent } else { colors.line };
     let fill = colors.active.lerp_to_gamma(reached, how_on);
+    let painter = ui.painter();
     painter.rect_filled(track, egui::CornerRadius::same(255), fill);
 
     let travel = TRACK.x - KNOB - 4.0;
@@ -60,9 +78,7 @@ pub fn switch(ui: &mut Ui, on: &mut bool, label: &str) -> Response {
         colors.text_low
     };
     painter.rect_filled(knob, egui::CornerRadius::same(255), knob_color);
-    focus_ring(ui, &response, theme::R_CONTROL);
-
-    response
+    focus_ring(ui, response, theme::R_CONTROL);
 }
 
 /// Points kept clear either side of a segment's label.

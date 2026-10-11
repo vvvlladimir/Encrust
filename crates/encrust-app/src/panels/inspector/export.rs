@@ -1,7 +1,6 @@
 use egui::{Color32, RichText};
 
 use super::opened;
-use crate::job::{SlicedFormat, label_of};
 use crate::network::{Reach, Target};
 use crate::panels::Window;
 use crate::panels::plate_summary::file_readings;
@@ -40,16 +39,16 @@ pub fn fact(window: &Window) -> Option<(String, Color32)> {
 /// where there is one and to a file where there is not.
 pub fn action(ui: &mut egui::Ui, window: &mut Window) {
     if window.machine.network.sent.is_some() {
-        if primary_button(ui, icon::PLAY, "Start the print", true).clicked() {
+        let what = "The file is on the machine. Nobody is standing at it yet.";
+        if primary_button(ui, icon::PLAY, "Start the print", true)
+            .on_hover_text(what)
+            .clicked()
+        {
             window
                 .machine
                 .network
                 .start_print(&mut window.machine.status);
         }
-        hint(
-            ui,
-            "The file is on the machine. Nobody is standing at it yet.",
-        );
         return;
     }
 
@@ -111,8 +110,8 @@ pub fn action(ui: &mut egui::Ui, window: &mut Window) {
     }
 }
 
-/// What the file comes to, its name, how much of the project it holds, what it is
-/// written as, and the way to how it is cut.
+/// What the file comes to, its name, how much of the project it holds, and the way to
+/// how it is cut. What it is written as belongs to the printer's settings.
 fn file(ui: &mut egui::Ui, window: &mut Window) {
     let rows = file_readings(ui.ctx(), window);
     let plates = window.doc.scene.plates().len();
@@ -121,7 +120,6 @@ fn file(ui: &mut egui::Ui, window: &mut Window) {
         readings(ui, &rows);
         text_row(ui, "File name", &mut window.machine.slicing.file_stem);
         scope_row(ui, plates);
-        format_row(ui, &mut window.machine.slicing);
         to_print_settings =
             secondary_button(ui, icon::PARAMETERS, "Layers, exposure and edges").clicked();
     });
@@ -153,23 +151,6 @@ fn scope_row(ui: &mut egui::Ui, plates: usize) {
         ui.selectable_value(&mut every, true, &all);
     });
     ui.data_mut(|data| data.insert_temp(every_plate_id(), every));
-}
-
-/// The containers the machine in hand can be written into, the one in use named.
-fn format_row(ui: &mut egui::Ui, slicing: &mut crate::slicing::Slicing) {
-    let offered: Vec<SlicedFormat> = slicing.printer.as_ref().map_or_else(
-        || SlicedFormat::CHOICES.to_vec(),
-        |printer| SlicedFormat::choices_for(printer).collect(),
-    );
-    let mut chosen = slicing.format;
-    picker_row(ui, "export-format", "Format", label_of(chosen), |ui| {
-        for format in offered {
-            ui.selectable_value(&mut chosen, format, label_of(format));
-        }
-    });
-    if chosen != slicing.format {
-        slicing.set_format(chosen);
-    }
 }
 
 /// A drop-down that names its choice, under a label.
@@ -244,10 +225,12 @@ fn by_address(ui: &mut egui::Ui, network: &mut crate::network::Network) {
                 network.add(address);
                 network.draft.clear();
             }
-            ui.add(
-                egui::TextEdit::singleline(&mut network.draft)
-                    .hint_text("Add by address, 192.168.1.42")
-                    .desired_width(ui.available_width()),
+            let width = ui.available_width();
+            crate::ui::address_field(
+                ui,
+                &mut network.draft,
+                "Add by address, 192.168.1.42",
+                width,
             );
         });
     });

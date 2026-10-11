@@ -25,22 +25,8 @@ const BROKEN: &str = "broken";
 
 /// The models card at the right of the stage: which plate, what stands on it and what can
 /// be done to it. As tall as the list, which scrolls once the card would pass `max_h`
-/// points; see `docs/decisions/0221`. Folded, only the plates are left, with the way back.
+/// points; see `docs/decisions/0221`.
 pub fn ui(ui: &mut egui::Ui, window: &mut Window, max_h: f32) {
-    if !window.view.options.plate_panel {
-        egui::Frame::new()
-            .inner_margin(PLATES_MARGIN)
-            .show(ui, |ui| {
-                ui.horizontal(|ui| {
-                    plate_strip::ui(ui, &mut window.doc.scene, theme::SCENE_W);
-                    let tooltip = shortcuts::tooltip(Action::PlatePanel);
-                    if icon_button(ui, icon::FOLD, &tooltip).clicked() {
-                        window.view.options.plate_panel = true;
-                    }
-                });
-            });
-        return;
-    }
     egui::Frame::new()
         .inner_margin(PLATES_MARGIN)
         .show(ui, |ui| {
@@ -73,7 +59,7 @@ const PLATES_MARGIN: egui::Margin = egui::Margin::symmetric(12, 8);
 /// another model.
 fn header(ui: &mut egui::Ui, window: &mut Window) {
     let colors = theme::colors();
-    let (models, picked) = tally(&window.doc.scene);
+    let (tint, tally) = tally(&window.doc.scene);
     let (rect, _) = ui.allocate_exact_size(vec2(ui.available_width(), HEADER_H), Sense::hover());
     let inner = rect.shrink2(vec2(theme::PANEL_PAD, 0.0));
     ui.scope_builder(
@@ -88,17 +74,10 @@ fn header(ui: &mut egui::Ui, window: &mut Window) {
                     .color(colors.text_mid),
             );
             ui.label(
-                egui::RichText::new(models)
+                egui::RichText::new(tally)
                     .font(theme::figures(11.0))
-                    .color(colors.text_low),
+                    .color(tint),
             );
-            if let Some(picked) = picked {
-                ui.label(
-                    egui::RichText::new(picked)
-                        .font(theme::figures(11.0))
-                        .color(colors.picked),
-                );
-            }
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                 let tooltip = shortcuts::tooltip(Action::OpenModel);
                 if icon_button(ui, icon::ADD, &tooltip).clicked() {
@@ -112,12 +91,13 @@ fn header(ui: &mut egui::Ui, window: &mut Window) {
     );
 }
 
-/// How many models stand on the plate, and how many of them are picked when any are.
-fn tally(scene: &Scene) -> (String, Option<String>) {
-    let count = scene.here().count().to_string();
+/// How many models are picked, in the selection's colour, or with none picked how many
+/// stand on the plate.
+fn tally(scene: &Scene) -> (egui::Color32, String) {
+    let colors = theme::colors();
     match scene.selection().len() {
-        0 => (count, None),
-        picked => (count, Some(format!("{picked} selected"))),
+        0 => (colors.text_low, scene.here().count().to_string()),
+        picked => (colors.picked, format!("{picked} selected")),
     }
 }
 

@@ -1,6 +1,6 @@
 # 0221. Float the side columns over a stage the width of the window
 
-- **Status:** Accepted
+- **Status:** Accepted; the plate column's fold is superseded by 0230
 - **Date:** 2026-10-11
 
 ## Context

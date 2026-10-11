@@ -16,9 +16,9 @@ none of them told AccessKit what they were, and none showed when it held the foc
 
 ## Decision
 
-- **Tab is egui's.** Tab and Shift Tab walk the ring of controls; the model and the layer
-  are switched with M. A click does not focus a button in egui, so the pointer never
-  leaves one holding the keyboard.
+- **Tab is egui's.** Tab and Shift Tab walk the ring of controls; the three views of the
+  layer strip are stepped through with M, and back with Shift M. A click does not focus a
+  button in egui, so the pointer never leaves one holding the keyboard.
 - **The focused control keeps the keys that drive it.** While a control that is not a
   field holds the focus, `shortcuts::take` leaves Enter, Space, Esc and the bare arrows to
   egui: Enter and Space press the control, Esc lets go of it, the arrows move the focus.
@@ -39,7 +39,7 @@ The rail, the inspector, the top bar and the layer strip can be walked and press
 the keyboard and read by a screen reader. A test focuses each tool of the rail by its
 AccessKit name and presses Enter on it.
 
-Tab no longer switches the view; the sheet and the strip's tooltip say M. Esc on a focused
+Tab no longer switches the view; the sheet and the strip's tooltips say M. Esc on a focused
 control lets go of it rather than deselecting, so it takes a second Esc. The view cube and
 a double click — editing a resin, renaming a plate — have no keyboard way in; the Frame
 view key and the menus stand in for the first.
