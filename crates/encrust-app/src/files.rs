@@ -80,6 +80,8 @@ pub enum Wanted {
     SlicedFile,
     PrinterProfile,
     ResinProfile,
+    /// A greyscale picture the Relief tool presses in.
+    ReliefPicture,
 }
 
 impl Wanted {
@@ -97,6 +99,7 @@ impl Wanted {
             Self::SlicedFile => &[("Sliced file", &crate::sliced::EXTENSIONS)],
             Self::PrinterProfile => &[("Printer profile", &["toml"])],
             Self::ResinProfile => &[("Resin profile", &["toml"])],
+            Self::ReliefPicture => &[("Picture", &PICTURES)],
         }
     }
 
@@ -139,6 +142,9 @@ impl Wanted {
 
 /// The meshes a model is read from.
 pub const MESHES: [&str; 3] = ["stl", "obj", "3mf"];
+
+/// The pictures a relief is pressed from: what the window can decode.
+pub const PICTURES: [&str; 5] = ["png", "jpg", "jpeg", "bmp", "tga"];
 
 /// The project file, which is the one thing the window writes and reads back whole.
 pub const PROJECTS: [&str; 1] = [core_engine::project::EXTENSION];

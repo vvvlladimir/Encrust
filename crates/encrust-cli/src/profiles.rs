@@ -153,6 +153,11 @@ pub fn show(id: &str, kind: Option<Kind>) -> Result<(Kind, String)> {
                 Kind::Printer => catalogue.printer(id).ok()?.profile.to_toml_string(named),
                 Kind::Resin => catalogue.resin(id).ok()?.profile.to_toml_string(named),
                 Kind::Support => catalogue.support(id).ok()?.profile.to_toml_string(named),
+                Kind::Hollow | Kind::Drain => catalogue
+                    .presets(candidate)
+                    .find(|entry| entry.id == id)?
+                    .profile
+                    .to_toml_string(named),
             };
             Some(toml.map(|toml| (candidate, toml)))
         })

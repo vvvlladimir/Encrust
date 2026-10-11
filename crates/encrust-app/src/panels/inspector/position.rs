@@ -1,12 +1,13 @@
 use core_geometry::glam::EulerRot;
 use core_geometry::{Quat, Transform, Vec3};
+use core_plate::OrientGoal;
 
 use crate::import::recenter;
 use crate::panels::Window;
 use crate::plate::BuildPlate;
 use crate::scene::{Axis, ObjectId, Scene, SceneObject};
 use crate::ui::{
-    axis_label, compact_button, describe, field_label, hint, icon, icon_toggle, later,
+    axis_label, compact_button, describe, field_label, hint, icon, icon_toggle, nested,
     number_field, number_row, progress_bar, secondary_button, section, section_with_action, switch,
     theme,
 };
@@ -26,6 +27,9 @@ const TURN_DEG: f32 = 45.0;
 /// A scale this small is indistinguishable from a flattened object, which can be neither
 /// picked nor sliced.
 const MIN_SCALE: f32 = 1e-3;
+
+/// The tilt a limit starts at once it is switched on, degrees.
+const DEFAULT_TILT_DEG: f32 = 45.0;
 
 /// The highest a model may be lifted off the plate by typing, millimetres.
 const MAX_LIFT_MM: f32 = 100.0;
@@ -318,18 +322,38 @@ fn lift(ui: &mut egui::Ui, scene: &mut Scene, id: ObjectId) {
 fn orient(ui: &mut egui::Ui, window: &mut Window, id: ObjectId) {
     section(ui, "Orient", None, |ui| {
         describe(ui, "Turn the selection the way it prints best.");
-        // TODO(step-8): a goal for the search, the tilt it may reach, and faces kept off
-        // the plate by the blockers.
-        later(ui, |ui| {
-            egui::ComboBox::from_id_salt("orient-goal")
-                .width(ui.available_width())
-                .selected_text("Fewest supports")
-                .show_ui(ui, |_| {});
-            let mut tilt_deg = 45.0_f32;
-            crate::ui::number_row(ui, "Max tilt", &mut tilt_deg, "\u{b0}", 1.0, 0.0..=90.0, 0);
-            let mut respect = true;
-            switch(ui, &mut respect, "Respect blockers");
+        let settings = &mut window.tools.orient.settings;
+        ui.horizontal(|ui| {
+            field_label(ui, "Optimise for", theme::colors().text_mid, "");
+            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                egui::ComboBox::from_id_salt("orient-goal")
+                    .width(theme::FIELD_W)
+                    .selected_text(settings.goal.label())
+                    .show_ui(ui, |ui| {
+                        for goal in OrientGoal::ALL {
+                            ui.selectable_value(&mut settings.goal, goal, goal.label());
+                        }
+                    });
+            });
         });
+        let mut limited = settings.max_tilt_deg.is_some();
+        if switch(ui, &mut limited, "Limit the tilt").changed() {
+            settings.max_tilt_deg = limited.then_some(DEFAULT_TILT_DEG);
+        }
+        if let Some(tilt_deg) = settings.max_tilt_deg.as_mut() {
+            nested(ui, |ui| {
+                number_row(
+                    ui,
+                    "Max tilt",
+                    tilt_deg,
+                    "\u{b0}",
+                    ANGLE_DRAG,
+                    0.0..=180.0,
+                    0,
+                );
+            });
+            describe(ui, "Measured from the way the model stands now.");
+        }
         auto_orient(ui, window, id);
     });
 }

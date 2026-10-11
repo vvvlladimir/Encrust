@@ -389,17 +389,6 @@ pub fn progress_bar(ui: &mut Ui, fraction: Option<f32>) {
     );
 }
 
-/// What a control the design has and the window cannot do yet says on hover.
-const LATER: &str = "Not available yet";
-
-/// A control the design has and the window cannot do yet: drawn greyed out, and saying so
-/// on hover, so the layout is final before the work behind it is.
-pub fn later<R>(ui: &mut Ui, add: impl FnOnce(&mut Ui) -> R) -> R {
-    let shown = ui.add_enabled_ui(false, add);
-    shown.response.on_disabled_hover_text(LATER);
-    shown.inner
-}
-
 /// A one pixel divider across the full width of whatever is drawing it.
 pub fn hairline(ui: &mut Ui) {
     let (rect, _) = ui.allocate_exact_size(vec2(ui.available_width(), 1.0), Sense::hover());

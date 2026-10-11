@@ -1,3 +1,7 @@
+use printer_profiles::Kind;
+
+use super::presets;
+use super::scope::{self, Scoped};
 use crate::drain::Placing;
 use crate::panels::Window;
 use crate::panels::inspector::hollow;
@@ -25,6 +29,25 @@ const MAX_DEPTH_MM: f32 = 50.0;
 /// The holes that let the resin out of a hollow model, and the resin that cannot get out
 /// yet.
 pub fn ui(ui: &mut egui::Ui, window: &mut Window) {
+    let scoped = Scoped {
+        plate: |tools| &mut tools.drain.state,
+        own: |object| &mut object.own.drain,
+        read: |object| &object.own.drain,
+    };
+    let own = section(ui, "Settings", None, |ui| {
+        let own = scope::switch(ui, window, &scoped);
+        scope::editing(window, own, &scoped, |window| {
+            presets::bar(
+                ui,
+                &mut window.machine.slicing.catalogue,
+                &mut window.machine.status,
+                Kind::Drain,
+                &mut window.tools.drain.state,
+            );
+        });
+        own
+    })
+    .flatten();
     section(ui, "Trapped resin", None, |ui| drainage(ui, window));
     section(ui, "Opening", None, |ui| {
         describe(
@@ -33,7 +56,7 @@ pub fn ui(ui: &mut egui::Ui, window: &mut Window) {
              is cut the moment it is placed, hollow or not.",
         );
         placing(ui, window);
-        sizes(ui, window.tools);
+        scope::editing(window, own, &scoped, |window| sizes(ui, window.tools));
         placed(ui, window);
         if let Some(job) = window.tools.hollow.job.as_ref() {
             hollow::running(ui, job);

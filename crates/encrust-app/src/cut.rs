@@ -1,4 +1,9 @@
-use core_geometry::{Mesh, Plane, Scalar, Transform, Vec3, cut, diagnose, split, transform_mesh};
+use std::sync::Arc;
+
+use core_geometry::{
+    Mesh, Plane, Scalar, Transform, Vec3, cut, diagnose, pin, pin_spots, split, transform_mesh,
+};
+use core_volume::HoleSize;
 
 pub use core_engine::project::Keep;
 
@@ -18,7 +23,36 @@ pub struct CutTool {
     /// Whether each half is turned to stand on the face the cut left. The window's own,
     /// like a view switch: a project does not write it down.
     pub lay_flat: bool,
+    /// Pins on the lower half and sockets in the upper, so the two glue back true, or
+    /// `None` for a plain cut. Kept by the window, like `lay_flat`.
+    pub pins: Option<Pins>,
 }
+
+/// How many pins a cut puts in, and their size, millimetres.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct Pins {
+    pub count: usize,
+    pub diameter_mm: Scalar,
+    pub length_mm: Scalar,
+}
+
+impl Default for Pins {
+    fn default() -> Self {
+        Self {
+            count: 2,
+            diameter_mm: 4.0,
+            length_mm: 5.0,
+        }
+    }
+}
+
+/// How much wider and deeper a socket is than its pin, millimetres a side: enough for
+/// resin that cures a little proud, little enough that glue fills it.
+pub const PIN_CLEARANCE_MM: Scalar = 0.2;
+
+/// How far a pin reaches back into the half it stands on, millimetres, so the two are one
+/// solid rather than touching along the cut.
+const PIN_SINK_MM: Scalar = 0.1;
 
 impl Default for CutTool {
     fn default() -> Self {
@@ -29,6 +63,7 @@ impl Default for CutTool {
                 keep: Keep::Both,
             },
             lay_flat: false,
+            pins: None,
         }
     }
 }
@@ -85,6 +120,10 @@ impl CutTool {
             ));
         }
 
+        let pins = self.pins.filter(|_| self.state.keep == Keep::Both);
+        let spots = pins.map_or_else(Vec::new, |pins| {
+            pin_spots(&halves.below, plane, pins.diameter_mm / 2.0, pins.count)
+        });
         // Each half with the way its cut face looks: up the axis for the lower one.
         let up = plane.normal;
         let pieces: Vec<(String, Mesh, Vec3)> = match self.state.keep {
@@ -100,15 +139,30 @@ impl CutTool {
         for (name, mesh, cut_face) in pieces {
             let (piece, was_mended) = place(scene, name, mesh);
             mended += usize::from(was_mended);
-            if self.lay_flat
-                && let Some(object) = scene.get_mut(piece)
-            {
+            let Some(object) = scene.get_mut(piece) else {
+                continue;
+            };
+            let pinned = cut_face == up && !spots.is_empty();
+            if let Some(pins) = pins {
+                if cut_face == up {
+                    stand_pins(object, &spots, up, pins);
+                } else {
+                    drill_sockets(object, &spots, up, pins);
+                }
+            }
+            // A half with pins standing on its cut cannot lie on it.
+            if self.lay_flat && !pinned {
                 object.lay_face_down(cut_face);
             }
         }
+        let pinned = match (pins, spots.len()) {
+            (None, _) => String::new(),
+            (Some(_), 0) => "; the cut is too small for a pin".to_owned(),
+            (Some(_), placed) => format!(" with {placed} pin(s)"),
+        };
         match halves.open_loops {
             0 => Status::Info(format!(
-                "Cut {name} at {} {position_mm:.1} mm{}",
+                "Cut {name} at {} {position_mm:.1} mm{pinned}{}",
                 self.state.axis.label(),
                 mending(mended)
             )),
@@ -117,6 +171,52 @@ impl CutTool {
                 mending(mended)
             )),
         }
+    }
+}
+
+/// Stands a pin on each spot of `object`'s cut, sunk a little into it so the two are one
+/// solid where the slicer fills them.
+fn stand_pins(object: &mut SceneObject, spots: &[Vec3], up: Vec3, pins: Pins) {
+    if spots.is_empty() {
+        return;
+    }
+    let mut mesh = (*object.mesh).clone();
+    for spot in spots {
+        let base = *spot - up * PIN_SINK_MM;
+        let body = pin(
+            base,
+            up,
+            pins.diameter_mm / 2.0,
+            pins.length_mm + PIN_SINK_MM,
+        );
+        let offset = mesh.vertices.len() as u32;
+        mesh.vertices.extend_from_slice(&body.vertices);
+        mesh.faces.extend(
+            body.faces
+                .iter()
+                .map(|face| face.map(|index| index + offset)),
+        );
+    }
+    object.reshape(Arc::new(mesh));
+}
+
+/// Drills a socket for each pin into `object`'s cut, a clearance wider and deeper than
+/// the pin, as a drain hole is drilled: the window already keeps, undoes and slices those.
+fn drill_sockets(object: &mut SceneObject, spots: &[Vec3], up: Vec3, pins: Pins) {
+    let size = HoleSize {
+        diameter_mm: pins.diameter_mm + 2.0 * PIN_CLEARANCE_MM,
+        depth_mm: pins.length_mm + PIN_CLEARANCE_MM,
+        taper: 1.0,
+    };
+    for spot in spots {
+        object.hollow.add_drain(
+            &object.mesh,
+            &object.bvh,
+            *spot,
+            -up,
+            size,
+            object.transform,
+        );
     }
 }
 
@@ -217,6 +317,7 @@ mod tests {
                 keep,
             },
             lay_flat: false,
+            pins: None,
         }
     }
 
@@ -318,6 +419,30 @@ mod tests {
         let height = bounds.maxs.z - bounds.mins.z;
         assert!((height - 5.0).abs() < 1e-3, "got {height}");
         assert!(bounds.mins.z.abs() < 1e-3, "and stands on the plate");
+    }
+
+    #[test]
+    fn pins_stand_on_the_lower_half_and_sockets_go_into_the_upper() {
+        let (mut scene, id) = scene_with(cuboid(Vec3::new(40.0, 10.0, 20.0)), Transform::default());
+        let tool = CutTool {
+            pins: Some(Pins::default()),
+            ..at(Axis::Z, 10.0, Keep::Both)
+        };
+        let status = tool.apply(&mut scene, id);
+        assert!(!status.is_error());
+
+        let lower = &scene.objects()[0];
+        let upper = &scene.objects()[1];
+        let top = lower.world_bounds().expect("a half has bounds").maxs.z;
+        assert!(
+            (top - 15.0).abs() < 1e-3,
+            "5 mm pins stand on the 10 mm cut, got {top}"
+        );
+        assert!(
+            lower.summary.diagnostics.is_sound(),
+            "a pin is a closed shell of its own"
+        );
+        assert_eq!(upper.hollow.drains().len(), 2, "one socket a pin");
     }
 
     #[test]

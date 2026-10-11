@@ -35,7 +35,12 @@ fn islands(ui: &mut egui::Ui, window: &mut Window) {
         let islands: Vec<usize> = measured
             .risks()
             .iter()
-            .filter(|risk| matches!(risk.kind, RiskKind::Island { .. }))
+            .filter(|risk| {
+                matches!(
+                    risk.kind,
+                    RiskKind::Island { .. } | RiskKind::Floating { .. }
+                )
+            })
             .map(|risk| risk.layer)
             .collect();
         (islands.len(), islands.first().copied())

@@ -64,6 +64,7 @@ pub fn open_plate(project: &Project, opening: &Opening) -> Result<Plate, EngineE
         material,
         exposure: ExposurePlan::new(bands),
         remove_islands: slicing.remove_islands,
+        hanging_passes: slicing.hanging_passes,
         format: SlicedFormat::from(slicing.format).at_revision_of(printer.profile.output),
         raster_window: opening.raster_window,
         created_unix_s: opening.created_unix_s,

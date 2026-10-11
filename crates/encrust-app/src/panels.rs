@@ -69,7 +69,6 @@ impl Window<'_> {
             shortcuts_sheet::ui(ui.ctx(), &mut self.view.options.sheet);
         }
         report::ui(ui.ctx(), &self.doc.scene, self.tools, self.machine);
-        support_diagram::ui(ui.ctx(), self);
         settings::machines::window(ui.ctx(), self);
 
         // The Settings screen takes the whole window under the bar: a profile is edited

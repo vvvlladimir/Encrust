@@ -5,14 +5,20 @@ use core_geometry::Vec3;
 use core_supports::Part;
 
 use crate::camera::OrbitCamera;
+use crate::measure::Target;
 use crate::panels::Window;
 use crate::pick::occluded;
 use crate::render::{AXIS_LENGTH_MM, CutLine};
+use crate::scene::SceneObject;
 use crate::ui::theme;
 use crate::workspace::Tool;
 
 /// How wide the dot at each end of a measurement is drawn, in points.
 const MEASURE_END_R: f32 = 4.0;
+
+/// Dash of an axis leg of a measurement, points, and the shortest leg drawn at all, mm.
+const MEASURE_DASH: f32 = 6.0;
+const MEASURE_LEG_MIN_MM: f32 = 0.005;
 
 /// How far along each edge a bounds bracket reaches, as a fraction of that edge.
 const BRACKET_ARM: f32 = 0.15;
@@ -95,38 +101,137 @@ pub(super) fn cut_line(window: &Window) -> Option<CutLine> {
 /// Draws the span over the models rather than into them: a measurement is chrome, and
 /// putting it in the 3D pass would hide it inside the very feature being measured.
 pub(super) fn draw_measure(ui: &egui::Ui, window: &Window, viewport: egui::Rect) {
+    let measure = &window.tools.measure;
+    if measure.target == Target::Planes {
+        draw_planes(ui, window, viewport);
+        return;
+    }
     let on_screen = projector(&window.view.camera, viewport);
-
     let painter = ui.painter_at(viewport);
     let accent = theme::colors().accent;
-    for end in [
-        window.tools.measure.start(),
-        window.tools.measure.span().map(|(_, to)| to),
-    ]
-    .into_iter()
-    .flatten()
-    .filter_map(&on_screen)
-    {
+    let ends = [measure.start(), measure.span().map(|(_, to)| to)];
+    for end in ends.into_iter().flatten().filter_map(&on_screen) {
         painter.circle_filled(end, MEASURE_END_R, accent);
     }
 
-    let Some((from, to)) = window.tools.measure.span() else {
+    let (Some((from, to)), Some(distance_mm)) = (measure.span(), measure.distance_mm()) else {
         return;
     };
+    if measure.show_axes {
+        draw_axis_legs(&painter, &on_screen, from, to);
+    }
     let (Some(from), Some(to)) = (on_screen(from), on_screen(to)) else {
         return;
     };
     painter.line_segment([from, to], egui::Stroke::new(2.0, accent));
+    tag(
+        &painter,
+        from.lerp(to, 0.5),
+        format!("{distance_mm:.2} mm"),
+        accent,
+    );
+}
 
-    let Some(distance_mm) = window.tools.measure.distance_mm() else {
+/// The span walked along X, then Y, then Z, each leg in its axis colour with its length.
+fn draw_axis_legs(
+    painter: &egui::Painter,
+    on_screen: &impl Fn(Vec3) -> Option<egui::Pos2>,
+    from: Vec3,
+    to: Vec3,
+) {
+    let mut at = from;
+    for axis in 0..3 {
+        let mut next = at;
+        next[axis] = to[axis];
+        let colour = theme::colors().axis[axis];
+        let leg = (on_screen(at), on_screen(next));
+        if let (Some(a), Some(b)) = leg
+            && (next[axis] - at[axis]).abs() > MEASURE_LEG_MIN_MM
+        {
+            painter.add(egui::Shape::dashed_line(
+                &[a, b],
+                egui::Stroke::new(1.5, colour),
+                MEASURE_DASH,
+                MEASURE_DASH * 0.6,
+            ));
+            let text = format!("{:.2}", next[axis] - at[axis]);
+            tag(painter, a.lerp(b, 0.5), text, colour);
+        }
+        at = next;
+    }
+}
+
+/// Washes the picked planes, and draws the gap square across from the first to the
+/// second with what it measures.
+fn draw_planes(ui: &egui::Ui, window: &Window, viewport: egui::Rect) {
+    let on_screen = projector(&window.view.camera, viewport);
+    let painter = ui.painter_at(viewport);
+    let measure = &window.tools.measure;
+    for plane in measure.planes() {
+        let Some(object) = window.doc.scene.get(plane.id).filter(|it| plane.is_on(it)) else {
+            continue;
+        };
+        wash(
+            &painter,
+            &on_screen,
+            object,
+            &plane.faces,
+            theme::scene().facet,
+        );
+    }
+    let Some(gap) = measure.plane_gap() else {
         return;
     };
-    let label = format!("{distance_mm:.2} mm");
-    let middle = from.lerp(to, 0.5);
-    let galley = painter.layout_no_wrap(label, theme::body(), theme::colors().text_high);
-    let box_rect = egui::Rect::from_center_size(middle, galley.size() + egui::vec2(10.0, 6.0));
-    painter.rect_filled(box_rect, theme::R_CONTROL, theme::colors().panel);
-    painter.galley(box_rect.center() - galley.size() / 2.0, galley, accent);
+    let accent = theme::colors().accent;
+    let (Some(from), Some(to)) = (on_screen(gap.from), on_screen(gap.to)) else {
+        return;
+    };
+    painter.line_segment([from, to], egui::Stroke::new(2.0, accent));
+    for end in [from, to] {
+        painter.circle_filled(end, MEASURE_END_R, accent);
+    }
+    let text = match gap.is_parallel() {
+        true => format!("{:.2} mm", gap.gap_mm),
+        false => format!("{:.1}°  {:.2} mm", gap.angle_deg, gap.centres_mm),
+    };
+    tag(&painter, from.lerp(to, 0.5), text, accent);
+}
+
+/// A figure on a small plate of the panel colour, so it reads over any model.
+fn tag(painter: &egui::Painter, at: egui::Pos2, text: String, colour: egui::Color32) {
+    let galley = painter.layout_no_wrap(text, theme::figures(11.5), colour);
+    let plate = egui::Rect::from_center_size(at, galley.size() + egui::vec2(10.0, 6.0));
+    painter.rect_filled(plate, theme::R_CONTROL, theme::colors().panel);
+    painter.galley(plate.center() - galley.size() / 2.0, galley, colour);
+}
+
+/// Washes `faces` of `object` in `colour`, over the model.
+fn wash(
+    painter: &egui::Painter,
+    on_screen: &impl Fn(Vec3) -> Option<egui::Pos2>,
+    object: &SceneObject,
+    faces: &[usize],
+    colour: egui::Color32,
+) {
+    let matrix = object.transform.to_matrix();
+    let mut mesh = egui::Mesh::default();
+    for face in faces.iter().take(MAX_FACET_TRIANGLES) {
+        let Some(corners) = object.mesh.faces.get(*face) else {
+            continue;
+        };
+        let points = corners.map(|corner| {
+            on_screen(matrix.transform_point3(object.mesh.vertices[corner as usize]))
+        });
+        let [Some(a), Some(b), Some(c)] = points else {
+            continue;
+        };
+        let at = mesh.vertices.len() as u32;
+        for point in [a, b, c] {
+            mesh.colored_vertex(point, colour);
+        }
+        mesh.add_triangle(at, at + 1, at + 2);
+    }
+    painter.add(mesh);
 }
 
 /// The outline of the Cut tool's plane, a little wider than the selected model, so the
@@ -257,26 +362,14 @@ pub(super) fn draw_facet(ui: &egui::Ui, window: &Window, viewport: egui::Rect) {
         return;
     };
     let on_screen = projector(&window.view.camera, viewport);
-    let matrix = object.transform.to_matrix();
-    let color = theme::scene().facet;
-    let mut mesh = egui::Mesh::default();
-    for face in facet.faces.iter().take(MAX_FACET_TRIANGLES) {
-        let Some(corners) = object.mesh.faces.get(*face) else {
-            continue;
-        };
-        let points = corners.map(|corner| {
-            on_screen(matrix.transform_point3(object.mesh.vertices[corner as usize]))
-        });
-        let [Some(a), Some(b), Some(c)] = points else {
-            continue;
-        };
-        let at = mesh.vertices.len() as u32;
-        for point in [a, b, c] {
-            mesh.colored_vertex(point, color);
-        }
-        mesh.add_triangle(at, at + 1, at + 2);
-    }
-    ui.painter_at(viewport).add(mesh);
+    let painter = ui.painter_at(viewport);
+    wash(
+        &painter,
+        &on_screen,
+        object,
+        &facet.faces,
+        theme::scene().facet,
+    );
 }
 
 /// Draws what the Edit mode is holding, over the models rather than into them: a stick as

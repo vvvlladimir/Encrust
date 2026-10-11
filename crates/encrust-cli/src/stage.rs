@@ -100,6 +100,8 @@ impl Staged {
             cutting: self.cutting,
             exposure: self.exposure.clone(),
             remove_islands: self.remove_islands,
+            // The command line takes islands out alone; it has no flag for what hangs.
+            hanging_passes: 0,
             format,
             raster_window,
             created_unix_s: now_unix_s(),

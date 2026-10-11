@@ -1,6 +1,8 @@
+use core_analysis::Risk;
 use core_raster::RasterSettings;
 use egui::{Align2, Rect, Sense, StrokeKind, UiBuilder, Vec2};
 
+use crate::panels::inspector::risk_tint;
 use crate::preview::{PixelRect, Preview};
 use crate::state::Machine;
 use crate::status::Status;
@@ -10,6 +12,8 @@ use crate::ui::theme;
 const INSET: f32 = 18.0;
 /// How much a point of scrolling zooms by: a notch of a wheel is about a fifth.
 const ZOOM_PER_POINT: f32 = 0.004;
+/// The ring around an issue on the shown layer, points: wide enough to find a pixel by.
+const RISK_RING_R: f32 = 12.0;
 
 /// The exposure mask, beside the model rather than under the inspector.
 ///
@@ -36,7 +40,14 @@ pub fn ui(ui: &mut egui::Ui, machine: &mut Machine, clear: Rect) {
         return;
     }
 
-    let full = picture(ui, &mut machine.preview, &settings, &mut machine.status);
+    let risks = layer_risks(machine);
+    let full = picture(
+        ui,
+        &mut machine.preview,
+        &settings,
+        &risks,
+        &mut machine.status,
+    );
     let scale = if full {
         1
     } else {
@@ -49,6 +60,23 @@ pub fn ui(ui: &mut egui::Ui, machine: &mut Machine, clear: Rect) {
         "scroll to zoom, drag to move".to_owned()
     };
     caption(ui, clear, &format!("Layer mask   1 : {scale}   {hint}"));
+}
+
+/// What the check found on the layer shown, once the stack is measured.
+fn layer_risks(machine: &Machine) -> Vec<Risk> {
+    let layer = machine.preview.layer();
+    machine
+        .slicing
+        .raster_settings()
+        .and_then(|settings| machine.preview.measured(&settings, machine.slicing.fold()))
+        .map(|measured| {
+            let risks = measured.risks();
+            risks
+                .into_iter()
+                .filter(|risk| risk.layer == layer)
+                .collect()
+        })
+        .unwrap_or_default()
 }
 
 fn caption(ui: &egui::Ui, clear: Rect, text: &str) {
@@ -71,6 +99,7 @@ fn picture(
     ui: &mut egui::Ui,
     preview: &mut Preview,
     settings: &RasterSettings,
+    risks: &[Risk],
     status: &mut Status,
 ) -> bool {
     let texture = match preview.texture(ui.ctx(), settings) {
@@ -104,7 +133,7 @@ fn picture(
     egui::Image::from_texture((texture.id(), placed.size())).paint_at(&clipped, placed);
 
     let visible = visible_pixels(room.intersect(placed), placed, settings);
-    match preview.detail(ui.ctx(), settings, visible) {
+    let full = match preview.detail(ui.ctx(), settings, visible) {
         Ok(Some((region, detail))) => {
             let at = |x: u32, y: u32| {
                 placed.min + Vec2::new(x as f32, y as f32) / panel_px * placed.size()
@@ -118,6 +147,21 @@ fn picture(
             *status = Status::failed(&error.context("cannot draw the layer in full"));
             false
         }
+    };
+    ring_risks(&clipped, risks, placed, panel_mm);
+    full
+}
+
+/// A ring in its colour around each issue on the layer, where the check found it: a cup,
+/// a thin run or a neck is not drawn into the pixels the way an island is.
+fn ring_risks(ui: &egui::Ui, risks: &[Risk], placed: Rect, panel_mm: Vec2) {
+    for risk in risks {
+        let along = Vec2::new(risk.at_mm[0], risk.at_mm[1]) / panel_mm;
+        let centre = placed.min + along * placed.size();
+        let tint = risk_tint(risk);
+        let painter = ui.painter();
+        painter.circle_filled(centre, RISK_RING_R, tint.gamma_multiply(0.18));
+        painter.circle_stroke(centre, RISK_RING_R, egui::Stroke::new(2.0, tint));
     }
 }
 

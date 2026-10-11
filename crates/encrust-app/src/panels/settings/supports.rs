@@ -9,8 +9,7 @@ use crate::panels::settings::{form_card, name_row, report, settled};
 use crate::panels::support_fields::Group;
 use crate::settings::{can_delete, new_support};
 use crate::state::Machine;
-use crate::supports::{Editing, Parameters};
-use crate::ui::{describe, icon, icon_button, inline_button, list as rows, list_row, theme};
+use crate::ui::{describe, icon, icon_button, list as rows, list_row, theme};
 
 /// Below this a form has no room for two columns of cards.
 const TWO_COLUMNS_W: f32 = 720.0;
@@ -88,13 +87,10 @@ pub fn form(ui: &mut Ui, window: &mut Window) {
         return;
     };
 
-    let mut drawing = false;
     form_card(ui, "Profile", |ui| {
         if let Some(name) = name_row(ui, "support", &draft.values.name) {
             draft.values.name = name;
         }
-        ui.add_space(4.0);
-        drawing = inline_button(ui, icon::PARAMETERS, "Set on a drawing", false, true).clicked();
     });
 
     let profile = &mut draft.values;
@@ -114,9 +110,6 @@ pub fn form(ui: &mut Ui, window: &mut Window) {
         });
     }
 
-    if drawing {
-        window.tools.supports.parameters = Some(Parameters::new(Editing::Settings));
-    }
     if settled(ui) {
         autosave(window.machine);
     }

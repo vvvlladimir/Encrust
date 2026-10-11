@@ -28,6 +28,9 @@ pub enum VolumeError {
     #[error("a relief needs an amplitude to move the surface by, got {0} mm")]
     BadAmplitude(Scalar),
 
+    #[error("a tiled relief needs a tile of positive size, got {0} mm")]
+    BadTile(Scalar),
+
     #[error("the texture covers {mapped} of the mesh's {faces} faces")]
     UnmappedMesh { faces: usize, mapped: usize },
 

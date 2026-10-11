@@ -154,8 +154,8 @@ fn click(ui: &egui::Ui, window: &mut Window, rect: egui::Rect, cursor: egui::Pos
         }
         Tool::Drain => place_drain_under_cursor(window, rect, cursor),
         Tool::Measure => {
-            let free = ui.input(|input| input.modifiers.alt);
-            measure_under_cursor(window, rect, cursor, free);
+            let alt = ui.input(|input| input.modifiers.alt);
+            measure_under_cursor(window, rect, cursor, alt);
         }
         Tool::Position if window.tools.orient.picking_face => {
             lay_face_under_cursor(window, rect, cursor);
@@ -174,7 +174,9 @@ fn click(ui: &egui::Ui, window: &mut Window, rect: egui::Rect, cursor: egui::Pos
 }
 
 /// Hands the 3D pass its frame: the models, the plate, the section and the shading.
-fn paint_plate(ui: &egui::Ui, window: &Window, rect: egui::Rect) {
+fn paint_plate(ui: &egui::Ui, window: &mut Window, rect: egui::Rect) {
+    let textures =
+        (*window.tool == Tool::Relief).then(|| window.tools.relief.textures(&window.doc.scene));
     // What needs holding up is shown while the Supports tool is the one in hand, at the
     // angle its own profile is set to; see `docs/decisions/0034`.
     let overhang_deg = window
@@ -199,7 +201,7 @@ fn paint_plate(ui: &egui::Ui, window: &Window, rect: egui::Rect) {
                 ranges: &window.machine.slicing.exposure,
                 floor_mm: window.machine.slicing.band_floor_mm(),
             },
-            textured: *window.tool == Tool::Relief,
+            textures: textures.as_ref(),
             cut_line: cut_line(window),
         },
         rect,

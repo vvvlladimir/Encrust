@@ -168,7 +168,15 @@ fn groups(ui: &mut egui::Ui, window: &mut Window) {
             let rename = Some(egui::Id::new(("support-group-name", group)));
             let holds = window.tools.supports.group_holds(group, &window.doc.scene);
             let count = holds.to_string();
-            let action = list_row(ui, name, tint, group == active, remove, rename, Some(&count));
+            let action = list_row(
+                ui,
+                name,
+                tint,
+                group == active,
+                remove,
+                rename,
+                Some(&count),
+            );
             if action.picked {
                 chosen = group;
             }

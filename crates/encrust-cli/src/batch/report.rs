@@ -210,10 +210,13 @@ pub struct Cured {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub widest_step_mm2: Option<f32>,
     /// Pieces cured over nothing, necks pulled past their limit, layers pulling the film
-    /// past its, and the parts taken out of the file as islands.
+    /// past its, holes sealed from below, pieces too thin to hold, and the parts taken out
+    /// of the file as islands.
     pub islands: usize,
     pub levers: usize,
     pub peels: usize,
+    pub suction_cups: usize,
+    pub thin: usize,
     pub islands_removed: usize,
     pub islands_removed_layers: usize,
     /// The layer the print most likely fails on: the first island, or the worst lever.
@@ -237,6 +240,8 @@ impl Cured {
             islands: count(|kind| matches!(kind, RiskKind::Island { .. })),
             levers: count(|kind| matches!(kind, RiskKind::Lever { .. })),
             peels: count(|kind| matches!(kind, RiskKind::Peel { .. })),
+            suction_cups: count(|kind| matches!(kind, RiskKind::SuctionCup { .. })),
+            thin: count(|kind| matches!(kind, RiskKind::Thin { .. })),
             islands_removed: measured.removed_islands(),
             islands_removed_layers: measured.removed_layers(),
             likely_fails_layer: measured.worst().map(|risk| risk.layer + 1),
@@ -554,6 +559,8 @@ mod tests {
                 islands: 0,
                 levers: 0,
                 peels: 0,
+                suction_cups: 0,
+                thin: 0,
                 islands_removed: 0,
                 islands_removed_layers: 0,
                 likely_fails_layer: None,

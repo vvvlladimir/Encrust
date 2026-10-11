@@ -150,6 +150,11 @@ impl SlicerApp {
                     &mut self.machine.status,
                     &file,
                 ),
+                Arrived::File(Wanted::ReliefPicture, file) => crate::relief::load_picture(
+                    &mut self.tools.relief,
+                    &mut self.machine.status,
+                    &file,
+                ),
                 Arrived::Dropped(file) => open_by_what_it_is(&mut self.window(), file),
                 Arrived::Failed(message) => self.machine.status = Status::Error(message),
             }

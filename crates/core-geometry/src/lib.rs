@@ -11,6 +11,7 @@ mod closest;
 mod hash;
 mod mesh;
 mod orient;
+mod pins;
 mod ray;
 mod repair;
 mod split;
@@ -29,6 +30,7 @@ pub use closest::{ClosestPoint, closest_point, point_aabb_squared, point_triangl
 pub use hash::{FastHasher, FastMap, FastSet};
 pub use mesh::Mesh;
 pub use orient::{Orientation, orient_outward};
+pub use pins::{pin, pin_spots};
 pub use ray::{PlacedHit, Ray, RayHit, ray_aabb, ray_triangle, raycast, raycast_placed};
 pub use repair::{Filled, fill_holes, remove_duplicate_faces, remove_unbalanced_faces};
 pub use split::split;

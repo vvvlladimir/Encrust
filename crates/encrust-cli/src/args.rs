@@ -185,8 +185,8 @@ pub struct RasterArgs {
           value_parser = clap::value_parser!(u8).range(0..=8))]
     pub blur: u8,
 
-    /// Take every island out of the written file: a piece cured over nothing, and then
-    /// whatever stood only on it, so a floating part goes whole.
+    /// Take every island out of the written file: a piece cured over nothing, and nothing
+    /// that stood on it.
     #[arg(long)]
     pub remove_islands: bool,
 

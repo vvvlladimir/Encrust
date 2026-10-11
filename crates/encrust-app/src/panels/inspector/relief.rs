@@ -1,9 +1,21 @@
+use std::sync::Arc;
+
+use core_geometry::Vec2;
+use core_volume::Tiling;
+
 use crate::panels::Window;
+use crate::relief::Picture;
 use crate::state::Doc;
 use crate::ui::{
-    describe, hint, icon, later, meta, number_row, primary_button, progress_bar, secondary_button,
+    describe, hint, icon, meta, number_row, primary_button, progress_bar, secondary_button,
     section, stats, theme, tone,
 };
+
+/// Bounds on one tile of a picture, millimetres: under a millimetre it is finer than the
+/// lattice can carry, and past two hundred one tile covers the plate.
+const MIN_TILE_MM: f32 = 1.0;
+const MAX_TILE_MM: f32 = 200.0;
+const TILE_STEP: f64 = 0.1;
 
 /// Per point of drag: a relief is measured in tenths of a millimetre, precision in
 /// hundredths of its own range.
@@ -14,36 +26,123 @@ const FINE_STEP: f64 = 0.01;
 /// would cost a band that wide on every voxel of the field.
 const MAX_DEPTH_MM: f32 = 2.0;
 
-/// The texture the models on the plate came with, and how deep it is pressed into them.
+/// What is pressed into the models on the plate — a chosen picture as tiles, or the
+/// texture each came with — and how deep.
 pub fn ui(ui: &mut egui::Ui, window: &mut Window) {
     section(ui, "Image", None, |ui| {
-        describe(
-            ui,
-            "A model's own texture becomes geometry: white moves the surface out, black \
-             leaves it where it is.",
-        );
-        carried(ui, window.doc);
-        // TODO(step-8): a greyscale image chosen from a file, shown here as a thumbnail.
-        later(ui, |ui| secondary_button(ui, icon::OPEN, "Choose"));
+        match &window.tools.relief.picture {
+            Some(picture) => chosen(ui, picture),
+            None => {
+                describe(
+                    ui,
+                    "A model's own texture becomes geometry: white moves the surface out, \
+                     black leaves it where it is. Or choose a picture to tile over any model.",
+                );
+                carried(ui, window.doc);
+            }
+        }
+        picture_buttons(ui, window);
     });
     section(ui, "Depth", None, |ui| {
         depth(ui, window);
-        // TODO(step-8): tile the image over the surface, at a size and a turn of its own.
-        later(ui, |ui| {
-            let mut tile_mm = 12.0_f32;
-            number_row(
-                ui,
-                "Tile size",
-                &mut tile_mm,
-                "mm",
-                DEPTH_STEP,
-                1.0..=100.0,
-                1,
+        if window.tools.relief.picture.is_some() {
+            tiling(ui, &mut window.tools.relief.tiling);
+        }
+    });
+}
+
+/// The edge of the thumbnail a chosen picture is shown at, points.
+const THUMB_PT: f32 = 64.0;
+/// Pixels a side of that thumbnail.
+const THUMB_PX: usize = 64;
+
+/// The picture in hand: a thumbnail, its name and its size.
+fn chosen(ui: &mut egui::Ui, picture: &Picture) {
+    let colors = theme::colors();
+    ui.horizontal(|ui| {
+        let texture = thumbnail(ui.ctx(), picture);
+        ui.add(egui::Image::new(&texture).fit_to_exact_size(egui::vec2(THUMB_PT, THUMB_PT)));
+        ui.vertical(|ui| {
+            ui.add(
+                egui::Label::new(
+                    egui::RichText::new(truncated(&picture.name))
+                        .font(theme::code(12.0))
+                        .color(colors.text_high),
+                )
+                .truncate(),
             );
-            let mut angle_deg = 0.0_f32;
-            number_row(ui, "Angle", &mut angle_deg, "\u{b0}", 1.0, 0.0..=360.0, 0);
+            let [width, height] = picture.size_px;
+            tone(ui, &format!("{width} \u{d7} {height} px"), colors.text_low);
         });
     });
+}
+
+/// The picture shrunk to a thumbnail, made into a texture once per picture.
+fn thumbnail(ctx: &egui::Context, picture: &Picture) -> egui::TextureHandle {
+    let id = egui::Id::new(("relief-thumbnail", Arc::as_ptr(&picture.heights) as usize));
+    if let Some(texture) = ctx.data(|data| data.get_temp::<egui::TextureHandle>(id)) {
+        return texture;
+    }
+    let pixels = (0..THUMB_PX * THUMB_PX)
+        .map(|index| {
+            let (x, y) = (index % THUMB_PX, index / THUMB_PX);
+            let uv = Vec2::new(
+                (x as f32 + 0.5) / THUMB_PX as f32,
+                1.0 - (y as f32 + 0.5) / THUMB_PX as f32,
+            );
+            let grey = (picture.heights.sample(uv).clamp(0.0, 1.0) * 255.0).round() as u8;
+            theme::mask_pixel(grey, false)
+        })
+        .collect();
+    let image = egui::ColorImage::new([THUMB_PX, THUMB_PX], pixels);
+    let texture = ctx.load_texture("relief-thumbnail", image, egui::TextureOptions::NEAREST);
+    ctx.data_mut(|data| data.insert_temp(id, texture.clone()));
+    texture
+}
+
+/// Choosing a picture, and going back to the models' own textures.
+fn picture_buttons(ui: &mut egui::Ui, window: &mut Window) {
+    let relief = &mut window.tools.relief;
+    let label = if relief.picture.is_some() {
+        "Choose another"
+    } else {
+        "Choose a picture"
+    };
+    if secondary_button(ui, icon::OPEN, label).clicked() {
+        crate::relief::open_picture(relief, &mut window.machine.status);
+    }
+    if relief.picture.is_some()
+        && secondary_button(ui, icon::RESET, "Use the models' own textures").clicked()
+    {
+        relief.picture = None;
+    }
+}
+
+/// How big a tile of the picture is, and how far it is turned.
+fn tiling(ui: &mut egui::Ui, tiling: &mut Tiling) {
+    number_row(
+        ui,
+        "Tile size",
+        &mut tiling.tile_mm,
+        "mm",
+        TILE_STEP,
+        MIN_TILE_MM..=MAX_TILE_MM,
+        1,
+    );
+    number_row(
+        ui,
+        "Angle",
+        &mut tiling.angle_deg,
+        "\u{b0}",
+        1.0,
+        0.0..=360.0,
+        0,
+    );
+    describe(
+        ui,
+        "The picture is laid from the three sides the model faces, and each face reads it \
+         from the side it faces most.",
+    );
 }
 
 fn depth(ui: &mut egui::Ui, window: &mut Window) {
@@ -146,9 +245,13 @@ pub fn action(ui: &mut egui::Ui, window: &mut Window) {
         window.machine.status.report("Pressing the relief", started);
     }
 
+    let what = match &window.tools.relief.picture {
+        Some(picture) => picture.name.as_str(),
+        None => "the texture",
+    };
     let scope = format!(
-        "Presses the texture into {}. The model is replaced, so its supports and its \
-         cavity go with it.",
+        "Presses {what} into {}. The model is replaced, so its supports and its cavity go \
+         with it.",
         window.doc.scene.scope()
     );
     hint(ui, blocked.unwrap_or(&scope));

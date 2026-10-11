@@ -21,14 +21,18 @@ enum Filter {
     Islands,
     Levers,
     Peel,
+    Cups,
+    Thin,
 }
 
 impl Filter {
     fn of(kind: &RiskKind) -> Self {
         match kind {
-            RiskKind::Island { .. } => Self::Islands,
+            RiskKind::Island { .. } | RiskKind::Floating { .. } => Self::Islands,
             RiskKind::Lever { .. } => Self::Levers,
             RiskKind::Peel { .. } => Self::Peel,
+            RiskKind::SuctionCup { .. } => Self::Cups,
+            RiskKind::Thin { .. } => Self::Thin,
         }
     }
 
@@ -38,6 +42,8 @@ impl Filter {
             Self::Islands => "Islands",
             Self::Levers => "Levers",
             Self::Peel => "Peel",
+            Self::Cups => "Cups",
+            Self::Thin => "Thin",
         }
     }
 
@@ -45,9 +51,14 @@ impl Filter {
         matches!(
             (self, kind),
             (Self::All, _)
-                | (Self::Islands, RiskKind::Island { .. })
+                | (
+                    Self::Islands,
+                    RiskKind::Island { .. } | RiskKind::Floating { .. }
+                )
                 | (Self::Levers, RiskKind::Lever { .. })
                 | (Self::Peel, RiskKind::Peel { .. })
+                | (Self::Cups, RiskKind::SuctionCup { .. })
+                | (Self::Thin, RiskKind::Thin { .. })
         )
     }
 }
@@ -74,6 +85,10 @@ pub fn ui(ui: &mut egui::Ui, window: &mut Window) {
         let islands = risks.iter().any(|risk| Filter::Islands.admits(&risk.kind));
         if islands && secondary_button(ui, icon::SUPPORTS, "Support every island").clicked() {
             crate::shortcuts::pick(window, Tool::Supports);
+        }
+        let cups = risks.iter().any(|risk| Filter::Cups.admits(&risk.kind));
+        if cups && secondary_button(ui, icon::DRAIN, "Drill the suction cups").clicked() {
+            crate::shortcuts::pick(window, Tool::Drain);
         }
     });
     if !risks.is_empty() {
@@ -181,8 +196,11 @@ fn pull(ui: &mut egui::Ui, window: &mut Window) {
 pub fn tint(risk: &Risk) -> Color32 {
     let colors = theme::colors();
     match risk.kind {
-        RiskKind::Island { .. } => colors.danger,
-        RiskKind::Lever { .. } | RiskKind::Peel { .. } => colors.warn,
+        RiskKind::Island { .. } | RiskKind::Floating { .. } => colors.danger,
+        RiskKind::Lever { .. }
+        | RiskKind::Peel { .. }
+        | RiskKind::SuctionCup { .. }
+        | RiskKind::Thin { .. } => colors.warn,
     }
 }
 
@@ -201,7 +219,7 @@ fn verdict(ui: &mut egui::Ui, worst: Option<&Risk>) -> Option<usize> {
         ),
         Some(risk) => {
             let wash = match risk.kind {
-                RiskKind::Island { .. } => colors.danger_wash,
+                RiskKind::Island { .. } | RiskKind::Floating { .. } => colors.danger_wash,
                 _ => colors.warn_wash,
             };
             (
@@ -242,10 +260,13 @@ fn verdict(ui: &mut egui::Ui, worst: Option<&Risk>) -> Option<usize> {
 
 /// Taking every island out of the written file, or putting them back.
 fn islands_action(ui: &mut egui::Ui, machine: &mut Machine, risks: &[Risk], removed: usize) {
-    if machine.slicing.remove_islands {
+    let slicing = &mut machine.slicing;
+    if slicing.remove_islands {
         removed_block(ui, removed);
+        hanging_action(ui, slicing, risks);
         if secondary_button(ui, icon::RESET, "Put the islands back").clicked() {
-            machine.slicing.remove_islands = false;
+            slicing.remove_islands = false;
+            slicing.hanging_passes = 0;
         }
         return;
     }
@@ -262,8 +283,33 @@ fn islands_action(ui: &mut egui::Ui, machine: &mut Machine, risks: &[Risk], remo
     }
     describe(
         ui,
-        "Erases them from the written file and checks again: whatever stood only on an \
-         island goes with it.",
+        "Erases them from the written file and checks again. Only the islands go; what \
+         stood on them stays, and is listed to be supported.",
+    );
+}
+
+/// Taking out the next layer of what the islands already taken out left hanging, one
+/// layer a click, as though each were an island in turn.
+fn hanging_action(ui: &mut egui::Ui, slicing: &mut crate::slicing::Slicing, risks: &[Risk]) {
+    let hanging = risks
+        .iter()
+        .filter(|risk| matches!(risk.kind, RiskKind::Floating { .. }))
+        .count();
+    if slicing.hanging_passes > 0 {
+        let passes = count(slicing.hanging_passes as usize, "layer", "layers");
+        hint(ui, &format!("And {passes} more of what stood on them."));
+    }
+    if hanging == 0 {
+        return;
+    }
+    let label = format!("Remove the next {}", count(hanging, "island", "islands"));
+    if secondary_button(ui, icon::ERASE, &label).clicked() {
+        slicing.hanging_passes += 1;
+    }
+    describe(
+        ui,
+        "Takes one layer more off each part left hanging, the one it starts on, and checks \
+         again.",
     );
 }
 
@@ -291,9 +337,11 @@ fn removed_block(ui: &mut egui::Ui, removed: usize) {
                             .color(colors.text_high),
                     );
                     ui.label(
-                        RichText::new("Erased from the file; what stood only on them went too.")
-                            .font(theme::small())
-                            .color(colors.text_low),
+                        RichText::new(
+                            "Erased from the file; anything left hanging is listed below.",
+                        )
+                        .font(theme::small())
+                        .color(colors.text_low),
                     );
                 });
             });
@@ -304,12 +352,16 @@ fn removed_block(ui: &mut egui::Ui, removed: usize) {
 struct Row {
     layer: usize,
     filter: Filter,
+    /// What stood on an island taken out, rather than an island itself.
+    hanging: bool,
     tint: Color32,
     count: usize,
     area_mm2: f32,
-    /// The worst reading among them: stress for a lever, force for a peel.
+    /// The worst reading among them: stress for a lever, force for a peel, resin held
+    /// for a cup, and the inverse of the width for a thin section.
     worst: f32,
     lever_mm: f32,
+    width_mm: f32,
 }
 
 /// The issues folded into rows. They arrive sorted by layer, and within a layer by kind.
@@ -317,31 +369,43 @@ fn rows(risks: &[Risk]) -> Vec<Row> {
     let mut rows: Vec<Row> = Vec::new();
     for risk in risks {
         let filter = Filter::of(&risk.kind);
-        let (area_mm2, worst, lever_mm) = match risk.kind {
-            RiskKind::Island { area_mm2 } => (area_mm2, 0.0, 0.0),
+        let hanging = matches!(risk.kind, RiskKind::Floating { .. });
+        let (area_mm2, worst, lever_mm, width_mm) = match risk.kind {
+            RiskKind::Island { area_mm2 } | RiskKind::Floating { area_mm2 } => {
+                (area_mm2, 0.0, 0.0, 0.0)
+            }
             RiskKind::Lever {
                 stress_mpa,
                 lever_mm,
                 ..
-            } => (0.0, stress_mpa, lever_mm),
-            RiskKind::Peel { force_n } => (0.0, force_n, 0.0),
+            } => (0.0, stress_mpa, lever_mm, 0.0),
+            RiskKind::Peel { force_n } => (0.0, force_n, 0.0, 0.0),
+            RiskKind::SuctionCup {
+                area_mm2,
+                volume_mm3,
+            } => (area_mm2, volume_mm3, 0.0, 0.0),
+            RiskKind::Thin { width_mm } => (0.0, 1.0 / width_mm.max(f32::EPSILON), 0.0, width_mm),
         };
         match rows.last_mut() {
-            Some(row) if row.layer == risk.layer && row.filter == filter => {
+            Some(row)
+                if row.layer == risk.layer && row.filter == filter && row.hanging == hanging =>
+            {
                 row.count += 1;
                 row.area_mm2 += area_mm2;
                 if worst > row.worst {
-                    (row.worst, row.lever_mm) = (worst, lever_mm);
+                    (row.worst, row.lever_mm, row.width_mm) = (worst, lever_mm, width_mm);
                 }
             }
             _ => rows.push(Row {
                 layer: risk.layer,
                 filter,
+                hanging,
                 tint: tint(risk),
                 count: 1,
                 area_mm2,
                 worst,
                 lever_mm,
+                width_mm,
             }),
         }
     }
@@ -358,7 +422,14 @@ fn filter(ui: &mut egui::Ui, risks: &[Risk]) -> Filter {
             .filter(|risk| filter.admits(&risk.kind))
             .count()
     };
-    let present: Vec<(Filter, usize)> = [Filter::Islands, Filter::Levers, Filter::Peel]
+    let kinds = [
+        Filter::Islands,
+        Filter::Levers,
+        Filter::Peel,
+        Filter::Cups,
+        Filter::Thin,
+    ];
+    let present: Vec<(Filter, usize)> = kinds
         .into_iter()
         .map(|filter| (filter, tally(filter)))
         .filter(|(_, count)| *count > 0)
@@ -419,25 +490,39 @@ fn go_to(machine: &mut Machine, layer: usize) {
 
 /// What one row holds, short enough for the right of it.
 fn detail(row: &Row) -> String {
+    if row.hanging {
+        return format!("hangs over nothing · {:.2} mm2", row.area_mm2);
+    }
     match (row.filter, row.count) {
         (Filter::Islands, 1) => format!("island · {:.2} mm2", row.area_mm2),
         (Filter::Islands, n) => format!("{n} islands · {:.2} mm2", row.area_mm2),
         (Filter::Levers, 1) => format!("lever · {:.1} mm · {:.0} MPa", row.lever_mm, row.worst),
         (Filter::Levers, n) => format!("{n} levers · {:.0} MPa", row.worst),
+        (Filter::Cups, 1) => format!("suction cup · {:.0} mm2", row.area_mm2),
+        (Filter::Cups, n) => format!("{n} suction cups · {:.1} mm2", row.area_mm2),
+        (Filter::Thin, 1) => format!("thin · {:.2} mm", row.width_mm),
+        (Filter::Thin, n) => format!("{n} thin · {:.2} mm", row.width_mm),
         _ => format!("peel · {:.0} N", row.worst),
     }
 }
 
+/// How sure the check is: an island always fails, a neck or a peel past its limit may, and
+/// a cup or a thin run is only worth a look.
 fn verdict_word(risk: &Risk) -> &'static str {
     match risk.kind {
-        RiskKind::Island { .. } => "Fails",
-        RiskKind::Lever { .. } | RiskKind::Peel { .. } => "Likely to fail",
+        RiskKind::Island { .. } | RiskKind::Floating { .. } => "Fails",
+        RiskKind::Lever { .. } | RiskKind::Peel { .. } => "May fail",
+        RiskKind::SuctionCup { .. } | RiskKind::Thin { .. } => "Worth a look",
     }
 }
 
 /// Why the worst issue fails the print, in a sentence.
 fn explain(risk: &Risk) -> String {
     match risk.kind {
+        RiskKind::Floating { area_mm2 } => format!(
+            "An island under it was taken out, so {area_mm2:.2} mm2 here hangs over nothing \
+             and the rest of that part with it. Support it."
+        ),
         RiskKind::Island { area_mm2 } => format!(
             "An island of {area_mm2:.2} mm2 cures over nothing: it sticks to the film and \
              stays in the vat. Support it, or remove it."
@@ -453,6 +538,18 @@ fn explain(risk: &Risk) -> String {
         RiskKind::Peel { force_n } => format!(
             "The film pulls on this layer with about {force_n:.0} N. Tilt the model, hollow \
              it, or lift slower."
+        ),
+        RiskKind::SuctionCup {
+            area_mm2,
+            volume_mm3,
+        } => format!(
+            "A hole of {area_mm2:.0} mm2 holding {:.2} ml is sealed from below, so each lift \
+             pulls on it. A drain hole lets the air in.",
+            volume_mm3 / 1000.0
+        ),
+        RiskKind::Thin { width_mm } => format!(
+            "A section {width_mm:.2} mm across stands over a millimetre tall. It may not \
+             form; thicken it if it matters."
         ),
     }
 }
@@ -513,5 +610,44 @@ mod tests {
                 (516, "peel · 60 N".to_owned()),
             ]
         );
+    }
+
+    #[test]
+    fn what_hangs_over_a_removed_island_is_its_own_row_and_asks_for_supports() {
+        let hanging = Risk {
+            layer: 40,
+            at_mm: [0.0; 2],
+            kind: RiskKind::Floating { area_mm2: 3.5 },
+        };
+        let rows = rows(&[island(40, 1.0), hanging]);
+        let described: Vec<String> = rows.iter().map(detail).collect();
+        assert_eq!(
+            described,
+            ["island · 1.00 mm2", "hangs over nothing · 3.50 mm2"]
+        );
+        assert!(
+            Filter::Islands.admits(&hanging.kind),
+            "Support every island takes it in"
+        );
+        assert_eq!(verdict_word(&hanging), "Fails");
+    }
+
+    #[test]
+    fn a_cup_and_a_thin_section_read_as_what_they_measure() {
+        let cup = Risk {
+            layer: 9,
+            at_mm: [0.0; 2],
+            kind: RiskKind::SuctionCup {
+                area_mm2: 25.0,
+                volume_mm3: 1800.0,
+            },
+        };
+        let thin = Risk {
+            layer: 20,
+            at_mm: [0.0; 2],
+            kind: RiskKind::Thin { width_mm: 0.08 },
+        };
+        let described: Vec<String> = rows(&[cup, thin]).iter().map(detail).collect();
+        assert_eq!(described, ["suction cup · 25 mm2", "thin · 0.08 mm"]);
     }
 }

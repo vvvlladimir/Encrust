@@ -6,7 +6,7 @@ use core_geometry::{Bvh, Mesh, Scalar, Vec3};
 use core_volume::{Cancel, HollowSettings, Shell, hollow_at_scale};
 
 use crate::job::pipeline::{thread_pool, worker_threads};
-use crate::scene::{ObjectId, Scene};
+use crate::scene::{ObjectId, Scene, SceneObject};
 
 /// One model to hollow, owned so that it can cross to the worker thread.
 pub struct HollowTask {
@@ -153,7 +153,10 @@ impl Drop for HollowJob {
 
 /// Every visible model with geometry on the plate being edited, with the blockers it
 /// carries.
-pub fn hollow_tasks(scene: &Scene, settings: &HollowSettings) -> Vec<HollowTask> {
+pub fn hollow_tasks(
+    scene: &Scene,
+    settings: impl Fn(&SceneObject) -> HollowSettings,
+) -> Vec<HollowTask> {
     scene
         .targets()
         .filter(|object| !object.mesh.is_empty())
@@ -162,7 +165,7 @@ pub fn hollow_tasks(scene: &Scene, settings: &HollowSettings) -> Vec<HollowTask>
             mesh: Arc::clone(&object.mesh),
             bvh: Arc::clone(&object.bvh),
             scale: object.transform.scale,
-            settings: object.hollow.asking(settings),
+            settings: object.hollow.asking(&settings(object)),
         })
         .collect()
 }

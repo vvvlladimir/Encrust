@@ -77,6 +77,7 @@ Grouped by what the decision governs; the number is still the order it was taken
 | [0194](0194-a-hole-is-closed-only-when-it-is-asked-for.md) | A hole is closed only when it is asked for, by the triangulator the cut already uses | Accepted |
 | [0195](0195-a-mended-model-is-sound-and-an-open-one-is-never-capped.md) | Repair drops the faces drawn twice, and an open model is never capped | Accepted |
 | [0205](0205-a-surface-closes-when-its-edges-pair-off.md) | A surface closes when its edges pair off, and repair drops what no winding covers | Accepted |
+| [0223](0223-a-cut-is-pinned-by-a-shell-and-a-drain.md) | Pin a cut by an added shell and a drain hole | Accepted |
 
 ### Mesh and texture input
 
@@ -140,8 +141,10 @@ Grouped by what the decision governs; the number is still the order it was taken
 | # | Decision | Status |
 |---|---|---|
 | [0163](0163-the-stack-is-measured-from-its-runs.md) | The stack is measured from its runs, in a crate of its own | Accepted |
-| [0164](0164-risks-are-read-off-the-stack-with-a-neck-carried-up.md) | Risks are read off the stack, each piece carrying the narrowest neck under it | Accepted |
+| [0164](0164-risks-are-read-off-the-stack-with-a-neck-carried-up.md) | Risks are read off the stack, each piece carrying the narrowest neck under it | Accepted; removal superseded by 0228 |
 | [0206](0206-a-report-counts-what-is-there-once.md) | A report counts what is there once, and resin only from the masks | Accepted |
+| [0224](0224-cups-and-thin-sections-are-read-off-the-stack.md) | Read suction cups and thin sections off the stack | Accepted |
+| [0228](0228-removing-an-island-takes-the-island-alone.md) | Removing islands takes the island alone | Accepted |
 
 ### Supports
 
@@ -196,6 +199,7 @@ Grouped by what the decision governs; the number is still the order it was taken
 | [0084](0084-a-cavity-is-clustered-surface-nets.md) | A cavity is extracted as surface nets clustered onto the lattice | Superseded by 0186 (how folded copies are merged only) |
 | [0085](0085-a-build-is-priced-by-its-larger-phase.md) | A build is priced by its larger phase, not by one constant a tile | Accepted |
 | [0116](0116-a-texture-is-pressed-into-the-field.md) | A texture is pressed into the field, not onto the vertices | Accepted |
+| [0225](0225-a-picture-is-tiled-on-from-three-sides.md) | Tile a picture onto a model from three sides | Accepted |
 | [0122](0122-a-reliefs-depth-is-a-plate-millimetre.md) | A relief's depth is a plate millimetre, pressed after placement | Accepted |
 | [0185](0185-a-wall-is-measured-on-the-plate.md) | A wall is measured on the plate, not in the model's own space | Accepted |
 | [0186](0186-a-cavity-is-a-closed-surface-and-a-slice-follows-it-through-a-branch.md) | A cavity is a closed surface, and a slice follows it through a branch | Accepted |
@@ -212,9 +216,11 @@ Grouped by what the decision governs; the number is still the order it was taken
 | # | Decision | Status |
 |---|---|---|
 | [0087](0087-orientation-is-scored-on-the-peel.md) | An orientation is scored on the peel, and measured in two passes | Accepted |
+| [0222](0222-an-orientation-is-searched-for-a-goal-within-a-tilt.md) | Search an orientation for a goal, within a tilt | Accepted |
 | [0088](0088-the-plate-is-packed-as-a-bitmap.md) | The plate is packed as a bitmap into the corner, and the block centred | Accepted |
 | [0098](0098-a-plate-is-a-number-on-the-object.md) | A plate is a number on the object, not a scene of its own | Accepted |
 | [0101](0101-a-tool-works-on-the-selection-or-the-plate.md) | A tool works on what is picked, and on the whole plate only when nothing is | Accepted |
+| [0227](0227-a-model-may-keep-its-own-hollow-and-drain-numbers.md) | Let a model keep its own Hollow and Drain numbers | Accepted |
 | [0178](0178-a-project-names-its-cavities-and-the-engine-opens-it.md) | A project names its cavities, and the engine opens it into a plate | Superseded by 0191 |
 | [0191](0191-a-project-holds-the-plate-as-it-stands.md) | A project holds the plate as it stands, and opening it builds nothing | Accepted |
 
@@ -256,6 +262,7 @@ Grouped by what the decision governs; the number is still the order it was taken
 | [0166](0166-a-machine-states-which-photon-workshop-revision-it-reads.md) | A machine states which Photon Workshop revision it reads | Accepted |
 | [0196](0196-a-resin-is-measured-not-shipped.md) | A resin is measured, not shipped, and a copy says where it came from | Superseded by 0197 (what a resin taken off a printer does only) |
 | [0197](0197-a-resin-off-a-printer-waits-in-the-pool.md) | A resin taken off a printer waits in the pool | Accepted |
+| [0226](0226-a-tools-settings-are-kept-as-named-presets.md) | Keep a tool's settings as named presets in the profile catalogue | Accepted |
 
 ### Printers over the network
 

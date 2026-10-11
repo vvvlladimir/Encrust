@@ -88,6 +88,8 @@ fn object(name: &str, mesh: &Mesh, transform: Transform) -> ObjectState {
         },
         supports: ObjectSupportState::default(),
         hollow: ObjectHollowState::default(),
+        own_hollow: None,
+        own_drain: None,
     }
 }
 
@@ -116,6 +118,7 @@ fn project() -> Project {
                 grey_levels: None,
                 blur_px: 0,
                 remove_islands: false,
+                hanging_passes: 0,
                 format: OutputFormat::Goo,
             },
             supports: SupportState {

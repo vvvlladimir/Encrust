@@ -1,10 +1,13 @@
-use crate::cut::{Keep, split_parts};
+use crate::cut::{CutTool, Keep, PIN_CLEARANCE_MM, Pins, split_parts};
 use crate::panels::Window;
 use crate::scene::Axis;
 use crate::ui::{
-    Segment, Segmented, describe, hint, icon, later, number_row, primary_button, secondary_button,
-    section, switch,
+    Segment, Segmented, count_row, describe, hint, icon, nested, number_row, primary_button,
+    secondary_button, section, switch,
 };
+
+/// The most pins one cut takes.
+const MAX_PINS: u32 = 6;
 
 /// Millimetres per point of drag on the position field.
 const OFFSET_STEP: f64 = 0.1;
@@ -68,12 +71,56 @@ pub fn ui(ui: &mut egui::Ui, window: &mut Window) {
             .show(ui, &mut window.tools.cut.state.keep);
         switch(ui, &mut window.tools.cut.lay_flat, "Lay the halves flat");
         describe(ui, "Each half stands on the face the cut left.");
-        // TODO(step-8): pegs and sockets so the halves glue back true.
-        later(ui, |ui| {
-            let mut pins = false;
-            switch(ui, &mut pins, "Alignment pins");
-        });
+        pins(ui, &mut window.tools.cut);
     });
+}
+
+/// Pins on the lower half and sockets in the upper, and how many and how big. A half kept
+/// alone has nothing to be pinned to.
+fn pins(ui: &mut egui::Ui, tool: &mut CutTool) {
+    let both = tool.state.keep == Keep::Both;
+    let mut on = tool.pins.is_some();
+    let flipped = ui
+        .add_enabled_ui(both, |ui| switch(ui, &mut on, "Alignment pins").changed())
+        .inner;
+    if flipped {
+        tool.pins = on.then(Pins::default);
+    }
+    let Some(pins) = tool.pins.as_mut().filter(|_| both) else {
+        describe(ui, "Pegs and sockets so the halves glue back true.");
+        return;
+    };
+    nested(ui, |ui| {
+        let mut count = pins.count as u32;
+        if count_row(ui, "Pins", &mut count, "", 0.1, 1..=MAX_PINS) {
+            pins.count = count as usize;
+        }
+        number_row(
+            ui,
+            "Diameter",
+            &mut pins.diameter_mm,
+            "mm",
+            OFFSET_STEP,
+            1.0..=20.0,
+            1,
+        );
+        number_row(
+            ui,
+            "Length",
+            &mut pins.length_mm,
+            "mm",
+            OFFSET_STEP,
+            1.0..=30.0,
+            1,
+        );
+    });
+    describe(
+        ui,
+        &format!(
+            "Pins stand on the lower half; the sockets are {PIN_CLEARANCE_MM:.1} mm wider \
+             each side and show as holes in the Drain tool."
+        ),
+    );
 }
 
 /// Cutting the selected model along the plane, or splitting it into the parts it is

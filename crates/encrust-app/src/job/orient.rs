@@ -1,7 +1,7 @@
 use std::sync::Arc;
 use std::sync::mpsc::{self, Receiver, TryRecvError};
 
-use core_geometry::{Mesh, Quat};
+use core_geometry::{Mesh, Quat, Vec3};
 use core_plate::{OrientSettings, orient};
 use rayon::prelude::*;
 
@@ -14,6 +14,8 @@ pub struct OrientTask {
     /// The model in its own space. Orientation is measured there, so where it currently
     /// stands does not enter into it.
     pub mesh: Arc<Mesh>,
+    /// The way down the model stands now, in its own space, which a tilt is measured from.
+    pub down_now: Vec3,
 }
 
 /// Everything one orientation run needs.
@@ -77,9 +79,13 @@ pub fn orient_tasks(scene: &Scene, only: Option<ObjectId>) -> Vec<OrientTask> {
     scene
         .targets()
         .filter(|object| only.is_none_or(|id| object.id == id))
-        .map(|object| OrientTask {
-            id: object.id,
-            mesh: Arc::clone(&object.mesh),
+        .map(|object| {
+            let turned = object.transform.rotation.inverse() * Vec3::NEG_Z;
+            OrientTask {
+                id: object.id,
+                mesh: Arc::clone(&object.mesh),
+                down_now: (turned / object.transform.scale).normalize_or(Vec3::NEG_Z),
+            }
         })
         .collect()
 }
@@ -95,7 +101,11 @@ fn run(request: &OrientRequest) -> OrientOutcome {
             .tasks
             .par_iter()
             .map(|task| {
-                orient(&task.mesh, &request.settings).map(|found| Turn {
+                let settings = OrientSettings {
+                    down_now: task.down_now,
+                    ..request.settings
+                };
+                orient(&task.mesh, &settings).map(|found| Turn {
                     id: task.id,
                     rotation: found.rotation,
                     angle_deg: found.rotation.to_axis_angle().1.to_degrees(),
@@ -151,10 +161,12 @@ mod tests {
                 OrientTask {
                     id: ObjectId::for_test(1),
                     mesh: Arc::new(cuboid(Vec3::new(40.0, 40.0, 4.0))),
+                    down_now: Vec3::NEG_Z,
                 },
                 OrientTask {
                     id: ObjectId::for_test(2),
                     mesh: Arc::new(cuboid(Vec3::splat(10.0))),
+                    down_now: Vec3::NEG_Z,
                 },
             ],
             settings: OrientSettings::default(),
@@ -173,6 +185,7 @@ mod tests {
             tasks: vec![OrientTask {
                 id: ObjectId::for_test(1),
                 mesh: Arc::new(Mesh::default()),
+                down_now: Vec3::NEG_Z,
             }],
             settings: OrientSettings::default(),
         };

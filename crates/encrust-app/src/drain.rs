@@ -5,7 +5,7 @@ use core_supports::Trapped;
 use core_volume::HoleSize;
 
 use crate::job::{TrapJob, TrapOutcome, TrapRequest, trap_tasks};
-use crate::scene::{ObjectId, Scene};
+use crate::scene::{ObjectId, Scene, SceneObject};
 use crate::status::Status;
 
 /// What a click in the viewport puts down.
@@ -50,13 +50,15 @@ impl Default for DrainTool {
 }
 
 impl DrainTool {
-    /// The hole the next click drills.
+    /// The hole the plate's numbers drill.
+    #[cfg(test)]
     pub fn size(&self) -> HoleSize {
-        HoleSize {
-            diameter_mm: self.state.diameter_mm,
-            depth_mm: self.state.depth_mm,
-            taper: self.state.taper,
-        }
+        size_of(&self.state)
+    }
+
+    /// The hole drilled into `object`: its own size, or the plate's.
+    pub fn size_for(&self, object: &SceneObject) -> HoleSize {
+        size_of(object.own.drain.as_ref().unwrap_or(&self.state))
     }
 
     /// Starts looking for resin that cannot get out of anything visible on the plate.
@@ -113,9 +115,9 @@ impl DrainTool {
     /// Digs the channel every model has been laying out, and says how many were dug.
     pub fn finish_channels(&mut self, scene: &mut Scene) -> usize {
         self.stale();
-        let diameter_mm = self.state.diameter_mm;
         let mut dug = 0;
         for object in scene.targets_mut() {
+            let diameter_mm = self.size_for(object).diameter_mm;
             let transform = object.transform;
             if !object.hollow.pending().is_empty()
                 && object.hollow.finish_channel(diameter_mm, transform)
@@ -136,12 +138,13 @@ impl DrainTool {
             return false;
         };
         self.stale();
+        let size = self.size_for(object);
         let drilled = object.hollow.drill_into(
             &object.mesh,
             &object.bvh,
             target,
-            self.state.diameter_mm,
-            self.state.taper,
+            size.diameter_mm,
+            size.taper,
             object.transform,
         );
         object.traps.remove(index);
@@ -154,10 +157,11 @@ impl DrainTool {
     /// the next check's answer, not this one's.
     pub fn drill_found(&mut self, scene: &mut Scene) -> usize {
         self.stale();
-        let (diameter_mm, taper) = (self.state.diameter_mm, self.state.taper);
         let mut drilled = 0;
 
         for object in scene.targets_mut() {
+            let size = self.size_for(object);
+            let (diameter_mm, taper) = (size.diameter_mm, size.taper);
             let targets: Vec<_> = object
                 .traps
                 .found()
@@ -179,6 +183,14 @@ impl DrainTool {
             object.traps.clear();
         }
         drilled
+    }
+}
+
+fn size_of(state: &DrainState) -> HoleSize {
+    HoleSize {
+        diameter_mm: state.diameter_mm,
+        depth_mm: state.depth_mm,
+        taper: state.taper,
     }
 }
 

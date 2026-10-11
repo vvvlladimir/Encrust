@@ -58,8 +58,11 @@ pub struct Slicing {
     pub grey_levels: Option<NonZeroU8>,
     /// Radius an anti-aliased edge is faded over, pixels; `0` leaves it sharp.
     pub blur_px: u8,
-    /// Whether every island is taken out of the written file, and what stood on it.
+    /// Whether every island is taken out of the written file.
     pub remove_islands: bool,
+    /// How many layers more of what stood on an island taken out go too, one a pass,
+    /// when islands are taken out at all (ADR 0228).
+    pub hanging_passes: u32,
     /// What the save dialog offers and what a `.ctb` name is written at.
     pub format: SlicedFormat,
     /// The exposures the last change of layer height carried along, as they were.
@@ -109,6 +112,7 @@ impl Default for Slicing {
             grey_levels: None,
             blur_px: 0,
             remove_islands: false,
+            hanging_passes: 0,
             format: SlicedFormat::default(),
             rescaled: None,
             job: None,
@@ -423,6 +427,7 @@ impl Slicing {
                 cutting: self.cutting(),
                 exposure: ExposurePlan::new(self.exposure.clone()),
                 remove_islands: self.remove_islands,
+                hanging_passes: self.hanging_passes,
                 format,
                 raster_window: worker_threads(),
                 created_unix_s: now_unix_s(),
@@ -439,6 +444,7 @@ impl Slicing {
         Fold {
             held_layers: self.material.bottom_layers as usize,
             remove_islands: self.remove_islands,
+            hanging_passes: self.hanging_passes,
             tolerance: Tolerance::of(&self.material),
         }
     }

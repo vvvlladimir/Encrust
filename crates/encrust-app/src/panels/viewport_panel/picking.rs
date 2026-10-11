@@ -3,19 +3,21 @@
 
 use core_supports::{Grab, Profiles, grab};
 
+use core_geometry::Vec3;
+
 use crate::camera::OrbitCamera;
 use crate::measure;
 use crate::panels::Window;
 use crate::pick::{pick, pick_surface, ray_through};
 use crate::scene::{ObjectId, Scene};
 
-/// Takes the point the click landed on, snapped to the nearest corner or edge of the
-/// model it landed on unless `free`.
+/// Takes the flat face the click landed on, or the point, snapped the way the tool is set
+/// unless `alt` is held.
 pub(super) fn measure_under_cursor(
     window: &mut Window,
     viewport: egui::Rect,
     cursor: egui::Pos2,
-    free: bool,
+    alt: bool,
 ) {
     let Some((id, hit)) = pick_surface(&window.doc.scene, &window.view.camera, viewport, cursor)
     else {
@@ -24,13 +26,48 @@ pub(super) fn measure_under_cursor(
     let Some(object) = window.doc.scene.get(id) else {
         return;
     };
-    let (point, snapped) = if free {
-        (hit.point, measure::Snapped::Free)
-    } else {
-        let adjacency = window.tools.measure_edges.of(&object.mesh);
-        measure::snap(&object.mesh, &object.bvh, &adjacency, object.transform, hit.point)
+    let adjacency = window.tools.measure_edges.of(&object.mesh);
+    let measure = &mut window.tools.measure;
+    if measure.target == measure::Target::Planes {
+        if let Some(plane) = measure::Plane::of(object, &adjacency, hit.face) {
+            measure.pick_plane(plane);
+        }
+        return;
+    }
+    let reach_mm = reach_at(&window.view.camera, viewport, cursor, hit.point);
+    let (point, snapped) = measure::snap(
+        &object.mesh,
+        &object.bvh,
+        &adjacency,
+        object.transform,
+        hit.point,
+        reach_mm,
+        measure.snap_now(alt),
+    );
+    measure.pick(point, snapped);
+}
+
+/// How near the cursor a corner or an edge catches a click, points of the screen.
+const SNAP_PX: f32 = 14.0;
+
+/// `SNAP_PX` as millimetres of the plate at `at`, which the cursor lies over: a snap
+/// reaches as far on screen however near the model is.
+fn reach_at(camera: &OrbitCamera, viewport: egui::Rect, cursor: egui::Pos2, at: Vec3) -> f32 {
+    let beside = cursor + egui::vec2(SNAP_PX, 0.0);
+    let (Some(here), Some(there)) = (
+        ray_through(camera, viewport, cursor),
+        ray_through(camera, viewport, beside),
+    ) else {
+        return 0.0;
     };
-    window.tools.measure.pick(point, snapped);
+    let facing = there.direction.dot(here.direction);
+    if facing <= f32::EPSILON {
+        return 0.0;
+    }
+    // Both rays cut by the plane through `at` that faces the camera.
+    let across =
+        there.origin + there.direction * ((at - there.origin).dot(here.direction) / facing);
+    (across - at).length()
 }
 
 /// Lays the face under the cursor on the plate, and picks the model it belongs to. A
@@ -129,8 +166,6 @@ pub(super) fn grab_under_cursor(
 #[cfg(test)]
 mod tests {
     use std::sync::Arc;
-
-    use core_geometry::Vec3;
 
     use super::*;
 

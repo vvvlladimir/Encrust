@@ -191,6 +191,9 @@ fn fingerprint(scene: &Scene) -> u64 {
         object.visible.hash(&mut hasher);
         Arc::as_ptr(&object.mesh).hash(&mut hasher);
         object.hollow.is_hollow().hash(&mut hasher);
+        serde_json::to_string(&object.own)
+            .unwrap_or_default()
+            .hash(&mut hasher);
 
         let transform = object.transform;
         for value in [

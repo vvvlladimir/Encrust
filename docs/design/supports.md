@@ -23,8 +23,11 @@ churning. Landing is one ray per point through the scene's `Bvh`, on every core 
 
 A tip leaves the surface square on: `columns` reads the normal of the face nearest the
 contact and puts the **neck** — the far end of the `[top]` segment — one `top.length_mm`
-out along it, straight down where that normal does not look downwards, and shorter where a
-full one would eat the room the body needs over the plate (ADR 0125). Everything below is
+out along it, and shorter where a full one would eat the room the body needs over the plate
+(ADR 0125). A face that does not look down — a wall or a slope a support was placed on by
+hand — sends the tip out along its slope, falling a quarter as much as it runs, so that it
+leaves the model whatever the overhang angle; a flat top, or a contact off the surface,
+sends it straight down. Everything below is
 measured from the neck, not from the contact.
 
 A ray runs down from `SURFACE_EPSILON_MM` (1 µm) below the neck — starting at the surface

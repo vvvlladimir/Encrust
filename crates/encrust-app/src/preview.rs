@@ -56,6 +56,7 @@ pub struct Preview {
 pub struct Fold {
     pub held_layers: usize,
     pub remove_islands: bool,
+    pub hanging_passes: u32,
     pub tolerance: Tolerance,
 }
 
@@ -63,7 +64,7 @@ impl Fold {
     fn start(self) -> Measured {
         let fold = Measured::new(self.held_layers);
         if self.remove_islands {
-            fold.removing_islands()
+            fold.removing_hanging(self.hanging_passes)
         } else {
             fold
         }

@@ -15,8 +15,7 @@ pub use field::{
 };
 pub use layout::{
     body_and_foot, card, card_foot, describe, dialog_frame, dialog_head, hairline, heading, hint,
-    later, meta, nested, notice, progress_bar, readings, section, section_with_action, stats,
-    subheading,
+    meta, nested, notice, progress_bar, readings, section, section_with_action, stats, subheading,
 };
 pub use list::{issue_row, list, list_row, two_lines};
 pub use toggle::{Segment, Segmented, switch, tone};

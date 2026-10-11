@@ -1,11 +1,12 @@
-//! Printer hardware descriptions, material exposure settings and support shapes, stored
-//! as TOML.
+//! Printer hardware descriptions, material exposure settings, support shapes and named
+//! tool settings, stored as TOML.
 
 mod catalogue;
 mod compensation;
 mod error;
 mod exposure;
 mod material;
+mod preset;
 mod printer;
 mod store;
 mod support;
@@ -15,6 +16,7 @@ pub use compensation::{Compensation, layer_time_between, shrink_pct_between};
 pub use error::ProfileError;
 pub use exposure::{ASSUMED_PENETRATION_DEPTH_MM, exposure_for_mm};
 pub use material::{MaterialProfile, PriceUnit, PrinterTuning, ResinDetails, WaitMode, Waits};
+pub use preset::Preset;
 pub use printer::{
     AnycubicExtension, BuildVolume, Connection, Display, Firmware, OutputFormat, PhotonRevision,
     PrinterProfile,

@@ -23,6 +23,15 @@ pub(crate) const MIN_PILLAR_HEIGHT_MM: Scalar = 0.2;
 /// A transform this close to singular has no surface left to read a normal off.
 const SINGULAR: Scalar = 1e-12;
 
+/// How near the surface a contact is read as sitting on it, millimetres of the model's own
+/// space: a click lands on it to within float error.
+const ON_SURFACE_MM: Scalar = 1e-3;
+
+/// How far a tip leaving a face that does not look down falls per unit it runs out, and the
+/// least a face has to lean for the tip to have an out to run along at all.
+const OUT_DROP: Scalar = 0.25;
+const OUT_MIN: Scalar = 0.05;
+
 /// How far a face a support stands on may lean from horizontal, degrees. Past this the
 /// foot has no surface under it: the column runs down the face instead of onto it.
 const MAX_LANDING_SLOPE_DEG: Scalar = 45.0;
@@ -213,8 +222,9 @@ pub fn neck_of(placed: &Placed, contact: Vec3, profile: &SupportProfile) -> Vec3
     contact + direction * length_mm
 }
 
-/// Which way a tip leaves the surface at `contact`: the outward normal of the face it
-/// sits on, or straight down where the model answers with nothing that looks downwards.
+/// Which way a tip leaves the surface at `contact`: the outward normal of a face that looks
+/// down, out and down off one it sits on that does not, so a support placed by hand on any
+/// face leaves the model; straight down off a flat top, or from a contact off the surface.
 fn tip_direction(placed: &Placed, contact: Vec3) -> Vec3 {
     let matrix = placed.transform.to_matrix();
     if matrix.determinant().abs() < SINGULAR {
@@ -235,7 +245,21 @@ fn tip_direction(placed: &Placed, contact: Vec3) -> Vec3 {
     // under the inverse transpose of that matrix's upper 3x3.
     let normal =
         (Mat3::from_mat4(inverse).transpose() * triangle.normal_unnormalized()).normalize_or_zero();
-    if normal.z < 0.0 { normal } else { -Vec3::Z }
+    match (normal.z < 0.0, found.distance <= ON_SURFACE_MM) {
+        (true, _) => normal,
+        (false, true) => out_and_down(normal),
+        (false, false) => -Vec3::Z,
+    }
+}
+
+/// Off a face that does not look down: square off it as nearly as a tip leaving downwards
+/// can, its rise traded for a quarter as much fall as it runs out.
+fn out_and_down(normal: Vec3) -> Vec3 {
+    let across = normal.truncate();
+    if across.length() <= OUT_MIN {
+        return -Vec3::Z;
+    }
+    across.extend(-OUT_DROP * across.length()).normalize()
 }
 
 /// Whether the foot on the plate has the model out of its way.
@@ -561,6 +585,50 @@ mod tests {
         assert!(columns[0].landing.is_none(), "it stands under its own foot");
         assert!(columns[1].landing.is_some());
         assert_eq!(columns[1].point, 1, "every column knows its point");
+    }
+
+    #[test]
+    fn a_tip_placed_on_a_face_looking_up_leaves_the_model_out_and_down() {
+        let model = ramp(4.0, 10.0);
+        let bvh = Bvh::build(&model);
+        let placed = Placed::new(&model, &bvh, Transform::default());
+        let profile = profile();
+
+        // The middle of the sloping face, which looks up and out towards -X.
+        let contact = Vec3::new(2.0, 0.0, 5.0);
+        let along = (neck_of(&placed, contact, &profile) - contact).normalize();
+        let normal = Vec3::new(-10.0, 0.0, 4.0).normalize();
+        assert!(along.z < 0.0, "the tip runs down, got {along}");
+        assert!(
+            along.dot(normal) > 0.25,
+            "and off the face rather than into the model, got {along}"
+        );
+    }
+
+    #[test]
+    fn a_support_placed_on_a_side_wall_still_stands() {
+        // A box raised 10 mm off the plate, clicked on its side at x = 10.
+        let raised = box_mesh(Vec3::new(0.0, 0.0, 10.0), Vec3::new(10.0, 10.0, 20.0));
+        let trees = crate::tests::trees_on(
+            &[SupportPoint::new(Vec3::new(10.0, 5.0, 15.0))],
+            &raised,
+            Transform::default(),
+            Profiles::single(&profile()),
+        );
+        assert_eq!(
+            trees.len(),
+            1,
+            "the click on the wall is held up from the plate"
+        );
+        assert!(
+            trees[0].landing().base.x > 10.0,
+            "it stands out beside the wall, not under it"
+        );
+    }
+
+    #[test]
+    fn a_tip_on_a_flat_top_has_nowhere_but_down() {
+        assert_eq!(out_and_down(Vec3::Z), -Vec3::Z);
     }
 
     #[test]

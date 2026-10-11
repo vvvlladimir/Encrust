@@ -1,5 +1,9 @@
 use core_volume::{HollowMode, InfillPattern, MIN_WALL_MM};
 
+use printer_profiles::Kind;
+
+use super::presets;
+use super::scope::{self, Scoped};
 use crate::job::HollowJob;
 use crate::panels::Window;
 use crate::state::{Doc, Tools};
@@ -30,6 +34,34 @@ const MAX_DENSITY: f32 = 0.5;
 
 /// The cavity inside the models on the plate, and what stands in it.
 pub fn ui(ui: &mut egui::Ui, window: &mut Window) {
+    let scoped = Scoped {
+        plate: |tools| &mut tools.hollow.state,
+        own: |object| &mut object.own.hollow,
+        read: |object| &object.own.hollow,
+    };
+    let own = section(ui, "Settings", None, |ui| {
+        let own = scope::switch(ui, window, &scoped);
+        scope::editing(window, own, &scoped, |window| {
+            presets::bar(
+                ui,
+                &mut window.machine.slicing.catalogue,
+                &mut window.machine.status,
+                Kind::Hollow,
+                &mut window.tools.hollow.state,
+            );
+        });
+        own
+    })
+    .flatten();
+    scope::editing(window, own, &scoped, |window| settings(ui, window));
+    section(ui, "Already done", None, |ui| {
+        done(ui, window);
+        drainage(ui, window);
+    });
+}
+
+/// The numbers the panel edits: the plate's, or the picked model's own.
+fn settings(ui: &mut egui::Ui, window: &mut Window) {
     section(ui, "Shell", None, |ui| {
         modes(ui, window.tools);
         wall(ui, window);
@@ -41,10 +73,6 @@ pub fn ui(ui: &mut egui::Ui, window: &mut Window) {
             "Click the model to keep its wall solid there, alt-click a blocker to take it away.",
         );
         blockers(ui, window);
-    });
-    section(ui, "Already done", None, |ui| {
-        done(ui, window);
-        drainage(ui, window);
     });
 }
 
@@ -328,12 +356,12 @@ fn done(ui: &mut egui::Ui, window: &mut Window) {
         );
     }
 
-    let asked = window.tools.hollow.settings();
-    let stale = window
-        .doc
-        .scene
-        .targets()
-        .any(|object| object.hollow.is_stale(&asked, object.transform));
+    let hollow = &window.tools.hollow;
+    let stale = window.doc.scene.targets().any(|object| {
+        object
+            .hollow
+            .is_stale(&hollow.settings_for(object), object.transform)
+    });
     if stale {
         ui.add_space(4.0);
         hint(

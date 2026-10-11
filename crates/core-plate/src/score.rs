@@ -24,7 +24,54 @@ pub struct Score {
     /// The largest cross-section the peel actually has to pull, square millimetres, or
     /// `None` for a candidate that was never sliced.
     pub peak_mm2: Option<Scalar>,
+    /// The part of `overhang_mm2` on faces that look up in the model's own file, which
+    /// is the side its author meant to be seen.
+    pub top_overhang_mm2: Scalar,
     pub total: Scalar,
+}
+
+/// What an orientation is searched for: one term of [`Score`] made to weigh more.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub enum OrientGoal {
+    /// The least surface hanging over nothing, so the fewest supports.
+    #[default]
+    FewestSupports,
+    /// The smallest cross-section pulled off the film at any layer.
+    LeastPeel,
+    /// The fewest layers.
+    ShortestPrint,
+    /// No support on the faces that look up in the file.
+    CleanTop,
+}
+
+impl OrientGoal {
+    pub const ALL: [Self; 4] = [
+        Self::FewestSupports,
+        Self::LeastPeel,
+        Self::ShortestPrint,
+        Self::CleanTop,
+    ];
+
+    pub fn label(self) -> &'static str {
+        match self {
+            Self::FewestSupports => "Fewest supports",
+            Self::LeastPeel => "Least peel force",
+            Self::ShortestPrint => "Shortest print",
+            Self::CleanTop => "Clean top surface",
+        }
+    }
+
+    /// Overhang, peel, height, footprint and top overhang, in that order. The first goal
+    /// keeps the weights the search had before there were goals.
+    fn weights(self) -> [Scalar; 5] {
+        let base = [W_OVERHANG, W_PEEL, W_HEIGHT, W_BOTTOM, 0.0];
+        match self {
+            Self::FewestSupports => base,
+            Self::LeastPeel => [W_OVERHANG / 2.0, W_PEEL * 3.0, W_HEIGHT, W_BOTTOM, 0.0],
+            Self::ShortestPrint => [W_OVERHANG / 2.0, W_PEEL, W_HEIGHT * 6.0, W_BOTTOM, 0.0],
+            Self::CleanTop => [W_OVERHANG, W_PEEL, W_HEIGHT, W_BOTTOM, W_TOP],
+        }
+    }
 }
 
 /// How much each term of [`Score`] weighs. Tuned by eye on the fixtures, not trained;
@@ -33,6 +80,12 @@ const W_OVERHANG: Scalar = 1.0;
 const W_PEEL: Scalar = 0.6;
 const W_HEIGHT: Scalar = 0.2;
 const W_BOTTOM: Scalar = 0.3;
+/// On top of the overhang it already is, so a supported top costs four times a support
+/// anywhere else.
+const W_TOP: Scalar = 3.0;
+
+/// A face looks up in its file once its normal is within sixty degrees of +Z.
+const LOOKS_UP: Scalar = 0.5;
 
 /// A face of the model, reduced to what scoring an orientation asks of it.
 ///
@@ -47,6 +100,7 @@ pub struct Faces<'a> {
     /// The model's own scale, from the cube root of the box it fills: what the height and
     /// the cross-section are divided by so that neither depends on how big the model is.
     length_mm: Scalar,
+    weights: [Scalar; 5],
 }
 
 impl<'a> Faces<'a> {
@@ -78,7 +132,16 @@ impl<'a> Faces<'a> {
             centroids,
             total_area_mm2,
             length_mm,
+            weights: OrientGoal::default().weights(),
         })
+    }
+
+    /// The same faces, ranked for `goal`.
+    pub fn for_goal(self, goal: OrientGoal) -> Self {
+        Self {
+            weights: goal.weights(),
+            ..self
+        }
     }
 
     /// What the model costs standing with `down` pointing at the plate, without the peel
@@ -95,7 +158,7 @@ impl<'a> Faces<'a> {
             .map(|vertex| vertex.dot(down))
             .reduce(|| Scalar::NEG_INFINITY, Scalar::max);
 
-        let (overhang_mm2, bottom_mm2, shadow_mm2) = (0..self.areas.len())
+        let (overhang_mm2, bottom_mm2, shadow_mm2, top_overhang_mm2) = (0..self.areas.len())
             .into_par_iter()
             .map(|face| {
                 let facing = self.normals[face].dot(down);
@@ -108,15 +171,20 @@ impl<'a> Faces<'a> {
                 } else {
                     0.0
                 };
+                let looks_up = self.normals[face].z > LOOKS_UP;
                 (
                     overhang,
                     if on_plate && facing > FLAT { area } else { 0.0 },
                     // Half the area a model's faces project onto the plate is its
                     // silhouette, which is the cross-section for anything convex.
                     area * facing.abs() / 2.0,
+                    if looks_up { overhang } else { 0.0 },
                 )
             })
-            .reduce(|| (0.0, 0.0, 0.0), |a, b| (a.0 + b.0, a.1 + b.1, a.2 + b.2));
+            .reduce(
+                || (0.0, 0.0, 0.0, 0.0),
+                |a, b| (a.0 + b.0, a.1 + b.1, a.2 + b.2, a.3 + b.3),
+            );
 
         let height_mm = self.extent(down);
         let mut score = Score {
@@ -125,6 +193,7 @@ impl<'a> Faces<'a> {
             height_mm,
             shadow_mm2,
             peak_mm2: None,
+            top_overhang_mm2,
             total: 0.0,
         };
         score.total = self.total(&score);
@@ -164,10 +233,12 @@ impl<'a> Faces<'a> {
     fn total(&self, score: &Score) -> Scalar {
         let area = self.total_area_mm2;
         let peel = score.peak_mm2.unwrap_or(score.shadow_mm2) / (self.length_mm * self.length_mm);
-        W_OVERHANG * (score.overhang_mm2 / area)
-            + W_PEEL * peel
-            + W_HEIGHT * (score.height_mm / self.length_mm)
-            - W_BOTTOM * (score.bottom_mm2 / area)
+        let [overhang, peel_weight, height, bottom, top] = self.weights;
+        overhang * (score.overhang_mm2 / area)
+            + peel_weight * peel
+            + height * (score.height_mm / self.length_mm)
+            - bottom * (score.bottom_mm2 / area)
+            + top * (score.top_overhang_mm2 / area)
     }
 }
 
@@ -178,6 +249,39 @@ const FLAT: Scalar = 0.996;
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_face_that_looks_up_in_its_file_is_a_top_overhang_once_it_hangs_down() {
+        // A 10 by 10 square at z = 10 looking up, and one at z = 20 looking down. Turned
+        // upside down, the high square rests on the plate and the low one hangs face down.
+        let mesh = Mesh::new(
+            vec![
+                Vec3::new(0.0, 0.0, 10.0),
+                Vec3::new(10.0, 0.0, 10.0),
+                Vec3::new(0.0, 10.0, 10.0),
+                Vec3::new(0.0, 0.0, 20.0),
+                Vec3::new(0.0, 10.0, 20.0),
+                Vec3::new(10.0, 0.0, 20.0),
+            ],
+            vec![[0, 1, 2], [3, 4, 5]],
+        );
+        let faces = Faces::of(&mesh).expect("two triangles have area");
+        let upside_down = faces.score(Vec3::Z, 45.0);
+        // Weighted the way every overhang is: 50 mm2 by 1 - sin(45).
+        let expected = 50.0 * (1.0 - 45.0_f32.to_radians().sin());
+        assert!(
+            (upside_down.top_overhang_mm2 - expected).abs() < 1e-3,
+            "the 50 mm2 triangle hangs flat, got {}",
+            upside_down.top_overhang_mm2
+        );
+        let clean = Faces::of(&mesh)
+            .expect("two triangles have area")
+            .for_goal(OrientGoal::CleanTop);
+        assert!(
+            clean.score(Vec3::Z, 45.0).total > upside_down.total,
+            "a clean top makes the same hang cost more"
+        );
+    }
 
     /// Axis-aligned box, twelve triangles, spanning 0..size on every axis.
     fn cuboid(size: Vec3) -> Mesh {

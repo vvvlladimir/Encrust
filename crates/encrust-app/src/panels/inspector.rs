@@ -8,8 +8,10 @@ mod measure;
 mod opened;
 mod paint;
 mod position;
+mod presets;
 mod print_settings;
 mod relief;
+mod scope;
 mod select;
 mod shape;
 mod supports;
@@ -111,11 +113,19 @@ fn fact(window: &Window, tool: Tool) -> Option<(String, egui::Color32)> {
         Tool::Check => check::fact(window),
         Tool::Export => export::fact(window),
         Tool::PrintSettings => plain(crate::panels::layers_and_exposure(window.machine)),
-        Tool::Measure => window
-            .tools
-            .measure
-            .snapped()
-            .and_then(|snapped| plain(snapped.label().to_owned())),
+        Tool::Measure => match window.tools.measure.target {
+            crate::measure::Target::Points => window
+                .tools
+                .measure
+                .snapped()
+                .and_then(|snapped| plain(snapped.label().to_owned())),
+            crate::measure::Target::Planes => window
+                .tools
+                .measure
+                .plane_gap()
+                .filter(crate::measure::PlaneGap::is_parallel)
+                .and_then(|_| plain("parallel".to_owned())),
+        },
         Tool::Cut | Tool::Relief => None,
     }
 }
@@ -125,7 +135,7 @@ fn help(tool: Tool) -> &'static str {
     match tool {
         Tool::Select => "Pick what the other tools work on.",
         Tool::Position => "Move, turn, size, lay down and mirror the selection.",
-        Tool::Measure => "Click two points on a model.",
+        Tool::Measure => "Click two points or two flat faces on a model.",
         Tool::Hollow => "Cut a cavity to save resin and lighten the peel.",
         Tool::Drain => "Let resin out of a hollow model.",
         Tool::Cut => "Split a model along a plane.",

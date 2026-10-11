@@ -50,31 +50,6 @@ pub struct SupportGroup {
     pub profile: SupportProfile,
 }
 
-/// Which profile the drawing of a support edits: the group in the tool's hands, or the
-/// one open on the Settings screen.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum Editing {
-    Tool,
-    Settings,
-}
-
-/// The window a support's measurements are set on over a drawing of it.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct Parameters {
-    pub editing: Editing,
-    /// The thin model-to-model strut is drawn rather than a regular support.
-    pub small_pillar: bool,
-}
-
-impl Parameters {
-    pub fn new(editing: Editing) -> Self {
-        Self {
-            editing,
-            small_pillar: false,
-        }
-    }
-}
-
 /// One piece of one frozen support: what the Edit mode selects, shows picked and carries.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Picked {
@@ -114,8 +89,6 @@ pub struct SupportTool {
     /// as the line it drew rather than as the frames it was sampled on.
     pub last_daub: Option<Vec2>,
     pub job: Option<SupportJob>,
-    /// The drawing of a support, while it is open.
-    pub parameters: Option<Parameters>,
     /// The group the panel is asking about before it takes it away, and the supports it
     /// holds, or `None` when it is asking nothing.
     pub dropping: Option<(u16, usize)>,
@@ -139,7 +112,6 @@ impl Default for SupportTool {
             stroke: false,
             last_daub: None,
             job: None,
-            parameters: None,
             dropping: None,
         }
     }

@@ -39,7 +39,7 @@ impl Run {
 
         let mut fold = Measured::new(plate.material.bottom_layers as usize);
         if plate.remove_islands {
-            fold = fold.removing_islands();
+            fold = fold.removing_hanging(plate.hanging_passes);
         }
 
         let job = PrintJob {

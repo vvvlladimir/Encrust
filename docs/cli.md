@@ -151,7 +151,7 @@ encrust slice model.stl \
   --profile my-printer.toml --adaptive --cusp 0.03 --min-layer-height 0.025 -o model.goo
 ```
 
-Every island taken out of the file, and whatever stood only on one:
+Every island taken out of the file, and nothing that stood on one:
 
 ```sh
 encrust slice model.stl \

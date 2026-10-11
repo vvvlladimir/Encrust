@@ -62,12 +62,34 @@ the plate; failing that, the most stressed neck, then the hardest peel.
 ## Removing islands
 
 A fold that removes islands takes every piece touching nothing below out of its layer,
-whatever its size, and hands back the stretches it covered. The layer is split rather than
-pruned, so what came out is a layer of its own: a piece of the next one that touches it
-carries the same part on, and only a piece touching none of it is a new island. That is
-what makes a part floating over sixty layers one island and not sixty (ADR 0206). The
-writer erases them from the runs before encoding, and the next layer is judged against the
-layer as written, so whatever stood only on an island becomes one and goes too. A write
-therefore runs in four stages a window at a time: rasterise and cure in parallel, fold in
-order, erase and encode in parallel, push in order. `Measured` keeps the stretches per
-layer, which is what Preview erases from its picture.
+whatever its size, and hands back the stretches it covered. The layer below is judged as
+cured, islands and all, so a piece standing on an island is floating rather than an island
+of its own: it stays in the file, a part floating over sixty layers loses its first layer
+alone, and the piece over the island is named once as **floating**, failing the verdict
+until it is supported (ADR 0228). Each further pass the user asks for takes one layer more:
+a piece standing only on what was taken out goes too while its depth over the island is
+within the passes, and the first one past them is named. The writer erases what was taken
+from the runs before encoding. A write therefore runs in four stages a window at a time:
+rasterise and cure in parallel, fold in order, erase and encode in parallel, push in
+order. `Measured` keeps the stretches per layer, which is what Preview erases from its
+picture.
+
+## Suction cups and thin sections
+
+A **suction cup** is a hole: dark pixels a layer closes in on every side, found per layer by
+joining the dark runs between two lit ones across rows and dropping every group that reaches
+the panel's edge or a row past the lit ones. A hole is *vented* when any of its pixels lies
+over open air in the layer under it, or over a hole that was; the first layer lies on the
+plate, so its holes are sealed. A sealed hole carries its cup up the stack while it stays
+sealed, adding its area times the layer's thickness; the cup is named once, at the layer it
+is widest, when that is at least `MIN_CUP_MM2` (25 mm², some 2.5 N at a full vacuum) and it
+holds at least `MIN_CUP_MM3` (0.02 ml). Anything less is a letter's counter or a pin's socket,
+which pulls too little to matter. A model standing on supports has open air
+between them, so its cavities start vented; one lying on the plate or on its own floor does
+not.
+
+A **thin section** is a piece held from below whose area, as a disc, is under `THIN_MM`
+(0.15 mm) across: narrower than the finest support tip, so a tip is never named. A run of
+thin pieces standing on each other is named once, where it starts, and only once it is
+`MIN_THIN_RUN_MM` (1 mm) tall: a shorter one is the point a curved surface starts on over a
+tip, or the end of a spike, and neither has anything to carry.

@@ -97,6 +97,9 @@ fn describe_risk(risk: &Risk) -> String {
     let [x, y] = risk.at_mm;
     let what = match risk.kind {
         RiskKind::Island { area_mm2 } => format!("island of {area_mm2:.2} mm^2"),
+        RiskKind::Floating { area_mm2 } => {
+            format!("{area_mm2:.2} mm^2 left hanging over an island taken out")
+        }
         RiskKind::Lever {
             stress_mpa,
             lever_mm,
@@ -105,6 +108,14 @@ fn describe_risk(risk: &Risk) -> String {
             format!("{stress_mpa:.0} MPa on a neck of {neck_mm2:.2} mm^2, {lever_mm:.1} mm off it")
         }
         RiskKind::Peel { force_n } => format!("peel of {force_n:.0} N on the film"),
+        RiskKind::SuctionCup {
+            area_mm2,
+            volume_mm3,
+        } => format!(
+            "suction cup of {area_mm2:.1} mm^2 holding {:.2} ml",
+            volume_mm3 / 1000.0
+        ),
+        RiskKind::Thin { width_mm } => format!("section {width_mm:.2} mm across"),
     };
     format!("layer {}, {what} at {x:.1}, {y:.1} mm", risk.layer + 1)
 }

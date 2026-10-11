@@ -9,6 +9,7 @@ use egui_wgpu::{CallbackResources, CallbackTrait, ScreenDescriptor};
 
 use crate::camera::OrbitCamera;
 use crate::plate::BuildPlate;
+use crate::relief::Textures;
 use crate::render::gpu::{
     CutDraw, CutLine, DrainCut, ExposureBand, Floor, FrameInput, MAX_BANDS, MAX_CUTS, MAX_POCKETS,
     ModelDraw, ReliefDraw, TrapBox,
@@ -16,7 +17,7 @@ use crate::render::gpu::{
 use crate::render::grid::{plate_lines, section_frame};
 use crate::render::label;
 use crate::render::vertex::{LabelVertex, LineVertex, ModelInstance, NOT_MARKED};
-use crate::scene::{Scene, SceneObject};
+use crate::scene::{Mapped, Scene, SceneObject};
 use crate::ui::theme;
 use crate::workspace::ViewOptions;
 
@@ -86,9 +87,9 @@ pub struct Shading<'a> {
     /// The height the models are cut at, or `None` to draw them whole.
     pub section_mm: Option<Scalar>,
     pub banding: Banding<'a>,
-    /// Whether a model still carrying a texture is drawn with it, which is what the Relief
-    /// tool shows.
-    pub textured: bool,
+    /// The texture each model is drawn with, which is what the Relief tool shows: the
+    /// picture it would press, or the one the model carries. `None` draws every model flat.
+    pub textures: Option<&'a Textures>,
     /// The Cut tool's plane, traced over the model it is set on.
     pub cut_line: Option<CutLine>,
 }
@@ -107,7 +108,7 @@ impl ViewportCallback {
             overhang_deg,
             section_mm,
             banding,
-            textured,
+            textures,
             cut_line,
         } = shading;
         let Draws {
@@ -117,7 +118,7 @@ impl ViewportCallback {
             cut_surfaces,
             pockets,
             reliefs,
-        } = Draws::of(scene, overhang_deg.map_or(NOT_MARKED, marking), textured);
+        } = Draws::of(scene, overhang_deg.map_or(NOT_MARKED, marking), textures);
 
         let (label, atlas) = label::front(plate);
         let mut lines = plate_lines(plate);
@@ -168,11 +169,12 @@ struct Draws {
 
 impl Draws {
     /// `mark` is the overhang threshold the models are washed at, or `NOT_MARKED`.
-    fn of(scene: &Scene, mark: f32, textured: bool) -> Self {
+    fn of(scene: &Scene, mark: f32, textures: Option<&Textures>) -> Self {
         let mut draws = Self::default();
         for object in scene.printable(scene.active_plate()) {
             let colour = color_for(scene.is_selected(object.id), object.summary.is_sound());
-            draws.model(object, colour, mark, textured);
+            let texture = textures.and_then(|textures| textures.get(&object.id));
+            draws.model(object, colour, mark, texture);
             draws.hollowing(object, colour);
             draws.supports(object);
         }
@@ -185,7 +187,13 @@ impl Draws {
         draws
     }
 
-    fn model(&mut self, object: &SceneObject, colour: Color32, mark: f32, textured: bool) {
+    fn model(
+        &mut self,
+        object: &SceneObject,
+        colour: Color32,
+        mark: f32,
+        texture: Option<&Arc<Mapped>>,
+    ) {
         let (drains, channels) = object.hollow.cut();
         self.cuts
             .extend(cuts_of(drains, channels, object.transform));
@@ -195,10 +203,7 @@ impl Draws {
         let instance = ModelInstance::new(object.transform, colour, mark);
         // The map is indexed by the model's own faces, so a hollowed model — whose shell
         // carries the cavity's as well — is drawn flat like everything else.
-        let mapped = object
-            .mapped
-            .as_ref()
-            .filter(|_| textured && object.hollow.shell().is_none());
+        let mapped = texture.filter(|_| object.hollow.shell().is_none());
         match mapped {
             Some(mapped) => self.reliefs.push(ReliefDraw {
                 mesh: Arc::clone(&mesh),
@@ -582,7 +587,7 @@ mod tests {
             .expect("the ball is hollow");
         assert!(!cavity.is_empty(), "and the cavity has faces of its own");
 
-        let draws = Draws::of(&scene, NOT_MARKED, false);
+        let draws = Draws::of(&scene, NOT_MARKED, None);
         let painted = draws
             .models
             .iter()
@@ -591,7 +596,7 @@ mod tests {
         assert_eq!(painted, 1, "the cavity is drawn once over the shell");
 
         scene.objects_mut()[0].traps.set(Vec::new());
-        let drained = Draws::of(&scene, NOT_MARKED, false);
+        let drained = Draws::of(&scene, NOT_MARKED, None);
         assert!(
             drained.models.iter().all(|draw| draw.faces() != cavity),
             "and not at all once the resin can get out"
@@ -730,7 +735,7 @@ mod tests {
     #[test]
     fn a_model_that_is_not_closed_is_drawn_but_never_counted_into_the_cap() {
         let scene = an_open_box();
-        let draws = Draws::of(&scene, NOT_MARKED, false);
+        let draws = Draws::of(&scene, NOT_MARKED, None);
 
         assert_eq!(draws.models.len(), 1, "an open model is still drawn");
         assert!(
@@ -750,7 +755,7 @@ mod tests {
             .expect("the box is there")
             .reshape(Arc::new(mesh));
 
-        assert_eq!(Draws::of(&scene, NOT_MARKED, false).solids.len(), 1);
+        assert_eq!(Draws::of(&scene, NOT_MARKED, None).solids.len(), 1);
     }
 
     #[test]

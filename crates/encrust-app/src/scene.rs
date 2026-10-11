@@ -3,6 +3,7 @@ use std::sync::{Arc, Mutex};
 use rayon::prelude::*;
 
 pub use core_engine::project::Axis;
+use core_engine::project::{DrainState, HollowState};
 use core_geometry::{
     Aabb, Bvh, Heightmap, Mesh, MeshDiagnostics, Orientation, Quat, Scalar, Transform, UvMap, Vec2,
     Vec3, Welded, center_of_mass,
@@ -186,7 +187,17 @@ pub struct SceneObject {
     pub traps: Traps,
     /// The texture the file carried, until it is pressed in.
     pub mapped: Option<Arc<Mapped>>,
+    /// The tool settings this model keeps instead of the plate's.
+    pub own: OwnSettings,
     bounds: PlacedBounds,
+}
+
+/// The Hollow and Drain settings a model keeps instead of the plate's, where it has its
+/// own; see `docs/decisions/0227`.
+#[derive(Debug, Clone, Default, PartialEq, serde::Serialize)]
+pub struct OwnSettings {
+    pub hollow: Option<HollowState>,
+    pub drain: Option<DrainState>,
 }
 
 /// The last bounds measured over a mesh's vertices, and the placement they were for, so
@@ -672,6 +683,7 @@ impl Scene {
             hollow: ModelHollow::default(),
             traps: Traps::default(),
             mapped: imported.mapped,
+            own: OwnSettings::default(),
             bounds: PlacedBounds::default(),
         });
         self.selected = vec![id];

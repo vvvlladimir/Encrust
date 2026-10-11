@@ -16,4 +16,4 @@ pub use candidates::{FlatFace, flat_faces};
 pub use error::PlateError;
 pub use mask::Footprint;
 pub use orient::{OrientSettings, Oriented, orient, rotation_for};
-pub use score::Score;
+pub use score::{OrientGoal, Score};

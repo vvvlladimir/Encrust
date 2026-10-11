@@ -195,6 +195,10 @@ pub struct SlicingState {
     pub grey_levels: Option<NonZeroU8>,
     pub blur_px: u8,
     pub remove_islands: bool,
+    /// Layers more of what stood on an island taken out that go too; absent, and so
+    /// none, before ADR 0228.
+    #[serde(default)]
+    pub hanging_passes: u32,
     pub format: OutputFormat,
 }
 
@@ -255,6 +259,12 @@ pub struct ObjectState {
     pub summary: Summary,
     pub supports: ObjectSupportState,
     pub hollow: ObjectHollowState,
+    /// The Hollow and Drain settings this model keeps instead of the plate's, where it has
+    /// its own (ADR 0227). A file without them reads as a model with none.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub own_hollow: Option<HollowState>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub own_drain: Option<DrainState>,
 }
 
 /// What mesh repair found at import, kept because the stored mesh is already repaired and
@@ -467,6 +477,7 @@ mod tests {
                     grey_levels: None,
                     blur_px: 0,
                     remove_islands: false,
+                    hanging_passes: 0,
                     format: OutputFormat::Ctb5,
                 },
                 supports: SupportState {
@@ -568,6 +579,12 @@ mod tests {
                     scale: Vec3::ONE,
                 }),
             },
+            own_hollow: None,
+            own_drain: (index == 1).then_some(DrainState {
+                diameter_mm: 4.0,
+                depth_mm: 3.0,
+                taper: 1.0,
+            }),
         }
     }
 
@@ -632,6 +649,24 @@ mod tests {
         let back = round_trip(&saved);
         assert!(back.models[0].shell.is_none());
         assert_eq!(back.models[0].printed(), &back.models[0].source);
+    }
+
+    #[test]
+    fn a_models_own_settings_come_back_and_a_file_without_them_reads() {
+        let back = round_trip(&project(2));
+        assert_eq!(back.manifest.objects[0].own_drain, None);
+        assert_eq!(
+            back.manifest.objects[1]
+                .own_drain
+                .as_ref()
+                .map(|own| own.diameter_mm),
+            Some(4.0)
+        );
+        let mut older = serde_json::to_value(&back.manifest.objects[1]).expect("serialises");
+        let fields = older.as_object_mut().expect("an object");
+        fields.remove("own_drain");
+        let read: ObjectState = serde_json::from_value(older).expect("a file from before reads");
+        assert_eq!(read.own_drain, None);
     }
 
     #[test]

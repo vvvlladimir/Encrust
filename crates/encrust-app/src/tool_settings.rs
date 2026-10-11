@@ -66,6 +66,7 @@ fn slicing_state(slicing: &Slicing) -> SlicingState {
         grey_levels: slicing.grey_levels,
         blur_px: slicing.blur_px,
         remove_islands: slicing.remove_islands,
+        hanging_passes: slicing.hanging_passes,
         format: slicing.format.into(),
     }
 }
@@ -99,6 +100,7 @@ fn restore_slicing(state: SlicingState, slicing: &mut Slicing) {
     slicing.grey_levels = state.grey_levels;
     slicing.blur_px = state.blur_px;
     slicing.remove_islands = state.remove_islands;
+    slicing.hanging_passes = state.hanging_passes;
     slicing.set_format(state.format.into());
 }
 
