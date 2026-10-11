@@ -16,8 +16,8 @@ pub enum Mode {
 /// What a click in the viewport does, and what the inspector beside the rail shows.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum Tool {
+    /// Picking models and placing what is picked; the rail calls it Select.
     #[default]
-    Select,
     Position,
     Measure,
     Hollow,
@@ -40,7 +40,7 @@ impl Tool {
     /// The groups of the rail, in the order it draws them, with a rule between each; see
     /// `docs/decisions/0218`.
     pub const RAIL: [&'static [Self]; 4] = [
-        &[Self::Select, Self::Position, Self::Measure],
+        &[Self::Position, Self::Measure],
         &[Self::Hollow, Self::Drain, Self::Cut, Self::Relief],
         &[Self::Supports, Self::Paint, Self::Shape],
         &[Self::Check, Self::Export],
@@ -48,8 +48,7 @@ impl Tool {
 
     /// Every variant, which is what a test walks to prove none was left unplaced.
     #[cfg(test)]
-    pub const ALL: [Self; 13] = [
-        Self::Select,
+    pub const ALL: [Self; 12] = [
         Self::Position,
         Self::Measure,
         Self::Hollow,
@@ -72,8 +71,7 @@ impl Tool {
 
     pub fn label(self) -> &'static str {
         match self {
-            Self::Select => "Select",
-            Self::Position => "Position",
+            Self::Position => "Select",
             Self::Measure => "Measure",
             Self::Hollow => "Hollow",
             Self::Drain => "Drain",
@@ -90,8 +88,7 @@ impl Tool {
 
     pub fn glyph(self) -> &'static str {
         match self {
-            Self::Select => icon::SELECT,
-            Self::Position => icon::POSITION,
+            Self::Position => icon::SELECT,
             Self::Measure => icon::MEASURE,
             Self::Hollow => icon::HOLLOW,
             Self::Drain => icon::DRAIN,

@@ -328,17 +328,21 @@ impl Reading {
             rect.center(),
             vec2(typed_w.max(LAYER_FIELD_MIN_W), rect.height()),
         );
-        let response = ui.put(
-            field,
-            egui::TextEdit::singleline(&mut text)
-                .id(id.with("field"))
-                .font(theme::figures(12.5))
-                .text_color(colors.accent_soft)
-                .horizontal_align(Align::Center)
-                .frame(egui::Frame::NONE)
-                .margin(egui::Margin::ZERO)
-                .desired_width(field.width()),
-        );
+        // A child, not `put`: allocating the box would pull the strip's cursor back up
+        // to it, and the track under the readout with it.
+        let layout = Layout::centered_and_justified(egui::Direction::LeftToRight);
+        let response = ui
+            .new_child(egui::UiBuilder::new().max_rect(field).layout(layout))
+            .add(
+                egui::TextEdit::singleline(&mut text)
+                    .id(id.with("field"))
+                    .font(theme::figures(12.5))
+                    .text_color(colors.accent_soft)
+                    .horizontal_align(Align::Center)
+                    .frame(egui::Frame::NONE)
+                    .margin(egui::Margin::ZERO)
+                    .desired_width(field.width()),
+            );
         if !response.lost_focus() {
             ui.data_mut(|data| data.insert_temp(id, text));
             return None;
@@ -773,6 +777,38 @@ fn fraction(bottom: Scalar, top: Scalar, height: Scalar) -> f32 {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// BUG: typing a layer pulled the track and its knob up over the readout.
+    #[test]
+    fn typing_a_layer_moves_nothing_under_the_readout() {
+        let reading = Reading {
+            at: Some(0.5),
+            layer: 12,
+            layers: 24,
+            height_mm: 0.6,
+            top_mm: 1.2,
+        };
+        let below = |typing: bool| {
+            let ctx = egui::Context::default();
+            if typing {
+                ctx.data_mut(|data| {
+                    data.insert_temp(egui::Id::new("layer-readout"), "7".to_owned())
+                });
+            }
+            let mut cursor = 0.0;
+            let mut output = ctx.run_ui(egui::RawInput::default(), |ui| {
+                reading.show(ui);
+                cursor = ui.cursor().top();
+            });
+            output.textures_delta.clear();
+            cursor
+        };
+        assert_eq!(
+            below(true),
+            below(false),
+            "the box stands inside the readout"
+        );
+    }
 
     #[test]
     fn the_strip_marks_the_widest_layer_full_height_and_an_island_where_it_starts() {

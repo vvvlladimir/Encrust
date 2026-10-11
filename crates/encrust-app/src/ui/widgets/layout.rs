@@ -1,3 +1,4 @@
+use egui::layers::ShapeIdx;
 use egui::{Frame, RichText, Sense, Ui, UiBuilder, vec2};
 
 use crate::ui::theme;
@@ -79,8 +80,20 @@ fn block<R>(
             })
             .inner
     });
-    hairline(ui);
+    let (rect, _) = ui.allocate_exact_size(vec2(ui.available_width(), 1.0), Sense::hover());
+    let shape = ui.painter().add(egui::Shape::rect_filled(
+        rect,
+        0.0,
+        theme::colors().hairline,
+    ));
+    ui.data_mut(|data| data.insert_temp(trailing_hairline(), (shape, rect.bottom())));
     (pressed, inner)
+}
+
+/// Where the hairline under the last block drawn is kept, so a card ending on it can
+/// take it away.
+fn trailing_hairline() -> egui::Id {
+    egui::Id::new("trailing-hairline")
 }
 
 /// The heading row of a block: caret and title, which fold it, the question mark that
@@ -297,11 +310,22 @@ pub fn body_and_foot<T>(
     let id = ui.id().with("foot-h");
     let foot_h = ui.data(|data| data.get_temp::<f32>(id)).unwrap_or(0.0);
     let room = (max_h - ui.min_rect().height() - foot_h).max(0.0);
+    ui.data_mut(|data| data.remove::<(ShapeIdx, f32)>(trailing_hairline()));
     egui::ScrollArea::vertical()
         .max_height(room)
         .auto_shrink([false, true])
         .show(ui, |ui| body(ui, state));
+    let body_bottom = ui.min_rect().bottom();
     let drawn = ui.scope(|ui| foot(ui, state)).response.rect.height();
+    // With no foot the last block's hairline would stand square over the card's rounded
+    // edge, so the card ends on that block instead.
+    let trailing = ui.data(|data| data.get_temp::<(ShapeIdx, f32)>(trailing_hairline()));
+    if let Some((shape, bottom)) = trailing
+        && drawn <= 0.0
+        && (bottom - body_bottom).abs() < 0.5
+    {
+        ui.painter().set(shape, egui::Shape::Noop);
+    }
     if (drawn - foot_h).abs() > 0.5 {
         ui.data_mut(|data| data.insert_temp(id, drawn));
         ui.ctx()

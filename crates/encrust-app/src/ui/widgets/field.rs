@@ -254,15 +254,21 @@ fn row(ui: &mut Ui, label: &str, field: impl FnOnce(&mut Ui) -> bool) -> bool {
 /// The box an IP address is typed into, as tall as the buttons beside it and `width`
 /// points wide.
 pub fn address_field(ui: &mut Ui, text: &mut String, hint: &str, width: f32) -> egui::Response {
-    let field = egui::TextEdit::singleline(text)
+    let field = text_box(egui::TextEdit::singleline(text))
         .hint_text(hint)
         .font(theme::figures(13.0))
-        .vertical_align(Align::Center)
-        .margin(egui::Margin::symmetric(10, 0))
         .background_color(theme::colors().sunken);
-    let response = ui.add_sized(vec2(width, theme::BUTTON_H), field);
+    let response = ui.add_sized(vec2(width, theme::FIELD_H), field);
     name_for_reader(ui, response.id, "Printer address");
     response
+}
+
+/// A line of text in the one shape every typed box has: as tall as a button, its text
+/// centred in it.
+pub fn text_box(edit: egui::TextEdit<'_>) -> egui::TextEdit<'_> {
+    edit.min_size(vec2(0.0, theme::FIELD_H))
+        .vertical_align(Align::Center)
+        .margin(egui::Margin::symmetric(10, 0))
 }
 
 /// A named line of text: the label on the left, the field taking what is left.
@@ -271,10 +277,8 @@ pub fn text_row(ui: &mut Ui, label: &str, value: &mut String) -> bool {
     ui.horizontal(|ui| {
         field_label(ui, label, theme::colors().text_mid, "");
         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-            let field = egui::TextEdit::singleline(value)
+            let field = text_box(egui::TextEdit::singleline(value))
                 .font(theme::label())
-                .vertical_align(egui::Align::Center)
-                .margin(egui::Margin::symmetric(8, 0))
                 .background_color(theme::colors().sunken);
             let response = ui.add_sized(vec2(ui.available_width(), theme::FIELD_H), field);
             name_for_reader(ui, response.id, label);

@@ -77,7 +77,7 @@ fn header(ui: &mut Ui, library: &mut Library) -> Option<Picked> {
     });
     ui.add_space(8.0);
     ui.add(
-        egui::TextEdit::singleline(&mut library.search)
+        crate::ui::text_box(egui::TextEdit::singleline(&mut library.search))
             .hint_text("Search every machine")
             .desired_width(ui.available_width()),
     );

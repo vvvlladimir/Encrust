@@ -11,14 +11,17 @@ const GAP: f32 = 6.0;
 const JOB_W: f32 = 360.0;
 /// The widest a message may grow before it is cut.
 const MESSAGE_W: f32 = 520.0;
+/// What a message leaves free at either side of the stage's foot: the view column's card
+/// at the right, and as much at the left so it stays centred.
+const BESIDE_W: f32 = theme::ICON_SIZE + 20.0;
 /// How long a message that is not a failure stays up after it changed, seconds.
 const INFO_LINGER_S: f64 = 4.0;
 
 /// Top centre of the stage: what is running, with a way to stop it, then the one thing the
-/// plate is waiting on, then what happened last. The window has no status line; see
-/// `docs/decisions/0217`.
+/// plate is waiting on. What happened last stands at the foot, between the side cards. The
+/// window has no status line; see `docs/decisions/0217`.
 pub fn ui(ui: &egui::Ui, window: &mut Window, stage: Rect) {
-    egui::Area::new(Id::new("stage-notice"))
+    let running = egui::Area::new(Id::new("stage-notice"))
         .order(egui::Order::Middle)
         .fixed_pos(stage.center_top() + vec2(0.0, INSET))
         .pivot(Align2::CENTER_TOP)
@@ -28,8 +31,19 @@ pub fn ui(ui: &egui::Ui, window: &mut Window, stage: Rect) {
             ui.with_layout(Layout::top_down(Align::Center), |ui| {
                 let running = jobs(ui, window);
                 waiting_to_print(ui, window);
-                message(ui, &mut window.machine.status, running);
-            });
+                running
+            })
+            .inner
+        })
+        .inner;
+    let width = (stage.width() - 2.0 * BESIDE_W).clamp(0.0, MESSAGE_W);
+    egui::Area::new(Id::new("stage-message"))
+        .order(egui::Order::Middle)
+        .fixed_pos(stage.center_bottom())
+        .pivot(Align2::CENTER_BOTTOM)
+        .constrain_to(stage)
+        .show(ui.ctx(), |ui| {
+            message(ui, &mut window.machine.status, running, width);
         });
 }
 
@@ -115,9 +129,9 @@ fn waiting_to_print(ui: &mut egui::Ui, window: &mut Window) {
     }
 }
 
-/// What happened last. A failure stays until it is put away, and its whole cause chain is
+/// What happened last, no wider than `max_w` points. A failure stays until it is put away, and its whole cause chain is
 /// on hover; anything else stands for a moment, and not at all while a job is running.
-fn message(ui: &mut egui::Ui, status: &mut Status, running: bool) {
+fn message(ui: &mut egui::Ui, status: &mut Status, running: bool, max_w: f32) {
     let error = status.is_error();
     let now = ui.input(|input| input.time);
     let since_s = now - changed_at(ui, status, now);
@@ -141,7 +155,7 @@ fn message(ui: &mut egui::Ui, status: &mut Status, running: bool) {
     }
     let mut dismissed = false;
     frame.show(ui, |ui| {
-        ui.set_max_width(MESSAGE_W);
+        ui.set_max_width(max_w);
         ui.horizontal(|ui| {
             ui.spacing_mut().item_spacing.x = 8.0;
             ui.label(RichText::new(glyph).font(theme::icon(13.0)).color(tint));

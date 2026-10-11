@@ -21,7 +21,7 @@ mod file;
 mod job;
 mod picture;
 
-pub use picture::{MaskView, PixelRect};
+pub use picture::{MaskView, PixelRect, on_plate};
 
 /// The sliced stack the preview panel is showing, and the build that produces it.
 #[derive(Default)]

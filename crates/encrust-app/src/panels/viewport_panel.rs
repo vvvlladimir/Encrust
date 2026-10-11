@@ -127,7 +127,7 @@ fn steer_camera(view: &mut View, rect: egui::Rect, pointer: &Pointer, drag: Drag
 
 /// What a click on the plate does, which is the tool's to say.
 fn click(ui: &egui::Ui, window: &mut Window, rect: egui::Rect, cursor: egui::Pos2) {
-    let picking = matches!(*window.tool, Tool::Select | Tool::Position);
+    let picking = *window.tool == Tool::Position;
     if !picking && takes_the_pick(window, rect, cursor) {
         return;
     }
@@ -213,7 +213,7 @@ fn paint_plate(ui: &egui::Ui, window: &mut Window, rect: egui::Rect) {
 
 /// The chrome each tool draws over the 3D pass: bounds, gizmo, measurement, brush.
 fn draw_tool_overlays(ui: &egui::Ui, window: &mut Window, rect: egui::Rect, pointer: &Pointer) {
-    if matches!(*window.tool, Tool::Select | Tool::Position) {
+    if *window.tool == Tool::Position {
         draw_bounds(ui, window, rect);
     }
     if *window.tool == Tool::Position && window.tools.orient.picking_face {

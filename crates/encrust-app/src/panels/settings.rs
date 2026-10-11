@@ -233,10 +233,8 @@ pub(super) fn name_row(ui: &mut egui::Ui, salt: &str, name: &str) -> Option<Stri
     ui.horizontal(|ui| {
         crate::ui::field_label(ui, "Name", theme::colors().text_mid, "");
         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-            let field = egui::TextEdit::singleline(&mut text)
+            let field = crate::ui::text_box(egui::TextEdit::singleline(&mut text))
                 .font(theme::label())
-                .vertical_align(egui::Align::Center)
-                .margin(egui::Margin::symmetric(8, 0))
                 .background_color(theme::colors().raised);
             response = Some(ui.add_sized(egui::vec2(ui.available_width(), theme::FIELD_H), field));
         });

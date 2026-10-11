@@ -449,7 +449,7 @@ mod tests {
     fn the_window_opens_on_the_prepare_mode_with_nothing_selected() {
         let app = SlicerApp::default();
         assert_eq!(app.mode, Mode::Prepare);
-        assert_eq!(app.tool, Tool::Select);
+        assert_eq!(app.tool, Tool::Position);
         assert!(
             app.view.options.grid,
             "the plate grid is on until it is turned off"
@@ -684,7 +684,7 @@ mod tests {
         shortcuts::act(&mut app.window(), shortcuts::Action::Pick(Tool::Hollow));
         assert_eq!(
             app.tool,
-            Tool::Select,
+            Tool::Position,
             "the tool is not reached under the sheet"
         );
         assert!(app.view.options.sheet);
@@ -701,7 +701,7 @@ mod tests {
         app.machine.report.open = true;
 
         shortcuts::act(&mut app.window(), shortcuts::Action::Pick(Tool::Hollow));
-        assert_eq!(app.tool, Tool::Select, "the tool is not reached under it");
+        assert_eq!(app.tool, Tool::Position, "the tool is not reached under it");
         assert!(app.machine.report.open);
 
         shortcuts::act(&mut app.window(), shortcuts::Action::Deselect);
@@ -714,7 +714,7 @@ mod tests {
     fn the_start_page_is_left_for_good() {
         let mut app = SlicerApp::default();
         assert!(crate::panels::still_starting(&mut app.window()));
-        app.tool = Tool::Position;
+        app.tool = Tool::Measure;
         assert!(!crate::panels::still_starting(&mut app.window()));
         app.tool = Tool::default();
         assert!(!crate::panels::still_starting(&mut app.window()));

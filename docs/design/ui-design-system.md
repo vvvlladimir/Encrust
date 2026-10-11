@@ -82,7 +82,7 @@ a codepoint pasted into a panel.
 
 ### Density
 
-Row 30 points, field 28, a named field's box 128 wide, button 32, primary button 40,
+Row 30 points, every box a value is typed in as tall as a button, 32, a named field's box 128 wide, primary button 40,
 section heading 36, panel padding 12, item gap 8. Tool rail 60 with 46 point buttons, 34 without their names, plate
 panel 272, inspector 328, top bar 44, layer strip 56, a chip 32.
 The two side columns are the widths a drag on their edge leaves them at; everything else is
@@ -123,6 +123,7 @@ paints from tokens only.
 | `field_label` | The name of a field with its unit in brackets after it: `Gap (mm)` |
 | `axis_label` | The same, the name an axis letter in its axis colour: `X (mm)` |
 | `number_field` | The one box a number is typed or dragged in: sunken, `FIELD_H` tall, the figure at its right |
+| `text_box` | The shape of every box text is typed in: `FIELD_H` tall, as a button is, the text centred in it |
 | `number_row`, `count_row` | The name on the left, a `FIELD_W` box on the right with the unit inside it after the figure |
 
 A named number is a `number_row`, its unit inside the box in `text_low`; a box standing under
@@ -197,8 +198,9 @@ the stack is still the plate's. See `docs/decisions/0061` and `0217`.
 Everything over the stage is an `egui::Area` anchored to a rectangle by its corner. Between
 the side cards stand the view cube and the home view at the top right
 (`panels/view_cube.rs`), the view tools at the bottom right beside this plate's card
-(`panels/view_column.rs`), and top centre the running jobs with their Cancel, a sent file waiting to be started, and the last
-message (`panels/stage_notice.rs`). A failure stays there until it is put away; any
+(`panels/view_column.rs`), top centre the running jobs with their Cancel and a sent file
+waiting to be started, and at the bottom centre, clear of the view tools, the last message
+(`panels/stage_notice.rs`). A failure stays there until it is put away; any
 other message stands for four seconds. There is no status line.
 
 The viewport reads the raw pointer rather than its own `Response`, so what is drawn over
@@ -234,9 +236,9 @@ height: a switch into Preview parks on
 the layer nearest where Prepare was cut, and a switch back cuts Prepare at the layer shown.
 
 `workspace::Tool` is what a click in the viewport does and what the inspector shows, in
-every view. `Tool::RAIL` groups twelve of them as Place, Modify, Supports and Finish; the
-print settings are a form the top bar opens. Position carries the gizmo and the transform
-fields; Select only says what is picked. See `docs/decisions/0218`.
+every view. `Tool::RAIL` groups eleven of them as Place, Modify, Supports and Finish; the
+print settings are a form the top bar opens. The first, `Tool::Position`, is named Select on
+the rail: it picks, and carries the gizmo and the transform fields. See `docs/decisions/0218`.
 
 A click on a model that is not picked only picks it, whichever tool is in hand: the tool
 works on what is picked, so aiming it somewhere else is its own click (ADR 0193).

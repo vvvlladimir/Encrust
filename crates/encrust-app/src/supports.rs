@@ -1,11 +1,14 @@
 use anyhow::{Result, bail};
-use core_geometry::{Adjacency, Scalar, Vec2, Vec3, lift_over_plate};
+use core_geometry::{Adjacency, Ray, Scalar, Vec2, Vec3, lift_over_plate, raycast_placed};
 use core_supports::{Part, Placed, ProjectSettings, project};
 use printer_profiles::SupportProfile;
 
 use crate::job::{SupportJob, SupportOutcome, SupportRequest, tasks_of};
-use crate::scene::Scene;
+use crate::scene::{ObjectId, Scene};
 use crate::status::Status;
+
+/// The group the Check tool stands island supports in, apart from the ones built by hand.
+pub const ISLANDS_GROUP: &str = "Islands";
 
 /// What a click on the model does while the Paint tool is in hand: stand one support,
 /// paint the patch a fill covers, paint the patch supports keep out of, or take either
@@ -248,6 +251,52 @@ impl SupportTool {
         gone
     }
 
+    /// Stands one support under each island whose floor is in `floors`, plate points at
+    /// the bottom of the layer it starts on, in the islands' group. Answers how many stood:
+    /// an island whose centre misses it, a ring or a crescent, is left to the hand.
+    ///
+    /// `layer_mm` is how far under a floor the underside may lie and still be the
+    /// island's: a layer is cut somewhere inside its own thickness.
+    pub fn support_islands(
+        &mut self,
+        scene: &mut Scene,
+        floors: &[Vec3],
+        layer_mm: Scalar,
+    ) -> usize {
+        let found: Vec<(ObjectId, Vec3)> = floors
+            .iter()
+            .filter_map(|floor| underside(scene, *floor, layer_mm))
+            .collect();
+        if found.is_empty() {
+            return 0;
+        }
+        let group = self.islands_group();
+        for (id, contact) in &found {
+            if let Some(object) = scene.get_mut(*id) {
+                let transform = object.transform;
+                object.supports.add(*contact, transform, group);
+            }
+        }
+        found.len()
+    }
+
+    /// The group named for islands, made from the numbers in hand the first time.
+    fn islands_group(&mut self) -> u16 {
+        if let Some(group) = self
+            .groups
+            .iter()
+            .position(|group| group.name == ISLANDS_GROUP)
+        {
+            return group as u16;
+        }
+        self.groups[self.active as usize].profile = self.profile.clone();
+        self.groups.push(SupportGroup {
+            name: ISLANDS_GROUP.to_owned(),
+            profile: self.profile.clone(),
+        });
+        (self.groups.len() - 1) as u16
+    }
+
     /// Fills every painted patch on the plate with supports, and returns how many were
     /// put down.
     ///
@@ -318,6 +367,21 @@ impl SupportTool {
         }
         moved
     }
+}
+
+/// The first surface straight over a point a layer under `floor`, if it is no more than
+/// two layers up: the underside of the island standing there.
+fn underside(scene: &Scene, floor: Vec3, layer_mm: Scalar) -> Option<(ObjectId, Vec3)> {
+    let ray = Ray::new(floor - Vec3::Z * layer_mm, Vec3::Z);
+    scene
+        .printable(scene.active_plate())
+        .filter_map(|object| {
+            let hit = raycast_placed(&object.mesh, &object.bvh, object.transform, &ray)?;
+            Some((object.id, hit))
+        })
+        .min_by(|(_, a), (_, b)| a.distance.total_cmp(&b.distance))
+        .filter(|(_, hit)| hit.distance <= 2.0 * layer_mm)
+        .map(|(id, hit)| (id, hit.point))
 }
 
 #[cfg(test)]
@@ -740,5 +804,52 @@ mod tests {
         let mut scene = one_cube();
         scene.objects_mut()[0].visible = false;
         assert_eq!(SupportTool::default().lift(&mut scene), 0);
+    }
+
+    /// A unit cube held 5 mm over the plate: its underside, the face at z = 5, is an
+    /// island on the layer that starts there.
+    fn floating_cube() -> Scene {
+        let mut scene = one_cube();
+        scene.objects_mut()[0].transform.translation.z = 5.0;
+        scene
+    }
+
+    #[test]
+    fn an_island_gets_a_support_on_its_underside_in_a_group_of_its_own() {
+        let mut scene = floating_cube();
+        let mut tool = SupportTool::default();
+        let floor = Vec3::new(0.5, 0.5, 5.0);
+
+        assert_eq!(tool.support_islands(&mut scene, &[floor], 0.05), 1);
+        assert_eq!(tool.groups.len(), 2);
+        assert_eq!(tool.groups[1].name, ISLANDS_GROUP);
+        assert_eq!(tool.active, 0, "the group in hand stays in hand");
+        let point = scene.objects()[0].supports.points()[0];
+        assert_eq!(point.group, 1);
+        let contact = scene.objects()[0]
+            .transform
+            .to_matrix()
+            .transform_point3(point.contact);
+        assert!(
+            (contact - floor).length() < 1e-4,
+            "the cube's bottom face is straight over the floor, got {contact}"
+        );
+
+        tool.support_islands(&mut scene, &[floor], 0.05);
+        assert_eq!(tool.groups.len(), 2, "a second press joins the same group");
+    }
+
+    #[test]
+    fn an_island_with_nothing_over_its_centre_stands_nothing_and_adds_no_group() {
+        let mut scene = floating_cube();
+        let mut tool = SupportTool::default();
+        let beside = Vec3::new(3.0, 0.5, 5.0);
+        let far_under = Vec3::new(0.5, 0.5, 2.0);
+
+        assert_eq!(
+            tool.support_islands(&mut scene, &[beside, far_under], 0.05),
+            0
+        );
+        assert_eq!(tool.groups.len(), 1);
     }
 }

@@ -89,7 +89,7 @@ fn save_row<T: Serialize>(
                 })
                 .inner
                 .clicked();
-            let field = egui::TextEdit::singleline(&mut name)
+            let field = crate::ui::text_box(egui::TextEdit::singleline(&mut name))
                 .hint_text("Name these settings")
                 .font(theme::label())
                 .desired_width(ui.available_width());

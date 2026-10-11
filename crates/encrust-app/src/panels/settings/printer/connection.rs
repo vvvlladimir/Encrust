@@ -112,18 +112,18 @@ fn bound_rows(ui: &mut egui::Ui, profile: &str, network: &mut Network, speaks: C
 fn fields(ui: &mut egui::Ui, draft: &mut PrusaDraft) -> Option<Link> {
     let half = FIELD_W / 2.0 - 2.0;
     ui.add(
-        egui::TextEdit::singleline(&mut draft.host)
+        crate::ui::text_box(egui::TextEdit::singleline(&mut draft.host))
             .hint_text("sl1.local")
             .desired_width(FIELD_W),
     );
     ui.horizontal(|ui| {
         ui.add(
-            egui::TextEdit::singleline(&mut draft.user)
+            crate::ui::text_box(egui::TextEdit::singleline(&mut draft.user))
                 .hint_text(net_prusalink::DEFAULT_USER)
                 .desired_width(half),
         );
         ui.add(
-            egui::TextEdit::singleline(&mut draft.password)
+            crate::ui::text_box(egui::TextEdit::singleline(&mut draft.password))
                 .hint_text("password")
                 .password(true)
                 .desired_width(half),
@@ -132,7 +132,7 @@ fn fields(ui: &mut egui::Ui, draft: &mut PrusaDraft) -> Option<Link> {
     let mut added = None;
     ui.horizontal(|ui| {
         ui.add(
-            egui::TextEdit::singleline(&mut draft.key)
+            crate::ui::text_box(egui::TextEdit::singleline(&mut draft.key))
                 .hint_text("or an API key")
                 .password(true)
                 .desired_width(FIELD_W),

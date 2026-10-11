@@ -13,7 +13,7 @@ pub use button::{
 };
 pub use field::{
     Carried, address_field, axis_label, carried_row, count_row, field_label, number_field,
-    number_row, text_row,
+    number_row, text_box, text_row,
 };
 pub use layout::{
     body_and_foot, card, card_foot, describe, dialog_frame, dialog_head, hairline, heading,

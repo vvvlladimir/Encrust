@@ -298,7 +298,8 @@ pub const fn colors() -> &'static Palette {
 
 /// Heights, widths and gaps, in points. One density, applied everywhere.
 pub const ROW_H: f32 = 30.0;
-pub const FIELD_H: f32 = 28.0;
+/// Every box a value is typed in stands as tall as a button.
+pub const FIELD_H: f32 = BUTTON_H;
 /// Width of the value box in a named row.
 pub const FIELD_W: f32 = 128.0;
 pub const PANEL_PAD: f32 = 12.0;

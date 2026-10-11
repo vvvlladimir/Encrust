@@ -2,39 +2,12 @@ use crate::panels::Window;
 use crate::plate::Overreach;
 use crate::scene::ObjectId;
 use crate::state::Doc;
-use crate::ui::{describe, icon, notice, readings, secondary_button, section, theme};
-
-/// What is picked, and nothing to change it with: every other tool works on it. Until
-/// something is picked, the two selections that need no aim.
-pub fn ui(ui: &mut egui::Ui, window: &mut Window) {
-    let picked = window.doc.scene.selection().to_vec();
-    let Some(first) = picked.first().and_then(|id| window.doc.scene.get(*id)) else {
-        nothing_picked(ui, window.doc);
-        return;
-    };
-
-    let mut rows = Vec::new();
-    if let Some(bounds) = first.world_bounds() {
-        let size = bounds.maxs - bounds.mins;
-        rows.extend([
-            ("Width", format!("{:.2} mm", size.x)),
-            ("Depth", format!("{:.2} mm", size.y)),
-            ("Height", format!("{:.2} mm", size.z)),
-        ]);
-    }
-    rows.push(("Triangles", first.mesh.faces.len().to_string()));
-    let title = if picked.len() > 1 {
-        "Size of the first"
-    } else {
-        "Size"
-    };
-    section(ui, title, None, |ui| readings(ui, &rows));
-    problems(ui, window, &picked);
-}
+use crate::ui::{describe, icon, notice, secondary_button, section, theme};
 
 /// Every picked model that reaches past the build volume, each with the move that brings
 /// it back in, or the reason there is none.
-fn problems(ui: &mut egui::Ui, window: &mut Window, picked: &[ObjectId]) {
+pub fn problems(ui: &mut egui::Ui, window: &mut Window) {
+    let picked = window.doc.scene.selection().to_vec();
     let plate = &window.doc.plate;
     let past: Vec<(ObjectId, String, Overreach)> = picked
         .iter()
@@ -52,7 +25,7 @@ fn problems(ui: &mut egui::Ui, window: &mut Window, picked: &[ObjectId]) {
         for (id, name, reach) in past {
             let why = match reach.shift {
                 Some(_) => "It will not be printed where it stands.",
-                None => "It is bigger than the volume: scale it down in Position.",
+                None => "It is bigger than the volume: scale it down.",
             };
             notice(
                 ui,
@@ -83,7 +56,8 @@ pub fn fact(doc: &Doc) -> Option<String> {
     }
 }
 
-fn nothing_picked(ui: &mut egui::Ui, doc: &mut Doc) {
+/// Until something is picked, how to pick it and the selection that needs no aim.
+pub fn nothing_picked(ui: &mut egui::Ui, doc: &mut Doc) {
     let count = doc.scene.here().count();
     section(
         ui,

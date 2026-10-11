@@ -7,9 +7,8 @@ use crate::panels::Window;
 use crate::plate::BuildPlate;
 use crate::scene::{Axis, ObjectId, Scene, SceneObject};
 use crate::ui::{
-    axis_label, compact_button, describe, field_label, hint, icon, icon_toggle, nested,
-    number_field, number_row, progress_bar, secondary_button, section, section_with_action, switch,
-    theme,
+    axis_label, compact_button, describe, field_label, icon, icon_toggle, nested, number_field,
+    number_row, progress_bar, secondary_button, section, section_with_action, switch, theme,
 };
 
 /// Millimetres, degrees and percent per point of drag on the transform fields.
@@ -50,11 +49,10 @@ const AXIS_NAMES: [&str; 3] = ["X", "Y", "Z"];
 /// the origin its file was authored around. See `docs/decisions/0110`.
 pub fn ui(ui: &mut egui::Ui, window: &mut Window) {
     let Some(id) = window.doc.scene.selected() else {
-        section(ui, "Position", None, |ui| {
-            hint(ui, "Select a model to move it.");
-        });
+        super::select::nothing_picked(ui, window.doc);
         return;
     };
+    super::select::problems(ui, window);
     position(ui, &mut window.doc.scene, &window.doc.plate, id);
     rotation(ui, window, id);
     scale(ui, &mut window.doc.scene, id);

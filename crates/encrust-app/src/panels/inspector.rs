@@ -49,7 +49,6 @@ pub fn ui(ui: &mut egui::Ui, window: &mut Window, max_h: f32) {
 
 fn body(ui: &mut egui::Ui, window: &mut Window, tool: Tool) {
     match tool {
-        Tool::Select => select::ui(ui, window),
         Tool::Position => position::ui(ui, window),
         Tool::Measure => measure::ui(ui, window.tools),
         Tool::Hollow => hollow::ui(ui, window),
@@ -99,7 +98,7 @@ fn fact(window: &Window, tool: Tool) -> Option<(String, egui::Color32)> {
     let colors = theme::colors();
     let plain = |text: String| Some((text, colors.text_mid));
     match tool {
-        Tool::Select | Tool::Position => select::fact(window.doc).and_then(plain),
+        Tool::Position => select::fact(window.doc).and_then(plain),
         Tool::Hollow => plain(format!("{:.2} mm", window.tools.hollow.state.thickness_mm)),
         Tool::Drain => drain::fact(window).map(|text| (text, colors.danger)),
         Tool::Supports => supports::fact(window).and_then(plain),
@@ -133,8 +132,7 @@ fn fact(window: &Window, tool: Tool) -> Option<(String, egui::Color32)> {
 /// What the tool is for, read from the question mark beside its name.
 fn help(tool: Tool) -> &'static str {
     match tool {
-        Tool::Select => "Pick what the other tools work on.",
-        Tool::Position => "Move, turn, size, lay down and mirror the selection.",
+        Tool::Position => "Pick a model, then move, turn, size, lay down and mirror it.",
         Tool::Measure => "Click two points or two flat faces on a model.",
         Tool::Hollow => "Cut a cavity to save resin and lighten the peel.",
         Tool::Drain => "Let resin out of a hollow model.",

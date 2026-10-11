@@ -130,11 +130,10 @@ fn steer(ui: &mut egui::Ui, lit: usize, count: usize) -> usize {
 fn field(ui: &mut egui::Ui, id: egui::Id, query: &mut String) -> bool {
     let colors = theme::colors();
     let response = ui.add(
-        egui::TextEdit::singleline(query)
+        crate::ui::text_box(egui::TextEdit::singleline(query))
             .id(id.with("field"))
             .hint_text("Find a tool, an action or a model")
             .font(theme::body())
-            .margin(egui::Margin::symmetric(10, 8))
             .background_color(colors.sunken)
             .desired_width(f32::INFINITY),
     );

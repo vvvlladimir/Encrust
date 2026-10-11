@@ -137,9 +137,8 @@ fn machine_list(ui: &mut Ui, window: &mut Window, action: &mut Option<Action>) {
     ui.horizontal(|ui| {
         ui.add_space(12.0);
         ui.add(
-            egui::TextEdit::singleline(&mut settings.search)
+            crate::ui::text_box(egui::TextEdit::singleline(&mut settings.search))
                 .hint_text(format!("{}  Your machines", icon::FIND))
-                .margin(egui::Margin::symmetric(10, 8))
                 .desired_width(ui.available_width() - 12.0),
         );
     });

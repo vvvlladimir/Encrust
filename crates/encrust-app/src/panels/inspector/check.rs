@@ -1,8 +1,12 @@
 use core_analysis::{Measured, Risk, RiskKind, equivalent_disc_mm};
+use core_geometry::Vec3;
 use egui::{Color32, RichText};
 
 use crate::panels::Window;
+use crate::preview::on_plate;
 use crate::state::Machine;
+use crate::status::Status;
+use crate::supports::ISLANDS_GROUP;
 use crate::ui::{
     Segment, Segmented, describe, focus_ring, hint, icon, issue_row, list, readings,
     secondary_button, section, theme,
@@ -84,7 +88,7 @@ pub fn ui(ui: &mut egui::Ui, window: &mut Window) {
         islands_action(ui, window.machine, &risks, removed);
         let islands = risks.iter().any(|risk| Filter::Islands.admits(&risk.kind));
         if islands && secondary_button(ui, icon::SUPPORTS, "Support every island").clicked() {
-            crate::shortcuts::pick(window, Tool::Supports);
+            support_islands(window, &risks);
         }
         let cups = risks.iter().any(|risk| Filter::Cups.admits(&risk.kind));
         if cups && secondary_button(ui, icon::DRAIN, "Drill the suction cups").clicked() {
@@ -110,6 +114,35 @@ pub fn ui(ui: &mut egui::Ui, window: &mut Window) {
         });
     }
     pull(ui, window);
+}
+
+/// Stands a support under every island the check found, in a group of their own built
+/// to the support numbers in hand, and says how many stood.
+fn support_islands(window: &mut Window, risks: &[Risk]) {
+    let Some(settings) = window.machine.slicing.raster_settings() else {
+        return;
+    };
+    let Some(plan) = window.machine.preview.plan() else {
+        return;
+    };
+    let floors: Vec<Vec3> = risks
+        .iter()
+        .filter(|risk| Filter::Islands.admits(&risk.kind))
+        .filter_map(|risk| {
+            let floor_mm = plan.top_of(risk.layer.checked_sub(1)?)?;
+            Some(on_plate(&settings, risk.at_mm).extend(floor_mm))
+        })
+        .collect();
+    let layer_mm = plan.nominal_thickness();
+    let stood = window
+        .tools
+        .supports
+        .support_islands(&mut window.doc.scene, &floors, layer_mm);
+    window.machine.status = Status::Info(match stood {
+        0 => "No island had an underside to stand a support on".to_owned(),
+        1 => format!("Stood 1 support in {ISLANDS_GROUP}"),
+        stood => format!("Stood {stood} supports in {ISLANDS_GROUP}"),
+    });
 }
 
 /// What the check has found so far, for the inspector's heading, and its colour.
