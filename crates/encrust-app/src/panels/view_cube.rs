@@ -131,7 +131,8 @@ fn turn(ui: &egui::Ui, window: &mut Window, to: OrbitCamera) {
 
 /// Draws the cube as `camera` sees it and returns the view a click on it asked for.
 fn cube(ui: &mut egui::Ui, camera: &OrbitCamera) -> Option<Vec3> {
-    let (rect, response) = ui.allocate_exact_size(Vec2::splat(SIZE), Sense::click());
+    // Not focusable: a face is aimed at with the pointer; the keyboard has Frame view.
+    let (rect, response) = ui.allocate_exact_size(Vec2::splat(SIZE), Sense::CLICK);
     let view = camera.view();
     let faces: Vec<(&Face, Vec<Cell>)> = FACES
         .iter()

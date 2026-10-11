@@ -19,7 +19,7 @@ use crate::panels::Window;
 use crate::settings::Section;
 use crate::state::Machine;
 use crate::status::Status;
-use crate::ui::{hairline, icon, icon_button, theme};
+use crate::ui::{focus_ring, hairline, icon, icon_button, theme};
 
 /// How wide the list of sections down the left is, and the list of profiles beside it.
 const SECTIONS_W: f32 = 230.0;
@@ -108,6 +108,9 @@ pub(super) fn nav_row(ui: &mut egui::Ui, glyph: &str, label: &str, active: bool)
     let colors = theme::colors();
     let size = vec2(ui.available_width(), theme::BUTTON_H + 4.0);
     let (rect, response) = ui.allocate_exact_size(size, egui::Sense::click());
+    response.widget_info(|| {
+        egui::WidgetInfo::selected(egui::WidgetType::SelectableLabel, true, active, label)
+    });
     let (fill, text) = match (active, response.hovered()) {
         (true, _) => (colors.accent_wash, colors.accent_soft),
         (false, true) => (colors.hover, colors.text_high),
@@ -131,6 +134,7 @@ pub(super) fn nav_row(ui: &mut egui::Ui, glyph: &str, label: &str, active: bool)
         theme::body(),
         text,
     );
+    focus_ring(ui, &response, theme::R_CONTROL);
     response
 }
 

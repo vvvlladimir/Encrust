@@ -257,7 +257,8 @@ fn drag_edge(ctx: &egui::Context, id: &str, card: Rect, fixed_left: bool) -> Opt
         .fixed_pos(pos2(left, card.top()))
         .show(ctx, |ui| {
             let size = vec2(GRAB_W, card.height());
-            let (strip, response) = ui.allocate_exact_size(size, Sense::drag());
+            // Not focusable: a grip has nothing to do from the keyboard.
+            let (strip, response) = ui.allocate_exact_size(size, Sense::DRAG);
             if response.hovered() || response.dragged() {
                 ui.ctx().set_cursor_icon(egui::CursorIcon::ResizeHorizontal);
                 let x = if fixed_left {

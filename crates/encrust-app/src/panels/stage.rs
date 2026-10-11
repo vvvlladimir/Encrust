@@ -81,8 +81,9 @@ fn divider(ui: &egui::Ui, window: &mut Window, stage: Rect, clear: Rect, middle:
         .order(egui::Order::Middle)
         .fixed_pos(pos2(middle - GRAB_W, clear.top()))
         .show(ui.ctx(), |ui| {
+            // Not focusable: a grip has nothing to do from the keyboard.
             let (strip, response) =
-                ui.allocate_exact_size(vec2(2.0 * GRAB_W, clear.height()), Sense::drag());
+                ui.allocate_exact_size(vec2(2.0 * GRAB_W, clear.height()), Sense::DRAG);
             if response.hovered() || response.dragged() {
                 ui.ctx().set_cursor_icon(egui::CursorIcon::ResizeHorizontal);
                 ui.painter().vline(

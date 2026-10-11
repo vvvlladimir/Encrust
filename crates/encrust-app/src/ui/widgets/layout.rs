@@ -95,6 +95,10 @@ fn block_heading(
             .sense(Sense::click())
             .selectable(false),
     );
+    fold.widget_info(|| {
+        egui::WidgetInfo::selected(egui::WidgetType::CollapsingHeader, true, open, title)
+    });
+    super::focus_ring(&child, &fold, theme::R_CONTROL);
     if fold
         .on_hover_cursor(egui::CursorIcon::PointingHand)
         .clicked()

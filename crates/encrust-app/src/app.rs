@@ -510,6 +510,39 @@ mod tests {
         assert_eq!(harness.state().mode, Mode::Preview);
     }
 
+    /// A screen reader finds every tool on the rail by its name, and Enter on the one in
+    /// focus picks it, which is the whole of driving the rail without a pointer.
+    #[test]
+    fn every_tool_on_the_rail_is_named_and_picked_from_the_keyboard() {
+        use egui_kittest::kittest::Queryable as _;
+
+        let mut app = SlicerApp::default();
+        app.view.options.started = true;
+        let mut dressed = false;
+        let mut harness = egui_kittest::Harness::builder()
+            .with_size(egui::vec2(1280.0, 900.0))
+            .build_ui_state(
+                move |ui, app: &mut SlicerApp| {
+                    if dressed {
+                        app.window().show(ui);
+                    } else {
+                        crate::ui::theme::apply(ui.ctx());
+                        dressed = true;
+                    }
+                },
+                app,
+            );
+        harness.run_steps(3);
+        for tool in Tool::on_rail() {
+            let button = egui::accesskit::Role::Button;
+            harness.get_by_role_and_label(button, tool.label()).focus();
+            harness.run_steps(2);
+            harness.key_press(egui::Key::Enter);
+            harness.run_steps(2);
+            assert_eq!(harness.state().tool, tool, "Enter on {}", tool.label());
+        }
+    }
+
     #[test]
     fn the_opening_camera_looks_at_the_plate() {
         let app = SlicerApp::default();
@@ -588,7 +621,7 @@ mod tests {
     }
 
     #[test]
-    fn tab_switches_between_preparing_and_previewing() {
+    fn the_mode_key_switches_between_preparing_and_previewing() {
         let mut app = SlicerApp::default();
         shortcuts::act(&mut app.window(), shortcuts::Action::ToggleMode);
         assert_eq!(app.mode, Mode::Preview);

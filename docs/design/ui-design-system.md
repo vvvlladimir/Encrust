@@ -128,6 +128,12 @@ paints from tokens only.
 A named number is a `number_row`, its unit inside the box in `text_low`; a box standing under
 a `field_label` of its own carries the unit in that label's brackets instead.
 
+Every control painted by hand states what it is through `Response::widget_info` — role,
+name, and whether it is on — and calls `focus_ring` once it is drawn, so Tab can reach it
+and a screen reader can name it. A `number_field` is given its name, since the label beside
+it is painted separately. A surface steered only by the pointer senses `Sense::DRAG` or
+`Sense::CLICK`, which Tab skips (ADR 0229).
+
 ## Layout
 
 `panels::Window::show` builds the window in a fixed order. Nothing is dockable. Under the

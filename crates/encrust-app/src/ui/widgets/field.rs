@@ -35,17 +35,37 @@ pub fn axis_label(ui: &mut Ui, index: usize, unit: &str) {
     );
 }
 
-/// The one box a number is typed or dragged in, `width` points wide. `decimals` fixes
-/// the digits after the point; `None` leaves them to the type. Returns whether it changed.
+/// The one box a number is typed or dragged in, `width` points wide, called `name` to a
+/// screen reader. `decimals` fixes the digits after the point; `None` leaves them to the
+/// type. Returns whether it changed.
 pub fn number_field<N: Numeric>(
     ui: &mut Ui,
+    name: &str,
     value: &mut N,
     speed: f64,
     range: RangeInclusive<N>,
     decimals: Option<usize>,
     width: f32,
 ) -> bool {
-    boxed_field(ui, value, speed, range, decimals, width, "")
+    let field = Field {
+        name,
+        unit: "",
+        width,
+    };
+    boxed_field(ui, &field, value, speed, range, decimals)
+}
+
+/// What a box is called, the unit drawn inside it, and its width in points.
+struct Field<'a> {
+    name: &'a str,
+    unit: &'a str,
+    width: f32,
+}
+
+/// Names a control for a screen reader, which cannot see the label painted beside it.
+fn name_for_reader(ui: &Ui, id: egui::Id, name: &str) {
+    ui.ctx()
+        .accesskit_node_builder(id, |node| node.set_label(name));
 }
 
 /// Points kept clear either side of the unit inside a box.
@@ -55,15 +75,16 @@ const UNIT_PAD: f32 = 8.0;
 /// after it in the quietest tone. The drag and the typing are egui's own `DragValue`.
 fn boxed_field<N: Numeric>(
     ui: &mut Ui,
+    field: &Field<'_>,
     value: &mut N,
     speed: f64,
     range: RangeInclusive<N>,
     decimals: Option<usize>,
-    width: f32,
-    unit: &str,
 ) -> bool {
     let colors = theme::colors();
-    let (rect, _) = ui.allocate_exact_size(vec2(width.max(40.0), theme::FIELD_H), Sense::hover());
+    let unit = field.unit;
+    let size = vec2(field.width.max(40.0), theme::FIELD_H);
+    let (rect, _) = ui.allocate_exact_size(size, Sense::hover());
     let frame = ui.painter().add(egui::Shape::Noop);
     let unit = (!unit.is_empty()).then(|| {
         ui.painter()
@@ -77,13 +98,14 @@ fn boxed_field<N: Numeric>(
     let response = ui
         .scope_builder(builder, |ui| {
             borderless(ui.style_mut(), value_rect.size());
-            let mut field = DragValue::new(value).speed(speed).range(range);
+            let mut drag = DragValue::new(value).speed(speed).range(range);
             if let Some(decimals) = decimals {
-                field = field.fixed_decimals(decimals);
+                drag = drag.fixed_decimals(decimals);
             }
-            ui.add(field)
+            ui.add(drag)
         })
         .inner;
+    name_for_reader(ui, response.id, field.name);
 
     let border = if response.has_focus() {
         colors.accent
@@ -140,16 +162,13 @@ pub fn number_row(
     range: RangeInclusive<Scalar>,
     decimals: usize,
 ) -> bool {
+    let field = Field {
+        name: label,
+        unit,
+        width: theme::FIELD_W,
+    };
     row(ui, label, |ui| {
-        boxed_field(
-            ui,
-            value,
-            speed,
-            range,
-            Some(decimals),
-            theme::FIELD_W,
-            unit,
-        )
+        boxed_field(ui, &field, value, speed, range, Some(decimals))
     })
 }
 
@@ -187,8 +206,12 @@ pub fn carried_row(
     ui.horizontal(|ui| {
         field_label(ui, label, colors.warn, "");
         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-            let width = theme::FIELD_W;
-            if boxed_field(ui, value, speed, range, Some(decimals), width, unit) {
+            let field = Field {
+                name: label,
+                unit,
+                width: theme::FIELD_W,
+            };
+            if boxed_field(ui, &field, value, speed, range, Some(decimals)) {
                 carried = Carried::Edited;
             }
             let back = format!("Back to {was:.decimals$} {unit}");
@@ -209,8 +232,13 @@ pub fn count_row(
     speed: f64,
     range: RangeInclusive<u32>,
 ) -> bool {
+    let field = Field {
+        name: label,
+        unit,
+        width: theme::FIELD_W,
+    };
     row(ui, label, |ui| {
-        boxed_field(ui, value, speed, range, None, theme::FIELD_W, unit)
+        boxed_field(ui, &field, value, speed, range, None)
     })
 }
 
@@ -234,9 +262,9 @@ pub fn text_row(ui: &mut Ui, label: &str, value: &mut String) -> bool {
                 .vertical_align(egui::Align::Center)
                 .margin(egui::Margin::symmetric(8, 0))
                 .background_color(theme::colors().sunken);
-            changed = ui
-                .add_sized(vec2(ui.available_width(), theme::FIELD_H), field)
-                .changed();
+            let response = ui.add_sized(vec2(ui.available_width(), theme::FIELD_H), field);
+            name_for_reader(ui, response.id, label);
+            changed = response.changed();
         });
     });
     changed

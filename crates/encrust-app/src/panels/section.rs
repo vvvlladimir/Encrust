@@ -6,7 +6,7 @@ use crate::panels::inspector::risk_tint;
 use crate::preview::{Preview, stack_fingerprint};
 use crate::shortcuts::{self, Action};
 use crate::state::Doc;
-use crate::ui::{icon, icon_button, theme};
+use crate::ui::{focus_ring, icon, icon_button, theme};
 use crate::workspace::{Mode, Section};
 
 /// How many layers a second the play button steps through. Fast enough to read the shape
@@ -120,7 +120,10 @@ fn views(ui: &mut egui::Ui, window: &mut Window) {
                 Stroke::new(1.0, colors.hairline),
             );
         }
-        response.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Button, true, *name));
+        response.widget_info(|| {
+            egui::WidgetInfo::selected(egui::WidgetType::RadioButton, true, on, *name)
+        });
+        focus_ring(ui, &response, theme::R_CONTROL);
         if response.on_hover_text(format!("{name}  {keys}")).clicked() {
             picked = Some(index);
         }
@@ -287,6 +290,11 @@ impl Reading {
                 .interact(spot, id.with("figure"), Sense::click())
                 .on_hover_cursor(egui::CursorIcon::Text)
                 .on_hover_text("Type a layer to go to");
+            response.widget_info(|| {
+                let name = format!("Layer {}, type a layer to go to", self.layer);
+                egui::WidgetInfo::labeled(egui::WidgetType::Button, true, name)
+            });
+            focus_ring(ui, &response, theme::R_CONTROL);
             ui.painter().galley(at, figure, colors.accent_soft);
             if response.clicked() {
                 ui.data_mut(|data| data.insert_temp(id, self.layer.to_string()));
@@ -398,12 +406,39 @@ fn track(ui: &mut egui::Ui, window: &mut Window, height: f32, reading: &Reading)
     {
         scrub(window, span_fraction(span, pointer.y));
     }
+    if response.has_focus() {
+        step_by_arrows(ui, window, response.id);
+    }
     let at = Reading::of(window).at;
     paint_track(ui, window, rect, span, at);
+    let (layer, layers) = (Reading::of(window).layer, reading.layers);
+    response.widget_info(|| {
+        let name = format!("Layer, of {layers}");
+        egui::WidgetInfo::slider(at.is_some(), layer as f64, name)
+    });
+    focus_ring(ui, &response, theme::R_CONTROL);
     if at.is_some() {
         response.on_hover_cursor(egui::CursorIcon::ResizeVertical);
     } else {
         response.on_hover_text("Nothing on the plate to cut through yet");
+    }
+}
+
+/// The bare arrows step the track that holds the focus, rather than moving the focus off
+/// it; with Shift they are the table's ten layers either way.
+fn step_by_arrows(ui: &egui::Ui, window: &mut Window, id: egui::Id) {
+    let arrows = egui::EventFilter {
+        vertical_arrows: true,
+        ..Default::default()
+    };
+    ui.memory_mut(|memory| memory.set_focus_lock_filter(id, arrows));
+    let (up, down) = ui.input_mut(|input| {
+        let mut bare = |key| input.count_and_consume_key(egui::Modifiers::NONE, key);
+        (bare(egui::Key::ArrowUp), bare(egui::Key::ArrowDown))
+    });
+    let layers = up as i64 - down as i64;
+    if layers != 0 {
+        step(window, layers);
     }
 }
 

@@ -8,7 +8,9 @@ use super::{Action, SIDE_PAD, child, scrolled, stroke, with_footer};
 use crate::panels::Window;
 use crate::panels::settings::resin;
 use crate::settings::{Deleting, Node, pool_for, resins_of};
-use crate::ui::{describe, filter_chip, icon, icon_button, inline_button, quiet_button, theme};
+use crate::ui::{
+    describe, filter_chip, focus_ring, icon, icon_button, inline_button, quiet_button, theme,
+};
 
 /// Where each column of the table starts, as a share of its width; the figures are set
 /// flush right against the start of the next.
@@ -231,6 +233,9 @@ fn resin_row(
     let colors = theme::colors();
     let size = vec2(ui.available_width(), theme::TABLE_ROW_H);
     let (rect, response) = ui.allocate_exact_size(size, Sense::click());
+    response.widget_info(|| {
+        egui::WidgetInfo::selected(egui::WidgetType::SelectableLabel, true, picked, &resin.name)
+    });
     let fill = match (picked, response.hovered()) {
         (true, _) => colors.accent_wash,
         (false, true) => colors.hover,
@@ -253,6 +258,7 @@ fn resin_row(
         );
     }
     painter.hline(rect.x_range(), rect.bottom() - 0.5, stroke());
+    focus_ring(ui, &response, theme::R_CONTROL);
     response.on_hover_text_at_pointer(match in_hand {
         true => "The plate prints with this resin. Double-click to edit it.",
         false => "Double-click to edit it.",

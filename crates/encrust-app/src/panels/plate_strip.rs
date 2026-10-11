@@ -2,7 +2,7 @@ use egui::{Align2, Sense, Stroke, vec2};
 
 use crate::scene::{ObjectId, Scene};
 use crate::shortcuts::{self, Action};
-use crate::ui::{icon, icon_button, theme};
+use crate::ui::{focus_ring, icon, icon_button, theme};
 
 /// How big a plate's square is.
 const PLATE_SIZE: f32 = 32.0;
@@ -93,6 +93,9 @@ enum Asked {
 fn square(ui: &mut egui::Ui, name: &str, count: usize, place: Place) -> Option<Asked> {
     let colors = theme::colors();
     let (rect, response) = ui.allocate_exact_size(vec2(PLATE_SIZE, PLATE_SIZE), Sense::click());
+    response.widget_info(|| {
+        egui::WidgetInfo::selected(egui::WidgetType::Button, true, place.active, name)
+    });
     let (fill, ink) = match (place.active, response.hovered()) {
         (true, _) => (colors.raised, colors.accent_soft),
         (false, true) => (colors.hover, colors.text_high),
@@ -115,6 +118,7 @@ fn square(ui: &mut egui::Ui, name: &str, count: usize, place: Place) -> Option<A
         theme::figures(12.5),
         ink,
     );
+    focus_ring(ui, &response, theme::R_CONTROL);
 
     let models = if count == 1 {
         "1 model".to_owned()

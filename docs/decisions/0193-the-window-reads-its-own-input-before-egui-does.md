@@ -1,6 +1,6 @@
 # 0193. The window reads its own input before egui does
 
-- **Status:** Accepted
+- **Status:** Accepted; Tab and the keys of a focused control are superseded by 0229
 - **Date:** 2026-10-06
 
 ## Context

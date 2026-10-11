@@ -168,7 +168,8 @@ fn ring_risks(ui: &egui::Ui, risks: &[Risk], placed: Rect, panel_mm: Vec2) {
 /// Scrolling or pinching over the pane zooms about the cursor, dragging moves the picture,
 /// and a double click shows the whole panel again.
 fn steer(ui: &egui::Ui, preview: &mut Preview, room: Rect, fit_rect: Rect, panel_px: Vec2) {
-    let response = ui.interact(room, ui.id().with("mask-view"), Sense::click_and_drag());
+    // Not focusable: the picture is steered by the pointer alone.
+    let response = ui.interact(room, ui.id().with("mask-view"), Sense::CLICK | Sense::DRAG);
     let view = &mut preview.view;
     if response.double_clicked() {
         *view = Default::default();

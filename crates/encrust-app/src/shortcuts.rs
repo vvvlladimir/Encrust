@@ -179,7 +179,7 @@ pub const BINDINGS: &[Binding] = &[
     ),
     bind(Group::Plate, Action::Undo, &[cmd(Key::Z)]),
     bind(Group::Plate, Action::Redo, &[cmd_shift(Key::Z)]),
-    bind(Group::Window, Action::ToggleMode, &[plain(Key::Tab)]),
+    bind(Group::Window, Action::ToggleMode, &[plain(Key::M)]),
     bind(Group::Window, Action::PlatePanel, &[plain(Key::Backslash)]),
     bind(Group::Window, Action::FrameView, &[plain(Key::F)]),
     bind(Group::Window, Action::Settings, &[cmd(Key::Comma)]),
@@ -205,6 +205,21 @@ pub const BINDINGS: &[Binding] = &[
 ];
 
 pub const GESTURES: &[Gesture] = &[
+    Gesture {
+        group: Group::Window,
+        label: "Move between the controls",
+        keys: "Tab, Shift Tab",
+    },
+    Gesture {
+        group: Group::Window,
+        label: "Press the control in focus",
+        keys: "Enter or Space",
+    },
+    Gesture {
+        group: Group::Window,
+        label: "Leave the control in focus",
+        keys: "Esc",
+    },
     Gesture {
         group: Group::Plate,
         label: "Add to the selection",
@@ -249,16 +264,14 @@ pub const GESTURES: &[Gesture] = &[
 
 /// The actions whose keys were pressed, taken out of the raw input before egui reads it.
 ///
-/// The window's own keys never reach egui, because egui answers several of them itself:
-/// Tab and the arrows walk its ring of focusable widgets, and a widget that then holds
-/// the focus swallows every key in this table. See `docs/decisions/0193`.
-///
-/// A field being typed into owns the keyboard whole: an S is an S there, not Slice, and
-/// Tab belongs to the ring of fields.
+/// Tab is egui's, and walks its ring of controls. While a control holds the focus the keys
+/// that drive it are egui's too, and every other key is still the table's; a field being
+/// typed into owns the keyboard whole. See `docs/decisions/0229`.
 pub fn take(ctx: &egui::Context, raw_input: &mut egui::RawInput) -> Vec<Action> {
     if ctx.text_edit_focused() {
         return Vec::new();
     }
+    let focused = ctx.memory(|memory| memory.focused().is_some());
     let mut fired = Vec::new();
     raw_input.events.retain(|event| {
         let egui::Event::Key {
@@ -270,6 +283,9 @@ pub fn take(ctx: &egui::Context, raw_input: &mut egui::RawInput) -> Vec<Action> 
         else {
             return true;
         };
+        if focused && drives_the_focus(*key, *modifiers) {
+            return true;
+        }
         match action_of(*key, *modifiers) {
             Some(action) => {
                 fired.push(action);
@@ -279,6 +295,22 @@ pub fn take(ctx: &egui::Context, raw_input: &mut egui::RawInput) -> Vec<Action> 
         }
     });
     fired
+}
+
+/// Whether egui answers this key on the control in focus: Enter and Space press it, Esc
+/// lets go of it, and the bare arrows move the focus or the value under it.
+fn drives_the_focus(key: Key, modifiers: Modifiers) -> bool {
+    !modifiers.any()
+        && matches!(
+            key,
+            Key::Enter
+                | Key::Space
+                | Key::Escape
+                | Key::ArrowUp
+                | Key::ArrowDown
+                | Key::ArrowLeft
+                | Key::ArrowRight
+        )
 }
 
 /// What this chord asks for, or `None` when the table does not bind it.
@@ -358,7 +390,6 @@ fn key_text(key: Key) -> &'static str {
                 "Del"
             }
         }
-        Key::Tab => "\u{21e5}",
         Key::Enter => "\u{23ce}",
         Key::Space => "\u{2423}",
         Key::ArrowUp => "\u{2191}",
@@ -626,8 +657,43 @@ mod tests {
     }
 
     #[test]
-    fn tab_asks_for_the_other_mode() {
-        assert_eq!(press(Key::Tab, Modifiers::NONE), vec![Action::ToggleMode]);
+    fn m_asks_for_the_other_mode() {
+        assert_eq!(press(Key::M, Modifiers::NONE), vec![Action::ToggleMode]);
+    }
+
+    /// Tab walks egui's ring of controls, so the table must never bind it.
+    #[test]
+    fn tab_is_left_to_the_ring_of_controls() {
+        let mut input = egui::RawInput {
+            events: vec![
+                key_event(Key::Tab, Modifiers::NONE),
+                key_event(Key::Tab, Modifiers::SHIFT),
+            ],
+            ..Default::default()
+        };
+        assert!(take(&egui::Context::default(), &mut input).is_empty());
+        assert_eq!(input.events.len(), 2);
+    }
+
+    /// A control in focus is pressed with Space and let go with Esc; the rest of the table
+    /// still answers, so the focus never leaves the window deaf.
+    #[test]
+    fn a_control_in_focus_keeps_the_keys_that_drive_it() {
+        let ctx = egui::Context::default();
+        ctx.memory_mut(|memory| memory.request_focus(egui::Id::new("a button")));
+        let mut input = egui::RawInput {
+            events: vec![
+                key_event(Key::Space, Modifiers::NONE),
+                key_event(Key::Escape, Modifiers::NONE),
+                key_event(Key::ArrowUp, Modifiers::NONE),
+                key_event(Key::ArrowUp, Modifiers::SHIFT),
+                key_event(Key::M, Modifiers::NONE),
+            ],
+            ..Default::default()
+        };
+        let fired = take(&ctx, &mut input);
+        assert_eq!(fired, vec![Action::Step(10), Action::ToggleMode]);
+        assert_eq!(input.events.len(), 3, "Space, Esc and the bare arrow stay");
     }
 
     /// The looser chord must not fire in place of the busier one.
@@ -640,13 +706,12 @@ mod tests {
         assert_eq!(press(Key::S, Modifiers::COMMAND), vec![Action::SaveProject]);
     }
 
-    /// egui answers Tab and the arrows itself, and a widget left holding the focus would
-    /// swallow every key in the table after that.
+    /// With nothing in focus the arrows are the layers', not egui's.
     #[test]
     fn a_key_the_table_binds_is_taken_out_of_the_input() {
         let mut input = egui::RawInput {
             events: vec![
-                key_event(Key::Tab, Modifiers::NONE),
+                key_event(Key::M, Modifiers::NONE),
                 key_event(Key::ArrowUp, Modifiers::NONE),
                 key_event(Key::G, Modifiers::NONE),
             ],

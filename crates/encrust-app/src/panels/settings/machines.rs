@@ -15,7 +15,9 @@ use crate::settings::{
     Deleting, Library, Node, Tab, add_resin, delete_resin, duplicate_resin, installed, new_printer,
     new_resin, take_resin_off,
 };
-use crate::ui::{dialog_frame, dialog_head, icon, inline_button, quiet_button, theme, two_lines};
+use crate::ui::{
+    dialog_frame, dialog_head, focus_ring, icon, inline_button, quiet_button, theme, two_lines,
+};
 
 /// The most of the screen the window takes, where the screen has it.
 const MOST: egui::Vec2 = vec2(1080.0, 720.0);
@@ -191,6 +193,10 @@ fn machine_row(
     let colors = theme::colors();
     let size = vec2(ui.available_width(), theme::TWO_LINE_ROW_H);
     let (rect, response) = ui.allocate_exact_size(size, Sense::click());
+    response.widget_info(|| {
+        let name = &entry.profile.name;
+        egui::WidgetInfo::selected(egui::WidgetType::SelectableLabel, true, picked, name)
+    });
     let fill = match (picked, response.hovered()) {
         (true, _) => colors.accent_wash,
         (false, true) => colors.hover,
@@ -226,6 +232,7 @@ fn machine_row(
         );
         right.x -= 22.0;
     }
+    focus_ring(ui, &response, 0.0);
     response
 }
 
@@ -304,6 +311,8 @@ fn tab_button(ui: &mut Ui, label: &str, open: bool) -> egui::Response {
         .layout_no_wrap(label.to_owned(), theme::label(), colors.text_high);
     let size = vec2(galley.size().x, theme::BUTTON_H + 4.0);
     let (rect, response) = ui.allocate_exact_size(size, Sense::click());
+    response
+        .widget_info(|| egui::WidgetInfo::selected(egui::WidgetType::Button, true, open, label));
     let text = match (open, response.hovered()) {
         (true, _) | (false, true) => colors.text_high,
         (false, false) => colors.text_low,
@@ -314,6 +323,7 @@ fn tab_button(ui: &mut Ui, label: &str, open: bool) -> egui::Response {
         let line = Rect::from_min_max(pos2(rect.left(), rect.bottom() - 2.0), rect.right_bottom());
         ui.painter().rect_filled(line, 0.0, colors.accent);
     }
+    focus_ring(ui, &response, theme::R_CONTROL);
     response
 }
 

@@ -1,6 +1,19 @@
-use egui::{Align2, Color32, Rect, Response, Sense, StrokeKind, Ui, vec2};
+use egui::{
+    Align2, Color32, CornerRadius, Rect, Response, Sense, StrokeKind, Ui, WidgetInfo, WidgetType,
+    vec2,
+};
 
 use crate::ui::theme;
+
+/// The ring a control wears while it holds the keyboard's focus, inside its own edge so no
+/// card clips it.
+pub fn focus_ring(ui: &Ui, response: &Response, radius: impl Into<CornerRadius>) {
+    if response.has_focus() {
+        let stroke = egui::Stroke::new(theme::FOCUS_W, theme::colors().accent);
+        ui.painter()
+            .rect_stroke(response.rect, radius, stroke, StrokeKind::Inside);
+    }
+}
 
 /// A borderless square with one glyph in it: the top bar and the overlay cards.
 pub fn icon_button(ui: &mut Ui, glyph: &str, tooltip: &str) -> Response {
@@ -26,17 +39,20 @@ pub fn icon_toggle(ui: &mut Ui, glyph: &str, tooltip: &str, on: bool) -> Respons
 pub fn rail_button(
     ui: &mut Ui,
     glyph: &str,
-    name: Option<&str>,
+    name: &str,
+    labelled: bool,
     tooltip: &str,
     active: bool,
     badge: Option<Color32>,
 ) -> Response {
-    let height = match name {
-        Some(_) => theme::RAIL_BUTTON_H,
-        None => theme::RAIL_ICON_H,
+    let height = if labelled {
+        theme::RAIL_BUTTON_H
+    } else {
+        theme::RAIL_ICON_H
     };
     let size = vec2(ui.available_width(), height);
     let (rect, response) = ui.allocate_exact_size(size, Sense::click());
+    response.widget_info(|| WidgetInfo::selected(WidgetType::Button, true, active, name));
     let colors = theme::colors();
     let (fill, foreground) = match (active, response.hovered()) {
         (true, _) => (colors.raised, colors.accent_soft),
@@ -45,9 +61,10 @@ pub fn rail_button(
     };
     let painter = ui.painter();
     painter.rect_filled(rect, theme::R_CONTROL, fill);
-    let glyph_at = match name {
-        Some(_) => rect.center_top() + vec2(0.0, 16.0),
-        None => rect.center(),
+    let glyph_at = if labelled {
+        rect.center_top() + vec2(0.0, 16.0)
+    } else {
+        rect.center()
     };
     painter.text(
         glyph_at,
@@ -56,7 +73,7 @@ pub fn rail_button(
         theme::icon(17.0),
         foreground,
     );
-    if let Some(name) = name {
+    if labelled {
         painter.text(
             rect.center_bottom() - vec2(0.0, 9.0),
             Align2::CENTER_CENTER,
@@ -70,6 +87,7 @@ pub fn rail_button(
         painter.circle_filled(at, RAIL_BADGE_R + 1.5, colors.base);
         painter.circle_filled(at, RAIL_BADGE_R, badge);
     }
+    focus_ring(ui, &response, theme::R_CONTROL);
     response.on_hover_text(tooltip)
 }
 
@@ -96,6 +114,9 @@ impl Square {
 
 fn square(ui: &mut Ui, glyph: &str, tooltip: &str, config: Square) -> Response {
     let (rect, response) = ui.allocate_exact_size(vec2(config.size, config.size), Sense::click());
+    response.widget_info(|| {
+        WidgetInfo::selected(WidgetType::Button, ui.is_enabled(), config.active, tooltip)
+    });
     let colors = theme::colors();
 
     let (fill, foreground) = match (config.active, response.hovered()) {
@@ -113,6 +134,7 @@ fn square(ui: &mut Ui, glyph: &str, tooltip: &str, config: Square) -> Response {
         theme::icon(config.glyph_size),
         foreground,
     );
+    focus_ring(ui, &response, theme::R_CONTROL);
 
     if tooltip.is_empty() {
         response
@@ -312,6 +334,7 @@ pub fn primary_button(ui: &mut Ui, glyph: &str, text: &str, enabled: bool) -> Re
 pub fn picker(ui: &mut Ui, glyph: &str, label: &str) -> Response {
     let colors = theme::colors();
     let (rect, response) = ui.allocate_exact_size(vec2(ui.available_width(), 32.0), Sense::click());
+    response.widget_info(|| WidgetInfo::labeled(WidgetType::ComboBox, ui.is_enabled(), label));
 
     let border = if response.hovered() {
         colors.line
@@ -358,6 +381,7 @@ pub fn picker(ui: &mut Ui, glyph: &str, label: &str) -> Response {
         galley,
         colors.text_high,
     );
+    focus_ring(ui, &response, theme::R_CONTROL);
 
     response
 }
@@ -396,6 +420,7 @@ fn filled_button(
         Sense::hover()
     };
     let (rect, response) = ui.allocate_exact_size(size, sense);
+    response.widget_info(|| WidgetInfo::labeled(WidgetType::Button, enabled, text));
 
     let fill = match (
         enabled,
@@ -439,6 +464,7 @@ fn filled_button(
         galley,
         foreground,
     );
+    focus_ring(ui, &response, theme::R_CONTROL);
 
     response
 }
@@ -455,6 +481,7 @@ pub fn summary_button(
     let colors = theme::colors();
     let (rect, response) =
         ui.allocate_exact_size(vec2(ui.available_width(), SUMMARY_H), Sense::click());
+    response.widget_info(|| WidgetInfo::labeled(WidgetType::Button, true, title));
     let fill = if response.hovered() {
         colors.hover
     } else {
@@ -499,6 +526,7 @@ pub fn summary_button(
         theme::icon(14.0),
         colors.text_low,
     );
+    focus_ring(ui, &response, theme::R_SURFACE);
     response.on_hover_cursor(egui::CursorIcon::PointingHand)
 }
 

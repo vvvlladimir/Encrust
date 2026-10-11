@@ -6,7 +6,7 @@ use egui::{Align, Align2, Layout, Rect, RichText, Sense, Stroke, Ui, UiBuilder, 
 
 use crate::files::{self, Handed, Wanted};
 use crate::panels::Window;
-use crate::ui::{ago, describe, icon, inline_button, theme, tone, two_lines};
+use crate::ui::{ago, describe, focus_ring, icon, inline_button, theme, tone, two_lines};
 use crate::workspace::Tool;
 
 /// The page's column, the share of it the drop zone takes, and the gap between the cards.
@@ -111,7 +111,11 @@ fn card(ui: &mut Ui, add: impl FnOnce(&mut Ui)) {
 /// asks for a model or a project.
 fn drop_zone(ui: &mut Ui, window: &mut Window, size: egui::Vec2) {
     let (rect, response) = ui.allocate_exact_size(size, Sense::click());
+    response.widget_info(|| {
+        egui::WidgetInfo::labeled(egui::WidgetType::Button, true, "Open a model or a project")
+    });
     paint_zone(ui.painter(), rect, response.hovered());
+    focus_ring(ui, &response, theme::R_SURFACE);
     let buttons = Rect::from_center_size(
         rect.center() + vec2(0.0, 52.0),
         vec2(size.x, theme::BUTTON_H),
@@ -227,6 +231,7 @@ fn machine_button(ui: &mut Ui, title: &str, detail: &str, tint: egui::Color32) -
     let colors = theme::colors();
     let size = vec2(ui.available_width(), theme::TWO_LINE_ROW_H + 8.0);
     let (rect, response) = ui.allocate_exact_size(size, Sense::click());
+    response.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::ComboBox, true, title));
     let fill = if response.hovered() {
         colors.hover
     } else {
@@ -257,6 +262,7 @@ fn machine_button(ui: &mut Ui, title: &str, detail: &str, tint: egui::Color32) -
         theme::icon(13.0),
         colors.text_low,
     );
+    focus_ring(ui, &response, theme::R_CONTROL);
     response
 }
 
@@ -310,6 +316,8 @@ fn recent(ui: &mut Ui, window: &mut Window) {
 fn recent_row(ui: &mut Ui, name: &str, when: &str) -> egui::Response {
     let colors = theme::colors();
     let (rect, response) = ui.allocate_exact_size(vec2(ui.available_width(), 40.0), Sense::click());
+    response.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Button, true, name));
+    focus_ring(ui, &response, theme::R_CONTROL);
     if response.hovered() {
         ui.painter()
             .rect_filled(rect, theme::R_CONTROL, colors.raised);

@@ -4,8 +4,8 @@ use egui::{Color32, RichText};
 use crate::panels::Window;
 use crate::state::Machine;
 use crate::ui::{
-    Segment, Segmented, describe, hint, icon, issue_row, list, readings, secondary_button, section,
-    theme,
+    Segment, Segmented, describe, focus_ring, hint, icon, issue_row, list, readings,
+    secondary_button, section, theme,
 };
 use crate::workspace::{Mode, Tool};
 
@@ -231,6 +231,7 @@ fn verdict(ui: &mut egui::Ui, worst: Option<&Risk>) -> Option<usize> {
             )
         }
     };
+    let name = title.clone();
     let card = egui::Frame::new()
         .fill(wash)
         .corner_radius(theme::R_SURFACE)
@@ -255,6 +256,8 @@ fn verdict(ui: &mut egui::Ui, worst: Option<&Risk>) -> Option<usize> {
         .response
         .interact(egui::Sense::click())
         .on_hover_cursor(egui::CursorIcon::PointingHand);
+    response.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Button, true, &name));
+    focus_ring(ui, &response, theme::R_SURFACE);
     response.clicked().then_some(layer)
 }
 

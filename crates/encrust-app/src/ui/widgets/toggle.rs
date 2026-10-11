@@ -1,5 +1,6 @@
-use egui::{Align2, Rect, Response, RichText, Sense, Ui, pos2, vec2};
+use egui::{Align2, Rect, Response, RichText, Sense, Ui, WidgetInfo, WidgetType, pos2, vec2};
 
+use super::focus_ring;
 use crate::ui::theme;
 
 /// How long the knob takes to cross the track, seconds.
@@ -20,6 +21,7 @@ pub fn switch(ui: &mut Ui, on: &mut bool, label: &str) -> Response {
         *on = !*on;
         response.mark_changed();
     }
+    response.widget_info(|| WidgetInfo::selected(WidgetType::Checkbox, enabled, *on, label));
 
     let how_on = ui.ctx().animate_bool_with_time(response.id, *on, SLIDE_S);
 
@@ -58,6 +60,7 @@ pub fn switch(ui: &mut Ui, on: &mut bool, label: &str) -> Response {
         colors.text_low
     };
     painter.rect_filled(knob, egui::CornerRadius::same(255), knob_color);
+    focus_ring(ui, &response, theme::R_CONTROL);
 
     response
 }
@@ -120,7 +123,16 @@ impl<'a, T: Copy + PartialEq> Segmented<'a, T> {
                 *current = segment.value;
                 changed = true;
             }
+            response.widget_info(|| {
+                WidgetInfo::selected(
+                    WidgetType::RadioButton,
+                    ui.is_enabled(),
+                    active,
+                    segment.label,
+                )
+            });
             self.paint(ui, slot, index, segment, active, response.hovered());
+            focus_ring(ui, &response, theme::R_CONTROL);
         }
 
         let frame = egui::epaint::RectShape::stroke(

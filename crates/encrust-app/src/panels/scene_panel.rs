@@ -7,8 +7,8 @@ use crate::panels::{Window, plate_strip, slice};
 use crate::scene::{ImportSummary, ObjectId, Scene, SceneObject};
 use crate::shortcuts::{self, Action};
 use crate::ui::{
-    body_and_foot, count_row, hairline, hint, icon, icon_button, number_row, secondary_button,
-    theme,
+    body_and_foot, count_row, focus_ring, hairline, hint, icon, icon_button, number_row,
+    secondary_button, theme,
 };
 
 /// The heading over the list, as tall as an inspector's.
@@ -302,7 +302,16 @@ fn row(
 ) -> Option<Clicked> {
     let (rect, response) =
         ui.allocate_exact_size(vec2(ui.available_width(), theme::ROW_H), Sense::click());
+    response.widget_info(|| {
+        egui::WidgetInfo::selected(
+            egui::WidgetType::SelectableLabel,
+            true,
+            selected,
+            &object.name,
+        )
+    });
     row_background(ui.painter(), rect, selected, response.hovered());
+    focus_ring(ui, &response, 0.0);
     let asked = row_menu(&response, object, plates, active);
 
     let (eye, eye_response) = visibility_eye(ui, rect, object);
@@ -402,6 +411,11 @@ fn visibility_eye(ui: &mut egui::Ui, rect: Rect, object: &SceneObject) -> (Rect,
         ui.id().with(object.id),
         Sense::click(),
     );
+    response.widget_info(|| {
+        let shown = format!("Show {}", object.name);
+        egui::WidgetInfo::selected(egui::WidgetType::Checkbox, true, object.visible, shown)
+    });
+    focus_ring(ui, &response, theme::R_CONTROL);
     ui.painter().text(
         eye.center(),
         Align2::CENTER_CENTER,
@@ -456,7 +470,11 @@ fn import_mark(
         }
     };
     let response = ui.interact(spot, ui.id().with((object.id, "import")), Sense::click());
+    response.widget_info(|| {
+        egui::WidgetInfo::labeled(egui::WidgetType::Button, true, "What the import found")
+    });
     paint_mark(ui.painter(), spot, mark, response.hovered());
+    focus_ring(ui, &response, theme::R_CONTROL);
     egui::Popup::menu(&response).show(|ui| {
         ui.set_max_width(POPUP_W);
         for line in lines {

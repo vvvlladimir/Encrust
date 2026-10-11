@@ -43,6 +43,8 @@ const STRAIGHT: f32 = 0.95;
 
 /// Position and angle take any value.
 const ANY: std::ops::RangeInclusive<f32> = f32::MIN..=f32::MAX;
+/// What a screen reader calls each axis's boxes.
+const AXIS_NAMES: [&str; 3] = ["X", "Y", "Z"];
 
 /// Where the selected model stands, in the same numbers the gizmo drags: its pivot, not
 /// the origin its file was authored around. See `docs/decisions/0110`.
@@ -70,12 +72,13 @@ fn position(ui: &mut egui::Ui, scene: &mut Scene, plate: &BuildPlate, id: Object
         };
         let mut pivot = object.pivot();
         let mut changed = false;
-        for axis in 0..3 {
+        for (axis, axis_name) in AXIS_NAMES.iter().enumerate() {
             ui.horizontal(|ui| {
                 label_column(ui, axis, "mm");
                 let width = ui.available_width();
                 let value = &mut pivot.translation[axis];
-                changed |= number_field(ui, value, POSITION_DRAG, ANY, Some(2), width);
+                let name = format!("Move along {axis_name}");
+                changed |= number_field(ui, &name, value, POSITION_DRAG, ANY, Some(2), width);
             });
         }
         // Written back only on a frame the user changed a number: settling every frame
@@ -123,7 +126,9 @@ fn rotation_rows(ui: &mut egui::Ui, pivot: &mut Transform) -> bool {
             label_column(ui, axis, "°");
             let spacing = ui.spacing().item_spacing.x;
             let width = ui.available_width() - 2.0 * (TURN_W + spacing);
-            typed |= number_field(ui, &mut degrees[axis], ANGLE_DRAG, ANY, Some(2), width);
+            let degrees = &mut degrees[axis];
+            let name = format!("Rotation about {}", AXIS_NAMES[axis]);
+            typed |= number_field(ui, &name, degrees, ANGLE_DRAG, ANY, Some(2), width);
             for sign in [-1.0, 1.0] {
                 let text = format!("{:+}°", sign * TURN_DEG);
                 let clicked = compact_button(ui, &text, TURN_W).clicked();
@@ -233,9 +238,29 @@ fn scale_row(
     let min_size = extent[axis] * MIN_SCALE;
 
     let sizes = min_size..=f32::MAX;
-    let sized = number_field(ui, &mut size_mm, POSITION_DRAG, sizes, Some(2), width);
+    let (size_name, ratio_name) = (
+        format!("{} size", AXIS_NAMES[axis]),
+        format!("{} ratio", AXIS_NAMES[axis]),
+    );
+    let sized = number_field(
+        ui,
+        &size_name,
+        &mut size_mm,
+        POSITION_DRAG,
+        sizes,
+        Some(2),
+        width,
+    );
     let percents = MIN_SCALE * 100.0..=f32::MAX;
-    let ratioed = number_field(ui, &mut percent, PERCENT_DRAG, percents, Some(2), width);
+    let ratioed = number_field(
+        ui,
+        &ratio_name,
+        &mut percent,
+        PERCENT_DRAG,
+        percents,
+        Some(2),
+        width,
+    );
     let wanted = match (sized, ratioed) {
         (true, _) if extent[axis] > 0.0 => Some(size_mm / extent[axis]),
         (_, true) => Some(percent / 100.0),

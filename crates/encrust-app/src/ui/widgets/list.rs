@@ -1,7 +1,9 @@
 use egui::{
-    Align, Align2, Color32, Frame, Id, Layout, Response, RichText, Sense, Ui, UiBuilder, vec2,
+    Align, Align2, Color32, Frame, Id, Layout, Response, RichText, Sense, Ui, UiBuilder,
+    WidgetInfo, WidgetType, vec2,
 };
 
+use super::focus_ring;
 use crate::ui::theme;
 
 /// What a click on a row of a list asked for.
@@ -54,6 +56,8 @@ pub fn list_row(
         (false, false) => (colors.raised, colors.text_high),
     };
     ui.painter().rect_filled(rect, 0.0, fill);
+    row.widget_info(|| WidgetInfo::selected(WidgetType::SelectableLabel, true, selected, label));
+    focus_ring(ui, &row, 0.0);
 
     let mut action = RowAction::default();
     let inner = rect.shrink2(vec2(9.0, 0.0));
@@ -134,6 +138,14 @@ pub fn issue_row(
         (false, true) => colors.hover,
         (false, false) => colors.raised,
     };
+    response.widget_info(|| {
+        WidgetInfo::selected(
+            WidgetType::SelectableLabel,
+            true,
+            selected,
+            format!("{place}, {detail}"),
+        )
+    });
     let painter = ui.painter();
     painter.rect_filled(rect, 0.0, fill);
 
@@ -158,6 +170,7 @@ pub fn issue_row(
         theme::figures(11.0),
         colors.text_mid,
     );
+    focus_ring(ui, &response, 0.0);
     response.on_hover_cursor(egui::CursorIcon::PointingHand)
 }
 

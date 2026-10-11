@@ -8,7 +8,7 @@ use crate::settings::Section;
 use crate::shortcuts::{self, Action};
 use crate::sliced;
 use crate::state::{Doc, Machine};
-use crate::ui::{icon, icon_button, theme};
+use crate::ui::{focus_ring, icon, icon_button, theme};
 use crate::updates::Stage;
 use crate::workspace::Tool;
 
@@ -23,11 +23,9 @@ pub fn ui(ui: &mut egui::Ui, window: &mut Window) {
     let bar = ui.max_rect();
 
     // Interacted with first so that every control drawn after it takes the press instead.
-    let drag = ui.interact(
-        bar,
-        ui.id().with("title-drag"),
-        egui::Sense::click_and_drag(),
-    );
+    // Not focusable: there is nothing to do with the bar from the keyboard.
+    let sense = egui::Sense::CLICK | egui::Sense::DRAG;
+    let drag = ui.interact(bar, ui.id().with("title-drag"), sense);
     if drag.drag_started() {
         ui.ctx().send_viewport_cmd(egui::ViewportCommand::StartDrag);
     }
@@ -132,6 +130,11 @@ fn print_chip(ui: &mut egui::Ui, window: &mut Window) {
         colors.text_mid
     };
     let layers = layers_and_exposure(window.machine);
+    let names = [
+        format!("Machine, {}", window.doc.plate.display_name()),
+        format!("Resin, {}", slicing.resin_name()),
+        format!("{}, {layers}", Tool::PrintSettings.label()),
+    ];
     let parts = [
         Part::new(
             ui,
@@ -164,7 +167,11 @@ fn print_chip(ui: &mut egui::Ui, window: &mut Window) {
         .iter()
         .enumerate()
         .map(|(index, zone)| {
-            ui.interact(*zone, ui.id().with(("print-chip", index)), Sense::click())
+            let response = ui.interact(*zone, ui.id().with(("print-chip", index)), Sense::click());
+            response.widget_info(|| {
+                egui::WidgetInfo::labeled(egui::WidgetType::Button, true, &names[index])
+            });
+            response
         })
         .collect();
 
@@ -191,6 +198,9 @@ fn print_chip(ui: &mut egui::Ui, window: &mut Window) {
         Stroke::new(1.0, colors.hairline),
         egui::StrokeKind::Inside,
     );
+    for response in &responses {
+        focus_ring(ui, response, theme::R_CONTROL);
+    }
 
     let [printer, resin, layers] = <[egui::Response; 3]>::try_from(responses)
         .unwrap_or_else(|_| unreachable!("three zones, three responses"));
@@ -438,6 +448,7 @@ fn pill(
         .layout_no_wrap(text.to_owned(), theme::small(), tint);
     let size = vec2(label.size().x + 34.0, theme::CHIP_H - 6.0);
     let (rect, response) = ui.allocate_exact_size(size, egui::Sense::click());
+    response.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Button, true, text));
     let fill = if response.hovered() {
         wash.gamma_multiply(1.6)
     } else {
@@ -457,6 +468,7 @@ fn pill(
         label,
         tint,
     );
+    focus_ring(ui, &response, egui::CornerRadius::same(255));
     response
 }
 

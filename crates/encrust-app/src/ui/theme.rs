@@ -331,6 +331,8 @@ pub const RAIL_ICON_H: f32 = 34.0;
 pub const CHIP_H: f32 = 32.0;
 pub const ICON_SIZE: f32 = 28.0;
 pub const PRIMARY_H: f32 = 40.0;
+/// The ring a control wears while it holds the keyboard's focus, points.
+pub const FOCUS_W: f32 = 1.5;
 pub const BUTTON_H: f32 = 32.0;
 /// Height of a running job's progress bar.
 pub const BAR_H: f32 = 6.0;
