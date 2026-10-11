@@ -94,9 +94,9 @@ impl SlicerApp {
         );
     }
 
-    /// The machine, the resin, the container and every tool value are written the frame
-    /// they change, so the next run opens on them however this one ends. Only on a
-    /// settled frame: a slider under the pointer is one choice, not one per frame.
+    /// The machine, the resin, the container, every tool value and the Preview divide are
+    /// written the frame they change, so the next run opens on them however this one ends.
+    /// Only on a settled frame: a slider under the pointer is one choice, not one per frame.
     fn remember_choices(&mut self, settled: bool) {
         if !settled {
             return;
@@ -107,7 +107,8 @@ impl SlicerApp {
             &self.machine.updates.prefs,
             &self.tools,
         )
-        .with_recent(&self.machine.recent);
+        .with_recent(&self.machine.recent)
+        .with_mask_split(self.view.options.mask_split);
         if now != self.prefs {
             self.prefs = now;
             self.prefs.save();

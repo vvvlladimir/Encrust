@@ -1,6 +1,6 @@
 //! What the window remembers between runs: the machine, the resin, the values every tool
-//! is set to, the printer on the network each machine sends to, and whether to look for
-//! updates.
+//! is set to, the printer on the network each machine sends to, whether to look for
+//! updates, and where Preview divides the model from the mask.
 
 use std::collections::BTreeMap;
 use std::net::IpAddr;
@@ -19,6 +19,7 @@ use crate::recent::Recent;
 use crate::slicing::Slicing;
 use crate::state::Tools;
 use crate::tool_settings::ToolSettings;
+use crate::ui::theme;
 use crate::updates::UpdatePrefs;
 
 /// The choices carried from one run to the next, beside the user's profile directory.
@@ -55,6 +56,9 @@ pub struct Preferences {
     /// The files opened lately, newest first.
     #[serde(default)]
     recent: Recent,
+    /// Where Preview divides the model from the mask, or `None` for the default.
+    #[serde(default)]
+    mask_split: Option<f32>,
 }
 
 impl Preferences {
@@ -74,6 +78,7 @@ impl Preferences {
             updates: updates.clone(),
             tools: Some(ToolSettings::of(tools, slicing)),
             recent: Recent::default(),
+            mask_split: None,
         }
     }
 
@@ -85,11 +90,23 @@ impl Preferences {
         }
     }
 
+    /// The same, with where Preview divides the model from the mask.
+    pub fn with_mask_split(self, split: f32) -> Self {
+        Self {
+            mask_split: Some(split),
+            ..self
+        }
+    }
+
     /// Stands the window under what was remembered. An id no longer in the catalogue is
     /// dropped rather than reported: the user did not ask for it this run.
     pub fn apply(&self, window: &mut Window) {
         window.machine.updates.prefs.clone_from(&self.updates);
         window.machine.recent.clone_from(&self.recent);
+        if let Some(split) = self.mask_split.filter(|split| split.is_finite()) {
+            let range = theme::MASK_SPLIT_RANGE;
+            window.view.options.mask_split = split.clamp(*range.start(), *range.end());
+        }
         // Before the printer, so that applying it points the window at the machine this
         // profile was last sent to.
         window.machine.network.manual.clone_from(&self.addresses);
@@ -290,6 +307,14 @@ mod tests {
             read.updates.check,
             "the update check is on in a file written before it existed"
         );
+    }
+
+    #[test]
+    fn the_preview_divide_survives_the_round_trip() {
+        let prefs = Preferences::default().with_mask_split(0.62);
+        let text = serde_json::to_string(&prefs).expect("the preferences serialise");
+        let read: Preferences = serde_json::from_str(&text).expect("and read back");
+        assert_eq!(read.mask_split, Some(0.62));
     }
 
     /// A wall thickness typed in once is the user's from then on, so it travels through

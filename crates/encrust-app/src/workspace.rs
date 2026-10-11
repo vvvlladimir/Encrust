@@ -148,6 +148,9 @@ pub struct ViewOptions {
     /// column that sized itself to its contents would jump whenever a tool changed.
     pub plate_w: f32,
     pub inspector_w: f32,
+    /// Where Preview divides the model from the mask, as a fraction of the stage's width
+    /// from its left. Remembered between runs.
+    pub mask_split: f32,
 }
 
 impl Default for ViewOptions {
@@ -162,6 +165,7 @@ impl Default for ViewOptions {
             issues: false,
             plate_w: theme::SCENE_W,
             inspector_w: theme::INSPECTOR_W,
+            mask_split: theme::MASK_SPLIT,
         }
     }
 }

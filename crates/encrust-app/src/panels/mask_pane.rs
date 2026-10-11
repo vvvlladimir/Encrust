@@ -13,9 +13,10 @@ const ZOOM_PER_POINT: f32 = 0.004;
 
 /// The exposure mask, beside the model rather than under the inspector.
 ///
-/// A 300 point column cannot show an 8520 pixel panel, so Preview gives the mask half the
-/// stage, or all of it; see `docs/decisions/0103`.
-pub fn ui(ui: &mut egui::Ui, machine: &mut Machine) {
+/// A 300 point column cannot show an 8520 pixel panel, so Preview gives the mask a pane of
+/// the stage, or all of it; see `docs/decisions/0103`. The picture fills the pane, under
+/// the cards as the model does; the caption keeps to `clear`, the room they leave.
+pub fn ui(ui: &mut egui::Ui, machine: &mut Machine, clear: Rect) {
     // A file being read names the panel it was written for; a profile loaded here says
     // nothing about a file another slicer wrote.
     let settings = machine
@@ -25,12 +26,13 @@ pub fn ui(ui: &mut egui::Ui, machine: &mut Machine) {
     let Some(settings) = settings else {
         caption(
             ui,
+            clear,
             "Load a printer profile to know the panel to draw the layers on.",
         );
         return;
     };
     if machine.preview.layer_count() == 0 {
-        caption(ui, "No stack to show yet.");
+        caption(ui, clear, "No stack to show yet.");
         return;
     }
 
@@ -46,11 +48,11 @@ pub fn ui(ui: &mut egui::Ui, machine: &mut Machine) {
     } else {
         "scroll to zoom, drag to move".to_owned()
     };
-    caption(ui, &format!("Layer mask   1 : {scale}   {hint}"));
+    caption(ui, clear, &format!("Layer mask   1 : {scale}   {hint}"));
 }
 
-fn caption(ui: &egui::Ui, text: &str) {
-    let room = ui.max_rect();
+fn caption(ui: &egui::Ui, clear: Rect, text: &str) {
+    let room = ui.max_rect().intersect(clear);
     ui.painter().text(
         room.left_top() + Vec2::splat(INSET),
         Align2::LEFT_TOP,

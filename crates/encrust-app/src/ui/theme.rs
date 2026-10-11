@@ -313,6 +313,10 @@ pub const INSPECTOR_HEAD_H: f32 = 48.0;
 /// How far either column may be dragged.
 pub const SCENE_W_RANGE: RangeInclusive<f32> = 170.0..=420.0;
 pub const INSPECTOR_W_RANGE: RangeInclusive<f32> = 260.0..=440.0;
+/// Where Preview divides the model from the mask, as a fraction of the stage's width, and
+/// how far the divide may be dragged.
+pub const MASK_SPLIT: f32 = 0.5;
+pub const MASK_SPLIT_RANGE: RangeInclusive<f32> = 0.15..=0.85;
 /// Points between a card floating over the stage and the stage's edge, and between two
 /// cards.
 pub const FLOAT_GAP: f32 = 8.0;

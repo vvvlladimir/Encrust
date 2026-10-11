@@ -30,6 +30,8 @@ const HANDLE: egui::Vec2 = vec2(20.0, 10.0);
 /// cured-area profile stands either side of the rule.
 const TICKS: usize = 18;
 const PROFILE_W: f32 = 9.0;
+/// A risk's tick across the rule.
+const RISK: egui::Vec2 = vec2(16.0, 2.0);
 
 /// Where the viewport cuts the plate's contents this frame, plate millimetres, or `None`
 /// when the whole model is drawn.
@@ -451,8 +453,10 @@ fn paint_track(ui: &egui::Ui, window: &Window, rect: Rect, span: egui::Rangef, a
         span.expand(HANDLE.y / 2.0),
     );
 
-    if let Some((measured, along)) = marked(window, span) {
-        Marks::of(measured, along.span().max(1.0) as usize).paint(painter, along, rule);
+    let marks = marked(window, span)
+        .map(|(measured, along)| (Marks::of(measured, along.span().max(1.0) as usize), along));
+    if let Some((marks, along)) = &marks {
+        marks.paint_profile(painter, *along, rule);
     }
     exposure_bands(painter, window, span, rect.left());
 
@@ -465,6 +469,9 @@ fn paint_track(ui: &egui::Ui, window: &Window, rect: Rect, span: egui::Rangef, a
     );
     // With nothing to cut through the rule stands alone: a scale would measure nothing.
     let Some(at) = at else {
+        if let Some((marks, along)) = &marks {
+            marks.paint_risks(painter, *along, rule);
+        }
         return;
     };
     for tick in 0..TICKS {
@@ -482,6 +489,9 @@ fn paint_track(ui: &egui::Ui, window: &Window, rect: Rect, span: egui::Rangef, a
         egui::CornerRadius::same(255),
         colors.accent.gamma_multiply(0.75),
     );
+    if let Some((marks, along)) = &marks {
+        marks.paint_risks(painter, *along, rule);
+    }
     let handle = Rect::from_center_size(pos2(rect.center().x, y), HANDLE);
     painter.rect(
         handle,
@@ -578,7 +588,7 @@ impl Marks {
         Self { widths, risks }
     }
 
-    fn paint(&self, painter: &egui::Painter, span: egui::Rangef, rule: Rect) {
+    fn paint_profile(&self, painter: &egui::Painter, span: egui::Rangef, rule: Rect) {
         let colors = theme::colors();
         let rows = self.widths.len() as f32;
         let profile = self
@@ -593,14 +603,16 @@ impl Marks {
                     pos2(rule.center().x, y),
                     vec2(2.0 * half, (span.span() / rows).max(1.0)),
                 );
-                egui::Shape::rect_filled(bar, 0.0, colors.hairline)
+                egui::Shape::rect_filled(bar, 0.0, colors.line)
             })
             .collect();
         painter.add(egui::Shape::Vec(profile));
+    }
 
+    /// Over the rule and its fill, so a risk under the cut reads as well as one above it.
+    fn paint_risks(&self, painter: &egui::Painter, span: egui::Rangef, rule: Rect) {
         for (at, tint) in &self.risks {
-            let y = up(span, *at);
-            let tick = Rect::from_center_size(pos2(rule.left() - 5.0, y), vec2(10.0, 3.0));
+            let tick = Rect::from_center_size(pos2(rule.center().x, up(span, *at)), RISK);
             painter.rect_filled(tick, egui::CornerRadius::same(255), *tint);
         }
     }

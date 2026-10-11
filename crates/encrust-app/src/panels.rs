@@ -107,17 +107,12 @@ impl Window<'_> {
         let rail = card_at(ctx, "rail", corner, Align2::LEFT_TOP, max_h, |ui| {
             tool_rail::ui(ui, self, max_h);
         });
-        let corner = pos2(rail.right() + gap, top);
-        let inspector = card_at(ctx, "inspector", corner, Align2::LEFT_TOP, max_h, |ui| {
-            ui.set_width(options.inspector_w);
-            inspector::ui(ui, self, max_h);
-        });
-        if let Some(raw) = drag_edge(ctx, "inspector-edge", inspector, true) {
-            self.view.options.inspector_w = raw.clamp(
-                *theme::INSPECTOR_W_RANGE.start(),
-                *theme::INSPECTOR_W_RANGE.end(),
-            );
-        }
+        // The whole stage given to the mask has nothing for a tool to work on.
+        let left = if *self.mode == Mode::Preview && options.mask_only {
+            rail
+        } else {
+            self.inspector(ctx, pos2(rail.right() + gap, top), max_h)
+        };
 
         let corner = pos2(stage.right() - gap, top);
         let strip = card_at(ctx, "layer-strip", corner, Align2::RIGHT_TOP, max_h, |ui| {
@@ -140,13 +135,29 @@ impl Window<'_> {
             }
         }
 
-        let left = inspector.right() + gap;
+        let left = left.right() + gap;
         let right = (models.left() - gap).max(left);
         Rect::from_x_y_ranges(left..=right, top..=stage.bottom() - gap)
     }
 }
 
 impl Window<'_> {
+    /// The open tool's card from `corner` down, and the edge that sizes it.
+    fn inspector(&mut self, ctx: &egui::Context, corner: Pos2, max_h: f32) -> Rect {
+        let width = self.view.options.inspector_w;
+        let inspector = card_at(ctx, "inspector", corner, Align2::LEFT_TOP, max_h, |ui| {
+            ui.set_width(width);
+            inspector::ui(ui, self, max_h);
+        });
+        if let Some(raw) = drag_edge(ctx, "inspector-edge", inspector, true) {
+            self.view.options.inspector_w = raw.clamp(
+                *theme::INSPECTOR_W_RANGE.start(),
+                *theme::INSPECTOR_W_RANGE.end(),
+            );
+        }
+        inspector
+    }
+
     /// The models from `corner` down, and this plate's figures and Slice standing on the
     /// stage's foot under them, both as wide as the plate panel; folded, the models card
     /// keeps only the plates. Answers the two cards, the second only while unfolded.
