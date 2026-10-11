@@ -143,8 +143,8 @@ pub struct ViewOptions {
     pub mask_only: bool,
     /// Whether Preview's column shows the issues found in the stack instead of the layer.
     pub issues: bool,
-    /// Width of the plate panel and of the inspector, points. Both are the user's: a
-    /// column that sized itself to its contents would jump whenever a tool changed.
+    /// Width of the plate panel and of the inspector, points, kept between runs: a column
+    /// that sized itself to its contents would jump whenever a tool changed.
     pub plate_w: f32,
     pub inspector_w: f32,
     /// Where Preview divides the model from the mask, as a fraction of the stage's width

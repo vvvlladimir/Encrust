@@ -1,6 +1,7 @@
 //! What the window remembers between runs: the machine, the resin, the values every tool
 //! is set to, the printer on the network each machine sends to, whether to look for
-//! updates, and where Preview divides the model from the mask.
+//! updates, how wide the two side cards were dragged, and where Preview divides the model
+//! from the mask.
 
 use std::collections::BTreeMap;
 use std::net::IpAddr;
@@ -21,6 +22,7 @@ use crate::state::Tools;
 use crate::tool_settings::ToolSettings;
 use crate::ui::theme;
 use crate::updates::UpdatePrefs;
+use crate::workspace::ViewOptions;
 
 /// The choices carried from one run to the next, beside the user's profile directory.
 ///
@@ -59,6 +61,12 @@ pub struct Preferences {
     /// Where Preview divides the model from the mask, or `None` for the default.
     #[serde(default)]
     mask_split: Option<f32>,
+    /// How wide the inspector and the plate panel were dragged, points, or `None` for the
+    /// defaults.
+    #[serde(default)]
+    inspector_w: Option<f32>,
+    #[serde(default)]
+    plate_w: Option<f32>,
 }
 
 impl Preferences {
@@ -79,6 +87,8 @@ impl Preferences {
             tools: Some(ToolSettings::of(tools, slicing)),
             recent: Recent::default(),
             mask_split: None,
+            inspector_w: None,
+            plate_w: None,
         }
     }
 
@@ -90,10 +100,13 @@ impl Preferences {
         }
     }
 
-    /// The same, with where Preview divides the model from the mask.
-    pub fn with_mask_split(self, split: f32) -> Self {
+    /// The same, with where Preview divides the model from the mask and how wide the side
+    /// cards stand.
+    pub fn with_layout(self, options: &ViewOptions) -> Self {
         Self {
-            mask_split: Some(split),
+            mask_split: Some(options.mask_split),
+            inspector_w: Some(options.inspector_w),
+            plate_w: Some(options.plate_w),
             ..self
         }
     }
@@ -103,9 +116,23 @@ impl Preferences {
     pub fn apply(&self, window: &mut Window) {
         window.machine.updates.prefs.clone_from(&self.updates);
         window.machine.recent.clone_from(&self.recent);
-        if let Some(split) = self.mask_split.filter(|split| split.is_finite()) {
-            let range = theme::MASK_SPLIT_RANGE;
-            window.view.options.mask_split = split.clamp(*range.start(), *range.end());
+        let options = &mut window.view.options;
+        for (stored, value, range) in [
+            (
+                self.mask_split,
+                &mut options.mask_split,
+                theme::MASK_SPLIT_RANGE,
+            ),
+            (
+                self.inspector_w,
+                &mut options.inspector_w,
+                theme::INSPECTOR_W_RANGE,
+            ),
+            (self.plate_w, &mut options.plate_w, theme::SCENE_W_RANGE),
+        ] {
+            if let Some(stored) = stored.filter(|stored| stored.is_finite()) {
+                *value = stored.clamp(*range.start(), *range.end());
+            }
         }
         // Before the printer, so that applying it points the window at the machine this
         // profile was last sent to.
@@ -310,11 +337,19 @@ mod tests {
     }
 
     #[test]
-    fn the_preview_divide_survives_the_round_trip() {
-        let prefs = Preferences::default().with_mask_split(0.62);
+    fn the_preview_divide_and_the_card_widths_survive_the_round_trip() {
+        let options = ViewOptions {
+            mask_split: 0.62,
+            inspector_w: 400.0,
+            plate_w: 200.0,
+            ..ViewOptions::default()
+        };
+        let prefs = Preferences::default().with_layout(&options);
         let text = serde_json::to_string(&prefs).expect("the preferences serialise");
         let read: Preferences = serde_json::from_str(&text).expect("and read back");
         assert_eq!(read.mask_split, Some(0.62));
+        assert_eq!(read.inspector_w, Some(400.0));
+        assert_eq!(read.plate_w, Some(200.0));
     }
 
     /// A wall thickness typed in once is the user's from then on, so it travels through
