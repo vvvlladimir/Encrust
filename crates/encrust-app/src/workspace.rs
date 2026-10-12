@@ -112,12 +112,16 @@ impl Tool {
 /// Where the viewport cuts the plate's contents, so that the layer strip under the stage
 /// reads as a section through the part rather than as a layer counter alone.
 ///
-/// Only the Prepare mode keeps a height here. The Preview mode cuts at the layer it is
-/// showing, which the preview already owns; see `docs/decisions/0061`.
+/// Only the Prepare mode keeps its top height here. The Preview mode cuts at the layer it
+/// is showing, which the preview already owns; see `docs/decisions/0061`. The floor is one
+/// height for both modes.
 #[derive(Debug, Clone, Copy, PartialEq, Default)]
 pub struct Section {
     /// Height above the plate, millimetres, or `None` while the whole model is drawn.
     pub height_mm: Option<Scalar>,
+    /// Height below which the model is cut away, millimetres, or `None` while it is drawn
+    /// down to the plate.
+    pub floor_mm: Option<Scalar>,
     /// Whether the cut is running up the model on its own, which is what Play does in
     /// this mode.
     pub playing: bool,

@@ -45,9 +45,21 @@ pub fn cut_height(mode: Mode, section: &Section, preview: &Preview) -> Option<Sc
     }
 }
 
+/// Where the viewport cuts away what stands below, plate millimetres, or `None` when the
+/// model is drawn down to the plate. The floor never rises past the top cut: in the
+/// Preview mode it keeps at least the layer being shown.
+pub fn floor_height(mode: Mode, section: &Section, preview: &Preview) -> Option<Scalar> {
+    let floor = section.floor_mm?;
+    match mode {
+        Mode::Preview if preview.layer_count() == 0 => None,
+        Mode::Preview => Some(floor.min(preview.bottom_of(preview.layer())?)),
+        Mode::Prepare => Some(section.height_mm.map_or(floor, |top| floor.min(top))),
+    }
+}
+
 /// The strip down the stage's right edge, in every view: which view, where the cut stands,
-/// a layer up, the track that moves the cut with the top of the print at its top, a layer
-/// down, and play. See `docs/decisions/0217`, `0221`.
+/// a layer up, the track whose two handles move the top cut and the floor with the top of
+/// the print at its top, a layer down, and play. See `docs/decisions/0217`, `0221`.
 pub fn ui(ui: &mut egui::Ui, window: &mut Window) {
     ui.with_layout(Layout::top_down(Align::Center), |ui| {
         ui.spacing_mut().item_spacing.y = 2.0;
@@ -194,6 +206,9 @@ struct Reading {
     /// Share of the way up, from zero at the plate to one at the top, or `None` with
     /// nothing to scrub.
     at: Option<f32>,
+    /// Share of the way up the floor stands and the first layer it leaves, counted from
+    /// one, or `None` while nothing is cut away from below.
+    floor: Option<(f32, usize)>,
     layer: usize,
     layers: usize,
     height_mm: Scalar,
@@ -210,6 +225,13 @@ impl Reading {
                 Self {
                     at: (count > 0)
                         .then(|| fraction(0.0, last as Scalar, preview.layer() as Scalar)),
+                    floor: floor_height(Mode::Preview, &window.view.section, preview).map(
+                        |floor| {
+                            let first =
+                                (preview.layer_topping_near(floor) + 1).min(preview.layer());
+                            (fraction(0.0, last as Scalar, first as Scalar), first + 1)
+                        },
+                    ),
                     layer: if count > 0 { preview.layer() + 1 } else { 0 },
                     layers: count,
                     height_mm: preview.layer_z().unwrap_or_default(),
@@ -226,8 +248,20 @@ impl Reading {
                     (bottom, top),
                     window.machine.slicing.layer_height_mm(),
                 );
+                let floor =
+                    floor_height(Mode::Prepare, &window.view.section, &window.machine.preview).map(
+                        |floor| {
+                            let (under, _) = layer_at(
+                                floor,
+                                (bottom, top),
+                                window.machine.slicing.layer_height_mm(),
+                            );
+                            (fraction(bottom, top, floor), under + 1)
+                        },
+                    );
                 Self {
                     at: Some(fraction(bottom, top, height)),
+                    floor,
                     layer,
                     layers,
                     height_mm: height,
@@ -240,6 +274,7 @@ impl Reading {
     fn nothing() -> Self {
         Self {
             at: None,
+            floor: None,
             layer: 0,
             layers: 0,
             height_mm: 0.0,
@@ -407,8 +442,8 @@ fn layer_at(
     (layer.min(layers), layers)
 }
 
-/// The track itself, its top the top of the print: a press or a drag puts the cut under
-/// the pointer.
+/// The track itself, its top the top of the print: a press or a drag moves whichever
+/// handle is nearer the pointer, the top cut or the floor, to stand under it.
 fn track(ui: &mut egui::Ui, window: &mut Window, height: f32, reading: &Reading) {
     // An id of its own rather than the next in line: a button appearing before the track
     // mid-drag would otherwise hand the drag to another widget.
@@ -420,27 +455,61 @@ fn track(ui: &mut egui::Ui, window: &mut Window, height: f32, reading: &Reading)
     };
     let response = ui.interact(rect, egui::Id::new("layer-track"), sense);
     let span = rect.y_range().shrink(HANDLE.y / 2.0);
-    if reading.at.is_some()
-        && let Some(pointer) = response.interact_pointer_pos()
-    {
-        scrub(window, span_fraction(span, pointer.y));
+    if let Some(at) = reading.at {
+        drag_handle(ui, window, &response, span, (at, reading.floor));
     }
     if response.has_focus() {
         step_by_arrows(ui, window, response.id);
     }
-    let at = Reading::of(window).at;
-    paint_track(ui, window, rect, span, at);
-    let (layer, layers) = (Reading::of(window).layer, reading.layers);
+    let after = Reading::of(window);
+    paint_track(ui, window, rect, span, (after.at, after.floor));
+    let (layer, layers) = (after.layer, reading.layers);
     response.widget_info(|| {
         let name = format!("Layer, of {layers}");
-        egui::WidgetInfo::slider(at.is_some(), layer as f64, name)
+        egui::WidgetInfo::slider(after.at.is_some(), layer as f64, name)
     });
     focus_ring(ui, &response, theme::R_CONTROL);
-    if at.is_some() {
-        response.on_hover_cursor(egui::CursorIcon::ResizeVertical);
+    match (after.at, after.floor) {
+        (None, _) => response.on_hover_text("Nothing on the plate to cut through yet"),
+        (Some(_), Some((_, first))) => response
+            .on_hover_cursor(egui::CursorIcon::ResizeVertical)
+            .on_hover_text(format!("Layers {first} to {layer}")),
+        (Some(_), None) => response.on_hover_cursor(egui::CursorIcon::ResizeVertical),
+    };
+}
+
+/// Moves the handle the press took hold of, kept for the length of the drag so the two
+/// never swap when they pass each other.
+fn drag_handle(
+    ui: &egui::Ui,
+    window: &mut Window,
+    response: &egui::Response,
+    span: egui::Rangef,
+    (at, floor): (f32, Option<(f32, usize)>),
+) {
+    let held = response.id.with("held");
+    let Some(pointer) = response.interact_pointer_pos() else {
+        ui.data_mut(|data| data.remove::<bool>(held));
+        return;
+    };
+    let floor_at = floor.map_or(0.0, |(floor_at, _)| floor_at);
+    let on_floor = ui
+        .data(|data| data.get_temp(held))
+        .unwrap_or_else(|| grabs_floor(pointer.y, up(span, at), up(span, floor_at)));
+    ui.data_mut(|data| data.insert_temp(held, on_floor));
+    let to = span_fraction(span, pointer.y);
+    if on_floor {
+        scrub_floor(window, to);
     } else {
-        response.on_hover_text("Nothing on the plate to cut through yet");
+        scrub(window, to);
     }
+}
+
+/// Whether a press at `pointer_y` takes the floor rather than the top: the nearer of the
+/// two, and with both under it the floor only from below.
+fn grabs_floor(pointer_y: f32, top_y: f32, floor_y: f32) -> bool {
+    let (to_top, to_floor) = ((pointer_y - top_y).abs(), (pointer_y - floor_y).abs());
+    to_floor < to_top || (to_floor == to_top && pointer_y > floor_y)
 }
 
 /// The bare arrows step the track that holds the focus, rather than moving the focus off
@@ -483,6 +552,27 @@ fn scrub(window: &mut Window, at: f32) {
     }
 }
 
+/// Moves the floor to `at` of the way up, never past the top cut; the bottom of the track
+/// cuts nothing away.
+fn scrub_floor(window: &mut Window, at: f32) {
+    match *window.mode {
+        Mode::Preview => {
+            let preview = &window.machine.preview;
+            let last = preview.layer_count().saturating_sub(1);
+            let first = ((at * last as f32).round() as usize).min(preview.layer());
+            window.view.section.floor_mm = preview.bottom_of(first);
+        }
+        Mode::Prepare => {
+            let Some((bottom, top)) = height_range(window.doc) else {
+                return;
+            };
+            let height = bottom + at * (top - bottom);
+            let ceiling = window.view.section.height_mm.unwrap_or(top);
+            window.view.section.floor_mm = (height > bottom).then_some(height.min(ceiling));
+        }
+    }
+}
+
 /// Where along `span` the pointer at `y` stands, from zero at its bottom to one at its top.
 fn span_fraction(span: egui::Rangef, y: f32) -> f32 {
     if span.span() <= 0.0 {
@@ -496,7 +586,13 @@ fn up(span: egui::Rangef, at: f32) -> f32 {
     egui::lerp(span.max..=span.min, at)
 }
 
-fn paint_track(ui: &egui::Ui, window: &Window, rect: Rect, span: egui::Rangef, at: Option<f32>) {
+fn paint_track(
+    ui: &egui::Ui,
+    window: &Window,
+    rect: Rect,
+    span: egui::Rangef,
+    (at, floor): (Option<f32>, Option<(f32, usize)>),
+) {
     let colors = theme::colors();
     let painter = ui.painter();
     let rule = Rect::from_x_y_ranges(
@@ -537,7 +633,8 @@ fn paint_track(ui: &egui::Ui, window: &Window, rect: Rect, span: egui::Rangef, a
         );
     }
     let y = up(span, at);
-    let filled = rule.with_min_y(y);
+    let fill_bottom = floor.map_or(rule.max.y, |(floor_at, _)| up(span, floor_at));
+    let filled = rule.with_min_y(y).with_max_y(fill_bottom.max(y));
     painter.rect_filled(
         filled,
         egui::CornerRadius::same(255),
@@ -546,14 +643,17 @@ fn paint_track(ui: &egui::Ui, window: &Window, rect: Rect, span: egui::Rangef, a
     if let Some((marks, along)) = &marks {
         marks.paint_risks(painter, *along, rule);
     }
-    let handle = Rect::from_center_size(pos2(rect.center().x, y), HANDLE);
-    painter.rect(
-        handle,
-        egui::CornerRadius::same(3),
-        colors.text_high,
-        Stroke::new(2.0, colors.accent.gamma_multiply(0.6)),
-        egui::StrokeKind::Outside,
-    );
+    let floor_y = floor.map_or(up(span, 0.0), |(floor_at, _)| up(span, floor_at));
+    for y in [floor_y, y] {
+        let handle = Rect::from_center_size(pos2(rect.center().x, y), HANDLE);
+        painter.rect(
+            handle,
+            egui::CornerRadius::same(3),
+            colors.text_high,
+            Stroke::new(2.0, colors.accent.gamma_multiply(0.6)),
+            egui::StrokeKind::Outside,
+        );
+    }
 }
 
 /// The stack the marks are read from, and the stretch of the track it covers: all of it
@@ -783,6 +883,7 @@ mod tests {
     fn typing_a_layer_moves_nothing_under_the_readout() {
         let reading = Reading {
             at: Some(0.5),
+            floor: None,
             layer: 12,
             layers: 24,
             height_mm: 0.6,
@@ -840,6 +941,7 @@ mod tests {
     fn the_prepare_mode_cuts_where_the_strip_was_left() {
         let section = Section {
             height_mm: Some(3.5),
+            floor_mm: None,
             playing: false,
         };
         let preview = Preview::default();
@@ -856,12 +958,47 @@ mod tests {
         // prepare mode was left at.
         let section = Section {
             height_mm: Some(3.5),
+            floor_mm: None,
             playing: false,
         };
         assert_eq!(
             cut_height(Mode::Preview, &section, &Preview::default()),
             None
         );
+    }
+
+    #[test]
+    fn the_floor_never_rises_past_the_top_cut() {
+        let section = |height_mm, floor_mm| Section {
+            height_mm,
+            floor_mm,
+            playing: false,
+        };
+        let preview = Preview::default();
+        let floor = |section| floor_height(Mode::Prepare, &section, &preview);
+        assert_eq!(floor(section(None, None)), None, "no floor cuts nothing");
+        assert_eq!(floor(section(None, Some(2.0))), Some(2.0));
+        assert_eq!(floor(section(Some(5.0), Some(2.0))), Some(2.0));
+        assert_eq!(
+            floor(section(Some(1.0), Some(2.0))),
+            Some(1.0),
+            "a top cut moved under the floor takes it down with it"
+        );
+        assert_eq!(
+            floor_height(Mode::Preview, &section(None, Some(2.0)), &preview),
+            None,
+            "an empty preview has no layers to cut from below"
+        );
+    }
+
+    #[test]
+    fn a_press_takes_the_nearer_handle_and_the_top_where_they_meet() {
+        // The top handle at y = 100, the floor at y = 300; y grows downwards.
+        assert!(!grabs_floor(150.0, 100.0, 300.0));
+        assert!(grabs_floor(250.0, 100.0, 300.0));
+        assert!(!grabs_floor(200.0, 100.0, 300.0), "halfway is the top's");
+        assert!(!grabs_floor(195.0, 200.0, 200.0), "over both is the top");
+        assert!(grabs_floor(205.0, 200.0, 200.0), "under both is the floor");
     }
 
     #[test]

@@ -303,12 +303,28 @@ fn section_crossing_fragment(in: ModelFragment) -> @location(0) vec4<f32> {
     return vec4<f32>(0.0);
 }
 
+// The same count for the bottom cut, over what stands under it: seen from below, those are
+// the crossings in front of the plane, and so the cap is filled by the same rule.
+@fragment
+fn bottom_crossing_fragment(in: ModelFragment) -> @location(0) vec4<f32> {
+    if (in.world.z >= globals.section.z) {
+        discard;
+    }
+    return vec4<f32>(0.0);
+}
+
+// Whether the section cut took a point away: above the top cut, or under the bottom one.
+fn sectioned_away(world: vec3<f32>) -> bool {
+    return (globals.section.y > 0.5 && world.z > globals.section.x)
+        || (globals.section.w > 0.5 && world.z < globals.section.z);
+}
+
 // Whether a fragment of a cut's own body is there to be drawn at all: what the section cut
 // took away is gone, and so is what another cut took out of this one, or two holes drilled
 // side by side would each lay down a depth the other's test then refuses to paint — a black
 // band between them. See docs/decisions/0201.
 fn cut_surface_gone(world: vec3<f32>) -> bool {
-    return (globals.section.y > 0.5 && world.z > globals.section.x) || cut_away(world);
+    return sectioned_away(world) || cut_away(world);
 }
 
 // The pass that lays the far wall of a cut body into the depth plane, painting nothing.
@@ -325,7 +341,7 @@ fn cut_candidate_fragment(in: ModelFragment) -> @location(0) vec4<f32> {
 // section cut applies, because what it took away is not there to be counted.
 @fragment
 fn cut_crossing_fragment(in: ModelFragment) -> @location(0) vec4<f32> {
-    if (globals.section.y > 0.5 && in.world.z > globals.section.x) {
+    if (sectioned_away(in.world)) {
         discard;
     }
     return vec4<f32>(0.0);
@@ -353,8 +369,7 @@ fn cut_wipe_fragment(in: ModelFragment) -> WipedFragment {
 fn model_fragment(in: ModelFragment, @builtin(front_facing) front_facing: bool) -> @location(0) vec4<f32> {
     let traced = cut_line(in.world);
     let stripe = hatch(in.world);
-    let cutting = globals.section.y > 0.5;
-    if (cutting && in.world.z > globals.section.x) {
+    if (sectioned_away(in.world)) {
         discard;
     }
     if (cut_away(in.world)) {
@@ -477,8 +492,7 @@ const RELIEF_CEILING = 1.35;
 
 @fragment
 fn relief_fragment(in: ReliefFragment, @builtin(front_facing) front_facing: bool) -> @location(0) vec4<f32> {
-    let cutting = globals.section.y > 0.5;
-    if (cutting && in.world.z > globals.section.x) {
+    if (sectioned_away(in.world)) {
         discard;
     }
 

@@ -146,6 +146,8 @@ pub(super) struct Solid {
 pub(super) struct Capping {
     /// Counts, in the stencil plane, how often a view ray crosses a solid above the cut.
     pub(super) crossing: Facing,
+    /// The same count under the bottom cut, which its cap is filled from.
+    pub(super) bottom_crossing: Facing,
     /// Fills the cut wherever that count says the plane is inside a solid.
     pub(super) cap: wgpu::RenderPipeline,
 }
@@ -334,11 +336,11 @@ impl<'a> Builder<'a> {
     }
 
     pub(super) fn capping(&self) -> Capping {
-        Capping {
-            crossing: self.facing(PipelineKind {
-                label: "viewport_section_crossings",
+        let crossing = |label, fragment_entry| {
+            self.facing(PipelineKind {
+                label,
                 vertex_entry: "model_vertex",
-                fragment_entry: "section_crossing_fragment",
+                fragment_entry,
                 buffers: &[Some(ModelVertex::layout()), Some(ModelInstance::layout())],
                 writes_color: false,
                 // Every crossing counts, whatever is in front of it, so the depth buffer
@@ -347,7 +349,11 @@ impl<'a> Builder<'a> {
                 depth_compare: wgpu::CompareFunction::Always,
                 stencil: counting_stencil(),
                 ..PipelineKind::default()
-            }),
+            })
+        };
+        Capping {
+            crossing: crossing("viewport_section_crossings", "section_crossing_fragment"),
+            bottom_crossing: crossing("viewport_bottom_crossings", "bottom_crossing_fragment"),
             cap: self.plain(PipelineKind {
                 label: "viewport_section_cap",
                 vertex_entry: "line_vertex",

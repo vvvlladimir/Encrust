@@ -230,6 +230,8 @@ mod tests {
             solids: &[],
             cut_surfaces: &[],
             cap: &[],
+            bottom_cut_mm: None,
+            bottom_cap: &[],
             label: &[],
             atlas: None,
             cuts: &[],

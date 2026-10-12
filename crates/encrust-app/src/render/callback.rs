@@ -35,12 +35,14 @@ pub struct ViewportCallback {
     view_projection: Mat4,
     eye: Vec3,
     section_mm: Option<Scalar>,
+    bottom_cut_mm: Option<Scalar>,
     lines: Vec<LineVertex>,
     models: Vec<ModelDraw>,
     /// What the cut is capped against: the same solids that are drawn, counted into the
     /// stencil plane so that the cap covers the material the plane runs through.
     solids: Vec<ModelDraw>,
     cap: Vec<LineVertex>,
+    bottom_cap: Vec<LineVertex>,
     /// The word lying in front of the plate, and the font atlas it samples.
     label: Vec<LabelVertex>,
     atlas: Option<std::sync::Arc<egui::ColorImage>>,
@@ -86,6 +88,8 @@ pub struct Shading<'a> {
     pub overhang_deg: Option<f32>,
     /// The height the models are cut at, or `None` to draw them whole.
     pub section_mm: Option<Scalar>,
+    /// The height below which they are cut away, or `None` to draw them down to the plate.
+    pub bottom_cut_mm: Option<Scalar>,
     pub banding: Banding<'a>,
     /// The texture each model is drawn with, which is what the Relief tool shows: the
     /// picture it would press, or the one the model carries. `None` draws every model flat.
@@ -107,6 +111,7 @@ impl ViewportCallback {
         let Shading {
             overhang_deg,
             section_mm,
+            bottom_cut_mm,
             banding,
             textures,
             cut_line,
@@ -122,7 +127,7 @@ impl ViewportCallback {
 
         let (label, atlas) = label::front(plate);
         let mut lines = plate_lines(plate);
-        if let Some(height) = section_mm {
+        for height in section_mm.into_iter().chain(bottom_cut_mm) {
             lines.extend(section_frame(plate, height));
         }
         Self {
@@ -130,10 +135,14 @@ impl ViewportCallback {
             view_projection: camera.view_projection(rect.width() / rect.height()),
             eye: camera.eye(),
             section_mm,
+            bottom_cut_mm,
             lines,
             models,
             solids,
             cap: section_mm
+                .map(|height| cap_quad(scene, plate, height))
+                .unwrap_or_default(),
+            bottom_cap: bottom_cut_mm
                 .map(|height| cap_quad(scene, plate, height))
                 .unwrap_or_default(),
             label,
@@ -484,6 +493,8 @@ impl CallbackTrait for ViewportCallback {
                     models: &self.models,
                     solids: &self.solids,
                     cap: &self.cap,
+                    bottom_cut_mm: self.bottom_cut_mm,
+                    bottom_cap: &self.bottom_cap,
                     label: &self.label,
                     atlas: self.atlas.clone(),
                     cuts: &self.cuts,

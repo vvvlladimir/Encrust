@@ -8,7 +8,7 @@ use wgpu::util::DeviceExt as _;
 
 use crate::render::grid::{GRID_MAJOR_MM, GRID_SPACING_MM};
 use crate::render::target::SceneTarget;
-use crate::render::vertex::ModelInstance;
+use crate::render::vertex::{LineVertex, ModelInstance};
 use crate::scene::Mapped;
 use crate::ui::theme;
 
@@ -85,7 +85,7 @@ struct Globals {
     /// are not. See `docs/design/viewport.md`.
     eye: [f32; 4],
     /// `x` is the height the models are cut at, plate millimetres, and `y` is 1.0 while
-    /// there is a cut at all. `z` and `w` pad the field out to a `vec4`.
+    /// there is a cut at all; `z` and `w` are the same for the cut from below.
     section: [f32; 4],
     /// `x` is how many of `cuts` carry a drain this frame, `y` how many of `bands` carry
     /// an exposure, and `z` the height below which a band has no effect.
@@ -195,12 +195,14 @@ struct Frame {
     /// solids, in the same buffer.
     reliefs: Vec<(usize, bool)>,
     relief_base: u32,
+    /// The top cap's vertices, then the bottom cap's after them in the same buffer.
     cap_vertices: u32,
+    bottom_cap_vertices: u32,
     cutting: bool,
+    cutting_bottom: bool,
     xray: bool,
 }
 
-/// The cut as the shader reads it. A height on its own could not say "no cut": a model
 /// What a fixed-size array the shader reads takes of `from`, and how much it took.
 fn clamped<T: Copy + Default, const N: usize>(from: &[T]) -> ([T; N], f32) {
     let mut into = [T::default(); N];
@@ -240,7 +242,7 @@ fn globals_of(frame: &FrameInput<'_>) -> Globals {
             .eye
             .extend(if frame.xray { theme::SEEN_THROUGH } else { 0.0 })
             .to_array(),
-        section: section(frame.section_mm),
+        section: section(frame.section_mm, frame.bottom_cut_mm),
         counts: [taken, banded, frame.band_floor_mm, held],
         overhang_color: theme::gamma(theme::scene().overhang),
         inside_color: theme::gamma(theme::scene().section_wash),
@@ -264,12 +266,12 @@ fn globals_of(frame: &FrameInput<'_>) -> Globals {
     }
 }
 
-/// standing below the plate is legal, so no value of it is free to mean nothing.
-fn section(height_mm: Option<Scalar>) -> [f32; 4] {
-    match height_mm {
-        Some(height) => [height, 1.0, 0.0, 0.0],
-        None => [0.0, 0.0, 0.0, 0.0],
-    }
+/// The two cuts as the shader reads them. A height on its own could not say "no cut": a
+/// model standing below the plate is legal, so no value of it is free to mean nothing.
+fn section(top_mm: Option<Scalar>, bottom_mm: Option<Scalar>) -> [f32; 4] {
+    let [top, top_on] = top_mm.map_or([0.0; 2], |height| [height, 1.0]);
+    let [bottom, bottom_on] = bottom_mm.map_or([0.0; 2], |height| [height, 1.0]);
+    [top, top_on, bottom, bottom_on]
 }
 
 impl ViewportResources {
@@ -341,7 +343,8 @@ impl ViewportResources {
         frame: &FrameInput<'_>,
     ) {
         self.lines.write(device, queue, frame.lines);
-        self.cap.write(device, queue, frame.cap);
+        let caps: Vec<LineVertex> = frame.cap.iter().chain(frame.bottom_cap).copied().collect();
+        self.cap.write(device, queue, &caps);
         self.label.write(device, queue, frame.label);
         if let Some(atlas) = frame.atlas.as_ref() {
             self.upload_atlas(device, queue, atlas);
@@ -364,6 +367,8 @@ impl ViewportResources {
         self.frame.label_vertices = frame.label.len() as u32;
         self.frame.cap_vertices = frame.cap.len() as u32;
         self.frame.cutting = frame.section_mm.is_some();
+        self.frame.bottom_cap_vertices = frame.bottom_cap.len() as u32;
+        self.frame.cutting_bottom = frame.bottom_cut_mm.is_some();
         self.frame.xray = frame.xray;
         self.frame.solid_base = frame.models.len() as u32;
         self.frame.relief_base = (frame.models.len() + frame.solids.len()) as u32;

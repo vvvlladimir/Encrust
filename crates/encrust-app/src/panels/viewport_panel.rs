@@ -210,6 +210,11 @@ fn paint_plate(ui: &egui::Ui, window: &mut Window, rect: egui::Rect) {
                 &window.view.section,
                 &window.machine.preview,
             ),
+            bottom_cut_mm: section::floor_height(
+                *window.mode,
+                &window.view.section,
+                &window.machine.preview,
+            ),
             banding: Banding {
                 ranges: &window.machine.slicing.exposure,
                 floor_mm: window.machine.slicing.band_floor_mm(),

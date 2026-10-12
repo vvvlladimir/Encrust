@@ -126,10 +126,11 @@ as its own inside and would count the wrong way into the stencil.
 
 ## The section cut
 
-Models are drawn up to the height the layer strip is parked at. The globals uniform
-carries `section = (height_mm, on, 0, 0)` — a height alone could not say "no cut", since a
+Models are drawn between the strip's two handles: up to the height the top one is parked
+at, and down to the floor the bottom one is. The globals uniform carries
+`section = (top_mm, on, bottom_mm, on)` — a height alone could not say "no cut", since a
 model below the plate is legal — and the model fragment shader discards anything whose
-world `z` is above it. The plate and grid go through the line pipeline and are never cut.
+world `z` is above the top or under the floor. The plate and grid go through the line pipeline and are never cut.
 
 The opened face is capped with the stencil plane, three draws in the viewport's own pass:
 
@@ -142,6 +143,11 @@ The opened face is capped with the stencil plane, three draws in the viewport's 
 3. **Fill the face.** One quad in the plane, wide enough to cover the plate, stencil test
    `NotEqual` against zero plus the ordinary depth test, so it is trimmed to exactly the
    material the plane runs through and hides what is behind it.
+
+The floor is capped the same way after the top, once a screen triangle has put the stencil
+back to zero: the count keeps what stands under the floor, which is the geometry between the
+eye and the plane when the floor is looked at from below — the only side it can be seen
+from, since from above the slab over it hides it.
 
 ## The inside of a cut
 
@@ -180,8 +186,8 @@ no effect there (ADR 0090). Eight bands fit in the globals; the ninth is left un
 The stencil is the viewport's own: the scene is drawn into a window-sized colour plane and
 a `Depth24PlusStencil8` plane in `render::target`, and one triangle copies the colour into
 egui's pass, the same in a browser as at the desk (ADR 0184). Which height the
-rail hands over depends on the mode, and `panels::section::cut_height` is the one place
-that decides.
+rail hands over depends on the mode, and `panels::section::cut_height` and `floor_height`
+are the one place that decides.
 
 ## Light
 

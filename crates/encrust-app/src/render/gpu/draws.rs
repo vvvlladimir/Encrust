@@ -73,6 +73,10 @@ pub struct FrameInput<'a> {
     pub cut_surfaces: &'a [CutDraw],
     /// The quad lying in the cutting plane the cap is painted with.
     pub cap: &'a [LineVertex],
+    /// Height below which the models are cut away, plate millimetres, or `None` to draw
+    /// them down to the plate; and the quad that caps that cut.
+    pub bottom_cut_mm: Option<Scalar>,
+    pub bottom_cap: &'a [LineVertex],
     /// The word lying in front of the plate, and the font atlas its triangles sample. The atlas
     /// goes to the card the first time it is seen and is kept by its address after that.
     pub label: &'a [LabelVertex],
