@@ -251,7 +251,7 @@ Grouped by what the decision governs; the number is still the order it was taken
 | [0049](0049-profiles-ship-in-the-binary-with-a-user-directory-over-them.md) | Profiles ship inside the binary, with a user directory over them by id | Accepted |
 | [0050](0050-one-resin-catalogue-retuned-per-printer.md) | One resin catalogue, retuned per printer by a `[printers.<id>]` table | Accepted |
 | [0051](0051-a-printer-profile-names-its-file-format.md) | A printer profile names the sliced-file format its firmware reads | Accepted |
-| [0052](0052-profiles-are-edited-in-the-window.md) | Profiles are edited in a Settings screen and saved into the user's directory | Accepted; where the machines and resins are edited is superseded by 0220 |
+| [0052](0052-profiles-are-edited-in-the-window.md) | Profiles are edited in a Settings screen and saved into the user's directory | Accepted; where the machines and resins are edited is superseded by 0220, and the Settings screen by 0233 |
 | [0120](0120-a-resin-is-tuned-per-printer.md) | A printer's resins are its own presets, edited in place | Accepted |
 | [0140](0140-a-profile-carries-the-machine-name-its-firmware-matches.md) | A profile carries the machine name its firmware matches | Accepted |
 | [0141](0141-advance-mode-follows-the-firmware-flag.md) | Advance mode follows the machine's firmware flag | Accepted |
@@ -316,12 +316,13 @@ Grouped by what the decision governs; the number is still the order it was taken
 | [0217](0217-the-window-is-a-top-bar-a-flat-rail-and-a-layer-strip.md) | The window is a top bar, a flat rail, a docked inspector and a layer strip | Accepted; the return to the model on a tool press is superseded by 0218, the docked columns and layer strip by 0221, Find by 0230, the message under the jobs by 0231 |
 | [0218](0218-twelve-tools-on-the-rail-and-print-settings-as-a-form.md) | Twelve tools on the rail, and the print settings as a form | Accepted; Select and the digits are superseded by 0231 |
 | [0219](0219-the-viewport-is-lit-shadowed-and-turned-by-a-cube.md) | Light the viewport by a sky, a key and a fill, shadow it by contact, and turn it by a cube | Accepted |
-| [0220](0220-machines-and-resins-are-a-window-and-the-window-starts-on-a-page.md) | Edit the machines and resins in a window over the plate, and start on a page | Accepted; the start page's machine card is superseded by 0232 |
+| [0220](0220-machines-and-resins-are-a-window-and-the-window-starts-on-a-page.md) | Edit the machines and resins in a window over the plate, and start on a page | Accepted; the start page's machine card is superseded by 0232, and the Settings screen by 0233 |
 | [0221](0221-the-columns-float-over-a-stage-the-width-of-the-window.md) | Float the side columns over a stage the width of the window | Accepted; the plate column's fold is superseded by 0230 |
 | [0229](0229-tab-walks-the-controls-and-every-control-has-a-name.md) | Tab walks the controls, and every control has a name | Accepted |
 | [0230](0230-find-is-a-palette-and-the-columns-stay-out.md) | Find is a palette, the plate column stays out, and a block explains itself on its question mark | Accepted |
 | [0231](0231-select-is-position-and-check-supports-its-islands.md) | Fold Select into Position, and let Check support the islands it finds | Accepted |
 | [0232](0232-the-start-page-offers-resin-test-prints-of-its-own.md) | The start page offers resin test prints of its own, and leaves the machine to the top bar | Accepted |
+| [0233](0233-settings-is-a-window-and-a-profile-travels-as-its-file.md) | Make Settings a window like Machine and resin, and carry a profile out as its file | Accepted |
 | [0192](0192-a-tool-value-is-remembered-and-taken-back-on-its-own-entry.md) | A tool value is remembered between runs and taken back on its own entry | Accepted |
 | [0193](0193-the-window-reads-its-own-input-before-egui-does.md) | The window reads its own input before egui does | Accepted; Tab and the keys of a focused control are superseded by 0229 |
 | [0202](0202-an-opened-file-closes-when-the-plate-changes.md) | An opened sliced file closes when the plate changes | Accepted |

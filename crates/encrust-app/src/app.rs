@@ -108,7 +108,8 @@ impl SlicerApp {
             &self.tools,
         )
         .with_recent(&self.machine.recent)
-        .with_layout(&self.view.options);
+        .with_layout(&self.view.options)
+        .with_general(&self.machine.general);
         if now != self.prefs {
             self.prefs = now;
             self.prefs.save();
@@ -143,13 +144,14 @@ impl SlicerApp {
                     project::open(&mut self.window(), &file);
                 }
                 Arrived::File(Wanted::PrinterProfile, file) => {
-                    crate::profiles::load_printer(&mut self.window(), &file);
+                    crate::profiles::import_printer(&mut self.window(), &file);
                 }
-                Arrived::File(Wanted::ResinProfile, file) => crate::profiles::load_material(
-                    &mut self.machine.slicing,
-                    &mut self.machine.status,
-                    &file,
-                ),
+                Arrived::File(Wanted::ResinProfile, file) => {
+                    crate::profiles::import_material(&mut self.machine, &file);
+                }
+                Arrived::File(Wanted::Profile(kind), file) => {
+                    crate::panels::import_profile(&mut self.window(), kind, &file);
+                }
                 Arrived::File(Wanted::ReliefPicture, file) => crate::relief::load_picture(
                     &mut self.tools.relief,
                     &mut self.machine.status,
@@ -720,12 +722,21 @@ mod tests {
         assert!(!crate::panels::still_starting(&mut app.window()));
     }
 
-    /// The Settings screen stands in the plate's place, so Escape is the way out of it.
+    /// The Settings window holds the keyboard, and Escape takes down the question over it
+    /// before the window itself.
     #[test]
-    fn escape_leaves_the_settings_screen() {
+    fn escape_closes_the_question_and_then_the_settings_window() {
         let mut app = SlicerApp::default();
         shortcuts::act(&mut app.window(), shortcuts::Action::Settings);
         assert!(app.machine.settings.open);
+
+        let deleting =
+            crate::settings::Deleting::Profile(printer_profiles::Kind::Support, "x".into());
+        app.machine.settings.confirm = Some(deleting);
+        shortcuts::act(&mut app.window(), shortcuts::Action::Deselect);
+        assert!(app.machine.settings.confirm.is_none());
+        assert!(app.machine.settings.open, "the window is still there");
+
         shortcuts::act(&mut app.window(), shortcuts::Action::Deselect);
         assert!(!app.machine.settings.open);
     }
@@ -821,5 +832,87 @@ mod tests {
             !app.machine.status.is_error(),
             "an empty plate is not a failure"
         );
+    }
+
+    const IMPORTED_ON: &str = "elegoo-saturn-4-ultra";
+
+    /// The app over a profile directory of the test's own, which every import lands in.
+    fn with_profile_dir(name: &str) -> SlicerApp {
+        let dir =
+            std::env::temp_dir().join(format!("encrust-profiles-{name}-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        let mut app = SlicerApp::default();
+        app.machine.slicing.catalogue = printer_profiles::Catalogue::with_root(&dir)
+            .expect("a missing directory reads as empty");
+        app
+    }
+
+    fn handed<T>(name: &str, text: Result<String, T>) -> Handed
+    where
+        T: std::fmt::Debug,
+    {
+        let text = text.expect("the profile serialises");
+        Handed::bytes(name, std::sync::Arc::from(text.into_bytes()))
+    }
+
+    #[test]
+    fn a_machine_from_the_file_menu_is_kept_and_put_under_the_plate() {
+        let mut app = with_profile_dir("printer");
+        let catalogue = &app.machine.slicing.catalogue;
+        let file = handed(
+            "saturn.toml",
+            crate::exchange::export(catalogue, printer_profiles::Kind::Printer, IMPORTED_ON),
+        );
+
+        crate::profiles::import_printer(&mut app.window(), &file);
+        let id = app
+            .machine
+            .slicing
+            .printer_id
+            .clone()
+            .expect("a machine in hand");
+        let entry = app.machine.slicing.catalogue.printer(&id).expect("kept");
+        assert!(
+            crate::settings::installed(&entry.source),
+            "one of the user's machines, with an id to remember"
+        );
+    }
+
+    #[test]
+    fn a_resin_from_the_file_menu_goes_on_the_machine_in_hand() {
+        let mut app = with_profile_dir("resin");
+        let profile = app
+            .machine
+            .slicing
+            .catalogue
+            .printer(IMPORTED_ON)
+            .expect("ships")
+            .profile
+            .clone();
+        crate::profiles::apply_printer(&mut app.window(), profile, Some(IMPORTED_ON.to_owned()));
+        let resin = printer_profiles::MaterialProfile {
+            name: "Bench grey".to_owned(),
+            ..printer_profiles::MaterialProfile::default()
+        };
+        let file = handed(
+            "grey.toml",
+            resin.to_toml_string(std::path::Path::new("grey")),
+        );
+
+        crate::profiles::import_material(&mut app.machine, &file);
+        let id = app
+            .machine
+            .slicing
+            .resin_id
+            .clone()
+            .expect("a resin in hand");
+        let kept = &app
+            .machine
+            .slicing
+            .catalogue
+            .resin(&id)
+            .expect("kept")
+            .profile;
+        assert!(kept.is_tuned_for(IMPORTED_ON));
     }
 }

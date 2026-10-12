@@ -106,6 +106,7 @@ pub fn action(ui: &mut egui::Ui, window: &mut Window) {
             &mut window.machine.status,
             run,
             via,
+            window.machine.general.sliced_dir.as_deref(),
         );
     }
 }

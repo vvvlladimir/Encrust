@@ -22,6 +22,7 @@ mod viewport_panel;
 
 pub use scene_panel::duplicate_selection;
 pub use section::animate as animate_preview;
+pub use settings::import_profile;
 pub use slice::slice_this_plate;
 pub use start::{open_recent, still_starting};
 pub use title_bar::{layers_and_exposure, open_machines, toggle_settings};
@@ -64,8 +65,7 @@ impl Window<'_> {
             .frame(strip_frame())
             .show(ui, |ui| title_bar::ui(ui, self));
 
-        // Over everything, the Settings screen included: the keys it lists belong to both
-        // halves of the window.
+        // Over everything: the keys it lists belong to both halves of the window.
         if self.view.options.sheet {
             shortcuts_sheet::ui(ui.ctx(), &mut self.view.options.sheet);
         }
@@ -74,15 +74,8 @@ impl Window<'_> {
         }
         report::ui(ui.ctx(), &self.doc.scene, self.tools, self.machine);
         settings::machines::window(ui.ctx(), self);
+        settings::window(ui.ctx(), self);
 
-        // The Settings screen takes the whole window under the bar: a profile is edited
-        // instead of the plate, not beside it.
-        if self.machine.settings.open {
-            egui::CentralPanel::default()
-                .frame(egui::Frame::new())
-                .show(ui, |ui| settings::ui(ui, self));
-            return;
-        }
         if still_starting(self) {
             egui::CentralPanel::default()
                 .frame(egui::Frame::new().fill(theme::colors().base))

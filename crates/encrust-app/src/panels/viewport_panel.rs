@@ -66,7 +66,8 @@ pub fn ui(ui: &mut egui::Ui, window: &mut Window) -> egui::Rect {
     let painting = paint_stroke(ui, window, rect, &pointer) || drag_support(window, rect, &pointer);
 
     follow_turn(ui, window.view);
-    steer_camera(window.view, rect, &pointer, gesture.drag, painting);
+    let invert = window.machine.general.invert_zoom;
+    steer_camera(window.view, rect, &pointer, gesture.drag, painting, invert);
     if gesture.clicked
         && let Some(position) = pointer.position
     {
@@ -103,8 +104,16 @@ fn follow_turn(ui: &egui::Ui, view: &mut View) {
     }
 }
 
-/// Orbits, pans and zooms the camera. Taking hold of it ends any swing still under way.
-fn steer_camera(view: &mut View, rect: egui::Rect, pointer: &Pointer, drag: Drag, painting: bool) {
+/// Orbits, pans and zooms the camera, the wheel the other way round when `invert`. Taking
+/// hold of it ends any swing still under way.
+fn steer_camera(
+    view: &mut View,
+    rect: egui::Rect,
+    pointer: &Pointer,
+    drag: Drag,
+    painting: bool,
+    invert: bool,
+) {
     let scrolled = pointer.over_viewport && pointer.scroll != 0.0;
     if scrolled || (drag != Drag::None && !painting) {
         view.turn = None;
@@ -120,8 +129,12 @@ fn steer_camera(view: &mut View, rect: egui::Rect, pointer: &Pointer, drag: Drag
     }
 
     if scrolled {
-        view.camera
-            .zoom((-pointer.scroll * ZOOM_PER_SCROLL_POINT).exp());
+        let scroll = if invert {
+            pointer.scroll
+        } else {
+            -pointer.scroll
+        };
+        view.camera.zoom((scroll * ZOOM_PER_SCROLL_POINT).exp());
     }
 }
 

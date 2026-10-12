@@ -143,10 +143,21 @@ fn the_preview_of_an_empty_plate() {
 }
 
 #[test]
-fn the_settings_screen() {
-    let mut app = app(false);
-    crate::panels::toggle_settings(&mut app.machine);
-    picture("settings", app);
+fn the_settings_window() {
+    let mut results = SnapshotResults::new();
+    let mut supports = app(false);
+    supports.view.options.started = true;
+    crate::panels::toggle_settings(&mut supports.machine);
+    results.extend(picture("settings", supports));
+    // Not General: it names the profile folder, which is a different path on every desk.
+    let mut hollow = app(false);
+    hollow.view.options.started = true;
+    crate::panels::toggle_settings(&mut hollow.machine);
+    hollow
+        .machine
+        .settings
+        .turn_to(crate::settings::Section::Hollow);
+    results.extend(picture("settings_hollow", hollow));
 }
 
 #[test]

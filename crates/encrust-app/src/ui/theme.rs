@@ -401,7 +401,7 @@ pub fn block_title() -> FontId {
     FontId::new(13.0, FontFamily::Name(MEDIUM.into()))
 }
 
-/// The name of a window over the plate, and of a page of the Settings screen.
+/// The name of a window over the plate.
 pub fn dialog_title() -> FontId {
     FontId::new(15.0, FontFamily::Name(SEMIBOLD.into()))
 }

@@ -78,10 +78,14 @@ pub enum Wanted {
     ModelOrProject,
     Project,
     SlicedFile,
+    /// A machine kept and put under the plate, from the File menu.
     PrinterProfile,
+    /// A resin kept on the machine in hand and printed with, from the File menu.
     ResinProfile,
     /// A greyscale picture the Relief tool presses in.
     ReliefPicture,
+    /// A profile taken into the catalogue from the Settings or the Machine and resin window.
+    Profile(printer_profiles::Kind),
 }
 
 impl Wanted {
@@ -100,6 +104,7 @@ impl Wanted {
             Self::PrinterProfile => &[("Printer profile", &["toml"])],
             Self::ResinProfile => &[("Resin profile", &["toml"])],
             Self::ReliefPicture => &[("Picture", &PICTURES)],
+            Self::Profile(_) => &[("Profile", &["toml"])],
         }
     }
 
@@ -237,6 +242,34 @@ pub fn pick(wanted: Wanted) -> Option<Handed> {
 pub fn pick(wanted: Wanted) -> Option<Handed> {
     crate::web::files::pick(wanted);
     None
+}
+
+/// Asks where `text` goes, offering `name`, and writes it there. Answers where it went, or
+/// `None` when the dialog was backed out of.
+#[cfg(not(target_arch = "wasm32"))]
+pub fn save_text(name: &str, wanted: Wanted, text: &str) -> anyhow::Result<Option<PathBuf>> {
+    use anyhow::Context as _;
+
+    let mut dialog = rfd::FileDialog::new().set_file_name(name);
+    for (filter, extensions) in wanted.filters() {
+        dialog = dialog.add_filter(*filter, extensions);
+    }
+    let Some(path) = dialog.save_file() else {
+        return Ok(None);
+    };
+    std::fs::write(&path, text).with_context(|| format!("cannot write {}", path.display()))?;
+    Ok(Some(path))
+}
+
+/// A browser asks where a download goes itself, so the file is only named.
+#[cfg(target_arch = "wasm32")]
+pub fn save_text(name: &str, _wanted: Wanted, text: &str) -> anyhow::Result<Option<PathBuf>> {
+    use anyhow::Context as _;
+
+    crate::web::files::download(name, text.as_bytes())
+        .map_err(|error| anyhow::Error::new(crate::web::opfs::failed(error)))
+        .with_context(|| format!("cannot hand over {name}"))?;
+    Ok(Some(PathBuf::from(name)))
 }
 
 /// What a browser's dialogs and downloads came back with since the last frame. Always

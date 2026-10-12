@@ -31,7 +31,7 @@ pub fn ui(ui: &mut egui::Ui, machine: &mut Machine, clear: Rect) {
         caption(
             ui,
             clear,
-            "Load a printer profile to know the panel to draw the layers on.",
+            "Pick a machine to know the panel to draw the layers on.",
         );
         return;
     };

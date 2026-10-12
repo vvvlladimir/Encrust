@@ -426,6 +426,12 @@ fn leave_machines(machine: &mut crate::state::Machine) {
     settings.close_machines();
 }
 
+fn leave_settings(machine: &mut crate::state::Machine) {
+    if machine.settings.confirm.take().is_none() {
+        machine.settings.close();
+    }
+}
+
 /// Does what a key asked for. Every action of the table is answered here, so a binding
 /// cannot be added without the work behind it.
 pub fn act(window: &mut Window, action: Action) {
@@ -452,10 +458,11 @@ pub fn act(window: &mut Window, action: Action) {
         }
         return;
     }
-    // The Settings screen stands in the plate's place, so Esc leaves it rather than
-    // clearing a selection nobody can see. Everything else there is typed, not pressed.
-    if window.machine.settings.open && matches!(action, Action::Deselect) {
-        window.machine.settings.open = false;
+    // So is the Settings window, and Esc takes down the question over it first.
+    if window.machine.settings.open {
+        if matches!(action, Action::Deselect) {
+            leave_settings(window.machine);
+        }
         return;
     }
     match action {

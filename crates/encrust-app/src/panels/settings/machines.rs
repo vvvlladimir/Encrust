@@ -3,31 +3,22 @@
 //! presets, and any resin ever added to a printer is in the pool for the others. See
 //! `docs/decisions/0220`.
 
-use egui::{Align, Color32, Layout, Rect, RichText, Sense, Ui, UiBuilder, pos2, vec2};
+use egui::{Align, Color32, Layout, Rect, RichText, Sense, Ui, pos2, vec2};
 use printer_profiles::{Catalogue, Connection, Entry, Kind, PrinterProfile, ProfileError};
 
 mod library;
 mod resins;
 
 use crate::panels::Window;
-use crate::panels::settings::{compensation, confirm, printer, report};
+use crate::panels::settings::frame::{
+    self, LIST_FOOT_H, SIDE_PAD, child, scrolled, stroke, tab_button, with_footer, with_header,
+};
+use crate::panels::settings::{compensation, confirm, export_profile, printer, report};
 use crate::settings::{
     Deleting, Library, Node, Tab, add_resin, delete_resin, duplicate_resin, installed, new_printer,
     new_resin, take_resin_off,
 };
-use crate::ui::{
-    dialog_frame, dialog_head, focus_ring, icon, inline_button, quiet_button, theme, two_lines,
-};
-
-/// The most of the screen the window takes, where the screen has it.
-const MOST: egui::Vec2 = vec2(1080.0, 720.0);
-/// The machine's name and the tabs over the right side, and the action bar under it.
-const HEADER_H: f32 = 64.0;
-const FOOTER_H: f32 = 52.0;
-/// The foot of the machine list: Add a machine and the room either side of it.
-const LIST_FOOT_H: f32 = theme::BUTTON_H + 24.0;
-/// Room either side of what the right side shows.
-const SIDE_PAD: f32 = 20.0;
+use crate::ui::{focus_ring, icon, icon_button, inline_button, quiet_button, theme, two_lines};
 
 /// What a click in the window asked for, carried out once the window has been drawn.
 enum Action {
@@ -57,6 +48,10 @@ enum Action {
     OpenLibrary,
     /// Something that cannot be undone, which the window asks about before doing it.
     Ask(Deleting),
+    /// A file asked for and taken in as a machine, or as a resin on this machine.
+    Import(Kind),
+    /// A machine or a resin written out to a file.
+    Export(Kind, String),
 }
 
 /// The window, while it is open, and the question and the calculator over it.
@@ -64,20 +59,18 @@ pub fn window(ctx: &egui::Context, window: &mut Window) {
     if !window.machine.settings.machines {
         return;
     }
-    let screen = ctx.content_rect().size() * theme::DIALOG_SHARE;
-    let size = vec2(MOST.x.min(screen.x), MOST.y.min(screen.y));
     let mut action = None;
-    let mut close = false;
-    let modal = egui::Modal::new(egui::Id::new("machine-and-resin"))
-        .frame(dialog_frame())
-        .show(ctx, |ui| {
-            let (rect, _) = ui.allocate_exact_size(size, Sense::hover());
-            close = body(ui, rect, window, &mut action);
-        });
+    let close = frame::show(
+        ctx,
+        "machine-and-resin",
+        icon::PRINTER,
+        "Machine and resin",
+        |ui, list, side| body(ui, list, side, window, &mut action),
+    );
     if let Some(action) = action {
         apply(window, action);
     }
-    if close || modal.should_close() {
+    if close {
         window.machine.settings.close_machines();
         return;
     }
@@ -85,23 +78,8 @@ pub fn window(ctx: &egui::Context, window: &mut Window) {
     ask(ctx, window);
 }
 
-/// Everything inside the window's frame. Answers whether it was asked to close.
-fn body(ui: &mut Ui, rect: Rect, window: &mut Window, action: &mut Option<Action>) -> bool {
-    let head = rect.with_max_y(rect.top() + theme::DIALOG_HEAD_H);
-    let list = Rect::from_min_max(
-        pos2(rect.left(), head.bottom()),
-        pos2(rect.left() + theme::DIALOG_LIST_W, rect.bottom()),
-    );
-    let side = Rect::from_min_max(pos2(list.right() + 1.0, head.bottom()), rect.max);
-    let mut title = ui.new_child(
-        UiBuilder::new()
-            .max_rect(head.shrink2(vec2(16.0, 0.0)))
-            .layout(Layout::left_to_right(Align::Center)),
-    );
-    let close = dialog_head(&mut title, icon::PRINTER, "Machine and resin");
-    let painter = ui.painter();
-    painter.hline(rect.x_range(), head.bottom(), stroke());
-    painter.vline(list.right(), list.y_range(), stroke());
+/// The machines down the left, and the library or the machine picked beside them.
+fn body(ui: &mut Ui, list: Rect, side: Rect, window: &mut Window, action: &mut Option<Action>) {
     machine_list(&mut child(ui, list), window, action);
     match window.machine.settings.library.is_some() {
         true => shop(
@@ -111,22 +89,6 @@ fn body(ui: &mut Ui, rect: Rect, window: &mut Window, action: &mut Option<Action
         ),
         false => machine(ui, side, window, action),
     }
-    close
-}
-
-/// A child laid out top down inside `rect`, and clipped to it.
-fn child(ui: &mut Ui, rect: Rect) -> Ui {
-    let mut child = ui.new_child(
-        UiBuilder::new()
-            .max_rect(rect)
-            .layout(Layout::top_down(Align::Min)),
-    );
-    child.set_clip_rect(rect.intersect(ui.clip_rect()));
-    child
-}
-
-fn stroke() -> egui::Stroke {
-    egui::Stroke::new(1.0, theme::colors().hairline)
 }
 
 /// The machines the user installed, by brand, over a search line, and the way to the
@@ -237,11 +199,16 @@ fn machine_row(
     response
 }
 
-/// The way into the library.
+/// The way into the library, and a machine taken in from a file beside it.
 fn add_machine(ui: &mut Ui, action: &mut Option<Action>) {
-    if crate::ui::secondary_button(ui, icon::ADD, "Add a machine").clicked() {
-        *action = Some(Action::OpenLibrary);
-    }
+    ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
+        if icon_button(ui, icon::IMPORT, "Import a machine from a file").clicked() {
+            *action = Some(Action::Import(Kind::Printer));
+        }
+        if crate::ui::secondary_button(ui, icon::ADD, "Add a machine").clicked() {
+            *action = Some(Action::OpenLibrary);
+        }
+    });
 }
 
 /// The machine picked in the list: its name and the tabs over what the open tab shows.
@@ -253,11 +220,7 @@ fn machine(ui: &mut Ui, side: Rect, window: &mut Window, action: &mut Option<Act
     };
     let (name, maker) = (draft.values.name.clone(), draft.values.manufacturer.clone());
     let id = draft.id.clone();
-    let header = side.with_max_y(side.top() + HEADER_H);
-    let content = Rect::from_min_max(pos2(side.left(), header.bottom() + 1.0), side.max);
-    ui.painter()
-        .hline(side.x_range(), header.bottom(), stroke());
-    let mut head = child(ui, header.shrink2(vec2(SIDE_PAD, 0.0)));
+    let (mut head, content) = with_header(ui, side);
     heading(&mut head, &name, &maker, &mut window.machine.settings.tab);
     match window.machine.settings.tab {
         Tab::Resins => resins::tab(ui, content, window, &id, action),
@@ -295,63 +258,12 @@ fn heading(ui: &mut Ui, name: &str, maker: &str, tab: &mut Tab) {
     });
 }
 
-/// One tab: its name, with the accent under it while it is the one open.
-fn tab_button(ui: &mut Ui, label: &str, open: bool) -> egui::Response {
-    let colors = theme::colors();
-    let galley = ui
-        .painter()
-        .layout_no_wrap(label.to_owned(), theme::label(), colors.text_high);
-    let size = vec2(galley.size().x, theme::BUTTON_H + 4.0);
-    let (rect, response) = ui.allocate_exact_size(size, Sense::click());
-    response
-        .widget_info(|| egui::WidgetInfo::selected(egui::WidgetType::Button, true, open, label));
-    let text = match (open, response.hovered()) {
-        (true, _) | (false, true) => colors.text_high,
-        (false, false) => colors.text_low,
-    };
-    let at = pos2(rect.left(), rect.center().y - galley.size().y / 2.0);
-    ui.painter().galley(at, galley, text);
-    if open {
-        let line = Rect::from_min_max(pos2(rect.left(), rect.bottom() - 2.0), rect.right_bottom());
-        ui.painter().rect_filled(line, 0.0, colors.accent);
-    }
-    focus_ring(ui, &response, theme::R_CONTROL);
-    response
-}
-
-/// `content` split into what scrolls and the action bar along its foot.
-fn with_footer(ui: &mut Ui, content: Rect) -> (Ui, Ui) {
-    let split = content.bottom() - FOOTER_H;
-    ui.painter().hline(content.x_range(), split, stroke());
-    let bar = Rect::from_min_max(pos2(content.left(), split + 1.0), content.max);
-    let mut bar = ui.new_child(
-        UiBuilder::new()
-            .max_rect(bar.shrink2(vec2(SIDE_PAD, 0.0)))
-            .layout(Layout::left_to_right(Align::Center)),
-    );
-    bar.spacing_mut().item_spacing.x = 4.0;
-    (child(ui, content.with_max_y(split)), bar)
-}
-
-/// A form, scrolled, with the window's own room either side of it.
-fn scrolled(ui: &mut Ui, add: impl FnOnce(&mut Ui)) {
-    egui::ScrollArea::vertical()
-        .auto_shrink([false, false])
-        .show(ui, |ui| {
-            ui.horizontal(|ui| {
-                ui.add_space(SIDE_PAD);
-                ui.vertical(|ui| {
-                    ui.set_width(ui.available_width() - SIDE_PAD);
-                    ui.spacing_mut().item_spacing.y = theme::ITEM_GAP;
-                    add(ui);
-                    ui.add_space(12.0);
-                });
-            });
-        });
-}
-
-/// What the Machine tab's bar offers: taking the machine off, and printing on it.
+/// What the Machine tab's bar offers: writing the machine out, taking it off, and
+/// printing on it.
 fn machine_actions(ui: &mut Ui, window: &Window, id: &str, action: &mut Option<Action>) {
+    if quiet_button(ui, icon::EXPORT, "Export", false, true).clicked() {
+        *action = Some(Action::Export(Kind::Printer, id.to_owned()));
+    }
     if quiet_button(ui, icon::REMOVE, "Remove this machine", true, true).clicked() {
         *action = Some(Action::Ask(Deleting::Printer(id.to_owned())));
     }
@@ -409,6 +321,8 @@ fn apply(window: &mut Window, action: Action) {
             settings.confirm = Some(deleting);
             None
         }
+        Action::Import(kind) => return crate::panels::settings::ask_for_profile(window, kind),
+        Action::Export(kind, id) => return export_profile(window.machine, kind, &id),
         writing => write(window.machine, writing),
     };
     window.machine.slicing.reload_resin();
@@ -505,6 +419,8 @@ fn delete(window: &mut Window, deleting: Deleting) {
             // open is never the resin that just went.
             None
         }
+        // Asked from the Settings window, which answers it itself.
+        Deleting::Profile(..) => None,
     };
     window.machine.slicing.reload_resin();
     pick(window, picked);

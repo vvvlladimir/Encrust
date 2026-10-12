@@ -1,97 +1,76 @@
-//! The Settings screen: the support profiles and the updates, opened for editing.
-//!
-//! The screen replaces the plate rather than floating over it, because editing a profile
-//! is not something done while dragging a model. Every edit is written as it is made. The
-//! machines and their resins are the Machine and resin window instead (ADR 0220). See
-//! `docs/design/profiles.md`.
+//! The Settings window: the support profiles, the presets of the Hollow and Drain tools,
+//! how the window behaves and the updates, a page each down its left. It is drawn in the
+//! frame the Machine and resin window is, and every edit is written as it is made. See
+//! `docs/decisions/0233` and `docs/design/profiles.md`.
 
 mod compensation;
 mod confirm;
+mod frame;
+mod general;
 pub(super) mod machines;
+mod presets;
 mod printer;
 mod resin;
 mod supports;
 mod updates;
 
-use egui::vec2;
+use egui::{Align, Layout, RichText, Ui, vec2};
+use printer_profiles::Kind;
 
+use crate::files::{self, Handed, Wanted};
 use crate::panels::Window;
-use crate::settings::Section;
+use crate::settings::{Deleting, Node, Section};
 use crate::state::Machine;
 use crate::status::Status;
-use crate::ui::{focus_ring, hairline, icon, icon_button, theme};
+use crate::ui::{focus_ring, hairline, icon, inline_button, theme};
+use frame::{child, scrolled, with_header};
 
-/// How wide the list of sections down the left is, and the list of profiles beside it.
-const SECTIONS_W: f32 = 230.0;
-pub(super) const LIST_W: f32 = 290.0;
-
-/// How wide the form grows: one column of blocks reads best at a form's width, and the
-/// support form sets two of them side by side.
-const FORM_W: f32 = theme::BLOCK_TITLE_W + theme::BLOCK_GAP + theme::BLOCK_FIELDS_W;
-const WIDE_FORM_W: f32 = 980.0;
-
-/// Room above and below the fields of a block.
-const BLOCK_PAD: f32 = 18.0;
-
-pub fn ui(ui: &mut egui::Ui, window: &mut Window) {
-    egui::Panel::left("settings-sections")
-        .exact_size(SECTIONS_W)
-        .resizable(false)
-        .frame(
-            egui::Frame::new()
-                .fill(theme::colors().base)
-                .inner_margin(egui::Margin::symmetric(12, 14)),
-        )
-        .show(ui, |ui| sections(ui, window));
-
-    egui::Panel::top("settings-title")
-        .frame(
-            egui::Frame::new()
-                .fill(theme::colors().panel)
-                .inner_margin(egui::Margin::symmetric(32, 18)),
-        )
-        .show(ui, |ui| title(ui, window.machine));
-
-    // Updates is one page with nothing to pick from, so it has no list.
-    if window.machine.settings.section == Section::Supports {
-        egui::Panel::left("settings-list")
-            .exact_size(LIST_W)
-            .resizable(false)
-            .frame(
-                egui::Frame::new()
-                    .fill(theme::colors().panel)
-                    .inner_margin(egui::Margin::symmetric(12, 8)),
-            )
-            .show(ui, |ui| {
-                egui::ScrollArea::vertical()
-                    .auto_shrink([false, false])
-                    .show(ui, |ui| supports::list(ui, window.machine));
-            });
+/// The window, while it is open, and the question over it.
+pub fn window(ctx: &egui::Context, window: &mut Window) {
+    if !window.machine.settings.open {
+        return;
     }
-
-    egui::CentralPanel::default()
-        .frame(egui::Frame::new().fill(theme::colors().panel))
-        .show(ui, |ui| form(ui, window));
+    let close = frame::show(
+        ctx,
+        "settings",
+        icon::SETTINGS,
+        "Settings",
+        |ui, list, side| {
+            pages(&mut child(ui, list.shrink2(vec2(12.0, 14.0))), window);
+            page(ui, side, window);
+        },
+    );
+    if close {
+        window.machine.settings.close();
+        return;
+    }
+    ask(ctx, window);
 }
 
-/// The pages of the screen, and the window and the sheet the rest of the setup lives in.
-fn sections(ui: &mut egui::Ui, window: &mut Window) {
+/// The pages down the left, the profiles over the window's own settings, and the window
+/// and the sheet the rest of the setup lives in.
+fn pages(ui: &mut Ui, window: &mut Window) {
     ui.spacing_mut().item_spacing.y = 2.0;
-    for section in Section::ALL {
-        let active = window.machine.settings.section == section;
-        if nav_row(ui, section_icon(section), section.label(), active).clicked() {
-            window.machine.settings.section = section;
+    let settings = &mut window.machine.settings;
+    for group in [&Section::PROFILES[..], &Section::OWN[..]] {
+        for section in group {
+            let active = settings.section == *section;
+            if nav_row(ui, section_icon(*section), section.label(), active).clicked() {
+                settings.turn_to(*section);
+            }
         }
+        ui.add_space(10.0);
+        hairline(ui);
+        ui.add_space(10.0);
     }
-    ui.add_space(10.0);
-    hairline(ui);
-    ui.add_space(10.0);
     if nav_row(ui, icon::PRINTER, "Machine and resin", false).clicked() {
+        window.machine.settings.close();
         crate::panels::open_machines(window.machine);
     }
     // The keys are a sheet rather than a page: there is nothing to edit, and one listing
     // is enough. See `crate::shortcuts`.
     if nav_row(ui, icon::KEYBOARD, "Shortcuts", false).clicked() {
+        window.machine.settings.close();
         window.view.options.sheet = true;
     }
 }
@@ -99,8 +78,66 @@ fn sections(ui: &mut egui::Ui, window: &mut Window) {
 fn section_icon(section: Section) -> &'static str {
     match section {
         Section::Supports => icon::SUPPORTS,
+        Section::Hollow => icon::HOLLOW,
+        Section::Drain => icon::DRAIN,
+        Section::General => icon::GENERAL,
         Section::Updates => icon::UPDATE,
     }
+}
+
+/// The open page under its name, and what the name's row offers for it.
+fn page(ui: &mut Ui, side: egui::Rect, window: &mut Window) {
+    let section = window.machine.settings.section;
+    let (mut head, content) = with_header(ui, side);
+    let pressed = heading(&mut head, section);
+    match section {
+        Section::Supports => supports::page(ui, content, window),
+        Section::Hollow | Section::Drain => presets::page(ui, content, window),
+        Section::General => scrolled(&mut child(ui, content), |ui| {
+            general::form(ui, window.machine);
+        }),
+        Section::Updates => scrolled(&mut child(ui, content), |ui| {
+            updates::form(ui, &mut window.machine.updates);
+        }),
+    }
+    match pressed {
+        Some(Heading::Import(kind)) => ask_for_profile(window, kind),
+        Some(Heading::New) => supports::add(window.machine, None),
+        None => {}
+    }
+}
+
+/// What the row of a page's name was pressed for.
+enum Heading {
+    Import(Kind),
+    New,
+}
+
+/// The page's name on the left, and on a page of profiles the ways to add one.
+fn heading(ui: &mut Ui, section: Section) -> Option<Heading> {
+    let mut pressed = None;
+    ui.horizontal_centered(|ui| {
+        ui.label(
+            RichText::new(section.label())
+                .font(theme::page_title(18.0))
+                .color(theme::colors().text_high),
+        );
+        let Some(kind) = section.kind() else {
+            return;
+        };
+        ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
+            ui.spacing_mut().item_spacing.x = 8.0;
+            if kind == Kind::Support
+                && inline_button(ui, icon::ADD, "New profile", false, true).clicked()
+            {
+                pressed = Some(Heading::New);
+            }
+            if inline_button(ui, icon::IMPORT, "Import", false, true).clicked() {
+                pressed = Some(Heading::Import(kind));
+            }
+        });
+    });
+    pressed
 }
 
 /// One entry of the list of pages: a glyph and a name, washed while it is the page open.
@@ -138,46 +175,97 @@ pub(super) fn nav_row(ui: &mut egui::Ui, glyph: &str, label: &str, active: bool)
     response
 }
 
-/// The form of what the list has picked, in a column of its own width.
-fn form(ui: &mut egui::Ui, window: &mut Window) {
-    let widest = match window.machine.settings.section {
-        Section::Supports => WIDE_FORM_W,
-        Section::Updates => FORM_W,
-    };
-    egui::ScrollArea::vertical()
-        .auto_shrink([false, false])
-        .show(ui, |ui| {
-            let width = (ui.available_width() - 64.0).min(widest);
-            ui.horizontal(|ui| {
-                ui.add_space(32.0);
-                ui.vertical(|ui| {
-                    ui.set_width(width);
-                    ui.spacing_mut().item_spacing.y = theme::ITEM_GAP;
-                    match window.machine.settings.section {
-                        Section::Supports => supports::form(ui, window),
-                        Section::Updates => updates::form(ui, &mut window.machine.updates),
-                    }
-                    ui.add_space(24.0);
-                });
-            });
-        });
+/// Asks for a profile's file and takes it in. A browser answers on a later frame, through
+/// [`import_profile`].
+pub(super) fn ask_for_profile(window: &mut Window, kind: Kind) {
+    if let Some(file) = files::pick(Wanted::Profile(kind)) {
+        import_profile(window, kind, &file);
+    }
 }
 
-/// The page's name, and the way back to the plate.
-fn title(ui: &mut egui::Ui, machine: &mut Machine) {
-    ui.horizontal(|ui| {
-        ui.label(
-            egui::RichText::new(machine.settings.section.label())
-                .font(theme::page_title(22.0))
-                .color(theme::colors().text_high),
-        );
-        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-            if icon_button(ui, icon::CANCEL, "Close settings").clicked() {
-                machine.settings.open = false;
-            }
-        });
-    });
+/// Takes `file` in as a profile of `kind` and opens it where it was asked for from: a
+/// resin goes on the machine the Machine and resin window has open.
+pub fn import_profile(window: &mut Window, kind: Kind, file: &Handed) {
+    let machine = &mut *window.machine;
+    let printer = match kind {
+        Kind::Resin => machine
+            .settings
+            .node
+            .as_ref()
+            .map(|node| node.printer().to_owned()),
+        _ => None,
+    };
+    let Some(id) = crate::exchange::import_file(machine, kind, file, printer.as_deref()) else {
+        return;
+    };
+    let settings = &mut machine.settings;
+    let catalogue = &machine.slicing.catalogue;
+    match (kind, printer) {
+        (Kind::Printer, _) => {
+            settings.library = None;
+            settings.pick(catalogue, Node::Printer(id));
+        }
+        (Kind::Resin, Some(printer)) => {
+            settings.editing_resin = false;
+            settings.pick(catalogue, Node::Resin { printer, resin: id });
+        }
+        (Kind::Support, _) => {
+            settings.editing_support = false;
+            settings.pick_support(catalogue, &id);
+        }
+        (Kind::Hollow | Kind::Drain, _) => settings.preset = Some(id),
+        (Kind::Resin, None) => {}
+    }
 }
+
+/// Writes the profile of `kind` under `id` out to a file the user names.
+pub(super) fn export_profile(machine: &mut Machine, kind: Kind, id: &str) {
+    let text = crate::exchange::export(&machine.slicing.catalogue, kind, id);
+    let Some(text) = report(&mut machine.status, "cannot export the profile", text) else {
+        return;
+    };
+    let name = crate::exchange::file_name(id);
+    match files::save_text(&name, Wanted::Profile(kind), &text) {
+        Ok(Some(path)) => machine.status = Status::Info(format!("Exported {}", path.display())),
+        Ok(None) => {}
+        Err(error) => machine.status = Status::failed(&error),
+    }
+}
+
+/// The question over the window, while a deletion is waiting to be answered for.
+fn ask(ctx: &egui::Context, window: &mut Window) {
+    let settings = &mut window.machine.settings;
+    let Some(deleting) = settings.confirm.clone() else {
+        return;
+    };
+    let Some(answer) = confirm::ask(ctx, &window.machine.slicing.catalogue, &deleting) else {
+        return;
+    };
+    settings.confirm = None;
+    if let (confirm::Answer::Confirmed, Deleting::Profile(kind, id)) = (answer, deleting) {
+        forget_profile(window.machine, kind, &id);
+    }
+}
+
+/// Throws away a support profile or a tool's preset, and leaves nothing of it open.
+fn forget_profile(machine: &mut Machine, kind: Kind, id: &str) {
+    let catalogue = &mut machine.slicing.catalogue;
+    let outcome = catalogue.forget_user_copy(kind, id);
+    report(&mut machine.status, "cannot delete the profile", outcome);
+    let settings = &mut machine.settings;
+    settings.editing_support = false;
+    settings.preset = None;
+    if kind == Kind::Support {
+        let first = catalogue.supports().next().map(|entry| entry.id.clone());
+        settings.support = None;
+        if let Some(first) = first {
+            settings.pick_support(catalogue, &first);
+        }
+    }
+}
+
+/// Room above and below the fields of a block.
+const BLOCK_PAD: f32 = 18.0;
 
 /// One category of a form: its title in a column of its own beside its fields, over a
 /// hairline. Where the form is too narrow for both, the title stands over the fields.

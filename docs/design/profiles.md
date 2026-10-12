@@ -106,17 +106,19 @@ is nothing to fall back on (ADR 0196). A report over geometry — `inspect` — 
 The window keeps the catalogue in `Slicing`, along with the resin as loaded and the resin
 as resolved. Picking a printer sets the plate, the container it writes, the machine on the
 network it sends to, and retunes the resin in hand; picking a resin retunes it for the
-printer in hand. Both menus end in the file dialog
-the window had before, which sets no id and therefore tunes nothing.
+printer in hand. The File menu's **Import a machine** and **Import a resin** keep a file as
+the user's own — the resin set up on the machine in hand — and put it under the plate, so
+every profile in use has an id.
 
 ## Editing in the window
 
 The machines and their resins are edited in the **Machine and resin** window, a modal over
-the plate opened from the top bar's chip, the File menu, the Settings screen and the start
-page; Esc closes it. The support profiles are edited on the Settings screen, which the gear
-in the top bar opens in the plate's place, a list beside a form. Either way every
-edit is written to the user's directory as soon as the value settles — no Save. ADR 0120,
-0220. The screen's other page, Updates, holds no profile: see `docs/design/updates.md`.
+the plate opened from the top bar's chip, the File menu, the Settings window and the start
+page; Esc closes it. The support profiles and the Hollow and Drain presets are in the
+**Settings** window, which the gear in the top bar opens: a table of each, and a support
+profile's form in the table's place. Either way every edit is written to the user's
+directory as soon as the value settles — no Save. ADR 0120, 0220, 0233. Its General and
+Updates pages hold no profile: see `docs/design/updates.md` for the second.
 
 - The window lists the machines the user has installed down its left, over a search line.
   The one picked has three tabs. **Resins** is a table of the resins set up on it, their
@@ -141,6 +143,11 @@ edit is written to the user's directory as soon as the value settles — no Save
   table and make it `last_printer`; name, type, colour, density and price go on the resin.
   Renaming one other printers share splits it off as this printer's own file.
 - Ids are made from the name when the profile is made (`unique_id`) and never follow it.
+- **Export** writes a profile out as the TOML it is kept as, `<id>.toml`; **Import**, on the
+  page of its kind, takes one in under an id of its own and renames it "… (imported)" when
+  the name is taken, so nothing is overwritten. An imported resin is set up on the machine
+  the window has open; a preset that does not read as its tool's settings is refused.
+  `exchange.rs`, ADR 0233.
 
 Saving the machine in use stands the plate back under it when the panel, the volume or
 the container changed. Saving the resin in use re-resolves it for that machine.

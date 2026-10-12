@@ -208,24 +208,22 @@ it would otherwise orbit the camera as well. None of these cards reports where i
 whichever egui layer is under the pointer owns it, and the plate is only under the pointer
 when that layer is the viewport's own; see `docs/decisions/0193`.
 
-## The Settings screen, the Machine and resin window and the start page
+## The Settings and Machine and resin windows, and the start page
 
-Three arrangements sit beside the plate's. With `Settings::open` the rail, the inspector
-and the stage are not drawn, and everything under the top bar is the Settings screen: its
-pages down the left, the open page's list and form beside them. A form is blocks — a title in
-a column of its own, the fields beside it, a hairline under them — and a title stands over
-its fields where the form is too narrow for both. It is a screen because a support profile
-is edited instead of the plate; the gear in the top bar opens it, and its close
-button or Esc leaves it.
-
-**Machine and resin** is a modal over the plate instead, because a machine and a resin are
-picked for the plate in view: the machines down its left, the picked one's Resins, Machine
-and Network tabs beside them, an action bar along the tabs' foot. A question or a
-calculator over it is a modal of its own.
+**Settings** and **Machine and resin** are modals over the plate, both drawn in one frame
+(`panels/settings/frame.rs`): a title row, a list down the left, and beside it a header,
+what the page shows and an action bar along its foot. A set of profiles is a table — words
+from the left, figures flush right — with a row's actions in the bar, and the form of the
+one being edited takes the table's place. A form is blocks: a title in a column of its own,
+the fields beside it, a hairline under them, and the title over its fields where the form
+is too narrow for both. Settings lists its pages down the left; Machine and resin lists the
+machines and gives the picked one tabs. A question or a calculator over either is a modal of
+its own, and Esc takes it down before the window.
 
 Until the first model, project or sliced file arrives, or a tool is picked, everything under
-the top bar is the **start page** instead: a drop zone, the files opened lately at its
-height, and a row of resin test prints drawn in code. See `docs/decisions/0052`, `0220`, `0232`.
+the top bar is the **start page** instead, unless General turns it off: a drop zone, the files opened lately at its
+height, and a row of resin test prints drawn in code. See `docs/decisions/0052`, `0220`, `0232`,
+`0233`.
 
 ## Modes and tools
 

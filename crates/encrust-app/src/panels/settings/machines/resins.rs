@@ -1,21 +1,24 @@
 //! The Resins tab: the resins set up on the machine as a table, narrowed by type, with the
 //! one picked opened in its form or put under the plate.
 
-use egui::{Align, Color32, Layout, Rect, RichText, Sense, Ui, pos2, vec2};
-use printer_profiles::MaterialProfile;
+use egui::{Align, Layout, Rect, RichText, Ui, pos2, vec2};
+use printer_profiles::{Kind, MaterialProfile};
 
-use super::{Action, SIDE_PAD, child, scrolled, stroke, with_footer};
+use super::Action;
 use crate::panels::Window;
+use crate::panels::settings::frame::{SIDE_PAD, Table, child, scrolled, with_footer};
 use crate::panels::settings::resin;
 use crate::settings::{Deleting, Node, pool_for, resins_of};
-use crate::ui::{
-    describe, filter_chip, focus_ring, icon, icon_button, inline_button, quiet_button, theme,
-};
+use crate::ui::{describe, filter_chip, icon, icon_button, inline_button, quiet_button, theme};
 
-/// Where each column of the table starts, as a share of its width; the figures are set
-/// flush right against the start of the next.
-const COLUMNS: [f32; 5] = [0.0, 0.46, 0.66, 0.78, 0.9];
-const HEADS: [&str; 5] = ["Profile", "Type", "Layer", "Exposure", "Bottom"];
+/// The resins' columns, each starting at a share of the width; the figures are set flush
+/// right against the start of the next. The room before the name holds the resin's colour.
+const TABLE: Table = Table {
+    heads: &["Profile", "Type", "Layer", "Exposure", "Bottom"],
+    columns: &[0.0, 0.46, 0.66, 0.78, 0.9],
+    words: 2,
+    lead: 26.0,
+};
 /// The row of filters over the table.
 const FILTERS_H: f32 = 52.0;
 /// The Add a resin menu: wide enough for a resin's name beside its delete button, and no
@@ -89,6 +92,9 @@ fn filter_row(ui: &mut Ui, window: &mut Window, printer: &str, action: &mut Opti
         }
         ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
             add_menu(ui, catalogue, printer, action);
+            if inline_button(ui, icon::IMPORT, "Import", false, true).clicked() {
+                *action = Some(Action::Import(Kind::Resin));
+            }
         });
     });
 }
@@ -162,7 +168,7 @@ fn table(
     let shown: Vec<(&str, &MaterialProfile)> = resins_of(&slicing.catalogue, printer)
         .filter(|(_, resin)| wanted.is_none_or(|kind| kind == resin.details.kind.trim()))
         .collect();
-    head_row(ui);
+    TABLE.head_row(ui);
     let scroll = egui::ScrollArea::vertical().id_salt("resin-table");
     scroll.auto_shrink([false, false]).show(ui, |ui| {
         ui.spacing_mut().item_spacing.y = 0.0;
@@ -189,39 +195,6 @@ fn table(
     });
 }
 
-fn head_row(ui: &mut Ui) {
-    let (rect, _) = ui.allocate_exact_size(vec2(ui.available_width(), 32.0), Sense::hover());
-    let colors = theme::colors();
-    for (index, head) in HEADS.into_iter().enumerate() {
-        let (at, align) = cell(rect, index);
-        ui.painter()
-            .text(at, align, head, theme::small(), colors.text_low);
-    }
-    ui.painter().hline(rect.x_range(), rect.bottom(), stroke());
-}
-
-/// Where cell `index` of a row in `rect` is drawn from: the name and the type from their
-/// left, the figures from their right.
-fn cell(rect: Rect, index: usize) -> (egui::Pos2, egui::Align2) {
-    let x = |share: f32| rect.left() + rect.width() * share;
-    match index {
-        0 => (
-            pos2(rect.left() + 26.0, rect.center().y),
-            egui::Align2::LEFT_CENTER,
-        ),
-        1 => (
-            pos2(x(COLUMNS[1]), rect.center().y),
-            egui::Align2::LEFT_CENTER,
-        ),
-        _ => {
-            let right = COLUMNS
-                .get(index + 1)
-                .map_or(rect.right() - 30.0, |next| x(*next) - 12.0);
-            (pos2(right, rect.center().y), egui::Align2::RIGHT_CENTER)
-        }
-    }
-}
-
 /// One resin: its colour and name, its type, and what this machine exposes it at.
 fn resin_row(
     ui: &mut Ui,
@@ -231,21 +204,18 @@ fn resin_row(
     in_hand: bool,
 ) -> egui::Response {
     let colors = theme::colors();
-    let size = vec2(ui.available_width(), theme::TABLE_ROW_H);
-    let (rect, response) = ui.allocate_exact_size(size, Sense::click());
-    response.widget_info(|| {
-        egui::WidgetInfo::selected(egui::WidgetType::SelectableLabel, true, picked, &resin.name)
-    });
-    let fill = match (picked, response.hovered()) {
-        (true, _) => colors.accent_wash,
-        (false, true) => colors.hover,
-        (false, false) => Color32::TRANSPARENT,
-    };
+    let cells = [
+        resin.name.clone(),
+        resin.details.kind.clone(),
+        format!("{:.0} µm", here.layer_height_mm * 1000.0),
+        format!("{:.1} s", here.exposure_s),
+        format!("{:.0} s", here.bottom_exposure_s),
+    ];
+    let response = TABLE.row(ui, &resin.name, picked, &cells);
+    let rect = response.rect;
     let painter = ui.painter_at(rect);
-    painter.rect_filled(rect, theme::R_CONTROL, fill);
     let chip = Rect::from_center_size(pos2(rect.left() + 12.0, rect.center().y), vec2(9.0, 9.0));
     painter.rect_filled(chip, 3.0, theme::resin_swatch(resin.details.color));
-    paint_cells(&painter, rect, here, resin);
     if in_hand {
         let at = pos2(rect.right() - 10.0, rect.center().y);
         let glyph = theme::icon(13.0);
@@ -257,38 +227,10 @@ fn resin_row(
             colors.accent_soft,
         );
     }
-    painter.hline(rect.x_range(), rect.bottom() - 0.5, stroke());
-    focus_ring(ui, &response, theme::R_CONTROL);
     response.on_hover_text_at_pointer(match in_hand {
         true => "The plate prints with this resin. Double-click to edit it.",
         false => "Double-click to edit it.",
     })
-}
-
-/// The name, the type and the three figures of a row, each in its column.
-fn paint_cells(
-    painter: &egui::Painter,
-    rect: Rect,
-    here: &MaterialProfile,
-    resin: &MaterialProfile,
-) {
-    let colors = theme::colors();
-    let cells = [
-        resin.name.clone(),
-        resin.details.kind.clone(),
-        format!("{:.0} µm", here.layer_height_mm * 1000.0),
-        format!("{:.1} s", here.exposure_s),
-        format!("{:.0} s", here.bottom_exposure_s),
-    ];
-    for (index, text) in cells.into_iter().enumerate() {
-        let (at, align) = cell(rect, index);
-        let (font, tint) = match index {
-            0 => (theme::label(), colors.text_high),
-            1 => (theme::label(), colors.text_mid),
-            _ => (theme::figures(12.5), colors.text_high),
-        };
-        painter.text(at, align, text, font, tint);
-    }
 }
 
 /// What the bar offers for the resin picked in the table, and putting it under the plate.
@@ -313,6 +255,9 @@ fn actions(
             printer: printer.to_owned(),
             resin: resin.to_owned(),
         });
+    }
+    if quiet_button(ui, icon::EXPORT, "Export", false, some).clicked() {
+        *action = picked.map(|resin| Action::Export(Kind::Resin, resin.to_owned()));
     }
     if quiet_button(ui, icon::REMOVE, "Take off this machine", true, some).clicked() {
         *action = picked.map(|resin| {

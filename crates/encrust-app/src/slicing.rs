@@ -383,7 +383,7 @@ impl Slicing {
     /// Why the Slice button is greyed out, or `None` when it is not.
     pub fn blocker(&self, scene: &Scene) -> Option<&'static str> {
         if self.printer.is_none() {
-            return Some("Load a printer profile to know the panel to slice for.");
+            return Some("Pick a machine to know the panel to slice for.");
         }
         if !self.chosen_resin {
             return Some("Add a resin to this printer: an exposure is measured on your machine.");

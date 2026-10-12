@@ -1,5 +1,5 @@
 //! The fields of one support profile, in the groups both the Supports tool and the
-//! Settings screen lay them out in.
+//! Settings window lay them out in.
 
 use std::ops::RangeInclusive;
 

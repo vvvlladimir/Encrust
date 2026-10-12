@@ -29,6 +29,7 @@ pub fn slice_this_plate(window: &mut Window) {
         &mut window.machine.status,
         Run::ThisPlate,
         Via::File,
+        window.machine.general.sliced_dir.as_deref(),
     );
 }
 
@@ -74,6 +75,7 @@ pub fn ui(ui: &mut egui::Ui, window: &mut Window) {
             &mut window.machine.status,
             run,
             via,
+            window.machine.general.sliced_dir.as_deref(),
         );
     }
 }
@@ -216,7 +218,15 @@ pub(super) enum Run {
     EveryPlate,
 }
 
-pub(super) fn start(scene: &Scene, slicing: &mut Slicing, status: &mut Status, run: Run, via: Via) {
+/// Slices into a file the user names, the dialog opening in `folder` when there is one.
+pub(super) fn start(
+    scene: &Scene,
+    slicing: &mut Slicing,
+    status: &mut Status,
+    run: Run,
+    via: Via,
+    folder: Option<&std::path::Path>,
+) {
     let format = slicing.format;
     if via == Via::Printer {
         let path = temporary_path(&default_file_name(scene, format, &slicing.file_stem));
@@ -228,7 +238,7 @@ pub(super) fn start(scene: &Scene, slicing: &mut Slicing, status: &mut Status, r
         return;
     }
     let name = default_file_name(scene, format, &slicing.file_stem);
-    let Some(path) = save_path(&name, format, slicing.printer.as_ref()) else {
+    let Some(path) = save_path(&name, format, slicing.printer.as_ref(), folder) else {
         return;
     };
 
@@ -251,10 +261,14 @@ fn save_path(
     name: &str,
     format: SlicedFormat,
     printer: Option<&printer_profiles::PrinterProfile>,
+    folder: Option<&std::path::Path>,
 ) -> Option<std::path::PathBuf> {
     // The chosen format goes first, so the dialog offers it; the others this machine can
     // be written into stay reachable, because the name is what decides in the end.
     let mut dialog = rfd::FileDialog::new().set_file_name(name);
+    if let Some(folder) = folder {
+        dialog = dialog.set_directory(folder);
+    }
     let offered = printer.map_or_else(
         || SlicedFormat::CHOICES.to_vec(),
         |printer| SlicedFormat::choices_for(printer).collect(),
@@ -271,6 +285,7 @@ fn save_path(
     name: &str,
     _format: SlicedFormat,
     _printer: Option<&printer_profiles::PrinterProfile>,
+    _folder: Option<&std::path::Path>,
 ) -> Option<std::path::PathBuf> {
     Some(name.into())
 }

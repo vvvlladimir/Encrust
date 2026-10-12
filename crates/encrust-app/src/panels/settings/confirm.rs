@@ -1,8 +1,7 @@
-//! The question asked before a profile is thrown away. Everything the Settings screen
-//! writes is written as it settles and there is no undo on it (ADR 0120), so a deletion
+//! The question asked before a profile is thrown away. Everything the two windows write is written as it settles and there is no undo on it (ADR 0120), so a deletion
 //! is asked about first; see ADR 0196.
 
-use printer_profiles::Catalogue;
+use printer_profiles::{Catalogue, Kind};
 
 use crate::settings::{Deleting, is_thrown_away_with_the_printer, other_printers};
 use crate::ui::{card, describe, inline_button, secondary_button, theme};
@@ -20,7 +19,7 @@ struct Question {
     gone: bool,
 }
 
-/// The dialog over the screen, if a deletion is waiting. Answers with what was confirmed.
+/// The dialog over the window, if a deletion is waiting. Answers with what was confirmed.
 pub(super) fn ask(
     ctx: &egui::Context,
     catalogue: &Catalogue,
@@ -81,13 +80,11 @@ fn question(catalogue: &Catalogue, deleting: &Deleting) -> Question {
                 what: format!("Remove {name} and everything you changed on it?"),
                 verb: "Remove",
                 gone: true,
-                cost: catalogue
-                    .is_shipped(printer_profiles::Kind::Printer, id)
-                    .then(|| {
-                        "The machine stays in the library, so it can be added again with \
+                cost: catalogue.is_shipped(Kind::Printer, id).then(|| {
+                    "The machine stays in the library, so it can be added again with \
                          the numbers this build ships."
-                            .to_owned()
-                    }),
+                        .to_owned()
+                }),
             }
         }
         Deleting::ResinOff { printer, resin } => {
@@ -133,7 +130,26 @@ fn question(catalogue: &Catalogue, deleting: &Deleting) -> Question {
                     .then(|| format!("It comes off {} as well.", others.join(", "))),
             }
         }
+        Deleting::Profile(kind, id) => Question {
+            title: "Delete this profile",
+            what: format!("Delete {}?", profile_name(catalogue, *kind, id)),
+            verb: "Delete",
+            gone: true,
+            cost: None,
+        },
     }
+}
+
+/// What a support profile or a tool's preset is called, or its id when it has gone.
+fn profile_name(catalogue: &Catalogue, kind: Kind, id: &str) -> String {
+    let name = match kind {
+        Kind::Support => catalogue.support(id).ok().map(|entry| &entry.profile.name),
+        _ => catalogue
+            .presets(kind)
+            .find(|entry| entry.id == id)
+            .map(|entry| &entry.profile.name),
+    };
+    name.map_or_else(|| id.to_owned(), Clone::clone)
 }
 
 fn resin_name(catalogue: &Catalogue, id: &str) -> String {

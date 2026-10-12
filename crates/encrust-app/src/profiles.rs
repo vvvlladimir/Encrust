@@ -1,16 +1,13 @@
-//! The printer and resin pickers, and the file dialogs the File menu opens a profile with.
+//! The printer and resin pickers, and the File menu's imports of a machine or a resin.
 
-use anyhow::Context as _;
-use printer_profiles::{MaterialProfile, PrinterProfile};
+use printer_profiles::{Kind, MaterialProfile, PrinterProfile};
 
 use crate::files::{self, Handed, Wanted};
 use crate::import::recenter;
 use crate::panels::Window;
 use crate::plate::BuildPlate;
 use crate::settings::{installed, installed_printers};
-use crate::slicing::Slicing;
 use crate::state::Machine;
-use crate::status::Status;
 
 /// The catalogue's printers, then the way into the settings of the one in hand.
 pub fn printer_menu(ui: &mut egui::Ui, window: &mut Window) {
@@ -88,29 +85,23 @@ pub fn resin_menu(ui: &mut egui::Ui, machine: &mut Machine) {
     }
 }
 
-/// Asks for a printer profile and loads it.
+/// Asks for a machine's file, keeps it among the user's machines and stands the plate
+/// under it.
 pub fn open_printer(window: &mut Window) {
     if let Some(file) = files::pick(Wanted::PrinterProfile) {
-        load_printer(window, &file);
+        import_printer(window, &file);
     }
 }
 
-/// Loads a printer profile the user handed over.
-pub fn load_printer(window: &mut Window, file: &Handed) {
-    let path = file.path();
-    let loaded = file
-        .text()
-        .map_err(anyhow::Error::new)
-        .and_then(|text| Ok(PrinterProfile::from_toml_str(&text, path)?))
-        .with_context(|| format!("cannot load the profile {}", path.display()));
-    let Some(profile) = window
-        .machine
-        .status
-        .report(&format!("Loaded {}", path.display()), loaded)
-    else {
+/// Keeps a machine the user handed over, and stands the plate under it.
+pub fn import_printer(window: &mut Window, file: &Handed) {
+    let Some(id) = crate::exchange::import_file(window.machine, Kind::Printer, file, None) else {
         return;
     };
-    apply_printer(window, profile, None);
+    if let Ok(entry) = window.machine.slicing.catalogue.printer(&id) {
+        let profile = entry.profile.clone();
+        apply_printer(window, profile, Some(id));
+    }
 }
 
 /// Stands the plate and everything on it under a new printer.
@@ -146,23 +137,24 @@ fn stand_on(window: &mut Window, plate: BuildPlate) {
     );
 }
 
-/// Asks for a resin profile and loads it.
-pub fn open_material(slicing: &mut Slicing, status: &mut Status) {
+/// Asks for a resin's file, keeps it on the machine in hand and prints with it.
+pub fn open_material(machine: &mut Machine) {
     if let Some(file) = files::pick(Wanted::ResinProfile) {
-        load_material(slicing, status, &file);
+        import_material(machine, &file);
     }
 }
 
-/// Loads a resin profile, which brings the layer height it was measured at with it.
-pub fn load_material(slicing: &mut Slicing, status: &mut Status, file: &Handed) {
-    let path = file.path();
-    let loaded = file
-        .text()
-        .map_err(anyhow::Error::new)
-        .and_then(|text| Ok(MaterialProfile::from_toml_str(&text, path)?))
-        .with_context(|| format!("cannot load the resin profile {}", path.display()));
-    if let Some(material) = status.report(&format!("Loaded {}", path.display()), loaded) {
-        slicing.resin_id = None;
-        slicing.set_material(material);
+/// Keeps a resin the user handed over, set up on the machine in hand, and prints with it.
+pub fn import_material(machine: &mut Machine, file: &Handed) {
+    let printer = machine.slicing.printer_id.clone();
+    let Some(id) = crate::exchange::import_file(machine, Kind::Resin, file, printer.as_deref())
+    else {
+        return;
+    };
+    let slicing = &mut machine.slicing;
+    if let Ok(entry) = slicing.catalogue.resin(&id) {
+        let resin = entry.profile.clone();
+        slicing.resin_id = Some(id);
+        slicing.set_material(resin);
     }
 }

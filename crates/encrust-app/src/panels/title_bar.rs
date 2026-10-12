@@ -51,10 +51,7 @@ pub fn ui(ui: &mut egui::Ui, window: &mut Window) {
         .response
         .rect;
 
-    let mut left_end = right.left();
-    if !window.machine.settings.open {
-        left_end = centred_chip(ui, window, bar, right.left());
-    }
+    let left_end = centred_chip(ui, window, bar, right.left());
     let left = bar.with_max_x((left_end - ENDS_GAP).max(bar.left()));
     ui.scope_builder(
         UiBuilder::new()
@@ -97,7 +94,7 @@ fn centred_chip(ui: &mut egui::Ui, window: &mut Window, bar: Rect, right_end: f3
 }
 
 /// What belongs to the whole window rather than to the plate: the sheet of keys and the
-/// Settings screen.
+/// Settings window.
 fn window_controls(ui: &mut egui::Ui, window: &mut Window) {
     if icon_button(ui, icon::SETTINGS, &shortcuts::tooltip(Action::Settings)).clicked() {
         toggle_settings(window.machine);
@@ -475,7 +472,7 @@ fn update_badge(ui: &mut egui::Ui, machine: &mut Machine) {
             if !machine.settings.open {
                 toggle_settings(machine);
             }
-            machine.settings.section = Section::Updates;
+            machine.settings.turn_to(Section::Updates);
         }
     }
     ui.add_space(6.0);
@@ -532,14 +529,17 @@ fn pill(
     response
 }
 
-/// Opens the Settings screen, on the first support profile when none is open yet, or
+/// Opens the Settings window, on the first support profile when none is picked yet, or
 /// closes it.
 pub fn toggle_settings(machine: &mut Machine) {
     let settings = &mut machine.settings;
-    settings.open = !settings.open;
+    if settings.open {
+        settings.close();
+        return;
+    }
+    settings.open = true;
     let catalogue = &machine.slicing.catalogue;
-    if settings.open
-        && settings.support.is_none()
+    if settings.support.is_none()
         && let Some(first) = catalogue.supports().next()
     {
         let id = first.id.clone();
@@ -622,13 +622,13 @@ fn file_menu(ui: &mut egui::Ui, window: &mut Window) {
         ui.close();
         sliced::close(&mut window.machine.preview, &mut window.machine.status);
     }
-    if ui.button("Load printer profile...").clicked() {
+    if ui.button("Import a machine...").clicked() {
         ui.close();
         profiles::open_printer(window);
     }
-    if ui.button("Load resin profile...").clicked() {
+    if ui.button("Import a resin...").clicked() {
         ui.close();
-        profiles::open_material(&mut window.machine.slicing, &mut window.machine.status);
+        profiles::open_material(window.machine);
     }
     ui.separator();
     if ui.button("Machine and resin...").clicked() {

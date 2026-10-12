@@ -88,4 +88,6 @@ pub struct Machine {
     pub report: Report,
     /// The files opened lately, for the start page.
     pub recent: Recent,
+    /// How the window itself behaves, from the Settings window's General page.
+    pub general: crate::prefs::General,
 }

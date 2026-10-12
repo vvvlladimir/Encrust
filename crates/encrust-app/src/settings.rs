@@ -1,4 +1,4 @@
-//! The Settings screen's state: which page is open, what is picked on it, and the profile
+//! The Settings window's state: which page is open, what is picked on it, and the profile
 //! being edited, which is written back as it changes. See `docs/design/profiles.md`.
 
 use std::collections::BTreeMap;
@@ -10,27 +10,49 @@ use printer_profiles::{
 
 use crate::slicing::Rescaled;
 
-/// A page of the Settings screen.
+/// A page of the Settings window.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum Section {
     #[default]
     Supports,
+    /// The Hollow tool's named settings.
+    Hollow,
+    /// The Drain tool's named settings.
+    Drain,
+    /// How the window itself behaves: where it starts, how it zooms, where files go.
+    General,
     /// Whether to look for a new release, and the one found.
     Updates,
 }
 
 impl Section {
+    /// The pages that list profiles, over the ones that hold the window's own settings.
+    pub const PROFILES: [Self; 3] = [Self::Supports, Self::Hollow, Self::Drain];
+
     #[cfg(not(target_arch = "wasm32"))]
-    pub const ALL: [Self; 2] = [Self::Supports, Self::Updates];
+    pub const OWN: [Self; 2] = [Self::General, Self::Updates];
 
     /// A page loads the latest release every time it is opened, so it has nothing to update.
     #[cfg(target_arch = "wasm32")]
-    pub const ALL: [Self; 1] = [Self::Supports];
+    pub const OWN: [Self; 1] = [Self::General];
 
     pub fn label(self) -> &'static str {
         match self {
             Self::Supports => "Supports",
+            Self::Hollow => "Hollow",
+            Self::Drain => "Drain",
+            Self::General => "General",
             Self::Updates => "Updates",
+        }
+    }
+
+    /// The kind of profile the page lists, when it lists any.
+    pub fn kind(self) -> Option<Kind> {
+        match self {
+            Self::Supports => Some(Kind::Support),
+            Self::Hollow => Some(Kind::Hollow),
+            Self::Drain => Some(Kind::Drain),
+            Self::General | Self::Updates => None,
         }
     }
 }
@@ -250,6 +272,8 @@ pub enum Deleting {
     ResinOff { printer: String, resin: String },
     /// A resin and its file, off every printer that has it.
     Resin(String),
+    /// A support profile or a tool's preset of the user's own, from the Settings window.
+    Profile(Kind, String),
 }
 
 /// What the machine library has open: a brand, and what its models are filtered by.
@@ -259,12 +283,16 @@ pub struct Library {
     pub search: String,
 }
 
-/// What the Settings screen and the Machine and resin window are showing.
+/// What the Settings window and the Machine and resin window are showing.
 #[derive(Default)]
 pub struct Settings {
-    /// Whether the Settings screen stands in the plate's place.
+    /// Whether the Settings window is over the plate.
     pub open: bool,
     pub section: Section,
+    /// Whether the support profile picked in the table is open in its form instead.
+    pub editing_support: bool,
+    /// The preset picked in the Hollow or Drain table, by id.
+    pub preset: Option<String>,
     /// Whether the Machine and resin window is over the window.
     pub machines: bool,
     pub tab: Tab,
@@ -336,10 +364,11 @@ impl Settings {
         self.calculators.open = None;
     }
 
-    /// Opens the screen on the support profiles, at the one `profile` was taken from.
+    /// Opens the window on the form of the support profile `profile` was taken from.
     pub fn open_supports(&mut self, catalogue: &Catalogue, profile: &SupportProfile) {
         self.open = true;
         self.section = Section::Supports;
+        self.editing_support = true;
         let entry = catalogue
             .supports()
             .find(|entry| entry.profile == *profile)
@@ -347,6 +376,20 @@ impl Settings {
         if let Some(entry) = entry {
             self.support = Some(Draft::new(entry.id.clone(), entry.profile.clone()));
         }
+    }
+
+    /// Turns to another page, with nothing on it picked or open.
+    pub fn turn_to(&mut self, section: Section) {
+        self.section = section;
+        self.editing_support = false;
+        self.preset = None;
+    }
+
+    /// Closes the Settings window, and the question over it.
+    pub fn close(&mut self) {
+        self.open = false;
+        self.editing_support = false;
+        self.confirm = None;
     }
 
     /// Loads a support profile into the form.
