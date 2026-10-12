@@ -183,7 +183,7 @@ fn form(ui: &mut Ui, window: &mut Window) {
     let profile = &mut draft.values;
     if ui.available_width() < TWO_COLUMNS_W {
         for group in Group::ALL {
-            form_card(ui, group.label(), |ui| group.show(ui, profile));
+            form_card(ui, group.label(), |ui| group.show(ui, profile, None));
         }
     } else {
         let (left, right) = Group::ALL.split_at(Group::ALL.len().div_ceil(2));
@@ -191,7 +191,7 @@ fn form(ui: &mut Ui, window: &mut Window) {
         ui.columns(2, |columns| {
             for (ui, groups) in columns.iter_mut().zip([left, right]) {
                 for group in groups {
-                    form_card(ui, group.label(), |ui| group.show(ui, profile));
+                    form_card(ui, group.label(), |ui| group.show(ui, profile, None));
                 }
             }
         });

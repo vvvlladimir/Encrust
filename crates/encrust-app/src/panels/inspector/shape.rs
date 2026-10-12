@@ -2,7 +2,7 @@ use anyhow::Context as _;
 
 use crate::panels::Window;
 use crate::panels::support_diagram::{self, Part};
-use crate::panels::support_fields::Group;
+use crate::panels::support_fields::{Group, saved_as};
 use crate::settings::keep_support;
 use crate::ui::{
     Segment, Segmented, icon, icon_button, secondary_button, section, subheading,
@@ -26,6 +26,8 @@ pub fn ui(ui: &mut egui::Ui, window: &mut Window) {
     section(ui, "Profile", None, |ui| profile_picker(ui, window));
     section(ui, "Part", None, |ui| {
         let profile = &mut window.tools.supports.profile;
+        let saved =
+            saved_as(&window.machine.slicing.catalogue, profile).map(|entry| &entry.profile);
         if kept_switch(
             ui,
             "support-kind",
@@ -33,7 +35,7 @@ pub fn ui(ui: &mut egui::Ui, window: &mut Window) {
         ) {
             support_diagram::small_pillar(ui, profile);
             ui.add_space(6.0);
-            Group::SmallPillar.show(ui, profile);
+            Group::SmallPillar.show(ui, profile, saved);
             return;
         }
         let parts = Part::ALL.map(|part| (part, part.label()));
@@ -49,7 +51,7 @@ pub fn ui(ui: &mut egui::Ui, window: &mut Window) {
                     None => subheading(ui, group.label()),
                 }
             }
-            group.show(ui, profile);
+            group.show(ui, profile, saved);
         }
     });
 }
@@ -107,25 +109,58 @@ fn profile_picker(ui: &mut egui::Ui, window: &mut Window) {
     if let Some(profile) = picked {
         window.tools.supports.profile = profile;
     }
-    if matching.is_none() {
-        if secondary_button(ui, icon::SAVE, "Save as a profile").clicked() {
-            let edited = window.tools.supports.profile.clone();
-            let kept = keep_support(&mut window.machine.slicing.catalogue, &edited)
-                .context("cannot save the support profile");
-            if window
-                .machine
-                .status
-                .report("Saved the support profile", kept)
-                .is_some()
-            {
-                window
-                    .machine
-                    .settings
-                    .open_supports(&window.machine.slicing.catalogue, &edited);
-            }
+    // Both always there, and dead while there is nothing to save: a button that comes and
+    // goes moves everything under it.
+    let edited = matching.is_none();
+    let source = saved_as(
+        &window.machine.slicing.catalogue,
+        &window.tools.supports.profile,
+    )
+    .map(|entry| entry.id.clone());
+    let (mut save, mut save_as) = (false, false);
+    ui.columns(2, |columns| {
+        save = columns[0]
+            .add_enabled_ui(edited && source.is_some(), |ui| {
+                secondary_button(ui, icon::SAVE, "Save")
+                    .on_hover_text("Save over the profile these numbers were taken from")
+                    .clicked()
+            })
+            .inner;
+        save_as = columns[1]
+            .add_enabled_ui(edited, |ui| {
+                secondary_button(ui, icon::SAVE, "Save as new")
+                    .on_hover_text("Keep these numbers as a profile of their own")
+                    .clicked()
+            })
+            .inner;
+    });
+
+    let profile = window.tools.supports.profile.clone();
+    if let Some(id) = source.filter(|_| save) {
+        let kept = window
+            .machine
+            .slicing
+            .catalogue
+            .save_support(&id, &profile)
+            .context("cannot save the support profile");
+        window
+            .machine
+            .status
+            .report("Saved the support profile", kept);
+    }
+    if save_as {
+        let kept = keep_support(&mut window.machine.slicing.catalogue, &profile)
+            .context("cannot save the support profile");
+        if window
+            .machine
+            .status
+            .report("Saved the support profile", kept)
+            .is_some()
+        {
+            manage = true;
         }
-    } else if manage {
-        let profile = window.tools.supports.profile.clone();
+    }
+    if manage {
         window
             .machine
             .settings

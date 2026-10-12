@@ -2,7 +2,7 @@ use core_analysis::RiskKind;
 
 use crate::job::SupportJob;
 use crate::panels::Window;
-use crate::panels::support_fields::Group;
+use crate::panels::support_fields::{Group, saved_as};
 use crate::state::Doc;
 use crate::status::Status;
 use crate::ui::{
@@ -16,7 +16,10 @@ use crate::workspace::{Mode, Tool};
 pub fn ui(ui: &mut egui::Ui, window: &mut Window) {
     section(ui, "Islands", None, |ui| islands(ui, window));
     section(ui, "Where", None, |ui| {
-        Group::Automatic.show(ui, &mut window.tools.supports.profile);
+        let profile = &mut window.tools.supports.profile;
+        let saved =
+            saved_as(&window.machine.slicing.catalogue, profile).map(|entry| &entry.profile);
+        Group::Automatic.show(ui, profile, saved);
         lift(ui, window);
     });
     section(ui, "Picked", None, |ui| editing(ui, window));
