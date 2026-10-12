@@ -1,6 +1,5 @@
 use core_geometry::glam::EulerRot;
 use core_geometry::{Mat3, Quat, Transform, Vec3};
-use core_plate::OrientGoal;
 
 use crate::gizmo::Axes;
 use crate::import::recenter;
@@ -9,7 +8,7 @@ use crate::plate::BuildPlate;
 use crate::scene::{Axis, ObjectId, Scene, SceneObject};
 use crate::ui::{
     Segment, Segmented, axis_label, compact_button, describe, field_label, hairline, icon,
-    icon_toggle, nested, number_field, number_row, progress_bar, secondary_button, section,
+    icon_toggle, number_field, number_row, progress_bar, secondary_button, section,
     section_with_action, switch, theme,
 };
 
@@ -29,18 +28,11 @@ const TURN_DEG: f32 = 45.0;
 /// picked nor sliced.
 const MIN_SCALE: f32 = 1e-3;
 
-/// The tilt a limit starts at once it is switched on, degrees.
-const DEFAULT_TILT_DEG: f32 = 45.0;
-
 /// The highest a model may be lifted off the plate by typing, millimetres.
 const MAX_LIFT_MM: f32 = 100.0;
 
 /// The gap between a model and the mirrored copy stood beside it, millimetres.
 const COPY_GAP_MM: f32 = 5.0;
-
-/// How near a face's normal has to be to an axis to be named for it alone: within about
-/// eighteen degrees.
-const STRAIGHT: f32 = 0.95;
 
 /// Position and angle take any value.
 const ANY: std::ops::RangeInclusive<f32> = f32::MIN..=f32::MAX;
@@ -59,9 +51,7 @@ pub fn ui(ui: &mut egui::Ui, window: &mut Window) {
     position(ui, &mut window.doc.scene, &window.doc.plate, id);
     rotation(ui, window, id, axes);
     scale(ui, &mut window.doc.scene, id, axes);
-    place(ui, &mut window.doc.scene, &window.doc.plate, id);
-    orient(ui, window, id);
-    lay_flat(ui, window, id);
+    place(ui, window, id);
     mirror(ui, &mut window.doc.scene);
 }
 
@@ -361,9 +351,12 @@ fn label_column(ui: &mut egui::Ui, axis: usize, unit: &str) {
     );
 }
 
-/// Standing the selection on the plate, over its middle, or as large as the volume takes.
-fn place(ui: &mut egui::Ui, scene: &mut Scene, plate: &BuildPlate, id: ObjectId) {
+/// Standing the selection on the plate, over its middle, as large as the volume takes, or
+/// turned the way it prints best.
+fn place(ui: &mut egui::Ui, window: &mut Window, id: ObjectId) {
     section(ui, "Place", None, |ui| {
+        let scene = &mut window.doc.scene;
+        let plate = &window.doc.plate;
         let mut fitted = false;
         ui.columns(3, |columns| {
             let Some(object) = scene.get_mut(id) else {
@@ -387,6 +380,7 @@ fn place(ui: &mut egui::Ui, scene: &mut Scene, plate: &BuildPlate, id: ObjectId)
             recentre(scene, plate, id);
         }
         lift(ui, scene, id);
+        turn(ui, window, id);
     });
 }
 
@@ -414,128 +408,45 @@ fn lift(ui: &mut egui::Ui, scene: &mut Scene, id: ObjectId) {
     }
 }
 
-/// Turning the selection the way it prints best, and the goals that search will weigh.
-fn orient(ui: &mut egui::Ui, window: &mut Window, id: ObjectId) {
-    section(ui, "Orient", None, |ui| {
-        describe(ui, "Turn the selection the way it prints best.");
-        let settings = &mut window.tools.orient.settings;
-        ui.horizontal(|ui| {
-            field_label(ui, "Optimise for", theme::colors().text_mid, "");
-            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                egui::ComboBox::from_id_salt("orient-goal")
-                    .width(theme::FIELD_W)
-                    .selected_text(settings.goal.label())
-                    .show_ui(ui, |ui| {
-                        for goal in OrientGoal::ALL {
-                            ui.selectable_value(&mut settings.goal, goal, goal.label());
-                        }
-                    });
-            });
-        });
-        let mut limited = settings.max_tilt_deg.is_some();
-        if switch(ui, &mut limited, "Limit the tilt").changed() {
-            settings.max_tilt_deg = limited.then_some(DEFAULT_TILT_DEG);
-        }
-        if let Some(tilt_deg) = settings.max_tilt_deg.as_mut() {
-            nested(ui, |ui| {
-                number_row(
-                    ui,
-                    "Max tilt",
-                    tilt_deg,
-                    "\u{b0}",
-                    ANGLE_DRAG,
-                    0.0..=180.0,
-                    0,
-                );
-            });
-            describe(ui, "Measured from the way the model stands now.");
-        }
-        auto_orient(ui, window, id);
-    });
-}
-
-/// The model's largest flat faces, each laid on the plate by a press, and a wait for a
-/// click on any other face. Pressed again, or Esc, stops waiting.
-fn lay_flat(ui: &mut egui::Ui, window: &mut Window, id: ObjectId) {
-    section(ui, "Lay flat", None, |ui| {
-        describe(ui, "Turn the model so a face rests on the plate.");
-        let Some(object) = window.doc.scene.get(id) else {
-            return;
-        };
-        let flats = window.tools.orient.flat_faces(object);
-        let mut laid = None;
-        for flat in flats.iter() {
-            let normal = object.world_normal(flat.normal);
-            let area_mm2 = world_area_mm2(flat.area_mm2, flat.normal, object.transform.scale);
-            if face_row(ui, &facing(normal), area_mm2).clicked() {
-                laid = Some(normal);
-            }
-        }
-        if let Some(normal) = laid
-            && let Some(object) = window.doc.scene.get_mut(id)
-        {
-            object.lay_face_down(normal);
-        }
-
-        let tools = &mut window.tools;
-        let picking = tools.orient.picking_face;
-        let label = if picking {
-            "Click a face to lay down"
+/// Auto-orient beside a wait for a click on a face of the model, which then rests on the
+/// plate. Pressed again, or Esc, stops that wait.
+fn turn(ui: &mut egui::Ui, window: &mut Window, id: ObjectId) {
+    let running = window.tools.orient.is_running();
+    let (oriented, laid) = ui.columns(2, |columns| {
+        let label = if running {
+            "Orienting..."
         } else {
-            "Pick another face on the model"
+            "Auto-orient"
         };
-        if secondary_button(ui, icon::SELECT, label).clicked() {
-            if picking {
-                tools.orient.stop_picking();
-            } else {
-                tools.orient.picking_face = true;
-            }
-        }
+        let oriented = columns[0]
+            .add_enabled_ui(!running, |ui| secondary_button(ui, icon::ORIENT, label))
+            .inner
+            .clicked();
+        let label = if window.tools.orient.picking_face {
+            "Click a face"
+        } else {
+            "Lay on face"
+        };
+        let laid = secondary_button(&mut columns[1], icon::SELECT, label).clicked();
+        (oriented, laid)
     });
-}
 
-/// One flat face: which way it looks now, and how much of it there is.
-fn face_row(ui: &mut egui::Ui, name: &str, area_mm2: f32) -> egui::Response {
-    let colors = theme::colors();
-    let button = egui::Button::new(
-        egui::RichText::new(name)
-            .font(theme::label())
-            .color(colors.text_high),
-    )
-    .right_text(
-        egui::RichText::new(format!("{area_mm2:.0} mm\u{b2}"))
-            .font(theme::figures(11.5))
-            .color(colors.text_low),
-    )
-    .min_size(egui::vec2(ui.available_width(), theme::FIELD_H));
-    ui.add(button)
-}
-
-/// The side of the plate a face looks towards, in plate coordinates.
-fn facing(normal: Vec3) -> String {
-    let along = normal.abs();
-    let tilted = along.max_element() < STRAIGHT;
-    let side = if along.z >= along.x && along.z >= along.y {
-        if normal.z < 0.0 { "Underside" } else { "Top" }
-    } else if along.y >= along.x {
-        if normal.y < 0.0 { "Front" } else { "Back" }
-    } else if normal.x < 0.0 {
-        "Left side"
-    } else {
-        "Right side"
-    };
-    if tilted {
-        format!("{side}, tilted")
-    } else {
-        side.to_owned()
+    if running {
+        // The search measures every candidate over the whole mesh, which is no share to
+        // count: the bar runs rather than standing at nought.
+        progress_bar(ui, None);
     }
-}
-
-/// An area measured in the model's own space, as it stands stretched by `scale`: a face
-/// with unit normal `n` grows by `|sx sy sz| * |n / s|`.
-fn world_area_mm2(area_mm2: f32, normal: Vec3, scale: Vec3) -> f32 {
-    let scale = scale.abs().max(Vec3::splat(MIN_SCALE));
-    area_mm2 * scale.x * scale.y * scale.z * (normal / scale).length()
+    if oriented && let Err(error) = window.tools.orient.start(&window.doc.scene, Some(id)) {
+        window.machine.status = crate::status::Status::failed(&error);
+    }
+    if laid {
+        let orient = &mut window.tools.orient;
+        if orient.picking_face {
+            orient.stop_picking();
+        } else {
+            orient.picking_face = true;
+        }
+    }
 }
 
 /// Every flip works on the whole selection, so a plate of four does not need the same
@@ -580,30 +491,6 @@ fn copies(scene: &mut Scene, ids: &[ObjectId]) -> Vec<ObjectId> {
     copied
 }
 
-/// Turns the model the way it prints best, on a worker thread: the search measures every
-/// candidate over the whole mesh and slices the best few.
-fn auto_orient(ui: &mut egui::Ui, window: &mut Window, id: ObjectId) {
-    let running = window.tools.orient.is_running();
-    let label = if running {
-        "Orienting..."
-    } else {
-        "Auto-orient"
-    };
-    let clicked = ui
-        .add_enabled_ui(!running, |ui| secondary_button(ui, icon::ORIENT, label))
-        .inner
-        .clicked();
-
-    if running {
-        // The search measures every candidate over the whole mesh, which is no share to
-        // count: the bar runs rather than standing at nought.
-        progress_bar(ui, None);
-    }
-    if clicked && let Err(error) = window.tools.orient.start(&window.doc.scene, Some(id)) {
-        window.machine.status = crate::status::Status::failed(&error);
-    }
-}
-
 /// Stretches the model evenly until its bounds meet the build volume on the tightest side.
 fn fit(object: &mut SceneObject, plate: &BuildPlate) {
     let Some(bounds) = object.world_bounds() else {
@@ -635,14 +522,6 @@ fn recentre(scene: &mut Scene, plate: &BuildPlate, id: ObjectId) {
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn a_stretched_face_grows_by_the_two_axes_it_spans() {
-        let scale = Vec3::new(2.0, -3.0, 4.0);
-        // A unit square facing up spans X and Y: 2 by 3 once stretched, mirror or not.
-        assert!((world_area_mm2(1.0, Vec3::Z, scale) - 6.0).abs() < 1e-5);
-        assert!((world_area_mm2(1.0, Vec3::X, scale) - 12.0).abs() < 1e-5);
-    }
 
     #[test]
     fn a_turn_is_about_the_plates_axes_or_the_models_own() {
