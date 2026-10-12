@@ -357,7 +357,7 @@ pub fn chord_text(chord: &KeyboardShortcut) -> String {
 pub fn chord_keys(chord: &KeyboardShortcut) -> Vec<&'static str> {
     let modifiers = chord.modifiers;
     let held = if cfg!(target_os = "macos") {
-        // Apple's order.
+        // Control, Option, Shift, Command: the order the platform writes them in.
         vec![
             (modifiers.ctrl, crate::ui::icon::KEY_CONTROL),
             (modifiers.alt, crate::ui::icon::KEY_OPTION),

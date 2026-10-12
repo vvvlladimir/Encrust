@@ -186,6 +186,12 @@ pub fn show(id: &str, kind: Option<Kind>) -> Result<(Kind, String)> {
 pub fn import(path: &Path, kind: Kind, printer: Option<&str>) -> Result<String> {
     let text =
         std::fs::read_to_string(path).with_context(|| format!("cannot read {}", path.display()))?;
+    if printer.is_some() && kind != Kind::Resin {
+        anyhow::bail!(
+            "--printer sets a resin up on a machine; a {} has none",
+            kind.label()
+        );
+    }
     let mut catalogue = Catalogue::load().context("cannot read the profile catalogue")?;
     if let Some(id) = printer {
         catalogue

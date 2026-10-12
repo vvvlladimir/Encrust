@@ -220,7 +220,7 @@ pub fn import_profile(window: &mut Window, kind: Kind, file: &Handed) {
 
 /// Writes the profile of `kind` under `id` out to a file the user names.
 pub(super) fn export_profile(machine: &mut Machine, kind: Kind, id: &str) {
-    let text = crate::exchange::export(&machine.slicing.catalogue, kind, id);
+    let text = machine.slicing.catalogue.export(kind, id);
     let Some(text) = report(&mut machine.status, "cannot export the profile", text) else {
         return;
     };

@@ -229,3 +229,32 @@ fn an_exported_drain_preset_is_imported_listed_and_shown() {
         "a drain is not a hollow preset"
     );
 }
+
+#[test]
+fn a_printer_named_for_anything_but_a_resin_is_refused() {
+    let dir = resin_dir("import-printer-flag");
+    let file = dir.join("wide.toml");
+    fs::write(
+        &file,
+        "name = \"Wide\"\n[settings]\ndiameter_mm = 3.5\ndepth_mm = 6.0\ntaper = 0.0\n",
+    )
+    .expect("the temp dir is writable");
+
+    let refused = encrust_with_profiles(
+        &dir,
+        &[
+            "profiles",
+            "import",
+            file.to_str().unwrap(),
+            "--kind",
+            "drain",
+            "--printer",
+            "elegoo-mars-4-ultra",
+        ],
+    );
+    assert_eq!(
+        refused.status.code(),
+        Some(1),
+        "a drain preset is set up on no machine"
+    );
+}

@@ -29,9 +29,6 @@ pub struct OrientRequest {
 pub struct Turn {
     pub id: ObjectId,
     pub rotation: Quat,
-    /// Degrees the model turns from where it stood, so the stage notice can say whether
-    /// anything moved.
-    pub angle_deg: f32,
 }
 
 /// How an orientation run ended.
@@ -80,11 +77,12 @@ pub fn orient_tasks(scene: &Scene, only: Option<ObjectId>) -> Vec<OrientTask> {
         .targets()
         .filter(|object| only.is_none_or(|id| object.id == id))
         .map(|object| {
-            let down = object.transform.linear().inverse() * Vec3::NEG_Z;
+            // The search answers a rotation that replaces this one, so down is read through it.
+            let down = object.transform.rotation.inverse() * Vec3::NEG_Z;
             OrientTask {
                 id: object.id,
                 mesh: Arc::clone(&object.mesh),
-                down_now: down.normalize_or(Vec3::NEG_Z),
+                down_now: down,
             }
         })
         .collect()
@@ -108,7 +106,6 @@ fn run(request: &OrientRequest) -> OrientOutcome {
                 orient(&task.mesh, &settings).map(|found| Turn {
                     id: task.id,
                     rotation: found.rotation,
-                    angle_deg: found.rotation.to_axis_angle().1.to_degrees(),
                 })
             })
             .collect();

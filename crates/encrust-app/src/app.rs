@@ -866,7 +866,7 @@ mod tests {
         let catalogue = &app.machine.slicing.catalogue;
         let file = handed(
             "saturn.toml",
-            crate::exchange::export(catalogue, printer_profiles::Kind::Printer, IMPORTED_ON),
+            catalogue.export(printer_profiles::Kind::Printer, IMPORTED_ON),
         );
 
         crate::profiles::import_printer(&mut app.window(), &file);

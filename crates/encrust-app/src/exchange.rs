@@ -9,11 +9,6 @@ use printer_profiles::{Catalogue, Kind, ProfileError};
 use crate::files::Handed;
 use crate::state::Machine;
 
-/// The profile of `kind` kept under `id`, as the file it is written out to.
-pub fn export(catalogue: &Catalogue, kind: Kind, id: &str) -> Result<String, ProfileError> {
-    catalogue.export(kind, id)
-}
-
 /// What a profile's file is called when it is written out.
 pub fn file_name(id: &str) -> String {
     format!("{id}.toml")
@@ -84,7 +79,7 @@ mod tests {
         catalogue
             .save_preset(Kind::Drain, "wide", &preset)
             .expect("writable");
-        let text = export(&catalogue, Kind::Drain, "wide").expect("just kept");
+        let text = catalogue.export(Kind::Drain, "wide").expect("just kept");
 
         let again = import(
             &mut catalogue,

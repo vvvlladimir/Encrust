@@ -55,12 +55,9 @@ impl Catalogue {
     ) -> Result<String, ProfileError> {
         let mut preset = Preset::from_toml_str(text, path)?;
         preset.read::<T>(path)?;
-        if self
-            .presets(kind)
-            .any(|entry| entry.profile.name == preset.name)
-        {
-            preset.name = imported(&preset.name);
-        }
+        preset.name = fresh_name(&preset.name, |name| {
+            self.presets(kind).any(|entry| entry.profile.name == name)
+        });
         let id = unique_id(&preset.name, |id| {
             self.presets(kind).any(|entry| entry.id == id)
         });
@@ -70,12 +67,10 @@ impl Catalogue {
 
     fn import_printer(&mut self, mut profile: PrinterProfile) -> Result<String, ProfileError> {
         let label = |profile: &PrinterProfile| format!("{} {}", profile.manufacturer, profile.name);
-        if self
-            .printers()
-            .any(|entry| label(&entry.profile) == label(&profile))
-        {
-            profile.name = imported(&profile.name);
-        }
+        profile.name = fresh_name(&profile.name, |name| {
+            let wanted = format!("{} {name}", profile.manufacturer);
+            self.printers().any(|entry| label(&entry.profile) == wanted)
+        });
         let id = unique_id(&label(&profile), |id| self.printer(id).is_ok());
         self.save_printer(&id, &profile)?;
         Ok(id)
@@ -86,9 +81,9 @@ impl Catalogue {
         mut resin: MaterialProfile,
         printer: Option<&str>,
     ) -> Result<String, ProfileError> {
-        if self.resins().any(|entry| entry.profile.name == resin.name) {
-            resin.name = imported(&resin.name);
-        }
+        resin.name = fresh_name(&resin.name, |name| {
+            self.resins().any(|entry| entry.profile.name == name)
+        });
         if let Some(printer) = printer {
             set_up_on(&mut resin, printer);
         }
@@ -98,12 +93,9 @@ impl Catalogue {
     }
 
     fn import_support(&mut self, mut profile: SupportProfile) -> Result<String, ProfileError> {
-        if self
-            .supports()
-            .any(|entry| entry.profile.name == profile.name)
-        {
-            profile.name = imported(&profile.name);
-        }
+        profile.name = fresh_name(&profile.name, |name| {
+            self.supports().any(|entry| entry.profile.name == name)
+        });
         let id = unique_id(&profile.name, |id| self.support(id).is_ok());
         self.save_support(&id, &profile)?;
         Ok(id)
@@ -149,8 +141,18 @@ fn slug(name: &str) -> String {
     stem.trim_end_matches('-').to_owned()
 }
 
-fn imported(name: &str) -> String {
-    format!("{name} (imported)")
+/// `name`, or marked as imported where it is `taken`, numbered past the marks taken too.
+fn fresh_name(name: &str, taken: impl Fn(&str) -> bool) -> String {
+    if !taken(name) {
+        return name.to_owned();
+    }
+    let mut fresh = format!("{name} (imported)");
+    let mut next = 2;
+    while taken(&fresh) {
+        fresh = format!("{name} (imported {next})");
+        next += 1;
+    }
+    fresh
 }
 
 /// Sets `resin` up on `printer`, starting from the printer it was last tuned on, unless
@@ -304,6 +306,33 @@ mod tests {
         assert!(
             matches!(refused, Err(ProfileError::Parse { .. })),
             "a hole is not a wall: {refused:?}"
+        );
+    }
+
+    #[test]
+    fn a_file_imported_twice_comes_in_under_two_names() {
+        let mut catalogue = writable("support-twice");
+        let text = catalogue
+            .export(Kind::Support, "heavy")
+            .expect("heavy ships");
+        let name = |catalogue: &Catalogue, id: &str| {
+            catalogue
+                .support(id)
+                .expect("imported")
+                .profile
+                .name
+                .clone()
+        };
+        let first = catalogue
+            .import(Kind::Support, &text, Path::new("heavy.toml"), None)
+            .expect("the file is the profile");
+        let second = catalogue
+            .import(Kind::Support, &text, Path::new("heavy.toml"), None)
+            .expect("and still is");
+        assert_ne!(
+            name(&catalogue, &first),
+            name(&catalogue, &second),
+            "two copies the list cannot tell apart"
         );
     }
 

@@ -156,7 +156,8 @@ impl ReliefTool {
                         "Pressed {depth:.2} mm of relief into {count} model(s)"
                     )),
                     _ => Status::Info(format!(
-                        "Pressed {depth:.2} mm of relief into {count} model(s); {coarsened} came                          out on a coarser lattice than precision asked for"
+                        "Pressed {depth:.2} mm of relief into {count} model(s); {coarsened} came \
+                         out on a coarser lattice than precision asked for"
                     )),
                 };
             }
