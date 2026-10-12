@@ -67,9 +67,11 @@ max_trunk_diameter_mm = 1.0
 # The slab the supports stand on instead of standing on the plate.
 [raft]
 enabled = false
-# hull or rectangle.
+# skates, grid or connected.
+style = "skates"
+# hull or rectangle: the outline a skates or grid raft is drawn to.
 shape = "hull"
-area_ratio = 1.1
+margin_mm = 2.0
 thickness_mm = 0.5
 slope_deg = 30.0
 

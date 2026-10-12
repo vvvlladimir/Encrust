@@ -489,12 +489,11 @@ fn raft_figures(painter: &egui::Painter, at: &Layout, profile: &SupportProfile) 
         Align2::RIGHT_CENTER,
         &slope,
     );
-    let area = format!("×{:.2}", raft.area_ratio);
     text(
         painter,
         pos2((at.raft + at.plate) / 2.0, at.axis),
         Align2::CENTER_CENTER,
-        &area,
+        &format!("+{}", mm(raft.margin_mm)),
     );
 }
 

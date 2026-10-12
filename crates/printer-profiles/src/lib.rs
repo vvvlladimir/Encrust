@@ -26,5 +26,5 @@ pub use printer::{
 pub use store::{DirStore, ProfileStore};
 pub use support::{
     BottomSegment, Bracing, Branching, ContactShape, MiddleSegment, PlatformShape, Raft, RaftShape,
-    SmallPillar, SupportProfile, TipSegment, TopSegment,
+    RaftStyle, SmallPillar, SupportProfile, TipSegment, TopSegment,
 };

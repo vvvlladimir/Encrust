@@ -104,12 +104,15 @@ stands on, because it carries the tips' weight (ADR 0042).
 contact's, then the contact driven into the face. What touches the part is a tip's scar whatever the trunk carries, so it
 breaks off by hand (ADR 0124).
 
-**Raft.** `[raft]` lays a slab from `z = 0` to `thickness_mm` over the feet that reach the
-plate. It lifts nothing: supports still land at `z = 0` and pass through, and the fill rule
-unions them (ADR 0043). The footprint is the convex hull of the foot centres (Andrew's
-monotone chain) or their bounding rectangle, pushed out by a foot radius and spread about
-its middle by √`area_ratio`, so the ratio names an area. `slope_deg` leans the walls in for
-the same reason feet are bevelled.
+**Raft.** `[raft]` lays its pieces on the plate. Supports still land at `z = 0` and pass
+through, and the fill rule unions them (ADR 0043). `style` picks the pieces: `skates`, a
+slab of `thickness_mm` whose sloped wall carries on up into a lip as tall again, its
+inner face at the same slope, like a saucer; a `grid` of bars inside a rim with a pad under each foot; or `connected` pads
+joined by strips along the feet's Euclidean minimum spanning tree. A skates or grid raft
+is drawn to the convex hull of the model's footprint and every foot (Andrew's monotone
+chain), pushed out `margin_mm` with rounded corners, or the smallest-area rectangle around
+that hull pushed out as far (ADR 0241). `slope_deg` leans the walls in for the same reason
+feet are bevelled.
 
 **Bracing.** Which trunks are tied is a graph: the Gabriel graph of the trunks tall enough
 to carry one level, cut at `max_spacing_mm` — two are neighbours when no third stands

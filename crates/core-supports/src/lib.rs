@@ -26,6 +26,7 @@ mod model;
 mod pick;
 mod placed;
 mod project;
+mod raft;
 mod region;
 mod sample;
 mod trapped;

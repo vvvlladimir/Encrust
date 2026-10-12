@@ -3,7 +3,9 @@
 
 use std::ops::RangeInclusive;
 
-use printer_profiles::{Catalogue, ContactShape, Entry, PlatformShape, RaftShape, SupportProfile};
+use printer_profiles::{
+    Catalogue, ContactShape, Entry, PlatformShape, RaftShape, RaftStyle, SupportProfile,
+};
 
 use crate::ui::{Carried, Segment, Segmented, carried_row, describe, nested, switch};
 
@@ -361,24 +363,33 @@ fn raft(ui: &mut egui::Ui, profile: &mut SupportProfile, saved: Option<&SupportP
         return;
     }
     nested(ui, |ui| {
-        let segments = [
-            Segment::new(RaftShape::Hull, "Hull"),
-            Segment::new(RaftShape::Rectangle, "Rectangle"),
-        ];
         let width = ui.available_width();
-        Segmented::new(&segments)
+        let styles = [
+            Segment::new(RaftStyle::Skates, "Skates"),
+            Segment::new(RaftStyle::Grid, "Grid"),
+            Segment::new(RaftStyle::Connected, "Connected"),
+        ];
+        Segmented::new(&styles)
             .width(width)
-            .show(ui, &mut raft.shape);
+            .show(ui, &mut raft.style);
+        if raft.style.has_outline() {
+            ui.add_space(2.0);
+            let shapes = [
+                Segment::new(RaftShape::Hull, "Hull"),
+                Segment::new(RaftShape::Rectangle, "Rectangle"),
+            ];
+            Segmented::new(&shapes)
+                .width(width)
+                .show(ui, &mut raft.shape);
+        }
         ui.add_space(2.0);
-        number(
+        mm(
             ui,
-            "Area",
-            was(saved, |p| p.raft.area_ratio),
-            &mut raft.area_ratio,
-            "x",
+            "Margin",
+            was(saved, |p| p.raft.margin_mm),
+            &mut raft.margin_mm,
             COARSE_STEP,
-            1.0..=4.0,
-            2,
+            0.0..=20.0,
         );
         mm(
             ui,

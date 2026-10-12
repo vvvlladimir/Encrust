@@ -1,13 +1,13 @@
 use crate::placed::Placed;
 use core_geometry::{Mesh, Scalar, Vec2, Vec3};
-use printer_profiles::{RaftShape, SupportProfile};
+use printer_profiles::SupportProfile;
 
 use crate::clear::{Beam, clear};
 use crate::tree::SupportTree;
 
 /// Two feet closer together than this stand in the same place, and the hull cannot tell
 /// them apart. Well under one pixel of any panel.
-const SAME_PLACE_MM: Scalar = 1e-4;
+pub(crate) const SAME_PLACE_MM: Scalar = 1e-4;
 
 /// How long a skate is, and how wide, as multiples of the foot's own radius. A skate
 /// grips along its length and releases across its width, so the two are not the same.
@@ -92,93 +92,6 @@ pub(crate) fn toe_of(tree: &SupportTree) -> Vec3 {
     }
     let away = away.normalize();
     Vec3::new(away.x, away.y, 0.0)
-}
-
-/// The raft under every support that reaches the plate, or `None` when there is nothing
-/// to stand on it.
-///
-/// The slab runs from the plate up to `thickness_mm` and the supports pass straight
-/// through it, which is the same overlap rule every joint uses; see
-/// `docs/decisions/0041`.
-pub(crate) fn raft(trees: &[SupportTree], profile: &SupportProfile) -> Option<Mesh> {
-    let raft = &profile.raft;
-    if !raft.enabled {
-        return None;
-    }
-
-    let feet: Vec<Vec2> = trees
-        .iter()
-        .filter(|tree| !tree.landing().on_model)
-        .map(|tree| {
-            let base = tree.landing().base;
-            Vec2::new(base.x, base.y)
-        })
-        .collect();
-    if feet.is_empty() {
-        return None;
-    }
-
-    let outline = match raft.shape {
-        RaftShape::Hull => hull(&feet),
-        RaftShape::Rectangle => rectangle(&feet),
-    };
-    // A foot's own width is part of what the raft has to cover, and so is the spread.
-    let margin = profile.base_radius_mm();
-    let top = grown(&outline, margin, raft.spread());
-    (top.len() >= 3).then(|| slab(&top, raft.overhang_mm(), raft.thickness_mm))
-}
-
-/// The outline pushed `margin_mm` outwards and then spread about its own middle.
-fn grown(outline: &[Vec2], margin_mm: Scalar, spread: Scalar) -> Vec<Vec2> {
-    let middle = outline.iter().fold(Vec2::ZERO, |sum, &p| sum + p) / outline.len() as Scalar;
-    outline
-        .iter()
-        .map(|&point| {
-            let arm = point - middle;
-            let out = if arm.length() < SAME_PLACE_MM {
-                Vec2::ZERO
-            } else {
-                arm.normalize() * margin_mm
-            };
-            middle + arm * spread + out
-        })
-        .collect()
-}
-
-/// A closed slab: `outline` at `thickness_mm`, the same outline pulled `overhang_mm`
-/// in where it meets the plate, and the walls between them.
-///
-/// The rim on the plate is the narrow one, which is what a blade gets under; see
-/// `docs/decisions/0044`.
-fn slab(outline: &[Vec2], overhang_mm: Scalar, thickness_mm: Scalar) -> Mesh {
-    let mut mesh = Mesh::default();
-    let count = outline.len();
-    let middle = outline.iter().fold(Vec2::ZERO, |sum, &p| sum + p) / count as Scalar;
-
-    let foot = grown(outline, -overhang_mm, 1.0);
-    for point in &foot {
-        mesh.vertices.push(Vec3::new(point.x, point.y, 0.0));
-    }
-    for point in outline {
-        mesh.vertices
-            .push(Vec3::new(point.x, point.y, thickness_mm));
-    }
-    let low_middle = mesh.vertices.len() as u32;
-    mesh.vertices.push(Vec3::new(middle.x, middle.y, 0.0));
-    let high_middle = mesh.vertices.len() as u32;
-    mesh.vertices
-        .push(Vec3::new(middle.x, middle.y, thickness_mm));
-
-    let low = |index: usize| (index % count) as u32;
-    let high = |index: usize| (count + index % count) as u32;
-    for index in 0..count {
-        mesh.faces.push([low_middle, low(index + 1), low(index)]);
-        mesh.faces.push([high_middle, high(index), high(index + 1)]);
-        mesh.faces
-            .push([low(index), low(index + 1), high(index + 1)]);
-        mesh.faces.push([low(index), high(index + 1), high(index)]);
-    }
-    mesh
 }
 
 /// The convex hull of `points`, counter-clockwise, by Andrew's monotone chain.
@@ -372,7 +285,7 @@ mod tests {
     use crate::tests::{box_mesh, profile, trees_on};
     use core_geometry::{Bvh, Mesh, Transform};
     use core_geometry::{diagnose, signed_volume};
-    use printer_profiles::{Bracing, PlatformShape, Raft, RaftShape};
+    use printer_profiles::{Bracing, PlatformShape};
 
     /// Every brace between `trees`, with `model` in the way of them.
     fn tied(trees: &[SupportTree], model: &Mesh, profile: &SupportProfile) -> Vec<(Vec3, Vec3)> {
@@ -400,17 +313,6 @@ mod tests {
             Transform::default(),
             Profiles::single(profile),
         )
-    }
-
-    fn with_raft(shape: RaftShape) -> SupportProfile {
-        SupportProfile {
-            raft: Raft {
-                enabled: true,
-                shape,
-                ..Raft::default()
-            },
-            ..profile()
-        }
     }
 
     /// Bracing on and branching off, so that the two trunks the test needs stay two.
@@ -486,114 +388,6 @@ mod tests {
         let profile = profile();
         let trees = standing(&[(10.0, 10.0)], 20.0, &profile);
         assert_eq!(toe_of(&trees[0]), Vec3::X);
-    }
-
-    #[test]
-    fn a_raft_covers_every_foot_that_reaches_the_plate() {
-        let profile = with_raft(RaftShape::Hull);
-        let places = [(10.0, 10.0), (30.0, 10.0), (30.0, 30.0), (10.0, 30.0)];
-        let trees = standing(&places, 20.0, &profile);
-        assert_eq!(
-            trees.len(),
-            4,
-            "twenty millimetres apart is too far to merge"
-        );
-
-        let slab = raft(&trees, &profile).expect("four feet make a raft");
-        let bounds = slab.aabb().expect("the slab has vertices");
-        for (x, y) in places {
-            assert!(
-                bounds.mins.x <= x && x <= bounds.maxs.x,
-                "the raft has to reach the foot at {x}, {y}"
-            );
-            assert!(bounds.mins.y <= y && y <= bounds.maxs.y);
-        }
-        assert!(
-            (bounds.maxs.z - profile.raft.thickness_mm).abs() < 1e-4,
-            "the slab is its own thickness tall"
-        );
-        assert!(bounds.mins.z.abs() < 1e-4, "it sits on the plate");
-    }
-
-    #[test]
-    fn a_raft_is_a_closed_solid_wound_outwards() {
-        for shape in [RaftShape::Hull, RaftShape::Rectangle] {
-            let profile = with_raft(shape);
-            let trees = standing(&[(10.0, 10.0), (30.0, 10.0), (20.0, 30.0)], 20.0, &profile);
-            let slab = raft(&trees, &profile).expect("three feet make a raft");
-
-            let diagnostics = diagnose(&slab);
-            assert_eq!(
-                diagnostics.boundary_edges, 0,
-                "{shape:?} left the raft open"
-            );
-            assert_eq!(diagnostics.non_manifold_edges, 0, "{shape:?}");
-            assert_eq!(diagnostics.degenerate_faces, 0, "{shape:?}");
-            assert!(signed_volume(&slab) > 0.0, "{shape:?}");
-        }
-    }
-
-    #[test]
-    fn a_raft_meets_the_plate_on_a_rim_pulled_in_from_its_widest_point() {
-        let profile = with_raft(RaftShape::Rectangle);
-        let trees = standing(&[(10.0, 10.0), (30.0, 10.0), (20.0, 30.0)], 20.0, &profile);
-        let slab = raft(&trees, &profile).expect("a raft");
-
-        let width_at = |z: Scalar| {
-            let xs: Vec<Scalar> = slab
-                .vertices
-                .iter()
-                .filter(|vertex| (vertex.z - z).abs() < 1e-3)
-                .map(|vertex| vertex.x)
-                .collect();
-            xs.iter().fold(Scalar::NEG_INFINITY, |a, &b| a.max(b))
-                - xs.iter().fold(Scalar::INFINITY, |a, &b| a.min(b))
-        };
-        assert!(
-            width_at(0.0) < width_at(profile.raft.thickness_mm) - 1e-3,
-            "a sloped wall leans in on the way down, so a blade gets under the rim"
-        );
-    }
-
-    #[test]
-    fn a_bigger_area_ratio_makes_a_bigger_raft() {
-        let small = with_raft(RaftShape::Rectangle);
-        let large = SupportProfile {
-            raft: Raft {
-                area_ratio: 3.0,
-                ..small.raft
-            },
-            ..small.clone()
-        };
-        let places = [(10.0, 10.0), (30.0, 10.0), (20.0, 30.0)];
-
-        let one = raft(&standing(&places, 20.0, &small), &small).expect("a raft");
-        let other = raft(&standing(&places, 20.0, &large), &large).expect("a raft");
-        assert!(signed_volume(&other) > signed_volume(&one));
-    }
-
-    #[test]
-    fn a_support_that_stands_on_the_model_needs_no_raft() {
-        let profile = with_raft(RaftShape::Hull);
-        let shelf = box_mesh(Vec3::ZERO, Vec3::splat(10.0));
-        let trees = trees_on(
-            &[SupportPoint::new(Vec3::new(5.0, 5.0, 20.0))],
-            &shelf,
-            Transform::default(),
-            Profiles::single(&profile),
-        );
-        assert!(trees[0].landing().on_model);
-        assert!(
-            raft(&trees, &profile).is_none(),
-            "nothing reaches the plate"
-        );
-    }
-
-    #[test]
-    fn a_raft_that_is_switched_off_is_not_built() {
-        let profile = profile();
-        let trees = standing(&[(10.0, 10.0), (30.0, 10.0), (20.0, 30.0)], 20.0, &profile);
-        assert!(raft(&trees, &profile).is_none());
     }
 
     #[test]

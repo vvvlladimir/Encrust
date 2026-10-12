@@ -2,8 +2,9 @@ use crate::placed::Placed;
 use core_geometry::{Mesh, Scalar, Vec3};
 use printer_profiles::{ContactShape, SupportProfile};
 
-use crate::base::{braces, raft, skate, skate_half_width_mm, toe_of};
+use crate::base::{braces, skate, skate_half_width_mm, toe_of};
 use crate::group::Profiles;
+use crate::raft::raft;
 use crate::tree::{SupportTree, TreeNode};
 
 mod tube;
@@ -113,7 +114,7 @@ fn mesh_ground(mesh: &mut Mesh, trees: &[SupportTree], placed: &Placed, ground: 
     for (from, to) in braces(trees, placed, ground) {
         sweep(mesh, &brace(from, to, ground));
     }
-    if let Some(slab) = raft(trees, ground) {
+    if let Some(slab) = raft(trees, placed, ground) {
         append(mesh, &slab);
     }
 }
