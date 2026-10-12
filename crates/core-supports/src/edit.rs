@@ -49,13 +49,7 @@ pub fn fits(tree: &SupportTree, placed: &Placed, profile: &SupportProfile) -> bo
 
     struts
         && clear(placed, &trunk)
-        && (landing.on_model
-            || foot_clear(
-                placed,
-                landing.base,
-                profile.flare_lower_radius_mm(),
-                profile,
-            ))
+        && (landing.on_model || foot_clear(placed, landing.pad_centre(), profile))
 }
 
 /// The nearest point of the model to `at`, in plate coordinates, for a tip that has to

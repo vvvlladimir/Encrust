@@ -2,11 +2,12 @@ use serde::{Deserialize, Serialize};
 
 use crate::group::Profiles;
 use crate::placed::Placed;
-use core_geometry::{Mat3, Ray, Scalar, Vec3, raycast_placed};
+use core_geometry::{Mat3, Ray, Scalar, Vec2, Vec3, raycast_placed};
 use printer_profiles::SupportProfile;
 use rayon::prelude::*;
 
 use crate::clear::{Beam, MIN_BODY_MM, clear};
+use crate::mesher::FOOT_BEVEL;
 
 /// Plate coordinates put the plate surface at z = 0; see `docs/architecture.md`.
 const PLATE_Z_MM: Scalar = 0.0;
@@ -65,6 +66,11 @@ pub struct Landing {
     pub base: Vec3,
     /// It landed on the model rather than on the plate, so it needs no foot.
     pub on_model: bool,
+    /// How far the middle of the pad stands off `base` across the plate, millimetres: a
+    /// pad the model is in the way of is moved aside whole rather than narrowed. A file
+    /// without it reads as a pad under its trunk. See `docs/decisions/0239`.
+    #[serde(default)]
+    pub pad_offset: Vec2,
 }
 
 impl Landing {
@@ -77,6 +83,11 @@ impl Landing {
         } else {
             self.base.z + profile.base_height_mm()
         }
+    }
+
+    /// The middle of the pad on the plate.
+    pub fn pad_centre(&self) -> Vec3 {
+        self.base + self.pad_offset.extend(0.0)
     }
 
     /// Lowest point of the whole column.
@@ -179,14 +190,17 @@ pub fn landing(
                 Landing {
                     base: hit.point,
                     on_model: true,
+                    pad_offset: Vec2::ZERO,
                 },
                 hit.point.z + touch_mm + SURFACE_EPSILON_MM,
             )
         }
         _ => {
+            let base = Vec3::new(contact.x, contact.y, PLATE_Z_MM);
             let landing = Landing {
-                base: Vec3::new(contact.x, contact.y, PLATE_Z_MM),
+                base,
                 on_model: false,
+                pad_offset: pad_offset(placed, base, radius_mm, profile)?,
             };
             let bottom_z = landing.pillar_bottom_z(profile);
             (landing, bottom_z)
@@ -197,15 +211,7 @@ pub fn landing(
     if height <= MIN_PILLAR_HEIGHT_MM {
         return None;
     }
-    let stands = stands_clear(placed, contact, bottom_z, radius_mm, profile)
-        && (landing.on_model
-            || foot_clear(
-                placed,
-                landing.base,
-                profile.flare_lower_radius_mm(),
-                profile,
-            ));
-    stands.then_some(landing)
+    stands_clear(placed, contact, bottom_z, radius_mm, profile).then_some(landing)
 }
 
 /// Where the body of a support placed at `contact` begins: one `[top]` out along the
@@ -268,18 +274,54 @@ fn out_and_down(normal: Vec3) -> Vec3 {
     across.extend(-OUT_DROP * across.length()).normalize()
 }
 
-/// Whether a foot of `radius_mm` on the plate has the model out of its way.
+/// How many directions and how many reaches a pad is tried at round its trunk before the
+/// support has to lean for room instead.
+const PAD_DIRECTIONS: u32 = 8;
+const PAD_REACHES: u32 = 3;
+
+/// Where the pad of a trunk of `radius_mm` standing at `base` goes: under the trunk, or
+/// as little aside as clears the model, and `None` when no place within reach does.
 ///
-/// A foot is wider than anything above it, so a column that came down in clear air can
-/// still drive it into a part that stands on the plate beside it. A landing asks about
-/// the flare alone, and the pad is then narrowed to the room the model leaves it; see
+/// A pad is never narrowed. It may be moved as far as still leaves the flare inside its
+/// top, which only a round pad that does not taper has room for; see
 /// `docs/decisions/0239`.
-pub(crate) fn foot_clear(
+fn pad_offset(
     placed: &Placed,
     base: Vec3,
     radius_mm: Scalar,
     profile: &SupportProfile,
-) -> bool {
+) -> Option<Vec2> {
+    if foot_clear(placed, base, profile) {
+        return Some(Vec2::ZERO);
+    }
+    let shape = profile.bottom.shape;
+    let inside_mm = profile.flare_lower_radius_mm().max(radius_mm);
+    let reach_mm = if shape.is_round() && !shape.tapers() {
+        // Inside the rim the pad meets the plate on, which the bevel pulls in.
+        profile.base_radius_mm() - profile.base_height_mm() * FOOT_BEVEL - inside_mm
+    } else {
+        0.0
+    };
+    if reach_mm <= SURFACE_EPSILON_MM {
+        return None;
+    }
+
+    (1..=PAD_REACHES)
+        .flat_map(|step| (0..PAD_DIRECTIONS).map(move |turn| (step, turn)))
+        .map(|(step, turn)| {
+            let angle = std::f32::consts::TAU * turn as Scalar / PAD_DIRECTIONS as Scalar;
+            Vec2::new(angle.cos(), angle.sin())
+                * (reach_mm * step as Scalar / PAD_REACHES as Scalar)
+        })
+        .find(|offset| foot_clear(placed, base + offset.extend(0.0), profile))
+}
+
+/// Whether the foot on the plate has the model out of its way.
+///
+/// A pad is wider than anything above it, so a column that came down in clear air can
+/// still drive its foot into a part that stands on the plate beside it.
+pub(crate) fn foot_clear(placed: &Placed, base: Vec3, profile: &SupportProfile) -> bool {
+    let radius_mm = profile.base_radius_mm();
     let beam = Beam {
         from: Vec3::new(base.x, base.y, base.z + profile.base_height_mm()),
         to: Vec3::new(base.x, base.y, base.z + SURFACE_EPSILON_MM),
@@ -524,30 +566,54 @@ mod tests {
     }
 
     #[test]
-    fn a_foot_is_no_landing_only_where_its_narrowest_would_drive_into_the_model() {
-        // A kerb 1 mm wide and 2 mm tall. The body is 0.6 mm wide and keeps 0.5 mm clear,
-        // so it passes 1.3 mm off the kerb, where the 1.1 mm flare under it does not.
-        let kerb = box_mesh(Vec3::new(0.0, -5.0, 0.0), Vec3::new(1.0, 5.0, 2.0));
+    fn a_pad_the_model_is_in_the_way_of_is_moved_aside_whole() {
+        // A step 2 mm tall whose face is at x = 1. The body comes down 3 mm clear of it,
+        // but the pad is 8 mm across and keeps 0.5 mm of air, so its middle has to stand
+        // 4.5 mm off that face: 1.5 mm further out than the trunk does.
+        let kerb = box_mesh(Vec3::new(-10.0, -10.0, 0.0), Vec3::new(1.0, 10.0, 2.0));
         let profile = profile();
+        let landing = landing_on(
+            &kerb,
+            Transform::default(),
+            Vec3::new(4.0, 0.0, 20.0),
+            &profile,
+        )
+        .expect("the pad has 2.3 mm to move in before the flare leaves its sole");
+        assert!(
+            landing.pad_centre().x >= 5.5 - 1e-3,
+            "the pad stands clear of the kerb, at {}",
+            landing.pad_centre()
+        );
+        assert!(
+            landing.pad_offset.length()
+                <= profile.base_radius_mm() - profile.flare_lower_radius_mm() + 1e-4,
+            "and the flare is still inside it, {} mm off its middle",
+            landing.pad_offset.length()
+        );
+
+        let clear = landing_on(
+            &kerb,
+            Transform::default(),
+            Vec3::new(6.0, 0.0, 20.0),
+            &profile,
+        )
+        .expect("6 mm out the pad clears the kerb where it is");
+        assert_eq!(clear.pad_offset, Vec2::ZERO);
+    }
+
+    #[test]
+    fn a_pad_with_nowhere_to_go_is_no_landing() {
+        // The same step with the trunk 1.3 mm off it: the pad would have to move 3.2 mm,
+        // and has 2.3.
+        let kerb = box_mesh(Vec3::new(-10.0, -10.0, 0.0), Vec3::new(1.0, 10.0, 2.0));
         assert!(
             landing_on(
                 &kerb,
                 Transform::default(),
                 Vec3::new(2.3, 0.0, 20.0),
-                &profile
+                &profile()
             )
             .is_none()
-        );
-        assert!(
-            landing_on(
-                &kerb,
-                Transform::default(),
-                Vec3::new(4.0, 0.0, 20.0),
-                &profile
-            )
-            .is_some(),
-            "3 mm out the 8 mm pad reaches the kerb, and is narrowed rather than refused; \
-             see `docs/decisions/0239`"
         );
     }
 

@@ -1,6 +1,6 @@
 # 0237. Fit a pad to the room it has, and lift a part by what its support needs
 
-- **Status:** Accepted; the gap kept between neighbouring pads is superseded by 0239
+- **Status:** Accepted; the fitting of a pad is superseded by 0239
 - **Date:** 2026-10-12
 
 ## Context

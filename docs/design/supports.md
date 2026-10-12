@@ -69,8 +69,10 @@ rings run past the contact and rings never climb, so the neck is shorter than
 `cylinder` (`facets`, no), `cone` (`facets`, to 45% of the rim), `prism` (6),
 `cube` (4), `skate` (no ring sweep at all). `platform_diameter_mm` is the circle the
 corners sit on, so a cube's side is that over √2. Every pad is that wide, and neighbouring
-pads overlap where their supports stand closer than it; one is narrower only where the
-model itself stands in its way, never below the flare standing in it (ADR 0239). The foot is a tube of its own, because a
+pads overlap into one where their supports stand closer than it. A pad the model is in the
+way of is moved aside whole — `Landing::pad_offset`, tried in eight directions as far as
+still leaves the flare inside its sole — and where that is not room enough the support
+has no landing there and leans for one like any other blocked front (ADR 0239). The foot is a tube of its own, because a
 tube has one side count, and the trunk runs down through it — the same overlap rule as
 every joint (ADR 0041).
 

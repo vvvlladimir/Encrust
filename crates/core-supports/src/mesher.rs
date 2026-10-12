@@ -1,10 +1,8 @@
-use std::borrow::Cow;
-
 use crate::placed::Placed;
 use core_geometry::{Mesh, Scalar, Vec3};
 use printer_profiles::{ContactShape, SupportProfile};
 
-use crate::base::{braces, foot_radius_mm, raft, skate, skate_half_width_mm, toe_of};
+use crate::base::{braces, raft, skate, skate_half_width_mm, toe_of};
 use crate::group::Profiles;
 use crate::tree::{SupportTree, TreeNode};
 
@@ -83,7 +81,7 @@ impl Style {
 pub fn mesh_trees(trees: &[SupportTree], placed: &Placed, profiles: Profiles) -> Mesh {
     let mut mesh = Mesh::default();
     for tree in trees {
-        mesh_tree(&mut mesh, tree, &fitted(tree, placed, profiles));
+        mesh_tree(&mut mesh, tree, profiles.of(tree.group()));
     }
     mesh_ground(&mut mesh, trees, placed, profiles.ground());
     mesh
@@ -96,29 +94,10 @@ pub fn mesh_groups(trees: &[SupportTree], placed: &Placed, profiles: Profiles) -
     for tree in trees {
         let slot = usize::from(tree.group());
         let slot = if slot < meshes.len() { slot } else { 0 };
-        mesh_tree(&mut meshes[slot], tree, &fitted(tree, placed, profiles));
+        mesh_tree(&mut meshes[slot], tree, profiles.of(tree.group()));
     }
     mesh_ground(&mut meshes[0], trees, placed, profiles.ground());
     meshes
-}
-
-/// The profile `tree` is built to, with its pad narrowed where the model is in its way.
-fn fitted<'a>(
-    tree: &SupportTree,
-    placed: &Placed,
-    profiles: Profiles<'a>,
-) -> Cow<'a, SupportProfile> {
-    let profile = profiles.of(tree.group());
-    if tree.landing().on_model {
-        return Cow::Borrowed(profile);
-    }
-    let radius_mm = foot_radius_mm(tree, placed, profile);
-    if radius_mm >= profile.base_radius_mm() {
-        return Cow::Borrowed(profile);
-    }
-    let mut fitted = profile.clone();
-    fitted.bottom.platform_diameter_mm = 2.0 * radius_mm;
-    Cow::Owned(fitted)
 }
 
 fn mesh_tree(mesh: &mut Mesh, tree: &SupportTree, profile: &SupportProfile) {
@@ -315,11 +294,10 @@ fn foot(tree: &SupportTree, profile: &SupportProfile, style: Style) -> Option<Tu
 
     let height = profile.base_height_mm();
     let bevel = height * FOOT_BEVEL;
-    let top = Vec3::new(
-        landing.base.x,
-        landing.base.y,
-        landing.pillar_bottom_z(profile),
-    );
+    // The pad stands where the landing found room for it, which is under the trunk unless
+    // the model was in the way; see `docs/decisions/0239`.
+    let centre = landing.pad_centre();
+    let top = Vec3::new(centre.x, centre.y, landing.pillar_bottom_z(profile));
 
     // The bevel is what a blade gets under: the pad meets the plate on a rim pulled in
     // from its widest point. See `docs/decisions/0044` and `docs/decisions/0130`.

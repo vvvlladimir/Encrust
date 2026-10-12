@@ -1,4 +1,4 @@
-use core_geometry::{Mat4, Scalar, Vec3};
+use core_geometry::{Mat4, Scalar, Vec2, Vec3};
 
 use serde::{Deserialize, Serialize};
 
@@ -113,6 +113,9 @@ impl SupportTree {
             node.position = matrix.transform_point3(node.position);
         }
         moved.landing.base = matrix.transform_point3(moved.landing.base);
+        moved.landing.pad_offset = matrix
+            .transform_vector3(moved.landing.pad_offset.extend(0.0))
+            .truncate();
         moved
     }
 
@@ -129,6 +132,7 @@ impl SupportTree {
         self.landing = Landing {
             base,
             on_model: false,
+            pad_offset: Vec2::ZERO,
         };
     }
 

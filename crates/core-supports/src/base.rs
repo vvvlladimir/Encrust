@@ -3,7 +3,6 @@ use core_geometry::{Mesh, Scalar, Vec2, Vec3};
 use printer_profiles::{RaftShape, SupportProfile};
 
 use crate::clear::{Beam, clear};
-use crate::column::foot_clear;
 use crate::tree::SupportTree;
 
 /// Two feet closer together than this stand in the same place, and the hull cannot tell
@@ -93,30 +92,6 @@ pub(crate) fn toe_of(tree: &SupportTree) -> Vec3 {
     }
     let away = away.normalize();
     Vec3::new(away.x, away.y, 0.0)
-}
-
-/// How much of its own width a pad the model is in the way of is tried at before it is
-/// left as narrow as the flare standing in it.
-const FOOT_FITS: [Scalar; 3] = [1.0, 0.75, 0.5];
-
-/// How wide the pad under `tree` is, as a radius in millimetres: the profile's own, which
-/// neighbouring pads are free to overlap, and narrower only where the model itself stands
-/// in its way, down to the flare it carries. See `docs/decisions/0239`.
-pub(crate) fn foot_radius_mm(
-    tree: &SupportTree,
-    placed: &Placed,
-    profile: &SupportProfile,
-) -> Scalar {
-    let narrowest_mm = profile
-        .flare_lower_radius_mm()
-        .min(profile.base_radius_mm());
-    FOOT_FITS
-        .iter()
-        .map(|share| profile.base_radius_mm() * share)
-        .find(|&radius_mm| {
-            radius_mm > narrowest_mm && foot_clear(placed, tree.landing().base, radius_mm, profile)
-        })
-        .unwrap_or(narrowest_mm)
 }
 
 /// The raft under every support that reaches the plate, or `None` when there is nothing
@@ -576,52 +551,6 @@ mod tests {
         let profile = profile();
         let trees = standing(&[(10.0, 10.0), (30.0, 10.0), (20.0, 30.0)], 20.0, &profile);
         assert!(raft(&trees, &profile).is_none());
-    }
-
-    fn radii(points: &[SupportPoint], model: &Mesh, profile: &SupportProfile) -> Vec<Scalar> {
-        let trees = trees_on(
-            points,
-            model,
-            Transform::default(),
-            Profiles::single(profile),
-        );
-        let bvh = Bvh::build(model);
-        let placed = Placed::new(model, &bvh, Transform::default());
-        trees
-            .iter()
-            .map(|tree| foot_radius_mm(tree, &placed, profile))
-            .collect()
-    }
-
-    #[test]
-    fn neighbouring_pads_are_as_wide_as_the_profile_asks_and_may_overlap() {
-        // Two columns 4 mm apart under 8 mm pads.
-        let mut profile = profile();
-        profile.branching.enabled = false;
-        let pair = [
-            SupportPoint::new(Vec3::new(0.0, 0.0, 20.0)),
-            SupportPoint::new(Vec3::new(4.0, 0.0, 20.0)),
-        ];
-        assert_eq!(
-            radii(&pair, &Mesh::default(), &profile),
-            vec![profile.base_radius_mm(); 2],
-            "a pad is the width its profile says, whatever stands beside it"
-        );
-    }
-
-    #[test]
-    fn a_pad_the_model_stands_in_the_way_of_is_narrowed_to_the_room_it_has() {
-        // A kerb whose face is 3 mm from the column: an 8 mm pad reaches through it, and
-        // half of one and its clearance stop 0.5 mm short.
-        let kerb = box_mesh(Vec3::new(0.0, -5.0, 0.0), Vec3::new(1.0, 5.0, 2.0));
-        let mut profile = profile();
-        profile.branching.enabled = false;
-        let beside = [SupportPoint::new(Vec3::new(4.0, 0.0, 20.0))];
-        let found = radii(&beside, &kerb, &profile);
-        assert!(
-            (found[0] - profile.base_radius_mm() * 0.5).abs() < 1e-4,
-            "got {found:?}"
-        );
     }
 
     #[test]
