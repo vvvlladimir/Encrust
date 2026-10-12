@@ -12,7 +12,10 @@ use crate::config::{
 use crate::detect::{across_mm, unsupported};
 use crate::field::{Field, Grid, Parts};
 use crate::region::Blocked;
-use crate::sample::sample_piece;
+use crate::sample::{sample_piece, sample_stance};
+
+/// How many supports a part stands steady on: fewer hold it and let it rock on the peel.
+const STEADY: u8 = 3;
 
 /// How many layers are read and looked at in one go. Enough to keep every core busy, few
 /// enough that a cancelled run stops inside a frame; see `docs/decisions/0033`.
@@ -55,6 +58,7 @@ pub fn generate_supports(
         // nowhere to put a column, and material that close to the plate is not going to
         // sag before it cures anyway.
         lowest_contact_mm: PLATE_CONTACT_MM.max(profile.base_height_mm() + MIN_PILLAR_HEIGHT_MM),
+        stance_mm: config.spacing_mm,
     };
 
     let mut standing = Standing::new(seeds, &grid, &config, layer_height_mm);
@@ -99,6 +103,15 @@ pub fn generate_supports(
                     placed.push(contact);
                 }
             }
+            for (piece, cell) in pass.unsteady(&standing, &parts, contact_mm) {
+                let at = grid.centre_mm(cell[0], cell[1]);
+                let refused = blocked
+                    .is_some_and(|blocked| blocked.covers(at.extend(contact_mm), pass.keep_out_mm));
+                if !refused {
+                    placed.extend(standing.prop(piece, at, contact_mm, pass.stance_mm / 4.0));
+                }
+                standing.leave(Some(piece));
+            }
             standing.rest_on(parts);
         }
 
@@ -136,6 +149,8 @@ struct Pass<'a> {
     /// How close to a blocked patch a contact may still be put.
     keep_out_mm: Scalar,
     lowest_contact_mm: Scalar,
+    /// How far across a part has to be before the supports that steady it are put down.
+    stance_mm: Scalar,
 }
 
 impl Pass<'_> {
@@ -186,6 +201,30 @@ impl Pass<'_> {
             .flat_map(|piece| sample_piece(&piece, self.spacing))
             .collect()
     }
+
+    /// Where the supports go that steady a part held at fewer than three places, with the
+    /// piece each one is for: asked once the part is wide enough for them to stand apart.
+    fn unsteady(
+        &self,
+        standing: &Standing,
+        parts: &Parts,
+        contact_mm: Scalar,
+    ) -> Vec<(u32, [i32; 2])> {
+        if contact_mm <= self.lowest_contact_mm {
+            return Vec::new();
+        }
+        standing
+            .unsteady()
+            .into_iter()
+            .map(|number| (number, parts.piece(number)))
+            .filter(|(_, piece)| across_mm(piece, self.grid) >= self.stance_mm)
+            .flat_map(|(number, piece)| {
+                sample_stance(&piece)
+                    .into_iter()
+                    .map(move |cell| (number, cell))
+            })
+            .collect()
+    }
 }
 
 /// The supports standing under each piece of the layer the run has reached.
@@ -200,10 +239,10 @@ impl Pass<'_> {
 struct Standing {
     /// One set per piece of the layer last climbed to, numbered as `Parts` numbers them.
     held: Vec<Held>,
-    /// Whether each of those pieces stands on the plate or on a support, itself or through
-    /// anything it grew out of. Kept apart from `held`, which forgets a support left far
-    /// enough below.
-    anchored: Vec<bool>,
+    /// How many supports stand under each of those pieces or under anything it grew out
+    /// of, counted no further than [`STEADY`]; a piece on the plate has that many. Kept
+    /// apart from `held`, which forgets a support left far enough below.
+    tips: Vec<u8>,
     /// The pieces of the layer below, so a piece can be followed onto what it grew from.
     below: Option<Parts>,
     /// Supports handed to the run that the climb has not reached yet, highest last.
@@ -226,7 +265,7 @@ impl Standing {
 
         Self {
             held: Vec::new(),
-            anchored: Vec::new(),
+            tips: Vec::new(),
             below: None,
             pending,
             radius_mm: config.coverage_radius_mm.max(Scalar::MIN_POSITIVE),
@@ -243,21 +282,23 @@ impl Standing {
     /// memory to the supports that still matter rather than to every one ever placed.
     fn climb(&mut self, parts: &Parts, z: Scalar) {
         let floor_z = z - self.radius_mm;
-        let on_plate = z <= PLATE_CONTACT_MM;
+        let on_plate = if z <= PLATE_CONTACT_MM { STEADY } else { 0 };
         let parents = self.below.as_ref().map(|below| parts.parents(below));
         let Some(parents) = parents else {
             self.held = vec![Held::default(); parts.count()];
-            self.anchored = vec![on_plate; parts.count()];
+            self.tips = vec![on_plate; parts.count()];
             self.take_seeds(parts, z);
             return;
         };
-        self.anchored = parents
+        self.tips = parents
             .iter()
             .map(|grown_from| {
-                on_plate
-                    || grown_from
-                        .iter()
-                        .any(|parent| self.anchored[*parent as usize])
+                grown_from
+                    .iter()
+                    .fold(on_plate, |tips, parent| {
+                        tips.saturating_add(self.tips[*parent as usize])
+                    })
+                    .min(STEADY)
             })
             .collect();
 
@@ -302,7 +343,8 @@ impl Standing {
             self.pending.pop();
             if let Some(piece) = parts.at(cell[0], cell[1]) {
                 self.held[piece as usize].add(seed, self.radius_mm);
-                self.anchored[piece as usize] = true;
+                // A part the hand has held is held as its owner wants it, see ADR 0095.
+                self.tips[piece as usize] = STEADY;
             }
         }
     }
@@ -310,15 +352,41 @@ impl Standing {
     /// The pieces of the layer climbed to that nothing holds, by their number.
     fn adrift(&self) -> impl Iterator<Item = u32> + '_ {
         (0u32..)
-            .zip(&self.anchored)
-            .filter_map(|(piece, anchored)| (!anchored).then_some(piece))
+            .zip(&self.tips)
+            .filter_map(|(piece, tips)| (*tips == 0).then_some(piece))
+    }
+
+    /// The pieces held, but at fewer places than a part can stand on.
+    fn unsteady(&self) -> Vec<u32> {
+        (0u32..)
+            .zip(&self.tips)
+            .filter_map(|(piece, tips)| (1..STEADY).contains(tips).then_some(piece))
+            .collect()
+    }
+
+    fn count(&mut self, piece: u32) {
+        let tips = &mut self.tips[piece as usize];
+        *tips = (*tips + 1).min(STEADY);
+    }
+
+    /// Puts a support under `piece` at `at` to steady it, unless one within `clear_mm`
+    /// already stands there; the ball a support holds is not asked about, because a part
+    /// on one support is held and still not steady.
+    fn prop(&mut self, piece: u32, at: Vec2, z: Scalar, clear_mm: Scalar) -> Option<Vec3> {
+        let held = &mut self.held[piece as usize];
+        if held.near(at, clear_mm.min(self.radius_mm), self.radius_mm) {
+            return None;
+        }
+        let contact = at.extend(z);
+        held.add(contact, self.radius_mm);
+        Some(contact)
     }
 
     /// Stops asking after `piece`, which wanted a support where none may stand: a patch
     /// painted out is left alone, not held from further up. See `docs/decisions/0093`.
     fn leave(&mut self, piece: Option<u32>) {
-        if let Some(anchored) = piece.and_then(|piece| self.anchored.get_mut(piece as usize)) {
-            *anchored = true;
+        if let Some(tips) = piece.and_then(|piece| self.tips.get_mut(piece as usize)) {
+            *tips = STEADY;
         }
     }
 
@@ -340,7 +408,7 @@ impl Standing {
             return None;
         }
         held.add(contact, self.radius_mm);
-        self.anchored[piece as usize] = true;
+        self.count(piece);
         Some(contact)
     }
 }
@@ -365,6 +433,23 @@ impl Held {
                         points.iter().any(|point| {
                             let reach = reach_at(z - point.z, radius_mm, above_mm);
                             (point.truncate() - at).length_squared() < reach * reach
+                        })
+                    })
+            })
+        })
+    }
+
+    /// Whether anything here stands within `clear_mm` of `at` on the plate, whatever its
+    /// height; `clear_mm` is no more than the side of a bucket.
+    fn near(&self, at: Vec2, clear_mm: Scalar, radius_mm: Scalar) -> bool {
+        let home = bucket_of(at, radius_mm);
+        (-1..=1).any(|dy| {
+            (-1..=1).any(|dx| {
+                self.buckets
+                    .get(&[home[0] + dx, home[1] + dy])
+                    .is_some_and(|points| {
+                        points.iter().any(|point| {
+                            (point.truncate() - at).length_squared() < clear_mm * clear_mm
                         })
                     })
             })
@@ -556,6 +641,41 @@ mod tests {
             "a part with nothing under it hangs in mid-air; its lowest contact is at \
              {lowest} mm and its point at {apex_mm} mm"
         );
+    }
+
+    #[test]
+    fn a_small_ball_stands_on_more_than_the_support_under_its_pole() {
+        let points = supports_for(&sphere(5.0, 5.0));
+        assert!(
+            points.len() >= 4,
+            "a part on fewer than three supports rocks on the peel: one under the pole and \
+             three round it, got {}",
+            points.len()
+        );
+    }
+
+    #[test]
+    fn every_corner_of_a_floating_slab_is_held() {
+        // Off the lattice on every side, so no corner has a lattice point to lean on.
+        let (low, high) = (Vec2::new(1.3, 2.7), Vec2::new(18.3, 15.7));
+        let points = supports_for(&box_mesh(low.extend(10.0), high.extend(14.0)));
+
+        for corner in [
+            low,
+            Vec2::new(high.x, low.y),
+            high,
+            Vec2::new(low.x, high.y),
+        ] {
+            let nearest = points
+                .iter()
+                .map(|point| (point.truncate() - corner).length())
+                .fold(Scalar::INFINITY, Scalar::min);
+            assert!(
+                nearest <= 2.0 * GRID_PITCH_MM,
+                "the corner at {corner} is {nearest} mm from the nearest support, and a \
+                 corner is held in its own cell"
+            );
+        }
     }
 
     /// Two boxes, the upper one jutting `step` further out over the lower one's ledge:

@@ -1,8 +1,10 @@
 use crate::placed::Placed;
-use core_geometry::{Mesh, Scalar, Vec2, Vec3};
+use core_geometry::{FastMap, Mesh, Scalar, Vec2, Vec3};
 use printer_profiles::{RaftShape, SupportProfile};
 
 use crate::clear::{Beam, clear};
+use crate::column::foot_clear;
+use crate::group::Profiles;
 use crate::tree::SupportTree;
 
 /// Two feet closer together than this stand in the same place, and the hull cannot tell
@@ -94,6 +96,76 @@ pub(crate) fn toe_of(tree: &SupportTree) -> Vec3 {
     Vec3::new(away.x, away.y, 0.0)
 }
 
+/// The air left between two neighbouring pads, millimetres: enough for resin to run out
+/// between them, so a row of pads is never a wall and a ring of them never a cup.
+const FOOT_GAP_MM: Scalar = 0.5;
+
+/// How much of its own width a pad the model is in the way of is tried at before it is
+/// left as narrow as the flare standing in it.
+const FOOT_FITS: [Scalar; 3] = [1.0, 0.75, 0.5];
+
+/// How wide the pad under each of `trees` is, as a radius in millimetres: the profile's
+/// own, narrowed to leave [`FOOT_GAP_MM`] to the nearest pad and to stay out of the
+/// model, and never narrower than the flare it carries. See `docs/decisions/0237`.
+pub(crate) fn foot_radii(
+    trees: &[SupportTree],
+    placed: &Placed,
+    profiles: Profiles,
+) -> Vec<Scalar> {
+    let widest_mm = profiles
+        .groups()
+        .map(|(_, profile)| profile.base_radius_mm())
+        .fold(SAME_PLACE_MM, Scalar::max);
+    // Two pads touch no further apart than two of the widest, so a bucket that size
+    // holds every neighbour that matters in the nine around a foot.
+    let cell_mm = 2.0 * widest_mm + FOOT_GAP_MM;
+    let cell_of = |base: Vec3| {
+        [
+            (base.x / cell_mm).floor() as i32,
+            (base.y / cell_mm).floor() as i32,
+        ]
+    };
+    let mut feet: FastMap<[i32; 2], Vec<usize>> = FastMap::default();
+    for (index, tree) in trees.iter().enumerate() {
+        if !tree.landing().on_model {
+            feet.entry(cell_of(tree.landing().base))
+                .or_default()
+                .push(index);
+        }
+    }
+
+    trees
+        .iter()
+        .enumerate()
+        .map(|(index, tree)| {
+            let profile = profiles.of(tree.group());
+            let base = tree.landing().base;
+            let home = cell_of(base);
+            let nearest_mm = (-1..=1)
+                .flat_map(|dy| (-1..=1).map(move |dx| [home[0] + dx, home[1] + dy]))
+                .filter_map(|cell| feet.get(&cell))
+                .flatten()
+                .filter(|&&other| other != index)
+                .map(|&other| (trees[other].landing().base - base).truncate().length())
+                .fold(Scalar::INFINITY, Scalar::min);
+
+            let narrowest_mm = profile
+                .flare_lower_radius_mm()
+                .min(profile.base_radius_mm());
+            let beside_mm = profile
+                .base_radius_mm()
+                .min((nearest_mm - FOOT_GAP_MM) / 2.0);
+            FOOT_FITS
+                .iter()
+                .map(|share| beside_mm * share)
+                .find(|&radius_mm| {
+                    radius_mm > narrowest_mm && foot_clear(placed, base, radius_mm, profile)
+                })
+                .unwrap_or(narrowest_mm)
+        })
+        .collect()
+}
+
 /// The raft under every support that reaches the plate, or `None` when there is nothing
 /// to stand on it.
 ///
@@ -182,7 +254,7 @@ fn slab(outline: &[Vec2], overhang_mm: Scalar, thickness_mm: Scalar) -> Mesh {
 }
 
 /// The convex hull of `points`, counter-clockwise, by Andrew's monotone chain.
-fn hull(points: &[Vec2]) -> Vec<Vec2> {
+pub(crate) fn hull(points: &[Vec2]) -> Vec<Vec2> {
     if points.len() < 3 {
         return rectangle(points);
     }
@@ -551,6 +623,61 @@ mod tests {
         let profile = profile();
         let trees = standing(&[(10.0, 10.0), (30.0, 10.0), (20.0, 30.0)], 20.0, &profile);
         assert!(raft(&trees, &profile).is_none());
+    }
+
+    fn radii(points: &[SupportPoint], model: &Mesh, profile: &SupportProfile) -> Vec<Scalar> {
+        let trees = trees_on(
+            points,
+            model,
+            Transform::default(),
+            Profiles::single(profile),
+        );
+        let bvh = Bvh::build(model);
+        let placed = Placed::new(model, &bvh, Transform::default());
+        foot_radii(&trees, &placed, Profiles::single(profile))
+    }
+
+    #[test]
+    fn a_pad_with_room_round_it_is_as_wide_as_the_profile_asks() {
+        let mut profile = profile();
+        profile.branching.enabled = false;
+        let alone = [SupportPoint::new(Vec3::new(0.0, 0.0, 20.0))];
+        assert_eq!(
+            radii(&alone, &Mesh::default(), &profile),
+            vec![profile.base_radius_mm()]
+        );
+    }
+
+    #[test]
+    fn neighbouring_pads_leave_a_gap_for_resin_to_run_out_through() {
+        // Two columns 4 mm apart under 8 mm pads, which would be one slab.
+        let mut profile = profile();
+        profile.branching.enabled = false;
+        let pair = [
+            SupportPoint::new(Vec3::new(0.0, 0.0, 20.0)),
+            SupportPoint::new(Vec3::new(4.0, 0.0, 20.0)),
+        ];
+        let found = radii(&pair, &Mesh::default(), &profile);
+        assert!(
+            (found[0] + found[1] + FOOT_GAP_MM - 4.0).abs() < 1e-4,
+            "two pads and the gap between them fill the 4 mm between their columns, got \
+             {found:?}"
+        );
+    }
+
+    #[test]
+    fn a_pad_beside_the_model_is_narrowed_to_the_room_it_has() {
+        // A kerb whose face is 3 mm from the column: an 8 mm pad reaches through it, and
+        // half of one and its clearance stop 0.5 mm short.
+        let kerb = box_mesh(Vec3::new(0.0, -5.0, 0.0), Vec3::new(1.0, 5.0, 2.0));
+        let mut profile = profile();
+        profile.branching.enabled = false;
+        let beside = [SupportPoint::new(Vec3::new(4.0, 0.0, 20.0))];
+        let found = radii(&beside, &kerb, &profile);
+        assert!(
+            (found[0] - profile.base_radius_mm() * 0.5).abs() < 1e-4,
+            "got {found:?}"
+        );
     }
 
     #[test]

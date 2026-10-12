@@ -440,7 +440,13 @@ fn turn(ui: &mut egui::Ui, window: &mut Window, id: ObjectId) {
         // count: the bar runs rather than standing at nought.
         progress_bar(ui, None);
     }
-    if oriented && let Err(error) = window.tools.orient.start(&window.doc.scene, Some(id)) {
+    let max_overhang_deg = window.tools.supports.profile.max_overhang_deg;
+    if oriented
+        && let Err(error) = window
+            .tools
+            .orient
+            .start(&window.doc.scene, Some(id), max_overhang_deg)
+    {
         window.machine.status = crate::status::Status::failed(&error);
     }
     if laid {

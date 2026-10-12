@@ -104,7 +104,15 @@ impl OrientTool {
 
     /// Starts a run over one model, or over everything visible when `only` is `None`, and
     /// stops waiting for a face: the run replaces the rotation a laid face would set.
-    pub fn start(&mut self, scene: &Scene, only: Option<ObjectId>) -> Result<()> {
+    ///
+    /// `max_overhang_deg` is the angle of the support profile in hand, so the search
+    /// counts as overhang what automatic placement will hold up.
+    pub fn start(
+        &mut self,
+        scene: &Scene,
+        only: Option<ObjectId>,
+        max_overhang_deg: f32,
+    ) -> Result<()> {
         let tasks = orient_tasks(scene, only);
         if tasks.is_empty() {
             bail!("nothing visible on the plate to orient");
@@ -113,7 +121,10 @@ impl OrientTool {
         self.stop_picking();
         self.job = Some(OrientJob::spawn(OrientRequest {
             tasks,
-            settings: self.settings,
+            settings: OrientSettings {
+                max_overhang_deg,
+                ..self.settings
+            },
         }));
         Ok(())
     }
@@ -232,7 +243,7 @@ mod tests {
         let mut tool = OrientTool::default();
         let mut status = Status::default();
         for _ in 0..2 {
-            tool.start(&scene, None)
+            tool.start(&scene, None, 45.0)
                 .expect("a visible slab can be oriented");
             settle(&mut tool, &mut scene, &mut status);
         }
@@ -248,7 +259,7 @@ mod tests {
         let mut tool = OrientTool::default();
         let mut status = Status::default();
 
-        tool.start(&scene, None)
+        tool.start(&scene, None, 45.0)
             .expect("a visible slab can be oriented");
         settle(&mut tool, &mut scene, &mut status);
 
@@ -266,7 +277,7 @@ mod tests {
         let mut tool = OrientTool::default();
         let scene = Scene::default();
         assert!(tool.blocker(&scene).is_some());
-        assert!(tool.start(&scene, None).is_err());
+        assert!(tool.start(&scene, None, 45.0).is_err());
     }
 
     #[test]

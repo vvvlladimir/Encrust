@@ -171,7 +171,8 @@ Turn the model the way it prints best before anything else is done to it, report
 default), `least-peel`, `shortest-print` or `clean-top`, and `--max-tilt DEG` keeps the turn
 within that many degrees of the way the file stands (ADR 0222) — and build supports to a profile of the catalogue —
 `light`, `medium`, `heavy` or one saved in the window, as `profiles list` names them — or to
-your own TOML with `--support-profile`:
+your own TOML with `--support-profile`. With both, the search counts as overhang what that
+profile's `max_overhang_deg` does, and 45 degrees without one:
 
 ```sh
 encrust slice model.stl \

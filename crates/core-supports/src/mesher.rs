@@ -1,8 +1,10 @@
+use std::borrow::Cow;
+
 use crate::placed::Placed;
 use core_geometry::{Mesh, Scalar, Vec3};
 use printer_profiles::{ContactShape, SupportProfile};
 
-use crate::base::{braces, raft, skate, skate_half_width_mm, toe_of};
+use crate::base::{braces, foot_radii, raft, skate, skate_half_width_mm, toe_of};
 use crate::group::Profiles;
 use crate::tree::{SupportTree, TreeNode};
 
@@ -99,8 +101,12 @@ impl Style {
 /// any one support. See `docs/decisions/0094`.
 pub fn mesh_trees(trees: &[SupportTree], placed: &Placed, profiles: Profiles) -> Mesh {
     let mut mesh = Mesh::default();
-    for tree in trees {
-        mesh_tree(&mut mesh, tree, profiles.of(tree.group()));
+    for (tree, radius_mm) in trees.iter().zip(foot_radii(trees, placed, profiles)) {
+        mesh_tree(
+            &mut mesh,
+            tree,
+            &fitted(profiles.of(tree.group()), radius_mm),
+        );
     }
     mesh_ground(&mut mesh, trees, placed, profiles.ground());
     mesh
@@ -110,13 +116,27 @@ pub fn mesh_trees(trees: &[SupportTree], placed: &Placed, profiles: Profiles) ->
 /// can be drawn apart. The raft and the bracing go with group 0, whose profile they take.
 pub fn mesh_groups(trees: &[SupportTree], placed: &Placed, profiles: Profiles) -> Vec<Mesh> {
     let mut meshes = vec![Mesh::default(); profiles.groups().count()];
-    for tree in trees {
+    for (tree, radius_mm) in trees.iter().zip(foot_radii(trees, placed, profiles)) {
         let slot = usize::from(tree.group());
         let slot = if slot < meshes.len() { slot } else { 0 };
-        mesh_tree(&mut meshes[slot], tree, profiles.of(tree.group()));
+        mesh_tree(
+            &mut meshes[slot],
+            tree,
+            &fitted(profiles.of(tree.group()), radius_mm),
+        );
     }
     mesh_ground(&mut meshes[0], trees, placed, profiles.ground());
     meshes
+}
+
+/// `profile` with its pad as wide as the room this support's foot has.
+fn fitted(profile: &SupportProfile, foot_radius_mm: Scalar) -> Cow<'_, SupportProfile> {
+    if foot_radius_mm >= profile.base_radius_mm() {
+        return Cow::Borrowed(profile);
+    }
+    let mut fitted = profile.clone();
+    fitted.bottom.platform_diameter_mm = 2.0 * foot_radius_mm;
+    Cow::Owned(fitted)
 }
 
 fn mesh_tree(mesh: &mut Mesh, tree: &SupportTree, profile: &SupportProfile) {
@@ -227,7 +247,7 @@ fn strut(
     // which is wider than the strut and swallows its end cap; see `docs/decisions/0044`.
     // A straight run through the joint has no ball, and reaches past it instead.
     let mut rings = Vec::with_capacity(8);
-    head(&mut rings, &nodes[child], profile, style);
+    head(&mut rings, &nodes[child], profile, style, length);
     push(&mut rings, length + overlap_mm, body_mm);
 
     Tube {
@@ -266,7 +286,7 @@ fn trunk(tree: &SupportTree, profile: &SupportProfile, style: Style) -> Tube {
     };
 
     let mut rings = Vec::with_capacity(8);
-    head(&mut rings, root, profile, style);
+    head(&mut rings, root, profile, style, length);
     if landing.on_model && !style.small {
         foot_tip(&mut rings, length, body_mm, profile);
     } else {
@@ -467,7 +487,16 @@ fn foot_top_radius_mm(profile: &SupportProfile, trunk_mm: Scalar) -> Scalar {
 
 /// The rings a tube starts with: the tip and the widening top segment at a contact, or
 /// the joint's own width anywhere else.
-fn head(rings: &mut Vec<Ring>, node: &TreeNode, profile: &SupportProfile, style: Style) {
+///
+/// `length` is the tube's own, and the top segment is no longer: a neck shortened to
+/// leave the body room over the plate would otherwise run on through the pad.
+fn head(
+    rings: &mut Vec<Ring>,
+    node: &TreeNode,
+    profile: &SupportProfile,
+    style: Style,
+    length: Scalar,
+) {
     if !node.is_leaf() {
         push(rings, 0.0, style.body_radius_mm(node.radius_mm, profile));
         return;
@@ -480,19 +509,16 @@ fn head(rings: &mut Vec<Ring>, node: &TreeNode, profile: &SupportProfile, style:
         push(rings, 0.0, contact_mm);
     }
 
+    let top_mm = profile.top_length_mm().min(length);
     push(rings, 0.0, profile.top_upper_radius_mm());
     push(
         rings,
-        profile.top_length_mm(),
+        top_mm,
         style.body_radius_mm(profile.top_lower_radius_mm(), profile),
     );
     // The top segment ends where the body begins: the two are separate measurements, so
     // the body keeps its own width rather than carrying the segment's on down.
-    push(
-        rings,
-        profile.top_length_mm(),
-        style.body_radius_mm(node.radius_mm, profile),
-    );
+    push(rings, top_mm, style.body_radius_mm(node.radius_mm, profile));
 }
 
 /// Where the tip pokes into the model, for a tube that starts at a contact.
@@ -770,8 +796,43 @@ mod tests {
     }
 
     #[test]
+    fn a_neck_shortened_over_the_plate_stops_where_the_body_begins() {
+        // A 2 mm top segment under a contact 1.5 mm up: the neck is cut to the room there
+        // is, and what is drawn of it must be cut with it.
+        let mut profile = profile();
+        profile.branching.enabled = false;
+        let points = [SupportPoint::new(Vec3::new(0.0, 0.0, 1.5))];
+        let mesh = meshed(
+            &trees_on(
+                &points,
+                &Mesh::default(),
+                Transform::default(),
+                Profiles::single(&profile),
+            ),
+            Profiles::single(&profile),
+        );
+
+        assert!(
+            !mesh.is_empty(),
+            "a contact 1.5 mm up has room for a support"
+        );
+        let lowest = mesh
+            .vertices
+            .iter()
+            .map(|vertex| vertex.z)
+            .fold(Scalar::INFINITY, Scalar::min);
+        assert!(
+            lowest >= -1e-4,
+            "a support ends on the plate, and this one reaches {lowest} mm"
+        );
+    }
+
+    #[test]
     fn branching_uses_less_material_than_two_columns() {
-        let profile = profile();
+        // Pads no wider than the flare, so two columns 4 mm apart keep theirs whole and
+        // the comparison is of the bodies.
+        let mut profile = profile();
+        profile.bottom.platform_diameter_mm = profile.bottom.lower_diameter_mm;
         let straight = SupportProfile {
             branching: printer_profiles::Branching {
                 enabled: false,

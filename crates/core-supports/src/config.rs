@@ -200,6 +200,28 @@ mod tests {
     }
 
     #[test]
+    fn every_shipped_preset_lifts_a_part_far_enough_for_its_own_support() {
+        for profile in [
+            SupportProfile::light(),
+            SupportProfile::medium(),
+            SupportProfile::heavy(),
+        ] {
+            let flare_mm = profile.flare_lower_radius_mm() - profile.flare_upper_radius_mm();
+            let needed_mm = profile.base_height_mm()
+                + flare_mm
+                + profile.top_length_mm()
+                + crate::column::MIN_PILLAR_HEIGHT_MM;
+            assert!(
+                needed_mm <= profile.z_lift_mm + 1e-4,
+                "{}: a pad, a flare, a top segment and the shortest pillar take {needed_mm} mm \
+                 and the lift leaves {} mm",
+                profile.name,
+                profile.z_lift_mm
+            );
+        }
+    }
+
+    #[test]
     fn the_shipped_presets_grow_stricter_as_they_grow_heavier() {
         let light = SampleConfig::for_profile(&SupportProfile::light());
         let heavy = SampleConfig::for_profile(&SupportProfile::heavy());

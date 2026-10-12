@@ -536,7 +536,7 @@ impl SupportProfile {
                 enabled: false,
                 ..shipped_bracing()
             },
-            z_lift_mm: default_z_lift_mm(),
+            z_lift_mm: 5.0,
         }
     }
 
@@ -582,7 +582,7 @@ impl SupportProfile {
             },
             raft: shipped_raft(RaftShape::Rectangle),
             bracing: shipped_bracing(),
-            z_lift_mm: default_z_lift_mm(),
+            z_lift_mm: 5.0,
         }
     }
 

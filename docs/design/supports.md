@@ -68,7 +68,10 @@ rings run past the contact and rings never climb, so the neck is shorter than
 **Feet.** `bottom.shape` sets the ring's side count and whether it tapers upward:
 `cylinder` (`facets`, no), `cone` (`facets`, to 45% of the rim), `prism` (6),
 `cube` (4), `skate` (no ring sweep at all). `platform_diameter_mm` is the circle the
-corners sit on, so a cube's side is that over √2. The foot is a tube of its own, because a
+corners sit on, so a cube's side is that over √2, and it is the widest the pad may be: each
+is narrowed to leave `FOOT_GAP_MM` (0.5 mm) of air to the nearest other pad and to stay
+out of the model, never below the flare standing in it, so a row of pads is no wall and a
+ring of them no cup (ADR 0237). The foot is a tube of its own, because a
 tube has one side count, and the trunk runs down through it — the same overlap rule as
 every joint (ADR 0041).
 
@@ -124,8 +127,9 @@ its **Lift models** button and the command line applies it inside `stand_under`,
 cuts the model, leaving a part that already stands that high where it is. Whether the
 lowest contact of a lifted part can stand at all is arithmetic: the pad, the top segment
 and `MIN_PILLAR_HEIGHT_MM` have to fit under that contact, the segment being shortened
-rather than allowed to eat the body's room. Light is sized to meet that at its own 2 mm —
-a 0.5 mm pad, a 0.3 mm flare and a 1 mm top segment.
+rather than allowed to eat the body's room. Every shipped preset lifts by at least that
+much: Light 2 mm for a 0.5 mm pad, a 0.3 mm flare and a 1 mm top segment, Medium and Heavy
+5 mm (ADR 0237).
 
 ## Keeping the mesh closed
 
@@ -196,12 +200,23 @@ A contact goes a whole layer below the plane that was cut, because the surface i
 inside the layer's rise and a contact above it would land the column on the very surface it
 holds. The tip then sinks `contact_depth_mm` back in.
 
-**Where the points go.** A piece is sampled on a lattice of `spacing_mm` anchored to the
-plate, every other row offset half a step; anchoring is what lets the coverage check thin a
-slope to one support per place rather than one per layer. The rim is walked at the same
-spacing and a rim point is dropped where a lattice point already holds the place — a
-lattice leaves its widest gap exactly at the edge, which is where the peel starts. A piece
-too small to catch a lattice point is all rim, so sampling never returns nothing.
+**Where the points go.** The outline first, because a corner is where a ledge lifts and the
+edge is where the peel starts. Corners are the vertices of the piece's convex hull where it
+turns 45 degrees or more between a quarter of a spacing back and a quarter on — a piece is
+cells, not a polygon, and a hull has a direction to turn from; a ring or a round rim has
+none. The rest of the rim is then taken wherever nothing stands within a spacing, so no
+rim cell is further than that from a support. The inside is filled from a lattice of
+`spacing_mm` anchored to the plate, every other row offset half a step, and then from a
+grid of a quarter of that into the gaps the rim's supports opened, both keeping three
+quarters of a spacing from what is taken; anchoring is what lets the coverage check thin a
+slope to one support per place rather than one per layer. A piece too small for two
+supports is all corner, so sampling never returns nothing.
+
+**Three to stand on.** A part held at one or two places is held and still rocks on the
+peel. Placement counts the supports under each piece and what it grew out of, and once
+such a part is a spacing across it gets up to three more round its rim, 0.8 of its width
+apart, whatever the coverage ball says. A part on the plate, one the hand has placed a
+support under and one the blocker refused are left as they are.
 `spacing_mm` is the profile's own `contact_spacing_mm` divided by the root of `density`, so
 the knob counts supports over an area: doubling it puts down twice as many (ADR 0081), and
 widening a contact holds better without thinning the lattice (ADR 0131). The head's carry —

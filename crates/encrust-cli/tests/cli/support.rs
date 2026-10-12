@@ -9,16 +9,28 @@ use std::process::{Command, Output};
 /// vertices per triangle. `faces` selects which of the twelve triangles to include, and
 /// `invert` reverses the winding of the first `invert` of them.
 pub fn write_box_stl(name: &str, size: f32, faces: usize, invert: usize) -> PathBuf {
+    write_leaning_box_stl(name, size, 0.0, faces, invert)
+}
+
+/// The same box with its top pushed `lean` along x, so that one wall hangs over the plate
+/// and the opposite one leans back from it.
+pub fn write_leaning_box_stl(
+    name: &str,
+    size: f32,
+    lean: f32,
+    faces: usize,
+    invert: usize,
+) -> PathBuf {
     let s = size;
     let corners = [
         [0.0, 0.0, 0.0],
         [s, 0.0, 0.0],
         [s, s, 0.0],
         [0.0, s, 0.0],
-        [0.0, 0.0, s],
-        [s, 0.0, s],
-        [s, s, s],
-        [0.0, s, s],
+        [lean, 0.0, s],
+        [s + lean, 0.0, s],
+        [s + lean, s, s],
+        [lean, s, s],
     ];
     let mut triangles: Vec<[usize; 3]> = vec![
         [0, 3, 2],

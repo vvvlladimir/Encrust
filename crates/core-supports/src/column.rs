@@ -198,7 +198,13 @@ pub fn landing(
         return None;
     }
     let stands = stands_clear(placed, contact, bottom_z, radius_mm, profile)
-        && (landing.on_model || foot_clear(placed, landing.base, profile));
+        && (landing.on_model
+            || foot_clear(
+                placed,
+                landing.base,
+                profile.flare_lower_radius_mm(),
+                profile,
+            ));
     stands.then_some(landing)
 }
 
@@ -262,12 +268,18 @@ fn out_and_down(normal: Vec3) -> Vec3 {
     across.extend(-OUT_DROP * across.length()).normalize()
 }
 
-/// Whether the foot on the plate has the model out of its way.
+/// Whether a foot of `radius_mm` on the plate has the model out of its way.
 ///
 /// A pad is wider than anything above it, so a column that came down in clear air can
-/// still drive its foot into a part that stands on the plate beside it.
-pub(crate) fn foot_clear(placed: &Placed, base: Vec3, profile: &SupportProfile) -> bool {
-    let radius_mm = profile.base_radius_mm();
+/// still drive its foot into a part that stands on the plate beside it. A landing asks
+/// about the narrowest foot there is, and the pad is then fitted to the room it has; see
+/// `docs/decisions/0237`.
+pub(crate) fn foot_clear(
+    placed: &Placed,
+    base: Vec3,
+    radius_mm: Scalar,
+    profile: &SupportProfile,
+) -> bool {
     let beam = Beam {
         from: Vec3::new(base.x, base.y, base.z + profile.base_height_mm()),
         to: Vec3::new(base.x, base.y, base.z + SURFACE_EPSILON_MM),
@@ -512,16 +524,16 @@ mod tests {
     }
 
     #[test]
-    fn a_foot_that_would_drive_into_the_model_is_no_landing() {
-        // A kerb 1 mm wide and 2 mm tall. The body comes down 3 mm clear of it, but the
-        // foot is 8 mm across and its rim reaches right through it.
+    fn a_foot_is_no_landing_only_where_its_narrowest_would_drive_into_the_model() {
+        // A kerb 1 mm wide and 2 mm tall. The body is 0.6 mm wide and keeps 0.5 mm clear,
+        // so it passes 1.3 mm off the kerb, where the 1.1 mm flare under it does not.
         let kerb = box_mesh(Vec3::new(0.0, -5.0, 0.0), Vec3::new(1.0, 5.0, 2.0));
         let profile = profile();
         assert!(
             landing_on(
                 &kerb,
                 Transform::default(),
-                Vec3::new(4.0, 0.0, 20.0),
+                Vec3::new(2.3, 0.0, 20.0),
                 &profile
             )
             .is_none()
@@ -530,11 +542,12 @@ mod tests {
             landing_on(
                 &kerb,
                 Transform::default(),
-                Vec3::new(6.0, 0.0, 20.0),
+                Vec3::new(4.0, 0.0, 20.0),
                 &profile
             )
             .is_some(),
-            "6 mm out the foot clears the kerb"
+            "3 mm out the 8 mm pad reaches the kerb, and is fitted to the room rather than \
+             refused; see `docs/decisions/0237`"
         );
     }
 

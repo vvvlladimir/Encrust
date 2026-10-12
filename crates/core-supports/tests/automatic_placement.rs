@@ -154,7 +154,9 @@ fn the_columns_of_a_run_mesh_into_a_closed_solid() {
 
 #[test]
 fn branching_holds_an_island_up_with_less_resin_than_columns_do() {
-    let model = floating_box();
+    // High enough over the plate that what is saved is pillar: under a low island the
+    // pads decide it, and a lone trunk's pad is the widest there is (ADR 0237).
+    let model = box_mesh(Vec3::new(0.0, 0.0, 40.0), Vec3::new(20.0, 20.0, 60.0));
     let branched = SupportProfile::medium();
     let straight = unbranched();
 
