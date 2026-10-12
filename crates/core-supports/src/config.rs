@@ -206,7 +206,7 @@ mod tests {
             SupportProfile::medium(),
             SupportProfile::heavy(),
         ] {
-            let flare_mm = profile.flare_lower_radius_mm() - profile.flare_upper_radius_mm();
+            let flare_mm = profile.flare_lower_radius_mm() - profile.pillar_radius_mm();
             let needed_mm = profile.base_height_mm()
                 + flare_mm
                 + profile.top_length_mm()

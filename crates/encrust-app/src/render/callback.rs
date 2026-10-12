@@ -310,7 +310,7 @@ impl Draws {
             }
         }
 
-        let groups = object.supports.meshes().unwrap_or_default();
+        let groups = object.supports.drawn();
         for (group, mesh) in groups
             .iter()
             .enumerate()

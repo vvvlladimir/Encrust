@@ -347,7 +347,8 @@ impl SupportTool {
         added
     }
 
-    /// Stands everything visible `z_lift_mm` clear of the plate.
+    /// Stands everything visible `z_lift_mm` clear of the plate, over whatever its raft
+    /// has already stood it up by.
     ///
     /// Supports need room under a part, and the layers printed straight onto the plate
     /// are the ones that stick to it hardest. Returns how many objects moved.
@@ -358,7 +359,7 @@ impl SupportTool {
             let Some(bounds) = object.world_bounds() else {
                 continue;
             };
-            let offset = lift_over_plate(&bounds, lift_mm);
+            let offset = lift_over_plate(&bounds, lift_mm + object.supports.raft_lift_mm());
             if offset.z.abs() < f32::EPSILON {
                 continue;
             }
@@ -366,6 +367,32 @@ impl SupportTool {
             moved += 1;
         }
         moved
+    }
+
+    /// Stands every supported model up by the thickness of the raft under it, and back
+    /// down when the raft or its supports go, so the slab is never printed into the part.
+    ///
+    /// The raft is the plate's, built to the first group's profile. What each model has
+    /// been stood up by is kept beside its supports, which is what makes this safe to ask
+    /// every frame. See `docs/decisions/0238`.
+    pub fn settle_on_raft(&self, scene: &mut Scene) {
+        let table = self.table();
+        let raft_mm = table
+            .first()
+            .filter(|ground| ground.raft.enabled)
+            .map_or(0.0, |ground| ground.raft.thickness_mm);
+        for object in scene.objects_mut() {
+            let wanted_mm = if object.supports.is_empty() {
+                0.0
+            } else {
+                raft_mm
+            };
+            let step_mm = wanted_mm - object.supports.raft_lift_mm();
+            if step_mm.abs() > f32::EPSILON {
+                object.transform.translation.z += step_mm;
+                object.supports.set_raft_lift_mm(wanted_mm);
+            }
+        }
     }
 }
 
@@ -785,6 +812,48 @@ mod tests {
             "the lowest point ends up at the lift, got {}",
             bounds.mins.z
         );
+    }
+
+    #[test]
+    fn a_raft_stands_a_supported_model_up_by_its_thickness_and_back_down_without_it() {
+        let mut scene = one_cube();
+        let mut tool = SupportTool::default();
+        tool.lift(&mut scene);
+        let bottom = |scene: &Scene| {
+            scene.objects()[0]
+                .world_bounds()
+                .expect("a cube has bounds")
+                .mins
+                .z
+        };
+        let lifted = bottom(&scene);
+
+        tool.profile.raft.enabled = true;
+        tool.settle_on_raft(&mut scene);
+        assert!(
+            (bottom(&scene) - lifted).abs() < 1e-5,
+            "a model with no supports has no raft under it"
+        );
+
+        let transform = scene.objects()[0].transform;
+        scene.objects_mut()[0]
+            .supports
+            .add(Vec3::new(0.5, 0.5, lifted), transform, 0);
+        tool.settle_on_raft(&mut scene);
+        tool.settle_on_raft(&mut scene);
+        assert!(
+            (bottom(&scene) - lifted - tool.profile.raft.thickness_mm).abs() < 1e-5,
+            "the slab must not be printed into the part, and asking twice lifts once"
+        );
+        assert_eq!(
+            tool.lift(&mut scene),
+            0,
+            "the lift is measured over the raft, so a model already there stays"
+        );
+
+        tool.profile.raft.enabled = false;
+        tool.settle_on_raft(&mut scene);
+        assert!((bottom(&scene) - lifted).abs() < 1e-5, "and back down");
     }
 
     #[test]

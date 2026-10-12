@@ -216,15 +216,14 @@ pub fn regular(ui: &mut Ui, profile: &SupportProfile, picked: Part) {
 /// The bite into the model and the cone widening out of it, as one outline.
 fn tip(at: &Layout, profile: &SupportProfile) -> Vec<Pos2> {
     let contact = half(profile.tip.contact_diameter_mm);
-    let upper = half(profile.top.upper_diameter_mm);
-    let lower = half(profile.top.lower_diameter_mm);
+    let pillar = half(profile.middle.diameter_mm);
     let y = at.axis;
     vec![
         pos2(at.bite, y - contact),
-        pos2(at.contact, y - upper.max(contact)),
-        pos2(at.neck, y - lower),
-        pos2(at.neck, y + lower),
-        pos2(at.contact, y + upper.max(contact)),
+        pos2(at.contact, y - contact),
+        pos2(at.neck, y - pillar),
+        pos2(at.neck, y + pillar),
+        pos2(at.contact, y + contact),
         pos2(at.bite, y + contact),
     ]
 }
@@ -251,9 +250,10 @@ fn base(at: &Layout, profile: &SupportProfile) -> [Vec<Pos2>; 2] {
     [flare, corners(pad)]
 }
 
-/// The flare's two widths and the pad's, as drawn: none narrower than the one above it.
+/// The pillar's width where the flare leaves it, the flare's where it meets the pad and
+/// the pad's, as drawn: none narrower than the one above it.
 fn base_halves(profile: &SupportProfile) -> (f32, f32, f32) {
-    let upper = half(profile.bottom.upper_diameter_mm);
+    let upper = half(profile.middle.diameter_mm);
     let lower = half(profile.bottom.lower_diameter_mm).max(upper);
     (
         upper,
@@ -282,17 +282,13 @@ fn raft_halves(at: &Layout, profile: &SupportProfile) -> (f32, f32) {
     (outer, (outer - lean).max(pad))
 }
 
-/// The contact, the bite, the cone's two widths and its length.
+/// The contact, the bite and the cone's length.
 fn tip_figures(painter: &egui::Painter, at: &Layout, profile: &SupportProfile) {
     let y = at.axis;
     let tip = &profile.tip;
     let top = &profile.top;
-    let (contact, upper, lower) = (
-        half(tip.contact_diameter_mm),
-        half(top.upper_diameter_mm),
-        half(top.lower_diameter_mm),
-    );
-    let reach = contact.max(upper).max(lower);
+    let contact = half(tip.contact_diameter_mm);
+    let reach = contact.max(half(profile.middle.diameter_mm));
     let length_y = at.lane(reach, 1);
     dimension(
         painter,
@@ -318,26 +314,6 @@ fn tip_figures(painter: &egui::Painter, at: &Layout, profile: &SupportProfile) {
         contact,
         &diameter(tip.contact_diameter_mm),
         contact_label,
-    );
-    let up_x = at.contact + (at.neck - at.contact) * 0.22;
-    let up_label = pos2(up_x + 6.0, at.lane(reach, 2));
-    across(
-        painter,
-        up_x,
-        y,
-        upper,
-        &diameter(top.upper_diameter_mm),
-        up_label,
-    );
-    let low_x = at.neck - 6.0;
-    let low_label = pos2(low_x, at.lane(reach, -1));
-    across(
-        painter,
-        low_x,
-        y,
-        lower,
-        &diameter(top.lower_diameter_mm),
-        low_label,
     );
 }
 
@@ -439,21 +415,11 @@ fn branch(painter: &egui::Painter, at: &Layout, profile: &SupportProfile, reach:
     );
 }
 
-/// The flare's two widths, the pad's width and its thickness.
+/// The flare's width at the pad, the pad's width and its thickness.
 fn base_figures(painter: &egui::Painter, at: &Layout, profile: &SupportProfile) {
     let y = at.axis;
     let bottom = &profile.bottom;
-    let (upper, lower, pad) = base_halves(profile);
-    let up_x = at.flare + 3.0;
-    let up_label = pos2(up_x - 8.0, at.lane(pad, 2));
-    across(
-        painter,
-        up_x,
-        y,
-        upper,
-        &diameter(bottom.upper_diameter_mm),
-        up_label,
-    );
+    let (_, lower, pad) = base_halves(profile);
     let low_x = at.pad - 3.0;
     let low_label = pos2(low_x - 8.0, at.lane(pad, -2));
     across(
@@ -494,7 +460,7 @@ fn raft_figures(painter: &egui::Painter, at: &Layout, profile: &SupportProfile) 
         painter,
         pos2(at.contact, lift_y),
         pos2(at.plate, lift_y),
-        &format!("lift {}", mm(profile.z_lift_mm)),
+        &format!("lift {}", mm(profile.lift_mm())),
     );
     let top_y = at.lane(outer, 1);
     if !raft.enabled {

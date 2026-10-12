@@ -9,7 +9,8 @@
 use core_geometry::{Bvh, Mesh, Transform, Vec3, Winding, diagnose, signed_volume};
 use core_slicer::{PlaneSliceEngine, SliceEngine, SliceSettings};
 use core_supports::{
-    Placed, Profiles, SupportPoint, SupportTree, columns, generate_supports, grow, mesh_trees,
+    Placed, Profiles, SupportPoint, SupportTree, columns, generate_supports, grow, low_points,
+    mesh_trees,
 };
 use printer_profiles::SupportProfile;
 
@@ -84,6 +85,7 @@ fn points(mesh: &Mesh, profile: &SupportProfile) -> Vec<SupportPoint> {
         LAYER_HEIGHT_MM,
         profile,
         &[],
+        &low_points(mesh, Transform::default()),
         None,
         &mut |_| true,
     )
@@ -154,9 +156,7 @@ fn the_columns_of_a_run_mesh_into_a_closed_solid() {
 
 #[test]
 fn branching_holds_an_island_up_with_less_resin_than_columns_do() {
-    // High enough over the plate that what is saved is pillar: under a low island the
-    // pads decide it, and a lone trunk's pad is the widest there is (ADR 0237).
-    let model = box_mesh(Vec3::new(0.0, 0.0, 40.0), Vec3::new(20.0, 20.0, 60.0));
+    let model = floating_box();
     let branched = SupportProfile::medium();
     let straight = unbranched();
 

@@ -4,13 +4,13 @@ use crate::placed::Placed;
 use core_geometry::{Mesh, Scalar, Vec3};
 use printer_profiles::{ContactShape, SupportProfile};
 
-use crate::base::{braces, foot_radii, raft, skate, skate_half_width_mm, toe_of};
+use crate::base::{braces, foot_radius_mm, raft, skate, skate_half_width_mm, toe_of};
 use crate::group::Profiles;
 use crate::tree::{SupportTree, TreeNode};
 
 mod tube;
 
-use tube::{RING_EPSILON_MM, Ring, Tube, ball, empty_tube, push, sweep};
+use tube::{RING_EPSILON_MM, Ring, Tube, ball, dome, empty_tube, push, round_off, sweep};
 
 /// How many rings a sphere tip is drawn with, as a fraction of the profile's facets.
 /// A tip is under a millimetre across, so the silhouette needs far fewer rings than the
@@ -31,25 +31,6 @@ pub const FOOT_BEVEL: Scalar = 0.6;
 /// Far enough that the two solids overlap, not so far that the trunk shows through the
 /// bottom of the pad.
 const FOOT_BITE: Scalar = 0.5;
-
-/// How many rings a joint's ball is drawn with. It only has to cover the seam where the
-/// struts meet, so the silhouette needs far fewer rings than the circumference needs
-/// sides. An even count puts one of them on the equator, which is where the ball has to
-/// be at its full width.
-const JOINT_RINGS: u32 = 6;
-
-/// How much wider than the trunk a joint's ball is. A strut ending at the centre of a
-/// ball of its own radius has its end cap exactly on the surface, and the flats of a
-/// polygon fall inside the circle they stand for; a little swell puts both safely under.
-const JOINT_SWELL: Scalar = 1.15;
-
-/// How far a strut reaches past a node it runs straight through, millimetres. Two tubes
-/// that only met on a plane would leave the fill rule a seam to argue about.
-const JOINT_OVERLAP_MM: Scalar = 0.1;
-
-/// Two directions this close are one direction: half a degree, which is finer than the
-/// facets either tube is drawn with.
-const COLLINEAR: Scalar = 0.999_961;
 
 /// Which set of measurements a support is built from.
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -101,12 +82,8 @@ impl Style {
 /// any one support. See `docs/decisions/0094`.
 pub fn mesh_trees(trees: &[SupportTree], placed: &Placed, profiles: Profiles) -> Mesh {
     let mut mesh = Mesh::default();
-    for (tree, radius_mm) in trees.iter().zip(foot_radii(trees, placed, profiles)) {
-        mesh_tree(
-            &mut mesh,
-            tree,
-            &fitted(profiles.of(tree.group()), radius_mm),
-        );
+    for tree in trees {
+        mesh_tree(&mut mesh, tree, &fitted(tree, placed, profiles));
     }
     mesh_ground(&mut mesh, trees, placed, profiles.ground());
     mesh
@@ -116,47 +93,40 @@ pub fn mesh_trees(trees: &[SupportTree], placed: &Placed, profiles: Profiles) ->
 /// can be drawn apart. The raft and the bracing go with group 0, whose profile they take.
 pub fn mesh_groups(trees: &[SupportTree], placed: &Placed, profiles: Profiles) -> Vec<Mesh> {
     let mut meshes = vec![Mesh::default(); profiles.groups().count()];
-    for (tree, radius_mm) in trees.iter().zip(foot_radii(trees, placed, profiles)) {
+    for tree in trees {
         let slot = usize::from(tree.group());
         let slot = if slot < meshes.len() { slot } else { 0 };
-        mesh_tree(
-            &mut meshes[slot],
-            tree,
-            &fitted(profiles.of(tree.group()), radius_mm),
-        );
+        mesh_tree(&mut meshes[slot], tree, &fitted(tree, placed, profiles));
     }
     mesh_ground(&mut meshes[0], trees, placed, profiles.ground());
     meshes
 }
 
-/// `profile` with its pad as wide as the room this support's foot has.
-fn fitted(profile: &SupportProfile, foot_radius_mm: Scalar) -> Cow<'_, SupportProfile> {
-    if foot_radius_mm >= profile.base_radius_mm() {
+/// The profile `tree` is built to, with its pad narrowed where the model is in its way.
+fn fitted<'a>(
+    tree: &SupportTree,
+    placed: &Placed,
+    profiles: Profiles<'a>,
+) -> Cow<'a, SupportProfile> {
+    let profile = profiles.of(tree.group());
+    if tree.landing().on_model {
+        return Cow::Borrowed(profile);
+    }
+    let radius_mm = foot_radius_mm(tree, placed, profile);
+    if radius_mm >= profile.base_radius_mm() {
         return Cow::Borrowed(profile);
     }
     let mut fitted = profile.clone();
-    fitted.bottom.platform_diameter_mm = 2.0 * foot_radius_mm;
+    fitted.bottom.platform_diameter_mm = 2.0 * radius_mm;
     Cow::Owned(fitted)
 }
 
 fn mesh_tree(mesh: &mut Mesh, tree: &SupportTree, profile: &SupportProfile) {
     let style = Style::of(tree, profile);
-    let covered = covers(tree, profile);
     for (child, parent) in tree.struts() {
-        let overlap_mm = if covered[parent] {
-            0.0
-        } else {
-            JOINT_OVERLAP_MM
-        };
-        sweep(
-            mesh,
-            &strut(tree, child, parent, profile, style, overlap_mm),
-        );
+        sweep(mesh, &strut(tree, child, parent, profile, style));
     }
     sweep(mesh, &trunk(tree, profile, style));
-    for (node, _) in covered.iter().enumerate().filter(|(_, covered)| **covered) {
-        sweep(mesh, &joint(&tree.nodes()[node], profile, style));
-    }
     stand_on(mesh, tree, profile);
 }
 
@@ -221,6 +191,7 @@ fn brace(from: Vec3, to: Vec3, profile: &SupportProfile) -> Tube {
         rings,
         sides: profile.facets as usize,
         apex: None,
+        tail: None,
     }
 }
 
@@ -231,7 +202,6 @@ fn strut(
     parent: usize,
     profile: &SupportProfile,
     style: Style,
-    overlap_mm: Scalar,
 ) -> Tube {
     let nodes = tree.nodes();
     let (from, to) = (nodes[child].position, nodes[parent].position);
@@ -241,14 +211,15 @@ fn strut(
         return empty_tube(from);
     }
     let direction = offset / length;
-    let body_mm = style.body_radius_mm(nodes[parent].radius_mm, profile);
+    let body_mm = style.body_radius_mm(nodes[child].radius_mm, profile);
 
-    // The strut stops dead at the joint. What covers the seam is the joint's own ball,
-    // which is wider than the strut and swallows its end cap; see `docs/decisions/0044`.
-    // A straight run through the joint has no ball, and reaches past it instead.
+    // A strut keeps its own width all the way down and ends in a dome of that width,
+    // centred on the joint. The tube leaving the joint starts under a dome of its own and
+    // is at least as wide, so every end is inside what it meets and nothing swells round
+    // the joint. See `docs/decisions/0238`.
     let mut rings = Vec::with_capacity(8);
     head(&mut rings, &nodes[child], profile, style, length);
-    push(&mut rings, length + overlap_mm, body_mm);
+    round_off(&mut rings, length, body_mm);
 
     Tube {
         top: from,
@@ -256,6 +227,7 @@ fn strut(
         rings,
         sides: profile.facets as usize,
         apex: apex_of(&nodes[child], direction, profile, style),
+        tail: Some(to + direction * body_mm),
     }
 }
 
@@ -299,6 +271,7 @@ fn trunk(tree: &SupportTree, profile: &SupportProfile, style: Style) -> Tube {
         rings,
         sides: profile.facets as usize,
         apex: apex_of(root, direction, profile, style),
+        tail: None,
     }
 }
 
@@ -310,49 +283,11 @@ fn trunk(tree: &SupportTree, profile: &SupportProfile, style: Style) -> Tube {
 fn foot_tip(rings: &mut Vec<Ring>, length: Scalar, body_mm: Scalar, profile: &SupportProfile) {
     let surface_mm = (length - profile.landing_depth_mm()).max(0.0);
     let taper_mm = profile.top_length_mm().min(surface_mm);
-    let neck_mm = profile.top_upper_radius_mm().min(body_mm);
-    let contact_mm = profile.contact_radius_mm().min(neck_mm);
+    let contact_mm = profile.contact_radius_mm().min(body_mm);
 
     push(rings, surface_mm - taper_mm, body_mm);
-    push(rings, surface_mm, neck_mm);
     push(rings, surface_mm, contact_mm);
     push(rings, length, contact_mm);
-}
-
-/// Which nodes need a ball over their seam: every node two or more struts meet at, and
-/// every node one strut arrives at and turns a corner. A straight run through a node
-/// needs none, and the strut above it reaches `JOINT_OVERLAP_MM` past it instead — which
-/// is what keeps a tip's own neck from wearing a bulge (ADR 0125).
-fn covers(tree: &SupportTree, profile: &SupportProfile) -> Vec<bool> {
-    let nodes = tree.nodes();
-    let mut children: Vec<Vec<usize>> = vec![Vec::new(); nodes.len()];
-    for (child, parent) in tree.struts() {
-        children[parent].push(child);
-    }
-
-    (0..nodes.len())
-        .map(|node| match children[node].as_slice() {
-            [] => false,
-            [only] => {
-                let arriving = nodes[node].position - nodes[*only].position;
-                let leaving = under(tree, node, profile) - nodes[node].position;
-                arriving
-                    .normalize_or_zero()
-                    .dot(leaving.normalize_or_zero())
-                    < COLLINEAR
-            }
-            _ => true,
-        })
-        .collect()
-}
-
-/// Where the body under `node` is aimed: the node it hangs from, or the bottom of the
-/// trunk when it is the root.
-fn under(tree: &SupportTree, node: usize, profile: &SupportProfile) -> Vec3 {
-    match tree.nodes()[node].parent {
-        Some(parent) => tree.nodes()[parent].position,
-        None => trunk_bottom(tree, profile),
-    }
 }
 
 /// Where the trunk under the root comes to rest, in plate coordinates.
@@ -363,25 +298,6 @@ fn trunk_bottom(tree: &SupportTree, profile: &SupportProfile) -> Vec3 {
         landing.base.y,
         landing.pillar_bottom_z(profile),
     )
-}
-
-/// The ball that covers a joint, as wide as the trunk leaving it.
-///
-/// Struts arrive at the joint from different directions and stop dead there. A ball of
-/// the trunk's own radius centred on the node contains every one of their end caps, so
-/// the joint needs no fitted geometry and cannot invert; see `docs/decisions/0044`.
-fn joint(node: &TreeNode, profile: &SupportProfile, style: Style) -> Tube {
-    let radius_mm = style.body_radius_mm(node.radius_mm, profile) * JOINT_SWELL;
-    let mut rings = Vec::with_capacity(JOINT_RINGS as usize);
-    ball(&mut rings, radius_mm, radius_mm, JOINT_RINGS);
-
-    Tube {
-        top: node.position,
-        direction: -Vec3::Z,
-        rings,
-        sides: profile.facets as usize,
-        apex: Some(node.position + Vec3::Z * radius_mm),
-    }
 }
 
 /// The foot the trunk stands on, as a solid of its own so that it can have a different
@@ -420,6 +336,7 @@ fn foot(tree: &SupportTree, profile: &SupportProfile, style: Style) -> Option<Tu
         rings,
         sides: shape.sides(profile.facets) as usize,
         apex: None,
+        tail: None,
     })
 }
 
@@ -439,14 +356,14 @@ fn plate_radius_mm(profile: &SupportProfile, trunk_mm: Scalar) -> Scalar {
 fn flare(tree: &SupportTree, profile: &SupportProfile, style: Style) -> Option<Tube> {
     let landing = tree.landing();
     let trunk_mm = style.body_radius_mm(tree.root().radius_mm, profile);
-    let upper_mm = profile.flare_upper_radius_mm().max(trunk_mm);
+    let upper_mm = trunk_mm;
     // Inside the pad at every depth it reaches, so it never shows through its side.
     let widest_mm = if profile.bottom.shape.is_round() {
         plate_radius_mm(profile, trunk_mm).min(foot_top_radius_mm(profile, trunk_mm))
     } else {
         skate_half_width_mm(profile)
     };
-    let lower_mm = profile.flare_lower_radius_mm().clamp(upper_mm, widest_mm);
+    let lower_mm = profile.flare_lower_radius_mm().min(widest_mm).max(upper_mm);
 
     let bottom_z = landing.pillar_bottom_z(profile);
     let room_mm = (tree.root().position.z - bottom_z).max(0.0);
@@ -470,6 +387,7 @@ fn flare(tree: &SupportTree, profile: &SupportProfile, style: Style) -> Option<T
         rings,
         sides: profile.facets as usize,
         apex: None,
+        tail: None,
     })
 }
 
@@ -498,7 +416,7 @@ fn head(
     length: Scalar,
 ) {
     if !node.is_leaf() {
-        push(rings, 0.0, style.body_radius_mm(node.radius_mm, profile));
+        dome(rings, style.body_radius_mm(node.radius_mm, profile));
         return;
     }
 
@@ -509,19 +427,13 @@ fn head(
         push(rings, 0.0, contact_mm);
     }
 
+    // One cone from the contact out to the body's own width; see `docs/decisions/0238`.
     let top_mm = profile.top_length_mm().min(length);
-    push(rings, 0.0, profile.top_upper_radius_mm());
-    push(
-        rings,
-        top_mm,
-        style.body_radius_mm(profile.top_lower_radius_mm(), profile),
-    );
-    // The top segment ends where the body begins: the two are separate measurements, so
-    // the body keeps its own width rather than carrying the segment's on down.
     push(rings, top_mm, style.body_radius_mm(node.radius_mm, profile));
 }
 
-/// Where the tip pokes into the model, for a tube that starts at a contact.
+/// Where the tip pokes into the model, for a tube that starts at a contact, and the pole
+/// of the dome for one that starts at a joint.
 ///
 /// It goes back up the tube's own axis, which at a tip is the normal of the face it
 /// holds, so the bite drives into the surface square on (ADR 0125). A cone's apex and a
@@ -533,7 +445,10 @@ fn apex_of(
     profile: &SupportProfile,
     style: Style,
 ) -> Option<Vec3> {
-    if !node.is_leaf() || profile.tip.shape == ContactShape::Plane {
+    if !node.is_leaf() {
+        return Some(node.position - direction * style.body_radius_mm(node.radius_mm, profile));
+    }
+    if profile.tip.shape == ContactShape::Plane {
         return None;
     }
     Some(node.position - direction * style.bite_mm(profile))
@@ -665,14 +580,25 @@ mod tests {
         let tip = PI * contact_r * contact_r * profile.contact_depth_mm() / 3.0;
         let neck = PI * profile.top_length_mm() / 3.0
             * (contact_r * contact_r + contact_r * pillar_r + pillar_r * pillar_r);
-        // The neck runs straight into the pillar, so the two tubes overlap rather than
-        // meeting on a plane, and that overlap is counted twice as well.
+        // The neck ends in a dome inside the pillar and the pillar starts under one inside
+        // the neck, each drawn as a cone on its pole and two frustums, and both counted
+        // on top of the tube they sit in.
         let pillar = PI * pillar_r * pillar_r * (height - profile.top_length_mm() - trunk_bottom);
-        let seam = PI * pillar_r * pillar_r * JOINT_OVERLAP_MM;
+        let ring = |step: f32| (PI / 2.0 * step / 3.0).sin() * pillar_r;
+        let drop = |step: f32| (1.0 - (PI / 2.0 * step / 3.0).cos()) * pillar_r;
+        let dome: f32 = (0..3u8)
+            .map(f32::from)
+            .map(|step| {
+                let (upper, lower) = (ring(step), ring(step + 1.0));
+                PI * (drop(step + 1.0) - drop(step)) / 3.0
+                    * (upper * upper + upper * lower + lower * lower)
+            })
+            .sum();
+        let seam = 2.0 * dome;
         let pad = PI * foot_h / 3.0 * (base_r * base_r + base_r * rim_r + rim_r * rim_r);
         // The flare rises as far as it widens, and sinks into the pad as far as the
         // pillar does.
-        let flare_top_r = profile.flare_upper_radius_mm().max(pillar_r);
+        let flare_top_r = pillar_r;
         let flare_bottom_r = profile.flare_lower_radius_mm();
         let rise = flare_bottom_r - flare_top_r;
         let flare = PI * rise / 3.0
@@ -829,10 +755,7 @@ mod tests {
 
     #[test]
     fn branching_uses_less_material_than_two_columns() {
-        // Pads no wider than the flare, so two columns 4 mm apart keep theirs whole and
-        // the comparison is of the bodies.
-        let mut profile = profile();
-        profile.bottom.platform_diameter_mm = profile.bottom.lower_diameter_mm;
+        let profile = profile();
         let straight = SupportProfile {
             branching: printer_profiles::Branching {
                 enabled: false,
@@ -915,15 +838,9 @@ mod tests {
     }
 
     #[test]
-    fn a_column_that_runs_straight_through_its_neck_wears_no_ball() {
+    fn nothing_of_a_plain_column_is_wider_than_its_pillar() {
         let profile = profile();
         let trees = column_on_plate(20.0, &profile);
-        let covered = covers(&trees[0], &profile);
-        assert!(
-            covered.iter().all(|covered| !covered),
-            "a tip square under a flat face and the pillar under it are one straight run"
-        );
-
         let mesh = meshed(&trees, Profiles::single(&profile));
         let widest = mesh
             .vertices
@@ -938,7 +855,7 @@ mod tests {
     }
 
     #[test]
-    fn a_joint_is_covered_by_a_ball_that_swallows_the_struts_meeting_there() {
+    fn a_strut_ends_rounded_inside_its_trunk_and_nothing_swells_round_the_joint() {
         let profile = profile();
         let trees = trees_on(
             &[
@@ -950,35 +867,53 @@ mod tests {
             Profiles::single(&profile),
         );
         let tree = &trees[0];
+        let root = tree.root_index();
+        let joint = tree.root().position;
+        let trunk_mm = tree.root().radius_mm;
         let style = Style::of(tree, &profile);
-        let covered = covers(tree, &profile);
-        let (child, parent) = tree
-            .struts()
-            .find(|(_, parent)| covered[*parent])
-            .expect("the two necks meet at a joint");
-        let tube = strut(tree, child, parent, &profile, style, 0.0);
 
-        let reaches = (tree.nodes()[parent].position - tree.nodes()[child].position).length();
-        let stops = tube.rings.last().expect("a strut has rings").along_mm;
-        assert!(
-            (stops - reaches).abs() < 1e-4,
-            "a strut stops dead at the joint it meets, at {reaches} mm, got {stops}"
-        );
+        for (child, parent) in tree.struts().filter(|(_, parent)| *parent == root) {
+            let tube = strut(tree, child, parent, &profile, style);
+            let reaches = (joint - tree.nodes()[child].position).length();
+            let own_mm = tree.nodes()[child].radius_mm;
+            let widest = tube
+                .rings
+                .iter()
+                .map(|ring| ring.radius_mm)
+                .fold(0.0, Scalar::max);
+            assert!(
+                (widest - own_mm).abs() < 1e-5,
+                "a strut keeps its own width of {own_mm} mm and does not widen into the \
+                 trunk, got {widest}"
+            );
 
-        assert_eq!(
-            covered.iter().filter(|covered| **covered).count(),
-            3,
-            "the two necks turn a corner into the lean, and the struts meet at a third"
-        );
-        let ball = joint(&tree.nodes()[parent], &profile, style);
-        let widest = ball
-            .rings
+            let mut swept = Mesh::default();
+            sweep(&mut swept, &tube);
+            let past: Vec<Scalar> = swept
+                .vertices
+                .iter()
+                .filter(|vertex| (**vertex - tube.top).dot(tube.direction) > reaches + 1e-4)
+                .map(|vertex| (*vertex - joint).length())
+                .collect();
+            assert!(!past.is_empty(), "the strut is rounded off past the joint");
+            assert!(
+                past.iter().all(|far| *far <= trunk_mm + 1e-4),
+                "what is past the joint is inside the trunk's own dome of {trunk_mm} mm: \
+                 {past:?}"
+            );
+        }
+
+        let mesh = meshed(&trees, Profiles::single(&profile));
+        let widest = mesh
+            .vertices
             .iter()
-            .map(|ring| ring.radius_mm)
+            .filter(|vertex| vertex.z < joint.z && vertex.z > joint.z - 2.0 * trunk_mm)
+            .map(|vertex| Vec2::new(vertex.x - joint.x, vertex.y - joint.y).length())
             .fold(0.0, Scalar::max);
         assert!(
-            widest >= tube.rings.last().expect("rings").radius_mm - 1e-4,
-            "the ball has to be at least as wide as the strut whose end it hides"
+            widest <= trunk_mm + 1e-4,
+            "under the joint there is the trunk and nothing swelling round it: {widest} mm \
+             against a trunk of {trunk_mm}"
         );
     }
 
@@ -1223,8 +1158,9 @@ mod tests {
         assert!(tree.landing().on_model, "it stands on the shelf");
         let trunk_mm = tree.root().radius_mm;
         assert!(
-            trunk_mm > profile.top_lower_radius_mm(),
-            "a merged trunk is wider than the segment it ends in, which is the case the              rim used to hang off"
+            trunk_mm > profile.pillar_radius_mm(),
+            "a merged trunk is wider than a pillar, which is the case the rim used to \
+             hang off"
         );
 
         let mesh = meshed(&trees, Profiles::single(&profile));
@@ -1338,47 +1274,30 @@ mod tests {
         );
     }
 
-    /// A column whose body is wider than the segment above it, which is the case the
-    /// two measurements only ever differ in.
-    fn stepped() -> SupportProfile {
-        let mut profile = profile();
-        profile.top.lower_diameter_mm = 1.0;
-        profile.middle.diameter_mm = 2.4;
-        profile
-    }
-
     #[test]
-    fn the_body_is_as_wide_as_the_middle_segment_not_as_the_segment_above_it() {
-        let profile = stepped();
+    fn the_cone_under_a_tip_runs_from_the_contact_out_to_the_pillar() {
+        let profile = profile();
         let mesh = one_column(&profile);
         let axis = Vec3::new(10.0, 10.0, 0.0);
+        let width_at = |z: Scalar| {
+            mesh.vertices
+                .iter()
+                .filter(|vertex| (vertex.z - z).abs() < 1e-3)
+                .map(|vertex| Vec2::new(vertex.x - axis.x, vertex.y - axis.y).length())
+                .fold(0.0, Scalar::max)
+        };
 
-        // The body is a plain tube, so its width is the ring where it leaves the top
-        // segment: that far down the column, nothing is narrower.
+        assert!(
+            (width_at(20.0) - profile.contact_radius_mm()).abs() < 1e-3,
+            "the cone leaves the model as wide as the contact, got {}",
+            width_at(20.0)
+        );
         let shoulder = 20.0 - profile.top_length_mm();
-        let widest = mesh
-            .vertices
-            .iter()
-            .filter(|vertex| (vertex.z - shoulder).abs() < 1e-3)
-            .map(|vertex| Vec2::new(vertex.x - axis.x, vertex.y - axis.y).length())
-            .fold(0.0, Scalar::max);
         assert!(
-            (widest - profile.pillar_radius_mm()).abs() < 1e-3,
-            "expected a body of {} mm, got {widest}",
-            profile.pillar_radius_mm()
+            (width_at(shoulder) - profile.pillar_radius_mm()).abs() < 1e-3,
+            "and meets the pillar at the pillar's own width, got {}",
+            width_at(shoulder)
         );
-        assert!(
-            widest_above(&mesh, axis, shoulder) <= profile.top_lower_radius_mm() + 1e-3,
-            "the segment above the body keeps its own width"
-        );
-    }
-
-    #[test]
-    fn a_stepped_column_is_still_closed() {
-        let diagnostics = diagnose(&one_column(&stepped()));
-        assert_eq!(diagnostics.boundary_edges, 0);
-        assert_eq!(diagnostics.non_manifold_edges, 0);
-        assert_eq!(diagnostics.degenerate_faces, 0);
     }
 
     #[test]

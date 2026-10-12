@@ -38,6 +38,7 @@ ones: version 2 and below hold no built geometry, which is the whole of this for
 | `plates`, `active_plate` | one name per build plate, and the one the project was left on |
 | `objects[]` | name, plate, `Transform`, visibility, the import summary, and what each tool placed |
 | `objects[].supports.grown` | every tree the automatic run grew, in the model's own space |
+| `objects[].supports.raft_lift_mm` | how much of the height in `transform` is the raft's lift (ADR 0238); absent in older files and read as 0 |
 | `objects[].supports.frozen` | every tree a hand took hold of, in the same space |
 | `objects[].hollow.built` | the shell standing on the model, or `null` for a solid one |
 

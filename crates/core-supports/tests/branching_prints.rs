@@ -130,8 +130,9 @@ fn the_overlap_at_a_joint_is_exposed_once_not_twice() {
     let joint = trees[0].root();
     let sliced = slice(&meshed(&trees, &profile));
 
-    // Half a trunk radius under the joint, where both stubs still overlap the trunk.
-    let layer = layer_at(&sliced, joint.position.z - joint.radius_mm / 2.0);
+    // Just under the joint, inside the domes the stubs end in, which is where they and
+    // the trunk overlap (ADR 0238).
+    let layer = layer_at(&sliced, joint.position.z - 0.03);
     let exposed = exposed_mm2(&layer);
     let summed = contour_mm2(&layer);
 

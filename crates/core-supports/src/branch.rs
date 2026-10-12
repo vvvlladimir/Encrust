@@ -699,7 +699,7 @@ mod tests {
             &Mesh::default(),
             Profiles::single(&profile),
         );
-        assert!(forest[0].root().radius_mm > profile.top_lower_radius_mm());
+        assert!(forest[0].root().radius_mm > profile.pillar_radius_mm());
     }
 
     #[test]

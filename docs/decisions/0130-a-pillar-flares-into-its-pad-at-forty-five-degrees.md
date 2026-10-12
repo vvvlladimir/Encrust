@@ -1,6 +1,6 @@
 # 0130. Flare a pillar into its pad at forty-five degrees
 
-- **Status:** Accepted
+- **Status:** Accepted; the flare's upper width is superseded by 0238
 - **Date:** 2026-09-29
 
 ## Context

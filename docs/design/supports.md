@@ -50,9 +50,9 @@ The profile is grouped as MSLA slicers group it, so numbers tuned elsewhere carr
 | Piece | From | To | Radius |
 |---|---|---|---|
 | tip cone | apex, `tip.contact_depth_mm` above the contact | the contact | `tip.contact_diameter_mm / 2` |
-| top segment | the contact | `top.length_mm` along the face normal | `top.upper_diameter_mm / 2` to `top.lower_diameter_mm / 2` |
+| top segment | the contact | `top.length_mm` along the face normal | `tip.contact_diameter_mm / 2` to the pillar's radius |
 | pillar | the top segment | the top of the flare | the node's radius, `middle.diameter_mm / 2` unless it is a trunk |
-| flare | the pillar | the top of the foot | `bottom.upper_diameter_mm / 2` to `bottom.lower_diameter_mm / 2` |
+| flare | the pillar | the top of the foot | the pillar's radius to `bottom.lower_diameter_mm / 2` |
 | foot | the top of the foot | `z = 0` | `bottom.platform_diameter_mm / 2` in to the bevelled rim |
 
 The apex sits back along the tip's own axis, which is that normal, so the bite drives into
@@ -68,10 +68,9 @@ rings run past the contact and rings never climb, so the neck is shorter than
 **Feet.** `bottom.shape` sets the ring's side count and whether it tapers upward:
 `cylinder` (`facets`, no), `cone` (`facets`, to 45% of the rim), `prism` (6),
 `cube` (4), `skate` (no ring sweep at all). `platform_diameter_mm` is the circle the
-corners sit on, so a cube's side is that over √2, and it is the widest the pad may be: each
-is narrowed to leave `FOOT_GAP_MM` (0.5 mm) of air to the nearest other pad and to stay
-out of the model, never below the flare standing in it, so a row of pads is no wall and a
-ring of them no cup (ADR 0237). The foot is a tube of its own, because a
+corners sit on, so a cube's side is that over √2. Every pad is that wide, and neighbouring
+pads overlap where their supports stand closer than it; one is narrower only where the
+model itself stands in its way, never below the flare standing in it (ADR 0239). The foot is a tube of its own, because a
 tube has one side count, and the trunk runs down through it — the same overlap rule as
 every joint (ADR 0041).
 
@@ -83,8 +82,8 @@ foot keeps its rim as a middle ring, so it narrows towards the support and still
 plate on the bevel.
 
 **The flare.** The pillar widens out into the pad over a cone that rises as far as it
-widens, which is forty-five degrees. Its height is `(lower - upper) / 2` rather than a
-field of its own, it is drawn with the pillar's facets rather than the pad's, and it sinks
+widens, which is forty-five degrees. It leaves the pillar at the pillar's own width, so
+its height is `(lower - pillar) / 2` rather than a field of its own (ADR 0238), it is drawn with the pillar's facets rather than the pad's, and it sinks
 `FOOT_BITE` into the pad the way the trunk does. It never reaches above the root it widens,
 never narrower than the trunk standing in it, and never wider than the narrowest ring of
 the pad under it (ADR 0130).
@@ -99,10 +98,8 @@ carrying one tip, section enabled — never marked. A trunk keeps its width what
 stands on, because it carries the tips' weight (ADR 0042).
 
 **Standing on the part.** Any other support that lands on the model ends in `[top]` and
-`[tip]` upside down: a cone over `top.length_mm` from the trunk's own width down to
-`top.upper_diameter_mm`, then the contact driven into the face. Leaving the trunk at its
-own width rather than at `top.lower_diameter_mm` is what keeps a rim from hanging off a
-merged trunk. What touches the part is a tip's scar whatever the trunk carries, so it
+`[tip]` upside down: a cone over `top.length_mm` from the trunk's own width down to the
+contact's, then the contact driven into the face. What touches the part is a tip's scar whatever the trunk carries, so it
 breaks off by hand (ADR 0124).
 
 **Raft.** `[raft]` lays a slab from `z = 0` to `thickness_mm` over the feet that reach the
@@ -122,7 +119,11 @@ that is not beam-checked — it is a slab, not a body, and clipping it is a plat
 operation.
 
 **Lift.** `z_lift_mm` is how far the lowest point of a part stands off the plate, applied
-by `core_geometry::lift_over_plate`; lifting twice is a no-op. The window applies it from
+by `core_geometry::lift_over_plate`; lifting twice is a no-op. A raft stands the part up
+by its own thickness on top of that, so the slab is never printed into it (ADR 0238): the
+command line adds the two, and the window does it without being asked — every supported
+model rises by the raft's thickness when the raft is switched on and comes back down when
+it or the supports go, and what it rose by is kept beside its supports and in the project. The window applies it from
 its **Lift models** button and the command line applies it inside `stand_under`, before it
 cuts the model, leaving a part that already stands that high where it is. Whether the
 lowest contact of a lifted part can stand at all is arithmetic: the pad, the top segment
@@ -195,6 +196,12 @@ The first three are read off a layer and the layers under it; adrift is read off
 A point hanging down begins as a speck under `MIN_ISLAND_MM` and then widens inside the
 angle, so no layer of it is an island or an overhang, and placement follows each piece's
 parentage to know that nothing ever held it. A piece the blocker refused counts as held.
+
+Where such a piece began at a **low point** of the model — a vertex lower than every
+vertex it shares a face with, which `low_points` reads off the mesh — its support goes to
+that point itself rather than to wherever its first layers were wide enough to read. A low
+point no adrift piece begins at within a millimetre of rise is a bump on a surface
+something already holds, and gets nothing.
 
 A contact goes a whole layer below the plane that was cut, because the surface is somewhere
 inside the layer's rise and a contact above it would land the column on the very surface it
@@ -294,11 +301,10 @@ the same beam. What still cannot stand is dropped, and the panel's
 standing-against-placed count is where that shows.
 
 **Meshing.** Every strut is its own closed tube and tubes overlap rather than weld
-(ADR 0041). A strut stops dead at its node; a ball `JOINT_SWELL` wider than the trunk,
-centred there, hides every end cap whatever the angles and however many struts meet
-(ADR 0044). A node one strut runs straight through — a tip square under the face it holds,
-over a pillar going the same way — gets no ball and the strut above reaches
-`JOINT_OVERLAP_MM` past it instead, so a plain column wears no bulge (ADR 0125). Ring
+(ADR 0041). A strut keeps its own width all the way down and ends in a dome of that width
+centred on the node; the tube leaving the node starts under a dome of its own. A trunk is
+never thinner than a branch, so every end lies inside what it meets: nothing covers the
+joint and nothing is wider there than the trunk itself (ADR 0238). Ring
 frames come from the tube's direction, chosen so a vertical tube uses the plate's own X
 and Y.
 `tests/branching_prints.rs` checks the point of all this: through a joint the layer has

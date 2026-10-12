@@ -288,6 +288,10 @@ pub struct ObjectSupportState {
     /// The grown trees, in the model's own space, as the run left them. They are not
     /// grown again on opening: a tree is where the file says it is.
     pub grown: Vec<SupportTree>,
+    /// How much of the height in `transform` is the raft's lift, millimetres (ADR 0238).
+    /// A file without it reads as a model no raft has lifted.
+    #[serde(default)]
+    pub raft_lift_mm: f32,
 }
 
 /// One model's hollowing: the blockers, drains and channels placed on it, and the shell
@@ -581,6 +585,7 @@ mod tests {
                 blocked: Region::default(),
                 frozen: Vec::new(),
                 grown: Vec::new(),
+                raft_lift_mm: 0.5,
             },
             hollow: ObjectHollowState {
                 blockers: vec![Blocker::ball(Vec3::ZERO, 1.5)],

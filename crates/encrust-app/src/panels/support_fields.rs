@@ -120,22 +120,8 @@ fn top(ui: &mut egui::Ui, profile: &mut SupportProfile) {
         0.05..=2.0,
     );
     mm(ui, "Bite", &mut tip.contact_depth_mm, FINE_STEP, 0.05..=1.0);
-    let top = &mut profile.top;
-    mm(
-        ui,
-        "Upper",
-        &mut top.upper_diameter_mm,
-        FINE_STEP,
-        0.05..=4.0,
-    );
-    mm(
-        ui,
-        "Lower",
-        &mut top.lower_diameter_mm,
-        COARSE_STEP,
-        0.05..=6.0,
-    );
-    mm(ui, "Length", &mut top.length_mm, COARSE_STEP, 0.2..=10.0);
+    let length = &mut profile.top.length_mm;
+    mm(ui, "Length", length, COARSE_STEP, 0.2..=10.0);
 }
 
 /// The column itself, and the air it keeps between itself and the model.
@@ -187,14 +173,7 @@ fn bottom(ui: &mut egui::Ui, profile: &mut SupportProfile) {
     );
     mm(
         ui,
-        "Flare upper",
-        &mut bottom.upper_diameter_mm,
-        COARSE_STEP,
-        0.1..=10.0,
-    );
-    mm(
-        ui,
-        "Flare lower",
+        "Flare",
         &mut bottom.lower_diameter_mm,
         COARSE_STEP,
         0.1..=15.0,
@@ -270,15 +249,9 @@ fn branching(ui: &mut egui::Ui, profile: &mut SupportProfile) {
     });
 }
 
-/// The slab the supports stand on, and how far the model stands off the plate.
+/// The slab the supports stand on. It lifts the model by its own thickness on top of
+/// the lift, so it is never printed into the part (ADR 0238).
 fn raft(ui: &mut egui::Ui, profile: &mut SupportProfile) {
-    mm(
-        ui,
-        "Model lift",
-        &mut profile.z_lift_mm,
-        COARSE_STEP,
-        0.0..=30.0,
-    );
     let raft = &mut profile.raft;
     switch(ui, &mut raft.enabled, "Raft under the feet");
     if !raft.enabled {
@@ -363,21 +336,12 @@ fn automatic(ui: &mut egui::Ui, profile: &mut SupportProfile) {
         MIN_DENSITY..=MAX_DENSITY,
         2,
     );
+    mm(ui, "Lift", &mut profile.z_lift_mm, COARSE_STEP, 0.0..=30.0);
 }
 
 /// A ring wider than the one above it turns a support inside out where the two cross.
 /// The fields are independent, so the order is restored here rather than forbidden there.
 pub fn keep_in_order(profile: &mut SupportProfile) {
-    // The contact is not in the chain: a head wider than the neck under it is a nail, not
-    // an inversion. See `docs/decisions/0131`.
-    profile.top.lower_diameter_mm = profile
-        .top
-        .lower_diameter_mm
-        .max(profile.top.upper_diameter_mm);
-    profile.middle.diameter_mm = profile
-        .middle
-        .diameter_mm
-        .max(profile.top.lower_diameter_mm);
     profile.branching.max_trunk_diameter_mm = profile
         .branching
         .max_trunk_diameter_mm
@@ -385,7 +349,7 @@ pub fn keep_in_order(profile: &mut SupportProfile) {
     profile.bottom.lower_diameter_mm = profile
         .bottom
         .lower_diameter_mm
-        .max(profile.bottom.upper_diameter_mm);
+        .max(profile.middle.diameter_mm);
     profile.bottom.platform_diameter_mm = profile
         .bottom
         .platform_diameter_mm

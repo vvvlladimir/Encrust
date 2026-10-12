@@ -93,6 +93,7 @@ fn object_state(object: &SceneObject) -> ObjectState {
             blocked: object.supports.blocked().clone(),
             frozen: object.supports.frozen().to_vec(),
             grown: object.supports.grown(object.transform),
+            raft_lift_mm: object.supports.raft_lift_mm(),
         },
         hollow: ObjectHollowState {
             blockers: object.hollow.blockers().to_vec(),
@@ -344,6 +345,7 @@ mod tests {
             blocked,
             Vec::new(),
         );
+        object.supports.set_raft_lift_mm(0.5);
         object.hollow = ModelHollow::restored(
             vec![Blocker::ball(Vec3::splat(0.5), 0.2)],
             Vec::new(),
@@ -424,6 +426,10 @@ mod tests {
         assert_eq!(after.supports.points(), before.supports.points());
         assert_eq!(after.supports.painted(), before.supports.painted());
         assert_eq!(after.supports.blocked(), before.supports.blocked());
+        assert!(
+            (after.supports.raft_lift_mm() - 0.5).abs() < f32::EPSILON,
+            "a model reopened on its raft must not be stood up by it again"
+        );
         assert_eq!(after.hollow.blockers(), before.hollow.blockers());
         assert_eq!(after.hollow.channels(), before.hollow.channels());
     }

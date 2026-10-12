@@ -20,6 +20,7 @@ mod edit;
 mod field;
 mod generate;
 mod group;
+mod low;
 mod mesher;
 mod model;
 mod pick;
@@ -35,6 +36,7 @@ pub use column::{Column, Landing, SupportPoint, columns, landing, neck_of};
 pub use edit::{carried, fits, on_model};
 pub use generate::generate_supports;
 pub use group::Profiles;
+pub use low::low_points;
 pub use mesher::{FOOT_BEVEL, mesh_groups, mesh_trees};
 pub use model::ModelSupports;
 pub use pick::{Grab, Part, grab, support_under};
@@ -127,17 +129,12 @@ mod tests {
                 contact_diameter_mm: 0.4,
                 contact_depth_mm: 0.2,
             },
-            top: TopSegment {
-                upper_diameter_mm: 0.4,
-                lower_diameter_mm: 1.2,
-                length_mm: 2.0,
-            },
+            top: TopSegment { length_mm: 2.0 },
             middle: MiddleSegment { diameter_mm: 1.2 },
             bottom: printer_profiles::BottomSegment {
                 shape: PlatformShape::Cylinder,
                 platform_diameter_mm: 8.0,
                 platform_thickness_mm: 1.0,
-                upper_diameter_mm: 1.2,
                 lower_diameter_mm: 2.2,
             },
             land_on_model: true,

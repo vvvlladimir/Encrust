@@ -11,6 +11,7 @@ use crate::config::{
 };
 use crate::detect::{across_mm, unsupported};
 use crate::field::{Field, Grid, Parts};
+use crate::low::Lows;
 use crate::region::Blocked;
 use crate::sample::{sample_piece, sample_stance};
 
@@ -25,7 +26,8 @@ const READ_BLOCK: usize = 32;
 ///
 /// `stack` is the model alone, already cut in plate coordinates; `seeds` are the contacts
 /// of supports that already exist, which hold up what is near them and are never moved or
-/// returned. `progress` is called with each layer index before what was found there is
+/// returned. `lows` are the model's [`crate::low_points`]: a part that begins at one is
+/// held at that point itself rather than where its first layers are wide enough to see. `progress` is called with each layer index before what was found there is
 /// put down, and stops the run by returning `false`, which leaves whatever was found up
 /// to that layer.
 ///
@@ -39,6 +41,7 @@ pub fn generate_supports(
     layer_height_mm: Scalar,
     profile: &SupportProfile,
     seeds: &[Vec3],
+    lows: &[Vec3],
     blocked: Option<&Blocked>,
     progress: &mut dyn FnMut(usize) -> bool,
 ) -> Vec<Vec3> {
@@ -59,9 +62,10 @@ pub fn generate_supports(
         // sag before it cures anyway.
         lowest_contact_mm: PLATE_CONTACT_MM.max(profile.base_height_mm() + MIN_PILLAR_HEIGHT_MM),
         stance_mm: config.spacing_mm,
+        blocked,
     };
 
-    let mut standing = Standing::new(seeds, &grid, &config, layer_height_mm);
+    let mut standing = Standing::new(seeds, lows, &grid, &config, layer_height_mm);
     let mut placed = Vec::new();
     // The block being looked at, with as much of the block before it as the lean is
     // measured over still in front of it.
@@ -88,30 +92,7 @@ pub fn generate_supports(
             }
             let contact_mm = contact_of(&stack.layers[index], layer_height_mm);
             standing.climb(&parts, contact_mm);
-            let adrift = pass.adrift(&standing, &parts, contact_mm);
-            for cell in adrift.into_iter().chain(cells) {
-                let at = grid.centre_mm(cell[0], cell[1]);
-                // Asked before the cell is taken, or a place nothing may stand on would
-                // still count as held and leave its neighbours a support short.
-                if blocked
-                    .is_some_and(|blocked| blocked.covers(at.extend(contact_mm), pass.keep_out_mm))
-                {
-                    standing.leave(parts.at(cell[0], cell[1]));
-                    continue;
-                }
-                if let Some(contact) = standing.take(parts.at(cell[0], cell[1]), at, contact_mm) {
-                    placed.push(contact);
-                }
-            }
-            for (piece, cell) in pass.unsteady(&standing, &parts, contact_mm) {
-                let at = grid.centre_mm(cell[0], cell[1]);
-                let refused = blocked
-                    .is_some_and(|blocked| blocked.covers(at.extend(contact_mm), pass.keep_out_mm));
-                if !refused {
-                    placed.extend(standing.prop(piece, at, contact_mm, pass.stance_mm / 4.0));
-                }
-                standing.leave(Some(piece));
-            }
+            pass.put_down(&mut standing, &parts, cells, contact_mm, &mut placed);
             standing.rest_on(parts);
         }
 
@@ -151,6 +132,7 @@ struct Pass<'a> {
     lowest_contact_mm: Scalar,
     /// How far across a part has to be before the supports that steady it are put down.
     stance_mm: Scalar,
+    blocked: Option<&'a Blocked>,
 }
 
 impl Pass<'_> {
@@ -187,6 +169,61 @@ impl Pass<'_> {
 }
 
 impl Pass<'_> {
+    /// Puts down what one layer needs, in the order that makes a run repeatable: the
+    /// points parts hang from, the pieces nothing holds, what the layer itself `wanted`,
+    /// and last the supports that steady a part held at too few places.
+    fn put_down(
+        &self,
+        standing: &mut Standing,
+        parts: &Parts,
+        wanted: Vec<[i32; 2]>,
+        contact_mm: Scalar,
+        placed: &mut Vec<Vec3>,
+    ) {
+        for (piece, tip) in self.hanging(standing, parts) {
+            if self.refuses(tip) {
+                standing.leave(Some(piece));
+            } else {
+                placed.push(standing.hang(piece, tip));
+            }
+        }
+        let adrift = self.adrift(standing, parts, contact_mm);
+        for cell in adrift.into_iter().chain(wanted) {
+            let at = self.grid.centre_mm(cell[0], cell[1]);
+            // Asked before the cell is taken, or a place nothing may stand on would
+            // still count as held and leave its neighbours a support short.
+            if self.refuses(at.extend(contact_mm)) {
+                standing.leave(parts.at(cell[0], cell[1]));
+            } else {
+                placed.extend(standing.take(parts.at(cell[0], cell[1]), at, contact_mm));
+            }
+        }
+        for (piece, cell) in self.unsteady(standing, parts, contact_mm) {
+            let at = self.grid.centre_mm(cell[0], cell[1]);
+            if !self.refuses(at.extend(contact_mm)) {
+                placed.extend(standing.prop(piece, at, contact_mm, self.stance_mm / 4.0));
+            }
+            standing.leave(Some(piece));
+        }
+    }
+
+    /// Whether the user has painted supports out of where `contact` would touch.
+    fn refuses(&self, contact: Vec3) -> bool {
+        self.blocked
+            .is_some_and(|blocked| blocked.covers(contact, self.keep_out_mm))
+    }
+
+    /// The pieces nothing holds that began at a low point of the model and have grown
+    /// into something worth holding, each with that point: where its support goes.
+    fn hanging(&self, standing: &Standing, parts: &Parts) -> Vec<(u32, Vec3)> {
+        standing
+            .adrift()
+            .filter_map(|piece| Some((piece, standing.hung_from(piece)?)))
+            .filter(|(_, tip)| tip.z > self.lowest_contact_mm)
+            .filter(|(piece, _)| across_mm(&parts.piece(*piece), self.grid) >= MIN_ISLAND_MM)
+            .collect()
+    }
+
     /// The cells that hold up what `standing` has nothing under: a piece too small to be
     /// an island when it began is held once it has grown into one, or everything that
     /// grows out of it prints in mid-air. See `docs/design/supports.md`.
@@ -243,6 +280,10 @@ struct Standing {
     /// of, counted no further than [`STEADY`]; a piece on the plate has that many. Kept
     /// apart from `held`, which forgets a support left far enough below.
     tips: Vec<u8>,
+    /// The low point each of those pieces began at, while nothing holds it yet.
+    hung: Vec<Option<Vec3>>,
+    /// The model's low points the climb has still to match to a piece.
+    lows: Lows,
     /// The pieces of the layer below, so a piece can be followed onto what it grew from.
     below: Option<Parts>,
     /// Supports handed to the run that the climb has not reached yet, highest last.
@@ -256,7 +297,13 @@ struct Standing {
 }
 
 impl Standing {
-    fn new(seeds: &[Vec3], grid: &Grid, config: &SampleConfig, layer_height_mm: Scalar) -> Self {
+    fn new(
+        seeds: &[Vec3],
+        lows: &[Vec3],
+        grid: &Grid,
+        config: &SampleConfig,
+        layer_height_mm: Scalar,
+    ) -> Self {
         let mut pending: Vec<(Vec3, [i32; 2])> = seeds
             .iter()
             .map(|seed| (*seed, grid.cell_of(seed.truncate())))
@@ -266,6 +313,8 @@ impl Standing {
         Self {
             held: Vec::new(),
             tips: Vec::new(),
+            hung: Vec::new(),
+            lows: Lows::new(lows, grid),
             below: None,
             pending,
             radius_mm: config.coverage_radius_mm.max(Scalar::MIN_POSITIVE),
@@ -287,9 +336,19 @@ impl Standing {
         let Some(parents) = parents else {
             self.held = vec![Held::default(); parts.count()];
             self.tips = vec![on_plate; parts.count()];
+            self.hung = vec![None; parts.count()];
             self.take_seeds(parts, z);
+            self.take_lows(parts, z);
             return;
         };
+        self.hung = parents
+            .iter()
+            .map(|grown_from| {
+                grown_from
+                    .iter()
+                    .find_map(|parent| self.hung[*parent as usize])
+            })
+            .collect();
         self.tips = parents
             .iter()
             .map(|grown_from| {
@@ -332,6 +391,32 @@ impl Standing {
         }
         self.held = held;
         self.take_seeds(parts, z);
+        self.take_lows(parts, z);
+    }
+
+    /// Gives every low point the climb has reached to the piece that begins at it, where
+    /// nothing holds that piece yet.
+    fn take_lows(&mut self, parts: &Parts, z: Scalar) {
+        self.lows.reach(z + self.above_mm);
+        let (tips, hung) = (&self.tips, &self.hung);
+        let claimed = self.lows.claim(parts, |piece| {
+            tips[piece as usize] == 0 && hung[piece as usize].is_none()
+        });
+        for (piece, point) in claimed {
+            self.hung[piece as usize] = Some(point);
+        }
+    }
+
+    /// The low point `piece` began at, if it began at one.
+    fn hung_from(&self, piece: u32) -> Option<Vec3> {
+        self.hung.get(piece as usize).copied().flatten()
+    }
+
+    /// Puts a support under `piece` at `tip`, the point it hangs from.
+    fn hang(&mut self, piece: u32, tip: Vec3) -> Vec3 {
+        self.held[piece as usize].add(tip, self.radius_mm);
+        self.count(piece);
+        tip
     }
 
     /// Takes on every support handed to the run that the climb has reached.
@@ -552,6 +637,7 @@ mod tests {
             LAYER_HEIGHT_MM,
             &profile(),
             &[],
+            &[],
             None,
             &mut |_| true,
         )
@@ -678,6 +764,44 @@ mod tests {
         }
     }
 
+    #[test]
+    fn a_part_that_begins_at_a_point_is_held_at_the_point_itself() {
+        let apex = Vec3::new(0.0, 0.0, 5.0);
+        let cone = cone_on_its_point(apex.z, 5.0, 10.0);
+        let lows = crate::low_points(&cone, core_geometry::Transform::default());
+        let points = generate_supports(
+            &slice(&cone),
+            LAYER_HEIGHT_MM,
+            &profile(),
+            &[],
+            &lows,
+            None,
+            &mut |_| true,
+        );
+
+        assert!(
+            points.contains(&apex),
+            "the cone hangs from its point at {apex}, and its lowest contact is {:?}",
+            points.iter().min_by(|a, b| a.z.total_cmp(&b.z))
+        );
+    }
+
+    #[test]
+    fn a_low_point_on_a_part_that_is_already_held_gets_no_support_of_its_own() {
+        // A box on the plate, told of a point on its wall: nothing begins there.
+        let standing = box_mesh(Vec3::ZERO, Vec3::new(10.0, 10.0, 10.0));
+        let points = generate_supports(
+            &slice(&standing),
+            LAYER_HEIGHT_MM,
+            &profile(),
+            &[],
+            &[Vec3::new(0.0, 5.0, 5.0)],
+            None,
+            &mut |_| true,
+        );
+        assert!(points.is_empty(), "got {points:?}");
+    }
+
     /// Two boxes, the upper one jutting `step` further out over the lower one's ledge:
     /// a staircase of overhangs, one above the other, which is what a stepped model is.
     fn steps(step: Scalar, rise: Scalar) -> Mesh {
@@ -734,6 +858,7 @@ mod tests {
             &slice(&floating),
             LAYER_HEIGHT_MM,
             &profile(),
+            &[],
             &[],
             Some(&blocked),
             &mut |_| true,
@@ -860,6 +985,7 @@ mod tests {
             LAYER_HEIGHT_MM,
             &profile(),
             &[Vec3::new(2.0, 2.0, 10.0)],
+            &[],
             None,
             &mut |_| true,
         );
@@ -911,6 +1037,7 @@ mod tests {
                 ..profile()
             },
             &[],
+            &[],
             None,
             &mut |_| true,
         );
@@ -921,6 +1048,7 @@ mod tests {
                 max_overhang_deg: 30.0,
                 ..profile()
             },
+            &[],
             &[],
             None,
             &mut |_| true,
@@ -937,9 +1065,15 @@ mod tests {
     fn a_denser_profile_puts_down_more_supports() {
         let ball = sphere(15.0, 0.0);
         let stack = slice(&ball);
-        let normal = generate_supports(&stack, LAYER_HEIGHT_MM, &profile(), &[], None, &mut |_| {
-            true
-        });
+        let normal = generate_supports(
+            &stack,
+            LAYER_HEIGHT_MM,
+            &profile(),
+            &[],
+            &[],
+            None,
+            &mut |_| true,
+        );
         let dense = generate_supports(
             &stack,
             LAYER_HEIGHT_MM,
@@ -947,6 +1081,7 @@ mod tests {
                 density: 3.0,
                 ..profile()
             },
+            &[],
             &[],
             None,
             &mut |_| true,
@@ -965,11 +1100,18 @@ mod tests {
         let stack = slice(&floating);
 
         let mut looked = 0;
-        let stopped =
-            generate_supports(&stack, LAYER_HEIGHT_MM, &profile(), &[], None, &mut |_| {
+        let stopped = generate_supports(
+            &stack,
+            LAYER_HEIGHT_MM,
+            &profile(),
+            &[],
+            &[],
+            None,
+            &mut |_| {
                 looked += 1;
                 false
-            });
+            },
+        );
         assert!(stopped.is_empty());
         assert_eq!(
             looked, 1,
@@ -989,6 +1131,7 @@ mod tests {
             LAYER_HEIGHT_MM,
             &profile(),
             &[],
+            &[],
             None,
             &mut |layer| layer < half,
         );
@@ -997,9 +1140,15 @@ mod tests {
         for point in &stopped {
             assert!(point.x < 20.0, "{point} is on the island never reached");
         }
-        let whole = generate_supports(&stack, LAYER_HEIGHT_MM, &profile(), &[], None, &mut |_| {
-            true
-        });
+        let whole = generate_supports(
+            &stack,
+            LAYER_HEIGHT_MM,
+            &profile(),
+            &[],
+            &[],
+            None,
+            &mut |_| true,
+        );
         assert!(whole.len() > stopped.len());
     }
 
@@ -1007,12 +1156,24 @@ mod tests {
     fn the_same_model_always_produces_the_same_supports() {
         let ball = sphere(15.0, 3.0);
         let stack = slice(&ball);
-        let once = generate_supports(&stack, LAYER_HEIGHT_MM, &profile(), &[], None, &mut |_| {
-            true
-        });
-        let twice = generate_supports(&stack, LAYER_HEIGHT_MM, &profile(), &[], None, &mut |_| {
-            true
-        });
+        let once = generate_supports(
+            &stack,
+            LAYER_HEIGHT_MM,
+            &profile(),
+            &[],
+            &[],
+            None,
+            &mut |_| true,
+        );
+        let twice = generate_supports(
+            &stack,
+            LAYER_HEIGHT_MM,
+            &profile(),
+            &[],
+            &[],
+            None,
+            &mut |_| true,
+        );
         assert_eq!(once, twice);
     }
 
@@ -1022,6 +1183,7 @@ mod tests {
             &Sliced::default(),
             LAYER_HEIGHT_MM,
             &profile(),
+            &[],
             &[],
             None,
             &mut |_| true,

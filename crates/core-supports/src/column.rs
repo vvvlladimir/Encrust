@@ -270,10 +270,10 @@ fn out_and_down(normal: Vec3) -> Vec3 {
 
 /// Whether a foot of `radius_mm` on the plate has the model out of its way.
 ///
-/// A pad is wider than anything above it, so a column that came down in clear air can
-/// still drive its foot into a part that stands on the plate beside it. A landing asks
-/// about the narrowest foot there is, and the pad is then fitted to the room it has; see
-/// `docs/decisions/0237`.
+/// A foot is wider than anything above it, so a column that came down in clear air can
+/// still drive it into a part that stands on the plate beside it. A landing asks about
+/// the flare alone, and the pad is then narrowed to the room the model leaves it; see
+/// `docs/decisions/0239`.
 pub(crate) fn foot_clear(
     placed: &Placed,
     base: Vec3,
@@ -546,8 +546,8 @@ mod tests {
                 &profile
             )
             .is_some(),
-            "3 mm out the 8 mm pad reaches the kerb, and is fitted to the room rather than \
-             refused; see `docs/decisions/0237`"
+            "3 mm out the 8 mm pad reaches the kerb, and is narrowed rather than refused; \
+             see `docs/decisions/0239`"
         );
     }
 

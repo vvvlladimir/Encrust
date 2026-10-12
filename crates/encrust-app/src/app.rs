@@ -294,10 +294,12 @@ impl SlicerApp {
     /// points, paint or profile moved under them, so that what the viewport draws is what
     /// would be sliced.
     fn refresh_supports(&mut self) {
+        self.tools.supports.settle_on_raft(&mut self.doc.scene);
         let table = self.tools.supports.table();
         for object in self.doc.scene.objects_mut() {
             let untouched = object.supports.is_empty()
                 && object.supports.meshes().is_none()
+                && object.supports.drawn().is_empty()
                 && object.supports.painted().is_empty()
                 && object.supports.blocked().is_empty();
             if untouched {
@@ -420,6 +422,15 @@ impl eframe::App for SlicerApp {
             &mut self.machine.status,
         );
         self.window().show(ui);
+        // An edit made in this frame is built in the next one, which nothing else asks
+        // for while the pointer is held still.
+        let stale = |object: &crate::scene::SceneObject| {
+            object.supports.meshes().is_none()
+                && !(object.supports.is_empty() && object.supports.drawn().is_empty())
+        };
+        if self.doc.scene.objects().iter().any(stale) {
+            ui.ctx().request_repaint();
+        }
 
         // A gesture is one edit, so nothing is recorded until the button is up again and
         // the field being typed into has been left.

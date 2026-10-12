@@ -162,7 +162,7 @@ Grouped by what the decision governs; the number is still the order it was taken
 | [0041](0041-a-support-is-a-set-of-overlapping-tubes.md) | A support is meshed as overlapping closed tubes, not one welded solid | Accepted |
 | [0042](0042-support-shapes-are-profile-data-swept-by-one-mesher.md) | Support shapes are data in the profile, swept by the one mesher | Accepted |
 | [0043](0043-the-base-is-three-solids-beside-the-supports.md) | The raft, the skate and the braces are solids beside the supports | Accepted |
-| [0044](0044-joints-are-balls-and-every-foot-is-bevelled.md) | A joint is covered by a ball, every foot is bevelled, braces cross | Accepted |
+| [0044](0044-joints-are-balls-and-every-foot-is-bevelled.md) | A joint is covered by a ball, every foot is bevelled, braces cross | Accepted; the ball over a joint is superseded by 0238 |
 | [0072](0072-trapped-resin-is-found-on-the-stack.md) | Trapped resin is found on the slice stack, in `core-supports` | Accepted |
 | [0077](0077-a-support-body-is-checked-as-a-beam.md) | A support body is checked as a beam, not as its axis | Accepted |
 | [0078](0078-a-blocked-tip-leans-until-it-finds-room.md) | A blocked tip leans until it finds room | Accepted |
@@ -177,9 +177,11 @@ Grouped by what the decision governs; the number is still the order it was taken
 | [0119](0119-support-profiles-join-the-catalogue.md) | Support profiles join the catalogue; a group tunes a copy | Accepted |
 | [0124](0124-a-support-standing-on-the-part-ends-in-a-contact.md) | End a support that stands on the part in a contact, and let a profile refuse one | Accepted |
 | [0125](0125-a-tip-leaves-the-surface-along-its-normal.md) | Leave the surface along its normal, and merge from the neck | Accepted |
-| [0130](0130-a-pillar-flares-into-its-pad-at-forty-five-degrees.md) | Flare a pillar into its pad at forty-five degrees | Accepted |
+| [0130](0130-a-pillar-flares-into-its-pad-at-forty-five-degrees.md) | Flare a pillar into its pad at forty-five degrees | Accepted; the flare's upper width is superseded by 0238 |
 | [0131](0131-the-shipped-presets-are-field-measurements.md) | Ship the field's measurements, and the two rules they broke | Accepted |
-| [0237](0237-a-pad-is-fitted-to-the-room-it-has.md) | Fit a pad to the room it has, and lift a part by what its support needs | Accepted |
+| [0237](0237-a-pad-is-fitted-to-the-room-it-has.md) | Fit a pad to the room it has, and lift a part by what its support needs | Accepted; the gap kept between neighbouring pads is superseded by 0239 |
+| [0238](0238-a-support-has-one-width-and-its-joints-are-domes.md) | Give a support one width, round its joints, and let a raft lift the part | Accepted |
+| [0239](0239-a-pad-is-as-wide-as-its-profile-says.md) | Make a pad as wide as its profile says | Accepted |
 | [0132](0132-the-shipped-asset-is-the-preset.md) | The shipped TOML is the preset, and the constructor mirrors it | Accepted |
 
 ### Volume: hollowing, infill and relief

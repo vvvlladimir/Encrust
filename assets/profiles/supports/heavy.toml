@@ -32,8 +32,6 @@ contact_diameter_mm = 1.0
 contact_depth_mm = 0.6
 
 [top]
-upper_diameter_mm = 0.6
-lower_diameter_mm = 1.5
 length_mm = 3.0
 
 [middle]
@@ -45,9 +43,8 @@ shape = "cylinder"
 platform_diameter_mm = 12.0
 platform_thickness_mm = 1.0
 
-# The flare between the pillar and the pad. It rises as far as it widens, so these
-# two also set its height.
-upper_diameter_mm = 1.5
+# How wide the flare between the pillar and the pad is where it meets the pad. It leaves
+# the pillar at the pillar's own width and rises as far as it widens.
 lower_diameter_mm = 2.7
 
 # The thin strut used where a support runs from one part of the model to another rather

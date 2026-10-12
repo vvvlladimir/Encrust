@@ -3,7 +3,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::{self, Receiver, TryRecvError};
 
 use core_geometry::{Mesh, Scalar, Transform, Vec3, transform_mesh};
-use core_supports::{Blocked, Region, generate_supports};
+use core_supports::{Blocked, Region, generate_supports, low_points};
 use printer_profiles::SupportProfile;
 
 use crate::job::pipeline::{slice_mesh, thread_pool, worker_threads};
@@ -231,6 +231,7 @@ fn place(
             request.layer_height_mm,
             &request.profile,
             &task.seeds,
+            &low_points(&task.mesh, task.transform),
             blocked.as_ref(),
             &mut |layer| {
                 let fraction = done + layer as f32 / layers / models;

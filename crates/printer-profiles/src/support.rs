@@ -31,14 +31,11 @@ pub struct TipSegment {
     pub contact_depth_mm: f32,
 }
 
-/// The frustum between the tip and the pillar, and the only part of a column whose two
-/// ends have different widths by design.
+/// The cone between the tip and the pillar: as wide as the contact where it leaves the
+/// model and as wide as the pillar where it meets it, so it has a length and no widths of
+/// its own. See `docs/decisions/0238`.
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 pub struct TopSegment {
-    /// Diameter where the segment leaves the contact, millimetres.
-    pub upper_diameter_mm: f32,
-    /// Diameter where it meets the pillar, millimetres.
-    pub lower_diameter_mm: f32,
     /// Length of the segment along its own axis, millimetres. On a branch that axis
     /// leans, so this is not a height.
     pub length_mm: f32,
@@ -108,20 +105,14 @@ pub struct BottomSegment {
     pub platform_diameter_mm: f32,
     /// Height of the foot, millimetres.
     pub platform_thickness_mm: f32,
-    /// Diameter where the flare leaves the pillar, millimetres.
-    #[serde(default = "default_bottom_upper_diameter_mm")]
-    pub upper_diameter_mm: f32,
-    /// Diameter where the flare meets the platform, millimetres. The flare rises as far
-    /// as it widens, so this sets its height as well; see `docs/decisions/0130`.
+    /// Diameter where the flare meets the platform, millimetres. It leaves the pillar at
+    /// the pillar's own width and rises as far as it widens, so this sets its height as
+    /// well; see `docs/decisions/0130`.
     #[serde(default = "default_bottom_lower_diameter_mm")]
     pub lower_diameter_mm: f32,
 }
 
 /// What a pillar of about a millimetre flares out to where it meets its pad; see ADR 0131.
-fn default_bottom_upper_diameter_mm() -> f32 {
-    1.0
-}
-
 fn default_bottom_lower_diameter_mm() -> f32 {
     2.2
 }
@@ -453,17 +444,12 @@ impl SupportProfile {
             },
             // The pad, the flare and the top segment together stand inside the 2 mm
             // lift this profile asks for; see `docs/design/supports.md`.
-            top: TopSegment {
-                upper_diameter_mm: 0.5,
-                lower_diameter_mm: 0.9,
-                length_mm: 1.0,
-            },
+            top: TopSegment { length_mm: 1.0 },
             middle: MiddleSegment { diameter_mm: 0.9 },
             bottom: BottomSegment {
                 shape: PlatformShape::Cylinder,
                 platform_diameter_mm: 7.0,
                 platform_thickness_mm: 0.5,
-                upper_diameter_mm: 0.9,
                 lower_diameter_mm: 1.5,
             },
             land_on_model: default_land_on_model(),
@@ -505,17 +491,12 @@ impl SupportProfile {
                 contact_diameter_mm: 0.8,
                 contact_depth_mm: 0.4,
             },
-            top: TopSegment {
-                upper_diameter_mm: 0.55,
-                lower_diameter_mm: 1.2,
-                length_mm: 2.0,
-            },
+            top: TopSegment { length_mm: 2.0 },
             middle: MiddleSegment { diameter_mm: 1.2 },
             bottom: BottomSegment {
                 shape: PlatformShape::Cylinder,
                 platform_diameter_mm: 12.0,
                 platform_thickness_mm: 1.0,
-                upper_diameter_mm: 1.2,
                 lower_diameter_mm: 2.2,
             },
             land_on_model: default_land_on_model(),
@@ -554,17 +535,12 @@ impl SupportProfile {
                 contact_diameter_mm: 1.0,
                 contact_depth_mm: 0.6,
             },
-            top: TopSegment {
-                upper_diameter_mm: 0.6,
-                lower_diameter_mm: 1.5,
-                length_mm: 3.0,
-            },
+            top: TopSegment { length_mm: 3.0 },
             middle: MiddleSegment { diameter_mm: 1.5 },
             bottom: BottomSegment {
                 shape: PlatformShape::Cylinder,
                 platform_diameter_mm: 12.0,
                 platform_thickness_mm: 1.0,
-                upper_diameter_mm: 1.5,
                 lower_diameter_mm: 2.7,
             },
             land_on_model: default_land_on_model(),
@@ -594,14 +570,6 @@ impl SupportProfile {
         self.tip.contact_depth_mm
     }
 
-    pub fn top_upper_radius_mm(&self) -> f32 {
-        self.top.upper_diameter_mm / 2.0
-    }
-
-    pub fn top_lower_radius_mm(&self) -> f32 {
-        self.top.lower_diameter_mm / 2.0
-    }
-
     pub fn top_length_mm(&self) -> f32 {
         self.top.length_mm
     }
@@ -618,8 +586,15 @@ impl SupportProfile {
         self.bottom.platform_thickness_mm
     }
 
-    pub fn flare_upper_radius_mm(&self) -> f32 {
-        self.bottom.upper_diameter_mm / 2.0
+    /// How far the lowest point of a part is stood off the plate, millimetres: the lift
+    /// the profile asks for, and a raft's thickness on top of it, so that the slab is
+    /// never printed into the part. See `docs/decisions/0238`.
+    pub fn lift_mm(&self) -> f32 {
+        if self.raft.enabled {
+            self.z_lift_mm + self.raft.thickness_mm
+        } else {
+            self.z_lift_mm
+        }
     }
 
     pub fn flare_lower_radius_mm(&self) -> f32 {
@@ -698,13 +673,10 @@ impl SupportProfile {
             ("contact_spacing_mm", self.contact_spacing_mm),
             ("contact_diameter_mm", self.tip.contact_diameter_mm),
             ("contact_depth_mm", self.tip.contact_depth_mm),
-            ("upper_diameter_mm", self.top.upper_diameter_mm),
-            ("lower_diameter_mm", self.top.lower_diameter_mm),
             ("length_mm", self.top.length_mm),
             ("diameter_mm", self.middle.diameter_mm),
             ("platform_diameter_mm", self.bottom.platform_diameter_mm),
             ("platform_thickness_mm", self.bottom.platform_thickness_mm),
-            ("bottom upper_diameter_mm", self.bottom.upper_diameter_mm),
             ("bottom lower_diameter_mm", self.bottom.lower_diameter_mm),
             (
                 "max_trunk_diameter_mm",
@@ -734,12 +706,9 @@ impl SupportProfile {
     /// Every ring of a column is at least as wide as the one above it. A column that
     /// narrows downwards turns itself inside out where the two rings cross.
     fn validate_widths(&self) -> Result<(), ProfileError> {
-        // The contact is not in this chain: a head wider than the neck under it is the
-        // nail every slicer drives into a face, not an inversion. See
-        // `docs/decisions/0131`.
+        // The contact is not in this chain: a head wider than the pillar under it is a
+        // cone that narrows, not an inversion.
         let rings = [
-            ("upper_diameter_mm", self.top.upper_diameter_mm),
-            ("lower_diameter_mm", self.top.lower_diameter_mm),
             ("diameter_mm", self.middle.diameter_mm),
             (
                 "max_trunk_diameter_mm",
@@ -762,14 +731,7 @@ impl SupportProfile {
             "platform_diameter_mm",
             self.bottom.platform_diameter_mm,
         )?;
-        // The flare stands between the pillar and the pad, so it is no narrower than the
-        // one and no wider than the other.
-        order(
-            "bottom upper_diameter_mm",
-            self.bottom.upper_diameter_mm,
-            "bottom lower_diameter_mm",
-            self.bottom.lower_diameter_mm,
-        )?;
+        // The flare stands inside the pad, so it is no wider than it.
         order(
             "bottom lower_diameter_mm",
             self.bottom.lower_diameter_mm,
@@ -853,8 +815,6 @@ contact_diameter_mm = 0.4
 contact_depth_mm = 0.2
 
 [top]
-upper_diameter_mm = 0.4
-lower_diameter_mm = 2.0
 length_mm = 2.0
 
 [middle]
@@ -882,8 +842,6 @@ contact_diameter_mm = 0.4
 contact_depth_mm = 0.2
 
 [top]
-upper_diameter_mm = 0.4
-lower_diameter_mm = 2.0
 length_mm = 2.0
 
 [middle]
@@ -957,25 +915,35 @@ platform_thickness_mm = 1.0
     }
 
     #[test]
-    fn a_contact_wider_than_the_neck_under_it_is_a_nail_head_not_an_error() {
+    fn a_contact_wider_than_the_pillar_under_it_is_a_nail_head_not_an_error() {
         let mut nailed = SupportProfile::medium();
-        nailed.tip.contact_diameter_mm = nailed.top.upper_diameter_mm + 1.0;
+        nailed.tip.contact_diameter_mm = nailed.middle.diameter_mm + 1.0;
         SupportProfile::from_toml_str(&toml_of(&nailed), path())
-            .expect("a head wider than its neck is what every slicer drives into a face");
+            .expect("a head wider than its pillar is a cone that narrows");
     }
 
     #[test]
-    fn a_neck_wider_than_the_segment_under_it_is_rejected() {
-        let mut broken = SupportProfile::medium();
-        broken.top.upper_diameter_mm = broken.top.lower_diameter_mm + 1.0;
-        let err = SupportProfile::from_toml_str(&toml_of(&broken), path()).unwrap_err();
-        assert!(matches!(
-            err,
-            ProfileError::OutOfOrder {
-                smaller: "upper_diameter_mm",
-                ..
-            }
-        ));
+    fn a_profile_written_with_the_widths_a_segment_no_longer_has_still_loads() {
+        let old = toml_of(&SupportProfile::medium())
+            .replace(
+                "[top]",
+                "[top]\nupper_diameter_mm = 0.55\nlower_diameter_mm = 1.2",
+            )
+            .replace("[bottom]", "[bottom]\nupper_diameter_mm = 1.2");
+        let profile = SupportProfile::from_toml_str(&old, path())
+            .expect("a profile saved before ADR 0238 names widths that are now derived");
+        assert_eq!(profile, SupportProfile::medium());
+    }
+
+    #[test]
+    fn a_raft_lifts_the_part_by_its_own_thickness_on_top_of_the_lift() {
+        let mut profile = SupportProfile::medium();
+        assert!((profile.lift_mm() - profile.z_lift_mm).abs() < f32::EPSILON);
+        profile.raft.enabled = true;
+        assert!(
+            (profile.lift_mm() - profile.z_lift_mm - profile.raft.thickness_mm).abs() < 1e-6,
+            "a slab under the feet must not be printed into the part"
+        );
     }
 
     #[test]
