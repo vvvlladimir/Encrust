@@ -117,6 +117,11 @@ impl Cured {
         &self.spans
     }
 
+    /// Rows of the panel the layer was cured on.
+    pub(crate) fn height(&self) -> u32 {
+        self.height
+    }
+
     /// This layer in two: the pieces `dropped` flags, and everything else. Both keep the
     /// panel they were cured on, so either can be read against another layer.
     pub(crate) fn split(self, dropped: &[bool]) -> (Self, Self) {

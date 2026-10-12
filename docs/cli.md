@@ -71,7 +71,7 @@ On a terminal `slice` draws a bar over the layers on stderr, and `batch` one ove
 models; `--no-progress`, `--quiet` and `--json` turn it off. The first Ctrl-C stops the run
 between layers, inside the cavity a `--hollow` run is building and between the models of a
 batch, and removes the file it was writing; a second one exits at once. `inspect`, `info`
-and `profiles` write nothing, so one Ctrl-C ends them.
+and `profiles` write at most one small file, so one Ctrl-C ends them.
 
 The output extension picks the format (ADR 0047): `.goo`, `.ctb`, `.cbddlp`, `.photon`,
 `.sl1`, `.sl1s`, `.zip`, `.cxdlp`, `.svgx`, `.cws`, one of the seven Anycubic extensions in
@@ -122,11 +122,17 @@ encrust slice model.stl \
 ```
 
 The model's own texture pressed in as relief, as deep as the plate millimetres given.
-Negative sinks it in. Needs a model carrying UVs and an image beside it:
+Negative sinks it in. Needs a model carrying UVs and an image beside it — or
+`--relief-image`, a picture tiled over any model from three sides, `--relief-tile`
+millimetres wide (12 by default) and turned `--relief-angle` degrees (ADR 0225):
 
 ```sh
 encrust slice textured.obj \
   --printer elegoo-mars-4-ultra --relief 0.4 --precision 0.6 -o model.goo
+
+encrust slice part.stl \
+  --printer elegoo-mars-4-ultra --relief 0.4 --relief-image knurl.png --relief-tile 6 \
+  --relief-angle 45 -o part.goo
 ```
 
 Exposure of its own over a band of print height, repeatable. The bottom block keeps the
@@ -151,21 +157,26 @@ encrust slice model.stl \
   --profile my-printer.toml --adaptive --cusp 0.03 --min-layer-height 0.025 -o model.goo
 ```
 
-Every island taken out of the file, and whatever stood only on one:
+Every island taken out of the file, and nothing that stood on one: what stood on it is
+named as floating (ADR 0228). `--hanging-passes N` takes N layers more of what is left
+hanging, one layer a pass, as the Check tool does:
 
 ```sh
 encrust slice model.stl \
-  --printer elegoo-mars-4-ultra --remove-islands -o model.goo
+  --printer elegoo-mars-4-ultra --remove-islands --hanging-passes 2 -o model.goo
 ```
 
 Turn the model the way it prints best before anything else is done to it, reported as the
-`--rotate` that repeats the turn, and build supports to a profile of the catalogue —
+`--rotate` that repeats the turn — `--orient-goal` searches for `fewest-supports` (the
+default), `least-peel`, `shortest-print` or `clean-top`, and `--max-tilt DEG` keeps the turn
+within that many degrees of the way the file stands (ADR 0222) — and build supports to a profile of the catalogue —
 `light`, `medium`, `heavy` or one saved in the window, as `profiles list` names them — or to
 your own TOML with `--support-profile`:
 
 ```sh
 encrust slice model.stl \
-  --printer elegoo-mars-4-ultra --orient --center -o model.goo
+  --printer elegoo-mars-4-ultra --orient --orient-goal least-peel --max-tilt 30 \
+  --center -o model.goo
 
 encrust slice model.stl \
   --printer elegoo-mars-4-ultra --supports medium --center -o model.goo
@@ -250,12 +261,18 @@ the new file's previews are blank (ADR 0180).
 ## Profiles, a config file, completions
 
 `profiles list` prints the catalogue in three blocks — printers, resins and support
-profiles — marking what came from your own folder; the resin block holds only what you
-made, since none is shipped; a support profile saved in the window is
-in that third block and `--supports` takes its id. `profiles show <id>` prints a printer,
-resin or support profile as the TOML it is kept in, or writes it with `-o`; edited, it is
-what `--profile`, `--material` and `--support-profile` take. `--kind` picks one when two
-kinds share an id.
+profiles — marking what came from your own folder, then the Hollow and Drain presets saved
+in the window, if any; the resin block holds only what you made, since none is shipped; a
+support profile saved in the window is in that third block and `--supports` takes its id.
+`profiles show <id>` prints any of them as the TOML it is kept in, or writes it with `-o`;
+edited, it is what `--profile`, `--material` and `--support-profile` take. `--kind` picks
+one when two kinds share an id. `profiles import FILE --kind KIND` takes a file exported
+from the window or by `show` into your own folder, under an id of its own and never over
+one you have; `--printer ID` sets an imported resin up on that machine (ADR 0233):
+
+```sh
+encrust profiles import grey.toml --kind resin --printer elegoo-mars-4-ultra
+```
 
 `--config FILE` holds flags written down: a key is a flag's long name, `true` the bare flag,
 `false` nothing, an array the flag once per element. Keys at the top are the global flags,

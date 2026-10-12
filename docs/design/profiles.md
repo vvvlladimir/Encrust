@@ -106,39 +106,48 @@ is nothing to fall back on (ADR 0196). A report over geometry — `inspect` — 
 The window keeps the catalogue in `Slicing`, along with the resin as loaded and the resin
 as resolved. Picking a printer sets the plate, the container it writes, the machine on the
 network it sends to, and retunes the resin in hand; picking a resin retunes it for the
-printer in hand. Both menus end in the file dialog
-the window had before, which sets no id and therefore tunes nothing.
+printer in hand. The File menu's **Import a machine** and **Import a resin** keep a file as
+the user's own — the resin set up on the machine in hand — and put it under the plate, so
+every profile in use has an id.
 
 ## Editing in the window
 
-The gear at the right of the title strip opens the Settings screen, which replaces the
-plate; Esc leaves it. Its profile pages, Printers and Supports, are each a list beside a form, and every
-edit is written to the user's directory as soon as the value settles — no Save. ADR 0120.
-The third page, Updates, holds no profile: see `docs/design/updates.md`.
+The machines and their resins are edited in the **Machine and resin** window, a modal over
+the plate opened from the top bar's chip, the File menu, the Settings window and the start
+page; Esc closes it. The support profiles and the Hollow and Drain presets are in the
+**Settings** window, which the gear in the top bar opens: a table of each, and a support
+profile's form in the table's place. Either way every edit is written to the user's
+directory as soon as the value settles — no Save. ADR 0120, 0220, 0233. Its General and
+Updates pages hold no profile: see `docs/design/updates.md` for the second.
 
-- **Printers** lists the machines the user has installed, by brand, over a search line.
-  The form carries the panel, the volume, the container
-  `output` names, how the machine is reached, and the firmware table, and says when it
-  differs from the machine of the same id this build ships. The one open shows
-  the resins set up on it, each with
-  buttons to duplicate it or take it off, and **Add resin**: a new one, or one from the
-  pool of every resin some printer has, which opens on `starting_point`.
-- The `+` over the list opens the **library** in the form's place: a search over every
+- The window lists the machines the user has installed down its left, over a search line.
+  The one picked has three tabs. **Resins** is a table of the resins set up on it, their
+  layer and exposures as this machine has them, narrowed by type; a double click or
+  **Edit** opens a resin's form in the table's place. **Machine** carries the panel, the
+  volume, the container `output` names and the firmware table, and says when the profile
+  differs from the machine of the same id this build ships. **Network** says how the
+  machine is reached. **Use this resin** and **Use this machine** put them under the plate.
+- **Add a machine** under the list opens the **library** in the tabs' place: a search over every
   machine there is, a card per brand, and that brand's models behind it. Picking one
   copies the shipped profile into the user's directory and closes the library onto it;
   **Custom printer** does the same with an empty profile. Removing a machine deletes that
   copy — asked about first — and a shipped one is back in the library to install again.
   The window moves to the machine under it in the list, or to none when it was the last.
-- **Add resin** offers every resin on another printer, and **New resin** makes one; a
+- **Add a resin** offers every resin on another printer, and **New resin** makes one; a
   printer with none and an empty pool offers that one button instead of the menu. A resin
   taken off a printer waits in the pool, and the pool is where it is deleted for good —
   except one nobody typed into, which goes with the printer it was made on (ADR 0197).
-  Every deletion is asked about first, because the only one this screen takes back is a
+  Every deletion is asked about first, because the only one the window takes back is a
   resin added again from the pool (ADR 0196).
 - A resin's form edits it **on that printer**: numbers go into its `[printers.<id>]`
   table and make it `last_printer`; name, type, colour, density and price go on the resin.
   Renaming one other printers share splits it off as this printer's own file.
 - Ids are made from the name when the profile is made (`unique_id`) and never follow it.
+- **Export** writes a profile out as the TOML it is kept as, `<id>.toml`; **Import**, on the
+  page of its kind, takes one in under an id of its own and renames it "… (imported)" when
+  the name is taken, so nothing is overwritten. An imported resin is set up on the machine
+  the window has open; a preset that does not read as its tool's settings is refused.
+  `exchange.rs`, ADR 0233.
 
 Saving the machine in use stands the plate back under it when the panel, the volume or
 the container changed. Saving the resin in use re-resolves it for that machine.

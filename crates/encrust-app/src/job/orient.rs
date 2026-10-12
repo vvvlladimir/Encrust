@@ -1,7 +1,7 @@
 use std::sync::Arc;
 use std::sync::mpsc::{self, Receiver, TryRecvError};
 
-use core_geometry::{Mesh, Quat};
+use core_geometry::{Mesh, Quat, Vec3};
 use core_plate::{OrientSettings, orient};
 use rayon::prelude::*;
 
@@ -14,6 +14,8 @@ pub struct OrientTask {
     /// The model in its own space. Orientation is measured there, so where it currently
     /// stands does not enter into it.
     pub mesh: Arc<Mesh>,
+    /// The way down the model stands now, in its own space, which a tilt is measured from.
+    pub down_now: Vec3,
 }
 
 /// Everything one orientation run needs.
@@ -27,9 +29,6 @@ pub struct OrientRequest {
 pub struct Turn {
     pub id: ObjectId,
     pub rotation: Quat,
-    /// Degrees the model turns from where it stood, so the status bar can say whether
-    /// anything moved.
-    pub angle_deg: f32,
 }
 
 /// How an orientation run ended.
@@ -77,9 +76,14 @@ pub fn orient_tasks(scene: &Scene, only: Option<ObjectId>) -> Vec<OrientTask> {
     scene
         .targets()
         .filter(|object| only.is_none_or(|id| object.id == id))
-        .map(|object| OrientTask {
-            id: object.id,
-            mesh: Arc::clone(&object.mesh),
+        .map(|object| {
+            // The search answers a rotation that replaces this one, so down is read through it.
+            let down = object.transform.rotation.inverse() * Vec3::NEG_Z;
+            OrientTask {
+                id: object.id,
+                mesh: Arc::clone(&object.mesh),
+                down_now: down,
+            }
         })
         .collect()
 }
@@ -95,10 +99,13 @@ fn run(request: &OrientRequest) -> OrientOutcome {
             .tasks
             .par_iter()
             .map(|task| {
-                orient(&task.mesh, &request.settings).map(|found| Turn {
+                let settings = OrientSettings {
+                    down_now: task.down_now,
+                    ..request.settings
+                };
+                orient(&task.mesh, &settings).map(|found| Turn {
                     id: task.id,
                     rotation: found.rotation,
-                    angle_deg: found.rotation.to_axis_angle().1.to_degrees(),
                 })
             })
             .collect();
@@ -151,10 +158,12 @@ mod tests {
                 OrientTask {
                     id: ObjectId::for_test(1),
                     mesh: Arc::new(cuboid(Vec3::new(40.0, 40.0, 4.0))),
+                    down_now: Vec3::NEG_Z,
                 },
                 OrientTask {
                     id: ObjectId::for_test(2),
                     mesh: Arc::new(cuboid(Vec3::splat(10.0))),
+                    down_now: Vec3::NEG_Z,
                 },
             ],
             settings: OrientSettings::default(),
@@ -173,6 +182,7 @@ mod tests {
             tasks: vec![OrientTask {
                 id: ObjectId::for_test(1),
                 mesh: Arc::new(Mesh::default()),
+                down_now: Vec3::NEG_Z,
             }],
             settings: OrientSettings::default(),
         };

@@ -1,7 +1,9 @@
 use egui::{
-    Align, Align2, Color32, Frame, Id, Layout, Response, RichText, Sense, Ui, UiBuilder, vec2,
+    Align, Align2, Color32, Frame, Id, Layout, Response, RichText, Sense, Ui, UiBuilder,
+    WidgetInfo, WidgetType, vec2,
 };
 
+use super::focus_ring;
 use crate::ui::theme;
 
 /// What a click on a row of a list asked for.
@@ -30,8 +32,9 @@ pub fn list<R>(ui: &mut Ui, add: impl FnOnce(&mut Ui) -> R) -> R {
         .inner
 }
 
-/// One row of that list: what it is, the colour it is drawn in, and the button that drops it.
-/// Given a `rename` id, a double click turns the label into a field, as a plate tab does.
+/// One row of that list: what it is, the colour it is drawn in, a figure at its right, and
+/// the button that drops it. Given a `rename` id, a double click turns the label into a
+/// field, as a plate tab does.
 ///
 /// The row takes its click before its contents are laid out, so the button over it is the
 /// later widget and wins the press it sits under.
@@ -42,16 +45,19 @@ pub fn list_row(
     selected: bool,
     remove: Option<(&str, &str)>,
     rename: Option<Id>,
+    aside: Option<&str>,
 ) -> RowAction {
     let colors = theme::colors();
     let (rect, row) =
         ui.allocate_exact_size(vec2(ui.available_width(), theme::ROW_H), Sense::click());
     let (fill, text) = match (selected, row.hovered()) {
-        (true, _) => (colors.accent_wash, colors.accent),
+        (true, _) => (colors.picked_wash, colors.accent_soft),
         (false, true) => (colors.hover, colors.text_high),
         (false, false) => (colors.raised, colors.text_high),
     };
     ui.painter().rect_filled(rect, 0.0, fill);
+    row.widget_info(|| WidgetInfo::selected(WidgetType::SelectableLabel, true, selected, label));
+    focus_ring(ui, &row, 0.0);
 
     let mut action = RowAction::default();
     let inner = rect.shrink2(vec2(9.0, 0.0));
@@ -66,6 +72,10 @@ pub fn list_row(
             ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
                 if let Some((glyph, tooltip)) = remove {
                     action.removed = super::icon_button(ui, glyph, tooltip).clicked();
+                }
+                if let Some(aside) = aside {
+                    let figure = RichText::new(aside).font(theme::figures(11.5));
+                    ui.label(figure.color(colors.text_low));
                 }
                 ui.with_layout(Layout::left_to_right(Align::Center), |ui| {
                     match rename.filter(|id| is_renaming(ui, *id)) {
@@ -124,17 +134,25 @@ pub fn issue_row(
     let (rect, response) =
         ui.allocate_exact_size(vec2(ui.available_width(), theme::ROW_H), Sense::click());
     let fill = match (selected, response.hovered()) {
-        (true, _) => colors.accent_wash,
+        (true, _) => colors.picked_wash,
         (false, true) => colors.hover,
         (false, false) => colors.raised,
     };
+    response.widget_info(|| {
+        WidgetInfo::selected(
+            WidgetType::SelectableLabel,
+            true,
+            selected,
+            format!("{place}, {detail}"),
+        )
+    });
     let painter = ui.painter();
     painter.rect_filled(rect, 0.0, fill);
 
     let dot = rect.left_center() + vec2(14.0, 0.0);
     painter.circle_filled(dot, 3.5, tint);
     let place_color = if selected {
-        colors.accent
+        colors.accent_soft
     } else {
         colors.text_high
     };
@@ -149,8 +167,30 @@ pub fn issue_row(
         rect.right_center() - vec2(12.0, 0.0),
         Align2::RIGHT_CENTER,
         detail,
-        theme::mono(11.0),
+        theme::figures(11.0),
         colors.text_mid,
     );
+    focus_ring(ui, &response, 0.0);
     response.on_hover_cursor(egui::CursorIcon::PointingHand)
+}
+
+/// A name over the line that says more about it, drawn from `left_center`: a machine over
+/// its maker and the file it is sliced into.
+pub fn two_lines(painter: &egui::Painter, left_center: egui::Pos2, title: &str, detail: &str) {
+    let colors = theme::colors();
+    let (title_at, detail_at) = (left_center - vec2(0.0, 8.0), left_center + vec2(0.0, 9.0));
+    painter.text(
+        title_at,
+        Align2::LEFT_CENTER,
+        title,
+        theme::label(),
+        colors.text_high,
+    );
+    painter.text(
+        detail_at,
+        Align2::LEFT_CENTER,
+        detail,
+        theme::small(),
+        colors.text_low,
+    );
 }

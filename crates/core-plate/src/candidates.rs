@@ -35,10 +35,28 @@ fn is_same(left: Vec3, right: Vec3) -> bool {
 }
 
 /// The outward normals of the model's flattest, largest surfaces, biggest first.
+fn flats(mesh: &Mesh) -> Vec<Vec3> {
+    flat_faces(mesh)
+        .into_iter()
+        .take(FLATS)
+        .map(|flat| flat.normal)
+        .collect()
+}
+
+/// A direction the model's surface faces over a large area: a face it could rest on.
+#[derive(Debug, Clone, Copy, PartialEq)]
+struct FlatFace {
+    /// Unit, outward, in the model's own space.
+    pub normal: Vec3,
+    /// Every triangle facing within a bin of `normal`, square millimetres.
+    pub area_mm2: Scalar,
+}
+
+/// The directions the model's surface faces, largest area first, in its own space.
 ///
 /// Normals are binned rather than clustered properly: a bin is a hash lookup a face,
 /// where clustering would be a comparison against every cluster found so far.
-fn flats(mesh: &Mesh) -> Vec<Vec3> {
+fn flat_faces(mesh: &Mesh) -> Vec<FlatFace> {
     let mut bins: FastMap<[i32; 3], (Vec3, Scalar)> = FastMap::default();
     for triangle in mesh.triangles() {
         let normal = triangle.normal_unnormalized();
@@ -57,13 +75,15 @@ fn flats(mesh: &Mesh) -> Vec<Vec3> {
         bin.1 += area;
     }
 
-    let mut ranked: Vec<(Vec3, Scalar)> = bins.into_values().collect();
-    ranked.sort_by(|a, b| b.1.total_cmp(&a.1));
+    let mut ranked: Vec<FlatFace> = bins
+        .into_values()
+        .filter_map(|(sum, area_mm2)| {
+            let normal = sum.try_normalize()?;
+            Some(FlatFace { normal, area_mm2 })
+        })
+        .collect();
+    ranked.sort_by(|a, b| b.area_mm2.total_cmp(&a.area_mm2));
     ranked
-        .into_iter()
-        .take(FLATS)
-        .filter_map(|(sum, _)| sum.try_normalize())
-        .collect()
 }
 
 /// `count` directions spread evenly over the sphere by the Fibonacci lattice, which needs
@@ -111,6 +131,32 @@ mod tests {
             [3, 4, 7],
         ];
         Mesh::new(vertices, faces)
+    }
+
+    #[test]
+    fn a_flat_slab_lists_its_two_wide_faces_first() {
+        let slab = Mesh::new(
+            unit_cube()
+                .vertices
+                .iter()
+                .map(|vertex| *vertex * Vec3::new(10.0, 10.0, 1.0))
+                .collect(),
+            unit_cube().faces.clone(),
+        );
+        let faces = flat_faces(&slab);
+        assert_eq!(faces.len(), 6);
+        for face in &faces[..2] {
+            assert!(
+                face.normal.z.abs() > 0.999,
+                "top and bottom first, got {face:?}"
+            );
+            assert!(
+                (face.area_mm2 - 100.0).abs() < 1e-3,
+                "a 10 by 10 face is 100 mm2, got {}",
+                face.area_mm2
+            );
+        }
+        assert!((faces[2].area_mm2 - 10.0).abs() < 1e-3, "a 10 by 1 side");
     }
 
     #[test]

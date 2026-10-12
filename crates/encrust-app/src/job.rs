@@ -26,7 +26,7 @@ pub use pipeline::{SliceRequest, worker_threads};
 pub use place::{SupportJob, SupportOutcome, SupportRequest, tasks_of};
 pub use plate::models_of;
 pub use preview::{PreviewJob, PreviewOutcome};
-pub use relief::{ReliefJob, ReliefOutcome, ReliefRequest, relief_tasks};
+pub use relief::{ReliefJob, ReliefOutcome, ReliefRequest, ReliefSource, relief_tasks};
 pub use repair::{RepairJob, RepairOutcome, RepairRequest, Repaired, mend};
 pub use send::{Action, SendJob, SendOutcome, SendRequest};
 pub use trapped::{TrapJob, TrapOutcome, TrapRequest, trap_tasks};

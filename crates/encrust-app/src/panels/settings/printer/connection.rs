@@ -5,7 +5,7 @@ use net_prusalink::Link;
 use printer_profiles::Connection;
 
 use crate::network::{Destination, Network, PrusaDraft};
-use crate::ui::{Segment, Segmented, hint, icon, icon_button, theme, tone};
+use crate::ui::{Segment, Segmented, hint, icon, icon_button, inline_button, theme, tone};
 
 /// How wide a field here is: enough for a host name, not enough to stretch the card.
 const FIELD_W: f32 = 230.0;
@@ -35,28 +35,25 @@ fn sdcp(ui: &mut egui::Ui, profile: &str, network: &mut Network) {
 
     ui.add_space(6.0);
     ui.horizontal(|ui| {
-        ui.add_enabled_ui(!network.is_scanning(), |ui| {
-            let label = match network.is_scanning() {
-                true => "Scanning...",
-                false => "Scan network",
-            };
-            if ui.button(format!("{} {label}", icon::NETWORK)).clicked() {
-                network.scan();
-            }
-        });
-        ui.add(
-            egui::TextEdit::singleline(&mut network.draft)
-                .hint_text("192.168.1.42")
-                .desired_width(120.0),
-        );
+        let scanning = network.is_scanning();
+        let label = if scanning {
+            "Scanning..."
+        } else {
+            "Scan network"
+        };
+        if inline_button(ui, icon::NETWORK, label, false, !scanning).clicked() {
+            network.scan();
+        }
         let address = network.draft.trim().parse().ok();
-        ui.add_enabled_ui(address.is_some(), |ui| {
-            if ui.button(icon::ADD).clicked()
+        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+            if inline_button(ui, icon::ADD, "Add", false, address.is_some()).clicked()
                 && let Some(address) = address
             {
                 network.add(address);
                 network.draft.clear();
             }
+            let width = ui.available_width();
+            crate::ui::address_field(ui, &mut network.draft, "192.168.1.42", width);
         });
     });
     hint(
@@ -115,18 +112,18 @@ fn bound_rows(ui: &mut egui::Ui, profile: &str, network: &mut Network, speaks: C
 fn fields(ui: &mut egui::Ui, draft: &mut PrusaDraft) -> Option<Link> {
     let half = FIELD_W / 2.0 - 2.0;
     ui.add(
-        egui::TextEdit::singleline(&mut draft.host)
+        crate::ui::text_box(egui::TextEdit::singleline(&mut draft.host))
             .hint_text("sl1.local")
             .desired_width(FIELD_W),
     );
     ui.horizontal(|ui| {
         ui.add(
-            egui::TextEdit::singleline(&mut draft.user)
+            crate::ui::text_box(egui::TextEdit::singleline(&mut draft.user))
                 .hint_text(net_prusalink::DEFAULT_USER)
                 .desired_width(half),
         );
         ui.add(
-            egui::TextEdit::singleline(&mut draft.password)
+            crate::ui::text_box(egui::TextEdit::singleline(&mut draft.password))
                 .hint_text("password")
                 .password(true)
                 .desired_width(half),
@@ -135,7 +132,7 @@ fn fields(ui: &mut egui::Ui, draft: &mut PrusaDraft) -> Option<Link> {
     let mut added = None;
     ui.horizontal(|ui| {
         ui.add(
-            egui::TextEdit::singleline(&mut draft.key)
+            crate::ui::text_box(egui::TextEdit::singleline(&mut draft.key))
                 .hint_text("or an API key")
                 .password(true)
                 .desired_width(FIELD_W),

@@ -2,6 +2,7 @@ use std::collections::BTreeMap;
 use std::f64::consts::PI;
 
 use crate::contact::{Contact, MIN_ISLAND_MM2, contacts};
+use crate::cups::Cups;
 use crate::layer::{Cured, LayerMeasure, Piece, Stretch};
 
 /// Peel force per unit of torsion constant, N/mm^4: Stefan's `3 mu h' / h^3`, set so a
@@ -13,6 +14,12 @@ pub const NECK_LIMIT_MPA: f64 = 5.0;
 /// Pull on the film past which a layer tears or lifts the model off the plate, newtons:
 /// about 3 kg, a solid section some 80 mm across. A warning level, like the neck's.
 pub const PEEL_LIMIT_N: f64 = 30.0;
+/// A piece narrower than this across, millimetres, as a disc of its area: thinner than the
+/// finest support tip, so a tip is never named, and too thin to survive the peel.
+pub const THIN_MM: f32 = 0.15;
+/// A thin run shorter than this is the point a shape starts or ends on, not a wire that
+/// has to stand, millimetres.
+pub const MIN_THIN_RUN_MM: f32 = 1.0;
 /// A contact narrower than this share of the neck under it becomes the new neck.
 const NARROWER: f64 = 0.9;
 
@@ -38,6 +45,9 @@ pub struct Risk {
 pub enum RiskKind {
     /// Cured over nothing: it sticks to the film and stays in the vat.
     Island { area_mm2: f32 },
+    /// Stands on an island that was taken out, so it hangs over nothing as the island did;
+    /// named once, on the layer over the island.
+    Floating { area_mm2: f32 },
     /// Pulled hard enough, far enough from the narrowest neck under it, to break it.
     Lever {
         stress_mpa: f32,
@@ -48,6 +58,12 @@ pub enum RiskKind {
     /// A layer whose suction on the film is past `PEEL_LIMIT_N`; a run of them is named
     /// once, at its hardest.
     Peel { force_n: f32 },
+    /// A hole sealed from below, by the plate or the model, that every lift pulls a vacuum
+    /// in; named once, where it is widest.
+    SuctionCup { area_mm2: f32, volume_mm3: f32 },
+    /// A piece held from below but narrower than `THIN_MM`; a run of them at least
+    /// `MIN_THIN_RUN_MM` tall is named once, where it starts.
+    Thin { width_mm: f32 },
 }
 
 /// What a stack cures, folded a layer at a time in print order. It holds the layer below
@@ -59,6 +75,9 @@ pub struct Measured {
     held: usize,
     /// Whether an island is taken out of its layer rather than named.
     removing: bool,
+    /// How many layers of what stood on an island taken out go too, each one the island
+    /// of the one over it, rather than being named.
+    passes: u32,
     layers: Vec<LayerMeasure>,
     volume_mm3: f64,
     hardest_pull: Option<Peak>,
@@ -74,18 +93,35 @@ pub struct Measured {
     peeling: Option<Risk>,
     /// What was taken out of each layer that lost an island, in print order.
     removed: Vec<(usize, Vec<Stretch>)>,
-    /// What the layer below lost, so a part taken out over many layers counts as one
-    /// island and not as one a layer.
-    taken_below: Option<Cured>,
     removed_parts: usize,
+    thins: Vec<Risk>,
+    floating: Vec<Risk>,
+    cups: Cups,
+    /// How thick the layer being folded is, millimetres.
+    layer_mm: f32,
 }
 
-/// What a piece of the layer below hands up: whether it reaches the plate, and the
-/// narrowest section between it and the plate.
+/// What a piece of the layer below hands up: whether it reaches the plate, the narrowest
+/// section between it and the plate, and the thin run it tops, if it is too thin.
 #[derive(Debug, Clone, Copy, PartialEq)]
 struct Carried {
     anchored: bool,
     neck: Neck,
+    thin: Option<ThinRun>,
+    /// Touches nothing below: an island, whether it is named or taken out.
+    island: bool,
+    /// Taken out of its layer: an island being removed at depth 0, or what hung over one
+    /// at its depth above it.
+    gone: Option<u32>,
+}
+
+/// Thin pieces standing on each other, followed up while they stay thin.
+#[derive(Debug, Clone, Copy, PartialEq)]
+struct ThinRun {
+    /// What it is named as once it is tall enough: where it starts.
+    start: Risk,
+    height_mm: f32,
+    named: bool,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -104,11 +140,22 @@ impl Measured {
         }
     }
 
-    /// The same fold, taking every island out of its layer instead of naming it. What
-    /// stood only on an island becomes one in turn, so a floating part goes whole.
+    /// The same fold, taking every island out of its layer instead of naming it. Only the
+    /// island goes: what stood on it is judged against the layer as cured, so it is not an
+    /// island in turn; see `docs/decisions/0228`.
     #[must_use]
     pub fn removing_islands(mut self) -> Self {
         self.removing = true;
+        self
+    }
+
+    /// The same fold, taking every island out and `passes` layers more of what stood on
+    /// one: each pass takes what the last one left hanging, as though it were an island in
+    /// turn. What is left after the last pass is named, as after the first.
+    #[must_use]
+    pub fn removing_hanging(mut self, passes: u32) -> Self {
+        self.removing = true;
+        self.passes = passes;
         self
     }
 
@@ -116,22 +163,21 @@ impl Measured {
     /// of it, which is nothing unless islands are being removed.
     pub fn push(&mut self, layer: Cured, thickness_mm: f32) -> Vec<Stretch> {
         let index = self.layers.len();
-        let (layer, carried, taken) = match self.below.take() {
-            None => {
-                let carried = self.on_plate(&layer);
-                (layer, carried, Vec::new())
-            }
-            Some((below, under)) => {
-                let (layer, taken) = if self.removing {
-                    self.clear(layer, &below)
-                } else {
-                    (layer, Vec::new())
-                };
-                let carried = self.carry(index, &layer, &below, &under);
-                (layer, carried, taken)
-            }
+        self.layer_mm = thickness_mm;
+        let below = self.below.as_ref().map(|(below, _)| below);
+        self.cups.push(index, &layer, below, thickness_mm);
+        let carried = match self.below.take() {
+            None => self.on_plate(&layer),
+            Some((below, under)) => self.carry(index, &layer, &below, &under),
         };
-        self.tally(index, &layer, thickness_mm);
+        // The layer below is kept as cured, islands and all, so that what stands on an
+        // island is not taken for one in turn.
+        let (kept, taken) = if self.removing {
+            self.clear(&layer, &carried)
+        } else {
+            (None, Vec::new())
+        };
+        self.tally(index, kept.as_ref().unwrap_or(&layer), thickness_mm);
         if !taken.is_empty() {
             self.removed.push((index, taken.clone()));
         }
@@ -171,8 +217,7 @@ impl Measured {
         self.largest_growth
     }
 
-    /// Parts taken out as islands: a piece floating on its own and whatever stood only
-    /// on it, however many layers that went on for.
+    /// Islands taken out: each a piece that cured over nothing, on the one layer it did.
     pub fn removed_islands(&self) -> usize {
         self.removed_parts
     }
@@ -192,55 +237,55 @@ impl Measured {
     /// Everything likely to fail, in print order.
     pub fn risks(&self) -> Vec<Risk> {
         let mut risks: Vec<Risk> = self.islands.clone();
+        risks.extend(self.floating.iter().copied());
         risks.extend(self.levers.values().copied());
         risks.extend(self.peels.iter().chain(&self.peeling).copied());
+        risks.extend(self.cups());
+        risks.extend(self.thins.iter().copied());
         risks.sort_by_key(|risk| risk.layer);
         risks
     }
 
-    /// The layer the print most likely fails on: the first island, since nothing cured
-    /// over nothing survives, or else the neck under the most stress, or else the hardest
-    /// peel.
+    fn cups(&self) -> impl Iterator<Item = Risk> + '_ {
+        self.cups.found().map(|cup| Risk {
+            layer: cup.peak_layer,
+            at_mm: cup.at_mm,
+            kind: RiskKind::SuctionCup {
+                area_mm2: cup.peak_mm2,
+                volume_mm3: cup.volume_mm3,
+            },
+        })
+    }
+
+    /// The layer the print most likely fails on: the first island or part left hanging
+    /// over one taken out, since nothing cured over nothing survives, or else the neck
+    /// under the most stress, the hardest peel, the deepest cup and the thinnest run.
     pub fn worst(&self) -> Option<Risk> {
         let hardest = |risks: &mut dyn Iterator<Item = Risk>| {
             risks.max_by(|a, b| severity(a).total_cmp(&severity(b)))
         };
         self.islands
-            .first()
+            .iter()
+            .chain(&self.floating)
+            .min_by_key(|risk| risk.layer)
             .copied()
             .or_else(|| hardest(&mut self.levers.values().copied()))
             .or_else(|| hardest(&mut self.peels.iter().chain(&self.peeling).copied()))
+            .or_else(|| hardest(&mut self.cups()))
+            .or_else(|| hardest(&mut self.thins.iter().copied()))
     }
 
-    /// Takes every piece of `layer` that touches nothing in `below` out of it.
-    fn clear(&mut self, layer: Cured, below: &Cured) -> (Cured, Vec<Stretch>) {
-        let mut dropped = vec![true; layer.pieces().len()];
-        for contact in contacts(&layer, below) {
-            dropped[contact.above as usize] = false;
+    /// Takes out of `layer` the pieces `carried` says go: its islands, and what hangs over
+    /// one when that goes too. Answers what is left, when anything was taken, and the
+    /// stretches taken.
+    fn clear(&mut self, layer: &Cured, carried: &[Carried]) -> (Option<Cured>, Vec<Stretch>) {
+        let dropped: Vec<bool> = carried.iter().map(|piece| piece.gone.is_some()).collect();
+        if !dropped.contains(&true) {
+            return (None, Vec::new());
         }
-        if !dropped.iter().any(|dropped| *dropped) {
-            self.taken_below = None;
-            return (layer, Vec::new());
-        }
-        let (kept, taken) = layer.split(&dropped);
-        self.count_parts(&taken);
-        let stretches = taken.stretches();
-        self.taken_below = Some(taken);
-        (kept, stretches)
-    }
-
-    /// Counts the pieces of `taken` that start a part rather than carry on one the layer
-    /// below lost, since what stood only on an island is the same island.
-    fn count_parts(&mut self, taken: &Cured) {
-        let Some(below) = self.taken_below.take() else {
-            self.removed_parts += taken.pieces().len();
-            return;
-        };
-        let mut carried = vec![false; taken.pieces().len()];
-        for contact in contacts(taken, &below) {
-            carried[contact.above as usize] = true;
-        }
-        self.removed_parts += carried.iter().filter(|carried| !**carried).count();
+        self.removed_parts += carried.iter().filter(|piece| piece.island).count();
+        let (kept, taken) = layer.clone().split(&dropped);
+        (Some(kept), taken.stretches())
     }
 
     /// The layer's own readings: its area and volume, and whether it pulls too hard.
@@ -282,6 +327,9 @@ impl Measured {
             .map(|piece| Carried {
                 anchored: true,
                 neck: self.neck(f64::from(piece.area_mm2), piece.centre_mm.map(f64::from)),
+                thin: None,
+                island: false,
+                gone: None,
             })
             .collect()
     }
@@ -326,9 +374,12 @@ impl Measured {
                 at_mm: [0.0; 2],
                 id: u32::MAX,
             },
+            thin: None,
+            island: false,
+            gone: None,
         };
         if touching.is_empty() {
-            if piece.area_mm2 >= MIN_ISLAND_MM2 {
+            if piece.area_mm2 >= MIN_ISLAND_MM2 && !self.removing {
                 self.islands.push(Risk {
                     layer: index,
                     at_mm: piece.centre_mm,
@@ -337,13 +388,38 @@ impl Measured {
                     },
                 });
             }
-            return floating;
+            return Carried {
+                island: true,
+                gone: self.removing.then_some(0),
+                ..floating
+            };
         }
         let held: Vec<&Contact> = touching
             .iter()
             .filter(|contact| under[contact.below as usize].anchored)
             .collect();
         if held.is_empty() {
+            let over = touching
+                .iter()
+                .filter_map(|contact| under[contact.below as usize].gone)
+                .min();
+            if let Some(depth) = over.filter(|depth| *depth < self.passes) {
+                return Carried {
+                    gone: Some(depth + 1),
+                    ..floating
+                };
+            }
+            // Only an island taken out leaves what stood on it to name: one kept is named
+            // itself, and what stands on it goes with it.
+            if over.is_some() && piece.area_mm2 >= MIN_ISLAND_MM2 {
+                self.floating.push(Risk {
+                    layer: index,
+                    at_mm: piece.centre_mm,
+                    kind: RiskKind::Floating {
+                        area_mm2: piece.area_mm2,
+                    },
+                });
+            }
             return floating;
         }
 
@@ -351,10 +427,52 @@ impl Measured {
         if index >= self.held {
             self.weigh(index, piece, neck);
         }
+        let thin = self.thin_run(index, piece, &held, under);
         Carried {
             anchored: true,
             neck,
+            thin,
+            island: false,
+            gone: None,
         }
+    }
+
+    /// The thin run `piece` tops, carried on from the tallest one under it, and named
+    /// where it starts once it is `MIN_THIN_RUN_MM` tall.
+    fn thin_run(
+        &mut self,
+        index: usize,
+        piece: &Piece,
+        held: &[&Contact],
+        under: &[Carried],
+    ) -> Option<ThinRun> {
+        let width_mm = 2.0 * (piece.area_mm2 / std::f32::consts::PI).sqrt();
+        if width_mm >= THIN_MM {
+            return None;
+        }
+        let below = held
+            .iter()
+            .filter_map(|contact| under[contact.below as usize].thin)
+            .max_by(|a, b| a.height_mm.total_cmp(&b.height_mm));
+        let mut run = below.unwrap_or(ThinRun {
+            start: Risk {
+                layer: index,
+                at_mm: piece.centre_mm,
+                kind: RiskKind::Thin { width_mm },
+            },
+            height_mm: 0.0,
+            named: index < self.held,
+        });
+        run.height_mm += self.layer_mm;
+        // A hair under the full height still counts: the thickness is summed in f32.
+        if !run.named && run.height_mm >= MIN_THIN_RUN_MM - 1e-4 {
+            run.named = true;
+            let start = |risk: &Risk| (risk.layer, risk.at_mm);
+            if self.thins.last().map(start) != Some(start(&run.start)) {
+                self.thins.push(run.start);
+            }
+        }
+        Some(run)
     }
 
     /// The narrower of what this piece touches and the necks under what it touches.
@@ -438,9 +556,11 @@ impl Measured {
 /// How bad a risk is against others of its kind.
 fn severity(risk: &Risk) -> f32 {
     match risk.kind {
-        RiskKind::Island { .. } => f32::INFINITY,
+        RiskKind::Island { .. } | RiskKind::Floating { .. } => f32::INFINITY,
         RiskKind::Lever { stress_mpa, .. } => stress_mpa,
         RiskKind::Peel { force_n } => force_n,
+        RiskKind::SuctionCup { volume_mm3, .. } => volume_mm3,
+        RiskKind::Thin { width_mm } => 1.0 / width_mm.max(f32::EPSILON),
     }
 }
 
@@ -489,6 +609,114 @@ mod tests {
 
     fn square(x0: u32, y0: u32, side: u32) -> Cured {
         layer(move |x, y| (x0..x0 + side).contains(&x) && (y0..y0 + side).contains(&y))
+    }
+
+    /// A 20 by 20 pixel square with a 10 by 10 hole in its middle, at 0.5 mm a pixel.
+    fn ring() -> Cured {
+        layer(|x, y| {
+            let outer = (10..30).contains(&x) && (10..30).contains(&y);
+            let hole = (15..25).contains(&x) && (15..25).contains(&y);
+            outer && !hole
+        })
+    }
+
+    fn cups(measured: &Measured) -> Vec<Risk> {
+        measured
+            .risks()
+            .into_iter()
+            .filter(|risk| matches!(risk.kind, RiskKind::SuctionCup { .. }))
+            .collect()
+    }
+
+    /// `count` rings, a millimetre of them at 20.
+    fn rings(count: usize) -> Vec<Cured> {
+        vec![ring(); count]
+    }
+
+    #[test]
+    fn a_ring_on_the_plate_is_one_suction_cup() {
+        let measured = fold(0, &rings(20));
+        let found = cups(&measured);
+        assert_eq!(found.len(), 1, "{found:?}");
+        let RiskKind::SuctionCup {
+            area_mm2,
+            volume_mm3,
+        } = found[0].kind
+        else {
+            unreachable!("filtered to cups");
+        };
+        // The hole is 10 px of 0.5 mm a side, 25 mm2, twenty layers of 0.05 mm.
+        assert!((area_mm2 - 25.0).abs() < 1e-3, "got {area_mm2}");
+        assert!((volume_mm3 - 25.0).abs() < 1e-3, "got {volume_mm3}");
+    }
+
+    #[test]
+    fn a_shallow_cup_is_too_little_resin_to_name() {
+        // 25 mm2 three layers deep is under 4 mm3.
+        assert!(cups(&fold(0, &rings(3))).is_empty());
+    }
+
+    #[test]
+    fn a_narrow_cup_is_too_little_pull_to_name() {
+        let narrow = layer(|x, y| {
+            let outer = (10..30).contains(&x) && (10..30).contains(&y);
+            let hole = (18..22).contains(&x) && (18..22).contains(&y);
+            outer && !hole
+        });
+        // 4 mm2 however deep: the counter of a letter.
+        assert!(cups(&fold(0, &vec![narrow; 200])).is_empty());
+    }
+
+    #[test]
+    fn a_ring_on_posts_lets_the_air_in_from_below() {
+        let posts = layer(|x, y| {
+            let corner = |at: u32| (at..at + 3).contains(&x);
+            (corner(10) || corner(27)) && ((10..13).contains(&y) || (27..30).contains(&y))
+        });
+        let measured = fold(0, &[&[posts][..], &rings(20)].concat());
+        assert!(cups(&measured).is_empty(), "air runs in between the posts");
+    }
+
+    #[test]
+    fn a_ring_over_a_solid_floor_is_a_cup() {
+        let measured = fold(0, &[&[square(0, 0, 40)][..], &rings(20)].concat());
+        assert_eq!(
+            cups(&measured).len(),
+            1,
+            "the floor seals it as the plate does"
+        );
+    }
+
+    #[test]
+    fn a_needle_is_named_once_where_it_thins() {
+        // At 0.02 mm a pixel, a 3 px square is 0.06 mm across: past any support tip.
+        let fine = PixelPitch { x: 0.02, y: 0.02 };
+        let base = cure(
+            &paint(60, 60, |x, y| u8::from(x < 40 && y < 40) * 255),
+            fine,
+        );
+        let needle = cure(
+            &paint(60, 60, |x, y| {
+                u8::from((20..23).contains(&x) && (20..23).contains(&y)) * 255
+            }),
+            fine,
+        );
+        let thins = |needle_layers: usize| {
+            let stack = [vec![base.clone()], vec![needle.clone(); needle_layers]].concat();
+            fold(0, &stack)
+                .risks()
+                .into_iter()
+                .filter(|risk| matches!(risk.kind, RiskKind::Thin { .. }))
+                .collect::<Vec<Risk>>()
+        };
+        // A millimetre is twenty layers of 0.05 mm.
+        let thin = thins(30);
+        assert_eq!(thin.len(), 1, "{thin:?}");
+        assert_eq!(thin[0].layer, 1, "named where it starts");
+        assert!(
+            thins(5).is_empty(),
+            "a quarter of a millimetre is the tip of something, not a wire"
+        );
     }
 
     #[test]
@@ -568,7 +796,7 @@ mod tests {
     }
 
     #[test]
-    fn removing_islands_takes_a_floating_part_out_whole_and_names_nothing() {
+    fn removing_islands_takes_the_island_alone_and_names_nothing() {
         let base = square(0, 0, 10);
         let both = layer(|x, y| (x < 10 && y < 10) || (x >= 30 && y >= 30));
         let mut measured = Measured::new(0).removing_islands();
@@ -576,19 +804,20 @@ mod tests {
             .into_iter()
             .map(|layer| measured.push(layer, 0.05).len())
             .collect();
-        // The second part is 30 rows tall, on each of the two layers it has.
-        assert_eq!(taken, vec![0, 30, 30]);
-        assert_eq!(
-            measured.removed_islands(),
-            1,
-            "one part, taken out over both its layers"
+        // The second part is 30 rows tall; only its first layer cured over nothing.
+        assert_eq!(taken, vec![0, 30, 0], "what stood on the island stays");
+        assert_eq!(measured.removed_islands(), 1);
+        assert_eq!(measured.removed_layers(), 1);
+        let risks = measured.risks();
+        assert_eq!(risks.len(), 1, "{risks:?}");
+        assert!(
+            matches!(risks[0].kind, RiskKind::Floating { .. }) && risks[0].layer == 2,
+            "what stood on it is named once, as hanging over nothing"
         );
-        assert_eq!(measured.removed_layers(), 2);
-        assert!(measured.risks().is_empty());
-        assert_eq!(measured.removed_from(2).len(), 30);
-        assert!(measured.removed_from(0).is_empty());
-        // Only the base is left: 5 x 5 mm on three layers.
-        assert!((measured.volume_mm3() - 25.0 * 0.15).abs() < 1e-3);
+        assert!(measured.removed_from(2).is_empty());
+        // The base on three layers, 5 x 5 mm, and the part's second layer, 15 x 15 mm.
+        let expected_mm3 = 25.0 * 0.15 + 225.0 * 0.05;
+        assert!((measured.volume_mm3() - expected_mm3).abs() < 1e-3);
     }
 
     #[test]
@@ -669,7 +898,47 @@ mod tests {
     }
 
     #[test]
-    fn a_floating_part_is_one_island_however_many_layers_it_has() {
+    fn each_pass_takes_one_layer_more_of_what_hangs() {
+        let base = square(0, 0, 10);
+        let both = layer(|x, y| (x < 10 && y < 10) || (x >= 30 && y >= 30));
+        let stack = [base, both.clone(), both.clone(), both.clone(), both];
+        let fold = |passes: u32| {
+            let mut measured = Measured::new(0).removing_hanging(passes);
+            let taken: Vec<usize> = stack
+                .iter()
+                .map(|layer| measured.push(layer.clone(), 0.05).len())
+                .collect();
+            (taken, measured)
+        };
+
+        let (taken, measured) = fold(1);
+        assert_eq!(
+            taken,
+            vec![0, 30, 30, 0, 0],
+            "the island and one layer over it"
+        );
+        assert_eq!(
+            measured.removed_islands(),
+            1,
+            "one island, however many passes"
+        );
+        let risks = measured.risks();
+        assert_eq!(risks.len(), 1, "{risks:?}");
+        assert_eq!(
+            risks[0].layer, 3,
+            "what is left hanging is named where it starts"
+        );
+
+        let (taken, measured) = fold(3);
+        assert_eq!(taken, vec![0, 30, 30, 30, 30], "three passes reach the top");
+        assert!(
+            measured.risks().is_empty(),
+            "nothing is left hanging to name"
+        );
+    }
+
+    #[test]
+    fn a_floating_part_loses_its_first_layer_alone_however_many_it_has() {
         let base = square(0, 0, 10);
         let floating = layer(|x, y| (x < 10 && y < 10) || (x >= 30 && y >= 30));
         let mut measured = Measured::new(0).removing_islands();
@@ -687,7 +956,7 @@ mod tests {
             measured.push(layer, 0.05);
         }
         assert_eq!(measured.removed_islands(), 2);
-        assert_eq!(measured.removed_layers(), 5);
+        assert_eq!(measured.removed_layers(), 2, "the first layer of each part");
     }
 
     #[test]

@@ -1,3 +1,4 @@
+use std::path::PathBuf;
 use std::sync::Arc;
 
 use anyhow::{Context, Result};
@@ -12,6 +13,7 @@ use crate::files::{self, Handed, Wanted};
 use crate::job::{ImportJob, ImportOutcome, ImportStage};
 use crate::panels::frame_view;
 use crate::plate::BuildPlate;
+use crate::recent::picture::Parts;
 use crate::repair::Repairs;
 use crate::scene::{ImportSummary, Imported, Mapped, Scene};
 use crate::status::Status;
@@ -23,6 +25,9 @@ use crate::status::Status;
 #[derive(Debug, Default)]
 pub struct Imports {
     jobs: Vec<ImportJob>,
+    /// The files on disk that reached the plate since the window last took them, for the
+    /// recent list, each with what its picture is drawn from.
+    opened: Vec<(PathBuf, Parts)>,
 }
 
 impl Imports {
@@ -39,11 +44,16 @@ impl Imports {
         self.jobs.push(ImportJob::spawn(file, plate.clone()));
     }
 
+    /// The files that reached the plate since the last call.
+    pub fn take_opened(&mut self) -> Vec<(PathBuf, Parts)> {
+        std::mem::take(&mut self.opened)
+    }
+
     pub fn is_busy(&self) -> bool {
         !self.jobs.is_empty()
     }
 
-    /// What the status bar says while files are being read.
+    /// What the stage notice says while files are being read.
     pub fn label(&self) -> Option<String> {
         let first = self.jobs.first()?;
         Some(match self.jobs.len() {
@@ -67,15 +77,19 @@ impl Imports {
         self.jobs.retain_mut(|job| match job.poll() {
             None => true,
             Some(outcome) => {
-                opened.push((job.path().to_path_buf(), outcome));
+                opened.push((job.path().to_path_buf(), job.is_on_disk(), outcome));
                 false
             }
         });
 
         let reported = !opened.is_empty();
-        for (path, outcome) in opened {
+        for (path, on_disk, outcome) in opened {
             match outcome {
                 ImportOutcome::Opened(imported) => {
+                    if on_disk {
+                        let parts = vec![(Arc::clone(&imported.mesh), imported.transform)];
+                        self.opened.push((path.clone(), parts));
+                    }
                     let id = scene.insert(*imported);
                     if let Some(object) = scene.get(id) {
                         repairs.consider(object);
@@ -247,7 +261,7 @@ mod tests {
         assert!(prepared(&fixture("model.gcode")).is_err());
     }
 
-    /// BUG-23: the status bar has one line, and a reader's own error already carries the
+    /// BUG-23: the stage notice has one line, and a reader's own error already carries the
     /// whole path, so what we add to it names the file alone.
     #[test]
     fn a_failure_names_the_file_and_not_the_path_it_was_opened_from() {

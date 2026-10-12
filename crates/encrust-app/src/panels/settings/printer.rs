@@ -21,8 +21,7 @@ const BROWSER_SENDS_NOTHING: &str = "A browser cannot reach a printer on your ne
 
 /// The machine open in the list, written back as it is edited.
 pub fn form(ui: &mut egui::Ui, window: &mut Window) {
-    let machine = &mut *window.machine;
-    let Some(draft) = machine.settings.printer.as_mut() else {
+    let Some(draft) = window.machine.settings.printer.as_mut() else {
         return;
     };
     let shipped = draft.shipped().cloned();
@@ -38,11 +37,6 @@ pub fn form(ui: &mut egui::Ui, window: &mut Window) {
     form_card(ui, "Display", |ui| display(ui, profile));
     form_card(ui, "Build volume", |ui| volume(ui, profile));
     form_card(ui, "Output", |ui| output(ui, profile));
-    // A browser reaches no printer, so a file is downloaded instead (ADR 0182).
-    form_card(ui, "Network", |ui| match cfg!(target_arch = "wasm32") {
-        true => hint(ui, BROWSER_SENDS_NOTHING),
-        false => connection::card(ui, &id, &mut profile.connection, &mut machine.network),
-    });
     form_card(ui, "Firmware", |ui| firmware(ui, profile));
 
     if restore {
@@ -51,6 +45,23 @@ pub fn form(ui: &mut egui::Ui, window: &mut Window) {
         }
         return;
     }
+    if settled(ui) {
+        autosave(window);
+    }
+}
+
+/// What the machine open in the list takes a file over, written back as it is edited.
+pub fn network(ui: &mut egui::Ui, window: &mut Window) {
+    let machine = &mut *window.machine;
+    let Some(draft) = machine.settings.printer.as_mut() else {
+        return;
+    };
+    let (id, profile) = (draft.id.clone(), &mut draft.values);
+    // A browser reaches no printer, so a file is downloaded instead (ADR 0182).
+    form_card(ui, "Network", |ui| match cfg!(target_arch = "wasm32") {
+        true => hint(ui, BROWSER_SENDS_NOTHING),
+        false => connection::card(ui, &id, &mut profile.connection, &mut machine.network),
+    });
     if settled(ui) {
         autosave(window);
     }

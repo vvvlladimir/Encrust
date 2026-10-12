@@ -5,7 +5,7 @@ use core_supports::Trapped;
 use core_volume::HoleSize;
 
 use crate::job::{TrapJob, TrapOutcome, TrapRequest, trap_tasks};
-use crate::scene::Scene;
+use crate::scene::{ObjectId, Scene, SceneObject};
 use crate::status::Status;
 
 /// What a click in the viewport puts down.
@@ -50,13 +50,15 @@ impl Default for DrainTool {
 }
 
 impl DrainTool {
-    /// The hole the next click drills.
+    /// The hole the plate's numbers drill.
+    #[cfg(test)]
     pub fn size(&self) -> HoleSize {
-        HoleSize {
-            diameter_mm: self.state.diameter_mm,
-            depth_mm: self.state.depth_mm,
-            taper: self.state.taper,
-        }
+        size_of(&self.state)
+    }
+
+    /// The hole drilled into `object`: its own size, or the plate's.
+    pub fn size_for(&self, object: &SceneObject) -> HoleSize {
+        size_of(object.own.drain.as_ref().unwrap_or(&self.state))
     }
 
     /// Starts looking for resin that cannot get out of anything visible on the plate.
@@ -80,7 +82,7 @@ impl DrainTool {
         self.checked = false;
     }
 
-    /// Drains a running check into the scene and the status bar. Returns whether one is
+    /// Drains a running check into the scene and the stage notice. Returns whether one is
     /// still going, which is what tells the window to keep repainting.
     pub fn poll(&mut self, scene: &mut Scene, status: &mut Status) -> bool {
         let Some(job) = self.job.as_mut() else {
@@ -113,9 +115,9 @@ impl DrainTool {
     /// Digs the channel every model has been laying out, and says how many were dug.
     pub fn finish_channels(&mut self, scene: &mut Scene) -> usize {
         self.stale();
-        let diameter_mm = self.state.diameter_mm;
         let mut dug = 0;
         for object in scene.targets_mut() {
+            let diameter_mm = self.size_for(object).diameter_mm;
             let transform = object.transform;
             if !object.hollow.pending().is_empty()
                 && object.hollow.finish_channel(diameter_mm, transform)
@@ -126,16 +128,40 @@ impl DrainTool {
         dug
     }
 
+    /// Drills a hole into pocket `index` of model `id` alone, at its lowest point, and
+    /// takes its mark off. Answers whether a hole went in.
+    pub fn drill_pocket(&mut self, scene: &mut Scene, id: ObjectId, index: usize) -> bool {
+        let Some(object) = scene.get_mut(id) else {
+            return false;
+        };
+        let Some(target) = object.traps.found().get(index).map(|trapped| trapped.at) else {
+            return false;
+        };
+        self.stale();
+        let size = self.size_for(object);
+        let drilled = object.hollow.drill_into(
+            &object.mesh,
+            &object.bvh,
+            target,
+            size.diameter_mm,
+            size.taper,
+            object.transform,
+        );
+        object.traps.remove(index);
+        drilled
+    }
+
     /// Drills a hole into every pocket the last check found, and says how many it put in.
     ///
     /// The marks come off with them: whether the holes drained what they were put in is
     /// the next check's answer, not this one's.
     pub fn drill_found(&mut self, scene: &mut Scene) -> usize {
         self.stale();
-        let (diameter_mm, taper) = (self.state.diameter_mm, self.state.taper);
         let mut drilled = 0;
 
         for object in scene.targets_mut() {
+            let size = self.size_for(object);
+            let (diameter_mm, taper) = (size.diameter_mm, size.taper);
             let targets: Vec<_> = object
                 .traps
                 .found()
@@ -160,6 +186,14 @@ impl DrainTool {
     }
 }
 
+fn size_of(state: &DrainState) -> HoleSize {
+    HoleSize {
+        diameter_mm: state.diameter_mm,
+        depth_mm: state.depth_mm,
+        taper: state.taper,
+    }
+}
+
 /// The pockets of resin the last drainage check found in one model, in its own space.
 /// Each carries the box it fills, and the viewport paints the cavity red inside those
 /// boxes alone, so draining one pocket takes its own red away (ADR 0200). The check reads
@@ -181,6 +215,13 @@ impl Traps {
 
     pub fn clear(&mut self) {
         *self = Self::default();
+    }
+
+    /// Takes the mark off pocket `index` alone.
+    pub fn remove(&mut self, index: usize) {
+        if index < self.found.len() {
+            self.found.remove(index);
+        }
     }
 }
 
@@ -256,6 +297,29 @@ mod tests {
         assert!(
             !tool.checked,
             "the plate moved, so what the panel reports is no longer what it holds"
+        );
+    }
+
+    #[test]
+    fn drilling_one_pocket_leaves_the_others_marked() {
+        let mut scene = scene_with_a_tetrahedron();
+        let id = scene.objects()[0].id;
+        let pocket = |x: f32, volume_mm3: f32| Trapped {
+            at: Vec3::new(x, 2.0, 2.0),
+            volume_mm3,
+            bounds: core_geometry::Aabb::new(Vec3::ZERO, Vec3::splat(4.0)),
+        };
+        let found = vec![pocket(2.0, 10.0), pocket(3.0, 20.0)];
+        scene.get_mut(id).expect("just inserted").traps.set(found);
+
+        let mut tool = DrainTool::default();
+        tool.drill_pocket(&mut scene, id, 0);
+        let left = scene.get(id).expect("still there").traps.found().to_vec();
+        assert_eq!(left.len(), 1, "the drilled pocket alone loses its mark");
+        assert_eq!(left[0].volume_mm3, 20.0, "the second pocket stays");
+        assert!(
+            !tool.drill_pocket(&mut scene, id, 5),
+            "no pocket five to drill"
         );
     }
 

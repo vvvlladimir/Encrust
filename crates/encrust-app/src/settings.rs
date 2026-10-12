@@ -1,8 +1,9 @@
-//! The Settings screen's state: which page is open, what is picked on it, and the profile
+//! The Settings window's state: which page is open, what is picked on it, and the profile
 //! being edited, which is written back as it changes. See `docs/design/profiles.md`.
 
 use std::collections::BTreeMap;
 
+pub use printer_profiles::unique_id;
 use printer_profiles::{
     Catalogue, Entry, Kind, MaterialProfile, PrinterProfile, PrinterTuning, ProfileError, Source,
     SupportProfile,
@@ -10,35 +11,78 @@ use printer_profiles::{
 
 use crate::slicing::Rescaled;
 
-/// A page of the Settings screen.
+/// A page of the Settings window.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum Section {
-    /// The printers, each with the resins set up on it.
     #[default]
-    Printers,
     Supports,
+    /// The Hollow tool's named settings.
+    Hollow,
+    /// The Drain tool's named settings.
+    Drain,
+    /// How the window itself behaves: where it starts, how it zooms, where files go.
+    General,
     /// Whether to look for a new release, and the one found.
     Updates,
 }
 
 impl Section {
+    /// The pages that list profiles, over the ones that hold the window's own settings.
+    pub const PROFILES: [Self; 3] = [Self::Supports, Self::Hollow, Self::Drain];
+
     #[cfg(not(target_arch = "wasm32"))]
-    pub const ALL: [Self; 3] = [Self::Printers, Self::Supports, Self::Updates];
+    pub const OWN: [Self; 2] = [Self::General, Self::Updates];
 
     /// A page loads the latest release every time it is opened, so it has nothing to update.
     #[cfg(target_arch = "wasm32")]
-    pub const ALL: [Self; 2] = [Self::Printers, Self::Supports];
+    pub const OWN: [Self; 1] = [Self::General];
 
     pub fn label(self) -> &'static str {
         match self {
-            Self::Printers => "Printers",
             Self::Supports => "Supports",
+            Self::Hollow => "Hollow",
+            Self::Drain => "Drain",
+            Self::General => "General",
             Self::Updates => "Updates",
+        }
+    }
+
+    /// The kind of profile the page lists, when it lists any.
+    pub fn kind(self) -> Option<Kind> {
+        match self {
+            Self::Supports => Some(Kind::Support),
+            Self::Hollow => Some(Kind::Hollow),
+            Self::Drain => Some(Kind::Drain),
+            Self::General | Self::Updates => None,
         }
     }
 }
 
-/// What the printer page has open: a printer, or one of the resins set up on it.
+/// A tab of the Machine and resin window, over the machine picked down its left.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum Tab {
+    /// The resins set up on the machine, as a table.
+    #[default]
+    Resins,
+    /// The machine's own profile: panel, volume, output and firmware.
+    Machine,
+    /// What the machine takes a file over, and which one on the network it is.
+    Network,
+}
+
+impl Tab {
+    pub const ALL: [Self; 3] = [Self::Resins, Self::Machine, Self::Network];
+
+    pub fn label(self) -> &'static str {
+        match self {
+            Self::Resins => "Resins",
+            Self::Machine => "Machine",
+            Self::Network => "Network",
+        }
+    }
+}
+
+/// What the Machine and resin window has open: a printer, or one of the resins set up on it.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Node {
     Printer(String),
@@ -229,6 +273,8 @@ pub enum Deleting {
     ResinOff { printer: String, resin: String },
     /// A resin and its file, off every printer that has it.
     Resin(String),
+    /// A support profile or a tool's preset of the user's own, from the Settings window.
+    Profile(Kind, String),
 }
 
 /// What the machine library has open: a brand, and what its models are filtered by.
@@ -238,35 +284,49 @@ pub struct Library {
     pub search: String,
 }
 
-/// What the Settings screen is showing.
+/// What the Settings window and the Machine and resin window are showing.
 #[derive(Default)]
 pub struct Settings {
+    /// Whether the Settings window is over the plate.
     pub open: bool,
     pub section: Section,
+    /// Whether the support profile picked in the table is open in its form instead.
+    pub editing_support: bool,
+    /// The preset picked in the Hollow or Drain table, by id.
+    pub preset: Option<String>,
+    /// Whether the Machine and resin window is over the window.
+    pub machines: bool,
+    pub tab: Tab,
+    /// The resin type the table is narrowed to, by the name on the bottle.
+    pub kind: Option<String>,
+    /// Whether the resin picked in the table is open in its form instead of the table.
+    pub editing_resin: bool,
     pub node: Option<Node>,
     /// What the machine list is filtered by, as it is being typed.
     pub search: String,
-    /// The machine library, while it stands in the form's place.
+    /// The machine library, while it stands in the tabs' place.
     pub library: Option<Library>,
     pub printer: Option<Draft<PrinterProfile>>,
     pub resin: Option<ResinDraft>,
     pub support: Option<Draft<SupportProfile>>,
     pub calculators: Calculators,
-    /// The deletion the screen is waiting for an answer on.
+    /// The deletion the window is waiting for an answer on.
     pub confirm: Option<Deleting>,
 }
 
 impl Settings {
-    /// Opens the screen on what the plate is using: its resin when that is set up on its
-    /// printer, the printer otherwise.
-    pub fn open(
+    /// Opens the Machine and resin window on what the plate is using: its resin, open in
+    /// its form, when that is set up on its printer, the printer's resins otherwise.
+    pub fn open_machines(
         &mut self,
         catalogue: &Catalogue,
         printer_id: Option<&str>,
         resin_id: Option<&str>,
     ) {
-        self.open = true;
-        self.section = Section::Printers;
+        self.machines = true;
+        self.tab = Tab::Resins;
+        self.kind = None;
+        self.library = None;
         let printer = printer_id
             .filter(|id| catalogue.printer(id).is_ok())
             .map(str::to_owned)
@@ -276,7 +336,7 @@ impl Settings {
                     .map(|entry| entry.id.clone())
             });
         let Some(printer) = printer else {
-            // Nothing installed yet, so the screen opens on the only thing there is to do.
+            // Nothing installed yet, so the window opens on the only thing there is to do.
             self.library = Some(Library::default());
             return;
         };
@@ -285,6 +345,7 @@ impl Settings {
                 .resin(id)
                 .is_ok_and(|entry| entry.profile.is_tuned_for(&printer))
         });
+        self.editing_resin = resin.is_some();
         let node = match resin {
             Some(resin) => Node::Resin {
                 printer,
@@ -295,10 +356,20 @@ impl Settings {
         self.pick(catalogue, node);
     }
 
-    /// Opens the screen on the support profiles, at the one `profile` was taken from.
+    /// Closes the Machine and resin window, and the question and calculator over it.
+    pub fn close_machines(&mut self) {
+        self.machines = false;
+        self.editing_resin = false;
+        self.library = None;
+        self.confirm = None;
+        self.calculators.open = None;
+    }
+
+    /// Opens the window on the form of the support profile `profile` was taken from.
     pub fn open_supports(&mut self, catalogue: &Catalogue, profile: &SupportProfile) {
         self.open = true;
         self.section = Section::Supports;
+        self.editing_support = true;
         let entry = catalogue
             .supports()
             .find(|entry| entry.profile == *profile)
@@ -306,6 +377,20 @@ impl Settings {
         if let Some(entry) = entry {
             self.support = Some(Draft::new(entry.id.clone(), entry.profile.clone()));
         }
+    }
+
+    /// Turns to another page, with nothing on it picked or open.
+    pub fn turn_to(&mut self, section: Section) {
+        self.section = section;
+        self.editing_support = false;
+        self.preset = None;
+    }
+
+    /// Closes the Settings window, and the question over it.
+    pub fn close(&mut self) {
+        self.open = false;
+        self.editing_support = false;
+        self.confirm = None;
     }
 
     /// Loads a support profile into the form.
@@ -318,6 +403,12 @@ impl Settings {
 
     /// Opens a printer or one of its resins in the form.
     pub fn pick(&mut self, catalogue: &Catalogue, node: Node) {
+        if self.node.as_ref().map(Node::printer) != Some(node.printer()) {
+            self.kind = None;
+        }
+        if matches!(node, Node::Printer(_)) {
+            self.editing_resin = false;
+        }
         self.printer = catalogue.printer(node.printer()).ok().map(|entry| {
             Draft::over_shipped(
                 entry.id.clone(),
@@ -572,35 +663,6 @@ pub fn can_delete(catalogue: &Catalogue, kind: Kind, id: &str) -> bool {
     !catalogue.is_shipped(kind, id)
 }
 
-/// The file stem `name` makes, numbered past the ones `taken` already claims.
-pub fn unique_id(name: &str, taken: impl Fn(&str) -> bool) -> String {
-    // A name in a script a file stem cannot hold still names a profile.
-    let stem = match slug(name) {
-        stem if stem.is_empty() => "profile".to_owned(),
-        stem => stem,
-    };
-    let mut id = stem.clone();
-    let mut next = 2;
-    while taken(&id) {
-        id = format!("{stem}-{next}");
-        next += 1;
-    }
-    id
-}
-
-/// The file stem a name makes: lower-case letters and digits, one dash between words.
-pub fn slug(name: &str) -> String {
-    let mut stem = String::new();
-    for c in name.chars() {
-        if c.is_ascii_alphanumeric() {
-            stem.push(c.to_ascii_lowercase());
-        } else if !stem.is_empty() && !stem.ends_with('-') {
-            stem.push('-');
-        }
-    }
-    stem.trim_end_matches('-').to_owned()
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -661,17 +723,6 @@ mod tests {
             .save_resin("standard-grey", &resin)
             .expect("the directory is writable");
         catalogue
-    }
-
-    #[test]
-    fn a_name_makes_a_file_stem() {
-        assert_eq!(slug("Saturn 4 Ultra"), "saturn-4-ultra");
-        assert_eq!(slug("  ABS-like (tough)! "), "abs-like-tough");
-        assert_eq!(unique_id("Смола", |_| false), "profile");
-        assert_eq!(
-            unique_id("Grey", |id| id == "grey" || id == "grey-2"),
-            "grey-3"
-        );
     }
 
     #[test]
@@ -784,10 +835,10 @@ mod tests {
     }
 
     #[test]
-    fn the_screen_opens_on_the_resin_the_plate_uses() {
+    fn the_window_opens_on_the_resin_the_plate_uses() {
         let catalogue = with_grey("open");
         let mut settings = Settings::default();
-        settings.open(&catalogue, Some(MARS), Some("standard-grey"));
+        settings.open_machines(&catalogue, Some(MARS), Some("standard-grey"));
         let resin = settings.resin.as_ref().expect("a resin is open");
         assert_eq!(resin.draft.id, "standard-grey");
         assert!(
@@ -800,7 +851,7 @@ mod tests {
     fn an_edit_for_one_printer_leaves_every_other_alone() {
         let catalogue = with_grey("edit");
         let mut settings = Settings::default();
-        settings.open(&catalogue, Some(MARS), Some("standard-grey"));
+        settings.open_machines(&catalogue, Some(MARS), Some("standard-grey"));
         let resin = settings.resin.as_mut().expect("open");
         let saturn_before = resin.base.for_printer(SATURN).exposure_s;
 

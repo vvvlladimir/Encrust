@@ -1,6 +1,6 @@
 # 0025. Lay the window out in fixed panels and drop `egui_dock`
 
-- **Status:** Accepted, scene card superseded by 0102
+- **Status:** Accepted, scene card superseded by 0102, status strip by 0217
 - **Date:** 2026-09-18
 
 ## Context

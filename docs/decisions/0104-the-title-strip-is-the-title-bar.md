@@ -1,6 +1,6 @@
 # 0104. The title strip is the window's title bar
 
-- **Status:** Accepted
+- **Status:** Accepted, the strip's height superseded by 0217
 - **Date:** 2026-09-27
 
 ## Context

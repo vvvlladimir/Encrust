@@ -1,6 +1,6 @@
 # 0157. The Slice row carries two actions, not a destination
 
-- **Status:** Accepted
+- **Status:** Accepted, the Send button superseded by 0217
 - **Date:** 2026-10-01
 
 ## Context

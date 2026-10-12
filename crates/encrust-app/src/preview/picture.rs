@@ -137,6 +137,19 @@ pub(super) fn as_seen(settings: &RasterSettings) -> RasterSettings {
     }
 }
 
+/// Where on the plate a risk measured on this panel stands, `at_mm` being millimetres from
+/// the first pixel of the picture `as_seen` lays out.
+pub fn on_plate(settings: &RasterSettings, at_mm: [f32; 2]) -> core_geometry::Vec2 {
+    let seen = as_seen(settings);
+    let across = |mirrored: bool, at: f32, px: u32, pitch: f32| {
+        if mirrored { px as f32 * pitch - at } else { at }
+    };
+    core_geometry::Vec2::new(
+        across(seen.mirror_x, at_mm[0], seen.width_px, seen.pitch.x),
+        across(seen.mirror_y, at_mm[1], seen.height_px, seen.pitch.y),
+    )
+}
+
 impl Preview {
     /// Rasterises the layer being shown, cutting its window first if that has not
     /// happened yet, and shrinks it to something a screen can hold.
@@ -327,5 +340,102 @@ impl Preview {
             MAX_PREVIEW_PX,
             MAX_PREVIEW_PX,
         )
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use core_analysis::RiskKind;
+    use core_geometry::{Mesh, Vec2, Vec3};
+    use core_raster::{Grey, PixelPitch, Shading};
+    use core_slicer::{ONE_SAMPLE, SliceSettings, WINDOW_LAYERS};
+
+    use super::*;
+    use crate::job::{MeasureJob, MeasureOutcome};
+
+    /// Twelve facets of the box from `min` to `max`, appended to `vertices` and `faces`.
+    fn add_box(vertices: &mut Vec<Vec3>, faces: &mut Vec<[u32; 3]>, min: Vec3, max: Vec3) {
+        let base = vertices.len() as u32;
+        for index in 0..8 {
+            let pick =
+                |bit: usize, low: f32, high: f32| if index >> bit & 1 == 0 { low } else { high };
+            vertices.push(Vec3::new(
+                pick(0, min.x, max.x),
+                pick(1, min.y, max.y),
+                pick(2, min.z, max.z),
+            ));
+        }
+        let quads = [
+            [0, 2, 3, 1],
+            [4, 5, 7, 6],
+            [0, 1, 5, 4],
+            [2, 6, 7, 3],
+            [0, 4, 6, 2],
+            [1, 3, 7, 5],
+        ];
+        for [a, b, c, d] in quads {
+            faces.push([base + a, base + b, base + c]);
+            faces.push([base + a, base + c, base + d]);
+        }
+    }
+
+    /// BUG: Support every island took the island back to the plate through the machine's
+    /// mirrors rather than the picture's, so every island landed across the plate.
+    #[test]
+    fn an_island_measured_on_a_mirrored_panel_is_found_where_it_stands() {
+        let (mut vertices, mut faces) = (Vec::new(), Vec::new());
+        add_box(
+            &mut vertices,
+            &mut faces,
+            Vec3::new(0.0, 0.0, 0.0),
+            Vec3::new(1.0, 1.0, 2.0),
+        );
+        // Off the panel's middle on both axes, so a flip on either shows.
+        add_box(
+            &mut vertices,
+            &mut faces,
+            Vec3::new(2.0, 2.6, 1.0),
+            Vec3::new(3.0, 3.6, 2.0),
+        );
+        let mesh = Mesh::new(vertices, faces);
+        let slicing = SliceSettings {
+            layer_height: 0.1,
+            samples: ONE_SAMPLE,
+        };
+        let windows = Windows::new(&mesh, slicing, WINDOW_LAYERS).expect("two boxes slice");
+        let settings = RasterSettings {
+            width_px: 200,
+            height_px: 200,
+            pitch: PixelPitch { x: 0.02, y: 0.02 },
+            mirror_x: true,
+            mirror_y: false,
+            shading: Shading::Coverage,
+            grey: Grey::default(),
+            blur_px: 0,
+        };
+        let mut job = MeasureJob::spawn(
+            Arc::new(mesh),
+            windows,
+            as_seen(&settings),
+            Tolerance::default(),
+            Measured::new(1),
+        );
+        let measured = loop {
+            match job.poll() {
+                Some(MeasureOutcome::Measured(measured)) => break measured,
+                Some(other) => panic!("two boxes measure: {other:?}"),
+                None => std::thread::yield_now(),
+            }
+        };
+        let island = measured
+            .risks()
+            .into_iter()
+            .find(|risk| matches!(risk.kind, RiskKind::Island { .. }))
+            .expect("the box standing on nothing is an island");
+        let found = on_plate(&settings, island.at_mm);
+        assert!(
+            (found - Vec2::new(2.5, 3.1)).length() < 0.05,
+            "the floating box is centred at (2.5, 3.1), found {found}"
+        );
     }
 }

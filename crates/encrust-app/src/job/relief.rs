@@ -1,8 +1,8 @@
 use std::sync::Arc;
 use std::sync::mpsc::{self, Receiver, TryRecvError};
 
-use core_geometry::{Bvh, Mesh, Scalar, Transform, Vec3, transform_mesh};
-use core_volume::{ReliefSettings, press};
+use core_geometry::{Bvh, Heightmap, Mesh, Scalar, Transform, transform_mesh};
+use core_volume::{ReliefSettings, Tiling, press, press_tiled};
 use rayon::prelude::*;
 
 use crate::job::pipeline::{thread_pool, worker_threads};
@@ -16,16 +16,29 @@ pub struct ReliefTask {
     /// The model and its hierarchy, both in its own space, which is where the map stands.
     pub mesh: Arc<Mesh>,
     pub bvh: Arc<Bvh>,
-    pub mapped: Arc<Mapped>,
-    /// What the model is scaled by where it stands. The relief is pressed at the size the
-    /// model prints at, so the mesh is scaled by this first; see ADR 0122.
-    pub scale: Vec3,
+    /// The texture the model's file came with, if any; a tiled picture needs none.
+    pub mapped: Option<Arc<Mapped>>,
+    /// The model's placement but for its turn (`Transform::sizing`). The relief is pressed
+    /// at the size the model prints at, so the mesh is taken through this first; see ADR 0122.
+    pub sizing: Transform,
 }
 
 /// Everything one relief run needs.
 pub struct ReliefRequest {
     pub tasks: Vec<ReliefTask>,
     pub settings: ReliefSettings,
+    pub source: ReliefSource,
+}
+
+/// What the heights are read from.
+pub enum ReliefSource {
+    /// Each model's own texture, through the map its file came with.
+    Mapped,
+    /// One picture laid over every model as tiles, mapped or not.
+    Tiled {
+        image: Arc<Heightmap>,
+        tiling: Tiling,
+    },
 }
 
 /// One model with its texture pressed in, in its own space.
@@ -78,19 +91,18 @@ impl ReliefJob {
     }
 }
 
-/// The models a run covers: everything on the plate being edited that still carries the
-/// texture its file came with.
-pub fn relief_tasks(scene: &Scene) -> Vec<ReliefTask> {
+/// The models a run covers: everything on the plate being edited, or with `tiled` false
+/// only what still carries the texture its file came with.
+pub fn relief_tasks(scene: &Scene, tiled: bool) -> Vec<ReliefTask> {
     scene
         .targets()
-        .filter_map(|object| {
-            Some(ReliefTask {
-                id: object.id,
-                mesh: Arc::clone(&object.mesh),
-                bvh: Arc::clone(&object.bvh),
-                mapped: Arc::clone(object.mapped.as_ref()?),
-                scale: object.transform.scale,
-            })
+        .filter(|object| tiled || object.mapped.is_some())
+        .map(|object| ReliefTask {
+            id: object.id,
+            mesh: Arc::clone(&object.mesh),
+            bvh: Arc::clone(&object.bvh),
+            mapped: object.mapped.clone(),
+            sizing: object.transform.sizing(),
         })
         .collect()
 }
@@ -107,20 +119,29 @@ fn run(request: &ReliefRequest) -> ReliefOutcome {
             .par_iter()
             .map(|task| {
                 let (mesh, bvh, uvs) = printed(task);
-                press(&mesh, &bvh, &uvs, &task.mapped.heights, &request.settings).map(|relief| {
-                    Pressed {
-                        id: task.id,
-                        mesh: Arc::new(relief.mesh),
-                        voxel_mm: relief.voxel_mm,
-                        coarsened: relief.coarsened,
+                let relief = match (&request.source, &task.mapped, uvs) {
+                    (ReliefSource::Tiled { image, tiling }, _, _) => {
+                        press_tiled(&mesh, &bvh, image, *tiling, &request.settings)
                     }
+                    (ReliefSource::Mapped, Some(mapped), Some(uvs)) => {
+                        press(&mesh, &bvh, &uvs, &mapped.heights, &request.settings)
+                    }
+                    (ReliefSource::Mapped, ..) => {
+                        return Err(anyhow::anyhow!("a model has no texture to press"));
+                    }
+                };
+                relief.map_err(anyhow::Error::new).map(|relief| Pressed {
+                    id: task.id,
+                    mesh: Arc::new(relief.mesh),
+                    voxel_mm: relief.voxel_mm,
+                    coarsened: relief.coarsened,
                 })
             })
             .collect();
 
         match pressed {
             Ok(pressed) => ReliefOutcome::Pressed(pressed),
-            Err(error) => ReliefOutcome::Failed(error.to_string()),
+            Err(error) => ReliefOutcome::Failed(format!("{error:#}")),
         }
     })
 }
@@ -131,26 +152,24 @@ fn run(request: &ReliefRequest) -> ReliefOutcome {
 /// own unit is not: a statue drawn 1.33 units tall and printed at 140 mm would otherwise be
 /// pressed on a lattice coarser than the model. A mirroring scale turns every face inside
 /// out, so the map's corners follow the winding.
-fn printed(task: &ReliefTask) -> (Arc<Mesh>, Arc<Bvh>, UvMap) {
-    if task.scale.abs_diff_eq(Vec3::ONE, Scalar::EPSILON) {
+fn printed(task: &ReliefTask) -> (Arc<Mesh>, Arc<Bvh>, Option<UvMap>) {
+    if task.sizing == Transform::default() {
         return (
             Arc::clone(&task.mesh),
             Arc::clone(&task.bvh),
-            task.mapped.uvs.clone(),
+            task.mapped.as_ref().map(|mapped| mapped.uvs.clone()),
         );
     }
 
-    let sized = Transform {
-        scale: task.scale,
-        ..Transform::default()
-    };
-    let mesh = transform_mesh(&task.mesh, sized);
-    let uvs = if task.scale.x * task.scale.y * task.scale.z < 0.0 {
-        let all: Vec<u32> = (0..mesh.faces.len() as u32).collect();
-        task.mapped.uvs.flipping(&all)
-    } else {
-        task.mapped.uvs.clone()
-    };
+    let mesh = transform_mesh(&task.mesh, task.sizing);
+    let uvs = task.mapped.as_ref().map(|mapped| {
+        if task.sizing.is_mirrored() {
+            let all: Vec<u32> = (0..mesh.faces.len() as u32).collect();
+            mapped.uvs.flipping(&all)
+        } else {
+            mapped.uvs.clone()
+        }
+    });
     let bvh = Arc::new(Bvh::build(&mesh));
     (Arc::new(mesh), bvh, uvs)
 }

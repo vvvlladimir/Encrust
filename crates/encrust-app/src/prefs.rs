@@ -1,6 +1,7 @@
 //! What the window remembers between runs: the machine, the resin, the values every tool
-//! is set to, the printer on the network each machine sends to, and whether to look for
-//! updates.
+//! is set to, the printer on the network each machine sends to, whether to look for
+//! updates, how the window behaves, how wide the two side cards were dragged, and where
+//! Preview divides the model from the mask.
 
 use std::collections::BTreeMap;
 use std::net::IpAddr;
@@ -15,15 +16,18 @@ use net_sdcp::Printer;
 use crate::network::{Destination, Network, Prusa};
 use crate::panels::Window;
 use crate::profiles;
+use crate::recent::Recent;
 use crate::slicing::Slicing;
 use crate::state::Tools;
 use crate::tool_settings::ToolSettings;
+use crate::ui::theme;
 use crate::updates::UpdatePrefs;
+use crate::workspace::ViewOptions;
 
 /// The choices carried from one run to the next, beside the user's profile directory.
 ///
-/// Only catalogue ids are kept. A profile opened from a file is not remembered: the file
-/// may have moved, and a silently stale machine is worse than none.
+/// Only catalogue ids are kept, never a path: a profile handed over as a file is imported
+/// into the catalogue first, because the file may move and a stale machine is worse than none.
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
 pub struct Preferences {
     printer: Option<String>,
@@ -51,6 +55,42 @@ pub struct Preferences {
     /// `docs/decisions/0192`.
     #[serde(default)]
     tools: Option<ToolSettings>,
+    /// The files opened lately, newest first.
+    #[serde(default)]
+    recent: Recent,
+    /// Where Preview divides the model from the mask, or `None` for the default.
+    #[serde(default)]
+    mask_split: Option<f32>,
+    /// How wide the inspector and the plate panel were dragged, points, or `None` for the
+    /// defaults.
+    #[serde(default)]
+    inspector_w: Option<f32>,
+    #[serde(default)]
+    plate_w: Option<f32>,
+    #[serde(default)]
+    general: General,
+}
+
+/// How the window itself behaves, as the Settings window's General page sets it.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct General {
+    /// Whether a run opens on the start page rather than straight on the plate.
+    pub start_page: bool,
+    /// Whether scrolling down zooms in rather than out.
+    pub invert_zoom: bool,
+    /// Where the dialog a sliced file is saved from opens, or `None` for the system's choice.
+    pub sliced_dir: Option<std::path::PathBuf>,
+}
+
+impl Default for General {
+    fn default() -> Self {
+        Self {
+            start_page: true,
+            invert_zoom: false,
+            sliced_dir: None,
+        }
+    }
 }
 
 impl Preferences {
@@ -69,6 +109,38 @@ impl Preferences {
                 .collect(),
             updates: updates.clone(),
             tools: Some(ToolSettings::of(tools, slicing)),
+            recent: Recent::default(),
+            mask_split: None,
+            inspector_w: None,
+            plate_w: None,
+            general: General::default(),
+        }
+    }
+
+    /// The same, with how the window behaves.
+    pub fn with_general(self, general: &General) -> Self {
+        Self {
+            general: general.clone(),
+            ..self
+        }
+    }
+
+    /// The same, with the files opened lately.
+    pub fn with_recent(self, recent: &Recent) -> Self {
+        Self {
+            recent: recent.clone(),
+            ..self
+        }
+    }
+
+    /// The same, with where Preview divides the model from the mask and how wide the side
+    /// cards stand.
+    pub fn with_layout(self, options: &ViewOptions) -> Self {
+        Self {
+            mask_split: Some(options.mask_split),
+            inspector_w: Some(options.inspector_w),
+            plate_w: Some(options.plate_w),
+            ..self
         }
     }
 
@@ -76,6 +148,29 @@ impl Preferences {
     /// dropped rather than reported: the user did not ask for it this run.
     pub fn apply(&self, window: &mut Window) {
         window.machine.updates.prefs.clone_from(&self.updates);
+        window.machine.recent.clone_from(&self.recent);
+        window.machine.general.clone_from(&self.general);
+        let options = &mut window.view.options;
+        if !self.general.start_page {
+            options.started = true;
+        }
+        for (stored, value, range) in [
+            (
+                self.mask_split,
+                &mut options.mask_split,
+                theme::MASK_SPLIT_RANGE,
+            ),
+            (
+                self.inspector_w,
+                &mut options.inspector_w,
+                theme::INSPECTOR_W_RANGE,
+            ),
+            (self.plate_w, &mut options.plate_w, theme::SCENE_W_RANGE),
+        ] {
+            if let Some(stored) = stored.filter(|stored| stored.is_finite()) {
+                *value = stored.clamp(*range.start(), *range.end());
+            }
+        }
         // Before the printer, so that applying it points the window at the machine this
         // profile was last sent to.
         window.machine.network.manual.clone_from(&self.addresses);
@@ -278,6 +373,22 @@ mod tests {
         );
     }
 
+    #[test]
+    fn the_preview_divide_and_the_card_widths_survive_the_round_trip() {
+        let options = ViewOptions {
+            mask_split: 0.62,
+            inspector_w: 400.0,
+            plate_w: 200.0,
+            ..ViewOptions::default()
+        };
+        let prefs = Preferences::default().with_layout(&options);
+        let text = serde_json::to_string(&prefs).expect("the preferences serialise");
+        let read: Preferences = serde_json::from_str(&text).expect("and read back");
+        assert_eq!(read.mask_split, Some(0.62));
+        assert_eq!(read.inspector_w, Some(400.0));
+        assert_eq!(read.plate_w, Some(200.0));
+    }
+
     /// A wall thickness typed in once is the user's from then on, so it travels through
     /// the file beside the machine it was typed for; see ADR 0192.
     #[test]
@@ -305,6 +416,27 @@ mod tests {
         assert_eq!(back.hollow.state.thickness_mm, 1.25);
         assert_eq!(back.drain.state.depth_mm, 7.5);
         assert_eq!(back.supports.brush_radius_mm, 4.0);
+    }
+
+    #[test]
+    fn a_file_written_before_the_general_page_opens_on_the_start_page() {
+        let read: Preferences =
+            serde_json::from_str("{}").expect("every field of the file is optional");
+        assert!(read.general.start_page);
+        assert!(!read.general.invert_zoom);
+    }
+
+    #[test]
+    fn how_the_window_behaves_survives_the_round_trip() {
+        let general = General {
+            start_page: false,
+            invert_zoom: true,
+            sliced_dir: Some(std::path::PathBuf::from("/prints")),
+        };
+        let prefs = Preferences::default().with_general(&general);
+        let text = serde_json::to_string(&prefs).expect("the preferences serialise");
+        let read: Preferences = serde_json::from_str(&text).expect("and read back");
+        assert_eq!(read.general, general);
     }
 
     #[test]

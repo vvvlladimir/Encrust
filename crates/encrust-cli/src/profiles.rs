@@ -4,6 +4,7 @@ use std::fmt;
 use std::path::Path;
 
 use anyhow::{Context, Result};
+use core_engine::project::{DrainState, HollowState};
 use printer_profiles::{Catalogue, Kind, MaterialProfile, PrinterProfile, SupportProfile};
 use serde::Serialize;
 
@@ -140,12 +141,21 @@ pub fn support(id: &str) -> Result<SupportProfile> {
     Ok(entry.profile.clone())
 }
 
+/// Every kind of profile the catalogue keeps, in the order they are listed.
+const KINDS: [Kind; 5] = [
+    Kind::Printer,
+    Kind::Resin,
+    Kind::Support,
+    Kind::Hollow,
+    Kind::Drain,
+];
+
 /// One profile of the catalogue as the TOML it is kept in, and which kind it turned out to
 /// be. An id two kinds share needs `kind` to say which.
 pub fn show(id: &str, kind: Option<Kind>) -> Result<(Kind, String)> {
     let catalogue = Catalogue::load().context("cannot read the profile catalogue")?;
     let named = Path::new(id);
-    let found: Vec<(Kind, String)> = [Kind::Printer, Kind::Resin, Kind::Support]
+    let found: Vec<(Kind, String)> = KINDS
         .into_iter()
         .filter(|candidate| kind.is_none_or(|wanted| wanted == *candidate))
         .filter_map(|candidate| {
@@ -153,6 +163,11 @@ pub fn show(id: &str, kind: Option<Kind>) -> Result<(Kind, String)> {
                 Kind::Printer => catalogue.printer(id).ok()?.profile.to_toml_string(named),
                 Kind::Resin => catalogue.resin(id).ok()?.profile.to_toml_string(named),
                 Kind::Support => catalogue.support(id).ok()?.profile.to_toml_string(named),
+                Kind::Hollow | Kind::Drain => catalogue
+                    .presets(candidate)
+                    .find(|entry| entry.id == id)?
+                    .profile
+                    .to_toml_string(named),
             };
             Some(toml.map(|toml| (candidate, toml)))
         })
@@ -166,12 +181,39 @@ pub fn show(id: &str, kind: Option<Kind>) -> Result<(Kind, String)> {
     }
 }
 
+/// Takes the profile file at `path` into the user's catalogue as `kind`, under an id of
+/// its own; a resin is set up on `printer`. Answers the new id.
+pub fn import(path: &Path, kind: Kind, printer: Option<&str>) -> Result<String> {
+    let text =
+        std::fs::read_to_string(path).with_context(|| format!("cannot read {}", path.display()))?;
+    if printer.is_some() && kind != Kind::Resin {
+        anyhow::bail!(
+            "--printer sets a resin up on a machine; a {} has none",
+            kind.label()
+        );
+    }
+    let mut catalogue = Catalogue::load().context("cannot read the profile catalogue")?;
+    if let Some(id) = printer {
+        catalogue
+            .printer(id)
+            .context("run `encrust profiles list` to see the printers there are")?;
+    }
+    let imported = match kind {
+        Kind::Hollow => catalogue.import_preset::<HollowState>(kind, &text, path),
+        Kind::Drain => catalogue.import_preset::<DrainState>(kind, &text, path),
+        Kind::Printer | Kind::Resin | Kind::Support => catalogue.import(kind, &text, path, printer),
+    };
+    imported.with_context(|| format!("cannot import {} as a {}", path.display(), kind.label()))
+}
+
 /// The catalogue as `profiles list` prints it.
 #[derive(Serialize)]
 pub struct Listing {
     printers: Vec<PrinterLine>,
     resins: Vec<ResinLine>,
     supports: Vec<SupportLine>,
+    hollow: Vec<PresetLine>,
+    drain: Vec<PresetLine>,
 }
 
 #[derive(Serialize)]
@@ -205,6 +247,13 @@ struct SupportLine {
     max_overhang_deg: f32,
     density: f32,
     user: bool,
+}
+
+/// Named settings of a tool, which are always the user's own.
+#[derive(Serialize)]
+struct PresetLine {
+    id: String,
+    name: String,
 }
 
 /// Reads the catalogue, marking what came from the user.
@@ -251,10 +300,24 @@ pub fn list() -> Result<Listing> {
             user: is_user(&entry.source),
         })
         .collect();
+    for path in catalogue.unreadable() {
+        tracing::warn!("{} is not a preset and was left out", path.display());
+    }
+    let presets = |kind| {
+        catalogue
+            .presets(kind)
+            .map(|entry| PresetLine {
+                id: entry.id.clone(),
+                name: entry.profile.name.clone(),
+            })
+            .collect()
+    };
     Ok(Listing {
         printers,
         resins,
         supports,
+        hollow: presets(Kind::Hollow),
+        drain: presets(Kind::Drain),
     })
 }
 
@@ -302,6 +365,16 @@ impl fmt::Display for Listing {
                 support.density,
                 origin(support.user),
             )?;
+        }
+
+        for (title, presets) in [("Hollow", &self.hollow), ("Drain", &self.drain)] {
+            if presets.is_empty() {
+                continue;
+            }
+            writeln!(f, "\n{title} presets:")?;
+            for preset in presets {
+                writeln!(f, "  {:<24} {}", preset.id, preset.name)?;
+            }
         }
         Ok(())
     }

@@ -88,6 +88,8 @@ fn object(name: &str, mesh: &Mesh, transform: Transform) -> ObjectState {
         },
         supports: ObjectSupportState::default(),
         hollow: ObjectHollowState::default(),
+        own_hollow: None,
+        own_drain: None,
     }
 }
 
@@ -116,6 +118,7 @@ fn project() -> Project {
                 grey_levels: None,
                 blur_px: 0,
                 remove_islands: false,
+                hanging_passes: 0,
                 format: OutputFormat::Goo,
             },
             supports: SupportState {
@@ -181,6 +184,7 @@ fn hollowed(saved: &mut Project, thickness_mm: f32) {
         voxel_mm: 0.2,
         coarsened: false,
         scale: Vec3::ONE,
+        stretched: None,
     });
     saved.models[0].shell = Some(Arc::new(box_mesh(
         Vec3::splat(thickness_mm),

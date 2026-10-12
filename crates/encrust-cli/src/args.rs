@@ -6,7 +6,9 @@ use std::path::PathBuf;
 use anyhow::{Context, Result};
 use core_format::ExposureRange;
 use core_geometry::{DEFAULT_WELD_TOLERANCE, Scalar, Vec3};
+use core_plate::OrientGoal;
 use core_slicer::{AdaptiveSettings, WINDOW_LAYERS};
+use core_volume::Tiling;
 use printer_profiles::SupportProfile;
 
 use crate::hollowing::HollowArgs;
@@ -62,9 +64,30 @@ pub struct ImportArgs {
     pub transform: TransformArgs,
 
     /// Press the file's own texture into the model as relief, this many millimetres deep.
-    /// Negative sinks it in. Needs a model carrying UVs and an image beside it.
+    /// Negative sinks it in. Needs a model carrying UVs and an image beside it, or
+    /// --relief-image.
     #[arg(long, value_name = "MM", allow_hyphen_values = true)]
     pub relief: Option<Scalar>,
+
+    /// Press this picture in instead, tiled over the model from three sides, so a model
+    /// with no UVs takes a relief too.
+    #[arg(long, value_name = "PATH", requires = "relief")]
+    pub relief_image: Option<PathBuf>,
+
+    /// How wide one tile of --relief-image is on the model, millimetres.
+    #[arg(long, value_name = "MM", default_value_t = Tiling::default().tile_mm,
+          requires = "relief_image")]
+    pub relief_tile: Scalar,
+
+    /// How far the tiles of --relief-image are turned, degrees.
+    #[arg(
+        long,
+        value_name = "DEG",
+        default_value_t = 0.0,
+        allow_hyphen_values = true,
+        requires = "relief_image"
+    )]
+    pub relief_angle: Scalar,
 
     /// How fine the lattice --relief and --hollow are cut on, 0 to 1. Not the layer height:
     /// the outside of the model never passes through the lattice.
@@ -90,6 +113,38 @@ pub struct TransformArgs {
     /// Turn the model the way it prints best before anything else is done to it.
     #[arg(long)]
     pub orient: bool,
+
+    /// What --orient searches for.
+    #[arg(long, value_enum, default_value_t = Goal::FewestSupports, requires = "orient")]
+    pub orient_goal: Goal,
+
+    /// How far --orient may turn the model from the way its file stands it, degrees.
+    #[arg(long, value_name = "DEG", requires = "orient")]
+    pub max_tilt: Option<Scalar>,
+}
+
+/// What an orientation is searched for, as [`OrientGoal`] names it.
+#[derive(Debug, Clone, Copy, clap::ValueEnum)]
+pub enum Goal {
+    /// The least surface hanging over nothing.
+    FewestSupports,
+    /// The smallest cross-section pulled off the film.
+    LeastPeel,
+    /// The fewest layers.
+    ShortestPrint,
+    /// No support on the faces that look up in the file.
+    CleanTop,
+}
+
+impl From<Goal> for OrientGoal {
+    fn from(goal: Goal) -> Self {
+        match goal {
+            Goal::FewestSupports => Self::FewestSupports,
+            Goal::LeastPeel => Self::LeastPeel,
+            Goal::ShortestPrint => Self::ShortestPrint,
+            Goal::CleanTop => Self::CleanTop,
+        }
+    }
 }
 
 /// What the model stands on.
@@ -185,10 +240,20 @@ pub struct RasterArgs {
           value_parser = clap::value_parser!(u8).range(0..=8))]
     pub blur: u8,
 
-    /// Take every island out of the written file: a piece cured over nothing, and then
-    /// whatever stood only on it, so a floating part goes whole.
+    /// Take every island out of the written file: a piece cured over nothing, and nothing
+    /// that stood on it.
     #[arg(long)]
     pub remove_islands: bool,
+
+    /// With --remove-islands, take this many layers more of whatever is left hanging over
+    /// a removed island, one layer of it a pass.
+    #[arg(
+        long,
+        value_name = "N",
+        default_value_t = 0,
+        requires = "remove_islands"
+    )]
+    pub hanging_passes: u32,
 
     /// Layers rasterised at once. Peak memory is this many masks; defaults to the number
     /// of threads.

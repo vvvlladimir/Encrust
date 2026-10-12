@@ -5,7 +5,6 @@ mod callback;
 mod gpu;
 mod grid;
 mod label;
-mod machine;
 #[cfg(test)]
 mod offscreen;
 mod target;
@@ -15,6 +14,7 @@ pub use callback::{Banding, Shading, ViewportCallback};
 pub use gpu::CutLine;
 #[cfg(not(target_arch = "wasm32"))]
 pub use gpu::MULTISAMPLING;
+pub use grid::AXIS_LENGTH_MM;
 pub use label::prime as prime_label;
 
 use gpu::ViewportResources;

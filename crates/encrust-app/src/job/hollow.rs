@@ -2,11 +2,11 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::{self, Receiver, TryRecvError};
 
-use core_geometry::{Bvh, Mesh, Scalar, Vec3};
+use core_geometry::{Bvh, Mat3, Mesh, Scalar};
 use core_volume::{Cancel, HollowSettings, Shell, hollow_at_scale};
 
 use crate::job::pipeline::{thread_pool, worker_threads};
-use crate::scene::{ObjectId, Scene};
+use crate::scene::{ObjectId, Scene, SceneObject};
 
 /// One model to hollow, owned so that it can cross to the worker thread.
 pub struct HollowTask {
@@ -15,9 +15,9 @@ pub struct HollowTask {
     /// cavity is worked out and kept in.
     pub mesh: Arc<Mesh>,
     pub bvh: Arc<Bvh>,
-    /// What the model is scaled by where it stands. The wall is measured on the plate at
-    /// this scale, so a model rescaled afterwards has to be hollowed again.
-    pub scale: Vec3,
+    /// The placement with its turn taken out (`Transform::unturned`). The wall is measured
+    /// on the plate under it, so a model resized afterwards has to be hollowed again.
+    pub shape: Mat3,
     pub settings: HollowSettings,
 }
 
@@ -153,7 +153,10 @@ impl Drop for HollowJob {
 
 /// Every visible model with geometry on the plate being edited, with the blockers it
 /// carries.
-pub fn hollow_tasks(scene: &Scene, settings: &HollowSettings) -> Vec<HollowTask> {
+pub fn hollow_tasks(
+    scene: &Scene,
+    settings: impl Fn(&SceneObject) -> HollowSettings,
+) -> Vec<HollowTask> {
     scene
         .targets()
         .filter(|object| !object.mesh.is_empty())
@@ -161,8 +164,8 @@ pub fn hollow_tasks(scene: &Scene, settings: &HollowSettings) -> Vec<HollowTask>
             id: object.id,
             mesh: Arc::clone(&object.mesh),
             bvh: Arc::clone(&object.bvh),
-            scale: object.transform.scale,
-            settings: object.hollow.asking(settings),
+            shape: object.transform.unturned(),
+            settings: object.hollow.asking(&settings(object)),
         })
         .collect()
 }
@@ -177,7 +180,7 @@ pub fn rebuild_tasks(scene: &Scene) -> Vec<HollowTask> {
                 id: object.id,
                 mesh: Arc::clone(&object.mesh),
                 bvh: Arc::clone(&object.bvh),
-                scale: object.transform.scale,
+                shape: object.transform.unturned(),
                 settings: object.hollow.rebuild()?,
             })
         })
@@ -219,7 +222,7 @@ fn shell_each(
             &task.mesh,
             &task.bvh,
             &task.settings,
-            task.scale,
+            task.shape,
             Cancel::never(),
         ) {
             Ok(hollowed) => shells.push(Shelled {
@@ -230,7 +233,7 @@ fn shell_each(
                     cavity_mm3: hollowed.cavity_mm3,
                     voxel_mm: hollowed.voxel_mm,
                     coarsened: hollowed.coarsened,
-                    scale: task.scale,
+                    shape: task.shape,
                     settings: task.settings.clone(),
                 },
             }),

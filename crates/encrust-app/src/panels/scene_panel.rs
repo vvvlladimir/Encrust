@@ -2,22 +2,18 @@ use egui::{Align2, Rect, Sense, vec2};
 
 use core_geometry::{Vec2, Vec3};
 
-use crate::panels::Window;
-use crate::profiles;
-use crate::scene::{Axis, ImportSummary, ObjectId, Scene, SceneObject};
+use crate::panels::plate_summary;
+use crate::panels::{Window, plate_strip, slice};
+use crate::project;
+use crate::scene::{ImportSummary, ObjectId, Scene, SceneObject};
 use crate::shortcuts::{self, Action};
-use crate::state::Doc;
 use crate::ui::{
-    count_row, hairline, heading, hint, icon, icon_button, meta, number_row, picker,
+    body_and_foot, count_row, focus_ring, hairline, hint, icon, icon_button, number_row,
     secondary_button, theme,
 };
 
-/// The print block at the foot of the panel: a heading over two pickers.
-const PRINT_H: f32 = 128.0;
-
-/// The row of actions at its foot: one line of icon buttons, inset like the inspector's
-/// own margin, plus the line above it.
-const ACTIONS_H: f32 = theme::ICON_SIZE + 25.0;
+/// The heading over the list, as tall as an inspector's.
+const HEADER_H: f32 = 40.0;
 
 /// More copies than this in one go is a slip of the mouse, not an intention.
 const ARRAY_MAX: u32 = 20;
@@ -28,39 +24,94 @@ const POPUP_W: f32 = 230.0;
 /// What the end of the row of a model that will not slice as it stands reads.
 const BROKEN: &str = "broken";
 
-/// The plate down the left of the stage: what stands on it, and what it is printed on.
-///
-/// A panel rather than a card over the viewport, so the list may be as long as the plate
-/// is full and a press on it can never orbit the camera; see `docs/decisions/0102`.
-pub fn ui(ui: &mut egui::Ui, window: &mut Window) {
-    egui::Panel::top("plate-print")
-        .exact_size(PRINT_H)
-        .resizable(false)
-        .show_separator_line(false)
-        .frame(egui::Frame::new().fill(theme::colors().panel))
-        .show(ui, |ui| print(ui, window));
-
-    egui::Panel::bottom("plate-actions")
-        .exact_size(ACTIONS_H)
-        .resizable(false)
-        .show_separator_line(false)
-        .frame(egui::Frame::new().fill(theme::colors().panel))
-        .show(ui, |ui| actions(ui, window));
-
-    ui.spacing_mut().item_spacing.y = 0.0;
-    ui.scope(|ui| {
-        ui.spacing_mut().item_spacing.y = 6.0;
-        egui::Frame::new()
-            .inner_margin(theme::CARD_MARGIN)
-            .show(ui, |ui| {
-                heading(ui, "Plate contents", None);
-            });
-    });
+/// The models card at the right of the stage: which plate, what stands on it and what can
+/// be done to it. As tall as the list, which scrolls once the card would pass `max_h`
+/// points; see `docs/decisions/0221`.
+pub fn ui(ui: &mut egui::Ui, window: &mut Window, max_h: f32) {
+    egui::Frame::new()
+        .inner_margin(PLATES_MARGIN)
+        .show(ui, |ui| {
+            let room = ui.available_width();
+            plate_strip::ui(ui, &mut window.doc.scene, room);
+        });
     hairline(ui);
+    header(ui, window);
+    hairline(ui);
+    body_and_foot(ui, max_h, window, rows, actions);
+}
 
-    egui::ScrollArea::vertical()
-        .auto_shrink([false, false])
-        .show(ui, |ui| rows(ui, window));
+/// What the plate comes to, and the button that makes the file: a card of its own on the
+/// stage's foot, under the models.
+pub fn this_plate(ui: &mut egui::Ui, window: &mut Window) {
+    egui::Frame::new()
+        .inner_margin(theme::PANEL_MARGIN)
+        .show(ui, |ui| {
+            ui.set_width(ui.available_width());
+            plate_summary::ui(ui, window);
+            ui.add_space(theme::ITEM_GAP);
+            slice::ui(ui, window);
+        });
+}
+
+/// Points around the row of plates at the card's head.
+const PLATES_MARGIN: egui::Margin = egui::Margin::symmetric(12, 8);
+
+/// What the plate holds and how much of it the tools are aimed at, with the way to add
+/// another model.
+fn header(ui: &mut egui::Ui, window: &mut Window) {
+    let colors = theme::colors();
+    let (tint, tally) = tally(&window.doc.scene);
+    let (rect, _) = ui.allocate_exact_size(vec2(ui.available_width(), HEADER_H), Sense::hover());
+    let inner = rect.shrink2(vec2(theme::PANEL_PAD, 0.0));
+    ui.scope_builder(
+        egui::UiBuilder::new()
+            .max_rect(inner)
+            .layout(egui::Layout::left_to_right(egui::Align::Center)),
+        |ui| {
+            ui.spacing_mut().item_spacing.x = 6.0;
+            ui.label(
+                egui::RichText::new("Models")
+                    .font(theme::section())
+                    .color(colors.text_mid),
+            );
+            ui.label(
+                egui::RichText::new(tally)
+                    .font(theme::figures(11.0))
+                    .color(tint),
+            );
+            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                let tooltip = shortcuts::tooltip(Action::OpenModel);
+                if icon_button(ui, icon::ADD, &tooltip).clicked() {
+                    window
+                        .doc
+                        .imports
+                        .open_dialog(&window.doc.plate, &mut window.machine.status);
+                }
+                project_name(ui, &window.doc.project);
+            });
+        },
+    );
+}
+
+/// What project is open, if one is, cut short to the room the heading leaves it.
+fn project_name(ui: &mut egui::Ui, opened: &project::Opened) {
+    let Some(name) = opened.name() else {
+        return;
+    };
+    let text = egui::RichText::new(name)
+        .font(theme::label())
+        .color(theme::colors().text_low);
+    ui.add(egui::Label::new(text).truncate());
+}
+
+/// How many models are picked, in the selection's colour, or with none picked how many
+/// stand on the plate.
+fn tally(scene: &Scene) -> (egui::Color32, String) {
+    let colors = theme::colors();
+    match scene.selection().len() {
+        0 => (colors.text_low, scene.here().count().to_string()),
+        picked => (colors.picked, format!("{picked} selected")),
+    }
 }
 
 /// What can be done to what stands on the plate. These belong to the contents rather
@@ -73,11 +124,10 @@ fn actions(ui: &mut egui::Ui, window: &mut Window) {
             let picked: Vec<ObjectId> = window.doc.scene.selection().to_vec();
             let aimed = !picked.is_empty();
             ui.spacing_mut().item_spacing.x = 2.0;
-            ui.columns(5, |columns| {
+            ui.columns(4, |columns| {
                 cell(&mut columns[0], aimed, |ui| duplicate(ui, window, &picked));
-                cell(&mut columns[1], aimed, |ui| mirror(ui, window.doc, &picked));
-                cell(&mut columns[2], aimed, |ui| array(ui, window, &picked));
-                cell(&mut columns[3], true, |ui| {
+                cell(&mut columns[1], aimed, |ui| array(ui, window, &picked));
+                cell(&mut columns[2], true, |ui| {
                     if icon_button(ui, icon::ARRANGE, "Arrange the plate").clicked() {
                         window.machine.status = crate::arrange::arrange_plate(
                             &mut window.doc.scene,
@@ -86,7 +136,7 @@ fn actions(ui: &mut egui::Ui, window: &mut Window) {
                         );
                     }
                 });
-                cell(&mut columns[4], aimed, |ui| {
+                cell(&mut columns[3], aimed, |ui| {
                     let tooltip = shortcuts::tooltip(Action::Remove);
                     if icon_button(ui, icon::REMOVE, &tooltip).clicked() {
                         window.doc.scene.remove_selected();
@@ -103,7 +153,7 @@ fn cell(ui: &mut egui::Ui, enabled: bool, add: impl FnOnce(&mut egui::Ui)) {
     });
 }
 
-/// Every copy and every flip works on the whole selection, so a plate of four does not
+/// Every copy works on the whole selection, so a plate of four does not
 /// need the same button pressed four times.
 fn duplicate(ui: &mut egui::Ui, window: &mut Window, picked: &[ObjectId]) {
     let tooltip = if picked.len() > 1 {
@@ -127,20 +177,6 @@ pub fn duplicate_selection(window: &mut Window) {
         })
         .collect();
     window.doc.scene.select_many(&copies);
-}
-
-/// Three axes on one button: a flip is rare enough not to be worth three of them.
-fn mirror(ui: &mut egui::Ui, doc: &mut Doc, picked: &[ObjectId]) {
-    let response = icon_button(ui, icon::MIRROR, "Mirror");
-    egui::Popup::menu(&response).show(|ui| {
-        for axis in Axis::ALL {
-            if ui.button(axis.label()).clicked() {
-                for id in picked {
-                    doc.scene.mirror(*id, axis);
-                }
-            }
-        }
-    });
 }
 
 /// The grid and the gap it leaves, behind the button that lays it out.
@@ -180,30 +216,6 @@ fn beside(scene: &Scene, id: ObjectId, gap_mm: f32) -> Vec3 {
         .and_then(SceneObject::world_bounds)
         .map_or(0.0, |bounds| bounds.maxs.x - bounds.mins.x);
     Vec3::new(width + gap_mm, 0.0, 0.0)
-}
-
-/// The machine and the resin belong to the plate rather than to whichever tool is open,
-/// so they stand over its contents and leave the inspector to the tool.
-fn print(ui: &mut egui::Ui, window: &mut Window) {
-    egui::Frame::new()
-        .inner_margin(theme::PANEL_MARGIN)
-        .show(ui, |ui| {
-            heading(ui, "Print", None);
-            let response = picker(ui, icon::PRINTER, window.doc.plate.display_name());
-            egui::Popup::menu(&response).show(|ui| profiles::printer_menu(ui, window));
-
-            ui.add_space(theme::ITEM_GAP);
-            let response = picker(ui, icon::RESIN, window.machine.slicing.resin_name());
-            egui::Popup::menu(&response).show(|ui| profiles::resin_menu(ui, window.machine));
-
-            if window.machine.slicing.printer_id.is_some()
-                && window.machine.slicing.has_resin()
-                && !window.machine.slicing.resin_is_tuned()
-            {
-                meta(ui, &["not measured on this printer".to_owned()]);
-            }
-        });
-    hairline(ui);
 }
 
 fn rows(ui: &mut egui::Ui, window: &mut Window) {
@@ -283,7 +295,16 @@ fn row(
 ) -> Option<Clicked> {
     let (rect, response) =
         ui.allocate_exact_size(vec2(ui.available_width(), theme::ROW_H), Sense::click());
+    response.widget_info(|| {
+        egui::WidgetInfo::selected(
+            egui::WidgetType::SelectableLabel,
+            true,
+            selected,
+            &object.name,
+        )
+    });
     row_background(ui.painter(), rect, selected, response.hovered());
+    focus_ring(ui, &response, 0.0);
     let asked = row_menu(&response, object, plates, active);
 
     let (eye, eye_response) = visibility_eye(ui, rect, object);
@@ -366,11 +387,6 @@ fn row_background(painter: &egui::Painter, rect: Rect, selected: bool, hovered: 
     let colors = theme::colors();
     if selected {
         painter.rect_filled(rect, 0.0, colors.picked_wash);
-        let marker = Rect::from_min_size(
-            egui::pos2(rect.left(), rect.top() + 4.0),
-            vec2(2.0, rect.height() - 8.0),
-        );
-        painter.rect_filled(marker, 0.0, colors.picked);
     } else if hovered {
         painter.rect_filled(rect, 0.0, colors.raised);
     }
@@ -388,6 +404,11 @@ fn visibility_eye(ui: &mut egui::Ui, rect: Rect, object: &SceneObject) -> (Rect,
         ui.id().with(object.id),
         Sense::click(),
     );
+    response.widget_info(|| {
+        let shown = format!("Show {}", object.name);
+        egui::WidgetInfo::selected(egui::WidgetType::Checkbox, true, object.visible, shown)
+    });
+    focus_ring(ui, &response, theme::R_CONTROL);
     ui.painter().text(
         eye.center(),
         Align2::CENTER_CENTER,
@@ -442,7 +463,11 @@ fn import_mark(
         }
     };
     let response = ui.interact(spot, ui.id().with((object.id, "import")), Sense::click());
+    response.widget_info(|| {
+        egui::WidgetInfo::labeled(egui::WidgetType::Button, true, "What the import found")
+    });
     paint_mark(ui.painter(), spot, mark, response.hovered());
+    focus_ring(ui, &response, theme::R_CONTROL);
     egui::Popup::menu(&response).show(|ui| {
         ui.set_max_width(POPUP_W);
         for line in lines {

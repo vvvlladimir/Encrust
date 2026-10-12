@@ -1,46 +1,43 @@
 use core_geometry::Scalar;
-use egui::{Id, Rect, Stroke, vec2};
+use egui::{Align, Align2, Color32, Layout, Rect, Sense, Stroke, pos2, vec2};
 
 use crate::panels::Window;
 use crate::panels::inspector::risk_tint;
-use crate::preview::Preview;
-use crate::state::{Doc, Machine};
-use crate::ui::{icon, icon_button, theme};
+use crate::preview::{Preview, stack_fingerprint};
+use crate::shortcuts::{self, Action};
+use crate::state::Doc;
+use crate::ui::{focus_ring, icon, icon_button, theme};
 use crate::workspace::{Mode, Section};
 
 /// How many layers a second the play button steps through. Fast enough to read the shape
 /// of a print, slow enough to see a layer.
 const PLAY_LAYERS_PER_S: f32 = 30.0;
 
-/// The room the slider is given: tall enough to aim a layer with, never taller than the
-/// room under the view tools.
-const SLIDER_H: f32 = 340.0;
-const MIN_SLIDER_H: f32 = 110.0;
-/// Points the card's three buttons, their gaps and its margins take beside the slider.
-const CARD_CHROME_H: f32 = 118.0;
+/// One of the three views, stacked; the readout under them; the least room the typed
+/// layer is given, so an emptied box still takes a click; and the room between groups.
+const VIEW_H: f32 = 30.0;
+const READOUT_H: f32 = 52.0;
+const LAYER_FIELD_MIN_W: f32 = 8.0;
+const GAP: f32 = 10.0;
 
-/// Thickness of the trough, and the width the slider is allocated, which is what egui
-/// sizes the handle from: it draws one of `width / 2.5`.
-const TROUGH_W: f32 = 4.0;
-const HANDLE_SPAN: f32 = 17.0;
-/// The handle is drawn as a bar this much flatter than it is wide, so that it reads as a
-/// mark on the rail rather than as a knob over it.
-const HANDLE_ASPECT: f32 = 0.42;
-
-/// How long the readout stays up after the rail was last moved, seconds, and the gap
-/// between it and the card it is pinned to.
-const LINGER_S: f64 = 1.4;
-const READOUT_GAP: f32 = 8.0;
-const READOUT_PAD: egui::Vec2 = vec2(7.0, 4.0);
-/// How far a risk's tick reaches out of the rail to the left, and into it.
-const RISK_TICK_OUT: f32 = 5.0;
-const RISK_TICK_IN: f32 = 4.0;
+/// The track: how wide it is, how thick its rule, the band of exposures down its left,
+/// and the handle on it.
+const TRACK_W: f32 = 40.0;
+const RULE_W: f32 = 5.0;
+const BAND_W: f32 = 3.0;
+const HANDLE: egui::Vec2 = vec2(20.0, 10.0);
+/// How many ticks the scale beside the rule carries, and how wide the widest row of the
+/// cured-area profile stands either side of the rule.
+const TICKS: usize = 18;
+const PROFILE_W: f32 = 9.0;
+/// A risk's tick across the rule.
+const RISK: egui::Vec2 = vec2(16.0, 2.0);
 
 /// Where the viewport cuts the plate's contents this frame, plate millimetres, or `None`
 /// when the whole model is drawn.
 ///
 /// The Preview mode always cuts at the layer it is showing, because that is what a layer
-/// preview is; the Prepare mode cuts only once the slider has been moved off the top.
+/// preview is; the Prepare mode cuts only once the strip has been moved off the top.
 pub fn cut_height(mode: Mode, section: &Section, preview: &Preview) -> Option<Scalar> {
     match mode {
         Mode::Preview => preview.layer_z(),
@@ -48,196 +45,676 @@ pub fn cut_height(mode: Mode, section: &Section, preview: &Preview) -> Option<Sc
     }
 }
 
-/// How tall the slider can be in a card given `room_h` points of height.
-pub fn slider_height(room_h: f32) -> f32 {
-    (room_h - CARD_CHROME_H).clamp(MIN_SLIDER_H, SLIDER_H)
-}
-
-/// Whether the rail has anything to scrub through, which is what decides if the card is
-/// drawn at all. A hint for the empty cases lives in the inspector, not over the plate.
-pub fn is_available(window: &Window) -> bool {
-    match *window.mode {
-        Mode::Preview => {
-            window.machine.preview.is_building() || window.machine.preview.layer_count() > 0
-        }
-        Mode::Prepare => height_range(window.doc).is_some(),
+/// Where the viewport cuts away what stands below, plate millimetres, or `None` when the
+/// model is drawn down to the plate. The floor never rises past the top cut: in the
+/// Preview mode it keeps at least the layer being shown.
+pub fn floor_height(mode: Mode, section: &Section, preview: &Preview) -> Option<Scalar> {
+    let floor = section.floor_mm?;
+    match mode {
+        Mode::Preview if preview.layer_count() == 0 => None,
+        Mode::Preview => Some(floor.min(preview.bottom_of(preview.layer())?)),
+        Mode::Prepare => Some(section.height_mm.map_or(floor, |top| floor.min(top))),
     }
 }
 
-/// The card: the slider that moves the cut and the buttons that step it, with the height
-/// it is at shown beside the handle while the rail is in use. One icon button wide, like
-/// the view tools it is lined up under.
-pub fn ui(ui: &mut egui::Ui, window: &mut Window, slider_h: f32) {
-    ui.set_width(theme::ICON_SIZE);
-    if window.machine.preview.is_building() {
-        building(ui, window.machine);
-        return;
-    }
-
-    let mut rail = memory(ui);
-    let now = ui.input(|input| input.time);
-    // The card's own rectangle is read from the frame before, because the readout has to
-    // be placed beside a rail that has not been laid out yet. One frame of lag only shows
-    // on the frame the card moves, which is when the window is resized.
-    let hovered = ui
-        .ctx()
-        .pointer_hover_pos()
-        .is_some_and(|pointer| rail.rect.contains(pointer));
-
-    let mut touched = false;
-    let mut scrub = None;
-    ui.vertical_centered(|ui| {
-        ui.spacing_mut().item_spacing = vec2(2.0, 6.0);
-        if icon_button(ui, icon::NEXT, "Up one layer").clicked() {
-            step(window, 1);
-            touched = true;
+/// The strip down the stage's right edge, in every view: which view, where the cut stands,
+/// a layer up, the track whose two handles move the top cut and the floor with the top of
+/// the print at its top, a layer down, and play. See `docs/decisions/0217`, `0221`.
+pub fn ui(ui: &mut egui::Ui, window: &mut Window) {
+    ui.with_layout(Layout::top_down(Align::Center), |ui| {
+        ui.spacing_mut().item_spacing.y = 2.0;
+        views(ui, window);
+        ui.add_space(GAP);
+        let readout = Reading::of(window);
+        if let Some(layer) = readout.show(ui) {
+            go_to_layer(window, layer);
         }
-        let moved = slider(ui, window, slider_h);
-        touched |= moved.changed;
-        scrub = Some(moved);
-        if icon_button(ui, icon::PREVIOUS, "Down one layer").clicked() {
-            step(window, -1);
-            touched = true;
-        }
-        ui.add_space(2.0);
-        footer(ui, window);
-    });
-
-    if touched {
-        rail.touched_at_s = now;
-    }
-    if let Some(scrub) = scrub.filter(|_| showing(hovered, now - rail.touched_at_s)) {
-        readout(ui, window, &scrub);
-        // The readout goes away on its own, so the window has to be asked for the frame
-        // that takes it away.
-        ui.ctx()
-            .request_repaint_after(std::time::Duration::from_secs_f64(LINGER_S));
-    }
-
-    rail.rect = ui.min_rect();
-    ui.data_mut(|data| data.insert_temp(memory_id(), rail));
-}
-
-/// Whether the height is shown: while the pointer is on the rail, and for a moment after
-/// it was last moved, so that a step or a drag says where it landed.
-fn showing(hovered: bool, since_touch_s: f64) -> bool {
-    hovered || since_touch_s < LINGER_S
-}
-
-/// What the rail remembers between frames: where it was drawn, and when it was last
-/// moved, on egui's own clock.
-#[derive(Debug, Clone, Copy)]
-struct Rail {
-    rect: Rect,
-    touched_at_s: f64,
-}
-
-impl Default for Rail {
-    fn default() -> Self {
-        Self {
-            rect: Rect::NOTHING,
-            touched_at_s: f64::NEG_INFINITY,
-        }
-    }
-}
-
-fn memory_id() -> Id {
-    Id::new("section-rail-state")
-}
-
-fn memory(ui: &egui::Ui) -> Rail {
-    ui.data(|data| data.get_temp(memory_id()))
-        .unwrap_or_default()
-}
-
-fn building(ui: &mut egui::Ui, machine: &mut Machine) {
-    ui.vertical_centered(|ui| {
-        ui.add_space(4.0);
-        ui.spinner();
-        if icon_button(ui, icon::CANCEL, "Cancel").clicked() {
-            machine.preview.cancel();
-        }
+        ui.add_space(GAP);
+        let movable = readout.at.is_some();
+        ui.add_enabled_ui(movable, |ui| step_button(ui, window, 1));
+        let below = 2.0 * theme::ICON_SIZE + GAP + 3.0 * ui.spacing().item_spacing.y;
+        let track_h = (ui.available_height() - below).max(0.0);
+        track(ui, window, track_h, &readout);
+        ui.add_enabled_ui(movable, |ui| {
+            step_button(ui, window, -1);
+            ui.add_space(GAP);
+            play_button(ui, window);
+        });
     });
 }
 
-/// The height the cut is at, and which layer that is when there are layers to count,
-/// drawn as a pill beside the handle rather than inside the card, so that the rail itself
-/// stays one column wide.
-fn readout(ui: &egui::Ui, window: &Window, scrub: &Scrub) {
-    let mut text = match cut_height(*window.mode, &window.view.section, &window.machine.preview) {
-        Some(z) => format!("{z:.3} mm"),
-        None => "-- mm".to_owned(),
-    };
-    if *window.mode == Mode::Preview && window.machine.preview.layer_count() > 0 {
-        text = format!(
-            "{text}   {}/{}",
-            window.machine.preview.layer() + 1,
-            window.machine.preview.layer_count()
-        );
-    }
-
+/// The three ways of looking at the plate: the model, the model and its layer side by
+/// side, and the layer alone. The two that read the layers are the Preview mode.
+fn views(ui: &mut egui::Ui, window: &mut Window) {
     let colors = theme::colors();
-    let painter = ui.painter();
-    let galley = painter.layout_no_wrap(text, theme::mono(11.0), colors.text_high);
-    let center = egui::pos2(
-        ui.min_rect().left() - READOUT_GAP - galley.size().x / 2.0 - READOUT_PAD.x,
-        scrub.handle_y,
-    );
-    let pill = Rect::from_center_size(center, galley.size() + 2.0 * READOUT_PAD);
-    painter.rect(
-        pill,
+    let showing = showing(window);
+    let keys = shortcuts::text(Action::View(1));
+    let views = [
+        (icon::MODEL, "Model", keys.as_str()),
+        (
+            icon::SIDE_BY_SIDE,
+            "Model and layer side by side",
+            keys.as_str(),
+        ),
+        (icon::MASK, "Layer mask", keys.as_str()),
+    ];
+    let width = ui.available_width();
+    let (rect, _) = ui.allocate_exact_size(vec2(width, VIEW_H * 3.0), Sense::hover());
+    let mut picked = None;
+    for (index, (glyph, name, keys)) in views.iter().enumerate() {
+        let cell = Rect::from_min_size(
+            rect.min + vec2(0.0, VIEW_H * index as f32),
+            vec2(width, VIEW_H),
+        );
+        let response = ui.interact(cell, ui.id().with(("view", index)), Sense::click());
+        let on = index == showing;
+        let (fill, tint) = match (on, response.hovered()) {
+            (true, _) => (colors.accent_wash, colors.accent_soft),
+            (false, true) => (colors.hover, colors.text_high),
+            (false, false) => (Color32::TRANSPARENT, colors.text_low),
+        };
+        ui.painter().rect_filled(cell, theme::R_CONTROL, fill);
+        ui.painter().text(
+            cell.center(),
+            Align2::CENTER_CENTER,
+            *glyph,
+            theme::icon(14.0),
+            tint,
+        );
+        if index > 0 {
+            ui.painter().hline(
+                cell.x_range(),
+                cell.top(),
+                Stroke::new(1.0, colors.hairline),
+            );
+        }
+        response.widget_info(|| {
+            egui::WidgetInfo::selected(egui::WidgetType::RadioButton, true, on, *name)
+        });
+        focus_ring(ui, &response, theme::R_CONTROL);
+        if response.on_hover_text(format!("{name}  {keys}")).clicked() {
+            picked = Some(index);
+        }
+    }
+    ui.painter().rect_stroke(
+        rect,
         theme::R_CONTROL,
-        colors.panel,
         Stroke::new(1.0, colors.hairline),
         egui::StrokeKind::Inside,
     );
-    painter.galley(
-        pill.center() - galley.size() / 2.0,
-        galley,
-        colors.text_high,
-    );
+    if let Some(index) = picked {
+        show_view(window, index);
+    }
 }
 
-/// What the slider reported this frame: where its handle ended up, in points down the
-/// viewport, and whether the user moved it.
-struct Scrub {
-    handle_y: f32,
-    changed: bool,
-    /// The slider's own rectangle, which the marks are laid along.
-    rail: Rect,
+/// Which of the three views is up: the model, the two side by side, or the layer alone.
+fn showing(window: &Window) -> usize {
+    match (*window.mode, window.view.options.mask_only) {
+        (Mode::Prepare, _) => 0,
+        (Mode::Preview, false) => 1,
+        (Mode::Preview, true) => 2,
+    }
 }
 
-/// The scrubber itself. It counts layers where there are layers, and millimetres of the
-/// scene's own height where there are not.
-fn slider(ui: &mut egui::Ui, window: &mut Window, slider_h: f32) -> Scrub {
-    let marks = match *window.mode {
-        Mode::Preview => window
-            .measured()
-            .map(|measured| Marks::of(measured, slider_h as usize)),
-        Mode::Prepare => None,
+fn show_view(window: &mut Window, index: usize) {
+    *window.mode = if index == 0 {
+        Mode::Prepare
+    } else {
+        Mode::Preview
     };
-    // egui wraps a vertical slider in a left-aligned column of the full width it is
-    // given, so the rail only lands in the middle of the card if the room it is handed is
-    // the width of the rail itself.
-    ui.allocate_ui(vec2(HANDLE_SPAN, slider_h), |ui| {
-        style_rail(ui, slider_h);
-        let under = ui.painter().add(egui::Shape::Noop);
-        let scrub = match *window.mode {
-            Mode::Preview => layer_slider(ui, &mut window.machine.preview),
-            Mode::Prepare => height_slider(ui, window),
-        };
-        if let Some(marks) = marks {
-            marks.paint(ui, under, scrub.rail);
-        }
-        scrub
-    })
-    .inner
+    window.view.options.mask_only = index == 2;
 }
 
-/// What the rail shows of the stack beside its handle: the cured area up the print, as
-/// widths behind the trough, and a tick at every layer named as a risk.
+/// Moves `step` views along the three, wrapping round at either end.
+pub(crate) fn turn_view(window: &mut Window, step: i8) {
+    let index = (showing(window) as i64 + i64::from(step)).rem_euclid(3);
+    show_view(window, index as usize);
+}
+
+/// A layer up over the track, or a layer down under it.
+fn step_button(ui: &mut egui::Ui, window: &mut Window, layers: i64) {
+    let glyph = if layers > 0 {
+        icon::LAYER_UP
+    } else {
+        icon::LAYER_DOWN
+    };
+    if icon_button(ui, glyph, &shortcuts::tooltip(Action::Step(layers))).clicked() {
+        step(window, layers);
+    }
+}
+
+/// Runs the cut up the print, or stops it. Moving the cut back to the top shows the whole
+/// model.
+fn play_button(ui: &mut egui::Ui, window: &mut Window) {
+    let playing = match *window.mode {
+        Mode::Preview => window.machine.preview.is_playing(),
+        Mode::Prepare => window.view.section.playing,
+    };
+    let (glyph, tooltip) = if playing {
+        (icon::PAUSE, "Pause".to_owned())
+    } else {
+        (icon::PLAY, shortcuts::tooltip(Action::Play))
+    };
+    if icon_button(ui, glyph, &tooltip).clicked() {
+        play(window);
+    }
+}
+
+/// Where the cut stands on the strip, and what it counts in: layers of the stack in the
+/// Preview mode, layer heights of the model in the Prepare mode.
+struct Reading {
+    /// Share of the way up, from zero at the plate to one at the top, or `None` with
+    /// nothing to scrub.
+    at: Option<f32>,
+    /// Share of the way up the floor stands and the first layer it leaves, counted from
+    /// one, or `None` while nothing is cut away from below.
+    floor: Option<(f32, usize)>,
+    layer: usize,
+    layers: usize,
+    height_mm: Scalar,
+    top_mm: Scalar,
+}
+
+impl Reading {
+    fn of(window: &Window) -> Self {
+        match *window.mode {
+            Mode::Preview => {
+                let preview = &window.machine.preview;
+                let count = preview.layer_count();
+                let last = count.saturating_sub(1);
+                Self {
+                    at: (count > 0)
+                        .then(|| fraction(0.0, last as Scalar, preview.layer() as Scalar)),
+                    floor: floor_height(Mode::Preview, &window.view.section, preview).map(
+                        |floor| {
+                            let first =
+                                (preview.layer_topping_near(floor) + 1).min(preview.layer());
+                            (fraction(0.0, last as Scalar, first as Scalar), first + 1)
+                        },
+                    ),
+                    layer: if count > 0 { preview.layer() + 1 } else { 0 },
+                    layers: count,
+                    height_mm: preview.layer_z().unwrap_or_default(),
+                    top_mm: preview.stack_top_mm().unwrap_or_default(),
+                }
+            }
+            Mode::Prepare => {
+                let Some((bottom, top)) = height_range(window.doc) else {
+                    return Self::nothing();
+                };
+                let height = window.view.section.height_mm.unwrap_or(top);
+                let (layer, layers) = layer_at(
+                    height,
+                    (bottom, top),
+                    window.machine.slicing.layer_height_mm(),
+                );
+                let floor =
+                    floor_height(Mode::Prepare, &window.view.section, &window.machine.preview).map(
+                        |floor| {
+                            let (under, _) = layer_at(
+                                floor,
+                                (bottom, top),
+                                window.machine.slicing.layer_height_mm(),
+                            );
+                            (fraction(bottom, top, floor), under + 1)
+                        },
+                    );
+                Self {
+                    at: Some(fraction(bottom, top, height)),
+                    floor,
+                    layer,
+                    layers,
+                    height_mm: height,
+                    top_mm: top,
+                }
+            }
+        }
+    }
+
+    fn nothing() -> Self {
+        Self {
+            at: None,
+            floor: None,
+            layer: 0,
+            layers: 0,
+            height_mm: 0.0,
+            top_mm: 0.0,
+        }
+    }
+
+    /// The layer the cut stands at, over how many there are and its height, centred.
+    /// A click on the layer opens it for typing; answers with the layer typed, on Enter.
+    fn show(&self, ui: &mut egui::Ui) -> Option<usize> {
+        let colors = theme::colors();
+        let width = ui.available_width();
+        let (rect, response) = ui.allocate_exact_size(vec2(width, READOUT_H), Sense::hover());
+        if self.at.is_none() {
+            ui.painter().text(
+                rect.center(),
+                Align2::CENTER_CENTER,
+                "No layers",
+                theme::small(),
+                colors.text_low,
+            );
+            response.on_hover_text("No layers yet");
+            return None;
+        }
+        let painter = ui.painter();
+        let row_h = painter
+            .layout_no_wrap("0".to_owned(), theme::figures(12.5), colors.text_low)
+            .size()
+            .y;
+        painter.text(
+            rect.center_top() + vec2(0.0, row_h),
+            Align2::CENTER_TOP,
+            format!("/ {}", self.layers),
+            theme::figures(11.0),
+            colors.text_low,
+        );
+        painter.text(
+            rect.center_bottom(),
+            Align2::CENTER_BOTTOM,
+            mm(self.height_mm),
+            theme::figures(10.0),
+            colors.text_low,
+        );
+        response.on_hover_text(format!("{:.2} of {:.2} mm", self.height_mm, self.top_mm));
+        let layer_rect = Rect::from_min_size(rect.min, vec2(width, row_h));
+        self.layer_field(ui, layer_rect)
+    }
+
+    /// The layer's own figure, or the box it is typed into once clicked.
+    fn layer_field(&self, ui: &mut egui::Ui, rect: Rect) -> Option<usize> {
+        let colors = theme::colors();
+        let id = egui::Id::new("layer-readout");
+        let typing: Option<String> = ui.data(|data| data.get_temp(id));
+        let Some(mut text) = typing else {
+            let figure = ui.painter().layout_no_wrap(
+                self.layer.to_string(),
+                theme::figures(12.5),
+                colors.accent_soft,
+            );
+            let at = pos2(rect.center().x - figure.size().x / 2.0, rect.top());
+            let spot = Rect::from_min_size(at, figure.size());
+            let response = ui
+                .interact(spot, id.with("figure"), Sense::click())
+                .on_hover_cursor(egui::CursorIcon::Text)
+                .on_hover_text("Type a layer to go to");
+            response.widget_info(|| {
+                let name = format!("Layer {}, type a layer to go to", self.layer);
+                egui::WidgetInfo::labeled(egui::WidgetType::Button, true, name)
+            });
+            focus_ring(ui, &response, theme::R_CONTROL);
+            ui.painter().galley(at, figure, colors.accent_soft);
+            if response.clicked() {
+                ui.data_mut(|data| data.insert_temp(id, self.layer.to_string()));
+                ui.memory_mut(|memory| memory.request_focus(id.with("field")));
+            }
+            return None;
+        };
+        // The box is the figure itself: no frame, no margin, as wide as what is typed and
+        // centred where it stood, so opening it moves nothing on the strip.
+        let typed_w = ui
+            .painter()
+            .layout_no_wrap(text.clone(), theme::figures(12.5), colors.accent_soft)
+            .size()
+            .x;
+        let field = Rect::from_center_size(
+            rect.center(),
+            vec2(typed_w.max(LAYER_FIELD_MIN_W), rect.height()),
+        );
+        // A child, not `put`: allocating the box would pull the strip's cursor back up
+        // to it, and the track under the readout with it.
+        let layout = Layout::centered_and_justified(egui::Direction::LeftToRight);
+        let response = ui
+            .new_child(egui::UiBuilder::new().max_rect(field).layout(layout))
+            .add(
+                egui::TextEdit::singleline(&mut text)
+                    .id(id.with("field"))
+                    .font(theme::figures(12.5))
+                    .text_color(colors.accent_soft)
+                    .horizontal_align(Align::Center)
+                    .frame(egui::Frame::NONE)
+                    .margin(egui::Margin::ZERO)
+                    .desired_width(field.width()),
+            );
+        if !response.lost_focus() {
+            ui.data_mut(|data| data.insert_temp(id, text));
+            return None;
+        }
+        ui.data_mut(|data| data.remove::<String>(id));
+        let entered = ui.input(|input| input.key_pressed(egui::Key::Enter));
+        entered.then(|| text.trim().parse().ok()).flatten()
+    }
+}
+
+/// A height in the strip's narrow column: two decimals, one from a hundred millimetres up.
+fn mm(height_mm: Scalar) -> String {
+    if height_mm < 100.0 {
+        format!("{height_mm:.2} mm")
+    } else {
+        format!("{height_mm:.1} mm")
+    }
+}
+
+/// Moves the cut to `layer`, counted from one at the plate as the readout counts it.
+fn go_to_layer(window: &mut Window, layer: usize) {
+    match *window.mode {
+        Mode::Preview => {
+            let preview = &mut window.machine.preview;
+            preview.set_layer(layer.saturating_sub(1));
+            preview.set_playing(false);
+        }
+        Mode::Prepare => {
+            let Some(range) = height_range(window.doc) else {
+                return;
+            };
+            let layer_height_mm = window.machine.slicing.layer_height_mm();
+            window.view.section.height_mm = height_of_layer(layer, range, layer_height_mm);
+            window.view.section.playing = false;
+        }
+    }
+}
+
+/// Where a cut at `layer` stands, `layer` layer heights over the bottom of the range, or
+/// `None` at the top and past it, where the whole model is shown.
+fn height_of_layer(
+    layer: usize,
+    (bottom, top): (Scalar, Scalar),
+    layer_height_mm: Scalar,
+) -> Option<Scalar> {
+    let height = bottom + layer as Scalar * layer_height_mm;
+    (height < top).then_some(height)
+}
+
+/// Which layer from the plate up a cut at `height` is, counted in layers of
+/// `layer_height_mm` from the bottom of the range, and how many layers the range holds.
+fn layer_at(
+    height: Scalar,
+    (bottom, top): (Scalar, Scalar),
+    layer_height_mm: Scalar,
+) -> (usize, usize) {
+    if layer_height_mm <= 0.0 || top <= bottom {
+        return (0, 0);
+    }
+    let layers = ((top - bottom) / layer_height_mm).ceil() as usize;
+    let layer = ((height - bottom) / layer_height_mm).round().max(0.0) as usize;
+    (layer.min(layers), layers)
+}
+
+/// The track itself, its top the top of the print: a press or a drag moves whichever
+/// handle is nearer the pointer, the top cut or the floor, to stand under it.
+fn track(ui: &mut egui::Ui, window: &mut Window, height: f32, reading: &Reading) {
+    // An id of its own rather than the next in line: a button appearing before the track
+    // mid-drag would otherwise hand the drag to another widget.
+    let (rect, _) = ui.allocate_exact_size(vec2(TRACK_W, height), Sense::hover());
+    let sense = if reading.at.is_some() {
+        Sense::click_and_drag()
+    } else {
+        Sense::hover()
+    };
+    let response = ui.interact(rect, egui::Id::new("layer-track"), sense);
+    let span = rect.y_range().shrink(HANDLE.y / 2.0);
+    if let Some(at) = reading.at {
+        drag_handle(ui, window, &response, span, (at, reading.floor));
+    }
+    if response.has_focus() {
+        step_by_arrows(ui, window, response.id);
+    }
+    let after = Reading::of(window);
+    paint_track(ui, window, rect, span, (after.at, after.floor));
+    let (layer, layers) = (after.layer, reading.layers);
+    response.widget_info(|| {
+        let name = format!("Layer, of {layers}");
+        egui::WidgetInfo::slider(after.at.is_some(), layer as f64, name)
+    });
+    focus_ring(ui, &response, theme::R_CONTROL);
+    match (after.at, after.floor) {
+        (None, _) => response.on_hover_text("Nothing on the plate to cut through yet"),
+        (Some(_), Some((_, first))) => response
+            .on_hover_cursor(egui::CursorIcon::ResizeVertical)
+            .on_hover_text(format!("Layers {first} to {layer}")),
+        (Some(_), None) => response.on_hover_cursor(egui::CursorIcon::ResizeVertical),
+    };
+}
+
+/// Moves the handle the press took hold of, kept for the length of the drag so the two
+/// never swap when they pass each other.
+fn drag_handle(
+    ui: &egui::Ui,
+    window: &mut Window,
+    response: &egui::Response,
+    span: egui::Rangef,
+    (at, floor): (f32, Option<(f32, usize)>),
+) {
+    let held = response.id.with("held");
+    let Some(pointer) = response.interact_pointer_pos() else {
+        ui.data_mut(|data| data.remove::<bool>(held));
+        return;
+    };
+    let floor_at = floor.map_or(0.0, |(floor_at, _)| floor_at);
+    let on_floor = ui
+        .data(|data| data.get_temp(held))
+        .unwrap_or_else(|| grabs_floor(pointer.y, up(span, at), up(span, floor_at)));
+    ui.data_mut(|data| data.insert_temp(held, on_floor));
+    let to = span_fraction(span, pointer.y);
+    if on_floor {
+        scrub_floor(window, to);
+    } else {
+        scrub(window, to);
+    }
+}
+
+/// Whether a press at `pointer_y` takes the floor rather than the top: the nearer of the
+/// two, and with both under it the floor only from below.
+fn grabs_floor(pointer_y: f32, top_y: f32, floor_y: f32) -> bool {
+    let (to_top, to_floor) = ((pointer_y - top_y).abs(), (pointer_y - floor_y).abs());
+    to_floor < to_top || (to_floor == to_top && pointer_y > floor_y)
+}
+
+/// The bare arrows step the track that holds the focus, rather than moving the focus off
+/// it; with Shift they are the table's ten layers either way.
+fn step_by_arrows(ui: &egui::Ui, window: &mut Window, id: egui::Id) {
+    let arrows = egui::EventFilter {
+        vertical_arrows: true,
+        ..Default::default()
+    };
+    ui.memory_mut(|memory| memory.set_focus_lock_filter(id, arrows));
+    let (up, down) = ui.input_mut(|input| {
+        let mut bare = |key| input.count_and_consume_key(egui::Modifiers::NONE, key);
+        (bare(egui::Key::ArrowUp), bare(egui::Key::ArrowDown))
+    });
+    let layers = up as i64 - down as i64;
+    if layers != 0 {
+        step(window, layers);
+    }
+}
+
+/// Moves the cut to `at` of the way up, and stops whatever was playing.
+fn scrub(window: &mut Window, at: f32) {
+    match *window.mode {
+        Mode::Preview => {
+            let preview = &mut window.machine.preview;
+            let last = preview.layer_count().saturating_sub(1);
+            preview.set_layer((at * last as f32).round() as usize);
+            preview.set_playing(false);
+        }
+        Mode::Prepare => {
+            let Some((bottom, top)) = height_range(window.doc) else {
+                return;
+            };
+            let height = bottom + at * (top - bottom);
+            // A strip parked at the top cuts nothing away, and saying so with `None` keeps
+            // the section shading off as well as the plane.
+            window.view.section.height_mm = (height < top).then_some(height);
+            window.view.section.playing = false;
+        }
+    }
+}
+
+/// Moves the floor to `at` of the way up, never past the top cut; the bottom of the track
+/// cuts nothing away.
+fn scrub_floor(window: &mut Window, at: f32) {
+    match *window.mode {
+        Mode::Preview => {
+            let preview = &window.machine.preview;
+            let last = preview.layer_count().saturating_sub(1);
+            let first = ((at * last as f32).round() as usize).min(preview.layer());
+            window.view.section.floor_mm = preview.bottom_of(first);
+        }
+        Mode::Prepare => {
+            let Some((bottom, top)) = height_range(window.doc) else {
+                return;
+            };
+            let height = bottom + at * (top - bottom);
+            let ceiling = window.view.section.height_mm.unwrap_or(top);
+            window.view.section.floor_mm = (height > bottom).then_some(height.min(ceiling));
+        }
+    }
+}
+
+/// Where along `span` the pointer at `y` stands, from zero at its bottom to one at its top.
+fn span_fraction(span: egui::Rangef, y: f32) -> f32 {
+    if span.span() <= 0.0 {
+        return 1.0;
+    }
+    ((span.max - y) / span.span()).clamp(0.0, 1.0)
+}
+
+/// How far down `span` a share `at` of the way up stands.
+fn up(span: egui::Rangef, at: f32) -> f32 {
+    egui::lerp(span.max..=span.min, at)
+}
+
+fn paint_track(
+    ui: &egui::Ui,
+    window: &Window,
+    rect: Rect,
+    span: egui::Rangef,
+    (at, floor): (Option<f32>, Option<(f32, usize)>),
+) {
+    let colors = theme::colors();
+    let painter = ui.painter();
+    let rule = Rect::from_x_y_ranges(
+        egui::Rangef::new(
+            rect.center().x - RULE_W / 2.0,
+            rect.center().x + RULE_W / 2.0,
+        ),
+        span.expand(HANDLE.y / 2.0),
+    );
+
+    let marks = marked(window, span)
+        .map(|(measured, along)| (Marks::of(measured, along.span().max(1.0) as usize), along));
+    if let Some((marks, along)) = &marks {
+        marks.paint_profile(painter, *along, rule);
+    }
+    exposure_bands(painter, window, span, rect.left());
+
+    painter.rect(
+        rule,
+        egui::CornerRadius::same(255),
+        colors.sunken,
+        Stroke::new(1.0, colors.hairline),
+        egui::StrokeKind::Outside,
+    );
+    // With nothing to cut through the rule stands alone: a scale would measure nothing.
+    let Some(at) = at else {
+        if let Some((marks, along)) = &marks {
+            marks.paint_risks(painter, *along, rule);
+        }
+        return;
+    };
+    for tick in 0..TICKS {
+        let y = egui::lerp(span, tick as f32 / (TICKS - 1) as f32);
+        painter.hline(
+            egui::Rangef::new(rect.right() - 6.0, rect.right()),
+            y,
+            Stroke::new(1.0, colors.line),
+        );
+    }
+    let y = up(span, at);
+    let fill_bottom = floor.map_or(rule.max.y, |(floor_at, _)| up(span, floor_at));
+    let filled = rule.with_min_y(y).with_max_y(fill_bottom.max(y));
+    painter.rect_filled(
+        filled,
+        egui::CornerRadius::same(255),
+        colors.accent.gamma_multiply(0.75),
+    );
+    if let Some((marks, along)) = &marks {
+        marks.paint_risks(painter, *along, rule);
+    }
+    let floor_y = floor.map_or(up(span, 0.0), |(floor_at, _)| up(span, floor_at));
+    for y in [floor_y, y] {
+        let handle = Rect::from_center_size(pos2(rect.center().x, y), HANDLE);
+        painter.rect(
+            handle,
+            egui::CornerRadius::same(3),
+            colors.text_high,
+            Stroke::new(2.0, colors.accent.gamma_multiply(0.6)),
+            egui::StrokeKind::Outside,
+        );
+    }
+}
+
+/// The stack the marks are read from, and the stretch of the track it covers: all of it
+/// in the Preview mode, and in the Prepare mode the stack's own height within the model's,
+/// while the stack is still the plate's.
+fn marked<'a>(
+    window: &'a Window,
+    span: egui::Rangef,
+) -> Option<(&'a core_analysis::Measured, egui::Rangef)> {
+    let measured = window.measured()?;
+    if *window.mode == Mode::Preview {
+        return Some((measured, span));
+    }
+    let preview = &window.machine.preview;
+    let fingerprint = stack_fingerprint(&window.doc.scene, window.machine.slicing.cutting());
+    if preview.read_facts().is_some() || preview.is_stale(fingerprint) {
+        return None;
+    }
+    let (bottom, top) = height_range(window.doc)?;
+    let stack_top = preview.stack_top_mm()?;
+    let from = up(span, fraction(bottom, top, 0.0));
+    let to = up(span, fraction(bottom, top, stack_top));
+    Some((measured, egui::Rangef::new(to, from)))
+}
+
+/// The exposure bands down the left of the track, each in its own tint, over the height
+/// the strip spans. A file being read states its own exposures, so it shows none of ours.
+fn exposure_bands(painter: &egui::Painter, window: &Window, span: egui::Rangef, left: f32) {
+    let (bottom_mm, top_mm) = match *window.mode {
+        Mode::Preview if window.machine.preview.read_facts().is_none() => {
+            match window.machine.preview.stack_top_mm() {
+                Some(top) => (0.0, top),
+                None => return,
+            }
+        }
+        Mode::Prepare => match height_range(window.doc) {
+            Some(range) => range,
+            None => return,
+        },
+        Mode::Preview => return,
+    };
+    for (index, band) in window.machine.slicing.exposure.iter().enumerate() {
+        let from = fraction(bottom_mm, top_mm, band.from_mm);
+        let to = fraction(bottom_mm, top_mm, band.to_mm);
+        if to <= from {
+            continue;
+        }
+        let strip = Rect::from_x_y_ranges(left..=left + BAND_W, up(span, to)..=up(span, from));
+        painter.rect_filled(
+            strip,
+            egui::CornerRadius::same(255),
+            theme::band_tint(index),
+        );
+    }
+}
+
+/// What the strip shows of the stack along its track: the cured area up the print, as a
+/// profile either side of the rule, and a tick at every layer named as a risk.
 struct Marks {
-    /// The widest layer in each row of the rail, from the plate up, over the widest of all.
+    /// The widest layer in each row of the track, from the plate up, over the widest of
+    /// all.
     widths: Vec<f32>,
     /// Where each risk sits up the stack, from zero to one, and its colour.
     risks: Vec<(f32, egui::Color32)>,
@@ -265,7 +742,7 @@ impl Marks {
         Self { widths, risks }
     }
 
-    fn paint(&self, ui: &egui::Ui, under: egui::layers::ShapeIdx, rail: Rect) {
+    fn paint_profile(&self, painter: &egui::Painter, span: egui::Rangef, rule: Rect) {
         let colors = theme::colors();
         let rows = self.widths.len() as f32;
         let profile = self
@@ -274,156 +751,29 @@ impl Marks {
             .enumerate()
             .filter(|(_, width)| **width > 0.0)
             .map(|(row, width)| {
-                let y = handle_y(rail, (row as f32 + 0.5) / rows);
-                let half = width * rail.width() / 2.0;
-                let band = Rect::from_center_size(
-                    egui::pos2(rail.center().x, y),
-                    vec2(2.0 * half, (rail.height() / rows).max(1.0)),
+                let y = up(span, (row as f32 + 0.5) / rows);
+                let half = RULE_W / 2.0 + width * PROFILE_W;
+                let bar = Rect::from_center_size(
+                    pos2(rule.center().x, y),
+                    vec2(2.0 * half, (span.span() / rows).max(1.0)),
                 );
-                egui::Shape::rect_filled(band, 0.0, colors.line)
+                egui::Shape::rect_filled(bar, 0.0, colors.line)
             })
             .collect();
-        ui.painter().set(under, egui::Shape::Vec(profile));
-
-        for (fraction, tint) in &self.risks {
-            let y = handle_y(rail, *fraction);
-            let tick = [
-                egui::pos2(rail.left() - RISK_TICK_OUT, y),
-                egui::pos2(rail.left() + RISK_TICK_IN, y),
-            ];
-            ui.painter().line_segment(tick, Stroke::new(1.5, *tint));
-        }
+        painter.add(egui::Shape::Vec(profile));
     }
-}
 
-/// The rail's own look: a thin trough sunk into the card, the accent under the handle,
-/// and a flat bar for the handle itself. The handle takes its size from the width the
-/// slider is allocated, so that width is the setting that makes it small.
-fn style_rail(ui: &mut egui::Ui, slider_h: f32) {
-    let colors = theme::colors();
-    let spacing = ui.spacing_mut();
-    spacing.slider_width = slider_h;
-    spacing.slider_rail_height = TROUGH_W;
-    spacing.interact_size.y = HANDLE_SPAN;
-
-    let visuals = ui.visuals_mut();
-    visuals.selection.bg_fill = colors.accent;
-    visuals.widgets.inactive.bg_fill = colors.sunken;
-    visuals.widgets.inactive.fg_stroke = Stroke::new(1.5, colors.text_high);
-    visuals.widgets.hovered.bg_fill = colors.text_high;
-    visuals.widgets.hovered.fg_stroke = Stroke::new(1.5, colors.text_high);
-    visuals.widgets.active.bg_fill = colors.accent;
-    visuals.widgets.active.fg_stroke = Stroke::new(1.5, colors.text_high);
-    // egui runs the accent past the handle's middle by the inactive corner radius, so
-    // anything rounder than the trough would show the fill above the handle.
-    let round = egui::CornerRadius::same((TROUGH_W / 2.0) as u8);
-    for state in [
-        &mut visuals.widgets.inactive,
-        &mut visuals.widgets.hovered,
-        &mut visuals.widgets.active,
-    ] {
-        state.corner_radius = round;
-    }
-}
-
-fn layer_slider(ui: &mut egui::Ui, preview: &mut Preview) -> Scrub {
-    let last = preview.layer_count().saturating_sub(1);
-    let mut index = preview.layer();
-    let response = ui.add(vertical(egui::Slider::new(&mut index, 0..=last)));
-    if response.changed() {
-        preview.set_layer(index);
-        preview.set_playing(false);
-    }
-    let fraction = if last == 0 {
-        1.0
-    } else {
-        preview.layer() as f32 / last as f32
-    };
-    Scrub {
-        handle_y: handle_y(response.rect, fraction),
-        changed: response.changed(),
-        rail: response.rect,
-    }
-}
-
-fn height_slider(ui: &mut egui::Ui, window: &mut Window) -> Scrub {
-    let Some((bottom, top)) = height_range(window.doc) else {
-        return Scrub {
-            handle_y: ui.min_rect().center().y,
-            changed: false,
-            rail: ui.min_rect(),
-        };
-    };
-    let mut height = window.view.section.height_mm.unwrap_or(top);
-    let response = ui.add(vertical(egui::Slider::new(&mut height, bottom..=top)));
-    if response.changed() {
-        // A slider parked at the top cuts nothing away, and saying so with `None` keeps
-        // the section shading off as well as the plane.
-        window.view.section.height_mm = (height < top).then_some(height);
-    }
-    Scrub {
-        handle_y: handle_y(response.rect, fraction(bottom, top, height)),
-        changed: response.changed(),
-        rail: response.rect,
-    }
-}
-
-/// Where down the slider's rectangle a handle at `fraction` of the range sits. egui pulls
-/// the travel in by the handle's own half-width at each end, and the readout has to sit
-/// on the handle rather than on the rail.
-fn handle_y(rect: Rect, fraction: f32) -> f32 {
-    let inset = rect.width() / 2.5 * HANDLE_ASPECT;
-    let travel = rect.y_range().shrink(inset);
-    egui::lerp(travel.max..=travel.min, fraction.clamp(0.0, 1.0))
-}
-
-/// Where a height sits in its range, from zero at the bottom to one at the top.
-fn fraction(bottom: Scalar, top: Scalar, height: Scalar) -> f32 {
-    if top <= bottom {
-        return 1.0;
-    }
-    ((height - bottom) / (top - bottom)).clamp(0.0, 1.0)
-}
-
-fn vertical<'a>(slider: egui::Slider<'a>) -> egui::Slider<'a> {
-    slider
-        .vertical()
-        .show_value(false)
-        .handle_shape(egui::style::HandleShape::Rect {
-            aspect_ratio: HANDLE_ASPECT,
-        })
-}
-
-/// Play in the preview, where there is a stack to run through; a way back to the whole
-/// model in the prepare mode, where the cut is the user's own.
-fn footer(ui: &mut egui::Ui, window: &mut Window) {
-    match *window.mode {
-        Mode::Preview => {
-            let playing = window.machine.preview.is_playing();
-            let (glyph, tooltip) = if playing {
-                (icon::PAUSE, "Pause")
-            } else {
-                (icon::PLAY, "Play")
-            };
-            if icon_button(ui, glyph, tooltip).clicked() {
-                window.machine.preview.set_playing(!playing);
-            }
-        }
-        Mode::Prepare if window.view.section.playing => {
-            if icon_button(ui, icon::PAUSE, "Pause").clicked() {
-                window.view.section.playing = false;
-            }
-        }
-        Mode::Prepare => {
-            if icon_button(ui, icon::SECTION, "Show the whole model").clicked() {
-                window.view.section.height_mm = None;
-            }
+    /// Over the rule and its fill, so a risk under the cut reads as well as one above it.
+    fn paint_risks(&self, painter: &egui::Painter, span: egui::Rangef, rule: Rect) {
+        for (at, tint) in &self.risks {
+            let tick = Rect::from_center_size(pos2(rule.center().x, up(span, *at)), RISK);
+            painter.rect_filled(tick, egui::CornerRadius::same(255), *tint);
         }
     }
 }
 
 /// Moves the cut by `layers`, which is a layer of the stack in the preview and a layer
-/// height of the print in the prepare mode. The rail is one in both modes, so the keys
+/// height of the print in the prepare mode. The strip is one in both modes, so the keys
 /// and the buttons that step it come here; see `docs/decisions/0061`.
 pub(crate) fn step(window: &mut Window, layers: i64) {
     match *window.mode {
@@ -516,12 +866,53 @@ pub fn animate(ctx: &egui::Context, preview: &mut Preview) -> bool {
     true
 }
 
+/// Where a height sits in its range, from zero at the bottom to one at the top.
+fn fraction(bottom: Scalar, top: Scalar, height: Scalar) -> f32 {
+    if top <= bottom {
+        return 1.0;
+    }
+    ((height - bottom) / (top - bottom)).clamp(0.0, 1.0)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
 
+    /// BUG: typing a layer pulled the track and its knob up over the readout.
     #[test]
-    fn the_rail_marks_the_widest_layer_full_width_and_an_island_where_it_starts() {
+    fn typing_a_layer_moves_nothing_under_the_readout() {
+        let reading = Reading {
+            at: Some(0.5),
+            floor: None,
+            layer: 12,
+            layers: 24,
+            height_mm: 0.6,
+            top_mm: 1.2,
+        };
+        let below = |typing: bool| {
+            let ctx = egui::Context::default();
+            if typing {
+                ctx.data_mut(|data| {
+                    data.insert_temp(egui::Id::new("layer-readout"), "7".to_owned())
+                });
+            }
+            let mut cursor = 0.0;
+            let mut output = ctx.run_ui(egui::RawInput::default(), |ui| {
+                reading.show(ui);
+                cursor = ui.cursor().top();
+            });
+            output.textures_delta.clear();
+            cursor
+        };
+        assert_eq!(
+            below(true),
+            below(false),
+            "the box stands inside the readout"
+        );
+    }
+
+    #[test]
+    fn the_strip_marks_the_widest_layer_full_height_and_an_island_where_it_starts() {
         use core_analysis::{Measured, cure};
         use core_raster::{LayerRuns, PixelPitch};
 
@@ -547,9 +938,10 @@ mod tests {
     }
 
     #[test]
-    fn the_prepare_mode_cuts_where_the_slider_was_left() {
+    fn the_prepare_mode_cuts_where_the_strip_was_left() {
         let section = Section {
             height_mm: Some(3.5),
+            floor_mm: None,
             playing: false,
         };
         let preview = Preview::default();
@@ -566,6 +958,7 @@ mod tests {
         // prepare mode was left at.
         let section = Section {
             height_mm: Some(3.5),
+            floor_mm: None,
             playing: false,
         };
         assert_eq!(
@@ -575,44 +968,95 @@ mod tests {
     }
 
     #[test]
-    fn the_slider_never_outgrows_its_viewport() {
-        assert_eq!(slider_height(2000.0), SLIDER_H, "a tall window caps it");
-        assert_eq!(slider_height(0.0), MIN_SLIDER_H, "a short one floors it");
-        let middle = slider_height(400.0);
-        assert!(
-            (MIN_SLIDER_H..=SLIDER_H).contains(&middle),
-            "{middle} is inside the range the card allows"
+    fn the_floor_never_rises_past_the_top_cut() {
+        let section = |height_mm, floor_mm| Section {
+            height_mm,
+            floor_mm,
+            playing: false,
+        };
+        let preview = Preview::default();
+        let floor = |section| floor_height(Mode::Prepare, &section, &preview);
+        assert_eq!(floor(section(None, None)), None, "no floor cuts nothing");
+        assert_eq!(floor(section(None, Some(2.0))), Some(2.0));
+        assert_eq!(floor(section(Some(5.0), Some(2.0))), Some(2.0));
+        assert_eq!(
+            floor(section(Some(1.0), Some(2.0))),
+            Some(1.0),
+            "a top cut moved under the floor takes it down with it"
+        );
+        assert_eq!(
+            floor_height(Mode::Preview, &section(None, Some(2.0)), &preview),
+            None,
+            "an empty preview has no layers to cut from below"
         );
     }
 
     #[test]
-    fn the_height_is_shown_while_the_rail_is_in_use_and_for_a_moment_after() {
-        assert!(showing(true, 30.0), "a pointer on the rail shows it");
-        assert!(showing(false, LINGER_S / 2.0), "a fresh move shows it");
-        assert!(
-            !showing(false, LINGER_S + 0.1),
-            "a rail nobody has touched shows nothing over the model"
+    fn a_press_takes_the_nearer_handle_and_the_top_where_they_meet() {
+        // The top handle at y = 100, the floor at y = 300; y grows downwards.
+        assert!(!grabs_floor(150.0, 100.0, 300.0));
+        assert!(grabs_floor(250.0, 100.0, 300.0));
+        assert!(!grabs_floor(200.0, 100.0, 300.0), "halfway is the top's");
+        assert!(!grabs_floor(195.0, 200.0, 200.0), "over both is the top");
+        assert!(grabs_floor(205.0, 200.0, 200.0), "under both is the floor");
+    }
+
+    #[test]
+    fn a_cut_counts_the_layers_of_the_model_under_it() {
+        // Ten millimetres at half a millimetre a layer is twenty layers.
+        assert_eq!(
+            layer_at(10.0, (0.0, 10.0), 0.5),
+            (20, 20),
+            "the top is the last"
         );
-        assert!(
-            !showing(false, f64::INFINITY),
-            "a rail that was never moved shows nothing"
+        assert_eq!(
+            layer_at(2.6, (0.0, 10.0), 0.5),
+            (5, 20),
+            "nearest layer, not past it"
+        );
+        assert_eq!(
+            layer_at(-1.0, (0.0, 10.0), 0.5),
+            (0, 20),
+            "under the plate is none"
+        );
+        assert_eq!(
+            layer_at(5.0, (5.0, 5.0), 0.5),
+            (0, 0),
+            "a flat model has no layers"
         );
     }
 
     #[test]
-    fn the_handle_sits_at_the_top_of_its_travel_at_the_top_of_the_range() {
-        let rect = Rect::from_min_size(egui::pos2(0.0, 100.0), vec2(HANDLE_SPAN, 200.0));
-        let top = handle_y(rect, 1.0);
-        let bottom = handle_y(rect, 0.0);
-        assert!(top < bottom, "a fuller value sits higher up the screen");
-        assert!(
-            rect.y_range().contains(top) && rect.y_range().contains(bottom),
-            "the handle stays inside the rail it belongs to"
+    fn a_typed_layer_stands_that_many_layers_up_and_the_top_shows_everything() {
+        assert_eq!(height_of_layer(4, (1.0, 10.0), 0.5), Some(3.0));
+        assert_eq!(
+            height_of_layer(0, (1.0, 10.0), 0.5),
+            Some(1.0),
+            "layer zero is the bottom"
         );
-        let middle = handle_y(rect, 0.5);
-        assert!(
-            (middle - rect.center().y).abs() < 0.5,
-            "half of the range is the middle of the rail"
+        assert_eq!(
+            height_of_layer(18, (1.0, 10.0), 0.5),
+            None,
+            "the top cuts nothing away"
+        );
+        assert_eq!(
+            height_of_layer(900, (1.0, 10.0), 0.5),
+            None,
+            "past the top is the top"
+        );
+    }
+
+    #[test]
+    fn the_track_reads_the_pointer_from_its_bottom_end_and_clamps_past_either() {
+        let span = egui::Rangef::new(100.0, 300.0);
+        assert_eq!(span_fraction(span, 200.0), 0.5);
+        assert_eq!(span_fraction(span, 300.0), 0.0, "the bottom is the plate");
+        assert_eq!(span_fraction(span, 0.0), 1.0, "over the top is the top");
+        assert_eq!(span_fraction(span, 900.0), 0.0);
+        assert_eq!(
+            span_fraction(egui::Rangef::new(5.0, 5.0), 5.0),
+            1.0,
+            "a track with no length stands at the top"
         );
     }
 

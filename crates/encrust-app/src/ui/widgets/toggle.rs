@@ -1,47 +1,67 @@
-use egui::{Align2, Rect, Response, RichText, Sense, Ui, pos2, vec2};
+use egui::{Align2, Rect, Response, RichText, Sense, Ui, WidgetInfo, WidgetType, pos2, vec2};
 
+use super::focus_ring;
 use crate::ui::theme;
 
 /// How long the knob takes to cross the track, seconds.
 const SLIDE_S: f32 = 0.12;
 
 /// Track and knob of a switch, points.
-const TRACK: egui::Vec2 = vec2(32.0, 18.0);
-const KNOB: f32 = 14.0;
+const TRACK: egui::Vec2 = vec2(28.0, 16.0);
+const KNOB: f32 = 12.0;
 
 /// A labelled switch filling one row: what it turns on, and the state it is in. A
 /// disabled one still shows its state, dimmed, rather than disappearing.
 pub fn switch(ui: &mut Ui, on: &mut bool, label: &str) -> Response {
     let colors = theme::colors();
-    let enabled = ui.is_enabled();
-    let (rect, mut response) =
-        ui.allocate_exact_size(vec2(ui.available_width(), theme::ROW_H), Sense::click());
-    if response.clicked() {
-        *on = !*on;
-        response.mark_changed();
-    }
-
-    let how_on = ui.ctx().animate_bool_with_time(response.id, *on, SLIDE_S);
-
-    let painter = ui.painter();
-    painter.text(
+    let size = vec2(ui.available_width(), theme::ROW_H);
+    let (rect, response) = flip(ui, size, on, label);
+    let ink = if ui.is_enabled() {
+        colors.text_mid
+    } else {
+        colors.text_low
+    };
+    ui.painter().text(
         pos2(rect.left(), rect.center().y),
         Align2::LEFT_CENTER,
         label,
         theme::label(),
-        if enabled {
-            colors.text_mid
-        } else {
-            colors.text_low
-        },
+        ink,
     );
-
     let track = Rect::from_min_size(
         pos2(rect.right() - TRACK.x, rect.center().y - TRACK.y / 2.0),
         TRACK,
     );
+    paint_track(ui, &response, track, *on);
+    response
+}
+
+/// The track alone, for a heading that already names what it turns on.
+pub fn bare_switch(ui: &mut Ui, on: &mut bool, name: &str) -> Response {
+    let (track, response) = flip(ui, TRACK, on, name);
+    paint_track(ui, &response, track, *on);
+    response
+}
+
+/// Takes the room a switch needs and turns `on` over when it is clicked.
+fn flip(ui: &mut Ui, size: egui::Vec2, on: &mut bool, name: &str) -> (Rect, Response) {
+    let enabled = ui.is_enabled();
+    let (rect, mut response) = ui.allocate_exact_size(size, Sense::click());
+    if response.clicked() {
+        *on = !*on;
+        response.mark_changed();
+    }
+    response.widget_info(|| WidgetInfo::selected(WidgetType::Checkbox, enabled, *on, name));
+    (rect, response)
+}
+
+fn paint_track(ui: &Ui, response: &Response, track: Rect, on: bool) {
+    let colors = theme::colors();
+    let enabled = ui.is_enabled();
+    let how_on = ui.ctx().animate_bool_with_time(response.id, on, SLIDE_S);
     let reached = if enabled { colors.accent } else { colors.line };
-    let fill = colors.line.lerp_to_gamma(reached, how_on);
+    let fill = colors.active.lerp_to_gamma(reached, how_on);
+    let painter = ui.painter();
     painter.rect_filled(track, egui::CornerRadius::same(255), fill);
 
     let travel = TRACK.x - KNOB - 4.0;
@@ -52,14 +72,17 @@ pub fn switch(ui: &mut Ui, on: &mut bool, label: &str) -> Response {
         ),
         egui::Vec2::splat(KNOB),
     );
-    let knob_color = match enabled {
-        true => colors.text_high.lerp_to_gamma(colors.on_accent, how_on),
-        false => colors.text_low,
+    let knob_color = if enabled {
+        colors.text_high
+    } else {
+        colors.text_low
     };
     painter.rect_filled(knob, egui::CornerRadius::same(255), knob_color);
-
-    response
+    focus_ring(ui, response, theme::R_CONTROL);
 }
+
+/// Points kept clear either side of a segment's label.
+const SEGMENT_PAD: f32 = 12.0;
 
 /// One choice inside a [`Segmented`] group.
 pub struct Segment<'a, T> {
@@ -73,30 +96,18 @@ impl<'a, T> Segment<'a, T> {
     }
 }
 
-/// A pill of mutually exclusive choices, such as the mode switch.
-///
-/// The filled flavour marks the chosen segment with the accent itself and is for the one
-/// switch that changes what the whole window is doing. Everything else uses the wash.
+/// A row of mutually exclusive choices in one bordered box, the chosen one in the wash.
 pub struct Segmented<'a, T> {
     segments: &'a [Segment<'a, T>],
-    filled: bool,
     width: Option<f32>,
-    height: f32,
 }
 
 impl<'a, T: Copy + PartialEq> Segmented<'a, T> {
     pub fn new(segments: &'a [Segment<'a, T>]) -> Self {
         Self {
             segments,
-            filled: false,
             width: None,
-            height: theme::ROW_H,
         }
-    }
-
-    pub fn filled(mut self) -> Self {
-        self.filled = true;
-        self
     }
 
     /// Spreads the segments evenly over `width` instead of sizing them to their labels.
@@ -105,33 +116,21 @@ impl<'a, T: Copy + PartialEq> Segmented<'a, T> {
         self
     }
 
-    /// Makes the group `height` points tall instead of a row's height.
-    pub fn height(mut self, height: f32) -> Self {
-        self.height = height;
-        self
-    }
-
     /// Draws the group and writes the chosen value back. Returns whether it changed.
     pub fn show(self, ui: &mut Ui, current: &mut T) -> bool {
         let colors = theme::colors();
-        let padding = 3.0;
         let widths = self.widths(ui);
-        let height = self.height;
-        let total: f32 = widths.iter().sum::<f32>() + padding * 2.0;
+        let total: f32 = widths.iter().sum();
 
         // Segments hang off the group's own allocation: `ui.id()` is shared by every
         // widget in the parent, and a label by any two segments that read the same.
-        let (rect, group) = ui.allocate_exact_size(vec2(total, height), Sense::hover());
-        ui.painter()
-            .rect_filled(rect, egui::CornerRadius::same(255), colors.raised);
+        let (rect, group) = ui.allocate_exact_size(vec2(total, theme::FIELD_H), Sense::hover());
+        let under = ui.painter().add(egui::Shape::Noop);
 
         let mut changed = false;
-        let mut left = rect.left() + padding;
+        let mut left = rect.left();
         for (index, (segment, width)) in self.segments.iter().zip(widths).enumerate() {
-            let slot = Rect::from_min_size(
-                pos2(left, rect.top() + padding),
-                vec2(width, height - padding * 2.0),
-            );
+            let slot = Rect::from_min_size(pos2(left, rect.top()), vec2(width, theme::FIELD_H));
             left += width;
 
             let response = ui.interact(slot, group.id.with(index), Sense::click());
@@ -140,25 +139,62 @@ impl<'a, T: Copy + PartialEq> Segmented<'a, T> {
                 *current = segment.value;
                 changed = true;
             }
-            self.paint(ui, slot, segment, active, response.hovered());
+            response.widget_info(|| {
+                WidgetInfo::selected(
+                    WidgetType::RadioButton,
+                    ui.is_enabled(),
+                    active,
+                    segment.label,
+                )
+            });
+            self.paint(ui, slot, index, segment, active, response.hovered());
+            focus_ring(ui, &response, theme::R_CONTROL);
         }
+
+        let frame = egui::epaint::RectShape::stroke(
+            rect,
+            theme::R_CONTROL,
+            egui::Stroke::new(1.0, colors.hairline),
+            egui::StrokeKind::Inside,
+        );
+        ui.painter().set(under, frame);
         changed
     }
 
-    fn paint(&self, ui: &Ui, slot: Rect, segment: &Segment<'_, T>, active: bool, hovered: bool) {
+    fn paint(
+        &self,
+        ui: &Ui,
+        slot: Rect,
+        index: usize,
+        segment: &Segment<'_, T>,
+        active: bool,
+        hovered: bool,
+    ) {
         let colors = theme::colors();
-        let (fill, foreground) = match (active, self.filled, hovered) {
-            (true, true, _) => (colors.accent, colors.on_accent),
-            (true, false, _) => (colors.accent_wash, colors.accent),
-            (false, _, true) => (egui::Color32::TRANSPARENT, colors.text_high),
-            (false, _, false) => (egui::Color32::TRANSPARENT, colors.text_mid),
+        let (fill, foreground) = match (active, hovered) {
+            (true, _) => (colors.accent_wash, colors.accent_soft),
+            (false, true) => (colors.hover, colors.text_high),
+            (false, false) => (egui::Color32::TRANSPARENT, colors.text_mid),
         };
 
         let painter = ui.painter();
-        painter.rect_filled(slot, egui::CornerRadius::same(255), fill);
+        let last = index + 1 == self.segments.len();
+        let radius = egui::CornerRadius {
+            nw: if index == 0 { theme::R_CONTROL.nw } else { 0 },
+            sw: if index == 0 { theme::R_CONTROL.sw } else { 0 },
+            ne: if last { theme::R_CONTROL.ne } else { 0 },
+            se: if last { theme::R_CONTROL.se } else { 0 },
+        };
+        painter.rect_filled(slot, radius, fill);
+        if index > 0 {
+            painter.vline(
+                slot.left(),
+                slot.y_range(),
+                egui::Stroke::new(1.0, colors.hairline),
+            );
+        }
 
-        let font = theme::label();
-        let galley = painter.layout_no_wrap(segment.label.to_owned(), font, foreground);
+        let galley = painter.layout_no_wrap(segment.label.to_owned(), theme::segment(), foreground);
         painter.galley(
             pos2(
                 slot.center().x - galley.size().x / 2.0,
@@ -172,7 +208,7 @@ impl<'a, T: Copy + PartialEq> Segmented<'a, T> {
     /// Either an even share of the width the caller asked for, or what each label needs.
     fn widths(&self, ui: &Ui) -> Vec<f32> {
         if let Some(width) = self.width {
-            let share = ((width - 6.0) / self.segments.len() as f32).max(0.0);
+            let share = (width / self.segments.len() as f32).max(0.0);
             return vec![share; self.segments.len()];
         }
 
@@ -181,10 +217,10 @@ impl<'a, T: Copy + PartialEq> Segmented<'a, T> {
             .map(|segment| {
                 let galley = ui.painter().layout_no_wrap(
                     segment.label.to_owned(),
-                    theme::label(),
+                    theme::segment(),
                     theme::colors().text_mid,
                 );
-                galley.size().x + 32.0
+                galley.size().x + 2.0 * SEGMENT_PAD
             })
             .collect()
     }

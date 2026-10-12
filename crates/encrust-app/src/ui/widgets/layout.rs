@@ -1,4 +1,5 @@
-use egui::{Align2, Frame, RichText, Sense, Ui, vec2};
+use egui::layers::ShapeIdx;
+use egui::{Frame, RichText, Sense, Ui, UiBuilder, vec2};
 
 use crate::ui::theme;
 
@@ -8,15 +9,16 @@ const DESCRIBING: &str = "encrust-describing";
 /// How far what a switch reveals is set in under it, points.
 const NEST_INDENT: i8 = 14;
 
-/// One block of the inspector: a heading, an optional hint on the right, the body, and a
-/// hairline under the lot. What the body `describe`s opens from a click on the title.
+/// One block of the inspector: a heading that folds it, an optional hint on the right,
+/// the body, and a hairline under the lot. What the body `describe`s is a question mark
+/// beside the title, read on hover.
 pub fn section<R>(
     ui: &mut Ui,
     title: &str,
     hint_text: Option<&str>,
     add: impl FnOnce(&mut Ui) -> R,
-) -> R {
-    block(ui, title, hint_text, None, add).1
+) -> Option<R> {
+    block(ui, title, hint_text, Trailing::Nothing, add).1
 }
 
 /// A block like `section` with one icon button at the right of its heading, for the
@@ -26,80 +28,150 @@ pub fn section_with_action<R>(
     title: &str,
     action: (&str, &str),
     add: impl FnOnce(&mut Ui) -> R,
-) -> (bool, R) {
-    block(ui, title, None, Some(action), add)
+) -> (bool, Option<R>) {
+    block(ui, title, None, Trailing::Action(action), add)
 }
+
+/// A block whose heading carries the switch that turns the whole of it on, so the switch
+/// is not named a second time under it. Returns whether it was flipped.
+pub fn section_with_switch<R>(
+    ui: &mut Ui,
+    title: &str,
+    on: &mut bool,
+    add: impl FnOnce(&mut Ui) -> R,
+) -> (bool, Option<R>) {
+    block(ui, title, None, Trailing::Switch(on), add)
+}
+
+/// What stands at the right end of a block's heading.
+enum Trailing<'a> {
+    Nothing,
+    /// An icon button: its glyph and its tooltip.
+    Action((&'a str, &'a str)),
+    Switch(&'a mut bool),
+}
+
+/// Body margin of a block: the heading row carries its own top, so the body has none.
+const BODY_MARGIN: egui::Margin = egui::Margin {
+    left: theme::PANEL_MARGIN.left,
+    right: theme::PANEL_MARGIN.right,
+    top: 0,
+    bottom: theme::PANEL_MARGIN.bottom,
+};
 
 fn block<R>(
     ui: &mut Ui,
     title: &str,
     hint_text: Option<&str>,
-    action: Option<(&str, &str)>,
+    trailing: Trailing<'_>,
     add: impl FnOnce(&mut Ui) -> R,
-) -> (bool, R) {
+) -> (bool, Option<R>) {
     let id = ui.id().with(("section", title));
-    let inner = Frame::new()
-        .inner_margin(theme::PANEL_MARGIN)
-        .show(ui, |ui| {
-            let (title_response, pressed) = ui
-                .horizontal(|ui| {
-                    let title_response = block_title(ui, id, title);
-                    let layout = egui::Layout::right_to_left(egui::Align::Center);
-                    let pressed = ui.with_layout(layout, |ui| {
-                        let pressed = action.is_some_and(|(glyph, tooltip)| {
-                            crate::ui::icon_button(ui, glyph, tooltip).clicked()
-                        });
-                        if let Some(hint_text) = hint_text {
-                            hint(ui, hint_text);
-                        }
-                        pressed
-                    });
-                    (title_response, pressed.inner)
-                })
-                .inner;
-            ui.add_space(3.0);
-            ui.spacing_mut().item_spacing.y = theme::ITEM_GAP;
-            let (inner, texts) = collecting(ui, id, add);
-            show_description(ui, id, &title_response, texts);
-            (pressed, inner)
-        })
-        .inner;
-    hairline(ui);
-    inner
+    let open = ui.data(|data| data.get_temp::<bool>(id.with("open"))) != Some(false);
+    let pressed = block_heading(ui, id, title, open, hint_text, trailing);
+    let inner = open.then(|| {
+        Frame::new()
+            .inner_margin(BODY_MARGIN)
+            .show(ui, |ui| {
+                ui.spacing_mut().item_spacing.y = theme::ITEM_GAP;
+                let (inner, texts) = collecting(ui, id, add);
+                ui.data_mut(|data| data.insert_temp(id.with("texts"), texts));
+                inner
+            })
+            .inner
+    });
+    let (rect, _) = ui.allocate_exact_size(vec2(ui.available_width(), 1.0), Sense::hover());
+    let shape = ui.painter().add(egui::Shape::rect_filled(
+        rect,
+        0.0,
+        theme::colors().hairline,
+    ));
+    ui.data_mut(|data| data.insert_temp(trailing_hairline(), (shape, rect.bottom())));
+    (pressed, inner)
 }
 
-/// The title of a block. It answers a click, and says so with a glyph, once the body has
-/// described itself.
-fn block_title(ui: &mut Ui, id: egui::Id, title: &str) -> egui::Response {
-    let described = ui.data(|data| data.get_temp::<bool>(id.with("described"))) == Some(true);
+/// Where the hairline under the last block drawn is kept, so a card ending on it can
+/// take it away.
+fn trailing_hairline() -> egui::Id {
+    egui::Id::new("trailing-hairline")
+}
+
+/// The heading row of a block: caret and title, which fold it, the question mark that
+/// reads out what the body described, and the hint and action at the right.
+fn block_heading(
+    ui: &mut Ui,
+    id: egui::Id,
+    title: &str,
+    open: bool,
+    hint_text: Option<&str>,
+    trailing: Trailing<'_>,
+) -> bool {
     let colors = theme::colors();
+    let (rect, _) =
+        ui.allocate_exact_size(vec2(ui.available_width(), theme::SECTION_H), Sense::hover());
+    let inner = rect.shrink2(vec2(theme::PANEL_PAD - 4.0, 0.0));
+    let layout = egui::Layout::left_to_right(egui::Align::Center);
+    let mut child = ui.new_child(UiBuilder::new().max_rect(inner).layout(layout));
+
+    let caret = if open {
+        crate::ui::icon::CARET_DOWN
+    } else {
+        crate::ui::icon::CARET_RIGHT
+    };
     let mut text = egui::text::LayoutJob::default();
     let format = |font, color| egui::TextFormat::simple(font, color);
-    text.append(title, 0.0, format(theme::section(), colors.text_mid));
-    if described {
-        let glyph = format(theme::icon(12.0), colors.text_low);
-        text.append(crate::ui::icon::INFO, 6.0, glyph);
+    text.append(caret, 0.0, format(theme::icon(11.0), colors.text_mid));
+    text.append(title, 6.0, format(theme::section(), colors.text_high));
+    let fold = child.add(
+        egui::Label::new(text)
+            .sense(Sense::click())
+            .selectable(false),
+    );
+    fold.widget_info(|| {
+        egui::WidgetInfo::selected(egui::WidgetType::CollapsingHeader, true, open, title)
+    });
+    super::focus_ring(&child, &fold, theme::R_CONTROL);
+    if fold
+        .on_hover_cursor(egui::CursorIcon::PointingHand)
+        .clicked()
+    {
+        child.data_mut(|data| data.insert_temp(id.with("open"), !open));
     }
-    let sense = if described {
-        Sense::click()
-    } else {
-        Sense::hover()
-    };
-    let response = ui.add(egui::Label::new(text).sense(sense).selectable(false));
-    if described {
-        response.on_hover_cursor(egui::CursorIcon::PointingHand)
-    } else {
-        response
+
+    let texts = child.data(|data| data.get_temp::<Vec<String>>(id.with("texts")));
+    if let Some(texts) = texts.filter(|texts| !texts.is_empty()) {
+        help_mark(&mut child, &texts);
     }
+
+    child
+        .with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+            let pressed = match trailing {
+                Trailing::Nothing => false,
+                Trailing::Action((glyph, tooltip)) => {
+                    crate::ui::icon_button(ui, glyph, tooltip).clicked()
+                }
+                Trailing::Switch(on) => {
+                    // In line with the switches of the body, which sit a full pad in.
+                    ui.add_space(4.0);
+                    super::bare_switch(ui, on, title).changed()
+                }
+            };
+            if let Some(hint_text) = hint_text {
+                hint(ui, hint_text);
+            }
+            pressed
+        })
+        .inner
 }
 
 /// Runs `add` with `describe` pointed at this block, and returns what it described.
 fn collecting<R>(ui: &mut Ui, id: egui::Id, add: impl FnOnce(&mut Ui) -> R) -> (R, Vec<String>) {
     let key = egui::Id::new(DESCRIBING);
+    let gathering = id.with("gathering");
     let outer = ui.data_mut(|data| {
-        data.insert_temp(id.with("texts"), Vec::<String>::new());
+        data.insert_temp(gathering, Vec::<String>::new());
         let outer = data.get_temp::<egui::Id>(key);
-        data.insert_temp(key, id);
+        data.insert_temp(key, gathering);
         outer
     });
     let inner = add(ui);
@@ -112,57 +184,75 @@ fn collecting<R>(ui: &mut Ui, id: egui::Id, add: impl FnOnce(&mut Ui) -> R) -> (
                 data.remove::<egui::Id>(key);
             }
         }
-        data.remove_temp::<Vec<String>>(id.with("texts"))
+        data.remove_temp::<Vec<String>>(gathering)
             .unwrap_or_default()
     });
     (inner, texts)
 }
 
-/// Opens and closes the block's description under its title, and draws it while open.
-fn show_description(ui: &Ui, id: egui::Id, title: &egui::Response, texts: Vec<String>) {
-    let open_id = id.with("open");
-    let described_id = id.with("described");
-    let was_open = ui.data(|data| data.get_temp::<bool>(open_id)) == Some(true);
-    let elsewhere = ui.input(|input| input.pointer.any_click()) && !title.clicked();
-    let open = !texts.is_empty() && (was_open ^ title.clicked()) && !(was_open && elsewhere);
-    ui.data_mut(|data| {
-        data.insert_temp(open_id, open);
-        data.insert_temp(described_id, !texts.is_empty());
-    });
-    if !open {
-        return;
-    }
-    let width = ui.available_width().max(160.0);
-    egui::Area::new(id.with("description"))
-        .order(egui::Order::Foreground)
-        .fixed_pos(title.rect.left_bottom() + vec2(0.0, 6.0))
-        .show(ui.ctx(), |ui| {
-            card().inner_margin(theme::CARD_MARGIN).show(ui, |ui| {
-                ui.set_max_width(width);
-                ui.spacing_mut().item_spacing.y = theme::ITEM_GAP;
-                for text in &texts {
-                    ui.label(
-                        RichText::new(text)
-                            .font(theme::small())
-                            .color(theme::colors().text_mid),
-                    );
-                }
-            });
-        });
-}
-
-/// What a block is for, or what a setting in it does: kept out of the way, and shown
-/// under the block's title when the title is clicked. Outside a block, a plain `hint`.
+/// What a block is for, or what a setting in it does: kept out of the way, and read from
+/// the question mark beside the block's title. Outside a block, a plain `hint`.
 pub fn describe(ui: &mut Ui, text: &str) {
     let key = egui::Id::new(DESCRIBING);
     let target = ui.data(|data| data.get_temp::<egui::Id>(key));
     match target {
         Some(id) => ui.data_mut(|data| {
-            data.get_temp_mut_or_default::<Vec<String>>(id.with("texts"))
+            data.get_temp_mut_or_default::<Vec<String>>(id)
                 .push(text.to_owned());
         }),
         None => hint(ui, text),
     }
+}
+
+/// Diameter of the help mark, and the most its text runs across before wrapping, points.
+const HELP_D: f32 = 13.0;
+const HELP_W: f32 = 280.0;
+
+/// The ringed question mark beside a title that reads out `texts`: on hover, and in a
+/// popup a click keeps open until the next click.
+pub fn help_mark<T: AsRef<str>>(ui: &mut Ui, texts: &[T]) {
+    let colors = theme::colors();
+    let (rect, response) = ui.allocate_exact_size(vec2(HELP_D, HELP_D), Sense::click());
+    let joined: Vec<&str> = texts.iter().map(AsRef::as_ref).collect();
+    response.widget_info(|| {
+        egui::WidgetInfo::labeled(egui::WidgetType::Button, true, joined.join(" "))
+    });
+    let ink = if response.hovered() {
+        colors.text_mid
+    } else {
+        colors.text_low
+    };
+    let painter = ui.painter();
+    painter.circle_stroke(
+        rect.center(),
+        HELP_D / 2.0 - 0.5,
+        egui::Stroke::new(1.0, ink),
+    );
+    painter.text(
+        rect.center(),
+        egui::Align2::CENTER_CENTER,
+        "?",
+        theme::help_mark(),
+        ink,
+    );
+    super::focus_ring(ui, &response, egui::CornerRadius::same(255));
+    let show = |ui: &mut Ui| {
+        ui.set_max_width(HELP_W);
+        for text in &joined {
+            ui.label(
+                RichText::new(*text)
+                    .font(theme::small())
+                    .color(colors.text_mid),
+            );
+        }
+    };
+    let popup = egui::Popup::menu(&response);
+    let response = if popup.is_open() {
+        response
+    } else {
+        response.on_hover_ui(show)
+    };
+    egui::Popup::menu(&response).show(show);
 }
 
 /// What a switch reveals, set in under it with a rule down its left edge, so it reads as
@@ -174,48 +264,73 @@ pub fn nested<R>(ui: &mut Ui, add: impl FnOnce(&mut Ui) -> R) -> R {
     };
     let shown = Frame::new().inner_margin(margin).show(ui, add);
     let rect = shown.response.rect;
-    let rule = egui::Rect::from_min_max(
-        egui::pos2(rect.left() + 3.0, rect.top()),
-        egui::pos2(rect.left() + 5.0, rect.bottom()),
+    ui.painter().vline(
+        rect.left() + 4.0,
+        rect.y_range(),
+        egui::Stroke::new(1.0, theme::colors().line),
     );
-    ui.painter()
-        .rect_filled(rule, theme::R_CONTROL, theme::colors().line);
     shown.inner
 }
 
-/// A verdict that has to be seen before anything else in its block: a glyph in `tint`, a
-/// title and a line saying what to do about it, on a wash of the same colour.
-pub fn notice(
-    ui: &mut Ui,
-    glyph: &str,
-    tint: egui::Color32,
-    wash: egui::Color32,
-    title: &str,
-    why: &str,
-) {
-    Frame::new()
-        .fill(wash)
-        .corner_radius(theme::R_SURFACE)
-        .inner_margin(theme::CARD_MARGIN)
-        .show(ui, |ui| {
-            ui.set_width(ui.available_width());
-            ui.horizontal_top(|ui| {
-                ui.label(RichText::new(glyph).font(theme::icon(22.0)).color(tint));
-                ui.vertical(|ui| {
-                    ui.spacing_mut().item_spacing.y = 3.0;
-                    ui.label(
-                        RichText::new(title)
-                            .heading()
-                            .color(theme::colors().text_high),
-                    );
-                    ui.label(
-                        RichText::new(why)
-                            .font(theme::small())
-                            .color(theme::colors().text_mid),
-                    );
-                });
-            });
+/// A verdict that has to be seen before anything else in its block: a glyph in `tint`,
+/// the verdict in plain ink, and a line saying what to do about it.
+pub fn notice(ui: &mut Ui, glyph: &str, tint: egui::Color32, title: &str, why: &str) {
+    let colors = theme::colors();
+    ui.horizontal_top(|ui| {
+        ui.spacing_mut().item_spacing.x = 8.0;
+        ui.label(RichText::new(glyph).font(theme::icon(14.0)).color(tint));
+        ui.vertical(|ui| {
+            ui.spacing_mut().item_spacing.y = 2.0;
+            ui.label(
+                RichText::new(title)
+                    .font(theme::label())
+                    .color(colors.text_high),
+            );
+            ui.label(
+                RichText::new(why)
+                    .font(theme::small())
+                    .color(colors.text_mid),
+            );
         });
+    });
+}
+
+/// A body that scrolls once it outgrows the card, and a foot under it that stays in
+/// view. `max_h` is the card's whole height, points, what is already drawn in it included.
+///
+/// The foot is measured as it is drawn, so the body is held to last frame's measure, and
+/// a frame whose foot changed height is drawn again.
+pub fn body_and_foot<T>(
+    ui: &mut Ui,
+    max_h: f32,
+    state: &mut T,
+    body: impl FnOnce(&mut Ui, &mut T),
+    foot: impl FnOnce(&mut Ui, &mut T),
+) {
+    let id = ui.id().with("foot-h");
+    let foot_h = ui.data(|data| data.get_temp::<f32>(id)).unwrap_or(0.0);
+    let room = (max_h - ui.min_rect().height() - foot_h).max(0.0);
+    ui.data_mut(|data| data.remove::<(ShapeIdx, f32)>(trailing_hairline()));
+    egui::ScrollArea::vertical()
+        .max_height(room)
+        .auto_shrink([false, true])
+        .show(ui, |ui| body(ui, state));
+    let body_bottom = ui.min_rect().bottom();
+    let drawn = ui.scope(|ui| foot(ui, state)).response.rect.height();
+    // With no foot the last block's hairline would stand square over the card's rounded
+    // edge, so the card ends on that block instead.
+    let trailing = ui.data(|data| data.get_temp::<(ShapeIdx, f32)>(trailing_hairline()));
+    if let Some((shape, bottom)) = trailing
+        && drawn <= 0.0
+        && (bottom - body_bottom).abs() < 0.5
+    {
+        ui.painter().set(shape, egui::Shape::Noop);
+    }
+    if (drawn - foot_h).abs() > 0.5 {
+        ui.data_mut(|data| data.insert_temp(id, drawn));
+        ui.ctx()
+            .request_discard("the foot of a card changed height");
+    }
 }
 
 /// The frame of anything that floats over the viewport.
@@ -227,49 +342,19 @@ pub fn card() -> Frame {
         .shadow(theme::shadow())
 }
 
-/// A group of fields under a title that folds them away, so a long form reads as its
-/// headings. Starts folded; which are open is kept per title.
-pub fn fold(ui: &mut Ui, title: &str, add: impl FnOnce(&mut Ui)) {
-    let id = ui.id().with(("fold", title));
-    let open = ui.data(|data| data.get_temp::<bool>(id)) == Some(true);
-    let colors = theme::colors();
-    let (rect, response) =
-        ui.allocate_exact_size(vec2(ui.available_width(), theme::ROW_H), Sense::click());
-    if response.hovered() {
-        ui.painter()
-            .rect_filled(rect, theme::R_CONTROL, colors.hover);
-    }
-    let glyph = if open {
-        crate::ui::icon::CARET_DOWN
-    } else {
-        crate::ui::icon::CARET_RIGHT
-    };
-    let left = rect.left_center() + vec2(6.0, 0.0);
-    let painter = ui.painter();
-    painter.text(
-        left,
-        Align2::LEFT_CENTER,
-        glyph,
-        theme::icon(12.0),
-        colors.text_low,
-    );
-    let title_at = left + vec2(18.0, 0.0);
-    painter.text(
-        title_at,
-        Align2::LEFT_CENTER,
-        title,
-        theme::section(),
-        colors.text_mid,
-    );
-    let response = response.on_hover_cursor(egui::CursorIcon::PointingHand);
-    if response.clicked() {
-        ui.data_mut(|data| data.insert_temp(id, !open));
-    }
-    if open {
-        ui.add_space(2.0);
-        add(ui);
-        ui.add_space(6.0);
-    }
+/// The foot of a card down a side of the stage, set apart on the window's colour and
+/// rounded to fit inside the card's outline.
+pub fn card_foot() -> Frame {
+    let r = theme::R_SURFACE.sw.saturating_sub(1);
+    Frame::new()
+        .fill(theme::colors().base)
+        .inner_margin(theme::PANEL_MARGIN)
+        .corner_radius(egui::CornerRadius {
+            nw: 0,
+            ne: 0,
+            sw: r,
+            se: r,
+        })
 }
 
 /// A section heading, used by the inspector and by the header row of a floating card.
@@ -299,6 +384,27 @@ pub fn subheading(ui: &mut Ui, title: &str) {
     ui.add_space(2.0);
 }
 
+/// A `subheading` carrying the switch that turns its group on. Returns whether it was
+/// flipped.
+pub fn subheading_with_switch(ui: &mut Ui, title: &str, on: &mut bool) -> bool {
+    ui.add_space(8.0);
+    let flipped = ui
+        .horizontal(|ui| {
+            ui.label(
+                RichText::new(title)
+                    .font(theme::small())
+                    .color(theme::colors().text_low),
+            );
+            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                super::bare_switch(ui, on, title).changed()
+            })
+            .inner
+        })
+        .inner;
+    ui.add_space(2.0);
+    flipped
+}
+
 /// A quiet aside: a unit, a count, a reason something is greyed out.
 pub fn hint(ui: &mut Ui, text: &str) {
     ui.label(
@@ -313,76 +419,45 @@ pub fn meta(ui: &mut Ui, lines: &[String]) {
     for line in lines {
         ui.label(
             RichText::new(line)
-                .font(theme::mono(11.0))
+                .font(theme::figures(11.0))
                 .color(theme::colors().text_low),
         );
     }
 }
 
-/// A grid of two columns of measured values. The cells are the panel colour, so the
-/// hairline showing between them is the whole of the grid.
+/// Measured values, one to a row with a leader between the name and the value: the
+/// figures of a block are rows, never tiles.
 pub fn stats(ui: &mut Ui, entries: &[(&str, String)]) {
-    let cell_width = (ui.available_width() - 1.0) / 2.0;
-    Frame::new()
-        .fill(theme::colors().hairline)
-        .corner_radius(theme::R_SURFACE)
-        .show(ui, |ui| {
-            ui.spacing_mut().item_spacing = vec2(1.0, 1.0);
-            for pair in entries.chunks(2) {
-                ui.horizontal(|ui| {
-                    for (key, value) in pair {
-                        cell(ui, cell_width, key, value);
-                    }
-                });
-            }
-        });
-}
-
-fn cell(ui: &mut Ui, width: f32, key: &str, value: &str) {
-    Frame::new()
-        .fill(theme::colors().panel)
-        .inner_margin(theme::CARD_MARGIN)
-        .show(ui, |ui| {
-            ui.set_width((width - theme::CARD_MARGIN.sum().x).max(0.0));
-            ui.vertical(|ui| {
-                ui.spacing_mut().item_spacing.y = 2.0;
-                ui.label(
-                    RichText::new(key)
-                        .font(theme::small())
-                        .color(theme::colors().text_low),
-                );
-                ui.label(
-                    RichText::new(value)
-                        .font(theme::mono(13.0))
-                        .color(theme::colors().text_high),
-                );
-            });
-        });
+    readings(ui, entries);
 }
 
 /// Points between the name and the value of a reading, which is the least that still
 /// reads as two columns.
 const READING_GAP: f32 = 10.0;
 
+/// Height of a reading's row, and the room kept between the leader and the text.
+const READING_H: f32 = 24.0;
+const LEADER_GAP: f32 = 6.0;
+
 /// Lines a value may wrap to before it is cut: a panel size states pixels and
 /// millimetres, which is two lines in a column this narrow.
 const VALUE_ROWS: usize = 2;
 
-/// Rows of one reading each, the name at the left and the value at the right, for a
-/// summary read top to bottom rather than compared across.
+/// Rows of one reading each, the name at the left, the value at the right and a dotted
+/// leader between them, for a summary read top to bottom rather than compared across.
 ///
 /// A value too long for the row wraps and then is cut, so that the name beside it stays
 /// readable: nothing here is drawn over anything else.
 pub fn readings(ui: &mut Ui, entries: &[(&str, String)]) {
     let colors = theme::colors();
     for (key, value) in entries {
-        let name = ui
-            .painter()
-            .layout_no_wrap((*key).to_owned(), theme::label(), colors.text_mid);
+        let name =
+            ui.painter()
+                .layout_no_wrap((*key).to_owned(), theme::reading(), colors.text_low);
         let room = ui.available_width() - name.size().x - READING_GAP;
         let mut job = egui::text::LayoutJob::simple(
             value.clone(),
-            theme::mono(12.0),
+            theme::reading(),
             colors.text_high,
             room.max(READING_GAP),
         );
@@ -390,14 +465,22 @@ pub fn readings(ui: &mut Ui, entries: &[(&str, String)]) {
         job.halign = egui::Align::RIGHT;
         let reading = ui.painter().layout_job(job);
 
-        let height = theme::ROW_H.max(reading.size().y + READING_GAP);
+        let height = READING_H.max(reading.size().y + 4.0);
         let (rect, _) = ui.allocate_exact_size(vec2(ui.available_width(), height), Sense::hover());
         let painter = ui.painter();
-        painter.galley(
-            rect.left_center() - vec2(0.0, name.size().y / 2.0),
-            name,
-            colors.text_mid,
-        );
+        let name_at = rect.left_center() - vec2(0.0, name.size().y / 2.0);
+        let baseline = name_at.y + name.size().y - 3.0;
+        let from = name_at.x + name.size().x + LEADER_GAP;
+        let to = rect.right() - reading.size().x - LEADER_GAP;
+        if reading.rows.len() == 1 && to > from {
+            painter.extend(egui::Shape::dotted_line(
+                &[egui::pos2(from, baseline), egui::pos2(to, baseline)],
+                colors.hairline.gamma_multiply(1.6),
+                3.0,
+                0.6,
+            ));
+        }
+        painter.galley(name_at, name, colors.text_low);
         painter.galley(
             rect.right_center() - vec2(0.0, reading.size().y / 2.0),
             reading,
@@ -424,4 +507,37 @@ pub fn hairline(ui: &mut Ui) {
     let (rect, _) = ui.allocate_exact_size(vec2(ui.available_width(), 1.0), Sense::hover());
     ui.painter()
         .rect_filled(rect, 0.0, theme::colors().hairline);
+}
+
+/// The title row of a window over the plate: its glyph, its name, and the way out.
+/// Answers whether the way out was taken.
+pub fn dialog_head(ui: &mut Ui, glyph: &str, title: &str) -> bool {
+    let colors = theme::colors();
+    ui.horizontal(|ui| {
+        ui.label(
+            RichText::new(glyph)
+                .font(theme::icon(15.0))
+                .color(colors.text_low),
+        );
+        ui.add_space(2.0);
+        ui.label(
+            RichText::new(title)
+                .font(theme::dialog_title())
+                .color(colors.text_high),
+        );
+        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+            super::icon_button(ui, crate::ui::icon::CANCEL, "Close  Esc").clicked()
+        })
+        .inner
+    })
+    .inner
+}
+
+/// The frame of a window over the plate: the panel's fill, a hairline edge, the shadow.
+pub fn dialog_frame() -> Frame {
+    Frame::new()
+        .fill(theme::colors().panel)
+        .stroke(egui::Stroke::new(1.0, theme::colors().hairline))
+        .corner_radius(theme::R_PANEL)
+        .shadow(theme::shadow())
 }

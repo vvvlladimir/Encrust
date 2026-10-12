@@ -77,7 +77,7 @@ fn header(ui: &mut Ui, library: &mut Library) -> Option<Picked> {
     });
     ui.add_space(8.0);
     ui.add(
-        egui::TextEdit::singleline(&mut library.search)
+        crate::ui::text_box(egui::TextEdit::singleline(&mut library.search))
             .hint_text("Search every machine")
             .desired_width(ui.available_width()),
     );
@@ -136,7 +136,7 @@ fn models(ui: &mut Ui, entries: &[&Entry<PrinterProfile>], with_brand: bool) -> 
             } else {
                 entry.profile.name.clone()
             };
-            if list_row(ui, &label, None, false, None, None).picked {
+            if list_row(ui, &label, None, false, None, None, None).picked {
                 picked = Some(Picked::Printer(entry.id.clone()));
             }
         }

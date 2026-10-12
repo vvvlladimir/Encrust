@@ -74,6 +74,8 @@ pub struct Staged {
     pub panel: PanelOverrides,
     pub exposure: ExposurePlan,
     pub remove_islands: bool,
+    /// Layers more taken of what is left hanging over a removed island.
+    pub hanging_passes: u32,
     /// Whether the stack is watched for resin with no way out.
     pub drainage: bool,
 }
@@ -100,6 +102,7 @@ impl Staged {
             cutting: self.cutting,
             exposure: self.exposure.clone(),
             remove_islands: self.remove_islands,
+            hanging_passes: self.hanging_passes,
             format,
             raster_window,
             created_unix_s: now_unix_s(),
@@ -272,6 +275,7 @@ pub fn plate_of(
         panel: overrides_of(&job.raster),
         exposure: ExposurePlan::new(job.slicing.exposure_at.clone()),
         remove_islands: job.raster.remove_islands,
+        hanging_passes: job.raster.hanging_passes,
         drainage,
     })
 }

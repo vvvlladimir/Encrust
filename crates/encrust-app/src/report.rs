@@ -84,7 +84,7 @@ pub struct Facts<'a> {
     pub resin_id: Option<&'a str>,
     /// The extension the next file would be written under.
     pub format: &'a str,
-    /// The failure on the status strip, when it is showing one.
+    /// The failure over the stage, when it is showing one.
     pub message: Option<String>,
     /// Every address and name the window knows a printer by, so that a failure quoting one
     /// can be scrubbed of it; see `Network::hosts`.

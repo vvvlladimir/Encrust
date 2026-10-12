@@ -17,3 +17,8 @@ CLAUDE.md
 
 # The browser build of web-engine, made by hand; see docs/design/web-build.md.
 /crates/web-engine/www/pkg
+
+# What a snapshot run leaves beside the committed pictures; see docs/decisions/0215.
+/crates/encrust-app/tests/snapshots/*.new.png
+/crates/encrust-app/tests/snapshots/*.diff.png
+/crates/encrust-app/tests/snapshots/*.old.png

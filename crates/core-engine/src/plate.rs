@@ -51,6 +51,9 @@ pub struct Plate {
     pub exposure: ExposurePlan,
     /// Whether every island is taken out of the written file.
     pub remove_islands: bool,
+    /// How many layers more of what stood on an island taken out go too, one a pass,
+    /// when islands are taken out at all (ADR 0228).
+    pub hanging_passes: u32,
     /// Which container is written. The output name has the last word on it (ADR 0047),
     /// so whoever holds the name resolves it before the run starts.
     pub format: SlicedFormat,

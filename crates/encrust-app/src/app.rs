@@ -94,9 +94,9 @@ impl SlicerApp {
         );
     }
 
-    /// The machine, the resin, the container and every tool value are written the frame
-    /// they change, so the next run opens on them however this one ends. Only on a
-    /// settled frame: a slider under the pointer is one choice, not one per frame.
+    /// The machine, the resin, every tool value, the Preview divide and the side cards' widths
+    /// are written the frame they change, so the next run opens on them however this one ends.
+    /// Only on a settled frame: a slider under the pointer is one choice, not one per frame.
     fn remember_choices(&mut self, settled: bool) {
         if !settled {
             return;
@@ -106,7 +106,10 @@ impl SlicerApp {
             &self.machine.network,
             &self.machine.updates.prefs,
             &self.tools,
-        );
+        )
+        .with_recent(&self.machine.recent)
+        .with_layout(&self.view.options)
+        .with_general(&self.machine.general);
         if now != self.prefs {
             self.prefs = now;
             self.prefs.save();
@@ -141,10 +144,16 @@ impl SlicerApp {
                     project::open(&mut self.window(), &file);
                 }
                 Arrived::File(Wanted::PrinterProfile, file) => {
-                    crate::profiles::load_printer(&mut self.window(), &file);
+                    crate::profiles::import_printer(&mut self.window(), &file);
                 }
-                Arrived::File(Wanted::ResinProfile, file) => crate::profiles::load_material(
-                    &mut self.machine.slicing,
+                Arrived::File(Wanted::ResinProfile, file) => {
+                    crate::profiles::import_material(&mut self.machine, &file);
+                }
+                Arrived::File(Wanted::Profile(kind), file) => {
+                    crate::panels::import_profile(&mut self.window(), kind, &file);
+                }
+                Arrived::File(Wanted::ReliefPicture, file) => crate::relief::load_picture(
+                    &mut self.tools.relief,
                     &mut self.machine.status,
                     &file,
                 ),
@@ -168,10 +177,13 @@ impl SlicerApp {
     }
 
     /// The preview shows the plate as it is, so entering the mode with a stale stack, or
-    /// none, cuts one. Nothing to cut, or nothing to cut it for, and it stays empty: the
-    /// transport says which.
+    /// none, cuts one; so does opening Check or Export, which read their figures off the
+    /// stack. Nothing to cut, or nothing to cut it for, and it stays empty: the transport
+    /// says which.
     fn refresh_preview(&mut self) {
-        if self.mode != Mode::Preview || self.machine.preview.is_building() {
+        let reads_the_stack =
+            self.mode == Mode::Preview || matches!(self.tool, Tool::Check | Tool::Export);
+        if !reads_the_stack || self.machine.preview.is_building() {
             return;
         }
         // A file being shown is the file, not the plate: nothing about the scene makes it
@@ -239,7 +251,7 @@ impl SlicerApp {
     }
 
     /// One frame of the prepare mode's transport: the cut climbing the model while the
-    /// section rail is playing. Answers whether it has to keep going.
+    /// layer strip is playing. Answers whether it has to keep going.
     fn run_the_cut_up(&mut self, ctx: &egui::Context) -> bool {
         if self.mode != Mode::Prepare {
             self.view.section.playing = false;
@@ -327,9 +339,19 @@ impl eframe::App for SlicerApp {
         self.keys.extend(shortcuts::take(ctx, raw_input));
     }
 
-    fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
+    fn ui(&mut self, ui: &mut egui::Ui, frame: &mut eframe::Frame) {
+        #[cfg(target_os = "macos")]
+        if !ui.input(|input| input.viewport().fullscreen.unwrap_or(false)) {
+            crate::traffic_lights::centre(frame, crate::ui::theme::TOP_BAR_H);
+        }
+        #[cfg(not(target_os = "macos"))]
+        let _ = frame;
         self.take_dropped_files(ui.ctx());
         self.take_arrived_files();
+        for (path, parts) in self.doc.imports.take_opened() {
+            self.machine.recent.note(&path, crate::updates::now_s());
+            crate::recent::picture::keep(&self.machine.recent, &path, parts);
+        }
 
         // A background job reports over a channel, which wakes nothing on its own, so the
         // window has to keep asking for frames while one is running.
@@ -420,6 +442,13 @@ impl eframe::App for SlicerApp {
 }
 
 #[cfg(test)]
+mod small_window;
+#[cfg(all(test, feature = "snapshots"))]
+mod snapshots;
+#[cfg(test)]
+mod states;
+
+#[cfg(test)]
 mod tests {
     use super::*;
 
@@ -427,11 +456,101 @@ mod tests {
     fn the_window_opens_on_the_prepare_mode_with_nothing_selected() {
         let app = SlicerApp::default();
         assert_eq!(app.mode, Mode::Prepare);
-        assert_eq!(app.tool, Tool::Select);
+        assert_eq!(app.tool, Tool::Position);
         assert!(
             app.view.options.grid,
             "the plate grid is on until it is turned off"
         );
+    }
+
+    /// BUG: the gizmo of a picked model took every press on the stage, the layer strip's
+    /// included, because it listened wherever the stage did.
+    #[test]
+    fn the_layer_strip_takes_a_press_while_a_model_is_picked() {
+        use core_geometry::{Mesh, Orientation, Transform, Vec3, diagnose};
+        use egui_kittest::kittest::Queryable as _;
+
+        let mesh = Mesh::new(
+            vec![
+                Vec3::new(0.0, 0.0, 0.0),
+                Vec3::new(10.0, 0.0, 0.0),
+                Vec3::new(0.0, 10.0, 0.0),
+                Vec3::new(0.0, 0.0, 10.0),
+            ],
+            vec![[0, 2, 1], [0, 1, 3], [1, 2, 3], [2, 0, 3]],
+        );
+        let mut app = SlicerApp::default();
+        let id = app.doc.scene.insert(crate::scene::Imported::new(
+            "tetra".to_owned(),
+            std::sync::Arc::new(mesh.clone()),
+            Transform::default(),
+            crate::scene::ImportSummary {
+                vertices_merged: 0,
+                faces_removed: 0,
+                orientation: Orientation {
+                    flipped_faces: 0,
+                    inverted_shells: 0,
+                    orientable: true,
+                },
+                diagnostics: diagnose(&mesh),
+            },
+        ));
+        app.doc.scene.select(Some(id));
+
+        // The faces a context is given reach it a frame later, so the first frame only
+        // dresses it.
+        let mut dressed = false;
+        let mut harness = egui_kittest::Harness::builder()
+            .with_size(egui::vec2(1280.0, 800.0))
+            .build_ui_state(
+                move |ui, app: &mut SlicerApp| {
+                    if dressed {
+                        app.window().show(ui);
+                    } else {
+                        crate::ui::theme::apply(ui.ctx());
+                        dressed = true;
+                    }
+                },
+                app,
+            );
+        harness.run_steps(3);
+        harness.get_by_label("Model and layer side by side").click();
+        harness.run_steps(3);
+
+        assert_eq!(harness.state().mode, Mode::Preview);
+    }
+
+    /// A screen reader finds every tool on the rail by its name, and Enter on the one in
+    /// focus picks it, which is the whole of driving the rail without a pointer.
+    #[test]
+    fn every_tool_on_the_rail_is_named_and_picked_from_the_keyboard() {
+        use egui_kittest::kittest::Queryable as _;
+
+        let mut app = SlicerApp::default();
+        app.view.options.started = true;
+        let mut dressed = false;
+        let mut harness = egui_kittest::Harness::builder()
+            .with_size(egui::vec2(1280.0, 900.0))
+            .build_ui_state(
+                move |ui, app: &mut SlicerApp| {
+                    if dressed {
+                        app.window().show(ui);
+                    } else {
+                        crate::ui::theme::apply(ui.ctx());
+                        dressed = true;
+                    }
+                },
+                app,
+            );
+        harness.run_steps(3);
+        for tool in Tool::on_rail() {
+            let button = egui::accesskit::Role::Button;
+            harness.get_by_role_and_label(button, tool.label()).focus();
+            harness.run_steps(2);
+            harness.key_press(egui::Key::Enter);
+            harness.run_steps(2);
+            assert_eq!(harness.state().tool, tool, "Enter on {}", tool.label());
+        }
     }
 
     #[test]
@@ -512,12 +631,54 @@ mod tests {
     }
 
     #[test]
-    fn tab_switches_between_preparing_and_previewing() {
+    fn the_view_key_runs_through_the_three_views_and_back() {
         let mut app = SlicerApp::default();
-        shortcuts::act(&mut app.window(), shortcuts::Action::ToggleMode);
+        let turn = |app: &mut SlicerApp, step| {
+            shortcuts::act(&mut app.window(), shortcuts::Action::View(step));
+            (app.mode, app.view.options.mask_only)
+        };
+        assert_eq!(turn(&mut app, 1), (Mode::Preview, false), "side by side");
+        assert_eq!(turn(&mut app, 1), (Mode::Preview, true), "the layer alone");
+        assert_eq!(
+            turn(&mut app, 1),
+            (Mode::Prepare, false),
+            "round to the model"
+        );
+        assert_eq!(
+            turn(&mut app, -1),
+            (Mode::Preview, true),
+            "and back the other way"
+        );
+    }
+
+    /// Only the layer strip switches the view; a tool opens in the inspector beside it.
+    #[test]
+    fn picking_a_tool_leaves_the_view_alone() {
+        let mut app = SlicerApp {
+            mode: Mode::Preview,
+            ..SlicerApp::default()
+        };
+        shortcuts::act(&mut app.window(), shortcuts::Action::Pick(Tool::Hollow));
+        assert_eq!(app.tool, Tool::Hollow);
         assert_eq!(app.mode, Mode::Preview);
-        shortcuts::act(&mut app.window(), shortcuts::Action::ToggleMode);
-        assert_eq!(app.mode, Mode::Prepare);
+    }
+
+    #[test]
+    fn picking_the_open_tool_again_folds_the_inspector() {
+        let mut app = SlicerApp::default();
+        let pick = |app: &mut SlicerApp, tool| {
+            shortcuts::act(&mut app.window(), shortcuts::Action::Pick(tool));
+        };
+        pick(&mut app, Tool::Hollow);
+        assert!(app.view.options.inspector);
+        pick(&mut app, Tool::Hollow);
+        assert!(!app.view.options.inspector, "a second press folds it");
+        pick(&mut app, Tool::Hollow);
+        assert!(app.view.options.inspector, "a third unfolds it");
+        pick(&mut app, Tool::Hollow);
+        pick(&mut app, Tool::Cut);
+        assert!(app.view.options.inspector, "another tool always opens");
+        assert_eq!(app.tool, Tool::Cut);
     }
 
     /// The sheet is modal: a key pressed under it moves nothing on the plate.
@@ -530,7 +691,7 @@ mod tests {
         shortcuts::act(&mut app.window(), shortcuts::Action::Pick(Tool::Hollow));
         assert_eq!(
             app.tool,
-            Tool::Select,
+            Tool::Position,
             "the tool is not reached under the sheet"
         );
         assert!(app.view.options.sheet);
@@ -547,28 +708,65 @@ mod tests {
         app.machine.report.open = true;
 
         shortcuts::act(&mut app.window(), shortcuts::Action::Pick(Tool::Hollow));
-        assert_eq!(app.tool, Tool::Select, "the tool is not reached under it");
+        assert_eq!(app.tool, Tool::Position, "the tool is not reached under it");
         assert!(app.machine.report.open);
 
         shortcuts::act(&mut app.window(), shortcuts::Action::Deselect);
         assert!(!app.machine.report.open, "Escape closes it");
     }
 
-    /// The Settings screen stands in the plate's place, so Escape is the way out of it:
-    /// the question over it first, then the screen.
+    /// The start page is left once and for good: a tool picked and put back does not
+    /// bring it back over an empty plate.
     #[test]
-    fn escape_leaves_the_settings_screen_and_the_question_over_it() {
+    fn the_start_page_is_left_for_good() {
+        let mut app = SlicerApp::default();
+        assert!(crate::panels::still_starting(&mut app.window()));
+        app.tool = Tool::Measure;
+        assert!(!crate::panels::still_starting(&mut app.window()));
+        app.tool = Tool::default();
+        assert!(!crate::panels::still_starting(&mut app.window()));
+    }
+
+    /// The Settings window holds the keyboard, and Escape takes down the question over it
+    /// before the window itself.
+    #[test]
+    fn escape_closes_the_question_and_then_the_settings_window() {
         let mut app = SlicerApp::default();
         shortcuts::act(&mut app.window(), shortcuts::Action::Settings);
         assert!(app.machine.settings.open);
 
-        app.machine.settings.confirm = Some(crate::settings::Deleting::Resin("grey".to_owned()));
+        let deleting =
+            crate::settings::Deleting::Profile(printer_profiles::Kind::Support, "x".into());
+        app.machine.settings.confirm = Some(deleting);
         shortcuts::act(&mut app.window(), shortcuts::Action::Deselect);
         assert!(app.machine.settings.confirm.is_none());
-        assert!(app.machine.settings.open, "the screen is still there");
+        assert!(app.machine.settings.open, "the window is still there");
 
         shortcuts::act(&mut app.window(), shortcuts::Action::Deselect);
         assert!(!app.machine.settings.open);
+    }
+
+    /// The Machine and resin window holds the keyboard, and Escape takes down the question
+    /// over it before the window itself.
+    #[test]
+    fn escape_closes_the_question_and_then_the_machine_and_resin_window() {
+        let mut app = SlicerApp::default();
+        crate::panels::open_machines(&mut app.machine);
+        assert!(app.machine.settings.machines);
+
+        app.machine.settings.confirm = Some(crate::settings::Deleting::Resin("grey".to_owned()));
+        shortcuts::act(&mut app.window(), shortcuts::Action::Deselect);
+        assert!(app.machine.settings.confirm.is_none());
+        assert!(app.machine.settings.machines, "the window is still there");
+
+        shortcuts::act(&mut app.window(), shortcuts::Action::SelectAll);
+        assert!(
+            app.machine.settings.machines,
+            "a key meant for the plate is held"
+        );
+
+        shortcuts::act(&mut app.window(), shortcuts::Action::Deselect);
+        assert!(!app.machine.settings.machines);
     }
 
     #[test]
@@ -580,6 +778,51 @@ mod tests {
         app.mode = Mode::Prepare;
         app.carry_height();
         assert_eq!(app.view.section.height_mm, Some(3.5));
+    }
+
+    /// Check and Export read their figures off the stack, so opening either cuts it
+    /// without the user having to look at a layer first.
+    #[test]
+    fn opening_check_or_export_cuts_the_stack_in_the_model_view() {
+        for tool in [Tool::Check, Tool::Export] {
+            let fixture = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+                .join("tests/fixtures/cube.stl");
+            let mut app = SlicerApp::default();
+            let profile = app
+                .machine
+                .slicing
+                .catalogue
+                .printer("elegoo-saturn-4-ultra")
+                .expect("the printer ships")
+                .profile
+                .clone();
+            let id = Some("elegoo-saturn-4-ultra".to_owned());
+            crate::profiles::apply_printer(&mut app.window(), profile, id);
+            app.open_model(Handed::Path(fixture));
+            while app.doc.imports.poll(
+                &mut app.doc.scene,
+                &app.doc.plate,
+                &mut app.view.camera,
+                &mut app.doc.repairs,
+                &mut app.machine.status,
+            ) {
+                std::thread::yield_now();
+            }
+
+            app.refresh_preview();
+            assert!(
+                !app.machine.preview.is_building(),
+                "the model view alone cuts nothing"
+            );
+            app.tool = tool;
+            app.refresh_preview();
+            assert!(
+                app.machine.preview.is_building(),
+                "{} cuts the stack",
+                tool.label()
+            );
+            assert_eq!(app.mode, Mode::Prepare, "and the view stays on the model");
+        }
     }
 
     #[test]
@@ -594,5 +837,87 @@ mod tests {
             !app.machine.status.is_error(),
             "an empty plate is not a failure"
         );
+    }
+
+    const IMPORTED_ON: &str = "elegoo-saturn-4-ultra";
+
+    /// The app over a profile directory of the test's own, which every import lands in.
+    fn with_profile_dir(name: &str) -> SlicerApp {
+        let dir =
+            std::env::temp_dir().join(format!("encrust-profiles-{name}-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        let mut app = SlicerApp::default();
+        app.machine.slicing.catalogue = printer_profiles::Catalogue::with_root(&dir)
+            .expect("a missing directory reads as empty");
+        app
+    }
+
+    fn handed<T>(name: &str, text: Result<String, T>) -> Handed
+    where
+        T: std::fmt::Debug,
+    {
+        let text = text.expect("the profile serialises");
+        Handed::bytes(name, std::sync::Arc::from(text.into_bytes()))
+    }
+
+    #[test]
+    fn a_machine_from_the_file_menu_is_kept_and_put_under_the_plate() {
+        let mut app = with_profile_dir("printer");
+        let catalogue = &app.machine.slicing.catalogue;
+        let file = handed(
+            "saturn.toml",
+            catalogue.export(printer_profiles::Kind::Printer, IMPORTED_ON),
+        );
+
+        crate::profiles::import_printer(&mut app.window(), &file);
+        let id = app
+            .machine
+            .slicing
+            .printer_id
+            .clone()
+            .expect("a machine in hand");
+        let entry = app.machine.slicing.catalogue.printer(&id).expect("kept");
+        assert!(
+            crate::settings::installed(&entry.source),
+            "one of the user's machines, with an id to remember"
+        );
+    }
+
+    #[test]
+    fn a_resin_from_the_file_menu_goes_on_the_machine_in_hand() {
+        let mut app = with_profile_dir("resin");
+        let profile = app
+            .machine
+            .slicing
+            .catalogue
+            .printer(IMPORTED_ON)
+            .expect("ships")
+            .profile
+            .clone();
+        crate::profiles::apply_printer(&mut app.window(), profile, Some(IMPORTED_ON.to_owned()));
+        let resin = printer_profiles::MaterialProfile {
+            name: "Bench grey".to_owned(),
+            ..printer_profiles::MaterialProfile::default()
+        };
+        let file = handed(
+            "grey.toml",
+            resin.to_toml_string(std::path::Path::new("grey")),
+        );
+
+        crate::profiles::import_material(&mut app.machine, &file);
+        let id = app
+            .machine
+            .slicing
+            .resin_id
+            .clone()
+            .expect("a resin in hand");
+        let kept = &app
+            .machine
+            .slicing
+            .catalogue
+            .resin(&id)
+            .expect("kept")
+            .profile;
+        assert!(kept.is_tuned_for(IMPORTED_ON));
     }
 }

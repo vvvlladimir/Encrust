@@ -1,7 +1,9 @@
 use core_geometry::{Mat4, Quat, Transform, Vec3};
 use transform_gizmo_egui::math::{DMat4, DQuat, DVec3, Transform as GizmoTransform};
 use transform_gizmo_egui::prelude::mint;
-use transform_gizmo_egui::{EnumSet, Gizmo, GizmoConfig, GizmoExt as _, GizmoMode, GizmoVisuals};
+use transform_gizmo_egui::{
+    EnumSet, Gizmo, GizmoConfig, GizmoExt as _, GizmoMode, GizmoOrientation, GizmoVisuals,
+};
 
 use crate::camera::OrbitCamera;
 use crate::ui::theme;
@@ -43,6 +45,17 @@ fn visuals(size: f32) -> GizmoVisuals {
 pub struct TransformGizmo {
     arrows: Gizmo,
     rings: Gizmo,
+    pub axes: Axes,
+}
+
+/// Which axes the handles, the turn buttons and the size fields follow.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub enum Axes {
+    /// The plate's.
+    #[default]
+    Global,
+    /// The model's own, turned with it.
+    Local,
 }
 
 impl TransformGizmo {
@@ -72,6 +85,10 @@ impl TransformGizmo {
             projection_matrix: row_matrix(camera.projection(aspect)),
             viewport,
             modes,
+            orientation: match self.axes {
+                Axes::Global => GizmoOrientation::Global,
+                Axes::Local => GizmoOrientation::Local,
+            },
             visuals: visuals(size),
             ..GizmoConfig::default()
         };
@@ -82,9 +99,24 @@ impl TransformGizmo {
         // Where an arrow crosses a ring both can take the press; the arrow wins.
         let turned = self.rings.interact(ui, &targets);
         let moved = self.arrows.interact(ui, &targets);
-        moved
-            .or(turned)
-            .map(|(_, placed)| placed.into_iter().map(from_gizmo).collect())
+        let (_, placed) = moved.or(turned)?;
+        let placed = placed.into_iter().map(from_gizmo);
+        Some(
+            placements
+                .iter()
+                .zip(placed)
+                .map(|(was, now)| carried(*was, now))
+                .collect(),
+        )
+    }
+}
+
+/// `was` where the crate put it. The crate knows a turn and a scale but not a stretch along
+/// the plate, so what it did is taken as a turn of the whole body and a move.
+fn carried(was: Transform, now: Transform) -> Transform {
+    Transform {
+        translation: now.translation,
+        ..was.turned(now.rotation * was.rotation.inverse())
     }
 }
 
@@ -107,19 +139,19 @@ fn into_gizmo(transform: Transform) -> GizmoTransform {
 }
 
 fn from_gizmo(transform: GizmoTransform) -> Transform {
-    Transform {
-        translation: from_vector(transform.translation),
+    Transform::from_scale_rotation_translation(
+        from_vector(transform.scale),
         // The gizmo accumulates rotations in f64 and hands back a quaternion that has
         // drifted off unit length by the time it reaches f32.
-        rotation: Quat::from_xyzw(
+        Quat::from_xyzw(
             transform.rotation.v.x as f32,
             transform.rotation.v.y as f32,
             transform.rotation.v.z as f32,
             transform.rotation.s as f32,
         )
         .normalize(),
-        scale: from_vector(transform.scale),
-    }
+        from_vector(transform.translation),
+    )
 }
 
 fn into_vector(value: Vec3) -> DVec3 {
@@ -133,6 +165,7 @@ fn from_vector(value: mint::Vector3<f64>) -> Vec3 {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use core_geometry::Mat3;
     use std::f32::consts::FRAC_PI_3;
 
     #[test]
@@ -141,6 +174,7 @@ mod tests {
             translation: Vec3::new(12.5, -3.25, 40.0),
             rotation: Quat::from_axis_angle(Vec3::new(1.0, 2.0, 3.0).normalize(), FRAC_PI_3),
             scale: Vec3::new(1.5, 2.0, 0.75),
+            ..Transform::default()
         };
         let returned = from_gizmo(into_gizmo(original));
 
@@ -151,6 +185,31 @@ mod tests {
             "expected {:?}, got {:?}",
             original.rotation,
             returned.rotation
+        );
+    }
+
+    #[test]
+    fn a_stretch_the_gizmo_cannot_see_turns_and_moves_with_the_model() {
+        let was = Transform::from_scale_rotation_translation(
+            Vec3::splat(2.0),
+            Quat::from_rotation_x(0.6),
+            Vec3::ONE,
+        )
+        .stretched(Vec3::new(1.0, 1.0, 1.5));
+        let turn = Quat::from_rotation_z(FRAC_PI_3);
+        let now = Transform::from_scale_rotation_translation(
+            was.scale,
+            turn * was.rotation,
+            Vec3::new(4.0, 5.0, 6.0),
+        );
+        let placed = carried(was, from_gizmo(into_gizmo(now)));
+
+        assert!(placed.translation.abs_diff_eq(now.translation, 1e-5));
+        assert!(
+            placed
+                .linear()
+                .abs_diff_eq(Mat3::from_quat(turn) * was.linear(), 1e-4),
+            "the stretched body turned as it stood"
         );
     }
 

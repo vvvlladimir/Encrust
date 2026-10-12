@@ -1,8 +1,21 @@
-use egui::{Align2, Color32, Rect, Response, Sense, StrokeKind, Ui, vec2};
+use egui::{
+    Align2, Color32, CornerRadius, Rect, Response, Sense, StrokeKind, Ui, WidgetInfo, WidgetType,
+    vec2,
+};
 
 use crate::ui::theme;
 
-/// A borderless square with one glyph in it: the title strip and the overlay cards.
+/// The ring a control wears while it holds the keyboard's focus, inside its own edge so no
+/// card clips it.
+pub fn focus_ring(ui: &Ui, response: &Response, radius: impl Into<CornerRadius>) {
+    if response.has_focus() {
+        let stroke = egui::Stroke::new(theme::FOCUS_W, theme::colors().accent);
+        ui.painter()
+            .rect_stroke(response.rect, radius, stroke, StrokeKind::Inside);
+    }
+}
+
+/// A borderless square with one glyph in it: the top bar and the overlay cards.
 pub fn icon_button(ui: &mut Ui, glyph: &str, tooltip: &str) -> Response {
     square(ui, glyph, tooltip, Square::icon())
 }
@@ -20,38 +33,73 @@ pub fn icon_toggle(ui: &mut Ui, glyph: &str, tooltip: &str, on: bool) -> Respons
     )
 }
 
-/// A rail button: bigger, and marked with a bar down its left edge when it is the tool in
-/// use. A tool a later step will fill in is drawn disabled rather than hidden, so the rail
-/// keeps its shape.
-pub fn tool_button(
+/// A rail button: a glyph over the tool's name, or the glyph alone where the rail is short
+/// of room, raised in the accent while it is the tool in use, and a dot in `badge` at its
+/// corner while the tool needs attention.
+pub fn rail_button(
     ui: &mut Ui,
     glyph: &str,
+    name: &str,
+    labelled: bool,
     tooltip: &str,
     active: bool,
-    enabled: bool,
+    badge: Option<Color32>,
 ) -> Response {
-    square(
-        ui,
+    let height = if labelled {
+        theme::RAIL_BUTTON_H
+    } else {
+        theme::RAIL_ICON_H
+    };
+    let size = vec2(ui.available_width(), height);
+    let (rect, response) = ui.allocate_exact_size(size, Sense::click());
+    response.widget_info(|| WidgetInfo::selected(WidgetType::Button, true, active, name));
+    let colors = theme::colors();
+    let (fill, foreground) = match (active, response.hovered()) {
+        (true, _) => (colors.raised, colors.accent_soft),
+        (false, true) => (colors.hover, colors.text_high),
+        (false, false) => (Color32::TRANSPARENT, colors.text_mid),
+    };
+    let painter = ui.painter();
+    painter.rect_filled(rect, theme::R_CONTROL, fill);
+    let glyph_at = if labelled {
+        rect.center_top() + vec2(0.0, 16.0)
+    } else {
+        rect.center()
+    };
+    painter.text(
+        glyph_at,
+        Align2::CENTER_CENTER,
         glyph,
-        tooltip,
-        Square {
-            size: theme::TOOL_SIZE,
-            glyph_size: 19.0,
-            marker: true,
-            active,
-            enabled,
-        },
-    )
+        theme::icon(17.0),
+        foreground,
+    );
+    if labelled {
+        painter.text(
+            rect.center_bottom() - vec2(0.0, 9.0),
+            Align2::CENTER_CENTER,
+            name,
+            theme::rail_name(),
+            foreground,
+        );
+    }
+    if let Some(badge) = badge {
+        let at = glyph_at + vec2(RAIL_BADGE_OFFSET.x, RAIL_BADGE_OFFSET.y - 16.0);
+        painter.circle_filled(at, RAIL_BADGE_R + 1.5, colors.base);
+        painter.circle_filled(at, RAIL_BADGE_R, badge);
+    }
+    focus_ring(ui, &response, theme::R_CONTROL);
+    response.on_hover_text(tooltip)
 }
+
+/// Where a rail button's dot sits from the top of its glyph, and its radius, points.
+const RAIL_BADGE_OFFSET: egui::Vec2 = vec2(10.0, 8.0);
+const RAIL_BADGE_R: f32 = 3.0;
 
 /// Every square icon control is the same drawing with different numbers.
 struct Square {
     size: f32,
     glyph_size: f32,
-    /// Paint the accent bar to the left of an active button.
-    marker: bool,
     active: bool,
-    enabled: bool,
 }
 
 impl Square {
@@ -59,38 +107,26 @@ impl Square {
         Self {
             size: theme::ICON_SIZE,
             glyph_size: 16.0,
-            marker: false,
             active: false,
-            enabled: true,
         }
     }
 }
 
 fn square(ui: &mut Ui, glyph: &str, tooltip: &str, config: Square) -> Response {
-    let sense = if config.enabled {
-        Sense::click()
-    } else {
-        Sense::hover()
-    };
-    let (rect, response) = ui.allocate_exact_size(vec2(config.size, config.size), sense);
+    let (rect, response) = ui.allocate_exact_size(vec2(config.size, config.size), Sense::click());
+    response.widget_info(|| {
+        WidgetInfo::selected(WidgetType::Button, ui.is_enabled(), config.active, tooltip)
+    });
     let colors = theme::colors();
 
-    let (fill, foreground) = match (config.enabled, config.active, response.hovered()) {
-        (false, _, _) => (Color32::TRANSPARENT, colors.text_low.gamma_multiply(0.6)),
-        (true, true, _) => (colors.accent_wash, colors.accent),
-        (true, false, true) => (colors.raised, colors.text_high),
-        (true, false, false) => (Color32::TRANSPARENT, colors.text_mid),
+    let (fill, foreground) = match (config.active, response.hovered()) {
+        (true, _) => (colors.accent_wash, colors.accent_soft),
+        (false, true) => (colors.hover, colors.text_high),
+        (false, false) => (Color32::TRANSPARENT, colors.text_mid),
     };
 
     let painter = ui.painter();
     painter.rect_filled(rect, theme::R_CONTROL, fill);
-    if config.marker && config.active {
-        let bar = Rect::from_min_size(
-            egui::pos2(rect.left() - 8.0, rect.center().y - 10.0),
-            vec2(2.0, 20.0),
-        );
-        painter.rect_filled(bar, theme::R_CONTROL, colors.accent);
-    }
     painter.text(
         rect.center(),
         Align2::CENTER_CENTER,
@@ -98,6 +134,7 @@ fn square(ui: &mut Ui, glyph: &str, tooltip: &str, config: Square) -> Response {
         theme::icon(config.glyph_size),
         foreground,
     );
+    focus_ring(ui, &response, theme::R_CONTROL);
 
     if tooltip.is_empty() {
         response
@@ -118,7 +155,8 @@ pub fn secondary_button(ui: &mut Ui, glyph: &str, text: &str) -> Response {
             fill: theme::colors().raised,
             foreground: theme::colors().text_high,
             border: Some(theme::colors().line),
-            pressed: theme::colors().hover,
+            hovered: theme::colors().hover,
+            pressed: theme::colors().active,
         },
         true,
     )
@@ -142,7 +180,8 @@ pub fn companion_button(ui: &mut Ui, glyph: &str, text: &str, enabled: bool) -> 
             fill: colors.raised,
             foreground,
             border: Some(colors.line),
-            pressed: colors.hover,
+            hovered: colors.hover,
+            pressed: colors.active,
         },
         enabled,
     )
@@ -170,22 +209,83 @@ pub fn inline_button(
             fill: colors.accent,
             foreground: colors.on_accent,
             border: None,
+            hovered: colors.accent_soft,
             pressed: colors.accent_deep,
         },
         (_, false) => Skin {
             fill: colors.raised,
             foreground: colors.text_low,
             border: Some(colors.line),
+            hovered: colors.raised,
             pressed: colors.raised,
         },
         (false, true) => Skin {
             fill: colors.raised,
             foreground: colors.text_high,
             border: Some(colors.line),
-            pressed: colors.hover,
+            hovered: colors.hover,
+            pressed: colors.active,
         },
     };
     filled_button(ui, glyph, text, size, &skin, enabled)
+}
+
+/// A button with no surface until it is hovered, for the lesser actions of a row: as wide
+/// as what it says, and `danger` when what it does cannot be taken back.
+pub fn quiet_button(ui: &mut Ui, glyph: &str, text: &str, danger: bool, enabled: bool) -> Response {
+    let colors = theme::colors();
+    let text_w = ui
+        .painter()
+        .layout_no_wrap(text.to_owned(), theme::label(), colors.text_high)
+        .size()
+        .x;
+    let glyph_w = if glyph.is_empty() { 0.0 } else { 22.0 };
+    let size = vec2(text_w + glyph_w + 24.0, theme::BUTTON_H);
+    let (foreground, hovered) = match (danger, enabled) {
+        (_, false) => (colors.text_low, Color32::TRANSPARENT),
+        (true, true) => (colors.danger, colors.danger_wash),
+        (false, true) => (colors.text_mid, colors.hover),
+    };
+    let skin = Skin {
+        fill: Color32::TRANSPARENT,
+        foreground,
+        border: None,
+        hovered,
+        pressed: if enabled {
+            colors.active
+        } else {
+            Color32::TRANSPARENT
+        },
+    };
+    filled_button(ui, glyph, text, size, &skin, enabled)
+}
+
+/// One of a row of filters: bordered, and washed in the accent while it is the one on.
+pub fn filter_chip(ui: &mut Ui, text: &str, on: bool) -> Response {
+    let colors = theme::colors();
+    let text_w = ui
+        .painter()
+        .layout_no_wrap(text.to_owned(), theme::label(), colors.text_high)
+        .size()
+        .x;
+    let size = vec2(text_w + 20.0, theme::FIELD_H);
+    let skin = match on {
+        true => Skin {
+            fill: colors.accent_wash,
+            foreground: colors.accent_soft,
+            border: Some(colors.accent_deep),
+            hovered: colors.accent_wash,
+            pressed: colors.accent_wash,
+        },
+        false => Skin {
+            fill: Color32::TRANSPARENT,
+            foreground: colors.text_mid,
+            border: Some(colors.line),
+            hovered: colors.hover,
+            pressed: colors.active,
+        },
+    };
+    filled_button(ui, "", text, size, &skin, true)
 }
 
 /// A button as tall as a field and `width` wide, to stand in a row of fields.
@@ -199,7 +299,8 @@ pub fn compact_button(ui: &mut Ui, text: &str, width: f32) -> Response {
             fill: theme::colors().raised,
             foreground: theme::colors().text_high,
             border: Some(theme::colors().line),
-            pressed: theme::colors().hover,
+            hovered: theme::colors().hover,
+            pressed: theme::colors().active,
         },
         true,
     )
@@ -222,6 +323,7 @@ pub fn primary_button(ui: &mut Ui, glyph: &str, text: &str, enabled: bool) -> Re
             fill,
             foreground,
             border: None,
+            hovered: colors.accent_soft,
             pressed: colors.accent_deep,
         },
         enabled,
@@ -232,18 +334,19 @@ pub fn primary_button(ui: &mut Ui, glyph: &str, text: &str, enabled: bool) -> Re
 pub fn picker(ui: &mut Ui, glyph: &str, label: &str) -> Response {
     let colors = theme::colors();
     let (rect, response) = ui.allocate_exact_size(vec2(ui.available_width(), 32.0), Sense::click());
+    response.widget_info(|| WidgetInfo::labeled(WidgetType::ComboBox, ui.is_enabled(), label));
 
-    let fill = if response.hovered() {
-        colors.hover
+    let border = if response.hovered() {
+        colors.line
     } else {
-        colors.raised
+        colors.hairline
     };
     let painter = ui.painter();
     painter.rect(
         rect,
         theme::R_CONTROL,
-        fill,
-        egui::Stroke::new(1.0, colors.line),
+        colors.sunken,
+        egui::Stroke::new(1.0, border),
         StrokeKind::Inside,
     );
     painter.text(
@@ -278,6 +381,7 @@ pub fn picker(ui: &mut Ui, glyph: &str, label: &str) -> Response {
         galley,
         colors.text_high,
     );
+    focus_ring(ui, &response, theme::R_CONTROL);
 
     response
 }
@@ -290,6 +394,7 @@ struct Skin {
     fill: Color32,
     foreground: Color32,
     border: Option<Color32>,
+    hovered: Color32,
     pressed: Color32,
 }
 
@@ -306,6 +411,7 @@ fn filled_button(
         fill,
         foreground,
         border,
+        hovered,
         pressed,
     } = *skin;
     let sense = if enabled {
@@ -314,6 +420,7 @@ fn filled_button(
         Sense::hover()
     };
     let (rect, response) = ui.allocate_exact_size(size, sense);
+    response.widget_info(|| WidgetInfo::labeled(WidgetType::Button, enabled, text));
 
     let fill = match (
         enabled,
@@ -322,7 +429,7 @@ fn filled_button(
     ) {
         (false, _, _) => fill,
         (true, true, _) => pressed,
-        (true, false, true) => fill.gamma_multiply(1.12),
+        (true, false, true) => hovered,
         (true, false, false) => fill,
     };
 
@@ -357,6 +464,7 @@ fn filled_button(
         galley,
         foreground,
     );
+    focus_ring(ui, &response, theme::R_CONTROL);
 
     response
 }
@@ -373,6 +481,7 @@ pub fn summary_button(
     let colors = theme::colors();
     let (rect, response) =
         ui.allocate_exact_size(vec2(ui.available_width(), SUMMARY_H), Sense::click());
+    response.widget_info(|| WidgetInfo::labeled(WidgetType::Button, true, title));
     let fill = if response.hovered() {
         colors.hover
     } else {
@@ -417,6 +526,7 @@ pub fn summary_button(
         theme::icon(14.0),
         colors.text_low,
     );
+    focus_ring(ui, &response, theme::R_SURFACE);
     response.on_hover_cursor(egui::CursorIcon::PointingHand)
 }
 

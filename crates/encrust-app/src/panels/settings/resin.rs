@@ -165,6 +165,7 @@ fn price_row(ui: &mut egui::Ui, details: &mut ResinDetails) {
                 });
             number_field(
                 ui,
+                "Price",
                 &mut details.price,
                 0.1,
                 0.0..=10_000.0,

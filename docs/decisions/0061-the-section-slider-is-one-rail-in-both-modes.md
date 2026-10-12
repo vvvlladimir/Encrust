@@ -1,6 +1,6 @@
 # 0061. Scrub the stack from a vertical rail over the viewport that cuts the model
 
-- **Status:** Accepted
+- **Status:** Accepted, the floating rail superseded by 0217
 - **Date:** 2026-09-21
 
 ## Context

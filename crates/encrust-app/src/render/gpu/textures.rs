@@ -1,4 +1,4 @@
-//! The two textures the viewport samples: the font atlas the machine's word is drawn
+//! The two textures the viewport samples: the font atlas the word in front of the plate is drawn
 //! from, and the image the Relief tool presses into a model (ADR 0116).
 
 use std::sync::Arc;

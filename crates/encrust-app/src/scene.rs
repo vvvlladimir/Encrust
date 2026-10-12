@@ -3,6 +3,7 @@ use std::sync::{Arc, Mutex};
 use rayon::prelude::*;
 
 pub use core_engine::project::Axis;
+use core_engine::project::{DrainState, HollowState};
 use core_geometry::{
     Aabb, Bvh, Heightmap, Mesh, MeshDiagnostics, Orientation, Quat, Scalar, Transform, UvMap, Vec2,
     Vec3, Welded, center_of_mass,
@@ -186,7 +187,17 @@ pub struct SceneObject {
     pub traps: Traps,
     /// The texture the file carried, until it is pressed in.
     pub mapped: Option<Arc<Mapped>>,
+    /// The tool settings this model keeps instead of the plate's.
+    pub own: OwnSettings,
     bounds: PlacedBounds,
+}
+
+/// The Hollow and Drain settings a model keeps instead of the plate's, where it has its
+/// own; see `docs/decisions/0227`.
+#[derive(Debug, Clone, Default, PartialEq, serde::Serialize)]
+pub struct OwnSettings {
+    pub hollow: Option<HollowState>,
+    pub drain: Option<DrainState>,
 }
 
 /// The last bounds measured over a mesh's vertices, and the placement they were for, so
@@ -241,10 +252,10 @@ impl SceneObject {
         self.bounds.get(&self.mesh, self.transform)
     }
 
-    /// A direction in the model's own space, as the placement turns it. Scale bends a
-    /// normal the other way from a point, hence the division.
+    /// A direction in the model's own space, as the placement turns it. A scale or a
+    /// stretch bends a normal the other way from a point, hence the inverse transpose.
     pub fn world_normal(&self, local: Vec3) -> Vec3 {
-        (self.transform.rotation * (local / self.transform.scale)).normalize_or_zero()
+        (self.transform.linear().inverse().transpose() * local).normalize_or_zero()
     }
 
     /// Where the handles stand: the model's centre of mass in plate coordinates, turned
@@ -281,7 +292,7 @@ impl SceneObject {
     /// that its centre of mass lands back on that pivot.
     pub fn settle(&mut self, pivot: Transform) {
         self.transform = Transform {
-            translation: pivot.translation - pivot.rotation * (pivot.scale * self.center_of_mass),
+            translation: pivot.translation - pivot.linear() * self.center_of_mass,
             ..pivot
         };
     }
@@ -293,12 +304,8 @@ impl SceneObject {
         let Some(normal) = normal.try_normalize() else {
             return false;
         };
-        let pivot = self.pivot();
         let turn = Quat::from_rotation_arc(normal, Vec3::NEG_Z);
-        self.settle(Transform {
-            rotation: (turn * pivot.rotation).normalize(),
-            ..pivot
-        });
+        self.settle(self.pivot().turned(turn));
         self.stand_on_plate();
         true
     }
@@ -470,6 +477,30 @@ impl Scene {
         self.active = self.active.min(self.plates.len() as u32 - 1);
         let left: Vec<ObjectId> = self.objects.iter().map(|object| object.id).collect();
         self.selected.retain(|id| left.contains(id));
+    }
+
+    /// Adds a copy of `plate` and of everything standing on it at the end, and makes it the
+    /// one being edited.
+    pub fn duplicate_plate(&mut self, plate: u32) -> Option<u32> {
+        let name = self.plates.get(plate as usize)?;
+        let name = (1..)
+            .map(|count| match count {
+                1 => format!("{name} copy"),
+                count => format!("{name} copy {count}"),
+            })
+            .find(|name| !self.plates.contains(name))?;
+        self.plates.push(name);
+        let copy = (self.plates.len() - 1) as u32;
+        let models: Vec<SceneObject> = self.on_plate(plate).cloned().collect();
+        for mut model in models {
+            model.id = ObjectId(self.next_id);
+            self.next_id += 1;
+            model.plate = copy;
+            self.objects.push(model);
+        }
+        self.active = copy;
+        self.selected.clear();
+        Some(copy)
     }
 
     /// Moves a model to another plate. It keeps where it stands, so a plate it does not
@@ -648,6 +679,7 @@ impl Scene {
             hollow: ModelHollow::default(),
             traps: Traps::default(),
             mapped: imported.mapped,
+            own: OwnSettings::default(),
             bounds: PlacedBounds::default(),
         });
         self.selected = vec![id];
@@ -1022,6 +1054,26 @@ mod tests {
     }
 
     #[test]
+    fn a_duplicated_plate_carries_copies_of_its_models_under_a_name_of_its_own() {
+        let (mut scene, original) = scene_with_cube();
+        let copy = scene.duplicate_plate(0).expect("plate 0 exists");
+        assert_eq!(scene.plates(), ["Plate 1", "Plate 1 copy"]);
+        assert_eq!(scene.active_plate(), copy, "the copy is the plate in front");
+        let copied: Vec<ObjectId> = scene.here().map(|object| object.id).collect();
+        assert_eq!(copied.len(), 1);
+        assert_ne!(copied[0], original, "a copy is a model of its own");
+        assert_eq!(
+            scene.on_plate(0).count(),
+            1,
+            "the original stays where it was"
+        );
+
+        scene.duplicate_plate(0);
+        assert_eq!(scene.plates()[2], "Plate 1 copy 2");
+        assert_eq!(scene.duplicate_plate(7), None);
+    }
+
+    #[test]
     fn the_last_plate_cannot_be_removed() {
         let (mut scene, id) = scene_with_cube();
         scene.remove_plate(0);
@@ -1244,6 +1296,7 @@ mod tests {
             translation: Vec3::new(10.0, 20.0, 0.0),
             rotation: Quat::IDENTITY,
             scale: Vec3::splat(2.0),
+            ..Transform::default()
         };
 
         let bounds = scene.get(id).and_then(SceneObject::world_bounds);

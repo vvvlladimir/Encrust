@@ -7,6 +7,7 @@ mod arrange;
 mod camera;
 mod cut;
 mod drain;
+mod exchange;
 mod files;
 mod gizmo;
 mod hollow;
@@ -22,10 +23,12 @@ mod prefs;
 mod preview;
 mod profiles;
 mod project;
+mod recent;
 mod relief;
 mod render;
 mod repair;
 mod report;
+mod samples;
 mod scene;
 mod settings;
 mod shortcuts;
@@ -35,6 +38,8 @@ mod state;
 mod status;
 mod supports;
 mod tool_settings;
+#[cfg(target_os = "macos")]
+mod traffic_lights;
 mod ui;
 mod undo;
 mod updates;
@@ -104,13 +109,14 @@ const ICON: &[u8] = include_bytes!(concat!(
     "/../../assets/icon/encrust-256.png"
 ));
 
-/// The title strip is the window's own title bar: macOS keeps its buttons over a
+/// The top bar is the window's own title bar: macOS keeps its buttons over a
 /// full-size content view, every other platform draws none. See `docs/decisions/0104`.
 #[cfg(not(target_arch = "wasm32"))]
 fn viewport() -> anyhow::Result<egui::ViewportBuilder> {
     use anyhow::Context as _;
     let viewport = egui::ViewportBuilder::default()
         .with_inner_size([1280.0, 800.0])
+        .with_min_inner_size([ui::theme::WINDOW_MIN_W, ui::theme::WINDOW_MIN_H])
         .with_icon(icon().context("the window icon")?);
     Ok(if cfg!(target_os = "macos") {
         viewport

@@ -4,7 +4,8 @@ use core_geometry::Scalar;
 use crate::ui::{icon, theme};
 
 /// What the window is doing with the plate: laying it out, or looking at the layers it
-/// will print. One is the editing half of the application, the other the reading half.
+/// will print. The layer strip's views switch it: the model alone is Prepare, the model
+/// beside its layer and the layer alone are Preview.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum Mode {
     #[default]
@@ -12,95 +13,117 @@ pub enum Mode {
     Preview,
 }
 
-impl Mode {
-    pub const ALL: [Self; 2] = [Self::Prepare, Self::Preview];
-
-    pub fn label(self) -> &'static str {
-        match self {
-            Self::Prepare => "Prepare",
-            Self::Preview => "Preview",
-        }
-    }
-}
-
-/// What a click in the viewport does, and which section of the inspector it opens.
+/// What a click in the viewport does, and what the inspector beside the rail shows.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum Tool {
+    /// Picking models and placing what is picked; the rail calls it Select.
     #[default]
-    Select,
-    Supports,
+    Position,
+    Measure,
     Hollow,
     Drain,
     Cut,
     Relief,
-    Layers,
-    Measure,
+    /// Growing supports automatically, and picking the parts of those already standing.
+    Supports,
+    /// Placing supports by hand, painting where they go and where they must not.
+    Paint,
+    /// The shape of one support, part by part, in the profile of the group in hand.
+    Shape,
+    Check,
+    Export,
+    /// A form rather than a tool: opened from the top bar, never from the rail.
+    PrintSettings,
 }
 
 impl Tool {
-    /// The groups of the rail, in the order it draws them, with a rule between each.
-    pub const PLACING: [Self; 1] = [Self::Select];
-    pub const SHAPING: [Self; 5] = [
-        Self::Supports,
-        Self::Hollow,
-        Self::Drain,
-        Self::Cut,
-        Self::Relief,
+    /// The groups of the rail, in the order it draws them, with a rule between each; see
+    /// `docs/decisions/0218`.
+    pub const RAIL: [&'static [Self]; 4] = [
+        &[Self::Position, Self::Measure],
+        &[Self::Hollow, Self::Drain, Self::Cut, Self::Relief],
+        &[Self::Supports, Self::Paint, Self::Shape],
+        &[Self::Check, Self::Export],
     ];
-    /// What the stack is cut with, and what only reads the plate.
-    pub const PRINTING: [Self; 2] = [Self::Layers, Self::Measure];
 
     /// Every variant, which is what a test walks to prove none was left unplaced.
     #[cfg(test)]
-    pub const ALL: [Self; 8] = [
-        Self::Select,
-        Self::Supports,
+    pub const ALL: [Self; 12] = [
+        Self::Position,
+        Self::Measure,
         Self::Hollow,
         Self::Drain,
         Self::Cut,
         Self::Relief,
-        Self::Layers,
-        Self::Measure,
+        Self::Supports,
+        Self::Paint,
+        Self::Shape,
+        Self::Check,
+        Self::Export,
+        Self::PrintSettings,
     ];
+
+    /// The tools of the rail, top to bottom.
+    #[cfg(test)]
+    pub fn on_rail() -> impl Iterator<Item = Self> {
+        Self::RAIL.into_iter().flatten().copied()
+    }
 
     pub fn label(self) -> &'static str {
         match self {
-            Self::Select => "Select",
-            Self::Supports => "Supports",
-            Self::Hollow => "Hollow",
-            Self::Drain => "Drain holes",
-            Self::Cut => "Cut and split",
-            Self::Relief => "Relief",
-            Self::Layers => "Layers and exposure",
+            Self::Position => "Select",
             Self::Measure => "Measure",
+            Self::Hollow => "Hollow",
+            Self::Drain => "Drain",
+            Self::Cut => "Cut",
+            Self::Relief => "Relief",
+            Self::Supports => "Supports",
+            Self::Paint => "Paint",
+            Self::Shape => "Shape",
+            Self::Check => "Check",
+            Self::Export => "Export",
+            Self::PrintSettings => "Print settings",
         }
     }
 
     pub fn glyph(self) -> &'static str {
         match self {
-            Self::Select => icon::SELECT,
-            Self::Supports => icon::SUPPORTS,
+            Self::Position => icon::SELECT,
+            Self::Measure => icon::MEASURE,
             Self::Hollow => icon::HOLLOW,
             Self::Drain => icon::DRAIN,
             Self::Cut => icon::CUT,
             Self::Relief => icon::RELIEF,
-            Self::Layers => icon::SLICE,
-            Self::Measure => icon::MEASURE,
+            Self::Supports => icon::SUPPORTS,
+            Self::Paint => icon::PAINT,
+            Self::Shape => icon::SHAPE,
+            Self::Check => icon::CHECK,
+            Self::Export => icon::EXPORT,
+            Self::PrintSettings => icon::PARAMETERS,
         }
+    }
+
+    /// Whether the plate is shaded by what needs holding up while this tool is in hand.
+    pub fn shows_overhangs(self) -> bool {
+        matches!(self, Self::Supports | Self::Paint)
     }
 }
 
-/// Where the viewport cuts the plate's contents, so that the slider down the right of the
-/// stage reads as a section through the part rather than as a layer counter alone.
+/// Where the viewport cuts the plate's contents, so that the layer strip under the stage
+/// reads as a section through the part rather than as a layer counter alone.
 ///
-/// Only the Prepare mode keeps a height here. The Preview mode cuts at the layer it is
-/// showing, which the preview already owns; see `docs/decisions/0061`.
+/// Only the Prepare mode keeps its top height here. The Preview mode cuts at the layer it
+/// is showing, which the preview already owns; see `docs/decisions/0061`. The floor is one
+/// height for both modes.
 #[derive(Debug, Clone, Copy, PartialEq, Default)]
 pub struct Section {
     /// Height above the plate, millimetres, or `None` while the whole model is drawn.
     pub height_mm: Option<Scalar>,
-    /// Whether the cut is running up the model on its own, which is what the transport
-    /// does in this mode.
+    /// Height below which the model is cut away, millimetres, or `None` while it is drawn
+    /// down to the plate.
+    pub floor_mm: Option<Scalar>,
+    /// Whether the cut is running up the model on its own, which is what Play does in
+    /// this mode.
     pub playing: bool,
 }
 
@@ -109,19 +132,35 @@ pub struct Section {
 pub struct ViewOptions {
     pub grid: bool,
     /// Whether the models are drawn seen through, so a cavity and what stands in it can be
-    /// looked into. The view card and the View menu are the only things that turn it on;
+    /// looked into. The view tools and the View menu are the only things that turn it on;
     /// see ADR 0190, 0198.
     pub xray: bool,
-    /// Whether the plate panel is unfolded down the left of the stage.
-    pub plate_panel: bool,
+    /// Whether the open tool's inspector is unfolded beside the rail.
+    pub inspector: bool,
     /// Whether the sheet of keys is up over the window.
     pub sheet: bool,
+    /// Whether the Find palette is up over the window.
+    pub find: bool,
+    /// Whether the window has left the start page, which it does once for good.
+    pub started: bool,
+    /// Whether Preview gives the whole stage to the layer mask rather than half of it.
+    pub mask_only: bool,
     /// Whether Preview's column shows the issues found in the stack instead of the layer.
     pub issues: bool,
-    /// Width of the plate panel and of the inspector, points. Both are the user's: a
-    /// column that sized itself to its contents would jump whenever a tool changed.
+    /// Width of the plate panel and of the inspector, points, kept between runs: a column
+    /// that sized itself to its contents would jump whenever a tool changed.
     pub plate_w: f32,
     pub inspector_w: f32,
+    /// Where Preview divides the model from the mask, as a fraction of the stage's width
+    /// from its left. Remembered between runs.
+    pub mask_split: f32,
+}
+
+impl ViewOptions {
+    /// Whether a sheet over the window holds the pointer, so the plate under it takes none.
+    pub fn modal(&self) -> bool {
+        self.sheet || self.find
+    }
 }
 
 impl Default for ViewOptions {
@@ -129,11 +168,15 @@ impl Default for ViewOptions {
         Self {
             grid: true,
             xray: false,
-            plate_panel: true,
+            inspector: true,
             sheet: false,
+            find: false,
+            started: false,
+            mask_only: false,
             issues: false,
             plate_w: theme::SCENE_W,
             inspector_w: theme::INSPECTOR_W,
+            mask_split: theme::MASK_SPLIT,
         }
     }
 }
@@ -152,14 +195,18 @@ mod tests {
         }
     }
 
-    /// A variant added and not placed would silently never be reachable.
+    /// A variant added and not placed would silently never be reachable; the print
+    /// settings alone are opened from the top bar instead.
     #[test]
-    fn every_tool_is_on_the_rail() {
+    fn every_tool_but_the_print_settings_is_on_the_rail() {
         for tool in Tool::ALL {
-            let on_rail = Tool::PLACING.contains(&tool)
-                || Tool::SHAPING.contains(&tool)
-                || Tool::PRINTING.contains(&tool);
-            assert!(on_rail, "{} is on no rail group", tool.label());
+            let on_rail = Tool::on_rail().any(|placed| placed == tool);
+            assert_eq!(
+                on_rail,
+                tool != Tool::PrintSettings,
+                "{} is in the wrong place",
+                tool.label()
+            );
         }
     }
 }

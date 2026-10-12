@@ -102,13 +102,15 @@ impl OrientTool {
         None
     }
 
-    /// Starts a run over one model, or over everything visible when `only` is `None`.
+    /// Starts a run over one model, or over everything visible when `only` is `None`, and
+    /// stops waiting for a face: the run replaces the rotation a laid face would set.
     pub fn start(&mut self, scene: &Scene, only: Option<ObjectId>) -> Result<()> {
         let tasks = orient_tasks(scene, only);
         if tasks.is_empty() {
             bail!("nothing visible on the plate to orient");
         }
 
+        self.stop_picking();
         self.job = Some(OrientJob::spawn(OrientRequest {
             tasks,
             settings: self.settings,
@@ -135,11 +137,12 @@ impl OrientTool {
             OrientOutcome::Turned(turns) => {
                 let mut moved = 0;
                 for turn in turns {
-                    if turn.angle_deg > SETTLED_DEG {
-                        moved += 1;
-                    }
                     if let Some(object) = scene.get_mut(turn.id) {
-                        object.transform.rotation = turn.rotation;
+                        let by = turn.rotation * object.transform.rotation.inverse();
+                        if by.to_axis_angle().1.to_degrees() > SETTLED_DEG {
+                            moved += 1;
+                        }
+                        object.transform = object.transform.turned(by);
                     }
                     let Some(bounds) = scene.get(turn.id).and_then(|o| o.world_bounds()) else {
                         continue;
@@ -221,6 +224,22 @@ mod tests {
         while tool.poll(scene, status) {
             std::thread::yield_now();
         }
+    }
+
+    #[test]
+    fn a_model_oriented_twice_is_not_turned_the_second_time() {
+        let mut scene = scene_with(cuboid(Vec3::new(40.0, 40.0, 4.0)));
+        let mut tool = OrientTool::default();
+        let mut status = Status::default();
+        for _ in 0..2 {
+            tool.start(&scene, None)
+                .expect("a visible slab can be oriented");
+            settle(&mut tool, &mut scene, &mut status);
+        }
+        assert!(
+            matches!(&status, Status::Info(text) if text.starts_with("Everything already")),
+            "the second run finds it standing as the first left it, got {status:?}"
+        );
     }
 
     #[test]

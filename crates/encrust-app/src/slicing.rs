@@ -58,8 +58,11 @@ pub struct Slicing {
     pub grey_levels: Option<NonZeroU8>,
     /// Radius an anti-aliased edge is faded over, pixels; `0` leaves it sharp.
     pub blur_px: u8,
-    /// Whether every island is taken out of the written file, and what stood on it.
+    /// Whether every island is taken out of the written file.
     pub remove_islands: bool,
+    /// How many layers more of what stood on an island taken out go too, one a pass,
+    /// when islands are taken out at all (ADR 0228).
+    pub hanging_passes: u32,
     /// What the save dialog offers and what a `.ctb` name is written at.
     pub format: SlicedFormat,
     /// The exposures the last change of layer height carried along, as they were.
@@ -77,6 +80,9 @@ pub struct Slicing {
     /// runs at a time: the machine's cores go into the layers of one plate, not into two
     /// plates at once.
     queued: Vec<(u32, PathBuf)>,
+    /// The name the file is offered under, without its extension; empty offers the
+    /// selected model's.
+    pub file_stem: String,
 }
 
 /// A file a job wrote, and what it was written for.
@@ -106,11 +112,13 @@ impl Default for Slicing {
             grey_levels: None,
             blur_px: 0,
             remove_islands: false,
+            hanging_passes: 0,
             format: SlicedFormat::default(),
             rescaled: None,
             job: None,
             written: None,
             to_send: false,
+            file_stem: String::new(),
             chosen: 0,
             queued: Vec::new(),
         }
@@ -375,7 +383,7 @@ impl Slicing {
     /// Why the Slice button is greyed out, or `None` when it is not.
     pub fn blocker(&self, scene: &Scene) -> Option<&'static str> {
         if self.printer.is_none() {
-            return Some("Load a printer profile to know the panel to slice for.");
+            return Some("Pick a machine to know the panel to slice for.");
         }
         if !self.chosen_resin {
             return Some("Add a resin to this printer: an exposure is measured on your machine.");
@@ -419,6 +427,7 @@ impl Slicing {
                 cutting: self.cutting(),
                 exposure: ExposurePlan::new(self.exposure.clone()),
                 remove_islands: self.remove_islands,
+                hanging_passes: self.hanging_passes,
                 format,
                 raster_window: worker_threads(),
                 created_unix_s: now_unix_s(),
@@ -435,6 +444,7 @@ impl Slicing {
         Fold {
             held_layers: self.material.bottom_layers as usize,
             remove_islands: self.remove_islands,
+            hanging_passes: self.hanging_passes,
             tolerance: Tolerance::of(&self.material),
         }
     }
@@ -464,7 +474,7 @@ impl Slicing {
         }
     }
 
-    /// Drains the running job into the status bar. Returns whether one is still running,
+    /// Drains the running job into the stage notice. Returns whether one is still running,
     /// which is what tells the window it has to keep repainting.
     pub fn poll(&mut self, scene: &Scene, status: &mut Status) -> bool {
         let Some(job) = self.job.as_mut() else {
@@ -567,7 +577,7 @@ fn beside(output: &Path, suffix: &str) -> PathBuf {
     path
 }
 
-/// Turns a finished job into the line the status bar shows.
+/// Turns a finished job into the line the stage notice shows.
 fn report(outcome: Outcome, material: &MaterialProfile) -> Status {
     match outcome {
         Outcome::Written {

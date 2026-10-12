@@ -13,6 +13,7 @@ impl ViewportResources {
         size_px: [u32; 2],
         viewport: egui::epaint::ViewportInPixels,
     ) {
+        self.bake_shadow(encoder);
         let mut pass = self.target.begin(device, encoder, size_px, viewport);
         self.paint(&mut pass);
     }
@@ -25,6 +26,7 @@ impl ViewportResources {
     /// Records the scene into a pass whose depth plane is [`DEPTH_FORMAT`].
     pub fn paint(&self, render_pass: &mut wgpu::RenderPass<'static>) {
         render_pass.set_bind_group(0, &self.globals_bind_group, &[]);
+        self.paint_plate(render_pass);
 
         if self.frame.line_vertices > 0 {
             render_pass.set_pipeline(&self.line_pipeline);
@@ -79,14 +81,7 @@ impl ViewportResources {
             render_pass.set_vertex_buffer(0, self.cap.buffer.slice(..));
             render_pass.draw(0..self.frame.cap_vertices, 0..1);
         }
-
-        // Last, so the models are already in the depth buffer and the near wall of the
-        // vat washes over whatever stands in front of it.
-        if self.frame.body_vertices > 0 {
-            render_pass.set_pipeline(&self.body_pipeline);
-            render_pass.set_vertex_buffer(0, self.body.buffer.slice(..));
-            render_pass.draw(0..self.frame.body_vertices, 0..1);
-        }
+        self.paint_bottom_cap(render_pass);
 
         if let Some((_, atlas)) = self
             .atlas
@@ -98,6 +93,9 @@ impl ViewportResources {
             render_pass.set_vertex_buffer(0, self.label.buffer.slice(..));
             render_pass.draw(0..self.frame.label_vertices, 0..1);
         }
+
+        // Last, so the models' depth keeps it off whatever stands in front of the plate.
+        self.paint_shadow(render_pass);
     }
 
     /// Draws the inside of every cut: the far wall of each body, kept where the object it
@@ -115,6 +113,28 @@ impl ViewportResources {
             render_pass.set_pipeline(&cutting.reset);
             render_pass.draw(0..3, 0..1);
         }
+    }
+
+    /// Caps the cut from below the same way, once the top cap's count is cleared: the
+    /// bottom cap is only ever seen from under it, where its count is the one in front.
+    fn paint_bottom_cap(&self, render_pass: &mut wgpu::RenderPass<'static>) {
+        if !self.frame.cutting_bottom || self.frame.bottom_cap_vertices == 0 {
+            return;
+        }
+        render_pass.set_pipeline(&self.cutting.reset);
+        render_pass.draw(0..3, 0..1);
+        let crossing = &self.capping.bottom_crossing;
+        self.draw_meshes(
+            render_pass,
+            crossing,
+            &self.frame.solids,
+            self.frame.solid_base,
+        );
+        render_pass.set_pipeline(&self.capping.cap);
+        render_pass.set_stencil_reference(MATERIAL_ABOVE);
+        render_pass.set_vertex_buffer(0, self.cap.buffer.slice(..));
+        let from = self.frame.cap_vertices;
+        render_pass.draw(from..from + self.frame.bottom_cap_vertices, 0..1);
     }
 
     /// Draws one mesh per entry, each with the instance that many slots past `base`.

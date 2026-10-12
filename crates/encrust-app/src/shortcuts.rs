@@ -9,7 +9,7 @@ use crate::panels::{
     Window, duplicate_selection, frame_view, section, slice_this_plate, toggle_settings,
 };
 use crate::status::Status;
-use crate::workspace::{Mode, Tool};
+use crate::workspace::Tool;
 
 /// What a key asks the window to do.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -21,11 +21,12 @@ pub enum Action {
     Deselect,
     Duplicate,
     Remove,
-    ToggleMode,
-    PlatePanel,
+    /// Views to move along the strip's three, wrapping: the next is positive.
+    View(i8),
     FrameView,
     Settings,
     Sheet,
+    Find,
     /// Layers to move through the stack, signed: up the stack is positive.
     Step(i64),
     Play,
@@ -49,11 +50,12 @@ impl Action {
             Self::Deselect => "Deselect",
             Self::Duplicate => "Duplicate",
             Self::Remove => "Remove from the plate",
-            Self::ToggleMode => "Prepare or Preview",
-            Self::PlatePanel => "Plate contents",
+            Self::View(step) if step > 0 => "Next view",
+            Self::View(_) => "Previous view",
             Self::FrameView => "Frame the view",
             Self::Settings => "Settings",
             Self::Sheet => "This sheet",
+            Self::Find => "Find",
             Self::Step(1) => "One layer on",
             Self::Step(-1) => "One layer back",
             Self::Step(layers) if layers > 0 => "Ten layers on",
@@ -134,14 +136,15 @@ const fn bind(group: Group, action: Action, keys: &'static [KeyboardShortcut]) -
 
 /// The table, in the order the sheet lists it.
 pub const BINDINGS: &[Binding] = &[
+    // The first ten tools of the rail, in its order. The rest are reached by the pointer.
     bind(
         Group::Tools,
-        Action::Pick(Tool::Select),
+        Action::Pick(Tool::Position),
         &[plain(Key::Num1)],
     ),
     bind(
         Group::Tools,
-        Action::Pick(Tool::Supports),
+        Action::Pick(Tool::Measure),
         &[plain(Key::Num2)],
     ),
     bind(
@@ -158,14 +161,12 @@ pub const BINDINGS: &[Binding] = &[
     ),
     bind(
         Group::Tools,
-        Action::Pick(Tool::Layers),
+        Action::Pick(Tool::Supports),
         &[plain(Key::Num7)],
     ),
-    bind(
-        Group::Tools,
-        Action::Pick(Tool::Measure),
-        &[plain(Key::Num8)],
-    ),
+    bind(Group::Tools, Action::Pick(Tool::Paint), &[plain(Key::Num8)]),
+    bind(Group::Tools, Action::Pick(Tool::Shape), &[plain(Key::Num9)]),
+    bind(Group::Tools, Action::Pick(Tool::Check), &[plain(Key::Num0)]),
     bind(Group::Plate, Action::SelectAll, &[cmd(Key::A)]),
     bind(Group::Plate, Action::Deselect, &[plain(Key::Escape)]),
     bind(Group::Plate, Action::Duplicate, &[cmd(Key::D)]),
@@ -176,10 +177,11 @@ pub const BINDINGS: &[Binding] = &[
     ),
     bind(Group::Plate, Action::Undo, &[cmd(Key::Z)]),
     bind(Group::Plate, Action::Redo, &[cmd_shift(Key::Z)]),
-    bind(Group::Window, Action::ToggleMode, &[plain(Key::Tab)]),
-    bind(Group::Window, Action::PlatePanel, &[plain(Key::Backslash)]),
+    bind(Group::Window, Action::View(1), &[plain(Key::M)]),
+    bind(Group::Window, Action::View(-1), &[shift(Key::M)]),
     bind(Group::Window, Action::FrameView, &[plain(Key::F)]),
     bind(Group::Window, Action::Settings, &[cmd(Key::Comma)]),
+    bind(Group::Window, Action::Find, &[cmd(Key::K)]),
     bind(
         Group::Window,
         Action::Sheet,
@@ -202,6 +204,21 @@ pub const BINDINGS: &[Binding] = &[
 ];
 
 pub const GESTURES: &[Gesture] = &[
+    Gesture {
+        group: Group::Window,
+        label: "Move between the controls",
+        keys: "Tab, Shift Tab",
+    },
+    Gesture {
+        group: Group::Window,
+        label: "Press the control in focus",
+        keys: "Enter or Space",
+    },
+    Gesture {
+        group: Group::Window,
+        label: "Leave the control in focus",
+        keys: "Esc",
+    },
     Gesture {
         group: Group::Plate,
         label: "Add to the selection",
@@ -246,16 +263,14 @@ pub const GESTURES: &[Gesture] = &[
 
 /// The actions whose keys were pressed, taken out of the raw input before egui reads it.
 ///
-/// The window's own keys never reach egui, because egui answers several of them itself:
-/// Tab and the arrows walk its ring of focusable widgets, and a widget that then holds
-/// the focus swallows every key in this table. See `docs/decisions/0193`.
-///
-/// A field being typed into owns the keyboard whole: an S is an S there, not Slice, and
-/// Tab belongs to the ring of fields.
+/// Tab is egui's, and walks its ring of controls. While a control holds the focus the keys
+/// that drive it are egui's too, and every other key is still the table's; a field being
+/// typed into owns the keyboard whole. See `docs/decisions/0229`.
 pub fn take(ctx: &egui::Context, raw_input: &mut egui::RawInput) -> Vec<Action> {
     if ctx.text_edit_focused() {
         return Vec::new();
     }
+    let focused = ctx.memory(|memory| memory.focused().is_some());
     let mut fired = Vec::new();
     raw_input.events.retain(|event| {
         let egui::Event::Key {
@@ -267,6 +282,9 @@ pub fn take(ctx: &egui::Context, raw_input: &mut egui::RawInput) -> Vec<Action> 
         else {
             return true;
         };
+        if focused && drives_the_focus(*key, *modifiers) {
+            return true;
+        }
         match action_of(*key, *modifiers) {
             Some(action) => {
                 fired.push(action);
@@ -276,6 +294,22 @@ pub fn take(ctx: &egui::Context, raw_input: &mut egui::RawInput) -> Vec<Action> 
         }
     });
     fired
+}
+
+/// Whether egui answers this key on the control in focus: Enter and Space press it, Esc
+/// lets go of it, and the bare arrows move the focus or the value under it.
+fn drives_the_focus(key: Key, modifiers: Modifiers) -> bool {
+    !modifiers.any()
+        && matches!(
+            key,
+            Key::Enter
+                | Key::Space
+                | Key::Escape
+                | Key::ArrowUp
+                | Key::ArrowDown
+                | Key::ArrowLeft
+                | Key::ArrowRight
+        )
 }
 
 /// What this chord asks for, or `None` when the table does not bind it.
@@ -310,54 +344,54 @@ pub fn chords(action: Action) -> &'static [KeyboardShortcut] {
         .map_or(&[], |binding| binding.keys)
 }
 
-/// What one chord reads as. egui spells its key names out — "Questionmark", "Backslash" —
-/// which is not what a keycap says.
+/// What one chord reads as, all its keys run together as a tooltip shows them.
 pub fn chord_text(chord: &KeyboardShortcut) -> String {
-    let modifiers = chord.modifiers;
-    let mut text = String::new();
-    if cfg!(target_os = "macos") {
-        // Apple's order, and no separator: the glyphs are the separator.
-        for (held, glyph) in [
-            (modifiers.ctrl, "Ctrl "),
-            (modifiers.alt, "Alt "),
-            (modifiers.shift, "\u{21e7}"),
-            (modifiers.command || modifiers.mac_cmd, "\u{2318}"),
-        ] {
-            if held {
-                text.push_str(glyph);
-            }
-        }
-    } else {
-        for (held, name) in [
-            (modifiers.ctrl || modifiers.command, "Ctrl+"),
-            (modifiers.alt, "Alt+"),
-            (modifiers.shift, "Shift+"),
-        ] {
-            if held {
-                text.push_str(name);
-            }
-        }
-    }
-    text.push_str(key_text(chord.logical_key));
-    text
+    let separator = if cfg!(target_os = "macos") { "" } else { "+" };
+    chord_keys(chord).join(separator)
 }
 
-/// The face of a keycap. Only the keys the table uses need one of their own; everything
-/// else is already what egui calls it.
+/// The face of each key a chord holds down, modifiers first, one keycap each.
+///
+/// The Mac's key symbols are Phosphor glyphs: the text fonts have no ⇧, ⌥ or ⏎, and a
+/// missing glyph draws as an empty box.
+pub fn chord_keys(chord: &KeyboardShortcut) -> Vec<&'static str> {
+    let modifiers = chord.modifiers;
+    let held = if cfg!(target_os = "macos") {
+        // Control, Option, Shift, Command: the order the platform writes them in.
+        vec![
+            (modifiers.ctrl, crate::ui::icon::KEY_CONTROL),
+            (modifiers.alt, crate::ui::icon::KEY_OPTION),
+            (modifiers.shift, crate::ui::icon::KEY_SHIFT),
+            (
+                modifiers.command || modifiers.mac_cmd,
+                crate::ui::icon::KEY_COMMAND,
+            ),
+        ]
+    } else {
+        vec![
+            (modifiers.ctrl || modifiers.command, "Ctrl"),
+            (modifiers.alt, "Alt"),
+            (modifiers.shift, "Shift"),
+        ]
+    };
+    held.into_iter()
+        .filter_map(|(held, face)| held.then_some(face))
+        .chain([key_text(chord.logical_key)])
+        .collect()
+}
+
+/// The face of a keycap. egui spells its key names out — "Questionmark", "Backslash" —
+/// which is not what a keycap says; only the keys the table uses need one of their own.
 fn key_text(key: Key) -> &'static str {
+    let mac = cfg!(target_os = "macos");
     match key {
         Key::Escape => "Esc",
-        Key::Backspace => "\u{232b}",
-        Key::Delete => {
-            if cfg!(target_os = "macos") {
-                "\u{2326}"
-            } else {
-                "Del"
-            }
-        }
-        Key::Tab => "\u{21e5}",
-        Key::Enter => "\u{23ce}",
-        Key::Space => "\u{2423}",
+        Key::Backspace if mac => crate::ui::icon::KEY_BACKSPACE,
+        Key::Backspace => "Backspace",
+        Key::Delete => "Del",
+        Key::Enter if mac => crate::ui::icon::KEY_RETURN,
+        Key::Enter => "Enter",
+        Key::Space => "Space",
         Key::ArrowUp => "\u{2191}",
         Key::ArrowDown => "\u{2193}",
         Key::Questionmark => "?",
@@ -382,12 +416,20 @@ pub fn tooltip(action: Action) -> String {
     format!("{}  {keys}", action.label())
 }
 
-/// Esc on the Settings screen: the question over it first, then the screen itself.
-fn leave_settings(machine: &mut crate::state::Machine) {
-    if machine.settings.confirm.take().is_some() {
+/// Esc over the Machine and resin window: the question or the calculator over it first,
+/// then the window itself.
+fn leave_machines(machine: &mut crate::state::Machine) {
+    let settings = &mut machine.settings;
+    if settings.confirm.take().is_some() || settings.calculators.open.take().is_some() {
         return;
     }
-    machine.settings.open = false;
+    settings.close_machines();
+}
+
+fn leave_settings(machine: &mut crate::state::Machine) {
+    if machine.settings.confirm.take().is_none() {
+        machine.settings.close();
+    }
 }
 
 /// Does what a key asked for. Every action of the table is answered here, so a binding
@@ -408,10 +450,19 @@ pub fn act(window: &mut Window, action: Action) {
         }
         return;
     }
-    // The Settings screen stands in the plate's place, so Esc leaves it rather than
-    // clearing a selection nobody can see. Everything else there is typed, not pressed.
-    if window.machine.settings.open && matches!(action, Action::Deselect) {
-        leave_settings(window.machine);
+    // The Machine and resin window is modal as well: it holds the keyboard, and Esc
+    // takes down whatever stands over it first.
+    if window.machine.settings.machines {
+        if matches!(action, Action::Deselect) {
+            leave_machines(window.machine);
+        }
+        return;
+    }
+    // So is the Settings window, and Esc takes down the question over it first.
+    if window.machine.settings.open {
+        if matches!(action, Action::Deselect) {
+            leave_settings(window.machine);
+        }
         return;
     }
     match action {
@@ -431,14 +482,17 @@ pub fn act(window: &mut Window, action: Action) {
             );
         }
         Action::SelectAll => window.doc.scene.select_here(),
+        // A measurement in hand goes first, so Esc on the ruler does not drop the selection.
+        Action::Deselect if *window.tool == Tool::Measure && !window.tools.measure.is_empty() => {
+            window.tools.measure.clear();
+        }
         Action::Deselect => {
             window.tools.orient.stop_picking();
             window.doc.scene.clear_selection();
         }
         Action::Duplicate => duplicate_selection(window),
         Action::Remove => remove(window),
-        Action::ToggleMode => *window.mode = other_mode(*window.mode),
-        Action::PlatePanel => window.view.options.plate_panel = !window.view.options.plate_panel,
+        Action::View(step) => section::turn_view(window, step),
         Action::FrameView => frame_view(
             &window.doc.scene,
             &window.doc.plate,
@@ -446,6 +500,7 @@ pub fn act(window: &mut Window, action: Action) {
         ),
         Action::Settings => toggle_settings(window.machine),
         Action::Sheet => window.view.options.sheet = true,
+        Action::Find => window.view.options.find = true,
         Action::Step(layers) => section::step(window, layers),
         Action::Play => section::play(window),
         Action::NewPlate => {
@@ -467,17 +522,13 @@ pub fn act(window: &mut Window, action: Action) {
     }
 }
 
-/// Reaching for a tool is an editing act, so it brings the plate back into view.
-fn pick(window: &mut Window, tool: Tool) {
-    *window.mode = Mode::Prepare;
+/// Opens a tool in the inspector, or folds the inspector away when the tool is open
+/// already. The view stays as it is: the layer strip alone switches it; see
+/// `docs/decisions/0218`.
+pub(crate) fn pick(window: &mut Window, tool: Tool) {
+    let options = &mut window.view.options;
+    options.inspector = *window.tool != tool || !options.inspector;
     *window.tool = tool;
-}
-
-fn other_mode(mode: Mode) -> Mode {
-    match mode {
-        Mode::Prepare => Mode::Preview,
-        Mode::Preview => Mode::Prepare,
-    }
 }
 
 fn remove(window: &mut Window) {
@@ -514,25 +565,10 @@ mod tests {
         }
     }
 
-    /// A tool with no key would be reachable by the pointer alone.
-    #[test]
-    fn every_tool_has_a_key() {
-        for tool in Tool::ALL {
-            assert!(
-                !chords(Action::Pick(tool)).is_empty(),
-                "{} is bound to nothing",
-                tool.label()
-            );
-        }
-    }
-
+    /// Ten digits key the first ten tools of the rail, in its order; see
+    /// `docs/decisions/0218`.
     #[test]
     fn the_rail_order_is_the_digit_order() {
-        let rail: Vec<Tool> = Tool::PLACING
-            .into_iter()
-            .chain(Tool::SHAPING)
-            .chain(Tool::PRINTING)
-            .collect();
         let digits = [
             Key::Num1,
             Key::Num2,
@@ -541,18 +577,25 @@ mod tests {
             Key::Num5,
             Key::Num6,
             Key::Num7,
+            Key::Num8,
+            Key::Num9,
+            Key::Num0,
         ];
+        let rail: Vec<Tool> = Tool::on_rail().collect();
         for (tool, digit) in rail.iter().zip(digits) {
             let chord = chords(Action::Pick(*tool))
                 .first()
                 .copied()
-                .expect("every tool is in the table");
+                .expect("each of the first ten tools is in the table");
             assert_eq!(
                 chord.logical_key,
                 digit,
                 "{} is not on the digit of its place on the rail",
                 tool.label()
             );
+        }
+        for tool in &rail[digits.len()..] {
+            assert!(chords(Action::Pick(*tool)).is_empty());
         }
     }
 
@@ -611,8 +654,44 @@ mod tests {
     }
 
     #[test]
-    fn tab_asks_for_the_other_mode() {
-        assert_eq!(press(Key::Tab, Modifiers::NONE), vec![Action::ToggleMode]);
+    fn m_turns_the_view_and_shift_m_turns_it_back() {
+        assert_eq!(press(Key::M, Modifiers::NONE), vec![Action::View(1)]);
+        assert_eq!(press(Key::M, Modifiers::SHIFT), vec![Action::View(-1)]);
+    }
+
+    /// Tab walks egui's ring of controls, so the table must never bind it.
+    #[test]
+    fn tab_is_left_to_the_ring_of_controls() {
+        let mut input = egui::RawInput {
+            events: vec![
+                key_event(Key::Tab, Modifiers::NONE),
+                key_event(Key::Tab, Modifiers::SHIFT),
+            ],
+            ..Default::default()
+        };
+        assert!(take(&egui::Context::default(), &mut input).is_empty());
+        assert_eq!(input.events.len(), 2);
+    }
+
+    /// A control in focus is pressed with Space and let go with Esc; the rest of the table
+    /// still answers, so the focus never leaves the window deaf.
+    #[test]
+    fn a_control_in_focus_keeps_the_keys_that_drive_it() {
+        let ctx = egui::Context::default();
+        ctx.memory_mut(|memory| memory.request_focus(egui::Id::new("a button")));
+        let mut input = egui::RawInput {
+            events: vec![
+                key_event(Key::Space, Modifiers::NONE),
+                key_event(Key::Escape, Modifiers::NONE),
+                key_event(Key::ArrowUp, Modifiers::NONE),
+                key_event(Key::ArrowUp, Modifiers::SHIFT),
+                key_event(Key::M, Modifiers::NONE),
+            ],
+            ..Default::default()
+        };
+        let fired = take(&ctx, &mut input);
+        assert_eq!(fired, vec![Action::Step(10), Action::View(1)]);
+        assert_eq!(input.events.len(), 3, "Space, Esc and the bare arrow stay");
     }
 
     /// The looser chord must not fire in place of the busier one.
@@ -625,20 +704,19 @@ mod tests {
         assert_eq!(press(Key::S, Modifiers::COMMAND), vec![Action::SaveProject]);
     }
 
-    /// egui answers Tab and the arrows itself, and a widget left holding the focus would
-    /// swallow every key in the table after that.
+    /// With nothing in focus the arrows are the layers', not egui's.
     #[test]
     fn a_key_the_table_binds_is_taken_out_of_the_input() {
         let mut input = egui::RawInput {
             events: vec![
-                key_event(Key::Tab, Modifiers::NONE),
+                key_event(Key::M, Modifiers::NONE),
                 key_event(Key::ArrowUp, Modifiers::NONE),
                 key_event(Key::G, Modifiers::NONE),
             ],
             ..Default::default()
         };
         let fired = take(&egui::Context::default(), &mut input);
-        assert_eq!(fired, vec![Action::ToggleMode, Action::Step(1)]);
+        assert_eq!(fired, vec![Action::View(1), Action::Step(1)]);
         assert_eq!(input.events, vec![key_event(Key::G, Modifiers::NONE)]);
     }
 

@@ -155,3 +155,82 @@ fn an_unknown_extension_is_an_error() {
     assert_eq!(output.status.code(), Some(1), "a failed run is exit code 1");
     assert!(stderr.contains("gcode"), "got {stderr}");
 }
+
+/// A checkerboard picture of 8 x 8 grey pixels, written beside the test's other files.
+fn write_checkers(name: &str) -> std::path::PathBuf {
+    let path = std::env::temp_dir().join(format!("encrust-cli-{name}.png"));
+    let file = std::fs::File::create(&path).expect("the temp dir is writable");
+    let mut encoder = png::Encoder::new(std::io::BufWriter::new(file), 8, 8);
+    encoder.set_color(png::ColorType::Grayscale);
+    encoder.set_depth(png::BitDepth::Eight);
+    let pixels: Vec<u8> = (0..64u8)
+        .map(|i| if (i / 8 + i % 8) % 2 == 0 { 255 } else { 0 })
+        .collect();
+    let mut writer = encoder.write_header().expect("a valid header");
+    writer.write_image_data(&pixels).expect("64 pixels");
+    path
+}
+
+#[test]
+fn a_model_with_no_uvs_takes_a_tiled_picture_as_relief() {
+    let path = write_box_stl("tiled-relief", 10.0, 12, 0);
+    let picture = write_checkers("tiled-relief");
+    let output = slice(&[
+        path.to_str().unwrap(),
+        "--relief",
+        "0.4",
+        "--relief-image",
+        picture.to_str().unwrap(),
+        "--relief-tile",
+        "4",
+    ]);
+    assert!(output.status.success(), "{}", stderr(&output));
+    assert!(
+        stdout(&output).contains("tiled every 4 mm"),
+        "{}",
+        stdout(&output)
+    );
+
+    let refused = slice(&[path.to_str().unwrap(), "--relief", "0.4"]);
+    assert_eq!(
+        refused.status.code(),
+        Some(1),
+        "an STL carries no map of its own"
+    );
+}
+
+#[test]
+fn an_orient_goal_without_orient_is_an_argument_error() {
+    let path = write_box_stl("goal-alone", 10.0, 12, 0);
+    let output = slice(&[path.to_str().unwrap(), "--orient-goal", "least-peel"]);
+    assert_eq!(output.status.code(), Some(2), "{}", stderr(&output));
+}
+
+#[test]
+fn the_orient_goal_and_the_tilt_limit_reach_the_search() {
+    let path = write_box_stl("no-tilt", 10.0, 12, 0);
+    let turned = |extra: &[&str]| {
+        let base = [
+            path.to_str().unwrap(),
+            "--orient",
+            "--orient-goal",
+            "clean-top",
+            "--json",
+        ];
+        let output = slice(&[&base[..], extra].concat());
+        assert!(output.status.success(), "{}", stderr(&output));
+        json(&output)["oriented"]["degrees"]
+            .as_f64()
+            .expect("an oriented run reports its turn")
+    };
+
+    assert!(
+        turned(&[]) > 1.0,
+        "a cube keeps its top clean by turning its upward face away from the film"
+    );
+    assert_eq!(
+        turned(&["--max-tilt", "0"]),
+        0.0,
+        "a tilt of nothing allows no turn"
+    );
+}

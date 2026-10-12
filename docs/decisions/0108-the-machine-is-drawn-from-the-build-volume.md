@@ -1,6 +1,6 @@
 # 0108. The build platform is drawn from the build volume, not loaded from a model
 
-- **Status:** Accepted
+- **Status:** Superseded by 0219
 - **Date:** 2026-09-27
 
 ## Context

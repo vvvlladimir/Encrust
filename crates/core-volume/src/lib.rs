@@ -36,6 +36,6 @@ pub use hollow::{
 };
 pub use infill::{InfillPattern, InfillSettings};
 pub use model::{HoleSize, ModelHollow, Shell, markers};
-pub use relief::{Relief, ReliefSettings, press};
+pub use relief::{Relief, ReliefSettings, Tiling, press, press_tiled};
 pub use sdf::Sdf;
 pub use sign::SignMode;

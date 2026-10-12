@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use core_format::ExposureRange;
-use core_geometry::{Mat4, Mesh, Scalar, Transform, Vec3};
+use core_geometry::{Mat4, Mesh, Scalar, Transform, Vec2, Vec3};
 use core_volume::{CUT_WEIGHT, Channel, DrainHole, MOUTH_LIFT_MM};
 use egui::Color32;
 use egui::epaint::ViewportInPixels;
@@ -9,15 +9,15 @@ use egui_wgpu::{CallbackResources, CallbackTrait, ScreenDescriptor};
 
 use crate::camera::OrbitCamera;
 use crate::plate::BuildPlate;
+use crate::relief::Textures;
 use crate::render::gpu::{
-    CutDraw, CutLine, DrainCut, ExposureBand, FrameInput, MAX_BANDS, MAX_CUTS, MAX_POCKETS,
+    CutDraw, CutLine, DrainCut, ExposureBand, Floor, FrameInput, MAX_BANDS, MAX_CUTS, MAX_POCKETS,
     ModelDraw, ReliefDraw, TrapBox,
 };
-use crate::render::grid::plate_lines;
+use crate::render::grid::{plate_lines, section_frame};
 use crate::render::label;
-use crate::render::machine::machine_faces;
-use crate::render::vertex::{BodyVertex, LabelVertex, LineVertex, ModelInstance, NOT_MARKED};
-use crate::scene::{Scene, SceneObject};
+use crate::render::vertex::{LabelVertex, LineVertex, ModelInstance, NOT_MARKED};
+use crate::scene::{Mapped, Scene, SceneObject};
 use crate::ui::theme;
 use crate::workspace::ViewOptions;
 
@@ -35,15 +35,15 @@ pub struct ViewportCallback {
     view_projection: Mat4,
     eye: Vec3,
     section_mm: Option<Scalar>,
+    bottom_cut_mm: Option<Scalar>,
     lines: Vec<LineVertex>,
     models: Vec<ModelDraw>,
     /// What the cut is capped against: the same solids that are drawn, counted into the
     /// stencil plane so that the cap covers the material the plane runs through.
     solids: Vec<ModelDraw>,
     cap: Vec<LineVertex>,
-    /// The machine under the plate: the platform and the arm it hangs from.
-    body: Vec<BodyVertex>,
-    /// The word lying on the platform, and the font atlas it samples.
+    bottom_cap: Vec<LineVertex>,
+    /// The word lying in front of the plate, and the font atlas it samples.
     label: Vec<LabelVertex>,
     atlas: Option<std::sync::Arc<egui::ColorImage>>,
     /// The holes already cut into the models being drawn, in plate millimetres. The
@@ -66,6 +66,10 @@ pub struct ViewportCallback {
     /// Whether the models are drawn seen through, so a cavity that holds resin can be
     /// looked into; see `docs/design/viewport.md`.
     xray: bool,
+    /// Whether the plate's grid is drawn into it.
+    grid: bool,
+    /// The plate the models cast their shadow on.
+    floor: Floor,
 }
 
 /// The exposure bands washed over the models, and the height below which one shows
@@ -84,10 +88,12 @@ pub struct Shading<'a> {
     pub overhang_deg: Option<f32>,
     /// The height the models are cut at, or `None` to draw them whole.
     pub section_mm: Option<Scalar>,
+    /// The height below which they are cut away, or `None` to draw them down to the plate.
+    pub bottom_cut_mm: Option<Scalar>,
     pub banding: Banding<'a>,
-    /// Whether a model still carrying a texture is drawn with it, which is what the Relief
-    /// tool shows.
-    pub textured: bool,
+    /// The texture each model is drawn with, which is what the Relief tool shows: the
+    /// picture it would press, or the one the model carries. `None` draws every model flat.
+    pub textures: Option<&'a Textures>,
     /// The Cut tool's plane, traced over the model it is set on.
     pub cut_line: Option<CutLine>,
 }
@@ -105,8 +111,9 @@ impl ViewportCallback {
         let Shading {
             overhang_deg,
             section_mm,
+            bottom_cut_mm,
             banding,
-            textured,
+            textures,
             cut_line,
         } = shading;
         let Draws {
@@ -116,21 +123,28 @@ impl ViewportCallback {
             cut_surfaces,
             pockets,
             reliefs,
-        } = Draws::of(scene, overhang_deg.map_or(NOT_MARKED, marking), textured);
+        } = Draws::of(scene, overhang_deg.map_or(NOT_MARKED, marking), textures);
 
         let (label, atlas) = label::front(plate);
+        let mut lines = plate_lines(plate);
+        for height in section_mm.into_iter().chain(bottom_cut_mm) {
+            lines.extend(section_frame(plate, height));
+        }
         Self {
             rect,
             view_projection: camera.view_projection(rect.width() / rect.height()),
             eye: camera.eye(),
             section_mm,
-            lines: plate_lines(plate, view.grid),
+            bottom_cut_mm,
+            lines,
             models,
             solids,
             cap: section_mm
                 .map(|height| cap_quad(scene, plate, height))
                 .unwrap_or_default(),
-            body: machine_faces(plate),
+            bottom_cap: bottom_cut_mm
+                .map(|height| cap_quad(scene, plate, height))
+                .unwrap_or_default(),
             label,
             atlas,
             cuts,
@@ -142,6 +156,11 @@ impl ViewportCallback {
             volume_mm: Vec3::new(plate.x_mm, plate.y_mm, plate.z_mm),
             cut_line,
             xray: view.xray,
+            grid: view.grid,
+            floor: Floor {
+                near_corner_mm: Vec2::ZERO,
+                size_mm: Vec2::new(plate.x_mm, plate.y_mm),
+            },
         }
     }
 }
@@ -159,11 +178,12 @@ struct Draws {
 
 impl Draws {
     /// `mark` is the overhang threshold the models are washed at, or `NOT_MARKED`.
-    fn of(scene: &Scene, mark: f32, textured: bool) -> Self {
+    fn of(scene: &Scene, mark: f32, textures: Option<&Textures>) -> Self {
         let mut draws = Self::default();
         for object in scene.printable(scene.active_plate()) {
             let colour = color_for(scene.is_selected(object.id), object.summary.is_sound());
-            draws.model(object, colour, mark, textured);
+            let texture = textures.and_then(|textures| textures.get(&object.id));
+            draws.model(object, colour, mark, texture);
             draws.hollowing(object, colour);
             draws.supports(object);
         }
@@ -176,7 +196,13 @@ impl Draws {
         draws
     }
 
-    fn model(&mut self, object: &SceneObject, colour: Color32, mark: f32, textured: bool) {
+    fn model(
+        &mut self,
+        object: &SceneObject,
+        colour: Color32,
+        mark: f32,
+        texture: Option<&Arc<Mapped>>,
+    ) {
         let (drains, channels) = object.hollow.cut();
         self.cuts
             .extend(cuts_of(drains, channels, object.transform));
@@ -186,10 +212,7 @@ impl Draws {
         let instance = ModelInstance::new(object.transform, colour, mark);
         // The map is indexed by the model's own faces, so a hollowed model — whose shell
         // carries the cavity's as well — is drawn flat like everything else.
-        let mapped = object
-            .mapped
-            .as_ref()
-            .filter(|_| textured && object.hollow.shell().is_none());
+        let mapped = texture.filter(|_| object.hollow.shell().is_none());
         match mapped {
             Some(mapped) => self.reliefs.push(ReliefDraw {
                 mesh: Arc::clone(&mesh),
@@ -345,8 +368,7 @@ pub(crate) fn cuts_of(
     transform: Transform,
 ) -> Vec<DrainCut> {
     let matrix = transform.to_matrix();
-    let scale = transform.scale.abs();
-    let smallest = scale.x.min(scale.y).min(scale.z);
+    let smallest = transform.least_scale();
     let place = |point: Vec3, radius_mm: Scalar| {
         let at = matrix.transform_point3(point);
         [at.x, at.y, at.z, radius_mm * smallest]
@@ -470,7 +492,8 @@ impl CallbackTrait for ViewportCallback {
                     models: &self.models,
                     solids: &self.solids,
                     cap: &self.cap,
-                    body: &self.body,
+                    bottom_cut_mm: self.bottom_cut_mm,
+                    bottom_cap: &self.bottom_cap,
                     label: &self.label,
                     atlas: self.atlas.clone(),
                     cuts: &self.cuts,
@@ -482,6 +505,8 @@ impl CallbackTrait for ViewportCallback {
                     volume_mm: Some(self.volume_mm),
                     cut_line: self.cut_line,
                     xray: self.xray,
+                    floor: Some(self.floor),
+                    grid: self.grid,
                 },
             );
             // The same pixels egui hands `paint` its viewport for, so the copy lands
@@ -549,7 +574,7 @@ mod tests {
             cavity_mm3: hollowed.cavity_mm3,
             voxel_mm: hollowed.voxel_mm,
             coarsened: hollowed.coarsened,
-            scale: Vec3::ONE,
+            shape: core_geometry::Mat3::IDENTITY,
             settings: asking,
         });
         object.traps.set(vec![Trapped {
@@ -572,7 +597,7 @@ mod tests {
             .expect("the ball is hollow");
         assert!(!cavity.is_empty(), "and the cavity has faces of its own");
 
-        let draws = Draws::of(&scene, NOT_MARKED, false);
+        let draws = Draws::of(&scene, NOT_MARKED, None);
         let painted = draws
             .models
             .iter()
@@ -581,7 +606,7 @@ mod tests {
         assert_eq!(painted, 1, "the cavity is drawn once over the shell");
 
         scene.objects_mut()[0].traps.set(Vec::new());
-        let drained = Draws::of(&scene, NOT_MARKED, false);
+        let drained = Draws::of(&scene, NOT_MARKED, None);
         assert!(
             drained.models.iter().all(|draw| draw.faces() != cavity),
             "and not at all once the resin can get out"
@@ -720,7 +745,7 @@ mod tests {
     #[test]
     fn a_model_that_is_not_closed_is_drawn_but_never_counted_into_the_cap() {
         let scene = an_open_box();
-        let draws = Draws::of(&scene, NOT_MARKED, false);
+        let draws = Draws::of(&scene, NOT_MARKED, None);
 
         assert_eq!(draws.models.len(), 1, "an open model is still drawn");
         assert!(
@@ -740,7 +765,7 @@ mod tests {
             .expect("the box is there")
             .reshape(Arc::new(mesh));
 
-        assert_eq!(Draws::of(&scene, NOT_MARKED, false).solids.len(), 1);
+        assert_eq!(Draws::of(&scene, NOT_MARKED, None).solids.len(), 1);
     }
 
     #[test]

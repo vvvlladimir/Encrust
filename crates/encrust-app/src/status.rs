@@ -1,4 +1,4 @@
-/// The last thing that happened, shown in the window's status bar.
+/// The last thing that happened, shown over the stage.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub enum Status {
     #[default]
@@ -23,7 +23,7 @@ impl Status {
         }
     }
 
-    /// The whole cause chain of a failure on one line, which is all the status bar has
+    /// The whole cause chain of a failure on one line, which is all the stage notice has
     /// room for.
     pub fn failed(error: &anyhow::Error) -> Self {
         let causes: Vec<String> = error.chain().map(ToString::to_string).collect();

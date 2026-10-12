@@ -273,9 +273,10 @@ fn an_island_is_taken_out_of_the_file_when_the_fold_is_asked_to() {
         written.measured.volume_mm3()
     };
 
-    // 32 mm^3 of the box on the plate, and 4 mm^3 of the floating one.
+    // 32 mm^3 of the box on the plate, and 4 mm^3 of the floating one; removing takes its
+    // first 0.5 mm layer alone, 2 mm^3, and leaves what stood on it.
     assert!((volume(Measured::new(0), "islands-kept") - 36.0).abs() < 0.5);
-    assert!((volume(Measured::new(0).removing_islands(), "islands-removed") - 32.0).abs() < 0.5);
+    assert!((volume(Measured::new(0).removing_islands(), "islands-removed") - 34.0).abs() < 0.5);
 }
 
 /// Stops the run as soon as the first group of layers has been written.
@@ -466,4 +467,62 @@ fn rounding_the_greys_still_writes_the_stack() {
     let _ = std::fs::remove_file(&path);
 
     assert_eq!(written.layers, 4);
+}
+
+/// A diamond floating beside the box: an octahedron of radius 2.4 mm, its lower point
+/// 1.1 mm over the plate, so its first layers grow out of a point over nothing.
+fn with_a_floating_diamond() -> Mesh {
+    let mut mesh = on_the_plate();
+    let centre = Vec3::new(9.6, 3.2, 3.5);
+    let r = 2.4;
+    let corners = [
+        centre + Vec3::X * r,
+        centre - Vec3::X * r,
+        centre + Vec3::Y * r,
+        centre - Vec3::Y * r,
+        centre + Vec3::Z * r,
+        centre - Vec3::Z * r,
+    ];
+    let base = mesh.vertices.len() as u32;
+    mesh.vertices.extend(corners);
+    let faces: [[u32; 3]; 8] = [
+        [0, 2, 4],
+        [2, 1, 4],
+        [1, 3, 4],
+        [3, 0, 4],
+        [2, 0, 5],
+        [1, 2, 5],
+        [3, 1, 5],
+        [0, 3, 5],
+    ];
+    mesh.faces
+        .extend(faces.iter().map(|face| face.map(|index| index + base)));
+    mesh
+}
+
+#[test]
+fn removing_islands_takes_the_point_of_a_floating_diamond_and_leaves_the_rest() {
+    let mesh = with_a_floating_diamond();
+    let fold = |fold: Measured, name: &str| {
+        let path = temp(name, "goo");
+        let written = run(&mesh, &path, SlicedFormat::Goo, 2, fold, &mut ())
+            .expect("nothing cancelled the run");
+        let _ = std::fs::remove_file(&path);
+        written.measured
+    };
+    let kept = fold(Measured::new(0), "diamond-kept");
+    let removed = fold(Measured::new(0).removing_islands(), "diamond-islands");
+    let whole = fold(
+        Measured::new(0).removing_hanging(u32::MAX),
+        "diamond-hanging",
+    );
+    assert_eq!(removed.removed_layers(), 1, "the point's layer alone");
+    assert!(
+        kept.volume_mm3() - removed.volume_mm3() < 0.25 * (kept.volume_mm3() - whole.volume_mm3()),
+        "most of the diamond stays"
+    );
+    assert!(
+        (whole.volume_mm3() - 32.0).abs() < 0.5,
+        "passes enough to reach its top take the whole diamond, leaving the 32 mm^3 box"
+    );
 }

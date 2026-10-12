@@ -1,6 +1,6 @@
 # 0164. Risks are read off the stack, each piece carrying the narrowest neck under it
 
-- **Status:** Accepted
+- **Status:** Accepted; its removal of islands superseded by 0228
 - **Date:** 2026-09-29
 
 ## Context

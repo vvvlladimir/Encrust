@@ -59,6 +59,7 @@ Grouped by what the decision governs; the number is still the order it was taken
 | [0183](0183-the-web-build-works-offline-and-the-command-line-completes-and-remembers.md) | The web build works offline, and the command line completes and remembers its flags | Accepted |
 | [0207](0207-a-test-run-rebuilds-nothing-it-does-not-have-to.md) | A test run rebuilds nothing it does not have to | Accepted |
 | [0214](0214-the-libraries-terms-ship-generated-from-the-lockfile.md) | The libraries' terms ship with the binary, generated from the lockfile | Accepted |
+| [0215](0215-the-panels-are-pictured-and-compared-by-hand.md) | The panels are pictured and compared, by hand | Accepted |
 
 ### Geometry
 
@@ -76,6 +77,7 @@ Grouped by what the decision governs; the number is still the order it was taken
 | [0194](0194-a-hole-is-closed-only-when-it-is-asked-for.md) | A hole is closed only when it is asked for, by the triangulator the cut already uses | Accepted |
 | [0195](0195-a-mended-model-is-sound-and-an-open-one-is-never-capped.md) | Repair drops the faces drawn twice, and an open model is never capped | Accepted |
 | [0205](0205-a-surface-closes-when-its-edges-pair-off.md) | A surface closes when its edges pair off, and repair drops what no winding covers | Accepted |
+| [0223](0223-a-cut-is-pinned-by-a-shell-and-a-drain.md) | Pin a cut by an added shell and a drain hole | Accepted |
 
 ### Mesh and texture input
 
@@ -139,8 +141,10 @@ Grouped by what the decision governs; the number is still the order it was taken
 | # | Decision | Status |
 |---|---|---|
 | [0163](0163-the-stack-is-measured-from-its-runs.md) | The stack is measured from its runs, in a crate of its own | Accepted |
-| [0164](0164-risks-are-read-off-the-stack-with-a-neck-carried-up.md) | Risks are read off the stack, each piece carrying the narrowest neck under it | Accepted |
+| [0164](0164-risks-are-read-off-the-stack-with-a-neck-carried-up.md) | Risks are read off the stack, each piece carrying the narrowest neck under it | Accepted; removal superseded by 0228 |
 | [0206](0206-a-report-counts-what-is-there-once.md) | A report counts what is there once, and resin only from the masks | Accepted |
+| [0224](0224-cups-and-thin-sections-are-read-off-the-stack.md) | Read suction cups and thin sections off the stack | Accepted |
+| [0228](0228-removing-an-island-takes-the-island-alone.md) | Removing islands takes the island alone | Accepted |
 
 ### Supports
 
@@ -195,6 +199,7 @@ Grouped by what the decision governs; the number is still the order it was taken
 | [0084](0084-a-cavity-is-clustered-surface-nets.md) | A cavity is extracted as surface nets clustered onto the lattice | Superseded by 0186 (how folded copies are merged only) |
 | [0085](0085-a-build-is-priced-by-its-larger-phase.md) | A build is priced by its larger phase, not by one constant a tile | Accepted |
 | [0116](0116-a-texture-is-pressed-into-the-field.md) | A texture is pressed into the field, not onto the vertices | Accepted |
+| [0225](0225-a-picture-is-tiled-on-from-three-sides.md) | Tile a picture onto a model from three sides | Accepted |
 | [0122](0122-a-reliefs-depth-is-a-plate-millimetre.md) | A relief's depth is a plate millimetre, pressed after placement | Accepted |
 | [0185](0185-a-wall-is-measured-on-the-plate.md) | A wall is measured on the plate, not in the model's own space | Accepted |
 | [0186](0186-a-cavity-is-a-closed-surface-and-a-slice-follows-it-through-a-branch.md) | A cavity is a closed surface, and a slice follows it through a branch | Accepted |
@@ -211,9 +216,12 @@ Grouped by what the decision governs; the number is still the order it was taken
 | # | Decision | Status |
 |---|---|---|
 | [0087](0087-orientation-is-scored-on-the-peel.md) | An orientation is scored on the peel, and measured in two passes | Accepted |
+| [0222](0222-an-orientation-is-searched-for-a-goal-within-a-tilt.md) | Search an orientation for a goal, within a tilt | Accepted; where the goal and the tilt are offered is superseded by 0236 |
+| [0236](0236-an-orientation-goal-is-asked-for-on-the-command-line.md) | Ask for an orientation goal and a tilt limit on the command line | Accepted |
 | [0088](0088-the-plate-is-packed-as-a-bitmap.md) | The plate is packed as a bitmap into the corner, and the block centred | Accepted |
 | [0098](0098-a-plate-is-a-number-on-the-object.md) | A plate is a number on the object, not a scene of its own | Accepted |
 | [0101](0101-a-tool-works-on-the-selection-or-the-plate.md) | A tool works on what is picked, and on the whole plate only when nothing is | Accepted |
+| [0227](0227-a-model-may-keep-its-own-hollow-and-drain-numbers.md) | Let a model keep its own Hollow and Drain numbers | Accepted |
 | [0178](0178-a-project-names-its-cavities-and-the-engine-opens-it.md) | A project names its cavities, and the engine opens it into a plate | Superseded by 0191 |
 | [0191](0191-a-project-holds-the-plate-as-it-stands.md) | A project holds the plate as it stands, and opening it builds nothing | Accepted |
 
@@ -244,7 +252,8 @@ Grouped by what the decision governs; the number is still the order it was taken
 | [0049](0049-profiles-ship-in-the-binary-with-a-user-directory-over-them.md) | Profiles ship inside the binary, with a user directory over them by id | Accepted |
 | [0050](0050-one-resin-catalogue-retuned-per-printer.md) | One resin catalogue, retuned per printer by a `[printers.<id>]` table | Accepted |
 | [0051](0051-a-printer-profile-names-its-file-format.md) | A printer profile names the sliced-file format its firmware reads | Accepted |
-| [0052](0052-profiles-are-edited-in-the-window.md) | Profiles are edited in a Settings screen and saved into the user's directory | Accepted |
+| [0052](0052-profiles-are-edited-in-the-window.md) | Profiles are edited in a Settings screen and saved into the user's directory | Accepted; where the machines and resins are edited is superseded by 0220, and the Settings screen by 0233 |
+| [0235](0235-a-profile-is-imported-by-the-catalogue.md) | Import and export a profile through the catalogue | Accepted |
 | [0120](0120-a-resin-is-tuned-per-printer.md) | A printer's resins are its own presets, edited in place | Accepted |
 | [0140](0140-a-profile-carries-the-machine-name-its-firmware-matches.md) | A profile carries the machine name its firmware matches | Accepted |
 | [0141](0141-advance-mode-follows-the-firmware-flag.md) | Advance mode follows the machine's firmware flag | Accepted |
@@ -255,6 +264,7 @@ Grouped by what the decision governs; the number is still the order it was taken
 | [0166](0166-a-machine-states-which-photon-workshop-revision-it-reads.md) | A machine states which Photon Workshop revision it reads | Accepted |
 | [0196](0196-a-resin-is-measured-not-shipped.md) | A resin is measured, not shipped, and a copy says where it came from | Superseded by 0197 (what a resin taken off a printer does only) |
 | [0197](0197-a-resin-off-a-printer-waits-in-the-pool.md) | A resin taken off a printer waits in the pool | Accepted |
+| [0226](0226-a-tools-settings-are-kept-as-named-presets.md) | Keep a tool's settings as named presets in the profile catalogue | Accepted |
 
 ### Printers over the network
 
@@ -278,9 +288,10 @@ Grouped by what the decision governs; the number is still the order it was taken
 | [0017](0017-transform-gizmo-crate.md) | transform-gizmo-egui for the transform handles | Accepted |
 | [0018](0018-background-slicing-job.md) | Slicing runs on a worker thread and reports over a channel | Accepted |
 | [0019](0019-slicing-job-thread-budget.md) | A background job runs on its own pool, one thread short of the machine | Accepted |
-| [0024](0024-design-tokens-and-bundled-typeface.md) | One token module paints the window; the typeface is compiled in | Accepted |
-| [0025](0025-fixed-window-layout.md) | Fixed panels instead of egui_dock | Accepted |
-| [0061](0061-the-section-slider-is-one-rail-in-both-modes.md) | The section slider is one rail, in both modes | Accepted |
+| [0024](0024-design-tokens-and-bundled-typeface.md) | One token module paints the window; the typeface is compiled in | Superseded by 0216 (the typeface and the palette's values) |
+| [0216](0216-the-window-is-set-in-plex-on-graphite.md) | The window is set in IBM Plex, on graphite, with figures in the text face | Accepted |
+| [0025](0025-fixed-window-layout.md) | Fixed panels instead of egui_dock | Accepted; the status strip is superseded by 0217 |
+| [0061](0061-the-section-slider-is-one-rail-in-both-modes.md) | The section slider is one rail, in both modes | Accepted; the floating rail is superseded by 0217 |
 | [0062](0062-cap-the-section-cut-with-the-stencil-plane.md) | The section cut is capped with the stencil plane | Superseded by 0184 (where the stencil comes from only) |
 | [0068](0068-the-window-holds-no-stack.md) | The window holds no stack: it cuts the window it is showing | Accepted |
 | [0070](0070-a-mesh-is-drawn-in-buffer-sized-pieces.md) | A mesh is drawn in pieces the card will take | Accepted; 0190 breaks a piece at a drawn range too |
@@ -290,20 +301,31 @@ Grouped by what the decision governs; the number is still the order it was taken
 | [0097](0097-a-project-is-a-zip-of-a-manifest-and-the-meshes.md) | A project is a zip of a JSON manifest and the meshes | Superseded by 0191 |
 | [0099](0099-unsaved-work-is-a-digest-asked-for-at-the-door.md) | Unsaved work is a digest of the manifest, asked for only at the door | Accepted |
 | [0100](0100-a-batch-is-the-single-run-once-per-model.md) | A batch is the single run, once per model, in the same binary | Accepted |
-| [0102](0102-the-plate-is-a-panel-not-a-card.md) | The plate is a panel, not a card over the viewport | Accepted |
-| [0103](0103-preview-splits-the-stage.md) | Preview splits the stage between the model and the mask | Accepted |
-| [0104](0104-the-title-strip-is-the-title-bar.md) | The title strip is the window's title bar | Accepted |
-| [0105](0105-a-panel-belongs-to-its-tool.md) | A panel belongs to its tool | Superseded by 0118 (the transform switch only) |
+| [0102](0102-the-plate-is-a-panel-not-a-card.md) | The plate is a panel, not a card over the viewport | Accepted; the plate strip and the pickers are superseded by 0217, the panel by 0221 |
+| [0103](0103-preview-splits-the-stage.md) | Preview splits the stage between the model and the mask | Accepted; hiding the columns is superseded by 0217 |
+| [0104](0104-the-title-strip-is-the-title-bar.md) | The title strip is the window's title bar | Accepted; its height is superseded by 0217 |
+| [0105](0105-a-panel-belongs-to-its-tool.md) | A panel belongs to its tool | Superseded by 0118 (the transform switch only), 0217 (the footer only) and 0218 (the Layers tool and the Mirror action) |
 | [0106](0106-a-shortcut-lives-in-the-table.md) | Every key the window answers lives in one table | Accepted |
 | [0107](0107-take-a-colour-token-not-floats.md) | A colour crosses into the renderer as a token, not as floats | Accepted |
-| [0108](0108-the-machine-is-drawn-from-the-build-volume.md) | The build platform is drawn from the build volume, not loaded from a model | Accepted |
+| [0108](0108-the-machine-is-drawn-from-the-build-volume.md) | The build platform is drawn from the build volume, not loaded from a model | Superseded by 0219 |
 | [0109](0109-the-preview-is-read-against-the-plate.md) | The preview is read against the plate, not against the panel | Accepted |
 | [0110](0110-the-gizmo-stands-on-the-centre-of-mass.md) | The gizmo stands on the model's centre of mass | Accepted |
-| [0118](0118-one-placing-panel-and-a-standing-gizmo.md) | One placing panel, and a gizmo that is always out | Accepted |
+| [0118](0118-one-placing-panel-and-a-standing-gizmo.md) | One placing panel, and a gizmo that is always out | Accepted; the gizmo on Select is superseded by 0218 |
 | [0135](0135-the-macos-icon-is-squircled-at-source.md) | The macOS icon is squircled at source, not only in the bundle | Accepted |
 | [0138](0138-the-destination-lives-on-the-slice-button.md) | The destination lives on the Slice button | Superseded by 0157 |
 | [0151](0151-the-preview-shows-a-source-not-a-plate.md) | Let the preview show a source, which is either a plate or a file | Accepted; what ends a file's turn is amended by 0202 |
-| [0157](0157-the-slice-row-carries-two-actions.md) | The Slice row carries two actions, not a destination | Accepted |
+| [0157](0157-the-slice-row-carries-two-actions.md) | The Slice row carries two actions, not a destination | Accepted; the Send button is superseded by 0217 |
+| [0217](0217-the-window-is-a-top-bar-a-flat-rail-and-a-layer-strip.md) | The window is a top bar, a flat rail, a docked inspector and a layer strip | Accepted; the return to the model on a tool press is superseded by 0218, the docked columns and layer strip by 0221, Find by 0230, the message under the jobs by 0231 |
+| [0218](0218-twelve-tools-on-the-rail-and-print-settings-as-a-form.md) | Twelve tools on the rail, and the print settings as a form | Accepted; Select and the digits are superseded by 0231 |
+| [0219](0219-the-viewport-is-lit-shadowed-and-turned-by-a-cube.md) | Light the viewport by a sky, a key and a fill, shadow it by contact, and turn it by a cube | Accepted |
+| [0220](0220-machines-and-resins-are-a-window-and-the-window-starts-on-a-page.md) | Edit the machines and resins in a window over the plate, and start on a page | Accepted; the start page's machine card is superseded by 0232, its recent list by 0234, and the Settings screen by 0233 |
+| [0221](0221-the-columns-float-over-a-stage-the-width-of-the-window.md) | Float the side columns over a stage the width of the window | Accepted; the plate column's fold is superseded by 0230 |
+| [0229](0229-tab-walks-the-controls-and-every-control-has-a-name.md) | Tab walks the controls, and every control has a name | Accepted |
+| [0230](0230-find-is-a-palette-and-the-columns-stay-out.md) | Find is a palette, the plate column stays out, and a block explains itself on its question mark | Accepted |
+| [0231](0231-select-is-position-and-check-supports-its-islands.md) | Fold Select into Position, and let Check support the islands it finds | Accepted |
+| [0232](0232-the-start-page-offers-resin-test-prints-of-its-own.md) | The start page offers resin test prints of its own, and leaves the machine to the top bar | Accepted; the row of tests under the recent files is superseded by 0234 |
+| [0233](0233-settings-is-a-window-and-a-profile-travels-as-its-file.md) | Make Settings a window like Machine and resin, and carry a profile out as its file | Accepted; where the import is done is superseded by 0235 |
+| [0234](0234-recent-files-are-pictured-and-share-a-shelf-with-test-prints.md) | Show the recent files as pictures, and switch between them and the test prints | Accepted |
 | [0192](0192-a-tool-value-is-remembered-and-taken-back-on-its-own-entry.md) | A tool value is remembered between runs and taken back on its own entry | Accepted |
-| [0193](0193-the-window-reads-its-own-input-before-egui-does.md) | The window reads its own input before egui does | Accepted |
+| [0193](0193-the-window-reads-its-own-input-before-egui-does.md) | The window reads its own input before egui does | Accepted; Tab and the keys of a focused control are superseded by 0229 |
 | [0202](0202-an-opened-file-closes-when-the-plate-changes.md) | An opened sliced file closes when the plate changes | Accepted |

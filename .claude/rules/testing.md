@@ -16,6 +16,8 @@
 - A bug fix comes with a test that fails before it. A reader of bytes somebody else wrote gets
   a fuzz target in `fuzz/`, and a crash it finds lands as a fixture and a test in the owning
   crate: `fuzz/README.md`.
+- A change to how the window looks runs the panel pictures before and after and commits the
+  new ones: `cargo test -p encrust-app --features snapshots --lib snapshots` (ADR 0215).
 - Test what the behaviour needs and stop. No test that only restates a getter.
 - `cargo test --workspace` passes before a step is done. Never `#[ignore]` a test to get there:
   fix it, or delete it and say so.

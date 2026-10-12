@@ -6,8 +6,9 @@ use bytemuck::{Pod, Zeroable};
 use core_geometry::{Mesh, Scalar};
 use wgpu::util::DeviceExt as _;
 
+use crate::render::grid::{GRID_MAJOR_MM, GRID_SPACING_MM};
 use crate::render::target::SceneTarget;
-use crate::render::vertex::ModelInstance;
+use crate::render::vertex::{LineVertex, ModelInstance};
 use crate::scene::Mapped;
 use crate::ui::theme;
 
@@ -15,15 +16,17 @@ mod buffers;
 mod draws;
 mod paint;
 mod pipelines;
+mod shadow;
 mod textures;
 
 pub use draws::{
-    CutDraw, CutLine, DrainCut, ExposureBand, FrameInput, ModelDraw, ReliefDraw, TrapBox,
+    CutDraw, CutLine, DrainCut, ExposureBand, Floor, FrameInput, ModelDraw, ReliefDraw, TrapBox,
 };
 
 use buffers::{DynamicBuffer, Piece, pieces};
 use draws::{Splits, cut_draws, splits_of};
 use pipelines::{Builder, Capping, Cutting, Facing, globals_layout};
+use shadow::ContactShadow;
 
 /// Depth and stencil format of the viewport's own target, `render::target`. The stencil
 /// plane is what caps the section cut, see `docs/decisions/0062` and `0184`.
@@ -37,9 +40,6 @@ pub const SAMPLE_COUNT: u32 = 1;
 /// both mean one sample.
 #[cfg(not(target_arch = "wasm32"))]
 pub const MULTISAMPLING: u16 = 0;
-
-/// Direction the key light travels, in plate coordinates: down, from the front left.
-const LIGHT_DIRECTION: [f32; 4] = [0.35, 0.55, -1.0, 0.0];
 
 /// Drain cuts the viewport can subtract in one frame.
 ///
@@ -62,13 +62,30 @@ pub const MAX_POCKETS: usize = 32;
 #[derive(Debug, Clone, Copy, Pod, Zeroable)]
 struct Globals {
     view_projection: [[f32; 4]; 4],
-    light_direction: [f32; 4],
+    /// The lights and the ambient, from `theme::Lighting`; every `w` is unused padding.
+    key_towards: [f32; 4],
+    fill_towards: [f32; 4],
+    key_color: [f32; 4],
+    fill_color: [f32; 4],
+    sky: [f32; 4],
+    ground: [f32; 4],
+    /// The plate the contact shadow lies on, plate millimetres: `xy` its near corner and
+    /// `zw` its size. `shadow_color.a` is how dark the shadow goes.
+    shadow_area: [f32; 4],
+    shadow_color: [f32; 4],
+    /// The colour the plate's own surface is filled with, over the same area, and the
+    /// grid drawn into it: `grid` is the minor and the major spacing, millimetres, and
+    /// 1.0 in `z` while the grid is shown.
+    plate_color: [f32; 4],
+    grid_minor: [f32; 4],
+    grid_major: [f32; 4],
+    grid: [f32; 4],
     /// `xyz` is where the camera stands, plate millimetres; `w` is how much of itself a
     /// surface keeps at most while the models are drawn seen through, and 0.0 while they
     /// are not. See `docs/design/viewport.md`.
     eye: [f32; 4],
     /// `x` is the height the models are cut at, plate millimetres, and `y` is 1.0 while
-    /// there is a cut at all. `z` and `w` pad the field out to a `vec4`.
+    /// there is a cut at all; `z` and `w` are the same for the cut from below.
     section: [f32; 4],
     /// `x` is how many of `cuts` carry a drain this frame, `y` how many of `bands` carry
     /// an exposure, and `z` the height below which a band has no effect.
@@ -137,9 +154,7 @@ pub struct ViewportResources {
     capping: Capping,
     /// What draws the inside of every cut.
     cutting: Cutting,
-    /// Draws the translucent machine over everything already painted.
-    body_pipeline: wgpu::RenderPipeline,
-    /// Draws the word the machine carries, sampled out of the font atlas.
+    /// Draws the word in front of the plate, sampled out of the font atlas.
     label_pipeline: wgpu::RenderPipeline,
     label_layout: wgpu::BindGroupLayout,
     label_sampler: wgpu::Sampler,
@@ -153,11 +168,11 @@ pub struct ViewportResources {
     instances: DynamicBuffer,
     lines: DynamicBuffer,
     cap: DynamicBuffer,
-    body: DynamicBuffer,
     label: DynamicBuffer,
     meshes: HashMap<usize, CachedMesh>,
     frame: Frame,
     target: SceneTarget,
+    shadow: ContactShadow,
 }
 
 /// What the last `prepare` decided to draw, replayed by `paint`.
@@ -167,7 +182,6 @@ pub struct ViewportResources {
 #[derive(Default)]
 struct Frame {
     line_vertices: u32,
-    body_vertices: u32,
     label_vertices: u32,
     /// Each mesh with whether its placement mirrors it, which picks the pipeline.
     models: Vec<Drawn>,
@@ -181,12 +195,14 @@ struct Frame {
     /// solids, in the same buffer.
     reliefs: Vec<(usize, bool)>,
     relief_base: u32,
+    /// The top cap's vertices, then the bottom cap's after them in the same buffer.
     cap_vertices: u32,
+    bottom_cap_vertices: u32,
     cutting: bool,
+    cutting_bottom: bool,
     xray: bool,
 }
 
-/// The cut as the shader reads it. A height on its own could not say "no cut": a model
 /// What a fixed-size array the shader reads takes of `from`, and how much it took.
 fn clamped<T: Copy + Default, const N: usize>(from: &[T]) -> ([T; N], f32) {
     let mut into = [T::default(); N];
@@ -201,14 +217,32 @@ fn globals_of(frame: &FrameInput<'_>) -> Globals {
     let (cuts, taken) = clamped::<_, MAX_CUTS>(frame.cuts);
     let (bands, banded) = clamped::<_, MAX_BANDS>(frame.bands);
     let (pockets, held) = clamped::<_, MAX_POCKETS>(frame.pockets);
+    let light = &theme::scene().light;
+    let towards = |[x, y, z]: [f32; 3]| [x, y, z, 0.0];
     Globals {
         view_projection: frame.view_projection.to_cols_array_2d(),
-        light_direction: LIGHT_DIRECTION,
+        key_towards: towards(light.key_towards),
+        fill_towards: towards(light.fill_towards),
+        key_color: theme::gamma(light.key),
+        fill_color: theme::gamma(light.fill),
+        sky: theme::gamma(light.sky),
+        ground: theme::gamma(light.ground),
+        shadow_area: frame.floor.map_or([0.0; 4], |floor| floor.area()),
+        shadow_color: theme::gamma(theme::scene().shadow),
+        plate_color: theme::gamma(theme::scene().plate),
+        grid_minor: theme::gamma(theme::scene().grid_minor),
+        grid_major: theme::gamma(theme::scene().grid_major),
+        grid: [
+            GRID_SPACING_MM,
+            GRID_MAJOR_MM,
+            if frame.grid { 1.0 } else { 0.0 },
+            0.0,
+        ],
         eye: frame
             .eye
             .extend(if frame.xray { theme::SEEN_THROUGH } else { 0.0 })
             .to_array(),
-        section: section(frame.section_mm),
+        section: section(frame.section_mm, frame.bottom_cut_mm),
         counts: [taken, banded, frame.band_floor_mm, held],
         overhang_color: theme::gamma(theme::scene().overhang),
         inside_color: theme::gamma(theme::scene().section_wash),
@@ -232,12 +266,12 @@ fn globals_of(frame: &FrameInput<'_>) -> Globals {
     }
 }
 
-/// standing below the plate is legal, so no value of it is free to mean nothing.
-fn section(height_mm: Option<Scalar>) -> [f32; 4] {
-    match height_mm {
-        Some(height) => [height, 1.0, 0.0, 0.0],
-        None => [0.0, 0.0, 0.0, 0.0],
-    }
+/// The two cuts as the shader reads them. A height on its own could not say "no cut": a
+/// model standing below the plate is legal, so no value of it is free to mean nothing.
+fn section(top_mm: Option<Scalar>, bottom_mm: Option<Scalar>) -> [f32; 4] {
+    let [top, top_on] = top_mm.map_or([0.0; 2], |height| [height, 1.0]);
+    let [bottom, bottom_on] = bottom_mm.map_or([0.0; 2], |height| [height, 1.0]);
+    [top, top_on, bottom, bottom_on]
 }
 
 impl ViewportResources {
@@ -262,6 +296,7 @@ impl ViewportResources {
         let solid = build.solid();
         let label = build.label();
         let relief = build.relief();
+        let shadow = ContactShadow::new(device, build.shadowing());
 
         Self {
             globals,
@@ -271,7 +306,6 @@ impl ViewportResources {
             line_pipeline: solid.line,
             capping: solid.capping,
             cutting: solid.cutting,
-            body_pipeline: build.body(),
             label_pipeline: label.pipelines,
             label_layout: label.layout,
             label_sampler: label.sampler,
@@ -283,11 +317,11 @@ impl ViewportResources {
             instances: DynamicBuffer::new(device, "viewport_instances"),
             lines: DynamicBuffer::new(device, "viewport_lines"),
             cap: DynamicBuffer::new(device, "viewport_section_cap"),
-            body: DynamicBuffer::new(device, "viewport_machine"),
             label: DynamicBuffer::new(device, "viewport_label"),
             meshes: HashMap::new(),
             frame: Frame::default(),
             target: SceneTarget::new(device, target_format),
+            shadow,
         }
     }
 
@@ -297,10 +331,11 @@ impl ViewportResources {
         self.write_geometry(device, queue, &frame);
         self.count_frame(&frame);
         self.record(device, queue, &frame);
+        self.shadow.want(&frame);
         self.drop_what_nobody_drew();
     }
 
-    /// Writes the plate, the cap, the machine, its word and every object's placement.
+    /// Writes the plate, the cap, the word and every object's placement.
     fn write_geometry(
         &mut self,
         device: &wgpu::Device,
@@ -308,8 +343,8 @@ impl ViewportResources {
         frame: &FrameInput<'_>,
     ) {
         self.lines.write(device, queue, frame.lines);
-        self.cap.write(device, queue, frame.cap);
-        self.body.write(device, queue, frame.body);
+        let caps: Vec<LineVertex> = frame.cap.iter().chain(frame.bottom_cap).copied().collect();
+        self.cap.write(device, queue, &caps);
         self.label.write(device, queue, frame.label);
         if let Some(atlas) = frame.atlas.as_ref() {
             self.upload_atlas(device, queue, atlas);
@@ -329,10 +364,11 @@ impl ViewportResources {
     /// plate geometry was written.
     fn count_frame(&mut self, frame: &FrameInput<'_>) {
         self.frame.line_vertices = frame.lines.len() as u32;
-        self.frame.body_vertices = frame.body.len() as u32;
         self.frame.label_vertices = frame.label.len() as u32;
         self.frame.cap_vertices = frame.cap.len() as u32;
         self.frame.cutting = frame.section_mm.is_some();
+        self.frame.bottom_cap_vertices = frame.bottom_cap.len() as u32;
+        self.frame.cutting_bottom = frame.bottom_cut_mm.is_some();
         self.frame.xray = frame.xray;
         self.frame.solid_base = frame.models.len() as u32;
         self.frame.relief_base = (frame.models.len() + frame.solids.len()) as u32;

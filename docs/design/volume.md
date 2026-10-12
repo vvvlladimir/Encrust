@@ -152,6 +152,12 @@ does the edge of a map that covers only part of the mesh (ADR 0121). The amplitu
 plate millimetre, so a caller presses after placement or divides by the model's own scale,
 and `press` reports the lattice it settled on (ADR 0122). See ADR 0116.
 
+A picture with no map behind it is laid on by projection instead (`press_tiled`): it is
+read as square tiles of `tile_mm`, turned by `angle_deg`, on each of the three planes the
+model's own axes span, and the three readings are blended by the nearest face's normal
+raised to the fourth power, so a face takes the plane it squarely faces and a 45° face
+takes two equally. Its axes are the model's own, at the size it prints at (ADR 0225).
+
 ## Extraction
 
 Surface nets over the band, one tile at a time on every core, clustered onto the lattice.

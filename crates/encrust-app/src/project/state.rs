@@ -8,7 +8,7 @@ use std::sync::Arc;
 use core_geometry::{Bvh, Vec3, center_of_mass};
 use rayon::prelude::*;
 
-use crate::scene::{ImportSummary, Imported, Scene, SceneObject};
+use crate::scene::{ImportSummary, Imported, OwnSettings, Scene, SceneObject};
 use crate::slicing::Slicing;
 use crate::state::Tools;
 use crate::tool_settings::ToolSettings;
@@ -100,6 +100,8 @@ fn object_state(object: &SceneObject) -> ObjectState {
             channels: object.hollow.channels().to_vec(),
             built: built_cavity(object),
         },
+        own_hollow: object.own.hollow.clone(),
+        own_drain: object.own.drain.clone(),
     }
 }
 
@@ -107,13 +109,15 @@ fn object_state(object: &SceneObject) -> ObjectState {
 fn built_cavity(object: &SceneObject) -> Option<BuiltCavity> {
     let asked = object.hollow.asked()?;
     let (voxel_mm, coarsened) = object.hollow.lattice()?;
+    let (scale, stretched) = BuiltCavity::keys_of(object.hollow.built_shape()?);
     Some(BuiltCavity {
         wall: Cavity::of(asked),
         cavity_faces: object.hollow.cavity_faces()?,
         cavity_mm3: object.hollow.cavity_mm3(),
         voxel_mm,
         coarsened,
-        scale: object.transform.scale,
+        scale,
+        stretched,
     })
 }
 
@@ -207,6 +211,10 @@ fn restore_objects(
             table,
         );
         object.hollow = hollow_of(&state.hollow, meshes);
+        object.own = OwnSettings {
+            hollow: state.own_hollow,
+            drain: state.own_drain,
+        };
     }
 }
 
@@ -306,6 +314,7 @@ mod tests {
                 translation: Vec3::new(12.0, 34.0, 0.0),
                 rotation: Quat::from_rotation_z(0.5),
                 scale: Vec3::splat(2.0),
+                ..Transform::default()
             },
             ImportSummary {
                 vertices_merged: 3,
@@ -350,6 +359,7 @@ mod tests {
         slicing.grey_levels = std::num::NonZeroU8::new(4);
         slicing.blur_px = 2;
         slicing.remove_islands = true;
+        slicing.hanging_passes = 2;
         slicing.samples = std::num::NonZeroU8::new(3).expect("three is not zero");
         slicing.exposure = vec![core_format::ExposureRange::new(0.0, 4.0, 9.5)];
         slicing.adaptive = Some(core_slicer::AdaptiveSettings::default());
@@ -431,6 +441,7 @@ mod tests {
         assert_eq!(back.slicing.grey_levels, saved.slicing.grey_levels);
         assert_eq!(back.slicing.blur_px, saved.slicing.blur_px);
         assert_eq!(back.slicing.remove_islands, saved.slicing.remove_islands);
+        assert_eq!(back.slicing.hanging_passes, saved.slicing.hanging_passes);
         assert_eq!(back.slicing.samples, saved.slicing.samples);
         assert_eq!(back.slicing.exposure, saved.slicing.exposure);
         assert_eq!(back.slicing.adaptive, saved.slicing.adaptive);
@@ -540,10 +551,22 @@ mod tests {
             cavity_mm3: 1.5,
             voxel_mm: 0.1,
             coarsened: true,
-            scale: object.transform.scale,
+            shape: object.transform.unturned(),
             settings,
         });
         shell
+    }
+
+    #[test]
+    fn a_models_own_hollow_numbers_are_saved_with_it() {
+        let mut saved = bench();
+        let mut own = saved.tools.hollow.state.clone();
+        own.thickness_mm = 3.5;
+        saved.scene.objects_mut()[0].own.hollow = Some(own.clone());
+
+        let back = round_trip(&saved);
+        assert_eq!(back.scene.objects()[0].own.hollow, Some(own));
+        assert_eq!(back.scene.objects()[0].own.drain, None);
     }
 
     #[test]
@@ -587,6 +610,23 @@ mod tests {
                 back.scene.objects()[0].transform
             ),
             "a plate opened as it was saved is not stale"
+        );
+    }
+
+    #[test]
+    fn a_shell_left_stale_by_a_resize_opens_stale() {
+        let mut saved = bench();
+        hollowed(&mut saved);
+        let object = &mut saved.scene.objects_mut()[0];
+        object.transform = object.transform.stretched(Vec3::splat(2.0));
+
+        let back = round_trip(&saved);
+        let object = &back.scene.objects()[0];
+        assert!(
+            object
+                .hollow
+                .is_stale(&back.tools.hollow.settings(), object.transform),
+            "the wall was built at half the size the model now stands at"
         );
     }
 

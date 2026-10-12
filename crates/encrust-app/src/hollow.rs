@@ -4,7 +4,7 @@ use core_geometry::Scalar;
 use core_volume::{HollowSettings, InfillSettings};
 
 use crate::job::{HollowJob, HollowOutcome, HollowRequest, hollow_tasks, rebuild_tasks};
-use crate::scene::Scene;
+use crate::scene::{Scene, SceneObject};
 use crate::status::Status;
 
 /// How wide a blocker a click drops, in millimetres of the plate.
@@ -44,16 +44,16 @@ impl Default for HollowTool {
 }
 
 impl HollowTool {
-    /// What the tool is asking for. What each model carries — its blockers and its drain
-    /// holes — is laid over this per model, in `hollow_tasks` and in `is_stale`.
+    /// What the plate's numbers ask a run for. What each model carries — its blockers and
+    /// its drain holes — is laid over this per model, in `hollow_tasks` and `is_stale`.
+    #[cfg(test)]
     pub fn settings(&self) -> HollowSettings {
-        HollowSettings {
-            thickness_mm: self.state.thickness_mm,
-            mode: self.state.mode,
-            precision: self.state.precision,
-            infill: self.state.infill_on.then_some(self.state.infill),
-            ..HollowSettings::default()
-        }
+        settings_of(&self.state)
+    }
+
+    /// What `object` is hollowed with: its own settings, or the plate's.
+    pub fn settings_for(&self, object: &SceneObject) -> HollowSettings {
+        settings_of(object.own.hollow.as_ref().unwrap_or(&self.state))
     }
 
     /// Why the Hollow button is greyed out, or `None` when it is not.
@@ -66,7 +66,7 @@ impl HollowTool {
 
     /// Starts a run over everything visible on the plate.
     pub fn start(&mut self, scene: &Scene) -> Result<()> {
-        let tasks = hollow_tasks(scene, &self.settings());
+        let tasks = hollow_tasks(scene, |object| self.settings_for(object));
         if tasks.is_empty() {
             bail!("nothing visible on the plate to hollow");
         }
@@ -93,7 +93,7 @@ impl HollowTool {
         std::mem::take(&mut self.hollowed)
     }
 
-    /// Drains a running job into the scene and the status bar. Returns whether one is
+    /// Drains a running job into the scene and the stage notice. Returns whether one is
     /// still going, which is what tells the window to keep repainting.
     pub fn poll(&mut self, scene: &mut Scene, status: &mut Status) -> bool {
         let Some(job) = self.job.as_mut() else {
@@ -126,6 +126,17 @@ impl HollowTool {
             HollowOutcome::Failed(message) => *status = Status::Error(message),
         }
         false
+    }
+}
+
+/// The run settings a panel's numbers ask for.
+fn settings_of(state: &HollowState) -> HollowSettings {
+    HollowSettings {
+        thickness_mm: state.thickness_mm,
+        mode: state.mode,
+        precision: state.precision,
+        infill: state.infill_on.then_some(state.infill),
+        ..HollowSettings::default()
     }
 }
 
@@ -168,6 +179,23 @@ mod tests {
     }
 
     #[test]
+    fn a_model_with_its_own_wall_is_hollowed_to_it() {
+        let mut scene = scene_with_a_tetrahedron();
+        let tool = HollowTool::default();
+        let plate_mm = tool.state.thickness_mm;
+        let mut own = tool.state.clone();
+        own.thickness_mm = plate_mm + 1.0;
+        scene.objects_mut()[0].own.hollow = Some(own);
+
+        let tasks = crate::job::hollow_tasks(&scene, |object| tool.settings_for(object));
+        assert_eq!(tasks.len(), 1);
+        assert!(
+            (tasks[0].settings.thickness_mm - (plate_mm + 1.0)).abs() < 1e-6,
+            "the model's own wall, not the plate's {plate_mm} mm"
+        );
+    }
+
+    #[test]
     fn a_finished_run_asks_once_for_the_drainage_check_that_follows_it() {
         let mut scene = scene_with_a_tetrahedron();
         let mut tool = HollowTool::default();
@@ -204,7 +232,7 @@ mod tests {
             cavity_mm3: 0.0,
             voxel_mm: 0.2,
             coarsened: false,
-            scale: Vec3::ONE,
+            shape: core_geometry::Mat3::IDENTITY,
             settings: built,
         });
         assert!(!tool.rebuild(&scene), "the shell is what it was built from");

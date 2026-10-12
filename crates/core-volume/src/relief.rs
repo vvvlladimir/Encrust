@@ -1,4 +1,4 @@
-use core_geometry::{Bvh, Heightmap, Mesh, Scalar, UvMap};
+use core_geometry::{Bvh, Heightmap, Mesh, Scalar, UvMap, Vec2, Vec3};
 use serde::{Deserialize, Serialize};
 
 use crate::build::{DEFAULT_BUDGET_BYTES, FieldSettings, build};
@@ -88,6 +88,78 @@ pub fn press(
         });
     }
 
+    let sample = |face: usize, point: Vec3| {
+        let (texture, uv) = uvs.at(mesh, face, point)?;
+        Some(heights.get(texture)?.sample(uv))
+    };
+    displaced(mesh, bvh, settings, &sample)
+}
+
+/// How a picture is laid over a model that has no map of its own: as square tiles of
+/// `tile_mm`, turned by `angle_deg` on each of the three planes it is projected along.
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+pub struct Tiling {
+    pub tile_mm: Scalar,
+    pub angle_deg: Scalar,
+}
+
+impl Default for Tiling {
+    fn default() -> Self {
+        Self {
+            tile_mm: 12.0,
+            angle_deg: 0.0,
+        }
+    }
+}
+
+/// How sharply the three projections hand over to one another as the surface turns: the
+/// normal's components to this power. Four keeps a face read from one plane until it is
+/// well past forty-five degrees.
+const BLEND_POWER: i32 = 4;
+
+/// Presses `image` into `mesh` as tiles projected along X, Y and Z, each weighted by how
+/// squarely the surface faces it, so a model needs no map; see `docs/design/volume.md`.
+pub fn press_tiled(
+    mesh: &Mesh,
+    bvh: &Bvh,
+    image: &Heightmap,
+    tiling: Tiling,
+    settings: &ReliefSettings,
+) -> Result<Relief, VolumeError> {
+    if mesh.aabb().is_none() {
+        return Err(VolumeError::EmptyMesh);
+    }
+    if !settings.amplitude_mm.is_finite() || settings.amplitude_mm == 0.0 {
+        return Err(VolumeError::BadAmplitude(settings.amplitude_mm));
+    }
+    if !tiling.tile_mm.is_finite() || tiling.tile_mm <= 0.0 {
+        return Err(VolumeError::BadTile(tiling.tile_mm));
+    }
+    let (sin, cos) = tiling.angle_deg.to_radians().sin_cos();
+    let on_plane = |a: Scalar, b: Scalar| {
+        let turned = Vec2::new(a * cos - b * sin, a * sin + b * cos);
+        image.sample(turned / tiling.tile_mm)
+    };
+    let sample = |face: usize, point: Vec3| {
+        let normal = mesh.triangle(face)?.normal_unnormalized().try_normalize()?;
+        let weights = normal.abs().powf(BLEND_POWER as Scalar);
+        let total = weights.x + weights.y + weights.z;
+        let height = weights.x * on_plane(point.y, point.z)
+            + weights.y * on_plane(point.x, point.z)
+            + weights.z * on_plane(point.x, point.y);
+        Some(height / total)
+    };
+    displaced(mesh, bvh, settings, &sample)
+}
+
+/// The surface of `mesh` moved by the height `sample` reads at its nearest point, on the
+/// finest lattice the budget allows.
+fn displaced(
+    mesh: &Mesh,
+    bvh: &Bvh,
+    settings: &ReliefSettings,
+    sample: &(dyn Fn(usize, Vec3) -> Option<Scalar> + Sync),
+) -> Result<Relief, VolumeError> {
     let asked_mm = settings.voxel_mm(mesh.surface_area());
     let mut voxel_mm = asked_mm;
     let carried = |voxel_mm: Scalar| {
@@ -98,22 +170,21 @@ pub fn press(
         }
     };
     for _ in 0..COARSENINGS {
-        match pressed(mesh, bvh, uvs, heights, settings, voxel_mm) {
+        match pressed(mesh, bvh, sample, settings, voxel_mm) {
             // The lattice the field priced is the one that fits, taken a twentieth coarser
             // still, the way a hollowing run steps back.
             Err(VolumeError::TooFine { fits_at_mm, .. }) => voxel_mm = fits_at_mm * 1.05,
             other => return other.map(carried(voxel_mm)),
         }
     }
-    pressed(mesh, bvh, uvs, heights, settings, voxel_mm).map(carried(voxel_mm))
+    pressed(mesh, bvh, sample, settings, voxel_mm).map(carried(voxel_mm))
 }
 
 /// One attempt at a given lattice.
 fn pressed(
     mesh: &Mesh,
     bvh: &Bvh,
-    uvs: &UvMap,
-    heights: &[Heightmap],
+    sample: &(dyn Fn(usize, Vec3) -> Option<Scalar> + Sync),
     settings: &ReliefSettings,
     voxel_mm: Scalar,
 ) -> Result<Mesh, VolumeError> {
@@ -148,13 +219,8 @@ fn pressed(
         let Some(found) = bvh.closest(mesh, point) else {
             return value;
         };
-        let Some((texture, uv)) = uvs.at(mesh, found.face, found.point) else {
-            return value;
-        };
-        let Some(heights) = heights.get(texture) else {
-            return value;
-        };
-        value - settings.amplitude_mm * heights.sample(uv)
+        sample(found.face, found.point)
+            .map_or(value, |height| value - settings.amplitude_mm * height)
     });
 
     Ok(extract(&displaced, Cancel::never()))
@@ -239,6 +305,36 @@ mod tests {
     /// What the lattice itself can promise: marching the cells places the surface within
     /// half a voxel, and `ReliefSettings` cuts a 0.4 mm amplitude at 0.13 mm.
     const TOLERANCE_MM: Scalar = 0.1;
+
+    #[test]
+    fn a_white_picture_tiled_over_a_cube_moves_every_side_out() {
+        let (mesh, _) = cube(10.0);
+        let bvh = Bvh::build(&mesh);
+        let settings = ReliefSettings {
+            amplitude_mm: 0.4,
+            ..ReliefSettings::default()
+        };
+        let pressed = press_tiled(&mesh, &bvh, &flat(1.0), Tiling::default(), &settings)
+            .expect("any closed mesh can be tiled");
+        let grown = bounds(&pressed.mesh);
+        // Every side reads white from the plane it faces, so all six move out 0.4 mm.
+        assert!(
+            (grown.maxs.x - 10.4).abs() < TOLERANCE_MM && (grown.mins.y + 0.4).abs() < TOLERANCE_MM,
+            "got {grown:?}"
+        );
+    }
+
+    #[test]
+    fn a_tile_of_no_size_is_refused() {
+        let (mesh, _) = cube(10.0);
+        let bvh = Bvh::build(&mesh);
+        let tiling = Tiling {
+            tile_mm: 0.0,
+            angle_deg: 0.0,
+        };
+        let refused = press_tiled(&mesh, &bvh, &flat(1.0), tiling, &ReliefSettings::default());
+        assert!(matches!(refused, Err(VolumeError::BadTile(_))));
+    }
 
     #[test]
     fn a_white_texture_moves_the_whole_surface_out() {

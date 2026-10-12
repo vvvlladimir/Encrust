@@ -34,7 +34,7 @@ A new build installs in the background and takes over once every tab of the old 
 closed. It cannot take over a running page: that page's threads import the module script
 as they start, and the new script over the old memory would not run. Only the first worker
 takes the page at once, which is what isolates it. `manifest.webmanifest` and the icons
-under `icons/` make the page installable. The title strip carries a Source link to the tag
+under `icons/` make the page installable. The top bar carries a Source link to the tag
 the build was made from, which the AGPL asks of a program served over a network.
 
 Each release carries the build as `encrust-web.tar.gz` (the `web` job in `release.yml`, on a

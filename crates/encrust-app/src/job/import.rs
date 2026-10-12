@@ -103,6 +103,11 @@ impl ImportJob {
         self.file.path()
     }
 
+    /// Whether the file has a path it can be opened from again.
+    pub fn is_on_disk(&self) -> bool {
+        matches!(self.file, Handed::Path(_))
+    }
+
     pub fn label(&self) -> String {
         let path = self.path();
         let name = path.file_name().map_or_else(

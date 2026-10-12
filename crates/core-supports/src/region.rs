@@ -79,15 +79,9 @@ impl Region {
             return 0;
         }
         // The brush is a radius on the plate, and the model's own space is where the
-        // faces live, so the radius travels with the smallest scale the model carries.
+        // faces live, so the radius travels with the least scale the model carries.
         let local = matrix.inverse().transform_point3(at);
-        let reach_mm = radius_mm
-            / placed
-                .transform
-                .scale
-                .abs()
-                .min_element()
-                .max(Scalar::MIN_POSITIVE);
+        let reach_mm = radius_mm / placed.transform.least_scale();
 
         let mut found = Vec::new();
         placed.bvh.faces_within(local, reach_mm, &mut found);

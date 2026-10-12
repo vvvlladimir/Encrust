@@ -4,7 +4,7 @@ use rayon::prelude::*;
 
 use crate::candidates::directions;
 use crate::error::PlateError;
-use crate::score::{Faces, Score};
+use crate::score::{Faces, OrientGoal, Score};
 
 /// What the search is allowed to spend, and what counts as an overhang while it looks.
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -20,6 +20,13 @@ pub struct OrientSettings {
     /// How many planes a shortlisted candidate is cut at. These are samples across the
     /// model's height, not the layers it will print at.
     pub sections: usize,
+    pub goal: OrientGoal,
+    /// How far the model may turn from the way it stands, degrees, or `None` for any
+    /// way at all.
+    pub max_tilt_deg: Option<Scalar>,
+    /// The way down the model stands now, in its own space, which the tilt is measured
+    /// from. `-Z` is the way its file was written.
+    pub down_now: Vec3,
 }
 
 impl Default for OrientSettings {
@@ -29,6 +36,9 @@ impl Default for OrientSettings {
             samples: 200,
             shortlist: 8,
             sections: 24,
+            goal: OrientGoal::FewestSupports,
+            max_tilt_deg: None,
+            down_now: Vec3::NEG_Z,
         }
     }
 }
@@ -52,8 +62,10 @@ pub struct Oriented {
 /// turning it, and only the best few are cut to find the cross-section the peel has to
 /// pull. See `docs/decisions/0087`.
 pub fn orient(mesh: &Mesh, settings: &OrientSettings) -> Result<Oriented, PlateError> {
-    let faces = Faces::of(mesh).ok_or(PlateError::NothingToOrient)?;
-    let candidates = directions(mesh, settings.samples);
+    let faces = Faces::of(mesh)
+        .ok_or(PlateError::NothingToOrient)?
+        .for_goal(settings.goal);
+    let candidates = within_tilt(directions(mesh, settings.samples), settings);
     if candidates.is_empty() {
         return Err(PlateError::NothingToOrient);
     }
@@ -81,6 +93,21 @@ pub fn orient(mesh: &Mesh, settings: &OrientSettings) -> Result<Oriented, PlateE
         score: best.1,
         considered: ranked.len(),
     })
+}
+
+/// The candidates no further than the tilt allows from the way down the model stands,
+/// which is always one of them: standing still is never out of reach.
+fn within_tilt(candidates: Vec<Vec3>, settings: &OrientSettings) -> Vec<Vec3> {
+    let Some(max_deg) = settings.max_tilt_deg else {
+        return candidates;
+    };
+    let Some(now) = settings.down_now.try_normalize() else {
+        return candidates;
+    };
+    let limit = max_deg.clamp(0.0, 180.0).to_radians().cos();
+    std::iter::once(now)
+        .chain(candidates.into_iter().filter(|down| down.dot(now) >= limit))
+        .collect()
 }
 
 /// The rotation that stands a model up with `down` pointing at the plate.
@@ -181,6 +208,35 @@ mod tests {
         let peak = found.score.peak_mm2.expect("the winner was sliced");
         assert!(peak < 200.0, "a 40 by 4 section, got {peak}");
         assert!(found.considered > 100, "the sphere was searched too");
+    }
+
+    #[test]
+    fn a_shortest_print_lays_a_tall_column_down() {
+        let mesh = cuboid(Vec3::new(6.0, 6.0, 80.0));
+        let settings = OrientSettings {
+            goal: OrientGoal::ShortestPrint,
+            ..OrientSettings::default()
+        };
+        let found = orient(&mesh, &settings).expect("a column can be oriented");
+        // Lying down it is 6 mm tall rather than 80: far fewer layers.
+        let long_axis = placed(found.rotation, Vec3::Z);
+        assert!(
+            long_axis.z.abs() < 0.05,
+            "the long axis lies flat, got {long_axis}"
+        );
+    }
+
+    #[test]
+    fn no_tilt_allowed_leaves_the_model_standing_as_it_is() {
+        let mesh = cuboid(Vec3::new(40.0, 40.0, 4.0));
+        let settings = OrientSettings {
+            max_tilt_deg: Some(0.0),
+            ..OrientSettings::default()
+        };
+        let found = orient(&mesh, &settings).expect("a slab can be oriented");
+        // Unbounded, the slab is stood on its edge; held to no tilt it stays flat.
+        let thin = placed(found.rotation, Vec3::Z);
+        assert!(thin.z.abs() > 0.999, "the slab still lies flat, got {thin}");
     }
 
     #[test]

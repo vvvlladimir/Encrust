@@ -86,6 +86,7 @@ fn plate(format: SlicedFormat) -> Plate {
         cutting: Cutting::uniform(0.5),
         exposure: ExposurePlan::default(),
         remove_islands: false,
+        hanging_passes: 0,
         format,
         raster_window: 2,
         created_unix_s: 0,

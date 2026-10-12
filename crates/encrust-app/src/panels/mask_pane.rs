@@ -1,23 +1,26 @@
+use core_analysis::Risk;
 use core_raster::RasterSettings;
 use egui::{Align2, Rect, Sense, StrokeKind, UiBuilder, Vec2};
 
+use crate::panels::inspector::risk_tint;
 use crate::preview::{PixelRect, Preview};
 use crate::state::Machine;
 use crate::status::Status;
 use crate::ui::theme;
 
-/// Points between the mask and the edge of the pane it is centred in, and the room kept
-/// clear down the right for the section rail parked against it.
+/// Points between the mask and the edge of the pane it is centred in.
 const INSET: f32 = 18.0;
-const RAIL_ROOM: f32 = 44.0;
 /// How much a point of scrolling zooms by: a notch of a wheel is about a fifth.
 const ZOOM_PER_POINT: f32 = 0.004;
+/// The ring around an issue on the shown layer, points: wide enough to find a pixel by.
+const RISK_RING_R: f32 = 12.0;
 
 /// The exposure mask, beside the model rather than under the inspector.
 ///
-/// A 300 point column cannot show an 8520 pixel panel, so Preview gives the mask half the
-/// stage; see `docs/decisions/0103`.
-pub fn ui(ui: &mut egui::Ui, machine: &mut Machine) {
+/// A 300 point column cannot show an 8520 pixel panel, so Preview gives the mask a pane of
+/// the stage, or all of it; see `docs/decisions/0103`. The picture fills the pane, under
+/// the cards as the model does; the caption keeps to `clear`, the room they leave.
+pub fn ui(ui: &mut egui::Ui, machine: &mut Machine, clear: Rect) {
     // A file being read names the panel it was written for; a profile loaded here says
     // nothing about a file another slicer wrote.
     let settings = machine
@@ -27,16 +30,24 @@ pub fn ui(ui: &mut egui::Ui, machine: &mut Machine) {
     let Some(settings) = settings else {
         caption(
             ui,
-            "Load a printer profile to know the panel to draw the layers on.",
+            clear,
+            "Pick a machine to know the panel to draw the layers on.",
         );
         return;
     };
     if machine.preview.layer_count() == 0 {
-        caption(ui, "No stack to show yet.");
+        caption(ui, clear, "No stack to show yet.");
         return;
     }
 
-    let full = picture(ui, &mut machine.preview, &settings, &mut machine.status);
+    let risks = layer_risks(machine);
+    let full = picture(
+        ui,
+        &mut machine.preview,
+        &settings,
+        &risks,
+        &mut machine.status,
+    );
     let scale = if full {
         1
     } else {
@@ -48,11 +59,28 @@ pub fn ui(ui: &mut egui::Ui, machine: &mut Machine) {
     } else {
         "scroll to zoom, drag to move".to_owned()
     };
-    caption(ui, &format!("Layer mask   1 : {scale}   {hint}"));
+    caption(ui, clear, &format!("Layer mask   1 : {scale}   {hint}"));
 }
 
-fn caption(ui: &egui::Ui, text: &str) {
-    let room = ui.max_rect();
+/// What the check found on the layer shown, once the stack is measured.
+fn layer_risks(machine: &Machine) -> Vec<Risk> {
+    let layer = machine.preview.layer();
+    machine
+        .slicing
+        .raster_settings()
+        .and_then(|settings| machine.preview.measured(&settings, machine.slicing.fold()))
+        .map(|measured| {
+            let risks = measured.risks();
+            risks
+                .into_iter()
+                .filter(|risk| risk.layer == layer)
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
+fn caption(ui: &egui::Ui, clear: Rect, text: &str) {
+    let room = ui.max_rect().intersect(clear);
     ui.painter().text(
         room.left_top() + Vec2::splat(INSET),
         Align2::LEFT_TOP,
@@ -65,12 +93,13 @@ fn caption(ui: &egui::Ui, text: &str) {
 /// Draws the mask as the view has it and answers the pointer. Returns whether what is on
 /// screen is the panel's own pixels rather than the shrunk picture.
 ///
-/// Only a failure reaches the status bar: a picture that is drawn says so by being there,
+/// Only a failure reaches the stage notice: a picture that is drawn says so by being there,
 /// and reporting it every frame would wipe out whatever else is written.
 fn picture(
     ui: &mut egui::Ui,
     preview: &mut Preview,
     settings: &RasterSettings,
+    risks: &[Risk],
     status: &mut Status,
 ) -> bool {
     let texture = match preview.texture(ui.ctx(), settings) {
@@ -86,10 +115,6 @@ fn picture(
     let panel_px = Vec2::new(settings.width_px as f32, settings.height_px as f32);
     let panel_mm = panel_px * Vec2::new(settings.pitch.x, settings.pitch.y);
     let room = ui.max_rect().shrink(INSET);
-    let room = Rect::from_min_max(
-        room.min,
-        egui::pos2(room.max.x - RAIL_ROOM + INSET, room.max.y),
-    );
     let fit_rect = Rect::from_center_size(room.center(), fit(room.size(), panel_mm.x / panel_mm.y));
 
     steer(ui, preview, room, fit_rect, panel_px);
@@ -108,7 +133,7 @@ fn picture(
     egui::Image::from_texture((texture.id(), placed.size())).paint_at(&clipped, placed);
 
     let visible = visible_pixels(room.intersect(placed), placed, settings);
-    match preview.detail(ui.ctx(), settings, visible) {
+    let full = match preview.detail(ui.ctx(), settings, visible) {
         Ok(Some((region, detail))) => {
             let at = |x: u32, y: u32| {
                 placed.min + Vec2::new(x as f32, y as f32) / panel_px * placed.size()
@@ -122,13 +147,29 @@ fn picture(
             *status = Status::failed(&error.context("cannot draw the layer in full"));
             false
         }
+    };
+    ring_risks(&clipped, risks, placed, panel_mm);
+    full
+}
+
+/// A ring in its colour around each issue on the layer, where the check found it: a cup,
+/// a thin run or a neck is not drawn into the pixels the way an island is.
+fn ring_risks(ui: &egui::Ui, risks: &[Risk], placed: Rect, panel_mm: Vec2) {
+    for risk in risks {
+        let along = Vec2::new(risk.at_mm[0], risk.at_mm[1]) / panel_mm;
+        let centre = placed.min + along * placed.size();
+        let tint = risk_tint(risk);
+        let painter = ui.painter();
+        painter.circle_filled(centre, RISK_RING_R, tint.gamma_multiply(0.18));
+        painter.circle_stroke(centre, RISK_RING_R, egui::Stroke::new(2.0, tint));
     }
 }
 
 /// Scrolling or pinching over the pane zooms about the cursor, dragging moves the picture,
 /// and a double click shows the whole panel again.
 fn steer(ui: &egui::Ui, preview: &mut Preview, room: Rect, fit_rect: Rect, panel_px: Vec2) {
-    let response = ui.interact(room, ui.id().with("mask-view"), Sense::click_and_drag());
+    // Not focusable: the picture is steered by the pointer alone.
+    let response = ui.interact(room, ui.id().with("mask-view"), Sense::CLICK | Sense::DRAG);
     let view = &mut preview.view;
     if response.double_clicked() {
         *view = Default::default();

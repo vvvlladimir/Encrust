@@ -8,6 +8,7 @@ use crate::plate::BuildPlate;
 use crate::render::{Banding, Shading, ViewportCallback};
 use crate::scene::{ObjectId, Scene};
 use crate::state::View;
+use crate::ui::theme;
 use crate::viewport_input::{Drag, Pointer};
 use crate::workspace::Tool;
 
@@ -21,7 +22,9 @@ use hollow::{
     add_channel_point_under_cursor, place_blocker_under_cursor, place_drain_under_cursor,
     remove_blocker_under_cursor, remove_drain_under_cursor,
 };
-use overlays::{cut_line, draw_bounds, draw_cut_plane, draw_facet, draw_measure, draw_picked};
+use overlays::{
+    cut_line, draw_axis_letters, draw_bounds, draw_cut_plane, draw_facet, draw_measure, draw_picked,
+};
 use paint::{draw_brush, paint_stroke};
 use picking::{
     lay_face_under_cursor, measure_under_cursor, point_at_face, select_under_cursor, takes_the_pick,
@@ -43,9 +46,9 @@ pub fn ui(ui: &mut egui::Ui, window: &mut Window) -> egui::Rect {
     // gizmo takes the pointer away from it. See `viewport_input.rs`.
     let (rect, _) = ui.allocate_exact_size(ui.available_size(), Sense::hover());
 
-    // The sheet is modal: a click meant for it must not orbit the plate or drill a hole
+    // The sheet and Find are modal: a click meant for them must not orbit the plate or drill a hole
     // in the model. The pointer is read from the raw input, which no modal layer covers.
-    let pointer = if window.view.options.sheet {
+    let pointer = if window.view.options.modal() {
         Pointer::idle()
     } else {
         pointer_state(ui, rect)
@@ -62,7 +65,9 @@ pub fn ui(ui: &mut egui::Ui, window: &mut Window) -> egui::Rect {
     // camera while either is out.
     let painting = paint_stroke(ui, window, rect, &pointer) || drag_support(window, rect, &pointer);
 
-    steer_camera(window.view, rect, &pointer, gesture.drag, painting);
+    follow_turn(ui, window.view);
+    let invert = window.machine.general.invert_zoom;
+    steer_camera(window.view, rect, &pointer, gesture.drag, painting, invert);
     if gesture.clicked
         && let Some(position) = pointer.position
     {
@@ -86,8 +91,33 @@ pub fn ui(ui: &mut egui::Ui, window: &mut Window) -> egui::Rect {
     rect
 }
 
-/// Orbits, pans and zooms the camera.
-fn steer_camera(view: &mut View, rect: egui::Rect, pointer: &Pointer, drag: Drag, painting: bool) {
+/// Moves the camera along the swing the view cube started, until it is over.
+fn follow_turn(ui: &egui::Ui, view: &mut View) {
+    let Some(turn) = view.turn else {
+        return;
+    };
+    let (camera, over) = turn.at(ui.input(|input| input.time));
+    view.camera = camera;
+    match over {
+        true => view.turn = None,
+        false => ui.ctx().request_repaint(),
+    }
+}
+
+/// Orbits, pans and zooms the camera, the wheel the other way round when `invert`. Taking
+/// hold of it ends any swing still under way.
+fn steer_camera(
+    view: &mut View,
+    rect: egui::Rect,
+    pointer: &Pointer,
+    drag: Drag,
+    painting: bool,
+    invert: bool,
+) {
+    let scrolled = pointer.over_viewport && pointer.scroll != 0.0;
+    if scrolled || (drag != Drag::None && !painting) {
+        view.turn = None;
+    }
     match drag {
         Drag::Orbit if painting => {}
         Drag::Orbit => view.camera.orbit(
@@ -98,28 +128,33 @@ fn steer_camera(view: &mut View, rect: egui::Rect, pointer: &Pointer, drag: Drag
         Drag::None => {}
     }
 
-    if pointer.over_viewport && pointer.scroll != 0.0 {
-        view.camera
-            .zoom((-pointer.scroll * ZOOM_PER_SCROLL_POINT).exp());
+    if scrolled {
+        let scroll = if invert {
+            pointer.scroll
+        } else {
+            -pointer.scroll
+        };
+        view.camera.zoom((scroll * ZOOM_PER_SCROLL_POINT).exp());
     }
 }
 
 /// What a click on the plate does, which is the tool's to say.
 fn click(ui: &egui::Ui, window: &mut Window, rect: egui::Rect, cursor: egui::Pos2) {
-    if *window.tool != Tool::Select && takes_the_pick(window, rect, cursor) {
+    let picking = *window.tool == Tool::Position;
+    if !picking && takes_the_pick(window, rect, cursor) {
         return;
     }
     match *window.tool {
         // Alt is what every modelling tool uses for "the opposite of this click", and
         // the other buttons are already spoken for by the camera.
         // A stroke of the brush has already painted whatever the click landed on.
-        Tool::Supports if window.tools.supports.placing.paints() => {}
-        Tool::Supports if ui.input(|input| input.modifiers.alt) => {
+        Tool::Paint if window.tools.supports.placing.paints() => {}
+        Tool::Paint if ui.input(|input| input.modifiers.alt) => {
             remove_support_under_cursor(window, rect, cursor);
         }
-        // The drag has already taken hold of whatever the press landed on.
-        Tool::Supports if window.tools.supports.placing.edits() => {}
-        Tool::Supports => place_support_under_cursor(window, rect, cursor),
+        Tool::Paint => place_support_under_cursor(window, rect, cursor),
+        // The drag has already taken hold of whatever part the press landed on.
+        Tool::Supports => {}
         Tool::Hollow if ui.input(|input| input.modifiers.alt) => {
             remove_blocker_under_cursor(window, rect, cursor);
         }
@@ -131,9 +166,11 @@ fn click(ui: &egui::Ui, window: &mut Window, rect: egui::Rect, cursor: egui::Pos
             add_channel_point_under_cursor(window, rect, cursor);
         }
         Tool::Drain => place_drain_under_cursor(window, rect, cursor),
-        Tool::Measure if ui.input(|input| input.modifiers.alt) => window.tools.measure.clear(),
-        Tool::Measure => measure_under_cursor(window, rect, cursor),
-        Tool::Select if window.tools.orient.picking_face => {
+        Tool::Measure => {
+            let alt = ui.input(|input| input.modifiers.alt);
+            measure_under_cursor(window, rect, cursor, alt);
+        }
+        Tool::Position if window.tools.orient.picking_face => {
             lay_face_under_cursor(window, rect, cursor);
         }
         _ => {
@@ -150,12 +187,17 @@ fn click(ui: &egui::Ui, window: &mut Window, rect: egui::Rect, cursor: egui::Pos
 }
 
 /// Hands the 3D pass its frame: the models, the plate, the section and the shading.
-fn paint_plate(ui: &egui::Ui, window: &Window, rect: egui::Rect) {
+fn paint_plate(ui: &egui::Ui, window: &mut Window, rect: egui::Rect) {
+    let textures =
+        (*window.tool == Tool::Relief).then(|| window.tools.relief.textures(&window.doc.scene));
     // What needs holding up is shown while the Supports tool is the one in hand, at the
     // angle its own profile is set to; see `docs/decisions/0034`.
-    let overhang_deg =
-        (*window.tool == Tool::Supports).then_some(window.tools.supports.profile.max_overhang_deg);
+    let overhang_deg = window
+        .tool
+        .shows_overhangs()
+        .then_some(window.tools.supports.profile.max_overhang_deg);
     crate::render::prime_label(ui.painter());
+    ui.painter().rect_filled(rect, 0.0, theme::colors().sunken);
     let callback = ViewportCallback::new(
         &window.doc.scene,
         &window.doc.plate,
@@ -168,32 +210,38 @@ fn paint_plate(ui: &egui::Ui, window: &Window, rect: egui::Rect) {
                 &window.view.section,
                 &window.machine.preview,
             ),
+            bottom_cut_mm: section::floor_height(
+                *window.mode,
+                &window.view.section,
+                &window.machine.preview,
+            ),
             banding: Banding {
                 ranges: &window.machine.slicing.exposure,
                 floor_mm: window.machine.slicing.band_floor_mm(),
             },
-            textured: *window.tool == Tool::Relief,
+            textures: textures.as_ref(),
             cut_line: cut_line(window),
         },
         rect,
     );
     ui.painter()
         .add(egui_wgpu::Callback::new_paint_callback(rect, callback));
+    draw_axis_letters(ui, window, rect);
 }
 
 /// The chrome each tool draws over the 3D pass: bounds, gizmo, measurement, brush.
 fn draw_tool_overlays(ui: &egui::Ui, window: &mut Window, rect: egui::Rect, pointer: &Pointer) {
-    if *window.tool == Tool::Select {
+    if *window.tool == Tool::Position {
         draw_bounds(ui, window, rect);
     }
-    if *window.tool == Tool::Select && window.tools.orient.picking_face {
+    if *window.tool == Tool::Position && window.tools.orient.picking_face {
         let hovered = pointer.over_viewport.then_some(pointer.position).flatten();
         point_at_face(window, rect, hovered.map(|at| egui::pos2(at.x, at.y)));
         draw_facet(ui, window, rect);
     }
     // While a face is being picked the click is for the model, not for a handle over it.
-    if !window.view.options.sheet
-        && *window.tool == Tool::Select
+    if !window.view.options.modal()
+        && *window.tool == Tool::Position
         && !window.tools.orient.picking_face
     {
         show_gizmo(ui, window, rect);
@@ -204,19 +252,30 @@ fn draw_tool_overlays(ui: &egui::Ui, window: &mut Window, rect: egui::Rect, poin
     if *window.tool == Tool::Cut {
         draw_cut_plane(ui, window, rect);
     }
-    if *window.tool == Tool::Supports && window.tools.supports.placing.paints() {
+    if *window.tool == Tool::Paint && window.tools.supports.placing.paints() {
         draw_brush(ui, window, rect);
     }
-    if *window.tool == Tool::Supports && window.tools.supports.placing.edits() {
+    if *window.tool == Tool::Supports {
         draw_picked(ui, window, rect);
     }
+}
+
+/// Draws the view with or without perspective, ending any swing that would put it back.
+pub fn set_orthographic(view: &mut View, orthographic: bool) {
+    view.turn = None;
+    view.camera.orthographic = orthographic;
 }
 
 /// Points the camera at everything on the plate, or at the plate itself when it is empty.
 pub fn frame_view(scene: &Scene, plate: &BuildPlate, camera: &mut OrbitCamera) {
     match scene.world_bounds() {
         Some(bounds) => camera.frame(&bounds),
-        None => *camera = OrbitCamera::framing_plate(plate),
+        None => {
+            *camera = OrbitCamera {
+                orthographic: camera.orthographic,
+                ..OrbitCamera::framing_plate(plate)
+            }
+        }
     }
 }
 
@@ -274,10 +333,21 @@ fn show_gizmo(ui: &egui::Ui, window: &mut Window, viewport: egui::Rect) {
         return;
     }
 
-    let Some(moved) = window
-        .view
-        .gizmo
-        .show(ui, viewport, &window.view.camera, &pivots)
+    // The crate listens wherever the pointer is, within the clip of the `Ui` it is handed;
+    // the stage's would take every press on the layer strip as well.
+    let mut over_viewport = egui::Ui::new(
+        ui.ctx().clone(),
+        ui.id().with("gizmo"),
+        egui::UiBuilder::new()
+            .layer_id(ui.layer_id())
+            .max_rect(viewport),
+    );
+    over_viewport.set_clip_rect(viewport.intersect(ui.clip_rect()));
+    let Some(moved) =
+        window
+            .view
+            .gizmo
+            .show(&over_viewport, viewport, &window.view.camera, &pivots)
     else {
         return;
     };

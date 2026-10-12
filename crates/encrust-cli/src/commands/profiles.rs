@@ -9,10 +9,27 @@ use crate::{json, profiles};
 
 #[derive(clap::Subcommand, Debug)]
 pub enum ProfilesCommand {
-    /// List every printer and resin, the user's own marked.
+    /// List every printer, resin, support profile and tool preset, the user's own marked.
     List,
     /// Print one profile as TOML, the starting point for one of your own.
     Show(ShowArgs),
+    /// Take a profile file someone exported into your own catalogue, under an id of its
+    /// own: an import never writes over what you have.
+    Import(ImportArgs),
+}
+
+#[derive(clap::Args, Debug)]
+pub struct ImportArgs {
+    /// The exported profile, a TOML file.
+    pub file: PathBuf,
+
+    /// What the file holds.
+    #[arg(long, value_enum)]
+    pub kind: ProfileKind,
+
+    /// The printer a resin is set up on, by id; it keeps whatever else it was tuned for.
+    #[arg(long, value_name = "ID")]
+    pub printer: Option<String>,
 }
 
 #[derive(clap::Args, Debug)]
@@ -20,7 +37,7 @@ pub struct ShowArgs {
     /// The profile's id, as `profiles list` prints it.
     pub id: String,
 
-    /// Which kind of profile, when a printer, a resin or a support profile share the id.
+    /// Which kind of profile, when two kinds share the id.
     #[arg(long, value_enum)]
     pub kind: Option<ProfileKind>,
 
@@ -34,6 +51,10 @@ pub enum ProfileKind {
     Printer,
     Resin,
     Support,
+    /// Named settings of the Hollow tool.
+    Hollow,
+    /// Named settings of the Drain tool.
+    Drain,
 }
 
 impl From<ProfileKind> for Kind {
@@ -42,6 +63,8 @@ impl From<ProfileKind> for Kind {
             ProfileKind::Printer => Self::Printer,
             ProfileKind::Resin => Self::Resin,
             ProfileKind::Support => Self::Support,
+            ProfileKind::Hollow => Self::Hollow,
+            ProfileKind::Drain => Self::Drain,
         }
     }
 }
@@ -58,6 +81,7 @@ impl ProfilesCommand {
                 }
             }
             Self::Show(args) => show(args, global)?,
+            Self::Import(args) => import(args, global)?,
         }
         Ok(Exit::Success)
     }
@@ -82,6 +106,18 @@ fn show(args: &ShowArgs, global: &GlobalArgs) -> Result<()> {
         }
         Some(_) => {}
         None => print!("{toml}"),
+    }
+    Ok(())
+}
+
+fn import(args: &ImportArgs, global: &GlobalArgs) -> Result<()> {
+    let kind = Kind::from(args.kind);
+    let id = profiles::import(&args.file, kind, args.printer.as_deref())?;
+    if global.json {
+        return json::print(&serde_json::json!({ "id": id, "kind": kind.label() }));
+    }
+    if global.talks() {
+        println!("{} {} imported as {id}", kind.label(), args.file.display());
     }
     Ok(())
 }

@@ -51,9 +51,9 @@ pub(super) fn place_drain_under_cursor(
         return;
     };
     window.doc.scene.select(Some(id));
-    let size = window.tools.drain.size();
     window.tools.drain.stale();
     if let Some(object) = window.doc.scene.get_mut(id) {
+        let size = window.tools.drain.size_for(object);
         let transform = object.transform;
         object.hollow.add_drain(
             &object.mesh,

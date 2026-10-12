@@ -6,7 +6,7 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use crate::{
-    DirStore, MaterialProfile, PrinterProfile, ProfileError, ProfileStore, SupportProfile,
+    DirStore, MaterialProfile, Preset, PrinterProfile, ProfileError, ProfileStore, SupportProfile,
 };
 
 include!(concat!(env!("OUT_DIR"), "/bundled_profiles.rs"));
@@ -20,6 +20,10 @@ pub enum Kind {
     Printer,
     Resin,
     Support,
+    /// Named settings of the Hollow tool, as a [`Preset`].
+    Hollow,
+    /// Named settings of the Drain tool, as a [`Preset`].
+    Drain,
 }
 
 impl Kind {
@@ -28,6 +32,8 @@ impl Kind {
             Self::Printer => "printers",
             Self::Resin => "resins",
             Self::Support => "supports",
+            Self::Hollow => "hollow",
+            Self::Drain => "drain",
         }
     }
 
@@ -36,6 +42,8 @@ impl Kind {
             Self::Printer => "printer",
             Self::Resin => "resin",
             Self::Support => "support profile",
+            Self::Hollow => "hollow profile",
+            Self::Drain => "drain profile",
         }
     }
 }
@@ -63,6 +71,12 @@ pub struct Catalogue {
     printers: BTreeMap<String, Entry<PrinterProfile>>,
     resins: BTreeMap<String, Entry<MaterialProfile>>,
     supports: BTreeMap<String, Entry<SupportProfile>>,
+    /// Named tool settings, which nothing ships: each is the user's own.
+    hollows: BTreeMap<String, Entry<Preset>>,
+    drains: BTreeMap<String, Entry<Preset>>,
+    /// Preset files that would not read, left out rather than failing the catalogue: a
+    /// tool's settings are never what a slice depends on.
+    unreadable: Vec<PathBuf>,
     /// Where an edited profile is written. `None` until a store is laid over the
     /// catalogue, which is what makes a bundled-only catalogue read-only.
     store: Option<Arc<dyn ProfileStore>>,
@@ -75,6 +89,9 @@ impl Catalogue {
             printers: bundled_table(BUNDLED_PRINTERS, "printers", PrinterProfile::from_toml_str)?,
             resins: bundled_table(BUNDLED_RESINS, "resins", MaterialProfile::from_toml_str)?,
             supports: bundled_table(BUNDLED_SUPPORTS, "supports", SupportProfile::from_toml_str)?,
+            hollows: BTreeMap::new(),
+            drains: BTreeMap::new(),
+            unreadable: Vec::new(),
             store: None,
         })
     }
@@ -123,8 +140,19 @@ impl Catalogue {
             Kind::Support,
             SupportProfile::from_toml_str,
         )?;
+        for kind in [Kind::Hollow, Kind::Drain] {
+            if let Some(table) = self.preset_table_mut(kind) {
+                let skipped = overlay_presets(table, &*store, kind)?;
+                self.unreadable.extend(skipped);
+            }
+        }
         self.store = Some(store);
         Ok(())
+    }
+
+    /// The preset files left out of the catalogue because they would not read.
+    pub fn unreadable(&self) -> &[PathBuf] {
+        &self.unreadable
     }
 
     /// Whether edits have somewhere to be written.
@@ -142,6 +170,57 @@ impl Catalogue {
 
     pub fn supports(&self) -> impl Iterator<Item = &Entry<SupportProfile>> {
         self.supports.values()
+    }
+
+    /// The named settings kept for a tool: `Kind::Hollow` or `Kind::Drain`, none else.
+    pub fn presets(&self, kind: Kind) -> impl Iterator<Item = &Entry<Preset>> {
+        self.preset_table(kind)
+            .into_iter()
+            .flat_map(BTreeMap::values)
+    }
+
+    fn preset_table(&self, kind: Kind) -> Option<&BTreeMap<String, Entry<Preset>>> {
+        match kind {
+            Kind::Hollow => Some(&self.hollows),
+            Kind::Drain => Some(&self.drains),
+            Kind::Printer | Kind::Resin | Kind::Support => None,
+        }
+    }
+
+    fn preset_table_mut(&mut self, kind: Kind) -> Option<&mut BTreeMap<String, Entry<Preset>>> {
+        match kind {
+            Kind::Hollow => Some(&mut self.hollows),
+            Kind::Drain => Some(&mut self.drains),
+            Kind::Printer | Kind::Resin | Kind::Support => None,
+        }
+    }
+
+    /// Writes `preset` as the named settings of `kind` under `id`. A kind that is not a
+    /// tool's is unknown to this call.
+    pub fn save_preset(
+        &mut self,
+        kind: Kind,
+        id: &str,
+        preset: &Preset,
+    ) -> Result<PathBuf, ProfileError> {
+        if self.preset_table(kind).is_none() {
+            return Err(ProfileError::Unknown {
+                kind: kind.label(),
+                id: id.to_owned(),
+            });
+        }
+        let path = self.keep(kind, id, |path| preset.to_toml_string(path))?;
+        if let Some(table) = self.preset_table_mut(kind) {
+            table.insert(
+                id.to_owned(),
+                Entry {
+                    id: id.to_owned(),
+                    profile: preset.clone(),
+                    source: Source::User(path.clone()),
+                },
+            );
+        }
+        Ok(path)
     }
 
     pub fn support(&self, id: &str) -> Result<&Entry<SupportProfile>, ProfileError> {
@@ -181,6 +260,7 @@ impl Catalogue {
             Kind::Printer => BUNDLED_PRINTERS,
             Kind::Resin => BUNDLED_RESINS,
             Kind::Support => BUNDLED_SUPPORTS,
+            Kind::Hollow | Kind::Drain => return false,
         };
         table.iter().any(|(name, _)| *name == id)
     }
@@ -298,6 +378,12 @@ impl Catalogue {
                 id,
                 SupportProfile::from_toml_str,
             ),
+            Kind::Hollow | Kind::Drain => {
+                if let Some(table) = self.preset_table_mut(kind) {
+                    table.remove(id);
+                }
+                Ok(())
+            }
         }
     }
 }
@@ -394,10 +480,95 @@ fn overlay<T>(
     Ok(())
 }
 
+/// Lays the presets of `kind` over `map`, and answers the files that would not read.
+fn overlay_presets(
+    map: &mut BTreeMap<String, Entry<Preset>>,
+    store: &dyn ProfileStore,
+    kind: Kind,
+) -> Result<Vec<PathBuf>, ProfileError> {
+    let mut unreadable = Vec::new();
+    for (id, path, toml) in store.read_all(kind)? {
+        match Preset::from_toml_str(&toml, &path) {
+            Ok(profile) => {
+                let source = Source::User(path);
+                map.insert(
+                    id.clone(),
+                    Entry {
+                        id,
+                        profile,
+                        source,
+                    },
+                );
+            }
+            Err(_) => unreadable.push(path),
+        }
+    }
+    Ok(unreadable)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::PrinterTuning;
+
+    #[test]
+    fn a_broken_preset_is_left_out_and_the_rest_of_the_catalogue_reads() {
+        in_its_own_dir("broken-preset", |dir, _| {
+            let drain = dir.join("drain");
+            std::fs::create_dir_all(&drain).expect("writable");
+            std::fs::write(drain.join("broken.toml"), "name = ").expect("writable");
+
+            let catalogue = Catalogue::with_root(dir).expect("a preset cannot fail the catalogue");
+            assert!(catalogue.printer("elegoo-mars-4-ultra").is_ok());
+            assert_eq!(catalogue.presets(Kind::Drain).count(), 0);
+            assert_eq!(catalogue.unreadable(), [drain.join("broken.toml")]);
+        });
+    }
+
+    #[test]
+    fn a_hollow_preset_is_kept_beside_the_profiles_and_forgotten() {
+        in_its_own_dir("hollow-preset", |dir, mut catalogue| {
+            let preset = Preset {
+                name: "Hive 2 mm".to_owned(),
+                settings: toml::Table::from_iter([("thickness_mm".to_owned(), 2.0.into())]),
+            };
+            let path = catalogue
+                .save_preset(Kind::Hollow, "hive-2-mm", &preset)
+                .expect("writable");
+            assert_eq!(path, dir.join("hollow/hive-2-mm.toml"));
+            let reloaded = Catalogue::with_root(dir).expect("the directory reads back");
+            let kept: Vec<&str> = reloaded
+                .presets(Kind::Hollow)
+                .map(|entry| entry.profile.name.as_str())
+                .collect();
+            assert_eq!(kept, ["Hive 2 mm"]);
+            assert_eq!(
+                reloaded.presets(Kind::Drain).count(),
+                0,
+                "kept apart by tool"
+            );
+
+            catalogue
+                .forget_user_copy(Kind::Hollow, "hive-2-mm")
+                .expect("removable");
+            assert_eq!(
+                catalogue.presets(Kind::Hollow).count(),
+                0,
+                "nothing shipped to fall back on"
+            );
+        });
+    }
+
+    #[test]
+    fn only_a_tools_kind_takes_a_preset() {
+        let mut catalogue = Catalogue::bundled().expect("shipped");
+        let preset = Preset {
+            name: "x".to_owned(),
+            settings: toml::Table::new(),
+        };
+        let refused = catalogue.save_preset(Kind::Printer, "x", &preset);
+        assert!(matches!(refused, Err(ProfileError::Unknown { .. })));
+    }
 
     #[test]
     fn every_bundled_profile_parses() {

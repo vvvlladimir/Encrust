@@ -1,8 +1,7 @@
-//! The question asked before a profile is thrown away. Everything the Settings screen
-//! writes is written as it settles and there is no undo on it (ADR 0120), so a deletion
+//! The question asked before a profile is thrown away. Everything the two windows write is written as it settles and there is no undo on it (ADR 0120), so a deletion
 //! is asked about first; see ADR 0196.
 
-use printer_profiles::Catalogue;
+use printer_profiles::{Catalogue, Kind};
 
 use crate::settings::{Deleting, is_thrown_away_with_the_printer, other_printers};
 use crate::ui::{card, describe, inline_button, secondary_button, theme};
@@ -20,25 +19,25 @@ struct Question {
     gone: bool,
 }
 
-/// The dialog over the screen, if a deletion is waiting. Answers with what was confirmed.
+/// The dialog over the window, if a deletion is waiting. Answers with what was confirmed.
 pub(super) fn ask(
     ctx: &egui::Context,
     catalogue: &Catalogue,
     deleting: &Deleting,
 ) -> Option<Answer> {
     let question = question(catalogue, deleting);
-    let mut open = true;
     let mut answer = None;
-    egui::Window::new(question.title)
-        .collapsible(false)
-        .resizable(false)
-        // A question about something that cannot be undone stands in the middle of the
-        // window, not wherever egui last put a window of that name.
-        .anchor(egui::Align2::CENTER_CENTER, egui::Vec2::ZERO)
+    // A modal of its own, so it stands over the window it was asked from.
+    let modal = egui::Modal::new(egui::Id::new("confirm-deletion"))
         .frame(card().inner_margin(theme::PANEL_MARGIN))
-        .open(&mut open)
         .show(ctx, |ui| {
             ui.set_width(380.0);
+            ui.label(
+                egui::RichText::new(question.title)
+                    .font(theme::dialog_title())
+                    .color(theme::colors().text_high),
+            );
+            ui.add_space(6.0);
             ui.label(egui::RichText::new(&question.what).font(theme::label()));
             if let Some(cost) = &question.cost {
                 describe(ui, cost);
@@ -56,9 +55,9 @@ pub(super) fn ask(
                 }
             });
         });
-    match open {
-        true => answer,
-        false => Some(Answer::Cancelled),
+    match modal.should_close() {
+        true => Some(Answer::Cancelled),
+        false => answer,
     }
 }
 
@@ -81,13 +80,11 @@ fn question(catalogue: &Catalogue, deleting: &Deleting) -> Question {
                 what: format!("Remove {name} and everything you changed on it?"),
                 verb: "Remove",
                 gone: true,
-                cost: catalogue
-                    .is_shipped(printer_profiles::Kind::Printer, id)
-                    .then(|| {
-                        "The machine stays in the library, so it can be added again with \
+                cost: catalogue.is_shipped(Kind::Printer, id).then(|| {
+                    "The machine stays in the library, so it can be added again with \
                          the numbers this build ships."
-                            .to_owned()
-                    }),
+                        .to_owned()
+                }),
             }
         }
         Deleting::ResinOff { printer, resin } => {
@@ -133,7 +130,26 @@ fn question(catalogue: &Catalogue, deleting: &Deleting) -> Question {
                     .then(|| format!("It comes off {} as well.", others.join(", "))),
             }
         }
+        Deleting::Profile(kind, id) => Question {
+            title: "Delete this profile",
+            what: format!("Delete {}?", profile_name(catalogue, *kind, id)),
+            verb: "Delete",
+            gone: true,
+            cost: None,
+        },
     }
+}
+
+/// What a support profile or a tool's preset is called, or its id when it has gone.
+fn profile_name(catalogue: &Catalogue, kind: Kind, id: &str) -> String {
+    let name = match kind {
+        Kind::Support => catalogue.support(id).ok().map(|entry| &entry.profile.name),
+        _ => catalogue
+            .presets(kind)
+            .find(|entry| entry.id == id)
+            .map(|entry| &entry.profile.name),
+    };
+    name.map_or_else(|| id.to_owned(), Clone::clone)
 }
 
 fn resin_name(catalogue: &Catalogue, id: &str) -> String {

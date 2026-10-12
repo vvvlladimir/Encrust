@@ -21,7 +21,7 @@ mod file;
 mod job;
 mod picture;
 
-pub use picture::{MaskView, PixelRect};
+pub use picture::{MaskView, PixelRect, on_plate};
 
 /// The sliced stack the preview panel is showing, and the build that produces it.
 #[derive(Default)]
@@ -56,6 +56,7 @@ pub struct Preview {
 pub struct Fold {
     pub held_layers: usize,
     pub remove_islands: bool,
+    pub hanging_passes: u32,
     pub tolerance: Tolerance,
 }
 
@@ -63,7 +64,7 @@ impl Fold {
     fn start(self) -> Measured {
         let fold = Measured::new(self.held_layers);
         if self.remove_islands {
-            fold.removing_islands()
+            fold.removing_hanging(self.hanging_passes)
         } else {
             fold
         }
@@ -209,7 +210,10 @@ pub fn plate_fingerprint(scene: &Scene) -> u64 {
             transform.scale.x,
             transform.scale.y,
             transform.scale.z,
-        ] {
+        ]
+        .into_iter()
+        .chain(transform.stretch.to_cols_array())
+        {
             value.to_bits().hash(&mut hasher);
         }
     }
@@ -228,10 +232,15 @@ impl Preview {
             return;
         };
         let count = source.layer_count();
-        let Some(height_mm) = height_mm else {
-            self.layer = count.saturating_sub(1);
-            return;
+        self.layer = match height_mm {
+            Some(height_mm) => self.layer_topping_near(height_mm),
+            None => count.saturating_sub(1),
         };
+    }
+
+    /// The layer whose top stands nearest `height_mm`, clamped to the stack.
+    pub fn layer_topping_near(&self, height_mm: Scalar) -> usize {
+        let count = self.layer_count();
         let height = |layer: usize| self.top_of(layer).unwrap_or(Scalar::MAX);
         let (mut below, mut above) = (0, count);
         while below < above {
@@ -248,7 +257,7 @@ impl Preview {
         } else {
             under
         };
-        self.layer = nearer.min(count.saturating_sub(1));
+        nearer.min(count.saturating_sub(1))
     }
 
     /// The height to hand the Prepare mode: the layer being shown, `None` at the top layer
@@ -299,6 +308,17 @@ impl Preview {
     /// the printer and the written file state it.
     pub fn layer_z(&self) -> Option<Scalar> {
         self.top_of(self.layer)
+    }
+
+    /// Bottom of layer `index` above the plate, millimetres, or `None` for the first,
+    /// which stands on the plate.
+    pub fn bottom_of(&self, index: usize) -> Option<Scalar> {
+        self.top_of(index.checked_sub(1)?)
+    }
+
+    /// Top of the last layer above the plate, millimetres: how tall the stack stands.
+    pub fn stack_top_mm(&self) -> Option<Scalar> {
+        self.top_of(self.layer_count().checked_sub(1)?)
     }
 
     /// Top of layer `index` above the plate, millimetres: the plan's for a plate being cut,
@@ -608,6 +628,19 @@ pub(crate) mod tests {
         assert_eq!(preview.layer(), 3, "above it, its last");
         preview.show_height(None);
         assert_eq!(preview.layer(), 3, "an uncut model is the top of the stack");
+    }
+
+    #[test]
+    fn a_layer_stands_on_the_top_of_the_one_under_it_and_the_first_on_the_plate() {
+        // Four layers of half a millimetre, topping out at 0.5, 1.0, 1.5 and 2.0.
+        let preview = preview_with_stack(4);
+        assert_eq!(
+            preview.bottom_of(0),
+            None,
+            "the first layer stands on the plate"
+        );
+        assert_eq!(preview.bottom_of(2), Some(1.0));
+        assert_eq!(preview.bottom_of(9), None, "past the stack is no layer");
     }
 
     #[test]

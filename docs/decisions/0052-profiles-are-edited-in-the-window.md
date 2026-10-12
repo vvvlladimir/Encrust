@@ -1,6 +1,7 @@
 # 0052. Edit profiles in the window, into the user's own directory
 
-- **Status:** Accepted
+- **Status:** Accepted; where the machines and resins are edited is superseded by 0220, and
+  the Settings screen by 0233
 - **Date:** 2026-09-20
 
 ## Context

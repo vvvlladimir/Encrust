@@ -1,4 +1,4 @@
-use crate::camera::OrbitCamera;
+use crate::camera::{CameraTurn, OrbitCamera};
 use crate::cut::CutTool;
 use crate::drain::DrainTool;
 use crate::gizmo::TransformGizmo;
@@ -10,6 +10,7 @@ use crate::orient::OrientTool;
 use crate::plate::BuildPlate;
 use crate::preview::Preview;
 use crate::project::Opened;
+use crate::recent::Recent;
 use crate::relief::ReliefTool;
 use crate::repair::Repairs;
 use crate::report::Report;
@@ -42,6 +43,8 @@ pub struct View {
     pub gizmo: TransformGizmo,
     pub section: Section,
     pub input: ViewportInput,
+    /// The swing the view cube asked for, while it is still under way.
+    pub turn: Option<CameraTurn>,
 }
 
 impl View {
@@ -53,6 +56,7 @@ impl View {
             gizmo: TransformGizmo::default(),
             section: Section::default(),
             input: ViewportInput::default(),
+            turn: None,
         }
     }
 }
@@ -67,6 +71,7 @@ pub struct Tools {
     pub relief: ReliefTool,
     pub orient: OrientTool,
     pub measure: Measure,
+    pub measure_edges: crate::measure::EdgeCache,
     pub array: Array,
 }
 
@@ -81,4 +86,8 @@ pub struct Machine {
     pub updates: Updates,
     /// The bug report being written, while the sheet for it is open.
     pub report: Report,
+    /// The files opened lately, for the start page.
+    pub recent: Recent,
+    /// How the window itself behaves, from the Settings window's General page.
+    pub general: crate::prefs::General,
 }

@@ -1,5 +1,5 @@
 //! The fields of one support profile, in the groups both the Supports tool and the
-//! Settings screen lay them out in.
+//! Settings window lay them out in.
 
 use std::ops::RangeInclusive;
 
@@ -64,6 +64,14 @@ impl Group {
             Self::Raft => "Raft",
             Self::Bracing => "Cross bracing",
             Self::Automatic => "Automatic",
+        }
+    }
+
+    /// The switch that turns the whole group on, which its heading carries.
+    pub fn switch(self, profile: &mut SupportProfile) -> Option<&mut bool> {
+        match self {
+            Self::Branching => Some(&mut profile.branching.enabled),
+            _ => None,
         }
     }
 
@@ -248,7 +256,6 @@ fn small_pillar(ui: &mut egui::Ui, profile: &mut SupportProfile) {
 /// How nearby tips merge into shared trunks on the way down.
 fn branching(ui: &mut egui::Ui, profile: &mut SupportProfile) {
     let branching = &mut profile.branching;
-    switch(ui, &mut branching.enabled, "Branching");
     if !branching.enabled {
         describe(ui, "Every tip stands on a column of its own.");
         return;
