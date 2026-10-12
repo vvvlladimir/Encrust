@@ -17,7 +17,7 @@ use std::path::Path;
 use std::sync::Arc;
 
 use core_format::ExposureRange;
-use core_geometry::{Mesh, MeshDiagnostics, Orientation, Scalar, Transform, Vec3};
+use core_geometry::{Mat3, Mesh, MeshDiagnostics, Orientation, Scalar, Transform, Vec3};
 use core_slicer::AdaptiveSettings;
 use core_supports::{ProjectSettings, Region, SupportPoint, SupportTree};
 use core_volume::{Blocker, Channel, DrainHole, HollowMode, HollowSettings, InfillSettings};
@@ -315,8 +315,26 @@ pub struct BuiltCavity {
     /// it coarser than the precision asked for.
     pub voxel_mm: Scalar,
     pub coarsened: bool,
-    /// The scale the model stood at, which the wall was measured under.
+    /// The size the model stood at, which the wall was measured under; see [`Self::shape`].
     pub scale: Vec3,
+    /// That size whole, written only where the model was stretched along the plate too.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub stretched: Option<Mat3>,
+}
+
+impl BuiltCavity {
+    /// What the wall was measured under (`Transform::unturned`), however the file wrote it.
+    pub fn shape(&self) -> Mat3 {
+        self.stretched
+            .unwrap_or_else(|| Mat3::from_diagonal(self.scale.abs()))
+    }
+
+    /// `shape` as the two keys write it: its diagonal, and itself where that is not all.
+    pub fn keys_of(shape: Mat3) -> (Vec3, Option<Mat3>) {
+        let diagonal = Vec3::new(shape.x_axis.x, shape.y_axis.y, shape.z_axis.z);
+        let stretched = (shape != Mat3::from_diagonal(diagonal)).then_some(shape);
+        (diagonal, stretched)
+    }
 }
 
 /// The wall a model was hollowed to, as the Hollow panel shows it.
@@ -528,7 +546,13 @@ mod tests {
         ObjectState {
             name: format!("model {index}"),
             plate: 0,
-            transform: Transform::from_translation(Vec3::new(1.0, 2.0, 3.0)),
+            transform: if index == 1 {
+                Transform::from_translation(Vec3::new(1.0, 2.0, 3.0))
+                    .turned(core_geometry::Quat::from_rotation_x(0.6))
+                    .stretched(Vec3::new(1.0, 1.0, 1.5))
+            } else {
+                Transform::from_translation(Vec3::new(1.0, 2.0, 3.0))
+            },
             visible: true,
             summary: Summary {
                 vertices_merged: 7,
@@ -577,6 +601,11 @@ mod tests {
                     voxel_mm: 0.2,
                     coarsened: false,
                     scale: Vec3::ONE,
+                    stretched: (index == 1).then_some(Mat3::from_cols(
+                        Vec3::new(2.0, 0.0, 0.0),
+                        Vec3::new(0.5, 1.0, 0.0),
+                        Vec3::new(0.0, 0.25, 1.5),
+                    )),
                 }),
             },
             own_hollow: None,
@@ -667,6 +696,31 @@ mod tests {
         fields.remove("own_drain");
         let read: ObjectState = serde_json::from_value(older).expect("a file from before reads");
         assert_eq!(read.own_drain, None);
+    }
+
+    #[test]
+    fn a_stretched_model_comes_back_stretched_and_a_file_from_before_reads() {
+        let saved = project(2);
+        let back = round_trip(&saved);
+        let (object, was) = (&back.manifest.objects[1], &saved.manifest.objects[1]);
+        assert_eq!(object.transform, was.transform);
+        assert_eq!(object.hollow.built, was.hollow.built);
+
+        let mut older = serde_json::to_value(&back.manifest.objects[0]).expect("serialises");
+        assert!(
+            older["transform"].get("stretch").is_none(),
+            "nothing stretched writes the transform as a file from before has it"
+        );
+        let built = older["hollow"]["built"].as_object_mut().expect("a shell");
+        assert!(built.remove("stretched").is_none());
+        built.insert("scale".to_owned(), serde_json::json!([-2.0, 1.0, 0.5]));
+        let read: ObjectState = serde_json::from_value(older).expect("a file from before reads");
+        assert_eq!(read.transform.stretch, Mat3::IDENTITY);
+        assert_eq!(
+            read.hollow.built.map(|built| built.shape()),
+            Some(Mat3::from_diagonal(Vec3::new(2.0, 1.0, 0.5))),
+            "an older shell was measured under the size of its scale"
+        );
     }
 
     #[test]

@@ -1,5 +1,5 @@
 use core_geometry::glam::EulerRot;
-use core_geometry::{Quat, Transform, Vec3};
+use core_geometry::{Mat3, Quat, Transform, Vec3};
 use core_plate::OrientGoal;
 
 use crate::gizmo::Axes;
@@ -117,23 +117,24 @@ fn rotation(ui: &mut egui::Ui, window: &mut Window, id: ObjectId, axes: Axes) {
     let tooltip = "Back to the way the model was imported";
     let (reset, _) = section_with_action(ui, "Rotation", (icon::RESET, tooltip), |ui| {
         if let Some(object) = window.doc.scene.get_mut(id) {
-            let mut pivot = object.pivot();
-            if rotation_rows(ui, &mut pivot, axes) {
-                object.settle(pivot);
+            let pivot = object.pivot();
+            if let Some(turn) = rotation_rows(ui, pivot.rotation, axes) {
+                object.settle(pivot.turned(turn));
             }
         }
     });
     if reset && let Some(object) = window.doc.scene.get_mut(id) {
-        object.settle(Transform {
-            rotation: Quat::IDENTITY,
-            ..object.pivot()
-        });
+        let pivot = object.pivot();
+        object.settle(pivot.turned(pivot.rotation.inverse()));
         object.stand_on_plate();
     }
 }
 
-fn rotation_rows(ui: &mut egui::Ui, pivot: &mut Transform, axes: Axes) -> bool {
-    let (x, y, z) = pivot.rotation.to_euler(EulerRot::XYZ);
+/// The angles the model is turned to, and the buttons that turn it further. Answers the
+/// turn about the plate's axes a frame asked for, which every turn is, so a stretch the
+/// model carries turns with it.
+fn rotation_rows(ui: &mut egui::Ui, rotation: Quat, axes: Axes) -> Option<Quat> {
+    let (x, y, z) = rotation.to_euler(EulerRot::XYZ);
     // Rounded to what the field shows, plus zero, so float dust never reads as "-0.00".
     let shown = |radians: f32| (radians.to_degrees() * 100.0).round() / 100.0 + 0.0;
     let mut degrees = Vec3::new(shown(x), shown(y), shown(z));
@@ -158,31 +159,27 @@ fn rotation_rows(ui: &mut egui::Ui, pivot: &mut Transform, axes: Axes) -> bool {
         });
     }
     if typed {
-        pivot.rotation = Quat::from_euler(
+        let wanted = Quat::from_euler(
             EulerRot::XYZ,
             degrees.x.to_radians(),
             degrees.y.to_radians(),
             degrees.z.to_radians(),
         );
+        return Some(wanted * rotation.inverse());
     }
-    let turned = turn != Quat::IDENTITY;
-    if turned {
-        pivot.rotation = turned_by(pivot.rotation, turn, axes);
-    }
-    typed || turned
+    (turn != Quat::IDENTITY).then(|| about_plate(rotation, turn, axes))
 }
 
-/// `rotation` with `turn` applied about the plate's axes or about the model's own.
-fn turned_by(rotation: Quat, turn: Quat, axes: Axes) -> Quat {
+/// `turn`, asked about the plate's axes or about the model's own, as a turn about the
+/// plate's.
+fn about_plate(rotation: Quat, turn: Quat, axes: Axes) -> Quat {
     match axes {
-        Axes::Global => turn * rotation,
-        Axes::Local => rotation * turn,
+        Axes::Global => turn,
+        Axes::Local => rotation * turn * rotation.inverse(),
     }
-    .normalize()
 }
 
-/// The model's size along the plate's axes or its own, and its stretch on each of its own
-/// axes as a percentage of the imported size.
+/// The model's size and stretch along the plate's axes or along its own.
 fn scale(ui: &mut egui::Ui, scene: &mut Scene, id: ObjectId, axes: Axes) {
     let linked_id = ui.id().with("scale-linked");
     let mut linked = ui.memory(|memory| memory.data.get_temp(linked_id).unwrap_or(true));
@@ -197,6 +194,7 @@ fn scale(ui: &mut egui::Ui, scene: &mut Scene, id: ObjectId, axes: Axes) {
         let pivot = object.pivot();
         object.settle(Transform {
             scale: keeping_mirror(pivot.scale, Vec3::ONE),
+            stretch: Mat3::IDENTITY,
             ..pivot
         });
         object.stand_on_plate();
@@ -204,40 +202,58 @@ fn scale(ui: &mut egui::Ui, scene: &mut Scene, id: ObjectId, axes: Axes) {
 }
 
 fn scale_rows(ui: &mut egui::Ui, object: &mut SceneObject, linked: &mut bool, axes: Axes) {
-    let mut pivot = object.pivot();
-    let mut factors = pivot.scale.abs();
-    let sizes = match (axes, object.world_bounds()) {
-        (Axes::Global, Some(bounds)) => Sizes::OnThePlate(bounds.maxs - bounds.mins),
-        _ => Sizes::OwnAxes(
-            object
-                .mesh
-                .aabb()
-                .map_or(Vec3::ONE, |bounds| bounds.maxs - bounds.mins),
-        ),
-    };
+    let pivot = object.pivot();
+    let shown = Shown::of(object, axes);
     let column = scale_header(ui, linked);
-    let mut changed = false;
+    let mut asked = None;
     for axis in 0..3 {
         ui.horizontal(|ui| {
             label_column(ui, axis, "");
-            changed |= scale_row(ui, &mut factors, sizes, axis, *linked, column);
+            if let Some(grow) = scale_row(ui, &shown, axis, column) {
+                asked = Some((axis, grow));
+            }
         });
     }
-    if changed {
-        pivot.scale = keeping_mirror(pivot.scale, factors);
-        object.settle(pivot);
+    if let Some((axis, grow)) = asked {
+        let together = *linked;
+        object.settle(grown(pivot, shown.ratio, axis, grow, together, axes));
     }
 }
 
-/// What the Size column reads.
-#[derive(Clone, Copy)]
-enum Sizes {
-    /// Along the model's own axes, from this unscaled extent, millimetres: what it measures
-    /// before it is turned, so a size typed here stays put however it is turned later.
-    OwnAxes(Vec3),
-    /// Along the plate's axes, as it stands now, millimetres. Stretching a turned model
-    /// along one of them would shear it, so a new one grows all three in proportion.
-    OnThePlate(Vec3),
+/// What the two columns read, each along the axes the switch above them picked.
+struct Shown {
+    /// What the model measures along each axis, millimetres.
+    size_mm: Vec3,
+    /// How many times each axis is drawn out of the imported model: the length of a model
+    /// axis through the placement, or of a plate axis read back through it.
+    ratio: Vec3,
+}
+
+impl Shown {
+    fn of(object: &SceneObject, axes: Axes) -> Self {
+        let linear = object.transform.linear();
+        match (axes, object.world_bounds()) {
+            (Axes::Global, Some(bounds)) => Self {
+                size_mm: bounds.maxs - bounds.mins,
+                ratio: object.transform.plate_factors(),
+            },
+            _ => {
+                let ratio = Vec3::new(
+                    linear.x_axis.length(),
+                    linear.y_axis.length(),
+                    linear.z_axis.length(),
+                );
+                let extent = object
+                    .mesh
+                    .aabb()
+                    .map_or(Vec3::ONE, |bounds| bounds.maxs - bounds.mins);
+                Self {
+                    size_mm: extent * ratio,
+                    ratio,
+                }
+            }
+        }
+    }
 }
 
 /// The two column titles and the link that keeps the three axes in proportion. Returns
@@ -268,26 +284,14 @@ fn caption(ui: &mut egui::Ui, text: &str, unit: &str, width: f32) {
     );
 }
 
-/// One axis as a size and as a percentage of the imported size. With the link on, a
-/// change to either stretches the other two axes by the same factor.
-fn scale_row(
-    ui: &mut egui::Ui,
-    factors: &mut Vec3,
-    sizes: Sizes,
-    axis: usize,
-    linked: bool,
-    width: f32,
-) -> bool {
-    let before = factors[axis];
-    let (shown_mm, on_the_plate) = match sizes {
-        Sizes::OwnAxes(extent) => (extent[axis] * before, false),
-        Sizes::OnThePlate(size) => (size[axis], true),
-    };
-    let mut size_mm = shown_mm;
-    let mut percent = before * 100.0;
+/// One axis as a size and as a percentage of the imported size. Answers how many times
+/// over the user asked for that axis to grow, on the frame they did.
+fn scale_row(ui: &mut egui::Ui, shown: &Shown, axis: usize, width: f32) -> Option<f32> {
+    let (was_mm, was_ratio) = (shown.size_mm[axis], shown.ratio[axis]);
+    let (mut size_mm, mut percent) = (was_mm, was_ratio * 100.0);
 
     let size_name = format!("{} size", AXIS_NAMES[axis]);
-    let least_mm = shown_mm / before * MIN_SCALE;
+    let least_mm = was_mm / was_ratio.max(MIN_SCALE) * MIN_SCALE;
     let sized = number_field(
         ui,
         &size_name,
@@ -308,26 +312,41 @@ fn scale_row(
         Some(2),
         width,
     );
-    let grow = match (sized, ratioed) {
-        (true, _) if shown_mm > 0.0 => size_mm / shown_mm,
-        (_, true) => percent / 100.0 / before,
-        _ => return false,
-    };
-    let together = linked || (sized && on_the_plate);
-    *factors = grown(*factors, axis, grow, together);
-    true
+    match (sized, ratioed) {
+        (true, _) if was_mm > 0.0 => Some(size_mm / was_mm),
+        (_, true) if was_ratio > 0.0 => Some(percent / 100.0 / was_ratio),
+        _ => None,
+    }
 }
 
-/// `factors` with `axis` grown `grow` times, or all three when `together`, none below the
-/// smallest scale.
-fn grown(factors: Vec3, axis: usize, grow: f32, together: bool) -> Vec3 {
-    let mut grown = factors;
+/// `pivot` with `axis` grown `grow` times — along the model's own axis or the plate's, as
+/// `axes` says — or all three when `together`. Nothing is drawn out to under the smallest
+/// scale, from `ratio`, what each axis reads now.
+fn grown(
+    pivot: Transform,
+    ratio: Vec3,
+    axis: usize,
+    grow: f32,
+    together: bool,
+    axes: Axes,
+) -> Transform {
     if together {
-        grown *= grow;
-    } else {
-        grown[axis] *= grow;
+        let grow = grow.max(MIN_SCALE / ratio.min_element().max(MIN_SCALE));
+        return Transform {
+            scale: pivot.scale * grow,
+            ..pivot
+        };
     }
-    grown.max(Vec3::splat(MIN_SCALE))
+    let grow = grow.max(MIN_SCALE / ratio[axis].max(MIN_SCALE));
+    let mut factors = Vec3::ONE;
+    factors[axis] = grow;
+    match axes {
+        Axes::Global => pivot.stretched(factors),
+        Axes::Local => Transform {
+            scale: pivot.scale * factors,
+            ..pivot
+        },
+    }
 }
 
 /// The axis letter, and its unit, in a column of one width so the fields line up.
@@ -630,27 +649,59 @@ mod tests {
         let lying = Quat::from_rotation_x(std::f32::consts::FRAC_PI_2);
         let turn = Quat::from_rotation_z(std::f32::consts::FRAC_PI_2);
         // Laid on its back, the model's own Z points along the plate's -Y.
-        let model_z = turned_by(lying, turn, Axes::Local) * Vec3::Z;
+        let own = about_plate(lying, turn, Axes::Local) * lying * Vec3::Z;
         assert!(
-            model_z.abs_diff_eq(lying * Vec3::Z, 1e-5),
+            own.abs_diff_eq(lying * Vec3::Z, 1e-5),
             "a turn about its own Z spins it in place"
         );
-        let plate_z = turned_by(lying, turn, Axes::Global) * Vec3::Z;
+        let plate = about_plate(lying, turn, Axes::Global) * lying * Vec3::Z;
         assert!(
-            plate_z.abs_diff_eq(Vec3::X, 1e-5),
-            "a turn about the plate's Z swings -Y round to X, got {plate_z:?}"
+            plate.abs_diff_eq(Vec3::X, 1e-5),
+            "a turn about the plate's Z swings -Y round to X, got {plate:?}"
         );
     }
 
+    fn slanted() -> Transform {
+        Transform::from_scale_rotation_translation(
+            Vec3::new(1.0, 2.0, -1.0),
+            Quat::from_rotation_x(0.7),
+            Vec3::ONE,
+        )
+    }
+
     #[test]
-    fn a_size_grows_its_own_axis_or_all_three_together() {
-        let factors = Vec3::new(1.0, 2.0, 0.5);
-        assert_eq!(grown(factors, 1, 1.5, false), Vec3::new(1.0, 3.0, 0.5));
-        assert_eq!(grown(factors, 1, 1.5, true), Vec3::new(1.5, 3.0, 0.75));
-        assert_eq!(
-            grown(factors, 2, 0.0, false),
-            Vec3::new(1.0, 2.0, MIN_SCALE),
-            "nothing shrinks below the smallest scale"
+    fn a_global_ratio_stretches_the_model_along_the_plate() {
+        let pivot = slanted();
+        let ratio = pivot.plate_factors();
+        let stretched = grown(pivot, ratio, 2, 1.5, false, Axes::Global);
+        assert!(
+            stretched
+                .plate_factors()
+                .abs_diff_eq(ratio * Vec3::new(1.0, 1.0, 1.5), 1e-5),
+            "the plate's Z reads half as long again and X and Y as before, got {:?}",
+            stretched.plate_factors()
+        );
+        assert!(stretched.is_mirrored(), "a stretch keeps a mirror");
+    }
+
+    #[test]
+    fn a_local_ratio_stretches_the_models_own_axis() {
+        let pivot = slanted();
+        let stretched = grown(pivot, pivot.scale.abs(), 1, 2.0, false, Axes::Local);
+        assert_eq!(stretched.scale, Vec3::new(1.0, 4.0, -1.0));
+        assert_eq!(stretched.stretch, Mat3::IDENTITY);
+    }
+
+    #[test]
+    fn linked_sizes_grow_all_three_alike_and_never_to_nothing() {
+        let pivot = slanted();
+        let grown_up = grown(pivot, pivot.scale.abs(), 0, 3.0, true, Axes::Global);
+        assert_eq!(grown_up.scale, Vec3::new(3.0, 6.0, -3.0));
+        let crushed = grown(pivot, pivot.scale.abs(), 0, 0.0, true, Axes::Local);
+        assert!(
+            (crushed.scale.abs().min_element() - MIN_SCALE).abs() < 1e-7,
+            "the shortest axis stops at the smallest scale, got {:?}",
+            crushed.scale
         );
     }
 

@@ -1,4 +1,4 @@
-use core_geometry::{Scalar, Vec3};
+use core_geometry::{Mat3, Scalar};
 use thiserror::Error;
 
 /// What can go wrong building a field or combining two of them.
@@ -22,8 +22,8 @@ pub enum VolumeError {
     #[error("the wall must be a positive thickness, got {0} mm")]
     BadThickness(Scalar),
 
-    #[error("a model scaled by {0} has an axis with no size to hollow")]
-    BadScale(Vec3),
+    #[error("a model placed by {0} has a direction with no size to hollow")]
+    BadScale(Mat3),
 
     #[error("a relief needs an amplitude to move the surface by, got {0} mm")]
     BadAmplitude(Scalar),

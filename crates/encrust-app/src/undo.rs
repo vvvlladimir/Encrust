@@ -207,7 +207,10 @@ fn fingerprint(scene: &Scene) -> u64 {
             transform.scale.x,
             transform.scale.y,
             transform.scale.z,
-        ] {
+        ]
+        .into_iter()
+        .chain(transform.stretch.to_cols_array())
+        {
             value.to_bits().hash(&mut hasher);
         }
 

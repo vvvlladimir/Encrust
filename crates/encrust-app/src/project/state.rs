@@ -109,13 +109,15 @@ fn object_state(object: &SceneObject) -> ObjectState {
 fn built_cavity(object: &SceneObject) -> Option<BuiltCavity> {
     let asked = object.hollow.asked()?;
     let (voxel_mm, coarsened) = object.hollow.lattice()?;
+    let (scale, stretched) = BuiltCavity::keys_of(object.transform.unturned());
     Some(BuiltCavity {
         wall: Cavity::of(asked),
         cavity_faces: object.hollow.cavity_faces()?,
         cavity_mm3: object.hollow.cavity_mm3(),
         voxel_mm,
         coarsened,
-        scale: object.transform.scale,
+        scale,
+        stretched,
     })
 }
 
@@ -312,6 +314,7 @@ mod tests {
                 translation: Vec3::new(12.0, 34.0, 0.0),
                 rotation: Quat::from_rotation_z(0.5),
                 scale: Vec3::splat(2.0),
+                ..Transform::default()
             },
             ImportSummary {
                 vertices_merged: 3,
@@ -548,7 +551,7 @@ mod tests {
             cavity_mm3: 1.5,
             voxel_mm: 0.1,
             coarsened: true,
-            scale: object.transform.scale,
+            shape: object.transform.unturned(),
             settings,
         });
         shell

@@ -35,7 +35,9 @@ pub use ray::{PlacedHit, Ray, RayHit, ray_aabb, ray_triangle, raycast, raycast_p
 pub use repair::{Filled, fill_holes, remove_duplicate_faces, remove_unbalanced_faces};
 pub use split::split;
 pub use topology::Adjacency;
-pub use transform::{Transform, center_over_plate, drop_to_plate, lift_over_plate, transform_mesh};
+pub use transform::{
+    Transform, center_over_plate, drop_to_plate, lift_over_plate, smallest_scale, transform_mesh,
+};
 pub use triangle::Triangle;
 pub use uv::{Heightmap, Mapping, UvMap};
 pub use validate::{MeshDiagnostics, center_of_mass, diagnose, signed_volume, signed_volume_x6};

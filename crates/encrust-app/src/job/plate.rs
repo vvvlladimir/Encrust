@@ -223,7 +223,7 @@ mod tests {
             cavity_mm3: 0.125,
             voxel_mm: 0.2,
             coarsened: false,
-            scale: Vec3::ONE,
+            shape: core_geometry::Mat3::IDENTITY,
             settings: core_volume::HollowSettings::default(),
         });
 
@@ -376,7 +376,7 @@ mod tests {
             cavity_mm3: hollowed.cavity_mm3,
             voxel_mm: hollowed.voxel_mm,
             coarsened: hollowed.coarsened,
-            scale: transform.scale,
+            shape: transform.unturned(),
             settings: asking,
         });
 

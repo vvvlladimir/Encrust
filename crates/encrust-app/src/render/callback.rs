@@ -368,8 +368,7 @@ pub(crate) fn cuts_of(
     transform: Transform,
 ) -> Vec<DrainCut> {
     let matrix = transform.to_matrix();
-    let scale = transform.scale.abs();
-    let smallest = scale.x.min(scale.y).min(scale.z);
+    let smallest = transform.least_scale();
     let place = |point: Vec3, radius_mm: Scalar| {
         let at = matrix.transform_point3(point);
         [at.x, at.y, at.z, radius_mm * smallest]
@@ -575,7 +574,7 @@ mod tests {
             cavity_mm3: hollowed.cavity_mm3,
             voxel_mm: hollowed.voxel_mm,
             coarsened: hollowed.coarsened,
-            scale: Vec3::ONE,
+            shape: core_geometry::Mat3::IDENTITY,
             settings: asking,
         });
         object.traps.set(vec![Trapped {

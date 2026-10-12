@@ -3,7 +3,7 @@ use std::io::Read as _;
 use std::sync::Arc;
 
 use anyhow::{Context as _, Result, bail};
-use core_geometry::{Heightmap, Mapping, Mesh, Scalar, UvMap, Vec2, Vec3};
+use core_geometry::{Heightmap, Mapping, Mat3, Mesh, Scalar, UvMap, Vec2, Vec3};
 use core_volume::{ReliefSettings, Tiling};
 use rayon::prelude::*;
 use serde::{Deserialize, Serialize};
@@ -21,7 +21,7 @@ pub type Textures = HashMap<ObjectId, Arc<Mapped>>;
 struct LaidFor {
     mesh: usize,
     picture: usize,
-    scale: Vec3,
+    sizing: Mat3,
     tiling: Tiling,
 }
 
@@ -143,10 +143,11 @@ impl ReliefTool {
                 let coarsened = models.iter().filter(|model| model.coarsened).count();
                 for model in models {
                     if let Some(object) = scene.get_mut(model.id) {
-                        // The relief was pressed at printed size, so the scale is in the
-                        // mesh now and must not be applied twice.
+                        // The relief was pressed at printed size, so the scale and the
+                        // stretch are in the mesh now and must not be applied twice.
                         object.reshape(model.mesh);
                         object.transform.scale = Vec3::ONE;
+                        object.transform.stretch = Mat3::IDENTITY;
                     }
                 }
                 let depth = self.state.amplitude_mm;
@@ -183,12 +184,12 @@ impl ReliefTool {
             let key = LaidFor {
                 mesh: Arc::as_ptr(&object.mesh) as usize,
                 picture: Arc::as_ptr(&picture.heights) as usize,
-                scale: object.transform.scale,
+                sizing: object.transform.sizing().linear(),
                 tiling: self.tiling,
             };
             let mapped = match self.laid.remove(&object.id) {
                 Some((was, mapped)) if was == key => mapped,
-                _ => Arc::new(lay(picture, &object.mesh, key.scale, self.tiling)),
+                _ => Arc::new(lay(picture, &object.mesh, key.sizing, self.tiling)),
             };
             laid.insert(object.id, (key, mapped));
         }
@@ -202,14 +203,14 @@ impl ReliefTool {
 
 /// `picture` laid over `mesh` at printed size the way pressing it lays it, each face read
 /// from the one of the three planes it faces most, where pressing blends them.
-fn lay(picture: &Picture, mesh: &Mesh, scale: Vec3, tiling: Tiling) -> Mapped {
+fn lay(picture: &Picture, mesh: &Mesh, sizing: Mat3, tiling: Tiling) -> Mapped {
     let (sin, cos) = tiling.angle_deg.to_radians().sin_cos();
     let on_plane = |a: Scalar, b: Scalar| Vec2::new(a * cos - b * sin, a * sin + b * cos);
     let faces = mesh
         .faces
         .par_iter()
         .map(|face| {
-            let corners = face.map(|index| mesh.vertices.get(index as usize).map(|v| *v * scale));
+            let corners = face.map(|index| mesh.vertices.get(index as usize).map(|v| sizing * *v));
             let [Some(a), Some(b), Some(c)] = corners else {
                 return None;
             };
@@ -424,7 +425,7 @@ mod tests {
             tile_mm: 5.0,
             angle_deg: 0.0,
         };
-        let laid = lay(&picture, &mesh, Vec3::ONE, tiling);
+        let laid = lay(&picture, &mesh, Mat3::IDENTITY, tiling);
         let corners = laid.uvs.of_face(0).expect("the face is mapped");
         assert_eq!(
             corners.corners,

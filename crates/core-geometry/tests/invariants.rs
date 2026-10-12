@@ -27,6 +27,7 @@ fn rigid(rotation: Quat, translation: Vec3) -> Transform {
         translation,
         rotation,
         scale: Vec3::ONE,
+        ..Transform::default()
     }
 }
 

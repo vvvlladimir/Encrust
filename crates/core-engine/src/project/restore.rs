@@ -28,7 +28,7 @@ pub fn hollow_of(state: &ObjectHollowState, meshes: &ModelMeshes) -> ModelHollow
         cavity_mm3: built.cavity_mm3,
         voxel_mm: built.voxel_mm,
         coarsened: built.coarsened,
-        scale: built.scale,
+        shape: built.shape(),
         settings,
     });
     hollow

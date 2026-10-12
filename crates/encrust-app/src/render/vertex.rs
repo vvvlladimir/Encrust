@@ -290,6 +290,7 @@ mod tests {
             translation: Vec3::new(3.0, 0.0, 0.0),
             rotation: Quat::from_rotation_z(0.7),
             scale: Vec3::new(1.0, 1.0, 4.0),
+            ..Transform::default()
         };
         let model = transform.to_matrix();
         let normals = normal_matrix(&model);

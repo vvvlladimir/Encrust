@@ -1,7 +1,7 @@
 use std::sync::Arc;
 use std::sync::mpsc::{self, Receiver, TryRecvError};
 
-use core_geometry::{Bvh, Heightmap, Mesh, Scalar, Transform, Vec3, transform_mesh};
+use core_geometry::{Bvh, Heightmap, Mesh, Scalar, Transform, transform_mesh};
 use core_volume::{ReliefSettings, Tiling, press, press_tiled};
 use rayon::prelude::*;
 
@@ -18,9 +18,9 @@ pub struct ReliefTask {
     pub bvh: Arc<Bvh>,
     /// The texture the model's file came with, if any; a tiled picture needs none.
     pub mapped: Option<Arc<Mapped>>,
-    /// What the model is scaled by where it stands. The relief is pressed at the size the
-    /// model prints at, so the mesh is scaled by this first; see ADR 0122.
-    pub scale: Vec3,
+    /// The model's placement but for its turn (`Transform::sizing`). The relief is pressed
+    /// at the size the model prints at, so the mesh is taken through this first; see ADR 0122.
+    pub sizing: Transform,
 }
 
 /// Everything one relief run needs.
@@ -102,7 +102,7 @@ pub fn relief_tasks(scene: &Scene, tiled: bool) -> Vec<ReliefTask> {
             mesh: Arc::clone(&object.mesh),
             bvh: Arc::clone(&object.bvh),
             mapped: object.mapped.clone(),
-            scale: object.transform.scale,
+            sizing: object.transform.sizing(),
         })
         .collect()
 }
@@ -153,7 +153,7 @@ fn run(request: &ReliefRequest) -> ReliefOutcome {
 /// pressed on a lattice coarser than the model. A mirroring scale turns every face inside
 /// out, so the map's corners follow the winding.
 fn printed(task: &ReliefTask) -> (Arc<Mesh>, Arc<Bvh>, Option<UvMap>) {
-    if task.scale.abs_diff_eq(Vec3::ONE, Scalar::EPSILON) {
+    if task.sizing == Transform::default() {
         return (
             Arc::clone(&task.mesh),
             Arc::clone(&task.bvh),
@@ -161,13 +161,9 @@ fn printed(task: &ReliefTask) -> (Arc<Mesh>, Arc<Bvh>, Option<UvMap>) {
         );
     }
 
-    let sized = Transform {
-        scale: task.scale,
-        ..Transform::default()
-    };
-    let mesh = transform_mesh(&task.mesh, sized);
+    let mesh = transform_mesh(&task.mesh, task.sizing);
     let uvs = task.mapped.as_ref().map(|mapped| {
-        if task.scale.x * task.scale.y * task.scale.z < 0.0 {
+        if task.sizing.is_mirrored() {
             let all: Vec<u32> = (0..mesh.faces.len() as u32).collect();
             mapped.uvs.flipping(&all)
         } else {

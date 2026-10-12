@@ -2,7 +2,7 @@
 //! thickness asked for, that the cavity never reaches outside the model, and that what
 //! fills it takes its own volume back.
 
-use core_geometry::{Bvh, Mesh, Scalar, Vec3, signed_volume};
+use core_geometry::{Bvh, Mat3, Mesh, Quat, Scalar, Transform, Vec3, signed_volume};
 use core_volume::{
     Blocker, CUT_WEIGHT, Cancel, Channel, HollowMode, HollowSettings, InfillPattern,
     InfillSettings, VolumeError, drill, hole_at, hollow, hollow_at_scale, pierce, sleeves,
@@ -342,7 +342,7 @@ fn infill_takes_its_own_volume_back_out_of_the_cavity() {
 fn a_stretched_model_keeps_the_wall_it_asked_for_on_the_plate() {
     let mesh = cube(20.0, 0.0);
     let bvh = Bvh::build(&mesh);
-    let stretch = Vec3::new(2.0, 1.0, 1.0);
+    let stretch = Mat3::from_diagonal(Vec3::new(2.0, 1.0, 1.0));
     let hollowed = hollow_at_scale(
         &mesh,
         &bvh,
@@ -364,7 +364,13 @@ fn a_stretched_model_keeps_the_wall_it_asked_for_on_the_plate() {
 fn a_stretched_model_is_filled_as_if_it_had_been_built_that_size() {
     let mesh = cube(20.0, 0.0);
     let bvh = Bvh::build(&mesh);
+    // Mirrored on Z, which measures nothing, so the shape is the size alone.
     let stretch = Vec3::new(1.6, 1.0, -1.0);
+    let shape = Transform {
+        scale: stretch,
+        ..Transform::default()
+    }
+    .unturned();
     let mut asked = settings(2.0, HollowMode::Internal);
     asked.infill = Some(InfillSettings {
         pattern: InfillPattern::Hive,
@@ -372,7 +378,7 @@ fn a_stretched_model_is_filled_as_if_it_had_been_built_that_size() {
         density: 0.15,
     });
     asked.blockers = vec![Blocker::ball(Vec3::new(10.0, 10.0, 10.0), 3.0)];
-    let scaled = hollow_at_scale(&mesh, &bvh, &asked, stretch, Cancel::never())
+    let scaled = hollow_at_scale(&mesh, &bvh, &asked, shape, Cancel::never())
         .expect("a closed cube hollows");
 
     let size = stretch.abs();
@@ -400,10 +406,43 @@ fn a_stretched_model_is_filled_as_if_it_had_been_built_that_size() {
 }
 
 #[test]
+fn a_turned_model_stretched_along_the_plate_keeps_its_wall_on_the_plate() {
+    let mesh = cube(20.0, 0.0);
+    let bvh = Bvh::build(&mesh);
+    let placed = Transform {
+        rotation: Quat::from_rotation_x(std::f32::consts::FRAC_PI_4),
+        ..Transform::default()
+    }
+    .stretched(Vec3::new(1.0, 1.0, 2.0));
+    let hollowed = hollow_at_scale(
+        &mesh,
+        &bvh,
+        &settings(2.0, HollowMode::Internal),
+        placed.unturned(),
+        Cancel::never(),
+    )
+    .expect("a closed cube hollows");
+
+    // The cube stands as a parallelepiped. Each pair of its faces closes in by the wall on
+    // both sides, so the cavity is its volume times (1 - 2t/h) for each face-to-face height h.
+    let edges = placed.linear() * Mat3::from_diagonal(Vec3::splat(20.0));
+    let volume = edges.determinant();
+    let cavity = (0..3).fold(volume, |cavity, axis| {
+        let across = edges.col((axis + 1) % 3).cross(edges.col((axis + 2) % 3));
+        cavity * (1.0 - 4.0 / (volume / across.length()))
+    });
+    assert!(
+        (hollowed.cavity_mm3 - cavity).abs() / cavity < 0.05,
+        "the sheared box holds {cavity} mm3 inside a 2 mm wall, got {}",
+        hollowed.cavity_mm3
+    );
+}
+
+#[test]
 fn a_model_flattened_to_nothing_cannot_be_hollowed() {
     let mesh = cube(20.0, 0.0);
     let bvh = Bvh::build(&mesh);
-    let flat = Vec3::new(1.0, 0.0, 1.0);
+    let flat = Mat3::from_diagonal(Vec3::new(1.0, 0.0, 1.0));
     assert_eq!(
         hollow_at_scale(
             &mesh,

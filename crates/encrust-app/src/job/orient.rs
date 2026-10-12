@@ -80,11 +80,11 @@ pub fn orient_tasks(scene: &Scene, only: Option<ObjectId>) -> Vec<OrientTask> {
         .targets()
         .filter(|object| only.is_none_or(|id| object.id == id))
         .map(|object| {
-            let turned = object.transform.rotation.inverse() * Vec3::NEG_Z;
+            let down = object.transform.linear().inverse() * Vec3::NEG_Z;
             OrientTask {
                 id: object.id,
                 mesh: Arc::clone(&object.mesh),
-                down_now: (turned / object.transform.scale).normalize_or(Vec3::NEG_Z),
+                down_now: down.normalize_or(Vec3::NEG_Z),
             }
         })
         .collect()

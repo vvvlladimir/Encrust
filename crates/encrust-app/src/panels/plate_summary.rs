@@ -125,8 +125,8 @@ pub fn tally(ctx: &egui::Context, scene: &Scene) -> Tally {
         Arc::as_ptr(model(object)).hash(&mut hasher);
         object
             .transform
-            .scale
-            .to_array()
+            .linear()
+            .to_cols_array()
             .map(f32::to_bits)
             .hash(&mut hasher);
         for supports in object.supports.meshes().unwrap_or_default() {
@@ -144,10 +144,10 @@ pub fn tally(ctx: &egui::Context, scene: &Scene) -> Tally {
     let mut tally = Tally::default();
     for object in scene.printable(plate) {
         let mesh = model(object);
-        let scale = object.transform.scale;
+        let grows = object.transform.linear().determinant().abs();
         tally.vertices += mesh.vertices.len();
         tally.triangles += mesh.faces.len();
-        tally.model_mm3 += signed_volume(mesh).abs() * (scale.x * scale.y * scale.z).abs();
+        tally.model_mm3 += signed_volume(mesh).abs() * grows;
         for supports in object.supports.meshes().unwrap_or_default() {
             tally.supports_mm3 += signed_volume(supports).abs();
         }

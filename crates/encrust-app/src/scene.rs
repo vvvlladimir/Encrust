@@ -252,10 +252,10 @@ impl SceneObject {
         self.bounds.get(&self.mesh, self.transform)
     }
 
-    /// A direction in the model's own space, as the placement turns it. Scale bends a
-    /// normal the other way from a point, hence the division.
+    /// A direction in the model's own space, as the placement turns it. A scale or a
+    /// stretch bends a normal the other way from a point, hence the inverse transpose.
     pub fn world_normal(&self, local: Vec3) -> Vec3 {
-        (self.transform.rotation * (local / self.transform.scale)).normalize_or_zero()
+        (self.transform.linear().inverse().transpose() * local).normalize_or_zero()
     }
 
     /// Where the handles stand: the model's centre of mass in plate coordinates, turned
@@ -292,7 +292,7 @@ impl SceneObject {
     /// that its centre of mass lands back on that pivot.
     pub fn settle(&mut self, pivot: Transform) {
         self.transform = Transform {
-            translation: pivot.translation - pivot.rotation * (pivot.scale * self.center_of_mass),
+            translation: pivot.translation - pivot.linear() * self.center_of_mass,
             ..pivot
         };
     }
@@ -304,12 +304,8 @@ impl SceneObject {
         let Some(normal) = normal.try_normalize() else {
             return false;
         };
-        let pivot = self.pivot();
         let turn = Quat::from_rotation_arc(normal, Vec3::NEG_Z);
-        self.settle(Transform {
-            rotation: (turn * pivot.rotation).normalize(),
-            ..pivot
-        });
+        self.settle(self.pivot().turned(turn));
         self.stand_on_plate();
         true
     }
@@ -1300,6 +1296,7 @@ mod tests {
             translation: Vec3::new(10.0, 20.0, 0.0),
             rotation: Quat::IDENTITY,
             scale: Vec3::splat(2.0),
+            ..Transform::default()
         };
 
         let bounds = scene.get(id).and_then(SceneObject::world_bounds);

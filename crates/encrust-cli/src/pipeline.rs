@@ -575,6 +575,7 @@ fn place(
         translation: Vec3::ZERO,
         rotation: transform.rotate.map_or(Quat::IDENTITY, euler_degrees),
         scale: transform.scale.unwrap_or(Vec3::ONE),
+        ..Transform::default()
     };
 
     let mut mesh = if placement == Transform::default() {

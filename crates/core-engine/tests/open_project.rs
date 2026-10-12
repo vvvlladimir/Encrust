@@ -184,6 +184,7 @@ fn hollowed(saved: &mut Project, thickness_mm: f32) {
         voxel_mm: 0.2,
         coarsened: false,
         scale: Vec3::ONE,
+        stretched: None,
     });
     saved.models[0].shell = Some(Arc::new(box_mesh(
         Vec3::splat(thickness_mm),

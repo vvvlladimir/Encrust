@@ -232,7 +232,7 @@ mod tests {
             cavity_mm3: 0.0,
             voxel_mm: 0.2,
             coarsened: false,
-            scale: Vec3::ONE,
+            shape: core_geometry::Mat3::IDENTITY,
             settings: built,
         });
         assert!(!tool.rebuild(&scene), "the shell is what it was built from");

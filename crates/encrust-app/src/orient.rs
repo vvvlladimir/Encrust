@@ -160,7 +160,8 @@ impl OrientTool {
                         moved += 1;
                     }
                     if let Some(object) = scene.get_mut(turn.id) {
-                        object.transform.rotation = turn.rotation;
+                        let by = turn.rotation * object.transform.rotation.inverse();
+                        object.transform = object.transform.turned(by);
                     }
                     let Some(bounds) = scene.get(turn.id).and_then(|o| o.world_bounds()) else {
                         continue;

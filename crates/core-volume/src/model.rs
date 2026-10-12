@@ -1,7 +1,7 @@
 use std::ops::Range;
 use std::sync::Arc;
 
-use core_geometry::{Bvh, Mesh, Scalar, Transform, Vec3};
+use core_geometry::{Bvh, Mat3, Mesh, Scalar, Transform, Vec3};
 
 use crate::{
     Blocker, Channel, DrainHole, HollowSettings, channel_under, drill, hole_at, lift_for, pierce,
@@ -46,6 +46,19 @@ pub struct ModelHollow {
     built: Option<Shell>,
 }
 
+/// Whether two shapes are one, but for the rounding a turn leaves in them.
+fn same_shape(built: Mat3, now: Mat3) -> bool {
+    let size = built
+        .abs()
+        .to_cols_array()
+        .into_iter()
+        .fold(1.0, Scalar::max);
+    built.abs_diff_eq(now, SHAPE_TOLERANCE * size)
+}
+
+/// Relative to the shape's largest entry: far under a hundredth of a percent of a resize.
+const SHAPE_TOLERANCE: Scalar = 1e-5;
+
 /// A model hollowed, in its own space: what a run of `hollow` hands back to be kept.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Shell {
@@ -58,8 +71,9 @@ pub struct Shell {
     /// made it coarser than the precision asked for.
     pub voxel_mm: Scalar,
     pub coarsened: bool,
-    /// The scale the model stood at, which the wall was measured under.
-    pub scale: Vec3,
+    /// The placement the wall was measured under, with its turn taken out
+    /// (`Transform::unturned`).
+    pub shape: Mat3,
     pub settings: HollowSettings,
 }
 
@@ -124,8 +138,7 @@ impl ModelHollow {
         taper: Scalar,
         transform: Transform,
     ) -> bool {
-        let scale = transform.scale.abs();
-        let smallest = scale.x.min(scale.y).min(scale.z).max(f32::EPSILON);
+        let smallest = transform.least_scale();
         let diameter_mm = diameter_mm / smallest;
         let Some(hole) = hole_at(mesh, bvh, target, diameter_mm, 0.0, taper) else {
             return false;
@@ -181,12 +194,12 @@ impl ModelHollow {
     }
 
     /// Whether what is built no longer matches what the tool is asking for, or the model
-    /// has been rescaled under it. A wall is measured on the plate at the scale it was
-    /// built under, so a model scaled after it was hollowed has a wall of the wrong
-    /// thickness.
+    /// has been rescaled or stretched under it. A wall is measured on the plate under the
+    /// shape it was built for, so a model resized after it was hollowed has a wall of the
+    /// wrong thickness. A turn alone changes nothing.
     pub fn is_stale(&self, asked: &HollowSettings, transform: Transform) -> bool {
         self.built.as_ref().is_some_and(|built| {
-            built.scale != transform.scale || built.settings != self.asking(asked)
+            !same_shape(built.shape, transform.unturned()) || built.settings != self.asking(asked)
         })
     }
 
@@ -219,8 +232,7 @@ impl ModelHollow {
         }
         // The blocker is kept in the model's own space, so a radius asked for in plate
         // millimetres has to come back through the scale the model stands at.
-        let scale = transform.scale.abs();
-        let smallest = scale.x.min(scale.y).min(scale.z).max(f32::EPSILON);
+        let smallest = transform.least_scale();
 
         self.blockers.push(Blocker::ball(
             matrix.inverse().transform_point3(point),
@@ -276,8 +288,7 @@ impl ModelHollow {
 
         // A hole is measured on the plate, like a blocker, and kept in the model's own
         // space, so both its numbers come back through the scale the model stands at.
-        let scale = transform.scale.abs();
-        let smallest = scale.x.min(scale.y).min(scale.z).max(f32::EPSILON);
+        let smallest = transform.least_scale();
         let at = inverse.transform_point3(point);
         let diameter_mm = size.diameter_mm / smallest;
         self.drains.push(DrainHole {
@@ -340,8 +351,7 @@ impl ModelHollow {
 
     /// Digs the channel laid out so far, if it has two points to run between.
     pub fn finish_channel(&mut self, diameter_mm: Scalar, transform: Transform) -> bool {
-        let scale = transform.scale.abs();
-        let smallest = scale.x.min(scale.y).min(scale.z).max(f32::EPSILON);
+        let smallest = transform.least_scale();
         let dug = channel_under(&self.pending, diameter_mm / smallest);
         self.pending.clear();
         let Some(channel) = dug else {
@@ -509,14 +519,14 @@ mod tests {
         )
     }
 
-    fn shell(scale: Vec3, settings: HollowSettings) -> Shell {
+    fn shell(shape: Mat3, settings: HollowSettings) -> Shell {
         Shell {
             mesh: Arc::new(Mesh::default()),
             cavity: 0..0,
             cavity_mm3: 1234.0,
             voxel_mm: 0.2,
             coarsened: false,
-            scale,
+            shape,
             settings,
         }
     }
@@ -742,7 +752,10 @@ mod tests {
 
         // Two millimetres of wall on a 0.2 mm lattice, which a half-millimetre dimple
         // cannot reach through.
-        hollow.take(shell(Vec3::ONE, hollow.asking(&HollowSettings::default())));
+        hollow.take(shell(
+            Mat3::IDENTITY,
+            hollow.asking(&HollowSettings::default()),
+        ));
         assert!(
             hollow.cut().0[0].depth_mm >= 2.0,
             "once there is a cavity the hole is re-cut through the wall, got {}",
@@ -754,7 +767,7 @@ mod tests {
     fn drilling_a_hole_leaves_the_shell_alone() {
         let asked = HollowSettings::default();
         let mut hollow = ModelHollow::default();
-        hollow.take(shell(Vec3::ONE, asked.clone()));
+        hollow.take(shell(Mat3::IDENTITY, asked.clone()));
         hollow.add_drain(
             &lid(),
             &Bvh::build(&lid()),
@@ -774,7 +787,7 @@ mod tests {
     fn a_shell_built_from_the_same_numbers_is_not_stale() {
         let asked = HollowSettings::default();
         let mut hollow = ModelHollow::default();
-        hollow.take(shell(Vec3::ONE, asked.clone()));
+        hollow.take(shell(Mat3::IDENTITY, asked.clone()));
 
         assert!(!hollow.is_stale(&asked, Transform::default()));
     }
@@ -782,7 +795,7 @@ mod tests {
     #[test]
     fn changing_the_wall_makes_the_shell_stale() {
         let mut hollow = ModelHollow::default();
-        hollow.take(shell(Vec3::ONE, HollowSettings::default()));
+        hollow.take(shell(Mat3::IDENTITY, HollowSettings::default()));
 
         let thicker = HollowSettings {
             thickness_mm: 3.0,
@@ -795,7 +808,7 @@ mod tests {
     fn adding_a_blocker_makes_the_shell_stale() {
         let asked = HollowSettings::default();
         let mut hollow = ModelHollow::default();
-        hollow.take(shell(Vec3::ONE, asked.clone()));
+        hollow.take(shell(Mat3::IDENTITY, asked.clone()));
         hollow.add_blocker(Vec3::ZERO, 4.0, Transform::default());
 
         assert!(hollow.is_stale(&asked, Transform::default()));
@@ -805,7 +818,7 @@ mod tests {
     fn digging_a_channel_makes_the_shell_stale_and_asks_for_a_sleeve_of_wall() {
         let asked = HollowSettings::default();
         let mut hollow = ModelHollow::default();
-        hollow.take(shell(Vec3::ONE, asked.clone()));
+        hollow.take(shell(Mat3::IDENTITY, asked.clone()));
         hollow.add_channel_point(Vec3::new(1.0, 0.0, 0.0), Vec3::X, Transform::default());
         hollow.add_channel_point(Vec3::new(1.0, 0.0, 6.0), Vec3::X, Transform::default());
         hollow.finish_channel(2.0, Transform::default());
@@ -838,7 +851,7 @@ mod tests {
             "a solid model has nothing to rebuild"
         );
         let built = hollow.asking(&HollowSettings::for_wall(3.0));
-        hollow.take(shell(Vec3::ONE, built));
+        hollow.take(shell(Mat3::IDENTITY, built));
         assert_eq!(
             hollow.rebuild(),
             None,
@@ -855,7 +868,7 @@ mod tests {
         );
         assert_eq!(sleeved.blockers.len(), 3, "a sleeve over each leg");
 
-        hollow.take(shell(Vec3::ONE, sleeved));
+        hollow.take(shell(Mat3::IDENTITY, sleeved));
         hollow.clear_channels();
         assert!(
             hollow
@@ -869,7 +882,7 @@ mod tests {
     fn rescaling_the_model_makes_the_shell_stale() {
         let asked = HollowSettings::default();
         let mut hollow = ModelHollow::default();
-        hollow.take(shell(Vec3::ONE, asked.clone()));
+        hollow.take(shell(Mat3::IDENTITY, asked.clone()));
 
         let doubled = Transform {
             scale: Vec3::splat(2.0),
@@ -879,6 +892,25 @@ mod tests {
             hollow.is_stale(&asked, doubled),
             "a wall measured at one scale is the wrong thickness once the model is \
              scaled again"
+        );
+    }
+
+    #[test]
+    fn turning_the_model_keeps_the_shell_and_stretching_it_does_not() {
+        let asked = HollowSettings::default();
+        let placed = Transform {
+            scale: Vec3::new(2.0, 1.0, 1.0),
+            ..Transform::default()
+        };
+        let mut hollow = ModelHollow::default();
+        hollow.take(shell(placed.unturned(), asked.clone()));
+
+        let turned = placed.turned(Quat::from_rotation_x(0.8));
+        assert!(!hollow.is_stale(&asked, turned), "a turn is no resize");
+        let stretched = turned.stretched(Vec3::new(1.0, 1.0, 1.5));
+        assert!(
+            hollow.is_stale(&asked, stretched),
+            "a turned model stretched along the plate has walls of new thicknesses"
         );
     }
 }

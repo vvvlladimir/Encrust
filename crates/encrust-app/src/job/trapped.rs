@@ -162,8 +162,12 @@ fn look_through(task: &TrapTask, layer_height_mm: Scalar) -> Result<Vec<Trapped>
         return Ok(Vec::new());
     }
     let inverse = matrix.inverse();
-    let scale = task.transform.scale.abs();
-    let volume = (scale.x * scale.y * scale.z).max(f32::EPSILON);
+    let volume = task
+        .transform
+        .linear()
+        .determinant()
+        .abs()
+        .max(f32::EPSILON);
 
     Ok(scan
         .finish()
