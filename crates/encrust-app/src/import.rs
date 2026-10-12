@@ -13,6 +13,7 @@ use crate::files::{self, Handed, Wanted};
 use crate::job::{ImportJob, ImportOutcome, ImportStage};
 use crate::panels::frame_view;
 use crate::plate::BuildPlate;
+use crate::recent::picture::Parts;
 use crate::repair::Repairs;
 use crate::scene::{ImportSummary, Imported, Mapped, Scene};
 use crate::status::Status;
@@ -24,8 +25,9 @@ use crate::status::Status;
 #[derive(Debug, Default)]
 pub struct Imports {
     jobs: Vec<ImportJob>,
-    /// The files handed over since the window last took them, for the recent list.
-    opened: Vec<PathBuf>,
+    /// The files on disk that reached the plate since the window last took them, for the
+    /// recent list, each with what its picture is drawn from.
+    opened: Vec<(PathBuf, Parts)>,
 }
 
 impl Imports {
@@ -39,14 +41,11 @@ impl Imports {
     /// Starts opening a mesh. The one way a model reaches the plate.
     pub fn open(&mut self, file: Handed, plate: &BuildPlate, status: &mut Status) {
         *status = Status::Info(format!("Opening {}", file.path().display()));
-        if let Handed::Path(path) = &file {
-            self.opened.push(path.clone());
-        }
         self.jobs.push(ImportJob::spawn(file, plate.clone()));
     }
 
-    /// The files handed over since the last call.
-    pub fn take_opened(&mut self) -> Vec<PathBuf> {
+    /// The files that reached the plate since the last call.
+    pub fn take_opened(&mut self) -> Vec<(PathBuf, Parts)> {
         std::mem::take(&mut self.opened)
     }
 
@@ -78,15 +77,19 @@ impl Imports {
         self.jobs.retain_mut(|job| match job.poll() {
             None => true,
             Some(outcome) => {
-                opened.push((job.path().to_path_buf(), outcome));
+                opened.push((job.path().to_path_buf(), job.is_on_disk(), outcome));
                 false
             }
         });
 
         let reported = !opened.is_empty();
-        for (path, outcome) in opened {
+        for (path, on_disk, outcome) in opened {
             match outcome {
                 ImportOutcome::Opened(imported) => {
+                    if on_disk {
+                        let parts = vec![(Arc::clone(&imported.mesh), imported.transform)];
+                        self.opened.push((path.clone(), parts));
+                    }
                     let id = scene.insert(*imported);
                     if let Some(object) = scene.get(id) {
                         repairs.consider(object);

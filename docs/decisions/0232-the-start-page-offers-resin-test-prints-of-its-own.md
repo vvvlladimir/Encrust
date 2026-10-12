@@ -1,6 +1,6 @@
 # 0232. The start page offers resin test prints of its own, and leaves the machine to the top bar
 
-- **Status:** Accepted
+- **Status:** Accepted; the row of tests under the recent files is superseded by 0234
 - **Date:** 2026-10-12
 
 ## Context

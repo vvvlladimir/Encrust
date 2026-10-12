@@ -1,5 +1,7 @@
 //! The files opened or saved lately, newest first, which the start page offers again.
 
+pub mod picture;
+
 use std::path::{Path, PathBuf};
 
 use serde::{Deserialize, Serialize};

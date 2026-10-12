@@ -348,8 +348,9 @@ impl eframe::App for SlicerApp {
         let _ = frame;
         self.take_dropped_files(ui.ctx());
         self.take_arrived_files();
-        for path in self.doc.imports.take_opened() {
+        for (path, parts) in self.doc.imports.take_opened() {
             self.machine.recent.note(&path, crate::updates::now_s());
+            crate::recent::picture::keep(&self.machine.recent, &path, parts);
         }
 
         // A background job reports over a channel, which wakes nothing on its own, so the

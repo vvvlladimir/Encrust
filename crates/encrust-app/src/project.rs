@@ -115,7 +115,7 @@ pub fn open(window: &mut Window, file: &Handed) {
             tools: window.tools,
         },
     );
-    window.machine.recent.note(&path, crate::updates::now_s());
+    remember(window, &path);
     window.doc.project.path = Some(path);
     window.doc.project.saved = Some(digest(&captured(window).manifest));
     window.doc.history = History::default();
@@ -162,6 +162,14 @@ pub fn save_dialog(window: &mut Window) -> bool {
     write(window, name)
 }
 
+/// Puts the project first in the recent list, pictured as its plate stands now.
+fn remember(window: &mut Window, path: &std::path::Path) {
+    let recent = &mut window.machine.recent;
+    recent.note(path, crate::updates::now_s());
+    let parts = crate::recent::picture::of_plate(&window.doc.scene);
+    crate::recent::picture::keep(recent, path, parts);
+}
+
 fn write(window: &mut Window, path: PathBuf) -> bool {
     let project = captured(window);
     let digest = digest(&project.manifest);
@@ -174,7 +182,7 @@ fn write(window: &mut Window, path: PathBuf) -> bool {
         .report(&format!("Saved {}", path.display()), written)
         .is_some();
     if saved {
-        window.machine.recent.note(&path, crate::updates::now_s());
+        remember(window, &path);
         window.doc.project.path = Some(path);
         window.doc.project.saved = Some(digest);
     }

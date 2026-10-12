@@ -1,5 +1,5 @@
 //! The test prints the start page offers: resin tests of the project's own, built in code
-//! with the mark raised on each, and pictured from the same mesh; see `docs/decisions/0232`.
+//! with the mark raised on each, and pictured from the same mesh; see `docs/decisions/0232` and `0234`.
 
 mod detail;
 mod exposure;
@@ -11,14 +11,13 @@ mod surface;
 use std::sync::Arc;
 
 use core_geometry::Mesh;
-use core_thumbnail::{Part, Rgb, ThumbnailSettings, render};
 
 use crate::files::Handed;
 
 /// One test print, opened as if its file had been dropped on the window.
 pub struct Sample {
     pub name: &'static str,
-    /// What printing it tells, in two lines of a card at most.
+    /// What printing it tells, shown when the pointer rests on its name.
     pub about: &'static str,
     build: fn() -> Mesh,
 }
@@ -46,50 +45,17 @@ pub const SAMPLES: [Sample; 4] = [
     },
 ];
 
-/// Rendered at twice the size it is shown at and halved, which smooths its edges.
-const SUPERSAMPLE: usize = 2;
-
 impl Sample {
+    /// The model, built afresh.
+    pub fn mesh(&self) -> Mesh {
+        (self.build)()
+    }
+
     /// The model as an STL handed to the window.
     pub fn handed(&self) -> Handed {
         let bytes = solid::stl(&(self.build)());
         Handed::bytes(format!("{}.stl", self.name), Arc::from(bytes))
     }
-
-    /// The model shaded in `model` on `background`, `size` pixels.
-    pub fn picture(&self, size: [usize; 2], background: Rgb, model: Rgb) -> egui::ColorImage {
-        let mesh = (self.build)();
-        let settings = ThumbnailSettings {
-            width_px: (size[0] * SUPERSAMPLE) as u32,
-            height_px: (size[1] * SUPERSAMPLE) as u32,
-            background,
-            model,
-        };
-        let large = render(&[Part::placed(&mesh)], &settings);
-        egui::ColorImage::from_rgb(size, &halved(large.pixels(), size))
-    }
-}
-
-/// Each block of `SUPERSAMPLE` pixels square averaged into one, as RGB bytes.
-fn halved(pixels: &[Rgb], size: [usize; 2]) -> Vec<u8> {
-    let wide = size[0] * SUPERSAMPLE;
-    let count = (SUPERSAMPLE * SUPERSAMPLE) as u32;
-    let mut bytes = Vec::with_capacity(size[0] * size[1] * 3);
-    for y in 0..size[1] {
-        for x in 0..size[0] {
-            let mut sum = [0u32; 3];
-            for dy in 0..SUPERSAMPLE {
-                let row = (y * SUPERSAMPLE + dy) * wide + x * SUPERSAMPLE;
-                for pixel in &pixels[row..row + SUPERSAMPLE] {
-                    for (total, channel) in sum.iter_mut().zip(pixel) {
-                        *total += u32::from(*channel);
-                    }
-                }
-            }
-            bytes.extend(sum.map(|total| (total / count) as u8));
-        }
-    }
-    bytes
 }
 
 #[cfg(test)]

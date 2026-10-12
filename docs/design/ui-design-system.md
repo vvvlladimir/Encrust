@@ -229,9 +229,9 @@ machines and gives the picked one tabs. A question or a calculator over either i
 its own, and Esc takes it down before the window.
 
 Until the first model, project or sliced file arrives, or a tool is picked, everything under
-the top bar is the **start page** instead, unless General turns it off: a drop zone, the files opened lately at its
-height, and a row of resin test prints drawn in code. See `docs/decisions/0052`, `0220`, `0232`,
-`0233`.
+the top bar is the **start page** instead, unless General turns it off: a drop zone, and under
+it a shelf of pictured tiles showing either the files opened lately or the resin test prints
+drawn in code, switched by the card beside the zone. See `docs/decisions/0052`, `0220`, `0232`, `0233`, `0234`.
 
 ## Modes and tools
 
