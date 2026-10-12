@@ -593,6 +593,10 @@ fn file_menu(ui: &mut egui::Ui, window: &mut Window) {
         ui.close();
         project::open_dialog(window);
     }
+    // A browser hands over bytes and keeps no paths to reopen.
+    if cfg!(not(target_arch = "wasm32")) {
+        ui.menu_button("Open recent", |ui| recent_menu(ui, window));
+    }
     if item(ui, "Save project", Action::SaveProject).clicked() {
         ui.close();
         project::save_open(window);
@@ -609,6 +613,7 @@ fn file_menu(ui: &mut egui::Ui, window: &mut Window) {
             .imports
             .open_dialog(&window.doc.plate, &mut window.machine.status);
     }
+    ui.menu_button("Open test print", |ui| test_print_menu(ui, window));
     if ui.button("Open sliced file...").clicked() {
         ui.close();
         sliced::open_dialog(window);
@@ -639,6 +644,36 @@ fn file_menu(ui: &mut egui::Ui, window: &mut Window) {
         ui.separator();
         if ui.button("Quit").clicked() {
             ui.ctx().send_viewport_cmd(egui::ViewportCommand::Close);
+        }
+    }
+}
+
+/// The files opened lately, newest first, each with how long ago.
+fn recent_menu(ui: &mut egui::Ui, window: &mut Window) {
+    let now = crate::updates::now_s();
+    let mut picked = None;
+    for file in window.machine.recent.files() {
+        let when = crate::ui::ago(Some(file.opened_at_s), now);
+        let row = ui.add(egui::Button::new(file.name()).shortcut_text(when));
+        if row.on_hover_text(file.path.display().to_string()).clicked() {
+            picked = Some(file.path.clone());
+        }
+    }
+    if window.machine.recent.files().is_empty() {
+        ui.add_enabled(false, egui::Button::new("Nothing opened yet"));
+    }
+    if let Some(path) = picked {
+        ui.close();
+        crate::panels::open_recent(window, path);
+    }
+}
+
+/// The test prints drawn for the window, the ones the start page offers.
+fn test_print_menu(ui: &mut egui::Ui, window: &mut Window) {
+    for sample in &crate::samples::SAMPLES {
+        if ui.button(sample.name).on_hover_text(sample.about).clicked() {
+            ui.close();
+            crate::app::open_by_what_it_is(window, sample.handed());
         }
     }
 }

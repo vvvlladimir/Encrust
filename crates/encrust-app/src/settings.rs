@@ -382,15 +382,6 @@ impl Settings {
     }
 }
 
-/// How many machines the library holds, and by how many makers.
-pub fn library_size(catalogue: &Catalogue) -> (usize, usize) {
-    let makers: std::collections::BTreeSet<&str> = catalogue
-        .printers()
-        .map(|entry| entry.profile.manufacturer.as_str())
-        .collect();
-    (catalogue.printers().count(), makers.len())
-}
-
 /// The resins set up on `printer`, in the catalogue's order.
 pub fn resins_of<'a>(
     catalogue: &'a Catalogue,

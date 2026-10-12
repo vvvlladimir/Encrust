@@ -1,6 +1,6 @@
 # 0220. Edit the machines and resins in a window over the plate, and start on a page
 
-- **Status:** Accepted
+- **Status:** Accepted; the start page's machine card is superseded by 0232
 - **Date:** 2026-10-11
 
 ## Context

@@ -27,6 +27,7 @@ mod relief;
 mod render;
 mod repair;
 mod report;
+mod samples;
 mod scene;
 mod settings;
 mod shortcuts;

@@ -1,12 +1,13 @@
 //! The start page: what the window shows under the top bar until the first model, project
-//! or sliced file arrives. A place to drop a model, the machine it is printed on, and the
-//! files opened lately; see `docs/decisions/0220`.
+//! or sliced file arrives. A place to drop a model, the files opened lately, and the test
+//! prints bundled with the window; see `docs/decisions/0220` and `0232`.
 
 use egui::{Align, Align2, Layout, Rect, RichText, Sense, Stroke, Ui, UiBuilder, pos2, vec2};
 
 use crate::files::{self, Handed, Wanted};
 use crate::panels::Window;
-use crate::ui::{ago, describe, focus_ring, icon, inline_button, theme, tone, two_lines};
+use crate::samples::{SAMPLES, Sample};
+use crate::ui::{ago, describe, focus_ring, icon, inline_button, theme, tone};
 use crate::workspace::Tool;
 
 /// The page's column, the share of it the drop zone takes, and the gap between the cards.
@@ -14,11 +15,15 @@ const COLUMN_W: f32 = 980.0;
 const DROP_SHARE: f32 = 0.575;
 const GAP: f32 = 32.0;
 /// The drop zone's height, the room inside a card's border, and the dashes of the zone's.
-const DROP_H: f32 = 340.0;
+const DROP_H: f32 = 300.0;
 const CARD_PAD: i8 = 20;
 const DASH: f32 = 4.0;
 /// How many recent files the page lists.
 const RECENT_SHOWN: usize = 5;
+/// A test print's card, the gap between two, and its picture's height inside it.
+const SAMPLE_H: f32 = 186.0;
+const SAMPLE_GAP: f32 = 16.0;
+const PREVIEW_H: f32 = 92.0;
 
 /// Whether the window is still on its start page. It leaves for good the moment anything
 /// is on the plate or under the layer strip, or a tool is picked.
@@ -39,7 +44,7 @@ pub fn ui(ui: &mut Ui, window: &mut Window) {
         .auto_shrink([false, false])
         .show(ui, |ui| {
             let width = COLUMN_W.min(ui.available_width() - 2.0 * GAP);
-            let top = ui.max_rect().top() + 64.0;
+            let top = ui.max_rect().top() + 40.0;
             let left = ui.max_rect().center().x - width / 2.0;
             let column = Rect::from_min_max(pos2(left, top), pos2(left + width, f32::INFINITY));
             let mut page = ui.new_child(
@@ -59,6 +64,8 @@ pub fn ui(ui: &mut Ui, window: &mut Window) {
             }
             page.add_space(28.0);
             cards(&mut page, window, width);
+            page.add_space(28.0);
+            samples(&mut page, window, width);
             let used = page.min_rect().bottom() - ui.max_rect().top() + 48.0;
             ui.allocate_space(vec2(ui.available_width(), used));
         });
@@ -73,13 +80,13 @@ fn heading(ui: &mut Ui) {
     );
     ui.add_space(4.0);
     ui.label(
-        RichText::new("Choose your machine, then open a model.")
+        RichText::new("Open a model, or begin with a test print.")
             .font(theme::lede())
             .color(colors.text_mid),
     );
 }
 
-/// The drop zone on the left, the machine and the recent files stacked on the right.
+/// The drop zone on the left, the recent files beside it at the zone's height.
 fn cards(ui: &mut Ui, window: &mut Window, width: f32) {
     let drop_w = ((width - GAP) * DROP_SHARE).floor();
     ui.horizontal_top(|ui| {
@@ -87,21 +94,20 @@ fn cards(ui: &mut Ui, window: &mut Window, width: f32) {
         drop_zone(ui, window, vec2(drop_w, DROP_H));
         ui.vertical(|ui| {
             ui.set_width(width - drop_w - GAP);
-            ui.spacing_mut().item_spacing = vec2(theme::ITEM_GAP, 16.0);
-            card(ui, |ui| machine(ui, window));
-            card(ui, |ui| recent(ui, window));
+            card(ui, DROP_H, |ui| recent(ui, window));
         });
     });
 }
 
-/// A bordered card the width of its column.
-fn card(ui: &mut Ui, add: impl FnOnce(&mut Ui)) {
+/// A bordered card the width of its column and `height` tall, border included.
+fn card(ui: &mut Ui, height: f32, add: impl FnOnce(&mut Ui)) {
     egui::Frame::new()
         .stroke(Stroke::new(1.0, theme::colors().line))
         .corner_radius(theme::R_PANEL)
         .inner_margin(egui::Margin::same(CARD_PAD))
         .show(ui, |ui| {
             ui.set_width(ui.available_width());
+            ui.set_min_height(height - 2.0 * (f32::from(CARD_PAD) + 1.0));
             ui.spacing_mut().item_spacing = vec2(6.0, 0.0);
             add(ui);
         });
@@ -193,79 +199,6 @@ fn buttons_row(row: &mut Ui) -> (bool, bool) {
     (model, project)
 }
 
-/// The machine the plate is printed on, or the warning that there is none yet. Either
-/// opens the Machine and resin window.
-fn machine(ui: &mut Ui, window: &mut Window) {
-    let colors = theme::colors();
-    ui.label(
-        RichText::new("Your machine")
-            .font(theme::block_title())
-            .color(colors.text_high),
-    );
-    ui.add_space(10.0);
-    let slicing = &window.machine.slicing;
-    let (title, detail, tint) = match slicing.printer.as_ref() {
-        Some(printer) => {
-            let format = core_pipeline::SlicedFormat::from(printer.output).extension();
-            let detail = format!("{}, .{format}", printer.manufacturer);
-            (printer.name.clone(), detail, colors.text_mid)
-        }
-        None => {
-            let (machines, makers) = crate::settings::library_size(&slicing.catalogue);
-            let detail = format!("{machines} profiles from {makers} makers");
-            ("Pick your machine".to_owned(), detail, colors.warn)
-        }
-    };
-    if machine_button(ui, &title, &detail, tint).clicked() {
-        crate::panels::open_machines(window.machine);
-    }
-    ui.add_space(10.0);
-    describe(
-        ui,
-        "The plate and every figure use this machine's build volume and pixel size.",
-    );
-}
-
-/// The machine as one wide button: its glyph, its name over its detail, and a caret.
-fn machine_button(ui: &mut Ui, title: &str, detail: &str, tint: egui::Color32) -> egui::Response {
-    let colors = theme::colors();
-    let size = vec2(ui.available_width(), theme::TWO_LINE_ROW_H + 8.0);
-    let (rect, response) = ui.allocate_exact_size(size, Sense::click());
-    response.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::ComboBox, true, title));
-    let fill = if response.hovered() {
-        colors.hover
-    } else {
-        colors.raised
-    };
-    let painter = ui.painter();
-    painter.rect(
-        rect,
-        theme::R_CONTROL,
-        fill,
-        Stroke::new(1.0, tint.gamma_multiply(0.6)),
-        egui::StrokeKind::Inside,
-    );
-    let left = rect.left_center() + vec2(14.0, 0.0);
-    painter.text(
-        left,
-        Align2::LEFT_CENTER,
-        icon::PRINTER,
-        theme::icon(20.0),
-        tint,
-    );
-    two_lines(painter, left + vec2(34.0, 0.0), title, detail);
-    let caret = rect.right_center() - vec2(14.0, 0.0);
-    painter.text(
-        caret,
-        Align2::RIGHT_CENTER,
-        icon::CARET_DOWN,
-        theme::icon(13.0),
-        colors.text_low,
-    );
-    focus_ring(ui, &response, theme::R_CONTROL);
-    response
-}
-
 /// The files opened lately, each opened again by a click. One that has gone is dropped
 /// from the list and said so.
 fn recent(ui: &mut Ui, window: &mut Window) {
@@ -301,9 +234,14 @@ fn recent(ui: &mut Ui, window: &mut Window) {
             picked = Some(file.path.clone());
         }
     }
-    let Some(path) = picked else {
-        return;
-    };
+    if let Some(path) = picked {
+        open_recent(window, path);
+    }
+}
+
+/// Opens a file from the recent list again, or drops it from the list and says so if it has
+/// gone since.
+pub fn open_recent(window: &mut Window, path: std::path::PathBuf) {
     if path.exists() {
         crate::app::open_by_what_it_is(window, Handed::Path(path));
     } else {
@@ -341,4 +279,100 @@ fn recent_row(ui: &mut Ui, name: &str, when: &str) -> egui::Response {
         colors.text_high,
     );
     response
+}
+
+/// The bundled test prints in a row, each put on the plate by a click.
+fn samples(ui: &mut Ui, window: &mut Window, width: f32) {
+    let colors = theme::colors();
+    ui.label(
+        RichText::new("Test prints")
+            .font(theme::block_title())
+            .color(colors.text_high),
+    );
+    ui.add_space(4.0);
+    describe(
+        ui,
+        "Resin tests drawn for Encrust, to try out a machine or a resin on.",
+    );
+    ui.add_space(12.0);
+    let count = SAMPLES.len() as f32;
+    let card_w = ((width - SAMPLE_GAP * (count - 1.0)) / count).floor();
+    let mut picked = None;
+    ui.horizontal_top(|ui| {
+        ui.spacing_mut().item_spacing.x = SAMPLE_GAP;
+        for (index, sample) in SAMPLES.iter().enumerate() {
+            if sample_card(ui, index, sample, vec2(card_w, SAMPLE_H)).clicked() {
+                picked = Some(sample);
+            }
+        }
+    });
+    if let Some(sample) = picked {
+        crate::app::open_by_what_it_is(window, sample.handed());
+    }
+}
+
+/// One test print: its picture over its name and what printing it tells.
+fn sample_card(ui: &mut Ui, index: usize, sample: &Sample, size: egui::Vec2) -> egui::Response {
+    let colors = theme::colors();
+    let (rect, response) = ui.allocate_exact_size(size, Sense::click());
+    response.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Button, true, sample.name));
+    let (fill, edge) = match response.hovered() {
+        true => (colors.raised, colors.accent_deep),
+        false => (colors.base, colors.line),
+    };
+    let painter = ui.painter_at(rect);
+    painter.rect(
+        rect,
+        theme::R_PANEL,
+        fill,
+        Stroke::new(1.0, edge),
+        egui::StrokeKind::Inside,
+    );
+    let inner = rect.shrink(14.0);
+    let stage = Rect::from_min_size(inner.min, vec2(inner.width(), PREVIEW_H));
+    let texture = preview(ui.ctx(), index, sample, stage.size());
+    let uv = Rect::from_min_max(pos2(0.0, 0.0), pos2(1.0, 1.0));
+    let picture = egui::epaint::RectShape::filled(stage, theme::R_CONTROL, egui::Color32::WHITE)
+        .with_texture(texture.id(), uv);
+    painter.add(picture);
+    let name_at = pos2(inner.left(), stage.bottom() + 14.0);
+    painter.text(
+        name_at,
+        Align2::LEFT_TOP,
+        sample.name,
+        theme::label(),
+        colors.text_high,
+    );
+    let mut job = egui::text::LayoutJob::simple(
+        sample.about.to_owned(),
+        theme::small(),
+        colors.text_mid,
+        inner.width(),
+    );
+    job.wrap.max_rows = 2;
+    let about = painter.layout_job(job);
+    painter.galley(name_at + vec2(0.0, 24.0), about, colors.text_mid);
+    focus_ring(ui, &response, theme::R_PANEL);
+    response
+}
+
+/// The test print's picture as a texture `size` points large, rendered once per window and
+/// again only when the card changes size.
+fn preview(
+    ctx: &egui::Context,
+    index: usize,
+    sample: &Sample,
+    size: egui::Vec2,
+) -> egui::TextureHandle {
+    let px = (size * ctx.pixels_per_point()).round();
+    let px = [px.x.max(1.0) as usize, px.y.max(1.0) as usize];
+    let id = egui::Id::new(("sample-preview", index, px));
+    if let Some(texture) = ctx.data(|data| data.get_temp::<egui::TextureHandle>(id)) {
+        return texture;
+    }
+    let rgb = |color: egui::Color32| [color.r(), color.g(), color.b()];
+    let image = sample.picture(px, rgb(theme::colors().sunken), rgb(theme::scene().object));
+    let texture = ctx.load_texture(sample.name, image, egui::TextureOptions::LINEAR);
+    ctx.data_mut(|data| data.insert_temp(id, texture.clone()));
+    texture
 }

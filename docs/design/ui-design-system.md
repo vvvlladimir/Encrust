@@ -224,8 +224,8 @@ and Network tabs beside them, an action bar along the tabs' foot. A question or 
 calculator over it is a modal of its own.
 
 Until the first model, project or sliced file arrives, or a tool is picked, everything under
-the top bar is the **start page** instead: a drop zone, the machine, and the files opened
-lately. See `docs/design/profiles.md` and `docs/decisions/0052`, `0220`.
+the top bar is the **start page** instead: a drop zone, the files opened lately at its
+height, and a row of resin test prints drawn in code. See `docs/decisions/0052`, `0220`, `0232`.
 
 ## Modes and tools
 
