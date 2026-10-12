@@ -216,6 +216,23 @@ it would otherwise orbit the camera as well. None of these cards reports where i
 whichever egui layer is under the pointer owns it, and the plate is only under the pointer
 when that layer is the viewport's own; see `docs/decisions/0193`.
 
+## A small window
+
+A desktop window is never made smaller than 900 by 560 (`theme::WINDOW_MIN_W`, `_H`): there
+both side cards still fit at their floors beside 240 points of stage. In a window narrower
+than the widths their edges were dragged to, the two give way in proportion to what each has
+above its floor and widen again with the window; the dragged widths are kept
+(`panels::fit_side_cards`). The chip cuts the machine's and the resin's names with an
+ellipsis, the longer first, and the project's name gives way before them; under 720 the
+bar's right end shows its glyphs alone. A window over the plate keeps 24 points from the
+window's edge, its list giving way to the page down to 28 % of it. The start page holds as
+many tiles to a row as fit at 160, and its drop zone drops its two buttons where they would
+cover its words; a click on the zone still asks.
+
+A browser's canvas has no floor, so no panel may ask egui for a negative size: a room is
+clamped at zero where it is worked out. `app/small_window.rs` draws every screen from one
+point square up to the floor.
+
 ## The Settings and Machine and resin windows, and the start page
 
 **Settings** and **Machine and resin** are modals over the plate, both drawn in one frame

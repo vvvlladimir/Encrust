@@ -97,29 +97,36 @@ impl Window<'_> {
         let gap = theme::FLOAT_GAP;
         let options = self.view.options;
         let top = stage.top() + gap;
-        let max_h = stage.height() - 2.0 * gap - 2.0 * CARD_STROKE;
+        let max_h = (stage.height() - 2.0 * gap - 2.0 * CARD_STROKE).max(0.0);
 
         let corner = pos2(stage.left() + gap, top);
         let rail = card_at(ctx, "rail", corner, Align2::LEFT_TOP, max_h, |ui| {
             tool_rail::ui(ui, self, max_h);
         });
-        // The whole stage given to the mask has nothing for a tool to work on.
-        let left = if (*self.mode == Mode::Preview && options.mask_only) || !options.inspector {
-            rail
-        } else {
-            self.inspector(ctx, pos2(rail.right() + gap, top), max_h)
-        };
-
         let corner = pos2(stage.right() - gap, top);
         let strip = card_at(ctx, "layer-strip", corner, Align2::RIGHT_TOP, max_h, |ui| {
             egui::Frame::new().inner_margin(STRIP_PAD).show(ui, |ui| {
                 let pad = f32::from(2 * STRIP_PAD);
                 ui.set_width(theme::LAYER_STRIP_W - pad - 2.0 * CARD_STROKE);
-                ui.set_height(max_h - pad);
+                ui.set_height((max_h - pad).max(0.0));
                 section::ui(ui, self);
             });
         });
-        let (models, plate) = self.plate_cards(ctx, pos2(strip.left() - gap, top), stage);
+
+        // The whole stage given to the mask has nothing for a tool to work on.
+        let inspector = !(*self.mode == Mode::Preview && options.mask_only) && options.inspector;
+        let between = strip.left() - rail.right();
+        let (inspector_w, plate_w) = fit_side_cards(
+            between,
+            inspector.then_some(options.inspector_w),
+            options.plate_w,
+        );
+        let left = match inspector_w {
+            Some(width) => self.inspector(ctx, pos2(rail.right() + gap, top), max_h, width),
+            None => rail,
+        };
+        let corner = pos2(strip.left() - gap, top);
+        let (models, plate) = self.plate_cards(ctx, corner, stage, plate_w);
         for (id, card) in [("models-edge", models), ("plate-edge", plate)] {
             if let Some(raw) = drag_edge(ctx, id, card, false) {
                 self.view.options.plate_w =
@@ -129,14 +136,13 @@ impl Window<'_> {
 
         let left = left.right() + gap;
         let right = (models.left() - gap).max(left);
-        Rect::from_x_y_ranges(left..=right, top..=stage.bottom() - gap)
+        Rect::from_x_y_ranges(left..=right, top..=(stage.bottom() - gap).max(top))
     }
 }
 
 impl Window<'_> {
-    /// The open tool's card from `corner` down, and the edge that sizes it.
-    fn inspector(&mut self, ctx: &egui::Context, corner: Pos2, max_h: f32) -> Rect {
-        let width = self.view.options.inspector_w;
+    /// The open tool's card from `corner` down, `width` wide, and the edge that sizes it.
+    fn inspector(&mut self, ctx: &egui::Context, corner: Pos2, max_h: f32, width: f32) -> Rect {
         let inspector = card_at(ctx, "inspector", corner, Align2::LEFT_TOP, max_h, |ui| {
             ui.set_width(width);
             inspector::ui(ui, self, max_h);
@@ -151,10 +157,15 @@ impl Window<'_> {
     }
 
     /// The models from `corner` down, and this plate's figures and Slice standing on the
-    /// stage's foot under them, both as wide as the plate panel. Answers the two cards.
-    fn plate_cards(&mut self, ctx: &egui::Context, corner: Pos2, stage: Rect) -> (Rect, Rect) {
+    /// stage's foot under them, both `width` wide. Answers the two cards.
+    fn plate_cards(
+        &mut self,
+        ctx: &egui::Context,
+        corner: Pos2,
+        stage: Rect,
+        width: f32,
+    ) -> (Rect, Rect) {
         let gap = theme::FLOAT_GAP;
-        let width = self.view.options.plate_w;
         let foot = pos2(corner.x, stage.bottom() - gap);
         let plate = card_at(
             ctx,
@@ -167,13 +178,42 @@ impl Window<'_> {
                 scene_panel::this_plate(ui, self);
             },
         );
-        let max_h = plate.top() - gap - corner.y - 2.0 * CARD_STROKE;
+        let max_h = (plate.top() - gap - corner.y - 2.0 * CARD_STROKE).max(0.0);
         let models = card_at(ctx, "models", corner, Align2::RIGHT_TOP, max_h, |ui| {
             ui.set_width(width);
             scene_panel::ui(ui, self, max_h);
         });
         (models, plate)
     }
+}
+
+/// The least of the stage the side cards leave clear, in points: room for the view cube
+/// and the view buttons beside it.
+const STAGE_MIN_W: f32 = 240.0;
+
+/// The inspector's width, when it is shown, and the plate cards' width that fit `between`
+/// the rail and the layer strip with `STAGE_MIN_W` of stage left between them. Each gives
+/// way in proportion to what it has above the least its range allows, and no further.
+fn fit_side_cards(between: f32, inspector_w: Option<f32>, plate_w: f32) -> (Option<f32>, f32) {
+    let cards = if inspector_w.is_some() { 2.0 } else { 1.0 };
+    let gaps = (cards + 2.0) * theme::FLOAT_GAP + 2.0 * cards * CARD_STROKE;
+    let room = between - gaps - STAGE_MIN_W;
+    let over = (inspector_w.unwrap_or(0.0) + plate_w - room).max(0.0);
+    let inspector_least = inspector_w.map(|width| width.min(*theme::INSPECTOR_W_RANGE.start()));
+    let plate_least = plate_w.min(*theme::SCENE_W_RANGE.start());
+    let slack = inspector_w
+        .zip(inspector_least)
+        .map_or(0.0, |(w, least)| w - least);
+    let slack = [slack, plate_w - plate_least];
+    let total = slack[0] + slack[1];
+    let give = |slack: f32| match total > 0.0 {
+        true => (over * slack / total).min(slack),
+        false => 0.0,
+    };
+    (
+        inspector_w.map(|width| width - give(slack[0])),
+        plate_w - give(slack[1]),
+    )
 }
 
 /// Points between the layer strip and the edge of its card.
@@ -260,4 +300,60 @@ fn strip_frame() -> egui::Frame {
     egui::Frame::new()
         .fill(theme::colors().base)
         .inner_margin(theme::STRIP_MARGIN)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// What the rail and the layer strip leave between them for cards of these widths and
+    /// the least stage, with the gaps and outlines `fit_side_cards` counts.
+    fn between(inspector_w: f32, plate_w: f32) -> f32 {
+        inspector_w + plate_w + STAGE_MIN_W + 4.0 * theme::FLOAT_GAP + 4.0 * CARD_STROKE
+    }
+
+    #[test]
+    fn side_cards_with_room_keep_their_widths() {
+        let fitted = fit_side_cards(between(328.0, 272.0) + 50.0, Some(328.0), 272.0);
+        assert_eq!(fitted, (Some(328.0), 272.0));
+    }
+
+    #[test]
+    fn side_cards_give_way_in_proportion_to_what_they_have_above_their_least() {
+        // 68 above the inspector's least of 260 and 102 above the plate's 170: 2 to 3.
+        let fitted = fit_side_cards(between(328.0, 272.0) - 50.0, Some(328.0), 272.0);
+        assert_eq!(fitted, (Some(308.0), 242.0));
+    }
+
+    #[test]
+    fn no_card_shrinks_below_the_least_its_range_allows() {
+        let fitted = fit_side_cards(0.0, Some(328.0), 272.0);
+        assert_eq!(fitted, (Some(260.0), 170.0));
+    }
+
+    #[test]
+    fn a_card_already_at_its_least_leaves_the_giving_to_the_other() {
+        let fitted = fit_side_cards(between(260.0, 272.0) - 40.0, Some(260.0), 272.0);
+        assert_eq!(fitted, (Some(260.0), 232.0));
+    }
+
+    #[test]
+    fn the_least_window_holds_both_side_cards_and_the_stage() {
+        let rail_w = theme::RAIL_W + 2.0 * CARD_STROKE;
+        let room = theme::WINDOW_MIN_W - 2.0 * theme::FLOAT_GAP - rail_w - theme::LAYER_STRIP_W;
+        let least = between(
+            *theme::INSPECTOR_W_RANGE.start(),
+            *theme::SCENE_W_RANGE.start(),
+        );
+        assert!(
+            room >= least,
+            "{room} points between the rail and the strip, {least} needed"
+        );
+    }
+
+    #[test]
+    fn a_closed_inspector_leaves_its_room_to_the_plate_cards() {
+        let room = between(0.0, 272.0) - theme::FLOAT_GAP - 2.0 * CARD_STROKE;
+        assert_eq!(fit_side_cards(room, None, 272.0), (None, 272.0));
+    }
 }

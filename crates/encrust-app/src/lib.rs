@@ -116,6 +116,7 @@ fn viewport() -> anyhow::Result<egui::ViewportBuilder> {
     use anyhow::Context as _;
     let viewport = egui::ViewportBuilder::default()
         .with_inner_size([1280.0, 800.0])
+        .with_min_inner_size([ui::theme::WINDOW_MIN_W, ui::theme::WINDOW_MIN_H])
         .with_icon(icon().context("the window icon")?);
     Ok(if cfg!(target_os = "macos") {
         viewport

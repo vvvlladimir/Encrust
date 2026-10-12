@@ -441,8 +441,12 @@ impl eframe::App for SlicerApp {
     }
 }
 
+#[cfg(test)]
+mod small_window;
 #[cfg(all(test, feature = "snapshots"))]
 mod snapshots;
+#[cfg(test)]
+mod states;
 
 #[cfg(test)]
 mod tests {

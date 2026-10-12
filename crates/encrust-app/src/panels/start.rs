@@ -12,9 +12,11 @@ use crate::samples::SAMPLES;
 use crate::ui::{ago, describe, focus_ring, icon, inline_button, theme, tone};
 use crate::workspace::Tool;
 
-/// The page's column, and the recent files' tiles across it with the gap between two.
+/// The page's column, and the recent files' tiles across it with the gap between two: as
+/// many as fit at their least width, never more than `COLUMNS`.
 const COLUMN_W: f32 = 980.0;
 const COLUMNS: usize = 4;
+const TILE_MIN_W: f32 = 160.0;
 const TILE_GAP: f32 = 16.0;
 /// The height of the drop zone and of the switch beside it.
 const ACTIONS_H: f32 = 112.0;
@@ -42,7 +44,7 @@ pub fn ui(ui: &mut Ui, window: &mut Window) {
     egui::ScrollArea::vertical()
         .auto_shrink([false, false])
         .show(ui, |ui| {
-            let width = COLUMN_W.min(ui.available_width() - 4.0 * TILE_GAP);
+            let width = COLUMN_W.min(ui.available_width() - 4.0 * TILE_GAP).max(0.0);
             let top = ui.max_rect().top() + 40.0;
             let left = ui.max_rect().center().x - width / 2.0;
             let column = Rect::from_min_max(pos2(left, top), pos2(left + width, f32::INFINITY));
@@ -85,17 +87,37 @@ fn heading(ui: &mut Ui) {
     );
 }
 
-/// One tile's width when `COLUMNS` of them span `width`.
-fn tile_w(width: f32) -> f32 {
-    ((width - TILE_GAP * (COLUMNS - 1) as f32) / COLUMNS as f32).floor()
+/// How many tiles stand in a row across `width`.
+fn columns(width: f32) -> usize {
+    let fit = ((width + TILE_GAP) / (TILE_MIN_W + TILE_GAP)).floor();
+    (fit as usize).clamp(1, COLUMNS)
 }
 
-/// The drop zone across three columns, the switch between the shelves in the fourth.
+/// One tile's width when `columns(width)` of them span `width`.
+fn tile_w(width: f32) -> f32 {
+    let columns = columns(width) as f32;
+    ((width - TILE_GAP * (columns - 1.0)) / columns)
+        .floor()
+        .max(0.0)
+}
+
+/// The drop zone across every column but the last, the switch between the shelves in it,
+/// or the two one over the other when a row holds one tile.
 fn actions(ui: &mut Ui, window: &mut Window, width: f32) {
+    if columns(width) == 1 {
+        drop_zone(ui, window, vec2(width, ACTIONS_H));
+        ui.add_space(TILE_GAP);
+        switch(ui, window, vec2(width, ACTIONS_H));
+        return;
+    }
     let folder_w = tile_w(width);
     ui.horizontal_top(|ui| {
         ui.spacing_mut().item_spacing.x = TILE_GAP;
-        drop_zone(ui, window, vec2(width - folder_w - TILE_GAP, ACTIONS_H));
+        drop_zone(
+            ui,
+            window,
+            vec2((width - folder_w - TILE_GAP).max(0.0), ACTIONS_H),
+        );
         switch(ui, window, vec2(folder_w, ACTIONS_H));
     });
 }
@@ -107,9 +129,11 @@ fn drop_zone(ui: &mut Ui, window: &mut Window, size: egui::Vec2) {
     response.widget_info(|| {
         egui::WidgetInfo::labeled(egui::WidgetType::Button, true, "Open a model or a project")
     });
-    paint_zone(ui.painter(), rect, response.hovered());
+    // The edge's stroke straddles the rect, so the clip is a point wider.
+    let painter = ui.painter_at(rect.expand(1.0));
+    let words_end = paint_zone(&painter, rect, response.hovered());
     focus_ring(ui, &response, theme::R_PANEL);
-    let (model, project) = buttons_row(ui, rect);
+    let (model, project) = buttons_row(ui, rect, words_end);
     let wanted = match (model, project, response.clicked()) {
         (true, _, _) => Some(Wanted::Model),
         (_, true, _) => Some(Wanted::Project),
@@ -122,7 +146,8 @@ fn drop_zone(ui: &mut Ui, window: &mut Window, size: egui::Vec2) {
 }
 
 /// The zone's dashed edge and what it says on its left, lit in the accent under the pointer.
-fn paint_zone(painter: &egui::Painter, rect: Rect, hovered: bool) {
+/// Answers where the words end.
+fn paint_zone(painter: &egui::Painter, rect: Rect, hovered: bool) -> f32 {
     let colors = theme::colors();
     let (fill, edge, glyph) = match hovered {
         true => (colors.accent_wash, colors.accent_deep, colors.accent_soft),
@@ -154,17 +179,20 @@ fn paint_zone(painter: &egui::Painter, rect: Rect, hovered: bool) {
             colors.text_low,
         ),
     ];
+    let mut words_end = left.x;
     for (offset, text, font, tint) in lines {
         let align = match offset.x < 60.0 {
             true => Align2::CENTER_CENTER,
             false => Align2::LEFT_CENTER,
         };
-        painter.text(left + offset, align, text, font, tint);
+        words_end = words_end.max(painter.text(left + offset, align, text, font, tint).right());
     }
+    words_end
 }
 
-/// The zone's two buttons, set against its right edge. Answers which was pressed.
-fn buttons_row(ui: &mut Ui, zone: Rect) -> (bool, bool) {
+/// The zone's two buttons, set against its right edge, or none where they would cover the
+/// words ending at `words_end`: a click on the zone still asks. Answers which was pressed.
+fn buttons_row(ui: &mut Ui, zone: Rect, words_end: f32) -> (bool, bool) {
     let colors = theme::colors();
     let width = |text: &str| {
         ui.painter()
@@ -178,6 +206,9 @@ fn buttons_row(ui: &mut Ui, zone: Rect) -> (bool, bool) {
         zone.right() - 24.0 - both,
         zone.center().y - theme::BUTTON_H / 2.0,
     );
+    if at.x < words_end + 24.0 {
+        return (false, false);
+    }
     let mut row = ui.new_child(
         UiBuilder::new()
             .max_rect(Rect::from_min_size(at, vec2(both, theme::BUTTON_H)))
@@ -281,7 +312,7 @@ fn switch(ui: &mut Ui, window: &Window, size: egui::Vec2) {
     }
 }
 
-/// The shelf's title, and its tiles four to a row.
+/// The shelf's title, and its tiles as many to a row as fit.
 fn shelf_tiles(ui: &mut Ui, window: &mut Window, width: f32) {
     let colors = theme::colors();
     let shown = shelf(ui.ctx());
@@ -299,26 +330,28 @@ fn shelf_tiles(ui: &mut Ui, window: &mut Window, width: f32) {
     });
     ui.add_space(12.0);
     let tile = tile_w(width);
-    let picture_h = ((tile - 2.0 * TILE_PAD) * 2.0 / 3.0).round();
+    let picture_h = ((tile - 2.0 * TILE_PAD) * 2.0 / 3.0).round().max(0.0);
     let size = vec2(tile, TILE_PAD + picture_h + CAPTION_H);
+    let columns = columns(width);
     match shown {
-        Shelf::Recent => recent(ui, window, size),
-        Shelf::TestPrints => test_prints(ui, window, size),
+        Shelf::Recent => recent(ui, window, size, columns),
+        Shelf::TestPrints => test_prints(ui, window, size, columns),
     }
 }
 
-/// `count` tiles in rows of `COLUMNS`, each drawn by `add`. Answers the index clicked.
+/// `count` tiles in rows of `columns`, each drawn by `add`. Answers the index clicked.
 fn grid(
     ui: &mut Ui,
     count: usize,
+    columns: usize,
     mut add: impl FnMut(&mut Ui, usize) -> egui::Response,
 ) -> Option<usize> {
     let mut picked = None;
     ui.scope(|ui| {
         ui.spacing_mut().item_spacing = vec2(TILE_GAP, TILE_GAP);
-        for start in (0..count).step_by(COLUMNS) {
+        for start in (0..count).step_by(columns) {
             ui.horizontal_top(|ui| {
-                for index in start..count.min(start + COLUMNS) {
+                for index in start..count.min(start + columns) {
                     if add(ui, index).clicked() {
                         picked = Some(index);
                     }
@@ -330,7 +363,7 @@ fn grid(
 }
 
 /// The files opened lately as tiles of what they held, each opened again by a click.
-fn recent(ui: &mut Ui, window: &mut Window, size: egui::Vec2) {
+fn recent(ui: &mut Ui, window: &mut Window, size: egui::Vec2, columns: usize) {
     let files = window.machine.recent.files().to_vec();
     if files.is_empty() {
         describe(
@@ -340,7 +373,7 @@ fn recent(ui: &mut Ui, window: &mut Window, size: egui::Vec2) {
         return;
     }
     let now = crate::updates::now_s();
-    let picked = grid(ui, files.len(), |ui, index| {
+    let picked = grid(ui, files.len(), columns, |ui, index| {
         let file = &files[index];
         let name = file
             .path
@@ -360,8 +393,8 @@ fn recent(ui: &mut Ui, window: &mut Window, size: egui::Vec2) {
 }
 
 /// The bundled test prints as tiles, each put on the plate by a click.
-fn test_prints(ui: &mut Ui, window: &mut Window, size: egui::Vec2) {
-    let picked = grid(ui, SAMPLES.len(), |ui, index| {
+fn test_prints(ui: &mut Ui, window: &mut Window, size: egui::Vec2, columns: usize) {
+    let picked = grid(ui, SAMPLES.len(), columns, |ui, index| {
         let sample = &SAMPLES[index];
         let shown = Tile {
             name: sample.name,
@@ -513,4 +546,29 @@ fn sample_picture(ctx: &egui::Context, index: usize) -> egui::TextureHandle {
     let texture = ctx.load_texture(sample.name, image, egui::TextureOptions::LINEAR);
     ctx.data_mut(|data| data.insert_temp(id, texture.clone()));
     texture
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn a_wide_page_holds_four_tiles_to_a_row() {
+        assert_eq!(columns(COLUMN_W), 4);
+        assert_eq!(columns(4000.0), COLUMNS, "never more than COLUMNS");
+    }
+
+    #[test]
+    fn a_narrow_page_holds_fewer_tiles_no_narrower_than_the_least() {
+        let width = 2.0 * TILE_MIN_W + TILE_GAP + 10.0;
+        assert_eq!(columns(width), 2);
+        assert!(tile_w(width) >= TILE_MIN_W);
+    }
+
+    #[test]
+    fn a_page_narrower_than_one_tile_still_holds_one() {
+        assert_eq!(columns(40.0), 1);
+        assert_eq!(columns(0.0), 1);
+        assert_eq!(tile_w(0.0), 0.0);
+    }
 }

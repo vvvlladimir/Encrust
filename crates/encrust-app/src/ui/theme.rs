@@ -324,6 +324,10 @@ pub const FLOAT_GAP: f32 = 8.0;
 /// The top bar, and the layer strip down the stage's right edge. On macOS the system
 /// draws its window buttons over the bar's left end, so the bar is tall enough for them.
 pub const TOP_BAR_H: f32 = 44.0;
+/// The least a desktop window may be made: the side cards fit beside a stage still worth
+/// working in, and the bar's names are cut rather than lost.
+pub const WINDOW_MIN_W: f32 = 900.0;
+pub const WINDOW_MIN_H: f32 = 560.0;
 pub const LAYER_STRIP_W: f32 = 56.0;
 /// A rail button holds a glyph over its name, or the glyph alone on a short screen.
 pub const RAIL_BUTTON_H: f32 = 46.0;
@@ -341,11 +345,12 @@ pub const BAR_H: f32 = 6.0;
 pub const BLOCK_TITLE_W: f32 = 180.0;
 pub const BLOCK_FIELDS_W: f32 = 460.0;
 pub const BLOCK_GAP: f32 = 24.0;
-/// A window over the plate: its title row, the most it takes of the screen, and the list
-/// down its left.
+/// A window over the plate: its title row, the screen it leaves either side, and the list
+/// down its left, which gives way to the page beside it in a small window.
 pub const DIALOG_HEAD_H: f32 = 48.0;
-pub const DIALOG_SHARE: f32 = 0.92;
+pub const DIALOG_MARGIN: f32 = 24.0;
 pub const DIALOG_LIST_W: f32 = 260.0;
+pub const DIALOG_LIST_SHARE: f32 = 0.28;
 /// A row of a table, and of a list whose entries carry a second line.
 pub const TABLE_ROW_H: f32 = 36.0;
 pub const TWO_LINE_ROW_H: f32 = 48.0;

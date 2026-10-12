@@ -25,17 +25,18 @@ pub(super) fn show(
     title: &str,
     add: impl FnOnce(&mut Ui, Rect, Rect),
 ) -> bool {
-    let screen = ctx.content_rect().size() * theme::DIALOG_SHARE;
-    let size = vec2(MOST.x.min(screen.x), MOST.y.min(screen.y));
+    let screen = ctx.content_rect().size() - egui::Vec2::splat(2.0 * theme::DIALOG_MARGIN);
+    let size = screen.min(MOST).max(egui::Vec2::ZERO);
     let mut close = false;
     let modal = egui::Modal::new(egui::Id::new(id))
         .frame(dialog_frame())
         .show(ctx, |ui| {
             let (rect, _) = ui.allocate_exact_size(size, Sense::hover());
             let head = rect.with_max_y(rect.top() + theme::DIALOG_HEAD_H);
+            let list_w = theme::DIALOG_LIST_W.min(rect.width() * theme::DIALOG_LIST_SHARE);
             let list = Rect::from_min_max(
                 pos2(rect.left(), head.bottom()),
-                pos2(rect.left() + theme::DIALOG_LIST_W, rect.bottom()),
+                pos2(rect.left() + list_w, rect.bottom()),
             );
             let side = Rect::from_min_max(pos2(list.right() + 1.0, head.bottom()), rect.max);
             let mut title_row = ui.new_child(
@@ -99,7 +100,7 @@ pub(super) fn scrolled(ui: &mut Ui, add: impl FnOnce(&mut Ui)) {
             ui.horizontal(|ui| {
                 ui.add_space(SIDE_PAD);
                 ui.vertical(|ui| {
-                    ui.set_width(ui.available_width() - SIDE_PAD);
+                    ui.set_width((ui.available_width() - SIDE_PAD).max(0.0));
                     ui.spacing_mut().item_spacing.y = theme::ITEM_GAP;
                     add(ui);
                     ui.add_space(12.0);

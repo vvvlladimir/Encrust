@@ -16,6 +16,8 @@ use crate::workspace::Tool;
 /// ends of the bar.
 const PAD: f32 = 10.0;
 const ENDS_GAP: f32 = 12.0;
+/// A bar narrower than this shows the right end's controls as their glyphs alone.
+const COMPACT_BAR_W: f32 = 720.0;
 
 /// The bar is the window's own title bar rather than a band under one; see
 /// `docs/decisions/0104` and `0217`.
@@ -34,6 +36,7 @@ pub fn ui(ui: &mut egui::Ui, window: &mut Window) {
     }
 
     // The right end goes first, so the tabs know how far they may run.
+    let compact = bar.width() < COMPACT_BAR_W;
     let right = ui
         .scope_builder(
             UiBuilder::new()
@@ -42,46 +45,67 @@ pub fn ui(ui: &mut egui::Ui, window: &mut Window) {
             |ui| {
                 ui.spacing_mut().item_spacing.x = 6.0;
                 window_buttons(ui);
-                find_button(ui, window);
+                find_button(ui, window, compact);
                 window_controls(ui, window);
-                update_badge(ui, window.machine);
-                alpha_badge(ui, window.machine);
+                update_badge(ui, window.machine, compact);
+                alpha_badge(ui, window.machine, compact);
             },
         )
         .response
         .rect;
 
-    let left_end = centred_chip(ui, window, bar, right.left());
-    let left = bar.with_max_x((left_end - ENDS_GAP).max(bar.left()));
-    ui.scope_builder(
-        UiBuilder::new()
-            .max_rect(left)
-            .layout(Layout::left_to_right(Align::Center)),
-        |ui| {
-            ui.spacing_mut().item_spacing.x = 0.0;
-            #[cfg(target_os = "macos")]
-            ui.add_space(crate::traffic_lights::ROOM);
-            menu(ui, window);
-            project_name(ui, &window.doc.project);
-        },
-    );
+    // The menus next, which never give way, then the chip in what is left, and the
+    // project's name in whatever room the chip leaves it.
+    let menus = ui
+        .scope_builder(
+            UiBuilder::new()
+                .max_rect(bar.with_max_x(right.left()))
+                .layout(Layout::left_to_right(Align::Center)),
+            |ui| {
+                ui.spacing_mut().item_spacing.x = 0.0;
+                #[cfg(target_os = "macos")]
+                ui.add_space(crate::traffic_lights::ROOM);
+                menu(ui, window);
+            },
+        )
+        .response
+        .rect;
+    let room = (menus.right() + ENDS_GAP)..=(right.left() - ENDS_GAP);
+    let left_end = centred_chip(ui, window, bar, room);
+    let name = Rect::from_x_y_ranges(menus.right()..=left_end - ENDS_GAP, bar.y_range());
+    if name.width() > 2.0 * PAD {
+        let mut ui = ui.new_child(
+            UiBuilder::new()
+                .max_rect(name)
+                .layout(Layout::left_to_right(Align::Center)),
+        );
+        project_name(&mut ui, &window.doc.project);
+    }
 }
 
-/// The print chip in the middle of the window, or as near it as the right end lets it
-/// stand. Answers where it starts, which is as far as the left end may run.
+/// The print chip in the middle of the window, or as near it as `room` lets it stand,
+/// its names cut short when even all of `room` is too little. Answers where it starts, or
+/// the end of `room` and its gap when it is left out.
 ///
 /// It is placed by last frame's width, and a frame whose width changed is drawn again.
-fn centred_chip(ui: &mut egui::Ui, window: &mut Window, bar: Rect, right_end: f32) -> f32 {
+fn centred_chip(
+    ui: &mut egui::Ui,
+    window: &mut Window,
+    bar: Rect,
+    room: std::ops::RangeInclusive<f32>,
+) -> f32 {
     let id = ui.id().with("print-chip-w");
     let width = ui.data(|data| data.get_temp::<f32>(id)).unwrap_or(0.0);
-    let x = (bar.center().x - width / 2.0).min(right_end - ENDS_GAP - width);
-    let room = Rect::from_x_y_ranges(x..=right_end, bar.y_range());
+    let (least, most) = (*room.start(), *room.end());
+    let max_w = (most - least).max(0.0);
+    let x = (bar.center().x - width / 2.0).min(most - width).max(least);
+    let rect = Rect::from_x_y_ranges(x..=x + max_w, bar.y_range());
     let drawn = ui
         .scope_builder(
             UiBuilder::new()
-                .max_rect(room)
+                .max_rect(rect)
                 .layout(Layout::left_to_right(Align::Center)),
-            |ui| print_chip(ui, window),
+            |ui| print_chip(ui, window, max_w),
         )
         .response
         .rect
@@ -90,7 +114,7 @@ fn centred_chip(ui: &mut egui::Ui, window: &mut Window, bar: Rect, right_end: f3
         ui.data_mut(|data| data.insert_temp(id, drawn));
         ui.ctx().request_discard("the print chip changed width");
     }
-    x
+    if drawn > 0.0 { x } else { most + ENDS_GAP }
 }
 
 /// What belongs to the whole window rather than to the plate: the sheet of keys and the
@@ -149,8 +173,10 @@ fn menu(ui: &mut egui::Ui, window: &mut Window) {
 }
 
 /// The machine and the resin the plate is printed on, and the layers and exposure it is
-/// cut with: they belong to the plate rather than to a tool, so they stand over it.
-fn print_chip(ui: &mut egui::Ui, window: &mut Window) {
+/// cut with: they belong to the plate rather than to a tool, so they stand over it. No
+/// wider than `max_w`: the two names are cut short to fit, the longer first, and the chip
+/// is left out where not even `NAME_LEAST_W` of each would.
+fn print_chip(ui: &mut egui::Ui, window: &mut Window, max_w: f32) {
     let colors = theme::colors();
     let slicing = &window.machine.slicing;
     let untuned = slicing.printer_id.is_some() && slicing.has_resin() && !slicing.resin_is_tuned();
@@ -165,13 +191,34 @@ fn print_chip(ui: &mut egui::Ui, window: &mut Window) {
         format!("Resin, {}", slicing.resin_name()),
         format!("{}, {layers}", Tool::PrintSettings.label()),
     ];
+    let slash_w = 10.0;
+    let settings = Part::new(
+        ui,
+        icon::PARAMETERS,
+        &layers,
+        colors.text_mid,
+        "",
+        f32::INFINITY,
+    );
+    let printer_name = window.doc.plate.display_name();
+    let names_room =
+        max_w - settings.width - slash_w - Part::chrome_w("") - Part::chrome_w(icon::CARET_DOWN);
+    if names_room < 2.0 * NAME_LEAST_W {
+        return;
+    }
+    let (printer_w, resin_w) = share_room(
+        names_room,
+        text_w(ui, printer_name),
+        text_w(ui, slicing.resin_name()),
+    );
     let parts = [
         Part::new(
             ui,
             icon::PRINTER,
-            window.doc.plate.display_name(),
+            printer_name,
             colors.text_high,
             "",
+            printer_w,
         ),
         Part::new(
             ui,
@@ -179,10 +226,10 @@ fn print_chip(ui: &mut egui::Ui, window: &mut Window) {
             slicing.resin_name(),
             resin_tint,
             icon::CARET_DOWN,
+            resin_w,
         ),
-        Part::new(ui, icon::PARAMETERS, &layers, colors.text_mid, ""),
+        settings,
     ];
-    let slash_w = 10.0;
     let width: f32 = parts.iter().map(|part| part.width).sum::<f32>() + slash_w;
     let (rect, _) = ui.allocate_exact_size(vec2(width, theme::CHIP_H), Sense::hover());
 
@@ -274,24 +321,40 @@ struct Part {
 }
 
 impl Part {
+    /// A part whose text is cut short with an ellipsis past `max_text_w` points.
     fn new(
         ui: &egui::Ui,
         glyph: &'static str,
         text: &str,
         tint: egui::Color32,
         caret: &'static str,
+        max_text_w: f32,
     ) -> Self {
-        let text = ui
+        let whole = ui
             .painter()
             .layout_no_wrap(text.to_owned(), theme::label(), tint);
-        let caret_w = if caret.is_empty() { 0.0 } else { 16.0 };
-        let width = PAD + 20.0 + text.size().x + caret_w + PAD;
+        // Laid out again only when cut: a truncating layout sets even a whole text apart.
+        let text = if whole.size().x <= max_text_w {
+            whole
+        } else {
+            let mut job =
+                egui::text::LayoutJob::simple_singleline(text.to_owned(), theme::label(), tint);
+            job.wrap = egui::text::TextWrapping::truncate_at_width(max_text_w.max(0.0));
+            ui.painter().layout_job(job)
+        };
+        let width = Self::chrome_w(caret) + text.size().x;
         Self {
             glyph,
             text,
             caret,
             width,
         }
+    }
+
+    /// The part's width less its text: the room either side, the glyph and the caret.
+    fn chrome_w(caret: &str) -> f32 {
+        let caret_w = if caret.is_empty() { 0.0 } else { 16.0 };
+        PAD + 20.0 + caret_w + PAD
     }
 
     fn paint(
@@ -343,9 +406,36 @@ impl Part {
     }
 }
 
+/// The least of a name the chip shows: enough for a letter and the ellipsis.
+const NAME_LEAST_W: f32 = 24.0;
+
+/// The width `text` takes in the chip, uncut.
+fn text_w(ui: &egui::Ui, text: &str) -> f32 {
+    ui.painter()
+        .layout_no_wrap(text.to_owned(), theme::label(), egui::Color32::WHITE)
+        .size()
+        .x
+}
+
+/// Two names' widths cut down to share `room`: the shorter keeps all it needs when it fits
+/// in half, the longer takes the rest.
+fn share_room(room: f32, first_w: f32, second_w: f32) -> (f32, f32) {
+    let room = room.max(0.0);
+    let half = room / 2.0;
+    if first_w + second_w <= room {
+        (first_w, second_w)
+    } else if first_w <= half {
+        (first_w, room - first_w)
+    } else if second_w <= half {
+        (room - second_w, second_w)
+    } else {
+        (half, half)
+    }
+}
+
 /// Where the search over every tool, field and setting will open. Drawn already, so the
 /// bar keeps its shape. TODO(step-5): the palette behind it, with its own ADR.
-fn find_button(ui: &mut egui::Ui, window: &mut Window) {
+fn find_button(ui: &mut egui::Ui, window: &mut Window, compact: bool) {
     let colors = theme::colors();
     let tint = colors.text_low;
     let label = ui
@@ -354,7 +444,10 @@ fn find_button(ui: &mut egui::Ui, window: &mut Window) {
     let keys = ui
         .painter()
         .layout_no_wrap(shortcuts::text(Action::Find), theme::small(), tint);
-    let width = PAD + 18.0 + label.size().x + 16.0 + keys.size().x + PAD;
+    let width = match compact {
+        true => PAD + 12.0 + PAD,
+        false => PAD + 18.0 + label.size().x + 16.0 + keys.size().x + PAD,
+    };
     let (rect, response) = ui.allocate_exact_size(vec2(width, theme::CHIP_H), Sense::click());
     response.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Button, true, "Find"));
     let painter = ui.painter();
@@ -378,22 +471,24 @@ fn find_button(ui: &mut egui::Ui, window: &mut Window) {
         tint,
     );
     let label_w = label.size().x;
-    painter.galley(
-        pos2(
-            rect.left() + PAD + 18.0,
-            rect.center().y - label.size().y / 2.0,
-        ),
-        label,
-        tint,
-    );
-    painter.galley(
-        pos2(
-            rect.left() + PAD + 18.0 + label_w + 16.0,
-            rect.center().y - keys.size().y / 2.0,
-        ),
-        keys,
-        tint,
-    );
+    if !compact {
+        painter.galley(
+            pos2(
+                rect.left() + PAD + 18.0,
+                rect.center().y - label.size().y / 2.0,
+            ),
+            label,
+            tint,
+        );
+        painter.galley(
+            pos2(
+                rect.left() + PAD + 18.0 + label_w + 16.0,
+                rect.center().y - keys.size().y / 2.0,
+            ),
+            keys,
+            tint,
+        );
+    }
     focus_ring(ui, &response, theme::R_CONTROL);
     if response
         .on_hover_text("Find a tool, an action or a model")
@@ -448,7 +543,7 @@ fn window_buttons(ui: &mut egui::Ui) {
 
 /// A release newer than this build, offered and never applied: a click opens the Updates
 /// page, or restarts into a build already installed. See `crate::updates`.
-fn update_badge(ui: &mut egui::Ui, machine: &mut Machine) {
+fn update_badge(ui: &mut egui::Ui, machine: &mut Machine, compact: bool) {
     let Some(offer) = machine.updates.waiting() else {
         return;
     };
@@ -459,7 +554,14 @@ fn update_badge(ui: &mut egui::Ui, machine: &mut Machine) {
         format!("Encrust {}", offer.version)
     };
     let colors = theme::colors();
-    let response = pill(ui, icon::UPDATE, &text, colors.accent, colors.accent_wash);
+    let response = pill(
+        ui,
+        icon::UPDATE,
+        &text,
+        compact,
+        colors.accent,
+        colors.accent_wash,
+    );
     let tooltip = if installed {
         "Close the window and start the new build"
     } else {
@@ -480,9 +582,16 @@ fn update_badge(ui: &mut egui::Ui, machine: &mut Machine) {
 
 /// What this build is, where it can be acted on: a click opens the sheet that writes a
 /// bug report. See `crate::report`.
-fn alpha_badge(ui: &mut egui::Ui, machine: &mut Machine) {
+fn alpha_badge(ui: &mut egui::Ui, machine: &mut Machine, compact: bool) {
     let colors = theme::colors();
-    let response = pill(ui, icon::BUG, "Alpha", colors.warn, colors.warn_wash);
+    let response = pill(
+        ui,
+        icon::BUG,
+        "Alpha",
+        compact,
+        colors.warn,
+        colors.warn_wash,
+    );
     if response
         .on_hover_text("Encrust is in alpha: say what went wrong")
         .clicked()
@@ -492,17 +601,20 @@ fn alpha_badge(ui: &mut egui::Ui, machine: &mut Machine) {
     ui.add_space(6.0);
 }
 
-/// A rounded tag in the bar, the one shape both badges are drawn as.
+/// A rounded tag in the bar, the one shape both badges are drawn as, its glyph alone when
+/// `compact`.
 fn pill(
     ui: &mut egui::Ui,
     glyph: &str,
     text: &str,
+    compact: bool,
     tint: egui::Color32,
     wash: egui::Color32,
 ) -> egui::Response {
+    let shown = if compact { "" } else { text };
     let label = ui
         .painter()
-        .layout_no_wrap(text.to_owned(), theme::small(), tint);
+        .layout_no_wrap(shown.to_owned(), theme::small(), tint);
     let size = vec2(label.size().x + 34.0, theme::CHIP_H - 6.0);
     let (rect, response) = ui.allocate_exact_size(size, egui::Sense::click());
     response.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Button, true, text));
@@ -561,12 +673,10 @@ fn project_name(ui: &mut egui::Ui, opened: &project::Opened) {
         return;
     };
     ui.add_space(PAD);
-    ui.label(
-        egui::RichText::new(name)
-            .font(theme::label())
-            .color(theme::colors().text_low),
-    );
-    ui.add_space(PAD);
+    let text = egui::RichText::new(name)
+        .font(theme::label())
+        .color(theme::colors().text_low);
+    ui.add(egui::Label::new(text).truncate());
 }
 
 /// A menu row that names its key beside itself: the menu is where a shortcut is learned.
@@ -789,5 +899,31 @@ fn view_menu(ui: &mut egui::Ui, window: &mut Window) {
     if item(ui, "Keyboard shortcuts", Action::Sheet).clicked() {
         ui.close();
         window.view.options.sheet = true;
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::share_room;
+
+    #[test]
+    fn names_with_room_are_not_cut() {
+        assert_eq!(share_room(300.0, 120.0, 90.0), (120.0, 90.0));
+    }
+
+    #[test]
+    fn the_longer_name_is_cut_first() {
+        assert_eq!(share_room(200.0, 160.0, 60.0), (140.0, 60.0));
+        assert_eq!(share_room(200.0, 60.0, 160.0), (60.0, 140.0));
+    }
+
+    #[test]
+    fn two_long_names_share_the_room_evenly() {
+        assert_eq!(share_room(200.0, 160.0, 180.0), (100.0, 100.0));
+    }
+
+    #[test]
+    fn no_room_cuts_both_names_to_nothing() {
+        assert_eq!(share_room(-40.0, 160.0, 60.0), (0.0, 0.0));
     }
 }
