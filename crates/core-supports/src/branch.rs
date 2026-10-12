@@ -6,6 +6,7 @@ use core_geometry::{Scalar, Vec2, Vec3};
 use printer_profiles::SupportProfile;
 
 use crate::Landing;
+use crate::base::braceable;
 use crate::clear::{Beam, clear};
 use crate::column::{Column, MIN_PILLAR_HEIGHT_MM, landing};
 use crate::group::Profiles;
@@ -62,10 +63,67 @@ fn grow_one(
         }
     }
     let mut trees = forest.harvest(placed, profile);
+    if profile.branching.enabled && profile.bracing.enabled {
+        gather(&mut trees, placed, profile);
+    }
     for tree in &mut trees {
         tree.set_group(group);
     }
     trees
+}
+
+/// How near a trunk that stood alone is brought to its neighbour, as a share of the
+/// distance a brace spans: inside it with room to spare, and not on top of the other.
+const GATHERED: Scalar = 0.75;
+
+/// Leans every tall trunk that stands out of a brace's reach towards its nearest
+/// neighbour, until one reaches.
+///
+/// A long thin trunk on its own is the support that sways on the peel, and bracing
+/// cannot help what it cannot span. The lean is a knee at the branch angle, taken only
+/// where the trunk under it is still tall enough to brace, clears the model and lands on
+/// the plate. See `docs/decisions/0240`.
+fn gather(trees: &mut [SupportTree], placed: &Placed, profile: &SupportProfile) {
+    let reach = profile.bracing.max_spacing_mm;
+    let at = |tree: &SupportTree| tree.root().position.truncate();
+    for index in 0..trees.len() {
+        let tree = &trees[index];
+        if tree.landing().on_model || !braceable(tree, profile) {
+            continue;
+        }
+        let here = at(tree);
+        let nearest = trees
+            .iter()
+            .enumerate()
+            .filter(|(other, tree)| *other != index && braceable(tree, profile))
+            .map(|(_, tree)| at(tree))
+            .min_by(|a, b| (*a - here).length().total_cmp(&(*b - here).length()));
+        let Some(there) = nearest.filter(|there| (*there - here).length() > reach) else {
+            continue;
+        };
+
+        let step = (there - here) * (1.0 - reach * GATHERED / (there - here).length());
+        let root = *tree.root();
+        let knee = root.position + step.extend(-step.length() / profile.branching.reach_per_drop());
+        let lean = Beam {
+            from: root.position,
+            to: knee,
+            from_radius_mm: root.radius_mm,
+            to_radius_mm: root.radius_mm,
+        }
+        .with_clearance(profile.clearance_mm);
+        let stands = landing(placed, knee, root.radius_mm, profile)
+            .filter(|landing| !landing.on_model && clear(placed, &lean));
+        let Some(landing) = stands else {
+            continue;
+        };
+
+        let mut leaning = tree.clone();
+        leaning.lean_to(knee, root.radius_mm, landing);
+        if braceable(&leaning, profile) {
+            trees[index] = leaning;
+        }
+    }
 }
 
 /// A tip or a trunk that has not been merged into anything yet.
@@ -768,6 +826,38 @@ mod tests {
                     ground / profile.branching.reach_per_drop()
                 );
             }
+        }
+    }
+
+    #[test]
+    fn a_tall_trunk_standing_alone_leans_into_reach_of_a_brace() {
+        // Two columns 40 mm tall and 20 mm apart: past merging, and past the 8 mm a brace
+        // spans, with far more height than the lean costs.
+        let mut profile = profile();
+        profile.bracing = printer_profiles::Bracing {
+            enabled: true,
+            max_spacing_mm: 8.0,
+            start_height_mm: 5.0,
+            rise_mm: 5.0,
+            ..printer_profiles::Bracing::default()
+        };
+        let forest = forest_of(
+            &[Vec3::new(0.0, 0.0, 40.0), Vec3::new(20.0, 0.0, 40.0)],
+            &Mesh::default(),
+            Profiles::single(&profile),
+        );
+        assert_eq!(forest.len(), 2, "20 mm is too far to merge");
+
+        let apart = (forest[0].landing().base - forest[1].landing().base).length();
+        assert!(
+            apart <= profile.bracing.max_spacing_mm,
+            "their trunks stand {apart} mm apart, out of a brace's reach"
+        );
+        for tree in &forest {
+            assert!(
+                braceable(tree, &profile),
+                "and each is still tall enough to tie"
+            );
         }
     }
 

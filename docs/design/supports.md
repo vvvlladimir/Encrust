@@ -111,7 +111,13 @@ monotone chain) or their bounding rectangle, pushed out by a foot radius and spr
 its middle by √`area_ratio`, so the ratio names an area. `slope_deg` leans the walls in for
 the same reason feet are bevelled.
 
-**Bracing.** `[bracing]` ties trunks within `max_spacing_mm` every `rise_mm` from
+**Bracing.** Which trunks are tied is a graph: the Gabriel graph of the trunks tall enough
+to carry one level, cut at `max_spacing_mm` — two are neighbours when no third stands
+inside the circle they span as a diameter. It is planar, so no two crosses cross seen from
+above, and it keeps every trunk's nearest neighbour. A tall trunk with nobody inside that
+reach is leant towards its nearest neighbour on a knee, to three quarters of the reach,
+where branching is on and the trunk under the knee can still be tied (ADR 0240).
+`[bracing]` ties those neighbours every `rise_mm` from
 `start_height_mm`, as high as both still stand — the lower of the two root nodes, since
 above that a trunk has split. A tie is a cross, not a rung, so the pair is braced both
 ways; a pair with room for one level is not tied. Each brace is one more tube, and one the

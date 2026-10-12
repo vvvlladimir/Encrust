@@ -73,6 +73,12 @@ impl SupportTree {
         self.root = knee;
     }
 
+    /// Bends the tree onto a knee at `position` and stands it on `landing` from there.
+    pub(crate) fn lean_to(&mut self, position: Vec3, radius_mm: Scalar, landing: Landing) {
+        self.stand_on_knee(position, radius_mm);
+        self.landing = landing;
+    }
+
     pub fn nodes(&self) -> &[TreeNode] {
         &self.nodes
     }

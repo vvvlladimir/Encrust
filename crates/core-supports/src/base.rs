@@ -266,21 +266,64 @@ pub(crate) fn braces(
 
     let radius_mm = bracing.radius_mm();
     let mut struts = Vec::new();
-    for (index, one) in trees.iter().enumerate() {
-        for two in &trees[index + 1..] {
-            struts.extend(tie(one, two, profile).into_iter().filter(|(from, to)| {
-                let beam = Beam {
-                    from: *from,
-                    to: *to,
-                    from_radius_mm: radius_mm,
-                    to_radius_mm: radius_mm,
-                }
-                .with_clearance(profile.clearance_mm);
-                clear(placed, &beam)
-            }));
-        }
+    for (one, two) in neighbours(trees, profile) {
+        struts.extend(tie(one, two, profile).into_iter().filter(|(from, to)| {
+            let beam = Beam {
+                from: *from,
+                to: *to,
+                from_radius_mm: radius_mm,
+                to_radius_mm: radius_mm,
+            }
+            .with_clearance(profile.clearance_mm);
+            clear(placed, &beam)
+        }));
     }
     struts
+}
+
+/// Whether `tree` stands tall enough to carry one level of bracing.
+pub(crate) fn braceable(tree: &SupportTree, profile: &SupportProfile) -> bool {
+    let bracing = &profile.bracing;
+    tree.root().position.z - tree.landing().bottom_z(profile)
+        >= bracing.start_height_mm + bracing.rise_mm
+}
+
+/// The pairs of trunks worth tying: the Gabriel graph of the trunks tall enough to brace,
+/// cut at `max_spacing_mm`.
+///
+/// Two trunks are neighbours when no third stands inside the circle they span as a
+/// diameter. That graph is planar, so no two crosses cross each other seen from above,
+/// and it keeps every trunk's nearest neighbour, so nothing a tie would reach is left
+/// alone; tying every pair within reach puts three crosses where two hold as well. See
+/// `docs/decisions/0240`.
+fn neighbours<'a>(
+    trees: &'a [SupportTree],
+    profile: &SupportProfile,
+) -> Vec<(&'a SupportTree, &'a SupportTree)> {
+    let tall: Vec<&SupportTree> = trees
+        .iter()
+        .filter(|tree| braceable(tree, profile))
+        .collect();
+    let at = |tree: &SupportTree| tree.root().position.truncate();
+    let reach = profile.bracing.max_spacing_mm;
+
+    let mut pairs = Vec::new();
+    for (index, one) in tall.iter().enumerate() {
+        for two in &tall[index + 1..] {
+            let (here, there) = (at(one), at(two));
+            if (there - here).length() > reach {
+                continue;
+            }
+            let between = tall.iter().any(|other| {
+                let point = at(other);
+                (point - here).dot(point - there) < -SAME_PLACE_MM
+            });
+            if !between {
+                pairs.push((*one, *two));
+            }
+        }
+    }
+    pairs
 }
 
 /// The braces between one pair of trunks.
@@ -591,6 +634,29 @@ mod tests {
         let height = profile.bracing.start_height_mm + profile.bracing.rise_mm / 2.0;
         let trees = standing(&[(10.0, 10.0), (18.0, 10.0)], height, &profile);
         assert!(tied(&trees, &Mesh::default(), &profile).is_empty());
+    }
+
+    #[test]
+    fn three_trunks_in_a_row_are_tied_to_their_neighbours_and_not_end_to_end() {
+        // 4 mm apart with 12 mm of reach: every pair is within it, and the outer two have
+        // the middle one standing between them.
+        let profile = with_bracing();
+        let row = standing(&[(10.0, 10.0), (14.0, 10.0), (18.0, 10.0)], 30.0, &profile);
+        let struts = tied(&row, &Mesh::default(), &profile);
+
+        assert!(!struts.is_empty(), "neighbours are tied");
+        for (from, to) in &struts {
+            assert!(
+                (to.x - from.x).abs() < 4.0 + 1e-3,
+                "a brace from {from} to {to} runs past the trunk between them"
+            );
+        }
+        let pair = tied(&row[..2], &Mesh::default(), &profile);
+        assert_eq!(
+            struts.len(),
+            2 * pair.len(),
+            "two pairs of neighbours, each tied as a pair alone is"
+        );
     }
 
     #[test]
