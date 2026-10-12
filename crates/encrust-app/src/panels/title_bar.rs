@@ -54,8 +54,7 @@ pub fn ui(ui: &mut egui::Ui, window: &mut Window) {
         .response
         .rect;
 
-    // The menus next, which never give way, then the chip in what is left, and the
-    // project's name in whatever room the chip leaves it.
+    // The menus next, which never give way, then the chip in what is left.
     let menus = ui
         .scope_builder(
             UiBuilder::new()
@@ -71,21 +70,11 @@ pub fn ui(ui: &mut egui::Ui, window: &mut Window) {
         .response
         .rect;
     let room = (menus.right() + ENDS_GAP)..=(right.left() - ENDS_GAP);
-    let left_end = centred_chip(ui, window, bar, room);
-    let name = Rect::from_x_y_ranges(menus.right()..=left_end - ENDS_GAP, bar.y_range());
-    if name.width() > 2.0 * PAD {
-        let mut ui = ui.new_child(
-            UiBuilder::new()
-                .max_rect(name)
-                .layout(Layout::left_to_right(Align::Center)),
-        );
-        project_name(&mut ui, &window.doc.project);
-    }
+    centred_chip(ui, window, bar, room);
 }
 
 /// The print chip in the middle of the window, or as near it as `room` lets it stand,
-/// its names cut short when even all of `room` is too little. Answers where it starts, or
-/// the end of `room` and its gap when it is left out.
+/// its names cut short when even all of `room` is too little.
 ///
 /// It is placed by last frame's width, and a frame whose width changed is drawn again.
 fn centred_chip(
@@ -93,7 +82,7 @@ fn centred_chip(
     window: &mut Window,
     bar: Rect,
     room: std::ops::RangeInclusive<f32>,
-) -> f32 {
+) {
     let id = ui.id().with("print-chip-w");
     let width = ui.data(|data| data.get_temp::<f32>(id)).unwrap_or(0.0);
     let (least, most) = (*room.start(), *room.end());
@@ -114,7 +103,6 @@ fn centred_chip(
         ui.data_mut(|data| data.insert_temp(id, drawn));
         ui.ctx().request_discard("the print chip changed width");
     }
-    if drawn > 0.0 { x } else { most + ENDS_GAP }
 }
 
 /// What belongs to the whole window rather than to the plate: the sheet of keys and the
@@ -665,18 +653,6 @@ pub fn open_machines(machine: &mut Machine) {
     machine
         .settings
         .open_machines(&machine.slicing.catalogue, printer.as_deref(), None);
-}
-
-/// What project is open, if one is. The window has no other place to say so.
-fn project_name(ui: &mut egui::Ui, opened: &project::Opened) {
-    let Some(name) = opened.name() else {
-        return;
-    };
-    ui.add_space(PAD);
-    let text = egui::RichText::new(name)
-        .font(theme::label())
-        .color(theme::colors().text_low);
-    ui.add(egui::Label::new(text).truncate());
 }
 
 /// A menu row that names its key beside itself: the menu is where a shortcut is learned.

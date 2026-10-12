@@ -1,7 +1,9 @@
 use core_geometry::{Mat4, Quat, Transform, Vec3};
 use transform_gizmo_egui::math::{DMat4, DQuat, DVec3, Transform as GizmoTransform};
 use transform_gizmo_egui::prelude::mint;
-use transform_gizmo_egui::{EnumSet, Gizmo, GizmoConfig, GizmoExt as _, GizmoMode, GizmoVisuals};
+use transform_gizmo_egui::{
+    EnumSet, Gizmo, GizmoConfig, GizmoExt as _, GizmoMode, GizmoOrientation, GizmoVisuals,
+};
 
 use crate::camera::OrbitCamera;
 use crate::ui::theme;
@@ -43,6 +45,17 @@ fn visuals(size: f32) -> GizmoVisuals {
 pub struct TransformGizmo {
     arrows: Gizmo,
     rings: Gizmo,
+    pub axes: Axes,
+}
+
+/// Which axes the handles, the turn buttons and the size fields follow.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub enum Axes {
+    /// The plate's.
+    #[default]
+    Global,
+    /// The model's own, turned with it.
+    Local,
 }
 
 impl TransformGizmo {
@@ -72,6 +85,10 @@ impl TransformGizmo {
             projection_matrix: row_matrix(camera.projection(aspect)),
             viewport,
             modes,
+            orientation: match self.axes {
+                Axes::Global => GizmoOrientation::Global,
+                Axes::Local => GizmoOrientation::Local,
+            },
             visuals: visuals(size),
             ..GizmoConfig::default()
         };

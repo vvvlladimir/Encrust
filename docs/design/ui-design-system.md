@@ -187,7 +187,8 @@ opens next to where it was picked. The rail is always the stage's height; a tall
 spreads its gaps up to a ceiling, a short one drops the names, then closes the gaps, and
 only then scrolls. The plates are a row of numbered squares at the head of
 the models card; a right click on one duplicates,
-removes or gathers the selection onto it. The sheet of keys and the gear stand at the top bar's right end.
+removes or gathers the selection onto it. The open project's name stands in the
+card's Models heading, left of its +. The sheet of keys and the gear stand at the top bar's right end.
 
 A side card past the room it has scrolls its list — the tool's sections, the plate's
 models — and keeps its foot in view (`ui::body_and_foot`). Both side cards are dragged by
@@ -223,7 +224,7 @@ both side cards still fit at their floors beside 240 points of stage. In a windo
 than the widths their edges were dragged to, the two give way in proportion to what each has
 above its floor and widen again with the window; the dragged widths are kept
 (`panels::fit_side_cards`). The chip cuts the machine's and the resin's names with an
-ellipsis, the longer first, and the project's name gives way before them; under 720 the
+ellipsis, the longer first; under 720 the
 bar's right end shows its glyphs alone. A window over the plate keeps 24 points from the
 window's edge, its list giving way to the page down to 28 % of it. The start page holds as
 many tiles to a row as fit at 160, and its drop zone drops its two buttons where they would
@@ -262,6 +263,10 @@ the layer nearest where Prepare was cut, and a switch back cuts Prepare at the l
 every view. `Tool::RAIL` groups eleven of them as Place, Modify, Supports and Finish; the
 print settings are a form the top bar opens. The first, `Tool::Position`, is named Select on
 the rail: it picks, and carries the gizmo and the transform fields. See `docs/decisions/0218`.
+A Global | Local pair over its fields sets whose axes the handles, the ±45° turns and the
+Size column follow; in Global a size is what the model measures on the plate, and typing one
+grows all three in proportion, since a stretch along the plate's axis would shear a turned
+model. Move, the angles and Ratio read the same either way.
 
 A click on a model that is not picked only picks it, whichever tool is in hand: the tool
 works on what is picked, so aiming it somewhere else is its own click (ADR 0193).

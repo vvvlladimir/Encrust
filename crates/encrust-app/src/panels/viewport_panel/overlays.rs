@@ -45,14 +45,18 @@ const PICKED_DOT_R: f32 = 5.0;
 const AXIS_LETTER_GAP_MM: f32 = 5.0;
 
 /// X, Y and Z past the tips of the arrows in the plate's origin corner. Drawn over the 3D pass
-/// rather than in it, so a letter always faces the camera.
+/// rather than in it, so a letter always faces the camera; a letter a model hides is left out.
 pub(super) fn draw_axis_letters(ui: &egui::Ui, window: &Window, viewport: egui::Rect) {
-    let project = projector(&window.view.camera, viewport);
+    let camera = &window.view.camera;
+    let project = projector(camera, viewport);
     for ((axis, letter), colour) in [(Vec3::X, "X"), (Vec3::Y, "Y"), (Vec3::Z, "Z")]
         .into_iter()
         .zip(theme::scene().plate_axis)
     {
         let tip = axis * (AXIS_LENGTH_MM + AXIS_LETTER_GAP_MM);
+        if occluded(&window.doc.scene, camera.sight_to(tip), tip) {
+            continue;
+        }
         if let Some(at) = project(tip).filter(|at| viewport.contains(*at)) {
             ui.painter().text(
                 at,

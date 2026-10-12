@@ -55,7 +55,7 @@ impl Asking {
 }
 
 impl Opened {
-    /// What the top bar calls the plate: the file's own name, or nothing at all for a
+    /// What the Models heading calls the plate: the file's own name, or nothing at all for a
     /// plate that has never been saved.
     pub fn name(&self) -> Option<&str> {
         self.path.as_ref()?.file_stem()?.to_str()

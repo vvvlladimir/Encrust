@@ -4,6 +4,7 @@ use core_geometry::{Vec2, Vec3};
 
 use crate::panels::plate_summary;
 use crate::panels::{Window, plate_strip, slice};
+use crate::project;
 use crate::scene::{ImportSummary, ObjectId, Scene, SceneObject};
 use crate::shortcuts::{self, Action};
 use crate::ui::{
@@ -86,9 +87,21 @@ fn header(ui: &mut egui::Ui, window: &mut Window) {
                         .imports
                         .open_dialog(&window.doc.plate, &mut window.machine.status);
                 }
+                project_name(ui, &window.doc.project);
             });
         },
     );
+}
+
+/// What project is open, if one is, cut short to the room the heading leaves it.
+fn project_name(ui: &mut egui::Ui, opened: &project::Opened) {
+    let Some(name) = opened.name() else {
+        return;
+    };
+    let text = egui::RichText::new(name)
+        .font(theme::label())
+        .color(theme::colors().text_low);
+    ui.add(egui::Label::new(text).truncate());
 }
 
 /// How many models are picked, in the selection's colour, or with none picked how many

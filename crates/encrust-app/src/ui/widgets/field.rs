@@ -98,7 +98,12 @@ fn boxed_field<N: Numeric>(
     let response = ui
         .scope_builder(builder, |ui| {
             borderless(ui.style_mut(), value_rect.size());
-            let mut drag = DragValue::new(value).speed(speed).range(range);
+            // egui would otherwise pull a value outside `range` into it every frame, and
+            // report that as an edit: a model sunk under the plate would be lifted back.
+            let mut drag = DragValue::new(value)
+                .speed(speed)
+                .range(range)
+                .clamp_existing_to_range(false);
             if let Some(decimals) = decimals {
                 drag = drag.fixed_decimals(decimals);
             }
@@ -139,7 +144,8 @@ fn borderless(style: &mut egui::Style, size: egui::Vec2) {
     style.spacing.button_padding.x = UNIT_PAD;
     let visuals = &mut style.visuals;
     visuals.extreme_bg_color = Color32::TRANSPARENT;
-    visuals.selection.stroke = egui::Stroke::NONE;
+    // egui paints selected text in this stroke's colour, so only its width may go.
+    visuals.selection.stroke.width = 0.0;
     for widget in [
         &mut visuals.widgets.inactive,
         &mut visuals.widgets.hovered,
@@ -286,4 +292,27 @@ pub fn text_row(ui: &mut Ui, label: &str, value: &mut String) -> bool {
         });
     });
     changed
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn a_value_outside_the_range_is_left_alone_until_it_is_edited() {
+        let ctx = egui::Context::default();
+        theme::apply(&ctx);
+        let mut bottom_mm = -5.0_f32;
+        let mut changed = false;
+        for _ in 0..2 {
+            let mut output = ctx.run_ui(egui::RawInput::default(), |ui| {
+                changed |=
+                    number_field(ui, "Lift", &mut bottom_mm, 0.1, 0.0..=100.0, Some(2), 80.0);
+            });
+            // No renderer takes the font atlas here.
+            output.textures_delta.clear();
+        }
+        assert_eq!(bottom_mm, -5.0, "a model sunk under the plate stays there");
+        assert!(!changed, "nobody touched the field");
+    }
 }
