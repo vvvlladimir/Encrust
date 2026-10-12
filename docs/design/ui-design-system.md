@@ -105,11 +105,17 @@ paints from tokens only.
 | `nested` | What a switch reveals, set in under it with a rule down its left edge |
 | `list`, `list_row` | Rows a panel adds to — support groups, bands, holes — on one hairline |
 | `card` | The frame of anything floating over the viewport |
-| `later` | A control the design has and the window cannot do yet: greyed out, "Not available yet" on hover |
+| `card_foot` | The foot of a side card, on `base` and rounded to fit inside the card |
+| `progress_bar` | A running job: filled to its fraction, or running on its own when the job cannot count its work |
 | `readings`, `stats` | Measured values, one to a row: name, dotted leader, figure |
+| `meta` | Lines of numbers under a picker: the build volume, the exposure the resin asks for |
+| `issue_row` | One finding: a dot in its colour, where it is, what it is; the row goes there |
+| `summary_button` | A card opening a view of its own: a glyph in the colour of what it found, a title, a line, a chevron |
 | `notice` | A verdict: a glyph in its colour, the verdict in plain ink, what to do under it |
 | `picker` | A row that opens a chooser: glyph, what is chosen, caret |
 | `primary_button` | The one action a screen is for. There is never a second in view |
+| `companion_button` | A second action beside the primary, raised rather than accented and as tall |
+| `inline_button` | A button as wide as what it says, in a row of several |
 | `secondary_button` | The ordinary full-width button |
 | `quiet_button` | A lesser action of a row with no surface until hovered, in `danger` when it cannot be taken back |
 | `filter_chip` | One of a row of filters, bordered, washed in the accent while on |
@@ -125,6 +131,8 @@ paints from tokens only.
 | `number_field` | The one box a number is typed or dragged in: sunken, `FIELD_H` tall, the figure at its right |
 | `text_box` | The shape of every box text is typed in: `FIELD_H` tall, as a button is, the text centred in it |
 | `number_row`, `count_row` | The name on the left, a `FIELD_W` box on the right with the unit inside it after the figure |
+| `carried_row` | A `number_row` the window changed for the user: its name in `warn` and a button that puts the old value back |
+| `text_row`, `address_field` | A named line of text; the box an IP address is typed in |
 
 A named number is a `number_row`, its unit inside the box in `text_low`; a box standing under
 a `field_label` of its own carries the unit in that label's brackets instead.
@@ -243,8 +251,7 @@ works on what is picked, so aiming it somewhere else is its own click (ADR 0193)
 
 The inspector shows the open tool and nothing else: a heading with its one fact, its
 sections, and its action pinned to the foot; see `docs/decisions/0105` and `0218`. A
-control the design has and the window cannot do yet is drawn by `ui::later`, greyed out.
-The plate's row of actions — duplicate, array, arrange, remove — is the plate's and not a
+control the window cannot do yet is not drawn. The plate's row of actions — duplicate, array, arrange, remove — is the plate's and not a
 tool's. The machine, the resin, the output format and every value a tool panel holds are
 remembered in `preferences.json` beside the user's profile directory, and each of those
 values answers undo; see `docs/decisions/0192`.
