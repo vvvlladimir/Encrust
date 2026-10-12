@@ -6,8 +6,10 @@ use printer_profiles::SupportProfile;
 use rayon::prelude::*;
 
 use crate::column::MIN_PILLAR_HEIGHT_MM;
-use crate::config::{GRID_PITCH_MM, PLATE_CONTACT_MM, REFERENCE_RISE_MM, SampleConfig};
-use crate::detect::unsupported;
+use crate::config::{
+    GRID_PITCH_MM, MIN_ISLAND_MM, PLATE_CONTACT_MM, REFERENCE_RISE_MM, SampleConfig,
+};
+use crate::detect::{across_mm, unsupported};
 use crate::field::{Field, Grid, Parts};
 use crate::region::Blocked;
 use crate::sample::sample_piece;
@@ -82,13 +84,15 @@ pub fn generate_supports(
             }
             let contact_mm = contact_of(&stack.layers[index], layer_height_mm);
             standing.climb(&parts, contact_mm);
-            for cell in cells {
+            let adrift = pass.adrift(&standing, &parts, contact_mm);
+            for cell in adrift.into_iter().chain(cells) {
                 let at = grid.centre_mm(cell[0], cell[1]);
                 // Asked before the cell is taken, or a place nothing may stand on would
                 // still count as held and leave its neighbours a support short.
                 if blocked
                     .is_some_and(|blocked| blocked.covers(at.extend(contact_mm), pass.keep_out_mm))
                 {
+                    standing.leave(parts.at(cell[0], cell[1]));
                     continue;
                 }
                 if let Some(contact) = standing.take(parts.at(cell[0], cell[1]), at, contact_mm) {
@@ -167,6 +171,23 @@ impl Pass<'_> {
     }
 }
 
+impl Pass<'_> {
+    /// The cells that hold up what `standing` has nothing under: a piece too small to be
+    /// an island when it began is held once it has grown into one, or everything that
+    /// grows out of it prints in mid-air. See `docs/design/supports.md`.
+    fn adrift(&self, standing: &Standing, parts: &Parts, contact_mm: Scalar) -> Vec<[i32; 2]> {
+        if contact_mm <= self.lowest_contact_mm {
+            return Vec::new();
+        }
+        standing
+            .adrift()
+            .map(|piece| parts.piece(piece))
+            .filter(|piece| across_mm(piece, self.grid) >= MIN_ISLAND_MM)
+            .flat_map(|piece| sample_piece(&piece, self.spacing))
+            .collect()
+    }
+}
+
 /// The supports standing under each piece of the layer the run has reached.
 ///
 /// A piece inherits what stood under the pieces it grew out of, so a support suppresses a
@@ -179,6 +200,10 @@ impl Pass<'_> {
 struct Standing {
     /// One set per piece of the layer last climbed to, numbered as `Parts` numbers them.
     held: Vec<Held>,
+    /// Whether each of those pieces stands on the plate or on a support, itself or through
+    /// anything it grew out of. Kept apart from `held`, which forgets a support left far
+    /// enough below.
+    anchored: Vec<bool>,
     /// The pieces of the layer below, so a piece can be followed onto what it grew from.
     below: Option<Parts>,
     /// Supports handed to the run that the climb has not reached yet, highest last.
@@ -201,6 +226,7 @@ impl Standing {
 
         Self {
             held: Vec::new(),
+            anchored: Vec::new(),
             below: None,
             pending,
             radius_mm: config.coverage_radius_mm.max(Scalar::MIN_POSITIVE),
@@ -217,12 +243,23 @@ impl Standing {
     /// memory to the supports that still matter rather than to every one ever placed.
     fn climb(&mut self, parts: &Parts, z: Scalar) {
         let floor_z = z - self.radius_mm;
+        let on_plate = z <= PLATE_CONTACT_MM;
         let parents = self.below.as_ref().map(|below| parts.parents(below));
         let Some(parents) = parents else {
             self.held = vec![Held::default(); parts.count()];
+            self.anchored = vec![on_plate; parts.count()];
             self.take_seeds(parts, z);
             return;
         };
+        self.anchored = parents
+            .iter()
+            .map(|grown_from| {
+                on_plate
+                    || grown_from
+                        .iter()
+                        .any(|parent| self.anchored[*parent as usize])
+            })
+            .collect();
 
         // A piece that is the only child of its only parent takes that parent's set over
         // rather than copying it, which is the whole of a wall going straight up.
@@ -265,7 +302,23 @@ impl Standing {
             self.pending.pop();
             if let Some(piece) = parts.at(cell[0], cell[1]) {
                 self.held[piece as usize].add(seed, self.radius_mm);
+                self.anchored[piece as usize] = true;
             }
+        }
+    }
+
+    /// The pieces of the layer climbed to that nothing holds, by their number.
+    fn adrift(&self) -> impl Iterator<Item = u32> + '_ {
+        (0u32..)
+            .zip(&self.anchored)
+            .filter_map(|(piece, anchored)| (!anchored).then_some(piece))
+    }
+
+    /// Stops asking after `piece`, which wanted a support where none may stand: a patch
+    /// painted out is left alone, not held from further up. See `docs/decisions/0093`.
+    fn leave(&mut self, piece: Option<u32>) {
+        if let Some(anchored) = piece.and_then(|piece| self.anchored.get_mut(piece as usize)) {
+            *anchored = true;
         }
     }
 
@@ -279,13 +332,15 @@ impl Standing {
     /// placed.
     fn take(&mut self, piece: Option<u32>, at: Vec2, z: Scalar) -> Option<Vec3> {
         let contact = at.extend(z);
-        let Some(held) = piece.and_then(|piece| self.held.get_mut(piece as usize)) else {
+        let Some(piece) = piece.filter(|piece| (*piece as usize) < self.held.len()) else {
             return Some(contact);
         };
+        let held = &mut self.held[piece as usize];
         if held.holds(at, z, self.radius_mm, self.above_mm) {
             return None;
         }
         held.add(contact, self.radius_mm);
+        self.anchored[piece as usize] = true;
         Some(contact)
     }
 }
@@ -458,6 +513,49 @@ mod tests {
             }
         }
         Mesh::new(vertices, faces)
+    }
+
+    /// A cone standing on its point `apex_mm` over the plate, opening to `radius` over
+    /// `height`: nothing on it leans further than its own wall.
+    fn cone_on_its_point(apex_mm: Scalar, radius: Scalar, height: Scalar) -> Mesh {
+        let sides = 64u32;
+        let mut vertices = vec![
+            Vec3::new(0.0, 0.0, apex_mm),
+            Vec3::new(0.0, 0.0, apex_mm + height),
+        ];
+        let mut faces = Vec::new();
+        for side in 0..sides {
+            let angle = std::f32::consts::TAU * side as Scalar / sides as Scalar;
+            vertices.push(Vec3::new(
+                radius * angle.cos(),
+                radius * angle.sin(),
+                apex_mm + height,
+            ));
+            let (here, next) = (2 + side, 2 + (side + 1) % sides);
+            faces.push([0, next, here]);
+            faces.push([1, here, next]);
+        }
+        Mesh::new(vertices, faces)
+    }
+
+    #[test]
+    fn a_point_hanging_over_the_plate_is_held_once_it_is_wide_enough_to_print() {
+        // A wall 27 degrees from vertical, well inside the 45 the profile allows, so
+        // nothing on the cone is an overhang and its first layer is a speck.
+        let apex_mm = 5.0;
+        let points = supports_for(&cone_on_its_point(apex_mm, 5.0, 10.0));
+
+        let lowest = points
+            .iter()
+            .map(|point| point.z)
+            .fold(Scalar::INFINITY, Scalar::min);
+        // The cone is `MIN_ISLAND_MM` across where its radius is half of that, and its
+        // radius is half its height above the point: 0.4 mm up.
+        assert!(
+            lowest < apex_mm + 1.0,
+            "a part with nothing under it hangs in mid-air; its lowest contact is at \
+             {lowest} mm and its point at {apex_mm} mm"
+        );
     }
 
     /// Two boxes, the upper one jutting `step` further out over the lower one's ledge:

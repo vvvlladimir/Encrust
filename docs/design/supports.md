@@ -178,6 +178,7 @@ the layer less the one below — which is a layer's only new underside.
 | a new piece touching nothing below | an **island** | all of it, if at least `MIN_ISLAND_MM` (0.4 mm) across |
 | new material past the reach from the layer a millimetre below | an **overhang** | the part past the reach, if at least `min_overhang_mm` across |
 | new material past `min_overhang_mm` from the layer directly below | a **step** | the part past it, held as an overhang (ADR 0080) |
+| a piece with no support and no plate under it or under anything it grew out of | **adrift** | all of it, once it is `MIN_ISLAND_MM` across |
 | a contact that would sit under a foot and the shortest pillar | standing on the plate | nothing |
 
 The reach is `REFERENCE_RISE_MM * tan(max_overhang_deg)`, measured over that rise because
@@ -185,6 +186,11 @@ at 0.05 mm layers any angle worth allowing moves less than one cell per layer (A
 near the bottom it is scaled to the rise available. `uncarried_by` never builds the grown
 layer: it subtracts the reference rows as it reads them, widened per row, and abandons a
 row at the first subtraction that empties it — which is every row of every wall.
+
+The first three are read off a layer and the layers under it; adrift is read off the climb.
+A point hanging down begins as a speck under `MIN_ISLAND_MM` and then widens inside the
+angle, so no layer of it is an island or an overhang, and placement follows each piece's
+parentage to know that nothing ever held it. A piece the blocker refused counts as held.
 
 A contact goes a whole layer below the plane that was cut, because the surface is somewhere
 inside the layer's rise and a contact above it would land the column on the very surface it
