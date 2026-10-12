@@ -427,7 +427,11 @@ fn turn(ui: &mut egui::Ui, window: &mut Window, id: ObjectId) {
         } else {
             "Lay on face"
         };
-        let laid = secondary_button(&mut columns[1], icon::SELECT, label).clicked();
+        // A run replaces the rotation when it lands, so a face laid meanwhile would be lost.
+        let laid = columns[1]
+            .add_enabled_ui(!running, |ui| secondary_button(ui, icon::SELECT, label))
+            .inner
+            .clicked();
         (oriented, laid)
     });
 

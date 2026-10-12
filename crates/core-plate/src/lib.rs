@@ -12,7 +12,6 @@ mod orient;
 mod score;
 
 pub use arrange::{ArrangeSettings, Arranged, Placed, arrange};
-pub use candidates::{FlatFace, flat_faces};
 pub use error::PlateError;
 pub use mask::Footprint;
 pub use orient::{OrientSettings, Oriented, orient, rotation_for};

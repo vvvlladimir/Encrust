@@ -102,13 +102,15 @@ impl OrientTool {
         None
     }
 
-    /// Starts a run over one model, or over everything visible when `only` is `None`.
+    /// Starts a run over one model, or over everything visible when `only` is `None`, and
+    /// stops waiting for a face: the run replaces the rotation a laid face would set.
     pub fn start(&mut self, scene: &Scene, only: Option<ObjectId>) -> Result<()> {
         let tasks = orient_tasks(scene, only);
         if tasks.is_empty() {
             bail!("nothing visible on the plate to orient");
         }
 
+        self.stop_picking();
         self.job = Some(OrientJob::spawn(OrientRequest {
             tasks,
             settings: self.settings,
