@@ -154,6 +154,11 @@ impl Transform {
     /// length as the plate does, and that no turn of the model changes. `diag(|scale|)` for a
     /// model with nothing stretched. Wall thicknesses are worked out in this space.
     pub fn unturned(self) -> Mat3 {
+        // Exact where nothing is stretched: a turn through the factorisation would come
+        // back some ULPs off the diagonal, and callers test it for the identity.
+        if is_identity(&self.stretch) {
+            return Mat3::from_diagonal(self.scale.abs());
+        }
         let linear = self.linear();
         cholesky(linear.transpose() * linear)
     }
@@ -392,6 +397,17 @@ mod tests {
                 .abs_diff_eq(Mat3::from_diagonal(Vec3::new(1.5, 2.0, 0.5)), 1e-5),
             "a turn and a mirror measure nothing, got {:?}",
             placed.unturned()
+        );
+    }
+
+    #[test]
+    fn a_model_only_turned_is_unturned_to_exactly_the_identity() {
+        let turned =
+            Transform::default().turned(Quat::from_euler(glam::EulerRot::XYZ, 0.7, 1.3, -2.1));
+        assert_eq!(
+            turned.unturned(),
+            Mat3::IDENTITY,
+            "the hollow's fast path and the project's keys test for it exactly"
         );
     }
 

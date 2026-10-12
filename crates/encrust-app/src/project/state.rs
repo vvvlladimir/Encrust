@@ -109,7 +109,7 @@ fn object_state(object: &SceneObject) -> ObjectState {
 fn built_cavity(object: &SceneObject) -> Option<BuiltCavity> {
     let asked = object.hollow.asked()?;
     let (voxel_mm, coarsened) = object.hollow.lattice()?;
-    let (scale, stretched) = BuiltCavity::keys_of(object.transform.unturned());
+    let (scale, stretched) = BuiltCavity::keys_of(object.hollow.built_shape()?);
     Some(BuiltCavity {
         wall: Cavity::of(asked),
         cavity_faces: object.hollow.cavity_faces()?,
@@ -610,6 +610,23 @@ mod tests {
                 back.scene.objects()[0].transform
             ),
             "a plate opened as it was saved is not stale"
+        );
+    }
+
+    #[test]
+    fn a_shell_left_stale_by_a_resize_opens_stale() {
+        let mut saved = bench();
+        hollowed(&mut saved);
+        let object = &mut saved.scene.objects_mut()[0];
+        object.transform = object.transform.stretched(Vec3::splat(2.0));
+
+        let back = round_trip(&saved);
+        let object = &back.scene.objects()[0];
+        assert!(
+            object
+                .hollow
+                .is_stale(&back.tools.hollow.settings(), object.transform),
+            "the wall was built at half the size the model now stands at"
         );
     }
 

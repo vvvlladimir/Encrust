@@ -186,6 +186,12 @@ impl ModelHollow {
         self.built.as_ref().map_or(0.0, |built| built.cavity_mm3)
     }
 
+    /// The placement the standing shell's wall was measured under, or `None` while the
+    /// model is still solid; see [`Shell::shape`].
+    pub fn built_shape(&self) -> Option<Mat3> {
+        self.built.as_ref().map(|built| built.shape)
+    }
+
     /// The lattice the cavity was cut on, and whether the memory budget coarsened it.
     pub fn lattice(&self) -> Option<(Scalar, bool)> {
         self.built

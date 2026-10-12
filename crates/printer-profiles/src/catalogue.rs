@@ -74,6 +74,9 @@ pub struct Catalogue {
     /// Named tool settings, which nothing ships: each is the user's own.
     hollows: BTreeMap<String, Entry<Preset>>,
     drains: BTreeMap<String, Entry<Preset>>,
+    /// Preset files that would not read, left out rather than failing the catalogue: a
+    /// tool's settings are never what a slice depends on.
+    unreadable: Vec<PathBuf>,
     /// Where an edited profile is written. `None` until a store is laid over the
     /// catalogue, which is what makes a bundled-only catalogue read-only.
     store: Option<Arc<dyn ProfileStore>>,
@@ -88,6 +91,7 @@ impl Catalogue {
             supports: bundled_table(BUNDLED_SUPPORTS, "supports", SupportProfile::from_toml_str)?,
             hollows: BTreeMap::new(),
             drains: BTreeMap::new(),
+            unreadable: Vec::new(),
             store: None,
         })
     }
@@ -136,20 +140,19 @@ impl Catalogue {
             Kind::Support,
             SupportProfile::from_toml_str,
         )?;
-        overlay(
-            &mut self.hollows,
-            &*store,
-            Kind::Hollow,
-            Preset::from_toml_str,
-        )?;
-        overlay(
-            &mut self.drains,
-            &*store,
-            Kind::Drain,
-            Preset::from_toml_str,
-        )?;
+        for kind in [Kind::Hollow, Kind::Drain] {
+            if let Some(table) = self.preset_table_mut(kind) {
+                let skipped = overlay_presets(table, &*store, kind)?;
+                self.unreadable.extend(skipped);
+            }
+        }
         self.store = Some(store);
         Ok(())
+    }
+
+    /// The preset files left out of the catalogue because they would not read.
+    pub fn unreadable(&self) -> &[PathBuf] {
+        &self.unreadable
     }
 
     /// Whether edits have somewhere to be written.
@@ -477,10 +480,50 @@ fn overlay<T>(
     Ok(())
 }
 
+/// Lays the presets of `kind` over `map`, and answers the files that would not read.
+fn overlay_presets(
+    map: &mut BTreeMap<String, Entry<Preset>>,
+    store: &dyn ProfileStore,
+    kind: Kind,
+) -> Result<Vec<PathBuf>, ProfileError> {
+    let mut unreadable = Vec::new();
+    for (id, path, toml) in store.read_all(kind)? {
+        match Preset::from_toml_str(&toml, &path) {
+            Ok(profile) => {
+                let source = Source::User(path);
+                map.insert(
+                    id.clone(),
+                    Entry {
+                        id,
+                        profile,
+                        source,
+                    },
+                );
+            }
+            Err(_) => unreadable.push(path),
+        }
+    }
+    Ok(unreadable)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::PrinterTuning;
+
+    #[test]
+    fn a_broken_preset_is_left_out_and_the_rest_of_the_catalogue_reads() {
+        in_its_own_dir("broken-preset", |dir, _| {
+            let drain = dir.join("drain");
+            std::fs::create_dir_all(&drain).expect("writable");
+            std::fs::write(drain.join("broken.toml"), "name = ").expect("writable");
+
+            let catalogue = Catalogue::with_root(dir).expect("a preset cannot fail the catalogue");
+            assert!(catalogue.printer("elegoo-mars-4-ultra").is_ok());
+            assert_eq!(catalogue.presets(Kind::Drain).count(), 0);
+            assert_eq!(catalogue.unreadable(), [drain.join("broken.toml")]);
+        });
+    }
 
     #[test]
     fn a_hollow_preset_is_kept_beside_the_profiles_and_forgotten() {

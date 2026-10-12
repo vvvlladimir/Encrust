@@ -209,9 +209,9 @@ pub struct Cured {
     pub widest_step_layer: Option<usize>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub widest_step_mm2: Option<f32>,
-    /// Pieces cured over nothing, necks pulled past their limit, layers pulling the film
-    /// past its, holes sealed from below, pieces too thin to hold, and the parts taken out
-    /// of the file as islands.
+    /// Pieces cured over nothing or left floating over one taken out, necks pulled past
+    /// their limit, layers pulling the film past its, holes sealed from below, pieces too
+    /// thin to hold, and the parts taken out of the file as islands.
     pub islands: usize,
     pub levers: usize,
     pub peels: usize,
@@ -237,7 +237,9 @@ impl Cured {
             hardest_pull_disc_mm: pull.map(|peak| equivalent_disc_mm(peak.value)),
             widest_step_layer: step.map(|peak| peak.layer + 1),
             widest_step_mm2: step.map(|peak| peak.value),
-            islands: count(|kind| matches!(kind, RiskKind::Island { .. })),
+            islands: count(|kind| {
+                matches!(kind, RiskKind::Island { .. } | RiskKind::Floating { .. })
+            }),
             levers: count(|kind| matches!(kind, RiskKind::Lever { .. })),
             peels: count(|kind| matches!(kind, RiskKind::Peel { .. })),
             suction_cups: count(|kind| matches!(kind, RiskKind::SuctionCup { .. })),
@@ -590,6 +592,33 @@ mod tests {
                 .contains("1.0 ml of resin over the 1 that would print"),
             "{}",
             summary.line(Path::new("out/batch.json"))
+        );
+    }
+
+    #[test]
+    fn a_part_left_floating_over_a_removed_island_is_counted_as_one() {
+        use core_analysis::cure;
+        use core_raster::{LayerRuns, PixelPitch};
+
+        let pitch = PixelPitch { x: 1.0, y: 1.0 };
+        let speck = || {
+            let mut builder = LayerRuns::builder(100, 100);
+            builder.pad_to(50 * 100 + 50);
+            builder.push(4, 255);
+            cure(&builder.finish(), pitch)
+        };
+        let mut base = LayerRuns::builder(100, 100);
+        base.push(3, 255);
+        let mut measured = Measured::new(0).removing_islands();
+        let _ = measured.push(cure(&base.finish(), pitch), 0.05);
+        let _ = measured.push(speck(), 0.05);
+        let _ = measured.push(speck(), 0.05);
+
+        let cured = Cured::of(&measured);
+        assert_eq!(cured.islands_removed, 1, "the speck over nothing goes");
+        assert_eq!(
+            cured.islands, 1,
+            "what stood on it floats and fails the print as the island would"
         );
     }
 

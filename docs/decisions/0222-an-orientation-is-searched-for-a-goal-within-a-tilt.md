@@ -1,6 +1,6 @@
 # 0222. Search an orientation for a goal, within a tilt
 
-- **Status:** Accepted
+- **Status:** Accepted; where the goal and the tilt are offered is superseded by 0236
 - **Date:** 2026-10-11
 
 ## Context

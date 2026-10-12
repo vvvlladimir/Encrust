@@ -3,6 +3,7 @@
 
 use std::collections::BTreeMap;
 
+pub use printer_profiles::unique_id;
 use printer_profiles::{
     Catalogue, Entry, Kind, MaterialProfile, PrinterProfile, PrinterTuning, ProfileError, Source,
     SupportProfile,
@@ -662,35 +663,6 @@ pub fn can_delete(catalogue: &Catalogue, kind: Kind, id: &str) -> bool {
     !catalogue.is_shipped(kind, id)
 }
 
-/// The file stem `name` makes, numbered past the ones `taken` already claims.
-pub fn unique_id(name: &str, taken: impl Fn(&str) -> bool) -> String {
-    // A name in a script a file stem cannot hold still names a profile.
-    let stem = match slug(name) {
-        stem if stem.is_empty() => "profile".to_owned(),
-        stem => stem,
-    };
-    let mut id = stem.clone();
-    let mut next = 2;
-    while taken(&id) {
-        id = format!("{stem}-{next}");
-        next += 1;
-    }
-    id
-}
-
-/// The file stem a name makes: lower-case letters and digits, one dash between words.
-pub fn slug(name: &str) -> String {
-    let mut stem = String::new();
-    for c in name.chars() {
-        if c.is_ascii_alphanumeric() {
-            stem.push(c.to_ascii_lowercase());
-        } else if !stem.is_empty() && !stem.ends_with('-') {
-            stem.push('-');
-        }
-    }
-    stem.trim_end_matches('-').to_owned()
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -751,17 +723,6 @@ mod tests {
             .save_resin("standard-grey", &resin)
             .expect("the directory is writable");
         catalogue
-    }
-
-    #[test]
-    fn a_name_makes_a_file_stem() {
-        assert_eq!(slug("Saturn 4 Ultra"), "saturn-4-ultra");
-        assert_eq!(slug("  ABS-like (tough)! "), "abs-like-tough");
-        assert_eq!(unique_id("Смола", |_| false), "profile");
-        assert_eq!(
-            unique_id("Grey", |id| id == "grey" || id == "grey-2"),
-            "grey-3"
-        );
     }
 
     #[test]

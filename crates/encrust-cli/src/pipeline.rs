@@ -11,15 +11,15 @@ use anyhow::{Context, Result};
 use core_analysis::Measured;
 use core_engine::{Cutting, bake, cut};
 use core_geometry::{
-    Bvh, Mesh, Quat, Scalar, Transform, Vec3, Welded, center_over_plate, diagnose, drop_to_plate,
-    glam::EulerRot, orient_outward, transform_mesh, weld,
+    Bvh, Heightmap, Mesh, Quat, Scalar, Transform, UvMap, Vec3, Welded, center_over_plate,
+    diagnose, drop_to_plate, glam::EulerRot, orient_outward, transform_mesh, weld,
 };
-use core_mesh_io::{Loaded, loader_for_extension};
+use core_mesh_io::{Loaded, Texture, loader_for_extension};
 use core_pipeline::{PanelOverrides, Tolerance, raster_settings};
 use core_plate::{OrientSettings, orient};
 use core_raster::Shading;
 use core_slicer::{AdaptiveSettings, Windows};
-use core_volume::{ReliefSettings, press};
+use core_volume::{ReliefSettings, Tiling, press, press_tiled};
 use printer_profiles::{Compensation, MaterialProfile, PrinterProfile};
 
 use crate::args::{ImportArgs, JobArgs, RasterArgs};
@@ -336,7 +336,7 @@ fn cut_without_a_container(
         output,
         &Tolerance::of(material),
         raster_window,
-        fold_of(staged.remove_islands, material),
+        fold_of(staged.remove_islands, staged.hanging_passes, material),
         stop,
     )
     .with_context(|| format!("cannot write the mask stack to {}", output.display()))?;
@@ -353,12 +353,12 @@ pub fn report_of(mesh: &Mesh, windows: &Windows, drainage: bool) -> SliceReport 
     slice
 }
 
-/// How the stack folds as it is written: how many bottom layers the plate holds, and
-/// whether islands come out.
-pub fn fold_of(remove_islands: bool, material: &MaterialProfile) -> Measured {
+/// How the stack folds as it is written: how many bottom layers the plate holds, whether
+/// islands come out, and how many layers more of what hung on them.
+pub fn fold_of(remove_islands: bool, hanging_passes: u32, material: &MaterialProfile) -> Measured {
     let fold = Measured::new(material.bottom_layers as usize);
     if remove_islands {
-        fold.removing_islands()
+        fold.removing_hanging(hanging_passes)
     } else {
         fold
     }
@@ -389,10 +389,8 @@ fn talk_mapping(loaded: &Loaded) {
     );
 }
 
-/// Presses the file's own texture into the welded mesh, where `--relief` asked for it.
-///
-/// The map is taken through the weld first: welding is the one step that renumbers the
-/// faces it is indexed by.
+/// Presses `--relief-image` or the file's own texture into the welded mesh, where
+/// `--relief` asked for it.
 fn press_relief(
     mesh: Mesh,
     welded: &Welded,
@@ -403,38 +401,31 @@ fn press_relief(
     let Some(amplitude_mm) = args.relief else {
         return Ok(mesh);
     };
-    let uvs = loaded
-        .uvs
-        .as_ref()
-        .context("--relief needs a model carrying texture coordinates")?
-        .without(&welded.dropped);
-    if loaded.textures.is_empty() {
-        anyhow::bail!("--relief needs a texture beside the model");
-    }
-    let heights = loaded
-        .textures
-        .iter()
-        .map(|texture| {
-            texture
-                .decode()
-                .with_context(|| format!("reading {}", texture.name))
-        })
-        .collect::<Result<Vec<_>>>()?;
-
+    let settings = ReliefSettings {
+        amplitude_mm,
+        precision: args.precision,
+        ..ReliefSettings::default()
+    };
     let started = Instant::now();
-    let bvh = Bvh::build(&mesh);
-    let relief = press(
-        &mesh,
-        &bvh,
-        &uvs,
-        &heights,
-        &ReliefSettings {
-            amplitude_mm,
-            precision: args.precision,
-            ..ReliefSettings::default()
-        },
-    )
-    .context("pressing the texture into the model")?;
+    let (relief, source) = match &args.relief_image {
+        Some(path) => {
+            let image = read_picture(path)?;
+            let tiling = Tiling {
+                tile_mm: args.relief_tile,
+                angle_deg: args.relief_angle,
+            };
+            let relief = press_tiled(&mesh, &Bvh::build(&mesh), &image, tiling, &settings)
+                .context("pressing the picture into the model")?;
+            let source = format!("{} tiled every {} mm", path.display(), tiling.tile_mm);
+            (relief, source)
+        }
+        None => {
+            let (uvs, heights) = texture_of(welded, loaded)?;
+            let relief = press(&mesh, &Bvh::build(&mesh), &uvs, &heights, &settings)
+                .context("pressing the texture into the model")?;
+            (relief, format!("{} image(s)", heights.len()))
+        }
+    };
 
     if talk {
         let lattice = match relief.coarsened {
@@ -445,15 +436,49 @@ fn press_relief(
             false => format!("{:.2} mm lattice", relief.voxel_mm),
         };
         println!(
-            "Relief: {amplitude_mm} mm of {} image(s) pressed in on a {lattice}, {} faces \
+            "Relief: {amplitude_mm} mm of {source} pressed in on a {lattice}, {} faces \
              became {}, took {:.1}s\n",
-            heights.len(),
             mesh.faces.len(),
             relief.mesh.faces.len(),
             started.elapsed().as_secs_f32()
         );
     }
     Ok(relief.mesh)
+}
+
+/// The file's own map, taken through the weld first: welding is the one step that
+/// renumbers the faces it is indexed by. And the images it addresses, as heights.
+fn texture_of(welded: &Welded, loaded: &Loaded) -> Result<(UvMap, Vec<Heightmap>)> {
+    let uvs = loaded
+        .uvs
+        .as_ref()
+        .context("--relief needs a model carrying texture coordinates, or --relief-image")?
+        .without(&welded.dropped);
+    if loaded.textures.is_empty() {
+        anyhow::bail!("--relief needs a texture beside the model, or --relief-image");
+    }
+    let heights = loaded
+        .textures
+        .iter()
+        .map(|texture| {
+            texture
+                .decode()
+                .with_context(|| format!("reading {}", texture.name))
+        })
+        .collect::<Result<Vec<_>>>()?;
+    Ok((uvs, heights))
+}
+
+/// The picture at `path` as one height per pixel, read as a texture would be.
+fn read_picture(path: &Path) -> Result<Heightmap> {
+    let bytes = std::fs::read(path).with_context(|| format!("cannot read {}", path.display()))?;
+    let texture = Texture {
+        name: path.display().to_string(),
+        bytes,
+    };
+    texture
+        .decode()
+        .with_context(|| format!("reading {}", path.display()))
 }
 
 /// Loads and repairs a model without slicing it, for `inspect`.
@@ -550,8 +575,13 @@ fn place(
 ) -> Result<(Mesh, Option<OrientSummary>)> {
     let transform = &args.transform;
     let (mesh, oriented) = if transform.orient {
-        let found = orient(&mesh, &OrientSettings::default())
-            .context("cannot find an orientation for this model")?;
+        let settings = OrientSettings {
+            goal: transform.orient_goal.into(),
+            max_tilt_deg: transform.max_tilt,
+            ..OrientSettings::default()
+        };
+        let found =
+            orient(&mesh, &settings).context("cannot find an orientation for this model")?;
         let summary = OrientSummary {
             rotation: found.rotation,
             peak_mm2: found.score.peak_mm2.unwrap_or_default(),

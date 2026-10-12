@@ -1,6 +1,6 @@
 # 0233. Make Settings a window like Machine and resin, and carry a profile out as its file
 
-- **Status:** Accepted
+- **Status:** Accepted; where the import is done is superseded by 0235
 - **Date:** 2026-10-12
 
 ## Context

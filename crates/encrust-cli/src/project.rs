@@ -67,6 +67,7 @@ pub fn stage(path: &Path, job: &JobArgs) -> Result<Staged> {
         panel: plate.panel,
         exposure: plate.exposure,
         remove_islands: plate.remove_islands,
+        hanging_passes: plate.hanging_passes,
         drainage,
     })
 }
@@ -135,6 +136,7 @@ fn refuse_shaping_flags(job: &JobArgs) -> Result<()> {
         ),
         ("--exposure-at", !job.slicing.exposure_at.is_empty()),
         ("--remove-islands", job.raster.remove_islands),
+        ("--hanging-passes", job.raster.hanging_passes != 0),
         ("--no-anti-alias", job.raster.no_anti_alias),
         ("--grey-levels", job.raster.grey_levels.is_some()),
         ("--grey-floor", job.raster.grey_floor.is_some()),
@@ -144,4 +146,32 @@ fn refuse_shaping_flags(job: &JobArgs) -> Result<()> {
         bail!("{flag} does not apply to a project, which carries its own; change it in the window");
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use clap::Parser;
+    use core_engine::project::save;
+
+    use super::*;
+
+    #[derive(Parser)]
+    struct Flags {
+        #[command(flatten)]
+        job: JobArgs,
+    }
+
+    #[test]
+    fn the_hanging_passes_a_project_was_saved_with_are_kept() {
+        let fixture = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/cube.encrust");
+        let mut project = load(&fixture).expect("the fixture is a project");
+        project.manifest.slicing.remove_islands = true;
+        project.manifest.slicing.hanging_passes = 2;
+        let path = std::env::temp_dir().join("encrust-cli-hanging-passes.encrust");
+        save(&path, &project).expect("the temp dir is writable");
+
+        let staged = stage(&path, &Flags::parse_from(["encrust"]).job).expect("it stages");
+        assert!(staged.remove_islands);
+        assert_eq!(staged.hanging_passes, 2, "as the window would slice it");
+    }
 }

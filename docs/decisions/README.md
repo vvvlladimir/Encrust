@@ -216,7 +216,8 @@ Grouped by what the decision governs; the number is still the order it was taken
 | # | Decision | Status |
 |---|---|---|
 | [0087](0087-orientation-is-scored-on-the-peel.md) | An orientation is scored on the peel, and measured in two passes | Accepted |
-| [0222](0222-an-orientation-is-searched-for-a-goal-within-a-tilt.md) | Search an orientation for a goal, within a tilt | Accepted |
+| [0222](0222-an-orientation-is-searched-for-a-goal-within-a-tilt.md) | Search an orientation for a goal, within a tilt | Accepted; where the goal and the tilt are offered is superseded by 0236 |
+| [0236](0236-an-orientation-goal-is-asked-for-on-the-command-line.md) | Ask for an orientation goal and a tilt limit on the command line | Accepted |
 | [0088](0088-the-plate-is-packed-as-a-bitmap.md) | The plate is packed as a bitmap into the corner, and the block centred | Accepted |
 | [0098](0098-a-plate-is-a-number-on-the-object.md) | A plate is a number on the object, not a scene of its own | Accepted |
 | [0101](0101-a-tool-works-on-the-selection-or-the-plate.md) | A tool works on what is picked, and on the whole plate only when nothing is | Accepted |
@@ -252,6 +253,7 @@ Grouped by what the decision governs; the number is still the order it was taken
 | [0050](0050-one-resin-catalogue-retuned-per-printer.md) | One resin catalogue, retuned per printer by a `[printers.<id>]` table | Accepted |
 | [0051](0051-a-printer-profile-names-its-file-format.md) | A printer profile names the sliced-file format its firmware reads | Accepted |
 | [0052](0052-profiles-are-edited-in-the-window.md) | Profiles are edited in a Settings screen and saved into the user's directory | Accepted; where the machines and resins are edited is superseded by 0220, and the Settings screen by 0233 |
+| [0235](0235-a-profile-is-imported-by-the-catalogue.md) | Import and export a profile through the catalogue | Accepted |
 | [0120](0120-a-resin-is-tuned-per-printer.md) | A printer's resins are its own presets, edited in place | Accepted |
 | [0140](0140-a-profile-carries-the-machine-name-its-firmware-matches.md) | A profile carries the machine name its firmware matches | Accepted |
 | [0141](0141-advance-mode-follows-the-firmware-flag.md) | Advance mode follows the machine's firmware flag | Accepted |
@@ -322,7 +324,7 @@ Grouped by what the decision governs; the number is still the order it was taken
 | [0230](0230-find-is-a-palette-and-the-columns-stay-out.md) | Find is a palette, the plate column stays out, and a block explains itself on its question mark | Accepted |
 | [0231](0231-select-is-position-and-check-supports-its-islands.md) | Fold Select into Position, and let Check support the islands it finds | Accepted |
 | [0232](0232-the-start-page-offers-resin-test-prints-of-its-own.md) | The start page offers resin test prints of its own, and leaves the machine to the top bar | Accepted; the row of tests under the recent files is superseded by 0234 |
-| [0233](0233-settings-is-a-window-and-a-profile-travels-as-its-file.md) | Make Settings a window like Machine and resin, and carry a profile out as its file | Accepted |
+| [0233](0233-settings-is-a-window-and-a-profile-travels-as-its-file.md) | Make Settings a window like Machine and resin, and carry a profile out as its file | Accepted; where the import is done is superseded by 0235 |
 | [0234](0234-recent-files-are-pictured-and-share-a-shelf-with-test-prints.md) | Show the recent files as pictures, and switch between them and the test prints | Accepted |
 | [0192](0192-a-tool-value-is-remembered-and-taken-back-on-its-own-entry.md) | A tool value is remembered between runs and taken back on its own entry | Accepted |
 | [0193](0193-the-window-reads-its-own-input-before-egui-does.md) | The window reads its own input before egui does | Accepted; Tab and the keys of a focused control are superseded by 0229 |
