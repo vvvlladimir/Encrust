@@ -52,7 +52,6 @@ pub fn ui(ui: &mut egui::Ui, window: &mut Window) {
         super::select::nothing_picked(ui, window.doc);
         return;
     };
-    super::select::problems(ui, window);
     position(ui, &mut window.doc.scene, &window.doc.plate, id);
     rotation(ui, window, id);
     scale(ui, &mut window.doc.scene, id);

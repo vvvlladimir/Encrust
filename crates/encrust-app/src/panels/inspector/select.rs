@@ -1,51 +1,5 @@
-use crate::panels::Window;
-use crate::plate::Overreach;
-use crate::scene::ObjectId;
 use crate::state::Doc;
-use crate::ui::{describe, icon, notice, secondary_button, section, theme};
-
-/// Every picked model that reaches past the build volume, each with the move that brings
-/// it back in, or the reason there is none.
-pub fn problems(ui: &mut egui::Ui, window: &mut Window) {
-    let picked = window.doc.scene.selection().to_vec();
-    let plate = &window.doc.plate;
-    let past: Vec<(ObjectId, String, Overreach)> = picked
-        .iter()
-        .filter_map(|id| {
-            let object = window.doc.scene.get(*id)?;
-            let reach = plate.overreach(&object.world_bounds()?)?;
-            Some((*id, object.name.clone(), reach))
-        })
-        .collect();
-    if past.is_empty() {
-        return;
-    }
-    let colors = theme::colors();
-    section(ui, "Problems", None, |ui| {
-        for (id, name, reach) in past {
-            let why = match reach.shift {
-                Some(_) => "It will not be printed where it stands.",
-                None => "It is bigger than the volume: scale it down.",
-            };
-            notice(
-                ui,
-                icon::WARNING,
-                colors.danger,
-                &format!(
-                    "{name} reaches {:.1} mm past the {}",
-                    reach.by_mm, reach.side
-                ),
-                why,
-            );
-            if let Some(shift) = reach.shift
-                && secondary_button(ui, icon::POSITION, "Move it in").clicked()
-                && let Some(object) = window.doc.scene.get_mut(id)
-            {
-                object.transform.translation += shift;
-            }
-        }
-    });
-}
+use crate::ui::{describe, icon, secondary_button, section};
 
 /// The name of what is picked, or how many, for the inspector's heading.
 pub fn fact(doc: &Doc) -> Option<String> {

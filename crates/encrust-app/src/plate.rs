@@ -1,4 +1,4 @@
-use core_geometry::{Aabb, Vec3};
+use core_geometry::Vec3;
 use printer_profiles::PrinterProfile;
 
 /// The build volume the viewport draws and models are placed on, in millimetres.
@@ -56,47 +56,6 @@ impl BuildPlate {
     pub fn diagonal_mm(&self) -> f32 {
         Vec3::new(self.x_mm, self.y_mm, self.z_mm).length()
     }
-
-    /// Where `bounds` reaches furthest past the volume, or `None` while it stands inside.
-    pub fn overreach(&self, bounds: &Aabb) -> Option<Overreach> {
-        let room = Vec3::new(self.x_mm, self.y_mm, self.z_mm);
-        let sides = [
-            ("left", -bounds.mins.x),
-            ("right", bounds.maxs.x - room.x),
-            ("front", -bounds.mins.y),
-            ("back", bounds.maxs.y - room.y),
-            ("top", bounds.maxs.z - room.z),
-        ];
-        let (side, by_mm) = sides
-            .into_iter()
-            .max_by(|a, b| a.1.total_cmp(&b.1))
-            .filter(|(_, by_mm)| *by_mm > OVERREACH_MM)?;
-        let size = bounds.maxs - bounds.mins;
-        let fits = size.cmple(room).all();
-        let shift = fits.then(|| {
-            let axis = |min: f32, max: f32, room: f32| (-min).max(0.0) - (max - room).max(0.0);
-            Vec3::new(
-                axis(bounds.mins.x, bounds.maxs.x, room.x),
-                axis(bounds.mins.y, bounds.maxs.y, room.y),
-                axis(bounds.mins.z, bounds.maxs.z, room.z),
-            )
-        });
-        Some(Overreach { side, by_mm, shift })
-    }
-}
-
-/// Past this a model is outside the volume rather than touching its wall, millimetres:
-/// a model stood on the plate sits within rounding of zero.
-const OVERREACH_MM: f32 = 1e-3;
-
-/// How a model reaches past the build volume, and the move that brings it back in.
-#[derive(Debug, Clone, Copy, PartialEq)]
-pub struct Overreach {
-    /// The wall it is furthest past: left, right, front, back or top.
-    pub side: &'static str,
-    pub by_mm: f32,
-    /// The smallest move that stands it inside, or `None` when it is bigger than the volume.
-    pub shift: Option<Vec3>,
 }
 
 #[cfg(test)]
@@ -155,42 +114,5 @@ z = 100.0
         };
         // 3-4-12 is a Pythagorean quadruple: the space diagonal is exactly 13.
         assert!((plate.diagonal_mm() - 13.0).abs() < 1e-5);
-    }
-
-    fn ten_cube() -> BuildPlate {
-        BuildPlate {
-            name: None,
-            x_mm: 10.0,
-            y_mm: 10.0,
-            z_mm: 10.0,
-        }
-    }
-
-    #[test]
-    fn a_box_inside_the_volume_does_not_overreach() {
-        let inside = Aabb::new(Vec3::ZERO, Vec3::splat(10.0));
-        assert_eq!(ten_cube().overreach(&inside), None);
-    }
-
-    #[test]
-    fn a_box_past_the_right_wall_is_moved_back_by_as_much() {
-        let past = Aabb::new(Vec3::new(8.0, 2.0, 0.0), Vec3::new(13.0, 4.0, 3.0));
-        let found = ten_cube()
-            .overreach(&past)
-            .expect("it reaches 3 mm past x = 10");
-        assert_eq!(found.side, "right");
-        assert!((found.by_mm - 3.0).abs() < 1e-5);
-        assert_eq!(found.shift, Some(Vec3::new(-3.0, 0.0, 0.0)));
-    }
-
-    #[test]
-    fn a_box_wider_than_the_volume_has_no_way_in() {
-        let wide = Aabb::new(Vec3::new(-1.0, 0.0, 0.0), Vec3::new(12.0, 1.0, 1.0));
-        let found = ten_cube().overreach(&wide).expect("13 mm do not fit in 10");
-        assert_eq!(
-            found.side, "right",
-            "2 mm past the right beats 1 mm past the left"
-        );
-        assert_eq!(found.shift, None);
     }
 }
