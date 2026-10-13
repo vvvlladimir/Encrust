@@ -345,3 +345,57 @@ turns, grid geometry, the cube's cells, vertex expansion, normal matrices, ray c
 picking, the gizmo's conversions — has headless unit tests. Asserting on the draw would
 mean an image-comparison harness and a GPU in CI; asserting on a drag would mean feeding
 synthetic pointer events through egui to test a third-party crate's arithmetic.
+
+## Light copies while the camera moves
+
+A plate of sixteen copies of a million-face model is eighteen million faces a frame, and
+the card draws that at thirty frames a second however little the CPU does. So while the
+camera moves, and for `SETTLE_S` after, every mesh over `MIN_FACES` is drawn as a light
+copy, and the frame after it comes to rest draws everything whole again.
+
+Only as many go light as the card needs, the smallest on screen first. Where the device has
+timestamp queries the scene pass is timed on the card itself and read back a few frames
+late, and the budget is what 12 ms buys at the cost a face was last seen to take: a dearer
+pass is taken in by half at once, a cheaper one by a twentieth, so the budget falls at the
+first heavy frame and climbs back over a second or two. Passes under a million faces are
+paid for by their pixels and teach it nothing. Where there is no such clock — a WebGL
+canvas — runs of slow frame intervals cut the budget instead, and nothing raises it.
+
+The copy gathers the mesh's corners onto a lattice and merges each cell's into their mean,
+dropping the faces that collapse: vertex clustering, in one pass and with no topology to
+keep, so it takes any mesh an import lets through. The lattice is sized from the surface's
+area to keep about a sixth of the faces, a hundred thousand at least, and coarsened until
+it does. It is built on a worker the first frame a mesh is drawn, keyed by its `Arc`, so
+copies of one model share one light copy and none is built twice.
+
+What a light copy may not be is a cap's count or a cavity's faces: while a cut is capped
+nothing is drawn light, and the trapped resin a hollowed model shows is still drawn from
+its full mesh, whose face ranges it names. A hole's inside is drawn against the light
+copy, so it still meets the surface around it.
+
+## Measuring a frame
+
+`render/frame_time.rs` writes what the viewport's frames cost under the `frame_time` log
+target, at debug, so it stays silent unless asked for:
+
+```sh
+RUST_LOG=info,frame_time=debug cargo run --release -p encrust-app -- model.stl 2> frames.log
+```
+
+Once a second while frames keep coming it writes a summary, and any frame more than 50 ms
+after the one before it on its own line. A gap of a second or more is the window resting,
+since it draws only when something changes, and is not counted.
+
+| Field | What it is |
+|---|---|
+| `interval_ms` | One frame to the next: what the eye sees, the card included |
+| `ui_ms` | The window's pass over its panels, CPU |
+| `prepare_ms` | Preparing and recording the viewport's passes, uploads included, CPU |
+| `drawn_faces`, `draws` | Triangles and mesh draws sent to the card, every pass counted |
+| `uploaded_faces` | Triangles uploaded because a mesh was new to the card |
+| `shadow_baked` | Whether the models were drawn once more into the contact shadow |
+| `card_ms` | The card's own time over the latest scene pass read back, a few frames late |
+
+An interval far above `ui_ms + prepare_ms` is time spent on the card or in presenting it;
+one close to them is the CPU's. `card_ms` tells the card from a hand that paused under a
+second: an interval far above it was spent waiting.

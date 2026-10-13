@@ -45,6 +45,18 @@ pub struct View {
     pub input: ViewportInput,
     /// The swing the view cube asked for, while it is still under way.
     pub turn: Option<CameraTurn>,
+    /// How long the window's last pass over its panels took, milliseconds of CPU: the
+    /// viewport writes it to the log beside its own frame.
+    pub ui_ms: f32,
+    /// The camera as the last frame drew it, and when it last moved, seconds of egui's
+    /// clock: heavy meshes are drawn light while it moves.
+    pub drawn_camera: OrbitCamera,
+    pub moved_s: f64,
+    pub lods: crate::render::Lods,
+    /// What this machine draws and keeps up while the camera moves, and what the last
+    /// frame drew, faces: the next frame's time is what that cost.
+    pub budget: crate::render::Budget,
+    pub drawn_faces: Option<usize>,
 }
 
 impl View {
@@ -57,6 +69,12 @@ impl View {
             section: Section::default(),
             input: ViewportInput::default(),
             turn: None,
+            ui_ms: 0.0,
+            drawn_camera: OrbitCamera::framing_plate(plate),
+            moved_s: f64::NEG_INFINITY,
+            lods: crate::render::Lods::default(),
+            budget: crate::render::Budget::default(),
+            drawn_faces: None,
         }
     }
 }

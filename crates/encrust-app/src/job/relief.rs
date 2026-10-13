@@ -8,7 +8,7 @@ use rayon::prelude::*;
 use crate::job::pipeline::{thread_pool, worker_threads};
 use core_geometry::UvMap;
 
-use crate::scene::{Mapped, ObjectId, Scene};
+use crate::scene::{Mapped, ObjectId, Scene, Shaped};
 
 /// One model to press a texture into, owned so that it can cross to the worker thread.
 pub struct ReliefTask {
@@ -45,7 +45,7 @@ pub enum ReliefSource {
 #[derive(Debug, Clone, PartialEq)]
 pub struct Pressed {
     pub id: ObjectId,
-    pub mesh: Arc<Mesh>,
+    pub shaped: Shaped,
     /// The lattice it came out on, in the model's own millimetres, and whether the memory
     /// budget made that coarser than precision asked for.
     pub voxel_mm: Scalar,
@@ -132,7 +132,7 @@ fn run(request: &ReliefRequest) -> ReliefOutcome {
                 };
                 relief.map_err(anyhow::Error::new).map(|relief| Pressed {
                     id: task.id,
-                    mesh: Arc::new(relief.mesh),
+                    shaped: Shaped::of(Arc::new(relief.mesh)),
                     voxel_mm: relief.voxel_mm,
                     coarsened: relief.coarsened,
                 })

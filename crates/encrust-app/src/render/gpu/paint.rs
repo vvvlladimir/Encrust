@@ -14,8 +14,16 @@ impl ViewportResources {
         viewport: egui::epaint::ViewportInPixels,
     ) {
         self.bake_shadow(encoder);
-        let mut pass = self.target.begin(device, encoder, size_px, viewport);
+        let timestamps = self.timer.as_mut().and_then(|timer| timer.begin());
+        let mut pass = self
+            .target
+            .begin(device, encoder, size_px, viewport, timestamps);
         self.paint(&mut pass);
+        drop(pass);
+        let faces = self.scene_faces();
+        if let Some(timer) = &mut self.timer {
+            timer.end(encoder, faces);
+        }
     }
 
     /// Lays what `draw` drew over egui's pass.

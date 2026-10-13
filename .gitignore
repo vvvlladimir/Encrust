@@ -22,3 +22,5 @@ CLAUDE.md
 /crates/encrust-app/tests/snapshots/*.new.png
 /crates/encrust-app/tests/snapshots/*.diff.png
 /crates/encrust-app/tests/snapshots/*.old.png
+
+*.log

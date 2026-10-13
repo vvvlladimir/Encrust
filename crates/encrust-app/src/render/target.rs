@@ -54,6 +54,7 @@ impl SceneTarget {
         encoder: &mut wgpu::CommandEncoder,
         size_px: [u32; 2],
         viewport: ViewportInPixels,
+        timestamps: Option<wgpu::RenderPassTimestampWrites<'_>>,
     ) -> wgpu::RenderPass<'static> {
         if self
             .planes
@@ -91,7 +92,7 @@ impl SceneTarget {
                     }),
                 }),
                 multiview_mask: None,
-                timestamp_writes: None,
+                timestamp_writes: timestamps,
                 occlusion_query_set: None,
             })
             .forget_lifetime();

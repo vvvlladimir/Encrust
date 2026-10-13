@@ -61,7 +61,7 @@ pub use status::Status;
 /// Opens the window, with `initial_model` loaded onto the plate if one was named.
 #[cfg(not(target_arch = "wasm32"))]
 pub fn run(initial_model: Option<&std::path::Path>) -> anyhow::Result<()> {
-    let options = eframe::NativeOptions {
+    let mut options = eframe::NativeOptions {
         viewport: viewport()?,
         renderer: eframe::Renderer::Wgpu,
         // The viewport draws into its own depth and stencil planes and egui needs none,
@@ -69,6 +69,7 @@ pub fn run(initial_model: Option<&std::path::Path>) -> anyhow::Result<()> {
         multisampling: render::MULTISAMPLING,
         ..Default::default()
     };
+    render::ask_for_timestamps(&mut options.wgpu_options);
 
     eframe::run_native(
         "Encrust",

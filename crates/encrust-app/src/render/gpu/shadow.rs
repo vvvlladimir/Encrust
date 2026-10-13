@@ -18,8 +18,29 @@ pub(super) struct ContactShadow {
     /// The silhouette as the blur reads it, and the blurred shadow as the plate reads it.
     silhouette_group: wgpu::BindGroup,
     blurred_group: wgpu::BindGroup,
+    bake: Bake,
+}
+
+/// What the shadow was last baked from, what this frame would bake it from, and whether
+/// this frame may: one drawing light copies never does.
+#[derive(Debug, Default)]
+struct Bake {
     baked: Option<u64>,
     wanted: Option<u64>,
+    held: bool,
+}
+
+impl Bake {
+    fn want(&mut self, wanted: Option<u64>, light: bool) {
+        self.held = light;
+        if !light {
+            self.wanted = wanted;
+        }
+    }
+
+    fn due(&self) -> bool {
+        !self.held && self.wanted.is_some() && self.wanted != self.baked
+    }
 }
 
 impl ContactShadow {
@@ -67,19 +88,22 @@ impl ContactShadow {
             pipelines,
             silhouette,
             blurred,
-            baked: None,
-            wanted: None,
+            bake: Bake::default(),
         }
     }
 
     /// Notes what this frame's shadow is cast by, or that there is none to cast.
     pub(super) fn want(&mut self, frame: &FrameInput<'_>) {
-        self.wanted = frame.floor.map(|floor| cast_by(frame, floor));
+        let wanted = frame
+            .floor
+            .filter(|_| !frame.light)
+            .map(|floor| cast_by(frame, floor));
+        self.bake.want(wanted, frame.light);
     }
 
     /// Whether the plate is to be darkened this frame.
     pub(super) fn shows(&self) -> bool {
-        self.wanted.is_some()
+        self.bake.wanted.is_some()
     }
 }
 
@@ -105,7 +129,7 @@ impl ViewportResources {
     /// Bakes the shadow again if what casts it changed since it was last baked.
     pub fn bake_shadow(&mut self, encoder: &mut wgpu::CommandEncoder) {
         let shadow = &self.shadow;
-        if shadow.wanted.is_none() || shadow.wanted == shadow.baked {
+        if !shadow.bake.due() {
             return;
         }
         {
@@ -121,7 +145,8 @@ impl ViewportResources {
             pass.set_bind_group(1, &shadow.silhouette_group, &[]);
             pass.draw(0..3, 0..1);
         }
-        self.shadow.baked = self.shadow.wanted;
+        self.shadow.bake.baked = self.shadow.bake.wanted;
+        self.shadow_baked = true;
     }
 
     /// Lays every model of the frame flat onto the silhouette.
@@ -245,6 +270,7 @@ mod tests {
             xray: false,
             floor: Some(floor()),
             grid: true,
+            light: false,
         }
     }
 
@@ -264,5 +290,24 @@ mod tests {
             ..floor()
         };
         assert_ne!(first, cast_by(&frame(&still), wider));
+    }
+
+    /// A frame of light copies keeps the last shadow, even one that was wanted and never
+    /// baked: baked from them it would be the light copies' shadow until the next change.
+    #[test]
+    fn a_frame_of_light_copies_never_bakes_the_shadow() {
+        let mut bake = Bake::default();
+        bake.want(Some(1), false);
+        bake.baked = bake.wanted;
+        bake.want(Some(2), false);
+        bake.want(Some(3), true);
+        assert!(!bake.due(), "the light frame bakes nothing");
+        assert_eq!(
+            bake.wanted,
+            Some(2),
+            "and leaves what the whole frame wanted"
+        );
+        bake.want(Some(2), false);
+        assert!(bake.due(), "which the next whole frame bakes");
     }
 }

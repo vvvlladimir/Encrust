@@ -2,9 +2,11 @@
 //! egui panel through `egui_wgpu::CallbackTrait`. See `docs/decisions/0014-viewport-rendering.md`.
 
 mod callback;
+mod frame_time;
 mod gpu;
 mod grid;
 mod label;
+mod lod;
 #[cfg(test)]
 mod offscreen;
 mod target;
@@ -16,8 +18,24 @@ pub use gpu::CutLine;
 pub use gpu::MULTISAMPLING;
 pub use grid::AXIS_LENGTH_MM;
 pub use label::prime as prime_label;
+pub use lod::{Budget, Candidate, Light, Lods, allot};
 
 use gpu::ViewportResources;
+
+/// Asks the device for the card's own clock over a pass where the adapter has one: the
+/// light copies drawn while the camera moves are budgeted by it.
+#[cfg(not(target_arch = "wasm32"))]
+pub fn ask_for_timestamps(options: &mut egui_wgpu::WgpuConfiguration) {
+    let egui_wgpu::WgpuSetup::CreateNew(create_new) = &mut options.wgpu_setup else {
+        return;
+    };
+    let base = std::sync::Arc::clone(&create_new.device_descriptor);
+    create_new.device_descriptor = std::sync::Arc::new(move |adapter| {
+        let mut descriptor = base(adapter);
+        descriptor.required_features |= adapter.features() & wgpu::Features::TIMESTAMP_QUERY;
+        descriptor
+    });
+}
 
 /// Builds the viewport's pipelines and buffers and hands them to egui, which keeps them
 /// for the lifetime of the window and lends them back to every paint callback.

@@ -145,7 +145,7 @@ impl ReliefTool {
                     if let Some(object) = scene.get_mut(model.id) {
                         // The relief was pressed at printed size, so the scale and the
                         // stretch are in the mesh now and must not be applied twice.
-                        object.reshape(model.mesh);
+                        object.reshape(model.shaped);
                         object.transform.scale = Vec3::ONE;
                         object.transform.stretch = Mat3::IDENTITY;
                     }

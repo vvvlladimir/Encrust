@@ -7,7 +7,7 @@ use crate::camera::OrbitCamera;
 use crate::drain::Placing;
 use crate::panels::{Window, section};
 use crate::plate::BuildPlate;
-use crate::render::{Banding, Shading, ViewportCallback};
+use crate::render::{Banding, Candidate, Light, Shading, ViewportCallback, allot};
 use crate::scene::{ObjectId, Scene};
 use crate::state::View;
 use crate::ui::theme;
@@ -103,6 +103,85 @@ pub fn ui(ui: &mut egui::Ui, window: &mut Window) -> egui::Rect {
     paint_plate(ui, window, rect, preview.as_ref());
     draw_tool_overlays(ui, window, rect, &pointer);
     rect
+}
+
+/// How long after the camera last moved heavy meshes are still drawn light, seconds: long
+/// enough to carry a drag over a pointer held still, short enough not to be noticed.
+const SETTLE_S: f64 = 0.3;
+
+/// The light copies drawn in place of heavy meshes this frame: none while the camera is
+/// still or a cut is capped, since a cap is counted against the meshes themselves, and
+/// while it moves only as many as the machine has shown it needs, the smallest on screen
+/// first. Every heavy mesh is asked for each frame, so its copy is built before it is wanted.
+fn light_meshes(ui: &egui::Ui, window: &mut Window, capped: bool) -> Light {
+    let (now, dt_s) = ui.input(|input| (input.time, input.unstable_dt));
+    let view = &mut *window.view;
+    if view.camera != view.drawn_camera {
+        view.drawn_camera = view.camera;
+        view.moved_s = now;
+    }
+    if view.lods.poll() {
+        ui.ctx().request_repaint();
+    }
+    view.budget.take_times();
+    let still_s = now - view.moved_s;
+    let moving = !capped && still_s < SETTLE_S;
+    // What the last frame drew is what this frame's wait was spent on.
+    if let Some(faces) = view.drawn_faces.take().filter(|_| moving) {
+        view.budget.observe(dt_s, faces);
+    }
+
+    let eye = view.camera.eye();
+    let scene = &window.doc.scene;
+    let drawn: Vec<(Arc<Mesh>, Option<Arc<Mesh>>, f32)> = scene
+        .printable(scene.active_plate())
+        .map(|object| {
+            let mesh = object.hollow.shell().unwrap_or(&object.mesh);
+            let looks = object.world_bounds().map_or(0.0, |bounds| {
+                let middle = (bounds.mins + bounds.maxs) / 2.0;
+                (bounds.maxs - middle).length() / middle.distance(eye).max(1.0)
+            });
+            (Arc::clone(mesh), view.lods.of(mesh), looks)
+        })
+        .collect();
+    let candidates: Vec<Candidate> = drawn
+        .iter()
+        .map(|(mesh, light, looks)| Candidate {
+            looks: *looks,
+            whole: mesh.faces.len(),
+            light: light
+                .as_ref()
+                .map_or(mesh.faces.len(), |light| light.faces.len()),
+        })
+        .collect();
+    let chosen = match view.budget.faces().filter(|_| moving) {
+        Some(budget) => allot(&candidates, budget),
+        None => vec![false; candidates.len()],
+    };
+    if moving {
+        view.drawn_faces = Some(
+            candidates
+                .iter()
+                .zip(&chosen)
+                .map(|(candidate, light)| {
+                    if *light {
+                        candidate.light
+                    } else {
+                        candidate.whole
+                    }
+                })
+                .sum(),
+        );
+        // One more frame once the camera has come to rest, to draw everything whole again.
+        ui.ctx()
+            .request_repaint_after(std::time::Duration::from_secs_f64(SETTLE_S - still_s));
+    }
+    drawn
+        .into_iter()
+        .zip(chosen)
+        .filter(|(_, light)| *light)
+        .filter_map(|((mesh, light, _), _)| Some((Arc::as_ptr(&mesh) as usize, light?)))
+        .collect()
 }
 
 /// Moves the camera along the swing the view cube started, until it is over.
@@ -245,6 +324,11 @@ fn paint_plate(
     crate::render::prime_label(ui.painter());
     ui.painter().rect_filled(rect, 0.0, theme::colors().sunken);
     let hidden_groups = window.tools.supports.hidden();
+    let section_mm =
+        section::cut_height(*window.mode, &window.view.section, &window.machine.preview);
+    let bottom_cut_mm =
+        section::floor_height(*window.mode, &window.view.section, &window.machine.preview);
+    let light = light_meshes(ui, window, section_mm.is_some() || bottom_cut_mm.is_some());
     let callback = ViewportCallback::new(
         &window.doc.scene,
         &window.doc.plate,
@@ -252,16 +336,8 @@ fn paint_plate(
         window.view.options,
         Shading {
             overhang_deg,
-            section_mm: section::cut_height(
-                *window.mode,
-                &window.view.section,
-                &window.machine.preview,
-            ),
-            bottom_cut_mm: section::floor_height(
-                *window.mode,
-                &window.view.section,
-                &window.machine.preview,
-            ),
+            section_mm,
+            bottom_cut_mm,
             banding: Banding {
                 ranges: &window.machine.slicing.exposure,
                 floor_mm: window.machine.slicing.band_floor_mm(),
@@ -270,9 +346,11 @@ fn paint_plate(
             cut_line: cut_line(window),
             hidden_groups: &hidden_groups,
             preview: preview.map(|(mesh, colour)| (mesh, *colour)),
+            light: Some(&light),
         },
         rect,
-    );
+    )
+    .timed(window.view.ui_ms, window.view.budget.report());
     ui.painter()
         .add(egui_wgpu::Callback::new_paint_callback(rect, callback));
     draw_axis_letters(ui, window, rect);
