@@ -1,9 +1,9 @@
 //! What the cursor is over: the model a click selects, the face it lays down or washes, the
 //! corner a measurement snaps to, and the part of a support a ray meets.
 
-use core_supports::{Grab, Profiles, grab_along};
+use core_supports::{Grab, Profiles, SupportTree, grab_along};
 
-use core_geometry::{Vec3, raycast_placed};
+use core_geometry::{Ray, Vec3, raycast_placed};
 
 use crate::camera::OrbitCamera;
 use crate::measure;
@@ -191,14 +191,36 @@ pub(super) fn grab_under_cursor(
     window.doc.scene.here().find_map(|object| {
         let table = window.tools.supports.table_for(object);
         let profiles = Profiles::new(&table)?;
-        let trees = object.supports.trees();
-        let (hit, along_mm) = grab_along(trees, &ray, profiles, slack_mm)?;
-        let hidden = trees
-            .get(hit.tree)
-            .and_then(|tree| window.tools.supports.groups.get(tree.group() as usize))
-            .is_some_and(|group| group.hidden);
-        (!hidden && along_mm <= wall_mm + BEHIND_MM).then_some((object.id, hit))
+        let hidden = window.tools.supports.hidden();
+        let (hit, along_mm) =
+            grab_shown(object.supports.trees(), &hidden, &ray, profiles, slack_mm)?;
+        (along_mm <= wall_mm + BEHIND_MM).then_some((object.id, hit))
     })
+}
+
+/// What `grab_along` answers among the trees whose group is not `hidden`, numbered as
+/// `trees` numbers them: a support left out of the view is not in the way of one behind.
+fn grab_shown(
+    trees: &[SupportTree],
+    hidden: &[bool],
+    ray: &Ray,
+    profiles: Profiles,
+    slack_mm: f32,
+) -> Option<(Grab, f32)> {
+    let shown: Vec<usize> = (0..trees.len())
+        .filter(|tree| {
+            !hidden
+                .get(trees[*tree].group() as usize)
+                .is_some_and(|out| *out)
+        })
+        .collect();
+    if shown.len() == trees.len() {
+        return grab_along(trees, ray, profiles, slack_mm);
+    }
+    let visible: Vec<SupportTree> = shown.iter().map(|tree| trees[*tree].clone()).collect();
+    let (hit, along_mm) = grab_along(&visible, ray, profiles, slack_mm)?;
+    let tree = *shown.get(hit.tree)?;
+    Some((Grab { tree, ..hit }, along_mm))
 }
 
 #[cfg(test)]
@@ -206,6 +228,36 @@ mod tests {
     use std::sync::Arc;
 
     use super::*;
+
+    #[test]
+    fn a_hidden_support_is_not_in_the_way_of_the_one_behind_it() {
+        let table = vec![printer_profiles::SupportProfile::default(); 2];
+        let mut supports = core_supports::ModelSupports::default();
+        supports.add(
+            Vec3::new(0.0, 0.0, 20.0),
+            core_geometry::Transform::default(),
+            0,
+        );
+        supports.add(
+            Vec3::new(30.0, 0.0, 20.0),
+            core_geometry::Transform::default(),
+            1,
+        );
+        let nothing = core_geometry::Mesh::default();
+        let bvh = core_geometry::Bvh::build(&nothing);
+        supports.refresh(&nothing, &bvh, core_geometry::Transform::default(), &table);
+        let trees = supports.trees();
+        let profiles = Profiles::new(&table).expect("two profiles");
+        // Level with the middle of both pillars, the first group's nearer the eye.
+        let ray = Ray::new(Vec3::new(-50.0, 0.0, 10.0), Vec3::X);
+        let group_met = |hidden: &[bool]| {
+            grab_shown(trees, hidden, &ray, profiles, 0.0).map(|(hit, _)| trees[hit.tree].group())
+        };
+
+        assert_eq!(group_met(&[false, false]), Some(0), "the nearer one");
+        assert_eq!(group_met(&[true, false]), Some(1), "the one behind it");
+        assert_eq!(group_met(&[true, true]), None);
+    }
 
     #[test]
     fn the_aim_reaches_as_far_wherever_on_the_screen_the_cursor_is() {
