@@ -346,8 +346,11 @@ is built with (ADR 0094). `columns` builds each tip to its own group's shape, `g
 once per group — so a trunk is never shared by two shapes — and `mesh_trees` meshes each
 tree to its group while the raft and the bracing come from group 0. A tree also carries the group it was grown to, so what meshes it knows its shape.
 
-The table lives in the window's Supports tool: the panel's fields edit the group in hand,
-and the scene stores only the number each support carries.
+The table lives in the window's Supports tool, and the scene stores the number each
+support carries. A model may keep a profile of its own in place of a group's
+(`OwnSettings::supports`, ADR 0246): the panel's fields edit the picked models' and the
+plate's only with nothing picked, `SupportTool::table_for` is the table a model is built
+to, and saving a profile is what hands an edit on to every other model built to it.
 
 Dropping a group takes every support built to it away — a group is a shape, so its supports
 do not survive it to be rebuilt to another group's numbers — and shifts the groups above it

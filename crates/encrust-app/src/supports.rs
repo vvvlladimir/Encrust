@@ -4,7 +4,9 @@ use core_supports::{Part, Placed, ProjectSettings, project};
 use printer_profiles::SupportProfile;
 
 use crate::job::{SupportJob, SupportOutcome, SupportRequest, tasks_of};
-use crate::scene::{ObjectId, Scene};
+use std::collections::BTreeMap;
+
+use crate::scene::{ObjectId, Scene, SceneObject};
 use crate::status::Status;
 
 /// The group the Check tool stands island supports in, apart from the ones built by hand.
@@ -92,6 +94,8 @@ pub struct SupportTool {
     /// as the line it drew rather than as the frames it was sampled on.
     pub last_daub: Option<Vec2>,
     pub job: Option<SupportJob>,
+    /// A profile the panel has just saved, until the plate has taken it on.
+    pub saved: Option<SupportProfile>,
     /// The group the panel is asking about before it takes it away, and the supports it
     /// holds, or `None` when it is asking nothing.
     pub dropping: Option<(u16, usize)>,
@@ -115,6 +119,7 @@ impl Default for SupportTool {
             stroke: false,
             last_daub: None,
             job: None,
+            saved: None,
             dropping: None,
         }
     }
@@ -134,7 +139,7 @@ impl SupportTool {
     /// The run cuts each model at the height it will be printed at, so the layers it
     /// looks at are the layers the printer will expose.
     pub fn start(&mut self, scene: &Scene, layer_height_mm: Scalar) -> Result<()> {
-        let tasks = tasks_of(scene);
+        let tasks = tasks_of(scene, |object| self.profile_for(object).clone());
         if tasks.is_empty() {
             bail!("nothing visible on the plate to hold up");
         }
@@ -142,7 +147,6 @@ impl SupportTool {
         self.job = Some(SupportJob::spawn(SupportRequest {
             tasks,
             layer_height_mm,
-            profile: self.profile.clone(),
         }));
         Ok(())
     }
@@ -198,6 +202,70 @@ impl SupportTool {
             .collect()
     }
 
+    /// Every group's profile as `object` is built to: its own where it keeps one, the
+    /// plate's where it does not. What every rebuild of a model's supports is given.
+    pub fn table_for(&self, object: &SceneObject) -> Vec<SupportProfile> {
+        with_own(self.table(), &object.own.supports)
+    }
+
+    /// The active group's profile as `object` is built to.
+    pub fn profile_for<'a>(&'a self, object: &'a SceneObject) -> &'a SupportProfile {
+        object
+            .own
+            .supports
+            .get(&self.active)
+            .unwrap_or(&self.profile)
+    }
+
+    /// The numbers the panel shows and the viewport marks overhangs by: the first picked
+    /// model's own where it keeps them, the plate's otherwise.
+    pub fn shown<'a>(&'a self, scene: &'a Scene) -> &'a SupportProfile {
+        scene
+            .selection()
+            .first()
+            .and_then(|id| scene.get(*id))
+            .map_or(&self.profile, |object| self.profile_for(object))
+    }
+
+    /// Puts `edited` on every picked model as its own profile of the active group, or
+    /// takes its own away where `edited` is what the plate already has.
+    pub fn keep_on_picked(&self, edited: &SupportProfile, scene: &mut Scene) {
+        for id in scene.selection().to_vec() {
+            let Some(object) = scene.get_mut(id) else {
+                continue;
+            };
+            if *edited == self.profile {
+                object.own.supports.remove(&self.active);
+            } else {
+                object.own.supports.insert(self.active, edited.clone());
+            }
+        }
+    }
+
+    /// Takes on a profile that has just been saved: the plate's numbers of that name
+    /// become the saved ones, so every model built to it follows, and a model whose own
+    /// are now no different lets go of them. A model keeping other edits keeps them.
+    pub fn adopt_saved(&mut self, scene: &mut Scene) {
+        let Some(saved) = self.saved.take() else {
+            return;
+        };
+        if self.profile.name == saved.name {
+            self.profile = saved.clone();
+        }
+        for group in &mut self.groups {
+            if group.profile.name == saved.name {
+                group.profile = saved.clone();
+            }
+        }
+        let table = self.table();
+        for object in scene.objects_mut() {
+            object
+                .own
+                .supports
+                .retain(|group, own| table.get(*group as usize).is_some_and(|plate| plate != own));
+        }
+    }
+
     /// Makes `group` the one new supports join and the one the panel's fields edit,
     /// keeping what was edited of the group being left.
     pub fn choose_group(&mut self, group: u16) {
@@ -244,7 +312,15 @@ impl SupportTool {
         let gone = scene
             .objects_mut()
             .iter_mut()
-            .map(|object| object.supports.drop_group(group))
+            .map(|object| {
+                let own = std::mem::take(&mut object.own.supports);
+                object.own.supports = own
+                    .into_iter()
+                    .filter(|(kept, _)| *kept != group)
+                    .map(|(kept, profile)| (kept - u16::from(kept > group), profile))
+                    .collect();
+                object.supports.drop_group(group)
+            })
             .sum();
         self.active = 0;
         self.profile = self.groups[0].profile.clone();
@@ -327,7 +403,7 @@ impl SupportTool {
                         object.supports.painted(),
                         &self.fill,
                         &standing,
-                        self.profile.max_overhang_deg,
+                        self.profile_for(object).max_overhang_deg,
                     ),
                 )
             })
@@ -353,9 +429,9 @@ impl SupportTool {
     /// Supports need room under a part, and the layers printed straight onto the plate
     /// are the ones that stick to it hardest. Returns how many objects moved.
     pub fn lift(&self, scene: &mut Scene) -> usize {
-        let lift_mm = self.profile.z_lift_mm;
         let mut moved = 0;
         for object in scene.targets_mut() {
+            let lift_mm = self.profile_for(object).z_lift_mm;
             let Some(bounds) = object.world_bounds() else {
                 continue;
             };
@@ -377,11 +453,14 @@ impl SupportTool {
     /// every frame. See `docs/decisions/0238`.
     pub fn settle_on_raft(&self, scene: &mut Scene) {
         let table = self.table();
-        let raft_mm = table
-            .first()
-            .filter(|ground| ground.raft.enabled)
-            .map_or(0.0, |ground| ground.raft.thickness_mm);
         for object in scene.objects_mut() {
+            let raft_mm = object
+                .own
+                .supports
+                .get(&0)
+                .or(table.first())
+                .filter(|ground| ground.raft.enabled)
+                .map_or(0.0, |ground| ground.raft.thickness_mm);
             let wanted_mm = if object.supports.is_empty() {
                 0.0
             } else {
@@ -394,6 +473,19 @@ impl SupportTool {
             }
         }
     }
+}
+
+/// `table` with the profiles a model keeps of its own put in place of its groups'.
+pub fn with_own(
+    mut table: Vec<SupportProfile>,
+    own: &BTreeMap<u16, SupportProfile>,
+) -> Vec<SupportProfile> {
+    for (group, profile) in own {
+        if let Some(plate) = table.get_mut(*group as usize) {
+            plate.clone_from(profile);
+        }
+    }
+    table
 }
 
 /// The first surface straight over a point a layer under `floor`, if it is no more than

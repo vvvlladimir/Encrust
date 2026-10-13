@@ -172,11 +172,11 @@ pub(super) fn grab_under_cursor(
     cursor: egui::Pos2,
 ) -> Option<(crate::scene::ObjectId, Grab)> {
     let ray = ray_through(&window.view.camera, viewport, cursor)?;
-    let table = window.tools.supports.table();
-    let profiles = Profiles::new(&table)?;
     let slack_mm = aim_slack_mm(&window.view.camera, viewport, cursor);
 
     window.doc.scene.here().find_map(|object| {
+        let table = window.tools.supports.table_for(object);
+        let profiles = Profiles::new(&table)?;
         grab(object.supports.trees(), &ray, profiles, slack_mm).map(|it| (object.id, it))
     })
 }

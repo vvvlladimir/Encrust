@@ -1,6 +1,6 @@
 # 0219. Light the viewport by a sky, a key and a fill, shadow it by contact, and turn it by a cube
 
-- **Status:** Accepted
+- **Status:** Accepted; the hatching of overhangs is superseded by 0245
 - **Date:** 2026-10-10
 
 ## Context

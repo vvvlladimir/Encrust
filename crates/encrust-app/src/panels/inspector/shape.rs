@@ -1,5 +1,6 @@
 use anyhow::Context as _;
 
+use super::scope;
 use crate::panels::Window;
 use crate::panels::support_diagram::{self, Part};
 use crate::panels::support_fields::{Group, saved_as};
@@ -23,6 +24,10 @@ fn groups(part: Part) -> &'static [Group] {
 /// The shape of the supports in the group in hand, part by part, and the saved profile it
 /// is built to.
 pub fn ui(ui: &mut egui::Ui, window: &mut Window) {
+    scope::editing_supports(window, |window| shape(ui, window));
+}
+
+fn shape(ui: &mut egui::Ui, window: &mut Window) {
     section(ui, "Profile", None, |ui| profile_picker(ui, window));
     section(ui, "Part", None, |ui| {
         let profile = &mut window.tools.supports.profile;
@@ -143,10 +148,14 @@ fn profile_picker(ui: &mut egui::Ui, window: &mut Window) {
             .catalogue
             .save_support(&id, &profile)
             .context("cannot save the support profile");
-        window
+        if window
             .machine
             .status
-            .report("Saved the support profile", kept);
+            .report("Saved the support profile", kept)
+            .is_some()
+        {
+            window.tools.supports.saved = Some(profile.clone());
+        }
     }
     if save_as {
         let kept = keep_support(&mut window.machine.slicing.catalogue, &profile)

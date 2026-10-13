@@ -40,6 +40,7 @@ ones: version 2 and below hold no built geometry, which is the whole of this for
 | `objects[].supports.grown` | every tree the automatic run grew, in the model's own space |
 | `objects[].supports.grown[].landing.pad_offset` | how far a tree's pad stands off its trunk on the plate, on `frozen` trees too (ADR 0239); absent in older files and read as none |
 | `objects[].supports.raft_lift_mm` | how much of the height in `transform` is the raft's lift (ADR 0238); absent in older files and read as 0 |
+| `objects[].own_supports` | the profile this model is built to in place of a group's, by group number (ADR 0246); absent when it keeps none, and in older files |
 | `objects[].supports.frozen` | every tree a hand took hold of, in the same space |
 | `objects[].hollow.built` | the shell standing on the model, or `null` for a solid one |
 

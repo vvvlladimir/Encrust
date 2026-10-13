@@ -10,6 +10,7 @@ use crate::repair;
 use crate::shortcuts;
 use crate::state::{Doc, Machine, Tools, View};
 use crate::status::Status;
+use crate::supports::with_own;
 use crate::tool_settings::ToolSettings;
 use crate::ui::theme;
 use crate::undo::Frame;
@@ -295,7 +296,7 @@ impl SlicerApp {
     /// would be sliced.
     fn refresh_supports(&mut self) {
         self.tools.supports.settle_on_raft(&mut self.doc.scene);
-        let table = self.tools.supports.table();
+        let plate = self.tools.supports.table();
         for object in self.doc.scene.objects_mut() {
             let untouched = object.supports.is_empty()
                 && object.supports.meshes().is_none()
@@ -307,6 +308,7 @@ impl SlicerApp {
             }
             let mesh = std::sync::Arc::clone(&object.mesh);
             let bvh = std::sync::Arc::clone(&object.bvh);
+            let table = with_own(plate.clone(), &object.own.supports);
             object
                 .supports
                 .refresh(&mesh, &bvh, object.transform, &table);

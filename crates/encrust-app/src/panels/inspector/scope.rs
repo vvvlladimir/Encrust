@@ -82,6 +82,32 @@ pub fn editing<T: Clone>(
     }
 }
 
+/// Runs `draw` with the Supports tool holding the profile the picked models are built to,
+/// and keeps what it changed on those models alone: an edit is theirs until it is saved
+/// over the profile it was taken from, which is when every other model follows. With
+/// nothing picked, `draw` edits the plate's. See `docs/decisions/0246`.
+///
+/// `draw` must not change which group is in hand: the tool holds a model's numbers
+/// while it runs, not the group's.
+pub fn editing_supports(window: &mut Window, draw: impl FnOnce(&mut Window)) {
+    if window.doc.scene.selection().is_empty() {
+        draw(window);
+        window.tools.supports.adopt_saved(&mut window.doc.scene);
+        return;
+    }
+    let shown = window.tools.supports.shown(&window.doc.scene).clone();
+    let plate = std::mem::replace(&mut window.tools.supports.profile, shown.clone());
+    draw(window);
+    let edited = std::mem::replace(&mut window.tools.supports.profile, plate);
+    if edited != shown {
+        window
+            .tools
+            .supports
+            .keep_on_picked(&edited, &mut window.doc.scene);
+    }
+    window.tools.supports.adopt_saved(&mut window.doc.scene);
+}
+
 #[cfg(test)]
 mod tests {
     use std::sync::Arc;
@@ -124,21 +150,12 @@ mod tests {
         }
     }
 
-    fn with_a_model() -> (Parts, ObjectId) {
+    fn tetrahedron() -> Imported {
         let mesh = Mesh::new(
             vec![Vec3::ZERO, Vec3::X, Vec3::Y, Vec3::Z],
             vec![[0, 2, 1], [0, 1, 3], [1, 2, 3], [2, 0, 3]],
         );
-        let doc = Doc::default();
-        let mut parts = Parts {
-            mode: Mode::default(),
-            tool: Tool::Hollow,
-            view: View::framing(&doc.plate),
-            doc,
-            tools: Tools::default(),
-            machine: Machine::default(),
-        };
-        let id = parts.doc.scene.insert(Imported::new(
+        Imported::new(
             "tetrahedron".to_owned(),
             Arc::new(mesh.clone()),
             Transform::default(),
@@ -152,8 +169,65 @@ mod tests {
                 },
                 diagnostics: diagnose(&mesh),
             },
-        ));
+        )
+    }
+
+    fn with_a_model() -> (Parts, ObjectId) {
+        let doc = Doc::default();
+        let mut parts = Parts {
+            mode: Mode::default(),
+            tool: Tool::Hollow,
+            view: View::framing(&doc.plate),
+            doc,
+            tools: Tools::default(),
+            machine: Machine::default(),
+        };
+        let id = parts.doc.scene.insert(tetrahedron());
         (parts, id)
+    }
+
+    #[test]
+    fn an_edit_to_the_support_profile_stays_on_the_picked_model_until_it_is_saved() {
+        let (mut parts, first) = with_a_model();
+        let second = parts.doc.scene.insert(tetrahedron());
+        let plate_mm = parts.tools.supports.profile.raft.thickness_mm;
+        parts.doc.scene.select(Some(first));
+
+        editing_supports(&mut parts.window(), |window| {
+            window.tools.supports.profile.raft.thickness_mm = plate_mm + 1.0;
+        });
+        let raft_of = |parts: &Parts, id: ObjectId| {
+            let object = parts.doc.scene.get(id).expect("there");
+            parts.tools.supports.table_for(object)[0].raft.thickness_mm
+        };
+        assert_eq!(
+            raft_of(&parts, first),
+            plate_mm + 1.0,
+            "the picked model took it"
+        );
+        assert_eq!(raft_of(&parts, second), plate_mm, "the other one did not");
+        assert_eq!(parts.tools.supports.profile.raft.thickness_mm, plate_mm);
+
+        // Saved over the profile it was taken from: now it is everybody's.
+        editing_supports(&mut parts.window(), |window| {
+            window.tools.supports.saved = Some(window.tools.supports.profile.clone());
+        });
+        assert_eq!(
+            raft_of(&parts, second),
+            plate_mm + 1.0,
+            "the other one follows"
+        );
+        assert!(
+            parts
+                .doc
+                .scene
+                .get(first)
+                .expect("there")
+                .own
+                .supports
+                .is_empty(),
+            "numbers that are the plate's again are no longer the model's own"
+        );
     }
 
     #[test]

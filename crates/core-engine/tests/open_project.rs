@@ -90,6 +90,7 @@ fn object(name: &str, mesh: &Mesh, transform: Transform) -> ObjectState {
         hollow: ObjectHollowState::default(),
         own_hollow: None,
         own_drain: None,
+        own_supports: Vec::new(),
     }
 }
 

@@ -1,3 +1,4 @@
+use std::collections::BTreeMap;
 use std::sync::{Arc, Mutex};
 
 use rayon::prelude::*;
@@ -11,6 +12,7 @@ use core_geometry::{
 
 use core_supports::ModelSupports;
 use core_volume::ModelHollow;
+use printer_profiles::SupportProfile;
 
 use crate::drain::Traps;
 
@@ -193,11 +195,14 @@ pub struct SceneObject {
 }
 
 /// The Hollow and Drain settings a model keeps instead of the plate's, where it has its
-/// own; see `docs/decisions/0227`.
+/// own, and the support profiles it is built to instead of its groups'; see
+/// `docs/decisions/0227` and `docs/decisions/0246`.
 #[derive(Debug, Clone, Default, PartialEq, serde::Serialize)]
 pub struct OwnSettings {
     pub hollow: Option<HollowState>,
     pub drain: Option<DrainState>,
+    /// By the number of the group each one stands in for.
+    pub supports: BTreeMap<u16, SupportProfile>,
 }
 
 /// The last bounds measured over a mesh's vertices, and the placement they were for, so

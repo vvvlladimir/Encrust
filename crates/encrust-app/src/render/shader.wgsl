@@ -184,12 +184,12 @@ fn hatch(world: vec3<f32>) -> f32 {
     return mix(cover, 0.5, smoothstep(0.25, 0.5, pixel));
 }
 
-// How much of the overhang colour a marked surface takes off a stripe and on one. Not
-// nothing between the stripes: a patch narrower than the pitch would otherwise vanish.
-const HATCH_GAP = 0.2;
-const HATCH_STRIPE = 0.85;
+// How much of the overhang colour a marked surface takes: filled, not hatched, so the edge
+// of what needs holding up is a line and not a row of stripe ends. See docs/decisions/0245.
+const OVERHANG_FILL = 0.85;
 
-// The same for whatever stands past the build volume.
+// How much of its colour whatever stands past the build volume takes off a stripe and on
+// one. Not nothing between the stripes: a part narrower than the pitch would vanish.
 const OUTSIDE_GAP = 0.3;
 const OUTSIDE_STRIPE = 0.9;
 
@@ -397,7 +397,7 @@ fn model_fragment(in: ModelFragment, @builtin(front_facing) front_facing: bool) 
     if (in.overhang >= 0.0) {
         let lean = -outward.z;
         let marked = smoothstep(in.overhang, in.overhang + OVERHANG_BAND, lean);
-        base = mix(base, globals.overhang_color.rgb, marked * mix(HATCH_GAP, HATCH_STRIPE, stripe));
+        base = mix(base, globals.overhang_color.rgb, marked * OVERHANG_FILL);
     }
 
     base = banded(base, in.world.z);

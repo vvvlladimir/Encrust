@@ -9,7 +9,7 @@ use crate::panels::Window;
 use crate::pick::{pick_surface, ray_through};
 use crate::scene::ObjectId;
 use crate::state::{Doc, Tools};
-use crate::supports::Picked;
+use crate::supports::{Picked, with_own};
 use crate::viewport_input::Pointer;
 use crate::workspace::Tool;
 
@@ -65,7 +65,7 @@ pub(super) fn remove_support_under_cursor(
             let Some(ray) = ray_through(&window.view.camera, viewport, cursor) else {
                 return;
             };
-            let table = window.tools.supports.table();
+            let table = window.tools.supports.table_for(object);
             let Some(profiles) = Profiles::new(&table) else {
                 return;
             };
@@ -166,7 +166,14 @@ fn carry_tip(window: &mut Window, viewport: egui::Rect, cursor: egui::Pos2, tip:
     let beside = part_position(window.doc, tip)
         .and_then(|stood| on_camera_plane(camera, viewport, cursor, stood));
 
-    let table = window.tools.supports.table();
+    let Some(table) = window
+        .doc
+        .scene
+        .get(tip.id)
+        .map(|object| window.tools.supports.table_for(object))
+    else {
+        return false;
+    };
     let Some(profiles) = Profiles::new(&table) else {
         return false;
     };
@@ -309,13 +316,19 @@ fn on_camera_plane(
 /// by, which is `core_supports::carried`: a step the model refuses leaves that support
 /// where it was. See `docs/decisions/0095`.
 fn carry_parts(window: &mut Window, step: Vec3) -> bool {
-    let table = window.tools.supports.table();
-    let Some(profiles) = Profiles::new(&table) else {
-        return false;
-    };
-
     let mut moved = false;
     for (id, frozen) in held_trees(window.tools) {
+        let Some(table) = window
+            .doc
+            .scene
+            .get(id)
+            .map(|object| window.tools.supports.table_for(object))
+        else {
+            continue;
+        };
+        let Some(profiles) = Profiles::new(&table) else {
+            continue;
+        };
         let parts: Vec<Part> = window
             .tools
             .supports
@@ -368,7 +381,7 @@ fn held_trees(tools: &Tools) -> Vec<(ObjectId, usize)> {
 /// Rebuilds the supports of every object something is held on, in this frame rather than
 /// the next: a support that vanishes under the cursor cannot be aimed.
 fn rebuild_held(window: &mut Window) {
-    let table = window.tools.supports.table();
+    let plate = window.tools.supports.table();
     let mut done: Vec<crate::scene::ObjectId> = Vec::new();
     for picked in window.tools.supports.picked.clone() {
         if done.contains(&picked.id) {
@@ -378,6 +391,7 @@ fn rebuild_held(window: &mut Window) {
         if let Some(object) = window.doc.scene.get_mut(picked.id) {
             let mesh = std::sync::Arc::clone(&object.mesh);
             let bvh = std::sync::Arc::clone(&object.bvh);
+            let table = with_own(plate.clone(), &object.own.supports);
             object
                 .supports
                 .refresh(&mesh, &bvh, object.transform, &table);

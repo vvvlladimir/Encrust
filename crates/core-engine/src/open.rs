@@ -119,7 +119,7 @@ fn model(object: &ObjectState, meshes: &ModelMeshes, table: &[SupportProfile]) -
         &meshes.source,
         &bvh,
         object.transform,
-        table,
+        &object.support_table(table),
     );
 
     Model {

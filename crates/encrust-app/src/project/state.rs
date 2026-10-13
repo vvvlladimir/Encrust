@@ -3,6 +3,7 @@
 //! What goes in is the plate as it stands, geometry and all; what comes out is that plate
 //! and nothing worked out anew (ADR 0191).
 
+use std::collections::BTreeMap;
 use std::sync::Arc;
 
 use core_geometry::{Bvh, Vec3, center_of_mass};
@@ -11,10 +12,11 @@ use rayon::prelude::*;
 use crate::scene::{ImportSummary, Imported, OwnSettings, Scene, SceneObject};
 use crate::slicing::Slicing;
 use crate::state::Tools;
+use crate::supports::with_own;
 use crate::tool_settings::ToolSettings;
 use core_engine::project::{
     BuiltCavity, Cavity, Chosen, Manifest, ModelMeshes, ObjectHollowState, ObjectState,
-    ObjectSupportState, Project, Summary, VERSION, hollow_of, supports_of,
+    ObjectSupportState, OwnSupportState, Project, Summary, VERSION, hollow_of, supports_of,
 };
 use printer_profiles::SupportProfile;
 
@@ -103,6 +105,15 @@ fn object_state(object: &SceneObject) -> ObjectState {
         },
         own_hollow: object.own.hollow.clone(),
         own_drain: object.own.drain.clone(),
+        own_supports: object
+            .own
+            .supports
+            .iter()
+            .map(|(group, profile)| OwnSupportState {
+                group: *group,
+                profile: profile.clone(),
+            })
+            .collect(),
     }
 }
 
@@ -204,17 +215,23 @@ fn restore_objects(
         };
         object.visible = state.visible;
         object.plate = state.plate;
+        let own_supports: BTreeMap<u16, SupportProfile> = state
+            .own_supports
+            .into_iter()
+            .map(|own| (own.group, own.profile))
+            .collect();
         object.supports = supports_of(
             &state.supports,
             &meshes.source,
             &bvh,
             state.transform,
-            table,
+            &with_own(table.to_vec(), &own_supports),
         );
         object.hollow = hollow_of(&state.hollow, meshes);
         object.own = OwnSettings {
             hollow: state.own_hollow,
             drain: state.own_drain,
+            supports: own_supports,
         };
     }
 }

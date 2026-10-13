@@ -1,6 +1,7 @@
 use core_analysis::RiskKind;
 use core_supports::Part;
 
+use super::scope;
 use crate::job::SupportJob;
 use crate::panels::Window;
 use crate::panels::support_fields::{Group, saved_as};
@@ -17,11 +18,13 @@ use crate::workspace::{Mode, Tool};
 pub fn ui(ui: &mut egui::Ui, window: &mut Window) {
     section(ui, "Islands", None, |ui| islands(ui, window));
     section(ui, "Where", None, |ui| {
-        let profile = &mut window.tools.supports.profile;
-        let saved =
-            saved_as(&window.machine.slicing.catalogue, profile).map(|entry| &entry.profile);
-        Group::Automatic.show(ui, profile, saved);
-        lift(ui, window);
+        scope::editing_supports(window, |window| {
+            let profile = &mut window.tools.supports.profile;
+            let saved =
+                saved_as(&window.machine.slicing.catalogue, profile).map(|entry| &entry.profile);
+            Group::Automatic.show(ui, profile, saved);
+            lift(ui, window);
+        });
     });
     section(ui, "Picked", None, |ui| editing(ui, window));
     section(ui, "Already done", None, |ui| placed(ui, window.doc));

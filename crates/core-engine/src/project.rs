@@ -265,6 +265,32 @@ pub struct ObjectState {
     pub own_hollow: Option<HollowState>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub own_drain: Option<DrainState>,
+    /// The support profiles this model is built to instead of its groups', where it has
+    /// its own (ADR 0246). A file without them reads as a model with none.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub own_supports: Vec<OwnSupportState>,
+}
+
+impl ObjectState {
+    /// The plate's `table` of group profiles as this model is built to it: its own
+    /// profile in place of a group's wherever it keeps one.
+    pub fn support_table(&self, table: &[SupportProfile]) -> Vec<SupportProfile> {
+        let mut table = table.to_vec();
+        for own in &self.own_supports {
+            if let Some(plate) = table.get_mut(own.group as usize) {
+                plate.clone_from(&own.profile);
+            }
+        }
+        table
+    }
+}
+
+/// One group's profile as one model keeps it: an edit that has not been saved over the
+/// profile it was taken from, or another profile altogether.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct OwnSupportState {
+    pub group: u16,
+    pub profile: SupportProfile,
 }
 
 /// What mesh repair found at import, kept because the stored mesh is already repaired and
@@ -619,6 +645,14 @@ mod tests {
                 depth_mm: 3.0,
                 taper: 1.0,
             }),
+            own_supports: if index == 1 {
+                vec![OwnSupportState {
+                    group: 1,
+                    profile: SupportProfile::heavy(),
+                }]
+            } else {
+                Vec::new()
+            },
         }
     }
 
@@ -701,6 +735,35 @@ mod tests {
         fields.remove("own_drain");
         let read: ObjectState = serde_json::from_value(older).expect("a file from before reads");
         assert_eq!(read.own_drain, None);
+    }
+
+    #[test]
+    fn a_model_is_built_to_its_own_support_profile_where_it_keeps_one() {
+        let plate = [SupportProfile::light(), SupportProfile::medium()];
+        assert_eq!(object(0).support_table(&plate), plate.to_vec());
+        assert_eq!(
+            object(1).support_table(&plate),
+            vec![SupportProfile::light(), SupportProfile::heavy()],
+            "the second model keeps its own profile of group 1"
+        );
+    }
+
+    #[test]
+    fn a_models_own_support_profile_comes_back_and_a_file_without_one_reads() {
+        let back = round_trip(&project(2));
+        assert!(back.manifest.objects[0].own_supports.is_empty());
+        assert_eq!(
+            back.manifest.objects[1].own_supports,
+            vec![OwnSupportState {
+                group: 1,
+                profile: SupportProfile::heavy(),
+            }]
+        );
+        let mut older = serde_json::to_value(&back.manifest.objects[1]).expect("serialises");
+        let fields = older.as_object_mut().expect("an object");
+        fields.remove("own_supports");
+        let read: ObjectState = serde_json::from_value(older).expect("a file from before reads");
+        assert!(read.own_supports.is_empty());
     }
 
     #[test]

@@ -100,10 +100,13 @@ fn boxed_field<N: Numeric>(
             borderless(ui.style_mut(), value_rect.size());
             // egui would otherwise pull a value outside `range` into it every frame, and
             // report that as an edit: a model sunk under the plate would be lifted back.
+            // A typed figure is taken when the box is left, not at each key: the first
+            // digit of 10 is under a least of 2 and would be pulled up to it at once.
             let mut drag = DragValue::new(value)
                 .speed(speed)
                 .range(range)
-                .clamp_existing_to_range(false);
+                .clamp_existing_to_range(false)
+                .update_while_editing(false);
             if let Some(decimals) = decimals {
                 drag = drag.fixed_decimals(decimals);
             }
@@ -314,5 +317,42 @@ mod tests {
         }
         assert_eq!(bottom_mm, -5.0, "a model sunk under the plate stays there");
         assert!(!changed, "nobody touched the field");
+    }
+
+    #[test]
+    fn a_figure_is_taken_when_the_box_is_left_and_not_at_each_key() {
+        use egui_kittest::kittest::Queryable as _;
+
+        let mut dressed = false;
+        let mut harness = egui_kittest::Harness::builder()
+            .with_size(egui::vec2(320.0, 80.0))
+            .build_ui_state(
+                move |ui, diameter_mm: &mut f32| {
+                    if dressed {
+                        number_field(ui, "Diameter", diameter_mm, 0.05, 2.0..=50.0, Some(2), 80.0);
+                    } else {
+                        theme::apply(ui.ctx());
+                        dressed = true;
+                    }
+                },
+                20.7_f32,
+            );
+        harness.run_steps(3);
+        harness.get_by_label("Diameter").click();
+        harness.run_steps(3);
+
+        harness.get_by_label("Diameter").type_text("1");
+        harness.run_steps(3);
+        assert_eq!(
+            *harness.state(),
+            20.7,
+            "1 is under the least of 2, and is only the first digit of 10"
+        );
+
+        harness.get_by_label("Diameter").type_text("0");
+        harness.run_steps(3);
+        harness.key_press(egui::Key::Enter);
+        harness.run_steps(3);
+        assert_eq!(*harness.state(), 10.0, "what was typed is what is taken");
     }
 }

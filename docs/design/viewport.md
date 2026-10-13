@@ -207,11 +207,12 @@ highlight is Blinn-Phong with `h` halfway between the key and the eye, small and
 a matt resin, scaled by the fragment's alpha so a translucent surface stays premultiplied.
 The shares are shader constants; the colours and directions are tokens.
 
-A surface leaning past the overhang angle, and whatever stands past the build volume, is
-hatched rather than filled: stripes 3.4 mm apart along `x + y - z`, so they run diagonally
-on any face, smoothed over a pixel with `fwidth` and evened out to half where they are
-closer together than pixels. Between the stripes the mark keeps a light wash, so a patch
-narrower than the pitch still shows.
+A surface leaning past the overhang angle is filled with the overhang colour at 0.85, so
+where the need for a support ends is one line (ADR 0245). Whatever stands past the build
+volume is hatched rather than filled: stripes 3.4 mm apart along `x + y - z`, so they run
+diagonally on any face, smoothed over a pixel with `fwidth` and evened out to half where
+they are closer together than pixels. Between the stripes the mark keeps a light wash, so
+a part narrower than the pitch still shows.
 
 ## The contact shadow
 
