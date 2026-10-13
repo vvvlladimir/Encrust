@@ -27,8 +27,9 @@ out along it, and shorter where a full one would eat the room the body needs ove
 (ADR 0125). A face that does not look down — a wall or a slope a support was placed on by
 hand — sends the tip out along its slope, falling a quarter as much as it runs, so that it
 leaves the model whatever the overhang angle; a flat top, or a contact off the surface,
-sends it straight down. Everything below is
-measured from the neck, not from the contact.
+sends it straight down. A contact on an edge or a corner sits on every face meeting there
+and leaves the one that looks down most, so the support under a low point of the model is
+shaped like the rest. Everything below is measured from the neck, not from the contact.
 
 A ray runs down from `SURFACE_EPSILON_MM` (1 µm) below the neck — starting at the surface
 itself would report the contact's own face at zero distance.
@@ -231,6 +232,14 @@ grid of a quarter of that into the gaps the rim's supports opened, both keeping 
 quarters of a spacing from what is taken; anchoring is what lets the coverage check thin a
 slope to one support per place rather than one per layer. A piece too small for two
 supports is all corner, so sampling never returns nothing.
+
+**Clear of the edge.** A head centred on the layer's outline is half off the surface it
+holds: its nearest face is the wall above the edge, so the tip leans out and cures onto
+that wall. Every sample is therefore taken `edge_inset_mm` in from the outline of the
+*layer* — the head's radius and one cell — which leaves the side a ledge is carried along
+alone, since material lies on both sides of it. Where a piece is further than twice the
+inset from any such room, it is narrower than a head and is sampled on its own cells as
+before; a contact that cannot stand clear is still better than none.
 
 **Three to stand on.** A part held at one or two places is held and still rocks on the
 peel. Placement counts the supports under each piece and what it grew out of, and once

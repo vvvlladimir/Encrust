@@ -53,6 +53,7 @@ pub fn generate_supports(
         grid: &grid,
         config: &config,
         spacing: grid.cells_of(config.spacing_mm).max(1),
+        inset: grid.cells_of(config.edge_inset_mm),
         // How many layers back the lean is measured over.
         window: ((REFERENCE_RISE_MM / layer_height_mm).round() as usize).max(1),
         layer_height_mm,
@@ -124,6 +125,8 @@ struct Pass<'a> {
     config: &'a SampleConfig,
     /// How far apart supports go, in cells.
     spacing: i32,
+    /// How far in from a layer's outline supports go, in cells.
+    inset: i32,
     /// How many layers back the lean is measured over.
     window: usize,
     layer_height_mm: Scalar,
@@ -157,13 +160,17 @@ impl Pass<'_> {
         let rise_mm = seen as Scalar * self.layer_height_mm;
 
         let found = unsupported(layer, below, reference, self.grid, self.config, rise_mm);
+        if found.islands.is_empty() && found.overhangs.is_empty() {
+            return Vec::new();
+        }
+        let room = layer.shrunk(self.inset);
         // Islands first: a support put down under one also holds the overhang it is part
         // of, which the coverage check then leaves alone.
         found
             .islands
             .iter()
             .chain(&found.overhangs)
-            .flat_map(|piece| sample_piece(piece, self.spacing))
+            .flat_map(|piece| sample_piece(piece, &room, self.inset, self.spacing))
             .collect()
     }
 }
@@ -235,7 +242,9 @@ impl Pass<'_> {
             .adrift()
             .map(|piece| parts.piece(piece))
             .filter(|piece| across_mm(piece, self.grid) >= MIN_ISLAND_MM)
-            .flat_map(|piece| sample_piece(&piece, self.spacing))
+            .flat_map(|piece| {
+                sample_piece(&piece, &piece.shrunk(self.inset), self.inset, self.spacing)
+            })
             .collect()
     }
 
@@ -256,7 +265,7 @@ impl Pass<'_> {
             .map(|number| (number, parts.piece(number)))
             .filter(|(_, piece)| across_mm(piece, self.grid) >= self.stance_mm)
             .flat_map(|(number, piece)| {
-                sample_stance(&piece)
+                sample_stance(&piece, self.inset)
                     .into_iter()
                     .map(move |cell| (number, cell))
             })
@@ -745,6 +754,7 @@ mod tests {
         // Off the lattice on every side, so no corner has a lattice point to lean on.
         let (low, high) = (Vec2::new(1.3, 2.7), Vec2::new(18.3, 15.7));
         let points = supports_for(&box_mesh(low.extend(10.0), high.extend(14.0)));
+        let inset_mm = SampleConfig::for_profile(&profile()).edge_inset_mm;
 
         for corner in [
             low,
@@ -757,9 +767,27 @@ mod tests {
                 .map(|point| (point.truncate() - corner).length())
                 .fold(Scalar::INFINITY, Scalar::min);
             assert!(
-                nearest <= 2.0 * GRID_PITCH_MM,
+                nearest <= inset_mm * Scalar::sqrt(2.0) + 2.0 * GRID_PITCH_MM,
                 "the corner at {corner} is {nearest} mm from the nearest support, and a \
-                 corner is held in its own cell"
+                 corner is held one inset in from both of its sides"
+            );
+        }
+    }
+
+    #[test]
+    fn no_head_under_a_floating_slab_reaches_over_its_edge() {
+        let (low, high) = (Vec2::new(1.3, 2.7), Vec2::new(18.3, 15.7));
+        let points = supports_for(&box_mesh(low.extend(10.0), high.extend(14.0)));
+        let radius_mm = profile().contact_radius_mm();
+
+        assert!(!points.is_empty(), "a floating slab is an island");
+        for point in &points {
+            let at = point.truncate();
+            let room_mm = (at - low).min_element().min((high - at).min_element());
+            assert!(
+                room_mm >= radius_mm,
+                "the head at {at} is {room_mm} mm from the slab's edge and {radius_mm} mm \
+                 wide, so it climbs the wall above that edge"
             );
         }
     }

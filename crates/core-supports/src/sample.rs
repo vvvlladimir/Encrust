@@ -23,6 +23,11 @@ const STANCE_REACH: (i32, i32) = (4, 5);
 /// Where supports go on one piece of unsupported layer, as cells of the grid it was read
 /// on.
 ///
+/// `room` is where on that layer a head stands without reaching over the layer's outline,
+/// and `inset` is how far in from the outline that is, in cells. A head on the outline
+/// itself is half on the wall above it, so the piece is sampled where it lies inside
+/// `room`, and on its own cells only where it is too narrow to have any room near it.
+///
 /// The outline goes first, corners before the rest of it: a corner is the first place a
 /// ledge lifts and the edge is where the peel starts, so neither may depend on where a
 /// lattice happened to fall. What is left inside is filled from a lattice anchored to the
@@ -31,44 +36,65 @@ const STANCE_REACH: (i32, i32) = (4, 5);
 ///
 /// A piece too small to hold two supports is all corner, so it still comes back with one:
 /// this never returns nothing for a piece that has cells.
-pub fn sample_piece(piece: &Field, spacing: i32) -> Vec<[i32; 2]> {
+pub fn sample_piece(piece: &Field, room: &Field, inset: i32, spacing: i32) -> Vec<[i32; 2]> {
     let spacing = spacing.max(1);
-    let rim = piece.rim();
+    let (clear, narrow) = standing_room(piece, room, inset);
     let mut taken = Thinning::new(spacing);
     let mut points = Vec::new();
 
-    for point in corners(&rim, spacing).into_iter().chain(cells_of(&rim)) {
-        if taken.take(point, spacing) {
-            points.push(point);
+    for part in [&clear, &narrow] {
+        let rim = part.rim();
+        for point in corners(&rim, spacing).into_iter().chain(cells_of(&rim)) {
+            if taken.take(point, spacing) {
+                points.push(point);
+            }
         }
     }
 
     let fill = (spacing * FILL_REACH.0 / FILL_REACH.1).max(1);
     // The staggered lattice first, then one of a quarter of its step into the gaps the
     // outline's supports opened in it: fine enough that no place is left a spacing away.
-    let inside = lattice_of(piece, spacing)
-        .into_iter()
-        .chain(fill_of(piece, spacing));
-    for point in inside {
-        if taken.take(point, fill) {
-            points.push(point);
+    for part in [&clear, &narrow] {
+        let inside = lattice_of(part, spacing)
+            .into_iter()
+            .chain(fill_of(part, spacing));
+        for point in inside {
+            if taken.take(point, fill) {
+                points.push(point);
+            }
         }
     }
     points
 }
 
 /// Where the supports that steady one part go: a few on its outline, as far apart as it
-/// is across, so that a part held at one place is held at three.
-pub fn sample_stance(piece: &Field) -> Vec<[i32; 2]> {
-    let Some((min, max)) = piece.bounds() else {
+/// is across, so that a part held at one place is held at three. The outline is taken
+/// `inset` cells in, where the part is wide enough to have one there.
+pub fn sample_stance(piece: &Field, inset: i32) -> Vec<[i32; 2]> {
+    let (clear, narrow) = standing_room(piece, &piece.shrunk(inset), inset);
+    let outline = clear.rim().with(&narrow.rim());
+    let Some((min, max)) = outline.bounds() else {
         return Vec::new();
     };
     let across = (max[0] - min[0] + 1).max(max[1] - min[1] + 1);
     let reach = (across * STANCE_REACH.0 / STANCE_REACH.1).max(1);
     let mut taken = Thinning::new(reach);
-    cells_of(&piece.rim())
+    cells_of(&outline)
         .filter(|point| taken.take(*point, reach))
         .collect()
+}
+
+/// The cells of `piece` inside `room`, and the cells of it further than a head's width
+/// from any of those: what is too narrow for a head to stand clear of the outline.
+fn standing_room(piece: &Field, room: &Field, inset: i32) -> (Field, Field) {
+    if inset <= 0 {
+        return (piece.clone(), Field::default());
+    }
+    let clear = piece.without(&piece.without(room));
+    // Twice the inset, because a square corner is 1.41 of it from the room inside it and
+    // is not a narrow place.
+    let narrow = piece.uncarried_by(&clear, 2 * inset);
+    (clear, narrow)
 }
 
 /// The cells taken so far, in buckets one spacing across, so that asking whether a cell
@@ -286,10 +312,18 @@ mod tests {
     /// Fifty cells of a tenth of a millimetre: the spacing the medium preset asks for.
     const SPACING: i32 = 50;
 
+    /// Three cells: a head 0.4 mm across and the cell it keeps clear of the outline.
+    const INSET: i32 = 3;
+
+    /// `piece` sampled as a whole layer of its own, so its outline is the layer's.
+    fn sampled(piece: &Field, spacing: i32) -> Vec<[i32; 2]> {
+        sample_piece(piece, &piece.shrunk(INSET), INSET, spacing)
+    }
+
     #[test]
     fn a_wide_piece_is_covered_at_the_spacing_it_was_given() {
         let piece = rectangle(10.0, 10.0, 20.0, 20.0);
-        let points = sample_piece(&piece, SPACING);
+        let points = sampled(&piece, SPACING);
 
         assert!(points.len() > 8, "a 400 mm2 piece needs a lattice");
         for point in &points {
@@ -328,7 +362,7 @@ mod tests {
     #[test]
     fn a_sliver_too_thin_for_the_lattice_still_gets_a_line_of_supports() {
         let piece = rectangle(10.0, 10.02, 30.0, 0.2);
-        let points = sample_piece(&piece, SPACING);
+        let points = sampled(&piece, SPACING);
 
         assert!(points.len() >= 5, "a 30 mm sliver needs a row of supports");
         for point in &points {
@@ -350,15 +384,65 @@ mod tests {
     fn every_corner_of_a_ledge_gets_a_support_wherever_the_lattice_falls() {
         // Off the lattice on every side, so no corner has a lattice point to lean on.
         let piece = rectangle(1.3, 2.7, 17.0, 13.0);
-        let points = sample_piece(&piece, SPACING);
+        let points = sampled(&piece, SPACING);
         let (min, max) = piece.bounds().expect("the piece has cells");
 
-        for corner in [min, [max[0], min[1]], max, [min[0], max[1]]] {
+        for corner in [
+            [min[0] + INSET, min[1] + INSET],
+            [max[0] - INSET, min[1] + INSET],
+            [max[0] - INSET, max[1] - INSET],
+            [min[0] + INSET, max[1] - INSET],
+        ] {
             assert!(
                 points.contains(&corner),
                 "a corner is the first place a ledge lifts, and {corner:?} has no support"
             );
         }
+    }
+
+    #[test]
+    fn no_support_of_a_wide_piece_stands_nearer_its_outline_than_a_head_reaches() {
+        let piece = rectangle(1.3, 2.7, 17.0, 13.0);
+        let (min, max) = piece.bounds().expect("the piece has cells");
+
+        for point in sampled(&piece, SPACING) {
+            let room = (point[0] - min[0])
+                .min(max[0] - point[0])
+                .min(point[1] - min[1])
+                .min(max[1] - point[1]);
+            assert!(
+                room >= INSET,
+                "{point:?} is {room} cells from the outline and the head reaches {INSET}"
+            );
+        }
+    }
+
+    #[test]
+    fn an_arm_too_narrow_for_a_head_is_still_held_along_its_length() {
+        // A 10 mm square with a 0.3 mm arm running 20 mm out of its side.
+        let piece = rectangle(10.0, 10.0, 10.0, 10.0).with(&rectangle(20.0, 15.0, 20.0, 0.3));
+        let points = sampled(&piece, SPACING);
+
+        let far = points.iter().filter(|point| point[0] > 300).count();
+        assert!(
+            far >= 1,
+            "the arm ends 20 mm from the square and nothing stands in its last 10 mm"
+        );
+    }
+
+    #[test]
+    fn a_ledge_is_inset_from_the_outline_and_not_from_what_carries_it() {
+        // The right half of a layer hangs over nothing; its left side joins the half
+        // that is carried, which is no edge of the layer.
+        let layer = rectangle(10.0, 10.0, 20.0, 10.0);
+        let piece = rectangle(20.0, 10.0, 10.0, 10.0);
+        let (min, _) = piece.bounds().expect("the piece has cells");
+
+        let points = sample_piece(&piece, &layer.shrunk(INSET), INSET, SPACING);
+        assert!(
+            points.iter().any(|point| point[0] == min[0]),
+            "the side a ledge is carried along has material on both sides of it"
+        );
     }
 
     #[test]
@@ -372,7 +456,7 @@ mod tests {
 
     #[test]
     fn a_part_held_at_one_place_is_steadied_at_three() {
-        let points = sample_stance(&circle(Vec2::new(30.0, 30.0), 3.0));
+        let points = sample_stance(&circle(Vec2::new(30.0, 30.0), 3.0), INSET);
         assert_eq!(
             points.len(),
             3,
@@ -383,7 +467,7 @@ mod tests {
     #[test]
     fn a_speck_gets_exactly_one_support() {
         let piece = rectangle(10.0, 10.0, 0.4, 0.4);
-        let points = sample_piece(&piece, SPACING);
+        let points = sampled(&piece, SPACING);
         assert_eq!(points.len(), 1);
         assert!(piece.contains(points[0][0], points[0][1]));
     }
@@ -392,8 +476,8 @@ mod tests {
     fn the_lattice_does_not_move_when_the_piece_does() {
         // Two steps, because every other row of the lattice is offset half a step: a
         // piece moved by an odd number of steps meets the other half of it.
-        let here = sample_piece(&rectangle(10.0, 10.0, 20.0, 20.0), SPACING);
-        let there = sample_piece(&rectangle(20.0, 20.0, 20.0, 20.0), SPACING);
+        let here = sampled(&rectangle(10.0, 10.0, 20.0, 20.0), SPACING);
+        let there = sampled(&rectangle(20.0, 20.0, 20.0, 20.0), SPACING);
         assert_eq!(
             here.len(),
             there.len(),
@@ -404,13 +488,13 @@ mod tests {
     #[test]
     fn a_denser_spacing_puts_down_more_supports() {
         let piece = rectangle(10.0, 10.0, 20.0, 20.0);
-        let sparse = sample_piece(&piece, SPACING);
-        let dense = sample_piece(&piece, SPACING / 2);
+        let sparse = sampled(&piece, SPACING);
+        let dense = sampled(&piece, SPACING / 2);
         assert!(dense.len() > sparse.len());
     }
 
     #[test]
     fn an_empty_piece_is_sampled_as_nothing() {
-        assert!(sample_piece(&Field::default(), SPACING).is_empty());
+        assert!(sampled(&Field::default(), SPACING).is_empty());
     }
 }

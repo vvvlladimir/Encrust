@@ -57,6 +57,10 @@ pub struct SampleConfig {
     /// own: a ledge of a few cells is a step of the staircase every sloped surface is
     /// printed as.
     pub min_overhang_mm: Scalar,
+    /// How far in from a layer's outline a contact is put: the head's own radius and a
+    /// cell more, so that the head ends on the surface it holds and not on the wall
+    /// beside it.
+    pub edge_inset_mm: Scalar,
 }
 
 impl SampleConfig {
@@ -93,6 +97,7 @@ impl SampleConfig {
             // Half of what one head carries: a ledge that small is inside the head that
             // would be put under it.
             min_overhang_mm: carry_mm / 2.0,
+            edge_inset_mm: head_radius_mm + GRID_PITCH_MM,
         }
     }
 }

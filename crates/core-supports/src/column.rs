@@ -2,7 +2,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::group::Profiles;
 use crate::placed::Placed;
-use core_geometry::{Mat3, Ray, Scalar, Vec2, Vec3, raycast_placed};
+use core_geometry::{Mat3, Ray, Scalar, Vec2, Vec3, point_triangle, raycast_placed};
 use printer_profiles::SupportProfile;
 use rayon::prelude::*;
 
@@ -250,27 +250,52 @@ pub fn neck_of(placed: &Placed, contact: Vec3, profile: &SupportProfile) -> Vec3
 /// Which way a tip leaves the surface at `contact`: the outward normal of a face that looks
 /// down, out and down off one it sits on that does not, so a support placed by hand on any
 /// face leaves the model; straight down off a flat top, or from a contact off the surface.
+///
+/// A contact on an edge or a corner sits on every face meeting there, and leaves the one
+/// that looks down most: which of them a search finds first is an accident of the mesh.
 fn tip_direction(placed: &Placed, contact: Vec3) -> Vec3 {
     let matrix = placed.transform.to_matrix();
     if matrix.determinant().abs() < SINGULAR {
         return -Vec3::Z;
     }
     let inverse = matrix.inverse();
-    let Some(found) = placed
-        .bvh
-        .closest(placed.model, inverse.transform_point3(contact))
-    else {
+    let local = inverse.transform_point3(contact);
+    let Some(found) = placed.bvh.closest(placed.model, local) else {
         return -Vec3::Z;
     };
-    let Some(triangle) = placed.model.triangle(found.face) else {
+    // A normal does not survive a non-uniform scale under the model matrix, but it does
+    // under the inverse transpose of that matrix's upper 3x3.
+    let turn = Mat3::from_mat4(inverse).transpose();
+    let normal_of = |face: usize| {
+        placed
+            .model
+            .triangle(face)
+            .map(|triangle| (turn * triangle.normal_unnormalized()).normalize_or_zero())
+    };
+    let Some(mut normal) = normal_of(found.face) else {
         return -Vec3::Z;
     };
 
-    // A normal does not survive a non-uniform scale under the model matrix, but it does
-    // under the inverse transpose of that matrix's upper 3x3.
-    let normal =
-        (Mat3::from_mat4(inverse).transpose() * triangle.normal_unnormalized()).normalize_or_zero();
-    match (normal.z < 0.0, found.distance <= ON_SURFACE_MM) {
+    let on_surface = found.distance <= ON_SURFACE_MM;
+    if on_surface {
+        let mut touching = Vec::new();
+        placed.bvh.faces_within(local, ON_SURFACE_MM, &mut touching);
+        // The hierarchy's leaves come back whole, so each face is measured again.
+        normal = touching
+            .into_iter()
+            .filter_map(|face| Some((placed.model.triangle(face as usize)?, face)))
+            .filter(|(triangle, _)| {
+                point_triangle(local, triangle).distance(local) <= ON_SURFACE_MM
+            })
+            .filter_map(|(_, face)| normal_of(face as usize))
+            .fold(
+                normal,
+                |lowest, other| {
+                    if other.z < lowest.z { other } else { lowest }
+                },
+            );
+    }
+    match (normal.z < 0.0, on_surface) {
         (true, _) => normal,
         (false, true) => out_and_down(normal),
         (false, false) => -Vec3::Z,
@@ -703,6 +728,40 @@ mod tests {
             trees[0].landing().base.x > 10.0,
             "it stands out beside the wall, not under it"
         );
+    }
+
+    #[test]
+    fn a_tip_on_a_corner_leaves_the_face_that_looks_down_whichever_face_is_found_first() {
+        use core_geometry::Quat;
+
+        // A box tipped five degrees about X and then about Y, so one corner of its
+        // underside hangs lowest and both walls meeting there look a little down too.
+        let model = box_mesh(Vec3::ZERO, Vec3::splat(10.0));
+        let transform = Transform {
+            rotation: Quat::from_rotation_y(5.0_f32.to_radians())
+                * Quat::from_rotation_x(-5.0_f32.to_radians()),
+            translation: Vec3::new(0.0, 0.0, 20.0),
+            ..Transform::default()
+        };
+        let bvh = Bvh::build(&model);
+        let placed = Placed::new(&model, &bvh, transform);
+        let matrix = transform.to_matrix();
+
+        let underside = matrix.transform_vector3(-Vec3::Z);
+        for corner in [
+            Vec3::ZERO,
+            Vec3::new(10.0, 0.0, 0.0),
+            Vec3::new(10.0, 10.0, 0.0),
+            Vec3::new(0.0, 10.0, 0.0),
+        ] {
+            let contact = matrix.transform_point3(corner);
+            let along = (neck_of(&placed, contact, &profile()) - contact).normalize();
+            assert!(
+                along.dot(underside) > 0.999,
+                "of the three faces meeting at {corner} the underside looks down most, \
+                 and the tip left along {along}"
+            );
+        }
     }
 
     #[test]
