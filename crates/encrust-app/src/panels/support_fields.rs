@@ -199,7 +199,7 @@ fn top(ui: &mut egui::Ui, profile: &mut SupportProfile, saved: Option<&SupportPr
     );
 }
 
-/// The column itself, and the air it keeps between itself and the model.
+/// The column itself, the widest its trunk grows, and the air it keeps from the model.
 fn main(ui: &mut egui::Ui, profile: &mut SupportProfile, saved: Option<&SupportProfile>) {
     mm(
         ui,
@@ -216,6 +216,15 @@ fn main(ui: &mut egui::Ui, profile: &mut SupportProfile, saved: Option<&SupportP
         &mut profile.clearance_mm,
         FINE_STEP,
         0.0..=3.0,
+    );
+    // Every trunk widens towards its base, branched or not (ADR 0242).
+    mm(
+        ui,
+        "Trunk cap",
+        was(saved, |p| p.branching.max_trunk_diameter_mm),
+        &mut profile.branching.max_trunk_diameter_mm,
+        COARSE_STEP,
+        0.3..=10.0,
     );
 }
 
@@ -341,15 +350,6 @@ fn branching(ui: &mut egui::Ui, profile: &mut SupportProfile, saved: Option<&Sup
             COARSE_STEP,
             1.0..=40.0,
             1,
-        );
-        let trunk = &mut branching.max_trunk_diameter_mm;
-        mm(
-            ui,
-            "Trunk cap",
-            was(saved, |p| p.branching.max_trunk_diameter_mm),
-            trunk,
-            COARSE_STEP,
-            0.3..=10.0,
         );
     });
 }

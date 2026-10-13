@@ -100,9 +100,9 @@ carrying one tip, section enabled — never marked. A trunk keeps its width what
 stands on, because it carries the tips' weight (ADR 0042).
 
 **Standing on the part.** Any other support that lands on the model ends in `[top]` and
-`[tip]` upside down: a cone over `top.length_mm` from the trunk's own width down to the
-contact's, then the contact driven into the face. What touches the part is a tip's scar whatever the trunk carries, so it
-breaks off by hand (ADR 0124).
+`[tip]` upside down: the trunk keeps its joint's width, then a cone over `top.length_mm`
+down to the contact's and a bite to a point, or flat for a plane tip. What touches the part
+is a tip's scar whatever the trunk carries, so it breaks off by hand (ADR 0124, 0242).
 
 **Raft.** `[raft]` lays its pieces on the plate. Supports still land at `z = 0` and pass
 through, and the fill rule unions them (ADR 0043). `style` picks the pieces: `skates`, a
@@ -286,10 +286,11 @@ the case where one front reaches the other's column outright.
 Candidates sit in a max-heap on `z`, so the highest meeting point — the merge that saves
 most — is taken first, and only when the two are within
 `branching.max_merge_distance_mm`, neither strut is zero length, each strut's body clears
-the model, and the meeting point can land. The trunk
-takes `(r_a^k + r_b^k)^(1/k)` for `trunk_exponent` `k`, capped at `max_trunk_diameter_mm`
-and never thinner than either branch: 2 conserves cross-section, 3 volume, the presets ship
-2.5. A trunk is a front again; a candidate whose fronts have merged is dropped when popped.
+the model, and the meeting point can land. The joint
+keeps the branches' own width; only the trunk under the root widens, as a cone from that
+width to a base of `min(cap, max(pillar, height / 15 / 2, carried))`, where `carried` folds
+`(r_a^k + r_b^k)^(1/k)` for `trunk_exponent` `k` over the tips it holds: 2 conserves
+cross-section, 3 volume, the presets ship 2.5 (ADR 0242). A trunk is a front again; a candidate whose fronts have merged is dropped when popped.
 Fronts sit in a grid of the merge distance, so a new one asks nine buckets. Survivors drop
 a vertical trunk to their landing. `branching.enabled = false` gives back step 7a's column
 exactly.

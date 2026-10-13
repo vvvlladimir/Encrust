@@ -67,6 +67,7 @@ mod tests {
             &placed,
             crate::neck_of(&placed, contact, profile),
             profile.pillar_radius_mm(),
+            1,
             profile,
         )
     }

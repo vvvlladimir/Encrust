@@ -112,7 +112,7 @@ fn gather(trees: &mut [SupportTree], placed: &Placed, profile: &SupportProfile) 
             to_radius_mm: root.radius_mm,
         }
         .with_clearance(profile.clearance_mm);
-        let stands = landing(placed, knee, root.radius_mm, profile)
+        let stands = landing(placed, knee, root.radius_mm, tree.tip_count(), profile)
             .filter(|landing| !landing.on_model && clear(placed, &lean));
         let Some(landing) = stands else {
             continue;
@@ -131,6 +131,8 @@ fn gather(trees: &mut [SupportTree], placed: &Placed, profile: &SupportProfile) 
 struct Front {
     position: Vec3,
     radius_mm: Scalar,
+    /// How many tips hang off it, which is what its trunk's base is sized for.
+    tips: usize,
     node: usize,
     alive: bool,
 }
@@ -212,6 +214,7 @@ impl Forest {
             forest.push_front(Front {
                 position: column.neck,
                 radius_mm,
+                tips: 1,
                 node,
                 alive: true,
             });
@@ -273,7 +276,7 @@ impl Forest {
                 continue;
             }
 
-            let merged = self.join(&candidate, profile);
+            let merged = self.join(&candidate);
             for other in self.neighbours(merged) {
                 self.offer(&mut heap, merged, other, profile);
             }
@@ -316,25 +319,28 @@ impl Forest {
     /// room under the meeting point for a trunk to stand.
     fn accepts(&self, candidate: &Candidate, placed: &Placed, profile: &SupportProfile) -> bool {
         let (a, b) = (&self.fronts[candidate.a], &self.fronts[candidate.b]);
-        let trunk_mm = profile.branching.merged_radius_mm(a.radius_mm, b.radius_mm);
+        let joint_mm = a.radius_mm.max(b.radius_mm);
         let reaches = |front: &Front| {
             let beam = Beam {
                 from: front.position,
                 to: candidate.meet,
                 from_radius_mm: front.radius_mm,
-                to_radius_mm: trunk_mm,
+                to_radius_mm: joint_mm,
             }
             .with_clearance(profile.clearance_mm);
             clear(placed, &beam)
         };
 
-        reaches(a) && reaches(b) && stands(candidate.meet, trunk_mm, placed, profile)
+        let tips = a.tips + b.tips;
+        reaches(a) && reaches(b) && stands(candidate.meet, joint_mm, tips, placed, profile)
     }
 
-    /// Hangs both fronts of `candidate` off a new node at the meeting point.
-    fn join(&mut self, candidate: &Candidate, profile: &SupportProfile) -> usize {
+    /// Hangs both fronts of `candidate` off a new node at the meeting point. The joint
+    /// keeps the branches' own width: only the trunk under the last one widens, see
+    /// `docs/decisions/0242`.
+    fn join(&mut self, candidate: &Candidate) -> usize {
         let (a, b) = (self.fronts[candidate.a], self.fronts[candidate.b]);
-        let radius_mm = profile.branching.merged_radius_mm(a.radius_mm, b.radius_mm);
+        let radius_mm = a.radius_mm.max(b.radius_mm);
 
         let node = self.nodes.len();
         self.nodes.push(TreeNode {
@@ -351,6 +357,7 @@ impl Forest {
         self.push_front(Front {
             position: candidate.meet,
             radius_mm,
+            tips: a.tips + b.tips,
             node,
             alive: true,
         })
@@ -365,10 +372,10 @@ impl Forest {
             if !front.alive {
                 continue;
             }
-            if landing(placed, front.position, front.radius_mm, profile).is_some() {
+            if landing(placed, front.position, front.radius_mm, front.tips, profile).is_some() {
                 continue;
             }
-            let Some((knee, _)) = escape(front.position, front.radius_mm, placed, profile) else {
+            let Some((knee, _)) = escape(&front, placed, profile) else {
                 continue;
             };
 
@@ -383,9 +390,9 @@ impl Forest {
             self.fronts[index].alive = false;
             self.push_front(Front {
                 position: knee,
-                radius_mm: front.radius_mm,
                 node,
                 alive: true,
+                ..front
             });
             bent = true;
         }
@@ -405,10 +412,11 @@ impl Forest {
             .iter()
             .filter(|front| front.alive)
             .filter_map(|front| {
-                if let Some(landing) = landing(placed, front.position, front.radius_mm, profile) {
+                let found = landing(placed, front.position, front.radius_mm, front.tips, profile);
+                if let Some(landing) = found {
                     return Some(self.cut(front.node, &children, landing));
                 }
-                let (knee, landing) = escape(front.position, front.radius_mm, placed, profile)?;
+                let (knee, landing) = escape(front, placed, profile)?;
                 let mut tree = self.cut(front.node, &children, landing);
                 tree.stand_on_knee(knee, front.radius_mm);
                 Some(tree)
@@ -445,11 +453,24 @@ impl Forest {
     }
 }
 
-/// Whether a trunk of `radius_mm` under `at` has anywhere to go: straight down, or
-/// leaning aside the way a blocked front does.
-fn stands(at: Vec3, radius_mm: Scalar, placed: &Placed, profile: &SupportProfile) -> bool {
-    landing(placed, at, radius_mm, profile).is_some()
-        || escape(at, radius_mm, placed, profile).is_some()
+/// Whether a trunk carrying `tips` under `at`, leaving it `radius_mm` wide, has anywhere
+/// to go: straight down, or leaning aside the way a blocked front does.
+fn stands(
+    at: Vec3,
+    radius_mm: Scalar,
+    tips: usize,
+    placed: &Placed,
+    profile: &SupportProfile,
+) -> bool {
+    let front = Front {
+        position: at,
+        radius_mm,
+        tips,
+        node: 0,
+        alive: true,
+    };
+    landing(placed, at, radius_mm, tips, profile).is_some()
+        || escape(&front, placed, profile).is_some()
 }
 
 /// Where a support with nothing under it can lean to and still find a trunk's worth of
@@ -457,12 +478,8 @@ fn stands(at: Vec3, radius_mm: Scalar, placed: &Placed, profile: &SupportProfile
 ///
 /// The shortest reach that works is taken, so a support leans no further than it has to;
 /// see `docs/decisions/0078`.
-fn escape(
-    from: Vec3,
-    radius_mm: Scalar,
-    placed: &Placed,
-    profile: &SupportProfile,
-) -> Option<(Vec3, Landing)> {
+fn escape(front: &Front, placed: &Placed, profile: &SupportProfile) -> Option<(Vec3, Landing)> {
+    let (from, radius_mm) = (front.position, front.radius_mm);
     let reach_per_drop = profile.branching.reach_per_drop();
     // A lean costs height, and what is left underneath is the ceiling on it: a support low
     // over the plate can only step aside as far as it can still descend.
@@ -492,7 +509,7 @@ fn escape(
             if !clear(placed, &beam) {
                 continue;
             }
-            if let Some(landing) = landing(placed, knee, radius_mm, profile) {
+            if let Some(landing) = landing(placed, knee, radius_mm, front.tips, profile) {
                 return Some((knee, landing));
             }
         }
@@ -750,14 +767,17 @@ mod tests {
     }
 
     #[test]
-    fn a_trunk_is_thicker_than_the_branches_it_carries() {
+    fn a_joint_keeps_the_width_of_the_branches_it_joins() {
         let profile = profile();
         let forest = forest_of(
             &[Vec3::new(10.0, 10.0, 20.0), Vec3::new(14.0, 10.0, 20.0)],
             &Mesh::default(),
             Profiles::single(&profile),
         );
-        assert!(forest[0].root().radius_mm > profile.pillar_radius_mm());
+        assert!(
+            (forest[0].root().radius_mm - profile.pillar_radius_mm()).abs() < 1e-6,
+            "only the trunk under the joint widens, and it does so towards its base"
+        );
     }
 
     #[test]

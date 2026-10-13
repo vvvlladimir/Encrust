@@ -152,22 +152,25 @@ pub fn columns(points: &[SupportPoint], placed: &Placed, profiles: Profiles) -> 
                 group: support.group,
                 contact,
                 neck,
-                landing: landing(placed, neck, profile.pillar_radius_mm(), profile),
+                landing: landing(placed, neck, profile.pillar_radius_mm(), 1, profile),
             }
         })
         .collect()
 }
 
-/// Where a column of `radius_mm` dropped from `from` lands, or `None` when there is no
+/// Where a trunk carrying `tips` dropped from `from` lands, or `None` when there is no
 /// room for one: nothing to stand on, the model itself in the way of the body, a face the
 /// user has painted supports out of, or a profile that refuses to stand on the part.
 ///
 /// `from` is where the body begins — the neck of a tip, or a joint — in plate
-/// coordinates, the same space `placed` puts the model in.
+/// coordinates, the same space `placed` puts the model in. The trunk leaves it `radius_mm`
+/// wide and, on the plate, widens down to the base its height and load ask for; on the
+/// model it keeps that width down to a tip. See `docs/decisions/0242`.
 pub fn landing(
     placed: &Placed,
     from: Vec3,
     radius_mm: Scalar,
+    tips: usize,
     profile: &SupportProfile,
 ) -> Option<Landing> {
     let contact = from;
@@ -176,7 +179,7 @@ pub fn landing(
 
     // Where the body stops being asked about: at the top of the foot on the plate, and on
     // the model at the height its rim already meets the face it stands on.
-    let (landing, bottom_z) = match below {
+    let (landing, bottom_z, base_mm) = match below {
         // A foot may not be put down on a blocked face; see `docs/decisions/0093`.
         Some(hit) if placed.blocks_face(hit.face) => return None,
         // The profile forbids standing on the part, so the support leans for the plate
@@ -193,17 +196,21 @@ pub fn landing(
                     pad_offset: Vec2::ZERO,
                 },
                 hit.point.z + touch_mm + SURFACE_EPSILON_MM,
+                radius_mm,
             )
         }
         _ => {
             let base = Vec3::new(contact.x, contact.y, PLATE_Z_MM);
+            let base_mm = profile
+                .trunk_base_radius_mm(from.z - PLATE_Z_MM, tips)
+                .max(radius_mm);
             let landing = Landing {
                 base,
                 on_model: false,
-                pad_offset: pad_offset(placed, base, radius_mm, profile)?,
+                pad_offset: pad_offset(placed, base, base_mm, profile)?,
             };
             let bottom_z = landing.pillar_bottom_z(profile);
-            (landing, bottom_z)
+            (landing, bottom_z, base_mm)
         }
     };
 
@@ -211,7 +218,13 @@ pub fn landing(
     if height <= MIN_PILLAR_HEIGHT_MM {
         return None;
     }
-    stands_clear(placed, contact, bottom_z, radius_mm, profile).then_some(landing)
+    let body = Beam {
+        from: contact,
+        to: Vec3::new(contact.x, contact.y, bottom_z),
+        from_radius_mm: radius_mm,
+        to_radius_mm: base_mm,
+    };
+    stands_clear(placed, &body, profile).then_some(landing)
 }
 
 /// Where the body of a support placed at `contact` begins: one `[top]` out along the
@@ -339,26 +352,12 @@ fn lean_of(normal: Vec3) -> Option<Scalar> {
     (up >= MAX_LANDING_SLOPE_DEG.to_radians().cos()).then(|| (1.0 - up * up).max(0.0).sqrt() / up)
 }
 
-/// Whether the body from `contact` down to `bottom_z` has the model out of its way.
-fn stands_clear(
-    placed: &Placed,
-    contact: Vec3,
-    bottom_z: Scalar,
-    radius_mm: Scalar,
-    profile: &SupportProfile,
-) -> bool {
-    if contact.z - bottom_z < MIN_BODY_MM {
+/// Whether `body`, a trunk dropped from its joint, has the model out of its way.
+fn stands_clear(placed: &Placed, body: &Beam, profile: &SupportProfile) -> bool {
+    if body.from.z - body.to.z < MIN_BODY_MM {
         return true;
     }
-
-    let beam = Beam {
-        from: contact,
-        to: Vec3::new(contact.x, contact.y, bottom_z),
-        from_radius_mm: radius_mm,
-        to_radius_mm: radius_mm,
-    }
-    .with_clearance(profile.clearance_mm);
-    clear(placed, &beam)
+    clear(placed, &body.with_clearance(profile.clearance_mm))
 }
 
 #[cfg(test)]
@@ -408,6 +407,7 @@ mod tests {
                 &placed,
                 Vec3::new(5.0, 5.0, 20.0),
                 profile().pillar_radius_mm(),
+                1,
                 &profile()
             )
             .is_none(),

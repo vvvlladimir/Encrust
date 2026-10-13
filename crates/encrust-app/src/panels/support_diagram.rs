@@ -61,12 +61,12 @@ impl Part {
     }
 
     /// How much of the support's length this part is drawn over: the part picked is
-    /// drawn larger, so its measurements have room.
-    fn share(self, picked: Part) -> f32 {
+    /// drawn larger, so its measurements have room. The tip follows its own length.
+    fn share(self, picked: Part, profile: &SupportProfile) -> f32 {
         let large = self == picked;
         match self {
-            Self::Tip if large => 0.36,
-            Self::Tip => 0.18,
+            Self::Tip if large => (0.15 * profile.top.length_mm).clamp(0.08, 0.5),
+            Self::Tip => (0.075 * profile.top.length_mm).clamp(0.04, 0.25),
             Self::Base if large => 0.24,
             Self::Base => 0.12,
             Self::Raft if large => 0.16,
@@ -99,7 +99,8 @@ struct Layout {
     contact: f32,
     bite: f32,
     neck: f32,
-    /// Where the pillar widens into the trunk a branch merges into; the flare when none does.
+    /// Where the trunk begins and widens towards its base: under a branch's merge, or at
+    /// the neck when the column is a trunk all the way down.
     merge: f32,
     flare: f32,
     /// Where the flare lands: the pad's face, or the raft's where the raft stands in for it.
@@ -107,7 +108,7 @@ struct Layout {
     plate: f32,
     /// Whether the raft is drawn, in the pad's place.
     raft: bool,
-    /// Half the pillar's width, and the trunk's below the merge.
+    /// Half the pillar's width, and the trunk's at its base, drawn at the cap it may grow to.
     pillar: f32,
     trunk: f32,
 }
@@ -118,18 +119,19 @@ impl Layout {
         let plate = frame.right() - INSET - WALL_W;
         let length = plate - contact;
         let raft = picked == Part::Raft || (profile.raft.enabled && picked != Part::Base);
-        let base = length * Part::Base.share(picked);
+        let base = length * Part::Base.share(picked, profile);
         let foot = match raft {
-            true => plate - length * Part::Raft.share(picked),
+            true => plate - length * Part::Raft.share(picked, profile),
             false => plate - base * 0.4,
         };
         let pillar = half(profile.middle.diameter_mm);
         let branched = picked == Part::Body && profile.branching.enabled;
-        let radius = profile.middle.diameter_mm / 2.0;
-        let trunk = match branched {
-            true => half(2.0 * profile.branching.merged_radius_mm(radius, radius)).max(pillar),
-            false => pillar,
+        // Two trunks side by side have no room to widen in the brace's picture.
+        let trunk = match picked {
+            Part::Brace => pillar,
+            _ => half(profile.branching.max_trunk_diameter_mm).max(pillar),
         };
+        let neck = contact + length * Part::Tip.share(picked, profile);
         let bite = (profile.tip.contact_depth_mm * WIDTH_PT).clamp(3.0, WALL_W - 2.0);
         let shift = if picked == Part::Brace {
             BRACE_GAP * 0.375
@@ -141,8 +143,8 @@ impl Layout {
             axis: frame.center().y - shift,
             contact,
             bite: contact - bite,
-            neck: contact + length * Part::Tip.share(picked),
-            merge: foot - base * 0.6,
+            neck,
+            merge: neck,
             flare: foot - base * 0.6,
             foot,
             plate,
@@ -151,9 +153,16 @@ impl Layout {
             trunk,
         };
         if branched {
-            at.merge = Branch::of(&at, profile).merge.x;
+            at.merge = Branch::of(&at, profile).joint.x;
         }
         at
+    }
+
+    /// Half the body's width at `x`: the pillar down to the merge, then the trunk
+    /// widening to its base at the flare.
+    fn body_half(&self, x: f32) -> f32 {
+        let along = ((x - self.merge) / (self.flare - self.merge).max(1.0)).clamp(0.0, 1.0);
+        self.pillar + (self.trunk - self.pillar) * along
     }
 
     /// The `row`th row of figures above the axis, clear of `reach` either side of it;
@@ -168,25 +177,54 @@ impl Layout {
     }
 }
 
-/// A second tip's branch: where it leaves the model beside the first tip, and where it
-/// merges into the pillar at the steepest lean the profile allows.
+/// A second tip's branch at the steepest lean the profile allows: where its tip is, which
+/// way it runs, and the joint on the pillar's top edge where its far side comes in and the
+/// trunk begins.
 struct Branch {
     start: Pos2,
-    merge: Pos2,
+    along: Vec2,
+    joint: Pos2,
 }
 
 impl Branch {
     fn of(at: &Layout, profile: &SupportProfile) -> Self {
-        let across_per_along = profile.branching.reach_per_drop();
-        let merge = at.neck + (at.flare - at.neck) * 0.55;
+        let lean = profile.branching.max_angle_rad();
+        let along = Vec2::angled(lean);
+        let joint = pos2(at.neck + (at.flare - at.neck) * 0.55, at.axis - at.pillar);
         // Under the walls' captions with a row for the angle, and clear of the first cone.
         let room = at.axis - at.top - CAPTION - FIGURE_H;
-        let side = room.min((merge - at.neck - 8.0) * across_per_along);
+        let side = room.min((joint.x - at.neck - 8.0) * lean.tan());
+        // The branch's middle runs a pillar's half-width in from the joint.
+        let inner = joint - far_side(along) * at.pillar;
+        let reach = (inner.y - (at.axis - side)).max(0.0) / along.y.max(0.1);
         Self {
-            start: pos2(merge - side / across_per_along, at.axis - side),
-            merge: pos2(merge, at.axis),
+            start: inner - along * reach,
+            along,
+            joint,
         }
     }
+
+    /// The branch's outline from the near side where it meets the pillar's top edge,
+    /// round its tip, to the joint: a tip cone a pillar wide, then the strut.
+    fn outline(&self, at: &Layout, contact: f32) -> [Pos2; 6] {
+        let (near, far) = (-far_side(self.along), far_side(self.along));
+        let cone = self.along * (contact.max(at.pillar) * 1.5);
+        let edge = self.start + near * at.pillar;
+        let meets = edge + self.along * ((at.axis - at.pillar - edge.y) / self.along.y);
+        [
+            meets,
+            edge + cone,
+            self.start + near * contact,
+            self.start + far * contact,
+            self.start + far * at.pillar + cone,
+            self.joint,
+        ]
+    }
+}
+
+/// The side of a branch running `along` that faces the plate's end of the pillar.
+fn far_side(along: Vec2) -> Vec2 {
+    vec2(along.y, -along.x)
 }
 
 /// How one outline is drawn: the accent over a wash when it is the part picked, a plain
@@ -234,8 +272,12 @@ pub fn regular(ui: &mut Ui, profile: &SupportProfile, picked: Part) {
     let pen = |part: Part| Pen::of(part, picked);
     let mut shapes = Vec::new();
     shapes.extend(pen(Part::Tip).outline(tip(&at, profile), false));
-    for outline in body(&at) {
-        shapes.extend(pen(Part::Body).outline(outline, false));
+    if at.merge > at.neck {
+        shapes.extend(joined(&at, &Branch::of(&at, profile), profile));
+    } else {
+        for outline in body(&at) {
+            shapes.extend(pen(Part::Body).outline(outline, false));
+        }
     }
     shapes.extend(pen(Part::Base).outline(flare(&at, profile), false));
     if at.raft {
@@ -267,19 +309,43 @@ fn tip(at: &Layout, profile: &SupportProfile) -> Vec<Pos2> {
     ]
 }
 
-/// The pillar, and the wider trunk it becomes below a merge.
+/// The pillar down to the merge, and the trunk widening from there to its base.
 fn body(at: &Layout) -> Vec<Vec<Pos2>> {
-    let band = |from: f32, to: f32, half: f32| {
-        corners(Rect::from_x_y_ranges(
-            from..=to,
-            at.axis - half..=at.axis + half,
-        ))
-    };
-    let mut bands = vec![band(at.neck, at.merge, at.pillar)];
-    if at.merge < at.flare {
-        bands.push(band(at.merge, at.flare, at.trunk));
+    let y = at.axis;
+    let trunk = vec![
+        pos2(at.merge, y - at.pillar),
+        pos2(at.flare, y - at.trunk),
+        pos2(at.flare, y + at.trunk),
+        pos2(at.merge, y + at.pillar),
+    ];
+    if at.merge <= at.neck {
+        return vec![trunk];
     }
-    bands
+    let pillar = Rect::from_x_y_ranges(at.neck..=at.merge, y - at.pillar..=y + at.pillar);
+    vec![corners(pillar), trunk]
+}
+
+/// The body and a branch as one solid: each piece washed on its own, one line round all.
+fn joined(at: &Layout, branch: &Branch, profile: &SupportProfile) -> Vec<Shape> {
+    let colors = theme::colors();
+    let arm = branch.outline(at, half(profile.tip.contact_diameter_mm));
+    let mut pieces = body(at);
+    pieces.push(arm.to_vec());
+    let mut shapes: Vec<Shape> = pieces
+        .into_iter()
+        .map(|piece| Shape::convex_polygon(piece, colors.accent_wash, Stroke::NONE))
+        .collect();
+    let y = at.axis;
+    let mut line = vec![pos2(at.neck, y - at.pillar)];
+    line.extend(arm);
+    line.extend([
+        pos2(at.flare, y - at.trunk),
+        pos2(at.flare, y + at.trunk),
+        pos2(at.merge, y + at.pillar),
+        pos2(at.neck, y + at.pillar),
+    ]);
+    shapes.push(Shape::closed_line(line, Stroke::new(LINE_W, colors.accent)));
+    shapes
 }
 
 /// The flare out of the body down to the foot.
@@ -362,48 +428,24 @@ fn tip_figures(painter: &Painter, at: &Layout, profile: &SupportProfile) {
     );
 }
 
-/// The pillar's width and the air it keeps, and the branch that merges into it.
+/// The pillar's width, the air it keeps, the widest its trunk's base grows, and the
+/// branch that merges into it.
 fn body_figures(painter: &Painter, at: &Layout, profile: &SupportProfile) {
     branch(painter, at, profile);
     let clear = clearance(painter, at, profile);
     let y = at.axis;
     let pillar = diameter(profile.middle.diameter_mm);
-    if at.merge >= at.flare {
-        let x = at.neck + 14.0;
-        let below = (
-            pos2(x - 4.0, at.lane(at.pillar + clear, -1)),
-            Align2::LEFT_CENTER,
-        );
-        across(
-            painter,
-            pos2(x, y),
-            at.pillar,
-            &pillar,
-            Some(Align2::LEFT_CENTER),
-            below,
-        );
-        return;
-    }
     let x = at.neck + 10.0;
     let below = (
         pos2(x + 4.0, at.lane(at.pillar + clear, -1)),
         Align2::RIGHT_CENTER,
     );
     across(painter, pos2(x, y), at.pillar, &pillar, None, below);
-    let x = at.flare - 64.0;
-    let below = (
-        pos2(x, at.lane(at.trunk + clear, -1)),
-        Align2::CENTER_CENTER,
-    );
+    let x = at.flare - 6.0;
+    let below = (pos2(x, at.lane(at.trunk + clear, -1)), Align2::RIGHT_CENTER);
     let widest = format!("Ø≤{:.2}", profile.branching.max_trunk_diameter_mm);
-    across(
-        painter,
-        pos2(x, y),
-        at.trunk,
-        &widest,
-        Some(Align2::LEFT_CENTER),
-        below,
-    );
+    let inside = Some(Align2::RIGHT_CENTER);
+    across(painter, pos2(x, y), at.body_half(x), &widest, inside, below);
 }
 
 /// The air the body keeps, dashed along its underside, its width written in the gap.
@@ -414,13 +456,13 @@ fn clearance(painter: &Painter, at: &Layout, profile: &SupportProfile) -> f32 {
     let line = [
         pos2(at.neck, y + at.pillar + clear),
         pos2(at.merge, y + at.pillar + clear),
-        pos2(at.merge, y + at.trunk + clear),
         pos2(at.flare, y + at.trunk + clear),
     ];
     let air = Stroke::new(1.0, theme::colors().text_low);
     painter.extend(Shape::dashed_line(&line, air, 4.0, 3.0));
-    let x = at.flare - 36.0;
-    let (from, to) = (pos2(x, y + at.trunk), pos2(x, y + at.trunk + clear));
+    let x = at.merge.max(at.neck + 40.0) + 4.0;
+    let edge = y + at.body_half(x);
+    let (from, to) = (pos2(x, edge), pos2(x, edge + clear));
     dimension(painter, from, to, "");
     text(
         painter,
@@ -440,30 +482,21 @@ fn branch(painter: &Painter, at: &Layout, profile: &SupportProfile) {
         text(painter, over, Align2::CENTER_CENTER, "no branching");
         return;
     }
-    let Branch { start, merge } = Branch::of(at, profile);
-    let side = (merge - start).normalized().rot90();
-    let contact = half(profile.tip.contact_diameter_mm);
-    let arm = vec![
-        start - side * contact,
-        merge - side * at.pillar,
-        merge + side * at.pillar,
-        start + side * contact,
-    ];
-    painter.extend(Pen::Picked.outline(arm, false));
+    let Branch { start, along, .. } = Branch::of(at, profile);
 
     // One line along the axis through the second tip serves the spacing and, against the
     // branch carried on past its tip, the angle, which then stands clear of the branch.
     let span_x = start.x - 14.0;
-    let lean = (merge - start).angle();
-    let back = start - Vec2::angled(lean) * 30.0;
+    let lean = along.angle();
     let guide = Stroke::new(1.0, theme::colors().text_low);
+    let level = [pos2(span_x - 4.0, start.y), start];
+    painter.extend(Shape::dashed_line(&level, guide, 4.0, 3.0));
     painter.extend(Shape::dashed_line(
-        &[pos2(span_x - 4.0, start.y), start],
+        &[start, start - along * 30.0],
         guide,
         4.0,
         3.0,
     ));
-    painter.extend(Shape::dashed_line(&[start, back], guide, 4.0, 3.0));
     let left = -std::f32::consts::PI;
     arc(painter, start, 22.0, left, left + lean);
     let label_at = start + Vec2::angled(left + lean / 2.0) * 38.0 - vec2(0.0, 3.0);

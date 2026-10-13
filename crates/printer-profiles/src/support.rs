@@ -151,6 +151,10 @@ impl SmallPillar {
     }
 }
 
+/// How many times its own base diameter a trunk may stand tall: a slenderer column buckles
+/// on the peel. See `docs/decisions/0242`.
+const TRUNK_SLENDERNESS: f32 = 15.0;
+
 /// How far a strut may lean from vertical, degrees. Past a right angle it climbs rather
 /// than descends and the merge solve stops having an answer.
 const MAX_BRANCH_ANGLE_DEG: f32 = 80.0;
@@ -171,11 +175,13 @@ pub struct Branching {
     pub max_angle_deg: f32,
     /// How far apart two tips may be and still be worth merging, millimetres.
     pub max_merge_distance_mm: f32,
-    /// How a trunk thickens as it takes on another branch: the radii of what it carries
-    /// are combined as the root of the sum of their powers. Two conserves cross-section,
-    /// three conserves volume; between them is what tree supports are usually drawn with.
+    /// How a trunk's base widens with the branches it carries: the radii of what it
+    /// carries are combined as the root of the sum of their powers. Two conserves
+    /// cross-section, three conserves volume; between them is what tree supports are
+    /// usually drawn with.
     pub trunk_exponent: f32,
-    /// However much a trunk carries, it never grows past this diameter, millimetres.
+    /// The widest a trunk's base grows, however tall it stands or much it carries,
+    /// millimetres. See `docs/decisions/0242`.
     pub max_trunk_diameter_mm: f32,
 }
 
@@ -625,6 +631,21 @@ impl SupportProfile {
         }
     }
 
+    /// Radius a trunk `height_mm` tall carrying `tips` widens to at its base, millimetres:
+    /// as wide as its height and its load ask, never past the cap nor under the pillar. It
+    /// leaves its top joint at the pillar's own width. See `docs/decisions/0242`.
+    pub fn trunk_base_radius_mm(&self, height_mm: f32, tips: usize) -> f32 {
+        let pillar = self.pillar_radius_mm();
+        let carried = (1..tips).fold(pillar, |radius, _| {
+            self.branching.merged_radius_mm(radius, pillar)
+        });
+        let slender = height_mm.max(0.0) / TRUNK_SLENDERNESS / 2.0;
+        carried
+            .max(slender)
+            .min(self.branching.max_trunk_diameter_mm / 2.0)
+            .max(pillar)
+    }
+
     pub fn flare_lower_radius_mm(&self) -> f32 {
         self.bottom.lower_diameter_mm / 2.0
     }
@@ -1051,6 +1072,37 @@ platform_thickness_mm = 1.0
         assert!(
             (radius - branching.max_trunk_diameter_mm / 2.0).abs() < 1e-5,
             "twenty merges must stop at the cap, got {radius}"
+        );
+    }
+
+    #[test]
+    fn a_trunk_base_widens_with_height_up_to_the_cap() {
+        let profile = SupportProfile::medium();
+        let short = profile.trunk_base_radius_mm(5.0, 1);
+        let tall = profile.trunk_base_radius_mm(24.0, 1);
+        let towering = profile.trunk_base_radius_mm(200.0, 1);
+        assert!(
+            (short - profile.pillar_radius_mm()).abs() < 1e-6,
+            "5 mm over a slenderness of 15 is under the 1.2 mm pillar, got {short}"
+        );
+        assert!(
+            (tall - 0.8).abs() < 1e-5,
+            "24 mm over a slenderness of 15 is 1.6 mm across, got {tall}"
+        );
+        assert!(
+            (towering - profile.branching.max_trunk_diameter_mm / 2.0).abs() < 1e-6,
+            "a 200 mm trunk stops at the cap, got {towering}"
+        );
+    }
+
+    #[test]
+    fn a_trunk_base_widens_with_the_tips_it_carries() {
+        let profile = SupportProfile::medium();
+        let one = profile.trunk_base_radius_mm(1.0, 1);
+        let four = profile.trunk_base_radius_mm(1.0, 4);
+        assert!(
+            four > one,
+            "four tips need a wider base than one even on a short trunk: {four} vs {one}"
         );
     }
 

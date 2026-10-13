@@ -211,13 +211,13 @@ fn strut(
     }
 }
 
-/// The tube under the root: the body, run all the way down through whatever foot there
-/// is so the two overlap.
+/// The tube under the root: a cone from the joint's own width out to the base its height
+/// and load ask for, run on down through whatever foot there is so the two overlap.
 fn trunk(tree: &SupportTree, profile: &SupportProfile, style: Style) -> Tube {
     let root = tree.root();
     let landing = tree.landing();
     let top = root.position;
-    let body_mm = style.body_radius_mm(root.radius_mm, profile);
+    let base_mm = trunk_base_mm(tree, profile, style);
 
     // Into the foot far enough to overlap it, and no further: a trunk run all the way to
     // the plate shows through the bottom of the pad.
@@ -239,11 +239,13 @@ fn trunk(tree: &SupportTree, profile: &SupportProfile, style: Style) -> Tube {
 
     let mut rings = Vec::with_capacity(8);
     head(&mut rings, root, profile, style, length);
-    if landing.on_model && !style.small {
-        foot_tip(&mut rings, length, body_mm, profile);
+    let tail = if landing.on_model && !style.small {
+        foot_tip(&mut rings, length, base_mm, profile).then(|| top + direction * length)
     } else {
-        push(&mut rings, length + into_foot, body_mm);
-    }
+        push(&mut rings, length, base_mm);
+        push(&mut rings, length + into_foot, base_mm);
+        None
+    };
 
     Tube {
         top,
@@ -251,7 +253,7 @@ fn trunk(tree: &SupportTree, profile: &SupportProfile, style: Style) -> Tube {
         rings,
         sides: profile.facets as usize,
         apex: apex_of(root, direction, profile, style),
-        tail: None,
+        tail,
     }
 }
 
@@ -259,15 +261,34 @@ fn trunk(tree: &SupportTree, profile: &SupportProfile, style: Style) -> Tube {
 /// what touches the part is a contact rather than the whole trunk.
 ///
 /// The cone leaves the trunk at whatever width the trunk is, so there is no rim hanging
-/// off its top. `length` runs from the root to the sunk bottom. See `docs/decisions/0124`.
-fn foot_tip(rings: &mut Vec<Ring>, length: Scalar, body_mm: Scalar, profile: &SupportProfile) {
+/// off its top. `length` runs from the root to the sunk bottom. Like the tip at the top it
+/// meets the surface on its contact and bites in to a point, which is when it answers
+/// true; a plane tip stops flat on the surface. See `docs/decisions/0124`.
+fn foot_tip(
+    rings: &mut Vec<Ring>,
+    length: Scalar,
+    body_mm: Scalar,
+    profile: &SupportProfile,
+) -> bool {
     let surface_mm = (length - profile.landing_depth_mm()).max(0.0);
     let taper_mm = profile.top_length_mm().min(surface_mm);
     let contact_mm = profile.contact_radius_mm().min(body_mm);
 
     push(rings, surface_mm - taper_mm, body_mm);
     push(rings, surface_mm, contact_mm);
-    push(rings, length, contact_mm);
+    profile.tip.shape != ContactShape::Plane
+}
+
+/// How wide the trunk is where it meets what it stands on, millimetres: its own width on
+/// the model, where it ends in a tip like any branch; see `docs/decisions/0242`.
+fn trunk_base_mm(tree: &SupportTree, profile: &SupportProfile, style: Style) -> Scalar {
+    let root = tree.root();
+    if tree.landing().on_model {
+        return style.body_radius_mm(root.radius_mm, profile);
+    }
+    let height = (root.position - trunk_bottom(tree, profile)).length();
+    let base = profile.trunk_base_radius_mm(height, tree.tip_count());
+    style.body_radius_mm(base.max(root.radius_mm), profile)
 }
 
 /// Where the trunk under the root comes to rest, in plate coordinates.
@@ -290,7 +311,7 @@ fn foot(tree: &SupportTree, profile: &SupportProfile, style: Style) -> Option<Tu
 
     let shape = profile.bottom.shape;
     let rim_mm = profile.base_radius_mm();
-    let trunk_mm = style.body_radius_mm(tree.root().radius_mm, profile);
+    let trunk_mm = trunk_base_mm(tree, profile, style);
     let top_mm = foot_top_radius_mm(profile, trunk_mm);
 
     let height = profile.base_height_mm();
@@ -334,7 +355,7 @@ fn plate_radius_mm(profile: &SupportProfile, trunk_mm: Scalar) -> Scalar {
 /// `docs/decisions/0130`.
 fn flare(tree: &SupportTree, profile: &SupportProfile, style: Style) -> Option<Tube> {
     let landing = tree.landing();
-    let trunk_mm = style.body_radius_mm(tree.root().radius_mm, profile);
+    let trunk_mm = trunk_base_mm(tree, profile, style);
     let upper_mm = trunk_mm;
     // Inside the pad at every depth it reaches, so it never shows through its side.
     let widest_mm = if profile.bottom.shape.is_round() {
@@ -1090,6 +1111,33 @@ mod tests {
     }
 
     #[test]
+    fn a_support_standing_on_the_model_bites_into_it_to_a_point() {
+        let mut profile = profile();
+        profile.small_pillar.enabled = false;
+        let trees = model_to_model(&profile);
+        assert!(trees[0].landing().on_model, "it stands on the shelf");
+
+        let mesh = meshed(&trees, Profiles::single(&profile));
+        let lowest = mesh
+            .vertices
+            .iter()
+            .copied()
+            .min_by(|a, b| a.z.total_cmp(&b.z))
+            .expect("a support has vertices");
+        let sunk = 10.0 - profile.landing_depth_mm();
+        assert!(
+            (lowest.z - sunk).abs() < 1e-3,
+            "the bite goes the tip's own depth into the 10 mm shelf, got {}",
+            lowest.z
+        );
+        assert!(
+            widest_below(&mesh, Vec3::new(5.0, 5.0, 0.0), sunk) < 1e-3,
+            "it ends in a point on its axis, as the tip at the top does, not a flat disc"
+        );
+        assert_eq!(diagnose(&mesh).boundary_edges, 0);
+    }
+
+    #[test]
     fn a_support_standing_on_the_model_touches_it_with_a_contact_not_a_trunk() {
         let mut profile = profile();
         profile.small_pillar.enabled = false;
@@ -1128,18 +1176,18 @@ mod tests {
     }
 
     #[test]
-    fn the_cone_under_a_trunk_leaves_it_at_the_trunk_s_own_width() {
+    fn a_trunk_on_the_model_keeps_its_width_down_to_its_tip() {
         let profile = profile();
         let trees = merged_on_the_model(&profile);
         let [tree] = &trees[..] else {
             panic!("three tips this close merge into one trunk");
         };
         assert!(tree.landing().on_model, "it stands on the shelf");
-        let trunk_mm = tree.root().radius_mm;
+        let trunk_mm = trunk_base_mm(tree, &profile, Style::of(tree, &profile));
         assert!(
-            trunk_mm > profile.pillar_radius_mm(),
-            "a merged trunk is wider than a pillar, which is the case the rim used to \
-             hang off"
+            (trunk_mm - profile.pillar_radius_mm()).abs() < 1e-6,
+            "a trunk on the model keeps the branches' width down to its tip, however many \
+             it carries, got {trunk_mm}"
         );
 
         let mesh = meshed(&trees, Profiles::single(&profile));
@@ -1157,6 +1205,38 @@ mod tests {
                 "the cone starts at the trunk's width, not at a rim under it: {width} mm                  against {trunk_mm} mm"
             );
         }
+    }
+
+    #[test]
+    fn a_trunk_widens_from_its_joint_down_to_its_base() {
+        let profile = profile();
+        let trees = trees_on(
+            &[
+                SupportPoint::new(Vec3::new(10.0, 10.0, 40.0)),
+                SupportPoint::new(Vec3::new(14.0, 10.0, 40.0)),
+            ],
+            &Mesh::default(),
+            Transform::default(),
+            Profiles::single(&profile),
+        );
+        let [tree] = &trees[..] else {
+            panic!("two tips this close merge into one trunk");
+        };
+        let tube = trunk(tree, &profile, Style::of(tree, &profile));
+        let pillar = profile.pillar_radius_mm();
+        let last = tube.rings[tube.rings.len() - 1].radius_mm;
+        let height = (tree.root().position - trunk_bottom(tree, &profile)).length();
+        let base = profile.trunk_base_radius_mm(height, 2);
+        assert!(
+            tube.rings
+                .iter()
+                .any(|ring| (ring.radius_mm - pillar).abs() < 1e-5),
+            "the trunk leaves its joint at the branches' own width of {pillar} mm"
+        );
+        assert!(
+            (last - base).abs() < 1e-5 && last > pillar,
+            "it widens to the {base} mm its height and two tips ask for, got {last}"
+        );
     }
 
     #[test]
