@@ -346,6 +346,7 @@ Grouped by what the decision governs; the number is still the order it was taken
 | [0232](0232-the-start-page-offers-resin-test-prints-of-its-own.md) | The start page offers resin test prints of its own, and leaves the machine to the top bar | Accepted; the row of tests under the recent files is superseded by 0234 |
 | [0233](0233-settings-is-a-window-and-a-profile-travels-as-its-file.md) | Make Settings a window like Machine and resin, and carry a profile out as its file | Accepted; where the import is done is superseded by 0235 |
 | [0234](0234-recent-files-are-pictured-and-share-a-shelf-with-test-prints.md) | Show the recent files as pictures, and switch between them and the test prints | Accepted |
-| [0192](0192-a-tool-value-is-remembered-and-taken-back-on-its-own-entry.md) | A tool value is remembered between runs and taken back on its own entry | Accepted |
+| [0192](0192-a-tool-value-is-remembered-and-taken-back-on-its-own-entry.md) | A tool value is remembered between runs and taken back on its own entry | Accepted; a tool value as always an entry of its own is superseded by 0257 |
+| [0257](0257-what-an-edit-sets-off-is-part-of-it.md) | Record what an edit sets off as part of it, and do it again after an undo | Accepted |
 | [0193](0193-the-window-reads-its-own-input-before-egui-does.md) | The window reads its own input before egui does | Accepted; Tab and the keys of a focused control are superseded by 0229 |
 | [0202](0202-an-opened-file-closes-when-the-plate-changes.md) | An opened sliced file closes when the plate changes | Accepted |

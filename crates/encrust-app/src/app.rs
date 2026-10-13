@@ -291,6 +291,21 @@ impl SlicerApp {
         self.tools.drain.stale();
     }
 
+    /// Ends the frame's edits and puts them on the history. What follows from an edit by
+    /// itself — a model settling onto its raft once its supports go — is done first, so it
+    /// is part of that edit: done a frame later it would be one of its own, which the
+    /// next undo would put back and the frame after it do again.
+    fn record(&mut self, frame: Frame) {
+        self.tools.supports.settle_on_raft(&mut self.doc.scene);
+        self.doc.history.observe(
+            &self.doc.scene,
+            &ToolSettings::of(&self.tools, &self.machine.slicing),
+            self.machine.slicing.chosen(),
+            frame,
+        );
+        self.remember_choices(frame.settled && !frame.typing);
+    }
+
     /// Rebuilds the columns and the painted patches of every object whose placement,
     /// points, paint or profile moved under them, so that what the viewport draws is what
     /// would be sliced.
@@ -441,13 +456,7 @@ impl eframe::App for SlicerApp {
             settled: ui.ctx().input(|input| !input.pointer.any_down()),
             typing: ui.ctx().memory(|memory| memory.focused().is_some()),
         };
-        self.doc.history.observe(
-            &self.doc.scene,
-            &ToolSettings::of(&self.tools, &self.machine.slicing),
-            self.machine.slicing.chosen(),
-            frame,
-        );
-        self.remember_choices(frame.settled && !frame.typing);
+        self.record(frame);
     }
 
     fn on_exit(&mut self) {
@@ -565,6 +574,45 @@ mod tests {
             harness.run_steps(2);
             assert_eq!(harness.state().tool, tool, "Enter on {}", tool.label());
         }
+    }
+
+    #[test]
+    fn taking_every_support_off_a_rafted_model_is_undone_in_one_step() {
+        let mut app = super::states::app(true);
+        app.tools.supports.raft.enabled = true;
+        let resting = Frame {
+            settled: true,
+            typing: false,
+        };
+        app.record(resting);
+        let object = &mut app.doc.scene.objects_mut()[0];
+        object.transform.translation.z = 10.0;
+        let transform = object.transform;
+        object
+            .supports
+            .add(core_geometry::Vec3::new(5.0, 5.0, 10.0), transform, 0);
+        app.record(resting);
+        let stood_mm = app.doc.scene.objects()[0].transform.translation.z;
+        assert!(stood_mm > 10.0, "the raft stood it up");
+
+        app.doc.scene.objects_mut()[0].supports.clear();
+        app.record(resting);
+        app.record(resting);
+        assert!(
+            app.doc
+                .history
+                .undo(&mut app.doc.scene, &mut app.tools, &mut app.machine.slicing)
+        );
+        app.record(resting);
+        app.record(resting);
+
+        let object = &app.doc.scene.objects()[0];
+        assert_eq!(object.supports.point_count(), 1, "the support is back");
+        assert_eq!(object.transform.translation.z, stood_mm, "on its raft");
+        assert!(
+            app.doc.history.can_redo(),
+            "and nothing was recorded over it"
+        );
     }
 
     #[test]
