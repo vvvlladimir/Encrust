@@ -166,8 +166,9 @@ impl ViewportResources {
             if piece.faces.start < draw.faces.start || piece.faces.end > draw.faces.end {
                 continue;
             }
-            render_pass.set_vertex_buffer(0, piece.buffer.slice(..));
-            render_pass.draw(0..piece.vertices, instance..instance + 1);
+            render_pass.set_vertex_buffer(0, piece.vertices.slice(..));
+            render_pass.set_index_buffer(piece.indices.slice(..), wgpu::IndexFormat::Uint32);
+            render_pass.draw_indexed(0..piece.index_count, 0, instance..instance + 1);
         }
     }
 }

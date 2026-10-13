@@ -108,9 +108,14 @@ object, the word, and the shadow last.
 
 ## Vertex layouts
 
-Models are a flat-shaded triangle list with no index buffer: each face becomes three
-vertices carrying that face's normal, because sharing vertices would need averaged normals
-and round off exactly the facets a sliceable model is made of.
+Models are drawn indexed and flat-shaded. Averaged normals would round off exactly the
+facets a sliceable model is made of, so the normal is read `flat`, off a face's first
+corner alone, and every face is turned to start on a corner no other face starts on; the
+other two are shared. A closed mesh has about half as many vertices as faces, so it lays
+out one vertex a face plus three indices: 36 bytes a face against the 72 a corner per face
+took. The normal is not read off the screen-space derivatives of the position instead,
+which would halve it again: on the machine this was built on the same frame came out
+different from one run to the next.
 
 | Buffer | Step | Contents |
 |---|---|---|

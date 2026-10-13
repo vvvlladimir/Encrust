@@ -1,10 +1,13 @@
+use std::ops::Range;
+
 use bytemuck::{Pod, Zeroable};
 use core_geometry::{Mat3, Mat4, Mesh, Transform, UvMap, Vec2, Vec3};
 use egui::Color32;
 
 use crate::ui::theme;
 
-/// One corner of one triangle, carrying its face normal.
+/// One corner of a mesh, shared by the faces that meet at it, carrying the normal of the
+/// one face it leads; see `docs/design/viewport.md`.
 #[repr(C)]
 #[derive(Debug, Clone, Copy, Pod, Zeroable)]
 pub struct ModelVertex {
@@ -25,26 +28,65 @@ impl ModelVertex {
     }
 }
 
-/// Expands `faces` of an indexed mesh into a flat-shaded triangle list.
-///
-/// Vertices are not shared between faces: a sliceable model is a hard-surfaced object and
-/// per-face normals show its facets honestly, including the ones that should not be there.
-/// A range rather than the whole mesh, because a cavity runs to millions of triangles and
-/// goes to the card in pieces; see `docs/decisions/0070-a-mesh-is-drawn-in-buffer-sized-pieces.md`.
-pub fn flat_shaded_vertices(mesh: &Mesh, faces: std::ops::Range<usize>) -> Vec<ModelVertex> {
-    let mut vertices = Vec::with_capacity(faces.len() * 3);
-    for triangle in faces.filter_map(|face| mesh.triangle(face)) {
+/// `faces` of a mesh as its corners and the triangles over them, each turned to start on
+/// the corner carrying its normal. A range, since a cavity goes to the card in pieces (ADR 0070).
+pub fn indexed_vertices(mesh: &Mesh, faces: Range<usize>) -> (Vec<ModelVertex>, Vec<u32>) {
+    let mut corners = Corners {
+        local: vec![u32::MAX; mesh.vertices.len()],
+        vertices: Vec::new(),
+        leading: Vec::new(),
+    };
+    let mut indices = Vec::with_capacity(faces.len() * 3);
+    for face in faces {
+        let Some(triangle) = mesh.triangle(face) else {
+            continue;
+        };
         // A degenerate face has no normal. It is kept so face indices still line up with
         // what the diagnostics reported, and shaded as if it faced up.
         let normal = normalized_or_up(triangle.normal_unnormalized()).to_array();
-        for position in [triangle.a, triangle.b, triangle.c] {
-            vertices.push(ModelVertex {
-                position: position.to_array(),
-                normal,
-            });
-        }
+        let at = mesh.faces[face].map(|corner| corners.of(mesh, corner));
+        let first = match (0..3).find(|&turn| !corners.leading[at[turn] as usize]) {
+            Some(turn) => {
+                corners.vertices[at[turn] as usize].normal = normal;
+                [at[turn], at[(turn + 1) % 3], at[(turn + 2) % 3]]
+            }
+            None => [corners.copy_of(at[0]), at[1], at[2]],
+        };
+        corners.leading[first[0] as usize] = true;
+        corners.vertices[first[0] as usize].normal = normal;
+        indices.extend(first);
     }
-    vertices
+    (corners.vertices, indices)
+}
+
+/// The corners of one range laid out so far, and which of them already lead a face.
+struct Corners {
+    local: Vec<u32>,
+    vertices: Vec<ModelVertex>,
+    leading: Vec<bool>,
+}
+
+impl Corners {
+    /// The shared corner standing for mesh vertex `corner`, laid out on first use.
+    fn of(&mut self, mesh: &Mesh, corner: u32) -> u32 {
+        let at = &mut self.local[corner as usize];
+        if *at == u32::MAX {
+            *at = self.vertices.len() as u32;
+            self.vertices.push(ModelVertex {
+                position: mesh.vertices[corner as usize].to_array(),
+                normal: [0.0; 3],
+            });
+            self.leading.push(false);
+        }
+        *at
+    }
+
+    /// A second corner where `corner` stands, for a face whose every corner already leads.
+    fn copy_of(&mut self, corner: u32) -> u32 {
+        self.vertices.push(self.vertices[corner as usize]);
+        self.leading.push(false);
+        (self.vertices.len() - 1) as u32
+    }
 }
 
 /// One corner of one triangle of a textured model: its face normal, where it lands on the
@@ -74,7 +116,7 @@ impl ReliefVertex {
     }
 }
 
-/// The same flat-shaded triangles as [`flat_shaded_vertices`], carrying the texture
+/// The triangles of a textured model, one corner of each a vertex, carrying the texture
 /// coordinates of each corner so the viewport can show what a relief would press in.
 pub fn textured_vertices(
     mesh: &Mesh,
@@ -271,29 +313,96 @@ mod tests {
     use super::*;
     use core_geometry::{Quat, Vec3};
 
-    fn one_triangle_facing_up() -> Mesh {
-        Mesh::new(vec![Vec3::ZERO, Vec3::X, Vec3::Y], vec![[0, 1, 2]])
+    /// The face each index triple stands for, by its normal off its first corner.
+    fn led(vertices: &[ModelVertex], indices: &[u32]) -> Vec<[f32; 3]> {
+        indices
+            .chunks(3)
+            .map(|face| vertices[face[0] as usize].normal)
+            .collect()
     }
 
     #[test]
-    fn every_face_becomes_three_vertices() {
-        let mesh = one_triangle_facing_up();
-        let vertices = flat_shaded_vertices(&mesh, 0..mesh.faces.len());
-        assert_eq!(vertices.len(), 3);
-        for vertex in vertices {
-            assert_eq!(vertex.normal, [0.0, 0.0, 1.0]);
+    fn a_corner_two_faces_share_is_sent_once() {
+        let square = Mesh::new(
+            vec![Vec3::ZERO, Vec3::X, Vec3::new(1.0, 1.0, 0.0), Vec3::Y],
+            vec![[0, 1, 2], [0, 2, 3]],
+        );
+        let (vertices, indices) = indexed_vertices(&square, 0..2);
+        assert_eq!(vertices.len(), 4, "a square is four corners, not six");
+        assert_ne!(
+            indices[0], indices[3],
+            "each face leads from a corner of its own"
+        );
+        assert_eq!(led(&vertices, &indices), [[0.0, 0.0, 1.0]; 2]);
+    }
+
+    /// A closed tetrahedron has four corners and four faces, each facing its own way, so
+    /// every face needs a leading corner and the corners just go round.
+    #[test]
+    fn every_face_of_a_closed_body_leads_with_its_own_normal() {
+        let tetrahedron = Mesh::new(
+            vec![Vec3::ZERO, Vec3::X, Vec3::Y, Vec3::Z],
+            vec![[0, 2, 1], [0, 1, 3], [0, 3, 2], [1, 2, 3]],
+        );
+        let (vertices, indices) = indexed_vertices(&tetrahedron, 0..4);
+        let third = 1.0 / 3.0_f32.sqrt();
+        let expected = [
+            [0.0, 0.0, -1.0],
+            [0.0, -1.0, 0.0],
+            [-1.0, 0.0, 0.0],
+            [third, third, third],
+        ];
+        for (got, want) in led(&vertices, &indices).iter().zip(expected) {
+            let off = got
+                .iter()
+                .zip(want)
+                .map(|(g, w)| (g - w).abs())
+                .fold(0.0, f32::max);
+            assert!(
+                off < 1e-6,
+                "each face reads its own normal: {got:?} against {want:?}"
+            );
+        }
+        assert!(
+            vertices.len() <= 8,
+            "corners are shared: {} for four",
+            vertices.len()
+        );
+        for (face, original) in indices.chunks(3).zip(&tetrahedron.faces) {
+            let got = [0, 1, 2].map(|k| vertices[face[k] as usize].position);
+            let at = original.map(|v| tetrahedron.vertices[v as usize].to_array());
+            let turns = [at, [at[1], at[2], at[0]], [at[2], at[0], at[1]]];
+            assert!(
+                turns.contains(&got),
+                "a face is turned round, never flipped"
+            );
         }
     }
 
     #[test]
-    fn a_degenerate_face_still_produces_vertices() {
-        let mesh = Mesh::new(vec![Vec3::ZERO, Vec3::X, Vec3::X], vec![[0, 1, 2]]);
-        assert_eq!(flat_shaded_vertices(&mesh, 0..mesh.faces.len()).len(), 3);
+    fn a_range_is_numbered_from_its_own_corners() {
+        let square = Mesh::new(
+            vec![Vec3::ZERO, Vec3::X, Vec3::new(1.0, 1.0, 0.0), Vec3::Y],
+            vec![[0, 1, 2], [0, 2, 3]],
+        );
+        let (vertices, indices) = indexed_vertices(&square, 1..2);
+        assert_eq!(vertices.len(), 3);
+        assert_eq!(indices, [0, 1, 2]);
+        assert_eq!(vertices[2].position, [0.0, 1.0, 0.0]);
     }
 
     #[test]
-    fn an_empty_mesh_produces_no_vertices() {
-        assert!(flat_shaded_vertices(&Mesh::default(), 0..0).is_empty());
+    fn a_degenerate_face_is_still_sent_facing_up() {
+        let mesh = Mesh::new(vec![Vec3::ZERO, Vec3::X, Vec3::X], vec![[0, 1, 2]]);
+        let (vertices, indices) = indexed_vertices(&mesh, 0..1);
+        assert_eq!(indices.len(), 3);
+        assert_eq!(led(&vertices, &indices), [[0.0, 0.0, 1.0]]);
+    }
+
+    #[test]
+    fn an_empty_mesh_produces_nothing() {
+        let (vertices, indices) = indexed_vertices(&Mesh::default(), 0..0);
+        assert!(vertices.is_empty() && indices.is_empty());
     }
 
     #[test]

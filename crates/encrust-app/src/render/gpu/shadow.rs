@@ -136,8 +136,9 @@ impl ViewportResources {
                 if piece.faces.start < draw.faces.start || piece.faces.end > draw.faces.end {
                     continue;
                 }
-                pass.set_vertex_buffer(0, piece.buffer.slice(..));
-                pass.draw(0..piece.vertices, instance..instance + 1);
+                pass.set_vertex_buffer(0, piece.vertices.slice(..));
+                pass.set_index_buffer(piece.indices.slice(..), wgpu::IndexFormat::Uint32);
+                pass.draw_indexed(0..piece.index_count, 0, instance..instance + 1);
             }
         }
         pass.set_pipeline(&self.shadow.pipelines.silhouette_relief);
