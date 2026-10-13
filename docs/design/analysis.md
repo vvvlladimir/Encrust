@@ -78,7 +78,10 @@ picture.
 
 A **suction cup** is a hole: dark pixels a layer closes in on every side, found per layer by
 joining the dark runs between two lit ones across rows and dropping every group that reaches
-the panel's edge or a row past the lit ones. A hole is *vented* when any of its pixels lies
+the panel's edge or a row past the lit ones. That reads one layer alone, so it is done as
+the layer is cured, in parallel; only the linking below runs in print order, and on twenty
+parts spread over a plate the order-bound fold fell from 672 ms to 35 ms
+(`cargo bench -p core-engine --bench plate`). A hole is *vented* when any of its pixels lies
 over open air in the layer under it, or over a hole that was; the first layer lies on the
 plate, so its holes are sealed. A sealed hole carries its cup up the stack while it stays
 sealed, adding its area times the layer's thickness; the cup is named once, at the layer it

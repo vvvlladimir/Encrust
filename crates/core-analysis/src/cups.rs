@@ -1,4 +1,4 @@
-use crate::layer::Cured;
+use crate::layer::{Cured, Span};
 
 /// A sealed hole narrower than this at its widest pulls too little to name, mm^2: a disc
 /// some 5.6 mm across, which a full vacuum holds with about 2.5 N.
@@ -8,7 +8,7 @@ pub const MIN_CUP_MM2: f32 = 25.0;
 pub const MIN_CUP_MM3: f32 = 20.0;
 
 /// A run of a row's dark pixels between two lit ones, and the hole it is part of.
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 struct Gap {
     row: u32,
     x0: u32,
@@ -17,7 +17,7 @@ struct Gap {
 }
 
 /// Dark pixels closed in on every side by what a layer cures, as one region.
-#[derive(Debug, Clone, Copy, Default)]
+#[derive(Debug, Clone, Copy, Default, PartialEq)]
 struct Hole {
     /// Whether air reaches it from below, through the layers already printed.
     vented: bool,
@@ -25,6 +25,14 @@ struct Hole {
     pixels: u64,
     x_px: f64,
     y_px: f64,
+}
+
+/// The holes of one layer, read off that layer alone. That is what lets them be found
+/// while layers are cured in parallel, leaving only their linking up the stack in order.
+#[derive(Debug, Clone, Default, PartialEq)]
+pub(crate) struct Holes {
+    gaps: Vec<Gap>,
+    holes: Vec<Hole>,
 }
 
 /// One sealed hole, followed up the stack while it stays sealed.
@@ -51,8 +59,9 @@ impl Cups {
     /// Reads the holes of layer `index`, `thickness_mm` thick, against the layer under it,
     /// or the plate where there is none.
     pub fn push(&mut self, index: usize, layer: &Cured, below: Option<&Cured>, thickness_mm: f32) {
-        let (gaps, mut holes) = holes(layer);
-        for gap in &gaps {
+        let Holes { gaps, holes } = layer.holes();
+        let mut holes = holes.clone();
+        for gap in gaps {
             let hole = &mut holes[gap.hole as usize];
             let (vented, cup) = self.under(gap, below);
             hole.vented |= vented;
@@ -131,60 +140,83 @@ fn row_range<T>(sorted: &[T], row: u32, row_of: impl Fn(&T) -> u32) -> std::ops:
     start..end
 }
 
-/// The dark runs of `layer` between two lit ones, grouped into holes, with the regions
-/// that reach the panel's edge left out: those are open air.
-fn holes(layer: &Cured) -> (Vec<Gap>, Vec<Hole>) {
-    let spans = layer.spans();
-    let mut gaps: Vec<Gap> = Vec::new();
-    let mut start = 0;
-    while start < spans.len() {
-        let row = spans[start].row;
-        let mut end = start;
-        while end + 1 < spans.len() && spans[end + 1].row == row {
-            if spans[end + 1].x0 > spans[end].x1 {
-                gaps.push(Gap {
-                    row,
-                    x0: spans[end].x1,
-                    x1: spans[end + 1].x0,
-                    hole: 0,
-                });
-            }
-            end += 1;
-        }
-        start = end + 1;
-    }
-
-    let outside = gaps.len();
-    let mut parent: Vec<usize> = (0..=outside).collect();
-    for (index, gap) in gaps.iter().enumerate() {
-        for next in [gap.row.checked_sub(1), gap.row.checked_add(1)] {
-            let lit = next
-                .filter(|next| *next < layer.height())
-                .map(|next| row_range(spans, next, |span| span.row))
-                .filter(|range| !range.is_empty());
-            let Some(lit) = lit else {
-                join(&mut parent, index, outside);
-                continue;
-            };
-            // Past the row's first or last lit pixel is open air.
-            if gap.x0 < spans[lit.start].x0 || gap.x1 > spans[lit.end - 1].x1 {
-                join(&mut parent, index, outside);
-            }
-            let row = spans[lit.start].row;
-            for other in row_range(&gaps, row, |other| other.row) {
-                if gaps[other].x0 < gap.x1 && gap.x0 < gaps[other].x1 {
-                    join(&mut parent, index, other);
+impl Holes {
+    /// The dark runs between two lit ones of a layer's `spans`, in reading order on a
+    /// panel `height` rows tall, grouped into holes, with the regions that reach the
+    /// panel's edge left out: those are open air.
+    pub(crate) fn of(spans: &[Span], height: u32) -> Self {
+        let gaps = gaps_between(spans);
+        let rows = height.max(spans.last().map_or(0, |span| span.row + 1));
+        let lit = row_starts(spans.iter().map(|span| span.row), rows);
+        let dark = row_starts(gaps.iter().map(|gap| gap.row), rows);
+        let outside = gaps.len();
+        let mut parent: Vec<usize> = (0..=outside).collect();
+        for (index, gap) in gaps.iter().enumerate() {
+            for next in [gap.row.checked_sub(1), gap.row.checked_add(1)] {
+                let Some(next) = next.filter(|next| *next < height) else {
+                    join(&mut parent, index, outside);
+                    continue;
+                };
+                let lit = row_of(&lit, next);
+                if lit.is_empty() {
+                    join(&mut parent, index, outside);
+                    continue;
+                }
+                // Past the row's first or last lit pixel is open air.
+                if gap.x0 < spans[lit.start].x0 || gap.x1 > spans[lit.end - 1].x1 {
+                    join(&mut parent, index, outside);
+                }
+                for other in row_of(&dark, next) {
+                    if gaps[other].x0 < gap.x1 && gap.x0 < gaps[other].x1 {
+                        join(&mut parent, index, other);
+                    }
                 }
             }
         }
+        numbered(&gaps, &mut parent, outside)
     }
+}
 
-    let outside_root = find(&mut parent, outside);
+fn gaps_between(spans: &[Span]) -> Vec<Gap> {
+    spans
+        .windows(2)
+        .filter(|pair| pair[0].row == pair[1].row && pair[1].x0 > pair[0].x1)
+        .map(|pair| Gap {
+            row: pair[0].row,
+            x0: pair[0].x1,
+            x1: pair[1].x0,
+            hole: 0,
+        })
+        .collect()
+}
+
+/// Where each row's entries start in a list ordered by row, with where the last one ends
+/// after them: row `r` is `starts[r]..starts[r + 1]`. One pass, where a search per gap
+/// was most of what a plate of many parts spent here.
+fn row_starts(rows: impl Iterator<Item = u32>, height: u32) -> Vec<usize> {
+    let mut starts = vec![0; height as usize + 1];
+    for row in rows {
+        starts[row as usize + 1] += 1;
+    }
+    for row in 1..starts.len() {
+        starts[row] += starts[row - 1];
+    }
+    starts
+}
+
+fn row_of(starts: &[usize], row: u32) -> std::ops::Range<usize> {
+    starts[row as usize]..starts[row as usize + 1]
+}
+
+/// The gaps not joined to the outside, each with the number of the hole it is part of,
+/// and what each hole holds.
+fn numbered(gaps: &[Gap], parent: &mut [usize], outside: usize) -> Holes {
+    let outside_root = find(parent, outside);
     let mut numbered = vec![u32::MAX; outside + 1];
     let mut holes: Vec<Hole> = Vec::new();
-    let mut kept = Vec::with_capacity(gaps.len());
+    let mut kept = Vec::new();
     for (index, gap) in gaps.iter().enumerate() {
-        let root = find(&mut parent, index);
+        let root = find(parent, index);
         if root == outside_root {
             continue;
         }
@@ -202,7 +234,7 @@ fn holes(layer: &Cured) -> (Vec<Gap>, Vec<Hole>) {
             ..*gap
         });
     }
-    (kept, holes)
+    Holes { gaps: kept, holes }
 }
 
 fn find(parent: &mut [usize], mut node: usize) -> usize {
