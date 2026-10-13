@@ -34,6 +34,7 @@ workspace = true
 [dev-dependencies]
 criterion.workspace = true
 format-chitu.workspace = true
+rayon.workspace = true
 
 [[bench]]
 name = "plate"

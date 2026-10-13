@@ -6,12 +6,16 @@
 use std::io::Cursor;
 use std::sync::Arc;
 
+use core_analysis::{Cured, Measured, cure};
 use core_engine::{Cutting, Model, Plate, Run};
 use core_format::ExposurePlan;
 use core_geometry::{Mesh, Scalar, Transform, Vec3};
 use core_pipeline::{PanelOverrides, SlicedFormat};
-use criterion::{Criterion, criterion_group, criterion_main};
+use core_raster::{LayerRuns, RasterSettings, Rasterizer, ScanlineRasterizer};
+use core_slicer::{Layer, SliceError};
+use criterion::{BatchSize, Criterion, criterion_group, criterion_main};
 use printer_profiles::{Catalogue, MaterialProfile};
+use rayon::prelude::*;
 
 /// Roughly 80k triangles over 20 mm of height: a detailed miniature at print resolution.
 fn sphere(radius: Scalar, rings: usize, segments: usize) -> Mesh {
@@ -120,5 +124,75 @@ fn plates(c: &mut Criterion) {
     group.finish();
 }
 
-criterion_group!(benches, plates);
+/// The stages `measure` runs, one at a time, over the whole stack held at once.
+fn stages(c: &mut Criterion) {
+    let mut group = c.benchmark_group("plate_stage");
+    group.sample_size(10);
+
+    for copies in [1, 20] {
+        let plate = plate_of(copies);
+        let run = Run::of(&plate).expect("the plate has geometry");
+        let panel = *run.panel();
+        group.bench_function(format!("slice_{copies}_spheres"), |b| {
+            b.iter(|| {
+                run.windows()
+                    .stream(run.mesh(), |sliced| {
+                        std::hint::black_box(sliced);
+                        Ok::<_, SliceError>(())
+                    })
+                    .expect("the plate slices");
+            });
+        });
+
+        let layers = run
+            .windows()
+            .cut(run.mesh(), 0..run.layer_count())
+            .expect("the plate slices")
+            .layers;
+        group.bench_function(format!("raster_{copies}_spheres"), |b| {
+            b.iter(|| rastered(&layers, &panel));
+        });
+
+        let runs = rastered(&layers, &panel);
+        group.bench_function(format!("cure_{copies}_spheres"), |b| {
+            b.iter(|| cured(&runs, &panel));
+        });
+
+        let cured = cured(&runs, &panel);
+        group.bench_function(format!("fold_{copies}_spheres"), |b| {
+            b.iter_batched(
+                || cured.clone(),
+                |cured| {
+                    let mut measured = Measured::new(plate.material.bottom_layers as usize);
+                    for layer in cured {
+                        measured.push(layer, plate.cutting.layer_height_mm);
+                    }
+                    measured.finish()
+                },
+                BatchSize::LargeInput,
+            );
+        });
+    }
+    group.finish();
+}
+
+fn rastered(layers: &[Layer], panel: &RasterSettings) -> Vec<LayerRuns> {
+    layers
+        .par_iter()
+        .map(|layer| {
+            ScanlineRasterizer
+                .rasterize(layer, panel)
+                .expect("the plate fits the panel")
+                .runs
+        })
+        .collect()
+}
+
+fn cured(runs: &[LayerRuns], panel: &RasterSettings) -> Vec<Cured> {
+    runs.par_iter()
+        .map(|runs| cure(runs, panel.pitch))
+        .collect()
+}
+
+criterion_group!(benches, plates, stages);
 criterion_main!(benches);
