@@ -26,8 +26,8 @@ max_overhang_deg = 45.0
 contact_spacing_mm = 4.0
 
 [tip]
-# cone, sphere or plane.
-shape = "cone"
+# sphere or plane.
+shape = "plane"
 contact_diameter_mm = 0.8
 contact_depth_mm = 0.4
 

@@ -162,9 +162,8 @@ fn degrees(
 /// The contact with the model and the cone that widens out of it.
 fn top(ui: &mut egui::Ui, profile: &mut SupportProfile, saved: Option<&SupportProfile>) {
     let segments = [
-        Segment::new(ContactShape::Cone, "Cone"),
-        Segment::new(ContactShape::Sphere, "Sphere"),
         Segment::new(ContactShape::Plane, "Plane"),
+        Segment::new(ContactShape::Sphere, "Sphere"),
     ];
     let width = ui.available_width();
     Segmented::new(&segments)

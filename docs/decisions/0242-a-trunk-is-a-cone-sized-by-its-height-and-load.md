@@ -1,4 +1,4 @@
-# 0242. Make a trunk a cone, its base sized by its height and its load up to the cap
+# 0242. Make a trunk a cone sized by its height and load, and no brace wider than it
 
 - **Status:** Accepted
 - **Date:** 2026-10-13
@@ -34,6 +34,11 @@ from the joint's width to the base the height asks for, and that base sets the p
 on the model it sweeps the joint's width. A candidate merge is asked about with the tips of
 both fronts.
 
+A brace is never wider than either trunk where it meets it: its radius is the least of
+`bracing.diameter_mm / 2` and the two trunks' meshed radii at its two ends, each trunk at
+its own group's profile. A brace that would have swallowed a thin trunk — a small pillar,
+or a pillar under a thick brace — is thinned to it rather than dropped.
+
 ## Consequences
 
 Tall supports stand wider at the plate and narrower where they leave the model, so the
@@ -42,6 +47,11 @@ and meaning for the load; no profile changes. A saved tree keeps its node radii,
 tree grown before this records as merged widths; it still meshes, at those widths.
 
 ## Alternatives considered
+
+### Dropping a brace wider than a trunk, or forbidding it in the profile
+
+Dropping it leaves the thinnest trunks, the ones that sway most, untied. A profile rule
+that the brace be no wider than the pillar cannot see a small pillar or a trunk's cone.
 
 ### A fixed cone angle
 

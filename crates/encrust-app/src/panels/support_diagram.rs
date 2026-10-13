@@ -295,16 +295,14 @@ pub fn regular(ui: &mut Ui, profile: &SupportProfile, picked: Part) {
     }
 }
 
-/// The bite into the model and the cone widening out of it, as one outline.
+/// The cone from the contact, pushed its bite into the model, out to the pillar.
 fn tip(at: &Layout, profile: &SupportProfile) -> Vec<Pos2> {
     let contact = half(profile.tip.contact_diameter_mm);
     let y = at.axis;
     vec![
         pos2(at.bite, y - contact),
-        pos2(at.contact, y - contact),
         pos2(at.neck, y - at.pillar),
         pos2(at.neck, y + at.pillar),
-        pos2(at.contact, y + contact),
         pos2(at.bite, y + contact),
     ]
 }
@@ -401,7 +399,7 @@ fn tip_figures(painter: &Painter, at: &Layout, profile: &SupportProfile) {
     let tip = &profile.tip;
     let contact = half(tip.contact_diameter_mm);
     let reach = contact.max(at.pillar);
-    let x = at.contact + 4.0;
+    let x = at.bite + 2.0;
     let above = (pos2(x - 4.0, at.lane(reach, 1)), Align2::LEFT_CENTER);
     across(
         painter,
@@ -414,7 +412,7 @@ fn tip_figures(painter: &Painter, at: &Layout, profile: &SupportProfile) {
     let length_y = at.lane(reach, 2);
     dimension(
         painter,
-        pos2(at.contact, length_y),
+        pos2(at.bite, length_y),
         pos2(at.neck, length_y),
         &mm(profile.top.length_mm),
     );

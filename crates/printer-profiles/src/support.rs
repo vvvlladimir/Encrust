@@ -8,14 +8,13 @@ use crate::ProfileError;
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
 pub enum ContactShape {
-    /// A point driven into the surface. The smallest scar, and the weakest grip.
-    #[default]
-    Cone,
     /// A ball at the tip. More contact area, so a firmer hold on a heavy overhang, at
     /// the cost of a wider mark to sand off.
     Sphere,
-    /// A flat disc pressed against the surface, biting nothing. For a face that must not
-    /// be pierced at all.
+    /// A flat disc, the whole tip pushed its bite into the surface. A profile written
+    /// when a pointed `cone` was offered loads as this; see `docs/decisions/0243`.
+    #[default]
+    #[serde(alias = "cone")]
     Plane,
 }
 
@@ -472,7 +471,7 @@ impl SupportProfile {
             contact_spacing_mm: default_contact_spacing_mm(),
             clearance_mm: default_clearance_mm(),
             tip: TipSegment {
-                shape: ContactShape::Cone,
+                shape: ContactShape::Plane,
                 contact_diameter_mm: 0.5,
                 contact_depth_mm: 0.3,
             },
@@ -521,7 +520,7 @@ impl SupportProfile {
             contact_spacing_mm: default_contact_spacing_mm(),
             clearance_mm: default_clearance_mm(),
             tip: TipSegment {
-                shape: ContactShape::Cone,
+                shape: ContactShape::Plane,
                 contact_diameter_mm: 0.8,
                 contact_depth_mm: 0.4,
             },
@@ -982,6 +981,19 @@ platform_thickness_mm = 1.0
         let profile = SupportProfile::from_toml_str(&old, path())
             .expect("a profile saved before ADR 0238 names widths that are now derived");
         assert_eq!(profile, SupportProfile::medium());
+    }
+
+    #[test]
+    fn a_profile_written_with_a_cone_tip_loads_with_a_plane_one() {
+        let old =
+            toml_of(&SupportProfile::medium()).replace("shape = \"plane\"", "shape = \"cone\"");
+        assert!(
+            old.contains("shape = \"cone\""),
+            "the tip's shape is written as a string"
+        );
+        let profile = SupportProfile::from_toml_str(&old, path())
+            .expect("a profile saved before ADR 0243 names a tip that is no longer offered");
+        assert_eq!(profile.tip.shape, ContactShape::Plane);
     }
 
     #[test]

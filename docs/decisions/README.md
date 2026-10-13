@@ -160,7 +160,7 @@ Grouped by what the decision governs; the number is still the order it was taken
 | [0034](0034-overhangs-are-shaded-in-the-viewport.md) | Overhangs are shaded in the viewport shader, by face angle | Accepted |
 | [0040](0040-nearby-tips-merge-into-shared-trunks.md) | Nearby tips merge into shared trunks, greedily, highest meeting point first | Accepted; the width of a merged trunk is superseded by 0242 |
 | [0041](0041-a-support-is-a-set-of-overlapping-tubes.md) | A support is meshed as overlapping closed tubes, not one welded solid | Accepted |
-| [0042](0042-support-shapes-are-profile-data-swept-by-one-mesher.md) | Support shapes are data in the profile, swept by the one mesher | Accepted |
+| [0042](0042-support-shapes-are-profile-data-swept-by-one-mesher.md) | Support shapes are data in the profile, swept by the one mesher | Accepted; the tip shapes are superseded by 0243 |
 | [0043](0043-the-base-is-three-solids-beside-the-supports.md) | The raft, the skate and the braces are solids beside the supports | Accepted |
 | [0044](0044-joints-are-balls-and-every-foot-is-bevelled.md) | A joint is covered by a ball, every foot is bevelled, braces cross | Accepted; the ball over a joint is superseded by 0238 |
 | [0072](0072-trapped-resin-is-found-on-the-stack.md) | Trapped resin is found on the slice stack, in `core-supports` | Accepted |
@@ -184,7 +184,8 @@ Grouped by what the decision governs; the number is still the order it was taken
 | [0239](0239-a-pad-is-as-wide-as-its-profile-says.md) | Make a pad as wide as its profile says, and move it rather than narrow it | Accepted |
 | [0240](0240-braces-follow-a-gabriel-graph-and-a-lone-trunk-leans-in.md) | Tie trunks along a Gabriel graph, and lean a lone trunk into reach | Accepted |
 | [0241](0241-a-raft-covers-the-part-and-comes-in-three-styles.md) | Draw a raft around the part by a margin in millimetres, in one of three styles | Accepted |
-| [0242](0242-a-trunk-is-a-cone-sized-by-its-height-and-load.md) | Make a trunk a cone, its base sized by its height and its load up to the cap | Accepted |
+| [0242](0242-a-trunk-is-a-cone-sized-by-its-height-and-load.md) | Make a trunk a cone sized by its height and load, and no brace wider than it | Accepted |
+| [0243](0243-a-tip-is-a-plane-or-a-sphere-and-a-plane-bites-by-moving-in.md) | Offer a plane or a sphere tip, and bite a plane tip by pushing it in | Accepted |
 | [0132](0132-the-shipped-asset-is-the-preset.md) | The shipped TOML is the preset, and the constructor mirrors it | Accepted |
 
 ### Volume: hollowing, infill and relief

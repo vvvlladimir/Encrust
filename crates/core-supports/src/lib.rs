@@ -127,7 +127,7 @@ mod tests {
             contact_spacing_mm: 4.0,
             clearance_mm: 0.5,
             tip: TipSegment {
-                shape: ContactShape::Cone,
+                shape: ContactShape::Plane,
                 contact_diameter_mm: 0.4,
                 contact_depth_mm: 0.2,
             },

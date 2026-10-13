@@ -84,7 +84,7 @@ pub fn mesh_trees(trees: &[SupportTree], placed: &Placed, profiles: Profiles) ->
     for tree in trees {
         mesh_tree(&mut mesh, tree, profiles.of(tree.group()));
     }
-    mesh_ground(&mut mesh, trees, placed, profiles.ground());
+    mesh_ground(&mut mesh, trees, placed, profiles);
     mesh
 }
 
@@ -97,7 +97,7 @@ pub fn mesh_groups(trees: &[SupportTree], placed: &Placed, profiles: Profiles) -
         let slot = if slot < meshes.len() { slot } else { 0 };
         mesh_tree(&mut meshes[slot], tree, profiles.of(tree.group()));
     }
-    mesh_ground(&mut meshes[0], trees, placed, profiles.ground());
+    mesh_ground(&mut meshes[0], trees, placed, profiles);
     meshes
 }
 
@@ -110,9 +110,10 @@ fn mesh_tree(mesh: &mut Mesh, tree: &SupportTree, profile: &SupportProfile) {
     stand_on(mesh, tree, profile);
 }
 
-fn mesh_ground(mesh: &mut Mesh, trees: &[SupportTree], placed: &Placed, ground: &SupportProfile) {
-    for (from, to) in braces(trees, placed, ground) {
-        sweep(mesh, &brace(from, to, ground));
+fn mesh_ground(mesh: &mut Mesh, trees: &[SupportTree], placed: &Placed, profiles: Profiles) {
+    let ground = profiles.ground();
+    for (from, to, radius_mm) in braces(trees, placed, profiles) {
+        sweep(mesh, &brace(from, to, radius_mm, ground));
     }
     if let Some(slab) = raft(trees, placed, ground) {
         append(mesh, &slab);
@@ -152,15 +153,14 @@ fn stand_on(mesh: &mut Mesh, tree: &SupportTree, profile: &SupportProfile) {
     skate(mesh, Vec3::new(base.x, base.y, 0.0), toe_of(tree), profile);
 }
 
-/// One brace, as a tube between two points on neighbouring trunks.
-fn brace(from: Vec3, to: Vec3, profile: &SupportProfile) -> Tube {
+/// One brace of `radius_mm`, as a tube between two points on neighbouring trunks.
+fn brace(from: Vec3, to: Vec3, radius_mm: Scalar, profile: &SupportProfile) -> Tube {
     let offset = to - from;
     let length = offset.length();
     if length < RING_EPSILON_MM {
         return empty_tube(from);
     }
 
-    let radius_mm = profile.bracing.radius_mm();
     let mut rings = Vec::with_capacity(2);
     push(&mut rings, 0.0, radius_mm);
     push(&mut rings, length, radius_mm);
@@ -261,22 +261,43 @@ fn trunk(tree: &SupportTree, profile: &SupportProfile, style: Style) -> Tube {
 /// what touches the part is a contact rather than the whole trunk.
 ///
 /// The cone leaves the trunk at whatever width the trunk is, so there is no rim hanging
-/// off its top. `length` runs from the root to the sunk bottom. Like the tip at the top it
-/// meets the surface on its contact and bites in to a point, which is when it answers
-/// true; a plane tip stops flat on the surface. See `docs/decisions/0124`.
+/// off its top. `length` runs from the root to the sunk bottom. Like the tip at the top, a
+/// plane tip is pushed its bite into the surface and ends flat there; a sphere meets the
+/// surface on its contact and bites in to a point, which is when it answers true. See
+/// `docs/decisions/0124` and `docs/decisions/0243`.
 fn foot_tip(
     rings: &mut Vec<Ring>,
     length: Scalar,
     body_mm: Scalar,
     profile: &SupportProfile,
 ) -> bool {
-    let surface_mm = (length - profile.landing_depth_mm()).max(0.0);
-    let taper_mm = profile.top_length_mm().min(surface_mm);
+    let pointed = profile.tip.shape == ContactShape::Sphere;
+    let end_mm = if pointed {
+        (length - profile.landing_depth_mm()).max(0.0)
+    } else {
+        length
+    };
+    let taper_mm = profile.top_length_mm().min(end_mm);
     let contact_mm = profile.contact_radius_mm().min(body_mm);
 
-    push(rings, surface_mm - taper_mm, body_mm);
-    push(rings, surface_mm, contact_mm);
-    profile.tip.shape != ContactShape::Plane
+    push(rings, end_mm - taper_mm, body_mm);
+    push(rings, end_mm, contact_mm);
+    pointed
+}
+
+/// Radius of `tree`'s trunk at height `z_mm` as it is meshed, millimetres: its joint's
+/// width at the root, its base's at the bottom, and straight between.
+pub(crate) fn trunk_radius_at_mm(
+    tree: &SupportTree,
+    profile: &SupportProfile,
+    z_mm: Scalar,
+) -> Scalar {
+    let style = Style::of(tree, profile);
+    let (top, bottom) = (tree.root().position.z, trunk_bottom(tree, profile).z);
+    let upper = style.body_radius_mm(tree.root().radius_mm, profile);
+    let lower = trunk_base_mm(tree, profile, style);
+    let along = ((top - z_mm) / (top - bottom).max(RING_EPSILON_MM)).clamp(0.0, 1.0);
+    upper + (lower - upper) * along
 }
 
 /// How wide the trunk is where it meets what it stands on, millimetres: its own width on
@@ -421,24 +442,29 @@ fn head(
     }
 
     let contact_mm = profile.contact_radius_mm();
+    let top_mm = profile.top_length_mm().min(length);
+    let body_mm = style.body_radius_mm(node.radius_mm, profile);
     if profile.tip.shape == ContactShape::Sphere {
         ball(rings, style.bite_mm(profile), contact_mm, SPHERE_RINGS);
-    } else {
-        push(rings, 0.0, contact_mm);
+        // One cone from the contact out to the body's own width; see `docs/decisions/0238`.
+        push(rings, top_mm, body_mm);
+        return;
     }
 
-    // One cone from the contact out to the body's own width; see `docs/decisions/0238`.
-    let top_mm = profile.top_length_mm().min(length);
-    push(rings, top_mm, style.body_radius_mm(node.radius_mm, profile));
+    // The whole tip is pushed its bite into the face, the cone with it; the disc it ends
+    // in is what grips. See `docs/decisions/0243`.
+    let bite_mm = style.bite_mm(profile).min(top_mm);
+    push(rings, -bite_mm, contact_mm);
+    push(rings, top_mm - bite_mm, body_mm);
 }
 
 /// Where the tip pokes into the model, for a tube that starts at a contact, and the pole
 /// of the dome for one that starts at a joint.
 ///
 /// It goes back up the tube's own axis, which at a tip is the normal of the face it
-/// holds, so the bite drives into the surface square on (ADR 0125). A cone's apex and a
-/// sphere's upper pole are the same point, `bite_mm` in. A plane tip bites nothing, so
-/// the sweep closes it with the flat disc it gets when there is no apex at all.
+/// holds, so the bite drives into the surface square on (ADR 0125). A sphere's upper pole
+/// is `bite_mm` in. A plane tip has no apex: the sweep closes it with the flat disc its
+/// first ring makes, already pushed in (ADR 0243).
 fn apex_of(
     node: &TreeNode,
     direction: Vec3,
@@ -572,12 +598,13 @@ mod tests {
         let rim_r = base_r - bevel;
         let trunk_bottom = profile.base_height_mm() - foot_h * FOOT_BITE;
 
-        // Tip cone, neck frustum, pillar cylinder, the flare into the pad and then the
+        // The tip's bite, neck frustum, pillar cylinder, the flare into the pad and then the
         // pad itself, one frustum in to the rim it meets the plate on. The pillar reaches
         // into the foot far enough to overlap it, and so does the flare, because each is
         // a solid of its own; see `docs/decisions/0041`. That much of them is counted
         // twice, and the closed form says so too.
-        let tip = PI * contact_r * contact_r * profile.contact_depth_mm() / 3.0;
+        // A plane tip is pushed its bite in, which lengthens the pillar by as much.
+        let tip = PI * pillar_r * pillar_r * profile.contact_depth_mm();
         let neck = PI * profile.top_length_mm() / 3.0
             * (contact_r * contact_r + contact_r * pillar_r + pillar_r * pillar_r);
         // The neck ends in a dome inside the pillar and the pillar starts under one inside
@@ -611,7 +638,7 @@ mod tests {
         let volume = signed_volume(&mesh);
         assert!(
             (volume - expected).abs() / expected < 0.001,
-            "expected {expected} mm3 from a cone, a frustum, a cylinder and a disc, got {volume}"
+            "expected {expected} mm3 from frustums, cylinders and a disc, got {volume}"
         );
     }
 
@@ -830,11 +857,23 @@ mod tests {
                     .total_cmp(&(*b - contact).dot(-normal))
             })
             .expect("the support was meshed");
+        let depth = profile.contact_depth_mm();
         assert!(
-            apex.abs_diff_eq(contact - normal * profile.contact_depth_mm(), 1e-3),
-            "the bite drives square into the face, got {apex} against {}",
-            contact - normal * profile.contact_depth_mm()
+            ((apex - contact).dot(-normal) - depth).abs() < 1e-3,
+            "the tip goes its bite into the face, got {}",
+            (apex - contact).dot(-normal)
         );
+        let centre = contact - normal * depth;
+        let disc = mesh
+            .vertices
+            .iter()
+            .filter(|vertex| ((**vertex - contact).dot(-normal) - depth).abs() < 1e-3);
+        for vertex in disc {
+            assert!(
+                (*vertex - centre).length() <= profile.contact_radius_mm() + 1e-3,
+                "the disc it ends in lies square across the normal, got {vertex}"
+            );
+        }
     }
 
     #[test]
@@ -957,11 +996,7 @@ mod tests {
 
     #[test]
     fn every_tip_shape_meshes_into_a_closed_solid() {
-        for shape in [
-            ContactShape::Cone,
-            ContactShape::Sphere,
-            ContactShape::Plane,
-        ] {
+        for shape in [ContactShape::Sphere, ContactShape::Plane] {
             let profile = with_tip(shape);
             let diagnostics = diagnose(&one_column(&profile));
             assert_eq!(
@@ -974,17 +1009,19 @@ mod tests {
     }
 
     #[test]
-    fn a_plane_tip_bites_nothing_and_a_cone_tip_bites_its_depth() {
+    fn a_plane_tip_is_pushed_its_bite_into_the_model_and_ends_flat() {
         let flat = with_tip(ContactShape::Plane);
-        let point = with_tip(ContactShape::Cone);
-
+        let mesh = one_column(&flat);
+        let sunk = 20.0 + flat.contact_depth_mm();
         assert!(
-            (ceiling(&one_column(&flat)) - 20.0).abs() < 1e-4,
-            "a plane tip stops at the surface it is pressed against"
+            (ceiling(&mesh) - sunk).abs() < 1e-4,
+            "the tip goes its bite into the face at z = 20, got {}",
+            ceiling(&mesh)
         );
+        let axis = Vec3::new(10.0, 10.0, 0.0);
         assert!(
-            (ceiling(&one_column(&point)) - (20.0 + point.contact_depth_mm())).abs() < 1e-4,
-            "a cone tip reaches its own depth into the model"
+            (widest_above(&mesh, axis, sunk - 2e-3) - flat.contact_radius_mm()).abs() < 1e-3,
+            "it ends on a disc as wide as its contact, not on a point"
         );
     }
 
@@ -998,18 +1035,13 @@ mod tests {
     }
 
     #[test]
-    fn a_sphere_tip_is_wide_inside_the_model_where_a_cone_has_narrowed_to_a_point() {
+    fn a_sphere_tip_is_wide_inside_the_model_and_bites_its_depth() {
         let ball = with_tip(ContactShape::Sphere);
-        let point = with_tip(ContactShape::Cone);
         let axis = Vec3::new(10.0, 10.0, 0.0);
 
         assert!(
             (ceiling(&one_column(&ball)) - (20.0 + ball.contact_depth_mm())).abs() < 1e-4,
-            "the top of the ball is where the cone's apex would have been"
-        );
-        assert!(
-            widest_above(&one_column(&point), axis, 20.0) < 1e-3,
-            "a cone is a single point above the contact"
+            "the top of the ball is its bite into the model"
         );
         assert!(
             widest_above(&one_column(&ball), axis, 20.0) > ball.contact_radius_mm() * 0.8,
@@ -1111,7 +1143,7 @@ mod tests {
     }
 
     #[test]
-    fn a_support_standing_on_the_model_bites_into_it_to_a_point() {
+    fn a_support_standing_on_the_model_is_pushed_its_bite_into_it() {
         let mut profile = profile();
         profile.small_pillar.enabled = false;
         let trees = model_to_model(&profile);
@@ -1130,9 +1162,10 @@ mod tests {
             "the bite goes the tip's own depth into the 10 mm shelf, got {}",
             lowest.z
         );
+        let widest = widest_below(&mesh, Vec3::new(5.0, 5.0, 0.0), sunk);
         assert!(
-            widest_below(&mesh, Vec3::new(5.0, 5.0, 0.0), sunk) < 1e-3,
-            "it ends in a point on its axis, as the tip at the top does, not a flat disc"
+            (widest - profile.contact_radius_mm()).abs() < 1e-3,
+            "it ends flat on its contact's disc, as the plane tip at the top does, got {widest}"
         );
         assert_eq!(diagnose(&mesh).boundary_edges, 0);
     }
@@ -1195,7 +1228,10 @@ mod tests {
         let widths: Vec<Scalar> = mesh
             .vertices
             .iter()
-            .filter(|vertex| (vertex.z - (10.0 + profile.top_length_mm())).abs() < 1e-3)
+            .filter(|vertex| {
+                let shoulder = 10.0 - profile.landing_depth_mm() + profile.top_length_mm();
+                (vertex.z - shoulder).abs() < 1e-3
+            })
             .map(|vertex| Vec2::new(vertex.x - axis.x, vertex.y - axis.y).length())
             .collect();
         assert!(!widths.is_empty(), "the taper starts one top segment up");
@@ -1346,12 +1382,13 @@ mod tests {
                 .fold(0.0, Scalar::max)
         };
 
+        let sunk = 20.0 + profile.contact_depth_mm();
         assert!(
-            (width_at(20.0) - profile.contact_radius_mm()).abs() < 1e-3,
-            "the cone leaves the model as wide as the contact, got {}",
-            width_at(20.0)
+            (width_at(sunk) - profile.contact_radius_mm()).abs() < 1e-3,
+            "the cone starts its bite inside the model as wide as the contact, got {}",
+            width_at(sunk)
         );
-        let shoulder = 20.0 - profile.top_length_mm();
+        let shoulder = sunk - profile.top_length_mm();
         assert!(
             (width_at(shoulder) - profile.pillar_radius_mm()).abs() < 1e-3,
             "and meets the pillar at the pillar's own width, got {}",

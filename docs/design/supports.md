@@ -49,21 +49,21 @@ The profile is grouped as MSLA slicers group it, so numbers tuned elsewhere carr
 
 | Piece | From | To | Radius |
 |---|---|---|---|
-| tip cone | apex, `tip.contact_depth_mm` above the contact | the contact | `tip.contact_diameter_mm / 2` |
-| top segment | the contact | `top.length_mm` along the face normal | `tip.contact_diameter_mm / 2` to the pillar's radius |
+| top segment | the contact disc, `tip.contact_depth_mm` into the model | `top.length_mm` along the face normal | `tip.contact_diameter_mm / 2` to the pillar's radius |
 | pillar | the top segment | the top of the flare | the node's radius, `middle.diameter_mm / 2` unless it is a trunk |
 | flare | the pillar | the top of the foot | the pillar's radius to `bottom.lower_diameter_mm / 2` |
 | foot | the top of the foot | `z = 0` | `bottom.platform_diameter_mm / 2` in to the bevelled rim |
 
-The apex sits back along the tip's own axis, which is that normal, so the bite drives into
+The bite goes back along the tip's own axis, which is that normal, so it drives into
 the face rather than up past it (ADR 0125, superseding that clause of ADR 0028). `facets`
 sides are used for every ring; twelve puts the flats 0.026 mm inside the circle of a 2 mm
 pillar, finer than a 9K pixel.
 
-**Tips.** `cone` is an apex `bite_mm` up — smallest scar, weakest grip. `sphere` is a ball
-with its upper pole at that apex — more material inside the model, so a firmer hold; its
-rings run past the contact and rings never climb, so the neck is shorter than
-`top.length_mm`. `plane` is the sweep's flat disc, for a face that must not be pierced.
+**Tips.** `plane`, the default, is the whole tip moved `bite_mm` along its axis into the
+model, ending on the sweep's flat disc of the contact's width (ADR 0243). `sphere` is a
+ball with its upper pole `bite_mm` in — more material inside the model, so a firmer hold;
+its rings run past the contact and rings never climb, so the neck is shorter than
+`top.length_mm`. A file naming the retired `cone` loads as `plane`.
 
 **Feet.** `bottom.shape` sets the ring's side count and whether it tapers upward:
 `cylinder` (`facets`, no), `cone` (`facets`, to 45% of the rim), `prism` (6),
@@ -101,7 +101,8 @@ stands on, because it carries the tips' weight (ADR 0042).
 
 **Standing on the part.** Any other support that lands on the model ends in `[top]` and
 `[tip]` upside down: the trunk keeps its joint's width, then a cone over `top.length_mm`
-down to the contact's and a bite to a point, or flat for a plane tip. What touches the part
+down to the contact's, pushed its bite in and flat for a plane tip, or meeting the surface
+and biting to a point for a sphere. What touches the part
 is a tip's scar whatever the trunk carries, so it breaks off by hand (ADR 0124, 0242).
 
 **Raft.** `[raft]` lays its pieces on the plate. Supports still land at `z = 0` and pass
@@ -123,7 +124,8 @@ where branching is on and the trunk under the knee can still be tied (ADR 0240).
 `[bracing]` ties those neighbours every `rise_mm` from
 `start_height_mm`, as high as both still stand — the lower of the two root nodes, since
 above that a trunk has split. A tie is a cross, not a rung, so the pair is braced both
-ways; a pair with room for one level is not tied. Each brace is one more tube, and one the
+ways; a pair with room for one level is not tied. A brace is no wider than either trunk
+where it meets it (ADR 0242). Each brace is one more tube, and one the
 model is in the way of is not tied at all: a brace goes through ADR 0077's beam like every
 other body, which is why `mesh_trees` is handed the model. The raft slab is the one thing
 that is not beam-checked — it is a slab, not a body, and clipping it is a plate-level

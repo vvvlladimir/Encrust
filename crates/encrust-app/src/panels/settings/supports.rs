@@ -96,7 +96,6 @@ fn table(ui: &mut Ui, machine: &Machine, picked: Option<&str>, action: &mut Opti
 
 fn cells(profile: &SupportProfile) -> [String; 5] {
     let tip = match profile.tip.shape {
-        ContactShape::Cone => "Cone",
         ContactShape::Sphere => "Sphere",
         ContactShape::Plane => "Plane",
     };
