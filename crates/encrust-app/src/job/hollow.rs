@@ -3,7 +3,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::{self, Receiver, TryRecvError};
 
 use core_geometry::{Bvh, Mat3, Mesh, Scalar};
-use core_volume::{Cancel, HollowSettings, Shell, hollow_at_scale};
+use core_volume::{Cancel, HollowSettings, Shell, VolumeError, hollow_at_scale};
 
 use crate::job::pipeline::{thread_pool, worker_threads};
 use crate::scene::{ObjectId, Scene, SceneObject};
@@ -209,7 +209,7 @@ fn shell_each(
     report: &mut (dyn FnMut(usize, usize) + Send),
 ) -> HollowOutcome {
     let models = request.tasks.len();
-    let mut shells = Vec::with_capacity(models);
+    let mut shells: Vec<Shelled> = Vec::with_capacity(models);
 
     for (index, task) in request.tasks.iter().enumerate() {
         // The field is built in one call, so a run can only be stopped between models.
@@ -218,31 +218,47 @@ fn shell_each(
         }
         report(index, models);
 
-        match hollow_at_scale(
-            &task.mesh,
-            &task.bvh,
-            &task.settings,
-            task.shape,
-            Cancel::never(),
-        ) {
-            Ok(hollowed) => shells.push(Shelled {
-                id: task.id,
-                shell: Shell {
-                    mesh: Arc::new(hollowed.mesh),
-                    cavity: hollowed.cavity,
-                    cavity_mm3: hollowed.cavity_mm3,
-                    voxel_mm: hollowed.voxel_mm,
-                    coarsened: hollowed.coarsened,
-                    shape: task.shape,
-                    settings: task.settings.clone(),
-                },
-            }),
-            Err(error) => return HollowOutcome::Failed(error.to_string()),
-        }
+        let shell = match twin_of(&request.tasks[..index], task) {
+            Some(twin) => shells[twin].shell.clone(),
+            None => match shell_of(task) {
+                Ok(shell) => shell,
+                Err(error) => return HollowOutcome::Failed(error.to_string()),
+            },
+        };
+        shells.push(Shelled { id: task.id, shell });
     }
 
     report(models, models);
     HollowOutcome::Hollowed(shells)
+}
+
+/// An earlier task `task` is a copy of — one mesh, one shape, one set of numbers — whose
+/// shell it shares rather than building the same field again.
+fn twin_of(earlier: &[HollowTask], task: &HollowTask) -> Option<usize> {
+    earlier.iter().position(|other| {
+        Arc::ptr_eq(&other.mesh, &task.mesh)
+            && other.shape == task.shape
+            && other.settings == task.settings
+    })
+}
+
+fn shell_of(task: &HollowTask) -> Result<Shell, VolumeError> {
+    let hollowed = hollow_at_scale(
+        &task.mesh,
+        &task.bvh,
+        &task.settings,
+        task.shape,
+        Cancel::never(),
+    )?;
+    Ok(Shell {
+        mesh: Arc::new(hollowed.mesh),
+        cavity: hollowed.cavity,
+        cavity_mm3: hollowed.cavity_mm3,
+        voxel_mm: hollowed.voxel_mm,
+        coarsened: hollowed.coarsened,
+        shape: task.shape,
+        settings: task.settings.clone(),
+    })
 }
 
 #[cfg(test)]
@@ -258,6 +274,59 @@ mod tests {
             done,
             total,
         }
+    }
+
+    fn tetrahedron_task(id: u64, mesh: &Arc<Mesh>, thickness_mm: Scalar) -> HollowTask {
+        HollowTask {
+            id: ObjectId::for_test(id),
+            mesh: Arc::clone(mesh),
+            bvh: Arc::new(Bvh::build(mesh)),
+            shape: Mat3::IDENTITY,
+            settings: HollowSettings {
+                thickness_mm,
+                ..HollowSettings::default()
+            },
+        }
+    }
+
+    #[test]
+    fn a_copy_shares_the_shell_of_its_original_and_a_different_wall_does_not() {
+        let mesh = Arc::new(Mesh::new(
+            vec![
+                core_geometry::Vec3::new(0.0, 0.0, 0.0),
+                core_geometry::Vec3::new(20.0, 0.0, 0.0),
+                core_geometry::Vec3::new(0.0, 20.0, 0.0),
+                core_geometry::Vec3::new(0.0, 0.0, 20.0),
+            ],
+            vec![[0, 2, 1], [0, 1, 3], [1, 2, 3], [2, 0, 3]],
+        ));
+        let request = HollowRequest {
+            tasks: vec![
+                tetrahedron_task(0, &mesh, 1.5),
+                tetrahedron_task(1, &mesh, 1.5),
+                tetrahedron_task(2, &mesh, 2.0),
+            ],
+        };
+        let HollowOutcome::Hollowed(shells) =
+            shell_each(&request, &AtomicBool::new(false), &mut |_, _| {})
+        else {
+            panic!("a 20 mm tetrahedron hollows at a 1.5 mm and a 2 mm wall");
+        };
+
+        let ids: Vec<ObjectId> = shells.iter().map(|shelled| shelled.id).collect();
+        assert_eq!(
+            ids,
+            [0, 1, 2].map(ObjectId::for_test),
+            "every object gets its own shell back, in order"
+        );
+        assert!(
+            Arc::ptr_eq(&shells[0].shell.mesh, &shells[1].shell.mesh),
+            "a copy at the same numbers is not built again"
+        );
+        assert!(
+            !Arc::ptr_eq(&shells[0].shell.mesh, &shells[2].shell.mesh),
+            "a wall of its own is a field of its own"
+        );
     }
 
     /// The bar runs rather than standing at nought for the whole of a run it cannot
