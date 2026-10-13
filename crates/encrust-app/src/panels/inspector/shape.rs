@@ -27,6 +27,14 @@ pub fn ui(ui: &mut egui::Ui, window: &mut Window) {
     scope::editing_supports(window, |window| shape(ui, window));
 }
 
+/// The profile the picked models' supports are built to, to be chosen, saved and opened
+/// for editing from any tool that places supports.
+pub fn profile_section(ui: &mut egui::Ui, window: &mut Window) {
+    scope::editing_supports(window, |window| {
+        section(ui, "Profile", None, |ui| profile_picker(ui, window));
+    });
+}
+
 fn shape(ui: &mut egui::Ui, window: &mut Window) {
     section(ui, "Profile", None, |ui| profile_picker(ui, window));
     section(ui, "Part", None, |ui| {

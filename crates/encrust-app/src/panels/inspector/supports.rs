@@ -16,6 +16,7 @@ use crate::workspace::{Mode, Tool};
 /// Growing supports under whatever hangs over nothing, and the parts of those already
 /// standing, which a click in this tool picks.
 pub fn ui(ui: &mut egui::Ui, window: &mut Window) {
+    super::shape::profile_section(ui, window);
     section(ui, "Islands", None, |ui| islands(ui, window));
     section(ui, "Where", None, |ui| {
         scope::editing_supports(window, |window| {

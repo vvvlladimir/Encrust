@@ -444,6 +444,12 @@ fn head(
     let contact_mm = profile.contact_radius_mm();
     let top_mm = profile.top_length_mm().min(length);
     let body_mm = style.body_radius_mm(node.radius_mm, profile);
+    // A small pillar has no tip: it is one width from the face it holds to the one it
+    // stands on, sunk into each.
+    if style.small {
+        push(rings, -style.bite_mm(profile), body_mm);
+        return;
+    }
     if profile.tip.shape == ContactShape::Sphere {
         ball(rings, style.bite_mm(profile), contact_mm, SPHERE_RINGS);
         // One cone from the contact out to the body's own width; see `docs/decisions/0238`.
@@ -474,7 +480,7 @@ fn apex_of(
     if !node.is_leaf() {
         return Some(node.position - direction * style.body_radius_mm(node.radius_mm, profile));
     }
-    if profile.tip.shape == ContactShape::Plane {
+    if style.small || profile.tip.shape == ContactShape::Plane {
         return None;
     }
     Some(node.position - direction * style.bite_mm(profile))
@@ -1130,6 +1136,34 @@ mod tests {
             diagnose(&meshed(&trees, Profiles::single(&profile))).boundary_edges,
             0
         );
+    }
+
+    #[test]
+    fn a_small_pillar_has_no_tip_and_is_one_width_from_end_to_end() {
+        for shape in [ContactShape::Plane, ContactShape::Sphere] {
+            let mut profile = profile();
+            profile.tip.shape = shape;
+            let trees = model_to_model(&profile);
+            let mesh = meshed(&trees, Profiles::single(&profile));
+            let radius_mm = profile.small_pillar.radius_mm();
+
+            // Within a millimetre of either face: the joint under the neck is a dome
+            // inside the body, and is not what touches the model.
+            let ends = mesh
+                .vertices
+                .iter()
+                .filter(|vertex| vertex.z > 19.0 || vertex.z < 11.0);
+            for vertex in ends {
+                let off_axis = Vec2::new(vertex.x - 5.0, vertex.y - 5.0).length();
+                // The middle of each flat end sits on the axis; everything else is wall.
+                assert!(
+                    off_axis < 1e-3 || (off_axis - radius_mm).abs() < 1e-3,
+                    "{shape:?}: a vertex {off_axis} mm off the axis of a pillar \
+                     {radius_mm} mm in radius is a tip or a taper"
+                );
+            }
+            assert_eq!(diagnose(&mesh).boundary_edges, 0, "{shape:?}: it is closed");
+        }
     }
 
     /// How far from `axis` the mesh reaches at or below `z`, which under a support

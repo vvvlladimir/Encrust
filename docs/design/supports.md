@@ -96,7 +96,8 @@ horizontal direction from the tree's highest tip to its root, or the plate's x i
 never leaned (ADR 0043).
 
 **Small pillar.** `[small_pillar]` is the strut between two parts of a model: a diameter
-and a depth per end, no foot. Which supports use it is derived — landing on the model,
+and a depth per end, no foot and no tip — one width from the face it holds to the one it
+stands on, whatever the profile's tip is. Which supports use it is derived — landing on the model,
 carrying one tip, section enabled — never marked. A trunk keeps its width whatever it
 stands on, because it carries the tips' weight (ADR 0042).
 

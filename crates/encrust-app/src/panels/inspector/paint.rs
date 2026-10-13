@@ -39,6 +39,7 @@ fn paint_hint(placing: Placing) -> &'static str {
 /// Supports by hand: placed one at a time, or filled into a painted patch, in the group
 /// the next ones join.
 pub fn ui(ui: &mut egui::Ui, window: &mut Window) {
+    super::shape::profile_section(ui, window);
     section(ui, "Brush", None, |ui| painting(ui, window));
     section(ui, "Fill", None, |ui| {
         // How dense a fill comes out is worth reading whichever brush is in hand.
