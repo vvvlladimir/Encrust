@@ -17,11 +17,11 @@ const FOOT_SIDES: usize = 16;
 
 /// Width of one bar of a grid raft, and the side of the square hole between two,
 /// millimetres.
-const GRID_BAR_MM: Scalar = 1.0;
-const GRID_HOLE_MM: Scalar = 2.0;
+pub const GRID_BAR_MM: Scalar = 1.0;
+pub const GRID_HOLE_MM: Scalar = 2.0;
 
 /// Width of a skate raft's lip, millimetres. It stands as tall as the slab is thick.
-const LIP_WIDTH_MM: Scalar = 1.0;
+pub const LIP_WIDTH_MM: Scalar = 1.0;
 
 /// The raft under every support that reaches the plate, or `None` when there is nothing
 /// to stand on it.

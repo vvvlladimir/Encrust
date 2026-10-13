@@ -13,13 +13,13 @@ pub(crate) const SAME_PLACE_MM: Scalar = 1e-4;
 
 /// How long a skate is, and how wide, as multiples of the foot's own radius. A skate
 /// grips along its length and releases across its width, so the two are not the same.
-const SKATE_LENGTH: Scalar = 1.6;
-const SKATE_WIDTH: Scalar = 0.55;
+pub const SKATE_LENGTH: Scalar = 1.6;
+pub const SKATE_WIDTH: Scalar = 0.55;
 
 /// How far in the bevel pulls the skate's footprint, as a fraction of its own size. The
 /// pad lies flat on the plate and meets it on a rim a blade gets under; see
 /// `docs/decisions/0044`.
-const SKATE_BEVEL: Scalar = 0.3;
+pub const SKATE_BEVEL: Scalar = 0.3;
 
 /// Half the width of a skate across its narrow way, millimetres, which is the most a
 /// flare standing in one may spread to.

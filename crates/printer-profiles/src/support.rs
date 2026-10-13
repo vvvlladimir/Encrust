@@ -11,10 +11,9 @@ pub enum ContactShape {
     /// A ball at the tip. More contact area, so a firmer hold on a heavy overhang, at
     /// the cost of a wider mark to sand off.
     Sphere,
-    /// A flat disc, the whole tip pushed its bite into the surface. A profile written
-    /// when a pointed `cone` was offered loads as this; see `docs/decisions/0243`.
+    /// A flat disc, the whole tip pushed its bite into the surface; see
+    /// `docs/decisions/0243`.
     #[default]
-    #[serde(alias = "cone")]
     Plane,
 }
 
@@ -981,19 +980,6 @@ platform_thickness_mm = 1.0
         let profile = SupportProfile::from_toml_str(&old, path())
             .expect("a profile saved before ADR 0238 names widths that are now derived");
         assert_eq!(profile, SupportProfile::medium());
-    }
-
-    #[test]
-    fn a_profile_written_with_a_cone_tip_loads_with_a_plane_one() {
-        let old =
-            toml_of(&SupportProfile::medium()).replace("shape = \"plane\"", "shape = \"cone\"");
-        assert!(
-            old.contains("shape = \"cone\""),
-            "the tip's shape is written as a string"
-        );
-        let profile = SupportProfile::from_toml_str(&old, path())
-            .expect("a profile saved before ADR 0243 names a tip that is no longer offered");
-        assert_eq!(profile.tip.shape, ContactShape::Plane);
     }
 
     #[test]

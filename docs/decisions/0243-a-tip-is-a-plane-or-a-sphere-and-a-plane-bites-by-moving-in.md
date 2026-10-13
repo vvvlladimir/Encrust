@@ -13,8 +13,9 @@ solid and falls away. The two default presets shipped the cone.
 
 ## Decision
 
-`ContactShape` is `Plane` or `Sphere`, and `Plane` is the default. A file naming `cone`
-loads as `plane`; the shipped Light and Medium presets are `plane`.
+`ContactShape` is `Plane` or `Sphere`, and `Plane` is the default; the shipped Light and
+Medium presets are `plane`. A file naming `cone` is a parse error like any other unknown
+value: Encrust is in alpha, with no profiles in the field to carry across.
 
 A plane tip is moved whole along its own axis `contact_depth_mm` into the model: its
 contact disc lies that far under the surface, and the cone from it to the pillar is
@@ -26,7 +27,8 @@ is never longer than the top segment. The sphere is unchanged.
 Every regular support now grips by a disc of the contact's full width sunk to the bite,
 so it holds as the field number says and leaves a round scar of the contact's size. The
 Bite field means one thing for both shapes. The neck outside the model is shorter by the
-bite, since the cone moves in with it.
+bite, since the cone moves in with it. A profile saved with a cone tip has its shape
+edited by hand before it loads; if Encrust ships before a format freeze, reopen that.
 
 ## Alternatives considered
 

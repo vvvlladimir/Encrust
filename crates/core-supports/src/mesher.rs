@@ -18,7 +18,7 @@ const SPHERE_RINGS: u32 = 6;
 
 /// How far a tapering foot narrows on the way up to the support it carries: it never
 /// closes in past this fraction of its own radius, so the rim stays a rim.
-const FOOT_TAPER: Scalar = 0.45;
+pub const FOOT_TAPER: Scalar = 0.45;
 
 /// How far the pad's wall pulls in on the way down to the plate, as a fraction of its own
 /// height. The whole wall is the bevel, so this is the tangent of its lean: 0.6 stands it

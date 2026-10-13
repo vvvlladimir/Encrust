@@ -63,7 +63,7 @@ pillar, finer than a 9K pixel.
 model, ending on the sweep's flat disc of the contact's width (ADR 0243). `sphere` is a
 ball with its upper pole `bite_mm` in — more material inside the model, so a firmer hold;
 its rings run past the contact and rings never climb, so the neck is shorter than
-`top.length_mm`. A file naming the retired `cone` loads as `plane`.
+`top.length_mm`.
 
 **Feet.** `bottom.shape` sets the ring's side count and whether it tapers upward:
 `cylinder` (`facets`, no), `cone` (`facets`, to 45% of the rim), `prism` (6),
@@ -430,3 +430,13 @@ Load for the profile as TOML. Editing any field moves the pill to `Custom`; fiel
 independent, so the order a profile must keep — every ring at least as wide as the one
 above, the small pillar no wider than the pillar it replaces — is restored after an edit
 rather than forbidden during one.
+
+**The Shape panel's drawing.** Each part is drawn from the same measurements the mesher
+builds it to — the plane or sphere tip, the trunk's cone up to the cap, the flare, the
+foot's shape and bevel, the raft's style — at one scale for lengths and widths alike, so a
+proportion on the panel is the proportion on the plate. Each view zooms to fit its own
+part: the tip close up against the model; two tips the merge distance apart meeting at the
+branch angle and the trunk down to the plate, its long middle cut out behind a break; the
+foot, on a support as short as the lift allows, and the raft's rim
+standing on the plate, since they are wide and thin; two trunks the spacing apart with
+their crossed braces. What runs past the frame is clipped, not shrunk.
