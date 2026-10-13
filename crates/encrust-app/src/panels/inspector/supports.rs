@@ -1,4 +1,5 @@
 use core_analysis::RiskKind;
+use core_supports::Part;
 
 use crate::job::SupportJob;
 use crate::panels::Window;
@@ -171,9 +172,15 @@ fn editing(ui: &mut egui::Ui, window: &mut Window) {
 
     ui.add_space(4.0);
     if secondary_button(ui, icon::REMOVE, "Remove these supports").clicked() {
+        // Highest first: a support that goes whole renumbers everything above it.
         for (id, frozen) in supports.iter().rev() {
+            let parts: Vec<Part> = held
+                .iter()
+                .filter(|picked| picked.id == *id && picked.frozen == *frozen)
+                .map(|picked| picked.part)
+                .collect();
             if let Some(object) = window.doc.scene.get_mut(*id) {
-                object.supports.remove_frozen(*frozen);
+                object.supports.remove_parts(*frozen, &parts);
             }
         }
         window.tools.supports.picked.clear();

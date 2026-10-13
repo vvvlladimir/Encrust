@@ -4,7 +4,7 @@ use core_geometry::{Adjacency, Bvh, Mesh, Scalar, Transform, Vec3};
 use printer_profiles::SupportProfile;
 
 use crate::{
-    Blocked, Placed, Profiles, Region, SupportPoint, SupportTree, columns, grow, mesh_groups,
+    Blocked, Part, Placed, Profiles, Region, SupportPoint, SupportTree, columns, grow, mesh_groups,
 };
 
 /// A transform this close to singular has flattened its model, and a click on it cannot
@@ -278,6 +278,34 @@ impl ModelSupports {
             self.frozen.remove(frozen);
             self.built = None;
         }
+    }
+
+    /// Takes `parts` of a frozen support away with everything they hold up, and the
+    /// whole support when that leaves it nothing to hold or its trunk or foot was named.
+    /// Answers whether the support is still there.
+    pub fn remove_parts(&mut self, frozen: usize, parts: &[Part]) -> bool {
+        let Some(tree) = self.frozen.get(frozen) else {
+            return false;
+        };
+        let whole = parts
+            .iter()
+            .any(|part| matches!(part, Part::Trunk | Part::Foot));
+        let cut: Vec<usize> = parts
+            .iter()
+            .filter_map(|part| match part {
+                Part::Node(node) | Part::Strut(node) => Some(*node),
+                Part::Trunk | Part::Foot => None,
+            })
+            .collect();
+        let left = if whole { None } else { tree.without(&cut) };
+
+        self.built = None;
+        if let Some(left) = left {
+            self.frozen[frozen] = left;
+            return true;
+        }
+        self.frozen.remove(frozen);
+        false
     }
 
     /// How many tips are being carried. Fewer than the points when one of them has no

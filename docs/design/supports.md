@@ -364,15 +364,38 @@ A rebuild then maps it back into plate coordinates and meshes it with the grown 
 and `frozen_of` says which is which.
 
 `grab` names what a ray met: `Node`, `Strut`, `Trunk` or `Foot`. Nodes and the foot are
-aimed at as balls 1.6 pillars wide and win a tie with the stick they sit on. A press picks
-a part and the press after that carries it, by the step the cursor takes on the plane
-through it facing the camera; everything else picked takes the same step. A node bends
-what meets there, a strut moves both its ends, and the foot stays on the plate.
+aimed at as balls 1.6 pillars wide and win a tie with the stick they sit on. A ray that
+goes through nothing takes the part it passes nearest, within a slack the viewport sets to
+two points of the screen where the camera is looking: a pillar seen from far away is a
+point wide, and a part the ray does go through always wins over one it only passes.
+The part a press would take is drawn fainter than what is held before the button goes down.
+
+A press picks a part and the same drag carries it, by the step the cursor takes on the
+plane through it facing the camera, measured from where the cursor was pressed and not from
+the part's middle; everything else picked takes the same step. A step the model refuses
+whole is tried again as its run across the plate and then as its rise, so a part slides
+along what it touches instead of stopping.
+
+A tip held alone is not slid by a step but aimed, like a new support: `tip_carried` puts
+it where the cursor's ray meets its model, or on the surface nearest the cursor at the
+tip's own depth when the ray misses or that place is refused. Its neck goes with it, one
+`[top]` out along the face it now holds, and a support that is one tip on one trunk drops
+its trunk from the neck again, so the whole of it follows the cursor.
+
+**Remove these supports** takes away what is picked and everything it holds up
+(`SupportTree::without`): a strut or a joint goes with the tips above it, a joint left
+holding nothing goes after it, and the support goes whole when no tip is left or its trunk
+or foot was picked. Shift only
+adds the part to what is picked or takes it out. The gesture is the support's from the
+press to the release, wherever the cursor goes, so the camera neither turns nor slides
+under it. A node bends what meets there, a strut moves both its ends, and the foot stays on
+the plate.
 
 Every step is then held to the rule the automatic run places by, which is what `carried`
 answers with: `on_model` pulls each tip back onto the nearest surface it holds, `fits`
 sweeps the whole tree as beams with the profile's clearance — tip heads apart, since a tip
-is meant to touch — and a step that sinks any part of it into the model or lands a tip on a
+is meant to touch, and a trunk standing on the model swept only down to where its rim may
+meet the face it sinks into — and a step that sinks any part of it into the model or lands a tip on a
 blocked face is dropped, cursor and support staying where they were. Which nodes a `Part`
 moves, and that the foot stays on the plate, are settled there too and not in the panel
 that reads the drag (ADR 0208).
@@ -422,7 +445,7 @@ same way, lifted 0.05 mm off the faces it covers, green for a fill and violet fo
 blocker, which is a colour no overhang wash is.
 While a brush is out, a press that lands on a model paints until the button comes up and a
 press that misses one still turns the camera; under **Edit** a press picks the part it landed
-on and draws it green, the press after that carries it, shift adds to what is picked, and
+on, draws it green and carries it (ADR 0244), and
 the columns are rebuilt in that same frame so nothing vanishes under the cursor. The stroke is painted along the line
 the cursor drew rather than only where the frames fell, and the brush itself is drawn as a
 ring lying on the surface under the cursor, in the colour of the patch it paints: drag to

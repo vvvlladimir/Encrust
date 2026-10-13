@@ -23,7 +23,8 @@ use hollow::{
     remove_blocker_under_cursor, remove_drain_under_cursor,
 };
 use overlays::{
-    cut_line, draw_axis_letters, draw_bounds, draw_cut_plane, draw_facet, draw_measure, draw_picked,
+    cut_line, draw_aimed, draw_axis_letters, draw_bounds, draw_cut_plane, draw_facet, draw_measure,
+    draw_picked,
 };
 use paint::{draw_brush, paint_stroke};
 use picking::{
@@ -63,11 +64,15 @@ pub fn ui(ui: &mut egui::Ui, window: &mut Window) -> egui::Rect {
     // The brush and the tip being dragged take the primary button only for a gesture that
     // began on something of theirs, so a drag that starts on empty plate still turns the
     // camera while either is out.
-    let painting = paint_stroke(ui, window, rect, &pointer) || drag_support(window, rect, &pointer);
+    let painting = paint_stroke(ui, window, rect, &pointer);
+    // A support in hand has the whole gesture, shift and all: it neither turns the camera
+    // nor slides it.
+    let carrying = !painting && drag_support(window, rect, &pointer);
+    let drag = if carrying { Drag::None } else { gesture.drag };
 
     follow_turn(ui, window.view);
     let invert = window.machine.general.invert_zoom;
-    steer_camera(window.view, rect, &pointer, gesture.drag, painting, invert);
+    steer_camera(window.view, rect, &pointer, drag, painting, invert);
     if gesture.clicked
         && let Some(position) = pointer.position
     {
@@ -257,6 +262,7 @@ fn draw_tool_overlays(ui: &egui::Ui, window: &mut Window, rect: egui::Rect, poin
     }
     if *window.tool == Tool::Supports {
         draw_picked(ui, window, rect);
+        draw_aimed(ui, window, rect, pointer);
     }
 }
 

@@ -172,7 +172,7 @@ Grouped by what the decision governs; the number is still the order it was taken
 | [0092](0092-a-painted-patch-is-a-set-of-faces.md) | A painted patch is a set of faces, filled on the plate's grid | Accepted |
 | [0093](0093-a-blocker-is-a-keep-out-not-a-hint.md) | A support blocker is a keep-out, not a hint | Accepted |
 | [0094](0094-a-supports-parameters-are-its-groups.md) | A support's parameters are its group's | Accepted |
-| [0095](0095-a-support-the-hand-touched-is-frozen.md) | A support the hand has touched is frozen into the scene | Accepted |
+| [0095](0095-a-support-the-hand-touched-is-frozen.md) | A support the hand has touched is frozen into the scene | Accepted; the two-press rule is superseded by 0244 |
 | [0208](0208-carrying-a-support-is-settled-in-core-supports.md) | Carrying a support by hand is settled in `core-supports` | Accepted |
 | [0119](0119-support-profiles-join-the-catalogue.md) | Support profiles join the catalogue; a group tunes a copy | Accepted |
 | [0124](0124-a-support-standing-on-the-part-ends-in-a-contact.md) | End a support that stands on the part in a contact, and let a profile refuse one | Accepted |
@@ -186,6 +186,7 @@ Grouped by what the decision governs; the number is still the order it was taken
 | [0241](0241-a-raft-covers-the-part-and-comes-in-three-styles.md) | Draw a raft around the part by a margin in millimetres, in one of three styles | Accepted |
 | [0242](0242-a-trunk-is-a-cone-sized-by-its-height-and-load.md) | Make a trunk a cone sized by its height and load, and no brace wider than it | Accepted |
 | [0243](0243-a-tip-is-a-plane-or-a-sphere-and-a-plane-bites-by-moving-in.md) | Offer a plane or a sphere tip, and bite a plane tip by pushing it in | Accepted |
+| [0244](0244-a-press-on-a-support-carries-it-and-the-aim-has-slack.md) | Carry a support by the press that picks it, and give the aim slack | Accepted |
 | [0132](0132-the-shipped-asset-is-the-preset.md) | The shipped TOML is the preset, and the constructor mirrors it | Accepted |
 
 ### Volume: hollowing, infill and relief

@@ -35,7 +35,7 @@ mod tree;
 pub use base::{SKATE_BEVEL, SKATE_LENGTH, SKATE_WIDTH};
 pub use branch::grow;
 pub use column::{Column, Landing, SupportPoint, columns, landing, neck_of};
-pub use edit::{carried, fits, on_model};
+pub use edit::{carried, fits, on_model, tip_carried};
 pub use generate::generate_supports;
 pub use group::Profiles;
 pub use low::low_points;

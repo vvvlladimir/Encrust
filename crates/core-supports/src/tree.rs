@@ -142,6 +142,87 @@ impl SupportTree {
         };
     }
 
+    /// Stands the tree on `landing`, for a trunk a hand has carried somewhere a column
+    /// was dropped from again.
+    pub(crate) fn stand_on(&mut self, landing: Landing) {
+        self.landing = landing;
+    }
+
+    /// The tree without the nodes in `cut` and everything they hold up, or `None` when
+    /// that leaves it nothing to hold: the root went, or every tip did.
+    ///
+    /// A joint left with nothing above it goes too, and so on down, so no stub is left
+    /// reaching for a tip that is not there.
+    #[must_use]
+    pub fn without(&self, cut: &[usize]) -> Option<Self> {
+        let mut kept: Vec<bool> = (0..self.nodes.len())
+            .map(|node| !self.hangs_from(node, cut))
+            .collect();
+        loop {
+            let mut holds = vec![false; self.nodes.len()];
+            for (node, _) in self
+                .nodes
+                .iter()
+                .enumerate()
+                .filter(|(node, _)| kept[*node])
+            {
+                if let Some(parent) = self.nodes[node].parent {
+                    holds[parent] = true;
+                }
+            }
+            let bare: Vec<usize> = (0..self.nodes.len())
+                .filter(|node| kept[*node] && !self.nodes[*node].is_leaf() && !holds[*node])
+                .collect();
+            if bare.is_empty() {
+                break;
+            }
+            for node in bare {
+                kept[node] = false;
+            }
+        }
+        if !kept[self.root] {
+            return None;
+        }
+
+        let mut renumbered = vec![0usize; self.nodes.len()];
+        let mut next = 0;
+        for (node, kept) in kept.iter().enumerate() {
+            renumbered[node] = next;
+            next += usize::from(*kept);
+        }
+        let nodes = self
+            .nodes
+            .iter()
+            .enumerate()
+            .filter(|(node, _)| kept[*node])
+            .map(|(_, node)| TreeNode {
+                parent: node.parent.map(|parent| renumbered[parent]),
+                ..*node
+            })
+            .collect();
+        Some(Self {
+            nodes,
+            root: renumbered[self.root],
+            ..self.clone()
+        })
+    }
+
+    /// Whether `node` is one of `cut` or hangs, through its parents, from one of them.
+    fn hangs_from(&self, node: usize, cut: &[usize]) -> bool {
+        let mut at = Some(node);
+        // No longer than the tree is deep; the count guards a file with a loop in it.
+        for _ in 0..=self.nodes.len() {
+            let Some(here) = at else {
+                return false;
+            };
+            if cut.contains(&here) {
+                return true;
+            }
+            at = self.nodes.get(here).and_then(|node| node.parent);
+        }
+        false
+    }
+
     /// Where the tree touches the model: the position of every tip it carries.
     pub fn contacts(&self) -> impl Iterator<Item = Vec3> + '_ {
         self.nodes
@@ -156,5 +237,91 @@ impl SupportTree {
             .iter()
             .enumerate()
             .filter_map(|(child, node)| node.parent.map(|parent| (child, parent)))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::tests::{profile, trees_on};
+    use crate::{Profiles, SupportPoint};
+    use core_geometry::{Mesh, Transform};
+
+    /// Two tips close enough to share a trunk and a third further off that joins them
+    /// lower down, all 20 mm over the plate.
+    fn branched() -> SupportTree {
+        let points: Vec<SupportPoint> = [10.0, 13.0, 19.0]
+            .into_iter()
+            .map(|x| SupportPoint::new(Vec3::new(x, 10.0, 20.0)))
+            .collect();
+        let mut trees = trees_on(
+            &points,
+            &Mesh::default(),
+            Transform::default(),
+            Profiles::single(&profile()),
+        );
+        assert_eq!(trees.len(), 1, "the three tips share a trunk");
+        trees.remove(0)
+    }
+
+    /// The node a tip hangs its head on: the one under the leaf holding `point`.
+    fn neck_under(tree: &SupportTree, point: usize) -> usize {
+        tree.nodes()
+            .iter()
+            .find(|node| node.point == Some(point))
+            .and_then(|node| node.parent)
+            .expect("a tip of a branched tree hangs from a neck")
+    }
+
+    #[test]
+    fn cutting_a_strut_takes_what_it_holds_and_leaves_the_rest_standing() {
+        let tree = branched();
+        let left = tree
+            .without(&[neck_under(&tree, 2)])
+            .expect("two tips are still held");
+
+        assert_eq!(left.tip_count(), 2);
+        assert_eq!(left.points().collect::<Vec<_>>(), vec![0, 1]);
+        assert_eq!(
+            left.landing(),
+            tree.landing(),
+            "the trunk stands where it stood"
+        );
+        for (child, parent) in left.struts() {
+            assert!(
+                child < left.nodes().len() && parent < left.nodes().len(),
+                "every strut still runs between two nodes of the tree"
+            );
+        }
+        assert!(
+            left.nodes()
+                .iter()
+                .enumerate()
+                .all(|(at, node)| node.is_leaf() || left.struts().any(|(_, parent)| parent == at)),
+            "no joint is left holding nothing"
+        );
+    }
+
+    #[test]
+    fn cutting_the_joint_two_tips_meet_at_takes_both() {
+        let tree = branched();
+        let joint = tree.nodes()[neck_under(&tree, 0)]
+            .parent
+            .expect("the neck hangs from the joint the pair meets at");
+        let left = tree.without(&[joint]).expect("the third tip is still held");
+        assert_eq!(left.points().collect::<Vec<_>>(), vec![2]);
+    }
+
+    #[test]
+    fn cutting_every_tip_leaves_no_support() {
+        let tree = branched();
+        let necks: Vec<usize> = (0..3).map(|point| neck_under(&tree, point)).collect();
+        assert!(tree.without(&necks).is_none());
+    }
+
+    #[test]
+    fn cutting_the_root_leaves_no_support() {
+        let tree = branched();
+        assert!(tree.without(&[tree.root_index()]).is_none());
     }
 }

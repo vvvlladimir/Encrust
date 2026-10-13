@@ -100,6 +100,24 @@ impl Landing {
     }
 }
 
+/// Height a trunk of `radius_mm` standing on `landing` is swept for clearance down to.
+///
+/// On the plate that is the top of the foot. On the model it is where the trunk's rim,
+/// clearance and all, may already touch the steepest face it is let stand on: below that
+/// it is sinking into what it stands on, which is what it is meant to do.
+pub(crate) fn swept_bottom_z(
+    landing: &Landing,
+    radius_mm: Scalar,
+    profile: &SupportProfile,
+) -> Scalar {
+    if landing.on_model {
+        let lean = MAX_LANDING_SLOPE_DEG.to_radians().tan();
+        landing.base.z + (radius_mm + profile.clearance_mm) * lean + SURFACE_EPSILON_MM
+    } else {
+        landing.pillar_bottom_z(profile)
+    }
+}
+
 /// One support resolved against the model: a tip square on the face it holds, and a
 /// vertical column from the end of that tip down to whatever it stands on, in plate
 /// coordinates.

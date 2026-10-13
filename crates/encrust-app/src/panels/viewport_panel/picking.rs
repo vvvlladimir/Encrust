@@ -34,7 +34,7 @@ pub(super) fn measure_under_cursor(
         }
         return;
     }
-    let reach_mm = reach_at(&window.view.camera, viewport, cursor, hit.point);
+    let reach_mm = reach_at(&window.view.camera, viewport, cursor, hit.point, SNAP_PX);
     let (point, snapped) = measure::snap(
         &object.mesh,
         &object.bvh,
@@ -50,10 +50,20 @@ pub(super) fn measure_under_cursor(
 /// How near the cursor a corner or an edge catches a click, points of the screen.
 const SNAP_PX: f32 = 14.0;
 
-/// `SNAP_PX` as millimetres of the plate at `at`, which the cursor lies over: a snap
-/// reaches as far on screen however near the model is.
-fn reach_at(camera: &OrbitCamera, viewport: egui::Rect, cursor: egui::Pos2, at: Vec3) -> f32 {
-    let beside = cursor + egui::vec2(SNAP_PX, 0.0);
+/// How near the cursor a part of a support is caught, points of the screen: enough that
+/// a pillar a point or two wide can be hit, too little to take one the cursor is not on.
+const AIM_PX: f32 = 2.0;
+
+/// `points` of the screen as millimetres of the plate at `at`, which the cursor lies
+/// over: a reach is as far on screen however near the model is.
+fn reach_at(
+    camera: &OrbitCamera,
+    viewport: egui::Rect,
+    cursor: egui::Pos2,
+    at: Vec3,
+    points: f32,
+) -> f32 {
+    let beside = cursor + egui::vec2(points, 0.0);
     let (Some(here), Some(there)) = (
         ray_through(camera, viewport, cursor),
         ray_through(camera, viewport, beside),
@@ -145,8 +155,17 @@ pub(super) fn aims_elsewhere(scene: &Scene, hit: Option<ObjectId>) -> bool {
     hit.is_some_and(|id| scene.has_selection() && !scene.is_selected(id))
 }
 
-/// Which part of which support the cursor is over, with the object it belongs to.
-/// Objects are searched in the order they were imported.
+/// How far a ray through `cursor` may pass a part of a support and still take it,
+/// millimetres, measured on that ray as far off as the camera is looking.
+pub(super) fn aim_slack_mm(camera: &OrbitCamera, viewport: egui::Rect, cursor: egui::Pos2) -> f32 {
+    let Some(ray) = ray_through(camera, viewport, cursor) else {
+        return 0.0;
+    };
+    let under = ray.at((camera.target - ray.origin).dot(ray.direction));
+    reach_at(camera, viewport, cursor, under, AIM_PX)
+}
+
+/// Which part of which support the cursor is on, with the object it belongs to. Objects are searched in the order they were imported.
 pub(super) fn grab_under_cursor(
     window: &Window,
     viewport: egui::Rect,
@@ -155,12 +174,11 @@ pub(super) fn grab_under_cursor(
     let ray = ray_through(&window.view.camera, viewport, cursor)?;
     let table = window.tools.supports.table();
     let profiles = Profiles::new(&table)?;
+    let slack_mm = aim_slack_mm(&window.view.camera, viewport, cursor);
 
-    window
-        .doc
-        .scene
-        .here()
-        .find_map(|object| grab(object.supports.trees(), &ray, profiles).map(|it| (object.id, it)))
+    window.doc.scene.here().find_map(|object| {
+        grab(object.supports.trees(), &ray, profiles, slack_mm).map(|it| (object.id, it))
+    })
 }
 
 #[cfg(test)]
@@ -168,6 +186,25 @@ mod tests {
     use std::sync::Arc;
 
     use super::*;
+
+    #[test]
+    fn the_aim_reaches_as_far_wherever_on_the_screen_the_cursor_is() {
+        let camera = OrbitCamera::default();
+        let viewport = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(800.0, 600.0));
+
+        // 600 points of height show 2 * 300 mm * tan(0.4) = 254 mm, so a point is
+        // 0.42 mm where the camera looks and two of them 0.85 mm.
+        let middle = aim_slack_mm(&camera, viewport, viewport.center());
+        assert!(
+            (middle - 0.85).abs() < 0.05,
+            "two points at the middle of the view are 0.85 mm, got {middle}"
+        );
+        let corner = aim_slack_mm(&camera, viewport, egui::pos2(40.0, 40.0));
+        assert!(
+            corner < 2.0 * middle,
+            "a cursor far from the middle reaches no further, got {corner} mm"
+        );
+    }
 
     #[test]
     fn a_click_outside_the_selection_only_aims_the_tool() {
