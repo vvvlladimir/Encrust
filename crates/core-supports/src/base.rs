@@ -4,7 +4,7 @@ use printer_profiles::SupportProfile;
 
 use crate::clear::{Beam, clear};
 use crate::group::Profiles;
-use crate::mesher::trunk_radius_at_mm;
+use crate::mesher::{trunk_axis_at, trunk_radius_at_mm};
 use crate::tree::SupportTree;
 
 /// Two feet closer together than this stand in the same place, and the hull cannot tell
@@ -274,20 +274,15 @@ fn tie(one: &SupportTree, two: &SupportTree, profiles: Profiles) -> Vec<(Vec3, V
     // A cross rather than a rung: each step ties the foot of one trunk to the head of
     // the other and back again, so the pair is braced against leaning either way. See
     // `docs/decisions/0044`.
+    // Each end is on its trunk's own axis at that height, not under its root: a trunk a
+    // hand has leant is not where it was grown, and a brace to where it was ties nothing.
+    let on = |tree: &SupportTree, z: Scalar| trunk_axis_at(tree, profiles.of(tree.group()), z);
     let mut struts = Vec::new();
     let mut z = floor;
     while z + bracing.rise_mm <= ceiling {
         let up = z + bracing.rise_mm;
-        struts.push((
-            Vec3::new(here.x, here.y, z),
-            Vec3::new(there.x, there.y, up),
-            width(one, z).min(width(two, up)),
-        ));
-        struts.push((
-            Vec3::new(there.x, there.y, z),
-            Vec3::new(here.x, here.y, up),
-            width(two, z).min(width(one, up)),
-        ));
+        struts.push((on(one, z), on(two, up), width(one, z).min(width(two, up))));
+        struts.push((on(two, z), on(one, up), width(two, z).min(width(one, up))));
         z = up;
     }
     struts
@@ -439,6 +434,31 @@ mod tests {
         assert!((ground(first.0) - ground(second.1)).length() < 1e-4);
         assert!((ground(first.1) - ground(second.0)).length() < 1e-4);
         assert!((first.0.z - second.0.z).abs() < 1e-4);
+    }
+
+    #[test]
+    fn a_brace_ends_on_a_trunk_a_hand_has_leant_and_not_where_it_was_grown() {
+        let profile = with_bracing();
+        let mut trees = standing(&[(10.0, 10.0), (18.0, 10.0)], 30.0, &profile);
+        // The first trunk's foot carried 4 mm away from the other: it now leans.
+        trees[0].move_landing(Vec3::new(6.0, 10.0, 0.0));
+
+        let struts = tied(&trees, &Mesh::default(), &profile);
+        assert!(!struts.is_empty(), "the pair is still within reach");
+        for end in struts.iter().flat_map(|(from, to, _)| [*from, *to]) {
+            let tree = if end.x < 14.0 { &trees[0] } else { &trees[1] };
+            let on_it = trunk_axis_at(tree, &profile, end.z);
+            assert!(
+                (end - on_it).length() < 1e-4,
+                "a brace ends on the trunk it ties, {end} against the trunk at {on_it}"
+            );
+        }
+        assert!(
+            struts
+                .iter()
+                .any(|(from, _, _)| (from.x - 10.0).abs() > 0.5 && from.x < 10.0),
+            "low down, the leant trunk is not under its root any more"
+        );
     }
 
     #[test]

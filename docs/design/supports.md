@@ -30,7 +30,8 @@ fast, 45 degrees, and a head that would meet the model within its own length goe
 down (ADR 0249). A flat top, or a contact off the surface, sends it straight down. A knee
 and the strut into a thicker support are held to 45 degrees too, whatever the branch
 angle; a trunk is swept for clearance from its own width below its top; and a tip that can
-neither stand nor lean is run on one strut straight onto the model under it. A contact on an edge or a corner sits on every face meeting there
+neither stand nor lean is run on one strut straight onto the model under it — onto a face
+that looks up at it, so a contact inside the model is not run out through its skin. A contact on an edge or a corner sits on every face meeting there
 and leaves the one that looks down most, so the support under a low point of the model is
 shaped like the rest. Everything below is measured from the neck, not from the contact.
 
@@ -125,7 +126,10 @@ to carry one level, cut at `max_spacing_mm` — two are neighbours when no third
 inside the circle they span as a diameter. It is planar, so no two crosses cross seen from
 above, and it keeps every trunk's nearest neighbour. A tall trunk with nobody inside that
 reach is leant towards its nearest neighbour on a knee, to three quarters of the reach,
-where branching is on and the trunk under the knee can still be tied (ADR 0240).
+where branching is on and the trunk under the knee can still be tied (ADR 0240) — but no
+further across than half the merge distance, and towards a trunk of any group already
+stood (ADR 0250). A brace ends on each trunk's own axis at that height, so one a hand has
+leant keeps its braces.
 `[bracing]` ties those neighbours every `rise_mm` from
 `start_height_mm`, as high as both still stand — the lower of the two root nodes, since
 above that a trunk has split. A tie is a cross, not a rung, so the pair is braced both
@@ -359,7 +363,10 @@ carrier wider than itself — by one strut within its own branch angle and half 
 distance, at the highest point it reaches — in the same heap its merges with other fronts sit in.
 Such a front is a tree whose `Landing` is that point with `on_support` beside `on_model`,
 so it has no trunk, no foot, no pad and no brace, and the mesher ends it plain inside the
-carrier. `grow` hands the forest back in group order.
+carrier. A tree built as a small pillar carries only as wide as that, and once every group
+is grown each one with a neck is itself run into a wider carrier in its reach and built
+that thin all the way up, so a small pillar stands on a support and never the other way
+round (ADR 0251). `grow` hands the forest back in group order.
 
 Any group can be dropped but the last, and the one after the first takes its place and the
 raft with it. A secondary click on a group's row builds the whole group to another saved

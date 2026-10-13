@@ -247,7 +247,7 @@ fn groups(ui: &mut egui::Ui, window: &mut Window) {
 
 /// Width of the menu a group's row opens, points: wide enough for a profile's name and
 /// the mark beside the one in use.
-const PROFILE_MENU_W: f32 = 190.0;
+const PROFILE_MENU_W: f32 = 180.0;
 
 /// The saved profiles a group can be built to, the one it is built to now marked, and
 /// answers the one chosen.
@@ -257,7 +257,10 @@ fn profile_menu(
     built_to: &str,
 ) -> Option<printer_profiles::SupportProfile> {
     let colors = theme::colors();
+    // Both: a menu is as wide as the widest thing in it asks for, and a row that asks
+    // for all the width there is gets the width of the window.
     ui.set_min_width(PROFILE_MENU_W);
+    ui.set_max_width(PROFILE_MENU_W);
     ui.spacing_mut().item_spacing.y = 2.0;
     ui.spacing_mut().button_padding = egui::vec2(8.0, 5.0);
     let heading = egui::RichText::new("Build this group to")
@@ -278,7 +281,7 @@ fn profile_menu(
         let name = egui::RichText::new(&profile.name)
             .font(theme::label())
             .color(colour);
-        let mark = if current { icon::CHECK } else { "" };
+        let mark = if current { icon::IN_HAND } else { "" };
         let item = egui::Button::new(name)
             .right_text(egui::RichText::new(mark).color(colors.accent))
             .selected(current)

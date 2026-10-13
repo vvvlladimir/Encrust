@@ -485,6 +485,19 @@ impl ModelSupports {
         }
     }
 
+    /// Takes every support of `group` away and leaves the group itself, and every other
+    /// group's number, as it was. Returns how many supports went.
+    pub fn clear_group(&mut self, group: u16) -> usize {
+        let before = self.point_count();
+        self.points.retain(|support| support.group != group);
+        self.frozen.retain(|tree| tree.group() != group);
+        let gone = before - self.point_count();
+        if gone > 0 {
+            self.built = None;
+        }
+        gone
+    }
+
     /// Takes every support away: the points and the trees a hand has frozen alike.
     pub fn clear(&mut self) {
         self.points.clear();
@@ -594,6 +607,20 @@ mod tests {
         assert!(supports.is_empty());
         assert!(supports.meshes().is_none());
         assert!(supports.trees().is_empty());
+    }
+
+    #[test]
+    fn clearing_one_group_leaves_the_others_and_their_numbers() {
+        let mut supports = ModelSupports::default();
+        for (x, group) in [(1.0, 0), (2.0, 1), (3.0, 2), (4.0, 1)] {
+            supports.add(Vec3::new(x, 0.0, 10.0), Transform::default(), group);
+        }
+
+        assert_eq!(supports.clear_group(1), 2);
+
+        let left: Vec<u16> = supports.points().iter().map(|point| point.group).collect();
+        assert_eq!(left, vec![0, 2], "group 2 is still group 2");
+        assert_eq!(supports.clear_group(1), 0, "nothing is left in it to take");
     }
 
     #[test]

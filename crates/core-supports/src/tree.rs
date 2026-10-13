@@ -143,6 +143,14 @@ impl SupportTree {
         };
     }
 
+    /// Builds every strut of the tree `radius_mm` wide, for one that is to be as thin as
+    /// a small pillar all the way up.
+    pub(crate) fn set_radius_mm(&mut self, radius_mm: Scalar) {
+        for node in &mut self.nodes {
+            node.radius_mm = radius_mm;
+        }
+    }
+
     /// Stands the tree on `landing`, for a trunk a hand has carried somewhere a column
     /// was dropped from again.
     pub(crate) fn stand_on(&mut self, landing: Landing) {

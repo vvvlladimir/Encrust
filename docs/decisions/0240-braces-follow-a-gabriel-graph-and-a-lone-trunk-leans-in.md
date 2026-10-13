@@ -1,6 +1,6 @@
 # 0240. Tie trunks along a Gabriel graph, and lean a lone trunk into reach
 
-- **Status:** Accepted
+- **Status:** Accepted; how far a trunk leans and towards what is superseded by 0250
 - **Date:** 2026-10-12
 
 ## Context

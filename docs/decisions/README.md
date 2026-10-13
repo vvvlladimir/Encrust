@@ -182,7 +182,7 @@ Grouped by what the decision governs; the number is still the order it was taken
 | [0237](0237-a-pad-is-fitted-to-the-room-it-has.md) | Fit a pad to the room it has, and lift a part by what its support needs | Accepted; the fitting of a pad is superseded by 0239 |
 | [0238](0238-a-support-has-one-width-and-its-joints-are-domes.md) | Give a support one width, round its joints, and let a raft lift the part | Accepted |
 | [0239](0239-a-pad-is-as-wide-as-its-profile-says.md) | Make a pad as wide as its profile says, and move it rather than narrow it | Accepted |
-| [0240](0240-braces-follow-a-gabriel-graph-and-a-lone-trunk-leans-in.md) | Tie trunks along a Gabriel graph, and lean a lone trunk into reach | Accepted |
+| [0240](0240-braces-follow-a-gabriel-graph-and-a-lone-trunk-leans-in.md) | Tie trunks along a Gabriel graph, and lean a lone trunk into reach | Accepted; how far a trunk leans and towards what is superseded by 0250 |
 | [0241](0241-a-raft-covers-the-part-and-comes-in-three-styles.md) | Draw a raft around the part by a margin in millimetres, in one of three styles | Accepted |
 | [0242](0242-a-trunk-is-a-cone-sized-by-its-height-and-load.md) | Make a trunk a cone sized by its height and load, and no brace wider than it | Accepted |
 | [0243](0243-a-tip-is-a-plane-or-a-sphere-and-a-plane-bites-by-moving-in.md) | Offer a plane or a sphere tip, and bite a plane tip by pushing it in | Accepted |
@@ -234,6 +234,8 @@ Grouped by what the decision governs; the number is still the order it was taken
 | [0247](0247-a-chosen-profile-is-a-group-of-its-own.md) | Make a profile chosen from the list a group of its own | Accepted |
 | [0248](0248-a-thinner-support-stands-on-a-thicker-one-of-another-group.md) | Stand a thinner support on the trunk of a thicker one of another group | Accepted |
 | [0249](0249-nothing-that-carries-a-support-leans-past-45-degrees.md) | Hold everything that carries a support to 45 degrees, branches apart, and give a stranded tip a strut | Accepted |
+| [0250](0250-a-trunk-leans-for-a-brace-no-further-than-a-branch-reaches.md) | Lean a trunk for a brace no further than a branch reaches, towards any group, and tie a brace to the trunk's own axis | Accepted |
+| [0251](0251-a-small-pillar-stands-on-a-support-and-nothing-is-built-in-the-solid.md) | Stand a small pillar on the support beside it, never a support on a small pillar, and build nothing inside the model | Accepted |
 | [0178](0178-a-project-names-its-cavities-and-the-engine-opens-it.md) | A project names its cavities, and the engine opens it into a plate | Superseded by 0191 |
 | [0191](0191-a-project-holds-the-plate-as-it-stands.md) | A project holds the plate as it stands, and opening it builds nothing | Accepted |
 

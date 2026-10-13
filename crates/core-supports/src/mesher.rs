@@ -70,6 +70,12 @@ impl Style {
     }
 }
 
+/// Whether `tree` is built as the thin strut of `[small_pillar]` and not to the width of
+/// its own nodes: what it can carry, and what it can stand on, go by that width.
+pub(crate) fn is_small(tree: &SupportTree, profile: &SupportProfile) -> bool {
+    Style::of(tree, profile).small
+}
+
 /// Welds every support into one mesh, in plate coordinates.
 ///
 /// Each strut is its own closed tube, and a tube reaches past the joint it ends at so
@@ -302,6 +308,14 @@ pub(crate) fn trunk_radius_at_mm(
     let lower = trunk_base_mm(tree, profile, style);
     let along = ((top - z_mm) / (top - bottom).max(RING_EPSILON_MM)).clamp(0.0, 1.0);
     upper + (lower - upper) * along
+}
+
+/// Where the axis of `tree`'s trunk is at height `z_mm`: under the root for a trunk that
+/// stands straight, and along the lean of one whose foot or root a hand has carried.
+pub(crate) fn trunk_axis_at(tree: &SupportTree, profile: &SupportProfile, z_mm: Scalar) -> Vec3 {
+    let (top, bottom) = (tree.root().position, trunk_bottom(tree, profile));
+    let along = ((top.z - z_mm) / (top.z - bottom.z).max(RING_EPSILON_MM)).clamp(0.0, 1.0);
+    top.lerp(bottom, along)
 }
 
 /// How wide the trunk is where it meets what it stands on, millimetres: its own width on

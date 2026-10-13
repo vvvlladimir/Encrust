@@ -1,4 +1,3 @@
-use core_analysis::RiskKind;
 use core_supports::Part;
 
 use super::scope;
@@ -8,16 +7,13 @@ use crate::panels::support_fields::{Group, saved_as};
 use crate::state::Doc;
 use crate::status::Status;
 use crate::ui::{
-    describe, hint, icon, primary_button, progress_bar, secondary_button, section, stats, theme,
-    tone,
+    hint, icon, primary_button, progress_bar, secondary_button, section, stats, theme, tone,
 };
-use crate::workspace::{Mode, Tool};
 
 /// Growing supports under whatever hangs over nothing, and the parts of those already
 /// standing, which a click in this tool picks.
 pub fn ui(ui: &mut egui::Ui, window: &mut Window) {
     super::shape::profile_section(ui, window);
-    section(ui, "Islands", None, |ui| islands(ui, window));
     section(ui, "Where", None, |ui| {
         scope::editing_supports(window, |window| {
             let profile = &mut window.tools.supports.profile;
@@ -29,58 +25,6 @@ pub fn ui(ui: &mut egui::Ui, window: &mut Window) {
     });
     section(ui, "Picked", None, |ui| editing(ui, window));
     section(ui, "Already done", None, |ui| placed(ui, window));
-}
-
-/// Layer parts with nothing under them, read from the same cut stack the Check tool reads,
-/// supports and all: an island counted here is one the supports do not hold yet.
-fn islands(ui: &mut egui::Ui, window: &mut Window) {
-    describe(
-        ui,
-        "Layer parts with nothing under them. They cure loose in the vat.",
-    );
-    let colors = theme::colors();
-    let found = window.measured().map(|measured| {
-        let islands: Vec<usize> = measured
-            .risks()
-            .iter()
-            .filter(|risk| {
-                matches!(
-                    risk.kind,
-                    RiskKind::Island { .. } | RiskKind::Floating { .. }
-                )
-            })
-            .map(|risk| risk.layer)
-            .collect();
-        (islands.len(), islands.first().copied())
-    });
-    match found {
-        Some((0, _)) => tone(ui, "Every island is held.", colors.ok),
-        Some((loose, first)) => {
-            let from = first.map_or(String::new(), |layer| {
-                format!(", the first at layer {}", layer + 1)
-            });
-            tone(ui, &format!("{loose} cure loose{from}."), colors.danger);
-            if secondary_button(ui, icon::CHECK, "Show them in Check").clicked() {
-                crate::shortcuts::pick(window, Tool::Check);
-            }
-        }
-        None if window.machine.preview.is_measuring() || window.machine.preview.is_building() => {
-            ui.horizontal(|ui| {
-                ui.spinner();
-                hint(ui, "Reading every layer of the stack...");
-            });
-        }
-        None => {
-            hint(
-                ui,
-                "Not scanned yet. Scanning cuts the layers and shows them beside the model.",
-            );
-            if secondary_button(ui, icon::CHECK, "Scan").clicked() {
-                *window.mode = Mode::Preview;
-                window.view.options.mask_only = false;
-            }
-        }
-    }
 }
 
 /// How many supports stand on the plate, for the inspector's heading.
@@ -252,12 +196,40 @@ fn placed(ui: &mut egui::Ui, window: &mut Window) {
         );
     }
 
+    // Side by side: everything, or only what stands in the group in hand.
     ui.add_space(4.0);
-    if secondary_button(ui, icon::REMOVE, "Remove every support").clicked() {
-        for object in window.doc.scene.targets_mut() {
+    let active = window.tools.supports.active;
+    let name = window.tools.supports.groups[active as usize].name.clone();
+    let in_group: usize = window
+        .doc
+        .scene
+        .targets()
+        .map(|object| object.supports.group_count(active))
+        .sum();
+    let (mut all, mut group) = (false, false);
+    ui.columns(2, |columns| {
+        all = secondary_button(&mut columns[0], icon::REMOVE, "Remove all")
+            .on_hover_text("Take every support away")
+            .clicked();
+        group = columns[1]
+            .add_enabled_ui(in_group > 0, |ui| {
+                secondary_button(ui, icon::REMOVE, &format!("Only {name}"))
+                    .on_hover_text(format!(
+                        "Take away the {in_group} of the group in hand and leave the rest"
+                    ))
+                    .clicked()
+            })
+            .inner;
+    });
+    for object in window.doc.scene.targets_mut() {
+        if all {
             object.supports.clear();
+        } else if group {
+            object.supports.clear_group(active);
         }
-        // What was held is gone with the rest.
+    }
+    // What was held may be gone, and what is left of the frozen is renumbered.
+    if all || group {
         window.tools.supports.picked.clear();
     }
 }

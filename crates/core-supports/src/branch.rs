@@ -12,6 +12,7 @@ use crate::column::{
     Column, MAX_LEAN_PER_DROP, MIN_PILLAR_HEIGHT_MM, PLATE_Z_MM, SURFACE_EPSILON_MM, landing,
 };
 use crate::group::Profiles;
+use crate::mesher::is_small;
 use crate::tree::{SupportTree, TreeNode};
 
 /// Two tips this close together stand in the same place, and the direction between them
@@ -53,12 +54,68 @@ pub fn grow(columns: &[Column], placed: &Placed, profiles: Profiles) -> Vec<Supp
             .filter(|column| column.group == group)
             .copied()
             .collect();
-        let trees = grow_one(&mine, placed, profile, group, &carriers);
+        let mut trees = grow_one(&mine, placed, profile, group, &carriers);
+        // Before anything thinner is leant onto them: a trunk moved afterwards would
+        // leave what joined it ending in the air.
+        if profile.branching.enabled && profiles.ground().bracing.enabled {
+            gather(&mut trees, &forest, placed, profile, profiles.ground());
+        }
         carriers.take(&trees, profile);
         forest.extend(trees);
     }
+    stand_small_pillars_on_supports(&mut forest, &carriers, placed, profiles);
     forest.sort_by_key(SupportTree::group);
     forest
+}
+
+/// Runs every tree that stands on the model as a small pillar into a support beside it
+/// instead, where one wider than the pillar is in its reach, and builds it that thin
+/// all the way up.
+///
+/// A small pillar is the thinnest thing on the plate whatever its group's pillar is, so
+/// it is never what a regular support stands on, and it is asked last, once every group
+/// has stood what it could be run into. See `docs/decisions/0251`.
+fn stand_small_pillars_on_supports(
+    forest: &mut [SupportTree],
+    carriers: &Carriers,
+    placed: &Placed,
+    profiles: Profiles,
+) {
+    for tree in forest.iter_mut() {
+        let profile = profiles.of(tree.group());
+        let root = *tree.root();
+        if !profile.branching.enabled || root.is_leaf() || !is_small(tree, profile) {
+            continue;
+        }
+        let radius_mm = profile.small_pillar.radius_mm().min(root.radius_mm);
+        let met = carriers
+            .near(root.position)
+            .into_iter()
+            .map(|index| &carriers.all[index])
+            .filter(|carrier| carrier.radius_mm >= radius_mm + THICKER_BY_MM)
+            .filter_map(|carrier| meeting_on(root.position, carrier, profile))
+            .filter(|meet| {
+                let strut = Beam {
+                    from: root.position,
+                    to: *meet,
+                    from_radius_mm: radius_mm,
+                    to_radius_mm: radius_mm,
+                }
+                .with_clearance(profile.clearance_mm)
+                .trimmed(radius_mm + profile.clearance_mm);
+                clear(placed, &strut)
+            })
+            .max_by(|a, b| a.z.total_cmp(&b.z));
+        if let Some(meet) = met {
+            tree.set_radius_mm(radius_mm);
+            tree.stand_on(Landing {
+                base: meet,
+                on_model: true,
+                pad_offset: Vec2::ZERO,
+                on_support: true,
+            });
+        }
+    }
 }
 
 /// How much wider a carrier has to be than what joins it, millimetres: under this the
@@ -102,15 +159,21 @@ impl Carriers {
     }
 
     /// Takes on the struts and the trunks of `trees`. The strut under a tip is its head,
-    /// narrowing to the contact, and carries nothing but its own tip.
+    /// narrowing to the contact, and carries nothing but its own tip. A tree built as a
+    /// small pillar is as wide as that, whatever its nodes say.
     fn take(&mut self, trees: &[SupportTree], profile: &SupportProfile) {
         for tree in trees {
+            let widest_mm = if is_small(tree, profile) {
+                profile.small_pillar.radius_mm()
+            } else {
+                Scalar::INFINITY
+            };
             let nodes = tree.nodes();
             for (child, parent) in tree.struts().filter(|(child, _)| !nodes[*child].is_leaf()) {
                 self.push(Carrier {
                     top: nodes[child].position,
                     bottom: nodes[parent].position,
-                    radius_mm: nodes[child].radius_mm,
+                    radius_mm: nodes[child].radius_mm.min(widest_mm),
                     floor_mm: 0.0,
                 });
             }
@@ -120,7 +183,7 @@ impl Carriers {
                 self.push(Carrier {
                     top: root.position,
                     bottom: Vec3::new(landing.base.x, landing.base.y, bottom_z),
-                    radius_mm: root.radius_mm,
+                    radius_mm: root.radius_mm.min(widest_mm),
                     floor_mm: MIN_PILLAR_HEIGHT_MM,
                 });
             }
@@ -220,9 +283,6 @@ fn grow_one(
         }
     }
     let mut trees = forest.harvest(placed, profile);
-    if profile.branching.enabled && profile.bracing.enabled {
-        gather(&mut trees, placed, profile);
-    }
     for tree in &mut trees {
         tree.set_group(group);
     }
@@ -237,29 +297,46 @@ const GATHERED: Scalar = 0.75;
 /// neighbour, until one reaches.
 ///
 /// A long thin trunk on its own is the support that sways on the peel, and bracing
-/// cannot help what it cannot span. The lean is a knee at the branch angle, taken only
+/// cannot help what it cannot span. The lean is a knee within 45 degrees, taken only
 /// where the trunk under it is still tall enough to brace, clears the model and lands on
-/// the plate. See `docs/decisions/0240`.
-fn gather(trees: &mut [SupportTree], placed: &Placed, profile: &SupportProfile) {
-    let reach = profile.bracing.max_spacing_mm;
+/// the plate, and only as far as a branch reaches. The neighbour may be one of `settled`,
+/// the trunks thicker groups have already stood: a brace ties any two trunks, whatever
+/// their groups. See `docs/decisions/0240` and `docs/decisions/0250`.
+fn gather(
+    trees: &mut [SupportTree],
+    settled: &[SupportTree],
+    placed: &Placed,
+    profile: &SupportProfile,
+    ground: &SupportProfile,
+) {
+    let reach = ground.bracing.max_spacing_mm;
+    // No further than a branch reaches: a trunk carried across a cavity to meet a brace
+    // is a longer lever than the one the brace was to steady.
+    let furthest = profile.branching.max_merge_distance_mm / 2.0;
     let at = |tree: &SupportTree| tree.root().position.truncate();
     for index in 0..trees.len() {
         let tree = &trees[index];
-        if tree.landing().on_model || !braceable(tree, profile) {
+        if tree.landing().on_model || !braceable(tree, ground) {
             continue;
         }
         let here = at(tree);
         let nearest = trees
             .iter()
             .enumerate()
-            .filter(|(other, tree)| *other != index && braceable(tree, profile))
-            .map(|(_, tree)| at(tree))
+            .filter(|(other, _)| *other != index)
+            .map(|(_, tree)| tree)
+            .chain(settled)
+            .filter(|tree| braceable(tree, ground))
+            .map(at)
             .min_by(|a, b| (*a - here).length().total_cmp(&(*b - here).length()));
         let Some(there) = nearest.filter(|there| (*there - here).length() > reach) else {
             continue;
         };
 
         let step = (there - here) * (1.0 - reach * GATHERED / (there - here).length());
+        if step.length() > furthest {
+            continue;
+        }
         let root = *tree.root();
         let knee = root.position + step.extend(-step.length() / lean_per_drop(profile));
         let lean = Beam {
@@ -277,7 +354,7 @@ fn gather(trees: &mut [SupportTree], placed: &Placed, profile: &SupportProfile) 
 
         let mut leaning = tree.clone();
         leaning.lean_to(knee, root.radius_mm, landing);
-        if braceable(&leaning, profile) {
+        if braceable(&leaning, ground) {
             trees[index] = leaning;
         }
     }
@@ -689,6 +766,9 @@ impl<'a> Forest<'a> {
                 // From just under the contact: one placed by hand sits on the face itself.
                 let ray = Ray::new(tip.position - Vec3::Z * SURFACE_EPSILON_MM, -Vec3::Z);
                 let under = raycast_placed(placed.model, placed.bvh, placed.transform, &ray)
+                    // A face looking up at the contact: one looking away is the inside of
+                    // the model, and a strut to it is built in the solid and pokes out.
+                    .filter(|hit| hit.normal.z > 0.0)
                     .filter(|hit| hit.point.z > PLATE_Z_MM && !placed.blocks_face(hit.face))
                     .filter(|hit| (MIN_PILLAR_HEIGHT_MM..=BRIDGE_MAX_MM).contains(&hit.distance))?;
                 let node = TreeNode {
@@ -986,6 +1066,68 @@ mod tests {
         assert_eq!(
             under, 0,
             "nothing of the thin support is built under where it joins the thick one"
+        );
+    }
+
+    #[test]
+    fn a_contact_inside_the_model_is_not_run_out_through_its_skin() {
+        // In the middle of a solid block hanging over the plate: straight down is the
+        // inside of its underside, 5 mm away.
+        let model = box_mesh(Vec3::new(0.0, 0.0, 5.0), Vec3::new(10.0, 10.0, 15.0));
+        let forest = forest_of(
+            &[Vec3::new(5.0, 5.0, 10.0)],
+            &model,
+            Profiles::single(&profile()),
+        );
+        assert!(
+            forest.is_empty(),
+            "a strut built in the solid holds nothing up and pokes out of the part"
+        );
+    }
+
+    #[test]
+    fn a_small_pillar_stands_on_the_support_beside_it_and_never_the_other_way_round() {
+        // A block with a contact 10 mm over it, which alone is a small pillar standing
+        // on the block, and a contact beside the block with the plate under it. Two
+        // groups of one profile, so that the two do not simply merge; the pillar's first.
+        let block = box_mesh(Vec3::ZERO, Vec3::splat(10.0));
+        let table = [profile(), profile()];
+        let points = [
+            SupportPoint::new(Vec3::new(9.0, 5.0, 20.0)),
+            // Far enough out for its pad to clear the block, so it stands straight.
+            SupportPoint::new(Vec3::new(14.5, 5.0, 20.0)).in_group(1),
+        ];
+        let bvh = Bvh::build(&block);
+        let placed = Placed::new(&block, &bvh, Transform::default());
+        let profiles = Profiles::new(&table).expect("two groups");
+        let forest = grow(
+            &crate::columns(&points, &placed, profiles),
+            &placed,
+            profiles,
+        );
+
+        let (pillar, column) = (&forest[0], &forest[1]);
+        assert!(
+            !column.landing().on_model,
+            "the regular support stands on the plate, not on the pillar"
+        );
+        let landing = pillar.landing();
+        assert!(
+            landing.on_support,
+            "the pillar runs into it instead of the block"
+        );
+        assert!(
+            (landing.base.truncate() - Vec2::new(14.5, 5.0)).length() < 1e-3,
+            "it ends on the column's axis, got {}",
+            landing.base
+        );
+        let thin = profile().small_pillar.radius_mm();
+        assert!(
+            pillar
+                .nodes()
+                .iter()
+                .all(|node| (node.radius_mm - thin).abs() < 1e-6),
+            "and it is a small pillar's width all the way up"
         );
     }
 
@@ -1317,11 +1459,10 @@ mod tests {
         }
     }
 
-    #[test]
-    fn a_tall_trunk_standing_alone_leans_into_reach_of_a_brace() {
-        // Two columns 40 mm tall and 20 mm apart: past merging, and past the 8 mm a brace
-        // spans, with far more height than the lean costs.
+    /// The fixture with braces spanning 8 mm and branches merging no further than 10.
+    fn braced_at_8_mm() -> SupportProfile {
         let mut profile = profile();
+        profile.branching.max_merge_distance_mm = 10.0;
         profile.bracing = printer_profiles::Bracing {
             enabled: true,
             max_spacing_mm: 8.0,
@@ -1329,12 +1470,66 @@ mod tests {
             rise_mm: 5.0,
             ..printer_profiles::Bracing::default()
         };
+        profile
+    }
+
+    #[test]
+    fn a_trunk_is_not_carried_across_a_gap_wider_than_a_branch_reaches_to_meet_a_brace() {
+        let profile = braced_at_8_mm();
         let forest = forest_of(
-            &[Vec3::new(0.0, 0.0, 40.0), Vec3::new(20.0, 0.0, 40.0)],
+            &[Vec3::new(0.0, 0.0, 40.0), Vec3::new(30.0, 0.0, 40.0)],
             &Mesh::default(),
             Profiles::single(&profile),
         );
-        assert_eq!(forest.len(), 2, "20 mm is too far to merge");
+        let apart = (forest[0].landing().base - forest[1].landing().base).length();
+        assert!(
+            (apart - 30.0).abs() < 1e-3,
+            "24 mm of lean is a lever, so each stands under its own tip: {apart} mm apart"
+        );
+    }
+
+    #[test]
+    fn a_trunk_leans_towards_one_of_another_group_as_it_would_towards_its_own() {
+        let mut thin = braced_at_8_mm();
+        thin.middle.diameter_mm *= 0.5;
+        let table = [braced_at_8_mm(), thin];
+        let points = [
+            SupportPoint::new(Vec3::new(0.0, 0.0, 40.0)),
+            SupportPoint::new(Vec3::new(11.0, 0.0, 40.0)).in_group(1),
+        ];
+        let model = Mesh::default();
+        let bvh = Bvh::build(&model);
+        let placed = Placed::new(&model, &bvh, Transform::default());
+        let profiles = Profiles::new(&table).expect("two groups");
+        let forest = grow(
+            &crate::columns(&points, &placed, profiles),
+            &placed,
+            profiles,
+        );
+
+        let (thick, thin) = (&forest[0], &forest[1]);
+        assert!(
+            (thick.landing().base.truncate()).length() < 1e-3,
+            "the thicker one was stood first and stays where it stood"
+        );
+        let apart = (thick.landing().base - thin.landing().base).length();
+        assert!(
+            apart <= table[0].bracing.max_spacing_mm,
+            "the thinner one leant into a brace's reach of it, {apart} mm apart"
+        );
+    }
+
+    #[test]
+    fn a_tall_trunk_standing_alone_leans_into_reach_of_a_brace() {
+        // Two columns 40 mm tall and 11 mm apart: past merging, and past the 8 mm a brace
+        // spans, with far more height than the lean costs.
+        let profile = braced_at_8_mm();
+        let forest = forest_of(
+            &[Vec3::new(0.0, 0.0, 40.0), Vec3::new(11.0, 0.0, 40.0)],
+            &Mesh::default(),
+            Profiles::single(&profile),
+        );
+        assert_eq!(forest.len(), 2, "11 mm is too far to merge");
 
         let apart = (forest[0].landing().base - forest[1].landing().base).length();
         assert!(
