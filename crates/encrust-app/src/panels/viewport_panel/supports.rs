@@ -2,7 +2,7 @@
 //! support is held to lives in `core_supports::carried`; see ADR 0095 and 0208.
 
 use core_geometry::Vec3;
-use core_supports::{Part, Placed, Profiles, support_under};
+use core_supports::{Part, Placed, Preview, Profiles, preview, support_under};
 
 use crate::camera::OrbitCamera;
 use crate::panels::Window;
@@ -13,7 +13,7 @@ use crate::supports::{Picked, with_own};
 use crate::viewport_input::Pointer;
 use crate::workspace::Tool;
 
-use super::picking::{aim_slack_mm, grab_under_cursor};
+use super::picking::{aim_slack_mm, aims_elsewhere, grab_under_cursor};
 
 /// A ray flatter than this against a plane has no crossing worth using: a part dragged
 /// edge-on to it would shoot off to the horizon.
@@ -36,6 +36,31 @@ pub(super) fn place_support_under_cursor(
         let transform = object.transform;
         object.supports.add(hit.point, transform, group);
     }
+}
+
+/// What a click would stand where the cursor is, or `None` when it would put nothing
+/// down: off every model, or on one the click would only pick.
+pub(super) fn preview_under_cursor(
+    window: &Window,
+    viewport: egui::Rect,
+    cursor: egui::Pos2,
+) -> Option<Preview> {
+    let (id, hit) = pick_surface(&window.doc.scene, &window.view.camera, viewport, cursor)?;
+    if aims_elsewhere(&window.doc.scene, Some(id)) {
+        return None;
+    }
+    let object = window.doc.scene.get(id)?;
+    let table = window.tools.supports.table_for(object);
+    let profiles = Profiles::new(&table)?;
+    let keep_out = object.supports.keep_out(&object.mesh, object.transform);
+    let placed =
+        Placed::new(&object.mesh, &object.bvh, object.transform).blocking(keep_out.as_ref());
+    Some(preview(
+        &placed,
+        hit.point,
+        window.tools.supports.active,
+        profiles,
+    ))
 }
 
 /// Takes away the support under the cursor. Objects are searched in the order they were

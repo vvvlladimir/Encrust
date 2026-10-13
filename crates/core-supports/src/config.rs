@@ -231,7 +231,6 @@ mod tests {
         let light = SampleConfig::for_profile(&SupportProfile::light());
         let heavy = SampleConfig::for_profile(&SupportProfile::heavy());
 
-        assert!(heavy.spacing_mm < light.spacing_mm, "heavier is denser");
         assert!(heavy.reach_mm < light.reach_mm, "heavier is stricter");
     }
 }

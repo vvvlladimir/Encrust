@@ -104,7 +104,8 @@ never leaned (ADR 0043).
 **Small pillar.** `[small_pillar]` is the strut between two parts of a model: a diameter
 and a depth per end, no foot and no tip — one width from the face it holds to the one it
 stands on, whatever the profile's tip is. Which supports use it is derived — landing on the model,
-carrying one tip, section enabled — never marked. A trunk keeps its width whatever it
+carrying one tip, running no further than `max_length_mm` from contact to landing, section
+enabled — never marked; a longer one keeps the regular width (ADR 0255). A trunk keeps its width whatever it
 stands on, because it carries the tips' weight (ADR 0042).
 
 **Standing on the part.** Any other support that lands on the model ends in `[top]` and
@@ -156,8 +157,7 @@ cuts the model, leaving a part that already stands that high where it is. Whethe
 lowest contact of a lifted part can stand at all is arithmetic: the pad, the top segment
 and `MIN_PILLAR_HEIGHT_MM` have to fit under that contact, the segment being shortened
 rather than allowed to eat the body's room. Every shipped preset lifts by at least that
-much: Light 2 mm for a 0.5 mm pad, a 0.3 mm flare and a 1 mm top segment, Medium and Heavy
-5 mm (ADR 0237).
+much: Light 3.6 mm, Medium 5 mm and Heavy 5.5 mm (ADR 0237, 0254).
 
 ## Keeping the mesh closed
 
@@ -493,7 +493,10 @@ blocker, which is a colour no overhang wash is.
 While a brush is out, a press that lands on a model paints until the button comes up and a
 press that misses one still turns the camera; under **Edit** a press picks the part it landed
 on, draws it green and carries it (ADR 0244), and
-the columns are rebuilt in that same frame so nothing vanishes under the cursor. The stroke is painted along the line
+the columns are rebuilt in that same frame so nothing vanishes under the cursor. While **Place** is in hand,
+the support a click would stand is drawn under the resting cursor, see-through in its group's tint, as
+`core_supports::preview` grows it alone — what it would merge with or be braced to is left
+out — or only its tip, in red, where nothing would be built. The stroke is painted along the line
 the cursor drew rather than only where the frames fell, and the brush itself is drawn as a
 ring lying on the surface under the cursor, in the colour of the patch it paints: drag to
 paint, ctrl-click for the whole surface, alt to erase. The inspector's Supports section

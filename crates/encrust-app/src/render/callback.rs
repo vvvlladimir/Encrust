@@ -98,6 +98,9 @@ pub struct Shading<'a> {
     pub cut_line: Option<CutLine>,
     /// The support groups left out of the view, by group number.
     pub hidden_groups: &'a [bool],
+    /// The support the hand is about to put down and the colour it is shown in, in plate
+    /// coordinates. Drawn only, never capped: it is not part of the print yet.
+    pub preview: Option<(&'a Arc<Mesh>, Color32)>,
 }
 
 impl ViewportCallback {
@@ -118,9 +121,10 @@ impl ViewportCallback {
             textures,
             cut_line,
             hidden_groups,
+            preview,
         } = shading;
         let Draws {
-            models,
+            mut models,
             solids,
             cuts,
             cut_surfaces,
@@ -132,6 +136,12 @@ impl ViewportCallback {
             textures,
             hidden_groups,
         );
+        if let Some((mesh, colour)) = preview {
+            models.push(ModelDraw::whole(
+                Arc::clone(mesh),
+                ModelInstance::new(Transform::default(), colour, NOT_MARKED),
+            ));
+        }
 
         let (label, atlas) = label::front(plate);
         let mut lines = plate_lines(plate);

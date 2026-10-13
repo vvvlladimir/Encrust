@@ -294,7 +294,7 @@ fn small_pillar(ui: &mut egui::Ui, profile: &mut SupportProfile, saved: Option<&
         describe(
             ui,
             "Used where a support runs from one part of the model to another. Both ends sink \
-             into a surface.",
+             into a surface; a longer run keeps the regular width.",
         );
         mm(
             ui,
@@ -319,6 +319,14 @@ fn small_pillar(ui: &mut egui::Ui, profile: &mut SupportProfile, saved: Option<&
             &mut pillar.lower_depth_mm,
             FINE_STEP,
             0.05..=1.0,
+        );
+        mm(
+            ui,
+            "Max length",
+            was(saved, |p| p.small_pillar.max_length_mm),
+            &mut pillar.max_length_mm,
+            COARSE_STEP,
+            0.5..=50.0,
         );
     });
 }

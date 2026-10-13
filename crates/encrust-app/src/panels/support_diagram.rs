@@ -1114,11 +1114,21 @@ fn brace_figures(
     let every = format!("every {}", mm(bracing.rise_mm));
     let (from, to) = (view.at(first - bracing.rise_mm, -gap), view.at(first, -gap));
     dimension(painter, from - clear, to - clear, "");
-    beside(painter, (from - clear).lerp(to - clear, 0.5), -across, &every);
+    beside(
+        painter,
+        (from - clear).lerp(to - clear, 0.5),
+        -across,
+        &every,
+    );
     let start = format!("first {}", mm(bracing.start_height_mm));
     let (from, to) = (view.at(first, gap), view.at(column.plate, gap));
     dimension(painter, from + clear, to + clear, "");
-    beside(painter, (from + clear).lerp(to + clear, 0.5), across, &start);
+    beside(
+        painter,
+        (from + clear).lerp(to + clear, 0.5),
+        across,
+        &start,
+    );
     let back = along * 8.0;
     let (from, to) = (view.at(top, -gap) - back, view.at(top, gap) - back);
     dimension(painter, from, to, "");
@@ -1176,6 +1186,9 @@ pub fn small_pillar(ui: &mut Ui, profile: &SupportProfile) {
     text(&painter, upper_at, Align2::LEFT_CENTER, &mm(upper));
     let lower_at = pos2(right - ARROW * 3.0, under);
     text(&painter, lower_at, Align2::RIGHT_CENTER, &mm(lower));
+    let over = view.lane(thick, 2);
+    let longest = format!("max {}", mm(pillar.max_length_mm));
+    dimension(&painter, pos2(left, over), pos2(right, over), &longest);
 }
 
 /// The body swept about an axis `offset_mm` off the view's, each stretch in its part's

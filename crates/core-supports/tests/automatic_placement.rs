@@ -311,7 +311,9 @@ fn a_ball_on_the_plate_is_held_under_its_cap_and_nowhere_above_it() {
     let mesh = meshed(&trees, &model, &profile);
     let winding = Winding::build(&model);
     let bvh = Bvh::build(&model);
-    let bite_mm = profile.contact_depth_mm() + 0.05;
+    // A tip stood straight down on a slope sinks its rim further than its bite, by no more
+    // than the rim's own radius.
+    let bite_mm = profile.contact_depth_mm() + profile.contact_radius_mm() + 0.05;
     for vertex in &mesh.vertices {
         if winding.at(&model, *vertex) < 0.5 {
             continue;
@@ -340,12 +342,18 @@ fn a_ball_on_the_plate_is_held_under_its_cap_and_nowhere_above_it() {
 #[test]
 fn a_denser_profile_holds_the_same_island_in_more_places() {
     let model = floating_box();
-    let light = points(&model, &SupportProfile::light());
-    let heavy = points(&model, &SupportProfile::heavy());
+    let sparse = points(&model, &SupportProfile::light());
+    let dense = points(
+        &model,
+        &SupportProfile {
+            density: 2.5,
+            ..SupportProfile::light()
+        },
+    );
     assert!(
-        heavy.len() > light.len(),
-        "the heavy preset placed {} against the light preset's {}",
-        heavy.len(),
-        light.len()
+        dense.len() > sparse.len(),
+        "a density of 2.5 placed {} against 0.6's {}",
+        dense.len(),
+        sparse.len()
     );
 }

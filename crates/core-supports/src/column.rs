@@ -174,18 +174,35 @@ pub fn columns(points: &[SupportPoint], placed: &Placed, profiles: Profiles) -> 
         .par_iter()
         .enumerate()
         .map(|(point, support)| {
-            let profile = profiles.of(support.group);
             let contact = matrix.transform_point3(support.contact);
-            let neck = neck_of(placed, contact, profile);
-            Column {
+            column(
+                placed,
                 point,
-                group: support.group,
+                support.group,
                 contact,
-                neck,
-                landing: landing(placed, neck, profile.pillar_radius_mm(), 1, profile),
-            }
+                profiles.of(support.group),
+            )
         })
         .collect()
+}
+
+/// The column of point `point` of `group`, touching the model at `contact` in plate
+/// coordinates.
+pub(crate) fn column(
+    placed: &Placed,
+    point: usize,
+    group: u16,
+    contact: Vec3,
+    profile: &SupportProfile,
+) -> Column {
+    let neck = neck_of(placed, contact, profile);
+    Column {
+        point,
+        group,
+        contact,
+        neck,
+        landing: landing(placed, neck, profile.pillar_radius_mm(), 1, profile),
+    }
 }
 
 /// Where a trunk carrying `tips` dropped from `from` lands, or `None` when there is no

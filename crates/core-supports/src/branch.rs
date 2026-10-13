@@ -1577,8 +1577,14 @@ mod probe {
             let v = std::f32::consts::PI * (0.02 + 0.96 * i as f32 / stacks as f32);
             for j in 0..slices {
                 let u = std::f32::consts::TAU * j as f32 / slices as f32;
-                let r = 20.0 + amp * (5.0 * u).sin() * (7.0 * v).sin() + 0.6 * amp * (11.0 * u + 3.0 * v).sin() * (9.0 * v).cos();
-                vertices.push(Vec3::new(r * v.sin() * u.cos(), r * v.sin() * u.sin(), 31.0 - r * v.cos()));
+                let r = 20.0
+                    + amp * (5.0 * u).sin() * (7.0 * v).sin()
+                    + 0.6 * amp * (11.0 * u + 3.0 * v).sin() * (9.0 * v).cos();
+                vertices.push(Vec3::new(
+                    r * v.sin() * u.cos(),
+                    r * v.sin() * u.sin(),
+                    31.0 - r * v.cos(),
+                ));
             }
         }
         let mut faces = Vec::new();
@@ -1596,11 +1602,16 @@ mod probe {
         let (top, bot) = (vertices.len() as u32, vertices.len() as u32 + 1);
         let c0: Vec3 = vertices[..slices].iter().copied().sum::<Vec3>() / slices as f32;
         let c1: Vec3 = vertices[stacks * slices..].iter().copied().sum::<Vec3>() / slices as f32;
-        vertices.push(c0); vertices.push(c1);
+        vertices.push(c0);
+        vertices.push(c1);
         for j in 0..slices {
             let n = (j + 1) % slices;
             faces.push([top, n as u32, j as u32]);
-            faces.push([bot, (stacks * slices + j) as u32, (stacks * slices + n) as u32]);
+            faces.push([
+                bot,
+                (stacks * slices + j) as u32,
+                (stacks * slices + n) as u32,
+            ]);
         }
         Mesh::new(vertices, faces)
     }
@@ -1611,13 +1622,37 @@ mod probe {
         let model = blob(3.0);
         let bvh = Bvh::build(&model);
         let placed = Placed::new(&model, &bvh, Transform::default());
-        let on: Vec<Vec3> = (0..model.faces.len()).step_by(53).filter_map(|f| model.triangle(f)).map(|t| ((t.a + t.b + t.c) / 3.0, t.normal_unnormalized().normalize().z)).filter(|(c, nz)| *nz < -0.3 && c.truncate().length() > 4.0).map(|(c, _)| c).collect();
-        for (base, extra) in [(SupportProfile::light(), SupportProfile::heavy()), (SupportProfile::medium(), SupportProfile::heavy()), (SupportProfile::heavy(), SupportProfile::light())] {
-            let stack = PlaneSliceEngine.slice(&model, &SliceSettings { layer_height: 0.05, ..SliceSettings::default() }).expect("s");
+        let on: Vec<Vec3> = (0..model.faces.len())
+            .step_by(53)
+            .filter_map(|f| model.triangle(f))
+            .map(|t| {
+                (
+                    (t.a + t.b + t.c) / 3.0,
+                    t.normal_unnormalized().normalize().z,
+                )
+            })
+            .filter(|(c, nz)| *nz < -0.3 && c.truncate().length() > 4.0)
+            .map(|(c, _)| c)
+            .collect();
+        for (base, extra) in [
+            (SupportProfile::light(), SupportProfile::heavy()),
+            (SupportProfile::medium(), SupportProfile::heavy()),
+            (SupportProfile::heavy(), SupportProfile::light()),
+        ] {
+            let stack = PlaneSliceEngine
+                .slice(
+                    &model,
+                    &SliceSettings {
+                        layer_height: 0.05,
+                        ..SliceSettings::default()
+                    },
+                )
+                .expect("s");
             let auto = crate::generate_supports(&stack, 0.05, &base, &[], &[], None, &mut |_| true);
             let table = [base.clone(), extra.clone()];
             let profiles = Profiles::new(&table).expect("t");
-            let mut points: Vec<SupportPoint> = auto.iter().copied().map(SupportPoint::new).collect();
+            let mut points: Vec<SupportPoint> =
+                auto.iter().copied().map(SupportPoint::new).collect();
             let (mut no_tree, mut no_mesh, mut bad) = (0, 0, 0);
             for c in &on {
                 points.push(SupportPoint::new(*c).in_group(1));
@@ -1625,13 +1660,31 @@ mod probe {
                 let trees = grow(&cols, &placed, profiles);
                 let idx = points.len() - 1;
                 let has = trees.iter().any(|t| t.points().any(|p| p == idx));
-                if !has { no_tree += 1; }
+                if !has {
+                    no_tree += 1;
+                }
                 let meshes = crate::mesh_groups(&trees, &placed, profiles);
-                if has && meshes[1].is_empty() { no_mesh += 1; }
-                if meshes.iter().any(|m| m.vertices.iter().any(|v| !v.is_finite())) { bad += 1; }
+                if has && meshes[1].is_empty() {
+                    no_mesh += 1;
+                }
+                if meshes
+                    .iter()
+                    .any(|m| m.vertices.iter().any(|v| !v.is_finite()))
+                {
+                    bad += 1;
+                }
                 points.pop();
             }
-            println!("{} + one {}: {} clicks: no tree {}, tree but empty mesh {}, non-finite {} (auto {})", base.name, extra.name, on.len(), no_tree, no_mesh, bad, auto.len());
+            println!(
+                "{} + one {}: {} clicks: no tree {}, tree but empty mesh {}, non-finite {} (auto {})",
+                base.name,
+                extra.name,
+                on.len(),
+                no_tree,
+                no_mesh,
+                bad,
+                auto.len()
+            );
         }
     }
 
@@ -1644,18 +1697,45 @@ mod probe {
             let bvh = Bvh::build(&raw);
             let placed = Placed::new(&raw, &bvh, transform);
             let m = transform.to_matrix();
-            let on: Vec<Vec3> = (0..raw.faces.len()).step_by(53).filter_map(|f| raw.triangle(f)).map(|t| ((t.a + t.b + t.c) / 3.0, t.normal_unnormalized().normalize().z)).filter(|(c, nz)| *nz < -0.3 && c.truncate().length() > 4.0).map(|(c, _)| m.transform_point3(c)).collect();
-            for profile in [SupportProfile::light(), SupportProfile::medium(), SupportProfile::heavy()] {
+            let on: Vec<Vec3> = (0..raw.faces.len())
+                .step_by(53)
+                .filter_map(|f| raw.triangle(f))
+                .map(|t| {
+                    (
+                        (t.a + t.b + t.c) / 3.0,
+                        t.normal_unnormalized().normalize().z,
+                    )
+                })
+                .filter(|(c, nz)| *nz < -0.3 && c.truncate().length() > 4.0)
+                .map(|(c, _)| m.transform_point3(c))
+                .collect();
+            for profile in [
+                SupportProfile::light(),
+                SupportProfile::medium(),
+                SupportProfile::heavy(),
+            ] {
                 let profiles = Profiles::single(&profile);
                 let inv = m.inverse();
-                let mut fail = 0; let mut total = 0;
+                let mut fail = 0;
+                let mut total = 0;
                 for c in &on {
-                    if c.z < profile.z_lift_mm.min(lift) + 3.0 { continue; }
+                    if c.z < profile.z_lift_mm.min(lift) + 3.0 {
+                        continue;
+                    }
                     total += 1;
-                    let cols = crate::columns(&[SupportPoint::new(inv.transform_point3(*c))], &placed, profiles);
-                    if grow(&cols, &placed, profiles).is_empty() { fail += 1; }
+                    let cols = crate::columns(
+                        &[SupportPoint::new(inv.transform_point3(*c))],
+                        &placed,
+                        profiles,
+                    );
+                    if grow(&cols, &placed, profiles).is_empty() {
+                        fail += 1;
+                    }
                 }
-                println!("lift {lift}: {}: {} of {} unheld", profile.name, fail, total);
+                println!(
+                    "lift {lift}: {}: {} of {} unheld",
+                    profile.name, fail, total
+                );
             }
         }
     }
@@ -1664,29 +1744,81 @@ mod probe {
     fn probe_heavy() {
         for amp in [3.0f32, 6.0] {
             let model = blob(amp);
-            println!("amp {amp} sv {} open {}", core_geometry::signed_volume(&model), core_geometry::diagnose(&model).boundary_edges);
+            println!(
+                "amp {amp} sv {} open {}",
+                core_geometry::signed_volume(&model),
+                core_geometry::diagnose(&model).boundary_edges
+            );
             let bvh = Bvh::build(&model);
             let placed = Placed::new(&model, &bvh, Transform::default());
-            let on: Vec<(Vec3, f32)> = (0..model.faces.len()).step_by(53).filter_map(|f| model.triangle(f)).map(|t| ((t.a + t.b + t.c) / 3.0, t.normal_unnormalized().normalize().z)).filter(|(_, nz)| *nz < -0.3).collect();
-            for profile in [SupportProfile::light(), SupportProfile::medium(), SupportProfile::heavy()] {
+            let on: Vec<(Vec3, f32)> = (0..model.faces.len())
+                .step_by(53)
+                .filter_map(|f| model.triangle(f))
+                .map(|t| {
+                    (
+                        (t.a + t.b + t.c) / 3.0,
+                        t.normal_unnormalized().normalize().z,
+                    )
+                })
+                .filter(|(_, nz)| *nz < -0.3)
+                .collect();
+            for profile in [
+                SupportProfile::light(),
+                SupportProfile::medium(),
+                SupportProfile::heavy(),
+            ] {
                 let profiles = Profiles::single(&profile);
-                let mut fail = 0; let mut shown = 0;
+                let mut fail = 0;
+                let mut shown = 0;
                 for (c, nz) in &on {
                     let cols = crate::columns(&[SupportPoint::new(*c)], &placed, profiles);
                     if grow(&cols, &placed, profiles).is_empty() {
                         fail += 1;
-                        if shown < 5 && profile.name == "Heavy" { shown += 1;
+                        if shown < 5 && profile.name == "Heavy" {
+                            shown += 1;
                             let neck = cols[0].neck;
                             let ray = Ray::new(neck - Vec3::Z * 1e-3, -Vec3::Z);
-                            let hit = raycast_placed(placed.model, placed.bvh, placed.transform, &ray);
+                            let hit =
+                                raycast_placed(placed.model, placed.bvh, placed.transform, &ray);
                             let r = profile.pillar_radius_mm();
                             let bottom = hit.map_or(1.0, |h| h.point.z + 0.3);
-                            let body = |cl: f32, trim: f32, rr: f32| clear(&placed, &Beam { from: neck, to: Vec3::new(neck.x, neck.y, bottom), from_radius_mm: r, to_radius_mm: rr }.with_clearance(cl).trimmed(trim));
-                            println!("   {:?} nz {:.2} neck {:?} below {:?} clear(c)={} clear(0)={} base_r {:.2} clear(c,cone)={}", c, nz, neck, hit.map(|h| (h.distance, h.normal.z)), body(profile.clearance_mm, r + profile.clearance_mm, r), body(0.0, r, r), profile.trunk_base_radius_mm(neck.z, 1), body(profile.clearance_mm, r + profile.clearance_mm, profile.trunk_base_radius_mm(neck.z, 1)));
+                            let body = |cl: f32, trim: f32, rr: f32| {
+                                clear(
+                                    &placed,
+                                    &Beam {
+                                        from: neck,
+                                        to: Vec3::new(neck.x, neck.y, bottom),
+                                        from_radius_mm: r,
+                                        to_radius_mm: rr,
+                                    }
+                                    .with_clearance(cl)
+                                    .trimmed(trim),
+                                )
+                            };
+                            println!(
+                                "   {:?} nz {:.2} neck {:?} below {:?} clear(c)={} clear(0)={} base_r {:.2} clear(c,cone)={}",
+                                c,
+                                nz,
+                                neck,
+                                hit.map(|h| (h.distance, h.normal.z)),
+                                body(profile.clearance_mm, r + profile.clearance_mm, r),
+                                body(0.0, r, r),
+                                profile.trunk_base_radius_mm(neck.z, 1),
+                                body(
+                                    profile.clearance_mm,
+                                    r + profile.clearance_mm,
+                                    profile.trunk_base_radius_mm(neck.z, 1)
+                                )
+                            );
                         }
                     }
                 }
-                println!("  {}: {} of {} down-facing clicks unheld", profile.name, fail, on.len());
+                println!(
+                    "  {}: {} of {} down-facing clicks unheld",
+                    profile.name,
+                    fail,
+                    on.len()
+                );
             }
         }
     }

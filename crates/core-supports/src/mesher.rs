@@ -1,7 +1,8 @@
 use crate::placed::Placed;
-use core_geometry::{Mesh, Scalar, Vec3};
+use core_geometry::{Mesh, Scalar, Vec2, Vec3};
 use printer_profiles::{ContactShape, SupportProfile};
 
+use crate::Landing;
 use crate::base::{braces, skate, skate_half_width_mm, toe_of};
 use crate::group::Profiles;
 use crate::raft::raft;
@@ -47,7 +48,8 @@ impl Style {
             small: profile.small_pillar.enabled
                 && tree.landing().on_model
                 && !tree.landing().on_support
-                && tree.tip_count() == 1,
+                && tree.tip_count() == 1
+                && run_mm(tree) <= profile.small_pillar.max_length_mm,
         }
     }
 
@@ -68,6 +70,17 @@ impl Style {
             node_radius_mm
         }
     }
+}
+
+/// How far a one-tip tree runs from its contact to where it stands, along its struts,
+/// millimetres.
+fn run_mm(tree: &SupportTree) -> Scalar {
+    let nodes = tree.nodes();
+    let struts: Scalar = tree
+        .struts()
+        .map(|(child, parent)| nodes[child].position.distance(nodes[parent].position))
+        .sum();
+    struts + tree.root().position.distance(tree.landing().base)
 }
 
 /// Whether `tree` is built as the thin strut of `[small_pillar]` and not to the width of
@@ -120,6 +133,46 @@ pub fn mesh_groups(trees: &[SupportTree], placed: &Placed, profiles: Profiles) -
     }
     mesh_raft(&mut meshes[0], trees, placed, profiles);
     meshes
+}
+
+/// One support on its own, without the braces and the raft it would share with others.
+pub(crate) fn mesh_alone(tree: &SupportTree, profile: &SupportProfile) -> Mesh {
+    let mut mesh = Mesh::default();
+    mesh_tree(&mut mesh, tree, profile);
+    mesh
+}
+
+/// The tip alone, from `contact` out to `neck`: what a support that cannot stand is shown
+/// as before it is put down.
+pub(crate) fn mesh_head(contact: Vec3, neck: Vec3, profile: &SupportProfile) -> Mesh {
+    let radius_mm = profile.pillar_radius_mm();
+    let nodes = vec![
+        TreeNode {
+            position: contact,
+            radius_mm,
+            parent: Some(1),
+            point: Some(0),
+        },
+        TreeNode {
+            position: neck,
+            radius_mm,
+            parent: None,
+            point: None,
+        },
+    ];
+    let landing = Landing {
+        base: neck,
+        on_model: false,
+        pad_offset: Vec2::ZERO,
+        on_support: false,
+    };
+    let tree = SupportTree::new(nodes, 1, landing);
+    let mut mesh = Mesh::default();
+    sweep(
+        &mut mesh,
+        &strut(&tree, 0, 1, profile, Style { small: false }),
+    );
+    mesh
 }
 
 fn mesh_tree(mesh: &mut Mesh, tree: &SupportTree, profile: &SupportProfile) {
@@ -1202,6 +1255,24 @@ mod tests {
         assert_eq!(
             diagnose(&meshed(&trees, Profiles::single(&profile))).boundary_edges,
             0
+        );
+    }
+
+    #[test]
+    fn a_support_between_two_surfaces_longer_than_the_small_pillar_keeps_its_width() {
+        let mut short = profile();
+        short.small_pillar.max_length_mm = 0.1;
+        let mut regular = profile();
+        regular.small_pillar.enabled = false;
+
+        let limited = signed_volume(&meshed(&model_to_model(&short), Profiles::single(&short)));
+        let thick = signed_volume(&meshed(
+            &model_to_model(&regular),
+            Profiles::single(&regular),
+        ));
+        assert!(
+            (limited - thick).abs() < 1e-3,
+            "a run past 0.1 mm is built as a regular support: {limited} mm3 against {thick} mm3"
         );
     }
 
