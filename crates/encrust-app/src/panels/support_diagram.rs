@@ -862,18 +862,13 @@ struct RaftSection {
 
 impl RaftSection {
     fn of(profile: &SupportProfile) -> Self {
-        use core_supports::{GRID_BAR_MM, LIP_WIDTH_MM};
         let raft = &profile.raft;
         let (thick, overhang) = (raft.thickness_mm, raft.overhang_mm());
         let pad = profile.base_radius_mm();
-        let margin = raft.margin_mm.max(0.0);
-        let (top, tall) = match raft.style {
-            RaftStyle::Skates => (
-                pad + margin.max(2.0 * (overhang + LIP_WIDTH_MM)),
-                2.0 * thick,
-            ),
-            RaftStyle::Grid => (pad + margin.max(2.0 * (overhang + GRID_BAR_MM)), thick),
-            RaftStyle::Connected => (pad + margin, thick),
+        let top = pad + raft.margin_mm.max(0.0);
+        let tall = match raft.style {
+            RaftStyle::Skates => 2.0 * thick,
+            RaftStyle::Grid | RaftStyle::Connected => thick,
         };
         Self {
             top,

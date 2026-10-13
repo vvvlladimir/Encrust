@@ -161,10 +161,13 @@ impl Carriers {
 
     /// Takes on the struts and the trunks of `trees`. The strut under a tip is its head,
     /// narrowing to the contact, and carries nothing but its own tip. A tree built as a
-    /// small pillar is as wide as that, whatever its nodes say.
+    /// small pillar is as wide as that, whatever its nodes say, and its trunk is left
+    /// out: it may yet be run into a support beside it, and would leave what stood on
+    /// it ending in the air.
     fn take(&mut self, trees: &[SupportTree], profile: &SupportProfile) {
         for tree in trees {
-            let widest_mm = if is_small(tree, profile) {
+            let small = is_small(tree, profile);
+            let widest_mm = if small {
                 profile.small_pillar.radius_mm()
             } else {
                 Scalar::INFINITY
@@ -179,7 +182,7 @@ impl Carriers {
                 });
             }
             let (root, landing) = (tree.root(), tree.landing());
-            if !root.is_leaf() {
+            if !root.is_leaf() && !small {
                 let bottom_z = landing.pillar_bottom_z(profile);
                 self.push(Carrier {
                     top: root.position,
@@ -1141,6 +1144,39 @@ mod tests {
                 .iter()
                 .all(|node| (node.radius_mm - thin).abs() < 1e-6),
             "and it is a small pillar's width all the way up"
+        );
+    }
+
+    #[test]
+    fn a_small_pillar_never_stands_on_another_that_has_moved_away() {
+        // The block and the two supports of the test above, and a third group whose small
+        // pillar is thinner still, beside the first: its nearest carrier would be the
+        // trunk the first pillar left behind when it ran into the column.
+        let block = box_mesh(Vec3::ZERO, Vec3::splat(10.0));
+        let mut thinner = profile();
+        thinner.small_pillar.diameter_mm -= 0.2;
+        let table = [profile(), profile(), thinner];
+        let points = [
+            SupportPoint::new(Vec3::new(9.0, 5.0, 20.0)),
+            SupportPoint::new(Vec3::new(14.5, 5.0, 20.0)).in_group(1),
+            SupportPoint::new(Vec3::new(9.0, 3.0, 20.0)).in_group(2),
+        ];
+        let bvh = Bvh::build(&block);
+        let placed = Placed::new(&block, &bvh, Transform::default());
+        let profiles = Profiles::new(&table).expect("three groups");
+        let forest = grow(
+            &crate::columns(&points, &placed, profiles),
+            &placed,
+            profiles,
+        );
+
+        let (moved, thin) = (&forest[0], &forest[2]);
+        assert!(moved.landing().on_support, "the first ran into the column");
+        let landing = thin.landing();
+        assert!(
+            !landing.on_support || (landing.base.truncate() - Vec2::new(14.5, 5.0)).length() < 1e-3,
+            "nothing stands at {} any more for it to end on",
+            landing.base
         );
     }
 

@@ -67,7 +67,7 @@ pub(crate) fn raft(
 /// pushed `margin_mm` out, counter-clockwise.
 ///
 /// A rounded corner is never tighter than twice `rim_mm`, or an inset that deep would turn
-/// it inside out.
+/// it inside out: under a smaller margin the hull is drawn in first by the difference.
 fn outline(feet: &[Vec2], placed: &Placed, profile: &SupportProfile, rim_mm: Scalar) -> Vec<Vec2> {
     let radius = profile.base_radius_mm();
     let mut points = footprint(placed);
@@ -77,7 +77,12 @@ fn outline(feet: &[Vec2], placed: &Placed, profile: &SupportProfile, rim_mm: Sca
     let around = hull(&points);
     let margin = profile.raft.margin_mm.max(0.0);
     match profile.raft.shape {
-        RaftShape::Hull => rounded(&around, margin.max(2.0 * rim_mm)),
+        RaftShape::Hull => {
+            let corner = margin.max(2.0 * rim_mm);
+            // Half the inradius at most, so a narrow footprint is never drawn in to nothing.
+            let inset = (corner - margin).min(inradius(&around) * 0.5);
+            rounded(&hull(&mitred(&around, -inset)), corner)
+        }
         RaftShape::Rectangle => mitred(&smallest_rectangle(&around), margin),
     }
 }
@@ -576,6 +581,23 @@ mod tests {
             assert!(bounds.mins.y <= -margin + 1e-3 && bounds.maxs.y >= 30.0 + margin - 1e-3);
             assert!(bounds.mins.z.abs() < 1e-4, "it sits on the plate");
         }
+    }
+
+    #[test]
+    fn a_hull_raft_goes_out_by_a_margin_smaller_than_its_corners() {
+        let mut profile = with_raft(RaftStyle::Skates, RaftShape::Hull);
+        profile.raft.margin_mm = 0.5;
+        let trees = standing(&[(20.0, 15.0)], 20.0, &profile);
+        let model = box_mesh(Vec3::new(0.0, 0.0, 22.0), Vec3::new(40.0, 30.0, 30.0));
+        let slab = built(&trees, &model, &profile).expect("one foot makes a raft");
+
+        // The lip flares out past the outline by the slab's overhang.
+        let reach = 0.5 + profile.raft.overhang_mm();
+        let bounds = slab.aabb().expect("the slab has vertices");
+        assert!(
+            (bounds.maxs.x - 40.0 - reach).abs() < 1e-2 && (bounds.mins.y + reach).abs() < 1e-2,
+            "a straight side of the 40 x 30 mm part is {reach} mm past it, got {bounds:?}"
+        );
     }
 
     #[test]

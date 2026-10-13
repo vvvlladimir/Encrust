@@ -40,7 +40,7 @@ pub fn fits(tree: &SupportTree, placed: &Placed, profile: &SupportProfile) -> bo
         to: Vec3::new(
             landing.base.x,
             landing.base.y,
-            swept_bottom_z(&landing, root.radius_mm, profile),
+            swept_bottom_z(placed, &landing, root.radius_mm, profile),
         ),
         from_radius_mm: root.radius_mm,
         to_radius_mm: root.radius_mm,
@@ -403,6 +403,38 @@ mod tests {
         assert!(
             (moved.root().position.x - (tree.root().position.x + 1.0)).abs() < 1e-4,
             "the joint took the step"
+        );
+    }
+
+    #[test]
+    fn a_support_stood_on_a_steep_face_as_a_last_resort_still_fits() {
+        // The ramp of the landing's own test, 68 degrees, under a column grown in clear air.
+        let model = crate::tests::ramp(4.0, 10.0);
+        let bvh = Bvh::build(&model);
+        let placed = Placed::new(&model, &bvh, Transform::default());
+        let mut tree = trees_on(
+            &[SupportPoint::new(Vec3::new(2.0, 0.0, 20.0))],
+            &Mesh::default(),
+            Transform::default(),
+            Profiles::single(&profile()),
+        )
+        .pop()
+        .expect("a column in clear air stands");
+        let root = *tree.root();
+        let steep = crate::column::landing_within(
+            &placed,
+            root.position,
+            root.radius_mm,
+            1,
+            &profile(),
+            crate::column::LAST_RESORT_SLOPE_DEG,
+        )
+        .expect("the ramp is under it");
+        tree.stand_on(steep);
+
+        assert!(
+            fits(&tree, &placed, &profile()),
+            "what the run stood there the hand may take hold of"
         );
     }
 

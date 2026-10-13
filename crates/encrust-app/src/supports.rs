@@ -1,4 +1,5 @@
 use anyhow::{Result, bail};
+use core_engine::project::own_table;
 use core_geometry::{Adjacency, Ray, Scalar, Vec2, Vec3, lift_over_plate, raycast_placed};
 use core_supports::{Part, Placed, ProjectSettings, project};
 use printer_profiles::{Raft, SupportProfile};
@@ -588,23 +589,18 @@ impl SupportTool {
     }
 }
 
-/// `table` with the profiles a model keeps of its own put in place of its groups', and
-/// under them the raft it stands on: its own, or `plate_raft`. The core builds the raft
-/// from the first group's profile, so that is where it is written.
+/// `table` as a model keeping `own` settings is built to it, on its own raft or
+/// `plate_raft`: the rule a project is cut by, `core_engine::project::own_table`.
 pub fn with_own(
-    mut table: Vec<SupportProfile>,
+    table: Vec<SupportProfile>,
     own: &OwnSettings,
     plate_raft: Raft,
 ) -> Vec<SupportProfile> {
-    for (group, profile) in &own.supports {
-        if let Some(plate) = table.get_mut(*group as usize) {
-            plate.clone_from(profile);
-        }
-    }
-    if let Some(ground) = table.first_mut() {
-        ground.raft = own.raft.unwrap_or(plate_raft);
-    }
-    table
+    let profiles = own
+        .supports
+        .iter()
+        .map(|(group, profile)| (*group, profile));
+    own_table(table, profiles, Some(own.raft.unwrap_or(plate_raft)))
 }
 
 /// The first surface straight over a point a layer under `floor`, if it is no more than
@@ -664,6 +660,24 @@ mod tests {
         let transform = object.transform;
         object.supports.add(Vec3::new(0.5, 0.5, 10.0), transform, 0);
         scene
+    }
+
+    #[test]
+    fn a_model_is_oriented_by_the_overhang_of_its_own_profile() {
+        let mut scene = one_cube();
+        let tool = SupportTool::default();
+        let mut own = tool.profile.clone();
+        own.max_overhang_deg += 10.0;
+        let wanted = own.max_overhang_deg;
+        scene.objects_mut()[0].own.supports.insert(tool.active, own);
+
+        let tasks = crate::job::orient_tasks(&scene, None, |object| {
+            tool.profile_for(object).max_overhang_deg
+        });
+        assert!(
+            (tasks[0].max_overhang_deg - wanted).abs() < f32::EPSILON,
+            "not the angle of the plate's profile"
+        );
     }
 
     #[test]

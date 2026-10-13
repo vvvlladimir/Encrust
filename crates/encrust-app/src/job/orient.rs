@@ -6,7 +6,7 @@ use core_plate::{OrientSettings, orient};
 use rayon::prelude::*;
 
 use crate::job::pipeline::{thread_pool, worker_threads};
-use crate::scene::{ObjectId, Scene};
+use crate::scene::{ObjectId, Scene, SceneObject};
 
 /// One model to find an orientation for, owned so that it can cross to the worker thread.
 pub struct OrientTask {
@@ -16,6 +16,8 @@ pub struct OrientTask {
     pub mesh: Arc<Mesh>,
     /// The way down the model stands now, in its own space, which a tilt is measured from.
     pub down_now: Vec3,
+    /// The overhang angle of the support profile this model is built to, degrees.
+    pub max_overhang_deg: f32,
 }
 
 /// Everything one orientation run needs.
@@ -72,7 +74,11 @@ impl OrientJob {
 
 /// The models a run covers, each in its own space: one when `only` names it, everything
 /// on the plate being edited otherwise.
-pub fn orient_tasks(scene: &Scene, only: Option<ObjectId>) -> Vec<OrientTask> {
+pub fn orient_tasks(
+    scene: &Scene,
+    only: Option<ObjectId>,
+    overhang_deg_of: impl Fn(&SceneObject) -> f32,
+) -> Vec<OrientTask> {
     scene
         .targets()
         .filter(|object| only.is_none_or(|id| object.id == id))
@@ -83,6 +89,7 @@ pub fn orient_tasks(scene: &Scene, only: Option<ObjectId>) -> Vec<OrientTask> {
                 id: object.id,
                 mesh: Arc::clone(&object.mesh),
                 down_now: down,
+                max_overhang_deg: overhang_deg_of(object),
             }
         })
         .collect()
@@ -101,6 +108,7 @@ fn run(request: &OrientRequest) -> OrientOutcome {
             .map(|task| {
                 let settings = OrientSettings {
                     down_now: task.down_now,
+                    max_overhang_deg: task.max_overhang_deg,
                     ..request.settings
                 };
                 orient(&task.mesh, &settings).map(|found| Turn {
@@ -159,11 +167,13 @@ mod tests {
                     id: ObjectId::for_test(1),
                     mesh: Arc::new(cuboid(Vec3::new(40.0, 40.0, 4.0))),
                     down_now: Vec3::NEG_Z,
+                    max_overhang_deg: 45.0,
                 },
                 OrientTask {
                     id: ObjectId::for_test(2),
                     mesh: Arc::new(cuboid(Vec3::splat(10.0))),
                     down_now: Vec3::NEG_Z,
+                    max_overhang_deg: 45.0,
                 },
             ],
             settings: OrientSettings::default(),
@@ -183,6 +193,7 @@ mod tests {
                 id: ObjectId::for_test(1),
                 mesh: Arc::new(Mesh::default()),
                 down_now: Vec3::NEG_Z,
+                max_overhang_deg: 45.0,
             }],
             settings: OrientSettings::default(),
         };

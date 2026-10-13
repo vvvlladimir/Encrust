@@ -288,17 +288,31 @@ impl ObjectState {
         table: &[SupportProfile],
         plate_raft: Option<Raft>,
     ) -> Vec<SupportProfile> {
-        let mut table = table.to_vec();
-        for own in &self.own_supports {
-            if let Some(plate) = table.get_mut(own.group as usize) {
-                plate.clone_from(&own.profile);
-            }
-        }
-        if let (Some(ground), Some(raft)) = (table.first_mut(), self.own_raft.or(plate_raft)) {
-            ground.raft = raft;
-        }
-        table
+        let own = self
+            .own_supports
+            .iter()
+            .map(|own| (own.group, &own.profile));
+        own_table(table.to_vec(), own, self.own_raft.or(plate_raft))
     }
+}
+
+/// `table` with the profiles one model keeps of its `own` put in place of its groups',
+/// by group number, and `raft` under them where there is one. The raft is built from the
+/// first group's profile, so that is where it is written.
+pub fn own_table<'a>(
+    mut table: Vec<SupportProfile>,
+    own: impl IntoIterator<Item = (u16, &'a SupportProfile)>,
+    raft: Option<Raft>,
+) -> Vec<SupportProfile> {
+    for (group, profile) in own {
+        if let Some(plate) = table.get_mut(group as usize) {
+            plate.clone_from(profile);
+        }
+    }
+    if let (Some(ground), Some(raft)) = (table.first_mut(), raft) {
+        ground.raft = raft;
+    }
+    table
 }
 
 /// One group's profile as one model keeps it: an edit that has not been saved over the

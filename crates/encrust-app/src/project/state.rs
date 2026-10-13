@@ -618,38 +618,6 @@ mod tests {
     }
 
     #[test]
-    fn a_saved_model_is_cut_to_the_table_the_window_built_it_to() {
-        let mut saved = bench();
-        saved.tools.supports.add_group();
-        saved.tools.supports.raft.thickness_mm += 1.0;
-        let own_raft = Raft {
-            thickness_mm: saved.tools.supports.raft.thickness_mm + 1.0,
-            ..saved.tools.supports.raft
-        };
-        saved.scene.objects_mut()[0]
-            .own
-            .supports
-            .insert(1, SupportProfile::heavy());
-
-        // The rule is written once here and once in `core_engine`; this holds them together.
-        for raft in [None, Some(own_raft)] {
-            saved.scene.objects_mut()[0].own.raft = raft;
-            let manifest = capture(saved.plate()).manifest;
-            let table: Vec<SupportProfile> = manifest
-                .supports
-                .groups
-                .iter()
-                .map(|group| group.profile.clone())
-                .collect();
-            assert_eq!(
-                manifest.objects[0].support_table(&table, manifest.supports.raft),
-                saved.tools.supports.table_for(&saved.scene.objects()[0]),
-                "the file is cut to the profiles the window shows, own raft {raft:?}"
-            );
-        }
-    }
-
-    #[test]
     fn an_opened_plate_stands_as_it_was_saved_and_builds_nothing() {
         let mut saved = bench();
         let shell = hollowed(&mut saved);

@@ -205,6 +205,17 @@ fn mesh_tree(mesh: &mut Mesh, tree: &SupportTree, profile: &SupportProfile, plac
         };
         sweep(mesh, &strut(tree, child, parent, profile, style));
     }
+    // A tree of one node has its tip on the trunk itself, held to the same half wall.
+    let root = tree.root();
+    let style = if root.is_leaf() {
+        let into = root.position - trunk_bottom(tree, profile);
+        Style {
+            bite_limit_mm: wall_mm(placed, root.position, into) * WALL_BITTEN,
+            ..style
+        }
+    } else {
+        style
+    };
     sweep(mesh, &trunk(tree, profile, style));
     stand_on(mesh, tree, profile);
 }
@@ -1348,6 +1359,43 @@ mod tests {
         assert!(
             (top - 10.075).abs() < 0.01,
             "half the wall is bitten, got {top}"
+        );
+    }
+
+    #[test]
+    fn a_strut_straight_from_its_contact_bites_no_further_than_half_the_wall() {
+        // A 0.15 mm ledge a millimetre over a block: one strut from the contact itself.
+        let mut model = box_mesh(Vec3::ZERO, Vec3::new(10.0, 10.0, 9.0));
+        let ledge = box_mesh(Vec3::new(0.0, 0.0, 10.0), Vec3::new(10.0, 10.0, 10.15));
+        let offset = model.vertices.len() as u32;
+        model.vertices.extend_from_slice(&ledge.vertices);
+        model
+            .faces
+            .extend(ledge.faces.iter().map(|face| face.map(|at| at + offset)));
+        let fixture = profile();
+        let points = [SupportPoint::new(Vec3::new(5.0, 5.0, 10.0))];
+        let trees = trees_on(
+            &points,
+            &model,
+            Transform::default(),
+            Profiles::single(&fixture),
+        );
+        assert!(trees[0].root().is_leaf(), "one node, the contact");
+
+        let bvh = core_geometry::Bvh::build(&model);
+        let mesh = mesh_trees(
+            &trees,
+            &Placed::new(&model, &bvh, Transform::default()),
+            Profiles::single(&fixture),
+        );
+        let top = mesh
+            .vertices
+            .iter()
+            .map(|vertex| vertex.z)
+            .fold(Scalar::NEG_INFINITY, Scalar::max);
+        assert!(
+            (top - 10.075).abs() < 0.01,
+            "half the 0.15 mm wall is bitten, got {top}"
         );
     }
 

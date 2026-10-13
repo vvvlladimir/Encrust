@@ -124,7 +124,9 @@ inner face at the same slope, like a saucer; a `grid` of bars inside a rim with 
 joined by strips along the feet's Euclidean minimum spanning tree. A skates or grid raft
 is drawn to the convex hull of the model's footprint and every foot (Andrew's monotone
 chain), pushed out `margin_mm` with rounded corners, or the smallest-area rectangle around
-that hull pushed out as far (ADR 0241). `slope_deg` leans the walls in for the same reason
+that hull pushed out as far (ADR 0241). A corner is rounded to at least twice the depth
+the rim cuts in; under a smaller margin the hull is drawn in by the difference first, so
+a straight side still stands `margin_mm` out. `slope_deg` leans the walls in for the same reason
 feet are bevelled.
 
 **Bracing.** Which trunks are tied is a graph: the Gabriel graph of the trunks tall enough
@@ -373,7 +375,8 @@ carrier wider than itself — by one strut within its own branch angle and half 
 distance, at the highest point it reaches — in the same heap its merges with other fronts sit in.
 Such a front is a tree whose `Landing` is that point with `on_support` beside `on_model`,
 so it has no trunk, no foot, no pad and no brace, and the mesher ends it plain inside the
-carrier. A tree built as a small pillar carries only as wide as that, and once every group
+carrier. A tree built as a small pillar carries only as wide as that, and its trunk
+carries nothing, since it may yet be moved from under what stood on it; once every group
 is grown each one with a neck is itself run into a wider carrier in its reach and built
 that thin all the way up, so a small pillar stands on a support and never the other way
 round (ADR 0251). `grow` hands the forest back in group order.
@@ -435,7 +438,9 @@ its trunk from the neck again, so the whole of it follows the cursor.
 **Remove these supports** takes away what is picked and everything it holds up
 (`SupportTree::without`): a strut or a joint goes with the tips above it, a joint left
 holding nothing goes after it, and the support goes whole when no tip is left or its trunk
-or foot was picked. Shift only
+or foot was picked. **Remove all** takes every support off the models aimed at, the
+ones a hand froze included, and **Only** *group* those of the group in hand alone,
+leaving the group and every other group's number as they were. Shift only
 adds the part to what is picked or takes it out. The gesture is the support's from the
 press to the release, wherever the cursor goes, so the camera neither turns nor slides
 under it. A node bends what meets there, a strut moves both its ends, and the foot stays on
