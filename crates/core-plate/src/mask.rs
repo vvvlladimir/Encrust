@@ -160,20 +160,30 @@ impl Footprint {
     /// sliver thinner than a cell still marks the cells it crosses: the mask has to cover
     /// the model, never merely sample it.
     pub fn of(mesh: &Mesh, transform: Transform, cell_mm: Scalar) -> Option<Self> {
+        Self::of_parts(&[(mesh, transform)], cell_mm)
+    }
+
+    /// Rasterises where several placed meshes stand together, as one footprint: a model
+    /// with its supports and its raft, which are carried as one.
+    pub fn of_parts(parts: &[(&Mesh, Transform)], cell_mm: Scalar) -> Option<Self> {
         if cell_mm <= 0.0 {
             return None;
         }
-        let matrix = transform.to_matrix();
-        let placed: Vec<Vec2> = mesh
-            .vertices
+        let placed: Vec<Vec<Vec2>> = parts
             .iter()
-            .map(|vertex| matrix.transform_point3(*vertex).truncate())
+            .map(|(mesh, transform)| {
+                let matrix = transform.to_matrix();
+                mesh.vertices
+                    .iter()
+                    .map(|vertex| matrix.transform_point3(*vertex).truncate())
+                    .collect()
+            })
             .collect();
-        if placed.is_empty() || mesh.faces.is_empty() {
+        if parts.iter().all(|(mesh, _)| mesh.faces.is_empty()) {
             return None;
         }
 
-        let (mins, maxs) = placed.iter().fold(
+        let (mins, maxs) = placed.iter().flatten().fold(
             (
                 Vec2::splat(Scalar::INFINITY),
                 Vec2::splat(Scalar::NEG_INFINITY),
@@ -186,13 +196,15 @@ impl Footprint {
             ((size.y / cell_mm).ceil() as usize).max(1),
         );
 
-        for face in &mesh.faces {
-            let corners = [
-                placed[face[0] as usize] - mins,
-                placed[face[1] as usize] - mins,
-                placed[face[2] as usize] - mins,
-            ];
-            fill(&mut mask, corners, cell_mm);
+        for ((mesh, _), placed) in parts.iter().zip(&placed) {
+            for face in &mesh.faces {
+                let corners = [
+                    placed[face[0] as usize] - mins,
+                    placed[face[1] as usize] - mins,
+                    placed[face[2] as usize] - mins,
+                ];
+                fill(&mut mask, corners, cell_mm);
+            }
         }
 
         Some(Self {
@@ -294,6 +306,33 @@ mod tests {
         assert_eq!((footprint.mask.width(), footprint.mask.height()), (10, 6));
         assert_eq!(footprint.area_cells(), 60, "the whole 10 by 6 rectangle");
         assert_eq!(footprint.corner_mm, Vec2::ZERO);
+    }
+
+    #[test]
+    fn a_footprint_of_parts_covers_each_where_it_stands() {
+        let model = cuboid(Vec3::splat(4.0));
+        let pad = Transform::from_translation(Vec3::new(-6.0, 0.0, 0.0));
+        let footprint = Footprint::of_parts(
+            &[
+                (&model, Transform::default()),
+                (&cuboid(Vec3::splat(2.0)), pad),
+            ],
+            1.0,
+        )
+        .expect("two boxes have a footprint");
+
+        assert_eq!(
+            footprint.corner_mm,
+            Vec2::new(-6.0, 0.0),
+            "from the pad's corner"
+        );
+        assert_eq!(footprint.mask.width(), 10, "-6 mm to 4 mm");
+        assert!(footprint.mask.get(1, 1), "the pad's cells are marked");
+        assert!(footprint.mask.get(8, 3), "the model's cells are marked");
+        assert!(
+            !footprint.mask.get(4, 3),
+            "the gap between them, -2 to -1 mm and over the pad's height, is left free"
+        );
     }
 
     #[test]

@@ -1,6 +1,6 @@
 # 0088. Pack the plate as a bitmap, into the corner, and centre the block
 
-- **Status:** Accepted
+- **Status:** Accepted; supports left out of a footprint is superseded by 0256
 - **Date:** 2026-09-24
 
 ## Context

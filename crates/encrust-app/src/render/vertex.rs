@@ -127,6 +127,9 @@ pub struct ModelInstance {
     /// space inside a model that fills with resin is not a surface, so no light shades
     /// it, no inside wash lightens its far wall, and the x-ray does not wash it down.
     surface: f32,
+    /// Share of the way to the eye the instance is drawn pulled, depth only: what wins
+    /// between two coplanar faces of different meshes.
+    pull: f32,
 }
 
 /// What [`ModelInstance::new`] is given for a mesh that is not marked: no lean can be
@@ -134,7 +137,7 @@ pub struct ModelInstance {
 pub const NOT_MARKED: f32 = -1.0;
 
 impl ModelInstance {
-    const ATTRIBUTES: [wgpu::VertexAttribute; 10] = wgpu::vertex_attr_array![
+    const ATTRIBUTES: [wgpu::VertexAttribute; 11] = wgpu::vertex_attr_array![
         2 => Float32x4,
         3 => Float32x4,
         4 => Float32x4,
@@ -145,6 +148,7 @@ impl ModelInstance {
         9 => Float32x4,
         10 => Float32,
         13 => Float32,
+        14 => Float32,
     ];
 
     pub const fn layout() -> wgpu::VertexBufferLayout<'static> {
@@ -166,7 +170,15 @@ impl ModelInstance {
             color: theme::gamma(color),
             overhang,
             surface: 1.0,
+            pull: 0.0,
         }
+    }
+
+    /// The same instance drawn `share` of the way nearer the eye in depth, and nowhere
+    /// else: a face level with another mesh's then wins it every frame instead of by turns.
+    pub fn pulled(mut self, share: f32) -> Self {
+        self.pull = share;
+        self
     }
 
     /// The same instance painted as a volume rather than as a surface: it keeps its own
@@ -337,7 +349,7 @@ mod tests {
     fn the_instance_stride_has_no_padding() {
         assert_eq!(
             size_of::<ModelInstance>(),
-            (16 + 9 + 4 + 2) * size_of::<f32>()
+            (16 + 9 + 4 + 3) * size_of::<f32>()
         );
     }
 }

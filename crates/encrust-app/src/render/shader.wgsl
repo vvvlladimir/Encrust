@@ -103,6 +103,9 @@ struct ModelVertex {
     // 1.0 for a surface of a model, 0.0 for a volume painted in its own colour. 11 and 12
     // belong to the relief pass.
     @location(13) surface: f32,
+    // Share of the way to the eye the depth is taken from, so that of two coplanar faces
+    // of different meshes the same one wins every frame.
+    @location(14) pull: f32,
 };
 
 struct ModelFragment {
@@ -201,7 +204,8 @@ fn model_vertex(in: ModelVertex) -> ModelFragment {
     let world = model * vec4<f32>(in.position, 1.0);
 
     var out: ModelFragment;
-    out.clip_position = globals.view_projection * world;
+    let seen = mix(world.xyz, globals.eye.xyz, in.pull);
+    out.clip_position = globals.view_projection * vec4<f32>(seen, 1.0);
     out.normal = normal_matrix * in.normal;
     out.color = in.color;
     out.overhang = in.overhang;

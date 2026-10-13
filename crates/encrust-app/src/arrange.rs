@@ -1,28 +1,32 @@
-use core_geometry::{Scalar, Vec2, Vec3};
+use core_geometry::{Mesh, Scalar, Transform, Vec2, Vec3};
 use core_plate::{ArrangeSettings, Footprint, arrange};
 
 use crate::plate::BuildPlate;
-use crate::scene::Scene;
+use crate::scene::{ObjectId, Scene};
 use crate::status::Status;
 
 /// Spreads everything visible over the plate, and says what would not fit.
 ///
-/// The footprint is the model itself: the supports under it lean outside it, and the
-/// clearance is what covers them until a support mesh is packed with its model.
+/// The footprint is the model with its supports and raft as they were last built: they
+/// stand on the plate beside it and move with it, so they are packed as one.
 pub fn arrange_plate(scene: &mut Scene, plate: &BuildPlate, clearance_mm: Scalar) -> Status {
     let settings = ArrangeSettings {
         clearance_mm,
         ..ArrangeSettings::default()
     };
 
-    let visible: Vec<_> = scene
-        .printable(scene.active_plate())
-        .map(|object| (object.id, object.mesh.clone(), object.transform))
-        .collect();
+    let visible: Vec<_> = scene.printable(scene.active_plate()).collect();
     let footprints: Vec<Footprint> = visible
         .iter()
-        .filter_map(|(_, mesh, transform)| Footprint::of(mesh, *transform, settings.cell_mm))
+        .filter_map(|object| {
+            let supports = object.supports.drawn().iter();
+            let parts: Vec<(&Mesh, Transform)> = std::iter::once((&*object.mesh, object.transform))
+                .chain(supports.map(|mesh| (&**mesh, Transform::default())))
+                .collect();
+            Footprint::of_parts(&parts, settings.cell_mm)
+        })
         .collect();
+    let visible: Vec<ObjectId> = visible.iter().map(|object| object.id).collect();
     if footprints.len() != visible.len() {
         return Status::Error("a model on the plate has no footprint to arrange".to_owned());
     }
@@ -32,7 +36,7 @@ pub fn arrange_plate(scene: &mut Scene, plate: &BuildPlate, clearance_mm: Scalar
 
     let arranged = arrange(&footprints, Vec2::new(plate.x_mm, plate.y_mm), &settings);
     for placed in &arranged.placed {
-        let Some((id, _, _)) = visible.get(placed.index) else {
+        let Some(id) = visible.get(placed.index) else {
             continue;
         };
         if let Some(object) = scene.get_mut(*id) {
@@ -138,6 +142,64 @@ mod tests {
                     !overlap(first, second),
                     "{first:?} still overlaps {second:?}"
                 );
+            }
+        }
+    }
+
+    /// Where a mesh in plate coordinates stands across the plate, as an `Aabb`.
+    fn bounds_of(mesh: &Mesh) -> Aabb {
+        let mut bounds = Aabb::new(Vec3::splat(f32::INFINITY), Vec3::splat(f32::NEG_INFINITY));
+        for vertex in &mesh.vertices {
+            bounds.mins = bounds.mins.min(*vertex);
+            bounds.maxs = bounds.maxs.max(*vertex);
+        }
+        bounds
+    }
+
+    /// Builds every object's supports where it now stands.
+    fn rebuild(scene: &mut Scene) {
+        let table = vec![printer_profiles::SupportProfile::default()];
+        for object in scene.objects_mut() {
+            let (mesh, bvh) = (Arc::clone(&object.mesh), Arc::clone(&object.bvh));
+            object
+                .supports
+                .refresh(&mesh, &bvh, object.transform, &table);
+        }
+    }
+
+    #[test]
+    fn a_support_pad_out_past_its_model_keeps_clear_of_the_next_model() {
+        let mut scene = heap(3);
+        for object in scene.objects_mut() {
+            object.transform.translation.z = 10.0;
+            let transform = object.transform;
+            // Under the corner, so half the pad stands out past the box.
+            object.supports.add(Vec3::new(0.5, 0.5, 10.0), transform, 0);
+        }
+        rebuild(&mut scene);
+        arrange_plate(&mut scene, &plate(), 0.5);
+        rebuild(&mut scene);
+
+        let objects = scene.objects();
+        for (index, object) in objects.iter().enumerate() {
+            let pads: Vec<Aabb> = object
+                .supports
+                .drawn()
+                .iter()
+                .filter(|mesh| !mesh.is_empty())
+                .map(|mesh| bounds_of(mesh))
+                .collect();
+            assert!(!pads.is_empty(), "the support was built");
+            for other in objects.iter().enumerate().filter(|(at, _)| *at != index) {
+                let model = other.1.world_bounds().expect("a box has bounds");
+                for pad in &pads {
+                    assert!(
+                        !overlap(pad, &model),
+                        "the support of {} at {pad:?} stands under {}",
+                        object.name,
+                        other.1.name
+                    );
+                }
             }
         }
     }

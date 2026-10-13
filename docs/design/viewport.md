@@ -40,6 +40,14 @@ projection is wgpu's `0..1` depth convention (`camera::rh::proj::directx`), not 
 surfaces. Near and far track the orbit distance at `distance/100` and `distance * 20`,
 since a fixed tenth-millimetre near plane would spend the depth buffer on empty space.
 
+Faces of different meshes lying in one plane — a pad on a raft, two groups' pads standing
+in each other — would still take that plane by turns. Each support group is drawn with
+its depth taken a ten-thousandth of the way nearer the eye than the next, lowest group
+nearest, so the same face wins every frame (`GROUP_PULL`); only depth moves, never where
+a fragment is lit or cut. A section is drawn a micron inside the height it cuts at, so a
+face level with the cut — a raft's top, a step's floor — is cut away under the cap
+rather than fighting it (`SECTION_INSET_MM`).
+
 `frame` puts the target at a box's centre and the distance at `radius / sin(fov_y / 2)`
 for `radius` half the box diagonal: exact vertically, conservative horizontally at any
 aspect wider than tall, which is every viewport panel in practice.

@@ -21,6 +21,15 @@ use crate::scene::{Mapped, Scene, SceneObject};
 use crate::ui::theme;
 use crate::workspace::ViewOptions;
 
+/// How far each support group is drawn pulled towards the eye over the one after it, as a
+/// share of its distance: pads of two groups, or a pad and the raft, lie in one plane, and
+/// the lower group wins it. About sixteen steps of a 24-bit depth at the orbit distance.
+const GROUP_PULL: f32 = 1e-4;
+
+/// Millimetres a cut is drawn inside what it cuts: one level with a face — the top of a
+/// raft, the floor of a step — would leave that face and the cap fighting for one depth.
+const SECTION_INSET_MM: Scalar = 1e-3;
+
 /// Millimetres the cap quad is grown past what it has to cover. It is clipped by the
 /// stencil, so the only cost of a generous one is a few more fragments discarded.
 const CAP_MARGIN_MM: f32 = 10.0;
@@ -123,6 +132,8 @@ impl ViewportCallback {
             hidden_groups,
             preview,
         } = shading;
+        let section_mm = section_mm.map(|height| height - SECTION_INSET_MM);
+        let bottom_cut_mm = bottom_cut_mm.map(|height| height + SECTION_INSET_MM);
         let Draws {
             mut models,
             solids,
@@ -336,11 +347,11 @@ impl Draws {
         {
             // A column holds nothing up but the model, so marking its own overhangs would
             // only paint the scaffolding red.
-            self.flat(
-                Arc::clone(mesh),
-                Transform::default(),
-                theme::support_tint(group),
-            );
+            let instance =
+                ModelInstance::new(Transform::default(), theme::support_tint(group), NOT_MARKED)
+                    .pulled(GROUP_PULL * (groups.len() - group) as f32);
+            self.models
+                .push(ModelDraw::whole(Arc::clone(mesh), instance));
             self.solid(Arc::clone(mesh), Transform::default());
         }
     }

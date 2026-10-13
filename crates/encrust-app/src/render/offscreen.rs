@@ -306,6 +306,56 @@ fn a_model_near_the_plate_darkens_it_and_one_high_above_does_not() {
     );
 }
 
+/// Two meshes lying in one plane, the second pulled towards the eye: it wins every pixel
+/// of it, where unpulled the two would take the plane by turns. A pad on a raft, or the
+/// pads of two support groups standing in each other.
+#[test]
+fn a_pulled_mesh_wins_the_plane_it_shares_with_another() {
+    let square = |faces: Vec<[u32; 3]>| {
+        Arc::new(Mesh::new(
+            vec![
+                Vec3::new(55.0, 20.0, 0.0),
+                Vec3::new(95.0, 20.0, 0.0),
+                Vec3::new(95.0, 60.0, 0.0),
+                Vec3::new(55.0, 20.0, 0.0) + Vec3::new(0.0, 40.0, 0.0),
+            ],
+            faces,
+        ))
+    };
+    let under = ModelDraw::whole(
+        square(vec![[0, 1, 2], [0, 2, 3]]),
+        ModelInstance::new(Transform::default(), theme::support_tint(1), NOT_MARKED),
+    );
+    let over = || {
+        ModelDraw::whole(
+            square(vec![[0, 1, 3], [1, 2, 3]]),
+            ModelInstance::new(Transform::default(), theme::support_tint(0), NOT_MARKED)
+                .pulled(1e-4),
+        )
+    };
+    let camera = OrbitCamera {
+        target: Vec3::new(75.0, 40.0, 0.0),
+        distance_mm: 200.0,
+        ..OrbitCamera::default()
+    };
+    let Some(alone) = paint(camera, None, &[over()], &[], Marks::default()) else {
+        return;
+    };
+    let shared = paint(camera, None, &[under, over()], &[], Marks::default())
+        .expect("the second frame draws too");
+    let lost = alone
+        .as_chunks::<4>()
+        .0
+        .iter()
+        .zip(shared.as_chunks::<4>().0)
+        .filter(|(alone, shared)| alone != shared)
+        .count();
+    assert_eq!(
+        lost, 0,
+        "{lost} pixel(s) of the plane went to the mesh under it"
+    );
+}
+
 /// A disc 40 mm across hanging `height_mm` over a wide lit disc lying just under the
 /// plate, which stands in for the plate the shadow is laid on; seen from the front, so
 /// the plate under the hanging disc shows past its front edge.
