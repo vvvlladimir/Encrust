@@ -20,9 +20,8 @@ impl ViewportResources {
             .begin(device, encoder, size_px, viewport, timestamps);
         self.paint(&mut pass);
         drop(pass);
-        let faces = self.scene_faces();
         if let Some(timer) = &mut self.timer {
-            timer.end(encoder, faces);
+            timer.end(encoder, self.planned_faces);
         }
     }
 

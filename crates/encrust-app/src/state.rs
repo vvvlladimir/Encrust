@@ -57,6 +57,8 @@ pub struct View {
     /// frame drew, faces: the next frame's time is what that cost.
     pub budget: crate::render::Budget,
     pub drawn_faces: Option<usize>,
+    /// The level each model was last drawn at, 0 for its own mesh.
+    pub levels: core_geometry::FastMap<crate::scene::ObjectId, usize>,
 }
 
 impl View {
@@ -75,6 +77,7 @@ impl View {
             lods: crate::render::Lods::default(),
             budget: crate::render::Budget::default(),
             drawn_faces: None,
+            levels: core_geometry::FastMap::default(),
         }
     }
 }

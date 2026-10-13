@@ -39,7 +39,7 @@ impl ViewportResources {
     }
 
     /// Triangles the scene pass draws, the shadow's bake left out.
-    pub(super) fn scene_faces(&self) -> usize {
+    fn scene_faces(&self) -> usize {
         let caps = usize::from(self.frame.cutting) + usize::from(self.frame.cutting_bottom);
         let cuts: usize = self
             .frame

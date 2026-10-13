@@ -80,14 +80,15 @@ pub struct ViewportCallback {
     xray: bool,
     /// Whether the plate's grid is drawn into it.
     grid: bool,
-    /// Whether some model is drawn as a light copy this frame.
+    /// Whether the models' levels are still changing from frame to frame.
     light: bool,
     /// The plate the models cast their shadow on.
     floor: Floor,
     /// How long the window's pass over its panels took on the frame before, milliseconds.
     ui_ms: f32,
-    /// Where the card's time over each frame goes.
+    /// Where the card's time over each frame goes, with the models' faces it drew.
     report: Option<Sender<CardTime>>,
+    faces: Option<usize>,
 }
 
 /// The exposure bands washed over the models, and the height below which one shows
@@ -119,7 +120,7 @@ pub struct Shading<'a> {
     /// The support the hand is about to put down and the colour it is shown in, in plate
     /// coordinates. Drawn only, never capped: it is not part of the print yet.
     pub preview: Option<(&'a Arc<Mesh>, Color32)>,
-    /// The light copies drawn in place of heavy meshes while the camera moves.
+    /// The lighter levels drawn in place of heavy meshes.
     pub light: Option<&'a Light>,
 }
 
@@ -199,31 +200,33 @@ impl ViewportCallback {
             cut_line,
             xray: view.xray,
             grid: view.grid,
-            light: light.is_some_and(|light| !light.is_empty()),
+            light: light.is_some_and(|light| light.settling),
             floor: Floor {
                 near_corner_mm: Vec2::ZERO,
                 size_mm: Vec2::new(plate.x_mm, plate.y_mm),
             },
             ui_ms: 0.0,
             report: None,
+            faces: None,
         }
     }
 
     /// The same frame, logged with what the window's last pass over its panels took, and
-    /// with the card's time over it sent to `report`.
-    pub fn timed(mut self, ui_ms: f32, report: Sender<CardTime>) -> Self {
+    /// with the card's time over it sent to `report` beside the models' `faces` it draws,
+    /// or not sent where `faces` is `None`.
+    pub fn timed(mut self, ui_ms: f32, report: Sender<CardTime>, faces: Option<usize>) -> Self {
         self.ui_ms = ui_ms;
         self.report = Some(report);
+        self.faces = faces;
         self
     }
 }
 
-/// What `object` is drawn as: its shell or its own mesh, or the light copy of that while
-/// the camera moves.
+/// What `object` is drawn as: its shell or its own mesh, or a lighter level of that.
 fn shown(object: &SceneObject, light: Option<&Light>) -> Arc<Mesh> {
     let mesh = object.hollow.shell().unwrap_or(&object.mesh);
     light
-        .and_then(|light| light.get(&(Arc::as_ptr(mesh) as usize)))
+        .and_then(|light| light.meshes.get(&object.id))
         .unwrap_or(mesh)
         .clone()
 }
@@ -241,7 +244,7 @@ struct Draws {
 
 impl Draws {
     /// `mark` is the overhang threshold the models are washed at, or `NOT_MARKED`.
-    /// `light` holds the copies drawn in place of heavy meshes while the camera moves.
+    /// `light` holds the lighter levels drawn in place of heavy meshes.
     fn of(
         scene: &Scene,
         mark: f32,
@@ -267,7 +270,7 @@ impl Draws {
         draws
     }
 
-    /// `shown` is what the model is drawn as: its own mesh, or a light copy of it.
+    /// `shown` is what the model is drawn as: its own mesh, or a lighter level of it.
     fn model(
         &mut self,
         object: &SceneObject,
@@ -558,7 +561,7 @@ impl CallbackTrait for ViewportCallback {
     ) -> Vec<wgpu::CommandBuffer> {
         let started = web_time::Instant::now();
         super::with_resources(callback_resources, |resources| {
-            resources.report_to(self.report.clone());
+            resources.report_to(self.report.clone(), self.faces);
             resources.prepare(
                 device,
                 queue,

@@ -187,10 +187,11 @@ pub struct ViewportResources {
     uploaded_faces: usize,
     shadow_baked: bool,
     frame_log: FrameLog,
-    /// The card's own clock over the scene pass, where it has one, where its times go,
-    /// and the latest of them, milliseconds.
+    /// The card's own clock over the scene pass, where it has one, where its times go
+    /// with the models' faces this frame draws, and the latest time, milliseconds.
     timer: Option<timer::CardTimer>,
     report: Option<Sender<CardTime>>,
+    planned_faces: Option<usize>,
     card_ms: Option<f32>,
 }
 
@@ -346,6 +347,7 @@ impl ViewportResources {
             frame_log: FrameLog::default(),
             timer: timer::CardTimer::new(device),
             report: None,
+            planned_faces: None,
             card_ms: None,
         }
     }
@@ -458,18 +460,20 @@ impl ViewportResources {
         let Some(timer) = &mut self.timer else {
             return;
         };
-        for time in timer.collect(device, queue) {
-            self.card_ms = Some(time.card_s * 1000.0);
-            if let Some(report) = &self.report {
+        for (card_s, faces) in timer.collect(device, queue) {
+            self.card_ms = Some(card_s * 1000.0);
+            if let (Some(report), Some(faces)) = (&self.report, faces) {
                 // Nobody listening any more is no reason to stop drawing.
-                let _ = report.send(time);
+                let _ = report.send(CardTime { card_s, faces });
             }
         }
     }
 
-    /// Where the card's time over each frame is sent from now on.
-    pub fn report_to(&mut self, report: Option<Sender<CardTime>>) {
+    /// Where the card's time over each frame is sent from now on, and the models' faces
+    /// this frame draws, or `None` for a frame not to be learnt from.
+    pub fn report_to(&mut self, report: Option<Sender<CardTime>>, faces: Option<usize>) {
         self.report = report;
+        self.planned_faces = faces;
     }
 
     /// Lets go of every mesh no frame has drawn for `KEEP_UNDRAWN`, and every texture

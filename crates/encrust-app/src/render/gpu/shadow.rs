@@ -22,7 +22,7 @@ pub(super) struct ContactShadow {
 }
 
 /// What the shadow was last baked from, what this frame would bake it from, and whether
-/// this frame may: one drawing light copies never does.
+/// this frame may: one whose levels are still changing never does.
 #[derive(Debug, Default)]
 struct Bake {
     baked: Option<u64>,

@@ -95,6 +95,8 @@ egui-wgpu = "0.36"
 egui_kittest = { version = "0.36", features = ["snapshot", "wgpu"] }
 wgpu = "30.0"
 transform-gizmo-egui = "0.11"
+# Lighter copies of heavy models for the viewport, pure Rust so the web build keeps them (ADR 0259).
+meshoptimizer-rs = { version = "0.2", default-features = false, features = ["std"] }
 bytemuck = { version = "1.25", features = ["derive"] }
 rfd = "0.16"
 # The window's own buttons on macOS, moved onto the top bar's centre line (ADR 0217). All

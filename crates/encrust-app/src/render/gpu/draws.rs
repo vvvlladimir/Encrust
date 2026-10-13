@@ -105,7 +105,8 @@ pub struct FrameInput<'a> {
     pub floor: Option<Floor>,
     /// Whether the plate's grid is drawn into it.
     pub grid: bool,
-    /// Whether some model is drawn as a light copy while the camera moves. The shadow is
+    /// Whether the models' levels still change frame to frame, the camera moving or detail
+    /// coming back. The shadow is
     /// not cast again from one: what the camera does never moves it.
     pub light: bool,
 }

@@ -346,32 +346,43 @@ picking, the gizmo's conversions — has headless unit tests. Asserting on the d
 mean an image-comparison harness and a GPU in CI; asserting on a drag would mean feeding
 synthetic pointer events through egui to test a third-party crate's arithmetic.
 
-## Light copies while the camera moves
+## Levels of a heavy model
 
-A plate of sixteen copies of a million-face model is eighteen million faces a frame, and
-the card draws that at thirty frames a second however little the CPU does. So while the
-camera moves, and for `SETTLE_S` after, every mesh over `MIN_FACES` is drawn as a light
-copy, and the frame after it comes to rest draws everything whole again.
+A plate of sixteen copies of a million-face model is eighteen million faces a frame, which
+one card draws in 6 ms and another in 30. So every mesh over `MIN_FACES` has a chain of
+lighter levels, and each frame draws every model at the finest level the card can afford;
+ADR 0259 holds why.
 
-Only as many go light as the card needs, the smallest on screen first. Where the device has
-timestamp queries the scene pass is timed on the card itself and read back a few frames
-late, and the budget is what 12 ms buys at the cost a face was last seen to take: a dearer
-pass is taken in by half at once, a cheaper one by a twentieth, so the budget falls at the
-first heavy frame and climbs back over a second or two. Passes under a million faces are
-paid for by their pixels and teach it nothing. Where there is no such clock — a WebGL
-canvas — runs of slow frame intervals cut the budget instead, and nothing raises it.
+**The chain.** Each level is simplified from the one before to about half its faces, by
+edge collapse, or where that stalls on a surface it may not tear, by merging corners on a
+grid; it stops at `FEWEST_FACES`. A level's error, mm, is the sum of the simplifier's own
+along the chain, or what the middles of a sample of its faces stand off the mesh, whichever
+is more: the simplifier measures corners, and on a curved surface a face sinks in between
+them by five times what it reports. A million faces take a second on a worker, the first
+level half of it; the chain is keyed by the mesh's `Arc`, so copies share one.
 
-The copy gathers the mesh's corners onto a lattice and merges each cell's into their mean,
-dropping the faces that collapse: vertex clustering, in one pass and with no topology to
-keep, so it takes any mesh an import lets through. The lattice is sized from the surface's
-area to keep about a sixth of the faces, a hundred thousand at least, and coarsened until
-it does. It is built on a worker the first frame a mesh is drawn, keyed by its `Arc`, so
-copies of one model share one light copy and none is built twice.
+**What the card can afford.** Where the device has timestamp queries the scene pass is
+timed on the card itself and read back a few frames late. A least-squares line through the
+passes, the older weighing less, tells the frame's own cost — its pixels, the plate — from
+the cost of a face, and the budget is the faces left in 12 ms while the camera moves and
+30 ms at rest. A pass dearer than the line foresees is believed at once and a cheaper one
+over a second, so the budget falls at the first heavy frame and climbs back. Without such
+a clock — a WebGL canvas — runs of slow frame intervals cut the moving budget instead,
+nothing raises it, and a resting frame draws everything whole.
 
-What a light copy may not be is a cap's count or a cavity's faces: while a cut is capped
-nothing is drawn light, and the trapped resin a hollowed model shows is still drawn from
-its full mesh, whose face ranges it names. A hole's inside is drawn against the light
-copy, so it still meets the surface around it.
+**Which level.** A level's error times the pixels a millimetre spans at the model's
+nearest to the eye is what it shows on screen. `allot` starts every model whole and, while
+the frame is over its budget, takes the step that shows least next. While the camera
+moves any step may be taken; at rest only those under half a pixel, which cannot be seen,
+so a card with room to spare draws everything whole and one without gives up only what
+is not seen. Once the camera stops, every model comes back a level a frame towards what
+the rest allows, never coarser than it is, so detail sharpens over a few frames instead
+of all at once.
+
+A level may not be a cap's count or a cavity's faces: while a cut is capped every model is
+drawn whole, and at rest a hollowed model is too, since the trapped resin it shows is drawn
+from its own mesh's face ranges. A hole's inside is drawn against the level drawn, so it
+still meets the surface around it. The shadow is not baked while levels still change.
 
 ## Measuring a frame
 

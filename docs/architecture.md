@@ -104,7 +104,7 @@ not drawn: a test may reach for a fixture the crate itself must not.
 ```
 encrust-app ──> core-engine, every core-*, printer-profiles, printer-link,
                net-sdcp, net-prusalink,
-               egui, eframe, egui-wgpu, wgpu, transform-gizmo-egui,
+               egui, eframe, egui-wgpu, wgpu, transform-gizmo-egui, meshoptimizer-rs,
                bytemuck, image, rfd, rayon, serde, serde_json, zip,
                ureq (with TLS at the desk), minisign-verify, tar, flate2, web-time;
                in a browser wasm-bindgen, wasm-bindgen-futures, js-sys, web-sys;

@@ -4,8 +4,6 @@
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU8, Ordering};
 
-use crate::render::frame_time::CardTime;
-
 /// Frames whose times can be on their way back at once; a frame finding none free goes
 /// untimed.
 const SLOTS: usize = 4;
@@ -29,8 +27,8 @@ pub(super) struct CardTimer {
 struct Slot {
     read: wgpu::Buffer,
     state: State,
-    /// Triangles the timed pass drew.
-    faces: usize,
+    /// The models' faces the timed pass drew, where the frame counted them.
+    faces: Option<usize>,
     mapped: Arc<AtomicU8>,
 }
 
@@ -67,7 +65,7 @@ impl CardTimer {
                     mapped_at_creation: false,
                 }),
                 state: State::Free,
-                faces: 0,
+                faces: None,
                 mapped: Arc::default(),
             })
             .collect();
@@ -96,8 +94,8 @@ impl CardTimer {
     }
 
     /// Copies out the timestamps the scene pass just wrote, to be read once the frame is
-    /// sent. `faces` is what the pass drew.
-    pub(super) fn end(&mut self, encoder: &mut wgpu::CommandEncoder, faces: usize) {
+    /// sent. `faces` is what the pass drew of the models.
+    pub(super) fn end(&mut self, encoder: &mut wgpu::CommandEncoder, faces: Option<usize>) {
         let Some(index) = self.current.take() else {
             return;
         };
@@ -110,9 +108,14 @@ impl CardTimer {
         slot.faces = faces;
     }
 
-    /// What the card took over the passes it has finished since the last call. Every pass
-    /// recorded before this frame has been sent by now, so its read can begin.
-    pub(super) fn collect(&mut self, device: &wgpu::Device, queue: &wgpu::Queue) -> Vec<CardTime> {
+    /// What the card took over the passes it has finished since the last call, seconds,
+    /// with the models' faces each drew. Every pass recorded before this frame has been
+    /// sent by now, so its read can begin.
+    pub(super) fn collect(
+        &mut self,
+        device: &wgpu::Device,
+        queue: &wgpu::Queue,
+    ) -> Vec<(f32, Option<usize>)> {
         for slot in &mut self.slots {
             if slot.state == State::Recorded {
                 let mapped = Arc::clone(&slot.mapped);
@@ -145,7 +148,7 @@ impl CardTimer {
 
 /// The time between the two timestamps in `slot`'s mapped buffer. A pass whose frame was
 /// never sent leaves them unwritten, and comes to nothing.
-fn read(slot: &Slot, tick_s: f32) -> Option<CardTime> {
+fn read(slot: &Slot, tick_s: f32) -> Option<(f32, Option<usize>)> {
     let ticks = match slot.read.get_mapped_range(..) {
         Ok(bytes) => Some(bytemuck::pod_read_unaligned::<[u64; 2]>(&bytes)),
         Err(error) => {
@@ -155,8 +158,5 @@ fn read(slot: &Slot, tick_s: f32) -> Option<CardTime> {
     };
     slot.read.unmap();
     let [began, ended] = ticks?;
-    (ended > began).then(|| CardTime {
-        card_s: (ended - began) as f32 * tick_s,
-        faces: slot.faces,
-    })
+    (ended > began).then(|| ((ended - began) as f32 * tick_s, slot.faces))
 }
