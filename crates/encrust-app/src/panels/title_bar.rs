@@ -820,7 +820,14 @@ fn edit_menu(ui: &mut egui::Ui, window: &mut Window) {
         .clicked()
     {
         ui.close();
-        if let Err(error) = window.tools.orient.start(&window.doc.scene, None) {
+        let supports = &window.tools.supports;
+        let started = window
+            .tools
+            .orient
+            .start(&window.doc.scene, None, |object| {
+                supports.profile_for(object).max_overhang_deg
+            });
+        if let Err(error) = started {
             window.machine.status = crate::status::Status::failed(&error);
         }
     }

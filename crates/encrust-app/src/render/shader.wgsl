@@ -103,6 +103,9 @@ struct ModelVertex {
     // 1.0 for a surface of a model, 0.0 for a volume painted in its own colour. 11 and 12
     // belong to the relief pass.
     @location(13) surface: f32,
+    // Share of the way to the eye the depth is taken from, so that of two coplanar faces
+    // of different meshes the same one wins every frame.
+    @location(14) pull: f32,
 };
 
 struct ModelFragment {
@@ -184,12 +187,12 @@ fn hatch(world: vec3<f32>) -> f32 {
     return mix(cover, 0.5, smoothstep(0.25, 0.5, pixel));
 }
 
-// How much of the overhang colour a marked surface takes off a stripe and on one. Not
-// nothing between the stripes: a patch narrower than the pitch would otherwise vanish.
-const HATCH_GAP = 0.2;
-const HATCH_STRIPE = 0.85;
+// How much of the overhang colour a marked surface takes: filled, not hatched, so the edge
+// of what needs holding up is a line and not a row of stripe ends. See docs/decisions/0245.
+const OVERHANG_FILL = 0.85;
 
-// The same for whatever stands past the build volume.
+// How much of its colour whatever stands past the build volume takes off a stripe and on
+// one. Not nothing between the stripes: a part narrower than the pitch would vanish.
 const OUTSIDE_GAP = 0.3;
 const OUTSIDE_STRIPE = 0.9;
 
@@ -201,7 +204,8 @@ fn model_vertex(in: ModelVertex) -> ModelFragment {
     let world = model * vec4<f32>(in.position, 1.0);
 
     var out: ModelFragment;
-    out.clip_position = globals.view_projection * world;
+    let seen = mix(world.xyz, globals.eye.xyz, in.pull);
+    out.clip_position = globals.view_projection * vec4<f32>(seen, 1.0);
     out.normal = normal_matrix * in.normal;
     out.color = in.color;
     out.overhang = in.overhang;
@@ -397,7 +401,7 @@ fn model_fragment(in: ModelFragment, @builtin(front_facing) front_facing: bool) 
     if (in.overhang >= 0.0) {
         let lean = -outward.z;
         let marked = smoothstep(in.overhang, in.overhang + OVERHANG_BAND, lean);
-        base = mix(base, globals.overhang_color.rgb, marked * mix(HATCH_GAP, HATCH_STRIPE, stripe));
+        base = mix(base, globals.overhang_color.rgb, marked * OVERHANG_FILL);
     }
 
     base = banded(base, in.world.z);

@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use anyhow::{Result, bail};
-use core_geometry::{Adjacency, Mesh, Vec3, drop_to_plate};
+use core_geometry::{Adjacency, Mesh, Vec3};
 use core_plate::OrientSettings;
 use core_supports::Region;
 
@@ -104,8 +104,16 @@ impl OrientTool {
 
     /// Starts a run over one model, or over everything visible when `only` is `None`, and
     /// stops waiting for a face: the run replaces the rotation a laid face would set.
-    pub fn start(&mut self, scene: &Scene, only: Option<ObjectId>) -> Result<()> {
-        let tasks = orient_tasks(scene, only);
+    ///
+    /// `overhang_deg_of` is the angle of the support profile each model is built to, so
+    /// the search counts as overhang what automatic placement will hold up.
+    pub fn start(
+        &mut self,
+        scene: &Scene,
+        only: Option<ObjectId>,
+        overhang_deg_of: impl Fn(&SceneObject) -> f32,
+    ) -> Result<()> {
+        let tasks = orient_tasks(scene, only, overhang_deg_of);
         if tasks.is_empty() {
             bail!("nothing visible on the plate to orient");
         }
@@ -143,12 +151,7 @@ impl OrientTool {
                             moved += 1;
                         }
                         object.transform = object.transform.turned(by);
-                    }
-                    let Some(bounds) = scene.get(turn.id).and_then(|o| o.world_bounds()) else {
-                        continue;
-                    };
-                    if let Some(object) = scene.get_mut(turn.id) {
-                        object.transform.translation += drop_to_plate(&bounds);
+                        object.stand_on_plate();
                     }
                 }
                 *status = Status::Info(match moved {
@@ -232,7 +235,7 @@ mod tests {
         let mut tool = OrientTool::default();
         let mut status = Status::default();
         for _ in 0..2 {
-            tool.start(&scene, None)
+            tool.start(&scene, None, |_| 45.0)
                 .expect("a visible slab can be oriented");
             settle(&mut tool, &mut scene, &mut status);
         }
@@ -248,7 +251,7 @@ mod tests {
         let mut tool = OrientTool::default();
         let mut status = Status::default();
 
-        tool.start(&scene, None)
+        tool.start(&scene, None, |_| 45.0)
             .expect("a visible slab can be oriented");
         settle(&mut tool, &mut scene, &mut status);
 
@@ -266,7 +269,7 @@ mod tests {
         let mut tool = OrientTool::default();
         let scene = Scene::default();
         assert!(tool.blocker(&scene).is_some());
-        assert!(tool.start(&scene, None).is_err());
+        assert!(tool.start(&scene, None, |_| 45.0).is_err());
     }
 
     #[test]

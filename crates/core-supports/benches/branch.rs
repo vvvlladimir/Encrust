@@ -59,11 +59,18 @@ fn tips(model: &Mesh, bvh: &Bvh, profile: &SupportProfile) -> Vec<core_supports:
             },
         )
         .expect("a closed ball slices");
-    let points: Vec<SupportPoint> =
-        generate_supports(&sliced, LAYER_HEIGHT_MM, profile, &[], None, &mut |_| true)
-            .into_iter()
-            .map(SupportPoint::new)
-            .collect();
+    let points: Vec<SupportPoint> = generate_supports(
+        &sliced,
+        LAYER_HEIGHT_MM,
+        profile,
+        &[],
+        &[],
+        None,
+        &mut |_| true,
+    )
+    .into_iter()
+    .map(SupportPoint::new)
+    .collect();
     columns(
         &points,
         &Placed::new(model, bvh, Transform::default()),

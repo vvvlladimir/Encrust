@@ -2,7 +2,7 @@
 //! washed facet and what the Edit mode is holding.
 
 use core_geometry::Vec3;
-use core_supports::Part;
+use core_supports::{Part, SupportTree};
 
 use crate::camera::OrbitCamera;
 use crate::measure::Target;
@@ -11,7 +11,10 @@ use crate::pick::occluded;
 use crate::render::{AXIS_LENGTH_MM, CutLine};
 use crate::scene::SceneObject;
 use crate::ui::theme;
+use crate::viewport_input::Pointer;
 use crate::workspace::Tool;
+
+use super::picking::grab_under_cursor;
 
 /// How wide the dot at each end of a measurement is drawn, in points.
 const MEASURE_END_R: f32 = 4.0;
@@ -40,6 +43,9 @@ const CUT_PLANE_MARGIN_MIN_MM: f32 = 3.0;
 const PICKED_WIDTH: f32 = 3.0;
 
 const PICKED_DOT_R: f32 = 5.0;
+
+/// How much of the picked colour the part under the cursor is drawn in.
+const AIMED_OPACITY: f32 = 0.55;
 
 /// How far past the tip of each axis arrow its letter stands, millimetres.
 const AXIS_LETTER_GAP_MM: f32 = 5.0;
@@ -391,32 +397,67 @@ pub(super) fn draw_picked(ui: &egui::Ui, window: &Window, viewport: egui::Rect) 
             continue;
         };
         let at = |point: Vec3| on_screen(matrix.transform_point3(point));
+        draw_part(&painter, tree, picked.part, at, theme::colors().picked);
+    }
+}
 
-        let ends = match picked.part {
-            Part::Node(node) => tree.nodes().get(node).map(|node| (node.position, None)),
-            Part::Strut(child) => tree.nodes().get(child).and_then(|node| {
-                let parent = node.parent?;
-                Some((node.position, Some(tree.nodes()[parent].position)))
-            }),
-            Part::Trunk => Some((tree.root().position, Some(tree.landing().base))),
-            Part::Foot => Some((tree.landing().base, None)),
-        };
-        let Some((from, to)) = ends else {
-            continue;
-        };
+/// Draws the part of a support a press would take hold of, fainter than what is held, so
+/// that the aim is seen before the button goes down.
+pub(super) fn draw_aimed(ui: &egui::Ui, window: &Window, viewport: egui::Rect, pointer: &Pointer) {
+    if pointer.primary_down || pointer.pan_button_down || !pointer.over_viewport {
+        return;
+    }
+    let Some(cursor) = pointer.position.map(|at| egui::pos2(at.x, at.y)) else {
+        return;
+    };
+    let Some((id, hit)) = grab_under_cursor(window, viewport, cursor) else {
+        return;
+    };
+    let Some(tree) = window
+        .doc
+        .scene
+        .get(id)
+        .and_then(|object| object.supports.trees().get(hit.tree))
+    else {
+        return;
+    };
+    let colour = theme::colors().picked.gamma_multiply(AIMED_OPACITY);
+    // The trees an object hands out for picking already stand in plate coordinates.
+    let on_screen = projector(&window.view.camera, viewport);
+    draw_part(&ui.painter_at(viewport), tree, hit.part, on_screen, colour);
+}
 
-        match to.and_then(at).zip(at(from)) {
-            Some((to, from)) => {
-                painter.line_segment(
-                    [from, to],
-                    egui::Stroke::new(PICKED_WIDTH, theme::colors().picked),
-                );
-            }
-            None => {
-                if let Some(from) = at(from) {
-                    painter.circle_filled(from, PICKED_DOT_R, theme::colors().picked);
-                }
-            }
+/// One part of `tree` as a line or a dot, through `at`, which puts a point of the tree's
+/// own space on the screen.
+fn draw_part(
+    painter: &egui::Painter,
+    tree: &SupportTree,
+    part: Part,
+    at: impl Fn(Vec3) -> Option<egui::Pos2>,
+    colour: egui::Color32,
+) {
+    let ends = match part {
+        Part::Node(node) => tree.nodes().get(node).map(|node| (node.position, None)),
+        Part::Strut(child) => tree.nodes().get(child).and_then(|node| {
+            let parent = node.parent?;
+            Some((node.position, Some(tree.nodes()[parent].position)))
+        }),
+        Part::Trunk => Some((tree.root().position, Some(tree.landing().base))),
+        Part::Foot => Some((tree.landing().base, None)),
+    };
+    let Some((from, to)) = ends else {
+        return;
+    };
+    let Some(from) = at(from) else {
+        return;
+    };
+    match to.and_then(at) {
+        Some(to) => {
+            painter.line_segment([from, to], egui::Stroke::new(PICKED_WIDTH, colour));
         }
+        None if to.is_none() => {
+            painter.circle_filled(from, PICKED_DOT_R, colour);
+        }
+        None => {}
     }
 }

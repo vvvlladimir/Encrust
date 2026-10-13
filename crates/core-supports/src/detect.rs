@@ -78,7 +78,7 @@ pub fn unsupported(
 
 /// The longer side of a piece's bounding box, millimetres. What "smaller than" means to
 /// the island filter.
-fn across_mm(piece: &Field, grid: &Grid) -> f32 {
+pub(crate) fn across_mm(piece: &Field, grid: &Grid) -> f32 {
     piece.bounds().map_or(0.0, |(min, max)| {
         let cells = (max[0] - min[0] + 1).max(max[1] - min[1] + 1);
         grid.millimetres_of(cells)

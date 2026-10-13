@@ -3,11 +3,11 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::{self, Receiver, TryRecvError};
 
 use core_geometry::{Mesh, Scalar, Transform, Vec3, transform_mesh};
-use core_supports::{Blocked, Region, generate_supports};
+use core_supports::{Blocked, Region, generate_supports, low_points};
 use printer_profiles::SupportProfile;
 
 use crate::job::pipeline::{slice_mesh, thread_pool, worker_threads};
-use crate::scene::{ObjectId, Scene};
+use crate::scene::{ObjectId, Scene, SceneObject};
 
 /// How much of the run has to pass before the worker says so again. A layer is a
 /// microsecond and a frame is sixteen thousand of them, so a message a layer would only
@@ -25,13 +25,14 @@ pub struct SupportTask {
     pub seeds: Vec<Vec3>,
     /// The faces painted out of bounds, which the run puts nothing on or near.
     pub blocked: Region,
+    /// What this model's supports are placed by: its own profile where it keeps one.
+    pub profile: SupportProfile,
 }
 
 /// Everything one automatic placement run needs.
 pub struct SupportRequest {
     pub tasks: Vec<SupportTask>,
     pub layer_height_mm: Scalar,
-    pub profile: SupportProfile,
 }
 
 /// Where the run wants supports under one model, in the plate coordinates that model
@@ -161,7 +162,10 @@ impl Drop for SupportJob {
 
 /// Every visible model with geometry on the plate being edited, and the supports already
 /// under it.
-pub fn tasks_of(scene: &Scene) -> Vec<SupportTask> {
+pub fn tasks_of(
+    scene: &Scene,
+    profile_of: impl Fn(&SceneObject) -> SupportProfile,
+) -> Vec<SupportTask> {
     scene
         .targets()
         .filter(|object| !object.mesh.is_empty())
@@ -171,6 +175,7 @@ pub fn tasks_of(scene: &Scene) -> Vec<SupportTask> {
             transform: object.transform,
             seeds: object.supports.contacts(object.transform),
             blocked: object.supports.blocked().clone(),
+            profile: profile_of(object),
         })
         .collect()
 }
@@ -229,8 +234,9 @@ fn place(
         let contacts = generate_supports(
             &stack,
             request.layer_height_mm,
-            &request.profile,
+            &task.profile,
             &task.seeds,
+            &low_points(&task.mesh, task.transform),
             blocked.as_ref(),
             &mut |layer| {
                 let fraction = done + layer as f32 / layers / models;
@@ -319,9 +325,8 @@ mod tests {
 
     fn request(scene: &Scene) -> SupportRequest {
         SupportRequest {
-            tasks: tasks_of(scene),
+            tasks: tasks_of(scene, |_| SupportProfile::medium()),
             layer_height_mm: 0.1,
-            profile: SupportProfile::medium(),
         }
     }
 
@@ -365,7 +370,7 @@ mod tests {
     fn a_hidden_model_is_not_worked_on() {
         let mut scene = scene_with_a_cube(Transform::from_translation(Vec3::new(0.0, 0.0, 10.0)));
         scene.objects_mut()[0].visible = false;
-        assert!(tasks_of(&scene).is_empty());
+        assert!(tasks_of(&scene, |_| SupportProfile::medium()).is_empty());
     }
 
     #[test]
@@ -377,7 +382,7 @@ mod tests {
             .supports
             .paint_face(&mesh, &adjacency, 0, 30.0, true, true);
 
-        let tasks = tasks_of(&scene);
+        let tasks = tasks_of(&scene, |_| SupportProfile::medium());
         assert!(
             !tasks[0].blocked.is_empty(),
             "the run has to know what it may not put a support on"
@@ -392,7 +397,7 @@ mod tests {
             .supports
             .add(Vec3::new(5.0, 5.0, 10.0), lift, 0);
 
-        let tasks = tasks_of(&scene);
+        let tasks = tasks_of(&scene, |_| SupportProfile::medium());
         assert_eq!(tasks.len(), 1);
         assert!(
             tasks[0].seeds[0].abs_diff_eq(Vec3::new(5.0, 5.0, 10.0), 1e-4),

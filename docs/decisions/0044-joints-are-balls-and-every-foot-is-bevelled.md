@@ -1,6 +1,6 @@
 # 0044. Cover a joint with a ball, bevel every foot, cross the braces
 
-- **Status:** Accepted
+- **Status:** Accepted; the ball over a joint is superseded by 0238
 - **Date:** 2026-09-19
 
 ## Context

@@ -3,6 +3,7 @@
 //! What goes in is the plate as it stands, geometry and all; what comes out is that plate
 //! and nothing worked out anew (ADR 0191).
 
+use std::collections::BTreeMap;
 use std::sync::Arc;
 
 use core_geometry::{Bvh, Vec3, center_of_mass};
@@ -11,12 +12,13 @@ use rayon::prelude::*;
 use crate::scene::{ImportSummary, Imported, OwnSettings, Scene, SceneObject};
 use crate::slicing::Slicing;
 use crate::state::Tools;
+use crate::supports::with_own;
 use crate::tool_settings::ToolSettings;
 use core_engine::project::{
     BuiltCavity, Cavity, Chosen, Manifest, ModelMeshes, ObjectHollowState, ObjectState,
-    ObjectSupportState, Project, Summary, VERSION, hollow_of, supports_of,
+    ObjectSupportState, OwnSupportState, Project, Summary, VERSION, hollow_of, supports_of,
 };
-use printer_profiles::SupportProfile;
+use printer_profiles::{Raft, SupportProfile};
 
 /// What a project file is written from: the plate, and the numbers each tool is set to.
 pub struct Captured<'a> {
@@ -93,6 +95,7 @@ fn object_state(object: &SceneObject) -> ObjectState {
             blocked: object.supports.blocked().clone(),
             frozen: object.supports.frozen().to_vec(),
             grown: object.supports.grown(object.transform),
+            raft_lift_mm: object.supports.raft_lift_mm(),
         },
         hollow: ObjectHollowState {
             blockers: object.hollow.blockers().to_vec(),
@@ -102,6 +105,16 @@ fn object_state(object: &SceneObject) -> ObjectState {
         },
         own_hollow: object.own.hollow.clone(),
         own_drain: object.own.drain.clone(),
+        own_raft: object.own.raft,
+        own_supports: object
+            .own
+            .supports
+            .iter()
+            .map(|(group, profile)| OwnSupportState {
+                group: *group,
+                profile: profile.clone(),
+            })
+            .collect(),
     }
 }
 
@@ -156,7 +169,8 @@ pub fn apply(project: Project, plate: CapturedMut<'_>) {
         }
         scene.rename_plate(index as u32, name.clone());
     }
-    restore_objects(scene, manifest.objects, models, &tools.supports.table());
+    let (table, raft) = (tools.supports.table(), tools.supports.raft);
+    restore_objects(scene, manifest.objects, models, &table, raft);
     scene.select(None);
     scene.show_plate(manifest.active_plate);
 }
@@ -168,6 +182,7 @@ fn restore_objects(
     objects: Vec<ObjectState>,
     models: Vec<ModelMeshes>,
     table: &[SupportProfile],
+    plate_raft: Raft,
 ) {
     // The hierarchy is the expensive half of opening a model and is per mesh, so the
     // plate's models are built at once rather than one after another.
@@ -203,18 +218,26 @@ fn restore_objects(
         };
         object.visible = state.visible;
         object.plate = state.plate;
+        let own_supports: BTreeMap<u16, SupportProfile> = state
+            .own_supports
+            .into_iter()
+            .map(|own| (own.group, own.profile))
+            .collect();
+        let own = OwnSettings {
+            hollow: state.own_hollow,
+            drain: state.own_drain,
+            supports: own_supports,
+            raft: state.own_raft,
+        };
         object.supports = supports_of(
             &state.supports,
             &meshes.source,
             &bvh,
             state.transform,
-            table,
+            &with_own(table.to_vec(), &own, plate_raft),
         );
         object.hollow = hollow_of(&state.hollow, meshes);
-        object.own = OwnSettings {
-            hollow: state.own_hollow,
-            drain: state.own_drain,
-        };
+        object.own = own;
     }
 }
 
@@ -344,6 +367,7 @@ mod tests {
             blocked,
             Vec::new(),
         );
+        object.supports.set_raft_lift_mm(0.5);
         object.hollow = ModelHollow::restored(
             vec![Blocker::ball(Vec3::splat(0.5), 0.2)],
             Vec::new(),
@@ -424,6 +448,10 @@ mod tests {
         assert_eq!(after.supports.points(), before.supports.points());
         assert_eq!(after.supports.painted(), before.supports.painted());
         assert_eq!(after.supports.blocked(), before.supports.blocked());
+        assert!(
+            (after.supports.raft_lift_mm() - 0.5).abs() < f32::EPSILON,
+            "a model reopened on its raft must not be stood up by it again"
+        );
         assert_eq!(after.hollow.blockers(), before.hollow.blockers());
         assert_eq!(after.hollow.channels(), before.hollow.channels());
     }
@@ -570,6 +598,26 @@ mod tests {
     }
 
     #[test]
+    fn the_plates_raft_and_a_models_own_are_saved_with_the_project() {
+        let mut saved = bench();
+        let plate = Raft {
+            enabled: !saved.tools.supports.raft.enabled,
+            thickness_mm: saved.tools.supports.raft.thickness_mm + 1.0,
+            ..saved.tools.supports.raft
+        };
+        let own = Raft {
+            thickness_mm: plate.thickness_mm + 1.0,
+            ..plate
+        };
+        saved.tools.supports.raft = plate;
+        saved.scene.objects_mut()[0].own.raft = Some(own);
+
+        let back = round_trip(&saved);
+        assert_eq!(back.tools.supports.raft, plate);
+        assert_eq!(back.scene.objects()[0].own.raft, Some(own));
+    }
+
+    #[test]
     fn an_opened_plate_stands_as_it_was_saved_and_builds_nothing() {
         let mut saved = bench();
         let shell = hollowed(&mut saved);
@@ -652,11 +700,28 @@ mod tests {
 
         let back = round_trip(&saved);
         let object = &back.scene.objects()[0];
-        assert_eq!(
-            object.supports.trees(),
-            standing,
-            "every tree is the one saved"
-        );
+        let trees = object.supports.trees();
+        assert_eq!(trees.len(), standing.len(), "every tree comes back");
+        // A tree is kept in the model's own space and stood up again through the model's
+        // placement, which is two matrices and the last digit of a float.
+        for (tree, was) in trees.iter().zip(&standing) {
+            assert_eq!(tree.group(), was.group());
+            assert_eq!(tree.landing().on_model, was.landing().on_model);
+            assert!(
+                tree.landing().base.abs_diff_eq(was.landing().base, 1e-4),
+                "a tree stands where it stood"
+            );
+            assert_eq!(tree.nodes().len(), was.nodes().len());
+            for (node, old) in tree.nodes().iter().zip(was.nodes()) {
+                assert_eq!((node.parent, node.point), (old.parent, old.point));
+                assert!(
+                    node.position.abs_diff_eq(old.position, 1e-4),
+                    "every tree is the one saved: {} against {}",
+                    node.position,
+                    old.position
+                );
+            }
+        }
         assert!(
             object
                 .supports

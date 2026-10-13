@@ -234,3 +234,38 @@ fn the_orient_goal_and_the_tilt_limit_reach_the_search() {
         "a tilt of nothing allows no turn"
     );
 }
+
+#[test]
+fn the_overhang_an_orientation_is_scored_on_is_the_support_profiles_own() {
+    // A wall hanging 50 degrees from vertical: past the 45 the medium profile holds up
+    // from, inside the 55 the light one does.
+    let lean = 10.0 * 50.0_f32.to_radians().tan();
+    let path = write_leaning_box_stl("leaning", 10.0, lean, 12, 0);
+    let overhang = |profile: &str| {
+        let output = slice(&[
+            path.to_str().unwrap(),
+            "--orient",
+            "--max-tilt",
+            "0",
+            "--supports",
+            profile,
+            "--json",
+        ]);
+        assert!(output.status.success(), "{}", stderr(&output));
+        json(&output)["oriented"]["overhang_mm2"]
+            .as_f64()
+            .expect("an oriented run reports its overhang")
+    };
+
+    // 155.6 mm2 of wall, weighted by how far past the angle it leans: sin 50 - sin 45.
+    assert!(
+        overhang("medium") > 5.0,
+        "the wall is 9 mm2 of weighted overhang at 45 degrees, got {}",
+        overhang("medium")
+    );
+    assert!(
+        overhang("light") < 0.01,
+        "and none at the 55 degrees the light profile asks for, got {}",
+        overhang("light")
+    );
+}

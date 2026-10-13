@@ -15,6 +15,10 @@ pub struct RowAction {
     pub removed: bool,
     /// The name typed over the label, once Enter or a click elsewhere takes it.
     pub renamed: Option<String>,
+    /// The eye was clicked: what the row stands for is to be shown, or hidden.
+    pub toggled: bool,
+    /// The row itself, for a caller that hangs a menu on its secondary click.
+    pub row: Option<egui::Response>,
 }
 
 /// A list the panel adds rows to: support groups, exposure bands, drain holes.
@@ -34,10 +38,12 @@ pub fn list<R>(ui: &mut Ui, add: impl FnOnce(&mut Ui) -> R) -> R {
 
 /// One row of that list: what it is, the colour it is drawn in, a figure at its right, and
 /// the button that drops it. Given a `rename` id, a double click turns the label into a
-/// field, as a plate tab does.
+/// field, as a plate tab does. Given `shown`, an eye beside the figure says whether what
+/// the row stands for is drawn, and asks for the other.
 ///
 /// The row takes its click before its contents are laid out, so the button over it is the
 /// later widget and wins the press it sits under.
+#[allow(clippy::too_many_arguments)]
 pub fn list_row(
     ui: &mut Ui,
     label: &str,
@@ -46,6 +52,7 @@ pub fn list_row(
     remove: Option<(&str, &str)>,
     rename: Option<Id>,
     aside: Option<&str>,
+    shown: Option<bool>,
 ) -> RowAction {
     let colors = theme::colors();
     let (rect, row) =
@@ -73,6 +80,14 @@ pub fn list_row(
                 if let Some((glyph, tooltip)) = remove {
                     action.removed = super::icon_button(ui, glyph, tooltip).clicked();
                 }
+                if let Some(shown) = shown {
+                    let (glyph, tooltip) = if shown {
+                        (crate::ui::icon::VISIBLE, "Hide in the view")
+                    } else {
+                        (crate::ui::icon::HIDDEN, "Show in the view")
+                    };
+                    action.toggled = super::icon_button(ui, glyph, tooltip).clicked();
+                }
                 if let Some(aside) = aside {
                     let figure = RichText::new(aside).font(theme::figures(11.5));
                     ui.label(figure.color(colors.text_low));
@@ -94,7 +109,8 @@ pub fn list_row(
         ui.data_mut(|data| data.insert_temp(id, label.to_owned()));
         ui.memory_mut(|memory| memory.request_focus(id));
     }
-    action.picked = !action.removed && row.clicked();
+    action.picked = !action.removed && !action.toggled && row.clicked();
+    action.row = Some(row);
     action
 }
 

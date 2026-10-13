@@ -1,7 +1,6 @@
 # Thick supports for heavy parts and large flat overhangs, at the cost of scarring.
 #
-# Sized to what an ELEGOO Saturn 4 Ultra is run with in the field, bar the density, the
-# overhang angle and the foot shape, which are ours; where the numbers come from: ADR 0131.
+# Tuned on prints rather than taken from the field; where the numbers come from: ADR 0254.
 
 name = "Heavy"
 
@@ -9,13 +8,18 @@ facets = 12
 
 # How many supports automatic placement puts down against what it reckons is enough,
 # counted over an area: doubling it puts down twice as many.
-density = 2.5
+density = 0.5
 
-# How far the lowest point of a part should stand clear of the plate.
-z_lift_mm = 2.0
+# How far the lowest point of a part should stand clear of the plate: room for the pad,
+# the flare and a whole top segment under its lowest contact, see ADR 0237.
+z_lift_mm = 5.5
 
 # How much clear air a support's body keeps between itself and the model.
 clearance_mm = 0.6
+
+# Whether a support may stand on the part where the plate is out of reach. Off: a heavy
+# part's supports lean for the plate instead, and leave its surfaces unscarred.
+land_on_model = false
 
 # How far a surface may lean before it needs holding up, degrees from vertical.
 max_overhang_deg = 35.0
@@ -25,29 +29,26 @@ max_overhang_deg = 35.0
 contact_spacing_mm = 4.0
 
 [tip]
-# cone, sphere or plane.
-shape = "sphere"
-contact_diameter_mm = 1.0
-contact_depth_mm = 0.6
+# sphere or plane.
+shape = "plane"
+contact_diameter_mm = 0.6
+contact_depth_mm = 0.2
 
 [top]
-upper_diameter_mm = 0.6
-lower_diameter_mm = 1.5
-length_mm = 3.0
+length_mm = 2.4
 
 [middle]
-diameter_mm = 1.5
+diameter_mm = 1.2
 
 [bottom]
 # cylinder, cone, prism or cube.
 shape = "cylinder"
-platform_diameter_mm = 12.0
+platform_diameter_mm = 10.0
 platform_thickness_mm = 1.0
 
-# The flare between the pillar and the pad. It rises as far as it widens, so these
-# two also set its height.
-upper_diameter_mm = 1.5
-lower_diameter_mm = 2.7
+# How wide the flare between the pillar and the pad is where it meets the pad. It leaves
+# the pillar at the pillar's own width and rises as far as it widens.
+lower_diameter_mm = 5.0
 
 # The thin strut used where a support runs from one part of the model to another rather
 # than down to the plate. Both of its ends sink into a surface.
@@ -56,28 +57,32 @@ enabled = true
 diameter_mm = 0.5
 upper_depth_mm = 0.2
 lower_depth_mm = 0.2
+# The longest it runs before it keeps the regular pillar's width instead.
+max_length_mm = 10.0
 
 # How the tips of nearby supports merge into shared trunks on the way down.
 [branching]
-enabled = true
+enabled = false
 max_angle_deg = 70.0
 max_merge_distance_mm = 10.0
 trunk_exponent = 2.5
-max_trunk_diameter_mm = 2.5
+max_trunk_diameter_mm = 2.2
 
 # The slab the supports stand on instead of standing on the plate.
 [raft]
 enabled = false
-# hull or rectangle.
+# skates, grid or connected.
+style = "skates"
+# hull or rectangle: the outline a skates or grid raft is drawn to.
 shape = "rectangle"
-area_ratio = 1.1
+margin_mm = 2.0
 thickness_mm = 0.5
 slope_deg = 30.0
 
 # Struts tying tall trunks to each other, so that neither can sway on the peel.
 [bracing]
 enabled = true
-diameter_mm = 0.8
-max_spacing_mm = 30.0
-start_height_mm = 3.0
-rise_mm = 2.0
+diameter_mm = 1.0
+max_spacing_mm = 10.0
+start_height_mm = 8.0
+rise_mm = 13.0

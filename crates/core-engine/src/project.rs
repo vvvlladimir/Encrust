@@ -21,7 +21,7 @@ use core_geometry::{Mat3, Mesh, MeshDiagnostics, Orientation, Scalar, Transform,
 use core_slicer::AdaptiveSettings;
 use core_supports::{ProjectSettings, Region, SupportPoint, SupportTree};
 use core_volume::{Blocker, Channel, DrainHole, HollowMode, HollowSettings, InfillSettings};
-use printer_profiles::{MaterialProfile, OutputFormat, PrinterProfile, SupportProfile};
+use printer_profiles::{MaterialProfile, OutputFormat, PrinterProfile, Raft, SupportProfile};
 use serde::{Deserialize, Serialize};
 
 /// What a project file is called, and what an open or save dialog filters on.
@@ -211,6 +211,10 @@ pub struct SupportState {
     pub fill: ProjectSettings,
     pub brush_radius_mm: Scalar,
     pub flood_angle_deg: Scalar,
+    /// The raft every model without one of its own stands on (ADR 0253). A file without
+    /// it reads as the raft of the first group's profile, which is what it used to be.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub raft: Option<Raft>,
 }
 
 /// A named set of support settings that supports are drawn with.
@@ -265,6 +269,58 @@ pub struct ObjectState {
     pub own_hollow: Option<HollowState>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub own_drain: Option<DrainState>,
+    /// The support profiles this model is built to instead of its groups', where it has
+    /// its own (ADR 0246). A file without them reads as a model with none.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub own_supports: Vec<OwnSupportState>,
+    /// The raft this model stands on instead of the plate's, where it has its own
+    /// (ADR 0253). A file without it reads as a model with none.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub own_raft: Option<Raft>,
+}
+
+impl ObjectState {
+    /// The plate's `table` of group profiles as this model is built to it: its own
+    /// profile in place of a group's wherever it keeps one, and under them the raft that
+    /// is its own, or `plate_raft`, or failing both the first group's.
+    pub fn support_table(
+        &self,
+        table: &[SupportProfile],
+        plate_raft: Option<Raft>,
+    ) -> Vec<SupportProfile> {
+        let own = self
+            .own_supports
+            .iter()
+            .map(|own| (own.group, &own.profile));
+        own_table(table.to_vec(), own, self.own_raft.or(plate_raft))
+    }
+}
+
+/// `table` with the profiles one model keeps of its `own` put in place of its groups',
+/// by group number, and `raft` under them where there is one. The raft is built from the
+/// first group's profile, so that is where it is written.
+pub fn own_table<'a>(
+    mut table: Vec<SupportProfile>,
+    own: impl IntoIterator<Item = (u16, &'a SupportProfile)>,
+    raft: Option<Raft>,
+) -> Vec<SupportProfile> {
+    for (group, profile) in own {
+        if let Some(plate) = table.get_mut(group as usize) {
+            plate.clone_from(profile);
+        }
+    }
+    if let (Some(ground), Some(raft)) = (table.first_mut(), raft) {
+        ground.raft = raft;
+    }
+    table
+}
+
+/// One group's profile as one model keeps it: an edit that has not been saved over the
+/// profile it was taken from, or another profile altogether.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct OwnSupportState {
+    pub group: u16,
+    pub profile: SupportProfile,
 }
 
 /// What mesh repair found at import, kept because the stored mesh is already repaired and
@@ -288,6 +344,10 @@ pub struct ObjectSupportState {
     /// The grown trees, in the model's own space, as the run left them. They are not
     /// grown again on opening: a tree is where the file says it is.
     pub grown: Vec<SupportTree>,
+    /// How much of the height in `transform` is the raft's lift, millimetres (ADR 0238).
+    /// A file without it reads as a model no raft has lifted.
+    #[serde(default)]
+    pub raft_lift_mm: f32,
 }
 
 /// One model's hollowing: the blockers, drains and channels placed on it, and the shell
@@ -507,6 +567,7 @@ mod tests {
                     fill: ProjectSettings::default(),
                     brush_radius_mm: 3.0,
                     flood_angle_deg: 30.0,
+                    raft: None,
                 },
                 hollow: HollowState {
                     thickness_mm: 2.0,
@@ -581,6 +642,7 @@ mod tests {
                 blocked: Region::default(),
                 frozen: Vec::new(),
                 grown: Vec::new(),
+                raft_lift_mm: 0.5,
             },
             hollow: ObjectHollowState {
                 blockers: vec![Blocker::ball(Vec3::ZERO, 1.5)],
@@ -614,6 +676,15 @@ mod tests {
                 depth_mm: 3.0,
                 taper: 1.0,
             }),
+            own_supports: if index == 1 {
+                vec![OwnSupportState {
+                    group: 1,
+                    profile: SupportProfile::heavy(),
+                }]
+            } else {
+                Vec::new()
+            },
+            own_raft: None,
         }
     }
 
@@ -696,6 +767,60 @@ mod tests {
         fields.remove("own_drain");
         let read: ObjectState = serde_json::from_value(older).expect("a file from before reads");
         assert_eq!(read.own_drain, None);
+    }
+
+    #[test]
+    fn a_model_is_built_to_its_own_support_profile_where_it_keeps_one() {
+        let plate = [SupportProfile::light(), SupportProfile::medium()];
+        assert_eq!(object(0).support_table(&plate, None), plate.to_vec());
+        assert_eq!(
+            object(1).support_table(&plate, None),
+            vec![SupportProfile::light(), SupportProfile::heavy()],
+            "the second model keeps its own profile of group 1"
+        );
+    }
+
+    #[test]
+    fn a_model_stands_on_its_own_raft_then_the_plates_then_the_first_groups() {
+        let plate = [SupportProfile::light(), SupportProfile::medium()];
+        let thick = Raft {
+            enabled: true,
+            thickness_mm: 3.5,
+            ..plate[0].raft
+        };
+        let thicker = Raft {
+            thickness_mm: 4.5,
+            ..thick
+        };
+
+        assert_eq!(object(0).support_table(&plate, None)[0].raft, plate[0].raft);
+        assert_eq!(object(0).support_table(&plate, Some(thick))[0].raft, thick);
+        let mut own = object(0);
+        own.own_raft = Some(thicker);
+        assert_eq!(own.support_table(&plate, Some(thick))[0].raft, thicker);
+        assert_eq!(
+            own.support_table(&plate, Some(thick))[1].raft,
+            plate[1].raft,
+            "only the first group's is the raft that is built"
+        );
+    }
+
+    #[test]
+    fn a_models_own_support_profile_comes_back_and_a_file_without_one_reads() {
+        let back = round_trip(&project(2));
+        assert!(back.manifest.objects[0].own_supports.is_empty());
+        assert_eq!(
+            back.manifest.objects[1].own_supports,
+            vec![OwnSupportState {
+                group: 1,
+                profile: SupportProfile::heavy(),
+            }]
+        );
+        let mut older = serde_json::to_value(&back.manifest.objects[1]).expect("serialises");
+        let fields = older.as_object_mut().expect("an object");
+        fields.remove("own_supports");
+        let read: ObjectState = serde_json::from_value(older).expect("a file from before reads");
+        assert!(read.own_supports.is_empty());
     }
 
     #[test]

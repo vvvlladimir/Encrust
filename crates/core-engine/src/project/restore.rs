@@ -50,5 +50,6 @@ pub fn supports_of(
         state.frozen.clone(),
     );
     supports.stand(&state.grown, model, bvh, transform, table);
+    supports.set_raft_lift_mm(state.raft_lift_mm);
     supports
 }

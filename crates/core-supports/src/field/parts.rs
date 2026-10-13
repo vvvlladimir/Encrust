@@ -110,6 +110,21 @@ impl Parts {
             .map(|at| labels[at])
     }
 
+    /// One piece on its own, by the number [`Parts::at`] answers with.
+    pub fn piece(&self, number: u32) -> Field {
+        let mut spans = Vec::new();
+        let mut at = 0;
+        for (y, row) in self.field.rows() {
+            for span in row {
+                if self.labels[at] == number {
+                    spans.push((y, *span));
+                }
+                at += 1;
+            }
+        }
+        Field::of_spans(spans)
+    }
+
     /// For every piece here, the pieces of `below` it stands on, corner contact included.
     ///
     /// Both fields are run-length and sorted, so each row is walked once from left to

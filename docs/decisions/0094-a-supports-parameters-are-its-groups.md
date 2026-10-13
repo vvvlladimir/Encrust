@@ -1,6 +1,6 @@
 # 0094. A support's parameters are its group's
 
-- **Status:** Accepted
+- **Status:** Accepted; that no trunk is shared across groups is superseded by 0248; that the bracing is group 0's is superseded by 0252; that the raft is group 0's is superseded by 0253
 - **Date:** 2026-09-26
 
 ## Context

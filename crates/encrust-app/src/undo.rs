@@ -21,6 +21,10 @@ const DEPTH: usize = 64;
 enum Step {
     Plate(Scene),
     Tools(Box<ToolSettings>),
+    /// Both changed in one frame, by one action: a raft switched on stands the supported
+    /// models up by its thickness. Two entries would be taken back one at a time, and the
+    /// half left behind would redo the other.
+    Both(Scene, Box<ToolSettings>),
 }
 
 /// What the frame the history is looking at was like.
@@ -78,26 +82,34 @@ impl History {
             return;
         }
         let now = fingerprint(scene);
-        if now != self.fingerprint {
+        let plate = (now != self.fingerprint).then(|| {
             self.fingerprint = now;
-            let was = std::mem::replace(&mut self.last, scene.clone());
-            self.record(Step::Plate(was));
-        }
+            std::mem::replace(&mut self.last, scene.clone())
+        });
 
         if chosen != self.chosen {
             // What a newly chosen printer or resin brought with it is what the next
             // change is measured against, not an edit of its own.
             self.chosen = chosen;
             self.tools = Some(Box::new(tools.clone()));
+            if let Some(was) = plate {
+                self.record(Step::Plate(was));
+            }
             return;
         }
-        match self.tools.as_deref_mut() {
-            Some(last) if *last != *tools => {
-                let was = std::mem::replace(last, tools.clone());
-                self.record(Step::Tools(Box::new(was)));
+        let tools_were = match self.tools.as_deref_mut() {
+            Some(last) if *last != *tools => Some(Box::new(std::mem::replace(last, tools.clone()))),
+            Some(_) => None,
+            None => {
+                self.tools = Some(Box::new(tools.clone()));
+                None
             }
-            Some(_) => {}
-            None => self.tools = Some(Box::new(tools.clone())),
+        };
+        match (plate, tools_were) {
+            (Some(scene), Some(tools)) => self.record(Step::Both(scene, tools)),
+            (Some(scene), None) => self.record(Step::Plate(scene)),
+            (None, Some(tools)) => self.record(Step::Tools(tools)),
+            (None, None) => {}
         }
     }
 
@@ -125,6 +137,7 @@ impl History {
             return false;
         };
         let held = self.put_back(previous, scene, tools, slicing);
+        self.follow_up(scene, tools);
         self.future.push(held);
         true
     }
@@ -135,8 +148,17 @@ impl History {
             return false;
         };
         let held = self.put_back(next, scene, tools, slicing);
+        self.follow_up(scene, tools);
         self.past.push_back(held);
         true
+    }
+
+    /// Does what the window does by itself after an edit, to the plate just put back, and
+    /// measures the next edit from there: done on the next frame instead, it would be an
+    /// edit of its own, recorded over the redo and undoing the undo.
+    fn follow_up(&mut self, scene: &mut Scene, tools: &mut Tools) {
+        tools.supports.settle_on_raft(scene);
+        self.settle(scene);
     }
 
     /// Puts `step` back, and answers with what the window was holding instead, which is
@@ -154,15 +176,28 @@ impl History {
                 self.settle(scene);
                 Step::Plate(held)
             }
-            Step::Tools(previous) => {
-                let held = ToolSettings::of(tools, slicing);
-                previous.apply(tools, slicing);
-                // A value can land clamped or rescaled, so the next frame is what the
-                // next change is measured against rather than what was asked for.
-                self.tools = None;
-                Step::Tools(Box::new(held))
+            Step::Tools(previous) => Step::Tools(self.put_tools_back(*previous, tools, slicing)),
+            Step::Both(previous, settings) => {
+                let held = std::mem::replace(scene, previous);
+                let held_settings = self.put_tools_back(*settings, tools, slicing);
+                Step::Both(held, held_settings)
             }
         }
+    }
+
+    /// Puts the tool values back, and answers with the ones the window was holding.
+    fn put_tools_back(
+        &mut self,
+        previous: ToolSettings,
+        tools: &mut Tools,
+        slicing: &mut Slicing,
+    ) -> Box<ToolSettings> {
+        let held = ToolSettings::of(tools, slicing);
+        previous.apply(tools, slicing);
+        // A value can land clamped or rescaled, so the next frame is what the next change
+        // is measured against rather than what was asked for.
+        self.tools = None;
+        Box::new(held)
     }
 
     /// The scene the window now holds is the one to measure the next edit against.
@@ -403,6 +438,76 @@ mod tests {
         assert_eq!(bench.x_of(id), Some(0.0));
         assert!(bench.redo());
         assert_eq!(bench.x_of(id), Some(10.0));
+    }
+
+    /// A frame of the window: what follows from an edit by itself, then the history.
+    fn frame(bench: &mut Bench) {
+        bench.tools.supports.settle_on_raft(&mut bench.scene);
+        bench.observe(true);
+    }
+
+    #[test]
+    fn a_raft_switched_on_under_a_supported_model_is_one_step_each_way() {
+        let mut bench = Bench::default();
+        let id = bench.add();
+        if let Some(object) = bench.scene.get_mut(id) {
+            object.transform.translation.z = 5.0;
+            let transform = object.transform;
+            object.supports.add(Vec3::new(0.5, 0.5, 5.0), transform, 0);
+        }
+        frame(&mut bench);
+        let z_of = |bench: &Bench| bench.scene.get(id).map(|o| o.transform.translation.z);
+
+        bench.tools.supports.raft.enabled = true;
+        frame(&mut bench);
+        let raised = z_of(&bench);
+        assert!(raised > Some(5.0), "the raft stood the model up");
+
+        assert!(bench.undo());
+        frame(&mut bench);
+        assert!(!bench.tools.supports.raft.enabled);
+        assert_eq!(z_of(&bench), Some(5.0), "back down with the raft gone");
+        assert!(
+            bench.history.can_redo(),
+            "and nothing recorded over the redo"
+        );
+
+        assert!(bench.redo());
+        frame(&mut bench);
+        assert!(bench.tools.supports.raft.enabled);
+        assert_eq!(z_of(&bench), raised);
+        assert!(!bench.history.can_redo());
+    }
+
+    #[test]
+    fn taking_the_supports_off_a_rafted_model_comes_back_in_one_undo() {
+        let mut bench = Bench::default();
+        bench.tools.supports.raft.enabled = true;
+        let id = bench.add();
+        if let Some(object) = bench.scene.get_mut(id) {
+            object.transform.translation.z = 5.0;
+            let transform = object.transform;
+            object.supports.add(Vec3::new(0.5, 0.5, 5.0), transform, 0);
+        }
+        frame(&mut bench);
+        frame(&mut bench);
+
+        if let Some(object) = bench.scene.get_mut(id) {
+            object.supports.clear();
+        }
+        // Recorded before the model settles, the way a frame used to.
+        bench.observe(true);
+        frame(&mut bench);
+
+        // Bounded: a history that redoes its own undo would go round for ever.
+        for _ in 0..4 {
+            if !bench.scene.get(id).is_some_and(|o| o.supports.is_empty()) || !bench.undo() {
+                break;
+            }
+            frame(&mut bench);
+        }
+        let object = bench.scene.get(id).expect("the cube is still there");
+        assert_eq!(object.supports.point_count(), 1, "the support came back");
     }
 
     #[test]

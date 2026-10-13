@@ -1,6 +1,6 @@
 # 0192. A tool value is remembered between runs and taken back on its own entry
 
-- **Status:** Accepted
+- **Status:** Accepted; a tool value as always an entry of its own is superseded by 0257
 - **Date:** 2026-10-06
 
 ## Context

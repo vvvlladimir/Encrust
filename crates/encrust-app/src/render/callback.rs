@@ -21,6 +21,15 @@ use crate::scene::{Mapped, Scene, SceneObject};
 use crate::ui::theme;
 use crate::workspace::ViewOptions;
 
+/// How far each support group is drawn pulled towards the eye over the one after it, as a
+/// share of its distance: pads of two groups, or a pad and the raft, lie in one plane, and
+/// the lower group wins it. About sixteen steps of a 24-bit depth at the orbit distance.
+const GROUP_PULL: f32 = 1e-4;
+
+/// Millimetres a cut is drawn inside what it cuts: one level with a face — the top of a
+/// raft, the floor of a step — would leave that face and the cap fighting for one depth.
+const SECTION_INSET_MM: Scalar = 1e-3;
+
 /// Millimetres the cap quad is grown past what it has to cover. It is clipped by the
 /// stencil, so the only cost of a generous one is a few more fragments discarded.
 const CAP_MARGIN_MM: f32 = 10.0;
@@ -96,6 +105,11 @@ pub struct Shading<'a> {
     pub textures: Option<&'a Textures>,
     /// The Cut tool's plane, traced over the model it is set on.
     pub cut_line: Option<CutLine>,
+    /// The support groups left out of the view, by group number.
+    pub hidden_groups: &'a [bool],
+    /// The support the hand is about to put down and the colour it is shown in, in plate
+    /// coordinates. Drawn only, never capped: it is not part of the print yet.
+    pub preview: Option<(&'a Arc<Mesh>, Color32)>,
 }
 
 impl ViewportCallback {
@@ -115,15 +129,30 @@ impl ViewportCallback {
             banding,
             textures,
             cut_line,
+            hidden_groups,
+            preview,
         } = shading;
+        let section_mm = section_mm.map(|height| height - SECTION_INSET_MM);
+        let bottom_cut_mm = bottom_cut_mm.map(|height| height + SECTION_INSET_MM);
         let Draws {
-            models,
+            mut models,
             solids,
             cuts,
             cut_surfaces,
             pockets,
             reliefs,
-        } = Draws::of(scene, overhang_deg.map_or(NOT_MARKED, marking), textures);
+        } = Draws::of(
+            scene,
+            overhang_deg.map_or(NOT_MARKED, marking),
+            textures,
+            hidden_groups,
+        );
+        if let Some((mesh, colour)) = preview {
+            models.push(ModelDraw::whole(
+                Arc::clone(mesh),
+                ModelInstance::new(Transform::default(), colour, NOT_MARKED),
+            ));
+        }
 
         let (label, atlas) = label::front(plate);
         let mut lines = plate_lines(plate);
@@ -178,14 +207,14 @@ struct Draws {
 
 impl Draws {
     /// `mark` is the overhang threshold the models are washed at, or `NOT_MARKED`.
-    fn of(scene: &Scene, mark: f32, textures: Option<&Textures>) -> Self {
+    fn of(scene: &Scene, mark: f32, textures: Option<&Textures>, hidden: &[bool]) -> Self {
         let mut draws = Self::default();
         for object in scene.printable(scene.active_plate()) {
             let colour = color_for(scene.is_selected(object.id), object.summary.is_sound());
             let texture = textures.and_then(|textures| textures.get(&object.id));
             draws.model(object, colour, mark, texture);
             draws.hollowing(object, colour);
-            draws.supports(object);
+            draws.supports(object, hidden);
         }
         // Last, so that the resin inside one model is still seen when another stands in
         // front of it: nothing hides anything under the x-ray, but what is drawn later
@@ -299,7 +328,7 @@ impl Draws {
 
     /// Patches and columns are already in plate coordinates: they were built against the
     /// placed model, not alongside it.
-    fn supports(&mut self, object: &SceneObject) {
+    fn supports(&mut self, object: &SceneObject, hidden: &[bool]) {
         let (painted, blocked) = object.supports.patches();
         for (patch, colour) in [
             (painted, theme::scene().painted),
@@ -310,19 +339,19 @@ impl Draws {
             }
         }
 
-        let groups = object.supports.meshes().unwrap_or_default();
+        let groups = object.supports.drawn();
         for (group, mesh) in groups
             .iter()
             .enumerate()
-            .filter(|(_, mesh)| !mesh.is_empty())
+            .filter(|(group, mesh)| !mesh.is_empty() && hidden.get(*group) != Some(&true))
         {
             // A column holds nothing up but the model, so marking its own overhangs would
             // only paint the scaffolding red.
-            self.flat(
-                Arc::clone(mesh),
-                Transform::default(),
-                theme::support_tint(group),
-            );
+            let instance =
+                ModelInstance::new(Transform::default(), theme::support_tint(group), NOT_MARKED)
+                    .pulled(GROUP_PULL * (groups.len() - group) as f32);
+            self.models
+                .push(ModelDraw::whole(Arc::clone(mesh), instance));
             self.solid(Arc::clone(mesh), Transform::default());
         }
     }
@@ -597,7 +626,7 @@ mod tests {
             .expect("the ball is hollow");
         assert!(!cavity.is_empty(), "and the cavity has faces of its own");
 
-        let draws = Draws::of(&scene, NOT_MARKED, None);
+        let draws = Draws::of(&scene, NOT_MARKED, None, &[]);
         let painted = draws
             .models
             .iter()
@@ -606,7 +635,7 @@ mod tests {
         assert_eq!(painted, 1, "the cavity is drawn once over the shell");
 
         scene.objects_mut()[0].traps.set(Vec::new());
-        let drained = Draws::of(&scene, NOT_MARKED, None);
+        let drained = Draws::of(&scene, NOT_MARKED, None, &[]);
         assert!(
             drained.models.iter().all(|draw| draw.faces() != cavity),
             "and not at all once the resin can get out"
@@ -745,7 +774,7 @@ mod tests {
     #[test]
     fn a_model_that_is_not_closed_is_drawn_but_never_counted_into_the_cap() {
         let scene = an_open_box();
-        let draws = Draws::of(&scene, NOT_MARKED, None);
+        let draws = Draws::of(&scene, NOT_MARKED, None, &[]);
 
         assert_eq!(draws.models.len(), 1, "an open model is still drawn");
         assert!(
@@ -765,7 +794,7 @@ mod tests {
             .expect("the box is there")
             .reshape(Arc::new(mesh));
 
-        assert_eq!(Draws::of(&scene, NOT_MARKED, None).solids.len(), 1);
+        assert_eq!(Draws::of(&scene, NOT_MARKED, None, &[]).solids.len(), 1);
     }
 
     #[test]

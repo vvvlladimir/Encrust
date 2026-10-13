@@ -57,6 +57,10 @@ pub struct SampleConfig {
     /// own: a ledge of a few cells is a step of the staircase every sloped surface is
     /// printed as.
     pub min_overhang_mm: Scalar,
+    /// How far in from a layer's outline a contact is put: the head's own radius and a
+    /// cell more, so that the head ends on the surface it holds and not on the wall
+    /// beside it.
+    pub edge_inset_mm: Scalar,
 }
 
 impl SampleConfig {
@@ -93,6 +97,7 @@ impl SampleConfig {
             // Half of what one head carries: a ledge that small is inside the head that
             // would be put under it.
             min_overhang_mm: carry_mm / 2.0,
+            edge_inset_mm: head_radius_mm + GRID_PITCH_MM,
         }
     }
 }
@@ -200,11 +205,32 @@ mod tests {
     }
 
     #[test]
+    fn every_shipped_preset_lifts_a_part_far_enough_for_its_own_support() {
+        for profile in [
+            SupportProfile::light(),
+            SupportProfile::medium(),
+            SupportProfile::heavy(),
+        ] {
+            let flare_mm = profile.flare_lower_radius_mm() - profile.pillar_radius_mm();
+            let needed_mm = profile.base_height_mm()
+                + flare_mm
+                + profile.top_length_mm()
+                + crate::column::MIN_PILLAR_HEIGHT_MM;
+            assert!(
+                needed_mm <= profile.z_lift_mm + 1e-4,
+                "{}: a pad, a flare, a top segment and the shortest pillar take {needed_mm} mm \
+                 and the lift leaves {} mm",
+                profile.name,
+                profile.z_lift_mm
+            );
+        }
+    }
+
+    #[test]
     fn the_shipped_presets_grow_stricter_as_they_grow_heavier() {
         let light = SampleConfig::for_profile(&SupportProfile::light());
         let heavy = SampleConfig::for_profile(&SupportProfile::heavy());
 
-        assert!(heavy.spacing_mm < light.spacing_mm, "heavier is denser");
         assert!(heavy.reach_mm < light.reach_mm, "heavier is stricter");
     }
 }

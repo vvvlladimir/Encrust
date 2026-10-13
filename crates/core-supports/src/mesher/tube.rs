@@ -13,6 +13,10 @@ pub struct Ring {
     pub radius_mm: Scalar,
 }
 
+/// How many rings a rounded end is drawn with, the tube's own last ring among them. An end
+/// is hidden inside the joint it meets, so it needs a silhouette and no more.
+const DOME_RINGS: u32 = 3;
+
 /// A straight run of a support: an axis, the circles along it and what closes its top.
 pub struct Tube {
     pub top: Vec3,
@@ -21,8 +25,11 @@ pub struct Tube {
     /// Sides the ring polygon is drawn with, which is what makes a foot a cube or a
     /// prism rather than a cylinder.
     pub sides: usize,
-    /// The tip cone's apex, for a tube that starts at a contact on the model.
+    /// What closes the top: the tip cone's apex for a tube that starts at a contact, the
+    /// pole of its dome for one that starts at a joint.
     pub apex: Option<Vec3>,
+    /// The pole of a rounded bottom, for a tube that ends at a joint.
+    pub tail: Option<Vec3>,
 }
 
 /// A tube with nothing in it, for a strut of no length.
@@ -33,6 +40,29 @@ pub fn empty_tube(top: Vec3) -> Tube {
         rings: Vec::new(),
         sides: 3,
         apex: None,
+        tail: None,
+    }
+}
+
+/// The rings of a dome a tube of `radius_mm` starts under, down to its full width at the
+/// top of the tube. The pole, `radius_mm` back along the axis, is the tube's apex.
+pub fn dome(rings: &mut Vec<Ring>, radius_mm: Scalar) {
+    for step in 1..=DOME_RINGS {
+        let angle = std::f32::consts::FRAC_PI_2 * step as Scalar / DOME_RINGS as Scalar;
+        push(rings, -radius_mm * angle.cos(), radius_mm * angle.sin());
+    }
+}
+
+/// The rings that round a tube of `radius_mm` off below `along_mm`, where its body ends.
+/// The pole, `radius_mm` further along the axis, is the tube's tail.
+pub fn round_off(rings: &mut Vec<Ring>, along_mm: Scalar, radius_mm: Scalar) {
+    for step in 0..DOME_RINGS {
+        let angle = std::f32::consts::FRAC_PI_2 * step as Scalar / DOME_RINGS as Scalar;
+        push(
+            rings,
+            radius_mm.mul_add(angle.sin(), along_mm),
+            radius_mm * angle.cos(),
+        );
     }
 }
 
@@ -82,7 +112,7 @@ pub fn frame(direction: Vec3) -> (Vec3, Vec3) {
 }
 
 /// Turns one tube into a closed solid: a cap on top, a band between each pair of rings,
-/// and a flat disc underneath. Every edge ends up in exactly two faces.
+/// and a flat disc or a rounded end underneath. Every edge ends up in exactly two faces.
 pub fn sweep(mesh: &mut Mesh, tube: &Tube) {
     let Some(&bottom) = tube.rings.last() else {
         return;
@@ -108,8 +138,10 @@ pub fn sweep(mesh: &mut Mesh, tube: &Tube) {
         }
     }
     let bottom_center = mesh.vertices.len() as u32;
-    mesh.vertices
-        .push(tube.top + tube.direction * bottom.along_mm);
+    mesh.vertices.push(
+        tube.tail
+            .unwrap_or(tube.top + tube.direction * bottom.along_mm),
+    );
 
     let cap = first;
     let ring_at = |index: usize, facet: usize| -> u32 {

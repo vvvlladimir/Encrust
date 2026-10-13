@@ -40,6 +40,14 @@ projection is wgpu's `0..1` depth convention (`camera::rh::proj::directx`), not 
 surfaces. Near and far track the orbit distance at `distance/100` and `distance * 20`,
 since a fixed tenth-millimetre near plane would spend the depth buffer on empty space.
 
+Faces of different meshes lying in one plane — a pad on a raft, two groups' pads standing
+in each other — would still take that plane by turns. Each support group is drawn with
+its depth taken a ten-thousandth of the way nearer the eye than the next, lowest group
+nearest, so the same face wins every frame (`GROUP_PULL`); only depth moves, never where
+a fragment is lit or cut. A section is drawn a micron inside the height it cuts at, so a
+face level with the cut — a raft's top, a step's floor — is cut away under the cap
+rather than fighting it (`SECTION_INSET_MM`).
+
 `frame` puts the target at a box's centre and the distance at `radius / sin(fov_y / 2)`
 for `radius` half the box diagonal: exact vertically, conservative horizontally at any
 aspect wider than tall, which is every viewport panel in practice.
@@ -207,11 +215,12 @@ highlight is Blinn-Phong with `h` halfway between the key and the eye, small and
 a matt resin, scaled by the fragment's alpha so a translucent surface stays premultiplied.
 The shares are shader constants; the colours and directions are tokens.
 
-A surface leaning past the overhang angle, and whatever stands past the build volume, is
-hatched rather than filled: stripes 3.4 mm apart along `x + y - z`, so they run diagonally
-on any face, smoothed over a pixel with `fwidth` and evened out to half where they are
-closer together than pixels. Between the stripes the mark keeps a light wash, so a patch
-narrower than the pitch still shows.
+A surface leaning past the overhang angle is filled with the overhang colour at 0.85, so
+where the need for a support ends is one line (ADR 0245). Whatever stands past the build
+volume is hatched rather than filled: stripes 3.4 mm apart along `x + y - z`, so they run
+diagonally on any face, smoothed over a pixel with `fwidth` and evened out to half where
+they are closer together than pixels. Between the stripes the mark keeps a light wash, so
+a part narrower than the pitch still shows.
 
 ## The contact shadow
 

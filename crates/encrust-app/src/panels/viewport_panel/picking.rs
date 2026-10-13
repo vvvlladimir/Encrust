@@ -1,9 +1,9 @@
 //! What the cursor is over: the model a click selects, the face it lays down or washes, the
 //! corner a measurement snaps to, and the part of a support a ray meets.
 
-use core_supports::{Grab, Profiles, grab};
+use core_supports::{Grab, Profiles, SupportTree, grab_along};
 
-use core_geometry::Vec3;
+use core_geometry::{Ray, Vec3, raycast_placed};
 
 use crate::camera::OrbitCamera;
 use crate::measure;
@@ -34,7 +34,7 @@ pub(super) fn measure_under_cursor(
         }
         return;
     }
-    let reach_mm = reach_at(&window.view.camera, viewport, cursor, hit.point);
+    let reach_mm = reach_at(&window.view.camera, viewport, cursor, hit.point, SNAP_PX);
     let (point, snapped) = measure::snap(
         &object.mesh,
         &object.bvh,
@@ -50,10 +50,20 @@ pub(super) fn measure_under_cursor(
 /// How near the cursor a corner or an edge catches a click, points of the screen.
 const SNAP_PX: f32 = 14.0;
 
-/// `SNAP_PX` as millimetres of the plate at `at`, which the cursor lies over: a snap
-/// reaches as far on screen however near the model is.
-fn reach_at(camera: &OrbitCamera, viewport: egui::Rect, cursor: egui::Pos2, at: Vec3) -> f32 {
-    let beside = cursor + egui::vec2(SNAP_PX, 0.0);
+/// How near the cursor a part of a support is caught, points of the screen: enough that
+/// a pillar a point or two wide can be hit, too little to take one the cursor is not on.
+const AIM_PX: f32 = 2.0;
+
+/// `points` of the screen as millimetres of the plate at `at`, which the cursor lies
+/// over: a reach is as far on screen however near the model is.
+fn reach_at(
+    camera: &OrbitCamera,
+    viewport: egui::Rect,
+    cursor: egui::Pos2,
+    at: Vec3,
+    points: f32,
+) -> f32 {
+    let beside = cursor + egui::vec2(points, 0.0);
     let (Some(here), Some(there)) = (
         ray_through(camera, viewport, cursor),
         ray_through(camera, viewport, beside),
@@ -145,22 +155,72 @@ pub(super) fn aims_elsewhere(scene: &Scene, hit: Option<ObjectId>) -> bool {
     hit.is_some_and(|id| scene.has_selection() && !scene.is_selected(id))
 }
 
-/// Which part of which support the cursor is over, with the object it belongs to.
-/// Objects are searched in the order they were imported.
+/// How much further along the ray than the model's surface a part may be met and still
+/// be in front of it, millimetres: a part is met on its axis, half its width behind the
+/// side that faces the camera, and a tip is sunk into the surface it holds.
+const BEHIND_MM: f32 = 1.0;
+
+/// How far a ray through `cursor` may pass a part of a support and still take it,
+/// millimetres, measured on that ray as far off as the camera is looking.
+pub(super) fn aim_slack_mm(camera: &OrbitCamera, viewport: egui::Rect, cursor: egui::Pos2) -> f32 {
+    let Some(ray) = ray_through(camera, viewport, cursor) else {
+        return 0.0;
+    };
+    let under = ray.at((camera.target - ray.origin).dot(ray.direction));
+    reach_at(camera, viewport, cursor, under, AIM_PX)
+}
+
+/// Which part of which support the cursor is on, with the object it belongs to. Objects are searched in the order they were imported.
 pub(super) fn grab_under_cursor(
     window: &Window,
     viewport: egui::Rect,
     cursor: egui::Pos2,
 ) -> Option<(crate::scene::ObjectId, Grab)> {
     let ray = ray_through(&window.view.camera, viewport, cursor)?;
-    let table = window.tools.supports.table();
-    let profiles = Profiles::new(&table)?;
+    let slack_mm = aim_slack_mm(&window.view.camera, viewport, cursor);
 
-    window
+    // A support behind a model is not under the cursor, and one of a group left out of
+    // the view is not there to be aimed at.
+    let wall_mm = window
         .doc
         .scene
         .here()
-        .find_map(|object| grab(object.supports.trees(), &ray, profiles).map(|it| (object.id, it)))
+        .filter_map(|object| raycast_placed(&object.mesh, &object.bvh, object.transform, &ray))
+        .map(|hit| hit.distance)
+        .fold(f32::INFINITY, f32::min);
+    window.doc.scene.here().find_map(|object| {
+        let table = window.tools.supports.table_for(object);
+        let profiles = Profiles::new(&table)?;
+        let hidden = window.tools.supports.hidden();
+        let (hit, along_mm) =
+            grab_shown(object.supports.trees(), &hidden, &ray, profiles, slack_mm)?;
+        (along_mm <= wall_mm + BEHIND_MM).then_some((object.id, hit))
+    })
+}
+
+/// What `grab_along` answers among the trees whose group is not `hidden`, numbered as
+/// `trees` numbers them: a support left out of the view is not in the way of one behind.
+fn grab_shown(
+    trees: &[SupportTree],
+    hidden: &[bool],
+    ray: &Ray,
+    profiles: Profiles,
+    slack_mm: f32,
+) -> Option<(Grab, f32)> {
+    let shown: Vec<usize> = (0..trees.len())
+        .filter(|tree| {
+            !hidden
+                .get(trees[*tree].group() as usize)
+                .is_some_and(|out| *out)
+        })
+        .collect();
+    if shown.len() == trees.len() {
+        return grab_along(trees, ray, profiles, slack_mm);
+    }
+    let visible: Vec<SupportTree> = shown.iter().map(|tree| trees[*tree].clone()).collect();
+    let (hit, along_mm) = grab_along(&visible, ray, profiles, slack_mm)?;
+    let tree = *shown.get(hit.tree)?;
+    Some((Grab { tree, ..hit }, along_mm))
 }
 
 #[cfg(test)]
@@ -168,6 +228,55 @@ mod tests {
     use std::sync::Arc;
 
     use super::*;
+
+    #[test]
+    fn a_hidden_support_is_not_in_the_way_of_the_one_behind_it() {
+        let table = vec![printer_profiles::SupportProfile::default(); 2];
+        let mut supports = core_supports::ModelSupports::default();
+        supports.add(
+            Vec3::new(0.0, 0.0, 20.0),
+            core_geometry::Transform::default(),
+            0,
+        );
+        supports.add(
+            Vec3::new(30.0, 0.0, 20.0),
+            core_geometry::Transform::default(),
+            1,
+        );
+        let nothing = core_geometry::Mesh::default();
+        let bvh = core_geometry::Bvh::build(&nothing);
+        supports.refresh(&nothing, &bvh, core_geometry::Transform::default(), &table);
+        let trees = supports.trees();
+        let profiles = Profiles::new(&table).expect("two profiles");
+        // Level with the middle of both pillars, the first group's nearer the eye.
+        let ray = Ray::new(Vec3::new(-50.0, 0.0, 10.0), Vec3::X);
+        let group_met = |hidden: &[bool]| {
+            grab_shown(trees, hidden, &ray, profiles, 0.0).map(|(hit, _)| trees[hit.tree].group())
+        };
+
+        assert_eq!(group_met(&[false, false]), Some(0), "the nearer one");
+        assert_eq!(group_met(&[true, false]), Some(1), "the one behind it");
+        assert_eq!(group_met(&[true, true]), None);
+    }
+
+    #[test]
+    fn the_aim_reaches_as_far_wherever_on_the_screen_the_cursor_is() {
+        let camera = OrbitCamera::default();
+        let viewport = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(800.0, 600.0));
+
+        // 600 points of height show 2 * 300 mm * tan(0.4) = 254 mm, so a point is
+        // 0.42 mm where the camera looks and two of them 0.85 mm.
+        let middle = aim_slack_mm(&camera, viewport, viewport.center());
+        assert!(
+            (middle - 0.85).abs() < 0.05,
+            "two points at the middle of the view are 0.85 mm, got {middle}"
+        );
+        let corner = aim_slack_mm(&camera, viewport, egui::pos2(40.0, 40.0));
+        assert!(
+            corner < 2.0 * middle,
+            "a cursor far from the middle reaches no further, got {corner} mm"
+        );
+    }
 
     #[test]
     fn a_click_outside_the_selection_only_aims_the_tool() {

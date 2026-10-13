@@ -1,6 +1,6 @@
 # 0040. Merge nearby tips into shared trunks, greedily, highest meeting point first
 
-- **Status:** Accepted
+- **Status:** Superseded by 0242 (the width of a merged trunk only)
 - **Date:** 2026-09-19
 
 ## Context

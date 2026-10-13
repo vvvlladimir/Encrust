@@ -86,6 +86,7 @@ fn support_state(supports: &SupportTool) -> SupportState {
         fill: supports.fill,
         brush_radius_mm: supports.brush_radius_mm,
         flood_angle_deg: supports.flood_angle_deg,
+        raft: Some(supports.raft),
     }
 }
 
@@ -106,10 +107,17 @@ fn restore_slicing(state: SlicingState, slicing: &mut Slicing) {
 
 fn restore_supports(state: SupportState, supports: &mut SupportTool) {
     if !state.groups.is_empty() {
+        // Hiding is of the view and not a setting, so a group that is still the one it
+        // was stays hidden through an undo.
+        let was = std::mem::take(&mut supports.groups);
         supports.groups = state
             .groups
             .into_iter()
-            .map(|group| SupportGroup {
+            .enumerate()
+            .map(|(index, group)| SupportGroup {
+                hidden: was
+                    .get(index)
+                    .is_some_and(|old| old.hidden && old.name == group.name),
                 name: group.name,
                 profile: group.profile,
             })
@@ -117,6 +125,8 @@ fn restore_supports(state: SupportState, supports: &mut SupportTool) {
         supports.active = state.active.min(supports.groups.len() as u16 - 1);
         supports.profile = supports.groups[supports.active as usize].profile.clone();
     }
+    // A file from before the raft was the plate's kept it in its first group's profile.
+    supports.raft = state.raft.unwrap_or(supports.groups[0].profile.raft);
     supports.fill = state.fill;
     supports.brush_radius_mm = state.brush_radius_mm;
     supports.flood_angle_deg = state.flood_angle_deg;
@@ -155,6 +165,27 @@ mod tests {
         assert_eq!(ToolSettings::of(&tools, &slicing), settings);
         assert_eq!(tools.supports.profile.name, "Heavy");
         assert_eq!(tools.array.columns, 5);
+    }
+
+    #[test]
+    fn a_hidden_group_stays_hidden_when_the_values_are_put_back() {
+        let mut slicing = Slicing::default();
+        let mut tools = edited();
+        let settings = ToolSettings::of(&tools, &slicing);
+        tools.supports.groups[0].hidden = true;
+        tools.supports.brush_radius_mm = 2.0;
+
+        settings.clone().apply(&mut tools, &mut slicing);
+        assert!(tools.supports.groups[0].hidden, "the view is not a setting");
+        assert!((tools.supports.brush_radius_mm - 6.0).abs() < f32::EPSILON);
+
+        let mut renamed = settings;
+        renamed.supports.groups[0].name = "Another".to_owned();
+        renamed.apply(&mut tools, &mut slicing);
+        assert!(
+            !tools.supports.groups[0].hidden,
+            "a group that is no longer the same one is shown"
+        );
     }
 
     #[test]

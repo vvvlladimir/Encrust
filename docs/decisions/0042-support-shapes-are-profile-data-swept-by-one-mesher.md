@@ -1,6 +1,6 @@
 # 0042. Support shapes are data in the profile, swept by the one mesher
 
-- **Status:** Accepted
+- **Status:** Superseded by 0243 (the tip shapes only)
 - **Date:** 2026-09-19
 
 ## Context

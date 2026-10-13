@@ -131,6 +131,7 @@ pub fn import(
     input: &Path,
     args: &ImportArgs,
     profile: Option<&PrinterProfile>,
+    max_overhang_deg: Option<Scalar>,
     talk: bool,
 ) -> Result<(Mesh, ImportReport, Option<OrientSummary>)> {
     let loaded = load(input)?;
@@ -138,7 +139,7 @@ pub fn import(
         talk_mapping(&loaded);
     }
     let welded = weld(&loaded.mesh, args.weld_tolerance);
-    let (mesh, oriented) = place(welded.mesh.clone(), args, profile)?;
+    let (mesh, oriented) = place(welded.mesh.clone(), args, profile, max_overhang_deg)?;
     if talk && let Some(summary) = &oriented {
         println!(
             "Oriented: {}, {:.1} mm2 largest section, {:.1} mm2 overhang\n",
@@ -486,7 +487,7 @@ pub fn inspect(input: &Path, args: &ImportArgs, chosen: &Chosen) -> Result<Impor
     let profile = chosen.printer.as_ref();
     let loaded = load(input)?;
     let welded = weld(&loaded.mesh, args.weld_tolerance);
-    let (mesh, _) = place(welded.mesh.clone(), args, profile)?;
+    let (mesh, _) = place(welded.mesh.clone(), args, profile, None)?;
     // Pressed here too, so that what `inspect` measures is what would be printed.
     let mut mesh = press_relief(mesh, &welded, &loaded, args, false)?;
     if args.transform.center {
@@ -568,17 +569,23 @@ pub fn load(path: &Path) -> Result<Loaded> {
 }
 
 /// Applies the requested orientation, scale, rotation and placement, in that order.
+///
+/// `max_overhang_deg` is the angle of the support profile the run builds to, so that the
+/// orientation is searched with the overhang its supports will be placed by.
 fn place(
     mesh: Mesh,
     args: &ImportArgs,
     profile: Option<&PrinterProfile>,
+    max_overhang_deg: Option<Scalar>,
 ) -> Result<(Mesh, Option<OrientSummary>)> {
     let transform = &args.transform;
     let (mesh, oriented) = if transform.orient {
+        let defaults = OrientSettings::default();
         let settings = OrientSettings {
+            max_overhang_deg: max_overhang_deg.unwrap_or(defaults.max_overhang_deg),
             goal: transform.orient_goal.into(),
             max_tilt_deg: transform.max_tilt,
-            ..OrientSettings::default()
+            ..defaults
         };
         let found =
             orient(&mesh, &settings).context("cannot find an orientation for this model")?;

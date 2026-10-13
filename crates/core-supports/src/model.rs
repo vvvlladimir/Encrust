@@ -4,7 +4,7 @@ use core_geometry::{Adjacency, Bvh, Mesh, Scalar, Transform, Vec3};
 use printer_profiles::SupportProfile;
 
 use crate::{
-    Blocked, Placed, Profiles, Region, SupportPoint, SupportTree, columns, grow, mesh_groups,
+    Blocked, Part, Placed, Profiles, Region, SupportPoint, SupportTree, columns, grow, mesh_groups,
 };
 
 /// A transform this close to singular has flattened its model, and a click on it cannot
@@ -33,6 +33,12 @@ pub struct ModelSupports {
     /// to be rebuilt per frame of a drag.
     patches: Patches,
     built: Option<Built>,
+    /// The column meshes as they were last built. `built` is dropped by every edit and
+    /// rebuilt a frame later, and what is drawn in between is this; see [`Self::drawn`].
+    drawn: Vec<Arc<Mesh>>,
+    /// How much of the height the model stands at is its raft's doing, millimetres: what
+    /// has to be taken back when the raft goes. See `docs/decisions/0238`.
+    raft_lift_mm: Scalar,
 }
 
 #[derive(Debug, Clone)]
@@ -86,6 +92,17 @@ impl ModelSupports {
 
     pub fn is_empty(&self) -> bool {
         self.points.is_empty() && self.frozen.is_empty()
+    }
+
+    /// How far the model has been stood up to clear its raft, millimetres.
+    pub fn raft_lift_mm(&self) -> Scalar {
+        self.raft_lift_mm
+    }
+
+    /// Records how far the model now stands up to clear its raft; whoever moves the
+    /// model keeps the two in step.
+    pub fn set_raft_lift_mm(&mut self, lift_mm: Scalar) {
+        self.raft_lift_mm = lift_mm;
     }
 
     pub fn point_count(&self) -> usize {
@@ -173,11 +190,13 @@ impl ModelSupports {
 
         let keep_out = self.keep_out(model, transform);
         let placed = Placed::new(model, bvh, transform).blocking(keep_out.as_ref());
+        let meshes: Vec<Arc<Mesh>> = mesh_groups(&trees, &placed, profiles)
+            .into_iter()
+            .map(Arc::new)
+            .collect();
+        self.drawn.clone_from(&meshes);
         self.built = Some(Built {
-            meshes: mesh_groups(&trees, &placed, profiles)
-                .into_iter()
-                .map(Arc::new)
-                .collect(),
+            meshes,
             trees,
             grown: standing,
             transform,
@@ -261,6 +280,34 @@ impl ModelSupports {
         }
     }
 
+    /// Takes `parts` of a frozen support away with everything they hold up, and the
+    /// whole support when that leaves it nothing to hold or its trunk or foot was named.
+    /// Answers whether the support is still there.
+    pub fn remove_parts(&mut self, frozen: usize, parts: &[Part]) -> bool {
+        let Some(tree) = self.frozen.get(frozen) else {
+            return false;
+        };
+        let whole = parts
+            .iter()
+            .any(|part| matches!(part, Part::Trunk | Part::Foot));
+        let cut: Vec<usize> = parts
+            .iter()
+            .filter_map(|part| match part {
+                Part::Node(node) | Part::Strut(node) => Some(*node),
+                Part::Trunk | Part::Foot => None,
+            })
+            .collect();
+        let left = if whole { None } else { tree.without(&cut) };
+
+        self.built = None;
+        if let Some(left) = left {
+            self.frozen[frozen] = left;
+            return true;
+        }
+        self.frozen.remove(frozen);
+        false
+    }
+
     /// How many tips are being carried. Fewer than the points when one of them has no
     /// room under it.
     pub fn standing(&self) -> usize {
@@ -271,6 +318,13 @@ impl ModelSupports {
     /// have been built.
     pub fn meshes(&self) -> Option<&[Arc<Mesh>]> {
         self.built.as_ref().map(|built| built.meshes.as_slice())
+    }
+
+    /// The column meshes to draw: the ones last built, which an edit leaves standing
+    /// until the rebuild that follows it. Drawing [`Self::meshes`] instead blinks every
+    /// support out for the frame of each click, and for as long as nothing repaints.
+    pub fn drawn(&self) -> &[Arc<Mesh>] {
+        &self.drawn
     }
 
     /// The patch painted to be supported, and the patch painted to be left alone, both in
@@ -431,8 +485,23 @@ impl ModelSupports {
         }
     }
 
+    /// Takes every support of `group` away and leaves the group itself, and every other
+    /// group's number, as it was. Returns how many supports went.
+    pub fn clear_group(&mut self, group: u16) -> usize {
+        let before = self.point_count();
+        self.points.retain(|support| support.group != group);
+        self.frozen.retain(|tree| tree.group() != group);
+        let gone = before - self.point_count();
+        if gone > 0 {
+            self.built = None;
+        }
+        gone
+    }
+
+    /// Takes every support away: the points and the trees a hand has frozen alike.
     pub fn clear(&mut self) {
         self.points.clear();
+        self.frozen.clear();
         self.built = None;
     }
 
@@ -473,11 +542,13 @@ impl ModelSupports {
         let matrix = transform.to_matrix();
         trees.extend(self.frozen.iter().map(|tree| tree.moved(matrix)));
 
+        let meshes: Vec<Arc<Mesh>> = mesh_groups(&trees, &placed, profiles)
+            .into_iter()
+            .map(Arc::new)
+            .collect();
+        self.drawn.clone_from(&meshes);
         self.built = Some(Built {
-            meshes: mesh_groups(&trees, &placed, profiles)
-                .into_iter()
-                .map(Arc::new)
-                .collect(),
+            meshes,
             trees,
             grown,
             transform,
@@ -536,6 +607,35 @@ mod tests {
         assert!(supports.is_empty());
         assert!(supports.meshes().is_none());
         assert!(supports.trees().is_empty());
+    }
+
+    #[test]
+    fn clearing_one_group_leaves_the_others_and_their_numbers() {
+        let mut supports = ModelSupports::default();
+        for (x, group) in [(1.0, 0), (2.0, 1), (3.0, 2), (4.0, 1)] {
+            supports.add(Vec3::new(x, 0.0, 10.0), Transform::default(), group);
+        }
+
+        assert_eq!(supports.clear_group(1), 2);
+
+        let left: Vec<u16> = supports.points().iter().map(|point| point.group).collect();
+        assert_eq!(left, vec![0, 2], "group 2 is still group 2");
+        assert_eq!(supports.clear_group(1), 0, "nothing is left in it to take");
+    }
+
+    #[test]
+    fn clearing_takes_the_supports_a_hand_froze_as_well() {
+        let mut supports = with_one_support(Transform::default());
+        supports
+            .freeze(0, Transform::default())
+            .expect("the one tree is there to freeze");
+        assert_eq!(supports.frozen().len(), 1);
+
+        supports.clear();
+        refresh(&mut supports, &nothing(), Transform::default());
+
+        assert!(supports.frozen().is_empty());
+        assert_eq!(supports.standing(), 0, "nothing is left standing");
     }
 
     #[test]
@@ -600,6 +700,37 @@ mod tests {
         assert!(
             !Arc::ptr_eq(&thin, thick),
             "a new profile must produce a new mesh"
+        );
+    }
+
+    #[test]
+    fn an_edit_leaves_the_last_columns_to_draw_until_they_are_rebuilt() {
+        let transform = Transform::default();
+        let mut supports = with_one_support(transform);
+        let before = supports.drawn().to_vec();
+        assert!(before.iter().any(|mesh| !mesh.is_empty()), "one column");
+
+        supports.add(Vec3::new(3.0, 3.0, 10.0), transform, 0);
+        assert!(supports.meshes().is_none(), "what is built is out of date");
+        assert_eq!(
+            supports.drawn().len(),
+            before.len(),
+            "and the viewport still has the last columns to draw"
+        );
+        assert!(
+            supports
+                .drawn()
+                .iter()
+                .zip(&before)
+                .all(|(now, then)| Arc::ptr_eq(now, then))
+        );
+
+        refresh(&mut supports, &nothing(), transform);
+        let faces =
+            |meshes: &[Arc<Mesh>]| meshes.iter().map(|mesh| mesh.faces.len()).sum::<usize>();
+        assert!(
+            faces(supports.drawn()) > faces(&before),
+            "the rebuild draws the second column as well"
         );
     }
 

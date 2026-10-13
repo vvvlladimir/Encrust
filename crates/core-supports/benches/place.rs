@@ -130,12 +130,32 @@ fn placing(c: &mut Criterion) {
 
     let tables = tables();
     c.bench_function("generate_supports/tables, 1200 layers", |b| {
-        b.iter(|| generate_supports(&tables, LAYER_HEIGHT_MM, &profile, &[], None, &mut |_| true));
+        b.iter(|| {
+            generate_supports(
+                &tables,
+                LAYER_HEIGHT_MM,
+                &profile,
+                &[],
+                &[],
+                None,
+                &mut |_| true,
+            )
+        });
     });
 
     let coarse = ball(256, 128);
     c.bench_function("generate_supports/ball, 600 layers", |b| {
-        b.iter(|| generate_supports(&coarse, LAYER_HEIGHT_MM, &profile, &[], None, &mut |_| true));
+        b.iter(|| {
+            generate_supports(
+                &coarse,
+                LAYER_HEIGHT_MM,
+                &profile,
+                &[],
+                &[],
+                None,
+                &mut |_| true,
+            )
+        });
     });
 
     // The same ball with sixteen times the faces, and so sixteen times the points on
@@ -143,7 +163,17 @@ fn placing(c: &mut Criterion) {
     // supports must follow the shape, not the triangle count.
     let dense = ball(1024, 512);
     c.bench_function("generate_supports/ball, 1 M faces", |b| {
-        b.iter(|| generate_supports(&dense, LAYER_HEIGHT_MM, &profile, &[], None, &mut |_| true));
+        b.iter(|| {
+            generate_supports(
+                &dense,
+                LAYER_HEIGHT_MM,
+                &profile,
+                &[],
+                &[],
+                None,
+                &mut |_| true,
+            )
+        });
     });
 }
 

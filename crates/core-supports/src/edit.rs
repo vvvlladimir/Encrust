@@ -1,8 +1,9 @@
 use core_geometry::{Mat4, Scalar, Vec3};
 use printer_profiles::SupportProfile;
 
+use crate::Landing;
 use crate::clear::{Beam, clear};
-use crate::column::foot_clear;
+use crate::column::{foot_clear, landing, neck_of, swept_bottom_z};
 use crate::pick::Part;
 use crate::placed::Placed;
 use crate::tree::SupportTree;
@@ -39,7 +40,7 @@ pub fn fits(tree: &SupportTree, placed: &Placed, profile: &SupportProfile) -> bo
         to: Vec3::new(
             landing.base.x,
             landing.base.y,
-            landing.pillar_bottom_z(profile),
+            swept_bottom_z(placed, &landing, root.radius_mm, profile),
         ),
         from_radius_mm: root.radius_mm,
         to_radius_mm: root.radius_mm,
@@ -49,7 +50,7 @@ pub fn fits(tree: &SupportTree, placed: &Placed, profile: &SupportProfile) -> bo
 
     struts
         && clear(placed, &trunk)
-        && (landing.on_model || foot_clear(placed, landing.base, profile))
+        && (landing.on_model || foot_clear(placed, landing.pad_centre(), profile))
 }
 
 /// The nearest point of the model to `at`, in plate coordinates, for a tip that has to
@@ -94,6 +95,48 @@ pub fn carried(
         carry_part(&mut carried, *part, matrix, inverse, step);
     }
     snap_tips(&mut carried, placed, matrix, inverse);
+    fits(&carried.moved(matrix), placed, profile).then_some(carried)
+}
+
+/// `tree` with its tip `tip` put down at `to`, or `None` when the model refuses it there.
+///
+/// `to` is in plate coordinates and need not be on the model: the tip goes to the nearest
+/// surface to it. The neck goes with the tip, one `[top]` out along the face it now
+/// holds, so the head stays square on wherever it is carried; and a support that is a
+/// tip on a trunk and nothing else stands its trunk under the neck again, on whatever is
+/// there. The rest is the rule [`carried`] holds a step to. `tree` is in the model's own
+/// space, which is the space the answer comes back in.
+pub fn tip_carried(
+    tree: &SupportTree,
+    tip: usize,
+    to: Vec3,
+    placed: &Placed,
+    profile: &SupportProfile,
+) -> Option<SupportTree> {
+    let matrix = placed.transform.to_matrix();
+    if matrix.determinant().abs() < SINGULAR {
+        return None;
+    }
+    let inverse = matrix.inverse();
+    let node = tree.nodes().get(tip).filter(|node| node.is_leaf())?;
+    let contact = on_model(placed, to)?;
+    let neck = neck_of(placed, contact, profile);
+
+    let mut carried = tree.clone();
+    carried.move_node(tip, inverse.transform_point3(contact));
+    if let Some(parent) = node.parent {
+        carried.move_node(parent, inverse.transform_point3(neck));
+        let alone = parent == tree.root_index() && tree.tip_count() == 1;
+        if alone && let Some(under) = landing(placed, neck, tree.root().radius_mm, 1, profile) {
+            carried.stand_on(Landing {
+                base: inverse.transform_point3(under.base),
+                pad_offset: inverse
+                    .transform_vector3(under.pad_offset.extend(0.0))
+                    .truncate(),
+                ..under
+            });
+        }
+    }
     fits(&carried.moved(matrix), placed, profile).then_some(carried)
 }
 
@@ -322,6 +365,117 @@ mod tests {
             )
             .is_none()
         );
+    }
+
+    /// The shelf with a slab on the plate under it, so a column from the shelf lands on
+    /// the model and not on the plate.
+    fn shelf_over_a_slab() -> Mesh {
+        let mut model = box_mesh(Vec3::ZERO, Vec3::new(10.0, 10.0, 2.0));
+        let upper = shelf();
+        let offset = model.vertices.len() as u32;
+        model.vertices.extend_from_slice(&upper.vertices);
+        model
+            .faces
+            .extend(upper.faces.iter().map(|face| face.map(|at| at + offset)));
+        model
+    }
+
+    #[test]
+    fn a_support_standing_on_the_model_fits_and_can_be_carried() {
+        let model = shelf_over_a_slab();
+        let bvh = Bvh::build(&model);
+        let placed = Placed::new(&model, &bvh, Transform::default());
+        let tree = under_the_shelf(&model);
+        assert!(tree.landing().on_model, "the slab is under the column");
+
+        assert!(
+            fits(&tree, &placed, &profile()),
+            "a trunk sunk into what it stands on is how it is built, not a collision"
+        );
+        let moved = carried(
+            &tree,
+            &[Part::Node(tree.root_index())],
+            Vec3::new(1.0, 0.0, 0.0),
+            &placed,
+            &profile(),
+        )
+        .expect("a joint carried a millimetre through clear air stands");
+        assert!(
+            (moved.root().position.x - (tree.root().position.x + 1.0)).abs() < 1e-4,
+            "the joint took the step"
+        );
+    }
+
+    #[test]
+    fn a_support_stood_on_a_steep_face_as_a_last_resort_still_fits() {
+        // The ramp of the landing's own test, 68 degrees, under a column grown in clear air.
+        let model = crate::tests::ramp(4.0, 10.0);
+        let bvh = Bvh::build(&model);
+        let placed = Placed::new(&model, &bvh, Transform::default());
+        let mut tree = trees_on(
+            &[SupportPoint::new(Vec3::new(2.0, 0.0, 20.0))],
+            &Mesh::default(),
+            Transform::default(),
+            Profiles::single(&profile()),
+        )
+        .pop()
+        .expect("a column in clear air stands");
+        let root = *tree.root();
+        let steep = crate::column::landing_within(
+            &placed,
+            root.position,
+            root.radius_mm,
+            1,
+            &profile(),
+            crate::column::LAST_RESORT_SLOPE_DEG,
+        )
+        .expect("the ramp is under it");
+        tree.stand_on(steep);
+
+        assert!(
+            fits(&tree, &placed, &profile()),
+            "what the run stood there the hand may take hold of"
+        );
+    }
+
+    #[test]
+    fn a_tip_carried_along_the_surface_takes_its_neck_and_its_trunk_with_it() {
+        let model = shelf();
+        let bvh = Bvh::build(&model);
+        let placed = Placed::new(&model, &bvh, Transform::default());
+        let tree = under_the_shelf(&model);
+        let tip = tip_of(&tree);
+
+        // Aimed 3 mm along and well under the shelf: the cursor need not be on the model.
+        let moved = tip_carried(&tree, tip, Vec3::new(8.0, 5.0, 6.0), &placed, &profile())
+            .expect("the underside of the shelf is clear at x = 8");
+
+        let at = moved.nodes()[tip].position;
+        assert!(
+            at.abs_diff_eq(Vec3::new(8.0, 5.0, 10.0), 1e-4),
+            "the tip sits on the underside straight over where it was aimed, got {at}"
+        );
+        let neck = moved.root().position;
+        assert!(
+            neck.abs_diff_eq(Vec3::new(8.0, 5.0, 10.0 - profile().top_length_mm()), 1e-4),
+            "the neck hangs one top segment under the tip, got {neck}"
+        );
+        let base = moved.landing().base;
+        assert!(
+            (base.x - 8.0).abs() < 1e-4 && base.z.abs() < 1e-4,
+            "a lone column stands under its neck again, got {base}"
+        );
+    }
+
+    #[test]
+    fn only_a_tip_is_carried_as_one() {
+        let model = shelf();
+        let bvh = Bvh::build(&model);
+        let placed = Placed::new(&model, &bvh, Transform::default());
+        let tree = under_the_shelf(&model);
+        let root = tree.root_index();
+
+        assert!(tip_carried(&tree, root, Vec3::new(8.0, 5.0, 10.0), &placed, &profile()).is_none());
     }
 
     #[test]

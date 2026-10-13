@@ -50,7 +50,7 @@ impl fmt::Display for SupportReport {
 
 /// Stands supports under `mesh`, in plate coordinates, and answers with them.
 ///
-/// The model is lifted off the plate first, by the profile's own `z_lift_mm`: a part
+/// The model is lifted off the plate first, by the profile's own lift and its raft: a part
 /// sitting on the plate has no room under it for a support, and the command line has no
 /// Lift button to press. `cuts` rides the lift with it and is answered where it ends up.
 /// See `docs/design/supports.md`.
@@ -65,7 +65,7 @@ pub fn stand_under(
     profile: &SupportProfile,
     layer_height_mm: Scalar,
 ) -> Result<(SupportReport, Mesh)> {
-    let lifted_mm = lift(mesh, cuts, profile.z_lift_mm)?;
+    let lifted_mm = lift(mesh, cuts, profile.lift_mm())?;
     let mut drilled = mesh.clone();
     if let Some(cuts) = cuts.as_ref() {
         append(&mut drilled, cuts);
@@ -80,10 +80,16 @@ pub fn stand_under(
         )
         .context("cannot slice the model to work out where it needs supports")?;
 
-    let contacts =
-        core_supports::generate_supports(&stack, layer_height_mm, profile, &[], None, &mut |_| {
-            true
-        });
+    let lows = core_supports::low_points(&drilled, Transform::default());
+    let contacts = core_supports::generate_supports(
+        &stack,
+        layer_height_mm,
+        profile,
+        &[],
+        &lows,
+        None,
+        &mut |_| true,
+    );
     let points: Vec<SupportPoint> = contacts.iter().copied().map(SupportPoint::new).collect();
 
     let bvh = Bvh::build(&drilled);

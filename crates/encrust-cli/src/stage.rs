@@ -210,7 +210,12 @@ pub fn plate_of(
     check_adaptive(job, printer)?;
     let mut placed = Vec::with_capacity(entries.len());
     for (path, shaping) in entries {
-        let (mut mesh, import, oriented) = import(path, &shaping.import, printer, watch.talk)?;
+        let max_overhang_deg = shaping
+            .supports
+            .as_ref()
+            .map(|profile| profile.max_overhang_deg);
+        let (mut mesh, import, oriented) =
+            import(path, &shaping.import, printer, max_overhang_deg, watch.talk)?;
         if let Some(position) = shaping.position {
             mesh = stood_at(&mesh, position)?;
         }

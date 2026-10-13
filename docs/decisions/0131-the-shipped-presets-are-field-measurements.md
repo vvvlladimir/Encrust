@@ -1,6 +1,6 @@
 # 0131. Ship the field's measurements, and the two rules they broke
 
-- **Status:** Accepted
+- **Status:** Accepted; the measurements and the order of the densities are superseded by 0254
 - **Date:** 2026-09-29
 
 ## Context

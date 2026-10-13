@@ -3,9 +3,11 @@
 
 use std::ops::RangeInclusive;
 
-use printer_profiles::{ContactShape, PlatformShape, RaftShape, SupportProfile};
+use printer_profiles::{
+    Catalogue, ContactShape, Entry, PlatformShape, RaftShape, RaftStyle, SupportProfile,
+};
 
-use crate::ui::{Segment, Segmented, describe, nested, number_row, switch};
+use crate::ui::{Carried, Segment, Segmented, carried_row, describe, nested, switch};
 
 /// Millimetres per point of drag. The tip is measured in tenths and the foot in whole
 /// millimetres, so they do not share a step.
@@ -75,36 +77,93 @@ impl Group {
         }
     }
 
-    /// Draws the group's fields, then puts the widths back in order.
-    pub fn show(self, ui: &mut egui::Ui, profile: &mut SupportProfile) {
+    /// Draws the group's fields, then puts the widths back in order. With `saved`, a
+    /// number that has moved off it is marked and can be put back.
+    pub fn show(
+        self,
+        ui: &mut egui::Ui,
+        profile: &mut SupportProfile,
+        saved: Option<&SupportProfile>,
+    ) {
         match self {
-            Self::Top => top(ui, profile),
-            Self::Main => main(ui, profile),
-            Self::Bottom => bottom(ui, profile),
-            Self::SmallPillar => small_pillar(ui, profile),
-            Self::Branching => branching(ui, profile),
-            Self::Raft => raft(ui, profile),
-            Self::Bracing => bracing(ui, profile),
-            Self::Automatic => automatic(ui, profile),
+            Self::Top => top(ui, profile, saved),
+            Self::Main => main(ui, profile, saved),
+            Self::Bottom => bottom(ui, profile, saved),
+            Self::SmallPillar => small_pillar(ui, profile, saved),
+            Self::Branching => branching(ui, profile, saved),
+            Self::Raft => raft(ui, profile, saved),
+            Self::Bracing => bracing(ui, profile, saved),
+            Self::Automatic => automatic(ui, profile, saved),
         }
         keep_in_order(profile);
     }
 }
 
-fn mm(ui: &mut egui::Ui, label: &str, value: &mut f32, step: f64, range: RangeInclusive<f32>) {
-    number_row(ui, label, value, "mm", step, range, 2);
+/// The profile of `catalogue` the one in hand was taken from: the saved one of its name,
+/// which is what an edit is measured against and what Save writes over.
+pub fn saved_as<'a>(
+    catalogue: &'a Catalogue,
+    profile: &SupportProfile,
+) -> Option<&'a Entry<SupportProfile>> {
+    catalogue
+        .supports()
+        .find(|entry| entry.profile.name == profile.name)
 }
 
-fn degrees(ui: &mut egui::Ui, label: &str, value: &mut f32, range: RangeInclusive<f32>) {
-    number_row(ui, label, value, "deg", ANGLE_STEP, range, 0);
+/// What one number is in the saved profile, where there is one to measure against.
+fn was(saved: Option<&SupportProfile>, of: impl Fn(&SupportProfile) -> f32) -> Option<f32> {
+    saved.map(of)
+}
+
+/// A named number of the profile. Where it has moved off what `was` saved, its label is
+/// in the warning colour and a button beside it puts the saved value back.
+#[allow(clippy::too_many_arguments)]
+fn number(
+    ui: &mut egui::Ui,
+    label: &str,
+    was: Option<f32>,
+    value: &mut f32,
+    unit: &str,
+    step: f64,
+    range: RangeInclusive<f32>,
+    decimals: usize,
+) {
+    // Half of the last digit shown: what reads the same is the same.
+    let shown = 0.5 * 10f32.powi(-(decimals as i32));
+    let moved = was.filter(|was| (was - *value).abs() >= shown);
+    if carried_row(ui, label, value, unit, step, range, decimals, moved) == Carried::Reverted
+        && let Some(was) = moved
+    {
+        *value = was;
+    }
+}
+
+fn mm(
+    ui: &mut egui::Ui,
+    label: &str,
+    was: Option<f32>,
+    value: &mut f32,
+    step: f64,
+    range: RangeInclusive<f32>,
+) {
+    number(ui, label, was, value, "mm", step, range, 2);
+}
+
+fn degrees(
+    ui: &mut egui::Ui,
+    label: &str,
+    was: Option<f32>,
+    value: &mut f32,
+    range: RangeInclusive<f32>,
+) {
+    number(ui, label, was, value, "deg", ANGLE_STEP, range, 0);
 }
 
 /// The contact with the model and the cone that widens out of it.
-fn top(ui: &mut egui::Ui, profile: &mut SupportProfile) {
+fn top(ui: &mut egui::Ui, profile: &mut SupportProfile, saved: Option<&SupportProfile>) {
     let segments = [
-        Segment::new(ContactShape::Cone, "Cone"),
-        Segment::new(ContactShape::Sphere, "Sphere"),
         Segment::new(ContactShape::Plane, "Plane"),
+        Segment::new(ContactShape::Sphere, "Sphere"),
     ];
     let width = ui.available_width();
     Segmented::new(&segments)
@@ -115,34 +174,36 @@ fn top(ui: &mut egui::Ui, profile: &mut SupportProfile) {
     mm(
         ui,
         "Contact",
+        was(saved, |p| p.tip.contact_diameter_mm),
         &mut tip.contact_diameter_mm,
         FINE_STEP,
         0.05..=2.0,
     );
-    mm(ui, "Bite", &mut tip.contact_depth_mm, FINE_STEP, 0.05..=1.0);
-    let top = &mut profile.top;
     mm(
         ui,
-        "Upper",
-        &mut top.upper_diameter_mm,
+        "Bite",
+        was(saved, |p| p.tip.contact_depth_mm),
+        &mut tip.contact_depth_mm,
         FINE_STEP,
-        0.05..=4.0,
+        0.05..=1.0,
     );
+    let length = &mut profile.top.length_mm;
     mm(
         ui,
-        "Lower",
-        &mut top.lower_diameter_mm,
+        "Length",
+        was(saved, |p| p.top.length_mm),
+        length,
         COARSE_STEP,
-        0.05..=6.0,
+        0.2..=10.0,
     );
-    mm(ui, "Length", &mut top.length_mm, COARSE_STEP, 0.2..=10.0);
 }
 
-/// The column itself, and the air it keeps between itself and the model.
-fn main(ui: &mut egui::Ui, profile: &mut SupportProfile) {
+/// The column itself, the widest its trunk grows, and the air it keeps from the model.
+fn main(ui: &mut egui::Ui, profile: &mut SupportProfile, saved: Option<&SupportProfile>) {
     mm(
         ui,
         "Diameter",
+        was(saved, |p| p.middle.diameter_mm),
         &mut profile.middle.diameter_mm,
         COARSE_STEP,
         0.3..=6.0,
@@ -150,14 +211,24 @@ fn main(ui: &mut egui::Ui, profile: &mut SupportProfile) {
     mm(
         ui,
         "Clearance",
+        was(saved, |p| p.clearance_mm),
         &mut profile.clearance_mm,
         FINE_STEP,
         0.0..=3.0,
     );
+    // Every trunk widens towards its base, branched or not (ADR 0242).
+    mm(
+        ui,
+        "Trunk cap",
+        was(saved, |p| p.branching.max_trunk_diameter_mm),
+        &mut profile.branching.max_trunk_diameter_mm,
+        COARSE_STEP,
+        0.3..=10.0,
+    );
 }
 
 /// The foot the column stands on.
-fn bottom(ui: &mut egui::Ui, profile: &mut SupportProfile) {
+fn bottom(ui: &mut egui::Ui, profile: &mut SupportProfile, saved: Option<&SupportProfile>) {
     let segments = [
         Segment::new(PlatformShape::Cylinder, "Round"),
         Segment::new(PlatformShape::Cone, "Tapered"),
@@ -174,6 +245,7 @@ fn bottom(ui: &mut egui::Ui, profile: &mut SupportProfile) {
     mm(
         ui,
         "Diameter",
+        was(saved, |p| p.bottom.platform_diameter_mm),
         &mut bottom.platform_diameter_mm,
         COARSE_STEP,
         1.0..=30.0,
@@ -181,20 +253,15 @@ fn bottom(ui: &mut egui::Ui, profile: &mut SupportProfile) {
     mm(
         ui,
         "Thickness",
+        was(saved, |p| p.bottom.platform_thickness_mm),
         &mut bottom.platform_thickness_mm,
         COARSE_STEP,
         0.2..=5.0,
     );
     mm(
         ui,
-        "Flare upper",
-        &mut bottom.upper_diameter_mm,
-        COARSE_STEP,
-        0.1..=10.0,
-    );
-    mm(
-        ui,
-        "Flare lower",
+        "Flare",
+        was(saved, |p| p.bottom.lower_diameter_mm),
         &mut bottom.lower_diameter_mm,
         COARSE_STEP,
         0.1..=15.0,
@@ -204,7 +271,7 @@ fn bottom(ui: &mut egui::Ui, profile: &mut SupportProfile) {
 /// Whether a support may stand on the part at all, and the thin strut between two parts
 /// of the model, which needs neither a foot nor the width a column standing on the plate
 /// needs.
-fn small_pillar(ui: &mut egui::Ui, profile: &mut SupportProfile) {
+fn small_pillar(ui: &mut egui::Ui, profile: &mut SupportProfile, saved: Option<&SupportProfile>) {
     switch(ui, &mut profile.land_on_model, "Stand on the model");
     if !profile.land_on_model {
         describe(
@@ -227,11 +294,12 @@ fn small_pillar(ui: &mut egui::Ui, profile: &mut SupportProfile) {
         describe(
             ui,
             "Used where a support runs from one part of the model to another. Both ends sink \
-             into a surface.",
+             into a surface; a longer run keeps the regular width.",
         );
         mm(
             ui,
             "Diameter",
+            was(saved, |p| p.small_pillar.diameter_mm),
             &mut pillar.diameter_mm,
             FINE_STEP,
             0.1..=3.0,
@@ -239,6 +307,7 @@ fn small_pillar(ui: &mut egui::Ui, profile: &mut SupportProfile) {
         mm(
             ui,
             "Upper depth",
+            was(saved, |p| p.small_pillar.upper_depth_mm),
             &mut pillar.upper_depth_mm,
             FINE_STEP,
             0.05..=1.0,
@@ -246,15 +315,24 @@ fn small_pillar(ui: &mut egui::Ui, profile: &mut SupportProfile) {
         mm(
             ui,
             "Lower depth",
+            was(saved, |p| p.small_pillar.lower_depth_mm),
             &mut pillar.lower_depth_mm,
             FINE_STEP,
             0.05..=1.0,
+        );
+        mm(
+            ui,
+            "Max length",
+            was(saved, |p| p.small_pillar.max_length_mm),
+            &mut pillar.max_length_mm,
+            COARSE_STEP,
+            0.5..=50.0,
         );
     });
 }
 
 /// How nearby tips merge into shared trunks on the way down.
-fn branching(ui: &mut egui::Ui, profile: &mut SupportProfile) {
+fn branching(ui: &mut egui::Ui, profile: &mut SupportProfile, saved: Option<&SupportProfile>) {
     let branching = &mut profile.branching;
     if !branching.enabled {
         describe(ui, "Every tip stands on a column of its own.");
@@ -262,60 +340,84 @@ fn branching(ui: &mut egui::Ui, profile: &mut SupportProfile) {
     }
     nested(ui, |ui| {
         let angle = &mut branching.max_angle_deg;
-        degrees(ui, "Branch angle", angle, MIN_BRANCH_DEG..=MAX_BRANCH_DEG);
+        degrees(
+            ui,
+            "Branch angle",
+            was(saved, |p| p.branching.max_angle_deg),
+            angle,
+            MIN_BRANCH_DEG..=MAX_BRANCH_DEG,
+        );
         let reach = &mut branching.max_merge_distance_mm;
-        number_row(ui, "Merge within", reach, "mm", COARSE_STEP, 1.0..=40.0, 1);
-        let trunk = &mut branching.max_trunk_diameter_mm;
-        mm(ui, "Trunk cap", trunk, COARSE_STEP, 0.3..=10.0);
+        number(
+            ui,
+            "Merge within",
+            was(saved, |p| p.branching.max_merge_distance_mm),
+            reach,
+            "mm",
+            COARSE_STEP,
+            1.0..=40.0,
+            1,
+        );
     });
 }
 
-/// The slab the supports stand on, and how far the model stands off the plate.
-fn raft(ui: &mut egui::Ui, profile: &mut SupportProfile) {
-    mm(
-        ui,
-        "Model lift",
-        &mut profile.z_lift_mm,
-        COARSE_STEP,
-        0.0..=30.0,
-    );
+/// The slab the supports stand on. It lifts the model by its own thickness on top of
+/// the lift, so it is never printed into the part (ADR 0238).
+fn raft(ui: &mut egui::Ui, profile: &mut SupportProfile, saved: Option<&SupportProfile>) {
     let raft = &mut profile.raft;
     switch(ui, &mut raft.enabled, "Raft under the feet");
     if !raft.enabled {
         return;
     }
     nested(ui, |ui| {
-        let segments = [
-            Segment::new(RaftShape::Hull, "Hull"),
-            Segment::new(RaftShape::Rectangle, "Rectangle"),
-        ];
         let width = ui.available_width();
-        Segmented::new(&segments)
+        let styles = [
+            Segment::new(RaftStyle::Skates, "Skates"),
+            Segment::new(RaftStyle::Grid, "Grid"),
+            Segment::new(RaftStyle::Connected, "Connected"),
+        ];
+        Segmented::new(&styles)
             .width(width)
-            .show(ui, &mut raft.shape);
+            .show(ui, &mut raft.style);
+        if raft.style.has_outline() {
+            ui.add_space(2.0);
+            let shapes = [
+                Segment::new(RaftShape::Hull, "Hull"),
+                Segment::new(RaftShape::Rectangle, "Rectangle"),
+            ];
+            Segmented::new(&shapes)
+                .width(width)
+                .show(ui, &mut raft.shape);
+        }
         ui.add_space(2.0);
-        number_row(
+        mm(
             ui,
-            "Area",
-            &mut raft.area_ratio,
-            "x",
+            "Margin",
+            was(saved, |p| p.raft.margin_mm),
+            &mut raft.margin_mm,
             COARSE_STEP,
-            1.0..=4.0,
-            2,
+            0.0..=20.0,
         );
         mm(
             ui,
             "Thickness",
+            was(saved, |p| p.raft.thickness_mm),
             &mut raft.thickness_mm,
             COARSE_STEP,
             0.2..=6.0,
         );
-        degrees(ui, "Wall slope", &mut raft.slope_deg, 0.0..=75.0);
+        degrees(
+            ui,
+            "Wall slope",
+            was(saved, |p| p.raft.slope_deg),
+            &mut raft.slope_deg,
+            0.0..=75.0,
+        );
     });
 }
 
 /// The struts tying tall trunks together.
-fn bracing(ui: &mut egui::Ui, profile: &mut SupportProfile) {
+fn bracing(ui: &mut egui::Ui, profile: &mut SupportProfile, saved: Option<&SupportProfile>) {
     let bracing = &mut profile.bracing;
     switch(ui, &mut bracing.enabled, "Brace tall trunks");
     if !bracing.enabled {
@@ -325,59 +427,88 @@ fn bracing(ui: &mut egui::Ui, profile: &mut SupportProfile) {
         mm(
             ui,
             "Diameter",
+            was(saved, |p| p.bracing.diameter_mm),
             &mut bracing.diameter_mm,
             FINE_STEP,
             0.1..=3.0,
         );
         let span = &mut bracing.max_spacing_mm;
-        number_row(ui, "Span", span, "mm", COARSE_STEP, 1.0..=40.0, 1);
+        number(
+            ui,
+            "Span",
+            was(saved, |p| p.bracing.max_spacing_mm),
+            span,
+            "mm",
+            COARSE_STEP,
+            1.0..=40.0,
+            1,
+        );
         let start = &mut bracing.start_height_mm;
-        number_row(ui, "First at", start, "mm", COARSE_STEP, 0.0..=40.0, 1);
+        number(
+            ui,
+            "First at",
+            was(saved, |p| p.bracing.start_height_mm),
+            start,
+            "mm",
+            COARSE_STEP,
+            0.0..=40.0,
+            1,
+        );
         let rise = &mut bracing.rise_mm;
-        number_row(ui, "Every", rise, "mm", COARSE_STEP, 1.0..=40.0, 1);
+        number(
+            ui,
+            "Every",
+            was(saved, |p| p.bracing.rise_mm),
+            rise,
+            "mm",
+            COARSE_STEP,
+            1.0..=40.0,
+            1,
+        );
     });
 }
 
 /// What the automatic run holds up, and how thickly.
-fn automatic(ui: &mut egui::Ui, profile: &mut SupportProfile) {
+fn automatic(ui: &mut egui::Ui, profile: &mut SupportProfile, saved: Option<&SupportProfile>) {
     let overhang = &mut profile.max_overhang_deg;
     degrees(
         ui,
         "Overhang",
+        was(saved, |p| p.max_overhang_deg),
         overhang,
         MIN_OVERHANG_DEG..=MAX_OVERHANG_DEG,
     );
     mm(
         ui,
         "Contact spacing",
+        was(saved, |p| p.contact_spacing_mm),
         &mut profile.contact_spacing_mm,
         COARSE_STEP,
         0.5..=20.0,
     );
-    number_row(
+    number(
         ui,
         "Density",
+        was(saved, |p| p.density),
         &mut profile.density,
         "x",
         COARSE_STEP,
         MIN_DENSITY..=MAX_DENSITY,
         2,
     );
+    mm(
+        ui,
+        "Lift",
+        was(saved, |p| p.z_lift_mm),
+        &mut profile.z_lift_mm,
+        COARSE_STEP,
+        0.0..=30.0,
+    );
 }
 
 /// A ring wider than the one above it turns a support inside out where the two cross.
 /// The fields are independent, so the order is restored here rather than forbidden there.
 pub fn keep_in_order(profile: &mut SupportProfile) {
-    // The contact is not in the chain: a head wider than the neck under it is a nail, not
-    // an inversion. See `docs/decisions/0131`.
-    profile.top.lower_diameter_mm = profile
-        .top
-        .lower_diameter_mm
-        .max(profile.top.upper_diameter_mm);
-    profile.middle.diameter_mm = profile
-        .middle
-        .diameter_mm
-        .max(profile.top.lower_diameter_mm);
     profile.branching.max_trunk_diameter_mm = profile
         .branching
         .max_trunk_diameter_mm
@@ -385,7 +516,7 @@ pub fn keep_in_order(profile: &mut SupportProfile) {
     profile.bottom.lower_diameter_mm = profile
         .bottom
         .lower_diameter_mm
-        .max(profile.bottom.upper_diameter_mm);
+        .max(profile.middle.diameter_mm);
     profile.bottom.platform_diameter_mm = profile
         .bottom
         .platform_diameter_mm
@@ -396,4 +527,32 @@ pub fn keep_in_order(profile: &mut SupportProfile) {
         .small_pillar
         .diameter_mm
         .min(profile.middle.diameter_mm);
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn an_edited_profile_is_measured_against_the_saved_one_of_its_name() {
+        let catalogue = Catalogue::bundled().expect("the shipped catalogue loads");
+        let mut edited = SupportProfile::medium();
+        edited.bracing.diameter_mm += 0.3;
+
+        let saved = saved_as(&catalogue, &edited).expect("Medium is shipped");
+        assert_eq!(saved.profile, SupportProfile::medium());
+        assert_eq!(
+            was(Some(&saved.profile), |profile| profile.bracing.diameter_mm),
+            Some(SupportProfile::medium().bracing.diameter_mm),
+            "which is what the field's button puts back"
+        );
+    }
+
+    #[test]
+    fn a_profile_of_a_name_nobody_saved_has_nothing_to_go_back_to() {
+        let catalogue = Catalogue::bundled().expect("the shipped catalogue loads");
+        let mut renamed = SupportProfile::medium();
+        renamed.name = "Nobody's".to_owned();
+        assert!(saved_as(&catalogue, &renamed).is_none());
+    }
 }

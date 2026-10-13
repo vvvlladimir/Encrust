@@ -1,5 +1,7 @@
-use core_geometry::Vec2;
-use egui::{PointerButton, Sense};
+use std::sync::Arc;
+
+use core_geometry::{Mesh, Vec2};
+use egui::{Color32, PointerButton, Sense};
 
 use crate::camera::OrbitCamera;
 use crate::drain::Placing;
@@ -23,13 +25,16 @@ use hollow::{
     remove_blocker_under_cursor, remove_drain_under_cursor,
 };
 use overlays::{
-    cut_line, draw_axis_letters, draw_bounds, draw_cut_plane, draw_facet, draw_measure, draw_picked,
+    cut_line, draw_aimed, draw_axis_letters, draw_bounds, draw_cut_plane, draw_facet, draw_measure,
+    draw_picked,
 };
 use paint::{draw_brush, paint_stroke};
 use picking::{
     lay_face_under_cursor, measure_under_cursor, point_at_face, select_under_cursor, takes_the_pick,
 };
-use supports::{drag_support, place_support_under_cursor, remove_support_under_cursor};
+use supports::{
+    drag_support, place_support_under_cursor, preview_under_cursor, remove_support_under_cursor,
+};
 
 /// Radians of orbit per point of cursor movement. A drag across a 600 point wide panel is
 /// a little under a full turn.
@@ -38,6 +43,10 @@ const ORBIT_RAD_PER_POINT: f32 = 0.009;
 /// Zoom is exponential in the scroll delta so that a notch changes the view by the same
 /// proportion however close the camera already is.
 const ZOOM_PER_SCROLL_POINT: f32 = 0.0015;
+
+/// How opaque the support a click would stand is drawn: see-through enough to read as not
+/// built yet, solid enough that its shape still reads.
+const PREVIEW_OPACITY: f32 = 0.6;
 
 /// Draws the plate and everything on it, and returns the rectangle it took, which is what
 /// the cards floating over it are anchored to.
@@ -63,11 +72,15 @@ pub fn ui(ui: &mut egui::Ui, window: &mut Window) -> egui::Rect {
     // The brush and the tip being dragged take the primary button only for a gesture that
     // began on something of theirs, so a drag that starts on empty plate still turns the
     // camera while either is out.
-    let painting = paint_stroke(ui, window, rect, &pointer) || drag_support(window, rect, &pointer);
+    let painting = paint_stroke(ui, window, rect, &pointer);
+    // A support in hand has the whole gesture, shift and all: it neither turns the camera
+    // nor slides it.
+    let carrying = !painting && drag_support(window, rect, &pointer);
+    let drag = if carrying { Drag::None } else { gesture.drag };
 
     follow_turn(ui, window.view);
     let invert = window.machine.general.invert_zoom;
-    steer_camera(window.view, rect, &pointer, gesture.drag, painting, invert);
+    steer_camera(window.view, rect, &pointer, drag, painting, invert);
     if gesture.clicked
         && let Some(position) = pointer.position
     {
@@ -86,7 +99,8 @@ pub fn ui(ui: &mut egui::Ui, window: &mut Window) -> egui::Rect {
     if rect.width() <= 0.0 || rect.height() <= 0.0 {
         return rect;
     }
-    paint_plate(ui, window, rect);
+    let preview = place_preview(ui, window, rect, &pointer);
+    paint_plate(ui, window, rect, preview.as_ref());
     draw_tool_overlays(ui, window, rect, &pointer);
     rect
 }
@@ -186,18 +200,51 @@ fn click(ui: &egui::Ui, window: &mut Window, rect: egui::Rect, cursor: egui::Pos
     }
 }
 
+/// The support the Place brush would stand under a resting cursor, in the active group's
+/// tint, or in red where nothing would stand.
+fn place_preview(
+    ui: &egui::Ui,
+    window: &Window,
+    rect: egui::Rect,
+    pointer: &Pointer,
+) -> Option<(Arc<Mesh>, Color32)> {
+    let placing = *window.tool == Tool::Paint && !window.tools.supports.placing.paints();
+    let removing = ui.input(|input| input.modifiers.alt);
+    let resting = !pointer.primary_down && !pointer.pan_button_down;
+    if !placing || removing || !resting || !pointer.over_viewport {
+        return None;
+    }
+    let cursor = pointer.position.map(|at| egui::pos2(at.x, at.y))?;
+    let shown = preview_under_cursor(window, rect, cursor)?;
+    let colour = if shown.stands {
+        theme::support_tint(usize::from(window.tools.supports.active))
+    } else {
+        theme::colors().danger
+    };
+    Some((Arc::new(shown.mesh), colour.gamma_multiply(PREVIEW_OPACITY)))
+}
+
 /// Hands the 3D pass its frame: the models, the plate, the section and the shading.
-fn paint_plate(ui: &egui::Ui, window: &mut Window, rect: egui::Rect) {
+fn paint_plate(
+    ui: &egui::Ui,
+    window: &mut Window,
+    rect: egui::Rect,
+    preview: Option<&(Arc<Mesh>, Color32)>,
+) {
     let textures =
         (*window.tool == Tool::Relief).then(|| window.tools.relief.textures(&window.doc.scene));
     // What needs holding up is shown while the Supports tool is the one in hand, at the
     // angle its own profile is set to; see `docs/decisions/0034`.
-    let overhang_deg = window
-        .tool
-        .shows_overhangs()
-        .then_some(window.tools.supports.profile.max_overhang_deg);
+    let overhang_deg = window.tool.shows_overhangs().then_some(
+        window
+            .tools
+            .supports
+            .shown(&window.doc.scene)
+            .max_overhang_deg,
+    );
     crate::render::prime_label(ui.painter());
     ui.painter().rect_filled(rect, 0.0, theme::colors().sunken);
+    let hidden_groups = window.tools.supports.hidden();
     let callback = ViewportCallback::new(
         &window.doc.scene,
         &window.doc.plate,
@@ -221,6 +268,8 @@ fn paint_plate(ui: &egui::Ui, window: &mut Window, rect: egui::Rect) {
             },
             textures: textures.as_ref(),
             cut_line: cut_line(window),
+            hidden_groups: &hidden_groups,
+            preview: preview.map(|(mesh, colour)| (mesh, *colour)),
         },
         rect,
     );
@@ -257,6 +306,7 @@ fn draw_tool_overlays(ui: &egui::Ui, window: &mut Window, rect: egui::Rect, poin
     }
     if *window.tool == Tool::Supports {
         draw_picked(ui, window, rect);
+        draw_aimed(ui, window, rect, pointer);
     }
 }
 

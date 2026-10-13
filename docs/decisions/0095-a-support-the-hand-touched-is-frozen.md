@@ -1,6 +1,6 @@
 # 0095. A support the hand has touched is frozen into the scene
 
-- **Status:** Accepted
+- **Status:** Accepted; the two-press rule is superseded by 0244
 - **Date:** 2026-09-26
 
 ## Context
