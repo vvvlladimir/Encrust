@@ -318,9 +318,11 @@ impl SceneObject {
     }
 
     /// Moves the model straight down, or up, until its lowest point touches the plate.
+    /// Nothing lifts it there, so no raft's lift is left to be taken back off it later.
     pub fn stand_on_plate(&mut self) {
         if let Some(bounds) = self.world_bounds() {
             self.transform.translation += core_geometry::drop_to_plate(&bounds);
+            self.supports.set_raft_lift_mm(0.0);
         }
     }
 }

@@ -317,10 +317,8 @@ fn strut(
     let direction = offset / length;
     let body_mm = style.body_radius_mm(nodes[child].radius_mm, profile);
 
-    // A strut keeps its own width all the way down and ends in a dome of that width,
-    // centred on the joint. The tube leaving the joint starts under a dome of its own and
-    // is at least as wide, so every end is inside what it meets and nothing swells round
-    // the joint. See `docs/decisions/0238`.
+    // One width down to a dome on the joint, under which the next, no narrower, tube
+    // starts: every end is inside what it meets. See `docs/decisions/0238`.
     let mut rings = Vec::with_capacity(8);
     head(&mut rings, &nodes[child], profile, style, length);
     round_off(&mut rings, length, body_mm);

@@ -592,10 +592,8 @@ mod tests {
         let placed = Placed::new(&model, &bvh, turned);
         let slab = raft(&trees, &placed, &profile).expect("a raft");
 
-        // A 40 mm square turned 45 degrees: its own rectangle is 44 mm across with the
-        // margin, while the plate's axes would need one 2 x 44 / sqrt 2 wide.
-        // A 40 mm square turned 45 degrees lies within |x| + |y| <= 20 sqrt 2. Its own
-        // rectangle, the margin and the lip's flare added, still does; the plate's would not.
+        // A 40 mm square turned 45 degrees lies within |x| + |y| <= 20 sqrt 2: its own
+        // rectangle, margin and lip's flare added, still does; the plate's would not.
         let reach = 20.0 + profile.raft.margin_mm + 2.0 * profile.raft.overhang_mm();
         let limit = reach * std::f32::consts::SQRT_2 + 1e-3;
         for vertex in &slab.vertices {

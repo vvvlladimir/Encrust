@@ -194,7 +194,12 @@ fn groups(ui: &mut egui::Ui, window: &mut Window) {
             }
             // The secondary click builds the whole group to another saved profile.
             if let Some(row) = &action.row {
-                let built_to = &window.tools.supports.table()[group as usize].name;
+                let tool = &window.tools.supports;
+                let built_to = if group == tool.active {
+                    &tool.profile.name
+                } else {
+                    &tool.groups[group as usize].profile.name
+                };
                 row.context_menu(|ui| {
                     if let Some(profile) = profile_menu(ui, &saved, built_to) {
                         retuned = Some((group, profile));

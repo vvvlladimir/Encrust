@@ -9,7 +9,7 @@ use crate::panels::Window;
 use crate::pick::{pick_surface, ray_through};
 use crate::scene::ObjectId;
 use crate::state::{Doc, Tools};
-use crate::supports::{Picked, with_own};
+use crate::supports::Picked;
 use crate::viewport_input::Pointer;
 use crate::workspace::Tool;
 
@@ -147,7 +147,9 @@ pub(super) fn drag_support(window: &mut Window, viewport: egui::Rect, pointer: &
         return false;
     }
 
-    if let Some(tip) = lone_tip(window) {
+    // A shift press only picks and sets no anchor: it must not carry the tip left in hand.
+    let carrying = window.tools.supports.anchor.is_some();
+    if let Some(tip) = lone_tip(window).filter(|_| carrying) {
         if carry_tip(window, viewport, cursor, tip) {
             rebuild_held(window);
         }
@@ -302,10 +304,8 @@ fn take_hold(window: &mut Window, viewport: egui::Rect, cursor: egui::Pos2, add:
         }
     }
 
-    // The freeze renumbered the trees, so where the part stands is asked of the frozen
-    // tree rather than of what was hit. The drag is measured from the point of the cursor
-    // level with the part, not from the part's middle: a stick taken by its end must not
-    // jump to put its middle under the cursor.
+    // Asked of the frozen tree, which the freeze renumbered, and from the cursor level with
+    // the part: a stick taken by its end must not jump to put its middle under the cursor.
     if !add {
         window.tools.supports.anchor = part_position(window.doc, picked)
             .and_then(|part| on_camera_plane(&window.view.camera, viewport, cursor, part));
@@ -420,8 +420,6 @@ fn held_trees(tools: &Tools) -> Vec<(ObjectId, usize)> {
 /// Rebuilds the supports of every object something is held on, in this frame rather than
 /// the next: a support that vanishes under the cursor cannot be aimed.
 fn rebuild_held(window: &mut Window) {
-    let plate = window.tools.supports.table();
-    let raft = window.tools.supports.raft;
     let mut done: Vec<crate::scene::ObjectId> = Vec::new();
     for picked in window.tools.supports.picked.clone() {
         if done.contains(&picked.id) {
@@ -431,7 +429,7 @@ fn rebuild_held(window: &mut Window) {
         if let Some(object) = window.doc.scene.get_mut(picked.id) {
             let mesh = std::sync::Arc::clone(&object.mesh);
             let bvh = std::sync::Arc::clone(&object.bvh);
-            let table = with_own(plate.clone(), &object.own, raft);
+            let table = window.tools.supports.table_for(object);
             object
                 .supports
                 .refresh(&mesh, &bvh, object.transform, &table);

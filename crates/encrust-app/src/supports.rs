@@ -1277,6 +1277,29 @@ mod tests {
     }
 
     #[test]
+    fn a_rafted_model_put_back_on_the_plate_is_not_sunk_into_it_when_its_supports_go() {
+        let mut scene = one_supported_cube();
+        let mut tool = SupportTool::default();
+        tool.raft.enabled = true;
+        tool.settle_on_raft(&mut scene);
+
+        scene.objects_mut()[0].stand_on_plate();
+        tool.settle_on_raft(&mut scene);
+        scene.objects_mut()[0].supports.clear();
+        tool.settle_on_raft(&mut scene);
+
+        let bottom = scene.objects()[0]
+            .world_bounds()
+            .expect("a cube has bounds")
+            .mins
+            .z;
+        assert!(
+            bottom > -1e-5,
+            "a model stood on the plate owes the raft nothing, got its bottom at {bottom} mm"
+        );
+    }
+
+    #[test]
     fn lifting_a_model_that_is_already_there_moves_nothing() {
         let mut scene = one_cube();
         let tool = SupportTool::default();

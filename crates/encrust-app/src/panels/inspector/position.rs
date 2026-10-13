@@ -440,7 +440,13 @@ fn turn(ui: &mut egui::Ui, window: &mut Window, id: ObjectId) {
         // count: the bar runs rather than standing at nought.
         progress_bar(ui, None);
     }
-    let max_overhang_deg = window.tools.supports.profile.max_overhang_deg;
+    let max_overhang_deg = window
+        .doc
+        .scene
+        .get(id)
+        .map_or(window.tools.supports.profile.max_overhang_deg, |object| {
+            window.tools.supports.profile_for(object).max_overhang_deg
+        });
     if oriented
         && let Err(error) = window
             .tools

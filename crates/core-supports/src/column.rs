@@ -311,9 +311,8 @@ pub fn neck_of(placed: &Placed, contact: Vec3, profile: &SupportProfile) -> Vec3
     // the wall across it — goes straight down instead, where that is open.
     let reach_mm = length_mm + profile.pillar_radius_mm();
     let square = tip_direction(placed, contact);
-    // Asked from a hair off the face, the way the head would have left it: a contact on
-    // a wall is on the edge of the solid, and straight down from the edge is neither in
-    // nor out.
+    // Asked from a hair off the face the head leaves: straight down from a contact on a
+    // wall starts on the solid's edge, which is neither in nor out.
     let off_the_face = contact + square * (10.0 * SURFACE_EPSILON_MM);
     let direction = if runs_into(placed, contact, square, reach_mm)
         && !runs_into(placed, off_the_face, -Vec3::Z, reach_mm)

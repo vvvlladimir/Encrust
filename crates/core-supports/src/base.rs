@@ -296,12 +296,8 @@ fn tie(one: &SupportTree, two: &SupportTree, profiles: Profiles) -> Vec<(Vec3, V
         + bracing.start_height_mm;
     let ceiling = here.z.min(there.z);
 
-    // A cross rather than a rung: each step ties the foot of one trunk to the head of
-    // the other and back again, so the pair is braced against leaning either way. See
-    // `docs/decisions/0044`.
-    //
-    // Each end is on its trunk's own axis at that height, not under its root: a trunk a
-    // hand has leant is not where it was grown, and a brace to where it was ties nothing.
+    // A cross, foot of one trunk to head of the other and back (ADR 0044), each end on its
+    // trunk's own axis at that height, not under its root: a hand may have leant it.
     let on = |tree: &SupportTree, z: Scalar| trunk_axis_at(tree, own(tree), z);
     let mut struts = Vec::new();
     let mut z = floor;

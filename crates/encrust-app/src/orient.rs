@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use anyhow::{Result, bail};
-use core_geometry::{Adjacency, Mesh, Vec3, drop_to_plate};
+use core_geometry::{Adjacency, Mesh, Vec3};
 use core_plate::OrientSettings;
 use core_supports::Region;
 
@@ -154,12 +154,7 @@ impl OrientTool {
                             moved += 1;
                         }
                         object.transform = object.transform.turned(by);
-                    }
-                    let Some(bounds) = scene.get(turn.id).and_then(|o| o.world_bounds()) else {
-                        continue;
-                    };
-                    if let Some(object) = scene.get_mut(turn.id) {
-                        object.transform.translation += drop_to_plate(&bounds);
+                        object.stand_on_plate();
                     }
                 }
                 *status = Status::Info(match moved {

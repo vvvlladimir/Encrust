@@ -39,9 +39,8 @@ pub fn profile_section(ui: &mut egui::Ui, window: &mut Window) {
 fn shape(ui: &mut egui::Ui, window: &mut Window) {
     section(ui, "Profile", None, |ui| profile_picker(ui, window, true));
     section(ui, "Part", None, |ui| {
-        // The raft drawn and edited here is the picked model's, or the plate's: it is
-        // lent to the profile while the part is drawn and taken back out after, so the
-        // profile's own never moves. See `docs/decisions/0253`.
+        // The picked model's raft, or the plate's, lent to the profile while it is drawn so
+        // the profile's own never moves. See `docs/decisions/0253`.
         let raft = window.tools.supports.raft_shown(&window.doc.scene);
         let profiles_own = std::mem::replace(&mut window.tools.supports.profile.raft, raft);
         parts(ui, window, profiles_own);
