@@ -1,9 +1,9 @@
 //! What the cursor is over: the model a click selects, the face it lays down or washes, the
 //! corner a measurement snaps to, and the part of a support a ray meets.
 
-use core_supports::{Grab, Profiles, grab};
+use core_supports::{Grab, Profiles, grab_along};
 
-use core_geometry::Vec3;
+use core_geometry::{Vec3, raycast_placed};
 
 use crate::camera::OrbitCamera;
 use crate::measure;
@@ -155,6 +155,11 @@ pub(super) fn aims_elsewhere(scene: &Scene, hit: Option<ObjectId>) -> bool {
     hit.is_some_and(|id| scene.has_selection() && !scene.is_selected(id))
 }
 
+/// How much further along the ray than the model's surface a part may be met and still
+/// be in front of it, millimetres: a part is met on its axis, half its width behind the
+/// side that faces the camera, and a tip is sunk into the surface it holds.
+const BEHIND_MM: f32 = 1.0;
+
 /// How far a ray through `cursor` may pass a part of a support and still take it,
 /// millimetres, measured on that ray as far off as the camera is looking.
 pub(super) fn aim_slack_mm(camera: &OrbitCamera, viewport: egui::Rect, cursor: egui::Pos2) -> f32 {
@@ -174,10 +179,25 @@ pub(super) fn grab_under_cursor(
     let ray = ray_through(&window.view.camera, viewport, cursor)?;
     let slack_mm = aim_slack_mm(&window.view.camera, viewport, cursor);
 
+    // A support behind a model is not under the cursor, and one of a group left out of
+    // the view is not there to be aimed at.
+    let wall_mm = window
+        .doc
+        .scene
+        .here()
+        .filter_map(|object| raycast_placed(&object.mesh, &object.bvh, object.transform, &ray))
+        .map(|hit| hit.distance)
+        .fold(f32::INFINITY, f32::min);
     window.doc.scene.here().find_map(|object| {
         let table = window.tools.supports.table_for(object);
         let profiles = Profiles::new(&table)?;
-        grab(object.supports.trees(), &ray, profiles, slack_mm).map(|it| (object.id, it))
+        let trees = object.supports.trees();
+        let (hit, along_mm) = grab_along(trees, &ray, profiles, slack_mm)?;
+        let hidden = trees
+            .get(hit.tree)
+            .and_then(|tree| window.tools.supports.groups.get(tree.group() as usize))
+            .is_some_and(|group| group.hidden);
+        (!hidden && along_mm <= wall_mm + BEHIND_MM).then_some((object.id, hit))
     })
 }
 

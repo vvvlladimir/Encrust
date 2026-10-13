@@ -1,6 +1,6 @@
 # 0246. Keep an edited support profile on the picked models until it is saved
 
-- **Status:** Accepted
+- **Status:** Accepted; what choosing another profile from the list does is superseded by 0247
 - **Date:** 2026-10-13
 
 ## Context

@@ -28,7 +28,7 @@ pub fn ui(ui: &mut egui::Ui, window: &mut Window) {
         });
     });
     section(ui, "Picked", None, |ui| editing(ui, window));
-    section(ui, "Already done", None, |ui| placed(ui, window.doc));
+    section(ui, "Already done", None, |ui| placed(ui, window));
 }
 
 /// Layer parts with nothing under them, read from the same cut stack the Check tool reads,
@@ -230,8 +230,8 @@ fn running(ui: &mut egui::Ui, job: &SupportJob) {
 }
 
 /// How many supports are on the plate, and the one way to take them all off again.
-fn placed(ui: &mut egui::Ui, doc: &mut Doc) {
-    let (points, columns) = standing(doc);
+fn placed(ui: &mut egui::Ui, window: &mut Window) {
+    let (points, columns) = standing(window.doc);
 
     stats(
         ui,
@@ -254,8 +254,10 @@ fn placed(ui: &mut egui::Ui, doc: &mut Doc) {
 
     ui.add_space(4.0);
     if secondary_button(ui, icon::REMOVE, "Remove every support").clicked() {
-        for object in doc.scene.targets_mut() {
+        for object in window.doc.scene.targets_mut() {
             object.supports.clear();
         }
+        // What was held is gone with the rest.
+        window.tools.supports.picked.clear();
     }
 }

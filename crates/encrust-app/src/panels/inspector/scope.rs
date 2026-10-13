@@ -88,11 +88,13 @@ pub fn editing<T: Clone>(
 /// nothing picked, `draw` edits the plate's. See `docs/decisions/0246`.
 ///
 /// `draw` must not change which group is in hand: the tool holds a model's numbers
-/// while it runs, not the group's.
+/// while it runs, not the group's. A profile chosen from the list is left in
+/// `SupportTool::chosen` and taken up here, once the group's own are back.
 pub fn editing_supports(window: &mut Window, draw: impl FnOnce(&mut Window)) {
     if window.doc.scene.selection().is_empty() {
         draw(window);
         window.tools.supports.adopt_saved(&mut window.doc.scene);
+        window.tools.supports.take_up_chosen(&mut window.doc.scene);
         return;
     }
     let shown = window.tools.supports.shown(&window.doc.scene).clone();
@@ -106,6 +108,7 @@ pub fn editing_supports(window: &mut Window, draw: impl FnOnce(&mut Window)) {
             .keep_on_picked(&edited, &mut window.doc.scene);
     }
     window.tools.supports.adopt_saved(&mut window.doc.scene);
+    window.tools.supports.take_up_chosen(&mut window.doc.scene);
 }
 
 #[cfg(test)]

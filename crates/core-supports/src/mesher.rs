@@ -44,7 +44,10 @@ impl Style {
     /// width whatever it stands on.
     fn of(tree: &SupportTree, profile: &SupportProfile) -> Self {
         Self {
-            small: profile.small_pillar.enabled && tree.landing().on_model && tree.tip_count() == 1,
+            small: profile.small_pillar.enabled
+                && tree.landing().on_model
+                && !tree.landing().on_support
+                && tree.tip_count() == 1,
         }
     }
 
@@ -239,7 +242,8 @@ fn trunk(tree: &SupportTree, profile: &SupportProfile, style: Style) -> Tube {
 
     let mut rings = Vec::with_capacity(8);
     head(&mut rings, root, profile, style, length);
-    let tail = if landing.on_model && !style.small {
+    // A trunk run into another support ends plain, inside the trunk it joins.
+    let tail = if landing.on_model && !landing.on_support && !style.small {
         foot_tip(&mut rings, length, base_mm, profile).then(|| top + direction * length)
     } else {
         push(&mut rings, length, base_mm);
@@ -833,8 +837,9 @@ mod tests {
         use core_geometry::Quat;
         use std::f32::consts::PI;
 
-        // The test ramp turned over, so the face that looked up is now an overhang.
-        let model = ramp(4.0, 10.0);
+        // A shallow ramp turned over, so the face that looked up is an overhang within 45
+        // degrees of level, which a tip still leaves square on.
+        let model = ramp(10.0, 4.0);
         let transform = Transform {
             rotation: Quat::from_rotation_x(PI),
             translation: Vec3::new(0.0, 0.0, 30.0),
@@ -843,15 +848,15 @@ mod tests {
         let profile = profile();
         let contact = transform
             .to_matrix()
-            .transform_point3(Vec3::new(2.0, 0.0, 5.0));
+            .transform_point3(Vec3::new(5.0, 0.0, 2.0));
         let trees = trees_on(
-            &[SupportPoint::new(Vec3::new(2.0, 0.0, 5.0))],
+            &[SupportPoint::new(Vec3::new(5.0, 0.0, 2.0))],
             &model,
             transform,
             Profiles::single(&profile),
         );
 
-        let normal = Vec3::new(-10.0, 0.0, -4.0).normalize();
+        let normal = Vec3::new(-4.0, 0.0, -10.0).normalize();
         let mesh = meshed(&trees, Profiles::single(&profile));
         let apex = mesh
             .vertices

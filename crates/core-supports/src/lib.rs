@@ -41,7 +41,7 @@ pub use group::Profiles;
 pub use low::low_points;
 pub use mesher::{FOOT_BEVEL, FOOT_TAPER, mesh_groups, mesh_trees};
 pub use model::ModelSupports;
-pub use pick::{Grab, Part, grab, support_under};
+pub use pick::{Grab, Part, grab, grab_along, support_under};
 pub use placed::Placed;
 pub use project::{ProjectSettings, project};
 pub use raft::{GRID_BAR_MM, GRID_HOLE_MM, LIP_WIDTH_MM};

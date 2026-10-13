@@ -485,8 +485,10 @@ impl ModelSupports {
         }
     }
 
+    /// Takes every support away: the points and the trees a hand has frozen alike.
     pub fn clear(&mut self) {
         self.points.clear();
+        self.frozen.clear();
         self.built = None;
     }
 
@@ -592,6 +594,21 @@ mod tests {
         assert!(supports.is_empty());
         assert!(supports.meshes().is_none());
         assert!(supports.trees().is_empty());
+    }
+
+    #[test]
+    fn clearing_takes_the_supports_a_hand_froze_as_well() {
+        let mut supports = with_one_support(Transform::default());
+        supports
+            .freeze(0, Transform::default())
+            .expect("the one tree is there to freeze");
+        assert_eq!(supports.frozen().len(), 1);
+
+        supports.clear();
+        refresh(&mut supports, &nothing(), Transform::default());
+
+        assert!(supports.frozen().is_empty());
+        assert_eq!(supports.standing(), 0, "nothing is left standing");
     }
 
     #[test]

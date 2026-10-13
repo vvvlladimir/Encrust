@@ -139,6 +139,7 @@ impl SupportTree {
             base,
             on_model: false,
             pad_offset: Vec2::ZERO,
+            on_support: false,
         };
     }
 

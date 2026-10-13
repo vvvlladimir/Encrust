@@ -1,6 +1,6 @@
 # 125. Leave the surface along its normal, and merge from the neck
 
-- **Status:** Accepted
+- **Status:** Accepted; a head past 45 degrees is superseded by 0249
 - **Date:** 2026-09-29
 
 ## Context

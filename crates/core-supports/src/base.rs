@@ -201,9 +201,11 @@ pub(crate) fn braces(
 
 /// Whether `tree` stands tall enough to carry one level of bracing.
 pub(crate) fn braceable(tree: &SupportTree, profile: &SupportProfile) -> bool {
+    // A tree leant onto another support is tied to it already.
     let bracing = &profile.bracing;
-    tree.root().position.z - tree.landing().bottom_z(profile)
-        >= bracing.start_height_mm + bracing.rise_mm
+    !tree.landing().on_support
+        && tree.root().position.z - tree.landing().bottom_z(profile)
+            >= bracing.start_height_mm + bracing.rise_mm
 }
 
 /// The pairs of trunks worth tying: the Gabriel graph of the trunks tall enough to brace,

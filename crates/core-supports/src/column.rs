@@ -10,7 +10,7 @@ use crate::clear::{Beam, MIN_BODY_MM, clear};
 use crate::mesher::FOOT_BEVEL;
 
 /// Plate coordinates put the plate surface at z = 0; see `docs/architecture.md`.
-const PLATE_Z_MM: Scalar = 0.0;
+pub(crate) const PLATE_Z_MM: Scalar = 0.0;
 
 /// How far below the contact a downward ray starts, so that it does not immediately hit
 /// the face the contact sits on. A micrometre is under any printable feature and well
@@ -28,9 +28,13 @@ const SINGULAR: Scalar = 1e-12;
 /// space: a click lands on it to within float error.
 const ON_SURFACE_MM: Scalar = 1e-3;
 
-/// How far a tip leaving a face that does not look down falls per unit it runs out, and the
-/// least a face has to lean for the tip to have an out to run along at all.
-const OUT_DROP: Scalar = 0.25;
+/// How much ground anything that carries a support may cover per millimetre it descends,
+/// branches apart: 45 degrees off vertical, past which a strut is printed as an overhang
+/// of its own and sags. A tip's head and a leaning trunk are held to it alike; a branch
+/// keeps its profile's angle. See `docs/decisions/0249`.
+pub(crate) const MAX_LEAN_PER_DROP: Scalar = 1.0;
+
+/// The least a face has to lean for a tip leaving it to have an out to run along at all.
 const OUT_MIN: Scalar = 0.05;
 
 /// How far a face a support stands on may lean from horizontal, degrees. Past this the
@@ -71,13 +75,21 @@ pub struct Landing {
     /// without it reads as a pad under its trunk. See `docs/decisions/0239`.
     #[serde(default)]
     pub pad_offset: Vec2,
+    /// What it landed on is the trunk of a thicker support of another group, which it
+    /// runs into at `base`; `on_model` is set with it, since it needs no foot either. A
+    /// file without it reads as a landing on the model itself. See `docs/decisions/0248`.
+    #[serde(default)]
+    pub on_support: bool,
 }
 
 impl Landing {
     /// Height at which the pillar body ends: the top of the foot, or the surface it sank
     /// into.
     pub fn pillar_bottom_z(&self, profile: &SupportProfile) -> Scalar {
-        if self.on_model {
+        if self.on_support {
+            // On the axis of the trunk it joins, which is already inside that trunk.
+            self.base.z
+        } else if self.on_model {
             // Sunk into what it stands on, so the two cure as one solid.
             self.base.z - profile.landing_depth_mm()
         } else {
@@ -212,6 +224,7 @@ pub fn landing(
                     base: hit.point,
                     on_model: true,
                     pad_offset: Vec2::ZERO,
+                    on_support: false,
                 },
                 hit.point.z + touch_mm + SURFACE_EPSILON_MM,
                 radius_mm,
@@ -226,6 +239,7 @@ pub fn landing(
                 base,
                 on_model: false,
                 pad_offset: pad_offset(placed, base, base_mm, profile)?,
+                on_support: false,
             };
             let bottom_z = landing.pillar_bottom_z(profile);
             (landing, bottom_z, base_mm)
@@ -252,8 +266,18 @@ pub fn landing(
 /// The tip is shortened rather than allowed to eat the room the body needs above the
 /// plate, which is what keeps a contact close to the plate standing at all.
 pub fn neck_of(placed: &Placed, contact: Vec3, profile: &SupportProfile) -> Vec3 {
-    let direction = tip_direction(placed, contact);
     let length_mm = profile.top_length_mm();
+    // A head that would run into the model — a contact in a crevice, whose face looks at
+    // the wall across it — goes straight down instead, where that is open.
+    let reach_mm = length_mm + profile.pillar_radius_mm();
+    let square = tip_direction(placed, contact);
+    let direction = if runs_into(placed, contact, square, reach_mm)
+        && !runs_into(placed, contact, -Vec3::Z, reach_mm)
+    {
+        -Vec3::Z
+    } else {
+        square
+    };
     let drop_mm = -direction.z * length_mm;
     let room_mm =
         (contact.z - PLATE_Z_MM - profile.base_height_mm() - MIN_PILLAR_HEIGHT_MM).max(0.0);
@@ -263,6 +287,13 @@ pub fn neck_of(placed: &Placed, contact: Vec3, profile: &SupportProfile) -> Vec3
         length_mm
     };
     contact + direction * length_mm
+}
+
+/// Whether a head leaving `contact` along `direction` meets the model within `reach_mm`.
+fn runs_into(placed: &Placed, contact: Vec3, direction: Vec3, reach_mm: Scalar) -> bool {
+    let ray = Ray::new(contact + direction * SURFACE_EPSILON_MM, direction);
+    raycast_placed(placed.model, placed.bvh, placed.transform, &ray)
+        .is_some_and(|hit| hit.distance < reach_mm)
 }
 
 /// Which way a tip leaves the surface at `contact`: the outward normal of a face that looks
@@ -313,21 +344,28 @@ fn tip_direction(placed: &Placed, contact: Vec3) -> Vec3 {
                 },
             );
     }
-    match (normal.z < 0.0, on_surface) {
-        (true, _) => normal,
-        (false, true) => out_and_down(normal),
-        (false, false) => -Vec3::Z,
+    if normal.z < 0.0 || on_surface {
+        out_and_down(normal)
+    } else {
+        -Vec3::Z
     }
 }
 
-/// Off a face that does not look down: square off it as nearly as a tip leaving downwards
-/// can, its rise traded for a quarter as much fall as it runs out.
+/// The way a tip leaves a face with this outward `normal`: along the normal where that
+/// descends at least as fast as [`MAX_LEAN_PER_DROP`] lets it run out, and otherwise out
+/// the way the normal points and down as fast as that. So a face that looks down is met
+/// square on, and a wall, a slope looking up or a face barely past vertical is left at 45
+/// degrees rather than sideways.
 fn out_and_down(normal: Vec3) -> Vec3 {
     let across = normal.truncate();
-    if across.length() <= OUT_MIN {
+    let run = across.length();
+    if run <= OUT_MIN {
         return -Vec3::Z;
     }
-    across.extend(-OUT_DROP * across.length()).normalize()
+    if -normal.z * MAX_LEAN_PER_DROP >= run {
+        return normal;
+    }
+    across.extend(-run / MAX_LEAN_PER_DROP).normalize()
 }
 
 /// How many directions and how many reaches a pad is tried at round its trunk before the
@@ -396,11 +434,22 @@ fn lean_of(normal: Vec3) -> Option<Scalar> {
 }
 
 /// Whether `body`, a trunk dropped from its joint, has the model out of its way.
+///
+/// The sweep begins the body's own width and clearance below its top. The top is where
+/// a head leaves the face it holds, and a head leaning at 45 degrees ends that near the
+/// face: asking for clear air all round it there refuses the very surface it stands
+/// under, which is how a contact under a rounded underside was left with no column.
 fn stands_clear(placed: &Placed, body: &Beam, profile: &SupportProfile) -> bool {
     if body.from.z - body.to.z < MIN_BODY_MM {
         return true;
     }
-    clear(placed, &body.with_clearance(profile.clearance_mm))
+    let under_the_head = body.from_radius_mm + profile.clearance_mm;
+    clear(
+        placed,
+        &body
+            .with_clearance(profile.clearance_mm)
+            .trimmed(under_the_head),
+    )
 }
 
 #[cfg(test)]
@@ -789,11 +838,40 @@ mod tests {
 
     #[test]
     fn a_tip_leaves_a_sloping_face_along_its_normal() {
+        // The face rises 4 over a run of 10, so once turned over its normal lies at
+        // (-4, 0, -10): 22 degrees off straight down.
+        let along = tip_under_a_turned_ramp(10.0, 4.0);
+        let expected = Vec3::new(-4.0, 0.0, -10.0).normalize();
+        assert!(
+            along.normalize().abs_diff_eq(expected, 1e-4),
+            "the tip leaves the face square on, got {}",
+            along.normalize()
+        );
+        assert!(
+            (along.length() - profile().top_length_mm()).abs() < 1e-4,
+            "the tip is one top segment long"
+        );
+    }
+
+    #[test]
+    fn a_tip_under_a_face_near_vertical_leaves_at_45_degrees_and_no_flatter() {
+        // Rising 10 over a run of 4: the normal is 68 degrees off straight down, and a
+        // head along it would be printed nearly level.
+        let along = tip_under_a_turned_ramp(4.0, 10.0).normalize();
+        let expected = Vec3::new(-1.0, 0.0, -1.0).normalize();
+        assert!(
+            along.abs_diff_eq(expected, 1e-4),
+            "the head runs out the way the face looks and falls as fast, got {along}"
+        );
+    }
+
+    /// From the contact to the neck of a tip in the middle of the sloping face of
+    /// `ramp(run, rise)` turned over, so that the face is an overhang.
+    fn tip_under_a_turned_ramp(run: Scalar, rise: Scalar) -> Vec3 {
         use core_geometry::Quat;
         use std::f32::consts::PI;
 
-        // The test ramp turned over, so the face that looked up is now an overhang.
-        let model = ramp(4.0, 10.0);
+        let model = ramp(run, rise);
         let transform = Transform {
             rotation: Quat::from_rotation_x(PI),
             translation: Vec3::new(0.0, 0.0, 30.0),
@@ -801,26 +879,30 @@ mod tests {
         };
         let bvh = Bvh::build(&model);
         let placed = Placed::new(&model, &bvh, transform);
-        let profile = profile();
-
-        // The middle of the sloping face, brought out into plate coordinates.
         let contact = transform
             .to_matrix()
-            .transform_point3(Vec3::new(2.0, 0.0, 5.0));
-        let neck = neck_of(&placed, contact, &profile);
-        let along = neck - contact;
+            .transform_point3(Vec3::new(run / 2.0, 0.0, rise / 2.0));
+        neck_of(&placed, contact, &profile()) - contact
+    }
 
-        // The face rises 10 over a run of 4, so its normal lies at (-10, 0, 4) before the
-        // turn and at (-10, 0, -4) after it.
-        let expected = Vec3::new(-10.0, 0.0, -4.0).normalize();
+    #[test]
+    fn a_head_that_would_run_into_a_wall_across_from_it_goes_straight_down() {
+        // A contact on the side of one wall, with another standing a millimetre across.
+        let mut model = box_mesh(Vec3::new(0.0, -5.0, 0.0), Vec3::new(1.0, 5.0, 20.0));
+        let across = box_mesh(Vec3::new(2.0, -5.0, 0.0), Vec3::new(3.0, 5.0, 20.0));
+        let offset = model.vertices.len() as u32;
+        model.vertices.extend_from_slice(&across.vertices);
+        model
+            .faces
+            .extend(across.faces.iter().map(|face| face.map(|at| at + offset)));
+        let bvh = Bvh::build(&model);
+        let placed = Placed::new(&model, &bvh, Transform::default());
+
+        let contact = Vec3::new(1.0, 0.0, 10.0);
+        let along = (neck_of(&placed, contact, &profile()) - contact).normalize();
         assert!(
-            along.normalize().abs_diff_eq(expected, 1e-4),
-            "the tip leaves the face square on, got {}",
-            along.normalize()
-        );
-        assert!(
-            (along.length() - profile.top_length_mm()).abs() < 1e-4,
-            "the tip is one top segment long"
+            along.abs_diff_eq(-Vec3::Z, 1e-4),
+            "out and down from this wall is into the other one, got {along}"
         );
     }
 

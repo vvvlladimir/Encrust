@@ -297,6 +297,8 @@ struct Standing {
     below: Option<Parts>,
     /// Supports handed to the run that the climb has not reached yet, highest last.
     pending: Vec<(Vec3, [i32; 2])>,
+    /// Supports the climb has reached whose piece has not appeared at their cell yet.
+    waiting: Vec<(Vec3, [i32; 2])>,
     /// Side of one bucket, millimetres: the radius over which a support holds.
     radius_mm: Scalar,
     /// How far above a place a support may stand and still hold it. A contact is put a
@@ -326,6 +328,7 @@ impl Standing {
             lows: Lows::new(lows, grid),
             below: None,
             pending,
+            waiting: Vec::new(),
             radius_mm: config.coverage_radius_mm.max(Scalar::MIN_POSITIVE),
             above_mm: layer_height_mm,
         }
@@ -429,18 +432,27 @@ impl Standing {
     }
 
     /// Takes on every support handed to the run that the climb has reached.
+    ///
+    /// A seed the run itself placed sits a layer under the surface it holds, so the layer
+    /// that first reaches it has nothing at its cell yet: it waits for the piece to
+    /// appear, for as long as it could still hold one, rather than being lost and
+    /// doubled up on.
     fn take_seeds(&mut self, parts: &Parts, z: Scalar) {
-        while let Some((seed, cell)) = self.pending.last().copied() {
-            if seed.z > z + self.above_mm {
-                break;
-            }
-            self.pending.pop();
-            if let Some(piece) = parts.at(cell[0], cell[1]) {
-                self.held[piece as usize].add(seed, self.radius_mm);
-                // A part the hand has held is held as its owner wants it, see ADR 0095.
-                self.tips[piece as usize] = STEADY;
-            }
+        while let Some(seed) = self.pending.pop_if(|seed| seed.0.z <= z + self.above_mm) {
+            self.waiting.push(seed);
         }
+        let floor_z = z - self.radius_mm;
+        let mut waiting = std::mem::take(&mut self.waiting);
+        waiting.retain(|(seed, cell)| {
+            let Some(piece) = parts.at(cell[0], cell[1]) else {
+                return seed.z >= floor_z;
+            };
+            self.held[piece as usize].add(*seed, self.radius_mm);
+            // A part the hand has held is held as its owner wants it, see ADR 0095.
+            self.tips[piece as usize] = STEADY;
+            false
+        });
+        self.waiting = waiting;
     }
 
     /// The pieces of the layer climbed to that nothing holds, by their number.
@@ -1021,6 +1033,37 @@ mod tests {
             seeded.is_empty(),
             "a hand-placed support must not be doubled up on, got {seeded:?}"
         );
+    }
+
+    #[test]
+    fn a_second_run_over_what_the_first_one_placed_adds_nothing() {
+        // A slab and a ball: flat undersides, where a contact sits right under the first
+        // layer, and a curved one, where the layers it holds go on widening above it.
+        for mesh in [
+            box_mesh(Vec3::new(0.0, 0.0, 10.0), Vec3::new(20.0, 20.0, 14.0)),
+            sphere(8.0, 6.0),
+        ] {
+            let stack = slice(&mesh);
+            let first = supports_for(&mesh);
+            assert!(!first.is_empty(), "the part needs holding");
+
+            let again = generate_supports(
+                &stack,
+                LAYER_HEIGHT_MM,
+                &profile(),
+                &first,
+                &[],
+                None,
+                &mut |_| true,
+            );
+            assert!(
+                again.is_empty(),
+                "every place is held by the {} supports already there, and the run put \
+                 {} more beside them",
+                first.len(),
+                again.len()
+            );
+        }
     }
 
     #[test]

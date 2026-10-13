@@ -6,7 +6,7 @@ use crate::panels::support_diagram::{self, Part};
 use crate::panels::support_fields::{Group, saved_as};
 use crate::settings::keep_support;
 use crate::ui::{
-    Segment, Segmented, icon, icon_button, secondary_button, section, subheading,
+    Segment, Segmented, hint, icon, icon_button, secondary_button, section, subheading,
     subheading_with_switch, theme,
 };
 
@@ -31,12 +31,12 @@ pub fn ui(ui: &mut egui::Ui, window: &mut Window) {
 /// for editing from any tool that places supports.
 pub fn profile_section(ui: &mut egui::Ui, window: &mut Window) {
     scope::editing_supports(window, |window| {
-        section(ui, "Profile", None, |ui| profile_picker(ui, window));
+        section(ui, "Profile", None, |ui| profile_picker(ui, window, false));
     });
 }
 
 fn shape(ui: &mut egui::Ui, window: &mut Window) {
-    section(ui, "Profile", None, |ui| profile_picker(ui, window));
+    section(ui, "Profile", None, |ui| profile_picker(ui, window, true));
     section(ui, "Part", None, |ui| {
         let profile = &mut window.tools.supports.profile;
         let saved =
@@ -90,7 +90,7 @@ where
 
 /// Which saved profile the group in hand is built to, and the way to the screen where
 /// profiles are made, edited and thrown away.
-fn profile_picker(ui: &mut egui::Ui, window: &mut Window) {
+fn profile_picker(ui: &mut egui::Ui, window: &mut Window, with_manage: bool) {
     let catalogue = &window.machine.slicing.catalogue;
     let current = &window.tools.supports.profile;
     let matching = catalogue
@@ -104,9 +104,15 @@ fn profile_picker(ui: &mut egui::Ui, window: &mut Window) {
 
     let mut picked = None;
     let mut manage = false;
+    // The way to the profiles' own screen is on the Shape tool, where they are edited.
+    let beside = if with_manage {
+        theme::ICON_SIZE + theme::ITEM_GAP
+    } else {
+        0.0
+    };
     ui.horizontal(|ui| {
         egui::ComboBox::from_id_salt("support-profile")
-            .width((ui.available_width() - theme::ICON_SIZE - theme::ITEM_GAP).max(80.0))
+            .width((ui.available_width() - beside).max(80.0))
             .selected_text(shown)
             .show_ui(ui, |ui| {
                 for entry in catalogue.supports() {
@@ -116,11 +122,29 @@ fn profile_picker(ui: &mut egui::Ui, window: &mut Window) {
                     }
                 }
             });
-        manage = icon_button(ui, icon::SETTINGS, "Edit support profiles").clicked();
+        if with_manage {
+            manage = icon_button(ui, icon::SETTINGS, "Edit support profiles").clicked();
+        }
     });
 
-    if let Some(profile) = picked {
-        window.tools.supports.profile = profile;
+    // Not the numbers in hand: another profile is another kind of support, and what
+    // stands stays as it was built. See `docs/decisions/0247`.
+    if picked.is_some() {
+        window.tools.supports.chosen = picked;
+    }
+    let active = window.tools.supports.active;
+    match window.tools.supports.group_holds(active, &window.doc.scene) {
+        0 => {}
+        1 => hint(
+            ui,
+            "1 support is built to this. Another profile starts a kind of its own.",
+        ),
+        holds => hint(
+            ui,
+            &format!(
+                "{holds} supports are built to this. Another profile starts a kind of its own."
+            ),
+        ),
     }
     // Both always there, and dead while there is nothing to save: a button that comes and
     // goes moves everything under it.

@@ -112,6 +112,7 @@ fn restore_supports(state: SupportState, supports: &mut SupportTool) {
             .map(|group| SupportGroup {
                 name: group.name,
                 profile: group.profile,
+                hidden: false,
             })
             .collect();
         supports.active = state.active.min(supports.groups.len() as u16 - 1);

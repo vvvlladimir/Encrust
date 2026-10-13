@@ -9,6 +9,9 @@ use std::collections::BTreeMap;
 use crate::scene::{ObjectId, Scene, SceneObject};
 use crate::status::Status;
 
+/// What the one group a plate starts with is called until a profile is chosen for it.
+const FIRST_GROUP: &str = "Default";
+
 /// The group the Check tool stands island supports in, apart from the ones built by hand.
 pub const ISLANDS_GROUP: &str = "Islands";
 
@@ -53,6 +56,9 @@ impl Placing {
 pub struct SupportGroup {
     pub name: String,
     pub profile: SupportProfile,
+    /// Left out of the view, though not out of the print: a way to see past one kind of
+    /// support to another.
+    pub hidden: bool,
 }
 
 /// One piece of one frozen support: what the Edit mode selects, shows picked and carries.
@@ -96,6 +102,8 @@ pub struct SupportTool {
     pub job: Option<SupportJob>,
     /// A profile the panel has just saved, until the plate has taken it on.
     pub saved: Option<SupportProfile>,
+    /// A profile the panel's list has just had chosen, until a group has taken it up.
+    pub chosen: Option<SupportProfile>,
     /// The group the panel is asking about before it takes it away, and the supports it
     /// holds, or `None` when it is asking nothing.
     pub dropping: Option<(u16, usize)>,
@@ -106,8 +114,9 @@ impl Default for SupportTool {
         Self {
             profile: SupportProfile::default(),
             groups: vec![SupportGroup {
-                name: "Default".to_owned(),
+                name: FIRST_GROUP.to_owned(),
                 profile: SupportProfile::default(),
+                hidden: false,
             }],
             active: 0,
             picked: Vec::new(),
@@ -120,6 +129,7 @@ impl Default for SupportTool {
             last_daub: None,
             job: None,
             saved: None,
+            chosen: None,
             dropping: None,
         }
     }
@@ -202,6 +212,11 @@ impl SupportTool {
             .collect()
     }
 
+    /// Which groups are left out of the view, by group number.
+    pub fn hidden(&self) -> Vec<bool> {
+        self.groups.iter().map(|group| group.hidden).collect()
+    }
+
     /// Every group's profile as `object` is built to: its own where it keeps one, the
     /// plate's where it does not. What every rebuild of a model's supports is given.
     pub fn table_for(&self, object: &SceneObject) -> Vec<SupportProfile> {
@@ -266,6 +281,80 @@ impl SupportTool {
         }
     }
 
+    /// Takes up the profile the panel's list had chosen: the group built to it becomes
+    /// the one in hand, and one is made for it when there is none. What already stands
+    /// stays in the group it stands in, built as it was. See `docs/decisions/0247`.
+    ///
+    /// Chosen again, the profile in hand goes back to what is saved, on the picked models
+    /// too. A group nothing stands in is retuned instead of left behind empty.
+    pub fn take_up_chosen(&mut self, scene: &mut Scene) {
+        let Some(profile) = self.chosen.take() else {
+            return;
+        };
+        let table = self.table();
+        if self.profile.name == profile.name {
+            self.profile = profile;
+            for id in scene.selection().to_vec() {
+                if let Some(object) = scene.get_mut(id) {
+                    object.own.supports.remove(&self.active);
+                }
+            }
+            return;
+        }
+        if let Some(group) = table.iter().position(|kind| kind.name == profile.name) {
+            self.choose_group(group as u16);
+            return;
+        }
+
+        let active = self.active as usize;
+        if self.group_holds(self.active, scene) == 0 && self.groups[active].name != ISLANDS_GROUP {
+            // Named for its profile, or still the name it was born with: follow the new one.
+            let named_for_it = [self.profile.name.as_str(), FIRST_GROUP]
+                .contains(&self.groups[active].name.as_str());
+            if named_for_it {
+                self.groups[active].name.clone_from(&profile.name);
+            }
+            for object in scene.objects_mut() {
+                object.own.supports.remove(&self.active);
+            }
+            self.groups[active].profile = profile.clone();
+            self.profile = profile;
+            return;
+        }
+        self.groups[active].profile = self.profile.clone();
+        self.groups.push(SupportGroup {
+            name: profile.name.clone(),
+            profile: profile.clone(),
+            hidden: false,
+        });
+        self.active = (self.groups.len() - 1) as u16;
+        self.profile = profile;
+    }
+
+    /// Builds `group` to `profile` instead of the one it had: every support in it is
+    /// rebuilt, on every model, and a model's own numbers for it are let go. The group
+    /// takes the profile's name unless the user had given it one.
+    pub fn retune_group(&mut self, group: u16, profile: SupportProfile, scene: &mut Scene) {
+        let Some(entry) = self.groups.get_mut(group as usize) else {
+            return;
+        };
+        let was = if group == self.active {
+            self.profile.name.clone()
+        } else {
+            entry.profile.name.clone()
+        };
+        if entry.name == was || entry.name == FIRST_GROUP {
+            entry.name.clone_from(&profile.name);
+        }
+        entry.profile = profile.clone();
+        if group == self.active {
+            self.profile = profile;
+        }
+        for object in scene.objects_mut() {
+            object.own.supports.remove(&group);
+        }
+    }
+
     /// Makes `group` the one new supports join and the one the panel's fields edit,
     /// keeping what was edited of the group being left.
     pub fn choose_group(&mut self, group: u16) {
@@ -283,6 +372,7 @@ impl SupportTool {
         self.groups.push(SupportGroup {
             name: format!("Group {}", self.groups.len() + 1),
             profile: self.profile.clone(),
+            hidden: false,
         });
         self.active = (self.groups.len() - 1) as u16;
     }
@@ -296,13 +386,14 @@ impl SupportTool {
             .sum()
     }
 
-    /// Takes a group away, and with it every support built to it. The default group
-    /// itself cannot go: something has to hold the raft's numbers.
+    /// Takes a group away, and with it every support built to it. The last one cannot
+    /// go: something has to hold the raft's numbers, and when the first goes the one
+    /// after it takes its place.
     ///
     /// Returns how many supports went. A group is a shape, so its supports leave with it
     /// rather than being rebuilt to another group's numbers; `Cmd+Z` puts them back.
     pub fn remove_group(&mut self, group: u16, scene: &mut Scene) -> usize {
-        if group == 0 || group as usize >= self.groups.len() {
+        if self.groups.len() <= 1 || group as usize >= self.groups.len() {
             return 0;
         }
         if self.active != group {
@@ -369,6 +460,7 @@ impl SupportTool {
         self.groups.push(SupportGroup {
             name: ISLANDS_GROUP.to_owned(),
             profile: self.profile.clone(),
+            hidden: false,
         });
         (self.groups.len() - 1) as u16
     }
@@ -535,6 +627,90 @@ mod tests {
             summary,
         ));
         scene
+    }
+
+    /// The cube with one support under it in the first group.
+    fn one_supported_cube() -> Scene {
+        let mut scene = one_cube();
+        let object = &mut scene.objects_mut()[0];
+        object.transform.translation.z = 10.0;
+        let transform = object.transform;
+        object.supports.add(Vec3::new(0.5, 0.5, 10.0), transform, 0);
+        scene
+    }
+
+    #[test]
+    fn another_profile_starts_a_kind_of_its_own_and_leaves_what_stands_alone() {
+        let mut scene = one_supported_cube();
+        let mut tool = SupportTool::default();
+        let first = tool.profile.clone();
+        let other = SupportProfile::heavy();
+        assert_ne!(first.name, other.name);
+
+        tool.chosen = Some(other.clone());
+        tool.take_up_chosen(&mut scene);
+
+        assert_eq!(tool.groups.len(), 2, "what stands keeps its group");
+        assert_eq!(tool.active, 1, "and the next support joins the new one");
+        assert_eq!(tool.groups[1].name, other.name);
+        assert_eq!(tool.table(), vec![first, other]);
+        assert_eq!(scene.objects()[0].supports.group_count(0), 1);
+    }
+
+    #[test]
+    fn a_group_nothing_stands_in_is_retuned_rather_than_left_behind() {
+        let mut scene = one_cube();
+        let mut tool = SupportTool::default();
+        let other = SupportProfile::heavy();
+
+        tool.chosen = Some(other.clone());
+        tool.take_up_chosen(&mut scene);
+
+        assert_eq!(tool.groups.len(), 1);
+        assert_eq!(tool.groups[0].name, other.name);
+        assert_eq!(tool.table(), vec![other]);
+    }
+
+    #[test]
+    fn a_profile_a_group_is_built_to_is_that_group_again() {
+        let mut scene = one_supported_cube();
+        let mut tool = SupportTool::default();
+        let first = tool.profile.clone();
+        tool.chosen = Some(SupportProfile::heavy());
+        tool.take_up_chosen(&mut scene);
+
+        tool.chosen = Some(first);
+        tool.take_up_chosen(&mut scene);
+
+        assert_eq!(
+            tool.groups.len(),
+            2,
+            "no third group for a profile already there"
+        );
+        assert_eq!(tool.active, 0);
+    }
+
+    #[test]
+    fn the_profile_in_hand_chosen_again_goes_back_to_what_is_saved() {
+        let mut scene = one_supported_cube();
+        let id = scene.objects()[0].id;
+        scene.select(Some(id));
+        let mut tool = SupportTool::default();
+        let saved = tool.profile.clone();
+        tool.profile.middle.diameter_mm += 0.3;
+        let mut own = saved.clone();
+        own.raft.enabled = !own.raft.enabled;
+        scene.objects_mut()[0].own.supports.insert(0, own);
+
+        tool.chosen = Some(saved.clone());
+        tool.take_up_chosen(&mut scene);
+
+        assert_eq!(tool.profile, saved);
+        assert!(
+            scene.objects()[0].own.supports.is_empty(),
+            "the picked model goes back with it"
+        );
+        assert_eq!(tool.groups.len(), 1);
     }
 
     /// An axis-aligned cube spanning 0..1, twelve triangles.
@@ -848,11 +1024,57 @@ mod tests {
     }
 
     #[test]
-    fn the_default_group_cannot_be_dropped() {
+    fn the_last_group_cannot_be_dropped() {
         let mut scene = one_cube();
         let mut tool = SupportTool::default();
         tool.remove_group(0, &mut scene);
         assert_eq!(tool.groups.len(), 1, "something has to hold the raft");
+    }
+
+    #[test]
+    fn the_first_group_goes_and_the_next_takes_its_place() {
+        let mut scene = one_supported_cube();
+        let transform = scene.objects()[0].transform;
+        let mut tool = SupportTool {
+            chosen: Some(SupportProfile::heavy()),
+            ..SupportTool::default()
+        };
+        tool.take_up_chosen(&mut scene);
+        scene.objects_mut()[0]
+            .supports
+            .add(Vec3::new(0.2, 0.2, 10.0), transform, 1);
+
+        let gone = tool.remove_group(0, &mut scene);
+
+        assert_eq!(gone, 1, "the first group's one support went with it");
+        assert_eq!(tool.groups.len(), 1);
+        assert_eq!(tool.groups[0].name, SupportProfile::heavy().name);
+        assert_eq!(tool.profile, SupportProfile::heavy());
+        assert_eq!(
+            scene.objects()[0].supports.group_count(0),
+            1,
+            "what stood in the second group now stands in the first"
+        );
+    }
+
+    #[test]
+    fn a_group_is_rebuilt_to_another_profile_and_named_for_it() {
+        let mut scene = one_supported_cube();
+        let mut tool = SupportTool::default();
+        let mut own = tool.profile.clone();
+        own.raft.enabled = !own.raft.enabled;
+        scene.objects_mut()[0].own.supports.insert(0, own);
+
+        tool.retune_group(0, SupportProfile::heavy(), &mut scene);
+
+        assert_eq!(tool.table(), vec![SupportProfile::heavy()]);
+        assert_eq!(tool.groups[0].name, SupportProfile::heavy().name);
+        assert!(scene.objects()[0].own.supports.is_empty());
+        assert_eq!(
+            scene.objects()[0].supports.group_count(0),
+            1,
+            "the support stays, in the group it was in"
+        );
     }
 
     #[test]

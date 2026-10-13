@@ -675,11 +675,28 @@ mod tests {
 
         let back = round_trip(&saved);
         let object = &back.scene.objects()[0];
-        assert_eq!(
-            object.supports.trees(),
-            standing,
-            "every tree is the one saved"
-        );
+        let trees = object.supports.trees();
+        assert_eq!(trees.len(), standing.len(), "every tree comes back");
+        // A tree is kept in the model's own space and stood up again through the model's
+        // placement, which is two matrices and the last digit of a float.
+        for (tree, was) in trees.iter().zip(&standing) {
+            assert_eq!(tree.group(), was.group());
+            assert_eq!(tree.landing().on_model, was.landing().on_model);
+            assert!(
+                tree.landing().base.abs_diff_eq(was.landing().base, 1e-4),
+                "a tree stands where it stood"
+            );
+            assert_eq!(tree.nodes().len(), was.nodes().len());
+            for (node, old) in tree.nodes().iter().zip(was.nodes()) {
+                assert_eq!((node.parent, node.point), (old.parent, old.point));
+                assert!(
+                    node.position.abs_diff_eq(old.position, 1e-4),
+                    "every tree is the one saved: {} against {}",
+                    node.position,
+                    old.position
+                );
+            }
+        }
         assert!(
             object
                 .supports

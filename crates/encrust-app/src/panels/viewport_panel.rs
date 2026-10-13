@@ -206,6 +206,7 @@ fn paint_plate(ui: &egui::Ui, window: &mut Window, rect: egui::Rect) {
     );
     crate::render::prime_label(ui.painter());
     ui.painter().rect_filled(rect, 0.0, theme::colors().sunken);
+    let hidden_groups = window.tools.supports.hidden();
     let callback = ViewportCallback::new(
         &window.doc.scene,
         &window.doc.plate,
@@ -229,6 +230,7 @@ fn paint_plate(ui: &egui::Ui, window: &mut Window, rect: egui::Rect) {
             },
             textures: textures.as_ref(),
             cut_line: cut_line(window),
+            hidden_groups: &hidden_groups,
         },
         rect,
     );

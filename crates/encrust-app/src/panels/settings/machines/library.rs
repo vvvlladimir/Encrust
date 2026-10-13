@@ -136,7 +136,7 @@ fn models(ui: &mut Ui, entries: &[&Entry<PrinterProfile>], with_brand: bool) -> 
             } else {
                 entry.profile.name.clone()
             };
-            if list_row(ui, &label, None, false, None, None, None).picked {
+            if list_row(ui, &label, None, false, None, None, None, None).picked {
                 picked = Some(Picked::Printer(entry.id.clone()));
             }
         }

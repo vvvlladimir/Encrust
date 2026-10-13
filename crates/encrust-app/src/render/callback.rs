@@ -96,6 +96,8 @@ pub struct Shading<'a> {
     pub textures: Option<&'a Textures>,
     /// The Cut tool's plane, traced over the model it is set on.
     pub cut_line: Option<CutLine>,
+    /// The support groups left out of the view, by group number.
+    pub hidden_groups: &'a [bool],
 }
 
 impl ViewportCallback {
@@ -115,6 +117,7 @@ impl ViewportCallback {
             banding,
             textures,
             cut_line,
+            hidden_groups,
         } = shading;
         let Draws {
             models,
@@ -123,7 +126,12 @@ impl ViewportCallback {
             cut_surfaces,
             pockets,
             reliefs,
-        } = Draws::of(scene, overhang_deg.map_or(NOT_MARKED, marking), textures);
+        } = Draws::of(
+            scene,
+            overhang_deg.map_or(NOT_MARKED, marking),
+            textures,
+            hidden_groups,
+        );
 
         let (label, atlas) = label::front(plate);
         let mut lines = plate_lines(plate);
@@ -178,14 +186,14 @@ struct Draws {
 
 impl Draws {
     /// `mark` is the overhang threshold the models are washed at, or `NOT_MARKED`.
-    fn of(scene: &Scene, mark: f32, textures: Option<&Textures>) -> Self {
+    fn of(scene: &Scene, mark: f32, textures: Option<&Textures>, hidden: &[bool]) -> Self {
         let mut draws = Self::default();
         for object in scene.printable(scene.active_plate()) {
             let colour = color_for(scene.is_selected(object.id), object.summary.is_sound());
             let texture = textures.and_then(|textures| textures.get(&object.id));
             draws.model(object, colour, mark, texture);
             draws.hollowing(object, colour);
-            draws.supports(object);
+            draws.supports(object, hidden);
         }
         // Last, so that the resin inside one model is still seen when another stands in
         // front of it: nothing hides anything under the x-ray, but what is drawn later
@@ -299,7 +307,7 @@ impl Draws {
 
     /// Patches and columns are already in plate coordinates: they were built against the
     /// placed model, not alongside it.
-    fn supports(&mut self, object: &SceneObject) {
+    fn supports(&mut self, object: &SceneObject, hidden: &[bool]) {
         let (painted, blocked) = object.supports.patches();
         for (patch, colour) in [
             (painted, theme::scene().painted),
@@ -314,7 +322,7 @@ impl Draws {
         for (group, mesh) in groups
             .iter()
             .enumerate()
-            .filter(|(_, mesh)| !mesh.is_empty())
+            .filter(|(group, mesh)| !mesh.is_empty() && hidden.get(*group) != Some(&true))
         {
             // A column holds nothing up but the model, so marking its own overhangs would
             // only paint the scaffolding red.
@@ -597,7 +605,7 @@ mod tests {
             .expect("the ball is hollow");
         assert!(!cavity.is_empty(), "and the cavity has faces of its own");
 
-        let draws = Draws::of(&scene, NOT_MARKED, None);
+        let draws = Draws::of(&scene, NOT_MARKED, None, &[]);
         let painted = draws
             .models
             .iter()
@@ -606,7 +614,7 @@ mod tests {
         assert_eq!(painted, 1, "the cavity is drawn once over the shell");
 
         scene.objects_mut()[0].traps.set(Vec::new());
-        let drained = Draws::of(&scene, NOT_MARKED, None);
+        let drained = Draws::of(&scene, NOT_MARKED, None, &[]);
         assert!(
             drained.models.iter().all(|draw| draw.faces() != cavity),
             "and not at all once the resin can get out"
@@ -745,7 +753,7 @@ mod tests {
     #[test]
     fn a_model_that_is_not_closed_is_drawn_but_never_counted_into_the_cap() {
         let scene = an_open_box();
-        let draws = Draws::of(&scene, NOT_MARKED, None);
+        let draws = Draws::of(&scene, NOT_MARKED, None, &[]);
 
         assert_eq!(draws.models.len(), 1, "an open model is still drawn");
         assert!(
@@ -765,7 +773,7 @@ mod tests {
             .expect("the box is there")
             .reshape(Arc::new(mesh));
 
-        assert_eq!(Draws::of(&scene, NOT_MARKED, None).solids.len(), 1);
+        assert_eq!(Draws::of(&scene, NOT_MARKED, None, &[]).solids.len(), 1);
     }
 
     #[test]

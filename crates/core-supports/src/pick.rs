@@ -49,6 +49,17 @@ pub fn grab(
     profiles: Profiles,
     slack_mm: Scalar,
 ) -> Option<Grab> {
+    grab_along(trees, ray, profiles, slack_mm).map(|(what, _)| what)
+}
+
+/// What [`grab`] answers, with how far along `ray` the part was met, millimetres: what
+/// a caller compares with whatever else the ray runs into on its way there.
+pub fn grab_along(
+    trees: &[SupportTree],
+    ray: &Ray,
+    profiles: Profiles,
+    slack_mm: Scalar,
+) -> Option<(Grab, Scalar)> {
     let near = |what: Grab, radius: Scalar, from: Vec3, to: Vec3| {
         let (along_ray, distance) = closest_approach(ray, from, to);
         let miss = (distance - radius).max(0.0);
@@ -68,7 +79,7 @@ pub fn grab(
                 .then_with(|| a.2.total_cmp(&b.2))
                 .then_with(|| a.3.cmp(&b.3))
         })
-        .map(|(what, ..)| what)
+        .map(|(what, _, along_ray, _)| (what, along_ray))
 }
 
 /// Which support `ray` passes through or within `slack_mm` of, as the index of the
@@ -217,6 +228,20 @@ mod tests {
             Transform::default(),
             Profiles::single(profile),
         )
+    }
+
+    #[test]
+    fn a_part_is_met_as_far_along_the_ray_as_it_stands() {
+        let profile = profile();
+        let trees = standing(&[(10.0, 10.0)], &profile);
+        let ray = Ray::new(Vec3::new(-50.0, 10.0, 10.0), Vec3::X);
+
+        let (_, along) =
+            grab_along(&trees, &ray, Profiles::single(&profile), 0.0).expect("it is hit");
+        assert!(
+            (along - 60.0).abs() < 1e-3,
+            "the pillar's axis is 60 mm from where the ray starts, got {along}"
+        );
     }
 
     #[test]

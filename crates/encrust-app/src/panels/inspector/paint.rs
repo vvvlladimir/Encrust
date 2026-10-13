@@ -152,6 +152,15 @@ fn groups(ui: &mut egui::Ui, window: &mut Window) {
     let mut chosen = active;
     let mut drop = None;
     let mut renamed = None;
+    let mut toggled = None;
+    let mut retuned = None;
+    let saved: Vec<printer_profiles::SupportProfile> = window
+        .machine
+        .slicing
+        .catalogue
+        .supports()
+        .map(|entry| entry.profile.clone())
+        .collect();
 
     let names: Vec<String> = window
         .tools
@@ -163,12 +172,13 @@ fn groups(ui: &mut egui::Ui, window: &mut Window) {
     list(ui, |ui| {
         for (group, name) in names.iter().enumerate() {
             let group = group as u16;
-            // The first group is where every support goes by default, so it cannot go.
-            let remove = (group != 0).then_some((icon::CANCEL, "Drop this group"));
+            // The last group cannot go: something has to hold the raft's numbers.
+            let remove = (names.len() > 1).then_some((icon::CANCEL, "Drop this group"));
             let tint = Some(theme::support_tint(group as usize));
             let rename = Some(egui::Id::new(("support-group-name", group)));
             let holds = window.tools.supports.group_holds(group, &window.doc.scene);
             let count = holds.to_string();
+            let shown = !window.tools.supports.groups[group as usize].hidden;
             let action = list_row(
                 ui,
                 name,
@@ -177,7 +187,21 @@ fn groups(ui: &mut egui::Ui, window: &mut Window) {
                 remove,
                 rename,
                 Some(&count),
+                Some(shown),
             );
+            if action.toggled {
+                toggled = Some(group);
+            }
+            // The secondary click builds the whole group to another saved profile.
+            if let Some(row) = &action.row {
+                let built_to = &window.tools.supports.table()[group as usize].name;
+                row.context_menu(|ui| {
+                    if let Some(profile) = profile_menu(ui, &saved, built_to) {
+                        retuned = Some((group, profile));
+                        ui.close();
+                    }
+                });
+            }
             if action.picked {
                 chosen = group;
             }
@@ -192,6 +216,16 @@ fn groups(ui: &mut egui::Ui, window: &mut Window) {
 
     if secondary_button(ui, icon::ADD, "New group").clicked() {
         window.tools.supports.add_group();
+    }
+    if let Some((group, profile)) = retuned {
+        window
+            .tools
+            .supports
+            .retune_group(group, profile, &mut window.doc.scene);
+    }
+    if let Some(group) = toggled {
+        let group = &mut window.tools.supports.groups[group as usize];
+        group.hidden = !group.hidden;
     }
     if let Some((group, name)) = renamed {
         window.tools.supports.groups[group as usize].name = name;
@@ -209,6 +243,52 @@ fn groups(ui: &mut egui::Ui, window: &mut Window) {
         }
     }
     dropping(ui, window);
+}
+
+/// Width of the menu a group's row opens, points: wide enough for a profile's name and
+/// the mark beside the one in use.
+const PROFILE_MENU_W: f32 = 190.0;
+
+/// The saved profiles a group can be built to, the one it is built to now marked, and
+/// answers the one chosen.
+fn profile_menu(
+    ui: &mut egui::Ui,
+    saved: &[printer_profiles::SupportProfile],
+    built_to: &str,
+) -> Option<printer_profiles::SupportProfile> {
+    let colors = theme::colors();
+    ui.set_min_width(PROFILE_MENU_W);
+    ui.spacing_mut().item_spacing.y = 2.0;
+    ui.spacing_mut().button_padding = egui::vec2(8.0, 5.0);
+    let heading = egui::RichText::new("Build this group to")
+        .font(theme::small())
+        .color(colors.text_low);
+    ui.add(egui::Label::new(heading).selectable(false));
+    ui.add_space(2.0);
+    ui.separator();
+
+    let mut chosen = None;
+    for profile in saved {
+        let current = profile.name == built_to;
+        let colour = if current {
+            colors.accent_soft
+        } else {
+            colors.text_high
+        };
+        let name = egui::RichText::new(&profile.name)
+            .font(theme::label())
+            .color(colour);
+        let mark = if current { icon::CHECK } else { "" };
+        let item = egui::Button::new(name)
+            .right_text(egui::RichText::new(mark).color(colors.accent))
+            .selected(current)
+            .frame_when_inactive(false)
+            .min_size(egui::vec2(ui.available_width(), theme::ROW_H - 6.0));
+        if ui.add(item).clicked() && !current {
+            chosen = Some(profile.clone());
+        }
+    }
+    chosen
 }
 
 /// The question a group holding supports is taken away behind: they go with it, and only

@@ -24,10 +24,13 @@ churning. Landing is one ray per point through the scene's `Bvh`, on every core 
 A tip leaves the surface square on: `columns` reads the normal of the face nearest the
 contact and puts the **neck** — the far end of the `[top]` segment — one `top.length_mm`
 out along it, and shorter where a full one would eat the room the body needs over the plate
-(ADR 0125). A face that does not look down — a wall or a slope a support was placed on by
-hand — sends the tip out along its slope, falling a quarter as much as it runs, so that it
-leaves the model whatever the overhang angle; a flat top, or a contact off the surface,
-sends it straight down. A contact on an edge or a corner sits on every face meeting there
+(ADR 0125). The head follows the normal only while that falls as fast as it runs out; a
+steeper face, a wall or a slope looking up sends it out the way the face looks and down as
+fast, 45 degrees, and a head that would meet the model within its own length goes straight
+down (ADR 0249). A flat top, or a contact off the surface, sends it straight down. A knee
+and the strut into a thicker support are held to 45 degrees too, whatever the branch
+angle; a trunk is swept for clearance from its own width below its top; and a tip that can
+neither stand nor lean is run on one strut straight onto the model under it. A contact on an edge or a corner sits on every face meeting there
 and leaves the one that looks down most, so the support under a low point of the model is
 shaped like the rest. Everything below is measured from the neck, not from the contact.
 
@@ -257,7 +260,10 @@ ledge that small is inside the head that would be put under it.
 around itself, so its reach falls off as the part climbs away: `sqrt(r² − rise²)`, nothing
 past the radius (ADR 0079). A sample inside that of a support already standing — placed
 lower in this run, or a seed — is skipped. A seed sits on the surface and a placed contact
-a layer under it, so a support one layer above a place still counts.
+a layer under it, so a support one layer above a place still counts. A seed the climb
+reaches before any piece stands at its cell — which is every contact an earlier run
+placed, a layer under the surface it holds — waits for that piece for as long as it could
+still hold it, so a second run, in any group, adds nothing where the first already holds.
 
 The ball is asked of one part only. `Field::parts` labels the pieces of a layer and
 `Parts::parents` maps each onto the pieces under it, so placement carries a set of standing
@@ -347,11 +353,32 @@ is built with (ADR 0094). `columns` builds each tip to its own group's shape, `g
 once per group — so a trunk is never shared by two shapes — and `mesh_trees` meshes each
 tree to its group while the raft and the bracing come from group 0. A tree also carries the group it was grown to, so what meshes it knows its shape.
 
+Groups are grown thickest first, and the struts and trunks a group has stood are carriers
+for the thinner groups after it (ADR 0248): while those merge, a front may run into a
+carrier wider than itself — by one strut within its own branch angle and half its merge
+distance, at the highest point it reaches — in the same heap its merges with other fronts sit in.
+Such a front is a tree whose `Landing` is that point with `on_support` beside `on_model`,
+so it has no trunk, no foot, no pad and no brace, and the mesher ends it plain inside the
+carrier. `grow` hands the forest back in group order.
+
+Any group can be dropped but the last, and the one after the first takes its place and the
+raft with it. A secondary click on a group's row builds the whole group to another saved
+profile (`SupportTool::retune_group`).
+
+A group can be left out of the view by the eye on its row. It is still printed; its
+supports are neither drawn nor aimed at.
+
 The table lives in the window's Supports tool, and the scene stores the number each
 support carries. A model may keep a profile of its own in place of a group's
 (`OwnSettings::supports`, ADR 0246): the panel's fields edit the picked models' and the
 plate's only with nothing picked, `SupportTool::table_for` is the table a model is built
 to, and saving a profile is what hands an edit on to every other model built to it.
+
+The list of saved profiles on the Shape, Paint and Supports tools chooses a group, not
+numbers: the group built to the chosen profile becomes the one in hand, one is made for it
+when there is none, and what stands keeps the group it stands in (ADR 0247). A group
+nothing stands in is retuned instead. So two kinds of support on one part are two choices
+from one list, and a support changes kind by being picked and moved to the group in hand.
 
 Dropping a group takes every support built to it away — a group is a shape, so its supports
 do not survive it to be rebuilt to another group's numbers — and shifts the groups above it
@@ -373,6 +400,8 @@ goes through nothing takes the part it passes nearest, within a slack the viewpo
 two points of the screen where the camera is looking: a pillar seen from far away is a
 point wide, and a part the ray does go through always wins over one it only passes.
 The part a press would take is drawn fainter than what is held before the button goes down.
+A part met further along the ray than a model's surface is behind that model and is not
+taken, hover or press: `grab_along` answers how far along the part stands.
 
 A press picks a part and the same drag carries it, by the step the cursor takes on the
 plane through it facing the camera, measured from where the cursor was pressed and not from
