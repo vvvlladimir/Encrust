@@ -233,8 +233,8 @@ pub fn tint(risk: &Risk) -> Color32 {
     }
 }
 
-/// The layer the print fails on, and why, on a card that goes there when clicked. Answers
-/// the layer to go to.
+/// The worst issue, where it is and what to do about it, on a card that goes there when
+/// clicked. Answers the layer to go to.
 fn verdict(ui: &mut egui::Ui, worst: Option<&Risk>) -> Option<usize> {
     let colors = theme::colors();
     let (glyph, tint, wash, title, why) = match worst {
@@ -255,7 +255,7 @@ fn verdict(ui: &mut egui::Ui, worst: Option<&Risk>) -> Option<usize> {
                 icon::WARNING,
                 tint(risk),
                 wash,
-                format!("{} at layer {}", verdict_word(risk), risk.layer + 1),
+                format!("{} on layer {}", issue_name(risk), risk.layer + 1),
                 explain(risk),
             )
         }
@@ -538,13 +538,15 @@ fn detail(row: &Row) -> String {
     }
 }
 
-/// How sure the check is: an island always fails, a neck or a peel past its limit may, and
-/// a cup or a thin run is only worth a look.
-fn verdict_word(risk: &Risk) -> &'static str {
+/// What the worst issue is, named plainly rather than as a failure.
+fn issue_name(risk: &Risk) -> &'static str {
     match risk.kind {
-        RiskKind::Island { .. } | RiskKind::Floating { .. } => "Fails",
-        RiskKind::Lever { .. } | RiskKind::Peel { .. } => "May fail",
-        RiskKind::SuctionCup { .. } | RiskKind::Thin { .. } => "Worth a look",
+        RiskKind::Island { .. } => "Unsupported island",
+        RiskKind::Floating { .. } => "Part left hanging",
+        RiskKind::Lever { .. } => "Weak neck",
+        RiskKind::Peel { .. } => "Hard peel",
+        RiskKind::SuctionCup { .. } => "Suction cup",
+        RiskKind::Thin { .. } => "Thin section",
     }
 }
 
@@ -661,7 +663,7 @@ mod tests {
             Filter::Islands.admits(&hanging.kind),
             "Support every island takes it in"
         );
-        assert_eq!(verdict_word(&hanging), "Fails");
+        assert_eq!(issue_name(&hanging), "Part left hanging");
     }
 
     #[test]
