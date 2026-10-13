@@ -18,7 +18,7 @@ use core_mesh_io::{Loaded, Texture, loader_for_extension};
 use core_pipeline::{PanelOverrides, Tolerance, raster_settings};
 use core_plate::{OrientSettings, orient};
 use core_raster::Shading;
-use core_slicer::{AdaptiveSettings, Windows};
+use core_slicer::{AdaptiveSettings, Solid, Windows};
 use core_volume::{ReliefSettings, Tiling, press, press_tiled};
 use printer_profiles::{Compensation, MaterialProfile, PrinterProfile};
 
@@ -316,12 +316,12 @@ fn cut_without_a_container(
     let cutting = &staged.cutting;
     let baked = bake(&staged.models, &cutting.compensation).context("nothing to slice")?;
     let windows = cut(&baked, cutting)?;
-    let mesh = &baked.mesh;
-    let mut slice = report_of(mesh, &windows, staged.drainage);
+    let solid = &baked.solid;
+    let mut slice = report_of(solid, &windows, staged.drainage);
 
     let Some(profile) = staged.printer.as_ref() else {
         tracing::warn!("rasterisation needs --profile to know the panel; nothing was written");
-        measure(mesh, &windows, &mut slice, stop)?;
+        measure(solid, &windows, &mut slice, stop)?;
         return Ok((slice, None));
     };
 
@@ -330,7 +330,7 @@ fn cut_without_a_container(
         .validate()
         .context("the panel cannot produce a usable mask")?;
     let report = write_stack(
-        mesh,
+        solid,
         &windows,
         &mut slice,
         &settings,
@@ -346,9 +346,9 @@ fn cut_without_a_container(
 
 /// An empty report over `windows`, watching the stack for trapped resin when `drainage`
 /// asks for it.
-pub fn report_of(mesh: &Mesh, windows: &Windows, drainage: bool) -> SliceReport {
+pub fn report_of(solid: &Solid, windows: &Windows, drainage: bool) -> SliceReport {
     let mut slice = SliceReport::new(windows.settings(), windows.plan().clone());
-    if drainage && let Some(bounds) = mesh.aabb() {
+    if drainage && let Some(bounds) = solid.aabb() {
         slice.watch_drainage(bounds.mins.truncate(), bounds.maxs.truncate());
     }
     slice
@@ -545,9 +545,9 @@ pub fn overrides_of(args: &RasterArgs) -> PanelOverrides {
 }
 
 /// Cuts the stack to count it, for a run that writes nothing.
-fn measure(mesh: &Mesh, windows: &Windows, report: &mut SliceReport, stop: &Stop) -> Result<()> {
+fn measure(solid: &Solid, windows: &Windows, report: &mut SliceReport, stop: &Stop) -> Result<()> {
     windows
-        .stream(mesh, |sliced| {
+        .stream(solid, |sliced| {
             stop.check()?;
             report.absorb(sliced);
             Ok::<(), anyhow::Error>(())

@@ -136,7 +136,7 @@ fn stages(c: &mut Criterion) {
         group.bench_function(format!("slice_{copies}_spheres"), |b| {
             b.iter(|| {
                 run.windows()
-                    .stream(run.mesh(), |sliced| {
+                    .stream(run.solid(), |sliced| {
                         std::hint::black_box(sliced);
                         Ok::<_, SliceError>(())
                     })
@@ -146,7 +146,7 @@ fn stages(c: &mut Criterion) {
 
         let layers = run
             .windows()
-            .cut(run.mesh(), 0..run.layer_count())
+            .cut(run.solid(), 0..run.layer_count())
             .expect("the plate slices")
             .layers;
         group.bench_function(format!("raster_{copies}_spheres"), |b| {

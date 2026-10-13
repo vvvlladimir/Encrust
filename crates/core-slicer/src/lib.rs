@@ -12,6 +12,7 @@ mod plan;
 mod plane;
 mod settings;
 mod sliced;
+mod solid;
 mod stitch;
 mod windows;
 
@@ -25,4 +26,5 @@ pub use offset::offset_contours;
 pub use plan::LayerPlan;
 pub use settings::{ONE_SAMPLE, SliceSettings};
 pub use sliced::Sliced;
+pub use solid::{Repeated, Solid, Source};
 pub use windows::{WINDOW_LAYERS, Windows};

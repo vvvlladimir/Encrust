@@ -156,7 +156,7 @@ fn look_through(task: &TrapTask, layer_height_mm: Scalar) -> Result<Vec<Trapped>
     }
     let bounds = placed.aabb().unwrap_or(material);
     let baked = Baked {
-        mesh: placed,
+        solid: placed.into(),
         ceiling_mm: material.maxs.z,
         floor_mm: material.mins.z,
     };
@@ -174,7 +174,7 @@ fn look_through(task: &TrapTask, layer_height_mm: Scalar) -> Result<Vec<Trapped>
         layer_height_mm,
     );
     windows
-        .stream(&baked.mesh, |sliced| {
+        .stream(&baked.solid, |sliced| {
             for layer in &sliced.layers {
                 scan.push(layer);
             }

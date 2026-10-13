@@ -2,8 +2,8 @@ use std::num::NonZeroU8;
 
 use core_geometry::{Mesh, Scalar};
 
-use crate::engine::{PlaneSliceEngine, SliceEngine, layer_heights_under, on_the_plate};
-use crate::{Layer, LayerPlan, SliceError, SliceSettings, Sliced};
+use crate::engine::{layer_heights_under, on_the_plate};
+use crate::{Layer, LayerPlan, SliceError, SliceSettings, Sliced, Source};
 
 /// Layers cut in one go before their contours are handed on and dropped.
 ///
@@ -114,15 +114,19 @@ impl Windows {
     }
 
     /// Cuts one range of layers, which need not be a whole window.
-    pub fn cut(&self, mesh: &Mesh, layers: std::ops::Range<usize>) -> Result<Sliced, SliceError> {
+    pub fn cut(
+        &self,
+        source: &(impl Source + ?Sized),
+        layers: std::ops::Range<usize>,
+    ) -> Result<Sliced, SliceError> {
         if self.settings.samples == crate::ONE_SAMPLE {
             let heights = self.heights.get(layers).unwrap_or(&[]);
-            return PlaneSliceEngine.slice_at(mesh, heights);
+            return source.slice_at(heights);
         }
 
         let layers = layers.start..layers.end.min(self.heights.len());
         let planes: Vec<Scalar> = layers.clone().flat_map(|l| self.planes_of(l)).collect();
-        let sliced = PlaneSliceEngine.slice_at(mesh, &planes)?;
+        let sliced = source.slice_at(&planes)?;
         Ok(self.fold(sliced, layers))
     }
 
@@ -155,7 +159,7 @@ impl Windows {
     /// Cuts window by window in print order, handing each one over before the next.
     pub fn stream<E>(
         &self,
-        mesh: &Mesh,
+        source: &(impl Source + ?Sized),
         mut each: impl FnMut(&Sliced) -> Result<(), E>,
     ) -> Result<(), E>
     where
@@ -164,7 +168,7 @@ impl Windows {
         let mut first = 0;
         while first < self.heights.len() {
             let last = (first + self.window).min(self.heights.len());
-            each(&self.cut(mesh, first..last)?)?;
+            each(&self.cut(source, first..last)?)?;
             first = last;
         }
         Ok(())

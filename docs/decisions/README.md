@@ -105,6 +105,7 @@ Grouped by what the decision governs; the number is still the order it was taken
 | [0187](0187-nothing-under-the-plate-is-cut.md) | Nothing under the plate is cut | Accepted; the top is clamped the same way by 0199 |
 | [0199](0199-a-bake-says-how-high-the-material-stands.md) | A bake says how high the material stands, and the stack stops there | Accepted; the floor is answered the same way by 0203 |
 | [0203](0203-a-bake-says-how-low-the-material-stands.md) | A bake says how low the material stands, and the plate is warned about that | Accepted |
+| [0258](0258-copies-of-a-model-are-cut-once.md) | Cut a model once however many copies of it stand on the plate | Accepted |
 
 ### Rasterisation
 

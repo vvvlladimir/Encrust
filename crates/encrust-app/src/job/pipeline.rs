@@ -9,7 +9,7 @@ use core_format::WriteSeek;
 use core_geometry::{Mesh, Scalar};
 use core_pipeline::{Observer, Tolerance, Written};
 use core_raster::RasterSettings;
-use core_slicer::{PlaneSliceEngine, SliceEngine, SliceSettings, Sliced, Windows};
+use core_slicer::{PlaneSliceEngine, SliceEngine, SliceSettings, Sliced, Solid, Windows};
 
 use crate::job::{Outcome, Progress, Stage};
 
@@ -147,7 +147,7 @@ pub fn slice_mesh(mesh: &Mesh, layer_height_mm: Scalar) -> Result<Sliced> {
 /// Measures what the stack cures without writing it, so Preview can say what the print
 /// takes. `None` when cancelled.
 pub fn measure_stack(
-    mesh: &Mesh,
+    solid: &Solid,
     windows: &Windows,
     settings: &RasterSettings,
     tolerance: &Tolerance,
@@ -155,7 +155,7 @@ pub fn measure_stack(
     cancel: &AtomicBool,
 ) -> Result<Option<Measured>> {
     core_pipeline::measure(
-        mesh,
+        solid,
         windows,
         settings,
         tolerance,

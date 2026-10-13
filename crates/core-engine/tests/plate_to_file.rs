@@ -103,9 +103,9 @@ fn two_models_keep_all_their_faces_and_their_places() {
     let merged = bake(&[cube_at(0.0), cube_at(5.0)], &Compensation::default())
         .expect("two cubes have geometry");
 
-    assert_eq!(merged.mesh.faces.len(), 24);
-    assert_eq!(merged.mesh.vertices.len(), 16);
-    let bounds = merged.mesh.aabb().expect("the bake has vertices");
+    assert_eq!(merged.solid.mesh.faces.len(), 24);
+    assert_eq!(merged.solid.mesh.vertices.len(), 16);
+    let bounds = merged.solid.mesh.aabb().expect("the bake has vertices");
     assert!(bounds.mins.abs_diff_eq(Vec3::ZERO, 1e-5));
     assert!(bounds.maxs.abs_diff_eq(Vec3::new(6.0, 1.0, 1.0), 1e-5));
 }
@@ -133,7 +133,14 @@ fn a_cut_standing_over_the_model_adds_no_layer_to_the_stack() {
         baked.ceiling_mm
     );
     assert!(
-        baked.mesh.aabb().expect("the bake has vertices").maxs.z > 1.5,
+        baked
+            .solid
+            .mesh
+            .aabb()
+            .expect("the bake has vertices")
+            .maxs
+            .z
+            > 1.5,
         "the cut itself is still there to subtract with"
     );
 
@@ -150,7 +157,7 @@ fn the_second_models_faces_point_at_its_own_vertices() {
     let merged = bake(&[cube_at(0.0), cube_at(5.0)], &Compensation::default())
         .expect("two cubes have geometry");
 
-    for face in &merged.mesh.faces[12..] {
+    for face in &merged.solid.mesh.faces[12..] {
         assert!(
             face.iter().all(|index| *index >= 8),
             "the second cube must index its own vertices"
@@ -178,8 +185,8 @@ fn a_support_goes_in_where_it_already_stands() {
 
     let merged = bake(std::slice::from_ref(&model), &Compensation::default())
         .expect("the plate has geometry");
-    assert_eq!(merged.mesh.faces.len(), 24, "the cube and the pillar");
-    let bounds = merged.mesh.aabb().expect("the bake has vertices");
+    assert_eq!(merged.solid.mesh.faces.len(), 24, "the cube and the pillar");
+    let bounds = merged.solid.mesh.aabb().expect("the bake has vertices");
     assert!(
         bounds.mins.z <= 0.0,
         "the pillar reaches the plate, so the bake starts at z = 0, got {}",
@@ -201,8 +208,8 @@ fn a_shrinking_resin_prints_the_part_larger_where_it_already_stood() {
     )
     .expect("a cube is there");
 
-    let before = plain.mesh.aabb().expect("a cube has bounds");
-    let after = grown.mesh.aabb().expect("a cube has bounds");
+    let before = plain.solid.mesh.aabb().expect("a cube has bounds");
+    let after = grown.solid.mesh.aabb().expect("a cube has bounds");
     let width = |bounds: &Aabb| bounds.maxs.x - bounds.mins.x;
     let middle = |bounds: &Aabb| Scalar::midpoint(bounds.mins.x, bounds.maxs.x);
     assert!(
@@ -408,4 +415,93 @@ fn a_cancelled_run_comes_back_as_nothing_written() {
         )
         .expect("stopping a run is not a failure");
     assert!(written.is_none());
+}
+
+/// Two 2 mm cubes held a millimetre over the plate on a pillar each, one pillar under
+/// its cube's middle and the other off to one side, so their footprints differ.
+fn lifted_pair(mesh: impl Fn() -> Arc<Mesh>) -> [Model; 2] {
+    let lifted = |x: Scalar, pillar_x: Scalar| Model {
+        mesh: mesh(),
+        transform: Transform {
+            translation: Vec3::new(x, 1.0, 1.0),
+            scale: Vec3::splat(2.0),
+            ..Transform::default()
+        },
+        cuts: None,
+        supports: vec![Arc::new(box_mesh(
+            Vec3::new(pillar_x, 1.5, 0.0),
+            Vec3::new(pillar_x + 1.0, 2.5, 1.0),
+        ))],
+    };
+    [lifted(1.0, 1.5), lifted(6.0, 4.5)]
+}
+
+/// Each layer's contours as their areas and centres, in a fixed order.
+fn sections(baked: &Baked) -> Vec<Vec<(Scalar, Scalar, Scalar)>> {
+    let windows = cut(baked, &Cutting::uniform(0.25)).expect("the pair plans");
+    let sliced = windows
+        .cut(&baked.solid, 0..windows.layer_count())
+        .expect("the pair slices");
+    sliced
+        .layers
+        .iter()
+        .map(|layer| {
+            let mut found: Vec<_> = layer
+                .contours
+                .iter()
+                .map(|contour| {
+                    let sum: core_geometry::Vec2 = contour.points.iter().copied().sum();
+                    let middle = sum / contour.points.len() as Scalar;
+                    (contour.area(), middle.x, middle.y)
+                })
+                .collect();
+            found.sort_by(|a, b| a.1.total_cmp(&b.1).then(a.2.total_cmp(&b.2)));
+            found
+        })
+        .collect()
+}
+
+#[test]
+fn copies_of_one_mesh_are_cut_once_and_come_out_as_if_each_were_cut() {
+    let shrinking = Compensation {
+        shrink_x_pct: 103.0,
+        shrink_y_pct: 102.0,
+        shrink_z_pct: 101.0,
+        ..Compensation::default()
+    };
+    let shared = unit_cube();
+    let copies = bake(&lifted_pair(|| Arc::clone(&shared)), &shrinking).expect("two cubes");
+    let apart = bake(&lifted_pair(unit_cube), &shrinking).expect("two cubes");
+
+    assert_eq!(copies.solid.repeated.len(), 1, "the cubes are one body");
+    assert_eq!(copies.solid.repeated[0].offsets_mm.len(), 1);
+    assert!(apart.solid.repeated.is_empty(), "two meshes are two bodies");
+
+    let (copies, apart) = (sections(&copies), sections(&apart));
+    assert_eq!(copies.len(), apart.len());
+    for (copy, cut) in copies.iter().zip(&apart) {
+        assert_eq!(copy.len(), cut.len());
+        for (a, b) in copy.iter().zip(cut) {
+            assert!(
+                (a.0 - b.0).abs() < 1e-4 && (a.1 - b.1).abs() < 1e-4 && (a.2 - b.2).abs() < 1e-4,
+                "each cube shrinks about its own footprint either way: {a:?} against {b:?}"
+            );
+        }
+    }
+}
+
+#[test]
+fn a_copy_standing_higher_is_a_body_of_its_own() {
+    let shared = unit_cube();
+    let raised = Model::placed(
+        Arc::clone(&shared),
+        Transform::from_translation(Vec3::new(5.0, 0.0, 0.5)),
+    );
+    let baked = bake(
+        &[Model::placed(shared, Transform::default()), raised],
+        &Compensation::default(),
+    )
+    .expect("two cubes");
+    assert!(baked.solid.repeated.is_empty());
+    assert_eq!(baked.solid.mesh.faces.len(), 24);
 }
