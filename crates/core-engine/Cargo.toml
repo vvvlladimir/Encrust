@@ -32,4 +32,9 @@ zip.workspace = true
 workspace = true
 
 [dev-dependencies]
+criterion.workspace = true
 format-chitu.workspace = true
+
+[[bench]]
+name = "plate"
+harness = false

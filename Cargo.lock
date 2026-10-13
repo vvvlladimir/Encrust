@@ -996,6 +996,7 @@ dependencies = [
  "core-supports",
  "core-thumbnail",
  "core-volume",
+ "criterion",
  "format-chitu",
  "printer-profiles",
  "serde",
