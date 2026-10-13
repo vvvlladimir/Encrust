@@ -2,7 +2,7 @@
 //! support is held to lives in `core_supports::carried`; see ADR 0095 and 0208.
 
 use core_geometry::Vec3;
-use core_supports::{Part, Placed, Preview, Profiles, preview, support_under};
+use core_supports::{Part, Placed, Preview, Profiles, preview, stands, support_under};
 
 use crate::camera::OrbitCamera;
 use crate::panels::Window;
@@ -20,7 +20,8 @@ use super::picking::{aim_slack_mm, aims_elsewhere, grab_under_cursor};
 const PLATE_GRAZE: f32 = 1e-3;
 
 /// Stands a support where the model was clicked, and selects what it was put on so that
-/// the inspector is talking about the same object.
+/// the inspector is talking about the same object. A support that would not stand there
+/// is not put down: the preview has already shown it red.
 pub(super) fn place_support_under_cursor(
     window: &mut Window,
     viewport: egui::Rect,
@@ -32,6 +33,19 @@ pub(super) fn place_support_under_cursor(
     };
     window.doc.scene.select(Some(id));
     let group = window.tools.supports.active;
+    let Some(object) = window.doc.scene.get(id) else {
+        return;
+    };
+    let table = window.tools.supports.table_for(object);
+    let Some(profiles) = Profiles::new(&table) else {
+        return;
+    };
+    let keep_out = object.supports.keep_out(&object.mesh, object.transform);
+    let placed =
+        Placed::new(&object.mesh, &object.bvh, object.transform).blocking(keep_out.as_ref());
+    if !stands(&placed, hit.point, group, profiles) {
+        return;
+    }
     if let Some(object) = window.doc.scene.get_mut(id) {
         let transform = object.transform;
         object.supports.add(hit.point, transform, group);

@@ -177,20 +177,6 @@ fn profile_picker(ui: &mut egui::Ui, window: &mut Window, with_manage: bool) {
     if picked.is_some() {
         window.tools.supports.chosen = picked;
     }
-    let active = window.tools.supports.active;
-    match window.tools.supports.group_holds(active, &window.doc.scene) {
-        0 => {}
-        1 => hint(
-            ui,
-            "1 support is built to this. Another profile starts a kind of its own.",
-        ),
-        holds => hint(
-            ui,
-            &format!(
-                "{holds} supports are built to this. Another profile starts a kind of its own."
-            ),
-        ),
-    }
     // Both always there, and dead while there is nothing to save: a button that comes and
     // goes moves everything under it.
     let edited = matching.is_none();

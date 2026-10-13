@@ -2,9 +2,9 @@ use core_geometry::{Mesh, Vec3};
 
 use crate::column::column;
 use crate::group::Profiles;
-use crate::grow;
 use crate::mesher::{mesh_alone, mesh_head};
 use crate::placed::Placed;
+use crate::{Column, SupportTree, grow};
 
 /// A support shown where the hand is about to put one, before it is put down.
 #[derive(Debug, Clone)]
@@ -22,19 +22,37 @@ pub struct Preview {
 /// merge with or be braced to among the supports already standing is left out, so the
 /// rebuild a hover asks for stays one column. `contact` is in plate coordinates.
 pub fn preview(placed: &Placed, contact: Vec3, group: u16, profiles: Profiles) -> Preview {
-    let profile = profiles.of(group);
-    let column = column(placed, 0, group, contact, profile);
-    let grown = grow(&[column], placed, profiles);
-    match grown.iter().find(|tree| tree.points().next().is_some()) {
+    let (column, tree) = alone(placed, contact, group, profiles);
+    match tree {
         Some(tree) => Preview {
-            mesh: mesh_alone(tree, profiles.of(tree.group())),
+            mesh: mesh_alone(&tree, profiles.of(tree.group())),
             stands: true,
         },
         None => Preview {
-            mesh: mesh_head(column.contact, column.neck, profile),
+            mesh: mesh_head(column.contact, column.neck, profiles.of(group)),
             stands: false,
         },
     }
+}
+
+/// Whether a support of `group` put down at `contact` alone is built at all, which is
+/// what a hand placing one is refused by. `contact` is in plate coordinates.
+pub fn stands(placed: &Placed, contact: Vec3, group: u16, profiles: Profiles) -> bool {
+    alone(placed, contact, group, profiles).1.is_some()
+}
+
+/// The column of a lone support at `contact`, and the tree it grows into if it stands.
+fn alone(
+    placed: &Placed,
+    contact: Vec3,
+    group: u16,
+    profiles: Profiles,
+) -> (Column, Option<SupportTree>) {
+    let column = column(placed, 0, group, contact, profiles.of(group));
+    let tree = grow(&[column], placed, profiles)
+        .into_iter()
+        .find(|tree| tree.points().next().is_some());
+    (column, tree)
 }
 
 #[cfg(test)]
@@ -58,6 +76,12 @@ mod tests {
         );
 
         assert!(shown.stands, "the plate is clear under the box");
+        assert!(stands(
+            &placed,
+            Vec3::new(0.0, 0.0, 10.0),
+            0,
+            Profiles::single(&fixture)
+        ));
         let lowest = shown
             .mesh
             .vertices
@@ -99,6 +123,12 @@ mod tests {
             "the lower slab is under it and too wide to lean past"
         );
         assert!(!shown.mesh.faces.is_empty(), "the tip is still shown");
+        assert!(!stands(
+            &placed,
+            Vec3::new(0.0, 0.0, 10.0),
+            0,
+            Profiles::single(&fixture)
+        ));
         let lowest = shown
             .mesh
             .vertices
