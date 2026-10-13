@@ -1,4 +1,5 @@
 use anyhow::Context as _;
+use printer_profiles::{Raft, SupportProfile};
 
 use super::scope;
 use crate::panels::Window;
@@ -38,6 +39,28 @@ pub fn profile_section(ui: &mut egui::Ui, window: &mut Window) {
 fn shape(ui: &mut egui::Ui, window: &mut Window) {
     section(ui, "Profile", None, |ui| profile_picker(ui, window, true));
     section(ui, "Part", None, |ui| {
+        // The raft drawn and edited here is the picked model's, or the plate's: it is
+        // lent to the profile while the part is drawn and taken back out after, so the
+        // profile's own never moves. See `docs/decisions/0253`.
+        let raft = window.tools.supports.raft_shown(&window.doc.scene);
+        let profiles_own = std::mem::replace(&mut window.tools.supports.profile.raft, raft);
+        parts(ui, window, profiles_own);
+        let edited = std::mem::replace(&mut window.tools.supports.profile.raft, profiles_own);
+        if edited != raft {
+            window
+                .tools
+                .supports
+                .keep_raft(edited, &mut window.doc.scene);
+        }
+    });
+}
+
+/// The parts of a support, one at a time, and the numbers each is built to.
+/// `profiles_raft` is the raft the profile in hand was saved with, which the one being
+/// shown can be set back to.
+fn parts(ui: &mut egui::Ui, window: &mut Window, profiles_raft: Raft) {
+    {
+        let picked = !window.doc.scene.selection().is_empty();
         let profile = &mut window.tools.supports.profile;
         let saved =
             saved_as(&window.machine.slicing.catalogue, profile).map(|entry| &entry.profile);
@@ -65,6 +88,28 @@ fn shape(ui: &mut egui::Ui, window: &mut Window) {
                 }
             }
             group.show(ui, profile, saved);
+        }
+        if part == Part::Raft {
+            raft_owner(ui, profile, profiles_raft, picked);
+        }
+    }
+}
+
+/// Whose raft the numbers above are, and the way to take the profile's instead.
+fn raft_owner(ui: &mut egui::Ui, profile: &mut SupportProfile, profiles_raft: Raft, picked: bool) {
+    ui.add_space(4.0);
+    hint(
+        ui,
+        if picked {
+            "The raft is this model's, whichever profile its supports are built to."
+        } else {
+            "The raft is the plate's: every model without its own stands on one like it."
+        },
+    );
+    let label = format!("Use the raft of {}", profile.name);
+    ui.add_enabled_ui(profile.raft != profiles_raft, |ui| {
+        if secondary_button(ui, icon::RESET, &label).clicked() {
+            profile.raft = profiles_raft;
         }
     });
 }

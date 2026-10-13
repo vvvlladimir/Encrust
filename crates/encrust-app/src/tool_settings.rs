@@ -86,6 +86,7 @@ fn support_state(supports: &SupportTool) -> SupportState {
         fill: supports.fill,
         brush_radius_mm: supports.brush_radius_mm,
         flood_angle_deg: supports.flood_angle_deg,
+        raft: Some(supports.raft),
     }
 }
 
@@ -118,6 +119,8 @@ fn restore_supports(state: SupportState, supports: &mut SupportTool) {
         supports.active = state.active.min(supports.groups.len() as u16 - 1);
         supports.profile = supports.groups[supports.active as usize].profile.clone();
     }
+    // A file from before the raft was the plate's kept it in its first group's profile.
+    supports.raft = state.raft.unwrap_or(supports.groups[0].profile.raft);
     supports.fill = state.fill;
     supports.brush_radius_mm = state.brush_radius_mm;
     supports.flood_angle_deg = state.flood_angle_deg;

@@ -5,7 +5,7 @@ use core_geometry::Bvh;
 use core_pipeline::{PanelOverrides, SlicedFormat};
 use core_raster::Shading;
 use core_slicer::WINDOW_LAYERS;
-use printer_profiles::{MaterialProfile, SupportProfile};
+use printer_profiles::{MaterialProfile, Raft, SupportProfile};
 
 use crate::project::{
     Manifest, ModelMeshes, ObjectState, Project, SlicingState, hollow_of, supports_of,
@@ -37,7 +37,7 @@ pub fn open_plate(project: &Project, opening: &Opening) -> Result<Plate, EngineE
         .iter()
         .zip(&project.models)
         .filter(|(object, _)| object.plate == opening.plate && object.visible)
-        .map(|(object, meshes)| model(object, meshes, &table))
+        .map(|(object, meshes)| model(object, meshes, &table, manifest.supports.raft))
         .collect();
 
     let slicing = &manifest.slicing;
@@ -111,7 +111,12 @@ fn support_table(manifest: &Manifest) -> Vec<SupportProfile> {
 
 /// One object as it prints: the shell the file holds, the bodies its holes cut, and the
 /// trees it keeps, meshed to the profile of their group.
-fn model(object: &ObjectState, meshes: &ModelMeshes, table: &[SupportProfile]) -> Model {
+fn model(
+    object: &ObjectState,
+    meshes: &ModelMeshes,
+    table: &[SupportProfile],
+    plate_raft: Option<Raft>,
+) -> Model {
     let bvh = Arc::new(Bvh::build(&meshes.source));
     let hollow = hollow_of(&object.hollow, meshes);
     let supports = supports_of(
@@ -119,7 +124,7 @@ fn model(object: &ObjectState, meshes: &ModelMeshes, table: &[SupportProfile]) -
         &meshes.source,
         &bvh,
         object.transform,
-        &object.support_table(table),
+        &object.support_table(table, plate_raft),
     );
 
     Model {

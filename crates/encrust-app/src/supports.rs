@@ -1,12 +1,10 @@
 use anyhow::{Result, bail};
 use core_geometry::{Adjacency, Ray, Scalar, Vec2, Vec3, lift_over_plate, raycast_placed};
 use core_supports::{Part, Placed, ProjectSettings, project};
-use printer_profiles::SupportProfile;
+use printer_profiles::{Raft, SupportProfile};
 
 use crate::job::{SupportJob, SupportOutcome, SupportRequest, tasks_of};
-use std::collections::BTreeMap;
-
-use crate::scene::{ObjectId, Scene, SceneObject};
+use crate::scene::{ObjectId, OwnSettings, Scene, SceneObject};
 use crate::status::Status;
 
 /// What the one group a plate starts with is called until a profile is chosen for it.
@@ -100,6 +98,9 @@ pub struct SupportTool {
     /// as the line it drew rather than as the frames it was sampled on.
     pub last_daub: Option<Vec2>,
     pub job: Option<SupportJob>,
+    /// The raft every model stands on that has none of its own. A raft is one slab under
+    /// a part, so it is the part's and the plate's, not any one group's; see ADR 0253.
+    pub raft: Raft,
     /// A profile the panel has just saved, until the plate has taken it on.
     pub saved: Option<SupportProfile>,
     /// A profile the panel's list has just had chosen, until a group has taken it up.
@@ -128,6 +129,7 @@ impl Default for SupportTool {
             stroke: false,
             last_daub: None,
             job: None,
+            raft: SupportProfile::default().raft,
             saved: None,
             chosen: None,
             dropping: None,
@@ -220,7 +222,32 @@ impl SupportTool {
     /// Every group's profile as `object` is built to: its own where it keeps one, the
     /// plate's where it does not. What every rebuild of a model's supports is given.
     pub fn table_for(&self, object: &SceneObject) -> Vec<SupportProfile> {
-        with_own(self.table(), &object.own.supports)
+        with_own(self.table(), &object.own, self.raft)
+    }
+
+    /// The raft the panel shows: the first picked model's own where it keeps one, the
+    /// plate's otherwise.
+    pub fn raft_shown(&self, scene: &Scene) -> Raft {
+        scene
+            .selection()
+            .first()
+            .and_then(|id| scene.get(*id))
+            .and_then(|object| object.own.raft)
+            .unwrap_or(self.raft)
+    }
+
+    /// Makes `raft` the raft of every picked model, or the plate's with nothing picked. A
+    /// model whose raft is the plate's again keeps none of its own.
+    pub fn keep_raft(&mut self, raft: Raft, scene: &mut Scene) {
+        if scene.selection().is_empty() {
+            self.raft = raft;
+            return;
+        }
+        for id in scene.selection().to_vec() {
+            if let Some(object) = scene.get_mut(id) {
+                object.own.raft = (raft != self.raft).then_some(raft);
+            }
+        }
     }
 
     /// The active group's profile as `object` is built to.
@@ -540,19 +567,13 @@ impl SupportTool {
     /// Stands every supported model up by the thickness of the raft under it, and back
     /// down when the raft or its supports go, so the slab is never printed into the part.
     ///
-    /// The raft is the plate's, built to the first group's profile. What each model has
+    /// The raft is the model's own, or the plate's (ADR 0253). What each model has
     /// been stood up by is kept beside its supports, which is what makes this safe to ask
     /// every frame. See `docs/decisions/0238`.
     pub fn settle_on_raft(&self, scene: &mut Scene) {
-        let table = self.table();
         for object in scene.objects_mut() {
-            let raft_mm = object
-                .own
-                .supports
-                .get(&0)
-                .or(table.first())
-                .filter(|ground| ground.raft.enabled)
-                .map_or(0.0, |ground| ground.raft.thickness_mm);
+            let raft = object.own.raft.unwrap_or(self.raft);
+            let raft_mm = if raft.enabled { raft.thickness_mm } else { 0.0 };
             let wanted_mm = if object.supports.is_empty() {
                 0.0
             } else {
@@ -567,15 +588,21 @@ impl SupportTool {
     }
 }
 
-/// `table` with the profiles a model keeps of its own put in place of its groups'.
+/// `table` with the profiles a model keeps of its own put in place of its groups', and
+/// under them the raft it stands on: its own, or `plate_raft`. The core builds the raft
+/// from the first group's profile, so that is where it is written.
 pub fn with_own(
     mut table: Vec<SupportProfile>,
-    own: &BTreeMap<u16, SupportProfile>,
+    own: &OwnSettings,
+    plate_raft: Raft,
 ) -> Vec<SupportProfile> {
-    for (group, profile) in own {
+    for (group, profile) in &own.supports {
         if let Some(plate) = table.get_mut(*group as usize) {
             plate.clone_from(profile);
         }
+    }
+    if let Some(ground) = table.first_mut() {
+        ground.raft = own.raft.unwrap_or(plate_raft);
     }
     table
 }
@@ -711,6 +738,85 @@ mod tests {
             "the picked model goes back with it"
         );
         assert_eq!(tool.groups.len(), 1);
+    }
+
+    /// A raft unlike the default one: switched the other way and a millimetre thicker.
+    fn another_raft(tool: &SupportTool) -> Raft {
+        Raft {
+            enabled: !tool.raft.enabled,
+            thickness_mm: tool.raft.thickness_mm + 1.0,
+            ..tool.raft
+        }
+    }
+
+    #[test]
+    fn a_raft_edited_with_a_model_picked_is_that_models_alone() {
+        let mut scene = one_cube();
+        let first = scene.objects()[0].id;
+        let second = {
+            let other = one_cube();
+            let object = &other.objects()[0];
+            scene.insert(crate::scene::Imported::new(
+                "second".to_owned(),
+                Arc::clone(&object.mesh),
+                Transform::default(),
+                object.summary.clone(),
+            ))
+        };
+        let mut tool = SupportTool::default();
+        let (plate, edited) = (tool.raft, another_raft(&tool));
+
+        scene.select(Some(first));
+        tool.keep_raft(edited, &mut scene);
+
+        let raft_of = |id| tool.table_for(scene.get(id).expect("there"))[0].raft;
+        assert_eq!(raft_of(first), edited);
+        assert_eq!(
+            raft_of(second),
+            plate,
+            "the other model stands on the plate's"
+        );
+        assert_eq!(tool.raft, plate);
+
+        scene.select(Some(first));
+        tool.keep_raft(plate, &mut scene);
+        assert_eq!(
+            scene.get(first).expect("there").own.raft,
+            None,
+            "a raft that is the plate's again is no longer the model's own"
+        );
+    }
+
+    #[test]
+    fn a_raft_edited_with_nothing_picked_is_the_plates() {
+        let mut scene = one_cube();
+        scene.select(None);
+        let mut tool = SupportTool::default();
+        let edited = another_raft(&tool);
+
+        tool.keep_raft(edited, &mut scene);
+
+        assert_eq!(tool.raft, edited);
+        assert_eq!(tool.table_for(&scene.objects()[0])[0].raft, edited);
+    }
+
+    #[test]
+    fn another_profile_leaves_the_raft_as_it_was() {
+        let mut scene = one_supported_cube();
+        let mut tool = SupportTool::default();
+        let raft = another_raft(&tool);
+        tool.raft = raft;
+        assert_ne!(SupportProfile::heavy().raft, raft);
+
+        tool.chosen = Some(SupportProfile::heavy());
+        tool.take_up_chosen(&mut scene);
+        tool.retune_group(0, SupportProfile::light(), &mut scene);
+
+        assert_eq!(
+            tool.table_for(&scene.objects()[0])[0].raft,
+            raft,
+            "the raft is the plate's, whatever the groups are built to"
+        );
     }
 
     /// An axis-aligned cube spanning 0..1, twelve triangles.
@@ -1142,7 +1248,7 @@ mod tests {
         };
         let lifted = bottom(&scene);
 
-        tool.profile.raft.enabled = true;
+        tool.raft.enabled = true;
         tool.settle_on_raft(&mut scene);
         assert!(
             (bottom(&scene) - lifted).abs() < 1e-5,
@@ -1156,7 +1262,7 @@ mod tests {
         tool.settle_on_raft(&mut scene);
         tool.settle_on_raft(&mut scene);
         assert!(
-            (bottom(&scene) - lifted - tool.profile.raft.thickness_mm).abs() < 1e-5,
+            (bottom(&scene) - lifted - tool.raft.thickness_mm).abs() < 1e-5,
             "the slab must not be printed into the part, and asking twice lifts once"
         );
         assert_eq!(
@@ -1165,7 +1271,7 @@ mod tests {
             "the lift is measured over the raft, so a model already there stays"
         );
 
-        tool.profile.raft.enabled = false;
+        tool.raft.enabled = false;
         tool.settle_on_raft(&mut scene);
         assert!((bottom(&scene) - lifted).abs() < 1e-5, "and back down");
     }

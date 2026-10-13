@@ -4,8 +4,8 @@ use printer_profiles::SupportProfile;
 ///
 /// A support carries the number of its group, not a profile of its own: two supports of
 /// one group are the same shape, and a support is retuned by moving it to another group.
-/// Group 0 is the one everything falls back to, and the one the raft and the bracing —
-/// which belong to the plate rather than to any one support — are built from.
+/// Group 0 is the one everything falls back to, and the one the raft — which belongs to
+/// the plate rather than to any one support — is built from.
 /// See `docs/decisions/0094`.
 #[derive(Debug, Clone, Copy)]
 pub struct Profiles<'a>(&'a [SupportProfile]);
@@ -28,8 +28,7 @@ impl<'a> Profiles<'a> {
         self.0.get(group as usize).unwrap_or(&self.0[0])
     }
 
-    /// The profile the plate itself is built to: the raft under the supports and the
-    /// bracing between them.
+    /// The profile the plate itself is built to: the raft under the supports.
     pub fn ground(&self) -> &'a SupportProfile {
         self.of(0)
     }

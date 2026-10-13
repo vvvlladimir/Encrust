@@ -297,6 +297,7 @@ impl SlicerApp {
     fn refresh_supports(&mut self) {
         self.tools.supports.settle_on_raft(&mut self.doc.scene);
         let plate = self.tools.supports.table();
+        let raft = self.tools.supports.raft;
         for object in self.doc.scene.objects_mut() {
             let untouched = object.supports.is_empty()
                 && object.supports.meshes().is_none()
@@ -308,7 +309,7 @@ impl SlicerApp {
             }
             let mesh = std::sync::Arc::clone(&object.mesh);
             let bvh = std::sync::Arc::clone(&object.bvh);
-            let table = with_own(plate.clone(), &object.own.supports);
+            let table = with_own(plate.clone(), &object.own, raft);
             object
                 .supports
                 .refresh(&mesh, &bvh, object.transform, &table);

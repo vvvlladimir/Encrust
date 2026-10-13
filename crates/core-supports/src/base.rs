@@ -163,53 +163,74 @@ fn rectangle(points: &[Vec2]) -> Vec<Vec2> {
     ]
 }
 
-/// Every brace between the trunks of `trees`, as the pair of points it runs between and
-/// its radius in millimetres.
+/// Every brace between the trunks of `trees`: the pair of points it runs between, its
+/// radius in millimetres, and the group whose bracing it is built to.
 ///
-/// Trunks within `max_spacing_mm` of each other are tied at `rise_mm` intervals from
-/// `start_height_mm` up, as high as both of them still stand. See `docs/decisions/0043`.
+/// Each trunk is tied the way its own group's `[bracing]` says, and only where that is
+/// switched on. A pair of one group is tied by that group's numbers. A pair of two
+/// groups is tied by the finer of the two — the thinner brace, with its start and its
+/// rise — no further apart than both let a brace span, and the brace is that group's:
+/// the trunk less able to carry a thick brace is the one that says how thick it is. See
+/// `docs/decisions/0252`.
+///
 /// A brace is a support body like any other, so one the model is in the way of is not
-/// tied at all; see `docs/decisions/0077`. The bracing is the ground profile's, and each
-/// trunk is as wide as its own group's profile makes it.
+/// tied at all; see `docs/decisions/0077`.
 pub(crate) fn braces(
     trees: &[SupportTree],
     placed: &Placed,
     profiles: Profiles,
-) -> Vec<(Vec3, Vec3, Scalar)> {
-    let profile = profiles.ground();
-    let bracing = &profile.bracing;
-    if !bracing.enabled || bracing.rise_mm <= SAME_PLACE_MM {
-        return Vec::new();
-    }
-
+) -> Vec<(Vec3, Vec3, Scalar, u16)> {
     let mut struts = Vec::new();
-    for (one, two) in neighbours(trees, profile) {
+    for (one, two) in neighbours(trees, profiles) {
+        let (group, profile) = lead_of(one, two, profiles);
         let tied = tie(one, two, profiles).into_iter();
-        struts.extend(tied.filter(|&(from, to, radius_mm)| {
-            let beam = Beam {
-                from,
-                to,
-                from_radius_mm: radius_mm,
-                to_radius_mm: radius_mm,
-            }
-            .with_clearance(profile.clearance_mm);
-            clear(placed, &beam)
-        }));
+        struts.extend(
+            tied.filter(|&(from, to, radius_mm)| {
+                let beam = Beam {
+                    from,
+                    to,
+                    from_radius_mm: radius_mm,
+                    to_radius_mm: radius_mm,
+                }
+                .with_clearance(profile.clearance_mm);
+                clear(placed, &beam)
+            })
+            .map(|(from, to, radius_mm)| (from, to, radius_mm, group)),
+        );
     }
     struts
 }
 
-/// Whether `tree` stands tall enough to carry one level of bracing.
+/// Whether `tree` stands tall enough to carry one level of the bracing of `profile`,
+/// which is its own group's.
 pub(crate) fn braceable(tree: &SupportTree, profile: &SupportProfile) -> bool {
     // A tree leant onto another support is tied to it already.
     let bracing = &profile.bracing;
-    !tree.landing().on_support
+    bracing.enabled
+        && bracing.rise_mm > SAME_PLACE_MM
+        && !tree.landing().on_support
         && tree.root().position.z - tree.landing().bottom_z(profile)
             >= bracing.start_height_mm + bracing.rise_mm
 }
 
+/// The group a brace between `one` and `two` is built to, and its profile: the one whose
+/// brace is the thinner, and the lower-numbered of two that are alike.
+fn lead_of<'a>(
+    one: &SupportTree,
+    two: &SupportTree,
+    profiles: Profiles<'a>,
+) -> (u16, &'a SupportProfile) {
+    let (a, b) = (one.group().min(two.group()), one.group().max(two.group()));
+    let (first, second) = (profiles.of(a), profiles.of(b));
+    if second.bracing.diameter_mm < first.bracing.diameter_mm {
+        (b, second)
+    } else {
+        (a, first)
+    }
+}
+
 /// The pairs of trunks worth tying: the Gabriel graph of the trunks tall enough to brace,
-/// cut at `max_spacing_mm`.
+/// cut at the shorter of the two spans their groups allow.
 ///
 /// Two trunks are neighbours when no third stands inside the circle they span as a
 /// diameter. That graph is planar, so no two crosses cross each other seen from above,
@@ -218,19 +239,23 @@ pub(crate) fn braceable(tree: &SupportTree, profile: &SupportProfile) -> bool {
 /// `docs/decisions/0240`.
 fn neighbours<'a>(
     trees: &'a [SupportTree],
-    profile: &SupportProfile,
+    profiles: Profiles,
 ) -> Vec<(&'a SupportTree, &'a SupportTree)> {
+    let own = |tree: &SupportTree| profiles.of(tree.group());
     let tall: Vec<&SupportTree> = trees
         .iter()
-        .filter(|tree| braceable(tree, profile))
+        .filter(|tree| braceable(tree, own(tree)))
         .collect();
     let at = |tree: &SupportTree| tree.root().position.truncate();
-    let reach = profile.bracing.max_spacing_mm;
 
     let mut pairs = Vec::new();
     for (index, one) in tall.iter().enumerate() {
         for two in &tall[index + 1..] {
             let (here, there) = (at(one), at(two));
+            let reach = own(one)
+                .bracing
+                .max_spacing_mm
+                .min(own(two).bracing.max_spacing_mm);
             if (there - here).length() > reach {
                 continue;
             }
@@ -246,19 +271,19 @@ fn neighbours<'a>(
     pairs
 }
 
-/// The braces between one pair of trunks.
+/// The braces between one pair of trunks, built to the pair's leading profile.
 ///
 /// A brace is never wider than either trunk where it meets it, or it swallows the thinner
 /// one; see `docs/decisions/0242`.
 fn tie(one: &SupportTree, two: &SupportTree, profiles: Profiles) -> Vec<(Vec3, Vec3, Scalar)> {
-    let profile = profiles.ground();
-    let bracing = &profile.bracing;
+    let (_, lead) = lead_of(one, two, profiles);
+    let bracing = &lead.bracing;
+    let own = |tree: &SupportTree| profiles.of(tree.group());
     let width = |tree: &SupportTree, z: Scalar| {
-        trunk_radius_at_mm(tree, profiles.of(tree.group()), z).min(bracing.radius_mm())
+        trunk_radius_at_mm(tree, own(tree), z).min(bracing.radius_mm())
     };
     let (here, there) = (one.root().position, two.root().position);
-    let ground = Vec2::new(there.x - here.x, there.y - here.y).length();
-    if ground > bracing.max_spacing_mm || ground < SAME_PLACE_MM {
+    if Vec2::new(there.x - here.x, there.y - here.y).length() < SAME_PLACE_MM {
         return Vec::new();
     }
 
@@ -266,17 +291,18 @@ fn tie(one: &SupportTree, two: &SupportTree, profiles: Profiles) -> Vec<(Vec3, V
     // each stands on and below the joint each one's branches leave from.
     let floor = one
         .landing()
-        .bottom_z(profile)
-        .max(two.landing().bottom_z(profile))
+        .bottom_z(own(one))
+        .max(two.landing().bottom_z(own(two)))
         + bracing.start_height_mm;
     let ceiling = here.z.min(there.z);
 
     // A cross rather than a rung: each step ties the foot of one trunk to the head of
     // the other and back again, so the pair is braced against leaning either way. See
     // `docs/decisions/0044`.
+    //
     // Each end is on its trunk's own axis at that height, not under its root: a trunk a
     // hand has leant is not where it was grown, and a brace to where it was ties nothing.
-    let on = |tree: &SupportTree, z: Scalar| trunk_axis_at(tree, profiles.of(tree.group()), z);
+    let on = |tree: &SupportTree, z: Scalar| trunk_axis_at(tree, own(tree), z);
     let mut struts = Vec::new();
     let mut z = floor;
     while z + bracing.rise_mm <= ceiling {
@@ -303,7 +329,7 @@ mod tests {
         trees: &[SupportTree],
         model: &Mesh,
         profile: &SupportProfile,
-    ) -> Vec<(Vec3, Vec3, Scalar)> {
+    ) -> Vec<(Vec3, Vec3, Scalar, u16)> {
         braces(
             trees,
             &Placed::new(model, &Bvh::build(model), Transform::default()),
@@ -415,7 +441,7 @@ mod tests {
         assert!(!struts.is_empty(), "two trunks within reach get tied");
         assert_eq!(struts.len() % 2, 0, "a cross is two struts, never one");
 
-        for (from, to, _) in &struts {
+        for (from, to, _, _) in &struts {
             assert!(
                 (to.z - from.z - profile.bracing.rise_mm).abs() < 1e-4,
                 "a brace climbs one rise on its way across, got {from} to {to}"
@@ -445,7 +471,7 @@ mod tests {
 
         let struts = tied(&trees, &Mesh::default(), &profile);
         assert!(!struts.is_empty(), "the pair is still within reach");
-        for end in struts.iter().flat_map(|(from, to, _)| [*from, *to]) {
+        for end in struts.iter().flat_map(|(from, to, _, _)| [*from, *to]) {
             let tree = if end.x < 14.0 { &trees[0] } else { &trees[1] };
             let on_it = trunk_axis_at(tree, &profile, end.z);
             assert!(
@@ -456,8 +482,83 @@ mod tests {
         assert!(
             struts
                 .iter()
-                .any(|(from, _, _)| (from.x - 10.0).abs() > 0.5 && from.x < 10.0),
+                .any(|(from, _, _, _)| (from.x - 10.0).abs() > 0.5 && from.x < 10.0),
             "low down, the leant trunk is not under its root any more"
+        );
+    }
+
+    /// Two trunks 30 mm tall and 8 mm apart, the first in group `one` and the second in
+    /// group `two` of `table`, with every brace between them.
+    fn tied_across(table: &[SupportProfile], one: u16, two: u16) -> Vec<(Vec3, Vec3, Scalar, u16)> {
+        let points = [
+            SupportPoint::new(Vec3::new(10.0, 10.0, 30.0)).in_group(one),
+            SupportPoint::new(Vec3::new(18.0, 10.0, 30.0)).in_group(two),
+        ];
+        let profiles = Profiles::new(table).expect("a table of groups");
+        let model = Mesh::default();
+        let trees = trees_on(&points, &model, Transform::default(), profiles);
+        braces(
+            &trees,
+            &Placed::new(&model, &Bvh::build(&model), Transform::default()),
+            profiles,
+        )
+    }
+
+    /// Bracing as `with_bracing` has it, the braces `diameter_mm` wide.
+    fn braced(diameter_mm: Scalar) -> SupportProfile {
+        let mut profile = with_bracing();
+        profile.bracing.diameter_mm = diameter_mm;
+        profile
+    }
+
+    /// The same shape with the bracing switched off.
+    fn unbraced() -> SupportProfile {
+        let mut profile = with_bracing();
+        profile.bracing.enabled = false;
+        profile
+    }
+
+    #[test]
+    fn a_group_is_braced_by_its_own_settings_whatever_the_first_group_says() {
+        let struts = tied_across(&[unbraced(), braced(0.8)], 1, 1);
+        assert!(
+            !struts.is_empty(),
+            "the second group has bracing on, and both trunks are its own"
+        );
+        assert!(
+            struts.iter().all(|(_, _, _, group)| *group == 1),
+            "and the braces are that group's, not the first one's"
+        );
+        assert!(
+            tied_across(&[braced(0.8), unbraced()], 1, 1).is_empty(),
+            "bracing on in the first group ties nothing in a group that has it off"
+        );
+    }
+
+    #[test]
+    fn two_groups_are_tied_by_the_finer_brace_and_only_where_both_are_braced() {
+        let struts = tied_across(&[braced(0.8), braced(0.4)], 0, 1);
+        assert!(!struts.is_empty(), "both groups brace, so the pair is tied");
+        for (_, _, radius_mm, group) in &struts {
+            assert_eq!(*group, 1, "the brace is the group's with the thinner one");
+            assert!(
+                *radius_mm <= 0.2 + 1e-6,
+                "and no wider than that group's, got {radius_mm}"
+            );
+        }
+        assert!(
+            tied_across(&[braced(0.8), unbraced()], 0, 1).is_empty(),
+            "a trunk whose group does not brace is not tied to one that does"
+        );
+    }
+
+    #[test]
+    fn a_pair_is_tied_no_further_apart_than_both_groups_span() {
+        let mut near = braced(0.8);
+        near.bracing.max_spacing_mm = 6.0;
+        assert!(
+            tied_across(&[braced(0.8), near], 0, 1).is_empty(),
+            "8 mm is inside one group's span and outside the other's"
         );
     }
 
@@ -469,7 +570,7 @@ mod tests {
         let struts = tied(&trees, &Mesh::default(), &profile);
         assert!(!struts.is_empty(), "two trunks within reach get tied");
 
-        for &(from, to, radius_mm) in &struts {
+        for &(from, to, radius_mm, _) in &struts {
             let at = |point: Vec3| {
                 let tree = trees
                     .iter()
@@ -511,7 +612,7 @@ mod tests {
         let struts = tied(&row, &Mesh::default(), &profile);
 
         assert!(!struts.is_empty(), "neighbours are tied");
-        for (from, to, _) in &struts {
+        for (from, to, _, _) in &struts {
             assert!(
                 (to.x - from.x).abs() < 4.0 + 1e-3,
                 "a brace from {from} to {to} runs past the trunk between them"

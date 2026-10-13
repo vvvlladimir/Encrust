@@ -39,7 +39,7 @@ const OUT_MIN: Scalar = 0.05;
 
 /// How far a face a support stands on may lean from horizontal, degrees. Past this the
 /// foot has no surface under it: the column runs down the face instead of onto it.
-const MAX_LANDING_SLOPE_DEG: Scalar = 45.0;
+pub(crate) const MAX_LANDING_SLOPE_DEG: Scalar = 45.0;
 
 /// Where a support touches the model, in the model's own space, and how it is built.
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
@@ -203,6 +203,29 @@ pub fn landing(
     tips: usize,
     profile: &SupportProfile,
 ) -> Option<Landing> {
+    landing_within(
+        placed,
+        from,
+        radius_mm,
+        tips,
+        profile,
+        MAX_LANDING_SLOPE_DEG,
+    )
+}
+
+/// How far a face may lean and still be stood on by a support with nowhere better to go,
+/// degrees: short of a wall, which a trunk would only run down.
+pub(crate) const LAST_RESORT_SLOPE_DEG: Scalar = 75.0;
+
+/// [`landing`], onto a face of the model leaning no further than `steepest_deg`.
+pub(crate) fn landing_within(
+    placed: &Placed,
+    from: Vec3,
+    radius_mm: Scalar,
+    tips: usize,
+    profile: &SupportProfile,
+    steepest_deg: Scalar,
+) -> Option<Landing> {
     let contact = from;
     let ray = Ray::new(contact - Vec3::Z * SURFACE_EPSILON_MM, -Vec3::Z);
     let below = raycast_placed(placed.model, placed.bvh, placed.transform, &ray);
@@ -218,7 +241,7 @@ pub fn landing(
         Some(hit) if hit.point.z > PLATE_Z_MM => {
             // The whole beam meets the face it lands on, clearance and all, so the reach
             // that stops being asked about is measured on the beam's own width.
-            let touch_mm = (radius_mm + profile.clearance_mm) * lean_of(hit.normal)?;
+            let touch_mm = (radius_mm + profile.clearance_mm) * lean_of(hit.normal, steepest_deg)?;
             (
                 Landing {
                     base: hit.point,
@@ -271,8 +294,12 @@ pub fn neck_of(placed: &Placed, contact: Vec3, profile: &SupportProfile) -> Vec3
     // the wall across it — goes straight down instead, where that is open.
     let reach_mm = length_mm + profile.pillar_radius_mm();
     let square = tip_direction(placed, contact);
+    // Asked from a hair off the face, the way the head would have left it: a contact on
+    // a wall is on the edge of the solid, and straight down from the edge is neither in
+    // nor out.
+    let off_the_face = contact + square * (10.0 * SURFACE_EPSILON_MM);
     let direction = if runs_into(placed, contact, square, reach_mm)
-        && !runs_into(placed, contact, -Vec3::Z, reach_mm)
+        && !runs_into(placed, off_the_face, -Vec3::Z, reach_mm)
     {
         -Vec3::Z
     } else {
@@ -289,11 +316,13 @@ pub fn neck_of(placed: &Placed, contact: Vec3, profile: &SupportProfile) -> Vec3
     contact + direction * length_mm
 }
 
-/// Whether a head leaving `contact` along `direction` meets the model within `reach_mm`.
+/// Whether a head leaving `contact` along `direction` meets the model within `reach_mm`,
+/// or sets off into it: the first face a ray from inside the solid meets is one it is
+/// leaving by, which looks the way the ray goes.
 fn runs_into(placed: &Placed, contact: Vec3, direction: Vec3, reach_mm: Scalar) -> bool {
     let ray = Ray::new(contact + direction * SURFACE_EPSILON_MM, direction);
     raycast_placed(placed.model, placed.bvh, placed.transform, &ray)
-        .is_some_and(|hit| hit.distance < reach_mm)
+        .is_some_and(|hit| hit.distance < reach_mm || hit.normal.dot(direction) > 0.0)
 }
 
 /// Which way a tip leaves the surface at `contact`: the outward normal of a face that looks
@@ -428,9 +457,9 @@ pub(crate) fn foot_clear(placed: &Placed, base: Vec3, profile: &SupportProfile) 
 
 /// How much ground the face `normal` belongs to covers per millimetre it rises, or `None`
 /// when it is too steep to stand a support on at all.
-fn lean_of(normal: Vec3) -> Option<Scalar> {
+fn lean_of(normal: Vec3, steepest_deg: Scalar) -> Option<Scalar> {
     let up = normal.z;
-    (up >= MAX_LANDING_SLOPE_DEG.to_radians().cos()).then(|| (1.0 - up * up).max(0.0).sqrt() / up)
+    (up >= steepest_deg.to_radians().cos()).then(|| (1.0 - up * up).max(0.0).sqrt() / up)
 }
 
 /// Whether `body`, a trunk dropped from its joint, has the model out of its way.
@@ -883,6 +912,49 @@ mod tests {
             .to_matrix()
             .transform_point3(Vec3::new(run / 2.0, 0.0, rise / 2.0));
         neck_of(&placed, contact, &profile()) - contact
+    }
+
+    #[test]
+    fn straight_down_into_the_solid_is_not_a_way_out_for_a_head() {
+        // A block hanging over the plate. From its top face, down is through the block,
+        // 10 mm of it, further than any head reaches; from its underside, down is air.
+        let model = box_mesh(Vec3::new(0.0, 0.0, 10.0), Vec3::new(10.0, 10.0, 20.0));
+        let bvh = Bvh::build(&model);
+        let placed = Placed::new(&model, &bvh, Transform::default());
+
+        assert!(
+            runs_into(&placed, Vec3::new(5.0, 5.0, 20.0), -Vec3::Z, 2.0),
+            "the first face under the top is the underside seen from inside"
+        );
+        assert!(!runs_into(
+            &placed,
+            Vec3::new(5.0, 5.0, 10.0),
+            -Vec3::Z,
+            2.0
+        ));
+    }
+
+    #[test]
+    fn a_trunk_stands_on_a_steep_face_only_when_asked_as_a_last_resort() {
+        // A ramp rising 10 over a run of 4: 68 degrees, past what a column chooses to
+        // stand on and short of a wall.
+        let model = ramp(4.0, 10.0);
+        let bvh = Bvh::build(&model);
+        let placed = Placed::new(&model, &bvh, Transform::default());
+        let from = Vec3::new(2.0, 0.0, 20.0);
+        let radius_mm = profile().pillar_radius_mm();
+
+        assert!(landing(&placed, from, radius_mm, 1, &profile()).is_none());
+        let steep = landing_within(
+            &placed,
+            from,
+            radius_mm,
+            1,
+            &profile(),
+            LAST_RESORT_SLOPE_DEG,
+        )
+        .expect("there is a face under it, and nowhere better was the caller's to say");
+        assert!(steep.on_model);
     }
 
     #[test]

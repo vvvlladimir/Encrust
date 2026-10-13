@@ -30,8 +30,10 @@ fast, 45 degrees, and a head that would meet the model within its own length goe
 down (ADR 0249). A flat top, or a contact off the surface, sends it straight down. A knee
 and the strut into a thicker support are held to 45 degrees too, whatever the branch
 angle; a trunk is swept for clearance from its own width below its top; and a tip that can
-neither stand nor lean is run on one strut straight onto the model under it — onto a face
-that looks up at it, so a contact inside the model is not run out through its skin. A contact on an edge or a corner sits on every face meeting there
+neither stand nor lean is first let stand, or lean and stand, on a face up to 75 degrees
+steep, and failing that run on one strut straight onto the model under it — onto a face
+that looks up at it, so a contact inside the model is not run out through its skin. A head
+is not sent straight down where down is into the solid. A contact on an edge or a corner sits on every face meeting there
 and leaves the one that looks down most, so the support under a low point of the model is
 shaped like the rest. Everything below is measured from the neck, not from the contact.
 
@@ -130,7 +132,10 @@ where branching is on and the trunk under the knee can still be tied (ADR 0240) 
 further across than half the merge distance, and towards a trunk of any group already
 stood (ADR 0250). A brace ends on each trunk's own axis at that height, so one a hand has
 leant keeps its braces.
-`[bracing]` ties those neighbours every `rise_mm` from
+`[bracing]` is each group's own (ADR 0252): a trunk is tied only where its group braces,
+two groups are tied where both do and no further apart than both span, and the brace
+between them is built to the finer of the two and meshed with that group. It ties those
+neighbours every `rise_mm` from
 `start_height_mm`, as high as both still stand — the lower of the two root nodes, since
 above that a trunk has split. A tie is a cross, not a rung, so the pair is braced both
 ways; a pair with room for one level is not tied. A brace is no wider than either trunk
@@ -355,7 +360,9 @@ Volume figures read a little high, because an overlapping mesh counts its overla
 A support carries the number of a group, and `Profiles` is the table of profiles the plate
 is built with (ADR 0094). `columns` builds each tip to its own group's shape, `grow` runs
 once per group — so a trunk is never shared by two shapes — and `mesh_trees` meshes each
-tree to its group while the raft and the bracing come from group 0. A tree also carries the group it was grown to, so what meshes it knows its shape.
+tree to its group and each brace to the group it ties. The raft is not a group's: it is the
+model's own or the plate's (ADR 0253), written into the first profile of the table a model
+is built with, which is where the core reads it. A tree also carries the group it was grown to, so what meshes it knows its shape.
 
 Groups are grown thickest first, and the struts and trunks a group has stood are carriers
 for the thinner groups after it (ADR 0248): while those merge, a front may run into a

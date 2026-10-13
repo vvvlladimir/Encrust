@@ -1,6 +1,6 @@
 # 0250. Lean a trunk for a brace no further than a branch reaches, towards any group, and tie a brace to the trunk's own axis
 
-- **Status:** Accepted
+- **Status:** Accepted; that bracing is asked of the ground profile is superseded by 0252
 - **Date:** 2026-10-13
 
 ## Context

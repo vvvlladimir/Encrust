@@ -9,7 +9,8 @@ use crate::Landing;
 use crate::base::braceable;
 use crate::clear::{Beam, clear};
 use crate::column::{
-    Column, MAX_LEAN_PER_DROP, MIN_PILLAR_HEIGHT_MM, PLATE_Z_MM, SURFACE_EPSILON_MM, landing,
+    Column, LAST_RESORT_SLOPE_DEG, MAX_LANDING_SLOPE_DEG, MAX_LEAN_PER_DROP, MIN_PILLAR_HEIGHT_MM,
+    PLATE_Z_MM, SURFACE_EPSILON_MM, landing, landing_within,
 };
 use crate::group::Profiles;
 use crate::mesher::is_small;
@@ -57,8 +58,8 @@ pub fn grow(columns: &[Column], placed: &Placed, profiles: Profiles) -> Vec<Supp
         let mut trees = grow_one(&mine, placed, profile, group, &carriers);
         // Before anything thinner is leant onto them: a trunk moved afterwards would
         // leave what joined it ending in the air.
-        if profile.branching.enabled && profiles.ground().bracing.enabled {
-            gather(&mut trees, &forest, placed, profile, profiles.ground());
+        if profile.branching.enabled && profile.bracing.enabled {
+            gather(&mut trees, &forest, placed, profile, profiles);
         }
         carriers.take(&trees, profile);
         forest.extend(trees);
@@ -301,22 +302,23 @@ const GATHERED: Scalar = 0.75;
 /// where the trunk under it is still tall enough to brace, clears the model and lands on
 /// the plate, and only as far as a branch reaches. The neighbour may be one of `settled`,
 /// the trunks thicker groups have already stood: a brace ties any two trunks, whatever
-/// their groups. See `docs/decisions/0240` and `docs/decisions/0250`.
+/// their groups, where both groups have bracing switched on. See `docs/decisions/0240`,
+/// `docs/decisions/0250` and `docs/decisions/0252`.
 fn gather(
     trees: &mut [SupportTree],
     settled: &[SupportTree],
     placed: &Placed,
     profile: &SupportProfile,
-    ground: &SupportProfile,
+    profiles: Profiles,
 ) {
-    let reach = ground.bracing.max_spacing_mm;
+    let reach = profile.bracing.max_spacing_mm;
     // No further than a branch reaches: a trunk carried across a cavity to meet a brace
     // is a longer lever than the one the brace was to steady.
     let furthest = profile.branching.max_merge_distance_mm / 2.0;
     let at = |tree: &SupportTree| tree.root().position.truncate();
     for index in 0..trees.len() {
         let tree = &trees[index];
-        if tree.landing().on_model || !braceable(tree, ground) {
+        if tree.landing().on_model || !braceable(tree, profile) {
             continue;
         }
         let here = at(tree);
@@ -326,7 +328,7 @@ fn gather(
             .filter(|(other, _)| *other != index)
             .map(|(_, tree)| tree)
             .chain(settled)
-            .filter(|tree| braceable(tree, ground))
+            .filter(|tree| braceable(tree, profiles.of(tree.group())))
             .map(at)
             .min_by(|a, b| (*a - here).length().total_cmp(&(*b - here).length()));
         let Some(there) = nearest.filter(|there| (*there - here).length() > reach) else {
@@ -354,7 +356,7 @@ fn gather(
 
         let mut leaning = tree.clone();
         leaning.lean_to(knee, root.radius_mm, landing);
-        if braceable(&leaning, ground) {
+        if braceable(&leaning, profile) {
             trees[index] = leaning;
         }
     }
@@ -682,7 +684,7 @@ impl<'a> Forest<'a> {
             if landing(placed, front.position, front.radius_mm, front.tips, profile).is_some() {
                 continue;
             }
-            let Some((knee, _)) = escape(&front, placed, profile) else {
+            let Some((knee, _)) = escape(&front, placed, profile, MAX_LANDING_SLOPE_DEG) else {
                 continue;
             };
 
@@ -719,16 +721,22 @@ impl<'a> Forest<'a> {
             .iter()
             .filter(|front| front.alive)
             .flat_map(|front| {
-                let found = landing(placed, front.position, front.radius_mm, front.tips, profile);
-                if let Some(landing) = found {
-                    return vec![self.cut(front.node, &children, landing)];
+                // Straight down, then leaning aside; then both again onto a face too steep
+                // to choose but not to stand on, before the tips are given up to a strut
+                // each. A support cured onto a slope beats a contact with nothing under it.
+                for steepest_deg in [MAX_LANDING_SLOPE_DEG, LAST_RESORT_SLOPE_DEG] {
+                    let (at, radius_mm, tips) = (front.position, front.radius_mm, front.tips);
+                    let down = landing_within(placed, at, radius_mm, tips, profile, steepest_deg);
+                    if let Some(landing) = down {
+                        return vec![self.cut(front.node, &children, landing)];
+                    }
+                    if let Some((knee, landing)) = escape(front, placed, profile, steepest_deg) {
+                        let mut tree = self.cut(front.node, &children, landing);
+                        tree.stand_on_knee(knee, front.radius_mm);
+                        return vec![tree];
+                    }
                 }
-                let Some((knee, landing)) = escape(front, placed, profile) else {
-                    return self.bridges(front, &children, placed, profile);
-                };
-                let mut tree = self.cut(front.node, &children, landing);
-                tree.stand_on_knee(knee, front.radius_mm);
-                vec![tree]
+                self.bridges(front, &children, placed, profile)
             })
             .chain(
                 self.landed.iter().map(|(front, landing)| {
@@ -832,7 +840,7 @@ fn stands(
         alive: true,
     };
     landing(placed, at, radius_mm, tips, profile).is_some()
-        || escape(&front, placed, profile).is_some()
+        || escape(&front, placed, profile, MAX_LANDING_SLOPE_DEG).is_some()
 }
 
 /// How much ground a leaning trunk — a knee, or the strut into a thicker support — covers
@@ -852,7 +860,12 @@ const BRIDGE_MAX_MM: Scalar = 6.0;
 ///
 /// The shortest reach that works is taken, so a support leans no further than it has to;
 /// see `docs/decisions/0078`.
-fn escape(front: &Front, placed: &Placed, profile: &SupportProfile) -> Option<(Vec3, Landing)> {
+fn escape(
+    front: &Front,
+    placed: &Placed,
+    profile: &SupportProfile,
+    steepest_deg: Scalar,
+) -> Option<(Vec3, Landing)> {
     let (from, radius_mm) = (front.position, front.radius_mm);
     let reach_per_drop = lean_per_drop(profile);
     // A lean costs height, and what is left underneath is the ceiling on it: a support low
@@ -886,7 +899,8 @@ fn escape(front: &Front, placed: &Placed, profile: &SupportProfile) -> Option<(V
             if !clear(placed, &beam) {
                 continue;
             }
-            if let Some(landing) = landing(placed, knee, radius_mm, front.tips, profile) {
+            let stood = landing_within(placed, knee, radius_mm, front.tips, profile, steepest_deg);
+            if let Some(landing) = stood {
                 return Some((knee, landing));
             }
         }
@@ -1547,5 +1561,133 @@ mod tests {
     #[test]
     fn no_contacts_grow_no_trees() {
         assert!(forest_of(&[], &Mesh::default(), Profiles::single(&profile())).is_empty());
+    }
+}
+
+#[cfg(test)]
+mod probe {
+    use super::*;
+    use crate::SupportPoint;
+    use core_geometry::{Bvh, Mesh, Transform};
+
+    fn blob(amp: f32) -> Mesh {
+        let (stacks, slices) = (160usize, 320usize);
+        let mut vertices = Vec::new();
+        for i in 0..=stacks {
+            let v = std::f32::consts::PI * (0.02 + 0.96 * i as f32 / stacks as f32);
+            for j in 0..slices {
+                let u = std::f32::consts::TAU * j as f32 / slices as f32;
+                let r = 20.0 + amp * (5.0 * u).sin() * (7.0 * v).sin() + 0.6 * amp * (11.0 * u + 3.0 * v).sin() * (9.0 * v).cos();
+                vertices.push(Vec3::new(r * v.sin() * u.cos(), r * v.sin() * u.sin(), 31.0 - r * v.cos()));
+            }
+        }
+        let mut faces = Vec::new();
+        for i in 0..stacks {
+            for j in 0..slices {
+                let a = (i * slices + j) as u32;
+                let b = (i * slices + (j + 1) % slices) as u32;
+                let c = ((i + 1) * slices + j) as u32;
+                let d = ((i + 1) * slices + (j + 1) % slices) as u32;
+                faces.push([a, b, c]);
+                faces.push([b, d, c]);
+            }
+        }
+        // caps
+        let (top, bot) = (vertices.len() as u32, vertices.len() as u32 + 1);
+        let c0: Vec3 = vertices[..slices].iter().copied().sum::<Vec3>() / slices as f32;
+        let c1: Vec3 = vertices[stacks * slices..].iter().copied().sum::<Vec3>() / slices as f32;
+        vertices.push(c0); vertices.push(c1);
+        for j in 0..slices {
+            let n = (j + 1) % slices;
+            faces.push([top, n as u32, j as u32]);
+            faces.push([bot, (stacks * slices + j) as u32, (stacks * slices + n) as u32]);
+        }
+        Mesh::new(vertices, faces)
+    }
+
+    #[test]
+    fn probe_mixed() {
+        use core_slicer::{PlaneSliceEngine, SliceEngine, SliceSettings};
+        let model = blob(3.0);
+        let bvh = Bvh::build(&model);
+        let placed = Placed::new(&model, &bvh, Transform::default());
+        let on: Vec<Vec3> = (0..model.faces.len()).step_by(53).filter_map(|f| model.triangle(f)).map(|t| ((t.a + t.b + t.c) / 3.0, t.normal_unnormalized().normalize().z)).filter(|(c, nz)| *nz < -0.3 && c.truncate().length() > 4.0).map(|(c, _)| c).collect();
+        for (base, extra) in [(SupportProfile::light(), SupportProfile::heavy()), (SupportProfile::medium(), SupportProfile::heavy()), (SupportProfile::heavy(), SupportProfile::light())] {
+            let stack = PlaneSliceEngine.slice(&model, &SliceSettings { layer_height: 0.05, ..SliceSettings::default() }).expect("s");
+            let auto = crate::generate_supports(&stack, 0.05, &base, &[], &[], None, &mut |_| true);
+            let table = [base.clone(), extra.clone()];
+            let profiles = Profiles::new(&table).expect("t");
+            let mut points: Vec<SupportPoint> = auto.iter().copied().map(SupportPoint::new).collect();
+            let (mut no_tree, mut no_mesh, mut bad) = (0, 0, 0);
+            for c in &on {
+                points.push(SupportPoint::new(*c).in_group(1));
+                let cols = crate::columns(&points, &placed, profiles);
+                let trees = grow(&cols, &placed, profiles);
+                let idx = points.len() - 1;
+                let has = trees.iter().any(|t| t.points().any(|p| p == idx));
+                if !has { no_tree += 1; }
+                let meshes = crate::mesh_groups(&trees, &placed, profiles);
+                if has && meshes[1].is_empty() { no_mesh += 1; }
+                if meshes.iter().any(|m| m.vertices.iter().any(|v| !v.is_finite())) { bad += 1; }
+                points.pop();
+            }
+            println!("{} + one {}: {} clicks: no tree {}, tree but empty mesh {}, non-finite {} (auto {})", base.name, extra.name, on.len(), no_tree, no_mesh, bad, auto.len());
+        }
+    }
+
+    #[test]
+    fn probe_low() {
+        let raw = blob(3.0);
+        let low = raw.vertices.iter().map(|v| v.z).fold(f32::MAX, f32::min);
+        for lift in [0.0f32, 2.0, 5.0] {
+            let transform = Transform::from_translation(Vec3::new(0.0, 0.0, lift - low));
+            let bvh = Bvh::build(&raw);
+            let placed = Placed::new(&raw, &bvh, transform);
+            let m = transform.to_matrix();
+            let on: Vec<Vec3> = (0..raw.faces.len()).step_by(53).filter_map(|f| raw.triangle(f)).map(|t| ((t.a + t.b + t.c) / 3.0, t.normal_unnormalized().normalize().z)).filter(|(c, nz)| *nz < -0.3 && c.truncate().length() > 4.0).map(|(c, _)| m.transform_point3(c)).collect();
+            for profile in [SupportProfile::light(), SupportProfile::medium(), SupportProfile::heavy()] {
+                let profiles = Profiles::single(&profile);
+                let inv = m.inverse();
+                let mut fail = 0; let mut total = 0;
+                for c in &on {
+                    if c.z < profile.z_lift_mm.min(lift) + 3.0 { continue; }
+                    total += 1;
+                    let cols = crate::columns(&[SupportPoint::new(inv.transform_point3(*c))], &placed, profiles);
+                    if grow(&cols, &placed, profiles).is_empty() { fail += 1; }
+                }
+                println!("lift {lift}: {}: {} of {} unheld", profile.name, fail, total);
+            }
+        }
+    }
+
+    #[test]
+    fn probe_heavy() {
+        for amp in [3.0f32, 6.0] {
+            let model = blob(amp);
+            println!("amp {amp} sv {} open {}", core_geometry::signed_volume(&model), core_geometry::diagnose(&model).boundary_edges);
+            let bvh = Bvh::build(&model);
+            let placed = Placed::new(&model, &bvh, Transform::default());
+            let on: Vec<(Vec3, f32)> = (0..model.faces.len()).step_by(53).filter_map(|f| model.triangle(f)).map(|t| ((t.a + t.b + t.c) / 3.0, t.normal_unnormalized().normalize().z)).filter(|(_, nz)| *nz < -0.3).collect();
+            for profile in [SupportProfile::light(), SupportProfile::medium(), SupportProfile::heavy()] {
+                let profiles = Profiles::single(&profile);
+                let mut fail = 0; let mut shown = 0;
+                for (c, nz) in &on {
+                    let cols = crate::columns(&[SupportPoint::new(*c)], &placed, profiles);
+                    if grow(&cols, &placed, profiles).is_empty() {
+                        fail += 1;
+                        if shown < 5 && profile.name == "Heavy" { shown += 1;
+                            let neck = cols[0].neck;
+                            let ray = Ray::new(neck - Vec3::Z * 1e-3, -Vec3::Z);
+                            let hit = raycast_placed(placed.model, placed.bvh, placed.transform, &ray);
+                            let r = profile.pillar_radius_mm();
+                            let bottom = hit.map_or(1.0, |h| h.point.z + 0.3);
+                            let body = |cl: f32, trim: f32, rr: f32| clear(&placed, &Beam { from: neck, to: Vec3::new(neck.x, neck.y, bottom), from_radius_mm: r, to_radius_mm: rr }.with_clearance(cl).trimmed(trim));
+                            println!("   {:?} nz {:.2} neck {:?} below {:?} clear(c)={} clear(0)={} base_r {:.2} clear(c,cone)={}", c, nz, neck, hit.map(|h| (h.distance, h.normal.z)), body(profile.clearance_mm, r + profile.clearance_mm, r), body(0.0, r, r), profile.trunk_base_radius_mm(neck.z, 1), body(profile.clearance_mm, r + profile.clearance_mm, profile.trunk_base_radius_mm(neck.z, 1)));
+                        }
+                    }
+                }
+                println!("  {}: {} of {} down-facing clicks unheld", profile.name, fail, on.len());
+            }
+        }
     }
 }

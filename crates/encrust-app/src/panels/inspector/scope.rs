@@ -193,30 +193,30 @@ mod tests {
     fn an_edit_to_the_support_profile_stays_on_the_picked_model_until_it_is_saved() {
         let (mut parts, first) = with_a_model();
         let second = parts.doc.scene.insert(tetrahedron());
-        let plate_mm = parts.tools.supports.profile.raft.thickness_mm;
+        let plate_mm = parts.tools.supports.profile.middle.diameter_mm;
         parts.doc.scene.select(Some(first));
 
         editing_supports(&mut parts.window(), |window| {
-            window.tools.supports.profile.raft.thickness_mm = plate_mm + 1.0;
+            window.tools.supports.profile.middle.diameter_mm = plate_mm + 1.0;
         });
-        let raft_of = |parts: &Parts, id: ObjectId| {
+        let width_of = |parts: &Parts, id: ObjectId| {
             let object = parts.doc.scene.get(id).expect("there");
-            parts.tools.supports.table_for(object)[0].raft.thickness_mm
+            parts.tools.supports.table_for(object)[0].middle.diameter_mm
         };
         assert_eq!(
-            raft_of(&parts, first),
+            width_of(&parts, first),
             plate_mm + 1.0,
             "the picked model took it"
         );
-        assert_eq!(raft_of(&parts, second), plate_mm, "the other one did not");
-        assert_eq!(parts.tools.supports.profile.raft.thickness_mm, plate_mm);
+        assert_eq!(width_of(&parts, second), plate_mm, "the other one did not");
+        assert_eq!(parts.tools.supports.profile.middle.diameter_mm, plate_mm);
 
         // Saved over the profile it was taken from: now it is everybody's.
         editing_supports(&mut parts.window(), |window| {
             window.tools.supports.saved = Some(window.tools.supports.profile.clone());
         });
         assert_eq!(
-            raft_of(&parts, second),
+            width_of(&parts, second),
             plate_mm + 1.0,
             "the other one follows"
         );

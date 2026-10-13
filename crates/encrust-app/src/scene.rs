@@ -12,7 +12,7 @@ use core_geometry::{
 
 use core_supports::ModelSupports;
 use core_volume::ModelHollow;
-use printer_profiles::SupportProfile;
+use printer_profiles::{Raft, SupportProfile};
 
 use crate::drain::Traps;
 
@@ -203,6 +203,8 @@ pub struct OwnSettings {
     pub drain: Option<DrainState>,
     /// By the number of the group each one stands in for.
     pub supports: BTreeMap<u16, SupportProfile>,
+    /// The raft under this model, where it is not the plate's; see ADR 0253.
+    pub raft: Option<Raft>,
 }
 
 /// The last bounds measured over a mesh's vertices, and the placement they were for, so

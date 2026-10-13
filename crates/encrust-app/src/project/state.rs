@@ -18,7 +18,7 @@ use core_engine::project::{
     BuiltCavity, Cavity, Chosen, Manifest, ModelMeshes, ObjectHollowState, ObjectState,
     ObjectSupportState, OwnSupportState, Project, Summary, VERSION, hollow_of, supports_of,
 };
-use printer_profiles::SupportProfile;
+use printer_profiles::{Raft, SupportProfile};
 
 /// What a project file is written from: the plate, and the numbers each tool is set to.
 pub struct Captured<'a> {
@@ -105,6 +105,7 @@ fn object_state(object: &SceneObject) -> ObjectState {
         },
         own_hollow: object.own.hollow.clone(),
         own_drain: object.own.drain.clone(),
+        own_raft: object.own.raft,
         own_supports: object
             .own
             .supports
@@ -168,7 +169,8 @@ pub fn apply(project: Project, plate: CapturedMut<'_>) {
         }
         scene.rename_plate(index as u32, name.clone());
     }
-    restore_objects(scene, manifest.objects, models, &tools.supports.table());
+    let (table, raft) = (tools.supports.table(), tools.supports.raft);
+    restore_objects(scene, manifest.objects, models, &table, raft);
     scene.select(None);
     scene.show_plate(manifest.active_plate);
 }
@@ -180,6 +182,7 @@ fn restore_objects(
     objects: Vec<ObjectState>,
     models: Vec<ModelMeshes>,
     table: &[SupportProfile],
+    plate_raft: Raft,
 ) {
     // The hierarchy is the expensive half of opening a model and is per mesh, so the
     // plate's models are built at once rather than one after another.
@@ -220,19 +223,21 @@ fn restore_objects(
             .into_iter()
             .map(|own| (own.group, own.profile))
             .collect();
+        let own = OwnSettings {
+            hollow: state.own_hollow,
+            drain: state.own_drain,
+            supports: own_supports,
+            raft: state.own_raft,
+        };
         object.supports = supports_of(
             &state.supports,
             &meshes.source,
             &bvh,
             state.transform,
-            &with_own(table.to_vec(), &own_supports),
+            &with_own(table.to_vec(), &own, plate_raft),
         );
         object.hollow = hollow_of(&state.hollow, meshes);
-        object.own = OwnSettings {
-            hollow: state.own_hollow,
-            drain: state.own_drain,
-            supports: own_supports,
-        };
+        object.own = own;
     }
 }
 
@@ -590,6 +595,26 @@ mod tests {
         let back = round_trip(&saved);
         assert_eq!(back.scene.objects()[0].own.hollow, Some(own));
         assert_eq!(back.scene.objects()[0].own.drain, None);
+    }
+
+    #[test]
+    fn the_plates_raft_and_a_models_own_are_saved_with_the_project() {
+        let mut saved = bench();
+        let plate = Raft {
+            enabled: !saved.tools.supports.raft.enabled,
+            thickness_mm: saved.tools.supports.raft.thickness_mm + 1.0,
+            ..saved.tools.supports.raft
+        };
+        let own = Raft {
+            thickness_mm: plate.thickness_mm + 1.0,
+            ..plate
+        };
+        saved.tools.supports.raft = plate;
+        saved.scene.objects_mut()[0].own.raft = Some(own);
+
+        let back = round_trip(&saved);
+        assert_eq!(back.tools.supports.raft, plate);
+        assert_eq!(back.scene.objects()[0].own.raft, Some(own));
     }
 
     #[test]

@@ -382,6 +382,7 @@ fn held_trees(tools: &Tools) -> Vec<(ObjectId, usize)> {
 /// the next: a support that vanishes under the cursor cannot be aimed.
 fn rebuild_held(window: &mut Window) {
     let plate = window.tools.supports.table();
+    let raft = window.tools.supports.raft;
     let mut done: Vec<crate::scene::ObjectId> = Vec::new();
     for picked in window.tools.supports.picked.clone() {
         if done.contains(&picked.id) {
@@ -391,7 +392,7 @@ fn rebuild_held(window: &mut Window) {
         if let Some(object) = window.doc.scene.get_mut(picked.id) {
             let mesh = std::sync::Arc::clone(&object.mesh);
             let bvh = std::sync::Arc::clone(&object.bvh);
-            let table = with_own(plate.clone(), &object.own.supports);
+            let table = with_own(plate.clone(), &object.own, raft);
             object
                 .supports
                 .refresh(&mesh, &bvh, object.transform, &table);

@@ -91,6 +91,7 @@ fn object(name: &str, mesh: &Mesh, transform: Transform) -> ObjectState {
         own_hollow: None,
         own_drain: None,
         own_supports: Vec::new(),
+        own_raft: None,
     }
 }
 
@@ -131,6 +132,7 @@ fn project() -> Project {
                 fill: ProjectSettings::default(),
                 brush_radius_mm: 2.0,
                 flood_angle_deg: 30.0,
+                raft: None,
             },
             hollow: HollowState {
                 thickness_mm: 2.0,

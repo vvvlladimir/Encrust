@@ -85,20 +85,24 @@ pub(crate) fn is_small(tree: &SupportTree, profile: &SupportProfile) -> bool {
 /// `placed` puts the mesh the braces have to keep clear of in the same space; every other
 /// body was already tested where it was built.
 ///
-/// Each tree is built to its own group's profile, while the raft under them and the
-/// bracing between them are built to group 0's: they belong to the plate rather than to
-/// any one support. See `docs/decisions/0094`.
+/// Each tree is built to its own group's profile, and each brace to the group it ties
+/// (ADR 0252). The raft under them is built to group 0's: it belongs to the plate rather
+/// than to any one support. See `docs/decisions/0094`.
 pub fn mesh_trees(trees: &[SupportTree], placed: &Placed, profiles: Profiles) -> Mesh {
     let mut mesh = Mesh::default();
     for tree in trees {
         mesh_tree(&mut mesh, tree, profiles.of(tree.group()));
     }
-    mesh_ground(&mut mesh, trees, placed, profiles);
+    for (from, to, radius_mm, group) in braces(trees, placed, profiles) {
+        sweep(&mut mesh, &brace(from, to, radius_mm, profiles.of(group)));
+    }
+    mesh_raft(&mut mesh, trees, placed, profiles);
     mesh
 }
 
 /// The same supports as [`mesh_trees`], one mesh per group in group order, so that each
-/// can be drawn apart. The raft and the bracing go with group 0, whose profile they take.
+/// can be drawn apart. A brace goes with the group it is built to, and the raft with
+/// group 0, whose profile it takes.
 pub fn mesh_groups(trees: &[SupportTree], placed: &Placed, profiles: Profiles) -> Vec<Mesh> {
     let mut meshes = vec![Mesh::default(); profiles.groups().count()];
     for tree in trees {
@@ -106,7 +110,15 @@ pub fn mesh_groups(trees: &[SupportTree], placed: &Placed, profiles: Profiles) -
         let slot = if slot < meshes.len() { slot } else { 0 };
         mesh_tree(&mut meshes[slot], tree, profiles.of(tree.group()));
     }
-    mesh_ground(&mut meshes[0], trees, placed, profiles);
+    for (from, to, radius_mm, group) in braces(trees, placed, profiles) {
+        let slot = usize::from(group);
+        let slot = if slot < meshes.len() { slot } else { 0 };
+        sweep(
+            &mut meshes[slot],
+            &brace(from, to, radius_mm, profiles.of(group)),
+        );
+    }
+    mesh_raft(&mut meshes[0], trees, placed, profiles);
     meshes
 }
 
@@ -119,12 +131,8 @@ fn mesh_tree(mesh: &mut Mesh, tree: &SupportTree, profile: &SupportProfile) {
     stand_on(mesh, tree, profile);
 }
 
-fn mesh_ground(mesh: &mut Mesh, trees: &[SupportTree], placed: &Placed, profiles: Profiles) {
-    let ground = profiles.ground();
-    for (from, to, radius_mm) in braces(trees, placed, profiles) {
-        sweep(mesh, &brace(from, to, radius_mm, ground));
-    }
-    if let Some(slab) = raft(trees, placed, ground) {
+fn mesh_raft(mesh: &mut Mesh, trees: &[SupportTree], placed: &Placed, profiles: Profiles) {
+    if let Some(slab) = raft(trees, placed, profiles.ground()) {
         append(mesh, &slab);
     }
 }
@@ -567,6 +575,46 @@ mod tests {
             groups.iter().map(|mesh| mesh.faces.len()).sum::<usize>(),
             whole.faces.len(),
             "split by group, nothing added and nothing lost"
+        );
+    }
+
+    #[test]
+    fn a_brace_is_meshed_with_the_group_it_ties() {
+        // Two tall trunks of the second group, close enough to tie, and nothing at all
+        // in the first.
+        let mut braced = profile();
+        braced.branching.enabled = false;
+        braced.bracing = printer_profiles::Bracing {
+            enabled: true,
+            start_height_mm: 5.0,
+            rise_mm: 5.0,
+            max_spacing_mm: 12.0,
+            ..printer_profiles::Bracing::default()
+        };
+        let table = [profile(), braced];
+        let profiles = Profiles::new(&table).expect("two groups");
+        let points = [
+            SupportPoint::new(Vec3::new(10.0, 10.0, 30.0)).in_group(1),
+            SupportPoint::new(Vec3::new(18.0, 10.0, 30.0)).in_group(1),
+        ];
+        let model = Mesh::default();
+        let bvh = core_geometry::Bvh::build(&model);
+        let placed = Placed::new(&model, &bvh, Transform::default());
+        let trees = trees_on(&points, &model, Transform::default(), profiles);
+
+        let groups = mesh_groups(&trees, &placed, profiles);
+        assert!(
+            groups[0].is_empty(),
+            "the first group holds nothing, so nothing is drawn in its colour"
+        );
+        let between = groups[1]
+            .vertices
+            .iter()
+            .filter(|vertex| vertex.x > 12.0 && vertex.x < 16.0)
+            .count();
+        assert!(
+            between > 0,
+            "the braces between the two trunks are the second group's"
         );
     }
 
