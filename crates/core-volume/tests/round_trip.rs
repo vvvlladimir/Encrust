@@ -358,16 +358,17 @@ fn a_surface_crossing_tiles_shares_its_seam_vertices() {
 /// The tolerance is half a voxel: that is what `docs/decisions/0063` already allows the
 /// wall, and it is the bound the carrier is chosen against. The comparison is against the
 /// hierarchy and not against the sphere, so that the mesh's own faceting is not counted
-/// as the sweep's error.
+/// as the sweep's error. The 0.1 mm wall is fine enough to be carried on the coarser
+/// carrier.
 #[test]
 fn the_sweep_answers_what_the_hierarchy_would() {
     let radius = 6.0;
     let mesh = ball(radius, 64, 64);
     let bvh = Bvh::build(&mesh);
 
-    for iso_mm in [0.0, -2.0] {
+    for (voxel_mm, iso_mm) in [(0.2, 0.0), (0.2, -2.0), (0.1, -2.0)] {
         let settings = FieldSettings {
-            voxel_mm: 0.2,
+            voxel_mm,
             iso_mm,
             ..FieldSettings::default()
         };
@@ -377,10 +378,12 @@ fn the_sweep_answers_what_the_hierarchy_would() {
 
         let mut worst = 0.0;
         let mut at = IVec3::ZERO;
-        // Every other voxel: 46k samples say the same as 357k and cost an eighth.
-        for z in (-35..=35).step_by(2) {
-            for y in (-35..=35).step_by(2) {
-                for x in (-35..=35).step_by(2) {
+        // About 46k samples over the ball say the same as every voxel and cost far less.
+        let reach = (7.0 / voxel_mm) as i32;
+        let stride = ((reach + 17) / 18) as usize;
+        for z in (-reach..=reach).step_by(stride) {
+            for y in (-reach..=reach).step_by(stride) {
+                for x in (-reach..=reach).step_by(stride) {
                     let voxel = IVec3::new(x, y, z);
                     let point = grid.position(voxel);
                     let found = bvh.closest(&mesh, point).expect("the ball has faces");
