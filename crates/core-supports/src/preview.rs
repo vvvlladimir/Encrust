@@ -25,7 +25,7 @@ pub fn preview(placed: &Placed, contact: Vec3, group: u16, profiles: Profiles) -
     let (column, tree) = alone(placed, contact, group, profiles);
     match tree {
         Some(tree) => Preview {
-            mesh: mesh_alone(&tree, profiles.of(tree.group())),
+            mesh: mesh_alone(&tree, profiles.of(tree.group()), placed),
             stands: true,
         },
         None => Preview {

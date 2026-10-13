@@ -62,7 +62,10 @@ The profile is grouped as MSLA slicers group it, so numbers tuned elsewhere carr
 | foot | the top of the foot | `z = 0` | `bottom.platform_diameter_mm / 2` in to the bevelled rim |
 
 The bite goes back along the tip's own axis, which is that normal, so it drives into
-the face rather than up past it (ADR 0125, superseding that clause of ADR 0028). `facets`
+the face rather than up past it (ADR 0125, superseding that clause of ADR 0028), and no
+deeper than half the wall behind the contact, measured by one ray along that axis: a tip
+on a thin edge would otherwise come out of its far side as a nub, and above the model's
+top as layers of nothing but tips. `facets`
 sides are used for every ring; twelve puts the flats 0.026 mm inside the circle of a 2 mm
 pillar, finer than a 9K pixel.
 

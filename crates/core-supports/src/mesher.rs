@@ -1,9 +1,10 @@
 use crate::placed::Placed;
-use core_geometry::{Mesh, Scalar, Vec2, Vec3};
+use core_geometry::{Mesh, Ray, Scalar, Vec2, Vec3, raycast_placed};
 use printer_profiles::{ContactShape, SupportProfile};
 
 use crate::Landing;
 use crate::base::{braces, skate, skate_half_width_mm, toe_of};
+use crate::column::SURFACE_EPSILON_MM;
 use crate::group::Profiles;
 use crate::raft::raft;
 use crate::tree::{SupportTree, TreeNode};
@@ -37,6 +38,9 @@ const FOOT_BITE: Scalar = 0.5;
 struct Style {
     /// The thin model-to-model strut of `[small_pillar]` rather than a regular support.
     small: bool,
+    /// The deepest a tip may bite, millimetres: half the wall behind its contact, so a
+    /// tip on a thin edge is not pushed out through the far side.
+    bite_limit_mm: Scalar,
 }
 
 impl Style {
@@ -50,16 +54,18 @@ impl Style {
                 && !tree.landing().on_support
                 && tree.tip_count() == 1
                 && run_mm(tree) <= profile.small_pillar.max_length_mm,
+            bite_limit_mm: Scalar::INFINITY,
         }
     }
 
     /// How far the tip bites into the model, millimetres.
     fn bite_mm(self, profile: &SupportProfile) -> Scalar {
-        if self.small {
+        let depth_mm = if self.small {
             profile.small_pillar.upper_depth_mm
         } else {
             profile.contact_depth_mm()
-        }
+        };
+        depth_mm.min(self.bite_limit_mm)
     }
 
     /// Width of the body, millimetres, given what the tree itself asked for.
@@ -104,7 +110,7 @@ pub(crate) fn is_small(tree: &SupportTree, profile: &SupportProfile) -> bool {
 pub fn mesh_trees(trees: &[SupportTree], placed: &Placed, profiles: Profiles) -> Mesh {
     let mut mesh = Mesh::default();
     for tree in trees {
-        mesh_tree(&mut mesh, tree, profiles.of(tree.group()));
+        mesh_tree(&mut mesh, tree, profiles.of(tree.group()), placed);
     }
     for (from, to, radius_mm, group) in braces(trees, placed, profiles) {
         sweep(&mut mesh, &brace(from, to, radius_mm, profiles.of(group)));
@@ -121,7 +127,7 @@ pub fn mesh_groups(trees: &[SupportTree], placed: &Placed, profiles: Profiles) -
     for tree in trees {
         let slot = usize::from(tree.group());
         let slot = if slot < meshes.len() { slot } else { 0 };
-        mesh_tree(&mut meshes[slot], tree, profiles.of(tree.group()));
+        mesh_tree(&mut meshes[slot], tree, profiles.of(tree.group()), placed);
     }
     for (from, to, radius_mm, group) in braces(trees, placed, profiles) {
         let slot = usize::from(group);
@@ -136,9 +142,9 @@ pub fn mesh_groups(trees: &[SupportTree], placed: &Placed, profiles: Profiles) -
 }
 
 /// One support on its own, without the braces and the raft it would share with others.
-pub(crate) fn mesh_alone(tree: &SupportTree, profile: &SupportProfile) -> Mesh {
+pub(crate) fn mesh_alone(tree: &SupportTree, profile: &SupportProfile, placed: &Placed) -> Mesh {
     let mut mesh = Mesh::default();
-    mesh_tree(&mut mesh, tree, profile);
+    mesh_tree(&mut mesh, tree, profile, placed);
     mesh
 }
 
@@ -170,18 +176,66 @@ pub(crate) fn mesh_head(contact: Vec3, neck: Vec3, profile: &SupportProfile) -> 
     let mut mesh = Mesh::default();
     sweep(
         &mut mesh,
-        &strut(&tree, 0, 1, profile, Style { small: false }),
+        &strut(
+            &tree,
+            0,
+            1,
+            profile,
+            Style {
+                small: false,
+                bite_limit_mm: Scalar::INFINITY,
+            },
+        ),
     );
     mesh
 }
 
-fn mesh_tree(mesh: &mut Mesh, tree: &SupportTree, profile: &SupportProfile) {
+fn mesh_tree(mesh: &mut Mesh, tree: &SupportTree, profile: &SupportProfile, placed: &Placed) {
     let style = Style::of(tree, profile);
+    let nodes = tree.nodes();
     for (child, parent) in tree.struts() {
+        let style = if nodes[child].is_leaf() {
+            let into = nodes[child].position - nodes[parent].position;
+            Style {
+                bite_limit_mm: wall_mm(placed, nodes[child].position, into) * WALL_BITTEN,
+                ..style
+            }
+        } else {
+            style
+        };
         sweep(mesh, &strut(tree, child, parent, profile, style));
     }
     sweep(mesh, &trunk(tree, profile, style));
     stand_on(mesh, tree, profile);
+}
+
+/// How much of the wall behind a contact a tip may bite into: half, so that what is left
+/// over it still holds and nothing of the tip shows on the far side.
+const WALL_BITTEN: Scalar = 0.5;
+
+/// How thick the model is behind `contact`, going `into` it, millimetres: the distance to
+/// where a ray leaves it again, or unbounded where it never does.
+///
+/// A contact a hair off the face — a sampled one, or one carried — meets that face on
+/// the way in first, and the wall is measured from there.
+fn wall_mm(placed: &Placed, contact: Vec3, into: Vec3) -> Scalar {
+    let Some(direction) = into.try_normalize() else {
+        return Scalar::INFINITY;
+    };
+    let mut from = contact + direction * SURFACE_EPSILON_MM;
+    let mut entered_mm = SURFACE_EPSILON_MM;
+    for _ in 0..2 {
+        let ray = Ray::new(from, direction);
+        let Some(hit) = raycast_placed(placed.model, placed.bvh, placed.transform, &ray) else {
+            return Scalar::INFINITY;
+        };
+        if hit.normal.dot(direction) > 0.0 {
+            return entered_mm + hit.distance;
+        }
+        from = hit.point + direction * SURFACE_EPSILON_MM;
+        entered_mm = SURFACE_EPSILON_MM;
+    }
+    Scalar::INFINITY
 }
 
 fn mesh_raft(mesh: &mut Mesh, trees: &[SupportTree], placed: &Placed, profiles: Profiles) {
@@ -1255,6 +1309,56 @@ mod tests {
         assert_eq!(
             diagnose(&meshed(&trees, Profiles::single(&profile))).boundary_edges,
             0
+        );
+    }
+
+    /// The highest point of the support held under a 40 mm slab from `bottom_mm` up, whose
+    /// contact is in the middle of its underside.
+    fn tip_top_under_slab(bottom_mm: Scalar, thickness_mm: Scalar) -> Scalar {
+        let slab = crate::tests::box_mesh(
+            Vec3::new(-20.0, -20.0, bottom_mm),
+            Vec3::new(20.0, 20.0, bottom_mm + thickness_mm),
+        );
+        let mut fixture = profile();
+        fixture.branching.enabled = false;
+        let points = [crate::SupportPoint::new(Vec3::new(0.0, 0.0, bottom_mm))];
+        let trees = crate::tests::trees_on(
+            &points,
+            &slab,
+            Transform::default(),
+            Profiles::single(&fixture),
+        );
+        let bvh = core_geometry::Bvh::build(&slab);
+        let mesh = mesh_trees(
+            &trees,
+            &Placed::new(&slab, &bvh, Transform::default()),
+            Profiles::single(&fixture),
+        );
+        mesh.vertices
+            .iter()
+            .map(|vertex| vertex.z)
+            .fold(Scalar::NEG_INFINITY, Scalar::max)
+    }
+
+    #[test]
+    fn a_tip_under_a_thin_wall_bites_no_further_than_half_of_it() {
+        let top = tip_top_under_slab(10.0, 0.15);
+        assert!(
+            top < 10.15,
+            "a 0.2 mm bite into a 0.15 mm wall would come out of its top, got {top}"
+        );
+        assert!(
+            (top - 10.075).abs() < 0.01,
+            "half the wall is bitten, got {top}"
+        );
+    }
+
+    #[test]
+    fn a_tip_under_a_thick_wall_bites_its_whole_depth() {
+        let top = tip_top_under_slab(10.0, 5.0);
+        assert!(
+            (top - 10.2).abs() < 0.01,
+            "the fixture's 0.2 mm bite, got {top}"
         );
     }
 
