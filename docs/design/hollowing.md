@@ -5,7 +5,7 @@ blockers and assembly, `infill.rs` the lattices. Both stand on `volume.md`.
 
 Why: ADR 0058 (band on the isosurface), 0059 (cavity appended, not welded), 0060 (a
 lattice is boxes), 0063 (the budget), 0083 (the precision ceiling), 0189 (a hole is what
-drains a cavity, and no cell is closed).
+drains a cavity, and no cell is closed), 0260 (kept fields).
 
 ## What comes out
 
@@ -209,6 +209,13 @@ and the CLI pass those in with the blockers a user placed (ADR 0076). The wall o
 is therefore the wall of the model. A channel dug or cleared on a model that is already
 hollow rebuilds its shell at once, at the numbers it was built at, and a sleeved channel
 drains its own two mouths, not the cavity it crosses.
+
+That rebuild does not build the field again. A run is `cavity_field` then `carve`, and the
+field holds neither blockers nor infill, so the window keeps the fields of the models it
+hollowed lately and carves a kept one again: 0.4 s rather than 5.4 s on a 406k-face bust.
+They may hold 512 MB together on the desktop and 128 MB in a browser, a field over that is
+never kept, and in a browser they make way for a field being built or a plate being sliced
+(ADR 0260).
 
 What the window draws inside a cut is the cut's own body. Nothing meshes the surface of a
 hole: the bodies are already there, wound inward, so the face that survives culling is the

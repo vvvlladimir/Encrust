@@ -5,7 +5,8 @@
 use core_geometry::{Bvh, Mat3, Mesh, Quat, Scalar, Transform, Vec3, signed_volume};
 use core_volume::{
     Blocker, CUT_WEIGHT, Cancel, Channel, HollowMode, HollowSettings, InfillPattern,
-    InfillSettings, VolumeError, drill, hole_at, hollow, hollow_at_scale, pierce, sleeves,
+    InfillSettings, VolumeError, carve, cavity_field, drill, hole_at, hollow, hollow_at_scale,
+    pierce, sleeves,
 };
 
 const PI: Scalar = std::f32::consts::PI;
@@ -403,6 +404,51 @@ fn a_stretched_model_is_filled_as_if_it_had_been_built_that_size() {
             .all(|(scaled, built)| (*scaled * size).abs_diff_eq(*built, 1e-3)),
         "the shell comes back in the model's own space, to be scaled onto the plate"
     );
+}
+
+#[test]
+fn a_kept_field_carves_the_shell_a_whole_run_would() {
+    let mesh = cube(20.0, 0.0);
+    let bvh = Bvh::build(&mesh);
+    let shape = Transform {
+        scale: Vec3::new(1.4, 1.0, 1.0),
+        ..Transform::default()
+    }
+    .unturned();
+    let mut asked = settings(2.0, HollowMode::Internal);
+    asked.infill = Some(InfillSettings {
+        pattern: InfillPattern::Grid,
+        size_mm: 5.0,
+        density: 0.15,
+    });
+    let field = cavity_field(&mesh, &bvh, &asked, shape, Cancel::never())
+        .expect("a closed cube has a cavity field");
+
+    // One field, carved under two sets of blockers, as a window keeps it while they move.
+    for blockers in [
+        vec![Blocker::ball(Vec3::new(10.0, 10.0, 10.0), 3.0)],
+        vec![Blocker::along(
+            Vec3::new(4.0, 4.0, 4.0),
+            Vec3::new(16.0, 4.0, 4.0),
+            2.0,
+        )],
+    ] {
+        asked.blockers = blockers;
+        let kept = carve(
+            &mesh,
+            &field,
+            &asked.blockers,
+            asked.infill,
+            Cancel::never(),
+        )
+        .expect("the kept field carves");
+        let whole = hollow_at_scale(&mesh, &bvh, &asked, shape, Cancel::never())
+            .expect("a closed cube hollows");
+        assert_eq!(
+            kept, whole,
+            "the field holds nothing of the blockers or the infill, so carving it again is the run"
+        );
+    }
 }
 
 #[test]

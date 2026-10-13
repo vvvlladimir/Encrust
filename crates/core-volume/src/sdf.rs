@@ -83,6 +83,18 @@ impl Sdf {
         self.tiles.is_empty()
     }
 
+    /// What holding the field costs, in bytes: its tiles and its runs, near enough to
+    /// budget a cache by.
+    pub fn bytes(&self) -> usize {
+        let tile = TILE_VALUES * size_of::<Quantised>() + size_of::<(IVec3, Box<[Quantised]>)>();
+        let runs: usize = self
+            .solid
+            .values()
+            .map(|runs| size_of::<(IVec2, Vec<(i32, i32)>)>() + size_of_val(&runs[..]))
+            .sum();
+        self.tiles.len() * tile + runs
+    }
+
     pub(crate) fn tile_keys(&self) -> impl Iterator<Item = IVec3> + '_ {
         self.tiles.keys().copied()
     }

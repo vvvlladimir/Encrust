@@ -3,10 +3,14 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::{self, Receiver, TryRecvError};
 
 use core_geometry::{Bvh, Mat3, Mesh, Scalar};
-use core_volume::{Cancel, HollowSettings, Shell, VolumeError, hollow_at_scale};
+use core_volume::{Cancel, HollowSettings, Shell, VolumeError, carve, cavity_field};
 
 use crate::job::pipeline::{thread_pool, worker_threads};
+
+mod fields;
+
 use crate::scene::{ObjectId, Scene, SceneObject};
+pub use fields::{SharedFields, lock};
 
 /// One model to hollow, owned so that it can cross to the worker thread.
 pub struct HollowTask {
@@ -24,6 +28,8 @@ pub struct HollowTask {
 /// Everything one hollowing run needs.
 pub struct HollowRequest {
     pub tasks: Vec<HollowTask>,
+    /// The fields the window keeps, read for a model built before and grown by each new one.
+    pub fields: SharedFields,
 }
 
 /// One model hollowed, in its own space, and which object it was.
@@ -220,7 +226,7 @@ fn shell_each(
 
         let shell = match twin_of(&request.tasks[..index], task) {
             Some(twin) => shells[twin].shell.clone(),
-            None => match shell_of(task) {
+            None => match shell_of(task, &request.fields) {
                 Ok(shell) => shell,
                 Err(error) => return HollowOutcome::Failed(error.to_string()),
             },
@@ -242,12 +248,29 @@ fn twin_of(earlier: &[HollowTask], task: &HollowTask) -> Option<usize> {
     })
 }
 
-fn shell_of(task: &HollowTask) -> Result<Shell, VolumeError> {
-    let hollowed = hollow_at_scale(
+/// The shell of one model, cut from the field kept for it where there is one.
+fn shell_of(task: &HollowTask, fields: &SharedFields) -> Result<Shell, VolumeError> {
+    let kept = lock(fields).get(&task.mesh, task.shape, &task.settings);
+    let field = match kept {
+        Some(field) => field,
+        None => {
+            lock(fields).make_way();
+            let field = Arc::new(cavity_field(
+                &task.mesh,
+                &task.bvh,
+                &task.settings,
+                task.shape,
+                Cancel::never(),
+            )?);
+            lock(fields).keep(&task.mesh, task.shape, &task.settings, Arc::clone(&field));
+            field
+        }
+    };
+    let hollowed = carve(
         &task.mesh,
-        &task.bvh,
-        &task.settings,
-        task.shape,
+        &field,
+        &task.settings.blockers,
+        task.settings.infill,
         Cancel::never(),
     )?;
     Ok(Shell {
@@ -301,6 +324,7 @@ mod tests {
             vec![[0, 2, 1], [0, 1, 3], [1, 2, 3], [2, 0, 3]],
         ));
         let request = HollowRequest {
+            fields: SharedFields::default(),
             tasks: vec![
                 tetrahedron_task(0, &mesh, 1.5),
                 tetrahedron_task(1, &mesh, 1.5),
