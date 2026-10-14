@@ -112,40 +112,41 @@ entirely inside out is a different problem from a few stray faces. `orientable` 
 when a conflict is left, which is a note and not a defect: the fill rule takes what each
 body encloses (ADR 0267).
 
-## Closing holes and dropping faces
+## Faces laid over others
 
-These are the parts of repair nobody runs without being asked: one adds surface the file
-never had, the others throw faces away, so the window puts the question to the user first
-(ADR 0194, 0195, 0205). The order is drop the duplicates, orient, drop the unbalanced,
-fill, orient.
+`remove_duplicate_faces(mesh)` looks at faces over the same three vertices. A pair wound
+opposite ways is a wall of no thickness that encloses nothing, so it goes whole. Dropping
+one of them would leave the other walking its edges the same way as a neighbour. Of a stack
+wound one way, the first face stays. Neither changes what the surface encloses, so import
+runs it after welding and before orientation, which would otherwise read a doubled edge
+as a branch (ADR 0268). The faces are found by the same counting sort as the edge table,
+keyed by sorted corners.
 
-`remove_duplicate_faces(mesh)` keeps the first face over any three vertices and drops the
-rest, winding ignored. It goes first: an edge a duplicate has tripled is neither a
-boundary nor a manifold edge, so neither the walk below nor the orientation pass can get
-through it.
+## Closing holes
 
-`remove_unbalanced_faces(mesh)` drops every face at an edge that does not pair off, and
-repeats until a pass finds nothing, since dropping a face can unbalance a neighbouring
-edge. What is left is wound consistently everywhere — an orientation can only fail where
-two faces walk one edge the same way — and the holes it opens are loops the fill closes.
-Faces along a boundary edge are kept: a hole is not a tangle. Orientation runs before it so
-that a shell written inside out is turned round rather than taken apart.
+Repair adds surface the file never had, so it runs only when the user presses Repair
+(ADR 0194, 0268). The order is drop the doubled faces, orient, fill, drop the doubled
+faces again, orient. If the result has more boundary edges, degenerate faces and
+duplicates between them than the input had, the input stands.
 
-The boundary edges — the groups of one in the edge table — are followed into loops
-*against* the direction the face that owns each edge walks it. A patch triangulated in that
-order is therefore wound the same way as the surface around it, and `orient_outward`
-afterwards has nothing to flip.
+An edge used an odd number of times cannot pair off without one more face. A hole's edge
+is used once, and the foot of a fin three times. The patch walks each such edge the way
+the surface is short of, so the loops it follows are wound like the surface around them,
+and `orient_outward` afterwards has nothing to flip. A fin's loop is closed by the fin's
+own reverse, which the second drop of doubled faces cancels against it.
 
-Each loop is flattened into the plane of its own Newell normal, which is the area-weighted
-normal of a ring that need not be flat and does not depend on where the ring stands. A
-normal of zero means the loop is a line: there is no plane to lay triangles in, so the loop
-is left open and counted in `loops_left`.
+A loop of up to 256 corners is patched by the triangulation of least total area, found by
+dynamic programming over its spans: the cost of a span is the cheapest split of it into
+two smaller spans and a triangle. A triangle whose doubled area is under `1e-6` of its
+longest edge squared is a sliver and is not allowed. On a flat loop, only a triangulation
+that does not overlap itself reaches the loop's own area. On a curved loop, the result is
+the tightest skin across it, not a fair continuation of the surface.
 
-A flat ring is filled by `triangulate`, the same `earcutr` call a plane cut caps its halves
-with (ADR 0089). It returns `n - 2` triangles for a ring of `n` corners; anything short of
-that means the projection folds over itself, and the loop is closed instead by a fan from
-one new vertex at its middle. The patch is flat either way: a hole across a curve comes out
-as a chord, which the user can see and undo.
+A longer loop, or one every triangulation of which holds a sliver, is flattened into the
+plane of its Newell normal and ear clipped by `triangulate`, the `earcutr` call a plane cut
+caps its halves with (ADR 0089). If that comes back short of `n - 2` triangles, the loop is
+fanned from one new vertex at its middle. A Newell normal of zero means the loop is a line,
+which is left open and counted in `loops_left`.
 
 ## Placement
 

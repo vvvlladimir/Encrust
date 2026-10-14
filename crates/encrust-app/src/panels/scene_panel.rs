@@ -309,9 +309,9 @@ fn row(
 
     let (eye, eye_response) = visibility_eye(ui, rect, object);
     let end = rect.right() - 10.0;
-    let name_right = match trouble(&object.summary) {
+    let (name_right, repair) = match trouble(&object.summary) {
         Some((mark, lines)) => import_mark(ui, rect, object, end, mark, &lines),
-        None => end,
+        None => (end, false),
     };
 
     let colors = theme::colors();
@@ -341,6 +341,9 @@ fn row(
 
     if let Some(asked) = asked {
         return Some(asked);
+    }
+    if repair {
+        return Some(Clicked::Repair);
     }
     if eye_response.clicked() {
         return Some(Clicked::Visibility);
@@ -435,8 +438,9 @@ enum Mark {
     Broken,
 }
 
-/// The mark at the end of the row, with what import found behind a click. Returns where
-/// it starts.
+/// The mark at the end of the row, with what import found behind a click, and the repair
+/// beside it on a model that is broken. Returns where it starts, and whether the repair
+/// was asked for.
 fn import_mark(
     ui: &mut egui::Ui,
     rect: Rect,
@@ -444,7 +448,7 @@ fn import_mark(
     right: f32,
     mark: Mark,
     lines: &[String],
-) -> f32 {
+) -> (f32, bool) {
     let spot = match mark {
         Mark::Repaired => {
             Rect::from_center_size(egui::pos2(right - 17.0, rect.center().y), vec2(18.0, 18.0))
@@ -468,13 +472,18 @@ fn import_mark(
     });
     paint_mark(ui.painter(), spot, mark, response.hovered());
     focus_ring(ui, &response, theme::R_CONTROL);
+    let mut repair = false;
     egui::Popup::menu(&response).show(|ui| {
         ui.set_max_width(POPUP_W);
         for line in lines {
             hint(ui, line);
         }
+        if mark == Mark::Broken {
+            ui.add_space(4.0);
+            repair = ui.button("Repair").clicked();
+        }
     });
-    spot.left()
+    (spot.left(), repair)
 }
 
 fn paint_mark(painter: &egui::Painter, spot: Rect, mark: Mark, hovered: bool) {

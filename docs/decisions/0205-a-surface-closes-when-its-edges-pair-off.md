@@ -1,6 +1,6 @@
 # 0205. A surface closes when its edges pair off, and repair drops what no winding covers
 
-- **Status:** Accepted; an unbalanced edge making a model unsound superseded by 0267
+- **Status:** Accepted; an unbalanced edge making a model unsound superseded by 0267, dropping unbalanced faces by 0268
 - **Date:** 2026-10-08
 
 ## Context

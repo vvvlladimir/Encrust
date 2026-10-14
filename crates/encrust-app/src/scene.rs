@@ -77,10 +77,16 @@ pub struct ImportSummary {
 }
 
 impl ImportSummary {
-    pub fn new(welded: &Welded, orientation: Orientation, diagnostics: MeshDiagnostics) -> Self {
+    /// `doubled` is how many faces laid over others went after welding.
+    pub fn new(
+        welded: &Welded,
+        doubled: usize,
+        orientation: Orientation,
+        diagnostics: MeshDiagnostics,
+    ) -> Self {
         Self {
             vertices_merged: welded.vertices_merged,
-            faces_removed: welded.faces_removed(),
+            faces_removed: welded.faces_removed() + doubled,
             orientation,
             diagnostics,
         }
@@ -134,7 +140,7 @@ impl ImportSummary {
     /// every STL merges thousands and it says nothing about the model.
     pub fn repairs(&self) -> Vec<String> {
         [
-            (self.faces_removed, "collapsed faces removed"),
+            (self.faces_removed, "collapsed or doubled faces removed"),
             (
                 self.orientation.flipped_faces,
                 "faces turned the right way round",

@@ -52,6 +52,8 @@ pub struct ImportReport {
     pub path: PathBuf,
     pub stats: MeshStats,
     pub welded: Welded,
+    /// Faces laid over others on the same corners that were dropped.
+    pub doubled: usize,
     pub diagnostics: Option<MeshDiagnostics>,
     pub orientation: Option<Orientation>,
     pub fit: Option<FitCheck>,
@@ -83,8 +85,16 @@ impl fmt::Display for ImportReport {
         writeln!(f)?;
 
         write!(f, "  triangles     {}", stats.faces)?;
-        if self.welded.faces_removed() > 0 {
-            write!(f, " ({} degenerate dropped)", self.welded.faces_removed())?;
+        let dropped: Vec<String> = [
+            (self.welded.faces_removed(), "degenerate"),
+            (self.doubled, "doubled"),
+        ]
+        .iter()
+        .filter(|(count, _)| *count > 0)
+        .map(|(count, what)| format!("{count} {what}"))
+        .collect();
+        if !dropped.is_empty() {
+            write!(f, " ({} dropped)", dropped.join(", "))?;
         }
         writeln!(f)?;
 

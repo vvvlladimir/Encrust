@@ -1,6 +1,6 @@
 # 0195. Repair drops the faces drawn twice, and an open model is never capped
 
-- **Status:** Accepted
+- **Status:** Accepted; which doubled faces go superseded by 0268
 - **Date:** 2026-10-06
 
 ## Context

@@ -12,7 +12,8 @@ use core_analysis::Measured;
 use core_engine::{Cutting, bake, cut};
 use core_geometry::{
     Bvh, Heightmap, Mesh, Quat, Scalar, Transform, UvMap, Vec3, Welded, center_over_plate,
-    diagnose, drop_to_plate, glam::EulerRot, orient_outward, transform_mesh, weld,
+    diagnose, drop_to_plate, glam::EulerRot, orient_outward, remove_duplicate_faces,
+    transform_mesh, weld,
 };
 use core_mesh_io::{Loaded, Texture, loader_for_extension};
 use core_pipeline::{PanelOverrides, Tolerance, raster_settings};
@@ -156,6 +157,12 @@ pub fn import(
     if args.transform.center {
         mesh = centred(mesh, profile)?;
     }
+    // Before the orientation fix: a face laid over another reads as a branch to it.
+    let doubled = if args.no_validate {
+        0
+    } else {
+        remove_duplicate_faces(&mut mesh).len()
+    };
     let orientation = (!args.no_validate).then(|| orient_outward(&mut mesh));
     let diagnostics = (!args.no_validate).then(|| diagnose(&mesh));
     let shells = diagnostics.as_ref().map(|found| found.shells);
@@ -166,6 +173,7 @@ pub fn import(
         path: input.to_path_buf(),
         stats,
         welded,
+        doubled,
         diagnostics,
         orientation,
         fit,
@@ -494,6 +502,12 @@ pub fn inspect(input: &Path, args: &ImportArgs, chosen: &Chosen) -> Result<Impor
         mesh = centred(mesh, profile)?;
     }
 
+    // Before the orientation fix: a face laid over another reads as a branch to it.
+    let doubled = if args.no_validate {
+        0
+    } else {
+        remove_duplicate_faces(&mut mesh).len()
+    };
     let orientation = (!args.no_validate).then(|| orient_outward(&mut mesh));
     let diagnostics = (!args.no_validate).then(|| diagnose(&mesh));
     let shells = diagnostics.as_ref().map(|found| found.shells);
@@ -504,6 +518,7 @@ pub fn inspect(input: &Path, args: &ImportArgs, chosen: &Chosen) -> Result<Impor
         path: input.to_path_buf(),
         stats,
         welded,
+        doubled,
         diagnostics,
         orientation,
         fit,

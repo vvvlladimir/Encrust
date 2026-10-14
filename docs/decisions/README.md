@@ -74,10 +74,11 @@ Grouped by what the decision governs; the number is still the order it was taken
 | [0075](0075-a-cut-is-its-own-operation.md) | A cut is its own operation, not part of hollowing | Accepted |
 | [0086](0086-an-edit-is-taken-back-by-restoring-a-scene.md) | An edit is taken back by restoring a scene, not by inverting it | Accepted |
 | [0089](0089-a-cut-is-exact-on-the-mesh.md) | A cut is exact on the mesh, capped with `earcutr` | Accepted |
-| [0194](0194-a-hole-is-closed-only-when-it-is-asked-for.md) | A hole is closed only when it is asked for, by the triangulator the cut already uses | Accepted |
-| [0195](0195-a-mended-model-is-sound-and-an-open-one-is-never-capped.md) | Repair drops the faces drawn twice, and an open model is never capped | Accepted |
-| [0205](0205-a-surface-closes-when-its-edges-pair-off.md) | A surface closes when its edges pair off, and repair drops what no winding covers | Accepted; an unbalanced edge making a model unsound superseded by 0267 |
+| [0194](0194-a-hole-is-closed-only-when-it-is-asked-for.md) | A hole is closed only when it is asked for, by the triangulator the cut already uses | Accepted; the triangulator and the question on import superseded by 0268 |
+| [0195](0195-a-mended-model-is-sound-and-an-open-one-is-never-capped.md) | Repair drops the faces drawn twice, and an open model is never capped | Accepted; which doubled faces go superseded by 0268 |
+| [0205](0205-a-surface-closes-when-its-edges-pair-off.md) | A surface closes when its edges pair off, and repair drops what no winding covers | Accepted; an unbalanced edge making a model unsound superseded by 0267, dropping unbalanced faces by 0268 |
 | [0267](0267-orientation-never-worsens-and-a-fold-is-only-noted.md) | Orientation never worsens a file, and a fold is noted rather than asked about | Accepted |
+| [0268](0268-repair-cancels-what-encloses-nothing-and-never-worsens.md) | Repair cancels what encloses nothing, patches by least area, and never worsens | Accepted |
 | [0223](0223-a-cut-is-pinned-by-a-shell-and-a-drain.md) | Pin a cut by an added shell and a drain hole | Accepted |
 
 ### Mesh and texture input

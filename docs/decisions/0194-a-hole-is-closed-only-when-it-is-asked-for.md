@@ -1,6 +1,6 @@
 # 0194. A hole is closed only when it is asked for, by the triangulator the cut already uses
 
-- **Status:** Accepted
+- **Status:** Accepted; the triangulator and the question on import superseded by 0268
 - **Date:** 2026-10-06
 
 ## Context

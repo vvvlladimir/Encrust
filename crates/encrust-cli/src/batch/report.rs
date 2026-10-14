@@ -500,7 +500,7 @@ fn model_of(import: &ImportReport) -> Model {
 fn repair_of(import: &ImportReport) -> Repair {
     Repair {
         vertices_merged: import.welded.vertices_merged,
-        faces_removed: import.welded.faces_removed(),
+        faces_removed: import.welded.faces_removed() + import.doubled,
         faces_flipped: import
             .orientation
             .as_ref()

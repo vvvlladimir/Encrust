@@ -1,7 +1,9 @@
 #[path = "../tests/shared/bodies.rs"]
 mod bodies;
 
-use core_geometry::{DEFAULT_WELD_TOLERANCE, Mesh, diagnose, orient_outward, weld};
+use core_geometry::{
+    DEFAULT_WELD_TOLERANCE, Mesh, diagnose, orient_outward, remove_duplicate_faces, weld,
+};
 use criterion::{Criterion, criterion_group, criterion_main};
 
 /// Roughly 200k triangles, the size of a detailed miniature.
@@ -40,6 +42,14 @@ fn benchmarks(c: &mut Criterion) {
         b.iter_batched(
             || clean.clone(),
             |mut mesh| orient_outward(&mut mesh),
+            criterion::BatchSize::LargeInput,
+        );
+    });
+
+    c.bench_function("remove duplicates from 200k triangles", |b| {
+        b.iter_batched(
+            || clean.clone(),
+            |mut mesh| remove_duplicate_faces(&mut mesh),
             criterion::BatchSize::LargeInput,
         );
     });
