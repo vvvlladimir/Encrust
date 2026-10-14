@@ -1,19 +1,18 @@
-//! One printer on the network as a card: who it is, whether it answers, what it is
-//! printing with a picture of it, the buttons that pause or stop it, its camera, its film
-//! and the prints it remembers. The Export tool lists them; the printer settings say the
-//! same in a line.
+//! A printer on the network, in the parts the window shows it in: one row in the Export
+//! tool naming where files go, the ring in the top bar, and the sheet the ring opens with
+//! everything about it. See `docs/decisions/0264`.
 
 mod controls;
 mod history;
+pub mod ring;
+pub mod sheet;
 
-use egui::{Color32, RichText};
+use egui::{Align2, Color32, RichText, Sense, StrokeKind, pos2, vec2};
 use printer_link::State;
+use printer_profiles::Connection;
 
-use crate::network::{Errand, Extras, Network, Reach, Reading, Target, Trouble};
-use crate::ui::{hint, icon, progress_bar, quiet_button, theme, tone};
-
-/// How big a picture of the print under way is drawn, in points.
-const PICTURE: egui::Vec2 = egui::vec2(72.0, 54.0);
+use crate::network::{Network, Reach, Reading, Target, Trouble};
+use crate::ui::{focus_ring, hint, icon, icon_button, progress_bar, theme, tone};
 
 /// What the card says about one printer, worked out before anything is drawn.
 #[derive(Debug, Clone, PartialEq)]
@@ -45,140 +44,125 @@ struct Job {
     detail: String,
 }
 
-/// Everything one card is drawn from.
-pub struct Card<'a> {
-    pub target: &'a Target<'a>,
-    pub reach: Reach,
-    pub reading: Option<&'a Reading>,
-    pub extras: Option<&'a Extras>,
-    /// Marks the printer the profile in hand is bound to.
-    pub lit: bool,
-    /// Offers to bind the profile in hand to this printer.
-    pub pickable: bool,
+/// What the Export tool's row was pressed for, by the printer's key.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Chosen {
+    /// Send this profile's files to that printer from now on.
+    Bind(String),
+    /// Open that printer's sheet.
+    Open(String),
 }
 
-/// What a card was pressed for, for the caller to carry out.
-#[derive(Debug, Default)]
-pub struct Pressed {
-    pub picked: bool,
-    pub errand: Option<Errand>,
-}
-
-/// Draws one printer.
-pub fn card(ui: &mut egui::Ui, card: &Card<'_>) -> Pressed {
-    let colors = theme::colors();
-    let face = face(card.reach, card.reading);
-    let (fill, stroke) = if card.lit {
-        (colors.accent_wash, colors.accent_soft)
-    } else {
-        (colors.raised, colors.hairline)
-    };
-    let mut pressed = Pressed::default();
-    egui::Frame::new()
-        .fill(fill)
-        .stroke(egui::Stroke::new(1.0, stroke))
-        .corner_radius(theme::R_CONTROL)
-        .inner_margin(egui::Margin::same(10))
-        .show(ui, |ui| {
-            ui.set_width(ui.available_width());
-            ui.spacing_mut().item_spacing.y = 4.0;
-            head(ui, card.target, &face);
-            pressed.errand = body(ui, card, &face);
-            if card.pickable {
-                let pick = quiet_button(
-                    ui,
-                    icon::SEND,
-                    "Send this printer's files here",
-                    false,
-                    true,
-                );
-                pressed.picked = pick.clicked();
-            }
-        });
-    pressed
-}
-
-/// Everything under the head: the print, its buttons, the readings, the camera, the
-/// history, and what went wrong.
-fn body(ui: &mut egui::Ui, card: &Card<'_>, face: &Face) -> Option<Errand> {
-    let key = card.target.key();
-    let mut errand = None;
-    if let Some(job) = &face.job {
-        ui.add_space(4.0);
-        let picture = match card.reading {
-            Some(Reading::State(state)) => state
-                .job_id
-                .as_ref()
-                .and_then(|id| card.extras?.pictures.get(id)?.texture()),
-            _ => None,
-        };
-        job_lines(ui, job, picture);
-    }
-    if let Some(Reading::State(state)) = card.reading {
-        errand = errand.or(controls::buttons(ui, &key, state, card.extras));
-        if let Some(warmth) = &face.warmth {
-            tone(ui, warmth, theme::colors().text_low);
-        }
-        controls::film(ui, state);
-        errand = errand.or(controls::camera(ui, state, card.extras));
-        if matches!(card.target, Target::Sdcp(_)) {
-            errand = errand.or(history::fold(ui, &key, card.extras));
-        }
-    }
-    if let Some(Reading::Failed(trouble)) = card.reading {
-        trouble_lines(ui, trouble);
-    }
-    if let Some(trouble) = card.extras.and_then(|extras| extras.trouble.as_ref()) {
-        trouble_lines(ui, trouble);
-    }
-    errand
-}
-
-/// The icon, the name over the model and address, and the state word at the right.
-fn head(ui: &mut egui::Ui, target: &Target<'_>, face: &Face) {
-    let colors = theme::colors();
+/// Where the printer in hand sends its files, as one row: the bound printer's name and
+/// what it is doing, opening a list of every printer speaking `speaks`, and beside it the
+/// way into that printer's sheet.
+pub fn destination(ui: &mut egui::Ui, network: &Network, speaks: Connection) -> Option<Chosen> {
+    let bound = network.target().filter(|target| target.speaks(speaks));
+    let choices: Vec<Target<'_>> = network
+        .targets()
+        .into_iter()
+        .filter(|target| target.speaks(speaks))
+        .collect();
+    let mut chosen = None;
     ui.horizontal(|ui| {
-        ui.label(
-            RichText::new(icon::PRINTER)
-                .font(theme::icon(18.0))
-                .color(colors.text_mid),
-        );
         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-            state_word(ui, face);
-            ui.with_layout(egui::Layout::top_down(egui::Align::Min), |ui| {
-                ui.spacing_mut().item_spacing.y = 0.0;
-                ui.add(
-                    egui::Label::new(
-                        RichText::new(target.name())
-                            .font(theme::label())
-                            .color(colors.text_high),
-                    )
-                    .truncate(),
-                );
-                ui.add(
-                    egui::Label::new(
-                        RichText::new(subtitle(target))
-                            .font(theme::small())
-                            .color(colors.text_low),
-                    )
-                    .truncate(),
-                );
+            if let Some(target) = &bound
+                && icon_button(ui, icon::OPEN_SHEET, "Open the printer").clicked()
+            {
+                chosen = Some(Chosen::Open(target.key()));
+            }
+            let row = destination_row(ui, network, bound.as_ref());
+            let lit = bound.as_ref().map(Target::key);
+            egui::Popup::menu(&row).show(|ui| {
+                for target in &choices {
+                    let line = format!(
+                        "{}  ·  {}",
+                        target.name(),
+                        summary(network.reach(target), network.reading(target))
+                    );
+                    let on = lit.as_deref() == Some(target.key().as_str());
+                    if ui.selectable_label(on, line).clicked() {
+                        chosen = Some(Chosen::Bind(target.key()));
+                    }
+                }
             });
         });
     });
+    chosen
 }
 
-/// A dot and a word, in the colour of what the printer is doing.
-fn state_word(ui: &mut egui::Ui, face: &Face) {
-    let colour = colour_of(face.light);
-    ui.label(RichText::new(&face.word).font(theme::small()).color(colour));
-    let (rect, _) = ui.allocate_exact_size(egui::vec2(8.0, 8.0), egui::Sense::hover());
-    ui.painter().circle_filled(rect.center(), 3.5, colour);
+/// The row itself: the printer glyph, the bound printer's name or an invitation to choose
+/// one, what it is doing in its colour, and a caret.
+fn destination_row(
+    ui: &mut egui::Ui,
+    network: &Network,
+    bound: Option<&Target<'_>>,
+) -> egui::Response {
+    let colors = theme::colors();
+    let (rect, response) =
+        ui.allocate_exact_size(vec2(ui.available_width(), theme::BUTTON_H), Sense::click());
+    let border = if response.hovered() {
+        colors.line
+    } else {
+        colors.hairline
+    };
+    let painter = ui.painter();
+    painter.rect(
+        rect,
+        theme::R_CONTROL,
+        colors.sunken,
+        egui::Stroke::new(1.0, border),
+        StrokeKind::Inside,
+    );
+    painter.text(
+        pos2(rect.left() + 16.0, rect.center().y),
+        Align2::CENTER_CENTER,
+        icon::PRINTER,
+        theme::icon(14.0),
+        colors.text_low,
+    );
+    painter.text(
+        pos2(rect.right() - 16.0, rect.center().y),
+        Align2::CENTER_CENTER,
+        icon::CARET_DOWN,
+        theme::icon(14.0),
+        colors.text_low,
+    );
+    let (name, tint, state) = match bound {
+        Some(target) => {
+            let face = face(network.reach(target), network.reading(target));
+            (target.name(), colors.text_high, Some(face))
+        }
+        None => ("Choose a printer".to_owned(), colors.text_low, None),
+    };
+    let mut right = rect.right() - 30.0;
+    if let Some(face) = &state {
+        let colour = colour_of(face.light);
+        let word = painter.layout_no_wrap(face.word.clone(), theme::small(), colour);
+        let at = pos2(right - word.size().x, rect.center().y - word.size().y / 2.0);
+        right = at.x - 12.0;
+        painter.galley(at, word, colour);
+        painter.circle_filled(pos2(right + 6.0, rect.center().y), 3.5, colour);
+        right -= 6.0;
+    }
+    let room = (right - rect.left() - 32.0).max(0.0);
+    let mut job = egui::text::LayoutJob::simple_singleline(name.clone(), theme::label(), tint);
+    job.wrap = egui::text::TextWrapping::truncate_at_width(room);
+    let galley = painter.layout_job(job);
+    painter.galley(
+        pos2(rect.left() + 30.0, rect.center().y - galley.size().y / 2.0),
+        galley,
+        tint,
+    );
+    focus_ring(ui, &response, theme::R_CONTROL);
+    let response = response.on_hover_text("The printer this profile sends to");
+    response.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::ComboBox, true, &name));
+    response
 }
 
-/// The file over its bar and the line under it, while it prints, beside the picture of
-/// it once the printer has sent one; one line for the last print once it is over.
-fn job_lines(ui: &mut egui::Ui, job: &Job, picture: Option<&egui::TextureHandle>) {
+/// The file over its bar and the line under it while it prints; one line for the last
+/// print once it is over.
+fn job_lines(ui: &mut egui::Ui, job: &Job) {
     let colors = theme::colors();
     let Some(progress) = job.progress else {
         tone(
@@ -188,36 +172,25 @@ fn job_lines(ui: &mut egui::Ui, job: &Job, picture: Option<&egui::TextureHandle>
         );
         return;
     };
-    let lines = |ui: &mut egui::Ui| {
-        ui.horizontal(|ui| {
-            let share = RichText::new(format!("{:.0}%", progress * 100.0))
-                .font(theme::figures(12.0))
-                .color(colors.text_high);
-            let share_w = 40.0;
-            let file = egui::Label::new(
-                RichText::new(&job.file)
-                    .font(theme::label())
-                    .color(colors.text_high),
-            )
-            .truncate();
-            let file_w = (ui.available_width() - share_w).max(0.0);
-            ui.allocate_ui(egui::vec2(file_w, theme::ROW_H), |ui| ui.add(file));
-            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                ui.label(share);
-            });
+    ui.horizontal(|ui| {
+        let share = RichText::new(format!("{:.0}%", progress * 100.0))
+            .font(theme::figures(12.0))
+            .color(colors.text_high);
+        let share_w = 40.0;
+        let file = egui::Label::new(
+            RichText::new(&job.file)
+                .font(theme::label())
+                .color(colors.text_high),
+        )
+        .truncate();
+        let file_w = (ui.available_width() - share_w).max(0.0);
+        ui.allocate_ui(egui::vec2(file_w, theme::ROW_H), |ui| ui.add(file));
+        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+            ui.label(share);
         });
-        progress_bar(ui, Some(progress));
-        tone(ui, &job.detail, colors.text_mid);
-    };
-    match picture {
-        Some(texture) => {
-            ui.horizontal(|ui| {
-                picture_of(ui, texture, PICTURE);
-                ui.vertical(lines);
-            });
-        }
-        None => lines(ui),
-    }
+    });
+    progress_bar(ui, Some(progress));
+    tone(ui, &job.detail, colors.text_mid);
 }
 
 /// A printer's picture of a print, fitted into `size` and rounded like the card.
@@ -269,16 +242,6 @@ pub fn summary(reach: Reach, reading: Option<&Reading>) -> String {
             ..
         }) => format!("{}, {file}, {:.0}%", face.word, progress * 100.0),
         _ => face.word,
-    }
-}
-
-/// The model and where it is, or what a Prusa machine said it is.
-fn subtitle(target: &Target<'_>) -> String {
-    match target {
-        Target::Sdcp(printer) if !printer.model.is_empty() => {
-            format!("{} · {}", printer.model, printer.address)
-        }
-        _ => target.detail(),
     }
 }
 

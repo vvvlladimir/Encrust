@@ -2,10 +2,9 @@ use egui::{Color32, RichText};
 use printer_profiles::Connection;
 
 use super::opened;
-use crate::network::Target;
 use crate::panels::Window;
 use crate::panels::plate_summary::file_readings;
-use crate::panels::printer_card::{self, Card, Pressed};
+use crate::panels::printer_card::{self, Chosen};
 use crate::panels::slice::{Run, Via, bound_machine, broken_reminder, start};
 use crate::ui::{
     hint, icon, inline_button, primary_button, readings, secondary_button, section,
@@ -179,8 +178,9 @@ fn picker_row(
     });
 }
 
-/// The machine the printer in hand is bound to, alone, when there is one; otherwise every
-/// machine the window can reach, each with what it is printing, and one can be bound.
+/// Where the printer in hand sends its files: one row naming the printer and what it is
+/// doing, which opens the others and, beside it, that printer's sheet. Everything else
+/// about a printer is in the sheet the top bar's ring opens (ADR 0264).
 fn send(ui: &mut egui::Ui, window: &mut Window) {
     if cfg!(target_arch = "wasm32") {
         return;
@@ -195,86 +195,52 @@ fn send(ui: &mut egui::Ui, window: &mut Window) {
         .machine
         .network
         .keep_fresh(ui.input(|input| input.time));
-    window.machine.network.show_pictures(ui.ctx());
-    let (rescan, pressed) =
-        section_with_action(ui, "Send to a printer", (icon::RESET, "Look again"), |ui| {
+    let (rescan, chosen) = section_with_action(
+        ui,
+        "Send to a printer",
+        (icon::RESET, "Look again"),
+        |ui| {
             let network = &window.machine.network;
-            let bound = network.target().filter(|target| target.speaks(connection));
-            if let Some(target) = bound {
-                return one_card(ui, network, &target, true, false);
+            if connection == Connection::None {
+                hint(
+                    ui,
+                    "This printer's profile takes files on a stick; choose its network in its settings to send from here.",
+                );
+                return None;
             }
-            let pressed = every_machine(ui, network, connection);
-            by_address(ui, &mut window.machine.network);
-            pressed
-        });
+            let found = network
+                .targets()
+                .iter()
+                .any(|target| target.speaks(connection));
+            let mut chosen = None;
+            if found {
+                chosen = printer_card::destination(ui, network, connection);
+            } else if network.is_scanning() {
+                ui.horizontal(|ui| {
+                    ui.spinner();
+                    hint(ui, "Looking for printers on the network");
+                });
+            } else {
+                hint(
+                    ui,
+                    "No machine found yet. Look again, or add one by its address.",
+                );
+            }
+            printer_card::scan_notes(ui, network);
+            if network.target().is_none() {
+                by_address(ui, &mut window.machine.network);
+            }
+            chosen
+        },
+    );
     if rescan {
         window.machine.network.scan();
     }
-    let Some((key, pressed)) = pressed.flatten() else {
-        return;
-    };
-    if let Some(errand) = pressed.errand {
-        window.machine.network.ask(&key, errand);
+    match chosen.flatten() {
+        Some(Chosen::Bind(key)) => window.machine.network.bind_here(key),
+        Some(Chosen::Open(key)) => window.machine.network.open = Some(key),
+        None => {}
     }
-    if pressed.picked {
-        window.machine.network.bind_here(key);
-    }
-}
-
-/// One printer's card, and what it was pressed for under the printer's key.
-fn one_card(
-    ui: &mut egui::Ui,
-    network: &crate::network::Network,
-    target: &Target<'_>,
-    lit: bool,
-    pickable: bool,
-) -> Option<(String, Pressed)> {
-    let key = target.key();
-    let card = Card {
-        target,
-        reach: network.reach(target),
-        reading: network.reading(target),
-        extras: network.extras(&key),
-        lit,
-        pickable,
-    };
-    let pressed = printer_card::card(ui, &card);
-    (pressed.picked || pressed.errand.is_some()).then_some((key, pressed))
-}
-
-/// Each machine on the network as a card, and what one of them was pressed for.
-fn every_machine(
-    ui: &mut egui::Ui,
-    network: &crate::network::Network,
-    connection: Connection,
-) -> Option<(String, Pressed)> {
-    let targets = network.targets();
-    if targets.is_empty() {
-        if network.is_scanning() {
-            ui.horizontal(|ui| {
-                ui.spinner();
-                hint(ui, "Looking for printers on the network");
-            });
-        } else {
-            hint(
-                ui,
-                "No machine found yet. Look again, or add one by its address.",
-            );
-        }
-    }
-    let mut pressed = None;
-    for target in &targets {
-        let pickable = connection != Connection::None && target.speaks(connection);
-        pressed = pressed.or(one_card(ui, network, target, false, pickable));
-    }
-    if !targets.is_empty() && connection == Connection::None {
-        hint(
-            ui,
-            "This printer's profile takes files on a stick; choose its network in its settings to send here.",
-        );
-    }
-    printer_card::scan_notes(ui, network);
-    pressed
 }
 
 /// A board on another subnet, which no broadcast reaches, typed in by its address. A

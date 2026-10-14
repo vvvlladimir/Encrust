@@ -178,7 +178,10 @@ window, double-clicks to maximise, and on every platform but macOS draws its own
 buttons; on macOS the system's are moved onto its centre line. See `docs/decisions/0104`
 and `0217`. The File, Edit and View menus stand at its left end. The chip in the middle of
 the window names the machine and the resin, each opening its list, and the layer height
-and exposure, which open the print settings. Find, at the right, opens a palette of every
+and exposure, which open the print settings. Left of it, once the window knows a printer
+on the network, a ring fills with how far the current printer has got, in the colour of
+what it is doing; a press opens that printer's sheet, or with more than one printer a list
+of them first (`panels/printer_card/ring.rs`, `docs/decisions/0264`). Find, at the right, opens a palette of every
 tool, every action of the key table and every model on the plate (`panels/find.rs`,
 `docs/decisions/0230`).
 

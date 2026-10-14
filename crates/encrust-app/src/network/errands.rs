@@ -10,7 +10,7 @@ use printer_link::{Command, State, Task, Wire};
 use super::Trouble;
 
 /// How many remembered prints are listed under a printer.
-const HISTORY_COUNT: usize = 5;
+const HISTORY_COUNT: usize = 8;
 
 /// One thing asked of one printer.
 #[derive(Debug, Clone, PartialEq)]

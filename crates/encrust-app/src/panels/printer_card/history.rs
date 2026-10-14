@@ -5,77 +5,111 @@ use super::picture_of;
 use crate::network::{Errand, Extras};
 use crate::ui::{ago, hint, icon, quiet_button, theme, tone};
 
-/// How big a remembered print's picture is drawn, in points.
-const THUMB: egui::Vec2 = egui::vec2(48.0, 36.0);
+/// The least width a tile takes, and the gap between two, in points.
+const TILE_MIN_W: f32 = 130.0;
+const TILE_GAP: f32 = 10.0;
+/// A board's thumbnail is 400 by 300.
+const PICTURE_ASPECT: f32 = 0.75;
+/// What a tile holds under its picture: the file, and how it ended over up to two lines.
+const CAPTION_H: f32 = 54.0;
 
-/// The prints the printer remembers, folded away until opened; opening it the first time
-/// is what asks for them.
-pub(super) fn fold(ui: &mut egui::Ui, key: &str, extras: Option<&Extras>) -> Option<Errand> {
+/// How many tiles a row of `width` holds, and how wide each is drawn.
+pub(super) fn columns(width: f32) -> (usize, f32) {
+    let count = (((width + TILE_GAP) / (TILE_MIN_W + TILE_GAP)).floor() as usize).max(1);
+    let tile_w = (width - TILE_GAP * (count - 1) as f32) / count as f32;
+    (count, tile_w)
+}
+
+/// How tall the tiles for `prints` stand in a row of `width`.
+pub(super) fn height(width: f32, prints: usize) -> f32 {
+    let (count, tile_w) = columns(width);
+    let rows = prints.div_ceil(count).max(1);
+    rows as f32 * (tile_w * PICTURE_ASPECT + CAPTION_H + TILE_GAP)
+}
+
+/// The prints the printer remembers as tiles, several to a row, each with its picture;
+/// drawing it the first time is what asks for them.
+pub(super) fn list(ui: &mut egui::Ui, extras: Option<&Extras>) -> Option<Errand> {
     let mut errand = None;
-    let title = RichText::new("Recent prints")
-        .font(theme::small())
-        .color(theme::colors().text_mid);
-    egui::CollapsingHeader::new(title)
-        .id_salt(("printer-history", key))
-        .show(ui, |ui| {
-            let asked = extras.is_some_and(|extras| extras.history_asked);
-            let doing = extras.and_then(|extras| extras.doing);
-            match extras.and_then(|extras| extras.history.as_deref()) {
-                None if !asked => errand = Some(Errand::History),
-                None => {
-                    if doing.is_some() {
-                        ui.spinner();
-                    }
-                }
-                Some([]) => hint(ui, "It remembers no prints."),
-                Some(tasks) => {
-                    let now_s = crate::updates::now_s();
-                    for task in tasks {
-                        let picture = extras
-                            .and_then(|extras| extras.pictures.get(&task.task_id))
-                            .and_then(|picture| picture.texture());
-                        row(ui, task, picture, now_s);
-                    }
-                }
+    let asked = extras.is_some_and(|extras| extras.history_asked);
+    let doing = extras.and_then(|extras| extras.doing);
+    match extras.and_then(|extras| extras.history.as_deref()) {
+        None if !asked => errand = Some(Errand::History),
+        None => {
+            if doing.is_some() {
+                ui.spinner();
             }
-            if asked
-                && doing.is_none()
-                && quiet_button(ui, icon::RESET, "Read again", false, true).clicked()
-            {
-                errand = Some(Errand::History);
-            }
-        });
+        }
+        Some([]) => hint(ui, "It remembers no prints."),
+        Some(tasks) => tiles(ui, tasks, extras),
+    }
+    if asked
+        && doing.is_none()
+        && quiet_button(ui, icon::RESET, "Read again", false, true).clicked()
+    {
+        errand = Some(Errand::History);
+    }
     errand
 }
 
-/// One remembered print: its picture, its file, and how and when it ended.
-fn row(ui: &mut egui::Ui, task: &Task, picture: Option<&egui::TextureHandle>, now_s: u64) {
+fn tiles(ui: &mut egui::Ui, tasks: &[Task], extras: Option<&Extras>) {
+    let (count, tile_w) = columns(ui.available_width());
+    let now_s = crate::updates::now_s();
+    ui.spacing_mut().item_spacing = egui::vec2(TILE_GAP, TILE_GAP);
+    for row in tasks.chunks(count) {
+        ui.horizontal_top(|ui| {
+            for task in row {
+                let picture = extras
+                    .and_then(|extras| extras.pictures.get(&task.task_id))
+                    .and_then(|picture| picture.texture());
+                tile(ui, task, picture, tile_w, now_s);
+            }
+        });
+    }
+}
+
+/// One remembered print: its picture, its file under it, and how and when it ended.
+fn tile(
+    ui: &mut egui::Ui,
+    task: &Task,
+    picture: Option<&egui::TextureHandle>,
+    width: f32,
+    now_s: u64,
+) {
     let colors = theme::colors();
-    ui.horizontal(|ui| {
+    let size = egui::vec2(width, width * PICTURE_ASPECT);
+    ui.vertical(|ui| {
+        ui.set_width(width);
+        ui.spacing_mut().item_spacing.y = 2.0;
         match picture {
-            Some(texture) => picture_of(ui, texture, THUMB),
+            Some(texture) => picture_of(ui, texture, size),
             None => {
-                let (rect, _) = ui.allocate_exact_size(THUMB, egui::Sense::hover());
+                let (rect, _) = ui.allocate_exact_size(size, egui::Sense::hover());
                 ui.painter()
                     .rect_filled(rect, theme::R_CONTROL, colors.sunken);
+                ui.painter().text(
+                    rect.center(),
+                    egui::Align2::CENTER_CENTER,
+                    icon::MODEL,
+                    theme::icon(22.0),
+                    colors.text_low,
+                );
             }
         }
-        ui.vertical(|ui| {
-            ui.spacing_mut().item_spacing.y = 0.0;
-            ui.add(
-                egui::Label::new(
-                    RichText::new(task.file_name())
-                        .font(theme::label())
-                        .color(colors.text_high),
-                )
-                .truncate(),
-            );
-            let tint = match task.ending() {
-                Ending::Failed => colors.warn,
-                Ending::Finished | Ending::Stopped | Ending::Other => colors.text_low,
-            };
-            tone(ui, &ended(task, now_s), tint);
-        });
+        let name = ui.add(
+            egui::Label::new(
+                RichText::new(task.file_name())
+                    .font(theme::label())
+                    .color(colors.text_high),
+            )
+            .truncate(),
+        );
+        name.on_hover_text(task.file_name());
+        let tint = match task.ending() {
+            Ending::Failed => colors.warn,
+            Ending::Finished | Ending::Stopped | Ending::Other => colors.text_low,
+        };
+        tone(ui, &ended(task, now_s), tint);
     });
 }
 
@@ -117,6 +151,18 @@ mod tests {
             }),
             ..Task::default()
         }
+    }
+
+    #[test]
+    fn a_row_holds_as_many_tiles_as_fit_and_shares_what_is_left() {
+        let (count, tile_w) = columns(584.0);
+        assert_eq!(count, 4, "four of 130 with three gaps of 10 fit in 584");
+        assert!((tile_w * 4.0 + TILE_GAP * 3.0 - 584.0).abs() < 1e-3);
+        assert_eq!(columns(90.0).0, 1, "a narrow row still holds one");
+        assert!(
+            height(584.0, 5) > height(584.0, 4),
+            "a fifth print starts a second row"
+        );
     }
 
     #[test]

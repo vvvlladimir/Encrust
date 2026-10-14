@@ -264,6 +264,8 @@ pub struct Network {
     /// Whether the window keeps off the network unless told to: the panel pictures must not
     /// depend on what is on the desk's network.
     pub hold: bool,
+    /// The key of the printer whose sheet is open over the window.
+    pub open: Option<String>,
     pub job: Option<SendJob>,
     pub sent: Option<Sent>,
     /// The address being typed, until it parses and is added.
@@ -341,6 +343,19 @@ impl Network {
             self.asked_at = Some(now_s);
             self.scan();
         }
+    }
+
+    /// The printer the top bar's ring stands for: the one the printer in hand is bound to,
+    /// else the first one printing, else the first one listed.
+    pub fn current(&self) -> Option<Target<'_>> {
+        if let Some(bound) = self.target() {
+            return Some(bound);
+        }
+        let targets = self.targets();
+        let printing = targets.iter().find(
+            |target| matches!(self.reading(target), Some(Reading::State(state)) if state.busy),
+        );
+        printing.or(targets.first()).copied()
     }
 
     /// What has been asked of the printer under `key` besides its state.
@@ -1214,5 +1229,23 @@ mod tests {
             matches!(&wanted[..], [(_, Errand::Picture { id, task: Some(_) })] if id == "3add"),
             "only the remembered print is still missing: {wanted:?}"
         );
+    }
+
+    #[test]
+    fn the_ring_stands_for_the_bound_printer_else_the_one_printing_else_the_first() {
+        let mut network = Network {
+            printers: vec![a_printer("aa"), a_printer("bb")],
+            ..Network::default()
+        };
+        assert_eq!(network.current().map(|t| t.key()), Some("sdcp:aa".into()));
+        network.hear("sdcp:bb", Reading::State(printing("dragon.goo")));
+        assert_eq!(network.current().map(|t| t.key()), Some("sdcp:bb".into()));
+        network.destination = Destination::Printer("sdcp:aa".into());
+        assert_eq!(
+            network.current().map(|t| t.key()),
+            Some("sdcp:aa".into()),
+            "the printer in hand's own machine wins over a busy one"
+        );
+        assert!(Network::default().current().is_none());
     }
 }

@@ -75,6 +75,8 @@ impl Window<'_> {
         }
         report::ui(ui.ctx(), &self.doc.scene, self.tools, self.machine);
         settings::machines::window(ui.ctx(), self);
+        self.machine.network.show_pictures(ui.ctx());
+        printer_card::sheet::ui(ui.ctx(), self);
         settings::window(ui.ctx(), self);
 
         if still_starting(self) {

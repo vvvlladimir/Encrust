@@ -1,6 +1,6 @@
 use egui::{Align, Align2, Layout, Rect, Sense, Stroke, UiBuilder, pos2, vec2};
 
-use crate::panels::{Window, frame_view};
+use crate::panels::{Window, frame_view, printer_card};
 use crate::profiles;
 use crate::project;
 use crate::scene::ObjectId;
@@ -94,7 +94,10 @@ fn centred_chip(
             UiBuilder::new()
                 .max_rect(rect)
                 .layout(Layout::left_to_right(Align::Center)),
-            |ui| print_chip(ui, window, max_w),
+            |ui| {
+                let ring_w = printer_card::ring::ui(ui, window);
+                print_chip(ui, window, max_w - ring_w);
+            },
         )
         .response
         .rect

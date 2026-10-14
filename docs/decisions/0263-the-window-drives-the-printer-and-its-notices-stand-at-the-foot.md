@@ -1,6 +1,6 @@
 # 0263. Let the window drive a printer, and stack its notices at the foot of the stage
 
-- **Status:** Accepted
+- **Status:** Accepted; the cards in the Export tool superseded by 0264
 - **Date:** 2026-10-14
 
 ## Context

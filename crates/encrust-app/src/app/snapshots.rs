@@ -170,6 +170,9 @@ fn the_printers_on_the_network() {
     let mut results = SnapshotResults::new();
     results.extend(picture("tool_export_bound", on_the_network(true)));
     results.extend(picture("tool_export_list", on_the_network(false)));
+    let mut sheet = on_the_network(true);
+    sheet.machine.network.open = Some("sdcp:aa".to_owned());
+    results.extend(picture("printer_sheet", sheet));
 }
 
 /// A plate as a board pictures it: a dark field with a lit model in the middle.
