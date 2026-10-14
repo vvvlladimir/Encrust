@@ -132,8 +132,9 @@ Say *why* in the body. What changed is visible in the diff; why it had to is not
 Nobody tags by hand. A bot keeps one open pull request holding the next version number and the
 changelog entries earned since the last release; merging it writes `CHANGELOG.md`, bumps the version,
 tags, and opens a draft release. The archives are built from that tag, attached to the same draft,
-signed, and named in `latest.json`, the feed the window's update check reads. A maintainer publishes
-the draft after looking at it, and only then does the window offer it. Signing needs the
+signed, and named in `latest.json`, the feed the window's update check reads. A maintainer rewrites
+the draft's notes for users (`/release-notes` in Claude Code drafts them), publishes
+it, and only then does the window offer it, with those notes. Signing needs the
 `UPDATE_SIGNING_KEY` repository secret; see [`docs/design/updates.md`](docs/design/updates.md#the-signing-key).
 
 That is why the commit subjects matter: the changelog is made of them. See
