@@ -1,5 +1,31 @@
 # Changelog
 
+## [0.3.0](https://github.com/vvvlladimir/Encrust/compare/v0.2.0...v0.3.0) (2026-10-14)
+
+
+### ✨ New
+
+* **app:** centre cutting plane on model and show network notes on hover ([c104679](https://github.com/vvvlladimir/Encrust/commit/c104679627133d809bf6d82498f278486b60db01))
+* **app:** redesign UI — new layout, start page, tool rail, transform gizmo ([#120](https://github.com/vvvlladimir/Encrust/issues/120)) ([72b2ccb](https://github.com/vvvlladimir/Encrust/commit/72b2ccb2dd3c7c9c04cfcf8351308d4b2500410f))
+* **network:** watch and drive printers from the window ([#124](https://github.com/vvvlladimir/Encrust/issues/124)) ([91cb985](https://github.com/vvvlladimir/Encrust/commit/91cb985c3fda7f3c4353a639e9d233664d449ff3))
+* **project:** name the printer and resin by id, give own profiles ([8926757](https://github.com/vvvlladimir/Encrust/commit/89267575bdfe8d18ed4d29996401fa4678ddd859))
+* **settings:** add undo to profile forms and switches to compensation ([48f029b](https://github.com/vvvlladimir/Encrust/commit/48f029b159e89b6744fa78eb131caf245fe78e60))
+* **supports:** cone trunks, rafts in three styles, per-model profiles and one-drag editing ([#122](https://github.com/vvvlladimir/Encrust/issues/122)) ([a180290](https://github.com/vvvlladimir/Encrust/commit/a1802909d741923756ca68fc0e54ab7bb00ba4f2))
+* **viewport:** draw ghosts for hollow, drain, and supports ([36a433c](https://github.com/vvvlladimir/Encrust/commit/36a433c1cc8c14290e91343b7c267c5c578c9e87))
+
+
+### 🐛 Fixed
+
+* **app:** exit process on macos to avoid accesskit crash ([8b67310](https://github.com/vvvlladimir/Encrust/commit/8b6731043f9fe74e1b9baebf2fd4636bf98a68f4))
+* **app:** truncate long scene object names with ellipsis and tooltip ([71bee8c](https://github.com/vvvlladimir/Encrust/commit/71bee8c68aa70a739921dc322ac96199a21ba300))
+* **repair:** orient by patches, cancel faces that enclose nothing, and never worsen a model ([#125](https://github.com/vvvlladimir/Encrust/issues/125)) ([9411359](https://github.com/vvvlladimir/Encrust/commit/941135988958dab2145ca9a5789d9c2b27c866bf))
+* **supports:** stand supports on the raft by their flare, without a pad ([cb37b82](https://github.com/vvvlladimir/Encrust/commit/cb37b8296e183970e1ca55293f655ca4c2dc1ebd))
+
+
+### ⚡ Faster
+
+* cut and hollow model copies once, draw heavy models at levels the card can afford ([#123](https://github.com/vvvlladimir/Encrust/issues/123)) ([922b1a3](https://github.com/vvvlladimir/Encrust/commit/922b1a3e274975581db35fa7cf86b48f2728abc8))
+
 ## [0.2.0](https://github.com/vvvlladimir/Encrust/compare/v0.1.0...v0.2.0) (2026-10-08)
 
 
