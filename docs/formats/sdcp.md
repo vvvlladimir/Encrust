@@ -82,8 +82,8 @@ the board ID, a timestamp and `From: 0` for a client. The commands used here:
 
 | Cmd | What it does | `Data` sent | What the answer carries beside `Ack` |
 |---|---|---|---|
-| `0` | report status | `{}` | nothing; the status follows on its own topic |
-| `1` | report attributes | `{}` | nothing; the attributes follow on their own topic |
+| `0` | report status | `null` | nothing; the status follows on its own topic |
+| `1` | report attributes | `null` | nothing; the attributes follow on their own topic |
 | `128` | start printing | `Filename`, `StartLayer` | nothing |
 | `129`, `130`, `131` | pause, stop, resume | `{}` | nothing |
 | `320` | list remembered prints | `{}` | `HistoryData`, task ids, most recent first |

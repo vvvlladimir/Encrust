@@ -138,12 +138,12 @@ pub struct PrintInfo {
     /// What the board remembers this print by, for command `321`.
     #[serde(default)]
     pub task_id: String,
-    /// Time printed so far, in ms. Read as a float because firmware is loose about it.
-    #[serde(default)]
-    pub current_ticks: f64,
-    /// Estimated time of the whole print, in ms; `0` while the board has no estimate.
-    #[serde(default)]
-    pub total_ticks: f64,
+    /// Time printed so far. Read as a float because firmware is loose about it.
+    #[serde(default, rename = "CurrentTicks")]
+    pub current_ms: f64,
+    /// Estimated time of the whole print; `0` while the board has no estimate.
+    #[serde(default, rename = "TotalTicks")]
+    pub total_ms: f64,
 }
 
 impl PrintInfo {
@@ -159,13 +159,12 @@ impl PrintInfo {
 
     /// Time printed so far, in seconds, or `None` before the print starts.
     pub fn elapsed_s(&self) -> Option<u64> {
-        (self.current_ticks > 0.0).then(|| (self.current_ticks / 1000.0) as u64)
+        (self.current_ms > 0.0).then(|| (self.current_ms / 1000.0) as u64)
     }
 
     /// Time left by the board's own estimate, in seconds, or `None` without one.
     pub fn remaining_s(&self) -> Option<u64> {
-        (self.total_ticks > 0.0)
-            .then(|| ((self.total_ticks - self.current_ticks).max(0.0) / 1000.0) as u64)
+        (self.total_ms > 0.0).then(|| ((self.total_ms - self.current_ms).max(0.0) / 1000.0) as u64)
     }
 
     /// Why the print stopped, or `None` while nothing is wrong.
@@ -380,8 +379,8 @@ mod tests {
     #[test]
     fn the_time_left_is_the_estimate_less_the_time_printed() {
         let info = PrintInfo {
-            current_ticks: 600_000.0,
-            total_ticks: 3_600_000.0,
+            current_ms: 600_000.0,
+            total_ms: 3_600_000.0,
             ..PrintInfo::default()
         };
         assert_eq!(

@@ -467,12 +467,15 @@ impl Network {
             Errand::Picture { id, .. } => {
                 extras.pictures.insert(id.clone(), Picture::Asked);
             }
-            Errand::History => extras.history_asked = true,
+            Errand::History => {
+                extras.history_asked = true;
+                extras.reading_history = true;
+            }
             Errand::Control(_) | Errand::Camera(_) => {}
         }
         let out = errands::Out::send(key.to_owned(), wire, state, errand);
-        if out.holds_the_buttons() {
-            extras.doing = Some(out.doing());
+        if let Some(doing) = out.doing() {
+            extras.doing = Some(doing);
             extras.trouble = None;
         }
         self.out.push(out);
@@ -610,6 +613,15 @@ impl Network {
             self.manual.push(address);
         }
         self.scan();
+    }
+
+    /// Stops asking at an address typed by hand, once the printer there is taken off a list.
+    pub fn forget(&mut self, address: &str) {
+        let Ok(address) = address.trim().parse::<IpAddr>() else {
+            return;
+        };
+        self.manual.retain(|typed| *typed != address);
+        self.silent.retain(|(typed, _)| *typed != address);
     }
 
     /// Sets up a Prusa machine, replacing one already known at that host.
@@ -798,17 +810,20 @@ impl Network {
 }
 
 /// Where `machine` is among the boards and Prusa machines the window knows, whatever the
-/// profile listing it is set to speak: whether it can be sent to is `Target::speaks`.
+/// profile listing it is set to speak: whether it can be sent to is `Target::speaks`. A
+/// board whose id is known is found by that id alone, never by another board's address.
 fn resolve<'a>(
     printers: &'a [Printer],
     prusa: &'a [Prusa],
     machine: &NetworkMachine,
 ) -> Option<Target<'a>> {
     let address = machine.address.trim();
-    let board = printers.iter().find(|printer| {
-        let same_board = machine.board.as_deref() == Some(printer.mainboard_id.as_str());
-        same_board || printer.address.to_string() == address
-    });
+    let board = printers
+        .iter()
+        .find(|printer| match machine.board.as_deref() {
+            Some(board) => printer.mainboard_id == board,
+            None => printer.address.to_string() == address,
+        });
     board.map(Target::Sdcp).or_else(|| {
         let set_up = prusa.iter().find(|prusa| prusa.link.host == address);
         set_up.map(Target::Prusa)
@@ -851,12 +866,13 @@ impl PrusaDraft {
 
 /// What a scan found, over the boards already listed: one that answered is replaced at
 /// its new address, and one that did not stays listed so a bound profile keeps its
-/// machine. Found boards nobody knew of go on the end.
+/// machine, unless another board answered from its address. New boards go on the end.
 fn merged(known: Vec<Printer>, found: Vec<Printer>) -> Vec<Printer> {
+    let taken: Vec<IpAddr> = found.iter().map(|printer| printer.address).collect();
     let mut found: Vec<Option<Printer>> = found.into_iter().map(Some).collect();
     let mut printers: Vec<Printer> = known
         .into_iter()
-        .map(|printer| {
+        .filter_map(|printer| {
             let answered = found
                 .iter_mut()
                 .find(|other| {
@@ -865,7 +881,11 @@ fn merged(known: Vec<Printer>, found: Vec<Printer>) -> Vec<Printer> {
                         .is_some_and(|other| other.mainboard_id == printer.mainboard_id)
                 })
                 .and_then(Option::take);
-            answered.unwrap_or(printer)
+            match answered {
+                Some(answered) => Some(answered),
+                None if taken.contains(&printer.address) => None,
+                None => Some(printer),
+            }
         })
         .collect();
     printers.extend(found.into_iter().flatten());
@@ -1034,6 +1054,42 @@ mod tests {
         assert_eq!(printers[1].mainboard_id, "bb");
     }
 
+    #[test]
+    fn a_board_gone_quiet_is_dropped_when_another_answers_from_its_address() {
+        let printers = merged(vec![a_printer("aa")], vec![a_printer("bb")]);
+        let ids: Vec<&str> = printers.iter().map(|p| p.mainboard_id.as_str()).collect();
+        assert_eq!(ids, ["bb"], "both boards stood at 192.168.1.42");
+    }
+
+    #[test]
+    fn an_address_taken_off_a_list_is_no_longer_asked() {
+        let address = IpAddr::from([192, 168, 1, 42]);
+        let mut network = Network {
+            manual: vec![address],
+            silent: vec![(address, None)],
+            hold: true,
+            ..Network::default()
+        };
+        network.forget(" 192.168.1.42 ");
+        assert!(network.manual.is_empty() && network.silent.is_empty());
+    }
+
+    #[test]
+    fn a_listed_board_is_found_by_its_id_and_not_by_another_at_its_address() {
+        let printers = [a_printer("aa"), at(77, a_printer("bb"))];
+        let machine = NetworkMachine {
+            name: String::new(),
+            address: "192.168.1.42".into(),
+            board: Some("bb".into()),
+        };
+        let found = resolve(&printers, &[], &machine).map(|target| target.key());
+        assert_eq!(
+            found,
+            Some("sdcp:bb".into()),
+            "bb moved to .77, aa stands at .42"
+        );
+    }
+
     /// Each profile lists its own printers and keeps the one it last sent to, so switching
     /// profiles puts each back on its own machine.
     #[test]
@@ -1065,7 +1121,7 @@ mod tests {
     fn a_board_is_reachable_only_while_it_keeps_answering() {
         let (sender, receiver) = mpsc::channel();
         let mut network = Network {
-            printers: vec![a_printer("aa"), a_printer("bb")],
+            printers: vec![a_printer("aa"), at(43, a_printer("bb"))],
             scan: Some(receiver),
             hold: true,
             ..Network::default()

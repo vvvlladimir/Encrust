@@ -91,7 +91,7 @@ fn sdcp(ui: &mut egui::Ui, profile: &mut PrinterProfile, network: &mut Network) 
 /// The printers this profile sends to, each named, with what it is doing and a way to
 /// take it off the list. A board listed by its address learns its id once it answers, so
 /// it is still found after it moves to another address.
-fn listed(ui: &mut egui::Ui, profile: &mut PrinterProfile, network: &Network) {
+fn listed(ui: &mut egui::Ui, profile: &mut PrinterProfile, network: &mut Network) {
     subheading(ui, "Printers this machine sends to");
     if profile.machines.is_empty() {
         tone(
@@ -130,7 +130,7 @@ fn listed(ui: &mut egui::Ui, profile: &mut PrinterProfile, network: &Network) {
         }
     });
     if let Some(index) = removed {
-        profile.machines.remove(index);
+        network.forget(&profile.machines.remove(index).address);
     }
 }
 

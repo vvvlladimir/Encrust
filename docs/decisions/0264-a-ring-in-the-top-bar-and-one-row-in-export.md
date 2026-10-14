@@ -1,6 +1,6 @@
 # 0264. Put a ring for the current printer in the top bar, and leave Export one row
 
-- **Status:** Accepted
+- **Status:** Accepted; the list the Export row opens superseded by 0265
 - **Date:** 2026-10-14
 
 ## Context
@@ -12,11 +12,12 @@ running for hours needs.
 
 ## Decision
 
-- Left of the print chip, once the window knows any printer, a ring as tall as the chip
-  stands for the current printer. That is the one the printer in hand is bound to, else the
-  first one printing, else the first one listed (`Network::current`). The ring's arc is the
-  share done, in the colour of what the printer is doing: accent printing, warning paused,
-  danger silent. While a print runs without a count it spins. The share is written inside;
+- Left of the print chip, once any printer answers, a ring as tall as the chip stands for
+  the current printer. That is the one the printer in hand is bound to, else the first one
+  printing, else the first one answering (`Network::current`). The ring's arc is the share
+  done, in the colour of what the printer is doing: accent printing, warning paused. A
+  printer that stops answering leaves the ring until a scan hears it again. While a print
+  runs without a count it spins. The share is written inside;
   otherwise the printer glyph is. With more than one printer a small badge gives the count.
 - A press opens the printer's sheet when there is one printer. With several, it opens a
   list first: a row per printer with its small ring, name, state and time left, and a row

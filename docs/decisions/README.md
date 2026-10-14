@@ -302,7 +302,7 @@ Grouped by what the decision governs; the number is still the order it was taken
 | [0182](0182-sending-is-a-crate-both-front-ends-share-and-a-browser-downloads.md) | Sending is a crate both front ends share, and a browser downloads | Accepted |
 | [0262](0262-discovery-asks-every-interface-and-the-window-watches-each-printer.md) | Ask every interface for printers, and watch each printer the window lists | Accepted |
 | [0263](0263-the-window-drives-the-printer-and-its-notices-stand-at-the-foot.md) | Let the window drive a printer, and stack its notices at the foot of the stage | Accepted; the cards in Export superseded by 0264 |
-| [0264](0264-a-ring-in-the-top-bar-and-one-row-in-export.md) | Put a ring for the current printer in the top bar, and leave Export one row | Accepted |
+| [0264](0264-a-ring-in-the-top-bar-and-one-row-in-export.md) | Put a ring for the current printer in the top bar, and leave Export one row | Accepted; the list the Export row opens superseded by 0265 |
 | [0265](0265-a-printer-profile-lists-its-printers-on-the-network.md) | A printer profile lists the printers of its model on the network | Accepted |
 
 ### The window and the command line

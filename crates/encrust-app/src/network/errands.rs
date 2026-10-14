@@ -27,16 +27,16 @@ pub enum Errand {
 }
 
 impl Errand {
-    /// What the card says while it runs.
-    fn doing(&self) -> &'static str {
+    /// What the card says in place of its buttons while it runs, for an errand that keeps
+    /// them waiting; reading prints and pictures leaves Pause and Stop in reach.
+    fn doing(&self) -> Option<&'static str> {
         match self {
-            Self::Control(Command::Pause) => "Pausing",
-            Self::Control(Command::Resume) => "Resuming",
-            Self::Control(Command::Stop) => "Stopping",
-            Self::History => "Reading its prints",
-            Self::Picture { .. } => "Fetching a picture",
-            Self::Camera(true) => "Turning the camera on",
-            Self::Camera(false) => "Turning the camera off",
+            Self::Control(Command::Pause) => Some("Pausing"),
+            Self::Control(Command::Resume) => Some("Resuming"),
+            Self::Control(Command::Stop) => Some("Stopping"),
+            Self::Camera(true) => Some("Turning the camera on"),
+            Self::Camera(false) => Some("Turning the camera off"),
+            Self::History | Self::Picture { .. } => None,
         }
     }
 }
@@ -78,6 +78,7 @@ pub struct Extras {
     pub history: Option<Vec<Task>>,
     /// Whether the history has been asked for, so a failed list is not asked again unbidden.
     pub history_asked: bool,
+    pub reading_history: bool,
     pub pictures: BTreeMap<String, Picture>,
     /// Where the camera streams to while it is on.
     pub camera: Option<String>,
@@ -106,12 +107,7 @@ impl Out {
         }
     }
 
-    /// Whether the errand keeps the card's buttons waiting.
-    pub(super) fn holds_the_buttons(&self) -> bool {
-        !matches!(self.errand, Errand::Picture { .. })
-    }
-
-    pub(super) fn doing(&self) -> &'static str {
+    pub(super) fn doing(&self) -> Option<&'static str> {
         self.errand.doing()
     }
 
@@ -125,8 +121,11 @@ impl Out {
                 unreachable: false,
             }),
         };
-        if self.holds_the_buttons() {
+        if self.doing().is_some() {
             extras.doing = None;
+        }
+        if self.errand == Errand::History {
+            extras.reading_history = false;
         }
         match (answer, &self.errand) {
             (Ok(Heard::Done), _) => extras.trouble = None,
@@ -228,7 +227,7 @@ mod tests {
             },
             answer,
         };
-        assert!(!out.holds_the_buttons());
+        assert_eq!(out.doing(), None);
         let trouble = Trouble {
             message: "network call failed".to_owned(),
             unreachable: false,
@@ -257,7 +256,7 @@ mod tests {
             answer,
         };
         let mut extras = Extras {
-            doing: Some(out.doing()),
+            doing: out.doing(),
             ..Extras::default()
         };
         let trouble = Trouble {
@@ -282,12 +281,34 @@ mod tests {
             answer,
         };
         let mut extras = Extras {
-            doing: Some(out.doing()),
+            doing: out.doing(),
             ..Extras::default()
         };
         drop(sender);
         assert!(out.take(&mut extras), "a dead errand is not waited on");
         assert_eq!(extras.doing, None);
         assert!(extras.trouble.is_some());
+    }
+
+    /// Reading the prints runs while the sheet first opens, beside a print under way.
+    #[test]
+    fn reading_the_prints_leaves_pause_and_stop_in_reach() {
+        let (sender, answer) = mpsc::channel();
+        let out = Out {
+            key: "sdcp:aa".to_owned(),
+            errand: Errand::History,
+            answer,
+        };
+        assert_eq!(out.doing(), None);
+        let mut extras = Extras {
+            reading_history: true,
+            ..Extras::default()
+        };
+        sender
+            .send(Ok(Heard::History(Vec::new())))
+            .expect("the errand holds the receiver");
+        assert!(out.take(&mut extras));
+        assert!(!extras.reading_history);
+        assert_eq!(extras.history, Some(Vec::new()));
     }
 }

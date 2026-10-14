@@ -214,8 +214,8 @@ fn remembered() -> Vec<printer_link::Task> {
         printer_link::Task {
             task_id: "3add".to_owned(),
             task_name: "/media/sda1/Hex tray.goo".to_owned(),
-            begin_time: now_s - 90_000,
-            end_time: now_s - 86_400,
+            begin_s: now_s - 90_000,
+            end_s: now_s - 86_400,
             task_status: 1,
             already_print_layer: 412,
             slice_information: slice(412),
@@ -224,8 +224,8 @@ fn remembered() -> Vec<printer_link::Task> {
         printer_link::Task {
             task_id: "10f2".to_owned(),
             task_name: "/media/sda1/Bench.goo".to_owned(),
-            begin_time: now_s - 3 * 86_400,
-            end_time: now_s - 3 * 86_400 + 600,
+            begin_s: now_s - 3 * 86_400,
+            end_s: now_s - 3 * 86_400 + 600,
             task_status: 3,
             already_print_layer: 240,
             slice_information: slice(1710),

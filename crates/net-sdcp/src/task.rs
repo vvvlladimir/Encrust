@@ -24,11 +24,11 @@ pub struct Task {
     #[serde(default)]
     pub thumbnail: String,
     /// Unix seconds.
-    #[serde(default)]
-    pub begin_time: u64,
+    #[serde(default, rename = "BeginTime")]
+    pub begin_s: u64,
     /// Unix seconds; the begin time again for a print stopped before it started.
-    #[serde(default)]
-    pub end_time: u64,
+    #[serde(default, rename = "EndTime")]
+    pub end_s: u64,
     #[serde(default)]
     pub task_status: u32,
     #[serde(default)]
@@ -42,12 +42,12 @@ pub struct Task {
 pub struct SliceInformation {
     #[serde(default)]
     pub total_layer_numbers: u32,
-    /// Estimated time of the whole print, in seconds.
-    #[serde(default)]
-    pub print_time: f64,
-    /// Resin the print takes, in ml.
-    #[serde(default)]
-    pub volume: f64,
+    /// Estimated time of the whole print.
+    #[serde(default, rename = "print_time")]
+    pub print_time_s: f64,
+    /// Resin the print takes.
+    #[serde(default, rename = "volume")]
+    pub volume_ml: f64,
 }
 
 /// How a remembered print ended, as `TaskStatus` spells it.
@@ -148,7 +148,7 @@ mod tests {
         assert_eq!(task.file_name(), "NEW+Darth+vader.3mf.goo");
         let slice = task.slice_information.expect("the board read the file");
         assert_eq!(slice.total_layer_numbers, 1710);
-        assert!((slice.print_time - 18885.0).abs() < f64::EPSILON);
+        assert!((slice.print_time_s - 18885.0).abs() < f64::EPSILON);
     }
 
     #[test]

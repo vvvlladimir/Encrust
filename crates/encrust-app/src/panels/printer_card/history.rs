@@ -32,21 +32,18 @@ pub(super) fn height(width: f32, prints: usize) -> f32 {
 pub(super) fn list(ui: &mut egui::Ui, extras: Option<&Extras>) -> Option<Errand> {
     let mut errand = None;
     let asked = extras.is_some_and(|extras| extras.history_asked);
-    let doing = extras.and_then(|extras| extras.doing);
+    let reading = extras.is_some_and(|extras| extras.reading_history);
     match extras.and_then(|extras| extras.history.as_deref()) {
         None if !asked => errand = Some(Errand::History),
         None => {
-            if doing.is_some() {
+            if reading {
                 ui.spinner();
             }
         }
         Some([]) => hint(ui, "It remembers no prints."),
         Some(tasks) => tiles(ui, tasks, extras),
     }
-    if asked
-        && doing.is_none()
-        && quiet_button(ui, icon::RESET, "Read again", false, true).clicked()
-    {
+    if asked && !reading && quiet_button(ui, icon::RESET, "Read again", false, true).clicked() {
         errand = Some(Errand::History);
     }
     errand
@@ -115,7 +112,7 @@ fn tile(
 
 /// How a remembered print ended, and when, as a person says it.
 fn ended(task: &Task, now_s: u64) -> String {
-    let when = ago(Some(task.end_time.max(task.begin_time)), now_s);
+    let when = ago(Some(task.end_s.max(task.begin_s)), now_s);
     let total = task
         .slice_information
         .as_ref()
@@ -141,8 +138,8 @@ mod tests {
     fn a_task(status: u32) -> Task {
         Task {
             task_name: "/media/sda1/print-a.goo".to_owned(),
-            begin_time: 1_000,
-            end_time: 4_600,
+            begin_s: 1_000,
+            end_s: 4_600,
             task_status: status,
             already_print_layer: 240,
             slice_information: Some(net_sdcp::SliceInformation {
