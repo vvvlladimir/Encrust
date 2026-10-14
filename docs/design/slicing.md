@@ -55,6 +55,16 @@ A shorter window holds less and rebuilds the index more often, each rebuild walk
 face. The result does not change: the same model gives the same contours whatever the
 window.
 
+## Copies
+
+A plate is cut from a `Solid`: one mesh of what stands once, and `Repeated` bodies that
+stand several times over, each moved along the plate and in no other way. A body is cut
+once and its contours are laid down again at each offset, moved by addition, so twenty
+copies of a model cost one model's crossings and stitching. That is exact in kind because
+stitching never crosses from one mesh to another: two meshes cut apart give the contours
+the two cut merged give, and the winding rule takes the union either way. `bake` decides
+what is a copy (ADR 0258).
+
 ## Where the sampling plane sits
 
 A `LayerPlan` is the boundaries between layers, lowest first, plus the height the mesh

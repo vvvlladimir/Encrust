@@ -6,7 +6,7 @@ use core_geometry::{
     remove_unbalanced_faces,
 };
 
-use crate::scene::ObjectId;
+use crate::scene::{ObjectId, Shaped};
 
 /// One model to close the holes in, owned so that it can cross to the worker thread.
 pub struct RepairRequest {
@@ -20,7 +20,7 @@ pub struct RepairRequest {
 pub struct Repaired {
     pub id: ObjectId,
     pub name: String,
-    pub mesh: Arc<Mesh>,
+    pub shaped: Shaped,
     pub filled: Filled,
     /// Faces that were lying over another face and have gone.
     pub duplicates_removed: usize,
@@ -83,7 +83,7 @@ fn run(request: RepairRequest) -> RepairOutcome {
     RepairOutcome::Done(Box::new(Repaired {
         id: request.id,
         name: request.name,
-        mesh: Arc::new(mesh),
+        shaped: Shaped::of(Arc::new(mesh)),
         filled: mended.filled,
         duplicates_removed: mended.duplicates_removed,
         tangles_removed: mended.tangles_removed,
@@ -174,7 +174,7 @@ mod tests {
         };
         assert_eq!(repaired.id, ObjectId::for_test(7));
         assert_eq!(repaired.filled.loops_filled, 1);
-        assert!(diagnose(&repaired.mesh).is_closed());
+        assert!(diagnose(&repaired.shaped.mesh).is_closed());
         assert!(repaired.orientation.orientable);
     }
 
@@ -204,7 +204,7 @@ mod tests {
         assert_eq!(repaired.duplicates_removed, 1);
         assert_eq!(repaired.filled.loops_filled, 1);
         assert!(
-            diagnose(&repaired.mesh).is_sound(),
+            diagnose(&repaired.shaped.mesh).is_sound(),
             "nothing is left for the window to call it broken for"
         );
     }
@@ -259,7 +259,7 @@ mod tests {
         assert_eq!(repaired.tangles_removed, 0, "a seam costs no face");
         assert_eq!(repaired.filled.loops_filled, 1);
         assert!(
-            diagnose(&repaired.mesh).is_sound(),
+            diagnose(&repaired.shaped.mesh).is_sound(),
             "closing the hole leaves nothing to call it broken for"
         );
     }
@@ -288,7 +288,7 @@ mod tests {
             panic!("the sliver is something to repair");
         };
         assert!(repaired.tangles_removed > 0);
-        assert!(diagnose(&repaired.mesh).is_sound());
+        assert!(diagnose(&repaired.shaped.mesh).is_sound());
     }
 
     #[test]

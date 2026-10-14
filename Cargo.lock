@@ -996,8 +996,10 @@ dependencies = [
  "core-supports",
  "core-thumbnail",
  "core-volume",
+ "criterion",
  "format-chitu",
  "printer-profiles",
+ "rayon",
  "serde",
  "serde_json",
  "thiserror 2.0.21",
@@ -1653,6 +1655,7 @@ dependencies = [
  "format-goo",
  "image",
  "js-sys",
+ "meshoptimizer-rs",
  "minisign-verify",
  "net-prusalink",
  "net-sdcp",
@@ -3036,6 +3039,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "488016bfae457b036d996092f6cb448677611ce4449e970ceaf42695203f218a"
 dependencies = [
  "autocfg",
+]
+
+[[package]]
+name = "meshoptimizer-rs"
+version = "0.2.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5129e1eb5c99c73171287687c91461acc5036a1fff02c07090cabf2f09e14573"
+dependencies = [
+ "libm",
 ]
 
 [[package]]

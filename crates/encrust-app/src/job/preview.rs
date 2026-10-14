@@ -1,8 +1,7 @@
 use std::sync::Arc;
 use std::sync::mpsc::{self, Receiver, TryRecvError};
 
-use core_geometry::Mesh;
-use core_slicer::Windows;
+use core_slicer::{Solid, Windows};
 
 use core_engine::{Baked, Cutting, cut};
 
@@ -14,7 +13,7 @@ pub enum PreviewOutcome {
     /// The plate as one mesh, and the layers it will be cut into. No contours: the layer
     /// being looked at is cut when it is looked at; see
     /// `docs/decisions/0068-the-window-holds-no-stack.md`.
-    Built(Arc<Mesh>, Windows),
+    Built(Arc<Solid>, Windows),
     /// The whole error chain flattened into one line, as the window has no terminal.
     Failed(String),
 }
@@ -58,7 +57,7 @@ fn build(baked: Baked, cutting: Cutting) -> PreviewOutcome {
     };
 
     match pool.install(|| cut(&baked, &cutting)) {
-        Ok(windows) => PreviewOutcome::Built(Arc::new(baked.mesh), windows),
+        Ok(windows) => PreviewOutcome::Built(Arc::new(baked.solid), windows),
         Err(error) => PreviewOutcome::Failed(
             anyhow::Error::new(error)
                 .chain()
@@ -72,7 +71,7 @@ fn build(baked: Baked, cutting: Cutting) -> PreviewOutcome {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use core_geometry::Vec3;
+    use core_geometry::{Mesh, Vec3};
 
     /// A regular tetrahedron of unit edges standing on the plate.
     fn tetrahedron() -> Mesh {
@@ -104,13 +103,17 @@ mod tests {
             Baked::of(tetrahedron()).expect("a tetrahedron has geometry"),
             Cutting::uniform(0.25),
         );
-        let PreviewOutcome::Built(mesh, windows) = wait(&mut job) else {
+        let PreviewOutcome::Built(solid, windows) = wait(&mut job) else {
             panic!("a sound mesh slices");
         };
         // One millimetre of model at a quarter of a millimetre a layer.
         assert_eq!(windows.layer_count(), 4);
         assert!(windows.height_of(0) < windows.height_of(3));
-        assert_eq!(mesh.faces.len(), 4, "the plate comes back to cut from");
+        assert_eq!(
+            solid.mesh.faces.len(),
+            4,
+            "the plate comes back to cut from"
+        );
     }
 
     #[test]

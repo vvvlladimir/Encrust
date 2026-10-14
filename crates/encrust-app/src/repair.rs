@@ -108,7 +108,7 @@ fn apply(scene: &mut Scene, repaired: &Repaired) -> Status {
     let Some(object) = scene.get_mut(repaired.id) else {
         return Status::Error(format!("{} is no longer on the plate", repaired.name));
     };
-    object.reshape(Arc::clone(&repaired.mesh));
+    object.reshape(repaired.shaped.clone());
     // What repair did is said in the stage notice; the summary keeps describing the file,
     // so a mended model carries no mark of its own.
     object.summary.orientation = repaired.orientation;
@@ -339,7 +339,7 @@ mod tests {
             &Repaired {
                 id,
                 name: "open.stl".to_owned(),
-                mesh: Arc::new(mesh),
+                shaped: crate::scene::Shaped::of(Arc::new(mesh)),
                 filled,
                 duplicates_removed: 0,
                 tangles_removed: 0,
@@ -366,7 +366,7 @@ mod tests {
             &Repaired {
                 id,
                 name: "model.stl".to_owned(),
-                mesh,
+                shaped: crate::scene::Shaped::of(mesh),
                 filled: core_geometry::Filled::default(),
                 duplicates_removed: 0,
                 tangles_removed: 0,

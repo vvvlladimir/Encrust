@@ -93,7 +93,16 @@ the seven faces upstream of it stands nearest: Zhao's sweep carrying a closest p
 rather than a value. Seven and not three, or a face waiting in a corner of the block could
 never step in. Tiles come in the walk's rings, and the whole shell is then swept once more,
 because a tile only sees the faces already in its block and one can be stranded in a
-neighbour of the same ring. Only two rings are kept as halo.
+neighbour of the same ring; that second pass skips a tile whose halo offers no voxel on its
+border a nearer face, since nothing else can move it. Only two rings are kept as halo.
+
+The carrier is `FAR_CARRY` = 4 times coarser instead where the whole band lies past what
+that carrier is trusted for, `3 · 4 · voxel < |iso| - band` — a 2 mm wall from about
+0.14 mm down. That is an eighth of the sweep again; where the band reaches into the
+trusted distance, every voxel of it would fall back on the hierarchy and cost more than the
+carrier saved, so the factor stays 2 (`carry_for`). On a 406k-face bust at 0.078 mm around a
+2 mm wall the field fell from 13.4 s to 6.2 s and its peak from 633 MB to 370 MB, with the
+wall no further off than before.
 
 **Refine.** A stored tile takes, per voxel, the nearest of the faces the eight carrier
 points around it hold. The `CARRY³` voxels of a carrier cell share those eight, so they are
@@ -120,6 +129,12 @@ the surface crosses no lattice edge of is all one side, and a band sitting a wal
 mesh is never nearer than that. That is what keeps the winding number affordable. The one
 question is asked at the true nearest point, not the carried face: near a thin wall the
 carrier hands over the wall's far side, close enough for a distance and wrong for a side.
+
+Most tiles are not asked at all. The walk already knows the signed distance at each tile's
+centre, and no surface is nearer a point than its distance, so a tile whose centre stands
+further from the mesh than its own radius takes that side for every voxel; the walk passes
+a side on to its neighbours the same way. Only near a hole of an open mesh, where the
+winding number can cross one half without crossing a face, can this differ from asking.
 
 The pseudonormal tells a seam from a face by barycentrics, except on a triangle whose angle
 at its first corner is under about six degrees, where `f32` cancellation loses the seam and
@@ -203,8 +218,8 @@ runs together are under a fifth.
 
 What the field promises is half a voxel against what the hierarchy would answer, over the
 whole band, at `iso = 0` and at a wall's offset. `the_sweep_answers_what_the_hierarchy_would`
-is that promise; `CARRY`, `TRUST_VOXELS` and the eight sweep directions are each set by it
-and not by argument.
+is that promise, on both carriers; `CARRY`, `FAR_CARRY`, `TRUST_VOXELS` and the eight sweep
+directions are each set by it and not by argument.
 
 Extraction of that same ball's cavity is 0.3 s for 314 000 triangles, where marching cubes
 gave 5.0 million for the same surface. `a_smooth_cavity_costs_far_fewer_triangles_than_the_cells_it_crosses`

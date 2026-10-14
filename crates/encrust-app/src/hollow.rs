@@ -1,9 +1,13 @@
+use std::sync::Arc;
+
 use anyhow::{Result, bail};
 use core_engine::project::HollowState;
 use core_geometry::Scalar;
 use core_volume::{HollowSettings, InfillSettings};
 
-use crate::job::{HollowJob, HollowOutcome, HollowRequest, hollow_tasks, rebuild_tasks};
+use crate::job::{
+    HollowJob, HollowOutcome, HollowRequest, SharedFields, hollow_tasks, lock_fields, rebuild_tasks,
+};
 use crate::scene::{Scene, SceneObject};
 use crate::status::Status;
 
@@ -23,6 +27,9 @@ pub struct HollowTool {
     /// Whether a run has just put a cavity on the plate, which is what takes the pockets
     /// an older check found off it; see ADR 0198.
     pub(crate) hollowed: bool,
+    /// The cavity fields of the models hollowed lately, so a blocker or a channel moved on
+    /// one cuts its cavity again without building the field.
+    fields: SharedFields,
 }
 
 impl Default for HollowTool {
@@ -39,6 +46,7 @@ impl Default for HollowTool {
             },
             job: None,
             hollowed: false,
+            fields: SharedFields::default(),
         }
     }
 }
@@ -71,7 +79,10 @@ impl HollowTool {
             bail!("nothing visible on the plate to hollow");
         }
 
-        self.job = Some(HollowJob::spawn(HollowRequest { tasks }));
+        self.job = Some(HollowJob::spawn(HollowRequest {
+            tasks,
+            fields: Arc::clone(&self.fields),
+        }));
         Ok(())
     }
 
@@ -83,8 +94,16 @@ impl HollowTool {
         if tasks.is_empty() || self.job.is_some() {
             return false;
         }
-        self.job = Some(HollowJob::spawn(HollowRequest { tasks }));
+        self.job = Some(HollowJob::spawn(HollowRequest {
+            tasks,
+            fields: Arc::clone(&self.fields),
+        }));
         true
+    }
+
+    /// Lets the kept fields go where they must make way for a plate being sliced.
+    pub fn make_way(&self) {
+        lock_fields(&self.fields).make_way();
     }
 
     /// Whether a cavity has been cut since this was last asked, so what an older check

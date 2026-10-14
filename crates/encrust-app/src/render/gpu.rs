@@ -1,11 +1,13 @@
 use std::collections::{HashMap, HashSet};
 use std::ops::Range;
 use std::sync::Arc;
+use std::sync::mpsc::Sender;
 
 use bytemuck::{Pod, Zeroable};
 use core_geometry::{Mesh, Scalar};
 use wgpu::util::DeviceExt as _;
 
+use crate::render::frame_time::{CardTime, FrameLog};
 use crate::render::grid::{GRID_MAJOR_MM, GRID_SPACING_MM};
 use crate::render::target::SceneTarget;
 use crate::render::vertex::{LineVertex, ModelInstance};
@@ -13,11 +15,13 @@ use crate::scene::Mapped;
 use crate::ui::theme;
 
 mod buffers;
+mod cost;
 mod draws;
 mod paint;
 mod pipelines;
 mod shadow;
 mod textures;
+mod timer;
 
 pub use draws::{
     CutDraw, CutLine, DrainCut, ExposureBand, Floor, FrameInput, ModelDraw, ReliefDraw, TrapBox,
@@ -124,7 +128,13 @@ struct CachedMesh {
     /// drawn in part — the drainage check lands frames after the shell does — so a cache
     /// entry whose breaks no longer cover what is asked for is uploaded again.
     splits: Vec<usize>,
+    /// When a frame last drew it: a mesh drawn only while the camera moves, a light copy,
+    /// stays on the card between moves rather than going up again with each one.
+    drawn_at: web_time::Instant,
 }
+
+/// How long a mesh no frame draws stays on the card.
+const KEEP_UNDRAWN: std::time::Duration = std::time::Duration::from_secs(10);
 
 /// One mesh to draw this frame: its cache key, whether its placement mirrors it, and
 /// which of its faces to draw.
@@ -173,6 +183,16 @@ pub struct ViewportResources {
     frame: Frame,
     target: SceneTarget,
     shadow: ContactShadow,
+    /// What this frame cost so far, and the frames before it a second at a time.
+    uploaded_faces: usize,
+    shadow_baked: bool,
+    frame_log: FrameLog,
+    /// The card's own clock over the scene pass, where it has one, where its times go
+    /// with the models' faces this frame draws, and the latest time, milliseconds.
+    timer: Option<timer::CardTimer>,
+    report: Option<Sender<CardTime>>,
+    planned_faces: Option<usize>,
+    card_ms: Option<f32>,
 }
 
 /// What the last `prepare` decided to draw, replayed by `paint`.
@@ -322,11 +342,21 @@ impl ViewportResources {
             frame: Frame::default(),
             target: SceneTarget::new(device, target_format),
             shadow,
+            uploaded_faces: 0,
+            shadow_baked: false,
+            frame_log: FrameLog::default(),
+            timer: timer::CardTimer::new(device),
+            report: None,
+            planned_faces: None,
+            card_ms: None,
         }
     }
 
     /// Uploads one frame's camera, plate geometry and objects, and records what to draw.
     pub fn prepare(&mut self, device: &wgpu::Device, queue: &wgpu::Queue, frame: FrameInput<'_>) {
+        self.uploaded_faces = 0;
+        self.shadow_baked = false;
+        self.read_card_times(device, queue);
         queue.write_buffer(&self.globals, 0, bytemuck::bytes_of(&globals_of(&frame)));
         self.write_geometry(device, queue, &frame);
         self.count_frame(&frame);
@@ -425,8 +455,29 @@ impl ViewportResources {
         }
     }
 
-    /// Lets go of every mesh and texture nobody drew this frame: it was taken off the
-    /// plate or replaced.
+    /// Sends on what the card took over the frames it has finished, to whoever asked.
+    fn read_card_times(&mut self, device: &wgpu::Device, queue: &wgpu::Queue) {
+        let Some(timer) = &mut self.timer else {
+            return;
+        };
+        for (card_s, faces) in timer.collect(device, queue) {
+            self.card_ms = Some(card_s * 1000.0);
+            if let (Some(report), Some(faces)) = (&self.report, faces) {
+                // Nobody listening any more is no reason to stop drawing.
+                let _ = report.send(CardTime { card_s, faces });
+            }
+        }
+    }
+
+    /// Where the card's time over each frame is sent from now on, and the models' faces
+    /// this frame draws, or `None` for a frame not to be learnt from.
+    pub fn report_to(&mut self, report: Option<Sender<CardTime>>, faces: Option<usize>) {
+        self.report = report;
+        self.planned_faces = faces;
+    }
+
+    /// Lets go of every mesh no frame has drawn for `KEEP_UNDRAWN`, and every texture
+    /// nobody drew this frame: it was taken off the plate or replaced.
     fn drop_what_nobody_drew(&mut self) {
         let live: HashSet<usize> = self
             .frame
@@ -441,7 +492,13 @@ impl ViewportResources {
             )
             .map(|drawn| drawn.key)
             .collect();
-        self.meshes.retain(|key, _| live.contains(key));
+        let now = web_time::Instant::now();
+        self.meshes.retain(|key, held| {
+            if live.contains(key) {
+                held.drawn_at = now;
+            }
+            now.duration_since(held.drawn_at) < KEEP_UNDRAWN
+        });
         let textured: HashSet<usize> = self.frame.reliefs.iter().map(|(key, _)| *key).collect();
         self.reliefs.retain(|key, _| textured.contains(key));
     }
@@ -459,12 +516,14 @@ impl ViewportResources {
         {
             return key;
         }
+        self.uploaded_faces += mesh.faces.len();
         self.meshes.insert(
             key,
             CachedMesh {
                 _mesh: Arc::clone(mesh),
                 pieces: pieces(device, mesh, splits),
                 splits: splits.to_vec(),
+                drawn_at: web_time::Instant::now(),
             },
         );
         key

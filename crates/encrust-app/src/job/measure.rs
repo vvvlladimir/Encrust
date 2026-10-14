@@ -3,10 +3,9 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::{self, Receiver, TryRecvError};
 
 use core_analysis::Measured;
-use core_geometry::Mesh;
 use core_pipeline::Tolerance;
 use core_raster::RasterSettings;
-use core_slicer::Windows;
+use core_slicer::{Solid, Windows};
 
 use crate::job::pipeline::{measure_stack, thread_pool, worker_threads};
 
@@ -26,9 +25,9 @@ pub struct MeasureJob {
 }
 
 impl MeasureJob {
-    /// Starts folding `windows` of `mesh` into `fold`.
+    /// Starts folding `windows` of `solid` into `fold`.
     pub fn spawn(
-        mesh: Arc<Mesh>,
+        solid: Arc<Solid>,
         windows: Windows,
         settings: RasterSettings,
         tolerance: Tolerance,
@@ -41,7 +40,14 @@ impl MeasureJob {
         crate::job::spawn(move || {
             let measured = thread_pool(worker_threads()).and_then(|pool| {
                 pool.install(|| {
-                    measure_stack(&mesh, &windows, &settings, &tolerance, fold, &worker_cancel)
+                    measure_stack(
+                        &solid,
+                        &windows,
+                        &settings,
+                        &tolerance,
+                        fold,
+                        &worker_cancel,
+                    )
                 })
             });
             let outcome = match measured {
@@ -82,7 +88,7 @@ impl Drop for MeasureJob {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use core_geometry::Vec3;
+    use core_geometry::{Mesh, Vec3};
     use core_raster::{Grey, PixelPitch, Shading};
     use core_slicer::{ONE_SAMPLE, SliceSettings, WINDOW_LAYERS};
 
@@ -136,7 +142,7 @@ mod tests {
         };
         let windows = Windows::new(&mesh, settings, WINDOW_LAYERS).expect("a cube slices");
         let mut job = MeasureJob::spawn(
-            Arc::new(mesh),
+            Arc::new(mesh.into()),
             windows,
             panel(),
             Tolerance::default(),

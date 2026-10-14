@@ -1,11 +1,9 @@
-use std::collections::HashSet;
-
-use core_geometry::{Aabb, Bvh, ClosestPoint, Mesh, Scalar, Vec3, glam::IVec3};
+use core_geometry::{Aabb, Bvh, ClosestPoint, FastMap, FastSet, Mesh, Scalar, Vec3, glam::IVec3};
 use rayon::prelude::*;
 
 use crate::cancel::Cancel;
 use crate::error::VolumeError;
-use crate::grid::{VoxelGrid, tile_of, within};
+use crate::grid::{TILE, VoxelGrid, tile_of, within};
 use crate::scatter::{Faces, seeds};
 use crate::sdf::{Quantised, Sdf, TILE_VALUES, gap_runs};
 use crate::sign::{SignMode, Signer};
@@ -112,13 +110,18 @@ pub fn build(
         candidate_tiles(mesh, grid, band_mm, settings.clip),
         keep,
     );
-    affordable(candidates.len(), sweep::carrier_tiles(&rings), settings)?;
+    let carry = sweep::carry_for(grid, band_mm, iso_mm);
+    affordable(
+        candidates.len(),
+        sweep::carrier_tiles(&rings, carry),
+        settings,
+    )?;
     if cancel.asked() {
         return Err(VolumeError::Cancelled);
     }
 
     let faces = Faces::of(mesh);
-    let wanted: HashSet<IVec3> = candidates.into_iter().collect();
+    let wanted: FastMap<IVec3, Scalar> = candidates.into_iter().collect();
 
     let tiles = sweep::fill(
         mesh,
@@ -130,7 +133,7 @@ pub fn build(
         iso_mm,
         rings,
         &wanted,
-        &seeds(mesh, &faces, sweep::carrier_grid(grid), keep),
+        &seeds(mesh, &faces, sweep::carrier_grid(grid, carry), keep),
         cancel,
     );
     if cancel.asked() {
@@ -160,7 +163,7 @@ fn walls(
     let mut tiles: Vec<IVec3> = stored.collect();
     if let Some(clip) = clip {
         let (low, high) = clipped_tiles(grid, clip);
-        let columns: HashSet<(i32, i32)> = tiles.iter().map(|tile| (tile.x, tile.y)).collect();
+        let columns: FastSet<(i32, i32)> = tiles.iter().map(|tile| (tile.x, tile.y)).collect();
         for (x, y) in columns {
             tiles.push(IVec3::new(x, y, low.z - 1));
             tiles.push(IVec3::new(x, y, high.z + 1));
@@ -204,13 +207,13 @@ fn candidate_tiles(
     grid: VoxelGrid,
     reach_mm: Scalar,
     clip: Option<Aabb>,
-) -> HashSet<IVec3> {
+) -> FastSet<IVec3> {
     let reach = Vec3::splat(reach_mm);
     let keep = clip.map(|clip| clipped_tiles(grid, clip));
 
     (0..mesh.faces.len())
         .into_par_iter()
-        .fold(HashSet::new, |mut tiles, face| {
+        .fold(FastSet::default, |mut tiles, face| {
             let Some(triangle) = mesh.triangle(face) else {
                 return tiles;
             };
@@ -231,7 +234,7 @@ fn candidate_tiles(
             }
             tiles
         })
-        .reduce(HashSet::new, |mut tiles, other| {
+        .reduce(FastSet::default, |mut tiles, other| {
             tiles.extend(other);
             tiles
         })
@@ -254,6 +257,7 @@ fn clipped_tiles(grid: VoxelGrid, clip: Aabb) -> (IVec3, IVec3) {
 ///
 /// The shell comes back as the rings the walk found it in, because that is the order the
 /// sweep has to take it in: every tile of a ring has a neighbour in the ring before it.
+/// The tiles worth filling come with the signed distance at their centres.
 #[allow(clippy::too_many_arguments)]
 fn reach(
     mesh: &Mesh,
@@ -262,9 +266,9 @@ fn reach(
     grid: VoxelGrid,
     band_mm: Scalar,
     iso_mm: Scalar,
-    seeds: HashSet<IVec3>,
+    seeds: FastSet<IVec3>,
     keep: Option<(IVec3, IVec3)>,
-) -> (Vec<Vec<IVec3>>, Vec<IVec3>) {
+) -> (Vec<Vec<IVec3>>, Vec<(IVec3, Scalar)>) {
     let edge_mm = band_mm + grid.tile_radius();
     let worth_filling = |distance: Scalar| (distance - iso_mm).abs() <= edge_mm;
     // A tile this much further from the mesh than the isosurface cannot lead to one that
@@ -280,18 +284,31 @@ fn reach(
     };
     let worth_stepping = |distance: Scalar| distance >= low_mm && distance <= high_mm;
 
-    let mut visited: HashSet<IVec3> = seeds.clone();
-    let mut frontier: Vec<IVec3> = seeds.into_iter().collect();
+    // No surface lies nearer a centre than its distance, so a neighbour whose centre is
+    // closer to it than that is on the same side and needs no question of its own.
+    let step_mm = Scalar::sqrt(3.0) * (TILE as Scalar * grid.voxel_mm);
+
+    let mut visited: FastSet<IVec3> = seeds.clone();
+    let mut frontier: Vec<(IVec3, Option<bool>)> =
+        seeds.into_iter().map(|tile| (tile, None)).collect();
     let mut rings: Vec<Vec<IVec3>> = Vec::new();
-    let mut found: Vec<IVec3> = Vec::new();
+    let mut found: Vec<(IVec3, Scalar)> = Vec::new();
 
     while !frontier.is_empty() {
         let measured: Vec<(IVec3, Scalar)> = frontier
             .par_iter()
-            .filter_map(|tile| {
+            .filter_map(|(tile, inside)| {
                 let center = grid.tile_center(*tile);
                 let found = bvh.closest(mesh, center)?;
-                Some((*tile, signed(signer, mesh, center, &found)))
+                let inside = inside.unwrap_or_else(|| signer.is_inside(mesh, center, &found));
+                Some((
+                    *tile,
+                    if inside {
+                        -found.distance
+                    } else {
+                        found.distance
+                    },
+                ))
             })
             .collect();
 
@@ -299,14 +316,15 @@ fn reach(
         rings.push(measured.iter().map(|(tile, _)| *tile).collect());
         for (tile, distance) in measured {
             if worth_filling(distance) {
-                found.push(tile);
+                found.push((tile, distance));
             }
             if !worth_stepping(distance) {
                 continue;
             }
+            let inherited = (distance.abs() > step_mm).then_some(distance < 0.0);
             for step in neighbours(tile) {
                 if keep.is_none_or(|(low, high)| within(step, low, high)) && visited.insert(step) {
-                    frontier.push(step);
+                    frontier.push((step, inherited));
                 }
             }
         }

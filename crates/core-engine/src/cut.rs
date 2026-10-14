@@ -52,20 +52,23 @@ pub fn cut(baked: &Baked, cutting: &Cutting) -> Result<Windows, EngineError> {
             "the model reaches under the plate, and what is under it is not cut"
         );
     }
+    // A copy moved along the plate adds no height and no slope, so the plan reads each
+    // body once.
+    let distinct = baked.solid.distinct();
     let Some(adaptive) = cutting.adaptive else {
         let settings = SliceSettings {
             layer_height: cutting.layer_height_mm,
             samples: cutting.samples,
         };
         return Ok(Windows::under(
-            &baked.mesh,
+            &distinct,
             settings,
             cutting.slice_window,
             baked.ceiling_mm,
         )?);
     };
     let plan = adaptive_plan_under(
-        &baked.mesh,
+        &distinct,
         &AdaptiveSettings {
             max_height_mm: cutting.layer_height_mm,
             ..adaptive

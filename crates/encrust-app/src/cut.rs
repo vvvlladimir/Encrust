@@ -10,7 +10,7 @@ pub use core_engine::project::Keep;
 use core_engine::project::{Axis, CutState};
 
 use crate::job::mend;
-use crate::scene::{ImportSummary, Imported, ObjectId, Scene, SceneObject};
+use crate::scene::{ImportSummary, Imported, ObjectId, Scene, SceneObject, Shaped};
 use crate::status::Status;
 
 /// Where the Cut tool's plane is, and what it does with the halves.
@@ -197,7 +197,7 @@ fn stand_pins(object: &mut SceneObject, spots: &[Vec3], up: Vec3, pins: Pins) {
                 .map(|face| face.map(|index| index + offset)),
         );
     }
-    object.reshape(Arc::new(mesh));
+    object.reshape(Shaped::of(Arc::new(mesh)));
 }
 
 /// Drills a socket for each pin into `object`'s cut, a clearance wider and deeper than

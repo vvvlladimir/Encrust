@@ -7,9 +7,9 @@ use std::ops::Range;
 use anyhow::Context as _;
 use core_analysis::Measured;
 use core_format::{ReadSeek, SlicedFile};
-use core_geometry::{Mesh, Scalar};
+use core_geometry::Scalar;
 use core_raster::{LayerRuns, RasterSettings};
-use core_slicer::{Contour, LayerPlan, Sliced, Windows};
+use core_slicer::{Contour, LayerPlan, Sliced, Solid, Windows};
 
 use core_engine::Cutting;
 use core_pipeline::{Opened, Tolerance};
@@ -90,7 +90,7 @@ struct MeasureKey {
 /// The plate to preview, the layers it cuts into, and the one window of it that has
 /// actually been cut.
 struct Stack {
-    mesh: Arc<Mesh>,
+    solid: Arc<Solid>,
     windows: Windows,
     fingerprint: u64,
     /// The window last cut and the contours it came to, so that stepping through a
@@ -270,6 +270,11 @@ impl Preview {
         Some(self.layer_z().filter(|_| self.layer + 1 < count))
     }
 
+    /// Whether a stack is being cut or measured, either of which slices the whole plate.
+    pub fn is_slicing(&self) -> bool {
+        self.job.is_some() || self.measuring.is_some()
+    }
+
     pub fn is_playing(&self) -> bool {
         self.playing && self.layer_count() > 0
     }
@@ -409,7 +414,7 @@ pub(crate) mod tests {
         .expect("a box slices");
         let mut preview = Preview {
             source: Some(Source::Cut(Stack {
-                mesh,
+                solid: Arc::new(Solid::from(mesh.as_ref().clone())),
                 windows,
                 fingerprint: 7,
                 cut: None,
@@ -480,7 +485,7 @@ pub(crate) mod tests {
         .expect("two boxes slice");
         let mut preview = Preview {
             source: Some(Source::Cut(Stack {
-                mesh: Arc::new(mesh),
+                solid: Arc::new(Solid::from(mesh)),
                 windows,
                 fingerprint: 7,
                 cut: None,

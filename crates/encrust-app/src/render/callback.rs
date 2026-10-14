@@ -1,4 +1,5 @@
 use std::sync::Arc;
+use std::sync::mpsc::Sender;
 
 use core_format::ExposureRange;
 use core_geometry::{Mat4, Mesh, Scalar, Transform, Vec2, Vec3};
@@ -10,12 +11,14 @@ use egui_wgpu::{CallbackResources, CallbackTrait, ScreenDescriptor};
 use crate::camera::OrbitCamera;
 use crate::plate::BuildPlate;
 use crate::relief::Textures;
+use crate::render::frame_time::CardTime;
 use crate::render::gpu::{
     CutDraw, CutLine, DrainCut, ExposureBand, Floor, FrameInput, MAX_BANDS, MAX_CUTS, MAX_POCKETS,
     ModelDraw, ReliefDraw, TrapBox,
 };
 use crate::render::grid::{plate_lines, section_frame};
 use crate::render::label;
+use crate::render::lod::Light;
 use crate::render::vertex::{LabelVertex, LineVertex, ModelInstance, NOT_MARKED};
 use crate::scene::{Mapped, Scene, SceneObject};
 use crate::ui::theme;
@@ -77,8 +80,15 @@ pub struct ViewportCallback {
     xray: bool,
     /// Whether the plate's grid is drawn into it.
     grid: bool,
+    /// Whether the models' levels are still changing from frame to frame.
+    light: bool,
     /// The plate the models cast their shadow on.
     floor: Floor,
+    /// How long the window's pass over its panels took on the frame before, milliseconds.
+    ui_ms: f32,
+    /// Where the card's time over each frame goes, with the models' faces it drew.
+    report: Option<Sender<CardTime>>,
+    faces: Option<usize>,
 }
 
 /// The exposure bands washed over the models, and the height below which one shows
@@ -110,6 +120,8 @@ pub struct Shading<'a> {
     /// The support the hand is about to put down and the colour it is shown in, in plate
     /// coordinates. Drawn only, never capped: it is not part of the print yet.
     pub preview: Option<(&'a Arc<Mesh>, Color32)>,
+    /// The lighter levels drawn in place of heavy meshes.
+    pub light: Option<&'a Light>,
 }
 
 impl ViewportCallback {
@@ -131,6 +143,7 @@ impl ViewportCallback {
             cut_line,
             hidden_groups,
             preview,
+            light,
         } = shading;
         let section_mm = section_mm.map(|height| height - SECTION_INSET_MM);
         let bottom_cut_mm = bottom_cut_mm.map(|height| height + SECTION_INSET_MM);
@@ -146,6 +159,7 @@ impl ViewportCallback {
             overhang_deg.map_or(NOT_MARKED, marking),
             textures,
             hidden_groups,
+            light,
         );
         if let Some((mesh, colour)) = preview {
             models.push(ModelDraw::whole(
@@ -186,12 +200,35 @@ impl ViewportCallback {
             cut_line,
             xray: view.xray,
             grid: view.grid,
+            light: light.is_some_and(|light| light.settling),
             floor: Floor {
                 near_corner_mm: Vec2::ZERO,
                 size_mm: Vec2::new(plate.x_mm, plate.y_mm),
             },
+            ui_ms: 0.0,
+            report: None,
+            faces: None,
         }
     }
+
+    /// The same frame, logged with what the window's last pass over its panels took, and
+    /// with the card's time over it sent to `report` beside the models' `faces` it draws,
+    /// or not sent where `faces` is `None`.
+    pub fn timed(mut self, ui_ms: f32, report: Sender<CardTime>, faces: Option<usize>) -> Self {
+        self.ui_ms = ui_ms;
+        self.report = Some(report);
+        self.faces = faces;
+        self
+    }
+}
+
+/// What `object` is drawn as: its shell or its own mesh, or a lighter level of that.
+fn shown(object: &SceneObject, light: Option<&Light>) -> Arc<Mesh> {
+    let mesh = object.hollow.shell().unwrap_or(&object.mesh);
+    light
+        .and_then(|light| light.meshes.get(&object.id))
+        .unwrap_or(mesh)
+        .clone()
 }
 
 /// What the objects on the plate come to on the GPU, gathered one object at a time.
@@ -207,13 +244,21 @@ struct Draws {
 
 impl Draws {
     /// `mark` is the overhang threshold the models are washed at, or `NOT_MARKED`.
-    fn of(scene: &Scene, mark: f32, textures: Option<&Textures>, hidden: &[bool]) -> Self {
+    /// `light` holds the lighter levels drawn in place of heavy meshes.
+    fn of(
+        scene: &Scene,
+        mark: f32,
+        textures: Option<&Textures>,
+        hidden: &[bool],
+        light: Option<&Light>,
+    ) -> Self {
         let mut draws = Self::default();
         for object in scene.printable(scene.active_plate()) {
             let colour = color_for(scene.is_selected(object.id), object.summary.is_sound());
             let texture = textures.and_then(|textures| textures.get(&object.id));
-            draws.model(object, colour, mark, texture);
-            draws.hollowing(object, colour);
+            let shown = shown(object, light);
+            draws.model(object, &shown, colour, mark, texture);
+            draws.hollowing(object, &shown, colour);
             draws.supports(object, hidden);
         }
         // Last, so that the resin inside one model is still seen when another stands in
@@ -225,9 +270,11 @@ impl Draws {
         draws
     }
 
+    /// `shown` is what the model is drawn as: its own mesh, or a lighter level of it.
     fn model(
         &mut self,
         object: &SceneObject,
+        shown: &Arc<Mesh>,
         colour: Color32,
         mark: f32,
         texture: Option<&Arc<Mapped>>,
@@ -251,8 +298,10 @@ impl Draws {
             // The cavity's own faces are declared even while nothing is trapped in it, so
             // that the frame which does paint them finds the mesh already cut to suit.
             None => self.models.push(match object.hollow.cavity_faces() {
-                Some(cavity) => ModelDraw::whole_around(Arc::clone(&mesh), cavity, instance),
-                None => ModelDraw::whole(Arc::clone(&mesh), instance),
+                Some(cavity) if Arc::ptr_eq(shown, &mesh) => {
+                    ModelDraw::whole_around(Arc::clone(&mesh), cavity, instance)
+                }
+                _ => ModelDraw::whole(Arc::clone(shown), instance),
             }),
         }
 
@@ -269,7 +318,7 @@ impl Draws {
         }
     }
 
-    fn hollowing(&mut self, object: &SceneObject, colour: Color32) {
+    fn hollowing(&mut self, object: &SceneObject, shown: &Arc<Mesh>, colour: Color32) {
         // Counted but never drawn: a cut is wound inward, so it takes itself back out of
         // the count and the cap opens over the bore. See ADR 0074, 0075.
         if let Some(cuts) = object.hollow.cut_bodies()
@@ -279,8 +328,9 @@ impl Draws {
         }
         // The inside of every hole: the far wall of the cut's own body, drawn where the
         // object stands in front of it. Nothing meshes what that looks like; see ADR 0201.
+        // Against what the model is drawn as, so the hole's inside meets its surface.
         if let Some(cuts) = object.hollow.cut_bodies() {
-            let mesh = object.hollow.shell().unwrap_or(&object.mesh);
+            let mesh = shown;
             self.cut_surfaces.push(CutDraw {
                 body: ModelDraw::part(
                     Arc::clone(cuts),
@@ -509,7 +559,9 @@ impl CallbackTrait for ViewportCallback {
         egui_encoder: &mut wgpu::CommandEncoder,
         callback_resources: &mut CallbackResources,
     ) -> Vec<wgpu::CommandBuffer> {
+        let started = web_time::Instant::now();
         super::with_resources(callback_resources, |resources| {
+            resources.report_to(self.report.clone(), self.faces);
             resources.prepare(
                 device,
                 queue,
@@ -536,6 +588,7 @@ impl CallbackTrait for ViewportCallback {
                     xray: self.xray,
                     floor: Some(self.floor),
                     grid: self.grid,
+                    light: self.light,
                 },
             );
             // The same pixels egui hands `paint` its viewport for, so the copy lands
@@ -546,6 +599,7 @@ impl CallbackTrait for ViewportCallback {
                 screen.size_in_pixels,
             );
             resources.draw(device, egui_encoder, screen.size_in_pixels, viewport);
+            resources.log_frame(started, self.ui_ms);
         });
         Vec::new()
     }
@@ -626,7 +680,7 @@ mod tests {
             .expect("the ball is hollow");
         assert!(!cavity.is_empty(), "and the cavity has faces of its own");
 
-        let draws = Draws::of(&scene, NOT_MARKED, None, &[]);
+        let draws = Draws::of(&scene, NOT_MARKED, None, &[], None);
         let painted = draws
             .models
             .iter()
@@ -635,7 +689,7 @@ mod tests {
         assert_eq!(painted, 1, "the cavity is drawn once over the shell");
 
         scene.objects_mut()[0].traps.set(Vec::new());
-        let drained = Draws::of(&scene, NOT_MARKED, None, &[]);
+        let drained = Draws::of(&scene, NOT_MARKED, None, &[], None);
         assert!(
             drained.models.iter().all(|draw| draw.faces() != cavity),
             "and not at all once the resin can get out"
@@ -774,7 +828,7 @@ mod tests {
     #[test]
     fn a_model_that_is_not_closed_is_drawn_but_never_counted_into_the_cap() {
         let scene = an_open_box();
-        let draws = Draws::of(&scene, NOT_MARKED, None, &[]);
+        let draws = Draws::of(&scene, NOT_MARKED, None, &[], None);
 
         assert_eq!(draws.models.len(), 1, "an open model is still drawn");
         assert!(
@@ -792,9 +846,12 @@ mod tests {
         scene
             .get_mut(id)
             .expect("the box is there")
-            .reshape(Arc::new(mesh));
+            .reshape(crate::scene::Shaped::of(Arc::new(mesh)));
 
-        assert_eq!(Draws::of(&scene, NOT_MARKED, None, &[]).solids.len(), 1);
+        assert_eq!(
+            Draws::of(&scene, NOT_MARKED, None, &[], None).solids.len(),
+            1
+        );
     }
 
     #[test]

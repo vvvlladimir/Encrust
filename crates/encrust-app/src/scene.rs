@@ -16,6 +16,43 @@ use printer_profiles::{Raft, SupportProfile};
 
 use crate::drain::Traps;
 
+/// A mesh with what the window keeps beside it: its hierarchy, its centre of mass and what
+/// is wrong with it. Built where the mesh is made, on a worker, since on a million faces it
+/// is a third of a second the window would otherwise stand still for.
+#[derive(Clone)]
+pub struct Shaped {
+    pub mesh: Arc<Mesh>,
+    bvh: Arc<Bvh>,
+    center_of_mass: Vec3,
+    diagnostics: MeshDiagnostics,
+}
+
+impl Shaped {
+    pub fn of(mesh: Arc<Mesh>) -> Self {
+        Self {
+            bvh: Arc::new(Bvh::build(&mesh)),
+            center_of_mass: center_of_mass(&mesh).unwrap_or(Vec3::ZERO),
+            diagnostics: core_geometry::diagnose(&mesh),
+            mesh,
+        }
+    }
+}
+
+/// Two shapes are one when their surfaces are: the rest is worked out from it.
+impl PartialEq for Shaped {
+    fn eq(&self, other: &Self) -> bool {
+        self.mesh == other.mesh
+    }
+}
+
+impl std::fmt::Debug for Shaped {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Shaped")
+            .field("faces", &self.mesh.faces.len())
+            .finish()
+    }
+}
+
 /// Identifies one object for as long as the window is open. Never reused, so a stale
 /// identifier resolves to nothing instead of to the wrong object.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -281,11 +318,17 @@ impl SceneObject {
     ///
     /// Everything indexed by the old surface goes: its supports, its cavity and the map
     /// that was pressed in are all about a mesh that no longer exists.
-    pub fn reshape(&mut self, mesh: Arc<Mesh>) {
-        self.bvh = Arc::new(Bvh::build(&mesh));
-        self.center_of_mass = center_of_mass(&mesh).unwrap_or(Vec3::ZERO);
+    pub fn reshape(&mut self, shaped: Shaped) {
+        let Shaped {
+            mesh,
+            bvh,
+            center_of_mass,
+            diagnostics,
+        } = shaped;
+        self.bvh = bvh;
+        self.center_of_mass = center_of_mass;
         self.summary = ImportSummary {
-            diagnostics: core_geometry::diagnose(&mesh),
+            diagnostics,
             ..self.summary.clone()
         };
         self.supports = ModelSupports::default();

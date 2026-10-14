@@ -47,11 +47,37 @@ impl Mesh {
             .fold((first, first), |(min, max), v| (min.min(*v), max.max(*v)));
         Some(Aabb::new(min, max))
     }
+
+    /// Adds `other`'s vertices and faces after this mesh's own, renumbered to point at them.
+    pub fn append(&mut self, other: &Mesh) {
+        let offset = self.vertices.len() as u32;
+        self.vertices.extend_from_slice(&other.vertices);
+        self.faces.extend(
+            other
+                .faces
+                .iter()
+                .map(|[a, b, c]| [a + offset, b + offset, c + offset]),
+        );
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn an_appended_mesh_keeps_its_own_triangles() {
+        let mut merged = slanted_quad();
+        let other = Mesh::new(vec![Vec3::X, Vec3::Y, Vec3::Z], vec![[0, 1, 2]]);
+        merged.append(&other);
+        assert_eq!(merged.vertices.len(), 7);
+        assert_eq!(merged.faces.len(), 3);
+        assert_eq!(
+            merged.triangle(2),
+            other.triangle(0),
+            "renumbered past the first four"
+        );
+    }
 
     fn slanted_quad() -> Mesh {
         Mesh::new(

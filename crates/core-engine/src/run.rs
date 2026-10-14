@@ -2,10 +2,9 @@ use std::path::Path;
 
 use core_analysis::Measured;
 use core_format::{PrintJob, WriteSeek};
-use core_geometry::Mesh;
 use core_pipeline::{Observer, SlicedFormat, Tolerance, Writing, Written, raster_settings};
 use core_raster::RasterSettings;
-use core_slicer::{LayerPlan, Windows};
+use core_slicer::{LayerPlan, Solid, Windows};
 use core_thumbnail::{Part, ThumbnailSettings, render};
 
 use crate::bake::{bake, parts};
@@ -13,13 +12,13 @@ use crate::cut::cut;
 use crate::error::EngineError;
 use crate::plate::{Model, Plate};
 
-/// A plate ready to be written: baked into one mesh, with the layers it will be cut in
+/// A plate ready to be written: baked, with the layers it will be cut in
 /// and the header its file carries.
 ///
 /// Built once, then written or measured as often as the caller likes. No stack is ever
 /// held whole: each layer is cut as it is needed (ADR 0010, 0068).
 pub struct Run {
-    mesh: Mesh,
+    solid: Solid,
     windows: Windows,
     job: PrintJob,
     panel: RasterSettings,
@@ -56,7 +55,7 @@ impl Run {
         };
 
         Ok(Self {
-            mesh: baked.mesh,
+            solid: baked.solid,
             windows,
             job,
             panel,
@@ -66,9 +65,9 @@ impl Run {
         })
     }
 
-    /// The whole plate as one mesh in plate coordinates, which is what gets cut.
-    pub fn mesh(&self) -> &Mesh {
-        &self.mesh
+    /// The whole plate in plate coordinates, which is what gets cut.
+    pub fn solid(&self) -> &Solid {
+        &self.solid
     }
 
     /// The stack as it is cut, a window of layers at a time.
@@ -129,7 +128,7 @@ impl Run {
     /// what the print takes before committing to a file.
     pub fn measure(&self, observer: &mut dyn Observer) -> Result<Option<Measured>, EngineError> {
         Ok(core_pipeline::measure(
-            &self.mesh,
+            &self.solid,
             &self.windows,
             &self.panel,
             &Tolerance::of(&self.job.material),
@@ -143,7 +142,7 @@ impl Run {
             format: self.format,
             name,
             job: &self.job,
-            mesh: &self.mesh,
+            source: &self.solid,
             windows: &self.windows,
             settings: &self.panel,
             window: self.raster_window,

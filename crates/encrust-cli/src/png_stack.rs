@@ -3,10 +3,10 @@ use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result};
 use core_analysis::Measured;
-use core_geometry::Mesh;
+
 use core_pipeline::Tolerance;
 use core_raster::{LayerRuns, RasterSettings};
-use core_slicer::Windows;
+use core_slicer::{Solid, Windows};
 
 use crate::exit::Stop;
 use crate::raster_report::RasterReport;
@@ -16,7 +16,7 @@ use crate::stack::{report_for, stream_into};
 /// Slices and rasterises into `directory` as `layer_NNNN.png`, a window at a time.
 #[allow(clippy::too_many_arguments)]
 pub fn write_stack(
-    mesh: &Mesh,
+    solid: &Solid,
     windows: &Windows,
     slice: &mut SliceReport,
     settings: &RasterSettings,
@@ -32,7 +32,7 @@ pub fn write_stack(
 
     let mut index = 0;
     let mut report = report_for(directory.to_owned(), settings, fold);
-    let streamed = windows.stream(mesh, |sliced| {
+    let streamed = windows.stream(solid, |sliced| {
         stop.check()?;
         slice.absorb(sliced);
         stream_into(

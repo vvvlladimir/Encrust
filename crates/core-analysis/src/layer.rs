@@ -3,6 +3,8 @@ use std::ops::Range;
 
 use core_raster::{LayerRuns, PixelPitch};
 
+use crate::cups::Holes;
+
 /// What one layer cures, read off the runs written for it.
 #[derive(Debug, Clone, Copy, Default, PartialEq)]
 pub struct LayerMeasure {
@@ -35,6 +37,7 @@ pub struct Cured {
     pitch: PixelPitch,
     spans: Vec<Span>,
     pieces: Vec<Piece>,
+    holes: Holes,
 }
 
 /// Lit pixels of one row, `x0..x1`, whatever their greys, and the piece they belong to.
@@ -83,6 +86,7 @@ pub fn cure(layer: &LayerRuns, pitch: PixelPitch) -> Cured {
         width: layer.width(),
         height: layer.height(),
         pitch,
+        holes: Holes::of(&spans, layer.height()),
         spans,
         pieces: moments.iter().map(Moments::piece).collect(),
     }
@@ -117,9 +121,8 @@ impl Cured {
         &self.spans
     }
 
-    /// Rows of the panel the layer was cured on.
-    pub(crate) fn height(&self) -> u32 {
-        self.height
+    pub(crate) fn holes(&self) -> &Holes {
+        &self.holes
     }
 
     /// This layer in two: the pieces `dropped` flags, and everything else. Both keep the
@@ -131,6 +134,7 @@ impl Cured {
             pitch,
             spans,
             pieces,
+            holes: _,
         } = self;
         let mut renumbered = vec![0u32; pieces.len()];
         let mut halves: [(Vec<Piece>, Vec<Span>); 2] =
@@ -153,6 +157,7 @@ impl Cured {
                 width,
                 height,
                 pitch,
+                holes: Holes::of(&kept_spans, height),
                 spans: kept_spans,
                 pieces: kept,
             },
@@ -160,6 +165,7 @@ impl Cured {
                 width,
                 height,
                 pitch,
+                holes: Holes::of(&taken_spans, height),
                 spans: taken_spans,
                 pieces: taken,
             },

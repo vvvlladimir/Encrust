@@ -1,6 +1,6 @@
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 
-use core_geometry::{Bvh, ClosestPoint, FastMap, Mesh, Scalar, Vec3, glam::IVec3};
+use core_geometry::{Bvh, ClosestPoint, FastMap, FastSet, Mesh, Scalar, Vec3, glam::IVec3};
 use rayon::prelude::*;
 
 use crate::cancel::Cancel;
@@ -23,15 +23,30 @@ const BLOCK_VALUES: usize = (SIDE * SIDE * SIDE) as usize;
 /// See `docs/decisions/0082-scatter-the-field-and-carry-it-coarse.md`.
 const CARRY: i32 = 2;
 
+/// The coarser carrier a band standing far enough off the mesh can take.
+const FAR_CARRY: i32 = 4;
+
+/// How much coarser than `grid` the carrier of a band `band_mm` wide around the surface
+/// `iso_mm` off the mesh is: [`FAR_CARRY`] or [`CARRY`], see `docs/design/volume.md`.
+pub(crate) fn carry_for(grid: VoxelGrid, band_mm: Scalar, iso_mm: Scalar) -> i32 {
+    let trusted_mm = TRUST_VOXELS * FAR_CARRY as Scalar * grid.voxel_mm;
+    if trusted_mm < iso_mm.abs() - band_mm {
+        FAR_CARRY
+    } else {
+        CARRY
+    }
+}
+
 /// What one tile of the sweep carries: the nearest face of each of its voxels.
 pub(crate) type Work = Box<[Nearest]>;
 
 /// One tile out of a ring, or nothing when the sweep had not reached anything around it.
 type Carried = (IVec3, Option<Work>);
 
-/// The lattice a field of `grid` carries its nearest faces across the wall on.
-pub(crate) fn carrier_grid(grid: VoxelGrid) -> VoxelGrid {
-    VoxelGrid::new(grid.voxel_mm * CARRY as Scalar)
+/// The lattice a field of `grid` carries its nearest faces across the wall on, `carry`
+/// times coarser.
+pub(crate) fn carrier_grid(grid: VoxelGrid, carry: i32) -> VoxelGrid {
+    VoxelGrid::new(grid.voxel_mm * carry as Scalar)
 }
 
 /// Carries the seed out to the isosurface on the coarse lattice, then refines the tiles
@@ -50,12 +65,21 @@ pub(crate) fn fill(
     band_mm: Scalar,
     iso_mm: Scalar,
     rings: Vec<Vec<IVec3>>,
-    wanted: &HashSet<IVec3>,
+    wanted: &FastMap<IVec3, Scalar>,
     seeds: &FastMap<IVec3, Work>,
     cancel: Cancel<'_>,
 ) -> HashMap<IVec3, Box<[Quantised]>> {
-    let coarse = carrier_grid(grid);
-    let carrier = carry(mesh, faces, bvh, coarse, coarsened(rings), seeds, cancel);
+    let factor = carry_for(grid, band_mm, iso_mm);
+    let coarse = carrier_grid(grid, factor);
+    let carrier = carry(
+        mesh,
+        faces,
+        bvh,
+        coarse,
+        coarsened(rings, factor),
+        seeds,
+        cancel,
+    );
 
     // A stored tile reads the carrier and nothing else, so there is no order between them.
     // A run given up on fills no further tile and comes back with what it had; the caller
@@ -63,13 +87,21 @@ pub(crate) fn fill(
     wanted
         .par_iter()
         .filter(|_| !cancel.asked())
-        .filter_map(|tile| {
-            let work = refine(mesh, faces, bvh, grid, &carrier, *tile, (band_mm, iso_mm));
+        .filter_map(|(tile, centre_mm)| {
+            let work = refine(
+                mesh,
+                faces,
+                bvh,
+                (grid, factor),
+                &carrier,
+                *tile,
+                (band_mm, iso_mm),
+            );
             let values = tile_values(
                 (mesh, faces, bvh),
                 signer,
                 grid,
-                *tile,
+                (*tile, *centre_mm),
                 &work,
                 band_mm,
                 iso_mm,
@@ -82,24 +114,24 @@ pub(crate) fn fill(
 /// How many tiles the carrier will hold for a shell the walk found in `rings`.
 ///
 /// Known before a voxel is filled, which is what lets the budget of ADR 0063 price it.
-pub(crate) fn carrier_tiles(rings: &[Vec<IVec3>]) -> usize {
-    let mut seen: HashSet<IVec3> = HashSet::new();
+pub(crate) fn carrier_tiles(rings: &[Vec<IVec3>], carry: i32) -> usize {
+    let mut seen: FastSet<IVec3> = FastSet::default();
     for ring in rings {
-        seen.extend(ring.iter().map(|tile| tile.div_euclid(IVec3::splat(CARRY))));
+        seen.extend(ring.iter().map(|tile| tile.div_euclid(IVec3::splat(carry))));
     }
     seen.len()
 }
 
 /// The walk's rings on the carrier's own tiles, each in the earliest ring a tile it covers
 /// appeared in.
-fn coarsened(rings: Vec<Vec<IVec3>>) -> Vec<Vec<IVec3>> {
-    let mut seen: HashSet<IVec3> = HashSet::new();
+fn coarsened(rings: Vec<Vec<IVec3>>, carry: i32) -> Vec<Vec<IVec3>> {
+    let mut seen: FastSet<IVec3> = FastSet::default();
     rings
         .into_iter()
         .map(|ring| {
             let mut coarse: Vec<IVec3> = ring
                 .into_iter()
-                .map(|tile| tile.div_euclid(IVec3::splat(CARRY)))
+                .map(|tile| tile.div_euclid(IVec3::splat(carry)))
                 .filter(|tile| seen.insert(*tile))
                 .collect();
             // Vertex numbering downstream follows the order tiles come out in, and a hash
@@ -114,7 +146,7 @@ fn coarsened(rings: Vec<Vec<IVec3>>) -> Vec<Vec<IVec3>> {
 /// only swept once the tiles between it and the surface are.
 ///
 /// Only the two rings a ring can read from are kept as halo, so the shell is only ever
-/// resident as the carrier itself, which is `CARRY` cubed smaller than it looks.
+/// resident as the carrier itself, which is the carry factor cubed smaller than it looks.
 #[allow(clippy::too_many_arguments)]
 fn carry(
     mesh: &Mesh,
@@ -196,7 +228,7 @@ fn settle(
                     .or_else(|| seeds.get(&at))
                     .map(|work| &work[..])
             };
-            (*tile, swept_tile(mesh, faces, bvh, coarse, *tile, &look))
+            (*tile, resettled(mesh, faces, bvh, coarse, *tile, &look))
         })
         .collect();
 
@@ -205,6 +237,58 @@ fn settle(
             carrier.insert(tile, work);
         }
     }
+}
+
+/// One carrier tile swept again, or `None` when nothing around it could move a voxel.
+fn resettled<'a>(
+    mesh: &Mesh,
+    faces: &Faces,
+    bvh: &Bvh,
+    grid: VoxelGrid,
+    tile: IVec3,
+    look: &impl Fn(IVec3) -> Option<&'a [Nearest]>,
+) -> Option<Work> {
+    let base = tile * TILE;
+    let mut near = vec![UNSET; BLOCK_VALUES];
+    gather(&mut near, base, look, tile);
+    offers_nearer(faces, grid, base, &near).then(|| swept_block(mesh, faces, bvh, grid, base, near))
+}
+
+/// Whether the halo of a block offers a voxel on the border of its tile a nearer face
+/// than the one it holds: the only way a face can enter the tile, so without one a sweep
+/// over it moves nothing.
+fn offers_nearer(faces: &Faces, grid: VoxelGrid, base: IVec3, near: &[Nearest]) -> bool {
+    let in_halo = |local: IVec3| local.min_element() == 0 || local.max_element() == SIDE - 1;
+    let on_border = |local: IVec3| local.min_element() == 1 || local.max_element() == TILE;
+
+    for local in tile_voxels().map(|voxel| voxel + IVec3::ONE) {
+        if !on_border(local) {
+            continue;
+        }
+        let own = near[at(local)];
+        let point = grid.position(base + local - IVec3::ONE);
+        let mut held: Option<Scalar> = None;
+        for offset in 0..27 {
+            let side = IVec3::new(offset % 3 - 1, (offset / 3) % 3 - 1, offset / 9 - 1);
+            let beside = local + side;
+            if !in_halo(beside) {
+                continue;
+            }
+            let carried = near[at(beside)];
+            if carried == UNSET || carried == own {
+                continue;
+            }
+            let held =
+                *held.get_or_insert_with(|| faces.distance(own, point).unwrap_or(Scalar::INFINITY));
+            if faces
+                .distance(carried, point)
+                .is_some_and(|distance| distance < held)
+            {
+                return true;
+            }
+        }
+    }
+    false
 }
 
 /// One carrier tile swept from whatever its neighbours already carry, or `None` when
@@ -238,7 +322,7 @@ const TRUST_VOXELS: Scalar = 3.0;
 /// One stored tile's nearest faces, refined from the carrier at its own resolution.
 ///
 /// A voxel takes the nearest of the faces the eight carrier points around it hold, and no
-/// march is needed because the tile arrives already full. The `CARRY` cubed voxels of one
+/// march is needed because the tile arrives already full. The `carry` cubed voxels of one
 /// carrier cell share those eight points, so the faces are named once per cell rather than
 /// once per voxel, and there are only ever two or three distinct ones.
 #[allow(clippy::too_many_arguments)]
@@ -246,13 +330,13 @@ fn refine(
     mesh: &Mesh,
     faces: &Faces,
     bvh: &Bvh,
-    grid: VoxelGrid,
+    (grid, carry): (VoxelGrid, i32),
     carrier: &FastMap<IVec3, Work>,
     tile: IVec3,
     band: (Scalar, Scalar),
 ) -> Work {
     let (band_mm, iso_mm) = band;
-    let trust_mm = TRUST_VOXELS * CARRY as Scalar * grid.voxel_mm;
+    let trust_mm = TRUST_VOXELS * carry as Scalar * grid.voxel_mm;
     // Past the band the value is the band's own whatever the distance was, so a voxel
     // there is never worth a traversal however far off the carrier might be.
     let told_mm = band_mm + 2.0 * grid.voxel_mm;
@@ -262,8 +346,8 @@ fn refine(
     let mut held: Option<(IVec3, &Work)> = None;
     let mut offered: Vec<Nearest> = Vec::with_capacity(8);
 
-    for cell in cells() {
-        let low = base.div_euclid(IVec3::splat(CARRY)) + cell;
+    for cell in cells(carry) {
+        let low = base.div_euclid(IVec3::splat(carry)) + cell;
         offered.clear();
         for corner in 0..8 {
             let at = low + IVec3::new(corner & 1, (corner >> 1) & 1, (corner >> 2) & 1);
@@ -279,8 +363,8 @@ fn refine(
             }
         }
 
-        for step in cell_voxels() {
-            let voxel = base + cell * CARRY + step;
+        for step in cell_voxels(carry) {
+            let voxel = base + cell * carry + step;
             let point = grid.position(voxel);
             let (mut nearest, mut carried) = (Scalar::INFINITY, UNSET);
             for face in &offered {
@@ -303,16 +387,17 @@ fn refine(
 }
 
 /// Every carrier cell of a tile, as an offset in carrier voxels from its lowest.
-fn cells() -> impl Iterator<Item = IVec3> {
-    let side = TILE / CARRY;
+fn cells(carry: i32) -> impl Iterator<Item = IVec3> {
+    let side = TILE / carry;
     (0..side)
         .flat_map(move |z| (0..side).flat_map(move |y| (0..side).map(move |x| IVec3::new(x, y, z))))
 }
 
 /// Every voxel of one carrier cell, as an offset from its lowest.
-fn cell_voxels() -> impl Iterator<Item = IVec3> {
-    (0..CARRY)
-        .flat_map(|z| (0..CARRY).flat_map(move |y| (0..CARRY).map(move |x| IVec3::new(x, y, z))))
+fn cell_voxels(carry: i32) -> impl Iterator<Item = IVec3> {
+    (0..carry).flat_map(move |z| {
+        (0..carry).flat_map(move |y| (0..carry).map(move |x| IVec3::new(x, y, z)))
+    })
 }
 
 /// Marches one block over and reads its own tile back out of it, asking the hierarchy for
@@ -463,17 +548,21 @@ fn searched(mesh: &Mesh, bvh: &Bvh, point: Vec3) -> Nearest {
 }
 
 /// One tile's stored values, or `None` when the band misses every voxel of it.
+///
+/// `centre_mm` is the signed distance at the tile's centre. No surface is nearer the
+/// centre than that, so past the tile's own radius it settles the side of every voxel.
 #[allow(clippy::too_many_arguments)]
 fn tile_values(
     surface: (&Mesh, &Faces, &Bvh),
     signer: &Signer,
     grid: VoxelGrid,
-    tile: IVec3,
+    (tile, centre_mm): (IVec3, Scalar),
     work: &[Nearest],
     band_mm: Scalar,
     iso_mm: Scalar,
 ) -> Option<Box<[Quantised]>> {
     let base = tile * TILE;
+    let settled = (centre_mm.abs() > grid.tile_radius()).then_some(centre_mm < 0.0);
     let mut values = vec![Quantised::MAX; TILE_VALUES];
     let mut found: Vec<(usize, Vec3, ClosestPoint)> = Vec::with_capacity(64);
     let mut crosses = false;
@@ -484,7 +573,7 @@ fn tile_values(
             surface,
             signer,
             grid,
-            block,
+            (block, settled),
             work,
             (band_mm, iso_mm),
             &mut found,
@@ -508,7 +597,7 @@ fn block_values(
     (mesh, faces, bvh): (&Mesh, &Faces, &Bvh),
     signer: &Signer,
     grid: VoxelGrid,
-    block: IVec3,
+    (block, settled): (IVec3, Option<bool>),
     work: &[Nearest],
     band: (Scalar, Scalar),
     found: &mut Vec<(usize, Vec3, ClosestPoint)>,
@@ -541,9 +630,11 @@ fn block_values(
     };
     // The side is asked of the true nearest point, not of the carried face: a face from
     // the far side of a thin wall is near enough for a distance and wrong for a side.
-    let one_sided = (nearest > reach_mm).then(|| {
-        let exact = bvh.closest(mesh, *first);
-        signer.is_inside(mesh, *first, exact.as_ref().unwrap_or(on_first))
+    let one_sided = settled.or_else(|| {
+        (nearest > reach_mm).then(|| {
+            let exact = bvh.closest(mesh, *first);
+            signer.is_inside(mesh, *first, exact.as_ref().unwrap_or(on_first))
+        })
     });
 
     let mut crosses = false;
@@ -625,7 +716,7 @@ mod tests {
             (&mesh, &faces, &bvh),
             &signer,
             grid,
-            IVec3::new(2, 2, 2),
+            (IVec3::new(2, 2, 2), 0.0),
             &underside,
             band_mm,
             iso_mm,

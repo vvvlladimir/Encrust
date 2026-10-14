@@ -94,17 +94,42 @@ fn check(request: &TrapRequest) -> TrapOutcome {
     };
 
     pool.install(|| {
-        let mut checked = Vec::with_capacity(request.tasks.len());
-        for task in &request.tasks {
-            match look_through(task, request.layer_height_mm) {
-                Ok(trapped) => checked.push(Pockets {
-                    id: task.id,
-                    trapped,
-                }),
-                Err(message) => return TrapOutcome::Failed(message),
-            }
+        let mut checked: Vec<Pockets> = Vec::with_capacity(request.tasks.len());
+        for (index, task) in request.tasks.iter().enumerate() {
+            let trapped = match twin_of(&request.tasks[..index], task) {
+                Some(twin) => checked[twin].trapped.clone(),
+                None => match look_through(task, request.layer_height_mm) {
+                    Ok(trapped) => trapped,
+                    Err(message) => return TrapOutcome::Failed(message),
+                },
+            };
+            checked.push(Pockets {
+                id: task.id,
+                trapped,
+            });
         }
         TrapOutcome::Checked(checked)
+    })
+}
+
+/// An earlier task `task` is a copy of: one mesh and one set of cuts, standing the same
+/// way at the same height and only somewhere else on the plate. Its pockets are kept in
+/// the model's own space and the scan's grid starts at the model's corner, so the copy's
+/// are the same and are not looked for again.
+fn twin_of(earlier: &[TrapTask], task: &TrapTask) -> Option<usize> {
+    let same_cuts = |other: &TrapTask| match (&other.cuts, &task.cuts) {
+        (None, None) => true,
+        (Some(a), Some(b)) => Arc::ptr_eq(a, b),
+        _ => false,
+    };
+    let (placed, at) = (task.transform, task.transform.translation);
+    earlier.iter().position(|other| {
+        let (turned, from) = (other.transform, other.transform.translation);
+        Arc::ptr_eq(&other.mesh, &task.mesh)
+            && same_cuts(other)
+            && (turned.rotation, turned.scale, turned.stretch)
+                == (placed.rotation, placed.scale, placed.stretch)
+            && from.z == at.z
     })
 }
 
@@ -131,7 +156,7 @@ fn look_through(task: &TrapTask, layer_height_mm: Scalar) -> Result<Vec<Trapped>
     }
     let bounds = placed.aabb().unwrap_or(material);
     let baked = Baked {
-        mesh: placed,
+        solid: placed.into(),
         ceiling_mm: material.maxs.z,
         floor_mm: material.mins.z,
     };
@@ -149,7 +174,7 @@ fn look_through(task: &TrapTask, layer_height_mm: Scalar) -> Result<Vec<Trapped>
         layer_height_mm,
     );
     windows
-        .stream(&baked.mesh, |sliced| {
+        .stream(&baked.solid, |sliced| {
             for layer in &sliced.layers {
                 scan.push(layer);
             }
@@ -283,6 +308,64 @@ mod tests {
             (pocket.at.z - 5.25).abs() < 0.3,
             "the hole goes at the cavity's floor, got {}",
             pocket.at
+        );
+    }
+
+    fn task(id: u64, mesh: &Arc<Mesh>, transform: Transform) -> TrapTask {
+        TrapTask {
+            id: ObjectId::for_test(id),
+            mesh: Arc::clone(mesh),
+            cuts: None,
+            transform,
+        }
+    }
+
+    #[test]
+    fn a_copy_moved_along_the_plate_shares_the_check_and_one_lifted_or_turned_does_not() {
+        let mesh = Arc::new(sealed_box());
+        let original = task(1, &mesh, Transform::default());
+        let moved = Transform::from_translation(Vec3::new(30.0, -12.0, 0.0));
+        assert_eq!(twin_of(&[original], &task(2, &mesh, moved)), Some(0));
+
+        let original = [task(1, &mesh, Transform::default())];
+        let lifted = Transform::from_translation(Vec3::new(0.0, 0.0, 3.0));
+        assert_eq!(
+            twin_of(&original, &task(3, &mesh, lifted)),
+            None,
+            "a model standing higher is cut at other heights"
+        );
+        let turned = Transform {
+            rotation: core_geometry::Quat::from_rotation_z(0.5),
+            ..Transform::default()
+        };
+        assert_eq!(twin_of(&original, &task(4, &mesh, turned)), None);
+        let other = Arc::new(sealed_box());
+        assert_eq!(
+            twin_of(&original, &task(5, &other, Transform::default())),
+            None,
+            "an equal mesh imported twice is not known to be one"
+        );
+    }
+
+    #[test]
+    fn every_copy_gets_the_pockets_of_its_original() {
+        let mesh = Arc::new(sealed_box());
+        let moved = Transform::from_translation(Vec3::new(30.0, 0.0, 0.0));
+        let mut job = TrapJob::spawn(TrapRequest {
+            tasks: vec![task(1, &mesh, Transform::default()), task(2, &mesh, moved)],
+            layer_height_mm: 0.5,
+        });
+
+        let TrapOutcome::Checked(models) = wait(&mut job) else {
+            panic!("a closed mesh slices");
+        };
+        let ids: Vec<ObjectId> = models.iter().map(|pockets| pockets.id).collect();
+        assert_eq!(ids, [1, 2].map(ObjectId::for_test));
+        assert_eq!(models[1].trapped, models[0].trapped);
+        assert_eq!(
+            models[1].trapped.len(),
+            1,
+            "the copy's cavity is sealed too"
         );
     }
 

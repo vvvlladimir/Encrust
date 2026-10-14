@@ -108,9 +108,15 @@ object, the word, and the shadow last.
 
 ## Vertex layouts
 
-Models are a flat-shaded triangle list with no index buffer: each face becomes three
-vertices carrying that face's normal, because sharing vertices would need averaged normals
-and round off exactly the facets a sliceable model is made of.
+Models are drawn indexed and flat-shaded. Averaged normals would round off exactly the
+facets a sliceable model is made of, so the normal is read `flat`, off a face's first
+corner alone, and every face is turned to start on a corner no other face starts on; the
+other two are shared. GL reads a flat input off the last corner instead, and naga cannot
+write `flat, first` for it, so on that backend every face is turned one step further. A closed mesh has about half as many vertices as faces, so it lays
+out one vertex a face plus three indices: 36 bytes a face against the 72 a corner per face
+took. The normal is not read off the screen-space derivatives of the position instead,
+which would halve it again: on the machine this was built on the same frame came out
+different from one run to the next.
 
 | Buffer | Step | Contents |
 |---|---|---|
@@ -340,3 +346,68 @@ turns, grid geometry, the cube's cells, vertex expansion, normal matrices, ray c
 picking, the gizmo's conversions — has headless unit tests. Asserting on the draw would
 mean an image-comparison harness and a GPU in CI; asserting on a drag would mean feeding
 synthetic pointer events through egui to test a third-party crate's arithmetic.
+
+## Levels of a heavy model
+
+A plate of sixteen copies of a million-face model is eighteen million faces a frame, which
+one card draws in 6 ms and another in 30. So every mesh over `MIN_FACES` has a chain of
+lighter levels, and each frame draws every model at the finest level the card can afford;
+ADR 0259 holds why.
+
+**The chain.** Each level is simplified from the one before to about half its faces, by
+edge collapse, or where that stalls on a surface it may not tear, by merging corners on a
+grid; it stops at `FEWEST_FACES`. A level's error, mm, is the sum of the simplifier's own
+along the chain, or what the middles of a sample of its faces stand off the mesh, whichever
+is more: the simplifier measures corners, and on a curved surface a face sinks in between
+them by five times what it reports. A million faces take a second on a worker, the first
+level half of it; the chain is keyed by the mesh's `Arc`, so copies share one.
+
+**What the card can afford.** Where the device has timestamp queries the scene pass is
+timed on the card itself and read back a few frames late. A least-squares line through the
+passes, the older weighing less, tells the frame's own cost — its pixels, the plate — from
+the cost of a face, and the budget is the faces left in 12 ms while the camera moves and
+30 ms at rest. A pass dearer than the line foresees is believed at once and a cheaper one
+over a second, so the budget falls at the first heavy frame and climbs back. Without such
+a clock — a WebGL canvas — runs of slow frame intervals cut the moving budget instead,
+nothing raises it, and a resting frame draws everything whole.
+
+**Which level.** A level's error times the pixels a millimetre spans at the model's
+nearest to the eye is what it shows on screen. `allot` starts every model whole and, while
+the frame is over its budget, takes the step that shows least next. While the camera
+moves any step may be taken; at rest only those under half a pixel, which cannot be seen,
+so a card with room to spare draws everything whole and one without gives up only what
+is not seen. Once the camera stops, every model comes back a level a frame towards what
+the rest allows, never coarser than it is, so detail sharpens over a few frames instead
+of all at once.
+
+A level may not be a cap's count or a cavity's faces: while a cut is capped every model is
+drawn whole, and at rest a hollowed model is too, since the trapped resin it shows is drawn
+from its own mesh's face ranges. A hole's inside is drawn against the level drawn, so it
+still meets the surface around it. The shadow is not baked while levels still change.
+
+## Measuring a frame
+
+`render/frame_time.rs` writes what the viewport's frames cost under the `frame_time` log
+target, at debug, so it stays silent unless asked for:
+
+```sh
+RUST_LOG=info,frame_time=debug cargo run --release -p encrust-app -- model.stl 2> frames.log
+```
+
+Once a second while frames keep coming it writes a summary, and any frame more than 50 ms
+after the one before it on its own line. A gap of a second or more is the window resting,
+since it draws only when something changes, and is not counted.
+
+| Field | What it is |
+|---|---|
+| `interval_ms` | One frame to the next: what the eye sees, the card included |
+| `ui_ms` | The window's pass over its panels, CPU |
+| `prepare_ms` | Preparing and recording the viewport's passes, uploads included, CPU |
+| `drawn_faces`, `draws` | Triangles and mesh draws sent to the card, every pass counted |
+| `uploaded_faces` | Triangles uploaded because a mesh was new to the card |
+| `shadow_baked` | Whether the models were drawn once more into the contact shadow |
+| `card_ms` | The card's own time over the latest scene pass read back, a few frames late |
+
+An interval far above `ui_ms + prepare_ms` is time spent on the card or in presenting it;
+one close to them is the CPU's. `card_ms` tells the card from a hand that paused under a
+second: an interval far above it was spent waiting.

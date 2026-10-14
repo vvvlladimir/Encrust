@@ -52,7 +52,7 @@ pub fn estimate(
         Some(plate) => {
             let run = Run::of(&plate)?;
             drop(plate);
-            let mut slice = report_of(run.mesh(), run.windows(), staged.drainage);
+            let mut slice = report_of(run.solid(), run.windows(), staged.drainage);
             let mut watching = Watching {
                 report: &mut slice,
                 bar: watch.progress.then(|| bar("layers")),
@@ -72,10 +72,10 @@ pub fn estimate(
             let baked =
                 bake(&staged.models, &staged.cutting.compensation).context("nothing to slice")?;
             let windows = cut(&baked, &staged.cutting)?;
-            let mesh = &baked.mesh;
-            let mut slice = report_of(mesh, &windows, staged.drainage);
+            let solid = &baked.solid;
+            let mut slice = report_of(solid, &windows, staged.drainage);
             windows
-                .stream(mesh, |sliced| {
+                .stream(solid, |sliced| {
                     watch.stop.check()?;
                     slice.absorb(sliced);
                     Ok::<(), anyhow::Error>(())

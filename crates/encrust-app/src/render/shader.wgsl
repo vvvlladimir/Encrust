@@ -110,7 +110,9 @@ struct ModelVertex {
 
 struct ModelFragment {
     @builtin(position) clip_position: vec4<f32>,
-    @location(0) normal: vec3<f32>,
+    // The face's own, carried by its first corner alone: corners are shared between faces
+    // and only the first is read on a flat input (docs/design/viewport.md).
+    @location(0) @interpolate(flat) normal: vec3<f32>,
     @location(1) color: vec4<f32>,
     @location(2) overhang: f32,
     // Where the fragment stands in plate millimetres: its height is what the section cut

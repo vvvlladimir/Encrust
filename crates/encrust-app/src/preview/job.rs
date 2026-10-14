@@ -49,10 +49,10 @@ impl Preview {
         let fingerprint = build.fingerprint;
         self.job = None;
         match outcome {
-            PreviewOutcome::Built(mesh, windows) => {
+            PreviewOutcome::Built(solid, windows) => {
                 self.layer = self.layer.min(windows.layer_count().saturating_sub(1));
                 self.source = Some(Source::Cut(Stack {
-                    mesh,
+                    solid,
                     windows,
                     fingerprint,
                     cut: None,
@@ -86,7 +86,7 @@ impl Preview {
         };
         // Measured as the picture shows it, so a risk's position lands on the picture.
         let job = MeasureJob::spawn(
-            Arc::clone(&stack.mesh),
+            Arc::clone(&stack.solid),
             stack.windows.clone(),
             as_seen(settings),
             fold.tolerance,
@@ -160,7 +160,7 @@ impl Preview {
 
         let sliced = stack
             .windows
-            .cut(&stack.mesh, wanted.clone())
+            .cut(stack.solid.as_ref(), wanted.clone())
             .context("cannot cut the layers being previewed")?;
         stack.cut = Some((wanted, sliced));
         Ok(())

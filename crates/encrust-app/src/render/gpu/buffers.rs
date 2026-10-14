@@ -6,7 +6,7 @@ use std::ops::Range;
 use bytemuck::Pod;
 use core_geometry::Mesh;
 
-use crate::render::vertex::{ModelVertex, flat_shaded_vertices};
+use crate::render::vertex::{ModelVertex, indexed_vertices, lead_last};
 
 use super::*;
 
@@ -16,8 +16,9 @@ const INITIAL_CAPACITY_BYTES: u64 = 4096;
 /// part of a mesh takes the pieces that fall inside it, which is why `pieces` breaks at
 /// the ends of that part as well as at the card's ceiling.
 pub(super) struct Piece {
-    pub(super) buffer: wgpu::Buffer,
-    pub(super) vertices: u32,
+    pub(super) vertices: wgpu::Buffer,
+    pub(super) indices: wgpu::Buffer,
+    pub(super) index_count: u32,
     pub(super) faces: Range<usize>,
 }
 
@@ -59,14 +60,17 @@ fn allocate(device: &wgpu::Device, label: &'static str, size: u64) -> wgpu::Buff
     })
 }
 
-/// A mesh flat-shaded into as few buffers as the card's own ceiling allows.
+/// A mesh in as few buffers as the card's own ceiling allows.
 ///
-/// Expanded a piece at a time as well as uploaded a piece at a time: a cavity of eleven
-/// million triangles is eight hundred megabytes of vertices, and holding all of them to
-/// hand one buffer over is the same wall from the other side.
+/// Laid out a piece at a time as well as uploaded a piece at a time: a cavity of eleven
+/// million triangles is hundreds of megabytes even shared, and holding all of it to hand
+/// one buffer over is the same wall from the other side.
 pub(super) fn pieces(device: &wgpu::Device, mesh: &Mesh, splits: &[usize]) -> Vec<Piece> {
+    // A piece whose faces share no corner is the largest its vertices can come to.
     let ceiling = device.limits().max_buffer_size as usize / size_of::<ModelVertex>();
     let faces_per_piece = (ceiling / 3).max(1);
+    // GL reads a flat input off a face's last corner and wgpu cannot ask it for the first.
+    let leads_last = device.adapter_info().backend == wgpu::Backend::Gl;
 
     let mut first = 0;
     let mut pieces = Vec::new();
@@ -78,11 +82,20 @@ pub(super) fn pieces(device: &wgpu::Device, mesh: &Mesh, splits: &[usize]) -> Ve
             .filter(|split| (first + 1..ceiling).contains(split))
             .min()
             .unwrap_or(ceiling);
-        let vertices = flat_shaded_vertices(mesh, first..last);
-        if !vertices.is_empty() {
+        let (vertices, mut indices) = indexed_vertices(mesh, first..last);
+        if leads_last {
+            lead_last(&mut indices);
+        }
+        if !indices.is_empty() {
             pieces.push(Piece {
-                buffer: upload(device, "viewport_mesh", &vertices),
-                vertices: vertices.len() as u32,
+                vertices: upload(device, "viewport_mesh", &vertices),
+                indices: upload_as(
+                    device,
+                    "viewport_mesh_indices",
+                    &indices,
+                    wgpu::BufferUsages::INDEX,
+                ),
+                index_count: indices.len() as u32,
                 faces: first..last,
             });
         }
@@ -98,9 +111,18 @@ pub(super) fn upload<T: Pod>(
     label: &'static str,
     data: &[T],
 ) -> wgpu::Buffer {
+    upload_as(device, label, data, wgpu::BufferUsages::VERTEX)
+}
+
+fn upload_as<T: Pod>(
+    device: &wgpu::Device,
+    label: &'static str,
+    data: &[T],
+    usage: wgpu::BufferUsages,
+) -> wgpu::Buffer {
     device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
         label: Some(label),
         contents: bytemuck::cast_slice(data),
-        usage: wgpu::BufferUsages::VERTEX,
+        usage,
     })
 }

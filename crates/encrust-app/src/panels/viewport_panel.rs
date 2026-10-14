@@ -15,6 +15,7 @@ use crate::viewport_input::{Drag, Pointer};
 use crate::workspace::Tool;
 
 mod hollow;
+mod levels;
 mod overlays;
 mod paint;
 mod picking;
@@ -245,6 +246,13 @@ fn paint_plate(
     crate::render::prime_label(ui.painter());
     ui.painter().rect_filled(rect, 0.0, theme::colors().sunken);
     let hidden_groups = window.tools.supports.hidden();
+    let section_mm =
+        section::cut_height(*window.mode, &window.view.section, &window.machine.preview);
+    let bottom_cut_mm =
+        section::floor_height(*window.mode, &window.view.section, &window.machine.preview);
+    let capped = section_mm.is_some() || bottom_cut_mm.is_some();
+    let height_px = rect.height() * ui.ctx().pixels_per_point();
+    let levels = levels::levels(ui, window, capped, height_px);
     let callback = ViewportCallback::new(
         &window.doc.scene,
         &window.doc.plate,
@@ -252,16 +260,8 @@ fn paint_plate(
         window.view.options,
         Shading {
             overhang_deg,
-            section_mm: section::cut_height(
-                *window.mode,
-                &window.view.section,
-                &window.machine.preview,
-            ),
-            bottom_cut_mm: section::floor_height(
-                *window.mode,
-                &window.view.section,
-                &window.machine.preview,
-            ),
+            section_mm,
+            bottom_cut_mm,
             banding: Banding {
                 ranges: &window.machine.slicing.exposure,
                 floor_mm: window.machine.slicing.band_floor_mm(),
@@ -270,9 +270,11 @@ fn paint_plate(
             cut_line: cut_line(window),
             hidden_groups: &hidden_groups,
             preview: preview.map(|(mesh, colour)| (mesh, *colour)),
+            light: Some(&levels.light),
         },
         rect,
-    );
+    )
+    .timed(window.view.ui_ms, window.view.budget.report(), levels.faces);
     ui.painter()
         .add(egui_wgpu::Callback::new_paint_callback(rect, callback));
     draw_axis_letters(ui, window, rect);

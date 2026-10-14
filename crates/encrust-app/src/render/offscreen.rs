@@ -812,6 +812,7 @@ fn paint_textured(camera: OrbitCamera, draw: &ReliefDraw) -> Option<Vec<u8>> {
             xray: false,
             floor: None,
             grid: false,
+            light: false,
         },
     );
     Some(read_back(device, queue, format, &mut resources))
@@ -879,6 +880,7 @@ fn paint_after<'a>(
         xray,
         floor,
         grid: false,
+        light: false,
     };
     for earlier in before {
         resources.prepare(device, queue, input(earlier));

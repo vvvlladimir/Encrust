@@ -4,9 +4,8 @@ use std::path::Path;
 
 use core_analysis::Measured;
 use core_format::{LayerSink, PrintJob, SlicedFileWriter, WRITE_BUFFER_BYTES, WriteSeek};
-use core_geometry::Mesh;
 use core_raster::RasterSettings;
-use core_slicer::{Sliced, Windows};
+use core_slicer::{Sliced, Source, Windows};
 use format_anycubic::AnycubicWriter;
 use format_chitu::{CbddlpWriter, CtbWriter};
 use format_creality::{CxdlpV4Writer, CxdlpVersion, CxdlpWriter};
@@ -47,9 +46,9 @@ pub struct Writing<'a> {
     pub name: &'a str,
     /// Everything the file carries but the masks.
     pub job: &'a PrintJob,
-    /// The mesh standing in plate coordinates, cut window by window as the file is
-    /// written; see `docs/decisions/0068-the-window-holds-no-stack.md`.
-    pub mesh: &'a Mesh,
+    /// What stands on the plate, in plate coordinates, cut window by window as the file
+    /// is written; see `docs/decisions/0068-the-window-holds-no-stack.md`.
+    pub source: &'a dyn Source,
     pub windows: &'a Windows,
     pub settings: &'a RasterSettings,
     /// Layers rasterised at once. Peak memory is this many masks (ADR 0010).
@@ -94,7 +93,7 @@ pub(crate) struct Destination<'a> {
     pub job: &'a PrintJob,
 }
 
-/// What hands a writer's sink its layers, in print order: a mesh cut as it goes, or a file
+/// What hands a writer's sink its layers, in print order: a plate cut as it goes, or a file
 /// read back.
 pub(crate) trait Feed {
     type Done;
@@ -166,7 +165,7 @@ impl Destination<'_> {
     }
 }
 
-/// A mesh cut, rasterised and folded a window at a time as it is fed.
+/// A plate cut, rasterised and folded a window at a time as it is fed.
 struct Cut<'a, 'b>(&'a Writing<'b>);
 
 impl Feed for Cut<'_, '_> {
@@ -209,7 +208,7 @@ pub fn write(
 /// Measures what the stack cures without writing it anywhere, so a preview can say what
 /// the print takes. As in `write`, no stack is ever held whole.
 pub fn measure(
-    mesh: &Mesh,
+    source: &dyn Source,
     windows: &Windows,
     settings: &RasterSettings,
     tolerance: &Tolerance,
@@ -219,7 +218,7 @@ pub fn measure(
     let group = rayon::current_num_threads().max(1);
     let mut cancelled = false;
 
-    windows.stream(mesh, |sliced: &Sliced| -> Result<(), PipelineError> {
+    windows.stream(source, |sliced: &Sliced| -> Result<(), PipelineError> {
         observer.window(sliced);
         for layers in sliced.layers.chunks(group) {
             if cancelled || observer.cancelled() {
@@ -252,7 +251,7 @@ fn stream_layers<S: LayerSink>(
     let mut cancelled = false;
 
     windows.stream(
-        request.mesh,
+        request.source,
         |sliced: &Sliced| -> Result<(), PipelineError> {
             observer.window(sliced);
             for layers in sliced.layers.chunks(request.window.max(1)) {

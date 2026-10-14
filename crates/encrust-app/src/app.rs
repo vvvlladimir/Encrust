@@ -360,6 +360,7 @@ impl eframe::App for SlicerApp {
     }
 
     fn ui(&mut self, ui: &mut egui::Ui, frame: &mut eframe::Frame) {
+        let started = web_time::Instant::now();
         #[cfg(target_os = "macos")]
         if !ui.input(|input| input.viewport().fullscreen.unwrap_or(false)) {
             crate::traffic_lights::centre(frame, crate::ui::theme::TOP_BAR_H);
@@ -414,6 +415,9 @@ impl eframe::App for SlicerApp {
                 .poll(&mut self.doc.scene, &mut self.machine.status)
             | crate::panels::animate_preview(ui.ctx(), &mut self.machine.preview);
         self.forget_what_an_old_check_found();
+        if self.machine.slicing.job.is_some() || self.machine.preview.is_slicing() {
+            self.tools.hollow.make_way();
+        }
         if working | self.run_the_cut_up(ui.ctx()) {
             ui.ctx().request_repaint();
         }
@@ -457,6 +461,7 @@ impl eframe::App for SlicerApp {
             typing: ui.ctx().memory(|memory| memory.focused().is_some()),
         };
         self.record(frame);
+        self.view.ui_ms = started.elapsed().as_secs_f32() * 1000.0;
     }
 
     fn on_exit(&mut self) {

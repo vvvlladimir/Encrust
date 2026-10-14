@@ -49,6 +49,7 @@ egui-phosphor.workspace = true
 egui-wgpu.workspace = true
 wgpu.workspace = true
 transform-gizmo-egui.workspace = true
+meshoptimizer-rs.workspace = true
 bytemuck.workspace = true
 image.workspace = true
 tracing.workspace = true

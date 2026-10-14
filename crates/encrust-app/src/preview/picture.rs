@@ -232,7 +232,7 @@ impl Preview {
             None => {
                 alone = stack
                     .windows
-                    .cut(&stack.mesh, index..index + 1)
+                    .cut(stack.solid.as_ref(), index..index + 1)
                     .context("cannot cut the layer under the one being previewed")?;
                 let Some(layer) = alone.layers.first() else {
                     bail!("layer {index} is not in the stack");
@@ -414,7 +414,7 @@ mod tests {
             blur_px: 0,
         };
         let mut job = MeasureJob::spawn(
-            Arc::new(mesh),
+            Arc::new(mesh.into()),
             windows,
             as_seen(&settings),
             Tolerance::default(),
