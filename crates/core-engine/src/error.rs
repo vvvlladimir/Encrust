@@ -22,4 +22,7 @@ pub enum EngineError {
 
     #[error("the project names no resin to slice with")]
     NoResin,
+
+    #[error("the project's printer or resin is not among the profiles here")]
+    NotHere(#[from] printer_profiles::ProfileError),
 }

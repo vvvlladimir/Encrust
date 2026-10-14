@@ -14,6 +14,7 @@ use core_engine::project::{EXTENSION, Project, ProjectError, digest, load, read_
 use crate::files::{self, Handed, Wanted};
 use crate::panels::Window;
 use crate::panels::frame_view;
+use crate::recent::picture;
 use crate::scene::Scene;
 use crate::status::Status;
 use crate::undo::History;
@@ -99,15 +100,16 @@ pub fn open(window: &mut Window, file: &Handed) {
     let read = read
         .map_err(anyhow::Error::new)
         .with_context(|| format!("cannot open the project {}", path.display()));
-    let Some(project) = window
+    let Some(mut project) = window
         .machine
         .status
         .report(&format!("Opened {}", path.display()), read)
     else {
         return;
     };
+    let preview = project.preview.take();
 
-    state::apply(
+    let not_here = state::apply(
         project,
         state::CapturedMut {
             scene: &mut window.doc.scene,
@@ -115,7 +117,10 @@ pub fn open(window: &mut Window, file: &Handed) {
             tools: window.tools,
         },
     );
-    remember(window, &path);
+    if let Some(note) = not_here.note() {
+        window.machine.status = Status::Info(format!("Opened {}; {note}", path.display()));
+    }
+    remember(window, &path, preview);
     window.doc.project.path = Some(path);
     window.doc.project.saved = Some(digest(&captured(window).manifest));
     window.doc.history = History::default();
@@ -162,19 +167,27 @@ pub fn save_dialog(window: &mut Window) -> bool {
     write(window, name)
 }
 
-/// Puts the project first in the recent list, pictured as its plate stands now.
-fn remember(window: &mut Window, path: &std::path::Path) {
+/// Puts the project first in the recent list, pictured by `preview` when it has one and
+/// as its plate stands now otherwise.
+fn remember(window: &mut Window, path: &std::path::Path, preview: Option<Vec<u8>>) {
     let recent = &mut window.machine.recent;
     recent.note(path, crate::updates::now_s());
-    let parts = crate::recent::picture::of_plate(&window.doc.scene);
-    crate::recent::picture::keep(recent, path, parts);
+    match preview {
+        Some(png) => picture::keep_png(recent, path, png),
+        None => picture::keep(recent, path, picture::of_plate(&window.doc.scene)),
+    }
 }
 
 fn write(window: &mut Window, path: PathBuf) -> bool {
-    let project = captured(window);
+    let mut project = captured(window);
     let digest = digest(&project.manifest);
-    let written = store(&path, &project)
+    let written = picture::png(&picture::of_plate(&window.doc.scene))
         .map_err(anyhow::Error::new)
+        .context("cannot draw the project's picture")
+        .and_then(|preview| {
+            project.preview = preview;
+            store(&path, &project).map_err(anyhow::Error::new)
+        })
         .with_context(|| format!("cannot write the project {}", path.display()));
     let saved = window
         .machine
@@ -182,7 +195,7 @@ fn write(window: &mut Window, path: PathBuf) -> bool {
         .report(&format!("Saved {}", path.display()), written)
         .is_some();
     if saved {
-        remember(window, &path);
+        remember(window, &path, project.preview);
         window.doc.project.path = Some(path);
         window.doc.project.saved = Some(digest);
     }

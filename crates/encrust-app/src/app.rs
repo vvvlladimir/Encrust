@@ -63,10 +63,15 @@ impl SlicerApp {
         crate::updates::sweep();
 
         let mut app = Self::default();
-        app.machine
+        let renamed = app
+            .machine
             .slicing
             .load_user_profiles(&mut app.machine.status);
         app.prefs = crate::prefs::load();
+        if !renamed.is_empty() {
+            app.prefs.follow(&renamed);
+            app.prefs.save();
+        }
         let prefs = app.prefs.clone();
         prefs.apply(&mut app.window());
         project::mark_saved(&mut app.window());

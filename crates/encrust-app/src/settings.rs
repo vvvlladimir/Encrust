@@ -6,7 +6,7 @@ use std::collections::BTreeMap;
 pub use printer_profiles::unique_id;
 use printer_profiles::{
     Catalogue, Entry, Kind, MaterialProfile, PrinterProfile, PrinterTuning, ProfileError, Source,
-    SupportProfile,
+    SupportProfile, own_id,
 };
 
 use crate::slicing::Rescaled;
@@ -615,7 +615,7 @@ fn save_as_own(
         last_printer: Some(printer.to_owned()),
         ..values
     };
-    let id = unique_id(&resin.name, |id| catalogue.resin(id).is_ok());
+    let id = own_id(&resin.name, |id| catalogue.resin(id).is_ok())?;
     catalogue.save_resin(&id, &resin)?;
     Ok(id)
 }
@@ -626,7 +626,7 @@ pub fn new_printer(catalogue: &mut Catalogue) -> Result<String, ProfileError> {
         name: "New printer".to_owned(),
         ..PrinterProfile::default()
     };
-    let id = unique_id(&printer.name, |id| catalogue.printer(id).is_ok());
+    let id = own_id(&printer.name, |id| catalogue.printer(id).is_ok())?;
     catalogue.save_printer(&id, &printer)?;
     Ok(id)
 }
@@ -881,7 +881,7 @@ mod tests {
     fn a_duplicate_belongs_to_the_printer_it_was_made_on() {
         let mut catalogue = with_grey("duplicate");
         let id = duplicate_resin(&mut catalogue, MARS, "standard-grey").expect("writable");
-        assert_eq!(id, "standard-grey-copy");
+        assert!(id.starts_with("standard-grey-copy-"), "{id}");
         let copy = &catalogue.resin(&id).expect("saved").profile;
         assert!(copy.is_tuned_for(MARS) && !copy.is_tuned_for(SATURN));
         assert!(
@@ -895,7 +895,7 @@ mod tests {
         let mut catalogue = with_grey("rename");
         let id =
             rename_resin(&mut catalogue, MARS, "standard-grey", "Grey fast").expect("writable");
-        assert_eq!(id, "grey-fast");
+        assert!(id.starts_with("grey-fast-"), "{id}");
         let kept = &catalogue.resin("standard-grey").expect("kept").profile;
         assert_eq!(
             kept.name, "Standard grey",

@@ -1,0 +1,46 @@
+# A resin for the CLI tests, standing in for the one a user measures on their own machine.
+#
+# Nothing of the kind is shipped: an exposure is measured, not transcribed, so the
+# catalogue holds no resin at all (docs/decisions/0196). The numbers here are only round
+# enough for a test to count seconds with.
+
+name = "Test resin"
+layer_height_mm = 0.05
+exposure_s = 2.5
+bottom_exposure_s = 30.0
+bottom_layers = 6
+transition_layers = 8
+light_off_delay_s = 0.5
+
+lift_distance_mm = 6.0
+lift_speed_mm_min = 65.0
+retract_distance_mm = 6.0
+retract_speed_mm_min = 150.0
+
+bottom_lift_distance_mm = 8.0
+bottom_lift_speed_mm_min = 65.0
+bottom_retract_speed_mm_min = 150.0
+
+light_pwm = 255
+bottom_light_pwm = 255
+density_g_cm3 = 1.1
+
+[waits]
+mode = "rest"
+after_retract_s = 0.5
+
+[printers.elegoo-mars-4-ultra]
+exposure_s = 2.4
+bottom_exposure_s = 28.0
+
+[printers.elegoo-saturn-4-ultra]
+exposure_s = 2.2
+bottom_exposure_s = 26.0
+lift_distance_mm = 4.0
+lift_speed_mm_min = 120.0
+retract_distance_mm = 4.0
+retract_speed_mm_min = 200.0
+
+[printers.elegoo-mars-3-pro]
+exposure_s = 3.0
+bottom_exposure_s = 36.0

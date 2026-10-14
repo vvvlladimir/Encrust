@@ -7,7 +7,7 @@ use core_format::{ExposurePlan, ExposureRange};
 use core_geometry::Scalar;
 use core_raster::{RasterSettings, Shading};
 use core_slicer::{AdaptiveSettings, ONE_SAMPLE, WINDOW_LAYERS};
-use printer_profiles::{Catalogue, MaterialProfile, PrinterProfile};
+use printer_profiles::{Catalogue, MaterialProfile, PrinterProfile, Renamed};
 
 use crate::job::{Outcome, SliceJob, SliceRequest, SlicedFormat, models_of, worker_threads};
 use crate::preview::Fold;
@@ -128,29 +128,40 @@ impl Default for Slicing {
 impl Slicing {
     /// Lays the user's own profile directory over the shipped catalogue. A directory
     /// that is not there is normal; one that cannot be read is worth saying out loud.
+    /// Answers the profiles moved to ids of their own on the way (ADR 0261).
     #[cfg(not(target_arch = "wasm32"))]
-    pub fn load_user_profiles(&mut self, status: &mut Status) {
+    pub fn load_user_profiles(&mut self, status: &mut Status) -> Vec<Renamed> {
         let Some(dir) = printer_profiles::user_dir() else {
-            return;
+            return Vec::new();
         };
-        if let Err(error) = self.catalogue.overlay(&dir) {
+        let loaded = self
+            .catalogue
+            .overlay(&dir)
+            .and_then(|()| self.catalogue.give_own_ids());
+        loaded.unwrap_or_else(|error| {
             *status = Status::failed(
                 &anyhow::Error::new(error)
                     .context(format!("cannot read your profiles in {}", dir.display())),
             );
-        }
+            Vec::new()
+        })
     }
 
     /// Lays the profiles the page keeps over the shipped catalogue; a browser has no
     /// directory to give.
     #[cfg(target_arch = "wasm32")]
-    pub fn load_user_profiles(&mut self, status: &mut Status) {
+    pub fn load_user_profiles(&mut self, status: &mut Status) -> Vec<Renamed> {
         let store = std::sync::Arc::new(crate::web::profiles::PageProfiles);
-        if let Err(error) = self.catalogue.overlay_store(store) {
+        let loaded = self
+            .catalogue
+            .overlay_store(store)
+            .and_then(|()| self.catalogue.give_own_ids());
+        loaded.unwrap_or_else(|error| {
             *status = Status::failed(
                 &anyhow::Error::new(error).context("cannot read your profiles in this browser"),
             );
-        }
+            Vec::new()
+        })
     }
 
     /// The resin as it was loaded, which is what a project file records: the retuned copy

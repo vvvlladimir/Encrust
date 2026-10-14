@@ -11,9 +11,12 @@
 </head>
 <body>
   <h1>Encrust in the browser</h1>
-  <p>A prototype with no interface: pick a project saved by Encrust, get the sliced file.
+  <p>A prototype with no interface: pick the printer and resin profiles to slice on, then a
+    project saved by Encrust, and get the sliced file.
     Everything runs on this page; nothing is uploaded.
     <a href="https://github.com/vvvlladimir/Encrust">Source code</a> (AGPL-3.0).</p>
+  <label>Printer profile <input id="printer" type="file" accept=".toml"></label>
+  <label>Resin profile <input id="resin" type="file" accept=".toml"></label>
   <label>Project <input id="project" type="file" accept=".encrust"></label>
   <output id="status"></output>
   <script type="module">
@@ -32,13 +35,22 @@
       status.textContent = `${name}: ${(data.bytes.length / 1e6).toFixed(1)} MB in `
         + `${data.seconds.toFixed(1)} s, wasm memory ${Math.round(data.memory / 1e6)} MB`;
     };
+    // A project names its printer and resin by id only, so they are handed over beside it.
+    const text = async (id) => document.getElementById(id).files[0]?.text();
     document.getElementById("project").onchange = async ({ target }) => {
       const file = target.files[0];
       if (!file) return;
+      const [printer, resin] = [await text("printer"), await text("resin")];
+      if (!printer || !resin) {
+        status.textContent = "Pick a printer and a resin profile first.";
+        return;
+      }
       status.textContent = `Slicing ${file.name}…`;
       worker.postMessage({
         name: file.name.replace(/\.encrust$/i, ""),
         bytes: new Uint8Array(await file.arrayBuffer()),
+        printer,
+        resin,
       });
     };
   </script>

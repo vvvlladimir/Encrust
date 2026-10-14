@@ -1,7 +1,8 @@
 //! The window's state as a project file, and back again.
 //!
 //! What goes in is the plate as it stands, geometry and all; what comes out is that plate
-//! and nothing worked out anew (ADR 0191).
+//! and nothing worked out anew (ADR 0191). The printer and resin go by id only, and come
+//! back only where this catalogue has them (ADR 0261).
 
 use std::collections::BTreeMap;
 use std::sync::Arc;
@@ -15,8 +16,8 @@ use crate::state::Tools;
 use crate::supports::with_own;
 use crate::tool_settings::ToolSettings;
 use core_engine::project::{
-    BuiltCavity, Cavity, Chosen, Manifest, ModelMeshes, ObjectHollowState, ObjectState,
-    ObjectSupportState, OwnSupportState, Project, Summary, VERSION, hollow_of, supports_of,
+    BuiltCavity, Cavity, Manifest, ModelMeshes, ObjectHollowState, ObjectState, ObjectSupportState,
+    OwnSupportState, Project, Summary, VERSION, hollow_of, supports_of,
 };
 use printer_profiles::{Raft, SupportProfile};
 
@@ -44,14 +45,11 @@ pub fn capture(plate: Captured<'_>) -> Project {
     let settings = ToolSettings::of(tools, slicing);
     let manifest = Manifest {
         version: VERSION,
-        printer: slicing.printer.clone().map(|profile| Chosen {
-            id: slicing.printer_id.clone(),
-            profile,
-        }),
-        resin: Some(Chosen {
-            id: slicing.resin_id.clone(),
-            profile: slicing.base_material().clone(),
-        }),
+        printer: slicing
+            .printer_id
+            .clone()
+            .filter(|_| slicing.printer.is_some()),
+        resin: slicing.resin_id.clone(),
         slicing: settings.slicing,
         supports: settings.supports,
         hollow: settings.hollow,
@@ -65,6 +63,33 @@ pub fn capture(plate: Captured<'_>) -> Project {
     Project {
         manifest,
         models: scene.objects().iter().map(model_meshes).collect(),
+        preview: None,
+    }
+}
+
+/// The printer and resin a project named that this catalogue does not have, which the
+/// window kept its own in place of.
+#[derive(Debug, Default, PartialEq, Eq)]
+pub struct NotHere {
+    pub printer: Option<String>,
+    pub resin: Option<String>,
+}
+
+impl NotHere {
+    /// What the status line says of them, or `None` when both were found.
+    pub fn note(&self) -> Option<String> {
+        let missing: Vec<String> = [("printer", &self.printer), ("resin", &self.resin)]
+            .into_iter()
+            .filter_map(|(kind, id)| Some(format!("the {kind} {}", id.as_ref()?)))
+            .collect();
+        (!missing.is_empty()).then(|| {
+            format!(
+                "{} it names {} not among yours, so yours stay{}",
+                missing.join(" and "),
+                if missing.len() == 1 { "is" } else { "are" },
+                if missing.len() == 1 { "s" } else { "" },
+            )
+        })
     }
 }
 
@@ -134,24 +159,28 @@ fn built_cavity(object: &SceneObject) -> Option<BuiltCavity> {
     })
 }
 
-/// Puts a loaded project in place of whatever the window was holding.
-pub fn apply(project: Project, plate: CapturedMut<'_>) {
+/// Puts a loaded project in place of whatever the window was holding. Its printer and
+/// resin are taken where this catalogue has them, and its slicing only with its printer;
+/// answers the ones it named that are not here.
+pub fn apply(project: Project, plate: CapturedMut<'_>) -> NotHere {
     let CapturedMut {
         scene,
         slicing,
         tools,
     } = plate;
-    let Project { manifest, models } = project;
+    let Project {
+        manifest, models, ..
+    } = project;
 
-    if let Some(printer) = manifest.printer {
-        slicing.set_printer(printer.profile, printer.id);
-    }
-    if let Some(resin) = manifest.resin {
-        slicing.resin_id = resin.id;
-        slicing.set_material(resin.profile);
-    }
+    let printer_named = manifest.printer.is_some();
+    let not_here = take_machine(manifest.printer, manifest.resin, slicing);
+    let kept = ToolSettings::of(tools, slicing).slicing;
     ToolSettings {
-        slicing: manifest.slicing,
+        slicing: if printer_named && not_here.printer.is_none() {
+            manifest.slicing
+        } else {
+            kept
+        },
         supports: manifest.supports,
         hollow: manifest.hollow,
         drain: manifest.drain,
@@ -173,6 +202,33 @@ pub fn apply(project: Project, plate: CapturedMut<'_>) {
     restore_objects(scene, manifest.objects, models, &table, raft);
     scene.select(None);
     scene.show_plate(manifest.active_plate);
+    not_here
+}
+
+/// Takes the printer and resin of these ids where the catalogue has them, and answers the
+/// ones it does not: the window keeps its own in their place.
+fn take_machine(printer: Option<String>, resin: Option<String>, slicing: &mut Slicing) -> NotHere {
+    let mut not_here = NotHere::default();
+    if let Some(id) = printer {
+        match slicing.catalogue.printer(&id) {
+            Ok(entry) => {
+                let profile = entry.profile.clone();
+                slicing.set_printer(profile, Some(id));
+            }
+            Err(_) => not_here.printer = Some(id),
+        }
+    }
+    if let Some(id) = resin {
+        match slicing.catalogue.resin(&id) {
+            Ok(entry) => {
+                let resin = entry.profile.clone();
+                slicing.resin_id = Some(id);
+                slicing.set_material(resin);
+            }
+            Err(_) => not_here.resin = Some(id),
+        }
+    }
+    not_here
 }
 
 /// Puts every object the file holds back on `scene`, with the shell, the cuts and the
@@ -378,6 +434,13 @@ mod tests {
         );
 
         let mut slicing = Slicing::default();
+        let printer = slicing
+            .catalogue
+            .printer(SATURN)
+            .expect("ships")
+            .profile
+            .clone();
+        slicing.set_printer(printer, Some(SATURN.to_owned()));
         slicing.set_layer_height(0.035);
         slicing.anti_alias = false;
         slicing.grey_levels = std::num::NonZeroU8::new(4);
@@ -415,9 +478,17 @@ mod tests {
         }
     }
 
+    const SATURN: &str = "elegoo-saturn-4-ultra";
+
     /// Writes a plate and reads it back into an empty window.
     fn round_trip(saved: &Bench) -> Bench {
-        let project = capture(saved.plate());
+        let (back, not_here) = reopened(capture(saved.plate()));
+        assert_eq!(not_here, NotHere::default(), "the shipped printer is here");
+        back
+    }
+
+    /// Writes `project` and reads it back into an empty window.
+    fn reopened(project: Project) -> (Bench, NotHere) {
         let mut bytes = Cursor::new(Vec::new());
         write_to(&mut bytes, &project).expect("a project in memory writes");
         bytes.set_position(0);
@@ -428,8 +499,59 @@ mod tests {
             slicing: Slicing::default(),
             tools: Tools::default(),
         };
-        apply(read, back.plate_mut());
-        back
+        let not_here = apply(read, back.plate_mut());
+        (back, not_here)
+    }
+
+    #[test]
+    fn a_project_names_its_printer_and_resin_and_carries_neither() {
+        let mut saved = bench();
+        saved.slicing.resin_id = Some("grey-0a1b2c3d".to_owned());
+        let manifest = capture(saved.plate()).manifest;
+        assert_eq!(manifest.printer.as_deref(), Some(SATURN));
+        assert_eq!(manifest.resin.as_deref(), Some("grey-0a1b2c3d"));
+    }
+
+    #[test]
+    fn a_printer_not_here_leaves_the_windows_printer_and_slicing() {
+        let mut project = capture(bench().plate());
+        project.manifest.printer = Some("someone-elses-0a1b2c3d".to_owned());
+        project.manifest.resin = Some("their-grey-4e5f6a7b".to_owned());
+        let window = Slicing::default();
+
+        let (back, not_here) = reopened(project);
+
+        assert_eq!(not_here.printer.as_deref(), Some("someone-elses-0a1b2c3d"));
+        assert_eq!(not_here.resin.as_deref(), Some("their-grey-4e5f6a7b"));
+        assert_eq!(
+            back.slicing.printer_id, window.printer_id,
+            "the window's own stays"
+        );
+        assert_eq!(back.slicing.resin_id, window.resin_id);
+        assert_eq!(
+            back.slicing.layer_height_mm(),
+            window.layer_height_mm(),
+            "the slicing goes only with its printer"
+        );
+        assert_eq!(back.slicing.blur_px, window.blur_px);
+        assert_eq!(
+            back.scene.objects().len(),
+            1,
+            "the plate opens all the same"
+        );
+    }
+
+    #[test]
+    fn the_status_names_what_was_not_here() {
+        assert_eq!(NotHere::default().note(), None);
+        let printer = NotHere {
+            printer: Some("bench-0a1b2c3d".to_owned()),
+            resin: None,
+        };
+        assert_eq!(
+            printer.note().as_deref(),
+            Some("the printer bench-0a1b2c3d it names is not among yours, so yours stays")
+        );
     }
 
     #[test]

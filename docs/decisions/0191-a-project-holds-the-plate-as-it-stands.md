@@ -1,6 +1,6 @@
 # 0191. A project holds the plate as it stands, and opening it builds nothing
 
-- **Status:** Accepted
+- **Status:** Accepted; refusing every other version is superseded by 0261, which reads version 4
 - **Date:** 2026-10-06
 
 ## Context

@@ -12,6 +12,7 @@ A zip. Deflate, no encryption, no comment.
 
 ```
 project.json            the manifest, UTF-8
+preview.png             the plate as a picture, 480 x 320, stored rather than deflated
 models/0/source.mesh    the first object as it was imported and repaired
 models/0/shell.mesh     the shell hollowing built from it, if it was hollowed
 models/1/source.mesh    the second object
@@ -20,18 +21,20 @@ models/1/source.mesh    the second object
 
 `models/<n>/` matches `objects[n]` of the manifest, by position. A `shell.mesh` is written
 when and only when that object's `hollow.built` is there, and a file whose manifest names
-a mesh the archive does not have is refused.
+a mesh the archive does not have is refused. `preview.png` is the start page's picture of
+the plate, there for whatever lists the file before opening it (ADR 0261); a file without
+one reads, and a plate with nothing on it has none.
 
 ## `project.json`
 
-`version` is read on its own before anything else, and a file claiming any version but
-this build's is refused whole. This build writes version 3. There is no reading of older
-ones: version 2 and below hold no built geometry, which is the whole of this format.
+`version` is read on its own before anything else. This build writes version 5. Version 4
+is read too: it carried its printer and resin whole, and only their ids are kept. Any other
+is refused whole: version 3 and below hold no built geometry or diagnostics.
 
 | Key | Type |
 |---|---|
-| `printer`, `resin` | `{ id, profile }`, the catalogue id and the profile itself |
-| `slicing` | layer height, `AdaptiveSettings`, `ExposureRange` bands, anti-aliasing, `OutputFormat` |
+| `printer`, `resin` | the catalogue id, or `null`; never the profile itself (ADR 0261) |
+| `slicing` | layer height, `AdaptiveSettings`, `ExposureRange` bands, anti-aliasing, `OutputFormat`; taken up only with the printer |
 | `supports` | the group table, the active group, `ProjectSettings` for a fill, the brush |
 | `hollow` | what the Hollow tool is set to, not what it built |
 | `drain`, `cut`, `array` | what the next hole, the cut plane and the copy grid are set to |
@@ -57,9 +60,11 @@ come back.
 The Relief tool has no entry here: what it is set to is remembered between runs instead,
 in `preferences.json` (ADR 0192).
 
-The profile travels with the file, not only its id: a plate has to open the same on a
-machine whose catalogue never had that printer. The id is kept beside it so the picker
-still shows the profile as the catalogue's when it is.
+The printer and resin travel by id alone, so a file never changes the profiles of whoever
+opens it. Where the catalogue has that id the window takes it, and the plate's slicing with
+the printer; where it does not, the window keeps its own printer, resin and slicing and
+says so. The command line asks for `--printer` or `--resin` instead, and a browser's
+`web-engine` is handed both as TOML (ADR 0261).
 
 ## A mesh blob
 

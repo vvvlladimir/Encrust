@@ -8,15 +8,17 @@
 use std::sync::Arc;
 
 use core_engine::project::{
-    Array, Axis, BuiltCavity, Cavity, Chosen, CutState, DrainState, Group, HollowState, Keep,
-    Manifest, ModelMeshes, ObjectHollowState, ObjectState, ObjectSupportState, Project,
-    SlicingState, Summary, SupportState, VERSION,
+    Array, Axis, BuiltCavity, Cavity, CutState, DrainState, Group, HollowState, Keep, Manifest,
+    ModelMeshes, ObjectHollowState, ObjectState, ObjectSupportState, Project, SlicingState,
+    Summary, SupportState, VERSION,
 };
-use core_engine::{EngineError, Opening, open_plate};
+use core_engine::{EngineError, Machine, Opening, open_plate};
 use core_geometry::{Bvh, Mesh, Orientation, Transform, Vec3, diagnose};
 use core_supports::{ModelSupports, ProjectSettings, SupportPoint, SupportTree};
 use core_volume::{HollowMode, InfillSettings};
-use printer_profiles::{MaterialProfile, OutputFormat, PrinterProfile, SupportProfile};
+use printer_profiles::{
+    Catalogue, MaterialProfile, OutputFormat, PrinterProfile, ProfileError, SupportProfile,
+};
 
 const PRINTER: &str = r#"
 name = "Test panel"
@@ -33,6 +35,9 @@ x = 80.0
 y = 80.0
 z = 80.0
 "#;
+
+const SATURN: &str = "elegoo-saturn-4-ultra";
+const GREY: &str = "standard-grey";
 
 /// A closed box, twelve triangles, wound outward.
 fn box_mesh(mins: Vec3, maxs: Vec3) -> Mesh {
@@ -95,22 +100,24 @@ fn object(name: &str, mesh: &Mesh, transform: Transform) -> ObjectState {
     }
 }
 
-/// A project of one 20 mm cube standing on the plate, on a printer with a resin.
+/// The small test panel and a stock resin, which every plate here is opened on.
+fn machine() -> Machine {
+    Machine {
+        printer: PrinterProfile::from_toml_str(PRINTER, std::path::Path::new("inline.toml"))
+            .expect("the inline profile is valid"),
+        printer_id: None,
+        resin: MaterialProfile::default(),
+    }
+}
+
+/// A project of one 20 mm cube standing on the plate, naming a shipped printer and resin.
 fn project() -> Project {
     let cube = box_mesh(Vec3::ZERO, Vec3::splat(20.0));
-    let printer = PrinterProfile::from_toml_str(PRINTER, std::path::Path::new("inline.toml"))
-        .expect("the inline profile is valid");
     Project {
         manifest: Manifest {
             version: VERSION,
-            printer: Some(Chosen {
-                id: None,
-                profile: printer,
-            }),
-            resin: Some(Chosen {
-                id: None,
-                profile: MaterialProfile::default(),
-            }),
+            printer: Some(SATURN.to_owned()),
+            resin: Some(GREY.to_owned()),
             slicing: SlicingState {
                 layer_height_mm: 0.05,
                 adaptive: None,
@@ -161,6 +168,7 @@ fn project() -> Project {
             source: Arc::new(cube),
             shell: None,
         }],
+        preview: None,
     }
 }
 
@@ -212,7 +220,7 @@ fn grown_under(mesh: &Mesh, transform: Transform, contact: Vec3) -> Vec<SupportT
 #[test]
 fn a_solid_model_opens_as_the_mesh_it_was_saved_with() {
     let saved = project();
-    let plate = open_plate(&saved, &opening()).expect("the project is complete");
+    let plate = open_plate(&saved, &machine(), &opening()).expect("the project is complete");
 
     let [model] = plate.models.as_slice() else {
         panic!("one object on the plate");
@@ -232,7 +240,7 @@ fn a_solid_model_opens_as_the_mesh_it_was_saved_with() {
 fn a_hollowed_model_opens_as_the_shell_in_the_file() {
     let mut saved = project();
     hollowed(&mut saved, 2.0);
-    let plate = open_plate(&saved, &opening()).expect("the project is complete");
+    let plate = open_plate(&saved, &machine(), &opening()).expect("the project is complete");
 
     let shell = saved.models[0]
         .shell
@@ -255,7 +263,7 @@ fn a_tree_the_file_keeps_stands_down_to_the_plate() {
         grown_under(&saved.models[0].source, lifted, Vec3::new(40.0, 40.0, 10.0));
     assert_eq!(object.supports.grown.len(), 1, "one point, one tree");
 
-    let plate = open_plate(&saved, &opening()).expect("the project is complete");
+    let plate = open_plate(&saved, &machine(), &opening()).expect("the project is complete");
     let [column] = plate.models[0].supports.as_slice() else {
         panic!("one group of supports");
     };
@@ -272,7 +280,7 @@ fn a_point_without_a_tree_grows_nothing() {
     let mut saved = project();
     saved.manifest.objects[0].supports.points = vec![SupportPoint::new(Vec3::new(10.0, 10.0, 0.0))];
 
-    let plate = open_plate(&saved, &opening()).expect("the project is complete");
+    let plate = open_plate(&saved, &machine(), &opening()).expect("the project is complete");
     assert!(
         plate.models[0]
             .supports
@@ -302,15 +310,36 @@ fn only_what_is_visible_on_the_opened_plate_is_taken() {
         },
     ]);
 
-    let plate = open_plate(&saved, &opening()).expect("the project is complete");
+    let plate = open_plate(&saved, &machine(), &opening()).expect("the project is complete");
     assert_eq!(plate.models.len(), 1);
+}
+
+/// The shipped printers and one resin of the user's, which nothing ships.
+fn shipped() -> Catalogue {
+    let dir = std::env::temp_dir().join(format!("encrust-open-project-{}", std::process::id()));
+    let mut catalogue = Catalogue::with_root(&dir).expect("a missing directory reads as empty");
+    catalogue
+        .save_resin(GREY, &MaterialProfile::default())
+        .expect("the temporary directory is writable");
+    catalogue
+}
+
+#[test]
+fn the_machine_a_project_names_is_the_catalogues() {
+    let machine = Machine::named(&project().manifest, &shipped()).expect("both are shipped");
+    assert_eq!(machine.printer_id.as_deref(), Some(SATURN));
+    assert_eq!(
+        machine.printer,
+        shipped().printer(SATURN).expect("ships").profile
+    );
 }
 
 #[test]
 fn a_project_without_a_printer_is_refused() {
     let mut saved = project();
     saved.manifest.printer = None;
-    let error = open_plate(&saved, &opening()).expect_err("there is no panel to cut for");
+    let error =
+        Machine::named(&saved.manifest, &shipped()).expect_err("there is no panel to cut for");
     assert!(matches!(error, EngineError::NoPrinter));
 }
 
@@ -318,6 +347,21 @@ fn a_project_without_a_printer_is_refused() {
 fn a_project_without_a_resin_is_refused() {
     let mut saved = project();
     saved.manifest.resin = None;
-    let error = open_plate(&saved, &opening()).expect_err("there is nothing to expose");
+    let error =
+        Machine::named(&saved.manifest, &shipped()).expect_err("there is nothing to expose");
     assert!(matches!(error, EngineError::NoResin));
+}
+
+#[test]
+fn a_printer_this_catalogue_lacks_is_refused() {
+    let mut saved = project();
+    saved.manifest.printer = Some("someone-elses-0a1b2c3d".to_owned());
+    let error = Machine::named(&saved.manifest, &shipped()).expect_err("nobody here has it");
+    assert!(matches!(
+        error,
+        EngineError::NotHere(ProfileError::Unknown {
+            kind: "printer",
+            ..
+        })
+    ));
 }

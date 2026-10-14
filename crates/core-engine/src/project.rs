@@ -1,7 +1,7 @@
 //! The `.encrust` project file: the plate as it stands, written to be opened as it was.
 //!
-//! A zip of one JSON manifest and the meshes of every model — what was imported, and the
-//! shell the tools built from it. Nothing the file holds is decided again on opening; only
+//! A zip of one JSON manifest, the meshes of every model — what was imported, and the
+//! shell the tools built from it — and a picture of the plate. Nothing the file holds is decided again on opening; only
 //! what is a cheap pure function of it is worked out, and `restore` is where that is done.
 //! See `docs/formats/encrust-project.md` and `docs/decisions/0191`.
 
@@ -21,17 +21,21 @@ use core_geometry::{Mat3, Mesh, MeshDiagnostics, Orientation, Scalar, Transform,
 use core_slicer::AdaptiveSettings;
 use core_supports::{ProjectSettings, Region, SupportPoint, SupportTree};
 use core_volume::{Blocker, Channel, DrainHole, HollowMode, HollowSettings, InfillSettings};
-use printer_profiles::{MaterialProfile, OutputFormat, PrinterProfile, Raft, SupportProfile};
+use printer_profiles::{OutputFormat, Raft, SupportProfile};
 use serde::{Deserialize, Serialize};
 
 /// What a project file is called, and what an open or save dialog filters on.
 pub const EXTENSION: &str = "encrust";
 
-/// The manifest this build writes. A file of any other version is refused: it carries
-/// built geometry and diagnostics an older build cannot supply (ADR 0191, 0205).
-pub const VERSION: u32 = 4;
+/// The manifest this build writes. Version 4 is read as well, by the ids of its profiles
+/// alone; any other is refused, lacking built geometry and diagnostics (ADR 0191, 0205, 0261).
+pub const VERSION: u32 = 5;
+
+/// The last version that carried its printer and resin whole rather than by id.
+const WHOLE_PROFILES: u32 = 4;
 
 const MANIFEST: &str = "project.json";
+const PREVIEW: &str = "preview.png";
 
 /// The axis a copy is flipped on, or a cut plane stands on, in the model's own frame:
 /// for a model standing as it was imported, the plate's axis of the same name.
@@ -136,6 +140,8 @@ pub fn digest(manifest: &Manifest) -> u64 {
 pub struct Project {
     pub manifest: Manifest,
     pub models: Vec<ModelMeshes>,
+    /// The plate as a PNG, for whatever lists the file before opening it.
+    pub preview: Option<Vec<u8>>,
 }
 
 /// The geometry one object carries: the mesh it was imported as, and the shell hollowing
@@ -159,8 +165,12 @@ impl ModelMeshes {
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Manifest {
     pub version: u32,
-    pub printer: Option<Chosen<PrinterProfile>>,
-    pub resin: Option<Chosen<MaterialProfile>>,
+    /// The catalogue id of the printer, which the file names but does not carry: a plate
+    /// opens on a machine of that id, or on the one already in hand (ADR 0261).
+    pub printer: Option<String>,
+    /// The catalogue id of the resin, held the same way.
+    pub resin: Option<String>,
+    /// What the plate is cut with, taken up only together with the printer.
     pub slicing: SlicingState,
     pub supports: SupportState,
     pub hollow: HollowState,
@@ -171,15 +181,6 @@ pub struct Manifest {
     pub plates: Vec<String>,
     pub active_plate: u32,
     pub objects: Vec<ObjectState>,
-}
-
-/// A profile as it was in hand, with the catalogue id it came from when it had one. The
-/// profile travels with the file so that a plate opens the same on a machine whose
-/// catalogue does not have that id.
-#[derive(Debug, Serialize, Deserialize)]
-pub struct Chosen<T> {
-    pub id: Option<String>,
-    pub profile: T,
 }
 
 /// How the plate is cut and drawn: layer height, exposures, anti-aliasing, the container.
@@ -438,6 +439,12 @@ pub fn write_to<W: Write + Seek>(sink: W, project: &Project) -> Result<(), Proje
 
     zip.start_file(MANIFEST, options)?;
     zip.write_all(&serde_json::to_vec_pretty(&project.manifest)?)?;
+    if let Some(png) = &project.preview {
+        // A PNG is compressed already; deflating it again only costs time.
+        let stored = options.compression_method(zip::CompressionMethod::Stored);
+        zip.start_file(PREVIEW, stored)?;
+        zip.write_all(png)?;
+    }
     for (index, model) in project.models.iter().enumerate() {
         zip.start_file(source_name(index), options)?;
         zip.write_all(&blob::write(&model.source))?;
@@ -469,12 +476,11 @@ pub fn read_from<R: Read + Seek>(source: R) -> Result<Project, ProjectError> {
         let mut text = String::new();
         entry.read_to_string(&mut text)?;
         let version: Version = serde_json::from_str(&text)?;
-        if version.version != VERSION {
-            return Err(ProjectError::WrongVersion {
-                found: version.version,
-            });
+        match version.version {
+            VERSION => serde_json::from_str(&text)?,
+            WHOLE_PROFILES => by_ids(serde_json::from_str(&text)?)?,
+            found => return Err(ProjectError::WrongVersion { found }),
         }
-        serde_json::from_str(&text)?
     };
 
     let mut models = Vec::with_capacity(manifest.objects.len());
@@ -487,7 +493,31 @@ pub fn read_from<R: Read + Seek>(source: R) -> Result<Project, ProjectError> {
         models.push(ModelMeshes { source, shell });
     }
 
-    Ok(Project { manifest, models })
+    let preview = match zip.by_name(PREVIEW) {
+        Ok(mut entry) => {
+            let mut png = Vec::new();
+            entry.read_to_end(&mut png)?;
+            Some(png)
+        }
+        Err(_) => None,
+    };
+    Ok(Project {
+        manifest,
+        models,
+        preview,
+    })
+}
+
+/// A version 4 manifest as this build's: the printer and resin it carried whole are kept
+/// by their ids alone, and one that had none is not named.
+fn by_ids(mut manifest: serde_json::Value) -> Result<Manifest, ProjectError> {
+    for key in ["printer", "resin"] {
+        if let Some(chosen) = manifest.get_mut(key) {
+            *chosen = chosen.get("id").cloned().unwrap_or_default();
+        }
+    }
+    manifest["version"] = VERSION.into();
+    Ok(serde_json::from_value(manifest)?)
 }
 
 /// Reads a project back from a file at `path`.
@@ -544,7 +574,7 @@ mod tests {
         Project {
             manifest: Manifest {
                 version: VERSION,
-                printer: None,
+                printer: Some("elegoo-saturn-4-ultra".to_owned()),
                 resin: None,
                 slicing: SlicingState {
                     layer_height_mm: 0.05,
@@ -598,6 +628,7 @@ mod tests {
                     shell: Some(Arc::new(mesh.clone())),
                 })
                 .collect(),
+            preview: Some(b"a picture of the plate".to_vec()),
         }
     }
 
@@ -857,7 +888,7 @@ mod tests {
 
     #[test]
     fn a_project_of_another_format_version_is_refused() {
-        for found in [VERSION - 1, VERSION + 1] {
+        for found in [WHOLE_PROFILES - 1, VERSION + 1] {
             let mut saved = project(1);
             saved.manifest.version = found;
 
@@ -868,6 +899,54 @@ mod tests {
             let error = read_from(bytes).expect_err("the format is not this one");
             assert!(matches!(error, ProjectError::WrongVersion { found: it } if it == found));
         }
+    }
+
+    #[test]
+    fn a_plate_brings_its_printer_by_id_and_its_picture_back() {
+        let saved = project(1);
+        let back = round_trip(&saved);
+        assert_eq!(back.manifest.printer, saved.manifest.printer);
+        assert_eq!(back.manifest.resin, None);
+        assert_eq!(back.preview, saved.preview);
+
+        let mut bare = project(1);
+        bare.preview = None;
+        assert_eq!(round_trip(&bare).preview, None, "a file without one reads");
+    }
+
+    #[test]
+    fn a_version_4_file_keeps_the_ids_of_the_profiles_it_carried() {
+        let saved = project(1);
+        let mut older = serde_json::to_value(&saved.manifest).expect("serialises");
+        older["version"] = WHOLE_PROFILES.into();
+        older["printer"] = serde_json::json!({ "id": "my-saturn", "profile": { "name": "Mine" } });
+        older["resin"] = serde_json::json!({ "id": null, "profile": { "name": "From a file" } });
+        let mut bytes = Cursor::new(Vec::new());
+        {
+            let mut zip = zip::ZipWriter::new(&mut bytes);
+            let options = zip::write::SimpleFileOptions::default();
+            zip.start_file(MANIFEST, options)
+                .expect("a zip in memory takes an entry");
+            zip.write_all(&serde_json::to_vec(&older).expect("the manifest serialises"))
+                .expect("a zip in memory takes bytes");
+            for (name, mesh) in [
+                (source_name(0), &saved.models[0].source),
+                (shell_name(0), &saved.models[0].source),
+            ] {
+                zip.start_file(name, options)
+                    .expect("a zip in memory takes an entry");
+                zip.write_all(&blob::write(mesh))
+                    .expect("a zip in memory takes bytes");
+            }
+            zip.finish().expect("a zip in memory finishes");
+        }
+        bytes.set_position(0);
+
+        let back = read_from(bytes).expect("a version 4 file reads");
+        assert_eq!(back.manifest.version, VERSION);
+        assert_eq!(back.manifest.printer.as_deref(), Some("my-saturn"));
+        assert_eq!(back.manifest.resin, None, "a resin with no id names none");
+        assert_eq!(back.preview, None);
     }
 
     #[test]

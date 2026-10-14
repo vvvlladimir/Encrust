@@ -1,6 +1,7 @@
 //! The picture a recent file is shown with on the start page: the plate as it stood when the
 //! file was opened or saved, rendered once off the drawing thread and kept as a PNG in a
-//! folder beside `preferences.json`; see `docs/decisions/0234`.
+//! folder beside `preferences.json`; see `docs/decisions/0234`. A project carries the
+//! same picture inside it (ADR 0261).
 
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
@@ -33,24 +34,46 @@ pub fn of_plate(scene: &Scene) -> Parts {
 /// Renders `parts` for `path` on a thread of its own, then drops the pictures of files
 /// `recent` no longer lists. A failure is silent: the tile falls back to its glyph.
 pub fn keep(recent: &Recent, path: &Path, parts: Parts) {
-    let Some(dir) = dir() else {
-        return;
-    };
     if parts.is_empty() {
         return;
     }
+    let colors = colors();
+    keep_with(recent, path, move || encoded(&parts, colors));
+}
+
+/// Keeps `png`, a picture already drawn, for `path`, as [`keep`] does.
+pub fn keep_png(recent: &Recent, path: &Path, png: Vec<u8>) {
+    keep_with(recent, path, move || Ok(png));
+}
+
+fn keep_with(
+    recent: &Recent,
+    path: &Path,
+    png: impl FnOnce() -> image::ImageResult<Vec<u8>> + Send + 'static,
+) {
+    let Some(dir) = dir() else {
+        return;
+    };
     let target = dir.join(file_name(path));
     let listed: Vec<PathBuf> = recent
         .files()
         .iter()
         .map(|file| dir.join(file_name(&file.path)))
         .collect();
-    let colors = colors();
     crate::job::spawn(move || {
-        if write(&target, &parts, colors).is_ok() {
+        if png().and_then(|png| write(&target, &png)).is_ok() {
             prune(&dir, &listed);
         }
     });
+}
+
+/// `parts` drawn in the window's colours as the PNG a picture is kept as, or `None` for a
+/// plate with nothing on it.
+pub fn png(parts: &Parts) -> image::ImageResult<Option<Vec<u8>>> {
+    if parts.is_empty() {
+        return Ok(None);
+    }
+    encoded(parts, colors()).map(Some)
 }
 
 /// `parts` rendered in the window's colours at the size a picture is kept at.
@@ -95,21 +118,27 @@ fn file_name(path: &Path) -> String {
     format!("{hash:016x}.png")
 }
 
-/// Written beside its place and renamed into it, so a reader never sees half a file.
-fn write(target: &Path, parts: &Parts, colors: (Rgb, Rgb)) -> image::ImageResult<()> {
-    let bytes = pixels(parts, colors);
-    if let Some(dir) = target.parent() {
-        std::fs::create_dir_all(dir)?;
-    }
-    let partial = target.with_extension("part");
-    image::save_buffer_with_format(
-        &partial,
-        &bytes,
+/// `parts` rendered as a PNG `SIZE_PX` large.
+fn encoded(parts: &Parts, colors: (Rgb, Rgb)) -> image::ImageResult<Vec<u8>> {
+    let mut png = Vec::new();
+    image::write_buffer_with_format(
+        &mut std::io::Cursor::new(&mut png),
+        &pixels(parts, colors),
         SIZE_PX[0] as u32,
         SIZE_PX[1] as u32,
         image::ExtendedColorType::Rgb8,
         image::ImageFormat::Png,
     )?;
+    Ok(png)
+}
+
+/// Written beside its place and renamed into it, so a reader never sees half a file.
+fn write(target: &Path, png: &[u8]) -> image::ImageResult<()> {
+    if let Some(dir) = target.parent() {
+        std::fs::create_dir_all(dir)?;
+    }
+    let partial = target.with_extension("part");
+    std::fs::write(&partial, png)?;
     std::fs::rename(partial, target)?;
     Ok(())
 }
@@ -189,7 +218,8 @@ mod tests {
             vec![[0, 1, 2]],
         );
         let parts: Parts = vec![(Arc::new(triangle), Transform::default())];
-        write(&target, &parts, ([0; 3], [200; 3])).expect("the temporary folder is writable");
+        let png = encoded(&parts, ([0; 3], [200; 3])).expect("a picture in memory encodes");
+        write(&target, &png).expect("the temporary folder is writable");
         let image = image::open(&target).expect("the picture was just written");
         assert_eq!([image.width(), image.height()], [480, 320]);
         let _ = std::fs::remove_dir_all(dir);

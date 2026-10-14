@@ -1,19 +1,20 @@
 //! A `.encrust` project saved by the window, sliced without one.
 //!
 //! The project carries its own models, placements, supports and walls, so the flags that
-//! shape a model are refused rather than quietly ignored. The printer, the resin, the
-//! layer height and how many layers are cut at once are what a flag may still change.
+//! shape a model are refused rather than quietly ignored. It names its printer and resin
+//! by id only, found among the user's profiles unless a flag names others (ADR 0261). The
+//! printer, the resin, the layer height and how many layers are cut at once are what a
+//! flag may still change.
 
 use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result, bail};
-use core_engine::project::{Chosen, Project, load};
-use core_engine::{Opening, open_plate};
-use printer_profiles::{Catalogue, MaterialProfile};
+use core_engine::project::{Manifest, load};
+use core_engine::{Machine, Opening, open_plate};
+use printer_profiles::{Catalogue, MaterialProfile, PrinterProfile};
 
 use crate::args::JobArgs;
 use crate::pipeline::raster_window;
-use crate::profiles::{self, Selection};
 use crate::sliced_file::now_unix_s;
 use crate::stage::{Part, Staged};
 
@@ -22,11 +23,15 @@ pub fn stage(path: &Path, job: &JobArgs) -> Result<Staged> {
     refuse_shaping_flags(job)?;
     let mut project =
         load(path).with_context(|| format!("cannot open the project {}", path.display()))?;
-    take_overrides(&mut project, job)?;
+    if let Some(height_mm) = job.slicing.layer_height {
+        project.manifest.slicing.layer_height_mm = height_mm;
+    }
+    let machine = machine(&project.manifest, job)?;
 
     let manifest = &project.manifest;
     let plate = open_plate(
         &project,
+        &machine,
         &Opening {
             plate: manifest.active_plate,
             raster_window: raster_window(&job.raster),
@@ -72,45 +77,69 @@ pub fn stage(path: &Path, job: &JobArgs) -> Result<Staged> {
     })
 }
 
-/// Puts the printer, resin and layer height the flags name in place of the project's, so
-/// the engine tunes the resin to the machine the same way the window does.
-fn take_overrides(project: &mut Project, job: &JobArgs) -> Result<()> {
+/// The printer and resin the flags name, or else the ones the project names by id, as
+/// the user's catalogue has them; the engine tunes the resin to the machine as the window does.
+fn machine(manifest: &Manifest, job: &JobArgs) -> Result<Machine> {
     let flags = &job.profile;
-    let manifest = &mut project.manifest;
-    if flags.profile.is_some() || flags.printer.is_some() {
-        let chosen = profiles::resolve(&Selection {
-            printer_id: flags.printer.as_deref(),
-            printer_path: flags.profile.as_deref(),
-            resin_id: None,
-            resin_path: None,
-        })?;
-        manifest.printer = chosen.printer.map(|profile| Chosen {
-            id: flags
-                .profile
-                .is_none()
-                .then(|| flags.printer.clone())
-                .flatten(),
-            profile,
-        });
-    }
-    if let Some(path) = &flags.material {
-        let profile = MaterialProfile::load(path)
-            .with_context(|| format!("cannot load {}", path.display()))?;
-        manifest.resin = Some(Chosen { id: None, profile });
-    } else if let Some(id) = &flags.resin {
-        let catalogue = Catalogue::load().context("cannot read the profile catalogue")?;
-        let entry = catalogue
-            .resin(id)
-            .context("run `encrust profiles list` to see the resins there are")?;
-        manifest.resin = Some(Chosen {
-            id: Some(id.clone()),
-            profile: entry.profile.clone(),
-        });
-    }
-    if let Some(height_mm) = job.slicing.layer_height {
-        manifest.slicing.layer_height_mm = height_mm;
-    }
-    Ok(())
+    let (printer, printer_id) = match (&flags.profile, &flags.printer) {
+        (Some(path), _) => {
+            let printer = PrinterProfile::load(path)
+                .with_context(|| format!("cannot load {}", path.display()))?;
+            (printer, None)
+        }
+        (None, Some(id)) => {
+            let why = format!("--printer {id} is not among your printers");
+            (printer_of(id, &why)?, Some(id.clone()))
+        }
+        (None, None) => {
+            let id = manifest
+                .printer
+                .as_deref()
+                .context("the project names no printer: pick one with --printer")?;
+            let why =
+                format!("the project's printer {id} is not among yours: pick one with --printer");
+            (printer_of(id, &why)?, Some(id.to_owned()))
+        }
+    };
+    let resin = match (&flags.material, &flags.resin) {
+        (Some(path), _) => MaterialProfile::load(path)
+            .with_context(|| format!("cannot load {}", path.display()))?,
+        (None, Some(id)) => resin_of(id, &format!("--resin {id} is not among your resins"))?,
+        (None, None) => {
+            let id = manifest
+                .resin
+                .as_deref()
+                .context("the project names no resin: pick one with --resin")?;
+            let why = format!("the project's resin {id} is not among yours: pick one with --resin");
+            resin_of(id, &why)?
+        }
+    };
+    Ok(Machine {
+        printer,
+        printer_id,
+        resin,
+    })
+}
+
+/// The user's catalogue, read only when an id has to be looked up in it.
+fn catalogue() -> Result<Catalogue> {
+    Catalogue::load().context("cannot read the profile catalogue")
+}
+
+fn printer_of(id: &str, why: &str) -> Result<PrinterProfile> {
+    let catalogue = catalogue()?;
+    let entry = catalogue.printer(id).with_context(|| {
+        format!("{why}; run `encrust profiles list` to see the printers there are")
+    })?;
+    Ok(entry.profile.clone())
+}
+
+fn resin_of(id: &str, why: &str) -> Result<MaterialProfile> {
+    let catalogue = catalogue()?;
+    let entry = catalogue.resin(id).with_context(|| {
+        format!("{why}; run `encrust profiles list` to see the resins there are")
+    })?;
+    Ok(entry.profile.clone())
 }
 
 /// The flags a project already answers for itself.
@@ -170,7 +199,15 @@ mod tests {
         let path = std::env::temp_dir().join("encrust-cli-hanging-passes.encrust");
         save(&path, &project).expect("the temp dir is writable");
 
-        let staged = stage(&path, &Flags::parse_from(["encrust"]).job).expect("it stages");
+        let fixtures = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures");
+        let flags = Flags::parse_from([
+            "encrust".into(),
+            "--profile".into(),
+            fixtures.join("project-panel.toml"),
+            "--material".into(),
+            fixtures.join("test-resin.toml"),
+        ]);
+        let staged = stage(&path, &flags.job).expect("it stages");
         assert!(staged.remove_islands);
         assert_eq!(staged.hanging_passes, 2, "as the window would slice it");
     }

@@ -245,7 +245,8 @@ Grouped by what the decision governs; the number is still the order it was taken
 | [0252](0252-a-brace-is-built-to-the-groups-it-ties.md) | Build a brace to the groups of the trunks it ties | Accepted |
 | [0253](0253-the-raft-is-the-models-not-a-groups.md) | Make the raft the model's and the plate's, not a group's | Accepted |
 | [0178](0178-a-project-names-its-cavities-and-the-engine-opens-it.md) | A project names its cavities, and the engine opens it into a plate | Superseded by 0191 |
-| [0191](0191-a-project-holds-the-plate-as-it-stands.md) | A project holds the plate as it stands, and opening it builds nothing | Accepted |
+| [0191](0191-a-project-holds-the-plate-as-it-stands.md) | A project holds the plate as it stands, and opening it builds nothing | Accepted; refusing every other version is superseded by 0261 |
+| [0261](0261-a-project-names-its-printer-and-resin-by-id.md) | Name a project's printer and resin by id, give the user's own ids a random tail, and picture the plate in the file | Accepted |
 
 ### Sliced-file formats
 

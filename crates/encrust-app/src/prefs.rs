@@ -12,6 +12,7 @@ use serde::{Deserialize, Serialize};
 
 use net_prusalink::Link;
 use net_sdcp::Printer;
+use printer_profiles::{Kind, Renamed};
 
 use crate::network::{Destination, Network, Prusa};
 use crate::panels::Window;
@@ -141,6 +142,25 @@ impl Preferences {
             inspector_w: Some(options.inspector_w),
             plate_w: Some(options.plate_w),
             ..self
+        }
+    }
+
+    /// Points every id kept here at where the catalogue moved its profile.
+    pub fn follow(&mut self, renamed: &[Renamed]) {
+        for moved in renamed {
+            let held = match moved.kind {
+                Kind::Printer => &mut self.printer,
+                Kind::Resin => &mut self.resin,
+                Kind::Support | Kind::Hollow | Kind::Drain => continue,
+            };
+            if held.as_deref() == Some(moved.from.as_str()) {
+                *held = Some(moved.to.clone());
+            }
+            if moved.kind == Kind::Printer
+                && let Some(destination) = self.bound.remove(&moved.from)
+            {
+                self.bound.insert(moved.to.clone(), destination);
+            }
         }
     }
 
@@ -305,6 +325,37 @@ mod tests {
             read.bound.get("elegoo-saturn-4-ultra"),
             Some(&Destination::Printer(key))
         );
+    }
+
+    #[test]
+    fn a_profile_moved_to_its_own_id_is_followed() {
+        let mut prefs = Preferences {
+            printer: Some("bench".to_owned()),
+            resin: Some("grey".to_owned()),
+            bound: BTreeMap::from([(
+                "bench".to_owned(),
+                Destination::Printer("sdcp:aa".to_owned()),
+            )]),
+            ..Preferences::default()
+        };
+        let moved = |kind, from: &str, to: &str| Renamed {
+            kind,
+            from: from.to_owned(),
+            to: to.to_owned(),
+        };
+
+        prefs.follow(&[
+            moved(Kind::Printer, "bench", "bench-0a1b2c3d"),
+            moved(Kind::Resin, "grey", "grey-4e5f6a7b"),
+        ]);
+
+        assert_eq!(prefs.printer.as_deref(), Some("bench-0a1b2c3d"));
+        assert_eq!(prefs.resin.as_deref(), Some("grey-4e5f6a7b"));
+        assert!(
+            prefs.bound.contains_key("bench-0a1b2c3d"),
+            "the machine stays bound"
+        );
+        assert!(!prefs.bound.contains_key("bench"));
     }
 
     /// Only the boards a profile was bound to: one that merely answered a scan announces

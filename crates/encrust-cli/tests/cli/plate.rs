@@ -181,8 +181,14 @@ fn project_fixture() -> PathBuf {
 #[test]
 fn a_project_slices_as_the_window_saved_it() {
     let out = output_file("project.goo");
+    let panel = project_fixture().with_file_name("project-panel.toml");
+    let resin = test_resin();
     let output = slice(&[
         project_fixture().to_str().unwrap(),
+        "--profile",
+        panel.to_str().unwrap(),
+        "--material",
+        resin.to_str().unwrap(),
         "-o",
         out.to_str().unwrap(),
         "--json",
@@ -198,6 +204,15 @@ fn a_project_slices_as_the_window_saved_it() {
         .expect("the file was written");
     assert!((3904.0..4300.0).contains(&cured), "cured {cured}");
     assert_eq!(report["models"][0]["input"].as_str(), Some("cube"));
+}
+
+/// The fixture was saved before a project named its printer by id alone (ADR 0261), and
+/// carried one with none: there is nothing here to slice it on.
+#[test]
+fn a_project_naming_no_printer_asks_for_one() {
+    let output = estimate(&[project_fixture().to_str().unwrap()]);
+    assert_eq!(output.status.code(), Some(1));
+    assert!(stderr(&output).contains("--printer"), "{}", stderr(&output));
 }
 
 #[test]

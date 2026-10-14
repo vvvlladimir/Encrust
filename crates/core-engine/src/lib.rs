@@ -20,6 +20,6 @@ mod run;
 pub use bake::{Baked, bake, parts};
 pub use cut::{Cutting, cut};
 pub use error::EngineError;
-pub use open::{Opening, open_plate};
+pub use open::{Machine, Opening, open_plate};
 pub use plate::{Model, Plate};
 pub use run::Run;

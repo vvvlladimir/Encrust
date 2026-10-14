@@ -106,7 +106,8 @@ out within 2 % of each other, so the build optimises for speed.
 
 ### Running
 
-`www/index.html` takes a project and downloads the file; the work runs in `www/worker.js`
+`www/index.html` takes a printer and a resin profile, then a project, and downloads the
+file — a project names its printer and resin by id only (ADR 0261); the work runs in `www/worker.js`
 because a page's own thread may not block. Serve `www/` over HTTP — a module does not load
 from `file://` — for instance `python3 -m http.server -d crates/web-engine/www`.
 
@@ -116,8 +117,10 @@ The same `slice_project` runs natively and in wasm, so the two numbers are one r
 targets:
 
 ```sh
-RAYON_NUM_THREADS=1 cargo run --release -p web-engine --example measure -- plate.encrust
-node crates/web-engine/www/measure.mjs crates/web-engine/www/pkg plate.encrust
+RAYON_NUM_THREADS=1 cargo run --release -p web-engine --example measure -- \
+  plate.encrust printer.toml resin.toml
+node crates/web-engine/www/measure.mjs crates/web-engine/www/pkg \
+  plate.encrust printer.toml resin.toml
 ```
 
 Natively, peak memory is the live bytes the allocator counts. In wasm it is the linear

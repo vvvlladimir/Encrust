@@ -7,6 +7,7 @@ mod error;
 mod exchange;
 mod exposure;
 mod material;
+mod own_ids;
 mod preset;
 mod printer;
 mod store;
@@ -18,6 +19,7 @@ pub use error::ProfileError;
 pub use exchange::unique_id;
 pub use exposure::{ASSUMED_PENETRATION_DEPTH_MM, exposure_for_mm};
 pub use material::{MaterialProfile, PriceUnit, PrinterTuning, ResinDetails, WaitMode, Waits};
+pub use own_ids::{Renamed, own_id};
 pub use preset::Preset;
 pub use printer::{
     AnycubicExtension, BuildVolume, Connection, Display, Firmware, OutputFormat, PhotonRevision,

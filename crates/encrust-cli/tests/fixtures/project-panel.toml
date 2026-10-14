@@ -1,0 +1,17 @@
+# The panel `cube.encrust` was saved on, which the project names by id only (ADR 0261):
+# 400 x 400 px over 80 mm, wide enough for the cube standing at (30, 30).
+
+name = "Test panel"
+manufacturer = "Test"
+output = "goo"
+
+[display]
+width_px = 400
+height_px = 400
+width_mm = 80.0
+height_mm = 80.0
+
+[build_volume]
+x = 80.0
+y = 80.0
+z = 80.0

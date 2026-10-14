@@ -7,4 +7,4 @@
 mod bindings;
 mod slice;
 
-pub use slice::{Sliced, WebError, slice_project};
+pub use slice::{Profiles, Sliced, WebError, slice_project};

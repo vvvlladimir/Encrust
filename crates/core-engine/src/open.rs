@@ -1,3 +1,4 @@
+use std::path::Path;
 use std::sync::Arc;
 
 use core_format::{ExposurePlan, ExposureRange};
@@ -5,7 +6,7 @@ use core_geometry::Bvh;
 use core_pipeline::{PanelOverrides, SlicedFormat};
 use core_raster::Shading;
 use core_slicer::WINDOW_LAYERS;
-use printer_profiles::{MaterialProfile, Raft, SupportProfile};
+use printer_profiles::{Catalogue, MaterialProfile, PrinterProfile, Raft, SupportProfile};
 
 use crate::project::{
     Manifest, ModelMeshes, ObjectState, Project, SlicingState, hollow_of, supports_of,
@@ -23,13 +24,52 @@ pub struct Opening {
     pub created_unix_s: u64,
 }
 
-/// One plate of `project` as a run takes it: the geometry the file holds, meshed and cut
-/// but never decided again (ADR 0191).
-pub fn open_plate(project: &Project, opening: &Opening) -> Result<Plate, EngineError> {
+/// The printer and resin a project is opened for, which the file names but does not
+/// carry (ADR 0261).
+#[derive(Debug, Clone)]
+pub struct Machine {
+    pub printer: PrinterProfile,
+    /// The catalogue id the printer is known by, which the resin's tuning is keyed on.
+    pub printer_id: Option<String>,
+    pub resin: MaterialProfile,
+}
+
+impl Machine {
+    /// The printer and resin `manifest` names, as `catalogue` has them.
+    pub fn named(manifest: &Manifest, catalogue: &Catalogue) -> Result<Self, EngineError> {
+        let printer_id = manifest.printer.as_deref().ok_or(EngineError::NoPrinter)?;
+        let resin_id = manifest.resin.as_deref().ok_or(EngineError::NoResin)?;
+        Ok(Self {
+            printer: catalogue.printer(printer_id)?.profile.clone(),
+            printer_id: Some(printer_id.to_owned()),
+            resin: catalogue.resin(resin_id)?.profile.clone(),
+        })
+    }
+
+    /// The printer and resin handed over as the TOML they are kept as, which is how a
+    /// caller with no catalogue of the user's names them.
+    pub fn from_toml(printer: &str, resin: &str) -> Result<Self, EngineError> {
+        Ok(Self {
+            printer: PrinterProfile::from_toml_str(printer, Path::new("printer.toml"))?,
+            printer_id: None,
+            resin: MaterialProfile::from_toml_str(resin, Path::new("resin.toml"))?,
+        })
+    }
+}
+
+/// One plate of `project` as a run takes it on `machine`: the geometry the file holds,
+/// meshed and cut but never decided again (ADR 0191).
+pub fn open_plate(
+    project: &Project,
+    machine: &Machine,
+    opening: &Opening,
+) -> Result<Plate, EngineError> {
     let manifest = &project.manifest;
-    let printer = manifest.printer.as_ref().ok_or(EngineError::NoPrinter)?;
-    let resin = manifest.resin.as_ref().ok_or(EngineError::NoResin)?;
-    let (material, bands) = tuned(&resin.profile, printer.id.as_deref(), &manifest.slicing);
+    let (material, bands) = tuned(
+        &machine.resin,
+        machine.printer_id.as_deref(),
+        &manifest.slicing,
+    );
 
     let table = support_table(manifest);
     let models = manifest
@@ -43,7 +83,7 @@ pub fn open_plate(project: &Project, opening: &Opening) -> Result<Plate, EngineE
     let slicing = &manifest.slicing;
     Ok(Plate {
         models,
-        printer: printer.profile.clone(),
+        printer: machine.printer.clone(),
         panel: PanelOverrides {
             shading: if slicing.anti_alias {
                 Shading::Coverage
@@ -65,7 +105,7 @@ pub fn open_plate(project: &Project, opening: &Opening) -> Result<Plate, EngineE
         exposure: ExposurePlan::new(bands),
         remove_islands: slicing.remove_islands,
         hanging_passes: slicing.hanging_passes,
-        format: SlicedFormat::from(slicing.format).at_revision_of(printer.profile.output),
+        format: SlicedFormat::from(slicing.format).at_revision_of(machine.printer.output),
         raster_window: opening.raster_window,
         created_unix_s: opening.created_unix_s,
     })

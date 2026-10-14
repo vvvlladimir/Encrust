@@ -1,6 +1,6 @@
 use wasm_bindgen::prelude::*;
 
-use crate::slice_project;
+use crate::{Profiles, slice_project};
 
 /// A sliced file handed to JavaScript: its bytes and its extension.
 #[wasm_bindgen]
@@ -23,12 +23,18 @@ impl SlicedFile {
     }
 }
 
-/// Slices the project in `project`. `created_unix_s` is `Date.now() / 1000`, because the
-/// module has no clock.
+/// Slices the project in `project` on the printer and resin given as the text of their
+/// TOML files. `created_unix_s` is `Date.now() / 1000`, because the module has no clock.
 #[wasm_bindgen]
-pub fn slice(project: &[u8], created_unix_s: f64) -> Result<SlicedFile, JsError> {
+pub fn slice(
+    project: &[u8],
+    printer: &str,
+    resin: &str,
+    created_unix_s: f64,
+) -> Result<SlicedFile, JsError> {
     let sliced = slice_project(
         project,
+        Profiles { printer, resin },
         // One thread, so one layer at a time; see ADR 0177.
         1,
         created_unix_s.max(0.0) as u64,

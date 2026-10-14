@@ -1,6 +1,7 @@
 //! The browser's run, natively: time and peak live bytes of `slice_project` on a project.
 //!
-//! `cargo run --release -p web-engine --example measure -- plate.encrust`, with
+//! `cargo run --release -p web-engine --example measure -- plate.encrust printer.toml
+//! resin.toml`, with
 //! `RAYON_NUM_THREADS=1` for the single thread the browser has. Peak memory is counted by
 //! the allocator, so it is what the run holds and not what the process was given; see
 //! `docs/design/web-build.md`.
@@ -10,7 +11,7 @@ use std::error::Error;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::time::{Instant, SystemTime, UNIX_EPOCH};
 
-use web_engine::slice_project;
+use web_engine::{Profiles, slice_project};
 
 static LIVE: AtomicUsize = AtomicUsize::new(0);
 static PEAK: AtomicUsize = AtomicUsize::new(0);
@@ -51,13 +52,20 @@ static ALLOCATOR: Counting = Counting;
 
 fn main() -> Result<(), Box<dyn Error>> {
     let mut args = std::env::args().skip(1);
-    let path = args.next().ok_or("usage: measure <project.encrust>")?;
+    let usage = "usage: measure <project.encrust> <printer.toml> <resin.toml>";
+    let path = args.next().ok_or(usage)?;
+    let printer = std::fs::read_to_string(args.next().ok_or(usage)?)?;
+    let resin = std::fs::read_to_string(args.next().ok_or(usage)?)?;
     let threads = rayon_threads();
 
     let project = std::fs::read(&path)?;
     let created_unix_s = SystemTime::now().duration_since(UNIX_EPOCH)?.as_secs();
     let started = Instant::now();
-    let sliced = slice_project(&project, threads, created_unix_s)?;
+    let profiles = Profiles {
+        printer: &printer,
+        resin: &resin,
+    };
+    let sliced = slice_project(&project, profiles, threads, created_unix_s)?;
     let seconds = started.elapsed().as_secs_f64();
 
     println!(

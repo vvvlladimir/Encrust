@@ -13,9 +13,15 @@ doctest = false
 
 [dependencies]
 directories.workspace = true
+# An own profile's id carries a random tail; see docs/decisions/0261.
+getrandom = { workspace = true, features = ["std"] }
 serde.workspace = true
 thiserror.workspace = true
 toml.workspace = true
+
+# `web-engine` builds for a browser without `encrust-web` above it to pick the source.
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+getrandom = { workspace = true, features = ["wasm_js"] }
 
 [lints]
 workspace = true

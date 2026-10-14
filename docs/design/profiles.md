@@ -37,6 +37,11 @@ The user's own directory has the same shape:
 names. A file there whose stem matches a shipped id replaces it; a new stem adds a
 profile. Nothing is merged inside a file: the user's file is the whole profile.
 
+A printer or resin the user makes, copies or imports is named for itself with a random
+tail, `my-saturn-7f3a9c2e`, so that a project naming it never lands on somebody else's
+profile of the same name. The window gives every bare one such a tail once, at start-up,
+and moves the resins' tuning and its own preferences after it (ADR 0261).
+
 That directory is also what the user **has**: the window lists a profile only once it is
 there, and the shipped catalogue is the library it is installed from, so a first run has
 no printer and no resin (ADR 0158). The CLI resolves any catalogue id, installed or not.

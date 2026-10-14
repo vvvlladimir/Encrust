@@ -8,7 +8,7 @@ use serde::de::DeserializeOwned;
 
 use crate::{
     Catalogue, Kind, MaterialProfile, Preset, PrinterProfile, PrinterTuning, ProfileError,
-    SupportProfile,
+    SupportProfile, own_id,
 };
 
 impl Catalogue {
@@ -71,7 +71,7 @@ impl Catalogue {
             let wanted = format!("{} {name}", profile.manufacturer);
             self.printers().any(|entry| label(&entry.profile) == wanted)
         });
-        let id = unique_id(&label(&profile), |id| self.printer(id).is_ok());
+        let id = own_id(&label(&profile), |id| self.printer(id).is_ok())?;
         self.save_printer(&id, &profile)?;
         Ok(id)
     }
@@ -87,7 +87,7 @@ impl Catalogue {
         if let Some(printer) = printer {
             set_up_on(&mut resin, printer);
         }
-        let id = unique_id(&resin.name, |id| self.resin(id).is_ok());
+        let id = own_id(&resin.name, |id| self.resin(id).is_ok())?;
         self.save_resin(&id, &resin)?;
         Ok(id)
     }
@@ -129,7 +129,7 @@ pub fn unique_id(name: &str, taken: impl Fn(&str) -> bool) -> String {
 }
 
 /// The file stem a name makes: lower-case letters and digits, one dash between words.
-fn slug(name: &str) -> String {
+pub(crate) fn slug(name: &str) -> String {
     let mut stem = String::new();
     for c in name.chars() {
         if c.is_ascii_alphanumeric() {

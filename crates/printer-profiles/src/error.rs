@@ -43,6 +43,12 @@ pub enum ProfileError {
     #[error("this platform has nowhere to keep your profiles; set {variable}")]
     NoUserDir { variable: &'static str },
 
+    #[error("this platform gave no randomness to name a profile with")]
+    NoRandomness {
+        #[source]
+        source: getrandom::Error,
+    },
+
     #[error("{id} is not a usable profile name: use letters, digits and dashes")]
     BadId { id: String },
 
