@@ -230,11 +230,8 @@ pub struct Hollowed {
     pub coarsened: bool,
 }
 
-/// The field a model's cavity is cut from, kept so that its blockers and infill can change
-/// without building it again: the build is nearly all of a run, and those are not in it.
-///
-/// It stands in millimetres of the plate under the shape it was built at, and remembers the
-/// wall, mode and precision it was asked for, so [`carve`] cannot cut it at others.
+/// The field a model's cavity is cut from, kept so its blockers and infill can change without
+/// building it again; [`carve`] cuts it only at the shape and settings it was built for.
 #[derive(Debug, Clone)]
 pub struct CavityField {
     offset: Sdf,

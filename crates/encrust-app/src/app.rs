@@ -415,7 +415,7 @@ impl eframe::App for SlicerApp {
                 .poll(&mut self.doc.scene, &mut self.machine.status)
             | crate::panels::animate_preview(ui.ctx(), &mut self.machine.preview);
         self.forget_what_an_old_check_found();
-        if self.machine.slicing.job.is_some() {
+        if self.machine.slicing.job.is_some() || self.machine.preview.is_slicing() {
             self.tools.hollow.make_way();
         }
         if working | self.run_the_cut_up(ui.ctx()) {

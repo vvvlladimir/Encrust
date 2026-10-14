@@ -111,7 +111,8 @@ object, the word, and the shadow last.
 Models are drawn indexed and flat-shaded. Averaged normals would round off exactly the
 facets a sliceable model is made of, so the normal is read `flat`, off a face's first
 corner alone, and every face is turned to start on a corner no other face starts on; the
-other two are shared. A closed mesh has about half as many vertices as faces, so it lays
+other two are shared. GL reads a flat input off the last corner instead, and naga cannot
+write `flat, first` for it, so on that backend every face is turned one step further. A closed mesh has about half as many vertices as faces, so it lays
 out one vertex a face plus three indices: 36 bytes a face against the 72 a corner per face
 took. The normal is not read off the screen-space derivatives of the position instead,
 which would halve it again: on the machine this was built on the same frame came out

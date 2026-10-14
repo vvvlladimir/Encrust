@@ -36,19 +36,8 @@ impl Baked {
     }
 }
 
-/// Bakes every model and the supports under it in plate coordinates, ready to slice.
-/// `None` when nothing handed over has any geometry.
-///
-/// Placement is applied here rather than layer by layer, and two models that overlap are
-/// one solid on the plate. A hollowed model goes in as its shell — the outer surface with
-/// the cavity wound the other way — because the rasteriser's positive winding rule is what
-/// takes the cavity out; see `docs/decisions/0059`. Supports are already in plate
-/// coordinates and go in as they are. Copies of one model are held once and cut once
-/// (ADR 0258).
-///
-/// Each model is scaled about its own footprint and about the plate, not about the plate's
-/// contents: a part shrinks towards itself and is held at the plate while it prints, so a
-/// correction must not move its neighbours; see `docs/design/compensation.md`.
+/// Bakes every model and the supports under it in plate coordinates, ready to slice, or
+/// `None` when nothing has geometry; see ADRs 0059, 0258 and `docs/design/compensation.md`.
 pub fn bake(models: &[Model], compensation: &Compensation) -> Option<Baked> {
     let mut solid = Solid::default();
     let mut extent = Extent::default();

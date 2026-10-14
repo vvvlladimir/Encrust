@@ -6,7 +6,7 @@ use std::ops::Range;
 use bytemuck::Pod;
 use core_geometry::Mesh;
 
-use crate::render::vertex::{ModelVertex, indexed_vertices};
+use crate::render::vertex::{ModelVertex, indexed_vertices, lead_last};
 
 use super::*;
 
@@ -69,6 +69,8 @@ pub(super) fn pieces(device: &wgpu::Device, mesh: &Mesh, splits: &[usize]) -> Ve
     // A piece whose faces share no corner is the largest its vertices can come to.
     let ceiling = device.limits().max_buffer_size as usize / size_of::<ModelVertex>();
     let faces_per_piece = (ceiling / 3).max(1);
+    // GL reads a flat input off a face's last corner and wgpu cannot ask it for the first.
+    let leads_last = device.adapter_info().backend == wgpu::Backend::Gl;
 
     let mut first = 0;
     let mut pieces = Vec::new();
@@ -80,7 +82,10 @@ pub(super) fn pieces(device: &wgpu::Device, mesh: &Mesh, splits: &[usize]) -> Ve
             .filter(|split| (first + 1..ceiling).contains(split))
             .min()
             .unwrap_or(ceiling);
-        let (vertices, indices) = indexed_vertices(mesh, first..last);
+        let (vertices, mut indices) = indexed_vertices(mesh, first..last);
+        if leads_last {
+            lead_last(&mut indices);
+        }
         if !indices.is_empty() {
             pieces.push(Piece {
                 vertices: upload(device, "viewport_mesh", &vertices),

@@ -270,6 +270,11 @@ impl Preview {
         Some(self.layer_z().filter(|_| self.layer + 1 < count))
     }
 
+    /// Whether a stack is being cut or measured, either of which slices the whole plate.
+    pub fn is_slicing(&self) -> bool {
+        self.job.is_some() || self.measuring.is_some()
+    }
+
     pub fn is_playing(&self) -> bool {
         self.playing && self.layer_count() > 0
     }

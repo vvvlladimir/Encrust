@@ -59,6 +59,14 @@ pub fn indexed_vertices(mesh: &Mesh, faces: Range<usize>) -> (Vec<ModelVertex>, 
     (corners.vertices, indices)
 }
 
+/// Turns every face one step round so the corner it leads with comes last, for a card
+/// that reads a flat input off a face's last corner, as GL does.
+pub fn lead_last(indices: &mut [u32]) {
+    for face in indices.as_chunks_mut::<3>().0 {
+        face.rotate_left(1);
+    }
+}
+
 /// The corners of one range laid out so far, and which of them already lead a face.
 struct Corners {
     local: Vec<u32>,
@@ -376,6 +384,25 @@ mod tests {
                 turns.contains(&got),
                 "a face is turned round, never flipped"
             );
+        }
+    }
+
+    #[test]
+    fn a_face_led_last_ends_on_its_own_normal_and_keeps_its_winding() {
+        let square = Mesh::new(
+            vec![Vec3::ZERO, Vec3::X, Vec3::new(1.0, 1.0, 0.0), Vec3::Y],
+            vec![[0, 1, 2], [0, 2, 3]],
+        );
+        let (vertices, mut indices) = indexed_vertices(&square, 0..2);
+        let first = indices.clone();
+        lead_last(&mut indices);
+        for (turned, original) in indices.chunks(3).zip(first.chunks(3)) {
+            assert_eq!(
+                turned,
+                [original[1], original[2], original[0]],
+                "turned, not flipped"
+            );
+            assert_eq!(vertices[turned[2] as usize].normal, [0.0, 0.0, 1.0]);
         }
     }
 

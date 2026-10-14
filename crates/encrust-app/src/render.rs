@@ -24,7 +24,6 @@ use gpu::ViewportResources;
 
 /// Asks the device for the card's own clock over a pass where the adapter has one: the
 /// light copies drawn while the camera moves are budgeted by it.
-#[cfg(not(target_arch = "wasm32"))]
 pub fn ask_for_timestamps(options: &mut egui_wgpu::WgpuConfiguration) {
     let egui_wgpu::WgpuSetup::CreateNew(create_new) = &mut options.wgpu_setup else {
         return;

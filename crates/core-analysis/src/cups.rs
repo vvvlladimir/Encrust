@@ -141,9 +141,8 @@ fn row_range<T>(sorted: &[T], row: u32, row_of: impl Fn(&T) -> u32) -> std::ops:
 }
 
 impl Holes {
-    /// The dark runs between two lit ones of a layer's `spans`, in reading order on a
-    /// panel `height` rows tall, grouped into holes, with the regions that reach the
-    /// panel's edge left out: those are open air.
+    /// The dark runs between lit ones of a layer's `spans` on a panel `height` rows tall, in
+    /// reading order and grouped into holes, leaving out open air reaching the panel's edge.
     pub(crate) fn of(spans: &[Span], height: u32) -> Self {
         let gaps = gaps_between(spans);
         let rows = height.max(spans.last().map_or(0, |span| span.row + 1));
@@ -190,9 +189,8 @@ fn gaps_between(spans: &[Span]) -> Vec<Gap> {
         .collect()
 }
 
-/// Where each row's entries start in a list ordered by row, with where the last one ends
-/// after them: row `r` is `starts[r]..starts[r + 1]`. One pass, where a search per gap
-/// was most of what a plate of many parts spent here.
+/// Where each row's entries start in a list ordered by row, and where the last one ends:
+/// row `r` is `starts[r]..starts[r + 1]`.
 fn row_starts(rows: impl Iterator<Item = u32>, height: u32) -> Vec<usize> {
     let mut starts = vec![0; height as usize + 1];
     for row in rows {

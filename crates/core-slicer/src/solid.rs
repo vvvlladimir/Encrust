@@ -19,9 +19,8 @@ impl Source for Mesh {
     }
 }
 
-/// A plate as it is cut: what stands on it once, as one mesh, and what stands on it
-/// several times over, cut once and laid down again at each copy. See
-/// `docs/design/slicing.md`.
+/// A plate as it is cut: what stands on it once, as one mesh, and what stands on it several
+/// times over, cut once and laid down at each copy (`docs/design/slicing.md`).
 #[derive(Debug, Clone, Default, PartialEq)]
 pub struct Solid {
     pub mesh: Mesh,
@@ -47,6 +46,7 @@ impl From<Mesh> for Solid {
 }
 
 impl Solid {
+    /// Whether nothing on the plate has a face to cut.
     pub fn is_empty(&self) -> bool {
         self.mesh.is_empty()
             && self

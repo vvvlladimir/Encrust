@@ -27,11 +27,7 @@ const CARRY: i32 = 2;
 const FAR_CARRY: i32 = 4;
 
 /// How much coarser than `grid` the carrier of a band `band_mm` wide around the surface
-/// `iso_mm` off the mesh is.
-///
-/// [`FAR_CARRY`] where the whole band lies past what that carrier is trusted for, since
-/// otherwise every voxel of it would fall back on the hierarchy and cost more than the
-/// carrier saved; [`CARRY`] everywhere else. See `docs/design/volume.md`.
+/// `iso_mm` off the mesh is: [`FAR_CARRY`] or [`CARRY`], see `docs/design/volume.md`.
 pub(crate) fn carry_for(grid: VoxelGrid, band_mm: Scalar, iso_mm: Scalar) -> i32 {
     let trusted_mm = TRUST_VOXELS * FAR_CARRY as Scalar * grid.voxel_mm;
     if trusted_mm < iso_mm.abs() - band_mm {
