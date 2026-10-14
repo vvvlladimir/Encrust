@@ -32,7 +32,8 @@ Discovery is shared with version 1; the two sections after it are not.
 Broadcast the seven bytes `M99999`. Every board on the segment replies with one datagram.
 The probe goes to each interface's own broadcast address, `192.168.1.255` on a `/24`, and
 only then to `255.255.255.255`: macOS refuses the limited broadcast with `EHOSTUNREACH`
-(ADR 0262).
+(ADR 0262). Its Local Network privacy setting passes that broadcast but refuses the control
+socket with the same error, so a board can be found and still not reached.
 Version 3 puts the fields straight under `Data`:
 
 ```json

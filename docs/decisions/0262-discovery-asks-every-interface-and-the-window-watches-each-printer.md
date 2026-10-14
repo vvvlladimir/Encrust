@@ -33,6 +33,12 @@ board pushes that on the socket anyway.
 - `State` gains the layer, the time printed and left (`CurrentTicks` and `TotalTicks`, in
   ms by the specification), the temperatures, and whether the machine is busy. A busy
   bound machine greys out *Slice and send*.
+- macOS lets a program onto the local network only once it is allowed under Local
+  Network, and a binary started from a terminal other than Terminal.app takes that
+  terminal's permission, so it is often never asked. The installers' `Info.plist` therefore
+  states `NSLocalNetworkUsageDescription`, and `cargo xtask app` builds the window as
+  `Encrust Dev.app`: id `app.encrust.dev`, signed ad hoc, so macOS asks about it under its
+  own name. The window's advice names whichever case it is running in.
 - The list in view is scanned again every 30 s. The Export tool shows the bound machine
   alone when there is one. Otherwise it lists every machine as a card, and a click binds
   the printer profile in hand to that machine.
@@ -46,6 +52,10 @@ Each listed version 3 board holds one of its few control connections while the w
 is open; the vendor's boards are reported to take about four. A send opens one more
 beside it. Each version 1 board is probed every period. If boards start refusing a
 second connection, the watch has to pause while a file goes up.
+
+An ad hoc signature changes with every build, so macOS may ask again after a rebuild of
+the development bundle. The installers are not code-signed either (ADR 0160), and a
+signed release would make the permission stick across updates.
 
 `TotalTicks` units come from the specification, not from a board seen mid-print. If a
 board reports seconds, the time left will read a thousand times too short, and the
@@ -72,4 +82,5 @@ bite, not less.
 ### The option that won, and what it costs
 
 A new dependency, a thread and a socket per printer for as long as the window is open,
-and a repaint every second while anything is watched.
+a repaint every second while anything is watched, and on macOS a development window that
+reaches printers only when run as a bundle or from Terminal.app.

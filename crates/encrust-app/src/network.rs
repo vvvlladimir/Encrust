@@ -79,10 +79,30 @@ impl Trouble {
 
     /// What the user can do about it, when there is something.
     pub fn advice(&self) -> Option<&'static str> {
-        (self.unreachable && cfg!(target_os = "macos")).then_some(
+        advice(self.unreachable && cfg!(target_os = "macos"), *IN_A_BUNDLE)
+    }
+}
+
+/// Whether the window runs from an app bundle, which macOS asks about the local network
+/// itself, rather than as a binary that takes the permission of whatever started it.
+static IN_A_BUNDLE: std::sync::LazyLock<bool> = std::sync::LazyLock::new(|| {
+    std::env::current_exe().is_ok_and(|exe| exe.to_string_lossy().contains(".app/Contents/MacOS/"))
+});
+
+/// What to tell a user whose printer has no route, when macOS may be the one `blocked`.
+fn advice(blocked: bool, bundled: bool) -> Option<&'static str> {
+    match (blocked, bundled) {
+        (false, _) => None,
+        (true, true) => Some(
             "If it is switched on, macOS may be keeping Encrust off the local network: allow \
              it under System Settings, Privacy & Security, Local Network.",
-        )
+        ),
+        (true, false) => Some(
+            "If it is switched on, macOS may be keeping this window off the local network. \
+             Started from a terminal, it has that terminal's permission: start it from \
+             Terminal.app, allow your terminal or editor under System Settings, Privacy & \
+             Security, Local Network, or run it as an app with `cargo xtask app`.",
+        ),
     }
 }
 
@@ -1004,13 +1024,24 @@ mod tests {
 
     #[test]
     fn only_no_route_on_macos_is_blamed_on_the_privacy_setting() {
-        let mut trouble = Trouble {
+        let trouble = Trouble {
             message: String::new(),
             unreachable: true,
         };
         assert_eq!(trouble.advice().is_some(), cfg!(target_os = "macos"));
-        trouble.unreachable = false;
-        assert_eq!(trouble.advice(), None);
+        assert_eq!(advice(false, true), None);
+        assert_eq!(advice(false, false), None);
+    }
+
+    #[test]
+    fn a_window_started_from_a_terminal_is_told_whose_permission_it_has() {
+        let bare = advice(true, false).expect("a blocked window is told what to do");
+        assert!(bare.contains("terminal"), "{bare}");
+        let bundled = advice(true, true).expect("a blocked app is told what to do");
+        assert!(
+            !bundled.contains("terminal"),
+            "an app is asked about itself: {bundled}"
+        );
     }
 
     #[test]

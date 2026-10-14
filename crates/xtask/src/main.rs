@@ -1,6 +1,7 @@
 //! Repository tasks run by hand. What `gen-profiles` reads and may invent is in
 //! `docs/design/profiles.md`; how `web` builds the browser window, `docs/design/web-build.md`.
 
+mod app;
 mod arch;
 mod containers;
 mod cross_check;
@@ -33,6 +34,8 @@ enum Command {
     Arch(arch::Args),
     /// Writes the terms of every library a release ships, from the lockfile.
     Licenses(licenses::Args),
+    /// Builds the window as a macOS app bundle macOS lets onto the local network, and opens it.
+    App(app::Args),
 }
 
 fn main() -> Result<()> {
@@ -42,5 +45,6 @@ fn main() -> Result<()> {
         Command::Man(args) => man::run(&args),
         Command::Arch(args) => arch::run(&args),
         Command::Licenses(args) => licenses::run(&args),
+        Command::App(args) => app::run(&args),
     }
 }
