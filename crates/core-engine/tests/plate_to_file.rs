@@ -505,3 +505,73 @@ fn a_copy_standing_higher_is_a_body_of_its_own() {
     assert!(baked.solid.repeated.is_empty());
     assert_eq!(baked.solid.mesh.faces.len(), 24);
 }
+
+/// The cured volume of the 4 x 4 x 2 mm box, in four 0.5 mm layers with one bottom layer,
+/// printed with `compensation`.
+fn cured_mm3(compensation: Compensation) -> f32 {
+    let mut plate = plate(SlicedFormat::Goo);
+    plate.material = MaterialProfile {
+        bottom_layers: 1,
+        compensation,
+        ..MaterialProfile::default()
+    };
+    plate.cutting.compensation = compensation;
+    Run::of(&plate)
+        .expect("the box is a run")
+        .measure(&mut ())
+        .expect("the stack measures")
+        .expect("nothing cancelled it")
+        .volume_mm3()
+}
+
+#[test]
+fn every_compensation_reaches_what_the_file_cures() {
+    // Each 0.2 mm offset is one pixel of the panel, so the masks cure it exactly: a layer
+    // of 4 x 4 mm drawn 0.2 mm in a side is 3.6 x 3.6 mm, 1.52 mm³ less at 0.5 mm.
+    let elephant = Compensation {
+        bottom_outer_offset_mm: -0.2,
+        ..Compensation::default()
+    };
+    let walls = Compensation {
+        outer_offset_mm: -0.2,
+        bottom_tolerance_on: false,
+        ..elephant
+    };
+    let wider = Compensation {
+        shrink_x_pct: 110.0,
+        ..Compensation::default()
+    };
+    let cases = [
+        (Compensation::default(), 32.0, "nothing moves"),
+        (elephant, 32.0 - 1.52, "the bottom layer is drawn smaller"),
+        (
+            Compensation {
+                bottom_tolerance_on: false,
+                ..elephant
+            },
+            32.0,
+            "a switched-off bottom block moves nothing",
+        ),
+        (
+            walls,
+            32.0 - 3.0 * 1.52,
+            "the three upper layers move alone",
+        ),
+        (wider, 4.4 * 4.0 * 2.0, "ten percent wider along X"),
+        (
+            Compensation {
+                shrinkage_on: false,
+                ..wider
+            },
+            32.0,
+            "switched-off shrinkage scales nothing",
+        ),
+    ];
+    for (compensation, expected, why) in cases {
+        let cured = cured_mm3(compensation);
+        assert!(
+            (cured - expected).abs() < 1e-3,
+            "{why}: expected {expected} mm³, cured {cured}"
+        );
+    }
+}

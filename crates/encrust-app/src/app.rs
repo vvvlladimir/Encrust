@@ -308,6 +308,7 @@ impl SlicerApp {
             self.machine.slicing.chosen(),
             frame,
         );
+        self.machine.settings.observe(frame);
         self.remember_choices(frame.settled && !frame.typing);
     }
 

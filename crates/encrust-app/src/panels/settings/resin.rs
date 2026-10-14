@@ -47,19 +47,11 @@ pub fn form(ui: &mut egui::Ui, window: &mut Window) {
         form_card(ui, "Waits", |ui| waits(ui, values));
         form_card(ui, "Motion", |ui| motion(ui, values));
     }
-    let pixel_mm = window
-        .machine
-        .settings
-        .printer
-        .as_ref()
-        .map_or(0.0, |printer| {
-            printer.values.display.width_mm / printer.values.display.width_px as f32
-        });
     if let Some(resin) = window.machine.settings.resin.as_mut() {
         let values = &mut resin.draft.values.compensation;
         let calculators = &mut window.machine.settings.calculators;
         form_card(ui, "Compensation", |ui| {
-            compensation::rows(ui, values, calculators, pixel_mm)
+            compensation::rows(ui, values, calculators)
         });
     }
 

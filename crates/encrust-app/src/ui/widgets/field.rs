@@ -55,6 +55,23 @@ pub fn number_field<N: Numeric>(
     boxed_field(ui, &field, value, speed, range, decimals)
 }
 
+/// A `number_field` with its unit drawn inside the box, for a row of several boxes that
+/// share one label.
+#[allow(clippy::too_many_arguments)]
+pub fn unit_field<N: Numeric>(
+    ui: &mut Ui,
+    name: &str,
+    value: &mut N,
+    unit: &str,
+    speed: f64,
+    range: RangeInclusive<N>,
+    decimals: Option<usize>,
+    width: f32,
+) -> bool {
+    let field = Field { name, unit, width };
+    boxed_field(ui, &field, value, speed, range, decimals)
+}
+
 /// What a box is called, the unit drawn inside it, and its width in points.
 struct Field<'a> {
     name: &'a str,

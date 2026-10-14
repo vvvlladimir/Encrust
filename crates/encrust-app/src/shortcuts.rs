@@ -450,18 +450,24 @@ pub fn act(window: &mut Window, action: Action) {
         }
         return;
     }
-    // The Machine and resin window is modal as well: it holds the keyboard, and Esc
-    // takes down whatever stands over it first.
+    // The Machine and resin window is modal as well: it holds the keyboard, Esc takes
+    // down whatever stands over it first, and undo reaches the form in view.
     if window.machine.settings.machines {
-        if matches!(action, Action::Deselect) {
-            leave_machines(window.machine);
+        match action {
+            Action::Deselect => leave_machines(window.machine),
+            Action::Undo => _ = window.machine.settings.undo(),
+            Action::Redo => _ = window.machine.settings.redo(),
+            _ => {}
         }
         return;
     }
     // So is the Settings window, and Esc takes down the question over it first.
     if window.machine.settings.open {
-        if matches!(action, Action::Deselect) {
-            leave_settings(window.machine);
+        match action {
+            Action::Deselect => leave_settings(window.machine),
+            Action::Undo => _ = window.machine.settings.undo(),
+            Action::Redo => _ = window.machine.settings.redo(),
+            _ => {}
         }
         return;
     }
