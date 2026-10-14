@@ -4,6 +4,9 @@ How the window learns about a release and replaces itself with it. Why it is bui
 [ADR 0172](../decisions/0172-the-window-offers-a-signed-update-and-never-applies-one.md).
 The code is `crates/encrust-app/src/updates/`.
 
+The browser build never looks at the feed, whatever ADR 0213 expected: a page loads the latest
+release each time it opens, and `ureq` panics on wasm reading a clock it does not have.
+
 ## The feed
 
 `release.yml`'s `feed` job uploads `latest.json` to every release:

@@ -145,6 +145,11 @@ impl Updates {
     }
 
     fn start_check(&mut self, asked: bool) {
+        // A page loads the latest release every time it is opened, and `ureq` reads a clock
+        // wasm does not have: the look panicked and took the window down with it.
+        if cfg!(target_arch = "wasm32") {
+            return;
+        }
         self.prefs.checked_at_s = Some(now_s());
         let (sender, reply) = mpsc::channel();
         crate::job::spawn(move || {

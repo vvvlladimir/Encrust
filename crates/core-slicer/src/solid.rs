@@ -63,15 +63,7 @@ impl Solid {
         }
         let mut merged = self.mesh.clone();
         for repeated in &self.repeated {
-            let offset = merged.vertices.len() as u32;
-            merged.vertices.extend_from_slice(&repeated.mesh.vertices);
-            merged.faces.extend(
-                repeated
-                    .mesh
-                    .faces
-                    .iter()
-                    .map(|[a, b, c]| [a + offset, b + offset, c + offset]),
-            );
+            merged.append(&repeated.mesh);
         }
         Cow::Owned(merged)
     }

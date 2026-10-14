@@ -50,9 +50,9 @@ pub fn bake(models: &[Model], compensation: &Compensation) -> Option<Baked> {
                 if solid.mesh.vertices.is_empty() {
                     solid.mesh = part.material;
                 } else {
-                    append(&mut solid.mesh, &part.material);
+                    solid.mesh.append(&part.material);
                 }
-                append(&mut solid.mesh, &part.cuts);
+                solid.mesh.append(&part.cuts);
             }
             [first, rest @ ..] => repeat(first, rest, compensation, &mut solid, &mut extent),
             [] => {}
@@ -153,7 +153,7 @@ fn repeat(
     corrected(&mut body.material, at_first);
     corrected(&mut body.cuts, at_first);
     extent.take(&body.material);
-    append(&mut body.material, &body.cuts);
+    body.material.append(&body.cuts);
     solid.repeated.push(Repeated {
         mesh: body.material,
         offsets_mm,
@@ -169,7 +169,7 @@ fn add_supports(model: &Model, matrix: Option<Mat4>, solid: &mut Solid, extent: 
         let mut supports = supports.as_ref().clone();
         corrected(&mut supports, matrix);
         extent.take(&supports);
-        append(&mut solid.mesh, &supports);
+        solid.mesh.append(&supports);
     }
 }
 
@@ -196,7 +196,7 @@ fn placed(model: &Model) -> Placed {
         transform_mesh(&model.mesh, model.transform)
     };
     for supports in &model.supports {
-        append(&mut material, supports);
+        material.append(supports);
     }
     let cuts = match &model.cuts {
         Some(cuts) => transform_mesh(cuts, model.transform),
@@ -261,14 +261,4 @@ fn corrected(mesh: &mut Mesh, matrix: Option<Mat4>) {
             *vertex = matrix.transform_point3(*vertex);
         }
     }
-}
-
-fn append(merged: &mut Mesh, mesh: &Mesh) {
-    let offset = merged.vertices.len() as u32;
-    merged.vertices.extend_from_slice(&mesh.vertices);
-    merged.faces.extend(
-        mesh.faces
-            .iter()
-            .map(|[a, b, c]| [a + offset, b + offset, c + offset]),
-    );
 }
