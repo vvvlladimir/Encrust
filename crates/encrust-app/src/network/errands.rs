@@ -3,7 +3,7 @@
 //! own and answers once; see `docs/decisions/0263`.
 
 use std::collections::BTreeMap;
-use std::sync::mpsc::{self, Receiver};
+use std::sync::mpsc::{self, Receiver, TryRecvError};
 
 use printer_link::{Command, State, Task, Wire};
 
@@ -117,8 +117,13 @@ impl Out {
 
     /// Files the answer into `extras` once it is in. Answers whether it was.
     pub(super) fn take(&self, extras: &mut Extras) -> bool {
-        let Ok(answer) = self.answer.try_recv() else {
-            return false;
+        let answer = match self.answer.try_recv() {
+            Ok(answer) => answer,
+            Err(TryRecvError::Empty) => return false,
+            Err(TryRecvError::Disconnected) => Err(Trouble {
+                message: "the errand ended without an answer".to_owned(),
+                unreachable: false,
+            }),
         };
         if self.holds_the_buttons() {
             extras.doing = None;
@@ -265,5 +270,24 @@ mod tests {
         assert!(out.take(&mut extras));
         assert_eq!(extras.doing, None, "the buttons come back");
         assert_eq!(extras.trouble, Some(trouble));
+    }
+
+    /// A thread that panicked drops its sender without a word.
+    #[test]
+    fn an_errand_whose_thread_died_gives_the_buttons_back() {
+        let (sender, answer) = mpsc::channel::<Result<Heard, Trouble>>();
+        let out = Out {
+            key: "sdcp:aa".to_owned(),
+            errand: Errand::Control(Command::Stop),
+            answer,
+        };
+        let mut extras = Extras {
+            doing: Some(out.doing()),
+            ..Extras::default()
+        };
+        drop(sender);
+        assert!(out.take(&mut extras), "a dead errand is not waited on");
+        assert_eq!(extras.doing, None);
+        assert!(extras.trouble.is_some());
     }
 }

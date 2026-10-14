@@ -31,8 +31,8 @@ const WATCH_PERIOD: Duration = Duration::from_secs(3);
 /// How long a list of printers in view goes before the network is asked again, in seconds.
 const RESCAN_S: f64 = 30.0;
 
-/// Whether a machine answered the last scan. It is the last answer rather than live
-/// state, for the reason `docs/decisions/0157` gives.
+/// Whether a machine answers: what its watch heard last, else the last scan's word
+/// (`docs/decisions/0262`).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Reach {
     /// It answered the last scan.
@@ -493,7 +493,6 @@ impl Network {
             let known = |id: &str| extras.is_some_and(|extras| extras.pictures.contains_key(id));
             if let Some(Reading::State(state)) = self.reading(&target)
                 && let Some(id) = state.job_id.as_deref()
-                && state.file.is_some()
                 && !known(id)
             {
                 let id = id.to_owned();
@@ -581,13 +580,12 @@ impl Network {
         let (sender, receiver) = mpsc::channel();
         let mut manual = self.manual.clone();
         // A listed board is asked at its address too, which reaches it where a broadcast
-        // does not cross.
+        // does not cross; one known to have moved is asked where it went.
         if self.speaks == Connection::Sdcp {
-            for address in self
-                .listed
-                .iter()
-                .filter_map(|m| m.address.trim().parse().ok())
-            {
+            for address in self.listed.iter().filter_map(|m| match self.resolve(m) {
+                Some(Target::Sdcp(board)) => Some(board.address),
+                _ => m.address.trim().parse().ok(),
+            }) {
                 if !manual.contains(&address) {
                     manual.push(address);
                 }
@@ -625,7 +623,9 @@ impl Network {
     /// Forgets a Prusa machine's login.
     pub fn forget_prusa(&mut self, host: &str) {
         self.prusa.retain(|known| known.link.host != host);
-        self.watch_all();
+        if !self.hold {
+            self.watch_all();
+        }
     }
 
     /// Sends a file the window has just written, and deletes it after when it was
@@ -1366,6 +1366,31 @@ mod tests {
         assert!(
             matches!(&wanted[..], [(_, Errand::Picture { id, task: Some(_) })] if id == "3add"),
             "only the remembered print is still missing: {wanted:?}"
+        );
+    }
+
+    /// A Prusa machine's status names no file, only the job's id.
+    #[test]
+    fn a_prusa_print_wants_its_picture_without_naming_its_file() {
+        let mut network = Network {
+            prusa: vec![Prusa {
+                link: Link::api_key("sl1.local", "key"),
+                text: None,
+            }],
+            ..Network::default()
+        };
+        let state = State {
+            state: "printing".to_owned(),
+            busy: true,
+            job_id: Some("297".to_owned()),
+            ..State::default()
+        };
+        network.hear("prusa:sl1.local", Reading::State(state));
+        let wanted = network.wanted_pictures();
+        assert!(
+            matches!(&wanted[..], [(key, Errand::Picture { id, task: None })]
+                if key == "prusa:sl1.local" && id == "297"),
+            "{wanted:?}"
         );
     }
 

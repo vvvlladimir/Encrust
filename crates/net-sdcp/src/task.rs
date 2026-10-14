@@ -60,6 +60,7 @@ pub enum Ending {
 }
 
 impl Task {
+    /// How the print ended, by its `TaskStatus`.
     pub fn ending(&self) -> Ending {
         match self.task_status {
             1 => Ending::Finished,
@@ -80,13 +81,15 @@ impl Task {
 /// Only a URL on the board's own address is fetched: the URL comes off the network, and
 /// nothing else on it gets to send this program elsewhere.
 pub fn picture(printer: &Printer, url: &str) -> Result<Vec<u8>, SdcpError> {
-    if host_of(url) != Some(printer.address.to_string().as_str()) {
+    if host_of(url) != Some(printer.address.to_string()) {
         return Err(SdcpError::ForeignUrl {
             url: url.to_owned(),
         });
     }
     let agent = ureq::config::Config::builder()
         .timeout_global(Some(PICTURE_TIMEOUT))
+        // A redirect would take the fetch off the board the address check let it reach.
+        .max_redirects(0)
         .build()
         .new_agent();
     let mut response = agent.get(url).call()?;
@@ -97,11 +100,13 @@ pub fn picture(printer: &Printer, url: &str) -> Result<Vec<u8>, SdcpError> {
         .read_to_vec()?)
 }
 
-/// The host of a plain `http://` URL, without its port.
-fn host_of(url: &str) -> Option<&str> {
-    let rest = url.strip_prefix("http://")?;
-    let authority = rest.split('/').next()?;
-    authority.split(':').next()
+/// The host of a plain `http://` URL, without its port, read as the request will read it.
+fn host_of(url: &str) -> Option<String> {
+    let uri: ureq::http::Uri = url.parse().ok()?;
+    if uri.scheme_str() != Some("http") {
+        return None;
+    }
+    uri.host().map(str::to_owned)
 }
 
 #[cfg(test)]
@@ -158,15 +163,26 @@ mod tests {
             picture(&a_board(), encrypted),
             Err(SdcpError::ForeignUrl { .. })
         ));
+        let disguised = "http://192.168.1.133:3030@203.0.113.9/media/thumb.bmp";
+        assert!(
+            matches!(
+                picture(&a_board(), disguised),
+                Err(SdcpError::ForeignUrl { .. })
+            ),
+            "the board's address as a login still sends the request elsewhere"
+        );
     }
 
     #[test]
     fn the_host_is_read_without_its_port_or_path() {
         assert_eq!(
-            host_of("http://192.168.1.133:3030/media/a.bmp"),
+            host_of("http://192.168.1.133:3030/media/a.bmp").as_deref(),
             Some("192.168.1.133")
         );
-        assert_eq!(host_of("http://192.168.1.133/a.bmp"), Some("192.168.1.133"));
+        assert_eq!(
+            host_of("http://192.168.1.133/a.bmp").as_deref(),
+            Some("192.168.1.133")
+        );
         assert_eq!(host_of("ftp://192.168.1.133/a.bmp"), None);
     }
 }
