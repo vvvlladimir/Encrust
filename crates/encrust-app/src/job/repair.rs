@@ -46,6 +46,7 @@ pub enum RepairOutcome {
 #[derive(Debug)]
 pub struct RepairJob {
     outcome: Receiver<RepairOutcome>,
+    id: ObjectId,
     name: String,
 }
 
@@ -53,11 +54,11 @@ impl RepairJob {
     /// Starts the repair. The thread is detached: it ends on its own.
     pub fn spawn(request: RepairRequest) -> Self {
         let (sender, outcome) = mpsc::channel();
-        let name = request.name.clone();
+        let (id, name) = (request.id, request.name.clone());
         crate::job::spawn(move || {
             let _ = sender.send(run(request));
         });
-        Self { outcome, name }
+        Self { outcome, id, name }
     }
 
     /// Returns the outcome on the frame the repair ends, and `None` while it is going.
@@ -74,6 +75,11 @@ impl RepairJob {
 
     pub fn label(&self) -> String {
         format!("Repairing {}", self.name)
+    }
+
+    /// The model being repaired.
+    pub fn id(&self) -> ObjectId {
+        self.id
     }
 }
 
@@ -101,7 +107,8 @@ pub struct Mended {
 }
 
 /// Patches the holes and drops the faces laid over others, and turns the patches the
-/// right way out; leaves the mesh as it came if that would leave more wrong with it.
+/// right way out; leaves the mesh as it came if that would leave more wrong with it, or
+/// nothing of it at all.
 ///
 /// The doubled faces go first, since one reads as a branch the boundary walk cannot get
 /// through, and again after the filling: a patch over a lone face or a fin is its reverse,
@@ -117,7 +124,9 @@ pub fn mend(mesh: &mut Mesh) -> Mended {
     duplicates_removed += remove_duplicate_faces(mesh).len();
     let orientation = orient_outward(mesh);
 
-    let kept_as_found = wrong(&diagnose(mesh)) > before;
+    // A sheet closed by its own reverse cancels away; a model that is nothing else would
+    // vanish from the plate rather than be repaired.
+    let kept_as_found = mesh.faces.is_empty() || wrong(&diagnose(mesh)) > before;
     if kept_as_found {
         *mesh = found;
     }
@@ -303,6 +312,15 @@ mod tests {
         assert_eq!(repaired.duplicates_removed, 2, "the fin and its reverse");
         assert_eq!(repaired.shaped.mesh.faces, closed_box().faces);
         assert!(diagnose(&repaired.shaped.mesh).is_sound());
+    }
+
+    #[test]
+    fn a_model_that_is_one_sheet_is_kept_rather_than_cancelled_away() {
+        let mut mesh = Mesh::new(vec![Vec3::ZERO, Vec3::X, Vec3::Y], vec![[0, 1, 2]]);
+        let mended = mend(&mut mesh);
+
+        assert!(mended.kept_as_found);
+        assert_eq!(mesh.faces, vec![[0, 1, 2]]);
     }
 
     #[test]

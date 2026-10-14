@@ -79,6 +79,7 @@ Grouped by what the decision governs; the number is still the order it was taken
 | [0205](0205-a-surface-closes-when-its-edges-pair-off.md) | A surface closes when its edges pair off, and repair drops what no winding covers | Accepted; an unbalanced edge making a model unsound superseded by 0267, dropping unbalanced faces by 0268 |
 | [0267](0267-orientation-never-worsens-and-a-fold-is-only-noted.md) | Orientation never worsens a file, and a fold is noted rather than asked about | Accepted |
 | [0268](0268-repair-cancels-what-encloses-nothing-and-never-worsens.md) | Repair cancels what encloses nothing, patches by least area, and never worsens | Accepted |
+| [0269](0269-import-geometry-runs-on-rayon.md) | Weld, index and sort a mesh's edges on rayon, with the same result one thread gives | Accepted |
 | [0223](0223-a-cut-is-pinned-by-a-shell-and-a-drain.md) | Pin a cut by an added shell and a drain hole | Accepted |
 
 ### Mesh and texture input

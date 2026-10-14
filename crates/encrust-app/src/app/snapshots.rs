@@ -234,10 +234,14 @@ fn remembered() -> Vec<printer_link::Task> {
     ]
 }
 
-/// A file waiting on a printer, and what happened last, stacked at the foot of the stage.
+/// A file waiting on a printer, a model that came in broken, and what happened last,
+/// stacked at the foot of the stage.
 #[test]
 fn the_notices_at_the_foot_of_the_stage() {
     let mut app = app(true);
+    if let Some(cube) = app.doc.scene.objects_mut().first_mut() {
+        cube.summary.diagnostics.boundary_edges = 3;
+    }
     app.machine.network.sent = Some(crate::network::Sent {
         printer: "Workshop".to_owned(),
         filename: "Dragon bust.goo".to_owned(),

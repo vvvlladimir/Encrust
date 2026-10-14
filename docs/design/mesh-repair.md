@@ -26,11 +26,18 @@ pins down.
 
 The cell is **2.5 tolerances** across. At that width the half of the cell a vertex sits in
 on each axis decides which side a match can be on, so eight cells are worth probing
-instead of 27 — a match in any other would be at least 1.25 tolerances away. Over the 2.6
-million vertices of an unwelded million-triangle STL, that is most of the cost. Cells are
+instead of 27 — a match in any other would be at least 1.25 tolerances away. Cells are
 hashed with `FastHasher` rather than `SipHash`: a cell derived from our own vertex is not
-an attacker's key, and there are millions of them. The bucket map and output list are
-reserved for a sixth of the input, which is about what an STL leaves.
+an attacker's key, and there are millions of them. Each cell holds only its last
+representative, chained to the one before it, so a cell costs one map entry and no list.
+
+Few vertices ever reach the grid (ADR 0269). The exact copies go first, through a parallel
+sort over bit patterns: an exporter writes a shared corner with the same bits every time,
+so this leaves about a sixth of an STL's vertices. Of those, a point with no other point in
+its eight probe cells can merge with nothing, and no point can merge into it. Such points
+are found in parallel by binary search in a sorted list of occupied cells. Only the rest go
+through the grid, in their original order, which is why the result is exactly what one
+vertex at a time gave.
 
 The cell has a floor of `1e-7` mm so a zero tolerance still hashes finitely, which also
 puts `-0.0` and `0.0` in one cell where exact comparison would not.

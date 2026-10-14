@@ -1,6 +1,8 @@
 use serde::{Deserialize, Serialize};
 
-use crate::topology::{Components, EdgeUse, edge_groups, edge_uses};
+use rayon::iter::{IndexedParallelIterator, IntoParallelRefIterator, ParallelIterator};
+
+use crate::topology::{Components, EdgeUse, edge_groups, edge_uses, sort_runs};
 use crate::{Mesh, Scalar, Vec3};
 
 /// What is structurally wrong, or right, with a mesh.
@@ -239,7 +241,7 @@ pub(crate) fn duplicate_faces(mesh: &Mesh) -> Vec<usize> {
 fn faces_by_corners(mesh: &Mesh) -> Vec<([u32; 3], bool, usize)> {
     let keyed: Vec<([u32; 3], bool, usize)> = mesh
         .faces
-        .iter()
+        .par_iter()
         .enumerate()
         .map(|(index, face)| {
             let mut key = *face;
@@ -267,9 +269,7 @@ fn faces_by_corners(mesh: &Mesh) -> Vec<([u32; 3], bool, usize)> {
         sorted[*slot] = face;
         *slot += 1;
     }
-    for run in starts.windows(2) {
-        sorted[run[0]..run[1]].sort_unstable();
-    }
+    sort_runs(&mut sorted, &starts);
     sorted
 }
 

@@ -1,5 +1,5 @@
-use std::collections::HashMap;
-use std::hash::BuildHasherDefault;
+use rayon::iter::{IndexedParallelIterator, IntoParallelRefIterator, ParallelIterator};
+use rayon::slice::ParallelSliceMut;
 
 use crate::hash::FastMap;
 use crate::{Mesh, Scalar, Vec3};
@@ -17,13 +17,6 @@ const MIN_CELL: Scalar = 1e-7;
 /// tolerances away, which is further than a match can be. A cell of exactly one tolerance
 /// would need all twenty-seven.
 const CELL_SCALE: Scalar = 2.5;
-
-/// How much of an unwelded mesh survives welding, as a divisor of its vertex count.
-///
-/// An STL writes three vertices per triangle and a closed surface has about twice as many
-/// triangles as vertices, so a sixth of them come out the other side. Overshooting the
-/// map costs memory; undershooting it costs a rehash of millions of entries.
-const SURVIVING_SHARE: usize = 6;
 
 /// Outcome of merging coincident vertices.
 #[derive(Debug, Clone, PartialEq)]
@@ -48,34 +41,9 @@ impl Welded {
 /// per face, so an unwelded mesh has no usable topology at all: every edge looks like a
 /// boundary. Welding is what makes the checks in [`crate::diagnose`] mean anything.
 pub fn weld(mesh: &Mesh, tolerance: Scalar) -> Welded {
-    let cell = tolerance.max(MIN_CELL) * CELL_SCALE;
-    let radius = tolerance.max(0.0);
-    let radius_sq = radius * radius;
-
-    let mut buckets: Buckets = HashMap::with_capacity_and_hasher(
-        mesh.vertices.len() / SURVIVING_SHARE + 1,
-        BuildHasherDefault::default(),
-    );
-    let mut vertices: Vec<Vec3> = Vec::with_capacity(mesh.vertices.len() / SURVIVING_SHARE + 1);
-    let mut remap: Vec<u32> = Vec::with_capacity(mesh.vertices.len());
-
-    for vertex in &mesh.vertices {
-        let nearby = probe_cells(*vertex, cell);
-        let existing = nearby
-            .iter()
-            .filter_map(|key| buckets.get(key))
-            .flatten()
-            .copied()
-            .find(|&i| vertices[i as usize].distance_squared(*vertex) <= radius_sq);
-
-        let index = existing.unwrap_or_else(|| {
-            let fresh = vertices.len() as u32;
-            vertices.push(*vertex);
-            buckets.entry(nearby[0]).or_default().push(fresh);
-            fresh
-        });
-        remap.push(index);
-    }
+    let (distinct, copy_of) = exact_copies(&mesh.vertices);
+    let (vertices, onto) = merge_nearby(&distinct, tolerance);
+    let remap: Vec<u32> = copy_of.iter().map(|at| onto[*at as usize]).collect();
 
     let mut faces = Vec::with_capacity(mesh.faces.len());
     let mut dropped = Vec::new();
@@ -93,6 +61,132 @@ pub fn weld(mesh: &Mesh, tolerance: Scalar) -> Welded {
         vertices_merged,
         dropped,
     }
+}
+
+/// The distinct positions among `vertices`, in the order each first appears, and which of
+/// them every vertex is.
+///
+/// An exporter writes a shared corner with the same bits every time it uses it, so this
+/// is most of welding, and a sort does it in parallel; the grid then sees a sixth of the
+/// vertices. Matching bits rather than values leaves `-0.0` and `0.0` to the grid.
+fn exact_copies(vertices: &[Vec3]) -> (Vec<Vec3>, Vec<u32>) {
+    // Sorted with the bits beside the index rather than looked up through it, which on a
+    // million vertices is the difference between a sort and a walk of cache misses.
+    let mut keyed: Vec<([u32; 3], u32)> = vertices
+        .iter()
+        .enumerate()
+        .map(|(at, vertex)| (vertex.to_array().map(Scalar::to_bits), at as u32))
+        .collect();
+    keyed.par_sort_unstable();
+
+    // First the lowest index sharing each vertex's bits, then, walking up, the number of
+    // that first one: it is always met before the copies that point at it.
+    let mut copy_of = vec![0u32; vertices.len()];
+    for run in keyed.chunk_by(|a, b| a.0 == b.0) {
+        for (_, at) in run {
+            copy_of[*at as usize] = run[0].1;
+        }
+    }
+    let mut distinct = Vec::new();
+    for at in 0..vertices.len() {
+        let first = copy_of[at] as usize;
+        copy_of[at] = if first == at {
+            distinct.push(vertices[at]);
+            distinct.len() as u32 - 1
+        } else {
+            copy_of[first]
+        };
+    }
+    (distinct, copy_of)
+}
+
+/// Merges points closer together than `tolerance` into the first of them a grid finds,
+/// and returns what is left and where each point went.
+///
+/// A point with no other in the eight cells a match could be in merges with nothing, and
+/// on a real mesh that is nearly all of them: those are told apart in parallel against a
+/// sorted list of occupied cells, and only the rest go through the grid, in their order.
+fn merge_nearby(points: &[Vec3], tolerance: Scalar) -> (Vec<Vec3>, Vec<u32>) {
+    let cell = tolerance.max(MIN_CELL) * CELL_SCALE;
+    let mut occupied: Vec<[i64; 3]> = points
+        .par_iter()
+        .map(|point| probe_cells(*point, cell)[0])
+        .collect();
+    occupied.par_sort_unstable();
+    let crowded: Vec<u32> = points
+        .par_iter()
+        .enumerate()
+        .filter(|(_, point)| has_company(&occupied, &probe_cells(**point, cell)))
+        .map(|(at, _)| at as u32)
+        .collect();
+
+    // Which point each one went to, the first of them for one that stands alone.
+    let mut rep: Vec<u32> = (0..points.len() as u32).collect();
+    for (at, onto) in crowded
+        .iter()
+        .zip(merge_crowded(points, &crowded, tolerance))
+    {
+        rep[*at as usize] = onto;
+    }
+    // Representatives are numbered in the order they appear, and come before what
+    // merges into them.
+    let mut kept = Vec::new();
+    for at in 0..points.len() {
+        let first = rep[at] as usize;
+        rep[at] = if first == at {
+            kept.push(points[at]);
+            kept.len() as u32 - 1
+        } else {
+            rep[first]
+        };
+    }
+    (kept, rep)
+}
+
+/// Whether a point shares its own cell, or any of the other seven a match could be in,
+/// with another point.
+fn has_company(occupied: &[[i64; 3]], probe: &[[i64; 3]; 8]) -> bool {
+    let home = occupied.partition_point(|cell| cell < &probe[0]);
+    occupied.get(home + 1) == Some(&probe[0])
+        || probe[1..]
+            .iter()
+            .any(|cell| occupied.binary_search(cell).is_ok())
+}
+
+/// Puts the crowded points through the grid in their order, and returns the point each
+/// merged into, itself for one that is kept.
+fn merge_crowded(points: &[Vec3], crowded: &[u32], tolerance: Scalar) -> Vec<u32> {
+    let cell = tolerance.max(MIN_CELL) * CELL_SCALE;
+    let radius_sq = tolerance.max(0.0) * tolerance.max(0.0);
+
+    // Each cell holds the last representative put in it, and `before` chains it to the
+    // one put in before that: one map entry and no list per cell.
+    let mut last = Cells::default();
+    last.reserve(crowded.len());
+    let mut before: FastMap<u32, u32> = FastMap::default();
+    let mut onto = Vec::with_capacity(crowded.len());
+
+    for &at in crowded {
+        let point = points[at as usize];
+        let nearby = probe_cells(point, cell);
+        let existing = nearby.iter().find_map(|key| {
+            let mut other = *last.get(key)?;
+            loop {
+                if points[other as usize].distance_squared(point) <= radius_sq {
+                    return Some(other);
+                }
+                other = *before.get(&other)?;
+            }
+        });
+
+        onto.push(existing.unwrap_or_else(|| {
+            if let Some(previous) = last.insert(nearby[0], at) {
+                before.insert(at, previous);
+            }
+            at
+        }));
+    }
+    onto
 }
 
 fn remap_face(face: [u32; 3], remap: &[u32]) -> Option<[u32; 3]> {
@@ -134,11 +228,64 @@ fn probe_cells(v: Vec3, cell: Scalar) -> [[i64; 3]; 8] {
     cells
 }
 
-type Buckets = FastMap<[i64; 3], Vec<u32>>;
+type Cells = FastMap<[i64; 3], u32>;
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Every point through the grid in turn, as welding did before it split the lonely
+    /// points off: what the split has to reproduce exactly.
+    fn one_by_one(points: &[Vec3], tolerance: Scalar) -> (Vec<Vec3>, Vec<u32>) {
+        let cell = tolerance.max(MIN_CELL) * CELL_SCALE;
+        let radius_sq = tolerance * tolerance;
+        let mut cells: FastMap<[i64; 3], Vec<u32>> = FastMap::default();
+        let (mut kept, mut onto) = (Vec::<Vec3>::new(), Vec::new());
+        for point in points {
+            let nearby = probe_cells(*point, cell);
+            let found = nearby
+                .iter()
+                .filter_map(|key| cells.get(key))
+                .flatten()
+                .copied()
+                .find(|&i| kept[i as usize].distance_squared(*point) <= radius_sq);
+            onto.push(found.unwrap_or_else(|| {
+                kept.push(*point);
+                cells
+                    .entry(nearby[0])
+                    .or_default()
+                    .push(kept.len() as u32 - 1);
+                kept.len() as u32 - 1
+            }));
+        }
+        (kept, onto)
+    }
+
+    #[test]
+    fn welding_in_parallel_merges_exactly_what_one_point_at_a_time_did() {
+        let tolerance = DEFAULT_WELD_TOLERANCE;
+        // Mostly lone points, with clusters strung out in steps of 0.7 tolerances, so a
+        // chain is longer than any one merge may reach.
+        let mut points = Vec::new();
+        for at in 0..20_000u32 {
+            let spot = Vec3::new(
+                (at % 97) as Scalar,
+                (at / 97 % 89) as Scalar,
+                (at % 7) as Scalar,
+            );
+            points.push(spot * 0.01);
+            if at % 11 == 0 {
+                for step in 1..5 {
+                    points.push(spot * 0.01 + Vec3::X * tolerance * 0.7 * step as Scalar);
+                }
+            }
+        }
+
+        assert_eq!(
+            merge_nearby(&points, tolerance),
+            one_by_one(&points, tolerance)
+        );
+    }
 
     #[test]
     fn coincident_vertices_collapse_into_one() {

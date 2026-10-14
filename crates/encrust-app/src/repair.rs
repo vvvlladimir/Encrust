@@ -1,24 +1,43 @@
-//! What the window does about a model that arrived broken: the runs that close the holes,
-//! started from the model's own row.
+//! What the window does about a model that arrived broken: the offer at the foot of the
+//! stage, and the runs that close the holes.
 //!
 //! Welding, orientation and dropping the faces laid over others are done on import without
 //! asking, because none of them changes what the model encloses (ADR 0005, 0268). Closing a
-//! hole invents surface that was never in the file, so it waits for the Repair button; see
+//! hole invents surface that was never in the file, so it is offered without blocking
+//! anything and waits for the Repair button; see
 //! `docs/decisions/0268-repair-cancels-what-encloses-nothing-and-never-worsens.md`.
 
 use std::sync::Arc;
 
 use crate::job::{RepairJob, RepairOutcome, RepairRequest, Repaired};
-use crate::scene::{ObjectId, Scene};
+use crate::scene::{ObjectId, Scene, SceneObject};
 use crate::status::Status;
 
-/// The repairs under way.
+/// The repairs under way, and the broken models the user chose to keep as they came.
 #[derive(Debug, Default)]
 pub struct Repairs {
     jobs: Vec<RepairJob>,
+    kept: Vec<ObjectId>,
 }
 
 impl Repairs {
+    /// The broken models on the plate being edited that repair is still offered for:
+    /// neither kept as they came nor being repaired already.
+    pub fn offered<'a>(&'a self, scene: &'a Scene) -> impl Iterator<Item = &'a SceneObject> {
+        scene.printable(scene.active_plate()).filter(|object| {
+            !object.summary.is_sound()
+                && !self.kept.contains(&object.id)
+                && !self.jobs.iter().any(|job| job.id() == object.id)
+        })
+    }
+
+    /// Stops offering to repair a model. Its mark stays, and so does its Repair button.
+    pub fn keep_as_it_is(&mut self, id: ObjectId) {
+        if !self.kept.contains(&id) {
+            self.kept.push(id);
+        }
+    }
+
     /// Starts closing the holes in one model.
     ///
     /// The mesh is replaced by the repaired one, so supports, a cavity and a texture
@@ -47,17 +66,24 @@ impl Repairs {
         self.jobs.retain_mut(|job| match job.poll() {
             None => true,
             Some(outcome) => {
-                done.push(outcome);
+                done.push((job.id(), outcome));
                 false
             }
         });
 
-        for outcome in done {
+        for (id, outcome) in done {
             match outcome {
                 RepairOutcome::Done(repaired) => {
                     *status = apply(scene, &repaired);
                 }
                 RepairOutcome::Failed(message) => *status = Status::Error(message),
+            }
+            // A repair that could not mend it is not offered again; the button still is.
+            if scene
+                .get(id)
+                .is_some_and(|object| !object.summary.is_sound())
+            {
+                self.keep_as_it_is(id);
             }
         }
         self.is_busy()
@@ -153,6 +179,53 @@ mod tests {
                 },
             },
         ))
+    }
+
+    #[test]
+    fn repair_is_offered_for_a_broken_model_and_not_a_sound_one() {
+        let mut scene = Scene::default();
+        let broken = object(&mut scene, 3);
+        object(&mut scene, 0);
+        let repairs = Repairs::default();
+
+        let offered: Vec<ObjectId> = repairs.offered(&scene).map(|object| object.id).collect();
+        assert_eq!(offered, vec![broken]);
+    }
+
+    #[test]
+    fn a_model_kept_as_it_is_is_no_longer_offered() {
+        let mut scene = Scene::default();
+        let id = object(&mut scene, 3);
+        let mut repairs = Repairs::default();
+        repairs.keep_as_it_is(id);
+
+        assert_eq!(repairs.offered(&scene).count(), 0);
+        assert_eq!(broken_on_the_plate(&scene), 1, "it is still broken");
+    }
+
+    #[test]
+    fn a_repair_that_could_not_mend_a_model_is_not_offered_again() {
+        let mut scene = Scene::default();
+        // A lone triangle would be closed by its own reverse and cancel away, so it is kept.
+        let id = object(&mut scene, 3);
+        let mut repairs = Repairs::default();
+        repairs.start(&scene, id, &mut Status::default());
+        while repairs.poll(&mut scene, &mut Status::default()) {
+            std::thread::yield_now();
+        }
+
+        assert!(!scene.get(id).expect("still there").summary.is_sound());
+        assert_eq!(repairs.offered(&scene).count(), 0);
+    }
+
+    #[test]
+    fn a_model_under_repair_is_no_longer_offered() {
+        let mut scene = Scene::default();
+        let id = open_box(&mut scene);
+        let mut repairs = Repairs::default();
+        repairs.start(&scene, id, &mut Status::default());
+
+        assert_eq!(repairs.offered(&scene).count(), 0);
     }
 
     #[test]

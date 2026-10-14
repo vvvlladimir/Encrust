@@ -1,3 +1,5 @@
+use rayon::iter::{IntoParallelIterator, ParallelIterator};
+
 use crate::Mesh;
 
 /// One face's use of one undirected edge.
@@ -24,7 +26,7 @@ pub(crate) fn edge_uses(mesh: &Mesh) -> Vec<EdgeUse> {
         .max()
         .map_or(0, |highest| highest as usize + 1);
 
-    let mut starts = vec![0u32; buckets + 1];
+    let mut starts = vec![0usize; buckets + 1];
     for face in &mesh.faces {
         for corner in 0..3 {
             let low = face[corner].min(face[(corner + 1) % 3]) as usize;
@@ -45,7 +47,7 @@ pub(crate) fn edge_uses(mesh: &Mesh) -> Vec<EdgeUse> {
             let edge = if forward { (from, to) } else { (to, from) };
 
             let slot = &mut cursor[edge.0 as usize];
-            uses[*slot as usize] = EdgeUse {
+            uses[*slot] = EdgeUse {
                 edge,
                 face: face as u32,
                 forward,
@@ -54,10 +56,28 @@ pub(crate) fn edge_uses(mesh: &Mesh) -> Vec<EdgeUse> {
         }
     }
 
-    for run in starts.windows(2) {
-        uses[run[0] as usize..run[1] as usize].sort_unstable();
-    }
+    sort_runs(&mut uses, &starts);
     uses
+}
+
+/// Sorts every run of `items` that `starts` bounds, a block of runs to a task on rayon's
+/// threads: there are as many runs as vertices, each a handful long.
+pub(crate) fn sort_runs<T: Ord + Send>(items: &mut [T], starts: &[usize]) {
+    const RUNS_PER_TASK: usize = 4096;
+    let runs = starts.len().saturating_sub(1);
+    let mut blocks = Vec::with_capacity(runs / RUNS_PER_TASK + 1);
+    let mut rest = items;
+    for first in (0..runs).step_by(RUNS_PER_TASK) {
+        let last = (first + RUNS_PER_TASK).min(runs);
+        let (block, tail) = rest.split_at_mut(starts[last] - starts[first]);
+        blocks.push((block, &starts[first..=last]));
+        rest = tail;
+    }
+    blocks.into_par_iter().for_each(|(block, bounds)| {
+        for run in bounds.windows(2) {
+            block[run[0] - bounds[0]..run[1] - bounds[0]].sort_unstable();
+        }
+    });
 }
 
 /// Groups a sorted [`edge_uses`] result into one slice per distinct edge.

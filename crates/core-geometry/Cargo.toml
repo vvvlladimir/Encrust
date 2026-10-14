@@ -16,6 +16,7 @@ serde.workspace = true
 glam.workspace = true
 parry3d.workspace = true
 earcutr.workspace = true
+rayon.workspace = true
 
 [dev-dependencies]
 criterion.workspace = true
