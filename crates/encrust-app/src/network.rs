@@ -1,5 +1,7 @@
 //! The printers this machine can reach, and what the window is sending them.
 
+mod errands;
+
 use std::collections::{BTreeMap, BTreeSet};
 use std::net::IpAddr;
 use std::path::{Path, PathBuf};
@@ -14,6 +16,8 @@ use net_sdcp::Printer;
 use printer_profiles::Connection;
 
 use printer_link::{Found, SendError, State, Wire};
+
+pub use errands::{Errand, Extras, Picture};
 
 use crate::job::{Action, SendJob, SendOutcome, SendRequest};
 use crate::status::Status;
@@ -253,6 +257,10 @@ pub struct Network {
     pub silent: Vec<(IpAddr, Option<Trouble>)>,
     /// Every printer listed, watched by its key.
     watches: BTreeMap<String, Watch>,
+    /// What has been asked of each printer besides its state, by its key.
+    extras: BTreeMap<String, Extras>,
+    /// Errands still out on their threads.
+    out: Vec<errands::Out>,
     /// Whether the window keeps off the network unless told to: the panel pictures must not
     /// depend on what is on the desk's network.
     pub hold: bool,
@@ -333,6 +341,81 @@ impl Network {
             self.asked_at = Some(now_s);
             self.scan();
         }
+    }
+
+    /// What has been asked of the printer under `key` besides its state.
+    pub fn extras(&self, key: &str) -> Option<&Extras> {
+        self.extras.get(key)
+    }
+
+    /// Sends `errand` to the printer under `key`, on a thread of its own.
+    pub fn ask(&mut self, key: &str, errand: Errand) {
+        let Some(target) = self.targets().into_iter().find(|t| t.key() == key) else {
+            return;
+        };
+        let state = match self.reading(&target) {
+            Some(Reading::State(state)) => state.clone(),
+            _ => State::default(),
+        };
+        let wire = target.wire();
+        let extras = self.extras.entry(key.to_owned()).or_default();
+        match &errand {
+            Errand::Picture { id, .. } => {
+                extras.pictures.insert(id.clone(), Picture::Asked);
+            }
+            Errand::History => extras.history_asked = true,
+            Errand::Control(_) | Errand::Camera(_) => {}
+        }
+        let out = errands::Out::send(key.to_owned(), wire, state, errand);
+        if out.holds_the_buttons() {
+            extras.doing = Some(out.doing());
+            extras.trouble = None;
+        }
+        self.out.push(out);
+    }
+
+    /// Puts each picture that has come in onto a texture the cards can draw.
+    pub fn show_pictures(&mut self, ctx: &egui::Context) {
+        for (key, extras) in &mut self.extras {
+            for (id, picture) in &mut extras.pictures {
+                if let Picture::Decoded(image) = picture {
+                    let name = format!("printer-picture-{key}-{id}");
+                    let texture =
+                        ctx.load_texture(name, image.clone(), egui::TextureOptions::LINEAR);
+                    *picture = Picture::Shown(texture);
+                }
+            }
+        }
+    }
+
+    /// The pictures the cards would draw and nobody has asked for yet: the print under way
+    /// on each printer, and each print in a history that has been read.
+    fn wanted_pictures(&self) -> Vec<(String, Errand)> {
+        let mut wanted = Vec::new();
+        for target in self.targets() {
+            let key = target.key();
+            let extras = self.extras.get(&key);
+            let known = |id: &str| extras.is_some_and(|extras| extras.pictures.contains_key(id));
+            if let Some(Reading::State(state)) = self.reading(&target)
+                && let Some(id) = state.job_id.as_deref()
+                && state.file.is_some()
+                && !known(id)
+            {
+                let id = id.to_owned();
+                wanted.push((key.clone(), Errand::Picture { id, task: None }));
+            }
+            let tasks = extras
+                .and_then(|extras| extras.history.as_deref())
+                .unwrap_or_default();
+            for task in tasks {
+                if !task.thumbnail.is_empty() && !known(&task.task_id) {
+                    let id = task.task_id.clone();
+                    let task = Some(task.clone());
+                    wanted.push((key.clone(), Errand::Picture { id, task }));
+                }
+            }
+        }
+        wanted
     }
 
     /// Whether any printer is being watched, which is what keeps its card repainting.
@@ -510,7 +593,22 @@ impl Network {
                 watch.last = Some(reading);
             }
         }
-        self.take_scan() | self.take_job(status)
+        let extras = &mut self.extras;
+        self.out
+            .retain(|out| !out.take(extras.entry(out.key.clone()).or_default()));
+        if !self.hold {
+            for (key, errand) in self.wanted_pictures() {
+                self.ask(&key, errand);
+            }
+        }
+        let errands = !self.out.is_empty();
+        self.take_scan() | self.take_job(status) | errands
+    }
+
+    /// What has been asked of a printer, open for a test to fill in as if it had answered.
+    #[cfg(test)]
+    pub(crate) fn extras_mut(&mut self, key: &str) -> &mut Extras {
+        self.extras.entry(key.to_owned()).or_default()
     }
 
     /// What a watch hears, put straight into the window as if its thread had said it.
@@ -541,6 +639,7 @@ impl Network {
             .collect();
         self.watches
             .retain(|key, watch| wanted.get(key) == Some(&watch.wire));
+        self.extras.retain(|key, _| wanted.contains_key(key));
         for (key, wire) in wanted {
             self.watches
                 .entry(key)
@@ -1084,5 +1183,36 @@ mod tests {
             Destination::Printer("sdcp:aa".into())
         );
         assert_eq!(network.target().map(|t| t.name()), Some("Saturn aa".into()));
+    }
+
+    #[test]
+    fn the_print_under_way_and_each_remembered_one_want_a_picture_once() {
+        let mut network = Network {
+            printers: vec![a_printer("aa")],
+            ..Network::default()
+        };
+        let state = State {
+            job_id: Some("0e8a".to_owned()),
+            ..printing("dragon.goo")
+        };
+        network.hear("sdcp:aa", Reading::State(state));
+        let wanted = network.wanted_pictures();
+        assert!(
+            matches!(&wanted[..], [(key, Errand::Picture { id, task: None })]
+                if key == "sdcp:aa" && id == "0e8a"),
+            "{wanted:?}"
+        );
+        let extras = network.extras_mut("sdcp:aa");
+        extras.pictures.insert("0e8a".to_owned(), Picture::Missing);
+        extras.history = Some(vec![printer_link::Task {
+            task_id: "3add".to_owned(),
+            thumbnail: "http://192.168.1.42:3030/media/3add.bmp".to_owned(),
+            ..printer_link::Task::default()
+        }]);
+        let wanted = network.wanted_pictures();
+        assert!(
+            matches!(&wanted[..], [(_, Errand::Picture { id, task: Some(_) })] if id == "3add"),
+            "only the remembered print is still missing: {wanted:?}"
+        );
     }
 }

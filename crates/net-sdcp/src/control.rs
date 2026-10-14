@@ -6,10 +6,11 @@ use tungstenite::client::IntoClientRequest as _;
 use tungstenite::handshake::client::ClientHandshake;
 use tungstenite::{Message, WebSocket};
 
-use crate::error::{ACK_BUSY, SdcpError, print_ack};
+use crate::error::{ACK_BUSY, SdcpError, print_ack, video_reason};
 use crate::message::{Incoming, Request, request_topic};
 use crate::mqtt::{Broker, Step, Waiting};
 use crate::printer::{Attributes, Machine, Printer, Status, Transport};
+use crate::task::Task;
 
 /// The board serves its control socket here, see docs/formats/sdcp.md.
 const CONTROL_PORT: u16 = 3030;
@@ -20,6 +21,12 @@ const DISCOVERY_PORT: u16 = 3000;
 pub(crate) const CMD_STATUS: u32 = 0;
 pub(crate) const CMD_ATTRIBUTES: u32 = 1;
 pub(crate) const CMD_START_PRINT: u32 = 128;
+const CMD_PAUSE: u32 = 129;
+const CMD_STOP: u32 = 130;
+const CMD_RESUME: u32 = 131;
+const CMD_HISTORY: u32 = 320;
+const CMD_TASKS: u32 = 321;
+const CMD_VIDEO: u32 = 386;
 pub(crate) const CMD_UPLOAD: u32 = 256;
 const CMD_REPORT_PERIOD: u32 = 512;
 
@@ -47,6 +54,8 @@ pub struct Control {
     /// Whether a status report arrived since the last time one was asked for.
     reported: bool,
     attributes: Attributes,
+    /// The fields of the answer last waited for, beside its `Ack`.
+    answer: Option<serde_json::Map<String, serde_json::Value>>,
 }
 
 /// The two ways a board is reached. Version 3 serves a socket; version 1 connects to a
@@ -72,6 +81,7 @@ impl Control {
             status: Status::default(),
             reported: false,
             attributes: Attributes::default(),
+            answer: None,
         };
         if matches!(control.printer.transport, Transport::Mqtt) {
             control.greet()?;
@@ -151,6 +161,58 @@ impl Control {
         }
     }
 
+    /// Pauses the print under way, after the layer being exposed.
+    pub fn pause(&mut self) -> Result<(), SdcpError> {
+        self.ask(CMD_PAUSE, Empty {}, "pause").map(|_| ())
+    }
+
+    /// Carries on with a paused print.
+    pub fn resume(&mut self) -> Result<(), SdcpError> {
+        self.ask(CMD_RESUME, Empty {}, "resume").map(|_| ())
+    }
+
+    /// Ends the print under way; it cannot be resumed after.
+    pub fn stop(&mut self) -> Result<(), SdcpError> {
+        self.ask(CMD_STOP, Empty {}, "stop").map(|_| ())
+    }
+
+    /// The ids of the prints the board remembers, most recent first.
+    pub fn history(&mut self) -> Result<Vec<String>, SdcpError> {
+        let mut fields = self.ask(CMD_HISTORY, Empty {}, "list its prints")?;
+        listed(&mut fields, "HistoryData")
+    }
+
+    /// What the board remembers of each print in `ids`.
+    pub fn tasks(&mut self, ids: &[String]) -> Result<Vec<Task>, SdcpError> {
+        let mut fields = self.ask(CMD_TASKS, TaskIds { id: ids }, "describe its prints")?;
+        listed(&mut fields, "HistoryDetailList")
+    }
+
+    /// Turns the camera's stream on or off, and answers the RTSP URL it serves when on.
+    pub fn video(&mut self, enable: bool) -> Result<Option<String>, SdcpError> {
+        self.answer = None;
+        let ack = self.request(
+            CMD_VIDEO,
+            Enable {
+                enable: u8::from(enable),
+            },
+        )?;
+        if ack != 0 {
+            let reason = video_reason(ack);
+            return Err(SdcpError::CommandRefused {
+                what: "stream its camera",
+                ack,
+                reason,
+            });
+        }
+        let url = self
+            .answer
+            .take()
+            .and_then(|mut fields| fields.remove("VideoUrl"))
+            .and_then(|url| url.as_str().map(str::to_owned));
+        Ok(url.filter(|url| enable && !url.is_empty()))
+    }
+
     /// Takes in whatever the printer has reported since the last call, without waiting.
     pub fn poll(&mut self) -> Result<(), SdcpError> {
         self.pump(None, Instant::now()).map(|_| ())
@@ -167,6 +229,24 @@ impl Control {
                 what: "the printer's reply",
                 seconds: REPLY_WINDOW.as_secs(),
             })
+    }
+
+    /// Sends a command whose only success is `Ack 0`, and answers the rest of its reply.
+    fn ask<T: Serialize>(
+        &mut self,
+        cmd: u32,
+        data: T,
+        what: &'static str,
+    ) -> Result<serde_json::Map<String, serde_json::Value>, SdcpError> {
+        self.answer = None;
+        match self.request(cmd, data)? {
+            0 => Ok(self.answer.take().unwrap_or_default()),
+            ack => Err(SdcpError::CommandRefused {
+                what,
+                ack,
+                reason: "no reason given",
+            }),
+        }
     }
 
     /// Reads reports until `awaited` is answered or the deadline passes, whichever is
@@ -205,8 +285,13 @@ impl Control {
             Ok(Incoming::Error(code)) => {
                 tracing::warn!(printer = %self.printer.name, code, "the printer reported an error");
             }
-            Ok(Incoming::Response { request_id, ack }) => {
+            Ok(Incoming::Response {
+                request_id,
+                ack,
+                fields,
+            }) => {
                 if awaited == Some(request_id.as_str()) {
+                    self.answer = Some(*fields);
                     return Some(ack.unwrap_or_default());
                 }
             }
@@ -310,6 +395,33 @@ struct StartPrint<'a> {
     start_layer: u32,
 }
 
+/// The `{}` a command without arguments carries.
+#[derive(Serialize)]
+struct Empty {}
+
+#[derive(Serialize)]
+#[serde(rename_all = "PascalCase")]
+struct TaskIds<'a> {
+    id: &'a [String],
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "PascalCase")]
+struct Enable {
+    enable: u8,
+}
+
+/// The list an answer carries under `name`; one that carries none was not answered.
+fn listed<T: serde::de::DeserializeOwned>(
+    fields: &mut serde_json::Map<String, serde_json::Value>,
+    name: &str,
+) -> Result<Vec<T>, SdcpError> {
+    let list = fields.remove(name).ok_or(SdcpError::BadPacket {
+        what: "an answer without the list it was asked for",
+    })?;
+    Ok(serde_json::from_value(list)?)
+}
+
 #[derive(Serialize)]
 #[serde(rename_all = "PascalCase")]
 struct ReportPeriod {
@@ -358,6 +470,29 @@ mod tests {
         };
         let text = serde_json::to_string(&data).expect("the command serialises");
         assert_eq!(text, r#"{"Filename":"model.goo","StartLayer":0}"#);
+    }
+
+    #[test]
+    fn commands_are_spelled_as_the_specification_spells_them() {
+        let empty = serde_json::to_string(&Empty {}).expect("the command serialises");
+        assert_eq!(empty, "{}", "pause, stop and resume carry an empty object");
+        let ids = ["0e8a".to_owned()];
+        let tasks = serde_json::to_string(&TaskIds { id: &ids }).expect("the command serialises");
+        assert_eq!(tasks, r#"{"Id":["0e8a"]}"#);
+        let video = serde_json::to_string(&Enable { enable: 1 }).expect("the command serialises");
+        assert_eq!(video, r#"{"Enable":1}"#);
+    }
+
+    #[test]
+    fn an_answer_without_its_list_is_a_bad_packet() {
+        let mut fields = serde_json::Map::new();
+        assert!(matches!(
+            listed::<String>(&mut fields, "HistoryData"),
+            Err(SdcpError::BadPacket { .. })
+        ));
+        fields.insert("HistoryData".to_owned(), serde_json::json!(["a", "b"]));
+        let ids: Vec<String> = listed(&mut fields, "HistoryData").expect("a list of ids");
+        assert_eq!(ids, ["a", "b"]);
     }
 
     #[test]

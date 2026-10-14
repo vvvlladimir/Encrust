@@ -55,6 +55,9 @@ pub struct Attributes {
     pub capabilities: Vec<String>,
     #[serde(default, rename = "SupportFileType")]
     pub file_types: Vec<String>,
+    /// Lifts the release film is rated for, beside the count in the status.
+    #[serde(default)]
+    pub release_film_max: Option<u32>,
 }
 
 impl Attributes {
@@ -63,6 +66,11 @@ impl Attributes {
         self.file_types
             .iter()
             .any(|known| known.eq_ignore_ascii_case(extension))
+    }
+
+    /// Whether the board serves a camera, as command `386` asks for.
+    pub fn has_camera(&self) -> bool {
+        self.capabilities.iter().any(|c| c == "VIDEO_STREAM")
     }
 
     /// Whether the board carries the file transfer and print control sub-protocols.
@@ -87,6 +95,9 @@ pub struct Status {
     /// Temperature inside the hood, in °C, on boards that heat it.
     #[serde(default, rename = "TempOfBox")]
     pub chamber_c: Option<f32>,
+    /// Lifts the release film has taken, on boards that count them.
+    #[serde(default)]
+    pub release_film: Option<u32>,
     /// What a board pulling a file has of it. Only version 1 reports this, because only
     /// version 1 pulls.
     #[serde(default)]
@@ -124,6 +135,9 @@ pub struct PrintInfo {
     pub filename: String,
     #[serde(default)]
     pub error_number: u32,
+    /// What the board remembers this print by, for command `321`.
+    #[serde(default)]
+    pub task_id: String,
     /// Time printed so far, in ms. Read as a float because firmware is loose about it.
     #[serde(default)]
     pub current_ticks: f64,

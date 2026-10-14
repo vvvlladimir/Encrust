@@ -56,9 +56,14 @@ fn over_socket(
         Ok(control) => control,
         Err(error) => return report(Err(error.into())),
     };
+    // Asked once: a camera and a film rating do not change while the connection is open.
+    let attributes = match control.attributes() {
+        Ok(attributes) => attributes.clone(),
+        Err(error) => return report(Err(error.into())),
+    };
     while !stop() {
         match control.refresh_status() {
-            Ok(status) => report(Ok(State::of_board(status))),
+            Ok(status) => report(Ok(State::of_board(status).with_attributes(&attributes))),
             Err(error) => return report(Err(error.into())),
         }
         pause(period, stop);

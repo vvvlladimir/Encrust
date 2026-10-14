@@ -8,6 +8,7 @@ mod message;
 mod mqtt;
 mod printer;
 mod serve;
+mod task;
 mod upload;
 
 pub use control::Control;
@@ -16,4 +17,5 @@ pub use error::SdcpError;
 pub use printer::{
     Attributes, Fetching, FileTransferInfo, Machine, PrintInfo, Printer, Stage, Status, Transport,
 };
+pub use task::{Ending, SliceInformation, Task, picture};
 pub use upload::{Transfer, upload};

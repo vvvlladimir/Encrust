@@ -22,6 +22,13 @@ pub struct State {
     pub uv_led_c: Option<f32>,
     /// Temperature inside the hood, in °C.
     pub chamber_c: Option<f32>,
+    /// What the print under way is known by to the printer, for asking for its picture.
+    pub job_id: Option<String>,
+    /// Lifts the release film has taken, and how many it is rated for.
+    pub film_lifts: Option<u32>,
+    pub film_lifts_max: Option<u32>,
+    /// Whether the printer serves a camera.
+    pub camera: bool,
     /// Why the last print stopped, when the printer says.
     pub error: Option<String>,
 }
@@ -44,8 +51,19 @@ impl State {
             remaining_s: info.remaining_s(),
             uv_led_c: status.uv_led_c,
             chamber_c: status.chamber_c,
+            job_id: (!info.task_id.is_empty()).then(|| info.task_id.clone()),
+            film_lifts: status.release_film,
+            film_lifts_max: None,
+            camera: false,
             error: info.error().map(str::to_owned),
         }
+    }
+
+    /// What only a board's attributes say: its camera and what its film is rated for.
+    pub(crate) fn with_attributes(mut self, attributes: &net_sdcp::Attributes) -> Self {
+        self.film_lifts_max = attributes.release_film_max.filter(|max| *max > 0);
+        self.camera = attributes.has_camera();
+        self
     }
 
     pub(crate) fn of_prusa(status: net_prusalink::Status) -> Self {
@@ -62,9 +80,13 @@ impl State {
             layer: None,
             layer_count: None,
             elapsed_s: None,
-            remaining_s: status.job.and_then(|job| job.time_remaining),
+            remaining_s: status.job.as_ref().and_then(|job| job.time_remaining),
             uv_led_c: None,
             chamber_c: None,
+            job_id: status.job.and_then(|job| job.id).map(|id| id.to_string()),
+            film_lifts: None,
+            film_lifts_max: None,
+            camera: false,
             error: None,
         }
     }
@@ -98,6 +120,7 @@ mod tests {
             "40 minutes estimated, 10 printed"
         );
         assert_eq!(state.uv_led_c, Some(31.5));
+        assert_eq!(state.job_id, None, "this report names no task");
         assert!(state.busy, "a printing board takes no second print");
         assert_eq!(state.error, None);
     }

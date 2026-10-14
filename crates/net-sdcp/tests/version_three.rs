@@ -44,6 +44,13 @@ fn a_printer() -> Printer {
 struct Script {
     status: fn(usize) -> Value,
     start_ack: fn(usize) -> u32,
+    /// What the board answers any other command with, `Ack` included.
+    reply: fn(u64) -> Value,
+}
+
+/// A board that takes every other command and says nothing more.
+fn accepts(_: u64) -> Value {
+    json!({"Ack": 0})
 }
 
 /// Plays one connection of a board on the control port, and returns the acks it gave
@@ -69,15 +76,16 @@ fn a_board(script: Script) -> (std::sync::MutexGuard<'static, ()>, JoinHandle<Ve
             let cmd = request["Data"]["Cmd"]
                 .as_u64()
                 .expect("a request has a command");
-            let ack = match cmd {
+            let data = match cmd {
+                0 | 1 => json!({"Ack": 0}),
                 128 => {
                     let ack = (script.start_ack)(starts.len());
                     starts.push(ack);
-                    ack
+                    json!({"Ack": ack})
                 }
-                _ => 0,
+                other => (script.reply)(other),
             };
-            let response = json!({"Id": "x", "Data": {"Cmd": cmd, "Data": {"Ack": ack},
+            let response = json!({"Id": "x", "Data": {"Cmd": cmd, "Data": data,
                 "RequestID": request["Data"]["RequestID"], "MainboardID": BOARD,
                 "TimeStamp": 0}, "Topic": format!("sdcp/response/{BOARD}")});
             socket
@@ -110,6 +118,7 @@ fn a_status_is_the_report_that_follows_the_acknowledgement() {
             "CurrentLayer": 3, "TotalLayer": 6, "Filename": "cube.goo"}})
         },
         start_ack: |_| 0,
+        reply: accepts,
     });
     let mut control = connected();
     let status = control.refresh_status().expect("the board reports");
@@ -133,6 +142,7 @@ fn a_print_starts_once_the_board_has_checked_the_file_it_was_sent() {
         },
         // Settled by its own report, the board still refuses the first start once.
         start_ack: |tried| u32::from(tried == 0),
+        reply: accepts,
     });
     let mut control = connected();
     control
@@ -152,6 +162,7 @@ fn a_board_printing_something_else_refuses_at_once() {
     let (_held, board) = a_board(Script {
         status: |_| json!({"CurrentStatus": [1], "PrintInfo": {"Status": 3}}),
         start_ack: |_| 1,
+        reply: accepts,
     });
     let mut control = connected();
     let refused = control.start_print("cube.goo", 0);
@@ -162,4 +173,89 @@ fn a_board_printing_something_else_refuses_at_once() {
     drop(control);
     let starts = board.join().expect("the board ran to the end");
     assert_eq!(starts, vec![1], "asked once, not until the window closes");
+}
+
+fn idle(_: usize) -> Value {
+    json!({"CurrentStatus": [0]})
+}
+
+#[test]
+fn the_history_is_a_list_of_ids_and_each_is_described_on_request() {
+    let (_held, board) = a_board(Script {
+        status: idle,
+        start_ack: |_| 0,
+        reply: |cmd| match cmd {
+            320 => json!({"Ack": 0, "HistoryData": ["0e8a", "3add"]}),
+            321 => json!({"Ack": 0, "HistoryDetailList": [{"TaskId": "0e8a",
+                "TaskName": "/media/mmcblk0p3/dragon.goo", "TaskStatus": 1,
+                "Thumbnail": "http://127.0.0.1:3030/media/0e8a.bmp"}]}),
+            _ => json!({"Ack": 0}),
+        },
+    });
+    let mut control = connected();
+    let ids = control.history().expect("the board lists its prints");
+    assert_eq!(ids, ["0e8a", "3add"]);
+    let tasks = control
+        .tasks(&ids[..1])
+        .expect("the board describes a print");
+    assert_eq!(tasks[0].file_name(), "dragon.goo");
+    assert_eq!(tasks[0].ending(), net_sdcp::Ending::Finished);
+    drop(control);
+    board.join().expect("the board ran to the end");
+}
+
+#[test]
+fn a_command_the_board_refuses_is_an_error_naming_what_was_asked() {
+    let (_held, board) = a_board(Script {
+        status: idle,
+        start_ack: |_| 0,
+        reply: |_| json!({"Ack": 1}),
+    });
+    let mut control = connected();
+    let refused = control.pause();
+    assert!(
+        matches!(
+            refused,
+            Err(SdcpError::CommandRefused {
+                what: "pause",
+                ack: 1,
+                ..
+            })
+        ),
+        "{refused:?}"
+    );
+    drop(control);
+    board.join().expect("the board ran to the end");
+}
+
+#[test]
+fn the_camera_answers_where_its_stream_is() {
+    let (_held, board) = a_board(Script {
+        status: idle,
+        start_ack: |_| 0,
+        reply: |_| json!({"Ack": 0, "VideoUrl": "rtsp://127.0.0.1:554/video"}),
+    });
+    let mut control = connected();
+    let url = control.video(true).expect("the board streams");
+    assert_eq!(url.as_deref(), Some("rtsp://127.0.0.1:554/video"));
+    drop(control);
+    board.join().expect("the board ran to the end");
+}
+
+#[test]
+fn a_board_without_a_camera_says_so() {
+    let (_held, board) = a_board(Script {
+        status: idle,
+        start_ack: |_| 0,
+        reply: |_| json!({"Ack": 2}),
+    });
+    let mut control = connected();
+    let refused = control.video(true);
+    assert!(
+        matches!(&refused, Err(SdcpError::CommandRefused { ack: 2, reason, .. })
+            if reason.contains("no camera")),
+        "{refused:?}"
+    );
+    drop(control);
+    board.join().expect("the board ran to the end");
 }

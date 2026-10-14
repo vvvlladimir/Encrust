@@ -46,17 +46,27 @@ impl<'a> Session<'a> {
             let request = builder.header("Accept", JSON).body(())?;
             Ok(session.calls.run(request)?)
         })
+        .map(text)
     }
 
-    /// Posts to a path with no body, which is how a print is started.
-    pub(crate) fn post(&mut self, path: &str) -> Result<String, PrusaLinkError> {
-        self.twice("POST", path, |session, builder| {
+    /// Reads whatever a path serves, such as a picture, as its bytes.
+    pub(crate) fn fetch(&mut self, path: &str) -> Result<Vec<u8>, PrusaLinkError> {
+        self.twice("GET", path, |session, builder| {
+            Ok(session.calls.run(builder.body(())?)?)
+        })
+    }
+
+    /// Sends `method` to a path with no body: a POST starts a print, a PUT pauses one and a
+    /// DELETE stops it.
+    pub(crate) fn bare(&mut self, method: &str, path: &str) -> Result<String, PrusaLinkError> {
+        self.twice(method, path, |session, builder| {
             let request = builder
                 .header("Accept", JSON)
                 .header("Content-Length", "0")
                 .body(())?;
             Ok(session.calls.run(request)?)
         })
+        .map(text)
     }
 
     /// Sends the file itself as the body of one PUT.
@@ -80,6 +90,7 @@ impl<'a> Session<'a> {
             let request = builder.body(File::open(source)?)?;
             Ok(session.uploads.run(request)?)
         })
+        .map(text)
     }
 
     /// Sends a request, and sends it again once when the answer was a challenge.
@@ -91,7 +102,7 @@ impl<'a> Session<'a> {
         method: &str,
         path: &str,
         mut send: impl FnMut(&mut Self, Builder) -> Result<Response<ureq::Body>, PrusaLinkError>,
-    ) -> Result<String, PrusaLinkError> {
+    ) -> Result<Vec<u8>, PrusaLinkError> {
         let builder = self.start(method, path);
         let response = send(self, builder)?;
         if response.status().as_u16() != 401 {
@@ -127,15 +138,15 @@ impl<'a> Session<'a> {
     }
 
     /// Turns one answer into its body, or into the refusal it states.
-    fn read(&self, response: Response<ureq::Body>) -> Result<String, PrusaLinkError> {
+    fn read(&self, response: Response<ureq::Body>) -> Result<Vec<u8>, PrusaLinkError> {
         let status = response.status().as_u16();
-        let body = response.into_body().read_to_string().unwrap_or_default();
+        let body = response.into_body().read_to_vec()?;
         match status {
             200..=299 => Ok(body),
             401 => Err(PrusaLinkError::Unauthorized {
                 host: self.link.host.clone(),
             }),
-            _ => Err(refusal(status, &body)),
+            _ => Err(refusal(status, &text(body))),
         }
     }
 
@@ -156,6 +167,12 @@ impl<'a> Session<'a> {
         self.challenge = Some(Challenge::parse(header)?);
         Ok(())
     }
+}
+
+/// A body read as text, where a stray byte is no reason to lose the rest of it.
+fn text(body: Vec<u8>) -> String {
+    String::from_utf8(body)
+        .unwrap_or_else(|error| String::from_utf8_lossy(error.as_bytes()).into_owned())
 }
 
 /// A refusal is an answer here: it carries the challenge and the reason.

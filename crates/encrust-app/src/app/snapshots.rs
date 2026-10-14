@@ -105,7 +105,7 @@ fn the_machine_and_resin_window() {
 /// printing and alone on its card, then both listed while nothing is bound.
 #[test]
 fn the_printers_on_the_network() {
-    use crate::network::{Destination, Reading};
+    use crate::network::{Destination, Picture, Reading};
     use printer_link::State;
 
     let board = |name: &str, id: &str, last: u8| net_sdcp::Printer {
@@ -129,6 +129,10 @@ fn the_printers_on_the_network() {
         layer_count: Some(800),
         remaining_s: Some(4_920),
         uv_led_c: Some(34.0),
+        job_id: Some("0e8a".to_owned()),
+        film_lifts: Some(668),
+        film_lifts_max: Some(60_000),
+        camera: true,
         ..State::default()
     };
     let idle = State {
@@ -148,6 +152,13 @@ fn the_printers_on_the_network() {
         network.printers = vec![board("Workshop", "aa", 133), board("Studio", "bb", 140)];
         network.hear("sdcp:aa", Reading::State(printing.clone()));
         network.hear("sdcp:bb", Reading::State(idle.clone()));
+        let extras = network.extras_mut("sdcp:aa");
+        extras
+            .pictures
+            .insert("0e8a".to_owned(), Picture::Decoded(a_plate_picture()));
+        extras.camera = Some("rtsp://192.168.1.133:554/video".to_owned());
+        extras.history_asked = true;
+        extras.history = Some(remembered());
         if bound {
             network.bind(
                 super::states::PRINTER,
@@ -159,4 +170,63 @@ fn the_printers_on_the_network() {
     let mut results = SnapshotResults::new();
     results.extend(picture("tool_export_bound", on_the_network(true)));
     results.extend(picture("tool_export_list", on_the_network(false)));
+}
+
+/// A plate as a board pictures it: a dark field with a lit model in the middle.
+fn a_plate_picture() -> egui::ColorImage {
+    let (width, height) = (96usize, 72usize);
+    let mut pixels = Vec::with_capacity(width * height * 4);
+    for y in 0..height {
+        for x in 0..width {
+            let inside = (30..66).contains(&x) && (14..58).contains(&y);
+            let shade = if inside { 190 } else { 28 };
+            pixels.extend_from_slice(&[shade, shade, shade + 10, 255]);
+        }
+    }
+    egui::ColorImage::from_rgba_unmultiplied([width, height], &pixels)
+}
+
+/// Two prints a board remembers: one finished, one stopped part of the way.
+fn remembered() -> Vec<printer_link::Task> {
+    let now_s = crate::updates::now_s();
+    let slice = |layers| {
+        Some(net_sdcp::SliceInformation {
+            total_layer_numbers: layers,
+            ..net_sdcp::SliceInformation::default()
+        })
+    };
+    vec![
+        printer_link::Task {
+            task_id: "3add".to_owned(),
+            task_name: "/media/sda1/Hex tray.goo".to_owned(),
+            begin_time: now_s - 90_000,
+            end_time: now_s - 86_400,
+            task_status: 1,
+            already_print_layer: 412,
+            slice_information: slice(412),
+            ..printer_link::Task::default()
+        },
+        printer_link::Task {
+            task_id: "10f2".to_owned(),
+            task_name: "/media/sda1/Bench.goo".to_owned(),
+            begin_time: now_s - 3 * 86_400,
+            end_time: now_s - 3 * 86_400 + 600,
+            task_status: 3,
+            already_print_layer: 240,
+            slice_information: slice(1710),
+            ..printer_link::Task::default()
+        },
+    ]
+}
+
+/// A file waiting on a printer, and what happened last, stacked at the foot of the stage.
+#[test]
+fn the_notices_at_the_foot_of_the_stage() {
+    let mut app = app(true);
+    app.machine.network.sent = Some(crate::network::Sent {
+        printer: "Workshop".to_owned(),
+        filename: "Dragon bust.goo".to_owned(),
+    });
+    app.machine.status = crate::status::Status::Info("Dragon bust.goo is on Workshop".to_owned());
+    picture("notices", app);
 }

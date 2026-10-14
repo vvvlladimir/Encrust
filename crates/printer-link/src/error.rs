@@ -9,6 +9,9 @@ pub enum SendError {
 
     #[error(transparent)]
     Prusa(#[from] PrusaLinkError),
+
+    #[error("{printer} is not printing anything")]
+    Idle { printer: String },
 }
 
 impl SendError {
@@ -26,6 +29,7 @@ impl SendError {
         match self {
             Self::Sdcp(error) => error.is_unreachable(),
             Self::Prusa(error) => error.is_unreachable(),
+            Self::Idle { .. } => false,
         }
     }
 }

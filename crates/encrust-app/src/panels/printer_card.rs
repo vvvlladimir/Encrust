@@ -1,11 +1,19 @@
-//! One printer on the network as a card: who it is, whether it answers, and what it is
-//! printing. The Export tool lists them; the printer settings say the same in a line.
+//! One printer on the network as a card: who it is, whether it answers, what it is
+//! printing with a picture of it, the buttons that pause or stop it, its camera, its film
+//! and the prints it remembers. The Export tool lists them; the printer settings say the
+//! same in a line.
+
+mod controls;
+mod history;
 
 use egui::{Color32, RichText};
 use printer_link::State;
 
-use crate::network::{Network, Reach, Reading, Target, Trouble};
-use crate::ui::{hint, icon, progress_bar, theme, tone};
+use crate::network::{Errand, Extras, Network, Reach, Reading, Target, Trouble};
+use crate::ui::{hint, icon, progress_bar, quiet_button, theme, tone};
+
+/// How big a picture of the print under way is drawn, in points.
+const PICTURE: egui::Vec2 = egui::vec2(72.0, 54.0);
 
 /// What the card says about one printer, worked out before anything is drawn.
 #[derive(Debug, Clone, PartialEq)]
@@ -37,24 +45,36 @@ struct Job {
     detail: String,
 }
 
-/// Draws one printer. `lit` marks the one the printer profile in hand is bound to; a
-/// `pickable` card answers a click, which binds the profile to it.
-pub fn card(
-    ui: &mut egui::Ui,
-    target: &Target<'_>,
-    reach: Reach,
-    reading: Option<&Reading>,
-    lit: bool,
-    pickable: bool,
-) -> egui::Response {
+/// Everything one card is drawn from.
+pub struct Card<'a> {
+    pub target: &'a Target<'a>,
+    pub reach: Reach,
+    pub reading: Option<&'a Reading>,
+    pub extras: Option<&'a Extras>,
+    /// Marks the printer the profile in hand is bound to.
+    pub lit: bool,
+    /// Offers to bind the profile in hand to this printer.
+    pub pickable: bool,
+}
+
+/// What a card was pressed for, for the caller to carry out.
+#[derive(Debug, Default)]
+pub struct Pressed {
+    pub picked: bool,
+    pub errand: Option<Errand>,
+}
+
+/// Draws one printer.
+pub fn card(ui: &mut egui::Ui, card: &Card<'_>) -> Pressed {
     let colors = theme::colors();
-    let face = face(reach, reading);
-    let (fill, stroke) = if lit {
+    let face = face(card.reach, card.reading);
+    let (fill, stroke) = if card.lit {
         (colors.accent_wash, colors.accent_soft)
     } else {
         (colors.raised, colors.hairline)
     };
-    let frame = egui::Frame::new()
+    let mut pressed = Pressed::default();
+    egui::Frame::new()
         .fill(fill)
         .stroke(egui::Stroke::new(1.0, stroke))
         .corner_radius(theme::R_CONTROL)
@@ -62,28 +82,56 @@ pub fn card(
         .show(ui, |ui| {
             ui.set_width(ui.available_width());
             ui.spacing_mut().item_spacing.y = 4.0;
-            head(ui, target, &face);
-            if let Some(job) = &face.job {
-                ui.add_space(4.0);
-                job_lines(ui, job);
-            }
-            if let Some(warmth) = &face.warmth {
-                tone(ui, warmth, colors.text_low);
-            }
-            if let Some(Reading::Failed(trouble)) = reading {
-                trouble_lines(ui, trouble);
+            head(ui, card.target, &face);
+            pressed.errand = body(ui, card, &face);
+            if card.pickable {
+                let pick = quiet_button(
+                    ui,
+                    icon::SEND,
+                    "Send this printer's files here",
+                    false,
+                    true,
+                );
+                pressed.picked = pick.clicked();
             }
         });
-    let sense = if pickable {
-        egui::Sense::click()
-    } else {
-        egui::Sense::hover()
-    };
-    let response = ui.interact(frame.response.rect, frame.response.id.with("pick"), sense);
-    if pickable && response.hovered() {
-        ui.ctx().set_cursor_icon(egui::CursorIcon::PointingHand);
+    pressed
+}
+
+/// Everything under the head: the print, its buttons, the readings, the camera, the
+/// history, and what went wrong.
+fn body(ui: &mut egui::Ui, card: &Card<'_>, face: &Face) -> Option<Errand> {
+    let key = card.target.key();
+    let mut errand = None;
+    if let Some(job) = &face.job {
+        ui.add_space(4.0);
+        let picture = match card.reading {
+            Some(Reading::State(state)) => state
+                .job_id
+                .as_ref()
+                .and_then(|id| card.extras?.pictures.get(id)?.texture()),
+            _ => None,
+        };
+        job_lines(ui, job, picture);
     }
-    response
+    if let Some(Reading::State(state)) = card.reading {
+        errand = errand.or(controls::buttons(ui, &key, state, card.extras));
+        if let Some(warmth) = &face.warmth {
+            tone(ui, warmth, theme::colors().text_low);
+        }
+        controls::film(ui, state);
+        errand = errand.or(controls::camera(ui, state, card.extras));
+        if matches!(card.target, Target::Sdcp(_)) {
+            errand = errand.or(history::fold(ui, &key, card.extras));
+        }
+    }
+    if let Some(Reading::Failed(trouble)) = card.reading {
+        trouble_lines(ui, trouble);
+    }
+    if let Some(trouble) = card.extras.and_then(|extras| extras.trouble.as_ref()) {
+        trouble_lines(ui, trouble);
+    }
+    errand
 }
 
 /// The icon, the name over the model and address, and the state word at the right.
@@ -128,9 +176,9 @@ fn state_word(ui: &mut egui::Ui, face: &Face) {
     ui.painter().circle_filled(rect.center(), 3.5, colour);
 }
 
-/// The file over its bar and the line under it, while it prints; one line for the last
-/// print once it is over.
-fn job_lines(ui: &mut egui::Ui, job: &Job) {
+/// The file over its bar and the line under it, while it prints, beside the picture of
+/// it once the printer has sent one; one line for the last print once it is over.
+fn job_lines(ui: &mut egui::Ui, job: &Job, picture: Option<&egui::TextureHandle>) {
     let colors = theme::colors();
     let Some(progress) = job.progress else {
         tone(
@@ -140,25 +188,45 @@ fn job_lines(ui: &mut egui::Ui, job: &Job) {
         );
         return;
     };
-    ui.horizontal(|ui| {
-        let share = RichText::new(format!("{:.0}%", progress * 100.0))
-            .font(theme::figures(12.0))
-            .color(colors.text_high);
-        let share_w = 40.0;
-        let file = egui::Label::new(
-            RichText::new(&job.file)
-                .font(theme::label())
-                .color(colors.text_high),
-        )
-        .truncate();
-        let file_w = (ui.available_width() - share_w).max(0.0);
-        ui.allocate_ui(egui::vec2(file_w, theme::ROW_H), |ui| ui.add(file));
-        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-            ui.label(share);
+    let lines = |ui: &mut egui::Ui| {
+        ui.horizontal(|ui| {
+            let share = RichText::new(format!("{:.0}%", progress * 100.0))
+                .font(theme::figures(12.0))
+                .color(colors.text_high);
+            let share_w = 40.0;
+            let file = egui::Label::new(
+                RichText::new(&job.file)
+                    .font(theme::label())
+                    .color(colors.text_high),
+            )
+            .truncate();
+            let file_w = (ui.available_width() - share_w).max(0.0);
+            ui.allocate_ui(egui::vec2(file_w, theme::ROW_H), |ui| ui.add(file));
+            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                ui.label(share);
+            });
         });
-    });
-    progress_bar(ui, Some(progress));
-    tone(ui, &job.detail, colors.text_mid);
+        progress_bar(ui, Some(progress));
+        tone(ui, &job.detail, colors.text_mid);
+    };
+    match picture {
+        Some(texture) => {
+            ui.horizontal(|ui| {
+                picture_of(ui, texture, PICTURE);
+                ui.vertical(lines);
+            });
+        }
+        None => lines(ui),
+    }
+}
+
+/// A printer's picture of a print, fitted into `size` and rounded like the card.
+fn picture_of(ui: &mut egui::Ui, texture: &egui::TextureHandle, size: egui::Vec2) {
+    ui.add(
+        egui::Image::new(texture)
+            .fit_to_exact_size(size)
+            .corner_radius(theme::R_CONTROL),
+    );
 }
 
 fn trouble_lines(ui: &mut egui::Ui, trouble: &Trouble) {
@@ -240,10 +308,14 @@ fn face(reach: Reach, reading: Option<&Reading>) -> Face {
     }
 }
 
+/// Whether the print is paused or on its way to it, which is what Resume answers.
+fn paused(state: &State) -> bool {
+    matches!(state.stage.as_deref(), Some("pausing" | "paused")) || state.state == "paused"
+}
+
 fn of_state(state: &State) -> Face {
     let stage = state.stage.as_deref();
-    let held = matches!(stage, Some("pausing" | "paused")) || state.state == "paused";
-    let (word, light) = if held {
+    let (word, light) = if paused(state) {
         ("Paused".to_owned(), Light::Held)
     } else if state.busy {
         (capitalised(stage.unwrap_or(&state.state)), Light::Working)

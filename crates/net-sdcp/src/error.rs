@@ -41,6 +41,16 @@ pub enum SdcpError {
         supported: String,
     },
 
+    #[error("the printer refused to {what}: {reason}")]
+    CommandRefused {
+        what: &'static str,
+        ack: u32,
+        reason: &'static str,
+    },
+
+    #[error("the printer pointed at {url}, which is not on the printer")]
+    ForeignUrl { url: String },
+
     #[error("cancelled")]
     Cancelled,
 }
@@ -82,6 +92,15 @@ impl SdcpError {
 
 /// The `Ack` a board answers a print request with while it is doing something else.
 pub(crate) const ACK_BUSY: u32 = 1;
+
+/// What a refused camera request means, by the specification's table for command `386`.
+pub(crate) fn video_reason(ack: u32) -> &'static str {
+    match ack {
+        1 => "it is already streaming to as many viewers as it allows",
+        2 => "it has no camera",
+        _ => "no reason given",
+    }
+}
 
 /// The `Ack` a print request comes back with, spelled out for the user.
 pub(crate) fn print_ack(ack: u32) -> Result<(), SdcpError> {

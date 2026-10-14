@@ -60,7 +60,7 @@ pub fn upload(
 /// Starts a file already on the machine's storage.
 pub fn start_print(link: &Link, filename: &str) -> Result<(), PrusaLinkError> {
     Session::new(link)
-        .post(&file_path(link, filename))
+        .bare("POST", &file_path(link, filename))
         .map(|_| ())
 }
 

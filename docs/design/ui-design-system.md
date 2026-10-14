@@ -207,10 +207,11 @@ the stack is still the plate's. See `docs/decisions/0061` and `0217`.
 Everything over the stage is an `egui::Area` anchored to a rectangle by its corner. Between
 the side cards stand the view cube and the home view at the top right
 (`panels/view_cube.rs`), the view tools at the bottom right beside this plate's card
-(`panels/view_column.rs`), top centre the running jobs with their Cancel and a sent file
-waiting to be started, and at the bottom centre, clear of the view tools, the last message
-(`panels/stage_notice.rs`). A failure stays there until it is put away; any
-other message stands for four seconds. There is no status line.
+(`panels/view_column.rs`), and at the bottom centre, clear of the view tools, every notice
+in one stack (`panels/stage_notice.rs`, ADR 0263): the running jobs with their Cancel, a
+sent file waiting to be started, and nearest the edge the last message. A failure stays
+there until it is put away; any other message stands for four seconds. There is no status
+line.
 
 The viewport reads the raw pointer rather than its own `Response`, so what is drawn over
 it would otherwise orbit the camera as well. None of these cards reports where it is:

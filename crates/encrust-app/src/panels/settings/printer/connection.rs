@@ -103,16 +103,14 @@ fn bound_rows(ui: &mut egui::Ui, profile: &str, network: &mut Network, speaks: C
         let label = format!("{} ({}), {state}", target.name(), target.detail());
         ui.radio_value(&mut chosen, Destination::Printer(target.key()), label);
     }
-    if listed {
-        ui.radio_value(&mut chosen, Destination::File, "Save to a file instead");
-    } else if network.is_scanning() {
-        tone(
-            ui,
-            "Looking for printers on the network",
-            theme::colors().text_mid,
-        );
-    } else {
-        tone(ui, "No machine set up yet", theme::colors().text_mid);
+    // Writing a file instead is `USB only` above, so the list offers machines alone.
+    if !listed {
+        let empty = if network.is_scanning() {
+            "Looking for printers on the network"
+        } else {
+            "No machine set up yet"
+        };
+        tone(ui, empty, theme::colors().text_mid);
     }
     network.bind(profile, chosen);
 }
