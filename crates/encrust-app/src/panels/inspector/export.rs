@@ -1,13 +1,14 @@
 use egui::{Color32, RichText};
+use printer_profiles::Connection;
 
 use super::opened;
-use crate::network::{Reach, Target};
 use crate::panels::Window;
 use crate::panels::plate_summary::file_readings;
-use crate::panels::slice::{Run, Via, bound_machine, broken_reminder, reach_dot, start};
+use crate::panels::printer_card::{self, Chosen};
+use crate::panels::slice::{Run, Via, bound_machine, broken_reminder, start};
 use crate::ui::{
-    hint, icon, inline_button, list, primary_button, readings, secondary_button, section,
-    section_with_action, text_row, theme,
+    hint, icon, primary_button, readings, secondary_button, section, section_with_action, text_row,
+    theme,
 };
 use crate::workspace::Tool;
 
@@ -58,7 +59,7 @@ pub fn action(ui: &mut egui::Ui, window: &mut Window) {
     }
     let busy = window.machine.slicing.job.is_some() || window.machine.network.job.is_some();
     let free = blocker.is_none() && !busy;
-    let bound = bound_machine(window.machine);
+    let bound = bound_machine(window.machine, ui.input(|input| input.time));
     let plates = window.doc.scene.plates().len();
     let extension = window.machine.slicing.format.extension();
     let to_file = if every_plate(ui.ctx(), plates) {
@@ -82,7 +83,7 @@ pub fn action(ui: &mut egui::Ui, window: &mut Window) {
             {
                 pressed = Some(Via::File);
             }
-            if let Some(why) = bound.blocker {
+            if let Some(why) = &bound.blocker {
                 hint(ui, why);
             }
         }
@@ -177,104 +178,69 @@ fn picker_row(
     });
 }
 
-/// Every machine the window can reach, with whether it answered, and the one the plate's
-/// printer is bound to lit.
+/// Where the printer in hand sends its files: one row naming the listed printer and
+/// what it is doing, opening the others the profile lists, and beside it that printer's
+/// sheet. Which printers a profile lists is its own network settings (ADR 0265).
 fn send(ui: &mut egui::Ui, window: &mut Window) {
     if cfg!(target_arch = "wasm32") {
         return;
     }
-    let (rescan, _) =
-        section_with_action(ui, "Send to a printer", (icon::RESET, "Look again"), |ui| {
-            {
-                let network = &window.machine.network;
-                let bound = network.target().map(|target| target.key());
-                let targets = network.targets();
-                if targets.is_empty() {
-                    hint(
-                        ui,
-                        "No machine found yet. Look again, or add one by its address.",
-                    );
-                }
-                list(ui, |ui| {
-                    for target in &targets {
-                        let lit = bound.as_deref() == Some(target.key().as_str());
-                        machine_row(ui, target, network.reach(target), lit);
-                    }
-                });
+    let connection = window
+        .machine
+        .slicing
+        .printer
+        .as_ref()
+        .map_or(Connection::None, |profile| profile.connection);
+    window
+        .machine
+        .network
+        .keep_fresh(ui.input(|input| input.time));
+    let mut set_up = false;
+    let (rescan, chosen) = section_with_action(
+        ui,
+        "Send to a printer",
+        (icon::RESET, "Look again"),
+        |ui| {
+            let network = &window.machine.network;
+            if connection == Connection::None {
+                hint(
+                    ui,
+                    "This printer's profile takes files on a stick; choose its network in its settings to send from here.",
+                );
+                return None;
             }
-            by_address(ui, &mut window.machine.network);
-        });
+            if network.listed().is_empty() {
+                hint(ui, "No printer of this model is listed to send to yet.");
+                set_up = secondary_button(ui, icon::NETWORK, "Choose them in its network settings")
+                    .clicked();
+                return None;
+            }
+            let chosen = printer_card::destination(ui, network);
+            if let Some(target) = network.target()
+                && !target.speaks(connection)
+            {
+                let line = format!(
+                    "{} speaks {}, but this profile sends over {}: set its network in the printer's settings.",
+                    network.label(&target),
+                    target.protocol().label(),
+                    connection.label()
+                );
+                crate::ui::tone(ui, &line, theme::colors().warn);
+            }
+            printer_card::scan_notes(ui, network);
+            chosen
+        },
+    );
     if rescan {
         window.machine.network.scan();
     }
-}
-
-/// A board on another subnet, which no broadcast reaches, typed in by its address. A
-/// machine that wants a login is set up in the printer's settings instead.
-fn by_address(ui: &mut egui::Ui, network: &mut crate::network::Network) {
-    let address = network.draft.trim().parse().ok();
-    ui.horizontal(|ui| {
-        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-            let add = ui
-                .add_enabled_ui(address.is_some(), |ui| {
-                    inline_button(ui, icon::ADD, "Add", false, true)
-                })
-                .inner;
-            if add.clicked()
-                && let Some(address) = address
-            {
-                network.add(address);
-                network.draft.clear();
-            }
-            let width = ui.available_width();
-            crate::ui::address_field(
-                ui,
-                &mut network.draft,
-                "Add by address, 192.168.1.42",
-                width,
-            );
-        });
-    });
-}
-
-/// One machine: its name over where it is, and a dot for whether it answered.
-fn machine_row(ui: &mut egui::Ui, target: &Target<'_>, reach: Reach, lit: bool) {
-    let colors = theme::colors();
-    let fill = if lit {
-        colors.accent_wash
-    } else {
-        Color32::TRANSPARENT
-    };
-    egui::Frame::new()
-        .fill(fill)
-        .corner_radius(theme::R_CONTROL)
-        .inner_margin(egui::Margin::symmetric(8, 4))
-        .show(ui, |ui| {
-            ui.set_width(ui.available_width());
-            ui.horizontal(|ui| {
-                ui.label(
-                    RichText::new(icon::PRINTER)
-                        .font(theme::icon(16.0))
-                        .color(colors.text_mid),
-                );
-                ui.vertical(|ui| {
-                    ui.spacing_mut().item_spacing.y = 0.0;
-                    ui.label(
-                        RichText::new(target.name())
-                            .font(theme::label())
-                            .color(colors.text_high),
-                    );
-                    ui.label(
-                        RichText::new(target.detail())
-                            .font(theme::code(10.5))
-                            .color(colors.text_low),
-                    );
-                });
-                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                    reach_dot(ui, reach);
-                });
-            });
-        })
-        .response
-        .on_hover_text(reach.hint(&target.name()));
+    if set_up {
+        crate::panels::open_machines(window.machine);
+        window.machine.settings.tab = crate::settings::Tab::Network;
+    }
+    match chosen.flatten() {
+        Some(Chosen::Pick(address)) => window.machine.network.choose(address),
+        Some(Chosen::Open(key)) => window.machine.network.open = Some(key),
+        None => {}
+    }
 }

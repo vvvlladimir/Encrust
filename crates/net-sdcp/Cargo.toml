@@ -20,5 +20,9 @@ tracing.workspace = true
 tungstenite.workspace = true
 ureq.workspace = true
 
+# A browser has no interfaces to list; see docs/decisions/0262.
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+if-addrs.workspace = true
+
 [lints]
 workspace = true

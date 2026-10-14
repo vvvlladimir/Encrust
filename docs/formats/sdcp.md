@@ -30,6 +30,10 @@ Discovery is shared with version 1; the two sections after it are not.
 ### Discovery, UDP port 3000
 
 Broadcast the seven bytes `M99999`. Every board on the segment replies with one datagram.
+The probe goes to each interface's own broadcast address, `192.168.1.255` on a `/24`, and
+only then to `255.255.255.255`: macOS refuses the limited broadcast with `EHOSTUNREACH`
+(ADR 0262). Its Local Network privacy setting passes that broadcast but refuses the control
+socket with the same error, so a board can be found and still not reached.
 Version 3 puts the fields straight under `Data`:
 
 ```json
@@ -74,9 +78,38 @@ sdcp/notice/${MainboardID}       board -> client, unprompted
 ```
 
 A request is an envelope of `Cmd`, a `Data` payload, a `RequestID` to match the answer by,
-the board ID, a timestamp and `From: 0` for a client. The commands used here are `0`
-(report status), `1` (report attributes) and `128` (start printing, taking a filename and
-a start layer). The rest of the command table is in the specification.
+the board ID, a timestamp and `From: 0` for a client. The commands used here:
+
+| Cmd | What it does | `Data` sent | What the answer carries beside `Ack` |
+|---|---|---|---|
+| `0` | report status | `null` | nothing; the status follows on its own topic |
+| `1` | report attributes | `null` | nothing; the attributes follow on their own topic |
+| `128` | start printing | `Filename`, `StartLayer` | nothing |
+| `129`, `130`, `131` | pause, stop, resume | `{}` | nothing |
+| `320` | list remembered prints | `{}` | `HistoryData`, task ids, most recent first |
+| `321` | describe prints | `Id`, a list of task ids | `HistoryDetailList` |
+| `386` | camera on or off | `Enable`, `1` or `0` | `VideoUrl` while on |
+
+The specification defines no `Ack` but `0` for `129` to `131`; any other is reported as
+a refusal. `386` defines three: as many viewers as the board allows (its attributes'
+`MaximumVideoStreamAllowed`, `2` on a Saturn 4 Ultra), no camera, and unknown. A board
+says it has one by `VIDEO_STREAM` in its attributes' `Capabilities`.
+
+A task from `321`, as a Saturn 4 Ultra on V1.5.2 answers it, trimmed:
+
+```json
+{ "TaskId": "0e8ac2f2-…", "TaskName": "/media/mmcblk0p3/dragon.goo", "TaskStatus": 3,
+  "Thumbnail": "http://192.168.1.133:3030/media/mmcblk0p1/history_image/0e8ac2f2-….bmp",
+  "BeginTime": 1791971587, "EndTime": 1791971587, "AlreadyPrintLayer": 0,
+  "SliceInformation": { "total_layer_numbers": 1710, "print_time": 18885, "volume": 235.1 } }
+```
+
+`TaskStatus` is `1` finished, `2` failed, `3` stopped, `0` anything else. The thumbnail is
+a 400 by 300 bitmap, 32 bits a pixel with the fourth byte zero, served over plain HTTP;
+only a URL on the board's own address is fetched. The print under way names its task in
+`PrintInfo.TaskId`, which is how its picture is found. The camera is RTSP carrying H.264,
+`rtsp://${MainboardIP}:554/video` on a Saturn 4 Ultra; the window shows the address rather
+than the video (ADR 0263).
 
 Every response carries an `Ack`, and only `0` is success. The other seven say why not:
 busy, file not found, MD5 mismatch, unreadable, resolution mismatch, unknown format,
@@ -97,6 +130,23 @@ Four details the shape of the client follows from:
 4. **A board checks a file after it lands and is busy until it has.** A start sent then is
    answered `Ack 1`, so a start waits out status `10` and asks again on busy, for up to a
    minute; a board printing something else is refused at once.
+
+What a status carries beyond the states, as a Saturn 4 Ultra on firmware V1.5.2 sends it:
+
+```json
+{ "Status": { "CurrentStatus": [0], "ReleaseFilm": 668, "TempOfUVLED": 21.8,
+              "TimeLapseStatus": 1,
+              "PrintInfo": { "Status": 0, "CurrentLayer": 0, "TotalLayer": 0,
+                             "CurrentTicks": 0, "TotalTicks": 0, "ErrorNumber": 0,
+                             "Filename": "", "TaskId": "" } } }
+```
+
+`CurrentTicks` and `TotalTicks` are the time printed and the estimated total, in ms by the
+specification. `TempOfUVLED` and `TempOfBox` are °C; a board without a heated hood leaves
+the second out. `ReleaseFilm` counts the lifts the film has taken, against the attributes'
+`ReleaseFilmMax`, `60000` on a Saturn 4 Ultra. The window watches a board by asking for this every few seconds over one
+connection it holds. A version 1 board is watched through the discovery probe instead,
+whose answer carries the same `Status` block (ADR 0262).
 
 ### Upload, version 3: `POST http://${MainboardIP}:3030/uploadFile/upload`
 

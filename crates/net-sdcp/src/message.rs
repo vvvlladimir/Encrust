@@ -71,6 +71,8 @@ pub(crate) enum Incoming {
     Response {
         request_id: String,
         ack: Option<u32>,
+        /// Whatever else the answer carries beside its `Ack`, such as a list of tasks.
+        fields: Box<serde_json::Map<String, serde_json::Value>>,
     },
     Status(Box<Status>),
     Attributes(Box<Attributes>),
@@ -105,9 +107,13 @@ impl Incoming {
                     None => Self::Other,
                 }
             }
-            () if topic.contains("/response/") => body.map_or(Self::Other, |body| Self::Response {
-                request_id: body.request_id.unwrap_or_default(),
-                ack: body.data.and_then(|inner| inner.ack),
+            () if topic.contains("/response/") => body.map_or(Self::Other, |body| {
+                let payload = body.data.unwrap_or_default();
+                Self::Response {
+                    request_id: body.request_id.unwrap_or_default(),
+                    ack: payload.ack,
+                    fields: Box::new(payload.fields),
+                }
             }),
             () if topic.contains("/error/") => body
                 .and_then(|body| body.data)
@@ -146,13 +152,15 @@ struct ResponseBody {
     attributes: Option<Attributes>,
 }
 
-#[derive(Deserialize)]
+#[derive(Default, Deserialize)]
 #[serde(rename_all = "PascalCase")]
 struct Payload {
     #[serde(default)]
     ack: Option<u32>,
     #[serde(default)]
     error_code: Option<String>,
+    #[serde(flatten)]
+    fields: serde_json::Map<String, serde_json::Value>,
 }
 
 fn seconds_now() -> u64 {
@@ -235,8 +243,9 @@ mod tests {
         let text = r#"{"Id":"x","Data":{"Cmd":128,"Data":{"Ack":2},
             "RequestID":"abc","MainboardID":"ffffffff","TimeStamp":1},
             "Topic":"sdcp/response/ffffffff"}"#;
-        let Incoming::Response { request_id, ack } =
-            Incoming::parse(text, None).expect("valid JSON")
+        let Incoming::Response {
+            request_id, ack, ..
+        } = Incoming::parse(text, None).expect("valid JSON")
         else {
             panic!("the response topic decides");
         };
@@ -248,8 +257,9 @@ mod tests {
     fn a_response_with_no_topic_of_its_own_is_sorted_by_the_one_it_arrived_on() {
         let text = r#"{"Id":"x","Data":{"Cmd":1,"Data":{"Ack":0},
             "RequestID":"130f","MainboardID":"ABCD1234","TimeStamp":8567213}}"#;
-        let Incoming::Response { request_id, ack } =
-            Incoming::parse(text, Some("/sdcp/response/ABCD1234")).expect("valid JSON")
+        let Incoming::Response {
+            request_id, ack, ..
+        } = Incoming::parse(text, Some("/sdcp/response/ABCD1234")).expect("valid JSON")
         else {
             panic!("the topic the message came on decides");
         };

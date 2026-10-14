@@ -178,7 +178,10 @@ window, double-clicks to maximise, and on every platform but macOS draws its own
 buttons; on macOS the system's are moved onto its centre line. See `docs/decisions/0104`
 and `0217`. The File, Edit and View menus stand at its left end. The chip in the middle of
 the window names the machine and the resin, each opening its list, and the layer height
-and exposure, which open the print settings. Find, at the right, opens a palette of every
+and exposure, which open the print settings. Left of it, once a printer on the network
+answers, a ring fills with how far the current printer has got, in the colour of what it
+is doing; a press opens that printer's sheet, or with more than one answering a list of
+them first. A printer that stops answering leaves the ring until a scan hears it again (`panels/printer_card/ring.rs`, `docs/decisions/0264`). Find, at the right, opens a palette of every
 tool, every action of the key table and every model on the plate (`panels/find.rs`,
 `docs/decisions/0230`).
 
@@ -207,10 +210,11 @@ the stack is still the plate's. See `docs/decisions/0061` and `0217`.
 Everything over the stage is an `egui::Area` anchored to a rectangle by its corner. Between
 the side cards stand the view cube and the home view at the top right
 (`panels/view_cube.rs`), the view tools at the bottom right beside this plate's card
-(`panels/view_column.rs`), top centre the running jobs with their Cancel and a sent file
-waiting to be started, and at the bottom centre, clear of the view tools, the last message
-(`panels/stage_notice.rs`). A failure stays there until it is put away; any
-other message stands for four seconds. There is no status line.
+(`panels/view_column.rs`), and at the bottom centre, clear of the view tools, every notice
+in one stack (`panels/stage_notice.rs`, ADR 0263): the running jobs with their Cancel, a
+sent file waiting to be started, and nearest the edge the last message. A failure stays
+there until it is put away; any other message stands for four seconds. There is no status
+line.
 
 The viewport reads the raw pointer rather than its own `Response`, so what is drawn over
 it would otherwise orbit the camera as well. None of these cards reports where it is:

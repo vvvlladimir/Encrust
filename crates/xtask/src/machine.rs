@@ -109,6 +109,7 @@ pub fn transcribe(stem: &str, ini: &Ini) -> Result<Transcribed> {
         mirror_y: ini.flag("display_mirror_y")?,
         output,
         connection: connection(&id),
+        machines: Vec::new(),
         firmware: printer_profiles::Firmware {
             // A board old enough to be given a `.ctb` below version 4 predates the
             // firmware that reads the per-layer tables.

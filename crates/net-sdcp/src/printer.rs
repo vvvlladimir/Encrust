@@ -55,6 +55,9 @@ pub struct Attributes {
     pub capabilities: Vec<String>,
     #[serde(default, rename = "SupportFileType")]
     pub file_types: Vec<String>,
+    /// Lifts the release film is rated for, beside the count in the status.
+    #[serde(default)]
+    pub release_film_max: Option<u32>,
 }
 
 impl Attributes {
@@ -63,6 +66,11 @@ impl Attributes {
         self.file_types
             .iter()
             .any(|known| known.eq_ignore_ascii_case(extension))
+    }
+
+    /// Whether the board serves a camera, as command `386` asks for.
+    pub fn has_camera(&self) -> bool {
+        self.capabilities.iter().any(|c| c == "VIDEO_STREAM")
     }
 
     /// Whether the board carries the file transfer and print control sub-protocols.
@@ -81,6 +89,15 @@ pub struct Status {
     pub current_status: Vec<u32>,
     #[serde(default)]
     pub print_info: PrintInfo,
+    /// Temperature of the light source, in °C, on boards with a sensor on it.
+    #[serde(default, rename = "TempOfUVLED")]
+    pub uv_led_c: Option<f32>,
+    /// Temperature inside the hood, in °C, on boards that heat it.
+    #[serde(default, rename = "TempOfBox")]
+    pub chamber_c: Option<f32>,
+    /// Lifts the release film has taken, on boards that count them.
+    #[serde(default)]
+    pub release_film: Option<u32>,
     /// What a board pulling a file has of it. Only version 1 reports this, because only
     /// version 1 pulls.
     #[serde(default)]
@@ -118,6 +135,15 @@ pub struct PrintInfo {
     pub filename: String,
     #[serde(default)]
     pub error_number: u32,
+    /// What the board remembers this print by, for command `321`.
+    #[serde(default)]
+    pub task_id: String,
+    /// Time printed so far. Read as a float because firmware is loose about it.
+    #[serde(default, rename = "CurrentTicks")]
+    pub current_ms: f64,
+    /// Estimated time of the whole print; `0` while the board has no estimate.
+    #[serde(default, rename = "TotalTicks")]
+    pub total_ms: f64,
 }
 
 impl PrintInfo {
@@ -129,6 +155,16 @@ impl PrintInfo {
     /// How far through the stack the printer is, or `None` before it starts.
     pub fn fraction(&self) -> Option<f32> {
         (self.total_layer > 0).then(|| self.current_layer as f32 / self.total_layer as f32)
+    }
+
+    /// Time printed so far, in seconds, or `None` before the print starts.
+    pub fn elapsed_s(&self) -> Option<u64> {
+        (self.current_ms > 0.0).then(|| (self.current_ms / 1000.0) as u64)
+    }
+
+    /// Time left by the board's own estimate, in seconds, or `None` without one.
+    pub fn remaining_s(&self) -> Option<u64> {
+        (self.total_ms > 0.0).then(|| ((self.total_ms - self.current_ms).max(0.0) / 1000.0) as u64)
     }
 
     /// Why the print stopped, or `None` while nothing is wrong.
@@ -323,6 +359,36 @@ mod tests {
         info.total_layer = 200;
         info.current_layer = 50;
         assert_eq!(info.fraction(), Some(0.25));
+    }
+
+    /// A Saturn 4 Ultra at rest, as it answered on firmware V1.5.2.
+    #[test]
+    fn an_idle_board_reports_its_light_source_temperature_and_no_times() {
+        let status: Status = serde_json::from_str(
+            r#"{"CurrentStatus":[0],"ReleaseFilm":668,"TempOfUVLED":21.815496444702148,
+                "TimeLapseStatus":1,"PrintInfo":{"Status":0,"CurrentLayer":0,"TotalLayer":0,
+                "CurrentTicks":0,"TotalTicks":0,"ErrorNumber":0,"Filename":"","TaskId":""}}"#,
+        )
+        .expect("a status report from a shipping board");
+        assert!(status.uv_led_c.is_some_and(|c| (c - 21.8).abs() < 0.1));
+        assert_eq!(status.chamber_c, None, "this board has no heated hood");
+        assert_eq!(status.print_info.elapsed_s(), None);
+        assert_eq!(status.print_info.remaining_s(), None);
+    }
+
+    #[test]
+    fn the_time_left_is_the_estimate_less_the_time_printed() {
+        let info = PrintInfo {
+            current_ms: 600_000.0,
+            total_ms: 3_600_000.0,
+            ..PrintInfo::default()
+        };
+        assert_eq!(
+            info.elapsed_s(),
+            Some(600),
+            "ticks are ms by the specification"
+        );
+        assert_eq!(info.remaining_s(), Some(3000));
     }
 
     #[test]

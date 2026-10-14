@@ -41,6 +41,16 @@ pub enum SdcpError {
         supported: String,
     },
 
+    #[error("the printer refused to {what}: {reason}")]
+    CommandRefused {
+        what: &'static str,
+        ack: u32,
+        reason: &'static str,
+    },
+
+    #[error("the printer pointed at {url}, which is not on the printer")]
+    ForeignUrl { url: String },
+
     #[error("cancelled")]
     Cancelled,
 }
@@ -57,8 +67,40 @@ impl From<ureq::Error> for SdcpError {
     }
 }
 
+impl SdcpError {
+    /// Whether the system found no route to the board: it is off, on another network, or
+    /// macOS is keeping this program off the local network.
+    pub fn is_unreachable(&self) -> bool {
+        let io = match self {
+            Self::Io(io) => io,
+            Self::Socket(socket) => match socket.as_ref() {
+                tungstenite::Error::Io(io) => io,
+                _ => return false,
+            },
+            Self::Transport(http) => match http.as_ref() {
+                ureq::Error::Io(io) => io,
+                _ => return false,
+            },
+            _ => return false,
+        };
+        matches!(
+            io.kind(),
+            std::io::ErrorKind::HostUnreachable | std::io::ErrorKind::NetworkUnreachable
+        )
+    }
+}
+
 /// The `Ack` a board answers a print request with while it is doing something else.
 pub(crate) const ACK_BUSY: u32 = 1;
+
+/// What a refused camera request means, by the specification's table for command `386`.
+pub(crate) fn video_reason(ack: u32) -> &'static str {
+    match ack {
+        1 => "it is already streaming to as many viewers as it allows",
+        2 => "it has no camera",
+        _ => "no reason given",
+    }
+}
 
 /// The `Ack` a print request comes back with, spelled out for the user.
 pub(crate) fn print_ack(ack: u32) -> Result<(), SdcpError> {
@@ -89,6 +131,17 @@ mod tests {
                 Err(SdcpError::PrintRefused { .. })
             ));
         }
+    }
+
+    #[test]
+    fn no_route_to_the_board_is_told_from_a_board_that_refused() {
+        let no_route = std::io::Error::from(std::io::ErrorKind::HostUnreachable);
+        assert!(SdcpError::Io(no_route).is_unreachable());
+        let wrapped = tungstenite::Error::Io(std::io::ErrorKind::NetworkUnreachable.into());
+        assert!(SdcpError::from(wrapped).is_unreachable());
+        let refused = std::io::Error::from(std::io::ErrorKind::ConnectionRefused);
+        assert!(!SdcpError::Io(refused).is_unreachable());
+        assert!(!SdcpError::BoardClosed.is_unreachable());
     }
 
     #[test]

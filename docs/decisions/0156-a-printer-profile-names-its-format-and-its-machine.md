@@ -1,6 +1,6 @@
 # 0156. A printer profile names its format, and is bound to its machine
 
-- **Status:** Accepted
+- **Status:** Accepted; the binding of one machine superseded by 0265
 - **Date:** 2026-10-01
 
 ## Context

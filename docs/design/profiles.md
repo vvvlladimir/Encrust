@@ -163,10 +163,20 @@ user's directory is what wins over it.
 ## How a machine is reached
 
 `connection` says what a machine takes a file over: `none` for a stick, `sdcp` for an
-Elegoo board, `prusa-link` for an Original Prusa. The address and the credentials are not
-in the profile — they are the window's own settings — but which machine on the network
-this profile sends to is remembered against it, so one printer is set up once and the
-Slice button goes there from then on (ADR 0156).
+Elegoo board, `prusa-link` for an Original Prusa. `[[machines]]` lists the printers of
+this model on the network that files go to, each with a `name`, an `address` and, for an
+SDCP board, its `board` id, which still names it after it moves to another address. The
+list travels with the profile when it is exported. A Prusa machine's login does not: it
+is the window's own setting (ADR 0153, 0265).
+
+```toml
+connection = "sdcp"
+
+[[machines]]
+name = "Bench A"
+address = "192.168.1.133"
+board = "d85f46e4d7d90100"
+```
 
 ## What the file calls the machine
 

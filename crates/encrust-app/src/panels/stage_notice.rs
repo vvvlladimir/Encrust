@@ -1,49 +1,38 @@
-use egui::{Align, Align2, Id, Layout, Rect, RichText, vec2};
+use egui::{Align, Align2, Id, Layout, Rect, RichText};
 
 use crate::panels::Window;
 use crate::status::Status;
 use crate::ui::{card, icon, icon_button, inline_button, progress_bar, theme};
 
-/// Points between the top of the stage and the first card, between the cards, and how
-/// wide a job's card is drawn whatever its label measures.
-const INSET: f32 = 12.0;
+/// Points between the cards, and how wide a job's card is drawn whatever its label
+/// measures.
 const GAP: f32 = 6.0;
 const JOB_W: f32 = 360.0;
 /// The widest a message may grow before it is cut.
 const MESSAGE_W: f32 = 520.0;
-/// What a message leaves free at either side of the stage's foot: the view column's card
+/// What a notice leaves free at either side of the stage's foot: the view column's card
 /// at the right, and as much at the left so it stays centred.
 const BESIDE_W: f32 = theme::ICON_SIZE + 20.0;
 /// How long a message that is not a failure stays up after it changed, seconds.
 const INFO_LINGER_S: f64 = 4.0;
 
-/// Top centre of the stage: what is running, with a way to stop it, then the one thing the
-/// plate is waiting on. What happened last stands at the foot, between the side cards. The
-/// window has no status line; see `docs/decisions/0217`.
+/// Every notice, stacked at the foot of the stage between the side cards: what is running,
+/// with a way to stop it, then a file waiting to be started, then what happened last,
+/// nearest the edge. The window has no status line; see `docs/decisions/0217` and `0263`.
 pub fn ui(ui: &egui::Ui, window: &mut Window, stage: Rect) {
-    let running = egui::Area::new(Id::new("stage-notice"))
+    let width = (stage.width() - 2.0 * BESIDE_W).clamp(0.0, MESSAGE_W);
+    egui::Area::new(Id::new("stage-notice"))
         .order(egui::Order::Middle)
-        .fixed_pos(stage.center_top() + vec2(0.0, INSET))
-        .pivot(Align2::CENTER_TOP)
+        .fixed_pos(stage.center_bottom())
+        .pivot(Align2::CENTER_BOTTOM)
         .constrain_to(stage)
         .show(ui.ctx(), |ui| {
             ui.spacing_mut().item_spacing.y = GAP;
             ui.with_layout(Layout::top_down(Align::Center), |ui| {
                 let running = jobs(ui, window);
                 waiting_to_print(ui, window);
-                running
-            })
-            .inner
-        })
-        .inner;
-    let width = (stage.width() - 2.0 * BESIDE_W).clamp(0.0, MESSAGE_W);
-    egui::Area::new(Id::new("stage-message"))
-        .order(egui::Order::Middle)
-        .fixed_pos(stage.center_bottom())
-        .pivot(Align2::CENTER_BOTTOM)
-        .constrain_to(stage)
-        .show(ui.ctx(), |ui| {
-            message(ui, &mut window.machine.status, running, width);
+                message(ui, &mut window.machine.status, running, width);
+            });
         });
 }
 

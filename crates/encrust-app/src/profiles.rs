@@ -107,11 +107,12 @@ pub fn import_printer(window: &mut Window, file: &Handed) {
 /// Stands the plate and everything on it under a new printer.
 ///
 /// A new build volume moves the middle of the plate, so everything already imported is
-/// put back over the new centre rather than left hanging off the old one. The machine on
-/// the network follows the profile, because it is bound to it; see ADR 0156.
+/// put back over the new centre rather than left hanging off the old one. The printers
+/// on the network follow the profile, because it lists them; see ADR 0265.
 pub fn apply_printer(window: &mut Window, profile: PrinterProfile, id: Option<String>) {
     let plate = BuildPlate::from_profile(&profile);
-    window.machine.network.bind_to(id.clone());
+    window.machine.network.bind_to(id.clone(), Some(&profile));
+    learn_printer_names(window.machine);
     window.machine.slicing.set_printer(profile, id);
     stand_on(window, plate);
 }
@@ -119,9 +120,19 @@ pub fn apply_printer(window: &mut Window, profile: PrinterProfile, id: Option<St
 /// Takes the machine out from under the plate: the default envelope, nothing bound and
 /// nothing to slice for. It is what removing the last machine leaves (BUG-14).
 pub fn clear_printer(window: &mut Window) {
-    window.machine.network.bind_to(None);
+    window.machine.network.bind_to(None, None);
     window.machine.slicing.clear_printer();
     stand_on(window, BuildPlate::default());
+}
+
+/// Tells the network what every profile calls its printers, after a profile changed.
+pub fn learn_printer_names(machine: &mut crate::state::Machine) {
+    let profiles = machine
+        .slicing
+        .catalogue
+        .printers()
+        .map(|entry| &entry.profile);
+    machine.network.learn_names(profiles);
 }
 
 /// Stands the plate and everything on it on a new build volume.

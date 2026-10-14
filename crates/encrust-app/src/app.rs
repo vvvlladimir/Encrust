@@ -425,6 +425,10 @@ impl eframe::App for SlicerApp {
         }
         if working | self.run_the_cut_up(ui.ctx()) {
             ui.ctx().request_repaint();
+        } else if self.machine.network.is_watching() {
+            // A watched printer reports every few seconds; a second is soon enough to show it.
+            ui.ctx()
+                .request_repaint_after(std::time::Duration::from_secs(1));
         }
         self.machine.updates.tick();
         if self.machine.updates.take_close() {

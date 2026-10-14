@@ -23,6 +23,9 @@ pub struct Machine {
 /// The print in progress. The status names no file; that is `GET /api/v1/job`'s.
 #[derive(Debug, Clone, Default, Deserialize)]
 pub struct Job {
+    /// What pausing, resuming and stopping it are addressed by.
+    #[serde(default)]
+    pub id: Option<u64>,
     /// Percent, 0 to 100.
     #[serde(default)]
     pub progress: f32,

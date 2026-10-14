@@ -1,25 +1,34 @@
-//! The Network card of the printer form: what the machine speaks, and which machine on
-//! the network this profile is bound to. See `docs/decisions/0156`.
+//! The Network card of the printer form: what the machine speaks, and the printers of
+//! this model on the network its files go to, each under a name of its own. See
+//! `docs/decisions/0265`.
 
 use net_prusalink::Link;
-use printer_profiles::Connection;
+use net_sdcp::Printer;
+use printer_profiles::{Connection, NetworkMachine, PrinterProfile};
 
-use crate::network::{Destination, Network, PrusaDraft};
-use crate::ui::{Segment, Segmented, hint, icon, icon_button, inline_button, theme, tone};
+use crate::network::{Network, PrusaDraft, Reach, Target};
+use crate::panels::printer_card;
+use crate::ui::{
+    Segment, Segmented, hint, icon, icon_button, inline_button, list, subheading, theme, tone,
+};
 
 /// How wide a field here is: enough for a host name, not enough to stretch the card.
 const FIELD_W: f32 = 230.0;
+/// How wide a listed printer's name is edited.
+const NAME_W: f32 = 170.0;
 
-/// What this machine takes a file over, and under it the one it is sent to.
-pub fn card(ui: &mut egui::Ui, profile: &str, connection: &mut Connection, network: &mut Network) {
+/// What this machine takes a file over, and under it the printers it is sent to.
+pub fn card(ui: &mut egui::Ui, profile: &mut PrinterProfile, network: &mut Network) {
     let segments: Vec<Segment<'_, Connection>> = Connection::ALL
         .iter()
         .map(|kind| Segment::new(*kind, kind.label()))
         .collect();
     let width = ui.available_width();
-    Segmented::new(&segments).width(width).show(ui, connection);
+    Segmented::new(&segments)
+        .width(width)
+        .show(ui, &mut profile.connection);
     ui.add_space(8.0);
-    match *connection {
+    match profile.connection {
         Connection::None => hint(
             ui,
             "What is sliced is saved to a file and carried over on a stick.",
@@ -29,55 +38,256 @@ pub fn card(ui: &mut egui::Ui, profile: &str, connection: &mut Connection, netwo
     }
 }
 
-/// Boards answer a broadcast, so they are scanned for; one on another subnet is typed in.
-fn sdcp(ui: &mut egui::Ui, profile: &str, network: &mut Network) {
-    bound_rows(ui, profile, network, Connection::Sdcp);
+/// Boards answer a broadcast, so the ones found are offered to tick; one on another
+/// subnet is typed in by its address.
+fn sdcp(ui: &mut egui::Ui, profile: &mut PrinterProfile, network: &mut Network) {
+    network.keep_fresh(ui.input(|input| input.time));
+    listed(ui, profile, network);
 
     ui.add_space(6.0);
     ui.horizontal(|ui| {
-        let scanning = network.is_scanning();
-        let label = if scanning {
-            "Scanning..."
-        } else {
-            "Scan network"
-        };
-        if inline_button(ui, icon::NETWORK, label, false, !scanning).clicked() {
-            network.scan();
-        }
-        let address = network.draft.trim().parse().ok();
+        subheading(ui, "Found on the network");
+        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+            let scanning = network.is_scanning();
+            let label = if scanning {
+                "Scanning..."
+            } else {
+                "Scan again"
+            };
+            if inline_button(ui, icon::NETWORK, label, false, !scanning).clicked() {
+                network.scan();
+            }
+        });
+    });
+    found(ui, profile, network);
+
+    ui.add_space(6.0);
+    let address: Option<std::net::IpAddr> = network.draft.trim().parse().ok();
+    ui.horizontal(|ui| {
         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
             if inline_button(ui, icon::ADD, "Add", false, address.is_some()).clicked()
                 && let Some(address) = address
             {
+                profile.machines.push(NetworkMachine {
+                    name: String::new(),
+                    address: address.to_string(),
+                    board: None,
+                });
                 network.add(address);
                 network.draft.clear();
             }
             let width = ui.available_width();
-            crate::ui::address_field(ui, &mut network.draft, "192.168.1.42", width);
+            crate::ui::address_field(
+                ui,
+                &mut network.draft,
+                "Add by address, 192.168.1.42",
+                width,
+            );
         });
     });
-    hint(
-        ui,
-        "A board stays listed once this printer is bound to it, scan or no scan.",
-    );
+    printer_card::scan_notes(ui, network);
 }
 
-/// A Prusa machine does not answer a broadcast and wants a login, so it is typed in.
-fn prusa(ui: &mut egui::Ui, profile: &str, network: &mut Network) {
-    bound_rows(ui, profile, network, Connection::PrusaLink);
+/// The printers this profile sends to, each named, with what it is doing and a way to
+/// take it off the list. A board listed by its address learns its id once it answers, so
+/// it is still found after it moves to another address.
+fn listed(ui: &mut egui::Ui, profile: &mut PrinterProfile, network: &mut Network) {
+    subheading(ui, "Printers this machine sends to");
+    if profile.machines.is_empty() {
+        tone(
+            ui,
+            "None yet: tick them below, or add one by its address.",
+            theme::colors().text_mid,
+        );
+        return;
+    }
+    let speaks = profile.connection;
+    let mut removed = None;
+    list(ui, |ui| {
+        for (index, machine) in profile.machines.iter_mut().enumerate() {
+            let target = network.resolve(machine);
+            if let (None, Some(Target::Sdcp(board))) = (&machine.board, &target) {
+                machine.board = Some(board.mainboard_id.clone());
+            }
+            let state = match &target {
+                Some(target) if !target.speaks(speaks) => {
+                    format!(
+                        "Speaks {}, not {}",
+                        target.protocol().label(),
+                        speaks.label()
+                    )
+                }
+                Some(target) => {
+                    printer_card::summary(network.reach(target), network.reading(target))
+                }
+                None if network.has_asked() => "Not found on the network".to_owned(),
+                None => "Not looked for yet".to_owned(),
+            };
+            let answers = target.is_some_and(|target| network.reach(&target) == Reach::Answered);
+            if listed_row(ui, machine, &state, answers) {
+                removed = Some(index);
+            }
+        }
+    });
+    if let Some(index) = removed {
+        network.forget(&profile.machines.remove(index).address);
+    }
+}
 
-    let hosts: Vec<String> = network
+/// One listed printer: a dot for whether it answers, its name to edit, where it is, what
+/// it is doing, and the button that takes it off the list. Answers whether it was pressed.
+fn listed_row(ui: &mut egui::Ui, machine: &mut NetworkMachine, state: &str, answers: bool) -> bool {
+    let colors = theme::colors();
+    let mut removed = false;
+    egui::Frame::new()
+        .fill(colors.raised)
+        .inner_margin(egui::Margin::symmetric(8, 4))
+        .show(ui, |ui| {
+            ui.set_width(ui.available_width());
+            ui.horizontal(|ui| {
+                let dot = if answers { colors.ok } else { colors.text_low };
+                let (rect, _) = ui.allocate_exact_size(egui::vec2(8.0, 8.0), egui::Sense::hover());
+                ui.painter().circle_filled(rect.center(), 3.5, dot);
+                ui.add(
+                    crate::ui::text_box(egui::TextEdit::singleline(&mut machine.name))
+                        .hint_text(machine.address.clone())
+                        .desired_width(NAME_W),
+                );
+                ui.label(
+                    egui::RichText::new(&machine.address)
+                        .font(theme::code(11.0))
+                        .color(colors.text_mid),
+                );
+                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                    removed =
+                        icon_button(ui, icon::REMOVE, "Take off this machine's list").clicked();
+                    ui.add(
+                        egui::Label::new(
+                            egui::RichText::new(state)
+                                .font(theme::small())
+                                .color(colors.text_low),
+                        )
+                        .truncate(),
+                    );
+                });
+            });
+        });
+    removed
+}
+
+/// Boards that answered and are not listed yet, a box each to tick onto the list, this
+/// model's first; and one press for every board of this model at once.
+fn found(ui: &mut egui::Ui, profile: &mut PrinterProfile, network: &Network) {
+    let mut unlisted: Vec<&Printer> = network
+        .printers
+        .iter()
+        .filter(|board| {
+            !profile.machines.iter().any(|machine| {
+                let key = Target::Sdcp(board).key();
+                network
+                    .resolve(machine)
+                    .is_some_and(|found| found.key() == key)
+            })
+        })
+        .collect();
+    unlisted.sort_by_key(|board| !same_model(&board.model, profile));
+    if unlisted.is_empty() {
+        let note = if network.is_scanning() {
+            "Looking for printers on the network"
+        } else {
+            "Every printer found is listed."
+        };
+        tone(ui, note, theme::colors().text_mid);
+        return;
+    }
+    let mut picked: Vec<Printer> = Vec::new();
+    for board in &unlisted {
+        let mut ticked = false;
+        let mine = same_model(&board.model, profile);
+        let label = format!("{} · {} · {}", board.name, board.model, board.address);
+        let text = egui::RichText::new(label).color(if mine {
+            theme::colors().text_high
+        } else {
+            theme::colors().text_low
+        });
+        let response = ui.checkbox(&mut ticked, text);
+        let response = if mine {
+            response
+        } else {
+            response.on_hover_text("Another model than this profile's")
+        };
+        if response.changed() && ticked {
+            picked.push((*board).clone());
+        }
+    }
+    let same: Vec<&&Printer> = unlisted
+        .iter()
+        .filter(|b| same_model(&b.model, profile))
+        .collect();
+    if same.len() > 1
+        && inline_button(
+            ui,
+            icon::ADD,
+            &format!("Add all {} of this model", same.len()),
+            false,
+            true,
+        )
+        .clicked()
+    {
+        picked = same.into_iter().map(|board| (*board).clone()).collect();
+    }
+    for board in picked {
+        let name = default_name(&board.name, &profile.machines);
+        profile.machines.push(NetworkMachine {
+            name,
+            address: board.address.to_string(),
+            board: Some(board.mainboard_id),
+        });
+    }
+}
+
+/// A Prusa machine does not answer a broadcast and wants a login, so it is set up by hand
+/// and the login stays in this window's settings rather than in the profile.
+fn prusa(ui: &mut egui::Ui, profile: &mut PrinterProfile, network: &mut Network) {
+    listed(ui, profile, network);
+
+    let unlisted: Vec<String> = network
         .prusa
         .iter()
         .map(|prusa| prusa.link.host.clone())
+        .filter(|host| {
+            !profile
+                .machines
+                .iter()
+                .any(|machine| machine.address == *host)
+        })
         .collect();
-    ui.add_space(6.0);
-    for host in hosts {
-        if icon_button(ui, icon::REMOVE, &format!("Forget {host}")).clicked() {
-            network.forget_prusa(&host);
+    if !unlisted.is_empty() {
+        subheading(ui, "Set up in this window");
+        for host in unlisted {
+            ui.horizontal(|ui| {
+                let mut ticked = false;
+                if ui.checkbox(&mut ticked, &host).changed() && ticked {
+                    profile.machines.push(NetworkMachine {
+                        name: String::new(),
+                        address: host.clone(),
+                        board: None,
+                    });
+                }
+                if icon_button(ui, icon::REMOVE, &format!("Forget the login for {host}")).clicked()
+                {
+                    network.forget_prusa(&host);
+                }
+            });
         }
     }
+    subheading(ui, "Set up another");
     if let Some(link) = fields(ui, &mut network.prusa_draft) {
+        profile.machines.push(NetworkMachine {
+            name: String::new(),
+            address: link.host.clone(),
+            board: None,
+        });
         network.add_prusa(link);
         network.prusa_draft = PrusaDraft::default();
     }
@@ -87,24 +297,30 @@ fn prusa(ui: &mut egui::Ui, profile: &str, network: &mut Network) {
     );
 }
 
-/// The machines this protocol offers, as a choice this profile is bound to one of.
-fn bound_rows(ui: &mut egui::Ui, profile: &str, network: &mut Network, speaks: Connection) {
-    let mut chosen = network.bound_to(profile);
-    let mut listed = false;
-    for target in network.targets() {
-        if !target.speaks(speaks) {
-            continue;
-        }
-        listed = true;
-        let label = format!("{} ({})", target.name(), target.detail());
-        ui.radio_value(&mut chosen, Destination::Printer(target.key()), label);
+/// Whether a board calling itself `model` is the machine `profile` describes.
+fn same_model(model: &str, profile: &PrinterProfile) -> bool {
+    let model = model.trim().to_lowercase();
+    let names = [
+        profile.name.to_lowercase(),
+        profile.machine_name().to_lowercase(),
+    ];
+    !model.is_empty()
+        && names
+            .iter()
+            .any(|name| model == *name || model.ends_with(&format!(" {name}")))
+}
+
+/// What a newly listed board is called: its own name, numbered when the list already
+/// holds a printer by that name, as ten boards fresh from the box all do.
+fn default_name(own: &str, listed: &[NetworkMachine]) -> String {
+    let taken = |name: &str| listed.iter().any(|machine| machine.name == name);
+    if !taken(own) {
+        return own.to_owned();
     }
-    if listed {
-        ui.radio_value(&mut chosen, Destination::File, "Save to a file instead");
-    } else {
-        tone(ui, "No machine set up yet", theme::colors().text_mid);
-    }
-    network.bind(profile, chosen);
+    (2..)
+        .map(|n| format!("{own} {n}"))
+        .find(|name| !taken(name))
+        .unwrap_or_else(|| own.to_owned())
 }
 
 /// A machine's host and either the login its screen generated or the key it falls back
@@ -145,4 +361,40 @@ fn fields(ui: &mut egui::Ui, draft: &mut PrusaDraft) -> Option<Link> {
         });
     });
     added
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn named(name: &str) -> NetworkMachine {
+        NetworkMachine {
+            name: name.to_owned(),
+            address: "192.168.1.9".to_owned(),
+            board: None,
+        }
+    }
+
+    #[test]
+    fn ten_boards_with_one_factory_name_are_numbered() {
+        assert_eq!(default_name("3D Printer", &[]), "3D Printer");
+        let listed = [named("3D Printer"), named("3D Printer 2")];
+        assert_eq!(default_name("3D Printer", &listed), "3D Printer 3");
+    }
+
+    #[test]
+    fn a_board_is_this_profiles_model_by_its_name_or_the_one_its_files_carry() {
+        let saturn = PrinterProfile {
+            name: "Saturn 4 Ultra".to_owned(),
+            machine_name: Some("ELEGOO Saturn 4 Ultra".to_owned()),
+            ..PrinterProfile::default()
+        };
+        assert!(same_model("Saturn 4 Ultra", &saturn));
+        assert!(same_model("ELEGOO Saturn 4 Ultra", &saturn));
+        assert!(!same_model("Saturn 3 Ultra", &saturn));
+        assert!(
+            !same_model("", &saturn),
+            "a board that names no model is no match"
+        );
+    }
 }

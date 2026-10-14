@@ -119,6 +119,8 @@ binaries = [{ path = "encrust-gui", main = true }, { path = "encrust" }]
 
 [package.metadata.packager.macos]
 minimum-system-version = "11.0"
+# Merged into the generated Info.plist: why the window asks for the local network (ADR 0262).
+info-plist-path = "../../assets/macos/Info.plist"
 
 [package.metadata.packager.nsis]
 installer-icon = "../../assets/icon/encrust.ico"

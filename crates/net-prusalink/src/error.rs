@@ -43,6 +43,25 @@ impl From<ureq::Error> for PrusaLinkError {
     }
 }
 
+impl PrusaLinkError {
+    /// Whether the system found no route to the machine: it is off, on another network,
+    /// or macOS is keeping this program off the local network.
+    pub fn is_unreachable(&self) -> bool {
+        let io = match self {
+            Self::Io(io) => io,
+            Self::Transport(http) => match http.as_ref() {
+                ureq::Error::Io(io) => io,
+                _ => return false,
+            },
+            _ => return false,
+        };
+        matches!(
+            io.kind(),
+            std::io::ErrorKind::HostUnreachable | std::io::ErrorKind::NetworkUnreachable
+        )
+    }
+}
+
 /// What a refusal means, in the words of the API's own error table.
 ///
 /// The body carries a `title` and a `text` when the printer has one; these stand in when
@@ -92,6 +111,15 @@ mod tests {
         };
         assert_eq!(status, 409);
         assert_eq!(reason, "RESIN TOO LOW: Refill the tank.");
+    }
+
+    #[test]
+    fn no_route_to_the_machine_is_told_from_a_machine_that_refused() {
+        let no_route = ureq::Error::Io(std::io::ErrorKind::HostUnreachable.into());
+        assert!(PrusaLinkError::from(no_route).is_unreachable());
+        let refused = std::io::Error::from(std::io::ErrorKind::ConnectionRefused);
+        assert!(!PrusaLinkError::Io(refused).is_unreachable());
+        assert!(!refusal(409, "").is_unreachable());
     }
 
     #[test]

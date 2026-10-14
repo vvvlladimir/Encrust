@@ -15,6 +15,7 @@ cargo xtask gen-profiles --source <dir of .ini profiles> --dry-run
 cargo xtask web   # the window for a browser, on nightly: docs/design/web-build.md
 cargo xtask man   # the command line's man pages, into target/man
 cargo xtask arch  # the drawn dependency graph against the manifests
+cargo xtask app   # the window as Encrust Dev.app, which macOS lets onto the local network
 cargo xtask licenses  # THIRD-PARTY-LICENSES.md from the lockfile (needs cargo-about)
 ```
 

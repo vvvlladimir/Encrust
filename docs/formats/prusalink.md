@@ -30,7 +30,7 @@ sent twice. Every request after counts up in `nc`, because a server is entitled 
 count it has already seen. `qop=auth` is answered when offered and the RFC 2069 form when
 not; `auth-int` is not implemented and no shipping firmware asks for it.
 
-## The four calls
+## The calls
 
 ### `GET /api/version`
 
@@ -69,8 +69,16 @@ Starts a file already on the storage. The body is ignored; `204 No Content` is t
 
 What `encrust printer status` reads. `printer.state` is the one required field — `IDLE`,
 `BUSY`, `PRINTING`, `PAUSED`, `FINISHED`, `STOPPED`, `ERROR`, `ATTENTION` or `READY` — and
-`job`, while there is one, carries `progress` in percent and `time_remaining` in seconds.
-The file being printed is not named here; that is `GET /api/v1/job`'s, which is not read.
+`job`, while there is one, carries its `id`, `progress` in percent and `time_remaining` in
+seconds. The file being printed is not named here; that is `GET /api/v1/job`'s.
+
+### `GET /api/v1/job`, and the job's own paths
+
+The print under way, or `204` with no body when there is none: its `id` and its `file`,
+whose `refs.thumbnail` is a path on the machine read with the same login, the picture the
+window shows of the print. The job is addressed by that `id`: `PUT /api/v1/job/{id}/pause`,
+`PUT /api/v1/job/{id}/resume` and `DELETE /api/v1/job/{id}` to stop it, each answered
+`204`, or `409` when the job is not in a state to take it (ADR 0263).
 
 ## What a refusal means
 
@@ -88,6 +96,9 @@ these stand in:
 | 507 | there is no room left on the storage |
 
 ## What this is not
+
+There is no history of past prints and no camera stream in what an SL1 serves, so a
+Prusa machine's card shows neither.
 
 There is no discovery. PrusaLink announces itself over mDNS as `_http._tcp`, and this
 workspace carries no resolver; a machine is typed in, with its credentials, and remembered

@@ -30,6 +30,9 @@ pub enum ProfileError {
     #[error("{field} cannot be negative, got {value}")]
     Negative { field: &'static str, value: f32 },
 
+    #[error("printer {index} on the network has no address")]
+    NoAddress { index: usize },
+
     #[error("tuning for printer {printer}: {field} must be greater than zero, got {value}")]
     NonPositiveTuning {
         printer: String,

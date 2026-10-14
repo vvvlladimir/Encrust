@@ -3,12 +3,14 @@
 
 mod digest;
 mod error;
+mod job;
 mod link;
 mod session;
 mod status;
 mod upload;
 
 pub use error::PrusaLinkError;
+pub use job::{PrintedFile, Printing, Refs, job, pause, picture, resume, stop};
 pub use link::{Auth, DEFAULT_USER, Link, Version};
 pub use status::{Job, Machine, Status, status};
 pub use upload::{probe, start_print, upload};

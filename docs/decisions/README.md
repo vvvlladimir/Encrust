@@ -281,7 +281,7 @@ Grouped by what the decision governs; the number is still the order it was taken
 | [0140](0140-a-profile-carries-the-machine-name-its-firmware-matches.md) | A profile carries the machine name its firmware matches | Accepted |
 | [0141](0141-advance-mode-follows-the-firmware-flag.md) | Advance mode follows the machine's firmware flag | Accepted |
 | [0142](0142-a-tilting-vat-reads-the-header-alone.md) | A tilting vat reads the header alone | Accepted |
-| [0156](0156-a-printer-profile-names-its-format-and-its-machine.md) | A printer profile names its format, and is bound to its machine | Accepted |
+| [0156](0156-a-printer-profile-names-its-format-and-its-machine.md) | A printer profile names its format, and is bound to its machine | Accepted; the binding superseded by 0265 |
 | [0158](0158-the-shipped-catalogue-is-a-library-not-a-list-of-machines-you-own.md) | The shipped catalogue is a library, not the machines you own | Accepted |
 | [0165](0165-the-catalogue-is-generated-and-only-what-we-can-write-ships.md) | The catalogue is generated, and only machines we can write a file for ship | Accepted |
 | [0166](0166-a-machine-states-which-photon-workshop-revision-it-reads.md) | A machine states which Photon Workshop revision it reads | Accepted |
@@ -300,6 +300,10 @@ Grouped by what the decision governs; the number is still the order it was taken
 | [0154](0154-sdcp-version-one-is-the-same-crate-with-a-second-transport.md) | SDCP version 1 is the same crate with a second transport | Accepted |
 | [0155](0155-the-broker-and-the-file-server-are-written-here.md) | The broker and the file server are written here | Accepted |
 | [0182](0182-sending-is-a-crate-both-front-ends-share-and-a-browser-downloads.md) | Sending is a crate both front ends share, and a browser downloads | Accepted |
+| [0262](0262-discovery-asks-every-interface-and-the-window-watches-each-printer.md) | Ask every interface for printers, and watch each printer the window lists | Accepted |
+| [0263](0263-the-window-drives-the-printer-and-its-notices-stand-at-the-foot.md) | Let the window drive a printer, and stack its notices at the foot of the stage | Accepted; the cards in Export superseded by 0264 |
+| [0264](0264-a-ring-in-the-top-bar-and-one-row-in-export.md) | Put a ring for the current printer in the top bar, and leave Export one row | Accepted; the list the Export row opens superseded by 0265 |
+| [0265](0265-a-printer-profile-lists-its-printers-on-the-network.md) | A printer profile lists the printers of its model on the network | Accepted |
 
 ### The window and the command line
 
@@ -337,8 +341,8 @@ Grouped by what the decision governs; the number is still the order it was taken
 | [0135](0135-the-macos-icon-is-squircled-at-source.md) | The macOS icon is squircled at source, not only in the bundle | Accepted |
 | [0138](0138-the-destination-lives-on-the-slice-button.md) | The destination lives on the Slice button | Superseded by 0157 |
 | [0151](0151-the-preview-shows-a-source-not-a-plate.md) | Let the preview show a source, which is either a plate or a file | Accepted; what ends a file's turn is amended by 0202 |
-| [0157](0157-the-slice-row-carries-two-actions.md) | The Slice row carries two actions, not a destination | Accepted; the Send button is superseded by 0217 |
-| [0217](0217-the-window-is-a-top-bar-a-flat-rail-and-a-layer-strip.md) | The window is a top bar, a flat rail, a docked inspector and a layer strip | Accepted; the return to the model on a tool press is superseded by 0218, the docked columns and layer strip by 0221, Find by 0230, the message under the jobs by 0231 |
+| [0157](0157-the-slice-row-carries-two-actions.md) | The Slice row carries two actions, not a destination | Accepted; the Send button is superseded by 0217, the stale dot by 0262 |
+| [0217](0217-the-window-is-a-top-bar-a-flat-rail-and-a-layer-strip.md) | The window is a top bar, a flat rail, a docked inspector and a layer strip | Accepted; the return to the model on a tool press is superseded by 0218, the docked columns and layer strip by 0221, Find by 0230, the message under the jobs by 0231, the jobs top centre by 0263 |
 | [0218](0218-twelve-tools-on-the-rail-and-print-settings-as-a-form.md) | Twelve tools on the rail, and the print settings as a form | Accepted; Select and the digits are superseded by 0231 |
 | [0219](0219-the-viewport-is-lit-shadowed-and-turned-by-a-cube.md) | Light the viewport by a sky, a key and a fill, shadow it by contact, and turn it by a cube | Accepted; the hatching of overhangs is superseded by 0245 |
 | [0245](0245-an-overhang-is-filled-not-hatched.md) | Fill an overhang with its colour instead of hatching it | Accepted |

@@ -22,8 +22,8 @@ pub use material::{MaterialProfile, PriceUnit, PrinterTuning, ResinDetails, Wait
 pub use own_ids::{Renamed, own_id};
 pub use preset::Preset;
 pub use printer::{
-    AnycubicExtension, BuildVolume, Connection, Display, Firmware, OutputFormat, PhotonRevision,
-    PrinterProfile,
+    AnycubicExtension, BuildVolume, Connection, Display, Firmware, NetworkMachine, OutputFormat,
+    PhotonRevision, PrinterProfile,
 };
 pub use store::{DirStore, ProfileStore};
 pub use support::{
