@@ -210,12 +210,13 @@ pub fn plate_of(
     check_adaptive(job, printer)?;
     let mut placed = Vec::with_capacity(entries.len());
     for (path, shaping) in entries {
-        let max_overhang_deg = shaping
-            .supports
-            .as_ref()
-            .map(|profile| profile.max_overhang_deg);
-        let (mut mesh, import, oriented) =
-            import(path, &shaping.import, printer, max_overhang_deg, watch.talk)?;
+        let (mut mesh, import, oriented) = import(
+            path,
+            &shaping.import,
+            shaping.supports.as_ref(),
+            printer,
+            watch.talk,
+        )?;
         if let Some(position) = shaping.position {
             mesh = stood_at(&mesh, position)?;
         }
@@ -237,9 +238,12 @@ pub fn plate_of(
         let (hollow, mut cuts) =
             hollow_and_cut(&mut mesh, &shaping.hollow, shaping.import.precision, watch)?;
         watch.stop.check()?;
+        // An orientation found to need no supports stays on the plate it was judged on.
+        let seated = oriented.as_ref().is_some_and(|turn| turn.on_plate);
         let stood = shaping
             .supports
             .as_ref()
+            .filter(|_| !seated)
             .map(|profile| stand_under(&mut mesh, &mut cuts, profile, layer_height))
             .transpose()?;
         let (supports, columns) = match stood {

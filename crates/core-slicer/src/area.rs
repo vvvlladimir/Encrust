@@ -1,4 +1,4 @@
-use core_geometry::Scalar;
+use core_geometry::{Scalar, Vec2};
 use i_overlay::core::fill_rule::FillRule;
 use i_overlay::float::simplify::SimplifyShape;
 
@@ -11,8 +11,23 @@ use crate::Contour;
 /// The whole plane goes in at once, because which contour overlaps which is what the
 /// figure is about. See `docs/decisions/0206`.
 pub fn covered_area(contours: &[Contour]) -> Scalar {
+    covered_pieces(contours)
+        .iter()
+        .flatten()
+        .map(|ring| shoelace(ring))
+        .sum::<Scalar>()
+        .abs()
+        / 2.0
+}
+
+/// The separate pieces one plane's contours cover, by the same rule as [`covered_area`]:
+/// each piece its outline first and then its holes, the holes wound the other way.
+///
+/// What a pull on the film is computed over, since a piece pulls as one and two pieces
+/// pull apart.
+pub fn covered_pieces(contours: &[Contour]) -> Vec<Vec<Vec<Vec2>>> {
     if contours.is_empty() {
-        return 0.0;
+        return Vec::new();
     }
     let shape: Vec<Vec<[Scalar; 2]>> = contours
         .iter()
@@ -23,22 +38,24 @@ pub fn covered_area(contours: &[Contour]) -> Scalar {
     // zero, so eight copies of one cut leave one hole and not a solid wound minus seven.
     shape
         .simplify_shape(FillRule::Positive)
-        .iter()
-        .flatten()
-        .map(|ring| shoelace(ring))
-        .sum::<Scalar>()
-        .abs()
-        / 2.0
+        .into_iter()
+        .map(|piece| {
+            piece
+                .into_iter()
+                .map(|ring| ring.into_iter().map(|[x, y]| Vec2::new(x, y)).collect())
+                .collect()
+        })
+        .collect()
 }
 
 /// Twice the signed area of a ring, in the order the overlay handed it back.
-fn shoelace(ring: &[[Scalar; 2]]) -> Scalar {
+fn shoelace(ring: &[Vec2]) -> Scalar {
     let count = ring.len();
     (0..count)
         .map(|index| {
-            let [px, py] = ring[index];
-            let [qx, qy] = ring[(index + 1) % count];
-            px.mul_add(qy, -(qx * py))
+            let p = ring[index];
+            let q = ring[(index + 1) % count];
+            p.x.mul_add(q.y, -(q.x * p.y))
         })
         .sum()
 }
@@ -47,7 +64,6 @@ fn shoelace(ring: &[[Scalar; 2]]) -> Scalar {
 mod tests {
     use super::*;
     use crate::Winding;
-    use core_geometry::Vec2;
 
     /// A square of `side`, its lower left corner at `at`, wound counter-clockwise.
     fn square(at: Vec2, side: Scalar) -> Contour {
@@ -94,6 +110,18 @@ mod tests {
             (laid_eight - 12.0).abs() < 1e-3,
             "the same cut eight times over is still one hole: {laid_eight}"
         );
+    }
+
+    #[test]
+    fn two_squares_apart_are_two_pieces_and_a_hole_stays_with_its_own() {
+        let pieces = covered_pieces(&[
+            square(Vec2::ZERO, 4.0),
+            hole(Vec2::splat(1.0), 2.0),
+            square(Vec2::new(10.0, 0.0), 2.0),
+        ]);
+        let mut rings: Vec<usize> = pieces.iter().map(Vec::len).collect();
+        rings.sort_unstable();
+        assert_eq!(rings, [1, 2], "a plain square, and a square with its hole");
     }
 
     #[test]

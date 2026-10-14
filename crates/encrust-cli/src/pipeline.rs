@@ -21,7 +21,7 @@ use core_plate::{OrientSettings, orient};
 use core_raster::Shading;
 use core_slicer::{AdaptiveSettings, Solid, Windows};
 use core_volume::{ReliefSettings, Tiling, press, press_tiled};
-use printer_profiles::{Compensation, MaterialProfile, PrinterProfile};
+use printer_profiles::{Compensation, MaterialProfile, PrinterProfile, SupportProfile};
 
 use crate::args::{ImportArgs, JobArgs, RasterArgs};
 use crate::exit::Stop;
@@ -67,6 +67,8 @@ pub struct OrientSummary {
     pub rotation: Quat,
     pub peak_mm2: Scalar,
     pub overhang_mm2: Scalar,
+    /// Whether the model needs no supports this way up, set straight on the plate.
+    pub on_plate: bool,
 }
 
 impl OrientSummary {
@@ -127,12 +129,13 @@ pub fn slice_one(
     })
 }
 
-/// Loads, welds, places and repairs the model, and says what import found.
+/// Loads, welds, places and repairs the model, and says what import found. `supports` is
+/// what it will stand on, if anything, which is what an orientation is judged on.
 pub fn import(
     input: &Path,
     args: &ImportArgs,
+    supports: Option<&SupportProfile>,
     profile: Option<&PrinterProfile>,
-    max_overhang_deg: Option<Scalar>,
     talk: bool,
 ) -> Result<(Mesh, ImportReport, Option<OrientSummary>)> {
     let loaded = load(input)?;
@@ -140,13 +143,18 @@ pub fn import(
         talk_mapping(&loaded);
     }
     let welded = weld(&loaded.mesh, args.weld_tolerance);
-    let (mesh, oriented) = place(welded.mesh.clone(), args, profile, max_overhang_deg)?;
+    let (mesh, oriented) = place(welded.mesh.clone(), args, supports, profile)?;
     if talk && let Some(summary) = &oriented {
         println!(
-            "Oriented: {}, {:.1} mm2 largest section, {:.1} mm2 overhang\n",
+            "Oriented: {}, {:.1} mm2 largest section, {:.1} mm2 overhang{}\n",
             summary.describe(),
             summary.peak_mm2,
-            summary.overhang_mm2
+            summary.overhang_mm2,
+            if summary.on_plate {
+                ", set on the plate with no supports"
+            } else {
+                ""
+            }
         );
     }
 
@@ -475,7 +483,7 @@ pub fn inspect(input: &Path, args: &ImportArgs, chosen: &Chosen) -> Result<Impor
     let profile = chosen.printer.as_ref();
     let loaded = load(input)?;
     let welded = weld(&loaded.mesh, args.weld_tolerance);
-    let (mesh, _) = place(welded.mesh.clone(), args, profile, None)?;
+    let (mesh, _) = place(welded.mesh.clone(), args, None, profile)?;
     // Pressed here too, so that what `inspect` measures is what would be printed.
     let mut mesh = press_relief(mesh, &welded, &loaded, args, false)?;
     if args.transform.center {
@@ -575,23 +583,18 @@ pub fn load(path: &Path) -> Result<Loaded> {
 }
 
 /// Applies the requested orientation, scale, rotation and placement, in that order.
-///
-/// `max_overhang_deg` is the angle of the support profile the run builds to, so that the
-/// orientation is searched with the overhang its supports will be placed by.
 fn place(
     mesh: Mesh,
     args: &ImportArgs,
+    supports: Option<&SupportProfile>,
     profile: Option<&PrinterProfile>,
-    max_overhang_deg: Option<Scalar>,
 ) -> Result<(Mesh, Option<OrientSummary>)> {
     let transform = &args.transform;
     let (mesh, oriented) = if transform.orient {
-        let defaults = OrientSettings::default();
         let settings = OrientSettings {
-            max_overhang_deg: max_overhang_deg.unwrap_or(defaults.max_overhang_deg),
             goal: transform.orient_goal.into(),
             max_tilt_deg: transform.max_tilt,
-            ..defaults
+            ..orient_settings(supports)
         };
         let found =
             orient(&mesh, &settings).context("cannot find an orientation for this model")?;
@@ -599,6 +602,7 @@ fn place(
             rotation: found.rotation,
             peak_mm2: found.score.peak_mm2.unwrap_or_default(),
             overhang_mm2: found.score.overhang_mm2,
+            on_plate: supports.is_some() && found.on_plate,
         };
         (
             transform_mesh(
@@ -633,6 +637,18 @@ fn place(
     Ok((mesh, oriented))
 }
 
+/// How the search judges a model that will stand on `supports`, or on the plate.
+pub fn orient_settings(supports: Option<&SupportProfile>) -> OrientSettings {
+    let plain = OrientSettings::default();
+    supports.map_or(plain, |profile| OrientSettings {
+        max_overhang_deg: profile.max_overhang_deg,
+        contact_spacing_mm: profile.contact_spacing_mm,
+        on_supports: true,
+        rest_on_plate: true,
+        ..plain
+    })
+}
+
 /// The model stood in the middle of the plate and on z = 0.
 ///
 /// Called again after relief, which moves the surface the first call centred: a texture
@@ -661,11 +677,24 @@ fn euler_degrees(angles: Vec3) -> Quat {
 mod tests {
     use super::*;
 
+    #[test]
+    fn the_orientation_limits_are_the_ones_the_analysis_names() {
+        let settings = OrientSettings::default();
+        let limit_mm4 = core_analysis::PEEL_LIMIT_N / core_analysis::PEEL_N_PER_MM4;
+        let ours = f64::from(settings.peel_limit_mm4.expect("a limit by default"));
+        assert!(
+            (ours - limit_mm4).abs() / limit_mm4 < 1e-6,
+            "{ours} against {limit_mm4}"
+        );
+        assert_eq!(settings.min_cup_mm2, core_analysis::MIN_CUP_MM2);
+    }
+
     fn summary(rotation: Quat) -> OrientSummary {
         OrientSummary {
             rotation,
             peak_mm2: 0.0,
             overhang_mm2: 0.0,
+            on_plate: false,
         }
     }
 

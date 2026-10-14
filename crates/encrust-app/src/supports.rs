@@ -671,11 +671,10 @@ mod tests {
         let wanted = own.max_overhang_deg;
         scene.objects_mut()[0].own.supports.insert(tool.active, own);
 
-        let tasks = crate::job::orient_tasks(&scene, None, |object| {
-            tool.profile_for(object).max_overhang_deg
-        });
+        let tasks =
+            crate::job::orient_tasks(&scene, None, |object| tool.profile_for(object).clone());
         assert!(
-            (tasks[0].max_overhang_deg - wanted).abs() < f32::EPSILON,
+            (tasks[0].support.max_overhang_deg - wanted).abs() < f32::EPSILON,
             "not the angle of the plate's profile"
         );
     }

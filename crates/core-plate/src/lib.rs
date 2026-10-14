@@ -6,13 +6,21 @@
 
 mod arrange;
 mod candidates;
+mod cups;
+mod cut;
 mod error;
+mod low_points;
 mod mask;
 mod orient;
+mod printed;
 mod score;
+mod section;
+mod select;
 
 pub use arrange::{ArrangeSettings, Arranged, Placed, arrange};
+pub use candidates::{FlatFace, flat_faces};
 pub use error::PlateError;
 pub use mask::Footprint;
-pub use orient::{OrientSettings, Oriented, orient, rotation_for};
+pub use orient::{OrientSettings, Oriented, finalists, orient, orient_printed, rotation_for};
+pub use printed::Printed;
 pub use score::{OrientGoal, Score};

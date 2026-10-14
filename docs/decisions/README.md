@@ -233,9 +233,13 @@ Grouped by what the decision governs; the number is still the order it was taken
 
 | # | Decision | Status |
 |---|---|---|
-| [0087](0087-orientation-is-scored-on-the-peel.md) | An orientation is scored on the peel, and measured in two passes | Accepted |
-| [0222](0222-an-orientation-is-searched-for-a-goal-within-a-tilt.md) | Search an orientation for a goal, within a tilt | Accepted; where the goal and the tilt are offered is superseded by 0236 |
+| [0087](0087-orientation-is-scored-on-the-peel.md) | An orientation is scored on the peel, and measured in two passes | Accepted; the score's terms and weights are superseded by 0274 |
+| [0222](0222-an-orientation-is-searched-for-a-goal-within-a-tilt.md) | Search an orientation for a goal, within a tilt | Accepted; where the goal and the tilt are offered is superseded by 0236, the goals' weights by 0274 |
 | [0236](0236-an-orientation-goal-is-asked-for-on-the-command-line.md) | Ask for an orientation goal and a tilt limit on the command line | Accepted |
+| [0274](0274-an-orientation-is-scored-on-supports-tips-and-stefans-pull.md) | Score an orientation as it stands on supports, by its tips and by Stefan's pull | Accepted; the tip's cost is superseded by 0275 |
+| [0275](0275-an-orientation-is-chosen-by-priority-and-stays-unless-a-turn-is-worth-it.md) | Choose an orientation by priority, refuse cups and tearing pulls, and stay unless a turn is worth it | Accepted |
+| [0276](0276-an-orientation-is-judged-on-the-model-as-it-prints.md) | Judge an orientation on the model as it prints: sized, hollowed and drilled | Accepted |
+| [0277](0277-an-orientation-is-proven-by-printing-its-finalists.md) | Prove an orientation by printing its finalists, and search the poses a person tries | Accepted |
 | [0088](0088-the-plate-is-packed-as-a-bitmap.md) | The plate is packed as a bitmap into the corner, and the block centred | Accepted; supports left out of a footprint is superseded by 0256 |
 | [0256](0256-a-footprint-carries-the-supports-and-the-raft.md) | Pack a model with its supports and its raft | Accepted |
 | [0098](0098-a-plate-is-a-number-on-the-object.md) | A plate is a number on the object, not a scene of its own | Accepted |

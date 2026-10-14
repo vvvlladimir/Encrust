@@ -441,13 +441,19 @@ fn turn(ui: &mut egui::Ui, window: &mut Window, id: ObjectId) {
         progress_bar(ui, None);
     }
     let supports = &window.tools.supports;
+    let machine = window
+        .machine
+        .slicing
+        .printer
+        .as_ref()
+        .map(|printer| (printer, &window.machine.slicing.material));
     if oriented
-        && let Err(error) = window
-            .tools
-            .orient
-            .start(&window.doc.scene, Some(id), |object| {
-                supports.profile_for(object).max_overhang_deg
-            })
+        && let Err(error) = window.tools.orient.start(
+            &window.doc.scene,
+            Some(id),
+            |object| supports.profile_for(object).clone(),
+            machine,
+        )
     {
         window.machine.status = crate::status::Status::failed(&error);
     }

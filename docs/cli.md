@@ -358,3 +358,20 @@ for one case named outright:
 cargo run --release -p encrust-cli --bin hollow-lab -- model.stl [case index]
 cargo run --release -p encrust-cli --bin hollow-lab -- model.stl --wall 0.3 --precision 0.5
 ```
+
+## `orient-lab`
+
+Each orientation goal against four poses by hand — as the file stands on supports and
+set on the plate, on its largest face, tilted 35° onto a corner — judged on what the pose
+actually prints: the supports standing under it, then the stack cut and cured, read for
+contacts, contacts left hanging, contacts on faces the file has looking up, layers, the hardest pull on the film, the largest step in area,
+islands and suction cups. A goal is chosen the way the window chooses it, by printing the
+search's finalists (`docs/design/orientation.md`). It passes when it fails no more than
+the soundest pose by hand, give or take a quarter and two, and either reads within a
+tenth of the best of those or is rid of a suction cup or a tearing pull they all have. With no model it runs eight built-in bodies whose right answer is
+known, and the last line counts the goals that passed:
+
+```sh
+cargo run --release -p encrust-cli --bin orient-lab
+cargo run --release -p encrust-cli --bin orient-lab -- a.stl b.obj --printer elegoo-saturn-4-ultra --support medium
+```

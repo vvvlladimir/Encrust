@@ -1,8 +1,11 @@
 use std::sync::Arc;
 use std::sync::mpsc::{self, Receiver, TryRecvError};
 
-use core_geometry::{Mesh, Quat, Vec3};
-use core_plate::{OrientSettings, orient};
+use core_engine::{Trial, orient_proven};
+use core_geometry::{Mesh, Quat, Transform, Vec3, transform_mesh};
+use core_plate::{OrientSettings, Oriented, Printed, orient_printed};
+use core_volume::ModelHollow;
+use printer_profiles::{MaterialProfile, PrinterProfile, SupportProfile};
 use rayon::prelude::*;
 
 use crate::job::pipeline::{thread_pool, worker_threads};
@@ -14,16 +17,62 @@ pub struct OrientTask {
     /// The model in its own space. Orientation is measured there, so where it currently
     /// stands does not enter into it.
     pub mesh: Arc<Mesh>,
-    /// The way down the model stands now, in its own space, which a tilt is measured from.
+    /// What will actually be printed where the model has been hollowed, and the holes and
+    /// channels cut into it, wound inward: what it pulls and seals is read off these.
+    pub shell: Option<Arc<Mesh>>,
+    pub cuts: Option<Arc<Mesh>>,
+    /// The way out of each drain hole and each end of a channel, in the model's own space.
+    pub vents: Vec<Vec3>,
+    /// The model's scale and stretch with its turn taken out. Overhangs, pulls and hole
+    /// sizes are measured in plate millimetres, so the meshes are judged through it.
+    pub sizing: Transform,
+    /// The way down the model stands now, in the sized model's space, which a tilt is
+    /// measured from.
     pub down_now: Vec3,
-    /// The overhang angle of the support profile this model is built to, degrees.
-    pub max_overhang_deg: f32,
+    /// The support profile this model is built to, which the search counts overhangs and
+    /// contacts by and a proof prints it on.
+    pub support: SupportProfile,
+}
+
+impl OrientTask {
+    /// A model as its file has it: solid, at its own size, standing the way it was drawn.
+    #[cfg(test)]
+    pub fn solid(id: ObjectId, mesh: Arc<Mesh>) -> Self {
+        Self {
+            id,
+            mesh,
+            shell: None,
+            cuts: None,
+            vents: Vec::new(),
+            sizing: Transform::default(),
+            down_now: Vec3::NEG_Z,
+            support: SupportProfile::medium(),
+        }
+    }
+
+    /// `mesh` as it measures on the plate. A model nobody resized is not copied.
+    fn sized(&self, mesh: &Arc<Mesh>) -> Arc<Mesh> {
+        if self.sizing == Transform::default() {
+            Arc::clone(mesh)
+        } else {
+            Arc::new(transform_mesh(mesh, self.sizing))
+        }
+    }
 }
 
 /// Everything one orientation run needs.
 pub struct OrientRequest {
     pub tasks: Vec<OrientTask>,
     pub settings: OrientSettings,
+    /// What the search's best few are printed with to choose between them, or `None`
+    /// to take the search at its word, as a window with no printer chosen has to.
+    pub proof: Option<Proof>,
+}
+
+/// The machine and the resin a pose is printed with to be judged.
+pub struct Proof {
+    pub printer: PrinterProfile,
+    pub material: MaterialProfile,
 }
 
 /// How a model should be turned, and what it will cost the print once it is.
@@ -31,6 +80,8 @@ pub struct OrientRequest {
 pub struct Turn {
     pub id: ObjectId,
     pub rotation: Quat,
+    /// Whether it needs no supports the way it now stands, set straight on the plate.
+    pub on_plate: bool,
 }
 
 /// How an orientation run ended.
@@ -73,26 +124,66 @@ impl OrientJob {
 }
 
 /// The models a run covers, each in its own space: one when `only` names it, everything
-/// on the plate being edited otherwise.
+/// on the plate being edited otherwise. `support_of` is the profile each is built to.
 pub fn orient_tasks(
     scene: &Scene,
     only: Option<ObjectId>,
-    overhang_deg_of: impl Fn(&SceneObject) -> f32,
+    support_of: impl Fn(&SceneObject) -> SupportProfile,
 ) -> Vec<OrientTask> {
     scene
         .targets()
         .filter(|object| only.is_none_or(|id| object.id == id))
-        .map(|object| {
-            // The search answers a rotation that replaces this one, so down is read through it.
-            let down = object.transform.rotation.inverse() * Vec3::NEG_Z;
-            OrientTask {
-                id: object.id,
-                mesh: Arc::clone(&object.mesh),
-                down_now: down,
-                max_overhang_deg: overhang_deg_of(object),
-            }
+        .map(|object| OrientTask {
+            id: object.id,
+            mesh: Arc::clone(&object.mesh),
+            shell: object.hollow.shell().map(Arc::clone),
+            cuts: object.hollow.cut_bodies().map(Arc::clone),
+            vents: vents_of(&object.hollow),
+            sizing: object.transform.sizing(),
+            down_now: object.transform.rotation.inverse() * Vec3::NEG_Z,
+            support: support_of(object),
         })
         .collect()
+}
+
+/// The orientation of one model: proven by printing where there is a machine to print
+/// with, and the search's own answer otherwise.
+fn choose(
+    printed: &Printed,
+    settings: &OrientSettings,
+    support: &SupportProfile,
+    proof: Option<&Proof>,
+) -> Result<Oriented, String> {
+    let Some(proof) = proof else {
+        return orient_printed(printed, settings).map_err(|error| error.to_string());
+    };
+    let trial = Trial {
+        printer: &proof.printer,
+        material: &proof.material,
+        support,
+        raster_window: worker_threads(),
+    };
+    orient_proven(printed, settings, &trial)
+        .map(|proven| proven.oriented)
+        .map_err(|error| error.to_string())
+}
+
+/// The way out of every hole and of both ends of every channel cut into a model.
+fn vents_of(hollow: &ModelHollow) -> Vec<Vec3> {
+    let (holes, channels) = hollow.cut();
+    let ends = channels.iter().flat_map(|channel| {
+        let points = &channel.points;
+        let first = points
+            .first()
+            .zip(points.get(1))
+            .map(|(end, next)| *end - *next);
+        let last = points
+            .last()
+            .zip(points.iter().rev().nth(1))
+            .map(|(end, next)| *end - *next);
+        first.into_iter().chain(last)
+    });
+    holes.iter().map(|hole| -hole.axis).chain(ends).collect()
 }
 
 fn run(request: &OrientRequest) -> OrientOutcome {
@@ -102,25 +193,40 @@ fn run(request: &OrientRequest) -> OrientOutcome {
     };
 
     pool.install(|| {
-        let turned: Result<Vec<Turn>, _> = request
+        let turned: Result<Vec<Turn>, String> = request
             .tasks
             .par_iter()
             .map(|task| {
                 let settings = OrientSettings {
                     down_now: task.down_now,
-                    max_overhang_deg: task.max_overhang_deg,
+                    max_overhang_deg: task.support.max_overhang_deg,
+                    contact_spacing_mm: task.support.contact_spacing_mm,
                     ..request.settings
                 };
-                orient(&task.mesh, &settings).map(|found| Turn {
-                    id: task.id,
-                    rotation: found.rotation,
+                let outer = task.sized(&task.mesh);
+                let shell = task.shell.as_ref().map(|shell| task.sized(shell));
+                let cuts = task.cuts.as_ref().map(|cuts| task.sized(cuts));
+                let sizing = task.sizing.linear();
+                let vents: Vec<Vec3> = task.vents.iter().map(|out| sizing * *out).collect();
+                let printed = Printed {
+                    outer: &outer,
+                    shell: shell.as_deref(),
+                    cuts: cuts.as_deref(),
+                    vents: &vents,
+                };
+                choose(&printed, &settings, &task.support, request.proof.as_ref()).map(|found| {
+                    Turn {
+                        id: task.id,
+                        rotation: found.rotation,
+                        on_plate: found.on_plate,
+                    }
                 })
             })
             .collect();
 
         match turned {
             Ok(turns) => OrientOutcome::Turned(turns),
-            Err(error) => OrientOutcome::Failed(error.to_string()),
+            Err(message) => OrientOutcome::Failed(message),
         }
     })
 }
@@ -163,20 +269,14 @@ mod tests {
     fn a_run_reports_a_turn_for_every_model_it_was_given() {
         let request = OrientRequest {
             tasks: vec![
-                OrientTask {
-                    id: ObjectId::for_test(1),
-                    mesh: Arc::new(cuboid(Vec3::new(40.0, 40.0, 4.0))),
-                    down_now: Vec3::NEG_Z,
-                    max_overhang_deg: 45.0,
-                },
-                OrientTask {
-                    id: ObjectId::for_test(2),
-                    mesh: Arc::new(cuboid(Vec3::splat(10.0))),
-                    down_now: Vec3::NEG_Z,
-                    max_overhang_deg: 45.0,
-                },
+                OrientTask::solid(
+                    ObjectId::for_test(1),
+                    Arc::new(cuboid(Vec3::new(40.0, 40.0, 4.0))),
+                ),
+                OrientTask::solid(ObjectId::for_test(2), Arc::new(cuboid(Vec3::splat(10.0)))),
             ],
             settings: OrientSettings::default(),
+            proof: None,
         };
 
         let OrientOutcome::Turned(turns) = run(&request) else {
@@ -187,15 +287,53 @@ mod tests {
     }
 
     #[test]
+    fn a_hollowed_model_is_judged_as_the_shell_it_prints() {
+        use crate::scene::{ImportSummary, Imported};
+        use core_geometry::{Mat3, Orientation, diagnose};
+        use core_volume::{HollowSettings, Shell};
+
+        let mesh = cuboid(Vec3::splat(10.0));
+        let mut scene = Scene::default();
+        scene.insert(Imported::new(
+            "cube".to_owned(),
+            Arc::new(mesh.clone()),
+            Transform::default(),
+            ImportSummary {
+                vertices_merged: 0,
+                faces_removed: 0,
+                orientation: Orientation {
+                    flipped_faces: 0,
+                    inverted_shells: 0,
+                    orientable: true,
+                },
+                diagnostics: diagnose(&mesh),
+            },
+        ));
+        let shell = Arc::new(mesh);
+        scene.objects_mut()[0].hollow.take(Shell {
+            mesh: Arc::clone(&shell),
+            cavity: 0..0,
+            cavity_mm3: 0.0,
+            voxel_mm: 0.5,
+            coarsened: false,
+            shape: Mat3::IDENTITY,
+            settings: HollowSettings::default(),
+        });
+
+        let tasks = orient_tasks(&scene, None, |_| SupportProfile::medium());
+        let judged = tasks[0].shell.as_ref().expect("the task carries the shell");
+        assert!(Arc::ptr_eq(judged, &shell));
+    }
+
+    #[test]
     fn a_model_with_no_geometry_fails_the_run() {
         let request = OrientRequest {
-            tasks: vec![OrientTask {
-                id: ObjectId::for_test(1),
-                mesh: Arc::new(Mesh::default()),
-                down_now: Vec3::NEG_Z,
-                max_overhang_deg: 45.0,
-            }],
+            tasks: vec![OrientTask::solid(
+                ObjectId::for_test(1),
+                Arc::new(Mesh::default()),
+            )],
             settings: OrientSettings::default(),
+            proof: None,
         };
 
         let OrientOutcome::Failed(message) = run(&request) else {

@@ -4,8 +4,9 @@ use anyhow::{Result, bail};
 use core_geometry::{Adjacency, Mesh, Vec3};
 use core_plate::OrientSettings;
 use core_supports::Region;
+use printer_profiles::{MaterialProfile, PrinterProfile, SupportProfile};
 
-use crate::job::{OrientJob, OrientOutcome, OrientRequest, orient_tasks};
+use crate::job::{OrientJob, OrientOutcome, OrientRequest, Proof, orient_tasks};
 use crate::scene::{ObjectId, Scene, SceneObject};
 use crate::status::Status;
 
@@ -105,15 +106,16 @@ impl OrientTool {
     /// Starts a run over one model, or over everything visible when `only` is `None`, and
     /// stops waiting for a face: the run replaces the rotation a laid face would set.
     ///
-    /// `overhang_deg_of` is the angle of the support profile each model is built to, so
-    /// the search counts as overhang what automatic placement will hold up.
+    /// Each model is judged as standing on supports built to `support_of` unless it needs
+    /// none. With a `machine` the search's best few are printed for it and the best taken.
     pub fn start(
         &mut self,
         scene: &Scene,
         only: Option<ObjectId>,
-        overhang_deg_of: impl Fn(&SceneObject) -> f32,
+        support_of: impl Fn(&SceneObject) -> SupportProfile,
+        machine: Option<(&PrinterProfile, &MaterialProfile)>,
     ) -> Result<()> {
-        let tasks = orient_tasks(scene, only, overhang_deg_of);
+        let tasks = orient_tasks(scene, only, support_of);
         if tasks.is_empty() {
             bail!("nothing visible on the plate to orient");
         }
@@ -121,7 +123,15 @@ impl OrientTool {
         self.stop_picking();
         self.job = Some(OrientJob::spawn(OrientRequest {
             tasks,
-            settings: self.settings,
+            settings: OrientSettings {
+                on_supports: true,
+                rest_on_plate: true,
+                ..self.settings
+            },
+            proof: machine.map(|(printer, material)| Proof {
+                printer: printer.clone(),
+                material: material.clone(),
+            }),
         }));
         Ok(())
     }
@@ -144,6 +154,7 @@ impl OrientTool {
         match outcome {
             OrientOutcome::Turned(turns) => {
                 let mut moved = 0;
+                let seated = turns.iter().filter(|turn| turn.on_plate).count();
                 for turn in turns {
                     if let Some(object) = scene.get_mut(turn.id) {
                         let by = turn.rotation * object.transform.rotation.inverse();
@@ -154,10 +165,15 @@ impl OrientTool {
                         object.stand_on_plate();
                     }
                 }
-                *status = Status::Info(match moved {
+                let turned = match moved {
                     0 => "Everything already stands the way it prints best".to_owned(),
                     1 => "Turned 1 model".to_owned(),
                     moved => format!("Turned {moved} models"),
+                };
+                *status = Status::Info(match seated {
+                    0 => turned,
+                    1 => format!("{turned}; 1 needs no supports as it stands"),
+                    seated => format!("{turned}; {seated} need no supports as they stand"),
                 });
             }
             OrientOutcome::Failed(message) => *status = Status::Error(message),
@@ -235,7 +251,7 @@ mod tests {
         let mut tool = OrientTool::default();
         let mut status = Status::default();
         for _ in 0..2 {
-            tool.start(&scene, None, |_| 45.0)
+            tool.start(&scene, None, |_| SupportProfile::medium(), None)
                 .expect("a visible slab can be oriented");
             settle(&mut tool, &mut scene, &mut status);
         }
@@ -251,7 +267,7 @@ mod tests {
         let mut tool = OrientTool::default();
         let mut status = Status::default();
 
-        tool.start(&scene, None, |_| 45.0)
+        tool.start(&scene, None, |_| SupportProfile::medium(), None)
             .expect("a visible slab can be oriented");
         settle(&mut tool, &mut scene, &mut status);
 
@@ -265,11 +281,35 @@ mod tests {
     }
 
     #[test]
+    fn a_resized_model_is_judged_at_the_size_it_prints() {
+        // A 40 mm cube squashed to a tenth of its height is a 40 x 40 x 4 slab on the
+        // plate, which stands on its edge, where the cube it was drawn as would stay put.
+        let mut scene = scene_with(cuboid(Vec3::splat(40.0)));
+        scene.objects_mut()[0].transform.scale = Vec3::new(1.0, 1.0, 0.1);
+        let mut tool = OrientTool::default();
+        let mut status = Status::default();
+
+        tool.start(&scene, None, |_| SupportProfile::medium(), None)
+            .expect("a visible slab can be oriented");
+        settle(&mut tool, &mut scene, &mut status);
+
+        let bounds = scene.world_bounds().expect("the slab is still there");
+        let height_mm = bounds.maxs.z - bounds.mins.z;
+        assert!(
+            height_mm > 39.0,
+            "the slab stands on its 40 mm edge, got {height_mm}"
+        );
+    }
+
+    #[test]
     fn an_empty_plate_has_nothing_to_orient() {
         let mut tool = OrientTool::default();
         let scene = Scene::default();
         assert!(tool.blocker(&scene).is_some());
-        assert!(tool.start(&scene, None, |_| 45.0).is_err());
+        assert!(
+            tool.start(&scene, None, |_| SupportProfile::medium(), None)
+                .is_err()
+        );
     }
 
     #[test]

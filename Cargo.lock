@@ -948,6 +948,7 @@ dependencies = [
  "core-format",
  "core-geometry",
  "core-pipeline",
+ "core-plate",
  "core-raster",
  "core-slicer",
  "core-supports",

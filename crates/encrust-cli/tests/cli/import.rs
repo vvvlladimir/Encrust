@@ -208,13 +208,14 @@ fn an_orient_goal_without_orient_is_an_argument_error() {
 
 #[test]
 fn the_orient_goal_and_the_tilt_limit_reach_the_search() {
-    let path = write_box_stl("no-tilt", 10.0, 12, 0);
-    let turned = |extra: &[&str]| {
+    // A cube ties on every goal and stays; a leaning box does not.
+    let path = write_leaning_box_stl("no-tilt", 10.0, 8.0, 12, 0);
+    let turned = |goal: &str, extra: &[&str]| {
         let base = [
             path.to_str().unwrap(),
             "--orient",
             "--orient-goal",
-            "clean-top",
+            goal,
             "--json",
         ];
         let output = slice(&[&base[..], extra].concat());
@@ -224,12 +225,14 @@ fn the_orient_goal_and_the_tilt_limit_reach_the_search() {
             .expect("an oriented run reports its turn")
     };
 
+    let shortest = turned("shortest-print", &[]);
     assert!(
-        turned(&[]) > 1.0,
-        "a cube keeps its top clean by turning its upward face away from the film"
+        (shortest - turned("clean-top", &[])).abs() > 1.0,
+        "the shortest print lays the box lower than a clean top stands it"
     );
+    assert!(shortest > 1.0, "the shortest print turns the box");
     assert_eq!(
-        turned(&["--max-tilt", "0"]),
+        turned("shortest-print", &["--max-tilt", "0"]),
         0.0,
         "a tilt of nothing allows no turn"
     );

@@ -271,7 +271,7 @@ impl PartReport {
             }),
             supports: part.supports.as_ref().map(|report| Supports {
                 lifted_mm: report.lifted_mm,
-                contacts: report.contacts,
+                contacts: report.contacts.len(),
                 standing: report.standing,
                 trunks: report.trees,
                 no_room_for: report.unsupported(),
