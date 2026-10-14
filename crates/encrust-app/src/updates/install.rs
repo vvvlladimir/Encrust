@@ -147,7 +147,7 @@ fn unzip(archive: &[u8]) -> Result<Entries, UpdateError> {
         if !file.is_file() {
             continue;
         }
-        let path = file.name().replace('\\', "/");
+        let path = file.name().map_err(invalid)?.replace('\\', "/");
         let mut bytes = Vec::new();
         file.read_to_end(&mut bytes).map_err(UpdateError::Archive)?;
         entries.insert(path, bytes);

@@ -102,7 +102,7 @@ fn entry_names(bytes: &[u8]) -> Vec<String> {
     zip::ZipArchive::new(Cursor::new(bytes))
         .expect("what we wrote is a zip")
         .file_names()
-        .map(str::to_owned)
+        .map(|name| name.expect("we write every name as text").into_owned())
         .collect()
 }
 

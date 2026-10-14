@@ -93,7 +93,11 @@ fn refuse_oversized_parts(path: &Path, source: &mut dyn ReadSeek) -> Result<(), 
         if entry.size() > MAX_PART_BYTES {
             return Err(malformed(
                 path,
-                format!("the part {} claims {} bytes", entry.name(), entry.size()),
+                format!(
+                    "the part {} claims {} bytes",
+                    String::from_utf8_lossy(entry.name_raw()),
+                    entry.size()
+                ),
             ));
         }
     }

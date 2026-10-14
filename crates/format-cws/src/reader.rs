@@ -3,6 +3,7 @@ use core_format::{
     layer_in_range, panel_in_range, png_shape, read_entry,
 };
 use core_raster::Run;
+use std::borrow::Cow;
 use zip::ZipArchive;
 
 use crate::conf::{self, CONF};
@@ -113,7 +114,7 @@ impl SlicedFileReader for CwsReader {
 /// Three containers we read start `PK`, so a file renamed on the way out of another slicer
 /// is told apart by what is in it rather than by its first bytes.
 pub fn claims<S: ReadSeek>(source: &mut S) -> bool {
-    ZipArchive::new(source).is_ok_and(|zip| zip.file_names().any(|name| name == CONF))
+    ZipArchive::new(source).is_ok_and(|zip| names(&zip).any(|name| name == CONF))
 }
 
 /// The images of the archive, in the order their numbers put them.
@@ -121,20 +122,19 @@ pub fn claims<S: ReadSeek>(source: &mut S) -> bool {
 /// The firmware shows them in that order whatever they are called, so the stem a writer
 /// chose does not reach the reader.
 fn layer_names<S: ReadSeek>(zip: &ZipArchive<S>) -> Vec<String> {
-    let mut names: Vec<String> = zip
-        .file_names()
+    let mut found: Vec<String> = names(zip)
         .filter(|name| name.to_ascii_lowercase().ends_with(".png") && !name.contains('/'))
-        .map(str::to_owned)
+        .map(Cow::into_owned)
         .collect();
-    names.sort_by_key(|name| natural(name));
-    names
+    found.sort_by_key(|name| natural(name));
+    found
 }
 
 /// The entry holding the program, where the archive holds one.
 fn program_name<S: ReadSeek>(zip: &ZipArchive<S>) -> Option<String> {
-    zip.file_names()
+    names(zip)
         .find(|name| name.to_ascii_lowercase().ends_with(".gcode"))
-        .map(str::to_owned)
+        .map(Cow::into_owned)
 }
 
 /// A name as its digits order it, so `a9` comes before `a10`.
@@ -161,6 +161,12 @@ impl<S: ReadSeek> OpenFile for OpenCws<S> {
         let png = entry_bytes(&mut self.zip, &name)?;
         decode_grey(&png)
     }
+}
+
+/// The names of the archive's entries; one that is not valid text cannot be any entry a
+/// reader looks for, so it is passed over.
+fn names<S: ReadSeek>(zip: &ZipArchive<S>) -> impl Iterator<Item = Cow<'_, str>> {
+    zip.file_names().flatten()
 }
 
 fn entry_bytes<S: ReadSeek>(zip: &mut ZipArchive<S>, name: &str) -> Result<Vec<u8>, FormatError> {

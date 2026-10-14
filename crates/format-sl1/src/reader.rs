@@ -1,3 +1,4 @@
+use std::borrow::Cow;
 use std::collections::BTreeMap;
 
 use core_format::{
@@ -107,8 +108,7 @@ fn read_settings<S: ReadSeek>(
 /// five digits and `.png`, whatever the prefix. The previews escape it because
 /// `thumbnail400x400` does not end in five digits.
 fn layer_names<S: ReadSeek>(zip: &ZipArchive<S>) -> Vec<(u32, String)> {
-    let mut found: Vec<(u32, String)> = zip
-        .file_names()
+    let mut found: Vec<(u32, String)> = names(zip)
         .filter_map(|name| {
             let stem = name.strip_suffix(".png")?;
             let digits = stem.get(stem.len().checked_sub(index_digits())?..)?;
@@ -117,11 +117,17 @@ fn layer_names<S: ReadSeek>(zip: &ZipArchive<S>) -> Vec<(u32, String)> {
                 .all(|c| c.is_ascii_digit())
                 .then(|| digits.parse().ok())
                 .flatten()
-                .map(|index| (index, name.to_owned()))
+                .map(|index| (index, name.to_string()))
         })
         .collect();
     found.sort_by_key(|(index, _)| *index);
     found
+}
+
+/// The names of the archive's entries; one that is not valid text cannot be any entry a
+/// reader looks for, so it is passed over.
+fn names<S: ReadSeek>(zip: &ZipArchive<S>) -> impl Iterator<Item = Cow<'_, str>> {
+    zip.file_names().flatten()
 }
 
 fn entry_bytes<S: ReadSeek>(zip: &mut ZipArchive<S>, name: &str) -> Result<Vec<u8>, FormatError> {

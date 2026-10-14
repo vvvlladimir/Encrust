@@ -1,3 +1,4 @@
+use std::borrow::Cow;
 use std::collections::BTreeMap;
 
 use core_format::{
@@ -98,7 +99,7 @@ impl SlicedFileReader for GcodeZipReader {
 /// Both archive containers we read start `PK`, so a file renamed on the way out of another
 /// slicer is told apart by what is in it rather than by its first bytes.
 pub fn claims<S: ReadSeek>(source: &mut S) -> bool {
-    ZipArchive::new(source).is_ok_and(|zip| zip.file_names().any(|name| name == PROGRAM))
+    ZipArchive::new(source).is_ok_and(|zip| names(&zip).any(|name| name == PROGRAM))
 }
 
 /// What one `;LAYER_START` block says about its layer.
@@ -163,15 +164,20 @@ fn read_program<S: ReadSeek>(zip: &mut ZipArchive<S>) -> Result<String, FormatEr
 /// The layer entries, found the way a reader finds them: a name of nothing but digits and
 /// `.png`, numbered from one. The two previews escape it because they are named.
 fn layer_names<S: ReadSeek>(zip: &ZipArchive<S>) -> Vec<String> {
-    let mut found: Vec<(u32, String)> = zip
-        .file_names()
+    let mut found: Vec<(u32, String)> = names(zip)
         .filter_map(|name| {
             let stem = name.strip_suffix(".png")?;
-            stem.parse().ok().map(|index| (index, name.to_owned()))
+            stem.parse().ok().map(|index| (index, name.to_string()))
         })
         .collect();
     found.sort_by_key(|(index, _)| *index);
     found.into_iter().map(|(_, name)| name).collect()
+}
+
+/// The names of the archive's entries; one that is not valid text cannot be any entry a
+/// reader looks for, so it is passed over.
+fn names<S: ReadSeek>(zip: &ZipArchive<S>) -> impl Iterator<Item = Cow<'_, str>> {
+    zip.file_names().flatten()
 }
 
 fn entry_bytes<S: ReadSeek>(zip: &mut ZipArchive<S>, name: &str) -> Result<Vec<u8>, FormatError> {

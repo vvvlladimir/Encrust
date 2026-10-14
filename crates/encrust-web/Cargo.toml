@@ -21,7 +21,7 @@ wasm-bindgen-futures.workspace = true
 web-sys = { workspace = true, features = ["HtmlCanvasElement"] }
 # The front end picks the browser's source of randomness for everything under it.
 getrandom = { workspace = true, features = ["wasm_js"] }
-getrandom-04 = { workspace = true, features = ["wasm_js"] }
+getrandom-03 = { workspace = true, features = ["wasm_js"] }
 
 [lints]
 workspace = true

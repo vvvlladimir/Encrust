@@ -113,7 +113,10 @@ fn text_entry(file: &[u8], name: &str) -> String {
 fn the_archive_holds_the_settings_an_image_a_layer_and_one_program() {
     let file = write(&job(3), &[layer(), layer(), layer()], 1234.0);
     let zip = zip::ZipArchive::new(Cursor::new(file.clone())).expect("it is an archive");
-    let names: Vec<String> = zip.file_names().map(str::to_owned).collect();
+    let names: Vec<String> = zip
+        .file_names()
+        .map(|name| name.expect("we write every name as text").into_owned())
+        .collect();
 
     assert!(names.contains(&"slice.conf".to_owned()));
     assert!(names.contains(&"encrust.gcode".to_owned()));

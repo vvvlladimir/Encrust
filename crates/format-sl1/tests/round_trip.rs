@@ -106,7 +106,7 @@ fn entry(bytes: &[u8], name: &str) -> Vec<u8> {
 fn names(bytes: &[u8]) -> Vec<String> {
     archive(bytes)
         .file_names()
-        .map(str::to_owned)
+        .map(|name| name.expect("we write every name as text").into_owned())
         .collect::<std::collections::BTreeSet<_>>()
         .into_iter()
         .collect()
@@ -145,7 +145,10 @@ fn the_settings_files_are_written_last_and_still_found_by_name() {
     let file = write(&job(1), &[LayerRuns::builder(WIDTH_PX, HEIGHT_PX).finish()]);
 
     // They go in behind the layers because one of their values is only known at the end.
-    let order: Vec<String> = archive(&file).file_names().map(str::to_owned).collect();
+    let order: Vec<String> = archive(&file)
+        .file_names()
+        .map(|name| name.expect("we write every name as text").into_owned())
+        .collect();
     assert_eq!(
         order.last().map(String::as_str),
         Some("prusaslicer.ini"),
