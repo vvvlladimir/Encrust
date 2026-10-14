@@ -1,19 +1,23 @@
 //! Placing a support by hand, taking hold of one and carrying it. The rule a carried
 //! support is held to lives in `core_supports::carried`; see ADR 0095 and 0208.
 
-use core_geometry::Vec3;
-use core_supports::{Part, Placed, Preview, Profiles, preview, stands, support_under};
+use std::sync::Arc;
+
+use core_geometry::{PlacedHit, Transform, Vec3};
+use core_supports::{Part, Placed, Profiles, preview, stands, support_under};
 
 use crate::camera::OrbitCamera;
 use crate::panels::Window;
 use crate::pick::{pick_surface, ray_through};
+use crate::render::{Ghost, GhostShape};
 use crate::scene::ObjectId;
 use crate::state::{Doc, Tools};
 use crate::supports::Picked;
+use crate::ui::theme;
 use crate::viewport_input::Pointer;
 use crate::workspace::Tool;
 
-use super::picking::{aim_slack_mm, aims_elsewhere, grab_under_cursor};
+use super::picking::{aim_slack_mm, grab_under_cursor};
 
 /// A ray flatter than this against a plane has no crossing worth using: a part dragged
 /// edge-on to it would shoot off to the horizon.
@@ -52,29 +56,29 @@ pub(super) fn place_support_under_cursor(
     }
 }
 
-/// What a click would stand where the cursor is, or `None` when it would put nothing
-/// down: off every model, or on one the click would only pick.
-pub(super) fn preview_under_cursor(
-    window: &Window,
-    viewport: egui::Rect,
-    cursor: egui::Pos2,
-) -> Option<Preview> {
-    let (id, hit) = pick_surface(&window.doc.scene, &window.view.camera, viewport, cursor)?;
-    if aims_elsewhere(&window.doc.scene, Some(id)) {
-        return None;
-    }
+/// The support a click at `hit` on object `id` would stand, in the active group's tint,
+/// or in red where it would not stand.
+pub(super) fn support_ghost(window: &Window, id: ObjectId, hit: &PlacedHit) -> Option<Ghost> {
     let object = window.doc.scene.get(id)?;
     let table = window.tools.supports.table_for(object);
     let profiles = Profiles::new(&table)?;
     let keep_out = object.supports.keep_out(&object.mesh, object.transform);
     let placed =
         Placed::new(&object.mesh, &object.bvh, object.transform).blocking(keep_out.as_ref());
-    Some(preview(
-        &placed,
-        hit.point,
-        window.tools.supports.active,
-        profiles,
-    ))
+    let active = window.tools.supports.active;
+    let shown = preview(&placed, hit.point, active, profiles);
+    let colour = if shown.stands {
+        theme::support_tint(usize::from(active))
+    } else {
+        theme::colors().danger
+    };
+    Some(Ghost {
+        shape: GhostShape::Body {
+            mesh: Arc::new(shown.mesh),
+            transform: Transform::default(),
+        },
+        colour,
+    })
 }
 
 /// Takes away the support under the cursor. Objects are searched in the order they were

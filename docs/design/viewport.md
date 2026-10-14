@@ -68,6 +68,12 @@ zero. Panning converts points to millimetres with
 `2 * distance * tan(fov_y / 2) / viewport_height_points`, the world height of the view
 plane over its height on screen, which keeps the same world point under the cursor.
 
+A tool that puts something down with a click — Place, Hollow, Drain — draws what that
+click would add under the resting cursor, see-through and never capped: a `Ghost`, built
+by the same `core-volume` and `core-supports` calls the click makes. A body is drawn as it
+would stand; a hole is cut into its model the way a drilled one is. Nothing shows while a
+button is held, with alt (which takes away), or over a model the click would only pick.
+
 ## Picking
 
 The cursor becomes clip coordinates (`x` -1 left to 1 right, `y` 1 top to -1 bottom) and

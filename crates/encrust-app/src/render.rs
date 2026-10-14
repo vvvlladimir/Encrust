@@ -12,7 +12,7 @@ mod offscreen;
 mod target;
 mod vertex;
 
-pub use callback::{Banding, Shading, ViewportCallback};
+pub use callback::{Banding, Ghost, GhostShape, Shading, ViewportCallback};
 pub use gpu::CutLine;
 #[cfg(not(target_arch = "wasm32"))]
 pub use gpu::MULTISAMPLING;

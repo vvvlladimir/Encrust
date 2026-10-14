@@ -1,13 +1,12 @@
-use std::sync::Arc;
-
-use core_geometry::{Mesh, Vec2};
-use egui::{Color32, PointerButton, Sense};
+use core_geometry::{PlacedHit, Vec2};
+use egui::{PointerButton, Sense};
 
 use crate::camera::OrbitCamera;
 use crate::drain::Placing;
 use crate::panels::{Window, section};
+use crate::pick::pick_surface;
 use crate::plate::BuildPlate;
-use crate::render::{Banding, Shading, ViewportCallback};
+use crate::render::{Banding, Ghost, Shading, ViewportCallback};
 use crate::scene::{ObjectId, Scene};
 use crate::state::View;
 use crate::ui::theme;
@@ -22,8 +21,9 @@ mod picking;
 mod supports;
 
 use hollow::{
-    add_channel_point_under_cursor, place_blocker_under_cursor, place_drain_under_cursor,
-    remove_blocker_under_cursor, remove_drain_under_cursor,
+    add_channel_point_under_cursor, blocker_ghost, channel_point_ghost, drain_ghost,
+    place_blocker_under_cursor, place_drain_under_cursor, remove_blocker_under_cursor,
+    remove_drain_under_cursor,
 };
 use overlays::{
     cut_line, draw_aimed, draw_axis_letters, draw_bounds, draw_cut_plane, draw_facet, draw_measure,
@@ -31,10 +31,11 @@ use overlays::{
 };
 use paint::{draw_brush, paint_stroke};
 use picking::{
-    lay_face_under_cursor, measure_under_cursor, point_at_face, select_under_cursor, takes_the_pick,
+    aims_elsewhere, lay_face_under_cursor, measure_under_cursor, point_at_face,
+    select_under_cursor, takes_the_pick,
 };
 use supports::{
-    drag_support, place_support_under_cursor, preview_under_cursor, remove_support_under_cursor,
+    drag_support, place_support_under_cursor, remove_support_under_cursor, support_ghost,
 };
 
 /// Radians of orbit per point of cursor movement. A drag across a 600 point wide panel is
@@ -45,9 +46,9 @@ const ORBIT_RAD_PER_POINT: f32 = 0.009;
 /// proportion however close the camera already is.
 const ZOOM_PER_SCROLL_POINT: f32 = 0.0015;
 
-/// How opaque the support a click would stand is drawn: see-through enough to read as not
-/// built yet, solid enough that its shape still reads.
-const PREVIEW_OPACITY: f32 = 0.6;
+/// How opaque what a click would put down is drawn: see-through enough to read as not
+/// placed yet, solid enough that its shape still reads.
+const GHOST_OPACITY: f32 = 0.6;
 
 /// Draws the plate and everything on it, and returns the rectangle it took, which is what
 /// the cards floating over it are anchored to.
@@ -100,8 +101,8 @@ pub fn ui(ui: &mut egui::Ui, window: &mut Window) -> egui::Rect {
     if rect.width() <= 0.0 || rect.height() <= 0.0 {
         return rect;
     }
-    let preview = place_preview(ui, window, rect, &pointer);
-    paint_plate(ui, window, rect, preview.as_ref());
+    let ghost = ghost(ui, window, rect, &pointer);
+    paint_plate(ui, window, rect, ghost.as_ref());
     draw_tool_overlays(ui, window, rect, &pointer);
     rect
 }
@@ -201,37 +202,35 @@ fn click(ui: &egui::Ui, window: &mut Window, rect: egui::Rect, cursor: egui::Pos
     }
 }
 
-/// The support the Place brush would stand under a resting cursor, in the active group's
-/// tint, or in red where nothing would stand.
-fn place_preview(
-    ui: &egui::Ui,
-    window: &Window,
-    rect: egui::Rect,
-    pointer: &Pointer,
-) -> Option<(Arc<Mesh>, Color32)> {
-    let placing = *window.tool == Tool::Paint && !window.tools.supports.placing.paints();
+/// What a click would put down under a resting cursor, for every tool that puts something
+/// down on a model, drawn see-through so it reads as not placed yet. Alt shows nothing:
+/// it takes away instead.
+fn ghost(ui: &egui::Ui, window: &Window, rect: egui::Rect, pointer: &Pointer) -> Option<Ghost> {
     let removing = ui.input(|input| input.modifiers.alt);
     let resting = !pointer.primary_down && !pointer.pan_button_down;
-    if !placing || removing || !resting || !pointer.over_viewport {
+    if removing || !resting || !pointer.over_viewport {
         return None;
     }
-    let cursor = pointer.position.map(|at| egui::pos2(at.x, at.y))?;
-    let shown = preview_under_cursor(window, rect, cursor)?;
-    let colour = if shown.stands {
-        theme::support_tint(usize::from(window.tools.supports.active))
-    } else {
-        theme::colors().danger
+    let shows: fn(&Window, ObjectId, &PlacedHit) -> Option<Ghost> = match *window.tool {
+        Tool::Paint if !window.tools.supports.placing.paints() => support_ghost,
+        Tool::Hollow => blocker_ghost,
+        Tool::Drain if window.tools.drain.placing == Placing::Channel => channel_point_ghost,
+        Tool::Drain => drain_ghost,
+        _ => return None,
     };
-    Some((Arc::new(shown.mesh), colour.gamma_multiply(PREVIEW_OPACITY)))
+    let cursor = pointer.position.map(|at| egui::pos2(at.x, at.y))?;
+    let (id, hit) = pick_surface(&window.doc.scene, &window.view.camera, rect, cursor)?;
+    // A click on a model outside the selection only picks it.
+    if aims_elsewhere(&window.doc.scene, Some(id)) {
+        return None;
+    }
+    let mut ghost = shows(window, id, &hit)?;
+    ghost.colour = ghost.colour.gamma_multiply(GHOST_OPACITY);
+    Some(ghost)
 }
 
 /// Hands the 3D pass its frame: the models, the plate, the section and the shading.
-fn paint_plate(
-    ui: &egui::Ui,
-    window: &mut Window,
-    rect: egui::Rect,
-    preview: Option<&(Arc<Mesh>, Color32)>,
-) {
+fn paint_plate(ui: &egui::Ui, window: &mut Window, rect: egui::Rect, ghost: Option<&Ghost>) {
     let textures =
         (*window.tool == Tool::Relief).then(|| window.tools.relief.textures(&window.doc.scene));
     // What needs holding up is shown while the Supports tool is the one in hand, at the
@@ -269,7 +268,7 @@ fn paint_plate(
             textures: textures.as_ref(),
             cut_line: cut_line(window),
             hidden_groups: &hidden_groups,
-            preview: preview.map(|(mesh, colour)| (mesh, *colour)),
+            ghost,
             light: Some(&levels.light),
         },
         rect,

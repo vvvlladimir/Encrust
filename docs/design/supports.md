@@ -505,7 +505,9 @@ on, draws it green and carries it (ADR 0244), and
 the columns are rebuilt in that same frame so nothing vanishes under the cursor. While **Place** is in hand,
 the support a click would stand is drawn under the resting cursor, see-through in its group's tint, as
 `core_supports::preview` grows it alone — what it would merge with or be braced to is left
-out — or only its tip, in red, where nothing would be built; a click there puts nothing down. The stroke is painted along the line
+out — or only its tip, in red, where nothing would be built; a click there puts nothing down.
+The Hollow and Drain tools show their blocker, hole or channel point the same way, see
+`docs/design/viewport.md`. The stroke is painted along the line
 the cursor drew rather than only where the frames fell, and the brush itself is drawn as a
 ring lying on the surface under the cursor, in the colour of the patch it paints: drag to
 paint, ctrl-click for the whole surface, alt to erase. The inspector's Supports section

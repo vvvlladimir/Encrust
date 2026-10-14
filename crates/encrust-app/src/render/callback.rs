@@ -3,7 +3,7 @@ use std::sync::mpsc::Sender;
 
 use core_format::ExposureRange;
 use core_geometry::{Mat4, Mesh, Scalar, Transform, Vec2, Vec3};
-use core_volume::{CUT_WEIGHT, Channel, DrainHole, MOUTH_LIFT_MM};
+use core_volume::{CUT_WEIGHT, Channel, DrainHole, MOUTH_LIFT_MM, drill};
 use egui::Color32;
 use egui::epaint::ViewportInPixels;
 use egui_wgpu::{CallbackResources, CallbackTrait, ScreenDescriptor};
@@ -20,7 +20,7 @@ use crate::render::grid::{plate_lines, section_frame};
 use crate::render::label;
 use crate::render::lod::Light;
 use crate::render::vertex::{LabelVertex, LineVertex, ModelInstance, NOT_MARKED};
-use crate::scene::{Mapped, Scene, SceneObject};
+use crate::scene::{Mapped, ObjectId, Scene, SceneObject};
 use crate::ui::theme;
 use crate::workspace::ViewOptions;
 
@@ -117,9 +117,8 @@ pub struct Shading<'a> {
     pub cut_line: Option<CutLine>,
     /// The support groups left out of the view, by group number.
     pub hidden_groups: &'a [bool],
-    /// The support the hand is about to put down and the colour it is shown in, in plate
-    /// coordinates. Drawn only, never capped: it is not part of the print yet.
-    pub preview: Option<(&'a Arc<Mesh>, Color32)>,
+    /// What a click under the resting cursor would put down, or `None`.
+    pub ghost: Option<&'a Ghost>,
     /// The lighter levels drawn in place of heavy meshes.
     pub light: Option<&'a Light>,
 }
@@ -142,31 +141,29 @@ impl ViewportCallback {
             textures,
             cut_line,
             hidden_groups,
-            preview,
+            ghost,
             light,
         } = shading;
         let section_mm = section_mm.map(|height| height - SECTION_INSET_MM);
         let bottom_cut_mm = bottom_cut_mm.map(|height| height + SECTION_INSET_MM);
-        let Draws {
-            mut models,
-            solids,
-            cuts,
-            cut_surfaces,
-            pockets,
-            reliefs,
-        } = Draws::of(
+        let mut draws = Draws::of(
             scene,
             overhang_deg.map_or(NOT_MARKED, marking),
             textures,
             hidden_groups,
             light,
         );
-        if let Some((mesh, colour)) = preview {
-            models.push(ModelDraw::whole(
-                Arc::clone(mesh),
-                ModelInstance::new(Transform::default(), colour, NOT_MARKED),
-            ));
+        if let Some(ghost) = ghost {
+            draws.ghost(scene, light, ghost);
         }
+        let Draws {
+            models,
+            solids,
+            cuts,
+            cut_surfaces,
+            pockets,
+            reliefs,
+        } = draws;
 
         let (label, atlas) = label::front(plate);
         let mut lines = plate_lines(plate);
@@ -231,6 +228,26 @@ fn shown(object: &SceneObject, light: Option<&Light>) -> Arc<Mesh> {
         .clone()
 }
 
+/// What a click is about to put down, drawn over the plate in `colour` and never capped:
+/// it is not part of the print yet.
+pub struct Ghost {
+    pub shape: GhostShape,
+    pub colour: Color32,
+}
+
+/// What a ghost is: a body drawn as it stands, or a hole drawn cut.
+pub enum GhostShape {
+    /// A body standing on a model: a support, a blocker, the point of a channel.
+    /// `mesh` is placed by `transform`: the identity for one already in plate coordinates.
+    Body {
+        mesh: Arc<Mesh>,
+        transform: Transform,
+    },
+    /// A hole about to be drilled into object `id`, in its own space, cut the way a
+    /// drilled one is.
+    Hole { id: ObjectId, hole: DrainHole },
+}
+
 /// What the objects on the plate come to on the GPU, gathered one object at a time.
 #[derive(Default)]
 struct Draws {
@@ -268,6 +285,32 @@ impl Draws {
             draws.traps(object);
         }
         draws
+    }
+
+    fn ghost(&mut self, scene: &Scene, light: Option<&Light>, ghost: &Ghost) {
+        match &ghost.shape {
+            GhostShape::Body { mesh, transform } => {
+                self.flat(Arc::clone(mesh), *transform, ghost.colour);
+            }
+            GhostShape::Hole { id, hole } => {
+                let Some(object) = scene.get(*id) else {
+                    return;
+                };
+                let Ok(body) = drill(std::slice::from_ref(hole), &[]) else {
+                    return;
+                };
+                // The body is laid down `CUT_WEIGHT` deep; its wall is the first copy alone.
+                let wall = 0..body.faces.len() / CUT_WEIGHT;
+                let instance = ModelInstance::new(object.transform, ghost.colour, NOT_MARKED);
+                // First, so a plate already holding `MAX_CUTS` cuts still opens this one.
+                let cut = cuts_of(std::slice::from_ref(hole), &[], object.transform);
+                self.cuts.splice(0..0, cut);
+                self.cut_surfaces.push(CutDraw {
+                    body: ModelDraw::part(Arc::new(body), wall, instance),
+                    solid: ModelDraw::whole(shown(object, light), instance),
+                });
+            }
+        }
     }
 
     /// `shown` is what the model is drawn as: its own mesh, or a lighter level of it.
@@ -705,6 +748,41 @@ mod tests {
             taper: 1.0,
             lift_mm: 0.0,
         }
+    }
+
+    #[test]
+    fn a_hole_about_to_be_drilled_is_cut_into_its_model_and_never_capped() {
+        let scene = a_hollowed_ball_with_resin_in_it();
+        let mut draws = Draws::of(&scene, NOT_MARKED, None, &[], None);
+        let (cuts, surfaces, solids) = (
+            draws.cuts.len(),
+            draws.cut_surfaces.len(),
+            draws.solids.len(),
+        );
+
+        let ghost = Ghost {
+            shape: GhostShape::Hole {
+                id: scene.objects()[0].id,
+                hole: hole(),
+            },
+            colour: Color32::WHITE,
+        };
+        draws.ghost(&scene, None, &ghost);
+        assert_eq!(
+            draws.cuts.len(),
+            cuts + 1,
+            "the hole is cut out of the model"
+        );
+        assert_eq!(
+            draws.cut_surfaces.len(),
+            surfaces + 1,
+            "and walled the way a drilled one is"
+        );
+        assert_eq!(
+            draws.solids.len(),
+            solids,
+            "it is not part of the print yet"
+        );
     }
 
     #[test]

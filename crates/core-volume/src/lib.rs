@@ -35,7 +35,7 @@ pub use hollow::{
     hollow, hollow_at_scale, lattice_mm, sleeves,
 };
 pub use infill::{InfillPattern, InfillSettings};
-pub use model::{HoleSize, ModelHollow, Shell, markers};
+pub use model::{HoleSize, ModelHollow, PENDING_MARKER_MM, Shell, markers};
 pub use relief::{Relief, ReliefSettings, Tiling, press, press_tiled};
 pub use sdf::Sdf;
 pub use sign::SignMode;

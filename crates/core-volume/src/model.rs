@@ -13,7 +13,7 @@ use crate::{
 const SINGULAR: f32 = 1e-12;
 
 /// How wide a point of a channel still being laid out is drawn, in millimetres.
-const PENDING_MARKER_MM: Scalar = 0.6;
+pub const PENDING_MARKER_MM: Scalar = 0.6;
 
 /// Rings and segments of the ball a marker is drawn as. A marker is read as a position,
 /// not as a shape, so it is meshed as coarsely as one can be and still look round.
@@ -232,19 +232,26 @@ impl ModelHollow {
 
     /// Puts a blocker where the model was clicked. `point` is in plate coordinates.
     pub fn add_blocker(&mut self, point: Vec3, radius_mm: Scalar, transform: Transform) {
+        if let Some(blocker) = Self::blocker_at(point, radius_mm, transform) {
+            self.blockers.push(blocker);
+            self.remesh_markers();
+        }
+    }
+
+    /// The blocker a click at `point`, in plate coordinates, would put down, in the
+    /// model's own space, or `None` where the placement has flattened the model.
+    pub fn blocker_at(point: Vec3, radius_mm: Scalar, transform: Transform) -> Option<Blocker> {
         let matrix = transform.to_matrix();
         if matrix.determinant().abs() < SINGULAR {
-            return;
+            return None;
         }
         // The blocker is kept in the model's own space, so a radius asked for in plate
         // millimetres has to come back through the scale the model stands at.
         let smallest = transform.least_scale();
-
-        self.blockers.push(Blocker::ball(
+        Some(Blocker::ball(
             matrix.inverse().transform_point3(point),
             radius_mm / smallest,
-        ));
-        self.remesh_markers();
+        ))
     }
 
     /// Takes away the blocker the click landed in, if any, and says whether it did.
@@ -283,29 +290,49 @@ impl ModelHollow {
         size: HoleSize,
         transform: Transform,
     ) {
+        if let Some(hole) = Self::drain_at(mesh, bvh, point, normal, size, transform) {
+            self.drains.push(hole);
+            self.recut();
+        }
+    }
+
+    /// The hole a click at `point` on a face of `normal`, both in plate coordinates, would
+    /// drill, in the model's own space, or `None` where it cannot be drilled.
+    pub fn drain_at(
+        mesh: &Mesh,
+        bvh: &Bvh,
+        point: Vec3,
+        normal: Vec3,
+        size: HoleSize,
+        transform: Transform,
+    ) -> Option<DrainHole> {
         let matrix = transform.to_matrix();
         if matrix.determinant().abs() < SINGULAR {
-            return;
+            return None;
         }
         let inverse = matrix.inverse();
-        let Some(axis) = inverse.transform_vector3(-normal).try_normalize() else {
-            return;
-        };
+        let axis = inverse.transform_vector3(-normal).try_normalize()?;
 
         // A hole is measured on the plate, like a blocker, and kept in the model's own
         // space, so both its numbers come back through the scale the model stands at.
         let smallest = transform.least_scale();
         let at = inverse.transform_point3(point);
         let diameter_mm = size.diameter_mm / smallest;
-        self.drains.push(DrainHole {
+        Some(DrainHole {
             at,
             axis,
             diameter_mm,
             depth_mm: size.depth_mm / smallest,
             taper: size.taper,
             lift_mm: lift_for(mesh, bvh, at, axis, diameter_mm),
-        });
-        self.recut();
+        })
+    }
+
+    /// `hole` as it would be cut here: through the wall, once the model is hollow.
+    pub fn as_cut(&self, hole: DrainHole) -> DrainHole {
+        self.pierced(std::slice::from_ref(&hole))
+            .pop()
+            .unwrap_or(hole)
     }
 
     /// Takes away the hole the click landed in, if any, and says whether it did.
@@ -342,17 +369,29 @@ impl ModelHollow {
     /// Adds a point to the channel being laid out. `point` and `normal` are in plate
     /// coordinates; the tube itself is sunk under them when the channel is dug.
     pub fn add_channel_point(&mut self, point: Vec3, normal: Vec3, transform: Transform) {
+        if let Some(pending) = Self::channel_point_at(point, normal, transform) {
+            self.pending.push(pending);
+            self.remesh_markers();
+        }
+    }
+
+    /// The point and outward normal a click would add to a channel, both in plate
+    /// coordinates, carried into the model's own space.
+    pub fn channel_point_at(
+        point: Vec3,
+        normal: Vec3,
+        transform: Transform,
+    ) -> Option<(Vec3, Vec3)> {
         let matrix = transform.to_matrix();
         if matrix.determinant().abs() < SINGULAR {
-            return;
+            return None;
         }
         // A normal is carried the other way round by the transpose, not by the inverse.
         let normal = matrix.transpose().transform_vector3(normal);
-        self.pending.push((
+        Some((
             matrix.inverse().transform_point3(point),
             normal.normalize_or_zero(),
-        ));
-        self.remesh_markers();
+        ))
     }
 
     /// Digs the channel laid out so far, if it has two points to run between.
@@ -392,10 +431,7 @@ impl ModelHollow {
     /// Re-cuts what is placed. A hole is drilled to the depth it was asked for, and once
     /// there is a cavity behind it, through the wall the cavity left; see ADR 0075.
     fn recut(&mut self) {
-        self.deepened = match self.built.as_ref() {
-            Some(built) => pierce(&self.drains, built.settings.thickness_mm, built.voxel_mm),
-            None => self.drains.clone(),
-        };
+        self.deepened = self.pierced(&self.drains);
         // A hole is placed on a surface and a channel dug between points, so the only body
         // that can fail to mesh is one that was never placed.
         self.cuts = drill(&self.deepened, &self.channels)
@@ -404,6 +440,13 @@ impl ModelHollow {
             .map(Arc::new);
         // Digging a channel takes the points it was laid out from, which are markers.
         self.remesh_markers();
+    }
+
+    fn pierced(&self, holes: &[DrainHole]) -> Vec<DrainHole> {
+        match self.built.as_ref() {
+            Some(built) => pierce(holes, built.settings.thickness_mm, built.voxel_mm),
+            None => holes.to_vec(),
+        }
     }
 
     /// Takes what a run built. The blockers and holes it was built with stay as they are:
@@ -766,6 +809,28 @@ mod tests {
             hollow.cut().0[0].depth_mm >= 2.0,
             "once there is a cavity the hole is re-cut through the wall, got {}",
             hollow.cut().0[0].depth_mm
+        );
+    }
+
+    #[test]
+    fn the_hole_a_click_would_drill_is_the_hole_it_cuts() {
+        let mut hollow = ModelHollow::default();
+        hollow.take(shell(
+            Mat3::IDENTITY,
+            hollow.asking(&HollowSettings::default()),
+        ));
+        let (mesh, size) = (lid(), drain_tool(3.0, 0.5));
+        let bvh = Bvh::build(&mesh);
+        let placed = Transform::from_translation(Vec3::new(10.0, 0.0, 0.0));
+        let at = Vec3::new(12.0, 1.0, 0.0);
+
+        let would = ModelHollow::drain_at(&mesh, &bvh, at, Vec3::Z, size, placed)
+            .expect("a flat lid takes a hole anywhere");
+        hollow.add_drain(&mesh, &bvh, at, Vec3::Z, size, placed);
+        assert_eq!(
+            hollow.as_cut(would),
+            hollow.cut().0[0],
+            "what the cursor shows is what the click cuts, through the wall"
         );
     }
 
