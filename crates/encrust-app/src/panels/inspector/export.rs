@@ -216,6 +216,17 @@ fn send(ui: &mut egui::Ui, window: &mut Window) {
                 return None;
             }
             let chosen = printer_card::destination(ui, network);
+            if let Some(target) = network.target()
+                && !target.speaks(connection)
+            {
+                let line = format!(
+                    "{} speaks {}, but this profile sends over {}: set its network in the printer's settings.",
+                    network.label(&target),
+                    target.protocol().label(),
+                    connection.label()
+                );
+                crate::ui::tone(ui, &line, theme::colors().warn);
+            }
             printer_card::scan_notes(ui, network);
             chosen
         },

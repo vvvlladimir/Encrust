@@ -35,7 +35,7 @@ pub fn ui(ui: &mut egui::Ui, window: &mut Window) -> f32 {
         return 0.0;
     };
     let key = current.key();
-    let count = network.targets().len();
+    let count = network.in_view().len();
     let look = Look::of(network, &current);
     let hover = hover_line(network, &current);
     let (rect, response) = ui.allocate_exact_size(vec2(SIZE, SIZE), Sense::click());
@@ -179,12 +179,12 @@ fn hover_line(network: &Network, target: &Target<'_>) -> String {
     format!("{}: {state}", network.label(target))
 }
 
-/// Every printer on the network, a row each, and the key of the one pressed.
+/// Every printer answering on the network, a row each, and the key of the one pressed.
 fn list(ui: &mut egui::Ui, network: &Network) -> Option<String> {
     let mut opened = None;
     ui.set_min_width(ROW_W);
     ui.spacing_mut().item_spacing.y = 2.0;
-    for target in network.targets() {
+    for target in network.in_view() {
         if row(ui, network, &target).clicked() {
             opened = Some(target.key());
         }
@@ -309,8 +309,7 @@ mod tests {
             "a finished print leaves no share behind"
         );
         let network = one_board();
-        let target = network.current().expect("one board is listed");
-        let silent = Look::of(&network, &target);
+        let silent = Look::of(&network, &Target::Sdcp(&network.printers[0]));
         assert!(silent.progress.is_none() && !silent.spinning);
     }
 

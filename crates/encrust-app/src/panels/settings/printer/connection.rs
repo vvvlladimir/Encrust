@@ -105,11 +105,18 @@ fn listed(ui: &mut egui::Ui, profile: &mut PrinterProfile, network: &Network) {
     let mut removed = None;
     list(ui, |ui| {
         for (index, machine) in profile.machines.iter_mut().enumerate() {
-            let target = network.find(speaks, machine);
+            let target = network.resolve(machine);
             if let (None, Some(Target::Sdcp(board))) = (&machine.board, &target) {
                 machine.board = Some(board.mainboard_id.clone());
             }
             let state = match &target {
+                Some(target) if !target.speaks(speaks) => {
+                    format!(
+                        "Speaks {}, not {}",
+                        target.protocol().label(),
+                        speaks.label()
+                    )
+                }
                 Some(target) => {
                     printer_card::summary(network.reach(target), network.reading(target))
                 }
@@ -171,7 +178,6 @@ fn listed_row(ui: &mut egui::Ui, machine: &mut NetworkMachine, state: &str, answ
 /// Boards that answered and are not listed yet, a box each to tick onto the list, this
 /// model's first; and one press for every board of this model at once.
 fn found(ui: &mut egui::Ui, profile: &mut PrinterProfile, network: &Network) {
-    let speaks = profile.connection;
     let mut unlisted: Vec<&Printer> = network
         .printers
         .iter()
@@ -179,7 +185,7 @@ fn found(ui: &mut egui::Ui, profile: &mut PrinterProfile, network: &Network) {
             !profile.machines.iter().any(|machine| {
                 let key = Target::Sdcp(board).key();
                 network
-                    .find(speaks, machine)
+                    .resolve(machine)
                     .is_some_and(|found| found.key() == key)
             })
         })

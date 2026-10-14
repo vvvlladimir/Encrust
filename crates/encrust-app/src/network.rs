@@ -210,12 +210,17 @@ impl Target<'_> {
         }
     }
 
+    /// What this machine takes a file over.
+    pub fn protocol(&self) -> Connection {
+        match self {
+            Self::Sdcp(_) => Connection::Sdcp,
+            Self::Prusa(_) => Connection::PrusaLink,
+        }
+    }
+
     /// Whether this is a machine a profile stating `connection` can be sent to.
     pub fn speaks(&self, connection: Connection) -> bool {
-        matches!(
-            (self, connection),
-            (Self::Sdcp(_), Connection::Sdcp) | (Self::Prusa(_), Connection::PrusaLink)
-        )
+        self.protocol() == connection
     }
 
     /// The errand's other half: what a worker thread needs to reach this printer.
@@ -315,16 +320,10 @@ impl Network {
             .or(self.listed.first())
     }
 
-    /// Where a listed printer is on the network: the board that answered with its id or
-    /// from its address, or the Prusa machine set up at its host.
+    /// Where a printer some profile lists is on the network: the board that answered with
+    /// its id or from its address, or the Prusa machine set up at its host.
     pub fn resolve(&self, machine: &NetworkMachine) -> Option<Target<'_>> {
-        self.find(self.speaks, machine)
-    }
-
-    /// Where a printer some profile lists is on the network, for a profile speaking
-    /// `speaks`, which need not be the one in hand.
-    pub fn find(&self, speaks: Connection, machine: &NetworkMachine) -> Option<Target<'_>> {
-        resolve(&self.printers, &self.prusa, speaks, machine)
+        resolve(&self.printers, &self.prusa, machine)
     }
 
     /// Whether any scan has finished since the window opened.
@@ -425,13 +424,23 @@ impl Network {
         }
     }
 
-    /// The printer the top bar's ring stands for: the one the printer in hand is bound to,
-    /// else the first one printing, else the first one listed.
+    /// The printers answering now, boards first: what the top bar's ring lists. One that
+    /// stopped answering drops out at once, and comes back when a scan hears it again.
+    pub fn in_view(&self) -> Vec<Target<'_>> {
+        let targets = self.targets().into_iter();
+        targets
+            .filter(|target| self.reach(target) == Reach::Answered)
+            .collect()
+    }
+
+    /// The printer the top bar's ring stands for, among those in view: the one the printer
+    /// in hand is bound to, else the first one printing, else the first one.
     pub fn current(&self) -> Option<Target<'_>> {
-        if let Some(bound) = self.target() {
-            return Some(bound);
+        let targets = self.in_view();
+        let bound = self.target().map(|bound| bound.key());
+        if let Some(bound) = targets.iter().find(|t| Some(t.key()) == bound) {
+            return Some(*bound);
         }
-        let targets = self.targets();
         let printing = targets.iter().find(
             |target| matches!(self.reading(target), Some(Reading::State(state)) if state.busy),
         );
@@ -538,15 +547,9 @@ impl Network {
         self.printers
             .iter()
             .filter(|printer| {
-                self.listed.iter().any(|machine| {
-                    resolve(
-                        std::slice::from_ref(*printer),
-                        &[],
-                        Connection::Sdcp,
-                        machine,
-                    )
-                    .is_some()
-                })
+                self.listed
+                    .iter()
+                    .any(|machine| resolve(std::slice::from_ref(*printer), &[], machine).is_some())
             })
             .cloned()
             .collect()
@@ -581,14 +584,17 @@ impl Network {
         let mut manual = self.manual.clone();
         // A listed board is asked at its address too, which reaches it where a broadcast
         // does not cross; one known to have moved is asked where it went.
-        if self.speaks == Connection::Sdcp {
-            for address in self.listed.iter().filter_map(|m| match self.resolve(m) {
-                Some(Target::Sdcp(board)) => Some(board.address),
-                _ => m.address.trim().parse().ok(),
-            }) {
-                if !manual.contains(&address) {
-                    manual.push(address);
-                }
+        let boards = self.listed.iter().filter_map(|m| match self.resolve(m) {
+            Some(Target::Sdcp(board)) => Some(board.address),
+            Some(Target::Prusa(_)) => None,
+            None if self.speaks == Connection::Sdcp || m.board.is_some() => {
+                m.address.trim().parse().ok()
+            }
+            None => None,
+        });
+        for address in boards.collect::<Vec<IpAddr>>() {
+            if !manual.contains(&address) {
+                manual.push(address);
             }
         }
         let links: Vec<Link> = self.prusa.iter().map(|prusa| prusa.link.clone()).collect();
@@ -706,11 +712,16 @@ impl Network {
         self.watches.insert(key.to_owned(), watch);
     }
 
-    /// Watches every printer listed, once each, and lets go of the ones gone or moved.
+    /// Watches every printer that answers, once each, and lets go of the ones gone or
+    /// moved: silent at the last scan, and silent to their own watch too.
     fn watch_all(&mut self) {
         let wanted: BTreeMap<String, Wire> = self
             .targets()
             .iter()
+            .filter(|target| {
+                self.seen.contains(&target.key())
+                    || matches!(self.reading(target), Some(Reading::State(_)))
+            })
             .map(|target| (target.key(), target.wire()))
             .collect();
         self.watches
@@ -786,29 +797,22 @@ impl Network {
     }
 }
 
-/// Where `machine` is among the boards and Prusa machines the window knows, for a
-/// profile speaking `speaks`.
+/// Where `machine` is among the boards and Prusa machines the window knows, whatever the
+/// profile listing it is set to speak: whether it can be sent to is `Target::speaks`.
 fn resolve<'a>(
     printers: &'a [Printer],
     prusa: &'a [Prusa],
-    speaks: Connection,
     machine: &NetworkMachine,
 ) -> Option<Target<'a>> {
     let address = machine.address.trim();
-    match speaks {
-        Connection::Sdcp => printers
-            .iter()
-            .find(|printer| {
-                let same_board = machine.board.as_deref() == Some(printer.mainboard_id.as_str());
-                same_board || printer.address.to_string() == address
-            })
-            .map(Target::Sdcp),
-        Connection::PrusaLink => prusa
-            .iter()
-            .find(|prusa| prusa.link.host == address)
-            .map(Target::Prusa),
-        Connection::None => None,
-    }
+    let board = printers.iter().find(|printer| {
+        let same_board = machine.board.as_deref() == Some(printer.mainboard_id.as_str());
+        same_board || printer.address.to_string() == address
+    });
+    board.map(Target::Sdcp).or_else(|| {
+        let set_up = prusa.iter().find(|prusa| prusa.link.host == address);
+        set_up.map(Target::Prusa)
+    })
 }
 
 /// The fields a Prusa machine is described by, as they are being typed.
@@ -921,6 +925,31 @@ mod tests {
             ..PrinterProfile::default()
         };
         network.bind_to(Some("saturn".to_owned()), Some(&profile));
+    }
+
+    /// A Saturn's board listed in a profile switched to PrusaLink: it still answers and
+    /// says so, and only sending to it is refused.
+    #[test]
+    fn a_board_listed_under_another_protocol_is_found_but_not_sent_to() {
+        let mut network = Network {
+            printers: vec![a_printer("aa")],
+            seen: BTreeSet::from(["sdcp:aa".to_owned()]),
+            asked: true,
+            ..Network::default()
+        };
+        listing(
+            &mut network,
+            Connection::PrusaLink,
+            &[("192.168.1.42", Some("aa"))],
+        );
+        let machine = network
+            .chosen_machine()
+            .expect("one printer is listed")
+            .clone();
+        assert_eq!(network.reach_of(&machine), Reach::Answered);
+        let target = network.target().expect("the board is found");
+        assert_eq!(target.protocol(), Connection::Sdcp);
+        assert!(!target.speaks(Connection::PrusaLink));
     }
 
     fn a_prusa(host: &str) -> Prusa {
@@ -1400,6 +1429,7 @@ mod tests {
             printers: vec![a_printer("aa"), a_printer("bb")],
             ..Network::default()
         };
+        network.hear("sdcp:aa", Reading::State(State::default()));
         assert_eq!(network.current().map(|t| t.key()), Some("sdcp:aa".into()));
         network.hear("sdcp:bb", Reading::State(printing("dragon.goo")));
         assert_eq!(network.current().map(|t| t.key()), Some("sdcp:bb".into()));
@@ -1414,5 +1444,31 @@ mod tests {
             "the printer in hand's own machine wins over a busy one"
         );
         assert!(Network::default().current().is_none());
+    }
+
+    /// A board remembered from the last run, or one switched off since, is no printer to
+    /// show: only what answers is.
+    #[test]
+    fn the_ring_lists_only_the_printers_that_answer() {
+        let mut network = Network {
+            printers: vec![a_printer("aa"), a_printer("bb"), a_printer("cc")],
+            seen: BTreeSet::from(["sdcp:bb".to_owned(), "sdcp:cc".to_owned()]),
+            asked: true,
+            ..Network::default()
+        };
+        let down = Trouble {
+            message: "no route to host".to_owned(),
+            unreachable: true,
+        };
+        network.hear("sdcp:cc", Reading::Failed(down));
+        let keys: Vec<String> = network.in_view().iter().map(Target::key).collect();
+        assert_eq!(keys, ["sdcp:bb"], "aa kept silent at the scan, cc since");
+        assert_eq!(network.current().map(|t| t.key()), Some("sdcp:bb".into()));
+        network.hear("sdcp:aa", Reading::State(State::default()));
+        assert_eq!(
+            network.in_view().len(),
+            2,
+            "a watch that hears it brings it back"
+        );
     }
 }
