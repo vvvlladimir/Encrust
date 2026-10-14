@@ -6,14 +6,20 @@ name: CI
 # main moved, or on demand before a merge. See ADR-0273.
 
 on:
+  # What nothing here builds or reads; the nightly gate below filters the same list.
   push:
     branches: [main]
-    paths-ignore: ["docs/**", "**.md"]
+    paths-ignore: &unbuilt
+      - "docs/**"
+      - "**.md"
+      - ".claude/**"
+      - ".github/ISSUE_TEMPLATE/**"
+      - ".github/FUNDING.yml"
   # `ready_for_review` is on top of the default three: a draft runs nothing, so the run happens
   # when the pull request is declared finished rather than on every commit leading up to it.
   pull_request:
     types: [opened, synchronize, reopened, ready_for_review]
-    paths-ignore: ["docs/**", "**.md"]
+    paths-ignore: *unbuilt
   schedule:
     - cron: "0 3 * * *"
   workflow_dispatch:
@@ -69,10 +75,16 @@ jobs:
         if: github.event_name == 'schedule'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        # The compare API lists at most 300 files, so a list that long counts as a change.
         run: |
           last=$(gh run list --repo "$GITHUB_REPOSITORY" --workflow ci.yml --event schedule \
             --status success --limit 1 --json headSha --jq '.[0].headSha // ""')
-          if [ "$last" = "$GITHUB_SHA" ]; then echo skip=true >> "$GITHUB_OUTPUT"; fi
+          [ -n "$last" ] || exit 0
+          files=$(gh api "repos/$GITHUB_REPOSITORY/compare/$last...$GITHUB_SHA" --jq '.files[].filename')
+          [ "$(printf '%s\n' "$files" | grep -c .)" -lt 300 ] || exit 0
+          built=$(printf '%s\n' "$files" |
+            grep -vE '^(docs/|\.claude/|\.github/ISSUE_TEMPLATE/)|\.md$|^\.github/FUNDING\.yml$' || true)
+          if [ -z "$built" ]; then echo skip=true >> "$GITHUB_OUTPUT"; fi
 
   linux:
     name: rust (ubuntu)

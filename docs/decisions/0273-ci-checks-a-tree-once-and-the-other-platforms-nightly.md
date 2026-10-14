@@ -21,6 +21,8 @@ long gone — and each leg spent up to two minutes compiling `cargo-packager`, a
 - macOS, Windows, the threaded web build and the floor run nightly, only when main moved since the
   last nightly run that passed, and on any branch through `workflow_dispatch`. The nightly run
   also runs Linux, which keeps main's cache fresh when merges were skipped.
+- A change only to `docs/`, Markdown, `.claude/` or the issue templates runs none of it, the
+  nightly run included.
 - Only main saves a cache. The licence check in `audit.yml` reads Linux CI's cache rather than
   keeping its own; the release workflow keeps none.
 - A tool is downloaded prebuilt by `taiki-e/install-action`, never compiled by `cargo install`.
