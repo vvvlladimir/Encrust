@@ -19,6 +19,15 @@ impl SendError {
             Self::Sdcp(SdcpError::Cancelled) | Self::Prusa(PrusaLinkError::Cancelled)
         )
     }
+
+    /// Whether the system found no route to the printer: it is off, on another network,
+    /// or macOS is keeping this program off the local network.
+    pub fn is_unreachable(&self) -> bool {
+        match self {
+            Self::Sdcp(error) => error.is_unreachable(),
+            Self::Prusa(error) => error.is_unreachable(),
+        }
+    }
 }
 
 #[cfg(test)]
@@ -34,5 +43,14 @@ mod tests {
         });
         assert!(!refused.is_cancelled());
         assert!(refused.to_string().contains("sl1.local"), "got {refused}");
+    }
+
+    #[test]
+    fn no_route_to_the_printer_is_told_from_a_printer_that_refused() {
+        let no_route = std::io::Error::from(std::io::ErrorKind::HostUnreachable);
+        assert!(SendError::from(SdcpError::Io(no_route)).is_unreachable());
+        let no_route = std::io::Error::from(std::io::ErrorKind::HostUnreachable);
+        assert!(SendError::from(PrusaLinkError::Io(no_route)).is_unreachable());
+        assert!(!SendError::from(SdcpError::Cancelled).is_unreachable());
     }
 }

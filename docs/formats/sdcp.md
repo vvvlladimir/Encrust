@@ -30,6 +30,9 @@ Discovery is shared with version 1; the two sections after it are not.
 ### Discovery, UDP port 3000
 
 Broadcast the seven bytes `M99999`. Every board on the segment replies with one datagram.
+The probe goes to each interface's own broadcast address, `192.168.1.255` on a `/24`, and
+only then to `255.255.255.255`: macOS refuses the limited broadcast with `EHOSTUNREACH`
+(ADR 0262).
 Version 3 puts the fields straight under `Data`:
 
 ```json
@@ -97,6 +100,22 @@ Four details the shape of the client follows from:
 4. **A board checks a file after it lands and is busy until it has.** A start sent then is
    answered `Ack 1`, so a start waits out status `10` and asks again on busy, for up to a
    minute; a board printing something else is refused at once.
+
+What a status carries beyond the states, as a Saturn 4 Ultra on firmware V1.5.2 sends it:
+
+```json
+{ "Status": { "CurrentStatus": [0], "ReleaseFilm": 668, "TempOfUVLED": 21.8,
+              "TimeLapseStatus": 1,
+              "PrintInfo": { "Status": 0, "CurrentLayer": 0, "TotalLayer": 0,
+                             "CurrentTicks": 0, "TotalTicks": 0, "ErrorNumber": 0,
+                             "Filename": "", "TaskId": "" } } }
+```
+
+`CurrentTicks` and `TotalTicks` are the time printed and the estimated total, in ms by the
+specification. `TempOfUVLED` and `TempOfBox` are °C; a board without a heated hood leaves
+the second out. The window watches a board by asking for this every few seconds over one
+connection it holds. A version 1 board is watched through the discovery probe instead,
+whose answer carries the same `Status` block (ADR 0262).
 
 ### Upload, version 3: `POST http://${MainboardIP}:3030/uploadFile/upload`
 

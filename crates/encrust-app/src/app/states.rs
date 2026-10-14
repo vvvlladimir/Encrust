@@ -51,6 +51,7 @@ fn cube_stl() -> String {
 /// The window on the pictured machine, with one cube picked on the plate when `cube`.
 pub(super) fn app(cube: bool) -> SlicerApp {
     let mut app = SlicerApp::default();
+    app.machine.network.hold = true;
     let entry = app
         .machine
         .slicing

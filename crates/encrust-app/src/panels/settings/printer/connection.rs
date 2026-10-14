@@ -5,6 +5,7 @@ use net_prusalink::Link;
 use printer_profiles::Connection;
 
 use crate::network::{Destination, Network, PrusaDraft};
+use crate::panels::printer_card;
 use crate::ui::{Segment, Segmented, hint, icon, icon_button, inline_button, theme, tone};
 
 /// How wide a field here is: enough for a host name, not enough to stretch the card.
@@ -31,6 +32,7 @@ pub fn card(ui: &mut egui::Ui, profile: &str, connection: &mut Connection, netwo
 
 /// Boards answer a broadcast, so they are scanned for; one on another subnet is typed in.
 fn sdcp(ui: &mut egui::Ui, profile: &str, network: &mut Network) {
+    network.keep_fresh(ui.input(|input| input.time));
     bound_rows(ui, profile, network, Connection::Sdcp);
 
     ui.add_space(6.0);
@@ -56,6 +58,7 @@ fn sdcp(ui: &mut egui::Ui, profile: &str, network: &mut Network) {
             crate::ui::address_field(ui, &mut network.draft, "192.168.1.42", width);
         });
     });
+    printer_card::scan_notes(ui, network);
     hint(
         ui,
         "A board stays listed once this printer is bound to it, scan or no scan.",
@@ -96,11 +99,18 @@ fn bound_rows(ui: &mut egui::Ui, profile: &str, network: &mut Network, speaks: C
             continue;
         }
         listed = true;
-        let label = format!("{} ({})", target.name(), target.detail());
+        let state = printer_card::summary(network.reach(&target), network.reading(&target));
+        let label = format!("{} ({}), {state}", target.name(), target.detail());
         ui.radio_value(&mut chosen, Destination::Printer(target.key()), label);
     }
     if listed {
         ui.radio_value(&mut chosen, Destination::File, "Save to a file instead");
+    } else if network.is_scanning() {
+        tone(
+            ui,
+            "Looking for printers on the network",
+            theme::colors().text_mid,
+        );
     } else {
         tone(ui, "No machine set up yet", theme::colors().text_mid);
     }

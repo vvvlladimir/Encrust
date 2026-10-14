@@ -42,7 +42,7 @@ pub fn ui(ui: &mut egui::Ui, window: &mut Window) {
         broken_reminder(ui, &window.doc.scene);
     }
     let busy = window.machine.slicing.job.is_some() || window.machine.network.job.is_some();
-    let bound = bound_machine(window.machine);
+    let bound = bound_machine(window.machine, ui.input(|input| input.time));
     let plates = window.doc.scene.plates().len();
     let more = bound.is_some() || plates > 1;
 
@@ -113,10 +113,10 @@ fn more_menu(
         let Some(bound) = bound else {
             return;
         };
-        let hint = bound.blocker.map_or_else(
-            || format!("Slice and send to {}", bound.name),
-            str::to_owned,
-        );
+        let hint = bound
+            .blocker
+            .clone()
+            .unwrap_or_else(|| format!("Slice and send to {}", bound.name));
         let send = egui::Button::new(format!("{}  Slice and send to {}", icon::SEND, bound.name));
         if ui
             .add_enabled(free && bound.blocker.is_none(), send)
@@ -164,11 +164,12 @@ pub(super) fn broken_reminder(ui: &mut egui::Ui, scene: &Scene) {
 pub(super) struct Bound {
     pub name: String,
     pub reach: Reach,
-    /// Why this machine cannot take what the window is set to write.
-    pub blocker: Option<&'static str>,
+    /// Why this machine cannot take what the window is set to write, or not now.
+    pub blocker: Option<String>,
 }
 
-pub(super) fn bound_machine(machine: &mut Machine) -> Option<Bound> {
+/// `now_s` is the window's clock, which says when the network is due to be asked again.
+pub(super) fn bound_machine(machine: &mut Machine, now_s: f64) -> Option<Bound> {
     // A browser reaches no printer, so the file is only ever downloaded (ADR 0182).
     if cfg!(target_arch = "wasm32") {
         return None;
@@ -181,19 +182,22 @@ pub(super) fn bound_machine(machine: &mut Machine) -> Option<Bound> {
     if connection == Connection::None || machine.network.target().is_none() {
         return None;
     }
-    machine.network.ensure_asked();
+    machine.network.keep_fresh(now_s);
 
     let network = &machine.network;
     let target = network.target()?;
     target.speaks(connection).then(|| Bound {
         name: target.name(),
         reach: network.reach(&target),
-        blocker: network.blocker(machine.slicing.format),
+        blocker: network
+            .blocker(machine.slicing.format)
+            .map(str::to_owned)
+            .or_else(|| network.busy()),
     })
 }
 
 /// Whether the bound machine answered the last scan, as a dot.
-pub(super) fn reach_dot(ui: &mut egui::Ui, reach: Reach) {
+fn reach_dot(ui: &mut egui::Ui, reach: Reach) {
     let (rect, _) = ui.allocate_exact_size(egui::vec2(DOT_W, DOT_W), egui::Sense::hover());
     let colors = theme::colors();
     let colour = match reach {

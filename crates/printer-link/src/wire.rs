@@ -8,7 +8,7 @@ use crate::error::SendError;
 use crate::state::State;
 
 /// A printer on a local network answers at once or not at all.
-const CONNECT_TIMEOUT: Duration = Duration::from_secs(5);
+pub(crate) const CONNECT_TIMEOUT: Duration = Duration::from_secs(5);
 
 /// How one printer is reached: the two protocols share nothing but this errand.
 #[derive(Debug, Clone, PartialEq, Eq)]

@@ -1,12 +1,13 @@
 use egui::{Color32, RichText};
+use printer_profiles::Connection;
 
 use super::opened;
-use crate::network::{Reach, Target};
 use crate::panels::Window;
 use crate::panels::plate_summary::file_readings;
-use crate::panels::slice::{Run, Via, bound_machine, broken_reminder, reach_dot, start};
+use crate::panels::printer_card;
+use crate::panels::slice::{Run, Via, bound_machine, broken_reminder, start};
 use crate::ui::{
-    hint, icon, inline_button, list, primary_button, readings, secondary_button, section,
+    hint, icon, inline_button, primary_button, readings, secondary_button, section,
     section_with_action, text_row, theme,
 };
 use crate::workspace::Tool;
@@ -58,7 +59,7 @@ pub fn action(ui: &mut egui::Ui, window: &mut Window) {
     }
     let busy = window.machine.slicing.job.is_some() || window.machine.network.job.is_some();
     let free = blocker.is_none() && !busy;
-    let bound = bound_machine(window.machine);
+    let bound = bound_machine(window.machine, ui.input(|input| input.time));
     let plates = window.doc.scene.plates().len();
     let extension = window.machine.slicing.format.extension();
     let to_file = if every_plate(ui.ctx(), plates) {
@@ -82,7 +83,7 @@ pub fn action(ui: &mut egui::Ui, window: &mut Window) {
             {
                 pressed = Some(Via::File);
             }
-            if let Some(why) = bound.blocker {
+            if let Some(why) = &bound.blocker {
                 hint(ui, why);
             }
         }
@@ -177,36 +178,84 @@ fn picker_row(
     });
 }
 
-/// Every machine the window can reach, with whether it answered, and the one the plate's
-/// printer is bound to lit.
+/// The machine the printer in hand is bound to, alone, when there is one; otherwise every
+/// machine the window can reach, each with what it is printing, and a click binds one.
 fn send(ui: &mut egui::Ui, window: &mut Window) {
     if cfg!(target_arch = "wasm32") {
         return;
     }
-    let (rescan, _) =
+    let connection = window
+        .machine
+        .slicing
+        .printer
+        .as_ref()
+        .map_or(Connection::None, |profile| profile.connection);
+    window
+        .machine
+        .network
+        .keep_fresh(ui.input(|input| input.time));
+    let (rescan, picked) =
         section_with_action(ui, "Send to a printer", (icon::RESET, "Look again"), |ui| {
-            {
-                let network = &window.machine.network;
-                let bound = network.target().map(|target| target.key());
-                let targets = network.targets();
-                if targets.is_empty() {
-                    hint(
-                        ui,
-                        "No machine found yet. Look again, or add one by its address.",
-                    );
-                }
-                list(ui, |ui| {
-                    for target in &targets {
-                        let lit = bound.as_deref() == Some(target.key().as_str());
-                        machine_row(ui, target, network.reach(target), lit);
-                    }
-                });
+            let network = &window.machine.network;
+            let bound = network.target().filter(|target| target.speaks(connection));
+            if let Some(target) = bound {
+                let reading = network.reading(&target);
+                printer_card::card(ui, &target, network.reach(&target), reading, true, false);
+                return None;
             }
+            let picked = every_machine(ui, network, connection);
             by_address(ui, &mut window.machine.network);
+            picked
         });
     if rescan {
         window.machine.network.scan();
     }
+    if let Some(key) = picked.flatten() {
+        window.machine.network.bind_here(key);
+    }
+}
+
+/// Each machine on the network as a card, and the key of one clicked to bind it.
+fn every_machine(
+    ui: &mut egui::Ui,
+    network: &crate::network::Network,
+    connection: Connection,
+) -> Option<String> {
+    let targets = network.targets();
+    if targets.is_empty() {
+        if network.is_scanning() {
+            ui.horizontal(|ui| {
+                ui.spinner();
+                hint(ui, "Looking for printers on the network");
+            });
+        } else {
+            hint(
+                ui,
+                "No machine found yet. Look again, or add one by its address.",
+            );
+        }
+    }
+    let mut picked = None;
+    for target in &targets {
+        let pickable = connection != Connection::None && target.speaks(connection);
+        let reading = network.reading(target);
+        let card = printer_card::card(ui, target, network.reach(target), reading, false, pickable);
+        if pickable
+            && card
+                .on_hover_text("Send this printer's files here")
+                .clicked()
+        {
+            picked = Some(target.key());
+        }
+    }
+    if !targets.is_empty() && connection == Connection::None {
+        hint(
+            ui,
+            "This printer's profile takes files on a stick; choose its network in its settings to send here.",
+        );
+    }
+    printer_card::scan_notes(ui, network);
+    picked
 }
 
 /// A board on another subnet, which no broadcast reaches, typed in by its address. A
@@ -235,46 +284,4 @@ fn by_address(ui: &mut egui::Ui, network: &mut crate::network::Network) {
             );
         });
     });
-}
-
-/// One machine: its name over where it is, and a dot for whether it answered.
-fn machine_row(ui: &mut egui::Ui, target: &Target<'_>, reach: Reach, lit: bool) {
-    let colors = theme::colors();
-    let fill = if lit {
-        colors.accent_wash
-    } else {
-        Color32::TRANSPARENT
-    };
-    egui::Frame::new()
-        .fill(fill)
-        .corner_radius(theme::R_CONTROL)
-        .inner_margin(egui::Margin::symmetric(8, 4))
-        .show(ui, |ui| {
-            ui.set_width(ui.available_width());
-            ui.horizontal(|ui| {
-                ui.label(
-                    RichText::new(icon::PRINTER)
-                        .font(theme::icon(16.0))
-                        .color(colors.text_mid),
-                );
-                ui.vertical(|ui| {
-                    ui.spacing_mut().item_spacing.y = 0.0;
-                    ui.label(
-                        RichText::new(target.name())
-                            .font(theme::label())
-                            .color(colors.text_high),
-                    );
-                    ui.label(
-                        RichText::new(target.detail())
-                            .font(theme::code(10.5))
-                            .color(colors.text_low),
-                    );
-                });
-                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                    reach_dot(ui, reach);
-                });
-            });
-        })
-        .response
-        .on_hover_text(reach.hint(&target.name()));
 }

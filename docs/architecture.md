@@ -88,7 +88,7 @@ it are in `.claude/rules/architecture.md`.
 | `format-cws` | `CwsWriter`, `CwsReader`, `claims`: a zip of eight-bit PNGs, one `slice.conf` and the gcode program that runs them (ADR 0170) |
 | `net-sdcp` | `Printer` with its `Transport`, `Attributes`, `Status`, `Machine`, `PrintInfo`, `FileTransferInfo`/`Fetching`, `Transfer`, `SdcpError`; `discover`/`probe` over UDP for both reply shapes, `Control` over a WebSocket or an MQTT broker of its own, `upload` posting packets or serving the file a board fetches (ADR 0154, 0155) |
 | `net-prusalink` | `Link`, `Auth`, `Version`, `DEFAULT_USER`, `Status`/`Machine`/`Job`, `PrusaLinkError`; `probe`, `upload` as one PUT, `start_print` and `status`, over HTTP digest or an API key (ADR 0152) |
-| `printer-link` | `Wire` over a board or a Prusa machine, `upload` with the board's pre-flight, `start_print`, `state` into one `State`, `scan` of both into `Found`, `SendError` (ADR 0182) |
+| `printer-link` | `Wire` over a board or a Prusa machine, `upload` with the board's pre-flight, `start_print`, `state` into one `State`, `watch` reporting it every period, `scan` of both into `Found`, `SendError` (ADR 0182, 0262) |
 | `encrust-cli` | `encrust` binary, one subcommand per module in `commands/` (ADR 0176): `stage` assembles a plate from models, a plate file (`plate_file`, ADR 0179) or a project (`project`, ADR 0191); `pipeline` runs a model through orient, hollow and supports and writes a staged plate through `core-engine`, or cuts it here for a PNG stack; `estimate` measures one without writing; `convert`; `printer` discovers, asks and sends through `printer-link`; `profiles show`; `completions`; `config`, the flags a `--config` file holds; `batch` runs one model at a time over a directory with a JSON report each; `--json`, exit codes, the progress bar and Ctrl-C |
 | `encrust-web` | The window's browser front end (ADR 0181): `start`, the window on a canvas; `www/` the page, its headers, its manifest and `sw.js`, the service worker that isolates it where a host sends no headers and keeps the build for working offline (ADR 0183) |
 | `web-engine` | The browser's front end without a window (ADR 0177): `slice_project`, the bytes of a project into the bytes of a sliced file with no file system, thread or clock, and the `wasm-bindgen` exports of it; `www/` the page, its worker and the Node measurement |
@@ -126,7 +126,7 @@ format-goo, format-chitu, format-anycubic, format-creality ──> core-format, 
 format-sl1, format-gcode-zip, format-cws ──> core-format, core-raster, zip
 format-svgx ──> core-format, core-raster, core-slicer, glam
 printer-link ──> net-sdcp, net-prusalink, serde
-net-sdcp ──> (nothing in this workspace; tungstenite, ureq, md-5, serde)
+net-sdcp ──> (nothing in this workspace; tungstenite, ureq, md-5, serde, if-addrs)
 net-prusalink ──> (nothing in this workspace; ureq, md-5, serde)
 core-format ──> core-raster, core-slicer, printer-profiles, core-thumbnail, png
 core-thumbnail ──> core-geometry

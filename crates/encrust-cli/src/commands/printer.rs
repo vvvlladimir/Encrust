@@ -158,6 +158,13 @@ impl Machine {
 
 fn discover(args: &DiscoverArgs, global: &GlobalArgs) -> Result<()> {
     let found = printer_link::scan(seconds(args.wait)?, &args.address, &[]);
+    if found.boards.is_empty()
+        && let Some(error) = found.broadcast
+    {
+        return Err(
+            anyhow::Error::new(error).context("the discovery probe went out on no interface")
+        );
+    }
     if global.json {
         return json::print(&serde_json::json!({ "printers": found.boards }));
     }
@@ -334,7 +341,7 @@ mod tests {
             file: Some("cube.goo".to_owned()),
             progress: Some(0.25),
             remaining_s: Some(61),
-            error: None,
+            ..State::default()
         };
         assert_eq!(
             described(&state),

@@ -300,6 +300,7 @@ Grouped by what the decision governs; the number is still the order it was taken
 | [0154](0154-sdcp-version-one-is-the-same-crate-with-a-second-transport.md) | SDCP version 1 is the same crate with a second transport | Accepted |
 | [0155](0155-the-broker-and-the-file-server-are-written-here.md) | The broker and the file server are written here | Accepted |
 | [0182](0182-sending-is-a-crate-both-front-ends-share-and-a-browser-downloads.md) | Sending is a crate both front ends share, and a browser downloads | Accepted |
+| [0262](0262-discovery-asks-every-interface-and-the-window-watches-each-printer.md) | Ask every interface for printers, and watch each printer the window lists | Accepted |
 
 ### The window and the command line
 
@@ -337,7 +338,7 @@ Grouped by what the decision governs; the number is still the order it was taken
 | [0135](0135-the-macos-icon-is-squircled-at-source.md) | The macOS icon is squircled at source, not only in the bundle | Accepted |
 | [0138](0138-the-destination-lives-on-the-slice-button.md) | The destination lives on the Slice button | Superseded by 0157 |
 | [0151](0151-the-preview-shows-a-source-not-a-plate.md) | Let the preview show a source, which is either a plate or a file | Accepted; what ends a file's turn is amended by 0202 |
-| [0157](0157-the-slice-row-carries-two-actions.md) | The Slice row carries two actions, not a destination | Accepted; the Send button is superseded by 0217 |
+| [0157](0157-the-slice-row-carries-two-actions.md) | The Slice row carries two actions, not a destination | Accepted; the Send button is superseded by 0217, the stale dot by 0262 |
 | [0217](0217-the-window-is-a-top-bar-a-flat-rail-and-a-layer-strip.md) | The window is a top bar, a flat rail, a docked inspector and a layer strip | Accepted; the return to the model on a tool press is superseded by 0218, the docked columns and layer strip by 0221, Find by 0230, the message under the jobs by 0231 |
 | [0218](0218-twelve-tools-on-the-rail-and-print-settings-as-a-form.md) | Twelve tools on the rail, and the print settings as a form | Accepted; Select and the digits are superseded by 0231 |
 | [0219](0219-the-viewport-is-lit-shadowed-and-turned-by-a-cube.md) | Light the viewport by a sky, a key and a fill, shadow it by contact, and turn it by a cube | Accepted; the hatching of overhangs is superseded by 0245 |

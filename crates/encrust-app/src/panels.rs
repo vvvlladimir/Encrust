@@ -3,6 +3,7 @@ mod inspector;
 mod mask_pane;
 mod plate_strip;
 mod plate_summary;
+mod printer_card;
 mod report;
 mod scene_panel;
 pub(crate) mod section;

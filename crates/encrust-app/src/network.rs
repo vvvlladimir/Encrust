@@ -3,6 +3,8 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::net::IpAddr;
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::{self, Receiver, TryRecvError};
 use std::time::Duration;
 
@@ -11,13 +13,19 @@ use net_prusalink::Link;
 use net_sdcp::Printer;
 use printer_profiles::Connection;
 
-use printer_link::{Found, Wire};
+use printer_link::{Found, SendError, State, Wire};
 
 use crate::job::{Action, SendJob, SendOutcome, SendRequest};
 use crate::status::Status;
 
 /// Long enough for every printer on the segment to answer, short enough to wait through.
 const SCAN_WINDOW: Duration = Duration::from_secs(2);
+
+/// How often a watched printer is asked what it is doing.
+const WATCH_PERIOD: Duration = Duration::from_secs(3);
+
+/// How long a list of printers in view goes before the network is asked again, in seconds.
+const RESCAN_S: f64 = 30.0;
 
 /// Where the Slice button puts what it writes.
 #[derive(Debug, Clone, PartialEq, Eq, Default, serde::Serialize, serde::Deserialize)]
@@ -48,6 +56,81 @@ impl Reach {
             Self::Silent => format!("{name} did not answer the last scan"),
             Self::Unasked => format!("{name} has not been asked yet"),
         }
+    }
+}
+
+/// Why a printer could not be asked, as the window words it.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Trouble {
+    /// The failure with every cause under it, on one line.
+    pub message: String,
+    /// Whether the system found no route to it, which on macOS may be its privacy setting.
+    pub unreachable: bool,
+}
+
+impl Trouble {
+    fn of(error: SendError) -> Self {
+        let unreachable = error.is_unreachable();
+        Self {
+            message: format!("{:#}", anyhow::Error::new(error)),
+            unreachable,
+        }
+    }
+
+    /// What the user can do about it, when there is something.
+    pub fn advice(&self) -> Option<&'static str> {
+        (self.unreachable && cfg!(target_os = "macos")).then_some(
+            "If it is switched on, macOS may be keeping Encrust off the local network: allow \
+             it under System Settings, Privacy & Security, Local Network.",
+        )
+    }
+}
+
+/// The last thing a watched printer said, or why it said nothing.
+#[derive(Debug, Clone, PartialEq)]
+pub enum Reading {
+    State(State),
+    Failed(Trouble),
+}
+
+/// One printer being watched on a thread of its own, and what it said last.
+struct Watch {
+    wire: Wire,
+    stop: Arc<AtomicBool>,
+    reports: Receiver<Reading>,
+    last: Option<Reading>,
+}
+
+impl Watch {
+    fn spawn(wire: Wire) -> Self {
+        let (sender, reports) = mpsc::channel();
+        let stop = Arc::new(AtomicBool::new(false));
+        let (flag, watched) = (Arc::clone(&stop), wire.clone());
+        crate::job::spawn(move || {
+            let stopped = || flag.load(Ordering::Relaxed);
+            printer_link::watch(&watched, WATCH_PERIOD, &stopped, &mut |heard| {
+                let reading = match heard {
+                    Ok(state) => Reading::State(state),
+                    Err(error) => Reading::Failed(Trouble::of(error)),
+                };
+                // The window let go of this watch, so nobody is listening any more.
+                if sender.send(reading).is_err() {
+                    flag.store(true, Ordering::Relaxed);
+                }
+            });
+        });
+        Self {
+            wire,
+            stop,
+            reports,
+            last: None,
+        }
+    }
+}
+
+impl Drop for Watch {
+    fn drop(&mut self) {
+        self.stop.store(true, Ordering::Relaxed);
     }
 }
 
@@ -113,7 +196,7 @@ impl Target<'_> {
     }
 
     /// The errand's other half: what a worker thread needs to reach this printer.
-    fn wire(&self) -> Wire {
+    pub fn wire(&self) -> Wire {
         match self {
             Self::Sdcp(printer) => Wire::Sdcp((*printer).clone()),
             Self::Prusa(prusa) => Wire::Prusa(prusa.link.clone()),
@@ -142,6 +225,17 @@ pub struct Network {
     seen: BTreeSet<String>,
     /// Whether any scan has finished since the window opened.
     asked: bool,
+    /// When the window last asked on its own, in seconds on its clock.
+    asked_at: Option<f64>,
+    /// Why the last broadcast went out on no interface.
+    pub trouble: Option<Trouble>,
+    /// Each address typed by hand that nothing answered at the last scan.
+    pub silent: Vec<(IpAddr, Option<Trouble>)>,
+    /// Every printer listed, watched by its key.
+    watches: BTreeMap<String, Watch>,
+    /// Whether the window keeps off the network unless told to: the panel pictures must not
+    /// depend on what is on the desk's network.
+    pub hold: bool,
     pub job: Option<SendJob>,
     pub sent: Option<Sent>,
     /// The address being typed, until it parses and is added.
@@ -180,8 +274,13 @@ impl Network {
             .find(|target| target.key() == *key)
     }
 
-    /// Whether `target` answered the last scan.
+    /// Whether `target` is answering: what its watch heard last, else the last scan.
     pub fn reach(&self, target: &Target<'_>) -> Reach {
+        match self.reading(target) {
+            Some(Reading::State(_)) => return Reach::Answered,
+            Some(Reading::Failed(_)) => return Reach::Silent,
+            None => {}
+        }
         match (self.seen.contains(&target.key()), self.asked) {
             (true, _) => Reach::Answered,
             (false, true) => Reach::Silent,
@@ -189,11 +288,42 @@ impl Network {
         }
     }
 
-    /// Asks the network once, so the dot beside Send is answered before it is asked
-    /// about. Does nothing after the first scan of the session.
-    pub fn ensure_asked(&mut self) {
-        if !self.asked && !self.is_scanning() {
+    /// What `target` said when its watch last asked, or `None` before it has answered.
+    pub fn reading(&self, target: &Target<'_>) -> Option<&Reading> {
+        self.watches.get(&target.key())?.last.as_ref()
+    }
+
+    /// Why the bound printer will not take a print now, as the press beside it says it.
+    pub fn busy(&self) -> Option<String> {
+        let target = self.target()?;
+        let Some(Reading::State(state)) = self.reading(&target) else {
+            return None;
+        };
+        state.busy.then(|| match &state.file {
+            Some(file) => format!("{} is printing {file}", target.name()),
+            None => format!("{} is busy: {}", target.name(), state.state),
+        })
+    }
+
+    /// Asks the network again when a list of printers is in view and the last time the
+    /// window asked on its own was a while ago; `now_s` is the window's clock.
+    pub fn keep_fresh(&mut self, now_s: f64) {
+        let due = self.asked_at.is_none_or(|at| now_s - at >= RESCAN_S);
+        if due && !self.hold && !self.is_scanning() {
+            self.asked_at = Some(now_s);
             self.scan();
+        }
+    }
+
+    /// Whether any printer is being watched, which is what keeps its card repainting.
+    pub fn is_watching(&self) -> bool {
+        !self.watches.is_empty()
+    }
+
+    /// Binds the printer profile in hand to the machine under `key`.
+    pub fn bind_here(&mut self, key: String) {
+        if let Some(profile) = self.profile.clone() {
+            self.bind(&profile, Destination::Printer(key));
         }
     }
 
@@ -316,6 +446,7 @@ impl Network {
         if self.target().is_none() {
             self.destination = Destination::File;
         }
+        self.watch_all();
     }
 
     /// Sends a file the window has just written, and deletes it after when it was
@@ -354,7 +485,47 @@ impl Network {
     /// Drains the scan and the errand into the stage notice. Returns whether either is
     /// still running, which is what tells the window to keep repainting.
     pub fn poll(&mut self, status: &mut Status) -> bool {
+        for watch in self.watches.values_mut() {
+            while let Ok(reading) = watch.reports.try_recv() {
+                watch.last = Some(reading);
+            }
+        }
         self.take_scan() | self.take_job(status)
+    }
+
+    /// What a watch hears, put straight into the window as if its thread had said it.
+    #[cfg(test)]
+    pub(crate) fn hear(&mut self, key: &str, reading: Reading) {
+        let (_, reports) = mpsc::channel();
+        let wire = self
+            .targets()
+            .into_iter()
+            .find(|target| target.key() == key)
+            .expect("the printer heard is listed")
+            .wire();
+        let watch = Watch {
+            wire,
+            stop: Arc::new(AtomicBool::new(true)),
+            reports,
+            last: Some(reading),
+        };
+        self.watches.insert(key.to_owned(), watch);
+    }
+
+    /// Watches every printer listed, once each, and lets go of the ones gone or moved.
+    fn watch_all(&mut self) {
+        let wanted: BTreeMap<String, Wire> = self
+            .targets()
+            .iter()
+            .map(|target| (target.key(), target.wire()))
+            .collect();
+        self.watches
+            .retain(|key, watch| wanted.get(key) == Some(&watch.wire));
+        for (key, wire) in wanted {
+            self.watches
+                .entry(key)
+                .or_insert_with(|| Watch::spawn(wire));
+        }
     }
 
     fn take_scan(&mut self) -> bool {
@@ -374,10 +545,19 @@ impl Network {
                 for prusa in &mut self.prusa {
                     prusa.text = found.reached.get(&prusa.link.host).cloned();
                 }
+                self.trouble = found.broadcast.map(Trouble::of);
+                self.silent = found
+                    .silent
+                    .into_iter()
+                    .map(|(address, error)| (address, error.map(Trouble::of)))
+                    .collect();
                 self.scan = None;
                 // A printer that answered no longer is not a destination any more.
                 if self.target().is_none() {
                     self.destination = Destination::File;
+                }
+                if !self.hold {
+                    self.watch_all();
                 }
                 false
             }
@@ -548,13 +728,11 @@ mod tests {
             printers: vec![a_printer("aa")],
             destination: Destination::Printer("sdcp:aa".to_owned()),
             scan: Some(receiver),
+            hold: true,
             ..Network::default()
         };
         sender
-            .send(Found {
-                boards: Vec::new(),
-                reached: BTreeMap::new(),
-            })
+            .send(Found::default())
             .expect("the scan holds the receiver");
         assert!(!network.poll(&mut Status::default()));
         assert_eq!(network.destination, Destination::Printer("sdcp:aa".into()));
@@ -602,6 +780,7 @@ mod tests {
         let mut network = Network {
             printers: vec![a_printer("aa"), a_printer("bb")],
             scan: Some(receiver),
+            hold: true,
             ..Network::default()
         };
         let answered = Target::Sdcp(&network.printers[0].clone());
@@ -610,7 +789,7 @@ mod tests {
         sender
             .send(Found {
                 boards: vec![a_printer("aa")],
-                reached: BTreeMap::new(),
+                ..Found::default()
             })
             .expect("the scan holds the receiver");
         assert!(!network.poll(&mut Status::default()));
@@ -632,12 +811,13 @@ mod tests {
             prusa: vec![a_prusa("sl1.local")],
             destination: Destination::Printer("prusa:sl1.local".to_owned()),
             scan: Some(receiver),
+            hold: true,
             ..Network::default()
         };
         sender
             .send(Found {
-                boards: Vec::new(),
                 reached: BTreeMap::from([("sl1.local".to_owned(), "Prusa SLA 1.8.0".to_owned())]),
+                ..Found::default()
             })
             .expect("the scan holds the receiver");
         assert!(!network.poll(&mut Status::default()));
@@ -735,5 +915,143 @@ mod tests {
         let mut network = Network::default();
         network.send(temporary_path("model.goo"), &mut Status::default());
         assert!(network.job.is_none());
+    }
+
+    fn printing(file: &str) -> State {
+        State {
+            state: "printing".to_owned(),
+            busy: true,
+            file: Some(file.to_owned()),
+            progress: Some(0.5),
+            ..State::default()
+        }
+    }
+
+    #[test]
+    fn a_bound_printer_in_the_middle_of_a_print_holds_the_send_back() {
+        let mut network = Network {
+            printers: vec![a_printer("aa")],
+            destination: Destination::Printer("sdcp:aa".to_owned()),
+            ..Network::default()
+        };
+        assert_eq!(
+            network.busy(),
+            None,
+            "nothing heard yet is nothing to hold back"
+        );
+        network.hear("sdcp:aa", Reading::State(printing("dragon.goo")));
+        assert_eq!(
+            network.busy().as_deref(),
+            Some("Saturn aa is printing dragon.goo")
+        );
+        let idle = State {
+            state: "idle".to_owned(),
+            ..State::default()
+        };
+        network.hear("sdcp:aa", Reading::State(idle));
+        assert_eq!(network.busy(), None);
+    }
+
+    /// The dot follows the watch once it has heard anything, rather than a scan that may
+    /// be half a minute old.
+    #[test]
+    fn what_the_watch_heard_overrides_the_last_scan() {
+        let mut network = Network {
+            printers: vec![a_printer("aa")],
+            ..Network::default()
+        };
+        let trouble = Trouble {
+            message: "network call failed".to_owned(),
+            unreachable: false,
+        };
+        network.hear("sdcp:aa", Reading::Failed(trouble));
+        let printers = network.printers.clone();
+        assert_eq!(network.reach(&Target::Sdcp(&printers[0])), Reach::Silent);
+        network.hear("sdcp:aa", Reading::State(printing("cube.goo")));
+        assert_eq!(network.reach(&Target::Sdcp(&printers[0])), Reach::Answered);
+    }
+
+    #[test]
+    fn a_broadcast_that_went_nowhere_is_kept_with_why() {
+        let (sender, receiver) = mpsc::channel();
+        let mut network = Network {
+            scan: Some(receiver),
+            manual: vec![IpAddr::from([192, 168, 1, 42])],
+            hold: true,
+            ..Network::default()
+        };
+        let no_route = std::io::Error::from(std::io::ErrorKind::HostUnreachable);
+        sender
+            .send(Found {
+                broadcast: Some(net_sdcp::SdcpError::Io(no_route).into()),
+                silent: vec![(IpAddr::from([192, 168, 1, 42]), None)],
+                ..Found::default()
+            })
+            .expect("the scan holds the receiver");
+        assert!(!network.poll(&mut Status::default()));
+        let trouble = network.trouble.clone().expect("the broadcast failed");
+        assert!(trouble.unreachable);
+        assert!(
+            trouble.message.contains("network call failed"),
+            "{}",
+            trouble.message
+        );
+        assert_eq!(
+            network.silent,
+            vec![(IpAddr::from([192, 168, 1, 42]), None)]
+        );
+    }
+
+    #[test]
+    fn only_no_route_on_macos_is_blamed_on_the_privacy_setting() {
+        let mut trouble = Trouble {
+            message: String::new(),
+            unreachable: true,
+        };
+        assert_eq!(trouble.advice().is_some(), cfg!(target_os = "macos"));
+        trouble.unreachable = false;
+        assert_eq!(trouble.advice(), None);
+    }
+
+    #[test]
+    fn a_held_window_does_not_ask_the_network_on_its_own() {
+        let mut network = Network {
+            hold: true,
+            ..Network::default()
+        };
+        network.keep_fresh(0.0);
+        assert!(!network.is_scanning());
+    }
+
+    #[test]
+    fn the_list_in_view_is_asked_again_only_once_it_is_stale() {
+        let mut network = Network::default();
+        network.keep_fresh(100.0);
+        assert!(network.is_scanning(), "the first look goes out at once");
+        network.scan = None;
+        network.keep_fresh(100.0 + RESCAN_S / 2.0);
+        assert!(!network.is_scanning(), "a fresh list is left alone");
+        network.keep_fresh(100.0 + RESCAN_S);
+        assert!(network.is_scanning());
+    }
+
+    #[test]
+    fn binding_from_the_list_binds_the_printer_profile_in_hand() {
+        let mut network = Network {
+            printers: vec![a_printer("aa")],
+            ..Network::default()
+        };
+        network.bind_here("sdcp:aa".to_owned());
+        assert!(
+            network.target().is_none(),
+            "no profile in hand, nothing to bind"
+        );
+        network.bind_to(Some("saturn".to_owned()));
+        network.bind_here("sdcp:aa".to_owned());
+        assert_eq!(
+            network.bound_to("saturn"),
+            Destination::Printer("sdcp:aa".into())
+        );
+        assert_eq!(network.target().map(|t| t.name()), Some("Saturn aa".into()));
     }
 }

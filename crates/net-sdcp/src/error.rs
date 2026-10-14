@@ -57,6 +57,29 @@ impl From<ureq::Error> for SdcpError {
     }
 }
 
+impl SdcpError {
+    /// Whether the system found no route to the board: it is off, on another network, or
+    /// macOS is keeping this program off the local network.
+    pub fn is_unreachable(&self) -> bool {
+        let io = match self {
+            Self::Io(io) => io,
+            Self::Socket(socket) => match socket.as_ref() {
+                tungstenite::Error::Io(io) => io,
+                _ => return false,
+            },
+            Self::Transport(http) => match http.as_ref() {
+                ureq::Error::Io(io) => io,
+                _ => return false,
+            },
+            _ => return false,
+        };
+        matches!(
+            io.kind(),
+            std::io::ErrorKind::HostUnreachable | std::io::ErrorKind::NetworkUnreachable
+        )
+    }
+}
+
 /// The `Ack` a board answers a print request with while it is doing something else.
 pub(crate) const ACK_BUSY: u32 = 1;
 
@@ -89,6 +112,17 @@ mod tests {
                 Err(SdcpError::PrintRefused { .. })
             ));
         }
+    }
+
+    #[test]
+    fn no_route_to_the_board_is_told_from_a_board_that_refused() {
+        let no_route = std::io::Error::from(std::io::ErrorKind::HostUnreachable);
+        assert!(SdcpError::Io(no_route).is_unreachable());
+        let wrapped = tungstenite::Error::Io(std::io::ErrorKind::NetworkUnreachable.into());
+        assert!(SdcpError::from(wrapped).is_unreachable());
+        let refused = std::io::Error::from(std::io::ErrorKind::ConnectionRefused);
+        assert!(!SdcpError::Io(refused).is_unreachable());
+        assert!(!SdcpError::BoardClosed.is_unreachable());
     }
 
     #[test]
