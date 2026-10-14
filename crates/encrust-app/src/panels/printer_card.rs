@@ -54,11 +54,18 @@ pub enum Chosen {
 
 /// Where the printer in hand sends its files, as one row: the chosen printer's name and
 /// what it is doing, a list of the others when the profile lists more than one, and
-/// beside it the way into that printer's sheet.
-pub fn destination(ui: &mut egui::Ui, network: &Network) -> Option<Chosen> {
+/// beside it the way into that printer's sheet. What went wrong — the caller's `warning`,
+/// the printer's own failure, what the scan could not do — waits behind the status word.
+pub fn destination(
+    ui: &mut egui::Ui,
+    network: &Network,
+    warning: Option<String>,
+) -> Option<Chosen> {
     let chosen_machine = network.chosen_machine()?;
     let target = network.resolve(chosen_machine);
     let several = network.listed().len() > 1;
+    let mut notes: Vec<Note> = warning.into_iter().map(Note::plain).collect();
+    notes.extend(machine_notes(network, chosen_machine));
     let mut chosen = None;
     ui.horizontal(|ui| {
         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
@@ -68,7 +75,7 @@ pub fn destination(ui: &mut egui::Ui, network: &Network) -> Option<Chosen> {
                 chosen = Some(Chosen::Open(target.key()));
             }
             let face = machine_face(network, chosen_machine);
-            let row = destination_row(ui, chosen_machine.label(), &face, several);
+            let row = destination_row(ui, chosen_machine.label(), &face, several, &notes);
             if !several {
                 return;
             }
@@ -87,6 +94,52 @@ pub fn destination(ui: &mut egui::Ui, network: &Network) -> Option<Chosen> {
     chosen
 }
 
+/// One thing that went wrong, and what the user can do about it when there is something.
+#[derive(Debug, Clone, PartialEq)]
+struct Note {
+    line: String,
+    advice: Option<&'static str>,
+}
+
+impl Note {
+    fn plain(line: String) -> Self {
+        Self { line, advice: None }
+    }
+
+    fn of(trouble: &Trouble) -> Self {
+        Self {
+            line: trouble.message.clone(),
+            advice: trouble.advice(),
+        }
+    }
+}
+
+/// What went wrong reaching one listed printer: its own failure, the broadcast that went
+/// nowhere, and the scan finding nothing at its address.
+fn machine_notes(network: &Network, machine: &printer_profiles::NetworkMachine) -> Vec<Note> {
+    let mut notes = Vec::new();
+    if let Some(target) = network.resolve(machine)
+        && let Some(Reading::Failed(trouble)) = network.reading(&target)
+    {
+        notes.push(Note::of(trouble));
+    }
+    if let Some(trouble) = &network.trouble {
+        notes.push(Note::plain(
+            "The search could not go out on any network".to_owned(),
+        ));
+        notes.push(Note::of(trouble));
+    }
+    let address = machine.address.trim();
+    for (silent, trouble) in &network.silent {
+        if silent.to_string() != address {
+            continue;
+        }
+        notes.push(Note::plain(format!("Nothing answered at {silent}")));
+        notes.extend(trouble.as_ref().map(Note::of));
+    }
+    notes
+}
+
 /// What a listed printer is doing, or that it was not found.
 fn machine_face(network: &Network, machine: &printer_profiles::NetworkMachine) -> Face {
     match network.resolve(machine) {
@@ -96,8 +149,14 @@ fn machine_face(network: &Network, machine: &printer_profiles::NetworkMachine) -
 }
 
 /// The row itself: the printer glyph, its name, what it is doing in its colour, and a
-/// caret when there are others to choose from.
-fn destination_row(ui: &mut egui::Ui, name: &str, face: &Face, several: bool) -> egui::Response {
+/// caret when there are others to choose from. Hovering the status word shows `notes`.
+fn destination_row(
+    ui: &mut egui::Ui,
+    name: &str,
+    face: &Face,
+    several: bool,
+    notes: &[Note],
+) -> egui::Response {
     let colors = theme::colors();
     let sense = if several {
         Sense::click()
@@ -137,12 +196,8 @@ fn destination_row(ui: &mut egui::Ui, name: &str, face: &Face, several: bool) ->
         );
         right = rect.right() - 30.0;
     }
-    let colour = colour_of(face.light);
-    let word = painter.layout_no_wrap(face.word.clone(), theme::small(), colour);
-    let at = pos2(right - word.size().x, rect.center().y - word.size().y / 2.0);
-    painter.galley(at, word, colour);
-    painter.circle_filled(pos2(at.x - 8.0, rect.center().y), 3.5, colour);
-    let room = (at.x - 16.0 - rect.left() - 30.0).max(0.0);
+    let status = paint_status(painter, face, rect, right);
+    let room = (status.left() - 8.0 - rect.left() - 30.0).max(0.0);
     let mut job =
         egui::text::LayoutJob::simple_singleline(name.to_owned(), theme::label(), colors.text_high);
     job.wrap = egui::text::TextWrapping::truncate_at_width(room);
@@ -155,14 +210,37 @@ fn destination_row(ui: &mut egui::Ui, name: &str, face: &Face, several: bool) ->
     if several {
         focus_ring(ui, &response, theme::R_CONTROL);
     }
-    let hover = if several {
-        "The printer this profile sends to; press for the others it lists"
+    let response = if !notes.is_empty() && ui.rect_contains_pointer(status) {
+        response.on_hover_ui(|ui| note_lines(ui, notes))
+    } else if several {
+        response.on_hover_text("The printer this profile sends to; press for the others it lists")
     } else {
-        "The printer this profile sends to"
+        response.on_hover_text("The printer this profile sends to")
     };
-    let response = response.on_hover_text(hover);
     response.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::ComboBox, several, name));
     response
+}
+
+/// The status word and its dot, right-aligned on `right` in the row; answers where they
+/// stand, the full height of the row.
+fn paint_status(painter: &egui::Painter, face: &Face, rect: egui::Rect, right: f32) -> egui::Rect {
+    let colour = colour_of(face.light);
+    let word = painter.layout_no_wrap(face.word.clone(), theme::small(), colour);
+    let at = pos2(right - word.size().x, rect.center().y - word.size().y / 2.0);
+    painter.galley(at, word, colour);
+    let dot = pos2(at.x - 8.0, rect.center().y);
+    painter.circle_filled(dot, 3.5, colour);
+    egui::Rect::from_x_y_ranges(dot.x - 4.0..=right, rect.y_range())
+}
+
+fn note_lines(ui: &mut egui::Ui, notes: &[Note]) {
+    ui.set_max_width(280.0);
+    for note in notes {
+        tone(ui, &note.line, theme::colors().warn);
+        if let Some(advice) = note.advice {
+            hint(ui, advice);
+        }
+    }
 }
 
 /// The file over its bar and the line under it while it prints; one line for the last

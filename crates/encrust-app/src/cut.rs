@@ -26,6 +26,9 @@ pub struct CutTool {
     /// Pins on the lower half and sockets in the upper, so the two glue back true, or
     /// `None` for a plain cut. Kept by the window, like `lay_flat`.
     pub pins: Option<Pins>,
+    /// The model the plane was last put through the middle of, so picking another one
+    /// moves the plane to it.
+    pub centred_on: Option<ObjectId>,
 }
 
 /// How many pins a cut puts in, and their size, millimetres.
@@ -64,6 +67,7 @@ impl Default for CutTool {
             },
             lay_flat: false,
             pins: None,
+            centred_on: None,
         }
     }
 }
@@ -83,14 +87,27 @@ impl CutTool {
         }
     }
 
-    /// Turns the plane to `axis`, through the model's centre of mass on every axis: the
-    /// offset meant for one axis means nothing on another.
+    /// Turns the plane to `axis`, through the model's centre of mass across X or Y and
+    /// halfway up it across Z: the offset meant for one axis means nothing on another.
     pub fn set_axis(&mut self, axis: Axis, object: &SceneObject) {
         self.state.axis = axis;
         self.state.height_mm = match axis {
             Axis::X | Axis::Y => 0.0,
-            Axis::Z => object.pivot().translation.z,
+            Axis::Z => object
+                .world_bounds()
+                .map_or(object.pivot().translation.z, |bounds| {
+                    (bounds.mins.z + bounds.maxs.z) / 2.0
+                }),
         };
+    }
+
+    /// Puts the plane through the middle of `id` on the axis it is set to, unless it was
+    /// already put through this model.
+    pub fn centre_on(&mut self, id: ObjectId, object: &SceneObject) {
+        if self.centred_on != Some(id) {
+            self.centred_on = Some(id);
+            self.set_axis(self.state.axis, object);
+        }
     }
 
     /// Cuts one model in two, in plate coordinates, and puts the halves on the plate in
@@ -318,6 +335,7 @@ mod tests {
             },
             lay_flat: false,
             pins: None,
+            centred_on: None,
         }
     }
 
@@ -492,7 +510,7 @@ mod tests {
     }
 
     #[test]
-    fn turning_the_plane_puts_it_through_the_centre_of_mass() {
+    fn turning_the_plane_puts_it_through_the_middle_of_the_model() {
         let lifted = Transform::from_translation(Vec3::new(0.0, 0.0, 20.0));
         let (scene, id) = scene_with(cuboid(Vec3::splat(10.0)), lifted);
         let object = scene.get(id).expect("the cube was just inserted");
@@ -507,6 +525,25 @@ mod tests {
         assert!(
             (tool.position_mm(object) - 5.0).abs() < 1e-4,
             "the cube spans 0..10 in Y"
+        );
+    }
+
+    #[test]
+    fn picking_a_model_puts_the_plane_halfway_up_it_once() {
+        let (scene, id) = scene_with(cuboid(Vec3::new(10.0, 10.0, 30.0)), Transform::default());
+        let object = scene.get(id).expect("the box was just inserted");
+        let mut tool = CutTool::default();
+
+        tool.centre_on(id, object);
+        assert!(
+            (tool.position_mm(object) - 15.0).abs() < 1e-4,
+            "half of a 30 mm tall box"
+        );
+        tool.state.height_mm = 4.0;
+        tool.centre_on(id, object);
+        assert!(
+            (tool.state.height_mm - 4.0).abs() < 1e-6,
+            "a height typed for the same model stays"
         );
     }
 

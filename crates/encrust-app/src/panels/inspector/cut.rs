@@ -24,6 +24,10 @@ pub fn ui(ui: &mut egui::Ui, window: &mut Window) {
         return;
     };
 
+    if let Some(object) = window.doc.scene.get(id) {
+        window.tools.cut.centre_on(id, object);
+    }
+
     section(ui, "Plane", None, |ui| {
         let axes: Vec<Segment<'_, Axis>> = Axis::ALL
             .iter()
