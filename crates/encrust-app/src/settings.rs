@@ -1,7 +1,7 @@
 //! The Settings window's state: which page is open, what is picked on it, and the profile
 //! being edited, which is written back as it changes. See `docs/design/profiles.md`.
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, VecDeque};
 
 pub use printer_profiles::unique_id;
 use printer_profiles::{
@@ -10,6 +10,7 @@ use printer_profiles::{
 };
 
 use crate::slicing::Rescaled;
+use crate::undo::Frame;
 
 /// A page of the Settings window.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -98,7 +99,11 @@ impl Node {
     }
 }
 
-/// One profile open for editing, and what of it was last written.
+/// How many settled edits a form takes back.
+const FORM_DEPTH: usize = 64;
+
+/// One profile open for editing, what of it was last written, and the edits made to it
+/// since it was opened, which undo and redo walk (ADR 0268).
 pub struct Draft<T> {
     pub id: String,
     pub values: T,
@@ -106,6 +111,11 @@ pub struct Draft<T> {
     /// What this build ships under the same id, when it ships anything. A copy taken out
     /// of the library by an older release stands over it and says nothing; see ADR 0196.
     shipped: Option<T>,
+    /// The values as the last recorded edit left them, what stood before each edit, oldest
+    /// first, and what undo took away.
+    checkpoint: T,
+    past: VecDeque<T>,
+    future: Vec<T>,
 }
 
 impl<T: Clone + PartialEq> Draft<T> {
@@ -113,9 +123,54 @@ impl<T: Clone + PartialEq> Draft<T> {
         Self {
             id,
             saved: values.clone(),
+            checkpoint: values.clone(),
             values,
             shipped: None,
+            past: VecDeque::new(),
+            future: Vec::new(),
         }
+    }
+
+    /// Records an edit once the gesture that made it is over, as the plate's history does:
+    /// a drag is one entry, and a field typed into one once it is left.
+    pub fn observe(&mut self, frame: Frame) {
+        if !frame.settled || frame.typing || self.values == self.checkpoint {
+            return;
+        }
+        let was = std::mem::replace(&mut self.checkpoint, self.values.clone());
+        self.past.push_back(was);
+        if self.past.len() > FORM_DEPTH {
+            self.past.pop_front();
+        }
+        self.future.clear();
+    }
+
+    /// Takes the form back to before its last edit, one not yet recorded first. The form
+    /// writes what it then holds as it would any edit.
+    pub fn undo(&mut self) -> bool {
+        if self.values == self.checkpoint {
+            let Some(previous) = self.past.pop_back() else {
+                return false;
+            };
+            self.checkpoint = previous;
+        }
+        let undone = std::mem::replace(&mut self.values, self.checkpoint.clone());
+        self.future.push(undone);
+        true
+    }
+
+    /// Puts back what the last undo took away, unless the form was edited since.
+    pub fn redo(&mut self) -> bool {
+        if self.values != self.checkpoint {
+            return false;
+        }
+        let Some(next) = self.future.pop() else {
+            return false;
+        };
+        let was = std::mem::replace(&mut self.checkpoint, next.clone());
+        self.past.push_back(was);
+        self.values = next;
+        true
     }
 
     /// The same, over the profile the build ships under that id.
@@ -203,6 +258,18 @@ impl ResinDraft {
         self.carried = None;
     }
 
+    /// `Draft::undo`, forgetting what a change of height carried along: the values it
+    /// would put back are no longer the ones in the form.
+    pub fn undo(&mut self) -> bool {
+        self.carried = None;
+        self.draft.undo()
+    }
+
+    pub fn redo(&mut self) -> bool {
+        self.carried = None;
+        self.draft.redo()
+    }
+
     /// The resin to write: the edits become this printer's table and every other printer
     /// keeps its own. What the resin is and what it costs belong to the resin itself.
     pub fn to_saved(&self) -> MaterialProfile {
@@ -282,6 +349,14 @@ pub enum Deleting {
 pub struct Library {
     pub brand: Option<String>,
     pub search: String,
+}
+
+/// Which profile's form is in view, and so which one undo reaches.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Form {
+    Printer,
+    Resin,
+    Support,
 }
 
 /// What the Settings window and the Machine and resin window are showing.
@@ -384,6 +459,49 @@ impl Settings {
         self.section = section;
         self.editing_support = false;
         self.preset = None;
+    }
+
+    /// The form in view in whichever of the two windows is open, if one is.
+    fn form_in_view(&self) -> Option<Form> {
+        if self.machines {
+            return match self.tab {
+                _ if self.library.is_some() => None,
+                Tab::Resins => self.editing_resin.then_some(Form::Resin),
+                Tab::Machine | Tab::Network => Some(Form::Printer),
+            };
+        }
+        (self.open && self.section == Section::Supports && self.editing_support)
+            .then_some(Form::Support)
+    }
+
+    /// Records the edit of the form in view once its gesture is over.
+    pub fn observe(&mut self, frame: Frame) {
+        match self.form_in_view() {
+            Some(Form::Printer) => self.printer.as_mut().map(|draft| draft.observe(frame)),
+            Some(Form::Resin) => self.resin.as_mut().map(|resin| resin.draft.observe(frame)),
+            Some(Form::Support) => self.support.as_mut().map(|draft| draft.observe(frame)),
+            None => None,
+        };
+    }
+
+    /// Takes back the last edit of the form in view.
+    pub fn undo(&mut self) -> bool {
+        match self.form_in_view() {
+            Some(Form::Printer) => self.printer.as_mut().is_some_and(Draft::undo),
+            Some(Form::Resin) => self.resin.as_mut().is_some_and(ResinDraft::undo),
+            Some(Form::Support) => self.support.as_mut().is_some_and(Draft::undo),
+            None => false,
+        }
+    }
+
+    /// Puts back the last edit of the form in view that undo took away.
+    pub fn redo(&mut self) -> bool {
+        match self.form_in_view() {
+            Some(Form::Printer) => self.printer.as_mut().is_some_and(Draft::redo),
+            Some(Form::Resin) => self.resin.as_mut().is_some_and(ResinDraft::redo),
+            Some(Form::Support) => self.support.as_mut().is_some_and(Draft::redo),
+            None => false,
+        }
     }
 
     /// Closes the Settings window, and the question over it.
@@ -666,6 +784,91 @@ pub fn can_delete(catalogue: &Catalogue, kind: Kind, id: &str) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    const RESTING: Frame = Frame {
+        settled: true,
+        typing: false,
+    };
+
+    /// A draft of one number, edited to each of `edits` and recorded after each.
+    fn edited(edits: &[u32]) -> Draft<u32> {
+        let mut draft = Draft::new("count".to_owned(), 0);
+        for edit in edits {
+            draft.values = *edit;
+            draft.observe(RESTING);
+        }
+        draft
+    }
+
+    #[test]
+    fn a_forms_edits_are_taken_back_and_put_back_in_order() {
+        let mut draft = edited(&[1, 2]);
+        assert!(draft.undo());
+        assert_eq!(draft.values, 1);
+        assert!(draft.undo());
+        assert_eq!(draft.values, 0);
+        assert!(!draft.undo(), "nothing was there before the form opened");
+        assert!(draft.redo());
+        assert!(draft.redo());
+        assert_eq!(draft.values, 2);
+        assert!(!draft.redo());
+    }
+
+    #[test]
+    fn a_number_still_being_typed_is_one_edit_once_it_is_left() {
+        let mut draft = edited(&[]);
+        let typing = Frame {
+            typing: true,
+            ..RESTING
+        };
+        for digit in [1, 12, 123] {
+            draft.values = digit;
+            draft.observe(typing);
+        }
+        draft.observe(RESTING);
+        assert!(draft.undo());
+        assert_eq!(draft.values, 0, "the whole number goes in one step");
+    }
+
+    #[test]
+    fn an_edit_not_yet_recorded_is_the_first_taken_back() {
+        let mut draft = edited(&[1]);
+        draft.values = 2;
+        assert!(draft.undo());
+        assert_eq!(draft.values, 1);
+        assert!(draft.redo());
+        assert_eq!(draft.values, 2);
+    }
+
+    #[test]
+    fn an_edit_after_an_undo_drops_what_it_took_away() {
+        let mut draft = edited(&[1, 2]);
+        draft.undo();
+        draft.values = 5;
+        assert!(!draft.redo(), "the form was edited since");
+        draft.observe(RESTING);
+        assert!(!draft.redo());
+        draft.undo();
+        assert_eq!(draft.values, 1);
+    }
+
+    #[test]
+    fn undo_reaches_only_the_form_in_view() {
+        let mut settings = Settings {
+            machines: true,
+            tab: Tab::Machine,
+            support: Some(Draft::new("support".to_owned(), SupportProfile::default())),
+            ..Settings::default()
+        };
+        if let Some(support) = settings.support.as_mut() {
+            support.values.name = "Edited".to_owned();
+        }
+        settings.observe(RESTING);
+        assert!(
+            !settings.undo(),
+            "the support form is not open in this window"
+        );
+    }
 
     #[test]
     fn moving_a_resins_measured_height_carries_its_exposure_and_can_be_taken_back() {

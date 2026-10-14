@@ -8,6 +8,16 @@ use serde::{Deserialize, Serialize};
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 #[serde(default, deny_unknown_fields)]
 pub struct Compensation {
+    /// Whether the shrinkage percentages are applied; off keeps them for later.
+    #[serde(default = "on")]
+    pub shrinkage_on: bool,
+    /// Whether the wall offsets and the parity offset move any layer above the bottom block.
+    #[serde(default = "on")]
+    pub tolerance_on: bool,
+    /// Whether the bottom block's wall offsets and the parity offset move its layers.
+    #[serde(default = "on")]
+    pub bottom_tolerance_on: bool,
+
     /// Percentage the geometry is scaled by along the plate's X before slicing. 100 is
     /// no correction; above it prints larger, to come out right after the resin shrinks.
     pub shrink_x_pct: f32,
@@ -38,6 +48,9 @@ pub struct Compensation {
 impl Default for Compensation {
     fn default() -> Self {
         Self {
+            shrinkage_on: true,
+            tolerance_on: true,
+            bottom_tolerance_on: true,
             shrink_x_pct: 100.0,
             shrink_y_pct: 100.0,
             shrink_z_pct: 100.0,
@@ -54,6 +67,9 @@ impl Default for Compensation {
 impl Compensation {
     /// The factors the printed geometry is scaled by, X, Y and Z, one each.
     pub fn scale(&self) -> [f32; 3] {
+        if !self.shrinkage_on {
+            return [1.0; 3];
+        }
         [
             factor(self.shrink_x_pct),
             factor(self.shrink_y_pct),
@@ -89,11 +105,18 @@ impl Compensation {
     /// The parity offset lands on even layers, counting the first layer off the plate as
     /// layer one, so it is the layers at an odd `index` that take it.
     pub fn offsets_of_layer_mm(&self, index: u32, is_bottom: bool) -> [f32; 2] {
-        let (hole, outer) = if is_bottom {
-            (self.bottom_hole_offset_mm, self.bottom_outer_offset_mm)
+        let (on, hole, outer) = if is_bottom {
+            (
+                self.bottom_tolerance_on,
+                self.bottom_hole_offset_mm,
+                self.bottom_outer_offset_mm,
+            )
         } else {
-            (self.hole_offset_mm, self.outer_offset_mm)
+            (self.tolerance_on, self.hole_offset_mm, self.outer_offset_mm)
         };
+        if !on {
+            return [0.0; 2];
+        }
         let parity = match index % 2 {
             1 => self.parity_offset_mm,
             _ => 0.0,
@@ -103,15 +126,15 @@ impl Compensation {
 
     /// Whether any layer's walls move at all.
     pub fn offsets_nothing(&self) -> bool {
-        [
-            self.hole_offset_mm,
-            self.outer_offset_mm,
-            self.bottom_hole_offset_mm,
-            self.bottom_outer_offset_mm,
-            self.parity_offset_mm,
-        ]
-        .iter()
-        .all(|offset| offset.abs() < f32::EPSILON)
+        let still = |offsets: &[f32]| offsets.iter().all(|offset| offset.abs() < f32::EPSILON);
+        let parity = self.parity_offset_mm;
+        (!self.tolerance_on || still(&[self.hole_offset_mm, self.outer_offset_mm, parity]))
+            && (!self.bottom_tolerance_on
+                || still(&[
+                    self.bottom_hole_offset_mm,
+                    self.bottom_outer_offset_mm,
+                    parity,
+                ]))
     }
 }
 
@@ -127,6 +150,10 @@ pub fn shrink_pct_between(nominal_mm: f32, printed_mm: f32) -> Option<f32> {
 /// actual times over a known layer count.
 pub fn layer_time_between(predicted_s: f32, actual_s: f32, layers: u32) -> Option<f32> {
     (layers > 0).then(|| (actual_s - predicted_s) / layers as f32)
+}
+
+fn on() -> bool {
+    true
 }
 
 fn factor(percent: f32) -> f32 {
@@ -218,5 +245,32 @@ mod tests {
             ..Compensation::default()
         };
         assert!((compensation.offsets_of_layer_mm(0, true)[1] + 0.08).abs() < 1e-6);
+    }
+
+    #[test]
+    fn a_switched_off_group_keeps_its_numbers_and_moves_nothing() {
+        let compensation = Compensation {
+            shrinkage_on: false,
+            bottom_tolerance_on: false,
+            shrink_x_pct: 101.0,
+            outer_offset_mm: -0.02,
+            bottom_outer_offset_mm: -0.08,
+            ..Compensation::default()
+        };
+        assert!(compensation.scales_nothing(), "shrinkage is off");
+        assert_eq!(compensation.offsets_of_layer_mm(0, true), [0.0; 2]);
+        assert!((compensation.offsets_of_layer_mm(0, false)[1] + 0.02).abs() < 1e-6);
+        assert!(
+            !compensation.offsets_nothing(),
+            "the upper layers still move"
+        );
+        assert_eq!(compensation.shrink_x_pct, 101.0);
+    }
+
+    #[test]
+    fn a_compensation_saved_before_the_switches_is_switched_on() {
+        let read: Compensation =
+            toml::from_str("outer_offset_mm = -0.02").expect("an older table parses");
+        assert!(read.shrinkage_on && read.tolerance_on && read.bottom_tolerance_on);
     }
 }

@@ -1,5 +1,5 @@
-//! The question asked before a profile is thrown away. Everything the two windows write is written as it settles and there is no undo on it (ADR 0120), so a deletion
-//! is asked about first; see ADR 0196.
+//! The question asked before a profile is thrown away. Undo reaches a form's numbers and
+//! never a deleted file (ADR 0268), so a deletion is asked about first; see ADR 0196.
 
 use printer_profiles::{Catalogue, Kind};
 

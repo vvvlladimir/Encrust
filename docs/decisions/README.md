@@ -278,7 +278,7 @@ Grouped by what the decision governs; the number is still the order it was taken
 | [0051](0051-a-printer-profile-names-its-file-format.md) | A printer profile names the sliced-file format its firmware reads | Accepted |
 | [0052](0052-profiles-are-edited-in-the-window.md) | Profiles are edited in a Settings screen and saved into the user's directory | Accepted; where the machines and resins are edited is superseded by 0220, and the Settings screen by 0233 |
 | [0235](0235-a-profile-is-imported-by-the-catalogue.md) | Import and export a profile through the catalogue | Accepted |
-| [0120](0120-a-resin-is-tuned-per-printer.md) | A printer's resins are its own presets, edited in place | Accepted |
+| [0120](0120-a-resin-is-tuned-per-printer.md) | A printer's resins are its own presets, edited in place | Accepted; no undo on the screen superseded by 0268 |
 | [0140](0140-a-profile-carries-the-machine-name-its-firmware-matches.md) | A profile carries the machine name its firmware matches | Accepted |
 | [0141](0141-advance-mode-follows-the-firmware-flag.md) | Advance mode follows the machine's firmware flag | Accepted |
 | [0142](0142-a-tilting-vat-reads-the-header-alone.md) | A tilting vat reads the header alone | Accepted |
@@ -289,6 +289,8 @@ Grouped by what the decision governs; the number is still the order it was taken
 | [0196](0196-a-resin-is-measured-not-shipped.md) | A resin is measured, not shipped, and a copy says where it came from | Superseded by 0197 (what a resin taken off a printer does only) |
 | [0197](0197-a-resin-off-a-printer-waits-in-the-pool.md) | A resin taken off a printer waits in the pool | Accepted |
 | [0226](0226-a-tools-settings-are-kept-as-named-presets.md) | Keep a tool's settings as named presets in the profile catalogue | Accepted |
+| [0267](0267-a-compensation-group-is-switched-off-without-losing-its-numbers.md) | Switch a compensation group off without losing its numbers | Accepted |
+| [0268](0268-undo-reaches-the-form-in-view.md) | Undo reaches the profile form in view | Accepted |
 
 ### Printers over the network
 

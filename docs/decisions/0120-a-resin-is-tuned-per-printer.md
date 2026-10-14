@@ -1,6 +1,6 @@
 # 0120. A printer's resins are its own presets, edited in place
 
-- **Status:** Accepted
+- **Status:** Accepted, with no undo on the screen superseded by 0268
 - **Date:** 2026-09-28
 
 ## Context

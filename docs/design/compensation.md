@@ -8,6 +8,8 @@ carries the corrections, one set per resin, overridable per printer through
 the bottle and the light engine.
 
 Every field is neutral by default. A resin that states nothing slices exactly as it did.
+Shrinkage, tolerance and bottom tolerance each sit under a switch: a group switched off
+keeps its numbers and changes nothing (ADR 0267).
 
 ## Shrinkage
 
@@ -42,7 +44,8 @@ a hole, `b` outwards on an outer contour, so a positive value on either makes th
 larger. `bottom_hole_offset_mm` and `bottom_outer_offset_mm` are the same for the bottom
 block, where a negative `b` is what takes an elephant foot off.
 
-`parity_offset_mm` is added to both on every second layer. An MSLA panel cannot draw an
+`parity_offset_mm` is added to both on every second layer, in whichever of the two groups
+is switched on. An MSLA panel cannot draw an
 edge finer than a pixel — 0.019 mm on a Saturn 4 Ultra — so an offset below that only
 exists as an average over alternating layers.
 

@@ -16,5 +16,5 @@ pub use widgets::{
     number_field, number_row, picker, primary_button, progress_bar, quiet_button, rail_button,
     readings, secondary_button, section, section_with_action, section_with_switch, stats,
     subheading, subheading_with_switch, summary_button, switch, text_box, text_row, tone,
-    two_lines,
+    two_lines, unit_field,
 };
