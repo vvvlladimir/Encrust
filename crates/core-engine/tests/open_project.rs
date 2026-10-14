@@ -314,9 +314,13 @@ fn only_what_is_visible_on_the_opened_plate_is_taken() {
     assert_eq!(plate.models.len(), 1);
 }
 
-/// The shipped printers and one resin of the user's, which nothing ships.
-fn shipped() -> Catalogue {
-    let dir = std::env::temp_dir().join(format!("encrust-open-project-{}", std::process::id()));
+/// The shipped printers and one resin of the user's, which nothing ships, in a directory
+/// of the calling test's own: tests run side by side, and one may read as another writes.
+fn shipped(test: &str) -> Catalogue {
+    let dir = std::env::temp_dir().join(format!(
+        "encrust-open-project-{}-{test}",
+        std::process::id()
+    ));
     let mut catalogue = Catalogue::with_root(&dir).expect("a missing directory reads as empty");
     catalogue
         .save_resin(GREY, &MaterialProfile::default())
@@ -326,11 +330,11 @@ fn shipped() -> Catalogue {
 
 #[test]
 fn the_machine_a_project_names_is_the_catalogues() {
-    let machine = Machine::named(&project().manifest, &shipped()).expect("both are shipped");
+    let machine = Machine::named(&project().manifest, &shipped("names")).expect("both are shipped");
     assert_eq!(machine.printer_id.as_deref(), Some(SATURN));
     assert_eq!(
         machine.printer,
-        shipped().printer(SATURN).expect("ships").profile
+        shipped("names").printer(SATURN).expect("ships").profile
     );
 }
 
@@ -338,8 +342,8 @@ fn the_machine_a_project_names_is_the_catalogues() {
 fn a_project_without_a_printer_is_refused() {
     let mut saved = project();
     saved.manifest.printer = None;
-    let error =
-        Machine::named(&saved.manifest, &shipped()).expect_err("there is no panel to cut for");
+    let error = Machine::named(&saved.manifest, &shipped("no-printer"))
+        .expect_err("there is no panel to cut for");
     assert!(matches!(error, EngineError::NoPrinter));
 }
 
@@ -347,8 +351,8 @@ fn a_project_without_a_printer_is_refused() {
 fn a_project_without_a_resin_is_refused() {
     let mut saved = project();
     saved.manifest.resin = None;
-    let error =
-        Machine::named(&saved.manifest, &shipped()).expect_err("there is nothing to expose");
+    let error = Machine::named(&saved.manifest, &shipped("no-resin"))
+        .expect_err("there is nothing to expose");
     assert!(matches!(error, EngineError::NoResin));
 }
 
@@ -356,7 +360,7 @@ fn a_project_without_a_resin_is_refused() {
 fn a_printer_this_catalogue_lacks_is_refused() {
     let mut saved = project();
     saved.manifest.printer = Some("someone-elses-0a1b2c3d".to_owned());
-    let error = Machine::named(&saved.manifest, &shipped()).expect_err("nobody here has it");
+    let error = Machine::named(&saved.manifest, &shipped("lacks")).expect_err("nobody here has it");
     assert!(matches!(
         error,
         EngineError::NotHere(ProfileError::Unknown {
