@@ -250,7 +250,7 @@ fn wall_mm(placed: &Placed, contact: Vec3, into: Vec3) -> Scalar {
 }
 
 fn mesh_raft(mesh: &mut Mesh, trees: &[SupportTree], placed: &Placed, profiles: Profiles) {
-    if let Some(slab) = raft(trees, placed, profiles.ground()) {
+    if let Some(slab) = raft(trees, placed, profiles) {
         append(mesh, &slab);
     }
 }
@@ -268,7 +268,8 @@ fn append(mesh: &mut Mesh, other: &Mesh) {
 }
 
 /// Whatever the tree stands on: the flare out of the pillar, and then a round foot swept
-/// as rings or a skate. Nothing at all when it lands on the model.
+/// as rings or a skate. Nothing at all when it lands on the model, and no foot on a raft,
+/// which the flare stands on instead; see `docs/decisions/0266`.
 fn stand_on(mesh: &mut Mesh, tree: &SupportTree, profile: &SupportProfile) {
     if tree.landing().on_model {
         return;
@@ -276,6 +277,9 @@ fn stand_on(mesh: &mut Mesh, tree: &SupportTree, profile: &SupportProfile) {
     let style = Style::of(tree, profile);
     if let Some(tube) = flare(tree, profile, style) {
         sweep(mesh, &tube);
+    }
+    if profile.raft.enabled {
+        return;
     }
     if profile.bottom.shape.is_round() {
         if let Some(tube) = foot(tree, profile, style) {
@@ -357,7 +361,7 @@ fn trunk(tree: &SupportTree, profile: &SupportProfile, style: Style) -> Tube {
     let into_foot = if landing.on_model {
         0.0
     } else {
-        profile.base_height_mm() * FOOT_BITE
+        profile.footing_height_mm() * FOOT_BITE
     };
 
     // Aimed at the foot rather than straight down: a foot dragged out from under its tip
@@ -510,7 +514,7 @@ fn plate_radius_mm(profile: &SupportProfile, trunk_mm: Scalar) -> Scalar {
     (profile.base_radius_mm() - bevel).max(trunk_mm)
 }
 
-/// The cone that widens the pillar out into the pad it stands on, or `None` when the
+/// The cone that widens the pillar out into the pad or raft it stands on, or `None` when the
 /// support lands on the model or has no room for one.
 ///
 /// It rises as far as it widens, which is the forty-five degrees every MSLA slicer draws
@@ -521,7 +525,9 @@ fn flare(tree: &SupportTree, profile: &SupportProfile, style: Style) -> Option<T
     let trunk_mm = trunk_base_mm(tree, profile, style);
     let upper_mm = trunk_mm;
     // Inside the pad at every depth it reaches, so it never shows through its side.
-    let widest_mm = if profile.bottom.shape.is_round() {
+    let widest_mm = if profile.raft.enabled {
+        Scalar::INFINITY
+    } else if profile.bottom.shape.is_round() {
         plate_radius_mm(profile, trunk_mm).min(foot_top_radius_mm(profile, trunk_mm))
     } else {
         skate_half_width_mm(profile)
@@ -540,7 +546,7 @@ fn flare(tree: &SupportTree, profile: &SupportProfile, style: Style) -> Option<T
     push(&mut rings, rise_mm, upper_mm + rise_mm);
     push(
         &mut rings,
-        rise_mm + profile.base_height_mm() * FOOT_BITE,
+        rise_mm + profile.footing_height_mm() * FOOT_BITE,
         upper_mm + rise_mm,
     );
 
@@ -552,6 +558,16 @@ fn flare(tree: &SupportTree, profile: &SupportProfile, style: Style) -> Option<T
         apex: None,
         tail: None,
     })
+}
+
+/// Radius of what a support standing on the plate meets the ground with, millimetres: its
+/// pad's rim, or the bottom of its flare where a raft takes the pad's place.
+pub(crate) fn footing_radius_mm(tree: &SupportTree, profile: &SupportProfile) -> Scalar {
+    if !profile.raft.enabled {
+        return profile.base_radius_mm();
+    }
+    let trunk_mm = trunk_base_mm(tree, profile, Style::of(tree, profile));
+    profile.flare_lower_radius_mm().max(trunk_mm)
 }
 
 /// Radius of the pad's own top ring, millimetres: its rim, or the narrowed one a
@@ -1715,6 +1731,50 @@ mod tests {
             (width_at(shoulder) - profile.pillar_radius_mm()).abs() < 1e-3,
             "and meets the pillar at the pillar's own width, got {}",
             width_at(shoulder)
+        );
+    }
+
+    #[test]
+    fn a_support_on_a_raft_has_no_pad_and_flares_onto_the_raft() {
+        let mut profile = profile();
+        profile.raft.enabled = true;
+        let trees = column_on_plate(20.0, &profile);
+        let model = Mesh::default();
+        let bvh = core_geometry::Bvh::build(&model);
+        let mesh = mesh_alone(
+            &trees[0],
+            &profile,
+            &Placed::new(&model, &bvh, Transform::default()),
+        );
+        let thickness = profile.raft.thickness_mm;
+        let flare_mm = profile.flare_lower_radius_mm();
+        assert!(
+            flare_mm < profile.base_radius_mm(),
+            "the fixture's flare is narrower than its pad, or this proves nothing"
+        );
+
+        let axis = Vec2::new(10.0, 10.0);
+        for vertex in &mesh.vertices {
+            assert!(
+                vertex.z >= thickness * (1.0 - FOOT_BITE) - 1e-4,
+                "nothing reaches under the raft's top by more than the bite, got {vertex}"
+            );
+            let reach = (vertex.truncate() - axis).length();
+            assert!(
+                reach <= flare_mm + 1e-3,
+                "nothing is wider than the flare, got {reach} mm out at {vertex}"
+            );
+        }
+        let style = Style::of(&trees[0], &profile);
+        let tube = flare(&trees[0], &profile, style).expect("a column on a raft flares");
+        let rises = tube.rings[1].along_mm - tube.rings[0].along_mm;
+        assert!(
+            (tube.rings[1].radius_mm - flare_mm).abs() < 1e-5,
+            "the flare widens to its own lower diameter, not to what a pad would allow"
+        );
+        assert!(
+            (tube.top.z - (thickness + rises)).abs() < 1e-5,
+            "the flare stands on the top of the raft"
         );
     }
 

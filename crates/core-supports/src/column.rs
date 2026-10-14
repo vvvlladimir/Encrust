@@ -83,8 +83,8 @@ pub struct Landing {
 }
 
 impl Landing {
-    /// Height at which the pillar body ends: the top of the foot, or the surface it sank
-    /// into.
+    /// Height at which the pillar body ends: the top of the foot or the raft, or the surface
+    /// it sank into.
     pub fn pillar_bottom_z(&self, profile: &SupportProfile) -> Scalar {
         if self.on_support {
             // On the axis of the trunk it joins, which is already inside that trunk.
@@ -93,7 +93,7 @@ impl Landing {
             // Sunk into what it stands on, so the two cure as one solid.
             self.base.z - profile.landing_depth_mm()
         } else {
-            self.base.z + profile.base_height_mm()
+            self.base.z + profile.footing_height_mm()
         }
     }
 
@@ -330,7 +330,7 @@ pub fn neck_of(placed: &Placed, contact: Vec3, profile: &SupportProfile) -> Vec3
     };
     let drop_mm = -direction.z * length_mm;
     let room_mm =
-        (contact.z - PLATE_Z_MM - profile.base_height_mm() - MIN_PILLAR_HEIGHT_MM).max(0.0);
+        (contact.z - PLATE_Z_MM - profile.footing_height_mm() - MIN_PILLAR_HEIGHT_MM).max(0.0);
     let length_mm = if drop_mm > room_mm {
         length_mm * room_mm / drop_mm
     } else {

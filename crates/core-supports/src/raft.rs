@@ -3,6 +3,8 @@ use printer_profiles::{RaftShape, RaftStyle, SupportProfile};
 use rayon::prelude::*;
 
 use crate::base::{SAME_PLACE_MM, hull};
+use crate::group::Profiles;
+use crate::mesher::footing_radius_mm;
 use crate::placed::Placed;
 use crate::tree::SupportTree;
 
@@ -26,22 +28,23 @@ pub const LIP_WIDTH_MM: Scalar = 1.0;
 /// The raft under every support that reaches the plate, or `None` when there is nothing
 /// to stand on it.
 ///
+/// It is built to the ground profile, and each foot is as wide as its own group draws it.
 /// Every piece stands on the plate, and the supports pass straight
 /// through it under the overlap rule every joint uses; see `docs/decisions/0041` and
 /// `docs/decisions/0241`.
-pub(crate) fn raft(
-    trees: &[SupportTree],
-    placed: &Placed,
-    profile: &SupportProfile,
-) -> Option<Mesh> {
+pub(crate) fn raft(trees: &[SupportTree], placed: &Placed, profiles: Profiles) -> Option<Mesh> {
+    let profile = profiles.ground();
     let raft = &profile.raft;
     if !raft.enabled {
         return None;
     }
-    let feet: Vec<Vec2> = trees
+    let feet: Vec<Foot> = trees
         .iter()
         .filter(|tree| !tree.landing().on_model)
-        .map(|tree| tree.landing().base.truncate())
+        .map(|tree| Foot {
+            centre: tree.landing().base.truncate(),
+            radius_mm: footing_radius_mm(tree, profiles.of(tree.group())),
+        })
         .collect();
     if feet.is_empty() {
         return None;
@@ -63,16 +66,22 @@ pub(crate) fn raft(
     (!mesh.faces.is_empty()).then_some(mesh)
 }
 
+/// Where a support meets the raft, and how wide.
+#[derive(Debug, Clone, Copy)]
+struct Foot {
+    centre: Vec2,
+    radius_mm: Scalar,
+}
+
 /// The outline a skates or grid raft is drawn to: the part's footprint and every foot,
 /// pushed `margin_mm` out, counter-clockwise.
 ///
 /// A rounded corner is never tighter than twice `rim_mm`, or an inset that deep would turn
 /// it inside out: under a smaller margin the hull is drawn in first by the difference.
-fn outline(feet: &[Vec2], placed: &Placed, profile: &SupportProfile, rim_mm: Scalar) -> Vec<Vec2> {
-    let radius = profile.base_radius_mm();
+fn outline(feet: &[Foot], placed: &Placed, profile: &SupportProfile, rim_mm: Scalar) -> Vec<Vec2> {
     let mut points = footprint(placed);
-    for &foot in feet {
-        points.extend(circle(foot, radius));
+    for foot in feet {
+        points.extend(circle(foot.centre, foot.radius_mm));
     }
     let around = hull(&points);
     let margin = profile.raft.margin_mm.max(0.0);
@@ -256,7 +265,7 @@ fn slab(mesh: &mut Mesh, outline: &[Vec2], overhang_mm: Scalar, thickness_mm: Sc
 
 /// A grid raft: a solid rim around `outline`, bars both ways across its inside, and a pad
 /// under every foot so none of them stands over a hole.
-fn grid(mesh: &mut Mesh, outline: &[Vec2], feet: &[Vec2], profile: &SupportProfile) {
+fn grid(mesh: &mut Mesh, outline: &[Vec2], feet: &[Foot], profile: &SupportProfile) {
     let raft = &profile.raft;
     let (overhang, thickness) = (raft.overhang_mm(), raft.thickness_mm);
     let rim = overhang + GRID_BAR_MM;
@@ -279,13 +288,8 @@ fn grid(mesh: &mut Mesh, outline: &[Vec2], feet: &[Vec2], profile: &SupportProfi
             slab(mesh, &bar, 0.0, thickness);
         }
     }
-    for &foot in feet {
-        slab(
-            mesh,
-            &circle(foot, profile.base_radius_mm()),
-            0.0,
-            thickness,
-        );
+    for foot in feet {
+        slab(mesh, &circle(foot.centre, foot.radius_mm), 0.0, thickness);
     }
 }
 
@@ -439,16 +443,18 @@ fn saucer(mesh: &mut Mesh, outline: &[Vec2], overhang_mm: Scalar, thickness_mm: 
 
 /// A connected raft: a pad under every foot and a strip a foot wide along the shortest
 /// network that joins them all, their minimum spanning tree.
-fn connected(mesh: &mut Mesh, feet: &[Vec2], profile: &SupportProfile) {
+fn connected(mesh: &mut Mesh, feet: &[Foot], profile: &SupportProfile) {
     let raft = &profile.raft;
     let (overhang, thickness) = (raft.overhang_mm(), raft.thickness_mm);
-    let radius = profile.base_radius_mm();
-    let pad = radius + raft.margin_mm.max(0.0);
-    for &foot in feet {
-        slab(mesh, &circle(foot, pad), overhang, thickness);
+    let margin = raft.margin_mm.max(0.0);
+    for foot in feet {
+        let pad = circle(foot.centre, foot.radius_mm + margin);
+        slab(mesh, &pad, overhang, thickness);
     }
-    for (one, two) in spanning_tree(feet) {
-        let (from, to) = (feet[one], feet[two]);
+    let centres: Vec<Vec2> = feet.iter().map(|foot| foot.centre).collect();
+    for (one, two) in spanning_tree(&centres) {
+        let (from, to) = (centres[one], centres[two]);
+        let radius = feet[one].radius_mm.min(feet[two].radius_mm);
         let side = (to - from).normalize_or_zero().perp() * radius;
         let strip = [from - side, to - side, to + side, from + side];
         slab(mesh, &strip, overhang, thickness);
@@ -530,7 +536,7 @@ mod tests {
         raft(
             trees,
             &Placed::new(model, &Bvh::build(model), Transform::default()),
-            profile,
+            Profiles::single(profile),
         )
     }
 
@@ -612,7 +618,7 @@ mod tests {
         let model = box_mesh(Vec3::new(-20.0, -20.0, 22.0), Vec3::new(20.0, 20.0, 30.0));
         let bvh = Bvh::build(&model);
         let placed = Placed::new(&model, &bvh, turned);
-        let slab = raft(&trees, &placed, &profile).expect("a raft");
+        let slab = raft(&trees, &placed, Profiles::single(&profile)).expect("a raft");
 
         // A 40 mm square turned 45 degrees lies within |x| + |y| <= 20 sqrt 2: its own
         // rectangle, margin and lip's flare added, still does; the plate's would not.
@@ -766,6 +772,31 @@ mod tests {
         assert!(
             built(&trees, &shelf, &profile).is_none(),
             "nothing reaches the plate"
+        );
+    }
+
+    #[test]
+    fn a_raft_reaches_past_the_flare_of_every_group_on_it() {
+        let ground = with_raft(RaftStyle::Skates, RaftShape::Hull);
+        let mut wide = ground.clone();
+        wide.bottom.lower_diameter_mm = 2.5 * ground.bottom.platform_diameter_mm;
+        let table = [ground.clone(), wide.clone()];
+        let profiles = Profiles::new(&table).expect("two groups");
+        let points = [
+            SupportPoint::new(Vec3::new(0.0, 0.0, 20.0)),
+            SupportPoint::new(Vec3::new(30.0, 0.0, 20.0)).in_group(1),
+        ];
+        let trees = trees_on(&points, &Mesh::default(), Transform::default(), profiles);
+        let model = Mesh::default();
+        let bvh = Bvh::build(&model);
+        let placed = Placed::new(&model, &bvh, Transform::default());
+        let slab = raft(&trees, &placed, profiles).expect("a raft");
+
+        let bounds = slab.aabb().expect("the slab has vertices");
+        let reach = 30.0 + wide.flare_lower_radius_mm() + ground.raft.margin_mm;
+        assert!(
+            bounds.maxs.x >= reach - 1e-2,
+            "the margin is measured from the wider group's own flare, {reach} mm, got {bounds:?}"
         );
     }
 

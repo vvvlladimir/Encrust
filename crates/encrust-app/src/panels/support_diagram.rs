@@ -288,6 +288,29 @@ impl Column {
         }
     }
 
+    /// One standing on a raft instead: no pad, the flare widening onto the slab's top
+    /// unchecked by a rim. See `docs/decisions/0266`.
+    fn on_raft(profile: &SupportProfile, tips: usize, trunk: f32) -> Self {
+        let mut stations = tip(profile);
+        let neck = stations.last().map_or(0.0, |station| station.x);
+        let base = profile.trunk_base_radius_mm(trunk, tips);
+        let foot = neck + trunk;
+        let lower = profile.flare_lower_radius_mm().max(base);
+        let flare = foot - (lower - base);
+        stations.push(station(flare, base, Part::Base));
+        stations.push(station(foot, lower, Part::Base));
+        Self {
+            stations,
+            neck,
+            flare,
+            foot,
+            plate: foot + profile.raft.thickness_mm,
+            base,
+            lower,
+            pad: lower,
+        }
+    }
+
     fn half_at(&self, x_mm: f32) -> f32 {
         half_at(&self.stations, x_mm)
     }
@@ -312,7 +335,7 @@ impl Column {
 /// How tall the trunk is of a support under a part stood as low as the profile lets it,
 /// millimetres.
 fn lowest_trunk_mm(profile: &SupportProfile) -> f32 {
-    let (top, foot) = (profile.top.length_mm, profile.base_height_mm());
+    let (top, foot) = (profile.top.length_mm, profile.footing_height_mm());
     (profile.lift_mm() - top - foot).max(2.0 * top).max(1.0)
 }
 
@@ -833,11 +856,17 @@ fn facets(painter: &Painter, view: &View, profile: &SupportProfile, column: &Col
 }
 
 /// The rim of the raft standing on the plate, cut through the middle of one foot, from
-/// inside the pad out to its edge: its thickness, its wall's lean, how far it reaches
-/// past the pad, and its style.
+/// inside the foot out to its edge: its thickness, its wall's lean, how far it reaches
+/// past the foot, and its style. A raft switched off is drawn under the pad it would
+/// replace.
 fn raft_view(painter: &Painter, frame: Rect, profile: &SupportProfile) {
-    let column = Column::of(profile, 1, lowest_trunk_mm(profile));
-    let section = RaftSection::of(profile);
+    let trunk = lowest_trunk_mm(profile);
+    let column = if profile.raft.enabled {
+        Column::on_raft(profile, 1, trunk)
+    } else {
+        Column::of(profile, 1, trunk)
+    };
+    let section = RaftSection::of(profile, column.pad);
     let rim = section.reach - section.pad;
     let along = (column.plate - section.tall * 2.5, column.plate);
     let across = ((section.pad - rim).max(0.0), section.reach + rim * 0.1);
@@ -849,7 +878,8 @@ fn raft_view(painter: &Painter, frame: Rect, profile: &SupportProfile) {
 }
 
 /// A raft cut through the middle of one foot, millimetres: half its width where the
-/// supports stand on it and where it meets the plate, how thick and how tall it is.
+/// supports stand on it and where it meets the plate, how thick and how tall it is, and
+/// half the width of the foot on it.
 struct RaftSection {
     top: f32,
     bottom: f32,
@@ -861,10 +891,9 @@ struct RaftSection {
 }
 
 impl RaftSection {
-    fn of(profile: &SupportProfile) -> Self {
+    fn of(profile: &SupportProfile, pad: f32) -> Self {
         let raft = &profile.raft;
         let (thick, overhang) = (raft.thickness_mm, raft.overhang_mm());
-        let pad = profile.base_radius_mm();
         let top = pad + raft.margin_mm.max(0.0);
         let tall = match raft.style {
             RaftStyle::Skates => 2.0 * thick,
@@ -979,7 +1008,7 @@ impl RaftSection {
     }
 }
 
-/// The slab's thickness, how far it reaches past the pad, and the lean of its wall.
+/// The slab's thickness, how far it reaches past the foot, and the lean of its wall.
 fn raft_figures(
     painter: &Painter,
     view: &View,

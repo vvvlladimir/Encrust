@@ -117,12 +117,13 @@ down to the contact's, pushed its bite in and flat for a plane tip, or meeting t
 and biting to a point for a sphere. What touches the part
 is a tip's scar whatever the trunk carries, so it breaks off by hand (ADR 0124, 0242).
 
-**Raft.** `[raft]` lays its pieces on the plate. Supports still land at `z = 0` and pass
-through, and the fill rule unions them (ADR 0043). `style` picks the pieces: `skates`, a
+**Raft.** `[raft]` lays its pieces on the plate. A support that reaches the plate has no
+pad then: its flare stands on the raft's top and bites into it, and the fill rule unions
+them (ADR 0043, 0266). `style` picks the pieces: `skates`, a
 slab of `thickness_mm` whose sloped wall carries on up into a lip as tall again, its
 inner face at the same slope, like a saucer; a `grid` of bars inside a rim with a pad under each foot; or `connected` pads
 joined by strips along the feet's Euclidean minimum spanning tree. A skates or grid raft
-is drawn to the convex hull of the model's footprint and every foot (Andrew's monotone
+is drawn to the convex hull of the model's footprint and every flare's foot (Andrew's monotone
 chain), pushed out `margin_mm` with rounded corners, or the smallest-area rectangle around
 that hull pushed out as far (ADR 0241). A corner is rounded to at least twice the depth
 the rim cuts in; under a smaller margin the hull is drawn in by the difference first, so
@@ -366,8 +367,8 @@ A support carries the number of a group, and `Profiles` is the table of profiles
 is built with (ADR 0094). `columns` builds each tip to its own group's shape, `grow` runs
 once per group — so a trunk is never shared by two shapes — and `mesh_trees` meshes each
 tree to its group and each brace to the group it ties. The raft is not a group's: it is the
-model's own or the plate's (ADR 0253), written into the first profile of the table a model
-is built with, which is where the core reads it. A tree also carries the group it was grown to, so what meshes it knows its shape.
+model's own or the plate's (ADR 0253), written into every profile of the table a model is
+built with; the core builds the slab from the first and stands every group on it (ADR 0266). A tree also carries the group it was grown to, so what meshes it knows its shape.
 
 Groups are grown thickest first, and the struts and trunks a group has stood are carriers
 for the thinner groups after it (ADR 0248): while those merge, a front may run into a

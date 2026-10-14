@@ -1,6 +1,6 @@
 # 0241. Draw a raft around the part by a margin in millimetres, in one of three styles
 
-- **Status:** Accepted
+- **Status:** Accepted; the radius a foot is drawn at superseded by 0266
 - **Date:** 2026-10-13
 
 ## Context

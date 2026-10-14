@@ -872,7 +872,7 @@ fn escape(
     let reach_per_drop = lean_per_drop(profile);
     // A lean costs height, and what is left underneath is the ceiling on it: a support low
     // over the plate can only step aside as far as it can still descend.
-    let room_mm = from.z - profile.base_height_mm() - MIN_PILLAR_HEIGHT_MM;
+    let room_mm = from.z - profile.footing_height_mm() - MIN_PILLAR_HEIGHT_MM;
     let reach_mm = (room_mm * reach_per_drop).min(profile.branching.max_merge_distance_mm);
     if reach_mm <= SAME_PLACE_MM {
         return None;

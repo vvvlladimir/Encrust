@@ -164,7 +164,7 @@ Grouped by what the decision governs; the number is still the order it was taken
 | [0040](0040-nearby-tips-merge-into-shared-trunks.md) | Nearby tips merge into shared trunks, greedily, highest meeting point first | Accepted; the width of a merged trunk is superseded by 0242 |
 | [0041](0041-a-support-is-a-set-of-overlapping-tubes.md) | A support is meshed as overlapping closed tubes, not one welded solid | Accepted |
 | [0042](0042-support-shapes-are-profile-data-swept-by-one-mesher.md) | Support shapes are data in the profile, swept by the one mesher | Accepted; the tip shapes are superseded by 0243 |
-| [0043](0043-the-base-is-three-solids-beside-the-supports.md) | The raft, the skate and the braces are solids beside the supports | Accepted |
+| [0043](0043-the-base-is-three-solids-beside-the-supports.md) | The raft, the skate and the braces are solids beside the supports | Accepted; supports passing through the raft superseded by 0266 |
 | [0044](0044-joints-are-balls-and-every-foot-is-bevelled.md) | A joint is covered by a ball, every foot is bevelled, braces cross | Accepted; the ball over a joint is superseded by 0238 |
 | [0072](0072-trapped-resin-is-found-on-the-stack.md) | Trapped resin is found on the slice stack, in `core-supports` | Accepted |
 | [0077](0077-a-support-body-is-checked-as-a-beam.md) | A support body is checked as a beam, not as its axis | Accepted |
@@ -186,7 +186,7 @@ Grouped by what the decision governs; the number is still the order it was taken
 | [0238](0238-a-support-has-one-width-and-its-joints-are-domes.md) | Give a support one width, round its joints, and let a raft lift the part | Accepted |
 | [0239](0239-a-pad-is-as-wide-as-its-profile-says.md) | Make a pad as wide as its profile says, and move it rather than narrow it | Accepted |
 | [0240](0240-braces-follow-a-gabriel-graph-and-a-lone-trunk-leans-in.md) | Tie trunks along a Gabriel graph, and lean a lone trunk into reach | Accepted; how far a trunk leans and towards what is superseded by 0250 |
-| [0241](0241-a-raft-covers-the-part-and-comes-in-three-styles.md) | Draw a raft around the part by a margin in millimetres, in one of three styles | Accepted |
+| [0241](0241-a-raft-covers-the-part-and-comes-in-three-styles.md) | Draw a raft around the part by a margin in millimetres, in one of three styles | Accepted; the radius a foot is drawn at superseded by 0266 |
 | [0242](0242-a-trunk-is-a-cone-sized-by-its-height-and-load.md) | Make a trunk a cone sized by its height and load, and no brace wider than it | Accepted |
 | [0243](0243-a-tip-is-a-plane-or-a-sphere-and-a-plane-bites-by-moving-in.md) | Offer a plane or a sphere tip, and bite a plane tip by pushing it in | Accepted |
 | [0244](0244-a-press-on-a-support-carries-it-and-the-aim-has-slack.md) | Carry a support by the press that picks it, and give the aim slack | Accepted |
@@ -243,7 +243,8 @@ Grouped by what the decision governs; the number is still the order it was taken
 | [0250](0250-a-trunk-leans-for-a-brace-no-further-than-a-branch-reaches.md) | Lean a trunk for a brace no further than a branch reaches, towards any group, and tie a brace to the trunk's own axis | Accepted; that bracing is asked of the ground profile is superseded by 0252 |
 | [0251](0251-a-small-pillar-stands-on-a-support-and-nothing-is-built-in-the-solid.md) | Stand a small pillar on the support beside it, never a support on a small pillar, and build nothing inside the model | Accepted |
 | [0252](0252-a-brace-is-built-to-the-groups-it-ties.md) | Build a brace to the groups of the trunks it ties | Accepted |
-| [0253](0253-the-raft-is-the-models-not-a-groups.md) | Make the raft the model's and the plate's, not a group's | Accepted |
+| [0253](0253-the-raft-is-the-models-not-a-groups.md) | Make the raft the model's and the plate's, not a group's | Accepted; the raft written into the first profile only superseded by 0266 |
+| [0266](0266-a-support-on-a-raft-flares-onto-it-without-a-pad.md) | Stand a support on a raft by its flare, without a pad | Accepted |
 | [0178](0178-a-project-names-its-cavities-and-the-engine-opens-it.md) | A project names its cavities, and the engine opens it into a plate | Superseded by 0191 |
 | [0191](0191-a-project-holds-the-plate-as-it-stands.md) | A project holds the plate as it stands, and opening it builds nothing | Accepted; refusing every other version is superseded by 0261 |
 | [0261](0261-a-project-names-its-printer-and-resin-by-id.md) | Name a project's printer and resin by id, give the user's own ids a random tail, and picture the plate in the file | Accepted |

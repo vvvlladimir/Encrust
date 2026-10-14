@@ -298,8 +298,8 @@ impl ObjectState {
 }
 
 /// `table` with the profiles one model keeps of its `own` put in place of its groups',
-/// by group number, and `raft` under them where there is one. The raft is built from the
-/// first group's profile, so that is where it is written.
+/// by group number, and `raft` under them, or the first group's where there is none. Every
+/// group stands on that one raft, so it is written into each; see `docs/decisions/0266`.
 pub fn own_table<'a>(
     mut table: Vec<SupportProfile>,
     own: impl IntoIterator<Item = (u16, &'a SupportProfile)>,
@@ -310,8 +310,10 @@ pub fn own_table<'a>(
             plate.clone_from(profile);
         }
     }
-    if let (Some(ground), Some(raft)) = (table.first_mut(), raft) {
-        ground.raft = raft;
+    if let Some(raft) = raft.or_else(|| table.first().map(|ground| ground.raft)) {
+        for profile in &mut table {
+            profile.raft = raft;
+        }
     }
     table
 }
@@ -804,10 +806,14 @@ mod tests {
     fn a_model_is_built_to_its_own_support_profile_where_it_keeps_one() {
         let plate = [SupportProfile::light(), SupportProfile::medium()];
         assert_eq!(object(0).support_table(&plate, None), plate.to_vec());
+        let heavy = SupportProfile {
+            raft: plate[0].raft,
+            ..SupportProfile::heavy()
+        };
         assert_eq!(
             object(1).support_table(&plate, None),
-            vec![SupportProfile::light(), SupportProfile::heavy()],
-            "the second model keeps its own profile of group 1"
+            vec![SupportProfile::light(), heavy],
+            "the second model keeps its own profile of group 1, on the first group's raft"
         );
     }
 
@@ -831,8 +837,15 @@ mod tests {
         assert_eq!(own.support_table(&plate, Some(thick))[0].raft, thicker);
         assert_eq!(
             own.support_table(&plate, Some(thick))[1].raft,
-            plate[1].raft,
-            "only the first group's is the raft that is built"
+            thicker,
+            "every group stands on the one raft"
+        );
+        let mut second = plate.clone();
+        second[1].raft = thick;
+        assert_eq!(
+            object(0).support_table(&second, None)[1].raft,
+            plate[0].raft,
+            "with none given, every group takes the first group's"
         );
     }
 

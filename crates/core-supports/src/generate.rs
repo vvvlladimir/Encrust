@@ -61,7 +61,7 @@ pub fn generate_supports(
         // A contact lower than a foot and the shortest pillar that can stand on it has
         // nowhere to put a column, and material that close to the plate is not going to
         // sag before it cures anyway.
-        lowest_contact_mm: PLATE_CONTACT_MM.max(profile.base_height_mm() + MIN_PILLAR_HEIGHT_MM),
+        lowest_contact_mm: PLATE_CONTACT_MM.max(profile.footing_height_mm() + MIN_PILLAR_HEIGHT_MM),
         stance_mm: config.spacing_mm,
         blocked,
     };

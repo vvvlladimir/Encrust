@@ -1,6 +1,6 @@
 # 0253. Make the raft the model's and the plate's, not a group's
 
-- **Status:** Accepted
+- **Status:** Accepted; the raft written into the first profile only superseded by 0266
 - **Date:** 2026-10-13
 
 ## Context

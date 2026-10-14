@@ -630,6 +630,16 @@ impl SupportProfile {
         self.bottom.platform_thickness_mm
     }
 
+    /// How high a support standing on the plate starts, millimetres: the top of its pad,
+    /// or of the raft that takes the pad's place. See `docs/decisions/0266`.
+    pub fn footing_height_mm(&self) -> f32 {
+        if self.raft.enabled {
+            self.raft.thickness_mm
+        } else {
+            self.base_height_mm()
+        }
+    }
+
     /// How far the lowest point of a part is stood off the plate, millimetres: the lift
     /// the profile asks for, and a raft's thickness on top of it, so that the slab is
     /// never printed into the part. See `docs/decisions/0238`.

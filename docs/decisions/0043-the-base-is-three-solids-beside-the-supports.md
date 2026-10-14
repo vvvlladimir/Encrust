@@ -1,6 +1,6 @@
 # 0043. Build the raft, the skate and the braces as solids beside the supports
 
-- **Status:** Accepted, with the skate's cock and the raft's slope superseded by 0044
+- **Status:** Accepted, with the skate's cock and the raft's slope superseded by 0044 and supports passing through the raft superseded by 0266
 - **Date:** 2026-09-19
 
 ## Context
