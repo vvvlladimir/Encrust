@@ -214,9 +214,39 @@ pub struct PrinterProfile {
     /// What this machine takes a file over, where it takes one at all.
     #[serde(default)]
     pub connection: Connection,
+    /// The printers of this model on the network that its files go to, in the order they
+    /// were listed. See `docs/decisions/0265`.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub machines: Vec<NetworkMachine>,
     /// What this machine's firmware will obey beyond the header.
     #[serde(default)]
     pub firmware: Firmware,
+}
+
+/// One printer on the network a profile sends to: what the user calls it and where it is.
+/// A Prusa machine's login is not here; it is the window's own setting (ADR 0153).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct NetworkMachine {
+    /// What the user calls it; empty shows the address.
+    #[serde(default)]
+    pub name: String,
+    /// The IP address or host it is reached at.
+    pub address: String,
+    /// An SDCP board's own id, which still names it after it moves to another address.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub board: Option<String>,
+}
+
+impl NetworkMachine {
+    /// What it is called in front of the user.
+    pub fn label(&self) -> &str {
+        if self.name.trim().is_empty() {
+            &self.address
+        } else {
+            &self.name
+        }
+    }
 }
 
 /// What a machine's firmware obeys beyond its header, which is not the same on every
@@ -271,6 +301,7 @@ impl Default for PrinterProfile {
             mirror_y: false,
             output: OutputFormat::Goo,
             connection: Connection::None,
+            machines: Vec::new(),
             firmware: Firmware::default(),
         }
     }
@@ -330,6 +361,13 @@ impl PrinterProfile {
             if value <= 0.0 {
                 return Err(ProfileError::NonPositive { field, value });
             }
+        }
+        if let Some(index) = self
+            .machines
+            .iter()
+            .position(|machine| machine.address.trim().is_empty())
+        {
+            return Err(ProfileError::NoAddress { index });
         }
         Ok(())
     }
@@ -425,6 +463,55 @@ z = 100.0
         );
         let profile = PrinterProfile::from_toml_str(&networked, path()).expect("valid profile");
         assert_eq!(profile.connection, Connection::Sdcp);
+    }
+
+    #[test]
+    fn a_profile_lists_its_printers_on_the_network_and_writes_them_back() {
+        let listed = SAMPLE.replace(
+            "manufacturer = \"Test\"",
+            "manufacturer = \"Test\"\nconnection = \"sdcp\"\n\n\
+             [[machines]]\nname = \"Bench A\"\naddress = \"192.168.1.133\"\n\
+             board = \"d85f46e4d7d90100\"\n\n\
+             [[machines]]\naddress = \"192.168.1.140\"",
+        );
+        let profile = PrinterProfile::from_toml_str(&listed, path()).expect("valid profile");
+        assert_eq!(profile.machines.len(), 2);
+        assert_eq!(profile.machines[0].label(), "Bench A");
+        assert_eq!(
+            profile.machines[0].board.as_deref(),
+            Some("d85f46e4d7d90100")
+        );
+        assert_eq!(
+            profile.machines[1].label(),
+            "192.168.1.140",
+            "no name shows the address"
+        );
+
+        let written = profile
+            .to_toml_string(path())
+            .expect("a valid profile writes");
+        let read = PrinterProfile::from_toml_str(&written, path()).expect("and reads back");
+        assert_eq!(read.machines, profile.machines);
+        let plain = PrinterProfile::from_toml_str(SAMPLE, path()).expect("valid profile");
+        let written = plain
+            .to_toml_string(path())
+            .expect("a valid profile writes");
+        assert!(
+            !written.contains("machines"),
+            "an empty list is left out: {written}"
+        );
+    }
+
+    #[test]
+    fn a_printer_listed_without_an_address_is_refused() {
+        let listed = SAMPLE.replace(
+            "manufacturer = \"Test\"",
+            "manufacturer = \"Test\"\n\n[[machines]]\nname = \"Bench A\"\naddress = \" \"",
+        );
+        assert!(matches!(
+            PrinterProfile::from_toml_str(&listed, path()),
+            Err(ProfileError::NoAddress { index: 0 })
+        ));
     }
 
     #[test]

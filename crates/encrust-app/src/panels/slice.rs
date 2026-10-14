@@ -187,7 +187,7 @@ pub(super) fn bound_machine(machine: &mut Machine, now_s: f64) -> Option<Bound> 
     let network = &machine.network;
     let target = network.target()?;
     target.speaks(connection).then(|| Bound {
-        name: target.name(),
+        name: network.label(&target),
         reach: network.reach(&target),
         blocker: network
             .blocker(machine.slicing.format)

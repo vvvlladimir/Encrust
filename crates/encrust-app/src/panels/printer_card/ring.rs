@@ -176,7 +176,7 @@ fn arc_points(center: Pos2, radius: f32, from: f32, share: f32) -> Vec<Pos2> {
 /// The line the ring says on hover: the printer and what it is doing.
 fn hover_line(network: &Network, target: &Target<'_>) -> String {
     let state = super::summary(network.reach(target), network.reading(target));
-    format!("{}: {state}", target.name())
+    format!("{}: {state}", network.label(target))
 }
 
 /// Every printer on the network, a row each, and the key of the one pressed.
@@ -211,7 +211,7 @@ fn row(ui: &mut egui::Ui, network: &Network, target: &Target<'_>) -> egui::Respo
     painter.text(
         pos2(text_x, rect.center().y - 8.0),
         Align2::LEFT_CENTER,
-        target.name(),
+        network.label(target),
         theme::label(),
         colors.text_high,
     );

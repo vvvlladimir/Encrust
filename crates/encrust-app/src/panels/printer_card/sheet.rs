@@ -36,7 +36,7 @@ pub fn ui(ctx: &egui::Context, window: &mut Window) {
         .frame(dialog_frame().inner_margin(egui::Margin::same(18)))
         .show(ctx, |ui| {
             ui.set_width(SHEET_W);
-            close = dialog_head(ui, icon::PRINTER, &target.name());
+            close = dialog_head(ui, icon::PRINTER, &network.label(&target));
             tone(ui, &about(&target), theme::colors().text_low);
             ui.add_space(8.0);
             hairline(ui);

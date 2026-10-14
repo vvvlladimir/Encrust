@@ -101,11 +101,11 @@ fn the_machine_and_resin_window() {
     results.extend(picture("machines_machine", machine));
 }
 
-/// The Export tool with two boards on the network: the one this printer is bound to
-/// printing and alone on its card, then both listed while nothing is bound.
+/// The Export tool with two boards on the network: a profile listing one names it on a
+/// plain row, one listing both offers the other, and the ring opens the first's sheet.
 #[test]
 fn the_printers_on_the_network() {
-    use crate::network::{Destination, Picture, Reading};
+    use crate::network::{Picture, Reading};
     use printer_link::State;
 
     let board = |name: &str, id: &str, last: u8| net_sdcp::Printer {
@@ -142,12 +142,30 @@ fn the_printers_on_the_network() {
         uv_led_c: Some(22.0),
         ..State::default()
     };
-    let on_the_network = |bound: bool| {
+    let on_the_network = |listed: usize| {
         let mut app = app(true);
         app.tool = Tool::Export;
-        if let Some(profile) = app.machine.slicing.printer.as_mut() {
-            profile.connection = printer_profiles::Connection::Sdcp;
-        }
+        let listing = [("Bench A", 133, "aa"), ("Bench B", 140, "bb")];
+        let profile = app
+            .machine
+            .slicing
+            .printer
+            .as_mut()
+            .expect("the pictured printer is in hand");
+        profile.connection = printer_profiles::Connection::Sdcp;
+        profile.machines = listing[..listed]
+            .iter()
+            .map(|(name, last, board)| printer_profiles::NetworkMachine {
+                name: (*name).to_owned(),
+                address: format!("192.168.1.{last}"),
+                board: Some((*board).to_owned()),
+            })
+            .collect();
+        let profile = profile.clone();
+        app.machine
+            .network
+            .bind_to(Some(super::states::PRINTER.to_owned()), Some(&profile));
+        app.machine.network.learn_names([&profile]);
         let network = &mut app.machine.network;
         network.printers = vec![board("Workshop", "aa", 133), board("Studio", "bb", 140)];
         network.hear("sdcp:aa", Reading::State(printing.clone()));
@@ -159,18 +177,12 @@ fn the_printers_on_the_network() {
         extras.camera = Some("rtsp://192.168.1.133:554/video".to_owned());
         extras.history_asked = true;
         extras.history = Some(remembered());
-        if bound {
-            network.bind(
-                super::states::PRINTER,
-                Destination::Printer("sdcp:aa".into()),
-            );
-        }
         app
     };
     let mut results = SnapshotResults::new();
-    results.extend(picture("tool_export_bound", on_the_network(true)));
-    results.extend(picture("tool_export_list", on_the_network(false)));
-    let mut sheet = on_the_network(true);
+    results.extend(picture("tool_export_bound", on_the_network(1)));
+    results.extend(picture("tool_export_list", on_the_network(2)));
+    let mut sheet = on_the_network(1);
     sheet.machine.network.open = Some("sdcp:aa".to_owned());
     results.extend(picture("printer_sheet", sheet));
 }
@@ -232,4 +244,44 @@ fn the_notices_at_the_foot_of_the_stage() {
     });
     app.machine.status = crate::status::Status::Info("Dragon bust.goo is on Workshop".to_owned());
     picture("notices", app);
+}
+
+/// The printer's Network tab with two boards of its model listed and named, and a third
+/// found on the network still to tick.
+#[test]
+fn the_printers_a_profile_sends_to() {
+    let mut app = with_machines(app(false), "network");
+    app.machine.settings.tab = crate::settings::Tab::Network;
+    let board = |name: &str, id: &str, last: u8| net_sdcp::Printer {
+        name: name.to_owned(),
+        model: "Saturn 4 Ultra".to_owned(),
+        brand: "ELEGOO".to_owned(),
+        address: std::net::IpAddr::from([192, 168, 1, last]),
+        mainboard_id: id.to_owned(),
+        brand_id: "00".to_owned(),
+        firmware: "V1.5.2".to_owned(),
+        protocol: "V3.0.0".to_owned(),
+        transport: net_sdcp::Transport::WebSocket,
+    };
+    app.machine.network.printers = vec![
+        board("3D Printer", "aa", 133),
+        board("3D Printer", "bb", 140),
+        board("3D Printer", "cc", 151),
+    ];
+    if let Some(draft) = app.machine.settings.printer.as_mut() {
+        draft.values.connection = printer_profiles::Connection::Sdcp;
+        draft.values.machines = vec![
+            printer_profiles::NetworkMachine {
+                name: "Bench A".to_owned(),
+                address: "192.168.1.133".to_owned(),
+                board: Some("aa".to_owned()),
+            },
+            printer_profiles::NetworkMachine {
+                name: "Bench B".to_owned(),
+                address: "192.168.1.140".to_owned(),
+                board: Some("bb".to_owned()),
+            },
+        ];
+    }
+    picture("machines_network", app);
 }

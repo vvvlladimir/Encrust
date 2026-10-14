@@ -281,7 +281,7 @@ Grouped by what the decision governs; the number is still the order it was taken
 | [0140](0140-a-profile-carries-the-machine-name-its-firmware-matches.md) | A profile carries the machine name its firmware matches | Accepted |
 | [0141](0141-advance-mode-follows-the-firmware-flag.md) | Advance mode follows the machine's firmware flag | Accepted |
 | [0142](0142-a-tilting-vat-reads-the-header-alone.md) | A tilting vat reads the header alone | Accepted |
-| [0156](0156-a-printer-profile-names-its-format-and-its-machine.md) | A printer profile names its format, and is bound to its machine | Accepted |
+| [0156](0156-a-printer-profile-names-its-format-and-its-machine.md) | A printer profile names its format, and is bound to its machine | Accepted; the binding superseded by 0265 |
 | [0158](0158-the-shipped-catalogue-is-a-library-not-a-list-of-machines-you-own.md) | The shipped catalogue is a library, not the machines you own | Accepted |
 | [0165](0165-the-catalogue-is-generated-and-only-what-we-can-write-ships.md) | The catalogue is generated, and only machines we can write a file for ship | Accepted |
 | [0166](0166-a-machine-states-which-photon-workshop-revision-it-reads.md) | A machine states which Photon Workshop revision it reads | Accepted |
@@ -303,6 +303,7 @@ Grouped by what the decision governs; the number is still the order it was taken
 | [0262](0262-discovery-asks-every-interface-and-the-window-watches-each-printer.md) | Ask every interface for printers, and watch each printer the window lists | Accepted |
 | [0263](0263-the-window-drives-the-printer-and-its-notices-stand-at-the-foot.md) | Let the window drive a printer, and stack its notices at the foot of the stage | Accepted; the cards in Export superseded by 0264 |
 | [0264](0264-a-ring-in-the-top-bar-and-one-row-in-export.md) | Put a ring for the current printer in the top bar, and leave Export one row | Accepted |
+| [0265](0265-a-printer-profile-lists-its-printers-on-the-network.md) | A printer profile lists the printers of its model on the network | Accepted |
 
 ### The window and the command line
 

@@ -56,11 +56,11 @@ pub fn network(ui: &mut egui::Ui, window: &mut Window) {
     let Some(draft) = machine.settings.printer.as_mut() else {
         return;
     };
-    let (id, profile) = (draft.id.clone(), &mut draft.values);
+    let profile = &mut draft.values;
     // A browser reaches no printer, so a file is downloaded instead (ADR 0182).
     form_card(ui, "Network", |ui| match cfg!(target_arch = "wasm32") {
         true => hint(ui, BROWSER_SENDS_NOTHING),
-        false => connection::card(ui, &id, &mut profile.connection, &mut machine.network),
+        false => connection::card(ui, profile, &mut machine.network),
     });
     if settled(ui) {
         autosave(window);
@@ -134,6 +134,7 @@ fn autosave(window: &mut Window) {
     }
     draft.mark_saved();
     let (id, profile) = (draft.id.clone(), draft.values.clone());
+    crate::profiles::learn_printer_names(window.machine);
     if window.machine.slicing.printer_id.as_deref() != Some(id.as_str()) {
         return;
     }
@@ -145,6 +146,7 @@ fn autosave(window: &mut Window) {
     if moves_the_plate {
         crate::profiles::apply_printer(window, profile, Some(id));
     } else {
+        window.machine.network.bind_to(Some(id), Some(&profile));
         window.machine.slicing.printer = Some(profile);
     }
 }

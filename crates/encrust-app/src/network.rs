@@ -13,7 +13,7 @@ use std::time::Duration;
 use core_pipeline::SlicedFormat;
 use net_prusalink::Link;
 use net_sdcp::Printer;
-use printer_profiles::Connection;
+use printer_profiles::{Connection, NetworkMachine, PrinterProfile};
 
 use printer_link::{Found, SendError, State, Wire};
 
@@ -30,15 +30,6 @@ const WATCH_PERIOD: Duration = Duration::from_secs(3);
 
 /// How long a list of printers in view goes before the network is asked again, in seconds.
 const RESCAN_S: f64 = 30.0;
-
-/// Where the Slice button puts what it writes.
-#[derive(Debug, Clone, PartialEq, Eq, Default, serde::Serialize, serde::Deserialize)]
-pub enum Destination {
-    #[default]
-    File,
-    /// The key of the chosen printer, which is what survives a rescan.
-    Printer(String),
-}
 
 /// Whether a machine answered the last scan. It is the last answer rather than live
 /// state, for the reason `docs/decisions/0157` gives.
@@ -211,6 +202,14 @@ impl Target<'_> {
         }
     }
 
+    /// Where it is: a board's IP address, or a Prusa machine's host.
+    pub fn address(&self) -> String {
+        match self {
+            Self::Sdcp(printer) => printer.address.to_string(),
+            Self::Prusa(prusa) => prusa.link.host.clone(),
+        }
+    }
+
     /// Whether this is a machine a profile stating `connection` can be sent to.
     pub fn speaks(&self, connection: Connection) -> bool {
         matches!(
@@ -236,12 +235,15 @@ pub struct Network {
     pub printers: Vec<Printer>,
     /// Prusa machines the user has set up, in the order they were added.
     pub prusa: Vec<Prusa>,
-    destination: Destination,
-    /// Where each printer profile's files go, by catalogue id. A machine chosen once is
-    /// chosen for good; see `docs/decisions/0156`.
-    bound: BTreeMap<String, Destination>,
-    /// The catalogue id of the printer in hand, which is what a choice is bound under.
+    /// The catalogue id of the printer in hand, which is what a choice is kept under.
     profile: Option<String>,
+    /// The printers the profile in hand lists, and what they speak; see ADR 0265.
+    listed: Vec<NetworkMachine>,
+    speaks: Connection,
+    /// Which listed printer each profile last sent to, by catalogue id, as its address.
+    chosen: BTreeMap<String, String>,
+    /// What the user calls each printer in any profile, by its key and by its address.
+    names: BTreeMap<String, String>,
     /// Addresses typed by hand, because a broadcast does not cross every network.
     pub manual: Vec<IpAddr>,
     scan: Option<Receiver<Found>>,
@@ -294,14 +296,91 @@ impl Network {
         boards.chain(self.prusa.iter().map(Target::Prusa)).collect()
     }
 
-    /// The printer the Slice button is pointed at, or `None` when it writes a file.
+    /// The printer the Slice button sends to: the listed one last chosen, else the first
+    /// listed, once it has been found on the network.
     pub fn target(&self) -> Option<Target<'_>> {
-        let Destination::Printer(key) = &self.destination else {
-            return None;
-        };
-        self.targets()
-            .into_iter()
-            .find(|target| target.key() == *key)
+        self.resolve(self.chosen_machine()?)
+    }
+
+    /// The printers the profile in hand lists, in order.
+    pub fn listed(&self) -> &[NetworkMachine] {
+        &self.listed
+    }
+
+    /// The listed printer the Slice button sends to, found on the network or not.
+    pub fn chosen_machine(&self) -> Option<&NetworkMachine> {
+        let chosen = self.profile.as_ref().and_then(|id| self.chosen.get(id));
+        chosen
+            .and_then(|address| self.listed.iter().find(|m| m.address == *address))
+            .or(self.listed.first())
+    }
+
+    /// Where a listed printer is on the network: the board that answered with its id or
+    /// from its address, or the Prusa machine set up at its host.
+    pub fn resolve(&self, machine: &NetworkMachine) -> Option<Target<'_>> {
+        self.find(self.speaks, machine)
+    }
+
+    /// Where a printer some profile lists is on the network, for a profile speaking
+    /// `speaks`, which need not be the one in hand.
+    pub fn find(&self, speaks: Connection, machine: &NetworkMachine) -> Option<Target<'_>> {
+        resolve(&self.printers, &self.prusa, speaks, machine)
+    }
+
+    /// Whether any scan has finished since the window opened.
+    pub fn has_asked(&self) -> bool {
+        self.asked
+    }
+
+    /// Whether a listed printer answers, and whether one not found was looked for.
+    pub fn reach_of(&self, machine: &NetworkMachine) -> Reach {
+        match self.resolve(machine) {
+            Some(target) => self.reach(&target),
+            None if self.asked => Reach::Silent,
+            None => Reach::Unasked,
+        }
+    }
+
+    /// Sends the profile in hand's files to the listed printer at `address` from now on.
+    pub fn choose(&mut self, address: String) {
+        if let Some(id) = self.profile.clone() {
+            self.chosen.insert(id, address);
+        }
+    }
+
+    /// Which listed printer each profile last sent to, for the preferences file.
+    pub fn chosen(&self) -> &BTreeMap<String, String> {
+        &self.chosen
+    }
+
+    /// What `target` is called in front of the user: the name a profile gave it, else
+    /// what it calls itself.
+    pub fn label(&self, target: &Target<'_>) -> String {
+        self.names
+            .get(&target.key())
+            .or_else(|| self.names.get(&target.address()))
+            .cloned()
+            .unwrap_or_else(|| target.name())
+    }
+
+    /// Learns what every profile calls its printers, so the ring and the sheet use the
+    /// names the profiles give them.
+    pub fn learn_names<'a>(&mut self, profiles: impl IntoIterator<Item = &'a PrinterProfile>) {
+        self.names.clear();
+        for profile in profiles {
+            for machine in profile
+                .machines
+                .iter()
+                .filter(|m| !m.name.trim().is_empty())
+            {
+                if let Some(board) = &machine.board {
+                    self.names
+                        .insert(format!("sdcp:{board}"), machine.name.clone());
+                }
+                let address = machine.address.trim().to_owned();
+                self.names.insert(address, machine.name.clone());
+            }
+        }
     }
 
     /// Whether `target` is answering: what its watch heard last, else the last scan.
@@ -329,9 +408,10 @@ impl Network {
         let Some(Reading::State(state)) = self.reading(&target) else {
             return None;
         };
+        let name = self.label(&target);
         state.busy.then(|| match &state.file {
-            Some(file) => format!("{} is printing {file}", target.name()),
-            None => format!("{} is busy: {}", target.name(), state.state),
+            Some(file) => format!("{name} is printing {file}"),
+            None => format!("{name} is busy: {}", state.state),
         })
     }
 
@@ -438,61 +518,35 @@ impl Network {
         !self.watches.is_empty()
     }
 
-    /// Binds the printer profile in hand to the machine under `key`.
-    pub fn bind_here(&mut self, key: String) {
-        if let Some(profile) = self.profile.clone() {
-            self.bind(&profile, Destination::Printer(key));
-        }
+    /// Stands the window under the printer profile now in hand: the printers it lists,
+    /// what they speak, and which of them it last sent to.
+    pub fn bind_to(&mut self, id: Option<String>, profile: Option<&PrinterProfile>) {
+        self.profile = id;
+        self.listed = profile.map(|p| p.machines.clone()).unwrap_or_default();
+        self.speaks = profile.map_or(Connection::None, |p| p.connection);
     }
 
-    /// Points one printer profile at a destination, whether or not it is the one in hand.
-    pub fn bind(&mut self, profile: &str, destination: Destination) {
-        match destination.clone() {
-            Destination::File => self.bound.remove(profile),
-            chosen => self.bound.insert(profile.to_owned(), chosen),
-        };
-        if self.profile.as_deref() == Some(profile) {
-            self.destination = destination;
-        }
-    }
-
-    /// Where one printer profile sends what it slices.
-    pub fn bound_to(&self, profile: &str) -> Destination {
-        self.bound.get(profile).cloned().unwrap_or_default()
-    }
-
-    /// Stands the window under the printer profile now in hand, pointing it back at the
-    /// machine that profile was last sent to.
-    pub fn bind_to(&mut self, profile: Option<String>) {
-        self.destination = profile
-            .as_deref()
-            .and_then(|id| self.bound.get(id))
-            .cloned()
-            .unwrap_or_default();
-        self.profile = profile;
-    }
-
-    /// What each printer profile is bound to, for the preferences file.
-    pub fn bindings(&self) -> &BTreeMap<String, Destination> {
-        &self.bound
-    }
-
-    /// Puts back what the preferences file remembered, boards and bindings together.
-    pub fn restore(&mut self, boards: Vec<Printer>, bound: BTreeMap<String, Destination>) {
+    /// Puts back what the preferences file remembered: the boards last listed and which
+    /// printer each profile sent to.
+    pub fn restore(&mut self, boards: Vec<Printer>, chosen: BTreeMap<String, String>) {
         self.printers = boards;
-        self.bound = bound;
+        self.chosen = chosen;
     }
 
-    /// The boards worth writing to the preferences file: the ones a printer profile is
-    /// bound to. A board that only answered a scan announces itself again next run.
+    /// The boards worth writing to the preferences file: the ones the profile in hand
+    /// lists, so its printers are named before any scan has answered.
     pub fn bound_boards(&self) -> Vec<Printer> {
         self.printers
             .iter()
             .filter(|printer| {
-                let key = Target::Sdcp(printer).key();
-                self.bound.values().any(|bound| match bound {
-                    Destination::Printer(chosen) => *chosen == key,
-                    Destination::File => false,
+                self.listed.iter().any(|machine| {
+                    resolve(
+                        std::slice::from_ref(*printer),
+                        &[],
+                        Connection::Sdcp,
+                        machine,
+                    )
+                    .is_some()
                 })
             })
             .cloned()
@@ -525,7 +579,20 @@ impl Network {
             return;
         }
         let (sender, receiver) = mpsc::channel();
-        let manual = self.manual.clone();
+        let mut manual = self.manual.clone();
+        // A listed board is asked at its address too, which reaches it where a broadcast
+        // does not cross.
+        if self.speaks == Connection::Sdcp {
+            for address in self
+                .listed
+                .iter()
+                .filter_map(|m| m.address.trim().parse().ok())
+            {
+                if !manual.contains(&address) {
+                    manual.push(address);
+                }
+            }
+        }
         let links: Vec<Link> = self.prusa.iter().map(|prusa| prusa.link.clone()).collect();
         crate::job::spawn(move || {
             let _ = sender.send(printer_link::scan(SCAN_WINDOW, &manual, &links));
@@ -555,15 +622,9 @@ impl Network {
         self.scan();
     }
 
-    /// Forgets a Prusa machine, and stops sending to it if that is where it was going.
+    /// Forgets a Prusa machine's login.
     pub fn forget_prusa(&mut self, host: &str) {
         self.prusa.retain(|known| known.link.host != host);
-        let gone = format!("prusa:{host}");
-        self.bound
-            .retain(|_, bound| *bound != Destination::Printer(gone.clone()));
-        if self.target().is_none() {
-            self.destination = Destination::File;
-        }
         self.watch_all();
     }
 
@@ -573,7 +634,7 @@ impl Network {
         let Some(target) = self.target() else {
             return;
         };
-        let (name, wire) = (target.name(), target.wire());
+        let (name, wire) = (self.label(&target), target.wire());
         let temporary = is_temporary(&path);
         *status = Status::Info(format!("Sending to {name}"));
         self.sent = None;
@@ -589,7 +650,7 @@ impl Network {
         let (Some(sent), Some(target)) = (self.sent.clone(), self.target()) else {
             return;
         };
-        let (name, wire) = (target.name(), target.wire());
+        let (name, wire) = (self.label(&target), target.wire());
         *status = Status::Info(format!("Starting {} on {name}", sent.filename));
         self.job = Some(SendJob::spawn(SendRequest {
             name,
@@ -686,10 +747,6 @@ impl Network {
                     .map(|(address, error)| (address, error.map(Trouble::of)))
                     .collect();
                 self.scan = None;
-                // A printer that answered no longer is not a destination any more.
-                if self.target().is_none() {
-                    self.destination = Destination::File;
-                }
                 if !self.hold {
                     self.watch_all();
                 }
@@ -726,6 +783,31 @@ impl Network {
             }
         }
         false
+    }
+}
+
+/// Where `machine` is among the boards and Prusa machines the window knows, for a
+/// profile speaking `speaks`.
+fn resolve<'a>(
+    printers: &'a [Printer],
+    prusa: &'a [Prusa],
+    speaks: Connection,
+    machine: &NetworkMachine,
+) -> Option<Target<'a>> {
+    let address = machine.address.trim();
+    match speaks {
+        Connection::Sdcp => printers
+            .iter()
+            .find(|printer| {
+                let same_board = machine.board.as_deref() == Some(printer.mainboard_id.as_str());
+                same_board || printer.address.to_string() == address
+            })
+            .map(Target::Sdcp),
+        Connection::PrusaLink => prusa
+            .iter()
+            .find(|prusa| prusa.link.host == address)
+            .map(Target::Prusa),
+        Connection::None => None,
     }
 }
 
@@ -816,6 +898,31 @@ mod tests {
         }
     }
 
+    fn at(last: u8, printer: Printer) -> Printer {
+        Printer {
+            address: IpAddr::from([192, 168, 1, last]),
+            ..printer
+        }
+    }
+
+    /// Stands `network` under a profile `saturn` speaking `speaks` and listing `machines`
+    /// as `(address, board)`.
+    fn listing(network: &mut Network, speaks: Connection, machines: &[(&str, Option<&str>)]) {
+        let profile = PrinterProfile {
+            connection: speaks,
+            machines: machines
+                .iter()
+                .map(|(address, board)| NetworkMachine {
+                    name: String::new(),
+                    address: (*address).to_owned(),
+                    board: board.map(str::to_owned),
+                })
+                .collect(),
+            ..PrinterProfile::default()
+        };
+        network.bind_to(Some("saturn".to_owned()), Some(&profile));
+    }
+
     fn a_prusa(host: &str) -> Prusa {
         Prusa {
             link: Link::digest(host, net_prusalink::DEFAULT_USER, "secret"),
@@ -824,18 +931,28 @@ mod tests {
     }
 
     #[test]
-    fn the_destination_names_a_printer_by_its_board() {
+    fn a_listed_printer_is_found_by_its_board_id_wherever_it_answers() {
         let mut network = Network {
-            printers: vec![a_printer("aa"), a_printer("bb")],
-            destination: Destination::Printer("sdcp:bb".to_owned()),
+            printers: vec![a_printer("aa"), at(77, a_printer("bb"))],
             ..Network::default()
         };
+        listing(
+            &mut network,
+            Connection::Sdcp,
+            &[("192.168.1.9", Some("bb"))],
+        );
         assert_eq!(
             network.target().map(|target| target.name()),
-            Some("Saturn bb".to_owned())
+            Some("Saturn bb".to_owned()),
+            "the board moved to .77 and still answers by its id"
         );
-        network.destination = Destination::File;
-        assert!(network.target().is_none());
+        listing(&mut network, Connection::Sdcp, &[("192.168.1.42", None)]);
+        assert_eq!(network.target().map(|t| t.name()), Some("Saturn aa".into()));
+        listing(&mut network, Connection::Sdcp, &[]);
+        assert!(
+            network.target().is_none(),
+            "a profile listing nothing writes a file"
+        );
     }
 
     #[test]
@@ -860,16 +977,20 @@ mod tests {
         let (sender, receiver) = mpsc::channel();
         let mut network = Network {
             printers: vec![a_printer("aa")],
-            destination: Destination::Printer("sdcp:aa".to_owned()),
             scan: Some(receiver),
             hold: true,
             ..Network::default()
         };
+        listing(
+            &mut network,
+            Connection::Sdcp,
+            &[("192.168.1.42", Some("aa"))],
+        );
         sender
             .send(Found::default())
             .expect("the scan holds the receiver");
         assert!(!network.poll(&mut Status::default()));
-        assert_eq!(network.destination, Destination::Printer("sdcp:aa".into()));
+        assert_eq!(network.target().map(|t| t.key()), Some("sdcp:aa".into()));
     }
 
     #[test]
@@ -884,26 +1005,29 @@ mod tests {
         assert_eq!(printers[1].mainboard_id, "bb");
     }
 
-    /// Binding a profile to a board is what makes the window send there without being
-    /// asked again, and switching profiles puts each back on its own machine.
+    /// Each profile lists its own printers and keeps the one it last sent to, so switching
+    /// profiles puts each back on its own machine.
     #[test]
-    fn each_printer_profile_keeps_the_machine_it_was_bound_to() {
+    fn each_printer_profile_keeps_the_printer_it_last_sent_to() {
         let mut network = Network {
-            printers: vec![a_printer("aa"), a_printer("bb")],
+            printers: vec![at(10, a_printer("aa")), at(11, a_printer("bb"))],
             ..Network::default()
         };
-        network.bind("saturn", Destination::Printer("sdcp:aa".into()));
-        network.bind("mars", Destination::Printer("sdcp:bb".into()));
-
-        network.bind_to(Some("mars".to_owned()));
-        assert_eq!(network.target().map(|t| t.name()), Some("Saturn bb".into()));
-        network.bind_to(Some("saturn".to_owned()));
-        assert_eq!(network.target().map(|t| t.name()), Some("Saturn aa".into()));
-        network.bind_to(Some("phrozen".to_owned()));
-        assert!(
-            network.target().is_none(),
-            "a profile nobody bound writes a file"
+        let both = [("192.168.1.10", None), ("192.168.1.11", None)];
+        listing(&mut network, Connection::Sdcp, &both);
+        assert_eq!(
+            network.target().map(|t| t.name()),
+            Some("Saturn aa".into()),
+            "nothing chosen yet sends to the first listed"
         );
+        network.choose("192.168.1.11".to_owned());
+        assert_eq!(network.target().map(|t| t.name()), Some("Saturn bb".into()));
+
+        let profile = PrinterProfile::default();
+        network.bind_to(Some("mars".to_owned()), Some(&profile));
+        assert!(network.target().is_none(), "mars lists no printer");
+        listing(&mut network, Connection::Sdcp, &both);
+        assert_eq!(network.target().map(|t| t.name()), Some("Saturn bb".into()));
     }
 
     /// The dot beside Send says what the last scan found, and tells a board that was
@@ -943,11 +1067,11 @@ mod tests {
         let (sender, receiver) = mpsc::channel();
         let mut network = Network {
             prusa: vec![a_prusa("sl1.local")],
-            destination: Destination::Printer("prusa:sl1.local".to_owned()),
             scan: Some(receiver),
             hold: true,
             ..Network::default()
         };
+        listing(&mut network, Connection::PrusaLink, &[("sl1.local", None)]);
         sender
             .send(Found {
                 reached: BTreeMap::from([("sl1.local".to_owned(), "Prusa SLA 1.8.0".to_owned())]),
@@ -956,10 +1080,6 @@ mod tests {
             .expect("the scan holds the receiver");
         assert!(!network.poll(&mut Status::default()));
         assert_eq!(
-            network.destination,
-            Destination::Printer("prusa:sl1.local".to_owned())
-        );
-        assert_eq!(
             network.target().map(|target| target.detail()),
             Some("Prusa SLA 1.8.0".to_owned())
         );
@@ -967,11 +1087,11 @@ mod tests {
 
     #[test]
     fn a_prusa_machine_is_only_sent_the_container_it_prints() {
-        let network = Network {
+        let mut network = Network {
             prusa: vec![a_prusa("sl1.local")],
-            destination: Destination::Printer("prusa:sl1.local".to_owned()),
             ..Network::default()
         };
+        listing(&mut network, Connection::PrusaLink, &[("sl1.local", None)]);
         assert!(network.blocker(SlicedFormat::Goo).is_some());
         assert!(
             network
@@ -982,11 +1102,11 @@ mod tests {
 
     #[test]
     fn a_board_is_not_told_what_it_prints_before_it_is_asked() {
-        let network = Network {
+        let mut network = Network {
             printers: vec![a_printer("aa")],
-            destination: Destination::Printer("sdcp:aa".to_owned()),
             ..Network::default()
         };
+        listing(&mut network, Connection::Sdcp, &[("192.168.1.42", None)]);
         assert!(network.blocker(SlicedFormat::Goo).is_none());
     }
 
@@ -1003,15 +1123,16 @@ mod tests {
     }
 
     #[test]
-    fn forgetting_a_machine_sends_the_file_back_to_disk() {
+    fn forgetting_a_login_leaves_the_listed_machine_unreachable() {
         let mut network = Network {
             prusa: vec![a_prusa("sl1.local")],
-            destination: Destination::Printer("prusa:sl1.local".to_owned()),
             ..Network::default()
         };
+        listing(&mut network, Connection::PrusaLink, &[("sl1.local", None)]);
         network.forget_prusa("sl1.local");
         assert!(network.prusa.is_empty());
-        assert_eq!(network.destination, Destination::File);
+        assert!(network.target().is_none());
+        assert_eq!(network.listed().len(), 1, "the profile still lists it");
     }
 
     #[test]
@@ -1065,9 +1186,9 @@ mod tests {
     fn a_bound_printer_in_the_middle_of_a_print_holds_the_send_back() {
         let mut network = Network {
             printers: vec![a_printer("aa")],
-            destination: Destination::Printer("sdcp:aa".to_owned()),
             ..Network::default()
         };
+        listing(&mut network, Connection::Sdcp, &[("192.168.1.42", None)]);
         assert_eq!(
             network.busy(),
             None,
@@ -1181,23 +1302,40 @@ mod tests {
     }
 
     #[test]
-    fn binding_from_the_list_binds_the_printer_profile_in_hand() {
+    fn a_printer_is_called_by_the_name_a_profile_gave_it_everywhere() {
         let mut network = Network {
-            printers: vec![a_printer("aa")],
+            printers: vec![a_printer("aa"), at(50, a_printer("bb"))],
             ..Network::default()
         };
-        network.bind_here("sdcp:aa".to_owned());
-        assert!(
-            network.target().is_none(),
-            "no profile in hand, nothing to bind"
-        );
-        network.bind_to(Some("saturn".to_owned()));
-        network.bind_here("sdcp:aa".to_owned());
+        let mars = PrinterProfile {
+            machines: vec![
+                NetworkMachine {
+                    name: "Bench A".to_owned(),
+                    address: "192.168.1.9".to_owned(),
+                    board: Some("aa".to_owned()),
+                },
+                NetworkMachine {
+                    name: "Bench B".to_owned(),
+                    address: "192.168.1.50".to_owned(),
+                    board: None,
+                },
+            ],
+            ..PrinterProfile::default()
+        };
+        network.learn_names([&mars]);
+        let printers = network.printers.clone();
         assert_eq!(
-            network.bound_to("saturn"),
-            Destination::Printer("sdcp:aa".into())
+            network.label(&Target::Sdcp(&printers[0])),
+            "Bench A",
+            "by its board"
         );
-        assert_eq!(network.target().map(|t| t.name()), Some("Saturn aa".into()));
+        assert_eq!(
+            network.label(&Target::Sdcp(&printers[1])),
+            "Bench B",
+            "by its address"
+        );
+        network.learn_names([]);
+        assert_eq!(network.label(&Target::Sdcp(&printers[0])), "Saturn aa");
     }
 
     #[test]
@@ -1240,7 +1378,11 @@ mod tests {
         assert_eq!(network.current().map(|t| t.key()), Some("sdcp:aa".into()));
         network.hear("sdcp:bb", Reading::State(printing("dragon.goo")));
         assert_eq!(network.current().map(|t| t.key()), Some("sdcp:bb".into()));
-        network.destination = Destination::Printer("sdcp:aa".into());
+        listing(
+            &mut network,
+            Connection::Sdcp,
+            &[("192.168.1.42", Some("aa"))],
+        );
         assert_eq!(
             network.current().map(|t| t.key()),
             Some("sdcp:aa".into()),

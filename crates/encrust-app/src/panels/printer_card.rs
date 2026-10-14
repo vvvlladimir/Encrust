@@ -9,9 +9,8 @@ pub mod sheet;
 
 use egui::{Align2, Color32, RichText, Sense, StrokeKind, pos2, vec2};
 use printer_link::State;
-use printer_profiles::Connection;
 
-use crate::network::{Network, Reach, Reading, Target, Trouble};
+use crate::network::{Network, Reach, Reading, Trouble};
 use crate::ui::{focus_ring, hint, icon, icon_button, progress_bar, theme, tone};
 
 /// What the card says about one printer, worked out before anything is drawn.
@@ -44,45 +43,42 @@ struct Job {
     detail: String,
 }
 
-/// What the Export tool's row was pressed for, by the printer's key.
+/// What the Export tool's row was pressed for.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Chosen {
-    /// Send this profile's files to that printer from now on.
-    Bind(String),
-    /// Open that printer's sheet.
+    /// Send this profile's files to the listed printer at that address from now on.
+    Pick(String),
+    /// Open the sheet of the printer under that key.
     Open(String),
 }
 
-/// Where the printer in hand sends its files, as one row: the bound printer's name and
-/// what it is doing, opening a list of every printer speaking `speaks`, and beside it the
-/// way into that printer's sheet.
-pub fn destination(ui: &mut egui::Ui, network: &Network, speaks: Connection) -> Option<Chosen> {
-    let bound = network.target().filter(|target| target.speaks(speaks));
-    let choices: Vec<Target<'_>> = network
-        .targets()
-        .into_iter()
-        .filter(|target| target.speaks(speaks))
-        .collect();
+/// Where the printer in hand sends its files, as one row: the chosen printer's name and
+/// what it is doing, a list of the others when the profile lists more than one, and
+/// beside it the way into that printer's sheet.
+pub fn destination(ui: &mut egui::Ui, network: &Network) -> Option<Chosen> {
+    let chosen_machine = network.chosen_machine()?;
+    let target = network.resolve(chosen_machine);
+    let several = network.listed().len() > 1;
     let mut chosen = None;
     ui.horizontal(|ui| {
         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-            if let Some(target) = &bound
+            if let Some(target) = &target
                 && icon_button(ui, icon::OPEN_SHEET, "Open the printer").clicked()
             {
                 chosen = Some(Chosen::Open(target.key()));
             }
-            let row = destination_row(ui, network, bound.as_ref());
-            let lit = bound.as_ref().map(Target::key);
+            let face = machine_face(network, chosen_machine);
+            let row = destination_row(ui, chosen_machine.label(), &face, several);
+            if !several {
+                return;
+            }
             egui::Popup::menu(&row).show(|ui| {
-                for target in &choices {
-                    let line = format!(
-                        "{}  ·  {}",
-                        target.name(),
-                        summary(network.reach(target), network.reading(target))
-                    );
-                    let on = lit.as_deref() == Some(target.key().as_str());
+                for machine in network.listed() {
+                    let face = machine_face(network, machine);
+                    let line = format!("{}  ·  {}", machine.label(), face.word);
+                    let on = machine.address == chosen_machine.address;
                     if ui.selectable_label(on, line).clicked() {
-                        chosen = Some(Chosen::Bind(target.key()));
+                        chosen = Some(Chosen::Pick(machine.address.clone()));
                     }
                 }
             });
@@ -91,17 +87,26 @@ pub fn destination(ui: &mut egui::Ui, network: &Network, speaks: Connection) -> 
     chosen
 }
 
-/// The row itself: the printer glyph, the bound printer's name or an invitation to choose
-/// one, what it is doing in its colour, and a caret.
-fn destination_row(
-    ui: &mut egui::Ui,
-    network: &Network,
-    bound: Option<&Target<'_>>,
-) -> egui::Response {
+/// What a listed printer is doing, or that it was not found.
+fn machine_face(network: &Network, machine: &printer_profiles::NetworkMachine) -> Face {
+    match network.resolve(machine) {
+        Some(target) => face(network.reach(&target), network.reading(&target)),
+        None => face(network.reach_of(machine), None),
+    }
+}
+
+/// The row itself: the printer glyph, its name, what it is doing in its colour, and a
+/// caret when there are others to choose from.
+fn destination_row(ui: &mut egui::Ui, name: &str, face: &Face, several: bool) -> egui::Response {
     let colors = theme::colors();
+    let sense = if several {
+        Sense::click()
+    } else {
+        Sense::hover()
+    };
     let (rect, response) =
-        ui.allocate_exact_size(vec2(ui.available_width(), theme::BUTTON_H), Sense::click());
-    let border = if response.hovered() {
+        ui.allocate_exact_size(vec2(ui.available_width(), theme::BUTTON_H), sense);
+    let border = if several && response.hovered() {
         colors.line
     } else {
         colors.hairline
@@ -121,42 +126,42 @@ fn destination_row(
         theme::icon(14.0),
         colors.text_low,
     );
-    painter.text(
-        pos2(rect.right() - 16.0, rect.center().y),
-        Align2::CENTER_CENTER,
-        icon::CARET_DOWN,
-        theme::icon(14.0),
-        colors.text_low,
-    );
-    let (name, tint, state) = match bound {
-        Some(target) => {
-            let face = face(network.reach(target), network.reading(target));
-            (target.name(), colors.text_high, Some(face))
-        }
-        None => ("Choose a printer".to_owned(), colors.text_low, None),
-    };
-    let mut right = rect.right() - 30.0;
-    if let Some(face) = &state {
-        let colour = colour_of(face.light);
-        let word = painter.layout_no_wrap(face.word.clone(), theme::small(), colour);
-        let at = pos2(right - word.size().x, rect.center().y - word.size().y / 2.0);
-        right = at.x - 12.0;
-        painter.galley(at, word, colour);
-        painter.circle_filled(pos2(right + 6.0, rect.center().y), 3.5, colour);
-        right -= 6.0;
+    let mut right = rect.right() - 10.0;
+    if several {
+        painter.text(
+            pos2(rect.right() - 16.0, rect.center().y),
+            Align2::CENTER_CENTER,
+            icon::CARET_DOWN,
+            theme::icon(14.0),
+            colors.text_low,
+        );
+        right = rect.right() - 30.0;
     }
-    let room = (right - rect.left() - 32.0).max(0.0);
-    let mut job = egui::text::LayoutJob::simple_singleline(name.clone(), theme::label(), tint);
+    let colour = colour_of(face.light);
+    let word = painter.layout_no_wrap(face.word.clone(), theme::small(), colour);
+    let at = pos2(right - word.size().x, rect.center().y - word.size().y / 2.0);
+    painter.galley(at, word, colour);
+    painter.circle_filled(pos2(at.x - 8.0, rect.center().y), 3.5, colour);
+    let room = (at.x - 16.0 - rect.left() - 30.0).max(0.0);
+    let mut job =
+        egui::text::LayoutJob::simple_singleline(name.to_owned(), theme::label(), colors.text_high);
     job.wrap = egui::text::TextWrapping::truncate_at_width(room);
     let galley = painter.layout_job(job);
     painter.galley(
         pos2(rect.left() + 30.0, rect.center().y - galley.size().y / 2.0),
         galley,
-        tint,
+        colors.text_high,
     );
-    focus_ring(ui, &response, theme::R_CONTROL);
-    let response = response.on_hover_text("The printer this profile sends to");
-    response.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::ComboBox, true, &name));
+    if several {
+        focus_ring(ui, &response, theme::R_CONTROL);
+    }
+    let hover = if several {
+        "The printer this profile sends to; press for the others it lists"
+    } else {
+        "The printer this profile sends to"
+    };
+    let response = response.on_hover_text(hover);
+    response.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::ComboBox, several, name));
     response
 }
 

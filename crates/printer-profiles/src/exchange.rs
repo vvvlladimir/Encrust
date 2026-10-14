@@ -195,6 +195,35 @@ mod tests {
         );
     }
 
+    /// A farm of one model set up once is handed to another desk with its printers named.
+    #[test]
+    fn a_printer_carries_the_machines_it_sends_to_out_and_back_in() {
+        let mut catalogue = writable("machines");
+        let mut saturn = catalogue
+            .printer(SATURN)
+            .expect("the Saturn ships")
+            .profile
+            .clone();
+        saturn.connection = crate::Connection::Sdcp;
+        saturn.machines = vec![crate::NetworkMachine {
+            name: "Bench A".to_owned(),
+            address: "192.168.1.133".to_owned(),
+            board: Some("d85f46e4d7d90100".to_owned()),
+        }];
+        catalogue.save_printer(SATURN, &saturn).expect("writable");
+        let text = catalogue
+            .export(Kind::Printer, SATURN)
+            .expect("the Saturn is there");
+
+        let mut elsewhere = writable("machines-elsewhere");
+        let id = elsewhere
+            .import(Kind::Printer, &text, Path::new("saturn.toml"), None)
+            .expect("the file is the profile");
+        let imported = &elsewhere.printer(&id).expect("imported").profile;
+        assert_eq!(imported.machines, saturn.machines);
+        assert_eq!(imported.connection, crate::Connection::Sdcp);
+    }
+
     #[test]
     fn a_support_profile_comes_back_as_a_copy_beside_itself() {
         let mut catalogue = writable("support");

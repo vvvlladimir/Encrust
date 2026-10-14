@@ -14,7 +14,7 @@ use net_prusalink::Link;
 use net_sdcp::Printer;
 use printer_profiles::{Kind, Renamed};
 
-use crate::network::{Destination, Network, Prusa};
+use crate::network::{Network, Prusa};
 use crate::panels::Window;
 use crate::profiles;
 use crate::recent::Recent;
@@ -37,11 +37,11 @@ pub struct Preferences {
     /// announces itself again next run, and its address may not be the same one.
     #[serde(default)]
     addresses: Vec<IpAddr>,
-    /// Where each printer profile sends what it slices, by catalogue id; see ADR 0156.
+    /// Which of its listed printers each profile last sent to, by catalogue id, as the
+    /// printer's address; see ADR 0265.
     #[serde(default)]
-    bound: BTreeMap<String, Destination>,
-    /// The boards those bindings name, so a bound machine is there to send to before any
-    /// scan has answered.
+    chosen: BTreeMap<String, String>,
+    /// The boards the printer in hand lists, so they are named before any scan answers.
     #[serde(default)]
     boards: Vec<Printer>,
     /// The Prusa machines set up, credentials and all. They are here rather than in a
@@ -101,7 +101,7 @@ impl Preferences {
             printer: slicing.printer_id.clone(),
             resin: slicing.resin_id.clone(),
             addresses: network.manual.clone(),
-            bound: network.bindings().clone(),
+            chosen: network.chosen().clone(),
             boards: network.bound_boards(),
             machines: network
                 .prusa
@@ -157,9 +157,9 @@ impl Preferences {
                 *held = Some(moved.to.clone());
             }
             if moved.kind == Kind::Printer
-                && let Some(destination) = self.bound.remove(&moved.from)
+                && let Some(address) = self.chosen.remove(&moved.from)
             {
-                self.bound.insert(moved.to.clone(), destination);
+                self.chosen.insert(moved.to.clone(), address);
             }
         }
     }
@@ -205,7 +205,7 @@ impl Preferences {
         window
             .machine
             .network
-            .restore(self.boards.clone(), self.bound.clone());
+            .restore(self.boards.clone(), self.chosen.clone());
 
         if let Some(id) = self.printer.as_deref()
             && let Ok(entry) = window.machine.slicing.catalogue.printer(id)
@@ -301,15 +301,25 @@ mod tests {
         assert_eq!(prefs.resin.as_deref(), Some("standard-grey"));
     }
 
-    /// Clicking through a scan once a run is what the binding is there to avoid, so the
-    /// board travels through the file beside the profile it was chosen for.
+    /// The printer a profile last sent to, and the board it lists, travel through the
+    /// file so the next run sends there before any scan has answered.
     #[test]
-    fn the_machine_a_printer_was_bound_to_survives_the_round_trip() {
+    fn the_printer_a_profile_last_sent_to_survives_the_round_trip() {
         let mut network = Network::default();
         let board = a_board();
-        let key = format!("sdcp:{}", board.mainboard_id);
+        let address = board.address.to_string();
         network.restore(vec![board], BTreeMap::new());
-        network.bind("elegoo-saturn-4-ultra", Destination::Printer(key.clone()));
+        let profile = printer_profiles::PrinterProfile {
+            connection: printer_profiles::Connection::Sdcp,
+            machines: vec![printer_profiles::NetworkMachine {
+                name: "Bench".to_owned(),
+                address: address.clone(),
+                board: None,
+            }],
+            ..printer_profiles::PrinterProfile::default()
+        };
+        network.bind_to(Some("elegoo-saturn-4-ultra".to_owned()), Some(&profile));
+        network.choose(address.clone());
 
         let prefs = Preferences::of(
             &Slicing::default(),
@@ -320,11 +330,8 @@ mod tests {
         let text = serde_json::to_string(&prefs).expect("the preferences serialise");
         let read: Preferences = serde_json::from_str(&text).expect("and read back");
 
-        assert_eq!(read.boards.len(), 1, "the bound board is kept");
-        assert_eq!(
-            read.bound.get("elegoo-saturn-4-ultra"),
-            Some(&Destination::Printer(key))
-        );
+        assert_eq!(read.boards.len(), 1, "the listed board is kept");
+        assert_eq!(read.chosen.get("elegoo-saturn-4-ultra"), Some(&address));
     }
 
     #[test]
@@ -332,10 +339,7 @@ mod tests {
         let mut prefs = Preferences {
             printer: Some("bench".to_owned()),
             resin: Some("grey".to_owned()),
-            bound: BTreeMap::from([(
-                "bench".to_owned(),
-                Destination::Printer("sdcp:aa".to_owned()),
-            )]),
+            chosen: BTreeMap::from([("bench".to_owned(), "192.168.1.42".to_owned())]),
             ..Preferences::default()
         };
         let moved = |kind, from: &str, to: &str| Renamed {
@@ -352,13 +356,13 @@ mod tests {
         assert_eq!(prefs.printer.as_deref(), Some("bench-0a1b2c3d"));
         assert_eq!(prefs.resin.as_deref(), Some("grey-4e5f6a7b"));
         assert!(
-            prefs.bound.contains_key("bench-0a1b2c3d"),
-            "the machine stays bound"
+            prefs.chosen.contains_key("bench-0a1b2c3d"),
+            "the printer it sends to follows"
         );
-        assert!(!prefs.bound.contains_key("bench"));
+        assert!(!prefs.chosen.contains_key("bench"));
     }
 
-    /// Only the boards a profile was bound to: one that merely answered a scan announces
+    /// Only the boards a profile lists: one that merely answered a scan announces
     /// itself again next run, at whatever address it has then.
     #[test]
     fn a_board_nobody_chose_is_not_written_to_the_file() {
@@ -417,7 +421,7 @@ mod tests {
         let read: Preferences = serde_json::from_str(r#"{"format":".goo"}"#)
             .expect("every field of the file is optional");
         assert!(read.machines.is_empty());
-        assert!(read.bound.is_empty());
+        assert!(read.chosen.is_empty());
         assert!(
             read.updates.check,
             "the update check is on in a file written before it existed"

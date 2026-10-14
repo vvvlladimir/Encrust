@@ -7,8 +7,8 @@ use crate::panels::plate_summary::file_readings;
 use crate::panels::printer_card::{self, Chosen};
 use crate::panels::slice::{Run, Via, bound_machine, broken_reminder, start};
 use crate::ui::{
-    hint, icon, inline_button, primary_button, readings, secondary_button, section,
-    section_with_action, text_row, theme,
+    hint, icon, primary_button, readings, secondary_button, section, section_with_action, text_row,
+    theme,
 };
 use crate::workspace::Tool;
 
@@ -178,9 +178,9 @@ fn picker_row(
     });
 }
 
-/// Where the printer in hand sends its files: one row naming the printer and what it is
-/// doing, which opens the others and, beside it, that printer's sheet. Everything else
-/// about a printer is in the sheet the top bar's ring opens (ADR 0264).
+/// Where the printer in hand sends its files: one row naming the listed printer and
+/// what it is doing, opening the others the profile lists, and beside it that printer's
+/// sheet. Which printers a profile lists is its own network settings (ADR 0265).
 fn send(ui: &mut egui::Ui, window: &mut Window) {
     if cfg!(target_arch = "wasm32") {
         return;
@@ -195,6 +195,7 @@ fn send(ui: &mut egui::Ui, window: &mut Window) {
         .machine
         .network
         .keep_fresh(ui.input(|input| input.time));
+    let mut set_up = false;
     let (rescan, chosen) = section_with_action(
         ui,
         "Send to a printer",
@@ -208,65 +209,27 @@ fn send(ui: &mut egui::Ui, window: &mut Window) {
                 );
                 return None;
             }
-            let found = network
-                .targets()
-                .iter()
-                .any(|target| target.speaks(connection));
-            let mut chosen = None;
-            if found {
-                chosen = printer_card::destination(ui, network, connection);
-            } else if network.is_scanning() {
-                ui.horizontal(|ui| {
-                    ui.spinner();
-                    hint(ui, "Looking for printers on the network");
-                });
-            } else {
-                hint(
-                    ui,
-                    "No machine found yet. Look again, or add one by its address.",
-                );
+            if network.listed().is_empty() {
+                hint(ui, "No printer of this model is listed to send to yet.");
+                set_up = secondary_button(ui, icon::NETWORK, "Choose them in its network settings")
+                    .clicked();
+                return None;
             }
+            let chosen = printer_card::destination(ui, network);
             printer_card::scan_notes(ui, network);
-            if network.target().is_none() {
-                by_address(ui, &mut window.machine.network);
-            }
             chosen
         },
     );
     if rescan {
         window.machine.network.scan();
     }
+    if set_up {
+        crate::panels::open_machines(window.machine);
+        window.machine.settings.tab = crate::settings::Tab::Network;
+    }
     match chosen.flatten() {
-        Some(Chosen::Bind(key)) => window.machine.network.bind_here(key),
+        Some(Chosen::Pick(address)) => window.machine.network.choose(address),
         Some(Chosen::Open(key)) => window.machine.network.open = Some(key),
         None => {}
     }
-}
-
-/// A board on another subnet, which no broadcast reaches, typed in by its address. A
-/// machine that wants a login is set up in the printer's settings instead.
-fn by_address(ui: &mut egui::Ui, network: &mut crate::network::Network) {
-    let address = network.draft.trim().parse().ok();
-    ui.horizontal(|ui| {
-        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-            let add = ui
-                .add_enabled_ui(address.is_some(), |ui| {
-                    inline_button(ui, icon::ADD, "Add", false, true)
-                })
-                .inner;
-            if add.clicked()
-                && let Some(address) = address
-            {
-                network.add(address);
-                network.draft.clear();
-            }
-            let width = ui.available_width();
-            crate::ui::address_field(
-                ui,
-                &mut network.draft,
-                "Add by address, 192.168.1.42",
-                width,
-            );
-        });
-    });
 }
