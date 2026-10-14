@@ -9,6 +9,7 @@ These bind every edit, including edits to documentation itself.
 | What lives in which crate, and the dependency graph | `docs/architecture.md` |
 | An external format and how we read it | `docs/formats/<format>.md` |
 | A CLI flag and a worked example | `docs/cli.md` |
+| What a user can and cannot do, in plain language | `docs/features.md` |
 | A rule to follow from now on | `.claude/rules/<topic>.md` |
 | Commands and status | `AGENTS.md` |
 
@@ -24,6 +25,8 @@ spend them like that, and push anything a reader needs only sometimes down into 
 - **Documentation is argument, not narration.** No benchmark diaries, no step-by-step
   retellings of what a step did, no restating the crate map in prose.
 - When a doc stops matching the code, fix or delete it in the same commit that broke it.
+- A change a user can see — a feature, a setting, a limit, a format, a printer — updates
+  `docs/features.md` in the same commit.
 
 An ADR is one decision per file, `NNNN-<slug>.md`, numbered from `0001` with no gaps, copied
 from `0000-template.md` with every heading kept, well under a page. `docs/decisions/README.md`
