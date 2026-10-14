@@ -1,56 +1,48 @@
-//! What the window does about a model that arrived broken: the question it asks the
-//! moment the model lands, and the runs that close the holes.
+//! What the window does about a model that arrived broken: the offer at the foot of the
+//! stage, and the runs that close the holes.
 //!
-//! Welding and orientation are done without asking, because both follow from the geometry
-//! (ADR 0005). Closing a hole invents surface that was never in the file, so it is asked
-//! for; see `docs/decisions/0194-a-hole-is-closed-only-when-it-is-asked-for.md` and 0195.
+//! Welding, orientation and dropping the faces laid over others are done on import without
+//! asking, because none of them changes what the model encloses (ADR 0005, 0270). Closing a
+//! hole invents surface that was never in the file, so it is offered without blocking
+//! anything and waits for the Repair button; see
+//! `docs/decisions/0270-repair-cancels-what-encloses-nothing-and-never-worsens.md`.
 
 use std::sync::Arc;
 
 use crate::job::{RepairJob, RepairOutcome, RepairRequest, Repaired};
 use crate::scene::{ObjectId, Scene, SceneObject};
 use crate::status::Status;
-use crate::ui::hint;
 
-/// How wide the question about a broken model is drawn, so its lines wrap rather than
-/// stretching the window.
-const ASK_W: f32 = 360.0;
-
-/// A model the window has not been told what to do about yet.
-#[derive(Debug, Clone, PartialEq)]
-struct Asked {
-    id: ObjectId,
-    name: String,
-    defects: Vec<String>,
-}
-
-/// The questions waiting to be answered, and the repairs under way.
+/// The repairs under way, and the broken models the user chose to keep as they came.
 #[derive(Debug, Default)]
 pub struct Repairs {
-    asked: Vec<Asked>,
     jobs: Vec<RepairJob>,
+    kept: Vec<ObjectId>,
 }
 
 impl Repairs {
-    /// Asks about a model that will not slice as it stands. A sound one is left alone, and
-    /// so is one already being asked about.
-    pub fn consider(&mut self, object: &SceneObject) {
-        if object.summary.is_sound() || self.asked.iter().any(|asked| asked.id == object.id) {
-            return;
-        }
-        self.asked.push(Asked {
-            id: object.id,
-            name: object.name.clone(),
-            defects: object.summary.defects(),
-        });
+    /// The broken models on the plate being edited that repair is still offered for:
+    /// neither kept as they came nor being repaired already.
+    pub fn offered<'a>(&'a self, scene: &'a Scene) -> impl Iterator<Item = &'a SceneObject> {
+        scene.printable(scene.active_plate()).filter(|object| {
+            !object.summary.is_sound()
+                && !self.kept.contains(&object.id)
+                && !self.jobs.iter().any(|job| job.id() == object.id)
+        })
     }
 
-    /// Starts closing the holes in one model, dropping any question about it.
+    /// Stops offering to repair a model. Its mark stays, and so does its Repair button.
+    pub fn keep_as_it_is(&mut self, id: ObjectId) {
+        if !self.kept.contains(&id) {
+            self.kept.push(id);
+        }
+    }
+
+    /// Starts closing the holes in one model.
     ///
     /// The mesh is replaced by the repaired one, so supports, a cavity and a texture
     /// placed on the model before this go with the mesh they were made for.
     pub fn start(&mut self, scene: &Scene, id: ObjectId, status: &mut Status) {
-        self.asked.retain(|asked| asked.id != id);
         let Some(object) = scene.get(id) else {
             return;
         };
@@ -61,18 +53,6 @@ impl Repairs {
         });
         *status = Status::Info(job.label());
         self.jobs.push(job);
-    }
-
-    /// Leaves a model as it came, and stops asking about it.
-    pub fn keep_as_it_is(&mut self, id: ObjectId) {
-        self.asked.retain(|asked| asked.id != id);
-    }
-
-    /// The model the window is asking about: its identifier, what it is called and what is
-    /// wrong with it.
-    pub fn asking(&self) -> Option<(ObjectId, &str, &[String])> {
-        let asked = self.asked.first()?;
-        Some((asked.id, &asked.name, &asked.defects))
     }
 
     pub fn is_busy(&self) -> bool {
@@ -86,17 +66,24 @@ impl Repairs {
         self.jobs.retain_mut(|job| match job.poll() {
             None => true,
             Some(outcome) => {
-                done.push(outcome);
+                done.push((job.id(), outcome));
                 false
             }
         });
 
-        for outcome in done {
+        for (id, outcome) in done {
             match outcome {
                 RepairOutcome::Done(repaired) => {
                     *status = apply(scene, &repaired);
                 }
                 RepairOutcome::Failed(message) => *status = Status::Error(message),
+            }
+            // A repair that could not mend it is not offered again; the button still is.
+            if scene
+                .get(id)
+                .is_some_and(|object| !object.summary.is_sound())
+            {
+                self.keep_as_it_is(id);
             }
         }
         self.is_busy()
@@ -108,6 +95,12 @@ fn apply(scene: &mut Scene, repaired: &Repaired) -> Status {
     let Some(object) = scene.get_mut(repaired.id) else {
         return Status::Error(format!("{} is no longer on the plate", repaired.name));
     };
+    if repaired.kept_as_found {
+        return Status::Error(format!(
+            "{} could not be repaired without leaving more wrong with it, so it is as it came",
+            repaired.name
+        ));
+    }
     object.reshape(repaired.shaped.clone());
     // What repair did is said in the stage notice; the summary keeps describing the file,
     // so a mended model carries no mark of its own.
@@ -131,7 +124,7 @@ fn apply(scene: &mut Scene, repaired: &Repaired) -> Status {
 /// How many things the repair actually changed, which is what decides whether it has
 /// anything to report.
 fn done(repaired: &Repaired) -> usize {
-    repaired.filled.loops_filled + repaired.duplicates_removed + repaired.tangles_removed
+    repaired.filled.loops_filled + repaired.duplicates_removed
 }
 
 /// What it changed, in the words the stage notice says it in.
@@ -146,54 +139,7 @@ fn what(repaired: &Repaired) -> Vec<String> {
             repaired.duplicates_removed
         ));
     }
-    if repaired.tangles_removed > 0 {
-        lines.push(format!(
-            "dropped {} face(s) nothing could be wound round",
-            repaired.tangles_removed
-        ));
-    }
     lines
-}
-
-/// The question about a model that arrived broken, over everything else: its answer
-/// decides what the mesh on the plate is, so nothing else is worth doing first.
-pub fn ask(ui: &mut egui::Ui, repairs: &mut Repairs, scene: &Scene, status: &mut Status) {
-    let Some((id, name, defects)) = repairs
-        .asking()
-        .map(|(id, name, defects)| (id, name.to_owned(), defects.to_vec()))
-    else {
-        return;
-    };
-
-    let mut answer = None;
-    egui::Modal::new(egui::Id::new("broken-import")).show(ui.ctx(), |ui| {
-        ui.set_max_width(ASK_W);
-        ui.label(format!("{name} is broken."));
-        for line in &defects {
-            hint(ui, line);
-        }
-        ui.add_space(8.0);
-        hint(
-            ui,
-            "Repairing covers what is open with surface that was not in the file. Left as \
-             it is, the model stays as it came and what is sliced from it may not print.",
-        );
-        ui.add_space(8.0);
-        ui.horizontal(|ui| {
-            if ui.button("Repair").clicked() {
-                answer = Some(true);
-            }
-            if ui.button("Keep as it is").clicked() {
-                answer = Some(false);
-            }
-        });
-    });
-
-    match answer {
-        Some(true) => repairs.start(scene, id, status),
-        Some(false) => repairs.keep_as_it_is(id),
-        None => {}
-    }
 }
 
 /// How many models on the plate being edited will not slice as they stand, which is what
@@ -236,40 +182,50 @@ mod tests {
     }
 
     #[test]
-    fn a_sound_model_is_never_asked_about() {
+    fn repair_is_offered_for_a_broken_model_and_not_a_sound_one() {
         let mut scene = Scene::default();
-        let id = object(&mut scene, 0);
-        let mut repairs = Repairs::default();
-        repairs.consider(scene.get(id).expect("the model was just inserted"));
+        let broken = object(&mut scene, 3);
+        object(&mut scene, 0);
+        let repairs = Repairs::default();
 
-        assert!(repairs.asking().is_none());
+        let offered: Vec<ObjectId> = repairs.offered(&scene).map(|object| object.id).collect();
+        assert_eq!(offered, vec![broken]);
     }
 
     #[test]
-    fn a_broken_model_is_asked_about_once() {
+    fn a_model_kept_as_it_is_is_no_longer_offered() {
         let mut scene = Scene::default();
         let id = object(&mut scene, 3);
         let mut repairs = Repairs::default();
-        let object = scene.get(id).expect("the model was just inserted");
-        repairs.consider(object);
-        repairs.consider(object);
-
-        let (asked, name, defects) = repairs.asking().expect("an open model is a question");
-        assert_eq!(asked, id);
-        assert_eq!(name, "model.stl");
-        assert_eq!(defects.len(), 1, "the open surface");
-    }
-
-    #[test]
-    fn keeping_a_model_as_it_is_ends_the_question() {
-        let mut scene = Scene::default();
-        let id = object(&mut scene, 3);
-        let mut repairs = Repairs::default();
-        repairs.consider(scene.get(id).expect("the model was just inserted"));
         repairs.keep_as_it_is(id);
 
-        assert!(repairs.asking().is_none());
-        assert!(!repairs.is_busy(), "nothing was started");
+        assert_eq!(repairs.offered(&scene).count(), 0);
+        assert_eq!(broken_on_the_plate(&scene), 1, "it is still broken");
+    }
+
+    #[test]
+    fn a_repair_that_could_not_mend_a_model_is_not_offered_again() {
+        let mut scene = Scene::default();
+        // A lone triangle would be closed by its own reverse and cancel away, so it is kept.
+        let id = object(&mut scene, 3);
+        let mut repairs = Repairs::default();
+        repairs.start(&scene, id, &mut Status::default());
+        while repairs.poll(&mut scene, &mut Status::default()) {
+            std::thread::yield_now();
+        }
+
+        assert!(!scene.get(id).expect("still there").summary.is_sound());
+        assert_eq!(repairs.offered(&scene).count(), 0);
+    }
+
+    #[test]
+    fn a_model_under_repair_is_no_longer_offered() {
+        let mut scene = Scene::default();
+        let id = open_box(&mut scene);
+        let mut repairs = Repairs::default();
+        repairs.start(&scene, id, &mut Status::default());
+
+        assert_eq!(repairs.offered(&scene).count(), 0);
     }
 
     #[test]
@@ -342,8 +298,8 @@ mod tests {
                 shaped: crate::scene::Shaped::of(Arc::new(mesh)),
                 filled,
                 duplicates_removed: 0,
-                tangles_removed: 0,
                 orientation,
+                kept_as_found: false,
             },
         );
 
@@ -369,14 +325,45 @@ mod tests {
                 shaped: crate::scene::Shaped::of(mesh),
                 filled: core_geometry::Filled::default(),
                 duplicates_removed: 0,
-                tangles_removed: 0,
                 orientation: Orientation {
                     flipped_faces: 0,
                     inverted_shells: 0,
                     orientable: true,
                 },
+                kept_as_found: false,
             },
         );
         assert!(status.is_error());
+    }
+
+    #[test]
+    fn a_repair_that_would_worsen_the_model_leaves_it_as_it_came() {
+        let mut scene = Scene::default();
+        let id = open_box(&mut scene);
+        let before = Arc::clone(&scene.get(id).expect("the box is there").mesh);
+
+        let status = apply(
+            &mut scene,
+            &Repaired {
+                id,
+                name: "open.stl".to_owned(),
+                shaped: crate::scene::Shaped::of(Arc::new(Mesh::default())),
+                filled: core_geometry::Filled::default(),
+                duplicates_removed: 0,
+                orientation: Orientation {
+                    flipped_faces: 0,
+                    inverted_shells: 0,
+                    orientable: true,
+                },
+                kept_as_found: true,
+            },
+        );
+
+        assert!(status.is_error(), "the user is told nothing was changed");
+        let object = scene.get(id).expect("the box is still there");
+        assert!(
+            Arc::ptr_eq(&object.mesh, &before),
+            "the mesh is the one it had"
+        );
     }
 }

@@ -32,7 +32,7 @@ pub use mesh::Mesh;
 pub use orient::{Orientation, orient_outward};
 pub use pins::{pin, pin_spots};
 pub use ray::{PlacedHit, Ray, RayHit, ray_aabb, ray_triangle, raycast, raycast_placed};
-pub use repair::{Filled, fill_holes, remove_duplicate_faces, remove_unbalanced_faces};
+pub use repair::{Filled, fill_holes, remove_duplicate_faces};
 pub use split::split;
 pub use topology::Adjacency;
 pub use transform::{

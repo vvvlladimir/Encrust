@@ -138,7 +138,7 @@ core-plate ──> core-geometry, core-slicer, rayon
 core-slicer ──> core-geometry, i_overlay
 core-mesh-io ──> core-geometry, zip
 printer-profiles ──> (nothing in this workspace)
-core-geometry ──> (nothing in this workspace)
+core-geometry ──> (nothing in this workspace; rayon)
 ```
 
 No front end names the crate that writes a container: the flavour a `SlicedFormat` carries

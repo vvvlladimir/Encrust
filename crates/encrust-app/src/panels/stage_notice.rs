@@ -1,6 +1,7 @@
 use egui::{Align, Align2, Id, Layout, Rect, RichText};
 
 use crate::panels::Window;
+use crate::scene::ObjectId;
 use crate::status::Status;
 use crate::ui::{card, icon, icon_button, inline_button, progress_bar, theme};
 
@@ -31,6 +32,7 @@ pub fn ui(ui: &egui::Ui, window: &mut Window, stage: Rect) {
             ui.with_layout(Layout::top_down(Align::Center), |ui| {
                 let running = jobs(ui, window);
                 waiting_to_print(ui, window);
+                broken(ui, window);
                 message(ui, &mut window.machine.status, running, width);
             });
         });
@@ -115,6 +117,50 @@ fn waiting_to_print(ui: &mut egui::Ui, window: &mut Window) {
             .machine
             .network
             .start_print(&mut window.machine.status);
+    }
+}
+
+/// A model that will not print as it stands, with the repair beside it. Nothing waits on
+/// the answer, so it is offered here rather than in a dialog, until it is taken or put by.
+fn broken(ui: &mut egui::Ui, window: &mut Window) {
+    let offered: Vec<(ObjectId, String, Vec<String>)> = window
+        .doc
+        .repairs
+        .offered(&window.doc.scene)
+        .map(|object| (object.id, object.name.clone(), object.summary.defects()))
+        .collect();
+    let label = match offered.as_slice() {
+        [] => return,
+        [(_, name, _)] => format!("{name} is broken"),
+        several => format!("{} models on this plate are broken", several.len()),
+    };
+    let (mut repair, mut keep) = (false, false);
+    card().inner_margin(theme::CARD_MARGIN).show(ui, |ui| {
+        ui.horizontal(|ui| {
+            let text = RichText::new(label)
+                .font(theme::label())
+                .color(theme::colors().warn);
+            let lines: Vec<&str> = offered
+                .iter()
+                .flat_map(|(_, _, defects)| defects.iter().map(String::as_str))
+                .collect();
+            ui.label(text).on_hover_text(lines.join("\n"));
+            let wording = if offered.len() == 1 {
+                "Repair"
+            } else {
+                "Repair all"
+            };
+            repair = inline_button(ui, icon::REPAIR, wording, true, true).clicked();
+            keep = icon_button(ui, icon::CANCEL, "Keep as it is").clicked();
+        });
+    });
+    for (id, _, _) in &offered {
+        if repair {
+            let repairs = &mut window.doc.repairs;
+            repairs.start(&window.doc.scene, *id, &mut window.machine.status);
+        } else if keep {
+            window.doc.repairs.keep_as_it_is(*id);
+        }
     }
 }
 

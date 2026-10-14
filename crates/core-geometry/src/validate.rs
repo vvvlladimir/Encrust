@@ -1,8 +1,8 @@
-use std::collections::HashSet;
-
 use serde::{Deserialize, Serialize};
 
-use crate::topology::{Components, EdgeUse, edge_groups, edge_uses};
+use rayon::iter::{IndexedParallelIterator, IntoParallelRefIterator, ParallelIterator};
+
+use crate::topology::{Components, EdgeUse, edge_groups, edge_uses, sort_runs};
 use crate::{Mesh, Scalar, Vec3};
 
 /// What is structurally wrong, or right, with a mesh.
@@ -15,7 +15,8 @@ pub struct MeshDiagnostics {
     pub faces: usize,
     /// Faces with a repeated vertex or zero area.
     pub degenerate_faces: usize,
-    /// Faces beyond the first that cover the same three vertices.
+    /// Faces laid over others on the same three vertices that would have to go: both of a
+    /// pair wound opposite ways, the extras of one wound the same way.
     pub duplicate_faces: usize,
     pub unreferenced_vertices: usize,
     /// Edges used by exactly one face: the mesh is open there.
@@ -40,9 +41,15 @@ impl MeshDiagnostics {
         self.unbalanced_edges == 0
     }
 
-    /// Nothing that would make slicing produce garbage.
+    /// Nothing that would make slicing produce garbage: no hole, no face without area, none
+    /// drawn twice. An edge two faces walk the same way is not one: see ADR 0269.
     pub fn is_sound(&self) -> bool {
-        self.is_closed() && self.degenerate_faces == 0 && self.duplicate_faces == 0
+        self.boundary_edges == 0 && self.degenerate_faces == 0 && self.duplicate_faces == 0
+    }
+
+    /// Unbalanced edges with no hole behind them, where faces lie folded onto each other.
+    pub fn folded_edges(&self) -> usize {
+        self.unbalanced_edges.saturating_sub(self.boundary_edges)
     }
 }
 
@@ -200,20 +207,75 @@ fn count_duplicates(mesh: &Mesh) -> usize {
     duplicate_faces(mesh).len()
 }
 
-/// Where the faces beyond the first that cover the same three vertices are, ascending.
-/// Winding is not part of the key: a face laid over another the other way round is as
-/// much of a duplicate as one laid over it the same way.
+/// The faces to drop where several cover the same three vertices, ascending.
+///
+/// Two of them wound opposite ways enclose nothing between them, so each such pair goes
+/// whole; of what is left, the first face stays and the rest go. What remains walks every
+/// edge as the majority did, so dropping these never unbalances one.
 pub(crate) fn duplicate_faces(mesh: &Mesh) -> Vec<usize> {
-    let mut seen: HashSet<[u32; 3]> = HashSet::with_capacity(mesh.faces.len());
-    let mut extra = Vec::new();
-    for (index, face) in mesh.faces.iter().enumerate() {
-        let mut key = *face;
-        key.sort_unstable();
-        if !seen.insert(key) {
-            extra.push(index);
+    let keyed = faces_by_corners(mesh);
+    let mut dropped = Vec::new();
+    for group in keyed
+        .chunk_by(|a, b| a.0 == b.0)
+        .filter(|group| group.len() > 1)
+    {
+        let forward = group.iter().filter(|face| face.1).count();
+        let backward = group.len() - forward;
+        let keep = match forward.cmp(&backward) {
+            std::cmp::Ordering::Greater => group.iter().find(|face| face.1),
+            std::cmp::Ordering::Less => group.iter().find(|face| !face.1),
+            std::cmp::Ordering::Equal => None,
         }
+        .map(|face| face.2);
+        dropped.extend(
+            group
+                .iter()
+                .map(|face| face.2)
+                .filter(|index| Some(*index) != keep),
+        );
     }
-    extra
+    dropped.sort_unstable();
+    dropped
+}
+
+/// Every face under its corners in ascending order, whether it winds the way that order
+/// does, and its index; sorted, so faces over the same corners are adjacent.
+///
+/// Counted out by lowest corner and sorted only within each run, the same order a full
+/// sort gives at linear cost, as `edge_uses` does.
+fn faces_by_corners(mesh: &Mesh) -> Vec<([u32; 3], bool, usize)> {
+    let keyed: Vec<([u32; 3], bool, usize)> = mesh
+        .faces
+        .par_iter()
+        .enumerate()
+        .map(|(index, face)| {
+            let mut key = *face;
+            key.sort_unstable();
+            let ascending = [key, [key[1], key[2], key[0]], [key[2], key[0], key[1]]];
+            (key, ascending.contains(face), index)
+        })
+        .collect();
+    let buckets = keyed
+        .iter()
+        .map(|face| face.0[0] as usize + 1)
+        .max()
+        .unwrap_or(0);
+    let mut starts = vec![0usize; buckets + 1];
+    for face in &keyed {
+        starts[face.0[0] as usize + 1] += 1;
+    }
+    for at in 1..starts.len() {
+        starts[at] += starts[at - 1];
+    }
+    let mut sorted = vec![([0u32; 3], false, 0usize); keyed.len()];
+    let mut cursor = starts.clone();
+    for face in keyed {
+        let slot = &mut cursor[face.0[0] as usize];
+        sorted[*slot] = face;
+        *slot += 1;
+    }
+    sort_runs(&mut sorted, &starts);
+    sorted
 }
 
 #[cfg(test)]
@@ -414,6 +476,17 @@ mod tests {
         assert_eq!(diagnostics.non_manifold_edges, 0);
         assert_eq!(diagnostics.unbalanced_edges, 3);
         assert!(!diagnostics.is_closed());
+        assert!(
+            diagnostics.is_sound(),
+            "the fill rule takes what the box encloses, so it slices as it stands"
+        );
+    }
+
+    #[test]
+    fn a_hole_makes_a_mesh_unsound() {
+        let mut mesh = box_mesh(Vec3::ZERO, Vec3::splat(2.0));
+        mesh.faces.pop();
+        assert!(!diagnose(&mesh).is_sound());
     }
 
     #[test]
@@ -429,6 +502,14 @@ mod tests {
         let mut mesh = two_triangles();
         mesh.faces.push([2, 0, 1]);
         assert_eq!(diagnose(&mesh).duplicate_faces, 1);
+    }
+
+    /// Wound opposite ways the two enclose nothing between them, so both are counted.
+    #[test]
+    fn a_face_laid_back_to_back_on_another_counts_as_a_pair() {
+        let mut mesh = two_triangles();
+        mesh.faces.push([0, 2, 1]);
+        assert_eq!(duplicate_faces(&mesh), vec![0, 2]);
     }
 
     #[test]

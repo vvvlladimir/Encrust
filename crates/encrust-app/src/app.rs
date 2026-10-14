@@ -6,7 +6,6 @@ use crate::prefs::Preferences;
 use crate::preview::stack_fingerprint;
 use crate::project;
 use crate::render;
-use crate::repair;
 use crate::shortcuts;
 use crate::state::{Doc, Machine, Tools, View};
 use crate::status::Status;
@@ -386,7 +385,6 @@ impl eframe::App for SlicerApp {
             &mut self.doc.scene,
             &self.doc.plate,
             &mut self.view.camera,
-            &mut self.doc.repairs,
             &mut self.machine.status,
         ) | self
             .doc
@@ -447,12 +445,6 @@ impl eframe::App for SlicerApp {
         self.take_shortcuts();
 
         project::guard_close(ui, &mut self.window());
-        repair::ask(
-            ui,
-            &mut self.doc.repairs,
-            &self.doc.scene,
-            &mut self.machine.status,
-        );
         self.window().show(ui);
         // An edit made in this frame is built in the next one, which nothing else asks
         // for while the pointer is held still.
@@ -651,7 +643,6 @@ mod tests {
             &mut app.doc.scene,
             &app.doc.plate,
             &mut app.view.camera,
-            &mut app.doc.repairs,
             &mut app.machine.status,
         ) {
             std::thread::yield_now();
@@ -701,7 +692,6 @@ mod tests {
             &mut app.doc.scene,
             &app.doc.plate,
             &mut app.view.camera,
-            &mut app.doc.repairs,
             &mut app.machine.status,
         ) {
             std::thread::yield_now();
@@ -884,7 +874,6 @@ mod tests {
                 &mut app.doc.scene,
                 &app.doc.plate,
                 &mut app.view.camera,
-                &mut app.doc.repairs,
                 &mut app.machine.status,
             ) {
                 std::thread::yield_now();

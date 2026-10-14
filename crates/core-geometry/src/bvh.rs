@@ -1,3 +1,5 @@
+use rayon::iter::{IntoParallelIterator, ParallelIterator};
+
 use crate::{
     Aabb, ClosestPoint, Mesh, Ray, RayHit, Scalar, Vec3, point_aabb_squared, point_triangle,
     ray_aabb, ray_triangle,
@@ -7,6 +9,10 @@ use crate::{
 /// splitting it would save, and large enough that the tree stays shallow; see
 /// `benches/raycast.rs`.
 const LEAF_FACES: usize = 4;
+
+/// Fewest faces a subtree needs before its halves are built on two threads: below it the
+/// hand-over costs more than the half it saves; see `benches/raycast.rs`.
+const PARALLEL_FACES: usize = 16_384;
 
 /// Deepest the tree can go. A median split halves the faces every level, so this is
 /// reached only by a mesh of more faces than memory holds.
@@ -29,7 +35,7 @@ pub struct Bvh {
     faces: Vec<u32>,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 struct Node {
     bounds: Aabb,
     /// First face of a leaf, or the right child of an inner node.
@@ -50,24 +56,15 @@ impl Bvh {
     /// ray through their edge, and dropping them would shift every face index.
     pub fn build(mesh: &Mesh) -> Self {
         let mut items: Vec<Item> = (0..mesh.faces.len())
-            .filter_map(|face| {
-                let triangle = mesh.triangle(face)?;
-                let bounds = Aabb::new(
-                    triangle.a.min(triangle.b).min(triangle.c),
-                    triangle.a.max(triangle.b).max(triangle.c),
-                );
-                Some(Item {
-                    face: face as u32,
-                    centroid: (bounds.mins + bounds.maxs) * 0.5,
-                    bounds,
-                })
-            })
+            .into_par_iter()
+            .filter_map(|face| item(mesh, face))
             .collect();
 
-        let mut nodes = Vec::with_capacity(2 * items.len() / LEAF_FACES + 1);
-        if !items.is_empty() {
-            split(&mut nodes, &mut items, 0, 0);
-        }
+        let nodes = if items.is_empty() {
+            Vec::new()
+        } else {
+            subtree(&mut items, 0, 0)
+        };
 
         Self {
             faces: items.iter().map(|item| item.face).collect(),
@@ -221,22 +218,94 @@ impl Bvh {
     }
 }
 
+/// One face as the build sees it, or `None` for a face naming a vertex that is not there.
+fn item(mesh: &Mesh, face: usize) -> Option<Item> {
+    let triangle = mesh.triangle(face)?;
+    let bounds = Aabb::new(
+        triangle.a.min(triangle.b).min(triangle.c),
+        triangle.a.max(triangle.b).max(triangle.c),
+    );
+    Some(Item {
+        face: face as u32,
+        centroid: (bounds.mins + bounds.maxs) * 0.5,
+        bounds,
+    })
+}
+
+/// The nodes over `items`, its root first, with its own children counted from it. A
+/// subtree large enough is built with its two halves side by side on rayon's threads and
+/// joined after; the nodes come out exactly as one thread would have laid them.
+fn subtree(items: &mut [Item], offset: usize, depth: usize) -> Vec<Node> {
+    if items.len() < PARALLEL_FACES {
+        let mut nodes = Vec::with_capacity(2 * items.len() / LEAF_FACES + 1);
+        split(&mut nodes, items, offset, depth);
+        return nodes;
+    }
+    let mut root = leaf(items, offset);
+    let Some(mid) = halve(items, depth) else {
+        return vec![root];
+    };
+    let (left, right) = items.split_at_mut(mid);
+    let (left, right) = rayon::join(
+        || subtree(left, offset, depth + 1),
+        || subtree(right, offset + mid, depth + 1),
+    );
+
+    let far = 1 + left.len();
+    root.count = 0;
+    root.at = far as u32;
+    let mut nodes = Vec::with_capacity(far + right.len());
+    nodes.push(root);
+    nodes.extend(shifted(left, 1));
+    nodes.extend(shifted(right, far));
+    nodes
+}
+
+/// A subtree's nodes moved `by` places along the array: an inner node's right child moves
+/// with it, a leaf's faces do not.
+fn shifted(nodes: Vec<Node>, by: usize) -> impl Iterator<Item = Node> {
+    nodes.into_iter().map(move |mut node| {
+        if node.count == 0 {
+            node.at += by as u32;
+        }
+        node
+    })
+}
+
 /// Builds the subtree covering `items`, which start at `offset` in the final face order,
 /// and returns the index of its root node.
 ///
 /// `items` is reordered in place, so a leaf is a contiguous stretch of it.
 fn split(nodes: &mut Vec<Node>, items: &mut [Item], offset: usize, depth: usize) -> usize {
     let index = nodes.len();
-    nodes.push(Node {
+    nodes.push(leaf(items, offset));
+    let Some(mid) = halve(items, depth) else {
+        return index;
+    };
+    let (left, right) = items.split_at_mut(mid);
+
+    nodes[index].count = 0;
+    split(nodes, left, offset, depth + 1);
+    let far = split(nodes, right, offset + mid, depth + 1);
+    nodes[index].at = far as u32;
+    index
+}
+
+/// A leaf over `items`, the faces from `offset` on.
+fn leaf(items: &[Item], offset: usize) -> Node {
+    Node {
         bounds: bounds_of(items.iter().map(|item| item.bounds)),
         at: offset as u32,
         count: items.len() as u32,
-    });
-
-    if items.len() <= LEAF_FACES || depth == MAX_DEPTH {
-        return index;
     }
+}
 
+/// Orders `items` about the median of their widest axis and returns where the halves
+/// meet, or `None` when they stay a leaf.
+fn halve(items: &mut [Item], depth: usize) -> Option<usize> {
+    if items.len() <= LEAF_FACES || depth == MAX_DEPTH {
+        return None;
+    }
     let centroids = bounds_of(
         items
             .iter()
@@ -245,18 +314,11 @@ fn split(nodes: &mut Vec<Node>, items: &mut [Item], offset: usize, depth: usize)
     let axis = widest_axis(&centroids);
     // Every face sitting on the same spot cannot be told apart by any split.
     if centroids.maxs[axis] - centroids.mins[axis] <= 0.0 {
-        return index;
+        return None;
     }
-
     let mid = items.len() / 2;
     items.select_nth_unstable_by(mid, |a, b| a.centroid[axis].total_cmp(&b.centroid[axis]));
-    let (left, right) = items.split_at_mut(mid);
-
-    nodes[index].count = 0;
-    split(nodes, left, offset, depth + 1);
-    let far = split(nodes, right, offset + mid, depth + 1);
-    nodes[index].at = far as u32;
-    index
+    Some(mid)
 }
 
 fn bounds_of(boxes: impl IntoIterator<Item = Aabb>) -> Aabb {
@@ -284,6 +346,41 @@ fn widest_axis(bounds: &Aabb) -> usize {
 mod tests {
     use super::*;
     use crate::raycast;
+
+    /// A field of separate triangles, more than one thread builds alone.
+    fn scattered(count: u32) -> Mesh {
+        let mut mesh = Mesh::default();
+        for at in 0..count {
+            let corner = Vec3::new(
+                (at % 211) as Scalar,
+                (at / 211 % 97) as Scalar,
+                (at % 13) as Scalar,
+            );
+            let base = mesh.vertices.len() as u32;
+            mesh.vertices
+                .extend([corner, corner + Vec3::X * 0.5, corner + Vec3::Y * 0.5]);
+            mesh.faces.push([base, base + 1, base + 2]);
+        }
+        mesh
+    }
+
+    #[test]
+    fn a_hierarchy_built_on_many_threads_is_the_one_one_thread_builds() {
+        let mesh = scattered(4 * PARALLEL_FACES as u32 + 77);
+        let built = Bvh::build(&mesh);
+
+        let mut items: Vec<Item> = (0..mesh.faces.len())
+            .filter_map(|face| item(&mesh, face))
+            .collect();
+        let mut nodes = Vec::new();
+        split(&mut nodes, &mut items, 0, 0);
+
+        assert_eq!(built.nodes, nodes);
+        assert_eq!(
+            built.faces,
+            items.iter().map(|item| item.face).collect::<Vec<_>>()
+        );
+    }
 
     /// What the gathered list is for: a block of voxels around `point` must be able to
     /// answer from it exactly as it would from a traversal of its own.

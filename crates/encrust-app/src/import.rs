@@ -4,7 +4,7 @@ use std::sync::Arc;
 use anyhow::{Context, Result};
 use core_geometry::{
     DEFAULT_WELD_TOLERANCE, Heightmap, Transform, Welded, center_over_plate, diagnose,
-    drop_to_plate, orient_outward, weld,
+    drop_to_plate, orient_outward, remove_duplicate_faces, weld,
 };
 use core_mesh_io::{Loaded, ModelFile, loader_for_extension};
 
@@ -14,7 +14,6 @@ use crate::job::{ImportJob, ImportOutcome, ImportStage};
 use crate::panels::frame_view;
 use crate::plate::BuildPlate;
 use crate::recent::picture::Parts;
-use crate::repair::Repairs;
 use crate::scene::{ImportSummary, Imported, Mapped, Scene};
 use crate::status::Status;
 
@@ -62,15 +61,14 @@ impl Imports {
         })
     }
 
-    /// Puts every import that has finished into the scene, points the camera at what
-    /// arrived and asks about anything that came in broken. Returns whether one is still
-    /// running, which is what tells the window to keep repainting.
+    /// Puts every import that has finished into the scene and points the camera at what
+    /// arrived. Returns whether one is still running, which is what tells the window to
+    /// keep repainting.
     pub fn poll(
         &mut self,
         scene: &mut Scene,
         plate: &BuildPlate,
         camera: &mut OrbitCamera,
-        repairs: &mut Repairs,
         status: &mut Status,
     ) -> bool {
         let mut opened = Vec::new();
@@ -90,10 +88,7 @@ impl Imports {
                         let parts = vec![(Arc::clone(&imported.mesh), imported.transform)];
                         self.opened.push((path.clone(), parts));
                     }
-                    let id = scene.insert(*imported);
-                    if let Some(object) = scene.get(id) {
-                        repairs.consider(object);
-                    }
+                    scene.insert(*imported);
                     *status = Status::Info(format!("Opened {}", path.display()));
                     frame_view(scene, plate, camera);
                 }
@@ -109,11 +104,13 @@ impl Imports {
     }
 }
 
-/// Loads a mesh, repairs it and stands it on the middle of the plate.
+/// Loads a mesh, makes the repairs that change nothing it encloses, and stands it on the
+/// middle of the plate.
 ///
 /// The repair order matches the CLI's: weld first, because on an unwelded mesh every edge
 /// looks like a boundary and neither the orientation fix nor the diagnostics mean
-/// anything. `stage` is called before each part of the work starts.
+/// anything; then the faces laid over others, which would read as branching. `stage` is
+/// called before each part of the work starts.
 pub fn prepare(
     file: &Handed,
     plate: &BuildPlate,
@@ -143,13 +140,14 @@ pub fn prepare(
     // Repaired in place and moved out at the end, so a mesh of tens of megabytes is
     // never held twice.
     let mut welded = weld(&loaded.mesh, DEFAULT_WELD_TOLERANCE);
+    let doubled = remove_duplicate_faces(&mut welded.mesh);
     // Kept only where there is a map to carry through the repair, which is the one thing
     // that renumbers and turns round the faces it is indexed by.
     let before = loaded.uvs.is_some().then(|| welded.mesh.faces.clone());
     let orientation = orient_outward(&mut welded.mesh);
-    let mapped = before.and_then(|before| mapped(&loaded, &welded, &before));
+    let mapped = before.and_then(|before| mapped(&loaded, &welded, &doubled, &before));
     let diagnostics = diagnose(&welded.mesh);
-    let summary = ImportSummary::new(&welded, orientation, diagnostics);
+    let summary = ImportSummary::new(&welded, doubled.len(), orientation, diagnostics);
     let mesh = welded.mesh;
 
     let bounds = mesh
@@ -179,12 +177,18 @@ fn file_name(path: &std::path::Path) -> String {
     )
 }
 
-/// The file's textures, over the mesh as the repair left it.
+/// The file's textures, over the mesh as the repair left it: welding's dropped faces, then
+/// the doubled ones, then the turned ones.
 ///
 /// A file that carries coordinates but no image it can read is not mapped: there would be
 /// nothing to press. One image it cannot read among several is refused whole rather than
 /// silently renumbering the rest, which the map is indexed by.
-fn mapped(loaded: &Loaded, welded: &Welded, before: &[[u32; 3]]) -> Option<Arc<Mapped>> {
+fn mapped(
+    loaded: &Loaded,
+    welded: &Welded,
+    doubled: &[u32],
+    before: &[[u32; 3]],
+) -> Option<Arc<Mapped>> {
     if loaded.textures.is_empty() {
         return None;
     }
@@ -216,6 +220,7 @@ fn mapped(loaded: &Loaded, welded: &Welded, before: &[[u32; 3]]) -> Option<Arc<M
             .uvs
             .as_ref()?
             .without(&welded.dropped)
+            .without(doubled)
             .flipping(&flipped),
         heights,
     }))

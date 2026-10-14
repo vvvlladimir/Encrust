@@ -4,22 +4,27 @@
 use crate::hash::FastMap;
 use crate::topology::{edge_groups, edge_uses};
 use crate::triangulate::triangulate;
-use crate::validate::{balanced, degenerate_faces, duplicate_faces};
+use crate::validate::duplicate_faces;
 use crate::{Mesh, Scalar, Vec2, Vec3};
 
 /// Smallest cross product treated as a direction, mm². Below it the loop is a line and
 /// has no plane to be triangulated in.
 const MIN_NORMAL: Scalar = 1e-12;
 
-/// Drops every face beyond the first that covers the same three vertices, and returns how
-/// many went.
-///
-/// A face drawn twice is never material twice: it only makes the edges round it look as
-/// if the surface branched there, and leaves a section cap counting one crossing too many.
-pub fn remove_duplicate_faces(mesh: &mut Mesh) -> usize {
+/// Longest loop whose patch is chosen by area. The choice costs the cube of the corner
+/// count, so a longer loop, which in practice is a flat cut, is ear clipped in its plane.
+const MAX_MINIMAL_RING: usize = 256;
+
+/// Thinnest triangle a patch may hold, as twice its area over its longest edge squared:
+/// below it the triangle is a sliver that would read as a face with no area.
+const MIN_ASPECT: f64 = 1e-6;
+
+/// Drops the faces laid over others on the same three vertices without changing what the
+/// surface encloses, and returns where they were in the mesh, ascending.
+pub fn remove_duplicate_faces(mesh: &mut Mesh) -> Vec<u32> {
     let extra = duplicate_faces(mesh);
     if extra.is_empty() {
-        return 0;
+        return Vec::new();
     }
     let mut dropped = vec![false; mesh.faces.len()];
     for index in &extra {
@@ -31,55 +36,7 @@ pub fn remove_duplicate_faces(mesh: &mut Mesh) -> usize {
         at += 1;
         keep
     });
-    extra.len()
-}
-
-/// Drops every face at an edge more faces walk one way than the other, and returns how
-/// many went.
-///
-/// What is left is wound consistently everywhere and closes wherever it did before, so
-/// what the drop opens is a boundary loop [`fill_holes`] closes. A boundary edge is a
-/// hole rather than a tangle, and the faces along one are kept.
-///
-/// Dropping a face can unbalance an edge that was balanced, so the pass repeats until one
-/// finds nothing; it ends because faces only ever go.
-pub fn remove_unbalanced_faces(mesh: &mut Mesh) -> usize {
-    let mut removed = 0;
-    loop {
-        let gone = drop_unbalanced(mesh);
-        if gone == 0 {
-            return removed;
-        }
-        removed += gone;
-    }
-}
-
-/// One pass of [`remove_unbalanced_faces`].
-fn drop_unbalanced(mesh: &mut Mesh) -> usize {
-    let uses = edge_uses(mesh);
-    let degenerate = degenerate_faces(mesh);
-    let mut dropped = vec![false; mesh.faces.len()];
-    let mut gone = 0;
-    for group in edge_groups(&uses) {
-        if group.len() == 1 || balanced(group, &degenerate) {
-            continue;
-        }
-        for edge_use in group {
-            let slot = &mut dropped[edge_use.face as usize];
-            gone += usize::from(!*slot);
-            *slot = true;
-        }
-    }
-    if gone == 0 {
-        return 0;
-    }
-    let mut at = 0;
-    mesh.faces.retain(|_| {
-        let keep = !dropped[at];
-        at += 1;
-        keep
-    });
-    gone
+    extra.into_iter().map(|index| index as u32).collect()
 }
 
 /// What closing the boundary loops of a mesh added to it.
@@ -124,19 +81,24 @@ pub fn fill_holes(mesh: &mut Mesh) -> Filled {
 /// The mesh's boundary loops, each in the direction a patch closing it is wound, and how
 /// many ends were reached without coming back round.
 ///
-/// A boundary edge is used by one face, so the patch across it walks it the other way:
-/// following those reversed edges gives a loop whose triangles agree with the surface.
+/// An edge used an odd number of times cannot pair off without one more face: a hole's
+/// edge is used once, the foot of a fin three times. The patch walks it the way the
+/// surface is short of, so following those edges gives loops whose triangles agree with
+/// the surface; a fin is thereby closed by its own reverse, which then cancels with it.
 fn boundary_loops(mesh: &Mesh) -> (Vec<Vec<u32>>, usize) {
     let uses = edge_uses(mesh);
     let mut onwards: FastMap<u32, Vec<u32>> = FastMap::default();
     let mut starts = Vec::new();
-    for group in edge_groups(&uses) {
-        if let [hole] = group {
-            let (from, to) = if hole.forward {
-                (hole.edge.1, hole.edge.0)
-            } else {
-                hole.edge
-            };
+    for group in edge_groups(&uses).filter(|group| group.len() % 2 == 1) {
+        let forward = group.iter().filter(|edge_use| edge_use.forward).count();
+        let backward = group.len() - forward;
+        let (low, high) = group[0].edge;
+        let (from, to) = if forward > backward {
+            (high, low)
+        } else {
+            (low, high)
+        };
+        for _ in 0..forward.abs_diff(backward) {
             onwards.entry(from).or_default().push(to);
             starts.push(from);
         }
@@ -177,58 +139,117 @@ fn patch(mesh: &mut Mesh, ring: &[u32]) -> usize {
     if ring.len() < 3 {
         return 0;
     }
-    if ring.len() == 3 {
-        mesh.faces.push([ring[0], ring[1], ring[2]]);
-        return 1;
-    }
-    let Some(flat) = flatten(mesh, ring) else {
-        return 0;
-    };
-    let corners: Vec<u32> = (0..ring.len() as u32).collect();
-    let faces = triangulate(&corners, &[], &flat);
-    // A ring whose projection folds over itself comes back short, and what is missing
-    // would be a hole again; a fan at least closes it.
-    if faces.len() + 2 != ring.len() {
-        return fan(mesh, ring);
-    }
-    mesh.faces.extend(faces.iter().map(|face| {
-        [
-            ring[face[0] as usize],
-            ring[face[1] as usize],
-            ring[face[2] as usize],
-        ]
-    }));
-    faces.len()
-}
-
-/// The loop in the two dimensions of its own plane, wound as it is round the plane's
-/// normal, which is the loop's own.
-fn flatten(mesh: &Mesh, ring: &[u32]) -> Option<Vec<Vec2>> {
     let points: Vec<Vec3> = ring
         .iter()
         .map(|index| *mesh.vertices.get(*index as usize).unwrap_or(&Vec3::ZERO))
         .collect();
-    // Newell's normal: the area-weighted normal of a loop that need not be flat, and
-    // independent of where the loop stands.
-    let mut normal = Vec3::ZERO;
-    for (at, point) in points.iter().enumerate() {
-        normal += point.cross(points[(at + 1) % points.len()]);
+    let minimal = (ring.len() <= MAX_MINIMAL_RING)
+        .then(|| least_area(&points))
+        .flatten();
+    let Some(faces) = minimal.or_else(|| ear_clipped(&points)) else {
+        // A ring whose projection folds over itself would be a hole again if left short;
+        // a fan at least closes it. One with no plane has nothing a fan could lie in.
+        return if newell(&points).length_squared() < MIN_NORMAL {
+            0
+        } else {
+            fan(mesh, ring)
+        };
+    };
+    mesh.faces.extend(
+        faces
+            .iter()
+            .map(|face| face.map(|corner| ring[corner as usize])),
+    );
+    faces.len()
+}
+
+/// The triangulation of a loop of corners with the least total area, by dynamic
+/// programming over its spans, with no sliver in it. `None` when every triangulation
+/// holds one, which a loop along a line does.
+///
+/// On a flat loop the least area is the loop's own and only a triangulation that does
+/// not overlap itself reaches it; on a curved one it is the tightest skin across.
+fn least_area(points: &[Vec3]) -> Option<Vec<[u32; 3]>> {
+    let n = points.len();
+    let mut cost = vec![0.0f64; n * n];
+    let mut split = vec![0u32; n * n];
+    for span in 2..n {
+        for first in 0..n - span {
+            let last = first + span;
+            let mut best = (f64::INFINITY, 0);
+            for middle in first + 1..last {
+                let inner = cost[first * n + middle] + cost[middle * n + last];
+                if inner >= best.0 {
+                    continue;
+                }
+                if let Some(area) = weight(points[first], points[middle], points[last])
+                    && inner + area < best.0
+                {
+                    best = (inner + area, middle as u32);
+                }
+            }
+            cost[first * n + last] = best.0;
+            split[first * n + last] = best.1;
+        }
     }
+    if !cost[n - 1].is_finite() {
+        return None;
+    }
+
+    let mut faces = Vec::with_capacity(n - 2);
+    let mut spans = vec![(0, n - 1)];
+    while let Some((first, last)) = spans.pop() {
+        if last - first < 2 {
+            continue;
+        }
+        let middle = split[first * n + last] as usize;
+        faces.push([first as u32, middle as u32, last as u32]);
+        spans.push((first, middle));
+        spans.push((middle, last));
+    }
+    Some(faces)
+}
+
+/// The area of a triangle the patch may use, mm², or `None` for a sliver.
+fn weight(a: Vec3, b: Vec3, c: Vec3) -> Option<f64> {
+    let twice = f64::from((b - a).cross(c - a).length());
+    let longest = (b - a)
+        .length_squared()
+        .max((c - b).length_squared())
+        .max((a - c).length_squared());
+    (twice > MIN_ASPECT * f64::from(longest)).then_some(twice / 2.0)
+}
+
+/// The loop ear clipped in its own plane, or `None` when it has none or its projection
+/// folds over itself.
+fn ear_clipped(points: &[Vec3]) -> Option<Vec<[u32; 3]>> {
+    let normal = newell(points);
     if normal.length_squared() < MIN_NORMAL {
         return None;
     }
     let across = normal.normalize().any_orthonormal_vector();
     let up = normal.normalize().cross(across);
-    Some(
-        points
-            .iter()
-            .map(|point| Vec2::new(point.dot(across), point.dot(up)))
-            .collect(),
-    )
+    let flat: Vec<Vec2> = points
+        .iter()
+        .map(|point| Vec2::new(point.dot(across), point.dot(up)))
+        .collect();
+    let corners: Vec<u32> = (0..points.len() as u32).collect();
+    let faces = triangulate(&corners, &[], &flat);
+    (faces.len() + 2 == points.len()).then_some(faces)
+}
+
+/// Newell's normal: the area-weighted normal of a loop that need not be flat, and
+/// independent of where the loop stands.
+fn newell(points: &[Vec3]) -> Vec3 {
+    points
+        .iter()
+        .zip(points.iter().cycle().skip(1))
+        .map(|(point, next)| point.cross(*next))
+        .sum()
 }
 
 /// Closes the loop with a fan from one new vertex in its middle, which is what a loop too
-/// long, too folded or too tangled to ear clip gets.
+/// long, too folded or too tangled to triangulate otherwise gets.
 fn fan(mesh: &mut Mesh, ring: &[u32]) -> usize {
     let middle: Vec3 = ring
         .iter()
@@ -304,40 +325,23 @@ mod tests {
     }
 
     #[test]
-    fn a_face_nothing_can_be_wound_round_is_dropped_and_what_it_opens_is_closed() {
+    fn a_fin_is_closed_by_its_own_reverse_and_both_go() {
         let mut mesh = cube_with_a_fin();
-        assert!(!diagnose(&mesh).is_closed(), "the tangle opens the surface");
+        assert!(!diagnose(&mesh).is_closed(), "the fin opens the surface");
 
-        let removed = remove_unbalanced_faces(&mut mesh);
         let filled = fill_holes(&mut mesh);
-        let orientation = orient_outward(&mut mesh);
+        let dropped = remove_duplicate_faces(&mut mesh);
 
-        assert!(removed > 0, "the tangled faces go");
-        assert_eq!(filled.loops_left, 0);
-        assert!(diagnose(&mesh).is_closed(), "and what went is closed again");
-        assert!(orientation.orientable);
-        assert!(
-            (signed_volume(&mesh) - 8.0).abs() < 1e-4,
-            "a 2 mm cube holds 8 mm^3 whatever was laid over it"
-        );
-    }
-
-    #[test]
-    fn a_mesh_that_closes_everywhere_keeps_every_face() {
-        let mut mesh = cube();
-        assert_eq!(remove_unbalanced_faces(&mut mesh), 0);
-        assert_eq!(mesh.faces, cube().faces);
-    }
-
-    #[test]
-    fn an_open_mesh_keeps_the_faces_along_its_hole() {
-        let mut mesh = cube_missing_top();
         assert_eq!(
-            remove_unbalanced_faces(&mut mesh),
-            0,
-            "a hole is not a tangle"
+            filled.loops_filled, 1,
+            "the fin's foot and free edges are one loop"
         );
-        assert_eq!(mesh.faces, cube_missing_top().faces);
+        assert_eq!(
+            dropped.len(),
+            2,
+            "the fin and the patch over it enclose nothing"
+        );
+        assert_eq!(mesh.faces, cube().faces);
     }
 
     #[test]
@@ -348,15 +352,27 @@ mod tests {
         mesh.faces.push([first[0], first[2], first[1]]);
         assert_eq!(diagnose(&mesh).duplicate_faces, 2);
 
-        assert_eq!(remove_duplicate_faces(&mut mesh), 2);
+        assert_eq!(remove_duplicate_faces(&mut mesh), vec![12, 13]);
         assert_eq!(mesh.faces, cube().faces);
         assert!(diagnose(&mesh).is_closed(), "the edges are manifold again");
+    }
+
+    /// A wall of no thickness inside a solid: two faces back to back over one triangle.
+    /// Dropping only one would leave the other's edges walked twice the same way.
+    #[test]
+    fn a_pair_laid_back_to_back_goes_whole() {
+        let mut mesh = cube();
+        mesh.faces.push([0, 1, 6]);
+        mesh.faces.push([0, 6, 1]);
+
+        assert_eq!(remove_duplicate_faces(&mut mesh), vec![12, 13]);
+        assert_eq!(mesh.faces, cube().faces);
     }
 
     #[test]
     fn a_mesh_with_nothing_drawn_twice_keeps_every_face() {
         let mut mesh = cube();
-        assert_eq!(remove_duplicate_faces(&mut mesh), 0);
+        assert!(remove_duplicate_faces(&mut mesh).is_empty());
         assert_eq!(mesh.faces.len(), 12);
     }
 
@@ -375,9 +391,9 @@ mod tests {
         let filled = fill_holes(&mut mesh);
 
         assert_eq!(filled.loops_filled, 1);
-        assert_eq!(filled.faces_added, 2, "a square loop ear clips into two");
+        assert_eq!(filled.faces_added, 2, "a square loop takes two triangles");
         assert_eq!(filled.loops_left, 0);
-        assert_eq!(mesh.vertices.len(), 8, "ear clipping adds no vertex");
+        assert_eq!(mesh.vertices.len(), 8, "a patch by area adds no vertex");
         assert!(diagnose(&mesh).is_closed());
     }
 
@@ -403,6 +419,26 @@ mod tests {
         assert_eq!(filled.faces_added, 4);
         assert!(diagnose(&mesh).is_closed());
         assert!((signed_volume(&mesh) - 8.0).abs() < 1e-4);
+    }
+
+    /// The loop round a missing top and side bends through a right angle, so it has no
+    /// plane: the least-area patch is the two squares that were there.
+    #[test]
+    fn a_hole_round_a_corner_is_closed_with_what_was_there() {
+        let whole = cube();
+        let faces = [&whole.faces[..2], &whole.faces[4..6], &whole.faces[8..]].concat();
+        let mut mesh = Mesh::new(whole.vertices, faces);
+        let filled = fill_holes(&mut mesh);
+
+        assert_eq!(filled.loops_filled, 1);
+        assert_eq!(filled.faces_added, 4, "two squares, two triangles each");
+        assert_eq!(mesh.vertices.len(), 8, "no fan, so no vertex of its own");
+        assert!(diagnose(&mesh).is_sound());
+        assert!(
+            (signed_volume(&mesh) - 8.0).abs() < 1e-4,
+            "a closed 2 mm cube encloses 8 mm³, got {}",
+            signed_volume(&mesh)
+        );
     }
 
     #[test]

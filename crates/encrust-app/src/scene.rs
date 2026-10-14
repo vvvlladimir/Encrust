@@ -77,10 +77,16 @@ pub struct ImportSummary {
 }
 
 impl ImportSummary {
-    pub fn new(welded: &Welded, orientation: Orientation, diagnostics: MeshDiagnostics) -> Self {
+    /// `doubled` is how many faces laid over others went after welding.
+    pub fn new(
+        welded: &Welded,
+        doubled: usize,
+        orientation: Orientation,
+        diagnostics: MeshDiagnostics,
+    ) -> Self {
         Self {
             vertices_merged: welded.vertices_merged,
-            faces_removed: welded.faces_removed(),
+            faces_removed: welded.faces_removed() + doubled,
             orientation,
             diagnostics,
         }
@@ -88,7 +94,7 @@ impl ImportSummary {
 
     /// Nothing about this model would make slicing produce garbage.
     pub fn is_sound(&self) -> bool {
-        self.diagnostics.is_sound() && self.orientation.orientable
+        self.diagnostics.is_sound()
     }
 
     /// What is still wrong with the mesh, in the words the window says it in. Empty for a
@@ -103,13 +109,6 @@ impl ImportSummary {
             ));
         }
         for (count, line) in [
-            (
-                // A boundary edge is unbalanced too, and is already named above as open.
-                diagnostics
-                    .unbalanced_edges
-                    .saturating_sub(diagnostics.boundary_edges),
-                "edges the surface cannot be wound round",
-            ),
             (diagnostics.degenerate_faces, "faces with no area"),
             (diagnostics.duplicate_faces, "faces drawn twice over"),
         ] {
@@ -117,10 +116,18 @@ impl ImportSummary {
                 lines.push(format!("{count} {line}"));
             }
         }
-        if !self.orientation.orientable {
-            lines.push("No consistent inside and outside, so slicing it is a guess".to_owned());
-        }
         lines
+    }
+
+    /// What is odd about the mesh but slices as it stands, so is said without asking.
+    pub fn notes(&self) -> Vec<String> {
+        let folded = self.diagnostics.folded_edges();
+        if folded == 0 {
+            return Vec::new();
+        }
+        vec![format!(
+            "{folded} edges where faces lie folded onto each other, sliced as they stand"
+        )]
     }
 
     /// What repair changed on the way in.
@@ -129,7 +136,7 @@ impl ImportSummary {
     /// every STL merges thousands and it says nothing about the model.
     pub fn repairs(&self) -> Vec<String> {
         [
-            (self.faces_removed, "collapsed faces removed"),
+            (self.faces_removed, "collapsed or doubled faces removed"),
             (
                 self.orientation.flipped_faces,
                 "faces turned the right way round",

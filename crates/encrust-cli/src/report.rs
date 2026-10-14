@@ -52,6 +52,8 @@ pub struct ImportReport {
     pub path: PathBuf,
     pub stats: MeshStats,
     pub welded: Welded,
+    /// Faces laid over others on the same corners that were dropped.
+    pub doubled: usize,
     pub diagnostics: Option<MeshDiagnostics>,
     pub orientation: Option<Orientation>,
     pub fit: Option<FitCheck>,
@@ -64,9 +66,8 @@ impl ImportReport {
             .diagnostics
             .as_ref()
             .is_none_or(MeshDiagnostics::is_sound);
-        let orientable = self.orientation.as_ref().is_none_or(|o| o.orientable);
         let fits = self.fit.as_ref().is_none_or(FitCheck::fits);
-        sound && orientable && fits
+        sound && fits
     }
 }
 
@@ -84,8 +85,16 @@ impl fmt::Display for ImportReport {
         writeln!(f)?;
 
         write!(f, "  triangles     {}", stats.faces)?;
-        if self.welded.faces_removed() > 0 {
-            write!(f, " ({} degenerate dropped)", self.welded.faces_removed())?;
+        let dropped: Vec<String> = [
+            (self.welded.faces_removed(), "degenerate"),
+            (self.doubled, "doubled"),
+        ]
+        .iter()
+        .filter(|(count, _)| *count > 0)
+        .map(|(count, what)| format!("{count} {what}"))
+        .collect();
+        if !dropped.is_empty() {
+            write!(f, " ({} dropped)", dropped.join(", "))?;
         }
         writeln!(f)?;
 
@@ -117,6 +126,14 @@ impl fmt::Display for ImportReport {
             writeln!(f, "  closed        {}", describe_closure(diagnostics))?;
             for defect in defects(diagnostics) {
                 writeln!(f, "  defect        {defect}")?;
+            }
+            let folded = diagnostics.folded_edges();
+            if folded > 0 {
+                // Sliced as they stand, so a note and not a defect: ADR 0269.
+                writeln!(
+                    f,
+                    "  note          {folded} edges where faces lie folded together"
+                )?;
             }
         }
 
@@ -156,13 +173,6 @@ fn describe_closure(diagnostics: &MeshDiagnostics) -> String {
 fn defects(diagnostics: &MeshDiagnostics) -> Vec<String> {
     let counts = [
         (diagnostics.boundary_edges, "open edges"),
-        (
-            // A boundary edge is unbalanced too, and is already counted as open.
-            diagnostics
-                .unbalanced_edges
-                .saturating_sub(diagnostics.boundary_edges),
-            "edges the surface cannot be wound round",
-        ),
         (diagnostics.degenerate_faces, "degenerate faces"),
         (diagnostics.duplicate_faces, "duplicate faces"),
         (diagnostics.unreferenced_vertices, "unused vertices"),
@@ -176,7 +186,10 @@ fn defects(diagnostics: &MeshDiagnostics) -> Vec<String> {
 
 fn describe_orientation(orientation: &Orientation) -> String {
     if !orientation.orientable {
-        return "not orientable, winding left as found".to_owned();
+        return match orientation.flipped_faces {
+            0 => "left as found where no turning mends it".to_owned(),
+            flipped => format!("fixed {flipped} inverted faces, the rest left as found"),
+        };
     }
     if orientation.inverted_shells > 0 {
         let shells = orientation.inverted_shells;

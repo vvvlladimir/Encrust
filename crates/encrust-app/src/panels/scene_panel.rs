@@ -309,9 +309,9 @@ fn row(
 
     let (eye, eye_response) = visibility_eye(ui, rect, object);
     let end = rect.right() - 10.0;
-    let name_right = match trouble(&object.summary) {
+    let (name_right, repair) = match trouble(&object.summary) {
         Some((mark, lines)) => import_mark(ui, rect, object, end, mark, &lines),
-        None => end,
+        None => (end, false),
     };
 
     let colors = theme::colors();
@@ -341,6 +341,9 @@ fn row(
 
     if let Some(asked) = asked {
         return Some(asked);
+    }
+    if repair {
+        return Some(Clicked::Repair);
     }
     if eye_response.clicked() {
         return Some(Clicked::Visibility);
@@ -435,8 +438,9 @@ enum Mark {
     Broken,
 }
 
-/// The mark at the end of the row, with what import found behind a click. Returns where
-/// it starts.
+/// The mark at the end of the row, with what import found behind a click, and the repair
+/// beside it on a model that is broken. Returns where it starts, and whether the repair
+/// was asked for.
 fn import_mark(
     ui: &mut egui::Ui,
     rect: Rect,
@@ -444,7 +448,7 @@ fn import_mark(
     right: f32,
     mark: Mark,
     lines: &[String],
-) -> f32 {
+) -> (f32, bool) {
     let spot = match mark {
         Mark::Repaired => {
             Rect::from_center_size(egui::pos2(right - 17.0, rect.center().y), vec2(18.0, 18.0))
@@ -468,13 +472,18 @@ fn import_mark(
     });
     paint_mark(ui.painter(), spot, mark, response.hovered());
     focus_ring(ui, &response, theme::R_CONTROL);
+    let mut repair = false;
     egui::Popup::menu(&response).show(|ui| {
         ui.set_max_width(POPUP_W);
         for line in lines {
             hint(ui, line);
         }
+        if mark == Mark::Broken {
+            ui.add_space(4.0);
+            repair = ui.button("Repair").clicked();
+        }
     });
-    spot.left()
+    (spot.left(), repair)
 }
 
 fn paint_mark(painter: &egui::Painter, spot: Rect, mark: Mark, hovered: bool) {
@@ -487,7 +496,8 @@ fn paint_mark(painter: &egui::Painter, spot: Rect, mark: Mark, hovered: bool) {
     painter.text(spot.center(), Align2::CENTER_CENTER, text, font, color);
 }
 
-/// What is wrong with a model and what repair already did, and how loudly to say it.
+/// What is wrong with a model, what is merely odd about it and what repair already did,
+/// and how loudly to say it.
 /// `None` when the mesh came in clean, which is most of them.
 fn trouble(summary: &ImportSummary) -> Option<(Mark, Vec<String>)> {
     let defects = summary.defects();
@@ -496,7 +506,7 @@ fn trouble(summary: &ImportSummary) -> Option<(Mark, Vec<String>)> {
     } else {
         Mark::Broken
     };
-    let lines = [defects, summary.repairs()].concat();
+    let lines = [defects, summary.notes(), summary.repairs()].concat();
     (!lines.is_empty()).then_some((mark, lines))
 }
 
@@ -509,7 +519,7 @@ mod tests {
     use super::*;
     use crate::scene::Imported;
 
-    fn summary(orientable: bool, boundary_edges: usize) -> ImportSummary {
+    fn summary(unbalanced_edges: usize, boundary_edges: usize) -> ImportSummary {
         let mesh = Mesh::new(vec![Vec3::ZERO, Vec3::X, Vec3::Y], vec![[0, 1, 2]]);
         ImportSummary {
             vertices_merged: 0,
@@ -517,11 +527,11 @@ mod tests {
             orientation: Orientation {
                 flipped_faces: 0,
                 inverted_shells: 0,
-                orientable,
+                orientable: unbalanced_edges == boundary_edges,
             },
             diagnostics: MeshDiagnostics {
                 boundary_edges,
-                unbalanced_edges: boundary_edges,
+                unbalanced_edges,
                 ..core_geometry::diagnose(&mesh)
             },
         }
@@ -540,7 +550,7 @@ mod tests {
                     format!("model-{at}.stl"),
                     Arc::clone(&mesh),
                     Transform::default(),
-                    summary(true, 0),
+                    summary(0, 0),
                 ))
             })
             .collect();
@@ -566,14 +576,14 @@ mod tests {
 
     #[test]
     fn a_clean_import_says_nothing() {
-        assert!(trouble(&summary(true, 0)).is_none());
+        assert!(trouble(&summary(0, 0)).is_none());
     }
 
     #[test]
     fn merging_the_vertices_of_an_stl_is_not_trouble() {
         let merged = ImportSummary {
             vertices_merged: 28,
-            ..summary(true, 0)
+            ..summary(0, 0)
         };
         assert!(
             trouble(&merged).is_none(),
@@ -582,17 +592,24 @@ mod tests {
     }
 
     #[test]
-    fn a_mesh_that_cannot_be_oriented_is_named_broken() {
-        let (mark, lines) = trouble(&summary(false, 4)).expect("a torn mesh has something to say");
+    fn a_mesh_with_a_hole_is_named_broken() {
+        let (mark, lines) = trouble(&summary(4, 4)).expect("a torn mesh has something to say");
         assert_eq!(mark, Mark::Broken);
-        assert_eq!(lines.len(), 2, "the open edges and the orientation");
+        assert_eq!(lines.len(), 1, "the open edges, and nothing more");
+    }
+
+    #[test]
+    fn faces_folded_onto_each_other_get_the_quiet_mark() {
+        let (mark, lines) = trouble(&summary(4, 0)).expect("a fold is worth a line");
+        assert_eq!(mark, Mark::Repaired);
+        assert_eq!(lines.len(), 1);
     }
 
     #[test]
     fn a_mesh_repair_only_tidied_gets_the_quiet_mark() {
         let tidied = ImportSummary {
             faces_removed: 2,
-            ..summary(true, 0)
+            ..summary(0, 0)
         };
         let (mark, lines) = trouble(&tidied).expect("a dropped face is worth a line");
         assert_eq!(mark, Mark::Repaired);

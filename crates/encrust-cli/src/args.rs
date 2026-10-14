@@ -56,7 +56,7 @@ pub struct ImportArgs {
     #[arg(long, value_name = "MM", default_value_t = DEFAULT_WELD_TOLERANCE)]
     pub weld_tolerance: Scalar,
 
-    /// Skip the topology check and the orientation fix.
+    /// Skip the topology check, dropping faces laid over others, and the orientation fix.
     #[arg(long)]
     pub no_validate: bool,
 

@@ -26,11 +26,18 @@ pins down.
 
 The cell is **2.5 tolerances** across. At that width the half of the cell a vertex sits in
 on each axis decides which side a match can be on, so eight cells are worth probing
-instead of 27 — a match in any other would be at least 1.25 tolerances away. Over the 2.6
-million vertices of an unwelded million-triangle STL, that is most of the cost. Cells are
+instead of 27 — a match in any other would be at least 1.25 tolerances away. Cells are
 hashed with `FastHasher` rather than `SipHash`: a cell derived from our own vertex is not
-an attacker's key, and there are millions of them. The bucket map and output list are
-reserved for a sixth of the input, which is about what an STL leaves.
+an attacker's key, and there are millions of them. A cell's representatives are searched
+in the order they were kept.
+
+Few vertices ever reach the grid (ADR 0271). The exact copies go first, through a parallel
+sort over bit patterns: an exporter writes a shared corner with the same bits every time,
+so this leaves about a sixth of an STL's vertices. Of those, a point with no other point in
+its eight probe cells can merge with nothing, and no point can merge into it. Such points
+are found in parallel by binary search in a sorted list of occupied cells. Only the rest,
+with every copy of them, go through the grid in their original order, which is why the
+result is exactly what one vertex at a time gave.
 
 The cell has a floor of `1e-7` mm so a zero tolerance still hashes finitely, which also
 puts `-0.0` and `0.0` in one cell where exact comparison would not.
@@ -90,56 +97,63 @@ lives with the plane-intersection epsilon.
 face normals are never consulted — exporters write them wrong often enough that winding
 order is the only trustworthy signal.
 
-1. Build face adjacency from the manifold edge groups, tagging each link with whether the
-   faces already agree.
-2. Breadth-first per component, assigning a flip flag: a face keeps its winding when it
-   agrees with the neighbour that reached it. An assigned neighbour that disagrees means
-   no consistent orientation exists — a Möbius strip — and the mesh is reported as not
-   orientable.
-3. Within a component only the two assignments matter, so the smaller one wins: the repair
-   is minimal and independent of the seed. Without it, a cube with three inverted faces
-   would be "fixed" by flipping the other nine.
-4. Per closed component, sum `a · (b × c)`: six times the enclosed volume, negative
+1. Link every two faces sharing an edge no third face uses, tagging the link with whether
+   they already agree.
+2. Union the agreeing links into patches. A patch is turned as a whole, so a conflict
+   inside one — a half twist, or two bodies' walls folded onto each other — is left where
+   the file put it rather than pushed around by a walk.
+3. The disagreeing links between two patches form a seam. Seams are honoured heaviest
+   first through a union-find that keeps parity: joining two patches ties them to opposite
+   turnings, and a seam whose patches are already tied is skipped.
+4. Within a group of tied patches only the two assignments matter, so the one turning
+   fewer faces wins: the repair is minimal, and without it a cube with three inverted
+   faces would be "fixed" by flipping the other nine.
+5. If the turning leaves as many seam edges in conflict as the file had, or more, the
+   file's winding stands. Orientation never makes a file worse (ADR 0269).
+6. Per closed component, sum `a · (b × c)`: six times the enclosed volume, negative
    exactly when the shell is wound inwards, so the shell is flipped. Open components are
    skipped — with a hole there is no inside to be on the wrong side of.
 
-Step 4 is why `Orientation` reports `inverted_shells` apart from `flipped_faces`: a model
-entirely inside out is a different problem from a few stray faces.
+Step 6 is why `Orientation` reports `inverted_shells` apart from `flipped_faces`: a model
+entirely inside out is a different problem from a few stray faces. `orientable` is false
+when a conflict is left, which is a note and not a defect: the fill rule takes what each
+body encloses (ADR 0269).
 
-## Closing holes and dropping faces
+## Faces laid over others
 
-These are the parts of repair nobody runs without being asked: one adds surface the file
-never had, the others throw faces away, so the window puts the question to the user first
-(ADR 0194, 0195, 0205). The order is drop the duplicates, orient, drop the unbalanced,
-fill, orient.
+`remove_duplicate_faces(mesh)` looks at faces over the same three vertices. A pair wound
+opposite ways is a wall of no thickness that encloses nothing, so it goes whole. Dropping
+one of them would leave the other walking its edges the same way as a neighbour. Of a stack
+wound one way, the first face stays. Neither changes what the surface encloses, so import
+runs it after welding and before orientation, which would otherwise read a doubled edge
+as a branch (ADR 0270). The faces are found by the same counting sort as the edge table,
+keyed by sorted corners.
 
-`remove_duplicate_faces(mesh)` keeps the first face over any three vertices and drops the
-rest, winding ignored. It goes first: an edge a duplicate has tripled is neither a
-boundary nor a manifold edge, so neither the walk below nor the orientation pass can get
-through it.
+## Closing holes
 
-`remove_unbalanced_faces(mesh)` drops every face at an edge that does not pair off, and
-repeats until a pass finds nothing, since dropping a face can unbalance a neighbouring
-edge. What is left is wound consistently everywhere — an orientation can only fail where
-two faces walk one edge the same way — and the holes it opens are loops the fill closes.
-Faces along a boundary edge are kept: a hole is not a tangle. Orientation runs before it so
-that a shell written inside out is turned round rather than taken apart.
+Repair adds surface the file never had, so it runs only when the user presses Repair
+(ADR 0194, 0270). The order is drop the doubled faces, orient, fill, drop the doubled
+faces again, orient. If the result has more boundary edges, degenerate faces and
+duplicates between them than the input had, the input stands.
 
-The boundary edges — the groups of one in the edge table — are followed into loops
-*against* the direction the face that owns each edge walks it. A patch triangulated in that
-order is therefore wound the same way as the surface around it, and `orient_outward`
-afterwards has nothing to flip.
+An edge used an odd number of times cannot pair off without one more face. A hole's edge
+is used once, and the foot of a fin three times. The patch walks each such edge the way
+the surface is short of, so the loops it follows are wound like the surface around them,
+and `orient_outward` afterwards has nothing to flip. A fin's loop is closed by the fin's
+own reverse, which the second drop of doubled faces cancels against it.
 
-Each loop is flattened into the plane of its own Newell normal, which is the area-weighted
-normal of a ring that need not be flat and does not depend on where the ring stands. A
-normal of zero means the loop is a line: there is no plane to lay triangles in, so the loop
-is left open and counted in `loops_left`.
+A loop of up to 256 corners is patched by the triangulation of least total area, found by
+dynamic programming over its spans: the cost of a span is the cheapest split of it into
+two smaller spans and a triangle. A triangle whose doubled area is under `1e-6` of its
+longest edge squared is a sliver and is not allowed. On a flat loop, only a triangulation
+that does not overlap itself reaches the loop's own area. On a curved loop, the result is
+the tightest skin across it, not a fair continuation of the surface.
 
-A flat ring is filled by `triangulate`, the same `earcutr` call a plane cut caps its halves
-with (ADR 0089). It returns `n - 2` triangles for a ring of `n` corners; anything short of
-that means the projection folds over itself, and the loop is closed instead by a fan from
-one new vertex at its middle. The patch is flat either way: a hole across a curve comes out
-as a chord, which the user can see and undo.
+A longer loop, or one every triangulation of which holds a sliver, is flattened into the
+plane of its Newell normal and ear clipped by `triangulate`, the `earcutr` call a plane cut
+caps its halves with (ADR 0089). If that comes back short of `n - 2` triangles, the loop is
+fanned from one new vertex at its middle. A Newell normal of zero means the loop is a line,
+which is left open and counted in `loops_left`.
 
 ## Placement
 
