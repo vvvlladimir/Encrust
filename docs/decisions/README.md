@@ -50,7 +50,7 @@ Grouped by what the decision governs; the number is still the order it was taken
 | [0162](0162-release-please-cuts-the-release.md) | release-please cuts the release, and the build workflow is called by it | Accepted |
 | [0172](0172-the-window-offers-a-signed-update-and-never-applies-one.md) | The window offers a signed update, and never applies one by itself | Accepted; the default of the daily check is amended by 0213 |
 | [0213](0213-the-daily-update-check-is-on-by-default.md) | The daily update check is on by default | Accepted |
-| [0173](0173-a-pull-request-runs-linux-and-main-runs-the-rest.md) | A pull request runs Linux, and main runs the rest | Accepted |
+| [0173](0173-a-pull-request-runs-linux-and-main-runs-the-rest.md) | A pull request runs Linux, and main runs the rest | Superseded by 0273 |
 | [0174](0174-a-plate-is-a-crate-live-and-written-down.md) | A plate is a crate, live and written down | Accepted |
 | [0176](0176-the-command-line-is-encrust-with-subcommands.md) | The command line is `encrust`, with subcommands, JSON and a clean Ctrl-C | Accepted |
 | [0177](0177-the-cores-build-for-a-browser.md) | The cores build for a browser: wasm32, one thread, no clock, a cavity budget | Accepted |
@@ -61,6 +61,7 @@ Grouped by what the decision governs; the number is still the order it was taken
 | [0214](0214-the-libraries-terms-ship-generated-from-the-lockfile.md) | The libraries' terms ship with the binary, generated from the lockfile | Accepted |
 | [0215](0215-the-panels-are-pictured-and-compared-by-hand.md) | The panels are pictured and compared, by hand | Accepted |
 | [0272](0272-a-dependency-is-built-once-at-one-feature-set.md) | A dependency is built once, at one feature set, and a bump is checked once over the workspace | Accepted |
+| [0273](0273-ci-checks-a-tree-once-and-the-other-platforms-nightly.md) | CI checks a tree once, and the other platforms nightly | Accepted |
 
 ### Geometry
 

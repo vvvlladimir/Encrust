@@ -39,9 +39,11 @@ jobs:
         with:
           shared-key: fuzz
           workspaces: fuzz
+          save-if: ${{ github.ref == 'refs/heads/main' }}
 
-      - name: Install cargo-fuzz
-        run: cargo install cargo-fuzz --locked
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-fuzz
 
       - name: Build every target
         working-directory: fuzz
@@ -75,9 +77,11 @@ jobs:
         with:
           shared-key: fuzz
           workspaces: fuzz
+          save-if: ${{ github.ref == 'refs/heads/main' }}
 
-      - name: Install cargo-fuzz
-        run: cargo install cargo-fuzz --locked
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-fuzz
 
       # 65536 bytes is above every header and layer table these containers have, so a longer input
       # buys slower iterations rather than deeper coverage.

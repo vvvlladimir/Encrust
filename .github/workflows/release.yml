@@ -107,10 +107,8 @@ jobs:
           rustup show
           rustup target add ${{ matrix.target }}
 
-      - uses: Swatinem/rust-cache@v2
-        with:
-          key: ${{ matrix.target }}
-
+      # No rust-cache: a release target directory is gone by the next release, evicted after seven
+      # days, and only crowded CI's caches out of the 10 GB until then. See ADR-0273.
       - name: Build
         run: >
           cargo build --release --locked --target ${{ matrix.target }}
@@ -137,8 +135,9 @@ jobs:
             *) tar -czf "$ARCHIVE" -C staging Encrust ;;
           esac
 
-      - name: Install cargo-packager
-        run: cargo install cargo-packager --locked
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-packager
 
       # linuxdeploy is itself an AppImage, and a runner has no FUSE to mount it with.
       - name: Package the installers
@@ -193,15 +192,18 @@ jobs:
           rustup toolchain install "$TOOLCHAIN" --profile minimal --component rust-src
           rustup target add wasm32-unknown-unknown --toolchain "$TOOLCHAIN"
 
-      - uses: Swatinem/rust-cache@v2
-        with:
-          shared-key: web-release
-
       # wasm-bindgen-cli must be the exact version of the crate, which the lock names.
-      - name: Install wasm-bindgen and wasm-opt
+      - id: bindgen
         run: |
           version=$(grep -A1 '^name = "wasm-bindgen"$' Cargo.lock | sed -n 's/^version = "\(.*\)"$/\1/p')
-          cargo install wasm-bindgen-cli --version "$version" --locked
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: wasm-bindgen@${{ steps.bindgen.outputs.version }}
+
+      - name: Install wasm-opt
+        run: |
           curl -fsSL "https://github.com/WebAssembly/binaryen/releases/download/$BINARYEN/binaryen-$BINARYEN-x86_64-linux.tar.gz" \
             | tar -xz -C "$RUNNER_TEMP"
           echo "$RUNNER_TEMP/binaryen-$BINARYEN/bin" >> "$GITHUB_PATH"

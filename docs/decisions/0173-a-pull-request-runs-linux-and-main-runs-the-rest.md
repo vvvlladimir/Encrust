@@ -1,6 +1,6 @@
 # 0173. A pull request runs Linux, and main runs the rest
 
-- **Status:** Accepted
+- **Status:** Superseded by 0273
 - **Date:** 2026-10-02
 
 ## Context

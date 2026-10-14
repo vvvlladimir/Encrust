@@ -31,6 +31,12 @@ on:
 permissions:
   contents: read
 
+# The same as ci.yml's, which rust-cache hashes into the key the notices job shares with it.
+env:
+  CARGO_TERM_COLOR: always
+  CARGO_PROFILE_DEV_DEBUG: "0"
+  CARGO_PROFILE_TEST_DEBUG: "0"
+
 concurrency:
   group: audit-${{ github.ref }}
   cancel-in-progress: true
@@ -54,12 +60,14 @@ jobs:
       - name: Install the pinned toolchain
         run: rustup show
 
+      # Linux CI's cache already holds xtask, so this only reads it.
       - uses: Swatinem/rust-cache@v2
         with:
-          shared-key: notices
+          shared-key: linux
+          save-if: false
 
-      # The binary is behind a feature that is not on by default.
-      - name: Install cargo-about
-        run: cargo install cargo-about --locked --features cli
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-about
 
       - run: cargo run -q -p xtask --locked -- licenses --check

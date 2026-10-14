@@ -1,8 +1,9 @@
 name: CI
 
 # Everything that must hold before a change reaches main: the three checks from AGENTS.md, the
-# rustdoc rules and the rust-version floor. A pull request runs Linux only; macOS, Windows and the
-# floor run on main, or on demand before a merge. See ADR-0173.
+# rustdoc rules and the rust-version floor. Linux runs on a pull request and on main, skipped for a
+# tree that already passed; macOS, Windows, the threaded web build and the floor run nightly when
+# main moved, or on demand before a merge. See ADR-0273.
 
 on:
   push:
@@ -13,14 +14,17 @@ on:
   pull_request:
     types: [opened, synchronize, reopened, ready_for_review]
     paths-ignore: ["docs/**", "**.md"]
+  schedule:
+    - cron: "0 3 * * *"
   workflow_dispatch:
 
 permissions:
   contents: read
 
-# A second push to the same branch makes the first run's answer worthless.
+# A second push to the same branch makes the first run's answer worthless; the nightly run on main
+# is in its own group so that a push does not cancel it.
 concurrency:
-  group: ci-${{ github.ref }}
+  group: ci-${{ github.event_name }}-${{ github.ref }}
   cancel-in-progress: true
 
 env:
@@ -32,9 +36,48 @@ env:
   CARGO_PROFILE_TEST_DEBUG: "0"
 
 jobs:
+  # A squash merge of an up-to-date pull request lands the tree its run already passed, and a night
+  # with no push to main has nothing new to check. See ADR-0273.
+  gate:
+    runs-on: ubuntu-latest
+    permissions:
+      actions: read
+      contents: read
+    outputs:
+      skip: ${{ steps.tree.outputs.skip == 'true' || steps.nightly.outputs.skip == 'true' }}
+    steps:
+      # A run passing is not enough: a draft's run passes with every job skipped.
+      - id: tree
+        if: github.event_name == 'push'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          tree_of() { gh api "repos/$GITHUB_REPOSITORY/commits/$1" --jq .commit.tree.sha; }
+          tree=$(tree_of "$GITHUB_SHA")
+          gh run list --repo "$GITHUB_REPOSITORY" --workflow ci.yml --status success --limit 30 \
+            --json databaseId,headSha --jq '.[] | "\(.databaseId) \(.headSha)"' |
+          while read -r id sha; do
+            [ "$(tree_of "$sha")" = "$tree" ] || continue
+            gh run view "$id" --repo "$GITHUB_REPOSITORY" --json jobs \
+              --jq '.jobs[] | select(.name == "rust (ubuntu)") | .conclusion' | grep -qx success || continue
+            echo "run $id passed this tree"
+            echo skip=true >> "$GITHUB_OUTPUT"
+            break
+          done
+
+      - id: nightly
+        if: github.event_name == 'schedule'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          last=$(gh run list --repo "$GITHUB_REPOSITORY" --workflow ci.yml --event schedule \
+            --status success --limit 1 --json headSha --jq '.[0].headSha // ""')
+          if [ "$last" = "$GITHUB_SHA" ]; then echo skip=true >> "$GITHUB_OUTPUT"; fi
+
   linux:
     name: rust (ubuntu)
-    if: github.event.pull_request.draft != true
+    needs: gate
+    if: needs.gate.outputs.skip != 'true' && github.event.pull_request.draft != true
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
@@ -46,7 +89,12 @@ jobs:
       - name: Install the pinned toolchain
         run: rustup show
 
+      # Shared with the licence check in audit.yml. Only main saves: a pull request's cache is
+      # visible to that pull request alone and only pushes main's out of the 10 GB.
       - uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: linux
+          save-if: ${{ github.ref == 'refs/heads/main' }}
 
       - name: Format
         run: cargo fmt --all --check
@@ -58,10 +106,13 @@ jobs:
       - name: Architecture
         run: cargo run -q -p xtask --locked -- arch
 
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-hakari
+
       # Every crate builds a dependency at the one feature set workspace-hack holds (ADR 0272).
       - name: Workspace hack
         run: |
-          cargo install cargo-hakari --locked
           cargo hakari generate --diff
           cargo hakari manage-deps --dry-run
 
@@ -88,7 +139,8 @@ jobs:
 
   platforms:
     name: rust (${{ matrix.os }})
-    if: github.event_name != 'pull_request'
+    needs: gate
+    if: needs.gate.outputs.skip != 'true' && contains(fromJSON('["schedule", "workflow_dispatch"]'), github.event_name)
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
@@ -101,6 +153,8 @@ jobs:
         run: rustup show
 
       - uses: Swatinem/rust-cache@v2
+        with:
+          save-if: ${{ github.ref == 'refs/heads/main' }}
 
       - name: Clippy
         run: cargo clippy --workspace --all-targets --locked -- -D warnings
@@ -109,10 +163,11 @@ jobs:
         run: cargo test --workspace --locked
 
   # The window as a browser runs it, on threads: a nightly compiler rebuilding the standard
-  # library, so it waits for main like the other platforms. See ADR 0181.
+  # library, so it runs nightly like the other platforms. See ADR 0181.
   web:
     name: web (threads)
-    if: github.event_name != 'pull_request'
+    needs: gate
+    if: needs.gate.outputs.skip != 'true' && contains(fromJSON('["schedule", "workflow_dispatch"]'), github.event_name)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
@@ -125,13 +180,15 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           shared-key: web
+          save-if: ${{ github.ref == 'refs/heads/main' }}
 
       - run: cargo xtask web --check
 
   # One source of truth: the toolchain checked here is the one Cargo.toml claims as its floor.
   msrv:
     name: msrv
-    if: github.event_name != 'pull_request'
+    needs: gate
+    if: needs.gate.outputs.skip != 'true' && contains(fromJSON('["schedule", "workflow_dispatch"]'), github.event_name)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
@@ -148,6 +205,7 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           shared-key: msrv
+          save-if: ${{ github.ref == 'refs/heads/main' }}
 
       # rust-toolchain.toml pins stable, and only this variable outranks it.
       - run: cargo check --workspace --all-targets --locked
@@ -159,7 +217,7 @@ jobs:
   # repositories and personal accounts; an organisation would need GITLEAKS_LICENSE.
   secrets:
     name: secret scan
-    if: github.event.pull_request.draft != true
+    if: github.event.pull_request.draft != true && github.event_name != 'schedule'
     runs-on: ubuntu-latest
     # The action lists a pull request's commits to scan only those.
     permissions:
