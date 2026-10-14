@@ -475,6 +475,10 @@ impl eframe::App for SlicerApp {
 
     fn on_exit(&mut self) {
         self.machine.updates.on_exit();
+        // Dropping the window resets its view's class under AppKit's Touch Bar observers,
+        // which aborts the process: https://github.com/AccessKit/accesskit/issues/823
+        #[cfg(target_os = "macos")]
+        std::process::exit(0);
     }
 }
 
