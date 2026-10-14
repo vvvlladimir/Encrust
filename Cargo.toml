@@ -1,6 +1,6 @@
 [workspace]
 resolver = "3"
-members = ["crates/*"]
+members = ["crates/*", "workspace-hack"]
 # `cargo fuzz` builds with `-Z` flags that need nightly, so the fuzz crate keeps its own
 # lockfile and toolchain; see docs/decisions/0161.
 exclude = ["fuzz"]

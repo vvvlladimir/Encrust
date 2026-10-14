@@ -25,3 +25,6 @@ getrandom-03 = { workspace = true, features = ["wasm_js"] }
 
 [lints]
 workspace = true
+
+[dependencies]
+workspace-hack = { version = "0.1", path = "../../workspace-hack" }

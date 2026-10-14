@@ -937,6 +937,7 @@ dependencies = [
  "core-slicer",
  "criterion",
  "glam 0.33.12",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -960,6 +961,7 @@ dependencies = [
  "serde_json",
  "thiserror 2.0.21",
  "tracing",
+ "workspace-hack",
  "zip 9.0.3",
 ]
 
@@ -974,6 +976,7 @@ dependencies = [
  "printer-profiles",
  "serde",
  "thiserror 2.0.21",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -1003,6 +1006,7 @@ dependencies = [
  "proptest",
  "rayon",
  "serde",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -1041,6 +1045,7 @@ dependencies = [
  "threemf2",
  "tobj",
  "tracing",
+ "workspace-hack",
  "zip 9.0.3",
 ]
 
@@ -1064,6 +1069,7 @@ dependencies = [
  "printer-profiles",
  "rayon",
  "thiserror 2.0.21",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -1075,6 +1081,7 @@ dependencies = [
  "criterion",
  "rayon",
  "thiserror 2.0.21",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -1086,6 +1093,7 @@ dependencies = [
  "glam 0.33.12",
  "proptest",
  "thiserror 2.0.21",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -1101,6 +1109,7 @@ dependencies = [
  "serde",
  "thiserror 2.0.21",
  "tracing",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -1114,6 +1123,7 @@ dependencies = [
  "printer-profiles",
  "rayon",
  "serde",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -1121,6 +1131,7 @@ name = "core-thumbnail"
 version = "0.3.0"
 dependencies = [
  "core-geometry",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -1132,6 +1143,7 @@ dependencies = [
  "rayon",
  "serde",
  "thiserror 2.0.21",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -1637,6 +1649,7 @@ dependencies = [
  "web-time",
  "wgpu",
  "winresource",
+ "workspace-hack",
  "zip 9.0.3",
 ]
 
@@ -1673,6 +1686,7 @@ dependencies = [
  "toml",
  "tracing",
  "tracing-subscriber",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -1685,6 +1699,7 @@ dependencies = [
  "wasm-bindgen",
  "wasm-bindgen-futures",
  "web-sys",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -1950,6 +1965,7 @@ dependencies = [
  "printer-profiles",
  "thiserror 2.0.21",
  "tracing",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -1962,6 +1978,7 @@ dependencies = [
  "printer-profiles",
  "thiserror 2.0.21",
  "tracing",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -1972,6 +1989,7 @@ dependencies = [
  "core-raster",
  "printer-profiles",
  "tracing",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -1982,6 +2000,7 @@ dependencies = [
  "core-raster",
  "printer-profiles",
  "tracing",
+ "workspace-hack",
  "zip 9.0.3",
 ]
 
@@ -1993,6 +2012,7 @@ dependencies = [
  "core-raster",
  "printer-profiles",
  "tracing",
+ "workspace-hack",
  "zip 9.0.3",
 ]
 
@@ -2007,6 +2027,7 @@ dependencies = [
  "proptest",
  "thiserror 2.0.21",
  "tracing",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -2019,6 +2040,7 @@ dependencies = [
  "printer-profiles",
  "thiserror 2.0.21",
  "tracing",
+ "workspace-hack",
  "zip 9.0.3",
 ]
 
@@ -2033,6 +2055,7 @@ dependencies = [
  "glam 0.33.12",
  "printer-profiles",
  "tracing",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -3126,6 +3149,7 @@ dependencies = [
  "thiserror 2.0.21",
  "tracing",
  "ureq",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -3140,6 +3164,7 @@ dependencies = [
  "tracing",
  "tungstenite",
  "ureq",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -3907,6 +3932,7 @@ dependencies = [
  "serde_json",
  "thiserror 2.0.21",
  "tracing",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -3918,6 +3944,7 @@ dependencies = [
  "serde",
  "thiserror 2.0.21",
  "toml",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -5489,6 +5516,7 @@ dependencies = [
  "core-volume",
  "thiserror 2.0.21",
  "wasm-bindgen",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -6118,6 +6146,55 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1ebf944e87a7c253233ad6766e082e3cd714b5d03812acc24c318f549614536e"
 
 [[package]]
+name = "workspace-hack"
+version = "0.1.0"
+dependencies = [
+ "bitflags 2.13.2",
+ "bytemuck",
+ "clap",
+ "clap_builder",
+ "crc32fast",
+ "fastrand",
+ "flate2",
+ "getrandom 0.3.4",
+ "getrandom 0.4.3",
+ "half",
+ "hashbrown 0.17.1",
+ "http",
+ "httparse",
+ "image",
+ "libc",
+ "linux-raw-sys 0.12.1",
+ "log",
+ "memchr",
+ "nix",
+ "num-traits",
+ "once_cell",
+ "phf_shared",
+ "proc-macro2",
+ "quote",
+ "regex-automata",
+ "regex-syntax",
+ "rustix 1.1.5",
+ "serde",
+ "serde_core",
+ "simd-adler32",
+ "smallvec",
+ "syn 2.0.119",
+ "syn 3.0.6",
+ "thiserror 2.0.21",
+ "toml_datetime",
+ "toml_parser",
+ "tracing",
+ "tracing-core",
+ "windows-sys 0.52.0",
+ "windows-sys 0.59.0",
+ "windows-sys 0.60.2",
+ "windows-sys 0.61.2",
+ "winnow",
+]
+
+[[package]]
 name = "writeable"
 version = "0.6.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -6202,6 +6279,7 @@ dependencies = [
  "encrust-cli",
  "printer-profiles",
  "toml",
+ "workspace-hack",
 ]
 
 [[package]]

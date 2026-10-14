@@ -48,6 +48,7 @@ ctrlc.workspace = true
 rayon.workspace = true
 tracing.workspace = true
 tracing-subscriber.workspace = true
+workspace-hack = { version = "0.1", path = "../../workspace-hack" }
 
 [dev-dependencies]
 # The test reads back a `.goo` it asked for: its checksum and its layer codec.

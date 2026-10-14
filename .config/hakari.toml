@@ -1,0 +1,10 @@
+# Which features each dependency is built with, the same under every `-p`: docs/decisions/0272.
+hakari-package = "workspace-hack"
+dep-format-version = "4"
+resolver = "2"
+platforms = ["aarch64-apple-darwin", "x86_64-unknown-linux-gnu", "x86_64-pc-windows-msvc"]
+
+# The Objective-C runtime reaches the binaries only, so no core crate may carry it (rule 1),
+# and TLS in ureq stays the window's alone (ADR 0172).
+[final-excludes]
+third-party = [{ name = "objc2" }, { name = "block2" }, { name = "ureq" }]

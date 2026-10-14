@@ -18,6 +18,7 @@ getrandom = { workspace = true, features = ["std"] }
 serde.workspace = true
 thiserror.workspace = true
 toml.workspace = true
+workspace-hack = { version = "0.1", path = "../../workspace-hack" }
 
 # `web-engine` builds for a browser without `encrust-web` above it to pick the source.
 [target.'cfg(target_arch = "wasm32")'.dependencies]

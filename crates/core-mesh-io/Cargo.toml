@@ -20,6 +20,7 @@ tobj.workspace = true
 threemf2.workspace = true
 tracing.workspace = true
 zip.workspace = true
+workspace-hack = { version = "0.1", path = "../../workspace-hack" }
 
 [dev-dependencies]
 criterion.workspace = true

@@ -20,7 +20,7 @@ deny() {
 }
 
 pin_reason='rust-toolchain.toml pins the compiler on purpose: changing it, or installing another toolchain, invalidates every cached artifact and costs a ten-minute rebuild. A failing check is never answered by moving the pin. Ask the user if the pin really has to move.'
-scope_reason='A workspace-wide cargo run rebuilds the whole graph. Check only the crate you touched: cargo test -p <crate>, cargo clippy -p <crate> --all-targets -- -D warnings. The three workspace checks run once, at the end, and only when the user asks for them; prefix that run with ENCRUST_FULL_CHECK=1.'
+scope_reason='A workspace-wide cargo run rebuilds the whole graph. Check only the crate you touched: cargo test -p <crate>, cargo clippy -p <crate> --all-targets -- -D warnings. The three workspace checks run once, at the end, and only when the user asks for them, or when Cargo.lock or a manifest'"'"'s dependencies changed (docs/decisions/0272); prefix that run with ENCRUST_FULL_CHECK=1.'
 
 case "$file" in
 *rust-toolchain.toml) deny "$pin_reason" ;;

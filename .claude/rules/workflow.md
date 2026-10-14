@@ -17,11 +17,16 @@ keep going.
 
 ## Before it is done
 
-Run `cargo fmt --all`, then `cargo clippy -p <crate> --all-targets -- -D warnings` and
-`cargo test -p <crate>` for each crate you touched — that shape and no other, because cargo
-caches a different generation of artifacts per invocation (0212). The workspace-wide forms
-in `AGENTS.md` are CI's gate, not yours: they rebuild the whole graph, and they are run here
-only when the user asks for them. All of it
+While working, run only `cargo test -p <crate>`. At the end run `cargo fmt --all`, then
+`cargo clippy -p <crate> --all-targets -- -D warnings` and `cargo test -p <crate>` for each
+crate you touched. The workspace-wide forms in `AGENTS.md` are CI's gate and run here only
+when the user asks — with one exception: a change to `Cargo.lock` or to a manifest's
+dependencies runs `cargo hakari generate`, `cargo hakari manage-deps`, then the clippy and
+test forms once over the whole workspace prefixed `ENCRUST_FULL_CHECK=1`, never crate by
+crate, and ends with `cargo sweep --time 7` (0272).
+
+One cargo at a time in this checkout: a second one waits on the first's lock. Cut its output
+with `tail`, never a `grep` that hides `Blocking` and `Compiling`. All of it
 runs on the compiler `rust-toolchain.toml` pins: never `rustup update` or move that pin to
 clear a lint, and never because a check is slow. Then update
 `docs/architecture.md` if a crate changed, make sure each architectural decision has its ADR,

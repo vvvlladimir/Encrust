@@ -60,6 +60,7 @@ Grouped by what the decision governs; the number is still the order it was taken
 | [0207](0207-a-test-run-rebuilds-nothing-it-does-not-have-to.md) | A test run rebuilds nothing it does not have to | Accepted |
 | [0214](0214-the-libraries-terms-ship-generated-from-the-lockfile.md) | The libraries' terms ship with the binary, generated from the lockfile | Accepted |
 | [0215](0215-the-panels-are-pictured-and-compared-by-hand.md) | The panels are pictured and compared, by hand | Accepted |
+| [0272](0272-a-dependency-is-built-once-at-one-feature-set.md) | A dependency is built once, at one feature set, and a bump is checked once over the workspace | Accepted |
 
 ### Geometry
 
