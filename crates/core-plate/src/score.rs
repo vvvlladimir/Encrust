@@ -124,8 +124,9 @@ const TIP_PATCHES: Scalar = 3.0;
 /// Support standing a model's own length tall costs half again the overhang it holds.
 const W_TALL: Scalar = 0.5;
 
-/// A face looks up in its file once its normal is within sixty degrees of +Z.
-const LOOKS_UP: Scalar = 0.5;
+/// A face looks up in its file once its normal is within sixty degrees of +Z: the side its
+/// author meant to be seen, as every stage reads it.
+pub const LOOKS_UP: Scalar = 0.5;
 
 /// A face of the model, reduced to what scoring an orientation asks of it.
 ///

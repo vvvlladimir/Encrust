@@ -6,7 +6,7 @@ use crate::cut::cut;
 use crate::error::PlateError;
 use crate::printed::Printed;
 use crate::score::{Faces, OrientGoal, Score};
-use crate::select::{Candidate, Judge};
+use crate::select::{Candidate, ranked};
 
 /// The pull past which a layer tears off the film: `core-analysis`'s `PEEL_LIMIT_N` over
 /// its `PEEL_N_PER_MM4`, 30 N, as a torsion constant in mm^4.
@@ -166,15 +166,15 @@ pub fn finalists(
         on_plate,
         considered,
     };
-    let seated = ordered(&faces, settings, rested, now).into_iter();
-    let stood = ordered(&faces, settings, measured, now).into_iter();
+    let seated = ordered(&faces, settings, &rested, now).into_iter();
+    let stood = ordered(&faces, settings, &measured, now).into_iter();
     let first: Vec<Oriented> = seated
         .map(|candidate| oriented(candidate, true))
         .chain(stood.map(|candidate| oriented(candidate, !settings.on_supports)))
         .take(count.max(1))
         .collect();
     let room = count.saturating_sub(first.len());
-    let last = ordered(&faces, settings, perhaps, now).into_iter();
+    let last = ordered(&faces, settings, &perhaps, now).into_iter();
     Ok(first
         .into_iter()
         .chain(last.take(room).map(|candidate| oriented(candidate, true)))
@@ -191,24 +191,11 @@ const APART_DEG: Scalar = 10.0;
 fn ordered(
     faces: &Faces,
     settings: &OrientSettings,
-    mut measured: Vec<Candidate>,
+    measured: &[Candidate],
     now: Vec3,
 ) -> Vec<Candidate> {
-    let Some(judge) = Judge::over(faces, settings, &measured) else {
-        return Vec::new();
-    };
-    measured.sort_by(|a, b| match (judge.beats(a, b), judge.beats(b, a)) {
-        (true, _) => std::cmp::Ordering::Less,
-        (_, true) => std::cmp::Ordering::Greater,
-        _ => std::cmp::Ordering::Equal,
-    });
-    let standing = measured.iter().position(|candidate| candidate.down == now);
-    if let (Some(at), Some(best)) = (standing, measured.first().copied())
-        && !judge.worth_turning(&best, &measured[at])
-    {
-        let standing = measured.remove(at);
-        measured.insert(0, standing);
-    }
+    let order = ranked(faces, settings, measured, now);
+    let measured: Vec<Candidate> = order.into_iter().map(|at| measured[at]).collect();
 
     let apart = APART_DEG.to_radians().cos();
     let mut chosen: Vec<Candidate> = Vec::new();
@@ -401,9 +388,13 @@ mod tests {
     }
 
     #[test]
-    fn a_slab_is_stood_on_its_edge_rather_than_laid_flat() {
+    fn a_slab_is_stood_on_its_edge_for_the_least_peel() {
         let mesh = cuboid(Vec3::new(40.0, 40.0, 4.0));
-        let found = orient(&mesh, &OrientSettings::default()).expect("a slab can be oriented");
+        let settings = OrientSettings {
+            goal: OrientGoal::LeastPeel,
+            ..OrientSettings::default()
+        };
+        let found = orient(&mesh, &settings).expect("a slab can be oriented");
 
         // Lying flat, every layer would peel a 1600 mm2 section off the film. The thin
         // axis therefore ends up across the plate rather than up it.
@@ -415,6 +406,16 @@ mod tests {
         let peak = found.score.peak_mm2.expect("the winner was sliced");
         assert!(peak < 200.0, "a 40 by 4 section, got {peak}");
         assert!(found.considered > 100, "the sphere was searched too");
+    }
+
+    #[test]
+    fn a_slab_lying_on_the_plate_stays_there_for_the_fewest_supports() {
+        // Flat or on its edge, nothing hangs: no turn wins the goal anything, and the peel
+        // of 1600 mm2 is the least-peel goal's to weigh, or a tearing pull's.
+        let mesh = cuboid(Vec3::new(40.0, 40.0, 4.0));
+        let found = orient(&mesh, &OrientSettings::default()).expect("a slab can be oriented");
+        let thin = placed(found.rotation, Vec3::Z);
+        assert!(thin.z.abs() > 0.95, "the slab still lies flat, got {thin}");
     }
 
     #[test]

@@ -12,8 +12,27 @@ use serde::{Deserialize, Serialize};
 use crate::poses::{Pose, Source};
 use crate::verdict::Verdict;
 
+/// The goal poses `model` held in this report, to be measured again in a run compared with
+/// it.
+pub fn known(report: &Report, model: &str) -> Vec<crate::poses::Known> {
+    report
+        .models
+        .iter()
+        .filter(|m| m.name == model)
+        .flat_map(|m| &m.poses)
+        .filter(|pose| pose.source != "hand" && pose.source != "oracle")
+        .map(|pose| {
+            (
+                pose.name.trim_start_matches("known: ").to_owned(),
+                Quat::from_array(pose.rotation),
+                pose.on_plate,
+            )
+        })
+        .collect()
+}
+
 /// Bumped when a field changes meaning, so an old baseline is refused rather than misread.
-const SCHEMA: u32 = 1;
+const SCHEMA: u32 = 2;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Report {
@@ -59,7 +78,13 @@ pub struct PoseRow {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct GoalRow {
     pub goal: String,
-    pub passed: bool,
+    /// `pass`, `fail`, `unreachable` — no pose measured would pass — or `isolated` by a
+    /// person; only the first two count.
+    pub status: String,
+    /// Why a person isolated it.
+    pub isolated: Option<String>,
+    /// A measured pose that would pass, or `None` when none would.
+    pub reachable_by: Option<String>,
     /// The rules the choice broke, by name.
     pub broken: Vec<String>,
     pub reading: f64,
@@ -91,6 +116,7 @@ impl PoseRow {
         let source = match self.source.as_str() {
             "hand" => Source::Hand,
             "oracle" => Source::Oracle,
+            "known" => Source::Known,
             other => {
                 Source::Goal(goal_of(other).with_context(|| format!("no goal is called {other}"))?)
             }
@@ -126,6 +152,7 @@ impl PoseRow {
                 Source::Hand => "hand".to_owned(),
                 Source::Goal(goal) => slug(goal).to_owned(),
                 Source::Oracle => "oracle".to_owned(),
+                Source::Known => "known".to_owned(),
             },
             rotation: pose.rotation.to_array(),
             tilt_deg: pose.tilt_deg,
@@ -147,10 +174,17 @@ impl PoseRow {
 }
 
 impl GoalRow {
-    pub fn of(verdict: &Verdict, seconds: f64) -> Self {
+    pub fn of(verdict: &Verdict, seconds: f64, isolated: Option<&str>) -> Self {
+        let status = if isolated.is_some() {
+            "isolated"
+        } else {
+            verdict.status().name()
+        };
         Self {
             goal: slug(verdict.goal).to_owned(),
-            passed: verdict.passed(),
+            status: status.to_owned(),
+            isolated: isolated.map(str::to_owned),
+            reachable_by: verdict.reachable_by.clone(),
             broken: verdict.broken().into_iter().map(str::to_owned).collect(),
             reading: verdict.reading,
             best_pose: verdict.best.as_ref().map(|(name, _)| name.clone()),
@@ -190,16 +224,54 @@ impl Report {
         Ok(report)
     }
 
-    /// Goals passed and goals judged.
+    /// Goals passed and goals counted: those that pass or fail, not those out of reach
+    /// or isolated.
     pub fn score(&self) -> (usize, usize) {
         let goals = self.models.iter().flat_map(|model| &model.goals);
-        let judged = goals.clone().count();
-        (goals.filter(|goal| goal.passed).count(), judged)
+        let counted = goals
+            .clone()
+            .filter(|goal| goal.status == "pass" || goal.status == "fail")
+            .count();
+        (goals.filter(|goal| goal.status == "pass").count(), counted)
+    }
+
+    /// Model and goal of every goal no measured pose could pass, and not yet isolated.
+    pub fn unreachable(&self) -> Vec<(&str, &str)> {
+        self.models
+            .iter()
+            .flat_map(|model| {
+                model
+                    .goals
+                    .iter()
+                    .filter(|goal| goal.status == "unreachable")
+                    .map(|goal| (model.name.as_str(), goal.goal.as_str()))
+            })
+            .collect()
     }
 }
 
 /// Prints one model's poses and verdicts as markdown.
 pub fn print_model(model: &ModelReport, verdicts: &[Verdict]) {
+    print_poses(model);
+    for (verdict, row) in verdicts.iter().zip(&model.goals) {
+        let call = match row.status.as_str() {
+            "pass" => "pass".to_owned(),
+            "fail" => format!(
+                "FAIL (reachable: {})",
+                row.reachable_by.as_deref().unwrap_or("—")
+            ),
+            "unreachable" => "UNREACHABLE: no measured pose passes".to_owned(),
+            _ => format!("isolated: {}", row.isolated.as_deref().unwrap_or("")),
+        };
+        println!("- {}: **{call}**", verdict.goal.label());
+        for check in verdict.checks.iter().filter(|check| !check.passed) {
+            println!("  - {}: {}", check.rule.name(), check.detail);
+        }
+    }
+    println!();
+}
+
+fn print_poses(model: &ModelReport) {
     println!("## {} — {} faces\n", model.name, model.faces);
     println!(
         "| pose | tilt ° | plate | fits | contacts | hanging | on top | layers | pull N | islands | cups | peels | resin ml | s |"
@@ -225,14 +297,6 @@ pub fn print_model(model: &ModelReport, verdicts: &[Verdict]) {
         );
     }
     println!();
-    for verdict in verdicts {
-        let call = if verdict.passed() { "pass" } else { "FAIL" };
-        println!("- {}: **{call}**", verdict.goal.label());
-        for check in verdict.checks.iter().filter(|check| !check.passed) {
-            println!("  - {}: {}", check.rule.name(), check.detail);
-        }
-    }
-    println!();
 }
 
 /// How one goal of one model moved between two runs.
@@ -240,23 +304,27 @@ pub fn print_model(model: &ModelReport, verdicts: &[Verdict]) {
 pub struct Change {
     pub model: String,
     pub goal: String,
-    pub was: Option<bool>,
-    pub now: bool,
+    /// The status before, or `None` for a goal the baseline never had.
+    pub was: Option<String>,
+    pub now: String,
     pub reading: (Option<f64>, f64),
 }
 
 impl Change {
-    /// A goal that passed before and fails now.
+    /// A goal that passed before and does not now, unless a person isolated it since.
     pub fn regressed(&self) -> bool {
-        self.was == Some(true) && !self.now
+        self.was.as_deref() == Some("pass") && self.now != "pass" && self.now != "isolated"
     }
 
     fn label(&self) -> &'static str {
-        match (self.was, self.now) {
-            (Some(true), false) => "REGRESSED",
-            (Some(false), true) => "fixed",
+        match (self.was.as_deref(), self.now.as_str()) {
             (None, _) => "new",
-            _ => "same",
+            (Some(was), now) if was == now => "same",
+            _ if self.regressed() => "REGRESSED",
+            (_, "pass") => "fixed",
+            (_, "isolated") => "isolated",
+            (_, "unreachable") => "unreachable",
+            _ => "changed",
         }
     }
 }
@@ -277,8 +345,8 @@ pub fn compare(was: &Report, now: &Report) -> Vec<Change> {
                 Change {
                     model: model.name.clone(),
                     goal: goal.goal.clone(),
-                    was: old.map(|old| old.passed),
-                    now: goal.passed,
+                    was: old.map(|old| old.status.clone()),
+                    now: goal.status.clone(),
                     reading: (old.map(|old| old.reading), goal.reading),
                 }
             })
@@ -306,9 +374,11 @@ pub fn print_changes(changes: &[Change]) {
     }
     let count = |label| changes.iter().filter(|c| c.label() == label).count();
     println!(
-        "\n{} fixed, {} regressed, {} new, {} same\n",
+        "\n{} fixed, {} regressed, {} unreachable, {} isolated, {} new, {} same\n",
         count("fixed"),
         count("REGRESSED"),
+        count("unreachable"),
+        count("isolated"),
         count("new"),
         count("same")
     );
@@ -327,7 +397,9 @@ mod tests {
                 poses: Vec::new(),
                 goals: vec![GoalRow {
                     goal: "fewest-supports".to_owned(),
-                    passed,
+                    status: if passed { "pass" } else { "fail" }.to_owned(),
+                    isolated: None,
+                    reachable_by: None,
                     broken: Vec::new(),
                     reading,
                     best_pose: None,
@@ -385,6 +457,14 @@ mod tests {
         empty.models.clear();
         let changes = compare(&empty, &report(false, 1.0));
         assert_eq!(changes[0].was, None);
+        assert!(!changes[0].regressed());
+    }
+
+    #[test]
+    fn a_goal_a_person_isolated_since_is_not_a_regression() {
+        let mut isolated = report(false, 1.0);
+        isolated.models[0].goals[0].status = "isolated".to_owned();
+        let changes = compare(&report(true, 1.0), &isolated);
         assert!(!changes[0].regressed());
     }
 }

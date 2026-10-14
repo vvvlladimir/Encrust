@@ -16,7 +16,13 @@ pub enum Source {
     Hand,
     Goal(OrientGoal),
     Oracle,
+    /// A pose a goal chose in a run kept before, measured again so that what is known to
+    /// be possible is not forgotten when the search stops finding it.
+    Known,
 }
+
+/// A pose to measure again: its name, its turn and whether it stands on the plate.
+pub type Known = (String, Quat, bool);
 
 /// One way of standing a model and what it prints.
 #[derive(Debug, Clone)]
@@ -42,9 +48,9 @@ pub struct Bench<'a> {
 }
 
 impl Bench<'_> {
-    /// Every pose of `mesh`: by hand, each goal's choice, then `oracle` directions spread
-    /// evenly over the sphere.
-    pub fn poses(&self, mesh: &Mesh, oracle: usize) -> Result<Vec<Pose>> {
+    /// Every pose of `mesh`: by hand, each goal's choice, `known` from runs before, then
+    /// `oracle` directions spread evenly over the sphere.
+    pub fn poses(&self, mesh: &Mesh, oracle: usize, known: &[Known]) -> Result<Vec<Pose>> {
         let printed = Printed::solid(mesh);
         let mut poses = Vec::new();
         for (name, rotation, on_plate) in by_hand(mesh) {
@@ -52,6 +58,15 @@ impl Bench<'_> {
         }
         for goal in OrientGoal::ALL {
             poses.push(self.chosen(&printed, goal)?);
+        }
+        for (name, rotation, on_plate) in known {
+            let measured = |pose: &Pose| {
+                pose.on_plate == *on_plate && pose.rotation.angle_between(*rotation) < KNOWN_DEG
+            };
+            if !poses.iter().any(measured) {
+                let name = format!("known: {name}");
+                poses.push(self.measure(&printed, name, Source::Known, *rotation, *on_plate)?);
+            }
         }
         for (at, down) in spread(oracle).into_iter().enumerate() {
             let name = format!("oracle {at}");
@@ -112,6 +127,9 @@ impl Bench<'_> {
         })
     }
 }
+
+/// A known pose this near one already measured is the same pose, radians.
+const KNOWN_DEG: f32 = 0.5 * std::f32::consts::PI / 180.0;
 
 /// The poses a person tries first: as drawn, on supports and on the plate, the largest
 /// flat face down, and tilted onto a corner.

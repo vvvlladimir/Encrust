@@ -6,10 +6,13 @@ use std::sync::Arc;
 use core_analysis::{Measured, PEEL_N_PER_MM4, RiskKind};
 use core_format::ExposurePlan;
 use core_geometry::{
-    Bvh, Mesh, Quat, Scalar, Transform, Vec3, center_over_plate, drop_to_plate, transform_mesh,
+    Mesh, Quat, Scalar, Transform, Vec3, center_over_plate, drop_to_plate, transform_mesh,
 };
 use core_pipeline::{PanelOverrides, SlicedFormat};
-use core_plate::{OrientGoal, OrientSettings, Oriented, Printed, finalists, rotation_for};
+use core_plate::{
+    LOOKS_UP, OrientGoal, OrientSettings, Oriented, Printed, Readings, finalists, rank,
+    rotation_for,
+};
 use printer_profiles::{MaterialProfile, PrinterProfile, SupportProfile};
 use rayon::prelude::*;
 
@@ -17,11 +20,7 @@ use crate::cut::Cutting;
 use crate::error::EngineError;
 use crate::plate::{Model, Plate};
 use crate::run::Run;
-use crate::stand::{append, contacts_under, facing, stand_under, touched};
-
-/// A face looks up in its file once its normal is within sixty degrees of +Z, the reading
-/// `core-plate` takes of the side meant to be seen.
-const LOOKS_UP: Scalar = 0.5;
+use crate::stand::{append, contacts_under, stand_under};
 
 /// Poses printed to choose between, on top of the way the model stands.
 const FINALISTS: usize = 4;
@@ -34,8 +33,15 @@ const FATAL: usize = 10;
 /// with no supports: a test piece's own overhangs, not a model's underside.
 const BARE_HANGING: usize = 16;
 
-/// The share of its own reading a turn has to win to be worth taking over standing still.
-const GAIN: f64 = 0.05;
+/// What of a goal's own reading is noise once printed: a contact or two, half a newton, a
+/// few layers.
+fn slack(goal: OrientGoal) -> f64 {
+    match goal {
+        OrientGoal::FewestSupports | OrientGoal::CleanTop => 2.0,
+        OrientGoal::LeastPeel => 0.5,
+        OrientGoal::ShortestPrint => 5.0,
+    }
+}
 
 /// How coarse a trial is cut: the tallest pose into about `TRIAL_LAYERS`, no layer
 /// thicker than `TRIAL_LAYER_MM`, cured at a pixel of `TRIAL_PIXEL_MM`. A trial ranks
@@ -125,21 +131,15 @@ pub struct Proven {
 
 /// Finds the orientation a model prints best in, by printing: the search's best few and
 /// the way the model stands are each supported, cut and cured, with every pose that may
-/// rest on the plate tried there bare. Those with the fewest cups and tearing pulls are
-/// kept, then those failing little more than the soundest, and of them the one that reads
-/// best on the goal is taken. The model stays as it stands unless a turn
-/// wins `GAIN` of that reading. The trials are cut coarse, so the printout answered is a
-/// ranking's and not the print's: [`print_out`] gives that.
+/// rest on the plate tried there bare, and ranked by [`core_plate::rank`] on what they
+/// printed, the search's own order breaking ties. The trials are cut coarse, so the
+/// printout answered is a ranking's and not the print's: [`print_out`] gives that.
 pub fn orient_proven(
     printed: &Printed,
     settings: &OrientSettings,
     trial: &Trial,
 ) -> Result<Proven, EngineError> {
     let found = finalists(printed, settings, usize::MAX)?;
-    let sketch = Depth::Sketch {
-        top: settings.goal == OrientGoal::CleanTop,
-        layer_mm: trial.material.layer_height_mm,
-    };
     let reach_mm = printed
         .outer
         .aabb()
@@ -161,7 +161,7 @@ pub fn orient_proven(
     let tried = poses
         .into_par_iter()
         .map(|pose| {
-            tried(printed, pose.rotation, pose.on_plate, trial, sketch).map(|printout| Proven {
+            print_out(printed, pose.rotation, pose.on_plate, trial).map(|printout| Proven {
                 oriented: *pose,
                 printout,
             })
@@ -173,28 +173,23 @@ pub fn orient_proven(
         })
         .collect::<Result<Vec<_>, EngineError>>()?;
 
-    // What loses the whole print comes before anything a goal asks for.
-    let least_fatal = tried.iter().map(|pose| pose.printout.fatal()).min();
-    let printable = |pose: &&Proven| Some(pose.printout.fatal()) == least_fatal;
-    let reading = |pose: &Proven| pose.printout.reading(settings.goal);
-    // The first of equals: the search's own order breaks a tie.
-    let best = tried
+    let readings: Vec<Readings> = tried
         .iter()
-        .filter(printable)
-        .reduce(|best, pose| {
-            if reading(pose) < reading(best) {
-                pose
-            } else {
-                best
-            }
+        .enumerate()
+        .map(|(at, pose)| Readings {
+            fatal: pose.printout.fatal() as f64,
+            unheld: Some((pose.printout.islands + pose.printout.hanging) as f64),
+            primary: pose.printout.reading(settings.goal),
+            // The search's own order breaks a tie.
+            tiebreak: at as f64,
+            standing: is_standing(&pose.oriented),
         })
+        .collect();
+    let best = rank(&readings, slack(settings.goal))
+        .first()
+        .copied()
         .ok_or(EngineError::EmptyPlate)?;
-    let stays = tried
-        .iter()
-        .filter(printable)
-        .find(|pose| is_standing(&pose.oriented))
-        .filter(|now| reading(now) - reading(best) <= GAIN * reading(now).abs());
-    Ok(*stays.unwrap_or(best))
+    Ok(tried[best])
 }
 
 /// Stands the model the way `rotation` turns it in the middle of the plate, on supports
@@ -204,29 +199,6 @@ pub fn print_out(
     rotation: Quat,
     on_plate: bool,
     trial: &Trial,
-) -> Result<Printout, EngineError> {
-    tried(printed, rotation, on_plate, trial, Depth::Print)
-}
-
-/// How far a pose is taken before it is read.
-#[derive(Clone, Copy)]
-enum Depth {
-    /// Supports grown and meshed under it, and cured with it.
-    Print,
-    /// Only where supports would touch, with the model cured alone: enough to rank a
-    /// pose on, at a fraction of the cost. Its islands are not read, since nothing
-    /// holds them. `top` says whether the faces the contacts land on are looked up, and
-    /// `layer_mm` is the print's own layer, which what hangs off a bare pose is counted
-    /// at: sixteen places is a line too fine for a coarse stack to draw.
-    Sketch { top: bool, layer_mm: Scalar },
-}
-
-fn tried(
-    printed: &Printed,
-    rotation: Quat,
-    on_plate: bool,
-    trial: &Trial,
-    depth: Depth,
 ) -> Result<Printout, EngineError> {
     let turn = Transform {
         rotation,
@@ -244,62 +216,29 @@ fn tried(
     let mut cuts = printed.cuts.map(|cuts| transform_mesh(cuts, moved));
 
     let layer_mm = trial.material.layer_height_mm;
-    let mut held = if on_plate {
+    let held = if on_plate {
         Held {
-            hanging: hanging_on_plate(
-                &placed,
-                cuts.as_ref(),
-                trial.support,
-                match depth {
-                    Depth::Print => layer_mm,
-                    Depth::Sketch { layer_mm, .. } => layer_mm,
-                },
-            )?,
+            hanging: hanging_on_plate(&placed, cuts.as_ref(), trial.support, layer_mm)?,
             ..Held::default()
         }
     } else {
-        match depth {
-            Depth::Print => {
-                let stood = stand_under(&mut placed, &mut cuts, trial.support, layer_mm)?;
-                Held {
-                    contacts: stood.contacts.len(),
-                    hanging: stood.contacts.len().saturating_sub(stood.standing),
-                    top_contacts: looking_up(&stood.facing, rotation),
-                    under_layers: 0,
-                    supports: vec![Arc::new(stood.supports)],
-                }
-            }
-            Depth::Sketch { top, .. } => {
-                let (lifted_mm, drilled, contacts) =
-                    touched(&mut placed, &mut cuts, trial.support, layer_mm)?;
-                let facing = if top {
-                    facing(&drilled, &Bvh::build(&drilled), &contacts)
-                } else {
-                    Vec::new()
-                };
-                Held {
-                    contacts: contacts.len(),
-                    top_contacts: looking_up(&facing, rotation),
-                    // Cured alone the stack starts at the model; its supports would
-                    // start it at the plate.
-                    under_layers: (lifted_mm / layer_mm).round() as usize,
-                    ..Held::default()
-                }
-            }
+        let stood = stand_under(&mut placed, &mut cuts, trial.support, layer_mm)?;
+        Held {
+            contacts: stood.contacts.len(),
+            hanging: stood.contacts.len().saturating_sub(stood.standing),
+            top_contacts: looking_up(&stood.facing, rotation),
+            supports: vec![Arc::new(stood.supports)],
         }
     };
 
-    let supports = std::mem::take(&mut held.supports);
-    let plate = plate_of(placed, cuts, supports, trial);
+    let plate = plate_of(placed, cuts, held.supports, trial);
     let measured = Run::of(&plate)?
         .measure(&mut ())?
         .ok_or(EngineError::EmptyPlate)?;
-    let mut read = printout([held.contacts, held.hanging, held.top_contacts], &measured);
-    if matches!(depth, Depth::Sketch { .. }) && !on_plate {
-        read.islands = 0;
-        read.layers += held.under_layers;
-    }
-    Ok(read)
+    Ok(printout(
+        [held.contacts, held.hanging, held.top_contacts],
+        &measured,
+    ))
 }
 
 /// What stands under a pose, and what was found needing it.
@@ -308,8 +247,6 @@ struct Held {
     contacts: usize,
     hanging: usize,
     top_contacts: usize,
-    /// Layers of support under the model that a sketch does not cure.
-    under_layers: usize,
     supports: Vec<Arc<Mesh>>,
 }
 

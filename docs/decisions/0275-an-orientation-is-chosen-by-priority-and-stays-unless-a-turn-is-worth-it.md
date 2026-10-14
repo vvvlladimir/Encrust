@@ -1,6 +1,6 @@
 # 0275. Choose an orientation by priority, refuse cups and tearing pulls, and stay unless a turn is worth it
 
-- **Status:** Accepted
+- **Status:** Accepted; how a turn is weighed, and that the proof ranks apart, are superseded by 0278
 - **Date:** 2026-10-12
 
 ## Context

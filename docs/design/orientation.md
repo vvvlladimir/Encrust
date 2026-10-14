@@ -128,15 +128,23 @@ its own, and is always among those cut.
 
 ## Choosing
 
-The shortlisted candidates, and always the way the model stands now, are picked by
-priority rather than by the total (ADR 0275):
+Every stage ranks by one rule, `core_plate::rank` (ADR 0275, 0278): the search on what it
+predicts, the proof on what it printed. In order:
 
-1. what fails the print: a suction cup, then a pull past the 30 N `core-analysis` names;
-2. the goal's own term, unweighted, within a tenth of the best;
-3. the total.
+1. what fails the print, compared exactly. Predicted, that is a suction cup, a pull past
+   the 30 N `core-analysis` names, and a model set on the plate with no face flat on it;
+   printed, the cups and tearing pulls the analysis reads;
+2. islands and contacts left hanging, within a quarter and two of the fewest, where a
+   stage reads them;
+3. the goal's own reading, within a tenth of the best and the noise of its unit: a
+   sliver of the dimensionless term in the search; two contacts, half a newton or five
+   layers once printed;
+4. the tie-break: the total in the search, the search's own order in the proof.
 
-The model then stays as it stands unless the turn fails less, puts the goal's own term
-back in the band, or wins 5 % of the total.
+The model stays as it stands unless a turn fails less, standing is out of the band, or
+the turn wins 5 % of the goal's own reading. The gain is the goal's and not the total's,
+so no goal turns a model for what another goal weighs: a slab lying on the plate stays
+flat for the fewest supports, and stands on its edge for the least peel.
 
 A wider shortlist and a pattern search around the winner were measured and dropped:
 the better the search found low scores, the more of what it found the support generator
@@ -157,15 +165,15 @@ a trial costs a whole slice, 35 s for five poses of a 230 ml model against 2 s. 
 pose prints at the real resolution is `print_out`'s to say, which is what `orient-lab`
 judges the choice on.
 
+Every trial stands its supports — columns grown and meshed — and cures them with the
+model (ADR 0278), so its islands and its contacts with no room are read as a print's are, if
+coarser: on the stack a figure's 13 islands read 7, and its 3 read 1. The order holds.
+Proving with supports costs a fifth more than proving the model alone did.
+
 A pose set bare on the plate that leaves more than sixteen places hanging is a model
-that needs supports, and is dropped. The poses with the fewest suction cups and tearing pulls are kept first: those lose the
-whole print, and no goal is worth one. A pose's failures are then its islands and its
-contacts with no room, and ten for each cup and tear; set on the plate, everything
-placement would have held counts as hanging. A pose is printable within a quarter and two
-of the fewest failures: an island more or less is the grain of the support grid, not a
-difference between poses. Among the printable, the goal's own reading decides — contacts,
-newtons, layers, contacts on up-facing faces — and the model stays as it stands unless a
-turn wins 5 % of it.
+that needs supports, and is dropped. The rest are ranked by the rule above on what they
+printed: cups and tearing pulls, then islands and hanging contacts, then the goal's own
+reading — contacts, newtons, layers, contacts on up-facing faces.
 
 ## Arranging
 

@@ -1,15 +1,8 @@
-use core_geometry::{Scalar, Vec3};
+use core_geometry::Vec3;
 
 use crate::orient::OrientSettings;
+use crate::policy::{Readings, rank};
 use crate::score::{Faces, Score};
-
-/// How far over the best a candidate's own term may be and still be in the running: a
-/// tenth, and a sliver more for a term that is zero at best.
-const BAND: Scalar = 0.10;
-const SLIVER: Scalar = 0.002;
-
-/// The share of its total a turn has to win to be worth taking over standing still.
-const GAIN: Scalar = 0.05;
 
 /// One way down, measured by both passes.
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -18,72 +11,28 @@ pub struct Candidate {
     pub score: Score,
 }
 
-/// Picks between measured candidates by priority rather than by the total alone: first
-/// what would fail the print, then the goal's own term within `BAND` of the best, and only
-/// then the total. See `docs/design/orientation.md`.
-pub struct Judge<'a> {
-    faces: &'a Faces<'a>,
-    settings: &'a OrientSettings,
-    fewest_failures: u8,
-    best_primary: Scalar,
-}
+/// What of a goal's dimensionless term is noise: a sliver, for a term that is zero at best.
+const SLIVER: f64 = 0.002;
 
-impl<'a> Judge<'a> {
-    /// The judge of `measured`, whose best decides the band everything is held to.
-    pub fn over(
-        faces: &'a Faces<'a>,
-        settings: &'a OrientSettings,
-        measured: &[Candidate],
-    ) -> Option<Self> {
-        let fewest_failures = measured
-            .iter()
-            .map(|candidate| failures(&candidate.score, settings))
-            .min()?;
-        let best_primary = measured
-            .iter()
-            .filter(|candidate| failures(&candidate.score, settings) == fewest_failures)
-            .map(|candidate| faces.primary(&candidate.score))
-            .fold(Scalar::INFINITY, Scalar::min);
-        Some(Self {
-            faces,
-            settings,
-            fewest_failures,
-            best_primary,
+/// `measured` best first, the way the model stands — `now` — first when no turn is worth
+/// it. See `docs/design/orientation.md`.
+pub fn ranked(
+    faces: &Faces,
+    settings: &OrientSettings,
+    measured: &[Candidate],
+    now: Vec3,
+) -> Vec<usize> {
+    let readings: Vec<Readings> = measured
+        .iter()
+        .map(|candidate| Readings {
+            fatal: f64::from(failures(&candidate.score, settings)),
+            unheld: None,
+            primary: f64::from(faces.primary(&candidate.score)),
+            tiebreak: f64::from(candidate.score.total),
+            standing: candidate.down == now,
         })
-    }
-
-    /// Whether `a` is the better of the two.
-    pub fn beats(&self, a: &Candidate, b: &Candidate) -> bool {
-        let rank = |candidate: &Candidate| {
-            let failing = failures(&candidate.score, self.settings);
-            (
-                failing,
-                failing > self.fewest_failures || !self.in_band(candidate),
-            )
-        };
-        match rank(a).cmp(&rank(b)) {
-            std::cmp::Ordering::Less => true,
-            std::cmp::Ordering::Greater => false,
-            std::cmp::Ordering::Equal => a.score.total < b.score.total,
-        }
-    }
-
-    /// Whether `turned` is worth taking over `now`, the way the model stands: it has to
-    /// fail less, or win `GAIN` of the total, so a model standing nearly right stays put.
-    pub fn worth_turning(&self, turned: &Candidate, now: &Candidate) -> bool {
-        if !self.beats(turned, now) {
-            return false;
-        }
-        let fails_less =
-            failures(&turned.score, self.settings) < failures(&now.score, self.settings);
-        let gain = now.score.total - turned.score.total;
-        fails_less || !self.in_band(now) || gain > GAIN * now.score.total.abs()
-    }
-
-    fn in_band(&self, candidate: &Candidate) -> bool {
-        let limit = self.best_primary + BAND * self.best_primary.abs() + SLIVER;
-        self.faces.primary(&candidate.score) <= limit
-    }
+        .collect();
+    rank(&readings, SLIVER)
 }
 
 /// What would fail the print outright, worse first: a suction cup counts four, a pull past
@@ -126,10 +75,10 @@ mod tests {
         )
     }
 
-    /// A measured candidate costing `overhang_mm2` of support and `total` in all.
-    fn candidate(overhang_mm2: Scalar, total: Scalar, cup_mm2: Scalar) -> Candidate {
+    /// A measured candidate pointing `down`, costing `overhang_mm2` of support and `total`.
+    fn candidate(down: Vec3, overhang_mm2: f32, total: f32, cup_mm2: f32) -> Candidate {
         Candidate {
-            down: Vec3::NEG_Z,
+            down,
             score: Score {
                 overhang_mm2,
                 low_points: 0,
@@ -146,46 +95,47 @@ mod tests {
         }
     }
 
-    #[test]
-    fn a_suction_cup_loses_whatever_it_scores() {
+    /// Where `candidate` ranks among `measured`, best first being 0.
+    fn place(measured: &[Candidate], candidate: usize, now: Vec3) -> usize {
         let mesh = cube();
         let faces = Faces::of(&mesh).expect("a cube has faces");
-        let settings = OrientSettings::default();
-        let cupping = candidate(0.0, 0.1, 400.0);
-        let clean = candidate(50.0, 9.0, 0.0);
-        let judge = Judge::over(&faces, &settings, &[cupping, clean]).expect("two candidates");
-        assert!(judge.beats(&clean, &cupping));
+        let order = ranked(&faces, &OrientSettings::default(), measured, now);
+        order
+            .iter()
+            .position(|at| *at == candidate)
+            .expect("every candidate is ranked")
+    }
+
+    #[test]
+    fn a_suction_cup_loses_whatever_it_scores() {
+        let cupping = candidate(Vec3::X, 0.0, 0.1, 400.0);
+        let clean = candidate(Vec3::Y, 50.0, 9.0, 0.0);
+        assert_eq!(place(&[cupping, clean], 1, Vec3::NEG_Z), 0);
     }
 
     #[test]
     fn the_goals_own_term_decides_before_the_total() {
-        let mesh = cube();
-        let faces = Faces::of(&mesh).expect("a cube has faces");
-        let settings = OrientSettings::default();
         // Fewest supports: 10 mm2 of overhang against 60, whatever the other terms add.
-        let few = candidate(10.0, 5.0, 0.0);
-        let many = candidate(60.0, 1.0, 0.0);
-        let judge = Judge::over(&faces, &settings, &[few, many]).expect("two candidates");
-        assert!(judge.beats(&few, &many));
+        let few = candidate(Vec3::X, 10.0, 5.0, 0.0);
+        let many = candidate(Vec3::Y, 60.0, 1.0, 0.0);
+        assert_eq!(place(&[many, few], 1, Vec3::NEG_Z), 0);
 
         // Within a tenth of the best, the total breaks the tie.
-        let close = candidate(10.5, 4.0, 0.0);
-        assert!(judge.beats(&close, &few));
+        let close = candidate(Vec3::Z, 10.5, 4.0, 0.0);
+        assert_eq!(place(&[few, close], 1, Vec3::NEG_Z), 0);
     }
 
     #[test]
     fn a_turn_winning_less_than_its_gain_is_not_worth_making() {
-        let mesh = cube();
-        let faces = Faces::of(&mesh).expect("a cube has faces");
-        let settings = OrientSettings::default();
-        let now = candidate(10.0, 1.00, 0.0);
-        let slightly = candidate(10.0, 0.98, 0.0);
-        let clearly = candidate(10.0, 0.80, 0.0);
-        let judge = Judge::over(&faces, &settings, &[now, slightly, clearly]).expect("three");
-        assert!(
-            !judge.worth_turning(&slightly, &now),
+        // The gain is the goal's own: the support term, not the total.
+        let now = candidate(Vec3::NEG_Z, 10.0, 1.0, 0.0);
+        let slightly = candidate(Vec3::X, 9.8, 0.5, 0.0);
+        let clearly = candidate(Vec3::Y, 6.0, 1.0, 0.0);
+        assert_eq!(
+            place(&[slightly, now], 1, Vec3::NEG_Z),
+            0,
             "2 % is not worth a turn"
         );
-        assert!(judge.worth_turning(&clearly, &now), "20 % is");
+        assert_eq!(place(&[clearly, now], 0, Vec3::NEG_Z), 0, "20 % is");
     }
 }

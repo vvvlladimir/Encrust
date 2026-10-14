@@ -461,12 +461,20 @@ mod tests {
             on_plate: None,
         };
         let verdict = judge(GOAL, &poses, upright, 1000).expect("the goal's pose is there");
-        assert_eq!(verdict.status(), Status::Fail, "as is passes, so it was reachable");
+        assert_eq!(
+            verdict.status(),
+            Status::Fail,
+            "as is passes, so it was reachable"
+        );
         assert_eq!(verdict.reachable_by.as_deref(), Some("as is"));
 
         let mut cupped = pose("as is", Source::Hand, 100, 0.0);
         cupped.printout.cups = 1;
-        let poses = [cupped, pose("over", Source::Hand, 10, 170.0), chosen(10, 170.0)];
+        let poses = [
+            cupped,
+            pose("over", Source::Hand, 10, 170.0),
+            chosen(10, 170.0),
+        ];
         let verdict = judge(GOAL, &poses, upright, 1000).expect("the goal's pose is there");
         assert_eq!(
             verdict.status(),

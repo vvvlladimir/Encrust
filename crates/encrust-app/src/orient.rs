@@ -283,10 +283,11 @@ mod tests {
     #[test]
     fn a_resized_model_is_judged_at_the_size_it_prints() {
         // A 40 mm cube squashed to a tenth of its height is a 40 x 40 x 4 slab on the
-        // plate, which stands on its edge, where the cube it was drawn as would stay put.
+        // plate, which the least peel stands on its edge.
         let mut scene = scene_with(cuboid(Vec3::splat(40.0)));
         scene.objects_mut()[0].transform.scale = Vec3::new(1.0, 1.0, 0.1);
         let mut tool = OrientTool::default();
+        tool.settings.goal = core_plate::OrientGoal::LeastPeel;
         let mut status = Status::default();
 
         tool.start(&scene, None, |_| SupportProfile::medium(), None)

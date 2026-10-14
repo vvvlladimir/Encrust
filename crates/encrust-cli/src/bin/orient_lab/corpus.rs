@@ -1,6 +1,7 @@
 //! The models a run benches and what a person expects of each, read from a TOML file so a
 //! corpus kept outside the repository carries its own expectations.
 
+use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result};
@@ -18,6 +19,27 @@ pub struct Entry {
     /// Why the model is listed but not benched, such as a format nothing reads yet.
     pub skip: Option<String>,
     pub expect: Expectations,
+    pub isolated: Isolated,
+}
+
+/// Goals a person has taken out of the count for one model, and why: benched and shown,
+/// but neither a pass nor a fail, so a model no pose can satisfy does not hide progress.
+#[derive(Debug, Clone, Default, PartialEq)]
+pub struct Isolated {
+    /// Why every goal of the model is isolated.
+    pub all: Option<String>,
+    /// Why one goal is, by its slug.
+    pub goals: BTreeMap<String, String>,
+}
+
+impl Isolated {
+    /// Why `goal` is isolated, or `None` when it counts.
+    pub fn why(&self, goal_slug: &str) -> Option<&str> {
+        self.goals
+            .get(goal_slug)
+            .or(self.all.as_ref())
+            .map(String::as_str)
+    }
 }
 
 /// What a person expects of a model under every goal, then under one goal in particular.
@@ -64,6 +86,9 @@ struct Raw {
     skip: Option<String>,
     #[serde(default)]
     expect: Expectations,
+    isolate: Option<String>,
+    #[serde(default, rename = "isolate-goals")]
+    isolate_goals: BTreeMap<String, String>,
 }
 
 /// Reads the corpus at `path`.
@@ -84,6 +109,10 @@ fn parse(text: &str, base: &Path) -> Result<Vec<Entry>> {
             note: raw.note,
             skip: raw.skip,
             expect: raw.expect,
+            isolated: Isolated {
+                all: raw.isolate,
+                goals: raw.isolate_goals,
+            },
         })
         .collect())
 }
@@ -119,6 +148,22 @@ mod tests {
         let shortest = entry.expect.for_goal(OrientGoal::ShortestPrint);
         assert_eq!(shortest.max_tilt_deg, Some(180.0));
         assert_eq!(shortest.on_plate, Some(false));
+    }
+
+    #[test]
+    fn a_goal_isolated_on_its_own_says_its_own_reason() {
+        let entries = parse(
+            r#"
+            [[model]]
+            path = "mask.3mf"
+            isolate-goals = { least-peel = "every pose cups" }
+            "#,
+            Path::new("."),
+        )
+        .expect("the corpus is well formed");
+        let isolated = &entries[0].isolated;
+        assert_eq!(isolated.why("least-peel"), Some("every pose cups"));
+        assert_eq!(isolated.why("fewest-supports"), None);
     }
 
     #[test]

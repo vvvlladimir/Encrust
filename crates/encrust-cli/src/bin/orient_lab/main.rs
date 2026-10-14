@@ -20,7 +20,7 @@ use core_plate::OrientGoal;
 use encrust_cli::pipeline;
 use printer_profiles::{Catalogue, MaterialProfile, PrinterProfile, SupportProfile};
 
-use crate::corpus::{Entry, Expectations};
+use crate::corpus::{Entry, Expectations, Isolated};
 use crate::poses::{Bench, Source};
 use crate::report::{GoalRow, ModelReport, PoseRow, Report};
 use crate::verdict::{Verdict, judge};
@@ -49,7 +49,8 @@ struct Args {
     #[arg(long)]
     json: Option<PathBuf>,
     /// Compare with a run kept before; a goal that passed there and fails here fails the
-    /// run.
+    /// run. The poses its goals chose, and those it knew from before, are measured again
+    /// here, so the best known pose of a model is never forgotten.
     #[arg(long)]
     baseline: Option<PathBuf>,
     /// Judge the poses a run kept again, measuring nothing: what changing a rule of
@@ -85,6 +86,7 @@ struct Subject {
     name: String,
     mesh: MeshSource,
     expect: Expectations,
+    isolated: Isolated,
 }
 
 enum MeshSource {
@@ -109,15 +111,30 @@ fn main() -> Result<ExitCode> {
     let report = match &args.rejudge {
         Some(path) => rejudged(&Report::read(path)?, &args)?,
         None => {
+            let kept = args.baseline.as_deref().map(Report::read).transpose()?;
             let mut report = Report::new(&args.printer, &args.support, args.oracle);
             for subject in subjects(&args)? {
-                report.models.push(bench(subject, &setup, args.oracle));
+                let known = kept
+                    .as_ref()
+                    .map(|kept| report::known(kept, &subject.name))
+                    .unwrap_or_default();
+                report
+                    .models
+                    .push(bench(subject, &setup, args.oracle, &known));
             }
             report
         }
     };
-    let (passed, judged) = report.score();
-    println!("{passed} of {judged} goals pass");
+    let (passed, counted) = report.score();
+    println!("{passed} of {counted} goals pass");
+    let unreachable = report.unreachable();
+    if !unreachable.is_empty() {
+        println!("\nUnreachable: no measured pose passes, so they are left out of the count.");
+        println!("Look at each, then isolate it in the corpus or find the pose that passes:");
+        for (model, goal) in unreachable {
+            println!("- {model}: {goal}");
+        }
+    }
 
     if let Some(path) = &args.json {
         report.write(path)?;
@@ -143,6 +160,7 @@ fn subjects(args: &Args) -> Result<Vec<Subject>> {
                 name: name_of(path),
                 mesh: MeshSource::File(path.clone()),
                 expect: Expectations::default(),
+                isolated: Isolated::default(),
             })
             .collect()
     } else {
@@ -152,6 +170,7 @@ fn subjects(args: &Args) -> Result<Vec<Subject>> {
                 name: name.to_owned(),
                 mesh: MeshSource::Built(mesh),
                 expect: Expectations::default(),
+                isolated: Isolated::default(),
             })
             .collect()
     };
@@ -168,6 +187,7 @@ fn from_entry(entry: Entry) -> Subject {
             .skip
             .map_or(MeshSource::File(entry.path), MeshSource::Skipped),
         expect: entry.expect,
+        isolated: entry.isolated,
     }
 }
 
@@ -180,7 +200,7 @@ fn name_of(path: &Path) -> String {
 
 /// Benches one model. One that cannot be loaded or measured is reported skipped, so a run
 /// over a corpus still finishes.
-fn bench(subject: Subject, setup: &Setup, oracle: usize) -> ModelReport {
+fn bench(subject: Subject, setup: &Setup, oracle: usize, known: &[poses::Known]) -> ModelReport {
     let skipped = |name: String, reason: String| {
         println!("## {name} — skipped: {reason}\n");
         ModelReport {
@@ -191,22 +211,24 @@ fn bench(subject: Subject, setup: &Setup, oracle: usize) -> ModelReport {
             goals: Vec::new(),
         }
     };
-    let mesh = match subject.mesh {
-        MeshSource::Built(mesh) => mesh,
-        MeshSource::Skipped(reason) => return skipped(subject.name, reason),
-        MeshSource::File(path) => match load(&path) {
+    let name = subject.name.clone();
+    let mesh = match &subject.mesh {
+        MeshSource::Built(mesh) => mesh.clone(),
+        MeshSource::Skipped(reason) => return skipped(name, reason.clone()),
+        MeshSource::File(path) => match load(path) {
             Ok(mesh) => mesh,
-            Err(error) => return skipped(subject.name, format!("{error:#}")),
+            Err(error) => return skipped(name, format!("{error:#}")),
         },
     };
-    match setup.bench().poses(&mesh, oracle) {
-        Ok(poses) => judged(subject.name, mesh.faces.len(), &poses, &subject.expect),
-        Err(error) => skipped(subject.name, format!("{error:#}")),
+    match setup.bench().poses(&mesh, oracle, known) {
+        Ok(poses) => judged(mesh.faces.len(), &poses, &subject),
+        Err(error) => skipped(name, format!("{error:#}")),
     }
 }
 
 /// Judges every goal of one measured model and prints it.
-fn judged(name: String, faces: usize, poses: &[poses::Pose], expect: &Expectations) -> ModelReport {
+fn judged(faces: usize, poses: &[poses::Pose], subject: &Subject) -> ModelReport {
+    let expect = &subject.expect;
     let verdicts: Vec<Verdict> = OrientGoal::ALL
         .into_iter()
         .filter_map(|goal| judge(goal, poses, expect.for_goal(goal), faces))
@@ -218,13 +240,16 @@ fn judged(name: String, faces: usize, poses: &[poses::Pose], expect: &Expectatio
             .map_or(0.0, |pose| pose.seconds)
     };
     let model = ModelReport {
-        name,
+        name: subject.name.clone(),
         faces,
         skipped: None,
         poses: poses.iter().map(PoseRow::of).collect(),
         goals: verdicts
             .iter()
-            .map(|verdict| GoalRow::of(verdict, seconds_of(verdict.goal)))
+            .map(|verdict| {
+                let isolated = subject.isolated.why(report::slug(verdict.goal));
+                GoalRow::of(verdict, seconds_of(verdict.goal), isolated)
+            })
             .collect(),
     };
     report::print_model(&model, &verdicts);
@@ -250,19 +275,22 @@ fn rejudged(kept: &Report, args: &Args) -> Result<Report> {
             report.models.push(model.clone());
             continue;
         }
-        let expect = expectations
+        let unlisted = Subject {
+            name: model.name.clone(),
+            mesh: MeshSource::Skipped(String::new()),
+            expect: Expectations::default(),
+            isolated: Isolated::default(),
+        };
+        let subject = expectations
             .iter()
             .find(|subject| subject.name == model.name)
-            .map(|subject| subject.expect.clone())
-            .unwrap_or_default();
+            .unwrap_or(&unlisted);
         let poses = model
             .poses
             .iter()
             .map(PoseRow::pose)
             .collect::<Result<Vec<_>>>()?;
-        report
-            .models
-            .push(judged(model.name.clone(), model.faces, &poses, &expect));
+        report.models.push(judged(model.faces, &poses, subject));
     }
     Ok(report)
 }

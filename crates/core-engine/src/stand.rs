@@ -59,7 +59,7 @@ pub fn stand_under(
 
 /// `mesh` and what is cut out of it lifted clear of the plate by the profile's own lift,
 /// then how far they moved, the drilled model, and where it needs holding up.
-pub(crate) fn touched(
+fn touched(
     mesh: &mut Mesh,
     cuts: &mut Option<Mesh>,
     profile: &SupportProfile,
@@ -76,7 +76,7 @@ pub(crate) fn touched(
 
 /// The way the surface of `drilled` under each contact faces, unit, or zero where the
 /// contact finds none.
-pub(crate) fn facing(drilled: &Mesh, bvh: &Bvh, contacts: &[Vec3]) -> Vec<Vec3> {
+fn facing(drilled: &Mesh, bvh: &Bvh, contacts: &[Vec3]) -> Vec<Vec3> {
     contacts
         .iter()
         .map(|contact| {

@@ -380,8 +380,12 @@ within three seconds a million faces. Each broken rule is named under the goal.
 With no model it runs eight built-in bodies. `--corpus FILE` reads a TOML list of
 models, each with what a person expects of it — `max-tilt-deg`, `on-plate`, for every
 goal or one — which is held as one more rule. `--json FILE` keeps the run; `--baseline
-FILE` sets it beside one kept before and exits non-zero when a goal that passed there
-fails here.
+FILE` sets it beside one kept before, measures again the poses that run's goals chose so
+the best known pose is never forgotten, and exits non-zero when a goal that passed there
+fails here. A goal no measured pose could pass is `unreachable` and left out of the
+count; a corpus may `isolate` a model or `isolate-goals` one goal, which is measured and
+shown but neither counted nor a regression. `--rejudge FILE` judges a kept run again by
+the rules as they are now, measuring nothing.
 
 ```sh
 cargo run --release -p encrust-cli --bin orient-lab
