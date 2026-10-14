@@ -28,16 +28,16 @@ The cell is **2.5 tolerances** across. At that width the half of the cell a vert
 on each axis decides which side a match can be on, so eight cells are worth probing
 instead of 27 — a match in any other would be at least 1.25 tolerances away. Cells are
 hashed with `FastHasher` rather than `SipHash`: a cell derived from our own vertex is not
-an attacker's key, and there are millions of them. Each cell holds only its last
-representative, chained to the one before it, so a cell costs one map entry and no list.
+an attacker's key, and there are millions of them. A cell's representatives are searched
+in the order they were kept.
 
-Few vertices ever reach the grid (ADR 0269). The exact copies go first, through a parallel
+Few vertices ever reach the grid (ADR 0271). The exact copies go first, through a parallel
 sort over bit patterns: an exporter writes a shared corner with the same bits every time,
 so this leaves about a sixth of an STL's vertices. Of those, a point with no other point in
 its eight probe cells can merge with nothing, and no point can merge into it. Such points
-are found in parallel by binary search in a sorted list of occupied cells. Only the rest go
-through the grid, in their original order, which is why the result is exactly what one
-vertex at a time gave.
+are found in parallel by binary search in a sorted list of occupied cells. Only the rest,
+with every copy of them, go through the grid in their original order, which is why the
+result is exactly what one vertex at a time gave.
 
 The cell has a floor of `1e-7` mm so a zero tolerance still hashes finitely, which also
 puts `-0.0` and `0.0` in one cell where exact comparison would not.
@@ -109,7 +109,7 @@ order is the only trustworthy signal.
    fewer faces wins: the repair is minimal, and without it a cube with three inverted
    faces would be "fixed" by flipping the other nine.
 5. If the turning leaves as many seam edges in conflict as the file had, or more, the
-   file's winding stands. Orientation never makes a file worse (ADR 0267).
+   file's winding stands. Orientation never makes a file worse (ADR 0269).
 6. Per closed component, sum `a · (b × c)`: six times the enclosed volume, negative
    exactly when the shell is wound inwards, so the shell is flipped. Open components are
    skipped — with a hole there is no inside to be on the wrong side of.
@@ -117,7 +117,7 @@ order is the only trustworthy signal.
 Step 6 is why `Orientation` reports `inverted_shells` apart from `flipped_faces`: a model
 entirely inside out is a different problem from a few stray faces. `orientable` is false
 when a conflict is left, which is a note and not a defect: the fill rule takes what each
-body encloses (ADR 0267).
+body encloses (ADR 0269).
 
 ## Faces laid over others
 
@@ -126,13 +126,13 @@ opposite ways is a wall of no thickness that encloses nothing, so it goes whole.
 one of them would leave the other walking its edges the same way as a neighbour. Of a stack
 wound one way, the first face stays. Neither changes what the surface encloses, so import
 runs it after welding and before orientation, which would otherwise read a doubled edge
-as a branch (ADR 0268). The faces are found by the same counting sort as the edge table,
+as a branch (ADR 0270). The faces are found by the same counting sort as the edge table,
 keyed by sorted corners.
 
 ## Closing holes
 
 Repair adds surface the file never had, so it runs only when the user presses Repair
-(ADR 0194, 0268). The order is drop the doubled faces, orient, fill, drop the doubled
+(ADR 0194, 0270). The order is drop the doubled faces, orient, fill, drop the doubled
 faces again, orient. If the result has more boundary edges, degenerate faces and
 duplicates between them than the input had, the input stands.
 

@@ -239,9 +239,11 @@ fn remembered() -> Vec<printer_link::Task> {
 #[test]
 fn the_notices_at_the_foot_of_the_stage() {
     let mut app = app(true);
-    if let Some(cube) = app.doc.scene.objects_mut().first_mut() {
-        cube.summary.diagnostics.boundary_edges = 3;
-    }
+    let cube = app.doc.scene.objects_mut().first_mut();
+    cube.expect("the pictured plate holds a cube")
+        .summary
+        .diagnostics
+        .boundary_edges = 3;
     app.machine.network.sent = Some(crate::network::Sent {
         printer: "Workshop".to_owned(),
         filename: "Dragon bust.goo".to_owned(),

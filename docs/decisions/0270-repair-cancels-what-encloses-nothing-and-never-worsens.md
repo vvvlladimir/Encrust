@@ -1,4 +1,4 @@
-# 0268. Repair cancels what encloses nothing, patches by least area, and never worsens
+# 0270. Repair cancels what encloses nothing, patches by least area, and never worsens
 
 - **Status:** Accepted
 - **Date:** 2026-10-14
@@ -38,11 +38,12 @@ its plane as before, and fanned only if that fails.
 
 **`remove_unbalanced_faces` is gone.** The asked-for repair drops doubled faces, orients,
 fills, drops doubled faces again and orients. If the result is less sound than the input,
-counting boundary edges, degenerate faces and duplicates, the mesh stays as it came and
-the user is told.
+counting boundary edges, degenerate faces and duplicates, or nothing is left of it, the
+mesh stays as it came and the user is told.
 
-**The window no longer asks on import.** A broken model carries its mark, and the Repair
-button sits in the mark's popup and in the row's menu.
+**The window no longer stops to ask on import.** A broken model carries its mark, and a
+card at the foot of the stage offers Repair and Keep as it is until one is chosen. Repair
+also sits in the mark's popup and the row's menu, and a model it cannot mend counts as kept.
 
 ## Consequences
 
@@ -52,7 +53,8 @@ the button. Fans fall from 14 to 1. On a 200k-triangle sphere, dropping duplicat
 before. The run is counted out by lowest corner, as `edge_uses` is.
 
 A zero-thickness sheet with nothing on either side, once filled and cancelled, vanishes
-rather than printing as a wall of no thickness, which it never could have.
+rather than printing as a wall of no thickness, which it never could have. A model that is
+nothing but such a sheet stays as it came.
 
 ## Alternatives considered
 

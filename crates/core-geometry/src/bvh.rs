@@ -218,10 +218,6 @@ impl Bvh {
     }
 }
 
-/// Builds the subtree covering `items`, which start at `offset` in the final face order,
-/// and returns the index of its root node.
-///
-/// `items` is reordered in place, so a leaf is a contiguous stretch of it.
 /// One face as the build sees it, or `None` for a face naming a vertex that is not there.
 fn item(mesh: &Mesh, face: usize) -> Option<Item> {
     let triangle = mesh.triangle(face)?;
@@ -276,6 +272,10 @@ fn shifted(nodes: Vec<Node>, by: usize) -> impl Iterator<Item = Node> {
     })
 }
 
+/// Builds the subtree covering `items`, which start at `offset` in the final face order,
+/// and returns the index of its root node.
+///
+/// `items` is reordered in place, so a leaf is a contiguous stretch of it.
 fn split(nodes: &mut Vec<Node>, items: &mut [Item], offset: usize, depth: usize) -> usize {
     let index = nodes.len();
     nodes.push(leaf(items, offset));

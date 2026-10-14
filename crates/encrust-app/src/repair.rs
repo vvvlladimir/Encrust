@@ -2,10 +2,10 @@
 //! stage, and the runs that close the holes.
 //!
 //! Welding, orientation and dropping the faces laid over others are done on import without
-//! asking, because none of them changes what the model encloses (ADR 0005, 0268). Closing a
+//! asking, because none of them changes what the model encloses (ADR 0005, 0270). Closing a
 //! hole invents surface that was never in the file, so it is offered without blocking
 //! anything and waits for the Repair button; see
-//! `docs/decisions/0268-repair-cancels-what-encloses-nothing-and-never-worsens.md`.
+//! `docs/decisions/0270-repair-cancels-what-encloses-nothing-and-never-worsens.md`.
 
 use std::sync::Arc;
 

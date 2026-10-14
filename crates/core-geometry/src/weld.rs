@@ -1,4 +1,6 @@
-use rayon::iter::{IndexedParallelIterator, IntoParallelRefIterator, ParallelIterator};
+use rayon::iter::{
+    IndexedParallelIterator, IntoParallelIterator, IntoParallelRefIterator, ParallelIterator,
+};
 use rayon::slice::ParallelSliceMut;
 
 use crate::hash::FastMap;
@@ -41,9 +43,8 @@ impl Welded {
 /// per face, so an unwelded mesh has no usable topology at all: every edge looks like a
 /// boundary. Welding is what makes the checks in [`crate::diagnose`] mean anything.
 pub fn weld(mesh: &Mesh, tolerance: Scalar) -> Welded {
-    let (distinct, copy_of) = exact_copies(&mesh.vertices);
-    let (vertices, onto) = merge_nearby(&distinct, tolerance);
-    let remap: Vec<u32> = copy_of.iter().map(|at| onto[*at as usize]).collect();
+    let first = first_copies(&mesh.vertices);
+    let (vertices, remap) = merge_nearby(&mesh.vertices, &first, tolerance);
 
     let mut faces = Vec::with_capacity(mesh.faces.len());
     let mut dropped = Vec::new();
@@ -63,13 +64,11 @@ pub fn weld(mesh: &Mesh, tolerance: Scalar) -> Welded {
     }
 }
 
-/// The distinct positions among `vertices`, in the order each first appears, and which of
-/// them every vertex is.
+/// For every vertex, the lowest index holding the same bits.
 ///
-/// An exporter writes a shared corner with the same bits every time it uses it, so this
-/// is most of welding, and a sort does it in parallel; the grid then sees a sixth of the
-/// vertices. Matching bits rather than values leaves `-0.0` and `0.0` to the grid.
-fn exact_copies(vertices: &[Vec3]) -> (Vec<Vec3>, Vec<u32>) {
+/// Exporters write a shared corner with the same bits each time, so this finds most merges
+/// by a parallel sort; `-0.0` and `0.0` are left to the grid.
+fn first_copies(vertices: &[Vec3]) -> Vec<u32> {
     // Sorted with the bits beside the index rather than looked up through it, which on a
     // million vertices is the difference between a sort and a walk of cache misses.
     let mut keyed: Vec<([u32; 3], u32)> = vertices
@@ -79,65 +78,57 @@ fn exact_copies(vertices: &[Vec3]) -> (Vec<Vec3>, Vec<u32>) {
         .collect();
     keyed.par_sort_unstable();
 
-    // First the lowest index sharing each vertex's bits, then, walking up, the number of
-    // that first one: it is always met before the copies that point at it.
-    let mut copy_of = vec![0u32; vertices.len()];
+    let mut first = vec![0u32; vertices.len()];
     for run in keyed.chunk_by(|a, b| a.0 == b.0) {
         for (_, at) in run {
-            copy_of[*at as usize] = run[0].1;
+            first[*at as usize] = run[0].1;
         }
     }
-    let mut distinct = Vec::new();
-    for at in 0..vertices.len() {
-        let first = copy_of[at] as usize;
-        copy_of[at] = if first == at {
-            distinct.push(vertices[at]);
-            distinct.len() as u32 - 1
-        } else {
-            copy_of[first]
-        };
-    }
-    (distinct, copy_of)
+    first
 }
 
 /// Merges points closer together than `tolerance` into the first of them a grid finds,
 /// and returns what is left and where each point went.
 ///
-/// A point with no other in the eight cells a match could be in merges with nothing, and
-/// on a real mesh that is nearly all of them: those are told apart in parallel against a
-/// sorted list of occupied cells, and only the rest go through the grid, in their order.
-fn merge_nearby(points: &[Vec3], tolerance: Scalar) -> (Vec<Vec3>, Vec<u32>) {
+/// A distinct point with no other in the eight cells a match could be in merges with
+/// nothing; those are told apart in parallel, and only the rest go through the grid.
+fn merge_nearby(points: &[Vec3], first: &[u32], tolerance: Scalar) -> (Vec<Vec3>, Vec<u32>) {
     let cell = tolerance.max(MIN_CELL) * CELL_SCALE;
+    let is_first = |at: usize| first[at] as usize == at;
     let mut occupied: Vec<[i64; 3]> = points
         .par_iter()
-        .map(|point| probe_cells(*point, cell)[0])
+        .enumerate()
+        .filter(|(at, _)| is_first(*at))
+        .map(|(_, point)| probe_cells(*point, cell)[0])
         .collect();
     occupied.par_sort_unstable();
-    let crowded: Vec<u32> = points
+    let company: Vec<bool> = points
         .par_iter()
         .enumerate()
-        .filter(|(_, point)| has_company(&occupied, &probe_cells(**point, cell)))
-        .map(|(at, _)| at as u32)
+        .map(|(at, point)| is_first(at) && has_company(&occupied, &probe_cells(*point, cell)))
+        .collect();
+    // A copy of a crowded point is searched again, as it was before copies were split off.
+    let crowded: Vec<u32> = (0..points.len() as u32)
+        .into_par_iter()
+        .filter(|at| company[first[*at as usize] as usize])
         .collect();
 
-    // Which point each one went to, the first of them for one that stands alone.
-    let mut rep: Vec<u32> = (0..points.len() as u32).collect();
+    let mut rep = first.to_vec();
     for (at, onto) in crowded
         .iter()
         .zip(merge_crowded(points, &crowded, tolerance))
     {
         rep[*at as usize] = onto;
     }
-    // Representatives are numbered in the order they appear, and come before what
-    // merges into them.
+    // Every point goes to one before it or to itself, so one pass in order numbers them.
     let mut kept = Vec::new();
     for at in 0..points.len() {
-        let first = rep[at] as usize;
-        rep[at] = if first == at {
+        let onto = rep[at] as usize;
+        rep[at] = if onto == at {
             kept.push(points[at]);
             kept.len() as u32 - 1
         } else {
-            rep[first]
+            rep[onto]
         };
     }
     (kept, rep)
@@ -158,31 +149,21 @@ fn has_company(occupied: &[[i64; 3]], probe: &[[i64; 3]; 8]) -> bool {
 fn merge_crowded(points: &[Vec3], crowded: &[u32], tolerance: Scalar) -> Vec<u32> {
     let cell = tolerance.max(MIN_CELL) * CELL_SCALE;
     let radius_sq = tolerance.max(0.0) * tolerance.max(0.0);
-
-    // Each cell holds the last representative put in it, and `before` chains it to the
-    // one put in before that: one map entry and no list per cell.
-    let mut last = Cells::default();
-    last.reserve(crowded.len());
-    let mut before: FastMap<u32, u32> = FastMap::default();
+    let mut cells = Cells::default();
     let mut onto = Vec::with_capacity(crowded.len());
 
     for &at in crowded {
         let point = points[at as usize];
         let nearby = probe_cells(point, cell);
-        let existing = nearby.iter().find_map(|key| {
-            let mut other = *last.get(key)?;
-            loop {
-                if points[other as usize].distance_squared(point) <= radius_sq {
-                    return Some(other);
-                }
-                other = *before.get(&other)?;
-            }
-        });
+        let existing = nearby
+            .iter()
+            .filter_map(|key| cells.get(key))
+            .flatten()
+            .copied()
+            .find(|&other| points[other as usize].distance_squared(point) <= radius_sq);
 
         onto.push(existing.unwrap_or_else(|| {
-            if let Some(previous) = last.insert(nearby[0], at) {
-                before.insert(at, previous);
-            }
+            cells.entry(nearby[0]).or_default().push(at);
             at
         }));
     }
@@ -228,7 +209,7 @@ fn probe_cells(v: Vec3, cell: Scalar) -> [[i64; 3]; 8] {
     cells
 }
 
-type Cells = FastMap<[i64; 3], u32>;
+type Cells = FastMap<[i64; 3], Vec<u32>>;
 
 #[cfg(test)]
 mod tests {
@@ -279,12 +260,30 @@ mod tests {
                     points.push(spot * 0.01 + Vec3::X * tolerance * 0.7 * step as Scalar);
                 }
             }
+            // A copy of a point some way back, as an exporter writes a shared corner.
+            if at % 13 == 0 && points.len() > 40 {
+                points.push(points[points.len() - 37]);
+            }
         }
 
         assert_eq!(
-            merge_nearby(&points, tolerance),
+            merge_nearby(&points, &first_copies(&points), tolerance),
             one_by_one(&points, tolerance)
         );
+    }
+
+    #[test]
+    fn a_point_near_two_kept_ones_in_a_cell_merges_into_the_older() {
+        let tolerance = DEFAULT_WELD_TOLERANCE;
+        let at = |share: Scalar| Vec3::new(share * tolerance, 0.5 * tolerance, 0.5 * tolerance);
+        // Both kept points 1.5 tolerances apart in the cell from 0 to 2.5, and the third
+        // within one tolerance of each; its copy comes after a closer point was kept.
+        let points = vec![at(0.1), at(1.6), at(0.85), at(0.85)];
+
+        let (kept, onto) = merge_nearby(&points, &first_copies(&points), tolerance);
+        assert_eq!(kept.len(), 2);
+        assert_eq!(onto, vec![0, 1, 0, 0], "the oldest point in the cell wins");
+        assert_eq!((kept, onto), one_by_one(&points, tolerance));
     }
 
     #[test]

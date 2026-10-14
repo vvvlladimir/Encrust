@@ -19,12 +19,8 @@ const MAX_MINIMAL_RING: usize = 256;
 /// below it the triangle is a sliver that would read as a face with no area.
 const MIN_ASPECT: f64 = 1e-6;
 
-/// Drops the faces laid over others on the same three vertices, and returns where they
-/// were in the mesh, ascending.
-///
-/// Two faces wound opposite ways enclose nothing, so the pair goes whole; of a stack
-/// wound one way the first stays. Neither changes what the surface encloses, nor
-/// unbalances an edge.
+/// Drops the faces laid over others on the same three vertices without changing what the
+/// surface encloses, and returns where they were in the mesh, ascending.
 pub fn remove_duplicate_faces(mesh: &mut Mesh) -> Vec<u32> {
     let extra = duplicate_faces(mesh);
     if extra.is_empty() {

@@ -157,27 +157,7 @@ pub fn import(
     if args.transform.center {
         mesh = centred(mesh, profile)?;
     }
-    // Before the orientation fix: a face laid over another reads as a branch to it.
-    let doubled = if args.no_validate {
-        0
-    } else {
-        remove_duplicate_faces(&mut mesh).len()
-    };
-    let orientation = (!args.no_validate).then(|| orient_outward(&mut mesh));
-    let diagnostics = (!args.no_validate).then(|| diagnose(&mesh));
-    let shells = diagnostics.as_ref().map(|found| found.shells);
-    let stats = MeshStats::of(&mesh, shells).context("mesh has no vertices")?;
-    let fit = profile.map(|p| FitCheck::of(&stats, p));
-
-    let import = ImportReport {
-        path: input.to_path_buf(),
-        stats,
-        welded,
-        doubled,
-        diagnostics,
-        orientation,
-        fit,
-    };
+    let import = checked(&mut mesh, input, welded, args, profile)?;
     if talk {
         print!("{import}");
     }
@@ -501,17 +481,28 @@ pub fn inspect(input: &Path, args: &ImportArgs, chosen: &Chosen) -> Result<Impor
     if args.transform.center {
         mesh = centred(mesh, profile)?;
     }
+    checked(&mut mesh, input, welded, args, profile)
+}
 
+/// Drops the doubled faces, fixes the winding and measures the model, unless validation
+/// is off, and says what import found.
+fn checked(
+    mesh: &mut Mesh,
+    input: &Path,
+    welded: Welded,
+    args: &ImportArgs,
+    profile: Option<&PrinterProfile>,
+) -> Result<ImportReport> {
     // Before the orientation fix: a face laid over another reads as a branch to it.
     let doubled = if args.no_validate {
         0
     } else {
-        remove_duplicate_faces(&mut mesh).len()
+        remove_duplicate_faces(mesh).len()
     };
-    let orientation = (!args.no_validate).then(|| orient_outward(&mut mesh));
-    let diagnostics = (!args.no_validate).then(|| diagnose(&mesh));
+    let orientation = (!args.no_validate).then(|| orient_outward(mesh));
+    let diagnostics = (!args.no_validate).then(|| diagnose(mesh));
     let shells = diagnostics.as_ref().map(|found| found.shells);
-    let stats = MeshStats::of(&mesh, shells).context("mesh has no vertices")?;
+    let stats = MeshStats::of(mesh, shells).context("mesh has no vertices")?;
     let fit = profile.map(|p| FitCheck::of(&stats, p));
 
     Ok(ImportReport {

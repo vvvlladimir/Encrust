@@ -1,4 +1,4 @@
-# 0267. Orientation never worsens a file, and a fold is noted rather than asked about
+# 0269. Orientation never worsens a file, and a fold is noted rather than asked about
 
 - **Status:** Accepted
 - **Date:** 2026-10-14
@@ -44,9 +44,6 @@ surface out of a sound model.
 There is no threshold: any number of conflicts that orientation cannot mend is a note. The
 signal to reopen this is a file whose conflicts print wrong, rather than one that only
 reads oddly.
-
-Remove-the-unbalanced in the asked-for repair now runs only on a model that also has a
-hole, duplicates or degenerate faces.
 
 ## Alternatives considered
 

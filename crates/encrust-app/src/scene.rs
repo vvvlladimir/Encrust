@@ -121,11 +121,7 @@ impl ImportSummary {
 
     /// What is odd about the mesh but slices as it stands, so is said without asking.
     pub fn notes(&self) -> Vec<String> {
-        let diagnostics = &self.diagnostics;
-        // A boundary edge is unbalanced too, and is already named among the defects.
-        let folded = diagnostics
-            .unbalanced_edges
-            .saturating_sub(diagnostics.boundary_edges);
+        let folded = self.diagnostics.folded_edges();
         if folded == 0 {
             return Vec::new();
         }

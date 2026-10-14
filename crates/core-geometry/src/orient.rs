@@ -95,8 +95,8 @@ struct Link {
 ///
 /// Faces that already agree with each other form patches, and a patch is turned as a
 /// whole, so a conflict inside one, which no turning can mend, never spreads out of it.
-/// Between patches the seams with the most edges are honoured first. If that leaves
-/// more edges in conflict than the file had, the file's own winding stands.
+/// Between patches the seams with the most edges are honoured first. Unless that leaves
+/// fewer edges in conflict than the file had, the file's own winding stands.
 fn settle(faces: usize, links: &[Link]) -> Vec<bool> {
     let mut patches = Components::new(faces);
     for link in links.iter().filter(|link| link.agreed) {

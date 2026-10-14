@@ -127,11 +127,9 @@ impl fmt::Display for ImportReport {
             for defect in defects(diagnostics) {
                 writeln!(f, "  defect        {defect}")?;
             }
-            let folded = diagnostics
-                .unbalanced_edges
-                .saturating_sub(diagnostics.boundary_edges);
+            let folded = diagnostics.folded_edges();
             if folded > 0 {
-                // Sliced as they stand, so a note and not a defect: ADR 0267.
+                // Sliced as they stand, so a note and not a defect: ADR 0269.
                 writeln!(
                     f,
                     "  note          {folded} edges where faces lie folded together"

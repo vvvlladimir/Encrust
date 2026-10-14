@@ -1,4 +1,4 @@
-# 0269. Weld, index and sort a mesh's edges on rayon, with the same result one thread gives
+# 0271. Weld, index and sort a mesh's edges on rayon, with the same result one thread gives
 
 - **Status:** Accepted
 - **Date:** 2026-10-14
@@ -17,7 +17,7 @@ eight:
 | reading the file | 38 ms |
 
 ADR 0038 moved that work off the frame, but the user still waits for it. Rule 7 of
-`AGENTS.md` asks that work proportional to triangles run on rayon. `core-geometry` was the
+`.claude/rules/architecture.md` asks that work proportional to triangles run on rayon. `core-geometry` was the
 one core that did no such work in parallel and depended on nothing that could.
 
 Most of welding's time was not spent merging anything. An exporter writes a shared corner
@@ -33,9 +33,9 @@ does for its peers (ADR 0177).
 **Welding runs in three passes.** First, a parallel sort over bit patterns finds the exact
 copies. Second, a parallel check against a sorted list of occupied cells sets aside every
 distinct point with no other in the eight cells a match could be in, because such a point
-merges with nothing. Third, the remaining points go through the grid one at a time, in
-their order, with one map entry per cell chained through the representatives. The result
-is exactly what one point at a time gave, and a test holds the two against each other.
+merges with nothing. Third, the remaining points and their copies go through the grid one at a
+time, in their order, so a copy is matched again as it was before. The result is exactly
+what one point at a time gave, and a test holds the two against each other.
 
 **A hierarchy's halves are built on two threads above 16 384 faces,** then joined into the
 same node array a single thread lays out, which a test also checks.

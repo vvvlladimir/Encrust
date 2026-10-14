@@ -42,9 +42,14 @@ impl MeshDiagnostics {
     }
 
     /// Nothing that would make slicing produce garbage: no hole, no face without area, none
-    /// drawn twice. An edge two faces walk the same way is not one: see ADR 0267.
+    /// drawn twice. An edge two faces walk the same way is not one: see ADR 0269.
     pub fn is_sound(&self) -> bool {
         self.boundary_edges == 0 && self.degenerate_faces == 0 && self.duplicate_faces == 0
+    }
+
+    /// Unbalanced edges with no hole behind them, where faces lie folded onto each other.
+    pub fn folded_edges(&self) -> usize {
+        self.unbalanced_edges.saturating_sub(self.boundary_edges)
     }
 }
 
