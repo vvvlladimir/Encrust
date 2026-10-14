@@ -64,9 +64,8 @@ impl ImportReport {
             .diagnostics
             .as_ref()
             .is_none_or(MeshDiagnostics::is_sound);
-        let orientable = self.orientation.as_ref().is_none_or(|o| o.orientable);
         let fits = self.fit.as_ref().is_none_or(FitCheck::fits);
-        sound && orientable && fits
+        sound && fits
     }
 }
 
@@ -118,6 +117,16 @@ impl fmt::Display for ImportReport {
             for defect in defects(diagnostics) {
                 writeln!(f, "  defect        {defect}")?;
             }
+            let folded = diagnostics
+                .unbalanced_edges
+                .saturating_sub(diagnostics.boundary_edges);
+            if folded > 0 {
+                // Sliced as they stand, so a note and not a defect: ADR 0267.
+                writeln!(
+                    f,
+                    "  note          {folded} edges where faces lie folded together"
+                )?;
+            }
         }
 
         if let Some(orientation) = &self.orientation {
@@ -156,13 +165,6 @@ fn describe_closure(diagnostics: &MeshDiagnostics) -> String {
 fn defects(diagnostics: &MeshDiagnostics) -> Vec<String> {
     let counts = [
         (diagnostics.boundary_edges, "open edges"),
-        (
-            // A boundary edge is unbalanced too, and is already counted as open.
-            diagnostics
-                .unbalanced_edges
-                .saturating_sub(diagnostics.boundary_edges),
-            "edges the surface cannot be wound round",
-        ),
         (diagnostics.degenerate_faces, "degenerate faces"),
         (diagnostics.duplicate_faces, "duplicate faces"),
         (diagnostics.unreferenced_vertices, "unused vertices"),
@@ -176,7 +178,10 @@ fn defects(diagnostics: &MeshDiagnostics) -> Vec<String> {
 
 fn describe_orientation(orientation: &Orientation) -> String {
     if !orientation.orientable {
-        return "not orientable, winding left as found".to_owned();
+        return match orientation.flipped_faces {
+            0 => "left as found where no turning mends it".to_owned(),
+            flipped => format!("fixed {flipped} inverted faces, the rest left as found"),
+        };
     }
     if orientation.inverted_shells > 0 {
         let shells = orientation.inverted_shells;

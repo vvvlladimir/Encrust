@@ -40,9 +40,10 @@ impl MeshDiagnostics {
         self.unbalanced_edges == 0
     }
 
-    /// Nothing that would make slicing produce garbage.
+    /// Nothing that would make slicing produce garbage: no hole, no face without area, none
+    /// drawn twice. An edge two faces walk the same way is not one: see ADR 0267.
     pub fn is_sound(&self) -> bool {
-        self.is_closed() && self.degenerate_faces == 0 && self.duplicate_faces == 0
+        self.boundary_edges == 0 && self.degenerate_faces == 0 && self.duplicate_faces == 0
     }
 }
 
@@ -414,6 +415,17 @@ mod tests {
         assert_eq!(diagnostics.non_manifold_edges, 0);
         assert_eq!(diagnostics.unbalanced_edges, 3);
         assert!(!diagnostics.is_closed());
+        assert!(
+            diagnostics.is_sound(),
+            "the fill rule takes what the box encloses, so it slices as it stands"
+        );
+    }
+
+    #[test]
+    fn a_hole_makes_a_mesh_unsound() {
+        let mut mesh = box_mesh(Vec3::ZERO, Vec3::splat(2.0));
+        mesh.faces.pop();
+        assert!(!diagnose(&mesh).is_sound());
     }
 
     #[test]

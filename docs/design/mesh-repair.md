@@ -90,21 +90,27 @@ lives with the plane-intersection epsilon.
 face normals are never consulted — exporters write them wrong often enough that winding
 order is the only trustworthy signal.
 
-1. Build face adjacency from the manifold edge groups, tagging each link with whether the
-   faces already agree.
-2. Breadth-first per component, assigning a flip flag: a face keeps its winding when it
-   agrees with the neighbour that reached it. An assigned neighbour that disagrees means
-   no consistent orientation exists — a Möbius strip — and the mesh is reported as not
-   orientable.
-3. Within a component only the two assignments matter, so the smaller one wins: the repair
-   is minimal and independent of the seed. Without it, a cube with three inverted faces
-   would be "fixed" by flipping the other nine.
-4. Per closed component, sum `a · (b × c)`: six times the enclosed volume, negative
+1. Link every two faces sharing an edge no third face uses, tagging the link with whether
+   they already agree.
+2. Union the agreeing links into patches. A patch is turned as a whole, so a conflict
+   inside one — a half twist, or two bodies' walls folded onto each other — is left where
+   the file put it rather than pushed around by a walk.
+3. The disagreeing links between two patches form a seam. Seams are honoured heaviest
+   first through a union-find that keeps parity: joining two patches ties them to opposite
+   turnings, and a seam whose patches are already tied is skipped.
+4. Within a group of tied patches only the two assignments matter, so the one turning
+   fewer faces wins: the repair is minimal, and without it a cube with three inverted
+   faces would be "fixed" by flipping the other nine.
+5. If the turning leaves as many seam edges in conflict as the file had, or more, the
+   file's winding stands. Orientation never makes a file worse (ADR 0267).
+6. Per closed component, sum `a · (b × c)`: six times the enclosed volume, negative
    exactly when the shell is wound inwards, so the shell is flipped. Open components are
    skipped — with a hole there is no inside to be on the wrong side of.
 
-Step 4 is why `Orientation` reports `inverted_shells` apart from `flipped_faces`: a model
-entirely inside out is a different problem from a few stray faces.
+Step 6 is why `Orientation` reports `inverted_shells` apart from `flipped_faces`: a model
+entirely inside out is a different problem from a few stray faces. `orientable` is false
+when a conflict is left, which is a note and not a defect: the fill rule takes what each
+body encloses (ADR 0267).
 
 ## Closing holes and dropping faces
 
