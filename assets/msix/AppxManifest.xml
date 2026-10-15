@@ -36,29 +36,19 @@
   </Resources>
 
   <Applications>
-    <Application Id="Encrust" Executable="encrust-gui.exe" EntryPoint="Windows.FullTrustApplication">
+    <!-- The command line rides on the window's entry as an alias: the Store refuses an app with
+         no Start menu entry. A console alias must allow one instance per terminal. -->
+    <Application
+      Id="Encrust"
+      Executable="encrust-gui.exe"
+      EntryPoint="Windows.FullTrustApplication"
+      desktop4:SupportsMultipleInstances="true">
       <uap:VisualElements
         DisplayName="Encrust"
         Description="Slicer for MSLA and SLA resin 3D printers"
         BackgroundColor="transparent"
         Square150x150Logo="Images\Square150x150Logo.png"
         Square44x44Logo="Images\Square44x44Logo.png" />
-    </Application>
-
-    <!-- No Start menu entry: the command line is reached by typing `encrust` in a terminal. A
-         console alias must allow several instances, one per terminal that runs it. -->
-    <Application
-      Id="EncrustCli"
-      Executable="encrust.exe"
-      EntryPoint="Windows.FullTrustApplication"
-      desktop4:SupportsMultipleInstances="true">
-      <uap:VisualElements
-        DisplayName="Encrust command line"
-        Description="Slices and converts print files from a terminal"
-        BackgroundColor="transparent"
-        Square150x150Logo="Images\Square150x150Logo.png"
-        Square44x44Logo="Images\Square44x44Logo.png"
-        AppListEntry="none" />
       <Extensions>
         <uap5:Extension
           Category="windows.appExecutionAlias"
