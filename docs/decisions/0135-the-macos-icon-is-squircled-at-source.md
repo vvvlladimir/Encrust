@@ -1,6 +1,6 @@
 # 0135. The macOS icon is squircled at source, not only in the bundle
 
-- **Status:** Accepted
+- **Status:** Accepted; the square icon on other targets is replaced by [0287](0287-every-desktop-icon-is-the-rounded-tile.md)
 - **Date:** 2026-09-29
 
 ## Context

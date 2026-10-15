@@ -64,6 +64,10 @@ started from an `.AppImage` (it runs from a read-only mount) or installed under 
 `.deb` (the package manager owns it); those are sent to the release page. Inside `Encrust.app`
 and the per-user Windows install the swap works as above.
 
+A copy installed from the Microsoft Store runs from under a `WindowsApps` directory, which
+Windows keeps read-only. It never reads the feed: the Store updates it, and the Updates page
+links there instead ([ADR 0286](../decisions/0286-the-windows-build-also-ships-through-the-microsoft-store.md)).
+
 ## The signing key
 
 The public half is `assets/update-key.pub`. The private half is the repository secret
