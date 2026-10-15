@@ -240,6 +240,8 @@ jobs:
           $PSNativeCommandUseErrorActionPreference = $true
           $sdk = (Get-ChildItem "${env:ProgramFiles(x86)}\Windows Kits\10\bin\10.*\x64\makeappx.exe" |
             Sort-Object { [version]$_.Directory.Parent.Name } | Select-Object -Last 1).DirectoryName
+          if (-not $sdk) { throw 'no makeappx.exe in any Windows SDK on this runner' }
+          Write-Host "SDK tools: $sdk"
           Copy-Item -Recurse workflow/assets/msix msix
           (Get-Content workflow/assets/msix/AppxManifest.xml -Raw).Replace('@VERSION@', "$($env:TAG.TrimStart('v')).0") |
             Set-Content msix/AppxManifest.xml -NoNewline

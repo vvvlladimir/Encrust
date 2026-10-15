@@ -45,8 +45,13 @@
         Square44x44Logo="Images\Square44x44Logo.png" />
     </Application>
 
-    <!-- No Start menu entry: the command line is reached by typing `encrust` in a terminal. -->
-    <Application Id="EncrustCli" Executable="encrust.exe" EntryPoint="Windows.FullTrustApplication">
+    <!-- No Start menu entry: the command line is reached by typing `encrust` in a terminal. A
+         console alias must allow several instances, one per terminal that runs it. -->
+    <Application
+      Id="EncrustCli"
+      Executable="encrust.exe"
+      EntryPoint="Windows.FullTrustApplication"
+      desktop4:SupportsMultipleInstances="true">
       <uap:VisualElements
         DisplayName="Encrust command line"
         Description="Slices and converts print files from a terminal"
