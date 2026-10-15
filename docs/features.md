@@ -70,8 +70,10 @@ capped silently.
 
 **Auto-orient:**
 - Searches for the best angle for one of four goals: **fewest supports**, **least peel**,
-  **shortest print** or **clean top**. Clean top keeps the side facing up in the file free
-  of support marks.
+  **shortest print** or **clean top**, picked in Position above **Auto-orient**; the
+  plate-wide **Auto-orient plate** uses the same goal. Clean top keeps the side facing up
+  in the file free of support marks. The goal resets to fewest supports when the window
+  reopens.
 - You can cap the tilt (for example "no more than 30° from how it stands now"). A cap of 0
   leaves the model as it is.
 - It never picks an angle worse than the current one.
@@ -80,6 +82,11 @@ capped silently.
   suction cups — drain them with **Drain**, or use **least peel**, which avoids them — and
   islands, takes supports with no room to stand as they come, and never picks a pose that
   would not fit the printer or that would balance on a point.
+- **Least peel** keeps the hardest layer's pull on the film low, without suction cups or
+  anything left hanging. Once every layer pulls under 10 N — a third of the 30 N warning —
+  it has nothing more to win, and takes the pose with the least support among those, so
+  a small model is not tilted or flipped for a fraction of a newton. The newtons are an
+  estimate good to about a factor of three, not a measurement of your printer.
 - It either leaves a model standing on the plate, with supports only under what hangs
   over it, or lifts it onto supports by the support profile's **Lift** — whichever the
   goal prefers. Your raft setting is counted either way.
@@ -234,7 +241,8 @@ smoothing, not the original model.
 - **Islands:** parts that start in mid-air with nothing under them.
 - **Suction cups:** closed hollows that pull on the film.
 - **Thin sections and weak necks:** places too thin to hold.
-- **Hard peel:** the layers that pull the film hardest, the widest step and the levers.
+- **Hard peel:** the layers that pull the film hardest, the widest step and the levers. A
+  section's pull follows its area, less for a thin strip than for a disc of the same area.
 
 **It lets you:**
 - Jump to the layer of each issue.

@@ -34,6 +34,27 @@ fn turn_cost(goal: OrientGoal, drawn: f64) -> f64 {
     }
 }
 
+/// The pull the least peel has enough at, newtons, the judge's own (README, 2.3a), and the
+/// support past the least such pose's it may then take, a quarter and a strut.
+const PEEL_ENOUGH_N: f64 = 10.0;
+const SPARE_BAND: f64 = 1.25;
+const SPARE_SLACK_ML: f64 = 0.05;
+
+/// `goal`'s reading of `pose`, no lower than what the goal counts as enough.
+fn effective(goal: OrientGoal, pose: &Pose) -> f64 {
+    let reading = pose.printout.reading(goal);
+    if goal == OrientGoal::LeastPeel {
+        reading.max(PEEL_ENOUGH_N)
+    } else {
+        reading
+    }
+}
+
+/// The support a pose takes, millilitres.
+fn support_ml(pose: &Pose) -> f64 {
+    pose.printout.reading(OrientGoal::FewestSupports)
+}
+
 /// A tilt under this is standing as drawn, degrees.
 const SETTLED_DEG: f32 = 2.0;
 
@@ -276,13 +297,17 @@ pub fn judge(goal: OrientGoal, poses: &[Pose], expect: Expect, faces: usize) -> 
         .iter()
         .find(|pose| pose.source == Source::Goal(goal))?;
     let floor = Floor::of(poses, goal);
-    let reading = |pose: &Pose| pose.printout.reading(goal);
+    let reading = |pose: &Pose| effective(goal, pose);
     // The best is sought among the poses a person would accept at all.
     let acceptable = |pose: &Pose| expected(pose, expect).iter().all(|check| check.passed);
     let best = poses
         .iter()
         .filter(|pose| floor.sound(pose) && acceptable(pose))
-        .min_by(|a, b| reading(a).total_cmp(&reading(b)))
+        .min_by(|a, b| {
+            reading(a)
+                .total_cmp(&reading(b))
+                .then(support_ml(a).total_cmp(&support_ml(b)))
+        })
         .map(|pose| (pose.name.clone(), reading(pose)));
     let held_to = |pose: &Pose| held_to(goal, pose, poses, &floor, best.as_ref(), expect);
     let reachable_by = poses
@@ -295,7 +320,7 @@ pub fn judge(goal: OrientGoal, poses: &[Pose], expect: Expect, faces: usize) -> 
     Some(Verdict {
         goal,
         checks,
-        reading: reading(chosen),
+        reading: chosen.printout.reading(goal),
         best,
         reachable_by,
     })
@@ -313,16 +338,21 @@ fn held_to(
 ) -> Vec<Check> {
     let chosen = pose;
     let mut checks = floor.prints(chosen).to_vec();
-    let own = chosen.printout.reading(goal);
+    let own = effective(goal, chosen);
     if let Some((name, best_reading)) = best {
         let limit = best_reading * (1.0 + goal_band(goal)) + Printout::noise(goal);
         // A reading bought by failing the print wins nothing.
         let sound = floor.sound(chosen);
         let unsound = if sound { "" } else { "not sound, so no win: " };
+        let spare = spare(goal, chosen, poses, floor);
         checks.push(check(
             Rule::Goal,
-            sound && own <= limit,
-            format!("{unsound}{own:.1}, best {best_reading:.1} by {name}"),
+            sound && own <= limit && spare.is_none(),
+            format!(
+                "{unsound}{:.1}, best {best_reading:.1} by {name}{}",
+                chosen.printout.reading(goal),
+                spare.unwrap_or_default()
+            ),
         ));
         checks.push(stays(goal, chosen, poses, floor, limit));
     }
@@ -330,19 +360,44 @@ fn held_to(
     checks
 }
 
+/// Where the least peel has enough, what it took in support past the least any sound pose
+/// with enough takes, as the reason it fails; `None` when it took no more.
+fn spare(goal: OrientGoal, chosen: &Pose, poses: &[Pose], floor: &Floor) -> Option<String> {
+    if goal != OrientGoal::LeastPeel || effective(goal, chosen) > PEEL_ENOUGH_N {
+        return None;
+    }
+    let (name, least) = poses
+        .iter()
+        .filter(|pose| floor.sound(pose) && effective(goal, pose) <= PEEL_ENOUGH_N)
+        .map(|pose| (pose.name.as_str(), support_ml(pose)))
+        .min_by(|a, b| a.1.total_cmp(&b.1))?;
+    let own = support_ml(chosen);
+    (own > least * SPARE_BAND + SPARE_SLACK_ML)
+        .then(|| format!("; enough, but {own:.2} ml of support against {least:.2} by {name}"))
+}
+
 /// A turn is only worth it when standing as drawn is out of the band, or the turn wins
-/// [`turn_cost`] over it.
+/// [`turn_cost`] over it; where both have enough pull, it has to spare that in support.
 fn stays(goal: OrientGoal, chosen: &Pose, poses: &[Pose], floor: &Floor, limit: f64) -> Check {
-    let reading = |pose: &Pose| pose.printout.reading(goal);
-    let as_drawn = poses
+    let reading = |pose: &Pose| effective(goal, pose);
+    let drawn_pose = poses
         .iter()
         .filter(|pose| pose.tilt_deg < SETTLED_DEG && floor.sound(pose))
-        .map(reading)
-        .min_by(f64::total_cmp)
-        .filter(|drawn| *drawn <= limit);
-    let passed = match as_drawn {
+        .min_by(|a, b| {
+            reading(a)
+                .total_cmp(&reading(b))
+                .then(support_ml(a).total_cmp(&support_ml(b)))
+        })
+        .filter(|pose| reading(pose) <= limit);
+    let as_drawn = drawn_pose.map(reading);
+    let passed = match drawn_pose {
         Some(drawn) if chosen.tilt_deg >= SETTLED_DEG => {
-            reading(chosen) <= drawn - turn_cost(goal, drawn)
+            let won = reading(chosen) <= reading(drawn) - turn_cost(goal, reading(drawn));
+            let enough = goal == OrientGoal::LeastPeel
+                && reading(drawn).max(reading(chosen)) <= PEEL_ENOUGH_N;
+            let spared = support_ml(chosen)
+                <= support_ml(drawn) - turn_cost(OrientGoal::FewestSupports, support_ml(drawn));
+            won || (enough && spared)
         }
         _ => true,
     };
@@ -392,7 +447,7 @@ mod tests {
     const FEWEST: OrientGoal = OrientGoal::FewestSupports;
 
     /// A printout standing `contacts` contacts on a tenth of a millilitre of support each,
-    /// pulling as many tenths of a newton.
+    /// pulling a newton each: past the least peel's enough from ten.
     fn printout(contacts: usize) -> Printout {
         Printout {
             contacts,
@@ -400,7 +455,7 @@ mod tests {
             hanging: 0,
             top_contacts: 0,
             layers: 100,
-            pull_n: contacts as f64 / 10.0,
+            pull_n: contacts as f64,
             growth_mm2: 0.0,
             islands: 0,
             cups: 0,
@@ -519,7 +574,7 @@ mod tests {
             chosen(52, 30.0),
         ];
         assert_eq!(broken_for(FEWEST, &poses), ["goal"], "5.2 ml against 5.0");
-        assert!(broken(&poses).is_empty(), "5.2 N is within a tenth of 5.0");
+        assert!(broken(&poses).is_empty(), "52 N is within a tenth of 50");
     }
 
     #[test]
@@ -583,5 +638,57 @@ mod tests {
         slow.seconds = 30.0;
         let poses = [pose("as is", Source::Hand, 100, 0.0), slow];
         assert_eq!(broken(&poses), ["time"]);
+    }
+
+    #[test]
+    fn with_enough_pull_the_least_peel_fails_on_support_it_did_not_need() {
+        let mut heavy = chosen(8, 30.0);
+        heavy.printout.supports_ml = 2.0;
+        let poses = [
+            pose("as is", Source::Hand, 100, 0.0),
+            pose("lean", Source::Hand, 5, 20.0),
+            heavy,
+        ];
+        assert_eq!(
+            broken(&poses),
+            ["goal"],
+            "8 N and 5 N both have enough; 2 ml against 0.5"
+        );
+        let spare = chosen(6, 30.0);
+        let poses = [
+            pose("as is", Source::Hand, 100, 0.0),
+            pose("lean", Source::Hand, 5, 20.0),
+            spare,
+        ];
+        assert!(
+            broken(&poses).is_empty(),
+            "0.6 ml is within a quarter and a strut of 0.5"
+        );
+    }
+
+    #[test]
+    fn a_turn_past_enough_pull_does_not_stay_for_the_support_it_spares() {
+        let mut lighter = chosen(11, 30.0);
+        lighter.printout.supports_ml = 0.2;
+        let poses = [pose("as is", Source::Hand, 5, 0.0), lighter];
+        assert_eq!(
+            broken(&poses),
+            ["stays"],
+            "11 N has not enough, so 0.2 ml against 0.5 does not pay for the turn"
+        );
+    }
+
+    #[test]
+    fn a_turn_with_enough_pull_spares_support_against_the_lightest_way_as_drawn() {
+        let mut heavy = pose("as is", Source::Hand, 5, 0.0);
+        heavy.printout.supports_ml = 2.0;
+        let mut turned = chosen(3, 30.0);
+        turned.printout.supports_ml = 0.75;
+        let poses = [heavy, pose("as is too", Source::Hand, 6, 0.0), turned];
+        assert_eq!(
+            broken(&poses),
+            ["stays"],
+            "both as drawn have enough; 0.75 ml spares nothing against 0.6"
+        );
     }
 }

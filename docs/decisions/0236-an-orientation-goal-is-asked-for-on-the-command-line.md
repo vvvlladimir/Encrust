@@ -1,6 +1,6 @@
 # 0236. Ask for an orientation goal and a tilt limit on the command line
 
-- **Status:** Accepted
+- **Status:** Accepted; that the window orients for the default goal alone is superseded by 0282
 - **Date:** 2026-10-12
 
 ## Context

@@ -690,18 +690,6 @@ fn euler_degrees(angles: Vec3) -> Quat {
 mod tests {
     use super::*;
 
-    #[test]
-    fn the_orientation_limits_are_the_ones_the_analysis_names() {
-        let settings = OrientSettings::default();
-        let limit_mm4 = core_analysis::PEEL_LIMIT_N / core_analysis::PEEL_N_PER_MM4;
-        let ours = f64::from(settings.peel_limit_mm4.expect("a limit by default"));
-        assert!(
-            (ours - limit_mm4).abs() / limit_mm4 < 1e-6,
-            "{ours} against {limit_mm4}"
-        );
-        assert_eq!(settings.min_cup_mm2, core_analysis::MIN_CUP_MM2);
-    }
-
     fn summary(rotation: Quat) -> OrientSummary {
         OrientSummary {
             rotation,

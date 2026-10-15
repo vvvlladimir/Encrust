@@ -145,7 +145,7 @@ mod tests {
         // The cavity's widest section is a disc of its own radius, pi * 28^2 = 2463 mm2.
         assert!(hollow.cup_mm2 > 2000.0, "got {}", hollow.cup_mm2);
         assert!(
-            hollow.pull_mm4 < solid.pull_mm4 / 2.0,
+            hollow.pull_n < solid.pull_n / 2.0,
             "a 2 mm ring pulls far less than the disc it is the rim of"
         );
     }

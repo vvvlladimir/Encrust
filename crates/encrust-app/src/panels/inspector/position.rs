@@ -1,5 +1,6 @@
 use core_geometry::glam::EulerRot;
 use core_geometry::{Mat3, Quat, Transform, Vec3};
+use core_plate::OrientGoal;
 
 use crate::gizmo::Axes;
 use crate::import::recenter;
@@ -7,8 +8,8 @@ use crate::panels::Window;
 use crate::plate::BuildPlate;
 use crate::scene::{Axis, ObjectId, Scene, SceneObject};
 use crate::ui::{
-    Segment, Segmented, axis_label, compact_button, describe, field_label, hairline, icon,
-    icon_toggle, number_field, number_row, progress_bar, secondary_button, section,
+    Segment, Segmented, axis_label, compact_button, describe, field_label, hairline, hint, icon,
+    icon_toggle, number_field, number_row, picker, progress_bar, secondary_button, section,
     section_with_action, switch, theme,
 };
 
@@ -408,10 +409,13 @@ fn lift(ui: &mut egui::Ui, scene: &mut Scene, id: ObjectId) {
     }
 }
 
-/// Auto-orient beside a wait for a click on a face of the model, which then rests on the
-/// plate. Pressed again, or Esc, stops that wait.
+/// What auto-orient is for, beside Auto-orient and a wait for a click on a face of the
+/// model, which then rests on the plate. Pressed again, or Esc, stops that wait.
 fn turn(ui: &mut egui::Ui, window: &mut Window, id: ObjectId) {
     let running = window.tools.orient.is_running();
+    ui.add_enabled_ui(!running, |ui| {
+        goal(ui, &mut window.tools.orient.settings.goal)
+    });
     let (oriented, laid) = ui.columns(2, |columns| {
         let label = if running {
             "Orienting..."
@@ -464,6 +468,34 @@ fn turn(ui: &mut egui::Ui, window: &mut Window, id: ObjectId) {
         } else {
             orient.picking_face = true;
         }
+    }
+}
+
+/// The goal auto-orient searches for, and what it means in a line.
+fn goal(ui: &mut egui::Ui, chosen: &mut OrientGoal) {
+    let response = picker(ui, icon::ORIENT, chosen.label());
+    egui::Popup::menu(&response).show(|ui| {
+        for choice in OrientGoal::ALL {
+            if ui
+                .selectable_label(choice == *chosen, choice.label())
+                .clicked()
+            {
+                *chosen = choice;
+                ui.close();
+            }
+        }
+    });
+    hint(ui, goal_hint(*chosen));
+}
+
+fn goal_hint(goal: OrientGoal) -> &'static str {
+    match goal {
+        OrientGoal::FewestSupports => "The least resin in supports, whichever way up.",
+        OrientGoal::LeastPeel => {
+            "The lightest pull on the film, no cups; under 10 N, the fewest supports."
+        }
+        OrientGoal::ShortestPrint => "The fewest layers that still print.",
+        OrientGoal::CleanTop => "No supports on the side facing up in the file.",
     }
 }
 

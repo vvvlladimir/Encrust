@@ -28,15 +28,16 @@ The support term adds three things a support is put under:
   ceiling costs more than a low one.
 
 The volume term is what the fewest supports reads (ADR 0279): every face past the overhang
-angle, however far past, by its plan area — placement spreads a contact a spacing apart
+angle, however far past, and within a degree of it, since placement reads the angle off
+pixel steps and holds much of a face that meets it exactly, by its plan area — placement spreads a contact a spacing apart
 over all of it — times the height it is held at, plus the lift under all of it, plus each
 tip standing half the model's height up.
 
-A section's pull is Stefan's: each piece pulls with `A⁴ / (4π² J)`, its torsion constant,
-the measure `core-analysis` reads off a cured layer (`docs/design/analysis.md`). Scoring
-the area of the disc that pulls as hard keeps the term in the units of the shadow it
-replaces. A disc pulls the most an area can, so a thin strip or two pieces apart score
-less than their area.
+A section's pull is the one `core-analysis` reads off a cured layer, `pull_n`
+(`docs/design/analysis.md`). Scoring the area of the disc that pulls as hard keeps the term
+in the units of the shadow it replaces. A disc pulls the most an area can, so a thin strip
+or two pieces apart score less than their area, and a shadow scored as a disc never less
+than a cut.
 
 | Goal | support | volume | peel | height | bottom | top |
 |---|---|---|---|---|---|---|
@@ -157,6 +158,14 @@ The model stays as it stands unless a turn fails less, standing is out of the ba
 the turn wins 5 % of the goal's own reading and more than the noise of its unit; the
 turn is weighed against the best ranked way of standing, on the plate or on supports. No
 goal weighs which way is up: the file does not say.
+
+A goal may have **enough**: a reading at or under which every candidate reads alike, and a
+**fallback** goal whose reading then decides, ahead of the tie-break (ADR 0281). The least
+peel has enough at 10 N, a third of the 30 N warning, and falls back on the fewest
+supports: under 10 N a model is turned only to save support, and a turn between two that
+both have enough has to save 5 % of it and more than its noise. Every stage hands the rule
+every goal's reading of a candidate and the noise of each in its own unit, so a policy
+that weighs several goals is one more `Policy`, with no stage changed.
 
 The fewest supports skips steps 2 and 3: past what fails the print, the least support
 volume wins outright, and any turn that needs less is worth making. Islands, contacts with

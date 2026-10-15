@@ -13,8 +13,8 @@ use crate::section::Section;
 pub struct Cut {
     /// The largest cross-section, square millimetres.
     pub peak_mm2: Scalar,
-    /// The hardest pull of any section on the film, mm^4.
-    pub pull_mm4: Scalar,
+    /// The hardest pull of any section on the film, newtons.
+    pub pull_n: Scalar,
     /// The widest hole sealed from below, square millimetres, or zero for none.
     pub cup_mm2: Scalar,
 }
@@ -82,7 +82,7 @@ pub fn cut(
     for pieces in stack {
         let section = Section::of(&pieces);
         measured.peak_mm2 = measured.peak_mm2.max(section.area_mm2);
-        measured.pull_mm4 = measured.pull_mm4.max(section.pull_mm4);
+        measured.pull_n = measured.pull_n.max(section.pull_n);
         cups.push(pieces);
     }
     measured.cup_mm2 = cups.largest_mm2();

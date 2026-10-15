@@ -1,6 +1,6 @@
 # 0274. Score an orientation as it stands on supports, by its tips and by Stefan's pull
 
-- **Status:** Accepted, the tip's cost superseded by 0275
+- **Status:** Accepted, the tip's cost superseded by 0275, Stefan's pull and its copy in `core-plate` by 0281
 - **Date:** 2026-10-12
 
 ## Context

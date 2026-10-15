@@ -285,10 +285,10 @@ mod tests {
 
     #[test]
     fn a_resized_model_is_judged_at_the_size_it_prints() {
-        // A 40 mm cube squashed to a tenth of its height is a 40 x 40 x 4 slab on the
-        // plate, which the least peel stands on its edge.
-        let mut scene = scene_with(cuboid(Vec3::splat(40.0)));
-        scene.objects_mut()[0].transform.scale = Vec3::new(1.0, 1.0, 0.1);
+        // A 100 mm cube squashed to 4 mm is a slab pulling some 98 N lying flat, which
+        // the least peel turns off its face.
+        let mut scene = scene_with(cuboid(Vec3::splat(100.0)));
+        scene.objects_mut()[0].transform.scale = Vec3::new(1.0, 1.0, 0.04);
         let mut tool = OrientTool::default();
         tool.settings.goal = core_plate::OrientGoal::LeastPeel;
         let mut status = Status::default();
@@ -300,8 +300,8 @@ mod tests {
         let bounds = scene.world_bounds().expect("the slab is still there");
         let height_mm = bounds.maxs.z - bounds.mins.z;
         assert!(
-            height_mm > 39.0,
-            "the slab stands on its 40 mm edge, got {height_mm}"
+            height_mm > 10.0,
+            "the 4 mm slab does not lie flat, got {height_mm}"
         );
     }
 

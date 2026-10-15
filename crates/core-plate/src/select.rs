@@ -1,8 +1,8 @@
 use core_geometry::Vec3;
 
 use crate::orient::OrientSettings;
-use crate::policy::{Readings, rank};
-use crate::score::{Faces, Score};
+use crate::policy::{Noise, Readings, rank};
+use crate::score::{Faces, OrientGoal, Score};
 
 /// One way down, measured by both passes, on supports or set on the plate.
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -12,7 +12,7 @@ pub struct Candidate {
     pub on_plate: bool,
 }
 
-/// What of a goal's dimensionless term is noise: a sliver, for a term that is zero at best.
+/// A sliver of a dimensionless term, for a term that is zero at best.
 const SLIVER: f64 = 0.002;
 
 /// `measured` best first, the way the model stands — `now` — first when no turn is worth
@@ -30,13 +30,17 @@ pub fn ranked(
             suction: f64::from(suction(&candidate.score, settings)),
             unheld: None,
             roomless: 0.0,
-            primary: f64::from(faces.reading(settings.goal, &candidate.score)),
+            goals: OrientGoal::ALL.map(|goal| f64::from(faces.reading(goal, &candidate.score))),
             tiebreak: [f64::from(candidate.score.total), 0.0],
             standing: candidate.down == now,
         })
         .collect();
-    rank(&readings, settings.goal, SLIVER)
+    rank(&readings, settings.goal, &NOISE)
 }
+
+/// What of each goal's search reading is noise: half a newton of pull, as the proof reads
+/// it, and a sliver of every dimensionless term.
+const NOISE: Noise = [SLIVER, 0.5, SLIVER, SLIVER];
 
 /// A model set on the plate with no face flat on it, which only supports could hold there.
 fn unseated(candidate: &Candidate) -> u8 {
@@ -48,8 +52,8 @@ fn unseated(candidate: &Candidate) -> u8 {
 fn suction(score: &Score, settings: &OrientSettings) -> u8 {
     let cup = score.cup_mm2.unwrap_or(0.0) > 0.0;
     let tearing = settings
-        .peel_limit_mm4
-        .is_some_and(|limit| score.peak_pull_mm4.unwrap_or(0.0) > limit);
+        .peel_limit_n
+        .is_some_and(|limit| score.peak_pull_n.unwrap_or(0.0) > limit);
     u8::from(cup) * 2 + u8::from(tearing)
 }
 
@@ -97,7 +101,7 @@ mod tests {
                 height_mm: 10.0,
                 shadow_mm2: 100.0,
                 peak_mm2: Some(100.0),
-                peak_pull_mm4: Some(1000.0),
+                peak_pull_n: Some(1.0),
                 top_overhang_mm2: 0.0,
                 cup_mm2: Some(cup_mm2),
                 lift_mm: 0.0,

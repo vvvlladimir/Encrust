@@ -1,3 +1,4 @@
+use core_analysis::{MIN_CUP_MM2, PEEL_LIMIT_N};
 use core_geometry::{Mesh, Quat, Scalar, Vec3};
 use rayon::prelude::*;
 
@@ -7,13 +8,6 @@ use crate::error::PlateError;
 use crate::printed::Printed;
 use crate::score::{Faces, OrientGoal, Score};
 use crate::select::{Candidate, ranked};
-
-/// The pull past which a layer tears off the film: `core-analysis`'s `PEEL_LIMIT_N` over
-/// its `PEEL_N_PER_MM4`, 30 N, as a torsion constant in mm^4.
-const PEEL_LIMIT_MM4: Scalar = 4_687_500.0;
-
-/// The narrowest sealed hole worth naming, mm^2: `core-analysis`'s `MIN_CUP_MM2`.
-const MIN_CUP_MM2: Scalar = 25.0;
 
 /// The most drain holes tried as the way down: each is a candidate cut through.
 const VENTS_TRIED: usize = 8;
@@ -36,9 +30,9 @@ pub struct OrientSettings {
     /// Whether a way up that needs no supports at all is taken straight on the plate
     /// instead, where the model is otherwise judged on supports.
     pub rest_on_plate: bool,
-    /// The hardest pull on the film an orientation may ask of any layer, as Stefan's
-    /// torsion constant, mm^4, or `None` for no limit.
-    pub peel_limit_mm4: Option<Scalar>,
+    /// The hardest pull on the film an orientation may ask of any layer, newtons, or
+    /// `None` for no limit.
+    pub peel_limit_n: Option<Scalar>,
     /// The narrowest hole sealed from below that counts as a suction cup, mm^2.
     pub min_cup_mm2: Scalar,
     /// Directions taken off the sphere, on top of the model's own flat faces.
@@ -66,7 +60,7 @@ impl Default for OrientSettings {
             on_supports: false,
             lift_mm: 5.0,
             rest_on_plate: false,
-            peel_limit_mm4: Some(PEEL_LIMIT_MM4),
+            peel_limit_n: Some(PEEL_LIMIT_N as Scalar),
             min_cup_mm2: MIN_CUP_MM2,
             samples: 200,
             shortlist: 8,
@@ -382,24 +376,39 @@ mod tests {
     }
 
     #[test]
-    fn a_slab_is_stood_on_its_edge_for_the_least_peel() {
-        let mesh = cuboid(Vec3::new(40.0, 40.0, 4.0));
+    fn a_slab_pulling_past_the_limit_is_turned_off_its_face_for_the_least_peel() {
+        let mesh = cuboid(Vec3::new(100.0, 100.0, 4.0));
         let settings = OrientSettings {
             goal: OrientGoal::LeastPeel,
             ..OrientSettings::default()
         };
         let found = orient(&mesh, &settings).expect("a slab can be oriented");
 
-        // Lying flat, every layer would peel a 1600 mm2 section off the film. The thin
-        // axis therefore ends up across the plate rather than up it.
+        // Lying flat, a 100 mm square pulls some 98 N; turned, each section is a strip.
         let thin = placed(found.rotation, Vec3::Z);
         assert!(
-            thin.z.abs() < 0.05,
-            "the wide faces end up vertical, got {thin}"
+            thin.z.abs() < 0.95,
+            "the slab does not lie flat, got {thin}"
         );
-        let peak = found.score.peak_mm2.expect("the winner was sliced");
-        assert!(peak < 200.0, "a 40 by 4 section, got {peak}");
+        let pull = found.score.peak_pull_n.expect("the winner was cut");
+        assert!(
+            f64::from(pull) < PEEL_LIMIT_N / 3.0,
+            "under enough, got {pull} N"
+        );
         assert!(found.considered > 100, "the sphere was searched too");
+    }
+
+    #[test]
+    fn a_slab_pulling_little_enough_stays_flat_for_the_least_peel() {
+        // A 40 mm square pulls some 8 N, under a third of the limit: nothing to win.
+        let mesh = cuboid(Vec3::new(40.0, 40.0, 4.0));
+        let settings = OrientSettings {
+            goal: OrientGoal::LeastPeel,
+            ..OrientSettings::default()
+        };
+        let found = orient(&mesh, &settings).expect("a slab can be oriented");
+        let thin = placed(found.rotation, Vec3::Z);
+        assert!(thin.z.abs() > 0.95, "the slab still lies flat, got {thin}");
     }
 
     #[test]
@@ -589,15 +598,15 @@ mod tests {
             ..OrientSettings::default()
         };
         let found = orient(&mesh, &settings).expect("a slab can be oriented");
-        // Flat, a 100 mm square pulls some 97 N, past the 30 N limit. Tilted a few degrees,
+        // Flat, a 100 mm square pulls some 98 N, past the 30 N limit. Tilted a few degrees,
         // each section is a strip that pulls far less, for barely more layers.
         let thin = placed(found.rotation, Vec3::Z);
         assert!(
             thin.z.abs() < 0.999,
             "the slab does not lie flat, got {thin}"
         );
-        let pull = found.score.peak_pull_mm4.expect("the winner was cut");
-        assert!(pull < PEEL_LIMIT_MM4, "{pull}");
+        let pull = found.score.peak_pull_n.expect("the winner was cut");
+        assert!(f64::from(pull) < PEEL_LIMIT_N, "{pull}");
     }
 
     /// An open-topped 30 mm box with 2 mm walls, open side up as its file has it.

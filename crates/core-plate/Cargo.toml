@@ -12,6 +12,7 @@ authors.workspace = true
 doctest = false
 
 [dependencies]
+core-analysis.workspace = true
 core-geometry.workspace = true
 core-slicer.workspace = true
 rayon.workspace = true

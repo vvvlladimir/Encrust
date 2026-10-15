@@ -128,7 +128,7 @@ pub fn write_risks(f: &mut fmt::Formatter<'_>, measured: &Measured) -> fmt::Resu
             f,
             "  hardest pull  layer {}, like a disc {:.1} mm across",
             pull.layer + 1,
-            equivalent_disc_mm(pull.value)
+            equivalent_disc_mm(f64::from(pull.value))
         )?;
     }
     if let Some(growth) = measured.largest_growth() {

@@ -1,14 +1,13 @@
-use std::f64::consts::{PI, TAU};
-
+use core_analysis::pull_n;
 use core_geometry::{Scalar, Vec2};
 
 /// What one cut through the model pulls on the film as the plate lifts it.
 #[derive(Debug, Clone, Copy, Default, PartialEq)]
 pub struct Section {
     pub area_mm2: Scalar,
-    /// Stefan's suction, summed over the pieces as each one's torsion constant, mm^4: the
-    /// reading `core-analysis` takes of a cured layer. See `docs/design/analysis.md`.
-    pub pull_mm4: Scalar,
+    /// What the pieces pull, summed, newtons: the reading `core-analysis` takes of a cured
+    /// layer. See `docs/design/analysis.md`.
+    pub pull_n: Scalar,
 }
 
 impl Section {
@@ -20,14 +19,8 @@ impl Section {
             .fold((0.0, 0.0), |(area, pull), (a, p)| (area + a, pull + p));
         Self {
             area_mm2: area as Scalar,
-            pull_mm4: pull as Scalar,
+            pull_n: pull as Scalar,
         }
-    }
-
-    /// The area of the one disc that pulls as hard, square millimetres. A disc pulls the
-    /// most an area can, so this is the area itself for a disc and less for anything else.
-    pub fn equivalent_mm2(self) -> Scalar {
-        (TAU * f64::from(self.pull_mm4)).sqrt() as Scalar
     }
 }
 
@@ -58,11 +51,7 @@ fn piece(rings: &[Vec<Vec2>]) -> (f64, f64) {
         return (0.0, 0.0);
     }
     let polar = polar - (x * x + y * y) / area;
-    if polar <= 0.0 {
-        return (area, 0.0);
-    }
-    // Saint-Venant's torsion constant of the piece, which is what Stefan's law scales.
-    (area, area.powi(4) / (4.0 * PI * PI * polar))
+    (area, pull_n(area, polar))
 }
 
 #[cfg(test)]
@@ -88,16 +77,14 @@ mod tests {
     }
 
     #[test]
-    fn a_disc_pulls_as_stefan_says_and_is_its_own_equivalent() {
+    fn a_cut_disc_pulls_as_the_cured_disc_does() {
         let section = Section::of(&[vec![disc(10.0, 720)]]);
-        // Stefan's disc pulls pi R^4 / 2.
-        let expected = std::f32::consts::PI * 10f32.powi(4) / 2.0;
+        let cured = core_analysis::disc_pull_n(20.0) as Scalar;
         assert!(
-            (section.pull_mm4 - expected).abs() / expected < 1e-3,
-            "a 10 mm disc pulls pi R^4 / 2 = {expected}, got {}",
-            section.pull_mm4
+            (section.pull_n - cured).abs() / cured < 1e-3,
+            "the search and the proof read one law: {cured} N, got {}",
+            section.pull_n
         );
-        assert!((section.equivalent_mm2() - section.area_mm2).abs() / section.area_mm2 < 1e-3);
     }
 
     #[test]
@@ -115,24 +102,26 @@ mod tests {
             "both are 40 mm2"
         );
         assert!(
-            thin.equivalent_mm2() < square.equivalent_mm2() / 4.0,
-            "a 40 by 1 strip peels off its edge, got {} against {}",
-            thin.equivalent_mm2(),
-            square.equivalent_mm2()
+            thin.pull_n < square.pull_n,
+            "resin reaches a strip's middle sooner, got {} against {}",
+            thin.pull_n,
+            square.pull_n
         );
     }
 
     #[test]
-    fn two_pieces_pull_less_than_one_of_both_their_areas() {
+    fn two_pieces_pull_apart_and_less_than_one_of_both_their_areas() {
         let apart = Section::of(&[
             vec![square(Vec2::ZERO, 10.0)],
             vec![square(Vec2::new(50.0, 0.0), 10.0)],
         ]);
+        let single = Section::of(&[vec![square(Vec2::ZERO, 10.0)]]);
         let one = Section::of(&[vec![square(Vec2::ZERO, 200f32.sqrt())]]);
         assert!((apart.area_mm2 - 200.0).abs() < 1e-3);
+        assert!((apart.pull_n - 2.0 * single.pull_n).abs() / single.pull_n < 1e-3);
         assert!(
-            (apart.pull_mm4 - one.pull_mm4 / 2.0).abs() / one.pull_mm4 < 1e-3,
-            "pull goes with area squared, so halves pull a quarter each"
+            apart.pull_n < one.pull_n,
+            "resin reaches each half from its own edge"
         );
     }
 
@@ -143,6 +132,6 @@ mod tests {
         let ring = Section::of(&[vec![square(Vec2::ZERO, 10.0), hole]]);
         let solid = Section::of(&[vec![square(Vec2::ZERO, 10.0)]]);
         assert!((ring.area_mm2 - 96.0).abs() < 1e-3, "100 - 4");
-        assert!(ring.pull_mm4 < solid.pull_mm4);
+        assert!(ring.pull_n < solid.pull_n);
     }
 }

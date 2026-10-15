@@ -1077,6 +1077,7 @@ dependencies = [
 name = "core-plate"
 version = "0.3.0"
 dependencies = [
+ "core-analysis",
  "core-geometry",
  "core-slicer",
  "criterion",

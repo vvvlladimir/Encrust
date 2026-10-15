@@ -3,7 +3,7 @@
 
 use std::sync::Arc;
 
-use core_analysis::{Measured, PEEL_N_PER_MM4, RiskKind};
+use core_analysis::{Measured, RiskKind};
 use core_format::ExposurePlan;
 use core_geometry::{
     Mesh, Quat, Scalar, Transform, Vec3, center_over_plate, drop_to_plate, signed_volume,
@@ -238,7 +238,8 @@ fn judged(
     goal: OrientGoal,
     is_standing: impl Fn(&Oriented) -> bool,
 ) -> Vec<Tried> {
-    let slack = Printout::noise(goal);
+    let noise = OrientGoal::ALL.map(Printout::noise);
+    let slack = noise[goal.index()];
     let readings: Vec<Readings> = tried
         .iter()
         .enumerate()
@@ -247,14 +248,14 @@ fn judged(
             suction: pose.printout.fatal() as f64,
             unheld: Some(pose.printout.islands as f64),
             roomless: pose.printout.hanging as f64,
-            primary: pose.printout.reading(goal),
+            goals: OrientGoal::ALL.map(|each| pose.printout.reading(each)),
             // The goal's reading to the noise of its unit, then the search's own order.
             tiebreak: [(pose.printout.reading(goal) / slack).round(), at as f64],
             standing: is_standing(&pose.oriented),
         })
         .collect();
-    let rulings = rulings(&readings, goal, slack);
-    rank(&readings, goal, slack)
+    let rulings = rulings(&readings, goal, &noise);
+    rank(&readings, goal, &noise)
         .into_iter()
         .map(|at| Tried {
             proven: tried[at],
@@ -397,7 +398,7 @@ fn printout(held: &Held, measured: &Measured) -> Printout {
         layers: measured.layer_count(),
         pull_n: measured
             .hardest_pull()
-            .map_or(0.0, |peak| f64::from(peak.value) * PEEL_N_PER_MM4),
+            .map_or(0.0, |peak| f64::from(peak.value)),
         growth_mm2: measured.largest_growth().map_or(0.0, |peak| peak.value),
         islands: count(|kind| matches!(kind, RiskKind::Island { .. })),
         cups: count(|kind| matches!(kind, RiskKind::SuctionCup { .. })),
