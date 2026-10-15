@@ -6,13 +6,14 @@ name: Release
 #
 # Called by `release-please.yml` once it has tagged the release, never by the tag itself: a tag
 # pushed with GITHUB_TOKEN raises no event, so `on: push: tags` would simply never fire. The manual
-# trigger is for rebuilding a tag whose run failed.
+# trigger rebuilds a tag, or only the parts ticked, and makes the draft if the tag has no release.
 #
 # Each platform gets an installer people download and an archive the window's own update reads:
 # `.dmg`, `-setup.exe`, `.AppImage` and `.deb` from `cargo packager`, configured in
-# crates/encrust-app/Cargo.toml. Nothing is code-signed; each archive is signed with the project's
-# release key, and `latest.json` names them for the window's update check. Publishing the draft is
-# what makes that feed visible. See ADR-0160, ADR-0162 and ADR-0172.
+# crates/encrust-app/Cargo.toml, and a `.msixupload` for the Microsoft Store. Nothing is code-signed;
+# each archive is signed with the project's release key, and `latest.json` names them for the
+# window's update check. Publishing the draft is what makes that feed visible. See ADR-0160,
+# ADR-0162, ADR-0172 and ADR-0286.
 
 on:
   workflow_call:
@@ -21,12 +22,42 @@ on:
         description: The tag to build, for example v0.1.0.
         required: true
         type: string
+      macos: { type: boolean, default: true }
+      linux: { type: boolean, default: true }
+      windows: { type: boolean, default: true }
+      store: { type: boolean, default: true }
+      web: { type: boolean, default: true }
+      feed: { type: boolean, default: true }
   workflow_dispatch:
     inputs:
       tag:
-        description: The tag to build, for example v0.1.0.
+        description: The tag to build, for example v0.1.0. A tag with no release gets a draft.
         required: true
         type: string
+      macos:
+        description: macOS, both architectures (.dmg and the update archives)
+        type: boolean
+        default: true
+      linux:
+        description: Linux (.AppImage, .deb and the update archive)
+        type: boolean
+        default: true
+      windows:
+        description: Windows (-setup.exe and the update archive)
+        type: boolean
+        default: true
+      store:
+        description: Microsoft Store package (.msixupload), packaged by this branch's assets/msix
+        type: boolean
+        default: true
+      web:
+        description: Browser build (encrust-web.tar.gz)
+        type: boolean
+        default: true
+      feed:
+        description: Sign the update archives on the release and rewrite latest.json
+        type: boolean
+        default: true
 
 permissions:
   contents: write
@@ -40,6 +71,8 @@ jobs:
   # downloaded from.
   draft:
     runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.legs.outputs.matrix }}
     steps:
       - uses: actions/checkout@v7
         with:
@@ -66,30 +99,37 @@ jobs:
           gh release create "$TAG" --repo "$GITHUB_REPOSITORY" --draft \
             --title "$TAG" --generate-notes
 
+      # The build legs the ticked boxes ask for. The Windows leg also runs for the Store alone,
+      # which needs its binaries but not its installer. Linux is built on the oldest supported
+      # runner: a binary cannot run against a glibc older than the one it was built on.
+      - id: legs
+        env:
+          ON: ${{ toJSON(inputs) }}
+        run: |
+          matrix=$(jq -c --argjson on "$ON" '{include: [.[]
+              | .installers = $on[.platform]
+              | .store = (.platform == "windows" and $on.store)
+              | select(.installers or .store)]}' <<'EOF'
+          [
+            {"platform": "macos", "os": "macos-latest", "target": "aarch64-apple-darwin",
+             "archive": "encrust-macos-aarch64.tar.gz", "formats": "dmg"},
+            {"platform": "macos", "os": "macos-latest", "target": "x86_64-apple-darwin",
+             "archive": "encrust-macos-x86_64.tar.gz", "formats": "dmg"},
+            {"platform": "linux", "os": "ubuntu-22.04", "target": "x86_64-unknown-linux-gnu",
+             "archive": "encrust-linux-x86_64.tar.gz", "formats": "appimage,deb"},
+            {"platform": "windows", "os": "windows-latest", "target": "x86_64-pc-windows-msvc",
+             "archive": "encrust-windows-x86_64.zip", "formats": "nsis"}
+          ]
+          EOF
+          )
+          echo "matrix=$matrix" >> "$GITHUB_OUTPUT"
+
   build:
     needs: draft
+    if: needs.draft.outputs.matrix != '{"include":[]}'
     strategy:
       fail-fast: false
-      matrix:
-        include:
-          - os: macos-latest
-            target: aarch64-apple-darwin
-            archive: encrust-macos-aarch64.tar.gz
-            formats: dmg
-          - os: macos-latest
-            target: x86_64-apple-darwin
-            archive: encrust-macos-x86_64.tar.gz
-            formats: dmg
-          # The oldest supported runner: a Linux binary cannot run against a glibc older than the
-          # one it was built on, and a newer runner would raise that floor for no gain.
-          - os: ubuntu-22.04
-            target: x86_64-unknown-linux-gnu
-            archive: encrust-linux-x86_64.tar.gz
-            formats: appimage,deb
-          - os: windows-latest
-            target: x86_64-pc-windows-msvc
-            archive: encrust-windows-x86_64.zip
-            formats: nsis
+      matrix: ${{ fromJSON(needs.draft.outputs.matrix) }}
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v7
@@ -118,6 +158,7 @@ jobs:
       # The licences it does need: handing somebody the binary is what obliges us to pass on both
       # ours and those of the libraries compiled into it (ADR 0214).
       - name: Collect the archive
+        if: matrix.installers
         shell: bash
         env:
           TARGET: ${{ matrix.target }}
@@ -136,11 +177,13 @@ jobs:
           esac
 
       - uses: taiki-e/install-action@v2
+        if: matrix.installers
         with:
           tool: cargo-packager
 
       # linuxdeploy is itself an AppImage, and a runner has no FUSE to mount it with.
       - name: Package the installers
+        if: matrix.installers
         shell: bash
         env:
           APPIMAGE_EXTRACT_AND_RUN: 1
@@ -150,6 +193,7 @@ jobs:
 
       # Names without the version, so `releases/latest/download/<name>` always works.
       - name: Attach them to the draft
+        if: matrix.installers
         shell: bash
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -171,6 +215,46 @@ jobs:
           ls installers
           gh release upload "$TAG" "$ARCHIVE" installers/* --clobber --repo "$GITHUB_REPOSITORY"
 
+      # The manifest and logos come from the revision this workflow runs from, not the tag, so an
+      # older tag can still be packaged for the Store.
+      - name: Check out the Store packaging
+        if: matrix.store
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ github.sha }}
+          path: workflow
+          sparse-checkout: assets/msix
+
+      # The Store's package of the same two binaries. The Store signs it, so it is uploaded by hand
+      # and never installed from the release page. A failure here costs only this file (ADR 0286).
+      - name: Package for the Store
+        if: matrix.store
+        continue-on-error: true
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ inputs.tag }}
+          TARGET: ${{ matrix.target }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $PSNativeCommandUseErrorActionPreference = $true
+          $sdk = (Get-ChildItem "${env:ProgramFiles(x86)}\Windows Kits\10\bin\10.*\x64\makeappx.exe" |
+            Sort-Object { [version]$_.Directory.Parent.Name } | Select-Object -Last 1).DirectoryName
+          if (-not $sdk) { throw 'no makeappx.exe in any Windows SDK on this runner' }
+          Write-Host "SDK tools: $sdk"
+          Copy-Item -Recurse workflow/assets/msix msix
+          (Get-Content workflow/assets/msix/AppxManifest.xml -Raw).Replace('@VERSION@', "$($env:TAG.TrimStart('v')).0") |
+            Set-Content msix/AppxManifest.xml -NoNewline
+          Copy-Item "target/$env:TARGET/release/encrust-gui.exe", "target/$env:TARGET/release/encrust.exe",
+            LICENSE, THIRD-PARTY-LICENSES.md msix
+          & "$sdk\makepri.exe" createconfig /cf priconfig.xml /dq en-US /pv 10.0.0 /o
+          & "$sdk\makepri.exe" new /pr msix /cf priconfig.xml /mn msix/AppxManifest.xml /of msix/resources.pri /o
+          & "$sdk\makeappx.exe" pack /d msix /p Encrust.msix /o
+          Compress-Archive Encrust.msix Encrust.zip
+          $upload = 'Encrust-windows-x86_64-store.msixupload'
+          Move-Item Encrust.zip $upload
+          gh release upload $env:TAG $upload --clobber --repo $env:GITHUB_REPOSITORY
+
   # The window built for a browser, as one archive the site unpacks under /app/run/ (encrust-site,
   # scripts/web-app.mjs). The site takes it from the latest published release, so it ships when the
   # desktop builds do. It is not in the update feed: a browser updates through its service worker.
@@ -178,6 +262,7 @@ jobs:
   # docs/design/web-build.md.
   web:
     needs: draft
+    if: inputs.web
     runs-on: ubuntu-latest
     env:
       TOOLCHAIN: nightly-2026-10-01
@@ -231,7 +316,10 @@ jobs:
   # The trusted comment binds a signature to its version and file name, which the window checks;
   # a signature cannot then be moved to another archive or replayed for an older release.
   feed:
-    needs: build
+    needs: [draft, build]
+    if: >-
+      !cancelled() && inputs.feed && needs.draft.result == 'success'
+      && (needs.build.result == 'success' || needs.build.result == 'skipped')
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7

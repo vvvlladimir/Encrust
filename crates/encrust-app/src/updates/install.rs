@@ -3,6 +3,7 @@
 use std::fs;
 use std::io::Read;
 use std::path::{Path, PathBuf};
+use std::sync::LazyLock;
 use std::time::Duration;
 
 use super::feed::{self, Download, FEED_URL, Offer, Version};
@@ -64,10 +65,27 @@ pub fn current_exe() -> Result<PathBuf, &'static str> {
         return Err("A development build is updated by building it.");
     }
     let exe = std::env::current_exe().map_err(|_| "The running program cannot be located.")?;
+    if cfg!(windows) && in_store_package(&exe) {
+        return Err("This copy is updated by the Microsoft Store.");
+    }
     if packaged(&exe, std::env::var_os("APPIMAGE").is_some()) {
         return Err("This copy is updated by downloading the new package.");
     }
     Ok(exe)
+}
+
+/// Whether this window runs from the Store's package, which only the Store updates (ADR 0286).
+pub fn from_store() -> bool {
+    static STORE: LazyLock<bool> = LazyLock::new(|| {
+        cfg!(windows) && std::env::current_exe().is_ok_and(|exe| in_store_package(&exe))
+    });
+    *STORE
+}
+
+/// Windows installs every MSIX package under a `WindowsApps` directory, on whichever drive.
+fn in_store_package(exe: &Path) -> bool {
+    exe.components()
+        .any(|part| part.as_os_str().eq_ignore_ascii_case("WindowsApps"))
 }
 
 /// An AppImage runs from a read-only mount, and what a `.deb` put under `/usr` is the
@@ -288,6 +306,19 @@ mod tests {
             Path::new("/tmp/.mount_x/usr/bin/encrust-gui"),
             true
         ));
+    }
+
+    #[test]
+    fn a_store_package_is_found_on_any_drive_and_a_home_install_is_not() {
+        let store =
+            "C:/Program Files/WindowsApps/VladimirVarvorkin.Encrust_0.3.0.0_x64__ysasz88zzhe46";
+        assert!(in_store_package(&Path::new(store).join(APP)));
+        assert!(in_store_package(Path::new(
+            "D:/windowsapps/Encrust/encrust-gui.exe"
+        )));
+        assert!(!in_store_package(Path::new(
+            "C:/Users/me/AppData/Local/Encrust/encrust-gui.exe"
+        )));
     }
 
     #[cfg(target_os = "linux")]

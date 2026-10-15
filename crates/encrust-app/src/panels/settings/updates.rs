@@ -4,7 +4,7 @@ use egui::{RichText, Ui};
 
 use crate::panels::settings::form_card;
 use crate::ui::{ago, hint, icon, inline_button, primary_button, switch, theme};
-use crate::updates::{Note, Offer, RELEASES, Stage, Updates, now_s};
+use crate::updates::{Note, Offer, RELEASES, STORE_PAGE, Stage, Updates, from_store, now_s};
 
 /// How many lines of the release notes the page shows; the rest is on the release page. A
 /// scroll area inside the page's own collapses to its first frame, so the list is cut instead.
@@ -16,6 +16,13 @@ const PRIVACY: &str = "One request a day to GitHub for the newest release. It ca
                        is downloaded or installed until you ask.";
 
 pub fn form(ui: &mut Ui, updates: &mut Updates) {
+    if from_store() {
+        form_card(ui, "Checking", |ui| {
+            hint(ui, "The Microsoft Store keeps this copy up to date.");
+            ui.hyperlink_to("Encrust in the Microsoft Store", STORE_PAGE);
+        });
+        return;
+    }
     form_card(ui, "Checking", |ui| {
         switch(
             ui,

@@ -14,13 +14,16 @@ use serde::{Deserialize, Serialize};
 use crate::status::Status;
 
 pub use feed::{Note, Offer, Version};
-pub use install::sweep;
+pub use install::{from_store, sweep};
 
 /// How long one look at the feed holds before the next is due, seconds: a day.
 const CHECK_EVERY_S: u64 = 24 * 60 * 60;
 
 /// Where a release is read about in a browser, for a build this window cannot install.
 pub const RELEASES: &str = concat!(env!("CARGO_PKG_REPOSITORY"), "/releases");
+
+/// The app's page in the Microsoft Store, which updates the copy installed from it.
+pub const STORE_PAGE: &str = "https://apps.microsoft.com/detail/9NB0ZMB3M8H8";
 
 /// Why a look at the feed or an install did not happen.
 #[derive(Debug, thiserror::Error)]
@@ -125,14 +128,15 @@ impl Updates {
         Version::parse(env!("CARGO_PKG_VERSION")).unwrap_or_default()
     }
 
-    /// Looks at the feed once a day, if the user turned that on. A failure here is quiet:
-    /// the user did not ask for this look, and it is tried again tomorrow.
+    /// Looks at the feed once a day, if the user turned that on and the Store does not update
+    /// this copy. A failure here is quiet: the user did not ask, and it is tried again tomorrow.
     pub fn tick(&mut self) {
         let idle = matches!(
             self.stage,
             Stage::Idle | Stage::Current | Stage::Failed { .. }
         );
-        if self.prefs.check && idle && is_due(self.prefs.checked_at_s, now_s()) {
+        let due = is_due(self.prefs.checked_at_s, now_s());
+        if self.prefs.check && idle && due && !from_store() {
             self.start_check(false);
         }
     }
