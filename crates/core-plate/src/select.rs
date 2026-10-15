@@ -4,11 +4,12 @@ use crate::orient::OrientSettings;
 use crate::policy::{Readings, rank};
 use crate::score::{Faces, Score};
 
-/// One way down, measured by both passes.
+/// One way down, measured by both passes, on supports or set on the plate.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Candidate {
     pub down: Vec3,
     pub score: Score,
+    pub on_plate: bool,
 }
 
 /// What of a goal's dimensionless term is noise: a sliver, for a term that is zero at best.
@@ -25,7 +26,7 @@ pub fn ranked(
     let readings: Vec<Readings> = measured
         .iter()
         .map(|candidate| Readings {
-            fatal: f64::from(unseated(&candidate.score, settings)),
+            fatal: f64::from(unseated(candidate)),
             suction: f64::from(suction(&candidate.score, settings)),
             unheld: None,
             roomless: 0.0,
@@ -38,8 +39,8 @@ pub fn ranked(
 }
 
 /// A model set on the plate with no face flat on it, which only supports could hold there.
-fn unseated(score: &Score, settings: &OrientSettings) -> u8 {
-    u8::from(!settings.on_supports && score.bottom_mm2 <= 0.0)
+fn unseated(candidate: &Candidate) -> u8 {
+    u8::from(candidate.on_plate && candidate.score.bottom_mm2 <= 0.0)
 }
 
 /// What the film would fail the print by, worse first: a suction cup counts two, a pull
@@ -99,8 +100,10 @@ mod tests {
                 peak_pull_mm4: Some(1000.0),
                 top_overhang_mm2: 0.0,
                 cup_mm2: Some(cup_mm2),
+                lift_mm: 0.0,
                 total,
             },
+            on_plate: false,
         }
     }
 

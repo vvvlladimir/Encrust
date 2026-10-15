@@ -101,14 +101,14 @@ Three kinds of candidate are cut whatever the first pass makes of them (ADR 0277
 
 A model drawn to print as it stands should not be lifted. Where the settings allow it,
 the way the model stands and its six largest flat faces are scored set on the plate. A
-pose rests when a face lies flat on it, under a hundredth of the surface hangs, nothing is
-cupped against the plate and no section tears. A resting pose comes ahead of every
-supported one, and is printed with no supports.
+pose is a seat when a face lies flat on it and either under a hundredth of the surface
+hangs or a quarter of its shadow is flat on the plate; it stays there with supports only
+under what hangs over it — what a person does with a figure on its base (ADR 0279).
 
-A pose that hangs more than that but has a quarter of its shadow flat on the plate stays
-on the plate with supports only under what hangs over it — what a person does with a figure
-on its base (ADR 0279). The score cannot weigh that against lifting it, so such a pose
-comes last among the finalists and the proof below decides. Whichever way the proof stands
+Seats are ranked with the lifted poses by the same rule, each goal on its own reading: a
+seat's predicted support stands from the plate, a lifted pose's from its lift, so the
+fewest supports compares the two directly (ADR 0280). The proof always prints the best
+seat, wherever it ranks, as the search predicts a seat's supports less surely. Whichever way the proof stands
 a pose is the way the window and the command line stand it: on the plate, or lifted by the
 support profile's own lift.
 

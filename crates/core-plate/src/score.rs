@@ -49,6 +49,8 @@ pub struct Score {
     /// The widest hole sealed from below, square millimetres, zero for none, or `None`
     /// for a candidate that was never sliced.
     pub cup_mm2: Option<Scalar>,
+    /// How far supports stand the pose off the plate, millimetres; zero set on it.
+    pub lift_mm: Scalar,
     pub total: Scalar,
 }
 
@@ -265,6 +267,7 @@ impl<'a> Faces<'a> {
             peak_pull_mm4: None,
             top_overhang_mm2,
             cup_mm2: None,
+            lift_mm: if on_supports { self.lift_mm } else { 0.0 },
             total: 0.0,
         };
         score.total = self.total(&score);
@@ -374,7 +377,7 @@ impl<'a> Faces<'a> {
         Terms {
             held: (score.overhang_mm2 + tips_mm2) / area
                 + W_TALL * score.support_mm3 / (area * length),
-            volume: self.volume_mm3(score, tips_mm2) / (area * length),
+            volume: volume_mm3(score, tips_mm2) / (area * length),
             peel: pulled / (length * length),
             height: score.height_mm / length,
             bottom: score.bottom_mm2 / area,
@@ -383,14 +386,13 @@ impl<'a> Faces<'a> {
     }
 }
 
-impl Faces<'_> {
-    /// About how much support stands under a pose, as the plan area placement holds times
-    /// the height it is held at, lift included, cubic millimetres; a tip stands half the
-    /// model's height up.
-    fn volume_mm3(&self, score: &Score, tips_mm2: Scalar) -> Scalar {
-        let lift_mm = if self.on_supports { self.lift_mm } else { 0.0 };
-        score.under_mm3 + (score.under_mm2 + tips_mm2) * lift_mm + tips_mm2 * score.height_mm / 2.0
-    }
+/// About how much support stands under a pose, as the plan area placement holds times the
+/// height it is held at, lift included, cubic millimetres; a tip stands half the model's
+/// height up.
+fn volume_mm3(score: &Score, tips_mm2: Scalar) -> Scalar {
+    score.under_mm3
+        + (score.under_mm2 + tips_mm2) * score.lift_mm
+        + tips_mm2 * score.height_mm / 2.0
 }
 
 /// The terms of a [`Score`], each made dimensionless, before they are weighed.
@@ -649,19 +651,27 @@ mod tests {
             .expect("a cube has faces")
             .for_settings(&settings);
         let score = faces.score(Vec3::NEG_Z);
-        let volume_mm3 = faces.volume_mm3(&score, 0.0);
+        let upright_mm3 = volume_mm3(&score, 0.0);
         assert!(
-            (volume_mm3 - 500.0).abs() < 1e-2,
-            "only the 100 mm2 floor hangs, 5 mm up on the lift: got {volume_mm3}"
+            (upright_mm3 - 500.0).abs() < 1e-2,
+            "only the 100 mm2 floor hangs, 5 mm up on the lift: got {upright_mm3}"
         );
+
         // Leaned 30°: the floor's plan shrinks to 86.6 mm2, its middle stands 2.5 mm over
         // the low edge, and the lift is under it all: 86.6 * (2.5 + 5).
         let lean = 30.0_f32.to_radians();
         let leaning = faces.score(Vec3::new(lean.sin(), 0.0, -lean.cos()));
-        let leaning_mm3 = faces.volume_mm3(&leaning, 0.0);
+        let leaning_mm3 = volume_mm3(&leaning, 0.0);
         assert!(
             (leaning_mm3 - 649.5).abs() < 0.5,
             "the floor stands higher leaned, got {leaning_mm3}"
+        );
+        // Set leaning on the plate on its low edge, the same floor stands on no lift.
+        let seated = faces.score_on_plate(Vec3::new(lean.sin(), 0.0, -lean.cos()));
+        let seated_mm3 = volume_mm3(&seated, 0.0);
+        assert!(
+            (seated_mm3 - 216.5).abs() < 0.5,
+            "86.6 mm2 held 2.5 mm up and nothing on a lift, got {seated_mm3}"
         );
     }
 

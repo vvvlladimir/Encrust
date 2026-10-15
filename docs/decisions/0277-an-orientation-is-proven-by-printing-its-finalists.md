@@ -1,6 +1,7 @@
 # 0277. Prove an orientation by printing its finalists, and search the poses a person tries
 
-- **Status:** Accepted; how the proof ranks and that it sketches without supports are superseded by 0278
+- **Status:** Accepted; how the proof ranks and that it sketches without supports are superseded
+  by 0278, where a seat ranks by 0280
 - **Date:** 2026-10-12
 
 ## Context

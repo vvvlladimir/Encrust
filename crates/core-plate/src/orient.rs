@@ -158,30 +158,23 @@ pub fn finalists(
             Ok(Candidate {
                 down,
                 score: faces.with_cut(faces.score(down), sections),
+                on_plate,
             })
         })
         .collect::<Result<Vec<_>, PlateError>>()?;
 
-    let (rested, perhaps) = resting(printed, &faces, settings, now)?;
+    let mut measured = measured;
+    measured.extend(seated(printed, &faces, settings, now)?);
     let considered = ranked.len();
-    let oriented = |candidate: Candidate, on_plate: bool| Oriented {
-        rotation: rotation_for(candidate.down),
-        score: candidate.score,
-        on_plate,
-        considered,
-    };
-    let seated = ordered(&faces, settings, &rested, now).into_iter();
-    let stood = ordered(&faces, settings, &measured, now).into_iter();
-    let first: Vec<Oriented> = seated
-        .map(|candidate| oriented(candidate, true))
-        .chain(stood.map(|candidate| oriented(candidate, !settings.on_supports)))
-        .take(count.max(1))
-        .collect();
-    let room = count.saturating_sub(first.len());
-    let last = ordered(&faces, settings, &perhaps, now).into_iter();
-    Ok(first
+    Ok(ordered(&faces, settings, &measured, now)
         .into_iter()
-        .chain(last.take(room).map(|candidate| oriented(candidate, true)))
+        .take(count.max(1))
+        .map(|candidate| Oriented {
+            rotation: rotation_for(candidate.down),
+            score: candidate.score,
+            on_plate: candidate.on_plate,
+            considered,
+        })
         .collect())
 }
 
@@ -195,8 +188,8 @@ fn apart_deg(goal: OrientGoal) -> Scalar {
 }
 
 /// `measured` best first by the judge's priorities, the way the model stands kept ahead of
-/// a turn that is not worth making, and anything within `apart_deg` of a better one
-/// dropped.
+/// a turn that is not worth making, and anything within `apart_deg` of a better one held
+/// the same way dropped.
 fn ordered(
     faces: &Faces,
     settings: &OrientSettings,
@@ -211,6 +204,7 @@ fn ordered(
     for candidate in measured {
         let alone = chosen
             .iter()
+            .filter(|kept| kept.on_plate == candidate.on_plate)
             .all(|kept| kept.down.dot(candidate.down) < apart);
         // Every turn is weighed against the way the model stands, so that is kept
         // however near a better one it lies.
@@ -232,18 +226,16 @@ const REST_HELD: Scalar = 0.01;
 /// rather than on a ledge; the way it stands now is tried on the plate whatever it has.
 const SEAT_SHARE: Scalar = 0.25;
 
-/// The ways the model stands straight on the plate, measured as resting there: first
-/// those needing no supports at all, then those that may not, which come last among the
-/// finalists for a caller that can print them. Both are empty unless the settings ask.
-/// See `docs/design/orientation.md`.
-fn resting(
+/// The ways the model stands straight on the plate, measured there, ranked with the rest
+/// by the same rule; none unless the settings ask. See `docs/design/orientation.md`.
+fn seated(
     printed: &Printed,
     faces: &Faces,
     settings: &OrientSettings,
     now: Vec3,
-) -> Result<(Vec<Candidate>, Vec<Candidate>), PlateError> {
+) -> Result<Vec<Candidate>, PlateError> {
     if !(settings.rest_on_plate && settings.on_supports) {
-        return Ok((Vec::new(), Vec::new()));
+        return Ok(Vec::new());
     }
     let seats: Vec<Vec3> = std::iter::once(now)
         .chain(
@@ -264,20 +256,14 @@ fn resting(
                 return Ok(None);
             }
             let sections = cut(printed, down, settings.sections, true, settings.min_cup_mm2)?;
-            let score = faces.with_cut(score, sections);
-            let tears = settings
-                .peel_limit_mm4
-                .is_some_and(|limit| sections.pull_mm4 > limit);
-            let sound = sections.cup_mm2 <= 0.0 && !tears;
-            Ok(Some((Candidate { down, score }, rests && sound)))
+            Ok(Some(Candidate {
+                down,
+                score: faces.with_cut(score, sections),
+                on_plate: true,
+            }))
         })
         .collect::<Result<Vec<_>, PlateError>>()?;
-    let (rested, perhaps): (Vec<_>, Vec<_>) = measured
-        .into_iter()
-        .flatten()
-        .partition(|(_, rests)| *rests);
-    let bare = |seats: Vec<(Candidate, bool)>| seats.into_iter().map(|(seat, _)| seat).collect();
-    Ok((bare(rested), bare(perhaps)))
+    Ok(measured.into_iter().flatten().collect())
 }
 
 /// How far the model is leaned from the way it stands, degrees, and in how many

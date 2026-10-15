@@ -211,15 +211,17 @@ pub fn prove(
     Ok(judged(&tried, settings.goal, is_standing))
 }
 
-/// The first `finalists` of `found` and the way the model stands, each pose once.
+/// The first `finalists` of `found`, the way the model stands and the best pose set on the
+/// plate, each once: the search cannot weigh a seat's supports as surely as a lift's.
 fn to_print(
     found: &[Oriented],
     finalists: usize,
     is_standing: impl Fn(&Oriented) -> bool,
 ) -> Vec<&Oriented> {
+    let best_seat = found.iter().position(|pose| pose.on_plate);
     let mut poses: Vec<&Oriented> = Vec::new();
     for (at, pose) in found.iter().enumerate() {
-        let wanted = at < finalists || is_standing(pose);
+        let wanted = at < finalists || is_standing(pose) || Some(at) == best_seat;
         let again = |kept: &&Oriented| {
             kept.on_plate == pose.on_plate && kept.rotation.abs_diff_eq(pose.rotation, 1e-5)
         };
