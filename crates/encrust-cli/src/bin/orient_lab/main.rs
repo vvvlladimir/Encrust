@@ -16,7 +16,7 @@ use anyhow::{Context, Result};
 use clap::Parser;
 use core_engine::Trial;
 use core_geometry::{Mesh, orient_outward, weld};
-use core_plate::OrientGoal;
+use core_plate::OrientPreset;
 use encrust_cli::pipeline;
 use printer_profiles::{Catalogue, MaterialProfile, PrinterProfile, SupportProfile};
 
@@ -71,7 +71,7 @@ struct Setup {
     printer: PrinterProfile,
     material: MaterialProfile,
     support: SupportProfile,
-    full_finalists: Option<OrientGoal>,
+    full_finalists: Option<OrientPreset>,
 }
 
 impl Setup {
@@ -249,8 +249,7 @@ fn bench(subject: Subject, setup: &Setup, oracle: usize, known: &[poses::Known])
 /// Judges every goal of one measured model and prints it.
 fn judged(faces: usize, poses: &[poses::Pose], subject: &Subject) -> ModelReport {
     let expect = &subject.expect;
-    let verdicts: Vec<Verdict> = OrientGoal::ALL
-        .into_iter()
+    let verdicts: Vec<Verdict> = OrientPreset::all()
         .filter_map(|goal| judge(goal, poses, expect.for_goal(goal), faces))
         .collect();
     let seconds_of = |goal| {

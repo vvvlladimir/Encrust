@@ -43,9 +43,6 @@ pub struct Score {
     /// The hardest pull on the film of any section, newtons, or `None` for a candidate
     /// that was never sliced.
     pub peak_pull_n: Option<Scalar>,
-    /// The part of `overhang_mm2` on faces that look up in the model's own file, which
-    /// is the side its author meant to be seen.
-    pub top_overhang_mm2: Scalar,
     /// The widest hole sealed from below, square millimetres, zero for none, or `None`
     /// for a candidate that was never sliced.
     pub cup_mm2: Option<Scalar>,
@@ -72,20 +69,13 @@ pub enum OrientGoal {
     LeastPeel,
     /// The shortest stack, model and lift, which sets the layers and the time.
     ShortestPrint,
-    /// No support on the faces that look up in the file.
-    CleanTop,
 }
 
 impl OrientGoal {
-    pub const ALL: [Self; 4] = [
-        Self::FewestSupports,
-        Self::LeastPeel,
-        Self::ShortestPrint,
-        Self::CleanTop,
-    ];
+    pub const ALL: [Self; 3] = [Self::FewestSupports, Self::LeastPeel, Self::ShortestPrint];
 
     /// Where this goal's reading sits among every goal's, the order of [`Self::ALL`].
-    pub fn index(self) -> usize {
+    pub const fn index(self) -> usize {
         self as usize
     }
 
@@ -94,7 +84,6 @@ impl OrientGoal {
             Self::FewestSupports => "Fewest supports",
             Self::LeastPeel => "Least peel force",
             Self::ShortestPrint => "Shortest print",
-            Self::CleanTop => "Clean top surface",
         }
     }
 
@@ -107,7 +96,6 @@ impl OrientGoal {
             peel: 0.6,
             height: 0.05,
             bottom: 0.3,
-            top: 0.0,
         };
         match self {
             Self::FewestSupports => Weights {
@@ -127,22 +115,97 @@ impl OrientGoal {
                 height: 1.5,
                 ..base
             },
-            Self::CleanTop => Weights { top: 3.0, ..base },
+        }
+    }
+}
+
+/// What auto-orient is asked for: one goal, or every goal weighed against the others.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum OrientPreset {
+    /// One goal, ranked by its own policy alone.
+    Goal(OrientGoal),
+    /// Every goal at once, each giving up as small and as even a share of its best as the
+    /// model allows. A goal added to [`OrientGoal::ALL`] is weighed with the rest.
+    Auto,
+}
+
+impl Default for OrientPreset {
+    fn default() -> Self {
+        Self::Goal(OrientGoal::default())
+    }
+}
+
+impl From<OrientGoal> for OrientPreset {
+    fn from(goal: OrientGoal) -> Self {
+        Self::Goal(goal)
+    }
+}
+
+impl OrientPreset {
+    /// Every preset: each goal, then the balance of them all.
+    pub fn all() -> impl Iterator<Item = Self> {
+        OrientGoal::ALL
+            .into_iter()
+            .map(Self::Goal)
+            .chain(std::iter::once(Self::Auto))
+    }
+
+    /// The name a person picks the preset by.
+    pub fn label(self) -> &'static str {
+        match self {
+            Self::Goal(goal) => goal.label(),
+            Self::Auto => "Auto",
+        }
+    }
+
+    /// The search's weights: the goal's own, or the mean of every goal's.
+    fn weights(self) -> Weights {
+        match self {
+            Self::Goal(goal) => goal.weights(),
+            Self::Auto => {
+                let count = OrientGoal::ALL.len() as Scalar;
+                let sum = OrientGoal::ALL
+                    .map(OrientGoal::weights)
+                    .into_iter()
+                    .fold(Weights::default(), Weights::plus);
+                sum.times(1.0 / count)
+            }
         }
     }
 }
 
 /// How much each term of [`Score`] weighs for one goal, set by eye and checked on
 /// `orient-lab`. `support` weighs everything a support is put under: the overhang, the
-/// tips and the height they stand at. The top weighs on top of the overhang it already is.
-#[derive(Debug, Clone, Copy, PartialEq)]
+/// tips and the height they stand at.
+#[derive(Debug, Clone, Copy, Default, PartialEq)]
 struct Weights {
     support: Scalar,
     volume: Scalar,
     peel: Scalar,
     height: Scalar,
     bottom: Scalar,
-    top: Scalar,
+}
+
+impl Weights {
+    fn plus(self, other: Self) -> Self {
+        Self {
+            support: self.support + other.support,
+            volume: self.volume + other.volume,
+            peel: self.peel + other.peel,
+            height: self.height + other.height,
+            bottom: self.bottom + other.bottom,
+        }
+    }
+
+    fn times(self, factor: Scalar) -> Self {
+        Self {
+            support: self.support * factor,
+            volume: self.volume * factor,
+            peel: self.peel * factor,
+            height: self.height * factor,
+            bottom: self.bottom * factor,
+        }
+    }
 }
 
 /// What a tip costs, in flat patches one contact holds: the whole model can hang off it,
@@ -229,7 +292,7 @@ impl<'a> Faces<'a> {
     /// supports or on the plate, past its overhang angle, by contacts its spacing apart.
     pub fn for_settings(self, settings: &OrientSettings) -> Self {
         Self {
-            weights: settings.goal.weights(),
+            weights: settings.preset.weights(),
             on_supports: settings.on_supports,
             lean: settings.max_overhang_deg.to_radians().sin(),
             held_from: (settings.max_overhang_deg - AT_THE_ANGLE_DEG)
@@ -271,11 +334,10 @@ impl<'a> Faces<'a> {
             under_mm3,
             bottom_mm2,
             shadow_mm2,
-            top_overhang_mm2,
         ] = (0..self.areas.len())
             .into_par_iter()
             .map(|face| self.face_terms(face, down, floor, on_supports))
-            .reduce(|| [0.0; 7], |a, b| std::array::from_fn(|at| a[at] + b[at]));
+            .reduce(|| [0.0; 6], |a, b| std::array::from_fn(|at| a[at] + b[at]));
 
         let plate = (!on_supports).then_some(floor);
         let mut score = Score {
@@ -289,7 +351,6 @@ impl<'a> Faces<'a> {
             shadow_mm2,
             peak_mm2: None,
             peak_pull_n: None,
-            top_overhang_mm2,
             cup_mm2: None,
             lift_mm: if on_supports { self.lift_mm } else { 0.0 },
             total: 0.0,
@@ -304,8 +365,8 @@ impl<'a> Faces<'a> {
     }
 
     /// One face's share of overhang, support volume, area under supports and its volume,
-    /// footprint, shadow and top overhang.
-    fn face_terms(&self, face: usize, down: Vec3, floor: Scalar, on_supports: bool) -> [Scalar; 7] {
+    /// footprint and shadow.
+    fn face_terms(&self, face: usize, down: Vec3, floor: Scalar, on_supports: bool) -> [Scalar; 6] {
         let lean = self.lean;
         let facing = self.normals[face].dot(down);
         let area = self.areas[face];
@@ -320,7 +381,6 @@ impl<'a> Faces<'a> {
             0.0
         };
         let under = if hangs { facing * area } else { 0.0 };
-        let looks_up = self.normals[face].z > LOOKS_UP;
         [
             overhang,
             overhang * above_mm,
@@ -330,7 +390,6 @@ impl<'a> Faces<'a> {
             // Half the area a model's faces project onto the plate is its silhouette,
             // which is the cross-section for anything convex.
             area * facing.abs() / 2.0,
-            if looks_up { overhang } else { 0.0 },
         ]
     }
 
@@ -373,19 +432,25 @@ impl<'a> Faces<'a> {
             OrientGoal::FewestSupports => terms.volume,
             OrientGoal::LeastPeel => peak_pull_n(score),
             OrientGoal::ShortestPrint => score.stack_mm(),
-            OrientGoal::CleanTop => terms.top,
         }
     }
 
     fn total(&self, score: &Score) -> Scalar {
+        self.weighed(self.weights, score)
+    }
+
+    /// What `score` would total ranked for `preset`, whichever preset these faces weigh.
+    pub(crate) fn total_for(&self, preset: OrientPreset, score: &Score) -> Scalar {
+        self.weighed(preset.weights(), score)
+    }
+
+    fn weighed(&self, w: Weights, score: &Score) -> Scalar {
         let terms = self.terms(score);
-        let w = self.weights;
         w.support * terms.held
             + w.volume * terms.volume
             + w.peel * terms.peel
             + w.height * terms.height
             - w.bottom * terms.bottom
-            + w.top * terms.top
     }
 
     /// Every term made dimensionless. The peel is the area of the disc pulling as hard.
@@ -404,7 +469,6 @@ impl<'a> Faces<'a> {
             peel: pulled / (length * length),
             height: score.stack_mm() / length,
             bottom: score.bottom_mm2 / area,
-            top: score.top_overhang_mm2 / area,
         }
     }
 }
@@ -434,7 +498,6 @@ struct Terms {
     peel: Scalar,
     height: Scalar,
     bottom: Scalar,
-    top: Scalar,
 }
 
 /// A face whose normal is within a few degrees of straight down is lying on the plate
@@ -444,42 +507,6 @@ const FLAT: Scalar = 0.996;
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn a_face_that_looks_up_in_its_file_is_a_top_overhang_once_it_hangs_down() {
-        // A 10 by 10 square at z = 10 looking up, and one at z = 20 looking down. Turned
-        // upside down, the high square rests on the plate and the low one hangs face down.
-        let mesh = Mesh::new(
-            vec![
-                Vec3::new(0.0, 0.0, 10.0),
-                Vec3::new(10.0, 0.0, 10.0),
-                Vec3::new(0.0, 10.0, 10.0),
-                Vec3::new(0.0, 0.0, 20.0),
-                Vec3::new(0.0, 10.0, 20.0),
-                Vec3::new(10.0, 0.0, 20.0),
-            ],
-            vec![[0, 1, 2], [3, 4, 5]],
-        );
-        let faces = Faces::of(&mesh).expect("two triangles have area");
-        let upside_down = faces.score(Vec3::Z);
-        // Weighted the way every overhang is: 50 mm2 by 1 - sin(45).
-        let expected = 50.0 * (1.0 - 45.0_f32.to_radians().sin());
-        assert!(
-            (upside_down.top_overhang_mm2 - expected).abs() < 1e-3,
-            "the 50 mm2 triangle hangs flat, got {}",
-            upside_down.top_overhang_mm2
-        );
-        let clean = Faces::of(&mesh)
-            .expect("two triangles have area")
-            .for_settings(&OrientSettings {
-                goal: OrientGoal::CleanTop,
-                ..OrientSettings::default()
-            });
-        assert!(
-            clean.score(Vec3::Z).total > upside_down.total,
-            "a clean top makes the same hang cost more"
-        );
-    }
 
     /// Axis-aligned box, twelve triangles, spanning 0..size on every axis.
     fn cuboid(size: Vec3) -> Mesh {
@@ -808,7 +835,7 @@ mod tests {
     /// The least peel, which weighs what a section pulls on the film.
     fn peel() -> OrientSettings {
         OrientSettings {
-            goal: OrientGoal::LeastPeel,
+            preset: OrientGoal::LeastPeel.into(),
             ..OrientSettings::default()
         }
     }

@@ -6,7 +6,7 @@ use std::path::PathBuf;
 use anyhow::{Context, Result};
 use core_format::ExposureRange;
 use core_geometry::{DEFAULT_WELD_TOLERANCE, Scalar, Vec3};
-use core_plate::OrientGoal;
+use core_plate::{OrientGoal, OrientPreset};
 use core_slicer::{AdaptiveSettings, WINDOW_LAYERS};
 use core_volume::Tiling;
 use printer_profiles::SupportProfile;
@@ -123,26 +123,26 @@ pub struct TransformArgs {
     pub max_tilt: Option<Scalar>,
 }
 
-/// What an orientation is searched for, as [`OrientGoal`] names it.
+/// What an orientation is searched for, as [`OrientPreset`] names it.
 #[derive(Debug, Clone, Copy, clap::ValueEnum)]
 pub enum Goal {
-    /// The least surface hanging over nothing.
+    /// The least resin in the supports.
     FewestSupports,
-    /// The smallest cross-section pulled off the film.
+    /// The lightest pull on the film.
     LeastPeel,
-    /// The fewest layers.
+    /// The shortest stack.
     ShortestPrint,
-    /// No support on the faces that look up in the file.
-    CleanTop,
+    /// Every goal at once, each giving up as even a share of its best as it can.
+    Auto,
 }
 
-impl From<Goal> for OrientGoal {
+impl From<Goal> for OrientPreset {
     fn from(goal: Goal) -> Self {
         match goal {
-            Goal::FewestSupports => Self::FewestSupports,
-            Goal::LeastPeel => Self::LeastPeel,
-            Goal::ShortestPrint => Self::ShortestPrint,
-            Goal::CleanTop => Self::CleanTop,
+            Goal::FewestSupports => OrientGoal::FewestSupports.into(),
+            Goal::LeastPeel => OrientGoal::LeastPeel.into(),
+            Goal::ShortestPrint => OrientGoal::ShortestPrint.into(),
+            Goal::Auto => Self::Auto,
         }
     }
 }

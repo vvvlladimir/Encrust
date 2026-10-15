@@ -1,9 +1,10 @@
-//! The one rule an orientation is chosen by, whatever the stage and the goal; each goal
-//! picks its own [`Policy`]. See `docs/design/orientation.md`.
+//! The one rule an orientation is chosen by, whatever the stage and the preset: each goal
+//! ranks by its own [`Policy`], and the auto preset by the [`Balance`] of them all. See
+//! `docs/design/orientation.md`.
 
 use core_analysis::PEEL_LIMIT_N;
 
-use crate::score::OrientGoal;
+use crate::score::{OrientGoal, OrientPreset};
 
 /// What one way to stand reads on everything the choice weighs; lower is better in each.
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -32,7 +33,7 @@ pub struct Readings {
 }
 
 /// What of each goal's reading is noise, in the order of [`OrientGoal::ALL`] and the unit a
-/// stage reads it in: contacts, millilitres, newtons or a dimensionless share.
+/// stage reads it in: millilitres or a dimensionless share, newtons, millimetres.
 pub type Noise = [f64; OrientGoal::ALL.len()];
 
 /// How far over the best still counts as as good: a share of the best, and a slack
@@ -48,6 +49,11 @@ impl Band {
         best + self.share * best.abs() + self.slack
     }
 }
+
+const EXACT: Band = Band {
+    share: 0.0,
+    slack: 0.0,
+};
 
 /// How candidates are ranked for one goal.
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -69,6 +75,9 @@ struct Policy {
     fallback_noise: f64,
     /// The share of its own reading a turn has to win over standing still.
     stay_gain: f64,
+    /// How many of its noise the goal's reading is held to at least where the balance
+    /// weighs it as a share of the best: less spares nothing worth another goal's share.
+    floor_noises: f64,
 }
 
 impl Policy {
@@ -113,12 +122,28 @@ impl Policy {
         }
     }
 
+    /// How far over the best the goal reads as good as the best beside the other goals: its
+    /// own band, or the common one where it ranks strictly by the least.
+    fn alike(&self, noise: f64) -> Band {
+        if self.primary == EXACT {
+            Band {
+                share: PRIMARY_SHARE,
+                slack: noise,
+            }
+        } else {
+            self.primary
+        }
+    }
+
     /// Each goal's own policy: a goal is ranked by nothing another goal sets.
     fn of(goal: OrientGoal, noise: &Noise) -> Self {
         let primary_slack = noise[goal.index()];
         match goal {
             // The least support volume, whatever else it reads (ADR 0279).
-            OrientGoal::FewestSupports => Self::strictly_least(goal),
+            OrientGoal::FewestSupports => Self {
+                floor_noises: SUPPORT_FLOOR_NOISES,
+                ..Self::strictly_least(goal)
+            },
             OrientGoal::LeastPeel => Self {
                 enough: ENOUGH_PULL_N,
                 fallback: Some(OrientGoal::FewestSupports),
@@ -132,28 +157,25 @@ impl Policy {
                     share: STACK_SHARE,
                     slack: primary_slack.max(STACK_SLACK_MM),
                 },
+                floor_noises: STACK_FLOOR_NOISES,
                 ..Self::banded(goal, primary_slack)
             },
-            OrientGoal::CleanTop => Self::banded(goal, primary_slack),
         }
     }
 
     /// Strictly the least reading past what fails every goal, and any turn that lowers it.
     fn strictly_least(goal: OrientGoal) -> Self {
-        let exact = Band {
-            share: 0.0,
-            slack: 0.0,
-        };
         Self {
             goal,
             weighs_hazards: false,
             weighs_tearing: false,
-            unheld: exact,
-            primary: exact,
+            unheld: EXACT,
+            primary: EXACT,
             enough: f64::NEG_INFINITY,
             fallback: None,
             fallback_noise: 0.0,
             stay_gain: 0.0,
+            floor_noises: 0.0,
         }
     }
 
@@ -172,6 +194,7 @@ impl Policy {
             fallback: None,
             fallback_noise: 0.0,
             stay_gain: STAY_GAIN,
+            floor_noises: 0.0,
         }
     }
 }
@@ -193,6 +216,12 @@ const ENOUGH_PULL_N: f64 = PEEL_LIMIT_N / 3.0;
 /// minutes on a 100 mm figure, two on a flat part.
 const STACK_SHARE: f64 = 0.02;
 const STACK_SLACK_MM: f64 = 1.0;
+/// Ten struts of support, half a millilitre as a proof reads it, is resin nobody misses
+/// and a minute to clip off.
+const SUPPORT_FLOOR_NOISES: f64 = 10.0;
+/// Five noises of stack, 1.5 mm as a proof reads it, is about what the bottom layers add
+/// to any print whatever its height.
+const STACK_FLOOR_NOISES: f64 = 5.0;
 
 /// The rankings' common ground: the fewest fatal readings, the fewest unheld among them,
 /// and the best primary among those.
@@ -242,6 +271,14 @@ impl Bests {
         self.first_tier(r, policy) && policy.primary(r) <= policy.primary.limit(self.primary)
     }
 
+    /// Whether `r` fails the print more surely than the best, or leaves more hanging,
+    /// compared in that order with `other`.
+    fn fails_less(&self, r: &Readings, other: &Readings, policy: &Policy) -> bool {
+        (policy.fatal(r), !self.held(r, policy))
+            .partial_cmp(&(policy.fatal(other), !self.held(other, policy)))
+            .is_some_and(std::cmp::Ordering::is_lt)
+    }
+
     /// The order key: fatal, then held, then in band, then the fewest unheld, then the
     /// least reading where the goal has no band, then the fallback, then the tie-break.
     fn key(&self, r: &Readings, policy: &Policy) -> Key {
@@ -257,9 +294,138 @@ impl Bests {
     }
 }
 
+/// How the auto preset weighs every goal at once: the product of each reading's share of
+/// the best a sound pose reads, `docs/design/orientation.md`.
+struct Balance {
+    /// What fails the print and what hangs, weighed as strictly as any goal weighs them.
+    hazards: Policy,
+    bests: Bests,
+    goals: [Policy; OrientGoal::ALL.len()],
+    noise: Noise,
+    /// Each goal's best reading among the sound, and the floor under every reading of it.
+    best: [f64; OrientGoal::ALL.len()],
+    floor: [f64; OrientGoal::ALL.len()],
+}
+
+/// A share no reading falls under, so that a goal at zero at best still divides.
+const TINY: f64 = 1e-9;
+
+impl Balance {
+    fn of(readings: &[Readings], noise: &Noise) -> Option<Self> {
+        let hazards = Policy::banded(OrientGoal::ALL[0], 0.0);
+        let bests = Bests::of(readings, &hazards)?;
+        let goals = OrientGoal::ALL.map(|goal| Policy::of(goal, noise));
+        let best = goals.map(|policy| {
+            readings
+                .iter()
+                .filter(|r| bests.first_tier(r, &hazards))
+                .map(|r| policy.primary(r))
+                .min_by(f64::total_cmp)
+                .unwrap_or(f64::INFINITY)
+        });
+        let floor = std::array::from_fn(|at| goals[at].floor_noises * noise[at]);
+        Some(Self {
+            hazards,
+            bests,
+            goals,
+            noise: *noise,
+            best,
+            floor,
+        })
+    }
+
+    /// The natural logarithm of each goal's reading as a share of its best.
+    fn shares(&self, r: &Readings) -> [f64; OrientGoal::ALL.len()] {
+        std::array::from_fn(|at| {
+            let over = |reading: f64| (reading + self.floor[at]).max(TINY);
+            (over(self.goals[at].primary(r)) / over(self.best[at])).ln()
+        })
+    }
+
+    /// What every share costs together: the logarithm of their product.
+    fn cost(&self, r: &Readings) -> f64 {
+        self.shares(r).iter().sum()
+    }
+
+    /// What the noise of every goal's reading moves the cost by at most.
+    fn cost_noise(&self) -> f64 {
+        (0..self.noise.len())
+            .map(|at| (1.0 + self.noise[at] / (self.best[at] + self.floor[at]).max(TINY)).ln())
+            .sum()
+    }
+
+    fn sound(&self, r: &Readings) -> bool {
+        self.bests.first_tier(r, &self.hazards)
+    }
+
+    /// Whether `r` is sound and as good as the best on every goal at once.
+    fn in_every_band(&self, r: &Readings) -> bool {
+        self.sound(r)
+            && self.goals.iter().enumerate().all(|(at, policy)| {
+                policy.primary(r) <= policy.alike(self.noise[at]).limit(self.best[at])
+            })
+    }
+
+    /// Whether `a` reads no worse than `b` on any goal and better past the noise on one.
+    fn dominates(&self, a: &Readings, b: &Readings) -> bool {
+        let pairs = self
+            .goals
+            .iter()
+            .map(|policy| (policy.primary(a), policy.primary(b)));
+        let mut better = false;
+        for (at, (own, other)) in pairs.enumerate() {
+            if own > other {
+                return false;
+            }
+            better |= own < other - self.noise[at];
+        }
+        better
+    }
+
+    /// For each of `readings`, whether a sound one dominates it.
+    fn dominated(&self, readings: &[Readings]) -> Vec<bool> {
+        readings
+            .iter()
+            .map(|b| {
+                readings
+                    .iter()
+                    .any(|a| self.sound(a) && self.dominates(a, b))
+            })
+            .collect()
+    }
+
+    /// The order key: fatal, then held, then good on every goal, then dominated, then the
+    /// cost, then the worst share, then the tie-break.
+    fn key(&self, r: &Readings, dominated: bool) -> Key {
+        let worst = self.shares(r).into_iter().fold(f64::NEG_INFINITY, f64::max);
+        (
+            self.hazards.fatal(r),
+            !self.bests.held(r, &self.hazards),
+            !self.in_every_band(r),
+            f64::from(u8::from(dominated)),
+            self.cost(r),
+            worst,
+            r.tiebreak,
+        )
+    }
+
+    /// Whether `turned` is worth leaving `now` for: it fails less, or standing is not good
+    /// on every goal and the turn is, or it costs a twentieth less and more than the noise.
+    fn worth_turning(&self, turned: &Readings, now: &Readings) -> bool {
+        if self.bests.fails_less(turned, now, &self.hazards) {
+            return true;
+        }
+        if self.in_every_band(now) {
+            return false;
+        }
+        let gain = self.cost(now) - self.cost(turned);
+        self.in_every_band(turned) || gain > (-(-STAY_GAIN).ln_1p()).max(self.cost_noise())
+    }
+}
+
 type Key = (f64, bool, bool, f64, f64, f64, [f64; 2]);
 
-fn compare(a: Key, b: Key) -> std::cmp::Ordering {
+fn compare(a: &Key, b: &Key) -> std::cmp::Ordering {
     a.0.total_cmp(&b.0)
         .then(a.1.cmp(&b.1))
         .then(a.2.cmp(&b.2))
@@ -273,18 +439,18 @@ fn compare(a: Key, b: Key) -> std::cmp::Ordering {
 /// The indices of `readings`, best first, with the way the model stands moved to the front
 /// when no turn ahead of it is worth making. Ties keep their order. `noise` is the stage's
 /// own: only it knows the unit it reads each goal in.
-pub fn rank(readings: &[Readings], goal: OrientGoal, noise: &Noise) -> Vec<usize> {
-    ranking(readings, goal, noise).map_or_else(Vec::new, |ranking| ranking.order)
+pub fn rank(readings: &[Readings], preset: OrientPreset, noise: &Noise) -> Vec<usize> {
+    Ranking::of(readings, preset, noise).map_or_else(Vec::new, |ranking| ranking.order)
 }
 
 /// Why each of `readings` ended where [`rank`] put it, in the order given.
-pub fn rulings(readings: &[Readings], goal: OrientGoal, noise: &Noise) -> Vec<Ruling> {
-    let Some(ranking) = ranking(readings, goal, noise) else {
+pub fn rulings(readings: &[Readings], preset: OrientPreset, noise: &Noise) -> Vec<Ruling> {
+    let Some(ranking) = Ranking::of(readings, preset, noise) else {
         return Vec::new();
     };
     let mut rulings = vec![Ruling::TieBreak; readings.len()];
     for (place, at) in ranking.order.iter().enumerate() {
-        rulings[*at] = ranking.ruling(&readings[*at], place);
+        rulings[*at] = ranking.ruling(readings, *at, place);
     }
     rulings
 }
@@ -306,59 +472,151 @@ pub enum Ruling {
     OutOfBand,
     /// As good as the best, and behind it on the tie-break.
     TieBreak,
+    /// Balancing every goal, another sound pose reads better on one and no worse on any.
+    Dominated,
+    /// Balancing every goal, a sound pose no other beats on all of them, which costs more
+    /// than the chosen: a trade the user may prefer.
+    Alternative,
 }
 
-/// The policy, the bests it measured, the order, and whether standing still was moved ahead.
+impl Ruling {
+    /// Whether a pose so ruled is one worth offering in turn beside the chosen: as good, or
+    /// a trade no other pose beats.
+    pub fn is_offered(self) -> bool {
+        matches!(
+            self,
+            Self::Chosen
+                | Self::Stayed
+                | Self::NotWorthTurning
+                | Self::TieBreak
+                | Self::Alternative
+        )
+    }
+}
+
+/// What ranks the candidates: one goal's policy, or the balance of every goal.
+enum Rule {
+    Goal {
+        policy: Policy,
+        bests: Bests,
+    },
+    Balance {
+        balance: Box<Balance>,
+        dominated: Vec<bool>,
+    },
+}
+
+impl Rule {
+    fn of(readings: &[Readings], preset: OrientPreset, noise: &Noise) -> Option<Self> {
+        Some(match preset {
+            OrientPreset::Goal(goal) => {
+                let policy = Policy::of(goal, noise);
+                let bests = Bests::of(readings, &policy)?;
+                Self::Goal { policy, bests }
+            }
+            OrientPreset::Auto => {
+                let balance = Balance::of(readings, noise)?;
+                let dominated = balance.dominated(readings);
+                Self::Balance {
+                    balance: Box::new(balance),
+                    dominated,
+                }
+            }
+        })
+    }
+
+    fn key(&self, readings: &[Readings], at: usize) -> Key {
+        match self {
+            Self::Goal { policy, bests } => bests.key(&readings[at], policy),
+            Self::Balance { balance, dominated } => balance.key(&readings[at], dominated[at]),
+        }
+    }
+
+    fn worth_turning(&self, turned: &Readings, now: &Readings) -> bool {
+        match self {
+            Self::Goal { policy, bests } => worth_turning(bests, policy, turned, now),
+            Self::Balance { balance, .. } => balance.worth_turning(turned, now),
+        }
+    }
+
+    /// What a candidate ranked past the first lost on.
+    fn lost_on(&self, readings: &[Readings], at: usize) -> Ruling {
+        let r = &readings[at];
+        match self {
+            Self::Goal { policy, bests } => {
+                if policy.fatal(r).total_cmp(&bests.fatal).is_gt() {
+                    Ruling::Fatal
+                } else if !bests.held(r, policy) {
+                    Ruling::Unheld
+                } else if !bests.in_band(r, policy) {
+                    Ruling::OutOfBand
+                } else {
+                    Ruling::TieBreak
+                }
+            }
+            Self::Balance { balance, dominated } => {
+                if balance
+                    .hazards
+                    .fatal(r)
+                    .total_cmp(&balance.bests.fatal)
+                    .is_gt()
+                {
+                    Ruling::Fatal
+                } else if !balance.bests.held(r, &balance.hazards) {
+                    Ruling::Unheld
+                } else if dominated[at] {
+                    Ruling::Dominated
+                } else {
+                    Ruling::Alternative
+                }
+            }
+        }
+    }
+}
+
+/// The rule, the order, and whether standing still was moved ahead.
 struct Ranking {
-    policy: Policy,
-    bests: Bests,
+    rule: Rule,
     order: Vec<usize>,
     stayed: bool,
 }
 
 impl Ranking {
-    fn ruling(&self, r: &Readings, place: usize) -> Ruling {
-        let (policy, bests) = (&self.policy, &self.bests);
+    fn of(readings: &[Readings], preset: OrientPreset, noise: &Noise) -> Option<Self> {
+        let rule = Rule::of(readings, preset, noise)?;
+        let keys: Vec<Key> = (0..readings.len())
+            .map(|at| rule.key(readings, at))
+            .collect();
+        let mut order: Vec<usize> = (0..readings.len()).collect();
+        order.sort_by(|a, b| compare(&keys[*a], &keys[*b]));
+
+        let standing = order.iter().position(|at| readings[*at].standing);
+        let stayed = standing
+            .filter(|position| *position > 0)
+            .is_some_and(|position| {
+                let (turned, now) = (order[0], order[position]);
+                compare(&keys[turned], &keys[now]).is_ge()
+                    || !rule.worth_turning(&readings[turned], &readings[now])
+            });
+        if let (true, Some(position)) = (stayed, standing) {
+            let now = order.remove(position);
+            order.insert(0, now);
+        }
+        Some(Self {
+            rule,
+            order,
+            stayed,
+        })
+    }
+
+    fn ruling(&self, readings: &[Readings], at: usize, place: usize) -> Ruling {
         match (place, self.stayed) {
             (0, true) => Ruling::Stayed,
             (0, false) => Ruling::Chosen,
             (1, true) => Ruling::NotWorthTurning,
-            _ if policy.fatal(r).total_cmp(&bests.fatal).is_gt() => Ruling::Fatal,
-            _ if !bests.held(r, policy) => Ruling::Unheld,
-            _ if !bests.in_band(r, policy) => Ruling::OutOfBand,
-            _ => Ruling::TieBreak,
+            _ => self.rule.lost_on(readings, at),
         }
     }
-}
-
-fn ranking(readings: &[Readings], goal: OrientGoal, noise: &Noise) -> Option<Ranking> {
-    let policy = Policy::of(goal, noise);
-    let bests = Bests::of(readings, &policy)?;
-    let key = |at: &usize| bests.key(&readings[*at], &policy);
-    let mut order: Vec<usize> = (0..readings.len()).collect();
-    order.sort_by(|a, b| compare(key(a), key(b)));
-
-    let standing = order.iter().position(|at| readings[*at].standing);
-    let stayed = standing
-        .filter(|position| *position > 0)
-        .is_some_and(|position| {
-            !worth_turning(
-                &bests,
-                &policy,
-                &readings[order[0]],
-                &readings[order[position]],
-            )
-        });
-    if let (true, Some(position)) = (stayed, standing) {
-        let now = order.remove(position);
-        order.insert(0, now);
-    }
-    Some(Ranking {
-        policy,
-        bests,
-        order,
-        stayed,
-    })
 }
 
 /// Whether `turned`, ranked ahead of `now`, is worth leaving the way the model stands for:
@@ -366,13 +624,7 @@ fn ranking(readings: &[Readings], goal: OrientGoal, noise: &Noise) -> Option<Ran
 /// reading and more than the noise of its unit — or, both having enough, as much of the
 /// fallback's.
 fn worth_turning(bests: &Bests, policy: &Policy, turned: &Readings, now: &Readings) -> bool {
-    let key = |r: &Readings| bests.key(r, policy);
-    if compare(key(turned), key(now)).is_ge() {
-        return false;
-    }
-    let fails_less = (policy.fatal(turned), !bests.held(turned, policy))
-        .partial_cmp(&(policy.fatal(now), !bests.held(now, policy)))
-        .is_some_and(std::cmp::Ordering::is_lt);
+    let fails_less = bests.fails_less(turned, now, policy);
     let gain = policy.primary(now) - policy.primary(turned);
     let worth = (policy.stay_gain * policy.primary(now).abs()).max(policy.primary.slack);
     let both_enough = policy.primary(now).max(policy.primary(turned)) <= policy.enough;
@@ -387,14 +639,18 @@ mod tests {
     use super::*;
 
     const SLACK: Noise = [0.0; OrientGoal::ALL.len()];
-    /// A twentieth of a millilitre of support, half a newton of pull, 0.3 mm of stack and two
-    /// contacts, as a proof reads.
-    const PROVEN: Noise = [0.05, 0.5, 0.3, 2.0];
-    /// A goal ranked with its bands and no floor; the fewest supports has neither.
-    const GOAL: OrientGoal = OrientGoal::CleanTop;
-    const SHORTEST: OrientGoal = OrientGoal::ShortestPrint;
-    const PEEL: OrientGoal = OrientGoal::LeastPeel;
-    const FEWEST: OrientGoal = OrientGoal::FewestSupports;
+    /// A twentieth of a millilitre of support, half a newton of pull and 0.3 mm of stack, as
+    /// a proof reads.
+    const PROVEN: Noise = [0.05, 0.5, 0.3];
+    /// A goal ranked with its bands, read past enough pull to have nothing to fall back on.
+    const GOAL: OrientPreset = OrientPreset::Goal(OrientGoal::LeastPeel);
+    const SHORTEST: OrientPreset = OrientPreset::Goal(OrientGoal::ShortestPrint);
+    const PEEL: OrientPreset = OrientPreset::Goal(OrientGoal::LeastPeel);
+    const FEWEST: OrientPreset = OrientPreset::Goal(OrientGoal::FewestSupports);
+    const AUTO: OrientPreset = OrientPreset::Auto;
+    const SUPPORT: usize = OrientGoal::FewestSupports.index();
+    const PULL: usize = OrientGoal::LeastPeel.index();
+    const STACK: usize = OrientGoal::ShortestPrint.index();
 
     fn reading(fatal: f64, unheld: Option<f64>, primary: f64, tiebreak: f64) -> Readings {
         Readings {
@@ -469,19 +725,15 @@ mod tests {
         };
         let roomy = reading(0.0, Some(0.0), 90.0, 1.0);
         assert_eq!(rank(&[roomless, roomy], FEWEST, &SLACK)[0], 0);
-        assert_eq!(
-            rank(&[roomless, roomy], OrientGoal::LeastPeel, &SLACK)[0],
-            1
-        );
+        assert_eq!(rank(&[roomless, roomy], PEEL, &SLACK)[0], 1);
     }
 
     #[test]
     fn other_goals_refuse_a_cup_whatever_it_saves() {
         let sound = reading(0.0, None, 90.0, 1.0);
-        let peel = OrientGoal::LeastPeel;
-        assert_eq!(rank(&[sucking(60.0), sound], peel, &SLACK)[0], 1);
+        assert_eq!(rank(&[sucking(60.0), sound], PEEL, &SLACK)[0], 1);
         assert_eq!(
-            rulings(&[sucking(60.0), sound], peel, &SLACK),
+            rulings(&[sucking(60.0), sound], PEEL, &SLACK),
             [Ruling::Fatal, Ruling::Chosen]
         );
     }
@@ -519,13 +771,14 @@ mod tests {
 
     #[test]
     fn a_turn_has_to_win_more_than_the_noise_of_its_unit() {
-        let mut now = reading(0.0, None, 2.0, 1.0);
+        let mut now = reading(0.0, None, 12.0, 1.0);
         now.standing = true;
-        let turned = reading(0.0, None, 0.0, 0.0);
+        let turned = reading(0.0, None, 11.0, 0.0);
+        let coarse = [0.05, 2.0, 0.3];
         assert_eq!(
-            rank(&[turned, now], GOAL, &PROVEN)[0],
+            rank(&[turned, now], GOAL, &coarse)[0],
             1,
-            "two contacts is the noise of a contact count"
+            "a twelfth of the reading is past the share, but not past two newtons of noise"
         );
     }
 
@@ -607,7 +860,7 @@ mod tests {
     /// tie-broken as a proof does, on the pull to its noise.
     fn pulling(pull: f64, supports: f64) -> Readings {
         let mut r = reading(0.0, Some(0.0), pull, (pull / 0.5).round());
-        r.goals[FEWEST.index()] = supports;
+        r.goals[SUPPORT] = supports;
         r
     }
 
@@ -670,9 +923,9 @@ mod tests {
     /// A candidate standing `stack_mm` tall that the fewest supports reads as `supports`,
     /// tie-broken as a proof does, on the stack to its noise.
     fn stacking(stack_mm: f64, supports: f64) -> Readings {
-        let noise = PROVEN[SHORTEST.index()];
+        let noise = PROVEN[STACK];
         let mut r = reading(0.0, Some(0.0), stack_mm, (stack_mm / noise).round());
-        r.goals[FEWEST.index()] = supports;
+        r.goals[SUPPORT] = supports;
         r
     }
 
@@ -710,5 +963,103 @@ mod tests {
             0,
             "102 mm is past 95 * 1.02 + 1"
         );
+    }
+
+    /// A sound candidate reading `support` ml, `pull` newtons and `stack` millimetres.
+    fn weighing(support: f64, pull: f64, stack: f64) -> Readings {
+        let mut r = reading(0.0, Some(0.0), 0.0, 0.0);
+        r.goals[SUPPORT] = support;
+        r.goals[PULL] = pull;
+        r.goals[STACK] = stack;
+        r
+    }
+
+    #[test]
+    fn auto_takes_a_pose_good_on_every_goal_over_a_cheaper_trade() {
+        // 1.0 ml is within a tenth and 0.05 ml of 0.91 ml, and 100 mm within a fiftieth and
+        // a millimetre of 97.1 mm; 104 mm is not, though its product of shares is lower.
+        let readings = [
+            weighing(0.91, 5.0, 104.0),
+            weighing(1.0, 5.0, 100.0),
+            weighing(1.3, 5.0, 97.1),
+        ];
+        assert_eq!(rank(&readings, AUTO, &PROVEN)[0], 1);
+    }
+
+    #[test]
+    fn auto_weighs_shares_not_units() {
+        // The two finalists of a 98 mm disc with pockets: eight times the support on its face,
+        // five times the stack on its edge. The larger share loses whatever the units are.
+        let edge = weighing(0.79, 0.9, 103.0);
+        let face = weighing(6.19, 8.4, 21.3);
+        assert_eq!(rank(&[face, edge], AUTO, &PROVEN)[0], 1);
+
+        let in_microlitres = |mut r: Readings| {
+            r.goals[SUPPORT] *= 1000.0;
+            r
+        };
+        let mut noise = PROVEN;
+        noise[SUPPORT] *= 1000.0;
+        assert_eq!(
+            rank(&[in_microlitres(face), in_microlitres(edge)], AUTO, &noise)[0],
+            1,
+            "a goal read in another unit chooses the same"
+        );
+    }
+
+    #[test]
+    fn auto_refuses_a_cup_and_a_tearing_pull_whatever_they_save() {
+        let sound = weighing(4.0, 20.0, 100.0);
+        let cupped = Readings {
+            suction: 1.0,
+            ..weighing(1.0, 5.0, 50.0)
+        };
+        let tearing = Readings {
+            tearing: 1.0,
+            ..weighing(1.0, 5.0, 50.0)
+        };
+        assert_eq!(rank(&[cupped, tearing, sound], AUTO, &PROVEN)[0], 2);
+    }
+
+    #[test]
+    fn auto_offers_every_trade_no_other_pose_beats_and_rules_the_rest_dominated() {
+        let readings = [
+            weighing(1.0, 5.0, 100.0),
+            weighing(4.0, 5.0, 40.0),
+            weighing(4.5, 5.0, 45.0),
+            weighing(2.0, 5.0, 60.0),
+        ];
+        let rulings = rulings(&readings, AUTO, &PROVEN);
+        assert_eq!(
+            rulings[2],
+            Ruling::Dominated,
+            "40 mm and 4.0 ml beat it on both"
+        );
+        assert_eq!(
+            rulings.iter().filter(|ruling| ruling.is_offered()).count(),
+            3,
+            "the other three each trade support for time"
+        );
+        assert_eq!(*rank(&readings, AUTO, &PROVEN).last().expect("four"), 2);
+    }
+
+    #[test]
+    fn auto_ignores_a_goal_every_pose_reads_alike() {
+        // Every pull is under enough: what is left is support against time.
+        let readings = [weighing(1.0, 9.0, 50.0), weighing(1.0, 1.0, 60.0)];
+        assert_eq!(rank(&readings, AUTO, &PROVEN)[0], 0);
+    }
+
+    #[test]
+    fn auto_stays_where_the_model_stands_good_on_every_goal() {
+        let mut now = weighing(1.02, 5.0, 101.0);
+        now.standing = true;
+        let turned = weighing(1.0, 5.0, 100.0);
+        assert_eq!(
+            rulings(&[turned, now], AUTO, &PROVEN),
+            [Ruling::NotWorthTurning, Ruling::Stayed]
+        );
+        let clearly = weighing(0.3, 5.0, 80.0);
+        assert_eq!(rank(&[clearly, now], AUTO, &PROVEN)[0], 0);
     }
 }

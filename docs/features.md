@@ -69,11 +69,19 @@ capped silently.
   height.
 
 **Auto-orient:**
-- Searches for the best angle for one of four goals: **fewest supports**, **least peel**,
-  **shortest print** or **clean top**, picked in Position above **Auto-orient**; the
-  plate-wide **Auto-orient plate** uses the same goal. Clean top keeps the side facing up
-  in the file free of support marks. The goal resets to fewest supports when the window
-  reopens.
+- Searches for the best angle for one of four presets: **fewest supports**, **least
+  peel**, **shortest print** or **auto**, picked in Position above **Auto-orient**; the
+  plate-wide **Auto-orient plate** uses the same preset. The preset resets to fewest
+  supports when the window reopens.
+- **Auto** balances the other three for each model. It never lets one of supports, pull
+  or print time go far worse for the sake of the others. Where some pose is about as good
+  as the best on all three, it takes that one. Otherwise it takes the pose where each
+  gives up the smallest, most even share of its best. Like least peel, it never takes a
+  suction cup or a pull past the warning.
+- When there are other good poses, Position shows **Pose 1 of N** with arrows to step
+  through them. With a printer chosen, each one shows its supports, pull and height. Auto
+  offers every trade that no other pose beats on all three; a single goal offers the poses
+  it reads as just as good.
 - You can cap the tilt (for example "no more than 30° from how it stands now"). A cap of 0
   leaves the model as it is.
 - It never picks an angle worse than the current one.

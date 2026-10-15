@@ -1,9 +1,9 @@
 use std::sync::Arc;
 use std::sync::mpsc::{self, Receiver, TryRecvError};
 
-use core_engine::{Trial, orient_proven};
+use core_engine::{Trial, prove};
 use core_geometry::{Mesh, Quat, Transform, Vec3, transform_mesh};
-use core_plate::{OrientSettings, Oriented, Printed, orient_printed};
+use core_plate::{OrientSettings, Printed, finalists};
 use core_volume::ModelHollow;
 use printer_profiles::{MaterialProfile, PrinterProfile, SupportProfile};
 use rayon::prelude::*;
@@ -75,16 +75,33 @@ pub struct Proof {
     pub material: MaterialProfile,
 }
 
-/// How a model should be turned, and what it will cost the print once it is.
-#[derive(Debug, Clone, Copy, PartialEq)]
+/// How a model should be turned, and the other good ways to stand it, best first.
+#[derive(Debug, Clone, PartialEq)]
 pub struct Turn {
     pub id: ObjectId,
-    pub rotation: Quat,
-    /// Whether it stands straight on the plate, supported only where it hangs over it.
-    pub on_plate: bool,
+    /// Never empty: the first is the choice, the rest are offered in turn beside it.
+    pub poses: Vec<Pose>,
     /// How far it is stood off the plate onto its supports when it is not on it,
     /// millimetres: its support profile's own lift.
     pub lift_mm: f32,
+}
+
+/// One way to stand a model, and what a proof read it to cost, where one printed it.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct Pose {
+    pub rotation: Quat,
+    /// Whether it stands straight on the plate, supported only where it hangs over it.
+    pub on_plate: bool,
+    pub costs: Option<Costs>,
+}
+
+/// What a pose costs as a proof printed it.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct Costs {
+    pub supports_ml: f32,
+    pub pull_n: f64,
+    /// How tall the stack stands, model and supports, millimetres.
+    pub stack_mm: f32,
 }
 
 /// How an orientation run ended.
@@ -149,16 +166,24 @@ pub fn orient_tasks(
         .collect()
 }
 
-/// The orientation of one model: proven by printing where there is a machine to print
-/// with, and the search's own answer otherwise.
+/// The good ways to stand one model, best first: proven by printing where there is a
+/// machine to print with, and the search's own answer otherwise.
 fn choose(
     printed: &Printed,
     settings: &OrientSettings,
     support: &SupportProfile,
     proof: Option<&Proof>,
-) -> Result<Oriented, String> {
+) -> Result<Vec<Pose>, String> {
+    let found = finalists(printed, settings, usize::MAX).map_err(|error| error.to_string())?;
     let Some(proof) = proof else {
-        return orient_printed(printed, settings).map_err(|error| error.to_string());
+        return Ok(offered(found.iter().map(|pose| {
+            let unproven = Pose {
+                rotation: pose.rotation,
+                on_plate: pose.on_plate,
+                costs: None,
+            };
+            (unproven, pose.ruling.is_offered())
+        })));
     };
     let trial = Trial {
         printer: &proof.printer,
@@ -166,9 +191,29 @@ fn choose(
         support,
         raster_window: worker_threads(),
     };
-    orient_proven(printed, settings, &trial)
-        .map(|proven| proven.oriented)
-        .map_err(|error| error.to_string())
+    let tried = prove(printed, settings, &found, &trial).map_err(|error| error.to_string())?;
+    Ok(offered(tried.iter().map(|tried| {
+        let (oriented, printout) = (tried.proven.oriented, tried.proven.printout);
+        let proven = Pose {
+            rotation: oriented.rotation,
+            on_plate: oriented.on_plate,
+            costs: Some(Costs {
+                supports_ml: printout.supports_ml,
+                pull_n: printout.pull_n,
+                stack_mm: printout.stack_mm,
+            }),
+        };
+        (proven, tried.ruling.is_offered())
+    })))
+}
+
+/// The first of `ranked` and every other one offered beside it.
+fn offered(ranked: impl Iterator<Item = (Pose, bool)>) -> Vec<Pose> {
+    ranked
+        .enumerate()
+        .filter(|(at, (_, offered))| *at == 0 || *offered)
+        .map(|(_, (pose, _))| pose)
+        .collect()
 }
 
 /// The way out of every hole and of both ends of every channel cut into a model.
@@ -218,13 +263,14 @@ fn run(request: &OrientRequest) -> OrientOutcome {
                     cuts: cuts.as_deref(),
                     vents: &vents,
                 };
-                choose(&printed, &settings, &task.support, request.proof.as_ref()).map(|found| {
-                    Turn {
-                        id: task.id,
-                        rotation: found.rotation,
-                        on_plate: found.on_plate,
-                        lift_mm: task.support.z_lift_mm,
-                    }
+                let poses = choose(&printed, &settings, &task.support, request.proof.as_ref())?;
+                if poses.is_empty() {
+                    return Err("the search found no orientation".to_owned());
+                }
+                Ok(Turn {
+                    id: task.id,
+                    poses,
+                    lift_mm: task.support.z_lift_mm,
                 })
             })
             .collect();

@@ -5,8 +5,9 @@ use rayon::prelude::*;
 use crate::candidates::{directions, flat_faces};
 use crate::cut::cut;
 use crate::error::PlateError;
+use crate::policy::Ruling;
 use crate::printed::Printed;
-use crate::score::{Faces, OrientGoal, Score};
+use crate::score::{Faces, OrientGoal, OrientPreset, Score};
 use crate::select::{Candidate, ranked};
 
 /// The most drain holes tried as the way down: each is a candidate cut through.
@@ -43,7 +44,8 @@ pub struct OrientSettings {
     /// How many planes a shortlisted candidate is cut at. These are samples across the
     /// model's height, not the layers it will print at.
     pub sections: usize,
-    pub goal: OrientGoal,
+    /// What the orientation is searched for: one goal, or all of them balanced.
+    pub preset: OrientPreset,
     /// How far the model may turn from the way it stands, degrees, or `None` for any
     /// way at all.
     pub max_tilt_deg: Option<Scalar>,
@@ -65,7 +67,7 @@ impl Default for OrientSettings {
             samples: 200,
             shortlist: 8,
             sections: 24,
-            goal: OrientGoal::FewestSupports,
+            preset: OrientPreset::default(),
             max_tilt_deg: None,
             down_now: Vec3::NEG_Z,
         }
@@ -84,6 +86,9 @@ pub struct Oriented {
     /// Orientations that were measured, after the ones a print cannot tell apart were
     /// dropped.
     pub considered: usize,
+    /// What decided its place among the search's finalists: whether it is worth offering
+    /// beside the first.
+    pub ruling: Ruling,
 }
 
 /// Finds the orientation a model prints best in.
@@ -163,21 +168,23 @@ pub fn finalists(
     Ok(ordered(&faces, settings, &measured, now)
         .into_iter()
         .take(count.max(1))
-        .map(|candidate| Oriented {
+        .map(|(candidate, ruling)| Oriented {
             rotation: rotation_for(candidate.down),
             score: candidate.score,
             on_plate: candidate.on_plate,
             considered,
+            ruling,
         })
         .collect())
 }
 
 /// How far apart two finalists stand at least, degrees: nearer, and printing both tells
 /// a caller nothing the first did not. Support volume changes slowly with a turn.
-fn apart_deg(goal: OrientGoal) -> Scalar {
-    match goal {
-        OrientGoal::FewestSupports => 20.0,
-        OrientGoal::LeastPeel | OrientGoal::ShortestPrint | OrientGoal::CleanTop => 10.0,
+fn apart_deg(preset: OrientPreset) -> Scalar {
+    match preset {
+        OrientPreset::Goal(OrientGoal::FewestSupports) => 20.0,
+        OrientPreset::Goal(OrientGoal::LeastPeel | OrientGoal::ShortestPrint)
+        | OrientPreset::Auto => 10.0,
     }
 }
 
@@ -189,21 +196,20 @@ fn ordered(
     settings: &OrientSettings,
     measured: &[Candidate],
     now: Vec3,
-) -> Vec<Candidate> {
+) -> Vec<(Candidate, Ruling)> {
     let order = ranked(faces, settings, measured, now);
-    let measured: Vec<Candidate> = order.into_iter().map(|at| measured[at]).collect();
-
-    let apart = apart_deg(settings.goal).to_radians().cos();
-    let mut chosen: Vec<Candidate> = Vec::new();
-    for candidate in measured {
+    let apart = apart_deg(settings.preset).to_radians().cos();
+    let mut chosen: Vec<(Candidate, Ruling)> = Vec::new();
+    for (at, ruling) in order {
+        let candidate = measured[at];
         let alone = chosen
             .iter()
-            .filter(|kept| kept.on_plate == candidate.on_plate)
-            .all(|kept| kept.down.dot(candidate.down) < apart);
+            .filter(|(kept, _)| kept.on_plate == candidate.on_plate)
+            .all(|(kept, _)| kept.down.dot(candidate.down) < apart);
         // Every turn is weighed against the way the model stands, so that is kept
         // however near a better one it lies.
         if alone || candidate.down == now {
-            chosen.push(candidate);
+            chosen.push((candidate, ruling));
         }
     }
     chosen
@@ -288,12 +294,11 @@ const BEST_OF_EACH: usize = 2;
 /// has to beat, its drain holes pointed down and its leans — then the best `count` by
 /// total and the best few on each reading alone.
 fn shortlist(ranked: &[(Vec3, Score)], count: usize, kept: Vec<Vec3>) -> Vec<Vec3> {
-    let readings: [(Reading, usize); 5] = [
+    let readings: [(Reading, usize); 4] = [
         (|score| score.total, count.max(1)),
         (|score| score.overhang_mm2, BEST_OF_EACH),
         (|score| score.shadow_mm2, BEST_OF_EACH),
         (|score| score.stack_mm(), BEST_OF_EACH),
-        (|score| score.top_overhang_mm2, BEST_OF_EACH),
     ];
     let mut chosen = kept;
     for (reading, take) in readings {
@@ -379,7 +384,7 @@ mod tests {
     fn a_slab_pulling_past_the_limit_is_turned_off_its_face_for_the_least_peel() {
         let mesh = cuboid(Vec3::new(100.0, 100.0, 4.0));
         let settings = OrientSettings {
-            goal: OrientGoal::LeastPeel,
+            preset: OrientGoal::LeastPeel.into(),
             ..OrientSettings::default()
         };
         let found = orient(&mesh, &settings).expect("a slab can be oriented");
@@ -403,7 +408,7 @@ mod tests {
         // A 40 mm square pulls some 8 N, under a third of the limit: nothing to win.
         let mesh = cuboid(Vec3::new(40.0, 40.0, 4.0));
         let settings = OrientSettings {
-            goal: OrientGoal::LeastPeel,
+            preset: OrientGoal::LeastPeel.into(),
             ..OrientSettings::default()
         };
         let found = orient(&mesh, &settings).expect("a slab can be oriented");
@@ -425,7 +430,7 @@ mod tests {
     fn a_shortest_print_lays_a_tall_column_down() {
         let mesh = cuboid(Vec3::new(6.0, 6.0, 80.0));
         let settings = OrientSettings {
-            goal: OrientGoal::ShortestPrint,
+            preset: OrientGoal::ShortestPrint.into(),
             ..OrientSettings::default()
         };
         let found = orient(&mesh, &settings).expect("a column can be oriented");
@@ -593,7 +598,7 @@ mod tests {
     fn a_shortest_print_lays_a_slab_flat_whatever_it_pulls() {
         let mesh = cuboid(Vec3::new(100.0, 100.0, 4.0));
         let settings = OrientSettings {
-            goal: OrientGoal::ShortestPrint,
+            preset: OrientGoal::ShortestPrint.into(),
             on_supports: true,
             ..OrientSettings::default()
         };
@@ -640,7 +645,7 @@ mod tests {
         );
 
         let peel = OrientSettings {
-            goal: OrientGoal::LeastPeel,
+            preset: OrientGoal::LeastPeel.into(),
             ..OrientSettings::default()
         };
         let found = orient(&mesh, &peel).expect("a box can be oriented");

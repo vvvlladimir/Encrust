@@ -1,6 +1,6 @@
 # 0282. Ask which goal to orient for in the window
 
-- **Status:** Accepted
+- **Status:** Accepted; what the picker lists is superseded by 0284
 - **Date:** 2026-10-15
 
 ## Context

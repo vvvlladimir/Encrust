@@ -1,4 +1,4 @@
-//! The poses a model is measured in: those a person tries by hand, what each goal chooses,
+//! The poses a model is measured in: those a person tries by hand, what each preset chooses,
 //! and, asked for, an even spread over the sphere that stands in for the true best.
 
 use std::time::Instant;
@@ -7,7 +7,8 @@ use anyhow::{Context, Result};
 use core_engine::{Printout, Trial, Tried, print_out, prove};
 use core_geometry::{Mesh, Quat, Vec3};
 use core_plate::{
-    OrientGoal, OrientSettings, Oriented, Printed, Ruling, finalists, flat_faces, rotation_for,
+    OrientGoal, OrientPreset, OrientSettings, Oriented, Printed, Ruling, finalists, flat_faces,
+    rotation_for,
 };
 use encrust_cli::pipeline;
 use printer_profiles::{BuildVolume, SupportProfile};
@@ -17,7 +18,7 @@ use serde::{Deserialize, Serialize};
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum Source {
     Hand,
-    Goal(OrientGoal),
+    Goal(OrientPreset),
     Oracle,
     /// A pose a goal chose in a run kept before, measured again so that what is known to
     /// be possible is not forgotten when the search stops finding it.
@@ -67,8 +68,11 @@ pub struct Finalist {
     pub fatal: usize,
     /// Islands and hanging contacts.
     pub unheld: usize,
-    /// The goal's own reading.
+    /// The goal's own reading, or nothing for the auto preset, which has none.
     pub reading: f64,
+    /// Every goal's reading, in the order of [`OrientGoal::ALL`].
+    #[serde(default)]
+    pub readings: Vec<f64>,
     pub ruling: String,
     /// The same pose printed at full resolution, where the run asked for it.
     #[serde(default)]
@@ -86,25 +90,34 @@ pub struct Full {
     pub reading: f64,
 }
 
+/// What `preset` reads of `printout`: its goal's reading, and nothing for the auto preset.
+fn reading(printout: &Printout, preset: OrientPreset) -> f64 {
+    match preset {
+        OrientPreset::Goal(goal) => printout.reading(goal),
+        OrientPreset::Auto => 0.0,
+    }
+}
+
 impl Full {
-    fn of(printout: &Printout, goal: OrientGoal) -> Self {
+    fn of(printout: &Printout, preset: OrientPreset) -> Self {
         Self {
             fatal: printout.fatal(),
             unheld: printout.islands + printout.hanging,
-            reading: printout.reading(goal),
+            reading: reading(printout, preset),
         }
     }
 }
 
 impl Finalist {
-    fn of(tried: &Tried, goal: OrientGoal) -> Self {
+    fn of(tried: &Tried, preset: OrientPreset) -> Self {
         let printout = &tried.proven.printout;
         Self {
             tilt_deg: tilt_deg(tried.proven.oriented.rotation),
             on_plate: tried.proven.oriented.on_plate,
             fatal: printout.fatal(),
             unheld: printout.islands + printout.hanging,
-            reading: printout.reading(goal),
+            reading: reading(printout, preset),
+            readings: OrientGoal::ALL.map(|goal| printout.reading(goal)).to_vec(),
             ruling: ruling(tried.ruling).to_owned(),
             full: None,
             searched: 0,
@@ -121,6 +134,8 @@ fn ruling(ruling: Ruling) -> &'static str {
         Ruling::Unheld => "leaves too much hanging",
         Ruling::OutOfBand => "out of the goal's band",
         Ruling::TieBreak => "lost the tie-break",
+        Ruling::Dominated => "beaten on every goal",
+        Ruling::Alternative => "a trade the user may prefer",
     }
 }
 
@@ -129,12 +144,12 @@ pub struct Bench<'a> {
     pub trial: Trial<'a>,
     pub support: &'a SupportProfile,
     pub volume: &'a BuildVolume,
-    /// The goal whose finalists are printed again at full resolution, beside the proof.
-    pub full_finalists: Option<OrientGoal>,
+    /// The preset whose finalists are printed again at full resolution, beside the proof.
+    pub full_finalists: Option<OrientPreset>,
 }
 
 impl Bench<'_> {
-    /// Every pose of `mesh`: by hand, each goal's choice, `known` from runs before, then
+    /// Every pose of `mesh`: by hand, each preset's choice, `known` from runs before, then
     /// `oracle` directions spread evenly over the sphere.
     pub fn poses(&self, mesh: &Mesh, oracle: usize, known: &[Known]) -> Result<Vec<Pose>> {
         let printed = Printed::solid(mesh);
@@ -142,8 +157,8 @@ impl Bench<'_> {
         for (name, rotation, on_plate) in by_hand(mesh) {
             poses.push(self.measure(&printed, name, Source::Hand, rotation, on_plate)?);
         }
-        for goal in OrientGoal::ALL {
-            poses.push(self.chosen(&printed, goal)?);
+        for preset in OrientPreset::all() {
+            poses.push(self.chosen(&printed, preset)?);
         }
         for (name, rotation, on_plate) in known {
             let measured = |pose: &Pose| {
@@ -162,11 +177,11 @@ impl Bench<'_> {
         Ok(poses)
     }
 
-    /// What `goal` chooses, the way the window asks it, judged on the stack it prints at
+    /// What `preset` chooses, the way the window asks it, judged on the stack it prints at
     /// full resolution: the proof itself ranks on a coarse one.
-    fn chosen(&self, printed: &Printed, goal: OrientGoal) -> Result<Pose> {
+    fn chosen(&self, printed: &Printed, preset: OrientPreset) -> Result<Pose> {
         let settings = OrientSettings {
-            goal,
+            preset,
             ..pipeline::orient_settings(Some(self.support))
         };
         let started = Instant::now();
@@ -179,11 +194,11 @@ impl Bench<'_> {
             .context("the search found no orientation")?
             .proven
             .oriented;
-        let name = format!("goal: {}", goal.label());
+        let name = format!("goal: {}", preset.label());
         let mut pose = self.measure(
             printed,
             name,
-            Source::Goal(goal),
+            Source::Goal(preset),
             chosen.rotation,
             chosen.on_plate,
         )?;
@@ -193,7 +208,7 @@ impl Bench<'_> {
             proof_s: seconds - search_s,
             finalists: tried
                 .iter()
-                .map(|tried| self.finalist(printed, tried, goal, &found))
+                .map(|tried| self.finalist(printed, tried, preset, &found))
                 .collect::<Result<_>>()?,
         };
         Ok(pose)
@@ -203,10 +218,10 @@ impl Bench<'_> {
         &self,
         printed: &Printed,
         tried: &Tried,
-        goal: OrientGoal,
+        preset: OrientPreset,
         found: &[Oriented],
     ) -> Result<Finalist> {
-        let mut finalist = Finalist::of(tried, goal);
+        let mut finalist = Finalist::of(tried, preset);
         finalist.searched = found
             .iter()
             .position(|pose| {
@@ -214,10 +229,10 @@ impl Bench<'_> {
                     && pose.rotation == tried.proven.oriented.rotation
             })
             .unwrap_or(usize::MAX);
-        if self.full_finalists == Some(goal) {
+        if self.full_finalists == Some(preset) {
             let oriented = tried.proven.oriented;
             let printout = print_out(printed, oriented.rotation, oriented.on_plate, &self.trial)?;
-            finalist.full = Some(Full::of(&printout, goal));
+            finalist.full = Some(Full::of(&printout, preset));
         }
         Ok(finalist)
     }

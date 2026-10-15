@@ -25,4 +25,4 @@ pub use mask::Footprint;
 pub use orient::{OrientSettings, Oriented, finalists, orient, orient_printed, rotation_for};
 pub use policy::{Noise, Readings, Ruling, rank, rulings};
 pub use printed::Printed;
-pub use score::{LOOKS_UP, OrientGoal, Score};
+pub use score::{LOOKS_UP, OrientGoal, OrientPreset, Score};

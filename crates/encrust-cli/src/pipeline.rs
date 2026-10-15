@@ -592,7 +592,7 @@ fn place(
     let transform = &args.transform;
     let (mesh, oriented) = if transform.orient {
         let settings = OrientSettings {
-            goal: transform.orient_goal.into(),
+            preset: transform.orient_goal.into(),
             max_tilt_deg: transform.max_tilt,
             ..orient_settings(supports)
         };

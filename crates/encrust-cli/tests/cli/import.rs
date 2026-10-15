@@ -227,9 +227,10 @@ fn the_orient_goal_and_the_tilt_limit_reach_the_search() {
 
     let shortest = turned("shortest-print", &[]);
     assert!(
-        (shortest - turned("clean-top", &[])).abs() > 1.0,
-        "the shortest print lays the box lower than a clean top stands it"
+        (shortest - turned("fewest-supports", &[])).abs() > 1.0,
+        "the shortest print lays the box otherwise than the fewest supports stand it"
     );
+    assert!(turned("auto", &[]).is_finite(), "auto reaches the search");
     assert!(shortest > 1.0, "the shortest print turns the box");
     assert_eq!(
         turned("shortest-print", &["--max-tilt", "0"]),

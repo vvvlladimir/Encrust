@@ -22,7 +22,7 @@ pub use hollow::{
 };
 pub use import::{ImportJob, ImportOutcome, ImportStage};
 pub use measure::{MeasureJob, MeasureOutcome};
-pub use orient::{OrientJob, OrientOutcome, OrientRequest, Proof, orient_tasks};
+pub use orient::{Costs, OrientJob, OrientOutcome, OrientRequest, Pose, Proof, Turn, orient_tasks};
 #[cfg(target_arch = "wasm32")]
 pub use pipeline::run_into;
 pub use pipeline::{SliceRequest, worker_threads};

@@ -1,6 +1,6 @@
 use core_geometry::glam::EulerRot;
 use core_geometry::{Mat3, Quat, Transform, Vec3};
-use core_plate::OrientGoal;
+use core_plate::{OrientGoal, OrientPreset};
 
 use crate::gizmo::Axes;
 use crate::import::recenter;
@@ -9,8 +9,8 @@ use crate::plate::BuildPlate;
 use crate::scene::{Axis, ObjectId, Scene, SceneObject};
 use crate::ui::{
     Segment, Segmented, axis_label, compact_button, describe, field_label, hairline, hint, icon,
-    icon_toggle, number_field, number_row, picker, progress_bar, secondary_button, section,
-    section_with_action, switch, theme,
+    icon_button, icon_toggle, number_field, number_row, picker, progress_bar, secondary_button,
+    section, section_with_action, switch, theme,
 };
 
 /// Millimetres, degrees and percent per point of drag on the transform fields.
@@ -414,7 +414,7 @@ fn lift(ui: &mut egui::Ui, scene: &mut Scene, id: ObjectId) {
 fn turn(ui: &mut egui::Ui, window: &mut Window, id: ObjectId) {
     let running = window.tools.orient.is_running();
     ui.add_enabled_ui(!running, |ui| {
-        goal(ui, &mut window.tools.orient.settings.goal)
+        preset(ui, &mut window.tools.orient.settings.preset)
     });
     let (oriented, laid) = ui.columns(2, |columns| {
         let label = if running {
@@ -443,6 +443,8 @@ fn turn(ui: &mut egui::Ui, window: &mut Window, id: ObjectId) {
         // The search measures every candidate over the whole mesh, which is no share to
         // count: the bar runs rather than standing at nought.
         progress_bar(ui, None);
+    } else {
+        offers(ui, window, id);
     }
     let supports = &window.tools.supports;
     let machine = window
@@ -471,11 +473,11 @@ fn turn(ui: &mut egui::Ui, window: &mut Window, id: ObjectId) {
     }
 }
 
-/// The goal auto-orient searches for, and what it means in a line.
-fn goal(ui: &mut egui::Ui, chosen: &mut OrientGoal) {
+/// What auto-orient searches for, and what it means in a line.
+fn preset(ui: &mut egui::Ui, chosen: &mut OrientPreset) {
     let response = picker(ui, icon::ORIENT, chosen.label());
     egui::Popup::menu(&response).show(|ui| {
-        for choice in OrientGoal::ALL {
+        for choice in OrientPreset::all() {
             if ui
                 .selectable_label(choice == *chosen, choice.label())
                 .clicked()
@@ -485,17 +487,51 @@ fn goal(ui: &mut egui::Ui, chosen: &mut OrientGoal) {
             }
         }
     });
-    hint(ui, goal_hint(*chosen));
+    hint(ui, preset_hint(*chosen));
 }
 
-fn goal_hint(goal: OrientGoal) -> &'static str {
-    match goal {
-        OrientGoal::FewestSupports => "The least resin in supports, whichever way up.",
-        OrientGoal::LeastPeel => {
+fn preset_hint(preset: OrientPreset) -> &'static str {
+    match preset {
+        OrientPreset::Goal(OrientGoal::FewestSupports) => {
+            "The least resin in supports, whichever way up."
+        }
+        OrientPreset::Goal(OrientGoal::LeastPeel) => {
             "The lightest pull on the film, no cups; under 10 N, the fewest supports."
         }
-        OrientGoal::ShortestPrint => "The fewest layers that still print.",
-        OrientGoal::CleanTop => "No supports on the side facing up in the file.",
+        OrientPreset::Goal(OrientGoal::ShortestPrint) => "The fewest layers that still print.",
+        OrientPreset::Auto => {
+            "Supports, pull and print time balanced: none gives up much for the others."
+        }
+    }
+}
+
+/// The other good ways the last run found to stand the model, one at a time, and what the
+/// one it stands in costs.
+fn offers(ui: &mut egui::Ui, window: &mut Window, id: ObjectId) {
+    let Some(offer) = window.tools.orient.offer(id) else {
+        return;
+    };
+    let mut step = None;
+    ui.horizontal(|ui| {
+        if icon_button(ui, icon::PREVIOUS, "The good pose before").clicked() {
+            step = Some(true);
+        }
+        ui.label(format!("Pose {} of {}", offer.at + 1, offer.count));
+        if icon_button(ui, icon::NEXT, "The next good pose").clicked() {
+            step = Some(false);
+        }
+    });
+    if let Some(costs) = offer.costs {
+        hint(
+            ui,
+            &format!(
+                "{:.2} ml of supports, {:.1} N of pull, {:.1} mm tall",
+                costs.supports_ml, costs.pull_n, costs.stack_mm
+            ),
+        );
+    }
+    if let Some(back) = step {
+        window.tools.orient.step(&mut window.doc.scene, id, back);
     }
 }
 

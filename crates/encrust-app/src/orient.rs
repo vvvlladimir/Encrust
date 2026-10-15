@@ -6,7 +6,7 @@ use core_plate::OrientSettings;
 use core_supports::Region;
 use printer_profiles::{MaterialProfile, PrinterProfile, SupportProfile};
 
-use crate::job::{OrientJob, OrientOutcome, OrientRequest, Proof, orient_tasks};
+use crate::job::{Costs, OrientJob, OrientOutcome, OrientRequest, Pose, Proof, Turn, orient_tasks};
 use crate::scene::{ObjectId, Scene, SceneObject};
 use crate::status::Status;
 
@@ -29,6 +29,18 @@ pub struct OrientTool {
     /// The edges of the last mesh pointed at, which finding a face walks. Built once per
     /// mesh, since a mesh of a million faces takes a moment.
     adjacency: Option<(usize, Arc<Adjacency>)>,
+    /// The good ways to stand each model the last run turned, and which one it stands in.
+    offers: Vec<(Turn, usize)>,
+}
+
+/// Where a model stands among the good ways the last run found for it.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct Offer {
+    /// Which of them it stands in, from 0, and how many there are.
+    pub at: usize,
+    pub count: usize,
+    /// What it costs standing so, where a proof printed it.
+    pub costs: Option<Costs>,
 }
 
 /// The flat face a click would lay on the plate: every triangle joined to the one
@@ -121,6 +133,7 @@ impl OrientTool {
         }
 
         self.stop_picking();
+        self.offers.clear();
         self.job = Some(OrientJob::spawn(OrientRequest {
             tasks,
             settings: OrientSettings {
@@ -154,29 +167,28 @@ impl OrientTool {
         match outcome {
             OrientOutcome::Turned(turns) => {
                 let mut moved = 0;
-                let seated = turns.iter().filter(|turn| turn.on_plate).count();
-                for turn in turns {
+                let seated = turns.iter().filter(|turn| turn.poses[0].on_plate).count();
+                let others: usize = turns.iter().map(|turn| turn.poses.len() - 1).sum();
+                for turn in &turns {
                     if let Some(object) = scene.get_mut(turn.id) {
-                        let by = turn.rotation * object.transform.rotation.inverse();
-                        if by.to_axis_angle().1.to_degrees() > SETTLED_DEG {
-                            moved += 1;
-                        }
-                        object.transform = object.transform.turned(by);
-                        object.stand_on_plate();
-                        if !turn.on_plate {
-                            object.transform.translation.z += turn.lift_mm;
-                        }
+                        moved += usize::from(stand(object, turn.poses[0], turn.lift_mm));
                     }
                 }
+                self.offers = turns.into_iter().map(|turn| (turn, 0)).collect();
                 let turned = match moved {
                     0 => "Everything already stands the way it prints best".to_owned(),
                     1 => "Turned 1 model".to_owned(),
                     moved => format!("Turned {moved} models"),
                 };
-                *status = Status::Info(match seated {
+                let turned = match seated {
                     0 => turned,
                     1 => format!("{turned}; 1 stands on the plate"),
                     seated => format!("{turned}; {seated} stand on the plate"),
+                };
+                *status = Status::Info(match others {
+                    0 => turned,
+                    1 => format!("{turned}; 1 other good pose to compare"),
+                    others => format!("{turned}; {others} other good poses to compare"),
                 });
             }
             OrientOutcome::Failed(message) => *status = Status::Error(message),
@@ -185,11 +197,53 @@ impl OrientTool {
     }
 }
 
+impl OrientTool {
+    /// Where `id` stands among the good ways the last run found for it, or `None` when it
+    /// found it only the one.
+    pub fn offer(&self, id: ObjectId) -> Option<Offer> {
+        let (turn, at) = self.offers.iter().find(|(turn, _)| turn.id == id)?;
+        (turn.poses.len() > 1).then(|| Offer {
+            at: *at,
+            count: turn.poses.len(),
+            costs: turn.poses[*at].costs,
+        })
+    }
+
+    /// Stands `id` the next good way the last run found for it, or the one before when
+    /// `back`, round from the last to the first.
+    pub fn step(&mut self, scene: &mut Scene, id: ObjectId, back: bool) {
+        let Some((turn, at)) = self.offers.iter_mut().find(|(turn, _)| turn.id == id) else {
+            return;
+        };
+        let count = turn.poses.len();
+        *at = if back {
+            (*at + count - 1) % count
+        } else {
+            (*at + 1) % count
+        };
+        if let Some(object) = scene.get_mut(id) {
+            stand(object, turn.poses[*at], turn.lift_mm);
+        }
+    }
+}
+
+/// Stands `object` the way `pose` says, dropped back onto the plate and lifted `lift_mm`
+/// onto its supports where it is not set on it. Returns whether that turned it.
+fn stand(object: &mut SceneObject, pose: Pose, lift_mm: f32) -> bool {
+    let by = pose.rotation * object.transform.rotation.inverse();
+    object.transform = object.transform.turned(by);
+    object.stand_on_plate();
+    if !pose.on_plate {
+        object.transform.translation.z += lift_mm;
+    }
+    by.to_axis_angle().1.to_degrees() > SETTLED_DEG
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::scene::{ImportSummary, Imported};
-    use core_geometry::{Mesh, Orientation, Transform, Vec3, diagnose};
+    use core_geometry::{Mesh, Orientation, Quat, Transform, Vec3, diagnose};
     use std::sync::Arc;
 
     /// Axis-aligned box, twelve triangles, spanning 0..size on every axis.
@@ -290,7 +344,7 @@ mod tests {
         let mut scene = scene_with(cuboid(Vec3::splat(100.0)));
         scene.objects_mut()[0].transform.scale = Vec3::new(1.0, 1.0, 0.04);
         let mut tool = OrientTool::default();
-        tool.settings.goal = core_plate::OrientGoal::LeastPeel;
+        tool.settings.preset = core_plate::OrientGoal::LeastPeel.into();
         let mut status = Status::default();
 
         tool.start(&scene, None, |_| SupportProfile::medium(), None)
@@ -302,6 +356,53 @@ mod tests {
         assert!(
             height_mm > 10.0,
             "the 4 mm slab does not lie flat, got {height_mm}"
+        );
+    }
+
+    #[test]
+    fn stepping_through_the_offered_poses_turns_the_model_and_wraps_round() {
+        let mut scene = scene_with(cuboid(Vec3::new(40.0, 20.0, 4.0)));
+        let id = scene.objects()[0].id;
+        let pose = |rotation| Pose {
+            rotation,
+            on_plate: true,
+            costs: None,
+        };
+        let on_edge = Quat::from_rotation_x(std::f32::consts::FRAC_PI_2);
+        let mut tool = OrientTool {
+            offers: vec![(
+                Turn {
+                    id,
+                    poses: vec![pose(Quat::IDENTITY), pose(on_edge)],
+                    lift_mm: 0.0,
+                },
+                0,
+            )],
+            ..OrientTool::default()
+        };
+
+        tool.step(&mut scene, id, false);
+        let turned = scene.objects()[0].transform.rotation;
+        assert!(
+            turned.abs_diff_eq(on_edge, 1e-5),
+            "the second pose, got {turned:?}"
+        );
+        assert_eq!(
+            tool.offer(id).map(|offer| (offer.at, offer.count)),
+            Some((1, 2))
+        );
+
+        tool.step(&mut scene, id, false);
+        assert_eq!(
+            tool.offer(id).map(|offer| offer.at),
+            Some(0),
+            "past the last, the first"
+        );
+        tool.step(&mut scene, id, true);
+        assert_eq!(
+            tool.offer(id).map(|offer| offer.at),
+            Some(1),
+            "before the first, the last"
         );
     }
 

@@ -4,7 +4,7 @@
 //! answer, only the current bar.
 
 use core_engine::Printout;
-use core_plate::OrientGoal;
+use core_plate::{OrientGoal, OrientPreset};
 use serde::Deserialize;
 
 use crate::poses::{Pose, Source};
@@ -139,11 +139,13 @@ pub struct Check {
     pub detail: String,
 }
 
-/// How one goal's choice did.
+/// How one preset's choice did.
 #[derive(Debug, Clone)]
 pub struct Verdict {
-    pub goal: OrientGoal,
+    pub goal: OrientPreset,
     pub checks: Vec<Check>,
+    /// The goal's own reading; for the auto preset, its worst goal's reading as a multiple of
+    /// that goal's best.
     pub reading: f64,
     /// The best reading of any sound pose, and which pose read it.
     pub best: Option<(String, f64)>,
@@ -213,9 +215,13 @@ struct Floor {
 
 impl Floor {
     fn of(poses: &[Pose], goal: OrientGoal) -> Self {
-        let any_fits = poses.iter().any(|pose| pose.fits);
         let weighs_cups = goal != OrientGoal::FewestSupports;
         let weighs_tears = goal != OrientGoal::ShortestPrint;
+        Self::weighing(poses, weighs_cups, weighs_tears)
+    }
+
+    fn weighing(poses: &[Pose], weighs_cups: bool, weighs_tears: bool) -> Self {
+        let any_fits = poses.iter().any(|pose| pose.fits);
         let fatal_of = |pose: &Pose| fatal(pose, weighs_cups, weighs_tears);
         let fitting = || poses.iter().filter(move |pose| pose.fits || !any_fits);
         let fatal = fitting().map(fatal_of).min().unwrap_or(0);
@@ -319,12 +325,26 @@ fn check(rule: Rule, passed: bool, detail: String) -> Check {
     }
 }
 
-/// Judges what `goal` chose for one model against every pose measured for it, and
+/// Judges what `preset` chose for one model against every pose measured for it, and
 /// whether any of them would have passed.
-pub fn judge(goal: OrientGoal, poses: &[Pose], expect: Expect, faces: usize) -> Option<Verdict> {
+pub fn judge(
+    preset: OrientPreset,
+    poses: &[Pose],
+    expect: Expect,
+    faces: usize,
+) -> Option<Verdict> {
     let chosen = poses
         .iter()
-        .find(|pose| pose.source == Source::Goal(goal))?;
+        .find(|pose| pose.source == Source::Goal(preset))?;
+    let mut verdict = match preset {
+        OrientPreset::Goal(goal) => judge_goal(goal, chosen, poses, expect),
+        OrientPreset::Auto => judge_auto(chosen, poses, expect),
+    };
+    verdict.checks.push(time(chosen, faces));
+    Some(verdict)
+}
+
+fn judge_goal(goal: OrientGoal, chosen: &Pose, poses: &[Pose], expect: Expect) -> Verdict {
     let floor = Floor::of(poses, goal);
     let effective_of = |pose: &Pose| effective(goal, pose);
     // The best is sought among the poses a person would accept at all.
@@ -344,15 +364,190 @@ pub fn judge(goal: OrientGoal, poses: &[Pose], expect: Expect, faces: usize) -> 
         .find(|pose| held_to(pose).iter().all(|check| check.passed))
         .map(|pose| pose.name.clone());
 
-    let mut checks = held_to(chosen);
-    checks.push(time(chosen, faces));
-    Some(Verdict {
-        goal,
-        checks,
+    Verdict {
+        goal: goal.into(),
+        checks: held_to(chosen),
         reading: reading(goal, chosen),
         best,
         reachable_by,
-    })
+    }
+}
+
+/// The judge's own bands for the auto preset (README, 2.3a): a tenth and the noise over
+/// the best on every goal is as good as the best.
+const AUTO_BAND: f64 = 0.10;
+/// The most any goal may read as a multiple of its best for the balance to count as one:
+/// three times the support or the time for another goal's sake is no longer a balance.
+const AUTO_MOST: f64 = 3.0;
+/// What the judge adds under each goal's reading before it is taken as a multiple: half a
+/// millilitre of support, nothing past the enough pull, and thirty layers.
+const AUTO_FLOOR: [f64; OrientGoal::ALL.len()] = [0.5, 0.0, 30.0];
+
+/// Every goal's reading of `pose` as the judge counts them, enough pull and all.
+fn readings(pose: &Pose) -> [f64; OrientGoal::ALL.len()] {
+    OrientGoal::ALL.map(|goal| effective(goal, pose))
+}
+
+/// What the auto preset is weighed against: the best reading of every goal among `sound`.
+struct Balance<'a> {
+    sound: Vec<&'a Pose>,
+    best: [f64; OrientGoal::ALL.len()],
+}
+
+impl<'a> Balance<'a> {
+    fn of(sound: Vec<&'a Pose>) -> Option<Self> {
+        let first = sound.first()?;
+        let best = sound.iter().fold(readings(first), |best, pose| {
+            let own = readings(pose);
+            std::array::from_fn(|at| best[at].min(own[at]))
+        });
+        Some(Self { sound, best })
+    }
+
+    /// Each goal's reading of `pose` as a multiple of its best, floors added.
+    fn multiples(&self, pose: &Pose) -> [f64; OrientGoal::ALL.len()] {
+        let own = readings(pose);
+        std::array::from_fn(|at| {
+            (own[at] + AUTO_FLOOR[at]) / (self.best[at] + AUTO_FLOOR[at]).max(f64::EPSILON)
+        })
+    }
+
+    fn worst(&self, pose: &Pose) -> f64 {
+        self.multiples(pose).into_iter().fold(0.0, f64::max)
+    }
+
+    fn in_every_band(&self, pose: &Pose) -> bool {
+        let own = readings(pose);
+        OrientGoal::ALL
+            .iter()
+            .enumerate()
+            .all(|(at, goal)| own[at] <= self.best[at] * (1.0 + AUTO_BAND) + noise(*goal))
+    }
+
+    /// A sound pose reading no worse than `pose` on any goal and better past the noise on one.
+    fn beaten_by(&self, pose: &Pose) -> Option<&'a Pose> {
+        let own = readings(pose);
+        self.sound.iter().copied().find(|other| {
+            let theirs = readings(other);
+            let mut better = false;
+            for (at, goal) in OrientGoal::ALL.iter().enumerate() {
+                if theirs[at] > own[at] {
+                    return false;
+                }
+                better |= theirs[at] < own[at] - noise(*goal);
+            }
+            better
+        })
+    }
+}
+
+/// Judges the auto preset: sound, good on every goal where some pose is, beaten on all of
+/// them by no sound pose, and no goal past [`AUTO_MOST`] of its best.
+fn judge_auto(chosen: &Pose, poses: &[Pose], expect: Expect) -> Verdict {
+    let floor = Floor::weighing(poses, true, true);
+    let acceptable = |pose: &Pose| expected(pose, expect).iter().all(|check| check.passed);
+    let balance = Balance::of(
+        poses
+            .iter()
+            .filter(|pose| floor.sound(pose) && acceptable(pose))
+            .collect(),
+    );
+    let held_to = |pose: &Pose| held_to_auto(pose, poses, &floor, balance.as_ref(), expect);
+    let reachable_by = poses
+        .iter()
+        .find(|pose| held_to(pose).iter().all(|check| check.passed))
+        .map(|pose| pose.name.clone());
+    let best = balance.as_ref().and_then(|balance| {
+        balance
+            .sound
+            .iter()
+            .min_by(|a, b| balance.worst(a).total_cmp(&balance.worst(b)))
+            .map(|pose| (pose.name.clone(), balance.worst(pose)))
+    });
+    Verdict {
+        goal: OrientPreset::Auto,
+        checks: held_to(chosen),
+        reading: balance
+            .as_ref()
+            .map_or(0.0, |balance| balance.worst(chosen)),
+        best,
+        reachable_by,
+    }
+}
+
+fn held_to_auto(
+    pose: &Pose,
+    poses: &[Pose],
+    floor: &Floor,
+    balance: Option<&Balance>,
+    expect: Expect,
+) -> Vec<Check> {
+    let mut checks = floor.prints(pose).to_vec();
+    if let Some(balance) = balance {
+        let sound = floor.sound(pose);
+        let all_round = balance
+            .sound
+            .iter()
+            .find(|other| balance.in_every_band(other))
+            .filter(|_| !balance.in_every_band(pose));
+        let beaten_by = balance.beaten_by(pose);
+        let multiples = balance.multiples(pose);
+        let lopsided = multiples.iter().any(|multiple| *multiple > AUTO_MOST);
+        let [ml, n, layers] = multiples;
+        let mut detail = format!("supports ×{ml:.2}, pull ×{n:.2}, layers ×{layers:.2}");
+        if !sound {
+            detail.push_str("; not sound, so no win");
+        }
+        if let Some(other) = all_round {
+            detail.push_str(&format!("; {} is good on every goal", other.name));
+        }
+        if let Some(other) = beaten_by {
+            detail.push_str(&format!("; beaten on every goal by {}", other.name));
+        }
+        if lopsided {
+            detail.push_str(&format!("; a goal past ×{AUTO_MOST:.0} its best"));
+        }
+        checks.push(check(
+            Rule::Goal,
+            sound && all_round.is_none() && beaten_by.is_none() && !lopsided,
+            detail,
+        ));
+        checks.push(stays_auto(pose, poses, floor, balance));
+    }
+    checks.extend(expected(pose, expect));
+    checks
+}
+
+/// A turn is only worth it when standing as drawn is not good on every goal, or the turn
+/// wins [`turn_cost`] over it on one goal and loses past the noise on none.
+fn stays_auto(chosen: &Pose, poses: &[Pose], floor: &Floor, balance: &Balance) -> Check {
+    let drawn = poses.iter().find(|pose| {
+        pose.tilt_deg < SETTLED_DEG && floor.sound(pose) && balance.in_every_band(pose)
+    });
+    let passed = match drawn {
+        Some(drawn) if chosen.tilt_deg >= SETTLED_DEG => {
+            let (own, theirs) = (readings(chosen), readings(drawn));
+            let goals = OrientGoal::ALL.iter().enumerate();
+            let won = goals
+                .clone()
+                .any(|(at, goal)| own[at] < theirs[at] - turn_cost(*goal, theirs[at]));
+            let lost = goals
+                .clone()
+                .any(|(at, goal)| own[at] > theirs[at] + noise(*goal));
+            won && !lost
+        }
+        _ => true,
+    };
+    let detail = drawn.map_or_else(
+        || "standing as drawn is not good on every goal".to_owned(),
+        |drawn| {
+            format!(
+                "turned {:.0}° from {}, good on every goal",
+                chosen.tilt_deg, drawn.name
+            )
+        },
+    );
+    check(Rule::Stays, passed, detail)
 }
 
 /// Every rule but time applied to `pose` as if `goal` had chosen it: time is the search's
@@ -511,7 +706,7 @@ mod tests {
     }
 
     fn chosen(contacts: usize, tilt_deg: f32) -> Pose {
-        pose("chosen", Source::Goal(GOAL), contacts, tilt_deg)
+        pose("chosen", Source::Goal(GOAL.into()), contacts, tilt_deg)
     }
 
     fn broken(poses: &[Pose]) -> Vec<&'static str> {
@@ -522,9 +717,9 @@ mod tests {
     fn broken_for(goal: OrientGoal, poses: &[Pose]) -> Vec<&'static str> {
         let mut poses = poses.to_vec();
         for pose in poses.iter_mut().filter(|pose| pose.name == "chosen") {
-            pose.source = Source::Goal(goal);
+            pose.source = Source::Goal(goal.into());
         }
-        judge(goal, &poses, Expect::default(), 1000)
+        judge(goal.into(), &poses, Expect::default(), 1000)
             .expect("the goal's pose is among them")
             .broken()
     }
@@ -624,7 +819,7 @@ mod tests {
             max_tilt_deg: Some(10.0),
             on_plate: Some(false),
         };
-        let verdict = judge(GOAL, &poses, expect, 1000).expect("the goal's pose is there");
+        let verdict = judge(GOAL.into(), &poses, expect, 1000).expect("the goal's pose is there");
         assert_eq!(verdict.broken(), ["expected"]);
     }
 
@@ -639,7 +834,7 @@ mod tests {
             max_tilt_deg: Some(90.0),
             on_plate: None,
         };
-        let verdict = judge(GOAL, &poses, upright, 1000).expect("the goal's pose is there");
+        let verdict = judge(GOAL.into(), &poses, upright, 1000).expect("the goal's pose is there");
         assert_eq!(
             verdict.status(),
             Status::Fail,
@@ -654,7 +849,7 @@ mod tests {
             pose("over", Source::Hand, 10, 170.0),
             chosen(10, 170.0),
         ];
-        let verdict = judge(GOAL, &poses, upright, 1000).expect("the goal's pose is there");
+        let verdict = judge(GOAL.into(), &poses, upright, 1000).expect("the goal's pose is there");
         assert_eq!(
             verdict.status(),
             Status::Unreachable,
@@ -733,5 +928,77 @@ mod tests {
             broken_for(OrientGoal::ShortestPrint, &poses).is_empty(),
             "the limit is an estimate, and 50 layers beats 100"
         );
+    }
+
+    /// A pose reading `ml` of support and `layers` layers, pulling under enough.
+    fn trading(name: &str, source: Source, ml: f32, layers: usize, tilt_deg: f32) -> Pose {
+        let mut pose = pose(name, source, 1, tilt_deg);
+        pose.printout.supports_ml = ml;
+        pose.printout.layers = layers;
+        pose
+    }
+
+    fn auto_broken(poses: &[Pose]) -> Vec<&'static str> {
+        judge(OrientPreset::Auto, poses, Expect::default(), 1000)
+            .expect("the auto pose is among them")
+            .broken()
+    }
+
+    const AUTO: Source = Source::Goal(OrientPreset::Auto);
+
+    #[test]
+    fn auto_passes_a_trade_no_sound_pose_beats_on_every_goal() {
+        let poses = [
+            trading("as is", Source::Hand, 1.0, 400, 0.0),
+            trading("flat", Source::Hand, 3.0, 200, 90.0),
+            trading("chosen", AUTO, 1.6, 300, 30.0),
+        ];
+        assert!(auto_broken(&poses).is_empty(), "{:?}", auto_broken(&poses));
+    }
+
+    #[test]
+    fn auto_fails_a_pose_beaten_on_every_goal() {
+        let poses = [
+            trading("as is", Source::Hand, 1.0, 300, 0.0),
+            trading("chosen", AUTO, 1.6, 320, 30.0),
+        ];
+        assert_eq!(auto_broken(&poses), ["goal", "stays"]);
+    }
+
+    #[test]
+    fn auto_fails_a_trade_where_some_pose_is_good_on_every_goal() {
+        let poses = [
+            trading("cheap", Source::Hand, 1.0, 330, 10.0),
+            trading("short", Source::Hand, 1.5, 300, 20.0),
+            trading("all round", Source::Hand, 1.05, 310, 40.0),
+            trading("chosen", AUTO, 1.4, 302, 30.0),
+        ];
+        assert_eq!(auto_broken(&poses), ["goal"]);
+    }
+
+    #[test]
+    fn auto_fails_a_goal_paid_past_three_times_its_best() {
+        let poses = [
+            trading("as is", Source::Hand, 0.5, 2000, 0.0),
+            trading("chosen", AUTO, 5.0, 200, 30.0),
+        ];
+        assert_eq!(auto_broken(&poses), ["goal"], "5.5 ml against 1 ml");
+    }
+
+    #[test]
+    fn auto_fails_a_cup_and_a_tear_like_the_least_peel() {
+        let mut chosen = trading("chosen", AUTO, 0.5, 200, 30.0);
+        chosen.printout.peels = 1;
+        let poses = [trading("as is", Source::Hand, 1.0, 300, 0.0), chosen];
+        assert!(auto_broken(&poses).contains(&"fatal"));
+    }
+
+    #[test]
+    fn auto_stays_where_standing_as_drawn_is_good_on_every_goal() {
+        let poses = [
+            trading("as is", Source::Hand, 1.0, 300, 0.0),
+            trading("chosen", AUTO, 1.0, 299, 30.0),
+        ];
+        assert_eq!(auto_broken(&poses), ["stays"]);
     }
 }

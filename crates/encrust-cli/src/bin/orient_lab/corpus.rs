@@ -5,7 +5,7 @@ use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result};
-use core_plate::OrientGoal;
+use core_plate::{OrientGoal, OrientPreset};
 use serde::Deserialize;
 
 use crate::verdict::Expect;
@@ -51,17 +51,17 @@ pub struct Expectations {
     pub fewest_supports: Option<Expect>,
     pub least_peel: Option<Expect>,
     pub shortest_print: Option<Expect>,
-    pub clean_top: Option<Expect>,
+    pub auto: Option<Expect>,
 }
 
 impl Expectations {
-    /// What `goal` is held to: its own table where it sets a field, every goal's otherwise.
-    pub fn for_goal(&self, goal: OrientGoal) -> Expect {
-        let own = match goal {
-            OrientGoal::FewestSupports => self.fewest_supports,
-            OrientGoal::LeastPeel => self.least_peel,
-            OrientGoal::ShortestPrint => self.shortest_print,
-            OrientGoal::CleanTop => self.clean_top,
+    /// What `preset` is held to: its own table where it sets a field, every preset's otherwise.
+    pub fn for_goal(&self, preset: OrientPreset) -> Expect {
+        let own = match preset {
+            OrientPreset::Goal(OrientGoal::FewestSupports) => self.fewest_supports,
+            OrientPreset::Goal(OrientGoal::LeastPeel) => self.least_peel,
+            OrientPreset::Goal(OrientGoal::ShortestPrint) => self.shortest_print,
+            OrientPreset::Auto => self.auto,
         }
         .unwrap_or_default();
         Expect {
@@ -142,10 +142,10 @@ mod tests {
 
         let entry = &entries[0];
         assert_eq!(entry.path, Path::new("/corpus/models/figure.stl"));
-        let fewest = entry.expect.for_goal(OrientGoal::FewestSupports);
+        let fewest = entry.expect.for_goal(OrientGoal::FewestSupports.into());
         assert_eq!(fewest.max_tilt_deg, Some(90.0));
         assert_eq!(fewest.on_plate, None);
-        let shortest = entry.expect.for_goal(OrientGoal::ShortestPrint);
+        let shortest = entry.expect.for_goal(OrientGoal::ShortestPrint.into());
         assert_eq!(shortest.max_tilt_deg, Some(180.0));
         assert_eq!(shortest.on_plate, Some(false));
     }

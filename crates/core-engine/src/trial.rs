@@ -11,8 +11,8 @@ use core_geometry::{
 };
 use core_pipeline::{PanelOverrides, SlicedFormat};
 use core_plate::{
-    LOOKS_UP, OrientGoal, OrientSettings, Oriented, Printed, Readings, Ruling, finalists, rank,
-    rotation_for, rulings,
+    LOOKS_UP, OrientGoal, OrientPreset, OrientSettings, Oriented, Printed, Readings, Ruling,
+    finalists, rank, rotation_for, rulings,
 };
 use printer_profiles::{BuildVolume, MaterialProfile, PrinterProfile, SupportProfile};
 use rayon::prelude::*;
@@ -124,16 +124,14 @@ impl Printout {
             OrientGoal::FewestSupports => f64::from(self.supports_ml),
             OrientGoal::LeastPeel => self.pull_n,
             OrientGoal::ShortestPrint => f64::from(self.stack_mm),
-            OrientGoal::CleanTop => self.top_contacts as f64,
         }
     }
 
-    /// What of `goal`'s [`Printout::reading`] is noise: a strut's resin, millilitres, two
-    /// contacts, half a newton, and two of a trial's thickest layers.
+    /// What of `goal`'s [`Printout::reading`] is noise: a strut's resin, millilitres, half
+    /// a newton, and two of a trial's thickest layers.
     pub fn noise(goal: OrientGoal) -> f64 {
         match goal {
             OrientGoal::FewestSupports => 0.05,
-            OrientGoal::CleanTop => 2.0,
             OrientGoal::LeastPeel => 0.5,
             OrientGoal::ShortestPrint => 2.0 * f64::from(TRIAL_LAYER_MM),
         }
@@ -210,7 +208,7 @@ pub fn prove(
             })
         })
         .collect::<Result<Vec<_>, EngineError>>()?;
-    Ok(judged(&tried, settings.goal, is_standing))
+    Ok(judged(&tried, settings.preset, is_standing))
 }
 
 /// The first `finalists` of `found`, the way the model stands and the best pose set on the
@@ -234,14 +232,17 @@ fn to_print(
     poses
 }
 
-/// `tried` ranked for `goal` on what each printed, best first, with what decided its place.
+/// `tried` ranked for `preset` on what each printed, best first, with what decided its place.
 fn judged(
     tried: &[Proven],
-    goal: OrientGoal,
+    preset: OrientPreset,
     is_standing: impl Fn(&Oriented) -> bool,
 ) -> Vec<Tried> {
     let noise = OrientGoal::ALL.map(Printout::noise);
-    let slack = noise[goal.index()];
+    let to_noise = |pose: &Proven| match preset {
+        OrientPreset::Goal(goal) => (pose.printout.reading(goal) / noise[goal.index()]).round(),
+        OrientPreset::Auto => 0.0,
+    };
     let readings: Vec<Readings> = tried
         .iter()
         .enumerate()
@@ -253,12 +254,12 @@ fn judged(
             roomless: pose.printout.hanging as f64,
             goals: OrientGoal::ALL.map(|each| pose.printout.reading(each)),
             // The goal's reading to the noise of its unit, then the search's own order.
-            tiebreak: [(pose.printout.reading(goal) / slack).round(), at as f64],
+            tiebreak: [to_noise(pose), at as f64],
             standing: is_standing(&pose.oriented),
         })
         .collect();
-    let rulings = rulings(&readings, goal, &noise);
-    rank(&readings, goal, &noise)
+    let rulings = rulings(&readings, preset, &noise);
+    rank(&readings, preset, &noise)
         .into_iter()
         .map(|at| Tried {
             proven: tried[at],

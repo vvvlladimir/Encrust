@@ -9,7 +9,7 @@ use std::path::Path;
 
 use core_engine::{EngineError, Trial, orient_proven, print_out, prove};
 use core_geometry::{Mesh, Quat, Vec3};
-use core_plate::{OrientGoal, OrientSettings, Printed, Ruling, finalists};
+use core_plate::{OrientGoal, OrientPreset, OrientSettings, Printed, Ruling, finalists};
 use printer_profiles::{MaterialProfile, PrinterProfile, SupportProfile};
 
 /// Panel of 600 x 400 pixels at a 0.1 mm pitch: 60 x 40 mm of build area.
@@ -55,9 +55,9 @@ impl Bench {
         }
     }
 
-    fn settings(&self, goal: OrientGoal) -> OrientSettings {
+    fn settings(&self, preset: impl Into<OrientPreset>) -> OrientSettings {
         OrientSettings {
-            goal,
+            preset: preset.into(),
             max_overhang_deg: self.support.max_overhang_deg,
             contact_spacing_mm: self.support.contact_spacing_mm,
             on_supports: true,
@@ -169,6 +169,34 @@ fn a_mushroom_is_proven_to_rest_on_its_cap() {
         stem.z < -0.99,
         "the stem points up from the cap, got {stem}"
     );
+}
+
+#[test]
+fn auto_rests_a_mushroom_on_its_cap_and_offers_only_trades_no_other_pose_beats() {
+    let bench = Bench::new();
+    let mesh = mushroom();
+    let settings = bench.settings(OrientPreset::Auto);
+    let printed = Printed::solid(&mesh);
+    let found = finalists(&printed, &settings, usize::MAX).expect("a mushroom has finalists");
+
+    let tried = prove(&printed, &settings, &found, &bench.trial()).expect("a mushroom prints");
+    let chosen = tried.first().expect("something is chosen").proven;
+    assert!(
+        chosen.oriented.on_plate,
+        "cap down it needs no support, prints shorter than lifted and pulls little"
+    );
+    for pose in &tried[1..] {
+        let beaten = pose.proven.printout.supports_ml >= chosen.printout.supports_ml
+            && pose.proven.printout.stack_mm >= chosen.printout.stack_mm + 0.3
+            && pose.proven.printout.pull_n.max(10.0) >= chosen.printout.pull_n.max(10.0);
+        if beaten {
+            assert!(
+                !pose.ruling.is_offered(),
+                "{:?} is beaten on every goal",
+                pose.ruling
+            );
+        }
+    }
 }
 
 #[test]

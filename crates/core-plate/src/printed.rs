@@ -186,7 +186,7 @@ mod tests {
         };
         let settings = OrientSettings {
             on_supports: true,
-            goal: OrientGoal::LeastPeel,
+            preset: OrientGoal::LeastPeel.into(),
             ..OrientSettings::default()
         };
 

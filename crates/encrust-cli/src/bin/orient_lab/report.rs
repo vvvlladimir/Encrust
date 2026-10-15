@@ -6,7 +6,7 @@ use std::path::Path;
 use anyhow::{Context, Result};
 use core_engine::Printout;
 use core_geometry::Quat;
-use core_plate::OrientGoal;
+use core_plate::{OrientGoal, OrientPreset};
 use serde::{Deserialize, Serialize};
 
 use crate::poses::{Pose, Source, Trace};
@@ -109,21 +109,19 @@ fn sits_by_default() -> bool {
     true
 }
 
-/// The name a goal goes by in reports and corpus files.
-pub fn slug(goal: OrientGoal) -> &'static str {
-    match goal {
-        OrientGoal::FewestSupports => "fewest-supports",
-        OrientGoal::LeastPeel => "least-peel",
-        OrientGoal::ShortestPrint => "shortest-print",
-        OrientGoal::CleanTop => "clean-top",
+/// The name a preset goes by in reports and corpus files.
+pub fn slug(preset: OrientPreset) -> &'static str {
+    match preset {
+        OrientPreset::Goal(OrientGoal::FewestSupports) => "fewest-supports",
+        OrientPreset::Goal(OrientGoal::LeastPeel) => "least-peel",
+        OrientPreset::Goal(OrientGoal::ShortestPrint) => "shortest-print",
+        OrientPreset::Auto => "auto",
     }
 }
 
-/// The goal a slug names, or `None` for a slug no goal goes by.
-pub fn goal_of(slug_text: &str) -> Option<OrientGoal> {
-    OrientGoal::ALL
-        .into_iter()
-        .find(|goal| slug(*goal) == slug_text)
+/// The preset a slug names, or `None` for a slug no preset goes by.
+pub fn goal_of(slug_text: &str) -> Option<OrientPreset> {
+    OrientPreset::all().find(|preset| slug(*preset) == slug_text)
 }
 
 impl PoseRow {
@@ -133,9 +131,8 @@ impl PoseRow {
             "hand" => Source::Hand,
             "oracle" => Source::Oracle,
             "known" => Source::Known,
-            other => {
-                Source::Goal(goal_of(other).with_context(|| format!("no goal is called {other}"))?)
-            }
+            // A goal a run kept before had and this one has not is a pose found once.
+            other => goal_of(other).map_or(Source::Known, Source::Goal),
         };
         Ok(Pose {
             name: self.name.clone(),
@@ -330,14 +327,13 @@ fn print_trace(trace: &Trace) {
                 full.fatal, full.unheld, full.reading
             )
         });
+        let reads = match finalist.readings.as_slice() {
+            [ml, n, mm] => format!("{ml:.2} ml, {n:.1} N, {mm:.1} mm"),
+            _ => format!("{:.2}", finalist.reading),
+        };
         println!(
-            "    - #{} {:.0}° {stand}: {} fatal, {} unheld, reads {:.2}{full} — {}",
-            finalist.searched,
-            finalist.tilt_deg,
-            finalist.fatal,
-            finalist.unheld,
-            finalist.reading,
-            finalist.ruling
+            "    - #{} {:.0}° {stand}: {} fatal, {} unheld, reads {reads}{full} — {}",
+            finalist.searched, finalist.tilt_deg, finalist.fatal, finalist.unheld, finalist.ruling
         );
     }
 }
@@ -495,7 +491,7 @@ mod tests {
     fn a_pose_kept_as_a_row_comes_back_as_it_was_measured() {
         let pose = Pose {
             name: "goal: Least peel force".to_owned(),
-            source: Source::Goal(OrientGoal::LeastPeel),
+            source: Source::Goal(OrientGoal::LeastPeel.into()),
             rotation: Quat::from_rotation_x(0.5),
             on_plate: true,
             printout: Printout {
