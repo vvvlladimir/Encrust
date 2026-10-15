@@ -172,7 +172,10 @@ default), `least-peel`, `shortest-print` or `clean-top`, and `--max-tilt DEG` ke
 within that many degrees of the way the file stands (ADR 0222) — and build supports to a profile of the catalogue —
 `light`, `medium`, `heavy` or one saved in the window, as `profiles list` names them — or to
 your own TOML with `--support-profile`. With both, the search counts as overhang what that
-profile's `max_overhang_deg` does, and 45 degrees without one:
+profile's `max_overhang_deg` does, and 45 degrees without one. A turned model is stood
+back on the plate where it is in x and y. When the search finds it needs no supports but
+set there it would leave anything hanging, it is stood on supports after all, and the run
+says so. For example:
 
 ```sh
 encrust slice model.stl \
@@ -375,7 +378,10 @@ whoever found it: no more cups and tearing pulls than the soundest pose; islands
 hanging contacts within a quarter and two of the fewest; nothing hanging under a pose
 set on the plate; inside the build volume when anything is; its own reading within a
 tenth of the best sound pose; not turned when standing as drawn was good enough; and
-within three seconds a million faces. Each broken rule is named under the goal.
+within three seconds a million faces. Each broken rule is named under the goal, and under
+a goal that fails, its trace: the seconds its search and its proof took, and every
+finalist it printed, on the coarse stack the proof ranks on, with what decided its place.
+The run ends with the seconds all goals spent on each stage.
 
 With no model it runs eight built-in bodies. `--corpus FILE` reads a TOML list of
 models, each with what a person expects of it — `max-tilt-deg`, `on-plate`, for every

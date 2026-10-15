@@ -10,8 +10,8 @@ use core_geometry::{
 };
 use core_pipeline::{PanelOverrides, SlicedFormat};
 use core_plate::{
-    LOOKS_UP, OrientGoal, OrientSettings, Oriented, Printed, Readings, finalists, rank,
-    rotation_for,
+    LOOKS_UP, OrientGoal, OrientSettings, Oriented, Printed, Readings, Ruling, finalists, rank,
+    rotation_for, rulings,
 };
 use printer_profiles::{MaterialProfile, PrinterProfile, SupportProfile};
 use rayon::prelude::*;
@@ -20,7 +20,7 @@ use crate::cut::Cutting;
 use crate::error::EngineError;
 use crate::plate::{Model, Plate};
 use crate::run::Run;
-use crate::stand::{append, contacts_under, stand_under};
+use crate::stand::{left_hanging, stand_under};
 
 /// Poses printed to choose between, on top of the way the model stands.
 const FINALISTS: usize = 4;
@@ -28,10 +28,6 @@ const FINALISTS: usize = 4;
 /// What a suction cup or a tearing pull weighs against an island or a point left hanging:
 /// the first two lose the whole print, the others a detail of it.
 const FATAL: usize = 10;
-
-/// The most places a pose set bare on the plate may leave hanging and still be a print
-/// with no supports: a test piece's own overhangs, not a model's underside.
-const BARE_HANGING: usize = 16;
 
 /// What of a goal's own reading is noise once printed: a contact or two, half a newton, a
 /// few layers.
@@ -129,17 +125,39 @@ pub struct Proven {
     pub printout: Printout,
 }
 
-/// Finds the orientation a model prints best in, by printing: the search's best few and
-/// the way the model stands are each supported, cut and cured, with every pose that may
-/// rest on the plate tried there bare, and ranked by [`core_plate::rank`] on what they
-/// printed, the search's own order breaking ties. The trials are cut coarse, so the
-/// printout answered is a ranking's and not the print's: [`print_out`] gives that.
+/// One finalist printed, and what decided its place: `None` for a pose set on the plate
+/// that left anything hanging, which is not ranked as one.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct Tried {
+    pub proven: Proven,
+    pub ruling: Option<Ruling>,
+}
+
+/// Finds the orientation a model prints best in, by printing: the search's
+/// [`finalists`], then [`prove`].
 pub fn orient_proven(
     printed: &Printed,
     settings: &OrientSettings,
     trial: &Trial,
 ) -> Result<Proven, EngineError> {
     let found = finalists(printed, settings, usize::MAX)?;
+    prove(printed, settings, &found, trial)?
+        .first()
+        .map(|tried| tried.proven)
+        .ok_or(EngineError::EmptyPlate)
+}
+
+/// Prints the search's best few of `found` and the way the model stands, each supported,
+/// cut and cured, with every pose that may rest on the plate tried there bare, and answers
+/// them ranked by [`core_plate::rank`] on what they printed, the search's own order
+/// breaking ties: the first is the choice, the rest are why. The trials are cut coarse, so
+/// a printout is a ranking's and not the print's: [`print_out`] gives that.
+pub fn prove(
+    printed: &Printed,
+    settings: &OrientSettings,
+    found: &[Oriented],
+    trial: &Trial,
+) -> Result<Vec<Tried>, EngineError> {
     let reach_mm = printed
         .outer
         .aabb()
@@ -158,7 +176,7 @@ pub fn orient_proven(
         .filter(|(at, pose)| *at < FINALISTS || pose.on_plate || is_standing(pose))
         .map(|(_, pose)| pose)
         .collect();
-    let tried = poses
+    let printed_out = poses
         .into_par_iter()
         .map(|pose| {
             print_out(printed, pose.rotation, pose.on_plate, trial).map(|printout| Proven {
@@ -166,12 +184,9 @@ pub fn orient_proven(
                 printout,
             })
         })
-        .filter(|tried| {
-            tried.as_ref().map_or(true, |pose| {
-                !pose.oriented.on_plate || pose.printout.hanging <= BARE_HANGING
-            })
-        })
         .collect::<Result<Vec<_>, EngineError>>()?;
+    let seated = |pose: &Proven| !pose.oriented.on_plate || pose.printout.hanging == 0;
+    let (tried, unseated): (Vec<Proven>, Vec<Proven>) = printed_out.into_iter().partition(seated);
 
     let readings: Vec<Readings> = tried
         .iter()
@@ -185,11 +200,17 @@ pub fn orient_proven(
             standing: is_standing(&pose.oriented),
         })
         .collect();
-    let best = rank(&readings, slack(settings.goal))
-        .first()
-        .copied()
-        .ok_or(EngineError::EmptyPlate)?;
-    Ok(tried[best])
+    let slack = slack(settings.goal);
+    let rulings = rulings(&readings, slack);
+    let ranked = rank(&readings, slack).into_iter().map(|at| Tried {
+        proven: tried[at],
+        ruling: Some(rulings[at]),
+    });
+    let unranked = unseated.into_iter().map(|proven| Tried {
+        proven,
+        ruling: None,
+    });
+    Ok(ranked.chain(unranked).collect())
 }
 
 /// Stands the model the way `rotation` turns it in the middle of the plate, on supports
@@ -218,7 +239,7 @@ pub fn print_out(
     let layer_mm = trial.material.layer_height_mm;
     let held = if on_plate {
         Held {
-            hanging: hanging_on_plate(&placed, cuts.as_ref(), trial.support, layer_mm)?,
+            hanging: left_hanging(&placed, cuts.as_ref(), trial.support, layer_mm)?,
             ..Held::default()
         }
     } else {
@@ -258,30 +279,6 @@ fn looking_up(facing: &[Vec3], rotation: Quat) -> usize {
         .iter()
         .filter(|facing| (back * **facing).z > LOOKS_UP)
         .count()
-}
-
-/// A face this near the lowest point of a model set on the plate is held by the plate.
-const SEATED_MM: Scalar = 0.5;
-
-/// How many supports a model set on the plate goes without: what placement would stand
-/// under it lifted clear, less what would only have held its seat.
-fn hanging_on_plate(
-    placed: &Mesh,
-    cuts: Option<&Mesh>,
-    support: &SupportProfile,
-    layer_mm: Scalar,
-) -> Result<usize, EngineError> {
-    let lift_mm = support.lift_mm();
-    let lifted = Transform::from_translation(Vec3::Z * lift_mm);
-    let mut drilled = transform_mesh(placed, lifted);
-    if let Some(cuts) = cuts {
-        append(&mut drilled, &transform_mesh(cuts, lifted));
-    }
-    let contacts = contacts_under(&drilled, support, layer_mm)?;
-    Ok(contacts
-        .iter()
-        .filter(|contact| contact.z > lift_mm + SEATED_MM)
-        .count())
 }
 
 /// One model and its supports on the plate, cut and cured the way `trial` prints.

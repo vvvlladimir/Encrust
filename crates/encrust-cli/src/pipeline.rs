@@ -633,8 +633,20 @@ fn place(
 
     if transform.center {
         mesh = centred(mesh, profile)?;
+    } else if oriented.is_some() {
+        // A turn about the file's origin can sink the model through the plate.
+        mesh = dropped(mesh)?;
     }
     Ok((mesh, oriented))
+}
+
+/// The model stood on z = 0, where it is in x and y.
+fn dropped(mesh: Mesh) -> Result<Mesh> {
+    let bounds = mesh.aabb().context("mesh has no vertices")?;
+    Ok(transform_mesh(
+        &mesh,
+        Transform::from_translation(drop_to_plate(&bounds)),
+    ))
 }
 
 /// How the search judges a model that will stand on `supports`, or on the plate.

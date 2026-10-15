@@ -4,11 +4,14 @@
 use std::time::Instant;
 
 use anyhow::{Context, Result};
-use core_engine::{Printout, Trial, orient_proven, print_out};
+use core_engine::{Printout, Trial, Tried, print_out, prove};
 use core_geometry::{Mesh, Quat, Vec3};
-use core_plate::{OrientGoal, OrientSettings, Printed, flat_faces, rotation_for};
+use core_plate::{
+    OrientGoal, OrientSettings, Printed, Ruling, finalists, flat_faces, rotation_for,
+};
 use encrust_cli::pipeline;
 use printer_profiles::{BuildVolume, SupportProfile};
+use serde::{Deserialize, Serialize};
 
 /// Where a pose came from.
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -38,6 +41,61 @@ pub struct Pose {
     /// vertical however it fits best.
     pub fits: bool,
     pub seconds: f64,
+    /// For a goal's choice, how it was made; empty for any other pose.
+    pub trace: Trace,
+}
+
+/// How a goal chose: the seconds each stage took, and every finalist it printed.
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+pub struct Trace {
+    /// Finding the finalists off the mesh: scoring every candidate and cutting the shortlist.
+    pub search_s: f64,
+    /// Printing the finalists, coarse, and ranking them.
+    pub proof_s: f64,
+    /// Best first, as the goal ranked them.
+    pub finalists: Vec<Finalist>,
+}
+
+/// One finalist as the proof read it on its coarse stack, and what decided its place.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct Finalist {
+    pub tilt_deg: f32,
+    pub on_plate: bool,
+    pub fatal: usize,
+    /// Islands and hanging contacts.
+    pub unheld: usize,
+    /// The goal's own reading.
+    pub reading: f64,
+    pub ruling: String,
+}
+
+impl Finalist {
+    fn of(tried: &Tried, goal: OrientGoal) -> Self {
+        let printout = &tried.proven.printout;
+        Self {
+            tilt_deg: tilt_deg(tried.proven.oriented.rotation),
+            on_plate: tried.proven.oriented.on_plate,
+            fatal: printout.fatal(),
+            unheld: printout.islands + printout.hanging,
+            reading: printout.reading(goal),
+            ruling: tried
+                .ruling
+                .map_or("left hanging on the plate", ruling)
+                .to_owned(),
+        }
+    }
+}
+
+fn ruling(ruling: Ruling) -> &'static str {
+    match ruling {
+        Ruling::Chosen => "chosen",
+        Ruling::Stayed => "stayed as it stands",
+        Ruling::NotWorthTurning => "not worth the turn",
+        Ruling::Fatal => "fails the print",
+        Ruling::Unheld => "leaves too much hanging",
+        Ruling::OutOfBand => "out of the goal's band",
+        Ruling::TieBreak => "lost the tie-break",
+    }
 }
 
 /// What every pose is measured against.
@@ -84,19 +142,32 @@ impl Bench<'_> {
             ..pipeline::orient_settings(Some(self.support))
         };
         let started = Instant::now();
-        let found = orient_proven(printed, &settings, &self.trial)
-            .context("the search found no orientation")?
-            .oriented;
+        let found = finalists(printed, &settings, usize::MAX)?;
+        let search_s = started.elapsed().as_secs_f64();
+        let tried = prove(printed, &settings, &found, &self.trial)?;
         let seconds = started.elapsed().as_secs_f64();
+        let chosen = tried
+            .first()
+            .context("the search found no orientation")?
+            .proven
+            .oriented;
         let name = format!("goal: {}", goal.label());
         let mut pose = self.measure(
             printed,
             name,
             Source::Goal(goal),
-            found.rotation,
-            found.on_plate,
+            chosen.rotation,
+            chosen.on_plate,
         )?;
         pose.seconds = seconds;
+        pose.trace = Trace {
+            search_s,
+            proof_s: seconds - search_s,
+            finalists: tried
+                .iter()
+                .map(|tried| Finalist::of(tried, goal))
+                .collect(),
+        };
         Ok(pose)
     }
 
@@ -124,6 +195,7 @@ impl Bench<'_> {
             tilt_deg: tilt_deg(rotation),
             fits: fits(printed.outer, rotation, lift_mm, self.volume),
             seconds: started.elapsed().as_secs_f64(),
+            trace: Trace::default(),
         })
     }
 }

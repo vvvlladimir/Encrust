@@ -9,7 +9,7 @@ use core_geometry::Quat;
 use core_plate::OrientGoal;
 use serde::{Deserialize, Serialize};
 
-use crate::poses::{Pose, Source};
+use crate::poses::{Pose, Source, Trace};
 use crate::verdict::Verdict;
 
 /// The goal poses `model` held in this report, to be measured again in a run compared with
@@ -73,6 +73,9 @@ pub struct PoseRow {
     pub peels: usize,
     pub resin_ml: f32,
     pub seconds: f64,
+    /// How a goal made its choice; empty for any other pose and in runs kept before it.
+    #[serde(default)]
+    pub trace: Trace,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -141,6 +144,7 @@ impl PoseRow {
             tilt_deg: self.tilt_deg,
             fits: self.fits,
             seconds: self.seconds,
+            trace: self.trace.clone(),
         })
     }
 
@@ -169,6 +173,7 @@ impl PoseRow {
             peels: o.peels,
             resin_ml: o.resin_ml,
             seconds: pose.seconds,
+            trace: pose.trace.clone(),
         }
     }
 }
@@ -235,6 +240,16 @@ impl Report {
         (goals.filter(|goal| goal.status == "pass").count(), counted)
     }
 
+    /// Seconds every goal's choice spent searching and proving, summed over the run.
+    pub fn stages(&self) -> (f64, f64) {
+        self.models.iter().flat_map(|model| &model.poses).fold(
+            (0.0, 0.0),
+            |(search_s, proof_s), pose| {
+                (search_s + pose.trace.search_s, proof_s + pose.trace.proof_s)
+            },
+        )
+    }
+
     /// Model and goal of every goal no measured pose could pass, and not yet isolated.
     pub fn unreachable(&self) -> Vec<(&str, &str)> {
         self.models
@@ -267,8 +282,33 @@ pub fn print_model(model: &ModelReport, verdicts: &[Verdict]) {
         for check in verdict.checks.iter().filter(|check| !check.passed) {
             println!("  - {}: {}", check.rule.name(), check.detail);
         }
+        if row.status != "pass"
+            && let Some(chosen) = model.poses.iter().find(|pose| pose.source == row.goal)
+        {
+            print_trace(&chosen.trace);
+        }
     }
     println!();
+}
+
+/// The finalists a goal printed and why each ended where it did, read on the coarse stack
+/// the proof ranks on, not the full one the table above holds.
+fn print_trace(trace: &Trace) {
+    println!(
+        "  - trace: search {:.1} s, proof {:.1} s, finalists on the coarse stack:",
+        trace.search_s, trace.proof_s
+    );
+    for finalist in &trace.finalists {
+        let stand = if finalist.on_plate {
+            "on the plate"
+        } else {
+            "on supports"
+        };
+        println!(
+            "    - {:.0}° {stand}: {} fatal, {} unheld, reads {:.1} — {}",
+            finalist.tilt_deg, finalist.fatal, finalist.unheld, finalist.reading, finalist.ruling
+        );
+    }
 }
 
 fn print_poses(model: &ModelReport) {
@@ -441,6 +481,7 @@ mod tests {
             tilt_deg: 28.6,
             fits: false,
             seconds: 1.2,
+            trace: Trace::default(),
         };
         let back = PoseRow::of(&pose)
             .pose()

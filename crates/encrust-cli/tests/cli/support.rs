@@ -70,6 +70,51 @@ pub fn write_leaning_box_stl(
     path
 }
 
+/// Binary STL of axis-aligned boxes, each given by its two far corners and wound outward.
+pub fn write_boxes_stl(name: &str, boxes: &[([f32; 3], [f32; 3])]) -> PathBuf {
+    const FACES: [[usize; 3]; 12] = [
+        [0, 2, 1],
+        [1, 2, 3],
+        [4, 5, 6],
+        [5, 7, 6],
+        [0, 1, 4],
+        [1, 5, 4],
+        [2, 6, 3],
+        [3, 6, 7],
+        [0, 4, 2],
+        [2, 4, 6],
+        [1, 3, 5],
+        [3, 7, 5],
+    ];
+    let mut bytes = vec![0u8; 80];
+    bytes.extend_from_slice(&((boxes.len() * FACES.len()) as u32).to_le_bytes());
+    for (mins, maxs) in boxes {
+        let corner = |at: usize| {
+            [0, 1, 2].map(|axis| {
+                if at >> axis & 1 == 0 {
+                    mins[axis]
+                } else {
+                    maxs[axis]
+                }
+            })
+        };
+        for face in FACES {
+            bytes.extend_from_slice(&[0u8; 12]);
+            for at in face {
+                for value in corner(at) {
+                    bytes.extend_from_slice(&value.to_le_bytes());
+                }
+            }
+            bytes.extend_from_slice(&[0u8; 2]);
+        }
+    }
+    let dir = std::env::temp_dir().join("encrust-cli-tests");
+    fs::create_dir_all(&dir).expect("temp dir");
+    let path = dir.join(format!("{name}.stl"));
+    fs::write(&path, bytes).expect("write fixture");
+    path
+}
+
 /// The profile shipped in the repository, resolved without depending on the test's
 /// working directory.
 pub fn shipped_profile() -> PathBuf {

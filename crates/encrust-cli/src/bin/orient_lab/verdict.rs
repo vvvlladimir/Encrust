@@ -370,6 +370,7 @@ mod tests {
             tilt_deg,
             fits: true,
             seconds: 0.1,
+            trace: crate::poses::Trace::default(),
         }
     }
 

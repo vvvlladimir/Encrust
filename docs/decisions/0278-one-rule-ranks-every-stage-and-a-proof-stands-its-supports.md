@@ -33,6 +33,13 @@ tilted 15° with 3, and stood a lever bare on the plate with five overhangs unhe
 - **The proof prints each pose with its supports,** grown and meshed, on its coarse
   stack, and ranks on the islands and hanging contacts that reads. The sketch without
   supports is gone, and `print_out` is the one way a pose is read.
+- **A rank says why.** `core_plate::rulings` gives each candidate what decided its place —
+  what fails, what hangs, the band, the tie-break, or a turn not worth making — and
+  `core_engine::prove` answers every finalist it printed with its ruling, best first;
+  `orient_proven` is `finalists` and then `prove`. A caller times the two stages apart.
+- **Bare on the plate means nothing hanging.** The proof drops a pose set on the plate
+  that leaves anything hanging, where it allowed sixteen, and `left_hanging` is the one
+  count of it: the command line checks it before leaving a model bare.
 - `core_plate::LOOKS_UP` is the one reading of a face that looks up in its file.
 
 ## Consequences
@@ -41,6 +48,11 @@ On `orient-lab`, with 0274–0277 as the baseline: the bodies pass 31 goals of 3
 29, the corpus 64 of 92 against 62, and the fewest supports 16 of 23 against 14. A lever
 and an island part no longer stand bare with overhangs unheld. Choosing takes a fifth
 longer: 101 s against 83 s over the eleven largest models.
+
+Dropping a bare pose with anything hanging, where sixteen were allowed, changes no choice
+on the corpus or the bodies; it closes the case the command line, which does not prove, fell
+into: a lever left bare with five overhangs unheld. Of the time choosing takes, the proof
+is two thirds: 66 s against 31 s of search over the corpus.
 
 No goal turns a model for what another weighs: a slab lying on the plate stays flat for
 the fewest supports, where it used to stand on its edge for the peel in the total.

@@ -75,6 +75,8 @@ capped silently.
 - You can cap the tilt (for example "no more than 30° from how it stands now"). A cap of 0
   leaves the model as it is.
 - It never picks an angle worse than the current one.
+- It sets a model straight on the plate, with no supports, only when nothing would be left
+  hanging there; otherwise the model goes on supports.
 
 **Many models:**
 - **Arrange the plate** automatically, largest model first.

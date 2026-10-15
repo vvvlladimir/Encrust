@@ -101,7 +101,8 @@ supported one, and is printed with no supports.
 
 A pose that hangs more than that but has a quarter of its shadow flat on the plate may
 still print bare: a test piece is drawn to. The score cannot tell, so such a pose comes
-last among the finalists and is only ever taken by the proof below.
+last among the finalists and is only ever taken by the proof below, and only when nothing
+it sets on the plate is left hanging.
 
 Set on the plate with no face flat on it, a model is balanced on an edge or a point: that
 counts as a failure, under a cup and a tearing pull.
@@ -170,10 +171,16 @@ model (ADR 0278), so its islands and its contacts with no room are read as a pri
 coarser: on the stack a figure's 13 islands read 7, and its 3 read 1. The order holds.
 Proving with supports costs a fifth more than proving the model alone did.
 
-A pose set bare on the plate that leaves more than sixteen places hanging is a model
-that needs supports, and is dropped. The rest are ranked by the rule above on what they
-printed: cups and tearing pulls, then islands and hanging contacts, then the goal's own
-reading — contacts, newtons, layers, contacts on up-facing faces.
+A pose set bare on the plate that leaves anything hanging is a model that needs supports,
+and is dropped: on the plate means held by the plate. The rest are ranked by the rule
+above on what they printed: cups and tearing pulls, then islands and hanging contacts,
+then the goal's own reading — contacts, newtons, layers, contacts on up-facing faces.
+`prove` answers every finalist with what decided its place, `core_plate::rulings`: which
+of those it lost on, the tie-break, or a turn not worth making.
+
+The command line orients by the search alone, so before it leaves a model bare where the
+search said it rests, it counts what would hang there the way the proof does,
+`left_hanging`, and stands supports under it if anything would.
 
 ## Arranging
 

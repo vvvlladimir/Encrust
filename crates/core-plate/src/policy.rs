@@ -122,7 +122,65 @@ fn compare(a: (f64, bool, bool, f64), b: (f64, bool, bool, f64)) -> std::cmp::Or
 /// of the primary's own unit is noise: a stage reads it in contacts, newtons or a
 /// dimensionless share, and only it knows which.
 pub fn rank(readings: &[Readings], primary_slack: f64) -> Vec<usize> {
-    let policy = &Policy {
+    ranking(readings, primary_slack).map_or_else(Vec::new, |ranking| ranking.order)
+}
+
+/// Why each of `readings` ended where [`rank`] put it, in the order given.
+pub fn rulings(readings: &[Readings], primary_slack: f64) -> Vec<Ruling> {
+    let Some(ranking) = ranking(readings, primary_slack) else {
+        return Vec::new();
+    };
+    let mut rulings = vec![Ruling::TieBreak; readings.len()];
+    for (place, at) in ranking.order.iter().enumerate() {
+        rulings[*at] = ranking.ruling(&readings[*at], place);
+    }
+    rulings
+}
+
+/// What decided a candidate's place.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Ruling {
+    /// Ranked first.
+    Chosen,
+    /// Ranked first as the way the model stands, no turn ahead of it being worth making.
+    Stayed,
+    /// Ranked first and turned away from, but not worth the turn.
+    NotWorthTurning,
+    /// Would fail the print more surely than the best.
+    Fatal,
+    /// Leaves more hanging than the band over the fewest allows.
+    Unheld,
+    /// Its goal's own reading is past the band over the best.
+    OutOfBand,
+    /// As good as the best, and behind it on the tie-break.
+    TieBreak,
+}
+
+/// The policy, the bests it measured, the order, and whether standing still was moved ahead.
+struct Ranking {
+    policy: Policy,
+    bests: Bests,
+    order: Vec<usize>,
+    stayed: bool,
+}
+
+impl Ranking {
+    fn ruling(&self, r: &Readings, place: usize) -> Ruling {
+        let (policy, bests) = (&self.policy, &self.bests);
+        match (place, self.stayed) {
+            (0, true) => Ruling::Stayed,
+            (0, false) => Ruling::Chosen,
+            (1, true) => Ruling::NotWorthTurning,
+            _ if r.fatal.total_cmp(&bests.fatal).is_gt() => Ruling::Fatal,
+            _ if !bests.held(r, policy) => Ruling::Unheld,
+            _ if !bests.in_band(r, policy) => Ruling::OutOfBand,
+            _ => Ruling::TieBreak,
+        }
+    }
+}
+
+fn ranking(readings: &[Readings], primary_slack: f64) -> Option<Ranking> {
+    let policy = Policy {
         unheld: UNHELD,
         primary: Band {
             share: PRIMARY_SHARE,
@@ -130,27 +188,33 @@ pub fn rank(readings: &[Readings], primary_slack: f64) -> Vec<usize> {
         },
         stay_gain: STAY_GAIN,
     };
-    let Some(bests) = Bests::of(readings, policy) else {
-        return Vec::new();
-    };
-    let key = |at: &usize| bests.key(&readings[*at], policy);
+    let bests = Bests::of(readings, &policy)?;
+    let key = |at: &usize| bests.key(&readings[*at], &policy);
     let mut order: Vec<usize> = (0..readings.len()).collect();
     order.sort_by(|a, b| compare(key(a), key(b)));
 
     let first_standing = readings.iter().position(|r| r.standing);
     let standing = order.iter().position(|at| Some(*at) == first_standing);
-    if let Some(position) = standing.filter(|position| *position > 0)
-        && !worth_turning(
-            &bests,
-            policy,
-            &readings[order[0]],
-            &readings[order[position]],
-        )
-    {
+    let stayed = standing
+        .filter(|position| *position > 0)
+        .is_some_and(|position| {
+            !worth_turning(
+                &bests,
+                &policy,
+                &readings[order[0]],
+                &readings[order[position]],
+            )
+        });
+    if let (true, Some(position)) = (stayed, standing) {
         let now = order.remove(position);
         order.insert(0, now);
     }
-    order
+    Some(Ranking {
+        policy,
+        bests,
+        order,
+        stayed,
+    })
 }
 
 /// Whether `turned`, ranked ahead of `now`, is worth leaving the way the model stands for:
@@ -248,5 +312,38 @@ mod tests {
     #[test]
     fn nothing_to_rank_ranks_nothing() {
         assert!(rank(&[], SLACK).is_empty());
+        assert!(rulings(&[], SLACK).is_empty());
+    }
+
+    #[test]
+    fn each_place_is_ruled_by_the_first_thing_it_lost_on() {
+        let readings = [
+            reading(1.0, Some(0.0), 10.0, 0.0),
+            reading(0.0, Some(20.0), 10.0, 1.0),
+            reading(0.0, Some(0.0), 50.0, 2.0),
+            reading(0.0, Some(0.0), 10.0, 4.0),
+            reading(0.0, Some(0.0), 10.0, 3.0),
+        ];
+        assert_eq!(
+            rulings(&readings, SLACK),
+            [
+                Ruling::Fatal,
+                Ruling::Unheld,
+                Ruling::OutOfBand,
+                Ruling::TieBreak,
+                Ruling::Chosen
+            ]
+        );
+    }
+
+    #[test]
+    fn standing_still_is_ruled_stayed_and_the_turn_it_beat_not_worth_it() {
+        let mut now = reading(0.0, None, 100.0, 1.0);
+        now.standing = true;
+        let slightly = reading(0.0, None, 98.0, 0.0);
+        assert_eq!(
+            rulings(&[slightly, now], SLACK),
+            [Ruling::NotWorthTurning, Ruling::Stayed]
+        );
     }
 }

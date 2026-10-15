@@ -127,6 +127,8 @@ fn main() -> Result<ExitCode> {
     };
     let (passed, counted) = report.score();
     println!("{passed} of {counted} goals pass");
+    let (search_s, proof_s) = report.stages();
+    println!("choosing took {search_s:.1} s of search and {proof_s:.1} s of proof");
     let unreachable = report.unreachable();
     if !unreachable.is_empty() {
         println!("\nUnreachable: no measured pose passes, so they are left out of the count.");

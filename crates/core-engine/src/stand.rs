@@ -89,9 +89,34 @@ fn facing(drilled: &Mesh, bvh: &Bvh, contacts: &[Vec3]) -> Vec<Vec3> {
         .collect()
 }
 
+/// A face this near the lowest point of a model set on the plate is held by the plate.
+const SEATED_MM: Scalar = 0.5;
+
+/// How many places `placed`, set bare on the plate, leaves hanging: what placement would
+/// stand under it lifted clear, less what would only have held its seat. Zero is a model
+/// that prints with no supports.
+pub fn left_hanging(
+    placed: &Mesh,
+    cuts: Option<&Mesh>,
+    support: &SupportProfile,
+    layer_height_mm: Scalar,
+) -> Result<usize, EngineError> {
+    let lift_mm = support.lift_mm();
+    let lifted = Transform::from_translation(Vec3::Z * lift_mm);
+    let mut drilled = transform_mesh(placed, lifted);
+    if let Some(cuts) = cuts {
+        append(&mut drilled, &transform_mesh(cuts, lifted));
+    }
+    let contacts = contacts_under(&drilled, support, layer_height_mm)?;
+    Ok(contacts
+        .iter()
+        .filter(|contact| contact.z > lift_mm + SEATED_MM)
+        .count())
+}
+
 /// Where `drilled`, standing where it is, needs holding up: what automatic placement
 /// would touch, before anything is stood under it.
-pub(crate) fn contacts_under(
+fn contacts_under(
     drilled: &Mesh,
     profile: &SupportProfile,
     layer_height_mm: Scalar,
@@ -135,7 +160,7 @@ fn lift(mesh: &mut Mesh, cuts: &mut Option<Mesh>, lift_mm: Scalar) -> Result<Sca
 }
 
 /// Adds `other`'s geometry to `mesh`, keeping each face pointing at its own vertices.
-pub(crate) fn append(mesh: &mut Mesh, other: &Mesh) {
+fn append(mesh: &mut Mesh, other: &Mesh) {
     let offset = mesh.vertices.len() as u32;
     mesh.vertices.extend_from_slice(&other.vertices);
     mesh.faces.extend(

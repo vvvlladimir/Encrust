@@ -272,3 +272,54 @@ fn the_overhang_an_orientation_is_scored_on_is_the_support_profiles_own() {
         overhang("light")
     );
 }
+
+#[test]
+fn a_model_set_on_the_plate_with_a_ledge_hanging_is_stood_on_supports() {
+    // A 20 mm cube with a 4 mm ledge out of its top: too little of its surface to keep it
+    // off the plate, enough to need holding up there.
+    let path = write_boxes_stl(
+        "ledge",
+        &[
+            ([0.0, 0.0, 0.0], [20.0, 20.0, 20.0]),
+            ([20.0, 8.0, 18.0], [24.0, 12.0, 20.0]),
+        ],
+    );
+    let output = slice(&[
+        path.to_str().unwrap(),
+        "--orient",
+        "--max-tilt",
+        "0",
+        "--supports",
+        "medium",
+        "--json",
+    ]);
+    assert!(output.status.success(), "{}", stderr(&output));
+    let report = json(&output);
+    assert!(
+        report["supports"]["contacts"].as_u64().unwrap_or(0) > 0,
+        "the ledge is held up: {report}"
+    );
+}
+
+#[test]
+fn an_oriented_model_stands_on_the_plate_without_centring() {
+    // Turned over about the file's origin, a box drawn on the plate ends up under it.
+    let path = write_leaning_box_stl("turned-over", 10.0, 8.0, 12, 0);
+    let out = output_dir("turned-over");
+    let output = slice(&[
+        path.to_str().unwrap(),
+        "-o",
+        out.to_str().unwrap(),
+        "--profile",
+        shipped_profile().to_str().unwrap(),
+        "--orient",
+        "--orient-goal",
+        "shortest-print",
+    ]);
+    assert!(output.status.success(), "{}", stderr(&output));
+    assert!(
+        !stderr(&output).contains("under the plate"),
+        "{}",
+        stderr(&output)
+    );
+}

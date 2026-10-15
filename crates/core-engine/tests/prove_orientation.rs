@@ -7,9 +7,9 @@
 
 use std::path::Path;
 
-use core_engine::{EngineError, Trial, orient_proven, print_out};
+use core_engine::{EngineError, Trial, orient_proven, print_out, prove};
 use core_geometry::{Mesh, Quat, Vec3};
-use core_plate::{OrientGoal, OrientSettings, Printed};
+use core_plate::{OrientGoal, OrientSettings, Printed, Ruling, finalists};
 use printer_profiles::{MaterialProfile, PrinterProfile, SupportProfile};
 
 /// Panel of 600 x 400 pixels at a 0.1 mm pitch: 60 x 40 mm of build area.
@@ -188,6 +188,21 @@ fn a_table_left_hanging_bare_is_stood_on_supports() {
         "so it is not left bare on the plate"
     );
     assert!(proven.printout.contacts > 0);
+
+    let found = finalists(&Printed::solid(&mesh), &settings, usize::MAX).expect("it has finalists");
+    let tried = prove(&Printed::solid(&mesh), &settings, &found, &bench.trial())
+        .expect("its finalists print");
+    assert!(
+        matches!(tried[0].ruling, Some(Ruling::Chosen | Ruling::Stayed)),
+        "the first tried is the choice, got {:?}",
+        tried[0].ruling
+    );
+    assert!(
+        tried
+            .iter()
+            .any(|tried| tried.proven.oriented.on_plate && tried.ruling.is_none()),
+        "the bare table was printed and left out of the ranking"
+    );
 }
 
 #[test]
