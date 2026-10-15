@@ -154,7 +154,6 @@ pub struct Faces<'a> {
     /// The model's own scale, from the cube root of the box it fills: what the height and
     /// the cross-section are divided by so that neither depends on how big the model is.
     length_mm: Scalar,
-    goal: OrientGoal,
     weights: Weights,
     on_supports: bool,
     /// The sine of the overhang angle: how far a face may face down before it hangs.
@@ -195,7 +194,6 @@ impl<'a> Faces<'a> {
             low_points: LowPoints::of(mesh),
             total_area_mm2,
             length_mm,
-            goal: OrientGoal::default(),
             weights: OrientGoal::default().weights(),
             on_supports: false,
             lean: 0.0,
@@ -209,7 +207,6 @@ impl<'a> Faces<'a> {
     /// supports or on the plate, past its overhang angle, by contacts its spacing apart.
     pub fn for_settings(self, settings: &OrientSettings) -> Self {
         Self {
-            goal: settings.goal,
             weights: settings.goal.weights(),
             on_supports: settings.on_supports,
             lean: settings.max_overhang_deg.to_radians().sin(),
@@ -337,11 +334,11 @@ impl<'a> Faces<'a> {
         high - low
     }
 
-    /// The term `goal` is searched for, unweighted: what the priorities pick by before the
-    /// total breaks the tie. See `docs/design/orientation.md`.
-    pub fn primary(&self, score: &Score) -> Scalar {
+    /// The term `goal` is searched for, unweighted, whichever goal these faces are ranked
+    /// for: what its policy picks by before the total breaks the tie.
+    pub fn reading(&self, goal: OrientGoal, score: &Score) -> Scalar {
         let terms = self.terms(score);
-        match self.goal {
+        match goal {
             OrientGoal::FewestSupports => terms.volume,
             OrientGoal::LeastPeel => terms.peel,
             OrientGoal::ShortestPrint => terms.height,

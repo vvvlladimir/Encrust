@@ -3,6 +3,7 @@
 //! is what it is live in `local-docs/orientation/README.md`; nothing here is a reference
 //! answer, only the current bar.
 
+use core_engine::Printout;
 use core_plate::OrientGoal;
 use serde::Deserialize;
 
@@ -29,7 +30,7 @@ fn turn_cost(goal: OrientGoal, drawn: f64) -> f64 {
     if goal == OrientGoal::FewestSupports {
         0.0
     } else {
-        0.05 * drawn + slack(goal)
+        0.05 * drawn + Printout::noise(goal)
     }
 }
 
@@ -150,17 +151,6 @@ impl Verdict {
             .filter(|check| !check.passed)
             .map(|check| check.rule.name())
             .collect()
-    }
-}
-
-/// What a goal's own reading may be off by and still be the same: a strut's resin, a
-/// contact, a newton's half, a few layers.
-fn slack(goal: OrientGoal) -> f64 {
-    match goal {
-        OrientGoal::FewestSupports => 0.05,
-        OrientGoal::CleanTop => 2.0,
-        OrientGoal::LeastPeel => 0.5,
-        OrientGoal::ShortestPrint => 5.0,
     }
 }
 
@@ -325,7 +315,7 @@ fn held_to(
     let mut checks = floor.prints(chosen).to_vec();
     let own = chosen.printout.reading(goal);
     if let Some((name, best_reading)) = best {
-        let limit = best_reading * (1.0 + goal_band(goal)) + slack(goal);
+        let limit = best_reading * (1.0 + goal_band(goal)) + Printout::noise(goal);
         // A reading bought by failing the print wins nothing.
         let sound = floor.sound(chosen);
         let unsound = if sound { "" } else { "not sound, so no win: " };

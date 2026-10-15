@@ -1,7 +1,8 @@
 # 0278. Rank the search and the proof by one rule, and prove a pose with its supports
 
 - **Status:** Accepted; the band over islands, the proof's tie-break, the coarse layer it
-  places supports on and what the fewest supports reads are superseded by 0279
+  places supports on, what the fewest supports reads and the count a bare pose is checked
+  by are superseded by 0279
 - **Date:** 2026-10-15
 
 ## Context

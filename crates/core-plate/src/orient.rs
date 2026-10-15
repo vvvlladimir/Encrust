@@ -186,13 +186,11 @@ pub fn finalists(
 }
 
 /// How far apart two finalists stand at least, degrees: nearer, and printing both tells
-/// a caller nothing the first did not. Support volume changes slowly with a turn, so the
-/// fewest supports spreads its finalists twice as far.
+/// a caller nothing the first did not. Support volume changes slowly with a turn.
 fn apart_deg(goal: OrientGoal) -> Scalar {
-    if goal == OrientGoal::FewestSupports {
-        20.0
-    } else {
-        10.0
+    match goal {
+        OrientGoal::FewestSupports => 20.0,
+        OrientGoal::LeastPeel | OrientGoal::ShortestPrint | OrientGoal::CleanTop => 10.0,
     }
 }
 

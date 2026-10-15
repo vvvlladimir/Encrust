@@ -162,6 +162,15 @@ The fewest supports skips steps 2 and 3: past what fails the print, the least su
 volume wins outright, and any turn that needs less is worth making. Islands, contacts with
 no room and cups are its user's to settle with the tools that fix them.
 
+A goal is ranked by nothing another goal sets. What is its own is an exhaustive `match` on
+`OrientGoal`, so a new goal is forced through every one: its weights (`OrientGoal::weights`),
+its reading off the mesh (`Faces::reading`) and once printed (`Printout::reading`) with the
+noise of its unit (`Printout::noise`), its policy (`Policy::of`) and its finalists' spacing
+(`apart_deg`). Both readings take the goal as an argument, so every goal's reading of one
+candidate is at hand to a goal that weighs several. What every goal shares — steps 1 to 4,
+the build volume, supports placed on the print's layer — moves every goal when it changes,
+and is measured on all of them in `orient-lab`.
+
 A wider shortlist and a pattern search around the winner were measured and dropped:
 the better the search found low scores, the more of what it found the support generator
 left hanging (ADR 0275).
@@ -172,7 +181,7 @@ The score is a prediction, and what it predicts is measured cheaply once a print
 known. `core-engine` takes the search's finalists — best first, no two within 10°, 20° for
 the fewest supports, whose volume changes slowly with a turn — and prints the first few
 and the way the model stands, with supports stood under each, and every pose that may rest
-on the plate bare. A few is four for a model of a million faces and up to sixteen for a
+on the plate set there, with supports only under what hangs over it. A few is four for a model of a million faces and up to sixteen for a
 lighter one under 200 mm, which prints as many in the same time.
 
 The supports are placed on the print's own layer (ADR 0279): how many contacts placement
@@ -190,9 +199,8 @@ where the profile has one, and none where nothing hangs. All are ranked by the r
 newtons, layers, contacts on up-facing faces — and `prove` answers every finalist with
 what decided its place, `core_plate::rulings`.
 
-The command line orients by the search alone, so before it leaves a model bare where the
-search said it rests, it counts what would hang there the way the proof does,
-`left_hanging`, and stands supports under it if anything would.
+The command line orients by the search alone, and stands a model the search set on the
+plate the way the proof does, `stand_seated`: supports under what hangs, none if nothing does.
 
 ## Arranging
 

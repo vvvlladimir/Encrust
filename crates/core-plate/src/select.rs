@@ -29,7 +29,7 @@ pub fn ranked(
             suction: f64::from(suction(&candidate.score, settings)),
             unheld: None,
             roomless: 0.0,
-            primary: f64::from(faces.primary(&candidate.score)),
+            primary: f64::from(faces.reading(settings.goal, &candidate.score)),
             tiebreak: [f64::from(candidate.score.total), 0.0],
             standing: candidate.down == now,
         })

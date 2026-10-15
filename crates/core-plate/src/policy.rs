@@ -1,9 +1,5 @@
-//! The one rule an orientation is chosen by, whether the readings are predicted off the
-//! mesh or measured by printing it, and whatever the goal: what fails the print first,
-//! then what is left hanging, then the goal's own reading within a band, then a
-//! tie-break, and the model stays as it stands unless a turn is worth it. The fewest
-//! supports weighs only what fails and its own reading, with no band. See
-//! `docs/design/orientation.md`.
+//! The one rule an orientation is chosen by, whatever the stage and the goal; each goal
+//! picks its own [`Policy`]. See `docs/design/orientation.md`.
 
 use crate::score::OrientGoal;
 
@@ -14,13 +10,12 @@ pub struct Readings {
     /// pose past the build volume, or balanced on the plate on a point.
     pub fatal: f64,
     /// Suction cups and pulls past what the film lets go of, weighted the same way: fatal
-    /// to every goal but the fewest supports, which leaves them to a drain hole.
+    /// to a goal whose policy weighs hazards.
     pub suction: f64,
-    /// Islands left with nothing under them, where the stage measured them; the fewest
-    /// supports does not weigh them.
+    /// Islands left with nothing under them, where the stage measured them.
     pub unheld: Option<f64>,
-    /// Contacts placement wanted and found no room for a column under: left hanging for
-    /// every goal but the fewest supports, which takes them as placement leaves them.
+    /// Contacts placement wanted and found no room for a column under, counted with the
+    /// islands as left hanging.
     pub roomless: f64,
     /// The goal's own reading.
     pub primary: f64,
@@ -50,7 +45,7 @@ impl Band {
 struct Policy {
     /// Whether suction counts as failing the print, islands and contacts with no room as
     /// hanging, and the goal's reading within a band; without, the least reading wins.
-    strict: bool,
+    weighs_hazards: bool,
     unheld: Band,
     primary: Band,
     /// The share of its own reading a turn has to win over standing still.
@@ -59,38 +54,51 @@ struct Policy {
 
 impl Policy {
     fn fatal(&self, r: &Readings) -> f64 {
-        r.fatal + if self.strict { r.suction } else { 0.0 }
+        r.fatal + if self.weighs_hazards { r.suction } else { 0.0 }
     }
 
     /// What is left hanging, where the stage measured it and the goal weighs it.
     fn left(&self, r: &Readings) -> Option<f64> {
         r.unheld
-            .filter(|_| self.strict)
+            .filter(|_| self.weighs_hazards)
             .map(|islands| islands + r.roomless)
     }
 
     /// The goal's own reading where it ranks ahead of what is left hanging and the
     /// tie-break, which is where it has no band.
     fn least(&self, r: &Readings) -> f64 {
-        if self.strict { 0.0 } else { r.primary }
+        if self.weighs_hazards { 0.0 } else { r.primary }
     }
 
+    /// Each goal's own policy: a goal is ranked by nothing another goal sets.
     fn of(goal: OrientGoal, primary_slack: f64) -> Self {
-        if goal == OrientGoal::FewestSupports {
+        match goal {
             // The least support volume, whatever else it reads (ADR 0279).
-            let exact = Band {
-                share: 0.0,
-                slack: 0.0,
-            };
-            return Self {
-                strict: false,
-                unheld: exact,
-                primary: exact,
-                stay_gain: 0.0,
-            };
+            OrientGoal::FewestSupports => Self::strictly_least(),
+            OrientGoal::LeastPeel | OrientGoal::ShortestPrint | OrientGoal::CleanTop => {
+                Self::banded(primary_slack)
+            }
         }
+    }
+
+    /// Strictly the least reading past what fails every goal, and any turn that lowers it.
+    fn strictly_least() -> Self {
+        let exact = Band {
+            share: 0.0,
+            slack: 0.0,
+        };
         Self {
-            strict: true,
+            weighs_hazards: false,
+            unheld: exact,
+            primary: exact,
+            stay_gain: 0.0,
+        }
+    }
+
+    /// Nothing failing or hanging, the reading within a band, and a turn worth its gain.
+    fn banded(primary_slack: f64) -> Self {
+        Self {
+            weighs_hazards: true,
             unheld: UNHELD,
             primary: Band {
                 share: PRIMARY_SHARE,

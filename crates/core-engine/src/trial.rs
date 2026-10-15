@@ -43,20 +43,6 @@ fn finalists_for(faces: usize, reach_mm: Scalar) -> usize {
 /// the first two lose the whole print, the others a detail of it.
 const FATAL: usize = 10;
 
-/// Support resin two poses differ by without differing: a strut or two, millilitres.
-const SUPPORT_NOISE_ML: f64 = 0.05;
-
-/// What of a goal's own reading is noise once printed: a strut or two, a contact or two,
-/// half a newton, a few layers.
-fn slack(goal: OrientGoal) -> f64 {
-    match goal {
-        OrientGoal::FewestSupports => SUPPORT_NOISE_ML,
-        OrientGoal::CleanTop => 2.0,
-        OrientGoal::LeastPeel => 0.5,
-        OrientGoal::ShortestPrint => 5.0,
-    }
-}
-
 /// How coarse a trial is cut: the tallest pose into about `TRIAL_LAYERS`, no layer
 /// thicker than `TRIAL_LAYER_MM`, cured at a pixel of `TRIAL_PIXEL_MM`. A trial ranks
 /// poses against each other, which the shape of a stack settles long before its last
@@ -139,6 +125,17 @@ impl Printout {
             OrientGoal::CleanTop => self.top_contacts as f64,
         }
     }
+
+    /// What of `goal`'s [`Printout::reading`] is noise: a strut's resin, millilitres, two
+    /// contacts, half a newton, five layers.
+    pub fn noise(goal: OrientGoal) -> f64 {
+        match goal {
+            OrientGoal::FewestSupports => 0.05,
+            OrientGoal::CleanTop => 2.0,
+            OrientGoal::LeastPeel => 0.5,
+            OrientGoal::ShortestPrint => 5.0,
+        }
+    }
 }
 
 /// An orientation chosen by printing the search's best few, and what it prints.
@@ -169,13 +166,8 @@ pub fn orient_proven(
         .ok_or(EngineError::EmptyPlate)
 }
 
-/// Prints the search's best few of `found` and the way the model stands, each supported,
-/// cut and cured, with every pose that may rest on the plate tried there with supports only
-/// under what hangs, and answers
-/// them ranked by [`core_plate::rank`] on what they printed: the first is the choice, the
-/// rest are why. Supports are placed on the print's own layer, so contacts are the
-/// print's; the cure is cut coarse, so the rest of a printout is a ranking's and not the
-/// print's: [`print_out`] gives that.
+/// Prints the search's best few of `found` and the way the model stands, and answers them
+/// ranked by [`core_plate::rank`] on what they printed. See `docs/design/orientation.md`.
 pub fn prove(
     printed: &Printed,
     settings: &OrientSettings,
@@ -195,18 +187,12 @@ pub fn prove(
     };
     let standing = rotation_for(settings.down_now);
     let is_standing = |pose: &Oriented| pose.rotation.abs_diff_eq(standing, 1e-5);
-    let finalists = finalists_for(printed.outer.faces.len(), reach_mm);
-    let mut poses: Vec<&Oriented> = Vec::new();
-    for (at, pose) in found.iter().enumerate() {
-        let wanted = at < finalists || is_standing(pose);
-        let again = |kept: &&Oriented| {
-            kept.on_plate == pose.on_plate && kept.rotation.abs_diff_eq(pose.rotation, 1e-5)
-        };
-        if wanted && !poses.iter().any(again) {
-            poses.push(pose);
-        }
-    }
-    let printed_out = poses
+    let poses = to_print(
+        found,
+        finalists_for(printed.outer.faces.len(), reach_mm),
+        is_standing,
+    );
+    let tried = poses
         .into_par_iter()
         .map(|pose| {
             print_held(
@@ -222,9 +208,35 @@ pub fn prove(
             })
         })
         .collect::<Result<Vec<_>, EngineError>>()?;
-    let tried = printed_out;
+    Ok(judged(&tried, settings.goal, is_standing))
+}
 
-    let slack = slack(settings.goal);
+/// The first `finalists` of `found` and the way the model stands, each pose once.
+fn to_print(
+    found: &[Oriented],
+    finalists: usize,
+    is_standing: impl Fn(&Oriented) -> bool,
+) -> Vec<&Oriented> {
+    let mut poses: Vec<&Oriented> = Vec::new();
+    for (at, pose) in found.iter().enumerate() {
+        let wanted = at < finalists || is_standing(pose);
+        let again = |kept: &&Oriented| {
+            kept.on_plate == pose.on_plate && kept.rotation.abs_diff_eq(pose.rotation, 1e-5)
+        };
+        if wanted && !poses.iter().any(again) {
+            poses.push(pose);
+        }
+    }
+    poses
+}
+
+/// `tried` ranked for `goal` on what each printed, best first, with what decided its place.
+fn judged(
+    tried: &[Proven],
+    goal: OrientGoal,
+    is_standing: impl Fn(&Oriented) -> bool,
+) -> Vec<Tried> {
+    let slack = Printout::noise(goal);
     let readings: Vec<Readings> = tried
         .iter()
         .enumerate()
@@ -233,23 +245,20 @@ pub fn prove(
             suction: pose.printout.fatal() as f64,
             unheld: Some(pose.printout.islands as f64),
             roomless: pose.printout.hanging as f64,
-            primary: pose.printout.reading(settings.goal),
+            primary: pose.printout.reading(goal),
             // The goal's reading to the noise of its unit, then the search's own order.
-            tiebreak: [
-                (pose.printout.reading(settings.goal) / slack).round(),
-                at as f64,
-            ],
+            tiebreak: [(pose.printout.reading(goal) / slack).round(), at as f64],
             standing: is_standing(&pose.oriented),
         })
         .collect();
-    let rulings = rulings(&readings, settings.goal, slack);
-    Ok(rank(&readings, settings.goal, slack)
+    let rulings = rulings(&readings, goal, slack);
+    rank(&readings, goal, slack)
         .into_iter()
         .map(|at| Tried {
             proven: tried[at],
             ruling: rulings[at],
         })
-        .collect())
+        .collect()
 }
 
 /// Stands the model the way `rotation` turns it in the middle of the plate, lifted onto
