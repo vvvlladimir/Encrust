@@ -120,6 +120,11 @@ fn a_box_set_on_the_plate_prints_with_nothing_under_it_and_nothing_hanging() {
     assert_eq!((bare.contacts, bare.hanging, bare.islands), (0, 0, 0));
     // 5 mm at the default resin's 0.05 mm a layer.
     assert_eq!(bare.layers, 100);
+    assert!(
+        (bare.stack_mm - 5.0).abs() < 1e-3,
+        "the stack is the box's 5 mm, got {}",
+        bare.stack_mm
+    );
 
     let lifted = print_out(&printed, Quat::IDENTITY, false, &bench.trial()).expect("a box prints");
     assert!(
@@ -129,6 +134,10 @@ fn a_box_set_on_the_plate_prints_with_nothing_under_it_and_nothing_hanging() {
     assert!(
         lifted.layers > bare.layers,
         "and the supports add their height"
+    );
+    assert!(
+        lifted.stack_mm > bare.stack_mm,
+        "and to the stack the time follows"
     );
 }
 

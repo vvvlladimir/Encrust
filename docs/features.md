@@ -87,6 +87,11 @@ capped silently.
   it has nothing more to win, and takes the pose with the least support among those, so
   a small model is not tilted or flipped for a fraction of a newton. The newtons are an
   estimate good to about a factor of three, not a measurement of your printer.
+- **Shortest print** takes the pose with the fewest layers — the model's height plus its
+  lift onto supports, since a layer takes as long whatever its area — that seals no cup and
+  leaves nothing hanging. It ignores the peel warning and the support it takes: a flat
+  part lies flat, a figure on its side. Poses within 2 % and a millimetre of the shortest
+  count as just as fast, so a model is not turned for less.
 - It either leaves a model standing on the plate, with supports only under what hangs
   over it, or lifts it onto supports by the support profile's **Lift** — whichever the
   goal prefers. Your raft setting is counted either way.

@@ -292,7 +292,7 @@ fn shortlist(ranked: &[(Vec3, Score)], count: usize, kept: Vec<Vec3>) -> Vec<Vec
         (|score| score.total, count.max(1)),
         (|score| score.overhang_mm2, BEST_OF_EACH),
         (|score| score.shadow_mm2, BEST_OF_EACH),
-        (|score| score.height_mm, BEST_OF_EACH),
+        (|score| score.stack_mm(), BEST_OF_EACH),
         (|score| score.top_overhang_mm2, BEST_OF_EACH),
     ];
     let mut chosen = kept;
@@ -590,7 +590,7 @@ mod tests {
     }
 
     #[test]
-    fn a_shortest_print_does_not_lay_flat_what_would_tear_off_the_film() {
+    fn a_shortest_print_lays_a_slab_flat_whatever_it_pulls() {
         let mesh = cuboid(Vec3::new(100.0, 100.0, 4.0));
         let settings = OrientSettings {
             goal: OrientGoal::ShortestPrint,
@@ -598,15 +598,12 @@ mod tests {
             ..OrientSettings::default()
         };
         let found = orient(&mesh, &settings).expect("a slab can be oriented");
-        // Flat, a 100 mm square pulls some 98 N, past the 30 N limit. Tilted a few degrees,
-        // each section is a strip that pulls far less, for barely more layers.
+        // Flat, a 100 mm square pulls some 98 N, past the 30 N limit, and stacks 4 mm: the
+        // least of any pose, which the shortest print takes (ADR 0283).
         let thin = placed(found.rotation, Vec3::Z);
-        assert!(
-            thin.z.abs() < 0.999,
-            "the slab does not lie flat, got {thin}"
-        );
+        assert!(thin.z.abs() > 0.999, "the slab lies flat, got {thin}");
         let pull = found.score.peak_pull_n.expect("the winner was cut");
-        assert!(f64::from(pull) < PEEL_LIMIT_N, "{pull}");
+        assert!(f64::from(pull) > PEEL_LIMIT_N, "{pull}");
     }
 
     /// An open-topped 30 mm box with 2 mm walls, open side up as its file has it.

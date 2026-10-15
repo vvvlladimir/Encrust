@@ -54,6 +54,14 @@ pub struct Score {
     pub total: Scalar,
 }
 
+impl Score {
+    /// How tall the stack stands, the model and the lift under it, millimetres: what a
+    /// print's layer count and time follow.
+    pub fn stack_mm(&self) -> Scalar {
+        self.height_mm + self.lift_mm
+    }
+}
+
 /// What an orientation is searched for: one term of [`Score`] made to weigh more.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub enum OrientGoal {
@@ -62,7 +70,7 @@ pub enum OrientGoal {
     FewestSupports,
     /// The smallest cross-section pulled off the film at any layer.
     LeastPeel,
-    /// The fewest layers.
+    /// The shortest stack, model and lift, which sets the layers and the time.
     ShortestPrint,
     /// No support on the faces that look up in the file.
     CleanTop,
@@ -115,7 +123,7 @@ impl OrientGoal {
             },
             Self::ShortestPrint => Weights {
                 support: 0.3,
-                peel: 0.3,
+                peel: 0.0,
                 height: 1.5,
                 ..base
             },
@@ -358,13 +366,13 @@ impl<'a> Faces<'a> {
     }
 
     /// What `goal` is searched for, whichever goal these faces are ranked for: its term
-    /// unweighted, and for the least peel the pull itself, newtons, as the proof reads it.
+    /// unweighted, and as the proof reads them the pull, newtons, and the stack, millimetres.
     pub fn reading(&self, goal: OrientGoal, score: &Score) -> Scalar {
         let terms = self.terms(score);
         match goal {
             OrientGoal::FewestSupports => terms.volume,
             OrientGoal::LeastPeel => peak_pull_n(score),
-            OrientGoal::ShortestPrint => terms.height,
+            OrientGoal::ShortestPrint => score.stack_mm(),
             OrientGoal::CleanTop => terms.top,
         }
     }
@@ -394,7 +402,7 @@ impl<'a> Faces<'a> {
                 + W_TALL * score.support_mm3 / (area * length),
             volume: volume_mm3(score, tips_mm2) / (area * length),
             peel: pulled / (length * length),
-            height: score.height_mm / length,
+            height: score.stack_mm() / length,
             bottom: score.bottom_mm2 / area,
             top: score.top_overhang_mm2 / area,
         }
@@ -696,6 +704,26 @@ mod tests {
         assert!(
             (seated_mm3 - 216.5).abs() < 0.5,
             "86.6 mm2 held 2.5 mm up and nothing on a lift, got {seated_mm3}"
+        );
+    }
+
+    #[test]
+    fn the_shortest_print_reads_the_lift_a_model_on_supports_stands_on() {
+        let cube = cuboid(Vec3::splat(10.0));
+        let settings = OrientSettings {
+            on_supports: true,
+            lift_mm: 5.0,
+            ..OrientSettings::default()
+        };
+        let faces = Faces::of(&cube)
+            .expect("a cube has faces")
+            .for_settings(&settings);
+        let goal = OrientGoal::ShortestPrint;
+        let lifted = faces.reading(goal, &faces.score(Vec3::NEG_Z));
+        let seated = faces.reading(goal, &faces.score_on_plate(Vec3::NEG_Z));
+        assert!(
+            (lifted - 15.0).abs() < 1e-3 && (seated - 10.0).abs() < 1e-3,
+            "a 10 mm cube stacks 15 mm on a 5 mm lift and 10 mm on the plate: {lifted}, {seated}"
         );
     }
 

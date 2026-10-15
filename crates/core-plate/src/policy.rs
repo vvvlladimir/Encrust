@@ -11,9 +11,11 @@ pub struct Readings {
     /// What would lose the print outright whatever the goal, weighted by how surely: a
     /// pose past the build volume, or balanced on the plate on a point.
     pub fatal: f64,
-    /// Suction cups and pulls past what the film lets go of, weighted the same way: fatal
-    /// to a goal whose policy weighs hazards.
+    /// Suction cups, weighted the same way: fatal to a goal whose policy weighs hazards.
     pub suction: f64,
+    /// Pulls past what the film lets go of, weighted the same way: fatal to a goal whose
+    /// policy weighs hazards and tearing.
+    pub tearing: f64,
     /// Islands left with nothing under them, where the stage measured them.
     pub unheld: Option<f64>,
     /// Contacts placement wanted and found no room for a column under, counted with the
@@ -54,6 +56,8 @@ struct Policy {
     /// Whether suction counts as failing the print, islands and contacts with no room as
     /// hanging, and the goal's reading within a band; without, the least reading wins.
     weighs_hazards: bool,
+    /// Whether, weighing hazards, a pull past the limit fails the print too.
+    weighs_tearing: bool,
     unheld: Band,
     primary: Band,
     /// The goal's reading at or under which every candidate reads alike, having nothing
@@ -83,7 +87,13 @@ impl Policy {
     }
 
     fn fatal(&self, r: &Readings) -> f64 {
-        r.fatal + if self.weighs_hazards { r.suction } else { 0.0 }
+        let tearing = if self.weighs_tearing { r.tearing } else { 0.0 };
+        r.fatal
+            + if self.weighs_hazards {
+                r.suction + tearing
+            } else {
+                0.0
+            }
     }
 
     /// What is left hanging, where the stage measured it and the goal weighs it.
@@ -115,7 +125,16 @@ impl Policy {
                 fallback_noise: noise[OrientGoal::FewestSupports.index()],
                 ..Self::banded(goal, primary_slack)
             },
-            OrientGoal::ShortestPrint | OrientGoal::CleanTop => Self::banded(goal, primary_slack),
+            // The fastest that holds, whatever it pulls: the limit is an estimate (ADR 0283).
+            OrientGoal::ShortestPrint => Self {
+                weighs_tearing: false,
+                primary: Band {
+                    share: STACK_SHARE,
+                    slack: primary_slack.max(STACK_SLACK_MM),
+                },
+                ..Self::banded(goal, primary_slack)
+            },
+            OrientGoal::CleanTop => Self::banded(goal, primary_slack),
         }
     }
 
@@ -128,6 +147,7 @@ impl Policy {
         Self {
             goal,
             weighs_hazards: false,
+            weighs_tearing: false,
             unheld: exact,
             primary: exact,
             enough: f64::NEG_INFINITY,
@@ -142,6 +162,7 @@ impl Policy {
         Self {
             goal,
             weighs_hazards: true,
+            weighs_tearing: true,
             unheld: UNHELD,
             primary: Band {
                 share: PRIMARY_SHARE,
@@ -168,6 +189,10 @@ const STAY_GAIN: f64 = 0.05;
 /// A pull under a third of the limit is no longer worth a turn or a support: the scale of
 /// the pull is known to about a factor of three (`docs/design/analysis.md`).
 const ENOUGH_PULL_N: f64 = PEEL_LIMIT_N / 3.0;
+/// A stack within a fiftieth and a millimetre of the shortest prints as fast: some four
+/// minutes on a 100 mm figure, two on a flat part.
+const STACK_SHARE: f64 = 0.02;
+const STACK_SLACK_MM: f64 = 1.0;
 
 /// The rankings' common ground: the fewest fatal readings, the fewest unheld among them,
 /// and the best primary among those.
@@ -362,10 +387,12 @@ mod tests {
     use super::*;
 
     const SLACK: Noise = [0.0; OrientGoal::ALL.len()];
-    /// Half a newton of pull and a twentieth of a millilitre of support, as a proof reads.
-    const PROVEN: Noise = [0.05, 0.5, 5.0, 2.0];
+    /// A twentieth of a millilitre of support, half a newton of pull, 0.3 mm of stack and two
+    /// contacts, as a proof reads.
+    const PROVEN: Noise = [0.05, 0.5, 0.3, 2.0];
     /// A goal ranked with its bands and no floor; the fewest supports has neither.
-    const GOAL: OrientGoal = OrientGoal::ShortestPrint;
+    const GOAL: OrientGoal = OrientGoal::CleanTop;
+    const SHORTEST: OrientGoal = OrientGoal::ShortestPrint;
     const PEEL: OrientGoal = OrientGoal::LeastPeel;
     const FEWEST: OrientGoal = OrientGoal::FewestSupports;
 
@@ -375,6 +402,7 @@ mod tests {
             unheld,
             goals: [primary; OrientGoal::ALL.len()],
             suction: 0.0,
+            tearing: 0.0,
             roomless: 0.0,
             tiebreak: [tiebreak, 0.0],
             standing: false,
@@ -491,13 +519,13 @@ mod tests {
 
     #[test]
     fn a_turn_has_to_win_more_than_the_noise_of_its_unit() {
-        let mut now = reading(0.0, None, 5.0, 1.0);
+        let mut now = reading(0.0, None, 2.0, 1.0);
         now.standing = true;
         let turned = reading(0.0, None, 0.0, 0.0);
         assert_eq!(
             rank(&[turned, now], GOAL, &PROVEN)[0],
             1,
-            "five layers is the noise of a layer count"
+            "two contacts is the noise of a contact count"
         );
     }
 
@@ -636,6 +664,51 @@ mod tests {
             rank(&readings, PEEL, &PROVEN)[0],
             1,
             "both in the band over 26.2 N, neither with enough: the pull decides"
+        );
+    }
+
+    /// A candidate standing `stack_mm` tall that the fewest supports reads as `supports`,
+    /// tie-broken as a proof does, on the stack to its noise.
+    fn stacking(stack_mm: f64, supports: f64) -> Readings {
+        let noise = PROVEN[SHORTEST.index()];
+        let mut r = reading(0.0, Some(0.0), stack_mm, (stack_mm / noise).round());
+        r.goals[FEWEST.index()] = supports;
+        r
+    }
+
+    #[test]
+    fn the_shortest_print_takes_the_shortest_stack_whatever_its_support() {
+        let readings = [stacking(100.0, 20.0), stacking(101.0, 1.0)];
+        assert_eq!(rank(&readings, SHORTEST, &PROVEN)[0], 0);
+    }
+
+    #[test]
+    fn the_shortest_print_counts_a_pull_past_the_limit_for_nothing_and_a_cup_as_fatal() {
+        let tearing = Readings {
+            tearing: 1.0,
+            ..stacking(80.0, 5.0)
+        };
+        let sound = stacking(100.0, 5.0);
+        assert_eq!(rank(&[sound, tearing], SHORTEST, &PROVEN)[0], 1);
+        assert_eq!(rank(&[sound, tearing], GOAL, &PROVEN)[0], 0);
+        let cupped = Readings {
+            suction: 1.0,
+            ..stacking(80.0, 5.0)
+        };
+        assert_eq!(rank(&[sound, cupped], SHORTEST, &PROVEN)[0], 0);
+    }
+
+    #[test]
+    fn as_fast_within_a_fiftieth_and_a_millimetre_the_shortest_print_stays() {
+        let mut now = stacking(102.0, 5.0);
+        now.standing = true;
+        let faster = stacking(100.0, 5.0);
+        assert_eq!(rank(&[faster, now], SHORTEST, &PROVEN)[0], 1);
+        let past = stacking(95.0, 5.0);
+        assert_eq!(
+            rank(&[past, now], SHORTEST, &PROVEN)[0],
+            0,
+            "102 mm is past 95 * 1.02 + 1"
         );
     }
 }

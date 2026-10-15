@@ -245,6 +245,7 @@ Grouped by what the decision governs; the number is still the order it was taken
 | [0280](0280-a-seat-is-ranked-with-the-lifted-poses-by-one-rule.md) | Rank a pose set on the plate with the lifted ones, by one rule | Accepted |
 | [0281](0281-a-section-pulls-by-its-area-and-reach-and-the-least-peel-stops-at-enough.md) | A section pulls by its area and reach, and the least peel stops at enough | Accepted |
 | [0282](0282-the-window-asks-which-goal-to-orient-for.md) | Ask which goal to orient for in the window | Accepted |
+| [0283](0283-the-shortest-print-reads-the-stack-and-takes-a-pull-past-the-limit.md) | The shortest print reads the stack, and takes a pull past the limit | Accepted |
 | [0088](0088-the-plate-is-packed-as-a-bitmap.md) | The plate is packed as a bitmap into the corner, and the block centred | Accepted; supports left out of a footprint is superseded by 0256 |
 | [0256](0256-a-footprint-carries-the-supports-and-the-raft.md) | Pack a model with its supports and its raft | Accepted |
 | [0098](0098-a-plate-is-a-number-on-the-object.md) | A plate is a number on the object, not a scene of its own | Accepted |

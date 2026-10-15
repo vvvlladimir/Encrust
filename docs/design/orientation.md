@@ -14,7 +14,7 @@ miniature and a bust are scored on the same scale:
 | support | overhang, tips and support height, over the surface area (below) |
 | volume | the support resin a pose is predicted to need, over the surface area times the length (below) |
 | peel | the area of the disc pulling as hard as the hardest section, over the model's own square length |
-| height | how tall the model stands, over the model's own length |
+| height | how tall the stack stands, the model and the lift under it, over the model's own length |
 | bottom | area flat on the plate, over the surface area; zero on supports |
 | top | the overhang on faces that look up in the file, over the surface area |
 
@@ -43,7 +43,7 @@ than a cut.
 |---|---|---|---|---|---|---|
 | Fewest supports | — | 1.0 | — | 0.05 | 0.3 | — |
 | Least peel force | 0.5 | — | 2.0 | 0.05 | 0.3 | — |
-| Shortest print | 0.3 | — | 0.3 | 1.5 | 0.3 | — |
+| Shortest print | 0.3 | — | — | 1.5 | 0.3 | — |
 | Clean top surface | 1.0 | — | 0.6 | 0.05 | 0.3 | 3.0 |
 
 The model's length is the cube root of its bounding box, which does not turn with it, so
@@ -95,7 +95,7 @@ Three kinds of candidate are cut whatever the first pass makes of them (ADR 0277
 - the model leaned 15°, 30° and 45° from the way it stands, eight ways round. A leaning
   model's shadow is far larger than any of its sections, so the first pass ranks the very
   pose that cuts the peel last;
-- the two best on each reading alone: overhang, shadow, height, top overhang;
+- the two best on each reading alone: overhang, shadow, stack height, top overhang;
 - each drain hole pointed at the plate (below).
 
 ## Resting on the plate
@@ -144,12 +144,12 @@ it predicts, the proof on what it printed. In order:
 1. what fails the print, compared exactly: a model set on the plate with no face flat on
    it; printed, a pose and its supports past the build volume. For every goal but the
    fewest supports, suction cups and pulls past the 30 N `core-analysis` names fail it too;
-   the fewest supports leaves a cup to a drain hole;
+   the fewest supports leaves a cup to a drain hole, the shortest print takes the pull;
 2. islands and contacts left hanging, within a quarter and one of the fewest, where a
    stage reads them;
 3. the goal's own reading, within a tenth of the best and the noise of its unit: a
-   sliver of the dimensionless term in the search; 0.05 ml of support, two contacts, half
-   a newton or five layers once printed;
+   sliver of the dimensionless term, half a newton or 0.1 mm of stack in the search;
+   0.05 ml of support, two contacts, half a newton or 0.3 mm of stack once printed;
 4. within that band, the fewest islands and hanging, then the tie-break: the total in
    the search; in the proof, the goal's reading to the noise of its unit and then the
    search's own order.
@@ -166,6 +166,12 @@ supports: under 10 N a model is turned only to save support, and a turn between 
 both have enough has to save 5 % of it and more than its noise. Every stage hands the rule
 every goal's reading of a candidate and the noise of each in its own unit, so a policy
 that weighs several goals is one more `Policy`, with no stage changed.
+
+The shortest print reads the stack — the model and the lift under it, millimetres — which
+the layers and the time follow, since a layer takes as long whatever its area. Its band
+is a fiftieth of the shortest and a millimetre, some four minutes on a 100 mm figure, and
+it weighs no support. A pull past the limit fails no pose for it: the limit is an estimate
+good to a factor of three, and the goal is the fewest layers that hold (ADR 0283).
 
 The fewest supports skips steps 2 and 3: past what fails the print, the least support
 volume wins outright, and any turn that needs less is worth making. Islands, contacts with

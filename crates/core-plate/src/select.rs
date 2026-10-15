@@ -27,34 +27,51 @@ pub fn ranked(
         .iter()
         .map(|candidate| Readings {
             fatal: f64::from(unseated(candidate)),
-            suction: f64::from(suction(&candidate.score, settings)),
+            suction: f64::from(suction(&candidate.score)),
+            tearing: f64::from(tearing(&candidate.score, settings)),
             unheld: None,
             roomless: 0.0,
             goals: OrientGoal::ALL.map(|goal| f64::from(faces.reading(goal, &candidate.score))),
-            tiebreak: [f64::from(candidate.score.total), 0.0],
+            tiebreak: tiebreak(settings.goal, &candidate.score),
             standing: candidate.down == now,
         })
         .collect();
     rank(&readings, settings.goal, &NOISE)
 }
 
-/// What of each goal's search reading is noise: half a newton of pull, as the proof reads
-/// it, and a sliver of every dimensionless term.
-const NOISE: Noise = [SLIVER, 0.5, SLIVER, SLIVER];
+/// What of each goal's search reading is noise: half a newton of pull and a tenth of a
+/// millimetre of stack, as the proof reads them, and a sliver of every dimensionless term.
+const NOISE: Noise = [SLIVER, 0.5, 0.1, SLIVER];
+
+/// What orders candidates the goal's own rules leave alike: the total, but for the shortest
+/// print its stack to the noise it is read to first, support not being weighed (ADR 0283).
+fn tiebreak(goal: OrientGoal, score: &Score) -> [f64; 2] {
+    let total = f64::from(score.total);
+    if goal == OrientGoal::ShortestPrint {
+        let stack = f64::from(score.stack_mm()) / NOISE[goal.index()];
+        [stack.round(), total]
+    } else {
+        [total, 0.0]
+    }
+}
 
 /// A model set on the plate with no face flat on it, which only supports could hold there.
 fn unseated(candidate: &Candidate) -> u8 {
     u8::from(candidate.on_plate && candidate.score.bottom_mm2 <= 0.0)
 }
 
-/// What the film would fail the print by, worse first: a suction cup counts two, a pull
-/// past the limit one.
-fn suction(score: &Score, settings: &OrientSettings) -> u8 {
-    let cup = score.cup_mm2.unwrap_or(0.0) > 0.0;
-    let tearing = settings
-        .peel_limit_n
-        .is_some_and(|limit| score.peak_pull_n.unwrap_or(0.0) > limit);
-    u8::from(cup) * 2 + u8::from(tearing)
+/// A suction cup the film would fail the print by, counted two: worse than a tearing pull.
+fn suction(score: &Score) -> u8 {
+    u8::from(score.cup_mm2.unwrap_or(0.0) > 0.0) * 2
+}
+
+/// A pull past the limit the film would fail the print by.
+fn tearing(score: &Score, settings: &OrientSettings) -> u8 {
+    u8::from(
+        settings
+            .peel_limit_n
+            .is_some_and(|limit| score.peak_pull_n.unwrap_or(0.0) > limit),
+    )
 }
 
 #[cfg(test)]
@@ -169,5 +186,18 @@ mod tests {
             "2 % less is less"
         );
         assert_eq!(place(&[same, now], 1, Vec3::NEG_Z), 0, "as much stays");
+    }
+
+    #[test]
+    fn within_its_band_the_shortest_print_takes_the_shorter_stack_not_the_lesser_support() {
+        let mut short = candidate(Vec3::X, 60.0, 5.0, 0.0);
+        short.score.height_mm = 10.0;
+        let mut tall = candidate(Vec3::Y, 10.0, 1.0, 0.0);
+        tall.score.height_mm = 10.5;
+        assert_eq!(
+            place_for(OrientGoal::ShortestPrint, &[tall, short], 1, Vec3::NEG_Z),
+            0,
+            "10.5 mm is within 10 * 1.02 + 1, and support is not weighed (ADR 0283)"
+        );
     }
 }

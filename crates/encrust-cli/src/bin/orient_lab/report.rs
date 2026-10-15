@@ -72,6 +72,9 @@ pub struct PoseRow {
     pub hanging: usize,
     pub top_contacts: usize,
     pub layers: usize,
+    /// How tall the stack stands, millimetres; zero in runs kept before it was read.
+    #[serde(default)]
+    pub stack_mm: f32,
     pub pull_n: f64,
     pub growth_mm2: f32,
     pub islands: usize,
@@ -145,6 +148,7 @@ impl PoseRow {
                 hanging: self.hanging,
                 top_contacts: self.top_contacts,
                 layers: self.layers,
+                stack_mm: self.stack_mm,
                 pull_n: self.pull_n,
                 growth_mm2: self.growth_mm2,
                 islands: self.islands,
@@ -181,6 +185,7 @@ impl PoseRow {
             hanging: o.hanging,
             top_contacts: o.top_contacts,
             layers: o.layers,
+            stack_mm: o.stack_mm,
             pull_n: o.pull_n,
             growth_mm2: o.growth_mm2,
             islands: o.islands,
@@ -499,6 +504,7 @@ mod tests {
                 hanging: 1,
                 top_contacts: 2,
                 layers: 400,
+                stack_mm: 20.0,
                 pull_n: 2.5,
                 growth_mm2: 30.0,
                 islands: 4,

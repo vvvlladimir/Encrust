@@ -90,6 +90,8 @@ pub struct Printout {
     /// Contacts on faces that look up in the model's own file.
     pub top_contacts: usize,
     pub layers: usize,
+    /// How tall the stack stands, model and supports, millimetres: what the time follows.
+    pub stack_mm: f32,
     /// The hardest pull of any layer on the film, newtons.
     pub pull_n: f64,
     /// The largest step in cured area from one layer to the next, square millimetres.
@@ -121,19 +123,19 @@ impl Printout {
         match goal {
             OrientGoal::FewestSupports => f64::from(self.supports_ml),
             OrientGoal::LeastPeel => self.pull_n,
-            OrientGoal::ShortestPrint => self.layers as f64,
+            OrientGoal::ShortestPrint => f64::from(self.stack_mm),
             OrientGoal::CleanTop => self.top_contacts as f64,
         }
     }
 
     /// What of `goal`'s [`Printout::reading`] is noise: a strut's resin, millilitres, two
-    /// contacts, half a newton, five layers.
+    /// contacts, half a newton, and two of a trial's thickest layers.
     pub fn noise(goal: OrientGoal) -> f64 {
         match goal {
             OrientGoal::FewestSupports => 0.05,
             OrientGoal::CleanTop => 2.0,
             OrientGoal::LeastPeel => 0.5,
-            OrientGoal::ShortestPrint => 5.0,
+            OrientGoal::ShortestPrint => 2.0 * f64::from(TRIAL_LAYER_MM),
         }
     }
 }
@@ -245,7 +247,8 @@ fn judged(
         .enumerate()
         .map(|(at, pose)| Readings {
             fatal: f64::from(u8::from(pose.printout.overflows)),
-            suction: pose.printout.fatal() as f64,
+            suction: pose.printout.cups as f64,
+            tearing: pose.printout.peels as f64,
             unheld: Some(pose.printout.islands as f64),
             roomless: pose.printout.hanging as f64,
             goals: OrientGoal::ALL.map(|each| pose.printout.reading(each)),
@@ -327,7 +330,7 @@ fn print_held(
         .ok_or(EngineError::EmptyPlate)?;
     Ok(Printout {
         overflows,
-        ..printout(&held, &measured)
+        ..printout(&held, &measured, trial.material.layer_height_mm)
     })
 }
 
@@ -387,7 +390,8 @@ fn plate_of(placed: Mesh, cuts: Option<Mesh>, supports: Vec<Arc<Mesh>>, trial: &
     }
 }
 
-fn printout(held: &Held, measured: &Measured) -> Printout {
+/// What `measured` cured, cut uniformly at `layer_mm`, and what `held` stood under it.
+fn printout(held: &Held, measured: &Measured, layer_mm: Scalar) -> Printout {
     let risks = measured.risks();
     let count = |wanted: fn(&RiskKind) -> bool| risks.iter().filter(|r| wanted(&r.kind)).count();
     Printout {
@@ -396,6 +400,7 @@ fn printout(held: &Held, measured: &Measured) -> Printout {
         hanging: held.hanging,
         top_contacts: held.top_contacts,
         layers: measured.layer_count(),
+        stack_mm: measured.layer_count() as Scalar * layer_mm,
         pull_n: measured
             .hardest_pull()
             .map_or(0.0, |peak| f64::from(peak.value)),

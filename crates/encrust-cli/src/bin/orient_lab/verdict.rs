@@ -30,7 +30,28 @@ fn turn_cost(goal: OrientGoal, drawn: f64) -> f64 {
     if goal == OrientGoal::FewestSupports {
         0.0
     } else {
-        0.05 * drawn + Printout::noise(goal)
+        0.05 * drawn + noise(goal)
+    }
+}
+
+/// The layers a full print is counted alike to, the judge's own (README, 2.3a).
+const LAYER_NOISE: f64 = 5.0;
+
+/// What of `goal`'s [`reading`] is noise.
+fn noise(goal: OrientGoal) -> f64 {
+    if goal == OrientGoal::ShortestPrint {
+        LAYER_NOISE
+    } else {
+        Printout::noise(goal)
+    }
+}
+
+/// `goal`'s reading of `pose` as the judge counts it: layers for the shortest print.
+fn reading(goal: OrientGoal, pose: &Pose) -> f64 {
+    if goal == OrientGoal::ShortestPrint {
+        pose.printout.layers as f64
+    } else {
+        pose.printout.reading(goal)
     }
 }
 
@@ -42,7 +63,7 @@ const SPARE_SLACK_ML: f64 = 0.05;
 
 /// `goal`'s reading of `pose`, no lower than what the goal counts as enough.
 fn effective(goal: OrientGoal, pose: &Pose) -> f64 {
-    let reading = pose.printout.reading(goal);
+    let reading = reading(goal, pose);
     if goal == OrientGoal::LeastPeel {
         reading.max(PEEL_ENOUGH_N)
     } else {
@@ -178,11 +199,14 @@ impl Verdict {
 /// What every pose of a model is held to: the fewest cups and tears, and the fewest
 /// islands and hanging contacts among those, of all poses that fit. The fewest supports
 /// leaves cups and tears to a drain hole, and islands and contacts with no room as
-/// placement leaves them, so for it those count for nothing.
+/// placement leaves them, so for it those count for nothing; the shortest print takes a
+/// tear, the limit being an estimate.
 struct Floor {
     any_fits: bool,
     /// Whether cups, tears, islands and hanging contacts count.
     weighs_cups: bool,
+    /// Whether, those counting, a pull past the limit does too.
+    weighs_tears: bool,
     fatal: usize,
     held_limit: f64,
 }
@@ -191,13 +215,8 @@ impl Floor {
     fn of(poses: &[Pose], goal: OrientGoal) -> Self {
         let any_fits = poses.iter().any(|pose| pose.fits);
         let weighs_cups = goal != OrientGoal::FewestSupports;
-        let fatal_of = |pose: &Pose| {
-            if weighs_cups {
-                pose.printout.fatal()
-            } else {
-                0
-            }
-        };
+        let weighs_tears = goal != OrientGoal::ShortestPrint;
+        let fatal_of = |pose: &Pose| fatal(pose, weighs_cups, weighs_tears);
         let fitting = || poses.iter().filter(move |pose| pose.fits || !any_fits);
         let fatal = fitting().map(fatal_of).min().unwrap_or(0);
         let unheld = |pose: &Pose| {
@@ -215,6 +234,7 @@ impl Floor {
         Self {
             any_fits,
             weighs_cups,
+            weighs_tears,
             fatal,
             held_limit: held as f64 * HELD_BAND + HELD_SLACK,
         }
@@ -229,11 +249,7 @@ impl Floor {
     }
 
     fn fatal(&self, pose: &Pose) -> usize {
-        if self.weighs_cups {
-            pose.printout.fatal()
-        } else {
-            0
-        }
+        fatal(pose, self.weighs_cups, self.weighs_tears)
     }
 
     /// The four rules about whether the pose prints at all, in order.
@@ -243,7 +259,11 @@ impl Floor {
             check(
                 Rule::Fatal,
                 self.fatal(pose) <= self.fatal,
-                format!("{} cups and tears, fewest {}", o.fatal(), self.fatal),
+                format!(
+                    "{} cups and counted tears, fewest {}",
+                    self.fatal(pose),
+                    self.fatal
+                ),
             ),
             check(
                 Rule::Held,
@@ -276,6 +296,15 @@ impl Floor {
     }
 }
 
+/// The cups and, where they count, the tears of `pose`, where cups count at all.
+fn fatal(pose: &Pose, weighs_cups: bool, weighs_tears: bool) -> usize {
+    match (weighs_cups, weighs_tears) {
+        (false, _) => 0,
+        (true, false) => pose.printout.cups,
+        (true, true) => pose.printout.fatal(),
+    }
+}
+
 /// Whether a pose on the plate stands there rather than balances: on a flat face, or on
 /// supports that hold it.
 fn sits(pose: &Pose) -> bool {
@@ -297,18 +326,18 @@ pub fn judge(goal: OrientGoal, poses: &[Pose], expect: Expect, faces: usize) -> 
         .iter()
         .find(|pose| pose.source == Source::Goal(goal))?;
     let floor = Floor::of(poses, goal);
-    let reading = |pose: &Pose| effective(goal, pose);
+    let effective_of = |pose: &Pose| effective(goal, pose);
     // The best is sought among the poses a person would accept at all.
     let acceptable = |pose: &Pose| expected(pose, expect).iter().all(|check| check.passed);
     let best = poses
         .iter()
         .filter(|pose| floor.sound(pose) && acceptable(pose))
         .min_by(|a, b| {
-            reading(a)
-                .total_cmp(&reading(b))
+            effective_of(a)
+                .total_cmp(&effective_of(b))
                 .then(support_ml(a).total_cmp(&support_ml(b)))
         })
-        .map(|pose| (pose.name.clone(), reading(pose)));
+        .map(|pose| (pose.name.clone(), effective_of(pose)));
     let held_to = |pose: &Pose| held_to(goal, pose, poses, &floor, best.as_ref(), expect);
     let reachable_by = poses
         .iter()
@@ -320,7 +349,7 @@ pub fn judge(goal: OrientGoal, poses: &[Pose], expect: Expect, faces: usize) -> 
     Some(Verdict {
         goal,
         checks,
-        reading: chosen.printout.reading(goal),
+        reading: reading(goal, chosen),
         best,
         reachable_by,
     })
@@ -340,7 +369,7 @@ fn held_to(
     let mut checks = floor.prints(chosen).to_vec();
     let own = effective(goal, chosen);
     if let Some((name, best_reading)) = best {
-        let limit = best_reading * (1.0 + goal_band(goal)) + Printout::noise(goal);
+        let limit = best_reading * (1.0 + goal_band(goal)) + noise(goal);
         // A reading bought by failing the print wins nothing.
         let sound = floor.sound(chosen);
         let unsound = if sound { "" } else { "not sound, so no win: " };
@@ -350,7 +379,7 @@ fn held_to(
             sound && own <= limit && spare.is_none(),
             format!(
                 "{unsound}{:.1}, best {best_reading:.1} by {name}{}",
-                chosen.printout.reading(goal),
+                reading(goal, chosen),
                 spare.unwrap_or_default()
             ),
         ));
@@ -455,6 +484,7 @@ mod tests {
             hanging: 0,
             top_contacts: 0,
             layers: 100,
+            stack_mm: 5.0,
             pull_n: contacts as f64,
             growth_mm2: 0.0,
             islands: 0,
@@ -689,6 +719,19 @@ mod tests {
             broken(&poses),
             ["stays"],
             "both as drawn have enough; 0.75 ml spares nothing against 0.6"
+        );
+    }
+
+    #[test]
+    fn a_tear_fails_a_goal_that_weighs_cups_but_not_the_shortest_print() {
+        let mut torn = chosen(10, 30.0);
+        torn.printout.peels = 1;
+        torn.printout.layers = 50;
+        let poses = [pose("as is", Source::Hand, 100, 0.0), torn];
+        assert!(broken(&poses).contains(&"fatal"));
+        assert!(
+            broken_for(OrientGoal::ShortestPrint, &poses).is_empty(),
+            "the limit is an estimate, and 50 layers beats 100"
         );
     }
 }
