@@ -85,6 +85,10 @@ capped silently.
 - You can cap the tilt (for example "no more than 30° from how it stands now"). A cap of 0
   leaves the model as it is.
 - It never picks an angle worse than the current one.
+- With a printer chosen, it tries its best few poses with their supports and counts the
+  islands each would leave at the printer's own pixel and layer, down to specks a tenth of
+  a millimetre across. A pose standing on the plate with something hanging off it is
+  turned down by every preset but fewest supports.
 - **Fewest supports** picks the pose with the least resin in its supports, raft included,
   whichever way up that is — strictly the least, however small the saving. It ignores
   suction cups — drain them with **Drain**, or use **least peel**, which avoids them — and

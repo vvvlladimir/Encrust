@@ -1,3 +1,4 @@
+use std::collections::hash_map::Entry;
 use std::hash::BuildHasherDefault;
 
 use core_geometry::{FastMap, Vec2};
@@ -49,6 +50,8 @@ struct Pending {
     /// The next crossing leaving the same edge, or `NONE`.
     next: Vec<u32>,
     used: Vec<bool>,
+    /// Whether each crossing is the first to leave its edge.
+    leads: Vec<bool>,
     /// Crossings that left an edge another had left already.
     shared: usize,
 }
@@ -61,17 +64,23 @@ impl Pending {
             FastMap::with_capacity_and_hasher(crossings.len(), BuildHasherDefault::default());
         let mut next = vec![NONE; crossings.len()];
         let mut last = vec![NONE; crossings.len()];
+        let mut leads = vec![false; crossings.len()];
         let mut shared = 0;
         for (at, crossing) in crossings.iter().enumerate() {
             let at = at as u32;
-            if let Some(&head) = first.get(&crossing.start_edge) {
-                shared += 1;
-                let tail = last[head as usize];
-                next[tail as usize] = at;
-                last[head as usize] = at;
-            } else {
-                first.insert(crossing.start_edge, at);
-                last[at as usize] = at;
+            match first.entry(crossing.start_edge) {
+                Entry::Occupied(head) => {
+                    let head = *head.get() as usize;
+                    shared += 1;
+                    let tail = last[head];
+                    next[tail as usize] = at;
+                    last[head] = at;
+                }
+                Entry::Vacant(slot) => {
+                    slot.insert(at);
+                    last[at as usize] = at;
+                    leads[at as usize] = true;
+                }
             }
         }
         Self {
@@ -79,6 +88,7 @@ impl Pending {
             crossings,
             first,
             next,
+            leads,
             shared,
         }
     }
@@ -101,24 +111,33 @@ impl Pending {
     /// Edges more crossings leave from than arrive at, once for each one over: the open
     /// ends of chains, in the order the crossings came.
     fn heads(&self) -> Vec<EdgeKey> {
-        let mut arriving: FastMap<EdgeKey, usize> =
-            FastMap::with_capacity_and_hasher(self.crossings.len(), BuildHasherDefault::default());
+        // Arrivals are counted against the first crossing leaving the same edge.
+        let mut arriving = vec![0usize; self.crossings.len()];
         for crossing in &self.crossings {
-            *arriving.entry(crossing.end_edge).or_default() += 1;
+            if let Some(&first) = self.first.get(&crossing.end_edge) {
+                arriving[first as usize] += 1;
+            }
         }
         let mut heads = Vec::new();
         for (at, crossing) in self.crossings.iter().enumerate() {
-            let edge = crossing.start_edge;
-            if self.first.get(&edge) != Some(&(at as u32)) {
+            if !self.leads[at] {
                 continue;
             }
-            let over = self
-                .leaving(edge)
-                .count()
-                .saturating_sub(arriving.get(&edge).copied().unwrap_or(0));
-            heads.extend(std::iter::repeat_n(edge, over));
+            let over = self.chain_from(at).saturating_sub(arriving[at]);
+            heads.extend(std::iter::repeat_n(crossing.start_edge, over));
         }
         heads
+    }
+
+    /// How many crossings leave the edge crossing `at` is the first to leave.
+    fn chain_from(&self, at: usize) -> usize {
+        let mut count = 0;
+        let mut here = at as u32;
+        while here != NONE {
+            count += 1;
+            here = self.next[here as usize];
+        }
+        count
     }
 }
 

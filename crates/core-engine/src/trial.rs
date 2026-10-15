@@ -1,6 +1,8 @@
 //! A pose judged by what it prints: stood on its supports, cut and cured, and read the
 //! way a finished plate is. See `docs/design/orientation.md`.
 
+mod islands;
+
 use std::sync::Arc;
 
 use core_analysis::{Measured, RiskKind};
@@ -22,6 +24,7 @@ use crate::error::EngineError;
 use crate::plate::{Model, Plate};
 use crate::run::Run;
 use crate::stand::{stand_seated, stand_under};
+use crate::trial::islands::islands_born;
 
 /// Poses printed to choose between, on top of the way the model stands: four for a model
 /// of a million faces, more for a lighter one, which prints as many in the same time, but
@@ -96,6 +99,7 @@ pub struct Printout {
     pub pull_n: f64,
     /// The largest step in cured area from one layer to the next, square millimetres.
     pub growth_mm2: f32,
+    /// Islands the print cures at its own pixel and layer, however coarse the trial.
     pub islands: usize,
     pub cups: usize,
     pub peels: usize,
@@ -178,7 +182,7 @@ pub fn prove(
         .outer
         .aabb()
         .map_or(0.0, |bounds| (bounds.maxs - bounds.mins).length());
-    let support_layer_mm = trial.material.layer_height_mm;
+    let print = trial;
     let (printer, material) = coarse(trial, reach_mm);
     let trial = &Trial {
         printer: &printer,
@@ -195,16 +199,11 @@ pub fn prove(
     let tried = poses
         .into_par_iter()
         .map(|pose| {
-            print_held(
-                printed,
-                pose.rotation,
-                pose.on_plate,
-                trial,
-                support_layer_mm,
-            )
-            .map(|printout| Proven {
-                oriented: *pose,
-                printout,
+            print_held(printed, pose.rotation, pose.on_plate, trial, Some(print)).map(|printout| {
+                Proven {
+                    oriented: *pose,
+                    printout,
+                }
             })
         })
         .collect::<Result<Vec<_>, EngineError>>()?;
@@ -248,7 +247,10 @@ fn judged(
         .enumerate()
         .map(|(at, pose)| Readings {
             fatal: f64::from(u8::from(pose.printout.overflows)),
-            suction: pose.printout.cups as f64,
+            // A model set on the plate holds itself up, so what hangs off it fails it as a cup.
+            suction: (pose.printout.cups
+                + usize::from(pose.oriented.on_plate && pose.printout.hanging > 0))
+                as f64,
             tearing: pose.printout.peels as f64,
             unheld: Some(pose.printout.islands as f64),
             roomless: pose.printout.hanging as f64,
@@ -277,23 +279,17 @@ pub fn print_out(
     on_plate: bool,
     trial: &Trial,
 ) -> Result<Printout, EngineError> {
-    print_held(
-        printed,
-        rotation,
-        on_plate,
-        trial,
-        trial.material.layer_height_mm,
-    )
+    print_held(printed, rotation, on_plate, trial, None)
 }
 
-/// The same with supports placed on `support_layer_mm`, the print's own layer even when
-/// `trial` cures a coarse stack.
+/// The same cured as coarse as `trial`, for a `print` finer than it: supports are placed on
+/// the print's own layer, and its islands counted at its own pixel and layer.
 fn print_held(
     printed: &Printed,
     rotation: Quat,
     on_plate: bool,
     trial: &Trial,
-    support_layer_mm: Scalar,
+    print: Option<&Trial>,
 ) -> Result<Printout, EngineError> {
     let turn = Transform {
         rotation,
@@ -310,8 +306,9 @@ fn print_held(
     let mut placed = transform_mesh(&turned, Transform::from_translation(offset));
     let mut cuts = printed.cuts.map(|cuts| transform_mesh(cuts, moved));
 
+    let layer_mm = print.unwrap_or(trial).material.layer_height_mm;
     let stand = if on_plate { stand_seated } else { stand_under };
-    let stood = stand(&mut placed, &mut cuts, trial.support, support_layer_mm)?;
+    let stood = stand(&mut placed, &mut cuts, trial.support, layer_mm)?;
     let mut held = Held {
         contacts: stood.contacts.len(),
         supports_mm3: signed_volume(&stood.supports).abs(),
@@ -325,14 +322,30 @@ fn print_held(
 
     let overflows = overflows(&placed, &held.supports, &trial.printer.build_volume);
     let supports = std::mem::take(&mut held.supports);
-    let plate = plate_of(placed, cuts, supports, trial);
+    let (placed, cuts) = (Arc::new(placed), cuts.map(Arc::new));
+    let plate = plate_of(&placed, cuts.as_ref(), &supports, trial);
     let measured = Run::measuring(&plate)?
         .measure(&mut ())?
         .ok_or(EngineError::EmptyPlate)?;
+    let mut printout = printout(&held, &measured, trial.material.layer_height_mm);
+    if let Some(print) = print {
+        printout.islands = islands_printed(&placed, cuts.as_ref(), &supports, print)?;
+    }
     Ok(Printout {
         overflows,
-        ..printout(&held, &measured, trial.material.layer_height_mm)
+        ..printout
     })
+}
+
+/// The islands `placed` cures on its supports at the pixel and layer `print` prints at.
+fn islands_printed(
+    placed: &Arc<Mesh>,
+    cuts: Option<&Arc<Mesh>>,
+    supports: &[Arc<Mesh>],
+    print: &Trial,
+) -> Result<usize, EngineError> {
+    let full = Run::measuring(&plate_of(placed, cuts, supports, print))?;
+    islands_born(&full, placed)
 }
 
 /// Whether `placed` and its `supports` reach past `volume`, their two widths matched with
@@ -370,13 +383,18 @@ fn looking_up(facing: &[Vec3], rotation: Quat) -> usize {
 }
 
 /// One model and its supports on the plate, cut and cured the way `trial` prints.
-fn plate_of(placed: Mesh, cuts: Option<Mesh>, supports: Vec<Arc<Mesh>>, trial: &Trial) -> Plate {
+fn plate_of(
+    placed: &Arc<Mesh>,
+    cuts: Option<&Arc<Mesh>>,
+    supports: &[Arc<Mesh>],
+    trial: &Trial,
+) -> Plate {
     Plate {
         models: vec![Model {
-            mesh: Arc::new(placed),
+            mesh: Arc::clone(placed),
             transform: Transform::default(),
-            cuts: cuts.map(Arc::new),
-            supports,
+            cuts: cuts.cloned(),
+            supports: supports.to_vec(),
         }],
         printer: trial.printer.clone(),
         material: trial.material.clone(),
@@ -411,5 +429,59 @@ fn printout(held: &Held, measured: &Measured, layer_mm: Scalar) -> Printout {
         peels: count(|kind| matches!(kind, RiskKind::Peel { .. })),
         resin_ml: measured.volume_mm3() / 1000.0,
         overflows: false,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use core_plate::Score;
+
+    use super::*;
+
+    /// A pose that prints `supports_ml`, on the plate or lifted, with `hanging` contacts.
+    fn tried(on_plate: bool, supports_ml: f32, hanging: usize) -> Proven {
+        Proven {
+            oriented: Oriented {
+                rotation: Quat::from_rotation_x(if on_plate { 0.0 } else { 1.0 }),
+                score: Score {
+                    overhang_mm2: 0.0,
+                    low_points: 0,
+                    support_mm3: 0.0,
+                    under_mm2: 0.0,
+                    under_mm3: 0.0,
+                    bottom_mm2: 0.0,
+                    height_mm: 0.0,
+                    shadow_mm2: 0.0,
+                    peak_mm2: None,
+                    peak_pull_n: None,
+                    cup_mm2: None,
+                    lift_mm: 0.0,
+                    total: 0.0,
+                },
+                on_plate,
+                considered: 0,
+                ruling: Ruling::Chosen,
+            },
+            printout: Printout {
+                supports_ml,
+                hanging,
+                pull_n: 5.0,
+                stack_mm: 20.0,
+                ..Printout::default()
+            },
+        }
+    }
+
+    #[test]
+    fn a_seat_with_something_hanging_fails_like_a_cup_but_not_the_fewest_supports() {
+        let poses = [tried(true, 0.5, 1), tried(false, 2.0, 0)];
+        let first = |preset| {
+            judged(&poses, preset, |_| false)[0]
+                .proven
+                .oriented
+                .on_plate
+        };
+        assert!(!first(OrientPreset::Goal(OrientGoal::LeastPeel)));
+        assert!(first(OrientPreset::Goal(OrientGoal::FewestSupports)));
     }
 }

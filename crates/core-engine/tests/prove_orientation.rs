@@ -279,7 +279,7 @@ fn ball(radius: f32, rings: u32) -> Mesh {
 }
 
 #[test]
-fn a_trial_counts_the_contacts_the_print_stands_on() {
+fn a_trial_stands_the_contacts_and_supports_the_print_does() {
     let bench = Bench::new();
     let mesh = ball(12.0, 48);
     let settings = bench.settings(OrientGoal::FewestSupports);
@@ -298,6 +298,10 @@ fn a_trial_counts_the_contacts_the_print_stands_on() {
             (pose.printout.contacts, pose.printout.hanging),
             (print.contacts, print.hanging),
             "placement cut coarser than the print puts down other contacts"
+        );
+        assert_eq!(
+            pose.printout.supports_ml, print.supports_ml,
+            "a trial stands the very supports the print does"
         );
     }
 }

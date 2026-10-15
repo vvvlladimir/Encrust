@@ -144,7 +144,7 @@ it predicts, the proof on what it printed. In order:
    it; printed, a pose and its supports past the build volume. For every goal but the
    fewest supports, suction cups and pulls past the 30 N `core-analysis` names fail it too;
    the fewest supports leaves a cup to a drain hole, the shortest print takes the pull;
-2. islands and contacts left hanging, within a quarter and one of the fewest, where a
+2. islands and contacts left hanging, within a quarter and two of the fewest, where a
    stage reads them;
 3. the goal's own reading, within a tenth of the best and the noise of its unit: a
    sliver of the dimensionless term, half a newton or 0.1 mm of stack in the search;
@@ -238,16 +238,24 @@ The supports are placed on the print's own layer (ADR 0279): how many contacts p
 puts down follows the layer it reads, and on a stack three times coarser a figure leaned
 45° read 189 contacts where the print stands 442. Placed on the print's layer, a trial's
 contacts, hanging contacts and support resin are the print's exactly. The cure that
-follows is cut coarse: the tallest pose into about 160 layers, cured at a 0.2 mm pixel,
-and all of them at once. It reads the cups and tearing pulls a print does, and a rough
-count of its islands: a print's islands are specks the support generator leaves alone,
-which only the print's own pixel and layer resolve, and neither a finer cure nor the
-generator's own count of them followed the print's until it cost a full one.
+follows is cut coarse: the tallest pose into about 160 layers, none thicker than 0.15 mm,
+cured at a 0.2 mm pixel, and all of them at once. It reads the cups and tearing pulls a
+print does.
+
+Islands it cannot read: a print's islands are specks the support generator leaves alone,
+which only the print's own pixel and layer resolve together (ADR 0285). A piece of a layer
+is born only where the surface turns from going down to going up, so the proof opens a
+window 1.5 mm round every low point of the model, and the middle of every flat underside
+narrower than 1.5 mm, a few layers high. It cuts the window's faces on the print's planes, draws
+the contours that close inside it on the print's pixel grid, and keeps each piece standing
+on nothing. Each is checked again on the whole plate's contours at its layer and the one
+under it, since a wall reaching in from outside can hold up what the window drew alone.
 
 A pose set on the plate gets supports only under what hangs over it, the raft with them
-where the profile has one, and none where nothing hangs. All are ranked by the rule above on what they printed — support resin,
-newtons, millimetres of stack — and `prove` answers every finalist with
-what decided its place, `core_plate::rulings`.
+where the profile has one, and none where nothing hangs. If a contact there finds no room
+for a column, the pose fails every goal that weighs cups, as a cup would. All are ranked
+by the rule above on what they printed — support resin, newtons, millimetres of stack —
+and `prove` answers every finalist with what decided its place, `core_plate::rulings`.
 
 The command line orients by the search alone, and stands a model the search set on the
 plate the way the proof does, `stand_seated`: supports under what hangs, none if nothing does.

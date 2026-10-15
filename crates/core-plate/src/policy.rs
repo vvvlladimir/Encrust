@@ -12,7 +12,8 @@ pub struct Readings {
     /// What would lose the print outright whatever the goal, weighted by how surely: a
     /// pose past the build volume, or balanced on the plate on a point.
     pub fatal: f64,
-    /// Suction cups, weighted the same way: fatal to a goal whose policy weighs hazards.
+    /// Suction cups, and a model set on the plate with something left hanging off it,
+    /// weighted the same way: fatal to a goal whose policy weighs hazards.
     pub suction: f64,
     /// Pulls past what the film lets go of, weighted the same way: fatal to a goal whose
     /// policy weighs hazards and tearing.
@@ -199,11 +200,11 @@ impl Policy {
     }
 }
 
-/// Islands and hanging contacts within a quarter and one of the fewest are the grain of
-/// the support grid; one and not two, as a coarse stack undercounts islands (ADR 0279).
+/// Islands and hanging contacts within a quarter and two of the fewest are the grain of
+/// the support grid, as islands are counted at the print's own pixel and layer (ADR 0285).
 const UNHELD: Band = Band {
     share: 0.25,
-    slack: 1.0,
+    slack: 2.0,
 };
 /// The goal's own reading within a tenth of the best is as good as the best.
 const PRIMARY_SHARE: f64 = 0.10;
@@ -681,7 +682,7 @@ mod tests {
         assert_eq!(
             rank(&readings, GOAL, &SLACK)[0],
             1,
-            "3 * 1.25 + 1 is under 12"
+            "3 * 1.25 + 2 is under 12"
         );
     }
 
