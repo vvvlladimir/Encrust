@@ -656,6 +656,7 @@ pub fn orient_settings(supports: Option<&SupportProfile>) -> OrientSettings {
         max_overhang_deg: profile.max_overhang_deg,
         contact_spacing_mm: profile.contact_spacing_mm,
         on_supports: true,
+        lift_mm: profile.lift_mm(),
         rest_on_plate: true,
         ..plain
     })

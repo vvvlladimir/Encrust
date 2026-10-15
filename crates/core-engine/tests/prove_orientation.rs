@@ -133,13 +133,16 @@ fn a_box_set_on_the_plate_prints_with_nothing_under_it_and_nothing_hanging() {
 }
 
 #[test]
-fn a_cap_hanging_over_its_stem_is_counted_against_the_plate() {
+fn a_cap_hanging_over_its_stem_on_the_plate_is_held_from_the_plate() {
     let bench = Bench::new();
     let mesh = mushroom();
     let as_drawn = print_out(&Printed::solid(&mesh), Quat::IDENTITY, true, &bench.trial())
         .expect("a mushroom prints");
-    assert!(as_drawn.hanging > 0, "nothing holds the cap's underside");
-    assert!(as_drawn.failures() >= as_drawn.hanging);
+    assert!(as_drawn.contacts > 0, "the cap's underside is held");
+    assert_eq!(
+        as_drawn.hanging, 0,
+        "and every contact has room for a column"
+    );
 }
 
 #[test]
@@ -160,7 +163,7 @@ fn a_mushroom_is_proven_to_rest_on_its_cap() {
 }
 
 #[test]
-fn a_table_left_hanging_bare_is_stood_on_supports() {
+fn a_table_stays_on_the_plate_held_only_under_its_top() {
     let bench = Bench::new();
     // A 2 mm foot and a 2 mm top, both 24 mm square, on a 4 mm leg: it sits on a whole
     // face either way up, and either way the other slab hangs all round the leg.
@@ -173,36 +176,116 @@ fn a_table_left_hanging_bare_is_stood_on_supports() {
         max_tilt_deg: Some(0.0),
         ..bench.settings(OrientGoal::FewestSupports)
     };
+    let printed = Printed::solid(&mesh);
 
-    let bare = print_out(&Printed::solid(&mesh), Quat::IDENTITY, true, &bench.trial())
-        .expect("a table prints");
+    let lifted =
+        print_out(&printed, Quat::IDENTITY, false, &bench.trial()).expect("a table prints");
+    let seated = print_out(&printed, Quat::IDENTITY, true, &bench.trial()).expect("a table prints");
+    assert!(seated.contacts > 0, "the top hangs round the leg");
     assert!(
-        bare.hanging > 16,
-        "the top hangs at {} places",
-        bare.hanging
+        seated.supports_ml < lifted.supports_ml,
+        "the plate holds the foot: {} ml against {} ml lifted",
+        seated.supports_ml,
+        lifted.supports_ml
     );
-    let proven = orient_proven(&Printed::solid(&mesh), &settings, &bench.trial())
-        .expect("a table can be oriented");
-    assert!(
-        !proven.oriented.on_plate,
-        "so it is not left bare on the plate"
-    );
-    assert!(proven.printout.contacts > 0);
 
-    let found = finalists(&Printed::solid(&mesh), &settings, usize::MAX).expect("it has finalists");
-    let tried = prove(&Printed::solid(&mesh), &settings, &found, &bench.trial())
-        .expect("its finalists print");
+    let found = finalists(&printed, &settings, usize::MAX).expect("it has finalists");
+    let tried = prove(&printed, &settings, &found, &bench.trial()).expect("its finalists print");
     assert!(
-        matches!(tried[0].ruling, Some(Ruling::Chosen | Ruling::Stayed)),
+        matches!(tried[0].ruling, Ruling::Chosen | Ruling::Stayed),
         "the first tried is the choice, got {:?}",
         tried[0].ruling
     );
+    let proven = tried[0].proven;
+    assert!(proven.oriented.on_plate, "it stays standing on its foot");
+    assert!(proven.printout.contacts > 0, "with supports under its top");
+}
+
+/// A ball of `radius` mm, `rings` bands of `rings * 2` quads, standing clear of z = 0.
+fn ball(radius: f32, rings: u32) -> Mesh {
+    let segments = rings * 2;
+    let mut vertices = vec![Vec3::new(0.0, 0.0, radius)];
+    for ring in 1..rings {
+        let theta = std::f32::consts::PI * ring as f32 / rings as f32;
+        for segment in 0..segments {
+            let phi = std::f32::consts::TAU * segment as f32 / segments as f32;
+            vertices.push(Vec3::new(
+                radius * theta.sin() * phi.cos(),
+                radius * theta.sin() * phi.sin(),
+                radius * theta.cos(),
+            ));
+        }
+    }
+    let south = vertices.len() as u32;
+    vertices.push(Vec3::new(0.0, 0.0, -radius));
+    let at = |ring: u32, segment: u32| 1 + (ring - 1) * segments + segment % segments;
+    let mut faces = Vec::new();
+    for segment in 0..segments {
+        faces.push([0, at(1, segment), at(1, segment + 1)]);
+        faces.push([at(rings - 1, segment), south, at(rings - 1, segment + 1)]);
+    }
+    for ring in 1..rings - 1 {
+        for segment in 0..segments {
+            faces.push([
+                at(ring, segment),
+                at(ring + 1, segment),
+                at(ring + 1, segment + 1),
+            ]);
+            faces.push([
+                at(ring, segment),
+                at(ring + 1, segment + 1),
+                at(ring, segment + 1),
+            ]);
+        }
+    }
+    Mesh::new(vertices, faces)
+}
+
+#[test]
+fn a_trial_counts_the_contacts_the_print_stands_on() {
+    let bench = Bench::new();
+    let mesh = ball(12.0, 48);
+    let settings = bench.settings(OrientGoal::FewestSupports);
+    let printed = Printed::solid(&mesh);
+
+    let found = finalists(&printed, &settings, usize::MAX).expect("a ball has finalists");
+    let tried = prove(&printed, &settings, &found, &bench.trial()).expect("a ball prints");
+    for pose in tried
+        .iter()
+        .map(|tried| tried.proven)
+        .filter(|pose| !pose.oriented.on_plate)
+    {
+        let print = print_out(&printed, pose.oriented.rotation, false, &bench.trial())
+            .expect("a ball prints");
+        assert_eq!(
+            (pose.printout.contacts, pose.printout.hanging),
+            (print.contacts, print.hanging),
+            "placement cut coarser than the print puts down other contacts"
+        );
+    }
+}
+
+#[test]
+fn the_fewest_supports_leave_a_cup_standing_on_its_floor() {
+    let bench = Bench::new();
+    // A 30 mm box open at the top: on its floor it needs no support, and seals a cup.
+    let mesh = boxes(&[
+        (Vec3::ZERO, Vec3::new(30.0, 30.0, 2.0)),
+        (Vec3::new(0.0, 0.0, 2.0), Vec3::new(2.0, 30.0, 20.0)),
+        (Vec3::new(28.0, 0.0, 2.0), Vec3::new(30.0, 30.0, 20.0)),
+        (Vec3::new(2.0, 0.0, 2.0), Vec3::new(28.0, 2.0, 20.0)),
+        (Vec3::new(2.0, 28.0, 2.0), Vec3::new(28.0, 30.0, 20.0)),
+    ]);
+    let settings = bench.settings(OrientGoal::FewestSupports);
+
+    let proven = orient_proven(&Printed::solid(&mesh), &settings, &bench.trial())
+        .expect("a box can be oriented");
+    let floor = proven.oriented.rotation * Vec3::NEG_Z;
     assert!(
-        tried
-            .iter()
-            .any(|tried| tried.proven.oriented.on_plate && tried.ruling.is_none()),
-        "the bare table was printed and left out of the ranking"
+        floor.z < -0.99,
+        "no support beats any, cup or not, got the floor at {floor}"
     );
+    assert_eq!(proven.printout.supports_ml, 0.0);
 }
 
 #[test]

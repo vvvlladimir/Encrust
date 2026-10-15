@@ -75,8 +75,14 @@ capped silently.
 - You can cap the tilt (for example "no more than 30° from how it stands now"). A cap of 0
   leaves the model as it is.
 - It never picks an angle worse than the current one.
-- It sets a model straight on the plate, with no supports, only when nothing would be left
-  hanging there; otherwise the model goes on supports.
+- **Fewest supports** picks the pose with the least resin in its supports, raft included,
+  whichever way up that is — strictly the least, however small the saving. It ignores
+  suction cups — drain them with **Drain**, or use **least peel**, which avoids them — and
+  islands, takes supports with no room to stand as they come, and never picks a pose that
+  would not fit the printer or that would balance on a point.
+- It either leaves a model standing on the plate, with supports only under what hangs
+  over it, or lifts it onto supports by the support profile's **Lift** — whichever the
+  goal prefers. Your raft setting is counted either way.
 
 **Many models:**
 - **Arrange the plate** automatically, largest model first.

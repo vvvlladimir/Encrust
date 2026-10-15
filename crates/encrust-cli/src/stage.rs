@@ -5,7 +5,7 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use anyhow::{Context, Result, bail};
-use core_engine::{Cutting, Model, Plate, left_hanging};
+use core_engine::{Cutting, Model, Plate};
 use core_format::ExposurePlan;
 use core_geometry::{Mesh, Scalar, Transform, Vec2, Vec3, transform_mesh};
 use core_pipeline::{PanelOverrides, SlicedFormat};
@@ -229,7 +229,7 @@ pub fn plate_of(
 
     let mut parts = Vec::with_capacity(entries.len());
     let mut models = Vec::with_capacity(entries.len());
-    for ((mut mesh, import, mut oriented), (path, shaping)) in placed.into_iter().zip(entries) {
+    for ((mut mesh, import, oriented), (path, shaping)) in placed.into_iter().zip(entries) {
         // The imports are all reported before the first model is shaped, so on a plate
         // these lines would otherwise read as the last model's.
         if watch.talk && entries.len() > 1 && shapes_anything(shaping) {
@@ -238,20 +238,13 @@ pub fn plate_of(
         let (hollow, mut cuts) =
             hollow_and_cut(&mut mesh, &shaping.hollow, shaping.import.precision, watch)?;
         watch.stop.check()?;
-        let seated = seated(
-            &mut oriented,
-            &mesh,
-            cuts.as_ref(),
-            shaping,
-            layer_height,
-            watch,
-        )?;
+        let seated = oriented.as_ref().is_some_and(|turn| turn.on_plate);
         let stood = shaping
             .supports
             .as_ref()
-            .filter(|_| !seated)
-            .map(|profile| stand_under(&mut mesh, &mut cuts, profile, layer_height))
-            .transpose()?;
+            .map(|profile| stand_under(&mut mesh, &mut cuts, profile, layer_height, seated))
+            .transpose()?
+            .filter(|(report, _)| !seated || !report.contacts.is_empty());
         let (supports, columns) = match stood {
             Some((report, mesh)) => (Some(report), vec![Arc::new(mesh)]),
             None => (None, Vec::new()),
@@ -313,36 +306,6 @@ fn check_adaptive(job: &JobArgs, printer: Option<&PrinterProfile>) -> Result<()>
 }
 
 /// Whether anything done to this model past import has a report of its own to print.
-/// Whether the model stays bare on the plate its orientation was judged on: only when it
-/// was found to need no supports and, set there, leaves nothing hanging. One that would is
-/// stood on supports, and `oriented` says so.
-fn seated(
-    oriented: &mut Option<OrientSummary>,
-    mesh: &Mesh,
-    cuts: Option<&Mesh>,
-    shaping: &Shaping,
-    layer_height: Scalar,
-    watch: &Watch,
-) -> Result<bool> {
-    let (Some(turn), Some(profile)) = (oriented.as_mut(), shaping.supports.as_ref()) else {
-        return Ok(false);
-    };
-    if !turn.on_plate {
-        return Ok(false);
-    }
-    let hanging = left_hanging(mesh, cuts, profile, layer_height)
-        .context("cannot tell whether the model stands on the plate unsupported")?;
-    if hanging > 0 {
-        turn.on_plate = false;
-        if watch.talk {
-            println!(
-                "Set bare on the plate it would leave {hanging} places hanging: stood on supports instead\n"
-            );
-        }
-    }
-    Ok(turn.on_plate)
-}
-
 fn shapes_anything(shaping: &Shaping) -> bool {
     shaping.hollow.wanted() || shaping.hollow.cutting() || shaping.supports.is_some()
 }

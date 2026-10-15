@@ -33,7 +33,28 @@ pub fn stand_under(
     profile: &SupportProfile,
     layer_height_mm: Scalar,
 ) -> Result<Stood, EngineError> {
-    let (lifted_mm, drilled, contacts) = touched(mesh, cuts, profile, layer_height_mm)?;
+    stand(mesh, cuts, profile, layer_height_mm, profile.lift_mm())
+}
+
+/// The same for a model left standing on the plate: supports go only under what hangs
+/// over it, and the plate holds the rest. A model that needs none gets none.
+pub fn stand_seated(
+    mesh: &mut Mesh,
+    cuts: &mut Option<Mesh>,
+    profile: &SupportProfile,
+    layer_height_mm: Scalar,
+) -> Result<Stood, EngineError> {
+    stand(mesh, cuts, profile, layer_height_mm, 0.0)
+}
+
+fn stand(
+    mesh: &mut Mesh,
+    cuts: &mut Option<Mesh>,
+    profile: &SupportProfile,
+    layer_height_mm: Scalar,
+    lift_mm: Scalar,
+) -> Result<Stood, EngineError> {
+    let (lifted_mm, drilled, contacts) = touched(mesh, cuts, profile, layer_height_mm, lift_mm)?;
     let points: Vec<SupportPoint> = contacts.iter().copied().map(SupportPoint::new).collect();
 
     let bvh = Bvh::build(&drilled);
@@ -57,15 +78,16 @@ pub fn stand_under(
     })
 }
 
-/// `mesh` and what is cut out of it lifted clear of the plate by the profile's own lift,
-/// then how far they moved, the drilled model, and where it needs holding up.
+/// `mesh` and what is cut out of it lifted `lift_mm` clear of the plate, then how far they
+/// moved, the drilled model, and where it needs holding up.
 fn touched(
     mesh: &mut Mesh,
     cuts: &mut Option<Mesh>,
     profile: &SupportProfile,
     layer_height_mm: Scalar,
+    lift_mm: Scalar,
 ) -> Result<(Scalar, Mesh, Vec<Vec3>), EngineError> {
-    let lifted_mm = lift(mesh, cuts, profile.lift_mm())?;
+    let lifted_mm = lift(mesh, cuts, lift_mm)?;
     let mut drilled = mesh.clone();
     if let Some(cuts) = cuts.as_ref() {
         append(&mut drilled, cuts);

@@ -30,6 +30,19 @@ pub struct Run {
 impl Run {
     /// Bakes `plate`, works out its layers and builds the header its file will carry.
     pub fn of(plate: &Plate) -> Result<Self, EngineError> {
+        Self::built(plate, thumbnail(&plate.models))
+    }
+
+    /// The same for a plate that is only measured, never written: its header carries no
+    /// picture, which costs as much to draw as a coarse stack does to cure.
+    pub fn measuring(plate: &Plate) -> Result<Self, EngineError> {
+        Self::built(plate, None)
+    }
+
+    fn built(
+        plate: &Plate,
+        thumbnail: Option<core_thumbnail::Thumbnail>,
+    ) -> Result<Self, EngineError> {
         let baked =
             bake(&plate.models, &plate.cutting.compensation).ok_or(EngineError::EmptyPlate)?;
         let panel = raster_settings(&plate.printer, plate.panel);
@@ -50,7 +63,7 @@ impl Run {
             // (ADR 0067).
             volume_mm3: 0.0,
             exposure: plate.exposure.clone(),
-            thumbnail: thumbnail(&plate.models),
+            thumbnail,
             created_unix_s: plate.created_unix_s,
         };
 

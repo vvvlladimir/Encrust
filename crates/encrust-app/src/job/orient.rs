@@ -80,8 +80,11 @@ pub struct Proof {
 pub struct Turn {
     pub id: ObjectId,
     pub rotation: Quat,
-    /// Whether it needs no supports the way it now stands, set straight on the plate.
+    /// Whether it stands straight on the plate, supported only where it hangs over it.
     pub on_plate: bool,
+    /// How far it is stood off the plate onto its supports when it is not on it,
+    /// millimetres: its support profile's own lift.
+    pub lift_mm: f32,
 }
 
 /// How an orientation run ended.
@@ -201,6 +204,7 @@ fn run(request: &OrientRequest) -> OrientOutcome {
                     down_now: task.down_now,
                     max_overhang_deg: task.support.max_overhang_deg,
                     contact_spacing_mm: task.support.contact_spacing_mm,
+                    lift_mm: task.support.lift_mm(),
                     ..request.settings
                 };
                 let outer = task.sized(&task.mesh);
@@ -219,6 +223,7 @@ fn run(request: &OrientRequest) -> OrientOutcome {
                         id: task.id,
                         rotation: found.rotation,
                         on_plate: found.on_plate,
+                        lift_mm: task.support.z_lift_mm,
                     }
                 })
             })

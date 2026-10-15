@@ -163,6 +163,9 @@ impl OrientTool {
                         }
                         object.transform = object.transform.turned(by);
                         object.stand_on_plate();
+                        if !turn.on_plate {
+                            object.transform.translation.z += turn.lift_mm;
+                        }
                     }
                 }
                 let turned = match moved {
@@ -172,8 +175,8 @@ impl OrientTool {
                 };
                 *status = Status::Info(match seated {
                     0 => turned,
-                    1 => format!("{turned}; 1 needs no supports as it stands"),
-                    seated => format!("{turned}; {seated} need no supports as they stand"),
+                    1 => format!("{turned}; 1 stands on the plate"),
+                    seated => format!("{turned}; {seated} stand on the plate"),
                 });
             }
             OrientOutcome::Failed(message) => *status = Status::Error(message),

@@ -26,6 +26,11 @@ pub struct Score {
     /// The overhang times how high it stands over the plate, cubic millimetres: how much
     /// support stands under it, at most.
     pub support_mm3: Scalar,
+    /// The plan area of every face leaning past the overhang angle, however far past,
+    /// square millimetres: what placement spreads its contacts over, one a spacing apart.
+    pub under_mm2: Scalar,
+    /// The same area times how high each face stands over the plate, cubic millimetres.
+    pub under_mm3: Scalar,
     /// Area lying on the plate, square millimetres, and zero for a model on supports.
     pub bottom_mm2: Scalar,
     pub height_mm: Scalar,
@@ -50,7 +55,7 @@ pub struct Score {
 /// What an orientation is searched for: one term of [`Score`] made to weigh more.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub enum OrientGoal {
-    /// The least surface hanging over nothing, so the fewest supports.
+    /// The least resin in the supports, whatever else the pose costs.
     #[default]
     FewestSupports,
     /// The smallest cross-section pulled off the film at any layer.
@@ -83,13 +88,19 @@ impl OrientGoal {
     fn weights(self) -> Weights {
         let base = Weights {
             support: 1.0,
+            volume: 0.0,
             peel: 0.6,
             height: 0.05,
             bottom: 0.3,
             top: 0.0,
         };
         match self {
-            Self::FewestSupports => base,
+            Self::FewestSupports => Weights {
+                support: 0.0,
+                volume: 1.0,
+                peel: 0.0,
+                ..base
+            },
             Self::LeastPeel => Weights {
                 support: 0.5,
                 peel: 2.0,
@@ -112,6 +123,7 @@ impl OrientGoal {
 #[derive(Debug, Clone, Copy, PartialEq)]
 struct Weights {
     support: Scalar,
+    volume: Scalar,
     peel: Scalar,
     height: Scalar,
     bottom: Scalar,
@@ -149,6 +161,8 @@ pub struct Faces<'a> {
     lean: Scalar,
     /// What one contact holds up, square millimetres: what a tip costs is a few of them.
     patch_mm2: Scalar,
+    /// How far supports lift the model off the plate, millimetres: the least a support is tall.
+    lift_mm: Scalar,
 }
 
 impl<'a> Faces<'a> {
@@ -186,6 +200,7 @@ impl<'a> Faces<'a> {
             on_supports: false,
             lean: 0.0,
             patch_mm2: 0.0,
+            lift_mm: 0.0,
         })?;
         Some(faces.for_settings(&OrientSettings::default()))
     }
@@ -199,6 +214,7 @@ impl<'a> Faces<'a> {
             on_supports: settings.on_supports,
             lean: settings.max_overhang_deg.to_radians().sin(),
             patch_mm2: settings.contact_spacing_mm * settings.contact_spacing_mm,
+            lift_mm: settings.lift_mm,
             ..self
         }
     }
@@ -228,19 +244,23 @@ impl<'a> Faces<'a> {
         let [
             overhang_mm2,
             support_mm3,
+            under_mm2,
+            under_mm3,
             bottom_mm2,
             shadow_mm2,
             top_overhang_mm2,
         ] = (0..self.areas.len())
             .into_par_iter()
             .map(|face| self.face_terms(face, down, floor, on_supports))
-            .reduce(|| [0.0; 5], |a, b| std::array::from_fn(|at| a[at] + b[at]));
+            .reduce(|| [0.0; 7], |a, b| std::array::from_fn(|at| a[at] + b[at]));
 
         let plate = (!on_supports).then_some(floor);
         let mut score = Score {
             overhang_mm2,
             low_points: self.low_points.count(down, plate, BOTTOM_BAND_MM),
             support_mm3,
+            under_mm2,
+            under_mm3,
             bottom_mm2,
             height_mm: self.extent(down),
             shadow_mm2,
@@ -259,8 +279,9 @@ impl<'a> Faces<'a> {
         self.terms(score).held
     }
 
-    /// One face's share of overhang, support volume, footprint, shadow and top overhang.
-    fn face_terms(&self, face: usize, down: Vec3, floor: Scalar, on_supports: bool) -> [Scalar; 5] {
+    /// One face's share of overhang, support volume, area under supports and its volume,
+    /// footprint, shadow and top overhang.
+    fn face_terms(&self, face: usize, down: Vec3, floor: Scalar, on_supports: bool) -> [Scalar; 7] {
         let lean = self.lean;
         let facing = self.normals[face].dot(down);
         let area = self.areas[face];
@@ -268,15 +289,15 @@ impl<'a> Faces<'a> {
         // A downward face lying on the plate is held by the plate, so it is the footprint
         // rather than an overhang. On supports nothing lies on the plate.
         let on_plate = !on_supports && above_mm < BOTTOM_BAND_MM;
-        let overhang = if facing > lean && !on_plate {
-            (facing - lean) * area
-        } else {
-            0.0
-        };
+        let hangs = facing > lean && !on_plate;
+        let overhang = if hangs { (facing - lean) * area } else { 0.0 };
+        let under = if hangs { facing * area } else { 0.0 };
         let looks_up = self.normals[face].z > LOOKS_UP;
         [
             overhang,
             overhang * above_mm,
+            under,
+            under * above_mm,
             if on_plate && facing > FLAT { area } else { 0.0 },
             // Half the area a model's faces project onto the plate is its silhouette,
             // which is the cross-section for anything convex.
@@ -321,7 +342,7 @@ impl<'a> Faces<'a> {
     pub fn primary(&self, score: &Score) -> Scalar {
         let terms = self.terms(score);
         match self.goal {
-            OrientGoal::FewestSupports => terms.held,
+            OrientGoal::FewestSupports => terms.volume,
             OrientGoal::LeastPeel => terms.peel,
             OrientGoal::ShortestPrint => terms.height,
             OrientGoal::CleanTop => terms.top,
@@ -331,7 +352,10 @@ impl<'a> Faces<'a> {
     fn total(&self, score: &Score) -> Scalar {
         let terms = self.terms(score);
         let w = self.weights;
-        w.support * terms.held + w.peel * terms.peel + w.height * terms.height
+        w.support * terms.held
+            + w.volume * terms.volume
+            + w.peel * terms.peel
+            + w.height * terms.height
             - w.bottom * terms.bottom
             + w.top * terms.top
     }
@@ -353,6 +377,7 @@ impl<'a> Faces<'a> {
         Terms {
             held: (score.overhang_mm2 + tips_mm2) / area
                 + W_TALL * score.support_mm3 / (area * length),
+            volume: self.volume_mm3(score, tips_mm2) / (area * length),
             peel: pulled / (length * length),
             height: score.height_mm / length,
             bottom: score.bottom_mm2 / area,
@@ -361,9 +386,20 @@ impl<'a> Faces<'a> {
     }
 }
 
+impl Faces<'_> {
+    /// About how much support stands under a pose, as the plan area placement holds times
+    /// the height it is held at, lift included, cubic millimetres; a tip stands half the
+    /// model's height up.
+    fn volume_mm3(&self, score: &Score, tips_mm2: Scalar) -> Scalar {
+        let lift_mm = if self.on_supports { self.lift_mm } else { 0.0 };
+        score.under_mm3 + (score.under_mm2 + tips_mm2) * lift_mm + tips_mm2 * score.height_mm / 2.0
+    }
+}
+
 /// The terms of a [`Score`], each made dimensionless, before they are weighed.
 struct Terms {
     held: Scalar,
+    volume: Scalar,
     peel: Scalar,
     height: Scalar,
     bottom: Scalar,
@@ -605,6 +641,34 @@ mod tests {
     }
 
     #[test]
+    fn a_cube_on_supports_stands_its_floor_on_the_lift() {
+        let cube = cuboid(Vec3::splat(10.0));
+        let settings = OrientSettings {
+            on_supports: true,
+            lift_mm: 5.0,
+            ..OrientSettings::default()
+        };
+        let faces = Faces::of(&cube)
+            .expect("a cube has faces")
+            .for_settings(&settings);
+        let score = faces.score(Vec3::NEG_Z);
+        let volume_mm3 = faces.volume_mm3(&score, 0.0);
+        assert!(
+            (volume_mm3 - 500.0).abs() < 1e-2,
+            "only the 100 mm2 floor hangs, 5 mm up on the lift: got {volume_mm3}"
+        );
+        // Leaned 30°: the floor's plan shrinks to 86.6 mm2, its middle stands 2.5 mm over
+        // the low edge, and the lift is under it all: 86.6 * (2.5 + 5).
+        let lean = 30.0_f32.to_radians();
+        let leaning = faces.score(Vec3::new(lean.sin(), 0.0, -lean.cos()));
+        let leaning_mm3 = faces.volume_mm3(&leaning, 0.0);
+        assert!(
+            (leaning_mm3 - 649.5).abs() < 0.5,
+            "the floor stands higher leaned, got {leaning_mm3}"
+        );
+    }
+
+    #[test]
     fn a_tall_box_is_scored_shorter_lying_down() {
         let box_mesh = cuboid(Vec3::new(10.0, 10.0, 60.0));
         let faces = Faces::of(&box_mesh).expect("a box has faces");
@@ -615,7 +679,9 @@ mod tests {
     #[test]
     fn the_shadow_stands_in_for_the_section_until_one_is_measured() {
         let cube = cuboid(Vec3::splat(10.0));
-        let faces = Faces::of(&cube).expect("a cube has faces");
+        let faces = Faces::of(&cube)
+            .expect("a cube has faces")
+            .for_settings(&peel());
         let score = faces.score(Vec3::NEG_Z);
 
         assert_eq!(score.peak_mm2, None);
@@ -639,10 +705,20 @@ mod tests {
         assert!(measured.total < score.total);
     }
 
+    /// The least peel, which weighs what a section pulls on the film.
+    fn peel() -> OrientSettings {
+        OrientSettings {
+            goal: OrientGoal::LeastPeel,
+            ..OrientSettings::default()
+        }
+    }
+
     #[test]
     fn a_thin_slab_casts_a_smaller_shadow_on_its_edge_than_on_its_face() {
         let slab = cuboid(Vec3::new(40.0, 40.0, 4.0));
-        let faces = Faces::of(&slab).expect("a slab has faces");
+        let faces = Faces::of(&slab)
+            .expect("a slab has faces")
+            .for_settings(&peel());
 
         let flat = faces.score(Vec3::NEG_Z);
         let edge = faces.score(Vec3::NEG_X);

@@ -7,7 +7,7 @@ use anyhow::{Context, Result};
 use core_engine::{Printout, Trial, Tried, print_out, prove};
 use core_geometry::{Mesh, Quat, Vec3};
 use core_plate::{
-    OrientGoal, OrientSettings, Printed, Ruling, finalists, flat_faces, rotation_for,
+    OrientGoal, OrientSettings, Oriented, Printed, Ruling, finalists, flat_faces, rotation_for,
 };
 use encrust_cli::pipeline;
 use printer_profiles::{BuildVolume, SupportProfile};
@@ -40,6 +40,9 @@ pub struct Pose {
     /// Whether the pose, supports and all, fits the build volume, turned about the
     /// vertical however it fits best.
     pub fits: bool,
+    /// Whether a face lies flat on the plate, so that set there the model sits rather
+    /// than balances on an edge or a point.
+    pub sits: bool,
     pub seconds: f64,
     /// For a goal's choice, how it was made; empty for any other pose.
     pub trace: Trace,
@@ -67,6 +70,30 @@ pub struct Finalist {
     /// The goal's own reading.
     pub reading: f64,
     pub ruling: String,
+    /// The same pose printed at full resolution, where the run asked for it.
+    #[serde(default)]
+    pub full: Option<Full>,
+    /// Where the search ranked it among its finalists, best first.
+    #[serde(default)]
+    pub searched: usize,
+}
+
+/// A finalist's readings printed at full resolution, to set against the coarse ones.
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+pub struct Full {
+    pub fatal: usize,
+    pub unheld: usize,
+    pub reading: f64,
+}
+
+impl Full {
+    fn of(printout: &Printout, goal: OrientGoal) -> Self {
+        Self {
+            fatal: printout.fatal(),
+            unheld: printout.islands + printout.hanging,
+            reading: printout.reading(goal),
+        }
+    }
 }
 
 impl Finalist {
@@ -78,10 +105,9 @@ impl Finalist {
             fatal: printout.fatal(),
             unheld: printout.islands + printout.hanging,
             reading: printout.reading(goal),
-            ruling: tried
-                .ruling
-                .map_or("left hanging on the plate", ruling)
-                .to_owned(),
+            ruling: ruling(tried.ruling).to_owned(),
+            full: None,
+            searched: 0,
         }
     }
 }
@@ -103,6 +129,8 @@ pub struct Bench<'a> {
     pub trial: Trial<'a>,
     pub support: &'a SupportProfile,
     pub volume: &'a BuildVolume,
+    /// The goal whose finalists are printed again at full resolution, beside the proof.
+    pub full_finalists: Option<OrientGoal>,
 }
 
 impl Bench<'_> {
@@ -165,10 +193,33 @@ impl Bench<'_> {
             proof_s: seconds - search_s,
             finalists: tried
                 .iter()
-                .map(|tried| Finalist::of(tried, goal))
-                .collect(),
+                .map(|tried| self.finalist(printed, tried, goal, &found))
+                .collect::<Result<_>>()?,
         };
         Ok(pose)
+    }
+
+    fn finalist(
+        &self,
+        printed: &Printed,
+        tried: &Tried,
+        goal: OrientGoal,
+        found: &[Oriented],
+    ) -> Result<Finalist> {
+        let mut finalist = Finalist::of(tried, goal);
+        finalist.searched = found
+            .iter()
+            .position(|pose| {
+                pose.on_plate == tried.proven.oriented.on_plate
+                    && pose.rotation == tried.proven.oriented.rotation
+            })
+            .unwrap_or(usize::MAX);
+        if self.full_finalists == Some(goal) {
+            let oriented = tried.proven.oriented;
+            let printout = print_out(printed, oriented.rotation, oriented.on_plate, &self.trial)?;
+            finalist.full = Some(Full::of(&printout, goal));
+        }
+        Ok(finalist)
     }
 
     fn measure(
@@ -194,6 +245,7 @@ impl Bench<'_> {
             printout,
             tilt_deg: tilt_deg(rotation),
             fits: fits(printed.outer, rotation, lift_mm, self.volume),
+            sits: sits(printed.outer, rotation),
             seconds: started.elapsed().as_secs_f64(),
             trace: Trace::default(),
         })
@@ -238,6 +290,33 @@ fn spread(count: usize) -> Vec<Vec3> {
             Vec3::new(ring * around.cos(), ring * around.sin(), z)
         })
         .collect()
+}
+
+/// A face this near straight down and this near the lowest point lies on the plate, as
+/// the search reads a footprint.
+const FLAT: f32 = 0.996;
+const SEATED_MM: f32 = 0.5;
+/// The least footprint a model sits on rather than balances, square millimetres.
+const SITS_MM2: f32 = 1.0;
+
+/// Whether `mesh` turned by `rotation` has a footprint flat on the plate.
+fn sits(mesh: &Mesh, rotation: Quat) -> bool {
+    let low = mesh
+        .vertices
+        .iter()
+        .map(|vertex| (rotation * *vertex).z)
+        .fold(f32::INFINITY, f32::min);
+    let footprint_mm2: f32 = mesh
+        .triangles()
+        .filter_map(|triangle| {
+            let [a, b, c] = [triangle.a, triangle.b, triangle.c].map(|v| rotation * v);
+            let normal = (b - a).cross(c - a);
+            let area = normal.length() / 2.0;
+            let low_enough = a.z.max(b.z).max(c.z) - low < SEATED_MM;
+            (area > 0.0 && normal.z / (2.0 * area) < -FLAT && low_enough).then_some(area)
+        })
+        .sum();
+    footprint_mm2 >= SITS_MM2
 }
 
 /// Whether `mesh` turned by `rotation` and stood `lift_mm` off the plate fits `volume`.

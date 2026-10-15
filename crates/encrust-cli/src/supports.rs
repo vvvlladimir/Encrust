@@ -48,14 +48,21 @@ impl fmt::Display for SupportReport {
 }
 
 /// Stands supports under `mesh`, in plate coordinates, and answers with them: the
-/// engine's `stand_under`, with what it found laid out for a terminal.
+/// engine's `stand_under`, or `stand_seated` for a model left on the plate, with what it
+/// found laid out for a terminal.
 pub fn stand_under(
     mesh: &mut Mesh,
     cuts: &mut Option<Mesh>,
     profile: &SupportProfile,
     layer_height_mm: Scalar,
+    seated: bool,
 ) -> Result<(SupportReport, Mesh)> {
-    let stood = core_engine::stand_under(mesh, cuts, profile, layer_height_mm)
+    let stand = if seated {
+        core_engine::stand_seated
+    } else {
+        core_engine::stand_under
+    };
+    let stood = stand(mesh, cuts, profile, layer_height_mm)
         .context("cannot stand supports under the model")?;
     let report = SupportReport {
         lifted_mm: stood.lifted_mm,
@@ -107,8 +114,9 @@ mod tests {
     #[test]
     fn an_overhang_gets_columns_under_it_and_they_come_back_as_a_mesh() {
         let mut mesh = overhang();
-        let (report, supports) = stand_under(&mut mesh, &mut None, &SupportProfile::medium(), 0.05)
-            .expect("a slab slices and supports");
+        let (report, supports) =
+            stand_under(&mut mesh, &mut None, &SupportProfile::medium(), 0.05, false)
+                .expect("a slab slices and supports");
 
         assert!(!report.contacts.is_empty(), "a hanging slab needs holding");
         assert!(report.standing > 0, "and there is empty plate under it");
@@ -154,8 +162,8 @@ mod tests {
         let mut mesh = slab_on_the_plate();
         let profile = SupportProfile::medium();
 
-        let (report, _) =
-            stand_under(&mut mesh, &mut None, &profile, 0.05).expect("a slab slices and supports");
+        let (report, _) = stand_under(&mut mesh, &mut None, &profile, 0.05, false)
+            .expect("a slab slices and supports");
 
         assert!(
             (report.lifted_mm - profile.z_lift_mm).abs() < 1e-4,
@@ -179,7 +187,7 @@ mod tests {
     #[test]
     fn a_part_already_standing_clear_of_the_plate_is_not_moved() {
         let mut mesh = overhang();
-        let (report, _) = stand_under(&mut mesh, &mut None, &SupportProfile::medium(), 0.05)
+        let (report, _) = stand_under(&mut mesh, &mut None, &SupportProfile::medium(), 0.05, false)
             .expect("a slab slices and supports");
 
         assert!(

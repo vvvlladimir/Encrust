@@ -1,6 +1,6 @@
-use std::collections::HashMap;
+use std::hash::BuildHasherDefault;
 
-use core_geometry::Vec2;
+use core_geometry::{FastMap, Vec2};
 
 use crate::Contour;
 use crate::plane::{Crossing, EdgeKey};
@@ -22,46 +22,104 @@ pub(crate) struct Stitched {
 /// sharpest left turn there, which keeps two loops touching at a point two loops.
 pub(crate) fn stitch(crossings: Vec<Crossing>) -> Stitched {
     let mut result = Stitched::default();
-    let mut pending: Pending = HashMap::with_capacity(crossings.len());
-    for crossing in crossings {
-        let leaving = pending.entry(crossing.start_edge).or_default();
-        if !leaving.is_empty() {
-            result.unlinked += 1;
-        }
-        leaving.push(crossing);
-    }
+    let mut pending = Pending::of(crossings);
+    result.unlinked = pending.shared;
 
     // Chains that start at a boundary have to be walked from their head, or an arbitrary
     // starting point would cut one broken contour into two.
-    for head in heads(&pending) {
+    for head in pending.heads() {
         take_contour(&mut pending, head, &mut result);
     }
-    while let Some(start) = pending.keys().next().copied() {
-        take_contour(&mut pending, start, &mut result);
+    for at in 0..pending.crossings.len() {
+        if !pending.used[at] {
+            let start = pending.crossings[at].start_edge;
+            take_contour(&mut pending, start, &mut result);
+        }
     }
     result
 }
 
-/// The crossings not yet chained, by the edge each one leaves from. Nearly every edge
-/// holds one; an edge two sheets of surface share holds two.
-type Pending = HashMap<EdgeKey, Vec<Crossing>>;
+/// The crossings of one plane, each findable by the edge it leaves from, and which of them
+/// are chained already. Nearly every edge has one crossing leaving it; an edge two sheets
+/// of surface share has two, linked through `next`.
+struct Pending {
+    crossings: Vec<Crossing>,
+    /// The first crossing leaving each edge.
+    first: FastMap<EdgeKey, u32>,
+    /// The next crossing leaving the same edge, or `NONE`.
+    next: Vec<u32>,
+    used: Vec<bool>,
+    /// Crossings that left an edge another had left already.
+    shared: usize,
+}
 
-/// Edges more crossings leave from than arrive at, once for each one over: the open
-/// ends of chains.
-fn heads(pending: &Pending) -> Vec<EdgeKey> {
-    let mut arriving: HashMap<EdgeKey, usize> = HashMap::new();
-    for crossing in pending.values().flatten() {
-        *arriving.entry(crossing.end_edge).or_default() += 1;
+const NONE: u32 = u32::MAX;
+
+impl Pending {
+    fn of(crossings: Vec<Crossing>) -> Self {
+        let mut first: FastMap<EdgeKey, u32> =
+            FastMap::with_capacity_and_hasher(crossings.len(), BuildHasherDefault::default());
+        let mut next = vec![NONE; crossings.len()];
+        let mut last = vec![NONE; crossings.len()];
+        let mut shared = 0;
+        for (at, crossing) in crossings.iter().enumerate() {
+            let at = at as u32;
+            if let Some(&head) = first.get(&crossing.start_edge) {
+                shared += 1;
+                let tail = last[head as usize];
+                next[tail as usize] = at;
+                last[head as usize] = at;
+            } else {
+                first.insert(crossing.start_edge, at);
+                last[at as usize] = at;
+            }
+        }
+        Self {
+            used: vec![false; crossings.len()],
+            crossings,
+            first,
+            next,
+            shared,
+        }
     }
-    pending
-        .iter()
-        .flat_map(|(edge, leaving)| {
-            let over = leaving
-                .len()
-                .saturating_sub(arriving.get(edge).copied().unwrap_or(0));
-            std::iter::repeat_n(*edge, over)
+
+    /// The crossings leaving `edge` and not chained yet, first in first.
+    fn leaving(&self, edge: EdgeKey) -> impl Iterator<Item = usize> + '_ {
+        let mut at = self.first.get(&edge).copied().unwrap_or(NONE);
+        std::iter::from_fn(move || {
+            while at != NONE {
+                let here = at as usize;
+                at = self.next[here];
+                if !self.used[here] {
+                    return Some(here);
+                }
+            }
+            None
         })
-        .collect()
+    }
+
+    /// Edges more crossings leave from than arrive at, once for each one over: the open
+    /// ends of chains, in the order the crossings came.
+    fn heads(&self) -> Vec<EdgeKey> {
+        let mut arriving: FastMap<EdgeKey, usize> =
+            FastMap::with_capacity_and_hasher(self.crossings.len(), BuildHasherDefault::default());
+        for crossing in &self.crossings {
+            *arriving.entry(crossing.end_edge).or_default() += 1;
+        }
+        let mut heads = Vec::new();
+        for (at, crossing) in self.crossings.iter().enumerate() {
+            let edge = crossing.start_edge;
+            if self.first.get(&edge) != Some(&(at as u32)) {
+                continue;
+            }
+            let over = self
+                .leaving(edge)
+                .count()
+                .saturating_sub(arriving.get(&edge).copied().unwrap_or(0));
+            heads.extend(std::iter::repeat_n(edge, over));
+        }
+        heads
+    }
 }
 
 fn take_contour(pending: &mut Pending, start: EdgeKey, result: &mut Stitched) {
@@ -99,27 +157,30 @@ fn walk(pending: &mut Pending, start: EdgeKey) -> (Vec<Vec2>, bool) {
 }
 
 /// Takes the crossing leaving `edge` that turns furthest left from `arriving`, or the
-/// only one there is.
+/// first there is.
 fn take(pending: &mut Pending, edge: EdgeKey, arriving: Option<&Crossing>) -> Option<Crossing> {
-    let leaving = pending.get_mut(&edge)?;
-    let index = match arriving {
-        Some(arriving) if leaving.len() > 1 => {
-            let heading = arriving.end - arriving.start;
-            let turn = |crossing: &Crossing| {
-                let next = crossing.end - crossing.start;
-                heading.perp_dot(next).atan2(heading.dot(next))
-            };
-            (0..leaving.len())
-                .max_by(|a, b| turn(&leaving[*a]).total_cmp(&turn(&leaving[*b])))
-                .unwrap_or(0)
+    let chosen = {
+        let mut leaving = pending.leaving(edge);
+        let first = leaving.next()?;
+        match (arriving, leaving.next()) {
+            (Some(arriving), Some(second)) => {
+                let heading = arriving.end - arriving.start;
+                let turn = |at: usize| {
+                    let crossing = &pending.crossings[at];
+                    let next = crossing.end - crossing.start;
+                    heading.perp_dot(next).atan2(heading.dot(next))
+                };
+                [first, second]
+                    .into_iter()
+                    .chain(leaving)
+                    .max_by(|a, b| turn(*a).total_cmp(&turn(*b)))
+                    .unwrap_or(first)
+            }
+            _ => first,
         }
-        _ => 0,
     };
-    let crossing = leaving.swap_remove(index);
-    if leaving.is_empty() {
-        pending.remove(&edge);
-    }
-    Some(crossing)
+    pending.used[chosen] = true;
+    Some(pending.crossings[chosen])
 }
 
 #[cfg(test)]

@@ -32,6 +32,7 @@ mod tests {
     use super::*;
     use crate::cut::cut;
     use crate::orient::{OrientSettings, orient_printed};
+    use crate::score::OrientGoal;
     use core_geometry::Scalar;
     use std::f32::consts::{PI, TAU};
 
@@ -185,6 +186,7 @@ mod tests {
         };
         let settings = OrientSettings {
             on_supports: true,
+            goal: OrientGoal::LeastPeel,
             ..OrientSettings::default()
         };
 

@@ -30,6 +30,9 @@ pub struct OrientSettings {
     /// Whether the model stands on supports, lifted off the plate, so that its underside
     /// hangs like any other rather than resting on the plate.
     pub on_supports: bool,
+    /// How far supports stand the model off the plate, millimetres: the least any support
+    /// is tall, which the fewest supports weighs every contact by.
+    pub lift_mm: Scalar,
     /// Whether a way up that needs no supports at all is taken straight on the plate
     /// instead, where the model is otherwise judged on supports.
     pub rest_on_plate: bool,
@@ -61,6 +64,7 @@ impl Default for OrientSettings {
             max_overhang_deg: 45.0,
             contact_spacing_mm: 4.0,
             on_supports: false,
+            lift_mm: 5.0,
             rest_on_plate: false,
             peel_limit_mm4: Some(PEEL_LIMIT_MM4),
             min_cup_mm2: MIN_CUP_MM2,
@@ -111,7 +115,7 @@ pub fn orient_printed(
         .ok_or(PlateError::NothingToOrient)
 }
 
-/// The best `count` ways to stand, best first and no two within `APART_DEG` of each
+/// The best `count` ways to stand, best first and no two within `apart_deg` of each
 /// other: what a caller able to print them judges between. The first is the answer of
 /// [`orient_printed`].
 pub fn finalists(
@@ -182,11 +186,18 @@ pub fn finalists(
 }
 
 /// How far apart two finalists stand at least, degrees: nearer, and printing both tells
-/// a caller nothing the first did not.
-const APART_DEG: Scalar = 10.0;
+/// a caller nothing the first did not. Support volume changes slowly with a turn, so the
+/// fewest supports spreads its finalists twice as far.
+fn apart_deg(goal: OrientGoal) -> Scalar {
+    if goal == OrientGoal::FewestSupports {
+        20.0
+    } else {
+        10.0
+    }
+}
 
 /// `measured` best first by the judge's priorities, the way the model stands kept ahead of
-/// a turn that is not worth making, and anything within `APART_DEG` of a better one
+/// a turn that is not worth making, and anything within `apart_deg` of a better one
 /// dropped.
 fn ordered(
     faces: &Faces,
@@ -197,7 +208,7 @@ fn ordered(
     let order = ranked(faces, settings, measured, now);
     let measured: Vec<Candidate> = order.into_iter().map(|at| measured[at]).collect();
 
-    let apart = APART_DEG.to_radians().cos();
+    let apart = apart_deg(settings.goal).to_radians().cos();
     let mut chosen: Vec<Candidate> = Vec::new();
     for candidate in measured {
         let alone = chosen
@@ -220,7 +231,7 @@ const SEATS: usize = 6;
 const REST_HELD: Scalar = 0.01;
 
 /// The share of its shadow a model has flat on the plate once it is sitting on a base
-/// rather than on a ledge. Whether it then prints bare is for printing it to tell.
+/// rather than on a ledge; the way it stands now is tried on the plate whatever it has.
 const SEAT_SHARE: Scalar = 0.25;
 
 /// The ways the model stands straight on the plate, measured as resting there: first
@@ -250,9 +261,8 @@ fn resting(
         .map(|down| {
             let score = faces.score_on_plate(down);
             let rests = faces.held(&score) <= REST_HELD;
-            if score.bottom_mm2 <= 0.0
-                || !(rests || score.bottom_mm2 >= SEAT_SHARE * score.shadow_mm2)
-            {
+            let seat = down == now || rests || score.bottom_mm2 >= SEAT_SHARE * score.shadow_mm2;
+            if score.bottom_mm2 <= 0.0 || !seat {
                 return Ok(None);
             }
             let sections = cut(printed, down, settings.sections, true, settings.min_cup_mm2)?;
@@ -639,11 +649,22 @@ mod tests {
             "open side up, its floor seals the inside"
         );
 
-        let found = orient(&mesh, &OrientSettings::default()).expect("a box can be oriented");
+        let peel = OrientSettings {
+            goal: OrientGoal::LeastPeel,
+            ..OrientSettings::default()
+        };
+        let found = orient(&mesh, &peel).expect("a box can be oriented");
         assert_eq!(
             found.score.cup_mm2,
             Some(0.0),
             "the turn it takes seals nothing"
+        );
+
+        let found = orient(&mesh, &OrientSettings::default()).expect("a box can be oriented");
+        let floor = found.rotation * Vec3::NEG_Z;
+        assert!(
+            floor.z < -0.99,
+            "the fewest supports leaves its floor on the plate, cup and all, got {floor}"
         );
     }
 

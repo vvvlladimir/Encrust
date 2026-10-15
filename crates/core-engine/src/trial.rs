@@ -6,34 +6,52 @@ use std::sync::Arc;
 use core_analysis::{Measured, PEEL_N_PER_MM4, RiskKind};
 use core_format::ExposurePlan;
 use core_geometry::{
-    Mesh, Quat, Scalar, Transform, Vec3, center_over_plate, drop_to_plate, transform_mesh,
+    Mesh, Quat, Scalar, Transform, Vec3, center_over_plate, drop_to_plate, signed_volume,
+    transform_mesh,
 };
 use core_pipeline::{PanelOverrides, SlicedFormat};
 use core_plate::{
     LOOKS_UP, OrientGoal, OrientSettings, Oriented, Printed, Readings, Ruling, finalists, rank,
     rotation_for, rulings,
 };
-use printer_profiles::{MaterialProfile, PrinterProfile, SupportProfile};
+use printer_profiles::{BuildVolume, MaterialProfile, PrinterProfile, SupportProfile};
 use rayon::prelude::*;
 
 use crate::cut::Cutting;
 use crate::error::EngineError;
 use crate::plate::{Model, Plate};
 use crate::run::Run;
-use crate::stand::{left_hanging, stand_under};
+use crate::stand::{stand_seated, stand_under};
 
-/// Poses printed to choose between, on top of the way the model stands.
+/// Poses printed to choose between, on top of the way the model stands: four for a model
+/// of a million faces, more for a lighter one, which prints as many in the same time, but
+/// never more for one past `LIGHT_REACH_MM` across, whose layers and plate cost more than
+/// its faces.
 const FINALISTS: usize = 4;
+const MOST_FINALISTS: usize = 16;
+const FINALIST_FACES: usize = 2_000_000;
+const LIGHT_REACH_MM: Scalar = 200.0;
+
+fn finalists_for(faces: usize, reach_mm: Scalar) -> usize {
+    if reach_mm > LIGHT_REACH_MM {
+        return FINALISTS;
+    }
+    (FINALIST_FACES / faces.max(1)).clamp(FINALISTS, MOST_FINALISTS)
+}
 
 /// What a suction cup or a tearing pull weighs against an island or a point left hanging:
 /// the first two lose the whole print, the others a detail of it.
 const FATAL: usize = 10;
 
-/// What of a goal's own reading is noise once printed: a contact or two, half a newton, a
-/// few layers.
+/// Support resin two poses differ by without differing: a strut or two, millilitres.
+const SUPPORT_NOISE_ML: f64 = 0.05;
+
+/// What of a goal's own reading is noise once printed: a strut or two, a contact or two,
+/// half a newton, a few layers.
 fn slack(goal: OrientGoal) -> f64 {
     match goal {
-        OrientGoal::FewestSupports | OrientGoal::CleanTop => 2.0,
+        OrientGoal::FewestSupports => SUPPORT_NOISE_ML,
+        OrientGoal::CleanTop => 2.0,
         OrientGoal::LeastPeel => 0.5,
         OrientGoal::ShortestPrint => 5.0,
     }
@@ -75,9 +93,11 @@ pub struct Trial<'a> {
 }
 
 /// What a pose costs once it is supported, cut and cured.
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, Copy, Default, PartialEq)]
 pub struct Printout {
     pub contacts: usize,
+    /// The resin in the supports, millilitres, as the plate's summary counts it.
+    pub supports_ml: f32,
     /// Places that need holding up and are not: contacts with no room for a column, and
     /// for a model set on the plate everything placement would have stood a support under.
     pub hanging: usize,
@@ -92,6 +112,9 @@ pub struct Printout {
     pub cups: usize,
     pub peels: usize,
     pub resin_ml: f32,
+    /// Whether the pose and its supports overflow the build volume however they are turned
+    /// about the vertical.
+    pub overflows: bool,
 }
 
 impl Printout {
@@ -110,7 +133,7 @@ impl Printout {
     /// The reading `goal` is meant to win, lower being better.
     pub fn reading(&self, goal: OrientGoal) -> f64 {
         match goal {
-            OrientGoal::FewestSupports => self.contacts as f64,
+            OrientGoal::FewestSupports => f64::from(self.supports_ml),
             OrientGoal::LeastPeel => self.pull_n,
             OrientGoal::ShortestPrint => self.layers as f64,
             OrientGoal::CleanTop => self.top_contacts as f64,
@@ -125,12 +148,11 @@ pub struct Proven {
     pub printout: Printout,
 }
 
-/// One finalist printed, and what decided its place: `None` for a pose set on the plate
-/// that left anything hanging, which is not ranked as one.
+/// One finalist printed, and what decided its place.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Tried {
     pub proven: Proven,
-    pub ruling: Option<Ruling>,
+    pub ruling: Ruling,
 }
 
 /// Finds the orientation a model prints best in, by printing: the search's
@@ -148,10 +170,12 @@ pub fn orient_proven(
 }
 
 /// Prints the search's best few of `found` and the way the model stands, each supported,
-/// cut and cured, with every pose that may rest on the plate tried there bare, and answers
-/// them ranked by [`core_plate::rank`] on what they printed, the search's own order
-/// breaking ties: the first is the choice, the rest are why. The trials are cut coarse, so
-/// a printout is a ranking's and not the print's: [`print_out`] gives that.
+/// cut and cured, with every pose that may rest on the plate tried there with supports only
+/// under what hangs, and answers
+/// them ranked by [`core_plate::rank`] on what they printed: the first is the choice, the
+/// rest are why. Supports are placed on the print's own layer, so contacts are the
+/// print's; the cure is cut coarse, so the rest of a printout is a ranking's and not the
+/// print's: [`print_out`] gives that.
 pub fn prove(
     printed: &Printed,
     settings: &OrientSettings,
@@ -162,6 +186,7 @@ pub fn prove(
         .outer
         .aabb()
         .map_or(0.0, |bounds| (bounds.maxs - bounds.mins).length());
+    let support_layer_mm = trial.material.layer_height_mm;
     let (printer, material) = coarse(trial, reach_mm);
     let trial = &Trial {
         printer: &printer,
@@ -170,56 +195,89 @@ pub fn prove(
     };
     let standing = rotation_for(settings.down_now);
     let is_standing = |pose: &Oriented| pose.rotation.abs_diff_eq(standing, 1e-5);
-    let poses: Vec<&Oriented> = found
-        .iter()
-        .enumerate()
-        .filter(|(at, pose)| *at < FINALISTS || pose.on_plate || is_standing(pose))
-        .map(|(_, pose)| pose)
-        .collect();
+    let finalists = finalists_for(printed.outer.faces.len(), reach_mm);
+    let mut poses: Vec<&Oriented> = Vec::new();
+    for (at, pose) in found.iter().enumerate() {
+        let wanted = at < finalists || is_standing(pose);
+        let again = |kept: &&Oriented| {
+            kept.on_plate == pose.on_plate && kept.rotation.abs_diff_eq(pose.rotation, 1e-5)
+        };
+        if wanted && !poses.iter().any(again) {
+            poses.push(pose);
+        }
+    }
     let printed_out = poses
         .into_par_iter()
         .map(|pose| {
-            print_out(printed, pose.rotation, pose.on_plate, trial).map(|printout| Proven {
+            print_held(
+                printed,
+                pose.rotation,
+                pose.on_plate,
+                trial,
+                support_layer_mm,
+            )
+            .map(|printout| Proven {
                 oriented: *pose,
                 printout,
             })
         })
         .collect::<Result<Vec<_>, EngineError>>()?;
-    let seated = |pose: &Proven| !pose.oriented.on_plate || pose.printout.hanging == 0;
-    let (tried, unseated): (Vec<Proven>, Vec<Proven>) = printed_out.into_iter().partition(seated);
+    let tried = printed_out;
 
+    let slack = slack(settings.goal);
     let readings: Vec<Readings> = tried
         .iter()
         .enumerate()
         .map(|(at, pose)| Readings {
-            fatal: pose.printout.fatal() as f64,
-            unheld: Some((pose.printout.islands + pose.printout.hanging) as f64),
+            fatal: f64::from(u8::from(pose.printout.overflows)),
+            suction: pose.printout.fatal() as f64,
+            unheld: Some(pose.printout.islands as f64),
+            roomless: pose.printout.hanging as f64,
             primary: pose.printout.reading(settings.goal),
-            // The search's own order breaks a tie.
-            tiebreak: at as f64,
+            // The goal's reading to the noise of its unit, then the search's own order.
+            tiebreak: [
+                (pose.printout.reading(settings.goal) / slack).round(),
+                at as f64,
+            ],
             standing: is_standing(&pose.oriented),
         })
         .collect();
-    let slack = slack(settings.goal);
-    let rulings = rulings(&readings, slack);
-    let ranked = rank(&readings, slack).into_iter().map(|at| Tried {
-        proven: tried[at],
-        ruling: Some(rulings[at]),
-    });
-    let unranked = unseated.into_iter().map(|proven| Tried {
-        proven,
-        ruling: None,
-    });
-    Ok(ranked.chain(unranked).collect())
+    let rulings = rulings(&readings, settings.goal, slack);
+    Ok(rank(&readings, settings.goal, slack)
+        .into_iter()
+        .map(|at| Tried {
+            proven: tried[at],
+            ruling: rulings[at],
+        })
+        .collect())
 }
 
-/// Stands the model the way `rotation` turns it in the middle of the plate, on supports
-/// unless it is `on_plate`, and reads the stack it and its supports cure.
+/// Stands the model the way `rotation` turns it in the middle of the plate, lifted onto
+/// supports, or `on_plate` with supports only under what hangs over it, and reads the stack
+/// it and its supports cure.
 pub fn print_out(
     printed: &Printed,
     rotation: Quat,
     on_plate: bool,
     trial: &Trial,
+) -> Result<Printout, EngineError> {
+    print_held(
+        printed,
+        rotation,
+        on_plate,
+        trial,
+        trial.material.layer_height_mm,
+    )
+}
+
+/// The same with supports placed on `support_layer_mm`, the print's own layer even when
+/// `trial` cures a coarse stack.
+fn print_held(
+    printed: &Printed,
+    rotation: Quat,
+    on_plate: bool,
+    trial: &Trial,
+    support_layer_mm: Scalar,
 ) -> Result<Printout, EngineError> {
     let turn = Transform {
         rotation,
@@ -236,36 +294,50 @@ pub fn print_out(
     let mut placed = transform_mesh(&turned, Transform::from_translation(offset));
     let mut cuts = printed.cuts.map(|cuts| transform_mesh(cuts, moved));
 
-    let layer_mm = trial.material.layer_height_mm;
-    let held = if on_plate {
-        Held {
-            hanging: left_hanging(&placed, cuts.as_ref(), trial.support, layer_mm)?,
-            ..Held::default()
-        }
-    } else {
-        let stood = stand_under(&mut placed, &mut cuts, trial.support, layer_mm)?;
-        Held {
-            contacts: stood.contacts.len(),
-            hanging: stood.contacts.len().saturating_sub(stood.standing),
-            top_contacts: looking_up(&stood.facing, rotation),
-            supports: vec![Arc::new(stood.supports)],
-        }
+    let stand = if on_plate { stand_seated } else { stand_under };
+    let stood = stand(&mut placed, &mut cuts, trial.support, support_layer_mm)?;
+    let mut held = Held {
+        contacts: stood.contacts.len(),
+        supports_mm3: signed_volume(&stood.supports).abs(),
+        hanging: stood.contacts.len().saturating_sub(stood.standing),
+        top_contacts: looking_up(&stood.facing, rotation),
+        supports: (!stood.supports.faces.is_empty())
+            .then(|| Arc::new(stood.supports))
+            .into_iter()
+            .collect(),
     };
 
-    let plate = plate_of(placed, cuts, held.supports, trial);
-    let measured = Run::of(&plate)?
+    let overflows = overflows(&placed, &held.supports, &trial.printer.build_volume);
+    let supports = std::mem::take(&mut held.supports);
+    let plate = plate_of(placed, cuts, supports, trial);
+    let measured = Run::measuring(&plate)?
         .measure(&mut ())?
         .ok_or(EngineError::EmptyPlate)?;
-    Ok(printout(
-        [held.contacts, held.hanging, held.top_contacts],
-        &measured,
-    ))
+    Ok(Printout {
+        overflows,
+        ..printout(&held, &measured)
+    })
+}
+
+/// Whether `placed` and its `supports` reach past `volume`, their two widths matched with
+/// the plate's sorted: the plate is free to turn them about the vertical.
+fn overflows(placed: &Mesh, supports: &[Arc<Mesh>], volume: &BuildVolume) -> bool {
+    let Some(mut bounds) = placed.aabb() else {
+        return false;
+    };
+    for support in supports.iter().filter_map(|support| support.aabb()) {
+        bounds.mins = bounds.mins.min(support.mins);
+        bounds.maxs = bounds.maxs.max(support.maxs);
+    }
+    let size = bounds.maxs - bounds.mins;
+    let (narrow, wide) = (size.x.min(size.y), size.x.max(size.y));
+    narrow > volume.x.min(volume.y) || wide > volume.x.max(volume.y) || bounds.maxs.z > volume.z
 }
 
 /// What stands under a pose, and what was found needing it.
-#[derive(Default)]
 struct Held {
     contacts: usize,
+    supports_mm3: Scalar,
     hanging: usize,
     top_contacts: usize,
     supports: Vec<Arc<Mesh>>,
@@ -303,13 +375,14 @@ fn plate_of(placed: Mesh, cuts: Option<Mesh>, supports: Vec<Arc<Mesh>>, trial: &
     }
 }
 
-fn printout([contacts, hanging, top_contacts]: [usize; 3], measured: &Measured) -> Printout {
+fn printout(held: &Held, measured: &Measured) -> Printout {
     let risks = measured.risks();
     let count = |wanted: fn(&RiskKind) -> bool| risks.iter().filter(|r| wanted(&r.kind)).count();
     Printout {
-        contacts,
-        hanging,
-        top_contacts,
+        contacts: held.contacts,
+        supports_ml: held.supports_mm3 / 1000.0,
+        hanging: held.hanging,
+        top_contacts: held.top_contacts,
         layers: measured.layer_count(),
         pull_n: measured
             .hardest_pull()
@@ -319,5 +392,6 @@ fn printout([contacts, hanging, top_contacts]: [usize; 3], measured: &Measured) 
         cups: count(|kind| matches!(kind, RiskKind::SuctionCup { .. })),
         peels: count(|kind| matches!(kind, RiskKind::Peel { .. })),
         resin_ml: measured.volume_mm3() / 1000.0,
+        overflows: false,
     }
 }

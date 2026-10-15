@@ -41,6 +41,9 @@ struct Args {
     printer: String,
     #[arg(long, default_value = "medium")]
     support: String,
+    /// Turn the support profile's raft on, as it ships otherwise.
+    #[arg(long)]
+    raft: bool,
     /// Also measure this many directions spread over the sphere, so the best known pose
     /// is not only one a person or the search thought of. Slow: a full print each.
     #[arg(long, default_value_t = 0)]
@@ -57,6 +60,10 @@ struct Args {
     /// success does, in seconds. Expectations come from `--corpus`, if given.
     #[arg(long)]
     rejudge: Option<PathBuf>,
+    /// Print the finalists of the goal this names (`fewest-supports`, ...) again at full
+    /// resolution and show both readings: what the coarse proof misjudges. Slow.
+    #[arg(long)]
+    full_finalists: Option<String>,
 }
 
 /// What every pose is printed with.
@@ -64,6 +71,7 @@ struct Setup {
     printer: PrinterProfile,
     material: MaterialProfile,
     support: SupportProfile,
+    full_finalists: Option<OrientGoal>,
 }
 
 impl Setup {
@@ -77,6 +85,7 @@ impl Setup {
             },
             support: &self.support,
             volume: &self.printer.build_volume,
+            full_finalists: self.full_finalists,
         }
     }
 }
@@ -101,7 +110,16 @@ fn main() -> Result<ExitCode> {
     let setup = Setup {
         printer: catalogue.printer(&args.printer)?.profile.clone(),
         material: MaterialProfile::default(),
-        support: catalogue.support(&args.support)?.profile.clone(),
+        support: {
+            let mut support = catalogue.support(&args.support)?.profile.clone();
+            support.raft.enabled |= args.raft;
+            support
+        },
+        full_finalists: args
+            .full_finalists
+            .as_deref()
+            .map(|slug| report::goal_of(slug).with_context(|| format!("no goal is called {slug}")))
+            .transpose()?,
     };
     println!(
         "printer {}, supports {}, layer {} mm, oracle {}\n",

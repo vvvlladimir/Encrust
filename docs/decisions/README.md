@@ -240,7 +240,8 @@ Grouped by what the decision governs; the number is still the order it was taken
 | [0275](0275-an-orientation-is-chosen-by-priority-and-stays-unless-a-turn-is-worth-it.md) | Choose an orientation by priority, refuse cups and tearing pulls, and stay unless a turn is worth it | Accepted; how a turn is weighed, and that the proof ranks apart, are superseded by 0278 |
 | [0276](0276-an-orientation-is-judged-on-the-model-as-it-prints.md) | Judge an orientation on the model as it prints: sized, hollowed and drilled | Accepted |
 | [0277](0277-an-orientation-is-proven-by-printing-its-finalists.md) | Prove an orientation by printing its finalists, and search the poses a person tries | Accepted; how the proof ranks and that it sketches without supports are superseded by 0278 |
-| [0278](0278-one-rule-ranks-every-stage-and-a-proof-stands-its-supports.md) | Rank the search and the proof by one rule, and prove a pose with its supports | Accepted |
+| [0278](0278-one-rule-ranks-every-stage-and-a-proof-stands-its-supports.md) | Rank the search and the proof by one rule, and prove a pose with its supports | Accepted; the band over islands, the proof's tie-break, the coarse layer it places supports on and what the fewest supports reads are superseded by 0279 |
+| [0279](0279-the-fewest-supports-is-support-volume-proven-on-the-prints-layer.md) | Choose the fewest supports by support volume, proven on the print's layer | Accepted |
 | [0088](0088-the-plate-is-packed-as-a-bitmap.md) | The plate is packed as a bitmap into the corner, and the block centred | Accepted; supports left out of a footprint is superseded by 0256 |
 | [0256](0256-a-footprint-carries-the-supports-and-the-raft.md) | Pack a model with its supports and its raft | Accepted |
 | [0098](0098-a-plate-is-a-number-on-the-object.md) | A plate is a number on the object, not a scene of its own | Accepted |

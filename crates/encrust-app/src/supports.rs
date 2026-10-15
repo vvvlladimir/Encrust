@@ -251,6 +251,14 @@ impl SupportTool {
         }
     }
 
+    /// The active group's profile as `object` is built to, with the raft it stands on, its
+    /// own or the plate's: what orienting it weighs its supports by.
+    pub fn built_for(&self, object: &SceneObject) -> SupportProfile {
+        let mut profile = self.profile_for(object).clone();
+        profile.raft = object.own.raft.unwrap_or(self.raft);
+        profile
+    }
+
     /// The active group's profile as `object` is built to.
     pub fn profile_for<'a>(&'a self, object: &'a SceneObject) -> &'a SupportProfile {
         object
@@ -677,6 +685,24 @@ mod tests {
             (tasks[0].support.max_overhang_deg - wanted).abs() < f32::EPSILON,
             "not the angle of the plate's profile"
         );
+    }
+
+    #[test]
+    fn a_model_is_oriented_on_the_raft_it_stands_on() {
+        let mut scene = one_cube();
+        let mut tool = SupportTool::default();
+        tool.raft.enabled = true;
+
+        let tasks = crate::job::orient_tasks(&scene, None, |object| tool.built_for(object));
+        assert!(tasks[0].support.raft.enabled, "the plate's raft is weighed");
+
+        let own = Raft {
+            enabled: false,
+            ..tool.raft
+        };
+        scene.objects_mut()[0].own.raft = Some(own);
+        let tasks = crate::job::orient_tasks(&scene, None, |object| tool.built_for(object));
+        assert!(!tasks[0].support.raft.enabled, "its own raft wins");
     }
 
     #[test]

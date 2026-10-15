@@ -25,5 +25,5 @@ pub use error::EngineError;
 pub use open::{Machine, Opening, open_plate};
 pub use plate::{Model, Plate};
 pub use run::Run;
-pub use stand::{Stood, left_hanging, stand_under};
+pub use stand::{Stood, left_hanging, stand_seated, stand_under};
 pub use trial::{Printout, Proven, Trial, Tried, orient_proven, print_out, prove};

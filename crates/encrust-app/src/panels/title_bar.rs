@@ -833,7 +833,7 @@ fn edit_menu(ui: &mut egui::Ui, window: &mut Window) {
         let started = window.tools.orient.start(
             &window.doc.scene,
             None,
-            |object| supports.profile_for(object).clone(),
+            |object| supports.built_for(object),
             machine,
         );
         if let Err(error) = started {

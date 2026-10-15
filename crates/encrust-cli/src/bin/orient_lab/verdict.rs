@@ -13,11 +13,25 @@ use crate::poses::{Pose, Source};
 const HELD_BAND: f64 = 1.25;
 const HELD_SLACK: f64 = 2.0;
 
-/// How far over the best known reading a goal's choice may read.
-const GOAL_BAND: f64 = 0.10;
+/// How far over the best known reading a goal's choice may read; the fewest supports takes
+/// the least (ADR 0279).
+fn goal_band(goal: OrientGoal) -> f64 {
+    if goal == OrientGoal::FewestSupports {
+        0.0
+    } else {
+        0.10
+    }
+}
 
-/// What a turn has to win over standing as drawn, when standing as drawn is good enough.
-const TURN_GAIN: f64 = 0.05;
+/// What a turn has to win over standing as drawn, when standing as drawn is good enough:
+/// a twentieth and the reading's noise, or anything at all for the fewest supports.
+fn turn_cost(goal: OrientGoal, drawn: f64) -> f64 {
+    if goal == OrientGoal::FewestSupports {
+        0.0
+    } else {
+        0.05 * drawn + slack(goal)
+    }
+}
 
 /// A tilt under this is standing as drawn, degrees.
 const SETTLED_DEG: f32 = 2.0;
@@ -139,45 +153,75 @@ impl Verdict {
     }
 }
 
-/// What a goal's own reading may be off by and still be the same: a contact, a newton's
-/// half, a few layers.
+/// What a goal's own reading may be off by and still be the same: a strut's resin, a
+/// contact, a newton's half, a few layers.
 fn slack(goal: OrientGoal) -> f64 {
     match goal {
-        OrientGoal::FewestSupports | OrientGoal::CleanTop => 2.0,
+        OrientGoal::FewestSupports => 0.05,
+        OrientGoal::CleanTop => 2.0,
         OrientGoal::LeastPeel => 0.5,
         OrientGoal::ShortestPrint => 5.0,
     }
 }
 
-fn unheld(pose: &Pose) -> usize {
-    pose.printout.islands + pose.printout.hanging
-}
-
 /// What every pose of a model is held to: the fewest cups and tears, and the fewest
-/// islands and hanging contacts among those, of all poses that fit.
+/// islands and hanging contacts among those, of all poses that fit. The fewest supports
+/// leaves cups and tears to a drain hole, and islands and contacts with no room as
+/// placement leaves them, so for it those count for nothing.
 struct Floor {
     any_fits: bool,
+    /// Whether cups, tears, islands and hanging contacts count.
+    weighs_cups: bool,
     fatal: usize,
     held_limit: f64,
 }
 
 impl Floor {
-    fn of(poses: &[Pose]) -> Self {
+    fn of(poses: &[Pose], goal: OrientGoal) -> Self {
         let any_fits = poses.iter().any(|pose| pose.fits);
+        let weighs_cups = goal != OrientGoal::FewestSupports;
+        let fatal_of = |pose: &Pose| {
+            if weighs_cups {
+                pose.printout.fatal()
+            } else {
+                0
+            }
+        };
         let fitting = || poses.iter().filter(move |pose| pose.fits || !any_fits);
-        let fatal = fitting()
-            .map(|pose| pose.printout.fatal())
-            .min()
-            .unwrap_or(0);
+        let fatal = fitting().map(fatal_of).min().unwrap_or(0);
+        let unheld = |pose: &Pose| {
+            if weighs_cups {
+                pose.printout.islands + pose.printout.hanging
+            } else {
+                0
+            }
+        };
         let held = fitting()
-            .filter(|pose| pose.printout.fatal() == fatal)
+            .filter(|pose| fatal_of(pose) == fatal)
             .map(unheld)
             .min()
             .unwrap_or(0);
         Self {
             any_fits,
+            weighs_cups,
             fatal,
             held_limit: held as f64 * HELD_BAND + HELD_SLACK,
+        }
+    }
+
+    fn unheld(&self, pose: &Pose) -> usize {
+        if self.weighs_cups {
+            pose.printout.islands + pose.printout.hanging
+        } else {
+            0
+        }
+    }
+
+    fn fatal(&self, pose: &Pose) -> usize {
+        if self.weighs_cups {
+            pose.printout.fatal()
+        } else {
+            0
         }
     }
 
@@ -187,22 +231,26 @@ impl Floor {
         [
             check(
                 Rule::Fatal,
-                o.fatal() <= self.fatal,
+                self.fatal(pose) <= self.fatal,
                 format!("{} cups and tears, fewest {}", o.fatal(), self.fatal),
             ),
             check(
                 Rule::Held,
-                unheld(pose) as f64 <= self.held_limit,
+                self.unheld(pose) as f64 <= self.held_limit,
                 format!(
                     "{} islands and hanging, at most {:.1}",
-                    unheld(pose),
+                    self.unheld(pose),
                     self.held_limit
                 ),
             ),
             check(
                 Rule::Seated,
-                !pose.on_plate || o.hanging == 0,
-                format!("{} hanging on the plate", o.hanging),
+                !pose.on_plate || (sits(pose) && (o.hanging == 0 || !self.weighs_cups)),
+                if sits(pose) {
+                    format!("{} hanging on the plate", o.hanging)
+                } else {
+                    "balanced on an edge or a point".to_owned()
+                },
             ),
             check(
                 Rule::Fits,
@@ -215,6 +263,12 @@ impl Floor {
     fn sound(&self, pose: &Pose) -> bool {
         self.prints(pose).iter().all(|check| check.passed)
     }
+}
+
+/// Whether a pose on the plate stands there rather than balances: on a flat face, or on
+/// supports that hold it.
+fn sits(pose: &Pose) -> bool {
+    pose.sits || pose.printout.contacts > 0
 }
 
 fn check(rule: Rule, passed: bool, detail: String) -> Check {
@@ -231,7 +285,7 @@ pub fn judge(goal: OrientGoal, poses: &[Pose], expect: Expect, faces: usize) -> 
     let chosen = poses
         .iter()
         .find(|pose| pose.source == Source::Goal(goal))?;
-    let floor = Floor::of(poses);
+    let floor = Floor::of(poses, goal);
     let reading = |pose: &Pose| pose.printout.reading(goal);
     // The best is sought among the poses a person would accept at all.
     let acceptable = |pose: &Pose| expected(pose, expect).iter().all(|check| check.passed);
@@ -271,7 +325,7 @@ fn held_to(
     let mut checks = floor.prints(chosen).to_vec();
     let own = chosen.printout.reading(goal);
     if let Some((name, best_reading)) = best {
-        let limit = best_reading * (1.0 + GOAL_BAND) + slack(goal);
+        let limit = best_reading * (1.0 + goal_band(goal)) + slack(goal);
         // A reading bought by failing the print wins nothing.
         let sound = floor.sound(chosen);
         let unsound = if sound { "" } else { "not sound, so no win: " };
@@ -287,7 +341,7 @@ fn held_to(
 }
 
 /// A turn is only worth it when standing as drawn is out of the band, or the turn wins
-/// `TURN_GAIN` over it.
+/// [`turn_cost`] over it.
 fn stays(goal: OrientGoal, chosen: &Pose, poses: &[Pose], floor: &Floor, limit: f64) -> Check {
     let reading = |pose: &Pose| pose.printout.reading(goal);
     let as_drawn = poses
@@ -298,7 +352,7 @@ fn stays(goal: OrientGoal, chosen: &Pose, poses: &[Pose], floor: &Floor, limit: 
         .filter(|drawn| *drawn <= limit);
     let passed = match as_drawn {
         Some(drawn) if chosen.tilt_deg >= SETTLED_DEG => {
-            reading(chosen) + slack(goal) <= drawn * (1.0 - TURN_GAIN)
+            reading(chosen) <= drawn - turn_cost(goal, drawn)
         }
         _ => true,
     };
@@ -343,20 +397,26 @@ mod tests {
     use core_engine::Printout;
     use core_geometry::Quat;
 
-    const GOAL: OrientGoal = OrientGoal::FewestSupports;
+    /// A goal judged with its bands; the fewest supports has none.
+    const GOAL: OrientGoal = OrientGoal::LeastPeel;
+    const FEWEST: OrientGoal = OrientGoal::FewestSupports;
 
+    /// A printout standing `contacts` contacts on a tenth of a millilitre of support each,
+    /// pulling as many tenths of a newton.
     fn printout(contacts: usize) -> Printout {
         Printout {
             contacts,
+            supports_ml: contacts as f32 / 10.0,
             hanging: 0,
             top_contacts: 0,
             layers: 100,
-            pull_n: 1.0,
+            pull_n: contacts as f64 / 10.0,
             growth_mm2: 0.0,
             islands: 0,
             cups: 0,
             peels: 0,
             resin_ml: 1.0,
+            overflows: false,
         }
     }
 
@@ -369,6 +429,7 @@ mod tests {
             printout: printout(contacts),
             tilt_deg,
             fits: true,
+            sits: true,
             seconds: 0.1,
             trace: crate::poses::Trace::default(),
         }
@@ -379,7 +440,16 @@ mod tests {
     }
 
     fn broken(poses: &[Pose]) -> Vec<&'static str> {
-        judge(GOAL, poses, Expect::default(), 1000)
+        broken_for(GOAL, poses)
+    }
+
+    /// What `goal` breaks having chosen the pose called "chosen".
+    fn broken_for(goal: OrientGoal, poses: &[Pose]) -> Vec<&'static str> {
+        let mut poses = poses.to_vec();
+        for pose in poses.iter_mut().filter(|pose| pose.name == "chosen") {
+            pose.source = Source::Goal(goal);
+        }
+        judge(goal, &poses, Expect::default(), 1000)
             .expect("the goal's pose is among them")
             .broken()
     }
@@ -391,28 +461,46 @@ mod tests {
     }
 
     #[test]
-    fn a_cup_the_soundest_pose_avoids_is_fatal() {
+    fn a_cup_the_soundest_pose_avoids_is_fatal_but_to_the_fewest_supports() {
         let mut cupped = chosen(10, 30.0);
         cupped.printout.cups = 1;
         let poses = [pose("as is", Source::Hand, 100, 0.0), cupped];
-        assert_eq!(broken(&poses), ["fatal", "goal"]);
+        assert!(
+            broken_for(FEWEST, &poses).is_empty(),
+            "a drain hole fixes a cup"
+        );
+        assert!(broken(&poses).contains(&"fatal"));
     }
 
     #[test]
-    fn islands_past_the_band_of_the_soundest_pose_are_not_held() {
+    fn islands_past_the_band_of_the_soundest_pose_are_not_held_but_by_the_fewest_supports() {
         let mut loose = chosen(10, 30.0);
         loose.printout.islands = 12;
         let poses = [pose("as is", Source::Hand, 100, 0.0), loose];
         assert_eq!(broken(&poses), ["held", "goal"]);
+        assert!(broken_for(FEWEST, &poses).is_empty());
     }
 
     #[test]
-    fn a_pose_on_the_plate_with_something_hanging_is_not_seated() {
+    fn a_pose_on_the_plate_with_something_hanging_is_not_seated_but_to_the_fewest_supports() {
         let mut bare = chosen(0, 30.0);
         bare.on_plate = true;
         bare.printout.hanging = 1;
         let poses = [pose("as is", Source::Hand, 100, 0.0), bare];
+        assert!(
+            !broken_for(FEWEST, &poses).contains(&"seated"),
+            "a contact with no room is placement's to leave"
+        );
         assert!(broken(&poses).contains(&"seated"));
+    }
+
+    #[test]
+    fn a_pose_balanced_on_a_point_is_not_seated() {
+        let mut balanced = chosen(0, 30.0);
+        balanced.on_plate = true;
+        balanced.sits = false;
+        let poses = [pose("as is", Source::Hand, 100, 0.0), balanced];
+        assert!(broken_for(FEWEST, &poses).contains(&"seated"));
     }
 
     #[test]
@@ -420,7 +508,7 @@ mod tests {
         let mut big = chosen(10, 30.0);
         big.fits = false;
         let poses = [pose("as is", Source::Hand, 100, 0.0), big];
-        assert!(broken(&poses).contains(&"fits"));
+        assert!(broken_for(FEWEST, &poses).contains(&"fits"));
     }
 
     #[test]
@@ -434,9 +522,24 @@ mod tests {
     }
 
     #[test]
-    fn a_turn_that_barely_beats_standing_as_drawn_is_needless() {
+    fn the_fewest_supports_have_no_band_over_the_best() {
+        let poses = [
+            pose("oracle 3", Source::Oracle, 50, 40.0),
+            pose("as is", Source::Hand, 200, 0.0),
+            chosen(52, 30.0),
+        ];
+        assert_eq!(broken_for(FEWEST, &poses), ["goal"], "5.2 ml against 5.0");
+        assert!(broken(&poses).is_empty(), "5.2 N is within a tenth of 5.0");
+    }
+
+    #[test]
+    fn a_turn_that_barely_beats_standing_as_drawn_is_needless_but_to_the_fewest_supports() {
         let poses = [pose("as is", Source::Hand, 100, 0.0), chosen(97, 30.0)];
         assert_eq!(broken(&poses), ["stays"]);
+        assert!(
+            broken_for(FEWEST, &poses).is_empty(),
+            "less support is less"
+        );
     }
 
     #[test]
@@ -469,10 +572,10 @@ mod tests {
         );
         assert_eq!(verdict.reachable_by.as_deref(), Some("as is"));
 
-        let mut cupped = pose("as is", Source::Hand, 100, 0.0);
-        cupped.printout.cups = 1;
+        let mut loose = pose("as is", Source::Hand, 100, 0.0);
+        loose.printout.islands = 12;
         let poses = [
-            cupped,
+            loose,
             pose("over", Source::Hand, 10, 170.0),
             chosen(10, 170.0),
         ];
@@ -480,7 +583,7 @@ mod tests {
         assert_eq!(
             verdict.status(),
             Status::Unreachable,
-            "every pose that prints is upside down, and the one upright one cups"
+            "every pose that prints is upside down, and the one upright one is loose"
         );
     }
 

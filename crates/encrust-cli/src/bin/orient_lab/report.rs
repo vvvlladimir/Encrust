@@ -62,7 +62,13 @@ pub struct PoseRow {
     pub tilt_deg: f32,
     pub on_plate: bool,
     pub fits: bool,
+    /// Whether it has a footprint flat on the plate; true in runs kept before it was read.
+    #[serde(default = "sits_by_default")]
+    pub sits: bool,
     pub contacts: usize,
+    /// The resin in the supports, millilitres; zero in runs kept before it was read.
+    #[serde(default)]
+    pub supports_ml: f32,
     pub hanging: usize,
     pub top_contacts: usize,
     pub layers: usize,
@@ -96,6 +102,10 @@ pub struct GoalRow {
     pub seconds: f64,
 }
 
+fn sits_by_default() -> bool {
+    true
+}
+
 /// The name a goal goes by in reports and corpus files.
 pub fn slug(goal: OrientGoal) -> &'static str {
     match goal {
@@ -107,7 +117,7 @@ pub fn slug(goal: OrientGoal) -> &'static str {
 }
 
 /// The goal a slug names, or `None` for a slug no goal goes by.
-fn goal_of(slug_text: &str) -> Option<OrientGoal> {
+pub fn goal_of(slug_text: &str) -> Option<OrientGoal> {
     OrientGoal::ALL
         .into_iter()
         .find(|goal| slug(*goal) == slug_text)
@@ -131,6 +141,7 @@ impl PoseRow {
             on_plate: self.on_plate,
             printout: Printout {
                 contacts: self.contacts,
+                supports_ml: self.supports_ml,
                 hanging: self.hanging,
                 top_contacts: self.top_contacts,
                 layers: self.layers,
@@ -140,9 +151,11 @@ impl PoseRow {
                 cups: self.cups,
                 peels: self.peels,
                 resin_ml: self.resin_ml,
+                overflows: !self.fits,
             },
             tilt_deg: self.tilt_deg,
             fits: self.fits,
+            sits: self.sits,
             seconds: self.seconds,
             trace: self.trace.clone(),
         })
@@ -162,7 +175,9 @@ impl PoseRow {
             tilt_deg: pose.tilt_deg,
             on_plate: pose.on_plate,
             fits: pose.fits,
+            sits: pose.sits,
             contacts: o.contacts,
+            supports_ml: o.supports_ml,
             hanging: o.hanging,
             top_contacts: o.top_contacts,
             layers: o.layers,
@@ -282,9 +297,9 @@ pub fn print_model(model: &ModelReport, verdicts: &[Verdict]) {
         for check in verdict.checks.iter().filter(|check| !check.passed) {
             println!("  - {}: {}", check.rule.name(), check.detail);
         }
-        if row.status != "pass"
-            && let Some(chosen) = model.poses.iter().find(|pose| pose.source == row.goal)
-        {
+        let chosen = model.poses.iter().find(|pose| pose.source == row.goal);
+        let full = |pose: &&PoseRow| pose.trace.finalists.iter().any(|f| f.full.is_some());
+        if let Some(chosen) = chosen.filter(|pose| row.status != "pass" || full(pose)) {
             print_trace(&chosen.trace);
         }
     }
@@ -304,9 +319,20 @@ fn print_trace(trace: &Trace) {
         } else {
             "on supports"
         };
+        let full = finalist.full.map_or_else(String::new, |full| {
+            format!(
+                " (full: {} fatal, {} unheld, reads {:.2})",
+                full.fatal, full.unheld, full.reading
+            )
+        });
         println!(
-            "    - {:.0}° {stand}: {} fatal, {} unheld, reads {:.1} — {}",
-            finalist.tilt_deg, finalist.fatal, finalist.unheld, finalist.reading, finalist.ruling
+            "    - #{} {:.0}° {stand}: {} fatal, {} unheld, reads {:.2}{full} — {}",
+            finalist.searched,
+            finalist.tilt_deg,
+            finalist.fatal,
+            finalist.unheld,
+            finalist.reading,
+            finalist.ruling
         );
     }
 }
@@ -314,17 +340,18 @@ fn print_trace(trace: &Trace) {
 fn print_poses(model: &ModelReport) {
     println!("## {} — {} faces\n", model.name, model.faces);
     println!(
-        "| pose | tilt ° | plate | fits | contacts | hanging | on top | layers | pull N | islands | cups | peels | resin ml | s |"
+        "| pose | tilt ° | plate | fits | contacts | supports ml | hanging | on top | layers | pull N | islands | cups | peels | resin ml | s |"
     );
-    println!("|---|---|---|---|---|---|---|---|---|---|---|---|---|---|");
+    println!("|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|");
     for p in &model.poses {
         println!(
-            "| {} | {:.0} | {} | {} | {} | {} | {} | {} | {:.1} | {} | {} | {} | {:.1} | {:.1} |",
+            "| {} | {:.0} | {} | {} | {} | {:.2} | {} | {} | {} | {:.1} | {} | {} | {} | {:.1} | {:.1} |",
             p.name,
             p.tilt_deg,
             if p.on_plate { "yes" } else { "—" },
             if p.fits { "yes" } else { "NO" },
             p.contacts,
+            p.supports_ml,
             p.hanging,
             p.top_contacts,
             p.layers,
@@ -468,6 +495,7 @@ mod tests {
             on_plate: true,
             printout: Printout {
                 contacts: 3,
+                supports_ml: 0.4,
                 hanging: 1,
                 top_contacts: 2,
                 layers: 400,
@@ -477,9 +505,11 @@ mod tests {
                 cups: 1,
                 peels: 0,
                 resin_ml: 5.0,
+                overflows: true,
             },
             tilt_deg: 28.6,
             fits: false,
+            sits: true,
             seconds: 1.2,
             trace: Trace::default(),
         };

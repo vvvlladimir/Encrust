@@ -12,6 +12,7 @@ miniature and a bust are scored on the same scale:
 | Term | What it is |
 |---|---|
 | support | overhang, tips and support height, over the surface area (below) |
+| volume | the support resin a pose is predicted to need, over the surface area times the length (below) |
 | peel | the area of the disc pulling as hard as the hardest section, over the model's own square length |
 | height | how tall the model stands, over the model's own length |
 | bottom | area flat on the plate, over the surface area; zero on supports |
@@ -26,18 +27,23 @@ The support term adds three things a support is put under:
 - half again the overhang for support standing the model's own length tall, so a high
   ceiling costs more than a low one.
 
+The volume term is what the fewest supports reads (ADR 0279): every face past the overhang
+angle, however far past, by its plan area — placement spreads a contact a spacing apart
+over all of it — times the height it is held at, plus the lift under all of it, plus each
+tip standing half the model's height up.
+
 A section's pull is Stefan's: each piece pulls with `A⁴ / (4π² J)`, its torsion constant,
 the measure `core-analysis` reads off a cured layer (`docs/design/analysis.md`). Scoring
 the area of the disc that pulls as hard keeps the term in the units of the shadow it
 replaces. A disc pulls the most an area can, so a thin strip or two pieces apart score
 less than their area.
 
-| Goal | support | peel | height | bottom | top |
-|---|---|---|---|---|---|
-| Fewest supports | 1.0 | 0.6 | 0.05 | 0.3 | — |
-| Least peel force | 0.5 | 2.0 | 0.05 | 0.3 | — |
-| Shortest print | 0.3 | 0.3 | 1.5 | 0.3 | — |
-| Clean top surface | 1.0 | 0.6 | 0.05 | 0.3 | 3.0 |
+| Goal | support | volume | peel | height | bottom | top |
+|---|---|---|---|---|---|---|
+| Fewest supports | — | 1.0 | — | 0.05 | 0.3 | — |
+| Least peel force | 0.5 | — | 2.0 | 0.05 | 0.3 | — |
+| Shortest print | 0.3 | — | 0.3 | 1.5 | 0.3 | — |
+| Clean top surface | 1.0 | — | 0.6 | 0.05 | 0.3 | 3.0 |
 
 The model's length is the cube root of its bounding box, which does not turn with it, so
 dividing by it changes no ranking — it only stops the weights meaning different things at
@@ -99,10 +105,12 @@ pose rests when a face lies flat on it, under a hundredth of the surface hangs, 
 cupped against the plate and no section tears. A resting pose comes ahead of every
 supported one, and is printed with no supports.
 
-A pose that hangs more than that but has a quarter of its shadow flat on the plate may
-still print bare: a test piece is drawn to. The score cannot tell, so such a pose comes
-last among the finalists and is only ever taken by the proof below, and only when nothing
-it sets on the plate is left hanging.
+A pose that hangs more than that but has a quarter of its shadow flat on the plate stays
+on the plate with supports only under what hangs over it — what a person does with a figure
+on its base (ADR 0279). The score cannot weigh that against lifting it, so such a pose
+comes last among the finalists and the proof below decides. Whichever way the proof stands
+a pose is the way the window and the command line stand it: on the plate, or lifted by the
+support profile's own lift.
 
 Set on the plate with no face flat on it, a model is balanced on an edge or a point: that
 counts as a failure, under a cup and a tearing pull.
@@ -129,23 +137,30 @@ its own, and is always among those cut.
 
 ## Choosing
 
-Every stage ranks by one rule, `core_plate::rank` (ADR 0275, 0278): the search on what it
-predicts, the proof on what it printed. In order:
+Every stage ranks by one rule, `core_plate::rank` (ADR 0275, 0278, 0279): the search on what
+it predicts, the proof on what it printed. In order:
 
-1. what fails the print, compared exactly. Predicted, that is a suction cup, a pull past
-   the 30 N `core-analysis` names, and a model set on the plate with no face flat on it;
-   printed, the cups and tearing pulls the analysis reads;
-2. islands and contacts left hanging, within a quarter and two of the fewest, where a
+1. what fails the print, compared exactly: a model set on the plate with no face flat on
+   it; printed, a pose and its supports past the build volume. For every goal but the
+   fewest supports, suction cups and pulls past the 30 N `core-analysis` names fail it too;
+   the fewest supports leaves a cup to a drain hole;
+2. islands and contacts left hanging, within a quarter and one of the fewest, where a
    stage reads them;
 3. the goal's own reading, within a tenth of the best and the noise of its unit: a
-   sliver of the dimensionless term in the search; two contacts, half a newton or five
-   layers once printed;
-4. the tie-break: the total in the search, the search's own order in the proof.
+   sliver of the dimensionless term in the search; 0.05 ml of support, two contacts, half
+   a newton or five layers once printed;
+4. within that band, the fewest islands and hanging, then the tie-break: the total in
+   the search; in the proof, the goal's reading to the noise of its unit and then the
+   search's own order.
 
 The model stays as it stands unless a turn fails less, standing is out of the band, or
-the turn wins 5 % of the goal's own reading. The gain is the goal's and not the total's,
-so no goal turns a model for what another goal weighs: a slab lying on the plate stays
-flat for the fewest supports, and stands on its edge for the least peel.
+the turn wins 5 % of the goal's own reading and more than the noise of its unit; the
+turn is weighed against the best ranked way of standing, on the plate or on supports. No
+goal weighs which way is up: the file does not say.
+
+The fewest supports skips steps 2 and 3: past what fails the print, the least support
+volume wins outright, and any turn that needs less is worth making. Islands, contacts with
+no room and cups are its user's to settle with the tools that fix them.
 
 A wider shortlist and a pattern search around the winner were measured and dropped:
 the better the search found low scores, the more of what it found the support generator
@@ -154,29 +169,26 @@ left hanging (ADR 0275).
 ## Proving
 
 The score is a prediction, and what it predicts is measured cheaply once a printer is
-known. `core-engine` takes the search's finalists — best first, no two within 10° — and
-prints the first four and the way the model stands, with supports stood under each, and
-every pose that may rest on the plate bare: the stack cut and cured, and read the way a
-finished plate is.
+known. `core-engine` takes the search's finalists — best first, no two within 10°, 20° for
+the fewest supports, whose volume changes slowly with a turn — and prints the first few
+and the way the model stands, with supports stood under each, and every pose that may rest
+on the plate bare. A few is four for a model of a million faces and up to sixteen for a
+lighter one under 200 mm, which prints as many in the same time.
 
-The trials are cut coarse: the tallest pose into about 160 layers, cured at a 0.2 mm
-pixel, and all of them at once. A trial ranks poses against each other, and the shape of
-a stack settles that long before its last layer does; at the print's own layer and pixel
-a trial costs a whole slice, 35 s for five poses of a 230 ml model against 2 s. What a
-pose prints at the real resolution is `print_out`'s to say, which is what `orient-lab`
-judges the choice on.
+The supports are placed on the print's own layer (ADR 0279): how many contacts placement
+puts down follows the layer it reads, and on a stack three times coarser a figure leaned
+45° read 189 contacts where the print stands 442. Placed on the print's layer, a trial's
+contacts, hanging contacts and support resin are the print's exactly. The cure that
+follows is cut coarse: the tallest pose into about 160 layers, cured at a 0.2 mm pixel,
+and all of them at once. It reads the cups and tearing pulls a print does, and a rough
+count of its islands: a print's islands are specks the support generator leaves alone,
+which only the print's own pixel and layer resolve, and neither a finer cure nor the
+generator's own count of them followed the print's until it cost a full one.
 
-Every trial stands its supports — columns grown and meshed — and cures them with the
-model (ADR 0278), so its islands and its contacts with no room are read as a print's are, if
-coarser: on the stack a figure's 13 islands read 7, and its 3 read 1. The order holds.
-Proving with supports costs a fifth more than proving the model alone did.
-
-A pose set bare on the plate that leaves anything hanging is a model that needs supports,
-and is dropped: on the plate means held by the plate. The rest are ranked by the rule
-above on what they printed: cups and tearing pulls, then islands and hanging contacts,
-then the goal's own reading — contacts, newtons, layers, contacts on up-facing faces.
-`prove` answers every finalist with what decided its place, `core_plate::rulings`: which
-of those it lost on, the tie-break, or a turn not worth making.
+A pose set on the plate gets supports only under what hangs over it, the raft with them
+where the profile has one, and none where nothing hangs. All are ranked by the rule above on what they printed — support resin,
+newtons, layers, contacts on up-facing faces — and `prove` answers every finalist with
+what decided its place, `core_plate::rulings`.
 
 The command line orients by the search alone, so before it leaves a model bare where the
 search said it rests, it counts what would hang there the way the proof does,
