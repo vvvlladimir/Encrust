@@ -8,9 +8,9 @@ use crate::panels::Window;
 use crate::plate::BuildPlate;
 use crate::scene::{Axis, ObjectId, Scene, SceneObject};
 use crate::ui::{
-    Segment, Segmented, axis_label, compact_button, describe, field_label, hairline, hint, icon,
-    icon_button, icon_toggle, number_field, number_row, picker, progress_bar, secondary_button,
-    section, section_with_action, switch, theme,
+    Segment, Segmented, axis_label, compact_button, describe, field_label, hairline, icon,
+    icon_toggle, inline_button, number_field, picker, progress_bar, secondary_button, section,
+    section_with_action, stepped_row, switch, theme,
 };
 
 /// Millimetres, degrees and percent per point of drag on the transform fields.
@@ -29,8 +29,10 @@ const TURN_DEG: f32 = 45.0;
 /// picked nor sliced.
 const MIN_SCALE: f32 = 1e-3;
 
-/// The highest a model may be lifted off the plate by typing, millimetres.
+/// The highest a model may be lifted off the plate by typing, and how far a press of
+/// either button beside it moves it, millimetres.
 const MAX_LIFT_MM: f32 = 100.0;
+const LIFT_STEP_MM: f32 = 1.0;
 
 /// The gap between a model and the mirrored copy stood beside it, millimetres.
 const COPY_GAP_MM: f32 = 5.0;
@@ -365,6 +367,7 @@ fn place(ui: &mut egui::Ui, window: &mut Window, id: ObjectId) {
             };
             if secondary_button(&mut columns[0], "", "On the plate").clicked() {
                 object.stand_on_plate();
+                object.lift_mm = None;
             }
             if secondary_button(&mut columns[1], "", "Centre").clicked()
                 && let Some(bounds) = object.world_bounds()
@@ -385,67 +388,58 @@ fn place(ui: &mut egui::Ui, window: &mut Window, id: ObjectId) {
     });
 }
 
-/// How high the model's lowest point stands over the plate. Typing a height moves the
-/// model there; it is the model's place, so nothing else remembers it.
-fn lift(ui: &mut egui::Ui, scene: &mut Scene, id: ObjectId) {
+/// How high the model stands over the plate, a millimetre a press either way. The height
+/// typed is the one auto-orient stands it on supports at; nought hands that back to the
+/// support profile. Supports shows the same row.
+pub fn lift(ui: &mut egui::Ui, scene: &mut Scene, id: ObjectId) {
     let Some(object) = scene.get_mut(id) else {
         return;
     };
-    let Some(bottom_mm) = object.world_bounds().map(|bounds| bounds.mins.z) else {
+    let Some(now_mm) = object.lift() else {
         return;
     };
-    let mut lift_mm = bottom_mm;
-    let typed = number_row(
+    let mut lift_mm = now_mm;
+    let range = 0.0..=MAX_LIFT_MM;
+    let label = "Lift off the plate";
+    if stepped_row(
         ui,
-        "Lift off the plate",
+        label,
         &mut lift_mm,
         "mm",
         POSITION_DRAG,
-        0.0..=MAX_LIFT_MM,
+        LIFT_STEP_MM,
+        range,
         2,
-    );
-    if typed {
-        object.transform.translation.z += lift_mm - bottom_mm;
+    ) {
+        object.lift_to(lift_mm);
     }
 }
 
-/// What auto-orient is for, beside Auto-orient and a wait for a click on a face of the
-/// model, which then rests on the plate. Pressed again, or Esc, stops that wait.
+/// What auto-orient is for, what that means on hover, and Auto-orient beside it: pressed again with nothing changed
+/// it stands the model the next good way it found. Under them, a wait for a click on a
+/// face of the model, which then rests on the plate; pressed again, or Esc, stops it.
 fn turn(ui: &mut egui::Ui, window: &mut Window, id: ObjectId) {
     let running = window.tools.orient.is_running();
-    ui.add_enabled_ui(!running, |ui| {
-        preset(ui, &mut window.tools.orient.settings.preset)
-    });
-    let (oriented, laid) = ui.columns(2, |columns| {
-        let label = if running {
-            "Orienting..."
-        } else {
-            "Auto-orient"
-        };
-        let oriented = columns[0]
-            .add_enabled_ui(!running, |ui| secondary_button(ui, icon::ORIENT, label))
-            .inner
-            .clicked();
-        let label = if window.tools.orient.picking_face {
-            "Click a face"
-        } else {
-            "Lay on face"
-        };
-        // A run replaces the rotation when it lands, so a face laid meanwhile would be lost.
-        let laid = columns[1]
-            .add_enabled_ui(!running, |ui| secondary_button(ui, icon::SELECT, label))
-            .inner
-            .clicked();
-        (oriented, laid)
-    });
-
+    let preset = &mut window.tools.orient.settings.preset;
+    let oriented = ui
+        .add_enabled_ui(!running, |ui| preset_row(ui, preset))
+        .inner;
     if running {
         // The search measures every candidate over the whole mesh, which is no share to
         // count: the bar runs rather than standing at nought.
         progress_bar(ui, None);
-    } else {
-        offers(ui, window, id);
     }
+    let label = if window.tools.orient.picking_face {
+        "Click a face"
+    } else {
+        "Lay on face"
+    };
+    // A run replaces the rotation when it lands, so a face laid meanwhile would be lost.
+    let laid = ui
+        .add_enabled_ui(!running, |ui| secondary_button(ui, icon::SELECT, label))
+        .inner
+        .clicked();
+
     let supports = &window.tools.supports;
     let machine = window
         .machine
@@ -455,10 +449,12 @@ fn turn(ui: &mut egui::Ui, window: &mut Window, id: ObjectId) {
         .map(|printer| (printer, &window.machine.slicing.material));
     if oriented
         && let Err(error) = window.tools.orient.start(
-            &window.doc.scene,
+            &mut window.doc.scene,
+            &window.doc.plate,
             Some(id),
             |object| supports.built_for(object),
             machine,
+            &mut window.machine.status,
         )
     {
         window.machine.status = crate::status::Status::failed(&error);
@@ -473,21 +469,31 @@ fn turn(ui: &mut egui::Ui, window: &mut Window, id: ObjectId) {
     }
 }
 
-/// What auto-orient searches for, and what it means in a line.
-fn preset(ui: &mut egui::Ui, chosen: &mut OrientPreset) {
-    let response = picker(ui, icon::ORIENT, chosen.label());
-    egui::Popup::menu(&response).show(|ui| {
-        for choice in OrientPreset::all() {
-            if ui
-                .selectable_label(choice == *chosen, choice.label())
-                .clicked()
-            {
-                *chosen = choice;
-                ui.close();
+/// The preset auto-orient searches for, filling the row beside Auto-orient. Answers
+/// whether Auto-orient was pressed.
+fn preset_row(ui: &mut egui::Ui, chosen: &mut OrientPreset) -> bool {
+    let size = egui::vec2(ui.available_width(), theme::BUTTON_H);
+    let layout = egui::Layout::right_to_left(egui::Align::Center);
+    ui.allocate_ui_with_layout(size, layout, |ui| {
+        let enabled = ui.is_enabled();
+        let oriented = inline_button(ui, icon::ORIENT, "Auto-orient", false, enabled).clicked();
+        let response =
+            picker(ui, icon::PARAMETERS, chosen.label()).on_hover_text(preset_hint(*chosen));
+        egui::Popup::menu(&response).show(|ui| {
+            let goals = OrientGoal::ALL.into_iter().map(OrientPreset::Goal);
+            for choice in std::iter::once(OrientPreset::Auto).chain(goals) {
+                if ui
+                    .selectable_label(choice == *chosen, choice.label())
+                    .clicked()
+                {
+                    *chosen = choice;
+                    ui.close();
+                }
             }
-        }
-    });
-    hint(ui, preset_hint(*chosen));
+        });
+        oriented
+    })
+    .inner
 }
 
 fn preset_hint(preset: OrientPreset) -> &'static str {
@@ -502,39 +508,6 @@ fn preset_hint(preset: OrientPreset) -> &'static str {
         OrientPreset::Auto => {
             "Supports, pull and print time balanced: none gives up much for the others."
         }
-    }
-}
-
-/// The other good ways the last run found to stand the model, one at a time, and what the
-/// one it stands in costs.
-fn offers(ui: &mut egui::Ui, window: &mut Window, id: ObjectId) {
-    let Some(offer) = window.tools.orient.offer(id) else {
-        return;
-    };
-    let mut step = None;
-    ui.horizontal(|ui| {
-        if icon_button(ui, icon::PREVIOUS, "The good pose before").clicked() {
-            step = Some(true);
-        }
-        ui.label(format!("Pose {} of {}", offer.at + 1, offer.count));
-        if icon_button(ui, icon::NEXT, "The next good pose").clicked() {
-            step = Some(false);
-        }
-    });
-    if let Some(costs) = offer.costs {
-        hint(
-            ui,
-            &format!(
-                "{:.2} ml of supports, {:.1} N of pull, {:.1} mm tall",
-                costs.supports_ml, costs.pull_n, costs.stack_mm
-            ),
-        );
-    }
-    if let Some(back) = step {
-        window
-            .tools
-            .orient
-            .step(&mut window.doc.scene, &window.doc.plate, id, back);
     }
 }
 

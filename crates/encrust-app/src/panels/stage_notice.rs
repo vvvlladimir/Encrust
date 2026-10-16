@@ -2,7 +2,7 @@ use egui::{Align, Align2, Id, Layout, Rect, RichText};
 
 use crate::panels::Window;
 use crate::scene::ObjectId;
-use crate::status::Status;
+use crate::status::{Change, Status};
 use crate::ui::{card, icon, icon_button, inline_button, progress_bar, theme};
 
 /// Points between the cards, and how wide a job's card is drawn whatever its label
@@ -202,6 +202,20 @@ fn message(ui: &mut egui::Ui, status: &mut Status, running: bool, max_w: f32) {
             if response.hovered() {
                 response.on_hover_text(&text);
             }
+            if let Status::Readings(_, readings) = status {
+                for reading in readings {
+                    let tint = match reading.change {
+                        Change::Same => colors.text_mid,
+                        Change::Better => colors.ok,
+                        Change::Worse => colors.danger,
+                    };
+                    ui.label(
+                        RichText::new(&reading.text)
+                            .font(theme::label())
+                            .color(tint),
+                    );
+                }
+            }
             if error {
                 dismissed = icon_button(ui, icon::CANCEL, "Put away").clicked();
             }
@@ -216,7 +230,7 @@ fn message(ui: &mut egui::Ui, status: &mut Status, running: bool, max_w: f32) {
 /// replaced wholesale wherever something happens, and carries no time of its own.
 fn changed_at(ui: &egui::Ui, status: &Status, now: f64) -> f64 {
     let id = Id::new("stage-notice-seen");
-    let key = Id::new((status.is_error(), status.text())).value();
+    let key = Id::new(status).value();
     let seen = ui.data(|data| data.get_temp::<(u64, f64)>(id));
     match seen {
         Some((seen_key, at)) if seen_key == key => at,

@@ -12,6 +12,7 @@ use crate::job::pipeline::{thread_pool, worker_threads};
 use crate::scene::{ObjectId, Scene, SceneObject};
 
 /// One model to find an orientation for, owned so that it can cross to the worker thread.
+#[derive(Clone)]
 pub struct OrientTask {
     pub id: ObjectId,
     /// The model in its own space. Orientation is measured there, so where it currently
@@ -50,6 +51,21 @@ impl OrientTask {
         }
     }
 
+    /// Whether `other` asks the search the same of the same model, however it now stands.
+    pub fn asks_as(&self, other: &Self) -> bool {
+        let same = |one: &Option<Arc<Mesh>>, two: &Option<Arc<Mesh>>| match (one, two) {
+            (Some(one), Some(two)) => Arc::ptr_eq(one, two),
+            (one, two) => one.is_none() && two.is_none(),
+        };
+        self.id == other.id
+            && Arc::ptr_eq(&self.mesh, &other.mesh)
+            && same(&self.shell, &other.shell)
+            && same(&self.cuts, &other.cuts)
+            && self.vents == other.vents
+            && self.sizing == other.sizing
+            && self.support == other.support
+    }
+
     /// `mesh` as it measures on the plate. A model nobody resized is not copied.
     fn sized(&self, mesh: &Arc<Mesh>) -> Arc<Mesh> {
         if self.sizing == Transform::default() {
@@ -70,6 +86,7 @@ pub struct OrientRequest {
 }
 
 /// The machine and the resin a pose is printed with to be judged.
+#[derive(Clone, PartialEq)]
 pub struct Proof {
     pub printer: PrinterProfile,
     pub material: MaterialProfile,
@@ -161,9 +178,17 @@ pub fn orient_tasks(
             vents: vents_of(&object.hollow),
             sizing: object.transform.sizing(),
             down_now: object.transform.rotation.inverse() * Vec3::NEG_Z,
-            support: support_of(object),
+            support: lifted(support_of(object), object.lift_mm),
         })
         .collect()
+}
+
+/// `support` standing a model `lift_mm` clear of the plate where the user asked for that.
+fn lifted(support: SupportProfile, lift_mm: Option<f32>) -> SupportProfile {
+    SupportProfile {
+        z_lift_mm: lift_mm.unwrap_or(support.z_lift_mm),
+        ..support
+    }
 }
 
 /// The good ways to stand one model, best first: proven by printing where there is a

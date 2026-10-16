@@ -1,6 +1,6 @@
 use anyhow::{Result, bail};
 use core_engine::project::own_table;
-use core_geometry::{Adjacency, Ray, Scalar, Vec2, Vec3, lift_over_plate, raycast_placed};
+use core_geometry::{Adjacency, Ray, Scalar, Vec2, Vec3, raycast_placed};
 use core_supports::{Part, Placed, ProjectSettings, project};
 use printer_profiles::{Raft, SupportProfile};
 
@@ -102,6 +102,9 @@ pub struct SupportTool {
     /// The raft every model stands on that has none of its own. A raft is one slab under
     /// a part, so it is the part's and the plate's, not any one group's; see ADR 0253.
     pub raft: Raft,
+    /// The raft last set, the plate's or a picked model's, which the next run's plate
+    /// stands on: a model's own is not kept between runs, and the switch is.
+    pub last_raft: Raft,
     /// A profile the panel has just saved, until the plate has taken it on.
     pub saved: Option<SupportProfile>,
     /// A profile the panel's list has just had chosen, until a group has taken it up.
@@ -131,6 +134,7 @@ impl Default for SupportTool {
             last_daub: None,
             job: None,
             raft: SupportProfile::default().raft,
+            last_raft: SupportProfile::default().raft,
             saved: None,
             chosen: None,
             dropping: None,
@@ -240,6 +244,7 @@ impl SupportTool {
     /// Makes `raft` the raft of every picked model, or the plate's with nothing picked. A
     /// model whose raft is the plate's again keeps none of its own.
     pub fn keep_raft(&mut self, raft: Raft, scene: &mut Scene) {
+        self.last_raft = raft;
         if scene.selection().is_empty() {
             self.raft = raft;
             return;
@@ -249,6 +254,12 @@ impl SupportTool {
                 object.own.raft = (raft != self.raft).then_some(raft);
             }
         }
+    }
+
+    /// Stands the plate on the raft an earlier run last set, where one was remembered.
+    pub fn resume_raft(&mut self, remembered: Option<Raft>) {
+        self.raft = remembered.unwrap_or(self.raft);
+        self.last_raft = self.raft;
     }
 
     /// The active group's profile as `object` is built to, with the raft it stands on, its
@@ -549,28 +560,6 @@ impl SupportTool {
             }
         }
         added
-    }
-
-    /// Stands everything visible `z_lift_mm` clear of the plate, over whatever its raft
-    /// has already stood it up by.
-    ///
-    /// Supports need room under a part, and the layers printed straight onto the plate
-    /// are the ones that stick to it hardest. Returns how many objects moved.
-    pub fn lift(&self, scene: &mut Scene) -> usize {
-        let mut moved = 0;
-        for object in scene.targets_mut() {
-            let lift_mm = self.profile_for(object).z_lift_mm;
-            let Some(bounds) = object.world_bounds() else {
-                continue;
-            };
-            let offset = lift_over_plate(&bounds, lift_mm + object.supports.raft_lift_mm());
-            if offset.z.abs() < f32::EPSILON {
-                continue;
-            }
-            object.transform.translation += offset;
-            moved += 1;
-        }
-        moved
     }
 
     /// Stands every supported model up by the thickness of the raft under it, and back
@@ -1258,26 +1247,29 @@ mod tests {
     }
 
     #[test]
-    fn lifting_stands_a_model_its_lift_clear_of_the_plate() {
+    fn a_raft_switched_on_a_picked_model_is_remembered_and_the_plates_kept() {
         let mut scene = one_cube();
-        let tool = SupportTool::default();
+        let mut tool = SupportTool::default();
+        let flipped = Raft {
+            enabled: !tool.raft.enabled,
+            ..tool.raft
+        };
+        tool.keep_raft(flipped, &mut scene);
 
-        assert_eq!(tool.lift(&mut scene), 1);
-        let bounds = scene.objects()[0]
-            .world_bounds()
-            .expect("the cube has bounds");
-        assert!(
-            (bounds.mins.z - tool.profile.z_lift_mm).abs() < 1e-4,
-            "the lowest point ends up at the lift, got {}",
-            bounds.mins.z
+        assert_eq!(
+            scene.objects()[0].own.raft,
+            Some(flipped),
+            "the picked model's own"
         );
+        assert_ne!(tool.raft, flipped, "the plate's is left as it was this run");
+        assert_eq!(tool.last_raft, flipped, "and the next run starts on it");
     }
 
     #[test]
     fn a_raft_stands_a_supported_model_up_by_its_thickness_and_back_down_without_it() {
         let mut scene = one_cube();
         let mut tool = SupportTool::default();
-        tool.lift(&mut scene);
+        scene.objects_mut()[0].lift_to(tool.profile.z_lift_mm);
         let bottom = |scene: &Scene| {
             scene.objects()[0]
                 .world_bounds()
@@ -1304,10 +1296,10 @@ mod tests {
             (bottom(&scene) - lifted - tool.raft.thickness_mm).abs() < 1e-5,
             "the slab must not be printed into the part, and asking twice lifts once"
         );
-        assert_eq!(
-            tool.lift(&mut scene),
-            0,
-            "the lift is measured over the raft, so a model already there stays"
+        let over_raft = scene.objects()[0].lift().expect("a cube has bounds");
+        assert!(
+            (over_raft - tool.profile.z_lift_mm).abs() < 1e-5,
+            "the lift is measured over the raft, got {over_raft}"
         );
 
         tool.raft.enabled = false;
@@ -1336,25 +1328,6 @@ mod tests {
             bottom > -1e-5,
             "a model stood on the plate owes the raft nothing, got its bottom at {bottom} mm"
         );
-    }
-
-    #[test]
-    fn lifting_a_model_that_is_already_there_moves_nothing() {
-        let mut scene = one_cube();
-        let tool = SupportTool::default();
-        tool.lift(&mut scene);
-        assert_eq!(
-            tool.lift(&mut scene),
-            0,
-            "a second lift must not stack on the first"
-        );
-    }
-
-    #[test]
-    fn a_hidden_model_is_not_lifted() {
-        let mut scene = one_cube();
-        scene.objects_mut()[0].visible = false;
-        assert_eq!(SupportTool::default().lift(&mut scene), 0);
     }
 
     /// A unit cube held 5 mm over the plate: its underside, the face at z = 5, is an

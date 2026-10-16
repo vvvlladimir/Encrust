@@ -468,8 +468,22 @@ fn bracing(ui: &mut egui::Ui, profile: &mut SupportProfile, saved: Option<&Suppo
     });
 }
 
-/// What the automatic run holds up, and how thickly.
+/// What the automatic run holds up, how thickly, and how far the profile lifts a model.
 fn automatic(ui: &mut egui::Ui, profile: &mut SupportProfile, saved: Option<&SupportProfile>) {
+    held_up(ui, profile, saved);
+    mm(
+        ui,
+        "Lift",
+        was(saved, |p| p.z_lift_mm),
+        &mut profile.z_lift_mm,
+        COARSE_STEP,
+        0.0..=30.0,
+    );
+}
+
+/// What the automatic run holds up, and how thickly: the automatic group beside a model,
+/// whose lift is its own.
+pub fn held_up(ui: &mut egui::Ui, profile: &mut SupportProfile, saved: Option<&SupportProfile>) {
     let overhang = &mut profile.max_overhang_deg;
     degrees(
         ui,
@@ -495,14 +509,6 @@ fn automatic(ui: &mut egui::Ui, profile: &mut SupportProfile, saved: Option<&Sup
         COARSE_STEP,
         MIN_DENSITY..=MAX_DENSITY,
         2,
-    );
-    mm(
-        ui,
-        "Lift",
-        was(saved, |p| p.z_lift_mm),
-        &mut profile.z_lift_mm,
-        COARSE_STEP,
-        0.0..=30.0,
     );
 }
 

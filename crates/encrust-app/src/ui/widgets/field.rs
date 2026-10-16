@@ -6,7 +6,7 @@ use egui::{
     Align, Color32, DragValue, Layout, Rect, RichText, Sense, TextStyle, Ui, UiBuilder, pos2, vec2,
 };
 
-use super::icon_button;
+use super::{compact_button, icon_button};
 use crate::ui::{icon, theme};
 
 /// What a field is called, in `color`, with its unit in brackets after it: the one way
@@ -196,6 +196,49 @@ pub fn number_row(
     row(ui, label, |ui| {
         boxed_field(ui, &field, value, speed, range, Some(decimals))
     })
+}
+
+/// A `number_row` with its unit after the label and a button either side of its box,
+/// taking `step` off the value and putting it on, inside `range`.
+#[allow(clippy::too_many_arguments)]
+pub fn stepped_row(
+    ui: &mut Ui,
+    label: &str,
+    value: &mut Scalar,
+    unit: &str,
+    speed: f64,
+    step: Scalar,
+    range: RangeInclusive<Scalar>,
+    decimals: usize,
+) -> bool {
+    let field = Field {
+        name: label,
+        unit: "",
+        width: theme::FIELD_W - 2.0 * theme::FIELD_H,
+    };
+    let (least, most) = (*range.start(), *range.end());
+    ui.horizontal(|ui| {
+        field_label(ui, label, theme::colors().text_mid, unit);
+        let right = Layout::right_to_left(Align::Center);
+        ui.with_layout(right, |ui| {
+            let more = compact_button(ui, "+", theme::FIELD_H)
+                .on_hover_text(format!("{step} {unit} more"))
+                .clicked();
+            let typed = boxed_field(ui, &field, value, speed, range, Some(decimals));
+            let less = compact_button(ui, "\u{2212}", theme::FIELD_H)
+                .on_hover_text(format!("{step} {unit} less"))
+                .clicked();
+            if more {
+                *value = (*value + step).min(most);
+            }
+            if less {
+                *value = (*value - step).max(least);
+            }
+            typed || more || less
+        })
+        .inner
+    })
+    .inner
 }
 
 /// What was done to a number the window had changed on the user's behalf.

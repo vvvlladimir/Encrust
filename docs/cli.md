@@ -188,7 +188,7 @@ encrust slice model.stl \
 ```
 
 A model is stood off the plate by the profile's own `z_lift_mm`, and by its raft's
-thickness on top when it has one, before anything is put under it, the way the window's **Lift models** does it: a part sitting on the plate has no
+thickness on top when it has one, before anything is put under it, the way the window's **Lift off the plate** does it: a part sitting on the plate has no
 room for a support. One already standing that high is left where it is, and a profile with
 `z_lift_mm = 0` lifts nothing. The report says how far it moved.
 

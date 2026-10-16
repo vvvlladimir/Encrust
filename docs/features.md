@@ -66,22 +66,26 @@ capped silently.
 - **Mirror** the model, or mirror a copy beside it.
 - **Lay on face:** click a face and the model lies on it.
 - Put a model back in the middle of the plate, back on the plate, or lift it off by a set
-  height.
+  height, typed or a millimetre a press of − or +. Auto-orient keeps that height for a pose
+  on supports; nought, or **On the plate**, hands it back to the support profile's lift.
 
 **Auto-orient:**
 - Searches for the best angle for one of four presets: **fewest supports**, **least
-  peel**, **shortest print** or **auto**, picked in Position above **Auto-orient**; the
-  plate-wide **Auto-orient plate** uses the same preset. The preset resets to fewest
-  supports when the window reopens.
+  peel**, **shortest print** or **auto**, picked in Position beside **Auto-orient**; the
+  plate-wide **Auto-orient plate** uses the same preset. The preset resets to auto when
+  the window reopens.
 - **Auto** balances the other three for each model. It never lets one of supports, pull
   or print time go far worse for the sake of the others. Where some pose is about as good
   as the best on all three, it takes that one. Otherwise it takes the pose where each
   gives up the smallest, most even share of its best. Like least peel, it never takes a
   suction cup or a pull past the warning.
-- When there are other good poses, Position shows **Pose 1 of N** with arrows to step
-  through them. With a printer chosen, each one shows its supports, pull and height. Auto
-  offers every trade that no other pose beats on all three; a single goal offers the poses
-  it reads as just as good.
+- When there are other good poses, pressing **Auto-orient** again with nothing changed
+  stands the model the next of them, round to the first, without searching again. A
+  change to the model, its supports, its lift, the preset, the printer or the resin
+  searches again. With a printer chosen, the notice shows each pose's supports, pull and
+  height, green where it beats the pose before and red where it loses. Auto offers every
+  trade that no other pose beats on all three; a single goal offers the poses it reads as
+  just as good.
 - You can cap the tilt (for example "no more than 30° from how it stands now"). A cap of 0
   leaves the model as it is.
 - It never picks an angle worse than the current one.
@@ -178,7 +182,8 @@ capped silently.
   height and load, and nothing carrying a load leans more than 45°.
 - A tip that has no room leans until it finds some. A support that still has no room is
   reported and left out of the print, never forced into the model.
-- **Lift models** off the plate by the profile's height first, so supports have room.
+- **Lift off the plate** stands the picked model that high, a millimetre a press of − or
+  +, so supports have room. It is the same number in Position and in Supports.
 
 ### Manual
 - **Place** a support with a click; Alt-click removes it.
@@ -205,6 +210,7 @@ capped silently.
 - **Raft:** **Skates** (a saucer-shaped slab), **Grid** (rim and bars) or **Connected** (a
   pad under each foot, joined by strips), drawn to the model's outline (hull) or a
   rectangle, with margin and thickness. A raft can belong to the plate or to one model.
+  The raft last set, on either, is the plate's when the window reopens.
 - **Bracing:** cross braces between tall trunks, where the first brace goes and how often
   they repeat.
 

@@ -2,24 +2,29 @@ use std::sync::Arc;
 
 use anyhow::{Result, bail};
 use core_geometry::{Adjacency, Mesh, Vec2, Vec3};
-use core_plate::OrientSettings;
+use core_plate::{OrientPreset, OrientSettings};
 use core_supports::Region;
 use printer_profiles::{MaterialProfile, PrinterProfile, SupportProfile};
 
-use crate::job::{Costs, OrientJob, OrientOutcome, OrientRequest, Pose, Proof, Turn, orient_tasks};
+use crate::job::{
+    Costs, OrientJob, OrientOutcome, OrientRequest, OrientTask, Pose, Proof, Turn, orient_tasks,
+};
 use crate::plate::BuildPlate;
 use crate::scene::{ObjectId, Scene, SceneObject};
-use crate::status::Status;
+use crate::status::{Reading, Status};
 
 /// A turn this small is the model already standing the way it should.
 const SETTLED_DEG: f32 = 0.5;
+
+/// How far the way down may differ from a pose's and the model still stand in it: what a
+/// placement's rounding leaves.
+const STANDING_EPS: f32 = 1e-4;
 
 /// How far a neighbouring triangle may lean from the one pointed at and still be part of
 /// the same flat face, degrees. Tessellation leaves a flat face within a hair of this.
 const FACET_DEG: f32 = 1.0;
 
 /// What the auto-orient button is set to, and the run it has going.
-#[derive(Default)]
 pub struct OrientTool {
     pub settings: OrientSettings,
     pub job: Option<OrientJob>,
@@ -32,16 +37,45 @@ pub struct OrientTool {
     adjacency: Option<(usize, Arc<Adjacency>)>,
     /// The good ways to stand each model the last run turned, and which one it stands in.
     offers: Vec<(Turn, usize)>,
+    /// What the last run was asked, which the button asked the same again steps through.
+    asked: Option<Asked>,
 }
 
-/// Where a model stands among the good ways the last run found for it.
-#[derive(Debug, Clone, Copy, PartialEq)]
-pub struct Offer {
-    /// Which of them it stands in, from 0, and how many there are.
-    pub at: usize,
-    pub count: usize,
-    /// What it costs standing so, where a proof printed it.
-    pub costs: Option<Costs>,
+impl Default for OrientTool {
+    fn default() -> Self {
+        Self {
+            settings: OrientSettings {
+                preset: OrientPreset::Auto,
+                ..OrientSettings::default()
+            },
+            job: None,
+            picking_face: false,
+            facet: None,
+            adjacency: None,
+            offers: Vec::new(),
+            asked: None,
+        }
+    }
+}
+
+/// The models a run was asked about, and what it judged them by.
+struct Asked {
+    tasks: Vec<OrientTask>,
+    settings: OrientSettings,
+    proof: Option<Proof>,
+}
+
+impl Asked {
+    fn same_as(&self, other: &Self) -> bool {
+        self.settings == other.settings
+            && self.proof == other.proof
+            && self.tasks.len() == other.tasks.len()
+            && self
+                .tasks
+                .iter()
+                .zip(&other.tasks)
+                .all(|(one, two)| one.asks_as(two))
+    }
 }
 
 /// The flat face a click would lay on the plate: every triangle joined to the one
@@ -116,17 +150,21 @@ impl OrientTool {
         None
     }
 
-    /// Starts a run over one model, or over everything visible when `only` is `None`, and
-    /// stops waiting for a face: the run replaces the rotation a laid face would set.
+    /// Turns one model, or everything visible when `only` is `None`, the way it prints
+    /// best, and stops waiting for a face: the run replaces the rotation a laid face would
+    /// set. Asked the same of the same models still standing as the last run left them,
+    /// it stands each the next good way that run found instead of searching again.
     ///
     /// Each model is judged as standing on supports built to `support_of` unless it needs
     /// none. With a `machine` the search's best few are printed for it and the best taken.
     pub fn start(
         &mut self,
-        scene: &Scene,
+        scene: &mut Scene,
+        plate: &BuildPlate,
         only: Option<ObjectId>,
         support_of: impl Fn(&SceneObject) -> SupportProfile,
         machine: Option<(&PrinterProfile, &MaterialProfile)>,
+        status: &mut Status,
     ) -> Result<()> {
         let tasks = orient_tasks(scene, only, support_of);
         if tasks.is_empty() {
@@ -134,8 +172,7 @@ impl OrientTool {
         }
 
         self.stop_picking();
-        self.offers.clear();
-        self.job = Some(OrientJob::spawn(OrientRequest {
+        let asked = Asked {
             tasks,
             settings: OrientSettings {
                 on_supports: true,
@@ -150,8 +187,32 @@ impl OrientTool {
                 printer: printer.clone(),
                 material: material.clone(),
             }),
+        };
+        if self.found_for(&asked) {
+            *status = self.step(scene, plate);
+            return Ok(());
+        }
+
+        self.offers.clear();
+        self.job = Some(OrientJob::spawn(OrientRequest {
+            tasks: asked.tasks.clone(),
+            settings: asked.settings,
+            proof: asked.proof.clone(),
         }));
+        self.asked = Some(asked);
         Ok(())
+    }
+
+    /// Whether the last run was asked `asked` and every model stands as it left it.
+    fn found_for(&self, asked: &Asked) -> bool {
+        let standing = |task: &OrientTask| {
+            self.offers.iter().any(|(turn, at)| {
+                let down = turn.poses[*at].rotation.inverse() * Vec3::NEG_Z;
+                turn.id == task.id && down.abs_diff_eq(task.down_now, STANDING_EPS)
+            })
+        };
+        self.asked.as_ref().is_some_and(|last| last.same_as(asked))
+            && asked.tasks.iter().all(standing)
     }
 
     /// Drains a running run into the scene. Returns whether one is still going, which is
@@ -172,64 +233,105 @@ impl OrientTool {
         match outcome {
             OrientOutcome::Turned(turns) => {
                 let mut moved = 0;
-                let seated = turns.iter().filter(|turn| turn.poses[0].on_plate).count();
-                let others: usize = turns.iter().map(|turn| turn.poses.len() - 1).sum();
                 for turn in &turns {
                     if let Some(object) = scene.get_mut(turn.id) {
                         moved += usize::from(stand(object, turn.poses[0], turn.lift_mm, plate));
                     }
                 }
+                *status = turned(&turns, moved);
                 self.offers = turns.into_iter().map(|turn| (turn, 0)).collect();
-                let turned = match moved {
-                    0 => "Everything already stands the way it prints best".to_owned(),
-                    1 => "Turned 1 model".to_owned(),
-                    moved => format!("Turned {moved} models"),
-                };
-                let turned = match seated {
-                    0 => turned,
-                    1 => format!("{turned}; 1 stands on the plate"),
-                    seated => format!("{turned}; {seated} stand on the plate"),
-                };
-                *status = Status::Info(match others {
-                    0 => turned,
-                    1 => format!("{turned}; 1 other good pose to compare"),
-                    others => format!("{turned}; {others} other good poses to compare"),
-                });
             }
-            OrientOutcome::Failed(message) => *status = Status::Error(message),
+            OrientOutcome::Failed(message) => {
+                self.asked = None;
+                *status = Status::Error(message);
+            }
         }
         false
     }
-}
 
-impl OrientTool {
-    /// Where `id` stands among the good ways the last run found for it, or `None` when it
-    /// found it only the one.
-    pub fn offer(&self, id: ObjectId) -> Option<Offer> {
-        let (turn, at) = self.offers.iter().find(|(turn, _)| turn.id == id)?;
-        (turn.poses.len() > 1).then(|| Offer {
-            at: *at,
-            count: turn.poses.len(),
-            costs: turn.poses[*at].costs,
-        })
-    }
-
-    /// Stands `id` the next good way the last run found for it, or the one before when
-    /// `back`, round from the last to the first.
-    pub fn step(&mut self, scene: &mut Scene, plate: &BuildPlate, id: ObjectId, back: bool) {
-        let Some((turn, at)) = self.offers.iter_mut().find(|(turn, _)| turn.id == id) else {
-            return;
-        };
-        let count = turn.poses.len();
-        *at = if back {
-            (*at + count - 1) % count
-        } else {
-            (*at + 1) % count
-        };
-        if let Some(object) = scene.get_mut(id) {
-            stand(object, turn.poses[*at], turn.lift_mm, plate);
+    /// Stands every model the last run turned the next good way it found, round from the
+    /// last to the first, and says what that one costs against the one before.
+    fn step(&mut self, scene: &mut Scene, plate: &BuildPlate) -> Status {
+        let alone = self.offers.len() == 1;
+        let mut stepped = 0;
+        let mut said = None;
+        for (turn, at) in &mut self.offers {
+            let count = turn.poses.len();
+            if count < 2 {
+                continue;
+            }
+            let was = turn.poses[*at];
+            *at = (*at + 1) % count;
+            let pose = turn.poses[*at];
+            if let Some(object) = scene.get_mut(turn.id) {
+                stand(object, pose, turn.lift_mm, plate);
+                stepped += 1;
+            }
+            if alone {
+                let headline = format!("Pose {} of {count}", *at + 1);
+                said = Some(costed(headline, pose.costs, was.costs));
+            }
+        }
+        match (said, stepped) {
+            (Some(said), _) => said,
+            (None, 0) => Status::Info(
+                "No other good pose: change the preset, the supports or the lift to search again"
+                    .to_owned(),
+            ),
+            (None, 1) => Status::Info("Stood 1 model its next good way".to_owned()),
+            (None, stepped) => Status::Info(format!("Stood {stepped} models their next good way")),
         }
     }
+}
+
+/// What a run did: how many models it turned, how many stand on the plate, how many other
+/// good poses the button steps through next, and what one model now costs.
+fn turned(turns: &[Turn], moved: usize) -> Status {
+    let seated = turns.iter().filter(|turn| turn.poses[0].on_plate).count();
+    let others: usize = turns.iter().map(|turn| turn.poses.len() - 1).sum();
+    let turned = match moved {
+        0 => "Everything already stands the way it prints best".to_owned(),
+        1 => "Turned 1 model".to_owned(),
+        moved => format!("Turned {moved} models"),
+    };
+    let turned = match seated {
+        0 => turned,
+        1 => format!("{turned}; 1 stands on the plate"),
+        seated => format!("{turned}; {seated} stand on the plate"),
+    };
+    let turned = match others {
+        0 => turned,
+        1 => format!("{turned}; Auto-orient again for 1 other good pose"),
+        others => format!("{turned}; Auto-orient again for {others} other good poses"),
+    };
+    match turns {
+        [turn] => costed(turned, turn.poses[0].costs, None),
+        _ => Status::Info(turned),
+    }
+}
+
+/// `headline` and what a pose costs, each figure against `was` where there was one.
+fn costed(headline: String, costs: Option<Costs>, was: Option<Costs>) -> Status {
+    let Some(costs) = costs else {
+        return Status::Info(headline);
+    };
+    let reading = |now: fn(&Costs) -> f64, shown: fn(f64) -> String| {
+        Reading::lower_better(now(&costs), was.as_ref().map(now), shown)
+    };
+    Status::Readings(
+        headline,
+        vec![
+            reading(
+                |costs| f64::from(costs.supports_ml),
+                |ml| format!("{ml:.2} ml of supports"),
+            ),
+            reading(|costs| costs.pull_n, |n| format!("{n:.1} N of pull")),
+            reading(
+                |costs| f64::from(costs.stack_mm),
+                |mm| format!("{mm:.1} mm tall"),
+            ),
+        ],
+    )
 }
 
 /// Stands `object` the way `pose` says, over the middle it stood over, slid only as far as
@@ -259,6 +361,7 @@ fn stand(object: &mut SceneObject, pose: Pose, lift_mm: f32, plate: &BuildPlate)
 mod tests {
     use super::*;
     use crate::scene::{ImportSummary, Imported};
+    use crate::status::Change;
     use core_geometry::{Mesh, Orientation, Quat, Transform, Vec3, diagnose};
     use std::sync::Arc;
 
@@ -318,20 +421,66 @@ mod tests {
         }
     }
 
+    /// Presses Auto-orient over the whole plate and waits for what it does.
+    fn press(tool: &mut OrientTool, scene: &mut Scene, status: &mut Status) {
+        let plate = BuildPlate::default();
+        tool.start(
+            scene,
+            &plate,
+            None,
+            |_| SupportProfile::medium(),
+            None,
+            status,
+        )
+        .expect("a visible model can be oriented");
+        settle(tool, scene, status);
+    }
+
     #[test]
-    fn a_model_oriented_twice_is_not_turned_the_second_time() {
+    fn a_model_oriented_again_after_a_change_is_not_turned_the_second_time() {
         let mut scene = scene_with(cuboid(Vec3::new(40.0, 40.0, 4.0)));
         let mut tool = OrientTool::default();
         let mut status = Status::default();
-        for _ in 0..2 {
-            tool.start(&scene, None, |_| SupportProfile::medium(), None)
-                .expect("a visible slab can be oriented");
-            settle(&mut tool, &mut scene, &mut status);
-        }
+        press(&mut tool, &mut scene, &mut status);
+        tool.settings.preset = core_plate::OrientGoal::FewestSupports.into();
+        press(&mut tool, &mut scene, &mut status);
         assert!(
             matches!(&status, Status::Info(text) if text.starts_with("Everything already")),
             "the second run finds it standing as the first left it, got {status:?}"
         );
+    }
+
+    #[test]
+    fn pressed_again_with_nothing_changed_it_steps_rather_than_searches() {
+        let mut scene = scene_with(cuboid(Vec3::new(40.0, 20.0, 4.0)));
+        let mut tool = OrientTool::default();
+        let mut status = Status::default();
+        press(&mut tool, &mut scene, &mut status);
+        let plate = BuildPlate::default();
+
+        tool.start(
+            &mut scene,
+            &plate,
+            None,
+            |_| SupportProfile::medium(),
+            None,
+            &mut status,
+        )
+        .expect("a visible slab can be oriented");
+        assert!(!tool.is_running(), "nothing new to ask, so no run");
+
+        scene.objects_mut()[0].lift_to(3.0);
+        tool.start(
+            &mut scene,
+            &plate,
+            None,
+            |_| SupportProfile::medium(),
+            None,
+            &mut status,
+        )
+        .expect("a visible slab can be oriented");
+        assert!(tool.is_running(), "a new lift is a new question");
+        settle(&mut tool, &mut scene, &mut status);
     }
 
     #[test]
@@ -340,9 +489,7 @@ mod tests {
         let mut tool = OrientTool::default();
         let mut status = Status::default();
 
-        tool.start(&scene, None, |_| SupportProfile::medium(), None)
-            .expect("a visible slab can be oriented");
-        settle(&mut tool, &mut scene, &mut status);
+        press(&mut tool, &mut scene, &mut status);
 
         let bounds = scene.world_bounds().expect("the slab is still there");
         assert!(
@@ -369,22 +516,13 @@ mod tests {
             ((bounds.mins + bounds.maxs) / 2.0).truncate()
         };
         let before = middle(&scene);
-        let mut tool = OrientTool {
-            offers: vec![(
-                Turn {
-                    id,
-                    poses: vec![Pose {
-                        rotation: Quat::IDENTITY,
-                        on_plate: true,
-                        costs: None,
-                    }],
-                    lift_mm: 0.0,
-                },
-                0,
-            )],
-            ..OrientTool::default()
+        let upright = Pose {
+            rotation: Quat::IDENTITY,
+            on_plate: true,
+            costs: None,
         };
-        tool.step(&mut scene, &BuildPlate::default(), id, false);
+        let column = scene.get_mut(id).expect("the column is there");
+        stand(column, upright, 0.0, &BuildPlate::default());
 
         let after = middle(&scene);
         assert!(
@@ -407,22 +545,13 @@ mod tests {
         let id = scene.objects()[0].id;
         scene.objects_mut()[0].transform.translation = Vec3::new(1.0, 30.0, 0.0);
         let on_side = Quat::from_rotation_y(std::f32::consts::FRAC_PI_2);
-        let mut tool = OrientTool {
-            offers: vec![(
-                Turn {
-                    id,
-                    poses: vec![Pose {
-                        rotation: on_side,
-                        on_plate: true,
-                        costs: None,
-                    }],
-                    lift_mm: 0.0,
-                },
-                0,
-            )],
-            ..OrientTool::default()
+        let lying = Pose {
+            rotation: on_side,
+            on_plate: true,
+            costs: None,
         };
-        tool.step(&mut scene, &BuildPlate::default(), id, false);
+        let column = scene.get_mut(id).expect("the column is there");
+        stand(column, lying, 0.0, &BuildPlate::default());
 
         let bounds = scene.world_bounds().expect("the column is there");
         let plate = BuildPlate::default();
@@ -443,9 +572,7 @@ mod tests {
         tool.settings.preset = core_plate::OrientGoal::LeastPeel.into();
         let mut status = Status::default();
 
-        tool.start(&scene, None, |_| SupportProfile::medium(), None)
-            .expect("a visible slab can be oriented");
-        settle(&mut tool, &mut scene, &mut status);
+        press(&mut tool, &mut scene, &mut status);
 
         let bounds = scene.world_bounds().expect("the slab is still there");
         let height_mm = bounds.maxs.z - bounds.mins.z;
@@ -459,46 +586,67 @@ mod tests {
     fn stepping_through_the_offered_poses_turns_the_model_and_wraps_round() {
         let mut scene = scene_with(cuboid(Vec3::new(40.0, 20.0, 4.0)));
         let id = scene.objects()[0].id;
-        let pose = |rotation| Pose {
+        let pose = |rotation, supports_ml| Pose {
             rotation,
             on_plate: true,
-            costs: None,
+            costs: Some(Costs {
+                supports_ml,
+                pull_n: 5.0,
+                stack_mm: 10.0,
+            }),
         };
         let on_edge = Quat::from_rotation_x(std::f32::consts::FRAC_PI_2);
         let mut tool = OrientTool {
             offers: vec![(
                 Turn {
                     id,
-                    poses: vec![pose(Quat::IDENTITY), pose(on_edge)],
+                    poses: vec![pose(Quat::IDENTITY, 1.0), pose(on_edge, 2.0)],
                     lift_mm: 0.0,
                 },
                 0,
             )],
             ..OrientTool::default()
         };
+        let plate = BuildPlate::default();
 
-        tool.step(&mut scene, &BuildPlate::default(), id, false);
+        let said = tool.step(&mut scene, &plate);
         let turned = scene.objects()[0].transform.rotation;
         assert!(
             turned.abs_diff_eq(on_edge, 1e-5),
             "the second pose, got {turned:?}"
         );
+        let Status::Readings(headline, readings) = said else {
+            panic!("a proven pose says what it costs, got {said:?}");
+        };
+        assert_eq!(headline, "Pose 2 of 2");
         assert_eq!(
-            tool.offer(id).map(|offer| (offer.at, offer.count)),
-            Some((1, 2))
+            readings[0].change,
+            Change::Worse,
+            "2 ml of supports after 1"
         );
+        assert_eq!(readings[1].change, Change::Same, "the same pull");
 
-        tool.step(&mut scene, &BuildPlate::default(), id, false);
-        assert_eq!(
-            tool.offer(id).map(|offer| offer.at),
-            Some(0),
-            "past the last, the first"
+        tool.step(&mut scene, &plate);
+        let turned = scene.objects()[0].transform.rotation;
+        assert!(
+            turned.abs_diff_eq(Quat::IDENTITY, 1e-5),
+            "past the last, the first, got {turned:?}"
         );
-        tool.step(&mut scene, &BuildPlate::default(), id, true);
+    }
+
+    #[test]
+    fn a_lift_the_user_asked_for_stands_a_supported_pose_on_it() {
+        let mut scene = scene_with(cuboid(Vec3::splat(10.0)));
+        scene.objects_mut()[0].lift_to(2.5);
+        let tasks = orient_tasks(&scene, None, |_| SupportProfile::medium());
+        assert_eq!(tasks[0].support.z_lift_mm, 2.5);
+
+        scene.objects_mut()[0].lift_to(0.0);
+        let tasks = orient_tasks(&scene, None, |_| SupportProfile::medium());
         assert_eq!(
-            tool.offer(id).map(|offer| offer.at),
-            Some(1),
-            "before the first, the last"
+            tasks[0].support.z_lift_mm,
+            SupportProfile::medium().z_lift_mm,
+            "back on the plate, the profile's lift"
         );
     }
 
@@ -507,8 +655,12 @@ mod tests {
         let mut tool = OrientTool::default();
         let scene = Scene::default();
         assert!(tool.blocker(&scene).is_some());
+        let mut scene = scene;
+        let plate = BuildPlate::default();
+        let none = |_: &SceneObject| SupportProfile::medium();
+        let mut status = Status::default();
         assert!(
-            tool.start(&scene, None, |_| SupportProfile::medium(), None)
+            tool.start(&mut scene, &plate, None, none, None, &mut status)
                 .is_err()
         );
     }

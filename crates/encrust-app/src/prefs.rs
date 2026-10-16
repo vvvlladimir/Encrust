@@ -12,7 +12,7 @@ use serde::{Deserialize, Serialize};
 
 use net_prusalink::Link;
 use net_sdcp::Printer;
-use printer_profiles::{Kind, Renamed};
+use printer_profiles::{Kind, Raft, Renamed};
 
 use crate::network::{Network, Prusa};
 use crate::panels::Window;
@@ -56,6 +56,9 @@ pub struct Preferences {
     /// `docs/decisions/0192`.
     #[serde(default)]
     tools: Option<ToolSettings>,
+    /// The raft last set, on the plate or on a model, which the next run's plate stands on.
+    #[serde(default)]
+    raft: Option<Raft>,
     /// The files opened lately, newest first.
     #[serde(default)]
     recent: Recent,
@@ -110,6 +113,7 @@ impl Preferences {
                 .collect(),
             updates: updates.clone(),
             tools: Some(ToolSettings::of(tools, slicing)),
+            raft: Some(tools.supports.last_raft),
             recent: Recent::default(),
             mask_split: None,
             inspector_w: None,
@@ -225,6 +229,7 @@ impl Preferences {
         if let Some(tools) = self.tools.clone() {
             tools.apply(window.tools, &mut window.machine.slicing);
         }
+        window.tools.supports.resume_raft(self.raft);
     }
 
     /// Writes the file, making its directory first. A failure is silent: nothing the user
@@ -471,6 +476,28 @@ mod tests {
         assert_eq!(back.hollow.state.thickness_mm, 1.25);
         assert_eq!(back.drain.state.depth_mm, 7.5);
         assert_eq!(back.supports.brush_radius_mm, 4.0);
+    }
+
+    #[test]
+    fn the_raft_last_set_is_the_plates_next_run() {
+        let mut tools = Tools::default();
+        let flipped = !tools.supports.raft.enabled;
+        tools.supports.last_raft.enabled = flipped;
+        let prefs = Preferences::of(
+            &Slicing::default(),
+            &Network::default(),
+            &UpdatePrefs::default(),
+            &tools,
+        );
+        let text = serde_json::to_string(&prefs).expect("the preferences serialise");
+        let back: Preferences = serde_json::from_str(&text).expect("and read back");
+
+        let mut next = Tools::default();
+        next.supports.resume_raft(back.raft);
+        assert_eq!(
+            next.supports.raft.enabled, flipped,
+            "the switch stays where it was left"
+        );
     }
 
     #[test]

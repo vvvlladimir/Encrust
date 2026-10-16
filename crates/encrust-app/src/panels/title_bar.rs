@@ -831,10 +831,12 @@ fn edit_menu(ui: &mut egui::Ui, window: &mut Window) {
             .as_ref()
             .map(|printer| (printer, &window.machine.slicing.material));
         let started = window.tools.orient.start(
-            &window.doc.scene,
+            &mut window.doc.scene,
+            &window.doc.plate,
             None,
             |object| supports.built_for(object),
             machine,
+            &mut window.machine.status,
         );
         if let Err(error) = started {
             window.machine.status = crate::status::Status::failed(&error);
