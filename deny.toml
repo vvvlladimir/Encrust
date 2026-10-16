@@ -7,6 +7,9 @@ yanked = "deny"
 # A vulnerability anywhere fails the build. "Unmaintained" only does when the crate is one
 # we chose ourselves: eframe pulls in unmaintained font parsing we have no upgrade for.
 unmaintained = "workspace"
+# Every zip 8 is yanked and the newest threemf2 still asks for one; drop this once it reads
+# 3MF through zip 9.
+ignore = [{ crate = "zip@8.6.0", reason = "the newest threemf2 requires zip ^8.6" }]
 
 [licenses]
 # Encrust ships under AGPL-3.0-only. Nothing here may be copyleft beyond that, or
