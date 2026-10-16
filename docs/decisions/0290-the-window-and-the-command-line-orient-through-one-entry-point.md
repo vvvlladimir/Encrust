@@ -1,4 +1,4 @@
-# 0289. The window and the command line orient through one entry point
+# 0290. The window and the command line orient through one entry point
 
 - **Status:** Accepted
 - **Date:** 2026-10-16

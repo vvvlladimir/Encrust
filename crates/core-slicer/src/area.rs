@@ -20,11 +20,8 @@ pub fn covered_area(contours: &[Contour]) -> Scalar {
         / 2.0
 }
 
-/// The separate pieces one plane's contours cover, by the same rule as [`covered_area`]:
-/// each piece its outline first and then its holes, the holes wound the other way.
-///
-/// What a pull on the film is computed over, since a piece pulls as one and two pieces
-/// pull apart.
+/// The separate pieces one plane's contours cover, each its outline and then its holes:
+/// what a pull on the film is computed over, since two pieces pull apart.
 pub fn covered_pieces(contours: &[Contour]) -> Vec<Vec<Vec<Vec2>>> {
     if contours.is_empty() {
         return Vec::new();

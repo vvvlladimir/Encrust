@@ -99,7 +99,7 @@ pub struct Turn {
     /// Never empty: the first is the choice, the rest are offered in turn beside it.
     pub poses: Vec<Pose>,
     /// How far it is stood off the plate onto its supports when it is not on it,
-    /// millimetres: its support profile's own lift.
+    /// millimetres: the lift the user gave the model, or its support profile's.
     pub lift_mm: f32,
 }
 

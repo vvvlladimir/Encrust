@@ -90,7 +90,7 @@ every layer, so a vent thinner than the spacing between two of them is missed.
 ## The build volume
 
 Where the settings carry a build volume, every first-pass candidate is checked against it
-(ADR 0288). The check reads an envelope: the model's farthest vertex along each of 256
+(ADR 0289). The check reads an envelope: the model's farthest vertex along each of 256
 Fibonacci directions, built once per model. That is a convex polytope inside the hull,
 short of it by at most a hundredth of the model's radius, so every extent is read that
 much larger.
@@ -280,8 +280,9 @@ for a column, the pose fails every goal that weighs cups, as a cup would. All ar
 by the rule above on what they printed — support resin, newtons, millimetres of stack —
 and `prove` answers every finalist with what decided its place, `core_plate::rulings`.
 
-The command line orients by the search alone, and stands a model the search set on the
-plate the way the proof does, `stand_seated`: supports under what hangs, none if nothing does.
+The command line orients through the same `orient_for_print`, and stands a model the search
+set on the plate the way the proof does, `stand_seated`: supports under what hangs, none if
+nothing does.
 
 ## Arranging
 

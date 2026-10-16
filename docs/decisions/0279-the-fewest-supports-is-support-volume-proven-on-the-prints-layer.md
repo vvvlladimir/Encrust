@@ -1,6 +1,6 @@
 # 0279. Choose the fewest supports by support volume, proven on the print's layer
 
-- **Status:** Accepted
+- **Status:** Accepted; the lift a pose is judged at in the window is superseded by 0291
 - **Date:** 2026-10-15
 
 ## Context

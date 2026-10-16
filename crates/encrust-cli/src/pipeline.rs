@@ -152,7 +152,7 @@ pub fn import(
             summary.peak_mm2,
             summary.overhang_mm2,
             if summary.on_plate {
-                ", set on the plate with no supports"
+                ", set on the plate"
             } else {
                 ""
             }
@@ -583,7 +583,8 @@ pub fn load(path: &Path) -> Result<Loaded> {
         .with_context(|| format!("cannot load {}", path.display()))
 }
 
-/// Applies the requested orientation, scale, rotation and placement, in that order.
+/// Applies the requested scale, orientation, rotation and placement, in that order: the
+/// search judges the model at the size it prints.
 fn place(
     mesh: Mesh,
     args: &ImportArgs,
@@ -591,25 +592,41 @@ fn place(
     chosen: &Chosen,
 ) -> Result<(Mesh, Option<OrientSummary>)> {
     let transform = &args.transform;
-    let (mesh, oriented) = if transform.orient {
+    let mesh = match transform.scale {
+        Some(scale) => transform_mesh(
+            &mesh,
+            Transform {
+                scale,
+                ..Transform::default()
+            },
+        ),
+        None => mesh,
+    };
+    let (mesh, mut oriented) = if transform.orient {
         let summary = orientation(&mesh, args, supports, chosen)?;
         (turned_in_place(&mesh, summary.rotation)?, Some(summary))
     } else {
         (mesh, None)
     };
 
-    let placement = Transform {
-        translation: Vec3::ZERO,
-        rotation: transform.rotate.map_or(Quat::IDENTITY, euler_degrees),
-        scale: transform.scale.unwrap_or(Vec3::ONE),
-        ..Transform::default()
-    };
-
-    let mut mesh = if placement == Transform::default() {
+    let rotation = transform.rotate.map_or(Quat::IDENTITY, euler_degrees);
+    let mut mesh = if rotation == Quat::IDENTITY {
         mesh
     } else {
-        transform_mesh(&mesh, placement)
+        transform_mesh(
+            &mesh,
+            Transform {
+                rotation,
+                ..Transform::default()
+            },
+        )
     };
+    // A --rotate that tips the model off the face --orient seated it on leaves it on supports.
+    if let Some(summary) = oriented.as_mut()
+        && !(rotation * Vec3::NEG_Z).abs_diff_eq(Vec3::NEG_Z, 1e-4)
+    {
+        summary.on_plate = false;
+    }
 
     if transform.center {
         mesh = centred(mesh, chosen.printer.as_ref())?;
@@ -761,6 +778,58 @@ mod tests {
     struct Flags {
         #[command(flatten)]
         import: ImportArgs,
+    }
+
+    #[test]
+    fn a_rotate_that_tips_a_seated_model_stands_it_on_supports() {
+        use clap::Parser;
+
+        let corners = (0..8)
+            .map(|at| {
+                Vec3::new(
+                    (at & 1) as Scalar,
+                    ((at >> 1) & 1) as Scalar,
+                    (at >> 2) as Scalar,
+                ) * 10.0
+            })
+            .collect();
+        let faces = vec![
+            [0, 2, 1],
+            [1, 2, 3],
+            [4, 5, 6],
+            [5, 7, 6],
+            [0, 1, 4],
+            [1, 5, 4],
+            [2, 6, 3],
+            [3, 6, 7],
+            [0, 4, 2],
+            [2, 4, 6],
+            [1, 3, 5],
+            [3, 7, 5],
+        ];
+        let cube = Mesh::new(corners, faces);
+        let chosen = Chosen {
+            printer: None,
+            material: MaterialProfile::default(),
+            invented_exposure: false,
+        };
+        let supports = SupportProfile::medium();
+        let seated = |flags: &[&str]| {
+            let args = Flags::parse_from(flags).import;
+            let (_, oriented) =
+                place(cube.clone(), &args, Some(&supports), &chosen).expect("a cube orients");
+            oriented.expect("--orient reports its turn").on_plate
+        };
+
+        assert!(seated(&["encrust", "--orient"]), "a cube needs no supports");
+        assert!(
+            !seated(&["encrust", "--orient", "--rotate", "30,0,0"]),
+            "tipped onto an edge, it no longer rests on a face"
+        );
+        assert!(
+            seated(&["encrust", "--orient", "--rotate", "0,0,30"]),
+            "a turn about the vertical keeps the face down"
+        );
     }
 
     #[test]

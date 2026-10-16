@@ -42,10 +42,6 @@ fn finalists_for(faces: usize, reach_mm: Scalar) -> usize {
     (FINALIST_FACES / faces.max(1)).clamp(FINALISTS, MOST_FINALISTS)
 }
 
-/// What a suction cup or a tearing pull weighs against an island or a point left hanging:
-/// the first two lose the whole print, the others a detail of it.
-const FATAL: usize = 10;
-
 /// How coarse a trial is cut: the tallest pose into about `TRIAL_LAYERS`, no layer
 /// thicker than `TRIAL_LAYER_MM`, cured at a pixel of `TRIAL_PIXEL_MM`. A trial ranks
 /// poses against each other, which the shape of a stack settles long before its last
@@ -87,8 +83,8 @@ pub struct Printout {
     pub contacts: usize,
     /// The resin in the supports, millilitres, as the plate's summary counts it.
     pub supports_ml: f32,
-    /// Places that need holding up and are not: contacts with no room for a column, and
-    /// for a model set on the plate everything placement would have stood a support under.
+    /// Places that need holding up and are not: contacts with no room for a column, on
+    /// supports or set on the plate.
     pub hanging: usize,
     /// Contacts on faces that look up in the model's own file.
     pub top_contacts: usize,
@@ -114,12 +110,6 @@ impl Printout {
     /// pulls.
     pub fn fatal(&self) -> usize {
         self.cups + self.peels
-    }
-
-    /// What in the pose would fail the print, a cup or a tearing pull counted `FATAL`
-    /// times over.
-    pub fn failures(&self) -> usize {
-        FATAL * self.fatal() + self.islands + self.hanging
     }
 
     /// The reading `goal` is meant to win, lower being better.
@@ -167,7 +157,7 @@ pub struct Choice {
 
 /// The ways to stand a model for print, best first: the search's [`finalists`] printed
 /// with `trial` and ranked by [`prove`] where there is a machine, and the search's own
-/// answer where there is none. Every front end orients through it (ADR 0289).
+/// answer where there is none. Every front end orients through it (ADR 0290).
 pub fn orient_for_print(
     printed: &Printed,
     settings: &OrientSettings,

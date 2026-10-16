@@ -1,4 +1,4 @@
-# 0288. The search checks every pose against the build volume
+# 0289. The search checks every pose against the build volume
 
 - **Status:** Accepted
 - **Date:** 2026-10-16

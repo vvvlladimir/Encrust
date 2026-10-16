@@ -99,12 +99,7 @@ pub struct Oriented {
     pub ruling: Ruling,
 }
 
-/// Finds the orientation a model prints best in.
-///
-/// Every candidate is scored on what can be read off the mesh without turning it; the
-/// shortlist is cut to measure its pull and its cups; the best of those is picked by
-/// priority; and the model stays as it stands unless the turn is worth it. See
-/// `docs/design/orientation.md`.
+/// Finds the orientation a model prints best in: `docs/design/orientation.md`.
 pub fn orient(mesh: &Mesh, settings: &OrientSettings) -> Result<Oriented, PlateError> {
     orient_printed(&Printed::solid(mesh), settings)
 }
@@ -135,56 +130,22 @@ pub fn finalists(
         .ok_or(PlateError::NothingToOrient)?
         .for_settings(settings);
     let now = settings.down_now.try_normalize().unwrap_or(Vec3::NEG_Z);
-    let mut kept = vec![now];
-    let by_hand = printed
-        .vents
-        .iter()
-        .filter_map(|out| out.try_normalize())
-        .take(VENTS_TRIED)
-        .chain(tilts(now));
-    kept.extend(by_hand.filter(|down| allowed(*down, now, settings)));
-
+    let kept = kept_poses(printed, settings, now);
     let envelope = settings
         .build_volume_mm
         .map(|room_mm| Envelope::of(mesh, room_mm));
     let envelope = envelope.as_ref();
-    let lift_mm = if settings.on_supports {
-        settings.lift_mm
-    } else {
-        0.0
-    };
+
     let mut candidates = within_tilt(directions(mesh, settings.samples), now, settings);
     candidates.extend(&kept[1..]);
-    let ranked: Vec<First> = candidates
-        .par_iter()
-        .map(|down| First {
-            down: *down,
-            score: faces.score(*down),
-            overflows: turn_to_fit(envelope, *down, lift_mm).is_none(),
-        })
-        .collect();
-
-    let measured = shortlist(&ranked, settings.shortlist, kept)
-        .into_par_iter()
-        .map(|down| {
-            let on_plate = !settings.on_supports;
-            let sections = cut(
-                printed,
-                down,
-                settings.sections,
-                on_plate,
-                settings.min_cup_mm2,
-            )?;
-            Ok(Candidate {
-                down,
-                score: faces.with_cut(faces.score(down), sections),
-                on_plate,
-                turn: turn_to_fit(envelope, down, lift_mm),
-            })
-        })
-        .collect::<Result<Vec<_>, PlateError>>()?;
-
-    let mut measured = measured;
+    let ranked = first_pass(&faces, settings, &candidates, envelope);
+    let mut measured = measure(
+        printed,
+        &faces,
+        settings,
+        shortlist(&ranked, settings.shortlist, kept),
+        envelope,
+    )?;
     measured.extend(seated(printed, &faces, settings, now, envelope)?);
     let considered = ranked.len();
     Ok(ordered(&faces, settings, &measured, now)
@@ -200,6 +161,77 @@ pub fn finalists(
             ruling,
         })
         .collect())
+}
+
+/// The way the model stands, then the poses a person tries by hand within the tilt: what
+/// the shortlist keeps whatever the first pass makes of them.
+fn kept_poses(printed: &Printed, settings: &OrientSettings, now: Vec3) -> Vec<Vec3> {
+    let mut kept = vec![now];
+    let by_hand = printed
+        .vents
+        .iter()
+        .filter_map(|out| out.try_normalize())
+        .take(VENTS_TRIED)
+        .chain(tilts(now));
+    kept.extend(by_hand.filter(|down| allowed(*down, now, settings)));
+    kept
+}
+
+/// How high a pose is lifted onto supports, millimetres, or nought on the plate.
+fn lift_of(settings: &OrientSettings) -> Scalar {
+    if settings.on_supports {
+        settings.lift_mm
+    } else {
+        0.0
+    }
+}
+
+/// Every candidate scored on what the mesh shows without cutting it.
+fn first_pass(
+    faces: &Faces,
+    settings: &OrientSettings,
+    candidates: &[Vec3],
+    envelope: Option<&Envelope>,
+) -> Vec<First> {
+    let lift_mm = lift_of(settings);
+    candidates
+        .par_iter()
+        .map(|down| First {
+            down: *down,
+            score: faces.score(*down),
+            overflows: turn_to_fit(envelope, *down, lift_mm).is_none(),
+        })
+        .collect()
+}
+
+/// The shortlist cut, to read its pull and its cups.
+fn measure(
+    printed: &Printed,
+    faces: &Faces,
+    settings: &OrientSettings,
+    shortlisted: Vec<Vec3>,
+    envelope: Option<&Envelope>,
+) -> Result<Vec<Candidate>, PlateError> {
+    let lift_mm = lift_of(settings);
+    let on_plate = !settings.on_supports;
+    shortlisted
+        .into_par_iter()
+        .map(|down| {
+            let sections = cut(
+                printed,
+                down,
+                settings.sections,
+                on_plate,
+                settings.min_cup_mm2,
+            )?;
+            Ok(Candidate {
+                down,
+                score: faces.with_cut(faces.score(down), sections),
+                on_plate,
+                turn: turn_to_fit(envelope, down, lift_mm),
+            })
+        })
+        .collect()
 }
 
 /// How far apart two finalists stand at least, degrees: nearer, and printing both tells

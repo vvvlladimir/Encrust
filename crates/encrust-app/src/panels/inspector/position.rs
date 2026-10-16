@@ -415,9 +415,8 @@ pub fn lift(ui: &mut egui::Ui, scene: &mut Scene, id: ObjectId) {
     }
 }
 
-/// What auto-orient is for, what that means on hover, and Auto-orient beside it: pressed again with nothing changed
-/// it stands the model the next good way it found. Under them, a wait for a click on a
-/// face of the model, which then rests on the plate; pressed again, or Esc, stops it.
+/// What auto-orient is for and Auto-orient beside it, which pressed again with nothing
+/// changed stands the model the next good way it found; under them, Lay on face.
 fn turn(ui: &mut egui::Ui, window: &mut Window, id: ObjectId) {
     let running = window.tools.orient.is_running();
     let preset = &mut window.tools.orient.settings.preset;

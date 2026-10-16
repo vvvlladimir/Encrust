@@ -46,9 +46,8 @@ fn turns_left(a: Vec2, b: Vec2, c: Vec2) -> bool {
     (b.x - a.x) * (c.y - a.y) - (b.y - a.y) * (c.x - a.x) > SAME_PLACE_MM
 }
 
-/// The turn, radians counter-clockwise and within a quarter either way of none, that stands
-/// `points` inside a rectangle `room` across: none where none is needed, and `None` where no
-/// turn fits them. Exact, by rotating calipers: `docs/design/orientation.md`.
+/// The turn, radians counter-clockwise within a quarter either way, that stands `points`
+/// inside a rectangle `room` across, or `None` where none does.
 pub fn fitting_turn(points: &[Vec2], room: Vec2) -> Option<Scalar> {
     let outline = convex_hull(points);
     let fits = |turn: Scalar| {

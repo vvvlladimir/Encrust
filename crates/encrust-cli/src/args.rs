@@ -110,7 +110,7 @@ pub struct TransformArgs {
     #[arg(long)]
     pub center: bool,
 
-    /// Turn the model the way it prints best before anything else is done to it.
+    /// Turn the model the way it prints best, at its --scale and before anything else.
     #[arg(long)]
     pub orient: bool,
 

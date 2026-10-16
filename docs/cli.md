@@ -166,7 +166,7 @@ encrust slice model.stl \
   --printer elegoo-mars-4-ultra --remove-islands --hanging-passes 2 -o model.goo
 ```
 
-Turn the model the way it prints best before anything else is done to it, reported as the
+Turn the model the way it prints best, at its `--scale` and before anything else, reported as the
 `--rotate` that repeats the turn — `--orient-goal` searches for `fewest-supports` (the
 default), `least-peel`, `shortest-print` or `auto`, which balances the three, and
 `--max-tilt DEG` keeps the turn within that many degrees of the way the file stands (ADR 0222) — and build supports to a profile of the catalogue —
@@ -174,9 +174,10 @@ default), `least-peel`, `shortest-print` or `auto`, which balances the three, an
 your own TOML with `--support-profile`. With both, the search counts as overhang what that
 profile's `max_overhang_deg` does, and 45 degrees without one. With a printer as well the
 search's best few are printed to choose between, as the window's **Auto-orient** does
-(ADR 0289). A turned model is stood on the plate over the middle it stood over in x and y. When the search finds it needs no supports but
-set there it would leave anything hanging, it is stood on supports after all, and the run
-says so. For example:
+(ADR 0290). A turned model is stood on the plate over the middle it stood over in x and y.
+A model the search sets on the plate gets supports only under what would hang there, and none
+if nothing does; with supports and a raft it stands on the raft's top. A `--rotate` that tips
+it off that face stands it on supports. For example:
 
 ```sh
 encrust slice model.stl \
