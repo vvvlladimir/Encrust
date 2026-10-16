@@ -5,3 +5,8 @@ xtask = "run --quiet --package xtask --"
 # feature; the threaded build sets these flags itself, see `cargo xtask web`.
 [target.wasm32-unknown-unknown]
 rustflags = ['--cfg', 'getrandom_backend="wasm_js"']
+
+# The C runtime goes inside the binaries: a bare `.exe` must start on a PC without the VC++
+# redistributable, see docs/decisions/0288.
+[target.'cfg(all(windows, target_env = "msvc"))']
+rustflags = ["-C", "target-feature=+crt-static"]
