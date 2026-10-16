@@ -5,6 +5,7 @@ use rayon::prelude::*;
 use crate::candidates::{directions, flat_faces};
 use crate::cut::cut;
 use crate::error::PlateError;
+use crate::fit::{Envelope, turn_to_fit};
 use crate::policy::Ruling;
 use crate::printed::Printed;
 use crate::score::{Faces, OrientGoal, OrientPreset, Score};
@@ -52,6 +53,9 @@ pub struct OrientSettings {
     /// The way down the model stands now, in its own space, which the tilt is measured
     /// from and which a turn has to beat. `-Z` is the way its file was written.
     pub down_now: Vec3,
+    /// The printer's build volume, millimetres along X, Y and Z, that every pose has to
+    /// stand inside on its supports, or `None` for no limit.
+    pub build_volume_mm: Option<Vec3>,
 }
 
 impl Default for OrientSettings {
@@ -70,6 +74,7 @@ impl Default for OrientSettings {
             preset: OrientPreset::default(),
             max_tilt_deg: None,
             down_now: Vec3::NEG_Z,
+            build_volume_mm: None,
         }
     }
 }
@@ -78,11 +83,14 @@ impl Default for OrientSettings {
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Oriented {
     /// The rotation to place the model with. It replaces whatever rotation the model
-    /// carries: the search measures the mesh in its own space.
+    /// carries, the search measuring the mesh in its own space, and turns it about the
+    /// vertical only as far as standing inside the build volume needs.
     pub rotation: Quat,
     pub score: Score,
     /// Whether this way up needs no supports and is judged set straight on the plate.
     pub on_plate: bool,
+    /// Whether it reaches past the build volume however it is turned about the vertical.
+    pub overflows: bool,
     /// Orientations that were measured, after the ones a print cannot tell apart were
     /// dropped.
     pub considered: usize,
@@ -136,11 +144,24 @@ pub fn finalists(
         .chain(tilts(now));
     kept.extend(by_hand.filter(|down| allowed(*down, now, settings)));
 
+    let envelope = settings
+        .build_volume_mm
+        .map(|room_mm| Envelope::of(mesh, room_mm));
+    let envelope = envelope.as_ref();
+    let lift_mm = if settings.on_supports {
+        settings.lift_mm
+    } else {
+        0.0
+    };
     let mut candidates = within_tilt(directions(mesh, settings.samples), now, settings);
     candidates.extend(&kept[1..]);
-    let ranked: Vec<(Vec3, Score)> = candidates
+    let ranked: Vec<First> = candidates
         .par_iter()
-        .map(|down| (*down, faces.score(*down)))
+        .map(|down| First {
+            down: *down,
+            score: faces.score(*down),
+            overflows: turn_to_fit(envelope, *down, lift_mm).is_none(),
+        })
         .collect();
 
     let measured = shortlist(&ranked, settings.shortlist, kept)
@@ -158,20 +179,23 @@ pub fn finalists(
                 down,
                 score: faces.with_cut(faces.score(down), sections),
                 on_plate,
+                turn: turn_to_fit(envelope, down, lift_mm),
             })
         })
         .collect::<Result<Vec<_>, PlateError>>()?;
 
     let mut measured = measured;
-    measured.extend(seated(printed, &faces, settings, now)?);
+    measured.extend(seated(printed, &faces, settings, now, envelope)?);
     let considered = ranked.len();
     Ok(ordered(&faces, settings, &measured, now)
         .into_iter()
         .take(count.max(1))
         .map(|(candidate, ruling)| Oriented {
-            rotation: rotation_for(candidate.down),
+            rotation: Quat::from_rotation_z(candidate.turn.unwrap_or(0.0))
+                * rotation_for(candidate.down),
             score: candidate.score,
             on_plate: candidate.on_plate,
+            overflows: candidate.turn.is_none(),
             considered,
             ruling,
         })
@@ -233,6 +257,7 @@ fn seated(
     faces: &Faces,
     settings: &OrientSettings,
     now: Vec3,
+    envelope: Option<&Envelope>,
 ) -> Result<Vec<Candidate>, PlateError> {
     if !(settings.rest_on_plate && settings.on_supports) {
         return Ok(Vec::new());
@@ -260,6 +285,7 @@ fn seated(
                 down,
                 score: faces.with_cut(score, sections),
                 on_plate: true,
+                turn: turn_to_fit(envelope, down, 0.0),
             }))
         })
         .collect::<Result<Vec<_>, PlateError>>()?;
@@ -283,6 +309,14 @@ fn tilts(now: Vec3) -> impl Iterator<Item = Vec3> {
     })
 }
 
+/// One way down as the first pass reads it.
+struct First {
+    down: Vec3,
+    score: Score,
+    /// Whether it reaches past the build volume however it is turned.
+    overflows: bool,
+}
+
 /// One number read off a score, lower being better.
 type Reading = fn(&Score) -> Scalar;
 
@@ -292,8 +326,8 @@ const BEST_OF_EACH: usize = 2;
 
 /// The candidates the second pass cuts: `kept` — the way the model stands, which a turn
 /// has to beat, its drain holes pointed down and its leans — then the best `count` by
-/// total and the best few on each reading alone.
-fn shortlist(ranked: &[(Vec3, Score)], count: usize, kept: Vec<Vec3>) -> Vec<Vec3> {
+/// total and the best few on each reading alone, any that fit the build volume first.
+fn shortlist(ranked: &[First], count: usize, kept: Vec<Vec3>) -> Vec<Vec3> {
     let readings: [(Reading, usize); 4] = [
         (|score| score.total, count.max(1)),
         (|score| score.overhang_mm2, BEST_OF_EACH),
@@ -302,11 +336,14 @@ fn shortlist(ranked: &[(Vec3, Score)], count: usize, kept: Vec<Vec3>) -> Vec<Vec
     ];
     let mut chosen = kept;
     for (reading, take) in readings {
-        let mut by_reading: Vec<&(Vec3, Score)> = ranked.iter().collect();
-        by_reading.sort_by(|a, b| reading(&a.1).total_cmp(&reading(&b.1)));
-        for (down, _) in by_reading.into_iter().take(take) {
-            if !chosen.contains(down) {
-                chosen.push(*down);
+        let mut by_reading: Vec<&First> = ranked.iter().collect();
+        by_reading.sort_by(|a, b| {
+            (a.overflows.cmp(&b.overflows))
+                .then_with(|| reading(&a.score).total_cmp(&reading(&b.score)))
+        });
+        for first in by_reading.into_iter().take(take) {
+            if !chosen.contains(&first.down) {
+                chosen.push(first.down);
             }
         }
     }
@@ -661,6 +698,67 @@ mod tests {
             floor.z < -0.99,
             "the fewest supports leaves its floor on the plate, cup and all, got {floor}"
         );
+    }
+
+    /// How far `mesh` spans along each plate axis once `rotation` stands it.
+    fn span(mesh: &Mesh, rotation: Quat) -> Vec3 {
+        let turned: Vec<Vec3> = mesh.vertices.iter().map(|v| rotation * *v).collect();
+        let low = turned
+            .iter()
+            .copied()
+            .reduce(Vec3::min)
+            .expect("a box has corners");
+        let high = turned
+            .iter()
+            .copied()
+            .reduce(Vec3::max)
+            .expect("a box has corners");
+        high - low
+    }
+
+    #[test]
+    fn a_column_taller_than_the_printer_is_laid_down_to_fit() {
+        let mesh = cuboid(Vec3::new(6.0, 6.0, 80.0));
+        let settings = OrientSettings {
+            build_volume_mm: Some(Vec3::new(120.0, 70.0, 50.0)),
+            ..OrientSettings::default()
+        };
+        // Standing is the fewest supports' answer without a volume, and 80 mm is past 50.
+        let found = orient(&mesh, &settings).expect("a column can be oriented");
+        assert!(!found.overflows, "a pose that fits is found");
+        let size = span(&mesh, found.rotation);
+        assert!(size.z < 50.0, "it lies low enough, got {size}");
+    }
+
+    #[test]
+    fn a_bar_longer_than_the_plate_is_turned_across_it() {
+        // 100 mm against a 90 mm square plate: lying flat it fits only at a slant, where it
+        // spans (100 + 4) / sqrt 2 = 74 mm each way, inside 90 less the base's margins.
+        let mesh = cuboid(Vec3::new(100.0, 4.0, 4.0));
+        let settings = OrientSettings {
+            on_supports: true,
+            preset: OrientGoal::ShortestPrint.into(),
+            build_volume_mm: Some(Vec3::new(90.0, 90.0, 40.0)),
+            ..OrientSettings::default()
+        };
+        let found = orient(&mesh, &settings).expect("a bar can be oriented");
+        assert!(!found.overflows, "it fits turned");
+        let size = span(&mesh, found.rotation);
+        assert!(
+            size.x < 90.0 && size.y < 90.0,
+            "within the plate, got {size}"
+        );
+    }
+
+    #[test]
+    fn a_model_no_pose_fits_is_still_answered_as_overflowing() {
+        let mesh = cuboid(Vec3::splat(50.0));
+        let settings = OrientSettings {
+            build_volume_mm: Some(Vec3::splat(40.0)),
+            ..OrientSettings::default()
+        };
+        let found = orient(&mesh, &settings).expect("a cube can be oriented");
+        assert!(found.overflows, "a 50 mm cube fits no 40 mm volume");
     }
 
     #[test]

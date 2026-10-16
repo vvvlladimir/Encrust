@@ -1,12 +1,13 @@
 use std::sync::Arc;
 
 use anyhow::{Result, bail};
-use core_geometry::{Adjacency, Mesh, Vec3};
+use core_geometry::{Adjacency, Mesh, Vec2, Vec3};
 use core_plate::OrientSettings;
 use core_supports::Region;
 use printer_profiles::{MaterialProfile, PrinterProfile, SupportProfile};
 
 use crate::job::{Costs, OrientJob, OrientOutcome, OrientRequest, Pose, Proof, Turn, orient_tasks};
+use crate::plate::BuildPlate;
 use crate::scene::{ObjectId, Scene, SceneObject};
 use crate::status::Status;
 
@@ -139,6 +140,10 @@ impl OrientTool {
             settings: OrientSettings {
                 on_supports: true,
                 rest_on_plate: true,
+                build_volume_mm: machine.map(|(printer, _)| {
+                    let volume = &printer.build_volume;
+                    Vec3::new(volume.x, volume.y, volume.z)
+                }),
                 ..self.settings
             },
             proof: machine.map(|(printer, material)| Proof {
@@ -153,9 +158,9 @@ impl OrientTool {
     /// what tells the window to keep repainting.
     ///
     /// A turn replaces the model's rotation rather than adding to it — the search
-    /// measures the mesh in its own space — and the model is dropped back onto the plate
-    /// afterwards, because turning it leaves it hanging or buried.
-    pub fn poll(&mut self, scene: &mut Scene, status: &mut Status) -> bool {
+    /// measures the mesh in its own space — and the model is stood back where it was on
+    /// `plate`, because turning it leaves it hanging, buried or off to one side.
+    pub fn poll(&mut self, scene: &mut Scene, plate: &BuildPlate, status: &mut Status) -> bool {
         let Some(job) = self.job.as_mut() else {
             return false;
         };
@@ -171,7 +176,7 @@ impl OrientTool {
                 let others: usize = turns.iter().map(|turn| turn.poses.len() - 1).sum();
                 for turn in &turns {
                     if let Some(object) = scene.get_mut(turn.id) {
-                        moved += usize::from(stand(object, turn.poses[0], turn.lift_mm));
+                        moved += usize::from(stand(object, turn.poses[0], turn.lift_mm, plate));
                     }
                 }
                 self.offers = turns.into_iter().map(|turn| (turn, 0)).collect();
@@ -211,7 +216,7 @@ impl OrientTool {
 
     /// Stands `id` the next good way the last run found for it, or the one before when
     /// `back`, round from the last to the first.
-    pub fn step(&mut self, scene: &mut Scene, id: ObjectId, back: bool) {
+    pub fn step(&mut self, scene: &mut Scene, plate: &BuildPlate, id: ObjectId, back: bool) {
         let Some((turn, at)) = self.offers.iter_mut().find(|(turn, _)| turn.id == id) else {
             return;
         };
@@ -222,16 +227,27 @@ impl OrientTool {
             (*at + 1) % count
         };
         if let Some(object) = scene.get_mut(id) {
-            stand(object, turn.poses[*at], turn.lift_mm);
+            stand(object, turn.poses[*at], turn.lift_mm, plate);
         }
     }
 }
 
-/// Stands `object` the way `pose` says, dropped back onto the plate and lifted `lift_mm`
-/// onto its supports where it is not set on it. Returns whether that turned it.
-fn stand(object: &mut SceneObject, pose: Pose, lift_mm: f32) -> bool {
+/// Stands `object` the way `pose` says, over the middle it stood over, slid only as far as
+/// keeps it on `plate`, dropped back onto it and lifted `lift_mm` onto its supports where it
+/// is not set on it. Returns whether that turned it.
+fn stand(object: &mut SceneObject, pose: Pose, lift_mm: f32, plate: &BuildPlate) -> bool {
+    let middle = |object: &SceneObject| {
+        object
+            .world_bounds()
+            .map(|bounds| ((bounds.mins + bounds.maxs) / 2.0).truncate())
+    };
+    let before = middle(object);
     let by = pose.rotation * object.transform.rotation.inverse();
     object.transform = object.transform.turned(by);
+    if let Some((before, after)) = before.zip(middle(object)) {
+        object.transform.translation += (before - after).extend(0.0);
+    }
+    object.slide_onto_plate(Vec2::new(plate.x_mm, plate.y_mm));
     object.stand_on_plate();
     if !pose.on_plate {
         object.transform.translation.z += lift_mm;
@@ -297,7 +313,7 @@ mod tests {
 
     /// Runs a job to its end, the way the window's frame loop would.
     fn settle(tool: &mut OrientTool, scene: &mut Scene, status: &mut Status) {
-        while tool.poll(scene, status) {
+        while tool.poll(scene, &BuildPlate::default(), status) {
             std::thread::yield_now();
         }
     }
@@ -335,6 +351,86 @@ mod tests {
             bounds.mins.z
         );
         assert!(!status.is_error(), "the run finished");
+    }
+
+    #[test]
+    fn a_turned_model_stays_over_the_spot_it_stood_on() {
+        // A 6 x 6 x 80 column lying along X, its own origin at one end: the shortest arc
+        // that stands it up swings it about that end, off the spot and past the plate.
+        let mut scene = scene_with(cuboid(Vec3::new(6.0, 6.0, 80.0)));
+        let id = scene.objects()[0].id;
+        scene.objects_mut()[0].transform = Transform {
+            rotation: Quat::from_rotation_y(std::f32::consts::FRAC_PI_2),
+            translation: Vec3::new(20.0, 40.0, 6.0),
+            ..Transform::default()
+        };
+        let middle = |scene: &Scene| {
+            let bounds = scene.world_bounds().expect("the column is there");
+            ((bounds.mins + bounds.maxs) / 2.0).truncate()
+        };
+        let before = middle(&scene);
+        let mut tool = OrientTool {
+            offers: vec![(
+                Turn {
+                    id,
+                    poses: vec![Pose {
+                        rotation: Quat::IDENTITY,
+                        on_plate: true,
+                        costs: None,
+                    }],
+                    lift_mm: 0.0,
+                },
+                0,
+            )],
+            ..OrientTool::default()
+        };
+        tool.step(&mut scene, &BuildPlate::default(), id, false);
+
+        let after = middle(&scene);
+        assert!(
+            after.abs_diff_eq(before, 1e-3),
+            "{before} before, {after} after"
+        );
+        let bounds = scene.world_bounds().expect("the column is there");
+        assert!(
+            bounds.mins.z.abs() < 1e-3,
+            "on the plate, got {}",
+            bounds.mins.z
+        );
+    }
+
+    #[test]
+    fn a_model_turned_near_the_edge_is_slid_back_onto_the_plate() {
+        // Standing 4 mm from the plate's left edge: laid on its side over the same middle,
+        // the 80 mm column would reach 36 mm past that edge.
+        let mut scene = scene_with(cuboid(Vec3::new(6.0, 6.0, 80.0)));
+        let id = scene.objects()[0].id;
+        scene.objects_mut()[0].transform.translation = Vec3::new(1.0, 30.0, 0.0);
+        let on_side = Quat::from_rotation_y(std::f32::consts::FRAC_PI_2);
+        let mut tool = OrientTool {
+            offers: vec![(
+                Turn {
+                    id,
+                    poses: vec![Pose {
+                        rotation: on_side,
+                        on_plate: true,
+                        costs: None,
+                    }],
+                    lift_mm: 0.0,
+                },
+                0,
+            )],
+            ..OrientTool::default()
+        };
+        tool.step(&mut scene, &BuildPlate::default(), id, false);
+
+        let bounds = scene.world_bounds().expect("the column is there");
+        let plate = BuildPlate::default();
+        assert!(
+            bounds.mins.x >= -1e-3 && bounds.maxs.x <= plate.x_mm + 1e-3,
+            "inside the plate's width, got {:?}",
+            bounds
+        );
     }
 
     #[test]
@@ -381,7 +477,7 @@ mod tests {
             ..OrientTool::default()
         };
 
-        tool.step(&mut scene, id, false);
+        tool.step(&mut scene, &BuildPlate::default(), id, false);
         let turned = scene.objects()[0].transform.rotation;
         assert!(
             turned.abs_diff_eq(on_edge, 1e-5),
@@ -392,13 +488,13 @@ mod tests {
             Some((1, 2))
         );
 
-        tool.step(&mut scene, id, false);
+        tool.step(&mut scene, &BuildPlate::default(), id, false);
         assert_eq!(
             tool.offer(id).map(|offer| offer.at),
             Some(0),
             "past the last, the first"
         );
-        tool.step(&mut scene, id, true);
+        tool.step(&mut scene, &BuildPlate::default(), id, true);
         assert_eq!(
             tool.offer(id).map(|offer| offer.at),
             Some(1),

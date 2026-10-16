@@ -594,6 +594,8 @@ fn place(
         let settings = OrientSettings {
             preset: transform.orient_goal.into(),
             max_tilt_deg: transform.max_tilt,
+            build_volume_mm: profile
+                .map(|p| Vec3::new(p.build_volume.x, p.build_volume.y, p.build_volume.z)),
             ..orient_settings(supports)
         };
         let found =

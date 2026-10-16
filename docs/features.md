@@ -85,6 +85,11 @@ capped silently.
 - You can cap the tilt (for example "no more than 30° from how it stands now"). A cap of 0
   leaves the model as it is.
 - It never picks an angle worse than the current one.
+- With a printer chosen, it only picks a pose that fits the build volume, supports and
+  all, if any pose does. It turns a part about the vertical, even across the plate's
+  diagonal, when that is the only way it fits.
+- A turned model stays over the spot it stood on. It is slid only as far as needed to
+  keep it on the plate.
 - With a printer chosen, it tries its best few poses with their supports and counts the
   islands each would leave at the printer's own pixel and layer, down to specks a tenth of
   a millimetre across. A pose standing on the plate with something hanging off it is

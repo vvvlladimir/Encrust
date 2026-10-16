@@ -182,6 +182,10 @@ impl Bench<'_> {
     fn chosen(&self, printed: &Printed, preset: OrientPreset) -> Result<Pose> {
         let settings = OrientSettings {
             preset,
+            build_volume_mm: Some({
+                let volume = &self.trial.printer.build_volume;
+                Vec3::new(volume.x, volume.y, volume.z)
+            }),
             ..pipeline::orient_settings(Some(self.support))
         };
         let started = Instant::now();

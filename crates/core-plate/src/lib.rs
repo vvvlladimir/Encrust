@@ -9,6 +9,7 @@ mod candidates;
 mod cups;
 mod cut;
 mod error;
+mod fit;
 mod low_points;
 mod mask;
 mod orient;

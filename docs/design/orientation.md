@@ -87,6 +87,28 @@ section's holes are sealed by the plate; on supports air reaches them from below
 the rule `core-analysis` follows on the cured stack, read at 24 sections instead of
 every layer, so a vent thinner than the spacing between two of them is missed.
 
+## The build volume
+
+Where the settings carry a build volume, every first-pass candidate is checked against it
+(ADR 0288). The check reads an envelope: the model's farthest vertex along each of 256
+Fibonacci directions, built once per model. That is a convex polytope inside the hull,
+short of it by at most a hundredth of the model's radius, so every extent is read that
+much larger.
+
+- **Height:** the envelope's extent along the way down, plus the lift onto supports.
+- **Plan:** the envelope's shadow. A pose on supports is given a raft's 2 mm margin on
+  every side for the supports' feet.
+
+The plan may fit any way the model is turned about the vertical. `fitting_turn` takes its
+convex hull and the turns where a caliper of the turned box comes to lie along a hull edge.
+Between two of those, each caliper rests on one vertex, so the turned width is a sinusoid
+`d.x cos t - d.y sin t` and the depth is another. A fit, if there is one, starts at an end
+of a span or where one of the sinusoids meets its wall, and those points are solved
+exactly. A pose that fits no way fails the print (step 1 below). The shortlist takes the
+poses that fit ahead of those that do not, and the rotation of a pose includes the turn
+that fits it. The proof prints the best pose that fits even when none of the finalists
+does, and checks what it printed, supports and all, the same exact way.
+
 ## The poses a person tries
 
 Three kinds of candidate are cut whatever the first pass makes of them (ADR 0277):
@@ -141,7 +163,8 @@ Every stage ranks by one rule, `core_plate::rank` (ADR 0275, 0278, 0279): the se
 it predicts, the proof on what it printed. In order:
 
 1. what fails the print, compared exactly: a model set on the plate with no face flat on
-   it; printed, a pose and its supports past the build volume. For every goal but the
+   it; a pose past the build volume however it is turned, by its envelope in the search,
+   and printed with its supports in the proof. For every goal but the
    fewest supports, suction cups and pulls past the 30 N `core-analysis` names fail it too;
    the fewest supports leaves a cup to a drain hole, the shortest print takes the pull;
 2. islands and contacts left hanging, within a quarter and two of the fewest, where a

@@ -8,13 +8,13 @@ use std::sync::Arc;
 use core_analysis::{Measured, RiskKind};
 use core_format::ExposurePlan;
 use core_geometry::{
-    Mesh, Quat, Scalar, Transform, Vec3, center_over_plate, drop_to_plate, signed_volume,
-    transform_mesh,
+    Mesh, Quat, Scalar, Transform, Vec2, Vec3, center_over_plate, drop_to_plate, fitting_turn,
+    signed_volume, transform_mesh,
 };
 use core_pipeline::{PanelOverrides, SlicedFormat};
 use core_plate::{
     LOOKS_UP, OrientGoal, OrientPreset, OrientSettings, Oriented, Printed, Readings, Ruling,
-    finalists, rank, rotation_for, rulings,
+    finalists, rank, rulings,
 };
 use printer_profiles::{BuildVolume, MaterialProfile, PrinterProfile, SupportProfile};
 use rayon::prelude::*;
@@ -189,8 +189,9 @@ pub fn prove(
         material: &material,
         ..*trial
     };
-    let standing = rotation_for(settings.down_now);
-    let is_standing = |pose: &Oriented| pose.rotation.abs_diff_eq(standing, 1e-5);
+    let standing = settings.down_now.try_normalize().unwrap_or(Vec3::NEG_Z);
+    let is_standing =
+        |pose: &Oriented| (pose.rotation.inverse() * Vec3::NEG_Z).abs_diff_eq(standing, 1e-5);
     let poses = to_print(
         found,
         finalists_for(printed.outer.faces.len(), reach_mm),
@@ -211,7 +212,8 @@ pub fn prove(
 }
 
 /// The first `finalists` of `found`, the way the model stands and the best pose set on the
-/// plate, each once: the search cannot weigh a seat's supports as surely as a lift's.
+/// plate, each once: the search cannot weigh a seat's supports as surely as a lift's. The
+/// best that fits the build volume is among them whenever one does.
 fn to_print(
     found: &[Oriented],
     finalists: usize,
@@ -227,6 +229,11 @@ fn to_print(
         if wanted && !poses.iter().any(again) {
             poses.push(pose);
         }
+    }
+    if poses.iter().all(|pose| pose.overflows)
+        && let Some(fitting) = found.iter().find(|pose| !pose.overflows)
+    {
+        poses.push(fitting);
     }
     poses
 }
@@ -348,19 +355,18 @@ fn islands_printed(
     islands_born(&full, placed)
 }
 
-/// Whether `placed` and its `supports` reach past `volume`, their two widths matched with
-/// the plate's sorted: the plate is free to turn them about the vertical.
+/// Whether `placed` and its `supports` reach past `volume` however they are turned about
+/// the vertical, which the plate is free to do.
 fn overflows(placed: &Mesh, supports: &[Arc<Mesh>], volume: &BuildVolume) -> bool {
-    let Some(mut bounds) = placed.aabb() else {
-        return false;
-    };
-    for support in supports.iter().filter_map(|support| support.aabb()) {
-        bounds.mins = bounds.mins.min(support.mins);
-        bounds.maxs = bounds.maxs.max(support.maxs);
-    }
-    let size = bounds.maxs - bounds.mins;
-    let (narrow, wide) = (size.x.min(size.y), size.x.max(size.y));
-    narrow > volume.x.min(volume.y) || wide > volume.x.max(volume.y) || bounds.maxs.z > volume.z
+    let meshes = || std::iter::once(placed).chain(supports.iter().map(|support| &**support));
+    let top_mm = meshes()
+        .filter_map(Mesh::aabb)
+        .map(|bounds| bounds.maxs.z)
+        .fold(Scalar::NEG_INFINITY, Scalar::max);
+    let plan: Vec<Vec2> = meshes()
+        .flat_map(|mesh| mesh.vertices.iter().map(|vertex| vertex.truncate()))
+        .collect();
+    top_mm > volume.z || fitting_turn(&plan, Vec2::new(volume.x, volume.y)).is_none()
 }
 
 /// What stands under a pose, and what was found needing it.
@@ -459,6 +465,7 @@ mod tests {
                     total: 0.0,
                 },
                 on_plate,
+                overflows: false,
                 considered: 0,
                 ruling: Ruling::Chosen,
             },
@@ -483,5 +490,50 @@ mod tests {
         };
         assert!(!first(OrientPreset::Goal(OrientGoal::LeastPeel)));
         assert!(first(OrientPreset::Goal(OrientGoal::FewestSupports)));
+    }
+
+    #[test]
+    fn the_best_pose_that_fits_is_printed_when_no_finalist_does() {
+        let mut found: Vec<Oriented> = (0..6)
+            .map(|at| Oriented {
+                rotation: Quat::from_rotation_x(0.3 * at as Scalar),
+                ..tried(false, 1.0, 0).oriented
+            })
+            .collect();
+        for pose in &mut found[..5] {
+            pose.overflows = true;
+        }
+        let poses = to_print(&found, 4, |_| false);
+        assert!(
+            poses.iter().any(|pose| !pose.overflows),
+            "the sixth pose, the only one that fits, is printed too"
+        );
+        assert_eq!(poses.len(), 5);
+    }
+
+    #[test]
+    fn a_bar_longer_than_the_plate_fits_across_its_diagonal() {
+        // At 45 degrees a 100 by 4 mm bar spans (100 + 4) / sqrt 2 = 74 mm each way.
+        let corners = (0..8)
+            .map(|at| {
+                let unit = Vec3::new(
+                    (at & 1) as Scalar,
+                    ((at >> 1) & 1) as Scalar,
+                    (at >> 2) as Scalar,
+                );
+                unit * Vec3::new(100.0, 4.0, 4.0)
+            })
+            .collect();
+        let bar = Mesh::new(corners, vec![[0, 1, 2]]);
+        let plate = |z: Scalar| BuildVolume {
+            x: 90.0,
+            y: 90.0,
+            z,
+        };
+        assert!(!overflows(&bar, &[], &plate(10.0)));
+        assert!(
+            overflows(&bar, &[], &plate(3.0)),
+            "4 mm tall in a 3 mm volume"
+        );
     }
 }

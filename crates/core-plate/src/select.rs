@@ -1,4 +1,4 @@
-use core_geometry::Vec3;
+use core_geometry::{Scalar, Vec3};
 
 use crate::orient::OrientSettings;
 use crate::policy::{Noise, Readings, Ruling, rank, rulings};
@@ -10,6 +10,9 @@ pub struct Candidate {
     pub down: Vec3,
     pub score: Score,
     pub on_plate: bool,
+    /// The turn about the vertical that stands it inside the build volume, radians, or
+    /// `None` where none does.
+    pub turn: Option<Scalar>,
 }
 
 /// A sliver of a dimensionless term, for a term that is zero at best.
@@ -59,7 +62,7 @@ fn readings(
                 faces.total_for(preset, score)
             };
             Readings {
-                fatal: f64::from(unseated(candidate)),
+                fatal: f64::from(unseated(candidate) + u8::from(candidate.turn.is_none())),
                 suction: f64::from(suction(score)),
                 tearing: f64::from(tearing(score, settings)),
                 unheld: None,
@@ -157,6 +160,7 @@ mod tests {
                 total,
             },
             on_plate: false,
+            turn: Some(0.0),
         }
     }
 
@@ -197,6 +201,21 @@ mod tests {
             0,
             "a cup is a drain hole's to fix, not more support's"
         );
+    }
+
+    #[test]
+    fn a_pose_past_the_build_volume_loses_whatever_it_scores() {
+        let mut overflowing = candidate(Vec3::X, 0.0, 0.1, 0.0);
+        overflowing.turn = None;
+        let fitting = candidate(Vec3::Y, 50.0, 9.0, 0.0);
+        for preset in OrientPreset::all() {
+            assert_eq!(
+                place_for(preset, &[overflowing, fitting], 1, Vec3::NEG_Z),
+                0,
+                "{}",
+                preset.label()
+            );
+        }
     }
 
     #[test]

@@ -1,5 +1,5 @@
 use crate::placed::Placed;
-use core_geometry::{Mesh, Scalar, Vec2, Vec3};
+use core_geometry::{Mesh, Scalar, Vec2, Vec3, convex_hull};
 use printer_profiles::SupportProfile;
 
 use crate::clear::{Beam, clear};
@@ -96,48 +96,15 @@ pub(crate) fn toe_of(tree: &SupportTree) -> Vec3 {
     Vec3::new(away.x, away.y, 0.0)
 }
 
-/// The convex hull of `points`, counter-clockwise, by Andrew's monotone chain.
+/// The convex hull of `points`, counter-clockwise, and their bounding rectangle where they
+/// lie on one line or in one place.
 pub(crate) fn hull(points: &[Vec2]) -> Vec<Vec2> {
-    if points.len() < 3 {
-        return rectangle(points);
-    }
-
-    let mut sorted = points.to_vec();
-    sorted.sort_by(|a, b| a.x.total_cmp(&b.x).then_with(|| a.y.total_cmp(&b.y)));
-    sorted.dedup_by(|a, b| (*a - *b).length() < SAME_PLACE_MM);
-    if sorted.len() < 3 {
-        return rectangle(points);
-    }
-
-    let mut chain: Vec<Vec2> = Vec::with_capacity(sorted.len() * 2);
-    for pass in 0..2 {
-        let start = chain.len();
-        let walk: Box<dyn Iterator<Item = &Vec2>> = if pass == 0 {
-            Box::new(sorted.iter())
-        } else {
-            Box::new(sorted.iter().rev())
-        };
-        for &point in walk {
-            while chain.len() >= start + 2
-                && !turns_left(chain[chain.len() - 2], chain[chain.len() - 1], point)
-            {
-                chain.pop();
-            }
-            chain.push(point);
-        }
-        chain.pop();
-    }
-
+    let chain = convex_hull(points);
     if chain.len() < 3 {
         rectangle(points)
     } else {
         chain
     }
-}
-
-/// Whether `c` lies to the left of the line `a`..`b`, which is what keeps a hull convex.
-fn turns_left(a: Vec2, b: Vec2, c: Vec2) -> bool {
-    (b.x - a.x) * (c.y - a.y) - (b.y - a.y) * (c.x - a.x) > SAME_PLACE_MM
 }
 
 /// The bounding rectangle of `points`, counter-clockwise.

@@ -531,7 +531,10 @@ fn offers(ui: &mut egui::Ui, window: &mut Window, id: ObjectId) {
         );
     }
     if let Some(back) = step {
-        window.tools.orient.step(&mut window.doc.scene, id, back);
+        window
+            .tools
+            .orient
+            .step(&mut window.doc.scene, &window.doc.plate, id, back);
     }
 }
 

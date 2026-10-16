@@ -88,7 +88,7 @@ pub fn flat_faces(mesh: &Mesh) -> Vec<FlatFace> {
 
 /// `count` directions spread evenly over the sphere by the Fibonacci lattice, which needs
 /// no triangulation and has no pole to clump around.
-fn sphere(count: usize) -> Vec<Vec3> {
+pub(crate) fn sphere(count: usize) -> Vec<Vec3> {
     let golden = std::f32::consts::PI * (3.0 - (5.0 as Scalar).sqrt());
     (0..count)
         .map(|index| {

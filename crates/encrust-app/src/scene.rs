@@ -367,6 +367,16 @@ impl SceneObject {
         true
     }
 
+    /// Slides the model along the plate only as far as stands it inside a plate `plate_mm`
+    /// across, or into the plate's near corner where it is too big to.
+    pub fn slide_onto_plate(&mut self, plate_mm: Vec2) {
+        if let Some(bounds) = self.world_bounds() {
+            let min = bounds.mins.truncate();
+            let onto = onto_plate(min, bounds.maxs.truncate() - min, plate_mm);
+            self.transform.translation += onto.extend(0.0);
+        }
+    }
+
     /// Moves the model straight down, or up, until its lowest point touches the plate.
     /// Nothing lifts it there, so no raft's lift is left to be taken back off it later.
     pub fn stand_on_plate(&mut self) {
