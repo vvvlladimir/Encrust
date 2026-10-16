@@ -209,8 +209,9 @@ capped silently.
 - **Base:** the pad's shape (round, cube, prism or tapered), its size, flare and wall slope.
 - **Raft:** **Skates** (a saucer-shaped slab), **Grid** (rim and bars) or **Connected** (a
   pad under each foot, joined by strips), drawn to the model's outline (hull) or a
-  rectangle, with margin and thickness. A raft can belong to the plate or to one model.
-  The raft last set, on either, is the plate's when the window reopens.
+  rectangle, with margin and thickness. The raft is the plate's, whichever model is picked,
+  and is kept when the window reopens. A model a project gave a raft of its own keeps it
+  until **Use the plate's raft**.
 - **Bracing:** cross braces between tall trunks, where the first brace goes and how often
   they repeat.
 

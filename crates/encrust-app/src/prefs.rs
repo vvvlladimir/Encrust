@@ -12,7 +12,7 @@ use serde::{Deserialize, Serialize};
 
 use net_prusalink::Link;
 use net_sdcp::Printer;
-use printer_profiles::{Kind, Raft, Renamed};
+use printer_profiles::{Kind, Renamed};
 
 use crate::network::{Network, Prusa};
 use crate::panels::Window;
@@ -56,9 +56,6 @@ pub struct Preferences {
     /// `docs/decisions/0192`.
     #[serde(default)]
     tools: Option<ToolSettings>,
-    /// The raft last set, on the plate or on a model, which the next run's plate stands on.
-    #[serde(default)]
-    raft: Option<Raft>,
     /// The files opened lately, newest first.
     #[serde(default)]
     recent: Recent,
@@ -113,7 +110,6 @@ impl Preferences {
                 .collect(),
             updates: updates.clone(),
             tools: Some(ToolSettings::of(tools, slicing)),
-            raft: Some(tools.supports.last_raft),
             recent: Recent::default(),
             mask_split: None,
             inspector_w: None,
@@ -229,7 +225,6 @@ impl Preferences {
         if let Some(tools) = self.tools.clone() {
             tools.apply(window.tools, &mut window.machine.slicing);
         }
-        window.tools.supports.resume_raft(self.raft);
     }
 
     /// Writes the file, making its directory first. A failure is silent: nothing the user
@@ -292,6 +287,8 @@ fn file() -> Option<PathBuf> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::scene::Scene;
+    use printer_profiles::Raft;
 
     #[test]
     fn what_is_remembered_is_what_the_window_is_set_to() {
@@ -479,10 +476,13 @@ mod tests {
     }
 
     #[test]
-    fn the_raft_last_set_is_the_plates_next_run() {
+    fn the_plates_raft_is_the_next_runs() {
         let mut tools = Tools::default();
-        let flipped = !tools.supports.raft.enabled;
-        tools.supports.last_raft.enabled = flipped;
+        let plate = Raft {
+            enabled: !tools.supports.raft.enabled,
+            ..tools.supports.raft
+        };
+        tools.supports.keep_raft(plate, &mut Scene::default());
         let prefs = Preferences::of(
             &Slicing::default(),
             &Network::default(),
@@ -493,9 +493,11 @@ mod tests {
         let back: Preferences = serde_json::from_str(&text).expect("and read back");
 
         let mut next = Tools::default();
-        next.supports.resume_raft(back.raft);
+        back.tools
+            .expect("the tool values were written")
+            .apply(&mut next, &mut Slicing::default());
         assert_eq!(
-            next.supports.raft.enabled, flipped,
+            next.supports.raft, plate,
             "the switch stays where it was left"
         );
     }

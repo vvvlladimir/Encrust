@@ -1,4 +1,4 @@
-# 0291. The window orients for auto, at the model's own lift, and remembers the raft
+# 0291. The window orients for auto, at the model's own lift, on one plate raft
 
 - **Status:** Accepted
 - **Date:** 2026-10-16
@@ -9,7 +9,8 @@ ADR 0282 left the window's goal at the fewest supports each time it opens, and A
 judges a pose on supports lifted by the profile's own lift. Once auto balanced every goal
 (ADR 0284) it was the goal most models wanted, and a user who typed a lift into Position
 saw auto-orient judge, and then stand, the model at a height they had not asked for. The
-raft, set on the plate or on a model, was also lost each time the window closed.
+Raft tab edited the picked model's own raft (ADR 0253), and a model is nearly always picked,
+so a raft set there was gone when the window closed and the plate's came back.
 
 ## Decision
 
@@ -17,15 +18,18 @@ The window's goal starts at `OrientPreset::Auto`; it still lasts the session and
 in `ToolSettings`. A model's `SceneObject::lift_mm`, set from **Lift off the plate**,
 replaces the profile's `z_lift_mm` in what auto-orient searches, proves and stands the pose
 at; nought or **On the plate** forgets it, and the profile's lift comes back. It lasts
-the session and is not written to a project. The raft last set, on the plate or on a model,
-is kept in `Preferences::raft` and is the plate's raft when the window opens. The command
-line keeps the fewest supports as its default and the profile's lift.
+the session and is not written to a project. The Raft tab edits the plate's raft whether
+a model is picked or not, and the plate's has one home, `ToolSettings::raft`, which the
+preferences and a project already keep. A model's own raft is made only by a project that
+carries one; with that model picked the tab edits it, and **Use the plate's raft** drops it. The command line keeps the fewest supports as its default and the
+profile's lift.
 
 ## Consequences
 
 The window and the command line now orient for different goals by default, and the docs
-say which is which. A pose is judged at the height the model will print at. A preferences
-file written before this reads with no raft and keeps the profile's. A user who wants the
+say which is which. A pose is judged at the height the model will print at. The plate
+stands on the raft it was left on, or the one an opened project brings. A new raft for one
+model alone is no longer something the window makes. A user who wants the
 lift to follow a project is the signal to write it into the manifest.
 
 ## Alternatives considered
@@ -35,11 +39,21 @@ lift to follow a project is the signal to write it into the manifest.
 It matches the command line, but a model auto would turn differently is left to a goal
 that ignores the pull and the height.
 
-### Write the lift and the raft into the project
+### Remember the raft last set, on the plate or on a model
 
-They would follow a plate between machines, but change the `.encrust` manifest for a
+The switch a user last touched comes back, but one model's raft then becomes every model's
+on the next run, and it overrides the raft a project just opened with.
+
+### Keep the Raft tab on the picked model
+
+It keeps ADR 0253's raft per model, but a user who sets a raft and reopens finds it gone.
+
+### Write the lift into the project
+
+It would follow a plate between machines, but change the `.encrust` manifest for a
 choice made while arranging.
 
 ### The option that won, and what it costs
 
-Two defaults to keep in step in the docs, and a lift that is gone when the window closes.
+Two defaults to keep in step in the docs, a lift that is gone when the window closes, and
+no way to give one model a raft of its own from the window.

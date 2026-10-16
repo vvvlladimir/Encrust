@@ -102,9 +102,6 @@ pub struct SupportTool {
     /// The raft every model stands on that has none of its own. A raft is one slab under
     /// a part, so it is the part's and the plate's, not any one group's; see ADR 0253.
     pub raft: Raft,
-    /// The raft last set, the plate's or a picked model's, which the next run's plate
-    /// stands on: a model's own is not kept between runs, and the switch is.
-    pub last_raft: Raft,
     /// A profile the panel has just saved, until the plate has taken it on.
     pub saved: Option<SupportProfile>,
     /// A profile the panel's list has just had chosen, until a group has taken it up.
@@ -134,7 +131,6 @@ impl Default for SupportTool {
             last_daub: None,
             job: None,
             raft: SupportProfile::default().raft,
-            last_raft: SupportProfile::default().raft,
             saved: None,
             chosen: None,
             dropping: None,
@@ -233,33 +229,23 @@ impl SupportTool {
     /// The raft the panel shows: the first picked model's own where it keeps one, the
     /// plate's otherwise.
     pub fn raft_shown(&self, scene: &Scene) -> Raft {
-        scene
-            .selection()
-            .first()
-            .and_then(|id| scene.get(*id))
-            .and_then(|object| object.own.raft)
-            .unwrap_or(self.raft)
+        own_raft_shown(scene).unwrap_or(self.raft)
     }
 
-    /// Makes `raft` the raft of every picked model, or the plate's with nothing picked. A
-    /// model whose raft is the plate's again keeps none of its own.
+    /// Makes `raft` the plate's, or the picked models' own while the panel shows one. A
+    /// model whose raft is the plate's again keeps none of its own; see ADR 0291.
     pub fn keep_raft(&mut self, raft: Raft, scene: &mut Scene) {
-        self.last_raft = raft;
-        if scene.selection().is_empty() {
+        if own_raft_shown(scene).is_none() {
             self.raft = raft;
             return;
         }
         for id in scene.selection().to_vec() {
-            if let Some(object) = scene.get_mut(id) {
+            if let Some(object) = scene.get_mut(id)
+                && object.own.raft.is_some()
+            {
                 object.own.raft = (raft != self.raft).then_some(raft);
             }
         }
-    }
-
-    /// Stands the plate on the raft an earlier run last set, where one was remembered.
-    pub fn resume_raft(&mut self, remembered: Option<Raft>) {
-        self.raft = remembered.unwrap_or(self.raft);
-        self.last_raft = self.raft;
     }
 
     /// The active group's profile as `object` is built to, with the raft it stands on, its
@@ -586,6 +572,12 @@ impl SupportTool {
     }
 }
 
+/// The raft the first picked model keeps of its own, which only a project can give it.
+pub fn own_raft_shown(scene: &Scene) -> Option<Raft> {
+    let first = scene.selection().first()?;
+    scene.get(*first)?.own.raft
+}
+
 /// `table` as a model keeping `own` settings is built to it, on its own raft or
 /// `plate_raft`: the rule a project is cut by, `core_engine::project::own_table`.
 pub fn with_own(
@@ -778,35 +770,35 @@ mod tests {
     }
 
     #[test]
-    fn a_raft_edited_with_a_model_picked_is_that_models_alone() {
+    fn a_raft_edited_with_a_model_picked_is_the_plates() {
         let mut scene = one_cube();
-        let first = scene.objects()[0].id;
-        let second = {
-            let other = one_cube();
-            let object = &other.objects()[0];
-            scene.insert(crate::scene::Imported::new(
-                "second".to_owned(),
-                Arc::clone(&object.mesh),
-                Transform::default(),
-                object.summary.clone(),
-            ))
-        };
+        scene.select(Some(scene.objects()[0].id));
         let mut tool = SupportTool::default();
-        let (plate, edited) = (tool.raft, another_raft(&tool));
+        let edited = another_raft(&tool);
 
-        scene.select(Some(first));
         tool.keep_raft(edited, &mut scene);
 
-        let raft_of = |id| tool.table_for(scene.get(id).expect("there"))[0].raft;
-        assert_eq!(raft_of(first), edited);
-        assert_eq!(
-            raft_of(second),
-            plate,
-            "the other model stands on the plate's"
-        );
-        assert_eq!(tool.raft, plate);
+        assert_eq!(tool.raft, edited, "the plate's, so the next run keeps it");
+        assert_eq!(scene.objects()[0].own.raft, None, "and not the model's own");
+    }
 
+    #[test]
+    fn a_models_own_raft_is_edited_in_place_and_dropped_at_the_plates() {
+        let mut scene = one_cube();
+        let first = scene.objects()[0].id;
         scene.select(Some(first));
+        let mut tool = SupportTool::default();
+        let (plate, own) = (tool.raft, another_raft(&tool));
+        scene.get_mut(first).expect("there").own.raft = Some(own);
+        let thicker = Raft {
+            thickness_mm: own.thickness_mm + 1.0,
+            ..own
+        };
+
+        tool.keep_raft(thicker, &mut scene);
+        assert_eq!(scene.get(first).expect("there").own.raft, Some(thicker));
+        assert_eq!(tool.raft, plate, "a project's own raft leaves the plate's");
+
         tool.keep_raft(plate, &mut scene);
         assert_eq!(
             scene.get(first).expect("there").own.raft,
@@ -1244,25 +1236,6 @@ mod tests {
             vec![0, 1],
             "one tree per group, each to its own shape"
         );
-    }
-
-    #[test]
-    fn a_raft_switched_on_a_picked_model_is_remembered_and_the_plates_kept() {
-        let mut scene = one_cube();
-        let mut tool = SupportTool::default();
-        let flipped = Raft {
-            enabled: !tool.raft.enabled,
-            ..tool.raft
-        };
-        tool.keep_raft(flipped, &mut scene);
-
-        assert_eq!(
-            scene.objects()[0].own.raft,
-            Some(flipped),
-            "the picked model's own"
-        );
-        assert_ne!(tool.raft, flipped, "the plate's is left as it was this run");
-        assert_eq!(tool.last_raft, flipped, "and the next run starts on it");
     }
 
     #[test]

@@ -251,7 +251,7 @@ Grouped by what the decision governs; the number is still the order it was taken
 | [0285](0285-a-proof-counts-islands-at-the-prints-own-pixel-over-the-low-points.md) | A proof counts islands at the print's own pixel and layer, over the low points | Accepted |
 | [0289](0289-the-search-checks-every-pose-against-the-build-volume.md) | The search checks every pose against the build volume | Accepted |
 | [0290](0290-the-window-and-the-command-line-orient-through-one-entry-point.md) | The window and the command line orient through one entry point | Accepted |
-| [0291](0291-the-window-orients-for-auto-at-the-models-own-lift.md) | The window orients for auto, at the model's own lift, and remembers the raft | Accepted |
+| [0291](0291-the-window-orients-for-auto-at-the-models-own-lift.md) | The window orients for auto, at the model's own lift, on one plate raft | Accepted |
 | [0088](0088-the-plate-is-packed-as-a-bitmap.md) | The plate is packed as a bitmap into the corner, and the block centred | Accepted; supports left out of a footprint is superseded by 0256 |
 | [0256](0256-a-footprint-carries-the-supports-and-the-raft.md) | Pack a model with its supports and its raft | Accepted |
 | [0098](0098-a-plate-is-a-number-on-the-object.md) | A plate is a number on the object, not a scene of its own | Accepted |
@@ -264,7 +264,7 @@ Grouped by what the decision governs; the number is still the order it was taken
 | [0250](0250-a-trunk-leans-for-a-brace-no-further-than-a-branch-reaches.md) | Lean a trunk for a brace no further than a branch reaches, towards any group, and tie a brace to the trunk's own axis | Accepted; that bracing is asked of the ground profile is superseded by 0252 |
 | [0251](0251-a-small-pillar-stands-on-a-support-and-nothing-is-built-in-the-solid.md) | Stand a small pillar on the support beside it, never a support on a small pillar, and build nothing inside the model | Accepted |
 | [0252](0252-a-brace-is-built-to-the-groups-it-ties.md) | Build a brace to the groups of the trunks it ties | Accepted |
-| [0253](0253-the-raft-is-the-models-not-a-groups.md) | Make the raft the model's and the plate's, not a group's | Accepted; the raft written into the first profile only superseded by 0266 |
+| [0253](0253-the-raft-is-the-models-not-a-groups.md) | Make the raft the model's and the plate's, not a group's | Accepted; the raft written into the first profile only superseded by 0266; the Raft tab editing the picked model's raft superseded by 0291 |
 | [0266](0266-a-support-on-a-raft-flares-onto-it-without-a-pad.md) | Stand a support on a raft by its flare, without a pad | Accepted |
 | [0178](0178-a-project-names-its-cavities-and-the-engine-opens-it.md) | A project names its cavities, and the engine opens it into a plate | Superseded by 0191 |
 | [0191](0191-a-project-holds-the-plate-as-it-stands.md) | A project holds the plate as it stands, and opening it builds nothing | Accepted; refusing every other version is superseded by 0261 |

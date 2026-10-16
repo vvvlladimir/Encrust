@@ -6,6 +6,7 @@ use crate::panels::Window;
 use crate::panels::support_diagram::{self, Part};
 use crate::panels::support_fields::{Group, saved_as};
 use crate::settings::keep_support;
+use crate::supports::own_raft_shown;
 use crate::ui::{
     Segment, Segmented, hint, icon, icon_button, secondary_button, section, subheading,
     subheading_with_switch, theme,
@@ -59,7 +60,7 @@ fn shape(ui: &mut egui::Ui, window: &mut Window) {
 /// shown can be set back to.
 fn parts(ui: &mut egui::Ui, window: &mut Window, profiles_raft: Raft) {
     {
-        let picked = !window.doc.scene.selection().is_empty();
+        let plate = own_raft_shown(&window.doc.scene).map(|_| window.tools.supports.raft);
         let profile = &mut window.tools.supports.profile;
         let saved =
             saved_as(&window.machine.slicing.catalogue, profile).map(|entry| &entry.profile);
@@ -89,22 +90,33 @@ fn parts(ui: &mut egui::Ui, window: &mut Window, profiles_raft: Raft) {
             group.show(ui, profile, saved);
         }
         if part == Part::Raft {
-            raft_owner(ui, profile, profiles_raft, picked);
+            raft_owner(ui, profile, profiles_raft, plate);
         }
     }
 }
 
-/// Whose raft the numbers above are, and the way to take the profile's instead.
-fn raft_owner(ui: &mut egui::Ui, profile: &mut SupportProfile, profiles_raft: Raft, picked: bool) {
+/// Whose raft the numbers above are, and the way to take the profile's instead. `plate`
+/// is the plate's raft while a picked model keeps one of its own, to go back to.
+fn raft_owner(
+    ui: &mut egui::Ui,
+    profile: &mut SupportProfile,
+    profiles_raft: Raft,
+    plate: Option<Raft>,
+) {
     ui.add_space(4.0);
     hint(
         ui,
-        if picked {
-            "The raft is this model's, whichever profile its supports are built to."
+        if plate.is_some() {
+            "The raft is this model's own, brought by its project."
         } else {
-            "The raft is the plate's: every model without its own stands on one like it."
+            "The raft is the plate's: every model stands on it."
         },
     );
+    if let Some(plate) = plate
+        && secondary_button(ui, icon::RESET, "Use the plate's raft").clicked()
+    {
+        profile.raft = plate;
+    }
     let label = format!("Use the raft of {}", profile.name);
     ui.add_enabled_ui(profile.raft != profiles_raft, |ui| {
         if secondary_button(ui, icon::RESET, &label).clicked() {
