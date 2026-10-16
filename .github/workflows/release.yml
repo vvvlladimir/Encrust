@@ -225,8 +225,8 @@ jobs:
           path: workflow
           sparse-checkout: assets/msix
 
-      # The Store's package of the same two binaries. The Store signs it, so it is uploaded by hand
-      # and never installed from the release page. A failure here costs only this file (ADR 0286).
+      # The Store's package of the same two binaries. The Store signs it, so `store.yml` sends it there
+      # and nobody installs it from the release page. A failure here costs only this file (ADR 0286).
       - name: Package for the Store
         if: matrix.store
         continue-on-error: true

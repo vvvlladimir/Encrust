@@ -1,6 +1,6 @@
 # 0286. The Windows build also ships through the Microsoft Store
 
-- **Status:** Accepted
+- **Status:** Accepted; the manual upload is replaced by `.github/workflows/store.yml`, which sends the package when the release is published
 - **Date:** 2026-10-15
 
 ## Context
