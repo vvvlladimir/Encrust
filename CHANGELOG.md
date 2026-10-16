@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.4.0](https://github.com/vvvlladimir/Encrust/compare/v0.3.0...v0.4.0) (2026-10-16)
+
+
+### ✨ New
+
+* **app:** ship the Windows build through the Microsoft Store ([6ef7591](https://github.com/vvvlladimir/Encrust/commit/6ef7591c93c51d404883f722f9c24128179592d7))
+* **orient:** prove auto-orient by trial print, one entry point for window and CLI ([#127](https://github.com/vvvlladimir/Encrust/issues/127)) ([85457e1](https://github.com/vvvlladimir/Encrust/commit/85457e186174f4b73711611180aa4373ee78fe12))
+
+
+### 🐛 Fixed
+
+* **app:** open the Windows window without a console or the VC++ runtime ([26debe8](https://github.com/vvvlladimir/Encrust/commit/26debe89d3928779dad5f8bc09b6ad23582d1cca))
+
 ## [0.3.0](https://github.com/vvvlladimir/Encrust/compare/v0.2.0...v0.3.0) (2026-10-14)
 
 
