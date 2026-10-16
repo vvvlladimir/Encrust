@@ -156,18 +156,43 @@ pub struct Tried {
     pub ruling: Ruling,
 }
 
-/// Finds the orientation a model prints best in, by printing: the search's
-/// [`finalists`], then [`prove`].
-pub fn orient_proven(
+/// One way to stand a model, and what it printed where it was printed to be judged.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct Choice {
+    pub oriented: Oriented,
+    pub printout: Option<Printout>,
+    /// What decided its place: whether it is worth offering beside the first.
+    pub ruling: Ruling,
+}
+
+/// The ways to stand a model for print, best first: the search's [`finalists`] printed
+/// with `trial` and ranked by [`prove`] where there is a machine, and the search's own
+/// answer where there is none. Every front end orients through it (ADR 0289).
+pub fn orient_for_print(
     printed: &Printed,
     settings: &OrientSettings,
-    trial: &Trial,
-) -> Result<Proven, EngineError> {
+    trial: Option<&Trial>,
+) -> Result<Vec<Choice>, EngineError> {
     let found = finalists(printed, settings, usize::MAX)?;
-    prove(printed, settings, &found, trial)?
-        .first()
-        .map(|tried| tried.proven)
-        .ok_or(EngineError::EmptyPlate)
+    let Some(trial) = trial else {
+        return Ok(found
+            .into_iter()
+            .map(|oriented| Choice {
+                oriented,
+                printout: None,
+                ruling: oriented.ruling,
+            })
+            .collect());
+    };
+    let tried = prove(printed, settings, &found, trial)?;
+    Ok(tried
+        .into_iter()
+        .map(|tried| Choice {
+            oriented: tried.proven.oriented,
+            printout: Some(tried.proven.printout),
+            ruling: tried.ruling,
+        })
+        .collect())
 }
 
 /// Prints the search's best few of `found` and the way the model stands, and answers them

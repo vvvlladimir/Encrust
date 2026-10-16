@@ -7,7 +7,7 @@
 
 use std::path::Path;
 
-use core_engine::{EngineError, Trial, orient_proven, print_out, prove};
+use core_engine::{Choice, EngineError, Printout, Trial, orient_for_print, print_out, prove};
 use core_geometry::{Mesh, Quat, Vec3};
 use core_plate::{OrientGoal, OrientPreset, OrientSettings, Printed, Ruling, finalists};
 use printer_profiles::{MaterialProfile, PrinterProfile, SupportProfile};
@@ -110,6 +110,35 @@ fn mushroom() -> Mesh {
     ])
 }
 
+/// The pose `mesh` prints best in, chosen by printing, and what it printed.
+fn best(mesh: &Mesh, settings: &OrientSettings, trial: &Trial) -> (Choice, Printout) {
+    let chosen = orient_for_print(&Printed::solid(mesh), settings, Some(trial))
+        .expect("the model can be oriented")[0];
+    let printout = chosen
+        .printout
+        .expect("a trial prints every pose it answers");
+    (chosen, printout)
+}
+
+#[test]
+fn with_no_machine_the_answer_is_the_searchs_own() {
+    let bench = Bench::new();
+    let mesh = mushroom();
+    let settings = bench.settings(OrientGoal::FewestSupports);
+
+    let chosen = orient_for_print(&Printed::solid(&mesh), &settings, None)
+        .expect("a mushroom can be oriented");
+    let found = finalists(&Printed::solid(&mesh), &settings, usize::MAX)
+        .expect("a mushroom can be oriented");
+    let turns: Vec<Quat> = chosen
+        .iter()
+        .map(|choice| choice.oriented.rotation)
+        .collect();
+    let searched: Vec<Quat> = found.iter().map(|pose| pose.rotation).collect();
+    assert_eq!(turns, searched, "nothing printed, nothing reordered");
+    assert!(chosen.iter().all(|choice| choice.printout.is_none()));
+}
+
 #[test]
 fn a_box_set_on_the_plate_prints_with_nothing_under_it_and_nothing_hanging() {
     let bench = Bench::new();
@@ -160,11 +189,10 @@ fn a_mushroom_is_proven_to_rest_on_its_cap() {
     let mesh = mushroom();
     let settings = bench.settings(OrientGoal::FewestSupports);
 
-    let proven = orient_proven(&Printed::solid(&mesh), &settings, &bench.trial())
-        .expect("a mushroom can be oriented");
-    assert!(proven.oriented.on_plate, "cap down it needs no supports");
-    assert_eq!((proven.printout.contacts, proven.printout.hanging), (0, 0));
-    let stem = proven.oriented.rotation * Vec3::Z;
+    let (chosen, printout) = best(&mesh, &settings, &bench.trial());
+    assert!(chosen.oriented.on_plate, "cap down it needs no supports");
+    assert_eq!((printout.contacts, printout.hanging), (0, 0));
+    let stem = chosen.oriented.rotation * Vec3::Z;
     assert!(
         stem.z < -0.99,
         "the stem points up from the cap, got {stem}"
@@ -319,21 +347,21 @@ fn the_fewest_supports_leave_a_cup_standing_on_its_floor() {
     ]);
     let settings = bench.settings(OrientGoal::FewestSupports);
 
-    let proven = orient_proven(&Printed::solid(&mesh), &settings, &bench.trial())
-        .expect("a box can be oriented");
-    let floor = proven.oriented.rotation * Vec3::NEG_Z;
+    let (chosen, printout) = best(&mesh, &settings, &bench.trial());
+    let floor = chosen.oriented.rotation * Vec3::NEG_Z;
     assert!(
         floor.z < -0.99,
         "no support beats any, cup or not, got the floor at {floor}"
     );
-    assert_eq!(proven.printout.supports_ml, 0.0);
+    assert_eq!(printout.supports_ml, 0.0);
 }
 
 #[test]
 fn a_mesh_with_no_faces_has_no_orientation_to_prove() {
     let bench = Bench::new();
     let settings = bench.settings(OrientGoal::FewestSupports);
-    let error = orient_proven(&Printed::solid(&Mesh::default()), &settings, &bench.trial())
+    let trial = bench.trial();
+    let error = orient_for_print(&Printed::solid(&Mesh::default()), &settings, Some(&trial))
         .expect_err("an empty mesh has no orientation");
     assert!(matches!(error, EngineError::Orient(_)));
 }

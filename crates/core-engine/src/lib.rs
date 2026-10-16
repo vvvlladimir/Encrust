@@ -26,4 +26,4 @@ pub use open::{Machine, Opening, open_plate};
 pub use plate::{Model, Plate};
 pub use run::Run;
 pub use stand::{Stood, stand_seated, stand_under};
-pub use trial::{Printout, Proven, Trial, Tried, orient_proven, print_out, prove};
+pub use trial::{Choice, Printout, Proven, Trial, Tried, orient_for_print, print_out, prove};

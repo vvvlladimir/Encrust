@@ -172,8 +172,9 @@ default), `least-peel`, `shortest-print` or `auto`, which balances the three, an
 `--max-tilt DEG` keeps the turn within that many degrees of the way the file stands (ADR 0222) — and build supports to a profile of the catalogue —
 `light`, `medium`, `heavy` or one saved in the window, as `profiles list` names them — or to
 your own TOML with `--support-profile`. With both, the search counts as overhang what that
-profile's `max_overhang_deg` does, and 45 degrees without one. A turned model is stood
-back on the plate where it is in x and y. When the search finds it needs no supports but
+profile's `max_overhang_deg` does, and 45 degrees without one. With a printer as well the
+search's best few are printed to choose between, as the window's **Auto-orient** does
+(ADR 0289). A turned model is stood on the plate over the middle it stood over in x and y. When the search finds it needs no supports but
 set there it would leave anything hanging, it is stood on supports after all, and the run
 says so. For example:
 

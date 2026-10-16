@@ -214,7 +214,7 @@ pub fn plate_of(
             path,
             &shaping.import,
             shaping.supports.as_ref(),
-            printer,
+            chosen,
             watch.talk,
         )?;
         if let Some(position) = shaping.position {

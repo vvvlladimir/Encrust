@@ -9,7 +9,7 @@ use std::time::Instant;
 
 use anyhow::{Context, Result};
 use core_analysis::Measured;
-use core_engine::{Cutting, bake, cut};
+use core_engine::{Cutting, Trial, bake, cut, orient_for_print};
 use core_geometry::{
     Bvh, Heightmap, Mesh, Quat, Scalar, Transform, UvMap, Vec3, Welded, center_over_plate,
     diagnose, drop_to_plate, glam::EulerRot, orient_outward, remove_duplicate_faces,
@@ -17,7 +17,7 @@ use core_geometry::{
 };
 use core_mesh_io::{Loaded, Texture, loader_for_extension};
 use core_pipeline::{PanelOverrides, Tolerance, raster_settings};
-use core_plate::{OrientSettings, orient};
+use core_plate::{OrientSettings, Printed};
 use core_raster::Shading;
 use core_slicer::{AdaptiveSettings, Solid, Windows};
 use core_volume::{ReliefSettings, Tiling, press, press_tiled};
@@ -135,15 +135,16 @@ pub fn import(
     input: &Path,
     args: &ImportArgs,
     supports: Option<&SupportProfile>,
-    profile: Option<&PrinterProfile>,
+    chosen: &Chosen,
     talk: bool,
 ) -> Result<(Mesh, ImportReport, Option<OrientSummary>)> {
+    let profile = chosen.printer.as_ref();
     let loaded = load(input)?;
     if talk {
         talk_mapping(&loaded);
     }
     let welded = weld(&loaded.mesh, args.weld_tolerance);
-    let (mesh, oriented) = place(welded.mesh.clone(), args, supports, profile)?;
+    let (mesh, oriented) = place(welded.mesh.clone(), args, supports, chosen)?;
     if talk && let Some(summary) = &oriented {
         println!(
             "Oriented: {}, {:.1} mm2 largest section, {:.1} mm2 overhang{}\n",
@@ -483,7 +484,7 @@ pub fn inspect(input: &Path, args: &ImportArgs, chosen: &Chosen) -> Result<Impor
     let profile = chosen.printer.as_ref();
     let loaded = load(input)?;
     let welded = weld(&loaded.mesh, args.weld_tolerance);
-    let (mesh, _) = place(welded.mesh.clone(), args, None, profile)?;
+    let (mesh, _) = place(welded.mesh.clone(), args, None, chosen)?;
     // Pressed here too, so that what `inspect` measures is what would be printed.
     let mut mesh = press_relief(mesh, &welded, &loaded, args, false)?;
     if args.transform.center {
@@ -587,35 +588,12 @@ fn place(
     mesh: Mesh,
     args: &ImportArgs,
     supports: Option<&SupportProfile>,
-    profile: Option<&PrinterProfile>,
+    chosen: &Chosen,
 ) -> Result<(Mesh, Option<OrientSummary>)> {
     let transform = &args.transform;
     let (mesh, oriented) = if transform.orient {
-        let settings = OrientSettings {
-            preset: transform.orient_goal.into(),
-            max_tilt_deg: transform.max_tilt,
-            build_volume_mm: profile
-                .map(|p| Vec3::new(p.build_volume.x, p.build_volume.y, p.build_volume.z)),
-            ..orient_settings(supports)
-        };
-        let found =
-            orient(&mesh, &settings).context("cannot find an orientation for this model")?;
-        let summary = OrientSummary {
-            rotation: found.rotation,
-            peak_mm2: found.score.peak_mm2.unwrap_or_default(),
-            overhang_mm2: found.score.overhang_mm2,
-            on_plate: supports.is_some() && found.on_plate,
-        };
-        (
-            transform_mesh(
-                &mesh,
-                Transform {
-                    rotation: found.rotation,
-                    ..Transform::default()
-                },
-            ),
-            Some(summary),
-        )
+        let summary = orientation(&mesh, args, supports, chosen)?;
+        (turned_in_place(&mesh, summary.rotation)?, Some(summary))
     } else {
         (mesh, None)
     };
@@ -634,12 +612,69 @@ fn place(
     };
 
     if transform.center {
-        mesh = centred(mesh, profile)?;
+        mesh = centred(mesh, chosen.printer.as_ref())?;
     } else if oriented.is_some() {
-        // A turn about the file's origin can sink the model through the plate.
+        // --rotate turns about the file's origin and can sink what --orient stood.
         mesh = dropped(mesh)?;
     }
     Ok((mesh, oriented))
+}
+
+/// The turn --orient finds, printed to choose between the search's best where a printer
+/// and supports to print it on are known, as the window does.
+fn orientation(
+    mesh: &Mesh,
+    args: &ImportArgs,
+    supports: Option<&SupportProfile>,
+    chosen: &Chosen,
+) -> Result<OrientSummary> {
+    let transform = &args.transform;
+    let profile = chosen.printer.as_ref();
+    let settings = OrientSettings {
+        preset: transform.orient_goal.into(),
+        max_tilt_deg: transform.max_tilt,
+        build_volume_mm: profile
+            .map(|p| Vec3::new(p.build_volume.x, p.build_volume.y, p.build_volume.z)),
+        ..orient_settings(supports)
+    };
+    let trial = profile.zip(supports).map(|(printer, support)| Trial {
+        printer,
+        material: &chosen.material,
+        support,
+        raster_window: rayon::current_num_threads(),
+    });
+    let found = orient_for_print(&Printed::solid(mesh), &settings, trial.as_ref())
+        .context("cannot find an orientation for this model")?
+        .into_iter()
+        .next()
+        .context("the search found no orientation for this model")?;
+    Ok(OrientSummary {
+        rotation: found.oriented.rotation,
+        peak_mm2: found.oriented.score.peak_mm2.unwrap_or_default(),
+        overhang_mm2: found.oriented.score.overhang_mm2,
+        on_plate: supports.is_some() && found.oriented.on_plate,
+    })
+}
+
+/// `mesh` turned by `rotation` and stood on z = 0 over the middle it stood over, where a
+/// turn about the file's origin would carry it off, perhaps off the plate.
+fn turned_in_place(mesh: &Mesh, rotation: Quat) -> Result<Mesh> {
+    let middle = |mesh: &Mesh| {
+        mesh.aabb()
+            .map(|bounds| ((bounds.mins + bounds.maxs) / 2.0).truncate())
+            .context("mesh has no vertices")
+    };
+    let before = middle(mesh)?;
+    let turned = transform_mesh(
+        mesh,
+        Transform {
+            rotation,
+            ..Transform::default()
+        },
+    );
+    let back = (before - middle(&turned)?).extend(0.0);
+    let moved = transform_mesh(&turned, Transform::from_translation(back));
+    dropped(moved)
 }
 
 /// The model stood on z = 0, where it is in x and y.
@@ -719,6 +754,52 @@ mod tests {
             bounds.mins.z.abs() < 1.0e-6,
             "nothing under the plate is cut, so --center has to end on it: {}",
             bounds.mins.z
+        );
+    }
+
+    #[derive(clap::Parser)]
+    struct Flags {
+        #[command(flatten)]
+        import: ImportArgs,
+    }
+
+    #[test]
+    fn an_oriented_model_is_stood_on_the_plate_over_the_middle_it_stood_over() {
+        use clap::Parser;
+
+        // A pyramid on its tip, its base 100..110 by 50..60 mm: it prints best turned over.
+        let base = [(100.0, 50.0), (110.0, 50.0), (110.0, 60.0), (100.0, 60.0)];
+        let mut vertices: Vec<Vec3> = base.iter().map(|&(x, y)| Vec3::new(x, y, 30.0)).collect();
+        vertices.push(Vec3::new(105.0, 55.0, 0.0));
+        let faces = vec![
+            [0, 1, 2],
+            [0, 2, 3],
+            [1, 0, 4],
+            [2, 1, 4],
+            [3, 2, 4],
+            [0, 3, 4],
+        ];
+        let args = Flags::parse_from(["encrust", "--orient"]).import;
+        let chosen = Chosen {
+            printer: None,
+            material: MaterialProfile::default(),
+            invented_exposure: false,
+        };
+
+        let (mesh, oriented) =
+            place(Mesh::new(vertices, faces), &args, None, &chosen).expect("a pyramid orients");
+        let bounds = mesh.aabb().expect("the mesh has vertices");
+        let middle = (bounds.mins + bounds.maxs) / 2.0;
+
+        assert!(oriented.is_some(), "--orient reports the turn it applied");
+        assert!(
+            bounds.mins.z.abs() < 1.0e-4,
+            "stood on z = 0: {}",
+            bounds.mins.z
+        );
+        assert!(
+            (middle.x - 105.0).abs() < 1.0e-3 && (middle.y - 55.0).abs() < 1.0e-3,
+            "the base's middle, (105, 55), stays where it was: {middle}"
         );
     }
 

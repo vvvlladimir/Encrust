@@ -1,9 +1,9 @@
 use std::sync::Arc;
 use std::sync::mpsc::{self, Receiver, TryRecvError};
 
-use core_engine::{Trial, prove};
+use core_engine::{Trial, orient_for_print};
 use core_geometry::{Mesh, Quat, Transform, Vec3, transform_mesh};
-use core_plate::{OrientSettings, Printed, finalists};
+use core_plate::{OrientSettings, Printed};
 use core_volume::ModelHollow;
 use printer_profiles::{MaterialProfile, PrinterProfile, SupportProfile};
 use rayon::prelude::*;
@@ -174,36 +174,25 @@ fn choose(
     support: &SupportProfile,
     proof: Option<&Proof>,
 ) -> Result<Vec<Pose>, String> {
-    let found = finalists(printed, settings, usize::MAX).map_err(|error| error.to_string())?;
-    let Some(proof) = proof else {
-        return Ok(offered(found.iter().map(|pose| {
-            let unproven = Pose {
-                rotation: pose.rotation,
-                on_plate: pose.on_plate,
-                costs: None,
-            };
-            (unproven, pose.ruling.is_offered())
-        })));
-    };
-    let trial = Trial {
+    let trial = proof.map(|proof| Trial {
         printer: &proof.printer,
         material: &proof.material,
         support,
         raster_window: worker_threads(),
-    };
-    let tried = prove(printed, settings, &found, &trial).map_err(|error| error.to_string())?;
-    Ok(offered(tried.iter().map(|tried| {
-        let (oriented, printout) = (tried.proven.oriented, tried.proven.printout);
-        let proven = Pose {
-            rotation: oriented.rotation,
-            on_plate: oriented.on_plate,
-            costs: Some(Costs {
+    });
+    let chosen =
+        orient_for_print(printed, settings, trial.as_ref()).map_err(|error| error.to_string())?;
+    Ok(offered(chosen.iter().map(|choice| {
+        let pose = Pose {
+            rotation: choice.oriented.rotation,
+            on_plate: choice.oriented.on_plate,
+            costs: choice.printout.map(|printout| Costs {
                 supports_ml: printout.supports_ml,
                 pull_n: printout.pull_n,
                 stack_mm: printout.stack_mm,
             }),
         };
-        (proven, tried.ruling.is_offered())
+        (pose, choice.ruling.is_offered())
     })))
 }
 
