@@ -80,23 +80,9 @@ impl SlicerApp {
         app
     }
 
-    /// A sliced file is opened to look at, not imported; anything else is a model.
+    /// Opens a model, read from a mesh or built back from a sliced file.
     fn open_model(&mut self, file: Handed) {
-        self.doc
-            .imports
-            .open(file, &self.doc.plate, &mut self.machine.status);
-    }
-
-    /// Opens a sliced file to look at, which is the Preview mode showing a container rather
-    /// than the plate. Only its tables are read; a layer is decoded when it is shown.
-    fn open_sliced_file(&mut self, file: &Handed) {
-        crate::sliced::open(
-            &mut self.machine.preview,
-            &mut self.mode,
-            &mut self.machine.status,
-            file,
-            &self.doc.scene,
-        );
+        open_by_what_it_is(&mut self.window(), file);
     }
 
     /// The machine, the resin, every tool value, the Preview divide and the side cards' widths
@@ -144,7 +130,6 @@ impl SlicerApp {
                 Arrived::File(Wanted::ModelOrProject, file) => {
                     open_by_what_it_is(&mut self.window(), file);
                 }
-                Arrived::File(Wanted::SlicedFile, file) => self.open_sliced_file(&file),
                 Arrived::File(Wanted::Project, file) => {
                     project::open(&mut self.window(), &file);
                 }
@@ -189,11 +174,6 @@ impl SlicerApp {
         let reads_the_stack =
             self.mode == Mode::Preview || matches!(self.tool, Tool::Check | Tool::Export);
         if !reads_the_stack || self.machine.preview.is_building() {
-            return;
-        }
-        // A file being shown is the file, not the plate: nothing about the scene makes it
-        // stale and there is no stack of ours to measure.
-        if self.machine.preview.read_facts().is_some() {
             return;
         }
         let fingerprint = stack_fingerprint(&self.doc.scene, self.machine.slicing.cutting());
@@ -343,13 +323,15 @@ pub fn open_by_what_it_is(window: &mut Window, file: Handed) {
     if crate::files::has_extension(file.path(), &crate::files::PROJECTS) {
         project::open(window, &file);
     } else if core_pipeline::reads_sliced_file(file.path()) {
-        crate::sliced::open(
-            &mut window.machine.preview,
-            window.mode,
-            &mut window.machine.status,
-            &file,
-            &window.doc.scene,
-        );
+        use anyhow::Context as _;
+        let slicing = &window.machine.slicing;
+        let placement =
+            crate::sliced::placement(&file, &slicing.catalogue, slicing.printer.as_ref())
+                .with_context(|| format!("cannot open {}", file.path().display()));
+        let status = &mut window.machine.status;
+        if let Some(placement) = status.report("", placement) {
+            window.doc.imports.open_sliced(file, placement, status);
+        }
     } else {
         window
             .doc
@@ -435,11 +417,6 @@ impl eframe::App for SlicerApp {
             ui.ctx().send_viewport_cmd(egui::ViewportCommand::Close);
         }
         self.hand_written_file_to_the_network();
-        crate::sliced::close_if_the_plate_moved_on(
-            &mut self.machine.preview,
-            &mut self.machine.status,
-            &self.doc.scene,
-        );
         self.refresh_preview();
         self.carry_height();
         self.refresh_supports();
@@ -654,26 +631,29 @@ mod tests {
     }
 
     #[test]
-    fn a_sliced_file_named_on_the_command_line_goes_under_the_layer_slider() {
-        // Written by the window's own path, so nothing but the opening is under test; the
-        // containers themselves are checked in `core-pipeline/tests/read_back.rs`.
+    fn a_sliced_file_opens_as_a_model_where_its_pixels_stood() {
+        // A 0.8 x 0.4 mm block lit at pixels 4..12 by 2..6 of 0.1 mm, three layers of 0.05.
         let path = crate::preview::tests::written_goo("app-startup", 3);
         let mut app = SlicerApp::default();
-        app.open_sliced_file(&Handed::Path(path));
+        app.open_model(Handed::Path(path));
 
-        assert_eq!(
-            app.mode,
-            Mode::Preview,
-            "a file opens in the mode that shows it"
+        while app.doc.imports.poll(
+            &mut app.doc.scene,
+            &app.doc.plate,
+            &mut app.view.camera,
+            &mut app.machine.status,
+        ) {
+            std::thread::yield_now();
+        }
+
+        assert!(!app.machine.status.is_error(), "{:?}", app.machine.status);
+        let object = &app.doc.scene.objects()[0];
+        assert_eq!(object.name, "encrust-preview-app-startup.goo");
+        let bounds = object.world_bounds().expect("a block has bounds");
+        assert!(
+            (bounds.mins.x - 0.4).abs() < 0.11 && (bounds.maxs.z - 0.15).abs() < 0.11,
+            "the block stands where its pixels and layers were: {bounds:?}"
         );
-        let facts = app
-            .machine
-            .preview
-            .read_facts()
-            .expect("the file is under the slider");
-        assert_eq!(facts.format, "goo");
-        assert_eq!(facts.layer_count(), 3);
-        assert!(app.doc.scene.is_empty(), "nothing reached the plate");
     }
 
     #[test]
@@ -992,57 +972,37 @@ mod tests {
         assert!(kept.is_tuned_for(IMPORTED_ON));
     }
 
-    /// What a vendor's file for the Saturn states of itself, at a panel no other key opens.
-    fn opened_file(width_px: u32, machine: Option<&str>) -> core_format::SlicedFile {
-        core_format::SlicedFile {
-            format: "goo",
-            version: Some(30),
-            machine: machine.map(str::to_owned),
-            slicer: None,
-            resin: Some("Bench grey".to_owned()),
-            width_px,
-            height_px: 5_120,
-            display_mm: None,
-            layer_height_mm: 0.05,
-            exposure_s: 2.37,
-            bottom_exposure_s: 31.3,
-            bottom_layers: 7,
-            print_time_s: None,
-            volume_mm3: None,
-            grey_steps: 256,
-            stated: printer_profiles::PrinterTuning {
-                light_pwm: Some(217),
-                ..printer_profiles::PrinterTuning::default()
-            },
-            layers: Vec::new(),
-        }
-    }
-
     #[test]
-    fn the_resin_of_an_opened_file_is_kept_on_the_machine_it_was_cut_for() {
-        let mut app = with_profile_dir("opened-resin");
-        let facts = opened_file(11_520, Some("ELEGOO Saturn 4 Ultra"));
+    fn a_sliced_file_handed_in_as_a_resin_goes_on_the_machine_in_hand() {
+        let mut app = with_profile_dir("sliced-resin");
+        app.machine.slicing.printer_id = Some(IMPORTED_ON.to_owned());
+        let path = crate::preview::tests::written_goo("sliced-resin", 3);
 
-        crate::profiles::keep_resin_of(&mut app.machine, &facts, "vendor.goo");
-        let kept = app
+        crate::profiles::import_material(&mut app.machine, &Handed::Path(path));
+        let id = app
+            .machine
+            .slicing
+            .resin_id
+            .clone()
+            .expect("the file's resin is in hand");
+        let kept = &app
             .machine
             .slicing
             .catalogue
-            .resins()
-            .find(|entry| entry.profile.name == "Bench grey")
-            .expect("kept under the name the file gives it");
-        let on_saturn = kept.profile.for_printer(IMPORTED_ON);
-        assert!(kept.profile.is_tuned_for(IMPORTED_ON));
-        assert_eq!((on_saturn.exposure_s, on_saturn.light_pwm), (2.37, 217));
+            .resin(&id)
+            .expect("kept")
+            .profile;
+        assert!(kept.is_tuned_for(IMPORTED_ON));
+        assert_eq!(kept.for_printer(IMPORTED_ON).layer_height_mm, 0.05);
     }
 
     #[test]
-    fn the_resin_of_a_file_for_no_known_machine_waits_for_one_in_hand() {
-        let mut app = with_profile_dir("opened-resin-unknown");
+    fn a_sliced_file_for_no_known_machine_waits_for_one_in_hand() {
+        let mut app = with_profile_dir("sliced-resin-unknown");
         app.machine.slicing.printer_id = None;
-        let facts = opened_file(17, None);
+        let path = crate::preview::tests::written_goo("sliced-resin-unknown", 3);
 
-        crate::profiles::keep_resin_of(&mut app.machine, &facts, "odd.goo");
+        crate::profiles::import_material(&mut app.machine, &Handed::Path(path));
         assert!(matches!(app.machine.status, Status::Error(_)));
         assert_eq!(app.machine.slicing.catalogue.resins().count(), 0);
     }

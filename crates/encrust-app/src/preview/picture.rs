@@ -3,7 +3,6 @@
 
 use anyhow::{Result, bail};
 use core_analysis::{Measured, erase, island_runs};
-use core_format::OpenFile;
 use core_raster::{
     LayerMask, LayerRuns, RasterSettings, Rasterizer, ScanlineRasterizer, crop, downsample,
     shrink_factor,
@@ -179,10 +178,10 @@ impl Preview {
             };
             let (taken_here, taken_under) = (taken(self, layer), under.map(|at| taken(self, at)));
 
-            let runs = erase(&self.runs_of(layer, &seen)?, &taken_here);
+            let runs = erase(&self.rasterised(layer, &seen)?, &taken_here);
             let islands = match (under, taken_under) {
                 (Some(under), Some(taken_under)) => {
-                    let below = erase(&self.runs_of(under, &seen)?, &taken_under);
+                    let below = erase(&self.rasterised(under, &seen)?, &taken_under);
                     island_runs(&runs, &below, seen.pitch)
                 }
                 _ => LayerRuns::builder(runs.width(), runs.height()).finish(),
@@ -195,31 +194,9 @@ impl Preview {
         }
     }
 
-    /// The runs of layer `index` at the panel's own resolution.
-    ///
-    /// A plate is rasterised from the window already cut when it is there and cut on its own
-    /// when it is not: the layer under a window's first is in the one before. A file is
-    /// decoded, which needs no rasteriser at all — the runs are what it holds.
-    pub(super) fn runs_of(&mut self, index: usize, settings: &RasterSettings) -> Result<LayerRuns> {
-        match self.source.as_mut() {
-            Some(Source::Read(read)) => {
-                let runs = read
-                    .open
-                    .layer(index as u32)
-                    .with_context(|| format!("cannot decode layer {index}"))?;
-                let mut builder = LayerRuns::builder(read.facts.width_px, read.facts.height_px);
-                for run in runs {
-                    builder.push(run.length, run.value);
-                }
-                Ok(builder.finish())
-            }
-            _ => self.rasterised(index, settings),
-        }
-    }
-
     /// Layer `index` rasterised off the plate being cut.
     pub(super) fn rasterised(&self, index: usize, settings: &RasterSettings) -> Result<LayerRuns> {
-        let Some(stack) = self.source.as_ref().and_then(Source::stack) else {
+        let Some(stack) = self.source.as_ref() else {
             bail!("no plate to preview");
         };
         let held = stack
@@ -248,7 +225,7 @@ impl Preview {
 
     pub(super) fn key(&self, settings: &RasterSettings) -> Option<TextureKey> {
         Some(TextureKey {
-            fingerprint: self.source.as_ref()?.fingerprint(),
+            fingerprint: self.source.as_ref()?.fingerprint,
             layer: self.layer,
             settings: *settings,
             cleaned: self.cleaned(settings).is_some(),
@@ -326,7 +303,7 @@ impl Preview {
     }
 
     pub(super) fn current(&self) -> Option<&core_slicer::Layer> {
-        let stack = self.source.as_ref()?.stack()?;
+        let stack = self.source.as_ref()?;
         let (window, sliced) = stack.cut.as_ref()?;
         sliced.layers.get(self.layer.checked_sub(window.start)?)
     }

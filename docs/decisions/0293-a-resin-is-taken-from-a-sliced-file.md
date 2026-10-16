@@ -30,8 +30,8 @@ the common ones, the only set a resin holds.
 panel, or among several the one whose firmware name or label the file names, case and
 spacing aside. `Catalogue::import_resin` takes the resin in as an import does (ADR 0235).
 `encrust profiles import FILE` with no `--kind` reads `FILE` as a sliced file, and the
-window's opened-file section keeps its resin with one button, on the matched machine or the
-one in hand.
+window's resin imports take a sliced file wherever they take a resin's TOML, setting it up
+on the printer in view or in hand.
 
 ## Consequences
 

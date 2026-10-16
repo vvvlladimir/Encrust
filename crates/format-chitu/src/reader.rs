@@ -70,6 +70,9 @@ impl SlicedFileReader for ChituReader {
             }
         };
         let version = reads.u32_le()?;
+        // The bed's X and Y, which every writer of the family fills with the panel's size.
+        let bed = (reads.f32_le()?, reads.f32_le()?);
+        let display_mm = (bed.0 > 0.0 && bed.1 > 0.0).then_some(bed);
 
         reads.seek_to(LAYER_HEIGHT)?;
         let layer_height_mm = reads.f32_le()?;
@@ -138,7 +141,7 @@ impl SlicedFileReader for ChituReader {
                 resin: None,
                 width_px,
                 height_px,
-                display_mm: None,
+                display_mm,
                 layer_height_mm,
                 exposure_s,
                 bottom_exposure_s,

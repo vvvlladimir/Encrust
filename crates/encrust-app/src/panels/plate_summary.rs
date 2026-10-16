@@ -33,10 +33,7 @@ pub fn ui(ui: &mut egui::Ui, window: &Window) {
             Some(block(window.machine, layer)),
         );
         let mut rows = layer_readings(window);
-        // A file states its own resin and time; ours describe a plate it knows nothing of.
-        if window.machine.preview.read_facts().is_none() {
-            rows.extend(print_readings(window));
-        }
+        rows.extend(print_readings(window));
         readings(ui, &rows);
         return;
     }
@@ -163,11 +160,7 @@ fn model(object: &crate::scene::SceneObject) -> &Arc<Mesh> {
 
 fn layer_readings(window: &Window) -> Vec<(&'static str, String)> {
     let preview = &window.machine.preview;
-    // A file's own table, where one is open: the window's resin says nothing about a
-    // stack somebody else exposed.
-    let exposure_s = preview
-        .read_layer_exposure_s()
-        .unwrap_or_else(|| layer_exposure_s(window.machine, preview.layer()));
+    let exposure_s = layer_exposure_s(window.machine, preview.layer());
 
     vec![
         (

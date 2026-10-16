@@ -520,10 +520,7 @@ pub fn act(window: &mut Window, action: Action) {
         Action::SaveProjectAs => {
             crate::project::save_dialog(window);
         }
-        Action::OpenModel => window
-            .doc
-            .imports
-            .open_dialog(&window.doc.plate, &mut window.machine.status),
+        Action::OpenModel => crate::import::open_dialog(window),
         Action::Slice => slice_this_plate(window),
     }
 }

@@ -6,7 +6,6 @@ use crate::project;
 use crate::scene::ObjectId;
 use crate::settings::Section;
 use crate::shortcuts::{self, Action};
-use crate::sliced;
 use crate::state::{Doc, Machine};
 use crate::ui::{focus_ring, icon, icon_button, theme};
 use crate::updates::Stage;
@@ -697,20 +696,9 @@ fn file_menu(ui: &mut egui::Ui, window: &mut Window) {
     ui.separator();
     if item(ui, "Open model...", Action::OpenModel).clicked() {
         ui.close();
-        window
-            .doc
-            .imports
-            .open_dialog(&window.doc.plate, &mut window.machine.status);
+        crate::import::open_dialog(window);
     }
     ui.menu_button("Open test print", |ui| test_print_menu(ui, window));
-    if ui.button("Open sliced file...").clicked() {
-        ui.close();
-        sliced::open_dialog(window);
-    }
-    if window.machine.preview.read_path().is_some() && ui.button("Close sliced file").clicked() {
-        ui.close();
-        sliced::close(&mut window.machine.preview, &mut window.machine.status);
-    }
     if ui.button("Import a machine...").clicked() {
         ui.close();
         profiles::open_printer(window);

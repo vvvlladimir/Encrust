@@ -69,6 +69,12 @@ impl Handed {
     }
 }
 
+/// What a resin is taken from: its own file, or any sliced file a reader claims.
+const RESIN_SOURCES: [&str; 14] = [
+    "toml", "goo", "ctb", "cbddlp", "photon", "pwmx", "pwmo", "pwms", "sl1", "sl1s", "zip",
+    "cxdlp", "svgx", "cws",
+];
+
 /// What a dialog is asking for, which is also where its answer goes.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Wanted {
@@ -77,7 +83,6 @@ pub enum Wanted {
     /// a decision about which kind of file it is.
     ModelOrProject,
     Project,
-    SlicedFile,
     /// A machine kept and put under the plate, from the File menu.
     PrinterProfile,
     /// A resin kept on the machine in hand and printed with, from the File menu.
@@ -93,16 +98,22 @@ impl Wanted {
     /// the one the dialog opens on, so it is the widest.
     pub fn filters(self) -> &'static [(&'static str, &'static [&'static str])] {
         match self {
-            Self::Model => &[("Mesh", &MESHES)],
+            Self::Model => &[
+                ("Model", &MODELS),
+                ("Mesh", &MESHES),
+                ("Sliced file", &crate::sliced::EXTENSIONS),
+            ],
             Self::ModelOrProject => &[
                 ("Model or project", &OPENABLE),
                 ("Mesh", &MESHES),
+                ("Sliced file", &crate::sliced::EXTENSIONS),
                 ("Encrust project", &PROJECTS),
             ],
             Self::Project => &[("Encrust project", &PROJECTS)],
-            Self::SlicedFile => &[("Sliced file", &crate::sliced::EXTENSIONS)],
             Self::PrinterProfile => &[("Printer profile", &["toml"])],
-            Self::ResinProfile => &[("Resin profile", &["toml"])],
+            Self::ResinProfile | Self::Profile(printer_profiles::Kind::Resin) => {
+                &[("Resin profile or sliced file", &RESIN_SOURCES)]
+            }
             Self::ReliefPicture => &[("Picture", &PICTURES)],
             Self::Profile(_) => &[("Profile", &["toml"])],
         }
@@ -154,11 +165,30 @@ pub const PICTURES: [&str; 5] = ["png", "jpg", "jpeg", "bmp", "tga"];
 /// The project file, which is the one thing the window writes and reads back whole.
 pub const PROJECTS: [&str; 1] = [core_engine::project::EXTENSION];
 
+/// What a model is read from: a mesh, or a sliced file built back into one (ADR 0294).
+pub const MODELS: [&str; 16] = [
+    "stl", "obj", "3mf", "goo", "ctb", "cbddlp", "photon", "pwmx", "pwmo", "pwms", "sl1", "sl1s",
+    "zip", "cxdlp", "svgx", "cws",
+];
+
 /// What the plate can be filled from in one dialog: a model or a project.
-pub const OPENABLE: [&str; 4] = [
-    MESHES[0],
-    MESHES[1],
-    MESHES[2],
+pub const OPENABLE: [&str; 17] = [
+    "stl",
+    "obj",
+    "3mf",
+    "goo",
+    "ctb",
+    "cbddlp",
+    "photon",
+    "pwmx",
+    "pwmo",
+    "pwms",
+    "sl1",
+    "sl1s",
+    "zip",
+    "cxdlp",
+    "svgx",
+    "cws",
     core_engine::project::EXTENSION,
 ];
 
@@ -290,13 +320,32 @@ mod tests {
     use super::*;
 
     #[test]
-    fn one_dialog_opens_both_a_model_and_a_project() {
+    fn one_dialog_opens_a_model_a_sliced_file_and_a_project() {
         let wanted = Wanted::ModelOrProject;
         assert!(wanted.takes(Path::new("boat.STL")), "any case of a mesh");
         assert!(wanted.takes(Path::new("plate.encrust")));
-        assert!(!wanted.takes(Path::new("plate.goo")));
+        assert!(
+            wanted.takes(Path::new("plate.goo")),
+            "built back into a model"
+        );
+        assert!(!wanted.takes(Path::new("notes.txt")));
         let names: Vec<&str> = wanted.filters().iter().map(|(name, _)| *name).collect();
-        assert_eq!(names, ["Model or project", "Mesh", "Encrust project"]);
+        assert_eq!(
+            names,
+            ["Model or project", "Mesh", "Sliced file", "Encrust project"]
+        );
+    }
+
+    #[test]
+    fn every_container_a_reader_claims_opens_as_a_model() {
+        for extension in crate::sliced::EXTENSIONS {
+            let name = format!("plate.{extension}");
+            assert!(Wanted::Model.takes(Path::new(&name)), "{name}");
+            assert!(
+                core_pipeline::reads_sliced_file(Path::new(&name)),
+                "{name} is offered, so a reader must claim it"
+            );
+        }
     }
 
     #[test]

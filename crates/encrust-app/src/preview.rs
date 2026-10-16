@@ -1,23 +1,20 @@
 use std::hash::{DefaultHasher, Hash, Hasher};
-use std::path::PathBuf;
 use std::sync::Arc;
 
 use std::ops::Range;
 
 use anyhow::Context as _;
 use core_analysis::Measured;
-use core_format::{ReadSeek, SlicedFile};
 use core_geometry::Scalar;
 use core_raster::{LayerRuns, RasterSettings};
 use core_slicer::{Contour, LayerPlan, Sliced, Solid, Windows};
 
 use core_engine::Cutting;
-use core_pipeline::{Opened, Tolerance};
+use core_pipeline::Tolerance;
 
 use crate::job::{MeasureJob, PreviewJob};
 use crate::scene::Scene;
 
-mod file;
 mod job;
 mod picture;
 
@@ -26,7 +23,8 @@ pub use picture::{MaskView, PixelRect, on_plate};
 /// The sliced stack the preview panel is showing, and the build that produces it.
 #[derive(Default)]
 pub struct Preview {
-    source: Option<Source>,
+    /// The plate being cut, and the layers it cuts into.
+    source: Option<Stack>,
     /// Index into the stack, not a height: the slider counts layers.
     layer: usize,
     job: Option<Build>,
@@ -96,49 +94,6 @@ struct Stack {
     /// The window last cut and the contours it came to, so that stepping through a
     /// window costs nothing; see `docs/decisions/0068-the-window-holds-no-stack.md`.
     cut: Option<(Range<usize>, Sliced)>,
-}
-
-/// Where the layers the panel is showing come from.
-///
-/// Both answer the same question — the runs of layer `n` — and neither holds a stack: a
-/// plate cuts the layer it is asked for, a file decodes it. See `docs/decisions/0151`.
-enum Source {
-    Cut(Stack),
-    Read(Box<ReadFile>),
-}
-
-impl Source {
-    fn stack(&self) -> Option<&Stack> {
-        match self {
-            Self::Cut(stack) => Some(stack),
-            Self::Read(_) => None,
-        }
-    }
-
-    fn fingerprint(&self) -> u64 {
-        match self {
-            Self::Cut(stack) => stack.fingerprint,
-            Self::Read(read) => read.fingerprint,
-        }
-    }
-
-    fn layer_count(&self) -> usize {
-        match self {
-            Self::Cut(stack) => stack.windows.layer_count(),
-            Self::Read(read) => read.facts.layer_count() as usize,
-        }
-    }
-}
-
-/// A sliced file open in the window, and what it says about itself.
-struct ReadFile {
-    path: PathBuf,
-    facts: SlicedFile,
-    open: Opened<Box<dyn ReadSeek>>,
-    fingerprint: u64,
-    /// What stood on the plate when the file was opened. The plate moving on is what ends
-    /// the file's turn under the slider, so that no reading comes from the other source.
-    plate: u64,
 }
 
 /// A running build and the fingerprint its stack will carry.
@@ -231,7 +186,7 @@ impl Preview {
         let Some(source) = self.source.as_ref() else {
             return;
         };
-        let count = source.layer_count();
+        let count = source.windows.layer_count();
         self.layer = match height_mm {
             Some(height_mm) => self.layer_topping_near(height_mm),
             None => count.saturating_sub(1),
@@ -291,7 +246,9 @@ impl Preview {
     }
 
     pub fn layer_count(&self) -> usize {
-        self.source.as_ref().map_or(0, Source::layer_count)
+        self.source
+            .as_ref()
+            .map_or(0, |stack| stack.windows.layer_count())
     }
 
     pub fn layer(&self) -> usize {
@@ -306,7 +263,7 @@ impl Preview {
 
     /// Where every layer of the stack starts and stops.
     pub fn plan(&self) -> Option<&LayerPlan> {
-        Some(self.source.as_ref()?.stack()?.windows.plan())
+        Some(self.source.as_ref()?.windows.plan())
     }
 
     /// Height the plate stands at for the layer being shown: the top of that layer, as
@@ -326,17 +283,9 @@ impl Preview {
         self.top_of(self.layer_count().checked_sub(1)?)
     }
 
-    /// Top of layer `index` above the plate, millimetres: the plan's for a plate being cut,
-    /// and the layer table's own for a file being read.
+    /// Top of layer `index` above the plate, millimetres, as the plan cuts it.
     fn top_of(&self, index: usize) -> Option<Scalar> {
-        match self.source.as_ref()? {
-            Source::Cut(stack) => stack.windows.plan().top_of(index),
-            Source::Read(read) => read
-                .facts
-                .layers
-                .get(index)
-                .map(|entry| Scalar::from(entry.z_mm)),
-        }
+        self.source.as_ref()?.windows.plan().top_of(index)
     }
 
     /// Area the layer exposes, square millimetres, taken from the contours rather than
@@ -344,19 +293,6 @@ impl Preview {
     ///
     /// `None` until the window holding the layer has been cut, which drawing it does.
     pub fn layer_area_mm2(&self) -> Option<Scalar> {
-        if let Some((_, shown)) = self.full.as_ref().filter(|_| self.read_facts().is_some()) {
-            // A file has no contours; its area is the mask's, which is exact because the
-            // runs held here are the panel's own resolution rather than the shrunk picture.
-            let panel = self.read_panel()?;
-            let lit: u64 = shown
-                .runs
-                .runs()
-                .iter()
-                .filter(|run| run.value > 0)
-                .map(|run| u64::from(run.length))
-                .sum();
-            return Some(lit as Scalar * panel.pitch.x * panel.pitch.y);
-        }
         let layer = self.current()?;
         let double_area: Scalar = layer.contours.iter().map(Contour::signed_double_area).sum();
         Some((double_area / 2.0).max(0.0))
@@ -366,7 +302,6 @@ impl Preview {
     pub fn is_stale(&self, fingerprint: u64) -> bool {
         self.source
             .as_ref()
-            .and_then(Source::stack)
             .is_some_and(|stack| stack.fingerprint != fingerprint)
     }
 }
@@ -381,8 +316,7 @@ pub(crate) mod tests {
     use core_raster::{Grey, LayerMask};
     use core_raster::{PixelPitch, Shading};
 
-    use crate::files::Handed;
-    use crate::scene::{ImportSummary, Imported};
+    use crate::scene::ImportSummary;
     use crate::status::Status;
 
     /// Panel of 64 x 32 pixels at a 0.2 mm pitch: 12.8 x 6.4 mm of build area.
@@ -413,12 +347,12 @@ pub(crate) mod tests {
         )
         .expect("a box slices");
         let mut preview = Preview {
-            source: Some(Source::Cut(Stack {
+            source: Some(Stack {
                 solid: Arc::new(Solid::from(mesh.as_ref().clone())),
                 windows,
                 fingerprint: 7,
                 cut: None,
-            })),
+            }),
             ..Preview::default()
         };
         preview.cut_window().expect("a box slices");
@@ -484,12 +418,12 @@ pub(crate) mod tests {
         )
         .expect("two boxes slice");
         let mut preview = Preview {
-            source: Some(Source::Cut(Stack {
+            source: Some(Stack {
                 solid: Arc::new(Solid::from(mesh)),
                 windows,
                 fingerprint: 7,
                 cut: None,
-            })),
+            }),
             ..Preview::default()
         };
 
@@ -900,7 +834,7 @@ pub(crate) mod tests {
 
     /// A `.goo` of `count` layers on a 16 x 8 panel with a lit block in the middle, written
     /// to a temporary file so it can be opened by path the way the window opens one.
-    pub(crate) fn written_goo(name: &str, count: u32) -> PathBuf {
+    pub(crate) fn written_goo(name: &str, count: u32) -> std::path::PathBuf {
         use core_format::{LayerSink, PrintJob, SlicedFileWriter};
         use printer_profiles::{MaterialProfile, PrinterProfile};
 
@@ -967,157 +901,5 @@ z = 10.0
             sink.finish(1234.0).expect("every promised layer arrived");
         }
         path
-    }
-
-    #[test]
-    fn an_opened_file_reports_what_it_states_and_not_what_a_profile_would() {
-        let path = written_goo("states", 4);
-        let mut preview = Preview::default();
-        preview
-            .read_file(&Handed::Path(path.clone()), 0)
-            .expect("a .goo we wrote opens");
-
-        let facts = preview.read_facts().expect("a file is open");
-        assert_eq!(facts.format, "goo");
-        assert_eq!(facts.layer_count(), 4);
-        assert_eq!((facts.width_px, facts.height_px), (16, 8));
-        assert_eq!(preview.layer_count(), 4);
-        assert_eq!(
-            preview.layer(),
-            3,
-            "a file opens at its top layer, as a cut stack does"
-        );
-
-        // The panel is the file's, whatever profile the window holds.
-        let panel = preview.read_panel().expect("a .goo records its panel");
-        assert_eq!((panel.width_px, panel.height_px), (16, 8));
-        assert!((panel.pitch.x - 0.1).abs() < 1e-6);
-    }
-
-    #[test]
-    fn a_layer_of_an_opened_file_is_decoded_rather_than_cut() {
-        let path = written_goo("decode", 3);
-        let mut preview = Preview::default();
-        preview
-            .read_file(&Handed::Path(path.clone()), 0)
-            .expect("a .goo we wrote opens");
-        let panel = preview.read_panel().expect("a .goo records its panel");
-
-        preview.set_layer(1);
-        let mask = preview.mask(&panel).expect("the layer decodes");
-        assert_eq!((mask.width(), mask.height()), (16, 8));
-
-        let lit = mask.pixels().iter().filter(|grey| **grey > 0).count();
-        assert_eq!(lit, 8 * 4, "the block written into every layer comes back");
-
-        // Area is the mask's own, because a file has no contours to take it from.
-        let area = preview
-            .layer_area_mm2()
-            .expect("a decoded layer has an area");
-        assert!(
-            (area - 32.0 * 0.01).abs() < 1e-4,
-            "32 lit pixels of 0.1 by 0.1 mm, got {area}"
-        );
-    }
-
-    #[test]
-    fn an_opened_file_is_never_stale_against_the_scene_and_states_its_own_heights() {
-        let path = written_goo("heights", 4);
-        let mut preview = Preview::default();
-        preview
-            .read_file(&Handed::Path(path.clone()), 0)
-            .expect("a .goo we wrote opens");
-
-        assert!(
-            !preview.is_stale(0),
-            "nothing about the plate makes an opened file out of date"
-        );
-        assert!(
-            preview.plan().is_none(),
-            "a container carries a layer table, not a plan we cut"
-        );
-
-        preview.set_layer(0);
-        let first = preview
-            .layer_z()
-            .expect("the table states every layer's top");
-        preview.set_layer(3);
-        let last = preview
-            .layer_z()
-            .expect("the table states every layer's top");
-        assert!((first - 0.05).abs() < 1e-4, "got {first}");
-        assert!((last - 0.2).abs() < 1e-4, "got {last}");
-    }
-
-    /// BUG-51: importing a model while a file is open left the panel, the slider and the
-    /// footer stating two stacks at once.
-    #[test]
-    fn a_file_is_over_an_old_plate_once_what_stands_on_it_changes() {
-        let path = written_goo("plate", 2);
-        let mut scene = Scene::default();
-        let mut preview = Preview::default();
-        preview
-            .read_file(&Handed::Path(path.clone()), plate_fingerprint(&scene))
-            .expect("a .goo we wrote opens");
-        assert!(
-            !preview.file_is_over_an_old_plate(plate_fingerprint(&scene)),
-            "the plate it was opened over is the plate it is shown over"
-        );
-
-        scene.insert(Imported::new(
-            "box".to_owned(),
-            Arc::new(box_mesh(2.0)),
-            Transform::default(),
-            ImportSummary {
-                vertices_merged: 0,
-                faces_removed: 0,
-                orientation: Orientation {
-                    flipped_faces: 0,
-                    inverted_shells: 0,
-                    orientable: true,
-                },
-                diagnostics: diagnose(&box_mesh(2.0)),
-            },
-        ));
-        assert!(preview.file_is_over_an_old_plate(plate_fingerprint(&scene)));
-    }
-
-    /// The exposure of a file's layer is the file's own, not the window resin's ramp.
-    #[test]
-    fn an_opened_file_states_its_own_exposure_for_the_layer_being_shown() {
-        let path = written_goo("exposure", 3);
-        let mut preview = Preview::default();
-        preview
-            .read_file(&Handed::Path(path.clone()), 0)
-            .expect("a .goo we wrote opens");
-        let facts = preview.read_facts().expect("a file is open").clone();
-
-        preview.set_layer(2);
-        let exposure_s = preview
-            .read_layer_exposure_s()
-            .expect("the table states every layer's exposure");
-        assert!(
-            (exposure_s - facts.layers[2].exposure_s).abs() < 1e-6,
-            "the row of the layer being shown, got {exposure_s}"
-        );
-        assert_eq!(
-            Preview::default().read_layer_exposure_s(),
-            None,
-            "a plate under the slider has no file to read"
-        );
-    }
-
-    #[test]
-    fn closing_a_file_leaves_nothing_of_it_behind() {
-        let path = written_goo("close", 2);
-        let mut preview = Preview::default();
-        preview
-            .read_file(&Handed::Path(path.clone()), 0)
-            .expect("a .goo we wrote opens");
-        preview.close_file();
-
-        assert!(preview.read_facts().is_none());
-        assert!(preview.read_path().is_none());
-        assert_eq!(preview.layer_count(), 0);
     }
 }

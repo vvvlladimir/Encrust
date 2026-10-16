@@ -1,7 +1,6 @@
 use egui::{Color32, RichText};
 use printer_profiles::Connection;
 
-use super::opened;
 use crate::panels::Window;
 use crate::panels::plate_summary::file_readings;
 use crate::panels::printer_card::{self, Chosen};
@@ -15,12 +14,7 @@ use crate::workspace::Tool;
 /// From the plate to a file, and from the file to a printer, top to bottom. Slice in the
 /// plate column does the same press; this is where its choices are read.
 pub fn ui(ui: &mut egui::Ui, window: &mut Window) {
-    // A file being shown states its own numbers; ours describe a plate it knows nothing of.
-    if window.machine.preview.read_facts().is_some() {
-        opened::ui(ui, window);
-    } else {
-        file(ui, window);
-    }
+    file(ui, window);
     send(ui, window);
 }
 

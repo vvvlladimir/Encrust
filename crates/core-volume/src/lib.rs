@@ -19,6 +19,7 @@ mod scatter;
 mod sdf;
 mod shells;
 mod sign;
+mod stack;
 mod sweep;
 
 pub use build::{FieldSettings, build};
@@ -39,3 +40,4 @@ pub use model::{HoleSize, ModelHollow, PENDING_MARKER_MM, Shell, markers};
 pub use relief::{Relief, ReliefSettings, Tiling, press, press_tiled};
 pub use sdf::Sdf;
 pub use sign::SignMode;
+pub use stack::{Panel, StackField};

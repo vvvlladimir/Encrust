@@ -21,13 +21,7 @@ const RISK_RING_R: f32 = 12.0;
 /// the stage, or all of it; see `docs/decisions/0103`. The picture fills the pane, under
 /// the cards as the model does; the caption keeps to `clear`, the room they leave.
 pub fn ui(ui: &mut egui::Ui, machine: &mut Machine, clear: Rect) {
-    // A file being read names the panel it was written for; a profile loaded here says
-    // nothing about a file another slicer wrote.
-    let settings = machine
-        .preview
-        .read_panel()
-        .or_else(|| machine.slicing.raster_settings());
-    let Some(settings) = settings else {
+    let Some(settings) = machine.slicing.raster_settings() else {
         caption(
             ui,
             clear,

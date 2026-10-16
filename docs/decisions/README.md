@@ -302,6 +302,7 @@ Grouped by what the decision governs; the number is still the order it was taken
 | [0052](0052-profiles-are-edited-in-the-window.md) | Profiles are edited in a Settings screen and saved into the user's directory | Accepted; where the machines and resins are edited is superseded by 0220, and the Settings screen by 0233 |
 | [0235](0235-a-profile-is-imported-by-the-catalogue.md) | Import and export a profile through the catalogue | Accepted |
 | [0293](0293-a-resin-is-taken-from-a-sliced-file.md) | Take a resin from a sliced file, keeping only what a printer could use | Accepted |
+| [0294](0294-a-sliced-file-opens-as-a-model.md) | Open a sliced file as a model, built back from its layers | Accepted |
 | [0120](0120-a-resin-is-tuned-per-printer.md) | A printer's resins are its own presets, edited in place | Accepted; no undo on the screen superseded by 0268 |
 | [0140](0140-a-profile-carries-the-machine-name-its-firmware-matches.md) | A profile carries the machine name its firmware matches | Accepted |
 | [0141](0141-advance-mode-follows-the-firmware-flag.md) | Advance mode follows the machine's firmware flag | Accepted |
@@ -367,7 +368,7 @@ Grouped by what the decision governs; the number is still the order it was taken
 | [0118](0118-one-placing-panel-and-a-standing-gizmo.md) | One placing panel, and a gizmo that is always out | Accepted; the gizmo on Select is superseded by 0218 |
 | [0135](0135-the-macos-icon-is-squircled-at-source.md) | The macOS icon is squircled at source, not only in the bundle | Accepted |
 | [0138](0138-the-destination-lives-on-the-slice-button.md) | The destination lives on the Slice button | Superseded by 0157 |
-| [0151](0151-the-preview-shows-a-source-not-a-plate.md) | Let the preview show a source, which is either a plate or a file | Accepted; what ends a file's turn is amended by 0202 |
+| [0151](0151-the-preview-shows-a-source-not-a-plate.md) | Let the preview show a source, which is either a plate or a file | Superseded by 0294 |
 | [0157](0157-the-slice-row-carries-two-actions.md) | The Slice row carries two actions, not a destination | Accepted; the Send button is superseded by 0217, the stale dot by 0262 |
 | [0217](0217-the-window-is-a-top-bar-a-flat-rail-and-a-layer-strip.md) | The window is a top bar, a flat rail, a docked inspector and a layer strip | Accepted; the return to the model on a tool press is superseded by 0218, the docked columns and layer strip by 0221, Find by 0230, the message under the jobs by 0231, the jobs top centre by 0263 |
 | [0218](0218-twelve-tools-on-the-rail-and-print-settings-as-a-form.md) | Twelve tools on the rail, and the print settings as a form | Accepted; Select and the digits are superseded by 0231 |
@@ -384,4 +385,4 @@ Grouped by what the decision governs; the number is still the order it was taken
 | [0192](0192-a-tool-value-is-remembered-and-taken-back-on-its-own-entry.md) | A tool value is remembered between runs and taken back on its own entry | Accepted; a tool value as always an entry of its own is superseded by 0257 |
 | [0257](0257-what-an-edit-sets-off-is-part-of-it.md) | Record what an edit sets off as part of it, and do it again after an undo | Accepted |
 | [0193](0193-the-window-reads-its-own-input-before-egui-does.md) | The window reads its own input before egui does | Accepted; Tab and the keys of a focused control are superseded by 0229 |
-| [0202](0202-an-opened-file-closes-when-the-plate-changes.md) | An opened sliced file closes when the plate changes | Accepted |
+| [0202](0202-an-opened-file-closes-when-the-plate-changes.md) | An opened sliced file closes when the plate changes | Superseded by 0294 |

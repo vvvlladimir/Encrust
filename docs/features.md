@@ -30,8 +30,12 @@ but only one printer, the ELEGOO Saturn 4 Ultra, has printed a file Encrust wrot
   material, which the Relief tool uses.
 - Open an **`.encrust` project**. It opens exactly as it was saved, with its supports and
   cavities already built, so nothing is recalculated.
-- Open **any sliced file** Encrust can write, whoever made it, to look at it layer by layer
-  or convert it. A file with the wrong extension is recognised by its first bytes.
+- Open **any sliced file** Encrust can read, whoever made it, as a model: its layers are
+  built back into a mesh that stands where it stood on the plate, so you can move it,
+  support it again or cut it for another printer. Its supports and raft come back as part
+  of the model, edges are rounded by about 0.05 mm, and layer steps stay. A `.sl1` is slow
+  to open (a minute for a full 16K stack). An encrypted `.ctb` cannot be opened yet. A file
+  with the wrong extension is recognised by its first bytes.
 - Drag and drop onto the window, or use the **Recent** list, which shows a picture of each
   file.
 - Start from one of **four built-in test prints**: detail test, exposure check, surface
@@ -341,8 +345,9 @@ transition, light power, lifts, retracts, waits, density, price, colour and comp
 One resin can be tuned differently for each printer. A resin taken from a printer is kept
 until you set it up on another one.
 
-**Take a resin from a sliced file:** open a file another slicer wrote for your printer and
-press **Keep its resin**; it is saved on the machine the file was cut for. You get what the
+**Take a resin from a sliced file:** in **Machine and resin**, press **Import** on a
+printer's resins and pick a file another slicer wrote for it; the resin is saved on that
+printer. You get what the
 file states: exposure and bottom layers always, and transition, waits, lifts, speeds and
 light power where the format holds them (`.goo` holds all of them, `.sl1` none). Anything
 else keeps our defaults, and so does a lift the file states as a placeholder, as files for a

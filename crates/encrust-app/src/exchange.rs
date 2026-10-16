@@ -25,16 +25,42 @@ pub fn import_file(
     use anyhow::Context as _;
 
     let path = file.path();
-    let imported = file
-        .text()
-        .map_err(anyhow::Error::new)
-        .and_then(|text| {
-            let catalogue = &mut machine.slicing.catalogue;
-            Ok(import(catalogue, kind, &text, path, printer)?)
-        })
-        .with_context(|| format!("cannot import {}", path.display()));
+    let catalogue = &mut machine.slicing.catalogue;
+    let imported = if kind == Kind::Resin && core_pipeline::reads_sliced_file(path) {
+        resin_of_sliced(catalogue, file, printer)
+    } else {
+        file.text()
+            .map_err(anyhow::Error::new)
+            .and_then(|text| Ok(import(catalogue, kind, &text, path, printer)?))
+    }
+    .with_context(|| format!("cannot import {}", path.display()));
     let done = format!("Imported {}", path.display());
     machine.status.report(&done, imported)
+}
+
+/// Takes in the resin a sliced file states, set up on `printer` or else on the machine the
+/// file was cut for (ADR 0293). Answers the new id.
+fn resin_of_sliced(
+    catalogue: &mut Catalogue,
+    file: &Handed,
+    printer: Option<&str>,
+) -> anyhow::Result<String> {
+    use anyhow::Context as _;
+    use core_format::OpenFile as _;
+
+    let path = file.path();
+    let opened = core_pipeline::open(path, file.reader()?)?;
+    let facts = opened.facts();
+    let printer = printer
+        .or_else(|| {
+            catalogue.printer_for_panel(facts.width_px, facts.height_px, facts.machine.as_deref())
+        })
+        .map(str::to_owned)
+        .context("choose the printer this file was cut for first")?;
+    let stem = path
+        .file_stem()
+        .map_or_else(|| "Resin".into(), |stem| stem.to_string_lossy());
+    Ok(catalogue.import_resin(facts.resin(&stem), Some(&printer))?)
 }
 
 /// Takes `text` in as a profile of `kind` under an id of its own, a preset held to

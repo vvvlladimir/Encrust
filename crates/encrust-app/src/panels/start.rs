@@ -31,7 +31,6 @@ const CAPTION_H: f32 = 52.0;
 pub fn still_starting(window: &mut Window) -> bool {
     let quiet = window.doc.scene.is_empty()
         && window.doc.project.path.is_none()
-        && window.machine.preview.read_path().is_none()
         && !window.doc.imports.is_busy()
         && *window.tool == Tool::default();
     if !quiet {
