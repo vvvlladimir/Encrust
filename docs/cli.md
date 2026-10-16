@@ -166,13 +166,18 @@ encrust slice model.stl \
   --printer elegoo-mars-4-ultra --remove-islands --hanging-passes 2 -o model.goo
 ```
 
-Turn the model the way it prints best before anything else is done to it, reported as the
+Turn the model the way it prints best, at its `--scale` and before anything else, reported as the
 `--rotate` that repeats the turn — `--orient-goal` searches for `fewest-supports` (the
-default), `least-peel`, `shortest-print` or `clean-top`, and `--max-tilt DEG` keeps the turn
-within that many degrees of the way the file stands (ADR 0222) — and build supports to a profile of the catalogue —
+default), `least-peel`, `shortest-print` or `auto`, which balances the three, and
+`--max-tilt DEG` keeps the turn within that many degrees of the way the file stands (ADR 0222) — and build supports to a profile of the catalogue —
 `light`, `medium`, `heavy` or one saved in the window, as `profiles list` names them — or to
 your own TOML with `--support-profile`. With both, the search counts as overhang what that
-profile's `max_overhang_deg` does, and 45 degrees without one:
+profile's `max_overhang_deg` does, and 45 degrees without one. With a printer as well the
+search's best few are printed to choose between, as the window's **Auto-orient** does
+(ADR 0290). A turned model is stood on the plate over the middle it stood over in x and y.
+A model the search sets on the plate gets supports only under what would hang there, and none
+if nothing does; with supports and a raft it stands on the raft's top. A `--rotate` that tips
+it off that face stands it on supports. For example:
 
 ```sh
 encrust slice model.stl \
@@ -184,7 +189,7 @@ encrust slice model.stl \
 ```
 
 A model is stood off the plate by the profile's own `z_lift_mm`, and by its raft's
-thickness on top when it has one, before anything is put under it, the way the window's **Lift models** does it: a part sitting on the plate has no
+thickness on top when it has one, before anything is put under it, the way the window's **Lift off the plate** does it: a part sitting on the plate has no
 room for a support. One already standing that high is left where it is, and a profile with
 `z_lift_mm = 0` lifts nothing. The report says how far it moved.
 
@@ -357,4 +362,41 @@ for one case named outright:
 ```sh
 cargo run --release -p encrust-cli --bin hollow-lab -- model.stl [case index]
 cargo run --release -p encrust-cli --bin hollow-lab -- model.stl --wall 0.3 --precision 0.5
+```
+
+## `orient-lab`
+
+Each orientation goal's choice, four poses by hand — as the file stands on supports and
+set on the plate, on its largest face, tilted 35° onto a corner — and, with
+`--oracle N`, N directions spread over the sphere, all judged on what the pose actually
+prints: the supports standing under it, then the stack cut and cured, read for contacts,
+contacts left hanging, contacts on faces the file has looking up, layers, the hardest
+pull on the film, islands and suction cups, and whether it fits the build volume. A goal
+is chosen the way the window chooses it, by printing the search's finalists
+(`docs/design/orientation.md`).
+
+Every goal is held to the same rules against the best pose measured for the model,
+whoever found it: no more cups and tearing pulls than the soundest pose; islands and
+hanging contacts within a quarter and two of the fewest; nothing hanging under a pose
+set on the plate; inside the build volume when anything is; its own reading within a
+tenth of the best sound pose; not turned when standing as drawn was good enough; and
+within three seconds a million faces. Each broken rule is named under the goal, and under
+a goal that fails, its trace: the seconds its search and its proof took, and every
+finalist it printed, on the coarse stack the proof ranks on, with what decided its place.
+The run ends with the seconds all goals spent on each stage.
+
+With no model it runs eight built-in bodies. `--corpus FILE` reads a TOML list of
+models, each with what a person expects of it — `max-tilt-deg`, `on-plate`, for every
+goal or one — which is held as one more rule. `--json FILE` keeps the run; `--baseline
+FILE` sets it beside one kept before, measures again the poses that run's goals chose so
+the best known pose is never forgotten, and exits non-zero when a goal that passed there
+fails here. A goal no measured pose could pass is `unreachable` and left out of the
+count; a corpus may `isolate` a model or `isolate-goals` one goal, which is measured and
+shown but neither counted nor a regression. `--rejudge FILE` judges a kept run again by
+the rules as they are now, measuring nothing.
+
+```sh
+cargo run --release -p encrust-cli --bin orient-lab
+cargo run --release -p encrust-cli --bin orient-lab -- a.stl b.obj --printer elegoo-saturn-4-ultra --support medium
+cargo run --release -p encrust-cli --bin orient-lab -- --corpus corpus.toml --json now.json --baseline before.json
 ```

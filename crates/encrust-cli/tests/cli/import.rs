@@ -208,13 +208,14 @@ fn an_orient_goal_without_orient_is_an_argument_error() {
 
 #[test]
 fn the_orient_goal_and_the_tilt_limit_reach_the_search() {
-    let path = write_box_stl("no-tilt", 10.0, 12, 0);
-    let turned = |extra: &[&str]| {
+    // A cube ties on every goal and stays; a leaning box does not.
+    let path = write_leaning_box_stl("no-tilt", 10.0, 8.0, 12, 0);
+    let turned = |goal: &str, extra: &[&str]| {
         let base = [
             path.to_str().unwrap(),
             "--orient",
             "--orient-goal",
-            "clean-top",
+            goal,
             "--json",
         ];
         let output = slice(&[&base[..], extra].concat());
@@ -224,12 +225,15 @@ fn the_orient_goal_and_the_tilt_limit_reach_the_search() {
             .expect("an oriented run reports its turn")
     };
 
+    let shortest = turned("shortest-print", &[]);
     assert!(
-        turned(&[]) > 1.0,
-        "a cube keeps its top clean by turning its upward face away from the film"
+        (shortest - turned("fewest-supports", &[])).abs() > 1.0,
+        "the shortest print lays the box otherwise than the fewest supports stand it"
     );
+    assert!(turned("auto", &[]).is_finite(), "auto reaches the search");
+    assert!(shortest > 1.0, "the shortest print turns the box");
     assert_eq!(
-        turned(&["--max-tilt", "0"]),
+        turned("shortest-print", &["--max-tilt", "0"]),
         0.0,
         "a tilt of nothing allows no turn"
     );
@@ -267,5 +271,56 @@ fn the_overhang_an_orientation_is_scored_on_is_the_support_profiles_own() {
         overhang("light") < 0.01,
         "and none at the 55 degrees the light profile asks for, got {}",
         overhang("light")
+    );
+}
+
+#[test]
+fn a_model_set_on_the_plate_with_a_ledge_hanging_is_stood_on_supports() {
+    // A 20 mm cube with a 4 mm ledge out of its top: too little of its surface to keep it
+    // off the plate, enough to need holding up there.
+    let path = write_boxes_stl(
+        "ledge",
+        &[
+            ([0.0, 0.0, 0.0], [20.0, 20.0, 20.0]),
+            ([20.0, 8.0, 18.0], [24.0, 12.0, 20.0]),
+        ],
+    );
+    let output = slice(&[
+        path.to_str().unwrap(),
+        "--orient",
+        "--max-tilt",
+        "0",
+        "--supports",
+        "medium",
+        "--json",
+    ]);
+    assert!(output.status.success(), "{}", stderr(&output));
+    let report = json(&output);
+    assert!(
+        report["supports"]["contacts"].as_u64().unwrap_or(0) > 0,
+        "the ledge is held up: {report}"
+    );
+}
+
+#[test]
+fn an_oriented_model_stands_on_the_plate_without_centring() {
+    // Turned over about the file's origin, a box drawn on the plate ends up under it.
+    let path = write_leaning_box_stl("turned-over", 10.0, 8.0, 12, 0);
+    let out = output_dir("turned-over");
+    let output = slice(&[
+        path.to_str().unwrap(),
+        "-o",
+        out.to_str().unwrap(),
+        "--profile",
+        shipped_profile().to_str().unwrap(),
+        "--orient",
+        "--orient-goal",
+        "shortest-print",
+    ]);
+    assert!(output.status.success(), "{}", stderr(&output));
+    assert!(
+        !stderr(&output).contains("under the plate"),
+        "{}",
+        stderr(&output)
     );
 }

@@ -235,6 +235,9 @@ pub struct SceneObject {
     pub mapped: Option<Arc<Mapped>>,
     /// The tool settings this model keeps instead of the plate's.
     pub own: OwnSettings,
+    /// How high over its raft the user stood the model, millimetres: what auto-orient
+    /// lifts it by onto supports in place of the profile's lift.
+    pub lift_mm: Option<f32>,
     bounds: PlacedBounds,
 }
 
@@ -365,6 +368,31 @@ impl SceneObject {
         self.settle(self.pivot().turned(turn));
         self.stand_on_plate();
         true
+    }
+
+    /// Slides the model along the plate only as far as stands it inside a plate `plate_mm`
+    /// across, or into the plate's near corner where it is too big to.
+    pub fn slide_onto_plate(&mut self, plate_mm: Vec2) {
+        if let Some(bounds) = self.world_bounds() {
+            let min = bounds.mins.truncate();
+            let onto = onto_plate(min, bounds.maxs.truncate() - min, plate_mm);
+            self.transform.translation += onto.extend(0.0);
+        }
+    }
+
+    /// How high the model's lowest point stands over its raft, millimetres.
+    pub fn lift(&self) -> Option<f32> {
+        let bounds = self.world_bounds()?;
+        Some(bounds.mins.z - self.supports.raft_lift_mm())
+    }
+
+    /// Stands the model `lift_mm` over its raft and keeps that as the lift asked for, or
+    /// forgets it at nought, where auto-orient goes back to the profile's.
+    pub fn lift_to(&mut self, lift_mm: f32) {
+        if let Some(now_mm) = self.lift() {
+            self.transform.translation.z += lift_mm - now_mm;
+        }
+        self.lift_mm = (lift_mm > 0.0).then_some(lift_mm);
     }
 
     /// Moves the model straight down, or up, until its lowest point touches the plate.
@@ -739,6 +767,7 @@ impl Scene {
             traps: Traps::default(),
             mapped: imported.mapped,
             own: OwnSettings::default(),
+            lift_mm: None,
             bounds: PlacedBounds::default(),
         });
         self.selected = vec![id];

@@ -1,6 +1,6 @@
 # 0087. Score an orientation on the peel, and measure it in two passes
 
-- **Status:** Accepted
+- **Status:** Accepted, the score's terms and weights superseded by 0274
 - **Date:** 2026-09-24
 
 ## Context

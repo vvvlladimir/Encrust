@@ -1,10 +1,41 @@
 /// The last thing that happened, shown over the stage.
-#[derive(Debug, Clone, Default, PartialEq, Eq)]
+#[derive(Debug, Clone, Default, PartialEq, Eq, Hash)]
 pub enum Status {
     #[default]
     Idle,
     Info(String),
+    /// What happened, and what it reads now, each against what it read before.
+    Readings(String, Vec<Reading>),
     Error(String),
+}
+
+/// One figure as the notice shows it, and which way it moved.
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct Reading {
+    pub text: String,
+    pub change: Change,
+}
+
+impl Reading {
+    /// `now` as `shown` writes it, against `was` where there was one before. Lower is
+    /// better; a change too small to show is none.
+    pub fn lower_better(now: f64, was: Option<f64>, shown: impl Fn(f64) -> String) -> Self {
+        let text = shown(now);
+        let change = match was {
+            Some(was) if shown(was) != text && now < was => Change::Better,
+            Some(was) if shown(was) != text => Change::Worse,
+            _ => Change::Same,
+        };
+        Self { text, change }
+    }
+}
+
+/// Which way a reading moved from the last one.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum Change {
+    Same,
+    Better,
+    Worse,
 }
 
 impl Status {
@@ -33,7 +64,7 @@ impl Status {
     pub fn text(&self) -> &str {
         match self {
             Self::Idle => "Ready",
-            Self::Info(message) | Self::Error(message) => message,
+            Self::Info(message) | Self::Readings(message, _) | Self::Error(message) => message,
         }
     }
 
@@ -63,5 +94,24 @@ mod tests {
         assert_eq!(status.report("Opened cube.stl", failed), None);
         assert!(status.is_error());
         assert_eq!(status.text(), "cannot load cube.stl: no such file");
+    }
+
+    #[test]
+    fn a_reading_moves_only_as_far_as_it_shows() {
+        let ml = |value: f64| format!("{value:.2} ml");
+        assert_eq!(
+            Reading::lower_better(1.0, Some(2.0), ml).change,
+            Change::Better
+        );
+        assert_eq!(
+            Reading::lower_better(2.0, Some(1.0), ml).change,
+            Change::Worse
+        );
+        assert_eq!(
+            Reading::lower_better(1.0, Some(1.001), ml).change,
+            Change::Same,
+            "both read 1.00 ml"
+        );
+        assert_eq!(Reading::lower_better(1.0, None, ml).change, Change::Same);
     }
 }

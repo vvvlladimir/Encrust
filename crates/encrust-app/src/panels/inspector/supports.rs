@@ -3,9 +3,8 @@ use core_supports::Part;
 use super::scope;
 use crate::job::SupportJob;
 use crate::panels::Window;
-use crate::panels::support_fields::{Group, saved_as};
+use crate::panels::support_fields::{held_up, saved_as};
 use crate::state::Doc;
-use crate::status::Status;
 use crate::ui::{
     hint, icon, primary_button, progress_bar, secondary_button, section, stats, theme, tone,
 };
@@ -19,8 +18,10 @@ pub fn ui(ui: &mut egui::Ui, window: &mut Window) {
             let profile = &mut window.tools.supports.profile;
             let saved =
                 saved_as(&window.machine.slicing.catalogue, profile).map(|entry| &entry.profile);
-            Group::Automatic.show(ui, profile, saved);
-            lift(ui, window);
+            held_up(ui, profile, saved);
+            if let [id] = *window.doc.scene.selection() {
+                super::position::lift(ui, &mut window.doc.scene, id);
+            }
         });
     });
     section(ui, "Picked", None, |ui| editing(ui, window));
@@ -51,22 +52,6 @@ fn standing(doc: &Doc) -> (usize, usize) {
                 columns + object.supports.standing(),
             )
         })
-}
-
-/// Standing every part clear of the plate, by the lift the profile carries.
-fn lift(ui: &mut egui::Ui, window: &mut Window) {
-    let label = format!(
-        "Lift models {:.1} mm",
-        window.tools.supports.profile.z_lift_mm
-    );
-    if secondary_button(ui, icon::SUPPORTS, &label).clicked() {
-        let moved = window.tools.supports.lift(&mut window.doc.scene);
-        window.machine.status = Status::Info(match moved {
-            0 => "Nothing on the plate to lift".to_owned(),
-            1 => "Lifted 1 model off the plate".to_owned(),
-            moved => format!("Lifted {moved} models off the plate"),
-        });
-    }
 }
 
 /// What the click has picked: how much of it, which groups it belongs to, and the

@@ -66,15 +66,56 @@ capped silently.
 - **Mirror** the model, or mirror a copy beside it.
 - **Lay on face:** click a face and the model lies on it.
 - Put a model back in the middle of the plate, back on the plate, or lift it off by a set
-  height.
+  height, typed or a millimetre a press of − or +. Auto-orient keeps that height for a pose
+  on supports; nought, or **On the plate**, hands it back to the support profile's lift.
 
 **Auto-orient:**
-- Searches for the best angle for one of four goals: **fewest supports**, **least peel**,
-  **shortest print** or **clean top**. Clean top keeps the side facing up in the file free
-  of support marks.
+- Searches for the best angle for one of four presets: **fewest supports**, **least
+  peel**, **shortest print** or **auto**, picked in Position beside **Auto-orient**; the
+  plate-wide **Auto-orient plate** uses the same preset. The preset resets to auto when
+  the window reopens.
+- **Auto** balances the other three for each model. It never lets one of supports, pull
+  or print time go far worse for the sake of the others. Where some pose is about as good
+  as the best on all three, it takes that one. Otherwise it takes the pose where each
+  gives up the smallest, most even share of its best. Like least peel, it never takes a
+  suction cup or a pull past the warning.
+- When there are other good poses, pressing **Auto-orient** again with nothing changed
+  stands the model the next of them, round to the first, without searching again. A
+  change to the model, its supports, its lift, the preset, the printer or the resin
+  searches again. With a printer chosen, the notice shows each pose's supports, pull and
+  height, green where it beats the pose before and red where it loses. Auto offers every
+  trade that no other pose beats on all three; a single goal offers the poses it reads as
+  just as good.
 - You can cap the tilt (for example "no more than 30° from how it stands now"). A cap of 0
   leaves the model as it is.
 - It never picks an angle worse than the current one.
+- With a printer chosen, it only picks a pose that fits the build volume, supports and
+  all, if any pose does. It turns a part about the vertical, even across the plate's
+  diagonal, when that is the only way it fits.
+- A turned model stays over the spot it stood on. It is slid only as far as needed to
+  keep it on the plate.
+- With a printer chosen, it tries its best few poses with their supports and counts the
+  islands each would leave at the printer's own pixel and layer, down to specks a tenth of
+  a millimetre across. A pose standing on the plate with something hanging off it is
+  turned down by every preset but fewest supports.
+- **Fewest supports** picks the pose with the least resin in its supports, raft included,
+  whichever way up that is — strictly the least, however small the saving. It ignores
+  suction cups — drain them with **Drain**, or use **least peel**, which avoids them — and
+  islands, takes supports with no room to stand as they come, and never picks a pose that
+  would not fit the printer or that would balance on a point.
+- **Least peel** keeps the hardest layer's pull on the film low, without suction cups or
+  anything left hanging. Once every layer pulls under 10 N — a third of the 30 N warning —
+  it has nothing more to win, and takes the pose with the least support among those, so
+  a small model is not tilted or flipped for a fraction of a newton. The newtons are an
+  estimate good to about a factor of three, not a measurement of your printer.
+- **Shortest print** takes the pose with the fewest layers — the model's height plus its
+  lift onto supports, since a layer takes as long whatever its area — that seals no cup and
+  leaves nothing hanging. It ignores the peel warning and the support it takes: a flat
+  part lies flat, a figure on its side. Poses within 2 % and a millimetre of the shortest
+  count as just as fast, so a model is not turned for less.
+- It either leaves a model standing on the plate, with supports only under what hangs
+  over it, or lifts it onto supports by the support profile's **Lift** — whichever the
+  goal prefers. Your raft setting is counted either way.
 
 **Many models:**
 - **Arrange the plate** automatically, largest model first.
@@ -141,7 +182,8 @@ capped silently.
   height and load, and nothing carrying a load leans more than 45°.
 - A tip that has no room leans until it finds some. A support that still has no room is
   reported and left out of the print, never forced into the model.
-- **Lift models** off the plate by the profile's height first, so supports have room.
+- **Lift off the plate** stands the picked model that high, a millimetre a press of − or
+  +, so supports have room. It is the same number in Position and in Supports.
 
 ### Manual
 - **Place** a support with a click; Alt-click removes it.
@@ -167,7 +209,9 @@ capped silently.
 - **Base:** the pad's shape (round, cube, prism or tapered), its size, flare and wall slope.
 - **Raft:** **Skates** (a saucer-shaped slab), **Grid** (rim and bars) or **Connected** (a
   pad under each foot, joined by strips), drawn to the model's outline (hull) or a
-  rectangle, with margin and thickness. A raft can belong to the plate or to one model.
+  rectangle, with margin and thickness. The raft is the plate's, whichever model is picked,
+  and is kept when the window reopens. A model a project gave a raft of its own keeps it
+  until **Use the plate's raft**.
 - **Bracing:** cross braces between tall trunks, where the first brace goes and how often
   they repeat.
 
@@ -226,7 +270,8 @@ smoothing, not the original model.
 - **Islands:** parts that start in mid-air with nothing under them.
 - **Suction cups:** closed hollows that pull on the film.
 - **Thin sections and weak necks:** places too thin to hold.
-- **Hard peel:** the layers that pull the film hardest, the widest step and the levers.
+- **Hard peel:** the layers that pull the film hardest, the widest step and the levers. A
+  section's pull follows its area, less for a thin strip than for a disc of the same area.
 
 **It lets you:**
 - Jump to the layer of each issue.

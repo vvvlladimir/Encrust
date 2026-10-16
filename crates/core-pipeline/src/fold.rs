@@ -31,7 +31,7 @@ impl Tolerance {
     }
 
     /// `layer` with the offsets of its index applied, or the layer itself when none move.
-    fn applied<'a>(&self, layer: &'a Layer, index: u32) -> Cow<'a, Layer> {
+    pub fn applied<'a>(&self, layer: &'a Layer, index: u32) -> Cow<'a, Layer> {
         if self.moves_nothing() {
             return Cow::Borrowed(layer);
         }

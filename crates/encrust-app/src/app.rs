@@ -413,10 +413,11 @@ impl eframe::App for SlicerApp {
                 .tools
                 .drain
                 .poll(&mut self.doc.scene, &mut self.machine.status)
-            | self
-                .tools
-                .orient
-                .poll(&mut self.doc.scene, &mut self.machine.status)
+            | self.tools.orient.poll(
+                &mut self.doc.scene,
+                &self.doc.plate,
+                &mut self.machine.status,
+            )
             | crate::panels::animate_preview(ui.ctx(), &mut self.machine.preview);
         self.forget_what_an_old_check_found();
         if self.machine.slicing.job.is_some() || self.machine.preview.is_slicing() {

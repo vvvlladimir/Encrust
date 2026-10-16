@@ -20,6 +20,11 @@ path = "src/main.rs"
 name = "hollow-lab"
 path = "src/bin/hollow_lab.rs"
 
+# A bench for orientation: each goal against poses by hand, on the stack they produce.
+[[bin]]
+name = "orient-lab"
+path = "src/bin/orient_lab/main.rs"
+
 [dependencies]
 core-analysis.workspace = true
 core-geometry.workspace = true

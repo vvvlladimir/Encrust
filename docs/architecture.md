@@ -65,19 +65,19 @@ it are in `.claude/rules/architecture.md`.
 
 | Crate | Owns |
 |---|---|
-| `core-geometry` | `Mesh`, `UvMap`, `Heightmap`, `Triangle`, `Aabb`, `Transform`, `Ray`, `PlacedHit`, `Bvh` with `closest`/`faces_within`, `ClosestPoint`, `Adjacency`, `Winding`, `Plane`, `Cut`, `FastHasher`/`FastMap`/`FastSet`, glam re-exports; `weld`, `diagnose`, `orient_outward`, `fill_holes`, `remove_duplicate_faces`, `center_of_mass`, `transform_mesh`, raycasts, `closest_point`, `winding_number`, `cut`, `split`, `pin_spots` and `pin` for a cut's alignment pins (ADR 0223) |
+| `core-geometry` | `Mesh`, `UvMap`, `Heightmap`, `Triangle`, `Aabb`, `Transform`, `Ray`, `PlacedHit`, `Bvh` with `closest`/`faces_within`, `ClosestPoint`, `Adjacency`, `Winding`, `Plane`, `Cut`, `FastHasher`/`FastMap`/`FastSet`, glam re-exports; `weld`, `diagnose`, `orient_outward`, `fill_holes`, `remove_duplicate_faces`, `convex_hull`, `fitting_turn` (ADR 0289), `center_of_mass`, `transform_mesh`, raycasts, `closest_point`, `winding_number`, `cut`, `split`, `pin_spots` and `pin` for a cut's alignment pins (ADR 0223) |
 | `core-mesh-io` | `MeshLoader` reading a `ModelFile` — a name, a `ReadSeek` and the files beside it — or a path, returning `Loaded` with one `Texture` per material and `decode` to a `Heightmap`, `StlLoader`, `ObjLoader` with UVs and `map_Kd`, `ThreeMfLoader` with `texture2dgroup` |
-| `core-slicer` | `SliceSettings`, `LayerPlan`, `AdaptiveSettings`, `Layer`, `Contour`, `Sliced`, `SliceEngine` with `slice_at`, `PlaneSliceEngine`, `layer_heights`, `adaptive_plan`, `offset_contours`, `covered_area`, `Windows` sampling several planes a layer, `Source` it cuts from, `Solid` with its `Repeated` bodies cut once a copy (ADR 0258) |
+| `core-slicer` | `SliceSettings`, `LayerPlan`, `AdaptiveSettings`, `Layer`, `Contour`, `Sliced`, `SliceEngine` with `slice_at`, `PlaneSliceEngine`, `layer_heights`, `adaptive_plan`, `offset_contours`, `covered_area` and `covered_pieces`, `Windows` sampling several planes a layer, `Source` it cuts from, `Solid` with its `Repeated` bodies cut once a copy (ADR 0258) |
 | `core-raster` | `RasterSettings`, `Grey`, `Run`, `LayerRuns` with `blurred`, `LayerMask`, `Rastered`, `Rasterizer`, `ScanlineRasterizer`, `downsample` |
-| `core-analysis` | `cure` into a `Cured` layer of `Piece`s with area, centre and pull after Stefan; `Measured` folding volume, hardest pull, widest step and `Risk`s — islands, levers on the narrowest neck under a piece, peels, suction cups sealed from below, thin pieces — or taking islands out as it goes, part by part; `erase`, `island_runs`, `equivalent_disc_mm` |
+| `core-analysis` | `cure` into a `Cured` layer of `Piece`s with area, centre and pull; `pull_n`, the one law a section pulls on the film by, with `PEEL_LIMIT_N` (ADR 0281); `Measured` folding volume, hardest pull, widest step and `Risk`s — islands, levers on the narrowest neck under a piece, peels, suction cups sealed from below, thin pieces — or taking islands out as it goes, part by part; `erase`, `island_runs`, `equivalent_disc_mm` |
 | `core-supports` | `Placed`, `Profiles`, `SupportPoint`, `Landing`, `Column`, `SupportTree`; `columns`, `grow`, `mesh_trees`/`mesh_groups`, `grab`/`Grab`/`Part`, `support_under`, `generate_supports`; `carried`/`fits`/`on_model`, the rule a support edited by hand is held to (ADR 0208); `Region`/`Blocked` and `project`/`ProjectSettings` for a painted patch; `ModelSupports`, the supports one model carries; `TrapScan`/`Trapped` for resin with no way out |
-| `core-plate` | `OrientSettings` with an `OrientGoal` and a tilt limit (ADR 0222), `Oriented`, `Score`, `Footprint`, `ArrangeSettings`, `Arranged`, `Placed`, `PlateError`; `orient` — flat faces and a Fibonacci sphere scored on overhang, peel, height and footprint, the best few cut to measure the section; `arrange` — footprint bitmaps packed into the corner and centred |
+| `core-plate` | `OrientSettings` with an `OrientPreset` — one `OrientGoal` or auto, every goal balanced (ADR 0284) — a tilt limit (ADR 0222) and whether the model stands on supports (ADR 0274), `Oriented`, `Score`, `Printed` — a model with its shell, its cuts and its drain holes — and `orient_printed` judging it (ADR 0276), `finalists` — the best few ways to stand, for a caller able to print them (ADR 0277), `FlatFace` and `flat_faces`, `Footprint`, `ArrangeSettings`, `Arranged`, `Placed`, `PlateError`; `orient` — flat faces and a Fibonacci sphere scored on overhang, tips, support height, peel, height and footprint, the best few cut to measure their pull and suction cups, then chosen by priority (ADR 0275); `Readings` carrying every goal's reading, `rank` and `rulings` with `Ruling`, the one rule the search and the proof both rank by for a preset and why each candidate ended where it did, and which are worth offering beside the first, and `LOOKS_UP` (ADR 0278, 0279, 0281, 0284); `arrange` — footprint bitmaps packed into the corner and centred |
 | `core-volume` | `Sdf`, `VoxelGrid`, `FieldSettings`, `SignMode`, `VolumeError`; `build` — scattered from the faces, carried coarse across the wall, refined where it is stored — CSG operators, `extract` — clustered surface nets; `hollow` with `HollowSettings`, `HollowMode`, `Blocker`, `Hollowed`, `lattice_mm`, `MIN_WALL_MM`, `sleeves`, `InfillSettings`/`InfillPattern`; `DrainHole`, `Channel`, `drill`, `channel_under`, `hole_at`, `lift_for`, `pierce`; `ModelHollow` with `Shell`, `HoleSize`, `markers` — what one model carries; `press` with `ReliefSettings`/`Relief`, and `press_tiled` with `Tiling` for a picture on a model with no map (ADR 0225) |
 | `printer-profiles` | `PrinterProfile`/`OutputFormat`/`AnycubicExtension`/`PhotonRevision`/`Connection`/`NetworkMachine` (ADR 0265)/`Firmware`, `MaterialProfile`/`PrinterTuning`/`Compensation` and `exposure_for_mm`, `SupportProfile` and its segments, TOML load/save, `Catalogue` of printers, resins, support profiles and tools' named `Preset`s (ADR 0226), importing and exporting any of them as its file (ADR 0235), the `ProfileStore` it writes edits through with `DirStore` over a directory (ADR 0181), the random-tailed ids of the user's own printers and resins (ADR 0261), and `user_dir` |
 | `core-thumbnail` | `Thumbnail`, `Part`, `ThumbnailSettings`, `render` (CPU only) |
 | `core-format` | `PrintJob`, `ExposureRange`/`ExposurePlan`, `SlicedFileWriter`, `LayerSink`, `Fields`, `FormatError`, the greyscale and colour PNG codec the archive containers share (ADR 0167), and `Rle7Layer`/`decode_rle7` with the RGB15 preview record two binary families share (ADR 0168); `Reads::claim`, `panel_in_range` and `read_entry`, the bounds every reader puts a header's counts through (ADR 0171) |
 | `core-pipeline` | The write stage every front end shares (ADR 0127): `SlicedFormat` and the extension that picks it, with the container flavours its variants carry re-exported (ADR 0209), `PanelOverrides`/`raster_settings`, `Folded`/`Tolerance`/`fold_group`, `Writing`/`Written`/`write_to` streaming a stack into a sink with `write` wrapping it for a path (ADR 0175), `measure` doing the same without writing, `convert`/`convert_to` with `Converting`/`Converted` writing a read file again in another container (ADR 0180), `Observer` for a window arriving, layers landing and whether to stop, `PipelineError` |
-| `core-engine` | The plate every front end runs (ADR 0174): `Model`/`Plate`, `Cutting` and `cut`, `bake` merging the plate into one `Baked` — a `Solid` with the resin's shrinkage applied and each group of copies held once (ADR 0258), and the height the material in it reaches, which is what the stack stops at (ADR 0199) — and `parts` listing it for a thumbnail, `Run` with `write`/`write_file`/`measure`, `EngineError`; `open_plate` with `Opening`, one plate of a project as the file holds it; and `project` — the `.encrust` manifest with each model's `BuiltCavity` and trees, its source and shell blobs, `read_from`/`write_to`, `hollow_of`/`supports_of`, `digest`, `Axis`/`Keep`/`Array` (ADR 0191), and a model's own Hollow and Drain numbers (ADR 0227) support profiles (ADR 0246) and raft (ADR 0253) |
+| `core-engine` | The plate every front end runs (ADR 0174): `Model`/`Plate`, `Cutting` and `cut`, `bake` merging the plate into one `Baked` — a `Solid` with the resin's shrinkage applied and each group of copies held once (ADR 0258), and the height the material in it reaches, which is what the stack stops at (ADR 0199) — and `parts` listing it for a thumbnail, `Run` with `write`/`write_file`/`measure`, and `Run::measuring` for a plate only measured, `EngineError`; `stand_under` with `Stood`, automatic supports under one model, and `stand_seated`, supports only under what hangs over a model left on the plate; `orient_for_print` with `Choice`, the one way the window and the command line orient, printing the search's finalists where a machine is known and taking the search's answer where not (ADR 0290), over `prove`/`print_out` with `Trial`, `Printout`, `Proven` and `Tried`, supports placed on the print's own layer, each with what decided its place (ADR 0277, 0278, 0279); `open_plate` with `Opening`, one plate of a project as the file holds it; and `project` — the `.encrust` manifest with each model's `BuiltCavity` and trees, its source and shell blobs, `read_from`/`write_to`, `hollow_of`/`supports_of`, `digest`, `Axis`/`Keep`/`Array` (ADR 0191), and a model's own Hollow and Drain numbers (ADR 0227) support profiles (ADR 0246) and raft (ADR 0253) |
 | `format-goo` | `GooWriter`, `GooReader` and the `.goo` codec |
 | `format-chitu` | `CtbWriter`, `CtbVersion` v4/v5; `CbddlpWriter`, `CbddlpFlavour` and the eight-pass RLE1 codec (ADR 0146); `ChituReader` and `layer_crypt` (ADR 0149) |
 | `format-anycubic` | `AnycubicWriter`, `AnycubicFlavour` over seventeen extensions, `AnycubicVersion` v1/516/517, `AnycubicReader` and the four-bit PW0 codec (ADR 0147, 0166) |
@@ -117,8 +117,9 @@ encrust-cli ──> core-engine, every core-*, printer-profiles, printer-link,
 web-engine ──> core-engine, core-pipeline, wasm-bindgen
 xtask ──> printer-profiles, encrust-cli, toml, clap, clap_mangen
 
-core-engine ──> core-pipeline, core-analysis, core-format, core-geometry, core-raster,
-               core-slicer, core-supports, core-thumbnail, core-volume, printer-profiles,
+core-engine ──> core-pipeline, core-plate, core-analysis, core-format, core-geometry,
+               core-raster, core-slicer, core-supports, core-thumbnail, core-volume,
+               printer-profiles, rayon,
                serde, serde_json, zip
 core-pipeline ──> core-analysis, core-format, core-geometry, core-raster, core-slicer,
                printer-profiles, every format-*, rayon
@@ -134,7 +135,7 @@ core-raster ──> core-slicer
 core-supports ──> core-slicer, core-raster, core-geometry, printer-profiles, rayon
 core-analysis ──> core-raster
 core-volume ──> core-geometry, rayon
-core-plate ──> core-geometry, core-slicer, rayon
+core-plate ──> core-analysis, core-geometry, core-slicer, rayon
 core-slicer ──> core-geometry, i_overlay
 core-mesh-io ──> core-geometry, zip
 printer-profiles ──> (nothing in this workspace)
@@ -180,7 +181,8 @@ destinations, not by a crate under them (ADR 0182).
 - `core-analysis` reads the stack as runs, not contours, so what it measures is what
   cures (ADR 0163).
 - `core-plate` reads the slicer because the peel force it scores is a cross-section, not
-  a normal (ADR 0087). It packs footprints as bitmaps of its own rather than taking on a
+  a normal (ADR 0087), and `core-analysis` for the law that section pulls by and the limits
+  it is held to, so the search scores what the proof measures (ADR 0281). It packs footprints as bitmaps of its own rather than taking on a
   polygon boolean (ADR 0088).
 - `core-format` reads `core-slicer` for the `LayerPlan` a written file records, and
   re-exports it, so a `format-*` crate gets the type without a dependency of its own
@@ -188,9 +190,10 @@ destinations, not by a crate under them (ADR 0182).
 - `core-pipeline` stops at the write stage, and `core-engine` sits above it with the run
   that reaches it: bake the plate into one mesh with the resin's shrinkage applied, plan
   the layers, render the thumbnail, assemble the `PrintJob`. Both front ends had written
-  that five times over (ADR 0174). Orient, hollow and supports are still not there: the
-  CLI drives them from flags and the window from tool state, so they were never
-  duplicated (ADR 0127), and a `Model` carries only their result (ADR 0129).
+  that five times over (ADR 0174). Hollowing is still not there: the CLI drives it from
+  flags and the window from tool state (ADR 0127), and a `Model` carries only its result
+  (ADR 0129). Automatic supports and the orientation proved on them are, since proving a
+  pose is a run of the plate: stand, cut, cure and read (ADR 0277).
 - `core-engine` also owns the `.encrust` file, because a plate live and a plate written
   down are the same facts in two forms. It is data and (de)serialisation only, so the
   command line and a browser can open a project without a window (ADR 0174).

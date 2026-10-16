@@ -149,8 +149,8 @@ Grouped by what the decision governs; the number is still the order it was taken
 
 | # | Decision | Status |
 |---|---|---|
-| [0163](0163-the-stack-is-measured-from-its-runs.md) | The stack is measured from its runs, in a crate of its own | Accepted |
-| [0164](0164-risks-are-read-off-the-stack-with-a-neck-carried-up.md) | Risks are read off the stack, each piece carrying the narrowest neck under it | Accepted; removal superseded by 0228 |
+| [0163](0163-the-stack-is-measured-from-its-runs.md) | The stack is measured from its runs, in a crate of its own | Accepted; the pull law is superseded by 0281 |
+| [0164](0164-risks-are-read-off-the-stack-with-a-neck-carried-up.md) | Risks are read off the stack, each piece carrying the narrowest neck under it | Accepted; removal superseded by 0228, the pull by 0281 |
 | [0206](0206-a-report-counts-what-is-there-once.md) | A report counts what is there once, and resin only from the masks | Accepted |
 | [0224](0224-cups-and-thin-sections-are-read-off-the-stack.md) | Read suction cups and thin sections off the stack | Accepted |
 | [0228](0228-removing-an-island-takes-the-island-alone.md) | Removing islands takes the island alone | Accepted |
@@ -234,9 +234,24 @@ Grouped by what the decision governs; the number is still the order it was taken
 
 | # | Decision | Status |
 |---|---|---|
-| [0087](0087-orientation-is-scored-on-the-peel.md) | An orientation is scored on the peel, and measured in two passes | Accepted |
-| [0222](0222-an-orientation-is-searched-for-a-goal-within-a-tilt.md) | Search an orientation for a goal, within a tilt | Accepted; where the goal and the tilt are offered is superseded by 0236 |
-| [0236](0236-an-orientation-goal-is-asked-for-on-the-command-line.md) | Ask for an orientation goal and a tilt limit on the command line | Accepted |
+| [0087](0087-orientation-is-scored-on-the-peel.md) | An orientation is scored on the peel, and measured in two passes | Accepted; the score's terms and weights are superseded by 0274 |
+| [0222](0222-an-orientation-is-searched-for-a-goal-within-a-tilt.md) | Search an orientation for a goal, within a tilt | Accepted; where the goal and the tilt are offered is superseded by 0236, the goals' weights by 0274, the clean top by 0284 |
+| [0236](0236-an-orientation-goal-is-asked-for-on-the-command-line.md) | Ask for an orientation goal and a tilt limit on the command line | Accepted; the window's goal is superseded by 0282, the goals it names by 0284 |
+| [0274](0274-an-orientation-is-scored-on-supports-tips-and-stefans-pull.md) | Score an orientation as it stands on supports, by its tips and by Stefan's pull | Accepted; the tip's cost is superseded by 0275, Stefan's pull by 0281 |
+| [0275](0275-an-orientation-is-chosen-by-priority-and-stays-unless-a-turn-is-worth-it.md) | Choose an orientation by priority, refuse cups and tearing pulls, and stay unless a turn is worth it | Accepted; how a turn is weighed, and that the proof ranks apart, are superseded by 0278 |
+| [0276](0276-an-orientation-is-judged-on-the-model-as-it-prints.md) | Judge an orientation on the model as it prints: sized, hollowed and drilled | Accepted |
+| [0277](0277-an-orientation-is-proven-by-printing-its-finalists.md) | Prove an orientation by printing its finalists, and search the poses a person tries | Accepted; how the proof ranks and that it sketches without supports are superseded by 0278, where a seat ranks by 0280 |
+| [0278](0278-one-rule-ranks-every-stage-and-a-proof-stands-its-supports.md) | Rank the search and the proof by one rule, and prove a pose with its supports | Accepted; the band over islands, the proof's tie-break, the coarse layer it places supports on, what the fewest supports reads and the count a bare pose is checked by are superseded by 0279 |
+| [0279](0279-the-fewest-supports-is-support-volume-proven-on-the-prints-layer.md) | Choose the fewest supports by support volume, proven on the print's layer | Accepted; the band over islands and the proof's island count are superseded by 0285, the lift a pose is judged at in the window by 0291 |
+| [0280](0280-a-seat-is-ranked-with-the-lifted-poses-by-one-rule.md) | Rank a pose set on the plate with the lifted ones, by one rule | Accepted |
+| [0281](0281-a-section-pulls-by-its-area-and-reach-and-the-least-peel-stops-at-enough.md) | A section pulls by its area and reach, and the least peel stops at enough | Accepted |
+| [0282](0282-the-window-asks-which-goal-to-orient-for.md) | Ask which goal to orient for in the window | Accepted; what the picker lists is superseded by 0284, its default by 0291 |
+| [0283](0283-the-shortest-print-reads-the-stack-and-takes-a-pull-past-the-limit.md) | The shortest print reads the stack, and takes a pull past the limit | Accepted |
+| [0284](0284-auto-orient-balances-every-goal-by-the-product-of-its-shares.md) | Auto-orient balances every goal by the product of its shares, and the clean top goes | Accepted |
+| [0285](0285-a-proof-counts-islands-at-the-prints-own-pixel-over-the-low-points.md) | A proof counts islands at the print's own pixel and layer, over the low points | Accepted |
+| [0289](0289-the-search-checks-every-pose-against-the-build-volume.md) | The search checks every pose against the build volume | Accepted |
+| [0290](0290-the-window-and-the-command-line-orient-through-one-entry-point.md) | The window and the command line orient through one entry point | Accepted |
+| [0291](0291-the-window-orients-for-auto-at-the-models-own-lift.md) | The window orients for auto, at the model's own lift, on one plate raft | Accepted |
 | [0088](0088-the-plate-is-packed-as-a-bitmap.md) | The plate is packed as a bitmap into the corner, and the block centred | Accepted; supports left out of a footprint is superseded by 0256 |
 | [0256](0256-a-footprint-carries-the-supports-and-the-raft.md) | Pack a model with its supports and its raft | Accepted |
 | [0098](0098-a-plate-is-a-number-on-the-object.md) | A plate is a number on the object, not a scene of its own | Accepted |
@@ -249,7 +264,7 @@ Grouped by what the decision governs; the number is still the order it was taken
 | [0250](0250-a-trunk-leans-for-a-brace-no-further-than-a-branch-reaches.md) | Lean a trunk for a brace no further than a branch reaches, towards any group, and tie a brace to the trunk's own axis | Accepted; that bracing is asked of the ground profile is superseded by 0252 |
 | [0251](0251-a-small-pillar-stands-on-a-support-and-nothing-is-built-in-the-solid.md) | Stand a small pillar on the support beside it, never a support on a small pillar, and build nothing inside the model | Accepted |
 | [0252](0252-a-brace-is-built-to-the-groups-it-ties.md) | Build a brace to the groups of the trunks it ties | Accepted |
-| [0253](0253-the-raft-is-the-models-not-a-groups.md) | Make the raft the model's and the plate's, not a group's | Accepted; the raft written into the first profile only superseded by 0266 |
+| [0253](0253-the-raft-is-the-models-not-a-groups.md) | Make the raft the model's and the plate's, not a group's | Accepted; the raft written into the first profile only superseded by 0266; the Raft tab editing the picked model's raft superseded by 0291 |
 | [0266](0266-a-support-on-a-raft-flares-onto-it-without-a-pad.md) | Stand a support on a raft by its flare, without a pad | Accepted |
 | [0178](0178-a-project-names-its-cavities-and-the-engine-opens-it.md) | A project names its cavities, and the engine opens it into a plate | Superseded by 0191 |
 | [0191](0191-a-project-holds-the-plate-as-it-stands.md) | A project holds the plate as it stands, and opening it builds nothing | Accepted; refusing every other version is superseded by 0261 |

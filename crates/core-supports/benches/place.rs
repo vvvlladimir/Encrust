@@ -125,6 +125,38 @@ fn ball(segments: u32, rings: u32) -> Sliced {
         .expect("a closed ball slices")
 }
 
+/// Thirty tiers of pins, ten by ten, each tier carrying a slab the next stands on: every pin
+/// begins over nothing, and every slab joins a hundred pieces into one, the way a lattice
+/// or a cluster of cones turned on its side splits and joins on layer after layer.
+fn tiers() -> Sliced {
+    let mut parts = Vec::new();
+    for tier in 0..30 {
+        let base = 1.0 + 1.2 * tier as Scalar;
+        for row in 0..10 {
+            for column in 0..10 {
+                let (x, y) = (2.0 + 3.6 * column as Scalar, 2.0 + 3.6 * row as Scalar);
+                parts.push(box_mesh(
+                    Vec3::new(x, y, base),
+                    Vec3::new(x + 0.8, y + 0.8, base + 0.8),
+                ));
+            }
+        }
+        parts.push(box_mesh(
+            Vec3::new(0.0, 0.0, base + 0.8),
+            Vec3::new(40.0, 40.0, base + 1.2),
+        ));
+    }
+    PlaneSliceEngine
+        .slice(
+            &merge(&parts),
+            &SliceSettings {
+                layer_height: LAYER_HEIGHT_MM,
+                ..SliceSettings::default()
+            },
+        )
+        .expect("closed boxes slice")
+}
+
 fn placing(c: &mut Criterion) {
     let profile = SupportProfile::medium();
 
@@ -142,6 +174,24 @@ fn placing(c: &mut Criterion) {
             )
         });
     });
+
+    let tiers = tiers();
+    let mut group = c.benchmark_group("generate_supports");
+    group.sample_size(10);
+    group.bench_function("thirty tiers of pins", |b| {
+        b.iter(|| {
+            generate_supports(
+                &tiers,
+                LAYER_HEIGHT_MM,
+                &profile,
+                &[],
+                &[],
+                None,
+                &mut |_| true,
+            )
+        });
+    });
+    group.finish();
 
     let coarse = ball(256, 128);
     c.bench_function("generate_supports/ball, 600 layers", |b| {

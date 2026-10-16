@@ -45,7 +45,7 @@ fn flats(mesh: &Mesh) -> Vec<Vec3> {
 
 /// A direction the model's surface faces over a large area: a face it could rest on.
 #[derive(Debug, Clone, Copy, PartialEq)]
-struct FlatFace {
+pub struct FlatFace {
     /// Unit, outward, in the model's own space.
     pub normal: Vec3,
     /// Every triangle facing within a bin of `normal`, square millimetres.
@@ -56,7 +56,7 @@ struct FlatFace {
 ///
 /// Normals are binned rather than clustered properly: a bin is a hash lookup a face,
 /// where clustering would be a comparison against every cluster found so far.
-fn flat_faces(mesh: &Mesh) -> Vec<FlatFace> {
+pub fn flat_faces(mesh: &Mesh) -> Vec<FlatFace> {
     let mut bins: FastMap<[i32; 3], (Vec3, Scalar)> = FastMap::default();
     for triangle in mesh.triangles() {
         let normal = triangle.normal_unnormalized();
@@ -88,7 +88,7 @@ fn flat_faces(mesh: &Mesh) -> Vec<FlatFace> {
 
 /// `count` directions spread evenly over the sphere by the Fibonacci lattice, which needs
 /// no triangulation and has no pole to clump around.
-fn sphere(count: usize) -> Vec<Vec3> {
+pub(crate) fn sphere(count: usize) -> Vec<Vec3> {
     let golden = std::f32::consts::PI * (3.0 - (5.0 as Scalar).sqrt());
     (0..count)
         .map(|index| {

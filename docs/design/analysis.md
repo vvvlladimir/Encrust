@@ -18,15 +18,30 @@ Each span adds its pixels to its piece as rectangles of panel weighted by grey (
 
 ## The pull
 
-Separating a flat layer from the film draws resin into a thin gap from its edge. Stefan's
-law gives the force on a disc as `3 pi mu R^4 h' / (2 h^3)`; for any shape the pressure
-solves the same Poisson problem as Saint-Venant torsion, so the force is proportional to
-the section's torsion constant `J`. Each piece is taken apart from the rest, since resin
-reaches every piece from its own edge, and the layer's pull is the sum. `J` is
-approximated as `A^4 / (4 pi^2 I_p)`: exact for a disc (`pi R^4 / 2`), 0.152 `s^4` for a
-square against 0.141, 0.304 `a b^3` for a thin strip against 0.333.
+Separating a layer from the film draws resin into the gap from the layer's edge. Measured
+on solid sections of one area, the force follows the area and, more weakly, how far resin
+has to reach in, the area over the perimeter: 6.16 N for a 314 mm² disc, 4.9 N for a star
+of the same area (Pan et al., *Rapid Prototyping Journal* 23(2), 2017). Stefan's squeeze
+film alone, `F ∝ R⁴`, puts the disc several times past the star and a thin strip at next to
+nothing; a film peeling off its edge does neither. So a piece pulls
 
-A pull is stated as the diameter of the disc that pulls as hard, `2 (2 J / pi)^(1/4)`.
+`F = A (PULL_N_PER_MM2 + PULL_N_PER_MM3 r)`, with reach `r = sqrt(A³ / (8 π² I_p))`
+
+which is `A / L` exactly for a disc and within a fifth of it for a square or a strip, read
+off the moments with no perimeter traced. The two constants' ratio, 0.146 per mm, is the
+line through Pan's disc and star; their scale puts a 100 cm² disc at about 100 N, the order
+users report. Each piece is taken apart from the rest, since resin reaches every piece from
+its own edge, and the layer's pull is the sum. `core-plate` reads a cut section with the
+same `pull_n`, so the search and the proof read one law (ADR 0281).
+
+The newtons are known to about a factor of three: Pan pulled straight up off PDMS, a
+tilting vat peels a PFA film. So `PEEL_LIMIT_N`, 30 N — a solid disc some 73 mm across — is
+a warning level, and what the number is sure of is which of two poses pulls harder. A hole
+lets resin in only where it is open; one sealed from below is a suction cup, read apart
+below, and Pan measured more pull, not less, on holes the plate sealed.
+
+A pull is stated as the diameter of the solid disc that pulls as hard,
+`equivalent_disc_mm`.
 
 ## A stack
 
@@ -46,7 +61,7 @@ the risks are read this way: ADR 0164.
 - Each anchored piece carries its **neck**: the narrowest section between it and the
   plate. It is the piece's own contact where that is under 0.9 of the necks it stands on,
   and otherwise those necks together, their areas summed and their centres weighted.
-- The layer's pull on a piece is `F = J * PEEL_N_PER_MM4`. On a neck of area `A` and
+- The layer's pull on a piece is its own `F`. On a neck of area `A` and
   radius `r` the stress is `F / A + F L / (pi r^3 / 4)`: tension, and bending over a round
   section. The lever `L` is how far off the neck the pull acts: the piece's centre off the
   neck's, plus half the piece's own radius of gyration `sqrt(I_p / A)`, because the film

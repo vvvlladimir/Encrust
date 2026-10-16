@@ -1,6 +1,6 @@
 # 0163. The stack is measured from its runs, in a crate of its own
 
-- **Status:** Accepted
+- **Status:** Accepted; the pull law superseded by 0281
 - **Date:** 2026-09-29
 
 ## Context

@@ -23,6 +23,6 @@ another**, that is an ADR and belongs in `docs/decisions/`.
 | [volume.md](volume.md) | The distance field, its sparse storage, the CSG operators and extraction |
 | [hollowing.md](hollowing.md) | The three hollow modes, the blockers, and the lattices that fill a cavity |
 | [supports.md](supports.md) | Where a column can stand, the shape it is meshed as, placing one by hand |
-| [analysis.md](analysis.md) | A layer's pieces from its runs, the pull on the film after Stefan, islands and levers |
+| [analysis.md](analysis.md) | A layer's pieces from its runs, the pull on the film, islands and levers |
 | [hostile-files.md](hostile-files.md) | What a reader believes of a header, and the three guards under every count |
 | [updates.md](updates.md) | The release feed, what an archive passes before it is unpacked, and the swap |

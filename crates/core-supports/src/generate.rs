@@ -1,6 +1,4 @@
-use std::collections::HashMap;
-
-use core_geometry::{Scalar, Vec2, Vec3};
+use core_geometry::{FastMap, Scalar, Vec2, Vec3};
 use core_slicer::{Layer, Sliced};
 use printer_profiles::SupportProfile;
 use rayon::prelude::*;
@@ -390,9 +388,20 @@ impl Standing {
                     taken.prune(floor_z, self.radius_mm);
                     taken
                 }
+                // Where pieces join, the largest set no other piece grows out of is taken
+                // over and the rest poured into it, rather than every set copied afresh.
                 parents => {
-                    let mut piece = Held::default();
-                    for parent in parents {
+                    let largest = parents
+                        .iter()
+                        .filter(|parent| children[**parent as usize] == 1)
+                        .max_by_key(|parent| self.held[**parent as usize].buckets.len())
+                        .copied();
+                    let mut piece = largest.map_or_else(Held::default, |largest| {
+                        let mut taken = std::mem::take(&mut self.held[largest as usize]);
+                        taken.prune(floor_z, self.radius_mm);
+                        taken
+                    });
+                    for parent in parents.iter().filter(|parent| Some(**parent) != largest) {
                         piece.take_in(&self.held[*parent as usize], floor_z, self.radius_mm);
                     }
                     piece
@@ -522,7 +531,7 @@ impl Standing {
 /// The supports standing under one piece of a layer.
 #[derive(Debug, Clone, Default)]
 struct Held {
-    buckets: HashMap<[i32; 2], Vec<Vec3>>,
+    buckets: FastMap<u64, Vec<Vec3>>,
     /// The lowest point held, so that a set with nothing to drop is not walked at all.
     lowest_z: Scalar,
 }
@@ -534,7 +543,7 @@ impl Held {
         (-1..=1).any(|dy| {
             (-1..=1).any(|dx| {
                 self.buckets
-                    .get(&[home[0] + dx, home[1] + dy])
+                    .get(&packed([home[0] + dx, home[1] + dy]))
                     .is_some_and(|points| {
                         points.iter().any(|point| {
                             let reach = reach_at(z - point.z, radius_mm, above_mm);
@@ -552,7 +561,7 @@ impl Held {
         (-1..=1).any(|dy| {
             (-1..=1).any(|dx| {
                 self.buckets
-                    .get(&[home[0] + dx, home[1] + dy])
+                    .get(&packed([home[0] + dx, home[1] + dy]))
                     .is_some_and(|points| {
                         points.iter().any(|point| {
                             (point.truncate() - at).length_squared() < clear_mm * clear_mm
@@ -568,7 +577,7 @@ impl Held {
         }
         self.lowest_z = self.lowest_z.min(contact.z);
         self.buckets
-            .entry(bucket_of(contact.truncate(), radius_mm))
+            .entry(packed(bucket_of(contact.truncate(), radius_mm)))
             .or_default()
             .push(contact);
     }
@@ -600,6 +609,12 @@ fn reach_at(rise: Scalar, radius_mm: Scalar, above_mm: Scalar) -> Scalar {
     // much above the place still counts as under it.
     let rise = (rise + above_mm).max(0.0);
     (radius_mm * radius_mm - rise * rise).max(0.0).sqrt()
+}
+
+/// A bucket as one word, which hashes in one step where a pair of integers hashes a byte
+/// at a time.
+fn packed([x, y]: [i32; 2]) -> u64 {
+    (u64::from(x as u32) << 32) | u64::from(y as u32)
 }
 
 fn bucket_of(at: Vec2, radius_mm: Scalar) -> [i32; 2] {

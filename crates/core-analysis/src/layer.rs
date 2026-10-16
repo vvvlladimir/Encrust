@@ -1,18 +1,17 @@
-use std::f64::consts::PI;
 use std::ops::Range;
 
 use core_raster::{LayerRuns, PixelPitch};
 
 use crate::cups::Holes;
+use crate::pull::pull_n;
 
 /// What one layer cures, read off the runs written for it.
 #[derive(Debug, Clone, Copy, Default, PartialEq)]
 pub struct LayerMeasure {
     /// Cured area, square millimetres; a grey pixel counts for the share of light it gets.
     pub area_mm2: f32,
-    /// How hard the layer pulls on the film, mm^4: the sum of its pieces' torsion
-    /// constants, which Stefan's law makes the suction of. See `docs/design/analysis.md`.
-    pub peel_mm4: f32,
+    /// How hard the layer pulls on the film, newtons: the sum of its pieces' pulls.
+    pub pull_n: f32,
     /// Separate pieces the layer cures.
     pub pieces: u32,
 }
@@ -23,7 +22,8 @@ pub struct Piece {
     pub area_mm2: f32,
     /// Centre of the cured area, panel millimetres from the top-left pixel.
     pub centre_mm: [f32; 2],
-    pub peel_mm4: f32,
+    /// What the piece pulls on the film, newtons. See `docs/design/analysis.md`.
+    pub pull_n: f32,
     /// Radius of gyration of the cured area about its centre, millimetres: how far off
     /// that centre the pull acts while the film still holds half the piece.
     pub gyration_mm: f32,
@@ -99,12 +99,12 @@ pub fn measure(layer: &LayerRuns, pitch: PixelPitch) -> LayerMeasure {
 
 impl Cured {
     pub fn measure(&self) -> LayerMeasure {
-        let (area, peel) = self.pieces.iter().fold((0.0, 0.0), |(area, peel), piece| {
-            (area + piece.area_mm2, peel + piece.peel_mm4)
+        let (area, pull) = self.pieces.iter().fold((0.0, 0.0), |(area, pull), piece| {
+            (area + piece.area_mm2, pull + piece.pull_n)
         });
         LayerMeasure {
             area_mm2: area,
-            peel_mm4: peel,
+            pull_n: pull,
             pieces: self.pieces.len() as u32,
         }
     }
@@ -226,12 +226,6 @@ pub fn erase(layer: &LayerRuns, stretches: &[Stretch]) -> LayerRuns {
         at = end;
     }
     builder.finish()
-}
-
-/// The diameter of the disc that pulls as hard as `peel_mm4`, which is how a pull is
-/// worth stating to someone holding a print.
-pub fn equivalent_disc_mm(peel_mm4: f32) -> f32 {
-    2.0 * (2.0 * peel_mm4 / std::f32::consts::PI).powf(0.25)
 }
 
 /// A span while the layer is being read, with what its pixels add up to.
@@ -375,7 +369,7 @@ impl Moments {
         Piece {
             area_mm2: self.area as f32,
             centre_mm: [(self.x / self.area) as f32, (self.y / self.area) as f32],
-            peel_mm4: self.torsion(polar) as f32,
+            pull_n: pull_n(self.area, polar) as f32,
             gyration_mm: (polar / self.area).sqrt() as f32,
         }
     }
@@ -385,19 +379,13 @@ impl Moments {
         let polar = self.xx + self.yy - (self.x * self.x + self.y * self.y) / self.area;
         polar.max(0.0)
     }
-
-    /// Saint-Venant's torsion constant, `A^4 / (4 pi^2 I_p)`, which is exact for a disc.
-    fn torsion(&self, polar: f64) -> f64 {
-        if polar <= 0.0 {
-            return 0.0;
-        }
-        self.area.powi(4) / (4.0 * PI * PI * polar)
-    }
 }
 
 #[cfg(test)]
 pub(crate) mod tests {
     use super::*;
+    use crate::pull::disc_pull_n;
+    use std::f64::consts::PI;
 
     pub const UNIT: PixelPitch = PixelPitch { x: 1.0, y: 1.0 };
 
@@ -430,8 +418,8 @@ pub(crate) mod tests {
     }
 
     #[test]
-    fn a_disc_pulls_as_its_radius_to_the_fourth() {
-        // 200 px at 0.05 mm is a disc of 10 mm; Stefan's disc pulls as pi R^4 / 2.
+    fn a_painted_disc_pulls_as_the_disc_it_is() {
+        // 200 px at 0.05 mm is a disc of radius 10 mm.
         let pitch = PixelPitch { x: 0.05, y: 0.05 };
         let disc = paint(400, 400, |x, y| {
             let (dx, dy) = (f64::from(x) + 0.5 - 200.0, f64::from(y) + 0.5 - 200.0);
@@ -442,31 +430,30 @@ pub(crate) mod tests {
             }
         });
         let measured = measure(&disc, pitch);
-        let (area, peel) = (PI * 100.0, PI * 10_000.0 / 2.0);
+        let (area, pull) = (PI * 100.0, disc_pull_n(20.0));
         assert!(
             (f64::from(measured.area_mm2) - area).abs() / area < 0.01,
             "area {} against pi R^2 = {area}",
             measured.area_mm2
         );
         assert!(
-            (f64::from(measured.peel_mm4) - peel).abs() / peel < 0.02,
-            "pull {} against pi R^4 / 2 = {peel}",
-            measured.peel_mm4
+            (f64::from(measured.pull_n) - pull).abs() / pull < 0.02,
+            "pull {} against a 20 mm disc's {pull}",
+            measured.pull_n
         );
-        assert!((equivalent_disc_mm(measured.peel_mm4) - 20.0).abs() < 0.1);
     }
 
     #[test]
-    fn a_strip_pulls_far_less_than_a_square_of_its_area() {
+    fn a_strip_pulls_less_than_a_square_of_its_area() {
         let square = measure(&rectangle(40, 40), UNIT);
         let strip = measure(&rectangle(400, 4), UNIT);
         assert!((square.area_mm2 - strip.area_mm2).abs() < 1e-3);
-        // Torsion constants: 0.141 s^4 for the square, a b^3 / 3 for the strip.
+        // Resin reaches 10 mm into the square and 2 into the strip.
         assert!(
-            strip.peel_mm4 * 10.0 < square.peel_mm4,
+            strip.pull_n < square.pull_n,
             "strip {} against square {}",
-            strip.peel_mm4,
-            square.peel_mm4
+            strip.pull_n,
+            square.pull_n
         );
     }
 
@@ -478,11 +465,11 @@ pub(crate) mod tests {
         let two = measure(&apart, UNIT);
         let one = measure(&rectangle(20, 20), UNIT);
         assert_eq!(two.pieces, 2);
-        assert!((two.peel_mm4 - 2.0 * one.peel_mm4).abs() / one.peel_mm4 < 1e-4);
+        assert!((two.pull_n - 2.0 * one.pull_n).abs() / one.pull_n < 1e-4);
 
         let joined = measure(&rectangle(40, 20), UNIT);
         assert_eq!(joined.pieces, 1);
-        assert!(two.peel_mm4 < joined.peel_mm4);
+        assert!(two.pull_n < joined.pull_n);
     }
 
     #[test]

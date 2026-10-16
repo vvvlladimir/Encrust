@@ -287,6 +287,8 @@ fn file() -> Option<PathBuf> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::scene::Scene;
+    use printer_profiles::Raft;
 
     #[test]
     fn what_is_remembered_is_what_the_window_is_set_to() {
@@ -471,6 +473,33 @@ mod tests {
         assert_eq!(back.hollow.state.thickness_mm, 1.25);
         assert_eq!(back.drain.state.depth_mm, 7.5);
         assert_eq!(back.supports.brush_radius_mm, 4.0);
+    }
+
+    #[test]
+    fn the_plates_raft_is_the_next_runs() {
+        let mut tools = Tools::default();
+        let plate = Raft {
+            enabled: !tools.supports.raft.enabled,
+            ..tools.supports.raft
+        };
+        tools.supports.keep_raft(plate, &mut Scene::default());
+        let prefs = Preferences::of(
+            &Slicing::default(),
+            &Network::default(),
+            &UpdatePrefs::default(),
+            &tools,
+        );
+        let text = serde_json::to_string(&prefs).expect("the preferences serialise");
+        let back: Preferences = serde_json::from_str(&text).expect("and read back");
+
+        let mut next = Tools::default();
+        back.tools
+            .expect("the tool values were written")
+            .apply(&mut next, &mut Slicing::default());
+        assert_eq!(
+            next.supports.raft, plate,
+            "the switch stays where it was left"
+        );
     }
 
     #[test]

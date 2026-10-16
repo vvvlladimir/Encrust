@@ -205,7 +205,7 @@ fn pull(ui: &mut egui::Ui, window: &mut Window) {
         (
             "Pulls like a disc of",
             hardest.map_or_else(waiting, |peak| {
-                format!("{:.1} mm", equivalent_disc_mm(peak.value))
+                format!("{:.1} mm", equivalent_disc_mm(f64::from(peak.value)))
             }),
         ),
         (

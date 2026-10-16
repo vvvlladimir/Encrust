@@ -1,4 +1,5 @@
 use core_pipeline::PipelineError;
+use core_plate::PlateError;
 use core_raster::RasterError;
 use core_slicer::SliceError;
 
@@ -16,6 +17,12 @@ pub enum EngineError {
 
     #[error(transparent)]
     Pipeline(#[from] PipelineError),
+
+    #[error("cannot slice the model to work out where it needs supports")]
+    Supports(#[source] SliceError),
+
+    #[error("cannot find an orientation for the model")]
+    Orient(#[from] PlateError),
 
     #[error("the project names no printer to slice for")]
     NoPrinter,

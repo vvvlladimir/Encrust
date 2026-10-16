@@ -157,8 +157,9 @@ by `core_geometry::lift_over_plate`; lifting twice is a no-op. A raft stands the
 by its own thickness on top of that, so the slab is never printed into it (ADR 0238): the
 command line adds the two, and the window does it without being asked — every supported
 model rises by the raft's thickness when the raft is switched on and comes back down when
-it or the supports go, and what it rose by is kept beside its supports and in the project. The window applies it from
-its **Lift models** button and the command line applies it inside `stand_under`, before it
+it or the supports go, and what it rose by is kept beside its supports and in the project. The window applies it
+per model from **Lift off the plate**, in Position and in Supports alike, or as auto-orient
+stands a pose on supports, and the command line applies it inside `stand_under`, before it
 cuts the model, leaving a part that already stands that high where it is. Whether the
 lowest contact of a lifted part can stand at all is arithmetic: the pad, the top segment
 and `MIN_PILLAR_HEIGHT_MM` have to fit under that contact, the segment being shortened

@@ -234,7 +234,7 @@ impl Cured {
         Self {
             resin_mm3: measured.volume_mm3(),
             hardest_pull_layer: pull.map(|peak| peak.layer + 1),
-            hardest_pull_disc_mm: pull.map(|peak| equivalent_disc_mm(peak.value)),
+            hardest_pull_disc_mm: pull.map(|peak| equivalent_disc_mm(f64::from(peak.value)) as f32),
             widest_step_layer: step.map(|peak| peak.layer + 1),
             widest_step_mm2: step.map(|peak| peak.value),
             islands: count(|kind| {
@@ -271,7 +271,7 @@ impl PartReport {
             }),
             supports: part.supports.as_ref().map(|report| Supports {
                 lifted_mm: report.lifted_mm,
-                contacts: report.contacts,
+                contacts: report.contacts.len(),
                 standing: report.standing,
                 trunks: report.trees,
                 no_room_for: report.unsupported(),

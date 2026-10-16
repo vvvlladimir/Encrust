@@ -4,16 +4,11 @@ use std::f64::consts::PI;
 use crate::contact::{Contact, MIN_ISLAND_MM2, contacts};
 use crate::cups::Cups;
 use crate::layer::{Cured, LayerMeasure, Piece, Stretch};
+use crate::pull::PEEL_LIMIT_N;
 
-/// Peel force per unit of torsion constant, N/mm^4: Stefan's `3 mu h' / h^3`, set so a
-/// 100 cm^2 disc pulls about 100 N, the order users report.
-pub const PEEL_N_PER_MM4: f64 = 6.4e-6;
 /// Stress a neck of green resin is taken to fail at, megapascals. Not measured: a warning
 /// level.
 pub const NECK_LIMIT_MPA: f64 = 5.0;
-/// Pull on the film past which a layer tears or lifts the model off the plate, newtons:
-/// about 3 kg, a solid section some 80 mm across. A warning level, like the neck's.
-pub const PEEL_LIMIT_N: f64 = 30.0;
 /// A piece narrower than this across, millimetres, as a disc of its area: thinner than the
 /// finest support tip, so a tip is never named, and too thin to survive the peel.
 pub const THIN_MM: f32 = 0.15;
@@ -206,7 +201,7 @@ impl Measured {
         self.volume_mm3 as f32
     }
 
-    /// The layer that pulls hardest on the film, in mm^4, above the bottom block.
+    /// The layer that pulls hardest on the film, in newtons, above the bottom block.
     pub fn hardest_pull(&self) -> Option<Peak> {
         self.hardest_pull
     }
@@ -297,10 +292,10 @@ impl Measured {
         if index < self.held {
             return;
         }
-        raise(&mut self.hardest_pull, index, measure.peel_mm4);
+        raise(&mut self.hardest_pull, index, measure.pull_n);
         raise(&mut self.largest_growth, index, growth);
 
-        let force_n = f64::from(measure.peel_mm4) * PEEL_N_PER_MM4;
+        let force_n = f64::from(measure.pull_n);
         if force_n < PEEL_LIMIT_N {
             self.peels.extend(self.peeling.take());
             return;
@@ -516,7 +511,7 @@ impl Measured {
     /// The stress this layer's pull puts on the neck under it: tension over its section,
     /// and the bending of the pull held off to one side. See `docs/design/analysis.md`.
     fn weigh(&mut self, index: usize, piece: &Piece, neck: Neck) {
-        let force_n = f64::from(piece.peel_mm4) * PEEL_N_PER_MM4;
+        let force_n = f64::from(piece.pull_n);
         let radius_mm = (neck.area_mm2 / PI).sqrt();
         let [cx, cy] = piece.centre_mm.map(f64::from);
         let offset_mm = (cx - neck.at_mm[0]).hypot(cy - neck.at_mm[1]);
@@ -822,7 +817,7 @@ mod tests {
 
     #[test]
     fn a_run_of_layers_pulling_past_the_limit_is_named_once_at_its_hardest() {
-        // A 30 mm square pulls about 5 N; a pitch of 3 mm makes the same pixels 180 mm.
+        // A 30 mm square pulls about 4 N; a pitch of 3 mm makes the same pixels 180 mm.
         let big = PixelPitch { x: 3.0, y: 3.0 };
         let wide = |side: u32| {
             cure(
