@@ -3,6 +3,8 @@
 
 mod feed;
 mod install;
+#[cfg(windows)]
+mod store;
 mod verify;
 
 use std::path::PathBuf;
@@ -24,6 +26,9 @@ pub const RELEASES: &str = concat!(env!("CARGO_PKG_REPOSITORY"), "/releases");
 
 /// The app's page in the Microsoft Store, which updates the copy installed from it.
 pub const STORE_PAGE: &str = "https://apps.microsoft.com/detail/9NB0ZMB3M8H8";
+/// The same page opened in the Store app rather than a browser.
+#[cfg(windows)]
+const STORE_LINK: &str = "ms-windows-store://pdp/?ProductId=9NB0ZMB3M8H8";
 
 /// Why a look at the feed or an install did not happen.
 #[derive(Debug, thiserror::Error)]
@@ -54,6 +59,9 @@ pub enum UpdateError {
         #[source]
         source: std::io::Error,
     },
+    #[cfg(windows)]
+    #[error("the Microsoft Store did not answer")]
+    Store(#[source] windows::core::Error),
 }
 
 /// What the window remembers of updates between runs.
@@ -128,20 +136,20 @@ impl Updates {
         Version::parse(env!("CARGO_PKG_VERSION")).unwrap_or_default()
     }
 
-    /// Looks at the feed once a day, if the user turned that on and the Store does not update
-    /// this copy. A failure here is quiet: the user did not ask, and it is tried again tomorrow.
+    /// Looks once a day, if the user turned that on or the Store updates this copy. A failure
+    /// here is quiet: the user did not ask, and it is tried again tomorrow.
     pub fn tick(&mut self) {
         let idle = matches!(
             self.stage,
             Stage::Idle | Stage::Current | Stage::Failed { .. }
         );
         let due = is_due(self.prefs.checked_at_s, now_s());
-        if self.prefs.check && idle && due && !from_store() {
+        if (self.prefs.check || from_store()) && idle && due {
             self.start_check(false);
         }
     }
 
-    /// Looks at the feed now, because the user asked.
+    /// Looks now, because the user asked.
     pub fn check_now(&mut self) {
         if !self.is_busy() {
             self.start_check(true);
@@ -157,7 +165,7 @@ impl Updates {
         self.prefs.checked_at_s = Some(now_s());
         let (sender, reply) = mpsc::channel();
         crate::job::spawn(move || {
-            let _ = sender.send(install::check(Self::running()));
+            let _ = sender.send(look());
         });
         self.stage = Stage::Checking { asked, reply };
     }
@@ -308,6 +316,27 @@ impl Updates {
             }
         }
     }
+}
+
+/// What is newer than this build: the Store's package for a copy installed from it, the
+/// release feed's for any other.
+fn look() -> Result<Option<Offer>, UpdateError> {
+    #[cfg(windows)]
+    if from_store() {
+        return store::check();
+    }
+    install::check(Updates::running())
+}
+
+/// Opens this app's page in the Store app, whose Update button installs what it offered.
+pub fn open_store() {
+    #[cfg(windows)]
+    crate::job::spawn(|| {
+        if let Err(error) = store::open() {
+            let error = anyhow::Error::new(error).context("cannot open the Microsoft Store");
+            tracing::error!("{error:#}");
+        }
+    });
 }
 
 /// Whether a look made at `checked_at_s` is a day old at `now_s`. A clock set back counts

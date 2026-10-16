@@ -65,8 +65,9 @@ started from an `.AppImage` (it runs from a read-only mount) or installed under 
 and the per-user Windows install the swap works as above.
 
 A copy installed from the Microsoft Store runs from under a `WindowsApps` directory, which
-Windows keeps read-only. It never reads the feed: the Store updates it, and the Updates page
-links there instead ([ADR 0286](../decisions/0286-the-windows-build-also-ships-through-the-microsoft-store.md)).
+Windows keeps read-only. It never reads the feed and never replaces itself: it asks the Store
+for a newer package of itself, offers that, and its button opens the app's page in the Store
+app, whose Update button installs it ([ADR 0292](../decisions/0292-the-store-copy-asks-the-store-for-its-update.md)).
 
 ## The signing key
 

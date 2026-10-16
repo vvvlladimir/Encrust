@@ -107,6 +107,7 @@ objc2-app-kit = { version = "0.3", default-features = false, features = ["std", 
 objc2-foundation = { version = "0.3", default-features = false, features = ["std", "NSGeometry"] }
 raw-window-handle = "0.6"
 winresource = { version = "0.1", default-features = false }
+windows = { version = "0.62", default-features = false, features = ["std", "ApplicationModel", "Foundation_Collections", "Services_Store", "System"] }
 criterion = "0.8"
 proptest = "1.11"
 

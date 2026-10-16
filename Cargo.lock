@@ -1650,6 +1650,7 @@ dependencies = [
  "web-sys",
  "web-time",
  "wgpu",
+ "windows",
  "winresource",
  "workspace-hack",
  "zip 9.0.3",

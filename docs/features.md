@@ -393,7 +393,8 @@ address in a video player).
 - Tool values are remembered between runs.
 - **Updates:** checks once a day (can be turned off), downloads, verifies the signature and
   installs only when you press it. You can skip a version. A copy from the Microsoft Store
-  is updated by the Store instead.
+  is updated by the Store instead: it says when the Store has a new version, and its button
+  opens Encrust in the Store app to update.
 - **Bug report:** builds a Markdown report (what happened, how to reproduce it, settings,
   profiles) and gives it to you to copy or save. Encrust never sends it itself, and network
   addresses are removed from it.

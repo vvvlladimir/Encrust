@@ -50,6 +50,8 @@ Grouped by what the decision governs; the number is still the order it was taken
 | [0162](0162-release-please-cuts-the-release.md) | release-please cuts the release, and the build workflow is called by it | Accepted |
 | [0172](0172-the-window-offers-a-signed-update-and-never-applies-one.md) | The window offers a signed update, and never applies one by itself | Accepted; the default of the daily check is amended by 0213 |
 | [0213](0213-the-daily-update-check-is-on-by-default.md) | The daily update check is on by default | Accepted |
+| [0286](0286-the-windows-build-also-ships-through-the-microsoft-store.md) | The Windows build also ships through the Microsoft Store | Accepted; the manual upload replaced by `store.yml`, the Store copy hearing of no update amended by 0292 |
+| [0292](0292-the-store-copy-asks-the-store-for-its-update.md) | The Store copy asks the Store for its update and sends the user there | Accepted |
 | [0173](0173-a-pull-request-runs-linux-and-main-runs-the-rest.md) | A pull request runs Linux, and main runs the rest | Superseded by 0273 |
 | [0174](0174-a-plate-is-a-crate-live-and-written-down.md) | A plate is a crate, live and written down | Accepted |
 | [0176](0176-the-command-line-is-encrust-with-subcommands.md) | The command line is `encrust`, with subcommands, JSON and a clean Ctrl-C | Accepted |
