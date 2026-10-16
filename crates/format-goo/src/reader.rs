@@ -1,6 +1,7 @@
 use core_format::{
-    FormatError, LayerEntry, OpenFile, ReadSeek, Reads, SlicedFile, SlicedFileReader,
-    layer_in_range, panel_in_range,
+    FormatError, LayerEntry, OpenFile, PrinterTuning, ReadSeek, Reads, SlicedFile,
+    SlicedFileReader, WaitMode, Waits, layer_in_range, panel_in_range, stated_distance_mm,
+    stated_pwm, stated_speed_mm_min, stated_wait_s,
 };
 use core_raster::Run;
 
@@ -10,15 +11,15 @@ use crate::rle;
 /// The tag behind the version string, which is what says this is a `.goo` at all.
 const MAGIC_TAG: [u8; 8] = [0x07, 0x00, 0x00, 0x00, 0x44, 0x4C, 0x50, 0x00];
 
-/// Fields of the header we read, by their offset from the start of the file. The rest are
-/// motion the reader has no place for; the whole list is in `docs/formats/goo.md`.
+/// Fields of the header we read, by their offset from the start of the file; the whole
+/// list is in `docs/formats/goo.md`.
 const SOFTWARE: u64 = 12;
 const MACHINE: u64 = 92;
 const RESIN: u64 = 156;
 const GEOMETRY: u64 = 195_310;
 const LAYER_HEIGHT: u64 = 195_332;
-const BOTTOM_EXPOSURE: u64 = 195_369;
 const TOTALS: u64 = 195_446;
+const TRANSITION: u64 = 195_475;
 
 /// Bytes of one layer's definition, up to the data size field behind it.
 const DEFINITION_BYTES: u64 = 66;
@@ -64,15 +65,16 @@ impl SlicedFileReader for GooReader {
         let display_mm = (reads.f32_be()?, reads.f32_be()?);
 
         reads.seek_to(LAYER_HEIGHT)?;
-        let layer_height_mm = reads.f32_be()?;
-        let exposure_s = reads.f32_be()?;
-        reads.seek_to(BOTTOM_EXPOSURE)?;
-        let bottom_exposure_s = reads.f32_be()?;
-        let bottom_layers = reads.u32_be()?;
+        let exposure = read_exposure(&mut reads)?;
+        let mut stated = read_motion(&mut reads)?;
+        stated.waits = exposure.waits;
+        stated.light_off_delay_s = exposure.light_off_delay_s;
 
         reads.seek_to(TOTALS)?;
         let print_time_s = reads.u32_be()?;
         let volume_mm3 = reads.f32_be()?;
+        reads.seek_to(TRANSITION)?;
+        stated.transition_layers = Some(reads.u16_be()?);
 
         let layers = walk_layers(&mut reads, layer_count)?;
         Ok(OpenGoo {
@@ -86,17 +88,95 @@ impl SlicedFileReader for GooReader {
                 width_px,
                 height_px,
                 display_mm: Some(display_mm),
-                layer_height_mm,
-                exposure_s,
-                bottom_exposure_s,
-                bottom_layers,
+                layer_height_mm: exposure.layer_height_mm,
+                exposure_s: exposure.exposure_s,
+                bottom_exposure_s: exposure.bottom_exposure_s,
+                bottom_layers: exposure.bottom_layers,
                 print_time_s: Some(print_time_s),
                 volume_mm3: Some(volume_mm3),
                 grey_steps: 256,
+                stated,
                 layers,
             },
         })
     }
+}
+
+/// The header's exposure block, from the layer height on.
+struct ExposureBlock {
+    layer_height_mm: f32,
+    exposure_s: f32,
+    bottom_exposure_s: f32,
+    bottom_layers: u32,
+    waits: Option<Waits>,
+    light_off_delay_s: Option<f32>,
+}
+
+fn read_exposure<S: ReadSeek>(reads: &mut Reads<S>) -> Result<ExposureBlock, FormatError> {
+    let layer_height_mm = reads.f32_be()?;
+    let exposure_s = reads.f32_be()?;
+    let resting = reads.u8()? != 0;
+    let light_off_delay_s = stated_wait_s(reads.f32_be()?);
+    // Six rests, the bottom layers' three first; a resin holds one set, the common one.
+    reads.skip(12)?;
+    let rests = [reads.f32_be()?, reads.f32_be()?, reads.f32_be()?].map(stated_wait_s);
+    let waits = match rests {
+        [
+            Some(before_lift_s),
+            Some(after_lift_s),
+            Some(after_retract_s),
+        ] => Some(Waits {
+            mode: if resting {
+                WaitMode::Rest
+            } else {
+                WaitMode::LightOff
+            },
+            before_lift_s,
+            after_lift_s,
+            after_retract_s,
+        }),
+        _ => None,
+    };
+    Ok(ExposureBlock {
+        layer_height_mm,
+        exposure_s,
+        bottom_exposure_s: reads.f32_be()?,
+        bottom_layers: reads.u32_be()?,
+        waits,
+        light_off_delay_s,
+    })
+}
+
+/// The header's motion block, which follows the exposure: each peel, then the light.
+fn read_motion<S: ReadSeek>(reads: &mut Reads<S>) -> Result<PrinterTuning, FormatError> {
+    let mut peel = [0.0; 8];
+    for value in &mut peel {
+        *value = reads.f32_be()?;
+    }
+    let [
+        bottom_lift,
+        bottom_lift_speed,
+        lift,
+        lift_speed,
+        _,
+        bottom_retract_speed,
+        retract,
+        retract_speed,
+    ] = peel;
+    // Both second stages, which a resin has no place for.
+    reads.skip(32)?;
+    Ok(PrinterTuning {
+        bottom_lift_distance_mm: stated_distance_mm(bottom_lift),
+        bottom_lift_speed_mm_min: stated_speed_mm_min(bottom_lift_speed),
+        lift_distance_mm: stated_distance_mm(lift),
+        lift_speed_mm_min: stated_speed_mm_min(lift_speed),
+        bottom_retract_speed_mm_min: stated_speed_mm_min(bottom_retract_speed),
+        retract_distance_mm: stated_distance_mm(retract),
+        retract_speed_mm_min: stated_speed_mm_min(retract_speed),
+        bottom_light_pwm: stated_pwm(reads.u16_be()?),
+        light_pwm: stated_pwm(reads.u16_be()?),
+        ..PrinterTuning::default()
+    })
 }
 
 /// `V3.0` as 30, the number the header's own field would hold.

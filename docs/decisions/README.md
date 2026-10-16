@@ -301,6 +301,7 @@ Grouped by what the decision governs; the number is still the order it was taken
 | [0051](0051-a-printer-profile-names-its-file-format.md) | A printer profile names the sliced-file format its firmware reads | Accepted |
 | [0052](0052-profiles-are-edited-in-the-window.md) | Profiles are edited in a Settings screen and saved into the user's directory | Accepted; where the machines and resins are edited is superseded by 0220, and the Settings screen by 0233 |
 | [0235](0235-a-profile-is-imported-by-the-catalogue.md) | Import and export a profile through the catalogue | Accepted |
+| [0293](0293-a-resin-is-taken-from-a-sliced-file.md) | Take a resin from a sliced file, keeping only what a printer could use | Accepted |
 | [0120](0120-a-resin-is-tuned-per-printer.md) | A printer's resins are its own presets, edited in place | Accepted; no undo on the screen superseded by 0268 |
 | [0140](0140-a-profile-carries-the-machine-name-its-firmware-matches.md) | A profile carries the machine name its firmware matches | Accepted |
 | [0141](0141-advance-mode-follows-the-firmware-flag.md) | Advance mode follows the machine's firmware flag | Accepted |

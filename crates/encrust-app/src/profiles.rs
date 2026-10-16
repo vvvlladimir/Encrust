@@ -1,5 +1,7 @@
-//! The printer and resin pickers, and the File menu's imports of a machine or a resin.
+//! The printer and resin pickers, the File menu's imports of a machine or a resin, and the
+//! resin an opened sliced file was printed with.
 
+use core_format::SlicedFile;
 use printer_profiles::{Kind, MaterialProfile, PrinterProfile};
 
 use crate::files::{self, Handed, Wanted};
@@ -168,4 +170,34 @@ pub fn import_material(machine: &mut Machine, file: &Handed) {
         slicing.resin_id = Some(id);
         slicing.set_material(resin);
     }
+}
+
+/// Keeps the resin `facts` says its file was printed with, named after `file` where it
+/// names none, on the machine it was cut for or else on the one in hand.
+pub fn keep_resin_of(machine: &mut Machine, facts: &SlicedFile, file: &str) {
+    use anyhow::Context as _;
+
+    let slicing = &mut machine.slicing;
+    let printer = slicing
+        .catalogue
+        .printer_for_panel(facts.width_px, facts.height_px, facts.machine.as_deref())
+        .map(str::to_owned)
+        .or_else(|| slicing.printer_id.clone());
+    let stem = std::path::Path::new(file)
+        .file_stem()
+        .map_or_else(|| file.into(), |stem| stem.to_string_lossy());
+    let kept = printer
+        .context("choose the printer this file was cut for first")
+        .and_then(|printer| {
+            let id = slicing
+                .catalogue
+                .import_resin(facts.resin(&stem), Some(&printer))?;
+            Ok((id, printer))
+        })
+        .with_context(|| format!("cannot keep the resin of {file}"));
+    let done = match &kept {
+        Ok((id, printer)) => format!("Kept the resin of {file} as {id}, set up on {printer}"),
+        Err(_) => String::new(),
+    };
+    machine.status.report(&done, kept);
 }

@@ -258,3 +258,93 @@ fn a_printer_named_for_anything_but_a_resin_is_refused() {
         "a drain preset is set up on no machine"
     );
 }
+
+/// A stack sliced for `printer`, or for the 200 px test panel where none is named, with
+/// the resin `my-grey` of `dir`.
+fn sliced_with_my_grey(dir: &std::path::Path, name: &str, printer: Option<&str>) -> PathBuf {
+    let path = write_box_stl(name, 10.0, 12, 0);
+    let out = output_file(&format!("{name}.goo"));
+    let mut args = vec![
+        "slice".to_owned(),
+        path.to_str().unwrap().to_owned(),
+        "--resin".to_owned(),
+        "my-grey".to_owned(),
+        "--layer-height".to_owned(),
+        "2".to_owned(),
+        "-o".to_owned(),
+        out.to_str().unwrap().to_owned(),
+    ];
+    match printer {
+        Some(id) => args.extend(["--printer".to_owned(), id.to_owned()]),
+        None => args.extend([
+            "--profile".to_owned(),
+            test_panel().to_str().unwrap().to_owned(),
+        ]),
+    }
+    let args: Vec<&str> = args.iter().map(String::as_str).collect();
+    let output = encrust_with_profiles(dir, &args);
+    assert!(output.status.success(), "{}", stderr(&output));
+    out
+}
+
+#[test]
+fn a_sliced_files_resin_is_imported_onto_the_machine_it_was_cut_for() {
+    let dir = resin_dir("import-sliced");
+    let file = sliced_with_my_grey(&dir, "import-sliced", Some("elegoo-saturn-4-ultra"));
+
+    let output = encrust_with_profiles(&dir, &["profiles", "import", file.to_str().unwrap()]);
+    assert!(output.status.success(), "{}", stderr(&output));
+    let said = stdout(&output);
+    assert!(said.contains("set up on elegoo-saturn-4-ultra"), "{said}");
+
+    let id = said
+        .split("imported as ")
+        .nth(1)
+        .and_then(|rest| rest.split(',').next())
+        .expect("the new id is said");
+    let shown = stdout(&encrust_with_profiles(
+        &dir,
+        &["profiles", "show", id, "--kind", "resin"],
+    ));
+    // The file's own layer, not the 0.05 mm the resin was measured at.
+    assert!(shown.contains("layer_height_mm = 2.0"), "{shown}");
+    assert!(
+        shown.contains("[printers.elegoo-saturn-4-ultra]"),
+        "{shown}"
+    );
+}
+
+#[test]
+fn a_sliced_file_for_no_machine_we_know_needs_one_named() {
+    let dir = resin_dir("import-sliced-panel");
+    let file = sliced_with_my_grey(&dir, "import-sliced-panel", None);
+
+    let refused = encrust_with_profiles(&dir, &["profiles", "import", file.to_str().unwrap()]);
+    assert_eq!(refused.status.code(), Some(1));
+    assert!(
+        stderr(&refused).contains("--printer"),
+        "{}",
+        stderr(&refused)
+    );
+
+    let named = encrust_with_profiles(
+        &dir,
+        &[
+            "profiles",
+            "import",
+            file.to_str().unwrap(),
+            "--printer",
+            "elegoo-mars-3-pro",
+        ],
+    );
+    assert!(named.status.success(), "{}", stderr(&named));
+}
+
+#[test]
+fn a_profile_file_without_a_kind_is_told_to_say_what_it_holds() {
+    let dir = resin_dir("import-no-kind");
+    let file = dir.join("resins").join("my-grey.toml");
+    let refused = encrust_with_profiles(&dir, &["profiles", "import", file.to_str().unwrap()]);
+    assert_eq!(refused.status.code(), Some(1));
+    assert!(stderr(&refused).contains("--kind"), "{}", stderr(&refused));
+}

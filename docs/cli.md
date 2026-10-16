@@ -282,6 +282,16 @@ one you have; `--printer ID` sets an imported resin up on that machine (ADR 0233
 encrust profiles import grey.toml --kind resin --printer elegoo-mars-4-ultra
 ```
 
+Without `--kind`, `FILE` is a sliced file and its resin is taken in: whatever the file states
+of exposure, transition, waits, lifts and light power, our defaults for the rest, set up on
+the machine the file was cut for. That machine is found by the panel and the name the file
+gives; where several share the panel and the file names none, `--printer ID` says which
+(ADR 0293):
+
+```sh
+encrust profiles import vendor.goo
+```
+
 `--config FILE` holds flags written down: a key is a flag's long name, `true` the bare flag,
 `false` nothing, an array the flag once per element. Keys at the top are the global flags,
 a table names a subcommand, and a nested one a subcommand under it. A key fills in only a

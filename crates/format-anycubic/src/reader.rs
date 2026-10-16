@@ -1,6 +1,7 @@
 use core_format::{
-    FormatError, LayerEntry, OpenFile, ReadSeek, Reads, SlicedFile, SlicedFileReader,
-    layer_in_range, panel_in_range,
+    FormatError, LayerEntry, OpenFile, PrinterTuning, ReadSeek, Reads, SlicedFile,
+    SlicedFileReader, layer_in_range, panel_in_range, stated_distance_mm, stated_speed_mm_min,
+    stated_wait_s,
 };
 use core_raster::Run;
 
@@ -76,10 +77,13 @@ impl SlicedFileReader for AnycubicReader {
         let pitch_um = reads.f32_le()?;
         let layer_height_mm = reads.f32_le()?;
         let exposure_s = reads.f32_le()?;
-        reads.skip(4)?;
+        let light_off_delay_s = stated_wait_s(reads.f32_le()?);
         let bottom_exposure_s = reads.f32_le()?;
         let bottom_layers = reads.f32_le()? as u32;
-        reads.skip(12)?;
+        let lift_mm = stated_distance_mm(reads.f32_le()?);
+        // Both speeds are millimetres a second here, not a minute.
+        let lift_speed_mm_min = stated_speed_mm_min(reads.f32_le()? * 60.0);
+        let retract_speed_mm_min = stated_speed_mm_min(reads.f32_le()? * 60.0);
         let volume_ml = reads.f32_le()?;
         reads.skip(4)?;
         let width_px = reads.u32_le()?;
@@ -90,6 +94,15 @@ impl SlicedFileReader for AnycubicReader {
         // print time; see docs/formats/anycubic.md.
         reads.skip(16)?;
         let print_time_s = reads.u32_le()?;
+        let stated = PrinterTuning {
+            light_off_delay_s,
+            lift_distance_mm: lift_mm,
+            retract_distance_mm: lift_mm,
+            lift_speed_mm_min,
+            retract_speed_mm_min,
+            transition_layers: u16::try_from(reads.u32_le()?).ok(),
+            ..PrinterTuning::default()
+        };
 
         reads.seek_to(table + LAYER_TABLE_HEAD_BYTES - 4)?;
         let layer_count = reads.u32_le()?;
@@ -118,6 +131,7 @@ impl SlicedFileReader for AnycubicReader {
                 print_time_s: Some(print_time_s),
                 volume_mm3: Some(volume_ml * 1000.0),
                 grey_steps: GREY_STEPS,
+                stated,
                 layers,
             },
         })

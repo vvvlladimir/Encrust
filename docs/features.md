@@ -341,6 +341,14 @@ transition, light power, lifts, retracts, waits, density, price, colour and comp
 One resin can be tuned differently for each printer. A resin taken from a printer is kept
 until you set it up on another one.
 
+**Take a resin from a sliced file:** open a file another slicer wrote for your printer and
+press **Keep its resin**; it is saved on the machine the file was cut for. You get what the
+file states: exposure and bottom layers always, and transition, waits, lifts, speeds and
+light power where the format holds them (`.goo` holds all of them, `.sl1` none). Anything
+else keeps our defaults, and so does a lift the file states as a placeholder, as files for a
+tilting vat do. An encrypted `.ctb` cannot be read yet. Colour, price and compensation are
+not in sliced files.
+
 **Flexibility:**
 - Every profile (printer, resin, support, hollow and drain presets) is a plain TOML text
   file you can open and edit. Unknown keys are refused, so a typo fails loudly instead of

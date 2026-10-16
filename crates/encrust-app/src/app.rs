@@ -991,4 +991,59 @@ mod tests {
             .profile;
         assert!(kept.is_tuned_for(IMPORTED_ON));
     }
+
+    /// What a vendor's file for the Saturn states of itself, at a panel no other key opens.
+    fn opened_file(width_px: u32, machine: Option<&str>) -> core_format::SlicedFile {
+        core_format::SlicedFile {
+            format: "goo",
+            version: Some(30),
+            machine: machine.map(str::to_owned),
+            slicer: None,
+            resin: Some("Bench grey".to_owned()),
+            width_px,
+            height_px: 5_120,
+            display_mm: None,
+            layer_height_mm: 0.05,
+            exposure_s: 2.37,
+            bottom_exposure_s: 31.3,
+            bottom_layers: 7,
+            print_time_s: None,
+            volume_mm3: None,
+            grey_steps: 256,
+            stated: printer_profiles::PrinterTuning {
+                light_pwm: Some(217),
+                ..printer_profiles::PrinterTuning::default()
+            },
+            layers: Vec::new(),
+        }
+    }
+
+    #[test]
+    fn the_resin_of_an_opened_file_is_kept_on_the_machine_it_was_cut_for() {
+        let mut app = with_profile_dir("opened-resin");
+        let facts = opened_file(11_520, Some("ELEGOO Saturn 4 Ultra"));
+
+        crate::profiles::keep_resin_of(&mut app.machine, &facts, "vendor.goo");
+        let kept = app
+            .machine
+            .slicing
+            .catalogue
+            .resins()
+            .find(|entry| entry.profile.name == "Bench grey")
+            .expect("kept under the name the file gives it");
+        let on_saturn = kept.profile.for_printer(IMPORTED_ON);
+        assert!(kept.profile.is_tuned_for(IMPORTED_ON));
+        assert_eq!((on_saturn.exposure_s, on_saturn.light_pwm), (2.37, 217));
+    }
+
+    #[test]
+    fn the_resin_of_a_file_for_no_known_machine_waits_for_one_in_hand() {
+        let mut app = with_profile_dir("opened-resin-unknown");
+        app.machine.slicing.printer_id = None;
+        let facts = opened_file(17, None);
+
+        crate::profiles::keep_resin_of(&mut app.machine, &facts, "odd.goo");
+        assert!(matches!(app.machine.status, Status::Error(_)));
+        assert_eq!(app.machine.slicing.catalogue.resins().count(), 0);
+    }
 }

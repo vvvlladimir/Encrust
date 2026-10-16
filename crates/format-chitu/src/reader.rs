@@ -1,6 +1,7 @@
 use core_format::{
-    FormatError, LayerEntry, OpenFile, ReadSeek, Reads, SlicedFile, SlicedFileReader,
-    layer_in_range, panel_in_range,
+    FormatError, LayerEntry, OpenFile, PrinterTuning, ReadSeek, Reads, SlicedFile,
+    SlicedFileReader, WaitMode, Waits, layer_in_range, panel_in_range, stated_distance_mm,
+    stated_pwm, stated_speed_mm_min, stated_wait_s,
 };
 use core_raster::Run;
 
@@ -91,14 +92,21 @@ impl SlicedFileReader for ChituReader {
 
         reads.seek_to(GREY_PASSES)?;
         let passes = reads.u32_le()?.max(1);
+        let light_pwm = stated_pwm(reads.u16_le()?);
+        let bottom_light_pwm = stated_pwm(reads.u16_le()?);
 
         // Other writers cover a `.ctb`'s runs with a cipher keyed here, so a
         // reader that ignored it would decode noise; see docs/formats/chitu.md.
         reads.seek_to(ENCRYPTION_KEY)?;
         let key = reads.u32_le()?;
 
-        let volume_mm3 = read_volume(&mut reads)?;
+        let (volume_mm3, peel) = read_print_parameters(&mut reads)?;
         let machine = read_machine_name(&mut reads, family)?;
+        let stated = PrinterTuning {
+            light_pwm,
+            bottom_light_pwm,
+            ..read_slicer_info(&mut reads, peel)?
+        };
 
         // A `.cbddlp` holds one row per pass per layer, laid out pass-major, so the table
         // is that many times longer than the stack; see docs/formats/chitu.md.
@@ -141,6 +149,7 @@ impl SlicedFileReader for ChituReader {
                     Family::Cbddlp => (passes + 1) as u16,
                     Family::Ctb => 128,
                 },
+                stated,
                 layers: rows.iter().take(layer_count as usize).copied().collect(),
             },
             family,
@@ -152,15 +161,101 @@ impl SlicedFileReader for ChituReader {
     }
 }
 
-/// The resin volume, which the print parameters block states in millilitres.
-fn read_volume<S: ReadSeek>(reads: &mut Reads<S>) -> Result<f32, FormatError> {
+/// The resin volume, which the print parameters block states in millilitres, and the peel
+/// and light-off delay it states beside it.
+fn read_print_parameters<S: ReadSeek>(
+    reads: &mut Reads<S>,
+) -> Result<(f32, PrinterTuning), FormatError> {
     reads.seek_to(PRINT_PARAMETERS)?;
     let at = u64::from(reads.u32_le()?);
     if at == 0 {
-        return Ok(0.0);
+        return Ok((0.0, PrinterTuning::default()));
     }
-    reads.seek_to(at + 0x14)?;
-    Ok(reads.f32_le()? * 1000.0)
+    reads.seek_to(at)?;
+    let mut block = [0.0; 10];
+    for value in &mut block {
+        *value = reads.f32_le()?;
+    }
+    let [
+        bottom_lift,
+        bottom_lift_speed,
+        lift,
+        lift_speed,
+        retract_speed,
+        volume_ml,
+        _,
+        _,
+        _,
+        light_off,
+    ] = block;
+    let peel = PrinterTuning {
+        bottom_lift_distance_mm: stated_distance_mm(bottom_lift),
+        bottom_lift_speed_mm_min: stated_speed_mm_min(bottom_lift_speed),
+        lift_distance_mm: stated_distance_mm(lift),
+        retract_distance_mm: stated_distance_mm(lift),
+        lift_speed_mm_min: stated_speed_mm_min(lift_speed),
+        retract_speed_mm_min: stated_speed_mm_min(retract_speed),
+        light_off_delay_s: stated_wait_s(light_off),
+        ..PrinterTuning::default()
+    };
+    Ok((volume_ml * 1000.0, peel))
+}
+
+/// What the `.ctb` slicer info block and the parameters it points at add to `peel`: the
+/// transition, the rests and the bottom retract speed. A file without the block adds none.
+fn read_slicer_info<S: ReadSeek>(
+    reads: &mut Reads<S>,
+    peel: PrinterTuning,
+) -> Result<PrinterTuning, FormatError> {
+    reads.seek_to(SLICER_INFO)?;
+    let at = u64::from(reads.u32_le()?);
+    let size = reads.u32_le()?;
+    if at == 0 || size == 0 {
+        return Ok(peel);
+    }
+    reads.seek_to(at + 0x3C)?;
+    let transition_layers = u16::try_from(reads.u32_le()?).ok();
+    let parameters_at = u64::from(reads.u32_le()?);
+    if parameters_at == 0 {
+        return Ok(PrinterTuning {
+            transition_layers,
+            ..peel
+        });
+    }
+    reads.seek_to(parameters_at)?;
+    let bottom_retract_speed_mm_min = stated_speed_mm_min(reads.f32_le()?);
+    reads.seek_to(parameters_at + 0x18)?;
+    let after_retract_s = reads.f32_le()?;
+    let after_lift_s = reads.f32_le()?;
+    let before_lift_s = reads.f32_le()?;
+    Ok(PrinterTuning {
+        transition_layers,
+        bottom_retract_speed_mm_min,
+        waits: rests(before_lift_s, after_lift_s, after_retract_s),
+        ..peel
+    })
+}
+
+/// The three rests as a resin's waits, resting where any of them is a wait at all: the
+/// container has no flag to say which way the printer waits.
+fn rests(before_lift_s: f32, after_lift_s: f32, after_retract_s: f32) -> Option<Waits> {
+    let [before_lift_s, after_lift_s, after_retract_s] =
+        [before_lift_s, after_lift_s, after_retract_s].map(stated_wait_s);
+    let waits = Waits {
+        mode: WaitMode::Rest,
+        before_lift_s: before_lift_s?,
+        after_lift_s: after_lift_s?,
+        after_retract_s: after_retract_s?,
+    };
+    let resting = waits.before_lift_s + waits.after_lift_s + waits.after_retract_s > 0.0;
+    Some(Waits {
+        mode: if resting {
+            WaitMode::Rest
+        } else {
+            WaitMode::LightOff
+        },
+        ..waits
+    })
 }
 
 /// The machine name, which only the `.ctb` slicer info block carries and which it addresses

@@ -8,7 +8,7 @@
 use std::io::Cursor;
 use std::path::Path;
 
-use core_format::{FormatError, LayerEntry, OpenFile, SlicedFile};
+use core_format::{FormatError, LayerEntry, OpenFile, PrinterTuning, SlicedFile};
 use core_pipeline::{Converting, PipelineError, SlicedFormat, convert, convert_to, open};
 use core_raster::Run;
 use printer_profiles::{MaterialProfile, PrinterProfile};
@@ -104,6 +104,7 @@ fn written() -> Written {
             print_time_s: None,
             volume_mm3: None,
             grey_steps: 256,
+            stated: PrinterTuning::default(),
             layers: exposures
                 .iter()
                 .enumerate()

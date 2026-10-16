@@ -2,8 +2,8 @@ use std::borrow::Cow;
 use std::collections::BTreeMap;
 
 use core_format::{
-    FormatError, LayerEntry, OpenFile, ReadSeek, SlicedFile, SlicedFileReader, decode_grey,
-    layer_in_range, png_shape, read_entry,
+    FormatError, LayerEntry, OpenFile, PrinterTuning, ReadSeek, SlicedFile, SlicedFileReader,
+    decode_grey, layer_in_range, png_shape, read_entry,
 };
 use core_raster::Run;
 use zip::ZipArchive;
@@ -80,6 +80,7 @@ impl SlicedFileReader for Sl1Reader {
                 print_time_s: number("printTime").map(|seconds| seconds as u32),
                 volume_mm3: number("usedMaterial").map(|ml| ml * 1000.0),
                 grey_steps: 256,
+                stated: PrinterTuning::default(),
                 layers: entries,
             },
         })

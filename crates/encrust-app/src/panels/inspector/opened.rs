@@ -1,7 +1,7 @@
 use core_format::SlicedFile;
 
 use crate::panels::Window;
-use crate::ui::{duration, hint, readings, section};
+use crate::ui::{duration, hint, readings, secondary_button, section};
 
 /// What an opened sliced file says about itself, in place of the machine and resin sections
 /// a plate being cut shows.
@@ -24,7 +24,7 @@ pub fn ui(ui: &mut egui::Ui, window: &mut Window) {
         );
 
     let rows = file_readings(facts);
-    section(ui, &name, None, |ui| {
+    let keep = section(ui, &name, None, |ui| {
         readings(ui, &rows);
         if facts.display_mm.is_none() {
             hint(
@@ -32,7 +32,18 @@ pub fn ui(ui: &mut egui::Ui, window: &mut Window) {
                 "This container records no panel size, so an area cannot be worked out from it.",
             );
         }
+        secondary_button(ui, "", "Keep its resin")
+            .on_hover_text(
+                "Save the exposure, waits and motion this file states as a resin of your own, \
+                 on the machine it was cut for. What it does not state keeps our defaults.",
+            )
+            .clicked()
     });
+    if keep == Some(true)
+        && let Some(facts) = window.machine.preview.read_facts().cloned()
+    {
+        crate::profiles::keep_resin_of(window.machine, &facts, &name);
+    }
 }
 
 /// The rows the section lists, in the order a reader would want them.
@@ -94,7 +105,7 @@ fn file_readings(facts: &SlicedFile) -> Vec<(&'static str, String)> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use core_format::LayerEntry;
+    use core_format::{LayerEntry, PrinterTuning};
 
     fn facts() -> SlicedFile {
         SlicedFile {
@@ -113,6 +124,7 @@ mod tests {
             print_time_s: Some(2695),
             volume_mm3: Some(1000.0),
             grey_steps: 128,
+            stated: PrinterTuning::default(),
             layers: vec![LayerEntry {
                 z_mm: 0.05,
                 exposure_s: 3.2,

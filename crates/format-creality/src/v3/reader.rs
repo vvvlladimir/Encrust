@@ -1,6 +1,6 @@
 use core_format::{
-    FormatError, LayerEntry, OpenFile, ReadSeek, Reads, SlicedFile, SlicedFileReader,
-    layer_in_range, panel_in_range,
+    FormatError, LayerEntry, OpenFile, PrinterTuning, ReadSeek, Reads, SlicedFile,
+    SlicedFileReader, layer_in_range, panel_in_range,
 };
 use core_raster::Run;
 
@@ -125,6 +125,7 @@ impl SlicedFileReader for CxdlpReader {
                 print_time_s: None,
                 volume_mm3: None,
                 grey_steps: 256,
+                stated: PrinterTuning::default(),
                 layers,
             },
         })

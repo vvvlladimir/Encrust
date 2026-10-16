@@ -14,6 +14,7 @@ mod reader;
 mod rgb15;
 mod rle7;
 mod ser;
+mod stated;
 mod timestamp;
 mod writer;
 
@@ -29,11 +30,16 @@ pub use reader::{
 pub use rgb15::{PREVIEW_HEADER_BYTES, PREVIEW_SIZES_PX, encode_rgb15, write_preview};
 pub use rle7::{Rle7Layer, decode_rle7};
 pub use ser::{Fields, WriteSeek};
+pub use stated::{stated_distance_mm, stated_pwm, stated_speed_mm_min, stated_wait_s};
 pub use writer::{LayerSink, SlicedFileWriter, WRITE_BUFFER_BYTES, validate};
 
 // How an exposure follows the layer height is a property of the resin, so it lives with
 // the resin profile; every writer scales through it.
 pub use printer_profiles::exposure_for_mm;
+
+// What a reader finds of the resin in a file is the resin's own tuning table, so a format
+// crate states it in those types.
+pub use printer_profiles::{PrinterTuning, WaitMode, Waits};
 
 // Runs are the format-neutral currency of a rasterised layer; they live in `core-raster`
 // so every sliced-file format speaks the same ones.

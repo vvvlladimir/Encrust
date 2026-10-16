@@ -5,6 +5,7 @@ use std::path::Path;
 
 use anyhow::{Context, Result};
 use core_engine::project::{DrainState, HollowState};
+use core_format::OpenFile;
 use printer_profiles::{Catalogue, Kind, MaterialProfile, PrinterProfile, SupportProfile};
 use serde::Serialize;
 
@@ -204,6 +205,56 @@ pub fn import(path: &Path, kind: Kind, printer: Option<&str>) -> Result<String> 
         Kind::Printer | Kind::Resin | Kind::Support => catalogue.import(kind, &text, path, printer),
     };
     imported.with_context(|| format!("cannot import {} as a {}", path.display(), kind.label()))
+}
+
+/// Takes the resin a sliced file was printed with into the user's catalogue, set up on
+/// `printer` or else on the machine the file was cut for. Answers the new id and the printer.
+pub fn import_sliced(path: &Path, printer: Option<&str>) -> Result<(String, String)> {
+    if path
+        .extension()
+        .is_some_and(|extension| extension.eq_ignore_ascii_case("toml"))
+    {
+        anyhow::bail!(
+            "{} is a profile file; say what it holds with --kind",
+            path.display()
+        );
+    }
+    let file =
+        std::fs::File::open(path).with_context(|| format!("cannot open {}", path.display()))?;
+    let opened = core_pipeline::open(path, std::io::BufReader::new(file))
+        .with_context(|| format!("cannot read {} as a sliced file", path.display()))?;
+    let facts = opened.facts();
+    let mut catalogue = Catalogue::load().context("cannot read the profile catalogue")?;
+    let printer = match printer {
+        Some(id) => {
+            catalogue
+                .printer(id)
+                .context("run `encrust profiles list` to see the printers there are")?;
+            id.to_owned()
+        }
+        None => catalogue
+            .printer_for_panel(facts.width_px, facts.height_px, facts.machine.as_deref())
+            .map(str::to_owned)
+            .with_context(|| {
+                format!(
+                    "cannot tell which printer a {} x {} px file{} is for; name it with --printer",
+                    facts.width_px,
+                    facts.height_px,
+                    facts
+                        .machine
+                        .as_deref()
+                        .map(|machine| format!(" for {machine}"))
+                        .unwrap_or_default()
+                )
+            })?,
+    };
+    let stem = path
+        .file_stem()
+        .map_or_else(|| "Resin".into(), |stem| stem.to_string_lossy());
+    let id = catalogue
+        .import_resin(facts.resin(&stem), Some(&printer))
+        .with_context(|| format!("cannot import the resin of {}", path.display()))?;
+    Ok((id, printer))
 }
 
 /// The catalogue as `profiles list` prints it.

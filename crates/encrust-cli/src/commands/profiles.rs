@@ -13,21 +13,23 @@ pub enum ProfilesCommand {
     List,
     /// Print one profile as TOML, the starting point for one of your own.
     Show(ShowArgs),
-    /// Take a profile file someone exported into your own catalogue, under an id of its
-    /// own: an import never writes over what you have.
+    /// Take a profile file someone exported, or the resin a sliced file was printed with,
+    /// into your own catalogue under an id of its own: an import never writes over what you
+    /// have.
     Import(ImportArgs),
 }
 
 #[derive(clap::Args, Debug)]
 pub struct ImportArgs {
-    /// The exported profile, a TOML file.
+    /// The exported profile, a TOML file, or a sliced file to take the resin of.
     pub file: PathBuf,
 
-    /// What the file holds.
+    /// What a profile file holds. Left out, the file is a sliced one.
     #[arg(long, value_enum)]
-    pub kind: ProfileKind,
+    pub kind: Option<ProfileKind>,
 
-    /// The printer a resin is set up on, by id; it keeps whatever else it was tuned for.
+    /// The printer a resin is set up on, by id; it keeps whatever else it was tuned for. A
+    /// sliced file's resin goes on the machine it was cut for unless this names another.
     #[arg(long, value_name = "ID")]
     pub printer: Option<String>,
 }
@@ -111,13 +113,33 @@ fn show(args: &ShowArgs, global: &GlobalArgs) -> Result<()> {
 }
 
 fn import(args: &ImportArgs, global: &GlobalArgs) -> Result<()> {
-    let kind = Kind::from(args.kind);
+    let Some(kind) = args.kind.map(Kind::from) else {
+        return import_sliced(args, global);
+    };
     let id = profiles::import(&args.file, kind, args.printer.as_deref())?;
     if global.json {
         return json::print(&serde_json::json!({ "id": id, "kind": kind.label() }));
     }
     if global.talks() {
         println!("{} {} imported as {id}", kind.label(), args.file.display());
+    }
+    Ok(())
+}
+
+fn import_sliced(args: &ImportArgs, global: &GlobalArgs) -> Result<()> {
+    let (id, printer) = profiles::import_sliced(&args.file, args.printer.as_deref())?;
+    if global.json {
+        return json::print(&serde_json::json!({
+            "id": id,
+            "kind": Kind::Resin.label(),
+            "printer": printer,
+        }));
+    }
+    if global.talks() {
+        println!(
+            "resin of {} imported as {id}, set up on {printer}",
+            args.file.display()
+        );
     }
     Ok(())
 }
