@@ -62,6 +62,7 @@ Grouped by what the decision governs; the number is still the order it was taken
 | [0215](0215-the-panels-are-pictured-and-compared-by-hand.md) | The panels are pictured and compared, by hand | Accepted |
 | [0272](0272-a-dependency-is-built-once-at-one-feature-set.md) | A dependency is built once, at one feature set, and a bump is checked once over the workspace | Accepted |
 | [0273](0273-ci-checks-a-tree-once-and-the-other-platforms-nightly.md) | CI checks a tree once, and the other platforms nightly | Accepted |
+| [0288](0288-the-windows-binaries-carry-their-c-runtime-and-the-window-no-console.md) | The Windows binaries carry their C runtime, and the window opens no console | Accepted |
 
 ### Geometry
 

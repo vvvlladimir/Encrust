@@ -1,3 +1,6 @@
+// Without it Windows opens a console beside the window, see docs/decisions/0288.
+#![cfg_attr(windows, windows_subsystem = "windows")]
+
 use std::path::PathBuf;
 
 use anyhow::Result;

@@ -1,0 +1,53 @@
+name: Store
+
+# Sends the Store package `release.yml` attached to a release to the Microsoft Store, once a
+# maintainer publishes the draft: publishing stays the one act that reaches users. The Store then
+# certifies it and updates every copy installed from it. The manual trigger resends a tag whose run
+# failed. See ADR 0286.
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: The published release to send to the Store, for example v0.4.0.
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+env:
+  PRODUCT_ID: 9NB0ZMB3M8H8
+  PACKAGE: Encrust-windows-x86_64-store.msixupload
+
+jobs:
+  publish:
+    runs-on: windows-latest
+    steps:
+      - name: Download the Store package
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ inputs.tag || github.event.release.tag_name }}
+        run: gh release download "$TAG" --pattern "$PACKAGE" --repo "$GITHUB_REPOSITORY"
+
+      - uses: microsoft/microsoft-store-apppublisher@v1.4
+
+      - name: Sign in to Partner Center
+        shell: pwsh
+        env:
+          TENANT_ID: ${{ secrets.MSSTORE_TENANT_ID }}
+          SELLER_ID: ${{ secrets.MSSTORE_SELLER_ID }}
+          CLIENT_ID: ${{ secrets.MSSTORE_CLIENT_ID }}
+          CLIENT_SECRET: ${{ secrets.MSSTORE_CLIENT_SECRET }}
+        run: >
+          msstore reconfigure --tenantId $env:TENANT_ID --sellerId $env:SELLER_ID
+          --clientId $env:CLIENT_ID --clientSecret $env:CLIENT_SECRET
+
+      # The package itself is the path: the CLI picks the publisher by its extension. The submission
+      # is made from the last published one, so the listing and its notes carry over.
+      - name: Submit the package
+        shell: pwsh
+        run: msstore publish $env:PACKAGE --appId $env:PRODUCT_ID
