@@ -333,6 +333,14 @@ The window offers only the machines whose format Encrust can actually write.
 
 ## Printers and profiles
 
+**First setup:** while the plate has no printer or no resin, a notice at the foot of the
+window says which, with **Set up** to open **Machine and resin**. There, an empty list of
+printers offers **Add a machine** and **Import a machine**, and a printer with no resin
+offers **Add a resin** and **Import a resin**. A file dropped on the window is imported
+rather than opened: as a resin while a printer's resins are in view, or when it is a sliced
+file or a resin profile, and as a printer otherwise. The first printer and resin you add
+are the ones the plate prints on, with no second click.
+
 **Printers:** 100 bundled profiles from 14 makers: Anycubic, Elegoo, Creality, Phrozen,
 EPAX, FlashForge, Nova3D, Peopoly, QIDI, Wanhao, Prusa, Kelant, UniFormation, Voxelab.
 Search the library by name or brand, or add a **custom printer**.
@@ -349,7 +357,7 @@ One resin can be tuned differently for each printer. A resin taken from a printe
 until you set it up on another one.
 
 **Take a resin from a sliced file:** in **Machine and resin**, press **Import** on a
-printer's resins and pick a file another slicer wrote for it; the resin is saved on that
+printer's resins (**Import a resin** on a printer with none yet) and pick a file another slicer wrote for it; the resin is saved on that
 printer. You get what the
 file states: exposure and bottom layers always, and transition, waits, lifts, speeds and
 light power where the format holds them (`.goo` holds all of them, `.sl1` only the

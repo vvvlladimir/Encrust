@@ -40,8 +40,9 @@ pub fn ui(ui: &mut egui::Ui, window: &mut Window, clear: Rect) {
         empty_state(ui, clear.center(), viewport, window);
     }
     view_cube::ui(ui, window, clear);
-    view_column::ui(ui, window, clear);
-    stage_notice::ui(ui, window, clear);
+    let column = view_column::ui(ui, window, clear);
+    let beside = clear.with_max_x((column.left() - theme::FLOAT_GAP).max(clear.left()));
+    stage_notice::ui(ui, window, beside);
 }
 
 /// The exposure mask, drawn in `rect`, its caption kept to `clear`.

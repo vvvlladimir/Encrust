@@ -114,11 +114,20 @@ impl SlicerApp {
         let dropped = ctx.input_mut(|input| std::mem::take(&mut input.raw.dropped_files));
         #[cfg(not(target_arch = "wasm32"))]
         for file in dropped {
-            open_by_what_it_is(&mut self.window(), Handed::Path(file.path().to_path_buf()));
+            self.open_dropped(Handed::Path(file.path().to_path_buf()));
         }
         // A browser reads a dropped file by a promise, so it arrives on a later frame.
         #[cfg(target_arch = "wasm32")]
         crate::web::files::read_dropped(dropped);
+    }
+
+    /// A dropped file is a profile while Machine and resin is open over the plate, and
+    /// opens as it would from the dialog otherwise.
+    fn open_dropped(&mut self, file: Handed) {
+        match self.machine.settings.machines {
+            true => crate::panels::import_dropped(&mut self.window(), &file),
+            false => open_by_what_it_is(&mut self.window(), file),
+        }
     }
 
     /// What a browser's dialogs handed over since the last frame, each where it was asked
@@ -147,7 +156,7 @@ impl SlicerApp {
                     &mut self.machine.status,
                     &file,
                 ),
-                Arrived::Dropped(file) => open_by_what_it_is(&mut self.window(), file),
+                Arrived::Dropped(file) => self.open_dropped(file),
                 Arrived::Failed(message) => self.machine.status = Status::Error(message),
             }
         }
@@ -777,6 +786,145 @@ mod tests {
         assert!(!crate::panels::still_starting(&mut app.window()));
         app.tool = Tool::default();
         assert!(!crate::panels::still_starting(&mut app.window()));
+    }
+
+    /// A plate with nothing to print on says so at the stage's foot. From there two zones and
+    /// a library pick reach a machine and a resin, each put under the plate unasked (ADR 0299).
+    #[test]
+    fn a_plate_with_nothing_to_print_on_is_set_up_from_its_notice() {
+        use egui::accesskit::Role;
+        use egui_kittest::kittest::Queryable as _;
+
+        let dir = std::env::temp_dir().join(format!("encrust-setup-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        let mut app = SlicerApp::default();
+        app.view.options.started = true;
+        app.machine.slicing.catalogue = printer_profiles::Catalogue::with_root(&dir)
+            .expect("a missing directory reads as empty");
+        let mut dressed = false;
+        let mut harness = egui_kittest::Harness::builder()
+            .with_size(egui::vec2(1280.0, 900.0))
+            .build_ui_state(
+                move |ui, app: &mut SlicerApp| {
+                    if dressed {
+                        app.window().show(ui);
+                    } else {
+                        crate::ui::theme::apply(ui.ctx());
+                        dressed = true;
+                    }
+                },
+                app,
+            );
+        harness.run_steps(3);
+        assert!(
+            !harness.state().machine.settings.machines,
+            "nothing opens unasked"
+        );
+        harness.get_by_label("No printer or resin yet");
+
+        for step in [
+            "Set up",
+            "Add a machine",
+            "Elegoo",
+            "Saturn 4 Ultra",
+            "Add a resin",
+        ] {
+            harness.get_by_role_and_label(Role::Button, step).click();
+            harness.run_steps(3);
+        }
+        let slicing = &harness.state().machine.slicing;
+        assert_eq!(slicing.printer_id.as_deref(), Some("elegoo-saturn-4-ultra"));
+        assert!(slicing.resin_id.is_some(), "the new resin is the plate's");
+
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// A file dropped on Machine and resin is a profile rather than a model: a machine while
+    /// the library is in view, a resin once its machine's resins are, and either goes under
+    /// the plate that had none (ADR 0299).
+    #[test]
+    fn a_profile_dropped_on_machine_and_resin_is_imported_and_printed_on() {
+        let dir = std::env::temp_dir().join(format!("encrust-drop-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        let mut app = SlicerApp::default();
+        app.machine.slicing.catalogue = printer_profiles::Catalogue::with_root(&dir)
+            .expect("a missing directory reads as empty");
+        let printer = app
+            .machine
+            .slicing
+            .catalogue
+            .export(printer_profiles::Kind::Printer, "elegoo-saturn-4-ultra")
+            .expect("a shipped machine exports");
+        let printer_file =
+            std::env::temp_dir().join(format!("encrust-drop-{}.toml", std::process::id()));
+        std::fs::write(&printer_file, printer).expect("the temp directory is writable");
+        crate::panels::open_machines(&mut app.machine);
+
+        app.open_dropped(Handed::Path(printer_file.clone()));
+        assert!(
+            app.machine.slicing.printer_id.is_some(),
+            "the dropped machine is printed on"
+        );
+        assert!(app.doc.scene.is_empty(), "nothing went on the plate");
+
+        let resin = Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../printer-profiles/tests/fixtures/saturn-4-ultra.cfgx");
+        app.open_dropped(Handed::Path(resin));
+        assert!(
+            app.machine.slicing.resin_id.is_some(),
+            "the dropped resin is printed with"
+        );
+
+        let _ = std::fs::remove_file(&printer_file);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// A machine the user removed is still in the library, and a run must not open on it.
+    #[test]
+    fn a_remembered_machine_that_is_no_longer_the_users_is_not_restored() {
+        let read: crate::prefs::Preferences =
+            serde_json::from_str(r#"{"printer":"elegoo-saturn-4-ultra","resin":"gone"}"#)
+                .expect("every field of the file is optional");
+        let mut app = SlicerApp::default();
+        read.apply(&mut app.window());
+        assert!(app.machine.slicing.printer_id.is_none());
+        assert!(app.machine.slicing.resin_id.is_none());
+    }
+
+    /// Notices of different widths stand on one middle, the room between the side cards.
+    #[test]
+    fn every_notice_at_the_stages_foot_is_centred_on_one_line() {
+        use egui_kittest::kittest::Queryable as _;
+
+        let mut app = SlicerApp::default();
+        app.view.options.started = true;
+        app.machine.status = Status::Info("Opened /a/rather/long/path/to/Stand.obj".to_owned());
+        let mut dressed = false;
+        let mut harness = egui_kittest::Harness::builder()
+            .with_size(egui::vec2(1280.0, 900.0))
+            .build_ui_state(
+                move |ui, app: &mut SlicerApp| {
+                    if dressed {
+                        app.window().show(ui);
+                    } else {
+                        crate::ui::theme::apply(ui.ctx());
+                        dressed = true;
+                    }
+                },
+                app,
+            );
+        harness.run_steps(3);
+        let unready = harness.get_by_label("No printer or resin yet").rect();
+        let message = harness
+            .get_by_label("Opened /a/rather/long/path/to/Stand.obj")
+            .rect();
+        let set_up = harness.get_by_label("Set up").rect();
+        let unready_middle = (unready.left() + set_up.right()) / 2.0;
+        assert!(
+            (unready_middle - message.center().x).abs() < 16.0,
+            "the notice centred at {unready_middle}, the message at {}",
+            message.center().x
+        );
     }
 
     /// The Settings window holds the keyboard, and Escape takes down the question over it

@@ -4,12 +4,14 @@
 use egui::{Align, Layout, Rect, RichText, Ui, pos2, vec2};
 use printer_profiles::{Kind, MaterialProfile};
 
-use super::Action;
+use super::{Action, ZONE_GAP};
 use crate::panels::Window;
 use crate::panels::settings::frame::{SIDE_PAD, Table, child, scrolled, with_footer};
 use crate::panels::settings::resin;
 use crate::settings::{Deleting, Node, pool_for, resins_of};
-use crate::ui::{describe, filter_chip, icon, icon_button, inline_button, quiet_button, theme};
+use crate::ui::{
+    describe, filter_chip, icon, icon_button, inline_button, quiet_button, theme, zone_button,
+};
 
 /// The resins' columns, each starting at a share of the width; the figures are set flush
 /// right against the start of the next. The room before the name holds the resin's colour.
@@ -25,7 +27,8 @@ const FILTERS_H: f32 = 52.0;
 /// wider, because a row with its button at the right end takes whatever it is offered.
 const MENU_W: f32 = 240.0;
 
-/// The tab, laid out in `content`: the form of the resin being edited, or the table.
+/// The tab, laid out in `content`: the form of the resin being edited, the table, or the
+/// ways to a first resin when there is nothing to put in it.
 pub(super) fn tab(
     ui: &mut Ui,
     content: Rect,
@@ -38,6 +41,11 @@ pub(super) fn tab(
         Some(Node::Resin { resin, .. }) => Some(resin.clone()),
         _ => None,
     };
+    let catalogue = &window.machine.slicing.catalogue;
+    if resins_of(catalogue, printer).next().is_none() && !settings.editing_resin {
+        let room = content.shrink2(vec2(SIDE_PAD, 20.0));
+        return first_resin(ui, room, catalogue, printer, action);
+    }
     let (mut body, mut bar) = with_footer(ui, content);
     if settings.editing_resin && settings.resin.is_some() {
         scrolled(&mut body, |ui| {
@@ -70,6 +78,33 @@ pub(super) fn tab(
     actions(&mut bar, window, printer, picked.as_deref(), action);
 }
 
+/// The two ways to a machine's first resin, side by side over the whole tab. Adding one
+/// asks what from only when the pool has something to offer.
+fn first_resin(
+    ui: &mut Ui,
+    room: Rect,
+    catalogue: &printer_profiles::Catalogue,
+    printer: &str,
+    action: &mut Option<Action>,
+) {
+    let half = (room.width() - ZONE_GAP) / 2.0;
+    let left = room.with_max_x(room.left() + half);
+    let right = room.with_min_x(left.right() + ZONE_GAP);
+    let by_hand = "The exposure and layers off the bottle or the resin maker's site";
+    let add = zone_button(ui, left, icon::ADD, "Add a resin", by_hand);
+    if pool_for(catalogue, printer).next().is_none() {
+        if add.clicked() {
+            *action = Some(Action::NewResin(printer.to_owned()));
+        }
+    } else {
+        egui::Popup::menu(&add).show(|ui| add_choices(ui, catalogue, printer, action));
+    }
+    let from_file = "A file sliced for this machine (.goo, .ctb, ...) or a resin profile (.cfgx, .ini), or drop one here";
+    if zone_button(ui, right, icon::IMPORT, "Import a resin", from_file).clicked() {
+        *action = Some(Action::Import(Kind::Resin));
+    }
+}
+
 /// Every type of resin on the machine as a filter, and the ways to add one.
 fn filter_row(ui: &mut Ui, window: &mut Window, printer: &str, action: &mut Option<Action>) {
     let catalogue = &window.machine.slicing.catalogue;
@@ -99,56 +134,54 @@ fn filter_row(ui: &mut Ui, window: &mut Window, printer: &str, action: &mut Opti
     });
 }
 
-/// A new resin, or one out of the pool of every resin some printer has. With nothing on
-/// the machine and nothing in the pool there is one thing to do, so the menu of one is a
-/// button instead (ADR 0197).
+/// A new resin, or one out of the pool of every resin some printer has.
 fn add_menu(
     ui: &mut Ui,
     catalogue: &printer_profiles::Catalogue,
     printer: &str,
     action: &mut Option<Action>,
 ) {
-    let first = resins_of(catalogue, printer).next().is_none()
-        && pool_for(catalogue, printer).next().is_none();
-    if first {
-        if inline_button(ui, icon::RESIN, "Add the first resin", false, true).clicked() {
-            *action = Some(Action::NewResin(printer.to_owned()));
-        }
-        return;
-    }
     let button = inline_button(ui, icon::ADD, "Add a resin", false, true);
-    egui::Popup::menu(&button).show(|ui| {
-        ui.set_width(MENU_W);
-        if ui.button("New resin").clicked() {
-            *action = Some(Action::NewResin(printer.to_owned()));
-        }
-        ui.separator();
-        ui.label(
-            RichText::new("From the pool")
-                .font(theme::small())
-                .color(theme::colors().text_low),
-        );
-        let mut empty = true;
-        for (id, resin) in pool_for(catalogue, printer) {
-            empty = false;
-            ui.horizontal(|ui| {
-                if ui.button(&resin.name).clicked() {
-                    *action = Some(Action::AddResin {
-                        printer: printer.to_owned(),
-                        resin: id.to_owned(),
-                    });
-                }
-                ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
-                    if icon_button(ui, icon::REMOVE, "Delete this resin").clicked() {
-                        *action = Some(Action::Ask(Deleting::Resin(id.to_owned())));
-                    }
+    egui::Popup::menu(&button).show(|ui| add_choices(ui, catalogue, printer, action));
+}
+
+/// What the menu of a new resin offers: one from nothing, or one out of the pool.
+fn add_choices(
+    ui: &mut Ui,
+    catalogue: &printer_profiles::Catalogue,
+    printer: &str,
+    action: &mut Option<Action>,
+) {
+    ui.set_width(MENU_W);
+    if ui.button("New resin").clicked() {
+        *action = Some(Action::NewResin(printer.to_owned()));
+    }
+    ui.separator();
+    ui.label(
+        RichText::new("From the pool")
+            .font(theme::small())
+            .color(theme::colors().text_low),
+    );
+    let mut empty = true;
+    for (id, resin) in pool_for(catalogue, printer) {
+        empty = false;
+        ui.horizontal(|ui| {
+            if ui.button(&resin.name).clicked() {
+                *action = Some(Action::AddResin {
+                    printer: printer.to_owned(),
+                    resin: id.to_owned(),
                 });
+            }
+            ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
+                if icon_button(ui, icon::REMOVE, "Delete this resin").clicked() {
+                    *action = Some(Action::Ask(Deleting::Resin(id.to_owned())));
+                }
             });
-        }
-        if empty {
-            describe(ui, "Every resin you have is already on this machine.");
-        }
-    });
+        });
+    }
+    if empty {
+        describe(ui, "Every resin you have is already on this machine.");
+    }
 }
 
 /// The resins on the machine, the type filter applied, under a row of column names.

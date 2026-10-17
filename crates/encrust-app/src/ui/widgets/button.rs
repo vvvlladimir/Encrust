@@ -532,3 +532,50 @@ pub fn summary_button(
 
 /// Height of a summary card: two lines of text and room around them.
 const SUMMARY_H: f32 = 52.0;
+
+/// A large target filling `rect`: a glyph over a title and a line under it, for the few
+/// things a view with nothing in it yet offers.
+pub fn zone_button(ui: &mut Ui, rect: Rect, glyph: &str, title: &str, detail: &str) -> Response {
+    let colors = theme::colors();
+    let response = ui.allocate_rect(rect, Sense::click());
+    response.widget_info(|| WidgetInfo::labeled(WidgetType::Button, true, title));
+    let (fill, line) = if response.hovered() {
+        (colors.hover, colors.accent_soft)
+    } else {
+        (colors.raised, colors.line)
+    };
+    let painter = ui.painter_at(rect);
+    painter.rect(
+        rect,
+        theme::R_SURFACE,
+        fill,
+        egui::Stroke::new(1.0, line),
+        StrokeKind::Inside,
+    );
+    let middle = rect.center();
+    let wrap = (rect.width() - 2.0 * ZONE_PAD).max(0.0);
+    painter.text(
+        middle - vec2(0.0, 22.0),
+        Align2::CENTER_CENTER,
+        glyph,
+        theme::icon(30.0),
+        colors.text_mid,
+    );
+    painter.text(
+        middle + vec2(0.0, 12.0),
+        Align2::CENTER_CENTER,
+        title,
+        theme::page_title(16.0),
+        colors.text_high,
+    );
+    let mut job =
+        egui::text::LayoutJob::simple(detail.to_owned(), theme::small(), colors.text_low, wrap);
+    job.halign = egui::Align::Center;
+    let words = painter.layout_job(job);
+    painter.galley(middle + vec2(0.0, 26.0), words, colors.text_low);
+    focus_ring(ui, &response, theme::R_SURFACE);
+    response.on_hover_cursor(egui::CursorIcon::PointingHand)
+}
+
+/// Room a zone's line keeps from its edges.
+const ZONE_PAD: f32 = 24.0;

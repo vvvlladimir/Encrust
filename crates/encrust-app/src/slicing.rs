@@ -230,11 +230,7 @@ impl Slicing {
                 Ok(entry) => self.base_material = entry.profile.clone(),
                 // A resin deleted in Settings is no longer the resin in hand, and there
                 // is no measured exposure to fall back on (ADR 0196).
-                Err(_) => {
-                    self.resin_id = None;
-                    self.chosen_resin = false;
-                    self.base_material = MaterialProfile::default();
-                }
+                Err(_) => self.drop_resin(),
             }
         }
         self.adopt_default_resin();
@@ -242,8 +238,8 @@ impl Slicing {
     }
 
     /// A printer brings its own resin when the one in hand is not set up on it: the first
-    /// the user has on it, because numbers measured elsewhere are not a calibration, and
-    /// a resin nobody added is not theirs to print with (ADR 0158).
+    /// the user has on it, or none, because numbers measured elsewhere are not a
+    /// calibration and a resin nobody added is not theirs to print with (ADR 0158).
     fn adopt_default_resin(&mut self) {
         let set_up = self
             .printer_id
@@ -257,11 +253,21 @@ impl Slicing {
                 crate::settings::installed(&entry.source) && entry.profile.is_tuned_for(printer)
             })
         }) else {
+            if self.resin_id.is_some() {
+                self.drop_resin();
+            }
             return;
         };
         self.resin_id = Some(entry.id.clone());
         self.base_material = entry.profile.clone();
         self.chosen_resin = true;
+    }
+
+    /// No resin in hand, and no exposure to slice at until one is chosen.
+    fn drop_resin(&mut self) {
+        self.resin_id = None;
+        self.chosen_resin = false;
+        self.base_material = MaterialProfile::default();
     }
 
     /// How many printers and resins have been taken into hand. The undo stack watches it
@@ -1143,6 +1149,33 @@ z = 10.0
             "a resin of the Mars' own replaces one it has none of"
         );
         assert!(slicing.resin_is_tuned());
+    }
+
+    /// A machine with no resin of its own leaves the plate with none rather than with one
+    /// measured on another machine.
+    #[test]
+    fn a_printer_with_no_resin_of_its_own_leaves_none_in_hand() {
+        let dir = std::env::temp_dir().join(format!("encrust-slicing-none-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        let mut slicing = Slicing {
+            catalogue: Catalogue::with_root(&dir).expect("a missing directory reads as empty"),
+            ..Slicing::default()
+        };
+        let mut only_saturn = measured_on_both();
+        only_saturn.printers.remove(MARS);
+        slicing
+            .catalogue
+            .save_resin("saturn-only", &only_saturn)
+            .expect("writable");
+        slicing.resin_id = Some("saturn-only".to_owned());
+        slicing.set_material(only_saturn);
+
+        let mars = slicing.catalogue.printer(MARS).expect("shipped");
+        let (profile, id) = (mars.profile.clone(), mars.id.clone());
+        slicing.set_printer(profile, Some(id));
+
+        assert!(slicing.resin_id.is_none());
+        assert_eq!(slicing.resin_name(), "Select a resin");
     }
 
     /// An exposure is measured, so a machine alone is not enough to cut with (ADR 0196).

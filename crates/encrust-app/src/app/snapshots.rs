@@ -7,7 +7,7 @@ use std::path::PathBuf;
 use egui_kittest::{Harness, SnapshotResults};
 
 use super::SlicerApp;
-use super::states::{app, drawn, with_machines};
+use super::states::{app, drawn, with_machines, with_nothing};
 use crate::workspace::{Mode, Tool};
 
 /// The size the window opens at, `lib::viewport`.
@@ -99,6 +99,8 @@ fn the_machine_and_resin_window() {
     let mut machine = with_machines(app(false), "machine");
     machine.machine.settings.tab = crate::settings::Tab::Machine;
     results.extend(picture("machines_machine", machine));
+    results.extend(picture("machines_none", with_nothing(app(false), false)));
+    results.extend(picture("machines_no_resin", with_nothing(app(false), true)));
 }
 
 /// The Export tool with two boards on the network: a profile listing one names it on a
@@ -249,6 +251,7 @@ fn the_notices_at_the_foot_of_the_stage() {
         filename: "Dragon bust.goo".to_owned(),
     });
     app.machine.status = crate::status::Status::Info("Dragon bust.goo is on Workshop".to_owned());
+    app.machine.slicing.resin_id = None;
     picture("notices", app);
 }
 
