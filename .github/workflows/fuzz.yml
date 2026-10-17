@@ -45,9 +45,11 @@ jobs:
         with:
           tool: cargo-fuzz
 
+      # The installed cargo-fuzz is a musl build and defaults to its own triple, which the
+      # address sanitizer refuses; name the runner's.
       - name: Build every target
         working-directory: fuzz
-        run: cargo +nightly fuzz build
+        run: cargo +nightly fuzz build --target x86_64-unknown-linux-gnu
 
   fuzz:
     name: ${{ matrix.target }}
@@ -88,7 +90,7 @@ jobs:
       - name: Fuzz ${{ matrix.target }}
         working-directory: fuzz
         run: |
-          cargo +nightly fuzz run ${{ matrix.target }} \
+          cargo +nightly fuzz run ${{ matrix.target }} --target x86_64-unknown-linux-gnu \
             -- -max_total_time=120 -max_len=65536 -rss_limit_mb=2048
 
       # A crash is the whole point of the job, and it is worthless without the input that caused it:

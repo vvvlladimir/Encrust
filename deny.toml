@@ -8,8 +8,13 @@ yanked = "deny"
 # we chose ourselves: eframe pulls in unmaintained font parsing we have no upgrade for.
 unmaintained = "workspace"
 # Every zip 8 is yanked and the newest threemf2 still asks for one; drop this once it reads
-# 3MF through zip 9.
-ignore = [{ crate = "zip@8.6.0", reason = "the newest threemf2 requires zip ^8.6" }]
+# 3MF through zip 9. Its three advisories are in `extract`, which nothing here calls.
+ignore = [
+    { crate = "zip@8.6.0", reason = "the newest threemf2 requires zip ^8.6" },
+    { id = "RUSTSEC-2026-0367", reason = "zip 8 `extract` only; threemf2 and we never call it" },
+    { id = "RUSTSEC-2026-0368", reason = "zip 8 `extract` only; threemf2 and we never call it" },
+    { id = "RUSTSEC-2026-0369", reason = "zip 8 `extract` only; threemf2 and we never call it" },
+]
 
 [licenses]
 # Encrust ships under AGPL-3.0-only. Nothing here may be copyleft beyond that, or
