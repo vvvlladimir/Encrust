@@ -1,6 +1,9 @@
 use std::io;
 
-use core_format::{Fields, PREVIEW_SIZES_PX, PrintJob, Rgb, write_preview};
+use core_format::{
+    CHITU_DISCLAIMER, CHITU_DISCLAIMER_BYTES, Fields, PREVIEW_SIZES_PX, PrintJob, Rgb,
+    write_preview,
+};
 
 use crate::writer::CtbVersion;
 
@@ -9,12 +12,6 @@ const PRINT_PARAMETERS_BYTES: u32 = 60;
 pub(crate) const SLICER_INFO_BYTES: u32 = 76;
 const PRINT_PARAMETERS_V4_BYTES: u32 = 464;
 const RESIN_PARAMETERS_BYTES: u32 = 40;
-
-/// The notice CBD Technology puts in every version 4 file, at the length it expects.
-///
-/// It is a field of the container, not a claim of ours; see `docs/formats/chitu.md`.
-const DISCLAIMER: &str = "Layout and record format for the ctb and cbddlp file types are the copyrighted programs or codes of CBD Technology (China) Inc..The Customer or User shall not in any manner reproduce, distribute, modify, decompile, disassemble, decrypt, extract, reverse engineer, lease, assign, or sublicense the said programs or codes.";
-const DISCLAIMER_BYTES: u32 = 320;
 
 /// Colour a preview record is padded with where the square thumbnail does not reach.
 const PREVIEW_BACKGROUND: Rgb = [0, 0, 0];
@@ -176,7 +173,7 @@ fn write_slicer_info(
 ) -> io::Result<()> {
     let name = job.printer.machine_name().as_bytes();
     let machine_name_address = at + SLICER_INFO_BYTES;
-    let v4_parameters_address = machine_name_address + name.len() as u32 + DISCLAIMER_BYTES;
+    let v4_parameters_address = machine_name_address + name.len() as u32 + CHITU_DISCLAIMER_BYTES;
 
     fields.zeros(28)?;
     fields.u32_le(machine_name_address)?;
@@ -202,7 +199,7 @@ fn write_v4_parameters(
     version: CtbVersion,
 ) -> io::Result<()> {
     let disclaimer_address = fields.position()? as u32;
-    fields.text(DISCLAIMER, DISCLAIMER_BYTES as usize)?;
+    fields.text(CHITU_DISCLAIMER, CHITU_DISCLAIMER_BYTES as usize)?;
 
     let at = fields.position()? as u32;
     let resin_parameters_address = match version {
@@ -229,7 +226,7 @@ fn write_v4_parameters(
     fields.u32_le(job.layer_count().saturating_sub(1))?;
     fields.zeros(16)?;
     fields.u32_le(disclaimer_address)?;
-    fields.u32_le(DISCLAIMER_BYTES)?;
+    fields.u32_le(CHITU_DISCLAIMER_BYTES)?;
     fields.u32_le(resin_parameters_address)?;
     fields.zeros(380)?;
 
@@ -262,18 +259,4 @@ fn write_resin_parameters(fields: &mut Fields<'_>, job: &PrintJob, at: u32) -> i
     fields.bytes(resin_type)?;
     fields.bytes(resin_name)?;
     fields.bytes(machine_name)
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn the_disclaimer_fits_the_field_the_format_fixes() {
-        assert_eq!(
-            DISCLAIMER.len(),
-            DISCLAIMER_BYTES as usize,
-            "the notice is written whole, not truncated, at 320 bytes"
-        );
-    }
 }

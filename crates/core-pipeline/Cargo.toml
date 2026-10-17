@@ -20,6 +20,7 @@ core-slicer.workspace = true
 printer-profiles.workspace = true
 format-goo.workspace = true
 format-chitu.workspace = true
+format-ctb-encrypted.workspace = true
 format-anycubic.workspace = true
 format-sl1.workspace = true
 format-gcode-zip.workspace = true

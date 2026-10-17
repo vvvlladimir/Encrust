@@ -15,6 +15,8 @@ pub enum OutputFormat {
     Ctb4,
     /// Chitu's `.ctb`, revision 5.
     Ctb5,
+    /// Chitu's encrypted `.ctb`, which the newer Chitu boards take and nothing else.
+    CtbEncrypted,
     /// Chitu's older `.cbddlp`.
     Cbddlp,
     /// The same container under the extension Anycubic's early machines read, `.photon`.
@@ -117,6 +119,7 @@ impl OutputFormat {
             Self::Goo => ".goo",
             Self::Ctb4 => ".ctb v4",
             Self::Ctb5 => ".ctb v5",
+            Self::CtbEncrypted => ".ctb encrypted",
             Self::Cbddlp => ".cbddlp",
             Self::Photon => ".photon",
             Self::Anycubic { extension, .. } => extension.label(),

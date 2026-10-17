@@ -7,6 +7,7 @@ use core_raster::Run;
 use format_anycubic::{AnycubicReader, PwsReader};
 use format_chitu::{CbddlpFlavour, ChituReader};
 use format_creality::{CxdlpReader, CxdlpV4Reader};
+use format_ctb_encrypted::CtbEncryptedReader;
 use format_cws::CwsReader;
 use format_gcode_zip::GcodeZipReader;
 use format_goo::GooReader;
@@ -23,6 +24,7 @@ use crate::error::PipelineError;
 pub enum Opened<S> {
     Goo(format_goo::OpenGoo<S>),
     Chitu(format_chitu::OpenChitu<S>),
+    CtbEncrypted(format_ctb_encrypted::OpenCtbEncrypted<S>),
     Anycubic(format_anycubic::OpenAnycubic<S>),
     Sl1(format_sl1::OpenSl1<S>),
     GcodeZip(format_gcode_zip::OpenGcodeZip<S>),
@@ -37,6 +39,7 @@ impl<S: ReadSeek> OpenFile for Opened<S> {
         match self {
             Self::Goo(open) => open.facts(),
             Self::Chitu(open) => open.facts(),
+            Self::CtbEncrypted(open) => open.facts(),
             Self::Anycubic(open) => open.facts(),
             Self::Sl1(open) => open.facts(),
             Self::GcodeZip(open) => open.facts(),
@@ -51,6 +54,7 @@ impl<S: ReadSeek> OpenFile for Opened<S> {
         match self {
             Self::Goo(open) => open.layer(index),
             Self::Chitu(open) => open.layer(index),
+            Self::CtbEncrypted(open) => open.layer(index),
             Self::Anycubic(open) => open.layer(index),
             Self::Sl1(open) => open.layer(index),
             Self::GcodeZip(open) => open.layer(index),
@@ -125,6 +129,9 @@ fn sniff<S: ReadSeek>(source: &mut S) -> Result<Family, FormatError> {
     if head.len() >= 12 && head[4..12] == GOO_MAGIC_TAG {
         return Ok(Family::Goo);
     }
+    if format_ctb_encrypted::claims(head) {
+        return Ok(Family::Chitu(CbddlpFlavour::Cbddlp));
+    }
     if head.len() >= 4 {
         let magic = u32::from_le_bytes([head[0], head[1], head[2], head[3]]);
         if CHITU_MAGICS.contains(&magic) {
@@ -133,6 +140,15 @@ fn sniff<S: ReadSeek>(source: &mut S) -> Result<Family, FormatError> {
         }
     }
     Err(FormatError::UnknownContainer)
+}
+
+/// Whether the file is the encrypted `.ctb`, by its first four bytes.
+fn encrypted_ctb<S: ReadSeek>(source: &mut S) -> Result<bool, FormatError> {
+    let mut magic = [0; 4];
+    source.seek(SeekFrom::Start(0))?;
+    let read = fill(source, &mut magic)?;
+    source.seek(SeekFrom::Start(0))?;
+    Ok(format_ctb_encrypted::claims(&magic[..read]))
 }
 
 /// The revision a `.cxdlp` states, which sits behind its magic.
@@ -184,6 +200,10 @@ impl Family {
     fn open_from<S: ReadSeek>(self, mut source: S) -> Result<Opened<S>, FormatError> {
         match self {
             Self::Goo => GooReader.open(source).map(Opened::Goo),
+            // The encrypted `.ctb` shares the name and the family's magic but one digit.
+            Self::Chitu(_) if encrypted_ctb(&mut source)? => {
+                CtbEncryptedReader.open(source).map(Opened::CtbEncrypted)
+            }
             Self::Chitu(flavour) => ChituReader::new(flavour).open(source).map(Opened::Chitu),
             Self::Anycubic => AnycubicReader.open(source).map(Opened::Anycubic),
             Self::Pws => PwsReader.open(source).map(Opened::Anycubic),

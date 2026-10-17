@@ -89,6 +89,13 @@ doc = false
 bench = false
 
 [[bin]]
+name = "sliced_ctb_encrypted"
+path = "fuzz_targets/sliced_ctb_encrypted.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
 name = "sliced_pws"
 path = "fuzz_targets/sliced_pws.rs"
 test = false

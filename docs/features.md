@@ -34,7 +34,7 @@ but only one printer, the ELEGOO Saturn 4 Ultra, has printed a file Encrust wrot
   built back into a mesh that stands where it stood on the plate, so you can move it,
   support it again or cut it for another printer. Its supports and raft come back as part
   of the model, edges are rounded by about 0.05 mm, and layer steps stay. A `.sl1` is slow
-  to open (a minute for a full 16K stack). An encrypted `.ctb` cannot be opened yet. A file
+  to open (a minute for a full 16K stack). A file
   with the wrong extension is recognised by its first bytes.
 - Drag and drop onto the window, or use the **Recent** list, which shows a picture of each
   file.
@@ -309,7 +309,8 @@ Every file Encrust writes is read back and checked. The output extension picks t
 | Format | Printers | Grey on edges | Notes |
 |---|---|---|---|
 | `.goo` | Elegoo, Phrozen | yes | |
-| `.ctb` v4, v5 | Elegoo, Creality, Phrozen, EPAX, Peopoly, QIDI, UniFormation | yes | **Encrypted `.ctb` is not supported** (needed by some newer boards). |
+| `.ctb` v4, v5 | Elegoo, Creality, Phrozen, EPAX, Peopoly, QIDI, UniFormation | yes | |
+| `.ctb` encrypted | the newer Chitu boards that take nothing else | yes | Written when the printer profile says `output = "ctb-encrypted"`; no shipped profile does yet. Read whoever wrote it. |
 | `.cbddlp`, `.photon` | older Chitu-board printers | yes, in 8 passes | 8 times the layer data. Warns above 1440 × 2560 px. |
 | `.pwmx` and the other Anycubic extensions | Anycubic | 4 bits | Edges dimmer than 1/16 are lost. |
 | `.sl1`, `.sl1s` | Prusa | full 8 bits | One exposure and one layer height for the whole print; the bottom layers fade to it from the first one rather than holding. |
@@ -354,8 +355,7 @@ file states: exposure and bottom layers always, and transition, waits, lifts, sp
 light power where the format holds them (`.goo` holds all of them, `.sl1` only the
 transition). Anything
 else keeps our defaults, and so does a lift the file states as a placeholder, as files for a
-tilting vat do. An encrypted `.ctb` cannot be read yet. Colour, price and compensation are
-not in sliced files.
+tilting vat do. Colour, price and compensation are not in sliced files.
 
 **Take a resin from another program's profile:** import the resin profile it exports, a
 `.cfgx` or an `.ini`, the same way; it goes on the printer you have chosen, or else on the
@@ -457,7 +457,8 @@ Do that in the window, save a project, then slice the project.
 - Only the **ELEGOO Saturn 4 Ultra** is confirmed by a real print. Start every other printer
   with a small calibration piece and check the build area and mirroring.
 - **No bundled resins.** Calibrate your own exposure.
-- **Encrypted `.ctb`** is not supported.
+- **Encrypted `.ctb`** is written only for a printer whose profile asks for it, and no
+  shipped profile does until a machine is confirmed by a print.
 - **Adaptive layer height** needs a custom printer profile; no bundled one allows it.
 - **Convert** cannot carry varying layer heights or the preview pictures.
 - **Browser build:** no network sending, no updates, uncapped section cut.

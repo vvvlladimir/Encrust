@@ -116,6 +116,11 @@ fn written_for(job: &PrintJob) -> Vec<(&'static str, Vec<u8>, u16)> {
             128,
         ),
         (
+            "ctb",
+            write_job(&format_ctb_encrypted::CtbEncryptedWriter, job),
+            128,
+        ),
+        (
             "cbddlp",
             write_job(&format_chitu::CbddlpWriter::default(), job),
             format_chitu::GREY_PASSES as u16 + 1,

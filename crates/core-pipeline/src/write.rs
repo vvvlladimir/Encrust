@@ -9,6 +9,7 @@ use core_slicer::{Sliced, Source, Windows};
 use format_anycubic::AnycubicWriter;
 use format_chitu::{CbddlpWriter, CtbWriter};
 use format_creality::{CxdlpV4Writer, CxdlpVersion, CxdlpWriter};
+use format_ctb_encrypted::CtbEncryptedWriter;
 use format_cws::CwsWriter;
 use format_gcode_zip::GcodeZipWriter;
 use format_goo::GooWriter;
@@ -119,6 +120,7 @@ impl Destination<'_> {
         match self.format {
             SlicedFormat::Goo => self.with(&GooWriter, sink, feed, observer),
             SlicedFormat::Ctb(version) => self.with(&CtbWriter::new(version), sink, feed, observer),
+            SlicedFormat::CtbEncrypted => self.with(&CtbEncryptedWriter, sink, feed, observer),
             SlicedFormat::Cbddlp(flavour) => {
                 self.with(&CbddlpWriter::new(flavour), sink, feed, observer)
             }

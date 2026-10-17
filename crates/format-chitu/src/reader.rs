@@ -6,7 +6,6 @@ use core_format::{
 use core_raster::Run;
 
 use crate::cbddlp::CbddlpFlavour;
-use crate::crypt::layer_crypt;
 use crate::layer::LAYER_DEF_BYTES;
 use crate::rle1;
 
@@ -339,7 +338,7 @@ impl<S: ReadSeek> OpenFile for OpenChitu<S> {
                 let entry = self.rows[index as usize];
                 self.reads.seek_to(entry.offset)?;
                 let mut data = self.reads.bytes(entry.size as usize)?;
-                layer_crypt(self.key, index, &mut data);
+                core_format::chitu_layer_crypt(self.key, index, &mut data);
                 core_format::decode_rle7(&data)
             }
             Family::Cbddlp => {

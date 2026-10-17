@@ -78,7 +78,8 @@ The output extension picks the format (ADR 0047): `.goo`, `.ctb`, `.cbddlp`, `.p
 `docs/formats/anycubic.md`, or a name with no extension for a directory of PNGs. A container
 name is refused without `--printer` or `--profile`: the panel is what the masks are drawn on,
 and a run that cannot write the file it was asked for fails rather than reports success.
-`--ctb-version` is read only by a `.ctb` name. A `.cxdlp` name is written at version 3 unless
+`--ctb-version` is read only by a `.ctb` name, and a `.ctb` is written encrypted when the
+printer profile says `output = "ctb-encrypted"` (ADR 0298). A `.cxdlp` name is written at version 3 unless
 the printer profile names version 4, as the Halot Mage line does (ADR 0168).
 
 Each container pays for grey differently. A `.cbddlp` carries it in eight one-bit passes, so

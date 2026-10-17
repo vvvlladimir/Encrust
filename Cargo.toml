@@ -37,6 +37,7 @@ format-gcode-zip = { path = "crates/format-gcode-zip" }
 format-creality = { path = "crates/format-creality" }
 format-svgx = { path = "crates/format-svgx" }
 format-cws = { path = "crates/format-cws" }
+format-ctb-encrypted = { path = "crates/format-ctb-encrypted" }
 net-sdcp = { path = "crates/net-sdcp" }
 net-prusalink = { path = "crates/net-prusalink" }
 printer-link = { path = "crates/printer-link" }
@@ -50,6 +51,10 @@ thiserror = "2.0"
 anyhow = "1.0"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
+# The encrypted `.ctb` container; see docs/decisions/0298.
+aes = "0.9"
+cbc = "0.2"
+sha2 = "0.11"
 zip = { version = "9.0", default-features = false, features = ["deflate-flate2"] }
 toml = "1.1"
 tracing = "0.1"
