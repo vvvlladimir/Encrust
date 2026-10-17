@@ -1690,3 +1690,9 @@ relief-no-pixels = the picture has no pixels
 ## web/opfs.rs
 
 web-no-storage = this browser has no private file storage
+
+## profiles.rs
+
+picker-no-machine = No machine yet. Add one in Machine and resin.
+picker-no-resin = No resins on this printer yet. Add them in Machine and resin.
+picker-edit-resin = Edit this resin...

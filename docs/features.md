@@ -433,8 +433,8 @@ address in a video player).
 - Choose where sliced files are saved and whether the window opens on the start page.
 - **Language:** the window follows the system's or the browser's first language, or the one
   you pick in Settings → General. A system language with no translation shows the window in
-  English, and Settings says so. English is complete; Russian is being translated, and what
-  is not translated yet shows in English. The test prints keep English file names in every
+  English, and Settings says so. English and Russian are complete; a message a translation
+  lacks shows in English. The test prints keep English file names in every
   language. The command line stays English.
 
 ---

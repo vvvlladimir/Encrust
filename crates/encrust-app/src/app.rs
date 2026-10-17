@@ -62,12 +62,16 @@ impl SlicerApp {
         theme::apply(&cc.egui_ctx);
         crate::updates::sweep();
 
-        let mut app = Self::default();
+        let prefs = crate::prefs::load();
+        crate::i18n::choose(prefs.language());
+        let mut app = Self {
+            prefs,
+            ..Self::default()
+        };
         let renamed = app
             .machine
             .slicing
             .load_user_profiles(&mut app.machine.status);
-        app.prefs = crate::prefs::load();
         if !renamed.is_empty() {
             app.prefs.follow(&renamed);
             app.prefs.save();

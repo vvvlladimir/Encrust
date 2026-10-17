@@ -149,6 +149,11 @@ impl Preferences {
         }
     }
 
+    /// The language the window is written in, or `None` for the system's.
+    pub fn language(&self) -> Option<Language> {
+        self.general.language
+    }
+
     /// Points every id kept here at where the catalogue moved its profile.
     pub fn follow(&mut self, renamed: &[Renamed]) {
         for moved in renamed {

@@ -20,6 +20,7 @@ pub enum Language {
 }
 
 impl Language {
+    /// Every language the window is written in, in the order the picker lists them.
     pub const ALL: [Self; 2] = [Self::English, Self::Russian];
 
     /// The language's own name for itself, which is never translated: a user lost in a

@@ -1,6 +1,6 @@
 # 0300. The window speaks the user's language through Fluent catalogues
 
-- **Status:** Superseded by 0301 (which system language wins only)
+- **Status:** Accepted
 - **Date:** 2026-10-17
 
 ## Context
@@ -12,7 +12,8 @@ that only maps keys to strings cannot carry it. The window also runs in a browse
 (ADR 0181), where nothing can be read from disk at start, and on threads, where a job
 writes the status line. egui draws every frame, so a language switched in the settings
 needs no restart if every string is looked up as it is drawn. IBM Plex, compiled in
-(`ui::fonts`), already covers Cyrillic.
+(`ui::fonts`), already covers Cyrillic. A system lists its languages in order, and a user
+may list a second one they do not read.
 
 ## Decision
 
@@ -26,8 +27,11 @@ translation falls back to English, and a key missing from English reads as itsel
 The language in use is a global the frame sets from `General::language` in
 `preferences.json`: a language the user chose, or `None` for the system's, which
 `sys-locale` 0.3 reads once — `navigator.languages` in a browser, through its `js`
-feature. The first of the system's languages the window has wins, and English otherwise.
-The General page offers the system's choice and every language, each named in itself.
+feature. Only the system's first language counts: the window uses it if it is written in
+it, and English otherwise, with a line under the language choice naming the untranslated
+tag (`de-DE`). A POSIX `C` or `POSIX` locale is English. The General page offers the
+system's choice and every language, each named in itself. A test print's file name is a
+fixed English one with no spaces in every language, since some printers refuse Cyrillic.
 
 English is the source: a test checks that every key the code names is in `en.ftl`, that
 every message there is used, and that a translation names only messages and arguments
@@ -60,8 +64,14 @@ Russian would go back to hand-built plurals in the code.
 No ids to invent, and a format translators know. Rejected: changing an English sentence
 orphans every translation of it, plurals are positional, and arguments are unnamed.
 
-### Fluent, and what it costs
+### The first of the system's languages the window has
+
+Right for a user who lists a second language they read, wrong for one who does not, and
+silent about it either way; a one-time choice in Settings serves the first user as well.
+
+### Fluent and the first language only, and what it costs
 
 Three dependencies, a thousand ids to keep apart, and no compile-time check that a key
 exists, which the test stands in for. A sentence built from fragments, such as a tool's
-scope set into its tooltip, still constrains the cases a translation may use.
+scope set into its tooltip, still constrains the cases a translation may use. A user whose
+first language is untranslated but whose second is gets English until they choose.
