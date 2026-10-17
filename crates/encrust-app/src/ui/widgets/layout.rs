@@ -1,6 +1,7 @@
 use egui::layers::ShapeIdx;
 use egui::{Frame, RichText, Sense, Ui, UiBuilder, vec2};
 
+use crate::i18n::tr;
 use crate::ui::theme;
 
 /// Where `describe` sends its text while a section's body is being drawn.
@@ -74,9 +75,7 @@ fn block<R>(
             .inner_margin(BODY_MARGIN)
             .show(ui, |ui| {
                 ui.spacing_mut().item_spacing.y = theme::ITEM_GAP;
-                let (inner, texts) = collecting(ui, id, add);
-                ui.data_mut(|data| data.insert_temp(id.with("texts"), texts));
-                inner
+                describing(ui, id, add)
             })
             .inner
     });
@@ -138,8 +137,8 @@ fn block_heading(
         child.data_mut(|data| data.insert_temp(id.with("open"), !open));
     }
 
-    let texts = child.data(|data| data.get_temp::<Vec<String>>(id.with("texts")));
-    if let Some(texts) = texts.filter(|texts| !texts.is_empty()) {
+    let texts = described(&child, id);
+    if !texts.is_empty() {
         help_mark(&mut child, &texts);
     }
 
@@ -162,6 +161,20 @@ fn block_heading(
             pressed
         })
         .inner
+}
+
+/// Draws the body of the block `id` with `describe` pointed at it, keeping what it said
+/// for the block's question mark, which is drawn before the body.
+pub fn describing<R>(ui: &mut Ui, id: egui::Id, add: impl FnOnce(&mut Ui) -> R) -> R {
+    let (inner, texts) = collecting(ui, id, add);
+    ui.data_mut(|data| data.insert_temp(id.with("texts"), texts));
+    inner
+}
+
+/// What the body of the block `id` described when it was last drawn.
+pub fn described(ui: &Ui, id: egui::Id) -> Vec<String> {
+    ui.data(|data| data.get_temp::<Vec<String>>(id.with("texts")))
+        .unwrap_or_default()
 }
 
 /// Runs `add` with `describe` pointed at this block, and returns what it described.
@@ -204,35 +217,39 @@ pub fn describe(ui: &mut Ui, text: &str) {
     }
 }
 
-/// Diameter of the help mark, and the most its text runs across before wrapping, points.
-const HELP_D: f32 = 13.0;
+/// The help glyph's size, the round target around it a pointer hits, and the most its text
+/// runs across before wrapping, points.
+const HELP_GLYPH: f32 = 14.0;
+const HELP_D: f32 = 20.0;
 const HELP_W: f32 = 280.0;
 
-/// The ringed question mark beside a title that reads out `texts`: on hover, and in a
-/// popup a click keeps open until the next click.
+/// The question mark beside a title that reads out `texts`: on hover, and in a popup a
+/// click keeps open until the next click. Faint at rest, so it never pulls the eye.
 pub fn help_mark<T: AsRef<str>>(ui: &mut Ui, texts: &[T]) {
     let colors = theme::colors();
     let (rect, response) = ui.allocate_exact_size(vec2(HELP_D, HELP_D), Sense::click());
+    let response = response.on_hover_cursor(egui::CursorIcon::PointingHand);
     let joined: Vec<&str> = texts.iter().map(AsRef::as_ref).collect();
     response.widget_info(|| {
         egui::WidgetInfo::labeled(egui::WidgetType::Button, true, joined.join(" "))
     });
-    let ink = if response.hovered() {
-        colors.text_mid
+    let open = egui::Popup::menu(&response).is_open();
+    let ink = if open {
+        colors.accent_soft
+    } else if response.hovered() {
+        colors.text_high
     } else {
-        colors.text_low
+        colors.text_low.gamma_multiply(0.75)
     };
     let painter = ui.painter();
-    painter.circle_stroke(
-        rect.center(),
-        HELP_D / 2.0 - 0.5,
-        egui::Stroke::new(1.0, ink),
-    );
+    if open || response.hovered() {
+        painter.circle_filled(rect.center(), HELP_D / 2.0, colors.hover);
+    }
     painter.text(
         rect.center(),
         egui::Align2::CENTER_CENTER,
-        "?",
-        theme::help_mark(),
+        crate::ui::icon::HELP,
+        theme::icon(HELP_GLYPH),
         ink,
     );
     super::focus_ring(ui, &response, egui::CornerRadius::same(255));
@@ -246,8 +263,7 @@ pub fn help_mark<T: AsRef<str>>(ui: &mut Ui, texts: &[T]) {
             );
         }
     };
-    let popup = egui::Popup::menu(&response);
-    let response = if popup.is_open() {
+    let response = if open {
         response
     } else {
         response.on_hover_ui(show)
@@ -427,7 +443,7 @@ pub fn meta(ui: &mut Ui, lines: &[String]) {
 
 /// Measured values, one to a row with a leader between the name and the value: the
 /// figures of a block are rows, never tiles.
-pub fn stats(ui: &mut Ui, entries: &[(&str, String)]) {
+pub fn stats(ui: &mut Ui, entries: &[(String, String)]) {
     readings(ui, entries);
 }
 
@@ -448,12 +464,12 @@ const VALUE_ROWS: usize = 2;
 ///
 /// A value too long for the row wraps and then is cut, so that the name beside it stays
 /// readable: nothing here is drawn over anything else.
-pub fn readings(ui: &mut Ui, entries: &[(&str, String)]) {
+pub fn readings(ui: &mut Ui, entries: &[(String, String)]) {
     let colors = theme::colors();
     for (key, value) in entries {
-        let name =
-            ui.painter()
-                .layout_no_wrap((*key).to_owned(), theme::reading(), colors.text_low);
+        let name = ui
+            .painter()
+            .layout_no_wrap(key.clone(), theme::reading(), colors.text_low);
         let room = ui.available_width() - name.size().x - READING_GAP;
         let mut job = egui::text::LayoutJob::simple(
             value.clone(),
@@ -526,7 +542,7 @@ pub fn dialog_head(ui: &mut Ui, glyph: &str, title: &str) -> bool {
                 .color(colors.text_high),
         );
         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-            super::icon_button(ui, crate::ui::icon::CANCEL, "Close  Esc").clicked()
+            super::icon_button(ui, crate::ui::icon::CANCEL, &tr!("dialog-close")).clicked()
         })
         .inner
     })

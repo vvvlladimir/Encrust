@@ -12,6 +12,7 @@ use anyhow::Context as _;
 use core_engine::project::{EXTENSION, Project, ProjectError, digest, load, read_from};
 
 use crate::files::{self, Handed, Wanted};
+use crate::i18n::tr;
 use crate::panels::Window;
 use crate::panels::frame_view;
 use crate::recent::picture;
@@ -46,11 +47,19 @@ enum Asking {
 }
 
 impl Asking {
-    /// What a button offers to do, and what the modal's line calls it.
-    fn verb(self) -> &'static str {
+    /// The button that saves first, then goes on.
+    fn save_and(self) -> String {
         match self {
-            Self::Close => "close",
-            Self::NewProject => "start a new project",
+            Self::Close => tr!("project-save-and-close"),
+            Self::NewProject => tr!("project-save-and-new"),
+        }
+    }
+
+    /// The button that goes on and lets the changes go.
+    fn without_saving(self) -> String {
+        match self {
+            Self::Close => tr!("project-close-without-saving"),
+            Self::NewProject => tr!("project-new-without-saving"),
         }
     }
 }
@@ -80,7 +89,7 @@ pub fn clear(window: &mut Window) {
     window.doc.history = History::default();
     window.doc.project.path = None;
     window.doc.project.saved = Some(digest(&captured(window).manifest));
-    window.machine.status = Status::Info("New project".to_owned());
+    window.machine.status = Status::Info(tr!("action-new-project"));
 }
 
 /// Asks for a project and opens it.
@@ -99,12 +108,11 @@ pub fn open(window: &mut Window, file: &Handed) {
     };
     let read = read
         .map_err(anyhow::Error::new)
-        .with_context(|| format!("cannot open the project {}", path.display()));
-    let Some(mut project) = window
-        .machine
-        .status
-        .report(&format!("Opened {}", path.display()), read)
-    else {
+        .with_context(|| tr!("project-cannot-open", path = path.display().to_string()));
+    let Some(mut project) = window.machine.status.report(
+        &tr!("status-opened", path = path.display().to_string()),
+        read,
+    ) else {
         return;
     };
     let preview = project.preview.take();
@@ -118,7 +126,11 @@ pub fn open(window: &mut Window, file: &Handed) {
         },
     );
     if let Some(note) = not_here.note() {
-        window.machine.status = Status::Info(format!("Opened {}; {note}", path.display()));
+        window.machine.status = Status::Info(tr!(
+            "project-opened-note",
+            path = path.display().to_string(),
+            note = note
+        ));
     }
     remember(window, &path, preview);
     window.doc.project.path = Some(path);
@@ -145,7 +157,7 @@ pub fn save_open(window: &mut Window) -> bool {
 #[cfg(not(target_arch = "wasm32"))]
 pub fn save_dialog(window: &mut Window) -> bool {
     let Some(path) = rfd::FileDialog::new()
-        .add_filter("Encrust project", &[EXTENSION])
+        .add_filter(tr!("filter-project"), &[EXTENSION])
         .set_file_name(format!("plate.{EXTENSION}"))
         .save_file()
     else {
@@ -183,16 +195,19 @@ fn write(window: &mut Window, path: PathBuf) -> bool {
     let digest = digest(&project.manifest);
     let written = picture::png(&picture::of_plate(&window.doc.scene))
         .map_err(anyhow::Error::new)
-        .context("cannot draw the project's picture")
+        .context(tr!("project-cannot-draw"))
         .and_then(|preview| {
             project.preview = preview;
             store(&path, &project).map_err(anyhow::Error::new)
         })
-        .with_context(|| format!("cannot write the project {}", path.display()));
+        .with_context(|| tr!("project-cannot-write", path = path.display().to_string()));
     let saved = window
         .machine
         .status
-        .report(&format!("Saved {}", path.display()), written)
+        .report(
+            &tr!("status-saved", name = path.display().to_string()),
+            written,
+        )
         .is_some();
     if saved {
         remember(window, &path, project.preview);
@@ -267,25 +282,21 @@ pub fn guard_close(ui: &egui::Ui, window: &mut Window) {
 
     let mut answered = None;
     egui::Modal::new(egui::Id::new("unsaved")).show(ui.ctx(), |ui| {
-        ui.label("This plate has changes that are not in a project file.");
+        ui.label(tr!("project-unsaved"));
         ui.add_space(8.0);
         ui.horizontal(|ui| {
-            let verb = asking.verb();
-            if ui.button(format!("Save and {verb}")).clicked() {
+            if ui.button(asking.save_and()).clicked() {
                 // Where to write is asked on the next frame, once this modal is gone:
                 // a file dialog opened from under it never comes back.
                 window.doc.project.saving = Some(asking);
                 window.doc.project.asking = None;
                 ui.ctx().request_repaint();
             }
-            if ui
-                .button(format!("{} without saving", first_capital(verb)))
-                .clicked()
-            {
+            if ui.button(asking.without_saving()).clicked() {
                 answered = Some(asking);
                 window.doc.project.asking = None;
             }
-            if ui.button("Keep working").clicked() {
+            if ui.button(tr!("project-keep-working")).clicked() {
                 window.doc.project.asking = None;
                 window.machine.updates.cancel_restart();
             }
@@ -308,14 +319,6 @@ fn go_on(ctx: &egui::Context, window: &mut Window, asking: Asking) {
 }
 
 /// A label that starts a button, from a verb that starts a sentence.
-fn first_capital(verb: &str) -> String {
-    let mut letters = verb.chars();
-    match letters.next() {
-        Some(first) => first.to_uppercase().collect::<String>() + letters.as_str(),
-        None => String::new(),
-    }
-}
-
 /// A name typed without the extension is still a project file; a dialog that already
 /// applied it is left alone.
 #[cfg(not(target_arch = "wasm32"))]

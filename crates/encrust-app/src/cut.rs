@@ -9,6 +9,7 @@ pub use core_engine::project::Keep;
 
 use core_engine::project::{Axis, CutState};
 
+use crate::i18n::tr;
 use crate::job::mend;
 use crate::scene::{ImportSummary, Imported, ObjectId, Scene, SceneObject, Shaped};
 use crate::status::Status;
@@ -118,10 +119,10 @@ impl CutTool {
     /// been cut away has nothing to hold.
     pub fn apply(&self, scene: &mut Scene, id: ObjectId) -> Status {
         let Some(object) = scene.get(id) else {
-            return Status::Error("nothing is selected to cut".to_owned());
+            return Status::Error(tr!("cut-nothing-selected"));
         };
         let Some(plane) = self.plane(object) else {
-            return Status::Error("the cut plane has no direction".to_owned());
+            return Status::Error(tr!("cut-no-direction"));
         };
         let position_mm = self.position_mm(object);
 
@@ -132,9 +133,7 @@ impl CutTool {
         // A plane that misses leaves the model whole. Replacing it with a copy of itself
         // would throw away its supports and its cavity for nothing.
         if halves.below.is_empty() || halves.above.is_empty() {
-            return Status::Error(format!(
-                "the plane misses {name}, so there is nothing to cut"
-            ));
+            return Status::Error(tr!("cut-misses", name = name));
         }
 
         let pins = self.pins.filter(|_| self.state.keep == Keep::Both);
@@ -145,8 +144,12 @@ impl CutTool {
         let up = plane.normal;
         let pieces: Vec<(String, Mesh, Vec3)> = match self.state.keep {
             Keep::Both => vec![
-                (format!("{name} (lower)"), halves.below, up),
-                (format!("{name} (upper)"), halves.above, -up),
+                (tr!("cut-lower-name", name = name.clone()), halves.below, up),
+                (
+                    tr!("cut-upper-name", name = name.clone()),
+                    halves.above,
+                    -up,
+                ),
             ],
             Keep::Below => vec![(name.clone(), halves.below, up)],
             Keep::Above => vec![(name.clone(), halves.above, -up)],
@@ -174,18 +177,23 @@ impl CutTool {
         }
         let pinned = match (pins, spots.len()) {
             (None, _) => String::new(),
-            (Some(_), 0) => "; the cut is too small for a pin".to_owned(),
-            (Some(_), placed) => format!(" with {placed} pin(s)"),
+            (Some(_), 0) => tr!("cut-too-small-for-pin"),
+            (Some(_), placed) => tr!("cut-with-pins", count = placed),
         };
         match halves.open_loops {
-            0 => Status::Info(format!(
-                "Cut {name} at {} {position_mm:.1} mm{pinned}{}",
-                self.state.axis.label(),
-                mending(mended)
+            0 => Status::Info(tr!(
+                "cut-done",
+                name = name,
+                axis = self.state.axis.label(),
+                position = format!("{position_mm:.1}"),
+                pinned = pinned,
+                mending = mending(mended)
             )),
-            open => Status::Info(format!(
-                "Cut {name}; {open} cut loops were open and left uncapped{}",
-                mending(mended)
+            open => Status::Info(tr!(
+                "cut-done-open",
+                name = name,
+                open = open,
+                mending = mending(mended)
             )),
         }
     }
@@ -241,7 +249,7 @@ fn drill_sockets(object: &mut SceneObject, spots: &[Vec3], up: Vec3, pins: Pins)
 /// its place. A model that is all one piece is left alone.
 pub fn split_parts(scene: &mut Scene, id: ObjectId) -> Status {
     let Some(object) = scene.get(id) else {
-        return Status::Error("nothing is selected to split".to_owned());
+        return Status::Error(tr!("cut-nothing-to-split"));
     };
     let name = object.name.clone();
     let mesh = object.hollow.shell().unwrap_or(&object.mesh);
@@ -249,19 +257,25 @@ pub fn split_parts(scene: &mut Scene, id: ObjectId) -> Status {
 
     let parts = split(&placed);
     if parts.len() < 2 {
-        return Status::Info(format!("{name} is one piece"));
+        return Status::Info(tr!("cut-one-piece", name = name));
     }
 
     let count = parts.len();
     scene.remove(id);
     let mut mended = 0;
     for (index, part) in parts.into_iter().enumerate() {
-        let (_, was_mended) = place(scene, format!("{name} (part {})", index + 1), part);
+        let (_, was_mended) = place(
+            scene,
+            tr!("cut-part-name", name = name.clone(), index = index + 1),
+            part,
+        );
         mended += usize::from(was_mended);
     }
-    Status::Info(format!(
-        "Split {name} into {count} parts{}",
-        mending(mended)
+    Status::Info(tr!(
+        "cut-split-done",
+        name = name,
+        count = count,
+        mending = mending(mended)
     ))
 }
 
@@ -305,8 +319,7 @@ fn place(scene: &mut Scene, name: String, mesh: Mesh) -> (ObjectId, bool) {
 fn mending(pieces: usize) -> String {
     match pieces {
         0 => String::new(),
-        1 => "; one piece was mended to close it".to_owned(),
-        pieces => format!("; {pieces} pieces were mended to close them"),
+        pieces => tr!("cut-mended", count = pieces),
     }
 }
 

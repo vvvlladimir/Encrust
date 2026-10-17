@@ -5,6 +5,7 @@
 use egui::{Align2, Pos2, RichText, Sense, Shape, Stroke, pos2, vec2};
 
 use super::{Light, colour_of, face, left};
+use crate::i18n::tr;
 use crate::network::{Network, Reading, Target};
 use crate::panels::Window;
 use crate::ui::{focus_ring, icon, theme};
@@ -47,7 +48,7 @@ pub fn ui(ui: &mut egui::Ui, window: &mut Window) -> f32 {
     }
     focus_ring(ui, &response, theme::R_CONTROL);
     response.widget_info(|| {
-        egui::WidgetInfo::labeled(egui::WidgetType::Button, true, "Printers on the network")
+        egui::WidgetInfo::labeled(egui::WidgetType::Button, true, tr!("ring-printers"))
     });
 
     if count == 1 {
@@ -239,7 +240,7 @@ fn row(ui: &mut egui::Ui, network: &Network, target: &Target<'_>) -> egui::Respo
             colors.text_mid,
         );
     }
-    response.on_hover_text(RichText::new("Open this printer").font(theme::small()))
+    response.on_hover_text(RichText::new(tr!("ring-open")).font(theme::small()))
 }
 
 #[cfg(test)]

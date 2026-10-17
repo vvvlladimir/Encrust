@@ -8,6 +8,7 @@ use std::sync::mpsc::{self, Receiver, TryRecvError};
 use printer_link::{Command, State, Task, Wire};
 
 use super::Trouble;
+use crate::i18n::tr;
 
 /// How many remembered prints are listed under a printer.
 const HISTORY_COUNT: usize = 8;
@@ -29,13 +30,13 @@ pub enum Errand {
 impl Errand {
     /// What the card says in place of its buttons while it runs, for an errand that keeps
     /// them waiting; reading prints and pictures leaves Pause and Stop in reach.
-    fn doing(&self) -> Option<&'static str> {
+    fn doing(&self) -> Option<String> {
         match self {
-            Self::Control(Command::Pause) => Some("Pausing"),
-            Self::Control(Command::Resume) => Some("Resuming"),
-            Self::Control(Command::Stop) => Some("Stopping"),
-            Self::Camera(true) => Some("Turning the camera on"),
-            Self::Camera(false) => Some("Turning the camera off"),
+            Self::Control(Command::Pause) => Some(tr!("errand-pausing")),
+            Self::Control(Command::Resume) => Some(tr!("errand-resuming")),
+            Self::Control(Command::Stop) => Some(tr!("errand-stopping")),
+            Self::Camera(true) => Some(tr!("errand-camera-on")),
+            Self::Camera(false) => Some(tr!("errand-camera-off")),
             Self::History | Self::Picture { .. } => None,
         }
     }
@@ -72,7 +73,7 @@ impl Picture {
 #[derive(Default)]
 pub struct Extras {
     /// What the card's buttons wait on, while it runs.
-    pub doing: Option<&'static str>,
+    pub doing: Option<String>,
     /// Why the last errand failed, until another is sent.
     pub trouble: Option<Trouble>,
     pub history: Option<Vec<Task>>,
@@ -107,7 +108,7 @@ impl Out {
         }
     }
 
-    pub(super) fn doing(&self) -> Option<&'static str> {
+    pub(super) fn doing(&self) -> Option<String> {
         self.errand.doing()
     }
 
@@ -117,7 +118,7 @@ impl Out {
             Ok(answer) => answer,
             Err(TryRecvError::Empty) => return false,
             Err(TryRecvError::Disconnected) => Err(Trouble {
-                message: "the errand ended without an answer".to_owned(),
+                message: tr!("errand-no-answer"),
                 unreachable: false,
             }),
         };

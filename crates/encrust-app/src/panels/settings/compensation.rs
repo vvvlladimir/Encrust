@@ -3,6 +3,7 @@
 
 use printer_profiles::{Compensation, layer_time_between, shrink_pct_between};
 
+use crate::i18n::tr;
 use crate::settings::{Calculator, Calculators};
 use egui::collapsing_header::CollapsingState;
 use egui::vec2;
@@ -27,7 +28,7 @@ const LAYER_TIME_RANGE: std::ops::RangeInclusive<f32> = -600.0..=600.0;
 /// The rows of the Compensation card: each group under the switch that turns it on, and
 /// the clock. See `docs/design/compensation.md`.
 pub(super) fn rows(ui: &mut egui::Ui, values: &mut Compensation, calculators: &mut Calculators) {
-    group(ui, "Shrinkage", &mut values.shrinkage_on, |ui| {
+    group(ui, &tr!("comp-shrinkage"), &mut values.shrinkage_on, |ui| {
         for (label, percent) in [
             ("X", &mut values.shrink_x_pct),
             ("Y", &mut values.shrink_y_pct),
@@ -35,19 +36,19 @@ pub(super) fn rows(ui: &mut egui::Ui, values: &mut Compensation, calculators: &m
         ] {
             number_row(ui, label, percent, "%", PCT_STEP, PCT_RANGE, 3);
         }
-        if secondary_button(ui, "", "Work it out from a measured part").clicked() {
+        if secondary_button(ui, "", &tr!("comp-from-measured")).clicked() {
             calculators.open = Some(Calculator::Shrinkage);
         }
     });
 
     let (hole_mm, outer_mm) = (&mut values.hole_offset_mm, &mut values.outer_offset_mm);
-    group(ui, "Tolerance", &mut values.tolerance_on, |ui| {
+    group(ui, &tr!("comp-tolerance"), &mut values.tolerance_on, |ui| {
         offsets(ui, hole_mm, outer_mm);
         number_row(
             ui,
-            "Every second layer",
+            &tr!("comp-every-second-layer"),
             &mut values.parity_offset_mm,
-            "mm",
+            &tr!("unit-mm"),
             OFFSET_STEP,
             OFFSET_RANGE,
             3,
@@ -60,24 +61,24 @@ pub(super) fn rows(ui: &mut egui::Ui, values: &mut Compensation, calculators: &m
     );
     group(
         ui,
-        "Bottom tolerance",
+        &tr!("comp-bottom-tolerance"),
         &mut values.bottom_tolerance_on,
         |ui| {
             offsets(ui, hole_mm, outer_mm);
         },
     );
 
-    subheading(ui, "Print time");
+    subheading(ui, &tr!("comp-print-time"));
     number_row(
         ui,
-        "Unaccounted per layer",
+        &tr!("comp-unaccounted"),
         &mut values.layer_time_s,
-        "s",
+        &tr!("unit-s"),
         SECOND_STEP,
         LAYER_TIME_RANGE,
         2,
     );
-    if secondary_button(ui, "", "Work it out from a finished print").clicked() {
+    if secondary_button(ui, "", &tr!("comp-from-print")).clicked() {
         calculators.open = Some(Calculator::LayerTime);
     }
 }
@@ -98,8 +99,9 @@ fn offsets(ui: &mut egui::Ui, hole_mm: &mut f32, outer_mm: &mut f32) {
         ui.add_space(theme::BLOCK_GAP);
         ui.vertical(|ui| {
             ui.add_space(diagram::SIZE / 2.0 - theme::ROW_H);
-            number_row(ui, "a", hole_mm, "mm", OFFSET_STEP, OFFSET_RANGE, 3);
-            number_row(ui, "b", outer_mm, "mm", OFFSET_STEP, OFFSET_RANGE, 3);
+            let mm = tr!("unit-mm");
+            number_row(ui, "a", hole_mm, &mm, OFFSET_STEP, OFFSET_RANGE, 3);
+            number_row(ui, "b", outer_mm, &mm, OFFSET_STEP, OFFSET_RANGE, 3);
         });
     });
 }
@@ -116,8 +118,8 @@ pub(super) fn calculator(
     };
     let (mut taken, mut closed) = (false, false);
     let title = match which {
-        Calculator::Shrinkage => "Shrinkage from a measured part",
-        Calculator::LayerTime => "Unaccounted time from a print",
+        Calculator::Shrinkage => tr!("comp-shrinkage-title"),
+        Calculator::LayerTime => tr!("comp-layer-time-title"),
     };
     // A modal of its own, so it stands over the Machine and resin window.
     let modal = egui::Modal::new(egui::Id::new("compensation-calculator"))
@@ -131,7 +133,7 @@ pub(super) fn calculator(
                         .color(theme::colors().text_high),
                 );
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                    closed = icon_button(ui, icon::CANCEL, "Close  Esc").clicked();
+                    closed = icon_button(ui, icon::CANCEL, &tr!("dialog-close")).clicked();
                 });
             });
             ui.add_space(6.0);
@@ -152,25 +154,26 @@ fn shrinkage(
     calculators: &mut Calculators,
     compensation: &mut Compensation,
 ) -> bool {
-    hint(ui, "A test part printed at 100 %, cured and measured cold.");
+    hint(ui, &tr!("comp-shrinkage-note"));
     ui.add_space(10.0);
     egui::Grid::new("shrinkage-calculator")
         .num_columns(4)
         .spacing(vec2(10.0, 6.0))
         .show(ui, |ui| {
             ui.label("");
-            for head in ["Drawn", "Measured", "Scale"] {
-                column_head(ui, head);
+            for head in [tr!("comp-drawn"), tr!("comp-measured"), tr!("comp-scale")] {
+                column_head(ui, &head);
             }
             ui.end_row();
             for (axis, label) in ["X", "Y", "Z"].into_iter().enumerate() {
                 axis_label(ui, axis, "");
                 for (name, size_mm) in [
-                    ("Drawn", &mut calculators.nominal_mm[axis]),
-                    ("Measured", &mut calculators.printed_mm[axis]),
+                    (tr!("comp-drawn"), &mut calculators.nominal_mm[axis]),
+                    (tr!("comp-measured"), &mut calculators.printed_mm[axis]),
                 ] {
                     let name = format!("{name} {label}");
-                    unit_field(ui, &name, size_mm, "mm", 0.01, 0.1..=400.0, Some(3), SIZE_W);
+                    let mm = tr!("unit-mm");
+                    unit_field(ui, &name, size_mm, &mm, 0.01, 0.1..=400.0, Some(3), SIZE_W);
                 }
                 let percent =
                     shrink_pct_between(calculators.nominal_mm[axis], calculators.printed_mm[axis]);
@@ -188,7 +191,7 @@ fn shrinkage(
             .iter()
             .find_map(|percent| limit_note(*percent, &PCT_RANGE, "%"))
     });
-    let take = take_button(ui, "Use these", found.is_some(), note.as_deref());
+    let take = take_button(ui, &tr!("comp-use-these"), found.is_some(), note.as_deref());
     if let (true, Some([x, y, z])) = (take, found) {
         compensation.shrink_x_pct = held(x, &PCT_RANGE);
         compensation.shrink_y_pct = held(y, &PCT_RANGE);
@@ -238,10 +241,12 @@ fn held(value: f32, range: &std::ops::RangeInclusive<f32>) -> f32 {
 fn limit_note(value: f32, range: &std::ops::RangeInclusive<f32>, unit: &str) -> Option<String> {
     let kept = held(value, range);
     (kept != value).then(|| {
-        format!(
-            "The field takes {} to {} {unit}, so it will be held at {kept:.2}.",
-            range.start(),
-            range.end()
+        tr!(
+            "comp-limit",
+            least = range.start().to_string(),
+            most = range.end().to_string(),
+            unit = unit.to_owned(),
+            kept = format!("{kept:.2}")
         )
     })
 }
@@ -261,18 +266,18 @@ fn layer_time(
     calculators: &mut Calculators,
     compensation: &mut Compensation,
 ) -> bool {
-    hint(ui, "Both times from the same print.");
+    hint(ui, &tr!("comp-same-print"));
     ui.add_space(10.0);
     egui::Grid::new("layer-time-calculator")
         .num_columns(4)
         .spacing(vec2(10.0, 6.0))
         .show(ui, |ui| {
-            clock_row(ui, "Predicted", &mut calculators.predicted);
-            clock_row(ui, "Actual", &mut calculators.actual);
-            row_label(ui, "Layers");
+            clock_row(ui, &tr!("comp-predicted"), &mut calculators.predicted);
+            clock_row(ui, &tr!("comp-actual"), &mut calculators.actual);
+            row_label(ui, &tr!("summary-layers"));
             unit_field(
                 ui,
-                "Layers",
+                &tr!("summary-layers"),
                 &mut calculators.layers,
                 "",
                 1.0,
@@ -296,17 +301,20 @@ fn layer_time(
         .show(ui, |ui| {
             ui.set_width(ui.available_width());
             ui.horizontal(|ui| {
-                row_label(ui, "Per layer");
+                row_label(ui, &tr!("comp-per-layer"));
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                     figure(
                         ui,
-                        &found.map_or_else(|| "—".to_owned(), |s| format!("{s:+.2} s")),
+                        &found.map_or_else(
+                            || "—".to_owned(),
+                            |s| tr!("value-s", value = format!("{s:+.2}")),
+                        ),
                     );
                 });
             });
         });
-    let note = found.and_then(|seconds| limit_note(seconds, &LAYER_TIME_RANGE, "s"));
-    let take = take_button(ui, "Use this", found.is_some(), note.as_deref());
+    let note = found.and_then(|seconds| limit_note(seconds, &LAYER_TIME_RANGE, &tr!("unit-s")));
+    let take = take_button(ui, &tr!("comp-use-this"), found.is_some(), note.as_deref());
     if let (true, Some(seconds)) = (take, found) {
         // A print that beat its estimate gives a negative correction, and clamping it at
         // zero leaves the estimate wrong in the same direction for ever (BUG-47).
@@ -328,15 +336,15 @@ fn row_label(ui: &mut egui::Ui, text: &str) {
 fn clock_row(ui: &mut egui::Ui, label: &str, clock: &mut [f32; 3]) {
     row_label(ui, label);
     for ((part, unit, most), value) in [
-        ("hours", "h", 99.0),
-        ("minutes", "m", 59.0),
-        ("seconds", "s", 59.0),
+        (tr!("comp-hours"), tr!("unit-h"), 99.0),
+        (tr!("comp-minutes"), tr!("unit-m"), 59.0),
+        (tr!("comp-seconds"), tr!("unit-s"), 59.0),
     ]
     .into_iter()
     .zip(clock.iter_mut())
     {
         let name = format!("{label} {part}");
-        unit_field(ui, &name, value, unit, 1.0, 0.0..=most, Some(0), CLOCK_W);
+        unit_field(ui, &name, value, &unit, 1.0, 0.0..=most, Some(0), CLOCK_W);
     }
     ui.end_row();
 }

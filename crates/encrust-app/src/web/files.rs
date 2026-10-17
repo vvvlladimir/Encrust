@@ -13,6 +13,7 @@ use wasm_bindgen_futures::{JsFuture, spawn_local};
 use web_sys::{Blob, FileList, HtmlInputElement};
 
 use crate::files::{Arrived, SIBLINGS, Wanted, together};
+use crate::i18n::tr;
 use crate::job::{Outcome, Progress, SliceRequest, run_into};
 use crate::web::opfs;
 
@@ -24,9 +25,9 @@ thread_local! {
 /// several files may be picked for one.
 pub fn pick(wanted: Wanted) {
     if let Err(error) = open_input(wanted) {
-        arrive(Arrived::Failed(format!(
-            "cannot open the file dialog: {}",
-            opfs::failed(error)
+        arrive(Arrived::Failed(tr!(
+            "web-cannot-open-dialog",
+            error = opfs::failed(error).to_string()
         )));
     }
 }
@@ -99,7 +100,11 @@ pub async fn slice_offered(
     };
     match offered {
         Ok(()) => outcome,
-        Err(error) => Outcome::Failed(format!("cannot hand over {name}: {error}")),
+        Err(error) => Outcome::Failed(tr!(
+            "web-cannot-hand-over",
+            name = name.to_owned(),
+            error = error.to_string()
+        )),
     }
 }
 
@@ -152,7 +157,11 @@ pub fn read_dropped(dropped: Vec<egui::DroppedFileHandle>) {
             match file.bytes_async().await {
                 Ok(bytes) => read.push((name, Arc::from(bytes))),
                 Err(error) => {
-                    return arrive(Arrived::Failed(format!("cannot read {name}: {error}")));
+                    return arrive(Arrived::Failed(tr!(
+                        "web-cannot-read",
+                        name = name.clone(),
+                        error = error.to_string()
+                    )));
                 }
             }
         }
@@ -174,10 +183,10 @@ async fn read_all(wanted: Wanted, files: FileList) {
                 read.push((file.name(), bytes));
             }
             Err(error) => {
-                arrive(Arrived::Failed(format!(
-                    "cannot read {}: {}",
-                    file.name(),
-                    opfs::failed(error)
+                arrive(Arrived::Failed(tr!(
+                    "web-cannot-read",
+                    name = file.name(),
+                    error = opfs::failed(error).to_string()
                 )));
                 return;
             }
@@ -196,9 +205,9 @@ async fn read_all(wanted: Wanted, files: FileList) {
         .filter(|handed| wanted.takes(handed.path()))
         .peekable();
     if asked_for.peek().is_none() {
-        return arrive(Arrived::Failed(format!(
-            "nothing to open among the files picked; pick a .{}",
-            wanted.extensions().join(", .")
+        return arrive(Arrived::Failed(tr!(
+            "web-nothing-to-open",
+            extensions = wanted.extensions().join(", .")
         )));
     }
     for handed in asked_for {

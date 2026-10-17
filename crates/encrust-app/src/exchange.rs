@@ -7,6 +7,7 @@ use core_engine::project::{DrainState, HollowState};
 use printer_profiles::{Catalogue, ForeignResin, Kind, ProfileError};
 
 use crate::files::Handed;
+use crate::i18n::tr;
 use crate::state::Machine;
 
 /// What a profile's file is called when it is written out.
@@ -35,8 +36,8 @@ pub fn import_file(
             .map_err(anyhow::Error::new)
             .and_then(|text| Ok(import(catalogue, kind, &text, path, printer)?))
     }
-    .with_context(|| format!("cannot import {}", path.display()));
-    let done = format!("Imported {}", path.display());
+    .with_context(|| tr!("exchange-cannot-import", path = path.display().to_string()));
+    let done = tr!("exchange-imported", path = path.display().to_string());
     machine.status.report(&done, imported)
 }
 
@@ -58,10 +59,11 @@ fn resin_of_sliced(
             catalogue.printer_for_panel(facts.width_px, facts.height_px, facts.machine.as_deref())
         })
         .map(str::to_owned)
-        .context("choose the printer this file was cut for first")?;
-    let stem = path
-        .file_stem()
-        .map_or_else(|| "Resin".into(), |stem| stem.to_string_lossy());
+        .context(tr!("exchange-choose-printer-file"))?;
+    let stem = path.file_stem().map_or_else(
+        || tr!("resin-resin"),
+        |stem| stem.to_string_lossy().into_owned(),
+    );
     Ok(catalogue.import_resin(facts.resin(&stem), Some(&printer))?)
 }
 
@@ -78,7 +80,7 @@ fn foreign_resin(
     let printer = printer
         .or_else(|| catalogue.printer_for_foreign(&foreign))
         .map(str::to_owned)
-        .context("choose the printer this resin was set up for first")?;
+        .context(tr!("exchange-choose-printer-resin"))?;
     Ok(catalogue.import_resin(foreign.resin, Some(&printer))?)
 }
 

@@ -5,6 +5,7 @@
 
 use std::io::{self, Seek, SeekFrom, Write};
 
+use crate::i18n::tr;
 use wasm_bindgen::JsCast;
 use wasm_bindgen_futures::JsFuture;
 use web_sys::{
@@ -105,7 +106,7 @@ fn storage() -> io::Result<StorageManager> {
     if storage.is_undefined() {
         return Err(io::Error::new(
             io::ErrorKind::Unsupported,
-            "this browser has no private file storage",
+            tr!("web-no-storage"),
         ));
     }
     Ok(storage.unchecked_into())

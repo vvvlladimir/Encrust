@@ -4,6 +4,7 @@ use printer_profiles::Kind;
 
 use super::presets;
 use super::scope::{self, Scoped};
+use crate::i18n::tr;
 use crate::job::HollowJob;
 use crate::panels::Window;
 use crate::state::{Doc, Tools};
@@ -39,7 +40,7 @@ pub fn ui(ui: &mut egui::Ui, window: &mut Window) {
         own: |object| &mut object.own.hollow,
         read: |object| &object.own.hollow,
     };
-    let own = section(ui, "Settings", None, |ui| {
+    let own = section(ui, &tr!("common-settings"), None, |ui| {
         let own = scope::switch(ui, window, &scoped);
         scope::editing(window, own, &scoped, |window| {
             presets::bar(
@@ -54,7 +55,7 @@ pub fn ui(ui: &mut egui::Ui, window: &mut Window) {
     })
     .flatten();
     scope::editing(window, own, &scoped, |window| settings(ui, window));
-    section(ui, "Already done", None, |ui| {
+    section(ui, &tr!("common-already-done"), None, |ui| {
         done(ui, window);
         drainage(ui, window);
     });
@@ -62,20 +63,20 @@ pub fn ui(ui: &mut egui::Ui, window: &mut Window) {
 
 /// The numbers the panel edits: the plate's, or the picked model's own.
 fn settings(ui: &mut egui::Ui, window: &mut Window) {
-    section(ui, "Shell", None, |ui| {
+    section(ui, &tr!("hollow-shell"), None, |ui| {
+        describe(ui, &tr!("hollow-shell-help"));
         modes(ui, window.tools);
         wall(ui, window);
     });
     // The body reads the switch as it stood before this frame's click; the knob's slide
     // draws the frame after, which catches it up.
     let mut on = window.tools.hollow.state.infill_on;
-    section_with_switch(ui, "Infill", &mut on, |ui| infill(ui, window.tools));
+    section_with_switch(ui, &tr!("hollow-infill"), &mut on, |ui| {
+        infill(ui, window.tools);
+    });
     window.tools.hollow.state.infill_on = on;
-    section(ui, "Keep solid", None, |ui| {
-        describe(
-            ui,
-            "Click the model to keep its wall solid there, alt-click a blocker to take it away.",
-        );
+    section(ui, &tr!("hollow-keep-solid"), None, |ui| {
+        describe(ui, &tr!("hollow-keep-solid-note"));
         blockers(ui, window);
     });
 }
@@ -84,8 +85,8 @@ fn settings(ui: &mut egui::Ui, window: &mut Window) {
 /// itself and the holes are the Drain tool's; see ADR 0190, 0198.
 fn drainage(ui: &mut egui::Ui, window: &mut Window) {
     if window.tools.drain.job.is_some() {
-        subheading(ui, "Drainage");
-        tone(ui, "Looking for trapped resin", theme::colors().text_mid);
+        subheading(ui, &tr!("hollow-drainage"));
+        tone(ui, &tr!("hollow-looking"), theme::colors().text_mid);
         progress_bar(ui, None);
         return;
     }
@@ -98,26 +99,22 @@ fn drainage(ui: &mut egui::Ui, window: &mut Window) {
         .sum();
     if trapped == 0 {
         if window.tools.drain.checked {
-            subheading(ui, "Drainage");
-            tone(
-                ui,
-                "The resin can get out of every cavity on the plate.",
-                theme::colors().ok,
-            );
+            subheading(ui, &tr!("hollow-drainage"));
+            tone(ui, &tr!("hollow-drains"), theme::colors().ok);
         }
         return;
     }
 
     let colors = theme::colors();
-    subheading(ui, "Drainage");
+    subheading(ui, &tr!("hollow-drainage"));
     notice(
         ui,
         icon::WARNING,
         colors.danger,
-        &format!("Resin is trapped in {trapped} place(s)"),
-        "Each one needs a hole of its own. Turn the x-ray on to see the space it fills.",
+        &tr!("hollow-trapped", count = trapped),
+        &tr!("hollow-trapped-note"),
     );
-    if secondary_button(ui, icon::DRAIN, "Drain the trapped resin").clicked() {
+    if secondary_button(ui, icon::DRAIN, &tr!("hollow-drain-trapped")).clicked() {
         crate::shortcuts::pick(window, Tool::Drain);
     }
 }
@@ -125,8 +122,8 @@ fn drainage(ui: &mut egui::Ui, window: &mut Window) {
 /// Which surface the wall is measured from.
 fn modes(ui: &mut egui::Ui, tools: &mut Tools) {
     let segments = [
-        Segment::new(HollowMode::Internal, "Inside"),
-        Segment::new(HollowMode::External, "Outside"),
+        Segment::new(HollowMode::Internal, tr!("hollow-inside")),
+        Segment::new(HollowMode::External, tr!("hollow-outside")),
     ];
     let width = ui.available_width();
     let mut chosen = tools.hollow.state.mode;
@@ -136,9 +133,9 @@ fn modes(ui: &mut egui::Ui, tools: &mut Tools) {
 
     describe(
         ui,
-        match tools.hollow.state.mode {
-            HollowMode::Internal => "The wall grows inward; the outside is untouched.",
-            HollowMode::External => "The wall grows outward, making a mould of the model.",
+        &match tools.hollow.state.mode {
+            HollowMode::Internal => tr!("hollow-inside-note"),
+            HollowMode::External => tr!("hollow-outside-note"),
         },
     );
 }
@@ -146,16 +143,16 @@ fn modes(ui: &mut egui::Ui, tools: &mut Tools) {
 fn wall(ui: &mut egui::Ui, window: &mut Window) {
     number_row(
         ui,
-        "Wall",
+        &tr!("hollow-wall"),
         &mut window.tools.hollow.state.thickness_mm,
-        "mm",
+        &tr!("unit-mm"),
         COARSE_STEP,
         MIN_WALL_MM..=MAX_WALL_MM,
         2,
     );
     number_row(
         ui,
-        "Precision",
+        &tr!("hollow-precision"),
         &mut window.tools.hollow.state.precision,
         "",
         FINE_STEP,
@@ -170,9 +167,9 @@ fn wall(ui: &mut egui::Ui, window: &mut Window) {
     );
     describe(
         ui,
-        &format!(
-            "Precision is how smooth the cavity comes out, on a {lattice_mm:.2} mm lattice. It is \
-             not the layer height.",
+        &tr!(
+            "hollow-precision-note",
+            lattice = format!("{lattice_mm:.2}")
         ),
     );
 }
@@ -193,16 +190,16 @@ fn widest(doc: &Doc) -> f32 {
 fn infill(ui: &mut egui::Ui, tools: &mut Tools) {
     if !tools.hollow.state.infill_on {
         ui.add_space(2.0);
-        describe(ui, "The cavity is left empty.");
+        describe(ui, &tr!("hollow-empty"));
         return;
     }
 
     nested(ui, |ui| {
         ui.add_space(2.0);
         let segments = [
-            Segment::new(InfillPattern::Hive, "Hive"),
-            Segment::new(InfillPattern::Grid, "Grid"),
-            Segment::new(InfillPattern::Scaffold, "Scaffold"),
+            Segment::new(InfillPattern::Hive, tr!("hollow-hive")),
+            Segment::new(InfillPattern::Grid, tr!("hollow-grid")),
+            Segment::new(InfillPattern::Scaffold, tr!("hollow-scaffold")),
         ];
         let width = ui.available_width();
         Segmented::new(&segments)
@@ -212,9 +209,9 @@ fn infill(ui: &mut egui::Ui, tools: &mut Tools) {
         ui.add_space(2.0);
         number_row(
             ui,
-            "Cell",
+            &tr!("hollow-cell"),
             &mut tools.hollow.state.infill.size_mm,
-            "mm",
+            &tr!("unit-mm"),
             COARSE_STEP,
             MIN_CELL_MM..=MAX_CELL_MM,
             1,
@@ -222,7 +219,7 @@ fn infill(ui: &mut egui::Ui, tools: &mut Tools) {
         let mut percent = tools.hollow.state.infill.density * 100.0;
         number_row(
             ui,
-            "Density",
+            &tr!("hollow-density"),
             &mut percent,
             "%",
             COARSE_STEP,
@@ -234,11 +231,9 @@ fn infill(ui: &mut egui::Ui, tools: &mut Tools) {
         ui.add_space(2.0);
         describe(
             ui,
-            &format!(
-                "{:.2} mm walls. Hive and Grid stand on the plate; Scaffold also braces \
-                 sideways. Every cell is open at the cavity's floor and ceiling, so resin \
-                 runs from cell to cell towards a hole.",
-                tools.hollow.state.infill.thickness_mm()
+            &tr!(
+                "hollow-infill-note",
+                walls = format!("{:.2}", tools.hollow.state.infill.thickness_mm())
             ),
         );
     });
@@ -248,9 +243,9 @@ fn infill(ui: &mut egui::Ui, tools: &mut Tools) {
 fn blockers(ui: &mut egui::Ui, window: &mut Window) {
     number_row(
         ui,
-        "Blocker size",
+        &tr!("hollow-blocker-size"),
         &mut window.tools.hollow.state.blocker_mm,
-        "mm",
+        &tr!("unit-mm"),
         COARSE_STEP,
         0.5..=40.0,
         1,
@@ -267,7 +262,13 @@ fn blockers(ui: &mut egui::Ui, window: &mut Window) {
     }
 
     ui.add_space(4.0);
-    if secondary_button(ui, icon::REMOVE, &format!("Clear {placed} blocker(s)")).clicked() {
+    if secondary_button(
+        ui,
+        icon::REMOVE,
+        &tr!("hollow-clear-blockers", count = placed),
+    )
+    .clicked()
+    {
         for object in window.doc.scene.targets_mut() {
             object.hollow.clear_blockers();
         }
@@ -284,16 +285,19 @@ pub fn action(ui: &mut egui::Ui, window: &mut Window) {
 
 fn start(ui: &mut egui::Ui, window: &mut Window) {
     let blocked = window.tools.hollow.blocker(&window.doc.scene);
-    let what = format!("Cuts a cavity inside {}.", window.doc.scene.scope());
-    if primary_button(ui, icon::HOLLOW, "Hollow", blocked.is_none())
+    let what = tr!("hollow-tooltip", scope = window.doc.scene.scope());
+    if primary_button(ui, icon::HOLLOW, &tr!("hollow-hollow"), blocked.is_none())
         .on_hover_text(what)
         .clicked()
     {
         let started = window.tools.hollow.start(&window.doc.scene);
-        window.machine.status.report("Hollowing", started);
+        window
+            .machine
+            .status
+            .report(&tr!("hollow-hollowing"), started);
     }
     if let Some(reason) = blocked {
-        ui.vertical_centered(|ui| tone(ui, reason, theme::colors().text_low));
+        ui.vertical_centered(|ui| tone(ui, &reason, theme::colors().text_low));
     }
 }
 
@@ -305,7 +309,7 @@ pub(super) fn running(ui: &mut egui::Ui, job: &HollowJob) {
 
     ui.add_space(4.0);
     ui.add_enabled_ui(!job.is_cancelling(), |ui| {
-        if secondary_button(ui, icon::CANCEL, "Cancel").clicked() {
+        if secondary_button(ui, icon::CANCEL, &tr!("common-cancel")).clicked() {
             job.cancel();
         }
     });
@@ -332,8 +336,11 @@ fn done(ui: &mut egui::Ui, window: &mut Window) {
     stats(
         ui,
         &[
-            ("Hollowed", hollowed.to_string()),
-            ("Resin saved", format!("{:.1} ml", saved / 1000.0)),
+            (tr!("hollow-hollowed"), hollowed.to_string()),
+            (
+                tr!("hollow-resin-saved"),
+                tr!("value-ml", value = format!("{:.1}", saved / 1000.0)),
+            ),
         ],
     );
 
@@ -349,10 +356,7 @@ fn done(ui: &mut egui::Ui, window: &mut Window) {
         ui.add_space(4.0);
         hint(
             ui,
-            &format!(
-                "This model needed more memory than the budget allows, so the cavity was cut on \
-                 a {voxel_mm:.2} mm lattice.",
-            ),
+            &tr!("hollow-coarsened", lattice = format!("{voxel_mm:.2}")),
         );
     }
 
@@ -364,14 +368,11 @@ fn done(ui: &mut egui::Ui, window: &mut Window) {
     });
     if stale {
         ui.add_space(4.0);
-        hint(
-            ui,
-            "The numbers have moved since. Hollow again to catch up.",
-        );
+        hint(ui, &tr!("hollow-stale"));
     }
 
     ui.add_space(4.0);
-    if secondary_button(ui, icon::REMOVE, "Make solid again").clicked() {
+    if secondary_button(ui, icon::REMOVE, &tr!("hollow-make-solid")).clicked() {
         for object in window.doc.scene.targets_mut() {
             object.hollow.clear();
         }

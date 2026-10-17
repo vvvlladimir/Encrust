@@ -8,6 +8,7 @@ use core_volume::ModelHollow;
 use printer_profiles::{MaterialProfile, PrinterProfile, SupportProfile};
 use rayon::prelude::*;
 
+use crate::i18n::tr;
 use crate::job::pipeline::{thread_pool, worker_threads};
 use crate::scene::{ObjectId, Scene, SceneObject};
 
@@ -153,9 +154,9 @@ impl OrientJob {
         match self.outcome.try_recv() {
             Ok(outcome) => Some(outcome),
             Err(TryRecvError::Empty) => None,
-            Err(TryRecvError::Disconnected) => Some(OrientOutcome::Failed(
-                "the orientation thread stopped without finishing".to_owned(),
-            )),
+            Err(TryRecvError::Disconnected) => {
+                Some(OrientOutcome::Failed(tr!("job-thread-stopped-orientation")))
+            }
         }
     }
 }
@@ -279,7 +280,7 @@ fn run(request: &OrientRequest) -> OrientOutcome {
                 };
                 let poses = choose(&printed, &settings, &task.support, request.proof.as_ref())?;
                 if poses.is_empty() {
-                    return Err("the search found no orientation".to_owned());
+                    return Err(tr!("job-orient-none"));
                 }
                 Ok(Turn {
                     id: task.id,

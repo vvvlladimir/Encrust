@@ -10,6 +10,7 @@ pub mod sheet;
 use egui::{Align2, Color32, RichText, Sense, StrokeKind, pos2, vec2};
 use printer_link::State;
 
+use crate::i18n::tr;
 use crate::network::{Network, Reach, Reading, Trouble};
 use crate::ui::{focus_ring, hint, icon, icon_button, progress_bar, theme, tone};
 
@@ -70,7 +71,7 @@ pub fn destination(
     ui.horizontal(|ui| {
         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
             if let Some(target) = &target
-                && icon_button(ui, icon::OPEN_SHEET, "Open the printer").clicked()
+                && icon_button(ui, icon::OPEN_SHEET, &tr!("card-open-printer")).clicked()
             {
                 chosen = Some(Chosen::Open(target.key()));
             }
@@ -98,7 +99,7 @@ pub fn destination(
 #[derive(Debug, Clone, PartialEq)]
 struct Note {
     line: String,
-    advice: Option<&'static str>,
+    advice: Option<String>,
 }
 
 impl Note {
@@ -124,9 +125,7 @@ fn machine_notes(network: &Network, machine: &printer_profiles::NetworkMachine) 
         notes.push(Note::of(trouble));
     }
     if let Some(trouble) = &network.trouble {
-        notes.push(Note::plain(
-            "The search could not go out on any network".to_owned(),
-        ));
+        notes.push(Note::plain(tr!("card-search-failed")));
         notes.push(Note::of(trouble));
     }
     let address = machine.address.trim();
@@ -134,7 +133,10 @@ fn machine_notes(network: &Network, machine: &printer_profiles::NetworkMachine) 
         if silent.to_string() != address {
             continue;
         }
-        notes.push(Note::plain(format!("Nothing answered at {silent}")));
+        notes.push(Note::plain(tr!(
+            "card-nothing-answered",
+            address = silent.to_string()
+        )));
         notes.extend(trouble.as_ref().map(Note::of));
     }
     notes
@@ -213,9 +215,9 @@ fn destination_row(
     let response = if !notes.is_empty() && ui.rect_contains_pointer(status) {
         response.on_hover_ui(|ui| note_lines(ui, notes))
     } else if several {
-        response.on_hover_text("The printer this profile sends to; press for the others it lists")
+        response.on_hover_text(tr!("card-destination-several"))
     } else {
-        response.on_hover_text("The printer this profile sends to")
+        response.on_hover_text(tr!("card-destination"))
     };
     response.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::ComboBox, several, name));
     response
@@ -237,7 +239,7 @@ fn note_lines(ui: &mut egui::Ui, notes: &[Note]) {
     ui.set_max_width(280.0);
     for note in notes {
         tone(ui, &note.line, theme::colors().warn);
-        if let Some(advice) = note.advice {
+        if let Some(advice) = &note.advice {
             hint(ui, advice);
         }
     }
@@ -288,7 +290,7 @@ fn picture_of(ui: &mut egui::Ui, texture: &egui::TextureHandle, size: egui::Vec2
 fn trouble_lines(ui: &mut egui::Ui, trouble: &Trouble) {
     tone(ui, &trouble.message, theme::colors().warn);
     if let Some(advice) = trouble.advice() {
-        hint(ui, advice);
+        hint(ui, &advice);
     }
 }
 
@@ -296,17 +298,13 @@ fn trouble_lines(ui: &mut egui::Ui, trouble: &Trouble) {
 /// quiet. Drawn under a list of printers, in the Export tool and the printer settings.
 pub fn scan_notes(ui: &mut egui::Ui, network: &Network) {
     if let Some(trouble) = &network.trouble {
-        tone(
-            ui,
-            "The search could not go out on any network",
-            theme::colors().warn,
-        );
+        tone(ui, &tr!("card-search-failed"), theme::colors().warn);
         trouble_lines(ui, trouble);
     }
     for (address, trouble) in &network.silent {
         tone(
             ui,
-            &format!("Nothing answered at {address}"),
+            &tr!("card-nothing-answered", address = address.to_string()),
             theme::colors().warn,
         );
         if let Some(trouble) = trouble {
@@ -332,18 +330,17 @@ fn face(reach: Reach, reading: Option<&Reading>) -> Face {
     match reading {
         Some(Reading::State(state)) => of_state(state),
         Some(Reading::Failed(_)) => Face {
-            word: "Not answering".to_owned(),
+            word: tr!("card-not-answering"),
             light: Light::Down,
             job: None,
             warmth: None,
         },
         None => Face {
             word: match reach {
-                Reach::Answered => "Connecting",
-                Reach::Silent => "Not answering",
-                Reach::Unasked => "Not asked yet",
-            }
-            .to_owned(),
+                Reach::Answered => tr!("card-connecting"),
+                Reach::Silent => tr!("card-not-answering"),
+                Reach::Unasked => tr!("card-not-asked"),
+            },
             light: match reach {
                 Reach::Silent => Light::Down,
                 Reach::Answered | Reach::Unasked => Light::Unknown,
@@ -362,11 +359,11 @@ fn paused(state: &State) -> bool {
 fn of_state(state: &State) -> Face {
     let stage = state.stage.as_deref();
     let (word, light) = if paused(state) {
-        ("Paused".to_owned(), Light::Held)
+        (tr!("card-paused"), Light::Held)
     } else if state.busy {
         (capitalised(stage.unwrap_or(&state.state)), Light::Working)
     } else {
-        ("Ready".to_owned(), Light::Ready)
+        (tr!("card-ready"), Light::Ready)
     };
     Face {
         word,
@@ -380,10 +377,10 @@ fn job(state: &State) -> Option<Job> {
     let file = state.file.clone()?;
     if !state.busy {
         let ended = match (&state.error, state.stage.as_deref()) {
-            (Some(error), _) => format!("Stopped: {error}"),
-            (None, Some("complete")) => "Finished".to_owned(),
-            (None, Some("stopped")) => "Stopped".to_owned(),
-            (None, _) => "Last print".to_owned(),
+            (Some(error), _) => tr!("card-stopped-error", error = error.clone()),
+            (None, Some("complete")) => tr!("card-finished"),
+            (None, Some("stopped")) => tr!("card-stopped"),
+            (None, _) => tr!("card-last-print"),
         };
         return Some(Job {
             file,
@@ -393,7 +390,7 @@ fn job(state: &State) -> Option<Job> {
     }
     let mut parts = Vec::new();
     if let (Some(layer), Some(count)) = (state.layer, state.layer_count) {
-        parts.push(format!("Layer {layer} of {count}"));
+        parts.push(tr!("card-layer-of", layer = layer, count = count));
     }
     if let Some(remaining_s) = state.remaining_s {
         parts.push(left(remaining_s));
@@ -406,10 +403,15 @@ fn job(state: &State) -> Option<Job> {
 }
 
 fn warmth(state: &State) -> Option<String> {
-    let readings: Vec<String> = [("Light source", state.uv_led_c), ("Hood", state.chamber_c)]
-        .into_iter()
-        .filter_map(|(name, celsius)| celsius.map(|c| format!("{name} {c:.0} °C")))
-        .collect();
+    let readings: Vec<String> = [
+        (tr!("card-light-source"), state.uv_led_c),
+        (tr!("card-hood"), state.chamber_c),
+    ]
+    .into_iter()
+    .filter_map(|(name, celsius)| {
+        celsius.map(|c| tr!("card-celsius", name = name, value = format!("{c:.0}")))
+    })
+    .collect();
     (!readings.is_empty()).then(|| readings.join(" · "))
 }
 
@@ -417,10 +419,10 @@ fn warmth(state: &State) -> Option<String> {
 fn left(seconds: u64) -> String {
     let minutes = seconds.div_ceil(60);
     match (minutes / 60, minutes % 60) {
-        (0, 0) => "Almost done".to_owned(),
-        (0, minutes) => format!("{minutes} min left"),
-        (hours, 0) => format!("{hours} h left"),
-        (hours, minutes) => format!("{hours} h {minutes} min left"),
+        (0, 0) => tr!("card-almost-done"),
+        (0, minutes) => tr!("card-minutes-left", minutes = minutes),
+        (hours, 0) => tr!("card-hours-left", hours = hours),
+        (hours, minutes) => tr!("card-time-left", hours = hours, minutes = minutes),
     }
 }
 

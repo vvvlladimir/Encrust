@@ -5,6 +5,7 @@
 
 use egui::{Key, KeyboardShortcut, Modifiers};
 
+use crate::i18n::tr;
 use crate::panels::{
     Window, duplicate_selection, frame_view, section, slice_this_plate, toggle_settings,
 };
@@ -41,33 +42,33 @@ pub enum Action {
 
 impl Action {
     /// What the sheet, a tooltip and a menu row call this action.
-    pub fn label(self) -> &'static str {
+    pub fn label(self) -> String {
         match self {
             Self::Pick(tool) => tool.label(),
-            Self::Undo => "Undo",
-            Self::Redo => "Redo",
-            Self::SelectAll => "Select all",
-            Self::Deselect => "Deselect",
-            Self::Duplicate => "Duplicate",
-            Self::Remove => "Remove from the plate",
-            Self::View(step) if step > 0 => "Next view",
-            Self::View(_) => "Previous view",
-            Self::FrameView => "Frame the view",
-            Self::Settings => "Settings",
-            Self::Sheet => "This sheet",
-            Self::Find => "Find",
-            Self::Step(1) => "One layer on",
-            Self::Step(-1) => "One layer back",
-            Self::Step(layers) if layers > 0 => "Ten layers on",
-            Self::Step(_) => "Ten layers back",
-            Self::Play => "Play",
-            Self::NewPlate => "New plate",
-            Self::NewProject => "New project",
-            Self::OpenProject => "Open a project",
-            Self::SaveProject => "Save the project",
-            Self::SaveProjectAs => "Save the project as",
-            Self::OpenModel => "Import a model",
-            Self::Slice => "Slice",
+            Self::Undo => tr!("action-undo"),
+            Self::Redo => tr!("action-redo"),
+            Self::SelectAll => tr!("action-select-all"),
+            Self::Deselect => tr!("action-deselect"),
+            Self::Duplicate => tr!("action-duplicate"),
+            Self::Remove => tr!("action-remove"),
+            Self::View(step) if step > 0 => tr!("action-next-view"),
+            Self::View(_) => tr!("action-previous-view"),
+            Self::FrameView => tr!("action-frame-view"),
+            Self::Settings => tr!("action-settings"),
+            Self::Sheet => tr!("action-sheet"),
+            Self::Find => tr!("action-find"),
+            Self::Step(1) => tr!("action-layer-on"),
+            Self::Step(-1) => tr!("action-layer-back"),
+            Self::Step(layers) if layers > 0 => tr!("action-ten-layers-on"),
+            Self::Step(_) => tr!("action-ten-layers-back"),
+            Self::Play => tr!("action-play"),
+            Self::NewPlate => tr!("action-new-plate"),
+            Self::NewProject => tr!("action-new-project"),
+            Self::OpenProject => tr!("action-open-project"),
+            Self::SaveProject => tr!("action-save-project"),
+            Self::SaveProjectAs => tr!("action-save-project-as"),
+            Self::OpenModel => tr!("action-import-model"),
+            Self::Slice => tr!("action-slice"),
         }
     }
 }
@@ -83,13 +84,13 @@ pub enum Group {
 }
 
 impl Group {
-    pub fn label(self) -> &'static str {
+    pub fn label(self) -> String {
         match self {
-            Self::Tools => "Tools, by their place on the rail",
-            Self::Plate => "The plate",
-            Self::Window => "The window",
-            Self::Layers => "The layers",
-            Self::Files => "Files",
+            Self::Tools => tr!("shortcut-group-tools"),
+            Self::Plate => tr!("shortcut-group-plate"),
+            Self::Window => tr!("shortcut-group-window"),
+            Self::Layers => tr!("shortcut-group-layers"),
+            Self::Files => tr!("shortcut-group-files"),
         }
     }
 }
@@ -106,8 +107,8 @@ pub struct Binding {
 /// for it, read by nothing.
 pub struct Gesture {
     pub group: Group,
-    pub label: &'static str,
-    pub keys: &'static str,
+    pub label: fn() -> String,
+    pub keys: fn() -> String,
 }
 
 const fn plain(key: Key) -> KeyboardShortcut {
@@ -206,58 +207,58 @@ pub const BINDINGS: &[Binding] = &[
 pub const GESTURES: &[Gesture] = &[
     Gesture {
         group: Group::Window,
-        label: "Move between the controls",
-        keys: "Tab, Shift Tab",
+        label: || tr!("gesture-move-focus"),
+        keys: || tr!("gesture-move-focus-keys"),
     },
     Gesture {
         group: Group::Window,
-        label: "Press the control in focus",
-        keys: "Enter or Space",
+        label: || tr!("gesture-press-focus"),
+        keys: || tr!("gesture-press-focus-keys"),
     },
     Gesture {
         group: Group::Window,
-        label: "Leave the control in focus",
-        keys: "Esc",
+        label: || tr!("gesture-leave-focus"),
+        keys: || tr!("gesture-leave-focus-keys"),
     },
     Gesture {
         group: Group::Plate,
-        label: "Add to the selection",
-        keys: "Cmd click",
+        label: || tr!("gesture-add-selection"),
+        keys: || tr!("gesture-add-selection-keys"),
     },
     Gesture {
         group: Group::Plate,
-        label: "Pick everything between, in the list",
-        keys: "Shift click",
+        label: || tr!("gesture-pick-between"),
+        keys: || tr!("gesture-pick-between-keys"),
     },
     Gesture {
         group: Group::Window,
-        label: "Orbit",
-        keys: "Drag",
+        label: || tr!("gesture-orbit"),
+        keys: || tr!("gesture-orbit-keys"),
     },
     Gesture {
         group: Group::Window,
-        label: "Pan",
-        keys: "Right drag",
+        label: || tr!("gesture-pan"),
+        keys: || tr!("gesture-pan-keys"),
     },
     Gesture {
         group: Group::Window,
-        label: "Zoom",
-        keys: "Scroll",
+        label: || tr!("gesture-zoom"),
+        keys: || tr!("gesture-zoom-keys"),
     },
     Gesture {
         group: Group::Layers,
-        label: "Zoom into the mask",
-        keys: "Scroll or pinch",
+        label: || tr!("gesture-zoom-mask"),
+        keys: || tr!("gesture-zoom-mask-keys"),
     },
     Gesture {
         group: Group::Layers,
-        label: "Move the mask",
-        keys: "Drag",
+        label: || tr!("gesture-move-mask"),
+        keys: || tr!("gesture-move-mask-keys"),
     },
     Gesture {
         group: Group::Layers,
-        label: "Show the whole mask",
-        keys: "Double click",
+        label: || tr!("gesture-whole-mask"),
+        keys: || tr!("gesture-whole-mask-keys"),
     },
 ];
 
@@ -411,7 +412,7 @@ pub fn text(action: Action) -> String {
 pub fn tooltip(action: Action) -> String {
     let keys = text(action);
     if keys.is_empty() {
-        return action.label().to_owned();
+        return action.label();
     }
     format!("{}  {keys}", action.label())
 }
@@ -537,7 +538,7 @@ pub(crate) fn pick(window: &mut Window, tool: Tool) {
 fn remove(window: &mut Window) {
     let gone = window.doc.scene.remove_selected();
     if gone > 0 {
-        window.machine.status = Status::Info(format!("Removed {gone} model(s)"));
+        window.machine.status = Status::Info(tr!("status-removed-models", count = gone));
     }
 }
 

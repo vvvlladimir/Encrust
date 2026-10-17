@@ -15,6 +15,7 @@ use core_volume::ModelHollow;
 use printer_profiles::{Raft, SupportProfile};
 
 use crate::drain::Traps;
+use crate::i18n::tr;
 
 /// A mesh with what the window keeps beside it: its hierarchy, its centre of mass and what
 /// is wrong with it. Built where the mesh is made, on a worker, since on a million faces it
@@ -103,18 +104,16 @@ impl ImportSummary {
         let diagnostics = &self.diagnostics;
         let mut lines = Vec::new();
         if diagnostics.boundary_edges > 0 {
-            lines.push(format!(
-                "The surface is not closed: {} edges have nothing on the other side",
-                diagnostics.boundary_edges
+            lines.push(tr!("defect-open", count = diagnostics.boundary_edges));
+        }
+        if diagnostics.degenerate_faces > 0 {
+            lines.push(tr!(
+                "defect-degenerate",
+                count = diagnostics.degenerate_faces
             ));
         }
-        for (count, line) in [
-            (diagnostics.degenerate_faces, "faces with no area"),
-            (diagnostics.duplicate_faces, "faces drawn twice over"),
-        ] {
-            if count > 0 {
-                lines.push(format!("{count} {line}"));
-            }
+        if diagnostics.duplicate_faces > 0 {
+            lines.push(tr!("defect-duplicate", count = diagnostics.duplicate_faces));
         }
         lines
     }
@@ -125,9 +124,7 @@ impl ImportSummary {
         if folded == 0 {
             return Vec::new();
         }
-        vec![format!(
-            "{folded} edges where faces lie folded onto each other, sliced as they stand"
-        )]
+        vec![tr!("note-folded", count = folded)]
     }
 
     /// What repair changed on the way in.
@@ -135,21 +132,23 @@ impl ImportSummary {
     /// Merged vertices are not among them: an STL stores every triangle on its own, so
     /// every STL merges thousands and it says nothing about the model.
     pub fn repairs(&self) -> Vec<String> {
-        [
-            (self.faces_removed, "collapsed or doubled faces removed"),
-            (
-                self.orientation.flipped_faces,
-                "faces turned the right way round",
-            ),
-            (
-                self.orientation.inverted_shells,
-                "shells turned the right way out",
-            ),
-        ]
-        .iter()
-        .filter(|(count, _)| *count > 0)
-        .map(|(count, what)| format!("Repaired: {count} {what}"))
-        .collect()
+        let mut lines = Vec::new();
+        if self.faces_removed > 0 {
+            lines.push(tr!("repaired-faces-removed", count = self.faces_removed));
+        }
+        if self.orientation.flipped_faces > 0 {
+            lines.push(tr!(
+                "repaired-flipped",
+                count = self.orientation.flipped_faces
+            ));
+        }
+        if self.orientation.inverted_shells > 0 {
+            lines.push(tr!(
+                "repaired-inverted",
+                count = self.orientation.inverted_shells
+            ));
+        }
+        lines
     }
 }
 
@@ -462,7 +461,7 @@ impl Default for Scene {
 
 /// What a plate nobody has renamed is called.
 fn plate_name(index: usize) -> String {
-    format!("Plate {}", index + 1)
+    tr!("scene-plate-name", index = index + 1)
 }
 
 impl Scene {
@@ -572,8 +571,8 @@ impl Scene {
         let name = self.plates.get(plate as usize)?;
         let name = (1..)
             .map(|count| match count {
-                1 => format!("{name} copy"),
-                count => format!("{name} copy {count}"),
+                1 => tr!("settings-copy-name", name = name.clone()),
+                count => tr!("scene-copy-numbered", name = name.clone(), count = count),
             })
             .find(|name| !self.plates.contains(name))?;
         self.plates.push(name);
@@ -667,10 +666,10 @@ impl Scene {
     pub fn scope(&self) -> String {
         let count = self.target_count();
         match (self.has_selection(), count) {
-            (true, 1) => "the selected model".to_owned(),
-            (true, count) => format!("the {count} selected models"),
-            (false, 1) => "the one model on the plate".to_owned(),
-            (false, count) => format!("all {count} models on the plate"),
+            (true, 1) => tr!("scope-selected-one"),
+            (true, count) => tr!("scope-selected", count = count),
+            (false, 1) => tr!("scope-plate-one"),
+            (false, count) => tr!("scope-plate", count = count),
         }
     }
 

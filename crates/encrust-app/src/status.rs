@@ -1,3 +1,4 @@
+use crate::i18n::tr;
 /// The last thing that happened, shown over the stage.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Hash)]
 pub enum Status {
@@ -61,10 +62,12 @@ impl Status {
         Self::Error(causes.join(": "))
     }
 
-    pub fn text(&self) -> &str {
+    pub fn text(&self) -> String {
         match self {
-            Self::Idle => "Ready",
-            Self::Info(message) | Self::Readings(message, _) | Self::Error(message) => message,
+            Self::Idle => tr!("card-ready"),
+            Self::Info(message) | Self::Readings(message, _) | Self::Error(message) => {
+                message.clone()
+            }
         }
     }
 

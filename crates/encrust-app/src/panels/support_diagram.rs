@@ -9,6 +9,7 @@ use std::cell::RefCell;
 use egui::{Align2, Color32, Painter, Pos2, Rect, Sense, Shape, Stroke, Ui, Vec2, pos2, vec2};
 use printer_profiles::{ContactShape, PlatformShape, RaftStyle, SupportProfile};
 
+use crate::i18n::tr;
 use crate::ui::theme;
 
 /// The drawing's height, points; its width is the panel's.
@@ -58,13 +59,13 @@ pub enum Part {
 impl Part {
     pub const ALL: [Self; 5] = [Self::Tip, Self::Body, Self::Base, Self::Raft, Self::Brace];
 
-    pub fn label(self) -> &'static str {
+    pub fn label(self) -> String {
         match self {
-            Self::Tip => "Tip",
-            Self::Body => "Body",
-            Self::Base => "Base",
-            Self::Raft => "Raft",
-            Self::Brace => "Brace",
+            Self::Tip => tr!("diagram-tip"),
+            Self::Body => tr!("diagram-body"),
+            Self::Base => tr!("diagram-base"),
+            Self::Raft => tr!("diagram-raft"),
+            Self::Brace => tr!("diagram-brace"),
         }
     }
 }
@@ -580,7 +581,12 @@ fn body_view(painter: &Painter, frame: Rect, profile: &SupportProfile) {
         revolved(painter, &view, &column.stations, 0.0, Part::Body);
         let over = view.lane(view.len(pillar) + view.len(profile.clearance_mm), 1);
         let at = pos2(view.x(merge) + 40.0, over);
-        text(painter, at, Align2::LEFT_CENTER, "no branching");
+        text(
+            painter,
+            at,
+            Align2::LEFT_CENTER,
+            &tr!("diagram-no-branching"),
+        );
     }
     breaks(painter, &view, &column.stations);
     body_figures(painter, &view, profile, &column, merge);
@@ -1021,7 +1027,7 @@ fn raft_figures(
     let above = view.at(column.plate - section.tall, 0.0).y - LANE;
     if !raft.enabled {
         let at = pos2(view.at(face, section.top).x, above);
-        text(painter, at, Align2::CENTER_BOTTOM, "no raft");
+        text(painter, at, Align2::CENTER_BOTTOM, &tr!("diagram-no-raft"));
         return;
     }
     let (pad, edge) = (view.at(face, section.pad).x, view.at(face, section.top).x);
@@ -1135,7 +1141,7 @@ fn brace_figures(
     let bracing = &profile.bracing;
     let (along, across) = (view.along_dir(), view.across_dir());
     let clear = across * (view.len(column.half_at(first)) + LANE);
-    let every = format!("every {}", mm(bracing.rise_mm));
+    let every = tr!("diagram-every", value = mm(bracing.rise_mm));
     let (from, to) = (view.at(first - bracing.rise_mm, -gap), view.at(first, -gap));
     dimension(painter, from - clear, to - clear, "");
     beside(
@@ -1144,7 +1150,7 @@ fn brace_figures(
         -across,
         &every,
     );
-    let start = format!("first {}", mm(bracing.start_height_mm));
+    let start = tr!("diagram-first", value = mm(bracing.start_height_mm));
     let (from, to) = (view.at(first, gap), view.at(column.plate, gap));
     dimension(painter, from + clear, to + clear, "");
     beside(
@@ -1161,7 +1167,12 @@ fn brace_figures(
     beside(painter, middle, -along, &spacing);
     beside(painter, middle, -along, &diameter(bracing.diameter_mm));
     if !bracing.enabled {
-        beside(painter, view.at(top, -gap) - clear, -across, "no bracing");
+        beside(
+            painter,
+            view.at(top, -gap) - clear,
+            -across,
+            &tr!("diagram-no-bracing"),
+        );
     }
 }
 
@@ -1211,7 +1222,7 @@ pub fn small_pillar(ui: &mut Ui, profile: &SupportProfile) {
     let lower_at = pos2(right - ARROW * 3.0, under);
     text(&painter, lower_at, Align2::RIGHT_CENTER, &mm(lower));
     let over = view.lane(thick, 2);
-    let longest = format!("max {}", mm(pillar.max_length_mm));
+    let longest = tr!("diagram-max", value = mm(pillar.max_length_mm));
     dimension(&painter, pos2(left, over), pos2(right, over), &longest);
 }
 
@@ -1327,7 +1338,7 @@ fn model_wall(painter: &Painter, view: &View) {
         Rect::from_x_y_ranges(left.min(face - WALL_W)..=face, top..=bottom),
     );
     let at = pos2(left, view.frame.top() + INSET);
-    caption(painter, at, Align2::LEFT_TOP, "model");
+    caption(painter, at, Align2::LEFT_TOP, &tr!("diagram-model"));
 }
 
 /// A face of the model at `x_mm` hatched out to the frame's right, with its caption.
@@ -1340,7 +1351,7 @@ fn far_wall(painter: &Painter, view: &View, x_mm: f32) {
         Rect::from_x_y_ranges(face..=right.max(face + WALL_W), top..=bottom),
     );
     let at = pos2(right, view.frame.top() + INSET);
-    caption(painter, at, Align2::RIGHT_TOP, "model");
+    caption(painter, at, Align2::RIGHT_TOP, &tr!("diagram-model"));
 }
 
 /// The plate at `x_mm`, a wall's width thick, with its caption over it.
@@ -1352,7 +1363,7 @@ fn plate_wall(painter: &Painter, view: &View, x_mm: f32) {
         Rect::from_x_y_ranges(face..=face + WALL_W, top..=bottom),
     );
     let at = pos2(face + WALL_W, view.frame.top() + INSET);
-    caption(painter, at, Align2::RIGHT_TOP, "plate");
+    caption(painter, at, Align2::RIGHT_TOP, &tr!("diagram-plate"));
 }
 
 /// The plate under a standing support, hatched down to the frame's foot.
@@ -1364,7 +1375,7 @@ fn plate_floor(painter: &Painter, view: &View, x_mm: f32) {
     // Written inside the floor, on a patch, where nothing above it can reach.
     let at = pos2(right - 4.0, (top + bottom) / 2.0);
     let (font, colour) = (theme::figures(10.0), theme::colors().text_low);
-    let galley = painter.layout_no_wrap("plate".to_owned(), font, colour);
+    let galley = painter.layout_no_wrap(tr!("diagram-plate"), font, colour);
     let rect = Align2::RIGHT_CENTER.anchor_size(at, galley.size());
     painter.rect_filled(rect.expand2(vec2(3.0, 0.0)), 2.0, theme::colors().sunken);
     painter.galley(rect.min, galley, colour);

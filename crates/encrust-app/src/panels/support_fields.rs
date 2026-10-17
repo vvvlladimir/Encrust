@@ -7,6 +7,7 @@ use printer_profiles::{
     Catalogue, ContactShape, Entry, PlatformShape, RaftShape, RaftStyle, SupportProfile,
 };
 
+use crate::i18n::tr;
 use crate::ui::{Carried, Segment, Segmented, carried_row, describe, nested, switch};
 
 /// Millimetres per point of drag. The tip is measured in tenths and the foot in whole
@@ -56,16 +57,16 @@ impl Group {
         Self::Automatic,
     ];
 
-    pub fn label(self) -> &'static str {
+    pub fn label(self) -> String {
         match self {
-            Self::Top => "Top",
-            Self::Main => "Pillar",
-            Self::Bottom => "Bottom",
-            Self::SmallPillar => "Small pillar",
-            Self::Branching => "Branching",
-            Self::Raft => "Raft",
-            Self::Bracing => "Cross bracing",
-            Self::Automatic => "Automatic",
+            Self::Top => tr!("support-group-top"),
+            Self::Main => tr!("support-group-pillar"),
+            Self::Bottom => tr!("support-group-bottom"),
+            Self::SmallPillar => tr!("support-group-small-pillar"),
+            Self::Branching => tr!("support-group-branching"),
+            Self::Raft => tr!("support-group-raft"),
+            Self::Bracing => tr!("support-group-bracing"),
+            Self::Automatic => tr!("support-group-automatic"),
         }
     }
 
@@ -146,7 +147,7 @@ fn mm(
     step: f64,
     range: RangeInclusive<f32>,
 ) {
-    number(ui, label, was, value, "mm", step, range, 2);
+    number(ui, label, was, value, &tr!("unit-mm"), step, range, 2);
 }
 
 fn degrees(
@@ -156,14 +157,24 @@ fn degrees(
     value: &mut f32,
     range: RangeInclusive<f32>,
 ) {
-    number(ui, label, was, value, "deg", ANGLE_STEP, range, 0);
+    number(
+        ui,
+        label,
+        was,
+        value,
+        &tr!("unit-deg"),
+        ANGLE_STEP,
+        range,
+        0,
+    );
 }
 
 /// The contact with the model and the cone that widens out of it.
 fn top(ui: &mut egui::Ui, profile: &mut SupportProfile, saved: Option<&SupportProfile>) {
+    describe(ui, &tr!("support-tip-help"));
     let segments = [
-        Segment::new(ContactShape::Plane, "Plane"),
-        Segment::new(ContactShape::Sphere, "Sphere"),
+        Segment::new(ContactShape::Plane, tr!("support-shape-plane")),
+        Segment::new(ContactShape::Sphere, tr!("support-shape-sphere")),
     ];
     let width = ui.available_width();
     Segmented::new(&segments)
@@ -173,7 +184,7 @@ fn top(ui: &mut egui::Ui, profile: &mut SupportProfile, saved: Option<&SupportPr
     let tip = &mut profile.tip;
     mm(
         ui,
-        "Contact",
+        &tr!("support-contact"),
         was(saved, |p| p.tip.contact_diameter_mm),
         &mut tip.contact_diameter_mm,
         FINE_STEP,
@@ -181,7 +192,7 @@ fn top(ui: &mut egui::Ui, profile: &mut SupportProfile, saved: Option<&SupportPr
     );
     mm(
         ui,
-        "Bite",
+        &tr!("support-bite"),
         was(saved, |p| p.tip.contact_depth_mm),
         &mut tip.contact_depth_mm,
         FINE_STEP,
@@ -190,7 +201,7 @@ fn top(ui: &mut egui::Ui, profile: &mut SupportProfile, saved: Option<&SupportPr
     let length = &mut profile.top.length_mm;
     mm(
         ui,
-        "Length",
+        &tr!("support-length"),
         was(saved, |p| p.top.length_mm),
         length,
         COARSE_STEP,
@@ -200,9 +211,10 @@ fn top(ui: &mut egui::Ui, profile: &mut SupportProfile, saved: Option<&SupportPr
 
 /// The column itself, the widest its trunk grows, and the air it keeps from the model.
 fn main(ui: &mut egui::Ui, profile: &mut SupportProfile, saved: Option<&SupportProfile>) {
+    describe(ui, &tr!("support-body-help"));
     mm(
         ui,
-        "Diameter",
+        &tr!("support-diameter"),
         was(saved, |p| p.middle.diameter_mm),
         &mut profile.middle.diameter_mm,
         COARSE_STEP,
@@ -210,7 +222,7 @@ fn main(ui: &mut egui::Ui, profile: &mut SupportProfile, saved: Option<&SupportP
     );
     mm(
         ui,
-        "Clearance",
+        &tr!("support-clearance"),
         was(saved, |p| p.clearance_mm),
         &mut profile.clearance_mm,
         FINE_STEP,
@@ -219,7 +231,7 @@ fn main(ui: &mut egui::Ui, profile: &mut SupportProfile, saved: Option<&SupportP
     // Every trunk widens towards its base, branched or not (ADR 0242).
     mm(
         ui,
-        "Trunk cap",
+        &tr!("support-trunk-cap"),
         was(saved, |p| p.branching.max_trunk_diameter_mm),
         &mut profile.branching.max_trunk_diameter_mm,
         COARSE_STEP,
@@ -229,12 +241,13 @@ fn main(ui: &mut egui::Ui, profile: &mut SupportProfile, saved: Option<&SupportP
 
 /// The foot the column stands on.
 fn bottom(ui: &mut egui::Ui, profile: &mut SupportProfile, saved: Option<&SupportProfile>) {
+    describe(ui, &tr!("support-foot-help"));
     let segments = [
-        Segment::new(PlatformShape::Cylinder, "Round"),
-        Segment::new(PlatformShape::Cone, "Tapered"),
-        Segment::new(PlatformShape::Prism, "Prism"),
-        Segment::new(PlatformShape::Cube, "Cube"),
-        Segment::new(PlatformShape::Skate, "Skate"),
+        Segment::new(PlatformShape::Cylinder, tr!("support-foot-round")),
+        Segment::new(PlatformShape::Cone, tr!("support-foot-tapered")),
+        Segment::new(PlatformShape::Prism, tr!("support-foot-prism")),
+        Segment::new(PlatformShape::Cube, tr!("support-foot-cube")),
+        Segment::new(PlatformShape::Skate, tr!("support-foot-skate")),
     ];
     let width = ui.available_width();
     Segmented::new(&segments)
@@ -244,7 +257,7 @@ fn bottom(ui: &mut egui::Ui, profile: &mut SupportProfile, saved: Option<&Suppor
     let bottom = &mut profile.bottom;
     mm(
         ui,
-        "Diameter",
+        &tr!("support-diameter"),
         was(saved, |p| p.bottom.platform_diameter_mm),
         &mut bottom.platform_diameter_mm,
         COARSE_STEP,
@@ -252,7 +265,7 @@ fn bottom(ui: &mut egui::Ui, profile: &mut SupportProfile, saved: Option<&Suppor
     );
     mm(
         ui,
-        "Thickness",
+        &tr!("support-thickness"),
         was(saved, |p| p.bottom.platform_thickness_mm),
         &mut bottom.platform_thickness_mm,
         COARSE_STEP,
@@ -260,7 +273,7 @@ fn bottom(ui: &mut egui::Ui, profile: &mut SupportProfile, saved: Option<&Suppor
     );
     mm(
         ui,
-        "Flare",
+        &tr!("support-flare"),
         was(saved, |p| p.bottom.lower_diameter_mm),
         &mut bottom.lower_diameter_mm,
         COARSE_STEP,
@@ -272,33 +285,26 @@ fn bottom(ui: &mut egui::Ui, profile: &mut SupportProfile, saved: Option<&Suppor
 /// of the model, which needs neither a foot nor the width a column standing on the plate
 /// needs.
 fn small_pillar(ui: &mut egui::Ui, profile: &mut SupportProfile, saved: Option<&SupportProfile>) {
-    switch(ui, &mut profile.land_on_model, "Stand on the model");
+    switch(
+        ui,
+        &mut profile.land_on_model,
+        &tr!("support-land-on-model"),
+    );
     if !profile.land_on_model {
-        describe(
-            ui,
-            "A support with the model under it leans aside for the plate, or is dropped. \
-             Nothing is left cured onto the part.",
-        );
+        describe(ui, &tr!("support-land-on-model-off"));
         return;
     }
     let pillar = &mut profile.small_pillar;
-    switch(ui, &mut pillar.enabled, "Thin these down");
+    switch(ui, &mut pillar.enabled, &tr!("support-thin-down"));
     if !pillar.enabled {
-        describe(
-            ui,
-            "A support that lands on the model keeps the regular pillar's width.",
-        );
+        describe(ui, &tr!("support-thin-down-off"));
         return;
     }
     nested(ui, |ui| {
-        describe(
-            ui,
-            "Used where a support runs from one part of the model to another. Both ends sink \
-             into a surface; a longer run keeps the regular width.",
-        );
+        describe(ui, &tr!("support-small-pillar-note"));
         mm(
             ui,
-            "Diameter",
+            &tr!("support-diameter"),
             was(saved, |p| p.small_pillar.diameter_mm),
             &mut pillar.diameter_mm,
             FINE_STEP,
@@ -306,7 +312,7 @@ fn small_pillar(ui: &mut egui::Ui, profile: &mut SupportProfile, saved: Option<&
         );
         mm(
             ui,
-            "Upper depth",
+            &tr!("support-upper-depth"),
             was(saved, |p| p.small_pillar.upper_depth_mm),
             &mut pillar.upper_depth_mm,
             FINE_STEP,
@@ -314,7 +320,7 @@ fn small_pillar(ui: &mut egui::Ui, profile: &mut SupportProfile, saved: Option<&
         );
         mm(
             ui,
-            "Lower depth",
+            &tr!("support-lower-depth"),
             was(saved, |p| p.small_pillar.lower_depth_mm),
             &mut pillar.lower_depth_mm,
             FINE_STEP,
@@ -322,7 +328,7 @@ fn small_pillar(ui: &mut egui::Ui, profile: &mut SupportProfile, saved: Option<&
         );
         mm(
             ui,
-            "Max length",
+            &tr!("support-max-length"),
             was(saved, |p| p.small_pillar.max_length_mm),
             &mut pillar.max_length_mm,
             COARSE_STEP,
@@ -335,14 +341,15 @@ fn small_pillar(ui: &mut egui::Ui, profile: &mut SupportProfile, saved: Option<&
 fn branching(ui: &mut egui::Ui, profile: &mut SupportProfile, saved: Option<&SupportProfile>) {
     let branching = &mut profile.branching;
     if !branching.enabled {
-        describe(ui, "Every tip stands on a column of its own.");
+        describe(ui, &tr!("support-no-branching"));
         return;
     }
     nested(ui, |ui| {
+        describe(ui, &tr!("support-branching-help"));
         let angle = &mut branching.max_angle_deg;
         degrees(
             ui,
-            "Branch angle",
+            &tr!("support-branch-angle"),
             was(saved, |p| p.branching.max_angle_deg),
             angle,
             MIN_BRANCH_DEG..=MAX_BRANCH_DEG,
@@ -350,10 +357,10 @@ fn branching(ui: &mut egui::Ui, profile: &mut SupportProfile, saved: Option<&Sup
         let reach = &mut branching.max_merge_distance_mm;
         number(
             ui,
-            "Merge within",
+            &tr!("support-merge-within"),
             was(saved, |p| p.branching.max_merge_distance_mm),
             reach,
-            "mm",
+            &tr!("unit-mm"),
             COARSE_STEP,
             1.0..=40.0,
             1,
@@ -364,17 +371,18 @@ fn branching(ui: &mut egui::Ui, profile: &mut SupportProfile, saved: Option<&Sup
 /// The slab the supports stand on. It lifts the model by its own thickness on top of
 /// the lift, so it is never printed into the part (ADR 0238).
 fn raft(ui: &mut egui::Ui, profile: &mut SupportProfile, saved: Option<&SupportProfile>) {
+    describe(ui, &tr!("support-raft-help"));
     let raft = &mut profile.raft;
-    switch(ui, &mut raft.enabled, "Raft under the feet");
+    switch(ui, &mut raft.enabled, &tr!("support-raft"));
     if !raft.enabled {
         return;
     }
     nested(ui, |ui| {
         let width = ui.available_width();
         let styles = [
-            Segment::new(RaftStyle::Skates, "Skates"),
-            Segment::new(RaftStyle::Grid, "Grid"),
-            Segment::new(RaftStyle::Connected, "Connected"),
+            Segment::new(RaftStyle::Skates, tr!("support-raft-skates")),
+            Segment::new(RaftStyle::Grid, tr!("support-raft-grid")),
+            Segment::new(RaftStyle::Connected, tr!("support-raft-connected")),
         ];
         Segmented::new(&styles)
             .width(width)
@@ -382,8 +390,8 @@ fn raft(ui: &mut egui::Ui, profile: &mut SupportProfile, saved: Option<&SupportP
         if raft.style.has_outline() {
             ui.add_space(2.0);
             let shapes = [
-                Segment::new(RaftShape::Hull, "Hull"),
-                Segment::new(RaftShape::Rectangle, "Rectangle"),
+                Segment::new(RaftShape::Hull, tr!("support-raft-hull")),
+                Segment::new(RaftShape::Rectangle, tr!("support-raft-rectangle")),
             ];
             Segmented::new(&shapes)
                 .width(width)
@@ -392,7 +400,7 @@ fn raft(ui: &mut egui::Ui, profile: &mut SupportProfile, saved: Option<&SupportP
         ui.add_space(2.0);
         mm(
             ui,
-            "Margin",
+            &tr!("support-margin"),
             was(saved, |p| p.raft.margin_mm),
             &mut raft.margin_mm,
             COARSE_STEP,
@@ -400,7 +408,7 @@ fn raft(ui: &mut egui::Ui, profile: &mut SupportProfile, saved: Option<&SupportP
         );
         mm(
             ui,
-            "Thickness",
+            &tr!("support-thickness"),
             was(saved, |p| p.raft.thickness_mm),
             &mut raft.thickness_mm,
             COARSE_STEP,
@@ -408,7 +416,7 @@ fn raft(ui: &mut egui::Ui, profile: &mut SupportProfile, saved: Option<&SupportP
         );
         degrees(
             ui,
-            "Wall slope",
+            &tr!("support-wall-slope"),
             was(saved, |p| p.raft.slope_deg),
             &mut raft.slope_deg,
             0.0..=75.0,
@@ -418,15 +426,16 @@ fn raft(ui: &mut egui::Ui, profile: &mut SupportProfile, saved: Option<&SupportP
 
 /// The struts tying tall trunks together.
 fn bracing(ui: &mut egui::Ui, profile: &mut SupportProfile, saved: Option<&SupportProfile>) {
+    describe(ui, &tr!("support-bracing-help"));
     let bracing = &mut profile.bracing;
-    switch(ui, &mut bracing.enabled, "Brace tall trunks");
+    switch(ui, &mut bracing.enabled, &tr!("support-bracing"));
     if !bracing.enabled {
         return;
     }
     nested(ui, |ui| {
         mm(
             ui,
-            "Diameter",
+            &tr!("support-diameter"),
             was(saved, |p| p.bracing.diameter_mm),
             &mut bracing.diameter_mm,
             FINE_STEP,
@@ -435,10 +444,10 @@ fn bracing(ui: &mut egui::Ui, profile: &mut SupportProfile, saved: Option<&Suppo
         let span = &mut bracing.max_spacing_mm;
         number(
             ui,
-            "Span",
+            &tr!("support-span"),
             was(saved, |p| p.bracing.max_spacing_mm),
             span,
-            "mm",
+            &tr!("unit-mm"),
             COARSE_STEP,
             1.0..=40.0,
             1,
@@ -446,10 +455,10 @@ fn bracing(ui: &mut egui::Ui, profile: &mut SupportProfile, saved: Option<&Suppo
         let start = &mut bracing.start_height_mm;
         number(
             ui,
-            "First at",
+            &tr!("support-first-at"),
             was(saved, |p| p.bracing.start_height_mm),
             start,
-            "mm",
+            &tr!("unit-mm"),
             COARSE_STEP,
             0.0..=40.0,
             1,
@@ -457,10 +466,10 @@ fn bracing(ui: &mut egui::Ui, profile: &mut SupportProfile, saved: Option<&Suppo
         let rise = &mut bracing.rise_mm;
         number(
             ui,
-            "Every",
+            &tr!("support-every"),
             was(saved, |p| p.bracing.rise_mm),
             rise,
-            "mm",
+            &tr!("unit-mm"),
             COARSE_STEP,
             1.0..=40.0,
             1,
@@ -471,9 +480,10 @@ fn bracing(ui: &mut egui::Ui, profile: &mut SupportProfile, saved: Option<&Suppo
 /// What the automatic run holds up, how thickly, and how far the profile lifts a model.
 fn automatic(ui: &mut egui::Ui, profile: &mut SupportProfile, saved: Option<&SupportProfile>) {
     held_up(ui, profile, saved);
+    describe(ui, &tr!("support-lift-help"));
     mm(
         ui,
-        "Lift",
+        &tr!("support-lift"),
         was(saved, |p| p.z_lift_mm),
         &mut profile.z_lift_mm,
         COARSE_STEP,
@@ -484,17 +494,18 @@ fn automatic(ui: &mut egui::Ui, profile: &mut SupportProfile, saved: Option<&Sup
 /// What the automatic run holds up, and how thickly: the automatic group beside a model,
 /// whose lift is its own.
 pub fn held_up(ui: &mut egui::Ui, profile: &mut SupportProfile, saved: Option<&SupportProfile>) {
+    describe(ui, &tr!("support-held-up-help"));
     let overhang = &mut profile.max_overhang_deg;
     degrees(
         ui,
-        "Overhang",
+        &tr!("support-overhang"),
         was(saved, |p| p.max_overhang_deg),
         overhang,
         MIN_OVERHANG_DEG..=MAX_OVERHANG_DEG,
     );
     mm(
         ui,
-        "Contact spacing",
+        &tr!("support-contact-spacing"),
         was(saved, |p| p.contact_spacing_mm),
         &mut profile.contact_spacing_mm,
         COARSE_STEP,
@@ -502,7 +513,7 @@ pub fn held_up(ui: &mut egui::Ui, profile: &mut SupportProfile, saved: Option<&S
     );
     number(
         ui,
-        "Density",
+        &tr!("support-density"),
         was(saved, |p| p.density),
         &mut profile.density,
         "x",

@@ -9,6 +9,7 @@ use core_raster::RasterSettings;
 
 use core_engine::{Cutting, bake};
 
+use crate::i18n::tr;
 use crate::job::{MeasureJob, MeasureOutcome, PreviewJob, PreviewOutcome, models_of};
 use crate::scene::Scene;
 use crate::status::Status;
@@ -23,7 +24,7 @@ impl Preview {
             &models_of(scene, scene.active_plate()),
             &cutting.compensation,
         )
-        .context("nothing visible on the plate to preview")?;
+        .context(tr!("preview-nothing-visible"))?;
         self.job = Some(Build {
             job: PreviewJob::spawn(baked, cutting),
             fingerprint: stack_fingerprint(scene, cutting),
@@ -145,7 +146,7 @@ impl Preview {
         let layer = self.layer;
         let stack = match self.source.as_mut() {
             Some(stack) => stack,
-            None => bail!("no plate to preview"),
+            None => bail!(tr!("preview-no-plate")),
         };
         let wanted = stack.windows.window_of(layer);
         if stack
@@ -159,7 +160,7 @@ impl Preview {
         let sliced = stack
             .windows
             .cut(stack.solid.as_ref(), wanted.clone())
-            .context("cannot cut the layers being previewed")?;
+            .context(tr!("preview-cannot-cut"))?;
         stack.cut = Some((wanted, sliced));
         Ok(())
     }

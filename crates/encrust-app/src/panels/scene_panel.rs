@@ -2,6 +2,7 @@ use egui::{Align2, Rect, Sense, vec2};
 
 use core_geometry::{Vec2, Vec3};
 
+use crate::i18n::tr;
 use crate::panels::plate_summary;
 use crate::panels::{Window, plate_strip, slice};
 use crate::project;
@@ -20,9 +21,6 @@ const ARRAY_MAX: u32 = 20;
 
 /// How wide the import report is allowed to get before it wraps.
 const POPUP_W: f32 = 230.0;
-
-/// What the end of the row of a model that will not slice as it stands reads.
-const BROKEN: &str = "broken";
 
 /// The models card at the right of the stage: which plate, what stands on it and what can
 /// be done to it. As tall as the list, which scrolls once the card would pass `max_h`
@@ -70,7 +68,7 @@ fn header(ui: &mut egui::Ui, window: &mut Window) {
         |ui| {
             ui.spacing_mut().item_spacing.x = 6.0;
             ui.label(
-                egui::RichText::new("Models")
+                egui::RichText::new(tr!("models-title"))
                     .font(theme::section())
                     .color(colors.text_mid),
             );
@@ -107,7 +105,7 @@ fn tally(scene: &Scene) -> (egui::Color32, String) {
     let colors = theme::colors();
     match scene.selection().len() {
         0 => (colors.text_low, scene.here().count().to_string()),
-        picked => (colors.picked, format!("{picked} selected")),
+        picked => (colors.picked, tr!("models-selected", count = picked)),
     }
 }
 
@@ -125,7 +123,7 @@ fn actions(ui: &mut egui::Ui, window: &mut Window) {
                 cell(&mut columns[0], aimed, |ui| duplicate(ui, window, &picked));
                 cell(&mut columns[1], aimed, |ui| array(ui, window, &picked));
                 cell(&mut columns[2], true, |ui| {
-                    if icon_button(ui, icon::ARRANGE, "Arrange the plate").clicked() {
+                    if icon_button(ui, icon::ARRANGE, &tr!("models-arrange")).clicked() {
                         window.machine.status = crate::arrange::arrange_plate(
                             &mut window.doc.scene,
                             &window.doc.plate,
@@ -154,7 +152,7 @@ fn cell(ui: &mut egui::Ui, enabled: bool, add: impl FnOnce(&mut egui::Ui)) {
 /// need the same button pressed four times.
 fn duplicate(ui: &mut egui::Ui, window: &mut Window, picked: &[ObjectId]) {
     let tooltip = if picked.len() > 1 {
-        format!("Duplicate {} models", picked.len())
+        tr!("models-duplicate", count = picked.len())
     } else {
         shortcuts::tooltip(Action::Duplicate)
     };
@@ -181,17 +179,19 @@ pub fn duplicate_selection(window: &mut Window) {
 /// The popup stays open on a click inside it, unlike a menu of actions: a click on one of
 /// its fields opens that field for typing, which closing would take away.
 fn array(ui: &mut egui::Ui, window: &mut Window, picked: &[ObjectId]) {
-    let response = icon_button(ui, icon::ARRAY, "Array");
+    let response = icon_button(ui, icon::ARRAY, &tr!("models-array"));
     egui::Popup::menu(&response)
         .close_behavior(egui::PopupCloseBehavior::CloseOnClickOutside)
         .show(|ui| {
             ui.set_width(POPUP_W);
             let array = &mut window.tools.array;
-            count_row(ui, "Columns", &mut array.columns, "", 0.05, 1..=ARRAY_MAX);
-            count_row(ui, "Rows", &mut array.rows, "", 0.05, 1..=ARRAY_MAX);
-            number_row(ui, "Gap", &mut array.gap_mm, "mm", 0.1, 0.0..=50.0, 1);
+            let (columns, rows) = (tr!("models-columns"), tr!("models-rows"));
+            count_row(ui, &columns, &mut array.columns, "", 0.05, 1..=ARRAY_MAX);
+            count_row(ui, &rows, &mut array.rows, "", 0.05, 1..=ARRAY_MAX);
+            let (gap, mm) = (tr!("measure-gap"), tr!("unit-mm"));
+            number_row(ui, &gap, &mut array.gap_mm, &mm, 0.1, 0.0..=50.0, 1);
             ui.add_space(4.0);
-            if secondary_button(ui, icon::ARRAY, "Lay out").clicked()
+            if secondary_button(ui, icon::ARRAY, &tr!("models-lay-out")).clicked()
                 && let Some(id) = picked.first()
             {
                 window.doc.scene.array(
@@ -361,12 +361,12 @@ fn row_menu(
 ) -> Option<Clicked> {
     let mut clicked = None;
     response.context_menu(|ui| {
-        if !object.summary.is_sound() && ui.button("Repair").clicked() {
+        if !object.summary.is_sound() && ui.button(tr!("notice-repair")).clicked() {
             clicked = Some(Clicked::Repair);
             ui.close();
         }
         ui.add_enabled_ui(plates.len() > 1, |ui| {
-            ui.menu_button("Move to plate", |ui| {
+            ui.menu_button(tr!("menu-move-to-plate"), |ui| {
                 for (index, name) in plates.iter().enumerate() {
                     let plate = index as u32;
                     if ui
@@ -405,7 +405,7 @@ fn visibility_eye(ui: &mut egui::Ui, rect: Rect, object: &SceneObject) -> (Rect,
         Sense::click(),
     );
     response.widget_info(|| {
-        let shown = format!("Show {}", object.name);
+        let shown = tr!("models-show", name = object.name.clone());
         egui::WidgetInfo::selected(egui::WidgetType::Checkbox, true, object.visible, shown)
     });
     focus_ring(ui, &response, theme::R_CONTROL);
@@ -451,11 +451,9 @@ fn import_mark(
             Rect::from_center_size(egui::pos2(right - 17.0, rect.center().y), vec2(18.0, 18.0))
         }
         Mark::Broken => {
-            let width = ui.painter().layout_no_wrap(
-                BROKEN.to_owned(),
-                theme::small(),
-                theme::colors().danger,
-            );
+            let width =
+                ui.painter()
+                    .layout_no_wrap(broken(), theme::small(), theme::colors().danger);
             let width = width.size().x + 8.0;
             Rect::from_center_size(
                 egui::pos2(right - width / 2.0, rect.center().y),
@@ -465,7 +463,7 @@ fn import_mark(
     };
     let response = ui.interact(spot, ui.id().with((object.id, "import")), Sense::click());
     response.widget_info(|| {
-        egui::WidgetInfo::labeled(egui::WidgetType::Button, true, "What the import found")
+        egui::WidgetInfo::labeled(egui::WidgetType::Button, true, tr!("models-import-found"))
     });
     paint_mark(ui.painter(), spot, mark, response.hovered());
     focus_ring(ui, &response, theme::R_CONTROL);
@@ -477,17 +475,22 @@ fn import_mark(
         }
         if mark == Mark::Broken {
             ui.add_space(4.0);
-            repair = ui.button("Repair").clicked();
+            repair = ui.button(tr!("notice-repair")).clicked();
         }
     });
     (spot.left(), repair)
 }
 
+/// What the end of the row of a model that will not slice as it stands reads.
+fn broken() -> String {
+    tr!("models-broken")
+}
+
 fn paint_mark(painter: &egui::Painter, spot: Rect, mark: Mark, hovered: bool) {
     let colors = theme::colors();
     let (text, font, color) = match mark {
-        Mark::Repaired => (icon::WARNING, theme::icon(14.0), colors.text_low),
-        Mark::Broken => (BROKEN, theme::small(), colors.danger),
+        Mark::Repaired => (icon::WARNING.to_owned(), theme::icon(14.0), colors.text_low),
+        Mark::Broken => (broken(), theme::small(), colors.danger),
     };
     let color = if hovered { colors.text_high } else { color };
     painter.text(spot.center(), Align2::CENTER_CENTER, text, font, color);

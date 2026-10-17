@@ -3,6 +3,7 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::{self, Receiver, Sender, TryRecvError};
 
+use crate::i18n::tr;
 use printer_link::{SendError, Wire};
 
 /// What a job does to the printer it is pointed at.
@@ -96,9 +97,7 @@ impl SendJob {
                 Ok(SendProgress::Finished(outcome)) => return Some(outcome),
                 Err(TryRecvError::Empty) => return None,
                 Err(TryRecvError::Disconnected) => {
-                    return Some(SendOutcome::Failed(
-                        "the network thread stopped without finishing".to_owned(),
-                    ));
+                    return Some(SendOutcome::Failed(tr!("job-thread-stopped-network")));
                 }
             }
         }
@@ -120,16 +119,16 @@ impl SendJob {
 
     pub fn label(&self) -> String {
         if self.is_cancelling() {
-            return "Cancelling".to_owned();
+            return tr!("job-cancelling");
         }
         if self.starting {
-            return format!("Starting {}", self.printer);
+            return tr!("job-send-starting", printer = self.printer.clone());
         }
         // Without a byte count there is nothing to tell connecting from sending, so the
         // label says the thing that is true of both.
         match self.fraction().is_some() || !self.counts_bytes {
-            true => format!("Sending to {}", self.printer),
-            false => format!("Connecting to {}", self.printer),
+            true => tr!("network-sending", name = self.printer.clone()),
+            false => tr!("job-send-connecting", printer = self.printer.clone()),
         }
     }
 }

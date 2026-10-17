@@ -1,6 +1,7 @@
 use std::path::Path;
 
 use crate::files::{Arrived, Handed, Wanted};
+use crate::i18n::tr;
 use crate::panels::Window;
 use crate::prefs::Preferences;
 use crate::preview::stack_fingerprint;
@@ -61,12 +62,16 @@ impl SlicerApp {
         theme::apply(&cc.egui_ctx);
         crate::updates::sweep();
 
-        let mut app = Self::default();
+        let prefs = crate::prefs::load();
+        crate::i18n::choose(prefs.language());
+        let mut app = Self {
+            prefs,
+            ..Self::default()
+        };
         let renamed = app
             .machine
             .slicing
             .load_user_profiles(&mut app.machine.status);
-        app.prefs = crate::prefs::load();
         if !renamed.is_empty() {
             app.prefs.follow(&renamed);
             app.prefs.save();
@@ -207,7 +212,7 @@ impl SlicerApp {
             .preview
             .build(&self.doc.scene, self.machine.slicing.cutting());
         if let Err(error) = started {
-            self.machine.status = Status::failed(&error.context("cannot build the layer preview"));
+            self.machine.status = Status::failed(&error.context(tr!("app-cannot-build-preview")));
         }
     }
 
@@ -336,7 +341,12 @@ pub fn open_by_what_it_is(window: &mut Window, file: Handed) {
         let slicing = &window.machine.slicing;
         let placement =
             crate::sliced::placement(&file, &slicing.catalogue, slicing.printer.as_ref())
-                .with_context(|| format!("cannot open {}", file.path().display()));
+                .with_context(|| {
+                    tr!(
+                        "error-cannot-open",
+                        path = file.path().display().to_string()
+                    )
+                });
         let status = &mut window.machine.status;
         if let Some(placement) = status.report("", placement) {
             window.doc.imports.open_sliced(file, placement, status);
@@ -357,6 +367,7 @@ impl eframe::App for SlicerApp {
 
     fn ui(&mut self, ui: &mut egui::Ui, frame: &mut eframe::Frame) {
         let started = web_time::Instant::now();
+        crate::i18n::choose(self.machine.general.language);
         #[cfg(target_os = "macos")]
         if !ui.input(|input| input.viewport().fullscreen.unwrap_or(false)) {
             crate::traffic_lights::centre(frame, crate::ui::theme::TOP_BAR_H);
@@ -566,7 +577,7 @@ mod tests {
         harness.run_steps(3);
         for tool in Tool::on_rail() {
             let button = egui::accesskit::Role::Button;
-            harness.get_by_role_and_label(button, tool.label()).focus();
+            harness.get_by_role_and_label(button, &tool.label()).focus();
             harness.run_steps(2);
             harness.key_press(egui::Key::Enter);
             harness.run_steps(2);

@@ -2,6 +2,7 @@ use core_analysis::{Measured, Risk, RiskKind, equivalent_disc_mm};
 use core_geometry::Vec3;
 use egui::{Color32, RichText};
 
+use crate::i18n::tr;
 use crate::panels::Window;
 use crate::preview::on_plate;
 use crate::state::Machine;
@@ -40,14 +41,14 @@ impl Filter {
         }
     }
 
-    fn name(self) -> &'static str {
+    fn name(self) -> String {
         match self {
-            Self::All => "All",
-            Self::Islands => "Islands",
-            Self::Levers => "Levers",
-            Self::Peel => "Peel",
-            Self::Cups => "Cups",
-            Self::Thin => "Thin",
+            Self::All => tr!("check-filter-all"),
+            Self::Islands => tr!("check-filter-islands"),
+            Self::Levers => tr!("check-filter-levers"),
+            Self::Peel => tr!("check-filter-peel"),
+            Self::Cups => tr!("check-filter-cups"),
+            Self::Thin => tr!("check-filter-thin"),
         }
     }
 
@@ -81,17 +82,18 @@ pub fn ui(ui: &mut egui::Ui, window: &mut Window) {
         return;
     };
 
-    section(ui, "Verdict", None, |ui| {
+    section(ui, &tr!("check-verdict"), None, |ui| {
         if let Some(layer) = verdict(ui, worst.as_ref()) {
             go_to(window.machine, layer);
         }
         islands_action(ui, window.machine, &risks, removed);
         let islands = risks.iter().any(|risk| Filter::Islands.admits(&risk.kind));
-        if islands && secondary_button(ui, icon::SUPPORTS, "Support every island").clicked() {
+        if islands && secondary_button(ui, icon::SUPPORTS, &tr!("check-support-islands")).clicked()
+        {
             support_islands(window, &risks);
         }
         let cups = risks.iter().any(|risk| Filter::Cups.admits(&risk.kind));
-        if cups && secondary_button(ui, icon::DRAIN, "Drill the suction cups").clicked() {
+        if cups && secondary_button(ui, icon::DRAIN, &tr!("check-drill-cups")).clicked() {
             crate::shortcuts::pick(window, Tool::Drain);
         }
     });
@@ -101,12 +103,9 @@ pub fn ui(ui: &mut egui::Ui, window: &mut Window) {
             .map(|row| row.layer)
             .collect::<std::collections::BTreeSet<_>>()
             .len();
-        let found = format!(
-            "{} on {}",
-            count(risks.len(), "issue", "issues"),
-            count(layers, "layer", "layers")
-        );
-        section(ui, "Issues", Some(&found), |ui| {
+        let found = tr!("check-found", issues = risks.len(), layers = layers);
+        section(ui, &tr!("check-issues"), Some(&found), |ui| {
+            describe(ui, &tr!("check-issues-help"));
             let filter = filter(ui, &risks);
             if let Some(layer) = listing(ui, window.machine.preview.layer(), &risks, filter) {
                 go_to(window.machine, layer);
@@ -138,11 +137,7 @@ fn support_islands(window: &mut Window, risks: &[Risk]) {
         .tools
         .supports
         .support_islands(&mut window.doc.scene, &floors, layer_mm);
-    window.machine.status = Status::Info(match stood {
-        0 => "No island had an underside to stand a support on".to_owned(),
-        1 => format!("Stood 1 support in {ISLANDS_GROUP}"),
-        stood => format!("Stood {stood} supports in {ISLANDS_GROUP}"),
-    });
+    window.machine.status = Status::Info(tr!("check-stood", count = stood, group = ISLANDS_GROUP));
 }
 
 /// What the check has found so far, for the inspector's heading, and its colour.
@@ -153,12 +148,12 @@ pub fn fact(window: &Window) -> Option<(String, Color32)> {
             .machine
             .preview
             .is_measuring()
-            .then(|| ("checking".to_owned(), colors.text_low));
+            .then(|| (tr!("check-fact-checking"), colors.text_low));
     };
     Some(match measured.worst() {
-        None => ("no issues".to_owned(), colors.text_mid),
+        None => (tr!("check-fact-none"), colors.text_mid),
         Some(worst) => (
-            count(measured.risks().len(), "issue", "issues"),
+            tr!("check-fact-issues", count = measured.risks().len()),
             tint(&worst),
         ),
     })
@@ -167,20 +162,16 @@ pub fn fact(window: &Window) -> Option<(String, Color32)> {
 /// Before there is anything to read: the stack being read, or the way to have it cut.
 fn waiting(ui: &mut egui::Ui, window: &mut Window) {
     if window.machine.preview.is_measuring() || window.machine.preview.is_building() {
-        section(ui, "Checking", None, |ui| {
+        section(ui, &tr!("check-checking"), None, |ui| {
             ui.horizontal(|ui| {
                 ui.spinner();
-                hint(ui, "Reading every layer of the stack...");
+                hint(ui, &tr!("check-reading"));
             });
         });
         return;
     }
-    section(ui, "Checking", None, |ui| {
-        hint(
-            ui,
-            "The check reads the layers, which are cut as soon as there is a model on the \
-             plate and a machine to cut it for.",
-        );
+    section(ui, &tr!("check-checking"), None, |ui| {
+        hint(ui, &tr!("check-reads-layers"));
     });
 }
 
@@ -194,30 +185,40 @@ fn pull(ui: &mut egui::Ui, window: &mut Window) {
     if measured.is_none() && !window.machine.preview.is_measuring() {
         return;
     }
-    let waiting = || "measuring".to_owned();
+    let waiting = || tr!("check-measuring");
     let hardest = measured.and_then(Measured::hardest_pull);
     let widest = measured.and_then(Measured::largest_growth);
     let rows = vec![
         (
-            "Hardest pull",
-            hardest.map_or_else(waiting, |peak| format!("layer {}", peak.layer + 1)),
-        ),
-        (
-            "Pulls like a disc of",
+            tr!("check-hardest-pull"),
             hardest.map_or_else(waiting, |peak| {
-                format!("{:.1} mm", equivalent_disc_mm(f64::from(peak.value)))
+                tr!("check-layer-lower", layer = peak.layer + 1)
             }),
         ),
         (
-            "Widest step",
-            widest.map_or_else(waiting, |peak| format!("layer {}", peak.layer + 1)),
+            tr!("check-disc"),
+            hardest.map_or_else(waiting, |peak| {
+                let mm = format!("{:.1}", equivalent_disc_mm(f64::from(peak.value)));
+                tr!("value-mm", value = mm)
+            }),
         ),
         (
-            "Grows by",
-            widest.map_or_else(waiting, |peak| format!("{:.0} mm2", peak.value)),
+            tr!("check-widest-step"),
+            widest.map_or_else(waiting, |peak| {
+                tr!("check-layer-lower", layer = peak.layer + 1)
+            }),
+        ),
+        (
+            tr!("check-grows-by"),
+            widest.map_or_else(waiting, |peak| {
+                tr!("value-mm2", value = format!("{:.0}", peak.value))
+            }),
         ),
     ];
-    section(ui, "Peel", None, |ui| readings(ui, &rows));
+    section(ui, &tr!("check-peel"), None, |ui| {
+        describe(ui, &tr!("check-peel-help"));
+        readings(ui, &rows);
+    });
 }
 
 /// The colour an issue is drawn in: islands in the colour the mask paints them, the rest
@@ -242,9 +243,8 @@ fn verdict(ui: &mut egui::Ui, worst: Option<&Risk>) -> Option<usize> {
             icon::CLEAR,
             colors.text_mid,
             colors.raised,
-            "Nothing found to fail on".to_owned(),
-            "No islands, no neck pulled past its limit, and no layer pulling the film too hard."
-                .to_owned(),
+            tr!("check-nothing-found"),
+            tr!("check-nothing-found-why"),
         ),
         Some(risk) => {
             let wash = match risk.kind {
@@ -255,7 +255,11 @@ fn verdict(ui: &mut egui::Ui, worst: Option<&Risk>) -> Option<usize> {
                 icon::WARNING,
                 tint(risk),
                 wash,
-                format!("{} on layer {}", issue_name(risk), risk.layer + 1),
+                tr!(
+                    "check-worst",
+                    issue = issue_name(risk),
+                    layer = risk.layer + 1
+                ),
                 explain(risk),
             )
         }
@@ -296,7 +300,7 @@ fn islands_action(ui: &mut egui::Ui, machine: &mut Machine, risks: &[Risk], remo
     if slicing.remove_islands {
         removed_block(ui, removed);
         hanging_action(ui, slicing, risks);
-        if secondary_button(ui, icon::RESET, "Put the islands back").clicked() {
+        if secondary_button(ui, icon::RESET, &tr!("check-put-islands-back")).clicked() {
             slicing.remove_islands = false;
             slicing.hanging_passes = 0;
         }
@@ -309,15 +313,11 @@ fn islands_action(ui: &mut egui::Ui, machine: &mut Machine, risks: &[Risk], remo
     if islands == 0 {
         return;
     }
-    let label = format!("Remove {}", count(islands, "island", "islands"));
+    let label = tr!("check-remove-islands", count = islands);
     if secondary_button(ui, icon::ERASE, &label).clicked() {
         machine.slicing.remove_islands = true;
     }
-    describe(
-        ui,
-        "Erases them from the written file and checks again. Only the islands go; what \
-         stood on them stays, and is listed to be supported.",
-    );
+    describe(ui, &tr!("check-remove-islands-note"));
 }
 
 /// Taking out the next layer of what the islands already taken out left hanging, one
@@ -328,27 +328,25 @@ fn hanging_action(ui: &mut egui::Ui, slicing: &mut crate::slicing::Slicing, risk
         .filter(|risk| matches!(risk.kind, RiskKind::Floating { .. }))
         .count();
     if slicing.hanging_passes > 0 {
-        let passes = count(slicing.hanging_passes as usize, "layer", "layers");
-        hint(ui, &format!("And {passes} more of what stood on them."));
+        hint(
+            ui,
+            &tr!("check-hanging-passes", count = slicing.hanging_passes),
+        );
     }
     if hanging == 0 {
         return;
     }
-    let label = format!("Remove the next {}", count(hanging, "island", "islands"));
+    let label = tr!("check-remove-next", count = hanging);
     if secondary_button(ui, icon::ERASE, &label).clicked() {
         slicing.hanging_passes += 1;
     }
-    describe(
-        ui,
-        "Takes one layer more off each part left hanging, the one it starts on, and checks \
-         again.",
-    );
+    describe(ui, &tr!("check-remove-next-note"));
 }
 
 /// What taking the islands out came to, on a quiet card of its own.
 fn removed_block(ui: &mut egui::Ui, removed: usize) {
     let colors = theme::colors();
-    let title = removed_note(removed).unwrap_or_else(|| "No islands to take out".to_owned());
+    let title = removed_note(removed).unwrap_or_else(|| tr!("check-no-islands-to-take"));
     egui::Frame::new()
         .fill(colors.raised)
         .corner_radius(theme::R_SURFACE)
@@ -369,11 +367,9 @@ fn removed_block(ui: &mut egui::Ui, removed: usize) {
                             .color(colors.text_high),
                     );
                     ui.label(
-                        RichText::new(
-                            "Erased from the file; anything left hanging is listed below.",
-                        )
-                        .font(theme::small())
-                        .color(colors.text_low),
+                        RichText::new(tr!("check-erased-note"))
+                            .font(theme::small())
+                            .color(colors.text_low),
                     );
                 });
             });
@@ -474,7 +470,7 @@ fn filter(ui: &mut egui::Ui, risks: &[Risk]) -> Filter {
         return Filter::All;
     }
 
-    let labels: Vec<(Filter, String)> = std::iter::once((Filter::All, "All".to_owned()))
+    let labels: Vec<(Filter, String)> = std::iter::once((Filter::All, Filter::All.name()))
         .chain(
             present
                 .iter()
@@ -501,7 +497,7 @@ fn listing(ui: &mut egui::Ui, shown: usize, risks: &[Risk], filter: Filter) -> O
     let picked = list(ui, |ui| {
         let mut picked = None;
         for row in rows.iter().take(LISTED) {
-            let place = format!("Layer {}", row.layer + 1);
+            let place = tr!("check-layer", layer = row.layer + 1);
             let selected = row.layer == shown;
             if issue_row(ui, row.tint, &place, &detail(row), selected).clicked() {
                 picked = Some(row.layer);
@@ -510,7 +506,7 @@ fn listing(ui: &mut egui::Ui, shown: usize, risks: &[Risk], filter: Filter) -> O
         picked
     });
     if rows.len() > LISTED {
-        hint(ui, &format!("and {} more layers", rows.len() - LISTED));
+        hint(ui, &tr!("check-more-layers", count = rows.len() - LISTED));
     }
     picked
 }
@@ -523,86 +519,91 @@ fn go_to(machine: &mut Machine, layer: usize) {
 /// What one row holds, short enough for the right of it.
 fn detail(row: &Row) -> String {
     if row.hanging {
-        return format!("hangs over nothing · {:.2} mm2", row.area_mm2);
+        let area = format!("{:.2}", row.area_mm2);
+        return tr!("check-row-hanging", area = area);
     }
-    match (row.filter, row.count) {
-        (Filter::Islands, 1) => format!("island · {:.2} mm2", row.area_mm2),
-        (Filter::Islands, n) => format!("{n} islands · {:.2} mm2", row.area_mm2),
-        (Filter::Levers, 1) => format!("lever · {:.1} mm · {:.0} MPa", row.lever_mm, row.worst),
-        (Filter::Levers, n) => format!("{n} levers · {:.0} MPa", row.worst),
-        (Filter::Cups, 1) => format!("suction cup · {:.0} mm2", row.area_mm2),
-        (Filter::Cups, n) => format!("{n} suction cups · {:.1} mm2", row.area_mm2),
-        (Filter::Thin, 1) => format!("thin · {:.2} mm", row.width_mm),
-        (Filter::Thin, n) => format!("{n} thin · {:.2} mm", row.width_mm),
-        _ => format!("peel · {:.0} N", row.worst),
+    let count = row.count;
+    match (row.filter, count) {
+        (Filter::Islands, _) => tr!(
+            "check-row-islands",
+            count = count,
+            area = format!("{:.2}", row.area_mm2)
+        ),
+        (Filter::Levers, 1) => tr!(
+            "check-row-lever",
+            lever = format!("{:.1}", row.lever_mm),
+            stress = format!("{:.0}", row.worst)
+        ),
+        (Filter::Levers, _) => tr!(
+            "check-row-levers",
+            count = count,
+            stress = format!("{:.0}", row.worst)
+        ),
+        (Filter::Cups, 1) => tr!("check-row-cup", area = format!("{:.0}", row.area_mm2)),
+        (Filter::Cups, _) => tr!(
+            "check-row-cups",
+            count = count,
+            area = format!("{:.1}", row.area_mm2)
+        ),
+        (Filter::Thin, _) => tr!(
+            "check-row-thin",
+            count = count,
+            width = format!("{:.2}", row.width_mm)
+        ),
+        _ => tr!("check-row-peel", force = format!("{:.0}", row.worst)),
     }
 }
 
 /// What the worst issue is, named plainly rather than as a failure.
-fn issue_name(risk: &Risk) -> &'static str {
+fn issue_name(risk: &Risk) -> String {
     match risk.kind {
-        RiskKind::Island { .. } => "Unsupported island",
-        RiskKind::Floating { .. } => "Part left hanging",
-        RiskKind::Lever { .. } => "Weak neck",
-        RiskKind::Peel { .. } => "Hard peel",
-        RiskKind::SuctionCup { .. } => "Suction cup",
-        RiskKind::Thin { .. } => "Thin section",
+        RiskKind::Island { .. } => tr!("check-issue-island"),
+        RiskKind::Floating { .. } => tr!("check-issue-hanging"),
+        RiskKind::Lever { .. } => tr!("check-issue-lever"),
+        RiskKind::Peel { .. } => tr!("check-issue-peel"),
+        RiskKind::SuctionCup { .. } => tr!("check-issue-cup"),
+        RiskKind::Thin { .. } => tr!("check-issue-thin"),
     }
 }
 
 /// Why the worst issue fails the print, in a sentence.
 fn explain(risk: &Risk) -> String {
     match risk.kind {
-        RiskKind::Floating { area_mm2 } => format!(
-            "An island under it was taken out, so {area_mm2:.2} mm2 here hangs over nothing \
-             and the rest of that part with it. Support it."
-        ),
-        RiskKind::Island { area_mm2 } => format!(
-            "An island of {area_mm2:.2} mm2 cures over nothing: it sticks to the film and \
-             stays in the vat. Support it, or remove it."
-        ),
+        RiskKind::Floating { area_mm2 } => {
+            tr!("check-explain-hanging", area = format!("{area_mm2:.2}"))
+        }
+        RiskKind::Island { area_mm2 } => {
+            tr!("check-explain-island", area = format!("{area_mm2:.2}"))
+        }
         RiskKind::Lever {
             stress_mpa,
             lever_mm,
             neck_mm2,
-        } => format!(
-            "The neck under it, {neck_mm2:.2} mm2, takes about {stress_mpa:.0} MPa from a \
-             pull {lever_mm:.1} mm off to one side. Support it nearer its middle."
+        } => tr!(
+            "check-explain-lever",
+            neck = format!("{neck_mm2:.2}"),
+            stress = format!("{stress_mpa:.0}"),
+            lever = format!("{lever_mm:.1}")
         ),
-        RiskKind::Peel { force_n } => format!(
-            "The film pulls on this layer with about {force_n:.0} N. Tilt the model, hollow \
-             it, or lift slower."
-        ),
+        RiskKind::Peel { force_n } => {
+            tr!("check-explain-peel", force = format!("{force_n:.0}"))
+        }
         RiskKind::SuctionCup {
             area_mm2,
             volume_mm3,
-        } => format!(
-            "A hole of {area_mm2:.0} mm2 holding {:.2} ml is sealed from below, so each lift \
-             pulls on it. A drain hole lets the air in.",
-            volume_mm3 / 1000.0
+        } => tr!(
+            "check-explain-cup",
+            area = format!("{area_mm2:.0}"),
+            volume = format!("{:.2}", volume_mm3 / 1000.0)
         ),
-        RiskKind::Thin { width_mm } => format!(
-            "A section {width_mm:.2} mm across stands over a millimetre tall. It may not \
-             form; thicken it if it matters."
-        ),
+        RiskKind::Thin { width_mm } => {
+            tr!("check-explain-thin", width = format!("{width_mm:.2}"))
+        }
     }
 }
 
 fn removed_note(removed: usize) -> Option<String> {
-    (removed > 0).then(|| {
-        format!(
-            "{} taken out of the file",
-            count(removed, "island", "islands")
-        )
-    })
-}
-
-fn count(n: usize, one: &str, many: &str) -> String {
-    if n == 1 {
-        format!("1 {one}")
-    } else {
-        format!("{n} {many}")
-    }
+    (removed > 0).then(|| tr!("check-removed", count = removed))
 }
 
 #[cfg(test)]

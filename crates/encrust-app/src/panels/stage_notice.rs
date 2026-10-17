@@ -1,5 +1,6 @@
 use egui::{Align, Align2, Id, Layout, Rect, RichText, pos2};
 
+use crate::i18n::tr;
 use crate::panels::Window;
 use crate::scene::ObjectId;
 use crate::status::{Change, Status};
@@ -66,7 +67,7 @@ fn jobs(stack: &mut Stack, window: &mut Window) {
         && job_card(
             stack,
             "preview",
-            "Cutting the layers to preview",
+            &tr!("notice-cutting-preview"),
             None,
             false,
         )
@@ -103,7 +104,7 @@ fn job_card(
             ui.horizontal(|ui| {
                 ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
                     ui.add_enabled_ui(!cancelling, |ui| {
-                        cancel = icon_button(ui, icon::CANCEL, "Cancel").clicked();
+                        cancel = icon_button(ui, icon::CANCEL, &tr!("common-cancel")).clicked();
                     });
                     if let Some(fraction) = fraction {
                         ui.label(
@@ -139,11 +140,16 @@ fn waiting_to_print(stack: &mut Stack, window: &mut Window) {
         card().inner_margin(theme::CARD_MARGIN).show(ui, |ui| {
             ui.horizontal(|ui| {
                 ui.label(
-                    RichText::new(format!("{} is on {}", sent.filename, sent.printer))
-                        .font(theme::label())
-                        .color(theme::colors().text_high),
+                    RichText::new(tr!(
+                        "network-sent",
+                        file = sent.filename.clone(),
+                        printer = sent.printer.clone()
+                    ))
+                    .font(theme::label())
+                    .color(theme::colors().text_high),
                 );
-                start = inline_button(ui, icon::PLAY, "Start print", true, true).clicked();
+                start =
+                    inline_button(ui, icon::PLAY, &tr!("notice-start-print"), true, true).clicked();
             });
         })
     });
@@ -166,8 +172,8 @@ fn broken(stack: &mut Stack, window: &mut Window) {
         .collect();
     let label = match offered.as_slice() {
         [] => return,
-        [(_, name, _)] => format!("{name} is broken"),
-        several => format!("{} models on this plate are broken", several.len()),
+        [(_, name, _)] => tr!("notice-broken-one", name = name.clone()),
+        several => tr!("notice-broken-several", count = several.len()),
     };
     let (mut repair, mut keep) = (false, false);
     stack.card("broken", |ui| {
@@ -182,12 +188,12 @@ fn broken(stack: &mut Stack, window: &mut Window) {
                     .collect();
                 ui.label(text).on_hover_text(lines.join("\n"));
                 let wording = if offered.len() == 1 {
-                    "Repair"
+                    tr!("notice-repair")
                 } else {
-                    "Repair all"
+                    tr!("notice-repair-all")
                 };
-                repair = inline_button(ui, icon::REPAIR, wording, true, true).clicked();
-                keep = icon_button(ui, icon::CANCEL, "Keep as it is").clicked();
+                repair = inline_button(ui, icon::REPAIR, &wording, true, true).clicked();
+                keep = icon_button(ui, icon::CANCEL, &tr!("notice-keep-as-is")).clicked();
             });
         })
     });
@@ -207,9 +213,9 @@ fn unready(stack: &mut Stack, window: &mut Window) {
     let slicing = &window.machine.slicing;
     let label = match (slicing.printer_id.is_some(), slicing.resin_id.is_some()) {
         (true, true) => return,
-        (false, false) => "No printer or resin yet",
-        (false, true) => "No printer yet",
-        (true, false) => "No resin on this printer yet",
+        (false, false) => tr!("notice-no-printer-resin"),
+        (false, true) => tr!("notice-no-printer"),
+        (true, false) => tr!("notice-no-resin"),
     };
     let mut open = false;
     stack.card("unready", |ui| {
@@ -227,7 +233,8 @@ fn unready(stack: &mut Stack, window: &mut Window) {
                         .font(theme::label())
                         .color(colors.text_high),
                 );
-                open = inline_button(ui, icon::PRINTER, "Set up", true, true).clicked();
+                open =
+                    inline_button(ui, icon::PRINTER, &tr!("notice-set-up"), true, true).clicked();
             });
         })
     });
@@ -276,7 +283,7 @@ fn message(stack: &mut Stack, status: &mut Status, running: bool, max_w: f32) {
                     ui.vertical(|ui| words(ui, status));
                 });
                 if error {
-                    dismissed = icon_button(ui, icon::CANCEL, "Put away").clicked();
+                    dismissed = icon_button(ui, icon::CANCEL, &tr!("notice-put-away")).clicked();
                 }
             });
         })

@@ -5,6 +5,7 @@ use core_geometry::{Bvh, Heightmap, Mesh, Scalar, Transform, transform_mesh};
 use core_volume::{ReliefSettings, Tiling, press, press_tiled};
 use rayon::prelude::*;
 
+use crate::i18n::tr;
 use crate::job::pipeline::{thread_pool, worker_threads};
 use core_geometry::UvMap;
 
@@ -84,9 +85,9 @@ impl ReliefJob {
         match self.outcome.try_recv() {
             Ok(outcome) => Some(outcome),
             Err(TryRecvError::Empty) => None,
-            Err(TryRecvError::Disconnected) => Some(ReliefOutcome::Failed(
-                "the relief thread stopped without finishing".to_owned(),
-            )),
+            Err(TryRecvError::Disconnected) => {
+                Some(ReliefOutcome::Failed(tr!("job-thread-stopped-relief")))
+            }
         }
     }
 }
@@ -127,7 +128,7 @@ fn run(request: &ReliefRequest) -> ReliefOutcome {
                         press(&mesh, &bvh, &uvs, &mapped.heights, &request.settings)
                     }
                     (ReliefSource::Mapped, ..) => {
-                        return Err(anyhow::anyhow!("a model has no texture to press"));
+                        return Err(anyhow::anyhow!(tr!("job-relief-no-texture")));
                     }
                 };
                 relief.map_err(anyhow::Error::new).map(|relief| Pressed {

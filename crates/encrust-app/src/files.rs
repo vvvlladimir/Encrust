@@ -7,6 +7,7 @@ use std::io::{self, Cursor, Read};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
+use crate::i18n::tr;
 use core_format::ReadSeek;
 
 /// A file given to the window by a dialog or a drop.
@@ -96,26 +97,26 @@ pub enum Wanted {
 impl Wanted {
     /// The filters a dialog shows, each its name and the extensions under it. The first is
     /// the one the dialog opens on, so it is the widest.
-    pub fn filters(self) -> &'static [(&'static str, &'static [&'static str])] {
+    pub fn filters(self) -> Vec<(String, &'static [&'static str])> {
         match self {
-            Self::Model => &[
-                ("Model", &MODELS),
-                ("Mesh", &MESHES),
-                ("Sliced file", &crate::sliced::EXTENSIONS),
+            Self::Model => vec![
+                (tr!("filter-model"), &MODELS),
+                (tr!("filter-mesh"), &MESHES),
+                (tr!("filter-sliced"), &crate::sliced::EXTENSIONS),
             ],
-            Self::ModelOrProject => &[
-                ("Model or project", &OPENABLE),
-                ("Mesh", &MESHES),
-                ("Sliced file", &crate::sliced::EXTENSIONS),
-                ("Encrust project", &PROJECTS),
+            Self::ModelOrProject => vec![
+                (tr!("filter-model-or-project"), &OPENABLE),
+                (tr!("filter-mesh"), &MESHES),
+                (tr!("filter-sliced"), &crate::sliced::EXTENSIONS),
+                (tr!("filter-project"), &PROJECTS),
             ],
-            Self::Project => &[("Encrust project", &PROJECTS)],
-            Self::PrinterProfile => &[("Printer profile", &["toml"])],
+            Self::Project => vec![(tr!("filter-project"), &PROJECTS)],
+            Self::PrinterProfile => vec![(tr!("filter-printer-profile"), &["toml"])],
             Self::ResinProfile | Self::Profile(printer_profiles::Kind::Resin) => {
-                &[("Resin profile or sliced file", &RESIN_SOURCES)]
+                vec![(tr!("filter-resin"), &RESIN_SOURCES)]
             }
-            Self::ReliefPicture => &[("Picture", &PICTURES)],
-            Self::Profile(_) => &[("Profile", &["toml"])],
+            Self::ReliefPicture => vec![(tr!("filter-picture"), &PICTURES)],
+            Self::Profile(_) => vec![(tr!("filter-profile"), &["toml"])],
         }
     }
 
@@ -130,7 +131,7 @@ impl Wanted {
     pub fn extensions(self) -> &'static [&'static str] {
         self.filters()
             .first()
-            .map_or(&[][..], |(_, extensions)| *extensions)
+            .map_or(&[][..], |(_, extensions)| extensions)
     }
 
     /// Whether `path` is one of the files this dialog asked for.
@@ -264,7 +265,7 @@ fn in_folder_of(mesh: &str, siblings: &[(String, Arc<[u8]>)]) -> Arc<[(String, A
 pub fn pick(wanted: Wanted) -> Option<Handed> {
     let mut dialog = rfd::FileDialog::new();
     for (name, extensions) in wanted.filters() {
-        dialog = dialog.add_filter(*name, extensions);
+        dialog = dialog.add_filter(name, extensions);
     }
     dialog.pick_file().map(Handed::Path)
 }
@@ -283,12 +284,13 @@ pub fn save_text(name: &str, wanted: Wanted, text: &str) -> anyhow::Result<Optio
 
     let mut dialog = rfd::FileDialog::new().set_file_name(name);
     for (filter, extensions) in wanted.filters() {
-        dialog = dialog.add_filter(*filter, extensions);
+        dialog = dialog.add_filter(filter, extensions);
     }
     let Some(path) = dialog.save_file() else {
         return Ok(None);
     };
-    std::fs::write(&path, text).with_context(|| format!("cannot write {}", path.display()))?;
+    std::fs::write(&path, text)
+        .with_context(|| tr!("error-cannot-write", path = path.display().to_string()))?;
     Ok(Some(path))
 }
 
@@ -299,7 +301,7 @@ pub fn save_text(name: &str, _wanted: Wanted, text: &str) -> anyhow::Result<Opti
 
     crate::web::files::download(name, text.as_bytes())
         .map_err(|error| anyhow::Error::new(crate::web::opfs::failed(error)))
-        .with_context(|| format!("cannot hand over {name}"))?;
+        .with_context(|| tr!("error-cannot-hand-over", name = name.to_owned()))?;
     Ok(Some(PathBuf::from(name)))
 }
 
@@ -330,7 +332,7 @@ mod tests {
             "built back into a model"
         );
         assert!(!wanted.takes(Path::new("notes.txt")));
-        let names: Vec<&str> = wanted.filters().iter().map(|(name, _)| *name).collect();
+        let names: Vec<String> = wanted.filters().into_iter().map(|(name, _)| name).collect();
         assert_eq!(
             names,
             ["Model or project", "Mesh", "Sliced file", "Encrust project"]

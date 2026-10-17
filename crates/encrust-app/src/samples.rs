@@ -13,39 +13,55 @@ use std::sync::Arc;
 use core_geometry::Mesh;
 
 use crate::files::Handed;
+use crate::i18n::tr;
 
 /// One test print, opened as if its file had been dropped on the window.
 pub struct Sample {
-    pub name: &'static str,
-    /// What printing it tells, shown when the pointer rests on its name.
-    pub about: &'static str,
+    /// The STL's name, the same in every language and safe on every file system.
+    file: &'static str,
+    name: fn() -> String,
+    about: fn() -> String,
     build: fn() -> Mesh,
 }
 
 pub const SAMPLES: [Sample; 4] = [
     Sample {
-        name: "Detail test",
-        about: "Spikes, ledges at three angles and the mark's overhangs, all without supports.",
+        file: "detail-test.stl",
+        name: || tr!("sample-detail"),
+        about: || tr!("sample-detail-about"),
         build: detail::build,
     },
     Sample {
-        name: "Exposure check",
-        about: "Pins and fins break off underexposed, slots and holes close up overexposed.",
+        file: "exposure-check.stl",
+        name: || tr!("sample-exposure"),
+        about: || tr!("sample-exposure-about"),
         build: exposure::build,
     },
     Sample {
-        name: "Surface finish",
-        about: "A dome and a column show the pixel steps and anti-aliasing, a ramp the layers.",
+        file: "surface-finish.stl",
+        name: || tr!("sample-surface"),
+        about: || tr!("sample-surface-about"),
         build: surface::build,
     },
     Sample {
-        name: "Fit gauge",
-        about: "Pins 0.3 mm under to 0.1 mm over a 6 mm hole, shortest smallest: which go in.",
+        file: "fit-gauge.stl",
+        name: || tr!("sample-fit"),
+        about: || tr!("sample-fit-about"),
         build: fit::build,
     },
 ];
 
 impl Sample {
+    /// What the test print is called, in the window's language.
+    pub fn name(&self) -> String {
+        (self.name)()
+    }
+
+    /// What printing it tells, shown when the pointer rests on its name.
+    pub fn about(&self) -> String {
+        (self.about)()
+    }
+
     /// The model, built afresh.
     pub fn mesh(&self) -> Mesh {
         (self.build)()
@@ -54,7 +70,7 @@ impl Sample {
     /// The model as an STL handed to the window.
     pub fn handed(&self) -> Handed {
         let bytes = solid::stl(&(self.build)());
-        Handed::bytes(format!("{}.stl", self.name), Arc::from(bytes))
+        Handed::bytes(self.file, Arc::from(bytes))
     }
 }
 
@@ -69,7 +85,7 @@ mod tests {
             let imported = crate::import::prepare(&sample.handed(), &plate, &mut |_| {})
                 .expect("a generated STL reads");
             let summary = &imported.summary;
-            assert!(summary.is_sound(), "{}: {summary:?}", sample.name);
+            assert!(summary.is_sound(), "{}: {summary:?}", sample.name());
         }
     }
 
@@ -77,7 +93,7 @@ mod tests {
     fn every_test_print_stays_small() {
         for sample in &SAMPLES {
             let faces = (sample.build)().faces.len();
-            assert!(faces < 40_000, "{} has {faces} faces", sample.name);
+            assert!(faces < 40_000, "{} has {faces} faces", sample.name());
         }
     }
 

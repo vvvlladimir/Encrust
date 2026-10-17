@@ -6,6 +6,7 @@ mod connection;
 use core_pipeline::SlicedFormat;
 use printer_profiles::PrinterProfile;
 
+use crate::i18n::tr;
 use crate::job::label_of;
 use crate::panels::Window;
 use crate::panels::settings::{form_card, report, settled};
@@ -16,9 +17,6 @@ use crate::ui::{count_row, hint, icon, number_row, picker, secondary_button, swi
 const FINE_STEP: f64 = 0.01;
 const COARSE_STEP: f64 = 0.1;
 
-const BROWSER_SENDS_NOTHING: &str = "A browser cannot reach a printer on your network. \
-    What is sliced downloads, and goes over on a stick or through the printer's own app.";
-
 /// The machine open in the list, written back as it is edited.
 pub fn form(ui: &mut egui::Ui, window: &mut Window) {
     let Some(draft) = window.machine.settings.printer.as_mut() else {
@@ -27,17 +25,17 @@ pub fn form(ui: &mut egui::Ui, window: &mut Window) {
     let shipped = draft.shipped().cloned();
     let (id, profile) = (draft.id.clone(), &mut draft.values);
     let mut restore = false;
-    form_card(ui, "Machine", |ui| {
-        text_row(ui, "Name", &mut profile.name);
-        text_row(ui, "Manufacturer", &mut profile.manufacturer);
+    form_card(ui, &tr!("settings-tab-machine"), |ui| {
+        text_row(ui, &tr!("settings-name"), &mut profile.name);
+        text_row(ui, &tr!("printer-manufacturer"), &mut profile.manufacturer);
         if shipped.is_some() {
             restore = own_copy_note(ui);
         }
     });
-    form_card(ui, "Display", |ui| display(ui, profile));
-    form_card(ui, "Build volume", |ui| volume(ui, profile));
-    form_card(ui, "Output", |ui| output(ui, profile));
-    form_card(ui, "Firmware", |ui| firmware(ui, profile));
+    form_card(ui, &tr!("printer-display"), |ui| display(ui, profile));
+    form_card(ui, &tr!("printer-build-volume"), |ui| volume(ui, profile));
+    form_card(ui, &tr!("printer-output"), |ui| output(ui, profile));
+    form_card(ui, &tr!("printer-firmware"), |ui| firmware(ui, profile));
 
     if restore {
         if let Some(shipped) = shipped {
@@ -58,9 +56,11 @@ pub fn network(ui: &mut egui::Ui, window: &mut Window) {
     };
     let profile = &mut draft.values;
     // A browser reaches no printer, so a file is downloaded instead (ADR 0182).
-    form_card(ui, "Network", |ui| match cfg!(target_arch = "wasm32") {
-        true => hint(ui, BROWSER_SENDS_NOTHING),
-        false => connection::card(ui, profile, &mut machine.network),
+    form_card(ui, &tr!("settings-tab-network"), |ui| {
+        match cfg!(target_arch = "wasm32") {
+            true => hint(ui, &tr!("printer-browser-sends-nothing")),
+            false => connection::card(ui, profile, &mut machine.network),
+        }
     });
     if settled(ui) {
         autosave(window);
@@ -72,13 +72,9 @@ pub fn network(ui: &mut egui::Ui, window: &mut Window) {
 /// Answers whether the shipped profile was asked for back.
 fn own_copy_note(ui: &mut egui::Ui) -> bool {
     ui.add_space(4.0);
-    hint(
-        ui,
-        "Your copy of a machine this build also ships, and the two differ. Yours wins, \
-         including where a later release corrected the shipped numbers.",
-    );
+    hint(ui, &tr!("printer-own-copy"));
     ui.add_space(4.0);
-    secondary_button(ui, icon::UPDATE, "Use the shipped profile").clicked()
+    secondary_button(ui, icon::UPDATE, &tr!("printer-use-shipped")).clicked()
 }
 
 /// Writes the shipped profile back over the user's copy, and stands the plate under it
@@ -92,7 +88,7 @@ fn put_shipped_back(window: &mut Window, id: &str, shipped: PrinterProfile) {
         .map(drop);
     if report(
         &mut window.machine.status,
-        "cannot put the shipped profile back",
+        &tr!("printer-cannot-put-back"),
         outcome,
     )
     .is_none()
@@ -125,7 +121,7 @@ fn autosave(window: &mut Window) {
         .save_printer(&draft.id, &draft.values);
     if report(
         &mut window.machine.status,
-        "cannot save the printer",
+        &tr!("printer-cannot-save"),
         outcome,
     )
     .is_none()
@@ -155,14 +151,14 @@ fn autosave(window: &mut Window) {
 /// being left as resin that never sets; see `docs/decisions/0113`.
 fn grey_floor_row(ui: &mut egui::Ui, floor: &mut u8) {
     let mut value = u32::from(*floor);
-    if count_row(ui, "Grey floor", &mut value, "", 1.0, 0..=254) {
+    if count_row(ui, &tr!("printer-grey-floor"), &mut value, "", 1.0, 0..=254) {
         *floor = value as u8;
     }
     hint(
         ui,
-        match floor {
-            0 => "every grey is written; a pixel too dim to cure leaves liquid resin",
-            _ => "a dimmer pixel is written black, so an edge loses a fraction of a pixel",
+        &match floor {
+            0 => tr!("printer-grey-floor-off"),
+            _ => tr!("printer-grey-floor-on"),
         },
     );
 }
@@ -171,34 +167,34 @@ fn grey_floor_row(ui: &mut egui::Ui, floor: &mut u8) {
 fn display(ui: &mut egui::Ui, profile: &mut PrinterProfile) {
     count_row(
         ui,
-        "Panel width",
+        &tr!("printer-panel-width"),
         &mut profile.display.width_px,
-        "px",
+        &tr!("unit-px"),
         1.0,
         1..=u32::MAX,
     );
     count_row(
         ui,
-        "Panel height",
+        &tr!("printer-panel-height"),
         &mut profile.display.height_px,
-        "px",
+        &tr!("unit-px"),
         1.0,
         1..=u32::MAX,
     );
     number_row(
         ui,
-        "Lit width",
+        &tr!("printer-lit-width"),
         &mut profile.display.width_mm,
-        "mm",
+        &tr!("unit-mm"),
         FINE_STEP,
         0.01..=1000.0,
         2,
     );
     number_row(
         ui,
-        "Lit height",
+        &tr!("printer-lit-height"),
         &mut profile.display.height_mm,
-        "mm",
+        &tr!("unit-mm"),
         FINE_STEP,
         0.01..=1000.0,
         2,
@@ -207,10 +203,10 @@ fn display(ui: &mut egui::Ui, profile: &mut PrinterProfile) {
     let (pitch_x, pitch_y) = profile.display.pixel_pitch_mm();
     hint(
         ui,
-        &format!(
-            "{:.1} x {:.1} um a pixel",
-            pitch_x * 1000.0,
-            pitch_y * 1000.0
+        &tr!(
+            "printer-pitch",
+            x = format!("{:.1}", pitch_x * 1000.0),
+            y = format!("{:.1}", pitch_y * 1000.0)
         ),
     );
 
@@ -221,36 +217,36 @@ fn display(ui: &mut egui::Ui, profile: &mut PrinterProfile) {
 fn volume(ui: &mut egui::Ui, profile: &mut PrinterProfile) {
     number_row(
         ui,
-        "Volume X",
+        &tr!("printer-volume-x"),
         &mut profile.build_volume.x,
-        "mm",
+        &tr!("unit-mm"),
         COARSE_STEP,
         1.0..=1000.0,
         2,
     );
     number_row(
         ui,
-        "Volume Y",
+        &tr!("printer-volume-y"),
         &mut profile.build_volume.y,
-        "mm",
+        &tr!("unit-mm"),
         COARSE_STEP,
         1.0..=1000.0,
         2,
     );
     number_row(
         ui,
-        "Volume Z",
+        &tr!("printer-volume-z"),
         &mut profile.build_volume.z,
-        "mm",
+        &tr!("unit-mm"),
         COARSE_STEP,
         1.0..=1000.0,
         2,
     );
 
     ui.add_space(6.0);
-    switch(ui, &mut profile.mirror_x, "Mirror across X");
-    switch(ui, &mut profile.mirror_y, "Mirror across Y");
-    hint(ui, "A mask printed the wrong way round is a mirrored part.");
+    switch(ui, &mut profile.mirror_x, &tr!("printer-mirror-x"));
+    switch(ui, &mut profile.mirror_y, &tr!("printer-mirror-y"));
+    hint(ui, &tr!("printer-mirror-note"));
 }
 
 /// What this machine obeys beyond the header, which no file format states.
@@ -258,16 +254,13 @@ fn firmware(ui: &mut egui::Ui, profile: &mut PrinterProfile) {
     switch(
         ui,
         &mut profile.firmware.per_layer_settings,
-        "Per-layer settings",
+        &tr!("printer-per-layer"),
     );
     hint(
         ui,
-        match profile.firmware.per_layer_settings {
-            true => "exposure and motion are read from each layer; .goo calls this advance mode",
-            false => {
-                "every layer prints at the header's numbers, and the machine ramps the \
-                      bottom block itself"
-            }
+        &match profile.firmware.per_layer_settings {
+            true => tr!("printer-per-layer-on"),
+            false => tr!("printer-per-layer-off"),
         },
     );
 
@@ -275,12 +268,9 @@ fn firmware(ui: &mut egui::Ui, profile: &mut PrinterProfile) {
     switch(
         ui,
         &mut profile.firmware.variable_layer_height,
-        "Variable layer height",
+        &tr!("printer-variable-height"),
     );
-    hint(
-        ui,
-        "Off means the plate steps by the header's height, so an adaptive stack is refused.",
-    );
+    hint(ui, &tr!("printer-variable-height-note"));
 }
 
 /// The container this machine's firmware reads. Every one the window can write *for this
@@ -301,8 +291,5 @@ fn output(ui: &mut egui::Ui, profile: &mut PrinterProfile) {
             }
         }
     });
-    hint(
-        ui,
-        "What this machine is sliced into, dialog and printer alike.",
-    );
+    hint(ui, &tr!("printer-output-note"));
 }

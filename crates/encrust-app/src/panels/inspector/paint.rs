@@ -1,10 +1,11 @@
 use core_geometry::Scalar;
 
+use crate::i18n::tr;
 use crate::panels::Window;
 use crate::status::Status;
 use crate::supports::Placing;
 use crate::ui::{
-    Segment, Segmented, hint, icon, list, list_row, nested, number_row, primary_button,
+    Segment, Segmented, describe, hint, icon, list, list_row, nested, number_row, primary_button,
     secondary_button, section, switch, theme,
 };
 
@@ -27,12 +28,12 @@ const MAX_FLOOD_DEG: f32 = 180.0;
 
 /// What a placing mode does. Short, because it stays on screen under the switch for as
 /// long as the tool is in hand.
-fn paint_hint(placing: Placing) -> &'static str {
+fn paint_hint(placing: Placing) -> String {
     match placing {
-        Placing::Point => "Click to place, alt-click to remove.",
-        Placing::Paint => "Drag to paint, ctrl-click a surface, alt to erase.",
-        Placing::Block => "Drag to block, ctrl-click a surface, alt to erase.",
-        Placing::Erase => "Drag to take paint and blocks off, ctrl-click a surface.",
+        Placing::Point => tr!("paint-hint-point"),
+        Placing::Paint => tr!("paint-hint-paint"),
+        Placing::Block => tr!("paint-hint-block"),
+        Placing::Erase => tr!("paint-hint-erase"),
     }
 }
 
@@ -40,18 +41,29 @@ fn paint_hint(placing: Placing) -> &'static str {
 /// the next ones join.
 pub fn ui(ui: &mut egui::Ui, window: &mut Window) {
     super::shape::profile_section(ui, window);
-    section(ui, "Brush", None, |ui| painting(ui, window));
-    section(ui, "Fill", None, |ui| {
+    section(ui, &tr!("paint-brush"), None, |ui| {
+        describe(ui, &tr!("paint-brush-help"));
+        painting(ui, window);
+    });
+    section(ui, &tr!("supports-placing-fill"), None, |ui| {
+        describe(ui, &tr!("paint-fill-help"));
         // How dense a fill comes out is worth reading whichever brush is in hand.
-        spacing_row(ui, "Rim", &mut window.tools.supports.fill.border_spacing_mm);
         spacing_row(
             ui,
-            "Inside",
+            &tr!("paint-rim"),
+            &mut window.tools.supports.fill.border_spacing_mm,
+        );
+        spacing_row(
+            ui,
+            &tr!("paint-inside"),
             &mut window.tools.supports.fill.infill_spacing_mm,
         );
         clear(ui, window);
     });
-    section(ui, "Groups", None, |ui| groups(ui, window));
+    section(ui, &tr!("paint-groups"), None, |ui| {
+        describe(ui, &tr!("paint-groups-help"));
+        groups(ui, window);
+    });
 }
 
 /// Filling what is painted with supports.
@@ -61,24 +73,20 @@ pub fn action(ui: &mut egui::Ui, window: &mut Window) {
         .scene
         .targets()
         .any(|object| !object.supports.painted().is_empty());
-    if primary_button(ui, icon::SUPPORTS, "Fill painted areas", painted).clicked() {
+    if primary_button(ui, icon::SUPPORTS, &tr!("paint-fill"), painted).clicked() {
         let added = window.tools.supports.fill(&mut window.doc.scene);
-        window.machine.status = Status::Info(match added {
-            0 => "The painted areas had nowhere to put a support".to_owned(),
-            1 => "Filled the painted areas with 1 support".to_owned(),
-            added => format!("Filled the painted areas with {added} supports"),
-        });
+        window.machine.status = Status::Info(tr!("paint-filled", count = added));
     }
 }
 
 /// Taking the paint, or the blocking, off again; with the eraser in hand, both.
 fn clear(ui: &mut egui::Ui, window: &mut Window) {
-    let (label, layers): (&str, &[bool]) = match window.tools.supports.placing {
-        Placing::Block => ("Clear blocked areas", &[true]),
-        Placing::Erase => ("Clear painted and blocked areas", &[false, true]),
-        Placing::Point | Placing::Paint => ("Clear painted areas", &[false]),
+    let (label, layers): (String, &[bool]) = match window.tools.supports.placing {
+        Placing::Block => (tr!("paint-clear-blocked"), &[true]),
+        Placing::Erase => (tr!("paint-clear-both"), &[false, true]),
+        Placing::Point | Placing::Paint => (tr!("paint-clear-painted"), &[false]),
     };
-    if secondary_button(ui, icon::REMOVE, label).clicked() {
+    if secondary_button(ui, icon::REMOVE, &label).clicked() {
         for object in window.doc.scene.targets_mut() {
             for blocking in layers {
                 object.supports.clear_paint(*blocking);
@@ -97,24 +105,24 @@ fn painting(ui: &mut egui::Ui, window: &mut Window) {
     }
 
     ui.add_space(4.0);
-    hint(ui, paint_hint(window.tools.supports.placing));
+    hint(ui, &paint_hint(window.tools.supports.placing));
 
     if window.tools.supports.placing.paints() {
         ui.add_space(4.0);
         number_row(
             ui,
-            "Brush",
+            &tr!("paint-brush"),
             &mut window.tools.supports.brush_radius_mm,
-            "mm",
+            &tr!("unit-mm"),
             COARSE_STEP,
             MIN_BRUSH_MM..=MAX_BRUSH_MM,
             2,
         );
         number_row(
             ui,
-            "Surface angle",
+            &tr!("paint-surface-angle"),
             &mut window.tools.supports.flood_angle_deg,
-            "deg",
+            &tr!("unit-deg"),
             ANGLE_STEP,
             MIN_FLOOD_DEG..=MAX_FLOOD_DEG,
             0,
@@ -132,9 +140,9 @@ fn spacing_row(ui: &mut egui::Ui, label: &str, spacing_mm: &mut Option<Scalar>) 
         nested(ui, |ui| {
             number_row(
                 ui,
-                "Spacing",
+                &tr!("support-table-spacing"),
                 value,
-                "mm",
+                &tr!("unit-mm"),
                 COARSE_STEP,
                 MIN_SPACING_MM..=MAX_SPACING_MM,
                 2,
@@ -173,7 +181,8 @@ fn groups(ui: &mut egui::Ui, window: &mut Window) {
         for (group, name) in names.iter().enumerate() {
             let group = group as u16;
             // The last group cannot go: something has to hold the raft's numbers.
-            let remove = (names.len() > 1).then_some((icon::CANCEL, "Drop this group"));
+            let drop_label = tr!("paint-drop-group");
+            let remove = (names.len() > 1).then_some((icon::CANCEL, drop_label.as_str()));
             let tint = Some(theme::support_tint(group as usize));
             let rename = Some(egui::Id::new(("support-group-name", group)));
             let holds = window.tools.supports.group_holds(group, &window.doc.scene);
@@ -219,7 +228,7 @@ fn groups(ui: &mut egui::Ui, window: &mut Window) {
         }
     });
 
-    if secondary_button(ui, icon::ADD, "New group").clicked() {
+    if secondary_button(ui, icon::ADD, &tr!("paint-new-group")).clicked() {
         window.tools.supports.add_group();
     }
     if let Some((group, profile)) = retuned {
@@ -268,7 +277,7 @@ fn profile_menu(
     ui.set_max_width(PROFILE_MENU_W);
     ui.spacing_mut().item_spacing.y = 2.0;
     ui.spacing_mut().button_padding = egui::vec2(8.0, 5.0);
-    let heading = egui::RichText::new("Build this group to")
+    let heading = egui::RichText::new(tr!("paint-build-to"))
         .font(theme::small())
         .color(colors.text_low);
     ui.add(egui::Label::new(heading).selectable(false));
@@ -312,24 +321,19 @@ fn dropping(ui: &mut egui::Ui, window: &mut Window) {
     };
     let name = entry.name.clone();
     egui::Modal::new(egui::Id::new("drop-support-group")).show(ui.ctx(), |ui| {
-        ui.label(match holds {
-            1 => format!("{name} holds 1 support, which goes with it."),
-            holds => format!("{name} holds {holds} supports, which go with it."),
-        });
+        ui.label(tr!("paint-group-holds", name = name.clone(), count = holds));
         ui.add_space(8.0);
         ui.horizontal(|ui| {
-            if ui.button("Drop the group").clicked() {
+            if ui.button(tr!("paint-drop-the-group")).clicked() {
                 let gone = window
                     .tools
                     .supports
                     .remove_group(group, &mut window.doc.scene);
-                window.machine.status = Status::Info(match gone {
-                    1 => format!("Dropped {name} and 1 support"),
-                    gone => format!("Dropped {name} and {gone} supports"),
-                });
+                window.machine.status =
+                    Status::Info(tr!("paint-dropped", name = name.clone(), count = gone));
                 window.tools.supports.dropping = None;
             }
-            if ui.button("Keep it").clicked() {
+            if ui.button(tr!("paint-keep-it")).clicked() {
                 window.tools.supports.dropping = None;
             }
         });

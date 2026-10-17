@@ -6,6 +6,7 @@
 
 use egui::RichText;
 
+use crate::i18n::tr;
 use crate::report::{FILE_NAME, Facts, Plate, Report};
 use crate::scene::Scene;
 use crate::state::{Machine, Tools};
@@ -28,16 +29,6 @@ const CHROME_H: f32 = 110.0;
 /// The report pane's share of the body, and the least it is left with on a short window.
 const REPORT_SHARE: f32 = 0.45;
 const REPORT_MIN_H: f32 = 120.0;
-
-/// What the sheet says above the fields. It is the privacy notice as well, which is why it
-/// states what does not happen before it asks for anything; see `docs/decisions/0212`.
-const NOTHING_SENT: &str = "Encrust is in alpha, and a report is how a bug gets fixed. Nothing \
-                            is sent from here: what you see below stays on this machine until \
-                            you hand it over yourself.";
-
-const NO_MODEL: &str = "Your model is never in the report. Attach it to the issue yourself only \
-                        if it is yours to share — a small shape that shows the same bug is \
-                        better for everyone.";
 
 /// Shows the sheet over the window, and closes it on Escape or a click outside.
 pub fn ui(ctx: &egui::Context, scene: &Scene, tools: &Tools, machine: &mut Machine) {
@@ -87,17 +78,14 @@ pub fn ui(ctx: &egui::Context, scene: &Scene, tools: &Tools, machine: &mut Machi
                 .max_height(body_h)
                 .auto_shrink([false, true])
                 .show(ui, |ui| {
-                    hint(ui, NOTHING_SENT);
+                    // The privacy notice as well, so it says what does not happen first (ADR 0212).
+                    hint(ui, &tr!("report-nothing-sent"));
                     ui.add_space(12.0);
-                    asked(
-                        ui,
-                        "What happened, and what you expected instead",
-                        &mut report.what,
-                    );
-                    asked(ui, "How to reproduce it", &mut report.steps);
+                    asked(ui, &tr!("report-what-happened"), &mut report.what);
+                    asked(ui, &tr!("report-steps"), &mut report.steps);
                     carried(ui, report);
                     ui.add_space(8.0);
-                    hint(ui, NO_MODEL);
+                    hint(ui, &tr!("report-no-model"));
                     ui.add_space(12.0);
 
                     // Drawn after the fields so that a key pressed this frame is already in it.
@@ -116,7 +104,7 @@ pub fn ui(ctx: &egui::Context, scene: &Scene, tools: &Tools, machine: &mut Machi
 }
 
 fn header(ui: &mut egui::Ui, report: &mut Report) {
-    if dialog_head(ui, icon::BUG, "Report a problem") {
+    if dialog_head(ui, icon::BUG, &tr!("report-title")) {
         report.open = false;
     }
     ui.add_space(8.0);
@@ -143,15 +131,15 @@ fn asked(ui: &mut egui::Ui, question: &str, answer: &mut String) {
 /// The three switches over what the window adds of its own.
 fn carried(ui: &mut egui::Ui, report: &mut Report) {
     let include = &mut report.include;
-    switch(ui, &mut include.profiles, "The printer and resin profiles");
-    switch(ui, &mut include.settings, "What the tool panels are set to");
-    switch(ui, &mut include.plate, "How much stands on the plate");
+    switch(ui, &mut include.profiles, &tr!("report-include-profiles"));
+    switch(ui, &mut include.settings, &tr!("report-include-settings"));
+    switch(ui, &mut include.plate, &tr!("report-include-plate"));
 }
 
 /// The report itself, whole and scrollable: a user who can read what they are handing
 /// over does not have to trust this window about it.
 fn shown(ui: &mut egui::Ui, text: &str, height: f32) {
-    crate::ui::heading(ui, "The report", None);
+    crate::ui::heading(ui, &tr!("report-the-report"), None);
     ui.add_space(4.0);
     egui::Frame::new()
         .fill(theme::colors().base)
@@ -182,19 +170,18 @@ fn handed_over(
     status: &mut Status,
 ) {
     ui.horizontal(|ui| {
-        if inline_button(ui, icon::BUG, "Open an issue", true, true).clicked() {
+        if inline_button(ui, icon::BUG, &tr!("report-open-issue"), true, true).clicked() {
             ui.ctx().copy_text(text.to_owned());
             ui.ctx()
                 .open_url(egui::OpenUrl::new_tab(report.issue_url(facts)));
-            *status =
-                Status::Info("The report is on your clipboard: paste it into the issue".to_owned());
+            *status = Status::Info(tr!("report-copied-for-issue"));
         }
         ui.add_space(6.0);
-        if inline_button(ui, icon::CLIPBOARD, "Copy the report", false, true).clicked() {
+        if inline_button(ui, icon::CLIPBOARD, &tr!("report-copy"), false, true).clicked() {
             ui.ctx().copy_text(text.to_owned());
-            *status = Status::Info("The report is on your clipboard".to_owned());
+            *status = Status::Info(tr!("report-copied"));
         }
-        if inline_button(ui, icon::SAVE, "Save it as a file", false, true).clicked() {
+        if inline_button(ui, icon::SAVE, &tr!("report-save"), false, true).clicked() {
             save(text, status);
         }
     });
@@ -225,8 +212,11 @@ fn save(text: &str, status: &mut Status) {
         return;
     };
     let written = std::fs::write(&path, text)
-        .with_context(|| format!("cannot write the report to {}", path.display()));
-    let _ = status.report(&format!("Saved {}", path.display()), written);
+        .with_context(|| tr!("report-cannot-write", path = path.display().to_string()));
+    let _ = status.report(
+        &tr!("status-saved", name = path.display().to_string()),
+        written,
+    );
 }
 
 /// A browser asks where a download goes itself, so the report is only named.
@@ -236,8 +226,8 @@ fn save(text: &str, status: &mut Status) {
 
     let handed = crate::web::files::download(FILE_NAME, text.as_bytes())
         .map_err(|error| anyhow::Error::new(crate::web::opfs::failed(error)))
-        .context("cannot hand over the report");
-    let _ = status.report(&format!("Saved {FILE_NAME}"), handed);
+        .context(tr!("report-cannot-hand-over"));
+    let _ = status.report(&tr!("status-saved", name = FILE_NAME), handed);
 }
 
 #[cfg(test)]

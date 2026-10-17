@@ -2,6 +2,7 @@ use core_analysis::Risk;
 use core_raster::RasterSettings;
 use egui::{Align2, Rect, Sense, StrokeKind, UiBuilder, Vec2};
 
+use crate::i18n::tr;
 use crate::panels::inspector::risk_tint;
 use crate::preview::{PixelRect, Preview};
 use crate::state::Machine;
@@ -22,15 +23,11 @@ const RISK_RING_R: f32 = 12.0;
 /// the cards as the model does; the caption keeps to `clear`, the room they leave.
 pub fn ui(ui: &mut egui::Ui, machine: &mut Machine, clear: Rect) {
     let Some(settings) = machine.slicing.raster_settings() else {
-        caption(
-            ui,
-            clear,
-            "Pick a machine to know the panel to draw the layers on.",
-        );
+        caption(ui, clear, &tr!("mask-pick-machine"));
         return;
     };
     if machine.preview.layer_count() == 0 {
-        caption(ui, clear, "No stack to show yet.");
+        caption(ui, clear, &tr!("mask-no-stack"));
         return;
     }
 
@@ -49,11 +46,11 @@ pub fn ui(ui: &mut egui::Ui, machine: &mut Machine, clear: Rect) {
     };
     let zoom = machine.preview.view.zoom;
     let hint = if zoom > 1.0 {
-        format!("x{zoom:.1}   double-click to fit")
+        tr!("mask-zoomed", zoom = format!("{zoom:.1}"))
     } else {
-        "scroll to zoom, drag to move".to_owned()
+        tr!("mask-how")
     };
-    caption(ui, clear, &format!("Layer mask   1 : {scale}   {hint}"));
+    caption(ui, clear, &tr!("mask-caption", scale = scale, hint = hint));
 }
 
 /// What the check found on the layer shown, once the stack is measured.
@@ -99,7 +96,7 @@ fn picture(
     let texture = match preview.texture(ui.ctx(), settings) {
         Ok(texture) => texture,
         Err(error) => {
-            *status = Status::failed(&error.context("cannot draw the layer"));
+            *status = Status::failed(&error.context(tr!("mask-cannot-draw")));
             return false;
         }
     };
@@ -138,7 +135,7 @@ fn picture(
         }
         Ok(None) => false,
         Err(error) => {
-            *status = Status::failed(&error.context("cannot draw the layer in full"));
+            *status = Status::failed(&error.context(tr!("mask-cannot-draw-full")));
             false
         }
     };

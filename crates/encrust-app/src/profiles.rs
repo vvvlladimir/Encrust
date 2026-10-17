@@ -3,6 +3,7 @@
 use printer_profiles::{Kind, MaterialProfile, PrinterProfile};
 
 use crate::files::{self, Handed, Wanted};
+use crate::i18n::tr;
 use crate::import::recenter;
 use crate::panels::Window;
 use crate::plate::BuildPlate;
@@ -25,11 +26,11 @@ pub fn printer_menu(ui: &mut egui::Ui, window: &mut Window) {
         }
     }
     if !listed {
-        ui.label("No machine yet. Add one in Machine and resin.");
+        ui.label(tr!("picker-no-machine"));
     }
 
     ui.separator();
-    if ui.button("Machine and resin...").clicked() {
+    if ui.button(tr!("menu-machine-and-resin")).clicked() {
         ui.close();
         crate::panels::open_machines(window.machine);
         return;
@@ -66,11 +67,11 @@ pub fn resin_menu(ui: &mut egui::Ui, machine: &mut Machine) {
         }
     }
     if !listed {
-        ui.label("No resins on this printer yet. Add them in Machine and resin.");
+        ui.label(tr!("picker-no-resin"));
     }
 
     ui.separator();
-    if ui.button("Edit this resin...").clicked() {
+    if ui.button(tr!("picker-edit-resin")).clicked() {
         ui.close();
         let (printer, resin) = (slicing.printer_id.clone(), slicing.resin_id.clone());
         machine

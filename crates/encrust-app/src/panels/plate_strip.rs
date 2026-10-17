@@ -1,5 +1,6 @@
 use egui::{Align2, Sense, Stroke, vec2};
 
+use crate::i18n::tr;
 use crate::scene::{ObjectId, Scene};
 use crate::shortcuts::{self, Action};
 use crate::ui::{focus_ring, icon, icon_button, theme};
@@ -120,11 +121,7 @@ fn square(ui: &mut egui::Ui, name: &str, count: usize, place: Place) -> Option<A
     );
     focus_ring(ui, &response, theme::R_CONTROL);
 
-    let models = if count == 1 {
-        "1 model".to_owned()
-    } else {
-        format!("{count} models")
-    };
+    let models = tr!("start-models", count = count);
     let response = response.on_hover_text(format!("{name}, {models}"));
     let asked = menu(&response, place);
     asked.or_else(|| response.clicked().then_some(Asked::Show))
@@ -134,13 +131,13 @@ fn square(ui: &mut egui::Ui, name: &str, count: usize, place: Place) -> Option<A
 fn menu(response: &egui::Response, place: Place) -> Option<Asked> {
     let mut asked = None;
     response.context_menu(|ui| {
-        if ui.button("Duplicate").clicked() {
+        if ui.button(tr!("action-duplicate")).clicked() {
             asked = Some(Asked::Duplicate);
             ui.close();
         }
         let gather = place.picked && !place.active;
         if ui
-            .add_enabled(gather, egui::Button::new("Move the selection here"))
+            .add_enabled(gather, egui::Button::new(tr!("plates-gather")))
             .clicked()
         {
             asked = Some(Asked::Gather);
@@ -148,7 +145,7 @@ fn menu(response: &egui::Response, place: Place) -> Option<Asked> {
         }
         ui.separator();
         if ui
-            .add_enabled(place.many, egui::Button::new("Remove with what is on it"))
+            .add_enabled(place.many, egui::Button::new(tr!("plates-remove")))
             .clicked()
         {
             asked = Some(Asked::Remove);

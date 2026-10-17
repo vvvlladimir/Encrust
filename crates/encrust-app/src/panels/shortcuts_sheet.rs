@@ -2,6 +2,7 @@
 
 use egui::{Align, Align2, Layout, RichText, Sense, StrokeKind, vec2};
 
+use crate::i18n::tr;
 use crate::shortcuts::{BINDINGS, GESTURES, Group, chord_keys};
 use crate::ui::{dialog_frame, dialog_head, hairline, icon, theme};
 
@@ -45,12 +46,9 @@ pub fn ui(ctx: &egui::Context, open: &mut bool) {
             hairline(ui);
             ui.add_space(8.0);
             ui.label(
-                RichText::new(
-                    "A tool takes the digit of its place on the rail. Keys are off while a \
-                     field has the cursor.",
-                )
-                .font(theme::small())
-                .color(theme::colors().text_low),
+                RichText::new(tr!("shortcuts-note"))
+                    .font(theme::small())
+                    .color(theme::colors().text_low),
             );
         });
     if sheet.should_close() {
@@ -59,7 +57,7 @@ pub fn ui(ctx: &egui::Context, open: &mut bool) {
 }
 
 fn header(ui: &mut egui::Ui, open: &mut bool) {
-    if dialog_head(ui, icon::KEYBOARD, "Keyboard shortcuts") {
+    if dialog_head(ui, icon::KEYBOARD, &tr!("shortcuts-title")) {
         *open = false;
     }
     ui.add_space(8.0);
@@ -82,10 +80,11 @@ fn column(ui: &mut egui::Ui, groups: &[Group]) {
             ui.add_space(4.0);
             for binding in BINDINGS.iter().filter(|binding| binding.group == *group) {
                 let chords: Vec<Vec<&str>> = binding.keys.iter().map(chord_keys).collect();
-                row(ui, binding.action.label(), &chords);
+                row(ui, &binding.action.label(), &chords);
             }
             for gesture in GESTURES.iter().filter(|gesture| gesture.group == *group) {
-                row(ui, gesture.label, &[vec![gesture.keys]]);
+                let keys = (gesture.keys)();
+                row(ui, &(gesture.label)(), &[vec![keys.as_str()]]);
             }
         }
     });
@@ -123,9 +122,11 @@ fn row(ui: &mut egui::Ui, label: &str, chords: &[Vec<&str>]) {
 
 /// The word between two chords, drawn from its right edge leftwards. Returns its left.
 fn or(ui: &egui::Ui, right: f32, center_y: f32) -> f32 {
-    let galley =
-        ui.painter()
-            .layout_no_wrap("or".to_owned(), theme::small(), theme::colors().text_low);
+    let galley = ui.painter().layout_no_wrap(
+        tr!("shortcuts-or"),
+        theme::small(),
+        theme::colors().text_low,
+    );
     let left = right - galley.size().x;
     let at = egui::pos2(left, center_y - galley.size().y / 2.0);
     ui.painter().galley(at, galley, theme::colors().text_low);

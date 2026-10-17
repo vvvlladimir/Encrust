@@ -106,7 +106,7 @@ fn button(ui: &mut egui::Ui, window: &mut Window, tool: Tool, labelled: bool) {
     let tooltip = shortcuts::tooltip(Action::Pick(tool));
     let badge = badge(window, tool);
     let glyph = tool.glyph();
-    if rail_button(ui, glyph, tool.label(), labelled, &tooltip, active, badge).clicked() {
+    if rail_button(ui, glyph, &tool.label(), labelled, &tooltip, active, badge).clicked() {
         shortcuts::pick(window, tool);
     }
 }

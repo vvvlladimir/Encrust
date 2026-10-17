@@ -6,6 +6,7 @@ use core_geometry::{
     remove_duplicate_faces,
 };
 
+use crate::i18n::tr;
 use crate::scene::{ObjectId, Shaped};
 
 /// One model to close the holes in, owned so that it can cross to the worker thread.
@@ -66,15 +67,15 @@ impl RepairJob {
         match self.outcome.try_recv() {
             Ok(outcome) => Some(outcome),
             Err(TryRecvError::Empty) => None,
-            Err(TryRecvError::Disconnected) => Some(RepairOutcome::Failed(format!(
-                "the thread repairing {} stopped without finishing",
-                self.name
+            Err(TryRecvError::Disconnected) => Some(RepairOutcome::Failed(tr!(
+                "job-thread-stopped-repair",
+                name = self.name.clone()
             ))),
         }
     }
 
     pub fn label(&self) -> String {
-        format!("Repairing {}", self.name)
+        tr!("job-repairing", name = self.name.clone())
     }
 
     /// The model being repaired.

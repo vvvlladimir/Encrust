@@ -10,6 +10,7 @@ use core_mesh_io::{Loaded, ModelFile, loader_for_extension};
 
 use crate::camera::OrbitCamera;
 use crate::files::{self, Handed, Wanted};
+use crate::i18n::tr;
 use crate::job::{ImportJob, ImportOutcome, ImportStage};
 use crate::panels::frame_view;
 use crate::plate::BuildPlate;
@@ -32,7 +33,10 @@ pub struct Imports {
 impl Imports {
     /// Starts opening a mesh. The one way a model reaches the plate.
     pub fn open(&mut self, file: Handed, plate: &BuildPlate, status: &mut Status) {
-        *status = Status::Info(format!("Opening {}", file.path().display()));
+        *status = Status::Info(tr!(
+            "import-opening",
+            path = file.path().display().to_string()
+        ));
         self.jobs.push(ImportJob::spawn(file, plate.clone()));
     }
 
@@ -43,7 +47,10 @@ impl Imports {
         placement: crate::sliced::Placement,
         status: &mut Status,
     ) {
-        *status = Status::Info(format!("Opening {}", file.path().display()));
+        *status = Status::Info(tr!(
+            "import-opening",
+            path = file.path().display().to_string()
+        ));
         self.jobs.push(ImportJob::spawn_sliced(file, placement));
     }
 
@@ -61,7 +68,7 @@ impl Imports {
         let first = self.jobs.first()?;
         Some(match self.jobs.len() {
             1 => first.label(),
-            rest => format!("{}, and {} more", first.label(), rest - 1),
+            rest => tr!("import-and-more", first = first.label(), count = rest - 1),
         })
     }
 
@@ -93,7 +100,7 @@ impl Imports {
                         self.opened.push((path.clone(), parts));
                     }
                     scene.insert(*imported);
-                    *status = Status::Info(format!("Opened {}", path.display()));
+                    *status = Status::Info(tr!("status-opened", path = path.display().to_string()));
                     frame_view(scene, plate, camera);
                 }
                 ImportOutcome::Failed(message) => *status = Status::Error(message),
@@ -132,9 +139,10 @@ pub fn prepare(
     let extension = path
         .extension()
         .and_then(|e| e.to_str())
-        .with_context(|| format!("{name} has no file extension"))?;
+        .with_context(|| tr!("import-no-extension", name = name.clone()))?;
 
-    let loader = loader_for_extension(extension).with_context(|| format!("cannot load {name}"))?;
+    let loader = loader_for_extension(extension)
+        .with_context(|| tr!("import-cannot-load", name = name.clone()))?;
 
     stage(ImportStage::Reading);
     let loaded = match file {
@@ -145,7 +153,7 @@ pub fn prepare(
             beside: &|name| file.beside(name),
         }),
     }
-    .with_context(|| format!("cannot load {name}"))?;
+    .with_context(|| tr!("import-cannot-load", name = name.clone()))?;
 
     stage(ImportStage::Repairing);
     // Repaired in place and moved out at the end, so a mesh of tens of megabytes is
@@ -163,7 +171,7 @@ pub fn prepare(
 
     let bounds = mesh
         .aabb()
-        .with_context(|| format!("{name} has no vertices"))?;
+        .with_context(|| tr!("import-no-vertices", name = name.clone()))?;
     let placement = drop_to_plate(&bounds) + center_over_plate(&bounds, plate.x_mm, plate.y_mm);
 
     stage(ImportStage::Indexing);

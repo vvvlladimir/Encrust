@@ -427,10 +427,6 @@ pub fn tool_title() -> FontId {
 }
 
 /// X, Y or Z beside the arrows in the corner of the plate.
-pub fn help_mark() -> FontId {
-    FontId::new(9.5, FontFamily::Name(MEDIUM.into()))
-}
-
 pub fn axis_letter() -> FontId {
     FontId::new(11.0, FontFamily::Name(SEMIBOLD.into()))
 }

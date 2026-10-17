@@ -6,6 +6,7 @@
 use egui::{Align, Align2, Layout, Rect, RichText, Sense, Stroke, Ui, UiBuilder, pos2, vec2};
 
 use crate::files::{self, Handed, Wanted};
+use crate::i18n::tr;
 use crate::panels::Window;
 use crate::recent::RecentFile;
 use crate::samples::SAMPLES;
@@ -58,7 +59,7 @@ pub fn ui(ui: &mut Ui, window: &mut Window) {
                 page.add_space(8.0);
                 tone(
                     &mut page,
-                    window.machine.status.text(),
+                    &window.machine.status.text(),
                     theme::colors().danger,
                 );
             }
@@ -74,13 +75,13 @@ pub fn ui(ui: &mut Ui, window: &mut Window) {
 fn heading(ui: &mut Ui) {
     let colors = theme::colors();
     ui.label(
-        RichText::new("Start a plate")
+        RichText::new(tr!("start-title"))
             .font(theme::page_title(26.0))
             .color(colors.text_high),
     );
     ui.add_space(4.0);
     ui.label(
-        RichText::new("Open a model, or pick up where you left off.")
+        RichText::new(tr!("start-subtitle"))
             .font(theme::lede())
             .color(colors.text_mid),
     );
@@ -126,7 +127,7 @@ fn actions(ui: &mut Ui, window: &mut Window, width: f32) {
 fn drop_zone(ui: &mut Ui, window: &mut Window, size: egui::Vec2) {
     let (rect, response) = ui.allocate_exact_size(size, Sense::click());
     response.widget_info(|| {
-        egui::WidgetInfo::labeled(egui::WidgetType::Button, true, "Open a model or a project")
+        egui::WidgetInfo::labeled(egui::WidgetType::Button, true, tr!("start-zone"))
     });
     // The edge's stroke straddles the rect, so the clip is a point wider.
     let painter = ui.painter_at(rect.expand(1.0));
@@ -164,16 +165,21 @@ fn paint_zone(painter: &egui::Painter, rect: Rect, hovered: bool) -> f32 {
     painter.extend(egui::Shape::dashed_line(&corners, edge, DASH, DASH));
     let left = rect.left_center();
     let lines = [
-        (vec2(40.0, 0.0), icon::DROP_HERE, theme::icon(26.0), glyph),
+        (
+            vec2(40.0, 0.0),
+            icon::DROP_HERE.to_owned(),
+            theme::icon(26.0),
+            glyph,
+        ),
         (
             vec2(72.0, -11.0),
-            "Drop a model here",
+            tr!("start-drop-here"),
             theme::page_title(17.0),
             colors.text_high,
         ),
         (
             vec2(72.0, 13.0),
-            "STL, OBJ, 3MF, or an .encrust project",
+            tr!("start-drop-formats"),
             theme::small(),
             colors.text_low,
         ),
@@ -200,7 +206,8 @@ fn buttons_row(ui: &mut Ui, zone: Rect, words_end: f32) -> (bool, bool) {
             .x
             + 32.0
     };
-    let both = width("Open a model") + width("Open a project") + theme::ITEM_GAP;
+    let (open_model, open_project) = (tr!("start-open-model"), tr!("start-open-project"));
+    let both = width(&open_model) + width(&open_project) + theme::ITEM_GAP;
     let at = pos2(
         zone.right() - 24.0 - both,
         zone.center().y - theme::BUTTON_H / 2.0,
@@ -214,8 +221,8 @@ fn buttons_row(ui: &mut Ui, zone: Rect, words_end: f32) -> (bool, bool) {
             .layout(Layout::left_to_right(Align::Center)),
     );
     row.spacing_mut().item_spacing.x = theme::ITEM_GAP;
-    let model = inline_button(&mut row, "", "Open a model", true, true).clicked();
-    let project = inline_button(&mut row, "", "Open a project", false, true).clicked();
+    let model = inline_button(&mut row, "", &open_model, true, true).clicked();
+    let project = inline_button(&mut row, "", &open_project, false, true).clicked();
     (model, project)
 }
 
@@ -239,10 +246,10 @@ impl Shelf {
         }
     }
 
-    fn title(self) -> &'static str {
+    fn title(self) -> String {
         match self {
-            Self::Recent => "Recent",
-            Self::TestPrints => "Test prints",
+            Self::Recent => tr!("start-recent"),
+            Self::TestPrints => tr!("start-test-prints"),
         }
     }
 
@@ -284,15 +291,15 @@ fn switch(ui: &mut Ui, window: &Window, size: egui::Vec2) {
         Shelf::TestPrints => SAMPLES.len(),
     };
     let count = match (to, count) {
-        (Shelf::Recent, 1) => "1 file".to_owned(),
-        (Shelf::Recent, count) => format!("{count} files"),
-        (Shelf::TestPrints, count) => format!("{count} models"),
+        (Shelf::Recent, count) => tr!("start-files", count = count),
+        (Shelf::TestPrints, count) => tr!("start-models", count = count),
     };
+    let title = to.title();
     let marks = [
         (inner.left_top(), to.glyph(), theme::icon(22.0), glyph),
         (
             inner.left_bottom() - vec2(0.0, 18.0),
-            to.title(),
+            &title,
             theme::block_title(),
             colors.text_high,
         ),
@@ -365,10 +372,7 @@ fn grid(
 fn recent(ui: &mut Ui, window: &mut Window, size: egui::Vec2, columns: usize) {
     let files = window.machine.recent.files().to_vec();
     if files.is_empty() {
-        describe(
-            ui,
-            "Nothing opened yet. A model or a project you open is shown here.",
-        );
+        describe(ui, &tr!("start-nothing-recent"));
         return;
     }
     let now = crate::updates::now_s();
@@ -395,13 +399,14 @@ fn recent(ui: &mut Ui, window: &mut Window, size: egui::Vec2, columns: usize) {
 fn test_prints(ui: &mut Ui, window: &mut Window, size: egui::Vec2, columns: usize) {
     let picked = grid(ui, SAMPLES.len(), columns, |ui, index| {
         let sample = &SAMPLES[index];
+        let name = sample.name();
         let shown = Tile {
-            name: sample.name,
-            left: "Test print".to_owned(),
+            name: &name,
+            left: tr!("start-test-print"),
             right: "STL".to_owned(),
             picture: Some(sample_picture(ui.ctx(), index)),
         };
-        tile(ui, &shown, size).on_hover_text(sample.about)
+        tile(ui, &shown, size).on_hover_text(sample.about())
     });
     if let Some(index) = picked {
         crate::app::open_by_what_it_is(window, SAMPLES[index].handed());
@@ -416,7 +421,7 @@ pub fn open_recent(window: &mut Window, path: std::path::PathBuf) {
     } else {
         window.machine.recent.forget(&path);
         window.machine.status =
-            crate::status::Status::Error(format!("{} is no longer there", path.display()));
+            crate::status::Status::Error(tr!("start-gone", path = path.display().to_string()));
     }
 }
 
@@ -509,7 +514,7 @@ fn caption(painter: &egui::Painter, shown: &Tile<'_>, inner: Rect, top: f32) {
 /// What kind of file it is, as a tile names it: "Project", or the model's extension.
 fn kind(file: &RecentFile) -> String {
     match file.path.extension().and_then(|ext| ext.to_str()) {
-        Some(core_engine::project::EXTENSION) => "Project".to_owned(),
+        Some(core_engine::project::EXTENSION) => tr!("start-project"),
         Some(ext) => ext.to_uppercase(),
         None => String::new(),
     }
@@ -542,7 +547,7 @@ fn sample_picture(ctx: &egui::Context, index: usize) -> egui::TextureHandle {
         core_geometry::Transform::default(),
     )];
     let image = crate::recent::picture::rendered(&parts);
-    let texture = ctx.load_texture(sample.name, image, egui::TextureOptions::LINEAR);
+    let texture = ctx.load_texture(sample.name(), image, egui::TextureOptions::LINEAR);
     ctx.data_mut(|data| data.insert_temp(id, texture.clone()));
     texture
 }

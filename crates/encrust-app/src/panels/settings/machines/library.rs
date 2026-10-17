@@ -5,6 +5,7 @@
 use egui::{RichText, Ui};
 use printer_profiles::{Catalogue, Entry, PrinterProfile};
 
+use crate::i18n::tr;
 use crate::settings::Library;
 use crate::ui::{hint, icon, inline_button, list, list_row, summary_button, theme};
 
@@ -28,7 +29,7 @@ pub fn page(ui: &mut Ui, catalogue: &Catalogue, library: &mut Library) -> Option
     let entries = super::sorted(catalogue, &needle);
     if !needle.is_empty() {
         if entries.is_empty() {
-            hint(ui, "No machine of that name.");
+            hint(ui, &tr!("machines-no-match"));
         }
         return picked.or_else(|| models(ui, &entries, true));
     }
@@ -54,12 +55,9 @@ pub fn page(ui: &mut Ui, catalogue: &Catalogue, library: &mut Library) -> Option
 fn header(ui: &mut Ui, library: &mut Library) -> Option<Picked> {
     let mut picked = None;
     ui.horizontal(|ui| {
-        let title = library
-            .brand
-            .clone()
-            .unwrap_or_else(|| "Add a machine".to_owned());
+        let title = library.brand.clone().unwrap_or_else(|| tr!("machines-add"));
         if library.brand.is_some() {
-            if inline_button(ui, icon::BACK, "All brands", false, true).clicked() {
+            if inline_button(ui, icon::BACK, &tr!("library-all-brands"), false, true).clicked() {
                 library.brand = None;
             }
             ui.add_space(8.0);
@@ -70,7 +68,7 @@ fn header(ui: &mut Ui, library: &mut Library) -> Option<Picked> {
                 .color(theme::colors().text_mid),
         );
         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-            if inline_button(ui, icon::ADD, "Custom printer", false, true).clicked() {
+            if inline_button(ui, icon::ADD, &tr!("library-custom"), false, true).clicked() {
                 picked = Some(Picked::Custom);
             }
         });
@@ -78,7 +76,7 @@ fn header(ui: &mut Ui, library: &mut Library) -> Option<Picked> {
     ui.add_space(8.0);
     ui.add(
         crate::ui::text_box(egui::TextEdit::singleline(&mut library.search))
-            .hint_text("Search every machine")
+            .hint_text(tr!("library-search"))
             .desired_width(ui.available_width()),
     );
     picked
@@ -105,10 +103,7 @@ fn brands(ui: &mut Ui, catalogue: &Catalogue) -> Option<String> {
     for row in counted.chunks(COLUMNS) {
         ui.columns(COLUMNS, |columns| {
             for (column, (brand, count)) in columns.iter_mut().zip(row) {
-                let detail = match count {
-                    1 => "1 machine".to_owned(),
-                    many => format!("{many} machines"),
-                };
+                let detail = tr!("library-machines", count = *count);
                 let card = summary_button(
                     column,
                     icon::PRINTER,

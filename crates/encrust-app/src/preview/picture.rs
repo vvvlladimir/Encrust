@@ -8,6 +8,7 @@ use core_raster::{
     shrink_factor,
 };
 
+use crate::i18n::tr;
 use crate::ui::theme;
 
 use super::*;
@@ -162,7 +163,7 @@ impl Preview {
     /// layer, scene and panel, with the islands on it against the layer below.
     pub(super) fn full(&mut self, settings: &RasterSettings) -> Result<&Shown> {
         let Some(key) = self.key(settings) else {
-            bail!("no sliced stack to preview");
+            bail!(tr!("preview-no-stack"));
         };
         if self.full.as_ref().is_none_or(|(cached, _)| *cached != key) {
             self.cut_window()?;
@@ -190,14 +191,14 @@ impl Preview {
         }
         match &self.full {
             Some((_, shown)) => Ok(shown),
-            None => bail!("no sliced stack to preview"),
+            None => bail!(tr!("preview-no-stack")),
         }
     }
 
     /// Layer `index` rasterised off the plate being cut.
     pub(super) fn rasterised(&self, index: usize, settings: &RasterSettings) -> Result<LayerRuns> {
         let Some(stack) = self.source.as_ref() else {
-            bail!("no plate to preview");
+            bail!(tr!("preview-no-plate"));
         };
         let held = stack
             .cut
@@ -210,16 +211,16 @@ impl Preview {
                 alone = stack
                     .windows
                     .cut(stack.solid.as_ref(), index..index + 1)
-                    .context("cannot cut the layer under the one being previewed")?;
+                    .context(tr!("preview-cannot-cut-under"))?;
                 let Some(layer) = alone.layers.first() else {
-                    bail!("layer {index} is not in the stack");
+                    bail!(tr!("preview-not-in-stack", index = index));
                 };
                 layer
             }
         };
         let rastered = ScanlineRasterizer
             .rasterize(layer, settings)
-            .with_context(|| format!("cannot rasterise the layer at z = {:.3} mm", layer.z))?;
+            .with_context(|| tr!("preview-cannot-rasterise", z = format!("{:.3}", layer.z)))?;
         Ok(rastered.runs)
     }
 
@@ -253,7 +254,7 @@ impl Preview {
             return Ok(None);
         }
         let Some(key) = self.key(settings) else {
-            bail!("no sliced stack to preview");
+            bail!(tr!("preview-no-stack"));
         };
         if let Some(((cached, region), handle)) = self.detail.as_ref()
             && *cached == key
@@ -282,7 +283,7 @@ impl Preview {
         settings: &RasterSettings,
     ) -> Result<egui::TextureHandle> {
         let Some(key) = self.key(settings) else {
-            bail!("no sliced stack to preview");
+            bail!(tr!("preview-no-stack"));
         };
         if let Some((cached, handle)) = self.texture.as_ref()
             && *cached == key

@@ -1,6 +1,7 @@
 use printer_profiles::{MaterialProfile, WaitMode};
 
 use super::layers;
+use crate::i18n::tr;
 use crate::slicing::Slicing;
 use crate::state::Machine;
 use crate::ui::{
@@ -13,21 +14,25 @@ use crate::ui::{
 /// profile: a new printer or resin puts them back.
 pub fn ui(ui: &mut egui::Ui, machine: &mut Machine) {
     let mut to_the_printer = layers::layers(ui, machine);
-    section(ui, "Exposure", Some("this session"), |ui| {
-        describe(
-            ui,
-            "From the resin profile. Edits change this session's slices only; the resin \
-             profile keeps its own numbers.",
-        );
-        exposure(ui, &mut machine.slicing);
-        transition(ui, &mut machine.slicing.material);
-    });
+    section(
+        ui,
+        &tr!("print-exposure"),
+        Some(&tr!("print-this-session")),
+        |ui| {
+            describe(ui, &tr!("print-exposure-help"));
+            describe(ui, &tr!("print-from-resin"));
+            exposure(ui, &mut machine.slicing);
+            transition(ui, &mut machine.slicing.material);
+        },
+    );
     to_the_printer |= layers::bands(ui, machine);
     layers::edges(ui, machine);
-    section(ui, "Waiting", None, |ui| {
+    section(ui, &tr!("print-waiting"), None, |ui| {
+        describe(ui, &tr!("print-waiting-help"));
         waiting(ui, &mut machine.slicing.material)
     });
-    section(ui, "Motion", None, |ui| {
+    section(ui, &tr!("print-motion"), None, |ui| {
+        describe(ui, &tr!("print-motion-help"));
         motion(ui, &mut machine.slicing.material)
     });
     if to_the_printer {
@@ -48,7 +53,7 @@ fn exposure(ui: &mut egui::Ui, slicing: &mut Slicing) {
     let material = &mut slicing.material;
     count_row(
         ui,
-        "Bottom layers",
+        &tr!("print-bottom-layers"),
         &mut material.bottom_layers,
         "",
         0.2,
@@ -56,9 +61,9 @@ fn exposure(ui: &mut egui::Ui, slicing: &mut Slicing) {
     );
     let carried = carried_row(
         ui,
-        "Exposure",
+        &tr!("print-exposure"),
         &mut material.exposure_s,
-        "s",
+        &tr!("unit-s"),
         0.01,
         0.1..=300.0,
         2,
@@ -66,9 +71,9 @@ fn exposure(ui: &mut egui::Ui, slicing: &mut Slicing) {
     );
     number_row(
         ui,
-        "Bottom exposure",
+        &tr!("print-bottom-exposure"),
         &mut material.bottom_exposure_s,
-        "s",
+        &tr!("unit-s"),
         0.1,
         0.1..=600.0,
         2,
@@ -81,20 +86,27 @@ fn exposure(ui: &mut egui::Ui, slicing: &mut Slicing) {
     if let Some(rescaled) = slicing.rescaled() {
         hint(
             ui,
-            &format!(
-                "Carried from {:.2} s at {:.3} mm to the {:.3} mm layer.",
-                rescaled.exposure_s,
-                rescaled.from_mm,
-                slicing.layer_height_mm()
+            &tr!(
+                "print-carried",
+                exposure = format!("{:.2}", rescaled.exposure_s),
+                from = format!("{:.3}", rescaled.from_mm),
+                to = format!("{:.3}", slicing.layer_height_mm())
             ),
         );
     }
 }
 
 fn transition(ui: &mut egui::Ui, material: &mut MaterialProfile) {
-    subheading(ui, "Transition");
+    subheading(ui, &tr!("print-transition"));
     let mut transition = u32::from(material.transition_layers);
-    if count_row(ui, "Transition layers", &mut transition, "", 0.2, 0..=100) {
+    if count_row(
+        ui,
+        &tr!("print-transition-layers"),
+        &mut transition,
+        "",
+        0.2,
+        0..=100,
+    ) {
         material.transition_layers = transition.min(u32::from(u16::MAX)) as u16;
     }
     let step_s = (material.bottom_exposure_s - material.exposure_s)
@@ -102,8 +114,11 @@ fn transition(ui: &mut egui::Ui, material: &mut MaterialProfile) {
     readings(
         ui,
         &[
-            ("Transition type", "Linear".to_owned()),
-            ("Step between layers", format!("{step_s:.3} s")),
+            (tr!("print-transition-type"), tr!("print-linear")),
+            (
+                tr!("print-step"),
+                tr!("value-s", value = format!("{step_s:.3}")),
+            ),
         ],
     );
 }
@@ -112,8 +127,8 @@ fn transition(ui: &mut egui::Ui, material: &mut MaterialProfile) {
 fn waiting(ui: &mut egui::Ui, material: &mut MaterialProfile) {
     let mut mode = material.waits.mode;
     let modes = [
-        Segment::new(WaitMode::LightOff, "Light off"),
-        Segment::new(WaitMode::Rest, "Resting"),
+        Segment::new(WaitMode::LightOff, tr!("print-light-off")),
+        Segment::new(WaitMode::Rest, tr!("print-resting")),
     ];
     if Segmented::new(&modes)
         .width(ui.available_width())
@@ -125,9 +140,9 @@ fn waiting(ui: &mut egui::Ui, material: &mut MaterialProfile) {
         WaitMode::LightOff => {
             number_row(
                 ui,
-                "Light off",
+                &tr!("print-light-off"),
                 &mut material.light_off_delay_s,
-                "s",
+                &tr!("unit-s"),
                 0.05,
                 0.0..=60.0,
                 2,
@@ -137,27 +152,27 @@ fn waiting(ui: &mut egui::Ui, material: &mut MaterialProfile) {
             let waits = &mut material.waits;
             number_row(
                 ui,
-                "Before lift",
+                &tr!("print-before-lift"),
                 &mut waits.before_lift_s,
-                "s",
+                &tr!("unit-s"),
                 0.05,
                 0.0..=60.0,
                 2,
             );
             number_row(
                 ui,
-                "After lift",
+                &tr!("print-after-lift"),
                 &mut waits.after_lift_s,
-                "s",
+                &tr!("unit-s"),
                 0.05,
                 0.0..=60.0,
                 2,
             );
             number_row(
                 ui,
-                "After retract",
+                &tr!("print-after-retract"),
                 &mut waits.after_retract_s,
-                "s",
+                &tr!("unit-s"),
                 0.05,
                 0.0..=60.0,
                 2,
@@ -169,27 +184,27 @@ fn waiting(ui: &mut egui::Ui, material: &mut MaterialProfile) {
 fn motion(ui: &mut egui::Ui, material: &mut MaterialProfile) {
     number_row(
         ui,
-        "Lift",
+        &tr!("print-lift"),
         &mut material.lift_distance_mm,
-        "mm",
+        &tr!("unit-mm"),
         0.1,
         0.5..=30.0,
         2,
     );
     number_row(
         ui,
-        "Lift speed",
+        &tr!("print-lift-speed"),
         &mut material.lift_speed_mm_min,
-        "mm/min",
+        &tr!("unit-mm-min"),
         1.0,
         1.0..=1000.0,
         0,
     );
     number_row(
         ui,
-        "Retract speed",
+        &tr!("print-retract-speed"),
         &mut material.retract_speed_mm_min,
-        "mm/min",
+        &tr!("unit-mm-min"),
         1.0,
         1.0..=1000.0,
         0,

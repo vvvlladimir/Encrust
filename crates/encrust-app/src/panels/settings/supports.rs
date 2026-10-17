@@ -5,6 +5,7 @@
 use egui::{Rect, Ui, pos2};
 use printer_profiles::{ContactShape, Kind, SupportProfile};
 
+use crate::i18n::tr;
 use crate::panels::Window;
 use crate::panels::settings::frame::{SIDE_PAD, Table, child, scrolled, with_footer};
 use crate::panels::settings::{export_profile, form_card, name_row, report, settled};
@@ -17,7 +18,15 @@ use crate::ui::{describe, icon, quiet_button};
 const TWO_COLUMNS_W: f32 = 720.0;
 
 const TABLE: Table = Table {
-    heads: &["Profile", "Tip", "Contact", "Pillar", "Spacing"],
+    heads: || {
+        vec![
+            tr!("table-profile"),
+            tr!("support-table-tip"),
+            tr!("support-contact"),
+            tr!("support-group-pillar"),
+            tr!("support-table-spacing"),
+        ]
+    },
     columns: &[0.0, 0.42, 0.6, 0.74, 0.88],
     words: 2,
     lead: 12.0,
@@ -41,7 +50,7 @@ pub(super) fn page(ui: &mut Ui, content: Rect, window: &mut Window) {
     let mut action = None;
     if editing {
         scrolled(&mut body, |ui| {
-            if quiet_button(ui, icon::BACK, "Every profile", false, true).clicked() {
+            if quiet_button(ui, icon::BACK, &tr!("profiles-every"), false, true).clicked() {
                 window.machine.settings.editing_support = false;
             }
             form(ui, window);
@@ -96,15 +105,24 @@ fn table(ui: &mut Ui, machine: &Machine, picked: Option<&str>, action: &mut Opti
 
 fn cells(profile: &SupportProfile) -> [String; 5] {
     let tip = match profile.tip.shape {
-        ContactShape::Sphere => "Sphere",
-        ContactShape::Plane => "Plane",
+        ContactShape::Sphere => tr!("support-shape-sphere"),
+        ContactShape::Plane => tr!("support-shape-plane"),
     };
     [
         profile.name.clone(),
         tip.to_owned(),
-        format!("{:.2} mm", profile.tip.contact_diameter_mm),
-        format!("{:.2} mm", profile.middle.diameter_mm),
-        format!("{:.1} mm", profile.contact_spacing_mm),
+        tr!(
+            "value-mm",
+            value = format!("{:.2}", profile.tip.contact_diameter_mm)
+        ),
+        tr!(
+            "value-mm",
+            value = format!("{:.2}", profile.middle.diameter_mm)
+        ),
+        tr!(
+            "value-mm",
+            value = format!("{:.1}", profile.contact_spacing_mm)
+        ),
     ]
 }
 
@@ -119,21 +137,21 @@ fn actions(
 ) {
     let some = picked.is_some();
     let owned = |id: &str| id.to_owned();
-    if !editing && quiet_button(ui, icon::EDIT, "Edit", false, some).clicked() {
+    if !editing && quiet_button(ui, icon::EDIT, &tr!("profiles-edit"), false, some).clicked() {
         *action = picked.map(owned).map(Action::Edit);
     }
-    if quiet_button(ui, icon::DUPLICATE, "Duplicate", false, some).clicked() {
+    if quiet_button(ui, icon::DUPLICATE, &tr!("action-duplicate"), false, some).clicked() {
         *action = picked.map(owned).map(Action::Duplicate);
     }
-    if quiet_button(ui, icon::EXPORT, "Export", false, some).clicked() {
+    if quiet_button(ui, icon::EXPORT, &tr!("common-export"), false, some).clicked() {
         *action = picked.map(owned).map(Action::Export);
     }
     let catalogue = &machine.slicing.catalogue;
     let deletable = picked.is_some_and(|id| can_delete(catalogue, Kind::Support, id));
-    let delete = quiet_button(ui, icon::REMOVE, "Delete", true, deletable);
+    let delete = quiet_button(ui, icon::REMOVE, &tr!("profiles-delete"), true, deletable);
     let delete = match deletable {
         true => delete,
-        false => delete.on_disabled_hover_text("A profile this build ships cannot be deleted."),
+        false => delete.on_disabled_hover_text(tr!("profiles-shipped")),
     };
     if delete.clicked() {
         *action = picked.map(owned).map(Action::Ask);
@@ -158,7 +176,7 @@ fn apply(machine: &mut Machine, action: Action) {
 /// A new support profile with the stock numbers, or a copy of `from`, opened in the form.
 pub(super) fn add(machine: &mut Machine, from: Option<&str>) {
     let outcome = new_support(&mut machine.slicing.catalogue, from);
-    if let Some(id) = report(&mut machine.status, "cannot add a support profile", outcome) {
+    if let Some(id) = report(&mut machine.status, &tr!("support-cannot-add"), outcome) {
         machine
             .settings
             .pick_support(&machine.slicing.catalogue, &id);
@@ -169,11 +187,11 @@ pub(super) fn add(machine: &mut Machine, from: Option<&str>) {
 /// The profile open in the form, written back as it is edited.
 fn form(ui: &mut Ui, window: &mut Window) {
     let Some(draft) = window.machine.settings.support.as_mut() else {
-        describe(ui, "Pick a support profile.");
+        describe(ui, &tr!("support-pick-profile"));
         return;
     };
 
-    form_card(ui, "Profile", |ui| {
+    form_card(ui, &tr!("table-profile"), |ui| {
         if let Some(name) = name_row(ui, "support", &draft.values.name) {
             draft.values.name = name;
         }
@@ -182,7 +200,7 @@ fn form(ui: &mut Ui, window: &mut Window) {
     let profile = &mut draft.values;
     if ui.available_width() < TWO_COLUMNS_W {
         for group in Group::ALL {
-            form_card(ui, group.label(), |ui| group.show(ui, profile, None));
+            form_card(ui, &group.label(), |ui| group.show(ui, profile, None));
         }
     } else {
         let (left, right) = Group::ALL.split_at(Group::ALL.len().div_ceil(2));
@@ -190,7 +208,7 @@ fn form(ui: &mut Ui, window: &mut Window) {
         ui.columns(2, |columns| {
             for (ui, groups) in columns.iter_mut().zip([left, right]) {
                 for group in groups {
-                    form_card(ui, group.label(), |ui| group.show(ui, profile, None));
+                    form_card(ui, &group.label(), |ui| group.show(ui, profile, None));
                 }
             }
         });
@@ -212,13 +230,7 @@ fn autosave(machine: &mut Machine) {
         .slicing
         .catalogue
         .save_support(&draft.id, &draft.values);
-    if report(
-        &mut machine.status,
-        "cannot save the support profile",
-        outcome,
-    )
-    .is_some()
-    {
+    if report(&mut machine.status, &tr!("support-cannot-save"), outcome).is_some() {
         draft.mark_saved();
     }
 }

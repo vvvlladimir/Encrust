@@ -52,9 +52,17 @@ image = { version = "0.25", default-features = false, features = ["bmp", "jpeg",
 libc = { version = "0.2", features = ["extra_traits"] }
 nix = { version = "0.31", default-features = false, features = ["fs", "signal"] }
 smallvec = { version = "1", default-features = false, features = ["union"] }
+tinystr = { version = "0.8", features = ["zerovec"] }
+yoke = { version = "0.8", default-features = false, features = ["derive"] }
+zerofrom = { version = "0.1", default-features = false, features = ["derive"] }
+zerovec = { version = "0.11", default-features = false, features = ["alloc", "derive", "yoke"] }
 
 [target.aarch64-apple-darwin.build-dependencies]
 syn-7b89eefb6aaa9bf3 = { package = "syn", version = "3", default-features = false, features = ["fold"] }
+tinystr = { version = "0.8", features = ["zerovec"] }
+yoke = { version = "0.8", default-features = false, features = ["derive"] }
+zerofrom = { version = "0.1", default-features = false, features = ["derive"] }
+zerovec = { version = "0.11", default-features = false, features = ["alloc", "derive", "yoke"] }
 
 [target.x86_64-unknown-linux-gnu.dependencies]
 bitflags = { version = "2", default-features = false, features = ["std"] }
@@ -68,10 +76,14 @@ quote = { version = "1" }
 rustix = { version = "1", features = ["event", "net", "pipe", "process", "shm", "system", "time"] }
 smallvec = { version = "1", default-features = false, features = ["union"] }
 syn-7b89eefb6aaa9bf3 = { package = "syn", version = "3", features = ["extra-traits", "fold", "full", "visit", "visit-mut"] }
+tinystr = { version = "0.8", features = ["zerovec"] }
 toml_datetime = { version = "1", features = ["serde"] }
 toml_parser = { version = "1" }
 tracing = { version = "0.1", features = ["log"] }
 winnow = { version = "1" }
+yoke = { version = "0.8", default-features = false, features = ["derive"] }
+zerofrom = { version = "0.1", default-features = false, features = ["derive"] }
+zerovec = { version = "0.11", default-features = false, features = ["alloc", "derive", "yoke"] }
 
 [target.x86_64-unknown-linux-gnu.build-dependencies]
 fastrand = { version = "2" }
@@ -81,16 +93,28 @@ phf_shared = { version = "0.13", default-features = false, features = ["std"] }
 serde = { version = "1", features = ["alloc", "derive"] }
 serde_core = { version = "1", default-features = false, features = ["alloc", "result", "std"] }
 syn-7b89eefb6aaa9bf3 = { package = "syn", version = "3", default-features = false, features = ["fold"] }
+tinystr = { version = "0.8", features = ["zerovec"] }
 toml_datetime = { version = "1", features = ["serde"] }
 toml_parser = { version = "1" }
 winnow = { version = "1" }
+yoke = { version = "0.8", default-features = false, features = ["derive"] }
+zerofrom = { version = "0.1", default-features = false, features = ["derive"] }
+zerovec = { version = "0.11", default-features = false, features = ["alloc", "derive", "yoke"] }
 
 [target.x86_64-pc-windows-msvc.dependencies]
 smallvec = { version = "1", default-features = false, features = ["union"] }
+tinystr = { version = "0.8", features = ["zerovec"] }
 windows-sys = { version = "0.61", features = ["Win32_Globalization", "Win32_NetworkManagement_IpHelper", "Win32_NetworkManagement_Ndis", "Win32_Networking_WinSock", "Win32_Security", "Win32_Storage_FileSystem", "Win32_System_Com", "Win32_System_Console", "Win32_System_IO", "Win32_System_Memory", "Win32_System_SystemInformation", "Win32_System_Threading", "Win32_UI_Input_KeyboardAndMouse", "Win32_UI_Shell_Common", "Win32_UI_WindowsAndMessaging"] }
+yoke = { version = "0.8", default-features = false, features = ["derive"] }
+zerofrom = { version = "0.1", default-features = false, features = ["derive"] }
+zerovec = { version = "0.11", default-features = false, features = ["alloc", "derive", "yoke"] }
 
 [target.x86_64-pc-windows-msvc.build-dependencies]
 log = { version = "0.4", default-features = false, features = ["std"] }
 syn-7b89eefb6aaa9bf3 = { package = "syn", version = "3", default-features = false, features = ["fold"] }
+tinystr = { version = "0.8", features = ["zerovec"] }
+yoke = { version = "0.8", default-features = false, features = ["derive"] }
+zerofrom = { version = "0.1", default-features = false, features = ["derive"] }
+zerovec = { version = "0.11", default-features = false, features = ["alloc", "derive", "yoke"] }
 
 ### END HAKARI SECTION

@@ -5,6 +5,7 @@ use core_engine::project::HollowState;
 use core_geometry::Scalar;
 use core_volume::{HollowSettings, InfillSettings};
 
+use crate::i18n::tr;
 use crate::job::{
     HollowJob, HollowOutcome, HollowRequest, SharedFields, hollow_tasks, lock_fields, rebuild_tasks,
 };
@@ -65,9 +66,9 @@ impl HollowTool {
     }
 
     /// Why the Hollow button is greyed out, or `None` when it is not.
-    pub fn blocker(&self, scene: &Scene) -> Option<&'static str> {
+    pub fn blocker(&self, scene: &Scene) -> Option<String> {
         if scene.target_count() == 0 {
-            return Some("Nothing visible on the plate to hollow.");
+            return Some(tr!("hollow-nothing-visible"));
         }
         None
     }
@@ -76,7 +77,7 @@ impl HollowTool {
     pub fn start(&mut self, scene: &Scene) -> Result<()> {
         let tasks = hollow_tasks(scene, |object| self.settings_for(object));
         if tasks.is_empty() {
-            bail!("nothing visible on the plate to hollow");
+            bail!(tr!("hollow-nothing-visible-error"));
         }
 
         self.job = Some(HollowJob::spawn(HollowRequest {
@@ -133,15 +134,13 @@ impl HollowTool {
                         object.hollow.take(shell.shell);
                     }
                 }
-                *status = Status::Info(match models {
-                    0 => "Nothing on the plate to hollow".to_owned(),
-                    _ => format!(
-                        "Hollowed {models} model(s), saving {:.1} ml",
-                        saved / 1000.0
-                    ),
-                });
+                *status = Status::Info(tr!(
+                    "hollow-done",
+                    count = models,
+                    saved = format!("{:.1}", saved / 1000.0)
+                ));
             }
-            HollowOutcome::Cancelled => *status = Status::Info("Hollowing cancelled".to_owned()),
+            HollowOutcome::Cancelled => *status = Status::Info(tr!("hollow-cancelled")),
             HollowOutcome::Failed(message) => *status = Status::Error(message),
         }
         false

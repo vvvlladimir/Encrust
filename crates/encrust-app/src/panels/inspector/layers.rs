@@ -3,6 +3,7 @@ use std::num::NonZeroU8;
 use core_format::ExposureRange;
 use core_slicer::{AdaptiveSettings, ONE_SAMPLE};
 
+use crate::i18n::tr;
 use crate::slicing::{MAX_LAYER_HEIGHT_MM, MIN_LAYER_HEIGHT_MM};
 use crate::state::Machine;
 use crate::ui::{
@@ -34,19 +35,20 @@ const NEW_BAND_MM: f32 = 10.0;
 /// surface. Answers whether the way to the printer's settings was taken.
 pub fn layers(ui: &mut egui::Ui, machine: &mut Machine) -> bool {
     let slicing = &mut machine.slicing;
-    section(ui, "Layers", None, |ui| {
+    section(ui, &tr!("summary-layers"), None, |ui| {
+        describe(ui, &tr!("layers-height-help"));
         let ceiling = slicing.adaptive.is_some();
         let mut layer_height_mm = slicing.layer_height_mm();
         let label = if ceiling {
-            "Thickest layer"
+            tr!("layers-thickest")
         } else {
-            "Layer height"
+            tr!("resin-layer-height")
         };
         if number_row(
             ui,
-            label,
+            &label,
             &mut layer_height_mm,
-            "mm",
+            &tr!("unit-mm"),
             LAYER_HEIGHT_STEP,
             MIN_LAYER_HEIGHT_MM..=MAX_LAYER_HEIGHT_MM,
             3,
@@ -66,8 +68,8 @@ pub fn layers(ui: &mut egui::Ui, machine: &mut Machine) -> bool {
 /// printer's settings was taken.
 pub fn bands(ui: &mut egui::Ui, machine: &mut Machine) -> bool {
     let count = machine.slicing.exposure.len();
-    let aside = (count > 0).then(|| format!("{count} band(s)"));
-    section(ui, "By height", aside.as_deref(), |ui| {
+    let aside = (count > 0).then(|| tr!("layers-bands", count = count));
+    section(ui, &tr!("layers-by-height"), aside.as_deref(), |ui| {
         exposure_bands(ui, &mut machine.slicing)
     })
     .unwrap_or_default()
@@ -78,15 +80,17 @@ pub fn bands(ui: &mut egui::Ui, machine: &mut Machine) -> bool {
 pub fn edges(ui: &mut egui::Ui, machine: &mut Machine) {
     let slicing = &mut machine.slicing;
     let look = Look::of(slicing.anti_alias, slicing.grey_levels, slicing.blur_px);
-    let aside = slicing.grey_levels.map(|levels| format!("{levels} levels"));
-    section(ui, "Edge smoothing", aside.as_deref(), |ui| {
-        describe(
-            ui,
-            "Grey levels on the mask edge, to hide the pixel stairs.",
-        );
+    let aside = slicing
+        .grey_levels
+        .map(|levels| tr!("layers-levels", count = levels.get()));
+    section(ui, &tr!("layers-edge-smoothing"), aside.as_deref(), |ui| {
+        describe(ui, &tr!("layers-edge-note"));
         let by_look_id = ui.id().with("edges-by-look");
         let mut by_look = ui.data(|data| data.get_temp(by_look_id).unwrap_or(look.is_some()));
-        let choices = [Segment::new(true, "Look"), Segment::new(false, "Number")];
+        let choices = [
+            Segment::new(true, tr!("layers-look")),
+            Segment::new(false, tr!("layers-number")),
+        ];
         Segmented::new(&choices)
             .width(ui.available_width())
             .show(ui, &mut by_look);
@@ -98,7 +102,7 @@ pub fn edges(ui: &mut egui::Ui, machine: &mut Machine) {
             }
             return;
         }
-        switch(ui, &mut slicing.anti_alias, "Anti-aliased masks");
+        switch(ui, &mut slicing.anti_alias, &tr!("layers-anti-aliased"));
         if slicing.anti_alias {
             nested(ui, |ui| {
                 grey_levels(ui, &mut slicing.grey_levels);
@@ -120,21 +124,21 @@ enum Look {
 impl Look {
     const ALL: [Self; 4] = [Self::Off, Self::Sharp, Self::Balanced, Self::Soft];
 
-    fn name(self) -> &'static str {
+    fn name(self) -> String {
         match self {
-            Self::Off => "Off",
-            Self::Sharp => "Sharp",
-            Self::Balanced => "Balanced",
-            Self::Soft => "Soft",
+            Self::Off => tr!("look-off"),
+            Self::Sharp => tr!("look-sharp"),
+            Self::Balanced => tr!("look-balanced"),
+            Self::Soft => tr!("look-soft"),
         }
     }
 
-    fn line(self) -> &'static str {
+    fn line(self) -> String {
         match self {
-            Self::Off => "Raw masks",
-            Self::Sharp => "Crisp text",
-            Self::Balanced => "The default",
-            Self::Soft => "Organic curves",
+            Self::Off => tr!("look-off-line"),
+            Self::Sharp => tr!("look-sharp-line"),
+            Self::Balanced => tr!("look-balanced-line"),
+            Self::Soft => tr!("look-soft-line"),
         }
     }
 
@@ -191,10 +195,7 @@ fn looks(ui: &mut egui::Ui, current: Option<Look>) -> Option<Look> {
         }
     }
     if current.is_none() {
-        hint(
-            ui,
-            "The numbers were set by hand. Pick a look to replace them.",
-        );
+        hint(ui, &tr!("layers-by-hand"));
     }
     picked
 }
@@ -204,34 +205,39 @@ fn looks(ui: &mut egui::Ui, current: Option<Look>) -> Option<Look> {
 fn firmware_note(ui: &mut egui::Ui, why: &str) -> bool {
     hint(ui, why);
     ui.add_space(4.0);
-    secondary_button(ui, icon::SETTINGS, "Open printer settings").clicked()
+    secondary_button(ui, icon::SETTINGS, &tr!("layers-open-printer")).clicked()
 }
 
 /// How many planes are sampled inside a layer. More finds a feature thinner than the
 /// layer, and costs a slicing pass each.
 fn samples_row(ui: &mut egui::Ui, samples: &mut NonZeroU8) {
     let mut value = f32::from(samples.get());
-    if number_row(ui, "Planes a layer", &mut value, "", 1.0, 1.0..=5.0, 0) {
+    if number_row(ui, &tr!("layers-planes"), &mut value, "", 1.0, 1.0..=5.0, 0) {
         *samples = NonZeroU8::new(value as u8).unwrap_or(ONE_SAMPLE);
     }
     if *samples != ONE_SAMPLE {
-        describe(
-            ui,
-            "a feature thinner than a layer survives, at that many times the cut",
-        );
+        describe(ui, &tr!("layers-planes-note"));
     }
 }
 
 /// How many greys an edge is rounded to. Off is every grey the panel will take.
 fn grey_levels(ui: &mut egui::Ui, levels: &mut Option<NonZeroU8>) {
     let mut limited = levels.is_some();
-    if switch(ui, &mut limited, "Round edge grey").changed() {
+    if switch(ui, &mut limited, &tr!("layers-round-grey")).changed() {
         *levels = limited.then_some(DEFAULT_GREY_LEVELS);
     }
     if let Some(count) = levels.as_mut() {
         nested(ui, |ui| {
             let mut value = f32::from(count.get());
-            if number_row(ui, "Grey levels", &mut value, "", 1.0, 2.0..=16.0, 0) {
+            if number_row(
+                ui,
+                &tr!("layers-grey-levels"),
+                &mut value,
+                "",
+                1.0,
+                2.0..=16.0,
+                0,
+            ) {
                 *count = NonZeroU8::new(value as u8).unwrap_or(DEFAULT_GREY_LEVELS);
             }
         });
@@ -241,14 +247,19 @@ fn grey_levels(ui: &mut egui::Ui, levels: &mut Option<NonZeroU8>) {
 /// How many pixels either side an edge is faded over. Zero keeps it sharp.
 fn blur_row(ui: &mut egui::Ui, blur_px: &mut u8) {
     let mut value = f32::from(*blur_px);
-    if number_row(ui, "Edge blur", &mut value, "px", 1.0, 0.0..=8.0, 0) {
+    if number_row(
+        ui,
+        &tr!("layers-edge-blur"),
+        &mut value,
+        &tr!("unit-px"),
+        1.0,
+        0.0..=8.0,
+        0,
+    ) {
         *blur_px = value as u8;
     }
     if *blur_px > 2 {
-        describe(
-            ui,
-            "a wide blur dims the wall inside the edge as well; one or two pixels is usual",
-        );
+        describe(ui, &tr!("layers-blur-note"));
     }
 }
 
@@ -258,11 +269,17 @@ fn carried_note(ui: &mut egui::Ui, slicing: &mut crate::slicing::Slicing) {
     let Some(rescaled) = slicing.rescaled() else {
         return;
     };
-    let text = format!(
-        "Exposure carried with the layer: {:.2} s at {:.3} mm is {:.2} s now.",
-        rescaled.exposure_s, rescaled.from_mm, slicing.material.exposure_s
+    let text = tr!(
+        "layers-carried",
+        was = format!("{:.2}", rescaled.exposure_s),
+        from = format!("{:.3}", rescaled.from_mm),
+        now = format!("{:.2}", slicing.material.exposure_s)
     );
-    let back = format!("Back to {:.2} s", rescaled.exposure_s);
+    let back = tr!(
+        "field-back-to",
+        value = format!("{:.2}", rescaled.exposure_s),
+        unit = tr!("unit-s")
+    );
     let mut revert = false;
     // The button takes its width first, and the sentence wraps into what is left: a label
     // in a horizontal layout does not wrap, and a long one pushes the panel out.
@@ -300,10 +317,12 @@ fn exposure_note(ui: &mut egui::Ui, slicing: &crate::slicing::Slicing) {
     let exposure_s = material.exposure_at(material.exposure_s, thickest);
     describe(
         ui,
-        &format!(
-            "The thickest layer reached is {thickest:.3} mm, not {:.3} mm, so a normal layer \
-             takes {exposure_s:.2} s rather than {:.2} s.",
-            material.layer_height_mm, material.exposure_s
+        &tr!(
+            "layers-thickest-reached",
+            thickest = format!("{thickest:.3}"),
+            asked = format!("{:.3}", material.layer_height_mm),
+            exposure = format!("{exposure_s:.2}"),
+            resin = format!("{:.2}", material.exposure_s)
         ),
     );
 }
@@ -316,7 +335,7 @@ fn adaptive_rows(ui: &mut egui::Ui, slicing: &mut crate::slicing::Slicing) -> bo
     let mut on = slicing.adaptive.is_some();
     let flipped = ui
         .add_enabled_ui(!refused, |ui| {
-            subheading_with_switch(ui, "Adaptive height", &mut on)
+            subheading_with_switch(ui, &tr!("layers-adaptive"), &mut on)
         })
         .inner;
     if flipped {
@@ -324,11 +343,7 @@ fn adaptive_rows(ui: &mut egui::Ui, slicing: &mut crate::slicing::Slicing) -> bo
     }
     let mut to_the_printer = false;
     if refused {
-        to_the_printer = firmware_note(
-            ui,
-            "This printer steps the plate by the header's height, so no layer can have one \
-             of its own.",
-        );
+        to_the_printer = firmware_note(ui, &tr!("layers-adaptive-refused"));
     }
     let Some(adaptive) = slicing.adaptive.as_mut() else {
         return to_the_printer;
@@ -336,18 +351,18 @@ fn adaptive_rows(ui: &mut egui::Ui, slicing: &mut crate::slicing::Slicing) -> bo
     nested(ui, |ui| {
         number_row(
             ui,
-            "Cusp",
+            &tr!("layers-cusp"),
             &mut adaptive.cusp_mm,
-            "mm",
+            &tr!("unit-mm"),
             LAYER_HEIGHT_STEP,
             MIN_LAYER_HEIGHT_MM..=MAX_LAYER_HEIGHT_MM,
             3,
         );
         number_row(
             ui,
-            "Thinnest layer",
+            &tr!("layers-thinnest"),
             &mut adaptive.min_height_mm,
-            "mm",
+            &tr!("unit-mm"),
             LAYER_HEIGHT_STEP,
             MIN_LAYER_HEIGHT_MM..=MAX_LAYER_HEIGHT_MM,
             3,
@@ -386,25 +401,16 @@ fn exposure_bands(ui: &mut egui::Ui, slicing: &mut crate::slicing::Slicing) -> b
     let bands = &slicing.exposure;
 
     if bands.is_empty() {
-        describe(
-            ui,
-            "Every layer takes the resin's exposure. A band replaces it over a height.",
-        );
+        describe(ui, &tr!("layers-no-bands"));
     } else {
-        describe(
-            ui,
-            "The bottom block keeps the resin's own exposure whatever a band says.",
-        );
+        describe(ui, &tr!("layers-bands-note"));
     }
     ui.add_space(4.0);
 
     if slicing.printer.is_some() && !slicing.printer_reads_per_layer() {
-        return firmware_note(
-            ui,
-            "This printer reads the header alone, so exposure cannot vary by height.",
-        );
+        return firmware_note(ui, &tr!("layers-bands-refused"));
     }
-    if secondary_button(ui, icon::ADD, "Add a band").clicked() {
+    if secondary_button(ui, icon::ADD, &tr!("layers-add-band")).clicked() {
         let from_mm = bands.last().map_or(0.0, |last| last.to_mm);
         let resin_exposure_s = slicing.material.exposure_s;
         slicing.exposure.push(ExposureRange::new(
@@ -428,26 +434,38 @@ fn band_rows(
     let mut remove = false;
     ui.horizontal(|ui| {
         chip(ui, theme::band_tint(index));
-        tone(ui, &format!("Band {}", index + 1), theme::colors().text_mid);
+        tone(
+            ui,
+            &tr!("layers-band", index = index + 1),
+            theme::colors().text_mid,
+        );
         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-            remove = icon_button(ui, icon::REMOVE, "Remove this band").clicked();
+            remove = icon_button(ui, icon::REMOVE, &tr!("layers-remove-band")).clicked();
         });
     });
     number_row(
         ui,
-        "From",
+        &tr!("layers-from"),
         &mut band.from_mm,
-        "mm",
+        &tr!("unit-mm"),
         BAND_STEP,
         0.0..=1000.0,
         2,
     );
-    number_row(ui, "To", &mut band.to_mm, "mm", BAND_STEP, 0.0..=1000.0, 2);
+    number_row(
+        ui,
+        &tr!("layers-to"),
+        &mut band.to_mm,
+        &tr!("unit-mm"),
+        BAND_STEP,
+        0.0..=1000.0,
+        2,
+    );
     match carried_row(
         ui,
-        "Exposure",
+        &tr!("print-exposure"),
         &mut band.exposure_s,
-        "s",
+        &tr!("unit-s"),
         EXPOSURE_STEP,
         0.01..=200.0,
         2,

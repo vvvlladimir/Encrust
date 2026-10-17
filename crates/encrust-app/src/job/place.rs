@@ -6,6 +6,7 @@ use core_geometry::{Mesh, Scalar, Transform, Vec3, transform_mesh};
 use core_supports::{Blocked, Region, generate_supports, low_points};
 use printer_profiles::SupportProfile;
 
+use crate::i18n::tr;
 use crate::job::pipeline::{slice_mesh, thread_pool, worker_threads};
 use crate::scene::{ObjectId, Scene, SceneObject};
 
@@ -120,9 +121,7 @@ impl SupportJob {
                 Ok(Report::Finished(outcome)) => return Some(outcome),
                 Err(TryRecvError::Empty) => return None,
                 Err(TryRecvError::Disconnected) => {
-                    return Some(SupportOutcome::Failed(
-                        "the support thread stopped without finishing".to_owned(),
-                    ));
+                    return Some(SupportOutcome::Failed(tr!("job-thread-stopped-support")));
                 }
             }
         }
@@ -143,11 +142,11 @@ impl SupportJob {
 
     pub fn label(&self) -> String {
         if self.is_cancelling() {
-            return "Cancelling".to_owned();
+            return tr!("job-cancelling");
         }
         match self.fraction {
-            Some(fraction) => format!("Placing supports, {:.0} %", fraction * 100.0),
-            None => "Cutting the plate...".to_owned(),
+            Some(fraction) => tr!("job-placing", percent = format!("{:.0}", fraction * 100.0)),
+            None => tr!("job-cutting-plate"),
         }
     }
 }

@@ -9,6 +9,7 @@ use printer_profiles::{Catalogue, Connection, Entry, Kind, PrinterProfile, Profi
 mod library;
 mod resins;
 
+use crate::i18n::tr;
 use crate::panels::Window;
 use crate::panels::settings::frame::{
     self, LIST_FOOT_H, SIDE_PAD, child, scrolled, stroke, tab_button, with_footer, with_header,
@@ -69,7 +70,7 @@ pub fn window(ctx: &egui::Context, window: &mut Window) {
         ctx,
         "machine-and-resin",
         icon::PRINTER,
-        "Machine and resin",
+        &tr!("machines-title"),
         |ui, list, side| body(ui, list, side, window, &mut action),
     );
     if let Some(action) = action {
@@ -105,7 +106,7 @@ fn machine_list(ui: &mut Ui, window: &mut Window, action: &mut Option<Action>) {
         ui.add_space(12.0);
         ui.add(
             crate::ui::text_box(egui::TextEdit::singleline(&mut settings.search))
-                .hint_text(format!("{}  Your machines", icon::FIND))
+                .hint_text(format!("{}  {}", icon::FIND, tr!("machines-search")))
                 .desired_width(ui.available_width() - 12.0),
         );
     });
@@ -151,7 +152,7 @@ fn machine_list(ui: &mut Ui, window: &mut Window, action: &mut Option<Action>) {
 fn no_match(ui: &mut Ui) {
     ui.horizontal_wrapped(|ui| {
         ui.add_space(14.0);
-        crate::ui::describe(ui, "No machine of that name.");
+        crate::ui::describe(ui, &tr!("machines-no-match"));
     });
 }
 
@@ -160,12 +161,12 @@ fn first_machine(ui: &mut Ui, room: Rect, action: &mut Option<Action>) {
     let half = (room.height() - ZONE_GAP) / 2.0;
     let top = room.with_max_y(room.top() + half);
     let bottom = room.with_min_y(top.bottom() + ZONE_GAP);
-    let library = "Pick yours from the library";
-    if zone_button(ui, top, icon::ADD, "Add a machine", library).clicked() {
+    let library = tr!("machines-from-library");
+    if zone_button(ui, top, icon::ADD, &tr!("machines-add"), &library).clicked() {
         *action = Some(Action::OpenLibrary);
     }
-    let file = "From a printer profile file, or drop one here";
-    if zone_button(ui, bottom, icon::IMPORT, "Import a machine", file).clicked() {
+    let file = tr!("machines-from-file");
+    if zone_button(ui, bottom, icon::IMPORT, &tr!("machines-import"), &file).clicked() {
         *action = Some(Action::Import(Kind::Printer));
     }
 }
@@ -229,14 +230,14 @@ fn machine_row(
 fn add_machine(ui: &mut Ui, picked: Option<&str>, action: &mut Option<Action>) {
     ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
         ui.add_enabled_ui(picked.is_some(), |ui| {
-            if icon_button(ui, icon::REMOVE, "Remove this machine").clicked() {
+            if icon_button(ui, icon::REMOVE, &tr!("machines-remove")).clicked() {
                 *action = picked.map(|id| Action::Ask(Deleting::Printer(id.to_owned())));
             }
         });
-        if icon_button(ui, icon::IMPORT, "Import a machine from a file").clicked() {
+        if icon_button(ui, icon::IMPORT, &tr!("machines-import-file")).clicked() {
             *action = Some(Action::Import(Kind::Printer));
         }
-        if crate::ui::secondary_button(ui, icon::ADD, "Add a machine").clicked() {
+        if crate::ui::secondary_button(ui, icon::ADD, &tr!("machines-add")).clicked() {
             *action = Some(Action::OpenLibrary);
         }
     });
@@ -246,7 +247,7 @@ fn add_machine(ui: &mut Ui, picked: Option<&str>, action: &mut Option<Action>) {
 fn machine(ui: &mut Ui, side: Rect, window: &mut Window, action: &mut Option<Action>) {
     let Some(draft) = window.machine.settings.printer.as_ref() else {
         let mut ui = child(ui, side.shrink2(vec2(SIDE_PAD, 16.0)));
-        crate::ui::describe(&mut ui, "Pick a machine, or add one from the library.");
+        crate::ui::describe(&mut ui, &tr!("machines-pick"));
         return;
     };
     let (name, maker) = (draft.values.name.clone(), draft.values.manufacturer.clone());
@@ -281,7 +282,7 @@ fn heading(ui: &mut Ui, name: &str, maker: &str, tab: &mut Tab) {
         ui.with_layout(Layout::right_to_left(Align::Max), |ui| {
             ui.spacing_mut().item_spacing.x = 18.0;
             for each in Tab::ALL.into_iter().rev() {
-                if tab_button(ui, each.label(), *tab == each).clicked() {
+                if tab_button(ui, &each.label(), *tab == each).clicked() {
                     *tab = each;
                 }
             }
@@ -291,17 +292,17 @@ fn heading(ui: &mut Ui, name: &str, maker: &str, tab: &mut Tab) {
 
 /// What the Machine tab's bar offers: writing the machine out, and printing on it.
 fn machine_actions(ui: &mut Ui, window: &Window, id: &str, action: &mut Option<Action>) {
-    if quiet_button(ui, icon::EXPORT, "Export", false, true).clicked() {
+    if quiet_button(ui, icon::EXPORT, &tr!("common-export"), false, true).clicked() {
         *action = Some(Action::Export(Kind::Printer, id.to_owned()));
     }
     ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
         let in_hand = window.machine.slicing.printer_id.as_deref() == Some(id);
         let label = if in_hand {
-            "The plate prints on this"
+            tr!("machines-in-hand")
         } else {
-            "Use this machine"
+            tr!("machines-use")
         };
-        if inline_button(ui, "", label, !in_hand, !in_hand).clicked() {
+        if inline_button(ui, "", &label, !in_hand, !in_hand).clicked() {
             *action = Some(Action::UsePrinter(id.to_owned()));
         }
     });
@@ -372,27 +373,31 @@ fn write(machine: &mut crate::state::Machine, action: Action) -> Option<Node> {
     let catalogue = &mut machine.slicing.catalogue;
     let status = &mut machine.status;
     match action {
-        Action::NewPrinter => {
-            report(status, "cannot add a printer", new_printer(catalogue)).map(Node::Printer)
-        }
+        Action::NewPrinter => report(
+            status,
+            &tr!("machines-cannot-add-printer"),
+            new_printer(catalogue),
+        )
+        .map(Node::Printer),
         Action::InstallPrinter(id) => {
             let outcome = install_printer(catalogue, &id);
-            report(status, "cannot add the machine", outcome).map(|()| Node::Printer(id))
+            report(status, &tr!("machines-cannot-add-machine"), outcome).map(|()| Node::Printer(id))
         }
         Action::NewResin(printer) => {
             // A new resin is named and measured before it is anything else.
             machine.settings.editing_resin = true;
             let outcome = new_resin(catalogue, &printer);
-            report(status, "cannot add a resin", outcome)
+            report(status, &tr!("machines-cannot-add-a-resin"), outcome)
                 .map(|resin| Node::Resin { printer, resin })
         }
         Action::AddResin { printer, resin } => {
             let outcome = add_resin(catalogue, &printer, &resin);
-            report(status, "cannot add the resin", outcome).map(|()| Node::Resin { printer, resin })
+            report(status, &tr!("machines-cannot-add-resin"), outcome)
+                .map(|()| Node::Resin { printer, resin })
         }
         Action::DuplicateResin { printer, resin } => {
             let outcome = duplicate_resin(catalogue, &printer, &resin);
-            report(status, "cannot duplicate the resin", outcome)
+            report(status, &tr!("machines-cannot-duplicate-resin"), outcome)
                 .map(|resin| Node::Resin { printer, resin })
         }
         _ => None,
@@ -436,7 +441,7 @@ fn delete(window: &mut Window, deleting: Deleting) {
                 .slicing
                 .catalogue
                 .forget_user_copy(Kind::Printer, &id);
-            report(&mut machine.status, "cannot remove the machine", outcome);
+            report(&mut machine.status, &tr!("machines-cannot-remove"), outcome);
             let in_hand = machine.slicing.printer_id.as_deref() == Some(id.as_str());
             if in_hand {
                 stand_under(window, next.clone());
@@ -446,13 +451,21 @@ fn delete(window: &mut Window, deleting: Deleting) {
         Deleting::ResinOff { printer, resin } => {
             let machine = &mut *window.machine;
             let outcome = take_resin_off(&mut machine.slicing.catalogue, &printer, &resin);
-            report(&mut machine.status, "cannot take the resin off", outcome);
+            report(
+                &mut machine.status,
+                &tr!("machines-cannot-take-resin-off"),
+                outcome,
+            );
             Some(Node::Printer(printer))
         }
         Deleting::Resin(resin) => {
             let machine = &mut *window.machine;
             let outcome = delete_resin(&mut machine.slicing.catalogue, &resin);
-            report(&mut machine.status, "cannot delete the resin", outcome);
+            report(
+                &mut machine.status,
+                &tr!("machines-cannot-delete-resin"),
+                outcome,
+            );
             // The pool holds what this printer is not set up with, so what the form has
             // open is never the resin that just went.
             None

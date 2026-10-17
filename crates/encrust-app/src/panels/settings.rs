@@ -18,6 +18,7 @@ use egui::{Align, Layout, RichText, Ui, vec2};
 use printer_profiles::Kind;
 
 use crate::files::{self, Handed, Wanted};
+use crate::i18n::tr;
 use crate::panels::Window;
 use crate::settings::{Deleting, Node, Section, Tab};
 use crate::state::Machine;
@@ -34,7 +35,7 @@ pub fn window(ctx: &egui::Context, window: &mut Window) {
         ctx,
         "settings",
         icon::SETTINGS,
-        "Settings",
+        &tr!("settings-title"),
         |ui, list, side| {
             pages(&mut child(ui, list.shrink2(vec2(12.0, 14.0))), window);
             page(ui, side, window);
@@ -55,7 +56,7 @@ fn pages(ui: &mut Ui, window: &mut Window) {
     for group in [&Section::PROFILES[..], &Section::OWN[..]] {
         for section in group {
             let active = settings.section == *section;
-            if nav_row(ui, section_icon(*section), section.label(), active).clicked() {
+            if nav_row(ui, section_icon(*section), &section.label(), active).clicked() {
                 settings.turn_to(*section);
             }
         }
@@ -63,13 +64,13 @@ fn pages(ui: &mut Ui, window: &mut Window) {
         hairline(ui);
         ui.add_space(10.0);
     }
-    if nav_row(ui, icon::PRINTER, "Machine and resin", false).clicked() {
+    if nav_row(ui, icon::PRINTER, &tr!("machines-title"), false).clicked() {
         window.machine.settings.close();
         crate::panels::open_machines(window.machine);
     }
     // The keys are a sheet rather than a page: there is nothing to edit, and one listing
     // is enough. See `crate::shortcuts`.
-    if nav_row(ui, icon::KEYBOARD, "Shortcuts", false).clicked() {
+    if nav_row(ui, icon::KEYBOARD, &tr!("settings-shortcuts"), false).clicked() {
         window.machine.settings.close();
         window.view.options.sheet = true;
     }
@@ -128,11 +129,11 @@ fn heading(ui: &mut Ui, section: Section) -> Option<Heading> {
         ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
             ui.spacing_mut().item_spacing.x = 8.0;
             if kind == Kind::Support
-                && inline_button(ui, icon::ADD, "New profile", false, true).clicked()
+                && inline_button(ui, icon::ADD, &tr!("settings-new-profile"), false, true).clicked()
             {
                 pressed = Some(Heading::New);
             }
-            if inline_button(ui, icon::IMPORT, "Import", false, true).clicked() {
+            if inline_button(ui, icon::IMPORT, &tr!("settings-import"), false, true).clicked() {
                 pressed = Some(Heading::Import(kind));
             }
         });
@@ -242,12 +243,15 @@ pub fn import_dropped(window: &mut Window, file: &Handed) {
 /// Writes the profile of `kind` under `id` out to a file the user names.
 pub(super) fn export_profile(machine: &mut Machine, kind: Kind, id: &str) {
     let text = machine.slicing.catalogue.export(kind, id);
-    let Some(text) = report(&mut machine.status, "cannot export the profile", text) else {
+    let Some(text) = report(&mut machine.status, &tr!("settings-cannot-export"), text) else {
         return;
     };
     let name = crate::exchange::file_name(id);
     match files::save_text(&name, Wanted::Profile(kind), &text) {
-        Ok(Some(path)) => machine.status = Status::Info(format!("Exported {}", path.display())),
+        Ok(Some(path)) => {
+            machine.status =
+                Status::Info(tr!("status-exported", path = path.display().to_string()));
+        }
         Ok(None) => {}
         Err(error) => machine.status = Status::failed(&error),
     }
@@ -272,7 +276,7 @@ fn ask(ctx: &egui::Context, window: &mut Window) {
 fn forget_profile(machine: &mut Machine, kind: Kind, id: &str) {
     let catalogue = &mut machine.slicing.catalogue;
     let outcome = catalogue.forget_user_copy(kind, id);
-    report(&mut machine.status, "cannot delete the profile", outcome);
+    report(&mut machine.status, &tr!("settings-cannot-delete"), outcome);
     let settings = &mut machine.settings;
     settings.editing_support = false;
     settings.preset = None;
@@ -290,20 +294,20 @@ const BLOCK_PAD: f32 = 18.0;
 
 /// One category of a form: its title in a column of its own beside its fields, over a
 /// hairline. Where the form is too narrow for both, the title stands over the fields.
+/// What the fields `describe` is a question mark beside the title.
 pub(super) fn form_card<R>(
     ui: &mut egui::Ui,
     title: &str,
     add: impl FnOnce(&mut egui::Ui) -> R,
 ) -> R {
-    let title_text = egui::RichText::new(title)
-        .font(theme::block_title())
-        .color(theme::colors().text_mid);
+    let id = ui.id().with(("form-card", title));
+    let texts = crate::ui::described(ui, id);
     let beside = theme::BLOCK_TITLE_W + theme::BLOCK_GAP + theme::FIELD_W * 2.0;
     ui.add_space(BLOCK_PAD);
     let inner = if ui.available_width() < beside {
-        ui.label(title_text);
+        card_title(ui, title, &texts);
         ui.add_space(4.0);
-        add(ui)
+        crate::ui::describing(ui, id, add)
     } else {
         ui.horizontal_top(|ui| {
             ui.allocate_ui_with_layout(
@@ -312,14 +316,14 @@ pub(super) fn form_card<R>(
                 |ui| {
                     ui.set_width(theme::BLOCK_TITLE_W);
                     ui.add_space(4.0);
-                    ui.label(title_text);
+                    card_title(ui, title, &texts);
                 },
             );
             ui.add_space(theme::BLOCK_GAP);
             ui.vertical(|ui| {
                 ui.set_width(ui.available_width().min(theme::BLOCK_FIELDS_W));
                 ui.spacing_mut().item_spacing.y = theme::ITEM_GAP;
-                add(ui)
+                crate::ui::describing(ui, id, add)
             })
             .inner
         })
@@ -328,6 +332,20 @@ pub(super) fn form_card<R>(
     ui.add_space(BLOCK_PAD);
     hairline(ui);
     inner
+}
+
+/// A form card's title, and the question mark that reads out what its fields described.
+fn card_title(ui: &mut egui::Ui, title: &str, texts: &[String]) {
+    let title_text = egui::RichText::new(title)
+        .font(theme::block_title())
+        .color(theme::colors().text_mid);
+    ui.horizontal_top(|ui| {
+        ui.spacing_mut().item_spacing.x = 4.0;
+        ui.label(title_text);
+        if !texts.is_empty() {
+            crate::ui::help_mark(ui, texts);
+        }
+    });
 }
 
 /// A name that is taken when Enter is pressed or the field is left, rather than on every
@@ -340,7 +358,7 @@ pub(super) fn name_row(ui: &mut egui::Ui, salt: &str, name: &str) -> Option<Stri
     });
     let mut response = None;
     ui.horizontal(|ui| {
-        crate::ui::field_label(ui, "Name", theme::colors().text_mid, "");
+        crate::ui::field_label(ui, &tr!("settings-name"), theme::colors().text_mid, "");
         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
             let field = crate::ui::text_box(egui::TextEdit::singleline(&mut text))
                 .font(theme::label())

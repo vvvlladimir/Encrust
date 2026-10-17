@@ -2,13 +2,14 @@ use anyhow::Context as _;
 use printer_profiles::{Raft, SupportProfile};
 
 use super::scope;
+use crate::i18n::tr;
 use crate::panels::Window;
 use crate::panels::support_diagram::{self, Part};
 use crate::panels::support_fields::{Group, saved_as};
 use crate::settings::keep_support;
 use crate::supports::own_raft_shown;
 use crate::ui::{
-    Segment, Segmented, hint, icon, icon_button, secondary_button, section, subheading,
+    Segment, Segmented, describe, hint, icon, icon_button, secondary_button, section, subheading,
     subheading_with_switch, theme,
 };
 
@@ -33,13 +34,19 @@ pub fn ui(ui: &mut egui::Ui, window: &mut Window) {
 /// for editing from any tool that places supports.
 pub fn profile_section(ui: &mut egui::Ui, window: &mut Window) {
     scope::editing_supports(window, |window| {
-        section(ui, "Profile", None, |ui| profile_picker(ui, window, false));
+        section(ui, &tr!("table-profile"), None, |ui| {
+            describe(ui, &tr!("shape-profile-help"));
+            profile_picker(ui, window, false);
+        });
     });
 }
 
 fn shape(ui: &mut egui::Ui, window: &mut Window) {
-    section(ui, "Profile", None, |ui| profile_picker(ui, window, true));
-    section(ui, "Part", None, |ui| {
+    section(ui, &tr!("table-profile"), None, |ui| {
+        describe(ui, &tr!("shape-profile-help"));
+        profile_picker(ui, window, true);
+    });
+    section(ui, &tr!("shape-part"), None, |ui| {
         // The picked model's raft, or the plate's, lent to the profile while it is drawn so
         // the profile's own never moves. See `docs/decisions/0253`.
         let raft = window.tools.supports.raft_shown(&window.doc.scene);
@@ -67,7 +74,10 @@ fn parts(ui: &mut egui::Ui, window: &mut Window, profiles_raft: Raft) {
         if kept_switch(
             ui,
             "support-kind",
-            &[(false, "Regular"), (true, "Small pillar")],
+            &[
+                (false, tr!("shape-regular")),
+                (true, tr!("support-group-small-pillar")),
+            ],
         ) {
             support_diagram::small_pillar(ui, profile);
             ui.add_space(6.0);
@@ -82,9 +92,9 @@ fn parts(ui: &mut egui::Ui, window: &mut Window, profiles_raft: Raft) {
             if groups(part).len() > 1 {
                 match group.switch(profile) {
                     Some(on) => {
-                        subheading_with_switch(ui, group.label(), on);
+                        subheading_with_switch(ui, &group.label(), on);
                     }
-                    None => subheading(ui, group.label()),
+                    None => subheading(ui, &group.label()),
                 }
             }
             group.show(ui, profile, saved);
@@ -106,18 +116,18 @@ fn raft_owner(
     ui.add_space(4.0);
     hint(
         ui,
-        if plate.is_some() {
-            "The raft is this model's own, brought by its project."
+        &if plate.is_some() {
+            tr!("shape-raft-own")
         } else {
-            "The raft is the plate's: every model stands on it."
+            tr!("shape-raft-plate")
         },
     );
     if let Some(plate) = plate
-        && secondary_button(ui, icon::RESET, "Use the plate's raft").clicked()
+        && secondary_button(ui, icon::RESET, &tr!("shape-use-plate-raft")).clicked()
     {
         profile.raft = plate;
     }
-    let label = format!("Use the raft of {}", profile.name);
+    let label = tr!("shape-use-profile-raft", name = profile.name.clone());
     ui.add_enabled_ui(profile.raft != profiles_raft, |ui| {
         if secondary_button(ui, icon::RESET, &label).clicked() {
             profile.raft = profiles_raft;
@@ -127,7 +137,7 @@ fn raft_owner(
 
 /// A switch across the panel whose choice is kept for the window rather than for the
 /// plate, under `key`.
-fn kept_switch<T>(ui: &mut egui::Ui, key: &str, choices: &[(T, &str)]) -> T
+fn kept_switch<T>(ui: &mut egui::Ui, key: &str, choices: &[(T, String)]) -> T
 where
     T: Copy + Default + PartialEq + Send + Sync + 'static,
 {
@@ -135,7 +145,7 @@ where
     let mut chosen = ui.data(|data| data.get_temp::<T>(id)).unwrap_or_default();
     let segments: Vec<Segment<'_, T>> = choices
         .iter()
-        .map(|(value, label)| Segment::new(*value, label))
+        .map(|(value, label)| Segment::new(*value, label.as_str()))
         .collect();
     Segmented::new(&segments)
         .width(ui.available_width())
@@ -155,7 +165,7 @@ fn profile_picker(ui: &mut egui::Ui, window: &mut Window, with_manage: bool) {
         .map(|entry| entry.id.clone());
     let shown = match &matching {
         Some(_) => current.name.clone(),
-        None => format!("{} (edited)", current.name),
+        None => tr!("shape-edited", name = current.name.clone()),
     };
 
     let mut picked = None;
@@ -179,7 +189,7 @@ fn profile_picker(ui: &mut egui::Ui, window: &mut Window, with_manage: bool) {
                 }
             });
         if with_manage {
-            manage = icon_button(ui, icon::SETTINGS, "Edit support profiles").clicked();
+            manage = icon_button(ui, icon::SETTINGS, &tr!("shape-edit-profiles")).clicked();
         }
     });
 
@@ -200,15 +210,15 @@ fn profile_picker(ui: &mut egui::Ui, window: &mut Window, with_manage: bool) {
     ui.columns(2, |columns| {
         save = columns[0]
             .add_enabled_ui(edited && source.is_some(), |ui| {
-                secondary_button(ui, icon::SAVE, "Save")
-                    .on_hover_text("Save over the profile these numbers were taken from")
+                secondary_button(ui, icon::SAVE, &tr!("shape-save"))
+                    .on_hover_text(tr!("shape-save-tooltip"))
                     .clicked()
             })
             .inner;
         save_as = columns[1]
             .add_enabled_ui(edited, |ui| {
-                secondary_button(ui, icon::SAVE, "Save as new")
-                    .on_hover_text("Keep these numbers as a profile of their own")
+                secondary_button(ui, icon::SAVE, &tr!("shape-save-as-new"))
+                    .on_hover_text(tr!("shape-save-as-new-tooltip"))
                     .clicked()
             })
             .inner;
@@ -221,11 +231,11 @@ fn profile_picker(ui: &mut egui::Ui, window: &mut Window, with_manage: bool) {
             .slicing
             .catalogue
             .save_support(&id, &profile)
-            .context("cannot save the support profile");
+            .context(tr!("support-cannot-save"));
         if window
             .machine
             .status
-            .report("Saved the support profile", kept)
+            .report(&tr!("shape-saved"), kept)
             .is_some()
         {
             window.tools.supports.saved = Some(profile.clone());
@@ -233,11 +243,11 @@ fn profile_picker(ui: &mut egui::Ui, window: &mut Window, with_manage: bool) {
     }
     if save_as {
         let kept = keep_support(&mut window.machine.slicing.catalogue, &profile)
-            .context("cannot save the support profile");
+            .context(tr!("support-cannot-save"));
         if window
             .machine
             .status
-            .report("Saved the support profile", kept)
+            .report(&tr!("shape-saved"), kept)
             .is_some()
         {
             manage = true;

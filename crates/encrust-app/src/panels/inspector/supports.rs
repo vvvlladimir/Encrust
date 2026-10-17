@@ -1,19 +1,21 @@
 use core_supports::Part;
 
 use super::scope;
+use crate::i18n::tr;
 use crate::job::SupportJob;
 use crate::panels::Window;
 use crate::panels::support_fields::{held_up, saved_as};
 use crate::state::Doc;
 use crate::ui::{
-    hint, icon, primary_button, progress_bar, secondary_button, section, stats, theme, tone,
+    describe, hint, icon, primary_button, progress_bar, secondary_button, section, stats, theme,
+    tone,
 };
 
 /// Growing supports under whatever hangs over nothing, and the parts of those already
 /// standing, which a click in this tool picks.
 pub fn ui(ui: &mut egui::Ui, window: &mut Window) {
     super::shape::profile_section(ui, window);
-    section(ui, "Where", None, |ui| {
+    section(ui, &tr!("supports-where"), None, |ui| {
         scope::editing_supports(window, |window| {
             let profile = &mut window.tools.supports.profile;
             let saved =
@@ -24,8 +26,10 @@ pub fn ui(ui: &mut egui::Ui, window: &mut Window) {
             }
         });
     });
-    section(ui, "Picked", None, |ui| editing(ui, window));
-    section(ui, "Already done", None, |ui| placed(ui, window));
+    section(ui, &tr!("supports-picked"), None, |ui| editing(ui, window));
+    section(ui, &tr!("supports-already-done"), None, |ui| {
+        placed(ui, window)
+    });
 }
 
 /// How many supports stand on the plate, for the inspector's heading.
@@ -58,13 +62,10 @@ fn standing(doc: &Doc) -> (usize, usize) {
 /// three things that can be done to it without the mouse.
 fn editing(ui: &mut egui::Ui, window: &mut Window) {
     if window.tools.supports.picked.is_empty() {
-        hint(
-            ui,
-            "Click a tip, a strut, a joint, the trunk or the foot to pick it. Drag to \
-             carry it, shift adds, alt removes.",
-        );
+        hint(ui, &tr!("supports-pick-hint"));
         return;
     }
+    describe(ui, &tr!("supports-picked-help"));
 
     let held = window.tools.supports.picked.clone();
     let supports = held
@@ -74,14 +75,14 @@ fn editing(ui: &mut egui::Ui, window: &mut Window) {
     stats(
         ui,
         &[
-            ("Parts", held.len().to_string()),
-            ("Supports", supports.len().to_string()),
+            (tr!("supports-stat-parts"), held.len().to_string()),
+            (tr!("supports-stat-supports"), supports.len().to_string()),
         ],
     );
 
     ui.add_space(4.0);
     let active = window.tools.supports.active;
-    if primary_button(ui, icon::SUPPORTS, "Move to the group in hand", true).clicked() {
+    if primary_button(ui, icon::SUPPORTS, &tr!("supports-move-to-group"), true).clicked() {
         for (id, frozen) in &supports {
             if let Some(object) = window.doc.scene.get_mut(*id)
                 && let Some(tree) = object.supports.frozen_mut(*frozen)
@@ -92,7 +93,7 @@ fn editing(ui: &mut egui::Ui, window: &mut Window) {
     }
 
     ui.add_space(4.0);
-    if secondary_button(ui, icon::SUPPORTS, "Grow these again").clicked() {
+    if secondary_button(ui, icon::SUPPORTS, &tr!("supports-grow-these-again")).clicked() {
         // Highest first: thawing renumbers everything above what was taken out.
         for (id, frozen) in supports.iter().rev() {
             if let Some(object) = window.doc.scene.get_mut(*id) {
@@ -104,7 +105,7 @@ fn editing(ui: &mut egui::Ui, window: &mut Window) {
     }
 
     ui.add_space(4.0);
-    if secondary_button(ui, icon::REMOVE, "Remove these supports").clicked() {
+    if secondary_button(ui, icon::REMOVE, &tr!("supports-remove-these")).clicked() {
         // Highest first: a support that goes whole renumbers everything above it.
         for (id, frozen) in supports.iter().rev() {
             let parts: Vec<Part> = held
@@ -123,15 +124,12 @@ fn editing(ui: &mut egui::Ui, window: &mut Window) {
 fn generate(ui: &mut egui::Ui, window: &mut Window) {
     let blocker = window.tools.supports.blocker(&window.doc.scene);
     let label = if standing(window.doc).0 > 0 {
-        "Grow them again"
+        tr!("supports-grow-again")
     } else {
-        "Grow the supports"
+        tr!("supports-grow")
     };
-    let what = format!(
-        "Cuts {} to find what hangs over nothing.",
-        window.doc.scene.scope()
-    );
-    if primary_button(ui, icon::SUPPORTS, label, blocker.is_none())
+    let what = tr!("supports-grow-tooltip", scope = window.doc.scene.scope());
+    if primary_button(ui, icon::SUPPORTS, &label, blocker.is_none())
         .on_hover_text(what)
         .clicked()
     {
@@ -139,10 +137,13 @@ fn generate(ui: &mut egui::Ui, window: &mut Window) {
             .tools
             .supports
             .start(&window.doc.scene, window.machine.slicing.layer_height_mm());
-        window.machine.status.report("Placing supports", started);
+        window
+            .machine
+            .status
+            .report(&tr!("supports-placing"), started);
     }
     if let Some(reason) = blocker {
-        ui.vertical_centered(|ui| tone(ui, reason, theme::colors().text_low));
+        ui.vertical_centered(|ui| tone(ui, &reason, theme::colors().text_low));
     }
 }
 
@@ -152,7 +153,7 @@ fn running(ui: &mut egui::Ui, job: &SupportJob) {
     progress_bar(ui, job.fraction());
 
     ui.add_enabled_ui(!job.is_cancelling(), |ui| {
-        if secondary_button(ui, icon::CANCEL, "Cancel").clicked() {
+        if secondary_button(ui, icon::CANCEL, &tr!("common-cancel")).clicked() {
             job.cancel();
         }
     });
@@ -165,8 +166,8 @@ fn placed(ui: &mut egui::Ui, window: &mut Window) {
     stats(
         ui,
         &[
-            ("Supports", points.to_string()),
-            ("Standing", columns.to_string()),
+            (tr!("supports-stat-supports"), points.to_string()),
+            (tr!("supports-stat-standing"), columns.to_string()),
         ],
     );
 
@@ -175,10 +176,7 @@ fn placed(ui: &mut egui::Ui, window: &mut Window) {
     }
     if points != columns {
         ui.add_space(4.0);
-        hint(
-            ui,
-            "Some supports have no room to stand and are not printed.",
-        );
+        hint(ui, &tr!("supports-no-room"));
     }
 
     // Side by side: everything, or only what stands in the group in hand.
@@ -193,15 +191,13 @@ fn placed(ui: &mut egui::Ui, window: &mut Window) {
         .sum();
     let (mut all, mut group) = (false, false);
     ui.columns(2, |columns| {
-        all = secondary_button(&mut columns[0], icon::REMOVE, "Remove all")
-            .on_hover_text("Take every support away")
+        all = secondary_button(&mut columns[0], icon::REMOVE, &tr!("supports-remove-all"))
+            .on_hover_text(tr!("supports-remove-all-tooltip"))
             .clicked();
         group = columns[1]
             .add_enabled_ui(in_group > 0, |ui| {
-                secondary_button(ui, icon::REMOVE, &format!("Only {name}"))
-                    .on_hover_text(format!(
-                        "Take away the {in_group} of the group in hand and leave the rest"
-                    ))
+                secondary_button(ui, icon::REMOVE, &tr!("supports-remove-group", name = name))
+                    .on_hover_text(tr!("supports-remove-group-tooltip", count = in_group))
                     .clicked()
             })
             .inner;

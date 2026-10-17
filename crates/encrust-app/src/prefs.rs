@@ -14,6 +14,7 @@ use net_prusalink::Link;
 use net_sdcp::Printer;
 use printer_profiles::{Kind, Renamed};
 
+use crate::i18n::Language;
 use crate::network::{Network, Prusa};
 use crate::panels::Window;
 use crate::profiles;
@@ -82,6 +83,8 @@ pub struct General {
     pub invert_zoom: bool,
     /// Where the dialog a sliced file is saved from opens, or `None` for the system's choice.
     pub sliced_dir: Option<std::path::PathBuf>,
+    /// The language the window is written in, or `None` for the system's.
+    pub language: Option<Language>,
 }
 
 impl Default for General {
@@ -90,6 +93,7 @@ impl Default for General {
             start_page: true,
             invert_zoom: false,
             sliced_dir: None,
+            language: None,
         }
     }
 }
@@ -143,6 +147,11 @@ impl Preferences {
             plate_w: Some(options.plate_w),
             ..self
         }
+    }
+
+    /// The language the window is written in, or `None` for the system's.
+    pub fn language(&self) -> Option<Language> {
+        self.general.language
     }
 
     /// Points every id kept here at where the catalogue moved its profile.
@@ -520,6 +529,7 @@ mod tests {
             start_page: false,
             invert_zoom: true,
             sliced_dir: Some(std::path::PathBuf::from("/prints")),
+            language: Some(crate::i18n::Language::Russian),
         };
         let prefs = Preferences::default().with_general(&general);
         let text = serde_json::to_string(&prefs).expect("the preferences serialise");

@@ -1,5 +1,6 @@
 use egui::{Align, Align2, Layout, Rect, Sense, Stroke, UiBuilder, pos2, vec2};
 
+use crate::i18n::tr;
 use crate::panels::{Window, frame_view, printer_card};
 use crate::profiles;
 use crate::project;
@@ -118,7 +119,10 @@ fn window_controls(ui: &mut egui::Ui, window: &mut Window) {
     }
 }
 
-const MENUS: [&str; 3] = ["File", "Edit", "View"];
+/// The menu titles, File, Edit and View, in the window's language.
+fn menus() -> [String; 3] {
+    [tr!("menu-file"), tr!("menu-edit"), tr!("menu-view")]
+}
 /// Points inside a menu title either side of its name, and between two titles.
 const MENU_PAD: f32 = 8.0;
 const MENU_GAP: f32 = 4.0;
@@ -139,23 +143,23 @@ fn menu(ui: &mut egui::Ui, window: &mut Window) {
         // A menu bar takes every point it is offered, so it is offered what its titles need.
         let font = egui::TextStyle::Button.resolve(ui.style());
         let pad = ui.spacing().button_padding.x * 2.0 + ui.spacing().item_spacing.x;
-        let width: f32 = MENUS
+        let menus = menus();
+        let width: f32 = menus
             .iter()
             .map(|title| {
-                let galley = ui.painter().layout_no_wrap(
-                    (*title).to_owned(),
-                    font.clone(),
-                    egui::Color32::WHITE,
-                );
+                let galley =
+                    ui.painter()
+                        .layout_no_wrap(title.clone(), font.clone(), egui::Color32::WHITE);
                 galley.size().x + pad
             })
             .sum();
         let size = vec2(width, ui.available_height());
         ui.allocate_ui_with_layout(size, Layout::left_to_right(Align::Center), |ui| {
             egui::MenuBar::new().ui(ui, |ui| {
-                ui.menu_button(MENUS[0], |ui| file_menu(ui, window));
-                ui.menu_button(MENUS[1], |ui| edit_menu(ui, window));
-                ui.menu_button(MENUS[2], |ui| view_menu(ui, window));
+                let [file, edit, view] = menus;
+                ui.menu_button(file, |ui| file_menu(ui, window));
+                ui.menu_button(edit, |ui| edit_menu(ui, window));
+                ui.menu_button(view, |ui| view_menu(ui, window));
             });
         });
     });
@@ -177,8 +181,8 @@ fn print_chip(ui: &mut egui::Ui, window: &mut Window, max_w: f32) {
     };
     let layers = layers_and_exposure(window.machine);
     let names = [
-        format!("Machine, {}", window.doc.plate.display_name()),
-        format!("Resin, {}", slicing.resin_name()),
+        tr!("chip-machine", name = window.doc.plate.display_name()),
+        tr!("chip-resin", name = slicing.resin_name()),
         format!("{}, {layers}", Tool::PrintSettings.label()),
     ];
     let slash_w = 10.0;
@@ -198,14 +202,14 @@ fn print_chip(ui: &mut egui::Ui, window: &mut Window, max_w: f32) {
     }
     let (printer_w, resin_w) = share_room(
         names_room,
-        text_w(ui, printer_name),
-        text_w(ui, slicing.resin_name()),
+        text_w(ui, &printer_name),
+        text_w(ui, &slicing.resin_name()),
     );
     let parts = [
         Part::new(
             ui,
             icon::PRINTER,
-            printer_name,
+            &printer_name,
             colors.text_high,
             "",
             printer_w,
@@ -213,7 +217,7 @@ fn print_chip(ui: &mut egui::Ui, window: &mut Window, max_w: f32) {
         Part::new(
             ui,
             icon::RESIN,
-            slicing.resin_name(),
+            &slicing.resin_name(),
             resin_tint,
             icon::CARET_DOWN,
             resin_w,
@@ -278,12 +282,12 @@ fn print_chip(ui: &mut egui::Ui, window: &mut Window, max_w: f32) {
 
     let [printer, resin, layers] = <[egui::Response; 3]>::try_from(responses)
         .unwrap_or_else(|_| unreachable!("three zones, three responses"));
-    let printer = printer.on_hover_text("The machine this plate is printed on");
+    let printer = printer.on_hover_text(tr!("chip-machine-tooltip"));
     egui::Popup::menu(&printer).show(|ui| profiles::printer_menu(ui, window));
     let resin = if untuned {
-        resin.on_hover_text("The resin, not measured on this printer")
+        resin.on_hover_text(tr!("chip-resin-untuned"))
     } else {
-        resin.on_hover_text("The resin")
+        resin.on_hover_text(tr!("chip-resin-tooltip"))
     };
     egui::Popup::menu(&resin).show(|ui| profiles::resin_menu(ui, window.machine));
     if layers.on_hover_text(Tool::PrintSettings.label()).clicked() {
@@ -294,10 +298,10 @@ fn print_chip(ui: &mut egui::Ui, window: &mut Window, max_w: f32) {
 /// The layer height and the exposure a plate is cut with, as the chip and the print
 /// settings' heading both read them.
 pub fn layers_and_exposure(machine: &Machine) -> String {
-    format!(
-        "{:.0} \u{b5}m, {:.2} s",
-        machine.slicing.layer_height_mm() * 1000.0,
-        machine.slicing.material.exposure_s
+    tr!(
+        "chip-layers",
+        layer = format!("{:.0}", machine.slicing.layer_height_mm() * 1000.0),
+        exposure = format!("{:.2}", machine.slicing.material.exposure_s)
     )
 }
 
@@ -430,7 +434,7 @@ fn find_button(ui: &mut egui::Ui, window: &mut Window, compact: bool) {
     let tint = colors.text_low;
     let label = ui
         .painter()
-        .layout_no_wrap("Find".to_owned(), theme::label(), tint);
+        .layout_no_wrap(tr!("find-button"), theme::label(), tint);
     let keys = ui
         .painter()
         .layout_no_wrap(shortcuts::text(Action::Find), theme::small(), tint);
@@ -439,7 +443,9 @@ fn find_button(ui: &mut egui::Ui, window: &mut Window, compact: bool) {
         false => PAD + 18.0 + label.size().x + 16.0 + keys.size().x + PAD,
     };
     let (rect, response) = ui.allocate_exact_size(vec2(width, theme::CHIP_H), Sense::click());
-    response.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Button, true, "Find"));
+    response.widget_info(|| {
+        egui::WidgetInfo::labeled(egui::WidgetType::Button, true, tr!("find-button"))
+    });
     let painter = ui.painter();
     let fill = if response.hovered() {
         colors.hover
@@ -480,10 +486,7 @@ fn find_button(ui: &mut egui::Ui, window: &mut Window, compact: bool) {
         );
     }
     focus_ring(ui, &response, theme::R_CONTROL);
-    if response
-        .on_hover_text("Find a tool, an action or a model")
-        .clicked()
-    {
+    if response.on_hover_text(tr!("find-tooltip")).clicked() {
         window.view.options.find = true;
     }
 }
@@ -508,24 +511,28 @@ fn window_buttons(ui: &mut egui::Ui) {
         env!("CARGO_PKG_VERSION")
     );
     ui.add_space(8.0);
-    let label = egui::RichText::new("Source")
+    let label = egui::RichText::new(tr!("bar-source"))
         .font(theme::small())
         .color(theme::colors().text_low);
     ui.hyperlink_to(label, source)
-        .on_hover_text("Encrust is free software under the AGPL-3.0; this is the code it runs");
+        .on_hover_text(tr!("bar-source-tooltip"));
 }
 
 #[cfg(not(any(target_os = "macos", target_arch = "wasm32")))]
 fn window_buttons(ui: &mut egui::Ui) {
-    if crate::ui::icon_button(ui, icon::CANCEL, "Close").clicked() {
+    if crate::ui::icon_button(ui, icon::CANCEL, &tr!("bar-close")).clicked() {
         ui.ctx().send_viewport_cmd(egui::ViewportCommand::Close);
     }
     let maximised = ui.input(|input| input.viewport().maximized.unwrap_or(false));
-    let tooltip = if maximised { "Restore" } else { "Maximise" };
-    if crate::ui::icon_button(ui, icon::MAXIMISE, tooltip).clicked() {
+    let tooltip = if maximised {
+        tr!("bar-restore")
+    } else {
+        tr!("bar-maximise")
+    };
+    if crate::ui::icon_button(ui, icon::MAXIMISE, &tooltip).clicked() {
         toggle_maximised(ui.ctx());
     }
-    if crate::ui::icon_button(ui, icon::MINIMISE, "Minimise").clicked() {
+    if crate::ui::icon_button(ui, icon::MINIMISE, &tr!("bar-minimise")).clicked() {
         ui.ctx()
             .send_viewport_cmd(egui::ViewportCommand::Minimized(true));
     }
@@ -539,7 +546,7 @@ fn update_badge(ui: &mut egui::Ui, machine: &mut Machine, compact: bool) {
     };
     let installed = matches!(machine.updates.stage, Stage::Installed(_));
     let text = if installed {
-        "Restart to update".to_owned()
+        tr!("bar-restart-to-update")
     } else {
         format!("Encrust {}", offer.version)
     };
@@ -553,9 +560,9 @@ fn update_badge(ui: &mut egui::Ui, machine: &mut Machine, compact: bool) {
         colors.accent_wash,
     );
     let tooltip = if installed {
-        "Close the window and start the new build"
+        tr!("bar-restart-tooltip")
     } else {
-        "A new release is out: see what changed"
+        tr!("bar-update-tooltip")
     };
     if response.on_hover_text(tooltip).clicked() {
         if installed {
@@ -577,15 +584,12 @@ fn alpha_badge(ui: &mut egui::Ui, machine: &mut Machine, compact: bool) {
     let response = pill(
         ui,
         icon::BUG,
-        "Alpha",
+        &tr!("bar-alpha"),
         compact,
         colors.warn,
         colors.warn_wash,
     );
-    if response
-        .on_hover_text("Encrust is in alpha: say what went wrong")
-        .clicked()
-    {
+    if response.on_hover_text(tr!("bar-alpha-tooltip")).clicked() {
         machine.report.open = true;
     }
     ui.add_space(6.0);
@@ -669,57 +673,59 @@ fn item_enabled(ui: &mut egui::Ui, label: &str, action: Action, enabled: bool) -
 }
 
 fn file_menu(ui: &mut egui::Ui, window: &mut Window) {
-    if item(ui, "New plate", Action::NewPlate).clicked() {
+    if item(ui, &tr!("menu-new-plate"), Action::NewPlate).clicked() {
         ui.close();
         window.doc.scene.add_plate();
     }
-    if item(ui, "New project", Action::NewProject).clicked() {
+    if item(ui, &tr!("menu-new-project"), Action::NewProject).clicked() {
         ui.close();
         project::new_project(window);
     }
-    if item(ui, "Open project...", Action::OpenProject).clicked() {
+    if item(ui, &tr!("menu-open-project"), Action::OpenProject).clicked() {
         ui.close();
         project::open_dialog(window);
     }
     // A browser hands over bytes and keeps no paths to reopen.
     if cfg!(not(target_arch = "wasm32")) {
-        ui.menu_button("Open recent", |ui| recent_menu(ui, window));
+        ui.menu_button(tr!("menu-open-recent"), |ui| recent_menu(ui, window));
     }
-    if item(ui, "Save project", Action::SaveProject).clicked() {
+    if item(ui, &tr!("menu-save-project"), Action::SaveProject).clicked() {
         ui.close();
         project::save_open(window);
     }
-    if item(ui, "Save project as...", Action::SaveProjectAs).clicked() {
+    if item(ui, &tr!("menu-save-project-as"), Action::SaveProjectAs).clicked() {
         ui.close();
         project::save_dialog(window);
     }
     ui.separator();
-    if item(ui, "Open model...", Action::OpenModel).clicked() {
+    if item(ui, &tr!("menu-open-model"), Action::OpenModel).clicked() {
         ui.close();
         crate::import::open_dialog(window);
     }
-    ui.menu_button("Open test print", |ui| test_print_menu(ui, window));
-    if ui.button("Import a machine...").clicked() {
+    ui.menu_button(tr!("menu-open-test-print"), |ui| {
+        test_print_menu(ui, window);
+    });
+    if ui.button(tr!("menu-import-machine")).clicked() {
         ui.close();
         profiles::open_printer(window);
     }
-    if ui.button("Import a resin...").clicked() {
+    if ui.button(tr!("menu-import-resin")).clicked() {
         ui.close();
         profiles::open_material(window.machine);
     }
     ui.separator();
-    if ui.button("Machine and resin...").clicked() {
+    if ui.button(tr!("menu-machine-and-resin")).clicked() {
         ui.close();
         open_machines(window.machine);
     }
-    if item(ui, "Settings...", Action::Settings).clicked() {
+    if item(ui, &tr!("menu-settings"), Action::Settings).clicked() {
         ui.close();
         toggle_settings(window.machine);
     }
     // A page is left by closing its tab.
     if cfg!(not(target_arch = "wasm32")) {
         ui.separator();
-        if ui.button("Quit").clicked() {
+        if ui.button(tr!("menu-quit")).clicked() {
             ui.ctx().send_viewport_cmd(egui::ViewportCommand::Close);
         }
     }
@@ -737,7 +743,7 @@ fn recent_menu(ui: &mut egui::Ui, window: &mut Window) {
         }
     }
     if window.machine.recent.files().is_empty() {
-        ui.add_enabled(false, egui::Button::new("Nothing opened yet"));
+        ui.add_enabled(false, egui::Button::new(tr!("menu-nothing-recent")));
     }
     if let Some(path) = picked {
         ui.close();
@@ -748,7 +754,11 @@ fn recent_menu(ui: &mut egui::Ui, window: &mut Window) {
 /// The test prints drawn for the window, the ones the start page offers.
 fn test_print_menu(ui: &mut egui::Ui, window: &mut Window) {
     for sample in &crate::samples::SAMPLES {
-        if ui.button(sample.name).on_hover_text(sample.about).clicked() {
+        if ui
+            .button(sample.name())
+            .on_hover_text(sample.about())
+            .clicked()
+        {
             ui.close();
             crate::app::open_by_what_it_is(window, sample.handed());
         }
@@ -757,7 +767,7 @@ fn test_print_menu(ui: &mut egui::Ui, window: &mut Window) {
 
 fn edit_menu(ui: &mut egui::Ui, window: &mut Window) {
     let can_undo = window.doc.history.can_undo();
-    if item_enabled(ui, "Undo", Action::Undo, can_undo).clicked() {
+    if item_enabled(ui, &tr!("action-undo"), Action::Undo, can_undo).clicked() {
         ui.close();
         window.doc.history.undo(
             &mut window.doc.scene,
@@ -766,7 +776,7 @@ fn edit_menu(ui: &mut egui::Ui, window: &mut Window) {
         );
     }
     let can_redo = window.doc.history.can_redo();
-    if item_enabled(ui, "Redo", Action::Redo, can_redo).clicked() {
+    if item_enabled(ui, &tr!("action-redo"), Action::Redo, can_redo).clicked() {
         ui.close();
         window.doc.history.redo(
             &mut window.doc.scene,
@@ -776,12 +786,12 @@ fn edit_menu(ui: &mut egui::Ui, window: &mut Window) {
     }
 
     ui.separator();
-    if item(ui, "Select all", Action::SelectAll).clicked() {
+    if item(ui, &tr!("action-select-all"), Action::SelectAll).clicked() {
         ui.close();
         window.doc.scene.select_here();
     }
     let picked = !window.doc.scene.selection().is_empty();
-    if item_enabled(ui, "Duplicate", Action::Duplicate, picked).clicked() {
+    if item_enabled(ui, &tr!("action-duplicate"), Action::Duplicate, picked).clicked() {
         ui.close();
         crate::panels::duplicate_selection(window);
     }
@@ -795,7 +805,7 @@ fn edit_menu(ui: &mut egui::Ui, window: &mut Window) {
         .scene
         .has_printable(window.doc.scene.active_plate());
     if ui
-        .add_enabled(anything, egui::Button::new("Arrange plate"))
+        .add_enabled(anything, egui::Button::new(tr!("menu-arrange-plate")))
         .clicked()
     {
         ui.close();
@@ -807,7 +817,7 @@ fn edit_menu(ui: &mut egui::Ui, window: &mut Window) {
     let can_orient = window.tools.orient.blocker(&window.doc.scene).is_none()
         && !window.tools.orient.is_running();
     if ui
-        .add_enabled(can_orient, egui::Button::new("Auto-orient plate"))
+        .add_enabled(can_orient, egui::Button::new(tr!("menu-auto-orient-plate")))
         .clicked()
     {
         ui.close();
@@ -842,7 +852,7 @@ fn move_to_plate(ui: &mut egui::Ui, doc: &mut Doc) {
 
     let mut moved = None;
     ui.add_enabled_ui(enabled, |ui| {
-        ui.menu_button("Move to plate", |ui| {
+        ui.menu_button(tr!("menu-move-to-plate"), |ui| {
             for (index, name) in plates.iter().enumerate() {
                 let plate = index as u32;
                 if ui
@@ -863,7 +873,7 @@ fn move_to_plate(ui: &mut egui::Ui, doc: &mut Doc) {
 }
 
 fn view_menu(ui: &mut egui::Ui, window: &mut Window) {
-    if item(ui, "Frame view", Action::FrameView).clicked() {
+    if item(ui, &tr!("menu-frame-view"), Action::FrameView).clicked() {
         ui.close();
         frame_view(
             &window.doc.scene,
@@ -871,14 +881,14 @@ fn view_menu(ui: &mut egui::Ui, window: &mut Window) {
             &mut window.view.camera,
         );
     }
-    ui.checkbox(&mut window.view.options.grid, "Plate grid");
-    ui.checkbox(&mut window.view.options.xray, "See through models");
+    ui.checkbox(&mut window.view.options.grid, tr!("menu-plate-grid"));
+    ui.checkbox(&mut window.view.options.xray, tr!("menu-xray"));
     let mut flat = window.view.camera.orthographic;
-    if ui.checkbox(&mut flat, "Orthographic view").changed() {
+    if ui.checkbox(&mut flat, tr!("menu-orthographic")).changed() {
         crate::panels::set_orthographic(window.view, flat);
     }
     ui.separator();
-    if item(ui, "Keyboard shortcuts", Action::Sheet).clicked() {
+    if item(ui, &tr!("shortcuts-title"), Action::Sheet).clicked() {
         ui.close();
         window.view.options.sheet = true;
     }

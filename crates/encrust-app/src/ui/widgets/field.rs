@@ -7,6 +7,7 @@ use egui::{
 };
 
 use super::{compact_button, icon_button};
+use crate::i18n::tr;
 use crate::ui::{icon, theme};
 
 /// What a field is called, in `color`, with its unit in brackets after it: the one way
@@ -222,11 +223,11 @@ pub fn stepped_row(
         let right = Layout::right_to_left(Align::Center);
         ui.with_layout(right, |ui| {
             let more = compact_button(ui, "+", theme::FIELD_H)
-                .on_hover_text(format!("{step} {unit} more"))
+                .on_hover_text(tr!("field-step-more", step = step, unit = unit))
                 .clicked();
             let typed = boxed_field(ui, &field, value, speed, range, Some(decimals));
             let less = compact_button(ui, "\u{2212}", theme::FIELD_H)
-                .on_hover_text(format!("{step} {unit} less"))
+                .on_hover_text(tr!("field-step-less", step = step, unit = unit))
                 .clicked();
             if more {
                 *value = (*value + step).min(most);
@@ -283,7 +284,11 @@ pub fn carried_row(
             if boxed_field(ui, &field, value, speed, range, Some(decimals)) {
                 carried = Carried::Edited;
             }
-            let back = format!("Back to {was:.decimals$} {unit}");
+            let back = tr!(
+                "field-back-to",
+                value = format!("{was:.decimals$}"),
+                unit = unit
+            );
             if icon_button(ui, icon::RESET, &back).clicked() {
                 carried = Carried::Reverted;
             }
@@ -328,7 +333,7 @@ pub fn address_field(ui: &mut Ui, text: &mut String, hint: &str, width: f32) -> 
         .font(theme::figures(13.0))
         .background_color(theme::colors().sunken);
     let response = ui.add_sized(vec2(width, theme::FIELD_H), field);
-    name_for_reader(ui, response.id, "Printer address");
+    name_for_reader(ui, response.id, &tr!("field-printer-address"));
     response
 }
 

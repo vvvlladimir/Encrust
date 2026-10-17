@@ -2,6 +2,7 @@ use egui::RichText;
 use printer_link::{Command, State};
 
 use super::paused;
+use crate::i18n::tr;
 use crate::network::{Errand, Extras};
 use crate::ui::{hint, icon, quiet_button, theme, tone};
 
@@ -19,7 +20,7 @@ pub(super) fn buttons(
     if !state.busy {
         return None;
     }
-    if let Some(doing) = extras.and_then(|extras| extras.doing) {
+    if let Some(doing) = extras.and_then(|extras| extras.doing.as_deref()) {
         ui.horizontal(|ui| {
             ui.spinner();
             tone(ui, doing, theme::colors().text_mid);
@@ -31,17 +32,13 @@ pub(super) fn buttons(
     let mut errand = None;
     let mut arm = armed;
     if armed {
-        tone(
-            ui,
-            "Stop the print? It cannot be resumed.",
-            theme::colors().warn,
-        );
+        tone(ui, &tr!("controls-stop-question"), theme::colors().warn);
         ui.horizontal(|ui| {
-            if quiet_button(ui, icon::STOP, "Stop the print", true, true).clicked() {
+            if quiet_button(ui, icon::STOP, &tr!("controls-stop"), true, true).clicked() {
                 errand = Some(Errand::Control(Command::Stop));
                 arm = false;
             }
-            if quiet_button(ui, "", "Keep printing", false, true).clicked() {
+            if quiet_button(ui, "", &tr!("controls-keep-printing"), false, true).clicked() {
                 arm = false;
             }
         });
@@ -74,7 +71,7 @@ pub(super) fn film(ui: &mut egui::Ui, state: &State) {
 fn film_line(state: &State) -> Option<(String, bool)> {
     let (lifts, max) = (state.film_lifts?, state.film_lifts_max?);
     let worn = f64::from(lifts) >= f64::from(max) * WORN_SHARE;
-    let line = format!("Release film {} of {} lifts", grouped(lifts), grouped(max));
+    let line = tr!("controls-film", lifts = grouped(lifts), max = grouped(max));
     Some((line, worn))
 }
 
@@ -97,7 +94,7 @@ pub(super) fn camera(ui: &mut egui::Ui, state: &State, extras: Option<&Extras>) 
     if !state.camera {
         return None;
     }
-    let free = extras.and_then(|extras| extras.doing).is_none();
+    let free = extras.and_then(|extras| extras.doing.as_ref()).is_none();
     let mut errand = None;
     match extras.and_then(|extras| extras.camera.as_deref()) {
         Some(url) => {
@@ -117,20 +114,17 @@ pub(super) fn camera(ui: &mut egui::Ui, state: &State, extras: Option<&Extras>) 
                 );
             });
             ui.horizontal(|ui| {
-                if quiet_button(ui, icon::CLIPBOARD, "Copy", false, true).clicked() {
+                if quiet_button(ui, icon::CLIPBOARD, &tr!("controls-copy"), false, true).clicked() {
                     ui.ctx().copy_text(url.to_owned());
                 }
-                if quiet_button(ui, "", "Turn the camera off", false, free).clicked() {
+                if quiet_button(ui, "", &tr!("controls-camera-off"), false, free).clicked() {
                     errand = Some(Errand::Camera(false));
                 }
             });
-            hint(
-                ui,
-                "The stream is RTSP: open the address in a player that takes it.",
-            );
+            hint(ui, &tr!("controls-rtsp"));
         }
         None => {
-            if quiet_button(ui, icon::CAMERA, "Camera stream", false, free).clicked() {
+            if quiet_button(ui, icon::CAMERA, &tr!("controls-camera"), false, free).clicked() {
                 errand = Some(Errand::Camera(true));
             }
         }

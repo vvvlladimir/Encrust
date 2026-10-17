@@ -308,6 +308,7 @@ Grouped by what the decision governs; the number is still the order it was taken
 | [0297](0297-the-pws-is-read-by-its-own-layer-codec.md) | Read the `.pws` with its own layer codec, named by the extension | Accepted |
 | [0298](0298-the-encrypted-ctb-is-read-and-written-in-a-crate-of-its-own.md) | Read and write the encrypted `.ctb` in a crate of its own | Accepted |
 | [0299](0299-a-plate-says-what-it-lacks-and-an-empty-list-offers-zones.md) | Say at the stage's foot what a plate lacks, and offer the first machine and resin as zones | Accepted |
+| [0300](0300-the-window-speaks-the-users-language-through-fluent-catalogues.md) | Write the window in the user's language through Fluent catalogues, the system's first by default | Accepted |
 | [0120](0120-a-resin-is-tuned-per-printer.md) | A printer's resins are its own presets, edited in place | Accepted; no undo on the screen superseded by 0268 |
 | [0140](0140-a-profile-carries-the-machine-name-its-firmware-matches.md) | A profile carries the machine name its firmware matches | Accepted |
 | [0141](0141-advance-mode-follows-the-firmware-flag.md) | Advance mode follows the machine's firmware flag | Accepted |
