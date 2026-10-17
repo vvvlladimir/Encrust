@@ -1,6 +1,7 @@
 use egui::{Align2, Id, Rect, Sense, Stroke, UiBuilder, pos2, vec2};
 
 use crate::files::{self, Wanted};
+use crate::i18n::tr;
 use crate::panels::{Window, mask_pane, stage_notice, view_column, view_cube, viewport_panel};
 use crate::ui::{card, icon, primary_button, theme};
 use crate::workspace::Mode;
@@ -132,19 +133,17 @@ fn empty_state(ui: &egui::Ui, at: egui::Pos2, viewport: Rect, window: &mut Windo
                         );
                         ui.add_space(8.0);
                         ui.label(
-                            egui::RichText::new("No model on the plate")
+                            egui::RichText::new(tr!("stage-empty"))
                                 .font(theme::body())
                                 .color(theme::colors().text_high),
                         );
                         ui.label(
-                            egui::RichText::new(
-                                "Open a model or a project, or drop one into the window.",
-                            )
-                            .font(theme::label())
-                            .color(theme::colors().text_mid),
+                            egui::RichText::new(tr!("stage-empty-hint"))
+                                .font(theme::label())
+                                .color(theme::colors().text_mid),
                         );
                         ui.add_space(14.0);
-                        if primary_button(ui, icon::OPEN, "Open...", true).clicked()
+                        if primary_button(ui, icon::OPEN, &tr!("stage-open"), true).clicked()
                             && let Some(file) = files::pick(Wanted::ModelOrProject)
                         {
                             crate::app::open_by_what_it_is(window, file);

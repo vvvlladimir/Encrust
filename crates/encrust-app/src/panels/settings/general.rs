@@ -2,25 +2,48 @@
 
 use egui::Ui;
 
+use crate::i18n::{self, Language, tr};
 use crate::panels::settings::form_card;
 use crate::state::Machine;
 use crate::ui::{hint, switch};
 
 pub fn form(ui: &mut Ui, machine: &mut Machine) {
     let general = &mut machine.general;
-    form_card(ui, "Start", |ui| {
-        switch(ui, &mut general.start_page, "Open on the start page");
-        hint(
-            ui,
-            "The drop zone, the files opened lately and the resin test prints, until a \
-             model arrives. Off, a run opens straight on the plate.",
-        );
+    form_card(ui, &tr!("general-language"), |ui| {
+        language(ui, &mut general.language)
     });
-    form_card(ui, "Viewport", |ui| {
-        switch(ui, &mut general.invert_zoom, "Scroll down to zoom in");
+    form_card(ui, &tr!("general-start"), |ui| {
+        switch(ui, &mut general.start_page, &tr!("general-start-page"));
+        hint(ui, &tr!("general-start-page-hint"));
+    });
+    form_card(ui, &tr!("general-viewport"), |ui| {
+        switch(ui, &mut general.invert_zoom, &tr!("general-invert-zoom"));
     });
     #[cfg(not(target_arch = "wasm32"))]
     desk(ui, machine);
+}
+
+/// The language the window is written in. Each is named in itself, so a user who cannot
+/// read the current one still finds theirs.
+fn language(ui: &mut Ui, choice: &mut Option<Language>) {
+    let system = tr!(
+        "general-language-system",
+        name = i18n::system().native_name()
+    );
+    let shown = choice.map_or_else(
+        || system.clone(),
+        |language| language.native_name().to_owned(),
+    );
+    egui::ComboBox::from_id_salt("general-language")
+        .width(ui.available_width())
+        .selected_text(shown)
+        .show_ui(ui, |ui| {
+            ui.selectable_value(choice, None, system);
+            for language in Language::ALL {
+                ui.selectable_value(choice, Some(language), language.native_name());
+            }
+        });
+    hint(ui, &tr!("general-language-hint"));
 }
 
 /// What only a desk has: folders.
@@ -31,41 +54,37 @@ fn desk(ui: &mut Ui, machine: &mut Machine) {
     use crate::ui::{icon, inline_button, quiet_button};
 
     let general = &mut machine.general;
-    form_card(ui, "Sliced files", |ui| {
+    form_card(ui, &tr!("general-sliced-files"), |ui| {
         let shown = general.sliced_dir.as_ref().map_or_else(
-            || "The save dialog opens wherever the system last left it.".to_owned(),
-            |dir| format!("The save dialog opens in {}", dir.display()),
+            || tr!("general-sliced-dir-system"),
+            |dir| tr!("general-sliced-dir", dir = dir.display().to_string()),
         );
         hint(ui, &shown);
         ui.horizontal(|ui| {
-            if inline_button(ui, icon::OPEN, "Choose a folder", false, true).clicked()
+            if inline_button(ui, icon::OPEN, &tr!("general-choose-folder"), false, true).clicked()
                 && let Some(dir) = rfd::FileDialog::new().pick_folder()
             {
                 general.sliced_dir = Some(dir);
             }
             let set = general.sliced_dir.is_some();
-            if quiet_button(ui, icon::RESET, "Forget it", false, set).clicked() {
+            if quiet_button(ui, icon::RESET, &tr!("general-forget-folder"), false, set).clicked() {
                 general.sliced_dir = None;
             }
         });
     });
-    form_card(ui, "Profiles", |ui| {
+    form_card(ui, &tr!("general-profiles"), |ui| {
         let Some(dir) = printer_profiles::user_dir() else {
-            hint(ui, "This system has nowhere to keep your profiles.");
+            hint(ui, &tr!("general-profiles-nowhere"));
             return;
         };
-        hint(
-            ui,
-            &format!(
-                "Your machines, resins and profiles are kept in {}",
-                dir.display()
-            ),
-        );
-        if inline_button(ui, icon::OPEN, "Open the folder", false, true).clicked() {
-            let opened = reveal(&dir).with_context(|| format!("cannot open {}", dir.display()));
+        let shown = dir.display().to_string();
+        hint(ui, &tr!("general-profiles-dir", dir = shown.clone()));
+        if inline_button(ui, icon::OPEN, &tr!("general-open-folder"), false, true).clicked() {
+            let opened =
+                reveal(&dir).with_context(|| tr!("error-cannot-open", path = shown.clone()));
             machine
                 .status
-                .report(&format!("Opened {}", dir.display()), opened);
+                .report(&tr!("status-opened", path = shown), opened);
         }
     });
 }

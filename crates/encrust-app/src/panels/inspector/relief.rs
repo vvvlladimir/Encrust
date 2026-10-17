@@ -3,6 +3,7 @@ use std::sync::Arc;
 use core_geometry::Vec2;
 use core_volume::Tiling;
 
+use crate::i18n::tr;
 use crate::panels::Window;
 use crate::relief::Picture;
 use crate::state::Doc;
@@ -29,21 +30,17 @@ const MAX_DEPTH_MM: f32 = 2.0;
 /// What is pressed into the models on the plate — a chosen picture as tiles, or the
 /// texture each came with — and how deep.
 pub fn ui(ui: &mut egui::Ui, window: &mut Window) {
-    section(ui, "Image", None, |ui| {
+    section(ui, &tr!("relief-image"), None, |ui| {
         match &window.tools.relief.picture {
             Some(picture) => chosen(ui, picture),
             None => {
-                describe(
-                    ui,
-                    "A model's own texture becomes geometry: white moves the surface out, \
-                     black leaves it where it is. Or choose a picture to tile over any model.",
-                );
+                describe(ui, &tr!("relief-image-note"));
                 carried(ui, window.doc);
             }
         }
         picture_buttons(ui, window);
     });
-    section(ui, "Depth", None, |ui| {
+    section(ui, &tr!("relief-depth"), None, |ui| {
         depth(ui, window);
         if window.tools.relief.picture.is_some() {
             tiling(ui, &mut window.tools.relief.tiling);
@@ -72,7 +69,11 @@ fn chosen(ui: &mut egui::Ui, picture: &Picture) {
                 .truncate(),
             );
             let [width, height] = picture.size_px;
-            tone(ui, &format!("{width} \u{d7} {height} px"), colors.text_low);
+            tone(
+                ui,
+                &tr!("relief-picture-size", width = width, height = height),
+                colors.text_low,
+            );
         });
     });
 }
@@ -104,15 +105,15 @@ fn thumbnail(ctx: &egui::Context, picture: &Picture) -> egui::TextureHandle {
 fn picture_buttons(ui: &mut egui::Ui, window: &mut Window) {
     let relief = &mut window.tools.relief;
     let label = if relief.picture.is_some() {
-        "Choose another"
+        tr!("relief-choose-another")
     } else {
-        "Choose a picture"
+        tr!("relief-choose-picture")
     };
-    if secondary_button(ui, icon::OPEN, label).clicked() {
+    if secondary_button(ui, icon::OPEN, &label).clicked() {
         crate::relief::open_picture(relief, &mut window.machine.status);
     }
     if relief.picture.is_some()
-        && secondary_button(ui, icon::RESET, "Use the models' own textures").clicked()
+        && secondary_button(ui, icon::RESET, &tr!("relief-own-textures")).clicked()
     {
         relief.picture = None;
     }
@@ -122,42 +123,38 @@ fn picture_buttons(ui: &mut egui::Ui, window: &mut Window) {
 fn tiling(ui: &mut egui::Ui, tiling: &mut Tiling) {
     number_row(
         ui,
-        "Tile size",
+        &tr!("relief-tile-size"),
         &mut tiling.tile_mm,
-        "mm",
+        &tr!("unit-mm"),
         TILE_STEP,
         MIN_TILE_MM..=MAX_TILE_MM,
         1,
     );
     number_row(
         ui,
-        "Angle",
+        &tr!("relief-angle"),
         &mut tiling.angle_deg,
-        "\u{b0}",
+        &tr!("unit-degrees"),
         1.0,
         0.0..=360.0,
         0,
     );
-    describe(
-        ui,
-        "The picture is laid from the three sides the model faces, and each face reads it \
-         from the side it faces most.",
-    );
+    describe(ui, &tr!("relief-tiling-note"));
 }
 
 fn depth(ui: &mut egui::Ui, window: &mut Window) {
     number_row(
         ui,
-        "Depth",
+        &tr!("relief-depth"),
         &mut window.tools.relief.state.amplitude_mm,
-        "mm",
+        &tr!("unit-mm"),
         DEPTH_STEP,
         -MAX_DEPTH_MM..=MAX_DEPTH_MM,
         2,
     );
     number_row(
         ui,
-        "Precision",
+        &tr!("relief-precision"),
         &mut window.tools.relief.state.precision,
         "",
         FINE_STEP,
@@ -175,10 +172,7 @@ fn depth(ui: &mut egui::Ui, window: &mut Window) {
     );
     describe(
         ui,
-        &format!(
-            "The relief is cut on a {lattice_mm:.2} mm lattice, and the whole model is \
-             meshed again at it. A negative depth sinks the texture in.",
-        ),
+        &tr!("relief-lattice-note", lattice = format!("{lattice_mm:.2}")),
     );
 }
 
@@ -194,20 +188,12 @@ fn carried(ui: &mut egui::Ui, doc: &Doc) {
     mapped.dedup();
 
     let [first, rest @ ..] = mapped.as_slice() else {
-        tone(
-            ui,
-            "No texture on the plate. It is read from the file a model is opened from, \
-             and is gone once it has been pressed in.",
-            theme::colors().text_low,
-        );
+        tone(ui, &tr!("relief-no-texture"), theme::colors().text_low);
         return;
     };
 
-    let label = match rest.len() {
-        0 => "Texture".to_owned(),
-        more => format!("{} textures", more + 1),
-    };
-    stats(ui, &[(label.as_str(), truncated(first))]);
+    let label = tr!("relief-textures", count = rest.len() + 1);
+    stats(ui, &[(label, truncated(first))]);
     // The rest are a list rather than a second cell: a file name is long enough that two
     // to a row would be two ellipses.
     meta(
@@ -234,29 +220,32 @@ fn truncated(name: &str) -> String {
 /// Pressing the texture in, or the progress of the run that is going.
 pub fn action(ui: &mut egui::Ui, window: &mut Window) {
     if window.tools.relief.is_busy() {
-        tone(ui, "Pressing...", theme::colors().text_mid);
+        tone(ui, &tr!("relief-pressing"), theme::colors().text_mid);
         progress_bar(ui, None);
         return;
     }
 
     let blocked = window.tools.relief.blocker(&window.doc.scene);
     let picture = match &window.tools.relief.picture {
-        Some(picture) => picture.name.as_str(),
-        None => "the texture",
+        Some(picture) => picture.name.clone(),
+        None => tr!("relief-the-texture"),
     };
-    let what = format!(
-        "Presses {picture} into {}. The model is replaced, so its supports and its cavity \
-         go with it.",
-        window.doc.scene.scope()
+    let what = tr!(
+        "relief-tooltip",
+        picture = picture,
+        scope = window.doc.scene.scope()
     );
-    if primary_button(ui, icon::RELIEF, "Press it in", blocked.is_none())
+    if primary_button(ui, icon::RELIEF, &tr!("relief-press"), blocked.is_none())
         .on_hover_text(what)
         .clicked()
     {
         let started = window.tools.relief.start(&window.doc.scene);
-        window.machine.status.report("Pressing the relief", started);
+        window
+            .machine
+            .status
+            .report(&tr!("relief-pressing-status"), started);
     }
     if let Some(reason) = blocked {
-        hint(ui, reason);
+        hint(ui, &reason);
     }
 }

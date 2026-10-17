@@ -9,6 +9,7 @@
 
 use std::sync::Arc;
 
+use crate::i18n::tr;
 use crate::job::{RepairJob, RepairOutcome, RepairRequest, Repaired};
 use crate::scene::{ObjectId, Scene, SceneObject};
 use crate::status::Status;
@@ -93,13 +94,10 @@ impl Repairs {
 /// Puts a repaired mesh back on the model it came from, and says what repairing it did.
 fn apply(scene: &mut Scene, repaired: &Repaired) -> Status {
     let Some(object) = scene.get_mut(repaired.id) else {
-        return Status::Error(format!("{} is no longer on the plate", repaired.name));
+        return Status::Error(tr!("repair-gone", name = repaired.name.clone()));
     };
     if repaired.kept_as_found {
-        return Status::Error(format!(
-            "{} could not be repaired without leaving more wrong with it, so it is as it came",
-            repaired.name
-        ));
+        return Status::Error(tr!("repair-kept", name = repaired.name.clone()));
     }
     object.reshape(repaired.shaped.clone());
     // What repair did is said in the stage notice; the summary keeps describing the file,
@@ -109,14 +107,18 @@ fn apply(scene: &mut Scene, repaired: &Repaired) -> Status {
     let name = &repaired.name;
     let left = repaired.filled.loops_left;
     match (done(repaired), left) {
-        (0, 0) => Status::Info(format!("{name} had nothing left to repair")),
-        (0, left) => Status::Error(format!(
-            "{name} has {left} boundaries with no patch that would close them"
+        (0, 0) => Status::Info(tr!("repair-nothing", name = name.clone())),
+        (0, left) => Status::Error(tr!("repair-no-patch", name = name.clone(), count = left)),
+        (_, 0) => Status::Info(tr!(
+            "repair-done",
+            name = name.clone(),
+            what = what(repaired).join(", ")
         )),
-        (_, 0) => Status::Info(format!("Repaired {name}: {}", what(repaired).join(", "))),
-        (_, left) => Status::Info(format!(
-            "Repaired {name}: {}; {left} boundaries could not be closed",
-            what(repaired).join(", ")
+        (_, left) => Status::Info(tr!(
+            "repair-done-open",
+            name = name.clone(),
+            what = what(repaired).join(", "),
+            count = left
         )),
     }
 }
@@ -131,12 +133,15 @@ fn done(repaired: &Repaired) -> usize {
 fn what(repaired: &Repaired) -> Vec<String> {
     let mut lines = Vec::new();
     if repaired.filled.loops_filled > 0 {
-        lines.push(format!("closed {} hole(s)", repaired.filled.loops_filled));
+        lines.push(tr!(
+            "repair-closed-holes",
+            count = repaired.filled.loops_filled
+        ));
     }
     if repaired.duplicates_removed > 0 {
-        lines.push(format!(
-            "dropped {} face(s) drawn twice",
-            repaired.duplicates_removed
+        lines.push(tr!(
+            "repair-dropped-faces",
+            count = repaired.duplicates_removed
         ));
     }
     lines

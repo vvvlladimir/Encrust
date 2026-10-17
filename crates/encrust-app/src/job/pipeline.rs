@@ -11,6 +11,7 @@ use core_pipeline::{Observer, Tolerance, Written};
 use core_raster::RasterSettings;
 use core_slicer::{PlaneSliceEngine, SliceEngine, SliceSettings, Sliced, Solid, Windows};
 
+use crate::i18n::tr;
 use crate::job::{Outcome, Progress, Stage};
 
 /// Everything one slicing run needs, owned so that it can cross to the worker thread.
@@ -98,7 +99,7 @@ pub fn thread_pool(threads: usize) -> Result<Pool> {
             .num_threads(threads.max(1))
             .build()
             .map(Pool)
-            .context("cannot start the slicing threads")
+            .context(tr!("job-cannot-start-threads"))
     }
     // In a browser a thread is a worker started at a cost, so every job shares one pool,
     // held to the same budget; see `crate::web::thread`.
@@ -141,7 +142,7 @@ pub fn slice_mesh(mesh: &Mesh, layer_height_mm: Scalar) -> Result<Sliced> {
     };
     PlaneSliceEngine
         .slice(mesh, &settings)
-        .context("cannot slice the model")
+        .context(tr!("job-cannot-slice"))
 }
 
 /// Measures what the stack cures without writing it, so Preview can say what the print
@@ -162,7 +163,7 @@ pub fn measure_stack(
         fold,
         &mut Cancel(cancel),
     )
-    .context("cannot measure the stack")
+    .context(tr!("job-cannot-measure"))
 }
 
 /// The worker's cancel flag and progress channel, as the engine wants to see them.
@@ -203,8 +204,12 @@ fn slice_and_write(
     }
 
     report(Progress::Stage(Stage::Rasterising));
-    let written = write(&run, &mut Worker { cancel, report })
-        .with_context(|| format!("cannot write {}", request.output.display()))?;
+    let written = write(&run, &mut Worker { cancel, report }).with_context(|| {
+        tr!(
+            "error-cannot-write",
+            path = request.output.display().to_string()
+        )
+    })?;
 
     let Some(written) = written else {
         return Ok(Outcome::Cancelled);

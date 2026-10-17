@@ -4,6 +4,7 @@ use core_geometry::Scalar;
 use core_supports::Trapped;
 use core_volume::HoleSize;
 
+use crate::i18n::tr;
 use crate::job::{TrapJob, TrapOutcome, TrapRequest, trap_tasks};
 use crate::scene::{ObjectId, Scene, SceneObject};
 use crate::status::Status;
@@ -65,7 +66,7 @@ impl DrainTool {
     pub fn start(&mut self, scene: &Scene, layer_height_mm: Scalar) -> Result<()> {
         let tasks = trap_tasks(scene);
         if tasks.is_empty() {
-            bail!("nothing visible on the plate to check");
+            bail!(tr!("drain-nothing-visible"));
         }
 
         self.checked = false;
@@ -102,10 +103,7 @@ impl DrainTool {
                     }
                 }
                 self.checked = true;
-                *status = Status::Info(match found {
-                    0 => "No trapped resin: everything can drain".to_owned(),
-                    _ => format!("{found} pocket(s) of trapped resin"),
-                });
+                *status = Status::Info(tr!("drain-found", count = found));
             }
             TrapOutcome::Failed(message) => *status = Status::Error(message),
         }

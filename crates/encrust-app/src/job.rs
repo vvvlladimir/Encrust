@@ -1,3 +1,4 @@
+use crate::i18n::tr;
 mod format;
 mod hollow;
 mod import;
@@ -71,10 +72,10 @@ pub enum Stage {
 }
 
 impl Stage {
-    pub fn label(self) -> &'static str {
+    pub fn label(self) -> String {
         match self {
-            Self::Slicing => "Slicing",
-            Self::Rasterising => "Rasterising",
+            Self::Slicing => tr!("slice-slicing"),
+            Self::Rasterising => tr!("job-rasterising"),
         }
     }
 }
@@ -169,9 +170,7 @@ impl SliceJob {
                 Ok(Progress::Finished(outcome)) => return Some(outcome),
                 Err(TryRecvError::Empty) => return None,
                 Err(TryRecvError::Disconnected) => {
-                    return Some(Outcome::Failed(
-                        "the slicing thread stopped without finishing".to_owned(),
-                    ));
+                    return Some(Outcome::Failed(tr!("job-thread-stopped")));
                 }
             }
         }
@@ -194,16 +193,16 @@ impl SliceJob {
 
     pub fn label(&self) -> String {
         if self.is_cancelling() {
-            return "Cancelling".to_owned();
+            return tr!("job-cancelling");
         }
         match self.fraction() {
-            Some(_) => format!(
-                "{} layer {} of {}",
-                self.stage.label(),
-                self.done,
-                self.total
+            Some(_) => tr!(
+                "job-progress",
+                stage = self.stage.label(),
+                done = self.done,
+                total = self.total
             ),
-            None => format!("{}...", self.stage.label()),
+            None => tr!("job-working", stage = self.stage.label()),
         }
     }
 }

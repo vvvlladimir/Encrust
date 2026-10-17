@@ -9,6 +9,7 @@ use printer_profiles::{
     SupportProfile, own_id,
 };
 
+use crate::i18n::tr;
 use crate::slicing::Rescaled;
 use crate::undo::Frame;
 
@@ -38,13 +39,13 @@ impl Section {
     #[cfg(target_arch = "wasm32")]
     pub const OWN: [Self; 1] = [Self::General];
 
-    pub fn label(self) -> &'static str {
+    pub fn label(self) -> String {
         match self {
-            Self::Supports => "Supports",
-            Self::Hollow => "Hollow",
-            Self::Drain => "Drain",
-            Self::General => "General",
-            Self::Updates => "Updates",
+            Self::Supports => tr!("settings-page-supports"),
+            Self::Hollow => tr!("settings-page-hollow"),
+            Self::Drain => tr!("settings-page-drain"),
+            Self::General => tr!("settings-page-general"),
+            Self::Updates => tr!("settings-page-updates"),
         }
     }
 
@@ -74,11 +75,11 @@ pub enum Tab {
 impl Tab {
     pub const ALL: [Self; 3] = [Self::Resins, Self::Machine, Self::Network];
 
-    pub fn label(self) -> &'static str {
+    pub fn label(self) -> String {
         match self {
-            Self::Resins => "Resins",
-            Self::Machine => "Machine",
-            Self::Network => "Network",
+            Self::Resins => tr!("settings-tab-resins"),
+            Self::Machine => tr!("settings-tab-machine"),
+            Self::Network => tr!("settings-tab-network"),
         }
     }
 }
@@ -604,7 +605,7 @@ pub fn new_resin(catalogue: &mut Catalogue, printer: &str) -> Result<String, Pro
 /// What **New resin** makes: the stock numbers under a name that says it is new.
 fn stock_resin() -> MaterialProfile {
     MaterialProfile {
-        name: "New resin".to_owned(),
+        name: tr!("settings-new-resin"),
         ..MaterialProfile::default()
     }
 }
@@ -631,7 +632,7 @@ pub fn duplicate_resin(
     resin: &str,
 ) -> Result<String, ProfileError> {
     let mut copy = catalogue.resin(resin)?.profile.for_printer(printer);
-    copy.name = format!("{} copy", copy.name);
+    copy.name = tr!("settings-copy-name", name = copy.name);
     save_as_own(catalogue, printer, copy)
 }
 
@@ -741,7 +742,7 @@ fn save_as_own(
 /// A new printer with the stock numbers. Returns its id.
 pub fn new_printer(catalogue: &mut Catalogue) -> Result<String, ProfileError> {
     let printer = PrinterProfile {
-        name: "New printer".to_owned(),
+        name: tr!("settings-new-printer"),
         ..PrinterProfile::default()
     };
     let id = own_id(&printer.name, |id| catalogue.printer(id).is_ok())?;
@@ -754,11 +755,11 @@ pub fn new_support(catalogue: &mut Catalogue, from: Option<&str>) -> Result<Stri
     let profile = match from {
         Some(id) => {
             let mut copy = catalogue.support(id)?.profile.clone();
-            copy.name = format!("{} copy", copy.name);
+            copy.name = tr!("settings-copy-name", name = copy.name);
             copy
         }
         None => SupportProfile {
-            name: "New profile".to_owned(),
+            name: tr!("settings-new-profile"),
             ..SupportProfile::default()
         },
     };

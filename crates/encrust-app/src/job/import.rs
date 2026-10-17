@@ -2,6 +2,7 @@ use std::path::Path;
 use std::sync::mpsc::{self, Receiver, TryRecvError};
 
 use crate::files::Handed;
+use crate::i18n::tr;
 use crate::plate::BuildPlate;
 use crate::scene::Imported;
 
@@ -15,11 +16,11 @@ pub enum ImportStage {
 }
 
 impl ImportStage {
-    pub fn label(self) -> &'static str {
+    pub fn label(self) -> String {
         match self {
-            Self::Reading => "Reading",
-            Self::Repairing => "Repairing",
-            Self::Indexing => "Indexing",
+            Self::Reading => tr!("import-stage-reading"),
+            Self::Repairing => tr!("import-stage-repairing"),
+            Self::Indexing => tr!("import-stage-indexing"),
         }
     }
 }
@@ -110,9 +111,7 @@ impl ImportJob {
                 Ok(Report::Finished(outcome)) => return Some(outcome),
                 Err(TryRecvError::Empty) => return None,
                 Err(TryRecvError::Disconnected) => {
-                    return Some(ImportOutcome::Failed(
-                        "the import thread stopped without finishing".to_owned(),
-                    ));
+                    return Some(ImportOutcome::Failed(tr!("job-thread-stopped-import")));
                 }
             }
         }
@@ -133,7 +132,7 @@ impl ImportJob {
             || path.display().to_string(),
             |name| name.to_string_lossy().into_owned(),
         );
-        format!("{} {name}", self.stage.label())
+        tr!("import-stage", stage = self.stage.label(), name = name)
     }
 }
 

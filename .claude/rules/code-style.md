@@ -31,6 +31,11 @@ and `CLAUDE.md` are English.
   file-level `#![expect(clippy::expect_used, reason = "...")]`.
 - Never swallow an error into an `Option`.
 
+## Text a user reads
+
+Every string the window shows is `tr!("key", ...)`, its English in `assets/i18n/en.ftl`;
+one sentence a message, never joined from pieces in the code. See docs/design/i18n.md.
+
 ## Naming, modules and size
 
 - Units in the name when the type lacks them: `layer_height_mm`, `exposure_s`, `width_px`.

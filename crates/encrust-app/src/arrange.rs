@@ -1,6 +1,7 @@
 use core_geometry::{Mesh, Scalar, Transform, Vec2, Vec3};
 use core_plate::{ArrangeSettings, Footprint, arrange};
 
+use crate::i18n::tr;
 use crate::plate::BuildPlate;
 use crate::scene::{ObjectId, Scene};
 use crate::status::Status;
@@ -28,10 +29,10 @@ pub fn arrange_plate(scene: &mut Scene, plate: &BuildPlate, clearance_mm: Scalar
         .collect();
     let visible: Vec<ObjectId> = visible.iter().map(|object| object.id).collect();
     if footprints.len() != visible.len() {
-        return Status::Error("a model on the plate has no footprint to arrange".to_owned());
+        return Status::Error(tr!("arrange-no-footprint"));
     }
     if footprints.is_empty() {
-        return Status::Info("Nothing visible on the plate to arrange".to_owned());
+        return Status::Info(tr!("arrange-nothing"));
     }
 
     let arranged = arrange(&footprints, Vec2::new(plate.x_mm, plate.y_mm), &settings);
@@ -45,9 +46,8 @@ pub fn arrange_plate(scene: &mut Scene, plate: &BuildPlate, clearance_mm: Scalar
     }
 
     match arranged.left_out.len() {
-        0 => Status::Info(format!("Arranged {} models", arranged.placed.len())),
-        1 => Status::Info("Arranged the plate; 1 model found no room".to_owned()),
-        short => Status::Info(format!("Arranged the plate; {short} models found no room")),
+        0 => Status::Info(tr!("arrange-done", count = arranged.placed.len())),
+        short => Status::Info(tr!("arrange-short", count = short)),
     }
 }
 

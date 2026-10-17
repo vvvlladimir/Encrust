@@ -3,6 +3,7 @@
 
 use egui::{Align2, Key, Modifiers, Sense, vec2};
 
+use crate::i18n::tr;
 use crate::panels::Window;
 use crate::scene::ObjectId;
 use crate::shortcuts::{self, Action, BINDINGS};
@@ -132,7 +133,7 @@ fn field(ui: &mut egui::Ui, id: egui::Id, query: &mut String) -> bool {
     let response = ui.add(
         crate::ui::text_box(egui::TextEdit::singleline(query))
             .id(id.with("field"))
-            .hint_text("Find a tool, an action or a model")
+            .hint_text(tr!("find-tooltip"))
             .font(theme::body())
             .background_color(colors.sunken)
             .desired_width(f32::INFINITY),
@@ -148,7 +149,7 @@ fn field(ui: &mut egui::Ui, id: egui::Id, query: &mut String) -> bool {
 fn rows(ui: &mut egui::Ui, list: &[Entry], lit: usize) -> Option<Found> {
     if list.is_empty() {
         ui.label(
-            egui::RichText::new("Nothing goes by that name")
+            egui::RichText::new(tr!("find-nothing"))
                 .font(theme::small())
                 .color(theme::colors().text_low),
         );

@@ -6,6 +6,7 @@ use core_geometry::{Mat4, Vec3};
 use egui::{Align2, Id, Pos2, Rect, Sense, Shape, Stroke, Vec2, vec2};
 
 use crate::camera::{CameraTurn, OrbitCamera};
+use crate::i18n::tr;
 use crate::panels::Window;
 use crate::ui::{icon, icon_button, theme};
 
@@ -34,7 +35,7 @@ struct Face {
     normal: Vec3,
     across: Vec3,
     up: Vec3,
-    name: &'static str,
+    name: fn() -> String,
 }
 
 const FACES: [Face; 6] = [
@@ -42,37 +43,37 @@ const FACES: [Face; 6] = [
         normal: Vec3::Z,
         across: Vec3::X,
         up: Vec3::Y,
-        name: "Top",
+        name: || tr!("cube-top"),
     },
     Face {
         normal: Vec3::NEG_Z,
         across: Vec3::X,
         up: Vec3::NEG_Y,
-        name: "Bottom",
+        name: || tr!("cube-bottom"),
     },
     Face {
         normal: Vec3::NEG_Y,
         across: Vec3::X,
         up: Vec3::Z,
-        name: "Front",
+        name: || tr!("cube-front"),
     },
     Face {
         normal: Vec3::Y,
         across: Vec3::NEG_X,
         up: Vec3::Z,
-        name: "Back",
+        name: || tr!("cube-back"),
     },
     Face {
         normal: Vec3::X,
         across: Vec3::Y,
         up: Vec3::Z,
-        name: "Right",
+        name: || tr!("cube-right"),
     },
     Face {
         normal: Vec3::NEG_X,
         across: Vec3::NEG_Y,
         up: Vec3::Z,
-        name: "Left",
+        name: || tr!("cube-left"),
     },
 ];
 
@@ -106,7 +107,7 @@ pub fn ui(ui: &egui::Ui, window: &mut Window, viewport: Rect) {
                     let to = window.view.camera.seen_from(towards);
                     turn(ui, window, to);
                 }
-                let home = |ui: &mut egui::Ui| icon_button(ui, icon::HOME, "Home view");
+                let home = |ui: &mut egui::Ui| icon_button(ui, icon::HOME, &tr!("cube-home"));
                 if ui.add_visible(hovered, home).clicked() {
                     let to = OrbitCamera {
                         orthographic: window.view.camera.orthographic,
@@ -243,11 +244,7 @@ fn contains(corners: &[Pos2; 4], point: Pos2) -> bool {
 /// The face's name lying on it: the laid-out text is carried onto the face's plane and
 /// projected with it, so it turns and foreshortens as the face does.
 fn name(painter: &egui::Painter, face: &Face, view: &Mat4, rect: Rect) {
-    let galley = painter.layout_no_wrap(
-        face.name.to_owned(),
-        theme::small(),
-        theme::colors().text_mid,
-    );
+    let galley = painter.layout_no_wrap((face.name)(), theme::small(), theme::colors().text_mid);
     let size = galley.rect.size();
     // Face units per point: the name as tall as a share of the face, and never wider.
     let scale = (NAME_HEIGHT / size.y.max(1.0)).min(NAME_WIDTH / size.x.max(1.0));

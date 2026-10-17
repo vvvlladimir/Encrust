@@ -1,3 +1,4 @@
+use crate::i18n::tr;
 use crate::state::Doc;
 use crate::ui::{describe, icon, secondary_button, section};
 
@@ -6,7 +7,7 @@ pub fn fact(doc: &Doc) -> Option<String> {
     match doc.scene.selection() {
         [] => None,
         [id] => doc.scene.get(*id).map(|object| object.name.clone()),
-        picked => Some(format!("{} selected", picked.len())),
+        picked => Some(tr!("models-selected", count = picked.len())),
     }
 }
 
@@ -15,16 +16,11 @@ pub fn nothing_picked(ui: &mut egui::Ui, doc: &mut Doc) {
     let count = doc.scene.here().count();
     section(
         ui,
-        "Selection",
-        Some(&format!("{count} on the plate")),
+        &tr!("select-selection"),
+        Some(&tr!("select-on-plate", count = count)),
         |ui| {
-            describe(
-                ui,
-                "Click a model to pick it. Cmd-click adds one to the selection and \
-                 shift-click takes everything between, and every tool then works on what \
-                 is picked.",
-            );
-            if secondary_button(ui, icon::SELECT, "Select all").clicked() {
+            describe(ui, &tr!("select-how"));
+            if secondary_button(ui, icon::SELECT, &tr!("action-select-all")).clicked() {
                 doc.scene.select_here();
             }
         },

@@ -1,6 +1,7 @@
 use core_geometry::Scalar;
 use egui::{Align, Align2, Color32, Layout, Rect, Sense, Stroke, pos2, vec2};
 
+use crate::i18n::tr;
 use crate::panels::Window;
 use crate::panels::inspector::risk_tint;
 use crate::preview::{Preview, stack_fingerprint};
@@ -90,13 +91,9 @@ fn views(ui: &mut egui::Ui, window: &mut Window) {
     let showing = showing(window);
     let keys = shortcuts::text(Action::View(1));
     let views = [
-        (icon::MODEL, "Model", keys.as_str()),
-        (
-            icon::SIDE_BY_SIDE,
-            "Model and layer side by side",
-            keys.as_str(),
-        ),
-        (icon::MASK, "Layer mask", keys.as_str()),
+        (icon::MODEL, tr!("view-model"), keys.as_str()),
+        (icon::SIDE_BY_SIDE, tr!("view-side-by-side"), keys.as_str()),
+        (icon::MASK, tr!("view-mask"), keys.as_str()),
     ];
     let width = ui.available_width();
     let (rect, _) = ui.allocate_exact_size(vec2(width, VIEW_H * 3.0), Sense::hover());
@@ -129,7 +126,7 @@ fn views(ui: &mut egui::Ui, window: &mut Window) {
             );
         }
         response.widget_info(|| {
-            egui::WidgetInfo::selected(egui::WidgetType::RadioButton, true, on, *name)
+            egui::WidgetInfo::selected(egui::WidgetType::RadioButton, true, on, name.as_str())
         });
         focus_ring(ui, &response, theme::R_CONTROL);
         if response.on_hover_text(format!("{name}  {keys}")).clicked() {
@@ -191,7 +188,7 @@ fn play_button(ui: &mut egui::Ui, window: &mut Window) {
         Mode::Prepare => window.view.section.playing,
     };
     let (glyph, tooltip) = if playing {
-        (icon::PAUSE, "Pause".to_owned())
+        (icon::PAUSE, tr!("section-pause"))
     } else {
         (icon::PLAY, shortcuts::tooltip(Action::Play))
     };
@@ -292,11 +289,11 @@ impl Reading {
             ui.painter().text(
                 rect.center(),
                 Align2::CENTER_CENTER,
-                "No layers",
+                tr!("section-no-layers"),
                 theme::small(),
                 colors.text_low,
             );
-            response.on_hover_text("No layers yet");
+            response.on_hover_text(tr!("section-no-layers-yet"));
             return None;
         }
         let painter = ui.painter();
@@ -318,7 +315,11 @@ impl Reading {
             theme::figures(10.0),
             colors.text_low,
         );
-        response.on_hover_text(format!("{:.2} of {:.2} mm", self.height_mm, self.top_mm));
+        response.on_hover_text(tr!(
+            "section-height-of",
+            height = format!("{:.2}", self.height_mm),
+            top = format!("{:.2}", self.top_mm)
+        ));
         let layer_rect = Rect::from_min_size(rect.min, vec2(width, row_h));
         self.layer_field(ui, layer_rect)
     }
@@ -339,9 +340,9 @@ impl Reading {
             let response = ui
                 .interact(spot, id.with("figure"), Sense::click())
                 .on_hover_cursor(egui::CursorIcon::Text)
-                .on_hover_text("Type a layer to go to");
+                .on_hover_text(tr!("section-type-layer"));
             response.widget_info(|| {
-                let name = format!("Layer {}, type a layer to go to", self.layer);
+                let name = tr!("section-layer-field", layer = self.layer);
                 egui::WidgetInfo::labeled(egui::WidgetType::Button, true, name)
             });
             focus_ring(ui, &response, theme::R_CONTROL);
@@ -390,11 +391,12 @@ impl Reading {
 
 /// A height in the strip's narrow column: two decimals, one from a hundred millimetres up.
 fn mm(height_mm: Scalar) -> String {
-    if height_mm < 100.0 {
-        format!("{height_mm:.2} mm")
+    let value = if height_mm < 100.0 {
+        format!("{height_mm:.2}")
     } else {
-        format!("{height_mm:.1} mm")
-    }
+        format!("{height_mm:.1}")
+    };
+    tr!("value-mm", value = value)
 }
 
 /// Moves the cut to `layer`, counted from one at the plate as the readout counts it.
@@ -465,15 +467,15 @@ fn track(ui: &mut egui::Ui, window: &mut Window, height: f32, reading: &Reading)
     paint_track(ui, window, rect, span, (after.at, after.floor));
     let (layer, layers) = (after.layer, reading.layers);
     response.widget_info(|| {
-        let name = format!("Layer, of {layers}");
+        let name = tr!("section-slider", count = layers);
         egui::WidgetInfo::slider(after.at.is_some(), layer as f64, name)
     });
     focus_ring(ui, &response, theme::R_CONTROL);
     match (after.at, after.floor) {
-        (None, _) => response.on_hover_text("Nothing on the plate to cut through yet"),
+        (None, _) => response.on_hover_text(tr!("section-nothing-to-cut")),
         (Some(_), Some((_, first))) => response
             .on_hover_cursor(egui::CursorIcon::ResizeVertical)
-            .on_hover_text(format!("Layers {first} to {layer}")),
+            .on_hover_text(tr!("section-layers-range", first = first, layer = layer)),
         (Some(_), None) => response.on_hover_cursor(egui::CursorIcon::ResizeVertical),
     };
 }

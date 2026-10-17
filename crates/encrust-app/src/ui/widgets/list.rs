@@ -4,6 +4,7 @@ use egui::{
 };
 
 use super::focus_ring;
+use crate::i18n::tr;
 use crate::ui::theme;
 
 /// What a click on a row of a list asked for.
@@ -82,11 +83,11 @@ pub fn list_row(
                 }
                 if let Some(shown) = shown {
                     let (glyph, tooltip) = if shown {
-                        (crate::ui::icon::VISIBLE, "Hide in the view")
+                        (crate::ui::icon::VISIBLE, tr!("list-hide"))
                     } else {
-                        (crate::ui::icon::HIDDEN, "Show in the view")
+                        (crate::ui::icon::HIDDEN, tr!("list-show"))
                     };
-                    action.toggled = super::icon_button(ui, glyph, tooltip).clicked();
+                    action.toggled = super::icon_button(ui, glyph, &tooltip).clicked();
                 }
                 if let Some(aside) = aside {
                     let figure = RichText::new(aside).font(theme::figures(11.5));

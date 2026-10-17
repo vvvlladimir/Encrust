@@ -9,6 +9,7 @@ use rayon::prelude::*;
 use serde::{Deserialize, Serialize};
 
 use crate::files::{self, Handed, Wanted};
+use crate::i18n::tr;
 use crate::job::{ReliefJob, ReliefOutcome, ReliefRequest, ReliefSource, relief_tasks};
 use crate::scene::{Mapped, ObjectId, Scene};
 use crate::status::Status;
@@ -91,15 +92,12 @@ impl ReliefTool {
     }
 
     /// Why the Press button is greyed out, or `None` when it is not.
-    pub fn blocker(&self, scene: &Scene) -> Option<&'static str> {
+    pub fn blocker(&self, scene: &Scene) -> Option<String> {
         if scene.target_count() == 0 {
-            return Some("Nothing visible on the plate to press a texture into.");
+            return Some(tr!("relief-nothing-visible"));
         }
         if self.picture.is_none() && relief_tasks(scene, false).is_empty() {
-            return Some(
-                "None of these models carries a texture. Choose a picture to tile over them, \
-                 or open an OBJ with its image beside it, or a 3MF with one inside it.",
-            );
+            return Some(tr!("relief-no-textures"));
         }
         None
     }
@@ -108,7 +106,7 @@ impl ReliefTool {
     pub fn start(&mut self, scene: &Scene) -> Result<()> {
         let tasks = relief_tasks(scene, self.picture.is_some());
         if tasks.is_empty() {
-            bail!("nothing on the plate carries a texture to press in");
+            bail!(tr!("relief-nothing-to-press"));
         }
         let source = match &self.picture {
             Some(picture) => ReliefSource::Tiled {
@@ -152,12 +150,16 @@ impl ReliefTool {
                 }
                 let depth = self.state.amplitude_mm;
                 *status = match coarsened {
-                    0 => Status::Info(format!(
-                        "Pressed {depth:.2} mm of relief into {count} model(s)"
+                    0 => Status::Info(tr!(
+                        "relief-done",
+                        depth = format!("{depth:.2}"),
+                        count = count
                     )),
-                    _ => Status::Info(format!(
-                        "Pressed {depth:.2} mm of relief into {count} model(s); {coarsened} came \
-                         out on a coarser lattice than precision asked for"
+                    _ => Status::Info(tr!(
+                        "relief-done-coarsened",
+                        depth = format!("{depth:.2}"),
+                        count = count,
+                        coarsened = coarsened
                     )),
                 };
             }
@@ -247,8 +249,10 @@ pub fn open_picture(tool: &mut ReliefTool, status: &mut Status) {
 /// Reads `file` as a greyscale picture for the Relief tool.
 pub fn load_picture(tool: &mut ReliefTool, status: &mut Status, file: &Handed) {
     let path = file.path();
-    let read = read_picture(file).with_context(|| format!("cannot read {}", path.display()));
-    if let Some(picture) = status.report(&format!("Pressing {}", picture_name(file)), read) {
+    let read = read_picture(file)
+        .with_context(|| tr!("error-cannot-read", path = path.display().to_string()));
+    let pressing = tr!("relief-pressing-picture", name = picture_name(file));
+    if let Some(picture) = status.report(&pressing, read) {
         tool.picture = Some(picture);
     }
 }
@@ -272,7 +276,7 @@ fn read_picture(file: &Handed) -> Result<Picture> {
     let grey = image.to_luma32f();
     let (width, height) = (grey.width() as usize, grey.height() as usize);
     let heights =
-        Heightmap::new(width, height, grey.into_raw()).context("the picture has no pixels")?;
+        Heightmap::new(width, height, grey.into_raw()).context(tr!("relief-no-pixels"))?;
     Ok(Picture {
         name: picture_name(file),
         heights: Arc::new(heights),
@@ -362,7 +366,7 @@ mod tests {
         let mut tool = ReliefTool::default();
         let scene = Scene::default();
         assert_eq!(
-            tool.blocker(&scene),
+            tool.blocker(&scene).as_deref(),
             Some("Nothing visible on the plate to press a texture into.")
         );
         assert!(tool.start(&scene).is_err());

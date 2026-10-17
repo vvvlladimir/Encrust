@@ -6,6 +6,7 @@
 use egui::RichText;
 
 use super::{colour_of, controls, face, history, job_lines, picture_of, trouble_lines};
+use crate::i18n::tr;
 use crate::network::{Errand, Network, Reading, Target};
 use crate::panels::Window;
 use crate::ui::{dialog_frame, dialog_head, hairline, icon, subheading, theme, tone};
@@ -108,7 +109,7 @@ fn body(ui: &mut egui::Ui, network: &Network, target: &Target<'_>) -> Option<Err
         ui.add_space(14.0);
         hairline(ui);
         ui.add_space(6.0);
-        subheading(ui, "Recent prints");
+        subheading(ui, &tr!("sheet-recent-prints"));
         // As tall as the tiles, up to what the window has left under them: a short window
         // scrolls the history rather than pushing the sheet off the screen.
         let prints = extras
@@ -149,7 +150,7 @@ fn about(target: &Target<'_>) -> String {
         Target::Sdcp(printer) => {
             let mut parts = vec![printer.model.clone(), printer.address.to_string()];
             if !printer.firmware.is_empty() {
-                parts.push(format!("firmware {}", printer.firmware));
+                parts.push(tr!("sheet-firmware", version = printer.firmware.clone()));
             }
             parts.retain(|part| !part.is_empty());
             parts.join(" · ")

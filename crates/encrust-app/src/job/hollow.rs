@@ -5,6 +5,7 @@ use std::sync::mpsc::{self, Receiver, TryRecvError};
 use core_geometry::{Bvh, Mat3, Mesh, Scalar};
 use core_volume::{Cancel, HollowSettings, Shell, VolumeError, carve, cavity_field};
 
+use crate::i18n::tr;
 use crate::job::pipeline::{thread_pool, worker_threads};
 
 mod fields;
@@ -115,9 +116,7 @@ impl HollowJob {
                 Ok(Report::Finished(outcome)) => return Some(outcome),
                 Err(TryRecvError::Empty) => return None,
                 Err(TryRecvError::Disconnected) => {
-                    return Some(HollowOutcome::Failed(
-                        "the hollowing thread stopped without finishing".to_owned(),
-                    ));
+                    return Some(HollowOutcome::Failed(tr!("job-thread-stopped-hollowing")));
                 }
             }
         }
@@ -140,11 +139,15 @@ impl HollowJob {
 
     pub fn label(&self) -> String {
         if self.is_cancelling() {
-            return "Stopping after this model".to_owned();
+            return tr!("job-hollow-stopping");
         }
         match self.fraction() {
-            Some(_) => format!("Hollowing model {} of {}", self.done + 1, self.total),
-            None => "Hollowing...".to_owned(),
+            Some(_) => tr!(
+                "job-hollow-progress",
+                index = self.done + 1,
+                total = self.total
+            ),
+            None => tr!("job-hollow-working"),
         }
     }
 }

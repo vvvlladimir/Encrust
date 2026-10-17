@@ -11,6 +11,7 @@ mod exchange;
 mod files;
 mod gizmo;
 mod hollow;
+mod i18n;
 mod import;
 mod job;
 mod measure;

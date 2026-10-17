@@ -2,6 +2,7 @@ use egui::RichText;
 use printer_link::{Ending, Task};
 
 use super::picture_of;
+use crate::i18n::tr;
 use crate::network::{Errand, Extras};
 use crate::ui::{ago, hint, icon, quiet_button, theme, tone};
 
@@ -40,10 +41,13 @@ pub(super) fn list(ui: &mut egui::Ui, extras: Option<&Extras>) -> Option<Errand>
                 ui.spinner();
             }
         }
-        Some([]) => hint(ui, "It remembers no prints."),
+        Some([]) => hint(ui, &tr!("history-none")),
         Some(tasks) => tiles(ui, tasks, extras),
     }
-    if asked && !reading && quiet_button(ui, icon::RESET, "Read again", false, true).clicked() {
+    if asked
+        && !reading
+        && quiet_button(ui, icon::RESET, &tr!("history-read-again"), false, true).clicked()
+    {
         errand = Some(Errand::History);
     }
     errand
@@ -119,13 +123,17 @@ fn ended(task: &Task, now_s: u64) -> String {
         .map(|slice| slice.total_layer_numbers)
         .filter(|total| *total > 0);
     let at = match total {
-        Some(total) => format!("at layer {} of {total}", task.already_print_layer),
-        None => format!("at layer {}", task.already_print_layer),
+        Some(total) => tr!(
+            "history-at-layer-of",
+            layer = task.already_print_layer,
+            total = total
+        ),
+        None => tr!("history-at-layer", layer = task.already_print_layer),
     };
     match task.ending() {
-        Ending::Finished => format!("Finished {when}"),
-        Ending::Stopped => format!("Stopped {at}, {when}"),
-        Ending::Failed => format!("Failed {at}, {when}"),
+        Ending::Finished => tr!("history-finished", when = when),
+        Ending::Stopped => tr!("history-stopped", at = at, when = when),
+        Ending::Failed => tr!("history-failed", at = at, when = when),
         Ending::Other => when,
     }
 }

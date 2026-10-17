@@ -10,6 +10,7 @@ use core_volume::{Cancel, Panel, StackField, extract};
 use printer_profiles::{Catalogue, PrinterProfile};
 
 use crate::files::Handed;
+use crate::i18n::tr;
 use crate::job::ImportStage;
 use crate::scene::{ImportSummary, Imported};
 
@@ -65,7 +66,7 @@ fn place(
     let (size_mm, (mirror_x, mirror_y)) = printer
         .and_then(|printer| oriented(printer, panel_px))
         .or(stated.map(|size_mm| (size_mm, (false, false))))
-        .context("the file states no panel size and no printer of its panel is known; choose the printer it was cut for first")?;
+        .context(tr!("sliced-no-panel"))?;
     Ok(Placement {
         panel: Panel {
             width_px: panel_px.0,
@@ -104,10 +105,10 @@ pub fn prepare(
     );
     stage(ImportStage::Reading);
     let mut opened = core_pipeline::open(file.path(), file.reader()?)
-        .with_context(|| format!("cannot open {name}"))?;
+        .with_context(|| tr!("error-cannot-open", path = name.clone()))?;
     let facts = opened.facts().clone();
     if facts.layer_count() == 0 {
-        anyhow::bail!("{name} has no layers");
+        anyhow::bail!(tr!("sliced-no-layers", name = name));
     }
     let voxel_mm = facts.layer_height_mm.max(FINEST_VOXEL_MM);
     let mut field = StackField::new(placement.panel, voxel_mm);
@@ -115,14 +116,21 @@ pub fn prepare(
     for (index, entry) in facts.layers.iter().enumerate() {
         let top_mm =
             layer_top_mm(entry.z_mm, bottom_mm, facts.layer_height_mm).with_context(|| {
-                format!(
-                    "layer {} of {name} stands nowhere a printer reaches",
-                    index + 1
+                tr!(
+                    "sliced-layer-unreachable",
+                    layer = index + 1,
+                    name = name.clone()
                 )
             })?;
         let runs: Vec<(u32, u8)> = opened
             .layer(index as u32)
-            .with_context(|| format!("cannot decode layer {} of {name}", index + 1))?
+            .with_context(|| {
+                tr!(
+                    "sliced-cannot-decode",
+                    layer = index + 1,
+                    name = name.clone()
+                )
+            })?
             .iter()
             .map(|run| (run.length, run.value))
             .collect();
@@ -134,7 +142,7 @@ pub fn prepare(
     let mut mesh = extract(&field.finish(), Cancel::never());
     unmirror(&mut mesh, placement);
     if mesh.faces.is_empty() {
-        anyhow::bail!("{name} lights no pixel");
+        anyhow::bail!(tr!("sliced-no-pixel", name = name));
     }
     stage(ImportStage::Indexing);
     let summary = ImportSummary {

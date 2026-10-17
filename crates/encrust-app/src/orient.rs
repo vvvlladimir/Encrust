@@ -6,6 +6,7 @@ use core_plate::{OrientPreset, OrientSettings};
 use core_supports::Region;
 use printer_profiles::{MaterialProfile, PrinterProfile, SupportProfile};
 
+use crate::i18n::tr;
 use crate::job::{
     Costs, OrientJob, OrientOutcome, OrientRequest, OrientTask, Pose, Proof, Turn, orient_tasks,
 };
@@ -143,9 +144,9 @@ impl OrientTool {
     }
 
     /// Why the button is greyed out, or `None` when it is not.
-    pub fn blocker(&self, scene: &Scene) -> Option<&'static str> {
+    pub fn blocker(&self, scene: &Scene) -> Option<String> {
         if scene.target_count() == 0 {
-            return Some("Nothing visible on the plate to orient.");
+            return Some(tr!("orient-nothing-visible"));
         }
         None
     }
@@ -168,7 +169,7 @@ impl OrientTool {
     ) -> Result<()> {
         let tasks = orient_tasks(scene, only, support_of);
         if tasks.is_empty() {
-            bail!("nothing visible on the plate to orient");
+            bail!(tr!("orient-nothing-visible-error"));
         }
 
         self.stop_picking();
@@ -268,18 +269,13 @@ impl OrientTool {
                 stepped += 1;
             }
             if alone {
-                let headline = format!("Pose {} of {count}", *at + 1);
+                let headline = tr!("orient-pose", index = *at + 1, count = count);
                 said = Some(costed(headline, pose.costs, was.costs));
             }
         }
         match (said, stepped) {
             (Some(said), _) => said,
-            (None, 0) => Status::Info(
-                "No other good pose: change the preset, the supports or the lift to search again"
-                    .to_owned(),
-            ),
-            (None, 1) => Status::Info("Stood 1 model its next good way".to_owned()),
-            (None, stepped) => Status::Info(format!("Stood {stepped} models their next good way")),
+            (None, stepped) => Status::Info(tr!("orient-stepped", count = stepped)),
         }
     }
 }
@@ -289,20 +285,14 @@ impl OrientTool {
 fn turned(turns: &[Turn], moved: usize) -> Status {
     let seated = turns.iter().filter(|turn| turn.poses[0].on_plate).count();
     let others: usize = turns.iter().map(|turn| turn.poses.len() - 1).sum();
-    let turned = match moved {
-        0 => "Everything already stands the way it prints best".to_owned(),
-        1 => "Turned 1 model".to_owned(),
-        moved => format!("Turned {moved} models"),
-    };
+    let turned = tr!("orient-turned", count = moved);
     let turned = match seated {
         0 => turned,
-        1 => format!("{turned}; 1 stands on the plate"),
-        seated => format!("{turned}; {seated} stand on the plate"),
+        seated => tr!("orient-seated", turned = turned, count = seated),
     };
     let turned = match others {
         0 => turned,
-        1 => format!("{turned}; Auto-orient again for 1 other good pose"),
-        others => format!("{turned}; Auto-orient again for {others} other good poses"),
+        others => tr!("orient-others", turned = turned, count = others),
     };
     match turns {
         [turn] => costed(turned, turn.poses[0].costs, None),
@@ -323,12 +313,15 @@ fn costed(headline: String, costs: Option<Costs>, was: Option<Costs>) -> Status 
         vec![
             reading(
                 |costs| f64::from(costs.supports_ml),
-                |ml| format!("{ml:.2} ml of supports"),
+                |ml| tr!("orient-supports-ml", value = format!("{ml:.2}")),
             ),
-            reading(|costs| costs.pull_n, |n| format!("{n:.1} N of pull")),
+            reading(
+                |costs| costs.pull_n,
+                |n| tr!("orient-pull", value = format!("{n:.1}")),
+            ),
             reading(
                 |costs| f64::from(costs.stack_mm),
-                |mm| format!("{mm:.1} mm tall"),
+                |mm| tr!("orient-tall", value = format!("{mm:.1}")),
             ),
         ],
     )

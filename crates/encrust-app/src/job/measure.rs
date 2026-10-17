@@ -7,6 +7,7 @@ use core_pipeline::Tolerance;
 use core_raster::RasterSettings;
 use core_slicer::{Solid, Windows};
 
+use crate::i18n::tr;
 use crate::job::pipeline::{measure_stack, thread_pool, worker_threads};
 
 /// How a measuring pass ended.
@@ -72,9 +73,9 @@ impl MeasureJob {
         match self.result.try_recv() {
             Ok(outcome) => Some(outcome),
             Err(TryRecvError::Empty) => None,
-            Err(TryRecvError::Disconnected) => Some(MeasureOutcome::Failed(
-                "the measuring thread stopped without finishing".to_owned(),
-            )),
+            Err(TryRecvError::Disconnected) => {
+                Some(MeasureOutcome::Failed(tr!("job-thread-stopped-measuring")))
+            }
         }
     }
 }

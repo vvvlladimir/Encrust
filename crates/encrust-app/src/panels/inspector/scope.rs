@@ -1,3 +1,4 @@
+use crate::i18n::tr;
 use crate::panels::Window;
 use crate::scene::{ObjectId, SceneObject};
 use crate::state::Tools;
@@ -26,9 +27,12 @@ pub fn switch<T: Clone>(
         .is_some_and(|object| (scoped.read)(object).is_some());
     let mut model = own;
     ui.horizontal(|ui| {
-        field_label(ui, "Applies to", theme::colors().text_mid, "");
+        field_label(ui, &tr!("scope-applies-to"), theme::colors().text_mid, "");
         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-            let choices = [Segment::new(false, "Plate"), Segment::new(true, "Model")];
+            let choices = [
+                Segment::new(false, tr!("scope-plate-choice")),
+                Segment::new(true, tr!("scope-model-choice")),
+            ];
             ui.add_enabled_ui(picked.is_some(), |ui| {
                 Segmented::new(&choices)
                     .width(theme::FIELD_W)
@@ -49,11 +53,10 @@ pub fn switch<T: Clone>(
         .filter(|object| (scoped.read)(object).is_some())
         .count();
     match (picked, model, keeping) {
-        (None, _, 0) => hint(ui, "Pick one model to give it numbers of its own."),
-        (_, true, _) => hint(ui, "These numbers are this model's alone."),
+        (None, _, 0) => hint(ui, &tr!("scope-pick-one")),
+        (_, true, _) => hint(ui, &tr!("scope-own")),
         (_, false, 0) => {}
-        (_, false, 1) => hint(ui, "1 model keeps numbers of its own."),
-        (_, false, n) => hint(ui, &format!("{n} models keep numbers of their own.")),
+        (_, false, n) => hint(ui, &tr!("scope-keeping", count = n)),
     }
     model.then_some(picked).flatten()
 }

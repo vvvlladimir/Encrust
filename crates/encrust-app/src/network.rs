@@ -19,8 +19,18 @@ use printer_link::{Found, SendError, State, Wire};
 
 pub use errands::{Errand, Extras, Picture};
 
+use crate::i18n::tr;
 use crate::job::{Action, SendJob, SendOutcome, SendRequest};
 use crate::status::Status;
+
+/// What a connection is called on its segment: a protocol by its own name, the lack of one
+/// in the window's language.
+pub fn connection_label(connection: Connection) -> String {
+    match connection {
+        Connection::None => tr!("network-usb-only"),
+        Connection::Sdcp | Connection::PrusaLink => connection.label().to_owned(),
+    }
+}
 
 /// Long enough for every printer on the segment to answer, short enough to wait through.
 const SCAN_WINDOW: Duration = Duration::from_secs(2);
@@ -47,9 +57,9 @@ impl Reach {
     /// What the dot beside the Send button says on hover.
     pub fn hint(self, name: &str) -> String {
         match self {
-            Self::Answered => format!("{name} answered the last scan"),
-            Self::Silent => format!("{name} did not answer the last scan"),
-            Self::Unasked => format!("{name} has not been asked yet"),
+            Self::Answered => tr!("reach-answered", name = name.to_owned()),
+            Self::Silent => tr!("reach-silent", name = name.to_owned()),
+            Self::Unasked => tr!("reach-unasked", name = name.to_owned()),
         }
     }
 }
@@ -73,7 +83,7 @@ impl Trouble {
     }
 
     /// What the user can do about it, when there is something.
-    pub fn advice(&self) -> Option<&'static str> {
+    pub fn advice(&self) -> Option<String> {
         advice(self.unreachable && cfg!(target_os = "macos"), *IN_A_BUNDLE)
     }
 }
@@ -85,19 +95,11 @@ static IN_A_BUNDLE: std::sync::LazyLock<bool> = std::sync::LazyLock::new(|| {
 });
 
 /// What to tell a user whose printer has no route, when macOS may be the one `blocked`.
-fn advice(blocked: bool, bundled: bool) -> Option<&'static str> {
+fn advice(blocked: bool, bundled: bool) -> Option<String> {
     match (blocked, bundled) {
         (false, _) => None,
-        (true, true) => Some(
-            "If it is switched on, macOS may be keeping Encrust off the local network: allow \
-             it under System Settings, Privacy & Security, Local Network.",
-        ),
-        (true, false) => Some(
-            "If it is switched on, macOS may be keeping this window off the local network. \
-             Started from a terminal, it has that terminal's permission: start it from \
-             Terminal.app, allow your terminal or editor under System Settings, Privacy & \
-             Security, Local Network, or run it as an app with `cargo xtask app`.",
-        ),
+        (true, true) => Some(tr!("network-advice-app")),
+        (true, false) => Some(tr!("network-advice-terminal")),
     }
 }
 
@@ -198,7 +200,7 @@ impl Target<'_> {
             Self::Prusa(prusa) => prusa
                 .text
                 .clone()
-                .unwrap_or_else(|| "not reached yet".to_owned()),
+                .unwrap_or_else(|| tr!("network-not-reached")),
         }
     }
 
@@ -409,8 +411,16 @@ impl Network {
         };
         let name = self.label(&target);
         state.busy.then(|| match &state.file {
-            Some(file) => format!("{name} is printing {file}"),
-            None => format!("{name} is busy: {}", state.state),
+            Some(file) => tr!(
+                "network-printing",
+                printer = name.clone(),
+                file = file.clone()
+            ),
+            None => tr!(
+                "network-busy",
+                name = name.clone(),
+                state = state.state.clone()
+            ),
         })
     }
 
@@ -563,10 +573,10 @@ impl Network {
     /// Only a mismatch nothing has to be asked about is caught here. What an Elegoo board
     /// takes is what the board itself reports, which costs a connection, so that check
     /// happens on the errand's own thread.
-    pub fn blocker(&self, format: SlicedFormat) -> Option<&'static str> {
+    pub fn blocker(&self, format: SlicedFormat) -> Option<String> {
         match self.target() {
             Some(Target::Prusa(_)) if !matches!(format, SlicedFormat::Sl1(_)) => {
-                Some("A Prusa machine prints .sl1; set that as this printer's output.")
+                Some(tr!("network-prusa-sl1"))
             }
             _ => None,
         }
@@ -654,7 +664,7 @@ impl Network {
         };
         let (name, wire) = (self.label(&target), target.wire());
         let temporary = is_temporary(&path);
-        *status = Status::Info(format!("Sending to {name}"));
+        *status = Status::Info(tr!("network-sending", name = name.clone()));
         self.sent = None;
         self.job = Some(SendJob::spawn(SendRequest {
             name,
@@ -669,7 +679,11 @@ impl Network {
             return;
         };
         let (name, wire) = (self.label(&target), target.wire());
-        *status = Status::Info(format!("Starting {} on {name}", sent.filename));
+        *status = Status::Info(tr!(
+            "network-starting",
+            file = sent.filename.clone(),
+            name = name.clone()
+        ));
         self.job = Some(SendJob::spawn(SendRequest {
             name,
             wire,
@@ -793,14 +807,22 @@ impl Network {
         self.job = None;
         match outcome {
             SendOutcome::Sent { printer, filename } => {
-                *status = Status::Info(format!("{filename} is on {printer}"));
+                *status = Status::Info(tr!(
+                    "network-sent",
+                    file = filename.clone(),
+                    printer = printer.clone()
+                ));
                 self.sent = Some(Sent { printer, filename });
             }
             SendOutcome::Printing { printer, filename } => {
-                *status = Status::Info(format!("{printer} is printing {filename}"));
+                *status = Status::Info(tr!(
+                    "network-printing",
+                    printer = printer.clone(),
+                    file = filename.clone()
+                ));
                 self.sent = None;
             }
-            SendOutcome::Cancelled => *status = Status::Info("Transfer cancelled".to_owned()),
+            SendOutcome::Cancelled => *status = Status::Info(tr!("network-cancelled")),
             SendOutcome::Failed(message) => {
                 *status = Status::failed(&anyhow::Error::msg(message));
             }

@@ -431,6 +431,9 @@ address in a video player).
   profiles) and gives it to you to copy or save. Encrust never sends it itself, and network
   addresses are removed from it.
 - Choose where sliced files are saved and whether the window opens on the start page.
+- **Language:** the window follows the system's or the browser's language, or the one you
+  pick in Settings → General. English is complete; Russian is being translated, and what is
+  not translated yet shows in English. The command line stays English.
 
 ---
 
@@ -471,4 +474,6 @@ Do that in the window, save a project, then slice the project.
 - **Convert** cannot carry varying layer heights or the preview pictures.
 - **Browser build:** no network sending, no updates, uncapped section cut.
 - **Camera:** the address only, no video inside Encrust.
+- **Translations:** messages from inside the slicing engine (a file that cannot be read, a
+  format it does not know) stay in English under a translated first line.
 - It is alpha: before a long print, compare the output with a slicer you already trust.

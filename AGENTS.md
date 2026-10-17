@@ -16,6 +16,7 @@ cargo xtask web   # the window for a browser, on nightly: docs/design/web-build.
 cargo xtask man   # the command line's man pages, into target/man
 cargo xtask arch  # the drawn dependency graph against the manifests
 cargo xtask app   # the window as Encrust Dev.app, which macOS lets onto the local network
+cargo xtask i18n ru  # what a translation of the window lacks: docs/design/i18n.md
 cargo xtask licenses  # THIRD-PARTY-LICENSES.md from the lockfile (needs cargo-about)
 ```
 

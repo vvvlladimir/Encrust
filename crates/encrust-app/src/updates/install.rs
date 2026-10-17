@@ -8,6 +8,7 @@ use std::time::Duration;
 
 use super::feed::{self, Download, FEED_URL, Offer, Version};
 use super::{UpdateError, verify};
+use crate::i18n::tr;
 
 /// The feed is a few kilobytes; anything near this is not the feed.
 const FEED_LIMIT: u64 = 1 << 20;
@@ -60,16 +61,16 @@ pub fn install(download: &Download, version: Version, exe: &Path) -> Result<(), 
 }
 
 /// The binary this window was started from, or why the window must not replace it.
-pub fn current_exe() -> Result<PathBuf, &'static str> {
+pub fn current_exe() -> Result<PathBuf, String> {
     if cfg!(debug_assertions) {
-        return Err("A development build is updated by building it.");
+        return Err(tr!("update-dev-build"));
     }
-    let exe = std::env::current_exe().map_err(|_| "The running program cannot be located.")?;
+    let exe = std::env::current_exe().map_err(|_| tr!("update-no-exe"))?;
     if cfg!(windows) && in_store_package(&exe) {
-        return Err("This copy is updated by the Microsoft Store.");
+        return Err(tr!("update-by-store"));
     }
     if packaged(&exe, std::env::var_os("APPIMAGE").is_some()) {
-        return Err("This copy is updated by downloading the new package.");
+        return Err(tr!("update-by-package"));
     }
     Ok(exe)
 }

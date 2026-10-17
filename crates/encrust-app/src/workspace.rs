@@ -1,6 +1,7 @@
 pub use core_engine::project::Array;
 use core_geometry::Scalar;
 
+use crate::i18n::tr;
 use crate::ui::{icon, theme};
 
 /// What the window is doing with the plate: laying it out, or looking at the layers it
@@ -69,20 +70,20 @@ impl Tool {
         Self::RAIL.into_iter().flatten().copied()
     }
 
-    pub fn label(self) -> &'static str {
+    pub fn label(self) -> String {
         match self {
-            Self::Position => "Select",
-            Self::Measure => "Measure",
-            Self::Hollow => "Hollow",
-            Self::Drain => "Drain",
-            Self::Cut => "Cut",
-            Self::Relief => "Relief",
-            Self::Supports => "Supports",
-            Self::Paint => "Paint",
-            Self::Shape => "Shape",
-            Self::Check => "Check",
-            Self::Export => "Export",
-            Self::PrintSettings => "Print settings",
+            Self::Position => tr!("tool-select"),
+            Self::Measure => tr!("tool-measure"),
+            Self::Hollow => tr!("tool-hollow"),
+            Self::Drain => tr!("tool-drain"),
+            Self::Cut => tr!("tool-cut"),
+            Self::Relief => tr!("tool-relief"),
+            Self::Supports => tr!("tool-supports"),
+            Self::Paint => tr!("tool-paint"),
+            Self::Shape => tr!("tool-shape"),
+            Self::Check => tr!("tool-check"),
+            Self::Export => tr!("tool-export"),
+            Self::PrintSettings => tr!("tool-print-settings"),
         }
     }
 

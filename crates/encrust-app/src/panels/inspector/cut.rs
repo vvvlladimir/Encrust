@@ -1,4 +1,5 @@
 use crate::cut::{CutTool, Keep, PIN_CLEARANCE_MM, Pins, split_parts};
+use crate::i18n::tr;
 use crate::panels::Window;
 use crate::scene::Axis;
 use crate::ui::{
@@ -18,8 +19,8 @@ const OFFSET_STEP: f64 = 0.1;
 /// neither moved by the plane nor moves it.
 pub fn ui(ui: &mut egui::Ui, window: &mut Window) {
     let Some(id) = window.doc.scene.selected() else {
-        section(ui, "Plane", None, |ui| {
-            hint(ui, "Select a model to cut.");
+        section(ui, &tr!("cut-plane"), None, |ui| {
+            hint(ui, &tr!("cut-select-model"));
         });
         return;
     };
@@ -28,7 +29,7 @@ pub fn ui(ui: &mut egui::Ui, window: &mut Window) {
         window.tools.cut.centre_on(id, object);
     }
 
-    section(ui, "Plane", None, |ui| {
+    section(ui, &tr!("cut-plane"), None, |ui| {
         let axes: Vec<Segment<'_, Axis>> = Axis::ALL
             .iter()
             .map(|axis| Segment::new(*axis, axis.label()))
@@ -45,38 +46,47 @@ pub fn ui(ui: &mut egui::Ui, window: &mut Window) {
         let plate = &window.doc.plate;
         let across = plate.x_mm.max(plate.y_mm);
         let (label, range) = match window.tools.cut.state.axis {
-            Axis::Z => ("Height", 0.0..=plate.z_mm),
-            Axis::X | Axis::Y => ("Offset", -across..=across),
+            Axis::Z => (tr!("cut-height"), 0.0..=plate.z_mm),
+            Axis::X | Axis::Y => (tr!("cut-offset"), -across..=across),
         };
         number_row(
             ui,
-            label,
+            &label,
             &mut window.tools.cut.state.height_mm,
-            "mm",
+            &tr!("unit-mm"),
             OFFSET_STEP,
             range,
             2,
         );
         let from = match window.tools.cut.state.axis {
-            Axis::Z => "Measured from the plate.",
-            Axis::X | Axis::Y => "Measured from the model's centre of mass.",
+            Axis::Z => tr!("cut-measured-from-plate"),
+            Axis::X | Axis::Y => tr!("cut-measured-from-centre"),
         };
-        describe(ui, from);
+        describe(ui, &from);
     });
 
-    section(ui, "Afterwards", None, |ui| {
+    section(ui, &tr!("cut-afterwards"), None, |ui| {
         let keeps: Vec<Segment<'_, Keep>> = Keep::ALL
             .iter()
-            .map(|keep| Segment::new(*keep, keep.label()))
+            .map(|keep| Segment::new(*keep, keep_label(*keep)))
             .collect();
         let width = ui.available_width();
         Segmented::new(&keeps)
             .width(width)
             .show(ui, &mut window.tools.cut.state.keep);
-        switch(ui, &mut window.tools.cut.lay_flat, "Lay the halves flat");
-        describe(ui, "Each half stands on the face the cut left.");
+        switch(ui, &mut window.tools.cut.lay_flat, &tr!("cut-lay-flat"));
+        describe(ui, &tr!("cut-lay-flat-note"));
         pins(ui, &mut window.tools.cut);
     });
+}
+
+/// Which halves stay, as the segmented choice names it.
+fn keep_label(keep: Keep) -> String {
+    match keep {
+        Keep::Both => tr!("cut-keep-both"),
+        Keep::Below => tr!("cut-keep-lower"),
+        Keep::Above => tr!("cut-keep-upper"),
+    }
 }
 
 /// Pins on the lower half and sockets in the upper, and how many and how big. A half kept
@@ -85,34 +95,34 @@ fn pins(ui: &mut egui::Ui, tool: &mut CutTool) {
     let both = tool.state.keep == Keep::Both;
     let mut on = tool.pins.is_some();
     let flipped = ui
-        .add_enabled_ui(both, |ui| switch(ui, &mut on, "Alignment pins").changed())
+        .add_enabled_ui(both, |ui| switch(ui, &mut on, &tr!("cut-pins")).changed())
         .inner;
     if flipped {
         tool.pins = on.then(Pins::default);
     }
     let Some(pins) = tool.pins.as_mut().filter(|_| both) else {
-        describe(ui, "Pegs and sockets so the halves glue back true.");
+        describe(ui, &tr!("cut-pins-note"));
         return;
     };
     nested(ui, |ui| {
         let mut count = pins.count as u32;
-        if count_row(ui, "Pins", &mut count, "", 0.1, 1..=MAX_PINS) {
+        if count_row(ui, &tr!("cut-pin-count"), &mut count, "", 0.1, 1..=MAX_PINS) {
             pins.count = count as usize;
         }
         number_row(
             ui,
-            "Diameter",
+            &tr!("cut-pin-diameter"),
             &mut pins.diameter_mm,
-            "mm",
+            &tr!("unit-mm"),
             OFFSET_STEP,
             1.0..=20.0,
             1,
         );
         number_row(
             ui,
-            "Length",
+            &tr!("cut-pin-length"),
             &mut pins.length_mm,
-            "mm",
+            &tr!("unit-mm"),
             OFFSET_STEP,
             1.0..=30.0,
             1,
@@ -120,9 +130,9 @@ fn pins(ui: &mut egui::Ui, tool: &mut CutTool) {
     });
     describe(
         ui,
-        &format!(
-            "Pins stand on the lower half; the sockets are {PIN_CLEARANCE_MM:.1} mm wider \
-             each side and show as holes in the Drain tool."
+        &tr!(
+            "cut-pins-sockets",
+            clearance = format!("{PIN_CLEARANCE_MM:.1}")
         ),
     );
 }
@@ -131,9 +141,9 @@ fn pins(ui: &mut egui::Ui, tool: &mut CutTool) {
 /// already made of.
 pub fn action(ui: &mut egui::Ui, window: &mut Window) {
     let picked = window.doc.scene.selected();
-    let what = "Two models replace one. Undo puts it back.";
-    if primary_button(ui, icon::SECTION, "Cut", picked.is_some())
-        .on_hover_text(what)
+    let what = tr!("cut-replaces");
+    if primary_button(ui, icon::SECTION, &tr!("cut-cut"), picked.is_some())
+        .on_hover_text(&what)
         .clicked()
         && let Some(id) = picked
     {
@@ -141,7 +151,7 @@ pub fn action(ui: &mut egui::Ui, window: &mut Window) {
     }
     let split = ui
         .add_enabled_ui(picked.is_some(), |ui| {
-            secondary_button(ui, icon::SPLIT, "Split into its parts").on_hover_text(what)
+            secondary_button(ui, icon::SPLIT, &tr!("cut-split")).on_hover_text(&what)
         })
         .inner;
     if split.clicked()

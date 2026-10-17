@@ -6,6 +6,7 @@ use core_supports::{TrapScan, Trapped};
 
 use core_engine::{Baked, Cutting, cut};
 
+use crate::i18n::tr;
 use crate::job::pipeline::{thread_pool, worker_threads};
 use crate::scene::{ObjectId, Scene};
 
@@ -66,9 +67,9 @@ impl TrapJob {
         match self.result.try_recv() {
             Ok(outcome) => Some(outcome),
             Err(TryRecvError::Empty) => None,
-            Err(TryRecvError::Disconnected) => Some(TrapOutcome::Failed(
-                "the drainage thread stopped without finishing".to_owned(),
-            )),
+            Err(TryRecvError::Disconnected) => {
+                Some(TrapOutcome::Failed(tr!("job-thread-stopped-drainage")))
+            }
         }
     }
 }

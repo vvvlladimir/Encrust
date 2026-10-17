@@ -4,6 +4,7 @@ use printer_profiles::{Catalogue, Kind, Preset};
 use serde::Serialize;
 use serde::de::DeserializeOwned;
 
+use crate::i18n::tr;
 use crate::settings::unique_id;
 use crate::status::Status;
 use crate::ui::{field_label, icon, icon_button, inline_button, theme};
@@ -28,17 +29,22 @@ pub fn bar<T>(
         .map(|entry| (entry.id.clone(), entry.profile.name.clone()));
     let shown = match &matching {
         Some((_, name)) => name.clone(),
-        None if catalogue.presets(kind).next().is_some() => "Unsaved".to_owned(),
-        None => "None saved yet".to_owned(),
+        None if catalogue.presets(kind).next().is_some() => tr!("presets-unsaved"),
+        None => tr!("presets-none-saved"),
     };
 
     let mut picked = None;
     let mut forget = None;
     ui.horizontal(|ui| {
-        field_label(ui, "Profile", theme::colors().text_mid, "");
+        field_label(ui, &tr!("table-profile"), theme::colors().text_mid, "");
         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
             if let Some((id, name)) = &matching
-                && icon_button(ui, icon::REMOVE, &format!("Delete {name}")).clicked()
+                && icon_button(
+                    ui,
+                    icon::REMOVE,
+                    &tr!("presets-delete-named", name = name.clone()),
+                )
+                .clicked()
             {
                 forget = Some(id.clone());
             }
@@ -62,7 +68,7 @@ pub fn bar<T>(
         let gone = catalogue
             .forget_user_copy(kind, &id)
             .map_err(anyhow::Error::new);
-        status.report(&format!("Deleted the {}", kind.label()), gone);
+        status.report(&tr!("presets-deleted", kind = kind.dir()), gone);
     }
     if matching.is_none() {
         save_row(ui, catalogue, status, kind, current);
@@ -85,12 +91,12 @@ fn save_row<T: Serialize>(
             let ready = !name.trim().is_empty();
             save = ui
                 .add_enabled_ui(ready, |ui| {
-                    inline_button(ui, icon::SAVE, "Save", false, true)
+                    inline_button(ui, icon::SAVE, &tr!("shape-save"), false, true)
                 })
                 .inner
                 .clicked();
             let field = crate::ui::text_box(egui::TextEdit::singleline(&mut name))
-                .hint_text("Name these settings")
+                .hint_text(tr!("presets-name-hint"))
                 .font(theme::label())
                 .desired_width(ui.available_width());
             ui.add(field);
@@ -99,7 +105,7 @@ fn save_row<T: Serialize>(
     if save {
         let kept = keep(catalogue, kind, name.trim(), current);
         if status
-            .report(&format!("Saved {}", name.trim()), kept)
+            .report(&tr!("status-saved", name = name.trim().to_owned()), kept)
             .is_some()
         {
             name.clear();

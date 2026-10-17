@@ -47,6 +47,9 @@ eframe.workspace = true
 egui.workspace = true
 egui-phosphor.workspace = true
 egui-wgpu.workspace = true
+fluent-bundle.workspace = true
+unic-langid.workspace = true
+sys-locale.workspace = true
 wgpu.workspace = true
 transform-gizmo-egui.workspace = true
 meshoptimizer-rs.workspace = true
@@ -62,6 +65,8 @@ workspace-hack = { version = "0.1", path = "../../workspace-hack" }
 format-goo.workspace = true
 # Pictures of the panels, compared against the ones committed; see docs/decisions/0215.
 egui_kittest.workspace = true
+# The catalogues read as syntax, so a test can compare their messages and arguments.
+fluent-syntax.workspace = true
 
 [features]
 # The panel snapshots need a GPU, which no CI runner has, so they run by hand.
@@ -86,6 +91,8 @@ windows.workspace = true
 wasm-bindgen.workspace = true
 wasm-bindgen-futures.workspace = true
 js-sys.workspace = true
+# A browser names its languages through `navigator.languages`.
+sys-locale = { workspace = true, features = ["js"] }
 web-sys = { workspace = true, features = [
     "Blob",
     "Document",

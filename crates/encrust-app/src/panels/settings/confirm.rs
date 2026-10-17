@@ -3,18 +3,19 @@
 
 use printer_profiles::{Catalogue, Kind};
 
+use crate::i18n::tr;
 use crate::settings::{Deleting, is_thrown_away_with_the_printer, other_printers};
 use crate::ui::{card, describe, inline_button, secondary_button, theme};
 
 /// What the dialog is asking, in the words the user needs to answer it.
 struct Question {
-    title: &'static str,
+    title: String,
     /// What goes, named.
     what: String,
     /// What else it takes with it, when it takes anything.
     cost: Option<String>,
     /// What the button that answers yes says, which is the verb of the question.
-    verb: &'static str,
+    verb: String,
     /// Whether what goes is gone for good, rather than kept somewhere it comes back from.
     gone: bool,
 }
@@ -33,7 +34,7 @@ pub(super) fn ask(
         .show(ctx, |ui| {
             ui.set_width(380.0);
             ui.label(
-                egui::RichText::new(question.title)
+                egui::RichText::new(&question.title)
                     .font(theme::dialog_title())
                     .color(theme::colors().text_high),
             );
@@ -43,14 +44,14 @@ pub(super) fn ask(
                 describe(ui, cost);
             }
             if question.gone {
-                describe(ui, "This cannot be undone.");
+                describe(ui, &tr!("confirm-cannot-undo"));
             }
             ui.add_space(8.0);
             ui.horizontal(|ui| {
-                if inline_button(ui, "", question.verb, true, true).clicked() {
+                if inline_button(ui, "", &question.verb, true, true).clicked() {
                     answer = Some(Answer::Confirmed);
                 }
-                if secondary_button(ui, "", "Cancel").clicked() {
+                if secondary_button(ui, "", &tr!("common-cancel")).clicked() {
                     answer = Some(Answer::Cancelled);
                 }
             });
@@ -76,15 +77,13 @@ fn question(catalogue: &Catalogue, deleting: &Deleting) -> Question {
                 |entry| format!("{} {}", entry.profile.manufacturer, entry.profile.name),
             );
             Question {
-                title: "Remove this machine",
-                what: format!("Remove {name} and everything you changed on it?"),
-                verb: "Remove",
+                title: tr!("machines-remove"),
+                what: tr!("confirm-remove-machine", name = name),
+                verb: tr!("confirm-remove"),
                 gone: true,
-                cost: catalogue.is_shipped(Kind::Printer, id).then(|| {
-                    "The machine stays in the library, so it can be added again with \
-                         the numbers this build ships."
-                        .to_owned()
-                }),
+                cost: catalogue
+                    .is_shipped(Kind::Printer, id)
+                    .then(|| tr!("confirm-machine-stays")),
             }
         }
         Deleting::ResinOff { printer, resin } => {
@@ -94,26 +93,20 @@ fn question(catalogue: &Catalogue, deleting: &Deleting) -> Question {
                 is_thrown_away_with_the_printer(catalogue, printer, resin).unwrap_or(false);
             match thrown_away {
                 true => Question {
-                    title: "Take this resin off",
-                    what: format!("Delete {name}?"),
-                    verb: "Delete",
+                    title: tr!("confirm-take-resin-off"),
+                    what: tr!("confirm-delete-named", name = name),
+                    verb: tr!("profiles-delete"),
                     gone: true,
-                    cost: Some(
-                        "Nothing was ever typed into it, so it is not kept in the pool.".to_owned(),
-                    ),
+                    cost: Some(tr!("confirm-untouched-resin")),
                 },
                 false => Question {
-                    title: "Take this resin off",
-                    what: format!("Take {name} off this printer?"),
-                    verb: "Take off",
+                    title: tr!("confirm-take-resin-off"),
+                    what: tr!("confirm-take-off-named", name = name),
+                    verb: tr!("confirm-take-off"),
                     gone: false,
                     cost: Some(match others.is_empty() {
-                        true => "It stays in the pool, for this or any other printer to \
-                                 take back."
-                            .to_owned(),
-                        false => {
-                            format!("It stays in the pool, measured on {}.", others.join(", "))
-                        }
+                        true => tr!("confirm-stays-in-pool"),
+                        false => tr!("confirm-stays-measured", printers = others.join(", ")),
                     }),
                 },
             }
@@ -122,18 +115,21 @@ fn question(catalogue: &Catalogue, deleting: &Deleting) -> Question {
             let name = resin_name(catalogue, resin);
             let others = other_printers(catalogue, "", resin).unwrap_or_default();
             Question {
-                title: "Delete this resin",
-                what: format!("Delete {name} and the exposures measured for it?"),
-                verb: "Delete",
+                title: tr!("confirm-delete-resin"),
+                what: tr!("confirm-delete-resin-named", name = name),
+                verb: tr!("profiles-delete"),
                 gone: true,
                 cost: (!others.is_empty())
-                    .then(|| format!("It comes off {} as well.", others.join(", "))),
+                    .then(|| tr!("confirm-comes-off", printers = others.join(", "))),
             }
         }
         Deleting::Profile(kind, id) => Question {
-            title: "Delete this profile",
-            what: format!("Delete {}?", profile_name(catalogue, *kind, id)),
-            verb: "Delete",
+            title: tr!("confirm-delete-profile"),
+            what: tr!(
+                "confirm-delete-named",
+                name = profile_name(catalogue, *kind, id)
+            ),
+            verb: tr!("profiles-delete"),
             gone: true,
             cost: None,
         },

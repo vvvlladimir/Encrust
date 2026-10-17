@@ -2,6 +2,7 @@
 
 use printer_profiles::{MaterialProfile, PriceUnit, ResinDetails, WaitMode};
 
+use crate::i18n::tr;
 use crate::panels::Window;
 use crate::panels::settings::{compensation, form_card, name_row, report, settled};
 use crate::settings::{Node, ResinDraft, rename_resin};
@@ -33,24 +34,28 @@ pub fn form(ui: &mut egui::Ui, window: &mut Window) {
     let current = resin.draft.values.name.clone();
 
     let mut renamed = None;
-    form_card(ui, "Resin", |ui| {
+    form_card(ui, &tr!("resin-resin"), |ui| {
         renamed = name_row(ui, "resin", &current);
         if let Some(resin) = window.machine.settings.resin.as_mut() {
             details(ui, &mut resin.draft.values);
         }
     });
     if let Some(resin) = window.machine.settings.resin.as_mut() {
-        form_card(ui, &format!("Exposure on the {printer}"), |ui| {
-            light(ui, resin);
-        });
+        form_card(
+            ui,
+            &tr!("resin-exposure-on", printer = printer.clone()),
+            |ui| {
+                light(ui, resin);
+            },
+        );
         let values = &mut resin.draft.values;
-        form_card(ui, "Waits", |ui| waits(ui, values));
-        form_card(ui, "Motion", |ui| motion(ui, values));
+        form_card(ui, &tr!("resin-waits"), |ui| waits(ui, values));
+        form_card(ui, &tr!("print-motion"), |ui| motion(ui, values));
     }
     if let Some(resin) = window.machine.settings.resin.as_mut() {
         let values = &mut resin.draft.values.compensation;
         let calculators = &mut window.machine.settings.calculators;
-        form_card(ui, "Compensation", |ui| {
+        form_card(ui, &tr!("resin-compensation"), |ui| {
             compensation::rows(ui, values, calculators)
         });
     }
@@ -76,7 +81,7 @@ fn autosave(machine: &mut Machine) {
         .slicing
         .catalogue
         .save_resin(&resin.draft.id, &saved);
-    if report(&mut machine.status, "cannot save the resin", outcome).is_none() {
+    if report(&mut machine.status, &tr!("resin-cannot-save"), outcome).is_none() {
         return;
     }
     resin.base = saved;
@@ -94,7 +99,7 @@ fn rename(window: &mut Window, name: &str) {
     let outcome = rename_resin(&mut window.machine.slicing.catalogue, &printer, &old, name);
     let Some(id) = report(
         &mut window.machine.status,
-        "cannot rename the resin",
+        &tr!("resin-cannot-rename"),
         outcome,
     ) else {
         return;
@@ -114,18 +119,18 @@ fn rename(window: &mut Window, name: &str) {
 
 /// What the resin is, what it looks like and what it costs.
 fn details(ui: &mut egui::Ui, values: &mut MaterialProfile) {
-    text_row(ui, "Type", &mut values.details.kind);
+    text_row(ui, &tr!("resins-type"), &mut values.details.kind);
     ui.horizontal(|ui| {
-        field_label(ui, "Colour", theme::colors().text_mid, "");
+        field_label(ui, &tr!("resin-colour"), theme::colors().text_mid, "");
         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
             ui.color_edit_button_srgb(&mut values.details.color);
         });
     });
     number_row(
         ui,
-        "Density",
+        &tr!("resin-density"),
         &mut values.density_g_cm3,
-        "g/ml",
+        &tr!("unit-g-ml"),
         FINE_STEP,
         0.1..=3.0,
         3,
@@ -136,7 +141,7 @@ fn details(ui: &mut egui::Ui, values: &mut MaterialProfile) {
 /// The price, the currency it is in and what it is a price of.
 fn price_row(ui: &mut egui::Ui, details: &mut ResinDetails) {
     ui.horizontal(|ui| {
-        field_label(ui, "Price", theme::colors().text_mid, "");
+        field_label(ui, &tr!("summary-price"), theme::colors().text_mid, "");
         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
             egui::ComboBox::from_id_salt("resin-price-per")
                 .width(56.0)
@@ -146,7 +151,7 @@ fn price_row(ui: &mut egui::Ui, details: &mut ResinDetails) {
                         ui.selectable_value(&mut details.price_per, unit, unit_label(unit));
                     }
                 });
-            ui.label(egui::RichText::new("per").color(theme::colors().text_low));
+            ui.label(egui::RichText::new(tr!("resin-per")).color(theme::colors().text_low));
             egui::ComboBox::from_id_salt("resin-currency")
                 .width(44.0)
                 .selected_text(details.currency.clone())
@@ -157,7 +162,7 @@ fn price_row(ui: &mut egui::Ui, details: &mut ResinDetails) {
                 });
             number_field(
                 ui,
-                "Price",
+                &tr!("summary-price"),
                 &mut details.price,
                 0.1,
                 0.0..=10_000.0,
@@ -168,10 +173,10 @@ fn price_row(ui: &mut egui::Ui, details: &mut ResinDetails) {
     });
 }
 
-fn unit_label(unit: PriceUnit) -> &'static str {
+fn unit_label(unit: PriceUnit) -> String {
     match unit {
-        PriceUnit::Kilogram => "kg",
-        PriceUnit::Litre => "l",
+        PriceUnit::Kilogram => tr!("resin-per-kg"),
+        PriceUnit::Litre => tr!("resin-per-litre"),
     }
 }
 
@@ -179,8 +184,8 @@ fn unit_label(unit: PriceUnit) -> &'static str {
 /// points of a peel.
 fn waits(ui: &mut egui::Ui, values: &mut MaterialProfile) {
     let segments = [
-        Segment::new(WaitMode::LightOff, "Light-off delay"),
-        Segment::new(WaitMode::Rest, "Rest times"),
+        Segment::new(WaitMode::LightOff, tr!("resin-light-off-delay")),
+        Segment::new(WaitMode::Rest, tr!("resin-rest-times")),
     ];
     let width = ui.available_width();
     Segmented::new(&segments)
@@ -191,9 +196,9 @@ fn waits(ui: &mut egui::Ui, values: &mut MaterialProfile) {
         WaitMode::LightOff => {
             number_row(
                 ui,
-                "Light off",
+                &tr!("print-light-off"),
                 &mut values.light_off_delay_s,
-                "s",
+                &tr!("unit-s"),
                 FINE_STEP,
                 0.0..=60.0,
                 2,
@@ -203,37 +208,34 @@ fn waits(ui: &mut egui::Ui, values: &mut MaterialProfile) {
             let waits = &mut values.waits;
             number_row(
                 ui,
-                "Before lift",
+                &tr!("print-before-lift"),
                 &mut waits.before_lift_s,
-                "s",
+                &tr!("unit-s"),
                 FINE_STEP,
                 0.0..=60.0,
                 2,
             );
             number_row(
                 ui,
-                "After lift",
+                &tr!("print-after-lift"),
                 &mut waits.after_lift_s,
-                "s",
+                &tr!("unit-s"),
                 FINE_STEP,
                 0.0..=60.0,
                 2,
             );
             number_row(
                 ui,
-                "After retract",
+                &tr!("print-after-retract"),
                 &mut waits.after_retract_s,
-                "s",
+                &tr!("unit-s"),
                 FINE_STEP,
                 0.0..=60.0,
                 2,
             );
         }
     }
-    hint(
-        ui,
-        "Counted into the print time, and written into the file.",
-    );
+    hint(ui, &tr!("resin-waits-note"));
 }
 
 /// Exposure: how long each layer is lit, and how hard. The exposure is measured at the
@@ -242,9 +244,9 @@ fn light(ui: &mut egui::Ui, resin: &mut ResinDraft) {
     let mut layer_height_mm = resin.draft.values.layer_height_mm;
     if number_row(
         ui,
-        "Layer height",
+        &tr!("resin-layer-height"),
         &mut layer_height_mm,
-        "mm",
+        &tr!("unit-mm"),
         FINE_STEP,
         MIN_LAYER_HEIGHT_MM..=MAX_LAYER_HEIGHT_MM,
         3,
@@ -257,9 +259,9 @@ fn light(ui: &mut egui::Ui, resin: &mut ResinDraft) {
     let values = &mut resin.draft.values;
     let carried = carried_row(
         ui,
-        "Exposure",
+        &tr!("print-exposure"),
         &mut values.exposure_s,
-        "s",
+        &tr!("unit-s"),
         FINE_STEP,
         0.05..=120.0,
         2,
@@ -268,25 +270,33 @@ fn light(ui: &mut egui::Ui, resin: &mut ResinDraft) {
     if let Some((exposure_s, from_mm)) = was {
         hint(
             ui,
-            &format!(
-                "Carried from {exposure_s:.2} s at {from_mm:.3} mm to {:.3} mm.",
-                values.layer_height_mm
+            &tr!(
+                "resin-carried",
+                exposure = format!("{exposure_s:.2}"),
+                from = format!("{from_mm:.3}"),
+                to = format!("{:.3}", values.layer_height_mm)
             ),
         );
     }
     number_row(
         ui,
-        "Bottom exposure",
+        &tr!("print-bottom-exposure"),
         &mut values.bottom_exposure_s,
-        "s",
+        &tr!("unit-s"),
         COARSE_STEP,
         0.05..=600.0,
         2,
     );
-    whole_row(ui, "Bottom layers", &mut values.bottom_layers, 1.0, 1..=200);
+    whole_row(
+        ui,
+        &tr!("print-bottom-layers"),
+        &mut values.bottom_layers,
+        1.0,
+        1..=200,
+    );
     transition_row(ui, values);
-    pwm_row(ui, "Light power", &mut values.light_pwm);
-    pwm_row(ui, "Bottom power", &mut values.bottom_light_pwm);
+    pwm_row(ui, &tr!("resin-light-power"), &mut values.light_pwm);
+    pwm_row(ui, &tr!("resin-bottom-power"), &mut values.bottom_light_pwm);
     match carried {
         Carried::Edited => resin.exposure_edited(),
         Carried::Reverted => resin.revert_exposure(),
@@ -298,36 +308,36 @@ fn light(ui: &mut egui::Ui, resin: &mut ResinDraft) {
 fn motion(ui: &mut egui::Ui, values: &mut MaterialProfile) {
     number_row(
         ui,
-        "Lift",
+        &tr!("print-lift"),
         &mut values.lift_distance_mm,
-        "mm",
+        &tr!("unit-mm"),
         COARSE_STEP,
         0.1..=100.0,
         2,
     );
     number_row(
         ui,
-        "Lift speed",
+        &tr!("print-lift-speed"),
         &mut values.lift_speed_mm_min,
-        "mm/min",
+        &tr!("unit-mm-min"),
         1.0,
         1.0..=1000.0,
         1,
     );
     number_row(
         ui,
-        "Retract",
+        &tr!("resin-retract"),
         &mut values.retract_distance_mm,
-        "mm",
+        &tr!("unit-mm"),
         COARSE_STEP,
         0.1..=100.0,
         2,
     );
     number_row(
         ui,
-        "Retract speed",
+        &tr!("print-retract-speed"),
         &mut values.retract_speed_mm_min,
-        "mm/min",
+        &tr!("unit-mm-min"),
         1.0,
         1.0..=1000.0,
         1,
@@ -335,27 +345,27 @@ fn motion(ui: &mut egui::Ui, values: &mut MaterialProfile) {
     ui.add_space(8.0);
     number_row(
         ui,
-        "Bottom lift",
+        &tr!("resin-bottom-lift"),
         &mut values.bottom_lift_distance_mm,
-        "mm",
+        &tr!("unit-mm"),
         COARSE_STEP,
         0.1..=100.0,
         2,
     );
     number_row(
         ui,
-        "Bottom lift speed",
+        &tr!("resin-bottom-lift-speed"),
         &mut values.bottom_lift_speed_mm_min,
-        "mm/min",
+        &tr!("unit-mm-min"),
         1.0,
         1.0..=1000.0,
         1,
     );
     number_row(
         ui,
-        "Bottom retract speed",
+        &tr!("resin-bottom-retract-speed"),
         &mut values.bottom_retract_speed_mm_min,
-        "mm/min",
+        &tr!("unit-mm-min"),
         1.0,
         1.0..=1000.0,
         1,
@@ -375,7 +385,14 @@ fn whole_row(
 /// The transition block is a `u16` in the profile, and a count on screen like any other.
 fn transition_row(ui: &mut egui::Ui, values: &mut MaterialProfile) {
     let mut layers = u32::from(values.transition_layers);
-    if crate::ui::count_row(ui, "Transition layers", &mut layers, "", 1.0, 0..=200) {
+    if crate::ui::count_row(
+        ui,
+        &tr!("print-transition-layers"),
+        &mut layers,
+        "",
+        1.0,
+        0..=200,
+    ) {
         values.transition_layers = layers as u16;
     }
     if values.transition_layers > 0 {
@@ -383,7 +400,7 @@ fn transition_row(ui: &mut egui::Ui, values: &mut MaterialProfile) {
             / (f32::from(values.transition_layers) + 1.0);
         hint(
             ui,
-            &format!("Linear: each layer {step:.2} s shorter than the one under it."),
+            &tr!("resin-transition-note", step = format!("{step:.2}")),
         );
     }
 }

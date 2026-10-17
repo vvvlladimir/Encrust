@@ -1,6 +1,7 @@
 use egui::layers::ShapeIdx;
 use egui::{Frame, RichText, Sense, Ui, UiBuilder, vec2};
 
+use crate::i18n::tr;
 use crate::ui::theme;
 
 /// Where `describe` sends its text while a section's body is being drawn.
@@ -427,7 +428,7 @@ pub fn meta(ui: &mut Ui, lines: &[String]) {
 
 /// Measured values, one to a row with a leader between the name and the value: the
 /// figures of a block are rows, never tiles.
-pub fn stats(ui: &mut Ui, entries: &[(&str, String)]) {
+pub fn stats(ui: &mut Ui, entries: &[(String, String)]) {
     readings(ui, entries);
 }
 
@@ -448,12 +449,12 @@ const VALUE_ROWS: usize = 2;
 ///
 /// A value too long for the row wraps and then is cut, so that the name beside it stays
 /// readable: nothing here is drawn over anything else.
-pub fn readings(ui: &mut Ui, entries: &[(&str, String)]) {
+pub fn readings(ui: &mut Ui, entries: &[(String, String)]) {
     let colors = theme::colors();
     for (key, value) in entries {
-        let name =
-            ui.painter()
-                .layout_no_wrap((*key).to_owned(), theme::reading(), colors.text_low);
+        let name = ui
+            .painter()
+            .layout_no_wrap(key.clone(), theme::reading(), colors.text_low);
         let room = ui.available_width() - name.size().x - READING_GAP;
         let mut job = egui::text::LayoutJob::simple(
             value.clone(),
@@ -526,7 +527,7 @@ pub fn dialog_head(ui: &mut Ui, glyph: &str, title: &str) -> bool {
                 .color(colors.text_high),
         );
         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-            super::icon_button(ui, crate::ui::icon::CANCEL, "Close  Esc").clicked()
+            super::icon_button(ui, crate::ui::icon::CANCEL, &tr!("dialog-close")).clicked()
         })
         .inner
     })

@@ -100,6 +100,11 @@ egui = "0.36"
 egui-phosphor = { version = "0.14", default-features = false, features = ["regular"] }
 egui-wgpu = "0.36"
 egui_kittest = { version = "0.36", features = ["snapshot", "wgpu"] }
+# The window's text in the user's language, and which language that is; see docs/decisions/0300.
+fluent-bundle = "0.16"
+fluent-syntax = "0.12"
+unic-langid = { version = "0.9", features = ["macros"] }
+sys-locale = "0.3"
 wgpu = "30.0"
 transform-gizmo-egui = "0.11"
 # Lighter copies of heavy models for the viewport, pure Rust so the web build keeps them (ADR 0259).

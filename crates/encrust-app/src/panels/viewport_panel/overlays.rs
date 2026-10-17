@@ -5,6 +5,7 @@ use core_geometry::Vec3;
 use core_supports::{Part, SupportTree};
 
 use crate::camera::OrbitCamera;
+use crate::i18n::tr;
 use crate::measure::Target;
 use crate::panels::Window;
 use crate::pick::occluded;
@@ -137,7 +138,7 @@ pub(super) fn draw_measure(ui: &egui::Ui, window: &Window, viewport: egui::Rect)
     tag(
         &painter,
         from.lerp(to, 0.5),
-        format!("{distance_mm:.2} mm"),
+        tr!("value-mm", value = format!("{distance_mm:.2}")),
         accent,
     );
 }
@@ -201,8 +202,12 @@ fn draw_planes(ui: &egui::Ui, window: &Window, viewport: egui::Rect) {
         painter.circle_filled(end, MEASURE_END_R, accent);
     }
     let text = match gap.is_parallel() {
-        true => format!("{:.2} mm", gap.gap_mm),
-        false => format!("{:.1}°  {:.2} mm", gap.angle_deg, gap.centres_mm),
+        true => tr!("value-mm", value = format!("{:.2}", gap.gap_mm)),
+        false => format!(
+            "{:.1}°  {}",
+            gap.angle_deg,
+            tr!("value-mm", value = format!("{:.2}", gap.centres_mm))
+        ),
     };
     tag(&painter, from.lerp(to, 0.5), text, accent);
 }

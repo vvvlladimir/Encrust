@@ -5,6 +5,7 @@ use core_format::{ExposurePlan, PrintJob};
 use core_geometry::{Mesh, Scalar, signed_volume};
 use printer_profiles::MaterialProfile;
 
+use crate::i18n::tr;
 use crate::panels::Window;
 use crate::scene::Scene;
 use crate::slicing::Slicing;
@@ -29,15 +30,15 @@ pub fn ui(ui: &mut egui::Ui, window: &Window) {
         let layer = window.machine.preview.layer();
         heading(
             ui,
-            &format!("Layer {}", layer + 1),
-            Some(block(window.machine, layer)),
+            &tr!("summary-layer", layer = layer + 1),
+            Some(&block(window.machine, layer)),
         );
         let mut rows = layer_readings(window);
         rows.extend(print_readings(window));
         readings(ui, &rows);
         return;
     }
-    heading(ui, "This plate", None);
+    heading(ui, &tr!("summary-this-plate"), None);
     let tally = tally(ui.ctx(), &window.doc.scene);
     readings(
         ui,
@@ -45,15 +46,21 @@ pub fn ui(ui: &mut egui::Ui, window: &Window) {
     );
 }
 
-fn plate_readings(scene: &Scene, slicing: &Slicing, tally: &Tally) -> Vec<(&'static str, String)> {
+fn plate_readings(scene: &Scene, slicing: &Slicing, tally: &Tally) -> Vec<(String, String)> {
     let (height_mm, layers) = stack(scene, slicing);
     // An adaptive stack only knows its count once the model has been planned, so the
     // summary states the two ends of the range the settings allow.
     let count = match layers {
-        (most, Some(fewest)) => format!("{fewest} to {most}"),
+        (most, Some(fewest)) => tr!("summary-layer-range", fewest = fewest, most = most),
         (layers, None) => layers.to_string(),
     };
-    let mut rows = vec![("Height", format!("{height_mm:.1} mm")), ("Layers", count)];
+    let mut rows = vec![
+        (
+            tr!("summary-height"),
+            tr!("value-mm", value = format!("{height_mm:.1}")),
+        ),
+        (tr!("summary-layers"), count),
+    ];
     if tally.triangles > 0 {
         rows.extend(tally_readings(tally, &slicing.material));
     }
@@ -62,7 +69,7 @@ fn plate_readings(scene: &Scene, slicing: &Slicing, tally: &Tally) -> Vec<(&'sta
 
 /// What the file the plate is sliced into comes to: its layers, then its resin, price and
 /// time once the stack is measured.
-pub fn file_readings(ctx: &egui::Context, window: &Window) -> Vec<(&'static str, String)> {
+pub fn file_readings(ctx: &egui::Context, window: &Window) -> Vec<(String, String)> {
     let tally = tally(ctx, &window.doc.scene);
     let mut rows = plate_readings(&window.doc.scene, &window.machine.slicing, &tally);
     rows.truncate(2);
@@ -70,16 +77,19 @@ pub fn file_readings(ctx: &egui::Context, window: &Window) -> Vec<(&'static str,
     rows
 }
 
-fn tally_readings(tally: &Tally, material: &MaterialProfile) -> Vec<(&'static str, String)> {
+fn tally_readings(tally: &Tally, material: &MaterialProfile) -> Vec<(String, String)> {
     let mut readings = vec![
-        ("Vertices", tally.vertices.to_string()),
-        ("Triangles", tally.triangles.to_string()),
+        (tr!("summary-vertices"), tally.vertices.to_string()),
+        (tr!("summary-triangles"), tally.triangles.to_string()),
         (
-            "Model/supports",
-            format!(
-                "{:.2}/{:.2} ml",
-                tally.model_mm3 / 1000.0,
-                tally.supports_mm3 / 1000.0
+            tr!("summary-model-supports"),
+            tr!(
+                "value-ml",
+                value = format!(
+                    "{:.2}/{:.2}",
+                    tally.model_mm3 / 1000.0,
+                    tally.supports_mm3 / 1000.0
+                )
             ),
         ),
     ];
@@ -89,7 +99,10 @@ fn tally_readings(tally: &Tally, material: &MaterialProfile) -> Vec<(&'static st
     };
     if let (Some(model), Some(supports)) = (price(tally.model_mm3), price(tally.supports_mm3)) {
         let currency = &material.details.currency;
-        readings.push(("Price", format!("{model:.2}/{supports:.2} {currency}")));
+        readings.push((
+            tr!("summary-price"),
+            format!("{model:.2}/{supports:.2} {currency}"),
+        ));
     }
     readings
 }
@@ -158,25 +171,34 @@ fn model(object: &crate::scene::SceneObject) -> &Arc<Mesh> {
     object.hollow.shell().unwrap_or(&object.mesh)
 }
 
-fn layer_readings(window: &Window) -> Vec<(&'static str, String)> {
+fn layer_readings(window: &Window) -> Vec<(String, String)> {
     let preview = &window.machine.preview;
     let exposure_s = layer_exposure_s(window.machine, preview.layer());
 
     vec![
         (
-            "Z height",
-            format!("{:.3} mm", preview.layer_z().unwrap_or_default()),
+            tr!("summary-z-height"),
+            tr!(
+                "value-mm",
+                value = format!("{:.3}", preview.layer_z().unwrap_or_default())
+            ),
         ),
-        ("Exposure", format!("{exposure_s:.2} s")),
         (
-            "Cured area",
-            format!("{:.0} mm2", preview.layer_area_mm2().unwrap_or_default()),
+            tr!("summary-exposure"),
+            tr!("value-s", value = format!("{exposure_s:.2}")),
+        ),
+        (
+            tr!("summary-cured-area"),
+            tr!(
+                "value-mm2",
+                value = format!("{:.0}", preview.layer_area_mm2().unwrap_or_default())
+            ),
         ),
     ]
 }
 
 /// What the stack comes to in resin, money and time, measured from the masks.
-fn print_readings(window: &Window) -> Vec<(&'static str, String)> {
+fn print_readings(window: &Window) -> Vec<(String, String)> {
     let material = &window.machine.slicing.material;
     let mut rows = Vec::new();
     match window.measured() {
@@ -184,26 +206,39 @@ fn print_readings(window: &Window) -> Vec<(&'static str, String)> {
             let volume_mm3 = measured.volume_mm3();
             let weight_g = volume_mm3 / 1000.0 * material.density_g_cm3;
             let price = material.cost(weight_g, volume_mm3).map_or_else(
-                || "not priced".to_owned(),
+                || tr!("summary-not-priced"),
                 |cost| format!("{cost:.3} {}", material.details.currency),
             );
             rows.extend([
-                ("Volume", format!("{:.3} ml", volume_mm3 / 1000.0)),
-                ("Weight", format!("{weight_g:.3} g")),
-                ("Price", price),
+                (
+                    tr!("summary-volume"),
+                    tr!("value-ml", value = format!("{:.3}", volume_mm3 / 1000.0)),
+                ),
+                (
+                    tr!("summary-weight"),
+                    tr!("value-g", value = format!("{weight_g:.3}")),
+                ),
+                (tr!("summary-price"), price),
             ]);
         }
         None => {
             let waiting = if window.machine.preview.is_measuring() {
-                "measuring"
+                tr!("summary-measuring")
             } else {
-                "-"
+                "-".to_owned()
             };
-            rows.extend(["Volume", "Weight", "Price"].map(|key| (key, waiting.to_owned())));
+            rows.extend(
+                [
+                    tr!("summary-volume"),
+                    tr!("summary-weight"),
+                    tr!("summary-price"),
+                ]
+                .map(|key| (key, waiting.clone())),
+            );
         }
     }
     if let Some(seconds) = print_time_s(window.machine) {
-        rows.push(("Time", duration(seconds)));
+        rows.push((tr!("summary-time"), duration(seconds)));
     }
     rows
 }
@@ -230,13 +265,15 @@ fn print_time_s(machine: &Machine) -> Option<u32> {
 }
 
 /// Where `layer` sits in the resin's exposure ramp, which the heading names.
-fn block(machine: &Machine, layer: usize) -> &'static str {
+fn block(machine: &Machine, layer: usize) -> String {
     let material = &machine.slicing.material;
     let bottom = material.bottom_layers as usize;
     match layer {
-        layer if layer < bottom => "bottom block",
-        layer if layer < bottom + material.transition_layers as usize => "transition",
-        _ => "body",
+        layer if layer < bottom => tr!("summary-block-bottom"),
+        layer if layer < bottom + material.transition_layers as usize => {
+            tr!("summary-block-transition")
+        }
+        _ => tr!("summary-block-body"),
     }
 }
 
@@ -293,7 +330,7 @@ mod tests {
             supports_mm3: 1_520.0,
         };
         let mut resin = MaterialProfile::default();
-        let keys = |readings: Vec<(&'static str, String)>| {
+        let keys = |readings: Vec<(String, String)>| {
             readings.into_iter().map(|(key, _)| key).collect::<Vec<_>>()
         };
         assert_eq!(

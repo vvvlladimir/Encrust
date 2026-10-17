@@ -10,6 +10,7 @@ use std::sync::Arc;
 use core_geometry::{Bvh, Vec3, center_of_mass};
 use rayon::prelude::*;
 
+use crate::i18n::tr;
 use crate::scene::{ImportSummary, Imported, OwnSettings, Scene, SceneObject};
 use crate::slicing::Slicing;
 use crate::state::Tools;
@@ -78,18 +79,18 @@ pub struct NotHere {
 impl NotHere {
     /// What the status line says of them, or `None` when both were found.
     pub fn note(&self) -> Option<String> {
-        let missing: Vec<String> = [("printer", &self.printer), ("resin", &self.resin)]
-            .into_iter()
-            .filter_map(|(kind, id)| Some(format!("the {kind} {}", id.as_ref()?)))
-            .collect();
-        (!missing.is_empty()).then(|| {
-            format!(
-                "{} it names {} not among yours, so yours stay{}",
-                missing.join(" and "),
-                if missing.len() == 1 { "is" } else { "are" },
-                if missing.len() == 1 { "s" } else { "" },
-            )
-        })
+        match (&self.printer, &self.resin) {
+            (None, None) => None,
+            (Some(printer), None) => {
+                Some(tr!("project-missing-printer", printer = printer.clone()))
+            }
+            (None, Some(resin)) => Some(tr!("project-missing-resin", resin = resin.clone())),
+            (Some(printer), Some(resin)) => Some(tr!(
+                "project-missing-both",
+                printer = printer.clone(),
+                resin = resin.clone()
+            )),
+        }
     }
 }
 

@@ -138,7 +138,8 @@ pub(super) fn tab_button(ui: &mut Ui, label: &str, open: bool) -> egui::Response
 /// many lead with words before the figures, and the room before the first, which a row
 /// may draw a mark in.
 pub(super) struct Table {
-    pub heads: &'static [&'static str],
+    /// The column names, in the window's language.
+    pub heads: fn() -> Vec<String>,
     pub columns: &'static [f32],
     pub words: usize,
     pub lead: f32,
@@ -149,7 +150,7 @@ impl Table {
     pub fn head_row(&self, ui: &mut Ui) {
         let (rect, _) = ui.allocate_exact_size(vec2(ui.available_width(), 32.0), Sense::hover());
         let colors = theme::colors();
-        for (index, head) in self.heads.iter().enumerate() {
+        for (index, head) in (self.heads)().into_iter().enumerate() {
             let (at, align) = self.cell(rect, index);
             ui.painter()
                 .text(at, align, head, theme::small(), colors.text_low);

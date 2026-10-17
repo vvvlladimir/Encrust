@@ -5,6 +5,7 @@ use core_geometry::{
 };
 use core_supports::Region;
 
+use crate::i18n::tr;
 use crate::scene::{ObjectId, SceneObject};
 
 /// The most triangles a snap looks through around the click: a reach that takes in more
@@ -29,11 +30,11 @@ pub enum Snapped {
 }
 
 impl Snapped {
-    pub fn label(self) -> &'static str {
+    pub fn label(self) -> String {
         match self {
-            Self::Corner => "on a corner",
-            Self::Edge => "on an edge",
-            Self::Free => "free",
+            Self::Corner => tr!("measure-snapped-corner"),
+            Self::Edge => tr!("measure-snapped-edge"),
+            Self::Free => tr!("measure-snapped-free"),
         }
     }
 }

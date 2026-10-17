@@ -13,6 +13,7 @@ use web_time::{SystemTime, UNIX_EPOCH};
 
 use serde::{Deserialize, Serialize};
 
+use crate::i18n::tr;
 use crate::status::Status;
 
 pub use feed::{Note, Offer, Version};
@@ -33,34 +34,38 @@ const STORE_LINK: &str = "ms-windows-store://pdp/?ProductId=9NB0ZMB3M8H8";
 /// Why a look at the feed or an install did not happen.
 #[derive(Debug, thiserror::Error)]
 pub enum UpdateError {
-    #[error("cannot fetch {url}")]
+    #[error("{}", tr!("update-error-fetch", url = .url.clone()))]
     Fetch {
         url: String,
         #[source]
         source: Box<ureq::Error>,
     },
-    #[error("the update feed is not readable")]
+    #[error("{}", tr!("update-error-feed"))]
     Feed(#[source] serde_json::Error),
-    #[error("`{0}` is not a release version")]
+    #[error("{}", tr!("update-error-version", version = .0.clone()))]
     Version(String),
-    #[error("the feed points outside this project's releases: {0}")]
+    #[error("{}", tr!("update-error-foreign", url = .0.clone()))]
     Foreign(String),
-    #[error("the download is not signed with the Encrust release key")]
+    #[error("{}", tr!("update-error-signature"))]
     Signature(#[source] minisign_verify::Error),
-    #[error("the signature is for `{found}`, not `{expected}`")]
+    #[error("{}", tr!(
+        "update-error-signed",
+        found = .found.clone(),
+        expected = .expected.clone()
+    ))]
     Signed { expected: String, found: String },
-    #[error("the downloaded archive cannot be unpacked")]
+    #[error("{}", tr!("update-error-archive"))]
     Archive(#[source] std::io::Error),
-    #[error("the downloaded archive holds no `{0}`")]
+    #[error("{}", tr!("update-error-missing", name = .0.clone()))]
     Missing(String),
-    #[error("cannot replace {}", path.display())]
+    #[error("{}", tr!("update-error-replace", path = .path.display().to_string()))]
     Replace {
         path: PathBuf,
         #[source]
         source: std::io::Error,
     },
     #[cfg(windows)]
-    #[error("the Microsoft Store did not answer")]
+    #[error("{}", tr!("update-error-store"))]
     Store(#[source] windows::core::Error),
 }
 
@@ -215,9 +220,9 @@ impl Updates {
 
     /// Why `offer` cannot be installed from the window, when it cannot; the release page
     /// is the way then.
-    pub fn blocked(offer: &Offer) -> Option<&'static str> {
+    pub fn blocked(offer: &Offer) -> Option<String> {
         if offer.download.is_none() {
-            Some("This release has no build for this platform.")
+            Some(tr!("update-no-build"))
         } else {
             install::current_exe().err()
         }
@@ -285,7 +290,7 @@ impl Updates {
             Ok(Some(offer)) => Stage::Offered(offer),
             Ok(None) => Stage::Current,
             Err(error) => {
-                let error = anyhow::Error::new(error).context("cannot check for updates");
+                let error = anyhow::Error::new(error).context(tr!("update-cannot-check"));
                 tracing::info!("{error:#}");
                 if asked {
                     *status = Status::failed(&error);
@@ -301,13 +306,16 @@ impl Updates {
     fn installed(&mut self, offer: Offer, outcome: Result<(), UpdateError>, status: &mut Status) {
         match outcome {
             Ok(()) => {
-                *status = Status::Info(format!("Encrust {} is installed", offer.version));
+                *status =
+                    Status::Info(tr!("update-installed", version = offer.version.to_string()));
                 self.stage = Stage::Installed(offer);
                 self.restart();
             }
             Err(error) => {
-                let error = anyhow::Error::new(error)
-                    .context(format!("cannot install Encrust {}", offer.version));
+                let error = anyhow::Error::new(error).context(tr!(
+                    "update-cannot-install",
+                    version = offer.version.to_string()
+                ));
                 *status = Status::failed(&error);
                 self.stage = Stage::Failed {
                     offer: Some(offer),
@@ -333,7 +341,7 @@ pub fn open_store() {
     #[cfg(windows)]
     crate::job::spawn(|| {
         if let Err(error) = store::open() {
-            let error = anyhow::Error::new(error).context("cannot open the Microsoft Store");
+            let error = anyhow::Error::new(error).context(tr!("update-cannot-open-store"));
             tracing::error!("{error:#}");
         }
     });

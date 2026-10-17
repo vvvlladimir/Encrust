@@ -1,5 +1,7 @@
 //! The controls the Encrust design is made of, painted from `theme` tokens only.
 
+use crate::i18n::tr;
+
 mod button;
 mod field;
 mod layout;
@@ -30,9 +32,18 @@ pub use toggle::{Segment, Segmented, bare_switch, switch, tone};
 pub fn duration(seconds: u32) -> String {
     let (hours, minutes, seconds) = (seconds / 3600, seconds / 60 % 60, seconds % 60);
     if hours > 0 {
-        format!("{hours}h{minutes:02}m{seconds:02}s")
+        tr!(
+            "duration-hours",
+            hours = hours,
+            minutes = format!("{minutes:02}"),
+            seconds = format!("{seconds:02}")
+        )
     } else {
-        format!("{minutes}m{seconds:02}s")
+        tr!(
+            "duration-minutes",
+            minutes = minutes,
+            seconds = format!("{seconds:02}")
+        )
     }
 }
 
@@ -42,16 +53,13 @@ pub fn duration(seconds: u32) -> String {
 /// here rather than in either of them.
 pub fn ago(at_s: Option<u64>, now_s: u64) -> String {
     let Some(at) = at_s else {
-        return "never".to_owned();
+        return tr!("ago-never");
     };
     match now_s.saturating_sub(at) {
-        0..60 => "just now".to_owned(),
-        seconds @ 60..3_600 => format!("{} min ago", seconds / 60),
-        seconds @ 3_600..86_400 => format!("{} h ago", seconds / 3_600),
-        seconds => match seconds / 86_400 {
-            1 => "yesterday".to_owned(),
-            days => format!("{days} days ago"),
-        },
+        0..60 => tr!("ago-just-now"),
+        seconds @ 60..3_600 => tr!("ago-minutes", count = seconds / 60),
+        seconds @ 3_600..86_400 => tr!("ago-hours", count = seconds / 3_600),
+        seconds => tr!("ago-days", count = seconds / 86_400),
     }
 }
 

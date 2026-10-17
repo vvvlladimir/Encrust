@@ -5,6 +5,7 @@ use core_slicer::{Solid, Windows};
 
 use core_engine::{Baked, Cutting, cut};
 
+use crate::i18n::tr;
 use crate::job::pipeline::{thread_pool, worker_threads};
 
 /// How a preview build ended.
@@ -43,9 +44,9 @@ impl PreviewJob {
         match self.result.try_recv() {
             Ok(outcome) => Some(outcome),
             Err(TryRecvError::Empty) => None,
-            Err(TryRecvError::Disconnected) => Some(PreviewOutcome::Failed(
-                "the preview thread stopped without finishing".to_owned(),
-            )),
+            Err(TryRecvError::Disconnected) => {
+                Some(PreviewOutcome::Failed(tr!("job-thread-stopped-preview")))
+            }
         }
     }
 }

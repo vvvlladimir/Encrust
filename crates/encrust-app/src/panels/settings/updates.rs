@@ -2,6 +2,7 @@
 
 use egui::{RichText, Ui};
 
+use crate::i18n::tr;
 use crate::panels::settings::form_card;
 use crate::ui::{ago, hint, icon, inline_button, primary_button, switch, theme};
 use crate::updates::{
@@ -12,37 +13,29 @@ use crate::updates::{
 /// scroll area inside the page's own collapses to its first frame, so the list is cut instead.
 const NOTES_SHOWN: usize = 24;
 
-/// What the switch costs, stated where it is turned on; see the privacy table in the README.
-const PRIVACY: &str = "One request a day to GitHub for the newest release. It carries this \
-                       build's version and nothing else, and GitHub sees your address. Nothing \
-                       is downloaded or installed until you ask.";
-
 pub fn form(ui: &mut Ui, updates: &mut Updates) {
-    form_card(ui, "Checking", |ui| {
+    form_card(ui, &tr!("updates-checking"), |ui| {
         if from_store() {
-            hint(ui, "The Microsoft Store keeps this copy up to date.");
-            ui.hyperlink_to("Encrust in the Microsoft Store", STORE_PAGE);
+            hint(ui, &tr!("updates-by-store"));
+            ui.hyperlink_to(tr!("updates-store-link"), STORE_PAGE);
         } else {
-            switch(
-                ui,
-                &mut updates.prefs.check,
-                "Look for a new release once a day",
-            );
-            hint(ui, PRIVACY);
+            switch(ui, &mut updates.prefs.check, &tr!("updates-daily"));
+            // What the switch costs, stated where it is turned on; see the README's privacy table.
+            hint(ui, &tr!("updates-privacy"));
         }
         ui.add_space(6.0);
         ui.horizontal(|ui| {
             let busy = updates.is_busy();
-            if inline_button(ui, icon::UPDATE, "Check now", false, !busy).clicked() {
+            if inline_button(ui, icon::UPDATE, &tr!("updates-check-now"), false, !busy).clicked() {
                 updates.check_now();
             }
             ui.add_space(8.0);
             hint(
                 ui,
-                &format!(
-                    "This is {}, last looked {}",
-                    Updates::running(),
-                    ago(updates.prefs.checked_at_s, now_s())
+                &tr!(
+                    "updates-this-is",
+                    version = Updates::running().to_string(),
+                    when = ago(updates.prefs.checked_at_s, now_s())
                 ),
             );
         });
@@ -54,8 +47,8 @@ pub fn form(ui: &mut Ui, updates: &mut Updates) {
 fn found(ui: &mut Ui, updates: &mut Updates) {
     match &updates.stage {
         Stage::Idle => {}
-        Stage::Checking { .. } => busy(ui, "Looking for a new release"),
-        Stage::Current => hint(ui, "This is the newest release."),
+        Stage::Checking { .. } => busy(ui, &tr!("updates-looking")),
+        Stage::Current => hint(ui, &tr!("updates-newest")),
         Stage::Failed {
             offer: None,
             message,
@@ -79,16 +72,16 @@ fn found(ui: &mut Ui, updates: &mut Updates) {
 fn actions(ui: &mut Ui, updates: &mut Updates, offer: &Offer) {
     let page = format!("{RELEASES}/tag/v{}", offer.version);
     match &updates.stage {
-        Stage::Installing { .. } => busy(ui, "Downloading and checking the signature"),
+        Stage::Installing { .. } => busy(ui, &tr!("updates-installing")),
         Stage::Installed(_) => {
-            hint(ui, "Installed. It runs from the next start.");
-            if primary_button(ui, icon::UPDATE, "Restart now", true).clicked() {
+            hint(ui, &tr!("updates-installed"));
+            if primary_button(ui, icon::UPDATE, &tr!("updates-restart-now"), true).clicked() {
                 updates.restart();
             }
         }
         _ if from_store() => {
-            hint(ui, "The Microsoft Store has this release for this copy.");
-            if primary_button(ui, icon::UPDATE, "Update in the Microsoft Store", true).clicked() {
+            hint(ui, &tr!("updates-store-has-it"));
+            if primary_button(ui, icon::UPDATE, &tr!("updates-in-store"), true).clicked() {
                 open_store();
             }
         }
@@ -97,10 +90,11 @@ fn actions(ui: &mut Ui, updates: &mut Updates, offer: &Offer) {
                 failure(ui, message);
             }
             let blocked = Updates::blocked(offer);
-            if let Some(reason) = blocked {
+            if let Some(reason) = &blocked {
                 hint(ui, reason);
             }
-            if primary_button(ui, icon::UPDATE, "Install and restart", blocked.is_none()).clicked()
+            if primary_button(ui, icon::UPDATE, &tr!("updates-install"), blocked.is_none())
+                .clicked()
             {
                 updates.install();
             }
@@ -110,11 +104,11 @@ fn actions(ui: &mut Ui, updates: &mut Updates, offer: &Offer) {
     ui.horizontal(|ui| {
         let skipped = updates.prefs.skipped == Some(offer.version.to_string());
         let offered = matches!(updates.stage, Stage::Offered(_));
-        if offered && !skipped && inline_button(ui, "", "Skip this version", false, true).clicked()
+        if offered && !skipped && inline_button(ui, "", &tr!("updates-skip"), false, true).clicked()
         {
             updates.skip();
         }
-        ui.hyperlink_to("Release page", page);
+        ui.hyperlink_to(tr!("updates-release-page"), page);
     });
 }
 
@@ -148,7 +142,7 @@ fn notes(ui: &mut Ui, notes: &[Note]) {
         }
     }
     if notes.len() > NOTES_SHOWN {
-        hint(ui, "And more on the release page.");
+        hint(ui, &tr!("updates-more-notes"));
     }
 }
 

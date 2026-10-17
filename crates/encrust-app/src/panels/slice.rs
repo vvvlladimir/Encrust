@@ -1,6 +1,7 @@
 use anyhow::Context as _;
 use printer_profiles::Connection;
 
+use crate::i18n::tr;
 use crate::job::SlicedFormat;
 #[cfg(not(target_arch = "wasm32"))]
 use crate::job::{applied_to, label_of};
@@ -50,8 +51,11 @@ pub fn ui(ui: &mut egui::Ui, window: &mut Window) {
     ui.horizontal(|ui| {
         ui.spacing_mut().item_spacing.x = 2.0;
         let beside = if more { theme::PRIMARY_H + 2.0 } else { 0.0 };
-        let label = format!("Slice to .{}", window.machine.slicing.format.extension());
-        let hint = blocker.unwrap_or("Rasterise the plate into a printable file");
+        let label = tr!(
+            "slice-to",
+            extension = window.machine.slicing.format.extension()
+        );
+        let hint = blocker.clone().unwrap_or_else(|| tr!("slice-tooltip"));
         ui.allocate_ui(
             egui::vec2(ui.available_width() - beside, theme::PRIMARY_H),
             |ui| {
@@ -65,7 +69,13 @@ pub fn ui(ui: &mut egui::Ui, window: &mut Window) {
             },
         );
         if more {
-            pressed = pressed.or(more_menu(ui, window, bound.as_ref(), blocker, busy));
+            pressed = pressed.or(more_menu(
+                ui,
+                window,
+                bound.as_ref(),
+                blocker.as_deref(),
+                busy,
+            ));
         }
     });
     if let Some((run, via)) = pressed {
@@ -86,7 +96,7 @@ fn more_menu(
     ui: &mut egui::Ui,
     window: &mut Window,
     bound: Option<&Bound>,
-    blocker: Option<&'static str>,
+    blocker: Option<&str>,
     busy: bool,
 ) -> Option<(Run, Via)> {
     let response = ui
@@ -94,7 +104,7 @@ fn more_menu(
             companion_button(ui, "", icon::CARET_DOWN, true)
         })
         .inner
-        .on_hover_text("Slice every plate, or slice and send");
+        .on_hover_text(tr!("slice-more-tooltip"));
     let mut pressed = None;
     let mut rescan = false;
     egui::Popup::menu(&response).show(|ui| {
@@ -102,10 +112,7 @@ fn more_menu(
         let free = blocker.is_none() && !busy;
         if plates > 1
             && ui
-                .add_enabled(
-                    free,
-                    egui::Button::new(format!("Slice all {plates} plates")),
-                )
+                .add_enabled(free, egui::Button::new(tr!("slice-all", count = plates)))
                 .clicked()
         {
             pressed = Some((Run::EveryPlate, Via::File));
@@ -113,15 +120,16 @@ fn more_menu(
         let Some(bound) = bound else {
             return;
         };
+        let hint_send = tr!("slice-send", name = bound.name.clone());
         let hint = bound
             .blocker
             .clone()
-            .unwrap_or_else(|| format!("Slice and send to {}", bound.name));
-        let send = egui::Button::new(format!("{}  Slice and send to {}", icon::SEND, bound.name));
+            .unwrap_or_else(|| tr!("slice-send", name = bound.name.clone()));
+        let send = egui::Button::new(format!("{}  {hint_send}", icon::SEND));
         if ui
             .add_enabled(free && bound.blocker.is_none(), send)
             .on_hover_text(&hint)
-            .on_disabled_hover_text(blocker.unwrap_or(&hint))
+            .on_disabled_hover_text(blocker.unwrap_or(&hint).to_owned())
             .clicked()
         {
             pressed = Some((Run::ThisPlate, Via::Printer));
@@ -129,7 +137,7 @@ fn more_menu(
         ui.horizontal(|ui| {
             reach_dot(ui, bound.reach);
             rescan = ui
-                .button("Scan again")
+                .button(tr!("connection-scan-again"))
                 .on_hover_text(bound.reach.hint(&bound.name))
                 .clicked();
         });
@@ -147,14 +155,7 @@ pub(super) fn broken_reminder(ui: &mut egui::Ui, scene: &Scene) {
     if broken == 0 {
         return;
     }
-    let line = match broken {
-        1 => "1 model on this plate is broken; what is sliced from it may not print".to_owned(),
-        count => {
-            format!(
-                "{count} models on this plate are broken; what is sliced from them may not print"
-            )
-        }
-    };
+    let line = tr!("slice-broken", count = broken);
     tone(ui, &line, theme::colors().warn);
     ui.add_space(4.0);
 }
@@ -191,7 +192,6 @@ pub(super) fn bound_machine(machine: &mut Machine, now_s: f64) -> Option<Bound> 
         reach: network.reach(&target),
         blocker: network
             .blocker(machine.slicing.format)
-            .map(str::to_owned)
             .or_else(|| network.busy()),
     })
 }
@@ -237,8 +237,8 @@ pub(super) fn start(
         slicing.send_when_written();
         let started = slicing
             .start(scene, scene.active_plate(), path)
-            .context("cannot slice the stack to send");
-        let _ = status.report("Slicing", started);
+            .context(tr!("slice-cannot-send"));
+        let _ = status.report(&tr!("slice-slicing"), started);
         return;
     }
     let name = default_file_name(scene, format, &slicing.file_stem);
@@ -249,15 +249,22 @@ pub(super) fn start(
     if run == Run::EveryPlate {
         let queued = slicing.start_all(scene, &path, status);
         if queued > 0 && !status.is_error() {
-            *status = Status::Info(format!("Slicing {queued} plates beside {}", path.display()));
+            *status = Status::Info(tr!(
+                "slice-all-started",
+                count = queued,
+                path = path.display().to_string()
+            ));
         }
         return;
     }
 
     let started = slicing
         .start(scene, scene.active_plate(), path.clone())
-        .with_context(|| format!("cannot slice into {}", path.display()));
-    let _ = status.report(&format!("Slicing into {}", path.display()), started);
+        .with_context(|| tr!("slice-cannot-slice-into", path = path.display().to_string()));
+    let _ = status.report(
+        &tr!("slice-slicing-into", path = path.display().to_string()),
+        started,
+    );
 }
 
 #[cfg(not(target_arch = "wasm32"))]

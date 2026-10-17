@@ -1,3 +1,4 @@
+use crate::i18n::tr;
 use core_geometry::Vec3;
 use printer_profiles::PrinterProfile;
 
@@ -43,8 +44,10 @@ impl BuildPlate {
 
     /// What to call the plate on screen, which is an invitation while there is no
     /// profile behind it.
-    pub fn display_name(&self) -> &str {
-        self.name.as_deref().unwrap_or("Select a printer")
+    pub fn display_name(&self) -> String {
+        self.name
+            .clone()
+            .unwrap_or_else(|| tr!("plate-select-printer"))
     }
 
     /// Middle of the plate surface, the point the camera looks at when nothing is loaded.

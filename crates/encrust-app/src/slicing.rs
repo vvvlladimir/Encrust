@@ -9,6 +9,7 @@ use core_raster::{RasterSettings, Shading};
 use core_slicer::{AdaptiveSettings, ONE_SAMPLE, WINDOW_LAYERS};
 use printer_profiles::{Catalogue, MaterialProfile, PrinterProfile, Renamed};
 
+use crate::i18n::tr;
 use crate::job::{Outcome, SliceJob, SliceRequest, SlicedFormat, models_of, worker_threads};
 use crate::preview::Fold;
 use crate::scene::Scene;
@@ -139,10 +140,10 @@ impl Slicing {
             .overlay(&dir)
             .and_then(|()| self.catalogue.give_own_ids());
         loaded.unwrap_or_else(|error| {
-            *status = Status::failed(
-                &anyhow::Error::new(error)
-                    .context(format!("cannot read your profiles in {}", dir.display())),
-            );
+            *status = Status::failed(&anyhow::Error::new(error).context(tr!(
+                "slicing-cannot-read-profiles",
+                dir = dir.display().to_string()
+            )));
             Vec::new()
         })
     }
@@ -158,7 +159,7 @@ impl Slicing {
             .and_then(|()| self.catalogue.give_own_ids());
         loaded.unwrap_or_else(|error| {
             *status = Status::failed(
-                &anyhow::Error::new(error).context("cannot read your profiles in this browser"),
+                &anyhow::Error::new(error).context(tr!("slicing-cannot-read-profiles-browser")),
             );
             Vec::new()
         })
@@ -215,10 +216,10 @@ impl Slicing {
 
     /// What the resin picker shows: not having one is a state, not a resin called "no
     /// resin".
-    pub fn resin_name(&self) -> &str {
+    pub fn resin_name(&self) -> String {
         match self.chosen_resin {
-            true => &self.material.name,
-            false => "Select a resin",
+            true => self.material.name.clone(),
+            false => tr!("slicing-select-resin"),
         }
     }
 
@@ -398,21 +399,21 @@ impl Slicing {
     }
 
     /// Why the Slice button is greyed out, or `None` when it is not.
-    pub fn blocker(&self, scene: &Scene) -> Option<&'static str> {
+    pub fn blocker(&self, scene: &Scene) -> Option<String> {
         if self.printer.is_none() {
-            return Some("Pick a machine to know the panel to slice for.");
+            return Some(tr!("slicing-pick-machine"));
         }
         if !self.chosen_resin {
-            return Some("Add a resin to this printer: an exposure is measured on your machine.");
+            return Some(tr!("slicing-add-resin"));
         }
         if !scene.has_printable(scene.active_plate()) {
-            return Some("Nothing visible on the plate to slice.");
+            return Some(tr!("slicing-nothing-visible"));
         }
         if !self.exposure.is_empty() && !self.printer_reads_per_layer() {
-            return Some("This printer reads the header alone, so exposure cannot vary by height.");
+            return Some(tr!("layers-bands-refused"));
         }
         if self.adaptive.is_some() && !self.printer_reads_variable_height() {
-            return Some("This printer steps the plate by the header's layer height.");
+            return Some(tr!("slicing-steps-by-header"));
         }
         None
     }
@@ -420,19 +421,19 @@ impl Slicing {
     /// Starts a job cutting `plate` into `output`. Fails when there is nothing on it.
     pub fn start(&mut self, scene: &Scene, plate: u32, output: PathBuf) -> Result<()> {
         let Some(printer) = self.printer.clone() else {
-            bail!("no printer profile is loaded");
+            bail!(tr!("slicing-no-printer"));
         };
         if !self.chosen_resin {
-            bail!("no resin is chosen, and an exposure is measured rather than shipped");
+            bail!(tr!("slicing-no-resin"));
         }
         let models = models_of(scene, plate);
         if models.is_empty() {
-            bail!("nothing visible on the plate to slice");
+            bail!(tr!("slicing-nothing-visible-error"));
         }
         // The output name has the last word on the container, and only the profile knows
         // which revision of it the machine reads; see ADR 0047.
         let format = SlicedFormat::of(&output, self.format.ctb_version())
-            .with_context(|| format!("{} names no sliced-file format", output.display()))?
+            .with_context(|| tr!("slicing-no-format", path = output.display().to_string()))?
             .at_revision_of(printer.output);
 
         self.job = Some(SliceJob::spawn(SliceRequest {
@@ -558,10 +559,12 @@ impl Slicing {
         let Some((plate, output)) = self.queued.pop() else {
             return false;
         };
-        if let Err(error) = self
-            .start(scene, plate, output.clone())
-            .with_context(|| format!("cannot slice into {}", output.display()))
-        {
+        if let Err(error) = self.start(scene, plate, output.clone()).with_context(|| {
+            tr!(
+                "slice-cannot-slice-into",
+                path = output.display().to_string()
+            )
+        }) {
             self.queued.clear();
             *status = Status::failed(&error);
             return false;
@@ -606,20 +609,24 @@ fn report(outcome: Outcome, material: &MaterialProfile) -> Status {
             let clipped = if clipped_layers == 0 {
                 String::new()
             } else {
-                format!(", {clipped_layers} layers cut off at the edge of the panel")
+                tr!("slicing-clipped", count = clipped_layers)
             };
             let weight_g = volume_mm3 / 1000.0 * material.density_g_cm3;
             let cost = material
                 .cost(weight_g, volume_mm3)
                 .map(|cost| format!(", {cost:.2} {}", material.details.currency))
                 .unwrap_or_default();
-            Status::Info(format!(
-                "Wrote {} : {layers} layers, {:.1} ml, {weight_g:.1} g{cost}{clipped}",
-                path.display(),
-                volume_mm3 / 1000.0,
+            Status::Info(tr!(
+                "slicing-wrote",
+                path = path.display().to_string(),
+                layers = layers,
+                volume = format!("{:.1}", volume_mm3 / 1000.0),
+                weight = format!("{weight_g:.1}"),
+                cost = cost,
+                clipped = clipped
             ))
         }
-        Outcome::Cancelled => Status::Info("Slicing cancelled".to_owned()),
+        Outcome::Cancelled => Status::Info(tr!("slicing-cancelled")),
         Outcome::Failed(message) => Status::Error(message),
     }
 }

@@ -1,3 +1,5 @@
+use std::borrow::Cow;
+
 use egui::{Align2, Rect, Response, RichText, Sense, Ui, WidgetInfo, WidgetType, pos2, vec2};
 
 use super::focus_ring;
@@ -87,12 +89,15 @@ const SEGMENT_PAD: f32 = 12.0;
 /// One choice inside a [`Segmented`] group.
 pub struct Segment<'a, T> {
     pub value: T,
-    pub label: &'a str,
+    pub label: Cow<'a, str>,
 }
 
 impl<'a, T> Segment<'a, T> {
-    pub fn new(value: T, label: &'a str) -> Self {
-        Self { value, label }
+    pub fn new(value: T, label: impl Into<Cow<'a, str>>) -> Self {
+        Self {
+            value,
+            label: label.into(),
+        }
     }
 }
 
@@ -144,7 +149,7 @@ impl<'a, T: Copy + PartialEq> Segmented<'a, T> {
                     WidgetType::RadioButton,
                     ui.is_enabled(),
                     active,
-                    segment.label,
+                    &segment.label,
                 )
             });
             self.paint(ui, slot, index, segment, active, response.hovered());
@@ -194,7 +199,8 @@ impl<'a, T: Copy + PartialEq> Segmented<'a, T> {
             );
         }
 
-        let galley = painter.layout_no_wrap(segment.label.to_owned(), theme::segment(), foreground);
+        let galley =
+            painter.layout_no_wrap(segment.label.to_string(), theme::segment(), foreground);
         painter.galley(
             pos2(
                 slot.center().x - galley.size().x / 2.0,
@@ -216,7 +222,7 @@ impl<'a, T: Copy + PartialEq> Segmented<'a, T> {
             .iter()
             .map(|segment| {
                 let galley = ui.painter().layout_no_wrap(
-                    segment.label.to_owned(),
+                    segment.label.to_string(),
                     theme::segment(),
                     theme::colors().text_mid,
                 );

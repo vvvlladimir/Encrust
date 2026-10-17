@@ -8,6 +8,7 @@ use core_engine::project::{DrainState, HollowState};
 use egui::{Rect, Ui, pos2};
 use printer_profiles::{Entry, Kind, Preset};
 
+use crate::i18n::tr;
 use crate::panels::Window;
 use crate::panels::settings::frame::{SIDE_PAD, Table, child, with_footer};
 use crate::panels::settings::{export_profile, form_card, name_row, report};
@@ -16,14 +17,28 @@ use crate::state::Machine;
 use crate::ui::{describe, icon, quiet_button};
 
 const HOLLOW: Table = Table {
-    heads: &["Profile", "Wall", "Infill", "Blocker"],
+    heads: || {
+        vec![
+            tr!("table-profile"),
+            tr!("hollow-wall"),
+            tr!("hollow-infill"),
+            tr!("presets-blocker"),
+        ]
+    },
     columns: &[0.0, 0.55, 0.7, 0.85],
     words: 1,
     lead: 12.0,
 };
 
 const DRAIN: Table = Table {
-    heads: &["Profile", "Diameter", "Depth", "Taper"],
+    heads: || {
+        vec![
+            tr!("table-profile"),
+            tr!("support-diameter"),
+            tr!("presets-depth"),
+            tr!("presets-taper"),
+        ]
+    },
     columns: &[0.0, 0.55, 0.7, 0.85],
     words: 1,
     lead: 12.0,
@@ -56,7 +71,7 @@ pub(super) fn page(ui: &mut Ui, content: Rect, window: &mut Window) {
         .and_then(|id| catalogue.presets(kind).find(|entry| entry.id == id));
     let mut rows = child(&mut body, rows);
     if let Some(entry) = picked_entry {
-        form_card(&mut rows, "Name", |ui| {
+        form_card(&mut rows, &tr!("settings-name"), |ui| {
             if let Some(name) = name_row(ui, kind.dir(), &entry.profile.name) {
                 action = Some(Action::Rename(entry.id.clone(), name));
             }
@@ -110,13 +125,7 @@ fn table(
         }
         if empty {
             ui.add_space(12.0);
-            describe(
-                ui,
-                &format!(
-                    "No {} yet. Keep one from the tool's Profile row, or import one.",
-                    kind.label()
-                ),
-            );
+            describe(ui, &tr!("presets-empty", kind = kind.dir()));
         }
     });
 }
@@ -129,21 +138,21 @@ fn cells(kind: Kind, entry: &Entry<Preset>) -> Option<Vec<String>> {
             let state = entry.profile.read::<HollowState>(path).ok()?;
             let infill = match state.infill_on {
                 true => format!("{:.0} %", state.infill.density * 100.0),
-                false => "None".to_owned(),
+                false => tr!("presets-none"),
             };
             vec![
                 name,
-                format!("{:.2} mm", state.thickness_mm),
+                tr!("value-mm", value = format!("{:.2}", state.thickness_mm)),
                 infill,
-                format!("{:.1} mm", state.blocker_mm),
+                tr!("value-mm", value = format!("{:.1}", state.blocker_mm)),
             ]
         }
         _ => {
             let state = entry.profile.read::<DrainState>(path).ok()?;
             vec![
                 name,
-                format!("{:.2} mm", state.diameter_mm),
-                format!("{:.1} mm", state.depth_mm),
+                tr!("value-mm", value = format!("{:.2}", state.diameter_mm)),
+                tr!("value-mm", value = format!("{:.1}", state.depth_mm)),
                 format!("{:.2}", state.taper),
             ]
         }
@@ -153,10 +162,10 @@ fn cells(kind: Kind, entry: &Entry<Preset>) -> Option<Vec<String>> {
 fn actions(ui: &mut Ui, picked: Option<&str>, action: &mut Option<Action>) {
     let some = picked.is_some();
     let owned = |id: &str| id.to_owned();
-    if quiet_button(ui, icon::EXPORT, "Export", false, some).clicked() {
+    if quiet_button(ui, icon::EXPORT, &tr!("common-export"), false, some).clicked() {
         *action = picked.map(owned).map(Action::Export);
     }
-    if quiet_button(ui, icon::REMOVE, "Delete", true, some).clicked() {
+    if quiet_button(ui, icon::REMOVE, &tr!("profiles-delete"), true, some).clicked() {
         *action = picked.map(owned).map(Action::Ask);
     }
 }
@@ -182,5 +191,5 @@ fn rename(machine: &mut Machine, kind: Kind, id: &str, name: String) {
         ..entry.profile.clone()
     };
     let outcome = catalogue.save_preset(kind, id, &preset);
-    report(&mut machine.status, "cannot rename the profile", outcome);
+    report(&mut machine.status, &tr!("presets-cannot-rename"), outcome);
 }

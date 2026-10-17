@@ -3,6 +3,7 @@ use core_geometry::{Mat3, Quat, Transform, Vec3};
 use core_plate::{OrientGoal, OrientPreset};
 
 use crate::gizmo::Axes;
+use crate::i18n::tr;
 use crate::import::recenter;
 use crate::panels::Window;
 use crate::plate::BuildPlate;
@@ -65,8 +66,8 @@ fn axes(ui: &mut egui::Ui, axes: &mut Axes) {
         .inner_margin(theme::PANEL_MARGIN)
         .show(ui, |ui| {
             let segments = [
-                Segment::new(Axes::Global, "Global"),
-                Segment::new(Axes::Local, "Local"),
+                Segment::new(Axes::Global, tr!("position-global")),
+                Segment::new(Axes::Local, tr!("position-local")),
             ];
             Segmented::new(&segments)
                 .width(ui.available_width())
@@ -76,28 +77,29 @@ fn axes(ui: &mut egui::Ui, axes: &mut Axes) {
 }
 
 fn position(ui: &mut egui::Ui, scene: &mut Scene, plate: &BuildPlate, id: ObjectId) {
-    let tooltip = "Back to the middle of the plate";
-    let (reset, _) = section_with_action(ui, "Move", (icon::RESET, tooltip), |ui| {
-        let Some(object) = scene.get_mut(id) else {
-            return;
-        };
-        let mut pivot = object.pivot();
-        let mut changed = false;
-        for (axis, axis_name) in AXIS_NAMES.iter().enumerate() {
-            ui.horizontal(|ui| {
-                label_column(ui, axis, "mm");
-                let width = ui.available_width();
-                let value = &mut pivot.translation[axis];
-                let name = format!("Move along {axis_name}");
-                changed |= number_field(ui, &name, value, POSITION_DRAG, ANY, Some(2), width);
-            });
-        }
-        // Written back only on a frame the user changed a number: settling every frame
-        // would let the round trip through the centre of mass accumulate.
-        if changed {
-            object.settle(pivot);
-        }
-    });
+    let tooltip = tr!("position-move-reset");
+    let (reset, _) =
+        section_with_action(ui, &tr!("position-move"), (icon::RESET, &tooltip), |ui| {
+            let Some(object) = scene.get_mut(id) else {
+                return;
+            };
+            let mut pivot = object.pivot();
+            let mut changed = false;
+            for (axis, axis_name) in AXIS_NAMES.iter().enumerate() {
+                ui.horizontal(|ui| {
+                    label_column(ui, axis, &tr!("unit-mm"));
+                    let width = ui.available_width();
+                    let value = &mut pivot.translation[axis];
+                    let name = tr!("position-move-along", axis = *axis_name);
+                    changed |= number_field(ui, &name, value, POSITION_DRAG, ANY, Some(2), width);
+                });
+            }
+            // Written back only on a frame the user changed a number: settling every frame
+            // would let the round trip through the centre of mass accumulate.
+            if changed {
+                object.settle(pivot);
+            }
+        });
     if reset {
         recentre(scene, plate, id);
     }
@@ -107,15 +109,20 @@ fn position(ui: &mut egui::Ui, scene: &mut Scene, plate: &BuildPlate, id: Object
 /// Round-tripping the quaternion every frame would let rounding accumulate, and near
 /// gimbal lock the three numbers would drift on their own.
 fn rotation(ui: &mut egui::Ui, window: &mut Window, id: ObjectId, axes: Axes) {
-    let tooltip = "Back to the way the model was imported";
-    let (reset, _) = section_with_action(ui, "Rotation", (icon::RESET, tooltip), |ui| {
-        if let Some(object) = window.doc.scene.get_mut(id) {
-            let pivot = object.pivot();
-            if let Some(turn) = rotation_rows(ui, pivot.rotation, axes) {
-                object.settle(pivot.turned(turn));
+    let tooltip = tr!("position-rotation-reset");
+    let (reset, _) = section_with_action(
+        ui,
+        &tr!("position-rotation"),
+        (icon::RESET, &tooltip),
+        |ui| {
+            if let Some(object) = window.doc.scene.get_mut(id) {
+                let pivot = object.pivot();
+                if let Some(turn) = rotation_rows(ui, pivot.rotation, axes) {
+                    object.settle(pivot.turned(turn));
+                }
             }
-        }
-    });
+        },
+    );
     if reset && let Some(object) = window.doc.scene.get_mut(id) {
         let pivot = object.pivot();
         object.settle(pivot.turned(pivot.rotation.inverse()));
@@ -139,7 +146,7 @@ fn rotation_rows(ui: &mut egui::Ui, rotation: Quat, axes: Axes) -> Option<Quat> 
             let spacing = ui.spacing().item_spacing.x;
             let width = ui.available_width() - 2.0 * (TURN_W + spacing);
             let degrees = &mut degrees[axis];
-            let name = format!("Rotation about {}", AXIS_NAMES[axis]);
+            let name = tr!("position-rotation-about", axis = AXIS_NAMES[axis]);
             typed |= number_field(ui, &name, degrees, ANGLE_DRAG, ANY, Some(2), width);
             for sign in [-1.0, 1.0] {
                 let text = format!("{:+}°", sign * TURN_DEG);
@@ -176,12 +183,13 @@ fn about_plate(rotation: Quat, turn: Quat, axes: Axes) -> Quat {
 fn scale(ui: &mut egui::Ui, scene: &mut Scene, id: ObjectId, axes: Axes) {
     let linked_id = ui.id().with("scale-linked");
     let mut linked = ui.memory(|memory| memory.data.get_temp(linked_id).unwrap_or(true));
-    let tooltip = "Back to the size the model was imported at";
-    let (reset, _) = section_with_action(ui, "Scale", (icon::RESET, tooltip), |ui| {
-        if let Some(object) = scene.get_mut(id) {
-            scale_rows(ui, object, &mut linked, axes);
-        }
-    });
+    let tooltip = tr!("position-scale-reset");
+    let (reset, _) =
+        section_with_action(ui, &tr!("position-scale"), (icon::RESET, &tooltip), |ui| {
+            if let Some(object) = scene.get_mut(id) {
+                scale_rows(ui, object, &mut linked, axes);
+            }
+        });
     ui.memory_mut(|memory| memory.data.insert_temp(linked_id, linked));
     if reset && let Some(object) = scene.get_mut(id) {
         let pivot = object.pivot();
@@ -256,10 +264,15 @@ fn scale_header(ui: &mut egui::Ui, linked: &mut bool) -> f32 {
     let column = (ui.available_width() - AXIS_W - 2.0 * spacing) / 2.0;
     ui.horizontal(|ui| {
         ui.add_space(AXIS_W + spacing);
-        caption(ui, "Size", "mm", column);
-        caption(ui, "Ratio", "%", column - theme::ICON_SIZE - spacing);
-        let tooltip = "Keep the proportions";
-        if icon_toggle(ui, icon::LINKED, tooltip, *linked).clicked() {
+        caption(ui, &tr!("position-size"), &tr!("unit-mm"), column);
+        caption(
+            ui,
+            &tr!("position-ratio"),
+            "%",
+            column - theme::ICON_SIZE - spacing,
+        );
+        let tooltip = tr!("position-keep-proportions");
+        if icon_toggle(ui, icon::LINKED, &tooltip, *linked).clicked() {
             *linked = !*linked;
         }
     });
@@ -283,7 +296,7 @@ fn scale_row(ui: &mut egui::Ui, shown: &Shown, axis: usize, width: f32) -> Optio
     let (was_mm, was_ratio) = (shown.size_mm[axis], shown.ratio[axis]);
     let (mut size_mm, mut percent) = (was_mm, was_ratio * 100.0);
 
-    let size_name = format!("{} size", AXIS_NAMES[axis]);
+    let size_name = tr!("position-axis-size", axis = AXIS_NAMES[axis]);
     let least_mm = was_mm / was_ratio.max(MIN_SCALE) * MIN_SCALE;
     let sized = number_field(
         ui,
@@ -294,7 +307,7 @@ fn scale_row(ui: &mut egui::Ui, shown: &Shown, axis: usize, width: f32) -> Optio
         Some(2),
         width,
     );
-    let ratio_name = format!("{} ratio", AXIS_NAMES[axis]);
+    let ratio_name = tr!("position-axis-ratio", axis = AXIS_NAMES[axis]);
     let percents = MIN_SCALE * 100.0..=f32::MAX;
     let ratioed = number_field(
         ui,
@@ -357,7 +370,7 @@ fn label_column(ui: &mut egui::Ui, axis: usize, unit: &str) {
 /// Standing the selection on the plate, over its middle, as large as the volume takes, or
 /// turned the way it prints best.
 fn place(ui: &mut egui::Ui, window: &mut Window, id: ObjectId) {
-    section(ui, "Place", None, |ui| {
+    section(ui, &tr!("position-place"), None, |ui| {
         let scene = &mut window.doc.scene;
         let plate = &window.doc.plate;
         let mut fitted = false;
@@ -365,17 +378,17 @@ fn place(ui: &mut egui::Ui, window: &mut Window, id: ObjectId) {
             let Some(object) = scene.get_mut(id) else {
                 return;
             };
-            if secondary_button(&mut columns[0], "", "On the plate").clicked() {
+            if secondary_button(&mut columns[0], "", &tr!("position-on-plate")).clicked() {
                 object.stand_on_plate();
                 object.lift_mm = None;
             }
-            if secondary_button(&mut columns[1], "", "Centre").clicked()
+            if secondary_button(&mut columns[1], "", &tr!("position-centre")).clicked()
                 && let Some(bounds) = object.world_bounds()
             {
                 let offset = plate.center() - bounds.center();
                 object.transform.translation += offset * Vec3::new(1.0, 1.0, 0.0);
             }
-            if secondary_button(&mut columns[2], "", "Scale to fit").clicked() {
+            if secondary_button(&mut columns[2], "", &tr!("position-scale-to-fit")).clicked() {
                 fit(object, plate);
                 fitted = true;
             }
@@ -400,12 +413,11 @@ pub fn lift(ui: &mut egui::Ui, scene: &mut Scene, id: ObjectId) {
     };
     let mut lift_mm = now_mm;
     let range = 0.0..=MAX_LIFT_MM;
-    let label = "Lift off the plate";
     if stepped_row(
         ui,
-        label,
+        &tr!("position-lift"),
         &mut lift_mm,
-        "mm",
+        &tr!("unit-mm"),
         POSITION_DRAG,
         LIFT_STEP_MM,
         range,
@@ -429,13 +441,13 @@ fn turn(ui: &mut egui::Ui, window: &mut Window, id: ObjectId) {
         progress_bar(ui, None);
     }
     let label = if window.tools.orient.picking_face {
-        "Click a face"
+        tr!("position-click-face")
     } else {
-        "Lay on face"
+        tr!("position-lay-on-face")
     };
     // A run replaces the rotation when it lands, so a face laid meanwhile would be lost.
     let laid = ui
-        .add_enabled_ui(!running, |ui| secondary_button(ui, icon::SELECT, label))
+        .add_enabled_ui(!running, |ui| secondary_button(ui, icon::SELECT, &label))
         .inner
         .clicked();
 
@@ -475,14 +487,21 @@ fn preset_row(ui: &mut egui::Ui, chosen: &mut OrientPreset) -> bool {
     let layout = egui::Layout::right_to_left(egui::Align::Center);
     ui.allocate_ui_with_layout(size, layout, |ui| {
         let enabled = ui.is_enabled();
-        let oriented = inline_button(ui, icon::ORIENT, "Auto-orient", false, enabled).clicked();
-        let response =
-            picker(ui, icon::PARAMETERS, chosen.label()).on_hover_text(preset_hint(*chosen));
+        let oriented = inline_button(
+            ui,
+            icon::ORIENT,
+            &tr!("position-auto-orient"),
+            false,
+            enabled,
+        )
+        .clicked();
+        let response = picker(ui, icon::PARAMETERS, &preset_label(*chosen))
+            .on_hover_text(preset_hint(*chosen));
         egui::Popup::menu(&response).show(|ui| {
             let goals = OrientGoal::ALL.into_iter().map(OrientPreset::Goal);
             for choice in std::iter::once(OrientPreset::Auto).chain(goals) {
                 if ui
-                    .selectable_label(choice == *chosen, choice.label())
+                    .selectable_label(choice == *chosen, preset_label(choice))
                     .clicked()
                 {
                     *chosen = choice;
@@ -495,18 +514,22 @@ fn preset_row(ui: &mut egui::Ui, chosen: &mut OrientPreset) -> bool {
     .inner
 }
 
-fn preset_hint(preset: OrientPreset) -> &'static str {
+/// What a preset is called in the picker.
+fn preset_label(preset: OrientPreset) -> String {
     match preset {
-        OrientPreset::Goal(OrientGoal::FewestSupports) => {
-            "The least resin in supports, whichever way up."
-        }
-        OrientPreset::Goal(OrientGoal::LeastPeel) => {
-            "The lightest pull on the film, no cups; under 10 N, the fewest supports."
-        }
-        OrientPreset::Goal(OrientGoal::ShortestPrint) => "The fewest layers that still print.",
-        OrientPreset::Auto => {
-            "Supports, pull and print time balanced: none gives up much for the others."
-        }
+        OrientPreset::Goal(OrientGoal::FewestSupports) => tr!("orient-preset-supports"),
+        OrientPreset::Goal(OrientGoal::LeastPeel) => tr!("orient-preset-peel"),
+        OrientPreset::Goal(OrientGoal::ShortestPrint) => tr!("orient-preset-shortest"),
+        OrientPreset::Auto => tr!("orient-preset-auto"),
+    }
+}
+
+fn preset_hint(preset: OrientPreset) -> String {
+    match preset {
+        OrientPreset::Goal(OrientGoal::FewestSupports) => tr!("orient-preset-supports-hint"),
+        OrientPreset::Goal(OrientGoal::LeastPeel) => tr!("orient-preset-peel-hint"),
+        OrientPreset::Goal(OrientGoal::ShortestPrint) => tr!("orient-preset-shortest-hint"),
+        OrientPreset::Auto => tr!("orient-preset-auto-hint"),
     }
 }
 
@@ -515,12 +538,12 @@ fn preset_hint(preset: OrientPreset) -> &'static str {
 fn mirror(ui: &mut egui::Ui, scene: &mut Scene) {
     let keep_id = ui.id().with("mirror-keep");
     let mut keep = ui.data(|data| data.get_temp(keep_id).unwrap_or(false));
-    section(ui, "Mirror", None, |ui| {
+    section(ui, &tr!("position-mirror"), None, |ui| {
         let picked = scene.selection().to_vec();
         let mut flipped = None;
         ui.columns(Axis::ALL.len(), |columns| {
             for (column, axis) in columns.iter_mut().zip(Axis::ALL) {
-                let label = format!("Across {}", axis.label());
+                let label = tr!("position-across", axis = axis.label());
                 if secondary_button(column, "", &label).clicked() {
                     flipped = Some(axis);
                 }
@@ -532,8 +555,8 @@ fn mirror(ui: &mut egui::Ui, scene: &mut Scene) {
                 scene.mirror(*id, axis);
             }
         }
-        switch(ui, &mut keep, "Keep the original");
-        describe(ui, "Mirror a copy beside it instead.");
+        switch(ui, &mut keep, &tr!("position-keep-original"));
+        describe(ui, &tr!("position-keep-original-note"));
     });
     ui.data_mut(|data| data.insert_temp(keep_id, keep));
 }

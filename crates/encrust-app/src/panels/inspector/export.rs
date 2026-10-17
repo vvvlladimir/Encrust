@@ -1,6 +1,7 @@
 use egui::{Color32, RichText};
 use printer_profiles::Connection;
 
+use crate::i18n::tr;
 use crate::panels::Window;
 use crate::panels::plate_summary::file_readings;
 use crate::panels::printer_card::{self, Chosen};
@@ -22,7 +23,10 @@ pub fn ui(ui: &mut egui::Ui, window: &mut Window) {
 pub fn fact(window: &Window) -> Option<(String, Color32)> {
     let colors = theme::colors();
     if let Some(sent) = &window.machine.network.sent {
-        return Some((format!("on {}", sent.printer), colors.accent_soft));
+        return Some((
+            tr!("export-on", printer = sent.printer.clone()),
+            colors.accent_soft,
+        ));
     }
     Some((
         format!(".{}", window.machine.slicing.format.extension()),
@@ -34,8 +38,8 @@ pub fn fact(window: &Window) -> Option<(String, Color32)> {
 /// where there is one and to a file where there is not.
 pub fn action(ui: &mut egui::Ui, window: &mut Window) {
     if window.machine.network.sent.is_some() {
-        let what = "The file is on the machine. Nobody is standing at it yet.";
-        if primary_button(ui, icon::PLAY, "Start the print", true)
+        let what = tr!("export-on-machine");
+        if primary_button(ui, icon::PLAY, &tr!("export-start-print"), true)
             .on_hover_text(what)
             .clicked()
         {
@@ -57,15 +61,15 @@ pub fn action(ui: &mut egui::Ui, window: &mut Window) {
     let plates = window.doc.scene.plates().len();
     let extension = window.machine.slicing.format.extension();
     let to_file = if every_plate(ui.ctx(), plates) {
-        format!("Slice all {plates} plates to .{extension}")
+        tr!("export-slice-all-to", count = plates, extension = extension)
     } else {
-        format!("Slice to .{extension}")
+        tr!("slice-to", extension = extension)
     };
 
     let mut pressed = None;
     match &bound {
         Some(bound) => {
-            let label = format!("Slice and send to {}", bound.name);
+            let label = tr!("slice-send", name = bound.name.clone());
             let enabled = free && bound.blocker.is_none();
             if primary_button(ui, icon::SEND, &label, enabled).clicked() {
                 pressed = Some(Via::Printer);
@@ -88,7 +92,7 @@ pub fn action(ui: &mut egui::Ui, window: &mut Window) {
         }
     }
     if let Some(why) = blocker {
-        hint(ui, why);
+        hint(ui, &why);
     }
     if let Some(via) = pressed {
         let run = match via {
@@ -112,12 +116,16 @@ fn file(ui: &mut egui::Ui, window: &mut Window) {
     let rows = file_readings(ui.ctx(), window);
     let plates = window.doc.scene.plates().len();
     let mut to_print_settings = false;
-    section(ui, "The file", None, |ui| {
+    section(ui, &tr!("export-the-file"), None, |ui| {
         readings(ui, &rows);
-        text_row(ui, "File name", &mut window.machine.slicing.file_stem);
+        text_row(
+            ui,
+            &tr!("export-file-name"),
+            &mut window.machine.slicing.file_stem,
+        );
         scope_row(ui, plates);
         to_print_settings =
-            secondary_button(ui, icon::PARAMETERS, "Layers, exposure and edges").clicked();
+            secondary_button(ui, icon::PARAMETERS, &tr!("export-print-settings")).clicked();
     });
     if to_print_settings {
         crate::shortcuts::pick(window, Tool::PrintSettings);
@@ -140,10 +148,11 @@ fn scope_row(ui: &mut egui::Ui, plates: usize) {
         return;
     }
     let mut every = every_plate(ui.ctx(), plates);
-    let all = format!("All {plates} plates");
-    let shown = if every { all.as_str() } else { "This plate" };
-    picker_row(ui, "export-scope", "Slice", shown, |ui| {
-        ui.selectable_value(&mut every, false, "This plate");
+    let all = tr!("export-all-plates", count = plates);
+    let this = tr!("export-this-plate");
+    let shown = if every { all.as_str() } else { this.as_str() };
+    picker_row(ui, "export-scope", &tr!("action-slice"), shown, |ui| {
+        ui.selectable_value(&mut every, false, &this);
         ui.selectable_value(&mut every, true, &all);
     });
     ui.data_mut(|data| data.insert_temp(every_plate_id(), every));
@@ -192,32 +201,28 @@ fn send(ui: &mut egui::Ui, window: &mut Window) {
     let mut set_up = false;
     let (rescan, chosen) = section_with_action(
         ui,
-        "Send to a printer",
-        (icon::RESET, "Look again"),
+        &tr!("export-send-to-printer"),
+        (icon::RESET, &tr!("export-look-again")),
         |ui| {
             let network = &window.machine.network;
             if connection == Connection::None {
-                hint(
-                    ui,
-                    "This printer's profile takes files on a stick; choose its network in its settings to send from here.",
-                );
+                hint(ui, &tr!("export-usb-only"));
                 return None;
             }
             if network.listed().is_empty() {
-                hint(ui, "No printer of this model is listed to send to yet.");
-                set_up = secondary_button(ui, icon::NETWORK, "Choose them in its network settings")
-                    .clicked();
+                hint(ui, &tr!("export-none-listed"));
+                set_up = secondary_button(ui, icon::NETWORK, &tr!("export-choose-them")).clicked();
                 return None;
             }
             let warning = network
                 .target()
                 .filter(|target| !target.speaks(connection))
                 .map(|target| {
-                    format!(
-                        "{} speaks {}, but this profile sends over {}: set its network in the printer's settings.",
-                        network.label(&target),
-                        target.protocol().label(),
-                        connection.label()
+                    tr!(
+                        "export-speaks-other",
+                        name = network.label(&target),
+                        theirs = target.protocol().label(),
+                        ours = crate::network::connection_label(connection)
                     )
                 });
             printer_card::destination(ui, network, warning)

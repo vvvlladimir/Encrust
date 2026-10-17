@@ -4,6 +4,7 @@ use core_geometry::{Adjacency, Ray, Scalar, Vec2, Vec3, raycast_placed};
 use core_supports::{Part, Placed, ProjectSettings, project};
 use printer_profiles::{Raft, SupportProfile};
 
+use crate::i18n::tr;
 use crate::job::{SupportJob, SupportOutcome, SupportRequest, tasks_of};
 use crate::scene::{ObjectId, OwnSettings, Scene, SceneObject};
 use crate::status::Status;
@@ -29,12 +30,12 @@ pub enum Placing {
 impl Placing {
     pub const ALL: [Self; 4] = [Self::Point, Self::Paint, Self::Block, Self::Erase];
 
-    pub fn label(self) -> &'static str {
+    pub fn label(self) -> String {
         match self {
-            Self::Point => "Place",
-            Self::Paint => "Fill",
-            Self::Block => "Block",
-            Self::Erase => "Erase",
+            Self::Point => tr!("supports-placing-place"),
+            Self::Paint => tr!("supports-placing-fill"),
+            Self::Block => tr!("supports-placing-block"),
+            Self::Erase => tr!("supports-placing-erase"),
         }
     }
 
@@ -140,9 +141,9 @@ impl Default for SupportTool {
 
 impl SupportTool {
     /// Why the Generate button is greyed out, or `None` when it is not.
-    pub fn blocker(&self, scene: &Scene) -> Option<&'static str> {
+    pub fn blocker(&self, scene: &Scene) -> Option<String> {
         if scene.target_count() == 0 {
-            return Some("Nothing visible on the plate to hold up.");
+            return Some(tr!("supports-nothing-visible"));
         }
         None
     }
@@ -154,7 +155,7 @@ impl SupportTool {
     pub fn start(&mut self, scene: &Scene, layer_height_mm: Scalar) -> Result<()> {
         let tasks = tasks_of(scene, |object| self.profile_for(object).clone());
         if tasks.is_empty() {
-            bail!("nothing visible on the plate to hold up");
+            bail!(tr!("supports-nothing-visible-error"));
         }
 
         self.job = Some(SupportJob::spawn(SupportRequest {
@@ -187,13 +188,9 @@ impl SupportTool {
                         object.supports.add(contact, placement.transform, group);
                     }
                 }
-                *status = Status::Info(match added {
-                    0 => "Nothing on the plate needs holding up".to_owned(),
-                    1 => "Placed 1 support".to_owned(),
-                    added => format!("Placed {added} supports"),
-                });
+                *status = Status::Info(tr!("supports-placed", count = added));
             }
-            SupportOutcome::Cancelled => *status = Status::Info("Placement cancelled".to_owned()),
+            SupportOutcome::Cancelled => *status = Status::Info(tr!("supports-cancelled")),
             SupportOutcome::Failed(message) => *status = Status::Error(message),
         }
         false
@@ -403,7 +400,7 @@ impl SupportTool {
     pub fn add_group(&mut self) {
         self.groups[self.active as usize].profile = self.profile.clone();
         self.groups.push(SupportGroup {
-            name: format!("Group {}", self.groups.len() + 1),
+            name: tr!("supports-group-name", index = self.groups.len() + 1),
             profile: self.profile.clone(),
             hidden: false,
         });

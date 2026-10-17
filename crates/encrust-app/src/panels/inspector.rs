@@ -19,6 +19,7 @@ pub use check::tint as risk_tint;
 
 use egui::{Align, Layout, RichText, Sense, UiBuilder, vec2};
 
+use crate::i18n::tr;
 use crate::panels::Window;
 use crate::ui::{body_and_foot, card_foot, hairline, help_mark, theme};
 use crate::workspace::Tool;
@@ -98,7 +99,10 @@ fn fact(window: &Window, tool: Tool) -> Option<(String, egui::Color32)> {
     let plain = |text: String| Some((text, colors.text_mid));
     match tool {
         Tool::Position => select::fact(window.doc).and_then(plain),
-        Tool::Hollow => plain(format!("{:.2} mm", window.tools.hollow.state.thickness_mm)),
+        Tool::Hollow => plain(tr!(
+            "value-mm",
+            value = format!("{:.2}", window.tools.hollow.state.thickness_mm)
+        )),
         Tool::Drain => drain::fact(window).map(|text| (text, colors.danger)),
         Tool::Supports => supports::fact(window).and_then(plain),
         Tool::Paint => window
@@ -116,33 +120,33 @@ fn fact(window: &Window, tool: Tool) -> Option<(String, egui::Color32)> {
                 .tools
                 .measure
                 .snapped()
-                .and_then(|snapped| plain(snapped.label().to_owned())),
+                .and_then(|snapped| plain(snapped.label())),
             crate::measure::Target::Planes => window
                 .tools
                 .measure
                 .plane_gap()
                 .filter(crate::measure::PlaneGap::is_parallel)
-                .and_then(|_| plain("parallel".to_owned())),
+                .and_then(|_| plain(tr!("inspector-parallel"))),
         },
         Tool::Cut | Tool::Relief => None,
     }
 }
 
 /// What the tool is for, read from the question mark beside its name.
-fn help(tool: Tool) -> &'static str {
+fn help(tool: Tool) -> String {
     match tool {
-        Tool::Position => "Pick a model, then move, turn, size, lay down and mirror it.",
-        Tool::Measure => "Click two points or two flat faces on a model.",
-        Tool::Hollow => "Cut a cavity to save resin and lighten the peel.",
-        Tool::Drain => "Let resin out of a hollow model.",
-        Tool::Cut => "Split a model along a plane.",
-        Tool::Relief => "Press a model's texture into its surface. White is the high point.",
-        Tool::Supports => "Hold up what hangs over nothing.",
-        Tool::Paint => "Tell the supports where to go and where not to.",
-        Tool::Shape => "The shape of one support, part by part.",
-        Tool::Check => "What will fail on the machine, with the layer it fails on.",
-        Tool::Export => "From the plate to a file, and from the file to a printer.",
-        Tool::PrintSettings => "How this plate is cut and exposed.",
+        Tool::Position => tr!("inspector-about-select"),
+        Tool::Measure => tr!("inspector-about-measure"),
+        Tool::Hollow => tr!("inspector-about-hollow"),
+        Tool::Drain => tr!("inspector-about-drain"),
+        Tool::Cut => tr!("inspector-about-cut"),
+        Tool::Relief => tr!("inspector-about-relief"),
+        Tool::Supports => tr!("inspector-about-supports"),
+        Tool::Paint => tr!("inspector-about-paint"),
+        Tool::Shape => tr!("inspector-about-shape"),
+        Tool::Check => tr!("inspector-about-check"),
+        Tool::Export => tr!("inspector-about-export"),
+        Tool::PrintSettings => tr!("inspector-about-print-settings"),
     }
 }
 

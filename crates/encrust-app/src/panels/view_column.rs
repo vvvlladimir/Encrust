@@ -1,5 +1,6 @@
 use egui::{Align2, Id, Rect, vec2};
 
+use crate::i18n::tr;
 use crate::panels::{Window, frame_view, set_orthographic};
 use crate::shortcuts::{self, Action};
 use crate::ui::{card, icon, icon_button, icon_toggle};
@@ -36,15 +37,15 @@ fn view_tools(ui: &mut egui::Ui, window: &mut Window) {
             );
         }
         let grid = &mut window.view.options.grid;
-        if icon_toggle(ui, icon::GRID, "Plate grid", *grid).clicked() {
+        if icon_toggle(ui, icon::GRID, &tr!("menu-plate-grid"), *grid).clicked() {
             *grid = !*grid;
         }
         let xray = &mut window.view.options.xray;
-        if icon_toggle(ui, icon::XRAY, "See through models", *xray).clicked() {
+        if icon_toggle(ui, icon::XRAY, &tr!("menu-xray"), *xray).clicked() {
             *xray = !*xray;
         }
         let flat = window.view.camera.orthographic;
-        if icon_toggle(ui, icon::PERSPECTIVE, "Orthographic view", flat).clicked() {
+        if icon_toggle(ui, icon::PERSPECTIVE, &tr!("menu-orthographic"), flat).clicked() {
             set_orthographic(window.view, !flat);
         }
     });
