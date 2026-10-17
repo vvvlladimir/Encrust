@@ -6,9 +6,9 @@ use core_format::{
 use core_raster::Run;
 
 use crate::blocks::MACHINE_NAME_BYTES;
-use crate::rle;
 use crate::tables::{LAYER_DEF_BYTES, LAYER_TABLE_HEAD_BYTES, TABLE_BASE_BYTES};
 use crate::writer::AnycubicVersion;
+use crate::{bit_planes, rle};
 
 /// The mark at the front of the file, without the nul padding that fills its field.
 const FILE_MARK: &[u8] = b"ANYCUBIC";
@@ -42,100 +42,160 @@ impl SlicedFileReader for AnycubicReader {
     }
 
     fn open<S: ReadSeek>(&self, source: S) -> Result<Self::Open<S>, FormatError> {
-        let mut reads = Reads::new(source);
-
-        let mark = reads.array::<8>()?;
-        if mark != FILE_MARK {
-            reads.seek_to(0)?;
-            return Err(FormatError::NotThisFormat {
-                format: "pwmx",
-                found: reads.u32_le()?,
-            });
-        }
-        reads.seek_to(0x0C)?;
-        let version = reads.u32_le()?;
-        // Every revision puts the header's own address in the same slot and its first
-        // twenty fields in the same order, so one pass reads all three.
-        let Some(revision) = READ_VERSIONS
-            .iter()
-            .copied()
-            .find(|known| known.number() == version)
-        else {
-            return Err(FormatError::UnsupportedVersion {
-                format: "pwmx",
-                version,
-            });
-        };
-
-        reads.seek_to(HEADER_ADDRESS)?;
-        let header = u64::from(reads.u32_le()?);
-        reads.seek_to(LAYER_TABLE_ADDRESS)?;
-        let table = u64::from(reads.u32_le()?);
-
-        // The fields begin behind the table's own name and stated length.
-        reads.seek_to(header + LAYER_TABLE_HEAD_BYTES - 4)?;
-        let pitch_um = reads.f32_le()?;
-        let layer_height_mm = reads.f32_le()?;
-        let exposure_s = reads.f32_le()?;
-        let light_off_delay_s = stated_wait_s(reads.f32_le()?);
-        let bottom_exposure_s = reads.f32_le()?;
-        let bottom_layers = reads.f32_le()? as u32;
-        let lift_mm = stated_distance_mm(reads.f32_le()?);
-        // Both speeds are millimetres a second here, not a minute.
-        let lift_speed_mm_min = stated_speed_mm_min(reads.f32_le()? * 60.0);
-        let retract_speed_mm_min = stated_speed_mm_min(reads.f32_le()? * 60.0);
-        let volume_ml = reads.f32_le()?;
-        reads.skip(4)?;
-        let width_px = reads.u32_le()?;
-        let height_px = reads.u32_le()?;
-        panel_in_range(width_px, height_px)?;
-
-        // Weight, price, the currency and the per-layer flag sit between the panel and the
-        // print time; see docs/formats/anycubic.md.
-        reads.skip(16)?;
-        let print_time_s = reads.u32_le()?;
-        let stated = PrinterTuning {
-            light_off_delay_s,
-            lift_distance_mm: lift_mm,
-            retract_distance_mm: lift_mm,
-            lift_speed_mm_min,
-            retract_speed_mm_min,
-            transition_layers: u16::try_from(reads.u32_le()?).ok(),
-            ..PrinterTuning::default()
-        };
-
-        reads.seek_to(table + LAYER_TABLE_HEAD_BYTES - 4)?;
-        let layer_count = reads.u32_le()?;
-        let layers = read_table(&mut reads, table, layer_count)?;
-        let machine = read_machine_name(&mut reads, revision)?;
-
-        let display_mm = (
-            width_px as f32 * pitch_um / 1000.0,
-            height_px as f32 * pitch_um / 1000.0,
-        );
-        Ok(OpenAnycubic {
-            reads,
-            facts: SlicedFile {
-                format: "pwmx",
-                version: Some(version),
-                machine,
-                slicer: None,
-                resin: None,
-                width_px,
-                height_px,
-                display_mm: Some(display_mm),
-                layer_height_mm,
-                exposure_s,
-                bottom_exposure_s,
-                bottom_layers,
-                print_time_s: Some(print_time_s),
-                volume_mm3: Some(volume_ml * 1000.0),
-                grey_steps: GREY_STEPS,
-                stated,
-                layers,
-            },
-        })
+        open_as(source, Codec::Nibbles)
     }
+}
+
+/// Reads the `.pws`: the same container, whose layers are one-bit passes summed into grey.
+#[derive(Debug, Default, Clone, Copy)]
+pub struct PwsReader;
+
+impl SlicedFileReader for PwsReader {
+    type Open<S: ReadSeek> = OpenAnycubic<S>;
+
+    fn extension(&self) -> &'static str {
+        "pws"
+    }
+
+    fn open<S: ReadSeek>(&self, source: S) -> Result<Self::Open<S>, FormatError> {
+        open_as(source, Codec::BitPlanes { levels: 0 })
+    }
+}
+
+/// How a layer's bytes encode its pixels.
+#[derive(Debug, Clone, Copy)]
+enum Codec {
+    /// Runs of a four-bit grey.
+    Nibbles,
+    /// One one-bit pass per anti-alias level, which the header states.
+    BitPlanes { levels: u32 },
+}
+
+impl Codec {
+    /// This codec as the header's anti-alias level makes it.
+    fn with_levels(self, levels: u32) -> Result<Self, FormatError> {
+        match self {
+            Self::Nibbles => Ok(self),
+            Self::BitPlanes { .. } if (1..=bit_planes::MAX_LEVELS).contains(&levels) => {
+                Ok(Self::BitPlanes { levels })
+            }
+            Self::BitPlanes { .. } => Err(FormatError::AntiAliasLevels {
+                levels,
+                max: bit_planes::MAX_LEVELS,
+            }),
+        }
+    }
+
+    fn format(self) -> &'static str {
+        match self {
+            Self::Nibbles => "pwmx",
+            Self::BitPlanes { .. } => "pws",
+        }
+    }
+
+    fn grey_steps(self) -> u16 {
+        match self {
+            Self::Nibbles => GREY_STEPS,
+            Self::BitPlanes { levels } => u16::try_from(levels + 1).unwrap_or(u16::MAX),
+        }
+    }
+}
+
+fn open_as<S: ReadSeek>(source: S, codec: Codec) -> Result<OpenAnycubic<S>, FormatError> {
+    let mut reads = Reads::new(source);
+
+    let mark = reads.array::<8>()?;
+    if mark != FILE_MARK {
+        reads.seek_to(0)?;
+        return Err(FormatError::NotThisFormat {
+            format: codec.format(),
+            found: reads.u32_le()?,
+        });
+    }
+    reads.seek_to(0x0C)?;
+    let version = reads.u32_le()?;
+    // Every revision puts the header's own address in the same slot and its first
+    // twenty fields in the same order, so one pass reads all three.
+    let Some(revision) = READ_VERSIONS
+        .iter()
+        .copied()
+        .find(|known| known.number() == version)
+    else {
+        return Err(FormatError::UnsupportedVersion {
+            format: codec.format(),
+            version,
+        });
+    };
+
+    reads.seek_to(HEADER_ADDRESS)?;
+    let header = u64::from(reads.u32_le()?);
+    reads.seek_to(LAYER_TABLE_ADDRESS)?;
+    let table = u64::from(reads.u32_le()?);
+
+    // The fields begin behind the table's own name and stated length.
+    reads.seek_to(header + LAYER_TABLE_HEAD_BYTES - 4)?;
+    let pitch_um = reads.f32_le()?;
+    let layer_height_mm = reads.f32_le()?;
+    let exposure_s = reads.f32_le()?;
+    let light_off_delay_s = stated_wait_s(reads.f32_le()?);
+    let bottom_exposure_s = reads.f32_le()?;
+    let bottom_layers = reads.f32_le()? as u32;
+    let lift_mm = stated_distance_mm(reads.f32_le()?);
+    // Both speeds are millimetres a second here, not a minute.
+    let lift_speed_mm_min = stated_speed_mm_min(reads.f32_le()? * 60.0);
+    let retract_speed_mm_min = stated_speed_mm_min(reads.f32_le()? * 60.0);
+    let volume_ml = reads.f32_le()?;
+    let codec = codec.with_levels(reads.u32_le()?)?;
+    let width_px = reads.u32_le()?;
+    let height_px = reads.u32_le()?;
+    panel_in_range(width_px, height_px)?;
+
+    // Weight, price, the currency and the per-layer flag sit between the panel and the
+    // print time; see docs/formats/anycubic.md.
+    reads.skip(16)?;
+    let print_time_s = reads.u32_le()?;
+    let stated = PrinterTuning {
+        light_off_delay_s,
+        lift_distance_mm: lift_mm,
+        retract_distance_mm: lift_mm,
+        lift_speed_mm_min,
+        retract_speed_mm_min,
+        transition_layers: u16::try_from(reads.u32_le()?).ok(),
+        ..PrinterTuning::default()
+    };
+
+    reads.seek_to(table + LAYER_TABLE_HEAD_BYTES - 4)?;
+    let layer_count = reads.u32_le()?;
+    let layers = read_table(&mut reads, table, layer_count)?;
+    let machine = read_machine_name(&mut reads, revision)?;
+
+    let display_mm = (
+        width_px as f32 * pitch_um / 1000.0,
+        height_px as f32 * pitch_um / 1000.0,
+    );
+    Ok(OpenAnycubic {
+        reads,
+        codec,
+        facts: SlicedFile {
+            format: codec.format(),
+            version: Some(version),
+            machine,
+            slicer: None,
+            resin: None,
+            width_px,
+            height_px,
+            display_mm: Some(display_mm),
+            layer_height_mm,
+            exposure_s,
+            bottom_exposure_s,
+            bottom_layers,
+            print_time_s: Some(print_time_s),
+            volume_mm3: Some(volume_ml * 1000.0),
+            grey_steps: codec.grey_steps(),
+            stated,
+            layers,
+        },
+    })
 }
 
 /// The name the machine block carries, which is what the firmware matches its own against.
@@ -190,6 +250,7 @@ fn read_table<S: ReadSeek>(
 /// An Anycubic file with its tables read and its masks still in it.
 pub struct OpenAnycubic<S> {
     reads: Reads<S>,
+    codec: Codec,
     facts: SlicedFile,
 }
 
@@ -203,7 +264,13 @@ impl<S: ReadSeek> OpenFile for OpenAnycubic<S> {
         let entry = self.facts.layers[index as usize];
         self.reads.seek_to(entry.offset)?;
         let data = self.reads.bytes(entry.size as usize)?;
-        rle::decode(&data)
+        match self.codec {
+            Codec::Nibbles => rle::decode(&data),
+            Codec::BitPlanes { levels } => {
+                let panel_px = u64::from(self.facts.width_px) * u64::from(self.facts.height_px);
+                bit_planes::decode(&data, panel_px, levels)
+            }
+        }
     }
 }
 

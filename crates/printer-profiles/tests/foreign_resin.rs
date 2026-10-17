@@ -96,8 +96,10 @@ fn a_saved_material_ini_gives_exposure_fade_correction_and_bottle() {
     assert_eq!(resin.name, "ENCRUST-TEST");
     assert!(close(resin.exposure_s, 2.37) && close(resin.bottom_exposure_s, 31.3));
     assert_eq!(
-        resin.transition_layers, 10,
-        "the material's own override of the faded layers wins, as the archive's numFade shows"
+        (resin.bottom_layers, resin.transition_layers),
+        (1, 8),
+        "the override's 10 faded layers, as the archive's numFade shows: one first layer and \
+         a ramp to layer 9"
     );
     assert!(close(resin.compensation.shrink_x_pct, 101.234));
     assert!(close(resin.compensation.shrink_y_pct, 100.567));

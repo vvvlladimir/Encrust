@@ -89,6 +89,13 @@ doc = false
 bench = false
 
 [[bin]]
+name = "sliced_pws"
+path = "fuzz_targets/sliced_pws.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
 name = "resin_profile"
 path = "fuzz_targets/resin_profile.rs"
 test = false

@@ -312,12 +312,14 @@ Every file Encrust writes is read back and checked. The output extension picks t
 | `.ctb` v4, v5 | Elegoo, Creality, Phrozen, EPAX, Peopoly, QIDI, UniFormation | yes | **Encrypted `.ctb` is not supported** (needed by some newer boards). |
 | `.cbddlp`, `.photon` | older Chitu-board printers | yes, in 8 passes | 8 times the layer data. Warns above 1440 × 2560 px. |
 | `.pwmx` and the other Anycubic extensions | Anycubic | 4 bits | Edges dimmer than 1/16 are lost. |
-| `.sl1`, `.sl1s` | Prusa | full 8 bits | One exposure and one layer height for the whole print. |
+| `.sl1`, `.sl1s` | Prusa | full 8 bits | One exposure and one layer height for the whole print; the bottom layers fade to it from the first one rather than holding. |
 | `.zip` (PNG layers + G-code) | Phrozen, Wanhao, Kelant | full 8 bits | Per-layer exposure and height are kept. No second lift or acceleration. |
 | `.cxdlp` v3, v4 | Creality | 8 bits (v3), 7 bits (v4) | |
 | `.svgx` | FlashForge, Voxelab | none (vector polygons) | Warns above 3840 × 2400 px. |
 | `.cws` | Nova3D | full 8 bits | Only the plain variant is written. |
 | PNG folder | any | full 8 bits | No extension on the output name. |
+
+Encrust also opens the `.pws` of the original Photon and Photon S, which it does not write.
 
 **Convert** a sliced file to another format for another printer.
 *Limits:* the masks are copied, never resampled, so the new printer's screen must have the
@@ -349,7 +351,8 @@ until you set it up on another one.
 printer's resins and pick a file another slicer wrote for it; the resin is saved on that
 printer. You get what the
 file states: exposure and bottom layers always, and transition, waits, lifts, speeds and
-light power where the format holds them (`.goo` holds all of them, `.sl1` none). Anything
+light power where the format holds them (`.goo` holds all of them, `.sl1` only the
+transition). Anything
 else keeps our defaults, and so does a lift the file states as a placeholder, as files for a
 tilting vat do. An encrypted `.ctb` cannot be read yet. Colour, price and compensation are
 not in sliced files.

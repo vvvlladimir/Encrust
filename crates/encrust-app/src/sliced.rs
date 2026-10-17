@@ -14,8 +14,8 @@ use crate::job::ImportStage;
 use crate::scene::{ImportSummary, Imported};
 
 /// The containers a reader claims, which open as a model would.
-pub const EXTENSIONS: [&str; 13] = [
-    "goo", "ctb", "cbddlp", "photon", "pwmx", "pwmo", "pwms", "sl1", "sl1s", "zip", "cxdlp",
+pub const EXTENSIONS: [&str; 14] = [
+    "goo", "ctb", "cbddlp", "photon", "pwmx", "pwmo", "pwms", "pws", "sl1", "sl1s", "zip", "cxdlp",
     "svgx", "cws",
 ];
 

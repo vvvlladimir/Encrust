@@ -70,9 +70,9 @@ impl Handed {
 }
 
 /// What a resin is taken from: its own file, or any sliced file a reader claims.
-const RESIN_SOURCES: [&str; 16] = [
-    "toml", "cfgx", "ini", "goo", "ctb", "cbddlp", "photon", "pwmx", "pwmo", "pwms", "sl1", "sl1s",
-    "zip", "cxdlp", "svgx", "cws",
+const RESIN_SOURCES: [&str; 17] = [
+    "toml", "cfgx", "ini", "goo", "ctb", "cbddlp", "photon", "pwmx", "pwmo", "pwms", "pws", "sl1",
+    "sl1s", "zip", "cxdlp", "svgx", "cws",
 ];
 
 /// What a dialog is asking for, which is also where its answer goes.
@@ -166,13 +166,13 @@ pub const PICTURES: [&str; 5] = ["png", "jpg", "jpeg", "bmp", "tga"];
 pub const PROJECTS: [&str; 1] = [core_engine::project::EXTENSION];
 
 /// What a model is read from: a mesh, or a sliced file built back into one (ADR 0294).
-pub const MODELS: [&str; 16] = [
-    "stl", "obj", "3mf", "goo", "ctb", "cbddlp", "photon", "pwmx", "pwmo", "pwms", "sl1", "sl1s",
-    "zip", "cxdlp", "svgx", "cws",
+pub const MODELS: [&str; 17] = [
+    "stl", "obj", "3mf", "goo", "ctb", "cbddlp", "photon", "pwmx", "pwmo", "pwms", "pws", "sl1",
+    "sl1s", "zip", "cxdlp", "svgx", "cws",
 ];
 
 /// What the plate can be filled from in one dialog: a model or a project.
-pub const OPENABLE: [&str; 17] = [
+pub const OPENABLE: [&str; 18] = [
     "stl",
     "obj",
     "3mf",
@@ -183,6 +183,7 @@ pub const OPENABLE: [&str; 17] = [
     "pwmx",
     "pwmo",
     "pwms",
+    "pws",
     "sl1",
     "sl1s",
     "zip",

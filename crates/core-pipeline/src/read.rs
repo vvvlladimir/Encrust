@@ -4,7 +4,7 @@ use std::path::Path;
 
 use core_format::{FormatError, OpenFile, ReadSeek, SlicedFile, SlicedFileReader};
 use core_raster::Run;
-use format_anycubic::AnycubicReader;
+use format_anycubic::{AnycubicReader, PwsReader};
 use format_chitu::{CbddlpFlavour, ChituReader};
 use format_creality::{CxdlpReader, CxdlpV4Reader};
 use format_cws::CwsReader;
@@ -171,6 +171,8 @@ enum Family {
     /// thing that tells a `.cbddlp` from a `.photon`.
     Chitu(CbddlpFlavour),
     Anycubic,
+    /// The same container, whose layer codec only its extension names.
+    Pws,
     Sl1,
     GcodeZip,
     Cxdlp,
@@ -184,6 +186,7 @@ impl Family {
             Self::Goo => GooReader.open(source).map(Opened::Goo),
             Self::Chitu(flavour) => ChituReader::new(flavour).open(source).map(Opened::Chitu),
             Self::Anycubic => AnycubicReader.open(source).map(Opened::Anycubic),
+            Self::Pws => PwsReader.open(source).map(Opened::Anycubic),
             Self::Sl1 => Sl1Reader.open(source).map(Opened::Sl1),
             Self::GcodeZip => GcodeZipReader.open(source).map(Opened::GcodeZip),
             // One magic heads both revisions and nothing else tells them apart, so the
@@ -216,6 +219,7 @@ fn claimed_by(path: &Path) -> Option<Family> {
         "cxdlp" => Some(Family::Cxdlp),
         "svgx" => Some(Family::Svgx),
         "cws" => Some(Family::Cws),
+        "pws" => Some(Family::Pws),
         other => format_anycubic::AnycubicFlavour::of_extension(other).map(|_| Family::Anycubic),
     }
 }
@@ -235,6 +239,11 @@ mod tests {
                 "{name} is a file this project writes"
             );
         }
+    }
+
+    #[test]
+    fn a_pws_is_read_with_its_own_layer_codec() {
+        assert!(matches!(claimed_by(Path::new("a.pws")), Some(Family::Pws)));
     }
 
     #[test]

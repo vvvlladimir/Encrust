@@ -1,6 +1,6 @@
 # 0148. Write the `.sl1` settings last, and refuse a stack it cannot carry
 
-- **Status:** Accepted
+- **Status:** Accepted; `numFade` as our transition layers is superseded by 0296
 - **Date:** 2026-09-30
 
 ## Context

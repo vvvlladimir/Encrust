@@ -281,7 +281,7 @@ Grouped by what the decision governs; the number is still the order it was taken
 | [0048](0048-thumbnails-are-rendered-in-software.md) | A sliced file's thumbnail is rendered in software, in `core-thumbnail` | Accepted |
 | [0146](0146-the-chitu-family-is-one-crate-and-cbddlp-carries-grey-in-eight-passes.md) | Keep the Chitu family in one crate, and buy `.cbddlp` grey with eight passes | Accepted |
 | [0147](0147-one-crate-writes-every-anycubic-extension-at-version-one.md) | Write every Anycubic extension from one crate, at version 1 | Accepted |
-| [0148](0148-the-sl1-settings-go-in-last-and-a-varying-stack-is-refused.md) | Write the `.sl1` settings last, and refuse a stack it cannot carry | Accepted |
+| [0148](0148-the-sl1-settings-go-in-last-and-a-varying-stack-is-refused.md) | Write the `.sl1` settings last, and refuse a stack it cannot carry | Accepted; `numFade` as our transition layers is superseded by 0296 |
 | [0149](0149-a-reader-is-a-trait-and-a-container-names-itself.md) | Make a reader a trait, and let a container name itself | Accepted |
 | [0150](0150-an-open-file-owns-the-source-it-reads-from.md) | Let an open file own the source it reads from | Accepted |
 | [0167](0167-the-gcode-zip-is-its-own-crate-and-the-png-codec-moves-down.md) | Give the gcode zip its own crate, and move the PNG codec down into `core-format` | Accepted |
@@ -304,6 +304,8 @@ Grouped by what the decision governs; the number is still the order it was taken
 | [0293](0293-a-resin-is-taken-from-a-sliced-file.md) | Take a resin from a sliced file, keeping only what a printer could use | Accepted |
 | [0294](0294-a-sliced-file-opens-as-a-model.md) | Open a sliced file as a model, built back from its layers | Accepted |
 | [0295](0295-a-resin-is-taken-from-another-programs-profile.md) | Take a resin from another program's exported profile | Accepted |
+| [0296](0296-the-sl1-fade-is-the-bottom-block-and-the-ramp.md) | State the `.sl1` fade as the bottom block and the ramp together | Accepted |
+| [0297](0297-the-pws-is-read-by-its-own-layer-codec.md) | Read the `.pws` with its own layer codec, named by the extension | Accepted |
 | [0120](0120-a-resin-is-tuned-per-printer.md) | A printer's resins are its own presets, edited in place | Accepted; no undo on the screen superseded by 0268 |
 | [0140](0140-a-profile-carries-the-machine-name-its-firmware-matches.md) | A profile carries the machine name its firmware matches | Accepted |
 | [0141](0141-advance-mode-follows-the-firmware-flag.md) | Advance mode follows the machine's firmware flag | Accepted |

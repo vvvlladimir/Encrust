@@ -57,7 +57,7 @@ archive written from the test file states `numFade = 10`, the override, not the
 |---|---|---|
 | `name` | `sla_material_settings_id` | |
 | `exposure_s`, `bottom_exposure_s` | `exposure_time`, `initial_exposure_time` | s; the first is required |
-| `transition_layers` | `faded_layers` | the count the exposure fades over, as `sl1.md`'s `numFade` |
+| `bottom_layers`, `transition_layers` | `faded_layers` | 1 and `faded_layers - 2`: the firmware's fade, see `sl1.md` |
 | `layer_height_mm` | `layer_height` | mm, in a saved configuration only |
 | `compensation.shrink_*_pct` | `material_correction_x/y/z` | a factor, 1 is 100 % |
 | `bottom_outer_offset_mm` | `elefant_foot_compensation` | mm, negated: the first layers' outline moves in |

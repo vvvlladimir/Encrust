@@ -25,13 +25,17 @@ pub(super) fn read(text: &str, path: &Path) -> Result<ForeignResin, ProfileError
         exposure_s,
         ..MaterialProfile::default()
     };
+    // One first layer, then a ramp to the normal exposure at layer `faded_layers - 1`: the
+    // firmware's fade, see docs/formats/sl1.md.
+    let fade = ini
+        .material("faded_layers")
+        .and_then(|count| count.parse::<u32>().ok());
     let tuning = PrinterTuning {
         layer_height_mm: ini.number("layer_height").filter(|height| *height > 0.0),
         bottom_exposure_s: ini.number("initial_exposure_time"),
-        // The exposure fades from the initial one over these layers: our transition.
-        transition_layers: ini
-            .material("faded_layers")
-            .and_then(|count| count.parse().ok()),
+        bottom_layers: fade.map(|_| 1),
+        transition_layers: fade
+            .map(|fade| u16::try_from(fade.saturating_sub(2)).unwrap_or(u16::MAX)),
         compensation: Some(compensation(&ini)),
         ..PrinterTuning::default()
     };

@@ -16,7 +16,7 @@ cargo +nightly fuzz run sliced_chitu -- -max_total_time=60
 cargo +nightly fuzz run mesh         -- -max_total_time=300 -max_len=65536
 ```
 
-Eleven targets:
+Twelve targets:
 
 | target | what it covers |
 | --- | --- |
@@ -24,6 +24,7 @@ Eleven targets:
 | `sliced_chitu` | `.ctb` v4 and v5, `.cbddlp`, `.photon`, and RLE7 and RLE1 |
 | `sliced_goo` | the `.goo` header, layer table and run-length encoding |
 | `sliced_anycubic` | `.pwmx` and the six extensions beside it, and PW0 |
+| `sliced_pws` | `.pws`: the same container, its layers as one-bit passes summed into grey |
 | `sliced_sl1` | `.sl1` and `.sl1s` — a zip of PNGs, so the zip and PNG decoders with it |
 | `sliced_gcode_zip` | the `.zip` whose `run.gcode` is the program, parsed line by line |
 | `sliced_creality` | `.cxdlp` at versions 3 and 4: the vertical lines, the tables and RLE7 |

@@ -7,10 +7,13 @@
 )]
 
 use core_format::{
-    ExposurePlan, ExposureRange, LayerPlan, LayerSink, PrintJob, SlicedFileWriter, Thumbnail,
+    ExposurePlan, ExposureRange, FormatError, LayerPlan, LayerSink, OpenFile, PrintJob,
+    SlicedFileReader, SlicedFileWriter, Thumbnail,
 };
 use core_raster::{Grey, LayerMask, LayerRuns, PixelPitch, RasterSettings, Shading};
-use format_anycubic::{AnycubicFlavour, AnycubicSink, AnycubicVersion, AnycubicWriter, decode};
+use format_anycubic::{
+    AnycubicFlavour, AnycubicSink, AnycubicVersion, AnycubicWriter, PwsReader, decode,
+};
 use printer_profiles::{MaterialProfile, PrinterProfile};
 
 const WIDTH_PX: u32 = 16;
@@ -427,4 +430,52 @@ fn an_extension_names_the_newest_revision_its_machines_read() {
         AnycubicVersion::V516
     );
     assert_eq!(AnycubicFlavour::Pm5.newest_version(), AnycubicVersion::V517);
+}
+
+/// A one-layer V1 file made a `.pws`: `levels` passes in the header and `passes` as the
+/// layer's bytes, appended and addressed from the layer table.
+fn as_pws(levels: u32, passes: &[u8]) -> Vec<u8> {
+    let writer = AnycubicWriter::new(AnycubicFlavour::Pw0, AnycubicVersion::V1);
+    let mut file = write_version(writer, &job(1), &[layer_from(&[0; 128])], 1.0);
+    // The header's fields start behind its 16-byte name and length; 0x28 is the level.
+    let level_at = u32_at(&file, HEADER_ADDRESS) as usize + 16 + 0x28;
+    file[level_at..level_at + 4].copy_from_slice(&levels.to_le_bytes());
+    let row = u32_at(&file, LAYER_TABLE_ADDRESS) as usize + 20;
+    let offset = u32::try_from(file.len()).expect("a small file");
+    file[row..row + 4].copy_from_slice(&offset.to_le_bytes());
+    let size = u32::try_from(passes.len()).expect("a short layer");
+    file[row + 4..row + 8].copy_from_slice(&size.to_le_bytes());
+    file.extend_from_slice(passes);
+    file
+}
+
+#[test]
+fn a_pws_layer_is_its_passes_summed_into_grey() {
+    // Two passes over 128 pixels: the first lights 64 from the left, the second 32.
+    let file = as_pws(2, &[0x80 | 64, 64, 0x80 | 32, 96]);
+    let mut open = PwsReader
+        .open(std::io::Cursor::new(file))
+        .expect("a .pws of two passes opens");
+    assert_eq!(open.facts().format, "pws");
+    assert_eq!(open.facts().grey_steps, 3, "none, one or both passes");
+    let runs: Vec<(u32, u8)> = open
+        .layer(0)
+        .expect("both passes fill the panel")
+        .iter()
+        .map(|run| (run.length, run.value))
+        .collect();
+    assert_eq!(
+        runs,
+        [(32, 255), (32, 127), (64, 0)],
+        "lit in c of 2 passes is c * 128 - 1"
+    );
+}
+
+#[test]
+fn a_pws_asking_for_no_passes_is_refused() {
+    let refused = PwsReader.open(std::io::Cursor::new(as_pws(0, &[])));
+    assert!(matches!(
+        refused.err(),
+        Some(FormatError::AntiAliasLevels { levels: 0, .. })
+    ));
 }

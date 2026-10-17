@@ -2,6 +2,7 @@
 //! and one greyscale PNG per layer. Layout is in `docs/formats/sl1.md`.
 
 mod config;
+mod fade;
 #[cfg(test)]
 mod fixtures;
 mod reader;

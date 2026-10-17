@@ -245,11 +245,21 @@ blank because nothing here renders through OpenGL.
 whether supports were generated and how dense. The stack's extent in X and Y does not reach
 the writer, so the box is the whole panel — an over-estimate the machine only draws with.
 
+## The `.pws` codec
+
+The `.pws` of the Photon and Photon S is the version-1 container with another layer codec,
+which only the extension names. A layer is as many one-bit passes of the panel as the
+header's anti-alias level says, one after another, from 1 to 16. Each byte is a run: the high
+bit lights it, the low seven bits count 0 to 127 pixels. A pass ends on the byte that fills
+the panel exactly, and a run past it is corrupt. A pixel lit in `c` of `n` passes is grey
+`c × (256 / n) − 1`, so one pass is black and white. This is how the open-source readers
+decode it, and a real file with four passes reads back as its model's volume.
+
 ## What we do not write
 
 - **Revisions 515 and 518, and the `.pws` codec.** No machine's published profile asks for
   515. 518 adds a second preview, a sub-layer table and a machine block of 224 bytes, and
-  two machines read it. `.pws` is the same container with a different layer codec.
+  two machines read it. A `.pws` is read, not written: see below.
 - **A checksum.** The reference writer computes one over a layer's runs and does not write
   it; the field it would go in does not exist.
 - **The two-stage lift.** The motion block is there from 516 on and the header's advanced

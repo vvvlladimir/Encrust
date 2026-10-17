@@ -252,6 +252,12 @@ fn stated_by(extension: &str) -> PrinterTuning {
             ..peel
         },
         "cws" => peel,
+        // Two bottom layers and a ramp of two fade over five; read back, the firmware's one
+        // first layer leaves a ramp of three ending on the same layer.
+        "sl1" => PrinterTuning {
+            transition_layers: Some(3),
+            ..PrinterTuning::default()
+        },
         _ => PrinterTuning::default(),
     }
 }
