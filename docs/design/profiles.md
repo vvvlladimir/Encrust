@@ -200,6 +200,15 @@ refused without it (ADR 0091). The Saturn 4 Ultra is the one shipped profile tha
 `per_layer_settings`: it separates a layer by tilting its vat, and obeying the per-layer
 lift stalls the plate (ADR 0142).
 
+## What the machine locks
+
+A printer file's `[locked]` table takes any key of a resin's per-printer table and holds it
+at that value on this machine: it goes over the resin's own and its per-printer table, the
+window leaves the field out, and every file and estimate for the machine states it (ADR
+0301). It is for a setting the firmware does not take from the resin. The Saturn 4 Ultra
+locks every lift and retract to the placeholder its vendor's own files carry, because the
+machine tilts its vat and runs that motion itself.
+
 ## Exposure follows the layer height
 
 `layer_height_mm` in a resin file is not a default, it is the thickness the exposure was

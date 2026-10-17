@@ -95,7 +95,7 @@ fn one(stem: &str, source: &Path, args: &Args, list: Option<&MachineList>) -> Re
     let ini = Ini::load(source)?;
     let machine = match transcribe(stem, &ini)? {
         Transcribed::Waiting(step) => return Ok(Outcome::Waiting(step)),
-        Transcribed::Ready(machine) => machine,
+        Transcribed::Ready(machine) => *machine,
     };
     if !is_valid_id(&machine.id) {
         bail!("`{}` is not a usable catalogue id", machine.id);

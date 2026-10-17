@@ -1,4 +1,4 @@
-use printer_profiles::{MaterialProfile, WaitMode};
+use printer_profiles::{MaterialProfile, PrinterTuning, WaitMode};
 
 use super::layers;
 use crate::i18n::tr;
@@ -13,6 +13,12 @@ use crate::ui::{
 /// The exposure, waits and motion change the copy the plate is sliced with, never the resin
 /// profile: a new printer or resin puts them back.
 pub fn ui(ui: &mut egui::Ui, machine: &mut Machine) {
+    let locked = machine
+        .slicing
+        .printer
+        .as_ref()
+        .map(|printer| printer.locked.clone())
+        .unwrap_or_default();
     let mut to_the_printer = layers::layers(ui, machine);
     section(
         ui,
@@ -22,19 +28,32 @@ pub fn ui(ui: &mut egui::Ui, machine: &mut Machine) {
             describe(ui, &tr!("print-exposure-help"));
             describe(ui, &tr!("print-from-resin"));
             exposure(ui, &mut machine.slicing);
-            transition(ui, &mut machine.slicing.material);
+            if locked.transition_layers.is_none() {
+                transition(ui, &mut machine.slicing.material);
+            }
         },
     );
     to_the_printer |= layers::bands(ui, machine);
     layers::edges(ui, machine);
-    section(ui, &tr!("print-waiting"), None, |ui| {
-        describe(ui, &tr!("print-waiting-help"));
-        waiting(ui, &mut machine.slicing.material)
-    });
-    section(ui, &tr!("print-motion"), None, |ui| {
-        describe(ui, &tr!("print-motion-help"));
-        motion(ui, &mut machine.slicing.material)
-    });
+    if locked.waits.is_none() {
+        section(ui, &tr!("print-waiting"), None, |ui| {
+            describe(ui, &tr!("print-waiting-help"));
+            waiting(ui, &mut machine.slicing.material)
+        });
+    }
+    if [
+        locked.lift_distance_mm,
+        locked.lift_speed_mm_min,
+        locked.retract_speed_mm_min,
+    ]
+    .iter()
+    .any(Option::is_none)
+    {
+        section(ui, &tr!("print-motion"), None, |ui| {
+            describe(ui, &tr!("print-motion-help"));
+            motion(ui, &mut machine.slicing.material, &locked)
+        });
+    }
     if to_the_printer {
         let printer = machine.slicing.printer_id.clone();
         let resin = machine.slicing.resin_id.clone();
@@ -181,32 +200,34 @@ fn waiting(ui: &mut egui::Ui, material: &mut MaterialProfile) {
     }
 }
 
-fn motion(ui: &mut egui::Ui, material: &mut MaterialProfile) {
-    number_row(
-        ui,
-        &tr!("print-lift"),
-        &mut material.lift_distance_mm,
-        &tr!("unit-mm"),
-        0.1,
-        0.5..=30.0,
-        2,
-    );
-    number_row(
-        ui,
-        &tr!("print-lift-speed"),
-        &mut material.lift_speed_mm_min,
-        &tr!("unit-mm-min"),
-        1.0,
-        1.0..=1000.0,
-        0,
-    );
-    number_row(
-        ui,
-        &tr!("print-retract-speed"),
-        &mut material.retract_speed_mm_min,
-        &tr!("unit-mm-min"),
-        1.0,
-        1.0..=1000.0,
-        0,
-    );
+/// The peel, less what the printer locks.
+fn motion(ui: &mut egui::Ui, material: &mut MaterialProfile, locked: &PrinterTuning) {
+    if locked.lift_distance_mm.is_none() {
+        number_row(
+            ui,
+            &tr!("print-lift"),
+            &mut material.lift_distance_mm,
+            &tr!("unit-mm"),
+            0.1,
+            0.5..=30.0,
+            2,
+        );
+    }
+    let speeds = [
+        (
+            tr!("print-lift-speed"),
+            locked.lift_speed_mm_min,
+            &mut material.lift_speed_mm_min,
+        ),
+        (
+            tr!("print-retract-speed"),
+            locked.retract_speed_mm_min,
+            &mut material.retract_speed_mm_min,
+        ),
+    ];
+    for (label, locked, value) in speeds {
+        if locked.is_none() {
+            number_row(ui, &label, value, &tr!("unit-mm-min"), 1.0, 1.0..=1000.0, 0);
+        }
+    }
 }

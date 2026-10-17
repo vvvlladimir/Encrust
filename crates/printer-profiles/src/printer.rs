@@ -2,7 +2,7 @@ use std::path::Path;
 
 use serde::{Deserialize, Serialize};
 
-use crate::ProfileError;
+use crate::{MaterialProfile, PrinterTuning, ProfileError};
 
 /// The sliced-file format a machine's firmware reads.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -224,6 +224,10 @@ pub struct PrinterProfile {
     /// What this machine's firmware will obey beyond the header.
     #[serde(default)]
     pub firmware: Firmware,
+    /// Resin settings this machine takes at one value only: the window hides them and every
+    /// file states these. See `docs/decisions/0301`.
+    #[serde(default, skip_serializing_if = "PrinterTuning::is_empty")]
+    pub locked: PrinterTuning,
 }
 
 /// One printer on the network a profile sends to: what the user calls it and where it is.
@@ -306,6 +310,7 @@ impl Default for PrinterProfile {
             connection: Connection::None,
             machines: Vec::new(),
             firmware: Firmware::default(),
+            locked: PrinterTuning::default(),
         }
     }
 }
@@ -372,7 +377,15 @@ impl PrinterProfile {
         {
             return Err(ProfileError::NoAddress { index });
         }
-        Ok(())
+        MaterialProfile::default()
+            .with_tuning(&self.locked)
+            .validate_values()
+            .map_err(|error| match error {
+                ProfileError::NonPositive { field, value } => {
+                    ProfileError::NonPositiveLocked { field, value }
+                }
+                other => other,
+            })
     }
 }
 
@@ -514,6 +527,51 @@ z = 100.0
         assert!(matches!(
             PrinterProfile::from_toml_str(&listed, path()),
             Err(ProfileError::NoAddress { index: 0 })
+        ));
+    }
+
+    #[test]
+    fn a_locked_setting_overrides_the_resin_and_one_left_open_keeps_it() {
+        let locked = format!("{SAMPLE}\n[locked]\nlift_speed_mm_min = 0.05\nlight_pwm = 255\n");
+        let profile = PrinterProfile::from_toml_str(&locked, path()).expect("valid profile");
+        let resin = MaterialProfile {
+            lift_speed_mm_min: 65.0,
+            light_pwm: 200,
+            exposure_s: 2.5,
+            ..MaterialProfile::default()
+        };
+
+        let printed = resin.on(&profile);
+        assert_eq!((printed.lift_speed_mm_min, printed.light_pwm), (0.05, 255));
+        assert_eq!(
+            printed.exposure_s, 2.5,
+            "what is not locked stays the resin's"
+        );
+
+        let written = profile
+            .to_toml_string(path())
+            .expect("a valid profile writes");
+        let read = PrinterProfile::from_toml_str(&written, path()).expect("and reads back");
+        assert_eq!(read.locked, profile.locked);
+        let plain = PrinterProfile::from_toml_str(SAMPLE, path()).expect("valid profile");
+        let written = plain
+            .to_toml_string(path())
+            .expect("a valid profile writes");
+        assert!(
+            !written.contains("locked"),
+            "nothing locked is left out: {written}"
+        );
+    }
+
+    #[test]
+    fn a_locked_speed_of_zero_is_refused() {
+        let locked = format!("{SAMPLE}\n[locked]\nlift_speed_mm_min = 0.0\n");
+        assert!(matches!(
+            PrinterProfile::from_toml_str(&locked, path()),
+            Err(ProfileError::NonPositiveLocked {
+                field: "lift_speed_mm_min",
+                ..
+            })
         ));
     }
 

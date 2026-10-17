@@ -1,7 +1,7 @@
 use core_raster::RasterSettings;
 use core_slicer::LayerPlan;
 use core_thumbnail::Thumbnail;
-use printer_profiles::{MaterialProfile, PrinterProfile};
+use printer_profiles::{MaterialProfile, PrinterProfile, stated_speed_mm_min};
 
 use crate::timestamp::format_utc;
 use crate::{ExposurePlan, exposure_for_mm};
@@ -165,7 +165,11 @@ impl PrintJob {
 
         let bottom = layer_count.min(material.bottom_layers);
         let normal = layer_count - bottom;
-        let travel = |distance_mm: f32, speed_mm_min: f32| distance_mm / speed_mm_min * 60.0;
+        // A speed no plate moves at is a stand-in for motion the machine runs itself, whose
+        // time is the resin's measured layer time (ADR 0301).
+        let travel = |distance_mm: f32, speed_mm_min: f32| {
+            stated_speed_mm_min(speed_mm_min).map_or(0.0, |speed| distance_mm / speed * 60.0)
+        };
 
         let bottom_motion = travel(
             material.bottom_lift_distance_mm,
@@ -466,6 +470,27 @@ mod tests {
 
         // 2 * 30 s + 2 * 2 s exposure, plus 6 mm up and down at 1 mm/s on all four layers.
         assert_eq!(job.print_time_s(), (60.0 + 4.0 + 4.0 * 12.0) as u32);
+    }
+
+    #[test]
+    fn a_placeholder_speed_adds_no_travel_to_the_print_time() {
+        let material = |speed_mm_min| MaterialProfile {
+            bottom_layers: 0,
+            exposure_s: 2.0,
+            light_off_delay_s: 0.0,
+            lift_distance_mm: 0.05,
+            lift_speed_mm_min: speed_mm_min,
+            retract_distance_mm: 0.05,
+            retract_speed_mm_min: speed_mm_min,
+            ..MaterialProfile::default()
+        };
+        let job = |speed_mm_min| PrintJob {
+            material: material(speed_mm_min),
+            ..sample_job(4)
+        };
+
+        // 0.05 mm at 0.05 mm/min would read as two minutes a layer; a tilting vat takes seconds.
+        assert_eq!(job(0.05).print_time_s(), 8, "four layers of 2 s exposure");
     }
 
     /// A print that came in under its estimate gives a negative correction, which has to

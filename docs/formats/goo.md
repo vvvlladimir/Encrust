@@ -78,7 +78,9 @@ part of the fixed header, so the bytes cannot be left out either way. A pixel is
 layer rather than from the header. We set it whenever a layer's exposure differs from the
 header's — transition layers, or a band of height (ADR 0090) — and only on a machine whose
 profile says it reads the per-layer tables (ADR 0141). A vendor file leaves it clear for an
-Elegoo Saturn 4 Ultra and lets the machine ramp the bottom block off the header.
+Elegoo Saturn 4 Ultra and lets the machine ramp the bottom block off the header. It also
+states 0.05 in every lift and retract field, distance and speed, which the machine's
+profile locks (ADR 0301): a file stating 6 mm made the plate rise again after the tilt.
 
 ### Mirroring
 

@@ -4,7 +4,7 @@ use std::path::Path;
 use serde::{Deserialize, Serialize};
 
 use crate::Compensation;
-use crate::ProfileError;
+use crate::{PrinterProfile, ProfileError};
 
 /// Exposure and motion settings for one resin.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -345,6 +345,12 @@ impl MaterialProfile {
         tuned
     }
 
+    /// This resin as `printer` prints it: every setting the machine locks put over its own.
+    #[must_use]
+    pub fn on(&self, printer: &PrinterProfile) -> Self {
+        self.clone().with_tuning(&printer.locked)
+    }
+
     /// This resin as measured at `layer_height_mm`: the normal exposure is carried along
     /// the working curve, so a layer of the new height cures as a layer of the old one did.
     /// The bottom block keeps its seconds, being exposed to stick rather than to cure
@@ -438,7 +444,7 @@ impl MaterialProfile {
         Ok(())
     }
 
-    fn validate_values(&self) -> Result<(), ProfileError> {
+    pub(crate) fn validate_values(&self) -> Result<(), ProfileError> {
         let checks = [
             ("layer_height_mm", self.layer_height_mm),
             ("exposure_s", self.exposure_s),

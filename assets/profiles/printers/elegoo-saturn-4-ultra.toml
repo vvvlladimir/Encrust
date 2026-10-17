@@ -28,3 +28,14 @@ z = 220.0
 [firmware]
 # A tilting vat: obeying the per-layer lift and retract stalls the plate, see ADR 0142.
 per_layer_settings = false
+
+# The vat tilts to separate a layer and the firmware runs that motion itself: the file
+# states the placeholders the vendor's own files carry, see ADR 0301.
+[locked]
+lift_distance_mm = 0.05
+lift_speed_mm_min = 0.05
+retract_distance_mm = 0.05
+retract_speed_mm_min = 0.05
+bottom_lift_distance_mm = 0.05
+bottom_lift_speed_mm_min = 0.05
+bottom_retract_speed_mm_min = 0.05

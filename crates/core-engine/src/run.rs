@@ -56,7 +56,7 @@ impl Run {
 
         let job = PrintJob {
             printer: plate.printer.clone(),
-            material: plate.material.clone(),
+            material: plate.material.on(&plate.printer),
             raster: panel,
             plan: windows.plan().clone(),
             // Only known once the stack has been cut; `finish` lays it down again

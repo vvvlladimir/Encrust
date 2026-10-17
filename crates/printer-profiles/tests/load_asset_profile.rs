@@ -1,6 +1,8 @@
 use std::path::{Path, PathBuf};
 
-use printer_profiles::{Catalogue, Connection, OutputFormat, PrinterProfile, SupportProfile};
+use printer_profiles::{
+    Catalogue, Connection, MaterialProfile, OutputFormat, PrinterProfile, SupportProfile,
+};
 
 fn asset(name: &str) -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR"))
@@ -97,6 +99,28 @@ fn the_saturn_4_ultra_reads_the_header_alone() {
         !entry.profile.firmware.per_layer_settings,
         "a tilting vat stalls on the per-layer lift, see ADR 0142"
     );
+}
+
+#[test]
+fn the_saturn_4_ultra_states_no_lift_of_its_own() {
+    let catalogue = Catalogue::bundled().expect("the shipped catalogue is valid");
+    let entry = catalogue
+        .printer("elegoo-saturn-4-ultra")
+        .expect("a shipped machine");
+    let printed = MaterialProfile::default().on(&entry.profile);
+
+    // The vendor's own files for the machine carry 0.05 in every peel field, see ADR 0301.
+    for value in [
+        printed.lift_distance_mm,
+        printed.lift_speed_mm_min,
+        printed.retract_distance_mm,
+        printed.retract_speed_mm_min,
+        printed.bottom_lift_distance_mm,
+        printed.bottom_lift_speed_mm_min,
+        printed.bottom_retract_speed_mm_min,
+    ] {
+        assert_eq!(value, 0.05, "the tilting vat runs its own motion");
+    }
 }
 
 #[test]

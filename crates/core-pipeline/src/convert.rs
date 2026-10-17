@@ -111,6 +111,7 @@ fn job_of(facts: &SlicedFile, converting: &Converting<'_>) -> Result<PrintJob, P
     material.bottom_exposure_s = facts.bottom_exposure_s;
     material.bottom_layers = facts.bottom_layers;
     material.transition_layers = transition_of(facts);
+    let material = material.on(printer);
 
     let shading = if facts.grey_steps <= 2 {
         Shading::Binary

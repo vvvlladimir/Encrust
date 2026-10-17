@@ -53,6 +53,9 @@ pub enum ProfileError {
         value: f32,
     },
 
+    #[error("the locked {field} must be greater than zero, got {value}")]
+    NonPositiveLocked { field: &'static str, value: f32 },
+
     #[error("there is no {kind} called {id} in the catalogue")]
     Unknown { kind: &'static str, id: String },
 

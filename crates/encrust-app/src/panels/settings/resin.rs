@@ -1,6 +1,6 @@
 //! The resin form: the exposure and motion of one resin, on one machine.
 
-use printer_profiles::{MaterialProfile, PriceUnit, ResinDetails, WaitMode};
+use printer_profiles::{MaterialProfile, PriceUnit, PrinterTuning, ResinDetails, WaitMode};
 
 use crate::i18n::tr;
 use crate::panels::Window;
@@ -32,6 +32,13 @@ pub fn form(ui: &mut egui::Ui, window: &mut Window) {
         .as_ref()
         .map_or_else(String::new, |printer| printer.values.name.clone());
     let current = resin.draft.values.name.clone();
+    let locked = window
+        .machine
+        .slicing
+        .catalogue
+        .printer(&resin.printer)
+        .map(|entry| entry.profile.locked.clone())
+        .unwrap_or_default();
 
     let mut renamed = None;
     form_card(ui, &tr!("resin-resin"), |ui| {
@@ -46,20 +53,30 @@ pub fn form(ui: &mut egui::Ui, window: &mut Window) {
             &tr!("resin-exposure-on", printer = printer.clone()),
             |ui| {
                 describe(ui, &tr!("print-exposure-help"));
-                light(ui, resin);
+                light(ui, resin, &locked);
             },
         );
         let values = &mut resin.draft.values;
-        form_card(ui, &tr!("resin-waits"), |ui| {
-            describe(ui, &tr!("print-waiting-help"));
-            waits(ui, values);
-        });
-        form_card(ui, &tr!("print-motion"), |ui| {
-            describe(ui, &tr!("print-motion-help"));
-            motion(ui, values);
-        });
+        if shows_waits(&locked) {
+            form_card(ui, &tr!("resin-waits"), |ui| {
+                describe(ui, &tr!("print-waiting-help"));
+                waits(ui, values, &locked);
+            });
+        }
+        if !locks_all_motion(&locked) {
+            form_card(ui, &tr!("print-motion"), |ui| {
+                describe(ui, &tr!("print-motion-help"));
+                motion(ui, values, &locked);
+            });
+        }
     }
-    if let Some(resin) = window.machine.settings.resin.as_mut() {
+    if let Some(resin) = window
+        .machine
+        .settings
+        .resin
+        .as_mut()
+        .filter(|_| locked.compensation.is_none())
+    {
         let values = &mut resin.draft.values.compensation;
         let calculators = &mut window.machine.settings.calculators;
         form_card(ui, &tr!("resin-compensation"), |ui| {
@@ -188,82 +205,73 @@ fn unit_label(unit: PriceUnit) -> String {
 }
 
 /// How the printer waits around each layer: one light-off delay, or rests at the three
-/// points of a peel.
-fn waits(ui: &mut egui::Ui, values: &mut MaterialProfile) {
-    let segments = [
-        Segment::new(WaitMode::LightOff, tr!("resin-light-off-delay")),
-        Segment::new(WaitMode::Rest, tr!("resin-rest-times")),
-    ];
-    let width = ui.available_width();
-    Segmented::new(&segments)
-        .width(width)
-        .show(ui, &mut values.waits.mode);
-    ui.add_space(4.0);
-    match values.waits.mode {
+/// points of a peel. What the printer locks is not offered.
+fn waits(ui: &mut egui::Ui, values: &mut MaterialProfile, locked: &PrinterTuning) {
+    if locked.waits.is_none() {
+        let segments = [
+            Segment::new(WaitMode::LightOff, tr!("resin-light-off-delay")),
+            Segment::new(WaitMode::Rest, tr!("resin-rest-times")),
+        ];
+        let width = ui.available_width();
+        Segmented::new(&segments)
+            .width(width)
+            .show(ui, &mut values.waits.mode);
+        ui.add_space(4.0);
+    }
+    match locked.waits.map_or(values.waits.mode, |waits| waits.mode) {
         WaitMode::LightOff => {
-            number_row(
-                ui,
-                &tr!("print-light-off"),
-                &mut values.light_off_delay_s,
-                &tr!("unit-s"),
-                FINE_STEP,
-                0.0..=60.0,
-                2,
-            );
+            if locked.light_off_delay_s.is_none() {
+                seconds_row(ui, &tr!("print-light-off"), &mut values.light_off_delay_s);
+            }
         }
-        WaitMode::Rest => {
+        WaitMode::Rest if locked.waits.is_none() => {
             let waits = &mut values.waits;
-            number_row(
-                ui,
-                &tr!("print-before-lift"),
-                &mut waits.before_lift_s,
-                &tr!("unit-s"),
-                FINE_STEP,
-                0.0..=60.0,
-                2,
-            );
-            number_row(
-                ui,
-                &tr!("print-after-lift"),
-                &mut waits.after_lift_s,
-                &tr!("unit-s"),
-                FINE_STEP,
-                0.0..=60.0,
-                2,
-            );
-            number_row(
-                ui,
-                &tr!("print-after-retract"),
-                &mut waits.after_retract_s,
-                &tr!("unit-s"),
-                FINE_STEP,
-                0.0..=60.0,
-                2,
-            );
+            seconds_row(ui, &tr!("print-before-lift"), &mut waits.before_lift_s);
+            seconds_row(ui, &tr!("print-after-lift"), &mut waits.after_lift_s);
+            seconds_row(ui, &tr!("print-after-retract"), &mut waits.after_retract_s);
         }
+        WaitMode::Rest => {}
     }
     hint(ui, &tr!("resin-waits-note"));
 }
 
+/// Whether the printer leaves any of the waits to the resin.
+fn shows_waits(locked: &PrinterTuning) -> bool {
+    match locked.waits {
+        None => true,
+        Some(waits) => waits.mode == WaitMode::LightOff && locked.light_off_delay_s.is_none(),
+    }
+}
+
+fn seconds_row(ui: &mut egui::Ui, label: &str, value: &mut f32) {
+    number_row(ui, label, value, &tr!("unit-s"), FINE_STEP, 0.0..=60.0, 2);
+}
+
 /// Exposure: how long each layer is lit, and how hard. The exposure is measured at the
 /// layer height above it and follows it, saying so until it is touched.
-fn light(ui: &mut egui::Ui, resin: &mut ResinDraft) {
+fn light(ui: &mut egui::Ui, resin: &mut ResinDraft, locked: &PrinterTuning) {
     let mut layer_height_mm = resin.draft.values.layer_height_mm;
-    if number_row(
-        ui,
-        &tr!("resin-layer-height"),
-        &mut layer_height_mm,
-        &tr!("unit-mm"),
-        FINE_STEP,
-        MIN_LAYER_HEIGHT_MM..=MAX_LAYER_HEIGHT_MM,
-        3,
-    ) {
+    if locked.layer_height_mm.is_none()
+        && number_row(
+            ui,
+            &tr!("resin-layer-height"),
+            &mut layer_height_mm,
+            &tr!("unit-mm"),
+            FINE_STEP,
+            MIN_LAYER_HEIGHT_MM..=MAX_LAYER_HEIGHT_MM,
+            3,
+        )
+    {
         resin.set_layer_height(layer_height_mm);
     }
     let was = resin
         .carried()
         .map(|carried| (carried.exposure_s, carried.from_mm));
     let values = &mut resin.draft.values;
+    if locked.exposure_s.is_some() {
+        bottom_and_power(ui, values, locked);
+        return;
+    }
     let carried = carried_row(
         ui,
         &tr!("print-exposure"),
@@ -285,25 +293,7 @@ fn light(ui: &mut egui::Ui, resin: &mut ResinDraft) {
             ),
         );
     }
-    number_row(
-        ui,
-        &tr!("print-bottom-exposure"),
-        &mut values.bottom_exposure_s,
-        &tr!("unit-s"),
-        COARSE_STEP,
-        0.05..=600.0,
-        2,
-    );
-    whole_row(
-        ui,
-        &tr!("print-bottom-layers"),
-        &mut values.bottom_layers,
-        1.0,
-        1..=200,
-    );
-    transition_row(ui, values);
-    pwm_row(ui, &tr!("resin-light-power"), &mut values.light_pwm);
-    pwm_row(ui, &tr!("resin-bottom-power"), &mut values.bottom_light_pwm);
+    bottom_and_power(ui, values, locked);
     match carried {
         Carried::Edited => resin.exposure_edited(),
         Carried::Reverted => resin.revert_exposure(),
@@ -311,72 +301,142 @@ fn light(ui: &mut egui::Ui, resin: &mut ResinDraft) {
     }
 }
 
-/// Motion: how the plate peels the layer off the film and comes back.
-fn motion(ui: &mut egui::Ui, values: &mut MaterialProfile) {
-    number_row(
-        ui,
-        &tr!("print-lift"),
-        &mut values.lift_distance_mm,
-        &tr!("unit-mm"),
-        COARSE_STEP,
-        0.1..=100.0,
-        2,
-    );
-    number_row(
-        ui,
-        &tr!("print-lift-speed"),
-        &mut values.lift_speed_mm_min,
-        &tr!("unit-mm-min"),
-        1.0,
-        1.0..=1000.0,
-        1,
-    );
-    number_row(
-        ui,
-        &tr!("resin-retract"),
-        &mut values.retract_distance_mm,
-        &tr!("unit-mm"),
-        COARSE_STEP,
-        0.1..=100.0,
-        2,
-    );
-    number_row(
-        ui,
-        &tr!("print-retract-speed"),
-        &mut values.retract_speed_mm_min,
-        &tr!("unit-mm-min"),
-        1.0,
-        1.0..=1000.0,
-        1,
-    );
+/// The bottom block, the ramp out of it and the light's power, where the printer leaves
+/// them to the resin.
+fn bottom_and_power(ui: &mut egui::Ui, values: &mut MaterialProfile, locked: &PrinterTuning) {
+    if locked.bottom_exposure_s.is_none() {
+        number_row(
+            ui,
+            &tr!("print-bottom-exposure"),
+            &mut values.bottom_exposure_s,
+            &tr!("unit-s"),
+            COARSE_STEP,
+            0.05..=600.0,
+            2,
+        );
+    }
+    if locked.bottom_layers.is_none() {
+        whole_row(
+            ui,
+            &tr!("print-bottom-layers"),
+            &mut values.bottom_layers,
+            1.0,
+            1..=200,
+        );
+    }
+    if locked.transition_layers.is_none() {
+        transition_row(ui, values);
+    }
+    if locked.light_pwm.is_none() {
+        pwm_row(ui, &tr!("resin-light-power"), &mut values.light_pwm);
+    }
+    if locked.bottom_light_pwm.is_none() {
+        pwm_row(ui, &tr!("resin-bottom-power"), &mut values.bottom_light_pwm);
+    }
+}
+
+/// Motion: how the plate peels the layer off the film and comes back. What the printer
+/// locks is not offered.
+fn motion(ui: &mut egui::Ui, values: &mut MaterialProfile, locked: &PrinterTuning) {
+    let rows = [
+        (
+            tr!("print-lift"),
+            locked.lift_distance_mm,
+            &mut values.lift_distance_mm,
+            Travel::Distance,
+        ),
+        (
+            tr!("print-lift-speed"),
+            locked.lift_speed_mm_min,
+            &mut values.lift_speed_mm_min,
+            Travel::Speed,
+        ),
+        (
+            tr!("resin-retract"),
+            locked.retract_distance_mm,
+            &mut values.retract_distance_mm,
+            Travel::Distance,
+        ),
+        (
+            tr!("print-retract-speed"),
+            locked.retract_speed_mm_min,
+            &mut values.retract_speed_mm_min,
+            Travel::Speed,
+        ),
+    ];
+    travel_rows(ui, rows);
     ui.add_space(8.0);
-    number_row(
-        ui,
-        &tr!("resin-bottom-lift"),
-        &mut values.bottom_lift_distance_mm,
-        &tr!("unit-mm"),
-        COARSE_STEP,
-        0.1..=100.0,
-        2,
-    );
-    number_row(
-        ui,
-        &tr!("resin-bottom-lift-speed"),
-        &mut values.bottom_lift_speed_mm_min,
-        &tr!("unit-mm-min"),
-        1.0,
-        1.0..=1000.0,
-        1,
-    );
-    number_row(
-        ui,
-        &tr!("resin-bottom-retract-speed"),
-        &mut values.bottom_retract_speed_mm_min,
-        &tr!("unit-mm-min"),
-        1.0,
-        1.0..=1000.0,
-        1,
-    );
+    let bottom = [
+        (
+            tr!("resin-bottom-lift"),
+            locked.bottom_lift_distance_mm,
+            &mut values.bottom_lift_distance_mm,
+            Travel::Distance,
+        ),
+        (
+            tr!("resin-bottom-lift-speed"),
+            locked.bottom_lift_speed_mm_min,
+            &mut values.bottom_lift_speed_mm_min,
+            Travel::Speed,
+        ),
+        (
+            tr!("resin-bottom-retract-speed"),
+            locked.bottom_retract_speed_mm_min,
+            &mut values.bottom_retract_speed_mm_min,
+            Travel::Speed,
+        ),
+    ];
+    travel_rows(ui, bottom);
+}
+
+/// Whether a lift or retract is a distance or a speed, which sets its unit and its range.
+#[derive(Clone, Copy)]
+enum Travel {
+    Distance,
+    Speed,
+}
+
+/// The rows of a peel the printer leaves to the resin.
+fn travel_rows<const N: usize>(
+    ui: &mut egui::Ui,
+    rows: [(String, Option<f32>, &mut f32, Travel); N],
+) {
+    for (label, locked, value, travel) in rows {
+        if locked.is_some() {
+            continue;
+        }
+        match travel {
+            Travel::Distance => {
+                number_row(
+                    ui,
+                    &label,
+                    value,
+                    &tr!("unit-mm"),
+                    COARSE_STEP,
+                    0.1..=100.0,
+                    2,
+                );
+            }
+            Travel::Speed => {
+                number_row(ui, &label, value, &tr!("unit-mm-min"), 1.0, 1.0..=1000.0, 1);
+            }
+        };
+    }
+}
+
+/// Whether the printer runs every part of the peel itself, which leaves the resin no motion.
+fn locks_all_motion(locked: &PrinterTuning) -> bool {
+    [
+        locked.lift_distance_mm,
+        locked.lift_speed_mm_min,
+        locked.retract_distance_mm,
+        locked.retract_speed_mm_min,
+        locked.bottom_lift_distance_mm,
+        locked.bottom_lift_speed_mm_min,
+        locked.bottom_retract_speed_mm_min,
+    ]
+    .iter()
+    .all(Option::is_some)
 }
 
 fn whole_row(

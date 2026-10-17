@@ -312,7 +312,8 @@ Grouped by what the decision governs; the number is still the order it was taken
 | [0120](0120-a-resin-is-tuned-per-printer.md) | A printer's resins are its own presets, edited in place | Accepted; no undo on the screen superseded by 0268 |
 | [0140](0140-a-profile-carries-the-machine-name-its-firmware-matches.md) | A profile carries the machine name its firmware matches | Accepted |
 | [0141](0141-advance-mode-follows-the-firmware-flag.md) | Advance mode follows the machine's firmware flag | Accepted |
-| [0142](0142-a-tilting-vat-reads-the-header-alone.md) | A tilting vat reads the header alone | Accepted |
+| [0142](0142-a-tilting-vat-reads-the-header-alone.md) | A tilting vat reads the header alone | Superseded by 0301 (the lift and retract it left in the file only) |
+| [0301](0301-a-printer-locks-the-settings-its-firmware-runs-itself.md) | Let a printer profile lock resin settings to one value, hidden in the window, and lock the Saturn 4 Ultra's peel to its vendor's placeholders | Accepted |
 | [0156](0156-a-printer-profile-names-its-format-and-its-machine.md) | A printer profile names its format, and is bound to its machine | Accepted; the binding superseded by 0265 |
 | [0158](0158-the-shipped-catalogue-is-a-library-not-a-list-of-machines-you-own.md) | The shipped catalogue is a library, not the machines you own | Accepted |
 | [0165](0165-the-catalogue-is-generated-and-only-what-we-can-write-ships.md) | The catalogue is generated, and only machines we can write a file for ship | Accepted |
