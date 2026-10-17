@@ -975,7 +975,7 @@ dependencies = [
  "core-raster",
  "core-slicer",
  "criterion",
- "glam 0.33.12",
+ "glam 0.34.1",
  "workspace-hack",
 ]
 
@@ -1041,7 +1041,7 @@ version = "0.4.0"
 dependencies = [
  "criterion",
  "earcutr",
- "glam 0.33.12",
+ "glam 0.34.1",
  "parry3d",
  "proptest",
  "rayon",
@@ -1132,7 +1132,7 @@ version = "0.4.0"
 dependencies = [
  "core-slicer",
  "criterion",
- "glam 0.33.12",
+ "glam 0.34.1",
  "proptest",
  "thiserror 2.0.21",
  "workspace-hack",
@@ -1144,7 +1144,7 @@ version = "0.4.0"
 dependencies = [
  "core-geometry",
  "criterion",
- "glam 0.33.12",
+ "glam 0.34.1",
  "i_overlay",
  "proptest",
  "rayon",
@@ -2153,7 +2153,7 @@ dependencies = [
  "core-raster",
  "core-slicer",
  "criterion",
- "glam 0.33.12",
+ "glam 0.34.1",
  "printer-profiles",
  "tracing",
  "workspace-hack",
@@ -2300,6 +2300,14 @@ checksum = "37bfe73dc8ec21f54d181e5a60554327ec3f1c600c455a75ccbfc65d2106a6c4"
 dependencies = [
  "approx",
  "libm",
+]
+
+[[package]]
+name = "glam"
+version = "0.34.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "fc148d4ddd3930c52f9e5ae79b89805c6f07e9ff417e7b083e0348cea60a5aba"
+dependencies = [
  "serde_core",
 ]
 
@@ -3852,7 +3860,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c1562dc717473dbaa4c1f85a36410e03c047b2e7df7f45ee938fbef64ae7fadf"
 dependencies = [
  "phf_macros",
- "phf_shared",
+ "phf_shared 0.13.1",
  "serde",
 ]
 
@@ -3863,7 +3871,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "135ace3a761e564ec88c03a77317a7c6b80bb7f7135ef2544dbe054243b89737"
 dependencies = [
  "fastrand",
- "phf_shared",
+ "phf_shared 0.13.1",
 ]
 
 [[package]]
@@ -3873,7 +3881,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "812f032b54b1e759ccd5f8b6677695d5268c588701effba24601f6932f8269ef"
 dependencies = [
  "phf_generator",
- "phf_shared",
+ "phf_shared 0.13.1",
  "proc-macro2",
  "quote",
  "syn 2.0.119",
@@ -3884,6 +3892,15 @@ name = "phf_shared"
 version = "0.13.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e57fef6bc5981e38c2ce2d63bfa546861309f875b8a75f092d1d54ae2d64f266"
+dependencies = [
+ "siphasher",
+]
+
+[[package]]
+name = "phf_shared"
+version = "0.14.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c6fd9027e2d9319be6349febd1db4e8d02aa544921200c9b777720ac34a3aa89"
 dependencies = [
  "siphasher",
 ]
@@ -6374,7 +6391,7 @@ dependencies = [
  "nix",
  "num-traits",
  "once_cell",
- "phf_shared",
+ "phf_shared 0.14.0",
  "proc-macro2",
  "quote",
  "regex-automata",
