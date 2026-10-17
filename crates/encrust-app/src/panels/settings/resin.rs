@@ -9,8 +9,8 @@ use crate::settings::{Node, ResinDraft, rename_resin};
 use crate::slicing::{MAX_LAYER_HEIGHT_MM, MIN_LAYER_HEIGHT_MM};
 use crate::state::Machine;
 use crate::ui::{
-    Carried, Segment, Segmented, carried_row, field_label, hint, number_field, number_row,
-    text_row, theme,
+    Carried, Segment, Segmented, carried_row, describe, field_label, hint, number_field,
+    number_row, text_row, theme,
 };
 
 const FINE_STEP: f64 = 0.01;
@@ -45,12 +45,19 @@ pub fn form(ui: &mut egui::Ui, window: &mut Window) {
             ui,
             &tr!("resin-exposure-on", printer = printer.clone()),
             |ui| {
+                describe(ui, &tr!("print-exposure-help"));
                 light(ui, resin);
             },
         );
         let values = &mut resin.draft.values;
-        form_card(ui, &tr!("resin-waits"), |ui| waits(ui, values));
-        form_card(ui, &tr!("print-motion"), |ui| motion(ui, values));
+        form_card(ui, &tr!("resin-waits"), |ui| {
+            describe(ui, &tr!("print-waiting-help"));
+            waits(ui, values);
+        });
+        form_card(ui, &tr!("print-motion"), |ui| {
+            describe(ui, &tr!("print-motion-help"));
+            motion(ui, values);
+        });
     }
     if let Some(resin) = window.machine.settings.resin.as_mut() {
         let values = &mut resin.draft.values.compensation;

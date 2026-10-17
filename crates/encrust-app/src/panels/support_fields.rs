@@ -171,6 +171,7 @@ fn degrees(
 
 /// The contact with the model and the cone that widens out of it.
 fn top(ui: &mut egui::Ui, profile: &mut SupportProfile, saved: Option<&SupportProfile>) {
+    describe(ui, &tr!("support-tip-help"));
     let segments = [
         Segment::new(ContactShape::Plane, tr!("support-shape-plane")),
         Segment::new(ContactShape::Sphere, tr!("support-shape-sphere")),
@@ -210,6 +211,7 @@ fn top(ui: &mut egui::Ui, profile: &mut SupportProfile, saved: Option<&SupportPr
 
 /// The column itself, the widest its trunk grows, and the air it keeps from the model.
 fn main(ui: &mut egui::Ui, profile: &mut SupportProfile, saved: Option<&SupportProfile>) {
+    describe(ui, &tr!("support-body-help"));
     mm(
         ui,
         &tr!("support-diameter"),
@@ -239,6 +241,7 @@ fn main(ui: &mut egui::Ui, profile: &mut SupportProfile, saved: Option<&SupportP
 
 /// The foot the column stands on.
 fn bottom(ui: &mut egui::Ui, profile: &mut SupportProfile, saved: Option<&SupportProfile>) {
+    describe(ui, &tr!("support-foot-help"));
     let segments = [
         Segment::new(PlatformShape::Cylinder, tr!("support-foot-round")),
         Segment::new(PlatformShape::Cone, tr!("support-foot-tapered")),
@@ -342,6 +345,7 @@ fn branching(ui: &mut egui::Ui, profile: &mut SupportProfile, saved: Option<&Sup
         return;
     }
     nested(ui, |ui| {
+        describe(ui, &tr!("support-branching-help"));
         let angle = &mut branching.max_angle_deg;
         degrees(
             ui,
@@ -367,6 +371,7 @@ fn branching(ui: &mut egui::Ui, profile: &mut SupportProfile, saved: Option<&Sup
 /// The slab the supports stand on. It lifts the model by its own thickness on top of
 /// the lift, so it is never printed into the part (ADR 0238).
 fn raft(ui: &mut egui::Ui, profile: &mut SupportProfile, saved: Option<&SupportProfile>) {
+    describe(ui, &tr!("support-raft-help"));
     let raft = &mut profile.raft;
     switch(ui, &mut raft.enabled, &tr!("support-raft"));
     if !raft.enabled {
@@ -421,6 +426,7 @@ fn raft(ui: &mut egui::Ui, profile: &mut SupportProfile, saved: Option<&SupportP
 
 /// The struts tying tall trunks together.
 fn bracing(ui: &mut egui::Ui, profile: &mut SupportProfile, saved: Option<&SupportProfile>) {
+    describe(ui, &tr!("support-bracing-help"));
     let bracing = &mut profile.bracing;
     switch(ui, &mut bracing.enabled, &tr!("support-bracing"));
     if !bracing.enabled {
@@ -474,6 +480,7 @@ fn bracing(ui: &mut egui::Ui, profile: &mut SupportProfile, saved: Option<&Suppo
 /// What the automatic run holds up, how thickly, and how far the profile lifts a model.
 fn automatic(ui: &mut egui::Ui, profile: &mut SupportProfile, saved: Option<&SupportProfile>) {
     held_up(ui, profile, saved);
+    describe(ui, &tr!("support-lift-help"));
     mm(
         ui,
         &tr!("support-lift"),
@@ -487,6 +494,7 @@ fn automatic(ui: &mut egui::Ui, profile: &mut SupportProfile, saved: Option<&Sup
 /// What the automatic run holds up, and how thickly: the automatic group beside a model,
 /// whose lift is its own.
 pub fn held_up(ui: &mut egui::Ui, profile: &mut SupportProfile, saved: Option<&SupportProfile>) {
+    describe(ui, &tr!("support-held-up-help"));
     let overhang = &mut profile.max_overhang_deg;
     degrees(
         ui,

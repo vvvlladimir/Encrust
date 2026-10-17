@@ -9,7 +9,7 @@ use crate::panels::support_fields::{Group, saved_as};
 use crate::settings::keep_support;
 use crate::supports::own_raft_shown;
 use crate::ui::{
-    Segment, Segmented, hint, icon, icon_button, secondary_button, section, subheading,
+    Segment, Segmented, describe, hint, icon, icon_button, secondary_button, section, subheading,
     subheading_with_switch, theme,
 };
 
@@ -35,6 +35,7 @@ pub fn ui(ui: &mut egui::Ui, window: &mut Window) {
 pub fn profile_section(ui: &mut egui::Ui, window: &mut Window) {
     scope::editing_supports(window, |window| {
         section(ui, &tr!("table-profile"), None, |ui| {
+            describe(ui, &tr!("shape-profile-help"));
             profile_picker(ui, window, false);
         });
     });
@@ -42,6 +43,7 @@ pub fn profile_section(ui: &mut egui::Ui, window: &mut Window) {
 
 fn shape(ui: &mut egui::Ui, window: &mut Window) {
     section(ui, &tr!("table-profile"), None, |ui| {
+        describe(ui, &tr!("shape-profile-help"));
         profile_picker(ui, window, true);
     });
     section(ui, &tr!("shape-part"), None, |ui| {

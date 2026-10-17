@@ -371,6 +371,7 @@ fn label_column(ui: &mut egui::Ui, axis: usize, unit: &str) {
 /// turned the way it prints best.
 fn place(ui: &mut egui::Ui, window: &mut Window, id: ObjectId) {
     section(ui, &tr!("position-place"), None, |ui| {
+        describe(ui, &tr!("position-place-help"));
         let scene = &mut window.doc.scene;
         let plate = &window.doc.plate;
         let mut fitted = false;

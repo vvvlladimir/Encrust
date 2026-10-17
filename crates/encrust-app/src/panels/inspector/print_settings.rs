@@ -19,6 +19,7 @@ pub fn ui(ui: &mut egui::Ui, machine: &mut Machine) {
         &tr!("print-exposure"),
         Some(&tr!("print-this-session")),
         |ui| {
+            describe(ui, &tr!("print-exposure-help"));
             describe(ui, &tr!("print-from-resin"));
             exposure(ui, &mut machine.slicing);
             transition(ui, &mut machine.slicing.material);
@@ -27,9 +28,11 @@ pub fn ui(ui: &mut egui::Ui, machine: &mut Machine) {
     to_the_printer |= layers::bands(ui, machine);
     layers::edges(ui, machine);
     section(ui, &tr!("print-waiting"), None, |ui| {
+        describe(ui, &tr!("print-waiting-help"));
         waiting(ui, &mut machine.slicing.material)
     });
     section(ui, &tr!("print-motion"), None, |ui| {
+        describe(ui, &tr!("print-motion-help"));
         motion(ui, &mut machine.slicing.material)
     });
     if to_the_printer {

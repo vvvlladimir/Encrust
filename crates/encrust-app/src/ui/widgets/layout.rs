@@ -75,9 +75,7 @@ fn block<R>(
             .inner_margin(BODY_MARGIN)
             .show(ui, |ui| {
                 ui.spacing_mut().item_spacing.y = theme::ITEM_GAP;
-                let (inner, texts) = collecting(ui, id, add);
-                ui.data_mut(|data| data.insert_temp(id.with("texts"), texts));
-                inner
+                describing(ui, id, add)
             })
             .inner
     });
@@ -139,8 +137,8 @@ fn block_heading(
         child.data_mut(|data| data.insert_temp(id.with("open"), !open));
     }
 
-    let texts = child.data(|data| data.get_temp::<Vec<String>>(id.with("texts")));
-    if let Some(texts) = texts.filter(|texts| !texts.is_empty()) {
+    let texts = described(&child, id);
+    if !texts.is_empty() {
         help_mark(&mut child, &texts);
     }
 
@@ -163,6 +161,20 @@ fn block_heading(
             pressed
         })
         .inner
+}
+
+/// Draws the body of the block `id` with `describe` pointed at it, keeping what it said
+/// for the block's question mark, which is drawn before the body.
+pub fn describing<R>(ui: &mut Ui, id: egui::Id, add: impl FnOnce(&mut Ui) -> R) -> R {
+    let (inner, texts) = collecting(ui, id, add);
+    ui.data_mut(|data| data.insert_temp(id.with("texts"), texts));
+    inner
+}
+
+/// What the body of the block `id` described when it was last drawn.
+pub fn described(ui: &Ui, id: egui::Id) -> Vec<String> {
+    ui.data(|data| data.get_temp::<Vec<String>>(id.with("texts")))
+        .unwrap_or_default()
 }
 
 /// Runs `add` with `describe` pointed at this block, and returns what it described.

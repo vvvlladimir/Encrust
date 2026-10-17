@@ -105,6 +105,7 @@ pub fn ui(ui: &mut egui::Ui, window: &mut Window) {
             .len();
         let found = tr!("check-found", issues = risks.len(), layers = layers);
         section(ui, &tr!("check-issues"), Some(&found), |ui| {
+            describe(ui, &tr!("check-issues-help"));
             let filter = filter(ui, &risks);
             if let Some(layer) = listing(ui, window.machine.preview.layer(), &risks, filter) {
                 go_to(window.machine, layer);
@@ -214,7 +215,10 @@ fn pull(ui: &mut egui::Ui, window: &mut Window) {
             }),
         ),
     ];
-    section(ui, &tr!("check-peel"), None, |ui| readings(ui, &rows));
+    section(ui, &tr!("check-peel"), None, |ui| {
+        describe(ui, &tr!("check-peel-help"));
+        readings(ui, &rows);
+    });
 }
 
 /// The colour an issue is drawn in: islands in the colour the mask paints them, the rest

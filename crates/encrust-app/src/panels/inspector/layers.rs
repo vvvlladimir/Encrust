@@ -36,6 +36,7 @@ const NEW_BAND_MM: f32 = 10.0;
 pub fn layers(ui: &mut egui::Ui, machine: &mut Machine) -> bool {
     let slicing = &mut machine.slicing;
     section(ui, &tr!("summary-layers"), None, |ui| {
+        describe(ui, &tr!("layers-height-help"));
         let ceiling = slicing.adaptive.is_some();
         let mut layer_height_mm = slicing.layer_height_mm();
         let label = if ceiling {

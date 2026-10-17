@@ -64,6 +64,7 @@ pub fn ui(ui: &mut egui::Ui, window: &mut Window) {
 /// The numbers the panel edits: the plate's, or the picked model's own.
 fn settings(ui: &mut egui::Ui, window: &mut Window) {
     section(ui, &tr!("hollow-shell"), None, |ui| {
+        describe(ui, &tr!("hollow-shell-help"));
         modes(ui, window.tools);
         wall(ui, window);
     });

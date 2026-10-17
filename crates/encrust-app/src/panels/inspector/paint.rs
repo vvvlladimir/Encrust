@@ -5,7 +5,7 @@ use crate::panels::Window;
 use crate::status::Status;
 use crate::supports::Placing;
 use crate::ui::{
-    Segment, Segmented, hint, icon, list, list_row, nested, number_row, primary_button,
+    Segment, Segmented, describe, hint, icon, list, list_row, nested, number_row, primary_button,
     secondary_button, section, switch, theme,
 };
 
@@ -41,8 +41,12 @@ fn paint_hint(placing: Placing) -> String {
 /// the next ones join.
 pub fn ui(ui: &mut egui::Ui, window: &mut Window) {
     super::shape::profile_section(ui, window);
-    section(ui, &tr!("paint-brush"), None, |ui| painting(ui, window));
+    section(ui, &tr!("paint-brush"), None, |ui| {
+        describe(ui, &tr!("paint-brush-help"));
+        painting(ui, window);
+    });
     section(ui, &tr!("supports-placing-fill"), None, |ui| {
+        describe(ui, &tr!("paint-fill-help"));
         // How dense a fill comes out is worth reading whichever brush is in hand.
         spacing_row(
             ui,
@@ -56,7 +60,10 @@ pub fn ui(ui: &mut egui::Ui, window: &mut Window) {
         );
         clear(ui, window);
     });
-    section(ui, &tr!("paint-groups"), None, |ui| groups(ui, window));
+    section(ui, &tr!("paint-groups"), None, |ui| {
+        describe(ui, &tr!("paint-groups-help"));
+        groups(ui, window);
+    });
 }
 
 /// Filling what is painted with supports.

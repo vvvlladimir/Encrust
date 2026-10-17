@@ -294,20 +294,20 @@ const BLOCK_PAD: f32 = 18.0;
 
 /// One category of a form: its title in a column of its own beside its fields, over a
 /// hairline. Where the form is too narrow for both, the title stands over the fields.
+/// What the fields `describe` is a question mark beside the title.
 pub(super) fn form_card<R>(
     ui: &mut egui::Ui,
     title: &str,
     add: impl FnOnce(&mut egui::Ui) -> R,
 ) -> R {
-    let title_text = egui::RichText::new(title)
-        .font(theme::block_title())
-        .color(theme::colors().text_mid);
+    let id = ui.id().with(("form-card", title));
+    let texts = crate::ui::described(ui, id);
     let beside = theme::BLOCK_TITLE_W + theme::BLOCK_GAP + theme::FIELD_W * 2.0;
     ui.add_space(BLOCK_PAD);
     let inner = if ui.available_width() < beside {
-        ui.label(title_text);
+        card_title(ui, title, &texts);
         ui.add_space(4.0);
-        add(ui)
+        crate::ui::describing(ui, id, add)
     } else {
         ui.horizontal_top(|ui| {
             ui.allocate_ui_with_layout(
@@ -316,14 +316,14 @@ pub(super) fn form_card<R>(
                 |ui| {
                     ui.set_width(theme::BLOCK_TITLE_W);
                     ui.add_space(4.0);
-                    ui.label(title_text);
+                    card_title(ui, title, &texts);
                 },
             );
             ui.add_space(theme::BLOCK_GAP);
             ui.vertical(|ui| {
                 ui.set_width(ui.available_width().min(theme::BLOCK_FIELDS_W));
                 ui.spacing_mut().item_spacing.y = theme::ITEM_GAP;
-                add(ui)
+                crate::ui::describing(ui, id, add)
             })
             .inner
         })
@@ -332,6 +332,20 @@ pub(super) fn form_card<R>(
     ui.add_space(BLOCK_PAD);
     hairline(ui);
     inner
+}
+
+/// A form card's title, and the question mark that reads out what its fields described.
+fn card_title(ui: &mut egui::Ui, title: &str, texts: &[String]) {
+    let title_text = egui::RichText::new(title)
+        .font(theme::block_title())
+        .color(theme::colors().text_mid);
+    ui.horizontal_top(|ui| {
+        ui.spacing_mut().item_spacing.x = 4.0;
+        ui.label(title_text);
+        if !texts.is_empty() {
+            crate::ui::help_mark(ui, texts);
+        }
+    });
 }
 
 /// A name that is taken when Enter is pressed or the field is left, rather than on every

@@ -7,7 +7,8 @@ use crate::panels::Window;
 use crate::panels::support_fields::{held_up, saved_as};
 use crate::state::Doc;
 use crate::ui::{
-    hint, icon, primary_button, progress_bar, secondary_button, section, stats, theme, tone,
+    describe, hint, icon, primary_button, progress_bar, secondary_button, section, stats, theme,
+    tone,
 };
 
 /// Growing supports under whatever hangs over nothing, and the parts of those already
@@ -64,6 +65,7 @@ fn editing(ui: &mut egui::Ui, window: &mut Window) {
         hint(ui, &tr!("supports-pick-hint"));
         return;
     }
+    describe(ui, &tr!("supports-picked-help"));
 
     let held = window.tools.supports.picked.clone();
     let supports = held
