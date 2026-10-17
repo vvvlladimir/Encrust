@@ -1,7 +1,8 @@
 use std::path::{Path, PathBuf};
 
 use printer_profiles::{
-    Catalogue, Connection, MaterialProfile, OutputFormat, PrinterProfile, SupportProfile,
+    Catalogue, Connection, MaterialProfile, OutputFormat, PrinterProfile, SupportProfile, WaitMode,
+    Waits,
 };
 
 fn asset(name: &str) -> PathBuf {
@@ -121,6 +122,33 @@ fn the_saturn_4_ultra_states_no_lift_of_its_own() {
     ] {
         assert_eq!(value, 0.05, "the tilting vat runs its own motion");
     }
+}
+
+#[test]
+fn the_saturn_4_ultra_rests_and_keeps_the_resins_rests() {
+    let catalogue = Catalogue::bundled().expect("the shipped catalogue is valid");
+    let entry = catalogue
+        .printer("elegoo-saturn-4-ultra")
+        .expect("a shipped machine");
+    let resin = MaterialProfile {
+        waits: Waits {
+            mode: WaitMode::LightOff,
+            after_retract_s: 1.3,
+            ..Waits::default()
+        },
+        ..MaterialProfile::default()
+    };
+
+    let printed = resin.on(&entry.profile);
+    assert_eq!(
+        printed.waits.mode,
+        WaitMode::Rest,
+        "the vendor slicer offers no other"
+    );
+    assert_eq!(
+        printed.waits.after_retract_s, 1.3,
+        "the rests stay the resin's"
+    );
 }
 
 #[test]

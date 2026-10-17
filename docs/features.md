@@ -251,7 +251,7 @@ capped silently.
 - Lift distance and speed, retract speed, separate values for the bottom layers.
 - A setting the printer runs itself is not offered. On the ELEGOO Saturn 4 Ultra the vat
   tilts to separate a layer, so there are no lift or retract settings: the file says what the
-  vendor's own files say, and the print time counts no lift.
+  vendor's own files say, and the print time counts no lift. It waits by resting only.
 - Wait before lift, after lift and after retract, light-off delay.
 - Light power, and bottom light power where the printer supports it.
 

@@ -202,12 +202,14 @@ lift stalls the plate (ADR 0142).
 
 ## What the machine locks
 
-A printer file's `[locked]` table takes any key of a resin's per-printer table and holds it
+A printer file's `[locked]` table takes any key of a resin's per-printer table, and
+`wait_mode` for a machine that waits one way only, and holds it
 at that value on this machine: it goes over the resin's own and its per-printer table, the
 window leaves the field out, and every file and estimate for the machine states it (ADR
-0301). It is for a setting the firmware does not take from the resin. The Saturn 4 Ultra
+0301). It is for a setting the firmware does not take from the resin. A shipped machine
+takes its table from the build, whatever the user's copy of it says (ADR 0302). The Saturn 4 Ultra
 locks every lift and retract to the placeholder its vendor's own files carry, because the
-machine tilts its vat and runs that motion itself.
+machine tilts its vat and runs that motion itself, and it waits by resting only.
 
 ## Exposure follows the layer height
 

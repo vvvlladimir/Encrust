@@ -38,7 +38,7 @@ pub fn ui(ui: &mut egui::Ui, machine: &mut Machine) {
     if locked.waits.is_none() {
         section(ui, &tr!("print-waiting"), None, |ui| {
             describe(ui, &tr!("print-waiting-help"));
-            waiting(ui, &mut machine.slicing.material)
+            waiting(ui, &mut machine.slicing.material, locked.wait_mode)
         });
     }
     if [
@@ -143,17 +143,22 @@ fn transition(ui: &mut egui::Ui, material: &mut MaterialProfile) {
 }
 
 /// What the printer waits for between moves: one light-off delay, or a rest at each stop.
-fn waiting(ui: &mut egui::Ui, material: &mut MaterialProfile) {
-    let mut mode = material.waits.mode;
-    let modes = [
-        Segment::new(WaitMode::LightOff, tr!("print-light-off")),
-        Segment::new(WaitMode::Rest, tr!("print-resting")),
-    ];
-    if Segmented::new(&modes)
-        .width(ui.available_width())
-        .show(ui, &mut mode)
-    {
+/// A printer that takes one mode only is shown in it, with no choice.
+fn waiting(ui: &mut egui::Ui, material: &mut MaterialProfile, locked: Option<WaitMode>) {
+    if let Some(mode) = locked {
         material.waits.mode = mode;
+    } else {
+        let mut mode = material.waits.mode;
+        let modes = [
+            Segment::new(WaitMode::LightOff, tr!("print-light-off")),
+            Segment::new(WaitMode::Rest, tr!("print-resting")),
+        ];
+        if Segmented::new(&modes)
+            .width(ui.available_width())
+            .show(ui, &mut mode)
+        {
+            material.waits.mode = mode;
+        }
     }
     match material.waits.mode {
         WaitMode::LightOff => {

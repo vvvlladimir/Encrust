@@ -6,7 +6,8 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use crate::{
-    DirStore, MaterialProfile, Preset, PrinterProfile, ProfileError, ProfileStore, SupportProfile,
+    DirStore, MaterialProfile, Preset, PrinterProfile, PrinterTuning, ProfileError, ProfileStore,
+    SupportProfile,
 };
 
 include!(concat!(env!("OUT_DIR"), "/bundled_profiles.rs"));
@@ -128,6 +129,10 @@ impl Catalogue {
             Kind::Printer,
             PrinterProfile::from_toml_str,
         )?;
+        let copies = self.printers.values_mut();
+        for entry in copies.filter(|entry| matches!(entry.source, Source::User(_))) {
+            entry.profile.locked = shipped_locks(&entry.id, &entry.profile);
+        }
         overlay(
             &mut self.resins,
             &*store,
@@ -269,9 +274,7 @@ impl Catalogue {
     /// is what tells a copy made by an older release from the profile beside it, and what
     /// *Restore* writes back; see `docs/decisions/0196`.
     pub fn shipped_printer(&self, id: &str) -> Option<PrinterProfile> {
-        let (_, source) = BUNDLED_PRINTERS.iter().find(|(name, _)| *name == id)?;
-        let path = PathBuf::from(format!("<bundled>/printers/{id}.toml"));
-        PrinterProfile::from_toml_str(source, &path).ok()
+        shipped_printer(id)
     }
 
     /// The store a profile of `id` is written to, once the id is known to be usable.
@@ -309,7 +312,10 @@ impl Catalogue {
             id.to_owned(),
             Entry {
                 id: id.to_owned(),
-                profile: profile.clone(),
+                profile: PrinterProfile {
+                    locked: shipped_locks(id, profile),
+                    ..profile.clone()
+                },
                 source: Source::User(path.clone()),
             },
         );
@@ -458,6 +464,18 @@ fn bundled_table<T>(
             ))
         })
         .collect()
+}
+
+/// What a machine locks: the shipped profile's table where one ships under `id`, whatever a
+/// copy says, so a copy made before a lock still takes it (ADR 0301).
+fn shipped_locks(id: &str, profile: &PrinterProfile) -> PrinterTuning {
+    shipped_printer(id).map_or_else(|| profile.locked.clone(), |shipped| shipped.locked)
+}
+
+fn shipped_printer(id: &str) -> Option<PrinterProfile> {
+    let (_, source) = BUNDLED_PRINTERS.iter().find(|(name, _)| *name == id)?;
+    let path = PathBuf::from(format!("<bundled>/printers/{id}.toml"));
+    PrinterProfile::from_toml_str(source, &path).ok()
 }
 
 fn overlay<T>(
@@ -827,6 +845,42 @@ z = 100.0
                 "the user's copy does not hide what the build ships"
             );
             assert!(catalogue.shipped_printer("my-printer").is_none());
+        });
+    }
+
+    #[test]
+    fn a_copy_saved_before_a_lock_still_takes_the_shipped_one() {
+        in_its_own_dir("copy-before-lock", |dir, mut catalogue| {
+            let shipped = catalogue
+                .shipped_printer("elegoo-saturn-4-ultra")
+                .expect("a shipped machine");
+            let old = PrinterProfile {
+                locked: PrinterTuning::default(),
+                ..shipped.clone()
+            };
+            catalogue
+                .save_printer("elegoo-saturn-4-ultra", &old)
+                .expect("writable");
+            let written = catalogue
+                .printer("elegoo-saturn-4-ultra")
+                .expect("saved")
+                .profile
+                .locked
+                .clone();
+            assert_eq!(written, shipped.locked, "a save keeps the machine's locks");
+
+            std::fs::write(
+                dir.join("printers/elegoo-saturn-4-ultra.toml"),
+                old.to_toml_string(dir).expect("a valid profile writes"),
+            )
+            .expect("writable");
+            let reloaded = Catalogue::with_root(dir).expect("the directory is readable");
+            let entry = reloaded.printer("elegoo-saturn-4-ultra").expect("the copy");
+            assert!(matches!(entry.source, Source::User(_)), "the copy stands");
+            assert_eq!(
+                entry.profile.locked, shipped.locked,
+                "with the shipped locks"
+            );
         });
     }
 

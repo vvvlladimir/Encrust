@@ -1,6 +1,6 @@
 # 0301. A printer locks the settings its firmware runs itself
 
-- **Status:** Accepted
+- **Status:** Superseded by 0302 (where a copy of a shipped machine takes its locks only)
 - **Date:** 2026-10-17
 
 ## Context

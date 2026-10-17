@@ -85,6 +85,9 @@ pub struct PrinterTuning {
     pub bottom_lift_speed_mm_min: Option<f32>,
     pub bottom_retract_speed_mm_min: Option<f32>,
     pub waits: Option<Waits>,
+    /// How the printer waits, over `waits`, for a machine that takes one mode only and
+    /// leaves the rests to the resin.
+    pub wait_mode: Option<WaitMode>,
     pub compensation: Option<Compensation>,
 }
 
@@ -192,6 +195,7 @@ impl PrinterTuning {
                 tuned.bottom_retract_speed_mm_min,
             ),
             waits: changed(base.waits, tuned.waits),
+            wait_mode: None,
             compensation: changed(base.compensation, tuned.compensation),
         }
     }
@@ -228,6 +232,7 @@ impl PrinterTuning {
             self.bottom_retract_speed_mm_min,
         );
         over(&mut profile.waits, self.waits);
+        over(&mut profile.waits.mode, self.wait_mode);
         over(&mut profile.compensation, self.compensation);
     }
 }

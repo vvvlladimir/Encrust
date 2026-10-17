@@ -207,7 +207,7 @@ fn unit_label(unit: PriceUnit) -> String {
 /// How the printer waits around each layer: one light-off delay, or rests at the three
 /// points of a peel. What the printer locks is not offered.
 fn waits(ui: &mut egui::Ui, values: &mut MaterialProfile, locked: &PrinterTuning) {
-    if locked.waits.is_none() {
+    if locked_mode(locked).is_none() {
         let segments = [
             Segment::new(WaitMode::LightOff, tr!("resin-light-off-delay")),
             Segment::new(WaitMode::Rest, tr!("resin-rest-times")),
@@ -218,28 +218,37 @@ fn waits(ui: &mut egui::Ui, values: &mut MaterialProfile, locked: &PrinterTuning
             .show(ui, &mut values.waits.mode);
         ui.add_space(4.0);
     }
-    match locked.waits.map_or(values.waits.mode, |waits| waits.mode) {
+    match locked_mode(locked).unwrap_or(values.waits.mode) {
         WaitMode::LightOff => {
             if locked.light_off_delay_s.is_none() {
                 seconds_row(ui, &tr!("print-light-off"), &mut values.light_off_delay_s);
             }
         }
-        WaitMode::Rest if locked.waits.is_none() => {
-            let waits = &mut values.waits;
-            seconds_row(ui, &tr!("print-before-lift"), &mut waits.before_lift_s);
-            seconds_row(ui, &tr!("print-after-lift"), &mut waits.after_lift_s);
-            seconds_row(ui, &tr!("print-after-retract"), &mut waits.after_retract_s);
+        WaitMode::Rest => {
+            if locked.waits.is_none() {
+                let waits = &mut values.waits;
+                seconds_row(ui, &tr!("print-before-lift"), &mut waits.before_lift_s);
+                seconds_row(ui, &tr!("print-after-lift"), &mut waits.after_lift_s);
+                seconds_row(ui, &tr!("print-after-retract"), &mut waits.after_retract_s);
+            }
         }
-        WaitMode::Rest => {}
     }
     hint(ui, &tr!("resin-waits-note"));
 }
 
+/// The one way of waiting the printer takes, where it takes only one.
+fn locked_mode(locked: &PrinterTuning) -> Option<WaitMode> {
+    locked
+        .wait_mode
+        .or_else(|| locked.waits.map(|waits| waits.mode))
+}
+
 /// Whether the printer leaves any of the waits to the resin.
 fn shows_waits(locked: &PrinterTuning) -> bool {
-    match locked.waits {
+    match locked_mode(locked) {
         None => true,
-        Some(waits) => waits.mode == WaitMode::LightOff && locked.light_off_delay_s.is_none(),
+        Some(WaitMode::LightOff) => locked.light_off_delay_s.is_none(),
+        Some(WaitMode::Rest) => locked.waits.is_none(),
     }
 }
 
