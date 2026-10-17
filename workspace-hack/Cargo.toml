@@ -70,7 +70,7 @@ bytemuck = { version = "1", default-features = false, features = ["aarch64_simd"
 fastrand = { version = "2" }
 libc = { version = "0.2", features = ["extra_traits"] }
 linux-raw-sys = { version = "0.12", default-features = false, features = ["auxvec", "elf", "errno", "general", "if_ether", "ioctl", "net", "netlink", "no_std", "prctl", "system", "xdp"] }
-phf_shared = { version = "0.13", default-features = false, features = ["std"] }
+phf_shared = { version = "0.14", default-features = false, features = ["std"] }
 proc-macro2 = { version = "1" }
 quote = { version = "1" }
 rustix = { version = "1", features = ["event", "net", "pipe", "process", "shm", "system", "time"] }
@@ -89,7 +89,7 @@ zerovec = { version = "0.11", default-features = false, features = ["alloc", "de
 fastrand = { version = "2" }
 hashbrown = { version = "0.17", default-features = false, features = ["default-hasher", "inline-more"] }
 memchr = { version = "2" }
-phf_shared = { version = "0.13", default-features = false, features = ["std"] }
+phf_shared = { version = "0.14", default-features = false, features = ["std"] }
 serde = { version = "1", features = ["alloc", "derive"] }
 serde_core = { version = "1", default-features = false, features = ["alloc", "result", "std"] }
 syn-7b89eefb6aaa9bf3 = { package = "syn", version = "3", default-features = false, features = ["fold"] }
