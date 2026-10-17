@@ -1,68 +1,70 @@
 # 0301. A printer locks the settings its firmware runs itself
 
-- **Status:** Superseded by 0302 (where a copy of a shipped machine takes its locks only)
+- **Status:** Accepted
 - **Date:** 2026-10-17
 
 ## Context
 
 ADR 0142 cleared advance mode for the Elegoo Saturn 4 Ultra, so the machine reads the `.goo`
-header alone, and it called the lift and retract left in the per-layer records dead weight.
-The header carries them too: the resin's 6 mm at 65 mm/min, 8 mm for the bottom. On such a
-file a user saw the plate tilt the vat and then rise and come back down a second time, which
-a vendor file for the machine does not do. That file states 0.05 in every lift and retract
-field, distance and speed alike.
+header alone. The header still carried the resin's peel, 6 mm at 65 mm/min, and on such a
+file a user saw the plate rise again after the vat tilted.
 
-The vendor's own machine definitions show this is not one machine's quirk. They hide fields
-per machine and still write a value for each: every peel field, at 0.05, on the Saturn 4
-Ultra, the Saturn 4 Ultra 16K, the Saturn 5 Ultra and the Mars 5 Ultra; the light power, at
-255, on older Chitu boards; the transition count, at 0, on others; the rests on the Halot
-line. Our window offered all of them on every machine.
+The vendor slicer's machine definitions hide fields per machine and write a fixed default for
+each: every peel field at 0.05 on the tilting vats (the Saturn 4 Ultra, its 16K, the Mars 5
+Ultra), two of which are offered resting alone; the light power at 255 and the transition at
+0 on older Chitu boards; light-off waiting on Anycubic and Halot machines; the bottom peel on
+a Halot Mage. Files it wrote from fresh presets for the Mars 5 Ultra and the Saturn 4 Ultra
+16K carry exactly those values. Our window offered all of them on every machine.
 
 ## Decision
 
-A printer profile carries `[locked]`, a `PrinterTuning`: the same keys as a resin's
-per-printer table. `MaterialProfile::on(printer)` lays it over the resin last, so it wins over
-the resin's own numbers and its table for that machine. A run (`core_engine::Run`), a
-conversion and the window's estimate take the resin through it; the settings form and the
-inspector leave out every locked field, and a card all of whose fields are locked. A locked
-value must load as a resin's would: a speed of zero is refused.
-
-The print time counts no travel at a speed under 1 mm/min, the floor `stated_speed_mm_min`
-already uses for a placeholder (ADR 0293). Such a motion is the machine's own, and its time
-is in the resin's measured layer time.
-
-`elegoo-saturn-4-ultra.toml` locks all seven peel fields at 0.05. Its `per_layer_settings =
-false` stays.
+- A printer profile carries `[locked]`, a `PrinterTuning`: any key of a resin's per-printer
+  table, and `wait_mode`, which holds the mode and leaves the rests to the resin.
+  `MaterialProfile::on(printer)` lays it over the resin last. A run, a conversion and the
+  window's estimate take the resin through it; the form and the inspector leave out every
+  locked field, and a card all of whose fields are locked. A locked speed of zero is refused.
+- **A shipped machine's locks are the build's.** Loading the user's directory and saving a
+  printer give each copy the shipped profile's table of the same id; a machine the user made
+  keeps its own.
+- The print time counts no travel under 1 mm/min, the placeholder floor of ADR 0293: that
+  motion is the machine's own, and its time is the resin's measured layer time.
+- What the vendor slicer hides, at its default, is locked for every machine of ours it matches
+  by panel, in the profile file alone: `gen-profiles` keeps a generated file's `[locked]` when
+  it rewrites the rest from the source. The Mars 5 Ultra and the Saturn 4 Ultra 16K ship,
+  read off the vendor's files for them.
 
 ## Consequences
 
-Any setting of any machine can be held at what its firmware needs, by data in its profile.
-No code names a machine or a mechanism. A resin tuned on a peel machine keeps its lifts for
-that machine: a lock changes what is written, not what the resin holds.
+What the vendor will not let a user change, neither do we, and a lock added to the catalogue
+reaches every user at the next start, copy or not. A resin keeps its own numbers for the
+machines that do not lock them. Locking the transition at 0 removes a ramp we used to write
+on machines that claimed the per-layer tables; the vendor writes none there.
 
-A Saturn 4 Ultra estimate leaves the tilt out until the resin's layer time is measured, so it
-reads short. A lock cannot be lifted in the window; a user's own copy of the profile can drop
-it by hand.
+A tilting vat's estimate leaves the tilt out until the resin's layer time is measured. The
+vendor writes the bottom layers' light-off apart from the rest; one delay cannot say that.
 
-Only the Saturn 4 Ultra is locked. The other machines the vendor hides fields on are
-either not in the catalogue or are generated (ADR 0165), and the generator learns a lock
-table of its own when one of them is locked. Reopen this if a Saturn 4 Ultra still rises
-twice on a file with the placeholders.
+Whether a tilting vat's firmware obeys a peel the file states is not measured: a preset
+carried over from another machine made the vendor write 5 mm at 60 mm/min for one. Reopen
+this if a Saturn 4 Ultra prints that file without rising twice.
 
 ## Alternatives considered
 
 ### A `tilting_vat` flag
 
 ADR 0142 proposed it. It names one mechanism and fixes one set of fields in code, when the
-evidence is machines hiding different fields at different values: every new case would be
-another flag.
+evidence is machines hiding different fields at different values.
 
-### Hide the fields and keep writing the resin's values
+### A lock table in `gen-profiles`
 
-Leaves the second lift in the file. Hiding without a value is only half of what the vendor
-does, and the half the machine does not see.
+Each lock would live twice, in the table and in the file it renders, with a test to keep the
+two equal. The file alone is what the window and the engine read.
+
+### Keep a user's own `[locked]` on a shipped machine
+
+An empty table is also what every copy saved before this decision holds, and the two cannot be
+told apart, so the copies would never take a lock.
 
 ### The option that won, and what it costs
 
-A lock is a value someone has to read off a vendor file or its machine definition. A wrong
-one is written silently, with no field left in the window to show it.
+A lock is read off another program's machine definitions and written silently, with no field
+left in the window to show it is wrong; and a hand edit to a copy's `[locked]` does nothing.

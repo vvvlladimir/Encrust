@@ -103,24 +103,28 @@ fn the_saturn_4_ultra_reads_the_header_alone() {
 }
 
 #[test]
-fn the_saturn_4_ultra_states_no_lift_of_its_own() {
+fn every_tilting_vat_states_no_lift_of_its_own() {
     let catalogue = Catalogue::bundled().expect("the shipped catalogue is valid");
-    let entry = catalogue
-        .printer("elegoo-saturn-4-ultra")
-        .expect("a shipped machine");
-    let printed = MaterialProfile::default().on(&entry.profile);
-
-    // The vendor's own files for the machine carry 0.05 in every peel field, see ADR 0301.
-    for value in [
-        printed.lift_distance_mm,
-        printed.lift_speed_mm_min,
-        printed.retract_distance_mm,
-        printed.retract_speed_mm_min,
-        printed.bottom_lift_distance_mm,
-        printed.bottom_lift_speed_mm_min,
-        printed.bottom_retract_speed_mm_min,
+    for id in [
+        "elegoo-saturn-4-ultra",
+        "elegoo-saturn-4-ultra-16k",
+        "elegoo-mars-5-ultra",
     ] {
-        assert_eq!(value, 0.05, "the tilting vat runs its own motion");
+        let entry = catalogue.printer(id).expect("a shipped machine");
+        let printed = MaterialProfile::default().on(&entry.profile);
+
+        // The vendor's own files for these carry 0.05 in every peel field, see ADR 0301.
+        for value in [
+            printed.lift_distance_mm,
+            printed.lift_speed_mm_min,
+            printed.retract_distance_mm,
+            printed.retract_speed_mm_min,
+            printed.bottom_lift_distance_mm,
+            printed.bottom_lift_speed_mm_min,
+            printed.bottom_retract_speed_mm_min,
+        ] {
+            assert_eq!(value, 0.05, "{id}: the tilting vat runs its own motion");
+        }
     }
 }
 

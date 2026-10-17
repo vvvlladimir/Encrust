@@ -31,3 +31,6 @@ revision = "v517"
 [firmware]
 per_layer_settings = true
 variable_layer_height = false
+
+[locked]
+wait_mode = "light-off"

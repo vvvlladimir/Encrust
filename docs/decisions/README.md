@@ -20,7 +20,9 @@ deliberately rather than drifted away from.
 - Short: argument only, a few lines per heading, well under a page.
 - **The ADR ships in the same commit as its code.** While it is still in the working diff
   it is editable — rewrite, renumber or delete it. Once committed, only its Status changes
-  and a new ADR supersedes it. A record that has been fully superseded may later be deleted,
+  and a new ADR supersedes it — unless the new decision continues it: one taken in the same
+  piece of work, or a correction of it before anything else builds on it, is folded into
+  that ADR rather than written beside it. A record that has been fully superseded may later be deleted,
   but only in a commit that moves its argument into the successor and leaves no reference
   behind.
 - Status is `Proposed`, `Accepted`, `Superseded by NNNN` or `Deprecated`.
@@ -313,8 +315,7 @@ Grouped by what the decision governs; the number is still the order it was taken
 | [0140](0140-a-profile-carries-the-machine-name-its-firmware-matches.md) | A profile carries the machine name its firmware matches | Accepted |
 | [0141](0141-advance-mode-follows-the-firmware-flag.md) | Advance mode follows the machine's firmware flag | Accepted |
 | [0142](0142-a-tilting-vat-reads-the-header-alone.md) | A tilting vat reads the header alone | Superseded by 0301 (the lift and retract it left in the file only) |
-| [0301](0301-a-printer-locks-the-settings-its-firmware-runs-itself.md) | Let a printer profile lock resin settings to one value, hidden in the window, and lock the Saturn 4 Ultra's peel to its vendor's placeholders | Superseded by 0302 (where a copy of a shipped machine takes its locks only) |
-| [0302](0302-a-shipped-machine-takes-its-locks-from-the-build.md) | A shipped machine takes its locks from the build, and may lock its wait mode | Accepted |
+| [0301](0301-a-printer-locks-the-settings-its-firmware-runs-itself.md) | A printer locks the settings its firmware runs itself, and a shipped machine's locks are the build's | Accepted |
 | [0156](0156-a-printer-profile-names-its-format-and-its-machine.md) | A printer profile names its format, and is bound to its machine | Accepted; the binding superseded by 0265 |
 | [0158](0158-the-shipped-catalogue-is-a-library-not-a-list-of-machines-you-own.md) | The shipped catalogue is a library, not the machines you own | Accepted |
 | [0165](0165-the-catalogue-is-generated-and-only-what-we-can-write-ships.md) | The catalogue is generated, and only machines we can write a file for ship | Accepted |

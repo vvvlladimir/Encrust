@@ -30,7 +30,7 @@ z = 220.0
 per_layer_settings = false
 
 # The vat tilts to separate a layer, so the peel is the vendor slicer's hidden defaults, and
-# it waits by resting only; see ADR 0301 and 0302.
+# it waits by resting only; see ADR 0301.
 [locked]
 wait_mode = "rest"
 lift_distance_mm = 0.05

@@ -28,3 +28,11 @@ z = 230.0
 [firmware]
 per_layer_settings = true
 variable_layer_height = false
+
+[locked]
+transition_layers = 0
+retract_speed_mm_min = 60.0
+bottom_lift_distance_mm = 6.0
+bottom_lift_speed_mm_min = 60.0
+bottom_retract_speed_mm_min = 60.0
+wait_mode = "light-off"

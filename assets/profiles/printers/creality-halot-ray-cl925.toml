@@ -28,3 +28,7 @@ z = 210.0
 [firmware]
 per_layer_settings = true
 variable_layer_height = false
+
+[locked]
+transition_layers = 0
+wait_mode = "light-off"

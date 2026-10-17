@@ -116,6 +116,7 @@ pub fn transcribe(stem: &str, ini: &Ini) -> Result<Transcribed> {
             per_layer_settings: !older_revision,
             variable_layer_height: false,
         },
+        // Not in the source: `gen-profiles` carries a file's own over (ADR 0301).
         locked: printer_profiles::PrinterTuning::default(),
     };
     Ok(Transcribed::Ready(Box::new(Machine {
