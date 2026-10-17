@@ -11,8 +11,11 @@ const GAP: f32 = 6.0;
 const JOB_W: f32 = 360.0;
 /// The widest a message may grow before it is cut.
 const MESSAGE_W: f32 = 520.0;
-/// How long a message that is not a failure stays up after it changed, seconds.
+/// How long a message that is not a failure stays up after it changed, or after the
+/// pointer left it, seconds.
 const INFO_LINGER_S: f64 = 4.0;
+/// Where egui keeps when the message was last seen changing.
+const SEEN: &str = "stage-notice-seen";
 
 /// Every notice, centred at the foot of `stage`: what is running, with a way to stop it, a
 /// file waiting to be started, a broken model, a plate that cannot slice yet, then what
@@ -27,7 +30,7 @@ pub fn ui(ui: &egui::Ui, window: &mut Window, stage: Rect) {
         room: stage,
         bottom: stage.bottom(),
     };
-    let width = stage.width().clamp(0.0, MESSAGE_W);
+    let width = (stage.width() - theme::CARD_MARGIN.sum().x).clamp(0.0, MESSAGE_W);
     message(&mut stack, &mut window.machine.status, running, width);
     unready(&mut stack, window);
     broken(&mut stack, window);
@@ -249,66 +252,87 @@ fn message(stack: &mut Stack, status: &mut Status, running: bool, max_w: f32) {
     }
 
     let colors = theme::colors();
-    let (glyph, tint) = if error {
-        (icon::WARNING, colors.danger)
-    } else {
-        (icon::INFO, colors.text_low)
-    };
     let mut frame = card().inner_margin(theme::CARD_MARGIN);
     if error {
         frame = frame.stroke(egui::Stroke::new(1.0, colors.danger.gamma_multiply(0.5)));
     }
     let mut dismissed = false;
-    stack.card("message", |ui| {
+    let shown = stack.card("message", |ui| {
         frame.show(ui, |ui| {
             ui.set_max_width(max_w);
-            ui.horizontal(|ui| {
+            // Rows as tall as their text: a notice is a line or two, not a form.
+            ui.spacing_mut().interact_size.y = 0.0;
+            ui.spacing_mut().item_spacing.y = 2.0;
+            ui.horizontal_top(|ui| {
                 ui.spacing_mut().item_spacing.x = 8.0;
-                ui.label(RichText::new(glyph).font(theme::icon(13.0)).color(tint));
-                let text = status.text().to_owned();
-                let label = RichText::new(&text)
-                    .font(theme::label())
-                    .color(colors.text_high);
-                let response = ui.add(egui::Label::new(label).truncate());
-                if response.hovered() {
-                    response.on_hover_text(&text);
+                if error {
+                    let glyph = RichText::new(icon::WARNING).font(theme::icon(13.0));
+                    ui.label(glyph.color(colors.danger));
                 }
-                if let Status::Readings(_, readings) = status {
-                    for reading in readings {
-                        let tint = match reading.change {
-                            Change::Same => colors.text_mid,
-                            Change::Better => colors.ok,
-                            Change::Worse => colors.danger,
-                        };
-                        ui.label(
-                            RichText::new(&reading.text)
-                                .font(theme::label())
-                                .color(tint),
-                        );
-                    }
-                }
+                // A message longer than the room wraps rather than running past the card.
+                let close_w = if error { theme::ICON_SIZE + 8.0 } else { 0.0 };
+                let words_w = (ui.available_width() - close_w).max(0.0);
+                ui.allocate_ui(egui::vec2(words_w, 0.0), |ui| {
+                    ui.vertical(|ui| words(ui, status));
+                });
                 if error {
                     dismissed = icon_button(ui, icon::CANCEL, "Put away").clicked();
                 }
             });
         })
     });
+    // A message being read stays: its moment starts again once the pointer leaves it.
+    if shown.response.contains_pointer() {
+        seen_now(&stack.ctx, status, now);
+    }
     if dismissed {
         *status = Status::Idle;
     }
 }
 
+/// The message, and under it the figures a step changed, coloured by whether they got
+/// better.
+fn words(ui: &mut egui::Ui, status: &Status) {
+    let colors = theme::colors();
+    ui.label(
+        RichText::new(status.text())
+            .font(theme::label())
+            .color(colors.text_high),
+    );
+    let Status::Readings(_, readings) = status else {
+        return;
+    };
+    ui.horizontal_wrapped(|ui| {
+        for reading in readings {
+            let tint = match reading.change {
+                Change::Same => colors.text_mid,
+                Change::Better => colors.ok,
+                Change::Worse => colors.danger,
+            };
+            ui.label(
+                RichText::new(&reading.text)
+                    .font(theme::label())
+                    .color(tint),
+            );
+        }
+    });
+}
+
 /// When the message last changed, on egui's clock, kept in egui's memory: the status is
 /// replaced wholesale wherever something happens, and carries no time of its own.
 fn changed_at(ctx: &egui::Context, status: &Status, now: f64) -> f64 {
-    let id = Id::new("stage-notice-seen");
-    let key = Id::new(status).value();
-    let seen = ctx.data(|data| data.get_temp::<(u64, f64)>(id));
+    let seen = ctx.data(|data| data.get_temp::<(u64, f64)>(Id::new(SEEN)));
     match seen {
-        Some((seen_key, at)) if seen_key == key => at,
+        Some((key, at)) if key == Id::new(status).value() => at,
         _ => {
-            ctx.data_mut(|data| data.insert_temp(id, (key, now)));
+            seen_now(ctx, status, now);
             now
         }
     }
+}
+
+/// Counts the message's moment from `now`.
+fn seen_now(ctx: &egui::Context, status: &Status, now: f64) {
+    let key = Id::new(status).value();
+    ctx.data_mut(|data| data.insert_temp(Id::new(SEEN), (key, now)));
 }
