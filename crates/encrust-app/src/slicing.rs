@@ -178,8 +178,8 @@ impl Slicing {
         self.retune();
     }
 
-    /// A new printer. The resin in hand is retuned for it, because an exposure measured
-    /// on another machine's light engine is not a calibration for this one.
+    /// A new printer. The resin in hand stays only where it is set up on it, and gives way
+    /// to the first that is, or to none: another light engine's exposure is no calibration.
     pub fn set_printer(&mut self, printer: PrinterProfile, id: Option<String>) {
         let output = printer.output.into();
         self.printer = Some(printer);
@@ -200,7 +200,7 @@ impl Slicing {
     }
 
     /// No machine in hand, which is what removing the last one leaves. The resin stays:
-    /// it is the user's, and the next machine retunes it.
+    /// it is the user's, until the next machine finds it not set up there.
     pub fn clear_printer(&mut self) {
         self.printer = None;
         self.printer_id = None;

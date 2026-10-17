@@ -28,7 +28,9 @@ pub use printer::{
     AnycubicExtension, BuildVolume, Connection, Display, Firmware, NetworkMachine, OutputFormat,
     PhotonRevision, PrinterProfile,
 };
-pub use stated::{stated_distance_mm, stated_pwm, stated_speed_mm_min, stated_wait_s};
+pub use stated::{
+    stated_distance_mm, stated_pwm, stated_rests, stated_speed_mm_min, stated_wait_s,
+};
 pub use store::{DirStore, ProfileStore};
 pub use support::{
     BottomSegment, Bracing, Branching, ContactShape, MiddleSegment, PlatformShape, Raft, RaftShape,

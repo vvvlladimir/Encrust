@@ -73,7 +73,7 @@ struct Blocks {
 }
 
 fn write_blocks(fields: &mut Fields<'_>, job: &PrintJob) -> Result<Blocks, FormatError> {
-    let [large, small] = PREVIEW_SIZES_PX.map(|(width, height)| (width, height));
+    let [large, small] = PREVIEW_SIZES_PX;
     let large_preview = write_preview(fields, large.0, large.1, &preview(job, large))?;
     let small_preview = write_preview(fields, small.0, small.1, &preview(job, small))?;
 

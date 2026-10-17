@@ -1,7 +1,7 @@
 use core_format::{
     FormatError, LayerEntry, OpenFile, PrinterTuning, ReadSeek, Reads, SlicedFile,
-    SlicedFileReader, WaitMode, Waits, layer_in_range, panel_in_range, stated_distance_mm,
-    stated_pwm, stated_speed_mm_min, stated_wait_s,
+    SlicedFileReader, layer_in_range, panel_in_range, stated_distance_mm, stated_pwm, stated_rests,
+    stated_speed_mm_min, stated_wait_s,
 };
 use core_raster::Run;
 
@@ -233,30 +233,8 @@ fn read_slicer_info<S: ReadSeek>(
     Ok(PrinterTuning {
         transition_layers,
         bottom_retract_speed_mm_min,
-        waits: rests(before_lift_s, after_lift_s, after_retract_s),
+        waits: stated_rests(before_lift_s, after_lift_s, after_retract_s),
         ..peel
-    })
-}
-
-/// The three rests as a resin's waits, resting where any of them is a wait at all: the
-/// container has no flag to say which way the printer waits.
-fn rests(before_lift_s: f32, after_lift_s: f32, after_retract_s: f32) -> Option<Waits> {
-    let [before_lift_s, after_lift_s, after_retract_s] =
-        [before_lift_s, after_lift_s, after_retract_s].map(stated_wait_s);
-    let waits = Waits {
-        mode: WaitMode::Rest,
-        before_lift_s: before_lift_s?,
-        after_lift_s: after_lift_s?,
-        after_retract_s: after_retract_s?,
-    };
-    let resting = waits.before_lift_s + waits.after_lift_s + waits.after_retract_s > 0.0;
-    Some(Waits {
-        mode: if resting {
-            WaitMode::Rest
-        } else {
-            WaitMode::LightOff
-        },
-        ..waits
     })
 }
 

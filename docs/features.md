@@ -33,7 +33,7 @@ but only one printer, the ELEGOO Saturn 4 Ultra, has printed a file Encrust wrot
 - Open **any sliced file** Encrust can read, whoever made it, as a model: its layers are
   built back into a mesh that stands where it stood on the plate, so you can move it,
   support it again or cut it for another printer. Its supports and raft come back as part
-  of the model, edges are rounded by about 0.05 mm, and layer steps stay. A `.sl1` is slow
+  of the model, edges are rounded by about a layer height (0.05 mm at the finest), and layer steps stay. A `.sl1` is slow
   to open (a minute for a full 16K stack). A file
   with the wrong extension is recognised by its first bytes.
 - Drag and drop onto the window, or use the **Recent** list, which shows a picture of each

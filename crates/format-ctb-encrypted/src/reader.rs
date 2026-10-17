@@ -1,7 +1,7 @@
 use core_format::{
     FormatError, LayerEntry, OpenFile, PrinterTuning, ReadSeek, Reads, SlicedFile,
-    SlicedFileReader, WaitMode, Waits, chitu_layer_crypt, decode_rle7, layer_in_range,
-    panel_in_range, stated_distance_mm, stated_pwm, stated_speed_mm_min, stated_wait_s,
+    SlicedFileReader, chitu_layer_crypt, decode_rle7, layer_in_range, panel_in_range,
+    stated_distance_mm, stated_pwm, stated_rests, stated_speed_mm_min, stated_wait_s,
 };
 use core_raster::Run;
 
@@ -174,7 +174,8 @@ fn facts(
         display_mm: Some((
             settings.f32(at::DISPLAY_MM),
             settings.f32(at::DISPLAY_MM + 4),
-        )),
+        ))
+        .filter(|&(width, height)| width > 0.0 && height > 0.0),
         layer_height_mm: settings.f32(at::LAYER_HEIGHT_MM),
         exposure_s: settings.f32(at::EXPOSURE_S),
         bottom_exposure_s: settings.f32(at::BOTTOM_EXPOSURE_S),
@@ -203,29 +204,13 @@ fn stated(settings: &Settings) -> PrinterTuning {
         bottom_lift_distance_mm: stated_distance_mm(settings.f32(at::BOTTOM_LIFT_MM)),
         bottom_lift_speed_mm_min: stated_speed_mm_min(settings.f32(at::BOTTOM_LIFT_SPEED)),
         bottom_retract_speed_mm_min: stated_speed_mm_min(settings.f32(at::BOTTOM_RETRACT_SPEED)),
-        waits: rests(settings),
+        waits: stated_rests(
+            settings.f32(at::REST_BEFORE_LIFT_S),
+            settings.f32(at::REST_AFTER_LIFT_S),
+            settings.f32(at::REST_AFTER_RETRACT_S),
+        ),
         ..PrinterTuning::default()
     }
-}
-
-/// The three rests as a resin's waits, resting where any of them is a wait at all.
-fn rests(settings: &Settings) -> Option<Waits> {
-    let rest = |offset| stated_wait_s(settings.f32(offset));
-    let waits = Waits {
-        mode: WaitMode::Rest,
-        before_lift_s: rest(at::REST_BEFORE_LIFT_S)?,
-        after_lift_s: rest(at::REST_AFTER_LIFT_S)?,
-        after_retract_s: rest(at::REST_AFTER_RETRACT_S)?,
-    };
-    let resting = waits.before_lift_s + waits.after_lift_s + waits.after_retract_s > 0.0;
-    Some(Waits {
-        mode: if resting {
-            WaitMode::Rest
-        } else {
-            WaitMode::LightOff
-        },
-        ..waits
-    })
 }
 
 /// An encrypted `.ctb` with its settings deciphered and its masks still in it.

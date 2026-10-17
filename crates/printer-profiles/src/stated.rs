@@ -1,6 +1,8 @@
 //! A resin setting as a file another program wrote states it, kept only where a printer
 //! could take it: a tilting vat's file carries placeholders, and some programs write zeros.
 
+use crate::{WaitMode, Waits};
+
 /// A lift or retract distance in millimetres, or `None` for a placeholder.
 pub fn stated_distance_mm(value: f32) -> Option<f32> {
     // A tilting vat's file states the layer height or zero; the shortest real peel is a few
@@ -23,6 +25,28 @@ pub fn stated_wait_s(value: f32) -> Option<f32> {
 pub fn stated_pwm(value: u16) -> Option<u8> {
     // Zero is a field the file never set, not a resin printing with the light off.
     u8::try_from(value).ok().filter(|pwm| *pwm > 0)
+}
+
+/// The three rests a container states, as waits that rest where any of them is a wait at
+/// all and turn the light off otherwise; `None` where one cannot be a wait.
+pub fn stated_rests(before_lift_s: f32, after_lift_s: f32, after_retract_s: f32) -> Option<Waits> {
+    let [before_lift_s, after_lift_s, after_retract_s] =
+        [before_lift_s, after_lift_s, after_retract_s].map(stated_wait_s);
+    let waits = Waits {
+        mode: WaitMode::Rest,
+        before_lift_s: before_lift_s?,
+        after_lift_s: after_lift_s?,
+        after_retract_s: after_retract_s?,
+    };
+    let resting = waits.before_lift_s + waits.after_lift_s + waits.after_retract_s > 0.0;
+    Some(Waits {
+        mode: if resting {
+            WaitMode::Rest
+        } else {
+            WaitMode::LightOff
+        },
+        ..waits
+    })
 }
 
 #[cfg(test)]
@@ -49,6 +73,14 @@ mod tests {
         assert_eq!(stated_wait_s(0.0), Some(0.0));
         assert_eq!(stated_wait_s(-1.0), None);
         assert_eq!(stated_wait_s(f32::NAN), None);
+    }
+
+    #[test]
+    fn rests_of_nothing_turn_the_light_off_and_a_bad_one_drops_them_all() {
+        let waits = |rests: Option<Waits>| rests.map(|waits| waits.mode);
+        assert_eq!(waits(stated_rests(0.0, 0.0, 0.0)), Some(WaitMode::LightOff));
+        assert_eq!(waits(stated_rests(0.0, 1.5, 0.0)), Some(WaitMode::Rest));
+        assert_eq!(waits(stated_rests(1.0, -1.0, 1.0)), None);
     }
 
     #[test]

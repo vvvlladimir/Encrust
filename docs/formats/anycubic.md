@@ -252,7 +252,7 @@ which only the extension names. A layer is as many one-bit passes of the panel a
 header's anti-alias level says, one after another, from 1 to 16. Each byte is a run: the high
 bit lights it, the low seven bits count 0 to 127 pixels. A pass ends on the byte that fills
 the panel exactly, and a run past it is corrupt. A pixel lit in `c` of `n` passes is grey
-`c × (256 / n) − 1`, so one pass is black and white. This is how the open-source readers
+`256 c / n − 1`, so one pass is black and white. This is how the open-source readers
 decode it, and a real file with four passes reads back as its model's volume.
 
 ## What we do not write

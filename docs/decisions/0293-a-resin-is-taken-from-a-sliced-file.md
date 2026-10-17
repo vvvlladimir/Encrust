@@ -1,4 +1,4 @@
-# 0293. A resin is taken from a sliced file
+# 0293. Take a resin from a sliced file, keeping only what a printer could use
 
 - **Status:** Accepted
 - **Date:** 2026-10-16
@@ -37,8 +37,8 @@ on the printer in view or in hand.
 
 A user's first resin is the one their old slicer printed with, on the right machine, with
 no typing. The readers of `.goo`, `.ctb` and `.cbddlp`/`.photon`, the Anycubic family,
-`.cws` and gcode-zip state what they hold; `.cxdlp`, `.sl1` and `.svgx` state only the
-exposure. An encrypted `.ctb` is not read at all, so its resin waits on that reader. A file
+`.cws`, gcode-zip and the encrypted `.ctb` (ADR 0298) state what they hold; a `.sl1` adds
+only its fade (ADR 0296), and `.cxdlp` and `.svgx` state only the exposure. A file
 whose panel several machines share and which names none of them needs `--printer`. Reopen
 the bounds if a real machine is found peeling outside them.
 
@@ -54,3 +54,8 @@ must agree on each offset; the reader already walks the header.
 Faithful to the bytes, but a resin with a 0.05 mm/min lift taken to a peel machine would
 stall it. Dropping them costs a user whose machine really peels at under 1 mm/min the
 default instead of their number; no such machine is known.
+
+### The option that won, and what it costs
+
+Every reader now fills a table it did not need for printing, and each bound is a guess
+from the machines we know: a value just outside one is lost without a word to the user.

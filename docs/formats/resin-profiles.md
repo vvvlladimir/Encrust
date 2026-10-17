@@ -67,6 +67,6 @@ archive written from the test file states `numFade = 10`, the override, not the
 | machine | `printer_settings_id`, else `printer_model` | blank in a configuration saved from the command line |
 | panel | `display_pixels_x`, `display_pixels_y` | |
 
-There is no lift, speed, light power or bottom-layer count: the motion keys (`tilt_*`,
+There is no lift, speed or light power, and no bottom-layer count beyond the fade's one: the motion keys (`tilt_*`,
 `tower_*`, `delay_*`) are for the vendor's own tilting machines, two values each by the
 area being exposed, and do not map to a peel.

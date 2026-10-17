@@ -83,8 +83,7 @@ fn add(counts: &[(u64, u8)], plane: &[(u64, bool)]) -> Vec<(u64, u8)> {
 
 /// The grey a pixel lit in `count` of `levels` passes is shown at.
 fn grey(count: u8, levels: u32) -> u8 {
-    let step = 256 / levels;
-    (u32::from(count) * step).saturating_sub(1).min(255) as u8
+    (u32::from(count) * 256 / levels).saturating_sub(1).min(255) as u8
 }
 
 #[cfg(test)]
@@ -115,6 +114,17 @@ mod tests {
             runs(&[(2, 255), (2, 191), (2, 127), (2, 63)]),
             "a pixel lit in c of 4 passes is c * 64 - 1"
         );
+    }
+
+    #[test]
+    fn a_pixel_lit_in_every_pass_is_white_whatever_the_count() {
+        for levels in 1..=MAX_LEVELS {
+            assert_eq!(
+                grey(levels as u8, levels),
+                255,
+                "{levels} of {levels} passes"
+            );
+        }
     }
 
     #[test]

@@ -4,7 +4,7 @@
 use std::sync::Arc;
 
 use anyhow::{Context, Result};
-use core_format::{OpenFile, SlicedFile};
+use core_format::OpenFile;
 use core_geometry::{Mesh, Orientation, Transform, Vec3, diagnose};
 use core_volume::{Cancel, Panel, StackField, extract};
 use printer_profiles::{Catalogue, PrinterProfile};
@@ -22,6 +22,9 @@ pub const EXTENSIONS: [&str; 14] = [
 /// Finest lattice a file is built back on, millimetres: a few pixels of any panel sold, and
 /// fine enough that a miniature's features survive.
 const FINEST_VOXEL_MM: f32 = 0.05;
+
+/// Highest a layer may stand, millimetres: well over any resin printer's build volume.
+const TALLEST_MM: f32 = 1000.0;
 
 /// How a file's panel lies over the plate.
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -41,32 +44,51 @@ pub fn placement(
 ) -> Result<Placement> {
     let opened = core_pipeline::open(file.path(), file.reader()?)?;
     let facts = opened.facts();
+    let panel_px = (facts.width_px, facts.height_px);
     let printer = catalogue
         .printer_for_panel(facts.width_px, facts.height_px, facts.machine.as_deref())
-        .and_then(|id| catalogue.printer(id).ok())
+        .map(|id| catalogue.printer(id))
+        .transpose()?
         .map(|entry| &entry.profile)
-        .or(in_hand.filter(|printer| same_panel(printer, facts)));
-    let size_mm = printer
-        .map(|printer| (printer.display.width_mm, printer.display.height_mm))
-        .or(facts.display_mm)
+        .or(in_hand.filter(|printer| oriented(printer, panel_px).is_some()));
+    place(panel_px, facts.display_mm, printer)
+}
+
+fn place(
+    panel_px: (u32, u32),
+    display_mm: Option<(f32, f32)>,
+    printer: Option<&PrinterProfile>,
+) -> Result<Placement> {
+    let stated = display_mm.filter(|&(width, height)| {
+        width.is_finite() && height.is_finite() && width > 0.0 && height > 0.0
+    });
+    let (size_mm, (mirror_x, mirror_y)) = printer
+        .and_then(|printer| oriented(printer, panel_px))
+        .or(stated.map(|size_mm| (size_mm, (false, false))))
         .context("the file states no panel size and no printer of its panel is known; choose the printer it was cut for first")?;
     Ok(Placement {
         panel: Panel {
-            width_px: facts.width_px,
-            height_px: facts.height_px,
-            pitch_mm: (
-                size_mm.0 / facts.width_px as f32,
-                size_mm.1 / facts.height_px as f32,
-            ),
+            width_px: panel_px.0,
+            height_px: panel_px.1,
+            pitch_mm: (size_mm.0 / panel_px.0 as f32, size_mm.1 / panel_px.1 as f32),
         },
-        mirror_x: printer.is_some_and(|printer| printer.mirror_x),
-        mirror_y: printer.is_some_and(|printer| printer.mirror_y),
+        mirror_x,
+        mirror_y,
     })
 }
 
-fn same_panel(printer: &PrinterProfile, facts: &SlicedFile) -> bool {
+/// The printer's panel size and mirroring along the file's axes, turned where the file
+/// states the panel portrait; `None` where it is another panel.
+fn oriented(printer: &PrinterProfile, panel_px: (u32, u32)) -> Option<((f32, f32), (bool, bool))> {
     let display = &printer.display;
-    (display.width_px, display.height_px) == (facts.width_px, facts.height_px)
+    let (mirror_x, mirror_y) = (printer.mirror_x, printer.mirror_y);
+    if (display.width_px, display.height_px) == panel_px {
+        Some(((display.width_mm, display.height_mm), (mirror_x, mirror_y)))
+    } else if (display.height_px, display.width_px) == panel_px {
+        Some(((display.height_mm, display.width_mm), (mirror_y, mirror_x)))
+    } else {
+        None
+    }
 }
 
 /// Builds the file's layers back into a model, named after the file and standing where its
@@ -91,10 +113,13 @@ pub fn prepare(
     let mut field = StackField::new(placement.panel, voxel_mm);
     let mut bottom_mm = 0.0;
     for (index, entry) in facts.layers.iter().enumerate() {
-        let top_mm = match entry.z_mm {
-            z if z > bottom_mm => z,
-            _ => bottom_mm + facts.layer_height_mm,
-        };
+        let top_mm =
+            layer_top_mm(entry.z_mm, bottom_mm, facts.layer_height_mm).with_context(|| {
+                format!(
+                    "layer {} of {name} stands nowhere a printer reaches",
+                    index + 1
+                )
+            })?;
         let runs: Vec<(u32, u8)> = opened
             .layer(index as u32)
             .with_context(|| format!("cannot decode layer {} of {name}", index + 1))?
@@ -130,6 +155,17 @@ pub fn prepare(
     ))
 }
 
+/// The top of a layer from the height the file states, or one layer above `bottom_mm` where
+/// it states none; `None` past any build volume, which would have the field grow without end.
+fn layer_top_mm(z_mm: f32, bottom_mm: f32, layer_height_mm: f32) -> Option<f32> {
+    let top_mm = if z_mm > bottom_mm {
+        z_mm
+    } else {
+        bottom_mm + layer_height_mm
+    };
+    (top_mm.is_finite() && top_mm <= TALLEST_MM).then_some(top_mm)
+}
+
 /// Takes the panel's own mirroring back out, so the model is the one the file was cut from.
 fn unmirror(mesh: &mut Mesh, placement: Placement) {
     let panel = placement.panel;
@@ -151,5 +187,75 @@ fn unmirror(mesh: &mut Mesh, placement: Placement) {
         for face in &mut mesh.faces {
             face.swap(1, 2);
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn printer(panel_px: (u32, u32), size_mm: (f32, f32), mirror_x: bool) -> PrinterProfile {
+        let mut printer = PrinterProfile::default();
+        printer.display.width_px = panel_px.0;
+        printer.display.height_px = panel_px.1;
+        printer.display.width_mm = size_mm.0;
+        printer.display.height_mm = size_mm.1;
+        printer.mirror_x = mirror_x;
+        printer.mirror_y = false;
+        printer
+    }
+
+    #[test]
+    fn a_file_stating_its_panel_portrait_takes_the_printer_turned() {
+        let landscape = printer((200, 100), (40.0, 30.0), true);
+        let placed = place((100, 200), None, Some(&landscape)).expect("the printer places it");
+        assert_eq!(
+            (placed.panel.pitch_mm, placed.mirror_x, placed.mirror_y),
+            ((0.3, 0.2), false, true),
+            "30 mm over 100 px across and 40 mm over 200 px down; the X mirror lies along Y"
+        );
+    }
+
+    #[test]
+    fn a_panel_size_of_nothing_is_not_a_size() {
+        for stated in [
+            (0.0, 10.0),
+            (-5.0, 10.0),
+            (f32::NAN, 10.0),
+            (f32::INFINITY, 10.0),
+        ] {
+            assert!(
+                place((10, 10), Some(stated), None).is_err(),
+                "{stated:?} gives no pixel pitch to build on"
+            );
+        }
+        let placed = place((10, 20), Some((5.0, 4.0)), None).expect("a stated size places it");
+        assert_eq!(
+            placed.panel.pitch_mm,
+            (0.5, 0.2),
+            "5 mm over 10 px, 4 mm over 20 px"
+        );
+    }
+
+    #[test]
+    fn a_layer_past_any_build_volume_is_refused() {
+        assert_eq!(
+            layer_top_mm(0.0, 1.0, 0.05),
+            Some(1.05),
+            "no height stated: one layer up"
+        );
+        assert_eq!(
+            layer_top_mm(2.0, 1.0, 0.05),
+            Some(2.0),
+            "a stated height is kept"
+        );
+        for z_mm in [1e9, f32::INFINITY] {
+            assert_eq!(
+                layer_top_mm(z_mm, 1.0, 0.05),
+                None,
+                "{z_mm} mm is past any printer"
+            );
+        }
+        assert_eq!(layer_top_mm(f32::NAN, 1.0, f32::INFINITY), None);
     }
 }

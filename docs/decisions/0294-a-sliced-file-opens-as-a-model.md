@@ -1,4 +1,4 @@
-# 0294. A sliced file opens as a model, built back from its layers
+# 0294. Open a sliced file as a model, built back from its layers
 
 - **Status:** Accepted
 - **Date:** 2026-10-16
