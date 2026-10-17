@@ -70,9 +70,9 @@ impl Handed {
 }
 
 /// What a resin is taken from: its own file, or any sliced file a reader claims.
-const RESIN_SOURCES: [&str; 14] = [
-    "toml", "goo", "ctb", "cbddlp", "photon", "pwmx", "pwmo", "pwms", "sl1", "sl1s", "zip",
-    "cxdlp", "svgx", "cws",
+const RESIN_SOURCES: [&str; 16] = [
+    "toml", "cfgx", "ini", "goo", "ctb", "cbddlp", "photon", "pwmx", "pwmo", "pwms", "sl1", "sl1s",
+    "zip", "cxdlp", "svgx", "cws",
 ];
 
 /// What a dialog is asking for, which is also where its answer goes.

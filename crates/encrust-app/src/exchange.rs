@@ -4,7 +4,7 @@
 use std::path::Path;
 
 use core_engine::project::{DrainState, HollowState};
-use printer_profiles::{Catalogue, Kind, ProfileError};
+use printer_profiles::{Catalogue, ForeignResin, Kind, ProfileError};
 
 use crate::files::Handed;
 use crate::state::Machine;
@@ -26,7 +26,9 @@ pub fn import_file(
 
     let path = file.path();
     let catalogue = &mut machine.slicing.catalogue;
-    let imported = if kind == Kind::Resin && core_pipeline::reads_sliced_file(path) {
+    let imported = if kind == Kind::Resin && ForeignResin::reads(path) {
+        foreign_resin(catalogue, file, printer)
+    } else if kind == Kind::Resin && core_pipeline::reads_sliced_file(path) {
         resin_of_sliced(catalogue, file, printer)
     } else {
         file.text()
@@ -61,6 +63,23 @@ fn resin_of_sliced(
         .file_stem()
         .map_or_else(|| "Resin".into(), |stem| stem.to_string_lossy());
     Ok(catalogue.import_resin(facts.resin(&stem), Some(&printer))?)
+}
+
+/// Takes in a resin another program exported, set up on `printer` or else on the machine
+/// it names. Answers the new id.
+fn foreign_resin(
+    catalogue: &mut Catalogue,
+    file: &Handed,
+    printer: Option<&str>,
+) -> anyhow::Result<String> {
+    use anyhow::Context as _;
+
+    let foreign = ForeignResin::from_str(&file.text()?, file.path())?;
+    let printer = printer
+        .or_else(|| catalogue.printer_for_foreign(&foreign))
+        .map(str::to_owned)
+        .context("choose the printer this resin was set up for first")?;
+    Ok(catalogue.import_resin(foreign.resin, Some(&printer))?)
 }
 
 /// Takes `text` in as a profile of `kind` under an id of its own, a preset held to

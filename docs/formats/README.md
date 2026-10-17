@@ -28,5 +28,7 @@ Chitu family: `.ctb` versions 4 and 5 from step 8a, `.cbddlp` and `.photon` from
 from step 18c, and `gcode-zip.md` the `.zip` of greyscale PNGs from step 21d.
 `creality.md` covers the `.cxdlp` at both its revisions from step 21e, `svgx.md` the
 `.svgx` of polygons from step 21f, and `cws.md` the `.cws` archive from step 21g.
+`resin-profiles.md` is not a sliced file but the resin profile another program exports,
+read and never written (ADR 0295).
 `encrust-project.md` covers our own `.encrust` project, which is not an external format and
 so records its shape rather than an argument with a specification.

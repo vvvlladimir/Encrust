@@ -6,7 +6,9 @@ use std::path::Path;
 use anyhow::{Context, Result};
 use core_engine::project::{DrainState, HollowState};
 use core_format::OpenFile;
-use printer_profiles::{Catalogue, Kind, MaterialProfile, PrinterProfile, SupportProfile};
+use printer_profiles::{
+    Catalogue, ForeignResin, Kind, MaterialProfile, PrinterProfile, SupportProfile,
+};
 use serde::Serialize;
 
 /// What the four profile arguments name, before any of it is loaded.
@@ -225,29 +227,16 @@ pub fn import_sliced(path: &Path, printer: Option<&str>) -> Result<(String, Stri
         .with_context(|| format!("cannot read {} as a sliced file", path.display()))?;
     let facts = opened.facts();
     let mut catalogue = Catalogue::load().context("cannot read the profile catalogue")?;
-    let printer = match printer {
-        Some(id) => {
-            catalogue
-                .printer(id)
-                .context("run `encrust profiles list` to see the printers there are")?;
-            id.to_owned()
-        }
-        None => catalogue
-            .printer_for_panel(facts.width_px, facts.height_px, facts.machine.as_deref())
-            .map(str::to_owned)
-            .with_context(|| {
-                format!(
-                    "cannot tell which printer a {} x {} px file{} is for; name it with --printer",
-                    facts.width_px,
-                    facts.height_px,
-                    facts
-                        .machine
-                        .as_deref()
-                        .map(|machine| format!(" for {machine}"))
-                        .unwrap_or_default()
-                )
-            })?,
-    };
+    let found =
+        catalogue.printer_for_panel(facts.width_px, facts.height_px, facts.machine.as_deref());
+    let printer = chosen_printer(&catalogue, printer, found, || {
+        format!(
+            "a {} x {} px file{}",
+            facts.width_px,
+            facts.height_px,
+            for_machine(facts.machine.as_deref())
+        )
+    })?;
     let stem = path
         .file_stem()
         .map_or_else(|| "Resin".into(), |stem| stem.to_string_lossy());
@@ -255,6 +244,52 @@ pub fn import_sliced(path: &Path, printer: Option<&str>) -> Result<(String, Stri
         .import_resin(facts.resin(&stem), Some(&printer))
         .with_context(|| format!("cannot import the resin of {}", path.display()))?;
     Ok((id, printer))
+}
+
+/// Takes a resin another program exported as its own profile into the user's catalogue,
+/// set up on `printer` or else on the machine it names. Answers the new id and the printer.
+pub fn import_foreign(path: &Path, printer: Option<&str>) -> Result<(String, String)> {
+    let text =
+        std::fs::read_to_string(path).with_context(|| format!("cannot read {}", path.display()))?;
+    let foreign = ForeignResin::from_str(&text, path)
+        .with_context(|| format!("cannot read {} as a resin profile", path.display()))?;
+    let mut catalogue = Catalogue::load().context("cannot read the profile catalogue")?;
+    let found = catalogue.printer_for_foreign(&foreign);
+    let printer = chosen_printer(&catalogue, printer, found, || {
+        format!("a resin profile{}", for_machine(foreign.machine.as_deref()))
+    })?;
+    let id = catalogue
+        .import_resin(foreign.resin, Some(&printer))
+        .with_context(|| format!("cannot import the resin of {}", path.display()))?;
+    Ok((id, printer))
+}
+
+/// The printer a resin is set up on: the one asked for, checked, or else the one `found`
+/// for the file `what` describes.
+fn chosen_printer(
+    catalogue: &Catalogue,
+    asked: Option<&str>,
+    found: Option<&str>,
+    what: impl FnOnce() -> String,
+) -> Result<String> {
+    if let Some(id) = asked {
+        catalogue
+            .printer(id)
+            .context("run `encrust profiles list` to see the printers there are")?;
+        return Ok(id.to_owned());
+    }
+    found.map(str::to_owned).with_context(|| {
+        format!(
+            "cannot tell which printer {} is for; name it with --printer",
+            what()
+        )
+    })
+}
+
+fn for_machine(machine: Option<&str>) -> String {
+    machine
+        .map(|machine| format!(" for {machine}"))
+        .unwrap_or_default()
 }
 
 /// The catalogue as `profiles list` prints it.

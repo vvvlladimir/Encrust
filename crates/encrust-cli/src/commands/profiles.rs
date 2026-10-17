@@ -1,7 +1,7 @@
 use std::path::PathBuf;
 
 use anyhow::{Context, Result};
-use printer_profiles::Kind;
+use printer_profiles::{ForeignResin, Kind};
 
 use crate::commands::GlobalArgs;
 use crate::exit::Exit;
@@ -13,23 +13,25 @@ pub enum ProfilesCommand {
     List,
     /// Print one profile as TOML, the starting point for one of your own.
     Show(ShowArgs),
-    /// Take a profile file someone exported, or the resin a sliced file was printed with,
-    /// into your own catalogue under an id of its own: an import never writes over what you
-    /// have.
+    /// Take a profile file someone exported, a resin another program exported, or the resin
+    /// a sliced file was printed with, into your own catalogue under an id of its own: an
+    /// import never writes over what you have.
     Import(ImportArgs),
 }
 
 #[derive(clap::Args, Debug)]
 pub struct ImportArgs {
-    /// The exported profile, a TOML file, or a sliced file to take the resin of.
+    /// The exported profile, a TOML file; a resin exported as `.cfgx` or `.ini`; or a sliced
+    /// file to take the resin of.
     pub file: PathBuf,
 
-    /// What a profile file holds. Left out, the file is a sliced one.
+    /// What a TOML profile holds. Left out, the file is another program's resin or a sliced
+    /// file.
     #[arg(long, value_enum)]
     pub kind: Option<ProfileKind>,
 
     /// The printer a resin is set up on, by id; it keeps whatever else it was tuned for. A
-    /// sliced file's resin goes on the machine it was cut for unless this names another.
+    /// resin from another program goes on the machine it names unless this names another.
     #[arg(long, value_name = "ID")]
     pub printer: Option<String>,
 }
@@ -114,7 +116,7 @@ fn show(args: &ShowArgs, global: &GlobalArgs) -> Result<()> {
 
 fn import(args: &ImportArgs, global: &GlobalArgs) -> Result<()> {
     let Some(kind) = args.kind.map(Kind::from) else {
-        return import_sliced(args, global);
+        return import_resin_of(args, global);
     };
     let id = profiles::import(&args.file, kind, args.printer.as_deref())?;
     if global.json {
@@ -126,8 +128,13 @@ fn import(args: &ImportArgs, global: &GlobalArgs) -> Result<()> {
     Ok(())
 }
 
-fn import_sliced(args: &ImportArgs, global: &GlobalArgs) -> Result<()> {
-    let (id, printer) = profiles::import_sliced(&args.file, args.printer.as_deref())?;
+fn import_resin_of(args: &ImportArgs, global: &GlobalArgs) -> Result<()> {
+    let printer = args.printer.as_deref();
+    let (id, printer) = if ForeignResin::reads(&args.file) {
+        profiles::import_foreign(&args.file, printer)?
+    } else {
+        profiles::import_sliced(&args.file, printer)?
+    };
     if global.json {
         return json::print(&serde_json::json!({
             "id": id,

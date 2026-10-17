@@ -303,6 +303,7 @@ Grouped by what the decision governs; the number is still the order it was taken
 | [0235](0235-a-profile-is-imported-by-the-catalogue.md) | Import and export a profile through the catalogue | Accepted |
 | [0293](0293-a-resin-is-taken-from-a-sliced-file.md) | Take a resin from a sliced file, keeping only what a printer could use | Accepted |
 | [0294](0294-a-sliced-file-opens-as-a-model.md) | Open a sliced file as a model, built back from its layers | Accepted |
+| [0295](0295-a-resin-is-taken-from-another-programs-profile.md) | Take a resin from another program's exported profile | Accepted |
 | [0120](0120-a-resin-is-tuned-per-printer.md) | A printer's resins are its own presets, edited in place | Accepted; no undo on the screen superseded by 0268 |
 | [0140](0140-a-profile-carries-the-machine-name-its-firmware-matches.md) | A profile carries the machine name its firmware matches | Accepted |
 | [0141](0141-advance-mode-follows-the-firmware-flag.md) | Advance mode follows the machine's firmware flag | Accepted |

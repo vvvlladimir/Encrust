@@ -1,5 +1,5 @@
-//! A resin setting as a file another slicer wrote states it, kept only where a printer could
-//! take it: a tilting vat's file carries placeholders, and some slicers write zeros.
+//! A resin setting as a file another program wrote states it, kept only where a printer
+//! could take it: a tilting vat's file carries placeholders, and some programs write zeros.
 
 /// A lift or retract distance in millimetres, or `None` for a placeholder.
 pub fn stated_distance_mm(value: f32) -> Option<f32> {

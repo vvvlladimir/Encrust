@@ -292,6 +292,15 @@ gives; where several share the panel and the file names none, `--printer ID` say
 encrust profiles import vendor.goo
 ```
 
+A `.cfgx` or `.ini` another program exported its resin as is read the same way, with its
+colour, price and compensation besides, and set up on the machine it names; an `.ini` saved
+without one needs `--printer ID`. Where each value comes from is in
+`docs/formats/resin-profiles.md` (ADR 0295):
+
+```sh
+encrust profiles import "My resin.cfgx"
+```
+
 `--config FILE` holds flags written down: a key is a flag's long name, `true` the bare flag,
 `false` nothing, an array the flag once per element. Keys at the top are the global flags,
 a table names a subcommand, and a nested one a subcommand under it. A key fills in only a

@@ -1006,4 +1006,29 @@ mod tests {
         assert!(matches!(app.machine.status, Status::Error(_)));
         assert_eq!(app.machine.slicing.catalogue.resins().count(), 0);
     }
+
+    #[test]
+    fn a_resin_another_program_exported_goes_on_the_machine_it_names() {
+        let mut app = with_profile_dir("foreign-resin");
+        app.machine.slicing.printer_id = None;
+        let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../printer-profiles/tests/fixtures/saturn-4-ultra.cfgx");
+
+        crate::profiles::import_material(&mut app.machine, &Handed::Path(path));
+        let id = app
+            .machine
+            .slicing
+            .resin_id
+            .clone()
+            .expect("the exported resin is in hand");
+        let kept = &app
+            .machine
+            .slicing
+            .catalogue
+            .resin(&id)
+            .expect("kept")
+            .profile;
+        assert!(kept.is_tuned_for(IMPORTED_ON));
+        assert_eq!(kept.for_printer(IMPORTED_ON).light_pwm, 211);
+    }
 }

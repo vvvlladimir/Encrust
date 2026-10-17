@@ -354,6 +354,14 @@ else keeps our defaults, and so does a lift the file states as a placeholder, as
 tilting vat do. An encrypted `.ctb` cannot be read yet. Colour, price and compensation are
 not in sliced files.
 
+**Take a resin from another program's profile:** import the resin profile it exports, a
+`.cfgx` or an `.ini`, the same way; it goes on the printer you have chosen, or else on the
+one the profile names. A `.cfgx` brings everything its resin holds: exposure, layers,
+waits, lifts, light power, compensation, colour, density and price. An `.ini` brings
+exposure, the faded layers, the XYZ correction, the elephant-foot compensation, colour,
+density and price per litre; it holds no lifts or light power for other machines. An
+encrypted profile, and a bundle of several materials in one file, cannot be read.
+
 **Flexibility:**
 - Every profile (printer, resin, support, hollow and drain presets) is a plain TOML text
   file you can open and edit. Unknown keys are refused, so a typo fails loudly instead of

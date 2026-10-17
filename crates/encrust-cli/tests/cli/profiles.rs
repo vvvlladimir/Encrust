@@ -348,3 +348,56 @@ fn a_profile_file_without_a_kind_is_told_to_say_what_it_holds() {
     assert_eq!(refused.status.code(), Some(1));
     assert!(stderr(&refused).contains("--kind"), "{}", stderr(&refused));
 }
+
+fn foreign_resin(name: &str) -> PathBuf {
+    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../printer-profiles/tests/fixtures")
+        .join(name)
+}
+
+#[test]
+fn a_cfgx_resin_is_imported_onto_the_machine_it_names() {
+    let dir = resin_dir("import-cfgx");
+    let file = foreign_resin("saturn-4-ultra.cfgx");
+
+    let output = encrust_with_profiles(&dir, &["profiles", "import", file.to_str().unwrap()]);
+    assert!(output.status.success(), "{}", stderr(&output));
+    let said = stdout(&output);
+    assert!(said.contains("set up on elegoo-saturn-4-ultra"), "{said}");
+    let id = said
+        .split("imported as ")
+        .nth(1)
+        .and_then(|rest| rest.split(',').next())
+        .expect("the new id is said");
+    let shown = stdout(&encrust_with_profiles(
+        &dir,
+        &["profiles", "show", id, "--kind", "resin"],
+    ));
+    assert!(shown.contains("light_pwm = 211"), "{shown}");
+}
+
+#[test]
+fn a_material_ini_naming_no_machine_needs_one_named() {
+    let dir = resin_dir("import-ini");
+    let file = foreign_resin("saved-configuration.ini");
+
+    let refused = encrust_with_profiles(&dir, &["profiles", "import", file.to_str().unwrap()]);
+    assert_eq!(refused.status.code(), Some(1));
+    assert!(
+        stderr(&refused).contains("--printer"),
+        "{}",
+        stderr(&refused)
+    );
+
+    let named = encrust_with_profiles(
+        &dir,
+        &[
+            "profiles",
+            "import",
+            file.to_str().unwrap(),
+            "--printer",
+            "elegoo-saturn-4-ultra",
+        ],
+    );
+    assert!(named.status.success(), "{}", stderr(&named));
+}

@@ -7,8 +7,8 @@ use std::path::Path;
 use serde::de::DeserializeOwned;
 
 use crate::{
-    Catalogue, Entry, Kind, MaterialProfile, Preset, PrinterProfile, PrinterTuning, ProfileError,
-    SupportProfile, own_id,
+    Catalogue, Entry, ForeignResin, Kind, MaterialProfile, Preset, PrinterProfile, PrinterTuning,
+    ProfileError, SupportProfile, own_id,
 };
 
 impl Catalogue {
@@ -90,18 +90,28 @@ impl Catalogue {
                 || (display.width_px, display.height_px) == (height_px, width_px)
         };
         let named = |entry: &&Entry<PrinterProfile>| {
-            let profile = &entry.profile;
-            let label = format!("{} {}", profile.manufacturer, profile.name);
-            machine.is_some_and(|machine| {
-                [profile.machine_name(), label.as_str()]
-                    .iter()
-                    .any(|name| same_name(name, machine))
-            })
+            machine.is_some_and(|machine| names(&entry.profile, machine))
         };
         let panel: Vec<_> = self.printers().filter(fits).collect();
         let picked: Vec<_> = panel.iter().copied().filter(named).collect();
         match (picked.as_slice(), panel.as_slice()) {
             ([one], _) | ([], [one]) => Some(one.id.as_str()),
+            _ => None,
+        }
+    }
+
+    /// The printer a resin another program exported was set up for: by its panel as
+    /// [`Catalogue::printer_for_panel`] picks it, or by name alone where it states no panel.
+    pub fn printer_for_foreign(&self, foreign: &ForeignResin) -> Option<&str> {
+        let machine = foreign.machine.as_deref();
+        if let Some([width_px, height_px]) = foreign.panel_px {
+            return self.printer_for_panel(width_px, height_px, machine);
+        }
+        let mut named = self
+            .printers()
+            .filter(|entry| machine.is_some_and(|machine| names(&entry.profile, machine)));
+        match (named.next(), named.next()) {
+            (Some(one), None) => Some(one.id.as_str()),
             _ => None,
         }
     }
@@ -171,6 +181,14 @@ pub(crate) fn slug(name: &str) -> String {
         }
     }
     stem.trim_end_matches('-').to_owned()
+}
+
+/// Whether `machine` is what `profile`'s firmware or label calls it.
+fn names(profile: &PrinterProfile, machine: &str) -> bool {
+    let label = format!("{} {}", profile.manufacturer, profile.name);
+    [profile.machine_name(), label.as_str()]
+        .iter()
+        .any(|name| same_name(name, machine))
 }
 
 /// Whether two machine names are one, whatever their case and spacing.
