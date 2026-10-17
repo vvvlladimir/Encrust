@@ -49,14 +49,15 @@ impl Run {
         panel.validate().map_err(EngineError::Panel)?;
         let windows = cut(&baked, &plate.cutting)?;
 
-        let mut fold = Measured::new(plate.material.bottom_layers as usize);
+        let material = plate.material.on(&plate.printer);
+        let mut fold = Measured::new(material.bottom_layers as usize);
         if plate.remove_islands {
             fold = fold.removing_hanging(plate.hanging_passes);
         }
 
         let job = PrintJob {
             printer: plate.printer.clone(),
-            material: plate.material.on(&plate.printer),
+            material,
             raster: panel,
             plan: windows.plan().clone(),
             // Only known once the stack has been cut; `finish` lays it down again

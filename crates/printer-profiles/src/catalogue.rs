@@ -307,15 +307,16 @@ impl Catalogue {
         id: &str,
         profile: &PrinterProfile,
     ) -> Result<PathBuf, ProfileError> {
+        let profile = PrinterProfile {
+            locked: shipped_locks(id, profile),
+            ..profile.clone()
+        };
         let path = self.keep(Kind::Printer, id, |path| profile.to_toml_string(path))?;
         self.printers.insert(
             id.to_owned(),
             Entry {
                 id: id.to_owned(),
-                profile: PrinterProfile {
-                    locked: shipped_locks(id, profile),
-                    ..profile.clone()
-                },
+                profile,
                 source: Source::User(path.clone()),
             },
         );
@@ -868,6 +869,10 @@ z = 100.0
                 .locked
                 .clone();
             assert_eq!(written, shipped.locked, "a save keeps the machine's locks");
+            let file = dir.join("printers/elegoo-saturn-4-ultra.toml");
+            let on_disk = std::fs::read_to_string(&file).expect("the save wrote it");
+            let on_disk = PrinterProfile::from_toml_str(&on_disk, &file).expect("and it reads");
+            assert_eq!(on_disk.locked, shipped.locked, "and so does the file");
 
             std::fs::write(
                 dir.join("printers/elegoo-saturn-4-ultra.toml"),

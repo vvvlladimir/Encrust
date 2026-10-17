@@ -57,13 +57,13 @@ pub fn form(ui: &mut egui::Ui, window: &mut Window) {
             },
         );
         let values = &mut resin.draft.values;
-        if shows_waits(&locked) {
+        if !locked.locks_waiting() {
             form_card(ui, &tr!("resin-waits"), |ui| {
                 describe(ui, &tr!("print-waiting-help"));
                 waits(ui, values, &locked);
             });
         }
-        if !locks_all_motion(&locked) {
+        if !locked.locks_motion() {
             form_card(ui, &tr!("print-motion"), |ui| {
                 describe(ui, &tr!("print-motion-help"));
                 motion(ui, values, &locked);
@@ -207,7 +207,7 @@ fn unit_label(unit: PriceUnit) -> String {
 /// How the printer waits around each layer: one light-off delay, or rests at the three
 /// points of a peel. What the printer locks is not offered.
 fn waits(ui: &mut egui::Ui, values: &mut MaterialProfile, locked: &PrinterTuning) {
-    if locked_mode(locked).is_none() {
+    if locked.held_wait_mode().is_none() {
         let segments = [
             Segment::new(WaitMode::LightOff, tr!("resin-light-off-delay")),
             Segment::new(WaitMode::Rest, tr!("resin-rest-times")),
@@ -218,7 +218,7 @@ fn waits(ui: &mut egui::Ui, values: &mut MaterialProfile, locked: &PrinterTuning
             .show(ui, &mut values.waits.mode);
         ui.add_space(4.0);
     }
-    match locked_mode(locked).unwrap_or(values.waits.mode) {
+    match locked.held_wait_mode().unwrap_or(values.waits.mode) {
         WaitMode::LightOff => {
             if locked.light_off_delay_s.is_none() {
                 seconds_row(ui, &tr!("print-light-off"), &mut values.light_off_delay_s);
@@ -234,22 +234,6 @@ fn waits(ui: &mut egui::Ui, values: &mut MaterialProfile, locked: &PrinterTuning
         }
     }
     hint(ui, &tr!("resin-waits-note"));
-}
-
-/// The one way of waiting the printer takes, where it takes only one.
-fn locked_mode(locked: &PrinterTuning) -> Option<WaitMode> {
-    locked
-        .wait_mode
-        .or_else(|| locked.waits.map(|waits| waits.mode))
-}
-
-/// Whether the printer leaves any of the waits to the resin.
-fn shows_waits(locked: &PrinterTuning) -> bool {
-    match locked_mode(locked) {
-        None => true,
-        Some(WaitMode::LightOff) => locked.light_off_delay_s.is_none(),
-        Some(WaitMode::Rest) => locked.waits.is_none(),
-    }
 }
 
 fn seconds_row(ui: &mut egui::Ui, label: &str, value: &mut f32) {
@@ -431,21 +415,6 @@ fn travel_rows<const N: usize>(
             }
         };
     }
-}
-
-/// Whether the printer runs every part of the peel itself, which leaves the resin no motion.
-fn locks_all_motion(locked: &PrinterTuning) -> bool {
-    [
-        locked.lift_distance_mm,
-        locked.lift_speed_mm_min,
-        locked.retract_distance_mm,
-        locked.retract_speed_mm_min,
-        locked.bottom_lift_distance_mm,
-        locked.bottom_lift_speed_mm_min,
-        locked.bottom_retract_speed_mm_min,
-    ]
-    .iter()
-    .all(Option::is_some)
 }
 
 fn whole_row(

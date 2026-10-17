@@ -22,9 +22,9 @@ deliberately rather than drifted away from.
   it is editable — rewrite, renumber or delete it. Once committed, only its Status changes
   and a new ADR supersedes it — unless the new decision continues it: one taken in the same
   piece of work, or a correction of it before anything else builds on it, is folded into
-  that ADR rather than written beside it. A record that has been fully superseded may later be deleted,
-  but only in a commit that moves its argument into the successor and leaves no reference
-  behind.
+  that ADR rather than written beside it. A record that has been fully superseded may later
+  be deleted, but only in a commit that moves its argument into the successor and leaves no
+  reference behind.
 - Status is `Proposed`, `Accepted`, `Superseded by NNNN` or `Deprecated`.
 - *Alternatives considered* carries the honest cost of the option that won, not only of
   the ones that lost.

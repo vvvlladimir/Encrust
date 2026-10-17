@@ -206,6 +206,36 @@ impl PrinterTuning {
         *self == Self::default()
     }
 
+    /// The one way of waiting this machine takes, where it takes only one.
+    pub fn held_wait_mode(&self) -> Option<WaitMode> {
+        self.wait_mode
+            .or_else(|| self.waits.map(|waits| waits.mode))
+    }
+
+    /// Whether this machine leaves the resin nothing to say about how it waits.
+    pub fn locks_waiting(&self) -> bool {
+        match self.held_wait_mode() {
+            None => false,
+            Some(WaitMode::LightOff) => self.light_off_delay_s.is_some(),
+            Some(WaitMode::Rest) => self.waits.is_some(),
+        }
+    }
+
+    /// Whether this machine runs every part of the peel itself, leaving the resin no motion.
+    pub fn locks_motion(&self) -> bool {
+        [
+            self.lift_distance_mm,
+            self.lift_speed_mm_min,
+            self.retract_distance_mm,
+            self.retract_speed_mm_min,
+            self.bottom_lift_distance_mm,
+            self.bottom_lift_speed_mm_min,
+            self.bottom_retract_speed_mm_min,
+        ]
+        .iter()
+        .all(Option::is_some)
+    }
+
     fn apply_to(&self, profile: &mut MaterialProfile) {
         over(&mut profile.layer_height_mm, self.layer_height_mm);
         over(&mut profile.exposure_s, self.exposure_s);
@@ -551,6 +581,28 @@ mod tests {
 
     fn path() -> &'static Path {
         Path::new("inline.toml")
+    }
+
+    #[test]
+    fn a_machine_holding_its_wait_mode_leaves_the_waiting_open_until_it_locks_the_wait() {
+        let held = PrinterTuning {
+            wait_mode: Some(WaitMode::LightOff),
+            ..PrinterTuning::default()
+        };
+        assert_eq!(held.held_wait_mode(), Some(WaitMode::LightOff));
+        assert!(
+            !held.locks_waiting(),
+            "the light-off delay is still the resin's"
+        );
+
+        let locked = PrinterTuning {
+            light_off_delay_s: Some(1.0),
+            ..held
+        };
+        assert!(
+            locked.locks_waiting(),
+            "mode and delay are both the machine's"
+        );
     }
 
     #[test]
