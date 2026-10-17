@@ -209,6 +209,20 @@ Tiles are merged a layer of tile Z at a time in ascending X and Y, which is also
 a quad reaches back in, and both tables are cut back to the plane between layers (ADR
 0064). One copy of the surface is resident rather than three.
 
+## A field from a stack of layers
+
+`StackField` builds the field back from a sliced file's masks (ADR 0294), a layer at a
+time. Each pixel goes to the voxel cell its centre falls in; a cell's cover is the lit
+fraction of its pixels, and a layer adds to the slab of cells it overlaps by the share of
+the slab it fills. A lattice point takes the mean cover of the eight cells around it, two
+slabs by two by two, which is a box filter two voxels wide: a flat boundary makes the cover
+fall linearly with distance, so `(0.5 − cover) · 2v` is the signed distance within a voxel
+of the surface and saturates beyond it. Every crossing therefore has an unsaturated point
+beside it, whose tile is stored, and the extraction's growth reaches the rest.
+
+Only two slabs, one tile row of planes and the lit bounding box of each are held; a tile
+row is turned into tiles on every core and dropped. Runs are spread a cell row per core.
+
 ## What it costs
 
 `cargo bench -p core-volume`, whose last case is a model the size of a real one.

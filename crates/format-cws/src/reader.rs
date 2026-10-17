@@ -1,6 +1,7 @@
 use core_format::{
-    FormatError, LayerEntry, OpenFile, ReadSeek, SlicedFile, SlicedFileReader, decode_grey,
-    layer_in_range, panel_in_range, png_shape, read_entry,
+    FormatError, LayerEntry, OpenFile, PrinterTuning, ReadSeek, SlicedFile, SlicedFileReader,
+    decode_grey, layer_in_range, panel_in_range, png_shape, read_entry, stated_distance_mm,
+    stated_speed_mm_min, stated_wait_s,
 };
 use core_raster::Run;
 use std::borrow::Cow;
@@ -51,6 +52,16 @@ impl SlicedFileReader for CwsReader {
         let bottom_exposure_s =
             number("head_layers_expo_ms").unwrap_or(exposure_s * 1000.0) / 1000.0;
         let bottom_layers = number("head_layers_num").unwrap_or_default() as u32;
+        let lift_mm = number("lift_distance").and_then(stated_distance_mm);
+        let stated = PrinterTuning {
+            light_off_delay_s: number("wait_before_expo_ms")
+                .and_then(|ms| stated_wait_s(ms / 1000.0)),
+            lift_distance_mm: lift_mm,
+            retract_distance_mm: lift_mm,
+            lift_speed_mm_min: number("lift_up_speed").and_then(stated_speed_mm_min),
+            retract_speed_mm_min: number("lift_down_speed").and_then(stated_speed_mm_min),
+            ..PrinterTuning::default()
+        };
 
         // The settings state the panel; a file short of them is measured off its first
         // image instead, which is the one thing that cannot be missing.
@@ -103,6 +114,7 @@ impl SlicedFileReader for CwsReader {
                 print_time_s: None,
                 volume_mm3: None,
                 grey_steps: 256,
+                stated,
                 layers,
             },
         })

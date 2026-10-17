@@ -13,7 +13,7 @@ use core_format::{
 };
 use core_pipeline::open;
 use core_raster::{Grey, LayerMask, LayerRuns, PixelPitch, RasterSettings, Shading};
-use printer_profiles::{MaterialProfile, PrinterProfile};
+use printer_profiles::{MaterialProfile, PrinterProfile, PrinterTuning, WaitMode, Waits};
 
 const WIDTH_PX: u32 = 64;
 const HEIGHT_PX: u32 = 40;
@@ -89,44 +89,79 @@ fn layer() -> LayerRuns {
 /// Every container that carries grey, with the name a file of it takes and the greys its
 /// layer data holds. The `.svgx` is not here: it carries none, and has its own test below.
 fn written() -> Vec<(&'static str, Vec<u8>, u16)> {
+    written_for(&job())
+}
+
+/// Every container, each holding a stack printed with `material`.
+fn written_with(material: &MaterialProfile) -> Vec<(&'static str, Vec<u8>)> {
+    let job = PrintJob {
+        material: material.clone(),
+        ..job()
+    };
+    written_for(&job)
+        .into_iter()
+        .map(|(extension, bytes, _)| (extension, bytes))
+        .collect()
+}
+
+fn written_for(job: &PrintJob) -> Vec<(&'static str, Vec<u8>, u16)> {
     vec![
-        ("goo", write_with(&format_goo::GooWriter), 256),
+        ("goo", write_job(&format_goo::GooWriter, job), 256),
         (
             "ctb",
-            write_with(&format_chitu::CtbWriter::new(format_chitu::CtbVersion::V4)),
+            write_job(
+                &format_chitu::CtbWriter::new(format_chitu::CtbVersion::V4),
+                job,
+            ),
+            128,
+        ),
+        (
+            "ctb",
+            write_job(&format_ctb_encrypted::CtbEncryptedWriter, job),
             128,
         ),
         (
             "cbddlp",
-            write_with(&format_chitu::CbddlpWriter::default()),
+            write_job(&format_chitu::CbddlpWriter::default(), job),
             format_chitu::GREY_PASSES as u16 + 1,
         ),
         (
             "pwmx",
-            write_with(&format_anycubic::AnycubicWriter::default()),
+            write_job(&format_anycubic::AnycubicWriter::default(), job),
             16,
         ),
         (
             "sl1",
-            write_with(&format_sl1::Sl1Writer::new(
-                format_sl1::Sl1Flavour::Sl1,
-                "plate",
-            )),
+            write_job(
+                &format_sl1::Sl1Writer::new(format_sl1::Sl1Flavour::Sl1, "plate"),
+                job,
+            ),
             256,
         ),
-        ("zip", write_with(&format_gcode_zip::GcodeZipWriter), 256),
-        ("cxdlp", write_with(&format_creality::CxdlpWriter), 256),
-        ("cxdlp", write_with(&format_creality::CxdlpV4Writer), 128),
-        ("cws", write_with(&format_cws::CwsWriter), 256),
+        (
+            "zip",
+            write_job(&format_gcode_zip::GcodeZipWriter, job),
+            256,
+        ),
+        ("cxdlp", write_job(&format_creality::CxdlpWriter, job), 256),
+        (
+            "cxdlp",
+            write_job(&format_creality::CxdlpV4Writer, job),
+            128,
+        ),
+        ("cws", write_job(&format_cws::CwsWriter, job), 256),
     ]
 }
 
 fn write_with<W: SlicedFileWriter>(writer: &W) -> Vec<u8> {
-    let job = job();
+    write_job(writer, &job())
+}
+
+fn write_job<W: SlicedFileWriter>(writer: &W, job: &PrintJob) -> Vec<u8> {
     let mut file = Cursor::new(Vec::new());
     {
         let mut sink = writer
-            .begin(&job, &mut file)
+            .begin(job, &mut file)
             .expect("the job matches the panel");
         for _ in 0..LAYERS {
             sink.push(W::Sink::encode(&layer())).expect("a layer");
@@ -162,6 +197,86 @@ fn every_container_reads_back_what_it_was_told() {
             (facts.height_mm() - 0.25).abs() < 1e-3,
             "{extension} stack height, got {}",
             facts.height_mm()
+        );
+    }
+}
+
+/// A resin whose every motion and light setting is a number no default holds, each one
+/// surviving a container's units exactly.
+fn told() -> MaterialProfile {
+    MaterialProfile {
+        lift_distance_mm: 5.5,
+        retract_distance_mm: 5.5,
+        lift_speed_mm_min: 60.0,
+        retract_speed_mm_min: 180.0,
+        bottom_lift_distance_mm: 6.5,
+        bottom_lift_speed_mm_min: 120.0,
+        bottom_retract_speed_mm_min: 150.0,
+        light_pwm: 211,
+        bottom_light_pwm: 233,
+        transition_layers: 2,
+        waits: Waits {
+            mode: WaitMode::Rest,
+            before_lift_s: 1.25,
+            after_lift_s: 0.75,
+            after_retract_s: 2.0,
+        },
+        ..job().material
+    }
+}
+
+/// What each container has a place for of `told`, as its reader states it back.
+fn stated_by(extension: &str) -> PrinterTuning {
+    let peel = PrinterTuning {
+        lift_distance_mm: Some(5.5),
+        retract_distance_mm: Some(5.5),
+        lift_speed_mm_min: Some(60.0),
+        retract_speed_mm_min: Some(180.0),
+        // The printer rests, so the light-off delay every container states is none.
+        light_off_delay_s: Some(0.0),
+        ..PrinterTuning::default()
+    };
+    let bottom = PrinterTuning {
+        bottom_lift_distance_mm: Some(6.5),
+        bottom_lift_speed_mm_min: Some(120.0),
+        light_pwm: Some(211),
+        bottom_light_pwm: Some(233),
+        ..peel.clone()
+    };
+    let rests = PrinterTuning {
+        transition_layers: Some(2),
+        bottom_retract_speed_mm_min: Some(150.0),
+        waits: Some(told().waits),
+        ..bottom.clone()
+    };
+    match extension {
+        "goo" | "ctb" => rests,
+        "cbddlp" | "zip" => bottom,
+        "pwmx" => PrinterTuning {
+            transition_layers: Some(2),
+            ..peel
+        },
+        "cws" => peel,
+        // Two bottom layers and a ramp of two fade over five; read back, the firmware's one
+        // first layer leaves a ramp of three ending on the same layer.
+        "sl1" => PrinterTuning {
+            transition_layers: Some(3),
+            ..PrinterTuning::default()
+        },
+        _ => PrinterTuning::default(),
+    }
+}
+
+#[test]
+fn every_container_reads_back_the_resin_it_has_a_place_for() {
+    for (extension, bytes) in written_with(&told()) {
+        let mut source = Cursor::new(bytes);
+        let opened = open(Path::new(&format!("plate.{extension}")), &mut source)
+            .unwrap_or_else(|error| panic!("a .{extension} we wrote must open: {error}"));
+        assert_eq!(
+            opened.facts().stated,
+            stated_by(extension),
+            ".{extension} states back every setting it carries and none it does not"
         );
     }
 }

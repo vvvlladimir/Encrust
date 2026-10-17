@@ -30,17 +30,21 @@ pub struct Imports {
 }
 
 impl Imports {
-    /// Asks for a mesh file and starts opening it.
-    pub fn open_dialog(&mut self, plate: &BuildPlate, status: &mut Status) {
-        if let Some(file) = files::pick(Wanted::Model) {
-            self.open(file, plate, status);
-        }
-    }
-
     /// Starts opening a mesh. The one way a model reaches the plate.
     pub fn open(&mut self, file: Handed, plate: &BuildPlate, status: &mut Status) {
         *status = Status::Info(format!("Opening {}", file.path().display()));
         self.jobs.push(ImportJob::spawn(file, plate.clone()));
+    }
+
+    /// Starts building a sliced file back into a model, its panel lying as `placement` says.
+    pub fn open_sliced(
+        &mut self,
+        file: Handed,
+        placement: crate::sliced::Placement,
+        status: &mut Status,
+    ) {
+        *status = Status::Info(format!("Opening {}", file.path().display()));
+        self.jobs.push(ImportJob::spawn_sliced(file, placement));
     }
 
     /// The files that reached the plate since the last call.
@@ -101,6 +105,13 @@ impl Imports {
             *status = Status::Info(label);
         }
         self.is_busy()
+    }
+}
+
+/// Asks for a model, a mesh or a sliced file, and starts opening it.
+pub fn open_dialog(window: &mut crate::panels::Window) {
+    if let Some(file) = files::pick(Wanted::Model) {
+        crate::app::open_by_what_it_is(window, file);
     }
 }
 

@@ -19,7 +19,7 @@ use printer_profiles::Kind;
 
 use crate::files::{self, Handed, Wanted};
 use crate::panels::Window;
-use crate::settings::{Deleting, Node, Section};
+use crate::settings::{Deleting, Node, Section, Tab};
 use crate::state::Machine;
 use crate::status::Status;
 use crate::ui::{focus_ring, hairline, icon, inline_button, theme};
@@ -203,7 +203,8 @@ pub fn import_profile(window: &mut Window, kind: Kind, file: &Handed) {
     match (kind, printer) {
         (Kind::Printer, _) => {
             settings.library = None;
-            settings.pick(catalogue, Node::Printer(id));
+            settings.pick(catalogue, Node::Printer(id.clone()));
+            machines::fill_empty_plate(window, &id);
         }
         (Kind::Resin, Some(printer)) => {
             settings.editing_resin = false;
@@ -216,6 +217,26 @@ pub fn import_profile(window: &mut Window, kind: Kind, file: &Handed) {
         (Kind::Hollow | Kind::Drain, _) => settings.preset = Some(id),
         (Kind::Resin, None) => {}
     }
+    // A plate with no resin takes the first one its machine now has.
+    if matches!(kind, Kind::Printer | Kind::Resin) {
+        window.machine.slicing.reload_resin();
+    }
+}
+
+/// Takes a file dropped on the Machine and resin window in as a profile: a resin when the
+/// window shows a machine's resins or the file can be nothing else, a machine otherwise.
+pub fn import_dropped(window: &mut Window, file: &Handed) {
+    let settings = &window.machine.settings;
+    let resins_in_view =
+        settings.library.is_none() && settings.node.is_some() && settings.tab == Tab::Resins;
+    let path = file.path();
+    let only_a_resin =
+        printer_profiles::ForeignResin::reads(path) || core_pipeline::reads_sliced_file(path);
+    let kind = match resins_in_view || only_a_resin {
+        true => Kind::Resin,
+        false => Kind::Printer,
+    };
+    import_profile(window, kind, file);
 }
 
 /// Writes the profile of `kind` under `id` out to a file the user names.

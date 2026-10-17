@@ -1,6 +1,6 @@
 # 0202. An opened sliced file closes when the plate changes
 
-- **Status:** Accepted
+- **Status:** Superseded by 0294
 - **Date:** 2026-10-07
 
 ## Context

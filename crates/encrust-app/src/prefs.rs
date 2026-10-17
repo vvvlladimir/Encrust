@@ -207,8 +207,10 @@ impl Preferences {
             .network
             .restore(self.boards.clone(), self.chosen.clone());
 
+        // Only what is still the user's: a machine they removed is still in the library.
         if let Some(id) = self.printer.as_deref()
             && let Ok(entry) = window.machine.slicing.catalogue.printer(id)
+            && crate::settings::installed(&entry.source)
         {
             let profile = entry.profile.clone();
             profiles::apply_printer(window, profile, Some(id.to_owned()));
@@ -219,6 +221,8 @@ impl Preferences {
             let resin = entry.profile.clone();
             window.machine.slicing.resin_id = Some(id.to_owned());
             window.machine.slicing.set_material(resin);
+            // A resin not set up on that machine gives way to one that is, or to none.
+            window.machine.slicing.reload_resin();
         }
         // After the resin, which brings a layer height and exposures of its own: what the
         // user last cut at stands over what the profile was measured at.

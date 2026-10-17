@@ -18,7 +18,12 @@ use crate::settings::{
     Deleting, Library, Node, Tab, add_resin, delete_resin, duplicate_resin, installed, new_printer,
     new_resin, take_resin_off,
 };
-use crate::ui::{focus_ring, icon, icon_button, inline_button, quiet_button, theme, two_lines};
+use crate::ui::{
+    focus_ring, icon, icon_button, inline_button, quiet_button, theme, two_lines, zone_button,
+};
+
+/// Room between two zones offered in an empty list.
+pub(super) const ZONE_GAP: f32 = 12.0;
 
 /// What a click in the window asked for, carried out once the window has been drawn.
 enum Action {
@@ -105,6 +110,10 @@ fn machine_list(ui: &mut Ui, window: &mut Window, action: &mut Option<Action>) {
         );
     });
     ui.add_space(8.0);
+    if mine(&window.machine.slicing.catalogue, "").is_empty() {
+        let room = Rect::from_min_max(ui.cursor().min, ui.max_rect().max).shrink(12.0);
+        return first_machine(ui, room, action);
+    }
     let footer_top = ui.max_rect().bottom() - LIST_FOOT_H;
     let rows = Rect::from_min_max(ui.cursor().min, pos2(ui.max_rect().right(), footer_top));
     let catalogue = &window.machine.slicing.catalogue;
@@ -120,7 +129,7 @@ fn machine_list(ui: &mut Ui, window: &mut Window, action: &mut Option<Action>) {
         ui.spacing_mut().item_spacing.y = 0.0;
         let listed = mine(catalogue, &settings.search);
         if listed.is_empty() {
-            empty_list(ui, settings.search.trim().is_empty());
+            no_match(ui);
         }
         for entry in listed {
             let picked = settings.library.is_none() && entry.id == open;
@@ -131,18 +140,34 @@ fn machine_list(ui: &mut Ui, window: &mut Window, action: &mut Option<Action>) {
     });
     let foot = Rect::from_min_max(pos2(ui.max_rect().left(), footer_top), ui.max_rect().max);
     ui.painter().hline(foot.x_range(), foot.top(), stroke());
-    add_machine(&mut child(ui, foot.shrink(12.0)), action);
+    let picked = settings
+        .library
+        .is_none()
+        .then_some(open)
+        .filter(|id| !id.is_empty());
+    add_machine(&mut child(ui, foot.shrink(12.0)), picked, action);
 }
 
-fn empty_list(ui: &mut Ui, unsearched: bool) {
-    let text = match unsearched {
-        true => "No machine yet. Add one from the library below.",
-        false => "No machine of that name.",
-    };
+fn no_match(ui: &mut Ui) {
     ui.horizontal_wrapped(|ui| {
         ui.add_space(14.0);
-        crate::ui::describe(ui, text);
+        crate::ui::describe(ui, "No machine of that name.");
     });
+}
+
+/// The two ways to a first machine, each half of the list's room, in place of the list.
+fn first_machine(ui: &mut Ui, room: Rect, action: &mut Option<Action>) {
+    let half = (room.height() - ZONE_GAP) / 2.0;
+    let top = room.with_max_y(room.top() + half);
+    let bottom = room.with_min_y(top.bottom() + ZONE_GAP);
+    let library = "Pick yours from the library";
+    if zone_button(ui, top, icon::ADD, "Add a machine", library).clicked() {
+        *action = Some(Action::OpenLibrary);
+    }
+    let file = "From a printer profile file, or drop one here";
+    if zone_button(ui, bottom, icon::IMPORT, "Import a machine", file).clicked() {
+        *action = Some(Action::Import(Kind::Printer));
+    }
 }
 
 /// One machine: its name over its maker and the file it is sliced into, the network glyph
@@ -199,9 +224,15 @@ fn machine_row(
     response
 }
 
-/// The way into the library, and a machine taken in from a file beside it.
-fn add_machine(ui: &mut Ui, action: &mut Option<Action>) {
+/// The way into the library, a machine taken in from a file beside it, and the machine
+/// picked in the list removed.
+fn add_machine(ui: &mut Ui, picked: Option<&str>, action: &mut Option<Action>) {
     ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
+        ui.add_enabled_ui(picked.is_some(), |ui| {
+            if icon_button(ui, icon::REMOVE, "Remove this machine").clicked() {
+                *action = picked.map(|id| Action::Ask(Deleting::Printer(id.to_owned())));
+            }
+        });
         if icon_button(ui, icon::IMPORT, "Import a machine from a file").clicked() {
             *action = Some(Action::Import(Kind::Printer));
         }
@@ -258,14 +289,10 @@ fn heading(ui: &mut Ui, name: &str, maker: &str, tab: &mut Tab) {
     });
 }
 
-/// What the Machine tab's bar offers: writing the machine out, taking it off, and
-/// printing on it.
+/// What the Machine tab's bar offers: writing the machine out, and printing on it.
 fn machine_actions(ui: &mut Ui, window: &Window, id: &str, action: &mut Option<Action>) {
     if quiet_button(ui, icon::EXPORT, "Export", false, true).clicked() {
         *action = Some(Action::Export(Kind::Printer, id.to_owned()));
-    }
-    if quiet_button(ui, icon::REMOVE, "Remove this machine", true, true).clicked() {
-        *action = Some(Action::Ask(Deleting::Printer(id.to_owned())));
     }
     ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
         let in_hand = window.machine.slicing.printer_id.as_deref() == Some(id);
@@ -325,8 +352,19 @@ fn apply(window: &mut Window, action: Action) {
         Action::Export(kind, id) => return export_profile(window.machine, kind, &id),
         writing => write(window.machine, writing),
     };
+    if let Some(node) = &picked {
+        fill_empty_plate(window, node.printer());
+    }
     window.machine.slicing.reload_resin();
     pick(window, picked);
+}
+
+/// Stands a plate with no machine under `printer`, so the first machine picked or added is
+/// the one it prints on; its first resin follows in `reload_resin`.
+pub(super) fn fill_empty_plate(window: &mut Window, printer: &str) {
+    if window.machine.slicing.printer_id.is_none() {
+        use_printer(window, printer);
+    }
 }
 
 /// Carries out an action that writes the user's directory. Answers what to open next.

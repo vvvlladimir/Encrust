@@ -16,6 +16,7 @@ directories.workspace = true
 # An own profile's id carries a random tail; see docs/decisions/0261.
 getrandom = { workspace = true, features = ["std"] }
 serde.workspace = true
+serde_json.workspace = true
 thiserror.workspace = true
 toml.workspace = true
 workspace-hack = { version = "0.1", path = "../../workspace-hack" }

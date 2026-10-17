@@ -64,7 +64,7 @@ The file the firmware reads. `key = value`, one per line.
 | `hollow` | 0 |
 | `layerHeight` | mm, the height actually sliced at |
 | `materialName` | `MaterialProfile::name` |
-| `numFade` | layers the bottom block fades to the rest over, which is our transition layers |
+| `numFade` | bottom plus transition layers plus one, held to 3–20; see below |
 | `numFast` | the stack's whole layer count |
 | `numSlow` | 0 |
 | `printProfile`, `prusaSlicerVersion` | what names us |
@@ -90,6 +90,17 @@ The print: `layer_height`, `initial_layer_height`, `exposure_time`,
 
 `display_mirror_x` and `display_mirror_y` come from the printer profile and the masks go in
 as they stand, as everywhere else (ADR 0134).
+
+## The fade
+
+The firmware exposes layer 0 for `expTimeFirst`, steps linearly down to layer
+`numFade - 2`, and exposes `expTime` from layer `numFade - 1` on ([`_fill_layers_times` in
+the firmware](https://gitlab.com/prusa3d/sl1/sla-fw/-/raw/master/slafw/project/project.py)).
+That is exactly one bottom layer and a ramp of `numFade - 2` of ours, which is what the
+reader states. A bottom block of several layers has no place: the writer states the
+`numFade` whose ramp reaches the normal exposure on the layer ours does, so a block of six
+fades instead of holding. The vendor's slicer takes 3 to 20, and the firmware divides by
+`numFade - 1`, so the count is held to that range (ADR 0296).
 
 ## What the container cannot carry
 

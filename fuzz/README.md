@@ -16,20 +16,23 @@ cargo +nightly fuzz run sliced_chitu -- -max_total_time=60
 cargo +nightly fuzz run mesh         -- -max_total_time=300 -max_len=65536
 ```
 
-Ten targets:
+Thirteen targets:
 
 | target | what it covers |
 | --- | --- |
 | `mesh` | STL, OBJ and 3MF through `loader_for_extension`, and `Texture::decode` behind them |
 | `sliced_chitu` | `.ctb` v4 and v5, `.cbddlp`, `.photon`, and RLE7 and RLE1 |
+| `sliced_ctb_encrypted` | the encrypted `.ctb`: header, deciphered settings, signature, layers; seeded with a real file |
 | `sliced_goo` | the `.goo` header, layer table and run-length encoding |
 | `sliced_anycubic` | `.pwmx` and the six extensions beside it, and PW0 |
+| `sliced_pws` | `.pws`: the same container, its layers as one-bit passes summed into grey |
 | `sliced_sl1` | `.sl1` and `.sl1s` — a zip of PNGs, so the zip and PNG decoders with it |
 | `sliced_gcode_zip` | the `.zip` whose `run.gcode` is the program, parsed line by line |
 | `sliced_creality` | `.cxdlp` at versions 3 and 4: the vertical lines, the tables and RLE7 |
 | `sliced_svgx` | `.svgx`: the header, the document index and the path data of one group |
 | `sliced_cws` | `.cws`: a zip, `slice.conf`, the gcode program and the PNGs behind it |
 | `sniff` | a file whose name says nothing: the sniffer picks the family, possibly the wrong one |
+| `resin_profile` | a resin another program exported, `.cfgx` or `.ini` by the first byte |
 
 Each reader is given the extension it expects rather than left to be found by chance, because a
 fuzzer spending its session failing a magic-number check tests the magic-number check.

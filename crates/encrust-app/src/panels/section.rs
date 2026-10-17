@@ -669,7 +669,7 @@ fn marked<'a>(
     }
     let preview = &window.machine.preview;
     let fingerprint = stack_fingerprint(&window.doc.scene, window.machine.slicing.cutting());
-    if preview.read_facts().is_some() || preview.is_stale(fingerprint) {
+    if preview.is_stale(fingerprint) {
         return None;
     }
     let (bottom, top) = height_range(window.doc)?;
@@ -680,20 +680,17 @@ fn marked<'a>(
 }
 
 /// The exposure bands down the left of the track, each in its own tint, over the height
-/// the strip spans. A file being read states its own exposures, so it shows none of ours.
+/// the strip spans.
 fn exposure_bands(painter: &egui::Painter, window: &Window, span: egui::Rangef, left: f32) {
     let (bottom_mm, top_mm) = match *window.mode {
-        Mode::Preview if window.machine.preview.read_facts().is_none() => {
-            match window.machine.preview.stack_top_mm() {
-                Some(top) => (0.0, top),
-                None => return,
-            }
-        }
+        Mode::Preview => match window.machine.preview.stack_top_mm() {
+            Some(top) => (0.0, top),
+            None => return,
+        },
         Mode::Prepare => match height_range(window.doc) {
             Some(range) => range,
             None => return,
         },
-        Mode::Preview => return,
     };
     for (index, band) in window.machine.slicing.exposure.iter().enumerate() {
         let from = fraction(bottom_mm, top_mm, band.from_mm);

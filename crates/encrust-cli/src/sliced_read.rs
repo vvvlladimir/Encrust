@@ -486,7 +486,7 @@ fn pitch_mm2(facts: &SlicedFile) -> f32 {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use core_format::LayerEntry;
+    use core_format::{LayerEntry, PrinterTuning};
 
     fn facts() -> SlicedFile {
         SlicedFile {
@@ -505,6 +505,7 @@ mod tests {
             print_time_s: Some(120),
             volume_mm3: Some(1000.0),
             grey_steps: 256,
+            stated: PrinterTuning::default(),
             layers: vec![LayerEntry {
                 z_mm: 0.05,
                 exposure_s: 2.5,

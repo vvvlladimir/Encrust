@@ -20,6 +20,8 @@ pub enum SlicedFormat {
     #[default]
     Goo,
     Ctb(CtbVersion),
+    /// The encrypted `.ctb`, which an output name alone never picks: only a profile does.
+    CtbEncrypted,
     Cbddlp(CbddlpFlavour),
     Anycubic(AnycubicFlavour, AnycubicVersion),
     Sl1(Sl1Flavour),
@@ -30,14 +32,15 @@ pub enum SlicedFormat {
 }
 
 impl SlicedFormat {
-    /// The thirteen a front end offers, in the order it offers them.
+    /// The fourteen a front end offers, in the order it offers them.
     ///
     /// Only `.pwmx` of the Anycubic family is on the picker: the other sixteen extensions
     /// are the same file under another name, and a user who needs one types it (ADR 0047).
-    pub const CHOICES: [Self; 13] = [
+    pub const CHOICES: [Self; 14] = [
         Self::Goo,
         Self::Ctb(CtbVersion::V4),
         Self::Ctb(CtbVersion::V5),
+        Self::CtbEncrypted,
         Self::Cbddlp(CbddlpFlavour::Cbddlp),
         Self::Cbddlp(CbddlpFlavour::Photon),
         Self::Anycubic(AnycubicFlavour::Pwmx, AnycubicVersion::V516),
@@ -96,6 +99,7 @@ impl SlicedFormat {
                 Self::Anycubic(flavour, revision)
             }
             (Self::Cxdlp(_), Self::Cxdlp(revision)) => Self::Cxdlp(revision),
+            (Self::Ctb(_), Self::CtbEncrypted) => Self::CtbEncrypted,
             _ => self,
         }
     }
@@ -136,7 +140,7 @@ impl SlicedFormat {
     pub fn extension(self) -> &'static str {
         match self {
             Self::Goo => "goo",
-            Self::Ctb(_) => "ctb",
+            Self::Ctb(_) | Self::CtbEncrypted => "ctb",
             Self::Cbddlp(flavour) => flavour.extension(),
             Self::Anycubic(flavour, _) => flavour.extension(),
             Self::Sl1(flavour) => flavour.extension(),
@@ -154,6 +158,7 @@ impl From<OutputFormat> for SlicedFormat {
             OutputFormat::Goo => Self::Goo,
             OutputFormat::Ctb4 => Self::Ctb(CtbVersion::V4),
             OutputFormat::Ctb5 => Self::Ctb(CtbVersion::V5),
+            OutputFormat::CtbEncrypted => Self::CtbEncrypted,
             OutputFormat::Cbddlp => Self::Cbddlp(CbddlpFlavour::Cbddlp),
             OutputFormat::Photon => Self::Cbddlp(CbddlpFlavour::Photon),
             OutputFormat::Anycubic {
@@ -177,6 +182,7 @@ impl From<SlicedFormat> for OutputFormat {
             SlicedFormat::Goo => Self::Goo,
             SlicedFormat::Ctb(CtbVersion::V4) => Self::Ctb4,
             SlicedFormat::Ctb(CtbVersion::V5) => Self::Ctb5,
+            SlicedFormat::CtbEncrypted => Self::CtbEncrypted,
             SlicedFormat::Cbddlp(CbddlpFlavour::Cbddlp) => Self::Cbddlp,
             SlicedFormat::Cbddlp(CbddlpFlavour::Photon) => Self::Photon,
             SlicedFormat::Anycubic(flavour, version) => Self::Anycubic {

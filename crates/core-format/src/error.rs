@@ -82,6 +82,15 @@ pub enum FormatError {
     #[error("layer {index} was asked for in a file of {layer_count} layers")]
     NoSuchLayer { index: u32, layer_count: u32 },
 
+    #[error("the header asks for {levels} anti-alias passes, where a file has 1 to {max}")]
+    AntiAliasLevels { levels: u32, max: u32 },
+
+    #[error("{what} is {size} bytes, which no file of this kind holds")]
+    BadBlock { what: &'static str, size: u64 },
+
+    #[error("the file's signature does not match its settings, so it was altered or cut short")]
+    SignatureMismatch,
+
     #[error("{what} could not be encoded: {reason}")]
     Encoding { what: &'static str, reason: String },
 }

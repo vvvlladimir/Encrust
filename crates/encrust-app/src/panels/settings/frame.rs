@@ -10,9 +10,10 @@ use crate::ui::{dialog_frame, dialog_head, focus_ring, theme};
 const MOST: egui::Vec2 = vec2(1080.0, 720.0);
 /// The page's name over the right side, and the action bar under it.
 const HEADER_H: f32 = 64.0;
-const FOOTER_H: f32 = 52.0;
-/// The foot of the list down the left: one button and the room either side of it.
-pub(super) const LIST_FOOT_H: f32 = theme::BUTTON_H + 24.0;
+/// The action bar, and the foot of the list beside it at the same height so the two
+/// hairlines over them meet: one button and the room either side of it.
+const FOOTER_H: f32 = theme::BUTTON_H + 24.0;
+pub(super) const LIST_FOOT_H: f32 = FOOTER_H;
 /// Room either side of what the right side shows.
 pub(super) const SIDE_PAD: f32 = 20.0;
 

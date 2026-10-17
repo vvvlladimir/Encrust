@@ -358,7 +358,8 @@ A key of zero means the data is in the clear, which is what we write.
 - **Deduplicated layers.** A vendor file points two identical layers at one blob of data. We
   write each layer's own bytes, because the stack is streamed a window at a time and
   nothing holds the hashes of every layer written so far.
-- **`.ctb` versions 2 and 3, `.cbddlp` version 1, and the encrypted and GKtwo variants.**
+- **`.ctb` versions 2 and 3, `.cbddlp` version 1, and the GKtwo variant.** The encrypted
+  `.ctb` is a container of its own, in `ctb-encrypted.md`.
   Version 4 is the oldest `.ctb` worth writing: every machine that reads version 5 reads it
   too. A machine whose published profile asks for version 3 therefore ships pointing at
   version 4, which needs firmware from 2021 or later; an older board refuses the file

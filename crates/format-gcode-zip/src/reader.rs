@@ -2,8 +2,9 @@ use std::borrow::Cow;
 use std::collections::BTreeMap;
 
 use core_format::{
-    FormatError, LayerEntry, OpenFile, ReadSeek, SlicedFile, SlicedFileReader, decode_grey,
-    layer_in_range, panel_in_range, png_shape, read_entry,
+    FormatError, LayerEntry, OpenFile, PrinterTuning, ReadSeek, SlicedFile, SlicedFileReader,
+    decode_grey, layer_in_range, panel_in_range, png_shape, read_entry, stated_distance_mm,
+    stated_pwm, stated_speed_mm_min, stated_wait_s,
 };
 use core_raster::Run;
 use zip::ZipArchive;
@@ -88,9 +89,28 @@ impl SlicedFileReader for GcodeZipReader {
                 print_time_s: number("estimatedPrintTime").map(|seconds| seconds as u32),
                 volume_mm3: number("volume").map(|ml| ml * 1000.0),
                 grey_steps: 256,
+                stated: stated(number),
                 layers: entries,
             },
         })
+    }
+}
+
+/// The motion, light and light-off delay the program's header states, by `number` of key.
+fn stated(number: impl Fn(&str) -> Option<f32>) -> PrinterTuning {
+    let pwm = |key: &str| number(key).and_then(|value| stated_pwm(value as u16));
+    let lift_mm = number("normalLayerLiftHeight").and_then(stated_distance_mm);
+    PrinterTuning {
+        lift_distance_mm: lift_mm,
+        retract_distance_mm: lift_mm,
+        lift_speed_mm_min: number("normalLayerLiftSpeed").and_then(stated_speed_mm_min),
+        retract_speed_mm_min: number("normalDropSpeed").and_then(stated_speed_mm_min),
+        bottom_lift_distance_mm: number("bottomLayerLiftHeight").and_then(stated_distance_mm),
+        bottom_lift_speed_mm_min: number("bottomLayerLiftSpeed").and_then(stated_speed_mm_min),
+        light_off_delay_s: number("lightOffTime").and_then(stated_wait_s),
+        light_pwm: pwm("PWMLight"),
+        bottom_light_pwm: pwm("bottomPWMLight"),
+        ..PrinterTuning::default()
     }
 }
 

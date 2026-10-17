@@ -82,10 +82,7 @@ fn header(ui: &mut egui::Ui, window: &mut Window) {
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                 let tooltip = shortcuts::tooltip(Action::OpenModel);
                 if icon_button(ui, icon::ADD, &tooltip).clicked() {
-                    window
-                        .doc
-                        .imports
-                        .open_dialog(&window.doc.plate, &mut window.machine.status);
+                    crate::import::open_dialog(window);
                 }
                 project_name(ui, &window.doc.project);
             });

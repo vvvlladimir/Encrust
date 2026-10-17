@@ -78,7 +78,8 @@ The output extension picks the format (ADR 0047): `.goo`, `.ctb`, `.cbddlp`, `.p
 `docs/formats/anycubic.md`, or a name with no extension for a directory of PNGs. A container
 name is refused without `--printer` or `--profile`: the panel is what the masks are drawn on,
 and a run that cannot write the file it was asked for fails rather than reports success.
-`--ctb-version` is read only by a `.ctb` name. A `.cxdlp` name is written at version 3 unless
+`--ctb-version` is read only by a `.ctb` name, and a `.ctb` is written encrypted when the
+printer profile says `output = "ctb-encrypted"` (ADR 0298). A `.cxdlp` name is written at version 3 unless
 the printer profile names version 4, as the Halot Mage line does (ADR 0168).
 
 Each container pays for grey differently. A `.cbddlp` carries it in eight one-bit passes, so
@@ -280,6 +281,25 @@ one you have; `--printer ID` sets an imported resin up on that machine (ADR 0233
 
 ```sh
 encrust profiles import grey.toml --kind resin --printer elegoo-mars-4-ultra
+```
+
+Without `--kind`, `FILE` is a sliced file and its resin is taken in: whatever the file states
+of exposure, transition, waits, lifts and light power, our defaults for the rest, set up on
+the machine the file was cut for. That machine is found by the panel and the name the file
+gives; where several share the panel and the file names none, `--printer ID` says which
+(ADR 0293):
+
+```sh
+encrust profiles import vendor.goo
+```
+
+A `.cfgx` or `.ini` another program exported its resin as is read the same way, with its
+colour, price and compensation besides, and set up on the machine it names; an `.ini` saved
+without one needs `--printer ID`. Where each value comes from is in
+`docs/formats/resin-profiles.md` (ADR 0295):
+
+```sh
+encrust profiles import "My resin.cfgx"
 ```
 
 `--config FILE` holds flags written down: a key is a flag's long name, `true` the bare flag,

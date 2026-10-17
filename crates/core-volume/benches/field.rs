@@ -5,8 +5,8 @@
 
 use core_geometry::{Bvh, Heightmap, Mesh, Scalar, UvMap, Vec2, Vec3};
 use core_volume::{
-    Cancel, FieldSettings, HollowMode, HollowSettings, InfillPattern, InfillSettings,
-    ReliefSettings, SignMode, build, extract, hollow, offset, press, shell,
+    Cancel, FieldSettings, HollowMode, HollowSettings, InfillPattern, InfillSettings, Panel,
+    ReliefSettings, SignMode, StackField, build, extract, hollow, offset, press, shell,
 };
 use criterion::{Criterion, criterion_group, criterion_main};
 
@@ -126,6 +126,53 @@ fn benchmarks(c: &mut Criterion) {
     });
 
     hollowing(c, &mesh, &bvh);
+    stacking(c);
+}
+
+/// A sliced file read back: a 40 mm disc 20 mm tall on a 16K panel, 400 layers.
+fn stacking(c: &mut Criterion) {
+    let panel = Panel {
+        width_px: 11_520,
+        height_px: 5_120,
+        pitch_mm: (0.019, 0.019),
+    };
+    let disc = disc_runs(panel, 20.0);
+    let mut group = c.benchmark_group("stack");
+    group.sample_size(10);
+    group.bench_function("field_of_a_disc_400_layers_0.05mm", |b| {
+        b.iter(|| {
+            let mut field = StackField::new(panel, 0.05);
+            for layer in 0..400 {
+                let bottom = layer as Scalar * 0.05;
+                field.push(bottom, bottom + 0.05, std::hint::black_box(&disc));
+            }
+            field.finish()
+        });
+    });
+    group.finish();
+}
+
+/// Runs lighting a disc of `radius_mm` in the middle of `panel`.
+fn disc_runs(panel: Panel, radius_mm: Scalar) -> Vec<(u32, u8)> {
+    let (width, height) = (panel.width_px, panel.height_px);
+    let centre = Vec2::new(width as Scalar, height as Scalar) * 0.5;
+    let radius_px = radius_mm / panel.pitch_mm.0;
+    let mut runs = Vec::new();
+    let mut dark = 0;
+    for y in 0..height {
+        let dy = y as Scalar + 0.5 - centre.y;
+        let half = (radius_px * radius_px - dy * dy).max(0.0).sqrt() as u32;
+        if half == 0 {
+            dark += width;
+            continue;
+        }
+        let first = centre.x as u32 - half;
+        runs.push((dark + first, 0));
+        runs.push((2 * half, 255));
+        dark = width - first - 2 * half;
+    }
+    runs.push((dark, 0));
+    runs
 }
 
 /// What a cavity, its infill and a relief cost on the same ball.

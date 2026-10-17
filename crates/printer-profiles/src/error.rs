@@ -17,6 +17,19 @@ pub enum ProfileError {
         source: toml::de::Error,
     },
 
+    #[error("cannot parse {path}")]
+    Json {
+        path: PathBuf,
+        #[source]
+        source: serde_json::Error,
+    },
+
+    #[error("{path} is not a resin profile this can read: use a .cfgx or an .ini")]
+    UnknownFormat { path: PathBuf },
+
+    #[error("{path} states no {key}, so it holds no resin")]
+    MissingSetting { path: PathBuf, key: &'static str },
+
     #[error("cannot write {path}")]
     Serialise {
         path: PathBuf,

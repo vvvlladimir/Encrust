@@ -1,6 +1,6 @@
 use core_format::{
-    FormatError, LayerEntry, OpenFile, ReadSeek, Reads, SlicedFile, SlicedFileReader, decode_rle7,
-    layer_in_range, panel_in_range,
+    FormatError, LayerEntry, OpenFile, PrinterTuning, ReadSeek, Reads, SlicedFile,
+    SlicedFileReader, decode_rle7, layer_in_range, panel_in_range,
 };
 use core_raster::Run;
 
@@ -103,6 +103,7 @@ impl SlicedFileReader for CxdlpV4Reader {
                 volume_mm3: Some(volume_ml * 1000.0),
                 // The codec carries seven bits of grey, so a layer reads back in 128 steps.
                 grey_steps: 128,
+                stated: PrinterTuning::default(),
                 layers,
             },
         })

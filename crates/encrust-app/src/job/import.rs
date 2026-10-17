@@ -56,11 +56,30 @@ impl ImportJob {
     /// already under way, and an import that finishes into a dropped handle is dropped
     /// with it.
     pub fn spawn(file: Handed, plate: BuildPlate) -> Self {
+        Self::run(file, move |file, stage| {
+            crate::import::prepare(file, &plate, stage)
+        })
+    }
+
+    /// Starts building a sliced file's layers back into a model, its panel lying as
+    /// `placement` says.
+    pub fn spawn_sliced(file: Handed, placement: crate::sliced::Placement) -> Self {
+        Self::run(file, move |file, stage| {
+            crate::sliced::prepare(file, placement, stage)
+        })
+    }
+
+    fn run(
+        file: Handed,
+        work: impl FnOnce(&Handed, &mut dyn FnMut(ImportStage)) -> anyhow::Result<Imported>
+        + Send
+        + 'static,
+    ) -> Self {
         let (sender, reports) = mpsc::channel();
         let worker_file = file.clone();
 
         crate::job::spawn(move || {
-            let outcome = match crate::import::prepare(&worker_file, &plate, &mut |stage| {
+            let outcome = match work(&worker_file, &mut |stage| {
                 let _ = sender.send(Report::Stage(stage));
             }) {
                 Ok(imported) => ImportOutcome::Opened(Box::new(imported)),

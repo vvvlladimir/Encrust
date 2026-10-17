@@ -20,10 +20,8 @@ pub(crate) fn config_ini(job: &PrintJob, flavour: Sl1Flavour, job_dir: &str) -> 
     ini.number("layerHeight", job.nominal_height_mm());
     ini.text("materialName", &material.name);
 
-    // The bottom block fades into the rest over this many layers, which is what our own
-    // transition layers are. The reader takes the stack's height from the two counts
-    // behind it: `numSlow + numFast`.
-    ini.int("numFade", u32::from(material.transition_layers));
+    // The reader takes the stack's height from the two counts behind it: `numSlow + numFast`.
+    ini.int("numFade", fade_of(job));
     ini.int("numFast", job.layer_count());
     ini.int("numSlow", 0);
 
@@ -73,11 +71,15 @@ pub(crate) fn prusaslicer_ini(job: &PrintJob, flavour: Sl1Flavour) -> String {
     ini.number("initial_layer_height", job.nominal_height_mm());
     ini.number("exposure_time", job.header_exposure_s());
     ini.number("initial_exposure_time", material.bottom_exposure_s);
-    ini.int("faded_layers", u32::from(material.transition_layers));
+    ini.int("faded_layers", fade_of(job));
     ini.text("material_name", &material.name);
     ini.number("material_density", material.density_g_cm3);
     ini.text("thumbnails", &crate::writer::thumbnail_sizes());
     ini.finish()
+}
+
+fn fade_of(job: &PrintJob) -> u32 {
+    crate::fade::fade_layers(job.material.bottom_layers, job.material.transition_layers)
 }
 
 /// The plate as the four corners of a rectangle, the shape the key states.
@@ -153,11 +155,18 @@ mod tests {
     }
 
     #[test]
-    fn the_bottom_block_fades_over_the_transition_layers() {
+    fn the_fade_ends_where_our_ramp_does() {
         let mut job = sample_job(7);
+        job.material.bottom_layers = 6;
         job.material.transition_layers = 3;
         let ini = config_ini(&job, Sl1Flavour::Sl1, "plate");
-        assert_eq!(value_of(&ini, "numFade"), Some("3"));
+        assert_eq!(
+            value_of(&ini, "numFade"),
+            Some("10"),
+            "the firmware reaches the normal exposure at layer numFade - 1, ours at 6 + 3"
+        );
+        let both = prusaslicer_ini(&job, Sl1Flavour::Sl1);
+        assert_eq!(value_of(&both, "faded_layers"), Some("10"));
     }
 
     #[test]

@@ -51,12 +51,12 @@ impl Preview {
         match outcome {
             PreviewOutcome::Built(solid, windows) => {
                 self.layer = self.layer.min(windows.layer_count().saturating_sub(1));
-                self.source = Some(Source::Cut(Stack {
+                self.source = Some(Stack {
                     solid,
                     windows,
                     fingerprint,
                     cut: None,
-                }));
+                });
                 if let Some(height_mm) = self.parked.take() {
                     self.show_height(height_mm);
                 }
@@ -81,7 +81,7 @@ impl Preview {
         }
         // Only a plate being cut is measured this way. A file's masks are already
         // written, so what they cure is read off them instead; see `read_measured`.
-        let Some(stack) = self.source.as_ref().and_then(Source::stack) else {
+        let Some(stack) = self.source.as_ref() else {
             return;
         };
         // Measured as the picture shows it, so a risk's position lands on the picture.
@@ -108,7 +108,7 @@ impl Preview {
 
     pub(super) fn measure_key(&self, settings: &RasterSettings, fold: Fold) -> Option<MeasureKey> {
         Some(MeasureKey {
-            fingerprint: self.source.as_ref()?.fingerprint(),
+            fingerprint: self.source.as_ref()?.fingerprint,
             settings: *settings,
             fold,
         })
@@ -141,12 +141,10 @@ impl Preview {
     }
 
     /// Cuts the window the layer being shown falls in, unless it is the one already cut.
-    /// A file being read has nothing to cut.
     pub(super) fn cut_window(&mut self) -> Result<()> {
         let layer = self.layer;
         let stack = match self.source.as_mut() {
-            Some(Source::Cut(stack)) => stack,
-            Some(Source::Read(_)) => return Ok(()),
+            Some(stack) => stack,
             None => bail!("no plate to preview"),
         };
         let wanted = stack.windows.window_of(layer);

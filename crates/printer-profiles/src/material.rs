@@ -324,6 +324,13 @@ impl MaterialProfile {
         index < self.bottom_layers
     }
 
+    /// This resin with every setting `tuning` states put over its own.
+    #[must_use]
+    pub fn with_tuning(mut self, tuning: &PrinterTuning) -> Self {
+        tuning.apply_to(&mut self);
+        self
+    }
+
     /// This resin as the given printer needs it, with that printer's tuning applied.
     ///
     /// A printer the resin says nothing about gets the untuned numbers, which are a

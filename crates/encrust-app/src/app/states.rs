@@ -48,17 +48,27 @@ fn cube_stl() -> String {
     text
 }
 
-/// The window on the pictured machine, with one cube picked on the plate when `cube`.
+/// The window on the pictured machine and a resin, with one cube picked on the plate when
+/// `cube`.
 pub(super) fn app(cube: bool) -> SlicerApp {
+    static PLATES: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
     let mut app = SlicerApp::default();
     app.machine.network.hold = true;
-    let entry = app
-        .machine
-        .slicing
-        .catalogue
+    let plate = PLATES.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+    let mut catalogue = own_printer(&format!("plate-{plate}"));
+    save_resin(
+        &mut catalogue,
+        "standard-grey",
+        "Standard grey",
+        "Standard",
+        2.2,
+    );
+    let profile = catalogue
         .printer(PRINTER)
-        .expect("the pictured printer ships");
-    let profile = entry.profile.clone();
+        .expect("the pictured printer ships")
+        .profile
+        .clone();
+    app.machine.slicing.catalogue = catalogue;
     crate::profiles::apply_printer(&mut app.window(), profile, Some(PRINTER.to_owned()));
     if cube {
         let file = Handed::Bytes {
@@ -97,14 +107,57 @@ pub(super) fn drawn(
     harness
 }
 
-/// The pictured machine and two resins on it, in a directory of the test's own, so the
-/// pictures never read or write the user's profiles.
+/// The pictured machine and two resins on it.
 pub(super) fn with_machines(mut app: SlicerApp, name: &str) -> SlicerApp {
-    use printer_profiles::{Catalogue, MaterialProfile, PrinterTuning, ResinDetails};
+    let mut catalogue = own_printer(name);
+    save_resin(
+        &mut catalogue,
+        "standard-grey",
+        "Standard grey",
+        "Standard",
+        2.2,
+    );
+    save_resin(
+        &mut catalogue,
+        "abs-like-tough",
+        "ABS-like tough",
+        "ABS-like",
+        2.4,
+    );
+    app.machine.slicing.catalogue = catalogue;
+    crate::panels::open_machines(&mut app.machine);
+    app
+}
 
+/// The window over `machines` of the user's own and none of their resins: the pictured
+/// machine, or none at all.
+#[cfg_attr(
+    not(feature = "snapshots"),
+    expect(dead_code, reason = "only pictured")
+)]
+pub(super) fn with_nothing(mut app: SlicerApp, machines: bool) -> SlicerApp {
+    app.machine.slicing.catalogue = match machines {
+        true => own_printer("no-resin"),
+        false => {
+            crate::profiles::clear_printer(&mut app.window());
+            let dir = std::env::temp_dir()
+                .join(format!("encrust-snapshots-empty-{}", std::process::id()));
+            let _ = std::fs::remove_dir_all(&dir);
+            printer_profiles::Catalogue::with_root(&dir)
+                .expect("a missing directory reads as empty")
+        }
+    };
+    crate::panels::open_machines(&mut app.machine);
+    app
+}
+
+/// The pictured machine installed in a directory of the test's own, so the pictures never
+/// read or write the user's profiles.
+fn own_printer(name: &str) -> printer_profiles::Catalogue {
     let dir = std::env::temp_dir().join(format!("encrust-snapshots-{name}-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&dir);
-    let mut catalogue = Catalogue::with_root(&dir).expect("a missing directory reads as empty");
+    let mut catalogue =
+        printer_profiles::Catalogue::with_root(&dir).expect("a missing directory reads as empty");
     let printer = catalogue
         .printer(PRINTER)
         .expect("the pictured printer ships")
@@ -113,42 +166,38 @@ pub(super) fn with_machines(mut app: SlicerApp, name: &str) -> SlicerApp {
     catalogue
         .save_printer(PRINTER, &printer)
         .expect("the directory is writable");
-    let resins = [
-        (
-            "standard-grey",
-            "Standard grey",
-            "Standard",
-            [0x8a, 0x8f, 0x96],
-            2.2,
-        ),
-        (
-            "abs-like-tough",
-            "ABS-like tough",
-            "ABS-like",
-            [0x5d, 0x6f, 0x7e],
-            2.4,
-        ),
-    ];
-    for (id, resin_name, kind, color, exposure_s) in resins {
-        let mut resin = MaterialProfile {
-            name: resin_name.to_owned(),
-            details: ResinDetails {
-                kind: kind.to_owned(),
-                color,
-                ..ResinDetails::default()
-            },
-            ..MaterialProfile::default()
-        };
-        let tuning = PrinterTuning {
-            exposure_s: Some(exposure_s),
-            ..PrinterTuning::default()
-        };
-        resin.printers.insert(PRINTER.to_owned(), tuning);
-        catalogue
-            .save_resin(id, &resin)
-            .expect("the directory is writable");
-    }
-    app.machine.slicing.catalogue = catalogue;
-    crate::panels::open_machines(&mut app.machine);
-    app
+    catalogue
+}
+
+/// A resin of type `kind` on the pictured machine, exposed for `exposure_s`.
+fn save_resin(
+    catalogue: &mut printer_profiles::Catalogue,
+    id: &str,
+    name: &str,
+    kind: &str,
+    exposure_s: f32,
+) {
+    use printer_profiles::{MaterialProfile, PrinterTuning, ResinDetails};
+
+    let color = match kind {
+        "Standard" => [0x8a, 0x8f, 0x96],
+        _ => [0x5d, 0x6f, 0x7e],
+    };
+    let mut resin = MaterialProfile {
+        name: name.to_owned(),
+        details: ResinDetails {
+            kind: kind.to_owned(),
+            color,
+            ..ResinDetails::default()
+        },
+        ..MaterialProfile::default()
+    };
+    let tuning = PrinterTuning {
+        exposure_s: Some(exposure_s),
+        ..PrinterTuning::default()
+    };
+    resin.printers.insert(PRINTER.to_owned(), tuning);
+    catalogue
+        .save_resin(id, &resin)
+        .expect("the directory is writable");
 }

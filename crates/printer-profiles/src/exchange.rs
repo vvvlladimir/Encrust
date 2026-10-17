@@ -7,8 +7,8 @@ use std::path::Path;
 use serde::de::DeserializeOwned;
 
 use crate::{
-    Catalogue, Kind, MaterialProfile, Preset, PrinterProfile, PrinterTuning, ProfileError,
-    SupportProfile, own_id,
+    Catalogue, Entry, ForeignResin, Kind, MaterialProfile, Preset, PrinterProfile, PrinterTuning,
+    ProfileError, SupportProfile, own_id,
 };
 
 impl Catalogue {
@@ -76,7 +76,49 @@ impl Catalogue {
         Ok(id)
     }
 
-    fn import_resin(
+    /// The printer a sliced file was cut for, by its panel and the machine it names: the
+    /// one machine of that panel, or the one of them the name picks. `None` where neither.
+    pub fn printer_for_panel(
+        &self,
+        width_px: u32,
+        height_px: u32,
+        machine: Option<&str>,
+    ) -> Option<&str> {
+        let fits = |entry: &&Entry<PrinterProfile>| {
+            let display = &entry.profile.display;
+            (display.width_px, display.height_px) == (width_px, height_px)
+                || (display.width_px, display.height_px) == (height_px, width_px)
+        };
+        let named = |entry: &&Entry<PrinterProfile>| {
+            machine.is_some_and(|machine| names(&entry.profile, machine))
+        };
+        let panel: Vec<_> = self.printers().filter(fits).collect();
+        let picked: Vec<_> = panel.iter().copied().filter(named).collect();
+        match (picked.as_slice(), panel.as_slice()) {
+            ([one], _) | ([], [one]) => Some(one.id.as_str()),
+            _ => None,
+        }
+    }
+
+    /// The printer a resin another program exported was set up for: by its panel as
+    /// [`Catalogue::printer_for_panel`] picks it, or by name alone where it states no panel.
+    pub fn printer_for_foreign(&self, foreign: &ForeignResin) -> Option<&str> {
+        let machine = foreign.machine.as_deref();
+        if let Some([width_px, height_px]) = foreign.panel_px {
+            return self.printer_for_panel(width_px, height_px, machine);
+        }
+        let mut named = self
+            .printers()
+            .filter(|entry| machine.is_some_and(|machine| names(&entry.profile, machine)));
+        match (named.next(), named.next()) {
+            (Some(one), None) => Some(one.id.as_str()),
+            _ => None,
+        }
+    }
+
+    /// Takes `resin` in under an id of its own, renamed when the name is already taken, and
+    /// sets it up on `printer`. Answers the new id.
+    pub fn import_resin(
         &mut self,
         mut resin: MaterialProfile,
         printer: Option<&str>,
@@ -139,6 +181,21 @@ pub(crate) fn slug(name: &str) -> String {
         }
     }
     stem.trim_end_matches('-').to_owned()
+}
+
+/// Whether `machine` is what `profile`'s firmware or label calls it.
+fn names(profile: &PrinterProfile, machine: &str) -> bool {
+    let label = format!("{} {}", profile.manufacturer, profile.name);
+    [profile.machine_name(), label.as_str()]
+        .iter()
+        .any(|name| same_name(name, machine))
+}
+
+/// Whether two machine names are one, whatever their case and spacing.
+fn same_name(ours: &str, theirs: &str) -> bool {
+    ours.split_whitespace()
+        .map(str::to_lowercase)
+        .eq(theirs.split_whitespace().map(str::to_lowercase))
 }
 
 /// `name`, or marked as imported where it is `taken`, numbered past the marks taken too.
@@ -384,5 +441,59 @@ mod tests {
         let catalogue = writable("missing");
         let missing = catalogue.export(Kind::Hollow, "nothing");
         assert!(matches!(missing, Err(ProfileError::Unknown { .. })));
+    }
+
+    #[test]
+    fn a_file_naming_its_machine_picks_it_among_the_machines_of_its_panel() {
+        let catalogue = Catalogue::bundled().expect("the shipped catalogue is valid");
+        // Five shipped machines share the Saturn 4 Ultra's 11520 x 5120 panel.
+        assert_eq!(catalogue.printer_for_panel(11_520, 5_120, None), None);
+        for named in ["Elegoo Saturn 4 Ultra", "ELEGOO  saturn 4 ULTRA"] {
+            assert_eq!(
+                catalogue.printer_for_panel(11_520, 5_120, Some(named)),
+                Some(SATURN),
+                "{named} is the Saturn by its label or the name its firmware matches"
+            );
+        }
+        assert_eq!(
+            catalogue.printer_for_panel(5_120, 11_520, Some("ELEGOO Saturn 4 Ultra")),
+            Some(SATURN),
+            "a panel stated portrait is the same panel"
+        );
+    }
+
+    #[test]
+    fn the_one_machine_of_a_panel_is_picked_whatever_the_file_calls_it() {
+        let mut catalogue = writable("panel");
+        let mut odd = catalogue.printer(MARS).expect("ships").profile.clone();
+        odd.display.width_px = 17;
+        odd.display.height_px = 9;
+        catalogue.save_printer("odd", &odd).expect("writable");
+        assert_eq!(
+            catalogue.printer_for_panel(17, 9, Some("Unknown machine")),
+            Some("odd")
+        );
+    }
+
+    #[test]
+    fn a_resin_taken_from_a_file_is_set_up_on_its_machine_beside_the_rest() {
+        let mut catalogue = writable("from-file");
+        let resin = MaterialProfile {
+            name: "Grey".to_owned(),
+            exposure_s: 2.37,
+            ..MaterialProfile::default()
+        };
+        let first = catalogue
+            .import_resin(resin.clone(), Some(SATURN))
+            .expect("writable");
+        let again = catalogue
+            .import_resin(resin, Some(SATURN))
+            .expect("writable");
+
+        assert_ne!(first, again, "an import never writes over what is there");
+        let kept = &catalogue.resin(&again).expect("imported").profile;
+        assert_eq!(kept.name, "Grey (imported)");
+        assert!(kept.is_tuned_for(SATURN));
+        assert_eq!(kept.for_printer(SATURN).exposure_s, 2.37);
     }
 }

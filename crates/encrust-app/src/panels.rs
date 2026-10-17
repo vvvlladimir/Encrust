@@ -23,7 +23,7 @@ mod viewport_panel;
 
 pub use scene_panel::duplicate_selection;
 pub use section::animate as animate_preview;
-pub use settings::import_profile;
+pub use settings::{import_dropped, import_profile};
 pub use slice::slice_this_plate;
 pub use start::{open_recent, still_starting};
 pub use title_bar::{layers_and_exposure, open_machines, toggle_settings};

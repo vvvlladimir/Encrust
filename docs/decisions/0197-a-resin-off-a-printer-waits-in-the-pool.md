@@ -1,6 +1,6 @@
 # 0197. A resin taken off a printer waits in the pool
 
-- **Status:** Accepted
+- **Status:** Accepted; the button for a first resin is superseded by 0299
 - **Date:** 2026-10-07
 
 ## Context

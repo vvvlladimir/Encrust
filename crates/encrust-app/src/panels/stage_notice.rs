@@ -1,4 +1,4 @@
-use egui::{Align, Align2, Id, Layout, Rect, RichText};
+use egui::{Align, Align2, Id, Layout, Rect, RichText, pos2};
 
 use crate::panels::Window;
 use crate::scene::ObjectId;
@@ -11,106 +11,141 @@ const GAP: f32 = 6.0;
 const JOB_W: f32 = 360.0;
 /// The widest a message may grow before it is cut.
 const MESSAGE_W: f32 = 520.0;
-/// What a notice leaves free at either side of the stage's foot: the view column's card
-/// at the right, and as much at the left so it stays centred.
-const BESIDE_W: f32 = theme::ICON_SIZE + 20.0;
-/// How long a message that is not a failure stays up after it changed, seconds.
+/// How long a message that is not a failure stays up after it changed, or after the
+/// pointer left it, seconds.
 const INFO_LINGER_S: f64 = 4.0;
+/// Where egui keeps when the message was last seen changing.
+const SEEN: &str = "stage-notice-seen";
 
-/// Every notice, stacked at the foot of the stage between the side cards: what is running,
-/// with a way to stop it, then a file waiting to be started, then what happened last,
-/// nearest the edge. The window has no status line; see `docs/decisions/0217` and `0263`.
+/// Every notice, centred at the foot of `stage`: what is running, with a way to stop it, a
+/// file waiting to be started, a broken model, a plate that cannot slice yet, then what
+/// happened last, nearest the edge. See `docs/decisions/0217` and `0263`.
 pub fn ui(ui: &egui::Ui, window: &mut Window, stage: Rect) {
-    let width = (stage.width() - 2.0 * BESIDE_W).clamp(0.0, MESSAGE_W);
-    egui::Area::new(Id::new("stage-notice"))
-        .order(egui::Order::Middle)
-        .fixed_pos(stage.center_bottom())
-        .pivot(Align2::CENTER_BOTTOM)
-        .constrain_to(stage)
-        .show(ui.ctx(), |ui| {
-            ui.spacing_mut().item_spacing.y = GAP;
-            ui.with_layout(Layout::top_down(Align::Center), |ui| {
-                let running = jobs(ui, window);
-                waiting_to_print(ui, window);
-                broken(ui, window);
-                message(ui, &mut window.machine.status, running, width);
-            });
-        });
+    let machine = &window.machine;
+    let running = machine.network.job.is_some()
+        || machine.slicing.job.is_some()
+        || machine.preview.is_building();
+    let mut stack = Stack {
+        ctx: ui.ctx().clone(),
+        room: stage,
+        bottom: stage.bottom(),
+    };
+    let width = (stage.width() - theme::CARD_MARGIN.sum().x).clamp(0.0, MESSAGE_W);
+    message(&mut stack, &mut window.machine.status, running, width);
+    unready(&mut stack, window);
+    broken(&mut stack, window);
+    waiting_to_print(&mut stack, window);
+    jobs(&mut stack, window);
 }
 
-/// One card per job that reports progress here. Answers whether any is running.
-fn jobs(ui: &mut egui::Ui, window: &mut Window) -> bool {
-    let mut running = false;
-    if let Some(job) = window.machine.network.job.as_ref() {
-        running = true;
-        if job_card(ui, &job.label(), job.fraction(), job.is_cancelling()) {
-            job.cancel();
-        }
+/// The notices stacked up from the foot of `room`, each in an area of its own centred on
+/// the room, so cards of different widths share one middle.
+struct Stack {
+    ctx: egui::Context,
+    room: Rect,
+    bottom: f32,
+}
+
+impl Stack {
+    /// The card `name` on top of those already stacked, as `add` draws it.
+    fn card<R>(&mut self, name: &str, add: impl FnOnce(&mut egui::Ui) -> R) -> R {
+        let shown = egui::Area::new(Id::new("stage-notice").with(name))
+            .order(egui::Order::Middle)
+            .fixed_pos(pos2(self.room.center().x, self.bottom))
+            .pivot(Align2::CENTER_BOTTOM)
+            .constrain_to(self.room)
+            .show(&self.ctx, add);
+        self.bottom = shown.response.rect.top() - GAP;
+        shown.inner
+    }
+}
+
+/// One card per job that reports progress here, the latest to start nearest the foot.
+fn jobs(stack: &mut Stack, window: &mut Window) {
+    if window.machine.preview.is_building()
+        && job_card(
+            stack,
+            "preview",
+            "Cutting the layers to preview",
+            None,
+            false,
+        )
+    {
+        window.machine.preview.cancel();
     }
     if let Some(job) = window.machine.slicing.job.as_ref() {
-        running = true;
-        if job_card(ui, &job.label(), job.fraction(), job.is_cancelling()) {
+        let (label, fraction) = (job.label(), job.fraction());
+        if job_card(stack, "slicing", &label, fraction, job.is_cancelling()) {
             job.cancel();
         }
     }
-    if window.machine.preview.is_building() {
-        running = true;
-        if job_card(ui, "Cutting the layers to preview", None, false) {
-            window.machine.preview.cancel();
+    if let Some(job) = window.machine.network.job.as_ref() {
+        let (label, fraction) = (job.label(), job.fraction());
+        if job_card(stack, "network", &label, fraction, job.is_cancelling()) {
+            job.cancel();
         }
     }
-    running
 }
 
 /// What is happening, how far along, and a way out. Answers whether to stop.
-fn job_card(ui: &mut egui::Ui, label: &str, fraction: Option<f32>, cancelling: bool) -> bool {
+fn job_card(
+    stack: &mut Stack,
+    name: &str,
+    label: &str,
+    fraction: Option<f32>,
+    cancelling: bool,
+) -> bool {
     let colors = theme::colors();
     let mut cancel = false;
-    card().inner_margin(theme::CARD_MARGIN).show(ui, |ui| {
-        ui.set_width(JOB_W);
-        ui.horizontal(|ui| {
-            ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
-                ui.add_enabled_ui(!cancelling, |ui| {
-                    cancel = icon_button(ui, icon::CANCEL, "Cancel").clicked();
-                });
-                if let Some(fraction) = fraction {
-                    ui.label(
-                        RichText::new(format!("{:.0} %", fraction * 100.0))
-                            .font(theme::figures(11.5))
-                            .color(colors.text_mid),
-                    );
-                }
-                ui.with_layout(Layout::left_to_right(Align::Center), |ui| {
-                    let text = RichText::new(label)
-                        .font(theme::label())
-                        .color(colors.text_high);
-                    ui.add(egui::Label::new(text).truncate());
+    stack.card(name, |ui| {
+        card().inner_margin(theme::CARD_MARGIN).show(ui, |ui| {
+            ui.set_width(JOB_W);
+            ui.horizontal(|ui| {
+                ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
+                    ui.add_enabled_ui(!cancelling, |ui| {
+                        cancel = icon_button(ui, icon::CANCEL, "Cancel").clicked();
+                    });
+                    if let Some(fraction) = fraction {
+                        ui.label(
+                            RichText::new(format!("{:.0} %", fraction * 100.0))
+                                .font(theme::figures(11.5))
+                                .color(colors.text_mid),
+                        );
+                    }
+                    ui.with_layout(Layout::left_to_right(Align::Center), |ui| {
+                        let text = RichText::new(label)
+                            .font(theme::label())
+                            .color(colors.text_high);
+                        ui.add(egui::Label::new(text).truncate());
+                    });
                 });
             });
-        });
-        // Slicing reports no layer counts until the stack is cut, so the bar runs rather
-        // than lies.
-        progress_bar(ui, fraction);
+            // Slicing reports no layer counts until the stack is cut, so the bar runs rather
+            // than lies.
+            progress_bar(ui, fraction);
+        })
     });
     cancel
 }
 
 /// A stack that reached the printer is not printing yet: starting it is a second,
 /// deliberate press, because nobody is standing at the machine when the first one lands.
-fn waiting_to_print(ui: &mut egui::Ui, window: &mut Window) {
+fn waiting_to_print(stack: &mut Stack, window: &mut Window) {
     let Some(sent) = window.machine.network.sent.clone() else {
         return;
     };
     let mut start = false;
-    card().inner_margin(theme::CARD_MARGIN).show(ui, |ui| {
-        ui.horizontal(|ui| {
-            ui.label(
-                RichText::new(format!("{} is on {}", sent.filename, sent.printer))
-                    .font(theme::label())
-                    .color(theme::colors().text_high),
-            );
-            start = inline_button(ui, icon::PLAY, "Start print", true, true).clicked();
-        });
+    stack.card("sent", |ui| {
+        card().inner_margin(theme::CARD_MARGIN).show(ui, |ui| {
+            ui.horizontal(|ui| {
+                ui.label(
+                    RichText::new(format!("{} is on {}", sent.filename, sent.printer))
+                        .font(theme::label())
+                        .color(theme::colors().text_high),
+                );
+                start = inline_button(ui, icon::PLAY, "Start print", true, true).clicked();
+            });
+        })
     });
     if start {
         window
@@ -122,7 +157,7 @@ fn waiting_to_print(ui: &mut egui::Ui, window: &mut Window) {
 
 /// A model that will not print as it stands, with the repair beside it. Nothing waits on
 /// the answer, so it is offered here rather than in a dialog, until it is taken or put by.
-fn broken(ui: &mut egui::Ui, window: &mut Window) {
+fn broken(stack: &mut Stack, window: &mut Window) {
     let offered: Vec<(ObjectId, String, Vec<String>)> = window
         .doc
         .repairs
@@ -135,24 +170,26 @@ fn broken(ui: &mut egui::Ui, window: &mut Window) {
         several => format!("{} models on this plate are broken", several.len()),
     };
     let (mut repair, mut keep) = (false, false);
-    card().inner_margin(theme::CARD_MARGIN).show(ui, |ui| {
-        ui.horizontal(|ui| {
-            let text = RichText::new(label)
-                .font(theme::label())
-                .color(theme::colors().warn);
-            let lines: Vec<&str> = offered
-                .iter()
-                .flat_map(|(_, _, defects)| defects.iter().map(String::as_str))
-                .collect();
-            ui.label(text).on_hover_text(lines.join("\n"));
-            let wording = if offered.len() == 1 {
-                "Repair"
-            } else {
-                "Repair all"
-            };
-            repair = inline_button(ui, icon::REPAIR, wording, true, true).clicked();
-            keep = icon_button(ui, icon::CANCEL, "Keep as it is").clicked();
-        });
+    stack.card("broken", |ui| {
+        card().inner_margin(theme::CARD_MARGIN).show(ui, |ui| {
+            ui.horizontal(|ui| {
+                let text = RichText::new(label)
+                    .font(theme::label())
+                    .color(theme::colors().warn);
+                let lines: Vec<&str> = offered
+                    .iter()
+                    .flat_map(|(_, _, defects)| defects.iter().map(String::as_str))
+                    .collect();
+                ui.label(text).on_hover_text(lines.join("\n"));
+                let wording = if offered.len() == 1 {
+                    "Repair"
+                } else {
+                    "Repair all"
+                };
+                repair = inline_button(ui, icon::REPAIR, wording, true, true).clicked();
+                keep = icon_button(ui, icon::CANCEL, "Keep as it is").clicked();
+            });
+        })
     });
     for (id, _, _) in &offered {
         if repair {
@@ -164,79 +201,138 @@ fn broken(ui: &mut egui::Ui, window: &mut Window) {
     }
 }
 
+/// A plate with no machine or no resin cannot slice, so it says which and offers the
+/// window both are set up in, for as long as either is missing (ADR 0299).
+fn unready(stack: &mut Stack, window: &mut Window) {
+    let slicing = &window.machine.slicing;
+    let label = match (slicing.printer_id.is_some(), slicing.resin_id.is_some()) {
+        (true, true) => return,
+        (false, false) => "No printer or resin yet",
+        (false, true) => "No printer yet",
+        (true, false) => "No resin on this printer yet",
+    };
+    let mut open = false;
+    stack.card("unready", |ui| {
+        card().inner_margin(theme::CARD_MARGIN).show(ui, |ui| {
+            ui.horizontal(|ui| {
+                ui.spacing_mut().item_spacing.x = 8.0;
+                let colors = theme::colors();
+                ui.label(
+                    RichText::new(icon::INFO)
+                        .font(theme::icon(13.0))
+                        .color(colors.warn),
+                );
+                ui.label(
+                    RichText::new(label)
+                        .font(theme::label())
+                        .color(colors.text_high),
+                );
+                open = inline_button(ui, icon::PRINTER, "Set up", true, true).clicked();
+            });
+        })
+    });
+    if open {
+        crate::panels::open_machines(window.machine);
+    }
+}
+
 /// What happened last, no wider than `max_w` points. A failure stays until it is put away, and its whole cause chain is
 /// on hover; anything else stands for a moment, and not at all while a job is running.
-fn message(ui: &mut egui::Ui, status: &mut Status, running: bool, max_w: f32) {
+fn message(stack: &mut Stack, status: &mut Status, running: bool, max_w: f32) {
     let error = status.is_error();
-    let now = ui.input(|input| input.time);
-    let since_s = now - changed_at(ui, status, now);
+    let now = stack.ctx.input(|input| input.time);
+    let since_s = now - changed_at(&stack.ctx, status, now);
     if matches!(status, Status::Idle) || !error && (running || since_s > INFO_LINGER_S) {
         return;
     }
     if !error {
-        ui.ctx()
+        stack
+            .ctx
             .request_repaint_after(std::time::Duration::from_secs_f64(INFO_LINGER_S - since_s));
     }
 
     let colors = theme::colors();
-    let (glyph, tint) = if error {
-        (icon::WARNING, colors.danger)
-    } else {
-        (icon::INFO, colors.text_low)
-    };
     let mut frame = card().inner_margin(theme::CARD_MARGIN);
     if error {
         frame = frame.stroke(egui::Stroke::new(1.0, colors.danger.gamma_multiply(0.5)));
     }
     let mut dismissed = false;
-    frame.show(ui, |ui| {
-        ui.set_max_width(max_w);
-        ui.horizontal(|ui| {
-            ui.spacing_mut().item_spacing.x = 8.0;
-            ui.label(RichText::new(glyph).font(theme::icon(13.0)).color(tint));
-            let text = status.text().to_owned();
-            let label = RichText::new(&text)
-                .font(theme::label())
-                .color(colors.text_high);
-            let response = ui.add(egui::Label::new(label).truncate());
-            if response.hovered() {
-                response.on_hover_text(&text);
-            }
-            if let Status::Readings(_, readings) = status {
-                for reading in readings {
-                    let tint = match reading.change {
-                        Change::Same => colors.text_mid,
-                        Change::Better => colors.ok,
-                        Change::Worse => colors.danger,
-                    };
-                    ui.label(
-                        RichText::new(&reading.text)
-                            .font(theme::label())
-                            .color(tint),
-                    );
+    let shown = stack.card("message", |ui| {
+        frame.show(ui, |ui| {
+            ui.set_max_width(max_w);
+            // Rows as tall as their text: a notice is a line or two, not a form.
+            ui.spacing_mut().interact_size.y = 0.0;
+            ui.spacing_mut().item_spacing.y = 2.0;
+            ui.horizontal_top(|ui| {
+                ui.spacing_mut().item_spacing.x = 8.0;
+                if error {
+                    let glyph = RichText::new(icon::WARNING).font(theme::icon(13.0));
+                    ui.label(glyph.color(colors.danger));
                 }
-            }
-            if error {
-                dismissed = icon_button(ui, icon::CANCEL, "Put away").clicked();
-            }
-        });
+                // A message longer than the room wraps rather than running past the card.
+                let close_w = if error { theme::ICON_SIZE + 8.0 } else { 0.0 };
+                let words_w = (ui.available_width() - close_w).max(0.0);
+                ui.allocate_ui(egui::vec2(words_w, 0.0), |ui| {
+                    ui.vertical(|ui| words(ui, status));
+                });
+                if error {
+                    dismissed = icon_button(ui, icon::CANCEL, "Put away").clicked();
+                }
+            });
+        })
     });
+    // A message being read stays: its moment starts again once the pointer leaves it.
+    if shown.response.contains_pointer() {
+        seen_now(&stack.ctx, status, now);
+    }
     if dismissed {
         *status = Status::Idle;
     }
 }
 
+/// The message, and under it the figures a step changed, coloured by whether they got
+/// better.
+fn words(ui: &mut egui::Ui, status: &Status) {
+    let colors = theme::colors();
+    ui.label(
+        RichText::new(status.text())
+            .font(theme::label())
+            .color(colors.text_high),
+    );
+    let Status::Readings(_, readings) = status else {
+        return;
+    };
+    ui.horizontal_wrapped(|ui| {
+        for reading in readings {
+            let tint = match reading.change {
+                Change::Same => colors.text_mid,
+                Change::Better => colors.ok,
+                Change::Worse => colors.danger,
+            };
+            ui.label(
+                RichText::new(&reading.text)
+                    .font(theme::label())
+                    .color(tint),
+            );
+        }
+    });
+}
+
 /// When the message last changed, on egui's clock, kept in egui's memory: the status is
 /// replaced wholesale wherever something happens, and carries no time of its own.
-fn changed_at(ui: &egui::Ui, status: &Status, now: f64) -> f64 {
-    let id = Id::new("stage-notice-seen");
-    let key = Id::new(status).value();
-    let seen = ui.data(|data| data.get_temp::<(u64, f64)>(id));
+fn changed_at(ctx: &egui::Context, status: &Status, now: f64) -> f64 {
+    let seen = ctx.data(|data| data.get_temp::<(u64, f64)>(Id::new(SEEN)));
     match seen {
-        Some((seen_key, at)) if seen_key == key => at,
+        Some((key, at)) if key == Id::new(status).value() => at,
         _ => {
-            ui.data_mut(|data| data.insert_temp(id, (key, now)));
+            seen_now(ctx, status, now);
             now
         }
     }
+}
+
+/// Counts the message's moment from `now`.
+fn seen_now(ctx: &egui::Context, status: &Status, now: f64) {
+    let key = Id::new(status).value();
+    ctx.data_mut(|data| data.insert_temp(Id::new(SEEN), (key, now)));
 }

@@ -2,6 +2,7 @@
 //! extensions, at version 1 and at revisions 516 and 517. Layout is in
 //! `docs/formats/anycubic.md`.
 
+mod bit_planes;
 mod blocks;
 #[cfg(test)]
 mod fixtures;
@@ -10,6 +11,6 @@ mod rle;
 mod tables;
 mod writer;
 
-pub use reader::{AnycubicReader, OpenAnycubic};
+pub use reader::{AnycubicReader, OpenAnycubic, PwsReader};
 pub use rle::{EncodedLayer, GREY_STEPS, decode};
 pub use writer::{AnycubicFlavour, AnycubicSink, AnycubicVersion, AnycubicWriter};

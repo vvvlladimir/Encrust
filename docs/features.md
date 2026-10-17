@@ -30,8 +30,12 @@ but only one printer, the ELEGOO Saturn 4 Ultra, has printed a file Encrust wrot
   material, which the Relief tool uses.
 - Open an **`.encrust` project**. It opens exactly as it was saved, with its supports and
   cavities already built, so nothing is recalculated.
-- Open **any sliced file** Encrust can write, whoever made it, to look at it layer by layer
-  or convert it. A file with the wrong extension is recognised by its first bytes.
+- Open **any sliced file** Encrust can read, whoever made it, as a model: its layers are
+  built back into a mesh that stands where it stood on the plate, so you can move it,
+  support it again or cut it for another printer. Its supports and raft come back as part
+  of the model, edges are rounded by about a layer height (0.05 mm at the finest), and layer steps stay. A `.sl1` is slow
+  to open (a minute for a full 16K stack). A file
+  with the wrong extension is recognised by its first bytes.
 - Drag and drop onto the window, or use the **Recent** list, which shows a picture of each
   file.
 - Start from one of **four built-in test prints**: detail test, exposure check, surface
@@ -305,15 +309,18 @@ Every file Encrust writes is read back and checked. The output extension picks t
 | Format | Printers | Grey on edges | Notes |
 |---|---|---|---|
 | `.goo` | Elegoo, Phrozen | yes | |
-| `.ctb` v4, v5 | Elegoo, Creality, Phrozen, EPAX, Peopoly, QIDI, UniFormation | yes | **Encrypted `.ctb` is not supported** (needed by some newer boards). |
+| `.ctb` v4, v5 | Elegoo, Creality, Phrozen, EPAX, Peopoly, QIDI, UniFormation | yes | |
+| `.ctb` encrypted | the newer Chitu boards that take nothing else | yes | Written when the printer profile says `output = "ctb-encrypted"`; no shipped profile does yet. Read whoever wrote it. |
 | `.cbddlp`, `.photon` | older Chitu-board printers | yes, in 8 passes | 8 times the layer data. Warns above 1440 × 2560 px. |
 | `.pwmx` and the other Anycubic extensions | Anycubic | 4 bits | Edges dimmer than 1/16 are lost. |
-| `.sl1`, `.sl1s` | Prusa | full 8 bits | One exposure and one layer height for the whole print. |
+| `.sl1`, `.sl1s` | Prusa | full 8 bits | One exposure and one layer height for the whole print; the bottom layers fade to it from the first one rather than holding. |
 | `.zip` (PNG layers + G-code) | Phrozen, Wanhao, Kelant | full 8 bits | Per-layer exposure and height are kept. No second lift or acceleration. |
 | `.cxdlp` v3, v4 | Creality | 8 bits (v3), 7 bits (v4) | |
 | `.svgx` | FlashForge, Voxelab | none (vector polygons) | Warns above 3840 × 2400 px. |
 | `.cws` | Nova3D | full 8 bits | Only the plain variant is written. |
 | PNG folder | any | full 8 bits | No extension on the output name. |
+
+Encrust also opens the `.pws` of the original Photon and Photon S, which it does not write.
 
 **Convert** a sliced file to another format for another printer.
 *Limits:* the masks are copied, never resampled, so the new printer's screen must have the
@@ -325,6 +332,14 @@ The window offers only the machines whose format Encrust can actually write.
 ---
 
 ## Printers and profiles
+
+**First setup:** while the plate has no printer or no resin, a notice at the foot of the
+window says which, with **Set up** to open **Machine and resin**. There, an empty list of
+printers offers **Add a machine** and **Import a machine**, and a printer with no resin
+offers **Add a resin** and **Import a resin**. A file dropped on the window is imported
+rather than opened: as a resin while a printer's resins are in view, or when it is a sliced
+file or a resin profile, and as a printer otherwise. The first printer and resin you add
+are the ones the plate prints on, with no second click.
 
 **Printers:** 100 bundled profiles from 14 makers: Anycubic, Elegoo, Creality, Phrozen,
 EPAX, FlashForge, Nova3D, Peopoly, QIDI, Wanhao, Prusa, Kelant, UniFormation, Voxelab.
@@ -340,6 +355,23 @@ your bottle, so you create the first resin yourself. A resin holds exposure, bot
 transition, light power, lifts, retracts, waits, density, price, colour and compensation.
 One resin can be tuned differently for each printer. A resin taken from a printer is kept
 until you set it up on another one.
+
+**Take a resin from a sliced file:** in **Machine and resin**, press **Import** on a
+printer's resins (**Import a resin** on a printer with none yet) and pick a file another slicer wrote for it; the resin is saved on that
+printer. You get what the
+file states: exposure and bottom layers always, and transition, waits, lifts, speeds and
+light power where the format holds them (`.goo` holds all of them, `.sl1` only the
+transition). Anything
+else keeps our defaults, and so does a lift the file states as a placeholder, as files for a
+tilting vat do. Colour, price and compensation are not in sliced files.
+
+**Take a resin from another program's profile:** import the resin profile it exports, a
+`.cfgx` or an `.ini`, the same way; it goes on the printer you have chosen, or else on the
+one the profile names. A `.cfgx` brings everything its resin holds: exposure, layers,
+waits, lifts, light power, compensation, colour, density and price. An `.ini` brings
+exposure, the faded layers, the XYZ correction, the elephant-foot compensation, colour,
+density and price per litre; it holds no lifts or light power for other machines. An
+encrypted profile, and a bundle of several materials in one file, cannot be read.
 
 **Flexibility:**
 - Every profile (printer, resin, support, hollow and drain presets) is a plain TOML text
@@ -433,7 +465,8 @@ Do that in the window, save a project, then slice the project.
 - Only the **ELEGOO Saturn 4 Ultra** is confirmed by a real print. Start every other printer
   with a small calibration piece and check the build area and mirroring.
 - **No bundled resins.** Calibrate your own exposure.
-- **Encrypted `.ctb`** is not supported.
+- **Encrypted `.ctb`** is written only for a printer whose profile asks for it, and no
+  shipped profile does until a machine is confirmed by a print.
 - **Adaptive layer height** needs a custom printer profile; no bundled one allows it.
 - **Convert** cannot carry varying layer heights or the preview pictures.
 - **Browser build:** no network sending, no updates, uncapped section cut.

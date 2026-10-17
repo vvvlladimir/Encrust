@@ -90,8 +90,8 @@ fn push_run(data: &mut Vec<u8>, lit: bool, length: u32) {
 
 /// Expands the passes of one layer back into runs of eight-bit grey.
 ///
-/// A pixel's value is how many passes lit it, scaled by the step between two passes and
-/// dropped by one so that every pass lighting it decodes to 255.
+/// A pixel's value is how many of the file's passes lit it, scaled by the step between two
+/// passes and dropped by one so that every pass lighting it decodes to 255.
 pub fn decode_passes(passes: &[Vec<u8>], pixel_count: u32) -> Result<Vec<Run>, FormatError> {
     let mut counts = vec![0u8; pixel_count as usize];
 
@@ -111,7 +111,8 @@ pub fn decode_passes(passes: &[Vec<u8>], pixel_count: u32) -> Result<Vec<Run>, F
         }
     }
 
-    let step = 256 / GREY_PASSES as u16;
+    // A file of one pass, which another slicer writes with anti-aliasing off, is binary.
+    let step = 256 / passes.len().clamp(1, GREY_PASSES as usize) as u16;
     Ok(coalesce(counts.into_iter().map(|count| {
         let value = u16::from(count) * step;
         value.saturating_sub(1) as u8
@@ -226,5 +227,25 @@ mod tests {
     fn a_pass_that_runs_past_the_layer_is_an_error() {
         let err = decode_passes(&[vec![0x7D | LIT_FLAG]], 4).unwrap_err();
         assert!(matches!(err, FormatError::MalformedRun { offset: 0 }));
+    }
+
+    #[test]
+    fn a_file_of_one_pass_decodes_a_lit_pixel_as_full() {
+        // One pass of three pixels lit then one dark: 0x80 marks a lit run.
+        let runs = decode_passes(&[vec![0x80 | 3, 1]], 4).expect("the run covers the layer");
+        assert_eq!(
+            runs,
+            vec![
+                Run {
+                    value: 255,
+                    length: 3
+                },
+                Run {
+                    value: 0,
+                    length: 1
+                }
+            ],
+            "a pixel every pass lights is full, however many passes there are"
+        );
     }
 }

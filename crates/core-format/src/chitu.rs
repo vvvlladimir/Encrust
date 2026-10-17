@@ -1,3 +1,13 @@
+//! What the Chitu containers share whatever their revision or encryption: the layer cipher
+//! and the notice every file from version 4 on carries. See `docs/formats/chitu.md`.
+
+/// The notice CBD Technology puts in every version 4 file, at the length it expects.
+///
+/// It is a field of the container, not a claim of ours; see `docs/formats/chitu.md`.
+pub const CHITU_DISCLAIMER: &str = "Layout and record format for the ctb and cbddlp file types are the copyrighted programs or codes of CBD Technology (China) Inc..The Customer or User shall not in any manner reproduce, distribute, modify, decompile, disassemble, decrypt, extract, reverse engineer, lease, assign, or sublicense the said programs or codes.";
+/// The bytes the format gives the notice.
+pub const CHITU_DISCLAIMER_BYTES: u32 = 320;
+
 /// Applies the `.ctb` layer cipher to one layer's run-length data, in place.
 ///
 /// A four-byte keystream word is derived from the header's key and the layer's index and
@@ -6,7 +16,7 @@
 ///
 /// A key of zero means the data is in the clear and nothing is done, which is what we
 /// write; see `docs/decisions/0046-ctb-layer-data-is-written-in-the-clear.md`.
-pub fn layer_crypt(key: u32, layer_index: u32, data: &mut [u8]) {
+pub fn chitu_layer_crypt(key: u32, layer_index: u32, data: &mut [u8]) {
     if key == 0 {
         return;
     }
@@ -32,9 +42,18 @@ mod tests {
     use super::*;
 
     #[test]
+    fn the_disclaimer_fits_the_field_the_format_fixes() {
+        assert_eq!(
+            CHITU_DISCLAIMER.len(),
+            CHITU_DISCLAIMER_BYTES as usize,
+            "the notice is written whole, not truncated, at 320 bytes"
+        );
+    }
+
+    #[test]
     fn a_key_of_zero_leaves_the_data_alone() {
         let mut data = [1, 2, 3, 4, 5];
-        layer_crypt(0, 7, &mut data);
+        chitu_layer_crypt(0, 7, &mut data);
         assert_eq!(data, [1, 2, 3, 4, 5]);
     }
 
@@ -42,9 +61,9 @@ mod tests {
     fn deciphering_is_the_same_pass_as_enciphering() {
         let plain: Vec<u8> = (0..64).collect();
         let mut data = plain.clone();
-        layer_crypt(0x0378_32AA, 3, &mut data);
+        chitu_layer_crypt(0x0378_32AA, 3, &mut data);
         assert_ne!(data, plain, "the data is actually covered");
-        layer_crypt(0x0378_32AA, 3, &mut data);
+        chitu_layer_crypt(0x0378_32AA, 3, &mut data);
         assert_eq!(data, plain);
     }
 
@@ -52,8 +71,8 @@ mod tests {
     fn each_layer_is_covered_by_its_own_keystream() {
         let mut first = vec![0; 16];
         let mut second = vec![0; 16];
-        layer_crypt(0x0378_32AA, 0, &mut first);
-        layer_crypt(0x0378_32AA, 1, &mut second);
+        chitu_layer_crypt(0x0378_32AA, 0, &mut first);
+        chitu_layer_crypt(0x0378_32AA, 1, &mut second);
         assert_ne!(first, second, "the layer index is part of the key");
     }
 
@@ -62,7 +81,7 @@ mod tests {
         // Zeroed input makes the output the keystream itself, so the first four bytes must
         // be one little-endian word and the fifth must begin another.
         let mut data = vec![0; 8];
-        layer_crypt(1, 0, &mut data);
+        chitu_layer_crypt(1, 0, &mut data);
         let init = 1u32.wrapping_mul(0x2D83_CDAC).wrapping_add(0xD8A8_3423);
         let word = 0xEC3D_47CDu32.wrapping_mul(init);
         assert_eq!(data[..4], word.to_le_bytes());

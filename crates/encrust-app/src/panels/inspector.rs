@@ -5,7 +5,6 @@ mod export;
 mod hollow;
 mod layers;
 mod measure;
-mod opened;
 mod paint;
 mod position;
 mod presets;

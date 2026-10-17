@@ -3,6 +3,7 @@
 //!
 //! A concrete format lives in its own crate beside this one; see `format-goo`.
 
+mod chitu;
 mod de;
 mod error;
 mod exposure;
@@ -17,6 +18,7 @@ mod ser;
 mod timestamp;
 mod writer;
 
+pub use chitu::{CHITU_DISCLAIMER, CHITU_DISCLAIMER_BYTES, chitu_layer_crypt};
 pub use de::{MAX_ENTRY_BYTES, ReadSeek, Reads, read_entry};
 pub use error::FormatError;
 pub use exposure::{ExposurePlan, ExposureRange};
@@ -34,6 +36,13 @@ pub use writer::{LayerSink, SlicedFileWriter, WRITE_BUFFER_BYTES, validate};
 // How an exposure follows the layer height is a property of the resin, so it lives with
 // the resin profile; every writer scales through it.
 pub use printer_profiles::exposure_for_mm;
+
+// What a reader finds of the resin in a file is the resin's own tuning table, so a format
+// crate states it in those types, through the bounds every importer of a resin shares.
+pub use printer_profiles::{
+    PrinterTuning, WaitMode, Waits, stated_distance_mm, stated_pwm, stated_rests,
+    stated_speed_mm_min, stated_wait_s,
+};
 
 // Runs are the format-neutral currency of a rasterised layer; they live in `core-raster`
 // so every sliced-file format speaks the same ones.

@@ -2,12 +2,13 @@ use std::borrow::Cow;
 use std::collections::BTreeMap;
 
 use core_format::{
-    FormatError, LayerEntry, OpenFile, ReadSeek, SlicedFile, SlicedFileReader, decode_grey,
-    layer_in_range, png_shape, read_entry,
+    FormatError, LayerEntry, OpenFile, PrinterTuning, ReadSeek, SlicedFile, SlicedFileReader,
+    decode_grey, layer_in_range, png_shape, read_entry,
 };
 use core_raster::Run;
 use zip::ZipArchive;
 
+use crate::fade::bottom_and_transition;
 use crate::writer::{Sl1Flavour, index_digits};
 
 /// Reads the Prusa `.sl1` archive. Layout is in `docs/formats/sl1.md`.
@@ -43,6 +44,13 @@ impl SlicedFileReader for Sl1Reader {
             }
         };
 
+        let (bottom_layers, transition_layers) = match number("numFade") {
+            Some(fade) => {
+                let (bottom, ramp) = bottom_and_transition(fade as u32);
+                (bottom, Some(ramp))
+            }
+            None => (0, None),
+        };
         let layer_height_mm = number("layerHeight").unwrap_or_default();
         let exposure_s = number("expTime").unwrap_or_default();
         let entries = layers
@@ -76,10 +84,14 @@ impl SlicedFileReader for Sl1Reader {
                 layer_height_mm,
                 exposure_s,
                 bottom_exposure_s: number("expTimeFirst").unwrap_or_default(),
-                bottom_layers: number("numFade").unwrap_or_default() as u32,
+                bottom_layers,
                 print_time_s: number("printTime").map(|seconds| seconds as u32),
                 volume_mm3: number("usedMaterial").map(|ml| ml * 1000.0),
                 grey_steps: 256,
+                stated: PrinterTuning {
+                    transition_layers,
+                    ..PrinterTuning::default()
+                },
                 layers: entries,
             },
         })

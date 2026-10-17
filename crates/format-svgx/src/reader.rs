@@ -1,6 +1,6 @@
 use core_format::{
-    FormatError, LayerEntry, OpenFile, ReadSeek, Reads, SlicedFile, SlicedFileReader,
-    layer_in_range, panel_in_range,
+    FormatError, LayerEntry, OpenFile, PrinterTuning, ReadSeek, Reads, SlicedFile,
+    SlicedFileReader, layer_in_range, panel_in_range,
 };
 use core_raster::{
     Grey, LayerRuns, PixelPitch, RasterSettings, Rasterizer, Run, ScanlineRasterizer, Shading,
@@ -90,6 +90,7 @@ impl SlicedFileReader for SvgxReader {
                 volume_mm3: number(&settings, "volume").map(|millilitres| millilitres * 1000.0),
                 // A path is filled or it is not: the container carries no grey at all.
                 grey_steps: 2,
+                stated: PrinterTuning::default(),
                 layers,
             },
         })

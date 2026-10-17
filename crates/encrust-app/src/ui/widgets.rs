@@ -9,7 +9,7 @@ mod toggle;
 pub use button::{
     compact_button, companion_button, filter_chip, focus_ring, icon_button, icon_toggle,
     inline_button, picker, primary_button, quiet_button, rail_button, secondary_button,
-    summary_button,
+    summary_button, zone_button,
 };
 pub use field::{
     Carried, address_field, axis_label, carried_row, count_row, field_label, number_field,

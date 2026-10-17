@@ -8,8 +8,8 @@ use crate::ui::{card, icon, icon_button, icon_toggle};
 const CARD_PAD: i8 = 3;
 
 /// The bottom right of the viewport, beside this plate's card: how the viewport is looked
-/// at.
-pub fn ui(ui: &egui::Ui, window: &mut Window, viewport: Rect) {
+/// at. Answers where the card stands.
+pub fn ui(ui: &egui::Ui, window: &mut Window, viewport: Rect) -> Rect {
     egui::Area::new(Id::new("view-tools"))
         .order(egui::Order::Middle)
         .fixed_pos(viewport.right_bottom())
@@ -19,7 +19,9 @@ pub fn ui(ui: &egui::Ui, window: &mut Window, viewport: Rect) {
             card()
                 .inner_margin(CARD_PAD)
                 .show(ui, |ui| view_tools(ui, window));
-        });
+        })
+        .response
+        .rect
 }
 
 /// What the viewport draws besides the models, and how to point the camera at them.
