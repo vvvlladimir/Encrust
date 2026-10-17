@@ -88,28 +88,33 @@ pub fn current() -> Language {
         .unwrap_or_default()
 }
 
-/// The first of the system's or the browser's languages the window is written in, English
-/// when it is none of them. Read once: a system changes language by logging in again.
+/// The system's or the browser's first language if the window is written in it, English
+/// otherwise. Read once: a system changes language by logging in again.
 pub fn system() -> Language {
-    static SYSTEM: OnceLock<Language> = OnceLock::new();
-    *SYSTEM.get_or_init(|| pick(sys_locale::get_locales()))
+    system_tag().and_then(language_of).unwrap_or_default()
 }
 
-/// The first of `locales` — BCP 47 tags such as `ru-RU`, or POSIX ones such as `ru_RU.UTF-8`
-/// — that names a language the window has, by its primary subtag.
-fn pick(locales: impl IntoIterator<Item = String>) -> Language {
-    locales
+/// The system's first language as its tag, such as `de-DE`, when the window is not written
+/// in it and so shows in English.
+pub fn system_untranslated() -> Option<&'static str> {
+    system_tag().filter(|tag| language_of(tag).is_none())
+}
+
+fn system_tag() -> Option<&'static str> {
+    static TAG: OnceLock<Option<String>> = OnceLock::new();
+    TAG.get_or_init(sys_locale::get_locale).as_deref()
+}
+
+/// The language `tag` names by its primary subtag — a BCP 47 tag such as `ru-RU`, or a
+/// POSIX one such as `ru_RU.UTF-8`, whose `C` and `POSIX` are English.
+fn language_of(tag: &str) -> Option<Language> {
+    let primary = tag.split(['-', '_', '.', '@']).next()?.to_ascii_lowercase();
+    if primary == "c" || primary == "posix" {
+        return Some(Language::English);
+    }
+    Language::ALL
         .into_iter()
-        .find_map(|locale| {
-            let primary = locale
-                .split(['-', '_', '.', '@'])
-                .next()?
-                .to_ascii_lowercase();
-            Language::ALL
-                .into_iter()
-                .find(|language| language.code() == primary)
-        })
-        .unwrap_or_default()
+        .find(|language| language.code() == primary)
 }
 
 /// The message `key` in the current language; `tr!` is the way to call it.
@@ -327,21 +332,17 @@ mod tests {
     }
 
     #[test]
-    fn the_first_system_language_the_window_has_wins() {
-        let tags = |tags: &[&str]| tags.iter().map(|tag| (*tag).to_owned()).collect::<Vec<_>>();
-        assert_eq!(pick(tags(&["de-DE", "ru-RU", "en-US"])), Language::Russian);
-        assert_eq!(pick(tags(&["ru_RU.UTF-8"])), Language::Russian);
-        assert_eq!(pick(tags(&["EN-gb"])), Language::English);
+    fn a_tag_names_a_language_by_its_primary_subtag() {
+        assert_eq!(language_of("ru-RU"), Some(Language::Russian));
+        assert_eq!(language_of("ru_RU.UTF-8"), Some(Language::Russian));
+        assert_eq!(language_of("EN-gb"), Some(Language::English));
         assert_eq!(
-            pick(tags(&["de-DE"])),
-            Language::English,
-            "none of them is ours"
+            language_of("C.UTF-8"),
+            Some(Language::English),
+            "POSIX default"
         );
-        assert_eq!(
-            pick(Vec::new()),
-            Language::English,
-            "a system that names none"
-        );
+        assert_eq!(language_of("de-DE"), None, "not translated");
+        assert_eq!(language_of(""), None, "a system that names none");
     }
 
     #[test]

@@ -1,6 +1,6 @@
 # 0300. The window speaks the user's language through Fluent catalogues
 
-- **Status:** Accepted
+- **Status:** Superseded by 0301 (which system language wins only)
 - **Date:** 2026-10-17
 
 ## Context

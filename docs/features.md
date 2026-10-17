@@ -431,9 +431,11 @@ address in a video player).
   profiles) and gives it to you to copy or save. Encrust never sends it itself, and network
   addresses are removed from it.
 - Choose where sliced files are saved and whether the window opens on the start page.
-- **Language:** the window follows the system's or the browser's language, or the one you
-  pick in Settings → General. English is complete; Russian is being translated, and what is
-  not translated yet shows in English. The command line stays English.
+- **Language:** the window follows the system's or the browser's first language, or the one
+  you pick in Settings → General. A system language with no translation shows the window in
+  English, and Settings says so. English is complete; Russian is being translated, and what
+  is not translated yet shows in English. The test prints keep English file names in every
+  language. The command line stays English.
 
 ---
 

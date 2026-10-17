@@ -39,7 +39,7 @@ value-um = { $value } µm
 
 general-language = Language
 general-language-system = As the system ({ $name })
-general-language-hint = A part not translated yet shows in English.
+general-language-untranslated = The window is not translated into the system's language ({ $tag }) yet, so it shows in English.
 general-start = Start
 general-start-page = Open on the start page
 general-start-page-hint = The drop zone, the files opened lately and the resin test prints, until a model arrives. Off, a run opens straight on the plate.

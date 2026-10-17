@@ -43,7 +43,11 @@ fn language(ui: &mut Ui, choice: &mut Option<Language>) {
                 ui.selectable_value(choice, Some(language), language.native_name());
             }
         });
-    hint(ui, &tr!("general-language-hint"));
+    if choice.is_none()
+        && let Some(tag) = i18n::system_untranslated()
+    {
+        hint(ui, &tr!("general-language-untranslated", tag = tag));
+    }
 }
 
 /// What only a desk has: folders.

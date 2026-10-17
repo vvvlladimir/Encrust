@@ -17,6 +17,8 @@ use crate::i18n::tr;
 
 /// One test print, opened as if its file had been dropped on the window.
 pub struct Sample {
+    /// The STL's name, the same in every language and safe on every file system.
+    file: &'static str,
     name: fn() -> String,
     about: fn() -> String,
     build: fn() -> Mesh,
@@ -24,21 +26,25 @@ pub struct Sample {
 
 pub const SAMPLES: [Sample; 4] = [
     Sample {
+        file: "detail-test.stl",
         name: || tr!("sample-detail"),
         about: || tr!("sample-detail-about"),
         build: detail::build,
     },
     Sample {
+        file: "exposure-check.stl",
         name: || tr!("sample-exposure"),
         about: || tr!("sample-exposure-about"),
         build: exposure::build,
     },
     Sample {
+        file: "surface-finish.stl",
         name: || tr!("sample-surface"),
         about: || tr!("sample-surface-about"),
         build: surface::build,
     },
     Sample {
+        file: "fit-gauge.stl",
         name: || tr!("sample-fit"),
         about: || tr!("sample-fit-about"),
         build: fit::build,
@@ -64,7 +70,7 @@ impl Sample {
     /// The model as an STL handed to the window.
     pub fn handed(&self) -> Handed {
         let bytes = solid::stl(&(self.build)());
-        Handed::bytes(format!("{}.stl", self.name()), Arc::from(bytes))
+        Handed::bytes(self.file, Arc::from(bytes))
     }
 }
 
