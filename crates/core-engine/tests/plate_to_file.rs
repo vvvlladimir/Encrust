@@ -353,6 +353,19 @@ fn the_requested_revision_reaches_the_ctb_header() {
 }
 
 #[test]
+fn a_setting_the_printer_locks_is_written_whatever_the_resin_says() {
+    let mut plate = plate(SlicedFormat::Goo);
+    plate.printer.locked.lift_distance_mm = Some(0.05);
+    plate.material.lift_distance_mm = 6.0;
+    plate.material.retract_distance_mm = 6.0;
+
+    let run = Run::of(&plate).expect("the box is a run");
+    let written = &run.job().material;
+    assert_eq!(written.lift_distance_mm, 0.05, "the machine's lock wins");
+    assert_eq!(written.retract_distance_mm, 6.0, "what is not locked stays");
+}
+
+#[test]
 fn the_written_file_carries_a_picture_of_the_plate() {
     let run = Run::of(&plate(SlicedFormat::Goo)).expect("the box is a run");
     let mut file = Cursor::new(Vec::new());

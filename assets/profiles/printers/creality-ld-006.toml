@@ -32,3 +32,7 @@ z = 245.0
 [firmware]
 per_layer_settings = false
 variable_layer_height = false
+
+[locked]
+light_pwm = 255
+bottom_light_pwm = 255

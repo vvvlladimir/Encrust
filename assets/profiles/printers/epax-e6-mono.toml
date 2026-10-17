@@ -32,3 +32,6 @@ z = 155.0
 [firmware]
 per_layer_settings = false
 variable_layer_height = false
+
+[locked]
+transition_layers = 0

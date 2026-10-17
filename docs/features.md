@@ -249,6 +249,12 @@ capped silently.
 
 ### Motion and waits
 - Lift distance and speed, retract speed, separate values for the bottom layers.
+- A setting the printer's own slicer does not let you change is not offered either, and the
+  file states what that slicer writes. On a tilting vat — the ELEGOO Saturn 4 Ultra, Saturn 4
+  Ultra 16K and Mars 5 Ultra — there are no lift or retract settings, and the print time
+  counts no lift; the Saturn 4 Ultra and the Mars 5 Ultra wait by resting only. Older Chitu
+  machines have no light power or transition layers, Anycubic and Halot machines wait with the
+  light off, and a Halot Mage's bottom lift is fixed.
 - Wait before lift, after lift and after retract, light-off delay.
 - Light power, and bottom light power where the printer supports it.
 

@@ -1,6 +1,6 @@
 # 0142. A tilting vat reads the header alone
 
-- **Status:** Accepted
+- **Status:** Superseded by 0301 (the lift and retract it left in the file only)
 - **Date:** 2026-09-29
 
 ## Context

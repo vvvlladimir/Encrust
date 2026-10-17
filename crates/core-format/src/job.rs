@@ -165,7 +165,15 @@ impl PrintJob {
 
         let bottom = layer_count.min(material.bottom_layers);
         let normal = layer_count - bottom;
-        let travel = |distance_mm: f32, speed_mm_min: f32| distance_mm / speed_mm_min * 60.0;
+        // Under 1 mm/min is a placeholder for motion the machine runs itself, so it adds no
+        // time here; the measured layer time carries it (ADR 0293, 0301).
+        let travel = |distance_mm: f32, speed_mm_min: f32| {
+            if speed_mm_min < 1.0 {
+                0.0
+            } else {
+                distance_mm / speed_mm_min * 60.0
+            }
+        };
 
         let bottom_motion = travel(
             material.bottom_lift_distance_mm,
@@ -466,6 +474,35 @@ mod tests {
 
         // 2 * 30 s + 2 * 2 s exposure, plus 6 mm up and down at 1 mm/s on all four layers.
         assert_eq!(job.print_time_s(), (60.0 + 4.0 + 4.0 * 12.0) as u32);
+    }
+
+    #[test]
+    fn a_placeholder_speed_adds_no_travel_to_the_print_time() {
+        let job = |distance_mm, speed_mm_min| PrintJob {
+            material: MaterialProfile {
+                bottom_layers: 0,
+                exposure_s: 2.0,
+                light_off_delay_s: 0.0,
+                lift_distance_mm: distance_mm,
+                lift_speed_mm_min: speed_mm_min,
+                retract_distance_mm: distance_mm,
+                retract_speed_mm_min: speed_mm_min,
+                ..MaterialProfile::default()
+            },
+            ..sample_job(4)
+        };
+
+        // 0.05 mm at 0.05 mm/min would read as two minutes a layer; a tilting vat takes seconds.
+        assert_eq!(
+            job(0.05, 0.05).print_time_s(),
+            8,
+            "four layers of 2 s exposure"
+        );
+        assert_eq!(
+            job(10.0, 1200.0).print_time_s(),
+            12,
+            "10 mm up and down at 1200 mm/min is 1 s a layer on top of the 2 s exposure"
+        );
     }
 
     /// A print that came in under its estimate gives a negative correction, which has to

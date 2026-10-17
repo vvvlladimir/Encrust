@@ -20,3 +20,8 @@ height_mm = 71.28
 x = 165.0
 y = 71.28
 z = 180.0
+
+# The vendor slicer hides the light power and writes it full, see ADR 0301.
+[locked]
+light_pwm = 255
+bottom_light_pwm = 255

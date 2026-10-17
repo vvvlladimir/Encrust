@@ -42,4 +42,5 @@ decisions taken together are one record, not one each.
 While an ADR is still in the working diff it is draft material: rewrite, renumber or delete it
 freely, even if its Status already reads `Accepted`. Never add a second ADR superseding one
 that is not committed yet. Once committed it is frozen: change only its Status, and record a
-new decision in a new ADR that supersedes it.
+new decision in a new ADR that supersedes it — except one that continues it, wholly or in
+part, before anything else builds on it: fold that into the old ADR instead of adding one.

@@ -1,6 +1,9 @@
 use std::path::{Path, PathBuf};
 
-use printer_profiles::{Catalogue, Connection, OutputFormat, PrinterProfile, SupportProfile};
+use printer_profiles::{
+    Catalogue, Connection, MaterialProfile, OutputFormat, PrinterProfile, SupportProfile, WaitMode,
+    Waits,
+};
 
 fn asset(name: &str) -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR"))
@@ -96,6 +99,59 @@ fn the_saturn_4_ultra_reads_the_header_alone() {
     assert!(
         !entry.profile.firmware.per_layer_settings,
         "a tilting vat stalls on the per-layer lift, see ADR 0142"
+    );
+}
+
+#[test]
+fn every_tilting_vat_states_no_lift_of_its_own() {
+    let catalogue = Catalogue::bundled().expect("the shipped catalogue is valid");
+    for id in [
+        "elegoo-saturn-4-ultra",
+        "elegoo-saturn-4-ultra-16k",
+        "elegoo-mars-5-ultra",
+    ] {
+        let entry = catalogue.printer(id).expect("a shipped machine");
+        let printed = MaterialProfile::default().on(&entry.profile);
+
+        // The vendor's own files for these carry 0.05 in every peel field, see ADR 0301.
+        for value in [
+            printed.lift_distance_mm,
+            printed.lift_speed_mm_min,
+            printed.retract_distance_mm,
+            printed.retract_speed_mm_min,
+            printed.bottom_lift_distance_mm,
+            printed.bottom_lift_speed_mm_min,
+            printed.bottom_retract_speed_mm_min,
+        ] {
+            assert_eq!(value, 0.05, "{id}: the tilting vat runs its own motion");
+        }
+    }
+}
+
+#[test]
+fn the_saturn_4_ultra_rests_and_keeps_the_resins_rests() {
+    let catalogue = Catalogue::bundled().expect("the shipped catalogue is valid");
+    let entry = catalogue
+        .printer("elegoo-saturn-4-ultra")
+        .expect("a shipped machine");
+    let resin = MaterialProfile {
+        waits: Waits {
+            mode: WaitMode::LightOff,
+            after_retract_s: 1.3,
+            ..Waits::default()
+        },
+        ..MaterialProfile::default()
+    };
+
+    let printed = resin.on(&entry.profile);
+    assert_eq!(
+        printed.waits.mode,
+        WaitMode::Rest,
+        "the vendor slicer offers no other"
+    );
+    assert_eq!(
+        printed.waits.after_retract_s, 1.3,
+        "the rests stay the resin's"
     );
 }
 

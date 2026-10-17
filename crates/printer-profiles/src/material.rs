@@ -4,7 +4,7 @@ use std::path::Path;
 use serde::{Deserialize, Serialize};
 
 use crate::Compensation;
-use crate::ProfileError;
+use crate::{PrinterProfile, ProfileError};
 
 /// Exposure and motion settings for one resin.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -85,6 +85,9 @@ pub struct PrinterTuning {
     pub bottom_lift_speed_mm_min: Option<f32>,
     pub bottom_retract_speed_mm_min: Option<f32>,
     pub waits: Option<Waits>,
+    /// How the printer waits, over `waits`, for a machine that takes one mode only and
+    /// leaves the rests to the resin.
+    pub wait_mode: Option<WaitMode>,
     pub compensation: Option<Compensation>,
 }
 
@@ -192,6 +195,7 @@ impl PrinterTuning {
                 tuned.bottom_retract_speed_mm_min,
             ),
             waits: changed(base.waits, tuned.waits),
+            wait_mode: None,
             compensation: changed(base.compensation, tuned.compensation),
         }
     }
@@ -200,6 +204,36 @@ impl PrinterTuning {
     /// numbers and a table not worth writing.
     pub fn is_empty(&self) -> bool {
         *self == Self::default()
+    }
+
+    /// The one way of waiting this machine takes, where it takes only one.
+    pub fn held_wait_mode(&self) -> Option<WaitMode> {
+        self.wait_mode
+            .or_else(|| self.waits.map(|waits| waits.mode))
+    }
+
+    /// Whether this machine leaves the resin nothing to say about how it waits.
+    pub fn locks_waiting(&self) -> bool {
+        match self.held_wait_mode() {
+            None => false,
+            Some(WaitMode::LightOff) => self.light_off_delay_s.is_some(),
+            Some(WaitMode::Rest) => self.waits.is_some(),
+        }
+    }
+
+    /// Whether this machine runs every part of the peel itself, leaving the resin no motion.
+    pub fn locks_motion(&self) -> bool {
+        [
+            self.lift_distance_mm,
+            self.lift_speed_mm_min,
+            self.retract_distance_mm,
+            self.retract_speed_mm_min,
+            self.bottom_lift_distance_mm,
+            self.bottom_lift_speed_mm_min,
+            self.bottom_retract_speed_mm_min,
+        ]
+        .iter()
+        .all(Option::is_some)
     }
 
     fn apply_to(&self, profile: &mut MaterialProfile) {
@@ -228,6 +262,7 @@ impl PrinterTuning {
             self.bottom_retract_speed_mm_min,
         );
         over(&mut profile.waits, self.waits);
+        over(&mut profile.waits.mode, self.wait_mode);
         over(&mut profile.compensation, self.compensation);
     }
 }
@@ -345,6 +380,12 @@ impl MaterialProfile {
         tuned
     }
 
+    /// This resin as `printer` prints it: every setting the machine locks put over its own.
+    #[must_use]
+    pub fn on(&self, printer: &PrinterProfile) -> Self {
+        self.clone().with_tuning(&printer.locked)
+    }
+
     /// This resin as measured at `layer_height_mm`: the normal exposure is carried along
     /// the working curve, so a layer of the new height cures as a layer of the old one did.
     /// The bottom block keeps its seconds, being exposed to stick rather than to cure
@@ -438,7 +479,7 @@ impl MaterialProfile {
         Ok(())
     }
 
-    fn validate_values(&self) -> Result<(), ProfileError> {
+    pub(crate) fn validate_values(&self) -> Result<(), ProfileError> {
         let checks = [
             ("layer_height_mm", self.layer_height_mm),
             ("exposure_s", self.exposure_s),
@@ -540,6 +581,28 @@ mod tests {
 
     fn path() -> &'static Path {
         Path::new("inline.toml")
+    }
+
+    #[test]
+    fn a_machine_holding_its_wait_mode_leaves_the_waiting_open_until_it_locks_the_wait() {
+        let held = PrinterTuning {
+            wait_mode: Some(WaitMode::LightOff),
+            ..PrinterTuning::default()
+        };
+        assert_eq!(held.held_wait_mode(), Some(WaitMode::LightOff));
+        assert!(
+            !held.locks_waiting(),
+            "the light-off delay is still the resin's"
+        );
+
+        let locked = PrinterTuning {
+            light_off_delay_s: Some(1.0),
+            ..held
+        };
+        assert!(
+            locked.locks_waiting(),
+            "mode and delay are both the machine's"
+        );
     }
 
     #[test]

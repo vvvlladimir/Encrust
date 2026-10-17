@@ -247,9 +247,10 @@ fn print_readings(window: &Window) -> Vec<(String, String)> {
 /// taken from. `None` until a printer is chosen and the stack is planned.
 fn job(machine: &Machine) -> Option<PrintJob> {
     let slicing = &machine.slicing;
+    let printer = slicing.printer.clone()?;
     Some(PrintJob {
-        printer: slicing.printer.clone()?,
-        material: slicing.material.clone(),
+        material: slicing.material.on(&printer),
+        printer,
         raster: slicing.raster_settings()?,
         plan: machine.preview.plan()?.clone(),
         volume_mm3: 0.0,

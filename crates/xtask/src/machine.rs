@@ -61,7 +61,7 @@ const CONNECTIONS: [(&str, Connection); 4] = [
 
 /// A machine ready to be written out, or the reason it is not.
 pub enum Transcribed {
-    Ready(Machine),
+    Ready(Box<Machine>),
     /// Its container waits on a later step, which this names.
     Waiting(&'static str),
 }
@@ -116,12 +116,14 @@ pub fn transcribe(stem: &str, ini: &Ini) -> Result<Transcribed> {
             per_layer_settings: !older_revision,
             variable_layer_height: false,
         },
+        // Not in the source: `gen-profiles` carries a file's own over (ADR 0301).
+        locked: printer_profiles::PrinterTuning::default(),
     };
-    Ok(Transcribed::Ready(Machine {
+    Ok(Transcribed::Ready(Box::new(Machine {
         id,
         profile,
         older_revision,
-    }))
+    })))
 }
 
 /// How far the plate travels, which one source profile states wrongly.

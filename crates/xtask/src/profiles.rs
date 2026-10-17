@@ -6,7 +6,7 @@ use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result, bail};
 use clap::Parser;
-use printer_profiles::{PrinterProfile, is_valid_id};
+use printer_profiles::{PrinterProfile, PrinterTuning, is_valid_id};
 
 use crate::cross_check::MachineList;
 use crate::ini::Ini;
@@ -93,9 +93,9 @@ enum Outcome {
 
 fn one(stem: &str, source: &Path, args: &Args, list: Option<&MachineList>) -> Result<Outcome> {
     let ini = Ini::load(source)?;
-    let machine = match transcribe(stem, &ini)? {
+    let mut machine = match transcribe(stem, &ini)? {
         Transcribed::Waiting(step) => return Ok(Outcome::Waiting(step)),
-        Transcribed::Ready(machine) => machine,
+        Transcribed::Ready(machine) => *machine,
     };
     if !is_valid_id(&machine.id) {
         bail!("`{}` is not a usable catalogue id", machine.id);
@@ -105,6 +105,7 @@ fn one(stem: &str, source: &Path, args: &Args, list: Option<&MachineList>) -> Re
     if target.exists() && !is_generated(&target)? {
         return Ok(Outcome::Kept(machine.id));
     }
+    machine.profile.locked = locked_in(&target)?;
     let over_the_list = match list {
         Some(list) => check(&machine, list)?,
         None => None,
@@ -175,6 +176,19 @@ fn render(machine: &Machine) -> Result<String> {
     Ok(text)
 }
 
+/// The `[locked]` table a catalogue file states, which the source knows nothing of and so a
+/// rewrite keeps; empty for a machine not written yet.
+fn locked_in(path: &Path) -> Result<PrinterTuning> {
+    if !path.exists() {
+        return Ok(PrinterTuning::default());
+    }
+    let text =
+        std::fs::read_to_string(path).with_context(|| format!("cannot read {}", path.display()))?;
+    let profile = PrinterProfile::from_toml_str(&text, path)
+        .with_context(|| format!("{} does not load", path.display()))?;
+    Ok(profile.locked)
+}
+
 fn is_generated(path: &Path) -> Result<bool> {
     let text =
         std::fs::read_to_string(path).with_context(|| format!("cannot read {}", path.display()))?;
@@ -237,5 +251,27 @@ impl Report {
         for line in lines {
             println!("  {line}");
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn a_rewrite_keeps_the_locks_the_file_states() {
+        let dir = std::env::temp_dir().join("encrust-xtask-locked-in");
+        std::fs::create_dir_all(&dir).expect("a temporary directory");
+        let path = dir.join("machine.toml");
+        let mut profile = PrinterProfile::default();
+        profile.locked.light_pwm = Some(255);
+        let text = profile.to_toml_string(&path).expect("a valid profile");
+        std::fs::write(&path, text).expect("writable");
+
+        let kept = locked_in(&path).expect("the file reads");
+        assert_eq!(kept.light_pwm, Some(255), "the hand-added lock survives");
+        let fresh = locked_in(&dir.join("not-written-yet.toml")).expect("no file is no error");
+        assert_eq!(fresh, PrinterTuning::default());
+        let _ = std::fs::remove_dir_all(&dir);
     }
 }

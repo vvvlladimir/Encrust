@@ -200,6 +200,19 @@ refused without it (ADR 0091). The Saturn 4 Ultra is the one shipped profile tha
 `per_layer_settings`: it separates a layer by tilting its vat, and obeying the per-layer
 lift stalls the plate (ADR 0142).
 
+## What the machine locks
+
+A printer file's `[locked]` table takes any key of a resin's per-printer table, and
+`wait_mode` for a machine that waits one way only, and holds it at that value on this
+machine: it goes over the resin's own and its per-printer table, the window leaves the field
+out, and every file and estimate for the machine states it (ADR 0301). A shipped machine takes
+its table from the build, whatever the user's copy of it says.
+
+What is locked is what the vendor slicer hides for that machine, at the default it writes:
+every lift and retract at 0.05 on the tilting vats, resting alone on two of them; the light
+power at 255 and the transition at 0 on older Chitu boards; light-off waiting on Anycubic and
+Halot machines; the bottom peel on a Halot Mage.
+
 ## Exposure follows the layer height
 
 `layer_height_mm` in a resin file is not a default, it is the thickness the exposure was
@@ -253,7 +266,9 @@ An `.ini` carries everything a printer file of ours needs but the container:
 The brand is the first word of the file name that names one of the twenty the generator
 knows, and the model is the rest; the id is the two in kebab case, which is the file stem.
 `connection` is not in the source and is a table in the generator, holding only the
-generations `docs/formats/sdcp.md` and `docs/formats/prusalink.md` name. `machine_name` is
+generations `docs/formats/sdcp.md` and `docs/formats/prusalink.md` name. `[locked]` is not in
+the source either: it is written into the catalogue file itself, and a run keeps a generated
+file's table when it rewrites the rest. `machine_name` is
 only known from a file the vendor's own slicer wrote, so it is left out until one is read.
 There are no exposures in the source — the `CUSTOM_VALUES` block carries lift, speed and
 PWM, not a measured cure — and none is invented here.
