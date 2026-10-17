@@ -205,35 +205,39 @@ pub fn describe(ui: &mut Ui, text: &str) {
     }
 }
 
-/// Diameter of the help mark, and the most its text runs across before wrapping, points.
-const HELP_D: f32 = 13.0;
+/// The help glyph's size, the round target around it a pointer hits, and the most its text
+/// runs across before wrapping, points.
+const HELP_GLYPH: f32 = 14.0;
+const HELP_D: f32 = 20.0;
 const HELP_W: f32 = 280.0;
 
-/// The ringed question mark beside a title that reads out `texts`: on hover, and in a
-/// popup a click keeps open until the next click.
+/// The question mark beside a title that reads out `texts`: on hover, and in a popup a
+/// click keeps open until the next click. Faint at rest, so it never pulls the eye.
 pub fn help_mark<T: AsRef<str>>(ui: &mut Ui, texts: &[T]) {
     let colors = theme::colors();
     let (rect, response) = ui.allocate_exact_size(vec2(HELP_D, HELP_D), Sense::click());
+    let response = response.on_hover_cursor(egui::CursorIcon::PointingHand);
     let joined: Vec<&str> = texts.iter().map(AsRef::as_ref).collect();
     response.widget_info(|| {
         egui::WidgetInfo::labeled(egui::WidgetType::Button, true, joined.join(" "))
     });
-    let ink = if response.hovered() {
-        colors.text_mid
+    let open = egui::Popup::menu(&response).is_open();
+    let ink = if open {
+        colors.accent_soft
+    } else if response.hovered() {
+        colors.text_high
     } else {
-        colors.text_low
+        colors.text_low.gamma_multiply(0.75)
     };
     let painter = ui.painter();
-    painter.circle_stroke(
-        rect.center(),
-        HELP_D / 2.0 - 0.5,
-        egui::Stroke::new(1.0, ink),
-    );
+    if open || response.hovered() {
+        painter.circle_filled(rect.center(), HELP_D / 2.0, colors.hover);
+    }
     painter.text(
         rect.center(),
         egui::Align2::CENTER_CENTER,
-        "?",
-        theme::help_mark(),
+        crate::ui::icon::HELP,
+        theme::icon(HELP_GLYPH),
         ink,
     );
     super::focus_ring(ui, &response, egui::CornerRadius::same(255));
@@ -247,8 +251,7 @@ pub fn help_mark<T: AsRef<str>>(ui: &mut Ui, texts: &[T]) {
             );
         }
     };
-    let popup = egui::Popup::menu(&response);
-    let response = if popup.is_open() {
+    let response = if open {
         response
     } else {
         response.on_hover_ui(show)
