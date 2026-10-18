@@ -109,7 +109,9 @@ points around it hold. The `CARRY³` voxels of a carrier cell share those eight,
 named once per cell and there are only ever two or three distinct ones. Nearer the mesh
 than `TRUST_VOXELS` carrier steps the carrier is not believed — the lateral miss costs
 about `step² / 2d` and that blows up as `d` falls — and the hierarchy is asked for that
-voxel, but only where the value would not be clamped to the band anyway.
+voxel, but only where the value would not be clamped to the band anyway. It is asked
+`closest_within` the carried face's own distance: only a nearer face can win, so the
+search culls from its first node and still comes back exact (ADR 0309).
 
 Neither the distance nor the side is carried with the face. The distance is a
 `point_triangle` away, and four more bytes a voxel over a shell is not affordable. The side
@@ -158,8 +160,12 @@ about a surface past its own reach. Asking for more is `OutsideBand`, never a cl
 `press` is an operator with a query behind it: at every lattice point of the band, the
 nearest point of the mesh names a face, the `UvMap` gives that point's coordinate and which
 of the model's images it lands on (ADR 0123), and that `Heightmap` gives a height which is
-subtracted like an offset — one whose distance varies over the surface. The band is built a whole amplitude wider so that the surface it moves
-stays in the tiles the field already stored, and the result's band is narrower by the same.
+subtracted like an offset — one whose distance varies over the surface. The band is built
+around the middle of the range the surface can move over, as an iso level, and as wide as
+half that range on top of what marching needs, so the moved surface stays in the tiles the
+field stored. The height is subtracted as each value is built (`build_moved`), at the
+nearest point the build asked the hierarchy for anyway, rather than by a second query per
+lattice point afterwards (ADR 0309).
 
 The relief is only as fine as the lattice, whatever the image's resolution, and only as
 continuous as the map: a UV that jumps between two faces jumps the surface with it, and so
@@ -193,7 +199,8 @@ cut, because it lies in the open under an overhang beside a wall that keeps its 
 
 Surface nets over the band, one tile at a time on every core, clustered onto the lattice.
 A tile reads a 9³ block — its own values plus the neighbour row its far cells reach into —
-so a cell costs no hash lookups.
+with one lookup for each of the eight tiles the block spans, so a cell costs no hash
+lookups.
 
 A cell the surface passes through gets one vertex, the mean of the crossings of its own
 twelve edges, and the gradient of its trilinear field as a normal. A crossed lattice edge
@@ -213,6 +220,13 @@ the surface, so a facet is lifted back out along its normal by the rise the cell
 normals imply. And clustering can fold two quads onto one triangle. Copies are summed the
 way the surface sums them: one wound against another takes it out, and two wound alike both
 stay. Dropping either kind alone opens the surface. See ADR 0084 and 0186.
+
+A quantised value can be exactly zero, and every cell around a lattice point at zero
+crosses the surface there, so their vertices are one point, or a rounding of an `f32` apart.
+A triangle between two of them has no area, and a mesh with one reads as broken. The
+corners of such a triangle within `1e-4` mm are welded, which collapses the zero-length
+edge the way a decimator would and keeps the surface closed (`collapse_flat_faces`,
+ADR 0309).
 
 A quad around an edge on a tile's lowest face names cells of the tiles below it, which the
 field need not store when the surface only crosses the face they share. Those tiles are

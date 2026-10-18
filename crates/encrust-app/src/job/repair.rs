@@ -2,8 +2,8 @@ use std::sync::Arc;
 use std::sync::mpsc::{self, Receiver, TryRecvError};
 
 use core_geometry::{
-    Filled, Mesh, MeshDiagnostics, Orientation, diagnose, fill_holes, orient_outward,
-    remove_duplicate_faces,
+    Filled, Mesh, MeshDiagnostics, Orientation, collapse_flat_faces, diagnose, fill_holes,
+    orient_outward, remove_duplicate_faces,
 };
 
 use crate::i18n::tr;
@@ -107,11 +107,12 @@ pub struct Mended {
     pub kept_as_found: bool,
 }
 
-/// Patches the holes and drops the faces laid over others, and turns the patches the
-/// right way out; leaves the mesh as it came if that would leave more wrong with it, or
-/// nothing of it at all.
+/// Collapses the faces with no area, patches the holes and drops the faces laid over
+/// others, and turns the patches the right way out; leaves the mesh as it came if that
+/// would leave more wrong with it, or nothing of it at all.
 ///
-/// The doubled faces go first, since one reads as a branch the boundary walk cannot get
+/// A face with no area goes first, by welding the corners it has on one point. The doubled
+/// faces go next, since one reads as a branch the boundary walk cannot get
 /// through, and again after the filling: a patch over a lone face or a fin is its reverse,
 /// and the two cancel. The orientation pass is last because a patch is new surface and
 /// nothing has decided its side yet. See `docs/design/mesh-repair.md`.
@@ -119,6 +120,7 @@ pub fn mend(mesh: &mut Mesh) -> Mended {
     let found = mesh.clone();
     let before = wrong(&diagnose(mesh));
 
+    collapse_flat_faces(mesh);
     let mut duplicates_removed = remove_duplicate_faces(mesh).len();
     orient_outward(mesh);
     let filled = fill_holes(mesh);
@@ -332,5 +334,24 @@ mod tests {
             mesh: Arc::new(open_box()),
         });
         assert_eq!(job.label(), "Repairing dragon.stl");
+    }
+
+    #[test]
+    fn a_face_with_no_area_between_two_corners_on_one_point_is_repaired() {
+        // A tetrahedron with its edge 0-1 split at vertex 0 by a vertex standing on it.
+        let mut mesh = Mesh::new(
+            vec![Vec3::ZERO, Vec3::X, Vec3::Y, Vec3::Z, Vec3::ZERO],
+            vec![
+                [0, 2, 4],
+                [4, 2, 1],
+                [0, 4, 3],
+                [4, 1, 3],
+                [1, 2, 3],
+                [2, 0, 3],
+            ],
+        );
+        let mended = mend(&mut mesh);
+        assert!(!mended.kept_as_found);
+        assert_eq!(wrong(&diagnose(&mesh)), 0, "got {:?}", diagnose(&mesh));
     }
 }

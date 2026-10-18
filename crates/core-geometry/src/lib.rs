@@ -34,7 +34,7 @@ pub use mesh::Mesh;
 pub use orient::{Orientation, orient_outward};
 pub use primitives::{cuboid, cylinder, oriented_box, prism, segments_for};
 pub use ray::{PlacedHit, Ray, RayHit, ray_aabb, ray_triangle, raycast, raycast_placed};
-pub use repair::{Filled, fill_holes, remove_duplicate_faces};
+pub use repair::{Filled, collapse_flat_faces, fill_holes, remove_duplicate_faces};
 pub use split::split;
 pub use topology::Adjacency;
 pub use transform::{

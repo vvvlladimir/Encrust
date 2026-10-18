@@ -1,11 +1,10 @@
 use std::borrow::Cow;
 
-use core_geometry::{Bvh, Heightmap, Mesh, Scalar, UvMap, Vec2, Vec3};
+use core_geometry::{Bvh, ClosestPoint, Heightmap, Mesh, Scalar, UvMap, Vec2, Vec3};
 use serde::{Deserialize, Serialize};
 
-use crate::build::{DEFAULT_BUDGET_BYTES, FieldSettings, build};
+use crate::build::{DEFAULT_BUDGET_BYTES, FieldSettings, build_moved};
 use crate::cancel::Cancel;
-use crate::csg::assemble;
 use crate::error::VolumeError;
 use crate::extract::extract;
 use crate::hollow::{BAND_VOXELS, COARSENINGS, lattice_mm};
@@ -77,6 +76,12 @@ impl ReliefSettings {
     /// How far, in amplitudes, a height read off the prepared texture moves the surface.
     fn lifted(&self, height: Scalar) -> Scalar {
         if self.symmetric { height - 0.5 } else { height }
+    }
+
+    /// The least and the most the surface moves outward, millimetres.
+    fn moves_mm(&self) -> (Scalar, Scalar) {
+        let ends = [self.lifted(0.0), self.lifted(1.0)].map(|lift| self.amplitude_mm * lift);
+        (ends[0].min(ends[1]), ends[0].max(ends[1]))
     }
 }
 
@@ -253,51 +258,51 @@ struct Press<'a> {
 
 impl Press<'_> {
     /// One attempt at a given lattice.
+    ///
+    /// The band is built around the middle of the range the surface can move over, so it
+    /// is only as wide as that range rather than the amplitude either side. Each value is
+    /// moved as it is built, at the nearest point the build found for it anyway.
     fn pressed(&self, voxel_mm: Scalar) -> Result<Mesh, VolumeError> {
-        let reach_mm = self.settings.amplitude_mm.abs();
-        let field = build(
+        let (least_mm, most_mm) = self.settings.moves_mm();
+        let middle_mm = Scalar::midpoint(least_mm, most_mm);
+        let reach_mm = (most_mm - least_mm) / 2.0;
+        let band_voxels = reach_mm / voxel_mm + BAND_VOXELS;
+        let band_mm = band_voxels * voxel_mm;
+        let moved = |signed: Scalar, point: Vec3, found: &ClosestPoint| {
+            // Past the band no displacement can reach back across zero, so neither the
+            // texture nor the mask is worth reading.
+            if (signed - middle_mm).abs() >= band_mm {
+                return signed;
+            }
+            self.moved(signed, point, found)
+        };
+        let field = build_moved(
             self.mesh,
             self.bvh,
             &FieldSettings {
                 voxel_mm,
                 // The displaced surface has to stay inside the band it was built in, so the
-                // band carries the amplitude on top of what marching the cells needs.
-                band_voxels: reach_mm / voxel_mm + BAND_VOXELS,
-                iso_mm: 0.0,
+                // band carries the reach on top of what marching the cells needs.
+                band_voxels,
+                iso_mm: middle_mm,
                 sign: SignMode::Auto,
                 clip: None,
                 budget_bytes: self.settings.budget_bytes,
             },
-            Cancel::never(),
+            &moved,
         )?;
-
-        let grid = field.grid();
-        let band_mm = field.band_mm();
-        let tiles = field.tile_keys().collect();
-        let displaced = assemble(grid, band_mm - reach_mm, tiles, |voxel| {
-            let value = field.value(voxel);
-            // Past the band the value is clamped anyway, and no displacement of it can reach
-            // back across zero, so the nearest-point query is not worth making.
-            if value.abs() >= band_mm {
-                return value;
-            }
-            self.moved(value, grid.position(voxel))
-        });
-
-        Ok(extract(&displaced, Cancel::never()))
+        Ok(extract(&field, Cancel::never()))
     }
 
-    /// The field's `value` at `point` once the texture has moved the surface, where the
-    /// mask lets it; see `docs/design/volume.md`.
-    fn moved(&self, value: Scalar, point: Vec3) -> Scalar {
-        let Some(found) = self.bvh.closest(self.mesh, point) else {
-            return value;
-        };
+    /// The signed distance `value` at `point`, whose nearest point of the model is
+    /// `found`, once the texture has moved the surface where the mask lets it; see
+    /// `docs/design/volume.md`.
+    fn moved(&self, value: Scalar, point: Vec3, found: &ClosestPoint) -> Scalar {
         let held = self
             .held
             .as_ref()
             .and_then(|held| Some((held, held.nearest(point)?)));
-        if held.is_some_and(|(_, at)| Held::is_held(&at, &found)) {
+        if held.is_some_and(|(_, at)| Held::is_held(&at, found)) {
             return value;
         }
         let moved = (self.sample)(found.face, found.point).map_or(value, |height| {

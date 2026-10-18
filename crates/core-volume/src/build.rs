@@ -79,6 +79,30 @@ pub fn build(
     settings: &FieldSettings,
     cancel: Cancel<'_>,
 ) -> Result<Sdf, VolumeError> {
+    built(mesh, bvh, settings, None, cancel)
+}
+
+/// Builds the field with each value taken through `moved` on its way in, with the voxel's
+/// nearest point the build found anyway.
+///
+/// Which tiles are stored, and which deep ones are solid, is still decided by the
+/// unmoved field, so `moved` must not carry the surface further than the band reaches.
+pub(crate) fn build_moved(
+    mesh: &Mesh,
+    bvh: &Bvh,
+    settings: &FieldSettings,
+    moved: sweep::Moved<'_>,
+) -> Result<Sdf, VolumeError> {
+    built(mesh, bvh, settings, Some(moved), Cancel::never())
+}
+
+fn built(
+    mesh: &Mesh,
+    bvh: &Bvh,
+    settings: &FieldSettings,
+    moved: Option<sweep::Moved<'_>>,
+    cancel: Cancel<'_>,
+) -> Result<Sdf, VolumeError> {
     if mesh.aabb().is_none() {
         return Err(VolumeError::EmptyMesh);
     }
@@ -134,6 +158,7 @@ pub fn build(
         rings,
         &wanted,
         &seeds(mesh, &faces, sweep::carrier_grid(grid, carry), keep),
+        moved,
         cancel,
     );
     if cancel.asked() {

@@ -1,6 +1,6 @@
 use std::collections::{HashMap, HashSet};
 
-use core_geometry::{FastMap, Mesh, Scalar, Vec3, glam::IVec3};
+use core_geometry::{FastMap, Mesh, Scalar, Vec3, collapse_flat_faces, glam::IVec3};
 use rayon::prelude::*;
 
 use crate::cancel::Cancel;
@@ -106,6 +106,9 @@ pub fn extract(field: &Sdf, cancel: Cancel<'_>) -> Mesh {
     }
 
     mesh.faces.retain(|face| face[0] != face[1]);
+    // A quantised value can be exactly zero, and a lattice point at zero is where every
+    // cell around it crosses the surface: their vertices are one point.
+    collapse_flat_faces(&mut mesh);
     mesh
 }
 
@@ -254,14 +257,7 @@ fn tile_mesh(field: &Sdf, tile: IVec3) -> TilePart {
     // One lookup per lattice point rather than one per cell corner, which is eight times
     // fewer for the same numbers.
     let mut block = vec![0.0 as Scalar; (BLOCK * BLOCK * BLOCK) as usize];
-    for z in 0..BLOCK {
-        for y in 0..BLOCK {
-            for x in 0..BLOCK {
-                block[((z * BLOCK + y) * BLOCK + x) as usize] =
-                    field.value(base + IVec3::new(x, y, z));
-            }
-        }
-    }
+    field.block(base, BLOCK, &mut block);
     let at = |offset: IVec3| block[((offset.z * BLOCK + offset.y) * BLOCK + offset.x) as usize];
 
     let mut part = TilePart {
@@ -544,6 +540,27 @@ mod tests {
             balanced(&mesh),
             "every edge is crossed back as often as it is crossed"
         );
+    }
+
+    /// A solid tile with one lattice point quantised to exactly zero: every cell around it
+    /// crosses the surface at that one point, so their vertices are one point too.
+    #[test]
+    fn a_lattice_point_on_the_surface_leaves_no_triangle_without_area() {
+        let band_mm = 0.4;
+        let touching = in_tile(IVec3::splat(TILE / 2));
+        let values: Box<[Quantised]> = (0..TILE_VALUES)
+            .map(|index| encode(if index == touching { 0.0 } else { -0.1 }, band_mm))
+            .collect();
+        let field = Sdf::new(
+            VoxelGrid::new(0.2),
+            band_mm,
+            HashMap::from([(IVec3::ZERO, values)]),
+            HashMap::new(),
+        );
+
+        let diagnostics = diagnose(&extract(&field, Cancel::never()));
+        assert_eq!(diagnostics.degenerate_faces, 0, "got {diagnostics:?}");
+        assert_eq!(diagnostics.boundary_edges, 0, "got {diagnostics:?}");
     }
 
     #[test]

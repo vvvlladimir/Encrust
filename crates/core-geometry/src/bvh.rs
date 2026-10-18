@@ -133,8 +133,22 @@ impl Bvh {
     /// `mesh` must be the one the hierarchy was built from. A narrow-band distance field
     /// asks this of every voxel near the surface; see `docs/design/distance-queries.md`.
     pub fn closest(&self, mesh: &Mesh, point: Vec3) -> Option<ClosestPoint> {
+        self.closest_within(mesh, point, Scalar::INFINITY)
+    }
+
+    /// Nearest point of `mesh` to `point` that is nearer than `within_mm`, or `None` when
+    /// none is.
+    ///
+    /// A caller that already knows a face at `within_mm` gets the exact answer for far
+    /// less: every node no nearer than that is culled before it is opened.
+    pub fn closest_within(
+        &self,
+        mesh: &Mesh,
+        point: Vec3,
+        within_mm: Scalar,
+    ) -> Option<ClosestPoint> {
         let mut best: Option<ClosestPoint> = None;
-        let mut best_squared = Scalar::INFINITY;
+        let mut best_squared = within_mm * within_mm;
         // Each entry carries the distance its box was at when it was pushed, so a node
         // the search has since outgrown is dropped without measuring its box again. The
         // stack is an array rather than a `Vec`: a field build asks this of millions of

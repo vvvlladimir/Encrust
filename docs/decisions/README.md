@@ -92,6 +92,7 @@ Grouped by what the decision governs; the number is still the order it was taken
 | [0306](0306-a-model-is-split-by-edges-and-parted-at-narrow-joins.md) | Split a model by shared edges, with its scraps, and cut a marked part off at its narrowest join | Accepted |
 | [0307](0307-a-relief-reads-its-grey-and-holds-level-faces.md) | Read a relief's grey and hold its level faces in the press | Accepted |
 | [0308](0308-ship-a-dozen-height-maps-in-the-window.md) | Ship a dozen height maps in the window | Accepted |
+| [0309](0309-a-field-is-moved-as-it-is-built-and-flat-faces-collapse.md) | Move a relief's field as it is built, and collapse faces with no area | Accepted |
 
 ### Mesh and texture input
 
