@@ -1,14 +1,20 @@
-use crate::cut::{CutTool, Keep, PIN_CLEARANCE_MM, Pins, split_parts};
+use core_joint::{JointKind, Joints, Key, Magnets, Pegs};
+
+use crate::cut::{Keep, split_parts};
 use crate::i18n::tr;
 use crate::panels::Window;
 use crate::scene::Axis;
+use crate::status::Status;
 use crate::ui::{
     Segment, Segmented, count_row, describe, hint, icon, nested, number_row, primary_button,
-    secondary_button, section, switch,
+    progress_bar, secondary_button, section, switch, theme, tone,
 };
 
-/// The most pins one cut takes.
-const MAX_PINS: u32 = 6;
+/// The most fixings one piece of a cut face takes.
+const MAX_PER_PIECE: u32 = 6;
+
+/// Millimetres per point of drag on a clearance.
+const CLEARANCE_STEP: f64 = 0.01;
 
 /// Millimetres per point of drag on the position field.
 const OFFSET_STEP: f64 = 0.1;
@@ -76,7 +82,8 @@ pub fn ui(ui: &mut egui::Ui, window: &mut Window) {
             .show(ui, &mut window.tools.cut.state.keep);
         switch(ui, &mut window.tools.cut.lay_flat, &tr!("cut-lay-flat"));
         describe(ui, &tr!("cut-lay-flat-note"));
-        pins(ui, &mut window.tools.cut);
+        let both = window.tools.cut.state.keep == Keep::Both;
+        joints(ui, &mut window.tools.cut.state.joints, both);
     });
 }
 
@@ -89,65 +96,134 @@ fn keep_label(keep: Keep) -> String {
     }
 }
 
-/// Pins on the lower half and sockets in the upper, and how many and how big. A half kept
-/// alone has nothing to be pinned to.
-fn pins(ui: &mut egui::Ui, tool: &mut CutTool) {
-    let both = tool.state.keep == Keep::Both;
-    let mut on = tool.pins.is_some();
+/// How the halves are joined, and the numbers of the kind chosen. A half kept alone has
+/// nothing to be joined to.
+fn joints(ui: &mut egui::Ui, joints: &mut Joints, both: bool) {
+    let mut on = joints.kind.is_some();
     let flipped = ui
-        .add_enabled_ui(both, |ui| switch(ui, &mut on, &tr!("cut-pins")).changed())
+        .add_enabled_ui(both, |ui| switch(ui, &mut on, &tr!("cut-joints")).changed())
         .inner;
     if flipped {
-        tool.pins = on.then(Pins::default);
+        joints.kind = on.then_some(JointKind::Dowels);
     }
-    let Some(pins) = tool.pins.as_mut().filter(|_| both) else {
-        describe(ui, &tr!("cut-pins-note"));
+    let Some(mut kind) = joints.kind.filter(|_| both) else {
+        describe(ui, &tr!("cut-joints-note"));
         return;
     };
     nested(ui, |ui| {
-        let mut count = pins.count as u32;
-        if count_row(ui, &tr!("cut-pin-count"), &mut count, "", 0.1, 1..=MAX_PINS) {
-            pins.count = count as usize;
+        let kinds: Vec<Segment<'_, JointKind>> = JointKind::ALL
+            .iter()
+            .map(|kind| Segment::new(*kind, kind_label(*kind)))
+            .collect();
+        let width = ui.available_width();
+        Segmented::new(&kinds).width(width).show(ui, &mut kind);
+        joints.kind = Some(kind);
+        describe(ui, &kind_note(kind));
+        match kind {
+            JointKind::Pins | JointKind::Dowels => pegs(ui, &mut joints.pegs),
+            JointKind::Magnets => magnets(ui, &mut joints.magnets),
+            JointKind::Key => key(ui, &mut joints.key),
         }
-        number_row(
-            ui,
-            &tr!("cut-pin-diameter"),
-            &mut pins.diameter_mm,
-            &tr!("unit-mm"),
-            OFFSET_STEP,
-            1.0..=20.0,
-            1,
-        );
-        number_row(
-            ui,
-            &tr!("cut-pin-length"),
-            &mut pins.length_mm,
-            &tr!("unit-mm"),
-            OFFSET_STEP,
-            1.0..=30.0,
-            1,
-        );
     });
-    describe(
+}
+
+fn kind_label(kind: JointKind) -> String {
+    match kind {
+        JointKind::Pins => tr!("cut-joint-pins"),
+        JointKind::Dowels => tr!("cut-joint-dowels"),
+        JointKind::Magnets => tr!("cut-joint-magnets"),
+        JointKind::Key => tr!("cut-joint-key"),
+    }
+}
+
+fn kind_note(kind: JointKind) -> String {
+    match kind {
+        JointKind::Pins => tr!("cut-joint-pins-note"),
+        JointKind::Dowels => tr!("cut-joint-dowels-note"),
+        JointKind::Magnets => tr!("cut-joint-magnets-note"),
+        JointKind::Key => tr!("cut-joint-key-note"),
+    }
+}
+
+fn per_piece(ui: &mut egui::Ui, count: &mut u32) {
+    count_row(ui, &tr!("cut-per-piece"), count, "", 0.1, 1..=MAX_PER_PIECE);
+}
+
+fn millimetres(
+    ui: &mut egui::Ui,
+    label: &str,
+    value: &mut f32,
+    range: std::ops::RangeInclusive<f32>,
+) {
+    number_row(ui, label, value, &tr!("unit-mm"), OFFSET_STEP, range, 1);
+}
+
+fn clearance(ui: &mut egui::Ui, value: &mut f32) {
+    number_row(
         ui,
-        &tr!(
-            "cut-pins-sockets",
-            clearance = format!("{PIN_CLEARANCE_MM:.1}")
-        ),
+        &tr!("cut-clearance"),
+        value,
+        &tr!("unit-mm"),
+        CLEARANCE_STEP,
+        0.0..=1.0,
+        2,
     );
+}
+
+fn pegs(ui: &mut egui::Ui, pegs: &mut Pegs) {
+    per_piece(ui, &mut pegs.per_piece);
+    switch(ui, &mut pegs.auto_size, &tr!("cut-auto-size"));
+    if pegs.auto_size {
+        describe(ui, &tr!("cut-auto-size-note"));
+    } else {
+        millimetres(ui, &tr!("cut-diameter"), &mut pegs.diameter_mm, 1.0..=20.0);
+        millimetres(ui, &tr!("cut-length"), &mut pegs.length_mm, 1.0..=30.0);
+    }
+    clearance(ui, &mut pegs.clearance_mm);
+    switch(ui, &mut pegs.keyed, &tr!("cut-keyed"));
+    describe(ui, &tr!("cut-keyed-note"));
+}
+
+fn magnets(ui: &mut egui::Ui, magnets: &mut Magnets) {
+    per_piece(ui, &mut magnets.per_piece);
+    millimetres(
+        ui,
+        &tr!("cut-diameter"),
+        &mut magnets.diameter_mm,
+        1.0..=30.0,
+    );
+    millimetres(
+        ui,
+        &tr!("cut-thickness"),
+        &mut magnets.thickness_mm,
+        0.5..=20.0,
+    );
+    clearance(ui, &mut magnets.clearance_mm);
+}
+
+fn key(ui: &mut egui::Ui, key: &mut Key) {
+    millimetres(ui, &tr!("cut-width"), &mut key.width_mm, 0.4..=10.0);
+    millimetres(ui, &tr!("cut-height"), &mut key.height_mm, 0.5..=10.0);
+    clearance(ui, &mut key.clearance_mm);
 }
 
 /// Cutting the selected model along the plane, or splitting it into the parts it is
 /// already made of.
 pub fn action(ui: &mut egui::Ui, window: &mut Window) {
+    if window.tools.cut.is_busy() {
+        tone(ui, &tr!("cut-cutting"), theme::colors().text_mid);
+        progress_bar(ui, None);
+        return;
+    }
     let picked = window.doc.scene.selected();
     let what = tr!("cut-replaces");
     if primary_button(ui, icon::SECTION, &tr!("cut-cut"), picked.is_some())
         .on_hover_text(&what)
         .clicked()
         && let Some(id) = picked
+        && let Err(error) = window.tools.cut.start(&window.doc.scene, id)
     {
-        window.machine.status = window.tools.cut.apply(&mut window.doc.scene, id);
+        window.machine.status = Status::Error(error.to_string());
     }
     let split = ui
         .add_enabled_ui(picked.is_some(), |ui| {

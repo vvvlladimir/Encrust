@@ -421,6 +421,10 @@ impl eframe::App for SlicerApp {
                 .poll(&mut self.doc.scene, &mut self.machine.status)
             | self
                 .tools
+                .cut
+                .poll(&mut self.doc.scene, &mut self.machine.status)
+            | self
+                .tools
                 .drain
                 .poll(&mut self.doc.scene, &mut self.machine.status)
             | self.tools.orient.poll(

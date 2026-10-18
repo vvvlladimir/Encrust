@@ -1006,6 +1006,7 @@ dependencies = [
  "core-analysis",
  "core-format",
  "core-geometry",
+ "core-joint",
  "core-pipeline",
  "core-plate",
  "core-raster",
@@ -1091,6 +1092,18 @@ dependencies = [
  "bitflags 1.3.2",
  "core-foundation",
  "libc",
+]
+
+[[package]]
+name = "core-joint"
+version = "0.4.0"
+dependencies = [
+ "core-csg",
+ "core-geometry",
+ "rayon",
+ "serde",
+ "thiserror 2.0.21",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -1696,6 +1709,7 @@ dependencies = [
  "core-engine",
  "core-format",
  "core-geometry",
+ "core-joint",
  "core-mesh-io",
  "core-pipeline",
  "core-plate",

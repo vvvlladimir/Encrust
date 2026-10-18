@@ -1,5 +1,6 @@
 use crate::i18n::tr;
 mod boolean;
+mod cut;
 mod format;
 mod hollow;
 mod import;
@@ -16,6 +17,7 @@ mod trapped;
 
 pub use boolean::{BooleanJob, BooleanOutcome, BooleanRequest};
 pub use core_pipeline::SlicedFormat;
+pub use cut::{CutJob, CutOutcome, CutRequest};
 #[cfg(not(target_arch = "wasm32"))]
 pub use format::applied_to;
 pub use format::label_of;

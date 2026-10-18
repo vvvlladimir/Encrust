@@ -18,6 +18,7 @@ use std::sync::Arc;
 
 use core_format::ExposureRange;
 use core_geometry::{Mat3, Mesh, MeshDiagnostics, Orientation, Scalar, Transform, Vec3};
+use core_joint::Joints;
 use core_slicer::AdaptiveSettings;
 use core_supports::{ProjectSettings, Region, SupportPoint, SupportTree};
 use core_volume::{Blocker, Channel, DrainHole, HollowMode, HollowSettings, InfillSettings};
@@ -244,7 +245,7 @@ pub struct DrainState {
     pub taper: Scalar,
 }
 
-/// Where the cut tool's plane stands and which halves it keeps.
+/// Where the cut tool's plane stands, which halves it keeps and how they are joined.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct CutState {
     pub axis: Axis,
@@ -252,6 +253,9 @@ pub struct CutState {
     /// centre of mass. Named for the Z cut it began as.
     pub height_mm: Scalar,
     pub keep: Keep,
+    /// A file without them reads as a plain cut (ADR 0305).
+    #[serde(default)]
+    pub joints: Joints,
 }
 
 /// One model on a plate: where it stands, and what was done to it.
@@ -618,6 +622,7 @@ mod tests {
                     axis: Axis::Z,
                     height_mm: 10.0,
                     keep: Keep::Both,
+                    joints: core_joint::Joints::default(),
                 },
                 array: Array::default(),
                 plates: vec!["Plate 1".to_owned()],
@@ -771,6 +776,20 @@ mod tests {
             back.manifest.objects[0].hollow.built,
             saved.manifest.objects[0].hollow.built
         );
+    }
+
+    #[test]
+    fn the_cut_joints_come_back_and_a_file_without_them_reads_as_a_plain_cut() {
+        let mut saved = project(1);
+        saved.manifest.cut.joints.kind = Some(core_joint::JointKind::Magnets);
+        saved.manifest.cut.joints.magnets.thickness_mm = 3.0;
+        let back = round_trip(&saved);
+        assert_eq!(back.manifest.cut.joints, saved.manifest.cut.joints);
+
+        let older: CutState =
+            serde_json::from_str(r#"{ "axis": "z", "height_mm": 10.0, "keep": "both" }"#)
+                .expect("a cut written before the joints reads");
+        assert_eq!(older.joints.kind, None);
     }
 
     #[test]

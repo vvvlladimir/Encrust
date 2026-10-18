@@ -66,12 +66,27 @@ cut-measured-from-centre = Отсчёт от центра масс модели.
 cut-afterwards = После разреза
 cut-lay-flat = Положить половины плашмя
 cut-lay-flat-note = Каждая половина встаёт на грань, оставленную разрезом.
-cut-pins = Юстировочные штифты
-cut-pins-note = Штифты и гнёзда, чтобы половины склеивались точно.
-cut-pin-count = Штифты
-cut-pin-diameter = Диаметр
-cut-pin-length = Длина
-cut-pins-sockets = Штифты стоят на нижней половине; гнёзда шире на { $clearance } мм с каждой стороны и в инструменте «Дренаж» видны как отверстия.
+cut-joints = Соединить половины
+cut-joints-note = Крепёж и гнёзда, чтобы половины склеивались точно.
+cut-joint-dowels = Дюбели
+cut-joint-pins = Штифты
+cut-joint-magnets = Магниты
+cut-joint-key = Шпонка
+cut-joint-dowels-note = Гнёзда в обеих половинах и дюбели, напечатанные рядом, так что обе грани разреза остаются ровными под поддержки.
+cut-joint-pins-note = Штифты стоят на нижней половине и входят в гнёзда верхней.
+cut-joint-magnets-note = В каждой половине гнездо под каждый дисковый магнит, чтобы вклеить его.
+cut-joint-key-note = Выступ по грани разреза нижней половины входит в паз верхней — для стенок, слишком тонких для штифта.
+cut-per-piece = На кусок
+cut-auto-size = Размер по сечению
+cut-auto-size-note = Каждый кусок сечения получает штифты такой толщины, какая в нём помещается.
+cut-diameter = Диаметр
+cut-length = Длина
+cut-thickness = Толщина
+cut-width = Ширина
+cut-clearance = Зазор
+cut-keyed = Один уже
+cut-keyed-note = Один штифт уже остальных, так что половины собираются только одним способом.
+cut-cutting = Режу модель
 cut-replaces = Одна модель заменяется двумя. Отмена вернёт её.
 cut-cut = Разрезать
 cut-split = Разделить на части
@@ -84,10 +99,16 @@ cut-misses = плоскость не пересекает { $name }, резат�
 cut-lower-name = { $name } (нижняя)
 cut-upper-name = { $name } (верхняя)
 cut-part-name = { $name } (часть { $index })
-cut-too-small-for-pin = ; сечение слишком мало для штифта
-# Starts with a space: it follows the cut's position directly.
+cut-dowel-name = { $name } (дюбель { $index })
+cut-no-room-for-joint = ; на грани разреза нет места для соединения
+cut-joint-failed = ; соединение не удалось встроить в половины, они оставлены без него: { $reason }
+# Each starts with a space: it follows the cut's position directly.
 cut-with-pins = { " " }со штифтами: { $count }
-cut-done = Разрез { $name } по { $axis } на { $position } мм{ $pinned }{ $mending }
+cut-with-dowels = { " " }с гнёздами под дюбели: { $count }, дюбели напечатаны рядом
+cut-with-magnets = { " " }с гнёздами под магниты: { $count } на половину
+cut-with-key = { " " }со шпонкой по кускам грани: { $count }
+cut-bare = ; кускам грани без места для крепежа: { $count }
+cut-done = Разрез { $name } по { $axis } на { $position } мм{ $joint }{ $bare }{ $mending }
 cut-done-open = Разрез { $name }; незамкнутых контуров разреза: { $open }, они остались без крышки{ $mending }
 cut-nothing-to-split = для разделения ничего не выбрано
 cut-one-piece = { $name } — цельная деталь
@@ -668,6 +689,7 @@ boolean-done-sampled =
        *[many] { $count } моделей объединено в { $name } на решётке { $lattice } мм, потому что одна из них не замкнута{ $mending }
     }
 job-thread-stopped-boolean = поток объединения остановился, не закончив
+job-thread-stopped-cut = поток разреза остановился, не закончив
 
 ## panels/title_bar.rs
 

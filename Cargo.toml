@@ -21,6 +21,7 @@ core-raster = { path = "crates/core-raster" }
 core-supports = { path = "crates/core-supports" }
 core-volume = { path = "crates/core-volume" }
 core-csg = { path = "crates/core-csg" }
+core-joint = { path = "crates/core-joint" }
 core-text = { path = "crates/core-text" }
 core-plate = { path = "crates/core-plate" }
 core-pipeline = { path = "crates/core-pipeline" }

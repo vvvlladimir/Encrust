@@ -1,6 +1,6 @@
 # 0223. Pin a cut by an added shell and a drain hole
 
-- **Status:** Accepted
+- **Status:** Superseded by 0305
 - **Date:** 2026-10-11
 
 ## Context

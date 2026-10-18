@@ -86,6 +86,20 @@ fn the_relief_tool_in_each_mode() {
 }
 
 #[test]
+fn the_cut_tool_joining_its_halves() {
+    let mut results = SnapshotResults::new();
+    for (name, kind) in [
+        ("tool_cut_dowels", core_joint::JointKind::Dowels),
+        ("tool_cut_key", core_joint::JointKind::Key),
+    ] {
+        let mut app = app(true);
+        app.tool = Tool::Cut;
+        app.tools.cut.state.joints.kind = Some(kind);
+        results.extend(picture(name, app));
+    }
+}
+
+#[test]
 fn the_preview_of_an_empty_plate() {
     let mut app = app(false);
     app.view.options.started = true;

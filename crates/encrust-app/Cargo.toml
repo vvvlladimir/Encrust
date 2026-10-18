@@ -18,6 +18,7 @@ path = "src/main.rs"
 [dependencies]
 core-analysis.workspace = true
 core-geometry.workspace = true
+core-joint.workspace = true
 core-text.workspace = true
 core-mesh-io.workspace = true
 core-engine.workspace = true

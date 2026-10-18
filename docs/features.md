@@ -141,8 +141,21 @@ capped silently.
 ### Cut
 - Cut a model with a plane. Position the plane by height from the plate or by an offset
   from the centre of mass, or click to place it on the model.
-- Add **alignment pins** (pegs and sockets, with diameter and length you set) so the halves
-  glue back true.
+- **Join the halves** so they glue back true, choosing one of four kinds:
+  - **dowels**: sockets in both halves, with the dowels printed beside them, so both cut
+    faces stay flat and can carry the supports where the glue hides them;
+  - **pins**: pins on the lower half that go into the upper;
+  - **magnets**: a socket in each half for every disc magnet, sized to the magnet;
+  - **key**: a tongue round the cut face of the lower half that goes into a groove in the
+    upper, for hollow walls too thin for a peg.
+- Every separate piece of the cut face gets its own pins, dowels or magnets, placed as far
+  apart as it allows and only where both halves are deep enough to take a socket. Pegs can
+  be sized from the width of each piece, with a gap you set. One peg can be made narrower,
+  so the halves go together only one way.
+- In a hollow model a pillar carries a socket over the cavity. Sockets are part of the
+  half, not drain holes. The halves are built off the drawing thread, and the stage notice
+  says how many went in and which pieces had no room. A half with pins or a tongue is not
+  laid flat on its cut.
 - Lay each half flat on its cut face, or split a model into its separate parts.
 - A piece the cut leaves broken is repaired automatically. Undo puts the original back.
 

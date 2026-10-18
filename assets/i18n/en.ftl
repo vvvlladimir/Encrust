@@ -66,12 +66,27 @@ cut-measured-from-centre = Measured from the model's centre of mass.
 cut-afterwards = Afterwards
 cut-lay-flat = Lay the halves flat
 cut-lay-flat-note = Each half stands on the face the cut left.
-cut-pins = Alignment pins
-cut-pins-note = Pegs and sockets so the halves glue back true.
-cut-pin-count = Pins
-cut-pin-diameter = Diameter
-cut-pin-length = Length
-cut-pins-sockets = Pins stand on the lower half; the sockets are { $clearance } mm wider each side and show as holes in the Drain tool.
+cut-joints = Join the halves
+cut-joints-note = Fixings and sockets so the halves glue back true.
+cut-joint-dowels = Dowels
+cut-joint-pins = Pins
+cut-joint-magnets = Magnets
+cut-joint-key = Key
+cut-joint-dowels-note = Sockets in both halves and dowels printed beside them, so both cut faces stay flat for supports.
+cut-joint-pins-note = Pins stand on the lower half and go into sockets in the upper.
+cut-joint-magnets-note = A socket in each half for every disc magnet, to glue them in.
+cut-joint-key-note = A tongue round the lower half's cut face into a groove in the upper, for walls too thin for a peg.
+cut-per-piece = Per piece
+cut-auto-size = Size from the face
+cut-auto-size-note = Each piece of the cut face takes pegs as wide as it has room for.
+cut-diameter = Diameter
+cut-length = Length
+cut-thickness = Thickness
+cut-width = Width
+cut-clearance = Clearance
+cut-keyed = One narrower
+cut-keyed-note = One peg is narrower than the rest, so the halves go together one way only.
+cut-cutting = Cutting the model
 cut-replaces = Two models replace one. Undo puts it back.
 cut-cut = Cut
 cut-split = Split into its parts
@@ -84,10 +99,16 @@ cut-misses = the plane misses { $name }, so there is nothing to cut
 cut-lower-name = { $name } (lower)
 cut-upper-name = { $name } (upper)
 cut-part-name = { $name } (part { $index })
-cut-too-small-for-pin = ; the cut is too small for a pin
-# Starts with a space: it follows the cut's position directly.
+cut-dowel-name = { $name } (dowel { $index })
+cut-no-room-for-joint = ; the cut face has no room for a joint
+cut-joint-failed = ; the joint could not be built into the halves, which are left plain: { $reason }
+# Each starts with a space: it follows the cut's position directly.
 cut-with-pins = { " " }with { $count } pin(s)
-cut-done = Cut { $name } at { $axis } { $position } mm{ $pinned }{ $mending }
+cut-with-dowels = { " " }with sockets for { $count } dowel(s), printed beside the halves
+cut-with-magnets = { " " }with sockets for { $count } magnet(s) a half
+cut-with-key = { " " }with a key round { $count } piece(s) of the face
+cut-bare = ; { $count } piece(s) of the face had no room for one
+cut-done = Cut { $name } at { $axis } { $position } mm{ $joint }{ $bare }{ $mending }
 cut-done-open = Cut { $name }; { $open } cut loops were open and left uncapped{ $mending }
 cut-nothing-to-split = nothing is selected to split
 cut-one-piece = { $name } is one piece
@@ -630,6 +651,7 @@ boolean-done-sampled =
        *[other] Combined { $count } models into { $name } on a { $lattice } mm lattice, as one was not a closed solid{ $mending }
     }
 job-thread-stopped-boolean = the combining thread stopped without finishing
+job-thread-stopped-cut = the cutting thread stopped without finishing
 
 ## panels/title_bar.rs
 

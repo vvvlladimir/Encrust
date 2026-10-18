@@ -1,0 +1,23 @@
+[package]
+name = "core-joint"
+description = "Pins, dowels, magnets and keys that join the two halves of a cut model back true."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+
+[lib]
+doctest = false
+
+[dependencies]
+core-csg.workspace = true
+core-geometry.workspace = true
+rayon.workspace = true
+serde.workspace = true
+thiserror.workspace = true
+workspace-hack = { version = "0.1", path = "../../workspace-hack" }
+
+[lints]
+workspace = true
