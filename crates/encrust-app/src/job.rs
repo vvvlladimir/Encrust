@@ -1,4 +1,5 @@
 use crate::i18n::tr;
+mod boolean;
 mod format;
 mod hollow;
 mod import;
@@ -13,6 +14,7 @@ mod repair;
 mod send;
 mod trapped;
 
+pub use boolean::{BooleanJob, BooleanOutcome, BooleanRequest};
 pub use core_pipeline::SlicedFormat;
 #[cfg(not(target_arch = "wasm32"))]
 pub use format::applied_to;

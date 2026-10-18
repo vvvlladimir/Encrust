@@ -52,6 +52,15 @@ The engine walks hash maps, so the same boolean may split a flat polygon of its 
 along other diagonals from one run to the next. The surface is the same; the triangle list
 is not. Tests compare face counts, volumes and vertices, never the list.
 
+## Combining models
+
+`core_volume::combine` is what the window's Combine models runs (ADR 0303). The models are
+read as solids in parallel and folded down a tree, so `n` of them cost `log n` rounds rather
+than `n` cuts into one growing whole; a difference unions everything after the first before
+the one cut. If any of them is not a solid the engine reads, all of them are sampled instead,
+each a field on one lattice — precision 0.5 at their combined area, coarsened to the budget
+as hollowing is — combined by `min`, `max` and `max(a, -b)` and extracted once.
+
 ## Primitives
 
 `core-geometry` builds the closed meshes a boolean is usually handed: `cuboid`,

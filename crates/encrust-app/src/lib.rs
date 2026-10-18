@@ -4,6 +4,7 @@
 
 mod app;
 mod arrange;
+mod boolean;
 mod camera;
 mod cut;
 mod drain;

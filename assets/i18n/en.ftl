@@ -567,6 +567,30 @@ relief-the-texture = the texture
 relief-tooltip = Presses { $picture } into { $scope }. The model is replaced, so its supports and its cavity go with it.
 relief-press = Press it in
 relief-pressing-status = Pressing the relief
+boolean-title = Combine models
+boolean-union = Union
+boolean-difference = Subtract
+boolean-intersection = Intersect
+boolean-union-note = The picked models become one model that holds everything any of them holds.
+boolean-difference-note = The other picked models are taken out of the one you picked first.
+boolean-intersection-note = Only what every picked model holds is kept.
+boolean-combine = Combine
+boolean-combining = Combining the models
+boolean-tooltip = Replaces the picked models with the one they make. Their supports, cavities and holes go with them; a torn model is combined through a field and loses its sharp edges.
+boolean-pick-two = Pick two or more models on the plate to combine, holding Shift or Cmd.
+boolean-nothing-left = the models combined leave nothing behind
+boolean-failed = the models could not be combined: { $reason }
+boolean-done =
+    { $count ->
+        [one] Combined { $count } model into { $name }{ $mending }
+       *[other] Combined { $count } models into { $name }{ $mending }
+    }
+boolean-done-sampled =
+    { $count ->
+        [one] Combined { $count } model into { $name } on a { $lattice } mm lattice, as one was not a closed solid{ $mending }
+       *[other] Combined { $count } models into { $name } on a { $lattice } mm lattice, as one was not a closed solid{ $mending }
+    }
+job-thread-stopped-boolean = the combining thread stopped without finishing
 
 ## panels/title_bar.rs
 

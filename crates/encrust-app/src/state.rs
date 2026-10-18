@@ -90,6 +90,7 @@ pub struct Tools {
     pub drain: DrainTool,
     pub cut: CutTool,
     pub relief: ReliefTool,
+    pub boolean: crate::boolean::BooleanTool,
     pub orient: OrientTool,
     pub measure: Measure,
     pub measure_edges: crate::measure::EdgeCache,

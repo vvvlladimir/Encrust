@@ -85,4 +85,10 @@ pub enum VolumeError {
         /// The coarsest lattice that would have fit, in millimetres.
         fits_at_mm: Scalar,
     },
+
+    #[error("combining models needs at least two, got {0}")]
+    TooFewModels(usize),
+
+    #[error("the models combined leave nothing behind")]
+    NothingLeft,
 }

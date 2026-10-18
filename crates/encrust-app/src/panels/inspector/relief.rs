@@ -1,15 +1,15 @@
 use std::sync::Arc;
 
 use core_geometry::Vec2;
-use core_volume::Tiling;
+use core_volume::{Boolean, Tiling};
 
 use crate::i18n::tr;
 use crate::panels::Window;
 use crate::relief::Picture;
 use crate::state::Doc;
 use crate::ui::{
-    describe, hint, icon, meta, number_row, primary_button, progress_bar, secondary_button,
-    section, stats, theme, tone,
+    Segment, Segmented, describe, hint, icon, meta, number_row, primary_button, progress_bar,
+    secondary_button, section, stats, theme, tone,
 };
 
 /// Bounds on one tile of a picture, millimetres: under a millimetre it is finer than the
@@ -46,6 +46,56 @@ pub fn ui(ui: &mut egui::Ui, window: &mut Window) {
             tiling(ui, &mut window.tools.relief.tiling);
         }
     });
+    section(ui, &tr!("boolean-title"), None, |ui| combine(ui, window));
+}
+
+/// Union, difference or intersection of the picked models, and the run that makes it.
+fn combine(ui: &mut egui::Ui, window: &mut Window) {
+    let tool = &mut window.tools.boolean;
+    let segments = [
+        Segment::new(Boolean::Union, tr!("boolean-union")),
+        Segment::new(Boolean::Difference, tr!("boolean-difference")),
+        Segment::new(Boolean::Intersection, tr!("boolean-intersection")),
+    ];
+    let mut chosen = tool.op;
+    if Segmented::new(&segments)
+        .width(ui.available_width())
+        .show(ui, &mut chosen)
+    {
+        tool.op = chosen;
+    }
+    describe(
+        ui,
+        &match tool.op {
+            Boolean::Union => tr!("boolean-union-note"),
+            Boolean::Difference => tr!("boolean-difference-note"),
+            Boolean::Intersection => tr!("boolean-intersection-note"),
+        },
+    );
+    if tool.is_busy() {
+        tone(ui, &tr!("boolean-combining"), theme::colors().text_mid);
+        progress_bar(ui, None);
+        return;
+    }
+
+    let blocked = tool.blocker(&window.doc.scene);
+    let clicked = ui
+        .add_enabled_ui(blocked.is_none(), |ui| {
+            secondary_button(ui, icon::COMBINE, &tr!("boolean-combine"))
+                .on_hover_text(tr!("boolean-tooltip"))
+                .clicked()
+        })
+        .inner;
+    if clicked {
+        let started = tool.start(&window.doc.scene);
+        window
+            .machine
+            .status
+            .report(&tr!("boolean-combining"), started);
+    }
+    if let Some(reason) = blocked {
+        hint(ui, &reason);
+    }
 }
 
 /// The edge of the thumbnail a chosen picture is shown at, points.

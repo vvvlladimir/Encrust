@@ -602,6 +602,32 @@ relief-the-texture = текстуру
 relief-tooltip = Вдавливает { $picture } в { $scope }. Модель заменяется, поэтому её поддержки и полость пропадают.
 relief-press = Вдавить
 relief-pressing-status = Вдавливание рельефа
+boolean-title = Объединение моделей
+boolean-union = Сложить
+boolean-difference = Вычесть
+boolean-intersection = Пересечь
+boolean-union-note = Выбранные модели становятся одной, в которой есть всё, что было в любой из них.
+boolean-difference-note = Остальные выбранные модели вычитаются из той, что выбрана первой.
+boolean-intersection-note = Остаётся только то, что есть во всех выбранных моделях.
+boolean-combine = Объединить
+boolean-combining = Объединение моделей
+boolean-tooltip = Заменяет выбранные модели той, что из них получается. Их поддержки, полости и отверстия пропадают; дырявая модель объединяется через поле и теряет острые края.
+boolean-pick-two = Выберите на плите две модели или больше, удерживая Shift или Cmd.
+boolean-nothing-left = после объединения от моделей ничего не остаётся
+boolean-failed = модели не удалось объединить: { $reason }
+boolean-done =
+    { $count ->
+        [one] { $count } модель объединена в { $name }{ $mending }
+        [few] { $count } модели объединены в { $name }{ $mending }
+       *[many] { $count } моделей объединено в { $name }{ $mending }
+    }
+boolean-done-sampled =
+    { $count ->
+        [one] { $count } модель объединена в { $name } на решётке { $lattice } мм, потому что одна из них не замкнута{ $mending }
+        [few] { $count } модели объединены в { $name } на решётке { $lattice } мм, потому что одна из них не замкнута{ $mending }
+       *[many] { $count } моделей объединено в { $name } на решётке { $lattice } мм, потому что одна из них не замкнута{ $mending }
+    }
+job-thread-stopped-boolean = поток объединения остановился, не закончив
 
 ## panels/title_bar.rs
 

@@ -4,6 +4,7 @@
 //! The field is the one engine behind hollowing, infill, drain holes and cuts; see
 //! `docs/design/volume.md`, and `docs/design/hollowing.md` for what is built on it.
 
+mod boolean;
 mod build;
 mod cancel;
 mod csg;
@@ -22,6 +23,7 @@ mod sign;
 mod stack;
 mod sweep;
 
+pub use boolean::{Boolean, Combined, combine};
 pub use build::{FieldSettings, build};
 pub use cancel::Cancel;
 pub use csg::{difference, intersection, offset, shell, union};

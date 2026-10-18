@@ -287,7 +287,7 @@ pub fn split_parts(scene: &mut Scene, id: ObjectId) -> Status {
 /// question is surface this tool just invented, not surface a file brought in. What it
 /// did is said in the stage notice, so a mended piece carries no mark of its own; a piece it
 /// could not close keeps the diagnostics that say so.
-fn place(scene: &mut Scene, name: String, mesh: Mesh) -> (ObjectId, bool) {
+pub(crate) fn place(scene: &mut Scene, name: String, mesh: Mesh) -> (ObjectId, bool) {
     let mut mesh = mesh;
     let mut diagnostics = diagnose(&mesh);
     let mended = !diagnostics.is_sound();
@@ -316,7 +316,7 @@ fn place(scene: &mut Scene, name: String, mesh: Mesh) -> (ObjectId, bool) {
 }
 
 /// What the stage notice adds about the pieces that had to be mended on their way down.
-fn mending(pieces: usize) -> String {
+pub(crate) fn mending(pieces: usize) -> String {
     match pieces {
         0 => String::new(),
         pieces => tr!("cut-mended", count = pieces),

@@ -234,6 +234,7 @@ Grouped by what the decision governs; the number is still the order it was taken
 | [0201](0201-the-surface-of-a-cut-is-the-cut-itself.md) | The surface of a cut is the cut's own body, kept where it stands in material | Accepted |
 | [0301](0301-a-lattice-is-cut-exactly-from-the-cavity.md) | Cut the lattice exactly from the cavity's mesh, its cells joined by crossing holes | Accepted |
 | [0302](0302-exact-booleans-live-in-core-csg-over-boolmesh.md) | Do exact mesh booleans in `core-csg`, over `boolmesh` | Accepted |
+| [0303](0303-models-are-combined-exactly-and-sampled-where-they-are-torn.md) | Combine models exactly, and through the field where one is not a solid | Accepted |
 | [0204](0204-a-field-build-is-given-up-on-between-tiles.md) | A field build is given up on between tiles | Accepted |
 
 ### The plate

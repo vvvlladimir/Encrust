@@ -151,6 +151,11 @@ capped silently.
 - Set the depth (a negative depth sinks the picture in), the tile size, the angle and the
   precision.
 - Using the model's own texture needs a model with UVs (OBJ or 3MF).
+- **Combine models** in the same panel: pick two or more and **Union** them into one,
+  **Subtract** the others from the one picked first, or **Intersect** them to keep only
+  what they share. The result replaces them; their supports, cavity and holes are not kept,
+  and Undo puts the originals back. Closed models keep their sharp edges; a torn scan is
+  combined through a field and its edges are rounded to the lattice the notice names.
 
 ### Hollow
 - Hollow a model with a wall thickness and precision you choose.
