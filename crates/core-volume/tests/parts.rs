@@ -1,13 +1,15 @@
 //! A model becomes the parts it is made of. What has to hold is that bodies meeting only
 //! along an edge are two, that a cavity stays with its body, that scraps are joined or
-//! dropped rather than handed back as parts, and that a narrow join is parted.
+//! dropped rather than handed back as parts, and that a part marked by a point is cut off
+//! flat at its narrow join and nowhere else.
 #![expect(
     clippy::expect_used,
     reason = "a broken fixture must fail the run loudly"
 )]
 
+use core_csg::Solid;
 use core_geometry::{Mesh, Scalar, Vec3, cuboid, diagnose, signed_volume};
-use core_volume::{Cancel, PartSettings, VolumeError, parts};
+use core_volume::{Cancel, PartSettings, PartedOff, VolumeError, part_off, parts};
 
 fn whole(meshes: &[Mesh]) -> Mesh {
     let mut whole = Mesh::default();
@@ -37,7 +39,7 @@ fn boxes_meeting_only_along_an_edge_are_two_parts() {
         cuboid(Vec3::ZERO, Vec3::splat(10.0)),
         cuboid(Vec3::new(10.0, 10.0, 0.0), Vec3::new(20.0, 20.0, 10.0)),
     ]);
-    let split = parts(&mesh, &PartSettings::default(), Cancel::never()).expect("boxes split");
+    let split = parts(&mesh, &PartSettings::default());
     assert_eq!(split.parts.len(), 2, "four faces on one edge join nothing");
 }
 
@@ -48,7 +50,7 @@ fn a_cavity_stays_in_the_part_round_it() {
         face.swap(1, 2);
     }
     let mesh = whole(&[cuboid(Vec3::ZERO, Vec3::splat(10.0)), cavity]);
-    let split = parts(&mesh, &PartSettings::default(), Cancel::never()).expect("a shell splits");
+    let split = parts(&mesh, &PartSettings::default());
     assert_eq!(split.parts.len(), 1);
     near(
         volumes(&split.parts)[0],
@@ -66,7 +68,7 @@ fn a_scrap_touching_a_part_is_joined_to_it_and_a_stray_one_dropped() {
         cuboid(Vec3::new(4.0, 4.0, 10.0), Vec3::new(5.0, 5.0, 10.5)),
         cuboid(Vec3::new(30.0, 0.0, 0.0), Vec3::new(30.5, 0.5, 0.5)),
     ]);
-    let split = parts(&mesh, &PartSettings::default(), Cancel::never()).expect("scraps split");
+    let split = parts(&mesh, &PartSettings::default());
     assert_eq!(split.parts.len(), 1, "neither scrap is a part");
     assert_eq!((split.joined, split.dropped), (1, 1));
     near(
@@ -83,55 +85,187 @@ fn a_model_of_nothing_but_scraps_keeps_them_all() {
         cuboid(Vec3::ZERO, Vec3::splat(0.5)),
         cuboid(Vec3::new(2.0, 0.0, 0.0), Vec3::new(2.5, 0.5, 0.5)),
     ]);
-    let split = parts(&mesh, &PartSettings::default(), Cancel::never()).expect("scraps split");
+    let split = parts(&mesh, &PartSettings::default());
     assert_eq!(split.parts.len(), 2, "a small model is not thrown away");
 }
 
-/// Two 10 mm boxes 10 mm apart, joined by a bar `bar_mm` square.
+fn solid(mesh: &Mesh) -> Solid {
+    Solid::new(mesh).expect("a box is a solid")
+}
+
+/// Two 10 mm boxes 10 mm apart along X, joined by a bar `bar_mm` square.
 fn dumbbell(bar_mm: Scalar) -> Mesh {
     let (low, high) = (5.0 - bar_mm / 2.0, 5.0 + bar_mm / 2.0);
-    let left = cuboid(Vec3::ZERO, Vec3::splat(10.0));
-    let right = cuboid(Vec3::new(20.0, 0.0, 0.0), Vec3::new(30.0, 10.0, 10.0));
     let bar = cuboid(Vec3::new(10.0, low, low), Vec3::new(20.0, high, high));
-    let solid = |mesh: &Mesh| core_csg::Solid::new(mesh).expect("a box is a solid");
-    solid(&left)
+    solid(&cuboid(Vec3::ZERO, Vec3::splat(10.0)))
         .union(&solid(&bar))
-        .and_then(|joined| joined.union(&solid(&right)))
+        .and_then(|joined| {
+            joined.union(&solid(&cuboid(
+                Vec3::new(20.0, 0.0, 0.0),
+                Vec3::new(30.0, 10.0, 10.0),
+            )))
+        })
         .expect("three boxes in a row join")
         .mesh()
 }
 
-fn at_necks(neck_mm: Scalar) -> PartSettings {
-    PartSettings {
-        at_necks: true,
-        neck_mm,
-        ..PartSettings::default()
+/// The dumbbell with a 4 mm bar, hollowed to walls 1 mm thick everywhere: the thin-walled
+/// shape a scan is.
+fn hollow_dumbbell() -> Mesh {
+    let cavities = solid(&cuboid(Vec3::splat(1.0), Vec3::splat(9.0)))
+        .union(&solid(&cuboid(
+            Vec3::new(8.5, 4.0, 4.0),
+            Vec3::new(21.5, 6.0, 6.0),
+        )))
+        .and_then(|joined| {
+            joined.union(&solid(&cuboid(
+                Vec3::new(21.0, 1.0, 1.0),
+                Vec3::new(29.0, 9.0, 9.0),
+            )))
+        })
+        .expect("three cavities in a row join");
+    solid(&dumbbell(4.0))
+        .difference(&cavities)
+        .expect("the cavities come out of the dumbbell")
+        .mesh()
+}
+
+/// What of `mesh` past the left box faces +X: its area, mm², and the least and most X
+/// it stands at.
+fn facing_the_bar(mesh: &Mesh) -> (Scalar, Scalar, Scalar) {
+    mesh.faces
+        .iter()
+        .map(|face| face.map(|corner| mesh.vertices[corner as usize]))
+        .filter(|[a, b, c]| (a.x + b.x + c.x) / 3.0 > 10.2)
+        .map(|[a, b, c]| {
+            (
+                (b - a).cross(c - a) / 2.0,
+                a.x.min(b.x).min(c.x),
+                a.x.max(b.x).max(c.x),
+            )
+        })
+        .filter(|(area, _, _)| area.normalize_or_zero().x > 0.999)
+        .fold(
+            (0.0, Scalar::MAX, Scalar::MIN),
+            |(total, low, high), (area, least, most)| {
+                (total + area.length(), low.min(least), high.max(most))
+            },
+        )
+}
+
+/// Checks that both sides are closed, that nothing was lost or added, that the part
+/// holds the left box and at most the whole bar, and that its cut is one flat face
+/// square to the bar, `across_mm2` in area.
+fn assert_parted_across_the_bar(
+    parted: &PartedOff,
+    model: &Mesh,
+    left_mm3: Scalar,
+    bar_mm3: Scalar,
+    across_mm2: Scalar,
+) {
+    for side in [&parted.part, &parted.rest] {
+        assert_eq!(diagnose(side).boundary_edges, 0, "each side is closed");
     }
+    let (part, rest) = (signed_volume(&parted.part), signed_volume(&parted.rest));
+    near(
+        part + rest,
+        signed_volume(model),
+        1e-3,
+        "parting loses and adds nothing",
+    );
+    assert!(
+        part > left_mm3 && part < left_mm3 + bar_mm3,
+        "the part is the left box and some of the bar, {left_mm3} to {}, got {part}",
+        left_mm3 + bar_mm3
+    );
+    let (area, low, high) = facing_the_bar(&parted.part);
+    near(
+        area,
+        across_mm2,
+        1e-3,
+        "the cut face is the bar's cross-section",
+    );
+    assert!(
+        high - low < 1e-3,
+        "the cut face is flat, spanning {low} to {high} mm"
+    );
 }
 
 #[test]
-fn a_bar_narrower_than_the_neck_is_parted_and_each_side_keeps_its_box() {
-    let split = parts(&dumbbell(0.6), &at_necks(1.5), Cancel::never()).expect("a dumbbell parts");
-    assert_eq!((split.parts.len(), split.necks), (2, 1));
-    for (part, volume) in split.parts.iter().zip(volumes(&split.parts)) {
-        assert_eq!(diagnose(part).boundary_edges, 0, "a part is closed");
-        // A 10 mm box and some of the 0.6 mm bar, whose whole 10 mm is 3.6 mm³.
-        near(volume, 1001.8, 0.01, "a box and up to the bar's length");
+fn a_part_marked_on_a_dumbbell_is_cut_off_flat_across_its_bar() {
+    let model = dumbbell(2.0);
+    let parted =
+        part_off(&model, Vec3::new(0.0, 5.0, 5.0), Cancel::never()).expect("the bar is a neck");
+    // A 10 mm box is 1000 mm³ and the 2 mm bar's whole 10 mm is 40 mm³.
+    assert_parted_across_the_bar(&parted, &model, 1000.0, 40.0, 4.0);
+}
+
+#[test]
+fn a_part_marked_on_a_thin_walled_dumbbell_is_cut_off_at_its_bar() {
+    let model = hollow_dumbbell();
+    let parted =
+        part_off(&model, Vec3::new(0.0, 5.0, 5.0), Cancel::never()).expect("the bar is a neck");
+    // A 10 mm box less its 8 mm cavity is 488 mm³, less the 4 mm² the bar opens through
+    // its 1 mm face; the bar's wall is 16 - 4 = 12 mm² across, over 10 mm.
+    assert_parted_across_the_bar(&parted, &model, 484.0, 124.0, 12.0);
+}
+
+#[test]
+fn a_part_no_material_joins_to_the_rest_is_cut_out_whole() {
+    // A 4 mm box half a millimetre off a 10 mm one: no wave crosses the gap, at any lattice.
+    let small = cuboid(Vec3::new(10.5, 3.0, 3.0), Vec3::new(14.5, 7.0, 7.0));
+    let model = whole(&[cuboid(Vec3::ZERO, Vec3::splat(10.0)), small]);
+    let parted = part_off(&model, Vec3::new(14.5, 5.0, 5.0), Cancel::never())
+        .expect("the small box is a piece of its own");
+    for side in [&parted.part, &parted.rest] {
+        assert_eq!(diagnose(side).boundary_edges, 0, "each side is closed");
     }
-    let total: Scalar = volumes(&split.parts).iter().sum();
-    near(total, 2003.6, 1e-3, "parting loses and adds nothing");
+    near(
+        signed_volume(&parted.part),
+        64.0,
+        1e-4,
+        "the 4 mm box, untouched",
+    );
+    near(
+        signed_volume(&parted.rest),
+        1000.0,
+        1e-4,
+        "the 10 mm box, untouched",
+    );
 }
 
 #[test]
-fn a_bar_wider_than_the_neck_holds_the_boxes_together() {
-    let split = parts(&dumbbell(3.0), &at_necks(1.5), Cancel::never()).expect("a dumbbell parts");
-    assert_eq!((split.parts.len(), split.necks), (1, 0));
+fn a_box_has_no_neck_to_part_at() {
+    let model = cuboid(Vec3::ZERO, Vec3::splat(10.0));
+    let error =
+        part_off(&model, Vec3::new(0.0, 5.0, 5.0), Cancel::never()).expect_err("a box is one body");
+    assert_eq!(error, VolumeError::NoNeck);
 }
 
 #[test]
-fn a_neck_search_given_up_on_is_cancelled() {
+fn a_point_off_the_model_parts_nothing() {
+    let error = part_off(&dumbbell(2.0), Vec3::new(50.0, 5.0, 5.0), Cancel::never())
+        .expect_err("the point is 20 mm past the model");
+    assert_eq!(error, VolumeError::NotOnModel);
+}
+
+#[test]
+fn a_part_off_given_up_on_is_cancelled() {
     let stop = || true;
-    let error = parts(&dumbbell(0.6), &at_necks(1.5), Cancel::when(&stop))
-        .expect_err("the run was stopped");
+    let error = part_off(
+        &dumbbell(2.0),
+        Vec3::new(0.0, 5.0, 5.0),
+        Cancel::when(&stop),
+    )
+    .expect_err("the run was stopped");
     assert_eq!(error, VolumeError::Cancelled);
+}
+
+#[test]
+fn a_model_that_is_no_solid_cannot_be_parted() {
+    let mut open = dumbbell(2.0);
+    open.faces.truncate(open.faces.len() - 1);
+    let error =
+        part_off(&open, Vec3::new(0.0, 5.0, 5.0), Cancel::never()).expect_err("a face is missing");
+    assert!(matches!(error, VolumeError::NotSolid(_)), "got {error:?}");
 }

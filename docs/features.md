@@ -160,9 +160,12 @@ capped silently.
 - **Split into its parts**: bodies that touch only at a corner or along an edge become
   separate parts. A cavity, and the lattice in it, stay with their body. Pieces smaller than
   a size you set are scraps: one touching a part is joined to it, and a stray one is dropped
-  rather than handed back as a part of its own. Optionally a model is also parted where two
-  bodies are joined by something narrower than a width you set. The split runs off the
-  drawing thread, and the stage notice says what it joined, dropped and parted.
+  rather than handed back as a part of its own. **Mark a part** and click on a thin part of
+  the model, and Split cuts that part off flat where it narrows into the rest, leaving the
+  rest of the surface as it was. A part only a fold of a scan's surface joins to the rest,
+  with no material between them, is cut out whole along the gap round it; with no narrow join from the mark the stage notice says so
+  and nothing is cut. The split runs off the drawing thread, and the stage notice says what
+  it joined and dropped.
 - A piece the cut leaves broken is repaired automatically. Undo puts the original back.
 
 ### Relief (texture, text and combining models)

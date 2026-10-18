@@ -89,7 +89,7 @@ Grouped by what the decision governs; the number is still the order it was taken
 | [0271](0271-import-geometry-runs-on-rayon.md) | Weld, index and sort a mesh's edges on rayon, with the same result one thread gives | Accepted |
 | [0223](0223-a-cut-is-pinned-by-a-shell-and-a-drain.md) | Pin a cut by an added shell and a drain hole | Superseded by 0305 |
 | [0305](0305-a-cut-is-joined-in-core-joint-by-exact-booleans.md) | Join a cut in `core-joint`, by pins, dowels, magnets or a key | Accepted |
-| [0306](0306-a-model-is-split-by-edges-and-parted-at-narrow-joins.md) | Split a model by shared edges, with its scraps, and part it at narrow joins by erosion | Accepted |
+| [0306](0306-a-model-is-split-by-edges-and-parted-at-narrow-joins.md) | Split a model by shared edges, with its scraps, and cut a marked part off at its narrowest join | Accepted |
 
 ### Mesh and texture input
 

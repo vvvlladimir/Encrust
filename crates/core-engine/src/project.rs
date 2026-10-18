@@ -789,7 +789,7 @@ mod tests {
         let mut saved = project(1);
         saved.manifest.cut.joints.kind = Some(core_joint::JointKind::Magnets);
         saved.manifest.cut.joints.magnets.thickness_mm = 3.0;
-        saved.manifest.cut.parts.at_necks = true;
+        saved.manifest.cut.parts.smallest_mm3 = 5.0;
         let back = round_trip(&saved);
         assert_eq!(back.manifest.cut.joints, saved.manifest.cut.joints);
         assert_eq!(back.manifest.cut.parts, saved.manifest.cut.parts);

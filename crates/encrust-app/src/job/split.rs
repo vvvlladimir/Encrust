@@ -1,7 +1,7 @@
 use std::sync::mpsc::{self, Receiver, TryRecvError};
 
-use core_geometry::Mesh;
-use core_volume::{Cancel, PartSettings, Parts, parts};
+use core_geometry::{Mesh, Vec3};
+use core_volume::{Cancel, PartSettings, PartedOff, Parts, VolumeError, part_off, parts};
 
 use crate::i18n::tr;
 use crate::job::pipeline::{thread_pool, worker_threads};
@@ -12,16 +12,19 @@ pub struct SplitRequest {
     pub id: ObjectId,
     pub placed: Mesh,
     pub settings: PartSettings,
+    /// The point on the plate a part is marked at, to cut that part off instead.
+    pub at: Option<Vec3>,
 }
 
 /// How a split ended.
 #[derive(Debug)]
 pub enum SplitOutcome {
     Split { id: ObjectId, parts: Parts },
+    PartedOff { id: ObjectId, parted: PartedOff },
     Failed(String),
 }
 
-/// A split on its own thread: looking for narrow joins builds a field of the model and
+/// A split on its own thread: cutting off a marked part builds a field of the model and
 /// cuts it exactly, seconds on a real one.
 #[derive(Debug)]
 pub struct SplitJob {
@@ -55,11 +58,20 @@ fn run(request: SplitRequest) -> SplitOutcome {
         Ok(pool) => pool,
         Err(error) => return SplitOutcome::Failed(error.to_string()),
     };
-    match pool.install(|| parts(&request.placed, &request.settings, Cancel::never())) {
-        Ok(parts) => SplitOutcome::Split {
+    let Some(at) = request.at else {
+        return SplitOutcome::Split {
             id: request.id,
-            parts,
+            parts: pool.install(|| parts(&request.placed, &request.settings)),
+        };
+    };
+    match pool.install(|| part_off(&request.placed, at, Cancel::never())) {
+        Ok(parted) => SplitOutcome::PartedOff {
+            id: request.id,
+            parted,
         },
+        Err(VolumeError::NoNeck | VolumeError::NotOnModel) => {
+            SplitOutcome::Failed(tr!("cut-no-neck"))
+        }
         Err(error) => SplitOutcome::Failed(tr!("cut-split-failed", reason = error.to_string())),
     }
 }

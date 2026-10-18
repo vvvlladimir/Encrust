@@ -94,4 +94,10 @@ pub enum VolumeError {
 
     #[error("a model is not a closed solid the exact cut can read: {0}")]
     NotSolid(String),
+
+    #[error("the point to part the model at is not on it")]
+    NotOnModel,
+
+    #[error("there is no narrow join to cut at from this point")]
+    NoNeck,
 }

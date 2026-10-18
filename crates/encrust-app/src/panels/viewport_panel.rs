@@ -28,12 +28,12 @@ use hollow::{
 };
 use overlays::{
     cut_line, draw_aimed, draw_axis_letters, draw_bounds, draw_cut_plane, draw_facet, draw_measure,
-    draw_picked,
+    draw_part_mark, draw_picked,
 };
 use paint::{draw_brush, paint_stroke};
 use picking::{
-    aims_elsewhere, lay_face_under_cursor, material_under, measure_under_cursor, point_at_face,
-    select_under_cursor, surface_under, takes_the_pick,
+    aims_elsewhere, lay_face_under_cursor, mark_part_under_cursor, material_under,
+    measure_under_cursor, point_at_face, select_under_cursor, surface_under, takes_the_pick,
 };
 use supports::{
     drag_support, place_support_under_cursor, remove_support_under_cursor, support_ghost,
@@ -193,6 +193,7 @@ fn click(ui: &egui::Ui, window: &mut Window, rect: egui::Rect, cursor: egui::Pos
         Tool::Position if window.tools.orient.picking_face => {
             lay_face_under_cursor(window, rect, cursor);
         }
+        Tool::Cut if window.tools.cut.picking_part => mark_part_under_cursor(window, rect, cursor),
         _ => {
             let adding = ui.input(|input| input.modifiers.command || input.modifiers.shift);
             select_under_cursor(window, rect, cursor, adding);
@@ -308,6 +309,7 @@ fn draw_tool_overlays(ui: &egui::Ui, window: &mut Window, rect: egui::Rect, poin
     }
     if *window.tool == Tool::Cut {
         draw_cut_plane(ui, window, rect);
+        draw_part_mark(ui, window, rect);
     }
     if *window.tool == Tool::Paint && window.tools.supports.placing.paints() {
         draw_brush(ui, window, rect);

@@ -2,10 +2,10 @@ use core_joint::{JointKind, Joints, Key, Magnets, Pegs};
 
 use core_volume::PartSettings;
 
-use crate::cut::Keep;
+use crate::cut::{CutTool, Keep};
 use crate::i18n::tr;
 use crate::panels::Window;
-use crate::scene::Axis;
+use crate::scene::{Axis, ObjectId};
 use crate::status::Status;
 use crate::ui::{
     Segment, Segmented, count_row, describe, hint, icon, nested, number_row, primary_button,
@@ -89,25 +89,32 @@ pub fn ui(ui: &mut egui::Ui, window: &mut Window) {
     });
 
     section(ui, &tr!("cut-parts"), None, |ui| {
-        parts(ui, &mut window.tools.cut.state.parts);
+        mark(ui, &mut window.tools.cut, id);
+        smallest(ui, &mut window.tools.cut.state.parts);
     });
 }
 
-/// What Split into its parts goes by: narrow joins, and the size below which a piece is a
-/// scrap.
-fn parts(ui: &mut egui::Ui, parts: &mut PartSettings) {
-    switch(ui, &mut parts.at_necks, &tr!("cut-parts-necks"));
-    if parts.at_necks {
-        nested(ui, |ui| {
-            millimetres(
-                ui,
-                &tr!("cut-parts-narrower"),
-                &mut parts.neck_mm,
-                0.2..=10.0,
-            );
-        });
+/// Mark a part, which waits for a click on the model; once one is marked, the same button
+/// takes the mark away.
+fn mark(ui: &mut egui::Ui, cut: &mut CutTool, id: ObjectId) {
+    let marked = cut.part_mark.is_some_and(|(on, _)| on == id);
+    let label = match (cut.picking_part, marked) {
+        (true, _) => tr!("cut-parts-click"),
+        (false, true) => tr!("cut-parts-unmark"),
+        (false, false) => tr!("cut-parts-mark"),
+    };
+    if secondary_button(ui, icon::SELECT, &label).clicked() {
+        match (cut.picking_part, marked) {
+            (true, _) => cut.picking_part = false,
+            (false, true) => cut.part_mark = None,
+            (false, false) => cut.picking_part = true,
+        }
     }
-    describe(ui, &tr!("cut-parts-necks-note"));
+    describe(ui, &tr!("cut-parts-mark-note"));
+}
+
+/// The size below which a piece Split into its parts finds is a scrap.
+fn smallest(ui: &mut egui::Ui, parts: &mut PartSettings) {
     number_row(
         ui,
         &tr!("cut-parts-smallest"),

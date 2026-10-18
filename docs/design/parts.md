@@ -27,25 +27,47 @@ A closed body's size is its volume. An open one has no volume, so its size is th
 cube whose six faces have its area, `(area / 6)^1.5`. A torn but large surface then stays a
 part, and a few loose triangles do not.
 
-## Narrow joins
+## A marked part
 
-With `half` = neck / 2, the body's field is built about the surface `half` inside it
-(`iso_mm = -half`). The lattice is `half / 2.5`, or coarser where the model's area asks
-for it, and coarser again where the field would pass its budget. The field is extracted
-into cores, one per piece the erosion left. A join narrower than the neck vanishes, so the
-bodies either side of it become separate cores.
+`part_off` takes a point on the model. The model's field is built at the surface on a
+lattice that puts 2²⁴ points over its box, never under 0.05 mm, and only its sign is read.
+The field stays sparse, so it is always the whole model's; only the wave's dense lattice
+is held to a box.
+The wave starts at the inside lattice point nearest the mark and steps to the six
+neighbours of each point, so a level is every point that many steps from it.
 
-Cores holding less than the smallest part are noise and are not counted. With two or more
-left, every core but the largest gets a cutter: its own field built about the surface
-`half + 2 voxels` outside it. The cutter reaches past the body the core came from
-everywhere but at the join, where it ends in the join. Each cutter is intersected out of
-what is left of the body, and the largest core's part is what remains. So the pieces always
-add up to the body exactly.
+The front of a level is its points; its area is their count, averaged over five levels.
+A level is a neck when its front is at most half both the widest front before it and the
+widest after it, and the neck is the level where that ratio is greatest. Comparing with
+the widest before, not with the start, is what keeps the small fronts round the mark from
+reading as a neck.
 
-A piece can come out in several shells: a fin of the neighbouring part caught in the
-cutter, or a thin feature outside it. Each piece is nested again. Bodies under the smallest
-size go back to the nearest piece however far it is, since they are the body's own
-material, not scraps of the model's.
+A level's front can be in pieces, since the wave is still filling corners behind it. Each
+piece is followed onward through the levels after it, and the piece most of the wave came
+through is the neck's. The plane goes through its centre. Its normal runs from the centre
+of the three levels behind that piece to the centre of the three in front, which point
+the wave came in. The square cut is that piece's widest in-plane reach plus three voxels,
+either way.
+
+A second wave starts from the mark and may not step across that square. If it reaches the
+neck's points three levels on, it got round the square, which is widened by half, twice at
+most, before the answer is `NoNeck`. A box with one face on the square and as deep as its
+half-width, on the mark's side, cuts the model into what is inside and what is outside it.
+Each body of each is voted for by its vertices more than a voxel off the plane. Each
+vertex counts for the side its nearest inside lattice point is on, by whether the second
+wave reached it. A body with no votes is the mark's where it came from inside the box. The
+mark's bodies inside and outside the box are joined by exact union, and so are the rest's.
+The box's other faces leave no seam that union does not take back out.
+
+A wave that dies out with no neck, having filled under half the model's volume, was held
+in by something finer than its lattice. The lattice is narrowed once onto the box round
+what it filled, grown by half its size either way, with as many points over that. A
+partition the coarse lattice missed is then found as a neck. A wave still held in is a
+piece no material the finer lattice sees joins to the rest, as on a scan whose surface
+folds round it. That piece is grown two voxels out into the empty space round it, never
+onto a voxel beside the rest's inside, and the closed surface round those voxels cuts the
+model by exact intersection and difference. The surfaces of both stay the model's own,
+except where the cutter crosses whatever thin fold joined them.
 
 ## Scraps
 

@@ -1,6 +1,7 @@
 use anyhow::{Result, anyhow};
 use core_geometry::{Mesh, Plane, Scalar, Transform, Vec3, diagnose, transform_mesh};
 use core_joint::{Joined, JointKind, Joints};
+use core_volume::PartedOff;
 
 pub use core_engine::project::Keep;
 
@@ -32,6 +33,11 @@ pub struct CutTool {
     running: Option<Running>,
     /// A split under way, and the name of the model it splits.
     splitting: Option<(SplitJob, String)>,
+    /// Whether the next click on a model marks the part Split cuts off it.
+    pub picking_part: bool,
+    /// The model a part is marked on, and the point, in the model's own coordinates so
+    /// that it moves with it.
+    pub part_mark: Option<(ObjectId, Vec3)>,
 }
 
 /// A cut under way, with what the tool was set to when it started.
@@ -61,6 +67,8 @@ impl Default for CutTool {
             centred_on: None,
             running: None,
             splitting: None,
+            picking_part: false,
+            part_mark: None,
         }
     }
 }
@@ -151,6 +159,9 @@ impl CutTool {
         if let Some(outcome) = self.splitting.as_mut().and_then(|(job, _)| job.poll())
             && let Some((_, name)) = self.splitting.take()
         {
+            if matches!(outcome, SplitOutcome::PartedOff { .. }) {
+                self.part_mark = None;
+            }
             *status = land_parts(scene, &name, outcome);
         }
         self.is_busy()
@@ -160,8 +171,27 @@ impl CutTool {
         self.running.is_some() || self.splitting.is_some()
     }
 
-    /// Starts breaking one model into the parts it is made of, off the drawing thread, as
-    /// the tool's `parts` settings say; [`CutTool::poll`] puts them on the plate.
+    /// Marks the part at `point` on the plate as the one Split cuts off `object`, and
+    /// ends the picking.
+    pub fn mark_part(&mut self, id: ObjectId, object: &SceneObject, point: Vec3) {
+        let local = object
+            .transform
+            .to_matrix()
+            .inverse()
+            .transform_point3(point);
+        self.part_mark = Some((id, local));
+        self.picking_part = false;
+    }
+
+    /// Where the part is marked on `id`, in plate coordinates, if it is.
+    pub fn marked_on(&self, id: ObjectId, object: &SceneObject) -> Option<Vec3> {
+        let (marked, local) = self.part_mark?;
+        (marked == id).then(|| object.transform.to_matrix().transform_point3(local))
+    }
+
+    /// Starts breaking one model into the parts it is made of, or cutting off the part
+    /// marked on it, off the drawing thread, as the tool's `parts` settings say;
+    /// [`CutTool::poll`] puts them on the plate.
     pub fn start_split(&mut self, scene: &Scene, id: ObjectId) -> Result<()> {
         let object = scene
             .get(id)
@@ -171,6 +201,7 @@ impl CutTool {
             id,
             placed: transform_mesh(mesh, object.transform),
             settings: self.state.parts,
+            at: self.marked_on(id, object),
         });
         self.splitting = Some((job, object.name.clone()));
         Ok(())
@@ -317,6 +348,7 @@ fn joint_notes(
 fn land_parts(scene: &mut Scene, name: &str, outcome: SplitOutcome) -> Status {
     let (id, parts) = match outcome {
         SplitOutcome::Split { id, parts } => (id, parts),
+        SplitOutcome::PartedOff { id, parted } => return land_parted_off(scene, name, id, parted),
         SplitOutcome::Failed(message) => return Status::Error(message),
     };
     let scraps = scrap_notes(parts.joined, parts.dropped);
@@ -342,17 +374,27 @@ fn land_parts(scene: &mut Scene, name: &str, outcome: SplitOutcome) -> Status {
             mending = mending(mended)
         ));
     }
-    let necks = match (parts.necks, parts.unparted) {
-        (0, 0) => String::new(),
-        (0, unparted) => tr!("cut-split-unparted", count = unparted),
-        (necks, _) => tr!("cut-split-necks", count = necks),
-    };
     Status::Info(tr!(
         "cut-split-done",
         name = name.to_owned(),
         count = count,
-        necks = necks,
         scraps = scraps,
+        mending = mending(mended)
+    ))
+}
+
+/// Puts the marked part and the rest of the model on the plate in its place.
+fn land_parted_off(scene: &mut Scene, name: &str, id: ObjectId, parted: PartedOff) -> Status {
+    scene.remove(id);
+    let mut mended = 0;
+    for (index, side) in [parted.part, parted.rest].into_iter().enumerate() {
+        let side_name = tr!("cut-part-name", name = name.to_owned(), index = index + 1);
+        let (_, was_mended) = place(scene, side_name, side);
+        mended += usize::from(was_mended);
+    }
+    Status::Info(tr!(
+        "cut-parted-off",
+        name = name.to_owned(),
         mending = mending(mended)
     ))
 }
@@ -770,6 +812,58 @@ mod tests {
         let status = split_now(&mut scene, id);
         assert!(!status.is_error(), "got {status:?}");
         assert_eq!(scene.objects().len(), 2);
+    }
+
+    /// Splits `id` with a part marked at `at` on the plate, through to the end.
+    fn part_off_now(tool: &mut CutTool, scene: &mut Scene, id: ObjectId, at: Vec3) -> Status {
+        let object = scene.get(id).expect("the model is on the plate");
+        tool.mark_part(id, object, at);
+        if let Err(error) = tool.start_split(scene, id) {
+            return Status::Error(error.to_string());
+        }
+        let mut status = Status::default();
+        while tool.poll(scene, &mut status) {
+            std::thread::yield_now();
+        }
+        status
+    }
+
+    #[test]
+    fn a_part_marked_on_a_moved_dumbbell_is_cut_off_and_the_mark_is_spent() {
+        let solid = |min: Vec3, max: Vec3| {
+            core_csg::Solid::new(&core_geometry::cuboid(min, max)).expect("a box is a solid")
+        };
+        let dumbbell = solid(Vec3::ZERO, Vec3::splat(10.0))
+            .union(&solid(Vec3::new(10.0, 4.0, 4.0), Vec3::new(20.0, 6.0, 6.0)))
+            .and_then(|joined| joined.union(&solid(Vec3::new(20.0, 0.0, 0.0), Vec3::splat(30.0))))
+            .expect("three boxes in a row join")
+            .mesh();
+        let moved = Transform::from_translation(Vec3::new(5.0, 0.0, 0.0));
+        let (mut scene, id) = scene_with(dumbbell, moved);
+        let mut tool = CutTool::default();
+        let status = part_off_now(&mut tool, &mut scene, id, Vec3::new(5.0, 5.0, 5.0));
+        assert!(!status.is_error(), "got {status:?}");
+        assert_eq!(
+            tool.part_mark, None,
+            "the mark went with the model it was on"
+        );
+        let [part, rest] = scene.objects() else {
+            panic!("the marked part and the rest replace the model");
+        };
+        let ends = |object: &SceneObject| object.world_bounds().expect("a side has faces");
+        assert!(
+            ends(part).maxs.x < 25.0 && ends(rest).mins.x > 15.0,
+            "the part is the box the mark is on, cut across the bar 15 to 25 mm on the plate"
+        );
+    }
+
+    #[test]
+    fn a_part_marked_on_a_box_has_no_neck_and_the_box_stays() {
+        let (mut scene, id) = scene_with(cuboid(Vec3::splat(4.0)), Transform::default());
+        let mut tool = CutTool::default();
+        let status = part_off_now(&mut tool, &mut scene, id, Vec3::new(0.0, 2.0, 2.0));
+        assert_eq!(status, Status::Error(tr!("cut-no-neck")));
+        assert_eq!(scene.objects().len(), 1);
     }
 
     #[test]

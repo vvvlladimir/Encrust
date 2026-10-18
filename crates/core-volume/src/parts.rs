@@ -1,26 +1,21 @@
 //! A model split into the parts it is made of; see `docs/design/parts.md`.
 
-mod necks;
+mod neck;
 mod pieces;
 
 use core_geometry::{Bvh, DEFAULT_WELD_TOLERANCE, Mesh, Scalar, weld};
 use serde::{Deserialize, Serialize};
 
-use crate::cancel::Cancel;
-use crate::error::VolumeError;
+pub use neck::{PartedOff, part_off};
 use pieces::{Body, nest, shells};
 
 /// A scrap this near a part touches it, mm: it was broken off it, not left beside it.
 const TOUCHING_MM: Scalar = 0.2;
 
-/// What a model is split by, and what is too small to be a part of its own.
+/// What is too small to be a part of its own when a model is split.
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct PartSettings {
-    /// Whether a part is also parted where two thicker bodies are joined by something
-    /// narrower than `neck_mm`.
-    pub at_necks: bool,
-    pub neck_mm: Scalar,
     /// A piece holding less than this is no part of its own, mm³: it is joined to the
     /// part it touches, or dropped where it touches none.
     pub smallest_mm3: Scalar,
@@ -28,11 +23,7 @@ pub struct PartSettings {
 
 impl Default for PartSettings {
     fn default() -> Self {
-        Self {
-            at_necks: false,
-            neck_mm: 1.0,
-            smallest_mm3: 2.0,
-        }
+        Self { smallest_mm3: 2.0 }
     }
 }
 
@@ -44,23 +35,12 @@ pub struct Parts {
     pub joined: usize,
     /// Scraps too small to be parts and touching none, left out.
     pub dropped: usize,
-    /// Narrow joins the parts were parted at.
-    pub necks: usize,
-    /// Bodies that had narrow joins but could not be cut exactly, and stay whole.
-    pub unparted: usize,
 }
 
 /// Splits `mesh` into its parts: bodies that share no edge two faces use, each with the
-/// shells inside it, parted at narrow joins if `settings` asks, with the scraps too small
-/// to be parts joined to the part they touch or dropped.
-///
-/// `cancel` is asked while narrow joins are looked for; a run given up on is
-/// [`VolumeError::Cancelled`].
-pub fn parts(
-    mesh: &Mesh,
-    settings: &PartSettings,
-    cancel: Cancel<'_>,
-) -> Result<Parts, VolumeError> {
+/// shells inside it, with the scraps too small to be parts joined to the part they touch
+/// or dropped.
+pub fn parts(mesh: &Mesh, settings: &PartSettings) -> Parts {
     let welded = weld(mesh, DEFAULT_WELD_TOLERANCE).mesh;
     let bodies = nest(shells(&welded));
     let mut done = Parts::default();
@@ -70,53 +50,10 @@ pub fn parts(
     if kept.is_empty() {
         // Nothing is big enough to stand for the model: every piece is kept as it is.
         kept = scraps;
-        return Ok(finished(kept, done));
-    }
-    if settings.at_necks {
-        kept = parted_at_necks(kept, settings, cancel, &mut done)?;
+        return finished(kept, done);
     }
     attach(&mut kept, scraps, TOUCHING_MM, &mut done);
-    Ok(finished(kept, done))
-}
-
-/// Every body of `kept` parted at its narrow joins, the scraps of each cut joined to the
-/// part they touch, and a body the cut cannot read left whole.
-fn parted_at_necks(
-    kept: Vec<Body>,
-    settings: &PartSettings,
-    cancel: Cancel<'_>,
-    done: &mut Parts,
-) -> Result<Vec<Body>, VolumeError> {
-    let mut parted = Vec::with_capacity(kept.len());
-    for body in kept {
-        let pieces =
-            match necks::parted(&body.mesh, settings.neck_mm, settings.smallest_mm3, cancel) {
-                Ok(pieces) => pieces,
-                Err(VolumeError::NotSolid(_)) => {
-                    done.unparted += 1;
-                    parted.push(body);
-                    continue;
-                }
-                Err(error) => return Err(error),
-            };
-        if pieces.len() == 1 {
-            parted.push(body);
-            continue;
-        }
-        done.necks += pieces.len() - 1;
-        let bodies: Vec<Body> = pieces
-            .iter()
-            .flat_map(|piece| nest(shells(piece)))
-            .collect();
-        let (mut whole, scraps): (Vec<Body>, Vec<Body>) = bodies
-            .into_iter()
-            .partition(|body| body.size_mm3 >= settings.smallest_mm3);
-        // A cut's scraps are the body's own material, so each goes back to the nearest part
-        // however far it is; it is not counted, being no scrap of the model's.
-        attach(&mut whole, scraps, Scalar::MAX, &mut Parts::default());
-        parted.extend(whole);
-    }
-    Ok(parted)
+    finished(kept, done)
 }
 
 /// Joins each of `scraps` to the nearest part of `parts` within `reach_mm`, and drops
