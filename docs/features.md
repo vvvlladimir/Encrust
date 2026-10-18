@@ -146,26 +146,29 @@ capped silently.
 - Lay each half flat on its cut face, or split a model into its separate parts.
 - A piece the cut leaves broken is repaired automatically. Undo puts the original back.
 
-### Relief (textures pressed into the surface)
-- Use the model's own texture, or **any picture** tiled over the model from three sides.
-- Set the depth (a negative depth sinks the picture in), the tile size, the angle and the
-  precision.
-- Using the model's own texture needs a model with UVs (OBJ or 3MF).
-- **Text** in the same panel: turn its switch on and click a model to write there,
-  **raised** out of the surface or **sunk** into it, several lines if you like. Pick the
-  **font** from the ones installed on your computer or the built-in IBM Plex Sans, and set
-  the letter height, the depth and the angle; a preview under the cursor shows what the
-  click will write. The depth is measured from the face where you click, and the letters
-  follow the face no further than that depth, so nothing beside them is cut; on a curved
-  face they stay flat. Text is only ever cut exactly: on a model that is not closed it is
-  refused, and the model is left as it was. Scripts that join their letters (Arabic,
-  Devanagari) are not shaped. The browser build offers only the built-in font.
-- **Combine models** in the same panel: pick two or more and **Union** them into one,
-  **Subtract** the others from the one picked first, or **Intersect** them to keep only
-  what they share. The result replaces them; their supports, cavity and holes are not kept,
-  and Undo puts the originals back. Closed models keep their sharp edges, a model made of parts
-  pushed into each other included; a torn scan is combined through a field and its edges
-  are rounded to the lattice the notice names.
+### Relief (texture, text and combining models)
+- Three modes, switched at the head of the panel, each with its own settings and its own
+  button at the foot.
+- **Texture:** press the model's own texture, or **any picture** tiled over the model from
+  three sides, into its surface. Set the depth (a negative depth sinks the picture in), the
+  tile size, the angle and the precision. The model's own texture needs a model with UVs
+  (OBJ or 3MF).
+- **Text:** click a model to write there, **raised** out of the surface or **sunk** into
+  it, several lines if you like. Pick the **font** from the ones installed on your computer
+  or the built-in IBM Plex Sans, and set the letter height, the depth and the angle; a
+  preview under the cursor shows what the click will write. The depth is measured from the
+  face where you click, and the letters follow the face no further than that depth, so
+  nothing beside them is cut; on a curved face they stay flat. Text is only ever cut
+  exactly: on a model that is not closed it is refused, and the model is left as it was.
+  Scripts that join their letters (Arabic, Devanagari) are not shaped. The browser build
+  offers only the built-in font.
+- **Combine:** pick two or more models — the panel lists them in the order picked and what
+  each does — and **Union** them into one, **Subtract** the others from the one picked
+  first, or **Intersect** them to keep only what they share. Closed models keep their sharp
+  edges, a model made of parts pushed into each other included; a torn scan is combined
+  through a field and its edges are rounded to the lattice the notice names.
+- Text and Combine replace the model; its supports, cavity and holes are not kept, and
+  Undo puts the original back.
 
 ### Hollow
 - Hollow a model with a wall thickness and precision you choose.

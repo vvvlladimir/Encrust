@@ -1,3 +1,4 @@
+use crate::relief::ReliefMode;
 use core_geometry::{PlacedHit, Vec2};
 use egui::{PointerButton, Sense};
 
@@ -182,7 +183,7 @@ fn click(ui: &egui::Ui, window: &mut Window, rect: egui::Rect, cursor: egui::Pos
             add_channel_point_under_cursor(window, rect, cursor);
         }
         Tool::Drain => place_drain_under_cursor(window, rect, cursor),
-        Tool::Relief if window.tools.text.placing => {
+        Tool::Relief if window.tools.relief.mode == ReliefMode::Text => {
             text::stamp_text_under_cursor(window, rect, cursor);
         }
         Tool::Measure => {
@@ -218,7 +219,9 @@ fn ghost(ui: &egui::Ui, window: &Window, rect: egui::Rect, pointer: &Pointer) ->
             (surface_under, channel_point_ghost)
         }
         Tool::Drain => (surface_under, drain_ghost),
-        Tool::Relief if window.tools.text.placing => (surface_under, text::text_ghost),
+        Tool::Relief if window.tools.relief.mode == ReliefMode::Text => {
+            (surface_under, text::text_ghost)
+        }
         _ => return None,
     };
     let cursor = pointer.position.map(|at| egui::pos2(at.x, at.y))?;
@@ -234,8 +237,9 @@ fn ghost(ui: &egui::Ui, window: &Window, rect: egui::Rect, pointer: &Pointer) ->
 
 /// Hands the 3D pass its frame: the models, the plate, the section and the shading.
 fn paint_plate(ui: &egui::Ui, window: &mut Window, rect: egui::Rect, ghost: Option<&Ghost>) {
-    let textures =
-        (*window.tool == Tool::Relief).then(|| window.tools.relief.textures(&window.doc.scene));
+    let textures = (*window.tool == Tool::Relief
+        && window.tools.relief.mode == ReliefMode::Texture)
+        .then(|| window.tools.relief.textures(&window.doc.scene));
     // What needs holding up is shown while the Supports tool is the one in hand, at the
     // angle its own profile is set to; see `docs/decisions/0034`.
     let overhang_deg = window.tool.shows_overhangs().then_some(

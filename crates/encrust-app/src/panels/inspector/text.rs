@@ -2,7 +2,7 @@ use crate::i18n::tr;
 use crate::panels::Window;
 use crate::text::{TextState, TextTool, reason};
 use crate::ui::{
-    Segment, Segmented, describe, hint, number_row, progress_bar, section_with_switch, theme, tone,
+    Segment, Segmented, describe, hint, number_row, progress_bar, section, theme, tone,
 };
 
 /// Bounds on the letters, millimetres: under a millimetre a capital is finer than resin
@@ -17,13 +17,10 @@ const MAX_DEPTH_MM: f32 = 10.0;
 const SIZE_STEP: f64 = 0.1;
 const DEPTH_STEP: f64 = 0.05;
 
-/// Text written where the model is clicked, while the switch is on: what, in what, and
-/// how big. A click with it off picks models, as Combine models needs.
+/// What a click on a model writes, in what, and how big.
 pub fn sections(ui: &mut egui::Ui, window: &mut Window) {
     let tool = &mut window.tools.text;
-    // The body reads the switch as it stood before this frame's click, as Hollow's does.
-    let mut placing = tool.placing;
-    section_with_switch(ui, &tr!("text-words"), &mut placing, |ui| {
+    section(ui, &tr!("text-words"), None, |ui| {
         let field = crate::ui::text_box(egui::TextEdit::multiline(&mut tool.state.text))
             .hint_text(tr!("text-words-hint"))
             .font(theme::label())
@@ -31,19 +28,25 @@ pub fn sections(ui: &mut egui::Ui, window: &mut Window) {
             .desired_width(ui.available_width());
         ui.add(field);
         family(ui, tool);
-        shape(ui, &mut tool.state);
-        if tool.is_busy() {
-            tone(ui, &tr!("text-stamping"), theme::colors().text_mid);
-            progress_bar(ui, None);
-            return;
-        }
-        describe(ui, &tr!("text-shape-note"));
-        match tool.shapes() {
-            Ok(_) => describe(ui, &tr!("text-click-note")),
-            Err(error) => hint(ui, &reason(&error)),
-        }
     });
-    tool.placing = placing;
+    section(ui, &tr!("text-lettering"), None, |ui| {
+        shape(ui, &mut tool.state);
+        describe(ui, &tr!("text-shape-note"));
+    });
+}
+
+/// Where the next click goes, why it cannot, or the stamp that is running.
+pub fn action(ui: &mut egui::Ui, window: &mut Window) {
+    let tool = &window.tools.text;
+    if tool.is_busy() {
+        tone(ui, &tr!("text-stamping"), theme::colors().text_mid);
+        progress_bar(ui, None);
+        return;
+    }
+    match tool.shapes() {
+        Ok(_) => tone(ui, &tr!("text-click-note"), theme::colors().text_mid),
+        Err(error) => hint(ui, &reason(&error)),
+    }
 }
 
 /// The family to write in. The machine's own are read the first time the list is opened,

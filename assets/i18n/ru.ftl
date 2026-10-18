@@ -611,7 +611,7 @@ text-height = Высота букв
 text-depth = Глубина
 text-angle = Угол
 text-shape-note = Буквы выступают из грани или уходят в неё на глубину, отсчитанную от грани в точке щелчка, и следуют за ней не дальше этой глубины; на кривой грани буквы остаются плоскими.
-text-click-note = Пока переключатель включён, щелчок по модели пишет на ней текст, а предпросмотр под курсором показывает, что получится. Выключите его, чтобы выбирать модели.
+text-click-note = Щёлкните по модели, чтобы написать на ней текст; предпросмотр под курсором показывает, что получится.
 text-stamping = Ставлю надпись
 text-nothing-under = здесь нет модели, на которой писать
 text-done = Надпись на { $name } готова{ $mending }
@@ -620,14 +620,35 @@ text-missing-glyph = в этом шрифте нет буквы { $character }
 text-blank = писать нечего
 text-bad-size = буквам нужны высота и глубина
 text-off-the-model = здесь надпись не встаёт на модель
-boolean-title = Объединение моделей
+relief-mode = Режим
+relief-mode-texture = Текстура
+relief-mode-text = Текст
+relief-mode-combine = Объединение
+relief-mode-texture-note = Текстура или картинка, вдавленная в поверхность моделей на плите.
+relief-mode-text-note = Текст, выступающий из модели или вдавленный в неё там, где вы щёлкнете.
+relief-mode-combine-note = Выбранные модели, сложенные в одну, вычтенные одна из другой или их общая часть.
+text-lettering = Буквы
+boolean-operation = Операция
+boolean-models = Модели
+boolean-none-picked = Пока ничего не выбрано.
+boolean-models-note = В том порядке, в каком выбраны. Щёлкните модель, чтобы выбрать её, и с Shift или Cmd — чтобы добавить следующую.
+boolean-role-kept = остаётся
+boolean-role-taken-out = вычитается
+boolean-role-joined = добавляется
+boolean-role-shared = общая часть
 boolean-union = Сложить
 boolean-difference = Вычесть
 boolean-intersection = Пересечь
 boolean-union-note = Выбранные модели становятся одной, в которой есть всё, что было в любой из них.
 boolean-difference-note = Остальные выбранные модели вычитаются из той, что выбрана первой.
 boolean-intersection-note = Остаётся только то, что есть во всех выбранных моделях.
-boolean-combine = Объединить
+boolean-combine-none = Объединить
+boolean-combine =
+    { $count ->
+        [one] Объединить { $count } модель
+        [few] Объединить { $count } модели
+       *[many] Объединить { $count } моделей
+    }
 boolean-combining = Объединение моделей
 boolean-tooltip = Заменяет выбранные модели той, что из них получается. Их поддержки, полости и отверстия пропадают; дырявая модель объединяется через поле и теряет острые края.
 boolean-pick-two = Выберите на плите две модели или больше, удерживая Shift или Cmd.
@@ -1557,7 +1578,7 @@ inspector-about-measure = Щёлкните по двум точкам или д�
 inspector-about-hollow = Вырежьте полость, чтобы сэкономить смолу и облегчить отрыв.
 inspector-about-drain = Дайте смоле вытечь из полой модели.
 inspector-about-cut = Разделите модель плоскостью.
-inspector-about-relief = Вдавите текстуру модели в её поверхность. Белый — высшая точка.
+inspector-about-relief = Вдавите текстуру в поверхность модели, напишите на ней текст или объедините модели в одну.
 inspector-about-supports = Поддержите то, что нависает над пустотой.
 inspector-about-paint = Укажите поддержкам, где им стоять, а где нет.
 inspector-about-shape = Форма одной поддержки, часть за частью.

@@ -72,6 +72,20 @@ fn the_hollow_tool_with_each_kind_of_infill() {
 }
 
 #[test]
+fn the_relief_tool_in_each_mode() {
+    let mut results = SnapshotResults::new();
+    for (name, mode) in [
+        ("tool_relief_text", crate::relief::ReliefMode::Text),
+        ("tool_relief_combine", crate::relief::ReliefMode::Combine),
+    ] {
+        let mut app = app(true);
+        app.tool = Tool::Relief;
+        app.tools.relief.mode = mode;
+        results.extend(picture(name, app));
+    }
+}
+
+#[test]
 fn the_preview_of_an_empty_plate() {
     let mut app = app(false);
     app.view.options.started = true;

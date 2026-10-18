@@ -49,6 +49,18 @@ pub struct ReliefState {
     pub precision: Scalar,
 }
 
+/// Which of the Relief tool's three jobs the panel and a click are for.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum ReliefMode {
+    /// A texture or a picture pressed into the surface.
+    #[default]
+    Texture,
+    /// Text written where a model is clicked.
+    Text,
+    /// The picked models joined, subtracted or intersected.
+    Combine,
+}
+
 /// What the Relief tool is set to, and the run it has going.
 ///
 /// A texture is pressed into the model as geometry rather than written as exposure: grey
@@ -56,6 +68,7 @@ pub struct ReliefState {
 /// `docs/decisions/0116-a-texture-is-pressed-into-the-field.md`.
 #[derive(Debug)]
 pub struct ReliefTool {
+    pub mode: ReliefMode,
     pub state: ReliefState,
     pub job: Option<ReliefJob>,
     /// The picture pressed instead of the models' own textures, while one is chosen. The
@@ -70,6 +83,7 @@ impl Default for ReliefTool {
     fn default() -> Self {
         let asked = ReliefSettings::default();
         Self {
+            mode: ReliefMode::default(),
             state: ReliefState {
                 amplitude_mm: asked.amplitude_mm,
                 precision: asked.precision,

@@ -24,8 +24,10 @@ coarsened to the budget, combined there and extracted; `Combined::voxel_mm` says
 `combine_exact` never samples and refuses with `NotSolid`, for a caller that must not
 remesh the model, as a label must not (ADR 0304).
 
-In the window the tool sits in the Relief panel, under Combine models. It takes the models
-picked on the plate, in the order they were picked, and runs off the drawing thread. The
+In the window it is the Relief tool's Combine mode, beside its Texture and Text modes: one
+tool switched at its head rather than three on the rail, each mode with its own sections
+and its own action at the foot. It takes the models picked on the plate, listed in the
+order they were picked with what each does, and runs off the drawing thread. The
 result replaces them, named after the first, through the same placement a cut uses; their
 supports, cavity, holes and texture are not carried over. The model itself is combined,
 never its shell. Undo puts the originals back, as for any edit (ADR 0086).

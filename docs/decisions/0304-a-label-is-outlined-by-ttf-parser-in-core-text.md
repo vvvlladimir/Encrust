@@ -24,10 +24,9 @@ taking the face only within the depth of the label's plane, so the letters stand
 out of the face or into it, never reach more than twice the depth off the plane, and overlap
 the model by 0.2 mm on the other side.
 
-The Text section of the Relief panel offers the bundled IBM Plex Sans at once and, the
-first time the font list is opened, every family installed on the machine, read by
-`fontdb` 0.23 on a worker; a browser has none to offer. While its switch is on, a click on
-a model stamps the label through `combine_exact` — union for raised, difference for sunk —
+The Relief tool's Text mode offers the bundled IBM Plex Sans at once and, the first time
+the font list is opened, every family installed on the machine, read by `fontdb` 0.23 on
+a worker; a browser has none to offer. In that mode a click on a model stamps the label through `combine_exact` — union for raised, difference for sunk —
 and a model it cannot read is refused rather than remeshed through the field.
 
 ## Consequences

@@ -1,11 +1,11 @@
 use std::sync::Arc;
 
 use core_geometry::Vec2;
-use core_volume::{Boolean, Tiling};
+use core_volume::Tiling;
 
 use crate::i18n::tr;
 use crate::panels::Window;
-use crate::relief::Picture;
+use crate::relief::{Picture, ReliefMode};
 use crate::state::Doc;
 use crate::ui::{
     Segment, Segmented, describe, hint, icon, meta, number_row, primary_button, progress_bar,
@@ -27,9 +27,49 @@ const FINE_STEP: f64 = 0.01;
 /// would cost a band that wide on every voxel of the field.
 const MAX_DEPTH_MM: f32 = 2.0;
 
+/// The tool's three jobs behind one switch at its head — a texture pressed in, text
+/// written on, models combined — each with its own sections and its own action.
+pub fn ui(ui: &mut egui::Ui, window: &mut Window) {
+    section(ui, &tr!("relief-mode"), None, |ui| modes(ui, window));
+    match window.tools.relief.mode {
+        ReliefMode::Texture => texture(ui, window),
+        ReliefMode::Text => super::text::sections(ui, window),
+        ReliefMode::Combine => super::combine::sections(ui, window),
+    }
+}
+
+/// The action at the foot belongs to the job in hand, never to all three.
+pub fn action(ui: &mut egui::Ui, window: &mut Window) {
+    match window.tools.relief.mode {
+        ReliefMode::Texture => press(ui, window),
+        ReliefMode::Text => super::text::action(ui, window),
+        ReliefMode::Combine => super::combine::action(ui, window),
+    }
+}
+
+fn modes(ui: &mut egui::Ui, window: &mut Window) {
+    let segments = [
+        Segment::new(ReliefMode::Texture, tr!("relief-mode-texture")),
+        Segment::new(ReliefMode::Text, tr!("relief-mode-text")),
+        Segment::new(ReliefMode::Combine, tr!("relief-mode-combine")),
+    ];
+    let mode = &mut window.tools.relief.mode;
+    Segmented::new(&segments)
+        .width(ui.available_width())
+        .show(ui, mode);
+    describe(
+        ui,
+        &match mode {
+            ReliefMode::Texture => tr!("relief-mode-texture-note"),
+            ReliefMode::Text => tr!("relief-mode-text-note"),
+            ReliefMode::Combine => tr!("relief-mode-combine-note"),
+        },
+    );
+}
+
 /// What is pressed into the models on the plate — a chosen picture as tiles, or the
 /// texture each came with — and how deep.
-pub fn ui(ui: &mut egui::Ui, window: &mut Window) {
+fn texture(ui: &mut egui::Ui, window: &mut Window) {
     section(ui, &tr!("relief-image"), None, |ui| {
         match &window.tools.relief.picture {
             Some(picture) => chosen(ui, picture),
@@ -46,57 +86,6 @@ pub fn ui(ui: &mut egui::Ui, window: &mut Window) {
             tiling(ui, &mut window.tools.relief.tiling);
         }
     });
-    super::text::sections(ui, window);
-    section(ui, &tr!("boolean-title"), None, |ui| combine(ui, window));
-}
-
-/// Union, difference or intersection of the picked models, and the run that makes it.
-fn combine(ui: &mut egui::Ui, window: &mut Window) {
-    let tool = &mut window.tools.boolean;
-    let segments = [
-        Segment::new(Boolean::Union, tr!("boolean-union")),
-        Segment::new(Boolean::Difference, tr!("boolean-difference")),
-        Segment::new(Boolean::Intersection, tr!("boolean-intersection")),
-    ];
-    let mut chosen = tool.op;
-    if Segmented::new(&segments)
-        .width(ui.available_width())
-        .show(ui, &mut chosen)
-    {
-        tool.op = chosen;
-    }
-    describe(
-        ui,
-        &match tool.op {
-            Boolean::Union => tr!("boolean-union-note"),
-            Boolean::Difference => tr!("boolean-difference-note"),
-            Boolean::Intersection => tr!("boolean-intersection-note"),
-        },
-    );
-    if tool.is_busy() {
-        tone(ui, &tr!("boolean-combining"), theme::colors().text_mid);
-        progress_bar(ui, None);
-        return;
-    }
-
-    let blocked = tool.blocker(&window.doc.scene);
-    let clicked = ui
-        .add_enabled_ui(blocked.is_none(), |ui| {
-            secondary_button(ui, icon::COMBINE, &tr!("boolean-combine"))
-                .on_hover_text(tr!("boolean-tooltip"))
-                .clicked()
-        })
-        .inner;
-    if clicked {
-        let started = tool.start(&window.doc.scene);
-        window
-            .machine
-            .status
-            .report(&tr!("boolean-combining"), started);
-    }
-    if let Some(reason) = blocked {
-        hint(ui, &reason);
-    }
 }
 
 /// The edge of the thumbnail a chosen picture is shown at, points.
@@ -269,7 +258,7 @@ fn truncated(name: &str) -> String {
 }
 
 /// Pressing the texture in, or the progress of the run that is going.
-pub fn action(ui: &mut egui::Ui, window: &mut Window) {
+fn press(ui: &mut egui::Ui, window: &mut Window) {
     if window.tools.relief.is_busy() {
         tone(ui, &tr!("relief-pressing"), theme::colors().text_mid);
         progress_bar(ui, None);

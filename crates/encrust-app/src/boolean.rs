@@ -105,6 +105,14 @@ pub(crate) fn land(scene: &mut Scene, ids: &[ObjectId], name: String, mesh: Mesh
     crate::cut::mending(usize::from(mended))
 }
 
+/// The names of the models a combination would take, in the order they were picked.
+pub(crate) fn picked_names(scene: &Scene) -> Vec<String> {
+    picked(scene)
+        .into_iter()
+        .map(|object| object.name.clone())
+        .collect()
+}
+
 /// The picked models a combination would take, in the order they were picked: only those
 /// on the plate being edited and not hidden.
 fn picked(scene: &Scene) -> Vec<&SceneObject> {

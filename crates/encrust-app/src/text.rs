@@ -121,7 +121,7 @@ fn installed() -> Vec<Family> {
     Vec::new()
 }
 
-/// What the Text section of the Relief panel writes and how. The window's own record.
+/// What the Relief tool writes in its Text mode, and how. The window's own record.
 #[derive(Debug, Clone, PartialEq)]
 pub struct TextState {
     pub text: String,
@@ -163,8 +163,6 @@ struct Outlined {
 #[derive(Debug, Default)]
 pub struct TextTool {
     pub state: TextState,
-    /// Whether a click on a model writes the text there rather than picking the model.
-    pub placing: bool,
     pub families: Families,
     pub job: Option<BooleanJob>,
     /// Behind a cell so the view, which only reads the tool, can outline what it draws.
