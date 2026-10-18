@@ -1,8 +1,8 @@
 use std::sync::Arc;
 use std::sync::mpsc::{self, Receiver, TryRecvError};
 
-use core_geometry::{Bvh, Heightmap, Mesh, Scalar, Transform, transform_mesh};
-use core_volume::{ReliefSettings, Tiling, press, press_tiled};
+use core_geometry::{Bvh, Heightmap, Mesh, Scalar, Transform, Vec3, transform_mesh};
+use core_volume::{AngleMask, ReliefSettings, Tiling, press, press_tiled};
 use rayon::prelude::*;
 
 use crate::i18n::tr;
@@ -22,6 +22,8 @@ pub struct ReliefTask {
     /// The model's placement but for its turn (`Transform::sizing`). The relief is pressed
     /// at the size the model prints at, so the mesh is taken through this first; see ADR 0122.
     pub sizing: Transform,
+    /// The plate's up in the model's own space, which is where its faces are held.
+    pub up: Vec3,
 }
 
 /// Everything one relief run needs.
@@ -104,6 +106,7 @@ pub fn relief_tasks(scene: &Scene, tiled: bool) -> Vec<ReliefTask> {
             bvh: Arc::clone(&object.bvh),
             mapped: object.mapped.clone(),
             sizing: object.transform.sizing(),
+            up: object.transform.rotation.inverse() * Vec3::Z,
         })
         .collect()
 }
@@ -120,12 +123,19 @@ fn run(request: &ReliefRequest) -> ReliefOutcome {
             .par_iter()
             .map(|task| {
                 let (mesh, bvh, uvs) = printed(task);
+                let settings = ReliefSettings {
+                    mask: AngleMask {
+                        up: task.up,
+                        ..request.settings.mask
+                    },
+                    ..request.settings
+                };
                 let relief = match (&request.source, &task.mapped, uvs) {
                     (ReliefSource::Tiled { image, tiling }, _, _) => {
-                        press_tiled(&mesh, &bvh, image, *tiling, &request.settings)
+                        press_tiled(&mesh, &bvh, image, *tiling, &settings)
                     }
                     (ReliefSource::Mapped, Some(mapped), Some(uvs)) => {
-                        press(&mesh, &bvh, &uvs, &mapped.heights, &request.settings)
+                        press(&mesh, &bvh, &uvs, &mapped.heights, &settings)
                     }
                     (ReliefSource::Mapped, ..) => {
                         return Err(anyhow::anyhow!(tr!("job-relief-no-texture")));

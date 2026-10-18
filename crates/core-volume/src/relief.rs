@@ -1,3 +1,5 @@
+use std::borrow::Cow;
+
 use core_geometry::{Bvh, Heightmap, Mesh, Scalar, UvMap, Vec2, Vec3};
 use serde::{Deserialize, Serialize};
 
@@ -9,8 +11,14 @@ use crate::extract::extract;
 use crate::hollow::{BAND_VOXELS, COARSENINGS, lattice_mm};
 use crate::sign::SignMode;
 
-/// How far the texture may move the surface, what it is cut on, and what the field may
-/// cost while it is.
+mod mask;
+mod smooth;
+
+pub use mask::AngleMask;
+use mask::Held;
+
+/// How far the texture may move the surface, how its grey is read, which faces it leaves
+/// alone, what it is cut on, and what the field may cost while it is.
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 pub struct ReliefSettings {
     /// How far the surface moves where the texture is white, in millimetres. Positive
@@ -19,6 +27,18 @@ pub struct ReliefSettings {
     /// How fine the lattice is, from 0 to 1, as everywhere else in this crate.
     pub precision: Scalar,
     pub budget_bytes: usize,
+    /// Reads the texture's black as high and its white as low.
+    #[serde(default)]
+    pub invert: bool,
+    /// Reads mid grey as the surface itself, so white raises it and black sinks it, each
+    /// by half the amplitude, and the model keeps about its size.
+    #[serde(default)]
+    pub symmetric: bool,
+    /// How far the texture is blurred before it is read, in pixels of the texture.
+    #[serde(default)]
+    pub smoothing_px: Scalar,
+    #[serde(default)]
+    pub mask: AngleMask,
 }
 
 impl Default for ReliefSettings {
@@ -27,6 +47,10 @@ impl Default for ReliefSettings {
             amplitude_mm: 0.5,
             precision: 0.5,
             budget_bytes: DEFAULT_BUDGET_BYTES,
+            invert: false,
+            symmetric: false,
+            smoothing_px: 0.0,
+            mask: AngleMask::default(),
         }
     }
 }
@@ -39,6 +63,36 @@ impl ReliefSettings {
     pub fn voxel_mm(&self, area_mm2: Scalar) -> Scalar {
         lattice_mm(self.amplitude_mm.abs(), self.precision, area_mm2)
     }
+
+    fn check(&self) -> Result<(), VolumeError> {
+        if !self.amplitude_mm.is_finite() || self.amplitude_mm == 0.0 {
+            return Err(VolumeError::BadAmplitude(self.amplitude_mm));
+        }
+        if !(self.smoothing_px.is_finite() && self.smoothing_px >= 0.0) {
+            return Err(VolumeError::BadSmoothing(self.smoothing_px));
+        }
+        self.mask.check()
+    }
+
+    /// How far, in amplitudes, a height read off the prepared texture moves the surface.
+    fn lifted(&self, height: Scalar) -> Scalar {
+        if self.symmetric { height - 0.5 } else { height }
+    }
+}
+
+/// `image` as a relief pressed with `settings` reads it: smoothed, then turned over where
+/// `invert` asks. The window draws this, so what it shows is what is pressed.
+pub fn prepared<'a>(image: &'a Heightmap, settings: &ReliefSettings) -> Cow<'a, Heightmap> {
+    if settings.smoothing_px <= 0.0 && !settings.invert {
+        return Cow::Borrowed(image);
+    }
+    let mut image = smooth::smoothed(image, settings.smoothing_px);
+    if settings.invert {
+        for height in image.samples_mut() {
+            *height = 1.0 - *height;
+        }
+    }
+    Cow::Owned(image)
 }
 
 /// A model with its texture pressed in, and what that cost.
@@ -68,9 +122,7 @@ pub fn press(
     if mesh.aabb().is_none() {
         return Err(VolumeError::EmptyMesh);
     }
-    if !settings.amplitude_mm.is_finite() || settings.amplitude_mm == 0.0 {
-        return Err(VolumeError::BadAmplitude(settings.amplitude_mm));
-    }
+    settings.check()?;
     // A map covering part of the mesh is honest — what it does not cover does not move —
     // but one indexed by a different face list is not the mesh's map at all.
     if uvs.len() != mesh.faces.len() || uvs.mapped() == 0 {
@@ -88,6 +140,10 @@ pub fn press(
         });
     }
 
+    let heights: Vec<_> = heights
+        .iter()
+        .map(|image| prepared(image, settings))
+        .collect();
     let sample = |face: usize, point: Vec3| {
         let (texture, uv) = uvs.at(mesh, face, point)?;
         Some(heights.get(texture)?.sample(uv))
@@ -129,12 +185,11 @@ pub fn press_tiled(
     if mesh.aabb().is_none() {
         return Err(VolumeError::EmptyMesh);
     }
-    if !settings.amplitude_mm.is_finite() || settings.amplitude_mm == 0.0 {
-        return Err(VolumeError::BadAmplitude(settings.amplitude_mm));
-    }
+    settings.check()?;
     if !tiling.tile_mm.is_finite() || tiling.tile_mm <= 0.0 {
         return Err(VolumeError::BadTile(tiling.tile_mm));
     }
+    let image = prepared(image, settings);
     let (sin, cos) = tiling.angle_deg.to_radians().sin_cos();
     let on_plane = |a: Scalar, b: Scalar| {
         let turned = Vec2::new(a * cos - b * sin, a * sin + b * cos);
@@ -160,6 +215,13 @@ fn displaced(
     settings: &ReliefSettings,
     sample: &(dyn Fn(usize, Vec3) -> Option<Scalar> + Sync),
 ) -> Result<Relief, VolumeError> {
+    let press = Press {
+        mesh,
+        bvh,
+        held: Held::of(mesh, &settings.mask),
+        sample,
+        settings,
+    };
     let asked_mm = settings.voxel_mm(mesh.surface_area());
     let mut voxel_mm = asked_mm;
     let carried = |voxel_mm: Scalar| {
@@ -170,60 +232,83 @@ fn displaced(
         }
     };
     for _ in 0..COARSENINGS {
-        match pressed(mesh, bvh, sample, settings, voxel_mm) {
+        match press.pressed(voxel_mm) {
             // The lattice the field priced is the one that fits, taken a twentieth coarser
             // still, the way a hollowing run steps back.
             Err(VolumeError::TooFine { fits_at_mm, .. }) => voxel_mm = fits_at_mm * 1.05,
             other => return other.map(carried(voxel_mm)),
         }
     }
-    pressed(mesh, bvh, sample, settings, voxel_mm).map(carried(voxel_mm))
+    press.pressed(voxel_mm).map(carried(voxel_mm))
 }
 
-/// One attempt at a given lattice.
-fn pressed(
-    mesh: &Mesh,
-    bvh: &Bvh,
-    sample: &(dyn Fn(usize, Vec3) -> Option<Scalar> + Sync),
-    settings: &ReliefSettings,
-    voxel_mm: Scalar,
-) -> Result<Mesh, VolumeError> {
-    let reach_mm = settings.amplitude_mm.abs();
-    let field = build(
-        mesh,
-        bvh,
-        &FieldSettings {
-            voxel_mm,
-            // The displaced surface has to stay inside the band it was built in, so the
-            // band carries the amplitude on top of what marching the cells needs.
-            band_voxels: reach_mm / voxel_mm + BAND_VOXELS,
-            iso_mm: 0.0,
-            sign: SignMode::Auto,
-            clip: None,
-            budget_bytes: settings.budget_bytes,
-        },
-        Cancel::never(),
-    )?;
+/// What one relief run reads its heights from and moves the surface by.
+struct Press<'a> {
+    mesh: &'a Mesh,
+    bvh: &'a Bvh,
+    held: Option<Held>,
+    sample: &'a (dyn Fn(usize, Vec3) -> Option<Scalar> + Sync),
+    settings: &'a ReliefSettings,
+}
 
-    let grid = field.grid();
-    let band_mm = field.band_mm();
-    let tiles = field.tile_keys().collect();
-    let displaced = assemble(grid, band_mm - reach_mm, tiles, |voxel| {
-        let value = field.value(voxel);
-        // Past the band the value is clamped anyway, and no displacement of it can reach
-        // back across zero, so the nearest-point query is not worth making.
-        if value.abs() >= band_mm {
-            return value;
-        }
-        let point = grid.position(voxel);
-        let Some(found) = bvh.closest(mesh, point) else {
+impl Press<'_> {
+    /// One attempt at a given lattice.
+    fn pressed(&self, voxel_mm: Scalar) -> Result<Mesh, VolumeError> {
+        let reach_mm = self.settings.amplitude_mm.abs();
+        let field = build(
+            self.mesh,
+            self.bvh,
+            &FieldSettings {
+                voxel_mm,
+                // The displaced surface has to stay inside the band it was built in, so the
+                // band carries the amplitude on top of what marching the cells needs.
+                band_voxels: reach_mm / voxel_mm + BAND_VOXELS,
+                iso_mm: 0.0,
+                sign: SignMode::Auto,
+                clip: None,
+                budget_bytes: self.settings.budget_bytes,
+            },
+            Cancel::never(),
+        )?;
+
+        let grid = field.grid();
+        let band_mm = field.band_mm();
+        let tiles = field.tile_keys().collect();
+        let displaced = assemble(grid, band_mm - reach_mm, tiles, |voxel| {
+            let value = field.value(voxel);
+            // Past the band the value is clamped anyway, and no displacement of it can reach
+            // back across zero, so the nearest-point query is not worth making.
+            if value.abs() >= band_mm {
+                return value;
+            }
+            self.moved(value, grid.position(voxel))
+        });
+
+        Ok(extract(&displaced, Cancel::never()))
+    }
+
+    /// The field's `value` at `point` once the texture has moved the surface, where the
+    /// mask lets it; see `docs/design/volume.md`.
+    fn moved(&self, value: Scalar, point: Vec3) -> Scalar {
+        let Some(found) = self.bvh.closest(self.mesh, point) else {
             return value;
         };
-        sample(found.face, found.point)
-            .map_or(value, |height| value - settings.amplitude_mm * height)
-    });
-
-    Ok(extract(&displaced, Cancel::never()))
+        let held = self
+            .held
+            .as_ref()
+            .and_then(|held| Some((held, held.nearest(point)?)));
+        if held.is_some_and(|(_, at)| Held::is_held(&at, &found)) {
+            return value;
+        }
+        let moved = (self.sample)(found.face, found.point).map_or(value, |height| {
+            value - self.settings.amplitude_mm * self.settings.lifted(height)
+        });
+        match held {
+            // Only a point outside the model can be wrapped round an edge into it.
+            Some((held, at)) if value > 0.0 => held.clipped(moved, point, &at),
+            _ => moved,
+        }
+    }
 }
 
 #[cfg(test)]
@@ -291,7 +376,7 @@ mod tests {
             &ReliefSettings {
                 amplitude_mm,
                 precision: 0.5,
-                budget_bytes: DEFAULT_BUDGET_BYTES,
+                ..ReliefSettings::default()
             },
         )
         .expect("a mapped cube can be pressed")
@@ -544,6 +629,184 @@ mod tests {
                 &ReliefSettings::default()
             ),
             Err(VolumeError::EmptyMesh)
+        ));
+    }
+
+    fn tiled_cube(heights: &Heightmap, settings: ReliefSettings) -> Aabb {
+        let (mesh, _) = cube(10.0);
+        let bvh = Bvh::build(&mesh);
+        let pressed = press_tiled(&mesh, &bvh, heights, Tiling::default(), &settings)
+            .expect("any closed mesh can be tiled");
+        bounds(&pressed.mesh)
+    }
+
+    fn raised(settings: ReliefSettings) -> ReliefSettings {
+        ReliefSettings {
+            amplitude_mm: 0.4,
+            ..settings
+        }
+    }
+
+    #[test]
+    fn an_inverted_texture_raises_what_was_black() {
+        let grown = tiled_cube(
+            &flat(0.0),
+            raised(ReliefSettings {
+                invert: true,
+                ..ReliefSettings::default()
+            }),
+        );
+        assert!(
+            (grown.maxs.z - 10.4).abs() < TOLERANCE_MM,
+            "got {grown:?}, expected black read as white to grow the cube 0.4 mm"
+        );
+    }
+
+    #[test]
+    fn a_symmetric_relief_leaves_mid_grey_where_it_was_and_moves_black_in() {
+        let symmetric = raised(ReliefSettings {
+            symmetric: true,
+            ..ReliefSettings::default()
+        });
+        let grey = tiled_cube(&flat(0.5), symmetric);
+        let black = tiled_cube(&flat(0.0), symmetric);
+        assert!(
+            (grey.maxs.z - 10.0).abs() < TOLERANCE_MM && (black.maxs.z - 9.8).abs() < TOLERANCE_MM,
+            "grey topped out at {} and black at {}, expected 10.0 and half of 0.4 mm in",
+            grey.maxs.z,
+            black.maxs.z
+        );
+    }
+
+    /// The cube with its lid widened to 14 mm, so that every side leans out over the
+    /// 10 mm bottom by about 11 degrees.
+    fn leaning_out() -> Mesh {
+        let (cube, _) = cube(10.0);
+        let vertices = cube
+            .vertices
+            .iter()
+            .map(|corner| {
+                if corner.z > 0.0 {
+                    Vec3::new(corner.x * 1.4 - 2.0, corner.y * 1.4 - 2.0, corner.z)
+                } else {
+                    *corner
+                }
+            })
+            .collect();
+        Mesh::new(vertices, cube.faces)
+    }
+
+    #[test]
+    fn a_held_bottom_stays_flat_where_leaning_sides_meet_it() {
+        let mesh = leaning_out();
+        let bvh = Bvh::build(&mesh);
+        let settings = raised(ReliefSettings {
+            mask: AngleMask {
+                bottom_deg: 5.0,
+                ..AngleMask::default()
+            },
+            ..ReliefSettings::default()
+        });
+        let pressed = press_tiled(&mesh, &bvh, &flat(1.0), Tiling::default(), &settings)
+            .expect("any closed mesh can be tiled");
+        let grown = bounds(&pressed.mesh);
+        // A side leaning out faces partly down, so without the clip at the held face's
+        // plane its relief hangs up to 0.4 × sin 11° ≈ 0.08 mm below the bottom edge.
+        assert!(
+            grown.mins.z.abs() < TOLERANCE_MM / 2.0 && grown.maxs.x > 12.2,
+            "got {grown:?}, expected the bottom at 0 and the sides moved out"
+        );
+    }
+
+    #[test]
+    fn a_held_top_is_measured_from_the_up_it_is_given() {
+        let grown = tiled_cube(
+            &flat(1.0),
+            raised(ReliefSettings {
+                mask: AngleMask {
+                    up: Vec3::X,
+                    top_deg: 5.0,
+                    ..AngleMask::default()
+                },
+                ..ReliefSettings::default()
+            }),
+        );
+        assert!(
+            (grown.maxs.x - 10.0).abs() < TOLERANCE_MM
+                && (grown.maxs.z - 10.4).abs() < TOLERANCE_MM,
+            "got {grown:?}, expected the +X face held and the lid moved"
+        );
+    }
+
+    #[test]
+    fn a_mask_past_level_or_with_no_up_is_refused() {
+        let (mesh, _) = cube(10.0);
+        let bvh = Bvh::build(&mesh);
+        let with = |mask: AngleMask| {
+            let settings = ReliefSettings {
+                mask,
+                ..ReliefSettings::default()
+            };
+            press_tiled(&mesh, &bvh, &flat(1.0), Tiling::default(), &settings)
+        };
+        assert!(matches!(
+            with(AngleMask {
+                bottom_deg: 95.0,
+                ..AngleMask::default()
+            }),
+            Err(VolumeError::BadMaskAngle(_))
+        ));
+        assert!(matches!(
+            with(AngleMask {
+                top_deg: Scalar::NAN,
+                ..AngleMask::default()
+            }),
+            Err(VolumeError::BadMaskAngle(_))
+        ));
+        assert!(matches!(
+            with(AngleMask {
+                up: Vec3::ZERO,
+                ..AngleMask::default()
+            }),
+            Err(VolumeError::BadMaskUp(_))
+        ));
+    }
+
+    #[test]
+    fn a_negative_smoothing_is_refused() {
+        let (mesh, uvs) = cube(10.0);
+        let bvh = Bvh::build(&mesh);
+        let settings = ReliefSettings {
+            smoothing_px: -1.0,
+            ..ReliefSettings::default()
+        };
+        assert!(matches!(
+            press(&mesh, &bvh, &uvs, &[flat(1.0)], &settings),
+            Err(VolumeError::BadSmoothing(_))
+        ));
+    }
+
+    #[test]
+    fn a_prepared_texture_is_smoothed_then_turned_over() {
+        let settings = ReliefSettings {
+            invert: true,
+            smoothing_px: 4.0,
+            ..ReliefSettings::default()
+        };
+        // Smoothed far past its four pixels, the half-black half-white strip is all
+        // mid grey, which turned over is mid grey again.
+        let strip = half();
+        let read = prepared(&strip, &settings);
+        assert!(
+            read.samples()
+                .iter()
+                .all(|height| (height - 0.5).abs() < 0.05),
+            "got {:?}",
+            read.samples()
+        );
+        assert!(matches!(
+            prepared(&strip, &ReliefSettings::default()),
+            Cow::Borrowed(_)
         ));
     }
 }

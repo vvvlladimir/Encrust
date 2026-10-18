@@ -20,7 +20,7 @@ use core_pipeline::{PanelOverrides, Tolerance, raster_settings};
 use core_plate::{OrientSettings, Printed};
 use core_raster::Shading;
 use core_slicer::{AdaptiveSettings, Solid, Windows};
-use core_volume::{ReliefSettings, Tiling, press, press_tiled};
+use core_volume::{AngleMask, ReliefSettings, Tiling, press, press_tiled};
 use printer_profiles::{Compensation, MaterialProfile, PrinterProfile, SupportProfile};
 
 use crate::args::{ImportArgs, JobArgs, RasterArgs};
@@ -399,9 +399,18 @@ fn press_relief(
     let Some(amplitude_mm) = args.relief else {
         return Ok(mesh);
     };
+    // Pressed after placement, so the plate's up is the mesh's own +Z.
     let settings = ReliefSettings {
         amplitude_mm,
         precision: args.precision,
+        invert: args.relief_invert,
+        symmetric: args.relief_symmetric,
+        smoothing_px: args.relief_smooth,
+        mask: AngleMask {
+            bottom_deg: args.relief_hold_bottom,
+            top_deg: args.relief_hold_top,
+            ..AngleMask::default()
+        },
         ..ReliefSettings::default()
     };
     let started = Instant::now();

@@ -175,6 +175,13 @@ capped silently.
   three sides, into its surface. Set the depth (a negative depth sinks the picture in), the
   tile size, the angle and the precision. The model's own texture needs a model with UVs
   (OBJ or 3MF).
+- The picture can be **inverted** (black raised, white left), **smoothed** to soften a
+  noisy photo, and pressed **symmetrically** about mid grey, so white raises the surface,
+  black sinks it and the model keeps about its size. The view shows the picture inverted
+  and smoothed, as it will be pressed.
+- **Leave flat:** faces within an angle you set of facing the plate, or of facing straight
+  up, keep their shape, and the relief stops square at their edge — a base the model stands
+  on stays flat.
 - **Text:** click a model to write there, **raised** out of the surface or **sunk** into
   it, several lines if you like. Pick the **font** from the ones installed on your computer
   or the built-in IBM Plex Sans, and set the letter height, the depth and the angle; a

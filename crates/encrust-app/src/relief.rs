@@ -4,7 +4,7 @@ use std::sync::Arc;
 
 use anyhow::{Context as _, Result, bail};
 use core_geometry::{Heightmap, Mapping, Mat3, Mesh, Scalar, UvMap, Vec2, Vec3};
-use core_volume::{ReliefSettings, Tiling};
+use core_volume::{AngleMask, ReliefSettings, Tiling, prepared};
 use rayon::prelude::*;
 use serde::{Deserialize, Serialize};
 
@@ -17,13 +17,22 @@ use crate::status::Status;
 /// The texture each model is drawn with while the Relief tool is open.
 pub type Textures = HashMap<ObjectId, Arc<Mapped>>;
 
-/// What a model's laid picture was laid for, so it is laid again only when one changes.
+/// What a model's drawn texture was made for, so it is made again only when one changes.
 #[derive(Debug, Clone, Copy, PartialEq)]
 struct LaidFor {
     mesh: usize,
-    picture: usize,
+    /// The chosen picture's heights, or the model's own texture.
+    source: usize,
     sizing: Mat3,
     tiling: Tiling,
+    look: Look,
+}
+
+/// What of the panel changes the picture itself, rather than where it is pressed.
+#[derive(Debug, Clone, Copy, PartialEq)]
+struct Look {
+    invert: bool,
+    smoothing_px: Scalar,
 }
 
 /// The widest a picture is read at, pixels. Past this a tile of a few millimetres has
@@ -47,6 +56,34 @@ pub struct ReliefState {
     /// the relief in rather than raising it.
     pub amplitude_mm: Scalar,
     pub precision: Scalar,
+    #[serde(default)]
+    pub invert: bool,
+    #[serde(default)]
+    pub symmetric: bool,
+    /// How far the texture is blurred before it is pressed, pixels of the texture.
+    #[serde(default)]
+    pub smoothing_px: Scalar,
+    /// Faces within this many degrees of facing the plate are left as they are.
+    #[serde(default)]
+    pub bottom_deg: Scalar,
+    /// Faces within this many degrees of facing straight up are left as they are.
+    #[serde(default)]
+    pub top_deg: Scalar,
+}
+
+impl Default for ReliefState {
+    fn default() -> Self {
+        let asked = ReliefSettings::default();
+        Self {
+            amplitude_mm: asked.amplitude_mm,
+            precision: asked.precision,
+            invert: asked.invert,
+            symmetric: asked.symmetric,
+            smoothing_px: asked.smoothing_px,
+            bottom_deg: asked.mask.bottom_deg,
+            top_deg: asked.mask.top_deg,
+        }
+    }
 }
 
 /// Which of the Relief tool's three jobs the panel and a click are for.
@@ -66,7 +103,7 @@ pub enum ReliefMode {
 /// A texture is pressed into the model as geometry rather than written as exposure: grey
 /// controls cure depth, so it could only texture a face pointing up or down; see
 /// `docs/decisions/0116-a-texture-is-pressed-into-the-field.md`.
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub struct ReliefTool {
     pub mode: ReliefMode,
     pub state: ReliefState,
@@ -79,29 +116,30 @@ pub struct ReliefTool {
     laid: HashMap<ObjectId, (LaidFor, Arc<Mapped>)>,
 }
 
-impl Default for ReliefTool {
-    fn default() -> Self {
-        let asked = ReliefSettings::default();
-        Self {
-            mode: ReliefMode::default(),
-            state: ReliefState {
-                amplitude_mm: asked.amplitude_mm,
-                precision: asked.precision,
+impl ReliefTool {
+    /// What the panel is set to. The mask's up is the plate's; each run turns it into
+    /// the model's own.
+    pub fn settings(&self) -> ReliefSettings {
+        let state = &self.state;
+        ReliefSettings {
+            amplitude_mm: state.amplitude_mm,
+            precision: state.precision,
+            invert: state.invert,
+            symmetric: state.symmetric,
+            smoothing_px: state.smoothing_px,
+            mask: AngleMask {
+                bottom_deg: state.bottom_deg,
+                top_deg: state.top_deg,
+                ..AngleMask::default()
             },
-            job: None,
-            picture: None,
-            tiling: Tiling::default(),
-            laid: HashMap::new(),
+            ..ReliefSettings::default()
         }
     }
-}
 
-impl ReliefTool {
-    pub fn settings(&self) -> ReliefSettings {
-        ReliefSettings {
-            amplitude_mm: self.state.amplitude_mm,
-            precision: self.state.precision,
-            ..ReliefSettings::default()
+    fn look(&self) -> Look {
+        Look {
+            invert: self.state.invert,
+            smoothing_px: self.state.smoothing_px,
         }
     }
 
@@ -186,29 +224,59 @@ impl ReliefTool {
         self.job.is_some()
     }
 
-    /// The texture each model on the plate is drawn with: the chosen picture over the
-    /// models it would be pressed into, else the texture each model carries.
+    /// The texture each model on the plate is drawn with, read the way pressing reads it:
+    /// the chosen picture over the models it would be pressed into, else the texture each
+    /// model carries.
     pub fn textures(&mut self, scene: &Scene) -> Textures {
-        let Some(picture) = &self.picture else {
-            self.laid.clear();
-            return scene
-                .printable(scene.active_plate())
-                .filter_map(|object| Some((object.id, Arc::clone(object.mapped.as_ref()?))))
-                .collect();
-        };
+        let look = self.look();
+        let settings = self.settings();
         let mut laid = HashMap::new();
-        for object in scene.targets() {
-            let key = LaidFor {
-                mesh: Arc::as_ptr(&object.mesh) as usize,
-                picture: Arc::as_ptr(&picture.heights) as usize,
-                sizing: object.transform.sizing().linear(),
-                tiling: self.tiling,
-            };
-            let mapped = match self.laid.remove(&object.id) {
-                Some((was, mapped)) if was == key => mapped,
-                _ => Arc::new(lay(picture, &object.mesh, key.sizing, self.tiling)),
-            };
-            laid.insert(object.id, (key, mapped));
+        match &self.picture {
+            Some(picture) => {
+                // Read once for every model it is laid over, and only when one is laid anew.
+                let mut read: Option<Picture> = None;
+                for object in scene.targets() {
+                    let key = LaidFor {
+                        mesh: Arc::as_ptr(&object.mesh) as usize,
+                        source: Arc::as_ptr(&picture.heights) as usize,
+                        sizing: object.transform.sizing().linear(),
+                        tiling: self.tiling,
+                        look,
+                    };
+                    let mapped = match self.laid.remove(&object.id) {
+                        Some((was, mapped)) if was == key => mapped,
+                        _ => {
+                            let read = read.get_or_insert_with(|| Picture {
+                                heights: Arc::new(
+                                    prepared(&picture.heights, &settings).into_owned(),
+                                ),
+                                ..picture.clone()
+                            });
+                            Arc::new(lay(read, &object.mesh, key.sizing, self.tiling))
+                        }
+                    };
+                    laid.insert(object.id, (key, mapped));
+                }
+            }
+            None => {
+                for object in scene.printable(scene.active_plate()) {
+                    let Some(own) = &object.mapped else {
+                        continue;
+                    };
+                    let key = LaidFor {
+                        mesh: Arc::as_ptr(&object.mesh) as usize,
+                        source: Arc::as_ptr(own) as usize,
+                        sizing: Mat3::IDENTITY,
+                        tiling: Tiling::default(),
+                        look,
+                    };
+                    let mapped = match self.laid.remove(&object.id) {
+                        Some((was, mapped)) if was == key => mapped,
+                        _ => read_as_pressed(own, &settings),
+                    };
+                    laid.insert(object.id, (key, mapped));
+                }
+            }
         }
         self.laid = laid;
         self.laid
@@ -216,6 +284,23 @@ impl ReliefTool {
             .map(|(id, (_, mapped))| (*id, Arc::clone(mapped)))
             .collect()
     }
+}
+
+/// A model's own texture as pressing with `settings` reads it, shared as it is where that
+/// changes nothing.
+fn read_as_pressed(own: &Arc<Mapped>, settings: &ReliefSettings) -> Arc<Mapped> {
+    if settings.smoothing_px <= 0.0 && !settings.invert {
+        return Arc::clone(own);
+    }
+    Arc::new(Mapped {
+        names: own.names.clone(),
+        uvs: own.uvs.clone(),
+        heights: own
+            .heights
+            .iter()
+            .map(|image| prepared(image, settings).into_owned())
+            .collect(),
+    })
 }
 
 /// `picture` laid over `mesh` at printed size the way pressing it lays it, each face read
@@ -459,11 +544,56 @@ mod tests {
             state: ReliefState {
                 amplitude_mm: -0.3,
                 precision: 0.8,
+                ..ReliefState::default()
             },
             ..ReliefTool::default()
         };
         let settings = tool.settings();
         assert!((settings.amplitude_mm + 0.3).abs() < 1e-6);
         assert!((settings.precision - 0.8).abs() < 1e-6);
+    }
+
+    #[test]
+    fn an_inverted_picture_is_drawn_the_way_it_is_pressed() {
+        let scene = scene_with_a_tetrahedron();
+        let mut tool = ReliefTool {
+            picture: Some(Picture {
+                name: "white.png".to_owned(),
+                heights: Arc::new(Heightmap::new(1, 1, vec![1.0]).expect("one pixel")),
+                size_px: [1, 1],
+            }),
+            state: ReliefState {
+                invert: true,
+                ..ReliefState::default()
+            },
+            ..ReliefTool::default()
+        };
+        let drawn = tool.textures(&scene);
+        let laid = drawn
+            .values()
+            .next()
+            .expect("the picture is laid over the model");
+        assert!(
+            laid.heights[0].sample(Vec2::splat(0.5)).abs() < 1e-6,
+            "white turned over is drawn black, as it would press"
+        );
+    }
+
+    #[test]
+    fn a_turned_model_holds_the_faces_that_face_the_plate_once_turned() {
+        let mut scene = scene_with_a_tetrahedron();
+        let id = scene.objects()[0].id;
+        // A quarter turn about X stands the model's +Y up on the plate.
+        scene
+            .get_mut(id)
+            .expect("the tetrahedron is in the scene")
+            .transform
+            .rotation = core_geometry::Quat::from_rotation_x(std::f32::consts::FRAC_PI_2);
+        let tasks = relief_tasks(&scene, true);
+        let up = tasks[0].up;
+        assert!(
+            (up - Vec3::Y).length() < 1e-5,
+            "got {up}, expected the model's +Y"
+        );
     }
 }

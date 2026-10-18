@@ -142,6 +142,17 @@ encrust slice part.stl \
   --relief-angle 45 -o part.goo
 ```
 
+`--relief-invert` reads black as high, `--relief-symmetric` reads mid grey as the surface
+and moves it half of `--relief` either way, and `--relief-smooth` blurs the texture by that
+many of its pixels first. `--relief-hold-bottom` and `--relief-hold-top` leave the faces
+within that many degrees of facing the plate, or straight up, as they are (ADR 0307):
+
+```sh
+encrust slice part.stl \
+  --printer elegoo-mars-4-ultra --relief 0.4 --relief-image stone.png --relief-symmetric \
+  --relief-smooth 1.5 --relief-hold-bottom 5 -o part.goo
+```
+
 Exposure of its own over a band of print height, repeatable. The bottom block keeps the
 resin's ramp whatever a band says:
 

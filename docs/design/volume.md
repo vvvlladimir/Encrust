@@ -173,6 +173,22 @@ model's own axes span, and the three readings are blended by the nearest face's 
 raised to the fourth power, so a face takes the plane it squarely faces and a 45° face
 takes two equally. Its axes are the model's own, at the size it prints at (ADR 0225).
 
+Both read the image through `prepared`: blurred by `smoothing_px` with three box passes of
+radius `r`, `r(r + 1) = σ²`, wrapping at the edges because a texture tiles, then turned over
+if `invert` asks. `symmetric` reads each height less one half, so mid grey stays put and
+the relief spans half the amplitude either way (ADR 0307).
+
+An `AngleMask` holds the faces within `bottom_deg` of `-up` or `top_deg` of `up`, in a
+hierarchy of their own. A lattice point whose nearest held point is as near as its nearest
+point on the model, within 1e-4 mm, keeps its value, so an edge between a held and a moved
+face goes to the held one. That alone keeps a relief off a held face's square edge, but not
+off one a face meets leaning down — a chamfer, the underside of a sphere — whose relief
+would hang below the plane. So a point outside the model and past the held face's edge,
+off its normal, takes the larger of its moved value and its distance above the held plane:
+the moved solid intersected with the half-space behind that face, on both sides of the
+plane so the lattice interpolates the cut onto it. A point straight over a held face is not
+cut, because it lies in the open under an overhang beside a wall that keeps its relief.
+
 ## Extraction
 
 Surface nets over the band, one tile at a time on every core, clustered onto the lattice.

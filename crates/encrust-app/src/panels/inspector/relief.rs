@@ -9,7 +9,7 @@ use crate::relief::{Picture, ReliefMode};
 use crate::state::Doc;
 use crate::ui::{
     Segment, Segmented, describe, hint, icon, meta, number_row, primary_button, progress_bar,
-    secondary_button, section, stats, theme, tone,
+    secondary_button, section, stats, switch, theme, tone,
 };
 
 /// Bounds on one tile of a picture, millimetres: under a millimetre it is finer than the
@@ -26,6 +26,10 @@ const FINE_STEP: f64 = 0.01;
 /// Past two millimetres a relief is a shape of its own rather than a texture, and it
 /// would cost a band that wide on every voxel of the field.
 const MAX_DEPTH_MM: f32 = 2.0;
+
+/// Past twenty pixels of blur a picture read down to 1024 pixels has lost its pattern.
+const MAX_SMOOTHING_PX: f32 = 20.0;
+const SMOOTHING_STEP: f64 = 0.1;
 
 /// The tool's three jobs behind one switch at its head — a texture pressed in, text
 /// written on, models combined — each with its own sections and its own action.
@@ -79,6 +83,7 @@ fn texture(ui: &mut egui::Ui, window: &mut Window) {
             }
         }
         picture_buttons(ui, window);
+        reading(ui, window);
     });
     section(ui, &tr!("relief-depth"), None, |ui| {
         depth(ui, window);
@@ -86,6 +91,34 @@ fn texture(ui: &mut egui::Ui, window: &mut Window) {
             tiling(ui, &mut window.tools.relief.tiling);
         }
     });
+    section(ui, &tr!("relief-hold"), None, |ui| holding(ui, window));
+}
+
+/// How the grey of the texture is read before it is pressed.
+fn reading(ui: &mut egui::Ui, window: &mut Window) {
+    let state = &mut window.tools.relief.state;
+    switch(ui, &mut state.invert, &tr!("relief-invert"));
+    number_row(
+        ui,
+        &tr!("relief-smoothing"),
+        &mut state.smoothing_px,
+        &tr!("unit-px"),
+        SMOOTHING_STEP,
+        0.0..=MAX_SMOOTHING_PX,
+        1,
+    );
+}
+
+/// The faces turned to the plate or straight up that the relief leaves as they are.
+fn holding(ui: &mut egui::Ui, window: &mut Window) {
+    let state = &mut window.tools.relief.state;
+    for (label, angle) in [
+        (tr!("relief-hold-bottom"), &mut state.bottom_deg),
+        (tr!("relief-hold-top"), &mut state.top_deg),
+    ] {
+        number_row(ui, &label, angle, &tr!("unit-degrees"), 1.0, 0.0..=90.0, 0);
+    }
+    describe(ui, &tr!("relief-hold-note"));
 }
 
 /// The edge of the thumbnail a chosen picture is shown at, points.
@@ -191,6 +224,11 @@ fn depth(ui: &mut egui::Ui, window: &mut Window) {
         DEPTH_STEP,
         -MAX_DEPTH_MM..=MAX_DEPTH_MM,
         2,
+    );
+    switch(
+        ui,
+        &mut window.tools.relief.state.symmetric,
+        &tr!("relief-symmetric"),
     );
     number_row(
         ui,

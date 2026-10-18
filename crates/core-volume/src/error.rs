@@ -1,4 +1,4 @@
-use core_geometry::{Mat3, Scalar};
+use core_geometry::{Mat3, Scalar, Vec3};
 use thiserror::Error;
 
 /// What can go wrong building a field or combining two of them.
@@ -30,6 +30,15 @@ pub enum VolumeError {
 
     #[error("a tiled relief needs a tile of positive size, got {0} mm")]
     BadTile(Scalar),
+
+    #[error("a relief is smoothed by a finite, non-negative width, got {0} px")]
+    BadSmoothing(Scalar),
+
+    #[error("a relief's mask holds faces within 0 to 90 degrees of level, got {0}")]
+    BadMaskAngle(Scalar),
+
+    #[error("a relief's mask needs a direction for up, got {0}")]
+    BadMaskUp(Vec3),
 
     #[error("the texture covers {mapped} of the mesh's {faces} faces")]
     UnmappedMesh { faces: usize, mapped: usize },

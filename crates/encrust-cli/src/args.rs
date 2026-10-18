@@ -89,6 +89,27 @@ pub struct ImportArgs {
     )]
     pub relief_angle: Scalar,
 
+    /// Read the texture's black as high and its white as low.
+    #[arg(long, requires = "relief")]
+    pub relief_invert: bool,
+
+    /// Read mid grey as the surface itself: white raises it and black sinks it, each by
+    /// half of --relief, so the model keeps about its size.
+    #[arg(long, requires = "relief")]
+    pub relief_symmetric: bool,
+
+    /// Blur the texture by this many of its pixels before pressing it.
+    #[arg(long, value_name = "PX", default_value_t = 0.0, requires = "relief")]
+    pub relief_smooth: Scalar,
+
+    /// Leave faces within this many degrees of facing the plate as they are.
+    #[arg(long, value_name = "DEG", default_value_t = 0.0, requires = "relief")]
+    pub relief_hold_bottom: Scalar,
+
+    /// Leave faces within this many degrees of facing straight up as they are.
+    #[arg(long, value_name = "DEG", default_value_t = 0.0, requires = "relief")]
+    pub relief_hold_top: Scalar,
+
     /// How fine the lattice --relief and --hollow are cut on, 0 to 1. Not the layer height:
     /// the outside of the model never passes through the lattice.
     #[arg(long, value_name = "0..1", default_value_t = 0.5)]
