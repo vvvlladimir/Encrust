@@ -39,7 +39,7 @@ impl Lattice for GridCells {
         walls.max(-holes)
     }
 
-    fn shapes(&self, bounds: &Aabb) -> Shapes {
+    fn shapes(&self, bounds: &Aabb, keep: &dyn Fn(&Aabb) -> bool) -> Shapes {
         let (pitch, cell) = (self.pitch, self.pitch - 2.0 * self.half_wall);
         let steps = |axis: usize| {
             let first = (bounds.mins[axis] / pitch).floor() as i32 - 1;
@@ -53,7 +53,10 @@ impl Lattice for GridCells {
                 let center = Vec2::new(i as Scalar + 0.5, j as Scalar + 0.5) * pitch;
                 let corners = [(-1.0, -1.0), (1.0, -1.0), (1.0, 1.0), (-1.0, 1.0)]
                     .map(|(x, y)| center + Vec2::new(x, y) * cell / 2.0);
-                cells.append(&prism(&corners, bottom, top));
+                let footprint = Aabb::new(corners[0].extend(bottom), corners[2].extend(top));
+                if keep(&footprint) {
+                    cells.append(&prism(&corners, bottom, top));
+                }
             }
         }
 
@@ -75,11 +78,14 @@ impl Lattice for GridCells {
                             at[1 - axis] = (middle as Scalar + 0.5) * pitch;
                             let mut off = Vec3::ZERO;
                             off[axis] = reach;
-                            along.push(Bar {
+                            let bar = Bar {
                                 from: at - off,
                                 to: at + off,
                                 radius: self.hole_radius,
-                            });
+                            };
+                            if keep(&bar.aabb()) {
+                                along.push(bar);
+                            }
                         }
                     }
                 }

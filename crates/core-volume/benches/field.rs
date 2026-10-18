@@ -234,16 +234,17 @@ fn hollowing(c: &mut Criterion, mesh: &Mesh, bvh: &Bvh) {
     });
 }
 
-/// A grid of 6 mm cells and 2 mm walls, on the ball and on one big enough that the lattice
-/// rather than the shell is what costs.
+/// Each pattern at 6 mm cells and 2 mm walls, on the ball and on one big enough that the
+/// lattice rather than the shell is what costs.
 fn infill(c: &mut Criterion, mesh: &Mesh, bvh: &Bvh, empty: &HollowSettings) {
-    let grid = HollowSettings {
+    let filled = |pattern| HollowSettings {
         infill: Some(InfillSettings {
-            pattern: InfillPattern::Grid,
+            pattern,
             ..InfillSettings::default()
         }),
         ..empty.clone()
     };
+    let grid = filled(InfillPattern::Grid);
     let big = sphere(50.0, 320, 320);
     let big_bvh = Bvh::build(&big);
 
@@ -258,6 +259,22 @@ fn infill(c: &mut Criterion, mesh: &Mesh, bvh: &Bvh, empty: &HollowSettings) {
     group.bench_function("grid_in_a_100mm_ball", |b| {
         b.iter(|| hollow(std::hint::black_box(&big), &big_bvh, &grid, Cancel::never()));
     });
+    for (name, pattern) in [
+        ("hive_in_a_100mm_ball", InfillPattern::Hive),
+        ("scaffold_in_a_100mm_ball", InfillPattern::Scaffold),
+    ] {
+        let settings = filled(pattern);
+        group.bench_function(name, |b| {
+            b.iter(|| {
+                hollow(
+                    std::hint::black_box(&big),
+                    &big_bvh,
+                    &settings,
+                    Cancel::never(),
+                )
+            });
+        });
+    }
     group.finish();
 }
 

@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
 use core_geometry::{
-    Scalar, Vec3,
+    Aabb, Scalar, Vec3,
     glam::{IVec2, IVec3},
 };
 
@@ -105,6 +105,24 @@ impl Sdf {
             runs.iter()
                 .flat_map(|(first, last)| *first..=*last)
                 .map(|z| IVec3::new(column.x, column.y, z))
+        })
+    }
+
+    /// Whether the surface or anything inside it may stand in `bounds`. Never false where
+    /// it does; it may be true a tile and two voxels off.
+    pub(crate) fn reaches(&self, bounds: &Aabb) -> bool {
+        // Two voxels take in a surface vertex clustered past the tile its corners are in.
+        let margin = Vec3::splat(2.0 * self.grid.voxel_mm);
+        let first = tile_of(self.grid.voxel(bounds.mins - margin));
+        let last = tile_of(self.grid.voxel(bounds.maxs + margin));
+        (first.x..=last.x).any(|x| {
+            (first.y..=last.y).any(|y| {
+                let inside = self.solid.get(&IVec2::new(x, y)).is_some_and(|runs| {
+                    runs.iter()
+                        .any(|(bottom, top)| *bottom <= last.z && *top >= first.z)
+                });
+                inside || (first.z..=last.z).any(|z| self.tiles.contains_key(&IVec3::new(x, y, z)))
+            })
         })
     }
 
@@ -222,6 +240,23 @@ mod tests {
     fn a_tile_the_field_never_saw_is_outside() {
         let field = one_tile_field();
         assert!((field.value(IVec3::new(400, 0, 0)) - 1.0).abs() < 1e-6);
+    }
+
+    #[test]
+    fn a_box_reaches_the_field_through_its_band_or_its_inside_and_nowhere_else() {
+        // Tiles are 8 mm on this 1 mm lattice: the band fills z 0..8, the inside z -24..0.
+        let field = one_tile_field();
+        let cube = |at: Vec3| Aabb::new(at, at + Vec3::ONE);
+        assert!(field.reaches(&cube(Vec3::new(2.0, 2.0, 4.0))), "the band");
+        assert!(
+            field.reaches(&cube(Vec3::new(2.0, 2.0, -20.0))),
+            "the inside"
+        );
+        assert!(!field.reaches(&cube(Vec3::new(100.0, 2.0, 4.0))), "far off");
+        assert!(
+            !field.reaches(&cube(Vec3::new(2.0, 2.0, -40.0))),
+            "under it"
+        );
     }
 
     #[test]

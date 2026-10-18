@@ -133,8 +133,9 @@ impl InfillSettings {
 trait Lattice: Sync {
     fn distance(&self, point: Vec3) -> Scalar;
 
-    /// The lattice's shapes over `bounds`, which they reach past on every side.
-    fn shapes(&self, bounds: &Aabb) -> Shapes;
+    /// The lattice's shapes over `bounds`, which they reach past on every side, leaving
+    /// out each one whose box `keep` refuses.
+    fn shapes(&self, bounds: &Aabb, keep: &dyn Fn(&Aabb) -> bool) -> Shapes;
 }
 
 /// What a lattice cuts a cavity with.
@@ -151,6 +152,16 @@ struct Bar {
     from: Vec3,
     to: Vec3,
     radius: Scalar,
+}
+
+impl Bar {
+    fn aabb(&self) -> Aabb {
+        let radius = Vec3::splat(self.radius);
+        Aabb::new(
+            self.from.min(self.to) - radius,
+            self.from.max(self.to) + radius,
+        )
+    }
 }
 
 /// What a lattice makes of a cavity: the void, to be wound inward, and the solid standing
@@ -213,8 +224,8 @@ pub(crate) fn cut(
     };
     let lattice = lattice_of(settings, bounds.mins.z);
     let reach = Vec3::splat(settings.cell_mm + settings.wall_mm);
-    let around = Aabb::new(bounds.mins - reach, bounds.maxs + reach);
-    if let Ok(solid) = carve::carved(&cavity_mesh, lattice.as_ref(), &around) {
+    let keep = |shape: &Aabb| cavity.reaches(shape);
+    if let Ok(solid) = carve::carved(&cavity_mesh, lattice.as_ref(), reach, &keep) {
         return Ok(Carved {
             void: cavity_mesh,
             solid,

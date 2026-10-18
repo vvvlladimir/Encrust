@@ -114,8 +114,19 @@ so none starts in mid-air and every node is held from below. Three square bars t
 cube fill `3x² - 2x³` of it exactly, so the density a user states is inverted by halving
 for `x`.
 
-**What it costs.** Measured on a 140×70×80 mm block with a 2 mm wall at precision 0.5,
-6 mm cells and 2 mm walls, the lattice's share of the run:
+**What it costs.** The walls cost what their holes cost: each group is cut through the
+whole of the walls cut so far, one after another, and the engine's cost follows the faces of
+both sides. Two things keep that down. A shape whose box meets no tile of the cavity's field,
+band or inside, is never meshed; on a curved model much of the lattice's box is air. And the
+cavity is halved across its longest side until there are two pieces a thread, no piece under
+four reaches across, each half the engine's own intersection and difference with one box.
+The pieces are carved in parallel and appended; two halves meet face to face on the cut,
+which the fill rule reads as one solid. A plane cut through `core-geometry` would be cheaper,
+but it leaves loops open at the cavity's seams. A halving the engine refuses carves that
+piece whole.
+
+Measured on a 140×70×80 mm block with a 2 mm wall at precision 0.5, 6 mm cells and 2 mm
+walls, before the culling and the pieces, the lattice's share of the run:
 
 | | Field | Exact | Faces, field against exact |
 |---|---|---|---|
@@ -123,9 +134,19 @@ for `x`.
 | Grid | 2.4 s | 1.5 s | 1.73 M against 0.40 M |
 | Scaffold | 3.2 s | 1.4 s | 4.21 M against 0.31 M |
 
-The walls cost what their holes cost: each group is cut through the whole of the walls cut
-so far, one after another. Appending the holes to a void of cells instead took 0.9 s for the
-hive and 0.5 s for the grid, and drew the membranes above.
+Appending the holes to a void of cells instead took 0.9 s for the hive and 0.5 s for the
+grid there, and drew the membranes above. And by `cargo bench -p core-volume --bench field -- infill/` on a 100 mm ball, the same
+settings, the exact cut whole against culled and in pieces:
+
+| | Whole | Culled, in pieces |
+|---|---|---|
+| Hive | 5.9 s | 2.4 s |
+| Grid | 2.3 s | 1.3 s |
+| Scaffold | 1.0 s | 1.2 s |
+
+A scaffold's three groups were already cut in parallel, so on the ball the halving is what it
+pays for. On a 406k-face bust, whole against in pieces: hive 5.5 s and 2.4 s, grid 2.1 s and
+1.5 s, scaffold 1.6 s and 1.2 s.
 
 ## Precision
 

@@ -33,6 +33,10 @@ scaffold is the cavity ∩ each group of struts, appended to overlap at the node
 rule to union. Holes reach into the cells past their walls, so no face of a hole lies on a
 wall's.
 
+A shape whose box meets no tile of the cavity's field is left out, and the cavity is halved
+by the engine itself, intersection and difference with one box, until there are two pieces a
+thread; the pieces are carved in parallel and appended, meeting face to face on each cut.
+
 `InfillSettings` states sizes, not a density, for the patterns with walls: `cell_mm`,
 `wall_mm`, and crossing holes `hole_mm` across — under a hexagon's side or a square's — the
 first row `first_hole_mm` over the cavity's floor and then every `hole_spacing_mm`, further
@@ -44,10 +48,14 @@ a corner so every strut leans 35° off level; its density is inverted exactly fr
 
 Walls are flat, holes round and open in the viewport as they print, and the cavity less the
 walls is the resin saved. One drain hole empties every cell. On a 140×70×80 mm block at
-precision 0.5, the lattice costs 1.4–5.0 s against 2.4–3.2 s from the field and a third to a
-thirteenth of its faces; see `docs/design/hollowing.md` for the table. The hive is the dear
-one: its holes are cut through the walls one group after another. Unioning a scaffold's
-groups first took up to 17 s on the same block, which is why they are not. The exact cut's triangulation varies from run to run
+precision 0.5, the lattice cut whole cost 1.4–5.0 s against 2.4–3.2 s from the field and a
+third to a thirteenth of its faces; unioning a scaffold's groups first took up to 17 s on
+the same block, which is why they are not. Culled and in pieces, a hive on a 100 mm ball
+drops from 5.9 s to 2.4 s and a grid from 2.3 s to 1.3 s; a scaffold, already three cuts in
+parallel, gains nothing there and a quarter on a real bust. See `docs/design/hollowing.md`
+for the tables. The hive is still the dear one: its holes are cut through the walls one
+group after another. Each cut between pieces leaves a pair of faces inside the walls, which
+no slice reads as a boundary. The exact cut's triangulation varies from run to run
 (ADR 0302), so a shell is reproducible in its surface and not in its triangle list.
 
 Reopen if the fallback turns out to be taken on real models, or if a sliver cell at the rim,
@@ -71,6 +79,12 @@ for the clip.
 Memory is one layer and any pattern is affordable, but it is a second slicing path through
 the preview, the viewport and the drainage scan, and the model stops being one mesh
 (ADR 0059).
+
+### Halve the cavity with a plane cut
+
+`core-geometry::cut` is linear and cheaper than a boolean, but at the seams surface nets
+leaves where two sheets of a cavity touch it left loops open or an edge walked three times,
+on two of three real models tried.
 
 ### The option that won, and what it costs
 

@@ -37,7 +37,7 @@ impl Lattice for Scaffold {
             - self.half_strut
     }
 
-    fn shapes(&self, bounds: &Aabb) -> Shapes {
+    fn shapes(&self, bounds: &Aabb, keep: &dyn Fn(&Aabb) -> bool) -> Shapes {
         let corners: Vec<Vec3> = (0..8)
             .map(|corner| {
                 let pick = |bit: usize, axis: usize| match corner & (1 << bit) {
@@ -71,7 +71,10 @@ impl Lattice for Scaffold {
                             across: [one, other],
                         };
                         for (from, to) in self.pieces(&line, bounds, along > 0) {
-                            struts.append(&self.strut(&line, from, to));
+                            let strut = self.strut(&line, from, to);
+                            if strut.aabb().is_some_and(|aabb| keep(&aabb)) {
+                                struts.append(&strut);
+                            }
                         }
                     }
                 }

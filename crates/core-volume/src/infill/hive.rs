@@ -82,7 +82,7 @@ impl Lattice for HiveCells {
         (-cell).max(-holes)
     }
 
-    fn shapes(&self, bounds: &Aabb) -> Shapes {
+    fn shapes(&self, bounds: &Aabb, keep: &dyn Fn(&Aabb) -> bool) -> Shapes {
         let centres = self.centres(bounds);
         let (bottom, top) = (bounds.mins.z, bounds.maxs.z);
         let corner = |step: usize| {
@@ -91,8 +91,15 @@ impl Lattice for HiveCells {
         };
         let hexagon: [Vec2; 6] = std::array::from_fn(corner);
         let mut cells = Mesh::default();
+        let half = Vec2::splat(self.circumradius);
         for centre in &centres {
-            cells.append(&prism(&hexagon.map(|at| at + *centre), bottom, top));
+            let footprint = Aabb::new(
+                (*centre - half).extend(bottom),
+                (*centre + half).extend(top),
+            );
+            if keep(&footprint) {
+                cells.append(&prism(&hexagon.map(|at| at + *centre), bottom, top));
+            }
         }
 
         // One group a direction of NORMALS, whose holes never cross; each reaches half an
@@ -110,11 +117,14 @@ impl Lattice for HiveCells {
                 for centre in &centres {
                     for z in &rows {
                         let at = |reach: Scalar| (*centre + *normal * reach).extend(*z);
-                        group.push(Bar {
+                        let bar = Bar {
                             from: at(near),
                             to: at(far),
                             radius: self.hole_radius,
-                        });
+                        };
+                        if keep(&bar.aabb()) {
+                            group.push(bar);
+                        }
                     }
                 }
                 group

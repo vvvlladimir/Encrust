@@ -1,7 +1,7 @@
 use std::panic::{self, AssertUnwindSafe};
 
 use boolmesh::prelude::{Manifold, OpType, compute_boolean};
-use core_geometry::{Mesh, Vec3};
+use core_geometry::{Aabb, Mesh, Vec3};
 
 use crate::error::CsgError;
 use crate::seams::{Unzipped, unzipped};
@@ -93,6 +93,16 @@ impl Solid {
             .map(|corners| corners.each_ref().map(|half| half.tail as u32))
             .collect();
         Mesh::new(vertices, faces)
+    }
+
+    /// The box the solid fills, or `None` for the empty solid.
+    pub fn aabb(&self) -> Option<Aabb> {
+        let bounds = &self.inner.as_ref()?.bb;
+        let (low, high) = (bounds.min, bounds.max);
+        Some(Aabb::new(
+            Vec3::new(low.x as f32, low.y as f32, low.z as f32),
+            Vec3::new(high.x as f32, high.y as f32, high.z as f32),
+        ))
     }
 }
 
