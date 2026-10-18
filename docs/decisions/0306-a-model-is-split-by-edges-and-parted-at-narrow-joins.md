@@ -27,8 +27,8 @@ a join is tells it from the bodies either side.
    within 0.2 mm of it, or dropped where it touches none.
 
 `core_volume::part_off` cuts off the part a user marks with a click. A breadth-first wave
-runs from the mark through the model's inside on a dense lattice, read off the sign of its
-field. The join is the level whose front is narrowest, at least twice over, against the
+runs from the mark through the model's inside on a dense lattice, read off the winding of
+its faces along each column. The join is the level whose front is narrowest, at least twice over, against the
 widest fronts both before and after it. The plane is fitted through the piece of that
 front the wave went on through. Only inside a box round the join is the model cut, by
 exact booleans. Each piece goes to the mark's side or the rest by what the wave reaches
@@ -42,7 +42,8 @@ in the Cut tool and runs both as a job. `docs/design/parts.md` has the details.
 
 The plate gets parts a user would name, never stray slivers, and a marked part comes off
 with one flat face to glue, every other surface the model's own. Cutting one off costs a
-field, two waves and four exact booleans, seconds on a scan. The front is counted over the
+pass over the faces, two waves and four exact booleans, one to three seconds on a
+640 000-face scan, nearly all of it the booleans. The front is counted over the
 whole wave, so a part with arms of its own can hide its join from it. Reopen this if
 marked parts are cut at the wrong join on real scans, or if joins need cutting along a
 curved surface.

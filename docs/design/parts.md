@@ -29,10 +29,16 @@ part, and a few loose triangles do not.
 
 ## A marked part
 
-`part_off` takes a point on the model. The model's field is built at the surface on a
-lattice that puts 2²⁴ points over its box, never under 0.05 mm, and only its sign is read.
-The field stays sparse, so it is always the whole model's; only the wave's dense lattice
-is held to a box.
+`part_off` takes a point on the model, on a lattice that puts 2²⁴ points over its box,
+never under 0.05 mm. Which points are inside is read off the faces, not off a distance
+field. Each face is projected down onto the columns of points it covers, giving where it
+crosses each and whether it faces up or down. Going up a column, a face turned down is a
+way in and one turned up a way out, so a point is inside where the count below it is
+positive. That is the winding number along a vertical ray, which overlapping shells do
+not fool. A column through an edge two faces share goes to exactly one of them, by which
+way the edge runs, in `f64`, where the products of `f32` differences are exact. It costs a
+pass over the faces and a sort of the crossings, tens of milliseconds on a scan.
+
 The wave starts at the inside lattice point nearest the mark and steps to the six
 neighbours of each point, so a level is every point that many steps from it.
 
@@ -57,11 +63,15 @@ Each body of each is voted for by its vertices more than a voxel off the plane. 
 vertex counts for the side its nearest inside lattice point is on, by whether the second
 wave reached it. A body with no votes is the mark's where it came from inside the box. The
 mark's bodies inside and outside the box are joined by exact union, and so are the rest's.
-The box's other faces leave no seam that union does not take back out.
+The box's other faces leave no seam that union does not take back out. Reading a side as a
+solid costs about what joining it does, so where a side's union would go through most of
+the model, the other side is joined instead and taken out of the model's solid, read once
+beside the wave.
 
 A wave that dies out with no neck, having filled under half the model's volume, was held
 in by something finer than its lattice. The lattice is narrowed once onto the box round
-what it filled, grown by half its size either way, with as many points over that. A
+what it filled, grown by half its size either way, with as many points over that, and the
+inside read again over it alone. A
 partition the coarse lattice missed is then found as a neck. A wave still held in is a
 piece no material the finer lattice sees joins to the rest, as on a scan whose surface
 folds round it. That piece is grown two voxels out into the empty space round it, never

@@ -26,5 +26,9 @@ criterion.workspace = true
 name = "field"
 harness = false
 
+[[bench]]
+name = "parts"
+harness = false
+
 [lints]
 workspace = true

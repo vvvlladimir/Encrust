@@ -3,28 +3,25 @@ use std::ops::RangeInclusive;
 
 use core_csg::{CsgError, Solid};
 use core_geometry::{
-    Aabb, Bvh, DEFAULT_WELD_TOLERANCE, FastSet, Mesh, Scalar, Vec3, glam::IVec3, oriented_box,
+    Aabb, DEFAULT_WELD_TOLERANCE, FastSet, Mesh, Scalar, Vec3, glam::IVec3, oriented_box,
     signed_volume, weld,
 };
 use rayon::prelude::*;
 
-use crate::build::{DEFAULT_BUDGET_BYTES, FieldSettings, build};
 use crate::cancel::Cancel;
 use crate::error::VolumeError;
 use crate::extract::extract;
 use crate::grid::{VoxelGrid, index_in_tile, tile_of};
-use crate::hollow::{COARSENINGS, MIN_WALL_MM};
+use crate::hollow::MIN_WALL_MM;
 use crate::sdf::{Quantised, Sdf, TILE_VALUES, encode};
-use crate::sign::SignMode;
 
 use super::pieces::{nest, shells};
+
+mod inside;
 
 /// Lattice points over the model's box: two dense arrays of them stay under a hundred
 /// megabytes, and a 120 mm model still gets voxels under half a millimetre.
 const LATTICE_POINTS: Scalar = 16_777_216.0;
-
-/// Voxels the field carries past the surface; the wave reads only its sign.
-const BAND_VOXELS: Scalar = 1.5;
 
 /// How many times narrower than the widest front on either side a front must be to be a
 /// neck. Under it a dip is the wave turning a corner, not a join.
@@ -54,6 +51,9 @@ const ISLAND_SHARE: Scalar = 0.5;
 /// Times the cut is widened by half again when it does not close the neck off.
 const WIDENINGS: usize = 2;
 
+/// Vertices of a body asked which side it is on: a majority needs no more.
+const VOTES: usize = 4096;
+
 const UNREACHED: u32 = u32::MAX;
 const OUTSIDE: u32 = u32::MAX - 1;
 
@@ -73,35 +73,53 @@ pub struct PartedOff {
 /// it, and [`VolumeError::Cancelled`] when `cancel` gives up.
 pub fn part_off(mesh: &Mesh, at: Vec3, cancel: Cancel<'_>) -> Result<PartedOff, VolumeError> {
     let welded = weld(mesh, DEFAULT_WELD_TOLERANCE).mesh;
-    let bvh = Bvh::build(&welded);
-    let volume_mm3 = signed_volume(&welded).abs();
-    let bounds = welded.aabb().ok_or(VolumeError::EmptyMesh)?;
-    let mut clip = None;
-    let mut zooms = 0;
-    let (wave, level) = loop {
-        let field = inside_field(&welded, &bvh, clip.unwrap_or(bounds), cancel)?;
-        let lattice = Lattice::over(&clip.unwrap_or(bounds), field.grid());
-        let seed = seed(&field, &lattice, at).ok_or(VolumeError::NotOnModel)?;
-        let wave = Wave::spread(&field, lattice, seed, cancel)?;
+    // The exact solid does not depend on the wave, so the two are built side by side.
+    let (body, found) = rayon::join(|| solid_of(&welded), || found(&welded, at, cancel));
+    let body = body?;
+    match found? {
+        Found::Neck(wave, level) => cut_at_neck(&body, &wave, level),
+        Found::Apart(wave) => cut_out(&body, &wave, cancel),
+    }
+}
+
+/// What the wave from the mark came to.
+enum Found {
+    /// A neck at that level.
+    Neck(Wave, usize),
+    /// A piece nothing the finest lattice sees joins to the rest.
+    Apart(Wave),
+}
+
+/// The wave from `at` and what it found, narrowed onto a piece it could not leave.
+fn found(mesh: &Mesh, at: Vec3, cancel: Cancel<'_>) -> Result<Found, VolumeError> {
+    let volume_mm3 = signed_volume(mesh).abs();
+    let mut bounds = mesh.aabb().ok_or(VolumeError::EmptyMesh)?;
+    for zoom in 0..=ZOOMS {
+        let lattice = Lattice::over(&bounds);
+        let inside = inside::inside(mesh, &lattice);
+        let seed = seed(&inside, &lattice, at).ok_or(VolumeError::NotOnModel)?;
+        let wave = Wave::spread(inside, lattice, seed, cancel)?;
         let counts: Vec<usize> = wave.fronts.iter().map(Vec::len).collect();
         if let Some(level) = neck(&counts) {
-            break (wave, level);
+            return Ok(Found::Neck(wave, level));
         }
         match wave.island(volume_mm3) {
-            Some(around) if zooms < ZOOMS => {
-                clip = Some(around);
-                zooms += 1;
-            }
-            Some(_) => return cut_out(&solid_of(&welded)?, &wave, &field, cancel),
-            None => return Err(VolumeError::NoNeck),
+            Some(_) if zoom == ZOOMS => return Ok(Found::Apart(wave)),
+            Some(around) => bounds = around,
+            None => break,
         }
-    };
+    }
+    Err(VolumeError::NoNeck)
+}
+
+/// `body` cut flat across the neck the wave found at `level`, the cut widened where the
+/// wave gets round it.
+fn cut_at_neck(body: &Solid, wave: &Wave, level: usize) -> Result<PartedOff, VolumeError> {
     let section = wave.section(level).ok_or(VolumeError::NoNeck)?;
-    let body = solid_of(&welded)?;
     let mut half_mm = section.radius_mm;
     for _ in 0..=WIDENINGS {
         if let Some(reached) = wave.closed_off(&section, half_mm) {
-            return cut(&body, &wave, &section, half_mm, &reached);
+            return cut(body, wave, &section, half_mm, &reached);
         }
         half_mm *= 1.5;
     }
@@ -119,25 +137,13 @@ fn solid_of(mesh: &Mesh) -> Result<Solid, VolumeError> {
 /// `body` parted along the gap round the piece the wave filled, where no material the
 /// finest lattice can see joins it to the rest: whatever does is thinner than printing
 /// holds together.
-fn cut_out(
-    body: &Solid,
-    wave: &Wave,
-    field: &Sdf,
-    cancel: Cancel<'_>,
-) -> Result<PartedOff, VolumeError> {
-    let cutter = occupied_surface(wave.lattice.grid, &wave.grown_into_gap(field), cancel)?;
+fn cut_out(body: &Solid, wave: &Wave, cancel: Cancel<'_>) -> Result<PartedOff, VolumeError> {
+    let cutter = occupied_surface(wave.lattice.grid, &wave.grown_into_gap(), cancel)?;
     let cutter = solid_of(&cutter)?;
-    let part = body
-        .intersection(&cutter)
-        .map_err(|error| not_solid(&error))?;
-    let rest = body
-        .difference(&cutter)
-        .map_err(|error| not_solid(&error))?;
-    let (part, rest) = (part.mesh(), rest.mesh());
-    if part.faces.is_empty() || rest.faces.is_empty() {
-        return Err(VolumeError::NoNeck);
-    }
-    Ok(PartedOff { part, rest })
+    let (part, rest) = rayon::join(|| body.intersection(&cutter), || body.difference(&cutter));
+    let part = part.map_err(|error| not_solid(&error))?.mesh();
+    let rest = rest.map_err(|error| not_solid(&error))?.mesh();
+    parted(part, rest)
 }
 
 /// The closed surface round `voxels`, half a voxel past their outermost centres.
@@ -167,39 +173,6 @@ fn occupied_surface(
     Ok(surface)
 }
 
-/// The field of `mesh` on a lattice fine enough for `LATTICE_POINTS` over `bounds`,
-/// coarsened until it fits its budget. The field is the whole model's, being sparse; only
-/// the wave's lattice is held to `bounds`.
-fn inside_field(
-    mesh: &Mesh,
-    bvh: &Bvh,
-    bounds: Aabb,
-    cancel: Cancel<'_>,
-) -> Result<Sdf, VolumeError> {
-    let size = bounds.maxs - bounds.mins;
-    let fits = (size.x * size.y * size.z / LATTICE_POINTS).cbrt();
-    // The finest lattice a wall is ever cut on, three voxels to the thinnest wall.
-    let mut voxel_mm = fits.max(MIN_WALL_MM / 3.0);
-    let mut tries = 0;
-    loop {
-        let settings = FieldSettings {
-            voxel_mm,
-            band_voxels: BAND_VOXELS,
-            iso_mm: 0.0,
-            sign: SignMode::Auto,
-            clip: None,
-            budget_bytes: DEFAULT_BUDGET_BYTES,
-        };
-        match build(mesh, bvh, &settings, cancel) {
-            Err(VolumeError::TooFine { fits_at_mm, .. }) if tries < COARSENINGS => {
-                voxel_mm = fits_at_mm;
-                tries += 1;
-            }
-            outcome => return outcome,
-        }
-    }
-}
-
 /// The box of lattice points the wave may spread over, held densely.
 struct Lattice {
     grid: VoxelGrid,
@@ -208,7 +181,12 @@ struct Lattice {
 }
 
 impl Lattice {
-    fn over(bounds: &Aabb, grid: VoxelGrid) -> Self {
+    /// The lattice over `bounds` fine enough for `LATTICE_POINTS` over it, and never finer
+    /// than walls are ever cut on, three voxels to the thinnest.
+    fn over(bounds: &Aabb) -> Self {
+        let size = bounds.maxs - bounds.mins;
+        let fits = (size.x * size.y * size.z / LATTICE_POINTS).cbrt();
+        let grid = VoxelGrid::new(fits.max(MIN_WALL_MM / 3.0));
         let low = grid.voxel(bounds.mins) - IVec3::splat(2);
         let size = grid.voxel(bounds.maxs) + IVec3::splat(3) - low;
         Self { grid, low, size }
@@ -239,11 +217,11 @@ impl Lattice {
 }
 
 /// The lattice point inside the model nearest `at`, among those round the cell it is in.
-fn seed(field: &Sdf, lattice: &Lattice, at: Vec3) -> Option<usize> {
+fn seed(inside: &[bool], lattice: &Lattice, at: Vec3) -> Option<usize> {
     let cell = lattice.grid.voxel(at);
     around(cell, -1..=2)
-        .filter(|voxel| field.value(*voxel) < 0.0)
         .filter_map(|voxel| lattice.index(voxel))
+        .filter(|index| inside[*index])
         .min_by(|a, b| {
             let away = |index: usize| lattice.position(index).distance_squared(at);
             away(*a).total_cmp(&away(*b))
@@ -273,6 +251,8 @@ const NEIGHBOURS: [IVec3; 6] = [
 struct Wave {
     lattice: Lattice,
     seed: usize,
+    /// Per lattice point, whether it is inside the model.
+    inside: Vec<bool>,
     /// Per lattice point, the level the wave reached it at, or `UNREACHED` or `OUTSIDE`.
     level: Vec<u32>,
     /// The lattice points of each level, its front.
@@ -293,7 +273,7 @@ struct Section {
 
 impl Wave {
     fn spread(
-        field: &Sdf,
+        inside: Vec<bool>,
         lattice: Lattice,
         seed: usize,
         cancel: Cancel<'_>,
@@ -316,9 +296,8 @@ impl Wave {
                     if level[near] != UNREACHED {
                         continue;
                     }
-                    let inside = field.value(voxel + step) < 0.0;
-                    level[near] = if inside { next_level } else { OUTSIDE };
-                    if inside {
+                    level[near] = if inside[near] { next_level } else { OUTSIDE };
+                    if inside[near] {
                         next.push(near as u32);
                     }
                 }
@@ -331,6 +310,7 @@ impl Wave {
         Ok(Self {
             lattice,
             seed,
+            inside,
             level,
             fronts,
         })
@@ -364,13 +344,11 @@ impl Wave {
 
     /// Every lattice point the wave reached, grown `GAP_VOXELS` steps out into the empty
     /// space round them, short of anything that touches the rest of the model's inside.
-    fn grown_into_gap(&self, field: &Sdf) -> FastSet<IVec3> {
-        let reached = |voxel: IVec3| {
-            self.lattice
-                .index(voxel)
-                .is_some_and(|index| self.level[index] < OUTSIDE)
-        };
-        let is_rest = |voxel: IVec3| field.value(voxel) < 0.0 && !reached(voxel);
+    fn grown_into_gap(&self) -> FastSet<IVec3> {
+        let index = |voxel: IVec3| self.lattice.index(voxel);
+        let is_inside = |voxel: IVec3| index(voxel).is_some_and(|at| self.inside[at]);
+        let reached = |voxel: IVec3| index(voxel).is_some_and(|at| self.level[at] < OUTSIDE);
+        let is_rest = |voxel: IVec3| is_inside(voxel) && !reached(voxel);
         let mut grown: FastSet<IVec3> = self
             .fronts
             .iter()
@@ -383,8 +361,8 @@ impl Wave {
             for voxel in front {
                 for step in NEIGHBOURS {
                     let near = voxel + step;
-                    let free = field.value(near) >= 0.0
-                        && !NEIGHBOURS.iter().any(|side| is_rest(near + *side));
+                    let free =
+                        !is_inside(near) && !NEIGHBOURS.iter().any(|side| is_rest(near + *side));
                     if free && grown.insert(near) {
                         next.push(near);
                     }
@@ -610,27 +588,76 @@ fn cut(
         [across * half_mm, along * half_mm, depth],
     );
     let cutter = Solid::new(&cutter).map_err(|error| not_solid(&error))?;
-    let inside = body
-        .intersection(&cutter)
-        .map_err(|error| not_solid(&error))?;
-    let outside = body
-        .difference(&cutter)
-        .map_err(|error| not_solid(&error))?;
-    let (part_in, rest_in) = sorted(&inside.mesh(), true, wave, section, reached);
-    let (part_out, rest_out) = sorted(&outside.mesh(), false, wave, section, reached);
-    let part = joined(&part_in, &part_out)?;
-    let rest = joined(&rest_in, &rest_out)?;
+    let (inside, outside) = rayon::join(|| body.intersection(&cutter), || body.difference(&cutter));
+    let inside = inside.map_err(|error| not_solid(&error))?.mesh();
+    let outside = outside.map_err(|error| not_solid(&error))?.mesh();
+    let ((part_in, rest_in), (part_out, rest_out)) = rayon::join(
+        || sorted(&inside, true, wave, section, reached),
+        || sorted(&outside, false, wave, section, reached),
+    );
+    let (part_faces, rest_faces) = (
+        part_in.faces.len() + part_out.faces.len(),
+        rest_in.faces.len() + rest_out.faces.len(),
+    );
+    let (join_part, join_rest) = (
+        joining_cost(&part_in, &part_out),
+        joining_cost(&rest_in, &rest_out),
+    );
+    // Taking a side out of the body reads it and goes through the whole body once more.
+    let whole = part_faces + rest_faces;
+    let both = join_part + join_rest;
+    let part_less = join_rest + rest_faces + whole;
+    let rest_less = join_part + part_faces + whole;
+    if both <= part_less.min(rest_less) {
+        let (part, rest) = rayon::join(|| joined(part_in, part_out), || joined(rest_in, rest_out));
+        parted(part?, rest?)
+    } else if part_less < rest_less {
+        let rest = joined(rest_in, rest_out)?;
+        parted(rest_of(body, &rest)?, rest)
+    } else {
+        let part = joined(part_in, part_out)?;
+        let rest = rest_of(body, &part)?;
+        parted(part, rest)
+    }
+}
+
+/// What joining two pieces of a side costs, in faces gone through: nothing where one is
+/// empty, otherwise reading both as solids and the union over them.
+fn joining_cost(left: &Mesh, right: &Mesh) -> usize {
+    if left.faces.is_empty() || right.faces.is_empty() {
+        return 0;
+    }
+    2 * (left.faces.len() + right.faces.len())
+}
+
+/// `body` less `side`, one of the two it was cut into, for when reading the other side
+/// back as a solid to join it costs more than taking this one out of the body.
+fn rest_of(body: &Solid, side: &Mesh) -> Result<Mesh, VolumeError> {
+    Ok(body
+        .difference(&solid_of(side)?)
+        .map_err(|error| not_solid(&error))?
+        .mesh())
+}
+
+fn parted(part: Mesh, rest: Mesh) -> Result<PartedOff, VolumeError> {
     if part.faces.is_empty() || rest.faces.is_empty() {
         return Err(VolumeError::NoNeck);
     }
     Ok(PartedOff { part, rest })
 }
 
-fn joined(left: &Mesh, right: &Mesh) -> Result<Mesh, VolumeError> {
-    let left = Solid::new(left).map_err(|error| not_solid(&error))?;
-    let right = Solid::new(right).map_err(|error| not_solid(&error))?;
-    Ok(left
-        .union(&right)
+/// The two pieces of one side as one mesh, joined by exact union where both have faces:
+/// reading a side as a solid costs as much as the union does.
+fn joined(left: Mesh, right: Mesh) -> Result<Mesh, VolumeError> {
+    if left.faces.is_empty() {
+        return Ok(right);
+    }
+    if right.faces.is_empty() {
+        return Ok(left);
+    }
+    let (left, right) = rayon::join(|| solid_of(&left), || solid_of(&right));
+    Ok(left?
+        .union(&right?)
         .map_err(|error| not_solid(&error))?
         .mesh())
 }
@@ -660,12 +687,13 @@ fn sorted(
     (part, rest)
 }
 
-/// How many of `mesh`'s vertices off the cut lie by a lattice point the closed-off wave
-/// reached, and how many by one it did not.
+/// How many of up to `VOTES` of `mesh`'s vertices off the cut lie by a lattice point the
+/// closed-off wave reached, and how many by one it did not.
 fn votes(mesh: &Mesh, wave: &Wave, section: &Section, reached: &[bool]) -> (usize, usize) {
     let voxel_mm = wave.lattice.grid.voxel_mm;
     mesh.vertices
         .par_iter()
+        .step_by((mesh.vertices.len() / VOTES).max(1))
         .filter(|vertex| (**vertex - section.centre).dot(section.normal).abs() > voxel_mm)
         .filter_map(|vertex| {
             around(wave.lattice.grid.voxel(*vertex), -1..=2)
