@@ -434,6 +434,9 @@ impl eframe::App for SlicerApp {
             )
             | crate::panels::animate_preview(ui.ctx(), &mut self.machine.preview);
         self.forget_what_an_old_check_found();
+        if self.tool != Tool::Relief {
+            self.tools.relief.forget_kept();
+        }
         if self.machine.slicing.job.is_some() || self.machine.preview.is_slicing() {
             self.tools.hollow.make_way();
         }

@@ -41,7 +41,10 @@ pub use hollow::{
 pub use infill::{InfillPattern, InfillSettings};
 pub use model::{HoleSize, ModelHollow, PENDING_MARKER_MM, Shell, markers};
 pub use parts::{PartSettings, PartedOff, Parts, part_off, parts};
-pub use relief::{AngleMask, Relief, ReliefSettings, Tiling, prepared, press, press_tiled};
+pub use relief::{
+    AngleMask, Relief, ReliefBasis, ReliefSettings, Tiling, prepared, press, press_reusing,
+    press_tiled, press_tiled_reusing,
+};
 pub use sdf::Sdf;
 pub use sign::SignMode;
 pub use stack::{Panel, StackField};

@@ -1,10 +1,10 @@
 use std::collections::HashMap;
 use std::io::Read as _;
-use std::sync::Arc;
+use std::sync::{Arc, Weak};
 
 use anyhow::{Context as _, Result, bail};
 use core_geometry::{Heightmap, Mapping, Mat3, Mesh, Scalar, UvMap, Vec2, Vec3};
-use core_volume::{AngleMask, ReliefSettings, Tiling, prepared};
+use core_volume::{AngleMask, ReliefBasis, ReliefSettings, Tiling, prepared};
 use rayon::prelude::*;
 use serde::{Deserialize, Serialize};
 
@@ -52,6 +52,22 @@ pub struct Picture {
     pub size_px: [u32; 2],
     /// Which of [`BUILTINS`] it is, for one that came with the window.
     pub builtin: Option<usize>,
+}
+
+/// How much memory the bases kept between presses may hold, bytes. A browser's memory
+/// only ever grows and is shared with every other tab, so the page keeps far less.
+#[cfg(target_arch = "wasm32")]
+const KEPT_BYTES: usize = 192 << 20;
+#[cfg(not(target_arch = "wasm32"))]
+const KEPT_BYTES: usize = 768 << 20;
+
+/// The basis one model was last pressed on, kept while the model it was built over is
+/// still the one on the plate — which, once pressed, it is again only after an undo.
+#[derive(Debug)]
+struct Kept {
+    id: ObjectId,
+    mesh: Weak<Mesh>,
+    basis: Arc<ReliefBasis>,
 }
 
 /// What the Relief tool presses with. It is the window's own record: the project manifest
@@ -120,6 +136,9 @@ pub struct ReliefTool {
     pub tiling: Tiling,
     /// The picture laid over each model it would be pressed into, for the view to draw.
     laid: HashMap<ObjectId, (LaidFor, Arc<Mapped>)>,
+    /// What the last run stood on, so that trying another picture after an undo skips
+    /// the search that is most of a press.
+    kept: Vec<Kept>,
 }
 
 impl ReliefTool {
@@ -162,10 +181,20 @@ impl ReliefTool {
 
     /// Starts a run over everything visible on the plate that carries a texture.
     pub fn start(&mut self, scene: &Scene) -> Result<()> {
-        let tasks = relief_tasks(scene, self.picture.is_some());
+        let mut tasks = relief_tasks(scene, self.picture.is_some());
         if tasks.is_empty() {
             bail!(tr!("relief-nothing-to-press"));
         }
+        for task in &mut tasks {
+            task.basis = self
+                .kept
+                .iter()
+                .find(|kept| kept.id == task.id && kept.mesh.as_ptr() == Arc::as_ptr(&task.mesh))
+                .map(|kept| Arc::clone(&kept.basis));
+        }
+        // What this run does not take is dropped before it starts rather than after, so
+        // it is never resident beside the bases the run builds.
+        self.kept.clear();
         let source = match &self.picture {
             Some(picture) => ReliefSource::Tiled {
                 image: Arc::clone(&picture.heights),
@@ -197,8 +226,17 @@ impl ReliefTool {
             ReliefOutcome::Pressed(models) => {
                 let count = models.len();
                 let coarsened = models.iter().filter(|model| model.coarsened).count();
+                let mut room = KEPT_BYTES;
                 for model in models {
                     if let Some(object) = scene.get_mut(model.id) {
+                        if model.basis.bytes() <= room {
+                            room -= model.basis.bytes();
+                            self.kept.push(Kept {
+                                id: model.id,
+                                mesh: Arc::downgrade(&object.mesh),
+                                basis: model.basis,
+                            });
+                        }
                         // The relief was pressed at printed size, so the scale and the
                         // stretch are in the mesh now and must not be applied twice.
                         object.reshape(model.shaped);
@@ -228,6 +266,12 @@ impl ReliefTool {
 
     pub fn is_busy(&self) -> bool {
         self.job.is_some()
+    }
+
+    /// Lets go of the bases kept for another press, which the window does once the tool
+    /// is put down: they can be hundreds of megabytes.
+    pub fn forget_kept(&mut self) {
+        self.kept.clear();
     }
 
     /// The texture each model on the plate is drawn with, read the way pressing reads it:
@@ -635,5 +679,120 @@ mod tests {
             (up - Vec3::Y).length() < 1e-5,
             "got {up}, expected the model's +Y"
         );
+    }
+}
+
+// [DEBUG-q7x2] throwaway probe, delete before done
+#[cfg(test)]
+mod debug_q7x2 {
+    #![expect(clippy::unwrap_used, clippy::expect_used, reason = "probe")]
+    use super::*;
+    #[test]
+    fn debug_q7x2_probe() {
+        let mesh = crate::samples::detail::build();
+        let bvh = core_geometry::Bvh::build(&mesh);
+        let env = |k: &str, d: f32| {
+            std::env::var(k)
+                .ok()
+                .and_then(|v| v.parse().ok())
+                .unwrap_or(d)
+        };
+        let only = env("ONLY", 2.0) as usize;
+        let mut tool = ReliefTool::default();
+        choose_builtin(&mut tool, &mut Status::default(), only);
+        let picture = tool.picture.unwrap();
+        let settings = ReliefSettings {
+            amplitude_mm: env("AMP", 0.2),
+            precision: env("P", 1.0),
+            symmetric: env("SYM", 1.0) > 0.0,
+            mask: core_volume::AngleMask {
+                bottom_deg: env("BOT", 0.0),
+                ..Default::default()
+            },
+            ..ReliefSettings::default()
+        };
+        let tiling = Tiling {
+            tile_mm: env("TILE", 31.9),
+            angle_deg: 0.0,
+        };
+        let t = std::time::Instant::now();
+        let (r, basis) = core_volume::press_tiled_reusing(
+            &mesh,
+            &bvh,
+            &picture.heights,
+            tiling,
+            &settings,
+            None,
+        )
+        .unwrap();
+        eprintln!(
+            "[DEBUG-q7x2] first {:.2}s basis {} MB",
+            t.elapsed().as_secs_f32(),
+            basis.bytes() >> 20
+        );
+        let mut other = ReliefTool::default();
+        choose_builtin(&mut other, &mut Status::default(), 8);
+        let t2 = std::time::Instant::now();
+        let _ = core_volume::press_tiled_reusing(
+            &mesh,
+            &bvh,
+            &other.picture.unwrap().heights,
+            tiling,
+            &settings,
+            Some(basis),
+        )
+        .unwrap();
+        eprintln!("[DEBUG-q7x2] reused {:.2}s", t2.elapsed().as_secs_f32());
+        let d = core_geometry::diagnose(&r.mesh);
+        eprintln!(
+            "[DEBUG-q7x2] {} {:.2}s voxel {:.3} faces {} open {} degen {} dup {} nonman {} vol {:.2}",
+            (BUILTINS[only].name)(),
+            t.elapsed().as_secs_f32(),
+            r.voxel_mm,
+            d.faces,
+            d.boundary_edges,
+            d.degenerate_faces,
+            d.duplicate_faces,
+            d.non_manifold_edges,
+            core_geometry::signed_volume(&r.mesh)
+        );
+        if let Ok(path) = std::env::var("PNG") {
+            let keep = |v: Vec3| v.x > 40.0 && v.y > 19.0 && v.z < 4.0;
+            let faces: Vec<[u32; 3]> = r
+                .mesh
+                .faces
+                .iter()
+                .copied()
+                .filter(|f| f.iter().all(|c| keep(r.mesh.vertices[*c as usize])))
+                .collect();
+            let mut remap = std::collections::HashMap::new();
+            let mut verts = Vec::new();
+            let faces: Vec<[u32; 3]> = faces
+                .iter()
+                .map(|f| {
+                    f.map(|c| {
+                        *remap.entry(c).or_insert_with(|| {
+                            verts.push(r.mesh.vertices[c as usize]);
+                            (verts.len() - 1) as u32
+                        })
+                    })
+                })
+                .collect();
+            let crop = Mesh::new(verts, faces);
+            let thumb = core_thumbnail::render(
+                &[core_thumbnail::Part::placed(&crop)],
+                &core_thumbnail::ThumbnailSettings {
+                    width_px: 1000,
+                    height_px: 800,
+                    background: [26, 28, 32],
+                    model: [230, 170, 60],
+                },
+            );
+            let raw: Vec<u8> = thumb.pixels().iter().flatten().copied().collect();
+            image::RgbImage::from_raw(1000, 800, raw)
+                .unwrap()
+                .save(path)
+                .unwrap();
+        }
     }
 }

@@ -67,6 +67,15 @@ const CLUSTER_MIN_COSINE: Scalar = 0.0;
 /// `cancel` is asked between the layers of tiles; a run given up on comes back with an
 /// empty mesh, and the caller that asked for the stop is the one that reports it.
 pub fn extract(field: &Sdf, cancel: Cancel<'_>) -> Mesh {
+    extract_clustered(field, CLUSTER_SLACK_VOXELS, cancel)
+}
+
+/// [`extract`] with cells clustered only within `slack_voxels` of their shared plane.
+///
+/// A surface someone will look at, such as a relief, wants a slack far under the half
+/// voxel a cavity takes: that half voxel is a quarter of a 0.2 mm relief at 0.05 mm, and
+/// clustering flattens it into plates. A slack near zero still clusters a truly flat face.
+pub(crate) fn extract_clustered(field: &Sdf, slack_voxels: Scalar, cancel: Cancel<'_>) -> Mesh {
     let mut layers: HashMap<i32, Vec<IVec3>> = HashMap::new();
     for tile in meshed_tiles(field) {
         layers.entry(tile.z).or_default().push(tile);
@@ -90,7 +99,7 @@ pub fn extract(field: &Sdf, cancel: Cancel<'_>) -> Mesh {
         tiles.sort_unstable_by_key(|tile| (tile.x, tile.y));
         let parts: Vec<TilePart> = tiles
             .par_iter()
-            .map(|tile| tile_mesh(field, *tile))
+            .map(|tile| tile_mesh(field, *tile, slack_voxels))
             .collect();
         for part in &parts {
             merge(&mut mesh, &mut shared, &mut written, part);
@@ -250,7 +259,7 @@ const BIAS: i64 = 1 << 19;
 
 /// The surface the cells whose lowest corner is inside `tile` contribute, as a part of its
 /// own.
-fn tile_mesh(field: &Sdf, tile: IVec3) -> TilePart {
+fn tile_mesh(field: &Sdf, tile: IVec3, slack_voxels: Scalar) -> TilePart {
     let grid = field.grid();
     let base = tile * TILE;
 
@@ -278,7 +287,7 @@ fn tile_mesh(field: &Sdf, tile: IVec3) -> TilePart {
         }
     }
 
-    let slack_mm = CLUSTER_SLACK_VOXELS * grid.voxel_mm;
+    let slack_mm = slack_voxels * grid.voxel_mm;
     for corner in CORNER_OFFSETS {
         let low = corner * CLUSTER_MAX_SIDE;
         cluster(&cuts, low, CLUSTER_MAX_SIDE, base, slack_mm, &mut part);

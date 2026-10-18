@@ -1,11 +1,16 @@
-use core_geometry::{Aabb, Bvh, ClosestPoint, FastMap, FastSet, Mesh, Scalar, Vec3, glam::IVec3};
+use std::collections::HashMap;
+
+use core_geometry::{
+    Aabb, Bvh, ClosestPoint, FastMap, FastSet, Mesh, Scalar, Vec3,
+    glam::{IVec2, IVec3},
+};
 use rayon::prelude::*;
 
 use crate::cancel::Cancel;
 use crate::error::VolumeError;
 use crate::grid::{TILE, VoxelGrid, tile_of, within};
 use crate::scatter::{Faces, seeds};
-use crate::sdf::{Quantised, Sdf, TILE_VALUES, gap_runs};
+use crate::sdf::{Quantised, Sdf, TILE_VALUES, encode, gap_runs};
 use crate::sign::{SignMode, Signer};
 use crate::sweep;
 
@@ -79,30 +84,46 @@ pub fn build(
     settings: &FieldSettings,
     cancel: Cancel<'_>,
 ) -> Result<Sdf, VolumeError> {
-    built(mesh, bvh, settings, None, cancel)
+    let (band_mm, iso_mm) = (settings.band_voxels * settings.voxel_mm, settings.iso_mm);
+    let value = |signed: Scalar, _: Vec3, _: &ClosestPoint| encode(signed - iso_mm, band_mm);
+    let built = built(mesh, bvh, settings, (&value, Quantised::MAX), cancel)?;
+    Ok(Sdf::new(built.grid, band_mm, built.tiles, built.solid))
 }
 
-/// Builds the field with each value taken through `moved` on its way in, with the voxel's
-/// nearest point the build found anyway.
-///
-/// Which tiles are stored, and which deep ones are solid, is still decided by the
-/// unmoved field, so `moved` must not carry the surface further than the band reaches.
-pub(crate) fn build_moved(
+/// What one field build stored: one record a voxel over the tiles the band crosses, and
+/// the runs of tiles wholly inside the solid.
+pub(crate) struct Built<T> {
+    pub(crate) grid: VoxelGrid,
+    pub(crate) tiles: HashMap<IVec3, Box<[T]>>,
+    pub(crate) solid: HashMap<IVec2, Vec<(i32, i32)>>,
+}
+
+/// A voxel the build never reached, in a [`build_nearest`] record.
+pub(crate) const NO_FACE: u32 = u32::MAX;
+/// The bit of a [`build_nearest`] record that says the voxel is inside the solid.
+pub(crate) const INSIDE: u32 = 1 << 31;
+
+/// Builds the band of `settings` storing, for each voxel, its nearest face and whether it
+/// is inside, rather than a distance: everything a relief needs to move the surface, and
+/// four bytes a voxel to keep for the next picture pressed into the same model.
+pub(crate) fn build_nearest(
     mesh: &Mesh,
     bvh: &Bvh,
     settings: &FieldSettings,
-    moved: sweep::Moved<'_>,
-) -> Result<Sdf, VolumeError> {
-    built(mesh, bvh, settings, Some(moved), Cancel::never())
+) -> Result<Built<u32>, VolumeError> {
+    let record = |signed: Scalar, _: Vec3, found: &ClosestPoint| {
+        found.face as u32 | if signed < 0.0 { INSIDE } else { 0 }
+    };
+    built(mesh, bvh, settings, (&record, NO_FACE), Cancel::never())
 }
 
-fn built(
+fn built<T: Copy + Send + Sync>(
     mesh: &Mesh,
     bvh: &Bvh,
     settings: &FieldSettings,
-    moved: Option<sweep::Moved<'_>>,
+    record: sweep::Record<'_, T>,
     cancel: Cancel<'_>,
-) -> Result<Sdf, VolumeError> {
+) -> Result<Built<T>, VolumeError> {
     if mesh.aabb().is_none() {
         return Err(VolumeError::EmptyMesh);
     }
@@ -158,7 +179,7 @@ fn built(
         rings,
         &wanted,
         &seeds(mesh, &faces, sweep::carrier_grid(grid, carry), keep),
-        moved,
+        record,
         cancel,
     );
     if cancel.asked() {
@@ -171,7 +192,7 @@ fn built(
             .is_some_and(|found| signed(&signer, mesh, point, &found) < iso_mm)
     });
 
-    Ok(Sdf::new(grid, band_mm, tiles, solid))
+    Ok(Built { grid, tiles, solid })
 }
 
 /// The stored tiles, with a tile just outside each end of a clipped column added to them.

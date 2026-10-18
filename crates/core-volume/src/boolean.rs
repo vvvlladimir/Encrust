@@ -94,10 +94,27 @@ fn exact(models: &[Mesh], op: Boolean) -> Result<Mesh, CsgError> {
 /// part pushed into a base — without a complaint and then counts the overlap twice. A mesh
 /// with a shell wound inward is a cavity in a part, and is read whole.
 fn solid_of(mesh: &Mesh) -> Result<Solid, CsgError> {
-    let shells = split(mesh);
-    if shells.len() < 2 || shells.iter().any(|shell| signed_volume(shell) < 0.0) {
-        return Solid::new(mesh);
+    match outward_shells(mesh) {
+        Some(shells) => union_of(&shells),
+        None => Solid::new(mesh),
     }
+}
+
+/// `mesh` with its shells unioned into one surface, so that no face is left standing
+/// inside another shell; `None` when it is one shell or holds a cavity, and there is
+/// nothing to union.
+pub(crate) fn united(mesh: &Mesh) -> Option<Result<Mesh, CsgError>> {
+    let shells = outward_shells(mesh)?;
+    Some(union_of(&shells).map(|solid| solid.mesh()))
+}
+
+/// The shells of `mesh` when there are several and every one is wound outward.
+fn outward_shells(mesh: &Mesh) -> Option<Vec<Mesh>> {
+    let shells = split(mesh);
+    (shells.len() >= 2 && shells.iter().all(|shell| signed_volume(shell) >= 0.0)).then_some(shells)
+}
+
+fn union_of(shells: &[Mesh]) -> Result<Solid, CsgError> {
     let solids: Vec<Solid> = shells
         .par_iter()
         .map(Solid::new)

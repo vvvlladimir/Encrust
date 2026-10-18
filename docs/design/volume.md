@@ -173,6 +173,13 @@ does the edge of a map that covers only part of the mesh (ADR 0121). The amplitu
 plate millimetre, so a caller presses after placement or divides by the model's own scale,
 and `press` reports the lattice it settled on (ADR 0122). See ADR 0116.
 
+A model built of shells pushed into each other — a wall stood on a base — has faces inside
+the solid, and a nearest point on one of them would press its relief into the middle of the
+model, while the pseudonormal signs the overlap as air. So a mesh of several outward shells
+is unioned by the exact cut first, the field is built over that surface, and each height is
+read off the model's own face at the nearest point. A mesh the cut cannot read is pressed as
+it stands. The union is kept in the `ReliefBasis` with the rest.
+
 A picture with no map behind it is laid on by projection instead (`press_tiled`): it is
 read as square tiles of `tile_mm`, turned by `angle_deg`, on each of the three planes the
 model's own axes span, and the three readings are blended by the nearest face's normal
