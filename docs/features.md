@@ -171,10 +171,11 @@ capped silently.
 ### Relief (texture, text and combining models)
 - Three modes, switched at the head of the panel, each with its own settings and its own
   button at the foot.
-- **Texture:** press the model's own texture, or **any picture** tiled over the model from
-  three sides, into its surface. Set the depth (a negative depth sinks the picture in), the
-  tile size, the angle and the precision. The model's own texture needs a model with UVs
-  (OBJ or 3MF).
+- **Texture:** press the model's own texture, one of **twelve built-in textures** (leather,
+  matte grain, carbon, basket weave, honeycomb, hex blocks, reptile, ripples, wood, bark,
+  stone, rock), or **any picture** tiled over the model from three sides, into its
+  surface. Set the depth (a negative depth sinks the picture in), the tile size, the angle
+  and the precision. The model's own texture needs a model with UVs (OBJ or 3MF).
 - The picture can be **inverted** (black raised, white left), **smoothed** to soften a
   noisy photo, and pressed **symmetrically** about mid grey, so white raises the surface,
   black sinks it and the model keeps about its size. The view shows the picture inverted

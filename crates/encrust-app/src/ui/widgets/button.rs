@@ -15,6 +15,32 @@ pub fn focus_ring(ui: &Ui, response: &Response, radius: impl Into<CornerRadius>)
     }
 }
 
+/// A picture to pick from a grid, `side` points square, ringed in the accent while it is
+/// the one picked.
+pub fn swatch(
+    ui: &mut Ui,
+    texture: &egui::TextureHandle,
+    side: f32,
+    picked: bool,
+    name: &str,
+) -> Response {
+    let (rect, response) = ui.allocate_exact_size(vec2(side, side), Sense::click());
+    response.widget_info(|| WidgetInfo::selected(WidgetType::Button, true, picked, name));
+    let colors = theme::colors();
+    egui::Image::new(texture)
+        .corner_radius(theme::R_CONTROL)
+        .paint_at(ui, rect);
+    let stroke = match (picked, response.hovered()) {
+        (true, _) => egui::Stroke::new(theme::FOCUS_W, colors.accent),
+        (false, true) => egui::Stroke::new(1.0, colors.text_low),
+        (false, false) => egui::Stroke::new(1.0, colors.line),
+    };
+    ui.painter()
+        .rect_stroke(rect, theme::R_CONTROL, stroke, StrokeKind::Inside);
+    focus_ring(ui, &response, theme::R_CONTROL);
+    response.on_hover_text(name)
+}
+
 /// A borderless square with one glyph in it: the top bar and the overlay cards.
 pub fn icon_button(ui: &mut Ui, glyph: &str, tooltip: &str) -> Response {
     square(ui, glyph, tooltip, Square::icon())

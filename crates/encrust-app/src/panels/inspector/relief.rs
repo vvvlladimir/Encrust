@@ -5,11 +5,11 @@ use core_volume::Tiling;
 
 use crate::i18n::tr;
 use crate::panels::Window;
-use crate::relief::{Picture, ReliefMode};
+use crate::relief::{BUILTINS, Picture, ReliefMode};
 use crate::state::Doc;
 use crate::ui::{
     Segment, Segmented, describe, hint, icon, meta, number_row, primary_button, progress_bar,
-    secondary_button, section, stats, switch, theme, tone,
+    secondary_button, section, stats, subheading, swatch, switch, theme, tone,
 };
 
 /// Bounds on one tile of a picture, millimetres: under a millimetre it is finer than the
@@ -82,6 +82,8 @@ fn texture(ui: &mut egui::Ui, window: &mut Window) {
                 carried(ui, window.doc);
             }
         }
+        subheading(ui, &tr!("relief-builtins"));
+        gallery(ui, window);
         picture_buttons(ui, window);
         reading(ui, window);
     });
@@ -172,6 +174,61 @@ fn thumbnail(ctx: &egui::Context, picture: &Picture) -> egui::TextureHandle {
     let texture = ctx.load_texture("relief-thumbnail", image, egui::TextureOptions::NEAREST);
     ctx.data_mut(|data| data.insert_temp(id, texture.clone()));
     texture
+}
+
+/// Textures in a row of the gallery, and the gap between two, points.
+const GALLERY_COLUMNS: usize = 4;
+const GALLERY_GAP: f32 = 6.0;
+
+/// The textures that come with the window, a click on one taking it as the picture.
+fn gallery(ui: &mut egui::Ui, window: &mut Window) {
+    let picked = window
+        .tools
+        .relief
+        .picture
+        .as_ref()
+        .and_then(|picture| picture.builtin);
+    let side = (ui.available_width() - GALLERY_GAP * (GALLERY_COLUMNS - 1) as f32)
+        / GALLERY_COLUMNS as f32;
+    let mut clicked = None;
+    for (row, builtins) in BUILTINS.chunks(GALLERY_COLUMNS).enumerate() {
+        ui.horizontal(|ui| {
+            ui.spacing_mut().item_spacing.x = GALLERY_GAP;
+            for (column, builtin) in builtins.iter().enumerate() {
+                let index = row * GALLERY_COLUMNS + column;
+                let Some(texture) = builtin_thumbnail(ui.ctx(), index) else {
+                    continue;
+                };
+                let name = (builtin.name)();
+                if swatch(ui, &texture, side, picked == Some(index), &name).clicked() {
+                    clicked = Some(index);
+                }
+            }
+        });
+        ui.add_space(GALLERY_GAP);
+    }
+    if let Some(index) = clicked {
+        let relief = &mut window.tools.relief;
+        crate::relief::choose_builtin(relief, &mut window.machine.status, index);
+    }
+}
+
+/// One shipped texture shrunk to a thumbnail, made into a texture the first time it is
+/// shown. `None` only for one that does not decode, which a test rules out.
+fn builtin_thumbnail(ctx: &egui::Context, index: usize) -> Option<egui::TextureHandle> {
+    let id = egui::Id::new(("relief-builtin", index));
+    if let Some(texture) = ctx.data(|data| data.get_temp::<egui::TextureHandle>(id)) {
+        return Some(texture);
+    }
+    let grey = BUILTINS.get(index)?.thumbnail(THUMB_PX as u32).ok()?;
+    let pixels = grey
+        .into_iter()
+        .map(|grey| theme::mask_pixel(grey, false))
+        .collect();
+    let image = egui::ColorImage::new([THUMB_PX, THUMB_PX], pixels);
+    let texture = ctx.load_texture("relief-builtin", image, egui::TextureOptions::LINEAR);
+    ctx.data_mut(|data| data.insert_temp(id, texture.clone()));
+    Some(texture)
 }
 
 /// Choosing a picture, and going back to the models' own textures.

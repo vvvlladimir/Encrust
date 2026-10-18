@@ -14,6 +14,10 @@ use crate::job::{ReliefJob, ReliefOutcome, ReliefRequest, ReliefSource, relief_t
 use crate::scene::{Mapped, ObjectId, Scene};
 use crate::status::Status;
 
+mod library;
+
+pub use library::BUILTINS;
+
 /// The texture each model is drawn with while the Relief tool is open.
 pub type Textures = HashMap<ObjectId, Arc<Mapped>>;
 
@@ -46,6 +50,8 @@ pub struct Picture {
     pub heights: Arc<Heightmap>,
     /// The size of the file, pixels, before it was read down to `MAX_PICTURE_PX`.
     pub size_px: [u32; 2],
+    /// Which of [`BUILTINS`] it is, for one that came with the window.
+    pub builtin: Option<usize>,
 }
 
 /// What the Relief tool presses with. It is the window's own record: the project manifest
@@ -365,7 +371,27 @@ fn picture_name(file: &Handed) -> String {
 fn read_picture(file: &Handed) -> Result<Picture> {
     let mut bytes = Vec::new();
     file.reader()?.read_to_end(&mut bytes)?;
-    let image = image::load_from_memory(&bytes)?;
+    decoded(picture_name(file), &bytes)
+}
+
+/// Takes one of the textures that come with the window as what the Relief tool presses in.
+pub fn choose_builtin(tool: &mut ReliefTool, status: &mut Status, index: usize) {
+    let Some(builtin) = BUILTINS.get(index) else {
+        return;
+    };
+    let name = (builtin.name)();
+    let read = decoded(name.clone(), builtin.bytes).map(|picture| Picture {
+        builtin: Some(index),
+        ..picture
+    });
+    if let Some(picture) = status.report(&tr!("relief-pressing-picture", name = name), read) {
+        tool.picture = Some(picture);
+    }
+}
+
+/// `bytes` of any picture format read as grey, no wider than `MAX_PICTURE_PX`.
+fn decoded(name: String, bytes: &[u8]) -> Result<Picture> {
+    let image = image::load_from_memory(bytes)?;
     let size_px = [image.width(), image.height()];
     let image = if size_px[0].max(size_px[1]) > MAX_PICTURE_PX {
         image.thumbnail(MAX_PICTURE_PX, MAX_PICTURE_PX)
@@ -377,9 +403,10 @@ fn read_picture(file: &Handed) -> Result<Picture> {
     let heights =
         Heightmap::new(width, height, grey.into_raw()).context(tr!("relief-no-pixels"))?;
     Ok(Picture {
-        name: picture_name(file),
+        name,
         heights: Arc::new(heights),
         size_px,
+        builtin: None,
     })
 }
 
@@ -435,6 +462,15 @@ mod tests {
     }
 
     #[test]
+    fn a_builtin_texture_is_chosen_by_its_place_in_the_list() {
+        let mut tool = ReliefTool::default();
+        choose_builtin(&mut tool, &mut Status::default(), 2);
+        let picture = tool.picture.expect("a shipped texture reads");
+        assert_eq!(picture.builtin, Some(2));
+        assert_eq!(picture.name, (BUILTINS[2].name)());
+    }
+
+    #[test]
     fn a_file_that_is_no_picture_is_said_so() {
         let mut tool = ReliefTool::default();
         let mut status = Status::default();
@@ -456,6 +492,7 @@ mod tests {
             name: "flat.png".to_owned(),
             heights: Arc::new(Heightmap::new(1, 1, vec![1.0]).expect("one pixel")),
             size_px: [1, 1],
+            builtin: None,
         });
         assert_eq!(tool.blocker(&scene), None);
     }
@@ -484,6 +521,7 @@ mod tests {
             name: "stone.png".to_owned(),
             heights: Arc::new(Heightmap::new(1, 1, vec![1.0]).expect("one pixel")),
             size_px: [1, 1],
+            builtin: None,
         });
         let first = tool.textures(&scene);
         let laid = first
@@ -515,6 +553,7 @@ mod tests {
             name: "stone.png".to_owned(),
             heights: Arc::new(Heightmap::new(1, 1, vec![1.0]).expect("one pixel")),
             size_px: [1, 1],
+            builtin: None,
         };
         // A face in the plane z = 0, so it is read from above, 10 mm on a side.
         let mesh = Mesh::new(
@@ -561,6 +600,7 @@ mod tests {
                 name: "white.png".to_owned(),
                 heights: Arc::new(Heightmap::new(1, 1, vec![1.0]).expect("one pixel")),
                 size_px: [1, 1],
+                builtin: None,
             }),
             state: ReliefState {
                 invert: true,
