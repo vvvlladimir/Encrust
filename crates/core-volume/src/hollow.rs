@@ -13,7 +13,7 @@ use crate::drain::Channel;
 use crate::error::VolumeError;
 use crate::extract::extract;
 use crate::grid::tile_of;
-use crate::infill::{InfillSettings, lattice};
+use crate::infill::{Carved, InfillSettings, cut};
 use crate::sdf::Sdf;
 use crate::shells::outer_shells;
 use crate::sign::SignMode;
@@ -236,11 +236,11 @@ pub struct Hollowed {
 pub struct CavityField {
     offset: Sdf,
     shape: Mat3,
-    thickness_mm: Scalar,
     mode: HollowMode,
-    precision: Scalar,
     voxel_mm: Scalar,
     coarsened: bool,
+    /// What carving it may take besides, in bytes, or zero for no ceiling.
+    budget_bytes: usize,
 }
 
 impl CavityField {
@@ -300,11 +300,10 @@ pub fn cavity_field(
     Ok(CavityField {
         offset,
         shape,
-        thickness_mm: settings.thickness_mm,
         mode: settings.mode,
-        precision: settings.precision,
         voxel_mm,
         coarsened,
+        budget_bytes: settings.budget_bytes,
     })
 }
 
@@ -420,8 +419,8 @@ fn offset_field(
     build(surface, bvh, &field, cancel)
 }
 
-/// The model with the cavity `field` bounds appended to it, and whatever stands in that
-/// cavity appended after.
+/// The model with the void `field` bounds appended to it wound inward, and whatever lattice
+/// stands in it appended after.
 fn shelled(
     mesh: &Mesh,
     field: &CavityField,
@@ -431,42 +430,35 @@ fn shelled(
 ) -> Result<Hollowed, VolumeError> {
     let blocked = blocked(&field.offset, blockers);
     let cavity = blocked.as_ref().unwrap_or(&field.offset);
-
     let cavity_mesh = extract(cavity, cancel);
+    let Carved { void, solid } = match &infill {
+        Some(infill) => cut(cavity, cavity_mesh, infill, field.budget_bytes, cancel)?,
+        None => Carved {
+            void: cavity_mesh,
+            solid: Mesh::default(),
+        },
+    };
     if cancel.asked() {
         return Err(VolumeError::Cancelled);
     }
-    let hollow_mm3 = volume_of(&cavity_mesh);
-    // Half the wall, so a strut is fused into the shell rather than left touching it, and
-    // never so far that it could reach out through the wall.
-    let bond_mm = field.thickness_mm / 2.0;
-    let filling = match &infill {
-        Some(infill) if !cavity.is_empty() => lattice(cavity, infill, field.precision, bond_mm)?,
-        _ => Mesh::default(),
-    };
 
     // Grown to what the three parts come to before the first is copied: a mesh that
     // doubles its way there holds the old copy and the new one at once, and the cavity of
     // a real model is millions of triangles.
     let mut whole = Mesh::new(
-        Vec::with_capacity(
-            mesh.vertices.len() + cavity_mesh.vertices.len() + filling.vertices.len(),
-        ),
-        Vec::with_capacity(mesh.faces.len() + cavity_mesh.faces.len() + filling.faces.len()),
+        Vec::with_capacity(mesh.vertices.len() + void.vertices.len() + solid.vertices.len()),
+        Vec::with_capacity(mesh.faces.len() + void.faces.len() + solid.faces.len()),
     );
     append(&mut whole, mesh);
-    let cavity_faces = whole.faces.len()..whole.faces.len() + cavity_mesh.faces.len();
-    append(&mut whole, &flipped(&cavity_mesh));
-    drop(cavity_mesh);
-    append(&mut whole, &filling);
-
-    // The lattice overlaps itself at every junction, so its own volume over-reads. What it
-    // takes back out of the cavity is the density it was asked for.
-    let filled = infill.map_or(0.0, |infill| infill.density);
+    let cavity_faces = whole.faces.len()..whole.faces.len() + void.faces.len();
+    append(&mut whole, &flipped(&void));
+    append(&mut whole, &solid);
     Ok(Hollowed {
         mesh: whole,
         cavity: cavity_faces,
-        cavity_mm3: (hollow_mm3 * (1.0 - filled)).max(0.0),
+        // Where shells of the void or of the solid overlap, their volumes count twice; the
+        // overlaps are the ends of holes and the nodes of struts, a few percent at most.
+        cavity_mm3: (volume_of(&void) - volume_of(&solid)).max(0.0),
         voxel_mm: field.voxel_mm,
         coarsened: false,
     })

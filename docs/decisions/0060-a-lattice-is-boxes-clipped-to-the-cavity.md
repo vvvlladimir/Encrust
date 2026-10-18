@@ -1,6 +1,6 @@
 # 0060. A lattice is boxes clipped to the cavity, not a field
 
-- **Status:** Accepted
+- **Status:** Superseded by 0301
 - **Date:** 2026-09-21
 
 ## Context

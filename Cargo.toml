@@ -20,6 +20,7 @@ core-slicer = { path = "crates/core-slicer" }
 core-raster = { path = "crates/core-raster" }
 core-supports = { path = "crates/core-supports" }
 core-volume = { path = "crates/core-volume" }
+core-csg = { path = "crates/core-csg" }
 core-plate = { path = "crates/core-plate" }
 core-pipeline = { path = "crates/core-pipeline" }
 core-engine = { path = "crates/core-engine" }
@@ -46,6 +47,9 @@ glam = { version = "0.33", features = ["serde"] }
 parry3d = "0.31"
 earcutr = "0.5"
 i_overlay = "9.0"
+# Exact booleans over closed meshes, in pure Rust so the browser build keeps them; see
+# docs/decisions/0302.
+boolmesh = { version = "0.2.1", default-features = false, features = ["rayon"] }
 rayon = "1.12"
 thiserror = "2.0"
 anyhow = "1.0"

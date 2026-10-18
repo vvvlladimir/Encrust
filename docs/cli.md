@@ -108,8 +108,14 @@ Nothing opens the cavity by itself — `--drain-at` below is what lets the resin
 ```sh
 encrust slice model.stl \
   --printer elegoo-mars-4-ultra --hollow 2 \
-  --infill hive --infill-size 5 --infill-density 0.15 --precision 0.5 -o model.goo
+  --infill hive --infill-cell 6 --infill-wall 2 --precision 0.5 -o model.goo
 ```
+
+A hive or grid takes `--infill-cell` (a hexagon's diameter, a square's side) and
+`--infill-wall`, and is joined by crossing holes `--infill-hole` millimetres across, the
+first row `--infill-hole-from` over the cavity's floor and the next every
+`--infill-hole-spacing`. A scaffold takes `--infill-cell` and `--infill-density`, 0 to 1.
+Every number left out is the window's default.
 
 A hole into the surface nearest a point, cut with or without a cavity behind it, and the
 check that says whether any resin is still stuck. `--check-drainage` asks for it alone. The

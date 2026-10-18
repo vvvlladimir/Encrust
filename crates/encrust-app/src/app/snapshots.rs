@@ -4,6 +4,7 @@
 
 use std::path::PathBuf;
 
+use core_volume::InfillPattern;
 use egui_kittest::{Harness, SnapshotResults};
 
 use super::SlicerApp;
@@ -52,6 +53,21 @@ fn every_tool_on_a_picked_model() {
         let mut app = app(true);
         app.tool = tool;
         results.extend(picture(&format!("tool_{tool:?}").to_lowercase(), app));
+    }
+}
+
+#[test]
+fn the_hollow_tool_with_each_kind_of_infill() {
+    let mut results = SnapshotResults::new();
+    for (name, pattern) in [
+        ("tool_hollow_hive", InfillPattern::Hive),
+        ("tool_hollow_scaffold", InfillPattern::Scaffold),
+    ] {
+        let mut app = app(true);
+        app.tool = Tool::Hollow;
+        app.tools.hollow.state.infill_on = true;
+        app.tools.hollow.state.infill.pattern = pattern;
+        results.extend(picture(name, app));
     }
 }
 

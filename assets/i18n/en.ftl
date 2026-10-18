@@ -491,8 +491,15 @@ hollow-hive = Hive
 hollow-grid = Grid
 hollow-scaffold = Scaffold
 hollow-cell = Cell
+hollow-cell-hive = Hexagon diameter
+hollow-cell-grid = Cell width
 hollow-density = Density
-hollow-infill-note = { $walls } mm walls. Hive and Grid stand on the plate; Scaffold also braces sideways. Every cell is open at the cavity's floor and ceiling, so resin runs from cell to cell towards a hole.
+hollow-infill-wall = Wall
+hollow-hole = Crossing hole
+hollow-hole-from = First hole row
+hollow-hole-spacing = Hole row spacing
+hollow-walled-note = Cells stand on the plate, joined to each other by round holes row above row, so resin runs from cell to cell towards a drain hole.
+hollow-scaffold-note = Struts on the edges of a cube stood on its corner: every one leans, so none starts in mid-air, and the lattice braces sideways as well.
 hollow-blocker-size = Blocker size
 hollow-clear-blockers =
     { $count ->

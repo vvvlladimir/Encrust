@@ -1,0 +1,21 @@
+[package]
+name = "core-csg"
+description = "Exact union, difference and intersection of closed triangle meshes."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+
+[lib]
+doctest = false
+
+[dependencies]
+core-geometry.workspace = true
+boolmesh.workspace = true
+thiserror.workspace = true
+workspace-hack = { version = "0.1", path = "../../workspace-hack" }
+
+[lints]
+workspace = true

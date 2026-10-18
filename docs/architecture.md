@@ -65,13 +65,14 @@ it are in `.claude/rules/architecture.md`.
 
 | Crate | Owns |
 |---|---|
-| `core-geometry` | `Mesh`, `UvMap`, `Heightmap`, `Triangle`, `Aabb`, `Transform`, `Ray`, `PlacedHit`, `Bvh` with `closest`/`faces_within`, `ClosestPoint`, `Adjacency`, `Winding`, `Plane`, `Cut`, `FastHasher`/`FastMap`/`FastSet`, glam re-exports; `weld`, `diagnose`, `orient_outward`, `fill_holes`, `remove_duplicate_faces`, `convex_hull`, `fitting_turn` (ADR 0289), `center_of_mass`, `transform_mesh`, raycasts, `closest_point`, `winding_number`, `cut`, `split`, `pin_spots` and `pin` for a cut's alignment pins (ADR 0223) |
+| `core-geometry` | `Mesh`, `UvMap`, `Heightmap`, `Triangle`, `Aabb`, `Transform`, `Ray`, `PlacedHit`, `Bvh` with `closest`/`faces_within`, `ClosestPoint`, `Adjacency`, `Winding`, `Plane`, `Cut`, `FastHasher`/`FastMap`/`FastSet`, glam re-exports; `weld`, `diagnose`, `orient_outward`, `fill_holes`, `remove_duplicate_faces`, `convex_hull`, `fitting_turn` (ADR 0289), `center_of_mass`, `transform_mesh`, raycasts, `closest_point`, `winding_number`, `cut`, `split`, `pin_spots` and `pin` for a cut's alignment pins (ADR 0223), the primitives `cuboid`, `oriented_box`, `prism`, `cylinder` and `segments_for` |
 | `core-mesh-io` | `MeshLoader` reading a `ModelFile` — a name, a `ReadSeek` and the files beside it — or a path, returning `Loaded` with one `Texture` per material and `decode` to a `Heightmap`, `StlLoader`, `ObjLoader` with UVs and `map_Kd`, `ThreeMfLoader` with `texture2dgroup` |
 | `core-slicer` | `SliceSettings`, `LayerPlan`, `AdaptiveSettings`, `Layer`, `Contour`, `Sliced`, `SliceEngine` with `slice_at`, `PlaneSliceEngine`, `layer_heights`, `adaptive_plan`, `offset_contours`, `covered_area` and `covered_pieces`, `Windows` sampling several planes a layer, `Source` it cuts from, `Solid` with its `Repeated` bodies cut once a copy (ADR 0258) |
 | `core-raster` | `RasterSettings`, `Grey`, `Run`, `LayerRuns` with `blurred`, `LayerMask`, `Rastered`, `Rasterizer`, `ScanlineRasterizer`, `downsample` |
 | `core-analysis` | `cure` into a `Cured` layer of `Piece`s with area, centre and pull; `pull_n`, the one law a section pulls on the film by, with `PEEL_LIMIT_N` (ADR 0281); `Measured` folding volume, hardest pull, widest step and `Risk`s — islands, levers on the narrowest neck under a piece, peels, suction cups sealed from below, thin pieces — or taking islands out as it goes, part by part; `erase`, `island_runs`, `equivalent_disc_mm` |
 | `core-supports` | `Placed`, `Profiles`, `SupportPoint`, `Landing`, `Column`, `SupportTree`; `columns`, `grow`, `mesh_trees`/`mesh_groups`, `grab`/`Grab`/`Part`, `support_under`, `generate_supports`; `carried`/`fits`/`on_model`, the rule a support edited by hand is held to (ADR 0208); `Region`/`Blocked` and `project`/`ProjectSettings` for a painted patch; `ModelSupports`, the supports one model carries; `TrapScan`/`Trapped` for resin with no way out |
 | `core-plate` | `OrientSettings` with an `OrientPreset` — one `OrientGoal` or auto, every goal balanced (ADR 0284) — a tilt limit (ADR 0222) and whether the model stands on supports (ADR 0274), `Oriented`, `Score`, `Printed` — a model with its shell, its cuts and its drain holes — and `orient_printed` judging it (ADR 0276), `finalists` — the best few ways to stand, for a caller able to print them (ADR 0277), `FlatFace` and `flat_faces`, `Footprint`, `ArrangeSettings`, `Arranged`, `Placed`, `PlateError`; `orient` — flat faces and a Fibonacci sphere scored on overhang, tips, support height, peel, height and footprint, the best few cut to measure their pull and suction cups, then chosen by priority (ADR 0275); `Readings` carrying every goal's reading, `rank` and `rulings` with `Ruling`, the one rule the search and the proof both rank by for a preset and why each candidate ended where it did, and which are worth offering beside the first, and `LOOKS_UP` (ADR 0278, 0279, 0281, 0284); `arrange` — footprint bitmaps packed into the corner and centred |
+| `core-csg` | `Solid` — a closed mesh readied once for `union`, `difference` and `intersection`, exact, over `boolmesh` — and `CsgError` (ADR 0302) |
 | `core-volume` | `Sdf`, `VoxelGrid`, `FieldSettings`, `SignMode`, `VolumeError`; `build` — scattered from the faces, carried coarse across the wall, refined where it is stored — CSG operators, `extract` — clustered surface nets; `hollow` with `HollowSettings`, `HollowMode`, `Blocker`, `Hollowed`, `lattice_mm`, `MIN_WALL_MM`, `sleeves`, `InfillSettings`/`InfillPattern`; `DrainHole`, `Channel`, `drill`, `channel_under`, `hole_at`, `lift_for`, `pierce`; `ModelHollow` with `Shell`, `HoleSize`, `markers` — what one model carries; `press` with `ReliefSettings`/`Relief`, and `press_tiled` with `Tiling` for a picture on a model with no map (ADR 0225); `StackField` over a `Panel`, a sliced file's layers built back into a field (ADR 0294) |
 | `printer-profiles` | `PrinterProfile`/`OutputFormat`/`AnycubicExtension`/`PhotonRevision`/`Connection`/`NetworkMachine` (ADR 0265)/`Firmware`, `MaterialProfile`/`PrinterTuning`/`Compensation` and `exposure_for_mm`, `SupportProfile` and its segments, TOML load/save, `Catalogue` of printers, resins, support profiles and tools' named `Preset`s (ADR 0226), importing and exporting any of them as its file (ADR 0235), `ForeignResin` read from another program's exported resin and the bounds a stated setting passes through (ADR 0293, 0295), the `ProfileStore` it writes edits through with `DirStore` over a directory (ADR 0181), the random-tailed ids of the user's own printers and resins (ADR 0261), and `user_dir` |
 | `core-thumbnail` | `Thumbnail`, `Part`, `ThumbnailSettings`, `render` (CPU only) |
@@ -137,7 +138,8 @@ core-thumbnail ──> core-geometry
 core-raster ──> core-slicer
 core-supports ──> core-slicer, core-raster, core-geometry, printer-profiles, rayon
 core-analysis ──> core-raster
-core-volume ──> core-geometry, rayon
+core-volume ──> core-csg, core-geometry, rayon
+core-csg ──> core-geometry, boolmesh
 core-plate ──> core-analysis, core-geometry, core-slicer, rayon
 core-slicer ──> core-geometry, i_overlay
 core-mesh-io ──> core-geometry, zip
@@ -178,6 +180,9 @@ destinations, not by a crate under them (ADR 0182).
 - `core-volume` owns the distance field and everything over it — hollowing, infill, drain
   holes and cuts are operators on a field, not crates of their own (ADR 0055–0060). A
   hollowed mesh is the model with its cavity appended: it gets sliced, never re-fielded.
+- `core-csg` is the one place an exact boolean is done, so the engine under it can be
+  replaced without touching a caller (ADR 0302). It sits on `core-geometry` alone, and
+  `core-volume` takes it to cut a lattice out of a cavity's mesh (ADR 0301).
 - `core-supports` sits above `core-slicer` and `core-raster` because it reads a `Sliced`
   stack onto the rasteriser's grid (ADR 0029, 0032), and reaches sideways only to the
   `printer-profiles` leaf (ADR 0027). The workspace has no polygon boolean dependency.
@@ -231,6 +236,7 @@ destinations, not by a crate under them (ADR 0182).
 | `PlacedHit` | `core-geometry` | Where a ray met a transformed mesh, in the ray's space |
 | `ClosestPoint`, `Winding` | `core-geometry` | Nearest surface, and which side of it (ADR 0053, 0054) |
 | `UvMap`, `Heightmap` | `core-geometry` | Three coordinates a face, and the image they address (ADR 0115, 0116) |
+| `Solid` | `core-csg` | A closed mesh as the boolean engine holds it, or nothing; never changed by an operation (ADR 0302) |
 | `Sdf`, `VoxelGrid` | `core-volume` | Narrow band of 8³ tiles plus solid runs, on a global lattice (ADR 0057) |
 | `FieldSettings`, `HollowSettings`, `InfillSettings`, `Hollowed` | `core-volume` | What to build, how thick, what stands in the cavity, what came out |
 | `ReliefSettings` | `core-volume` | How deep a texture is pressed into the surface, and on what lattice (ADR 0116) |

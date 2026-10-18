@@ -5,6 +5,7 @@
 use std::path::Path;
 
 use core_engine::project::{DrainState, HollowState};
+use core_volume::InfillPattern;
 use egui::{Rect, Ui, pos2};
 use printer_profiles::{Entry, Kind, Preset};
 
@@ -137,7 +138,11 @@ fn cells(kind: Kind, entry: &Entry<Preset>) -> Option<Vec<String>> {
         Kind::Hollow => {
             let state = entry.profile.read::<HollowState>(path).ok()?;
             let infill = match state.infill_on {
-                true => format!("{:.0} %", state.infill.density * 100.0),
+                true => match state.infill.pattern {
+                    InfillPattern::Hive => tr!("hollow-hive"),
+                    InfillPattern::Grid => tr!("hollow-grid"),
+                    InfillPattern::Scaffold => tr!("hollow-scaffold"),
+                },
                 false => tr!("presets-none"),
             };
             vec![

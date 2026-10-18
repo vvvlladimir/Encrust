@@ -184,11 +184,7 @@ fn hollowing(c: &mut Criterion, mesh: &Mesh, bvh: &Bvh) {
         ..HollowSettings::default()
     };
     let filled = HollowSettings {
-        infill: Some(InfillSettings {
-            pattern: InfillPattern::Hive,
-            size_mm: 5.0,
-            density: 0.15,
-        }),
+        infill: Some(InfillSettings::default()),
         ..empty.clone()
     };
 
@@ -196,9 +192,11 @@ fn hollowing(c: &mut Criterion, mesh: &Mesh, bvh: &Bvh) {
         b.iter(|| hollow(std::hint::black_box(mesh), bvh, &empty, Cancel::never()));
     });
 
-    c.bench_function("hollow a 40 mm ball and fill it with a gyroid", |b| {
+    c.bench_function("hollow a 40 mm ball and fill it with a hive", |b| {
         b.iter(|| hollow(std::hint::black_box(mesh), bvh, &filled, Cancel::never()));
     });
+
+    infill(c, mesh, bvh, &empty);
 
     // A relief is a field of its own plus a nearest-point query per lattice point, so it
     // is priced against the build it is built on.
@@ -234,6 +232,33 @@ fn hollowing(c: &mut Criterion, mesh: &Mesh, bvh: &Bvh) {
             )
         });
     });
+}
+
+/// A grid of 6 mm cells and 2 mm walls, on the ball and on one big enough that the lattice
+/// rather than the shell is what costs.
+fn infill(c: &mut Criterion, mesh: &Mesh, bvh: &Bvh, empty: &HollowSettings) {
+    let grid = HollowSettings {
+        infill: Some(InfillSettings {
+            pattern: InfillPattern::Grid,
+            ..InfillSettings::default()
+        }),
+        ..empty.clone()
+    };
+    let big = sphere(50.0, 320, 320);
+    let big_bvh = Bvh::build(&big);
+
+    let mut group = c.benchmark_group("infill");
+    group.sample_size(10);
+    group.bench_function("grid_in_a_40mm_ball", |b| {
+        b.iter(|| hollow(std::hint::black_box(mesh), bvh, &grid, Cancel::never()));
+    });
+    group.bench_function("empty_100mm_ball", |b| {
+        b.iter(|| hollow(std::hint::black_box(&big), &big_bvh, empty, Cancel::never()));
+    });
+    group.bench_function("grid_in_a_100mm_ball", |b| {
+        b.iter(|| hollow(std::hint::black_box(&big), &big_bvh, &grid, Cancel::never()));
+    });
+    group.finish();
 }
 
 /// A latitude and longitude UV for every corner of every face.

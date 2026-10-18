@@ -156,9 +156,15 @@ capped silently.
 - Hollow a model with a wall thickness and precision you choose.
 - **Inside** grows the wall inward and leaves the outside untouched. **Outside** grows it
   outward, which gives you a mould of the model.
-- **Infill** inside the cavity: **Hive** (hexagons, the stiffest for its weight), **Grid**
-  (square tubes) or **Scaffold** (struts on all three axes, the only one that takes a load
-  from the side), or leave the cavity empty. Set the cell size and density.
+- **Infill** inside the cavity, or leave it empty:
+  - **Hive** (hexagonal cells) and **Grid** (square cells) stand on the plate. Set the cell
+    size, the wall thickness, and the round crossing holes that join each cell to its
+    neighbours: their diameter, the height of the first row and the spacing between rows.
+    One drain hole empties every cell. Walls come out flat and holes round, at any
+    precision.
+  - **Scaffold** is struts on the edges of a cube stood on its corner. None of them is
+    level, so none starts in mid-air, and it braces the part sideways too. Set the cell size
+    and the density.
 - **Keep solid:** click spots on the model where the wall must stay solid (blockers), and
   set their size.
 - Each model can keep its own hollow settings, and you can save settings as named presets.

@@ -62,13 +62,30 @@ pub struct HollowArgs {
     #[arg(long = "infill", value_name = "PATTERN")]
     pub infill: Option<Pattern>,
 
-    /// Side of one infill cell, millimetres. For a hive, a hexagon's diameter.
-    #[arg(long = "infill-size", value_name = "MM", default_value_t = 5.0)]
-    pub size_mm: Scalar,
+    /// Across one infill cell, millimetres: a hexagon's corners for a hive, a square's
+    /// side for a grid, the cube's edge for a scaffold.
+    #[arg(long = "infill-cell", value_name = "MM")]
+    pub cell_mm: Option<Scalar>,
 
-    /// How much of the cavity the lattice fills, 0 to 1.
-    #[arg(long = "infill-density", value_name = "0..1", default_value_t = 0.15)]
-    pub density: Scalar,
+    /// Thickness of a hive or grid wall, millimetres.
+    #[arg(long = "infill-wall", value_name = "MM")]
+    pub wall_mm: Option<Scalar>,
+
+    /// How much of the cavity a scaffold fills, 0 to 1.
+    #[arg(long = "infill-density", value_name = "0..1")]
+    pub density: Option<Scalar>,
+
+    /// Diameter of the crossing holes joining hive or grid cells, millimetres.
+    #[arg(long = "infill-hole", value_name = "MM")]
+    pub hole_mm: Option<Scalar>,
+
+    /// Height of the first row of crossing holes over the cavity's floor, millimetres.
+    #[arg(long = "infill-hole-from", value_name = "MM")]
+    pub first_hole_mm: Option<Scalar>,
+
+    /// Height from one row of crossing holes to the next, millimetres.
+    #[arg(long = "infill-hole-spacing", value_name = "MM")]
+    pub hole_spacing_mm: Option<Scalar>,
 
     /// Diameter of the drain holes, millimetres.
     #[arg(long = "drain", value_name = "MM", default_value_t = 3.0)]
@@ -140,14 +157,24 @@ impl HollowArgs {
             thickness_mm,
             mode: self.mode.into(),
             precision,
-            infill: self.infill.map(|pattern| InfillSettings {
-                pattern: pattern.into(),
-                size_mm: self.size_mm,
-                density: self.density,
-            }),
+            infill: self.infill.map(|pattern| self.infill_settings(pattern)),
             blockers: sleeves(&self.dug(), thickness_mm),
             ..HollowSettings::default()
         })
+    }
+
+    /// The lattice `--infill` asked for, every size left out taken from the defaults.
+    fn infill_settings(&self, pattern: Pattern) -> InfillSettings {
+        let default = InfillSettings::default();
+        InfillSettings {
+            pattern: pattern.into(),
+            cell_mm: self.cell_mm.unwrap_or(default.cell_mm),
+            wall_mm: self.wall_mm.unwrap_or(default.wall_mm),
+            density: self.density.unwrap_or(default.density),
+            hole_mm: self.hole_mm.unwrap_or(default.hole_mm),
+            first_hole_mm: self.first_hole_mm.unwrap_or(default.first_hole_mm),
+            hole_spacing_mm: self.hole_spacing_mm.unwrap_or(default.hole_spacing_mm),
+        }
     }
 
     fn dug(&self) -> Vec<Channel> {
@@ -308,14 +335,25 @@ impl fmt::Display for HollowReport {
             }
         )?;
         if let Some(infill) = &self.settings.infill {
-            writeln!(
-                f,
-                "  infill        {}, {:.1} mm cells at {:.0}%, {:.2} mm walls",
-                infill.pattern.label().to_lowercase(),
-                infill.size_mm,
-                infill.density * 100.0,
-                infill.thickness_mm()
-            )?;
+            let pattern = infill.pattern.label().to_lowercase();
+            if infill.pattern.has_walls() {
+                writeln!(
+                    f,
+                    "  infill        {pattern}, {:.1} mm cells, {:.2} mm walls, {:.1} mm holes from {:.1} mm every {:.1} mm",
+                    infill.cell_mm,
+                    infill.wall_mm,
+                    infill.hole_mm,
+                    infill.first_hole_mm,
+                    infill.hole_spacing_mm
+                )?;
+            } else {
+                writeln!(
+                    f,
+                    "  infill        {pattern}, {:.1} mm cells at {:.0}%",
+                    infill.cell_mm,
+                    infill.density * 100.0
+                )?;
+            }
         }
         writeln!(
             f,

@@ -1,4 +1,4 @@
-use core_volume::{HollowMode, InfillPattern, MIN_WALL_MM};
+use core_volume::{HollowMode, InfillPattern, InfillSettings, MIN_WALL_MM};
 
 use printer_profiles::Kind;
 
@@ -28,8 +28,24 @@ const MAX_WALL_MM: f32 = 15.0;
 const MIN_CELL_MM: f32 = 1.0;
 const MAX_CELL_MM: f32 = 40.0;
 
-/// Bounds on the density. Under a twentieth the lattice holds nothing up, and past half
-/// it is a solid with a texture rather than an infill.
+/// Bounds on a hive or grid wall: under half a millimetre the field cannot carry it, and
+/// past ten it is solid with a few holes in it.
+const MIN_INFILL_WALL_MM: f32 = 0.5;
+const MAX_INFILL_WALL_MM: f32 = 10.0;
+
+/// The narrowest crossing hole resin still runs through, and the share of the widest the
+/// pattern allows that a hole may take.
+const MIN_HOLE_MM: f32 = 0.5;
+const MAX_HOLE_SHARE: f32 = 0.9;
+
+/// How high the rows of crossing holes may start, the least wall left between two rows and
+/// the furthest apart they may stand, mm.
+const MAX_HOLE_FROM_MM: f32 = 40.0;
+const MIN_HOLE_GAP_MM: f32 = 1.0;
+const MAX_HOLE_SPACING_MM: f32 = 40.0;
+
+/// Bounds on a scaffold's density. Under a twentieth the lattice holds nothing up, and
+/// past half it is a solid with a texture rather than an infill.
 const MIN_DENSITY: f32 = 0.05;
 const MAX_DENSITY: f32 = 0.5;
 
@@ -207,36 +223,88 @@ fn infill(ui: &mut egui::Ui, tools: &mut Tools) {
             .show(ui, &mut tools.hollow.state.infill.pattern);
 
         ui.add_space(2.0);
-        number_row(
-            ui,
-            &tr!("hollow-cell"),
-            &mut tools.hollow.state.infill.size_mm,
-            &tr!("unit-mm"),
-            COARSE_STEP,
-            MIN_CELL_MM..=MAX_CELL_MM,
-            1,
-        );
-        let mut percent = tools.hollow.state.infill.density * 100.0;
-        number_row(
-            ui,
-            &tr!("hollow-density"),
-            &mut percent,
-            "%",
-            COARSE_STEP,
-            MIN_DENSITY * 100.0..=MAX_DENSITY * 100.0,
-            0,
-        );
-        tools.hollow.state.infill.density = percent / 100.0;
+        let infill = &mut tools.hollow.state.infill;
+        let cell = match infill.pattern {
+            InfillPattern::Hive => tr!("hollow-cell-hive"),
+            InfillPattern::Grid => tr!("hollow-cell-grid"),
+            InfillPattern::Scaffold => tr!("hollow-cell"),
+        };
+        let mm = tr!("unit-mm");
+        let cells = MIN_CELL_MM..=MAX_CELL_MM;
+        number_row(ui, &cell, &mut infill.cell_mm, &mm, COARSE_STEP, cells, 1);
+        if infill.pattern.has_walls() {
+            walls(ui, infill);
+        } else {
+            let mut percent = infill.density * 100.0;
+            let range = MIN_DENSITY * 100.0..=MAX_DENSITY * 100.0;
+            number_row(
+                ui,
+                &tr!("hollow-density"),
+                &mut percent,
+                "%",
+                COARSE_STEP,
+                range,
+                0,
+            );
+            infill.density = percent / 100.0;
+        }
 
         ui.add_space(2.0);
         describe(
             ui,
-            &tr!(
-                "hollow-infill-note",
-                walls = format!("{:.2}", tools.hollow.state.infill.thickness_mm())
-            ),
+            &match infill.pattern.has_walls() {
+                true => tr!("hollow-walled-note"),
+                false => tr!("hollow-scaffold-note"),
+            },
         );
     });
+}
+
+/// The wall between two hive or grid cells, and the rows of crossing holes through it.
+fn walls(ui: &mut egui::Ui, infill: &mut InfillSettings) {
+    let mm = tr!("unit-mm");
+    let wall = MIN_INFILL_WALL_MM..=MAX_INFILL_WALL_MM;
+    number_row(
+        ui,
+        &tr!("hollow-infill-wall"),
+        &mut infill.wall_mm,
+        &mm,
+        COARSE_STEP,
+        wall,
+        2,
+    );
+    let holes = MIN_HOLE_MM..=(infill.widest_hole_mm() * MAX_HOLE_SHARE).max(MIN_HOLE_MM);
+    number_row(
+        ui,
+        &tr!("hollow-hole"),
+        &mut infill.hole_mm,
+        &mm,
+        COARSE_STEP,
+        holes,
+        2,
+    );
+    let from = 0.0..=MAX_HOLE_FROM_MM;
+    let first = &mut infill.first_hole_mm;
+    number_row(
+        ui,
+        &tr!("hollow-hole-from"),
+        first,
+        &mm,
+        COARSE_STEP,
+        from,
+        2,
+    );
+    let spacing = (infill.hole_mm + MIN_HOLE_GAP_MM)..=MAX_HOLE_SPACING_MM;
+    let rows = &mut infill.hole_spacing_mm;
+    number_row(
+        ui,
+        &tr!("hollow-hole-spacing"),
+        rows,
+        &mm,
+        COARSE_STEP,
+        spacing,
+        2,
+    );
 }
 
 /// How wide a blocker the next click drops, and how many are standing.

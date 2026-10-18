@@ -615,6 +615,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "boolmesh"
+version = "0.2.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "db6504723206a532f9cace8eb63d339c14a17ad9c2b06d7c35b1c3127f7b945f"
+dependencies = [
+ "glam 0.32.1",
+ "rayon",
+]
+
+[[package]]
 name = "bumpalo"
 version = "3.20.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -980,6 +990,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "core-csg"
+version = "0.4.0"
+dependencies = [
+ "boolmesh",
+ "core-geometry",
+ "thiserror 2.0.21",
+ "workspace-hack",
+]
+
+[[package]]
 name = "core-engine"
 version = "0.4.0"
 dependencies = [
@@ -1180,6 +1200,7 @@ dependencies = [
 name = "core-volume"
 version = "0.4.0"
 dependencies = [
+ "core-csg",
  "core-geometry",
  "criterion",
  "rayon",
@@ -1652,6 +1673,7 @@ dependencies = [
  "anyhow",
  "bytemuck",
  "core-analysis",
+ "core-csg",
  "core-engine",
  "core-format",
  "core-geometry",
@@ -1714,6 +1736,7 @@ dependencies = [
  "clap",
  "clap_complete",
  "core-analysis",
+ "core-csg",
  "core-engine",
  "core-format",
  "core-geometry",
@@ -6362,6 +6385,7 @@ dependencies = [
  "flate2",
  "getrandom 0.3.4",
  "getrandom 0.4.3",
+ "glam 0.32.1",
  "half",
  "hashbrown 0.17.1",
  "http",

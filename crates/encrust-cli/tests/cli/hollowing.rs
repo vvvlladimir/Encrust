@@ -75,16 +75,18 @@ fn infill_puts_material_back_into_the_cavity() {
             "3",
             "--infill",
             "grid",
-            "--infill-size",
+            "--infill-cell",
             "4",
-            "--infill-density",
-            "0.3",
+            "--infill-wall",
+            "1",
+            "--infill-hole",
+            "2",
         ],
     );
 
     assert_eq!(
         field(&text, "infill"),
-        "grid, 4.0 mm cells at 30%, 0.65 mm walls"
+        "grid, 4.0 mm cells, 1.00 mm walls, 2.0 mm holes from 4.0 mm every 8.0 mm"
     );
     assert!(
         lit_pixels(&filled, 8) > lit_pixels(&empty, 8),
@@ -251,8 +253,8 @@ fn a_hollow_box_with_no_hole_reports_the_resin_it_traps() {
 
 #[test]
 fn a_hive_in_a_cavity_drains_through_one_hole() {
-    // Each cell used to be a sealed box, so a hole in the lid drained the one under it and
-    // left every other cell full.
+    // A cell with no way into the next would be a sealed box, so a hole in the lid would
+    // drain the one under it and leave every other cell full.
     let path = write_box_stl("hive-drain", 20.0, 12, 0);
     let input = path.to_str().unwrap();
     let report = stdout(&estimate(&[
@@ -261,10 +263,6 @@ fn a_hive_in_a_cavity_drains_through_one_hole() {
         "2",
         "--infill",
         "hive",
-        "--infill-size",
-        "5",
-        "--infill-density",
-        "0.15",
         "--layer-height",
         "0.5",
         "--drain",
@@ -276,8 +274,7 @@ fn a_hive_in_a_cavity_drains_through_one_hole() {
     ]));
     assert!(
         !report.contains("trapped resin"),
-        "the cells are open over the floor of the cavity, so one hole drains all of \
-         them:\n{report}"
+        "crossing holes join every cell to the next, so one hole drains all of them:\n{report}"
     );
 }
 

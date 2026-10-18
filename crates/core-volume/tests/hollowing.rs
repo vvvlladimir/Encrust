@@ -4,7 +4,7 @@
 
 use core_geometry::{Bvh, Mat3, Mesh, Quat, Scalar, Transform, Vec3, signed_volume};
 use core_volume::{
-    Blocker, CUT_WEIGHT, Cancel, Channel, HollowMode, HollowSettings, InfillPattern,
+    Blocker, CUT_WEIGHT, Cancel, Channel, HollowMode, HollowSettings, Hollowed, InfillPattern,
     InfillSettings, VolumeError, carve, cavity_field, drill, hole_at, hollow, hollow_at_scale,
     pierce, sleeves,
 };
@@ -87,6 +87,25 @@ fn ball(radius: Scalar, rings: usize, segments: usize) -> Mesh {
         faces.push([at(rings - 1, segment), south, at(rings - 1, segment + 1)]);
     }
     Mesh::new(vertices, faces)
+}
+
+/// Two shells with the same faces, cavity and saving. The exact cut may split one flat
+/// polygon along other diagonals from one run to the next, so the faces are counted
+/// rather than compared one by one.
+fn assert_same_shell(left: &Hollowed, right: &Hollowed, why: &str) {
+    assert_eq!(left.mesh.faces.len(), right.mesh.faces.len(), "{why}");
+    assert_eq!(left.cavity, right.cavity, "{why}");
+    assert_eq!(
+        (left.voxel_mm, left.coarsened),
+        (right.voxel_mm, right.coarsened),
+        "{why}"
+    );
+    assert!(
+        (left.cavity_mm3 - right.cavity_mm3).abs() <= right.cavity_mm3 * 1e-4,
+        "{why}: {} mm3 against {} mm3",
+        left.cavity_mm3,
+        right.cavity_mm3
+    );
 }
 
 fn settings(thickness_mm: Scalar, mode: HollowMode) -> HollowSettings {
@@ -319,8 +338,7 @@ fn infill_takes_its_own_volume_back_out_of_the_cavity() {
         let mut asked = settings(2.0, HollowMode::Internal);
         asked.infill = Some(InfillSettings {
             pattern,
-            size_mm: 6.0,
-            density: 0.2,
+            ..InfillSettings::default()
         });
         let filled = hollow(&mesh, &bvh, &asked, Cancel::never()).expect("a closed ball hollows");
 
@@ -373,11 +391,7 @@ fn a_stretched_model_is_filled_as_if_it_had_been_built_that_size() {
     }
     .unturned();
     let mut asked = settings(2.0, HollowMode::Internal);
-    asked.infill = Some(InfillSettings {
-        pattern: InfillPattern::Hive,
-        size_mm: 5.0,
-        density: 0.15,
-    });
+    asked.infill = Some(InfillSettings::default());
     asked.blockers = vec![Blocker::ball(Vec3::new(10.0, 10.0, 10.0), 3.0)];
     let scaled = hollow_at_scale(&mesh, &bvh, &asked, shape, Cancel::never())
         .expect("a closed cube hollows");
@@ -391,9 +405,10 @@ fn a_stretched_model_is_filled_as_if_it_had_been_built_that_size() {
     let built = hollow(&placed, &Bvh::build(&placed), &asked, Cancel::never())
         .expect("a closed box hollows");
 
-    assert_eq!(
-        scaled.mesh.faces, built.mesh.faces,
-        "the same cells, the same struts and the same blocker as on the box itself"
+    assert_same_shell(
+        &scaled,
+        &built,
+        "the cells and the blocker of the box itself",
     );
     assert!(
         scaled
@@ -418,8 +433,7 @@ fn a_kept_field_carves_the_shell_a_whole_run_would() {
     let mut asked = settings(2.0, HollowMode::Internal);
     asked.infill = Some(InfillSettings {
         pattern: InfillPattern::Grid,
-        size_mm: 5.0,
-        density: 0.15,
+        ..InfillSettings::default()
     });
     let field = cavity_field(&mesh, &bvh, &asked, shape, Cancel::never())
         .expect("a closed cube has a cavity field");
@@ -444,9 +458,11 @@ fn a_kept_field_carves_the_shell_a_whole_run_would() {
         .expect("the kept field carves");
         let whole = hollow_at_scale(&mesh, &bvh, &asked, shape, Cancel::never())
             .expect("a closed cube hollows");
-        assert_eq!(
-            kept, whole,
-            "the field holds nothing of the blockers or the infill, so carving it again is the run"
+        assert_eq!(kept.mesh.vertices, whole.mesh.vertices);
+        assert_same_shell(
+            &kept,
+            &whole,
+            "the field holds nothing of the blockers or the infill, so carving it again is the run",
         );
     }
 }
@@ -612,9 +628,8 @@ fn an_infill_cell_of_no_size_is_refused() {
     let bvh = Bvh::build(&mesh);
     let mut asked = settings(2.0, HollowMode::Internal);
     asked.infill = Some(InfillSettings {
-        pattern: InfillPattern::Hive,
-        size_mm: 0.0,
-        density: 0.2,
+        cell_mm: 0.0,
+        ..InfillSettings::default()
     });
     assert_eq!(
         hollow(&mesh, &bvh, &asked, Cancel::never()).unwrap_err(),
@@ -767,4 +782,45 @@ fn append(whole: &mut Mesh, part: &Mesh) {
             .iter()
             .map(|[a, b, c]| [a + offset, b + offset, c + offset]),
     );
+}
+
+#[test]
+fn a_lattice_cut_exactly_costs_the_cavity_none_of_its_precision() {
+    let mesh = ball(20.0, 96, 96);
+    let bvh = Bvh::build(&mesh);
+    let mut asked = settings(2.0, HollowMode::Internal);
+    asked.precision = 0.5;
+    // Sixteen megabytes holds the empty cavity at the lattice asked for; a lattice cut from
+    // its mesh rather than its field needs nothing more.
+    asked.budget_bytes = 16 << 20;
+    let empty = hollow(&mesh, &bvh, &asked, Cancel::never()).expect("the empty cavity fits");
+
+    asked.infill = Some(InfillSettings::default());
+    let filled = hollow(&mesh, &bvh, &asked, Cancel::never()).expect("the hive fits");
+    assert!(!filled.coarsened, "the cavity was built as asked");
+    assert_eq!(filled.voxel_mm, empty.voxel_mm);
+    assert!(filled.cavity_mm3 < empty.cavity_mm3);
+}
+
+#[test]
+fn infill_walls_are_refused_with_no_thickness_and_holes_wider_than_a_cell() {
+    let mesh = ball(10.0, 32, 32);
+    let bvh = Bvh::build(&mesh);
+    let mut asked = settings(2.0, HollowMode::Internal);
+    asked.infill = Some(InfillSettings {
+        wall_mm: 0.0,
+        ..InfillSettings::default()
+    });
+    assert_eq!(
+        hollow(&mesh, &bvh, &asked, Cancel::never()).unwrap_err(),
+        VolumeError::BadInfillWall(0.0)
+    );
+    asked.infill = Some(InfillSettings {
+        hole_mm: 7.0,
+        ..InfillSettings::default()
+    });
+    assert!(matches!(
+        hollow(&mesh, &bvh, &asked, Cancel::never()).unwrap_err(),
+        VolumeError::BadHoles { .. }
+    ));
 }

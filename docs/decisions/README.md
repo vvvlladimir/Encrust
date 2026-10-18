@@ -211,7 +211,7 @@ Grouped by what the decision governs; the number is still the order it was taken
 | [0057](0057-a-field-is-band-tiles-and-solid-runs-on-a-global-lattice.md) | A field is band tiles and solid runs, on one global lattice | Accepted |
 | [0058](0058-the-band-is-built-around-an-isosurface.md) | The band is built around an isosurface, not around the mesh | Accepted; the bottom-through field it prices is dropped by 0189 |
 | [0059](0059-a-hollow-is-the-model-with-its-cavity-appended.md) | A hollow is the model with its cavity appended, not welded | Superseded by 0185 (the space the wall is measured in only); `BottomThrough` dropped by 0189 |
-| [0060](0060-a-lattice-is-boxes-clipped-to-the-cavity.md) | A lattice is boxes clipped to the cavity, not a field | Accepted |
+| [0060](0060-a-lattice-is-boxes-clipped-to-the-cavity.md) | A lattice is boxes clipped to the cavity, not a field | Superseded by 0301 |
 | [0063](0063-a-field-is-built-to-a-memory-budget.md) | A field is priced and built to a memory budget | Accepted; the clipped floor field it names is dropped by 0189 |
 | [0064](0064-marching-cubes-merges-by-lattice-edge-in-layers.md) | Marching cubes merges by lattice edge, a layer at a time | Accepted |
 | [0065](0065-a-fields-distances-are-quantised-to-its-band.md) | A field's distances are quantised to its band | Accepted |
@@ -227,11 +227,13 @@ Grouped by what the decision governs; the number is still the order it was taken
 | [0185](0185-a-wall-is-measured-on-the-plate.md) | A wall is measured on the plate, not in the model's own space | Accepted |
 | [0186](0186-a-cavity-is-a-closed-surface-and-a-slice-follows-it-through-a-branch.md) | A cavity is a closed surface, and a slice follows it through a branch | Accepted |
 | [0188](0188-a-cut-outweighs-what-it-lands-in-and-a-channel-stays-a-pipe.md) | A cut outweighs what it lands in, and a channel stays a pipe | Accepted; the wall it drew is replaced by 0201 |
-| [0189](0189-resin-leaves-through-a-hole-and-a-lattice-never-closes-a-cell.md) | Resin leaves through a hole, and a lattice never closes a cell | Accepted; its marks are replaced by 0190, its automatic check by 0198 |
+| [0189](0189-resin-leaves-through-a-hole-and-a-lattice-never-closes-a-cell.md) | Resin leaves through a hole, and a lattice never closes a cell | Accepted; its marks are replaced by 0190, its automatic check by 0198, its openings by 0301's crossing holes |
 | [0190](0190-the-space-that-holds-resin-is-painted-and-the-model-is-seen-through.md) | Paint the space that holds resin, and see the model through | Accepted; what opens the x-ray is amended by 0198, what is painted by 0200 |
 | [0200](0200-a-pocket-is-painted-on-its-own.md) | A pocket of trapped resin is painted on its own | Accepted |
 | [0198](0198-a-drainage-check-is-asked-for.md) | A drainage check is asked for, and the view it needs is the user's | Accepted |
 | [0201](0201-the-surface-of-a-cut-is-the-cut-itself.md) | The surface of a cut is the cut's own body, kept where it stands in material | Accepted |
+| [0301](0301-a-lattice-is-cut-exactly-from-the-cavity.md) | Cut the lattice exactly from the cavity's mesh, its cells joined by crossing holes | Accepted |
+| [0302](0302-exact-booleans-live-in-core-csg-over-boolmesh.md) | Do exact mesh booleans in `core-csg`, over `boolmesh` | Accepted |
 | [0204](0204-a-field-build-is-given-up-on-between-tiles.md) | A field build is given up on between tiles | Accepted |
 
 ### The plate

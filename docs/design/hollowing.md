@@ -1,11 +1,11 @@
 # Hollowing and infill
 
 How a solid becomes a shell and what fills it. `core-volume`: `hollow.rs` holds the modes,
-blockers and assembly, `infill.rs` the lattices. Both stand on `volume.md`.
+blockers and assembly, `infill.rs` and `infill/` the lattices. Both stand on `volume.md`.
 
-Why: ADR 0058 (band on the isosurface), 0059 (cavity appended, not welded), 0060 (a
-lattice is boxes), 0063 (the budget), 0083 (the precision ceiling), 0189 (a hole is what
-drains a cavity, and no cell is closed), 0260 (kept fields).
+Why: ADR 0058 (band on the isosurface), 0059 (cavity appended, not welded), 0063 (the
+budget), 0083 (the precision ceiling), 0189 (a hole is what drains a cavity), 0260 (kept
+fields), 0301 (the lattice is cut exactly from the cavity's mesh).
 
 ## What comes out
 
@@ -15,13 +15,13 @@ meshes appended in one buffer and nothing else.
 | | Internal | External |
 |---|---|---|
 | outside | the model, byte for byte | the surface grown by `t` |
-| cavity, wound inward | the surface `d = -t` | the model, wound inward |
-| infill, wound outward | boxes of the lattice inside the cavity | — |
+| void, wound inward | the surface `d = -t`, or what a hive or grid leaves of it | the model, wound inward |
+| solid, wound outward | a scaffold's struts, clipped to the cavity | — |
 
-Nothing is welded, so the model's triangles never pass through the lattice and the outside
+Nothing is welded, so the model's triangles never pass through the cavity and the outside
 keeps every imported detail. The positive winding rule does the arithmetic: `+1` in the
-wall, `0` in the cavity, `+1` in a strut standing in it, `-1` and so still air where
-something wound inward reaches past the model (ADR 0071).
+wall, `0` in the void, `+1` in a strut, and where shells of the void overlap, `-1` and so
+still air (ADR 0071).
 
 ## The cavity
 
@@ -55,86 +55,72 @@ the same point — and an alt-click removes the one the click landed in.
 
 ## The lattice
 
-| Pattern | What it is | What it carries |
+| Pattern | What it is | Its numbers |
 |---|---|---|
-| Hive | hexagonal tubes standing on the plate | load up and down |
-| Grid | square tubes standing on the plate | load up and down |
-| Scaffold | struts along all three axes of a cubic lattice | load sideways as well |
+| Hive | hexagonal cells standing on the plate | hexagon diameter, wall, crossing holes |
+| Grid | square cells standing on the plate | cell width, wall, crossing holes |
+| Scaffold | struts on the edges of a cubic lattice stood on a corner | cell, density |
 
-All three are open networks, because a closed cell traps resin and a hollow that traps
-resin is worse than none; the vertical two drain through their own tubes and through the
-openings below. No gyroid — it is the only pattern that cannot be written as boxes
-(ADR 0060).
+Each pattern is written down twice: as closed meshes on the global lattice — prisms for
+the cells, cylinders for the holes, square bars for the struts — and as a closed-form signed
+distance `solid(p)` (ADR 0301). The meshes are what a run cuts with, exactly, through
+`core-csg` (`csg.md`): walls come out flat, holes round to `ROUND_TOLERANCE_MM`, and the
+faces follow the cells rather than the lattice the cavity was cut on.
 
-Nothing is voxelised. Every piece is a closed box of twelve triangles whatever the
-precision, and boxes overlap rather than weld, since the fill rule unions them, as a
-support's struts do (ADR 0041). Cost follows the cell count, which is thousands, not the
-resolution, which has no bound.
+Nothing is unioned. The shapes come in groups whose shells never cross, and each group is
+one boolean against the cavity's mesh; the pieces may overlap one another, which the fill
+rule unions as it unions a support's struts (ADR 0041). Unioning them first is what a
+lattice cannot afford: a scaffold crosses itself at every node, and on a 140 mm block that
+union took 17 s against 0.5 s for the three cuts.
 
-### Density, not thickness
+- **Openings.** The void of a hive or grid is the cavity ∩ the cells, plus each hole: a
+  hole standing clear inside the cavity — its middle inside, the surface further than its
+  far end — is appended whole, and only the holes reaching the side are cut. A hole spans
+  its wall from face to face, so holes and cells add up to the void exactly.
+- **Struts.** A scaffold keeps the cavity whole as its void and appends the cavity ∩ each
+  group of struts as solid. The struts along the first axis run whole and the other two stop
+  at each node, so no two pieces overlap and their volume is the lattice's.
 
-The user states how much of the cavity is filled; the wall follows by inverting each
-pattern's solid fraction.
+The cavity's mesh comes from surface nets and is almost always a solid the engine reads.
+Where it is not, the lattice is cut from the field instead: `max(cavity, -solid)` over the
+cavity's tiles, as the blockers are, extracted once. That answer is the cavity's own
+lattice, rough where walls meet, and it fills the cavity's volume rather than its surface,
+so it is priced against the budget first and refused with `TooFine` rather than run over it.
 
-| Pattern | Solid fraction | Wall for a density `f` |
-|---|---|---|
-| Grid | `1 - (1 - t/c)²` | `t = c (1 - sqrt(1-f))` |
-| Hive | the same, on the hexagon's inradius | `t = (sqrt(3)/2) c (1 - sqrt(1-f))` |
-| Scaffold | about `3 t² / c²` | `t = c sqrt(f/3)` |
+**Hive.** Hexagons of diameter `D` across their corners, on a triangular lattice whose pitch
+is the hexagon across its flats plus the wall, `sqrt(3) D / 2 + t`. A point is measured
+from the nearest centre, which is one of the four corners of the lattice rhombus it stands
+in, and the cell is the largest of its three distances along the side normals less the
+inradius.
 
-`c` is the cell — a side for grid and scaffold, the circumscribed diameter for the hive,
-which is how slicers state it. A 20% grid of 5 mm cells is a 0.53 mm wall. Grid and hive
-are exact; the scaffold ignores the overlap at its nodes, so at 30% it comes out a few
-percent denser than stated. The openings below take `2 OPENING_MM / h` off a wall of height
-`h` — 6 % in a 26 mm cavity — so hive and grid come out that much lighter.
+**Grid.** Walls `t` thick on `x, y = k (c + t)`, so the cells are `c` across.
 
-### Clipping by sampling
+**Crossing holes.** No cell of a hive or grid is closed: a round hole runs along the line
+between every two neighbouring centres, through the middle of the wall they share. Rows
+stand `first_hole_mm` over the cavity's floor and then every `hole_spacing_mm`, and none
+below the first, so the walls stand whole on the floor and every hole is an arch rather
+than a slot. A hole as wide as the cell would cut the junctions away and is refused. All the
+cells of a cavity are then one pocket, which one drain hole empties (ADR 0189). A sliver of
+a cell at the rim lower than the first row has no hole of its own; the drainage check
+reports it.
 
-The cavity still bounds the lattice, but it is sampled rather than meshed. A vertical wall
-runs along one segment of the footprint, walked in chunks; each chunk asks the field for
-the stretches of its own vertical line inside the cavity, sampled at the lattice step and
-cut where the sign changes. A chunk's spans are taken at both ends and the middle and
-**intersected**, so a box is only ever shorter than the cavity above it — a box reaching
-out through the wall would be a contour with nothing around it, which the fill rule turns
-into material in mid-air. Each end is then pushed back out by half the wall thickness so
-the box fuses into the shell, still inside the model because half a wall is half a wall.
+**Scaffold.** The struts are square, `x c` across, on the edges of cubes of side `c` turned
+so the body diagonal stands upright: every strut climbs at `asin(1/sqrt(3))`, 35° off level,
+so none starts in mid-air and every node is held from below. Three square bars through a
+cube fill `3x² - 2x³` of it exactly, so the density a user states is inverted by halving
+for `x`.
 
-A scaffold strut is a straight line, so its spans are its boxes and it needs no chunking.
+**What it costs.** Measured on a 140×70×80 mm block with a 2 mm wall at precision 0.5,
+6 mm cells and 2 mm walls, the lattice's share of the run:
 
-A wall also has to reach the side of the cavity it runs into, and a chunk that leaves the
-cavity holds no span, so the walk stops up to a chunk short of it. `meet` takes that last
-stretch a lattice step at a time, which follows a side curving away under or over the wall,
-and then past the last step that held to where the side is at the middle of the wall's own
-height, plus the bond. Without it a corridor of air runs along the cavity's wall and joins
-every outer cell into one pocket (ADR 0189).
+| | Field | Exact | Faces, field against exact |
+|---|---|---|---|
+| Hive | 3.2 s | 1.6 s | 2.45 M against 0.55 M |
+| Grid | 2.4 s | 1.1 s | 1.73 M against 0.28 M |
+| Scaffold | 3.2 s | 1.8 s | 4.21 M against 0.31 M |
 
-### The openings
-
-A hive or grid cell would otherwise be a closed box. Each wall leaves `OPENING_MM` = 1.5 mm
-clear over the floor of the cavity and under its ceiling, except within `POST_REACH` — a
-quarter of a cell — of a junction, where it stands the whole height and welds into the
-shell. So a post holds every junction, the open middle half of each cell side is a bridge
-short enough to print, and the resin runs from cell to cell to whatever hole was drilled.
-The opening is taken off the spans before the bond is added back, which measures it from the
-surface the wall welds into; a cavity shallower than twice the opening plus the bond keeps
-the posts alone, with no wall between them.
-
-The open wall is **one walk along the whole segment**, so it merges exactly as it did before
-there were openings; only the posts are stood stretch by stretch, as a pair of caps at the
-floor and the ceiling of each span. That is what the cost follows. On the 60 mm ball above,
-2 mm grid cells at 15 % and 0.05 mm layers: the walls alone come to 56 contours on the
-busiest layer, and the posts bring that to 830, slicing in 97 ms against 13 ms. A hive pays
-almost nothing for its openings — 1402 against 1226 at 5 mm cells — because its edges are
-one cell long and never merged across cells anyway (ADR 0189).
-
-**Merging the runs** is what makes it affordable. A wall's cross-section is the same on
-every layer it crosses, so a box per chunk would put seven contours on a layer where one
-does. A chunk's spans are merged into the run before them and the run is broken only where
-holding it would cost more than a lattice step of height, so a wall crossing the middle of
-a cavity is one box and only its ends, where the ceiling falls away fast, are chased chunk
-by chunk. On a 60 mm ball with 2 mm grid cells: 83 contours on the busiest layer instead of
-8 928, before the openings below add their posts. `precision` sets the chunk, a quarter of a cell at 0 down to a sixteenth at 1, so it
-buys detail where the lattice meets the shell and costs nothing elsewhere.
+Overlapping shells cost contours: the busiest layer of the hive holds 872 against 435, and
+slicing the plate takes as long as it did.
 
 ## Precision
 
@@ -258,7 +244,5 @@ bounds the lot, and each pocket's own box is what the shader keeps the red insid
 - The shell is kept in model space but measured on the plate, at the scale the model
   stood at (ADR 0185). A model scaled after hollowing has a wall scaled with it; the window
   notices and asks to be run again.
-- Saved resin is reported as the density times the cavity, true by construction. The mesh's
-  own volume cannot be used, because the boxes overlap.
 - A channel narrower than a tenth of a millimetre drains in life and reads as closed to the
   scan, so the pocket behind it is reported. The error is a hole nobody needed.

@@ -99,6 +99,15 @@ impl Sdf {
         self.tiles.keys().copied()
     }
 
+    /// Tiles the field does not store because they lie wholly inside the solid.
+    pub(crate) fn inside_tiles(&self) -> impl Iterator<Item = IVec3> + '_ {
+        self.solid.iter().flat_map(|(column, runs)| {
+            runs.iter()
+                .flat_map(|(first, last)| *first..=*last)
+                .map(|z| IVec3::new(column.x, column.y, z))
+        })
+    }
+
     /// Value at a lattice point, in millimetres.
     pub fn value(&self, voxel: IVec3) -> Scalar {
         let tile = tile_of(voxel);

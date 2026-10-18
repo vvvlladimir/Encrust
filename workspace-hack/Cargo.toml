@@ -21,6 +21,7 @@ crc32fast = { version = "1" }
 flate2 = { version = "1", features = ["zlib-rs"] }
 getrandom-468e82937335b1c9 = { package = "getrandom", version = "0.3", default-features = false, features = ["std"] }
 getrandom-9fbad63c4bcf4a8f = { package = "getrandom", version = "0.4", default-features = false, features = ["std", "sys_rng"] }
+glam = { version = "0.32", features = ["mint"] }
 half = { version = "2", default-features = false, features = ["num-traits"] }
 hashbrown = { version = "0.17", default-features = false, features = ["default-hasher", "inline-more"] }
 http = { version = "1" }
