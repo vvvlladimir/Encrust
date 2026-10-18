@@ -25,6 +25,7 @@ unit-g-ml = г/мл
 unit-h = ч
 unit-m = мин
 unit-mm = мм
+unit-mm3 = мм³
 unit-mm-min = мм/мин
 unit-px = пикс.
 unit-s = с
@@ -87,6 +88,12 @@ cut-clearance = Зазор
 cut-keyed = Один уже
 cut-keyed-note = Один штифт уже остальных, так что половины собираются только одним способом.
 cut-cutting = Режу модель
+cut-parts = Части
+cut-parts-necks = Делить по тонким перемычкам
+cut-parts-narrower = Тоньше чем
+cut-parts-necks-note = «Разделить на части» также разделяет тела, соединённые только такой тонкой перемычкой.
+cut-parts-smallest = Наименьшая часть
+cut-parts-smallest-note = Кусок меньше этого присоединяется к части, которой касается, или отбрасывается, если не касается ни одной.
 cut-replaces = Одна модель заменяется двумя. Отмена вернёт её.
 cut-cut = Разрезать
 cut-split = Разделить на части
@@ -112,7 +119,13 @@ cut-done = Разрез { $name } по { $axis } на { $position } мм{ $joint
 cut-done-open = Разрез { $name }; незамкнутых контуров разреза: { $open }, они остались без крышки{ $mending }
 cut-nothing-to-split = для разделения ничего не выбрано
 cut-one-piece = { $name } — цельная деталь
-cut-split-done = { $name } разделена на части: { $count }{ $mending }
+cut-split-done = { $name } разделена на части: { $count }{ $necks }{ $scraps }{ $mending }
+cut-cleaned = { $name } — цельная деталь{ $scraps }{ $mending }
+cut-split-necks = , разделено по тонким перемычкам: { $count }
+cut-split-unparted = ; тонких перемычек не удалось точно разрезать, они оставлены: { $count }
+cut-split-joined = ; обрезков присоединено к частям, которых они касаются: { $count }
+cut-split-dropped = ; отброшено висящих обрезков: { $count }
+cut-split-failed = модель не удалось разделить: { $reason }
 cut-mended =
     { $count ->
         [1] ; одна деталь залатана, чтобы её закрыть
@@ -690,6 +703,7 @@ boolean-done-sampled =
     }
 job-thread-stopped-boolean = поток объединения остановился, не закончив
 job-thread-stopped-cut = поток разреза остановился, не закончив
+job-thread-stopped-split = поток разделения остановился, не закончив
 
 ## panels/title_bar.rs
 

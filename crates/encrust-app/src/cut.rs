@@ -1,5 +1,5 @@
 use anyhow::{Result, anyhow};
-use core_geometry::{Mesh, Plane, Scalar, Transform, Vec3, diagnose, split, transform_mesh};
+use core_geometry::{Mesh, Plane, Scalar, Transform, Vec3, diagnose, transform_mesh};
 use core_joint::{Joined, JointKind, Joints};
 
 pub use core_engine::project::Keep;
@@ -7,7 +7,7 @@ pub use core_engine::project::Keep;
 use core_engine::project::{Axis, CutState};
 
 use crate::i18n::tr;
-use crate::job::{CutJob, CutOutcome, CutRequest, mend};
+use crate::job::{CutJob, CutOutcome, CutRequest, SplitJob, SplitOutcome, SplitRequest, mend};
 use crate::scene::{ImportSummary, Imported, ObjectId, Scene, SceneObject};
 use crate::status::Status;
 
@@ -30,6 +30,8 @@ pub struct CutTool {
     /// moves the plane to it.
     pub centred_on: Option<ObjectId>,
     running: Option<Running>,
+    /// A split under way, and the name of the model it splits.
+    splitting: Option<(SplitJob, String)>,
 }
 
 /// A cut under way, with what the tool was set to when it started.
@@ -53,10 +55,12 @@ impl Default for CutTool {
                 height_mm: 10.0,
                 keep: Keep::Both,
                 joints: Joints::default(),
+                parts: core_volume::PartSettings::default(),
             },
             lay_flat: false,
             centred_on: None,
             running: None,
+            splitting: None,
         }
     }
 }
@@ -139,17 +143,37 @@ impl CutTool {
     /// Lands a finished cut in the scene. Returns whether one is still going, which is
     /// what tells the window to keep repainting.
     pub fn poll(&mut self, scene: &mut Scene, status: &mut Status) -> bool {
-        let Some(outcome) = self.running.as_mut().and_then(|running| running.job.poll()) else {
-            return self.running.is_some();
-        };
-        if let Some(running) = self.running.take() {
+        if let Some(outcome) = self.running.as_mut().and_then(|running| running.job.poll())
+            && let Some(running) = self.running.take()
+        {
             *status = running.land(scene, outcome);
         }
-        false
+        if let Some(outcome) = self.splitting.as_mut().and_then(|(job, _)| job.poll())
+            && let Some((_, name)) = self.splitting.take()
+        {
+            *status = land_parts(scene, &name, outcome);
+        }
+        self.is_busy()
     }
 
     pub fn is_busy(&self) -> bool {
-        self.running.is_some()
+        self.running.is_some() || self.splitting.is_some()
+    }
+
+    /// Starts breaking one model into the parts it is made of, off the drawing thread, as
+    /// the tool's `parts` settings say; [`CutTool::poll`] puts them on the plate.
+    pub fn start_split(&mut self, scene: &Scene, id: ObjectId) -> Result<()> {
+        let object = scene
+            .get(id)
+            .ok_or_else(|| anyhow!(tr!("cut-nothing-to-split")))?;
+        let mesh = object.hollow.shell().unwrap_or(&object.mesh);
+        let job = SplitJob::spawn(SplitRequest {
+            id,
+            placed: transform_mesh(mesh, object.transform),
+            settings: self.state.parts,
+        });
+        self.splitting = Some((job, object.name.clone()));
+        Ok(())
     }
 }
 
@@ -288,38 +312,61 @@ fn joint_notes(
     (joint, bare)
 }
 
-/// Breaks one model into the pieces that share no vertex, and puts them on the plate in
-/// its place. A model that is all one piece is left alone.
-pub fn split_parts(scene: &mut Scene, id: ObjectId) -> Status {
-    let Some(object) = scene.get(id) else {
-        return Status::Error(tr!("cut-nothing-to-split"));
+/// Puts the parts a split found on the plate in place of the model. A model that is one
+/// part and lost no scrap is left alone, supports and all.
+fn land_parts(scene: &mut Scene, name: &str, outcome: SplitOutcome) -> Status {
+    let (id, parts) = match outcome {
+        SplitOutcome::Split { id, parts } => (id, parts),
+        SplitOutcome::Failed(message) => return Status::Error(message),
     };
-    let name = object.name.clone();
-    let mesh = object.hollow.shell().unwrap_or(&object.mesh);
-    let placed = transform_mesh(mesh, object.transform);
-
-    let parts = split(&placed);
-    if parts.len() < 2 {
-        return Status::Info(tr!("cut-one-piece", name = name));
+    let scraps = scrap_notes(parts.joined, parts.dropped);
+    let count = parts.parts.len();
+    if count < 2 && parts.joined + parts.dropped == 0 {
+        return Status::Info(tr!("cut-one-piece", name = name.to_owned()));
     }
-
-    let count = parts.len();
     scene.remove(id);
     let mut mended = 0;
-    for (index, part) in parts.into_iter().enumerate() {
-        let (_, was_mended) = place(
-            scene,
-            tr!("cut-part-name", name = name.clone(), index = index + 1),
-            part,
-        );
+    for (index, part) in parts.parts.into_iter().enumerate() {
+        let part_name = match count {
+            1 => name.to_owned(),
+            _ => tr!("cut-part-name", name = name.to_owned(), index = index + 1),
+        };
+        let (_, was_mended) = place(scene, part_name, part);
         mended += usize::from(was_mended);
     }
+    if count < 2 {
+        return Status::Info(tr!(
+            "cut-cleaned",
+            name = name.to_owned(),
+            scraps = scraps,
+            mending = mending(mended)
+        ));
+    }
+    let necks = match (parts.necks, parts.unparted) {
+        (0, 0) => String::new(),
+        (0, unparted) => tr!("cut-split-unparted", count = unparted),
+        (necks, _) => tr!("cut-split-necks", count = necks),
+    };
     Status::Info(tr!(
         "cut-split-done",
-        name = name,
+        name = name.to_owned(),
         count = count,
+        necks = necks,
+        scraps = scraps,
         mending = mending(mended)
     ))
+}
+
+/// What the stage notice says of the scraps a split joined to their parts or dropped.
+fn scrap_notes(joined: usize, dropped: usize) -> String {
+    let mut notes = String::new();
+    if joined > 0 {
+        notes.push_str(&tr!("cut-split-joined", count = joined));
+    }
+    if dropped > 0 {
+        notes.push_str(&tr!("cut-split-dropped", count = dropped));
+    }
+    notes
 }
 
 /// Puts a mesh that came out of a cut on the plate, mending it first if it did not come
@@ -388,6 +435,7 @@ mod tests {
                 height_mm,
                 keep,
                 joints: Joints::default(),
+                parts: core_volume::PartSettings::default(),
             },
             ..CutTool::default()
         }
@@ -399,7 +447,20 @@ mod tests {
             return Status::Error(error.to_string());
         }
         let mut status = Status::default();
-        while tool.poll(scene, &mut status) && tool.is_busy() {
+        while tool.poll(scene, &mut status) {
+            std::thread::yield_now();
+        }
+        status
+    }
+
+    /// Runs a split of `id` through to the end, as the window's frames would.
+    fn split_now(scene: &mut Scene, id: ObjectId) -> Status {
+        let mut tool = CutTool::default();
+        if let Err(error) = tool.start_split(scene, id) {
+            return Status::Error(error.to_string());
+        }
+        let mut status = Status::default();
+        while tool.poll(scene, &mut status) {
             std::thread::yield_now();
         }
         status
@@ -706,17 +767,50 @@ mod tests {
         );
 
         let (mut scene, id) = scene_with(both, Transform::default());
-        let status = split_parts(&mut scene, id);
-        assert!(!status.is_error());
+        let status = split_now(&mut scene, id);
+        assert!(!status.is_error(), "got {status:?}");
         assert_eq!(scene.objects().len(), 2);
     }
 
     #[test]
     fn splitting_one_solid_leaves_it_alone() {
         let (mut scene, id) = scene_with(cuboid(Vec3::splat(4.0)), Transform::default());
-        let status = split_parts(&mut scene, id);
+        let status = split_now(&mut scene, id);
         assert!(!status.is_error());
         assert_eq!(scene.objects().len(), 1);
         assert_eq!(scene.objects()[0].id, id, "the model is the same one");
+    }
+
+    #[test]
+    fn a_scrap_hanging_beside_a_model_is_dropped_and_the_model_kept_as_one() {
+        let mut model = cuboid(Vec3::splat(4.0));
+        let scrap = cuboid(Vec3::splat(0.5));
+        let offset = model.vertices.len() as u32;
+        model.vertices.extend(
+            scrap
+                .vertices
+                .iter()
+                .map(|v| *v + Vec3::new(10.0, 0.0, 0.0)),
+        );
+        model.faces.extend(
+            scrap
+                .faces
+                .iter()
+                .map(|[a, b, c]| [a + offset, b + offset, c + offset]),
+        );
+        let (mut scene, id) = scene_with(model, Transform::default());
+        let status = split_now(&mut scene, id);
+        let Status::Info(message) = &status else {
+            panic!("a split is not an error, got {status:?}");
+        };
+        let [object] = scene.objects() else {
+            panic!("the scrap is no part of its own");
+        };
+        assert_eq!(object.name, "cube", "the model keeps its name");
+        assert!((signed_volume(&object.mesh) - 64.0).abs() < 1e-3);
+        assert!(
+            message.contains('1'),
+            "the dropped scrap is told, got {message}"
+        );
     }
 }

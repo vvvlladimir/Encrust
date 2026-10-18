@@ -21,7 +21,9 @@ use core_geometry::{Mat3, Mesh, MeshDiagnostics, Orientation, Scalar, Transform,
 use core_joint::Joints;
 use core_slicer::AdaptiveSettings;
 use core_supports::{ProjectSettings, Region, SupportPoint, SupportTree};
-use core_volume::{Blocker, Channel, DrainHole, HollowMode, HollowSettings, InfillSettings};
+use core_volume::{
+    Blocker, Channel, DrainHole, HollowMode, HollowSettings, InfillSettings, PartSettings,
+};
 use printer_profiles::{OutputFormat, Raft, SupportProfile};
 use serde::{Deserialize, Serialize};
 
@@ -256,6 +258,9 @@ pub struct CutState {
     /// A file without them reads as a plain cut (ADR 0305).
     #[serde(default)]
     pub joints: Joints,
+    /// What Split into its parts goes by; a file without it reads the defaults (ADR 0306).
+    #[serde(default)]
+    pub parts: PartSettings,
 }
 
 /// One model on a plate: where it stands, and what was done to it.
@@ -623,6 +628,7 @@ mod tests {
                     height_mm: 10.0,
                     keep: Keep::Both,
                     joints: core_joint::Joints::default(),
+                    parts: PartSettings::default(),
                 },
                 array: Array::default(),
                 plates: vec!["Plate 1".to_owned()],
@@ -779,17 +785,20 @@ mod tests {
     }
 
     #[test]
-    fn the_cut_joints_come_back_and_a_file_without_them_reads_as_a_plain_cut() {
+    fn the_cut_joints_and_parts_come_back_and_a_file_without_them_reads_the_defaults() {
         let mut saved = project(1);
         saved.manifest.cut.joints.kind = Some(core_joint::JointKind::Magnets);
         saved.manifest.cut.joints.magnets.thickness_mm = 3.0;
+        saved.manifest.cut.parts.at_necks = true;
         let back = round_trip(&saved);
         assert_eq!(back.manifest.cut.joints, saved.manifest.cut.joints);
+        assert_eq!(back.manifest.cut.parts, saved.manifest.cut.parts);
 
         let older: CutState =
             serde_json::from_str(r#"{ "axis": "z", "height_mm": 10.0, "keep": "both" }"#)
                 .expect("a cut written before the joints reads");
         assert_eq!(older.joints.kind, None);
+        assert_eq!(older.parts, PartSettings::default());
     }
 
     #[test]

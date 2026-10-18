@@ -15,6 +15,7 @@ mod grid;
 mod hollow;
 mod infill;
 mod model;
+mod parts;
 mod relief;
 mod scatter;
 mod sdf;
@@ -39,6 +40,7 @@ pub use hollow::{
 };
 pub use infill::{InfillPattern, InfillSettings};
 pub use model::{HoleSize, ModelHollow, PENDING_MARKER_MM, Shell, markers};
+pub use parts::{PartSettings, Parts, parts};
 pub use relief::{Relief, ReliefSettings, Tiling, press, press_tiled};
 pub use sdf::Sdf;
 pub use sign::SignMode;

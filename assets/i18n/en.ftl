@@ -25,6 +25,7 @@ unit-g-ml = g/ml
 unit-h = h
 unit-m = m
 unit-mm = mm
+unit-mm3 = mm³
 unit-mm-min = mm/min
 unit-px = px
 unit-s = s
@@ -87,6 +88,12 @@ cut-clearance = Clearance
 cut-keyed = One narrower
 cut-keyed-note = One peg is narrower than the rest, so the halves go together one way only.
 cut-cutting = Cutting the model
+cut-parts = Parts
+cut-parts-necks = Part at narrow joins
+cut-parts-narrower = Narrower than
+cut-parts-necks-note = Split into its parts also parts two bodies joined only by something this narrow.
+cut-parts-smallest = Smallest part
+cut-parts-smallest-note = A smaller piece is joined to the part it touches, or dropped if it touches none.
 cut-replaces = Two models replace one. Undo puts it back.
 cut-cut = Cut
 cut-split = Split into its parts
@@ -112,7 +119,13 @@ cut-done = Cut { $name } at { $axis } { $position } mm{ $joint }{ $bare }{ $mend
 cut-done-open = Cut { $name }; { $open } cut loops were open and left uncapped{ $mending }
 cut-nothing-to-split = nothing is selected to split
 cut-one-piece = { $name } is one piece
-cut-split-done = Split { $name } into { $count } parts{ $mending }
+cut-split-done = Split { $name } into { $count } parts{ $necks }{ $scraps }{ $mending }
+cut-cleaned = { $name } is one piece{ $scraps }{ $mending }
+cut-split-necks = , parted at { $count } narrow join(s)
+cut-split-unparted = ; { $count } narrow join(s) could not be cut exactly and stay whole
+cut-split-joined = ; { $count } scrap(s) joined to the part they touch
+cut-split-dropped = ; { $count } stray scrap(s) dropped
+cut-split-failed = the model could not be split: { $reason }
 cut-mended =
     { $count ->
         [1] ; one piece was mended to close it
@@ -652,6 +665,7 @@ boolean-done-sampled =
     }
 job-thread-stopped-boolean = the combining thread stopped without finishing
 job-thread-stopped-cut = the cutting thread stopped without finishing
+job-thread-stopped-split = the splitting thread stopped without finishing
 
 ## panels/title_bar.rs
 

@@ -38,6 +38,7 @@ is refused whole: version 3 and below hold no built geometry or diagnostics.
 | `supports` | the group table, the active group, `ProjectSettings` for a fill, the brush |
 | `hollow` | what the Hollow tool is set to, not what it built |
 | `drain`, `cut`, `array` | what the next hole, the cut plane and the copy grid are set to |
+| `cut.parts` | what Split into its parts goes by: narrow joins and the smallest part (ADR 0306); absent in older files and read as the defaults |
 | `cut.joints` | how a cut's halves are joined and what each kind is set to (ADR 0305); absent in older files and read as a plain cut |
 | `plates`, `active_plate` | one name per build plate, and the one the project was left on |
 | `objects[]` | name, plate, `Transform`, visibility, the import summary, and what each tool placed |

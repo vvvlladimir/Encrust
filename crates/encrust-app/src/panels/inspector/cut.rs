@@ -1,6 +1,8 @@
 use core_joint::{JointKind, Joints, Key, Magnets, Pegs};
 
-use crate::cut::{Keep, split_parts};
+use core_volume::PartSettings;
+
+use crate::cut::Keep;
 use crate::i18n::tr;
 use crate::panels::Window;
 use crate::scene::Axis;
@@ -85,6 +87,37 @@ pub fn ui(ui: &mut egui::Ui, window: &mut Window) {
         let both = window.tools.cut.state.keep == Keep::Both;
         joints(ui, &mut window.tools.cut.state.joints, both);
     });
+
+    section(ui, &tr!("cut-parts"), None, |ui| {
+        parts(ui, &mut window.tools.cut.state.parts);
+    });
+}
+
+/// What Split into its parts goes by: narrow joins, and the size below which a piece is a
+/// scrap.
+fn parts(ui: &mut egui::Ui, parts: &mut PartSettings) {
+    switch(ui, &mut parts.at_necks, &tr!("cut-parts-necks"));
+    if parts.at_necks {
+        nested(ui, |ui| {
+            millimetres(
+                ui,
+                &tr!("cut-parts-narrower"),
+                &mut parts.neck_mm,
+                0.2..=10.0,
+            );
+        });
+    }
+    describe(ui, &tr!("cut-parts-necks-note"));
+    number_row(
+        ui,
+        &tr!("cut-parts-smallest"),
+        &mut parts.smallest_mm3,
+        &tr!("unit-mm3"),
+        OFFSET_STEP,
+        0.0..=1000.0,
+        1,
+    );
+    describe(ui, &tr!("cut-parts-smallest-note"));
 }
 
 /// Which halves stay, as the segmented choice names it.
@@ -232,7 +265,8 @@ pub fn action(ui: &mut egui::Ui, window: &mut Window) {
         .inner;
     if split.clicked()
         && let Some(id) = picked
+        && let Err(error) = window.tools.cut.start_split(&window.doc.scene, id)
     {
-        window.machine.status = split_parts(&mut window.doc.scene, id);
+        window.machine.status = Status::Error(error.to_string());
     }
 }

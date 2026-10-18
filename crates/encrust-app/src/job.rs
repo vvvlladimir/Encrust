@@ -13,6 +13,7 @@ mod preview;
 mod relief;
 mod repair;
 mod send;
+mod split;
 mod trapped;
 
 pub use boolean::{BooleanJob, BooleanOutcome, BooleanRequest};
@@ -39,6 +40,7 @@ pub use preview::{PreviewJob, PreviewOutcome};
 pub use relief::{ReliefJob, ReliefOutcome, ReliefRequest, ReliefSource, relief_tasks};
 pub use repair::{RepairJob, RepairOutcome, RepairRequest, Repaired, mend};
 pub use send::{Action, SendJob, SendOutcome, SendRequest};
+pub use split::{SplitJob, SplitOutcome, SplitRequest};
 pub use trapped::{TrapJob, TrapOutcome, TrapRequest, trap_tasks};
 
 use std::path::PathBuf;

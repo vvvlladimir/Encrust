@@ -156,7 +156,13 @@ capped silently.
   half, not drain holes. The halves are built off the drawing thread, and the stage notice
   says how many went in and which pieces had no room. A half with pins or a tongue is not
   laid flat on its cut.
-- Lay each half flat on its cut face, or split a model into its separate parts.
+- Lay each half flat on its cut face.
+- **Split into its parts**: bodies that touch only at a corner or along an edge become
+  separate parts. A cavity, and the lattice in it, stay with their body. Pieces smaller than
+  a size you set are scraps: one touching a part is joined to it, and a stray one is dropped
+  rather than handed back as a part of its own. Optionally a model is also parted where two
+  bodies are joined by something narrower than a width you set. The split runs off the
+  drawing thread, and the stage notice says what it joined, dropped and parted.
 - A piece the cut leaves broken is repaired automatically. Undo puts the original back.
 
 ### Relief (texture, text and combining models)

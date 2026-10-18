@@ -159,6 +159,7 @@ fn project() -> Project {
                 height_mm: 10.0,
                 keep: Keep::Both,
                 joints: core_joint::Joints::default(),
+                parts: core_volume::PartSettings::default(),
             },
             array: Array::default(),
             plates: vec!["Plate 1".to_owned()],
