@@ -91,4 +91,7 @@ pub enum VolumeError {
 
     #[error("the models combined leave nothing behind")]
     NothingLeft,
+
+    #[error("a model is not a closed solid the exact cut can read: {0}")]
+    NotSolid(String),
 }

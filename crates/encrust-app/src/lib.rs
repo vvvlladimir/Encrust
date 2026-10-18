@@ -39,6 +39,7 @@ mod slicing;
 mod state;
 mod status;
 mod supports;
+mod text;
 mod tool_settings;
 #[cfg(target_os = "macos")]
 mod traffic_lights;

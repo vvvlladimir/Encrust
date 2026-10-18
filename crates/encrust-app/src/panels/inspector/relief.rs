@@ -46,6 +46,7 @@ pub fn ui(ui: &mut egui::Ui, window: &mut Window) {
             tiling(ui, &mut window.tools.relief.tiling);
         }
     });
+    super::text::sections(ui, window);
     section(ui, &tr!("boolean-title"), None, |ui| combine(ui, window));
 }
 

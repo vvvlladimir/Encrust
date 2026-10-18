@@ -1,10 +1,10 @@
 use anyhow::{Result, bail};
-use core_geometry::transform_mesh;
+use core_geometry::{Mesh, transform_mesh};
 use core_volume::Boolean;
 
 use crate::i18n::tr;
 use crate::job::{BooleanJob, BooleanOutcome, BooleanRequest};
-use crate::scene::{Scene, SceneObject};
+use crate::scene::{ObjectId, Scene, SceneObject};
 use crate::status::Status;
 
 /// Union, difference and intersection of the models picked on the plate, replacing them
@@ -49,6 +49,7 @@ impl BooleanTool {
                 .map(|object| transform_mesh(&object.mesh, object.transform))
                 .collect(),
             op: self.op,
+            exact: false,
         }));
         Ok(())
     }
@@ -67,11 +68,7 @@ impl BooleanTool {
                 mesh,
                 voxel_mm,
             } => {
-                for id in &ids {
-                    scene.remove(*id);
-                }
-                let (_, mended) = crate::cut::place(scene, name.clone(), mesh);
-                let mending = crate::cut::mending(usize::from(mended));
+                let mending = land(scene, &ids, name.clone(), mesh);
                 Status::Info(match voxel_mm {
                     None => tr!(
                         "boolean-done",
@@ -98,6 +95,16 @@ impl BooleanTool {
     }
 }
 
+/// Puts `mesh` on the plate in place of the models `ids`, and answers what the stage notice
+/// adds about mending it.
+pub(crate) fn land(scene: &mut Scene, ids: &[ObjectId], name: String, mesh: Mesh) -> String {
+    for id in ids {
+        scene.remove(*id);
+    }
+    let (_, mended) = crate::cut::place(scene, name, mesh);
+    crate::cut::mending(usize::from(mended))
+}
+
 /// The picked models a combination would take, in the order they were picked: only those
 /// on the plate being edited and not hidden.
 fn picked(scene: &Scene) -> Vec<&SceneObject> {
@@ -115,7 +122,7 @@ mod tests {
     use core_geometry::{Transform, Vec3, cuboid, diagnose, signed_volume};
 
     use super::*;
-    use crate::scene::{ImportSummary, Imported, ObjectId};
+    use crate::scene::{ImportSummary, Imported};
 
     fn cube_at(scene: &mut Scene, name: &str, at: Vec3) -> ObjectId {
         let mesh = cuboid(Vec3::ZERO, Vec3::splat(20.0));

@@ -4,7 +4,7 @@ use crate::ui::theme::{MEDIUM, SEMIBOLD};
 
 /// The faces are compiled in rather than loaded from disk, so the window looks the same on
 /// a machine that has none of them installed and needs no files beside the binary.
-const SANS: &[u8] = include_bytes!(concat!(
+pub(crate) const SANS: &[u8] = include_bytes!(concat!(
     env!("CARGO_MANIFEST_DIR"),
     "/../../assets/fonts/IBMPlexSans-Regular.ttf"
 ));

@@ -1,5 +1,5 @@
 use core_csg::{CsgError, Solid};
-use core_geometry::{Bvh, Mesh, Scalar};
+use core_geometry::{Bvh, Mesh, Scalar, signed_volume, split};
 use rayon::prelude::*;
 
 use crate::build::{DEFAULT_BUDGET_BYTES, FieldSettings, build};
@@ -60,11 +60,24 @@ pub fn combine(models: &[Mesh], op: Boolean, cancel: Cancel<'_>) -> Result<Combi
     Ok(combined)
 }
 
+/// `models` combined by `op` exactly, or refused: never sampled into a field. What a caller
+/// that must keep every edge of the model as it was asks for.
+pub fn combine_exact(models: &[Mesh], op: Boolean) -> Result<Mesh, VolumeError> {
+    if models.len() < 2 {
+        return Err(VolumeError::TooFewModels(models.len()));
+    }
+    if models.iter().any(|model| model.faces.is_empty()) {
+        return Err(VolumeError::EmptyMesh);
+    }
+    let mesh = exact(models, op).map_err(|error| VolumeError::NotSolid(error.to_string()))?;
+    if mesh.faces.is_empty() {
+        return Err(VolumeError::NothingLeft);
+    }
+    Ok(mesh)
+}
+
 fn exact(models: &[Mesh], op: Boolean) -> Result<Mesh, CsgError> {
-    let solids: Vec<Solid> = models
-        .par_iter()
-        .map(Solid::new)
-        .collect::<Result<_, _>>()?;
+    let solids: Vec<Solid> = models.par_iter().map(solid_of).collect::<Result<_, _>>()?;
     let (first, rest) = solids
         .split_first()
         .ok_or(CsgError::Failed(String::new()))?;
@@ -75,6 +88,21 @@ fn exact(models: &[Mesh], op: Boolean) -> Result<Mesh, CsgError> {
         Boolean::Difference => first.difference(&folded(rest, Solid::union)?)?,
     };
     Ok(combined.mesh())
+}
+
+/// `mesh` as one solid, its shells unioned first: the engine reads shells that cross — a
+/// part pushed into a base — without a complaint and then counts the overlap twice. A mesh
+/// with a shell wound inward is a cavity in a part, and is read whole.
+fn solid_of(mesh: &Mesh) -> Result<Solid, CsgError> {
+    let shells = split(mesh);
+    if shells.len() < 2 || shells.iter().any(|shell| signed_volume(shell) < 0.0) {
+        return Solid::new(mesh);
+    }
+    let solids: Vec<Solid> = shells
+        .par_iter()
+        .map(Solid::new)
+        .collect::<Result<_, _>>()?;
+    folded(&solids, Solid::union)
 }
 
 /// `solids` combined pairwise down a tree rather than one by one into a growing whole.
@@ -147,7 +175,7 @@ fn finished(
 
 #[cfg(test)]
 mod tests {
-    use core_geometry::{Vec3, cuboid, diagnose, signed_volume};
+    use core_geometry::{Vec3, cuboid, diagnose};
 
     use super::*;
 
@@ -214,6 +242,38 @@ mod tests {
         assert!(
             (got - 15_000.0).abs() < 0.03 * 15_000.0,
             "within the lattice's rounding of the exact 15000; got {got}"
+        );
+    }
+
+    #[test]
+    fn a_model_of_crossing_shells_is_unioned_before_it_is_cut() {
+        // Two cubes in one mesh, crossing in a 10 mm cube: 15000 mm³ as one solid.
+        let mut crossing = cube(0.0, 20.0);
+        crossing.append(&cube(10.0, 20.0));
+        let models = vec![crossing, cube(40.0, 10.0)];
+        let combined = combine(&models, Boolean::Union, Cancel::never()).expect("union");
+        assert_eq!(
+            combined.voxel_mm, None,
+            "crossing shells are still cut exactly"
+        );
+        let got = volume(&combined);
+        assert!(
+            (got - 16_000.0).abs() < 1e-2,
+            "15000 for the pair and 1000 apart; got {got}"
+        );
+    }
+
+    #[test]
+    fn an_exact_combination_refuses_what_it_cannot_read() {
+        let mut open = cube(10.0, 20.0);
+        open.faces.truncate(10);
+        assert!(matches!(
+            combine_exact(&[cube(0.0, 20.0), open], Boolean::Union),
+            Err(VolumeError::NotSolid(_))
+        ));
+        assert_eq!(
+            combine_exact(&[cube(0.0, 10.0), cube(20.0, 10.0)], Boolean::Intersection),
+            Err(VolumeError::NothingLeft)
         );
     }
 

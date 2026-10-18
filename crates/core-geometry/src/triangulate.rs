@@ -3,9 +3,10 @@
 
 use crate::{FastMap, Vec2};
 
-/// Fills one ring and the rings inside it, by ear clipping. The corners are indices into
-/// `flat`, and the triangles come back wound as the outer ring is.
-pub(crate) fn triangulate(outer: &[u32], holes: &[&Vec<u32>], flat: &[Vec2]) -> Vec<[u32; 3]> {
+/// Fills one ring and the rings inside it, by ear clipping: a cut's cap, a patch over a hole,
+/// a letter of a label. The corners are indices into `flat`, and the triangles come back
+/// wound as the outer ring is.
+pub fn triangulate(outer: &[u32], holes: &[&Vec<u32>], flat: &[Vec2]) -> Vec<[u32; 3]> {
     let mut patches = Vec::new();
     let mut ring: Vec<u32> = without_repeats(outer, flat, &mut patches);
     let mut hole_starts = Vec::with_capacity(holes.len());

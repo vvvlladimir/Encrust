@@ -23,7 +23,7 @@ mod sign;
 mod stack;
 mod sweep;
 
-pub use boolean::{Boolean, Combined, combine};
+pub use boolean::{Boolean, Combined, combine, combine_exact};
 pub use build::{FieldSettings, build};
 pub use cancel::Cancel;
 pub use csg::{difference, intersection, offset, shell, union};

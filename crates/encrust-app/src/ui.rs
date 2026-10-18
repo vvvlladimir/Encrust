@@ -3,7 +3,7 @@
 //!
 //! No colour, radius, gap or font size is written anywhere else in the crate.
 
-mod fonts;
+pub(crate) mod fonts;
 pub mod icon;
 pub mod theme;
 mod widgets;

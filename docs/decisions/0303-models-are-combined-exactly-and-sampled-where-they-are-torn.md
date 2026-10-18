@@ -16,10 +16,13 @@ fields, which read any mesh with a winding number, open scans included.
 
 `core_volume::combine` takes models placed on the plate and a `Boolean` — union,
 difference of the first less all the others, or intersection — and answers one closed
-mesh. It cuts exactly through `core-csg`, the operands folded down a tree in parallel and
-a difference's subtrahends unioned first. Where any model is not a solid the engine reads,
+mesh. It cuts exactly through `core-csg`, each model's shells unioned first — the engine
+reads crossing shells silently and counts their overlap twice — the operands folded down a
+tree in parallel and a difference's subtrahends unioned first. Where any model is not a solid the engine reads,
 every model is sampled into a field on the lattice precision 0.5 gives their area,
 coarsened to the budget, combined there and extracted; `Combined::voxel_mm` says so.
+`combine_exact` never samples and refuses with `NotSolid`, for a caller that must not
+remesh the model, as a label must not (ADR 0304).
 
 In the window the tool sits in the Relief panel, under Combine models. It takes the models
 picked on the plate, in the order they were picked, and runs off the drawing thread. The

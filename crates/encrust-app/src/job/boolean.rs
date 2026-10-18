@@ -1,7 +1,7 @@
 use std::sync::mpsc::{self, Receiver, TryRecvError};
 
 use core_geometry::{Mesh, Scalar};
-use core_volume::{Boolean, Cancel, VolumeError, combine};
+use core_volume::{Boolean, Cancel, Combined, VolumeError, combine, combine_exact};
 
 use crate::i18n::tr;
 use crate::job::pipeline::{thread_pool, worker_threads};
@@ -14,6 +14,8 @@ pub struct BooleanRequest {
     pub name: String,
     pub placed: Vec<Mesh>,
     pub op: Boolean,
+    /// Refuse rather than sample a model the exact cut cannot read.
+    pub exact: bool,
 }
 
 /// How a combination ended.
@@ -63,7 +65,17 @@ fn run(request: BooleanRequest) -> BooleanOutcome {
         Ok(pool) => pool,
         Err(error) => return BooleanOutcome::Failed(error.to_string()),
     };
-    match pool.install(|| combine(&request.placed, request.op, Cancel::never())) {
+    let combined = pool.install(|| {
+        if request.exact {
+            combine_exact(&request.placed, request.op).map(|mesh| Combined {
+                mesh,
+                voxel_mm: None,
+            })
+        } else {
+            combine(&request.placed, request.op, Cancel::never())
+        }
+    });
+    match combined {
         Ok(combined) => BooleanOutcome::Combined {
             ids: request.ids,
             name: request.name,
@@ -71,6 +83,7 @@ fn run(request: BooleanRequest) -> BooleanOutcome {
             voxel_mm: combined.voxel_mm,
         },
         Err(VolumeError::NothingLeft) => BooleanOutcome::Failed(tr!("boolean-nothing-left")),
+        Err(VolumeError::NotSolid(_)) => BooleanOutcome::Failed(tr!("boolean-not-solid")),
         Err(error) => BooleanOutcome::Failed(tr!("boolean-failed", reason = error.to_string())),
     }
 }

@@ -14,6 +14,7 @@ mod scope;
 mod select;
 mod shape;
 mod supports;
+mod text;
 
 pub use check::tint as risk_tint;
 

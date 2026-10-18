@@ -18,6 +18,7 @@ mod overlays;
 mod paint;
 mod picking;
 mod supports;
+mod text;
 
 use hollow::{
     add_channel_point_under_cursor, blocker_ghost, channel_point_ghost, drain_ghost,
@@ -181,6 +182,9 @@ fn click(ui: &egui::Ui, window: &mut Window, rect: egui::Rect, cursor: egui::Pos
             add_channel_point_under_cursor(window, rect, cursor);
         }
         Tool::Drain => place_drain_under_cursor(window, rect, cursor),
+        Tool::Relief if window.tools.text.placing => {
+            text::stamp_text_under_cursor(window, rect, cursor);
+        }
         Tool::Measure => {
             let alt = ui.input(|input| input.modifiers.alt);
             measure_under_cursor(window, rect, cursor, alt);
@@ -214,6 +218,7 @@ fn ghost(ui: &egui::Ui, window: &Window, rect: egui::Rect, pointer: &Pointer) ->
             (surface_under, channel_point_ghost)
         }
         Tool::Drain => (surface_under, drain_ghost),
+        Tool::Relief if window.tools.text.placing => (surface_under, text::text_ghost),
         _ => return None,
     };
     let cursor = pointer.position.map(|at| egui::pos2(at.x, at.y))?;

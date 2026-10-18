@@ -235,6 +235,7 @@ Grouped by what the decision governs; the number is still the order it was taken
 | [0301](0301-a-lattice-is-cut-exactly-from-the-cavity.md) | Cut the lattice exactly from the cavity's mesh, its cells joined by crossing holes | Accepted |
 | [0302](0302-exact-booleans-live-in-core-csg-over-boolmesh.md) | Do exact mesh booleans in `core-csg`, over `boolmesh` | Accepted |
 | [0303](0303-models-are-combined-exactly-and-sampled-where-they-are-torn.md) | Combine models exactly, and through the field where one is not a solid | Accepted |
+| [0304](0304-a-label-is-outlined-by-ttf-parser-in-core-text.md) | Outline a label with `ttf-parser` in `core-text`, and offer the machine's fonts | Accepted |
 | [0204](0204-a-field-build-is-given-up-on-between-tiles.md) | A field build is given up on between tiles | Accepted |
 
 ### The plate
