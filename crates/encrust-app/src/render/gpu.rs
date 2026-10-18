@@ -29,7 +29,7 @@ pub use draws::{
 
 use buffers::{DynamicBuffer, Piece, pieces};
 use draws::{Splits, cut_draws, splits_of};
-use pipelines::{Builder, Capping, Cutting, Facing, globals_layout};
+use pipelines::{Builder, Capping, Cutting, Facing, Markers, globals_layout};
 use shadow::ContactShadow;
 
 /// Depth and stencil format of the viewport's own target, `render::target`. The stencil
@@ -159,6 +159,7 @@ pub struct ViewportResources {
     globals_bind_group: wgpu::BindGroup,
     model_pipeline: Facing,
     xray_pipeline: Facing,
+    marker_pipelines: Markers,
     line_pipeline: wgpu::RenderPipeline,
     /// What caps the section cut.
     capping: Capping,
@@ -205,6 +206,8 @@ struct Frame {
     label_vertices: u32,
     /// Each mesh with whether its placement mirrors it, which picks the pipeline.
     models: Vec<Drawn>,
+    /// Where the markers start among `models`: they are drawn after the cap.
+    markers_from: usize,
     solids: Vec<Drawn>,
     solid_base: u32,
     /// Each object's cut bodies with the object itself, and where the pair's instances
@@ -323,6 +326,7 @@ impl ViewportResources {
             globals_bind_group,
             model_pipeline: solid.model,
             xray_pipeline: solid.xray,
+            marker_pipelines: solid.markers,
             line_pipeline: solid.line,
             capping: solid.capping,
             cutting: solid.cutting,
@@ -382,6 +386,7 @@ impl ViewportResources {
         let instances: Vec<ModelInstance> = frame
             .models
             .iter()
+            .chain(frame.markers)
             .chain(frame.solids)
             .map(|draw| draw.instance)
             .chain(frame.reliefs.iter().map(|draw| draw.instance))
@@ -396,12 +401,16 @@ impl ViewportResources {
         self.frame.line_vertices = frame.lines.len() as u32;
         self.frame.label_vertices = frame.label.len() as u32;
         self.frame.cap_vertices = frame.cap.len() as u32;
-        self.frame.cutting = frame.section_mm.is_some();
+        // A cap counts the crossings on its far side, which stand in front of it only for an
+        // eye on that side; from the other, through a hole, the count reads backwards.
+        self.frame.cutting = frame.section_mm.is_some_and(|mm| frame.eye.z > mm);
         self.frame.bottom_cap_vertices = frame.bottom_cap.len() as u32;
-        self.frame.cutting_bottom = frame.bottom_cut_mm.is_some();
+        self.frame.cutting_bottom = frame.bottom_cut_mm.is_some_and(|mm| frame.eye.z < mm);
         self.frame.xray = frame.xray;
-        self.frame.solid_base = frame.models.len() as u32;
-        self.frame.relief_base = (frame.models.len() + frame.solids.len()) as u32;
+        self.frame.markers_from = frame.models.len();
+        let drawn = frame.models.len() + frame.markers.len();
+        self.frame.solid_base = drawn as u32;
+        self.frame.relief_base = (drawn + frame.solids.len()) as u32;
         self.frame.cut_base = self.frame.relief_base + frame.reliefs.len() as u32;
         self.frame.models.clear();
         self.frame.solids.clear();
@@ -418,10 +427,16 @@ impl ViewportResources {
             frame
                 .models
                 .iter()
+                .chain(frame.markers)
                 .chain(frame.solids)
                 .chain(cut_draws(frame)),
         );
-        for (draws, solid) in [(frame.models, false), (frame.solids, true)] {
+        let kinds = [
+            (frame.models, false),
+            (frame.markers, false),
+            (frame.solids, true),
+        ];
+        for (draws, solid) in kinds {
             for draw in draws {
                 let drawn = self.drawn(device, draw, &splits);
                 match solid {

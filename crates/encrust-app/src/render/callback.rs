@@ -50,6 +50,7 @@ pub struct ViewportCallback {
     bottom_cut_mm: Option<Scalar>,
     lines: Vec<LineVertex>,
     models: Vec<ModelDraw>,
+    markers: Vec<ModelDraw>,
     /// What the cut is capped against: the same solids that are drawn, counted into the
     /// stencil plane so that the cap covers the material the plane runs through.
     solids: Vec<ModelDraw>,
@@ -158,6 +159,7 @@ impl ViewportCallback {
         }
         let Draws {
             models,
+            markers,
             solids,
             cuts,
             cut_surfaces,
@@ -178,6 +180,7 @@ impl ViewportCallback {
             bottom_cut_mm,
             lines,
             models,
+            markers,
             solids,
             cap: section_mm
                 .map(|height| cap_quad(scene, plate, height))
@@ -252,6 +255,7 @@ pub enum GhostShape {
 #[derive(Default)]
 struct Draws {
     models: Vec<ModelDraw>,
+    markers: Vec<ModelDraw>,
     solids: Vec<ModelDraw>,
     cuts: Vec<DrainCut>,
     cut_surfaces: Vec<CutDraw>,
@@ -290,7 +294,7 @@ impl Draws {
     fn ghost(&mut self, scene: &Scene, light: Option<&Light>, ghost: &Ghost) {
         match &ghost.shape {
             GhostShape::Body { mesh, transform } => {
-                self.flat(Arc::clone(mesh), *transform, ghost.colour);
+                self.marker(Arc::clone(mesh), *transform, ghost.colour);
             }
             GhostShape::Hole { id, hole } => {
                 let Some(object) = scene.get(*id) else {
@@ -388,7 +392,7 @@ impl Draws {
         }
         // Blockers are kept in the model's own space, so they ride its placement.
         if let Some(markers) = object.hollow.markers() {
-            self.flat(
+            self.marker(
                 Arc::clone(markers),
                 object.transform,
                 theme::scene().blocker,
@@ -452,6 +456,14 @@ impl Draws {
     /// Drawn in one flat colour and never marked for overhangs.
     fn flat(&mut self, mesh: Arc<Mesh>, transform: Transform, colour: Color32) {
         self.models.push(ModelDraw::whole(
+            mesh,
+            ModelInstance::new(transform, colour, NOT_MARKED),
+        ));
+    }
+
+    /// Drawn after the cap, so it shows through the cut it stands under.
+    fn marker(&mut self, mesh: Arc<Mesh>, transform: Transform, colour: Color32) {
+        self.markers.push(ModelDraw::whole(
             mesh,
             ModelInstance::new(transform, colour, NOT_MARKED),
         ));
@@ -614,6 +626,7 @@ impl CallbackTrait for ViewportCallback {
                     section_mm: self.section_mm,
                     lines: &self.lines,
                     models: &self.models,
+                    markers: &self.markers,
                     solids: &self.solids,
                     cap: &self.cap,
                     bottom_cut_mm: self.bottom_cut_mm,

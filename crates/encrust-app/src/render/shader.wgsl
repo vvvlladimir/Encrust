@@ -342,14 +342,10 @@ fn cut_candidate_fragment(in: ModelFragment) -> @location(0) vec4<f32> {
     return vec4<f32>(0.0);
 }
 
-// The pass that counts the material standing in front of that wall. It subtracts no cut: a
-// crossing inside a hole is still a crossing of the solid the count is about. Only the
-// section cut applies, because what it took away is not there to be counted.
+// The pass that counts the material standing in front of that wall. It subtracts no cut,
+// nor the section: whether the wall stands in material is a question about the whole solid.
 @fragment
 fn cut_crossing_fragment(in: ModelFragment) -> @location(0) vec4<f32> {
-    if (sectioned_away(in.world)) {
-        discard;
-    }
     return vec4<f32>(0.0);
 }
 
@@ -426,6 +422,27 @@ fn model_fragment(in: ModelFragment, @builtin(front_facing) front_facing: bool) 
     // result stays premultiplied for the blend.
     let wash = seen_through(normal, in.world, in.surface);
     return vec4<f32>(mix(shaded, globals.cut_color.rgb, traced) * wash, in.color.a * wash);
+}
+
+// A marker a tool put down, cut like the model. Its far half is lit as the flat face the cut
+// leaves, so a cut ball reads as a disc, not a bowl: see docs/design/viewport.md.
+@fragment
+fn marker_fragment(in: ModelFragment, @builtin(front_facing) front_facing: bool) -> @location(0) vec4<f32> {
+    if (sectioned_away(in.world)) {
+        discard;
+    }
+    var normal = normalize(in.normal);
+    var base = in.color.rgb;
+    if (!front_facing) {
+        normal = -normal;
+        if (globals.section.y > 0.5 && globals.eye.z > globals.section.x) {
+            normal = vec3<f32>(0.0, 0.0, 1.0);
+        } else if (globals.section.w > 0.5 && globals.eye.z < globals.section.z) {
+            normal = vec3<f32>(0.0, 0.0, -1.0);
+        }
+        base = mix(base, globals.inside_color.rgb * in.color.a, SECTION_WASH);
+    }
+    return vec4<f32>(lit(base, in.color.a, normal, in.world), in.color.a);
 }
 
 // How much of itself a surface keeps when the models are drawn seen through: least where

@@ -190,8 +190,10 @@ A hole's own volume is not taken off the resin saving: it is a cone through a wa
 number it would move is smaller than the cavity's own rounding.
 
 Two things make a hole actually open. Its mouth starts `MOUTH_LIFT_MM` past the surface
-plus whatever that surface rises around the rim — `lift_for` samples the rise by casting a
-ray down the hole's axis at twelve points around it — so no film is left over the mouth.
+plus whatever that surface rises around the rim — `lift_for` casts a ray out of the
+material along the hole's axis at twelve points around it — so no film is left over the
+mouth. A ray that meets air first counts nothing, so another part of the model standing over
+the hole is never cut.
 And `pierce` deepens a hole standing on a hollowed model until it is through the wall,
 `thickness + 2 voxels`, whatever depth was asked for: a hole shorter than its wall is a
 dimple, not a drain, so the depth a user types is a floor rather than a ceiling. On a solid

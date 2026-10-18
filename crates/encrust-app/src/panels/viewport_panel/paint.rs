@@ -4,13 +4,13 @@ use core_geometry::Adjacency;
 use core_supports::Placed;
 
 use crate::panels::Window;
-use crate::pick::pick_surface;
 use crate::supports::Placing;
 use crate::ui::theme;
 use crate::viewport_input::Pointer;
 use crate::workspace::Tool;
 
 use super::overlays::projector;
+use super::picking::surface_under;
 
 /// How many segments the brush ring is drawn with.
 const BRUSH_SEGMENTS: u32 = 48;
@@ -27,8 +27,7 @@ pub(super) fn draw_brush(ui: &egui::Ui, window: &Window, viewport: egui::Rect) {
     else {
         return;
     };
-    let Some((_, hit)) = pick_surface(&window.doc.scene, &window.view.camera, viewport, cursor)
-    else {
+    let Some((_, hit)) = surface_under(window, viewport, cursor) else {
         return;
     };
 
@@ -86,8 +85,7 @@ pub(super) fn paint_stroke(
 
     let cursor = egui::Pos2::new(position.x, position.y);
     if pointer.pressed {
-        window.tools.supports.stroke =
-            pick_surface(&window.doc.scene, &window.view.camera, viewport, cursor).is_some();
+        window.tools.supports.stroke = surface_under(window, viewport, cursor).is_some();
         window.tools.supports.last_daub = None;
     }
     if !window.tools.supports.stroke {
@@ -132,8 +130,7 @@ fn paint_under_cursor(
     whole_face: bool,
     marked: bool,
 ) {
-    let Some((id, hit)) = pick_surface(&window.doc.scene, &window.view.camera, viewport, cursor)
-    else {
+    let Some((id, hit)) = surface_under(window, viewport, cursor) else {
         return;
     };
     let placing = window.tools.supports.placing;

@@ -20,9 +20,10 @@ const RIM_SAMPLES: usize = 12;
 /// is enough to clear it and too little to show on the model.
 pub const MOUTH_LIFT_MM: Scalar = 0.05;
 
-/// Rings and segments of the ball that fills a channel's bend.
-const BEND_RINGS: usize = 6;
-const BEND_SEGMENTS: usize = 12;
+/// Rings and segments of the ball that fills a channel's bend: as fine as a tube, so no
+/// facet sinks under the skin the viewport cuts the model away to.
+const BEND_RINGS: usize = 12;
+const BEND_SEGMENTS: usize = SIDES;
 
 /// How many times a cut is laid over itself. Its winding has to outweigh every body that
 /// can stand where it lands — a shell, the lattice bonded into it, three struts meeting at
@@ -125,18 +126,14 @@ fn inward(mesh: &Mesh) -> Mesh {
 /// surface: the most the surface rises above the plane of the mouth around its own rim,
 /// which is nothing where that surface is flat or curves away.
 ///
-/// The rim is sampled by casting a ray down the hole's own axis at each of `RIM_SAMPLES`
-/// points around it, because what matters is the surface over the mouth and not the
-/// vertices that happen to be near it.
+/// Each of `RIM_SAMPLES` points around the rim casts a ray out of the model along the
+/// hole's axis, and counts only when the first face it meets is one it leaves the material
+/// through: whatever stands clear over the mouth, past air, is another part of the model.
 pub fn lift_for(mesh: &Mesh, bvh: &Bvh, at: Vec3, axis: Vec3, diameter_mm: Scalar) -> Scalar {
     let Some(axis) = axis.try_normalize() else {
         return 0.0;
     };
-    let Some(bounds) = mesh.aabb() else {
-        return 0.0;
-    };
     let radius = diameter_mm / 2.0;
-    let reach = (bounds.maxs - bounds.mins).length() + radius;
     let (right, up) = frame(axis);
 
     (0..RIM_SAMPLES)
@@ -144,9 +141,11 @@ pub fn lift_for(mesh: &Mesh, bvh: &Bvh, at: Vec3, axis: Vec3, diameter_mm: Scala
             let angle = std::f32::consts::TAU * sample as Scalar / RIM_SAMPLES as Scalar;
             let (sin, cos) = angle.sin_cos();
             let rim = at + (right * cos + up * sin) * radius;
-            let ray = Ray::new(rim - axis * reach, axis);
+            // Started just under the mouth's plane, so a flat face the rim lies on is met.
+            let ray = Ray::new(rim + axis * MOUTH_LIFT_MM, -axis);
             let hit = bvh.raycast(mesh, &ray)?;
-            Some((at - (ray.origin + axis * hit.t)).dot(axis))
+            let leaves = mesh.triangle(hit.face)?.normal_unnormalized().dot(axis) < 0.0;
+            leaves.then_some(hit.t - MOUTH_LIFT_MM)
         })
         .fold(0.0, Scalar::max)
 }
@@ -338,6 +337,32 @@ fn append(whole: &mut Mesh, part: &Mesh) {
 mod tests {
     use super::*;
     use core_geometry::signed_volume;
+
+    /// The viewport takes away the model within 97% of a cut's radius and draws the cut's
+    /// own wall in the opening, so a facet sunk deeper than that is never drawn and the
+    /// bend shows the model's inside through it.
+    #[test]
+    fn a_bend_stands_within_two_percent_of_its_radius() {
+        let bend = ball(Vec3::ZERO, 1.0, BEND_RINGS, BEND_SEGMENTS);
+        let deepest = bend
+            .faces
+            .iter()
+            .flat_map(|face| {
+                let [a, b, c] = face.map(|index| bend.vertices[index as usize]);
+                [
+                    (a + b) / 2.0,
+                    (b + c) / 2.0,
+                    (c + a) / 2.0,
+                    (a + b + c) / 3.0,
+                ]
+            })
+            .map(Vec3::length)
+            .fold(Scalar::INFINITY, Scalar::min);
+        assert!(
+            deepest >= 0.98,
+            "a facet of the bend sinks to {deepest} of its radius"
+        );
+    }
 
     fn hole() -> DrainHole {
         DrainHole {
@@ -562,6 +587,23 @@ mod tests {
         assert!(
             (lift - 2.0).abs() < 1e-4,
             "a 45 degree wall is 2 mm up at the rim of a 4 mm mouth, got {lift}"
+        );
+    }
+
+    #[test]
+    fn a_mouth_is_not_lifted_through_another_part_standing_over_it() {
+        // A slab 2 mm thick with a separate block hanging over it from z 5 to 8.
+        let mut mesh = boxed(Vec3::ZERO, Vec3::new(10.0, 10.0, 2.0));
+        append(
+            &mut mesh,
+            &boxed(Vec3::new(0.0, 0.0, 5.0), Vec3::new(10.0, 10.0, 8.0)),
+        );
+        let bvh = Bvh::build(&mesh);
+        let lift = lift_for(&mesh, &bvh, Vec3::new(5.0, 5.0, 2.0), Vec3::NEG_Z, 3.0);
+
+        assert!(
+            lift < 1e-4,
+            "the slab's lid is flat under the mouth, so the block over it is not cut, got {lift}"
         );
     }
 

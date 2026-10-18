@@ -3,13 +3,44 @@
 
 use core_supports::{Grab, Profiles, SupportTree, grab_along};
 
-use core_geometry::{Ray, Vec3, raycast_placed};
+use core_geometry::{PlacedHit, Ray, Vec3, raycast_placed};
 
 use crate::camera::OrbitCamera;
 use crate::measure;
-use crate::panels::Window;
-use crate::pick::{pick, pick_surface, ray_through};
+use crate::panels::{Window, section};
+use crate::pick::{pick, pick_material, pick_surface, ray_through};
 use crate::scene::{ObjectId, Scene};
+
+/// The model under the cursor through the section this frame shows; see [`pick`].
+pub(super) fn object_under(
+    window: &Window,
+    viewport: egui::Rect,
+    cursor: egui::Pos2,
+) -> Option<ObjectId> {
+    let (scene, camera) = (&window.doc.scene, &window.view.camera);
+    pick(scene, camera, viewport, cursor, section::shown(window))
+}
+
+/// The drawn face under the cursor through the section this frame shows; see [`pick_surface`].
+pub(super) fn surface_under(
+    window: &Window,
+    viewport: egui::Rect,
+    cursor: egui::Pos2,
+) -> Option<(ObjectId, PlacedHit)> {
+    let (scene, camera) = (&window.doc.scene, &window.view.camera);
+    pick_surface(scene, camera, viewport, cursor, section::shown(window))
+}
+
+/// The face or cap under the cursor through the section this frame shows; see
+/// [`pick_material`].
+pub(super) fn material_under(
+    window: &Window,
+    viewport: egui::Rect,
+    cursor: egui::Pos2,
+) -> Option<(ObjectId, PlacedHit)> {
+    let (scene, camera) = (&window.doc.scene, &window.view.camera);
+    pick_material(scene, camera, viewport, cursor, section::shown(window))
+}
 
 /// Takes the flat face the click landed on, or the point, snapped the way the tool is set
 /// unless `alt` is held.
@@ -19,8 +50,7 @@ pub(super) fn measure_under_cursor(
     cursor: egui::Pos2,
     alt: bool,
 ) {
-    let Some((id, hit)) = pick_surface(&window.doc.scene, &window.view.camera, viewport, cursor)
-    else {
+    let Some((id, hit)) = surface_under(window, viewport, cursor) else {
         return;
     };
     let Some(object) = window.doc.scene.get(id) else {
@@ -83,8 +113,7 @@ fn reach_at(
 /// Lays the face under the cursor on the plate, and picks the model it belongs to. A
 /// click on empty plate keeps the tool waiting for a face.
 pub(super) fn lay_face_under_cursor(window: &mut Window, viewport: egui::Rect, cursor: egui::Pos2) {
-    let Some((id, hit)) = pick_surface(&window.doc.scene, &window.view.camera, viewport, cursor)
-    else {
+    let Some((id, hit)) = surface_under(window, viewport, cursor) else {
         return;
     };
     let Some(object) = window.doc.scene.get_mut(id) else {
@@ -105,8 +134,7 @@ pub(super) fn lay_face_under_cursor(window: &mut Window, viewport: egui::Rect, c
 
 /// Keeps the flat face under the cursor as the one a click would lay down.
 pub(super) fn point_at_face(window: &mut Window, viewport: egui::Rect, cursor: Option<egui::Pos2>) {
-    let hit = cursor
-        .and_then(|cursor| pick_surface(&window.doc.scene, &window.view.camera, viewport, cursor));
+    let hit = cursor.and_then(|cursor| surface_under(window, viewport, cursor));
     match hit.and_then(|(id, hit)| Some((window.doc.scene.get(id)?, hit.face))) {
         Some((object, face)) => window.tools.orient.point_at(object, face),
         None => window.tools.orient.facet = None,
@@ -116,13 +144,13 @@ pub(super) fn point_at_face(window: &mut Window, viewport: egui::Rect, cursor: O
 /// A click that was not a drag picks whatever is under it, or clears the selection.
 /// Held with a modifier it adds to what is picked, or takes that one back out.
 pub(super) fn select_under_cursor(
-    scene: &mut Scene,
-    camera: &OrbitCamera,
+    window: &mut Window,
     viewport: egui::Rect,
     cursor: egui::Pos2,
     adding: bool,
 ) {
-    let hit = pick(scene, camera, viewport, cursor);
+    let hit = object_under(window, viewport, cursor);
+    let scene = &mut window.doc.scene;
     match (adding, hit) {
         (true, Some(id)) => scene.toggle_selected(id),
         (true, None) => {}
@@ -141,7 +169,7 @@ pub(super) fn takes_the_pick(
     viewport: egui::Rect,
     cursor: egui::Pos2,
 ) -> bool {
-    let hit = pick(&window.doc.scene, &window.view.camera, viewport, cursor);
+    let hit = object_under(window, viewport, cursor);
     if !aims_elsewhere(&window.doc.scene, hit) {
         return false;
     }

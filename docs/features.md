@@ -300,7 +300,8 @@ Resin is counted from what is actually cured.
 - Lit, shadowed 3D view with a view cube, orthographic or perspective, and a plate grid.
 - **See through models** (x-ray) to find cavities and trapped resin.
 - **Section slider:** cut through the model at any height, capped so you can see what is
-  solid.
+  solid. The tools reach the surfaces the cut opens up, and a Keep solid blocker can be put
+  inside the model through the cap.
 - **Layer view:** the mask of each layer, the model and the layer side by side, or a range
   of layers. Type a layer number to jump to it.
 - Ghost previews of hollowing, drains and supports before they are built.

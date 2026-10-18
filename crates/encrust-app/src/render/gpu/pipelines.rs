@@ -140,6 +140,14 @@ pub(super) struct Solid {
     pub(super) xray: Facing,
     pub(super) line: wgpu::RenderPipeline,
     pub(super) capping: Capping,
+    pub(super) markers: Markers,
+}
+
+/// A translucent marker drawn far half first and near half over it; in one pass its faces
+/// would cover each other in whatever order they were meshed in.
+pub(super) struct Markers {
+    pub(super) far: Facing,
+    pub(super) near: Facing,
 }
 
 /// The two passes that fill the section cut with a flat face.
@@ -260,6 +268,24 @@ impl<'a> Builder<'a> {
             }),
             capping: self.capping(),
             cutting: self.cutting(),
+            markers: self.markers(),
+        }
+    }
+
+    fn markers(&self) -> Markers {
+        let half = |label, cull| {
+            self.facing(PipelineKind {
+                label,
+                vertex_entry: "model_vertex",
+                fragment_entry: "marker_fragment",
+                buffers: &[Some(ModelVertex::layout()), Some(ModelInstance::layout())],
+                cull: Some(cull),
+                ..PipelineKind::default()
+            })
+        };
+        Markers {
+            far: half("viewport_markers_far", wgpu::Face::Front),
+            near: half("viewport_markers_near", wgpu::Face::Back),
         }
     }
 
@@ -359,6 +385,8 @@ impl<'a> Builder<'a> {
                 vertex_entry: "line_vertex",
                 fragment_entry: "line_fragment",
                 buffers: &[Some(LineVertex::layout())],
+                // No depth, so the markers drawn after it show what stands in the material.
+                depth_write: false,
                 stencil: inside_only_stencil(),
                 ..PipelineKind::default()
             }),

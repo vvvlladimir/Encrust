@@ -66,6 +66,9 @@ pub struct FrameInput<'a> {
     pub section_mm: Option<Scalar>,
     pub lines: &'a [LineVertex],
     pub models: &'a [ModelDraw],
+    /// What a tool puts on a model or is about to: blockers, the points of a channel, a
+    /// ghost. Drawn after the cap, so what stands in the material shows through the cut.
+    pub markers: &'a [ModelDraw],
     /// The solids the cut is capped against, counted into the stencil plane.
     pub solids: &'a [ModelDraw],
     /// The bodies cut out of each object, and the object they are cut into: what the

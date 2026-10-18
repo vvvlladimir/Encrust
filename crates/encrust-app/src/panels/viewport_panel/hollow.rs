@@ -7,10 +7,11 @@ use core_geometry::{PlacedHit, Scalar, Transform, Vec3};
 use core_volume::{ModelHollow, PENDING_MARKER_MM, markers};
 
 use crate::panels::Window;
-use crate::pick::pick_surface;
 use crate::render::{Ghost, GhostShape};
 use crate::scene::ObjectId;
 use crate::ui::theme;
+
+use super::picking::{material_under, surface_under};
 
 /// Keeps the wall solid where the model was clicked, and selects what it was put on so
 /// that the inspector is talking about the same object.
@@ -19,8 +20,7 @@ pub(super) fn place_blocker_under_cursor(
     viewport: egui::Rect,
     cursor: egui::Pos2,
 ) {
-    let Some((id, hit)) = pick_surface(&window.doc.scene, &window.view.camera, viewport, cursor)
-    else {
+    let Some((id, hit)) = material_under(window, viewport, cursor) else {
         return;
     };
     window.doc.scene.select(Some(id));
@@ -37,8 +37,7 @@ pub(super) fn remove_blocker_under_cursor(
     viewport: egui::Rect,
     cursor: egui::Pos2,
 ) {
-    let Some((id, hit)) = pick_surface(&window.doc.scene, &window.view.camera, viewport, cursor)
-    else {
+    let Some((id, hit)) = material_under(window, viewport, cursor) else {
         return;
     };
     if let Some(object) = window.doc.scene.get_mut(id) {
@@ -54,8 +53,7 @@ pub(super) fn place_drain_under_cursor(
     viewport: egui::Rect,
     cursor: egui::Pos2,
 ) {
-    let Some((id, hit)) = pick_surface(&window.doc.scene, &window.view.camera, viewport, cursor)
-    else {
+    let Some((id, hit)) = surface_under(window, viewport, cursor) else {
         return;
     };
     window.doc.scene.select(Some(id));
@@ -80,8 +78,7 @@ pub(super) fn add_channel_point_under_cursor(
     viewport: egui::Rect,
     cursor: egui::Pos2,
 ) {
-    let Some((id, hit)) = pick_surface(&window.doc.scene, &window.view.camera, viewport, cursor)
-    else {
+    let Some((id, hit)) = surface_under(window, viewport, cursor) else {
         return;
     };
     window.doc.scene.select(Some(id));
@@ -99,8 +96,7 @@ pub(super) fn remove_drain_under_cursor(
     viewport: egui::Rect,
     cursor: egui::Pos2,
 ) {
-    let Some((id, hit)) = pick_surface(&window.doc.scene, &window.view.camera, viewport, cursor)
-    else {
+    let Some((id, hit)) = surface_under(window, viewport, cursor) else {
         return;
     };
     window.tools.drain.stale();

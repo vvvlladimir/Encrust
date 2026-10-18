@@ -54,7 +54,7 @@ fn drilled_ball(drilled: bool) -> (Arc<Mesh>, Arc<Mesh>, Vec<DrainHole>) {
 }
 
 /// Both mouths stand eight millimetres clear of the surface, the way `lift_for` puts them
-/// where something stands over a hole: one hole through the top, one on the equator, whose
+/// where the surface rises around a hole: one hole through the top, one on the equator, whose
 /// lifted tube stands in the air across the cutting plane.
 fn holes() -> Vec<DrainHole> {
     vec![
@@ -161,6 +161,88 @@ fn a_hole_shows_the_wall_of_the_cut_that_made_it() {
         painted, 0,
         "{painted} pixel(s) of a wall stand where the model was not"
     );
+}
+
+/// A hole the section runs through still shows its wall under the plane: what stood in front
+/// of that wall is cut away, but the cap stands in its place.
+#[test]
+fn a_hole_the_section_runs_through_shows_its_wall_under_the_cap() {
+    // Down onto the hole on the equator, which the plane cuts along its length.
+    let camera = OrbitCamera {
+        target: Vec3::new(112.0, 40.0, 50.0),
+        distance_mm: 30.0,
+        yaw_rad: 0.0,
+        pitch_rad: 1.2,
+        ..OrbitCamera::default()
+    };
+    let Some(bare) = sectioned_ball(camera, false, true) else {
+        return;
+    };
+    let walled = sectioned_ball(camera, true, true).expect("the second frame draws too");
+
+    let changed = differing(&bare, &walled);
+    assert!(
+        changed > 4_000,
+        "the wall under the cap is drawn, not only where shell under the plane stands in front of it: {changed} pixels"
+    );
+}
+
+/// The top cap is counted along the stretch of a view ray above the plane, which is in front
+/// of the plane only for an eye above it. From under the plane, through a hole, it is not.
+#[test]
+fn the_cap_is_never_seen_from_the_side_of_the_plane_it_does_not_face() {
+    // From under the plane, up into the mouth of the hole on the equator.
+    let camera = OrbitCamera {
+        target: Vec3::new(115.0, 40.0, 50.0),
+        distance_mm: 30.0,
+        yaw_rad: 0.0,
+        pitch_rad: -0.4,
+        ..OrbitCamera::default()
+    };
+    let Some(uncapped) = sectioned_ball(camera, true, false) else {
+        return;
+    };
+    let capped = sectioned_ball(camera, true, true).expect("the second frame draws too");
+
+    let changed = differing(&uncapped, &capped);
+    assert_eq!(changed, 0, "{changed} pixel(s) of cap seen from under it");
+}
+
+/// The drilled ball cut at [`SECTION_MM`], with the inside of its holes drawn or not, and
+/// counted into the cap or not.
+fn sectioned_ball(camera: OrbitCamera, walled: bool, counted: bool) -> Option<Vec<u8>> {
+    let (mesh, bodies, holes) = drilled_ball(true);
+    let object = ModelInstance::new(Transform::default(), theme::scene().object, NOT_MARKED);
+    let cap_colour =
+        ModelInstance::new(Transform::default(), theme::scene().section_cap, NOT_MARKED);
+    let models = [ModelDraw::whole(Arc::clone(&mesh), object)];
+    let solids = match counted {
+        true => vec![
+            ModelDraw::whole(Arc::clone(&mesh), cap_colour),
+            ModelDraw::whole(Arc::clone(&bodies), cap_colour),
+        ],
+        false => Vec::new(),
+    };
+    let surfaces = match walled {
+        true => cut_surfaces(&mesh, &bodies, object),
+        false => Vec::new(),
+    };
+    let cuts = cuts_of(&holes, &[], Transform::default());
+    let marks = Marks {
+        cuts: &cuts,
+        cut_surfaces: &surfaces,
+        ..Marks::default()
+    };
+    paint(camera, Some(SECTION_MM), &models, &solids, marks)
+}
+
+fn differing(a: &[u8], b: &[u8]) -> usize {
+    a.as_chunks::<4>()
+        .0
+        .iter()
+        .zip(b.as_chunks::<4>().0)
+        .filter(|(a, b)| a != b)
+        .count()
 }
 
 /// A band tints the surface it covers and leaves the rest of the model alone, and shows
@@ -304,6 +386,74 @@ fn a_model_near_the_plate_darkens_it_and_one_high_above_does_not() {
         darkened, 0,
         "a model past the shadow's reach casts nothing on the plate"
     );
+}
+
+/// A slab standing on the plate and cut just over it: the model's floor lies in the plate,
+/// and the shadow laid on the plate must not show through the cap over it.
+#[test]
+fn the_shadow_on_the_plate_never_shows_through_a_cap() {
+    let floor = Floor {
+        near_corner_mm: Vec2::ZERO,
+        size_mm: Vec2::new(150.0, 80.0),
+    };
+    let slab = slab(Vec3::new(35.0, 20.0, 0.0), Vec3::new(115.0, 60.0, 16.0));
+    let object = ModelInstance::new(Transform::default(), theme::scene().object, NOT_MARKED);
+    let cap_colour =
+        ModelInstance::new(Transform::default(), theme::scene().section_cap, NOT_MARKED);
+    let models = [ModelDraw::whole(Arc::clone(&slab), object)];
+    let solids = [ModelDraw::whole(Arc::clone(&slab), cap_colour)];
+    let camera = OrbitCamera {
+        target: Vec3::new(75.0, 40.0, 0.0),
+        distance_mm: 300.0,
+        pitch_rad: 1.0,
+        ..OrbitCamera::default()
+    };
+    let frame = |floor| {
+        let marks = Marks {
+            floor,
+            ..Marks::default()
+        };
+        paint(camera, Some(0.8), &models, &solids, marks)
+    };
+    let Some(bare) = frame(None) else {
+        return;
+    };
+    let shaded = frame(Some(floor)).expect("the second frame draws too");
+
+    let darkened = bare
+        .as_chunks::<4>()
+        .0
+        .iter()
+        .zip(shaded.as_chunks::<4>().0)
+        .filter(|(bare, shaded)| bare[..3] != [0, 0, 0] && bare != shaded)
+        .count();
+    assert_eq!(darkened, 0, "{darkened} pixel(s) of the cap darkened");
+}
+
+/// A closed box between two corners, wound outward.
+fn slab(low: Vec3, high: Vec3) -> Arc<Mesh> {
+    let corner = |i: usize| {
+        Vec3::new(
+            if i & 1 == 0 { low.x } else { high.x },
+            if i & 2 == 0 { low.y } else { high.y },
+            if i & 4 == 0 { low.z } else { high.z },
+        )
+    };
+    let faces = vec![
+        [0, 2, 1],
+        [1, 2, 3],
+        [4, 5, 6],
+        [5, 7, 6],
+        [0, 1, 4],
+        [1, 5, 4],
+        [2, 6, 3],
+        [3, 6, 7],
+        [0, 4, 2],
+        [2, 4, 6],
+        [1, 3, 5],
+        [3, 7, 5],
+    ];
+    Arc::new(Mesh::new((0..8).map(corner).collect(), faces))
 }
 
 /// Two meshes lying in one plane, the second pulled towards the eye: it wins every pixel
@@ -483,6 +633,60 @@ fn painted_ball(drilled: bool, walled: bool) -> Option<Vec<u8>> {
     paint(camera, Some(SECTION_MM), &models, &solids, marks)
 }
 
+/// A blocker standing in the material under the cut shows through the cap, and one inside
+/// a model that is not cut stays hidden by its wall.
+#[test]
+fn a_marker_inside_the_material_shows_through_the_cut_and_nowhere_else() {
+    let solid = Arc::new(hollowed_ball().0.clone());
+    let object = ModelInstance::new(Transform::default(), theme::scene().object, NOT_MARKED);
+    let cap_colour =
+        ModelInstance::new(Transform::default(), theme::scene().section_cap, NOT_MARKED);
+    let models = [ModelDraw::whole(Arc::clone(&solid), object)];
+    let solids = [ModelDraw::whole(Arc::clone(&solid), cap_colour)];
+    // Wholly under the cut at 50 mm and wholly inside the ball of 40 mm about z 45.
+    let blocker = core_volume::markers([(Vec3::new(75.0, 40.0, 40.0), 8.0)]).expect("a ball");
+    let markers = [ModelDraw::whole(
+        Arc::new(blocker),
+        ModelInstance::new(Transform::default(), theme::scene().blocker, NOT_MARKED),
+    )];
+    let camera = OrbitCamera {
+        target: Vec3::new(75.0, 40.0, 45.0),
+        distance_mm: 170.0,
+        ..OrbitCamera::default()
+    };
+    let frame = |section_mm, markers| {
+        let marks = Marks {
+            markers,
+            ..Marks::default()
+        };
+        paint(camera, section_mm, &models, &solids, marks)
+    };
+    let Some(capped) = frame(Some(SECTION_MM), &[]) else {
+        return;
+    };
+    let changed = |a: &[u8], b: &[u8]| {
+        a.as_chunks::<4>()
+            .0
+            .iter()
+            .zip(b.as_chunks::<4>().0)
+            .filter(|(a, b)| a != b)
+            .count()
+    };
+
+    let marked = frame(Some(SECTION_MM), &markers).expect("the adapter drew once");
+    assert!(
+        changed(&capped, &marked) > 0,
+        "the blocker under the cap is hidden by it"
+    );
+    let whole = frame(None, &[]).expect("the adapter drew once");
+    let whole_marked = frame(None, &markers).expect("the adapter drew once");
+    assert_eq!(
+        changed(&whole, &whole_marked),
+        0,
+        "a blocker inside a model that is not cut shows through its wall"
+    );
+}
+
 /// The inside of the cuts `bodies` take out of `mesh`, the way the window hands them over:
 /// one copy of the bodies, which are laid `CUT_WEIGHT` deep for the slicer.
 fn cut_surfaces(mesh: &Arc<Mesh>, bodies: &Arc<Mesh>, instance: ModelInstance) -> Vec<CutDraw> {
@@ -502,6 +706,8 @@ fn cut_surfaces(mesh: &Arc<Mesh>, bodies: &Arc<Mesh>, instance: ModelInstance) -
 /// What the shader lays over the models besides their own colour.
 #[derive(Clone, Copy, Default)]
 struct Marks<'a> {
+    /// What a tool put on the models, drawn after the cap.
+    markers: &'a [ModelDraw],
     cuts: &'a [DrainCut],
     /// The bodies those cuts take out, with the objects they are cut into: what the inside
     /// of a hole is drawn from. See ADR 0201.
@@ -796,6 +1002,7 @@ fn paint_textured(camera: OrbitCamera, draw: &ReliefDraw) -> Option<Vec<u8>> {
             section_mm: None,
             lines: &[],
             models: &[],
+            markers: &[],
             solids: &[],
             cap: &[],
             bottom_cut_mm: None,
@@ -843,6 +1050,7 @@ fn paint_after<'a>(
     marks: Marks<'a>,
 ) -> Option<Vec<u8>> {
     let Marks {
+        markers,
         cuts,
         cut_surfaces,
         pockets,
@@ -864,6 +1072,7 @@ fn paint_after<'a>(
         section_mm,
         lines: &[],
         models,
+        markers,
         solids,
         cap: &cap,
         bottom_cut_mm: None,

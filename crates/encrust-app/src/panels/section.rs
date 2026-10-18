@@ -4,6 +4,7 @@ use egui::{Align, Align2, Color32, Layout, Rect, Sense, Stroke, pos2, vec2};
 use crate::i18n::tr;
 use crate::panels::Window;
 use crate::panels::inspector::risk_tint;
+use crate::pick::Shown;
 use crate::preview::{Preview, stack_fingerprint};
 use crate::shortcuts::{self, Action};
 use crate::state::Doc;
@@ -55,6 +56,15 @@ pub fn floor_height(mode: Mode, section: &Section, preview: &Preview) -> Option<
         Mode::Preview if preview.layer_count() == 0 => None,
         Mode::Preview => Some(floor.min(preview.bottom_of(preview.layer())?)),
         Mode::Prepare => Some(section.height_mm.map_or(floor, |top| floor.min(top))),
+    }
+}
+
+/// The heights the viewport leaves drawn this frame, which is all a click can land on.
+pub fn shown(window: &Window) -> Shown {
+    let (mode, section, preview) = (*window.mode, &window.view.section, &window.machine.preview);
+    Shown {
+        floor_mm: floor_height(mode, section, preview),
+        top_mm: cut_height(mode, section, preview),
     }
 }
 

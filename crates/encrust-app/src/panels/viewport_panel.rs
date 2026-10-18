@@ -4,7 +4,6 @@ use egui::{PointerButton, Sense};
 use crate::camera::OrbitCamera;
 use crate::drain::Placing;
 use crate::panels::{Window, section};
-use crate::pick::pick_surface;
 use crate::plate::BuildPlate;
 use crate::render::{Banding, Ghost, Shading, ViewportCallback};
 use crate::scene::{ObjectId, Scene};
@@ -31,8 +30,8 @@ use overlays::{
 };
 use paint::{draw_brush, paint_stroke};
 use picking::{
-    aims_elsewhere, lay_face_under_cursor, measure_under_cursor, point_at_face,
-    select_under_cursor, takes_the_pick,
+    aims_elsewhere, lay_face_under_cursor, material_under, measure_under_cursor, point_at_face,
+    select_under_cursor, surface_under, takes_the_pick,
 };
 use supports::{
     drag_support, place_support_under_cursor, remove_support_under_cursor, support_ghost,
@@ -191,13 +190,7 @@ fn click(ui: &egui::Ui, window: &mut Window, rect: egui::Rect, cursor: egui::Pos
         }
         _ => {
             let adding = ui.input(|input| input.modifiers.command || input.modifiers.shift);
-            select_under_cursor(
-                &mut window.doc.scene,
-                &window.view.camera,
-                rect,
-                cursor,
-                adding,
-            );
+            select_under_cursor(window, rect, cursor, adding);
         }
     }
 }
@@ -211,15 +204,20 @@ fn ghost(ui: &egui::Ui, window: &Window, rect: egui::Rect, pointer: &Pointer) ->
     if removing || !resting || !pointer.over_viewport {
         return None;
     }
-    let shows: fn(&Window, ObjectId, &PlacedHit) -> Option<Ghost> = match *window.tool {
-        Tool::Paint if !window.tools.supports.placing.paints() => support_ghost,
-        Tool::Hollow => blocker_ghost,
-        Tool::Drain if window.tools.drain.placing == Placing::Channel => channel_point_ghost,
-        Tool::Drain => drain_ghost,
+    type Under = fn(&Window, egui::Rect, egui::Pos2) -> Option<(ObjectId, PlacedHit)>;
+    type Shows = fn(&Window, ObjectId, &PlacedHit) -> Option<Ghost>;
+    // A blocker is a volume, so it can be put inside the material through the cap of a cut.
+    let (under, shows): (Under, Shows) = match *window.tool {
+        Tool::Paint if !window.tools.supports.placing.paints() => (surface_under, support_ghost),
+        Tool::Hollow => (material_under, blocker_ghost),
+        Tool::Drain if window.tools.drain.placing == Placing::Channel => {
+            (surface_under, channel_point_ghost)
+        }
+        Tool::Drain => (surface_under, drain_ghost),
         _ => return None,
     };
     let cursor = pointer.position.map(|at| egui::pos2(at.x, at.y))?;
-    let (id, hit) = pick_surface(&window.doc.scene, &window.view.camera, rect, cursor)?;
+    let (id, hit) = under(window, rect, cursor)?;
     // A click on a model outside the selection only picks it.
     if aims_elsewhere(&window.doc.scene, Some(id)) {
         return None;

@@ -65,7 +65,8 @@ impl ViewportResources {
             true => &self.xray_pipeline,
             false => &self.model_pipeline,
         };
-        self.draw_meshes(render_pass, models, &self.frame.models, 0);
+        let (drawn, markers) = self.frame.models.split_at(self.frame.markers_from);
+        self.draw_meshes(render_pass, models, drawn, 0);
 
         if !self.frame.reliefs.is_empty() {
             for (index, (key, mirrored)) in self.frame.reliefs.iter().enumerate() {
@@ -82,14 +83,7 @@ impl ViewportResources {
             }
         }
 
-        if self.frame.cutting && self.frame.cap_vertices > 0 {
-            render_pass.set_pipeline(&self.capping.cap);
-            render_pass.set_stencil_reference(MATERIAL_ABOVE);
-            render_pass.set_vertex_buffer(0, self.cap.buffer.slice(..));
-            render_pass.draw(0..self.frame.cap_vertices, 0..1);
-        }
-        self.paint_bottom_cap(render_pass);
-
+        // Before the caps, which lay down no depth for it to be hidden by.
         if let Some((_, atlas)) = self
             .atlas
             .as_ref()
@@ -101,8 +95,23 @@ impl ViewportResources {
             render_pass.draw(0..self.frame.label_vertices, 0..1);
         }
 
-        // Last, so the models' depth keeps it off whatever stands in front of the plate.
+        // Before the caps, which take no depth: the model's floor lies in the plate, and the
+        // shadow on it would win that tie over the cap by turns.
         self.paint_shadow(render_pass);
+
+        if self.frame.cutting && self.frame.cap_vertices > 0 {
+            render_pass.set_pipeline(&self.capping.cap);
+            render_pass.set_stencil_reference(MATERIAL_ABOVE);
+            render_pass.set_vertex_buffer(0, self.cap.buffer.slice(..));
+            render_pass.draw(0..self.frame.cap_vertices, 0..1);
+        }
+        self.paint_bottom_cap(render_pass);
+
+        // After the caps, which keep no depth: a blocker inside the material shows through
+        // the cut, and the model's own faces still hide it everywhere else.
+        let from = self.frame.markers_from as u32;
+        self.draw_meshes(render_pass, &self.marker_pipelines.far, markers, from);
+        self.draw_meshes(render_pass, &self.marker_pipelines.near, markers, from);
     }
 
     /// Draws the inside of every cut: the far wall of each body, kept where the object it

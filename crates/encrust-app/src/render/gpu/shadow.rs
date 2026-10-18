@@ -113,7 +113,7 @@ impl ContactShadow {
 fn cast_by(frame: &FrameInput<'_>, floor: Floor) -> u64 {
     let mut hasher = DefaultHasher::new();
     bytemuck::bytes_of(&floor.area()).hash(&mut hasher);
-    for draw in frame.models {
+    for draw in frame.models.iter().chain(frame.markers) {
         (Arc::as_ptr(&draw.mesh) as usize).hash(&mut hasher);
         draw.faces.hash(&mut hasher);
         bytemuck::bytes_of(&draw.instance).hash(&mut hasher);
@@ -253,6 +253,7 @@ mod tests {
             section_mm: None,
             lines: &[],
             models,
+            markers: &[],
             solids: &[],
             cut_surfaces: &[],
             cap: &[],

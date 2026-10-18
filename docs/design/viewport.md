@@ -87,6 +87,11 @@ transform whose determinant is near zero has flattened its model and is skipped 
 there is nothing left to click. Intersection is `core_geometry::ray` through the scene's
 `Bvh`, so a click costs microseconds whatever the triangle count (ADR 0016, 0036).
 
+A section cut shortens the ray to the heights it leaves drawn, so nothing it took away is
+hit. A ray whose first face past the cut is one it leaves the material through crossed the
+cut inside a model, where the cap is drawn: no face for a surface tool, but the model for a
+selection and a point on the cut for a Keep solid blocker (`pick_material`).
+
 ## The gizmo
 
 `transform-gizmo-egui` draws the handles with egui shapes after the wgpu callback and with
@@ -110,7 +115,7 @@ mutably and uploads the globals uniform (view-projection, lights, section cut, s
 the plate lines into a buffer that grows and never shrinks, one instance row per object,
 any mesh not already on the GPU keyed by its `Arc` address, and the draw list. `paint`
 borrows immutably and replays it: the line pipeline once, then the model pipeline per
-object, the word, and the shadow last.
+object, the word, then the shadow, before the caps and the markers.
 
 ## Vertex layouts
 
@@ -158,7 +163,8 @@ The opened face is capped with the stencil plane, three draws in the viewport's 
    and the depth test `Always`, keeping only what the cut took (`world_z > section`), so
    what is counted is the geometry between the eye and the plane. Back faces
    `IncrementWrap`, front faces `DecrementWrap`, so a ray that entered as many solids as
-   it left reads zero.
+   it left reads zero. That is what stands in front of the plane only for an eye above
+   it, so the top is capped only from above, the floor only from below.
 2. **Draw the models,** cut at the plane.
 3. **Fill the face.** One quad in the plane, wide enough to cover the plate, stencil test
    `NotEqual` against zero plus the ordinary depth test, so it is trimmed to exactly the
@@ -181,7 +187,8 @@ is, four draws per object that carries cuts and before anything else in the pass
    one a hole is looked into.
 2. **Count the material.** The object itself with the counting stencil, depth-tested `Less`
    against that candidate and writing neither colour nor depth: how much material stands
-   between the eye and the cut's own surface.
+   between the eye and the cut's own surface. The section takes nothing off it, since
+   whether the surface stands in material is a question about the whole solid.
 3. **Draw the surface** where the count ran negative, with the model's own shading.
 4. **Wipe the depth** where it did not, writing a depth of 1, so a tube hanging in the air
    beside the model leaves no ghost over what stands behind it.
@@ -197,6 +204,12 @@ through the openings. A model that is not sound counts nothing at all: crossings
 describe an inside on a closed surface, and the ones a hole swallows would paint the cap
 out into the air beside the model (ADR 0195). Inside surfaces are lit as if facing the
 camera and washed 35% towards the cap tone so inside reads as inside (ADR 0062).
+
+The cap writes no depth. What a tool puts on a model — a blocker, a channel's points, a
+ghost — is drawn after it, so the cut is a window onto what stands in the material, while
+the model's own faces still hide it from every other side. A marker is translucent, so it
+is drawn far half first and near half over it; where the cut opens one, its far half is lit
+as the flat face the cut leaves, so a cut ball reads as a disc rather than a bowl.
 
 Exposure bands are washed on in the same pass, 45% of the band's own tint over the
 fragment's height, walked backwards so the last band wins as it does when the file is
@@ -252,9 +265,10 @@ the gizmo bakes every frame it moves a model.
 
 Every frame a quad over the same rectangle at `z = 0` reads the blurred texture and lays
 black at `shadow`'s alpha times what it reads, over the backdrop the viewport is presented
-on. It is drawn last, with the depth test on and depth writes off, so whatever stands in
-front of the plate keeps it off and the grid lines stay crisp. From under the plate it
-discards.
+on. It is drawn after the models, with the depth test on and depth writes off, so whatever
+stands in front of the plate keeps it off and the grid lines stay crisp, and before the
+caps: they take no depth, and a model's floor lies in the plate, where the shadow would tie
+with it and show through a cap in stripes. From under the plate it discards.
 
 ## The view cube
 

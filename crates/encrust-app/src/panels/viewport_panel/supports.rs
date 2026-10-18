@@ -8,7 +8,7 @@ use core_supports::{Part, Placed, Profiles, preview, stands, support_under};
 
 use crate::camera::OrbitCamera;
 use crate::panels::Window;
-use crate::pick::{pick_surface, ray_through};
+use crate::pick::ray_through;
 use crate::render::{Ghost, GhostShape};
 use crate::scene::ObjectId;
 use crate::state::{Doc, Tools};
@@ -17,7 +17,7 @@ use crate::ui::theme;
 use crate::viewport_input::Pointer;
 use crate::workspace::Tool;
 
-use super::picking::{aim_slack_mm, grab_under_cursor};
+use super::picking::{aim_slack_mm, grab_under_cursor, surface_under};
 
 /// A ray flatter than this against a plane has no crossing worth using: a part dragged
 /// edge-on to it would shoot off to the horizon.
@@ -31,8 +31,7 @@ pub(super) fn place_support_under_cursor(
     viewport: egui::Rect,
     cursor: egui::Pos2,
 ) {
-    let Some((id, hit)) = pick_surface(&window.doc.scene, &window.view.camera, viewport, cursor)
-    else {
+    let Some((id, hit)) = surface_under(window, viewport, cursor) else {
         return;
     };
     window.doc.scene.select(Some(id));
@@ -205,7 +204,7 @@ fn carry_tip(window: &mut Window, viewport: egui::Rect, cursor: egui::Pos2, tip:
         return false;
     };
     let camera = &window.view.camera;
-    let pointed = pick_surface(&window.doc.scene, camera, viewport, cursor)
+    let pointed = surface_under(window, viewport, cursor)
         .filter(|(id, _)| *id == tip.id)
         .map(|(_, hit)| hit.point);
     let beside = part_position(window.doc, tip)

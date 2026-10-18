@@ -15,10 +15,10 @@ const SINGULAR: f32 = 1e-12;
 /// How wide a point of a channel still being laid out is drawn, in millimetres.
 pub const PENDING_MARKER_MM: Scalar = 0.6;
 
-/// Rings and segments of the ball a marker is drawn as. A marker is read as a position,
-/// not as a shape, so it is meshed as coarsely as one can be and still look round.
-const MARKER_RINGS: usize = 8;
-const MARKER_SEGMENTS: usize = 12;
+/// Rings and segments of the ball a marker is drawn as: fine enough to stay round when the
+/// camera is close and a cut shows its outline, under a thousand faces a ball.
+const MARKER_RINGS: usize = 16;
+const MARKER_SEGMENTS: usize = 24;
 
 /// The cavity one model carries: where its wall is to stay solid, the holes and channels
 /// cut into it, and the shell built from it. All of it is in the model's own space, so it
