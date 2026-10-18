@@ -57,9 +57,9 @@ impl Lattice for GridCells {
             }
         }
 
-        // A hole spans the wall from face to face, so it and the cells either side add up
-        // to the void without counting any of it twice.
-        let reach = self.half_wall;
+        // A hole reaches a quarter of a cell into the cells either side, so none of its faces
+        // lies on a wall's and the next one along still starts clear of it.
+        let reach = self.half_wall + cell / 4.0;
         let rows: Vec<Scalar> = self
             .rows
             .between(bottom - self.hole_radius, top + self.hole_radius)

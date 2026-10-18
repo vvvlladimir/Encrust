@@ -7,11 +7,21 @@ by sampling; this is the answer when the edges must stay sharp and the faces few
 ## A solid
 
 `Solid::new` reads a mesh once: it welds vertices standing on the same exact point, checks
-that every edge has two faces wound opposite ways, and builds the index the booleans query.
-A mesh may hold several shells, but none may cross another or itself. What fails is
-`CsgError::NotSolid`, carrying the engine's own reason; an open scan or a model with
-self-intersections is exactly that, and a caller that must answer anyway falls back on
-the field, which reads anything with a winding number.
+that every edge is walked as often one way as the other, and builds the index the booleans
+query. A mesh may hold several shells, but none may cross another or itself. What fails is
+`CsgError::NotSolid`; an open scan is exactly that, and a caller that must answer anyway
+falls back on the field, which reads anything with a winding number.
+
+The engine wants every edge used by exactly two faces and indexes past its own tables,
+panicking, on more. Shells that touch along an edge or at a vertex — surface nets leaves
+such seams wherever two sheets of a cavity meet — are split first. The faces round an edge
+are sorted by angle about it and paired across each wedge of solid; on a surface folded
+through itself the wedges nest rather than alternate, and are matched as brackets are. The
+corners each pair joins are the fan one copy of a vertex carries, and every copy of a split
+vertex is moved `1e-4` mm into its own fan, since the engine welds on exact positions. Where
+a fold pairs the faces so that a vertex still carries both fans, that edge is paired the
+next way round and the fans counted again, up to four times. A panic the engine raises
+anyway becomes an error.
 
 Every operation answers a new `Solid` and leaves both sides as they were, so one cavity is
 cut by several groups in turn without being read again. Nothing at all is the empty

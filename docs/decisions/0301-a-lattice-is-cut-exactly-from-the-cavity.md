@@ -26,12 +26,12 @@ signed distance. A run cuts the meshes from the cavity's mesh exactly, and only 
 mesh is not a solid the engine reads does it cut the distance from the field, priced
 against the budget and refused with `TooFine` past it.
 
-Nothing is unioned: the shapes come in groups whose shells never cross, each group is one
-boolean against the cavity, and the pieces are appended to overlap as they will, for the
-fill rule to union. A hive or grid is the cavity ∩ its cells plus its holes — whole where a
-hole stands clear inside the cavity — wound inward; a scaffold is the cavity ∩ its struts,
-wound outward over the whole cavity. Holes span their walls face to face and struts stop at
-nodes, so pieces never overlap and the volumes add up.
+The shapes come in groups whose shells never cross. The cavity stays whole as the void, and
+the lattice is appended as solid, wound outward: a hive's or grid's walls are the cavity
+less its cells and then less each group of holes in turn, one solid with real openings; a
+scaffold is the cavity ∩ each group of struts, appended to overlap at the nodes for the fill
+rule to union. Holes reach into the cells past their walls, so no face of a hole lies on a
+wall's.
 
 `InfillSettings` states sizes, not a density, for the patterns with walls: `cell_mm`,
 `wall_mm`, and crossing holes `hole_mm` across — under a hexagon's side or a square's — the
@@ -42,14 +42,12 @@ a corner so every strut leans 35° off level; its density is inverted exactly fr
 
 ## Consequences
 
-Walls are flat, holes round, and the void's volume is the resin saved. One drain hole
-empties every cell. On a 140×70×80 mm block at precision 0.5, the lattice costs 1.1–1.8 s
-against 2.4–3.2 s from the field and a fifth to a thirteenth of its faces; see
-`docs/design/hollowing.md` for the table. Unioning the groups first took up to 17 s on the
-same block, which is why nothing is unioned.
-
-Overlapping shells cost contours — twice as many on a hive's busiest layer — and slicing the
-plate takes as long as before. The exact cut's triangulation varies from run to run
+Walls are flat, holes round and open in the viewport as they print, and the cavity less the
+walls is the resin saved. One drain hole empties every cell. On a 140×70×80 mm block at
+precision 0.5, the lattice costs 1.4–5.0 s against 2.4–3.2 s from the field and a third to a
+thirteenth of its faces; see `docs/design/hollowing.md` for the table. The hive is the dear
+one: its holes are cut through the walls one group after another. Unioning a scaffold's
+groups first took up to 17 s on the same block, which is why they are not. The exact cut's triangulation varies from run to run
 (ADR 0302), so a shell is reproducible in its surface and not in its triangle list.
 
 Reopen if the fallback turns out to be taken on real models, or if a sliver cell at the rim,
@@ -77,6 +75,7 @@ the preview, the viewport and the drainage scan, and the model stops being one m
 ### The option that won, and what it costs
 
 Every pattern is written twice, as meshes and as a distance, and the two are held to each
-other by a test. The void is several overlapping shells, so its mesh is not one manifold
-and more contours reach the slicer. A cavity mesh the engine cannot read gets the rough
-field instead, silently.
+other by a test. A scaffold is several overlapping shells, so its mesh is not one manifold.
+A hive costs several times what appending its holes to a void of cells did, which drew a
+membrane across every hole. A cavity mesh the engine cannot read gets the rough field
+instead, silently.

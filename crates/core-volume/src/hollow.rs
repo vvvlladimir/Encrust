@@ -456,8 +456,8 @@ fn shelled(
     Ok(Hollowed {
         mesh: whole,
         cavity: cavity_faces,
-        // Where shells of the void or of the solid overlap, their volumes count twice; the
-        // overlaps are the ends of holes and the nodes of struts, a few percent at most.
+        // Where a scaffold's struts overlap at a node, their volume counts twice, a few
+        // percent at most.
         cavity_mm3: (volume_of(&void) - volume_of(&solid)).max(0.0),
         voxel_mm: field.voxel_mm,
         coarsened: false,

@@ -1,7 +1,10 @@
+use std::panic::{self, AssertUnwindSafe};
+
 use boolmesh::prelude::{Manifold, OpType, compute_boolean};
 use core_geometry::{Mesh, Vec3};
 
 use crate::error::CsgError;
+use crate::seams::{Unzipped, unzipped};
 
 /// What the engine answers when a boolean leaves nothing behind; it says so in its own
 /// tests, which is the only place the case is stated.
@@ -30,23 +33,14 @@ impl Solid {
         Self { inner: None }
     }
 
-    /// `mesh` read as a solid. It may be several closed shells, but none may cross another
-    /// or itself; vertices on the same exact point are taken as one.
+    /// `mesh` read as a solid. It may be several closed shells, touching along an edge or
+    /// at a vertex but crossing none; vertices on the same exact point are taken as one.
     pub fn new(mesh: &Mesh) -> Result<Self, CsgError> {
         if mesh.faces.is_empty() {
             return Ok(Self::empty());
         }
-        let positions: Vec<f64> = mesh
-            .vertices
-            .iter()
-            .flat_map(|vertex| vertex.to_array().map(f64::from))
-            .collect();
-        let indices: Vec<usize> = mesh
-            .faces
-            .iter()
-            .flat_map(|face| face.map(|index| index as usize))
-            .collect();
-        Manifold::new(&positions, &indices)
+        let Unzipped { positions, indices } = unzipped(mesh)?;
+        guarded(|| Manifold::new(&positions, &indices))
             .map(|inner| Self { inner: Some(inner) })
             .map_err(CsgError::NotSolid)
     }
@@ -103,11 +97,18 @@ impl Solid {
 }
 
 fn combined(left: &Manifold, right: &Manifold, op: OpType) -> Result<Solid, CsgError> {
-    match compute_boolean(left, right, op) {
+    match guarded(|| compute_boolean(left, right, op)) {
         Ok(inner) => Ok(Solid { inner: Some(inner) }),
         Err(reason) if reason == EMPTY => Ok(Solid::empty()),
         Err(reason) => Err(CsgError::Failed(reason)),
     }
+}
+
+/// The engine's answer, or its panic as an error: it indexes past its own tables on some
+/// inputs rather than refusing them.
+fn guarded<T>(run: impl FnOnce() -> Result<T, String>) -> Result<T, String> {
+    panic::catch_unwind(AssertUnwindSafe(run))
+        .unwrap_or_else(|_| Err("the boolean engine panicked".to_owned()))
 }
 
 #[cfg(test)]
@@ -188,6 +189,37 @@ mod tests {
             cube.intersection(&Solid::empty())
                 .expect("intersection")
                 .is_empty()
+        );
+    }
+
+    fn touching(min: [f32; 3], max: [f32; 3]) -> Solid {
+        let mut both = cuboid(Vec3::ZERO, Vec3::ONE);
+        both.append(&cuboid(Vec3::from(min), Vec3::from(max)));
+        Solid::new(&both).expect("two cubes that only touch are a solid")
+    }
+
+    #[test]
+    fn cubes_touching_along_an_edge_are_one_solid_the_engine_can_cut() {
+        // The unit cube and its diagonal neighbour share the edge x = y = 1, used four times.
+        let pair = touching([1.0, 1.0, 0.0], [2.0, 2.0, 1.0]);
+        near(volume(&pair), 2.0, "two unit cubes");
+        let slab = block([-1.0, -1.0, 0.5], [3.0, 3.0, 2.0]);
+        near(
+            volume(&pair.difference(&slab).expect("difference")),
+            1.0,
+            "the lower half of each",
+        );
+    }
+
+    #[test]
+    fn cubes_touching_at_a_corner_are_one_solid_the_engine_can_cut() {
+        let pair = touching([1.0; 3], [2.0; 3]);
+        near(volume(&pair), 2.0, "two unit cubes");
+        let slab = block([-1.0, -1.0, 0.5], [3.0, 3.0, 1.5]);
+        near(
+            volume(&pair.intersection(&slab).expect("intersection")),
+            1.0,
+            "half of each",
         );
     }
 

@@ -95,10 +95,10 @@ impl Lattice for HiveCells {
             cells.append(&prism(&hexagon.map(|at| at + *centre), bottom, top));
         }
 
-        // Each cell owns the holes to its neighbours in the three directions of NORMALS,
-        // each spanning the wall from face to face, so the holes and the cells add up to
-        // the void; the six that meet a cell are in three groups, which never cross.
-        let (near, far) = (self.inradius, self.pitch - self.inradius);
+        // One group a direction of NORMALS, whose holes never cross; each reaches half an
+        // inradius into the cells either side, so none of its faces lies on a wall's.
+        let reach = self.inradius / 2.0;
+        let (near, far) = (self.inradius - reach, self.pitch - self.inradius + reach);
         let rows: Vec<Scalar> = self
             .rows
             .between(bottom - self.hole_radius, top + self.hole_radius)

@@ -37,9 +37,11 @@ hash maps, so the same boolean triangulates flat polygons differently from run t
 result is reproducible in its surface, not in its triangle list, and tests compare volumes
 and counts. Using `BTreeMap` in its `boolean45` would fix that; it is worth sending upstream.
 
-Its input must be a solid: open or self-crossing meshes are refused. A caller that has to
-answer anyway keeps a fallback — the lattice falls back on the field (ADR 0301), and model
-booleans will need to weld and check first.
+Its input must be a solid: open or self-crossing meshes are refused. It panics on an edge
+more than two faces use, so `Solid::new` splits such seams first, drawing the copies of a
+split vertex `1e-4` mm apart, and turns any panic of the engine into an error. A caller that
+has to answer anyway keeps a fallback — the lattice falls back on the field (ADR 0301), and
+model booleans will need to weld and check first.
 
 Reopen if `boolmesh` stalls, if a real model it refuses turns out common, or if its speed
 holds a feature back; `manifold3d` is the next candidate.

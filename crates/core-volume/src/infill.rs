@@ -139,8 +139,8 @@ trait Lattice: Sync {
 
 /// What a lattice cuts a cavity with.
 enum Shapes {
-    /// Cells, which never cross, and the holes between them in groups, no two of a group
-    /// crossing: the void is what the cavity shares with them.
+    /// Cells, which never cross, and the holes through the walls between them in groups,
+    /// no two of a group crossing: the walls are what the cavity keeps of neither.
     Openings { cells: Mesh, holes: Vec<Vec<Bar>> },
     /// Groups of struts, no two of a group crossing: they are what the cavity keeps solid.
     Struts(Vec<Mesh>),
@@ -214,8 +214,11 @@ pub(crate) fn cut(
     let lattice = lattice_of(settings, bounds.mins.z);
     let reach = Vec3::splat(settings.cell_mm + settings.wall_mm);
     let around = Aabb::new(bounds.mins - reach, bounds.maxs + reach);
-    if let Ok(carved) = carve::carved(&cavity_mesh, cavity, lattice.as_ref(), &around) {
-        return Ok(carved);
+    if let Ok(solid) = carve::carved(&cavity_mesh, lattice.as_ref(), &around) {
+        return Ok(Carved {
+            void: cavity_mesh,
+            solid,
+        });
     }
     drop(cavity_mesh);
     let filled = field::filled(cavity, settings, budget_bytes)?;
@@ -237,7 +240,7 @@ fn lattice_of(settings: &InfillSettings, floor_mm: Scalar) -> Box<dyn Lattice> {
 mod tests {
     use std::collections::HashSet;
 
-    use core_geometry::{cuboid, diagnose, glam::IVec3, signed_volume};
+    use core_geometry::{cuboid, diagnose, glam::IVec3, signed_volume, winding_number};
 
     use super::*;
     use crate::csg::assemble;
@@ -344,6 +347,34 @@ mod tests {
                 "{} takes {sampled} of the cube by its distance and {exact} by its meshes",
                 pattern.label()
             );
+        }
+    }
+
+    #[test]
+    fn a_crossing_hole_opens_its_wall_right_through() {
+        // In a 40 mm cube the rows stand at z = -16, -8, 0, 8 and 16; z = -4 is between two.
+        // A 6 mm hexagon is 3 sqrt(3) mm across its flats, and the wall adds 2 mm.
+        let pitch = 3.0 * (3.0 as Scalar).sqrt() + 2.0;
+        for (pattern, wall) in [
+            (InfillPattern::Grid, Vec3::new(0.0, 4.0, 0.0)),
+            (InfillPattern::Hive, Vec3::new(pitch / 2.0, 0.0, 0.0)),
+        ] {
+            let cube = cuboid(Vec3::splat(-20.0), Vec3::splat(20.0));
+            let carved = cut(
+                &box_cavity(20.0),
+                cube,
+                &walled(pattern),
+                0,
+                Cancel::never(),
+            )
+            .expect("valid");
+            let solid = |at: Vec3| winding_number(&carved.solid, at) > 0.5;
+            let name = pattern.label();
+            assert!(
+                solid(wall.with_z(-4.0)),
+                "{name}: the wall between two rows"
+            );
+            assert!(!solid(wall), "{name}: the hole through it at its row");
         }
     }
 

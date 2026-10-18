@@ -15,13 +15,13 @@ meshes appended in one buffer and nothing else.
 | | Internal | External |
 |---|---|---|
 | outside | the model, byte for byte | the surface grown by `t` |
-| void, wound inward | the surface `d = -t`, or what a hive or grid leaves of it | the model, wound inward |
-| solid, wound outward | a scaffold's struts, clipped to the cavity | — |
+| void, wound inward | the surface `d = -t` | the model, wound inward |
+| solid, wound outward | a hive's or grid's walls, or a scaffold's struts, clipped to the cavity | — |
 
 Nothing is welded, so the model's triangles never pass through the cavity and the outside
 keeps every imported detail. The positive winding rule does the arithmetic: `+1` in the
-wall, `0` in the void, `+1` in a strut, and where shells of the void overlap, `-1` and so
-still air (ADR 0071).
+wall, `0` in the void, `+1` in a strut or a lattice wall, and `+2` where struts overlap at a
+node (ADR 0071).
 
 ## The cavity
 
@@ -67,22 +67,26 @@ distance `solid(p)` (ADR 0301). The meshes are what a run cuts with, exactly, th
 `core-csg` (`csg.md`): walls come out flat, holes round to `ROUND_TOLERANCE_MM`, and the
 faces follow the cells rather than the lattice the cavity was cut on.
 
-Nothing is unioned. The shapes come in groups whose shells never cross, and each group is
-one boolean against the cavity's mesh; the pieces may overlap one another, which the fill
-rule unions as it unions a support's struts (ADR 0041). Unioning them first is what a
-lattice cannot afford: a scaffold crosses itself at every node, and on a 140 mm block that
-union took 17 s against 0.5 s for the three cuts.
+The shapes come in groups whose shells never cross, so each group is one solid the engine
+reads. In every pattern the cavity is the void, whole, and what the lattice leaves standing
+in it is appended as solid.
 
-- **Openings.** The void of a hive or grid is the cavity ∩ the cells, plus each hole: a
-  hole standing clear inside the cavity — its middle inside, the surface further than its
-  far end — is appended whole, and only the holes reaching the side are cut. A hole spans
-  its wall from face to face, so holes and cells add up to the void exactly.
-- **Struts.** A scaffold keeps the cavity whole as its void and appends the cavity ∩ each
-  group of struts as solid. The struts along the first axis run whole and the other two stop
-  at each node, so no two pieces overlap and their volume is the lattice's.
+- **Walls.** A hive's or grid's walls are the cavity less its cells, then less each group of
+  holes in turn, so they are one solid and a hole is an opening through it. A void built
+  from cells and holes appended instead is right for the fill rule, but every cell's face
+  is still drawn across the hole it meets, a membrane in the viewport that never prints. A
+  hole reaches into the cells either side of its wall, half an inradius in a hive and a
+  quarter of a cell in a grid, so no end of it lies on a wall's face.
+- **Struts.** A scaffold's groups are each cut from the cavity and appended, not unioned:
+  they overlap at the nodes, and the fill rule unions them as it does a support's struts
+  (ADR 0041). The struts along the first axis run whole and the other two stop at each node,
+  so the overlaps are small. Unioning them is what a lattice cannot afford: a scaffold
+  crosses itself at every node, and on a 140 mm block that union took 17 s against 0.5 s
+  for the three cuts.
 
-The cavity's mesh comes from surface nets and is almost always a solid the engine reads.
-Where it is not, the lattice is cut from the field instead: `max(cavity, -solid)` over the
+The cavity's mesh comes from surface nets, which branches where two sheets of it touch along
+an edge; `Solid::new` splits those seams (`csg.md`), so it is almost always a solid the engine
+reads. Where it is not, the lattice is cut from the field instead: `max(cavity, -solid)` over the
 cavity's tiles, as the blockers are, extracted once. That answer is the cavity's own
 lattice, rough where walls meet, and it fills the cavity's volume rather than its surface,
 so it is priced against the budget first and refused with `TooFine` rather than run over it.
@@ -115,12 +119,13 @@ for `x`.
 
 | | Field | Exact | Faces, field against exact |
 |---|---|---|---|
-| Hive | 3.2 s | 1.6 s | 2.45 M against 0.55 M |
-| Grid | 2.4 s | 1.1 s | 1.73 M against 0.28 M |
-| Scaffold | 3.2 s | 1.8 s | 4.21 M against 0.31 M |
+| Hive | 3.2 s | 5.0 s | 2.45 M against 0.70 M |
+| Grid | 2.4 s | 1.5 s | 1.73 M against 0.40 M |
+| Scaffold | 3.2 s | 1.4 s | 4.21 M against 0.31 M |
 
-Overlapping shells cost contours: the busiest layer of the hive holds 872 against 435, and
-slicing the plate takes as long as it did.
+The walls cost what their holes cost: each group is cut through the whole of the walls cut
+so far, one after another. Appending the holes to a void of cells instead took 0.9 s for the
+hive and 0.5 s for the grid, and drew the membranes above.
 
 ## Precision
 
