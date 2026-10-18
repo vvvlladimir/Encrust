@@ -1,5 +1,16 @@
 # Changelog
 
+## [0.5.0](https://github.com/vvvlladimir/Encrust/compare/v0.4.0...v0.5.0) (2026-10-18)
+
+
+### ✨ New
+
+* **app:** query Microsoft Store for package updates on Windows ([99a9393](https://github.com/vvvlladimir/Encrust/commit/99a93939240bdea6a1720504b256d6d8121e48b3))
+* **i18n:** Add multi-language support and improve app help stylingf ([#132](https://github.com/vvvlladimir/Encrust/issues/132)) ([7a320cb](https://github.com/vvvlladimir/Encrust/commit/7a320cb8f3bcdbad5e186e3eedd40f9092e44e2b))
+* **printers:** Enhance printer profiles with locking and firmware settings ([#133](https://github.com/vvvlladimir/Encrust/issues/133)) ([07a5bbf](https://github.com/vvvlladimir/Encrust/commit/07a5bbf5c139114d04125845d109244863aec362))
+* **profiles:** Enhance profiles and volume handling with new import features ([#131](https://github.com/vvvlladimir/Encrust/issues/131)) ([2fa83e4](https://github.com/vvvlladimir/Encrust/commit/2fa83e47248af1b9de1a1476bb1010578318e763))
+* **viewport:** allow picking cut section material and surfaces ([d916754](https://github.com/vvvlladimir/Encrust/commit/d9167543d95592418fd3f34956e0593442bb67ab))
+
 ## [0.4.0](https://github.com/vvvlladimir/Encrust/compare/v0.3.0...v0.4.0) (2026-10-16)
 
 
