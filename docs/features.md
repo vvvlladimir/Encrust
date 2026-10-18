@@ -155,7 +155,8 @@ capped silently.
 ### Hollow
 - Hollow a model with a wall thickness and precision you choose.
 - **Inside** grows the wall inward and leaves the outside untouched. **Outside** grows it
-  outward, which gives you a mould of the model.
+  outward, which gives you a mould of the model; a mould takes no infill and keeps no
+  wall solid, so the panel hides both.
 - **Infill** inside the cavity, or leave it empty:
   - **Hive** (hexagonal cells) and **Grid** (square cells) stand on the plate. Set the cell
     size, the wall thickness, and the round crossing holes that join each cell to its

@@ -84,6 +84,11 @@ fn settings(ui: &mut egui::Ui, window: &mut Window) {
         modes(ui, window.tools);
         wall(ui, window);
     });
+    // A mould's void is the model itself: nothing stands in it and no wall is kept solid
+    // (docs/design/hollowing.md).
+    if window.tools.hollow.state.mode == HollowMode::External {
+        return;
+    }
     // The body reads the switch as it stood before this frame's click; the knob's slide
     // draws the frame after, which catches it up.
     let mut on = window.tools.hollow.state.infill_on;
