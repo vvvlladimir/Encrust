@@ -625,6 +625,7 @@ relief-pressing-status = Pressing the relief
 text-words = Text
 text-words-hint = What to write; a new line starts a second row
 text-reading-fonts = Reading the fonts installed on this machine...
+text-no-family = No installed font has that name
 text-raised = Raised
 text-sunk = Sunk
 text-height = Letter height

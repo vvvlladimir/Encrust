@@ -185,8 +185,9 @@ capped silently.
   on stays flat.
 - **Text:** click a model to write there, **raised** out of the surface or **sunk** into
   it, several lines if you like. Pick the **font** from the ones installed on your computer
-  or the built-in IBM Plex Sans, and set the letter height, the depth and the angle; a
-  preview under the cursor shows what the click will write. **Flat** letters measure the
+  or the built-in IBM Plex Sans — type in the font field to find one by name — and set the
+  letter height, the depth and the angle; a preview under the cursor shows what the click
+  will write. **Flat** letters measure the
   depth from the face where you click and follow it no further than that depth, so nothing
   beside them is cut. **On the surface** bends every letter onto the face under it, so it
   stands the full depth out of a curved face or into it everywhere; on a steep slope the

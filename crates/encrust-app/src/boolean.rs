@@ -50,6 +50,7 @@ impl BooleanTool {
                 .collect(),
             op: self.op,
             exact: false,
+            toward: None,
         }));
         Ok(())
     }

@@ -53,3 +53,6 @@ slope (ADR 0310).
 A label is joined with `combine_exact`, never through the field: a field remeshes the
 whole model at its lattice, which rounds every edge of it for the sake of a few letters.
 A model the exact cut cannot read is refused with `NotSolid`, and left as it was.
+Only the side of the model the letters stand on goes through the engine: it is cut off
+0.5 mm under them square to the clicked normal, joined, and stitched back along the cut
+(ADR 0311; `docs/design/csg.md`).

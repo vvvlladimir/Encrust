@@ -59,11 +59,26 @@ split into its shells and they are unioned first: the engine reads shells that c
 part pushed into a base — without a complaint, and then counts what they share twice. A
 model with a shell wound inward is a part with a cavity, and is read whole. The models are
 read as solids in parallel and folded down a tree, so `n` of them cost `log n` rounds rather
-than `n` cuts into one growing whole; a difference unions everything after the first before
-the one cut. If any of them is not a solid the engine reads, all of them are sampled instead,
+than `n` cuts into one growing whole. The model of the most faces stays out of the tree and
+is cut once at the end, as a difference cuts its first once with everything after it unioned:
+every pass through the engine costs the faces of both sides, so letters folded into a
+million-face model a level at a time cost three passes over it, where one is enough —
+`benches/boolean.rs` measures it. If any of them is not a solid the engine reads, all of them are sampled instead,
 each a field on one lattice — precision 0.5 at their combined area, coarsened to the budget
 as hollowing is — combined by `min`, `max` and `max(a, -b)` and extracted once.
-`combine_exact` is the same without the field, refusing with `NotSolid`; labels take it.
+`combine_exact` is the same without the field, refusing with `NotSolid`.
+
+`combine_exact_toward` is what labels take (ADR 0311). The first model is cut by a plane
+square to the side the others stand on, 0.5 mm under the lowest of them, and only the side
+above goes through the engine with them. The cut makes every point on it once, keyed by the
+edge it came from, so both halves carry it bit for bit. In the answer the faces with every
+corner within 0.1 µm of the plane are its cap — the cut puts any face of the model lying in
+the plane below, so above there are none — and their corners are the seam; on the side below,
+its cap is the faces facing up out of it with every corner on the seam. Both caps go, the
+seam's points are matched by position, and every edge along it must be walked by one side
+and back by the other, or the whole model is combined after all. A cut through a vertex
+lying in the plane can fold its cap; the engine refuses that, and the plane goes a few
+hundredths of a millimetre lower, three times at most.
 
 ## Primitives
 

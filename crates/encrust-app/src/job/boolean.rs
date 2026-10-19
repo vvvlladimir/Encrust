@@ -1,7 +1,9 @@
 use std::sync::mpsc::{self, Receiver, TryRecvError};
 
-use core_geometry::{Mesh, Scalar};
-use core_volume::{Boolean, Cancel, Combined, VolumeError, combine, combine_exact};
+use core_geometry::{Mesh, Scalar, Vec3};
+use core_volume::{
+    Boolean, Cancel, Combined, VolumeError, combine, combine_exact, combine_exact_toward,
+};
 
 use crate::i18n::tr;
 use crate::job::pipeline::{thread_pool, worker_threads};
@@ -16,6 +18,9 @@ pub struct BooleanRequest {
     pub op: Boolean,
     /// Refuse rather than sample a model the exact cut cannot read.
     pub exact: bool,
+    /// The side the others stand on the first from, when they are small beside it: an exact
+    /// cut then takes only that side of it through the engine.
+    pub toward: Option<Vec3>,
 }
 
 /// How a combination ended.
@@ -67,7 +72,11 @@ fn run(request: BooleanRequest) -> BooleanOutcome {
     };
     let combined = pool.install(|| {
         if request.exact {
-            combine_exact(&request.placed, request.op).map(|mesh| Combined {
+            match request.toward {
+                Some(toward) => combine_exact_toward(&request.placed, request.op, toward),
+                None => combine_exact(&request.placed, request.op),
+            }
+            .map(|mesh| Combined {
                 mesh,
                 voxel_mm: None,
             })

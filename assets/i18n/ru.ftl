@@ -660,6 +660,7 @@ relief-pressing-status = Вдавливание рельефа
 text-words = Текст
 text-words-hint = Что написать; новая строка начинает второй ряд
 text-reading-fonts = Читаю шрифты, установленные на этом компьютере...
+text-no-family = Шрифта с таким названием нет
 text-raised = Выпуклые
 text-sunk = Вдавленные
 text-height = Высота букв

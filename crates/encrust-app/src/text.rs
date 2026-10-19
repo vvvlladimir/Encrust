@@ -244,6 +244,7 @@ impl TextTool {
             },
             // Lettering must not remesh the model it is written on.
             exact: true,
+            toward: Some(hit.normal),
         }));
         Ok(())
     }

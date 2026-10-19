@@ -242,6 +242,7 @@ Grouped by what the decision governs; the number is still the order it was taken
 | [0303](0303-models-are-combined-exactly-and-sampled-where-they-are-torn.md) | Combine models exactly, and through the field where one is not a solid | Accepted |
 | [0304](0304-a-label-is-outlined-by-ttf-parser-in-core-text.md) | Outline a label with `ttf-parser` in `core-text`, and offer the machine's fonts | Accepted; that the letters are flat is superseded by 0310 |
 | [0310](0310-a-label-may-follow-the-surface-point-by-point.md) | Let a label follow the surface, its letters filled fine and laid point by point | Accepted |
+| [0311](0311-a-label-is-joined-through-the-side-of-the-model-it-stands-on.md) | Join a label through the side of the model it stands on | Accepted |
 | [0204](0204-a-field-build-is-given-up-on-between-tiles.md) | A field build is given up on between tiles | Accepted |
 
 ### The plate

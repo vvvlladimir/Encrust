@@ -1,5 +1,5 @@
 use core_csg::{CsgError, Solid};
-use core_geometry::{Bvh, Mesh, Scalar, signed_volume, split};
+use core_geometry::{Bvh, Mesh, Scalar, Vec3, signed_volume, split};
 use rayon::prelude::*;
 
 use crate::build::{DEFAULT_BUDGET_BYTES, FieldSettings, build};
@@ -10,6 +10,9 @@ use crate::extract::extract;
 use crate::hollow::{COARSENINGS, lattice_mm};
 use crate::sdf::Sdf;
 use crate::sign::SignMode;
+use local::Whole;
+
+mod local;
 
 /// The precision a combination falls back to the field at, as hollowing states it: a fifth
 /// of a millimetre where the model's size allows.
@@ -76,18 +79,60 @@ pub fn combine_exact(models: &[Mesh], op: Boolean) -> Result<Mesh, VolumeError> 
     Ok(mesh)
 }
 
+/// `models` combined as `combine_exact` does, where the others stand on the first from the
+/// side `toward` points to: only the part of it on their side goes through the engine, so a
+/// few letters on a dense model cost what the letters' neighbourhood does. Falls back to the
+/// whole model where cutting it would not pay or the halves would not join.
+pub fn combine_exact_toward(
+    models: &[Mesh],
+    op: Boolean,
+    toward: Vec3,
+) -> Result<Mesh, VolumeError> {
+    if models.len() < 2 {
+        return Err(VolumeError::TooFewModels(models.len()));
+    }
+    if models.iter().any(|model| model.faces.is_empty()) {
+        return Err(VolumeError::EmptyMesh);
+    }
+    if op == Boolean::Intersection {
+        return combine_exact(models, op);
+    }
+    match local::local(models, op, toward) {
+        Ok(mesh) if !mesh.faces.is_empty() => Ok(mesh),
+        // Every reason it was not done near the others is one the whole model is tried for.
+        Ok(_) | Err(Whole::NotLocal | Whole::Seam | Whole::Engine) => combine_exact(models, op),
+    }
+}
+
 fn exact(models: &[Mesh], op: Boolean) -> Result<Mesh, CsgError> {
     let solids: Vec<Solid> = models.par_iter().map(solid_of).collect::<Result<_, _>>()?;
     let (first, rest) = solids
         .split_first()
         .ok_or(CsgError::Failed(String::new()))?;
     let combined = match op {
-        Boolean::Union => folded(&solids, Solid::union)?,
-        Boolean::Intersection => folded(&solids, Solid::intersection)?,
+        Boolean::Union => largest_last(&solids, models, Solid::union)?,
+        Boolean::Intersection => largest_last(&solids, models, Solid::intersection)?,
         // The others may overlap each other, so they are one solid before they are cut.
         Boolean::Difference => first.difference(&folded(rest, Solid::union)?)?,
     };
     Ok(combined.mesh())
+}
+
+/// `solids` combined by `op` with the one of the most faces taken in last, so that a dense
+/// model under a few small ones goes through the engine once, not once a level of the tree.
+fn largest_last(
+    solids: &[Solid],
+    models: &[Mesh],
+    op: fn(&Solid, &Solid) -> Result<Solid, CsgError>,
+) -> Result<Solid, CsgError> {
+    let largest = (0..models.len())
+        .max_by_key(|index| models[*index].faces.len())
+        .unwrap_or(0);
+    let others: Vec<Solid> = (0..solids.len())
+        .filter(|index| *index != largest)
+        .map(|index| solids[index].clone())
+        .collect();
+    op(&solids[largest], &folded(&others, op)?)
 }
 
 /// `mesh` as one solid, its shells unioned first: the engine reads shells that cross — a
@@ -230,6 +275,51 @@ mod tests {
                 "{op:?}: 8000 mm³ each, 1000 shared, so {expected}; got {got}"
             );
         }
+    }
+
+    #[test]
+    fn combining_toward_a_side_answers_what_combining_whole_does() {
+        // A 20 mm cube with a 5 mm one standing half out of its top, seen from above and
+        // from below, where the cut would take the whole cube and is not made.
+        let models = vec![
+            cube(0.0, 20.0),
+            cuboid(Vec3::new(5.0, 5.0, 17.5), Vec3::new(10.0, 10.0, 22.5)),
+        ];
+        for toward in [Vec3::Z, -Vec3::Z] {
+            for (op, expected) in [
+                (Boolean::Union, 8_000.0 + 62.5),
+                (Boolean::Difference, 8_000.0 - 62.5),
+                (Boolean::Intersection, 62.5),
+            ] {
+                let mesh = combine_exact_toward(&models, op, toward).expect("both are solids");
+                let got = volume(&Combined {
+                    mesh,
+                    voxel_mm: None,
+                });
+                assert!(
+                    (got - expected).abs() < 1e-2,
+                    "{op:?} toward {toward}: 8000 mm³ and half of 125 outside it; got {got}"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn combining_toward_a_side_refuses_what_combining_whole_does() {
+        assert_eq!(
+            combine_exact_toward(&[cube(0.0, 1.0)], Boolean::Union, Vec3::Z),
+            Err(VolumeError::TooFewModels(1))
+        );
+        assert_eq!(
+            combine_exact_toward(&[cube(0.0, 1.0), Mesh::default()], Boolean::Union, Vec3::Z),
+            Err(VolumeError::EmptyMesh)
+        );
+        let mut open = cube(0.0, 20.0);
+        open.faces.truncate(10);
+        assert!(matches!(
+            combine_exact_toward(&[open, cube(5.0, 20.0)], Boolean::Union, Vec3::Z),
+            Err(VolumeError::NotSolid(_))
+        ));
     }
 
     #[test]
