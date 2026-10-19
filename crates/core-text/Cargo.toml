@@ -13,6 +13,7 @@ doctest = false
 
 [dependencies]
 core-geometry.workspace = true
+rayon.workspace = true
 ttf-parser.workspace = true
 thiserror.workspace = true
 workspace-hack = { version = "0.1", path = "../../workspace-hack" }

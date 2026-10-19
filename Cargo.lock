@@ -1206,6 +1206,7 @@ name = "core-text"
 version = "0.4.0"
 dependencies = [
  "core-geometry",
+ "rayon",
  "thiserror 2.0.21",
  "ttf-parser",
  "workspace-hack",

@@ -31,7 +31,12 @@ pub fn sections(ui: &mut egui::Ui, window: &mut Window) {
     });
     section(ui, &tr!("text-lettering"), None, |ui| {
         shape(ui, &mut tool.state);
-        describe(ui, &tr!("text-shape-note"));
+        let note = if tool.state.follow_surface {
+            tr!("text-follow-note")
+        } else {
+            tr!("text-shape-note")
+        };
+        describe(ui, &note);
     });
 }
 
@@ -88,6 +93,17 @@ fn shape(ui: &mut egui::Ui, state: &mut TextState) {
         .show(ui, &mut raised)
     {
         state.raised = raised;
+    }
+    let segments = [
+        Segment::new(false, tr!("text-flat")),
+        Segment::new(true, tr!("text-follow")),
+    ];
+    let mut follow = state.follow_surface;
+    if Segmented::new(&segments)
+        .width(ui.available_width())
+        .show(ui, &mut follow)
+    {
+        state.follow_surface = follow;
     }
     let mm = tr!("unit-mm");
     number_row(

@@ -5,7 +5,7 @@
 
 use std::sync::Arc;
 
-use core_geometry::{Bvh, Transform, Vec3, cuboid, diagnose, signed_volume};
+use core_geometry::{Bvh, Transform, Vec3, cuboid, cylinder, diagnose, signed_volume};
 use core_text::{Font, Frame, LabelSettings, Shape, TextError, label, outline, prism};
 
 fn plex() -> Font {
@@ -122,6 +122,7 @@ fn a_raised_label_stands_its_depth_out_of_a_flat_face_and_bites_into_it() {
             LabelSettings {
                 depth_mm: 1.5,
                 raised,
+                follow_surface: false,
             },
         )
         .expect("the label stands on the cube");
@@ -145,6 +146,7 @@ fn a_label_beside_the_model_stands_on_nothing() {
     let settings = LabelSettings {
         depth_mm: 1.0,
         raised: true,
+        follow_surface: false,
     };
     assert_eq!(
         label(&shapes, frame, &mesh, &bvh, Transform::default(), settings),
@@ -159,7 +161,8 @@ fn a_label_beside_the_model_stands_on_nothing() {
             Transform::default(),
             LabelSettings {
                 depth_mm: -1.0,
-                raised: true
+                raised: true,
+                follow_surface: false,
             }
         ),
         Err(TextError::BadSize { .. })
@@ -195,6 +198,7 @@ fn a_label_beside_a_pillar_keeps_to_its_depth() {
         let settings = LabelSettings {
             depth_mm: 0.5,
             raised,
+            follow_surface: false,
         };
         let label = label(&shapes, frame, &mesh, &bvh, Transform::default(), settings)
             .expect("the label stands on the plate");
@@ -208,4 +212,57 @@ fn a_label_beside_a_pillar_keeps_to_its_depth() {
             "raised {raised}: never more than twice its depth off the plate at 4 mm; got {top}"
         );
     }
+}
+
+#[test]
+fn letters_following_a_cylinder_stand_their_depth_off_it_everywhere() {
+    // A 15 mm cylinder lying along y, so the line runs round it: its top at x is √(r² − x²).
+    let radius = 15.0_f32;
+    let mesh = cylinder(
+        Vec3::new(0.0, -30.0, 0.0),
+        Vec3::new(0.0, 30.0, 0.0),
+        radius,
+        512,
+    );
+    let bvh = Bvh::build(&mesh);
+    let shapes = outline(&plex(), "ABCD", 6.0).expect("ABCD");
+    let frame = Frame::on(Vec3::new(0.0, 0.0, radius), Vec3::Z, 0.0).expect("a frame");
+    for (raised, below, above) in [(true, 0.2, 1.0), (false, 1.0, 0.2)] {
+        let settings = LabelSettings {
+            depth_mm: 1.0,
+            raised,
+            follow_surface: true,
+        };
+        let label = label(&shapes, frame, &mesh, &bvh, Transform::default(), settings)
+            .expect("the label stands on the cylinder");
+        for prism in &label.prisms {
+            assert_eq!(diagnose(prism).boundary_edges, 0, "every letter is closed");
+            assert!(signed_volume(prism) > 0.0, "and wound outward");
+            for vertex in &prism.vertices {
+                let surface = (radius * radius - vertex.x * vertex.x).sqrt();
+                let off = vertex.z - surface;
+                assert!(
+                    (off + below).abs() < 0.01 || (off - above).abs() < 0.01,
+                    "raised {raised}: {below} mm under the surface or {above} mm over it at x = {}; got {off}",
+                    vertex.x
+                );
+            }
+        }
+    }
+}
+
+#[test]
+fn letters_following_a_surface_beside_the_model_stand_on_nothing() {
+    let (mesh, bvh) = block();
+    let shapes = outline(&plex(), "A", 8.0).expect("A");
+    let frame = Frame::on(Vec3::new(200.0, 200.0, 40.0), Vec3::Z, 0.0).expect("a frame");
+    let settings = LabelSettings {
+        depth_mm: 1.0,
+        raised: true,
+        follow_surface: true,
+    };
+    assert_eq!(
+        label(&shapes, frame, &mesh, &bvh, Transform::default(), settings),
+        Err(TextError::OffTheModel)
+    );
 }

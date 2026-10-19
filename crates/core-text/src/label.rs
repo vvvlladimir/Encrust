@@ -1,12 +1,13 @@
 use core_geometry::{Bvh, Mesh, Quat, Ray, Scalar, Transform, Vec3, raycast_placed};
 
+use crate::drape::draped;
 use crate::error::TextError;
 use crate::outline::Shape;
 use crate::prism::prism;
 
 /// How far a label reaches past the surface it stands on, in millimetres, so that no face
 /// of it lies on the model's and the cut has something to bite.
-const OVERLAP_MM: Scalar = 0.2;
+pub(crate) const OVERLAP_MM: Scalar = 0.2;
 
 /// Past this share of the normal along the plate's z, a face counts as level and the
 /// label reads along y instead.
@@ -53,6 +54,8 @@ pub struct LabelSettings {
     pub depth_mm: Scalar,
     /// Raised out of the surface, or sunk into it.
     pub raised: bool,
+    /// Bent onto the surface letter by letter, or stood flat on the plane at the click.
+    pub follow_surface: bool,
 }
 
 /// A label's prisms on the plate, one a filled shape, and whether they are to be added to
@@ -66,9 +69,10 @@ pub struct Label {
 /// `shapes` laid at `frame` on the model `mesh` stands as under `transform`, `depth_mm` out
 /// of its surface or into it.
 ///
-/// The surface is followed only within the depth of the label's plane, so a label never
-/// reaches further than twice its depth from the point it was centred on, whatever stands
-/// beside it. The letters are flat. See `docs/design/labels.md`.
+/// Flat, the surface is followed only within the depth of the label's plane, so a label
+/// never reaches further than twice its depth from the point it was centred on, whatever
+/// stands beside it. Following the surface, every point of every letter stands the depth
+/// off the surface under it. See `docs/design/labels.md`.
 pub fn label(
     shapes: &[Shape],
     frame: Frame,
@@ -82,6 +86,13 @@ pub fn label(
         return Err(TextError::BadSize {
             what: "depth",
             value_mm: depth,
+        });
+    }
+    if settings.follow_surface {
+        let prisms = draped(shapes, frame, mesh, bvh, transform, settings)?;
+        return Ok(Label {
+            prisms,
+            raised: settings.raised,
         });
     }
     let (low, high) = surface_under(shapes, frame, mesh, bvh, transform, depth)?;

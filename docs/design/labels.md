@@ -35,7 +35,18 @@ or the plane, less the depth, to the highest plus 0.2 mm. So no letter ever reac
 than twice the depth off its plane, and each overlaps the model on the other side, so that
 no face of a letter lies on one of the model's.
 
-The letters are flat. Text that follows a curved surface is not done.
+That is a flat label. One that follows the surface is filled finer first: the
+triangulated shape has every edge longer than 1/160 of the label's longest side, and never
+under 0.25 mm, split at its middle, round after round, each triangle into the two, three or
+four pieces its split edges leave. A split edge is split for both triangles on it and put
+back into the ring, so the walls meet the caps and the letter stays closed. Under every
+point a ray goes down the normal from the label's plane; if the face it meets looks down,
+the point is inside the model and the ray goes up instead. That height, if within half the
+label's longest side or twice its depth, is where the point's bottom and top are measured
+from — the overlap below and the depth above for a raised letter, the other way round for
+a sunk one — and a point with none takes the mean of the others. The walls stay square to
+the label's plane, so on a steep face a letter is thinner across it by the cosine of the
+slope (ADR 0310).
 
 ## Joined exactly
 

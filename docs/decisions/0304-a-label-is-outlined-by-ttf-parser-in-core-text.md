@@ -1,6 +1,6 @@
 # 0304. Outline a label with `ttf-parser` in `core-text`, and offer the machine's fonts
 
-- **Status:** Accepted
+- **Status:** Accepted; that the letters are flat is superseded by 0310
 - **Date:** 2026-10-18
 
 ## Context

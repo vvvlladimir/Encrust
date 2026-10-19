@@ -132,6 +132,8 @@ pub struct TextState {
     /// How far the letters stand out of the surface or into it, millimetres.
     pub depth_mm: Scalar,
     pub raised: bool,
+    /// Bent onto the surface under every letter, or flat on the plane at the click.
+    pub follow_surface: bool,
     /// How far the line is turned about the surface's normal, degrees anticlockwise.
     pub angle_deg: Scalar,
 }
@@ -144,6 +146,7 @@ impl Default for TextState {
             height_mm: 6.0,
             depth_mm: 0.8,
             raised: true,
+            follow_surface: false,
             angle_deg: 0.0,
         }
     }
@@ -215,6 +218,7 @@ impl TextTool {
             LabelSettings {
                 depth_mm: self.state.depth_mm,
                 raised: self.state.raised,
+                follow_surface: self.state.follow_surface,
             },
         )
     }
@@ -371,16 +375,23 @@ mod tests {
     #[test]
     fn letters_on_a_closed_model_are_cut_exactly() {
         let (scene, id, hit) = cube();
-        let tool = TextTool::default();
         let object = scene.get(id).expect("the cube");
-        let label = tool
-            .label_at(object, &hit)
-            .expect("the text stands on the cube");
-        let mut models = vec![transform_mesh(&object.mesh, object.transform)];
-        models.extend(label.prisms);
-        let combined = core_volume::combine(&models, Boolean::Union, core_volume::Cancel::never())
-            .expect("the letters combine with the cube");
-        assert_eq!(combined.voxel_mm, None, "every letter is a closed solid");
+        for follow_surface in [false, true] {
+            let mut tool = TextTool::default();
+            tool.state.follow_surface = follow_surface;
+            let label = tool
+                .label_at(object, &hit)
+                .expect("the text stands on the cube");
+            let mut models = vec![transform_mesh(&object.mesh, object.transform)];
+            models.extend(label.prisms);
+            let combined =
+                core_volume::combine(&models, Boolean::Union, core_volume::Cancel::never())
+                    .expect("the letters combine with the cube");
+            assert_eq!(
+                combined.voxel_mm, None,
+                "following the surface {follow_surface}: every letter is a closed solid"
+            );
+        }
     }
 
     #[test]

@@ -186,9 +186,11 @@ capped silently.
 - **Text:** click a model to write there, **raised** out of the surface or **sunk** into
   it, several lines if you like. Pick the **font** from the ones installed on your computer
   or the built-in IBM Plex Sans, and set the letter height, the depth and the angle; a
-  preview under the cursor shows what the click will write. The depth is measured from the
-  face where you click, and the letters follow the face no further than that depth, so
-  nothing beside them is cut; on a curved face they stay flat. Text is only ever cut
+  preview under the cursor shows what the click will write. **Flat** letters measure the
+  depth from the face where you click and follow it no further than that depth, so nothing
+  beside them is cut. **On the surface** bends every letter onto the face under it, so it
+  stands the full depth out of a curved face or into it everywhere; on a steep slope the
+  depth is measured along the direction you clicked from. Text is only ever cut
   exactly: on a model that is not closed it is refused, and the model is left as it was.
   Scripts that join their letters (Arabic, Devanagari) are not shaped. The browser build
   offers only the built-in font.
