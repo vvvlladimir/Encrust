@@ -33,13 +33,16 @@ The engine works in `f64`; a mesh goes in and comes out as the pipeline's `f32`.
 
 ## What it costs
 
-On an M-series laptop, a sphere minus a hundred square prisms:
+On an M1, a sphere minus a hundred square prisms:
 
 | Sphere faces | Read | Boolean |
 |---|---|---|
-| 20 k | 11 ms | 30 ms |
-| 200 k | 130 ms | 200 ms |
-| 1 M | 640 ms | 1.0 s |
+| 200 k | 120 ms | 200 ms |
+| 1 M | 660 ms | 0.94 s |
+| 4 M | 4.3 s | 5.0 s |
+
+The weld and the seams run on every core (ADR 0314); the rest of the read and the boolean
+are the engine's, on one thread.
 
 Cost follows the faces of both sides and the crossings between them. A union of thousands
 of shapes crossing each other — the struts of a scaffold at every node — is many times

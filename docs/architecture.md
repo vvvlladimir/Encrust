@@ -143,7 +143,7 @@ core-raster ──> core-slicer
 core-supports ──> core-slicer, core-raster, core-geometry, printer-profiles, rayon
 core-analysis ──> core-raster
 core-volume ──> core-csg, core-geometry, rayon
-core-csg ──> core-geometry, boolmesh
+core-csg ──> core-geometry, boolmesh, rayon
 core-text ──> core-geometry, rayon, ttf-parser
 core-joint ──> core-csg, core-geometry, rayon, serde
 core-plate ──> core-analysis, core-geometry, core-slicer, rayon
@@ -187,8 +187,9 @@ destinations, not by a crate under them (ADR 0182).
   holes and cuts are operators on a field, not crates of their own (ADR 0055–0060). A
   hollowed mesh is the model with its cavity appended: it gets sliced, never re-fielded.
 - `core-csg` is the one place an exact boolean is done, so the engine under it can be
-  replaced without touching a caller (ADR 0303). It sits on `core-geometry` alone, and
-  `core-volume` takes it to cut a lattice out of a cavity's mesh (ADR 0302).
+  replaced without touching a caller (ADR 0303). It sits on `core-geometry`, readies a
+  solid on `rayon` (ADR 0314), and `core-volume` takes it to cut a lattice out of a
+  cavity's mesh (ADR 0302).
 - `core-joint` joins a cut's halves with exact booleans, so it sits on `core-csg`, which
   `core-geometry` under it cannot reach; `core-engine` takes it only for the `Joints` a
   project writes down (ADR 0306).

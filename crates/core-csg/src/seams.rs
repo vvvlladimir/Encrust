@@ -1,8 +1,10 @@
 use std::collections::HashMap;
+use std::hash::BuildHasherDefault;
 use std::ops::Range;
 
 use core_geometry::glam::DVec3;
-use core_geometry::{Components, Mesh, point_key};
+use core_geometry::{Components, FastMap, Mesh, point_key};
+use rayon::prelude::*;
 
 use crate::error::CsgError;
 
@@ -44,7 +46,8 @@ pub(crate) fn unzipped(mesh: &Mesh) -> Result<Unzipped, CsgError> {
 
 /// Vertices on the same exact point merged, and faces left without area by that dropped.
 fn welded(mesh: &Mesh) -> (Vec<DVec3>, Vec<[usize; 3]>) {
-    let mut index = HashMap::with_capacity(mesh.vertices.len());
+    let mut index =
+        FastMap::with_capacity_and_hasher(mesh.vertices.len(), BuildHasherDefault::default());
     let mut points = Vec::with_capacity(mesh.vertices.len());
     let mut remap = Vec::with_capacity(mesh.vertices.len());
     for vertex in &mesh.vertices {
@@ -74,23 +77,32 @@ struct Seams {
 
 impl Seams {
     fn new(points: &[DVec3], faces: &[[usize; 3]]) -> Result<Self, CsgError> {
-        let mut uses: Vec<(usize, usize, usize, bool)> = faces
-            .iter()
+        // `u32` halves what the sort moves; a mesh past four billion vertices is not printed.
+        let mut uses: Vec<(u32, u32, u32, bool)> = faces
+            .par_iter()
             .enumerate()
-            .flat_map(|(face, corners)| {
+            .flat_map_iter(|(face, corners)| {
                 (0..3).map(move |side| {
                     let (tail, head) = (corners[side], corners[(side + 1) % 3]);
-                    (tail.min(head), tail.max(head), face, tail < head)
+                    (
+                        tail.min(head) as u32,
+                        tail.max(head) as u32,
+                        face as u32,
+                        tail < head,
+                    )
                 })
             })
             .collect();
-        uses.sort_unstable();
+        uses.par_sort_unstable();
 
         let mut pairs = Vec::with_capacity(uses.len() / 2);
         let mut branching = HashMap::new();
         for run in uses.chunk_by(|a, b| (a.0, a.1) == (b.0, b.1)) {
-            let edge = [run[0].0, run[0].1];
-            let around: Vec<(usize, bool)> = run.iter().map(|&(.., face, up)| (face, up)).collect();
+            let edge = [run[0].0 as usize, run[0].1 as usize];
+            let around: Vec<(usize, bool)> = run
+                .iter()
+                .map(|&(.., face, up)| (face as usize, up))
+                .collect();
             let wedges = match around.as_slice() {
                 [(first, up), (second, other_up)] if up != other_up => vec![(*first, *second)],
                 _ => wedges_around(points, faces, edge, around)?,
@@ -205,15 +217,15 @@ fn copies(faces: &[[usize; 3]], pairs: &[(usize, usize, [usize; 2])]) -> (Vec<us
 /// wound against each other.
 fn stuck_edges(origin: &[usize], indices: &[usize]) -> Vec<[usize; 2]> {
     let mut uses: Vec<(usize, usize, bool)> = indices
-        .chunks(3)
-        .flat_map(|face| {
+        .par_chunks(3)
+        .flat_map_iter(|face| {
             (0..3).map(move |side| {
                 let (tail, head) = (face[side], face[(side + 1) % 3]);
                 (tail.min(head), tail.max(head), tail < head)
             })
         })
         .collect();
-    uses.sort_unstable();
+    uses.par_sort_unstable();
     let mut stuck: Vec<[usize; 2]> = uses
         .chunk_by(|a, b| (a.0, a.1) == (b.0, b.1))
         .filter(|run| !matches!(run, [a, b] if a.2 != b.2))

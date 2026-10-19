@@ -995,6 +995,7 @@ version = "0.4.0"
 dependencies = [
  "boolmesh",
  "core-geometry",
+ "rayon",
  "thiserror 2.0.21",
  "workspace-hack",
 ]
