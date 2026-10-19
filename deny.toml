@@ -55,3 +55,5 @@ wildcards = "allow"
 [sources]
 unknown-registry = "deny"
 unknown-git = "deny"
+# Our fork of boolmesh, until upstream takes its changes (ADR 0315).
+allow-git = ["https://github.com/vvvlladimir/boolmesh"]
