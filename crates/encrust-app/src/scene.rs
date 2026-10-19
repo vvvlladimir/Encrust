@@ -254,7 +254,8 @@ pub struct SceneObject {
     pub lift_mm: Option<f32>,
     /// The model this one is a plug for, laid beside it by the Drain tool (ADR 0313).
     pub plug_of: Option<ObjectId>,
-    /// What this model's plugs were last laid for; `None` until they are first looked at.
+    /// What this model's plugs were last laid for; `None` for one read back from a project,
+    /// which takes its plugs as they stand.
     pub plugs_laid: Option<PlugsLaid>,
     bounds: PlacedBounds,
 }
@@ -642,10 +643,20 @@ impl Scene {
         self.plates.push(name);
         let copy = (self.plates.len() - 1) as u32;
         let models: Vec<SceneObject> = self.on_plate(plate).cloned().collect();
-        for mut model in models {
+        let first = self.next_id;
+        let copied = |id: ObjectId| {
+            let index = models.iter().position(|model| model.id == id)?;
+            Some(ObjectId(first + index as u64))
+        };
+        let plugs: Vec<Option<ObjectId>> = models
+            .iter()
+            .map(|model| model.plug_of.and_then(copied))
+            .collect();
+        for (mut model, plug_of) in models.into_iter().zip(plugs) {
             model.id = ObjectId(self.next_id);
             self.next_id += 1;
             model.plate = copy;
+            model.plug_of = plug_of;
             self.objects.push(model);
         }
         self.active = copy;
@@ -832,7 +843,7 @@ impl Scene {
             own: OwnSettings::default(),
             lift_mm: None,
             plug_of: None,
-            plugs_laid: None,
+            plugs_laid: Some(PlugsLaid::default()),
             bounds: PlacedBounds::default(),
         });
         self.selected = vec![id];
@@ -848,6 +859,9 @@ impl Scene {
         copy.id = ObjectId(self.next_id);
         self.next_id += 1;
         copy.transform.translation += offset;
+        // A copy lays plugs of its own, and a copied plug is the user's, not its model's.
+        copy.plugs_laid = Some(PlugsLaid::default());
+        copy.plug_of = None;
 
         let copy_id = copy.id;
         self.objects.push(copy);

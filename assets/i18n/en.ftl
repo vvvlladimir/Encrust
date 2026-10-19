@@ -1344,7 +1344,7 @@ drain-check-tooltip = Cuts the plate and follows the air through it, looking for
 drain-checking = Checking drainage
 drain-hole = Hole
 drain-channel = Channel
-drain-channel-note = Each click adds a point; the channel is a tube of the hole size running under all of them, open at its two ends alone.
+drain-channel-note = Each click adds a point; the channel takes the hole's width and outline and runs under all of them, open at its two ends alone.
 drain-sizes-note = The depth is measured from the surface inwards. A taper under 1 makes it a cone.
 drain-round = Round
 drain-polygon = Polygon
@@ -1356,6 +1356,7 @@ drain-plugs-note = Each hole gets a plug on the plate beside its model as soon a
 drain-plug-gap = Gap per side
 drain-plug-drift = The resin's tolerance compensation is off, so the plug is drawn { $drift } mm wider a side to print at this gap.
 drain-plug-name = { $name } (plug { $index })
+drain-plugs-failed = The plugs for the drain holes could not be cut.
 drain-none-cut = No hole and no channel is cut yet.
 drain-clear-cuts =
     { $count ->

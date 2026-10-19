@@ -1,7 +1,8 @@
-use core_geometry::{Bvh, Mesh, Quat, Ray, Scalar, Vec3};
+use core_geometry::{Aabb, Bvh, Mesh, Quat, Ray, Scalar, Transform, Vec3, transform_mesh};
 
 use crate::drain::{DrainHole, MOUTH_LIFT_MM, Section};
 use crate::error::VolumeError;
+use crate::hollow::HollowMode;
 
 /// Rings the outer face of a plug is sampled on between its middle and its rim. Four on a
 /// twenty-millimetre hole is a sample every two and a half millimetres, where a surface
@@ -16,13 +17,21 @@ const THINNEST_MM: Scalar = 0.05;
 /// side: a slip fit on a resin printed to size, past the roughness of its walls.
 pub const PLUG_GAP_MM: Scalar = 0.15;
 
-/// A plug for each of `holes`, in the model's own space: what the hole took out of the
-/// wall, narrowed by `gap_mm` all round so it slides back in; see ADR 0313.
+/// Space left between a model and the plugs laid beside it, and between one plug and the
+/// next, millimetres.
+pub const PLUG_SPACING_MM: Scalar = 3.0;
+
+/// How long a plug is for a model shelled by `mode` to `thickness_mm`: the wall, where the
+/// cavity is inside it; `None`, the hole's own depth, for a mould, which has no wall to fill.
+pub fn plug_wall_mm(mode: HollowMode, thickness_mm: Scalar) -> Option<Scalar> {
+    (mode == HollowMode::Internal).then_some(thickness_mm)
+}
+
+/// A plug for each of `holes` as they are cut, after [`crate::pierce`], in the model's own
+/// space: what the hole took out of the wall, `gap_mm` narrower all round (ADR 0313).
 ///
-/// Its outer face is `model`'s surface over the mouth, read along the axis, so it closes
-/// flush; its inner end is flat, `wall_mm` in where the model is hollow, at the hole's own
-/// depth otherwise. A taper carries over, so a cone is closed by
-/// a cone.
+/// Its outer face is `model`'s surface over the mouth, so it closes flush, and its inner
+/// end is flat, `wall_mm` in, or at the hole's depth without one. A taper carries over.
 pub fn plugs(
     model: &Mesh,
     bvh: &Bvh,
@@ -37,9 +46,32 @@ pub fn plugs(
         .collect()
 }
 
+/// `plugs`, cut for `holes` in a model's own space, carried onto the plate by `transform`,
+/// stood on the end that goes in, and laid in a row past the right-hand side of `beside`.
+pub fn laid_beside(
+    plugs: &[Mesh],
+    holes: &[DrainHole],
+    transform: Transform,
+    beside: Aabb,
+) -> Vec<Mesh> {
+    let mut x = beside.maxs.x + PLUG_SPACING_MM;
+    let mut laid = Vec::with_capacity(plugs.len());
+    for (plug, hole) in plugs.iter().zip(holes) {
+        let placed = transform_mesh(plug, transform);
+        let stood = stand_on_end(&placed, transform.linear() * hole.axis);
+        let Some(size) = stood.aabb().map(|bounds| bounds.extents()) else {
+            continue;
+        };
+        let offset = Vec3::new(x + size.x / 2.0, beside.mins.y + size.y / 2.0, 0.0);
+        laid.push(transform_mesh(&stood, Transform::from_translation(offset)));
+        x += size.x + PLUG_SPACING_MM;
+    }
+    laid
+}
+
 /// `plug` turned so the end that goes into the model is down, standing on the plate with
 /// the middle of its footprint over the origin. `axis` is the hole's, carried the same way.
-pub fn stand_on_end(plug: &Mesh, axis: Vec3) -> Mesh {
+fn stand_on_end(plug: &Mesh, axis: Vec3) -> Mesh {
     let turn = axis.try_normalize().map_or(Quat::IDENTITY, |axis| {
         Quat::from_rotation_arc(axis, Vec3::NEG_Z)
     });
@@ -246,6 +278,58 @@ mod tests {
             "its footprint is centred on the origin"
         );
         assert!(signed_volume(&stood) > 0.0, "a turn keeps it wound outward");
+    }
+
+    #[test]
+    fn a_tapered_plug_narrows_with_the_hole_as_it_is_cut_through_the_wall() {
+        let shallow = DrainHole {
+            depth_mm: 2.0,
+            taper: 0.5,
+            ..hole_in_the_top()
+        };
+        let cut = crate::pierce(&[shallow], 4.0, 0.2);
+        let plug = the_plug(cut[0], Some(4.0), 0.1);
+        let inner_x = plug
+            .vertices
+            .iter()
+            .filter(|vertex| (vertex.z - 6.0).abs() < 1e-4)
+            .map(|vertex| vertex.x - 10.0)
+            .fold(Scalar::MIN, Scalar::max);
+        // Pierced to 4 + 2 voxels from a mouth lifted MOUTH_LIFT_MM, the cone halves over
+        // 4.45 mm, so 4 mm in a corner is 2 (1 - 0.5 * 4.05 / 4.45) out, less the gap's reach.
+        let inset = 0.1 / (std::f32::consts::PI / 24.0).cos();
+        let expected = 2.0 * (1.0 - 0.5 * 4.05 / 4.45) - inset;
+        assert!(
+            (inner_x - expected).abs() < 1e-3,
+            "the plug's inner end is the hole there less its gap, {expected} mm, got {inner_x}"
+        );
+    }
+
+    #[test]
+    fn plugs_are_laid_in_a_row_on_the_plate_past_their_model() {
+        let plug = the_plug(hole_in_the_top(), Some(2.0), 0.1);
+        let beside = Aabb::new(Vec3::ZERO, Vec3::new(20.0, 20.0, 10.0));
+        let laid = laid_beside(
+            &[plug.clone(), plug],
+            &[hole_in_the_top(); 2],
+            Transform::default(),
+            beside,
+        );
+        let bounds: Vec<Aabb> = laid
+            .iter()
+            .map(|plug| plug.aabb().expect("a plug has vertices"))
+            .collect();
+        assert!(
+            (bounds[0].mins.x - (20.0 + PLUG_SPACING_MM)).abs() < 1e-4
+                && (bounds[1].mins.x - (bounds[0].maxs.x + PLUG_SPACING_MM)).abs() < 1e-4,
+            "a spacing past the model, then a spacing past the plug before: {bounds:?}"
+        );
+        assert!(
+            bounds
+                .iter()
+                .all(|b| b.mins.z.abs() < 1e-5 && b.mins.y.abs() < 1e-4),
+            "each stands on the plate, level with the model's front: {bounds:?}"
+        );
     }
 
     #[test]

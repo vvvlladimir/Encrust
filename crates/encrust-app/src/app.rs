@@ -301,9 +301,8 @@ impl SlicerApp {
     }
 
     /// Ends the frame's edits and puts them on the history. What follows from an edit by
-    /// itself — a model settling onto its raft once its supports go, plugs laid for its
-    /// holes — is done first, so it is part of that edit: done a frame later it would be one of its own, which the
-    /// next undo would put back and the frame after it do again.
+    /// itself — a model settling onto its raft, plugs laid for its holes — is done first, so
+    /// it is part of that edit: a frame later, an undo would put it back and redo it at once.
     fn record(&mut self, frame: Frame) {
         self.tools.supports.settle_on_raft(&mut self.doc.scene);
         let drift_mm = self.machine.slicing.material.compensation.fit_drift_mm();

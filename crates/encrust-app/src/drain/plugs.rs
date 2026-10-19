@@ -1,5 +1,5 @@
-use core_geometry::{Mesh, Scalar, Transform, Vec3, transform_mesh};
-use core_volume::{DrainHole, HollowMode, VolumeError, plugs, stand_on_end};
+use core_geometry::{Mesh, Scalar};
+use core_volume::{DrainHole, VolumeError, laid_beside, plug_wall_mm, plugs};
 
 use super::DrainTool;
 use crate::i18n::tr;
@@ -7,13 +7,9 @@ use crate::landing::place;
 use crate::scene::{ObjectId, Scene, SceneObject};
 use crate::status::Status;
 
-/// Space left between a model and the plugs laid out beside it, and between one plug and
-/// the next, millimetres.
-const PLUG_SPACING_MM: Scalar = 3.0;
-
 /// What one model's plugs were last laid for, in its own space: they are laid again
-/// whenever it changes (ADR 0313).
-#[derive(Debug, Clone, PartialEq)]
+/// whenever it changes (ADR 0313). The default is laid for nothing, a model's first word.
+#[derive(Debug, Clone, Default, PartialEq)]
 pub struct PlugsLaid {
     holes: Vec<DrainHole>,
     wall_mm: Option<Scalar>,
@@ -23,8 +19,8 @@ pub struct PlugsLaid {
 impl DrainTool {
     /// Lays again the plugs of every model whose holes, wall or plug gap moved since they
     /// were last laid, in place of the ones laid then; `drift_mm` is what the resin leaves a
-    /// fit wider by (`Compensation::fit_drift_mm`). A model opened with its plugs already
-    /// beside it takes them as laid.
+    /// fit wider by (`Compensation::fit_drift_mm`). A model read back from a project has no
+    /// record and takes its plugs as they stand, the ones deleted before it was saved too.
     pub fn lay_plugs(&self, scene: &mut Scene, drift_mm: Scalar, status: &mut Status) {
         let due: Vec<(ObjectId, PlugsLaid, bool)> = scene
             .objects()
@@ -35,10 +31,7 @@ impl DrainTool {
                 let kept = match &object.plugs_laid {
                     Some(laid) if *laid == wanted => return None,
                     Some(_) => false,
-                    None => scene
-                        .objects()
-                        .iter()
-                        .any(|plug| plug.plug_of == Some(object.id)),
+                    None => true,
                 };
                 Some((object.id, wanted, kept))
             })
@@ -46,7 +39,8 @@ impl DrainTool {
 
         for (id, wanted, kept) in due {
             if !kept && let Err(error) = lay_again(scene, id, &wanted) {
-                *status = Status::Error(error.to_string());
+                *status =
+                    Status::failed(&anyhow::Error::new(error).context(tr!("drain-plugs-failed")));
             }
             if let Some(object) = scene.get_mut(id) {
                 object.plugs_laid = Some(wanted);
@@ -54,17 +48,15 @@ impl DrainTool {
         }
     }
 
-    /// The plugs `object` asks for now: one a hole, as long as the wall where it is an
-    /// inside shell, as deep as the hole otherwise.
+    /// The plugs `object` asks for now: one a hole as it is cut, through the wall.
     fn plugs_for(&self, object: &SceneObject, drift_mm: Scalar) -> PlugsLaid {
         let least = object.transform.least_scale();
         PlugsLaid {
-            holes: object.hollow.drains().to_vec(),
+            holes: object.hollow.cut().0.to_vec(),
             wall_mm: object
                 .hollow
                 .asked()
-                .filter(|asked| asked.mode == HollowMode::Internal)
-                .map(|asked| asked.thickness_mm / least),
+                .and_then(|asked| plug_wall_mm(asked.mode, asked.thickness_mm / least)),
             gap_mm: (self.state_for(object).plug_gap_mm - drift_mm) / least,
         }
     }
@@ -83,7 +75,9 @@ fn lay_again(scene: &mut Scene, id: ObjectId, wanted: &PlugsLaid) -> Result<(), 
     for plug in old {
         scene.remove(plug);
     }
-    let Some(object) = scene.get(id).filter(|_| !wanted.holes.is_empty()) else {
+    let found = scene.get(id).filter(|_| !wanted.holes.is_empty());
+    let Some((object, beside)) = found.and_then(|object| Some((object, object.world_bounds()?)))
+    else {
         scene.select_many(&selection);
         return Ok(());
     };
@@ -94,45 +88,21 @@ fn lay_again(scene: &mut Scene, id: ObjectId, wanted: &PlugsLaid) -> Result<(), 
         wanted.wall_mm,
         wanted.gap_mm,
     );
-    let stood = made.map(|made| -> Vec<Mesh> {
-        made.iter()
-            .zip(&wanted.holes)
-            .map(|(plug, hole)| {
-                let placed = transform_mesh(plug, object.transform);
-                stand_on_end(&placed, object.transform.linear() * hole.axis)
-            })
-            .collect()
-    });
-    let name = object.name.clone();
-    if let Ok(stood) = &stood {
-        lay_out(scene, id, &name, stood);
-    }
+    let laid = made.map(|made| laid_beside(&made, &wanted.holes, object.transform, beside));
+    let (name, plate) = (object.name.clone(), object.plate);
+    let result = laid.map(|laid| lay_out(scene, id, plate, &name, laid));
     scene.select_many(&selection);
-    stood.map(|_| ())
+    result
 }
 
-/// Stands `plugs` on the plate in a row past the right-hand side of model `beside`, each
-/// marked as its plug.
-fn lay_out(scene: &mut Scene, beside: ObjectId, name: &str, plugs: &[Mesh]) {
-    let Some((bounds, plate)) = scene
-        .get(beside)
-        .and_then(|object| Some((object.world_bounds()?, object.plate)))
-    else {
-        return;
-    };
-    let mut x = bounds.maxs.x + PLUG_SPACING_MM;
-    for (index, plug) in plugs.iter().enumerate() {
-        let Some(size) = plug.aabb().map(|bounds| bounds.extents()) else {
-            continue;
-        };
-        let offset = Vec3::new(x + size.x / 2.0, bounds.mins.y + size.y / 2.0, 0.0);
-        let laid = transform_mesh(plug, Transform::from_translation(offset));
+/// Puts `plugs`, already in plate coordinates, on `plate`, each marked as a plug of `model`.
+fn lay_out(scene: &mut Scene, model: ObjectId, plate: u32, name: &str, plugs: Vec<Mesh>) {
+    for (index, plug) in plugs.into_iter().enumerate() {
         let name = tr!("drain-plug-name", name = name.to_owned(), index = index + 1);
-        let (id, _) = place(scene, plate, name, laid);
+        let (id, _) = place(scene, plate, name, plug);
         if let Some(plug) = scene.get_mut(id) {
-            plug.plug_of = Some(beside);
+            plug.plug_of = Some(model);
         }
-        x += size.x + PLUG_SPACING_MM;
     }
 }
 
@@ -140,7 +110,7 @@ fn lay_out(scene: &mut Scene, beside: ObjectId, name: &str, plugs: &[Mesh]) {
 mod tests {
     use std::sync::Arc;
 
-    use core_geometry::{cuboid, diagnose};
+    use core_geometry::{Transform, Vec3, cuboid, diagnose};
 
     use super::*;
     use crate::scene::{ImportSummary, Imported};
@@ -250,6 +220,71 @@ mod tests {
             plugs_of(&scene, id)[0].id,
             first,
             "the plug read back is kept"
+        );
+    }
+
+    #[test]
+    fn a_plug_deleted_before_saving_stays_deleted_once_opened() {
+        let (mut scene, id, tool) = a_block_with_holes(&[3.0]);
+        let mut status = Status::default();
+        tool.lay_plugs(&mut scene, 0.0, &mut status);
+        let plug = plugs_of(&scene, id)[0].id;
+        scene.remove(plug);
+        scene.get_mut(id).expect("the block").plugs_laid = None;
+
+        tool.lay_plugs(&mut scene, 0.0, &mut status);
+        assert!(
+            plugs_of(&scene, id).is_empty(),
+            "the project is opened as it was saved"
+        );
+    }
+
+    #[test]
+    fn a_copy_of_a_model_gets_plugs_of_its_own() {
+        let (mut scene, id, tool) = a_block_with_holes(&[3.0]);
+        let mut status = Status::default();
+        tool.lay_plugs(&mut scene, 0.0, &mut status);
+        let copy = scene
+            .duplicate(id, Vec3::new(0.0, 30.0, 0.0))
+            .expect("the block is there to copy");
+
+        tool.lay_plugs(&mut scene, 0.0, &mut status);
+        assert_eq!(
+            plugs_of(&scene, copy).len(),
+            1,
+            "the copy's hole is plugged"
+        );
+        assert_eq!(plugs_of(&scene, id).len(), 1, "the original keeps its own");
+    }
+
+    #[test]
+    fn a_copied_plate_keeps_its_plugs_apart_from_the_original() {
+        let (mut scene, id, tool) = a_block_with_holes(&[3.0]);
+        let mut status = Status::default();
+        tool.lay_plugs(&mut scene, 0.0, &mut status);
+        let copied = scene.duplicate_plate(0).expect("plate 0 is there to copy");
+        let model = scene
+            .on_plate(copied)
+            .find(|object| object.plug_of.is_none())
+            .map(|object| object.id)
+            .expect("the block was copied");
+        assert_eq!(
+            plugs_of(&scene, model).len(),
+            1,
+            "the copied plug is the copy's"
+        );
+
+        drill(&mut scene, id, &tool, &[7.0]);
+        tool.lay_plugs(&mut scene, 0.0, &mut status);
+        assert_eq!(
+            plugs_of(&scene, id).len(),
+            2,
+            "the original lays its own again"
+        );
+        assert_eq!(
+            plugs_of(&scene, model).len(),
+            1,
+            "and leaves the copy's alone"
         );
     }
 }

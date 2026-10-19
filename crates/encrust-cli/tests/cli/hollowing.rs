@@ -459,3 +459,88 @@ fn plugs_with_no_hole_are_refused() {
     assert!(!output.status.success());
     assert!(stderr(&output).contains("none was given"));
 }
+
+#[test]
+fn an_open_floor_with_no_shell_is_refused() {
+    let path = write_box_stl("open-solid", 16.0, 12, 0);
+    let output = estimate(&[path.to_str().unwrap(), "--hollow-open-floor"]);
+    assert!(
+        !output.status.success(),
+        "a solid model has no floor to open"
+    );
+    assert!(stderr(&output).contains("--hollow was not given"));
+}
+
+#[test]
+fn a_negative_plug_gap_is_refused() {
+    let path = write_box_stl("plugs-negative", 8.0, 12, 0);
+    let output = estimate(&[
+        path.to_str().unwrap(),
+        "--drain-at",
+        "4,4,10",
+        "--drain-plugs",
+        "--plug-gap=-0.1",
+    ]);
+    assert!(
+        !output.status.success(),
+        "a plug wider than its hole cannot go in"
+    );
+    assert!(stderr(&output).contains("--plug-gap"));
+}
+
+#[test]
+fn plugs_that_would_run_off_the_plate_are_refused() {
+    // The 40 mm plate leaves 4 mm past a 36 mm box, short of a spacing and a plug.
+    let path = write_box_stl("plugs-off", 36.0, 12, 0);
+    let output = estimate(&[
+        path.to_str().unwrap(),
+        "--profile",
+        test_panel().to_str().unwrap(),
+        "--drain",
+        "3",
+        "--drain-at",
+        "18,18,40",
+        "--drain-plugs",
+    ]);
+    assert!(!output.status.success(), "{}", stdout(&output));
+    assert!(stderr(&output).contains("run off the plate"));
+}
+
+#[test]
+fn a_square_hole_turned_on_its_corner_takes_a_plug() {
+    let path = write_box_stl("plugs-square", 8.0, 12, 0);
+    let out = output_dir("plugs-square");
+    let output = slice(&[
+        path.to_str().unwrap(),
+        "--profile",
+        test_panel().to_str().unwrap(),
+        "--layer-height",
+        "1",
+        "--drain",
+        "3",
+        "--drain-sides",
+        "4",
+        "--drain-turn",
+        "45",
+        "--drain-at",
+        "4,4,10",
+        "--drain-plugs",
+        "--plug-gap",
+        "0.2",
+        "-o",
+        out.to_str().unwrap(),
+    ]);
+    let text = stdout(&output);
+    assert!(output.status.success(), "{text}");
+    assert_eq!(
+        field(&text, "plugs"),
+        "1 beside the model, 0.20 mm narrower a side"
+    );
+    // A square with its corners on 1.5 mm, its sides 0.2 mm in, is 2 (1.5 / root 2 - 0.2)
+    // across, 3.1 mm2 or about 310 pixels over the box's 6 400.
+    let lit = lit_pixels(&out, 0);
+    assert!(
+        (lit as f32 - 6_710.0).abs() < 100.0,
+        "the box and one square plug beside it, about 6 710 pixels, got {lit}"
+    );
+}

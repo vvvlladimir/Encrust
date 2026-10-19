@@ -2,11 +2,11 @@ use std::fmt;
 use std::time::{Duration, Instant};
 
 use anyhow::{Context, Result, bail};
-use core_geometry::{Bvh, Mesh, Scalar, Transform, Vec3, transform_mesh};
+use core_geometry::{Bvh, Mesh, Scalar, Transform, Vec3};
 use core_volume::{
     Cancel, Channel, DrainHole, HoleShape, HoleSize, HollowMode, HollowSettings, InfillPattern,
-    InfillSettings, PLUG_GAP_MM, VolumeError, drill, hole_at, hollow, pierce, plugs, sleeves,
-    stand_on_end,
+    InfillSettings, PLUG_GAP_MM, VolumeError, drill, hole_at, hollow, laid_beside, pierce,
+    plug_wall_mm, plugs, sleeves,
 };
 
 use crate::exit::{Cancelled, Stop};
@@ -193,8 +193,9 @@ impl HollowArgs {
         })
     }
 
-    /// Refuses an open floor on anything but a shell, and plugs with no hole to close.
-    fn check_floor_and_plugs(&self) -> Result<()> {
+    /// Refuses an open floor on anything but a shell, and plugs with no hole to close or a
+    /// gap that would make them wider than it.
+    pub(crate) fn check_floor_and_plugs(&self) -> Result<()> {
         if self.open_floor && !self.wanted() {
             bail!("--hollow-open-floor opens a shell's floor, and --hollow was not given");
         }
@@ -203,6 +204,12 @@ impl HollowArgs {
         }
         if self.plugs && self.drain_at.is_empty() {
             bail!("--drain-plugs closes the holes --drain-at drills, and none was given");
+        }
+        if self.plug_gap_mm.is_nan() || self.plug_gap_mm < 0.0 {
+            bail!(
+                "--plug-gap is how much narrower a plug is than its hole, so not {}",
+                self.plug_gap_mm
+            );
         }
         Ok(())
     }
@@ -302,7 +309,6 @@ pub fn run(
 ) -> Result<(Mesh, HollowReport)> {
     let started = Instant::now();
     args.check_infill()?;
-    args.check_floor_and_plugs()?;
     let bvh = Bvh::build(mesh);
     let Some(settings) = args.settings(precision) else {
         bail!("--hollow was not given, so there is nothing to hollow");
@@ -333,38 +339,32 @@ pub fn placed(mesh: &Mesh, args: &HollowArgs) -> Result<(Vec<DrainHole>, Vec<Cha
     Ok((args.drains(mesh, &Bvh::build(mesh))?, args.dug()))
 }
 
-/// Space left between the model and the plugs laid out beside it, and between one plug and
-/// the next, millimetres.
-const PLUG_SPACING_MM: Scalar = 3.0;
-
-/// A plug for each of `holes`, drilled into `mesh` as it stands solid on the plate, laid
-/// on the plate in a row past the model's right-hand side. `drift_mm` is what the resin's
-/// compensation leaves a fit wider by, and comes off the gap asked for.
+/// A plug for each of `holes` as they are cut, drilled into `mesh` as it stands solid on
+/// the plate, laid on the plate in a row past the model's right-hand side. `drift_mm` is
+/// what the resin's compensation leaves a fit wider by, and comes off the gap asked for.
 pub fn plugs_beside(
     mesh: &Mesh,
     holes: &[DrainHole],
     args: &HollowArgs,
     drift_mm: Scalar,
 ) -> Result<Vec<Mesh>> {
-    args.check_floor_and_plugs()?;
     let wall_mm = args
         .thickness_mm
-        .filter(|_| matches!(args.mode, Mode::Internal));
+        .and_then(|thickness_mm| plug_wall_mm(args.mode.into(), thickness_mm));
     let gap_mm = args.plug_gap_mm - drift_mm;
     let made = plugs(mesh, &Bvh::build(mesh), holes, wall_mm, gap_mm)
         .context("cutting the plugs for the drain holes")?;
     let bounds = mesh.aabb().context("mesh has no vertices")?;
+    Ok(laid_beside(&made, holes, Transform::default(), bounds))
+}
 
-    let mut x = bounds.maxs.x + PLUG_SPACING_MM;
-    let mut laid = Vec::with_capacity(made.len());
-    for (plug, hole) in made.iter().zip(holes) {
-        let stood = stand_on_end(plug, hole.axis);
-        let size = stood.aabb().context("a plug has vertices")?.extents();
-        let offset = Vec3::new(x + size.x / 2.0, bounds.mins.y + size.y / 2.0, 0.0);
-        laid.push(transform_mesh(&stood, Transform::from_translation(offset)));
-        x += size.x + PLUG_SPACING_MM;
+/// `holes` as a model hollowed to `wall` cuts them: deepened through the wall, where there
+/// is one, so none stops inside it.
+pub fn pierced(holes: &[DrainHole], wall: Option<(Scalar, Scalar)>) -> Vec<DrainHole> {
+    match wall {
+        Some((thickness_mm, voxel_mm)) => pierce(holes, thickness_mm, voxel_mm),
+        None => holes.to_vec(),
     }
-    Ok(laid)
 }
 
 /// The bodies `placed` cuts out of a model hollowed to `wall`, and how many of each.
@@ -378,10 +378,7 @@ pub fn cut(
     wall: Option<(Scalar, Scalar)>,
 ) -> Result<(Cuts, Mesh)> {
     let (holes, channels) = placed;
-    let holes = match wall {
-        Some((thickness_mm, voxel_mm)) => pierce(&holes, thickness_mm, voxel_mm),
-        None => holes,
-    };
+    let holes = pierced(&holes, wall);
     let bodies = drill(&holes, &channels).context("drilling the drains")?;
     Ok((
         Cuts {

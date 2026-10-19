@@ -288,6 +288,8 @@ fn restore_objects(
         };
         object.visible = state.visible;
         object.plate = state.plate;
+        // Opened as it was saved: the plugs standing are the ones it has.
+        object.plugs_laid = None;
         let own_supports: BTreeMap<u16, SupportProfile> = state
             .own_supports
             .into_iter()

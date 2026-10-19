@@ -3,7 +3,7 @@ use std::sync::mpsc::Sender;
 
 use core_format::ExposureRange;
 use core_geometry::{Mat4, Mesh, Scalar, Transform, Vec2, Vec3};
-use core_volume::{CUT_WEIGHT, Channel, DrainHole, HoleShape, MOUTH_LIFT_MM, drill};
+use core_volume::{CUT_WEIGHT, Channel, DrainHole, MOUTH_LIFT_MM, drill};
 use egui::Color32;
 use egui::epaint::ViewportInPixels;
 use egui_wgpu::{CallbackResources, CallbackTrait, ScreenDescriptor};
@@ -492,9 +492,8 @@ fn bands_of(ranges: &[ExposureRange]) -> Vec<ExposureBand> {
 
 /// The holes and channels of one model, in plate millimetres, ready for the shader.
 ///
-/// A channel is handed over a segment at a time with a ball at each joint, which is the
-/// same union of capsules `core-volume` meshes it as. Past `MAX_CUTS` a plate is drawn
-/// with its later holes uncut: only the picture is short, never the print.
+/// A channel is handed over a leg at a time with its mitres, the same prism `core-volume`
+/// meshes it as. Past `MAX_CUTS` a plate is drawn with its later holes uncut.
 pub(crate) fn cuts_of(
     drains: &[DrainHole],
     channels: &[Channel],
@@ -522,10 +521,7 @@ pub(crate) fn cuts_of(
     }
     for channel in channels {
         let radius = channel.diameter_mm / 2.0;
-        let sides = match channel.shape {
-            HoleShape::Round => None,
-            HoleShape::Polygon { .. } => Some(channel.shape.sides()),
-        };
+        let sides = channel.shape.corners();
         for leg in channel.legs() {
             let axis = leg.to - leg.from;
             let mut cut = DrainCut {

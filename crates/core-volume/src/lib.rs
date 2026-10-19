@@ -31,7 +31,7 @@ pub use cancel::Cancel;
 pub use csg::{difference, intersection, offset, shell, union};
 pub use drain::{
     CUT_WEIGHT, Channel, DrainHole, HoleShape, HoleSize, Leg, MOUTH_LIFT_MM, channel_under, drill,
-    hole_at, lift_for, pierce,
+    hole_at, lift_for, pierce, turn_in_model,
 };
 pub use error::VolumeError;
 pub use extract::extract;
@@ -43,7 +43,7 @@ pub use hollow::{
 pub use infill::{InfillPattern, InfillSettings};
 pub use model::{ModelHollow, PENDING_MARKER_MM, Shell, markers};
 pub use parts::{PartSettings, PartedOff, Parts, part_off, parts};
-pub use plug::{PLUG_GAP_MM, plugs, stand_on_end};
+pub use plug::{PLUG_GAP_MM, PLUG_SPACING_MM, laid_beside, plug_wall_mm, plugs};
 pub use relief::{
     AngleMask, Relief, ReliefBasis, ReliefSettings, Tiling, prepared, press, press_reusing,
     press_tiled, press_tiled_reusing,

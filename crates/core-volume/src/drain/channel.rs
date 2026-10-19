@@ -1,8 +1,8 @@
-use std::f32::consts::{FRAC_PI_2, TAU};
+use std::f32::consts::FRAC_PI_2;
 
 use core_geometry::{Mesh, Quat, Scalar, Vec3};
 
-use super::{Channel, Section};
+use super::{Channel, Section, around};
 
 /// The sharpest turn a channel takes at one point, radians. A mitre's reach past the tube
 /// grows as the secant of half the turn, so a sharper one is split in two at each side of
@@ -34,7 +34,7 @@ impl Channel {
         let spine = spine(&self.points, self.diameter_mm / 2.0);
         let tangents: Vec<Vec3> = spine
             .windows(2)
-            .map(|pair| (pair[1] - pair[0]).normalize())
+            .filter_map(|pair| (pair[1] - pair[0]).try_normalize())
             .collect();
         let Some(first) = tangents.first() else {
             return Vec::new();
@@ -66,12 +66,7 @@ impl Channel {
 /// `points` with the repeats dropped and every turn sharper than [`SHARPEST_TURN`] split
 /// into two, set apart far enough for a tube of `radius` to make each without folding.
 fn spine(points: &[Vec3], radius: Scalar) -> Vec<Vec3> {
-    let mut kept: Vec<Vec3> = Vec::with_capacity(points.len());
-    for point in points {
-        if kept.last().is_none_or(|last| last.distance(*point) > 1e-6) {
-            kept.push(*point);
-        }
-    }
+    let kept = without_repeats(points);
     let mut spine = Vec::with_capacity(kept.len() * 2);
     for (index, point) in kept.iter().enumerate() {
         let (Some(before), Some(after)) = (index.checked_sub(1), kept.get(index + 1)) else {
@@ -91,26 +86,35 @@ fn spine(points: &[Vec3], radius: Scalar) -> Vec<Vec3> {
         spine.push(*point - into.normalize() * apart);
         spine.push(*point + out.normalize() * apart);
     }
-    spine
+    // Two splits clamped to the leg between them, or a turn straight back, meet in one point.
+    without_repeats(&spine)
+}
+
+fn without_repeats(points: &[Vec3]) -> Vec<Vec3> {
+    let mut kept: Vec<Vec3> = Vec::with_capacity(points.len());
+    for point in points {
+        if kept.last().is_none_or(|last| last.distance(*point) > 1e-6) {
+            kept.push(*point);
+        }
+    }
+    kept
 }
 
 /// The closed prism `channel` digs, wound outward: one ring of its outline at each end and
-/// at every mitre, so the outline holds all the way through.
+/// at every mitre, so the outline holds all the way through. `None` for a channel that
+/// doubles straight back on itself, which has no mitre to turn on.
 pub(super) fn tunnel(channel: &Channel) -> Option<Mesh> {
     let radius = channel.diameter_mm / 2.0;
     let legs = channel.legs();
-    if radius <= 0.0 || !radius.is_finite() || legs.is_empty() {
+    let folded = legs.iter().rev().skip(1).any(|leg| leg.end.is_none());
+    if radius <= 0.0 || !radius.is_finite() || legs.is_empty() || folded {
         return None;
     }
     let sides = Section::of(channel.shape, channel.turn_deg).sides;
     let ring = |leg: &Leg| -> Vec<Vec3> {
         let axis = (leg.to - leg.from).normalize();
-        let across = axis.cross(leg.corner);
-        (0..sides)
-            .map(|side| {
-                let (sin, cos) = (TAU * side as Scalar / sides as Scalar).sin_cos();
-                (leg.corner * cos + across * sin) * radius
-            })
+        around(axis, leg.corner, sides)
+            .map(|offset| offset * radius)
             .collect()
     };
 
@@ -215,6 +219,41 @@ mod tests {
             legs[0].start.is_none() && legs[2].end.is_none(),
             "the ends are open"
         );
+    }
+
+    #[test]
+    fn two_sharp_turns_sharing_a_short_leg_leave_no_leg_of_nothing() {
+        let zigzag = square(vec![
+            Vec3::ZERO,
+            Vec3::new(10.0, 0.0, 0.0),
+            Vec3::new(5.0, 2.0, 0.0),
+            Vec3::new(15.0, 2.0, 0.0),
+        ]);
+        let legs = zigzag.legs();
+        assert!(
+            legs.iter()
+                .all(|leg| leg.from.distance(leg.to) > 1e-6 && leg.corner.is_finite()),
+            "both splits clamp to half the leg between them and meet in one point: {legs:?}"
+        );
+        let report = diagnose(&tunnel(&zigzag).expect("it digs"));
+        assert!(
+            report.is_sound() && report.unbalanced_edges == 0,
+            "{report:?}"
+        );
+    }
+
+    #[test]
+    fn a_channel_doubling_straight_back_is_not_dug() {
+        let back = square(vec![
+            Vec3::ZERO,
+            Vec3::new(10.0, 0.0, 0.0),
+            Vec3::new(4.0, 0.0, 0.0),
+        ]);
+        assert!(
+            back.legs().iter().all(|leg| leg.corner.is_finite()),
+            "no leg is left without a direction"
+        );
+        assert!(tunnel(&back).is_none(), "a turn straight back has no mitre");
     }
 
     #[test]

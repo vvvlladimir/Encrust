@@ -5,7 +5,7 @@ use core_geometry::{Bvh, Mat3, Mesh, Scalar, Transform, Vec3, smallest_scale};
 
 use crate::{
     Blocker, Channel, DrainHole, HoleSize, HollowSettings, channel_under, drill, hole_at, lift_for,
-    pierce, sleeves,
+    pierce, sleeves, turn_in_model,
 };
 
 /// A transform this close to singular has flattened its model, and a click on it cannot
@@ -138,11 +138,13 @@ impl ModelHollow {
         let Some(hole) = hole_at(mesh, bvh, target, asked) else {
             return false;
         };
+        let turn_deg = turn_in_model(hole.axis, size.turn_deg, transform.linear());
 
         // A diameter past the pocket's floor, so the tip is inside the pocket rather than
         // on its ceiling.
         self.drains.push(DrainHole {
             depth_mm: (target - hole.at).length() + diameter_mm,
+            turn_deg,
             ..hole
         });
         self.recut();
@@ -315,6 +317,7 @@ impl ModelHollow {
         let size = HoleSize {
             diameter_mm: size.diameter_mm / smallest,
             depth_mm: size.depth_mm / smallest,
+            turn_deg: turn_in_model(axis, size.turn_deg, transform.linear()),
             ..size
         };
         let lift_mm = lift_for(mesh, bvh, at, axis, size.diameter_mm);
@@ -391,12 +394,17 @@ impl ModelHollow {
     /// in the outline `size` asks for; its depth plays no part.
     pub fn finish_channel(&mut self, size: HoleSize, transform: Transform) -> bool {
         let smallest = transform.least_scale();
-        let dug =
-            channel_under(&self.pending, size.diameter_mm / smallest).map(|channel| Channel {
+        let dug = channel_under(&self.pending, size.diameter_mm / smallest)
+            .map(|channel| Channel {
                 shape: size.shape,
-                turn_deg: size.turn_deg,
+                turn_deg: turn_in_model(
+                    channel.points[1] - channel.points[0],
+                    size.turn_deg,
+                    transform.linear(),
+                ),
                 ..channel
-            });
+            })
+            .filter(|channel| drill(&[], std::slice::from_ref(channel)).is_ok());
         self.pending.clear();
         let Some(channel) = dug else {
             self.recut();

@@ -357,9 +357,12 @@ pub fn carve(
             None => mould(&placed, field, cancel),
         },
         HollowMode::Internal => {
-            let floor = settings
-                .open_toward
-                .map(|toward| (toward, settings.thickness_mm));
+            let floor = settings.open_toward.map(|toward| floor::Opening {
+                toward,
+                wall_mm: settings.thickness_mm,
+                band_mm: field.offset.band_mm(),
+                voxel_mm: field.voxel_mm,
+            });
             shelled(&placed, field, &blockers, floor, settings.infill, cancel)
         }
     }?;
@@ -458,17 +461,18 @@ fn offset_field(
 }
 
 /// The model with the void `field` bounds appended to it wound inward, and whatever lattice
-/// stands in it appended after. `floor` is the way to the plate and the wall, where the
-/// void is carried out through the floor the model stands on.
+/// stands in it appended after. `floor`, where given, carries the void out through the
+/// floor the model stands on.
 fn shelled(
     mesh: &Mesh,
     field: &CavityField,
     blockers: &[Blocker],
-    floor: Option<(Vec3, Scalar)>,
+    floor: Option<floor::Opening>,
     infill: Option<InfillSettings>,
     cancel: Cancel<'_>,
 ) -> Result<Hollowed, VolumeError> {
-    let opened = floor.and_then(|(toward, wall_mm)| opened(&field.offset, mesh, toward, wall_mm));
+    let opened = floor.and_then(|opening| floor::opened(&field.offset, mesh, opening));
+    let floor = floor.filter(|_| opened.is_some());
     let open = opened.as_ref().unwrap_or(&field.offset);
     let blocked = blocked(open, blockers);
     let cavity = blocked.as_ref().unwrap_or(open);
@@ -485,22 +489,11 @@ fn shelled(
     }
     // The opening reaches past the floor, and a lattice standing in it is stopped at the floor.
     let solid = match floor {
-        Some((toward, _)) if opened.is_some() => floor::stopped_at_floor(solid, mesh, toward),
-        _ => solid,
+        Some(opening) => floor::stopped_at_floor(solid, mesh, opening.toward),
+        None => solid,
     };
     // Where the floor is open, the shell is cut exactly near it, so the model shows it gone.
-    let through = match floor {
-        Some((toward, wall_mm)) if opened.is_some() => {
-            let opening = floor::Opening {
-                toward,
-                wall_mm,
-                band_mm: field.offset.band_mm(),
-                voxel_mm: field.voxel_mm,
-            };
-            floor::cut_through(mesh, &void, opening)
-        }
-        _ => None,
-    };
+    let through = floor.and_then(|opening| floor::cut_through(mesh, &void, opening));
     let cavity_mm3 = (volume_of(&void) - volume_of(&solid)).max(0.0);
     if let Some((mut whole, cavity)) = through {
         append(&mut whole, &solid);
@@ -552,70 +545,6 @@ fn mould(mesh: &Mesh, field: &CavityField, cancel: Cancel<'_>) -> Result<Hollowe
         voxel_mm: field.voxel_mm,
         coarsened: false,
     })
-}
-
-/// `cavity` carried on through the floor of `mesh` that faces `toward`, or `None` for no
-/// direction: the outline it has a band in from the floor's inner face, swept out past the
-/// floor's outer face, so the floor is gone wherever the cavity stood over it. See
-/// `docs/design/hollowing.md`.
-fn opened(cavity: &Sdf, mesh: &Mesh, toward: Vec3, wall_mm: Scalar) -> Option<Sdf> {
-    let toward = toward.try_normalize()?;
-    let floor = mesh
-        .vertices
-        .iter()
-        .map(|vertex| vertex.dot(toward))
-        .fold(Scalar::NEG_INFINITY, Scalar::max);
-    if !floor.is_finite() {
-        return None;
-    }
-
-    let grid = cavity.grid();
-    let band_mm = cavity.band_mm();
-    // Read a band inside the cavity, where its outline is the cavity's own, and swept a
-    // band past the floor, where the surface it leaves is clear of the model's.
-    let outline_at = floor - wall_mm - band_mm;
-    let out_to = floor + band_mm;
-    let swept = |point: Vec3| {
-        let along = point.dot(toward);
-        let outline = cavity.sample(point - toward * (along - outline_at));
-        (outline_at - along).max(along - out_to).max(outline)
-    };
-    let candidates = sweep_tiles(cavity, toward, outline_at, out_to);
-    Some(assemble(grid, band_mm, candidates, |voxel| {
-        cavity.value(voxel).min(swept(grid.position(voxel)))
-    }))
-}
-
-/// The tiles the sweep of `cavity` from `from` to `to` along `toward` may cross: the
-/// cavity's own, and every tile its outline at `from` passes through on the way.
-fn sweep_tiles(cavity: &Sdf, toward: Vec3, from: Scalar, to: Scalar) -> HashSet<IVec3> {
-    let grid = cavity.grid();
-    let reach = grid.tile_radius() + cavity.band_mm();
-    let step = grid.tile_radius();
-    let mut candidates: HashSet<IVec3> = cavity.tile_keys().collect();
-    let outline = cavity
-        .tile_keys()
-        .chain(cavity.inside_tiles())
-        .filter(|tile| {
-            let along = grid.tile_center(*tile).dot(toward);
-            (from - reach..=from + reach).contains(&along)
-        });
-    for tile in outline.collect::<Vec<_>>() {
-        let center = grid.tile_center(tile);
-        let mut along = center.dot(toward);
-        while along <= to + reach {
-            let passed = tile_of(grid.voxel(center + toward * (along - center.dot(toward))));
-            for z in -1..=1 {
-                for y in -1..=1 {
-                    for x in -1..=1 {
-                        candidates.insert(passed + IVec3::new(x, y, z));
-                    }
-                }
-            }
-            along += step;
-        }
-    }
-    candidates
 }
 
 /// The cavity with every blocker taken out of it, or `None` when there are none.

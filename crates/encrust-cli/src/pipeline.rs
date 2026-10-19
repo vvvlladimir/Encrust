@@ -194,15 +194,32 @@ pub fn hollow_and_cut(
     watch: &Watch,
 ) -> Result<Shelled> {
     let talk = watch.talk;
+    args.check_floor_and_plugs()?;
     // Where the cuts land is read off the model as it was imported; what they are cut
     // into may be the shell. See ADR 0075.
     let placed = args
         .cutting()
         .then(|| hollowing::placed(mesh, args))
         .transpose()?;
-    // A plug is the solid the hole takes out, so it is read before the model is a shell.
+
+    let mut hollow = None;
+    let mut shell = None;
+    if args.wanted() {
+        let (shelled, report) = hollowing::run(mesh, args, precision, watch.stop)?;
+        if talk {
+            print!("{report}");
+        }
+        shell = Some(shelled);
+        hollow = Some(report);
+    }
+    let wall = hollow.as_ref().map(HollowReport::wall);
+    // A plug is the solid a hole takes out as it is cut, so it is read off the model before
+    // the model is the shell.
     let plugs = match &placed {
-        Some((holes, _)) if args.plugs => hollowing::plugs_beside(mesh, holes, args, drift_mm)?,
+        Some((holes, _)) if args.plugs => {
+            let cut = hollowing::pierced(holes, wall);
+            hollowing::plugs_beside(mesh, &cut, args, drift_mm)?
+        }
         _ => Vec::new(),
     };
     if talk && !plugs.is_empty() {
@@ -212,17 +229,8 @@ pub fn hollow_and_cut(
             args.plug_gap_mm - drift_mm
         );
     }
-
-    let mut hollow = None;
-    let mut wall = None;
-    if args.wanted() {
-        let (shelled, report) = hollowing::run(mesh, args, precision, watch.stop)?;
-        if talk {
-            print!("{report}");
-        }
-        wall = Some(report.wall());
-        *mesh = shelled;
-        hollow = Some(report);
+    if let Some(shell) = shell {
+        *mesh = shell;
     }
     let mut bodies = None;
     if let Some(placed) = placed {

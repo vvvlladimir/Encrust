@@ -247,9 +247,10 @@ capped silently.
   the gap. A plug is what the hole took out of the wall, narrower all round by the gap you
   set (0.15 mm by default), with its outer face following the surface so it closes flush. If
   the resin's tolerance compensation is off, its offsets are allowed for so the fit prints
-  as set.
-- **Channel:** dig a tube of the hole size through a path of points, open only at its two
-  ends.
+  as set. Plugs are models like any other; a project opens with the plugs it was saved with,
+  and a copied model gets plugs of its own.
+- **Channel:** dig a tube of the hole's width and outline through a path of points, open
+  only at its two ends.
 - **Check drainage:** Encrust follows the air through every layer and finds every pocket
   of resin with no way out. Pockets are painted in the view, and you can see through the
   model to find them.
@@ -554,7 +555,8 @@ removes the half-written file.
 it into its parts or cut a part off, all at the window's default sizes, before it is sliced.
 
 **Holes:** open a shell's floor, cut drain holes round or as polygons, and
-print a plug for each beside the model, with the gap you choose.
+print a plug for each beside the model, with the gap you choose. A run whose plugs have no
+room beside their model stops rather than printing them on a neighbour.
 
 **You cannot** (from the command line): paint supports, place them by hand, set blockers,
 take the pieces of a cut or a split out as meshes, or hollow or support a model a cut or a

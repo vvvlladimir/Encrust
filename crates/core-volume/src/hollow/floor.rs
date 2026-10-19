@@ -1,11 +1,15 @@
+use std::collections::HashSet;
 use std::ops::Range;
 
 use core_geometry::{
-    Cut, FastMap, FastSet, Mesh, Plane, Scalar, Vec3, cut, diagnose, point_key, split,
+    Cut, FastMap, FastSet, Mesh, Plane, Scalar, Vec3, cut, diagnose, glam::IVec3, point_key, split,
 };
 
 use super::append;
 use crate::boolean::{Boolean, combine_exact, combine_exact_toward};
+use crate::csg::assemble;
+use crate::grid::tile_of;
+use crate::sdf::Sdf;
 
 /// A point this close to the plane the cavity is cut at is on it, millimetres: the cut's
 /// own band.
@@ -216,6 +220,63 @@ fn closes(lower: &[[u32; 3]], upper: &[[u32; 3]], seam: &FastSet<u32>) -> bool {
     down.sort_unstable();
     up.sort_unstable();
     !down.is_empty() && down.windows(2).all(|pair| pair[0] != pair[1]) && down == up
+}
+
+/// `cavity` carried on through the floor of `mesh` facing the opening's way, or `None` for no
+/// direction: the outline it has a band in from the floor's inner face, swept out past the
+/// floor's outer face, so the floor is gone wherever the cavity stood over it. See
+/// `docs/design/hollowing.md`.
+pub(super) fn opened(cavity: &Sdf, mesh: &Mesh, opening: Opening) -> Option<Sdf> {
+    let toward = opening.toward.try_normalize()?;
+    let floor = floor_at(mesh, toward)?;
+
+    let grid = cavity.grid();
+    let band_mm = cavity.band_mm();
+    // Read a band inside the cavity, where its outline is the cavity's own, and swept a
+    // band past the floor, where the surface it leaves is clear of the model's.
+    let outline_at = floor - opening.wall_mm - band_mm;
+    let out_to = floor + band_mm;
+    let swept = |point: Vec3| {
+        let along = point.dot(toward);
+        let outline = cavity.sample(point - toward * (along - outline_at));
+        (outline_at - along).max(along - out_to).max(outline)
+    };
+    let candidates = sweep_tiles(cavity, toward, outline_at, out_to);
+    Some(assemble(grid, band_mm, candidates, |voxel| {
+        cavity.value(voxel).min(swept(grid.position(voxel)))
+    }))
+}
+
+/// The tiles the sweep of `cavity` from `from` to `to` along `toward` may cross: the
+/// cavity's own, and every tile its outline at `from` passes through on the way.
+fn sweep_tiles(cavity: &Sdf, toward: Vec3, from: Scalar, to: Scalar) -> HashSet<IVec3> {
+    let grid = cavity.grid();
+    let reach = grid.tile_radius() + cavity.band_mm();
+    let step = grid.tile_radius();
+    let mut candidates: HashSet<IVec3> = cavity.tile_keys().collect();
+    let outline = cavity
+        .tile_keys()
+        .chain(cavity.inside_tiles())
+        .filter(|tile| {
+            let along = grid.tile_center(*tile).dot(toward);
+            (from - reach..=from + reach).contains(&along)
+        });
+    for tile in outline.collect::<Vec<_>>() {
+        let center = grid.tile_center(tile);
+        let mut along = center.dot(toward);
+        while along <= to + reach {
+            let passed = tile_of(grid.voxel(center + toward * (along - center.dot(toward))));
+            for z in -1..=1 {
+                for y in -1..=1 {
+                    for x in -1..=1 {
+                        candidates.insert(passed + IVec3::new(x, y, z));
+                    }
+                }
+            }
+            along += step;
+        }
+    }
+    candidates
 }
 
 /// How far along `toward` the furthest point of `model` lies: the floor facing that way.

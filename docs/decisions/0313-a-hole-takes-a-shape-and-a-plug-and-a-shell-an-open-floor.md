@@ -15,8 +15,9 @@ any change has to read the files already written.
 ## Decision
 
 `DrainHole` and `HoleSize` carry a `HoleShape` — round, or a polygon of 3 to 12 sides with
-its corners on the diameter — and a turn in degrees from the level, both `serde` defaults,
-so an older file reads as round and unturned. `HoleSize` moves into `drain.rs` beside the
+its corners on the diameter — and a turn in degrees from the plate's level, carried into
+the model's own space as it is placed, both `serde` defaults, so an older file reads as round
+and unturned. `HoleSize` moves into `drain.rs` beside the
 hole it sizes. A `Channel` takes the same two fields and is dug as one prism of its outline, mitred at every
 bend and carried round it by the least rotation, in place of tubes joined by balls, which
 broke a polygon's outline at each bend. Every hole is
@@ -27,11 +28,12 @@ own outline: each drain cut hands the shader its first corner and its count of s
 the hole's outline moved in by a gap a side, its inner end flat at the wall where the model
 is hollow, at the hole's depth otherwise, its outer face sampled on rings over the mouth and
 dropped onto the model's surface by rays cast out of the wall, as `lift_for` reads a rim.
-`stand_on_end` turns it onto its flat end. The window lays one per hole beside its model as
-soon as the hole is cut, and lays them again whenever the holes, the wall or the gap change;
-a plug knows its model by `ObjectState::plug_of`, the model's place in the file, so a project
-opened again keeps its plugs rather than laying a second set. The CLI lays them with
-`--drain-plugs`. The gap is 0.15 mm a side by default, and the fit is what prints: where a
+It is cut for the hole as it is cut, through the wall, and `laid_beside` stands it on its
+flat end in a row past its model for both front ends. The window lays one per hole as soon
+as the hole is cut, and again whenever the holes, the wall or the gap change; a plug knows
+its model by `ObjectState::plug_of`, the model's place in the file, and a project opened
+again keeps the plugs it was saved with. The CLI lays them with `--drain-plugs` and stops
+where one would land off the plate or on another model. The gap is 0.15 mm a side by default, and the fit is what prints: where a
 resin's tolerance compensation is off, `Compensation::fit_drift_mm` — its hole and outer
 offsets — comes off the gap.
 

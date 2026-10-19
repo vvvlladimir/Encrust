@@ -1,6 +1,7 @@
 //! A plate assembled from what the command line was given — one model, several, a plate
 //! file or a project — before it is written or measured.
 
+use std::ops::Range;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
@@ -249,6 +250,7 @@ pub fn plate_of(
 
     let mut parts = Vec::with_capacity(entries.len());
     let mut models = Vec::with_capacity(entries.len());
+    let mut plugged = Vec::new();
     let drift_mm = chosen.material.compensation.fit_drift_mm();
     for ((meshes, (import, oriented)), (path, shaping)) in
         pieces.into_iter().zip(found).zip(entries)
@@ -263,7 +265,9 @@ pub fn plate_of(
         for mesh in meshes {
             let down = put_down(mesh, shaping, seated, layer_height, drift_mm, watch)?;
             models.push(down.model);
+            let first = models.len();
             models.extend(down.plugs);
+            plugged.push((first..models.len(), path.as_path()));
             hollow = hollow.or(down.hollow);
             supports = supports.or(down.supports);
         }
@@ -275,6 +279,8 @@ pub fn plate_of(
             supports,
         });
     }
+
+    check_plugs_clear(&models, &plugged, printer)?;
 
     let drainage = job.slicing.check_drainage
         || entries
@@ -351,6 +357,51 @@ fn put_down(
         hollow,
         supports,
     })
+}
+
+/// Refuses plugs that land off the plate or on a model: laid in a row past their own
+/// model, they know nothing of the plate's edge or of its neighbours.
+fn check_plugs_clear(
+    models: &[Model],
+    plugged: &[(Range<usize>, &Path)],
+    printer: Option<&PrinterProfile>,
+) -> Result<()> {
+    let footprints: Vec<Option<(Vec2, Vec2)>> = models.iter().map(footprint).collect();
+    for (plugs, path) in plugged {
+        for (mins, maxs) in footprints[plugs.clone()].iter().flatten() {
+            let off = printer.is_some_and(|printer| {
+                let plate = Vec2::new(printer.build_volume.x, printer.build_volume.y);
+                mins.cmplt(Vec2::ZERO).any() || maxs.cmpgt(plate).any()
+            });
+            if off {
+                bail!(
+                    "the plugs for {} run off the plate; move the model left or leave out --drain-plugs",
+                    path.display()
+                );
+            }
+            let crowded = footprints.iter().enumerate().any(|(index, other)| {
+                !plugs.contains(&index)
+                    && other
+                        .is_some_and(|(low, high)| mins.cmplt(high).all() && low.cmplt(*maxs).all())
+            });
+            if crowded {
+                bail!(
+                    "the plugs for {} land on another model; give it room on its right or leave out --drain-plugs",
+                    path.display()
+                );
+            }
+        }
+    }
+    Ok(())
+}
+
+/// What `model` and its supports cover of the plate, its least and greatest corners.
+fn footprint(model: &Model) -> Option<(Vec2, Vec2)> {
+    std::iter::once(&model.mesh)
+        .chain(&model.supports)
+        .filter_map(|mesh| mesh.aabb())
+        .map(|bounds| (bounds.mins.truncate(), bounds.maxs.truncate()))
+        .reduce(|(low, high), (mins, maxs)| (low.min(mins), high.max(maxs)))
 }
 
 /// One piece ready to slice, the plugs for its holes, and what hollowing and supporting

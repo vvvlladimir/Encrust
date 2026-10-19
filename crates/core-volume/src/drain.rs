@@ -1,4 +1,4 @@
-use core_geometry::{Bvh, Mesh, Ray, Scalar, Vec3};
+use core_geometry::{Bvh, Mat3, Mesh, Ray, Scalar, Vec3};
 
 use serde::{Deserialize, Serialize};
 
@@ -50,6 +50,14 @@ impl HoleShape {
         match self {
             Self::Round => SIDES,
             Self::Polygon { sides } => usize::from(sides.clamp(Self::MIN_SIDES, Self::MAX_SIDES)),
+        }
+    }
+
+    /// How many corners a polygon has, or `None` for a round hole, drawn as a true circle.
+    pub fn corners(self) -> Option<usize> {
+        match self {
+            Self::Round => None,
+            Self::Polygon { .. } => Some(self.sides()),
         }
     }
 }
@@ -317,22 +325,38 @@ impl Section {
 
     /// The first of [`Self::corners`] about `axis` and the count of them, for a polygon.
     fn first_corner(self, shape: HoleShape, axis: Vec3) -> Option<(Vec3, usize)> {
-        let HoleShape::Polygon { .. } = shape else {
-            return None;
-        };
-        Some((self.corners(axis.try_normalize()?).next()?, self.sides))
+        let sides = shape.corners()?;
+        Some((self.corners(axis.try_normalize()?).next()?, sides))
     }
 
     /// Unit offsets from the axis to each corner, around `axis` the way [`frame`] turns.
     pub(crate) fn corners(self, axis: Vec3) -> impl Iterator<Item = Vec3> {
         let (right, up) = frame(axis);
-        (0..self.sides).map(move |side| {
-            let angle =
-                self.turn_rad + std::f32::consts::TAU * side as Scalar / self.sides as Scalar;
-            let (sin, cos) = angle.sin_cos();
-            right * cos + up * sin
-        })
+        let (sin, cos) = self.turn_rad.sin_cos();
+        around(axis, right * cos + up * sin, self.sides)
     }
+}
+
+/// `sides` unit offsets evenly round unit `axis`, the first at `first`, square to it.
+pub(crate) fn around(axis: Vec3, first: Vec3, sides: usize) -> impl Iterator<Item = Vec3> {
+    let across = axis.cross(first);
+    (0..sides).map(move |side| {
+        let (sin, cos) = (std::f32::consts::TAU * side as Scalar / sides as Scalar).sin_cos();
+        first * cos + across * sin
+    })
+}
+
+/// The turn about `axis`, in a model's own space, that puts a polygon's first corner
+/// `turn_deg` off the plate's level once `linear` stands the model on the plate.
+pub fn turn_in_model(axis: Vec3, turn_deg: Scalar, linear: Mat3) -> Scalar {
+    let (Some(axis), Some(placed)) = (axis.try_normalize(), (linear * axis).try_normalize()) else {
+        return turn_deg;
+    };
+    let (right, up) = frame(placed);
+    let (sin, cos) = turn_deg.to_radians().sin_cos();
+    let corner = linear.inverse() * (right * cos + up * sin);
+    let (right, up) = frame(axis);
+    corner.dot(up).atan2(corner.dot(right)).to_degrees()
 }
 
 /// A closed frustum of `section` from `from` to `to`, wound outward; `drill` turns it
@@ -452,6 +476,28 @@ mod tests {
             (turned.maxs.x - std::f32::consts::FRAC_1_SQRT_2).abs() < 1e-4,
             "an eighth of a turn puts a side there instead, got {}",
             turned.maxs.x
+        );
+    }
+
+    #[test]
+    fn a_turn_is_measured_from_the_plates_level_on_a_turned_model() {
+        // A model stood up a quarter turn about X: its own -Y is the plate's -Z, and a hole
+        // drilled along its own +X runs along the plate's +X, level in both.
+        let linear = Mat3::from_rotation_x(std::f32::consts::FRAC_PI_2);
+        let axis = Vec3::X;
+        let turn = turn_in_model(axis, 0.0, linear);
+        let corner = Section::of(HoleShape::Polygon { sides: 6 }, turn)
+            .corners(axis)
+            .next()
+            .expect("a hexagon has corners");
+        assert!(
+            (linear * corner).z.abs() < 1e-5,
+            "unturned, the first corner lies level on the plate, got {}",
+            linear * corner
+        );
+        assert!(
+            (turn_in_model(axis, 30.0, Mat3::IDENTITY) - 30.0).abs() < 1e-4,
+            "on a model standing as it was made, the turn is the one asked for"
         );
     }
 

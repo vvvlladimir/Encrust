@@ -241,29 +241,32 @@ model there is no wall to cross and the depth is what was typed.
 A polygon's corners lie on the hole's diameter and its turn is measured from the level line
 `frame` lays the first corner on wherever the axis is not upright, so a user turns a corner
 to the top of a hole in a side wall and the roof prints as a point rather than a flat span.
-A channel is one prism of its outline swept along its points, round or a polygon alike. The
+The level is the plate's: a hole placed on a turned model stores the turn, in its own
+space, that lays the first corner that far off the plate's level (`turn_in_model`), and
+then turns with the model. A channel is one prism of its outline swept along its points, round or a polygon alike. The
 outline is turned from the level about the first leg and carried onto each next one by the
 least rotation that takes the one leg onto the other — the polyline's rotation-minimising
 frame (Wang et al., "Computation of rotation minimizing frames", 2008), where the double
 reflection reduces at a corner to a reflection in the plane bisecting it — so the outline
 never twists, and both legs meet that bisecting mitre plane in the same ring. A mitre reaches
 out by the secant of half the turn, so a turn sharper than a right angle is made as two, set
-apart along a short leg long enough that neither folds. The viewport cuts holes and legs to
+apart along a short leg long enough that neither folds; two such splits that meet in one
+point are one, and a channel that doubles straight back has no mitre and is refused. The viewport cuts holes and legs to
 that outline, not to its circle: the shader reads a cut's first corner and count of sides and
 measures a point off the nearest side, and stops a leg at the mitre planes it shares.
 
-A plug is what a hole took out of the wall, cut as its own closed mesh rather than through
-the boolean engine (ADR 0313): the hole's outline moved in by the gap — by `gap / cos(π/n)`
+A plug is what a hole took out of the wall as it is cut, after `pierce`, made as its own
+closed mesh rather than through the boolean engine (ADR 0313): the hole's outline moved in by the gap — by `gap / cos(π/n)`
 at a corner, so every side clears by the gap — and as long as the wall where the model is
 hollow, as deep as the hole otherwise. Its inner end is flat. Its
 outer face is sampled on four rings over the mouth, each point dropped onto the model's
 surface by a ray cast out of the wall the way `lift_for` reads a rim, so it closes flush on
-a curved surface; a point no ray finds reads the mouth's own plane. `stand_on_end` turns it
-onto that flat end beside the model. The window lays the plugs again whenever a model's
-holes, wall or gap differ from what they were last laid for, and a plug keeps its model in
-the project file, so opening it again lays nothing twice. The gap a user sets is the fit that prints, so a resin
-whose tolerance compensation is off has its hole and outer offsets taken off it
-(`Compensation::fit_drift_mm`).
+a curved surface; a point no ray finds reads the mouth's own plane. `laid_beside` stands it
+on that flat end in a row past the model, for the window and the CLI alike. The window lays
+the plugs again whenever a model's holes, wall or gap differ from what they were last laid
+for; a model opened from a project takes the plugs it was saved with, and a copy lays its
+own. The gap a user sets is the fit that prints, so a resin whose tolerance compensation is
+off has its hole and outer offsets taken off it (`Compensation::fit_drift_mm`).
 
 A channel runs exactly between the points it was given, which is what `--channel` hands
 over. A run of clicks is not those points: `channel_under` sinks the spine a radius and a
