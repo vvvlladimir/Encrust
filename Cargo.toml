@@ -42,7 +42,7 @@ net-sdcp = { path = "crates/net-sdcp" }
 net-prusalink = { path = "crates/net-prusalink" }
 printer-link = { path = "crates/printer-link" }
 
-glam = { version = "0.33", features = ["serde"] }
+glam = { version = "0.34", features = ["serde"] }
 parry3d = "0.31"
 earcutr = "0.5"
 i_overlay = "9.0"
@@ -95,11 +95,11 @@ tobj = { version = "4.0", default-features = false }
 threemf2 = { version = "0.4", default-features = false, features = ["package-memory-optimized-read"] }
 png = "0.18"
 image = { version = "0.25", default-features = false, features = ["png", "jpeg", "bmp", "tga"] }
-eframe = "0.36"
-egui = "0.36"
+eframe = "0.37"
+egui = "0.37"
 egui-phosphor = { version = "0.14", default-features = false, features = ["regular"] }
-egui-wgpu = "0.36"
-egui_kittest = { version = "0.36", features = ["snapshot", "wgpu"] }
+egui-wgpu = "0.37"
+egui_kittest = { version = "0.37", features = ["snapshot", "wgpu"] }
 # The window's text in the user's language, and which language that is; see docs/decisions/0300.
 fluent-bundle = "0.16"
 fluent-syntax = "0.12"
