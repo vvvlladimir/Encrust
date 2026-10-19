@@ -11,7 +11,7 @@ use crate::state::{Doc, Tools};
 use crate::ui::{
     Segment, Segmented, blocked_hover, busy, describe, hint, icon, nested, notice, number_row,
     primary_button, progress_bar, secondary_button, section, section_with_switch, stats,
-    subheading, switch, theme, tone,
+    subheading, theme, tone,
 };
 use crate::workspace::Tool;
 
@@ -140,36 +140,45 @@ fn drainage(ui: &mut egui::Ui, window: &mut Window) {
     }
 }
 
-/// Which surface the wall is measured from.
+/// What the Shell picker offers: the two ways to measure a wall, and the inside shell
+/// opened through the floor it stands on.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Shell {
+    Inside,
+    Outside,
+    BottomThrough,
+}
+
+/// Which surface the wall is measured from, and whether a shell is open through its floor.
 fn modes(ui: &mut egui::Ui, tools: &mut Tools) {
     let segments = [
-        Segment::new(HollowMode::Internal, tr!("hollow-inside")),
-        Segment::new(HollowMode::External, tr!("hollow-outside")),
+        Segment::new(Shell::Inside, tr!("hollow-inside")),
+        Segment::new(Shell::Outside, tr!("hollow-outside")),
+        Segment::new(Shell::BottomThrough, tr!("hollow-bottom-through")),
     ];
+    let state = &mut tools.hollow.state;
+    let mut chosen = match (state.mode, state.open_floor) {
+        (HollowMode::External, _) => Shell::Outside,
+        (HollowMode::Internal, false) => Shell::Inside,
+        (HollowMode::Internal, true) => Shell::BottomThrough,
+    };
     let width = ui.available_width();
-    let mut chosen = tools.hollow.state.mode;
     if Segmented::new(&segments).width(width).show(ui, &mut chosen) {
-        tools.hollow.state.mode = chosen;
+        state.mode = match chosen {
+            Shell::Outside => HollowMode::External,
+            Shell::Inside | Shell::BottomThrough => HollowMode::Internal,
+        };
+        state.open_floor = chosen == Shell::BottomThrough;
     }
 
     describe(
         ui,
-        &match tools.hollow.state.mode {
-            HollowMode::Internal => tr!("hollow-inside-note"),
-            HollowMode::External => tr!("hollow-outside-note"),
+        &match chosen {
+            Shell::Inside => tr!("hollow-inside-note"),
+            Shell::Outside => tr!("hollow-outside-note"),
+            Shell::BottomThrough => tr!("hollow-bottom-through-note"),
         },
     );
-    // A mould is open nowhere; only a shell has a floor to open.
-    if tools.hollow.state.mode == HollowMode::Internal {
-        switch(
-            ui,
-            &mut tools.hollow.state.open_floor,
-            &tr!("hollow-open-floor"),
-        );
-        if tools.hollow.state.open_floor {
-            describe(ui, &tr!("hollow-open-floor-note"));
-        }
-    }
 }
 
 fn wall(ui: &mut egui::Ui, window: &mut Window) {

@@ -1,8 +1,13 @@
-use core_geometry::{Bvh, Mesh, Ray, Scalar, Vec3, ball};
+use core_geometry::{Bvh, Mesh, Ray, Scalar, Vec3};
 
 use serde::{Deserialize, Serialize};
 
 use crate::error::VolumeError;
+use channel::tunnel;
+
+mod channel;
+
+pub use channel::Leg;
 
 /// Sides of a hole's tube. A three millimetre hole is then within thirteen micrometres of
 /// round, which is under half a pixel on any panel the workspace writes for.
@@ -19,11 +24,6 @@ const RIM_SAMPLES: usize = 12;
 /// the plane by, which prints as a film over the hole. Half a layer of the finest machine
 /// is enough to clear it and too little to show on the model.
 pub const MOUTH_LIFT_MM: Scalar = 0.05;
-
-/// Rings and segments of the ball that fills a channel's bend: as fine as a tube, so no
-/// facet sinks under the skin the viewport cuts the model away to.
-const BEND_RINGS: usize = 12;
-const BEND_SEGMENTS: usize = SIDES;
 
 /// How many times a cut is laid over itself. Its winding has to outweigh every body that
 /// can stand where it lands — a shell, the lattice bonded into it, three struts meeting at
@@ -54,19 +54,8 @@ impl HoleShape {
     }
 }
 
-/// How far a hole goes once the model has a cavity behind it.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
-#[serde(rename_all = "kebab-case")]
-pub enum HoleMode {
-    /// Carried on through the wall into the cavity, however short it was asked: a drain.
-    #[default]
-    Through,
-    /// Stopped at its own depth, cavity or not: a socket for a magnet or a pin.
-    Blind,
-}
-
 /// The hole a click drills: its mouth and depth in millimetres of the plate, its far end
-/// as a fraction of its mouth, 1 being a cylinder, and its outline, turn and mode.
+/// as a fraction of its mouth, 1 being a cylinder, and its outline and turn.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct HoleSize {
     pub diameter_mm: Scalar,
@@ -75,11 +64,10 @@ pub struct HoleSize {
     pub shape: HoleShape,
     /// How far a polygon is turned about the axis, degrees.
     pub turn_deg: Scalar,
-    pub mode: HoleMode,
 }
 
 impl HoleSize {
-    /// A round hole that goes through, as every hole was before ADR 0313.
+    /// A round hole, as every hole was before ADR 0313.
     pub fn round(diameter_mm: Scalar, depth_mm: Scalar, taper: Scalar) -> Self {
         Self {
             diameter_mm,
@@ -87,7 +75,6 @@ impl HoleSize {
             taper,
             shape: HoleShape::Round,
             turn_deg: 0.0,
-            mode: HoleMode::Through,
         }
     }
 }
@@ -114,15 +101,12 @@ pub struct DrainHole {
     /// What the surface rises around the mouth, from `lift_for`; the mouth always stands
     /// clear by a little more than that, so nothing of it is left capped.
     pub lift_mm: Scalar,
-    /// The outline, how far it is turned about the axis in degrees, and whether a cavity
-    /// draws the hole on through the wall. A file without them reads a round hole that goes
-    /// through (ADR 0313).
+    /// The outline, and how far it is turned about the axis in degrees. A file without
+    /// them reads a round hole (ADR 0313).
     #[serde(default)]
     pub shape: HoleShape,
     #[serde(default)]
     pub turn_deg: Scalar,
-    #[serde(default)]
-    pub mode: HoleMode,
 }
 
 impl DrainHole {
@@ -137,16 +121,27 @@ impl DrainHole {
             lift_mm,
             shape: size.shape,
             turn_deg: size.turn_deg,
-            mode: size.mode,
         }
+    }
+
+    /// The unit offset from the axis to the outline's first corner, in the model's own
+    /// space, and how many corners there are; `None` for a round hole or no axis.
+    pub fn corner(&self) -> Option<(Vec3, usize)> {
+        Section::of(self.shape, self.turn_deg).first_corner(self.shape, self.axis)
     }
 }
 
-/// A drainage channel: a tube of `diameter_mm` dug along a polyline in model space.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+/// A drainage channel: a tube of `diameter_mm` dug along a polyline in model space, round
+/// or a polygon turned `turn_deg` from the level about each leg. A file without the outline
+/// reads a round one (ADR 0313).
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 pub struct Channel {
     pub points: Vec<Vec3>,
     pub diameter_mm: Scalar,
+    #[serde(default)]
+    pub shape: HoleShape,
+    #[serde(default)]
+    pub turn_deg: Scalar,
 }
 
 /// The bodies `holes` and `channels` take out of a model, wound inward and laid
@@ -183,8 +178,8 @@ fn weighted(body: &Mesh) -> Mesh {
     whole
 }
 
-/// Every hole deepened until it is through a wall of `thickness_mm` cut on a lattice of/// Every hole that goes through deepened until it is through a wall of `thickness_mm`
-/// cut on a lattice of `voxel_mm`; a blind hole stays at its depth.
+/// Every hole deepened until it is through a wall of `thickness_mm` cut on a lattice of
+/// `voxel_mm`.
 ///
 /// A hole is drilled along the surface's own normal, so the wall in front of it is the
 /// thickness the cavity was cut to; a hole left shorter than that is a dimple, not a
@@ -193,14 +188,11 @@ fn weighted(body: &Mesh) -> Mesh {
 pub fn pierce(holes: &[DrainHole], thickness_mm: Scalar, voxel_mm: Scalar) -> Vec<DrainHole> {
     holes
         .iter()
-        .map(|hole| match hole.mode {
-            HoleMode::Blind => *hole,
-            HoleMode::Through => DrainHole {
-                depth_mm: hole
-                    .depth_mm
-                    .max(hole.lift_mm + thickness_mm + 2.0 * voxel_mm),
-                ..*hole
-            },
+        .map(|hole| DrainHole {
+            depth_mm: hole
+                .depth_mm
+                .max(hole.lift_mm + thickness_mm + 2.0 * voxel_mm),
+            ..*hole
         })
         .collect()
 }
@@ -282,6 +274,7 @@ pub fn channel_under(surface: &[(Vec3, Vec3)], diameter_mm: Scalar) -> Option<Ch
     Some(Channel {
         points,
         diameter_mm,
+        ..Channel::default()
     })
 }
 
@@ -302,7 +295,7 @@ fn body_of(hole: &DrainHole) -> Option<Mesh> {
         tip,
         radius,
         radius * hole.taper,
-        Section::of(hole),
+        Section::of(hole.shape, hole.turn_deg),
     ))
 }
 
@@ -315,16 +308,19 @@ pub(crate) struct Section {
 }
 
 impl Section {
-    const ROUND: Self = Self {
-        sides: SIDES,
-        turn_rad: 0.0,
-    };
-
-    pub(crate) fn of(hole: &DrainHole) -> Self {
+    pub(crate) fn of(shape: HoleShape, turn_deg: Scalar) -> Self {
         Self {
-            sides: hole.shape.sides(),
-            turn_rad: hole.turn_deg.to_radians(),
+            sides: shape.sides(),
+            turn_rad: turn_deg.to_radians(),
         }
+    }
+
+    /// The first of [`Self::corners`] about `axis` and the count of them, for a polygon.
+    fn first_corner(self, shape: HoleShape, axis: Vec3) -> Option<(Vec3, usize)> {
+        let HoleShape::Polygon { .. } = shape else {
+            return None;
+        };
+        Some((self.corners(axis.try_normalize()?).next()?, self.sides))
     }
 
     /// Unit offsets from the axis to each corner, around `axis` the way [`frame`] turns.
@@ -337,33 +333,6 @@ impl Section {
             right * cos + up * sin
         })
     }
-}
-
-/// The tube one channel digs, with a ball at every bend so the corners are not left open.
-fn tunnel(channel: &Channel) -> Option<Mesh> {
-    let radius = channel.diameter_mm / 2.0;
-    let diggable = radius > 0.0 && channel.points.len() >= 2;
-    if !diggable {
-        return None;
-    }
-
-    let mut dug = Mesh::default();
-    for pair in channel.points.windows(2) {
-        if (pair[1] - pair[0]).try_normalize().is_none() {
-            continue;
-        }
-        append(
-            &mut dug,
-            &tube(pair[0], pair[1], radius, radius, Section::ROUND),
-        );
-    }
-    if dug.is_empty() {
-        return None;
-    }
-    for point in &channel.points {
-        append(&mut dug, &ball(*point, radius, BEND_RINGS, BEND_SEGMENTS));
-    }
-    Some(dug)
 }
 
 /// A closed frustum of `section` from `from` to `to`, wound outward; `drill` turns it
@@ -417,32 +386,6 @@ mod tests {
     use super::*;
     use core_geometry::signed_volume;
 
-    /// The viewport takes away the model within 97% of a cut's radius and draws the cut's
-    /// own wall in the opening, so a facet sunk deeper than that is never drawn and the
-    /// bend shows the model's inside through it.
-    #[test]
-    fn a_bend_stands_within_two_percent_of_its_radius() {
-        let bend = ball(Vec3::ZERO, 1.0, BEND_RINGS, BEND_SEGMENTS);
-        let deepest = bend
-            .faces
-            .iter()
-            .flat_map(|face| {
-                let [a, b, c] = face.map(|index| bend.vertices[index as usize]);
-                [
-                    (a + b) / 2.0,
-                    (b + c) / 2.0,
-                    (c + a) / 2.0,
-                    (a + b + c) / 3.0,
-                ]
-            })
-            .map(Vec3::length)
-            .fold(Scalar::INFINITY, Scalar::min);
-        assert!(
-            deepest >= 0.98,
-            "a facet of the bend sinks to {deepest} of its radius"
-        );
-    }
-
     fn hole() -> DrainHole {
         DrainHole {
             at: Vec3::ZERO,
@@ -453,7 +396,6 @@ mod tests {
             lift_mm: 1.0,
             shape: HoleShape::Round,
             turn_deg: 0.0,
-            mode: HoleMode::Through,
         }
     }
 
@@ -510,29 +452,6 @@ mod tests {
             (turned.maxs.x - std::f32::consts::FRAC_1_SQRT_2).abs() < 1e-4,
             "an eighth of a turn puts a side there instead, got {}",
             turned.maxs.x
-        );
-    }
-
-    #[test]
-    fn only_a_hole_that_goes_through_is_carried_through_the_wall() {
-        let blind = DrainHole {
-            depth_mm: 1.0,
-            mode: HoleMode::Blind,
-            ..hole()
-        };
-        let through = DrainHole {
-            depth_mm: 1.0,
-            ..hole()
-        };
-        let pierced = pierce(&[blind, through], 2.0, 0.1);
-        assert_eq!(
-            pierced[0].depth_mm, 1.0,
-            "a socket stops where it was asked"
-        );
-        assert!(
-            pierced[1].depth_mm >= 1.0 + 2.0,
-            "a drain reaches past its lift and the wall, got {}",
-            pierced[1].depth_mm
         );
     }
 
@@ -619,6 +538,7 @@ mod tests {
         let stub = Channel {
             points: vec![Vec3::ZERO],
             diameter_mm: 2.0,
+            ..Channel::default()
         };
         assert_eq!(
             drill(&[], &[stub]),
@@ -631,6 +551,7 @@ mod tests {
         let straight = Channel {
             points: vec![Vec3::ZERO, Vec3::new(10.0, 0.0, 0.0)],
             diameter_mm: 2.0,
+            ..Channel::default()
         };
         let bent = Channel {
             points: vec![
@@ -639,6 +560,7 @@ mod tests {
                 Vec3::new(10.0, 8.0, 0.0),
             ],
             diameter_mm: 2.0,
+            ..Channel::default()
         };
         let straight = drill(&[], &[straight]).expect("a straight channel digs");
         let bent = drill(&[], &[bent]).expect("a bent channel digs");

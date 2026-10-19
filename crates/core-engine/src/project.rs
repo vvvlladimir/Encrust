@@ -22,7 +22,7 @@ use core_joint::Joints;
 use core_slicer::AdaptiveSettings;
 use core_supports::{ProjectSettings, Region, SupportPoint, SupportTree};
 use core_volume::{
-    Blocker, Channel, DrainHole, HoleMode, HoleShape, HollowMode, HollowSettings, InfillSettings,
+    Blocker, Channel, DrainHole, HoleShape, HollowMode, HollowSettings, InfillSettings,
     PLUG_GAP_MM, PartSettings,
 };
 use printer_profiles::{OutputFormat, Raft, SupportProfile};
@@ -254,21 +254,19 @@ pub struct DrainState {
     pub diameter_mm: Scalar,
     pub depth_mm: Scalar,
     pub taper: Scalar,
-    /// The next hole's outline, its turn in degrees and whether it goes through a cavity,
-    /// and how much narrower than its hole a plug is drawn, millimetres a side. A file
-    /// without them reads a round hole that goes through and the default gap (ADR 0313).
+    /// The next hole's outline and its turn in degrees, and how much narrower than its hole
+    /// a plug is drawn, millimetres a side. A file without them reads a round hole and the
+    /// default gap (ADR 0313).
     #[serde(default)]
     pub shape: HoleShape,
     #[serde(default)]
     pub turn_deg: Scalar,
-    #[serde(default)]
-    pub mode: HoleMode,
     #[serde(default = "plug_gap")]
     pub plug_gap_mm: Scalar,
 }
 
 impl DrainState {
-    /// A round hole that goes through, with the default plug gap.
+    /// A round hole, with the default plug gap.
     pub fn round(diameter_mm: Scalar, depth_mm: Scalar, taper: Scalar) -> Self {
         Self {
             diameter_mm,
@@ -276,7 +274,6 @@ impl DrainState {
             taper,
             shape: HoleShape::Round,
             turn_deg: 0.0,
-            mode: HoleMode::Through,
             plug_gap_mm: PLUG_GAP_MM,
         }
     }
@@ -326,6 +323,9 @@ pub struct ObjectState {
     /// (ADR 0253). A file without it reads as a model with none.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub own_raft: Option<Raft>,
+    /// Which model of the file, by its place among them, this one is a plug for (ADR 0313).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub plug_of: Option<u32>,
 }
 
 impl ObjectState {
@@ -741,6 +741,7 @@ mod tests {
                 channels: vec![Channel {
                     points: vec![Vec3::ZERO, Vec3::Z],
                     diameter_mm: 3.0,
+                    ..Channel::default()
                 }],
                 built: Some(BuiltCavity {
                     wall: Cavity {
@@ -773,6 +774,7 @@ mod tests {
                 Vec::new()
             },
             own_raft: None,
+            plug_of: None,
         }
     }
 
@@ -965,15 +967,16 @@ mod tests {
     }
 
     #[test]
-    fn hole_shapes_and_an_open_floor_come_back_and_a_file_from_before_reads() {
-        let mut saved = project(1);
+    fn hole_shapes_an_open_floor_and_plugs_come_back_and_a_file_from_before_reads() {
+        let mut saved = project(2);
+        saved.manifest.objects[1].plug_of = Some(0);
         saved.manifest.drain.shape = HoleShape::Polygon { sides: 6 };
-        saved.manifest.drain.mode = HoleMode::Blind;
         saved.manifest.drain.plug_gap_mm = 0.2;
         saved.manifest.hollow.open_floor = true;
         let back = round_trip(&saved);
         assert_eq!(back.manifest.drain, saved.manifest.drain);
         assert!(back.manifest.hollow.open_floor);
+        assert_eq!(back.manifest.objects[1].plug_of, Some(0));
 
         let older: DrainState =
             serde_json::from_str(r#"{ "diameter_mm": 3.0, "depth_mm": 3.0, "taper": 1.0 }"#)
@@ -984,10 +987,7 @@ mod tests {
             "depth_mm": 3.0, "taper": 1.0, "lift_mm": 0.0
         }))
         .expect("a hole written before ADR 0313 reads");
-        assert_eq!(
-            (hole.shape, hole.mode),
-            (HoleShape::Round, HoleMode::Through)
-        );
+        assert_eq!(hole.shape, HoleShape::Round);
     }
 
     #[test]

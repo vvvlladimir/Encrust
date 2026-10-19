@@ -2,7 +2,9 @@
 //! thickness asked for, that the cavity never reaches outside the model, and that what
 //! fills it takes its own volume back.
 
-use core_geometry::{Bvh, Mat3, Mesh, Quat, Scalar, Transform, Vec3, ball, signed_volume};
+use core_geometry::{
+    Bvh, Mat3, Mesh, Quat, Scalar, Transform, Vec3, ball, diagnose, signed_volume,
+};
 use core_volume::{
     Blocker, CUT_WEIGHT, Cancel, Channel, HoleSize, HollowMode, HollowSettings, Hollowed,
     InfillPattern, InfillSettings, VolumeError, carve, cavity_field, drill, hole_at, hollow,
@@ -262,6 +264,7 @@ fn a_channel_is_kept_out_of_the_cavity_as_a_pipe() {
     let channel = Channel {
         points: vec![Vec3::new(0.0, 0.0, -12.0), Vec3::new(0.0, 0.0, 12.0)],
         diameter_mm: 2.0,
+        ..Channel::default()
     };
     let mut asked = settings(2.0, HollowMode::Internal);
     asked.blockers = sleeves(&[channel], asked.thickness_mm);
@@ -785,7 +788,7 @@ fn infill_walls_are_refused_with_no_thickness_and_holes_wider_than_a_cell() {
 }
 
 #[test]
-fn an_open_floor_carries_the_cavity_out_through_the_floor_and_nowhere_else() {
+fn an_open_floor_is_cut_out_of_the_shell_and_nothing_else_is() {
     let mesh = cube(20.0, 0.0);
     let bvh = Bvh::build(&mesh);
     let shut = hollow(
@@ -806,41 +809,80 @@ fn an_open_floor_carries_the_cavity_out_through_the_floor_and_nowhere_else() {
     )
     .expect("a closed cube hollows open");
 
-    let cavity_of = |hollowed: &Hollowed| {
-        let corners: Vec<Vec3> = hollowed.mesh.faces[hollowed.cavity.clone()]
+    let report = diagnose(&open.mesh);
+    assert!(
+        report.is_sound() && report.unbalanced_edges == 0,
+        "the shell is one closed surface, not a cavity laid over the floor; {report:?}"
+    );
+    let in_the_opening = open.mesh.faces.iter().any(|face| {
+        let corners = face.map(|index| open.mesh.vertices[index as usize]);
+        let middle = (corners[0] + corners[1] + corners[2]) / 3.0;
+        corners.iter().all(|corner| corner.z.abs() < 1e-3)
+            && (5.0..15.0).contains(&middle.x)
+            && (5.0..15.0).contains(&middle.y)
+    });
+    assert!(
+        !in_the_opening,
+        "no face of the floor is left under the cavity"
+    );
+
+    // A 20 mm cube less a 16 mm square void from its roof's underside down through the
+    // floor: 8000 - 16 * 16 * 18 mm3, within what the lattice rounds the void's edges by.
+    let expected = 8000.0 - 16.0 * 16.0 * 18.0;
+    let got = enclosed(&open.mesh);
+    assert!(
+        (got - expected).abs() < 0.03 * expected,
+        "the open shell holds {expected} mm3, got {got}"
+    );
+    let roof = |hollowed: &Hollowed| {
+        hollowed.mesh.faces[hollowed.cavity.clone()]
             .iter()
             .flatten()
-            .map(|index| hollowed.mesh.vertices[*index as usize])
-            .collect();
-        Mesh::new(corners, Vec::new())
-            .aabb()
-            .expect("the cube has a cavity")
+            .map(|index| hollowed.mesh.vertices[*index as usize].z)
+            .fold(Scalar::MIN, Scalar::max)
     };
-    let (shut, open) = (cavity_of(&shut), cavity_of(&open));
-    let voxel = 0.5;
     assert!(
-        shut.mins.z > 2.0 - voxel,
-        "closed, the floor keeps its 2 mm, got {}",
-        shut.mins.z
+        (roof(&shut) - roof(&open)).abs() < 0.5,
+        "the roof stays where it was: {} against {}",
+        roof(&shut),
+        roof(&open)
     );
+}
+
+#[test]
+fn a_lattice_in_an_open_floor_stands_on_the_floor_and_not_under_it() {
+    let mesh = cube(20.0, 0.0);
+    let bvh = Bvh::build(&mesh);
+    let open = hollow(
+        &mesh,
+        &bvh,
+        &HollowSettings {
+            open_toward: Some(Vec3::NEG_Z),
+            infill: Some(InfillSettings {
+                pattern: InfillPattern::Hive,
+                ..InfillSettings::default()
+            }),
+            ..settings(2.0, HollowMode::Internal)
+        },
+        Cancel::never(),
+    )
+    .expect("a closed cube hollows open around a hive");
+
+    let lowest = open
+        .mesh
+        .vertices
+        .iter()
+        .map(|vertex| vertex.z)
+        .fold(Scalar::MAX, Scalar::min);
     assert!(
-        open.mins.z < 0.0,
-        "open, the cavity reaches out under the cube's floor, got {}",
-        open.mins.z
+        lowest > -1e-3,
+        "nothing stands under the cube's floor at z = 0, got {lowest}"
     );
-    for (axis, (shut, open)) in [
-        (shut.mins.x, open.mins.x),
-        (shut.maxs.x, open.maxs.x),
-        (shut.maxs.z, open.maxs.z),
-    ]
-    .into_iter()
-    .enumerate()
-    {
-        assert!(
-            (shut - open).abs() < voxel,
-            "the walls and the roof stay where they were ({axis}): {shut} against {open}"
-        );
-    }
+    let on_the_floor = open.mesh.faces[open.cavity.end..]
+        .iter()
+        .flatten()
+        .any(|index| open.mesh.vertices[*index as usize].z.abs() < 1e-3);
+    assert!(on_the_floor, "the hive still stands down to the floor");
 }
 
 #[test]

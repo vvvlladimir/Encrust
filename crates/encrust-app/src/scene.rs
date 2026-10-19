@@ -14,7 +14,7 @@ use core_supports::ModelSupports;
 use core_volume::ModelHollow;
 use printer_profiles::{Raft, SupportProfile};
 
-use crate::drain::Traps;
+use crate::drain::{PlugsLaid, Traps};
 use crate::i18n::tr;
 
 /// A mesh with what the window keeps beside it: its hierarchy, its centre of mass and what
@@ -252,6 +252,10 @@ pub struct SceneObject {
     /// How high over its raft the user stood the model, millimetres: what auto-orient
     /// lifts it by onto supports in place of the profile's lift.
     pub lift_mm: Option<f32>,
+    /// The model this one is a plug for, laid beside it by the Drain tool (ADR 0313).
+    pub plug_of: Option<ObjectId>,
+    /// What this model's plugs were last laid for; `None` until they are first looked at.
+    pub plugs_laid: Option<PlugsLaid>,
     bounds: PlacedBounds,
 }
 
@@ -827,6 +831,8 @@ impl Scene {
             mapped: imported.mapped,
             own: OwnSettings::default(),
             lift_mm: None,
+            plug_of: None,
+            plugs_laid: None,
             bounds: PlacedBounds::default(),
         });
         self.selected = vec![id];

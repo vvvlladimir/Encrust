@@ -3,8 +3,10 @@
     reason = "a broken fixture must fail the run loudly"
 )]
 
-use core_geometry::{Mesh, Scalar, Vec3, ball, cuboid};
-use core_volume::{Boolean, combine_exact};
+use core_geometry::{Bvh, Mat3, Mesh, Scalar, Vec3, ball, cuboid};
+use core_volume::{
+    Boolean, Cancel, HollowMode, HollowSettings, carve, cavity_field, combine_exact,
+};
 use criterion::{Criterion, criterion_group, criterion_main};
 
 /// A half-million-face ball with seven small blocks standing out of its top, the way a
@@ -27,6 +29,29 @@ fn benchmarks(c: &mut Criterion) {
     });
     group.bench_function("seven letters sunk into a dense ball", |b| {
         b.iter(|| combine_exact(&models, Boolean::Difference).expect("the letters cut the ball"));
+    });
+    group.finish();
+
+    // The cavity's field is built once: what is timed is the floor cut out of the shell.
+    let dense = ball(Vec3::ZERO, 20.0, 512, 512);
+    let settings = HollowSettings {
+        thickness_mm: 2.0,
+        mode: HollowMode::Internal,
+        open_toward: Some(Vec3::NEG_Z),
+        ..HollowSettings::default()
+    };
+    let field = cavity_field(
+        &dense,
+        &Bvh::build(&dense),
+        &settings,
+        Mat3::IDENTITY,
+        Cancel::never(),
+    )
+    .expect("the ball has a cavity");
+    let mut group = c.benchmark_group("open_floor");
+    group.sample_size(10);
+    group.bench_function("a dense ball opened through its floor", |b| {
+        b.iter(|| carve(&dense, &field, &settings, Cancel::never()).expect("the ball opens"));
     });
     group.finish();
 }

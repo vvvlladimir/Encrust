@@ -1,6 +1,6 @@
 use core_geometry::{Bvh, Mesh, Quat, Ray, Scalar, Vec3};
 
-use crate::drain::{DrainHole, HoleMode, MOUTH_LIFT_MM, Section};
+use crate::drain::{DrainHole, MOUTH_LIFT_MM, Section};
 use crate::error::VolumeError;
 
 /// Rings the outer face of a plug is sampled on between its middle and its rim. Four on a
@@ -20,8 +20,8 @@ pub const PLUG_GAP_MM: Scalar = 0.15;
 /// wall, narrowed by `gap_mm` all round so it slides back in; see ADR 0313.
 ///
 /// Its outer face is `model`'s surface over the mouth, read along the axis, so it closes
-/// flush; its inner end is flat, `wall_mm` in where the model is hollow and the hole goes
-/// through, at the hole's own depth otherwise. A taper carries over, so a cone is closed by
+/// flush; its inner end is flat, `wall_mm` in where the model is hollow, at the hole's own
+/// depth otherwise. A taper carries over, so a cone is closed by
 /// a cone.
 pub fn plugs(
     model: &Mesh,
@@ -72,12 +72,9 @@ fn plug(
     if !sound || !gap_mm.is_finite() {
         return Err(VolumeError::BadDrain { index });
     }
-    let length_mm = match (hole.mode, wall_mm) {
-        (HoleMode::Through, Some(wall_mm)) => wall_mm,
-        _ => hole.depth_mm,
-    };
+    let length_mm = wall_mm.unwrap_or(hole.depth_mm);
 
-    let section = Section::of(hole);
+    let section = Section::of(hole.shape, hole.turn_deg);
     // A polygon's sides move in by the gap, so its corners move further than that.
     let inset = gap_mm / (std::f32::consts::PI / section.sides as Scalar).cos();
     let lift = hole.lift_mm.max(MOUTH_LIFT_MM);
@@ -183,7 +180,6 @@ mod tests {
             lift_mm: 0.0,
             shape: HoleShape::Round,
             turn_deg: 0.0,
-            mode: HoleMode::Through,
         }
     }
 
@@ -217,21 +213,6 @@ mod tests {
         assert!(
             (bounds.maxs.z - 10.0).abs() < 1e-4 && (bounds.mins.z - 8.0).abs() < 1e-4,
             "the plug runs from the slab's top down through the 2 mm wall, got {bounds:?}"
-        );
-    }
-
-    #[test]
-    fn a_blind_hole_is_plugged_to_its_own_depth() {
-        let blind = DrainHole {
-            mode: HoleMode::Blind,
-            ..hole_in_the_top()
-        };
-        let plug = the_plug(blind, Some(2.0), 0.1);
-        let bounds = plug.aabb().expect("a plug has vertices");
-        assert!(
-            (bounds.mins.z - 4.0).abs() < 1e-4,
-            "a socket's plug fills its 6 mm, wall or not, got {}",
-            bounds.mins.z
         );
     }
 

@@ -13,9 +13,14 @@ const MAX_BANDS = 8u;
 const MAX_POCKETS = 32u;
 
 // One drain hole or channel segment in plate millimetres: xyz is an end, w its radius.
+// corner.xyz points at a polygon's first corner and corner.w counts its sides, 0 if round.
+// start and end are the planes a channel's leg is mitred off at, w 1.0 where it is.
 struct DrainCut {
     mouth: vec4<f32>,
     tip: vec4<f32>,
+    corner: vec4<f32>,
+    start: vec4<f32>,
+    end: vec4<f32>,
 };
 
 // One band of print height that takes an exposure of its own: span.xy is the band in
@@ -228,22 +233,50 @@ const CUT_SKIN = 0.03;
 // floor of a blind hole sits exactly there, and is drawn rather than cut away.
 const CUT_FLOOR = 0.002;
 
+// How far `offset` stands from a cut's axis, measured so that the cut's outline reads as its
+// corner radius: plain distance for a circle, scaled up off a polygon's corners to its sides.
+fn reach(offset: vec3<f32>, axis: vec3<f32>, corner: vec4<f32>) -> f32 {
+    if (corner.w < 3.0) {
+        return length(offset);
+    }
+    let unit = normalize(axis);
+    let lengthwise = dot(offset, unit);
+    let across = offset - unit * lengthwise;
+    let sector = 6.2831853 / corner.w;
+    let angle = atan2(dot(across, cross(unit, corner.xyz)), dot(across, corner.xyz));
+    let from_side = angle - sector * floor(angle / sector) - 0.5 * sector;
+    let outline = length(across) * cos(from_side) / cos(0.5 * sector);
+    return sqrt(outline * outline + lengthwise * lengthwise);
+}
+
 fn cut_away(world: vec3<f32>) -> bool {
     let count = i32(globals.counts.x);
     for (var index = 0; index < count; index = index + 1) {
         let cut = globals.cuts[index];
         let axis = cut.tip.xyz - cut.mouth.xyz;
-        var along = dot(world - cut.mouth.xyz, axis) / max(dot(axis, axis), 1e-9);
+        let along = dot(world - cut.mouth.xyz, axis) / max(dot(axis, axis), 1e-9);
         // A negative radius at the far end marks a cut that opens there, a channel's
         // mouth against a hole's floor: the floor is geometry and has to survive.
         if (cut.tip.w >= 0.0 && along > 1.0 - CUT_FLOOR) {
             continue;
         }
+        // A leg of a channel ends at the plane it shares with the next, where that one
+        // takes over, so the outline runs on unbroken through the bend.
+        let past_start = dot(world - cut.mouth.xyz, cut.start.xyz) < 0.0;
+        let past_end = dot(world - cut.tip.xyz, cut.end.xyz) > 0.0;
+        if ((cut.start.w > 0.5 && past_start) || (cut.end.w > 0.5 && past_end)) {
+            continue;
+        }
         // Rounded at the ends that open, so that a surface curving away under a mouth is
-        // taken with it rather than left capping the bore.
-        along = clamp(along, 0.0, 1.0);
-        let radius = mix(cut.mouth.w, abs(cut.tip.w), along);
-        if (distance(world, cut.mouth.xyz + axis * along) < radius * (1.0 - CUT_SKIN)) {
+        // taken with it rather than left capping the bore; straight on to a mitre.
+        let held = clamp(along, 0.0, 1.0);
+        let radius = mix(cut.mouth.w, abs(cut.tip.w), held);
+        var offset = world - (cut.mouth.xyz + axis * held);
+        if ((along < 0.0 && cut.start.w > 0.5) || (along > 1.0 && cut.end.w > 0.5)) {
+            let unit = normalize(axis);
+            offset = offset - unit * dot(offset, unit);
+        }
+        if (reach(offset, axis, cut.corner) < radius * (1.0 - CUT_SKIN)) {
             return true;
         }
     }

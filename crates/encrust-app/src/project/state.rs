@@ -11,7 +11,7 @@ use core_geometry::{Bvh, Vec3, center_of_mass};
 use rayon::prelude::*;
 
 use crate::i18n::tr;
-use crate::scene::{ImportSummary, Imported, OwnSettings, Scene, SceneObject};
+use crate::scene::{ImportSummary, Imported, ObjectId, OwnSettings, Scene, SceneObject};
 use crate::slicing::Slicing;
 use crate::state::Tools;
 use crate::supports::with_own;
@@ -59,7 +59,11 @@ pub fn capture(plate: Captured<'_>) -> Project {
         array: settings.array,
         plates: scene.plates().to_vec(),
         active_plate: scene.active_plate(),
-        objects: scene.objects().iter().map(object_state).collect(),
+        objects: scene
+            .objects()
+            .iter()
+            .map(|object| object_state(scene, object))
+            .collect(),
     };
     Project {
         manifest,
@@ -103,7 +107,7 @@ fn model_meshes(object: &SceneObject) -> ModelMeshes {
     }
 }
 
-fn object_state(object: &SceneObject) -> ObjectState {
+fn object_state(scene: &Scene, object: &SceneObject) -> ObjectState {
     ObjectState {
         name: object.name.clone(),
         plate: object.plate,
@@ -132,6 +136,10 @@ fn object_state(object: &SceneObject) -> ObjectState {
         own_hollow: object.own.hollow.clone(),
         own_drain: object.own.drain.clone(),
         own_raft: object.own.raft,
+        plug_of: object
+            .plug_of
+            .and_then(|model| scene.objects().iter().position(|other| other.id == model))
+            .and_then(|index| u32::try_from(index).ok()),
         own_supports: object
             .own
             .supports
@@ -256,6 +264,7 @@ fn restore_objects(
         })
         .collect();
 
+    let mut plugs = Vec::new();
     for ((state, meshes), (bvh, center_of_mass)) in objects.into_iter().zip(&models).zip(measured) {
         let id = scene.insert(Imported {
             name: state.name,
@@ -273,6 +282,7 @@ fn restore_objects(
             // not pressed in before saving is not in there to press in now.
             mapped: None,
         });
+        plugs.push((id, state.plug_of));
         let Some(object) = scene.get_mut(id) else {
             continue;
         };
@@ -298,6 +308,14 @@ fn restore_objects(
         );
         object.hollow = hollow_of(&state.hollow, meshes);
         object.own = own;
+    }
+    // A plug names its model by its place in the file, which is known once all are in.
+    let ids: Vec<ObjectId> = plugs.iter().map(|(id, _)| *id).collect();
+    for (id, of) in plugs {
+        let model = of.and_then(|index| ids.get(index as usize).copied());
+        if let Some(object) = scene.get_mut(id) {
+            object.plug_of = model;
+        }
     }
 }
 
@@ -434,6 +452,7 @@ mod tests {
             vec![Channel {
                 points: vec![Vec3::ZERO, Vec3::Z],
                 diameter_mm: 1.5,
+                ..Channel::default()
             }],
         );
 

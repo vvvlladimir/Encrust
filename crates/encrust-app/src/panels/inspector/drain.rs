@@ -1,4 +1,4 @@
-use core_volume::{HoleMode, HoleShape};
+use core_volume::HoleShape;
 use printer_profiles::Kind;
 
 use super::presets;
@@ -69,7 +69,6 @@ pub fn ui(ui: &mut egui::Ui, window: &mut Window) {
         scope::editing(window, own, &scoped, |window| {
             sizes(ui, window.tools);
             outline(ui, window.tools);
-            depth_mode(ui, window.tools);
         });
         placed(ui, window);
         if let Some(job) = window.tools.hollow.job.as_ref() {
@@ -79,7 +78,7 @@ pub fn ui(ui: &mut egui::Ui, window: &mut Window) {
     section(ui, &tr!("drain-plugs"), None, |ui| {
         describe(ui, &tr!("drain-plugs-note"));
         scope::editing(window, own, &scoped, |window| plug_gap(ui, window.tools));
-        plugs(ui, window);
+        drift(ui, window);
     });
 }
 
@@ -241,23 +240,15 @@ fn outline(ui: &mut egui::Ui, tools: &mut Tools) {
     describe(ui, &tr!("drain-polygon-note"));
 }
 
-/// Whether a hole is carried on into a cavity behind it or stops at its depth.
-fn depth_mode(ui: &mut egui::Ui, tools: &mut Tools) {
-    let segments = [
-        Segment::new(HoleMode::Through, tr!("drain-through")),
-        Segment::new(HoleMode::Blind, tr!("drain-blind")),
-    ];
-    let width = ui.available_width();
-    Segmented::new(&segments)
-        .width(width)
-        .show(ui, &mut tools.drain.state.mode);
-    describe(
-        ui,
-        &match tools.drain.state.mode {
-            HoleMode::Through => tr!("drain-through-note"),
-            HoleMode::Blind => tr!("drain-blind-note"),
-        },
-    );
+/// What the plugs are widened by where the resin's tolerance compensation is off.
+fn drift(ui: &mut egui::Ui, window: &Window) {
+    let drift_mm = window.machine.slicing.material.compensation.fit_drift_mm();
+    if drift_mm.abs() > f32::EPSILON {
+        describe(
+            ui,
+            &tr!("drain-plug-drift", drift = format!("{drift_mm:.2}")),
+        );
+    }
 }
 
 fn plug_gap(ui: &mut egui::Ui, tools: &mut Tools) {
@@ -270,37 +261,6 @@ fn plug_gap(ui: &mut egui::Ui, tools: &mut Tools) {
         MIN_PLUG_GAP_MM..=MAX_PLUG_GAP_MM,
         2,
     );
-}
-
-/// The button that lays a plug for every hole on the plate beside its model.
-fn plugs(ui: &mut egui::Ui, window: &mut Window) {
-    let holes: usize = window
-        .doc
-        .scene
-        .targets()
-        .map(|object| object.hollow.drains().len())
-        .sum();
-    if holes == 0 {
-        hint(ui, &tr!("drain-plugs-none"));
-        return;
-    }
-    let drift_mm = window.machine.slicing.material.compensation.fit_drift_mm();
-    if drift_mm.abs() > f32::EPSILON {
-        describe(
-            ui,
-            &tr!("drain-plug-drift", drift = format!("{drift_mm:.2}")),
-        );
-    }
-    if secondary_button(ui, icon::ADD, &tr!("drain-lay-plugs", count = holes)).clicked() {
-        window.machine.status = match window
-            .tools
-            .drain
-            .lay_plugs(&mut window.doc.scene, drift_mm)
-        {
-            Ok(laid) => crate::status::Status::Info(tr!("drain-plugs-laid", count = laid)),
-            Err(error) => crate::status::Status::Error(error.to_string()),
-        };
-    }
 }
 
 /// How many holes are standing, and the one way to take them all away.

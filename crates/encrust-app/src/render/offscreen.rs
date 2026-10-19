@@ -67,7 +67,6 @@ fn holes() -> Vec<DrainHole> {
             lift_mm: 8.0,
             shape: core_volume::HoleShape::Round,
             turn_deg: 0.0,
-            mode: core_volume::HoleMode::Through,
         },
         DrainHole {
             at: Vec3::new(114.7, 40.0, 50.0),
@@ -78,7 +77,6 @@ fn holes() -> Vec<DrainHole> {
             lift_mm: 8.0,
             shape: core_volume::HoleShape::Round,
             turn_deg: 0.0,
-            mode: core_volume::HoleMode::Through,
         },
     ]
 }
@@ -166,6 +164,70 @@ fn a_hole_shows_the_wall_of_the_cut_that_made_it() {
     assert_eq!(
         painted, 0,
         "{painted} pixel(s) of a wall stand where the model was not"
+    );
+}
+
+/// A polygonal hole takes away its own outline and not the circle round it: a square with its
+/// corners on the diameter leaves the model standing between its sides and that circle.
+#[test]
+fn a_square_hole_takes_away_less_of_the_model_than_its_circle() {
+    let camera = OrbitCamera {
+        target: Vec3::new(110.0, 40.0, 50.0),
+        distance_mm: 22.0,
+        yaw_rad: std::f32::consts::PI,
+        pitch_rad: 0.1,
+        ..OrbitCamera::default()
+    };
+    let (mesh, _, _) = drilled_ball(false);
+    let square: Vec<DrainHole> = holes()
+        .into_iter()
+        .map(|hole| DrainHole {
+            shape: core_volume::HoleShape::Polygon { sides: 4 },
+            turn_deg: 45.0,
+            ..hole
+        })
+        .collect();
+    let bodies = Arc::new(drill(&square, &[]).expect("the square holes drill"));
+    let object = ModelInstance::new(Transform::default(), theme::scene().object, NOT_MARKED);
+    let models = [ModelDraw::whole(Arc::clone(&mesh), object)];
+    let surfaces = cut_surfaces(&mesh, &bodies, object);
+    let frame = |cuts: &[DrainCut], surfaces: &[CutDraw]| {
+        paint(
+            camera,
+            None,
+            &models,
+            &[],
+            Marks {
+                cuts,
+                cut_surfaces: surfaces,
+                ..Marks::default()
+            },
+        )
+    };
+
+    let Some(whole) = frame(&[], &[]) else {
+        return;
+    };
+    let squared = cuts_of(&square, &[], Transform::default());
+    let mut rounded = squared.clone();
+    for cut in &mut rounded {
+        cut.corner = [0.0; 4];
+    }
+    let changed = |cuts: &[DrainCut]| {
+        let drilled = frame(cuts, &surfaces).expect("a later frame draws too");
+        whole
+            .as_chunks::<4>()
+            .0
+            .iter()
+            .zip(drilled.as_chunks::<4>().0)
+            .filter(|(whole, drilled)| whole != drilled)
+            .count()
+    };
+    let (by_square, by_circle) = (changed(&squared), changed(&rounded));
+    // A square holds 2/pi of the circle its corners are on.
+    assert!(
+        (by_square as f32) < 0.8 * by_circle as f32,
+        "the square opens {by_square} pixels, its circle {by_circle}"
     );
 }
 

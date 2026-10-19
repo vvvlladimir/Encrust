@@ -30,8 +30,8 @@ pub use build::{FieldSettings, build};
 pub use cancel::Cancel;
 pub use csg::{difference, intersection, offset, shell, union};
 pub use drain::{
-    CUT_WEIGHT, Channel, DrainHole, HoleMode, HoleShape, HoleSize, MOUTH_LIFT_MM, channel_under,
-    drill, hole_at, lift_for, pierce,
+    CUT_WEIGHT, Channel, DrainHole, HoleShape, HoleSize, Leg, MOUTH_LIFT_MM, channel_under, drill,
+    hole_at, lift_for, pierce,
 };
 pub use error::VolumeError;
 pub use extract::extract;

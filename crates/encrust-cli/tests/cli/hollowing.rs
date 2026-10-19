@@ -419,52 +419,6 @@ fn an_open_floor_is_refused_on_a_mould() {
 }
 
 #[test]
-fn a_blind_hole_stops_short_of_the_cavity_a_drain_reaches() {
-    let path = write_box_stl("blind-drain", 20.0, 12, 0);
-    let input = path.to_str().unwrap();
-    let panel = test_panel();
-    let panel = panel.to_str().unwrap();
-    let drilled = |name: &str, extra: &[&str]| {
-        let out = output_dir(name);
-        let mut args = vec![
-            input,
-            "--profile",
-            panel,
-            "--hollow",
-            "2",
-            "--layer-height",
-            "0.5",
-            "--drain",
-            "6",
-            "--drain-depth",
-            "1",
-            "--drain-at",
-            "10,10,25",
-            "-o",
-            out.to_str().unwrap(),
-        ];
-        args.extend_from_slice(extra);
-        let output = slice(&args);
-        assert!(output.status.success(), "{}", stdout(&output));
-        out
-    };
-    let through = drilled("blind-through", &[]);
-    let blind = drilled("blind-socket", &["--drain-blind", "--drain-sides", "6"]);
-
-    // The lid runs from 18 to 20 mm; layer 36 is its lower half, under the 1 mm socket.
-    let (width, height, opened) = layer_pixels(&through, 36);
-    let (_, _, closed) = layer_pixels(&blind, 36);
-    let middle = (height as usize / 2) * width as usize + width as usize / 2;
-    assert_eq!(
-        opened[middle], 0x00,
-        "a drain is carried on through the lid"
-    );
-    assert_eq!(closed[middle], 0xFF, "a socket stops at its own depth");
-    let (_, _, socket) = layer_pixels(&blind, 39);
-    assert_eq!(socket[middle], 0x00, "and is open at the top all the same");
-}
-
-#[test]
 fn plugs_stand_beside_the_model_they_close() {
     let path = write_box_stl("plugs", 8.0, 12, 0);
     let out = output_dir("plugs");

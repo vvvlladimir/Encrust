@@ -4,8 +4,8 @@ use std::sync::Arc;
 use core_geometry::{Bvh, Mat3, Mesh, Scalar, Transform, Vec3, smallest_scale};
 
 use crate::{
-    Blocker, Channel, DrainHole, HoleMode, HoleSize, HollowSettings, channel_under, drill, hole_at,
-    lift_for, pierce, sleeves,
+    Blocker, Channel, DrainHole, HoleSize, HollowSettings, channel_under, drill, hole_at, lift_for,
+    pierce, sleeves,
 };
 
 /// A transform this close to singular has flattened its model, and a click on it cannot
@@ -119,8 +119,7 @@ impl ModelHollow {
     /// space, deep enough to reach it: what gives a trapped pocket its way out.
     ///
     /// `size` is measured on the plate, like the one a click drops; its depth is the
-    /// pocket's, and the hole goes through whatever mode it was asked in. Returns whether
-    /// there was a surface to drill through at all.
+    /// pocket's. Returns whether there was a surface to drill through at all.
     pub fn drill_into(
         &mut self,
         mesh: &Mesh,
@@ -134,7 +133,6 @@ impl ModelHollow {
         let asked = HoleSize {
             diameter_mm,
             depth_mm: 0.0,
-            mode: HoleMode::Through,
             ..size
         };
         let Some(hole) = hole_at(mesh, bvh, target, asked) else {
@@ -389,10 +387,16 @@ impl ModelHollow {
         ))
     }
 
-    /// Digs the channel laid out so far, if it has two points to run between.
-    pub fn finish_channel(&mut self, diameter_mm: Scalar, transform: Transform) -> bool {
+    /// Digs the channel laid out so far, if it has two points to run between, as wide and
+    /// in the outline `size` asks for; its depth plays no part.
+    pub fn finish_channel(&mut self, size: HoleSize, transform: Transform) -> bool {
         let smallest = transform.least_scale();
-        let dug = channel_under(&self.pending, diameter_mm / smallest);
+        let dug =
+            channel_under(&self.pending, size.diameter_mm / smallest).map(|channel| Channel {
+                shape: size.shape,
+                turn_deg: size.turn_deg,
+                ..channel
+            });
         self.pending.clear();
         let Some(channel) = dug else {
             self.recut();
@@ -496,6 +500,7 @@ impl ModelHollow {
             .map(|channel| Channel {
                 points: channel.points.iter().map(|point| sizing * *point).collect(),
                 diameter_mm: channel.diameter_mm * least,
+                ..*channel
             })
             .collect();
         let mut carried = Self {
@@ -783,14 +788,14 @@ mod tests {
         let mut hollow = ModelHollow::default();
         hollow.add_channel_point(Vec3::new(1.0, 0.0, 0.0), Vec3::X, Transform::default());
         assert!(
-            !hollow.finish_channel(2.0, Transform::default()),
+            !hollow.finish_channel(HoleSize::round(2.0, 0.0, 1.0), Transform::default()),
             "one point is not a channel"
         );
         assert!(hollow.channels().is_empty());
 
         hollow.add_channel_point(Vec3::new(1.0, 0.0, 0.0), Vec3::X, Transform::default());
         hollow.add_channel_point(Vec3::new(1.0, 0.0, 6.0), Vec3::X, Transform::default());
-        assert!(hollow.finish_channel(2.0, Transform::default()));
+        assert!(hollow.finish_channel(HoleSize::round(2.0, 0.0, 1.0), Transform::default()));
 
         let channel = &hollow.channels()[0];
         assert!((channel.diameter_mm - 2.0).abs() < 1e-4);
@@ -933,7 +938,7 @@ mod tests {
         hollow.take(shell(Mat3::IDENTITY, asked.clone()));
         hollow.add_channel_point(Vec3::new(1.0, 0.0, 0.0), Vec3::X, Transform::default());
         hollow.add_channel_point(Vec3::new(1.0, 0.0, 6.0), Vec3::X, Transform::default());
-        hollow.finish_channel(2.0, Transform::default());
+        hollow.finish_channel(HoleSize::round(2.0, 0.0, 1.0), Transform::default());
 
         assert!(
             hollow.is_stale(&asked, Transform::default()),
@@ -972,7 +977,7 @@ mod tests {
 
         hollow.add_channel_point(Vec3::new(1.0, 0.0, 0.0), Vec3::X, Transform::default());
         hollow.add_channel_point(Vec3::new(1.0, 0.0, 6.0), Vec3::X, Transform::default());
-        hollow.finish_channel(2.0, Transform::default());
+        hollow.finish_channel(HoleSize::round(2.0, 0.0, 1.0), Transform::default());
         let sleeved = hollow.rebuild().expect("the pipe needs its sleeve");
         assert!(
             (sleeved.thickness_mm - 3.0).abs() < 1e-6,

@@ -20,6 +20,8 @@ use crate::sdf::Sdf;
 use crate::shells::outer_shells;
 use crate::sign::SignMode;
 
+mod floor;
+
 /// How far past its own surface a hollowing field reaches.
 ///
 /// Two voxels, not the three a field takes by default: a cube the cavity passes through
@@ -481,6 +483,35 @@ fn shelled(
     if cancel.asked() {
         return Err(VolumeError::Cancelled);
     }
+    // The opening reaches past the floor, and a lattice standing in it is stopped at the floor.
+    let solid = match floor {
+        Some((toward, _)) if opened.is_some() => floor::stopped_at_floor(solid, mesh, toward),
+        _ => solid,
+    };
+    // Where the floor is open, the shell is cut exactly near it, so the model shows it gone.
+    let through = match floor {
+        Some((toward, wall_mm)) if opened.is_some() => {
+            let opening = floor::Opening {
+                toward,
+                wall_mm,
+                band_mm: field.offset.band_mm(),
+                voxel_mm: field.voxel_mm,
+            };
+            floor::cut_through(mesh, &void, opening)
+        }
+        _ => None,
+    };
+    let cavity_mm3 = (volume_of(&void) - volume_of(&solid)).max(0.0);
+    if let Some((mut whole, cavity)) = through {
+        append(&mut whole, &solid);
+        return Ok(Hollowed {
+            mesh: whole,
+            cavity,
+            cavity_mm3,
+            voxel_mm: field.voxel_mm,
+            coarsened: false,
+        });
+    }
 
     // Grown to what the three parts come to before the first is copied: a mesh that
     // doubles its way there holds the old copy and the new one at once, and the cavity of
@@ -498,7 +529,7 @@ fn shelled(
         cavity: cavity_faces,
         // Where a scaffold's struts overlap at a node, their volume counts twice, a few
         // percent at most.
-        cavity_mm3: (volume_of(&void) - volume_of(&solid)).max(0.0),
+        cavity_mm3,
         voxel_mm: field.voxel_mm,
         coarsened: false,
     })

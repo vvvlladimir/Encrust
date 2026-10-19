@@ -97,6 +97,7 @@ fn object(name: &str, mesh: &Mesh, transform: Transform) -> ObjectState {
         own_drain: None,
         own_supports: Vec::new(),
         own_raft: None,
+        plug_of: None,
     }
 }
 

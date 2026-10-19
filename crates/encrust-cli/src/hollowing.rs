@@ -4,9 +4,9 @@ use std::time::{Duration, Instant};
 use anyhow::{Context, Result, bail};
 use core_geometry::{Bvh, Mesh, Scalar, Transform, Vec3, transform_mesh};
 use core_volume::{
-    Cancel, Channel, DrainHole, HoleMode, HoleShape, HoleSize, HollowMode, HollowSettings,
-    InfillPattern, InfillSettings, PLUG_GAP_MM, VolumeError, drill, hole_at, hollow, pierce, plugs,
-    sleeves, stand_on_end,
+    Cancel, Channel, DrainHole, HoleShape, HoleSize, HollowMode, HollowSettings, InfillPattern,
+    InfillSettings, PLUG_GAP_MM, VolumeError, drill, hole_at, hollow, pierce, plugs, sleeves,
+    stand_on_end,
 };
 
 use crate::exit::{Cancelled, Stop};
@@ -110,8 +110,8 @@ pub struct HollowArgs {
     #[arg(long = "drain-taper", value_name = "0..1", default_value_t = 1.0)]
     pub drain_taper: Scalar,
 
-    /// Cut the drain holes as polygons of this many sides, their corners on the diameter;
-    /// round without it.
+    /// Cut the drain holes and channels as polygons of this many sides, their corners on the
+    /// diameter; round without it.
     #[arg(long = "drain-sides", value_name = "3..12", value_parser = clap::value_parser!(u8).range(3..=12))]
     pub drain_sides: Option<u8>,
 
@@ -123,11 +123,6 @@ pub struct HollowArgs {
         allow_hyphen_values = true
     )]
     pub drain_turn_deg: Scalar,
-
-    /// Stop each hole at --drain-depth even where a cavity is behind it: a socket, not a
-    /// drain.
-    #[arg(long = "drain-blind")]
-    pub drain_blind: bool,
 
     /// Print a plug for each drain hole, standing on the plate beside the model.
     #[arg(long = "drain-plugs")]
@@ -222,11 +217,6 @@ impl HollowArgs {
                 .drain_sides
                 .map_or(HoleShape::Round, |sides| HoleShape::Polygon { sides }),
             turn_deg: self.drain_turn_deg,
-            mode: if self.drain_blind {
-                HoleMode::Blind
-            } else {
-                HoleMode::Through
-            },
         }
     }
 
@@ -284,6 +274,8 @@ impl HollowArgs {
             .map(|points| Channel {
                 points: points.clone(),
                 diameter_mm: self.channel_mm,
+                shape: self.hole_size().shape,
+                turn_deg: self.drain_turn_deg,
             })
             .collect()
     }

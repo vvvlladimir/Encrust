@@ -150,9 +150,8 @@ encrust slice model.stl \
 ```
 
 A hole is round unless `--drain-sides 3..12` cuts it as a polygon, its corners on the
-diameter, turned `--drain-turn` degrees from the level. Once the model is hollow a hole is
-carried on through the wall into the cavity; `--drain-blind` stops it at `--drain-depth`
-instead, as a socket for a magnet or a pin. `--drain-plugs` prints a plug for each hole,
+diameter, turned `--drain-turn` degrees from the level; a `--channel` takes the same outline. Once the model is hollow a hole is
+carried on through the wall into the cavity. `--drain-plugs` prints a plug for each hole,
 standing on the plate past the model's right-hand side: what the hole took out of the wall,
 `--plug-gap` millimetres narrower a side (0.15 by default), its outer face flush with the
 surface (ADR 0313). A resin whose tolerance compensation is off takes its hole and outer

@@ -216,11 +216,11 @@ capped silently.
 - **Inside** grows the wall inward and leaves the outside untouched. **Outside** grows it
   outward, which gives you a mould of the model; a mould takes no infill and keeps no
   wall solid, so the panel hides both.
-- **Open floor:** an inside shell can open through the floor it stands on, so the resin runs
-  out with no drain hole. It follows the plate: turn the model and it asks to be hollowed
-  again. Standing on the plate the cavity stays sealed until the print comes off, so add a
-  small vent near the top. The layer preview shows the floor open; the model view still
-  draws it.
+- **Bottom through** grows the wall inward like Inside and cuts away the floor the model
+  stands on, so the resin runs out with no drain hole and the model shows the opening. It
+  follows the plate: turn the model and it asks to be hollowed again. Standing on the plate
+  the cavity stays sealed until the print comes off, so add a small vent near the top. On a
+  model with holes in its surface the floor is still drawn, though the layers are open.
 - **Infill** inside the cavity, or leave it empty:
   - **Hive** (hexagonal cells) and **Grid** (square cells) stand on the plate. Set the cell
     size, the wall thickness, and the round crossing holes that join each cell to its
@@ -237,16 +237,17 @@ capped silently.
 
 ### Drain
 - **Drill** a hole, with size, depth and taper, wherever you click.
-- A hole is **round** or a **polygon** of 3 to 12 sides that you can turn about its axis: turn
-  a corner to the top of a hole in a side wall and its roof prints without sagging.
-- **Through** holes are carried on through the wall into the cavity once the model is
-  hollow, however shallow you set them. **Blind** holes stop at their depth, as sockets for
-  magnets or pins.
-- **Plugs:** one button prints a plug for every hole, standing on the plate beside its
-  model. A plug is what the hole took out of the wall, narrower all round by the gap you set
-  (0.15 mm by default), with its outer face following the surface so it closes flush. If the
-  resin's tolerance compensation is off, its offsets are allowed for so the fit prints as
-  set.
+- A hole or a channel is **round** or a **polygon** of 3 to 12 sides that you can turn about
+  its axis: turn a corner to the top of a hole in a side wall and its roof prints without
+  sagging.
+- Once the model is hollow, a hole is carried on through the wall into the cavity, however
+  shallow you set it.
+- **Plugs:** every hole gets a plug standing on the plate beside its model as soon as it is
+  cut, and the plugs are made again when you add or clear holes, hollow the model or change
+  the gap. A plug is what the hole took out of the wall, narrower all round by the gap you
+  set (0.15 mm by default), with its outer face following the surface so it closes flush. If
+  the resin's tolerance compensation is off, its offsets are allowed for so the fit prints
+  as set.
 - **Channel:** dig a tube of the hole size through a path of points, open only at its two
   ends.
 - **Check drainage:** Encrust follows the air through every layer and finds every pocket
@@ -552,7 +553,7 @@ removes the half-written file.
 **Modelling:** combine the models given, write a label on one, cut it with a joint, split
 it into its parts or cut a part off, all at the window's default sizes, before it is sliced.
 
-**Holes:** open a shell's floor, cut drain holes round or as polygons, through or blind, and
+**Holes:** open a shell's floor, cut drain holes round or as polygons, and
 print a plug for each beside the model, with the gap you choose.
 
 **You cannot** (from the command line): paint supports, place them by hand, set blockers,

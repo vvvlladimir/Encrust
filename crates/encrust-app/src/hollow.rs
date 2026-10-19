@@ -319,7 +319,10 @@ mod tests {
             Vec3::NEG_Z,
             Transform::default(),
         );
-        assert!(object.hollow.finish_channel(2.0, Transform::default()));
+        assert!(object.hollow.finish_channel(
+            core_volume::HoleSize::round(2.0, 0.0, 1.0),
+            Transform::default()
+        ));
         assert!(tool.rebuild(&scene), "the channel needs its sleeve now");
         assert!(tool.job.is_some());
     }

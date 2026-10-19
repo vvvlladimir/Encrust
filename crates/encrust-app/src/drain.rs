@@ -1,18 +1,17 @@
 use anyhow::{Result, bail};
 use core_engine::project::DrainState;
-use core_geometry::{Mesh, Scalar, Transform, Vec3, transform_mesh};
+use core_geometry::Scalar;
 use core_supports::Trapped;
-use core_volume::{HoleSize, HollowMode, VolumeError, plugs, stand_on_end};
+use core_volume::HoleSize;
 
 use crate::i18n::tr;
 use crate::job::{TrapJob, TrapOutcome, TrapRequest, trap_tasks};
-use crate::landing::place;
 use crate::scene::{ObjectId, Scene, SceneObject};
 use crate::status::Status;
 
-/// Space left between a model and the plugs laid out beside it, and between one plug and
-/// the next, millimetres.
-const PLUG_SPACING_MM: Scalar = 3.0;
+mod plugs;
+
+pub use plugs::PlugsLaid;
 
 /// What a click in the viewport puts down.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -116,10 +115,9 @@ impl DrainTool {
         self.stale();
         let mut dug = 0;
         for object in scene.targets_mut() {
-            let diameter_mm = self.size_for(object).diameter_mm;
+            let size = self.size_for(object);
             let transform = object.transform;
-            if !object.hollow.pending().is_empty()
-                && object.hollow.finish_channel(diameter_mm, transform)
+            if !object.hollow.pending().is_empty() && object.hollow.finish_channel(size, transform)
             {
                 dug += 1;
             }
@@ -178,63 +176,9 @@ impl DrainTool {
         drilled
     }
 
-    /// Lays a plug for every hole of every model on the plate beside the model it closes,
-    /// and says how many it laid; `drift_mm` is what the resin leaves a fit wider by
-    /// (`Compensation::fit_drift_mm`). A model that is hollow and goes through gets plugs as
-    /// long as its wall, any other as deep as its hole (ADR 0313).
-    pub fn lay_plugs(&self, scene: &mut Scene, drift_mm: Scalar) -> Result<usize, VolumeError> {
-        let mut laid = Vec::new();
-        for object in scene.targets() {
-            let (holes, _) = object.hollow.cut();
-            if holes.is_empty() {
-                continue;
-            }
-            let least = object.transform.least_scale();
-            let gap_mm = (self.state_for(object).plug_gap_mm - drift_mm) / least;
-            let wall_mm = object
-                .hollow
-                .asked()
-                .filter(|asked| asked.mode == HollowMode::Internal)
-                .map(|asked| asked.thickness_mm / least);
-            let made = plugs(&object.mesh, &object.bvh, holes, wall_mm, gap_mm)?;
-            let stood = made.iter().zip(holes).map(|(plug, hole)| {
-                let placed = transform_mesh(plug, object.transform);
-                stand_on_end(&placed, object.transform.linear() * hole.axis)
-            });
-            laid.push((object.id, object.name.clone(), stood.collect::<Vec<_>>()));
-        }
-
-        let count = laid.iter().map(|(_, _, plugs)| plugs.len()).sum();
-        for (id, name, plugs) in laid {
-            lay_out(scene, id, &name, plugs);
-        }
-        Ok(count)
-    }
-
     /// What `object` drills with: its own settings, or the plate's.
-    fn state_for<'a>(&'a self, object: &'a SceneObject) -> &'a DrainState {
+    pub(crate) fn state_for<'a>(&'a self, object: &'a SceneObject) -> &'a DrainState {
         object.own.drain.as_ref().unwrap_or(&self.state)
-    }
-}
-
-/// Stands `plugs` on the plate in a row past the right-hand side of model `beside`.
-fn lay_out(scene: &mut Scene, beside: ObjectId, name: &str, plugs: Vec<Mesh>) {
-    let Some((bounds, plate)) = scene
-        .get(beside)
-        .and_then(|object| Some((object.world_bounds()?, object.plate)))
-    else {
-        return;
-    };
-    let mut x = bounds.maxs.x + PLUG_SPACING_MM;
-    for (index, plug) in plugs.into_iter().enumerate() {
-        let Some(size) = plug.aabb().map(|bounds| bounds.extents()) else {
-            continue;
-        };
-        let offset = Vec3::new(x + size.x / 2.0, bounds.mins.y + size.y / 2.0, 0.0);
-        let laid = transform_mesh(&plug, Transform::from_translation(offset));
-        let name = tr!("drain-plug-name", name = name.to_owned(), index = index + 1);
-        place(scene, plate, name, laid);
-        x += size.x + PLUG_SPACING_MM;
     }
 }
 
@@ -245,7 +189,6 @@ fn size_of(state: &DrainState) -> HoleSize {
         taper: state.taper,
         shape: state.shape,
         turn_deg: state.turn_deg,
-        mode: state.mode,
     }
 }
 
@@ -376,55 +319,6 @@ mod tests {
             !tool.drill_pocket(&mut scene, id, 5),
             "no pocket five to drill"
         );
-    }
-
-    #[test]
-    fn a_plug_for_each_hole_stands_on_the_plate_clear_of_its_model() {
-        let mesh = core_geometry::cuboid(Vec3::ZERO, Vec3::splat(10.0));
-        let mut scene = Scene::default();
-        let id = scene.insert(Imported::new(
-            "block".to_owned(),
-            Arc::new(mesh.clone()),
-            Transform::default(),
-            ImportSummary::made(diagnose(&mesh)),
-        ));
-        let tool = DrainTool::default();
-        let object = scene.get_mut(id).expect("just inserted");
-        let (mesh, bvh) = (Arc::clone(&object.mesh), Arc::clone(&object.bvh));
-        for x in [3.0, 7.0] {
-            object.hollow.add_drain(
-                &mesh,
-                &bvh,
-                Vec3::new(x, 5.0, 10.0),
-                Vec3::Z,
-                tool.size(),
-                Transform::default(),
-            );
-        }
-
-        let laid = tool
-            .lay_plugs(&mut scene, 0.0)
-            .expect("both holes are sound");
-        assert_eq!(laid, 2);
-        let [block, plugs @ ..] = scene.objects() else {
-            panic!("the block and its plugs");
-        };
-        assert_eq!(plugs.len(), 2, "one plug a hole");
-        let edge = block.world_bounds().expect("the block has bounds").maxs.x;
-        for plug in plugs {
-            let bounds = plug.world_bounds().expect("a plug has bounds");
-            assert!(
-                bounds.mins.z.abs() < 1e-4,
-                "{} stands on the plate",
-                plug.name
-            );
-            assert!(bounds.mins.x > edge, "{} is clear of the block", plug.name);
-            assert!(
-                (bounds.maxs.z - 3.0).abs() < 1e-3,
-                "a solid block's plug is as deep as its 3 mm hole, got {}",
-                bounds.maxs.z
-            );
-        }
     }
 
     #[test]
