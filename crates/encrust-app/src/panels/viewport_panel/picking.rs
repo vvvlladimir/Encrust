@@ -145,7 +145,7 @@ pub(super) fn mark_part_under_cursor(
     let Some(object) = window.doc.scene.get(id) else {
         return;
     };
-    window.tools.cut.mark_part(id, object, hit.point);
+    window.tools.cut.mark_part(object, hit.point);
     window.doc.scene.select(Some(id));
 }
 

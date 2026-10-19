@@ -5,7 +5,7 @@ use core_volume::PartSettings;
 use crate::cut::{CutTool, Keep};
 use crate::i18n::tr;
 use crate::panels::Window;
-use crate::scene::{Axis, ObjectId};
+use crate::scene::{Axis, SceneObject};
 use crate::status::Status;
 use crate::ui::{
     Segment, Segmented, count_row, describe, hint, icon, nested, number_row, primary_button,
@@ -20,6 +20,9 @@ const CLEARANCE_STEP: f64 = 0.01;
 
 /// Millimetres per point of drag on the position field.
 const OFFSET_STEP: f64 = 0.1;
+
+/// Cubic millimetres per point of drag on the smallest part.
+const VOLUME_STEP: f64 = 0.1;
 
 /// Where the plane cuts the selected model, and what to do with the halves.
 ///
@@ -89,25 +92,40 @@ pub fn ui(ui: &mut egui::Ui, window: &mut Window) {
     });
 
     section(ui, &tr!("cut-parts"), None, |ui| {
-        mark(ui, &mut window.tools.cut, id);
+        mark(ui, &mut window.tools.cut, window.doc.scene.get(id));
         smallest(ui, &mut window.tools.cut.state.parts);
     });
 }
 
+/// Where marking a part stands on the selected model.
+#[derive(Clone, Copy)]
+enum Marking {
+    Waiting,
+    Marked,
+    Unmarked,
+}
+
 /// Mark a part, which waits for a click on the model; once one is marked, the same button
 /// takes the mark away.
-fn mark(ui: &mut egui::Ui, cut: &mut CutTool, id: ObjectId) {
-    let marked = cut.part_mark.is_some_and(|(on, _)| on == id);
-    let label = match (cut.picking_part, marked) {
-        (true, _) => tr!("cut-parts-click"),
-        (false, true) => tr!("cut-parts-unmark"),
-        (false, false) => tr!("cut-parts-mark"),
+fn mark(ui: &mut egui::Ui, cut: &mut CutTool, object: Option<&SceneObject>) {
+    let marking = match (
+        cut.picking_part,
+        object.and_then(|object| cut.marked_on(object)),
+    ) {
+        (true, _) => Marking::Waiting,
+        (false, Some(_)) => Marking::Marked,
+        (false, None) => Marking::Unmarked,
+    };
+    let label = match marking {
+        Marking::Waiting => tr!("cut-parts-click"),
+        Marking::Marked => tr!("cut-parts-unmark"),
+        Marking::Unmarked => tr!("cut-parts-mark"),
     };
     if secondary_button(ui, icon::SELECT, &label).clicked() {
-        match (cut.picking_part, marked) {
-            (true, _) => cut.picking_part = false,
-            (false, true) => cut.part_mark = None,
-            (false, false) => cut.picking_part = true,
+        match marking {
+            Marking::Waiting => cut.picking_part = false,
+            Marking::Marked => cut.unmark_part(),
+            Marking::Unmarked => cut.picking_part = true,
         }
     }
     describe(ui, &tr!("cut-parts-mark-note"));
@@ -120,7 +138,7 @@ fn smallest(ui: &mut egui::Ui, parts: &mut PartSettings) {
         &tr!("cut-parts-smallest"),
         &mut parts.smallest_mm3,
         &tr!("unit-mm3"),
-        OFFSET_STEP,
+        VOLUME_STEP,
         0.0..=1000.0,
         1,
     );

@@ -118,8 +118,9 @@ for `x`.
 whole of the walls cut so far, one after another, and the engine's cost follows the faces of
 both sides. Two things keep that down. A shape whose box meets no tile of the cavity's field,
 band or inside, is never meshed; on a curved model much of the lattice's box is air. And the
-cavity is halved across its longest side until there are two pieces a thread, no piece under
-four reaches across, each half the engine's own intersection and difference with one box.
+cavity is halved across its longest side four times over — sixteen pieces, two for each of
+eight threads, fixed so that every machine carves the same mesh — no piece under four reaches
+across, each half the engine's own intersection and difference with one box.
 The pieces are carved in parallel and appended; two halves meet face to face on the cut,
 which the fill rule reads as one solid. A plane cut through `core-geometry` would be cheaper,
 but it leaves loops open at the cavity's seams. A halving the engine refuses carves that

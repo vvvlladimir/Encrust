@@ -93,6 +93,21 @@ impl ImportSummary {
         }
     }
 
+    /// The summary of a mesh a tool made rather than a file brought: nothing was welded,
+    /// dropped or turned on its way in.
+    pub fn made(diagnostics: MeshDiagnostics) -> Self {
+        Self {
+            vertices_merged: 0,
+            faces_removed: 0,
+            orientation: Orientation {
+                flipped_faces: 0,
+                inverted_shells: 0,
+                orientable: true,
+            },
+            diagnostics,
+        }
+    }
+
     /// Nothing about this model would make slicing produce garbage.
     pub fn is_sound(&self) -> bool {
         self.diagnostics.is_sound()
@@ -303,6 +318,9 @@ impl PlacedBounds {
 #[derive(Debug, Clone)]
 pub struct Taken {
     pub id: ObjectId,
+    pub name: String,
+    /// The plate it stood on, which is where what replaces it goes down.
+    pub plate: u32,
     mesh: Arc<Mesh>,
     transform: Transform,
 }
@@ -311,6 +329,8 @@ impl Taken {
     pub fn of(object: &SceneObject) -> Self {
         Self {
             id: object.id,
+            name: object.name.clone(),
+            plate: object.plate,
             mesh: Arc::clone(&object.mesh),
             transform: object.transform,
         }
@@ -320,8 +340,21 @@ impl Taken {
     /// so the mesh itself is compared, not only the id.
     pub fn is_current(&self, scene: &Scene) -> bool {
         scene.get(self.id).is_some_and(|object| {
-            Arc::ptr_eq(&object.mesh, &self.mesh) && object.transform == self.transform
+            self.is_model(object)
+                && object.transform == self.transform
+                && object.plate == self.plate
         })
+    }
+
+    /// Whether `object` still stands turned and sized as the model was taken: what a job
+    /// that rewrites the mesh in its own space depends on, where a move does not matter.
+    pub fn is_shaped_alike_to(&self, object: &SceneObject) -> bool {
+        self.is_model(object) && object.transform.linear() == self.transform.linear()
+    }
+
+    /// Whether `object` is the model taken, still with the mesh it was taken with.
+    pub fn is_model(&self, object: &SceneObject) -> bool {
+        object.id == self.id && Arc::ptr_eq(&object.mesh, &self.mesh)
     }
 }
 

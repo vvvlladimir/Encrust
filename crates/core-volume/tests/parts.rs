@@ -7,7 +7,7 @@
     reason = "a broken fixture must fail the run loudly"
 )]
 
-use core_csg::Solid;
+use core_csg::{CsgError, Solid};
 use core_geometry::{Mesh, Scalar, Vec3, cuboid, diagnose, signed_volume};
 use core_volume::{Cancel, PartSettings, PartedOff, VolumeError, part_off, parts};
 
@@ -267,5 +267,8 @@ fn a_model_that_is_no_solid_cannot_be_parted() {
     open.faces.truncate(open.faces.len() - 1);
     let error =
         part_off(&open, Vec3::new(0.0, 5.0, 5.0), Cancel::never()).expect_err("a face is missing");
-    assert!(matches!(error, VolumeError::NotSolid(_)), "got {error:?}");
+    assert!(
+        matches!(error, VolumeError::Csg(CsgError::NotSolid(_))),
+        "got {error:?}"
+    );
 }

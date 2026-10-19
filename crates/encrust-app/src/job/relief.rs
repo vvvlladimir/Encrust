@@ -11,11 +11,12 @@ use crate::i18n::tr;
 use crate::job::pipeline::{thread_pool, worker_threads};
 use core_geometry::UvMap;
 
-use crate::scene::{Mapped, ObjectId, Scene, Shaped};
+use crate::scene::{Mapped, Scene, Shaped, Taken};
 
 /// One model to press a texture into, owned so that it can cross to the worker thread.
 pub struct ReliefTask {
-    pub id: ObjectId,
+    /// The model as the run took it, so that the press lands only on that model.
+    pub taken: Taken,
     /// The model and its hierarchy, both in its own space, which is where the map stands.
     pub mesh: Arc<Mesh>,
     pub bvh: Arc<Bvh>,
@@ -52,7 +53,7 @@ pub enum ReliefSource {
 /// One model with its texture pressed in, in its own space.
 #[derive(Debug, Clone)]
 pub struct Pressed {
-    pub id: ObjectId,
+    pub taken: Taken,
     pub shaped: Shaped,
     /// Whether the memory budget made the lattice coarser than precision asked for.
     pub coarsened: bool,
@@ -106,7 +107,7 @@ pub fn relief_tasks(scene: &Scene, tiled: bool) -> Vec<ReliefTask> {
         .targets()
         .filter(|object| tiled || object.mapped.is_some())
         .map(|object| ReliefTask {
-            id: object.id,
+            taken: Taken::of(object),
             mesh: Arc::clone(&object.mesh),
             bvh: Arc::clone(&object.bvh),
             mapped: object.mapped.clone(),
@@ -152,7 +153,7 @@ fn run(request: &ReliefRequest) -> ReliefOutcome {
                 relief
                     .map_err(anyhow::Error::new)
                     .map(|(relief, basis)| Pressed {
-                        id: task.id,
+                        taken: task.taken.clone(),
                         shaped: Shaped::of(Arc::new(relief.mesh)),
                         coarsened: relief.coarsened,
                         basis,

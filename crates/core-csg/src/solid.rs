@@ -109,7 +109,12 @@ impl Solid {
 }
 
 fn combined(left: &Manifold, right: &Manifold, op: OpType) -> Result<Solid, CsgError> {
-    match guarded(|| compute_boolean(left, right, op)) {
+    answered(guarded(|| compute_boolean(left, right, op)))
+}
+
+/// The engine's answer to a boolean as a solid: nothing left is the empty one.
+fn answered(answer: Result<Manifold, String>) -> Result<Solid, CsgError> {
+    match answer {
         Ok(inner) => Ok(Solid { inner: Some(inner) }),
         Err(reason) if reason == EMPTY => Ok(Solid::empty()),
         Err(reason) => Err(CsgError::Failed(reason)),
@@ -248,5 +253,14 @@ mod tests {
         let flat = Mesh::new(vec![point, point, Vec3::ZERO], vec![[0, 1, 2]]);
         let solid = Solid::new(&flat).expect("nothing left is the empty solid");
         assert!(solid.is_empty());
+    }
+
+    #[test]
+    fn an_engine_that_panics_answers_that_the_boolean_failed() {
+        let answer = guarded(|| -> Result<Manifold, String> { panic!("past its own tables") });
+        assert!(
+            matches!(answered(answer), Err(CsgError::Failed(_))),
+            "a panic is an error the caller can act on"
+        );
     }
 }

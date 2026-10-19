@@ -138,7 +138,7 @@ pub fn press(
 }
 
 /// [`press`] over `basis` where it fits this model and these settings, and the basis the
-/// press stood on, for the caller to keep beside this very mesh: only its size is compared.
+/// press stood on, for the caller to keep for another press of the same mesh.
 pub fn press_reusing(
     mesh: &Mesh,
     bvh: &Bvh,

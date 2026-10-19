@@ -115,7 +115,7 @@ A hive or grid takes `--infill-cell` (a hexagon's diameter, a square's side) and
 `--infill-wall`, and is joined by crossing holes `--infill-hole` millimetres across, the
 first row `--infill-hole-from` over the cavity's floor and the next every
 `--infill-hole-spacing`. A scaffold takes `--infill-cell` and `--infill-density`, 0 to 1.
-Every number left out is the window's default.
+Every number left out is the window's default, and one the pattern has no use for is refused.
 
 A hole into the surface nearest a point, cut with or without a cavity behind it, and the
 check that says whether any resin is still stuck. `--check-drainage` asks for it alone. The

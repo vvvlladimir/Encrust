@@ -102,7 +102,10 @@ pub fn segments_for(radius: Scalar, tolerance: Scalar) -> usize {
     }
     let step = 2.0 * (1.0 - tolerance / radius).acos();
     // A NaN tolerance casts to zero, so the bound is kept after the cast as well.
-    ((std::f32::consts::TAU / step).ceil().clamp(3.0, MOST_SEGMENTS) as usize).max(3)
+    ((std::f32::consts::TAU / step)
+        .ceil()
+        .clamp(3.0, MOST_SEGMENTS) as usize)
+        .max(3)
 }
 
 #[cfg(test)]

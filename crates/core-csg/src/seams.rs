@@ -1,8 +1,8 @@
 use std::collections::HashMap;
 use std::ops::Range;
 
-use core_geometry::Mesh;
 use core_geometry::glam::DVec3;
+use core_geometry::{Mesh, point_key};
 
 use crate::error::CsgError;
 
@@ -49,9 +49,7 @@ fn welded(mesh: &Mesh) -> (Vec<DVec3>, Vec<[usize; 3]>) {
     let mut remap = Vec::with_capacity(mesh.vertices.len());
     for vertex in &mesh.vertices {
         let next = points.len();
-        let at = *index
-            .entry(vertex.to_array().map(f32::to_bits))
-            .or_insert(next);
+        let at = *index.entry(point_key(*vertex)).or_insert(next);
         if at == next {
             points.push(vertex.as_dvec3());
         }

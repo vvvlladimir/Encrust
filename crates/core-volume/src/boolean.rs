@@ -1,6 +1,7 @@
 use core_csg::{CsgError, Solid};
 use core_geometry::{Bvh, Mesh, Scalar, Vec3, signed_volume, split};
 use rayon::prelude::*;
+use serde::{Deserialize, Serialize};
 
 use crate::build::{DEFAULT_BUDGET_BYTES, FieldSettings, build};
 use crate::cancel::Cancel;
@@ -19,9 +20,11 @@ mod local;
 const FIELD_PRECISION: Scalar = 0.5;
 
 /// How models are combined into one.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
 pub enum Boolean {
     /// Everything any of them holds.
+    #[default]
     Union,
     /// The first with every other taken out of it.
     Difference,
@@ -72,7 +75,7 @@ pub fn combine_exact(models: &[Mesh], op: Boolean) -> Result<Mesh, VolumeError> 
     if models.iter().any(|model| model.faces.is_empty()) {
         return Err(VolumeError::EmptyMesh);
     }
-    let mesh = exact(models, op).map_err(|error| VolumeError::NotSolid(error.to_string()))?;
+    let mesh = exact(models, op)?;
     if mesh.faces.is_empty() {
         return Err(VolumeError::NothingLeft);
     }
@@ -106,14 +109,14 @@ pub fn combine_exact_toward(
 
 fn exact(models: &[Mesh], op: Boolean) -> Result<Mesh, CsgError> {
     let solids: Vec<Solid> = models.par_iter().map(solid_of).collect::<Result<_, _>>()?;
-    let (first, rest) = solids
-        .split_first()
-        .ok_or(CsgError::Failed(String::new()))?;
-    let combined = match op {
-        Boolean::Union => largest_last(&solids, models, Solid::union)?,
-        Boolean::Intersection => largest_last(&solids, models, Solid::intersection)?,
+    let combined = match (op, solids.as_slice()) {
+        (Boolean::Union, _) => largest_last(&solids, models, Solid::union)?,
+        (Boolean::Intersection, _) => largest_last(&solids, models, Solid::intersection)?,
         // The others may overlap each other, so they are one solid before they are cut.
-        Boolean::Difference => first.difference(&folded(rest, Solid::union)?)?,
+        (Boolean::Difference, [first, rest @ ..]) => {
+            first.difference(&folded(rest, Solid::union)?)?
+        }
+        (Boolean::Difference, []) => return Ok(Mesh::default()),
     };
     Ok(combined.mesh())
 }
@@ -318,7 +321,7 @@ mod tests {
         open.faces.truncate(10);
         assert!(matches!(
             combine_exact_toward(&[open, cube(5.0, 20.0)], Boolean::Union, Vec3::Z),
-            Err(VolumeError::NotSolid(_))
+            Err(VolumeError::Csg(CsgError::NotSolid(_)))
         ));
     }
 
@@ -376,7 +379,7 @@ mod tests {
         open.faces.truncate(10);
         assert!(matches!(
             combine_exact(&[cube(0.0, 20.0), open], Boolean::Union),
-            Err(VolumeError::NotSolid(_))
+            Err(VolumeError::Csg(CsgError::NotSolid(_)))
         ));
         assert_eq!(
             combine_exact(&[cube(0.0, 10.0), cube(20.0, 10.0)], Boolean::Intersection),

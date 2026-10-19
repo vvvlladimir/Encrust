@@ -95,6 +95,36 @@ fn infill_puts_material_back_into_the_cavity() {
 }
 
 #[test]
+fn an_infill_size_the_pattern_has_no_use_for_is_refused() {
+    let path = write_box_stl("hollow-unused-size", 16.0, 12, 0);
+    let out = output_dir("unused-size");
+    for (pattern, flag, value) in [
+        ("hive", "--infill-density", "0.2"),
+        ("scaffold", "--infill-wall", "1"),
+        ("scaffold", "--infill-hole-spacing", "6"),
+    ] {
+        let output = slice(&[
+            path.to_str().unwrap(),
+            "--profile",
+            test_panel().to_str().unwrap(),
+            "-o",
+            out.to_str().unwrap(),
+            "--hollow",
+            "3",
+            "--infill",
+            pattern,
+            flag,
+            value,
+        ]);
+        assert!(!output.status.success(), "{flag} on a {pattern} is refused");
+        assert!(
+            String::from_utf8_lossy(&output.stderr).contains(flag),
+            "and the refusal names the flag"
+        );
+    }
+}
+
+#[test]
 fn a_wall_thicker_than_the_model_is_reported_as_a_defect() {
     let (_, text) = hollow_cube("thick", &["--hollow", "12"]);
     assert!(

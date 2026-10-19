@@ -1,27 +1,19 @@
 use anyhow::{Result, bail};
-use core_geometry::{Mesh, transform_mesh};
+use core_geometry::{Scalar, transform_mesh};
 use core_volume::Boolean;
 
 use crate::i18n::tr;
-use crate::job::{BooleanJob, BooleanOutcome, BooleanRequest};
+use crate::job::{BooleanJob, BooleanOutcome, BooleanRequest, Method};
+use crate::landing;
 use crate::scene::{Scene, SceneObject, Taken};
 use crate::status::Status;
 
 /// Union, difference and intersection of the models picked on the plate, replacing them
 /// with the one they make. See `docs/design/csg.md`.
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub struct BooleanTool {
     pub op: Boolean,
     pub job: Option<BooleanJob>,
-}
-
-impl Default for BooleanTool {
-    fn default() -> Self {
-        Self {
-            op: Boolean::Union,
-            job: None,
-        }
-    }
 }
 
 impl BooleanTool {
@@ -33,15 +25,11 @@ impl BooleanTool {
     /// Starts combining the picked models, in the order they were picked.
     pub fn start(&mut self, scene: &Scene) -> Result<()> {
         let models = picked(scene);
-        let [first, ..] = models.as_slice() else {
-            bail!(tr!("boolean-pick-two"));
-        };
         if models.len() < 2 {
             bail!(tr!("boolean-pick-two"));
         }
         self.job = Some(BooleanJob::spawn(BooleanRequest {
             taken: models.iter().map(|object| Taken::of(object)).collect(),
-            name: first.name.clone(),
             // The model itself, not its shell: a cavity is not a solid the cut can read,
             // and the combination is hollowed again if it is to be.
             placed: models
@@ -49,8 +37,7 @@ impl BooleanTool {
                 .map(|object| transform_mesh(&object.mesh, object.transform))
                 .collect(),
             op: self.op,
-            exact: false,
-            toward: None,
+            method: Method::Sampled,
         }));
         Ok(())
     }
@@ -58,37 +45,24 @@ impl BooleanTool {
     /// Lands a finished run in the scene. Returns whether one is still going, which is what
     /// tells the window to keep repainting.
     pub fn poll(&mut self, scene: &mut Scene, status: &mut Status) -> bool {
-        let Some(outcome) = self.job.as_mut().and_then(BooleanJob::poll) else {
-            return self.job.is_some();
-        };
-        self.job = None;
-        *status = match outcome {
-            BooleanOutcome::Combined {
-                taken,
-                name,
-                mesh,
-                voxel_mm,
-            } => match land(scene, &taken, name.clone(), mesh) {
-                Err(changed) => Status::Error(changed),
-                Ok(mending) => Status::Info(match voxel_mm {
-                    None => tr!(
-                        "boolean-done",
-                        name = name,
-                        count = taken.len(),
-                        mending = mending
-                    ),
-                    Some(voxel_mm) => tr!(
-                        "boolean-done-sampled",
-                        name = name,
-                        count = taken.len(),
-                        lattice = format!("{voxel_mm:.2}"),
-                        mending = mending
-                    ),
-                }),
-            },
-            BooleanOutcome::Failed(message) => Status::Error(message),
-        };
-        false
+        if let Some(landed) = land(&mut self.job, scene, |done| match done.voxel_mm {
+            None => tr!(
+                "boolean-done",
+                name = done.name.to_owned(),
+                count = done.count,
+                mending = done.mending.clone()
+            ),
+            Some(voxel_mm) => tr!(
+                "boolean-done-sampled",
+                name = done.name.to_owned(),
+                count = done.count,
+                lattice = format!("{voxel_mm:.2}"),
+                mending = done.mending.clone()
+            ),
+        }) {
+            *status = landed;
+        }
+        self.job.is_some()
     }
 
     pub fn is_busy(&self) -> bool {
@@ -96,22 +70,48 @@ impl BooleanTool {
     }
 }
 
-/// Puts `mesh` on the plate in place of the models `taken`, and answers what the stage
-/// notice adds about mending it, or why it was dropped when one of them has changed since.
+/// What a finished combination did, for the stage notice to say.
+pub(crate) struct Done<'a> {
+    /// The first model taken, which the result is named after.
+    pub name: &'a str,
+    pub count: usize,
+    /// The lattice it was sampled on, millimetres, when it could not be cut exactly.
+    pub voxel_mm: Option<Scalar>,
+    pub mending: String,
+}
+
+/// Lands `job` once it has finished: its result stands on the plate in place of the models
+/// it took, unless one of them has changed since. Answers the stage notice, `said` by the
+/// tool that ran it, on the frame it lands.
 pub(crate) fn land(
+    job: &mut Option<BooleanJob>,
     scene: &mut Scene,
-    taken: &[Taken],
-    name: String,
-    mesh: Mesh,
-) -> Result<String, String> {
-    if !taken.iter().all(|model| model.is_current(scene)) {
-        return Err(tr!("job-model-changed", name = name));
+    said: impl FnOnce(&Done) -> String,
+) -> Option<Status> {
+    let outcome = job.as_mut()?.poll()?;
+    let job = job.take()?;
+    let combined = match outcome {
+        BooleanOutcome::Combined(combined) => combined,
+        BooleanOutcome::Failed(message) => return Some(Status::Error(message)),
+    };
+    let taken = job.taken();
+    let [first, ..] = taken else {
+        return None;
+    };
+    if let Err(changed) = landing::take_off(scene, taken) {
+        return Some(Status::Error(changed));
     }
-    for model in taken {
-        scene.remove(model.id);
+    let (id, mended) = landing::place(scene, first.plate, first.name.clone(), combined.mesh);
+    // What it replaced may have stood on supports, which do not come with it.
+    if let Some(object) = scene.get_mut(id) {
+        object.stand_on_plate();
     }
-    let (_, mended) = crate::cut::place(scene, name, mesh);
-    Ok(crate::cut::mending(usize::from(mended)))
+    Some(Status::Info(said(&Done {
+        name: &first.name,
+        count: taken.len(),
+        voxel_mm: combined.voxel_mm,
+        mending: landing::mending(usize::from(mended)),
+    })))
 }
 
 /// The names of the models a combination would take, in the order they were picked.
@@ -150,16 +150,7 @@ mod tests {
                 translation: at,
                 ..Transform::default()
             },
-            ImportSummary {
-                vertices_merged: 0,
-                faces_removed: 0,
-                orientation: core_geometry::Orientation {
-                    flipped_faces: 0,
-                    inverted_shells: 0,
-                    orientable: true,
-                },
-                diagnostics: diagnose(&mesh),
-            },
+            ImportSummary::made(diagnose(&mesh)),
         ))
     }
 
@@ -245,5 +236,47 @@ mod tests {
         );
         assert!(scene.get(first).is_some() && scene.get(second).is_some());
         assert_eq!(scene.objects().len(), 2, "nothing was replaced");
+    }
+
+    #[test]
+    fn a_combination_lands_on_the_plate_it_was_taken_from_while_another_is_open() {
+        let (mut scene, _, _) = two_picked();
+        let mut tool = BooleanTool::default();
+        tool.start(&scene).expect("two models are picked");
+        let other = scene.add_plate();
+        let mut status = Status::default();
+        while tool.poll(&mut scene, &mut status) {
+            std::thread::yield_now();
+        }
+        assert!(matches!(status, Status::Info(_)), "{status:?}");
+        assert_eq!(
+            scene.on_plate(other).count(),
+            0,
+            "nothing lands on the plate opened"
+        );
+        assert_eq!(
+            scene.on_plate(0).count(),
+            1,
+            "the union replaces the two it took"
+        );
+    }
+
+    #[test]
+    fn a_combination_of_lifted_models_stands_on_the_plate() {
+        let mut scene = Scene::default();
+        let first = cube_at(&mut scene, "first", Vec3::new(0.0, 0.0, 5.0));
+        let second = cube_at(&mut scene, "second", Vec3::new(10.0, 10.0, 5.0));
+        scene.select_many(&[first, second]);
+        let status = run(&mut BooleanTool::default(), &mut scene);
+        assert!(matches!(status, Status::Info(_)), "{status:?}");
+        let [combined] = scene.objects() else {
+            panic!("one model is left on the plate");
+        };
+        let bounds = combined.world_bounds().expect("the union has faces");
+        assert!(
+            bounds.mins.z.abs() < 1e-4,
+            "both cubes stood 5 mm up, as supports lift them; got {}",
+            bounds.mins.z
+        );
     }
 }

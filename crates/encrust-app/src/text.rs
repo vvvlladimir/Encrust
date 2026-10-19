@@ -7,9 +7,10 @@ use anyhow::Result;
 use core_geometry::{Mesh, PlacedHit, Scalar, transform_mesh};
 use core_text::{Font, Frame, Label, LabelSettings, Shape, TextError, label, outline};
 use core_volume::Boolean;
+use serde::{Deserialize, Serialize};
 
 use crate::i18n::tr;
-use crate::job::{BooleanJob, BooleanOutcome, BooleanRequest};
+use crate::job::{BooleanJob, BooleanRequest, Method};
 use crate::scene::{ObjectId, Scene, SceneObject, Taken};
 use crate::status::Status;
 
@@ -35,6 +36,8 @@ enum Source {
 pub struct Families {
     pub list: Vec<Family>,
     arriving: Option<Receiver<Vec<Family>>>,
+    /// Whether the machine's have been read, so they are read once a run.
+    read: bool,
 }
 
 impl Default for Families {
@@ -46,6 +49,7 @@ impl Default for Families {
         Self {
             list: vec![bundled],
             arriving: None,
+            read: false,
         }
     }
 }
@@ -53,7 +57,7 @@ impl Default for Families {
 impl Families {
     /// Starts reading the machine's families, the first time it is asked.
     pub fn ask(&mut self) {
-        if self.arriving.is_some() || self.list.len() > 1 {
+        if self.arriving.is_some() || self.read {
             return;
         }
         let (sender, arriving) = mpsc::channel();
@@ -65,14 +69,17 @@ impl Families {
 
     /// Takes the machine's families in if they have arrived.
     fn poll(&mut self) {
-        let Some(found) = self
-            .arriving
-            .as_ref()
-            .and_then(|arriving| arriving.try_recv().ok())
-        else {
+        let Some(arriving) = &self.arriving else {
             return;
         };
+        // A reader that stopped without a word leaves the bundled family, as a browser has.
+        let found = match arriving.try_recv() {
+            Ok(found) => found,
+            Err(mpsc::TryRecvError::Empty) => return,
+            Err(mpsc::TryRecvError::Disconnected) => Vec::new(),
+        };
         self.arriving = None;
+        self.read = true;
         self.list.extend(
             found
                 .into_iter()
@@ -121,12 +128,14 @@ fn installed() -> Vec<Family> {
     Vec::new()
 }
 
-/// What the Relief tool writes in its Text mode, and how. The window's own record.
-#[derive(Debug, Clone, PartialEq)]
+/// What the Relief tool writes in its Text mode, and how. The window's own record, kept
+/// between runs (ADR 0192).
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(default)]
 pub struct TextState {
     pub text: String,
-    /// Index into the families on offer.
-    pub family: usize,
+    /// The family's name, which stays its own while the machine's list of them changes.
+    pub family: String,
     /// How tall the capitals stand, millimetres.
     pub height_mm: Scalar,
     /// How far the letters stand out of the surface or into it, millimetres.
@@ -142,7 +151,7 @@ impl Default for TextState {
     fn default() -> Self {
         Self {
             text: "Encrust".to_owned(),
-            family: 0,
+            family: BUNDLED_FAMILY.to_owned(),
             height_mm: 6.0,
             depth_mm: 0.8,
             raised: true,
@@ -173,15 +182,17 @@ pub struct TextTool {
 }
 
 impl TextTool {
+    /// The family the tool is set to, or the bundled one while that is not on offer.
+    pub fn family(&self) -> Option<&Family> {
+        let list = &self.families.list;
+        list.iter()
+            .find(|family| family.name == self.state.family)
+            .or(list.first())
+    }
+
     /// The text outlined in the family and height the tool is set to.
     pub fn shapes(&self) -> Result<Arc<Vec<Shape>>, TextError> {
-        let family = self
-            .families
-            .list
-            .get(self.state.family)
-            .or(self.families.list.first())
-            .cloned()
-            .ok_or(TextError::Blank)?;
+        let family = self.family().cloned().ok_or(TextError::Blank)?;
         let mut outlined = self.outlined.borrow_mut();
         let current = outlined.as_ref().is_some_and(|outlined| {
             outlined.text == self.state.text
@@ -235,7 +246,6 @@ impl TextTool {
         placed.extend(label.prisms);
         self.job = Some(BooleanJob::spawn(BooleanRequest {
             taken: vec![Taken::of(object)],
-            name: object.name.clone(),
             placed,
             op: if label.raised {
                 Boolean::Union
@@ -243,29 +253,29 @@ impl TextTool {
                 Boolean::Difference
             },
             // Lettering must not remesh the model it is written on.
-            exact: true,
-            toward: Some(hit.normal),
+            method: Method::ExactToward(hit.normal),
         }));
         Ok(())
     }
 
-    /// Lands a finished stamp in the scene. Returns whether one is still going.
+    /// Lands a finished stamp in the scene. Returns whether one is still going, or the
+    /// machine's fonts are still being read.
     pub fn poll(&mut self, scene: &mut Scene, status: &mut Status) -> bool {
         self.families.poll();
-        let Some(outcome) = self.job.as_mut().and_then(BooleanJob::poll) else {
-            return self.job.is_some() || self.families.is_reading();
-        };
-        self.job = None;
-        *status = match outcome {
-            BooleanOutcome::Combined {
-                taken, name, mesh, ..
-            } => match crate::boolean::land(scene, &taken, name.clone(), mesh) {
-                Ok(mending) => Status::Info(tr!("text-done", name = name, mending = mending)),
-                Err(changed) => Status::Error(changed),
-            },
-            BooleanOutcome::Failed(message) => Status::Error(message),
-        };
-        false
+        // A family remembered from the last run is found among the machine's own.
+        if self.state.family != BUNDLED_FAMILY {
+            self.families.ask();
+        }
+        if let Some(landed) = crate::boolean::land(&mut self.job, scene, |done| {
+            tr!(
+                "text-done",
+                name = done.name.to_owned(),
+                mending = done.mending.clone()
+            )
+        }) {
+            *status = landed;
+        }
+        self.job.is_some() || self.families.is_reading()
     }
 
     pub fn is_busy(&self) -> bool {
@@ -283,15 +293,12 @@ pub fn ghost_mesh(label: &Label) -> Mesh {
 }
 
 fn font_of(family: &Family) -> Result<Font, TextError> {
-    let data = match &family.source {
-        Source::Bundled => crate::ui::fonts::SANS.to_vec(),
-        Source::File { path, .. } => {
-            std::fs::read(path).map_err(|error| TextError::BadFont(error.to_string()))?
-        }
-    };
-    let index = match &family.source {
-        Source::Bundled => 0,
-        Source::File { index, .. } => *index,
+    let (data, index) = match &family.source {
+        Source::Bundled => (crate::ui::fonts::SANS.to_vec(), 0),
+        Source::File { path, index } => (
+            std::fs::read(path).map_err(|error| TextError::BadFont(error.to_string()))?,
+            *index,
+        ),
     };
     Font::new(Arc::new(data), index)
 }
@@ -324,16 +331,7 @@ mod tests {
             "Cube".to_owned(),
             Arc::new(mesh.clone()),
             Transform::default(),
-            ImportSummary {
-                vertices_merged: 0,
-                faces_removed: 0,
-                orientation: core_geometry::Orientation {
-                    flipped_faces: 0,
-                    inverted_shells: 0,
-                    orientable: true,
-                },
-                diagnostics: diagnose(&mesh),
-            },
+            ImportSummary::made(diagnose(&mesh)),
         ));
         let hit = PlacedHit {
             point: Vec3::new(20.0, 20.0, 40.0),

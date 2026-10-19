@@ -4,9 +4,9 @@ use rayon::prelude::*;
 
 use super::{Bar, Lattice, ROUND_TOLERANCE_MM, Shapes};
 
-/// Pieces the cavity is cut into for each thread, so a piece that costs more than the
-/// rest does not leave the others idle.
-const PIECES_PER_THREAD: usize = 2;
+/// Times the cavity is halved: sixteen pieces, two for each of eight threads. Fixed rather
+/// than read off the machine, so a cavity carves to the same mesh on any of them.
+const HALVINGS: u32 = 4;
 
 /// The shortest side a piece may be cut across, in lattice reaches: below it the cells a
 /// cut crosses cost more than the piece does.
@@ -23,9 +23,7 @@ pub(super) fn carved(
     reach: Vec3,
     keep: &(dyn Fn(&Aabb) -> bool + Sync),
 ) -> Result<Mesh, CsgError> {
-    let pieces = rayon::current_num_threads().max(1) * PIECES_PER_THREAD;
-    let depth = pieces.next_power_of_two().trailing_zeros();
-    in_pieces(Solid::new(cavity_mesh)?, lattice, reach, keep, depth)
+    in_pieces(Solid::new(cavity_mesh)?, lattice, reach, keep, HALVINGS)
 }
 
 /// `cavity` halved across its longest side `depth` times over, each half carved on its own.

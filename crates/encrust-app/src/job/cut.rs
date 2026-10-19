@@ -1,16 +1,12 @@
-use std::sync::mpsc::{self, Receiver, TryRecvError};
-
 use core_engine::project::Keep;
 use core_geometry::{Mesh, Plane, cut};
 use core_joint::{Halves, Joined, Joints, join};
 
 use crate::i18n::tr;
-use crate::job::pipeline::{thread_pool, worker_threads};
-use crate::scene::ObjectId;
+use crate::job::{Worker, pooled};
 
 /// One model to cut, already placed on the plate.
 pub struct CutRequest {
-    pub id: ObjectId,
     /// What prints: the model, or its hollowed shell.
     pub printed: Mesh,
     /// The model's outside, where what prints is its shell.
@@ -24,7 +20,6 @@ pub struct CutRequest {
 #[derive(Debug)]
 pub enum CutOutcome {
     Cut {
-        id: ObjectId,
         joined: Joined,
         /// Cut loops that did not close, and were left uncapped.
         open_loops: usize,
@@ -38,39 +33,14 @@ pub enum CutOutcome {
 
 /// A cut on its own thread: building pins into a real model is a boolean of a second or
 /// more.
-#[derive(Debug)]
-pub struct CutJob {
-    outcome: Receiver<CutOutcome>,
-}
+pub type CutJob = Worker<CutOutcome>;
 
-impl CutJob {
-    /// Starts the run. The thread is detached: it ends on its own.
-    pub fn spawn(request: CutRequest) -> Self {
-        let (sender, outcome) = mpsc::channel();
-        crate::job::spawn(move || {
-            let _ = sender.send(run(request));
-        });
-        Self { outcome }
-    }
-
-    /// Returns the outcome on the frame the run ends, and `None` while it is going.
-    pub fn poll(&mut self) -> Option<CutOutcome> {
-        match self.outcome.try_recv() {
-            Ok(outcome) => Some(outcome),
-            Err(TryRecvError::Empty) => None,
-            Err(TryRecvError::Disconnected) => {
-                Some(CutOutcome::Failed(tr!("job-thread-stopped-cut")))
-            }
-        }
-    }
-}
-
-fn run(request: CutRequest) -> CutOutcome {
-    let pool = match thread_pool(worker_threads()) {
-        Ok(pool) => pool,
-        Err(error) => return CutOutcome::Failed(error.to_string()),
-    };
-    pool.install(|| cut_and_join(request))
+/// Starts the cut. The thread is detached: it ends on its own.
+pub fn spawn_cut(request: CutRequest) -> CutJob {
+    Worker::spawn(
+        move || pooled(|| cut_and_join(request), CutOutcome::Failed),
+        || CutOutcome::Failed(tr!("job-thread-stopped-cut")),
+    )
 }
 
 fn cut_and_join(request: CutRequest) -> CutOutcome {
@@ -88,7 +58,6 @@ fn cut_and_join(request: CutRequest) -> CutOutcome {
     };
     if request.keep != Keep::Both || request.joints.kind.is_none() {
         return CutOutcome::Cut {
-            id: request.id,
             joined: plain(halves),
             open_loops,
             unjoined: None,
@@ -105,7 +74,6 @@ fn cut_and_join(request: CutRequest) -> CutOutcome {
         Err(error) => (plain(halves), Some(error.to_string())),
     };
     CutOutcome::Cut {
-        id: request.id,
         joined,
         open_loops,
         unjoined,

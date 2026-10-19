@@ -36,7 +36,6 @@ core-slicer.workspace = true
 core-raster.workspace = true
 core-supports.workspace = true
 core-volume.workspace = true
-core-csg.workspace = true
 printer-profiles.workspace = true
 core-format.workspace = true
 core-thumbnail.workspace = true

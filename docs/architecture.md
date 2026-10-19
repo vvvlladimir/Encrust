@@ -116,7 +116,7 @@ encrust-app ──> core-engine, every core-*, printer-profiles, printer-link,
                on macOS objc2-app-kit, objc2-foundation, raw-window-handle;
                winresource at build time, for the Windows icon
 encrust-web ──> encrust-app, wasm-bindgen, wasm-bindgen-futures, web-sys, getrandom
-encrust-cli ──> core-engine, core-analysis, core-csg, core-format, core-geometry,
+encrust-cli ──> core-engine, core-analysis, core-format, core-geometry,
                core-mesh-io, core-pipeline, core-plate, core-raster, core-slicer,
                core-supports, core-thumbnail, core-volume, printer-profiles, printer-link,
                net-sdcp, net-prusalink, rayon, clap, clap_complete, serde, serde_json,

@@ -1,7 +1,8 @@
 use std::collections::HashMap;
+use std::hash::Hasher;
 
 use core_geometry::{
-    Bvh, ClosestPoint, FastMap, Mesh, Scalar, Vec3,
+    Bvh, ClosestPoint, FastHasher, FastMap, Mesh, Scalar, Vec3,
     glam::{IVec2, IVec3},
     point_triangle,
 };
@@ -39,25 +40,31 @@ pub struct ReliefBasis {
     solid: HashMap<IVec2, Vec<(i32, i32)>>,
 }
 
-/// Enough of a mesh to tell a basis was built over a different one.
+/// Enough of a mesh to tell a basis was built over a different one: its counts, and a hash
+/// of every vertex and face, so a vertex moved inside the same box tells too.
 #[derive(Debug, Clone, Copy, PartialEq)]
 struct Shape {
     vertices: usize,
     faces: usize,
-    low: Vec3,
-    high: Vec3,
+    content: u64,
 }
 
 impl Shape {
     fn of(mesh: &Mesh) -> Self {
-        let (low, high) = mesh.aabb().map_or((Vec3::ZERO, Vec3::ZERO), |bounds| {
-            (bounds.mins, bounds.maxs)
-        });
+        let mut hasher = FastHasher::default();
+        for vertex in &mesh.vertices {
+            let [x, y, z] = vertex.to_array().map(f32::to_bits);
+            hasher.write_u64(u64::from(x) << 32 | u64::from(y));
+            hasher.write_u64(u64::from(z));
+        }
+        for [a, b, c] in &mesh.faces {
+            hasher.write_u64(u64::from(*a) << 32 | u64::from(*b));
+            hasher.write_u64(u64::from(*c));
+        }
         Self {
             vertices: mesh.vertices.len(),
             faces: mesh.faces.len(),
-            low,
-            high,
+            content: hasher.finish(),
         }
     }
 }
@@ -114,10 +121,13 @@ impl ReliefBasis {
     ) -> Result<Self, VolumeError> {
         let asked_mm = settings.voxel_mm(mesh.surface_area());
         // A mesh the exact cut cannot read is pressed as it stands, buried faces and all.
-        let united = united(mesh).and_then(Result::ok).map(|united| {
-            let hierarchy = Bvh::build(&united);
-            (united, hierarchy)
-        });
+        let united = match united(mesh) {
+            Some(Ok(united)) => {
+                let hierarchy = Bvh::build(&united);
+                Some((united, hierarchy))
+            }
+            None | Some(Err(_)) => None,
+        };
         let (surface, hierarchy) = united
             .as_ref()
             .map_or((mesh, bvh), |(united, hierarchy)| (united, hierarchy));
@@ -237,5 +247,30 @@ impl Press<'_> {
             distance: (on_face - point).length(),
             face: face as usize,
         })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use core_geometry::cuboid;
+
+    use super::*;
+
+    #[test]
+    fn a_vertex_moved_inside_the_same_box_is_another_shape() {
+        let cube = cuboid(Vec3::ZERO, Vec3::splat(10.0));
+        let mut dented = cube.clone();
+        let corner = dented
+            .vertices
+            .iter_mut()
+            .find(|vertex| **vertex == Vec3::splat(10.0))
+            .expect("the cube has its far corner");
+        *corner = Vec3::splat(9.0);
+        assert_eq!(Shape::of(&cube), Shape::of(&cube.clone()));
+        assert_ne!(
+            Shape::of(&cube),
+            Shape::of(&dented),
+            "same counts, and the box still reaches 10 mm on every axis through the others"
+        );
     }
 }

@@ -50,9 +50,9 @@ parry3d = "0.31"
 earcutr = "0.5"
 i_overlay = "9.0"
 # Exact booleans over closed meshes, in pure Rust so the browser build keeps them; see
-# docs/decisions/0302.
+# docs/decisions/0303.
 boolmesh = { version = "0.2.1", default-features = false, features = ["rayon"] }
-# Glyph outlines for a label, and the faces a machine has to offer; see docs/decisions/0304.
+# Glyph outlines for a label, and the faces a machine has to offer; see docs/decisions/0305.
 ttf-parser = { version = "0.25", default-features = false, features = ["std", "opentype-layout", "apple-layout", "variable-fonts", "glyph-names"] }
 fontdb = { version = "0.23", default-features = false, features = ["std", "fs", "fontconfig"] }
 rayon = "1.12"

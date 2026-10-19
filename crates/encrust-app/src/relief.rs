@@ -10,7 +10,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::files::{self, Handed, Wanted};
 use crate::i18n::tr;
-use crate::job::{ReliefJob, ReliefOutcome, ReliefRequest, ReliefSource, relief_tasks};
+use crate::job::{Pressed, ReliefJob, ReliefOutcome, ReliefRequest, ReliefSource, relief_tasks};
 use crate::scene::{Mapped, ObjectId, Scene};
 use crate::status::Status;
 
@@ -67,6 +67,8 @@ const KEPT_BYTES: usize = 768 << 20;
 struct Kept {
     id: ObjectId,
     mesh: Weak<Mesh>,
+    /// The size and turn the mesh was pressed at, which a mirror changes and its box may not.
+    sizing: Mat3,
     basis: Arc<ReliefBasis>,
 }
 
@@ -189,7 +191,11 @@ impl ReliefTool {
             task.basis = self
                 .kept
                 .iter()
-                .find(|kept| kept.id == task.id && kept.mesh.as_ptr() == Arc::as_ptr(&task.mesh))
+                .find(|kept| {
+                    kept.id == task.taken.id
+                        && kept.mesh.as_ptr() == Arc::as_ptr(&task.mesh)
+                        && kept.sizing == task.sizing.linear()
+                })
                 .map(|kept| Arc::clone(&kept.basis));
         }
         // What this run does not take is dropped before it starts rather than after, so
@@ -222,46 +228,56 @@ impl ReliefTool {
         };
 
         self.job = None;
-        match outcome {
-            ReliefOutcome::Pressed(models) => {
-                let count = models.len();
-                let coarsened = models.iter().filter(|model| model.coarsened).count();
-                let mut room = KEPT_BYTES;
-                for model in models {
-                    if let Some(object) = scene.get_mut(model.id) {
-                        if model.basis.bytes() <= room {
-                            room -= model.basis.bytes();
-                            self.kept.push(Kept {
-                                id: model.id,
-                                mesh: Arc::downgrade(&object.mesh),
-                                basis: model.basis,
-                            });
-                        }
-                        // The relief was pressed at printed size, so the scale and the
-                        // stretch are in the mesh now and must not be applied twice.
-                        object.reshape(model.shaped);
-                        object.transform.scale = Vec3::ONE;
-                        object.transform.stretch = Mat3::IDENTITY;
-                    }
-                }
-                let depth = self.state.amplitude_mm;
-                *status = match coarsened {
-                    0 => Status::Info(tr!(
-                        "relief-done",
-                        depth = format!("{depth:.2}"),
-                        count = count
-                    )),
-                    _ => Status::Info(tr!(
-                        "relief-done-coarsened",
-                        depth = format!("{depth:.2}"),
-                        count = count,
-                        coarsened = coarsened
-                    )),
-                };
-            }
-            ReliefOutcome::Failed(message) => *status = Status::Error(message),
-        }
+        *status = match outcome {
+            ReliefOutcome::Pressed(models) => self.land(scene, models),
+            ReliefOutcome::Failed(message) => Status::Error(message),
+        };
         false
+    }
+
+    /// Puts each pressed mesh on the model it was pressed into, unless that model has been
+    /// reshaped, turned or resized since, and keeps the bases there is room for.
+    fn land(&mut self, scene: &mut Scene, models: Vec<Pressed>) -> Status {
+        let count = models.len();
+        let coarsened = models.iter().filter(|model| model.coarsened).count();
+        let mut changed = None;
+        let mut room = KEPT_BYTES;
+        for model in models {
+            let Some(object) = scene
+                .get_mut(model.taken.id)
+                .filter(|object| model.taken.is_shaped_alike_to(object))
+            else {
+                changed.get_or_insert(model.taken.name);
+                continue;
+            };
+            if model.basis.bytes() <= room {
+                room -= model.basis.bytes();
+                self.kept.push(Kept {
+                    id: object.id,
+                    mesh: Arc::downgrade(&object.mesh),
+                    sizing: object.transform.sizing().linear(),
+                    basis: model.basis,
+                });
+            }
+            // The relief was pressed at printed size, so the scale and the stretch are in
+            // the mesh now and must not be applied twice.
+            object.reshape(model.shaped);
+            object.transform.scale = Vec3::ONE;
+            object.transform.stretch = Mat3::IDENTITY;
+        }
+        if let Some(name) = changed {
+            return Status::Error(tr!("job-model-changed", name = name));
+        }
+        let depth = format!("{:.2}", self.state.amplitude_mm);
+        match coarsened {
+            0 => Status::Info(tr!("relief-done", depth = depth, count = count)),
+            _ => Status::Info(tr!(
+                "relief-done-coarsened",
+                depth = depth,
+                count = count,
+                coarsened = coarsened
+            )),
+        }
     }
 
     pub fn is_busy(&self) -> bool {
@@ -678,6 +694,40 @@ mod tests {
         assert!(
             (up - Vec3::Y).length() < 1e-5,
             "got {up}, expected the model's +Y"
+        );
+    }
+
+    #[test]
+    fn a_relief_pressed_into_a_model_resized_meanwhile_is_dropped() {
+        let mut scene = scene_with_a_tetrahedron();
+        let mut tool = ReliefTool {
+            picture: Some(Picture {
+                name: "flat.png".to_owned(),
+                heights: Arc::new(Heightmap::new(1, 1, vec![1.0]).expect("one pixel")),
+                size_px: [1, 1],
+                builtin: None,
+            }),
+            ..ReliefTool::default()
+        };
+        tool.start(&scene)
+            .expect("the picture presses into the tetrahedron");
+        let object = &mut scene.objects_mut()[0];
+        let before = Arc::clone(&object.mesh);
+        object.transform.scale = Vec3::splat(2.0);
+        let mut status = Status::default();
+        while tool.poll(&mut scene, &mut status) {
+            std::thread::yield_now();
+        }
+        assert_eq!(
+            status,
+            Status::Error(tr!("job-model-changed", name = "tetrahedron"))
+        );
+        let object = &scene.objects()[0];
+        assert!(Arc::ptr_eq(&object.mesh, &before), "the mesh is left alone");
+        assert_eq!(
+            object.transform.scale,
+            Vec3::splat(2.0),
+            "and so is its size"
         );
     }
 }

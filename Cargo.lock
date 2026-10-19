@@ -1772,7 +1772,6 @@ dependencies = [
  "clap",
  "clap_complete",
  "core-analysis",
- "core-csg",
  "core-engine",
  "core-format",
  "core-geometry",

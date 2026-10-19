@@ -177,6 +177,40 @@ impl HollowArgs {
         }
     }
 
+    /// Refuses an infill size the pattern asked for has no use for, rather than dropping it.
+    fn check_infill(&self) -> Result<()> {
+        let walled = [
+            ("--infill-wall", self.wall_mm.is_some()),
+            ("--infill-hole", self.hole_mm.is_some()),
+            ("--infill-hole-from", self.first_hole_mm.is_some()),
+            ("--infill-hole-spacing", self.hole_spacing_mm.is_some()),
+        ];
+        let density = [("--infill-density", self.density.is_some())];
+        let cell = [("--infill-cell", self.cell_mm.is_some())];
+        let given = |flags: &[(&'static str, bool)]| {
+            flags
+                .iter()
+                .find(|(_, given)| *given)
+                .map(|(flag, _)| *flag)
+        };
+        match self.infill {
+            None => match given(&[&cell[..], &density, &walled].concat()) {
+                Some(flag) => bail!("{flag} sizes an infill, and --infill was not given"),
+                None => Ok(()),
+            },
+            Some(Pattern::Scaffold) => match given(&walled) {
+                Some(flag) => bail!("{flag} sizes a hive or grid, and a scaffold has no walls"),
+                None => Ok(()),
+            },
+            Some(Pattern::Hive | Pattern::Grid) => match given(&density) {
+                Some(flag) => bail!(
+                    "{flag} is how much a scaffold fills; a hive or grid is sized by its cell and wall"
+                ),
+                None => Ok(()),
+            },
+        }
+    }
+
     fn dug(&self) -> Vec<Channel> {
         self.channels
             .iter()
@@ -215,6 +249,7 @@ pub fn run(
     stop: &Stop,
 ) -> Result<(Mesh, HollowReport)> {
     let started = Instant::now();
+    args.check_infill()?;
     let bvh = Bvh::build(mesh);
     let Some(settings) = args.settings(precision) else {
         bail!("--hollow was not given, so there is nothing to hollow");

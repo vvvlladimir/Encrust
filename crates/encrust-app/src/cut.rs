@@ -1,6 +1,6 @@
 use anyhow::{Result, anyhow};
-use core_geometry::{Mesh, Plane, Scalar, Transform, Vec3, diagnose, transform_mesh};
-use core_joint::{Joined, JointKind, Joints};
+use core_geometry::{Mesh, Plane, Scalar, Transform, Vec3, transform_mesh};
+use core_joint::{JointKind, Joints};
 use core_volume::PartedOff;
 
 pub use core_engine::project::Keep;
@@ -8,8 +8,11 @@ pub use core_engine::project::Keep;
 use core_engine::project::{Axis, CutState};
 
 use crate::i18n::tr;
-use crate::job::{CutJob, CutOutcome, CutRequest, SplitJob, SplitOutcome, SplitRequest, mend};
-use crate::scene::{ImportSummary, Imported, ObjectId, Scene, SceneObject, Taken};
+use crate::job::{
+    CutJob, CutOutcome, CutRequest, SplitJob, SplitOutcome, SplitRequest, spawn_cut, spawn_split,
+};
+use crate::landing::{self, mending, place, place_all};
+use crate::scene::{ObjectId, Scene, SceneObject, Taken};
 use crate::status::Status;
 
 /// Space left between a cut's lower half and the dowels laid out beside it, and between
@@ -32,12 +35,12 @@ pub struct CutTool {
     pub centred_on: Option<ObjectId>,
     running: Option<Running>,
     /// A split under way, and the model it splits.
-    splitting: Option<(SplitJob, Taken, String)>,
+    splitting: Option<(SplitJob, Taken)>,
     /// Whether the next click on a model marks the part Split cuts off it.
     pub picking_part: bool,
     /// The model a part is marked on, and the point, in the model's own coordinates so
-    /// that it moves with it.
-    pub part_mark: Option<(ObjectId, Vec3)>,
+    /// that it moves with it. A mark on a mesh that has since been replaced marks nothing.
+    part_mark: Option<(Taken, Vec3)>,
 }
 
 /// A cut under way, with what the tool was set to when it started.
@@ -45,7 +48,6 @@ pub struct CutTool {
 struct Running {
     job: CutJob,
     taken: Taken,
-    name: String,
     axis: Axis,
     position_mm: Scalar,
     up: Vec3,
@@ -128,8 +130,7 @@ impl CutTool {
         let shell = object.hollow.shell();
         let printed = transform_mesh(shell.unwrap_or(&object.mesh), object.transform);
         let solid = shell.map(|_| transform_mesh(&object.mesh, object.transform));
-        let job = CutJob::spawn(CutRequest {
-            id,
+        let job = spawn_cut(CutRequest {
             printed,
             solid,
             plane,
@@ -139,7 +140,6 @@ impl CutTool {
         self.running = Some(Running {
             job,
             taken: Taken::of(object),
-            name: object.name.clone(),
             axis: self.state.axis,
             position_mm: self.position_mm(object),
             up: plane.normal,
@@ -158,17 +158,13 @@ impl CutTool {
         {
             *status = running.land(scene, outcome);
         }
-        if let Some(outcome) = self.splitting.as_mut().and_then(|(job, ..)| job.poll())
-            && let Some((_, taken, name)) = self.splitting.take()
+        if let Some(outcome) = self.splitting.as_mut().and_then(|(job, _)| job.poll())
+            && let Some((_, taken)) = self.splitting.take()
         {
-            if matches!(outcome, SplitOutcome::PartedOff { .. }) {
+            if matches!(outcome, SplitOutcome::PartedOff(_)) {
                 self.part_mark = None;
             }
-            *status = if taken.is_current(scene) {
-                land_parts(scene, &name, outcome)
-            } else {
-                Status::Error(tr!("job-model-changed", name = name))
-            };
+            *status = land_parts(scene, &taken, outcome);
         }
         self.is_busy()
     }
@@ -179,20 +175,27 @@ impl CutTool {
 
     /// Marks the part at `point` on the plate as the one Split cuts off `object`, and
     /// ends the picking.
-    pub fn mark_part(&mut self, id: ObjectId, object: &SceneObject, point: Vec3) {
+    pub fn mark_part(&mut self, object: &SceneObject, point: Vec3) {
         let local = object
             .transform
             .to_matrix()
             .inverse()
             .transform_point3(point);
-        self.part_mark = Some((id, local));
+        self.part_mark = Some((Taken::of(object), local));
         self.picking_part = false;
     }
 
-    /// Where the part is marked on `id`, in plate coordinates, if it is.
-    pub fn marked_on(&self, id: ObjectId, object: &SceneObject) -> Option<Vec3> {
-        let (marked, local) = self.part_mark?;
-        (marked == id).then(|| object.transform.to_matrix().transform_point3(local))
+    /// Where the part is marked on `object`, in plate coordinates, if it is.
+    pub fn marked_on(&self, object: &SceneObject) -> Option<Vec3> {
+        let (marked, local) = self.part_mark.as_ref()?;
+        marked
+            .is_model(object)
+            .then(|| object.transform.to_matrix().transform_point3(*local))
+    }
+
+    /// Forgets the part marked, as the toggle that marked it does.
+    pub fn unmark_part(&mut self) {
+        self.part_mark = None;
     }
 
     /// Starts breaking one model into the parts it is made of, or cutting off the part
@@ -203,62 +206,51 @@ impl CutTool {
             .get(id)
             .ok_or_else(|| anyhow!(tr!("cut-nothing-to-split")))?;
         let mesh = object.hollow.shell().unwrap_or(&object.mesh);
-        let job = SplitJob::spawn(SplitRequest {
-            id,
+        let job = spawn_split(SplitRequest {
             placed: transform_mesh(mesh, object.transform),
             settings: self.state.parts,
-            at: self.marked_on(id, object),
+            at: self.marked_on(object),
         });
-        self.splitting = Some((job, Taken::of(object), object.name.clone()));
+        self.splitting = Some((job, Taken::of(object)));
         Ok(())
     }
 }
 
 impl Running {
     fn land(self, scene: &mut Scene, outcome: CutOutcome) -> Status {
-        let (id, joined, open_loops, unjoined) = match outcome {
+        let name = self.taken.name.clone();
+        let (joined, open_loops, unjoined) = match outcome {
             CutOutcome::Cut {
-                id,
                 joined,
                 open_loops,
                 unjoined,
-            } => (id, joined, open_loops, unjoined),
-            CutOutcome::Missed => {
-                return Status::Error(tr!("cut-misses", name = self.name));
-            }
+            } => (joined, open_loops, unjoined),
+            CutOutcome::Missed => return Status::Error(tr!("cut-misses", name = name)),
             CutOutcome::Failed(message) => return Status::Error(message),
         };
-        if !self.taken.is_current(scene) {
-            return Status::Error(tr!("job-model-changed", name = self.name));
+        if let Err(changed) = landing::take_off(scene, std::slice::from_ref(&self.taken)) {
+            return Status::Error(changed);
         }
-        scene.remove(id);
         let kind = self.joints.kind.filter(|_| self.keep == Keep::Both);
-        let Joined {
-            below,
-            above,
-            loose,
-            placed,
-            bare,
-        } = joined;
         // Pins and a tongue stand on the lower half's cut, which it then cannot lie on.
-        let raised = matches!(kind, Some(JointKind::Pins | JointKind::Key)) && placed > 0;
-        let (mended, lower) = self.put_down(scene, below, above, raised);
+        let raised = matches!(kind, Some(JointKind::Pins | JointKind::Key)) && joined.placed > 0;
+        let (mended, lower) = self.put_down(scene, joined.below, joined.above, raised);
         if let Some(lower) = lower {
-            lay_out_dowels(scene, lower, &self.name, &loose);
+            lay_out_dowels(scene, lower, &name, &joined.loose);
         }
         let mending = mending(mended);
         if open_loops > 0 {
             return Status::Info(tr!(
                 "cut-done-open",
-                name = self.name,
+                name = name,
                 open = open_loops,
                 mending = mending
             ));
         }
-        let (joint, bare) = joint_notes(kind, placed, bare, unjoined);
+        let (joint, bare) = joint_notes(kind, joined.placed, joined.bare, unjoined);
         Status::Info(tr!(
             "cut-done",
-            name = self.name,
+            name = name,
             axis = self.axis.label(),
             position = format!("{:.1}", self.position_mm),
             joint = joint,
@@ -276,7 +268,7 @@ impl Running {
         above: Mesh,
         raised: bool,
     ) -> (usize, Option<ObjectId>) {
-        let name = &self.name;
+        let name = &self.taken.name;
         let up = self.up;
         let pieces = match self.keep {
             Keep::Both => vec![
@@ -288,7 +280,7 @@ impl Running {
         };
         let (mut mended, mut lower) = (0, None);
         for (name, mesh, cut_face) in pieces {
-            let (piece, was_mended) = place(scene, name, mesh);
+            let (piece, was_mended) = place(scene, self.taken.plate, name, mesh);
             mended += usize::from(was_mended);
             let is_lower = cut_face == up;
             if is_lower {
@@ -307,7 +299,10 @@ impl Running {
 
 /// Stands each dowel on the plate in a row beside the lower half `beside`.
 fn lay_out_dowels(scene: &mut Scene, beside: ObjectId, name: &str, dowels: &[Mesh]) {
-    let Some(bounds) = scene.get(beside).and_then(SceneObject::world_bounds) else {
+    let Some((bounds, plate)) = scene
+        .get(beside)
+        .and_then(|object| Some((object.world_bounds()?, object.plate)))
+    else {
         return;
     };
     let mut x = bounds.maxs.x + DOWEL_GAP_MM;
@@ -320,7 +315,7 @@ fn lay_out_dowels(scene: &mut Scene, beside: ObjectId, name: &str, dowels: &[Mes
         let offset = Vec3::new(x + radius, bounds.mins.y + radius, 0.0);
         let placed = transform_mesh(dowel, Transform::from_translation(offset));
         let name = tr!("cut-dowel-name", name = name.to_owned(), index = index + 1);
-        place(scene, name, placed);
+        place(scene, plate, name, placed);
         x += 2.0 * radius + DOWEL_GAP_MM;
     }
 }
@@ -352,58 +347,65 @@ fn joint_notes(
     (joint, bare)
 }
 
-/// Puts the parts a split found on the plate in place of the model. A model that is one
-/// part and lost no scrap is left alone, supports and all.
-fn land_parts(scene: &mut Scene, name: &str, outcome: SplitOutcome) -> Status {
-    let (id, parts) = match outcome {
-        SplitOutcome::Split { id, parts } => (id, parts),
-        SplitOutcome::PartedOff { id, parted } => return land_parted_off(scene, name, id, parted),
+/// Puts the parts a split found on the plate in place of the model it took. A model that
+/// is one part and lost no scrap is left alone, supports and all.
+fn land_parts(scene: &mut Scene, taken: &Taken, outcome: SplitOutcome) -> Status {
+    let name = &taken.name;
+    let parts = match outcome {
+        SplitOutcome::Split(parts) => parts,
+        SplitOutcome::PartedOff(parted) => return land_parted_off(scene, taken, parted),
         SplitOutcome::Failed(message) => return Status::Error(message),
     };
-    let scraps = scrap_notes(parts.joined, parts.dropped);
     let count = parts.parts.len();
     if count < 2 && parts.joined + parts.dropped == 0 {
-        return Status::Info(tr!("cut-one-piece", name = name.to_owned()));
+        return Status::Info(tr!("cut-one-piece", name = name.clone()));
     }
-    scene.remove(id);
-    let mut mended = 0;
-    for (index, part) in parts.parts.into_iter().enumerate() {
+    if let Err(changed) = landing::take_off(scene, std::slice::from_ref(taken)) {
+        return Status::Error(changed);
+    }
+    let scraps = scrap_notes(parts.joined, parts.dropped);
+    let named = parts.parts.into_iter().enumerate().map(|(index, part)| {
         let part_name = match count {
-            1 => name.to_owned(),
-            _ => tr!("cut-part-name", name = name.to_owned(), index = index + 1),
+            1 => name.clone(),
+            _ => tr!("cut-part-name", name = name.clone(), index = index + 1),
         };
-        let (_, was_mended) = place(scene, part_name, part);
-        mended += usize::from(was_mended);
-    }
+        (part_name, part)
+    });
+    let mending = mending(place_all(scene, taken.plate, named));
     if count < 2 {
         return Status::Info(tr!(
             "cut-cleaned",
-            name = name.to_owned(),
+            name = name.clone(),
             scraps = scraps,
-            mending = mending(mended)
+            mending = mending
         ));
     }
     Status::Info(tr!(
         "cut-split-done",
-        name = name.to_owned(),
+        name = name.clone(),
         count = count,
         scraps = scraps,
-        mending = mending(mended)
+        mending = mending
     ))
 }
 
 /// Puts the marked part and the rest of the model on the plate in its place.
-fn land_parted_off(scene: &mut Scene, name: &str, id: ObjectId, parted: PartedOff) -> Status {
-    scene.remove(id);
-    let mut mended = 0;
-    for (index, side) in [parted.part, parted.rest].into_iter().enumerate() {
-        let side_name = tr!("cut-part-name", name = name.to_owned(), index = index + 1);
-        let (_, was_mended) = place(scene, side_name, side);
-        mended += usize::from(was_mended);
+fn land_parted_off(scene: &mut Scene, taken: &Taken, parted: PartedOff) -> Status {
+    if let Err(changed) = landing::take_off(scene, std::slice::from_ref(taken)) {
+        return Status::Error(changed);
     }
+    let name = &taken.name;
+    let sides = [parted.part, parted.rest]
+        .into_iter()
+        .enumerate()
+        .map(|(index, side)| {
+            let side_name = tr!("cut-part-name", name = name.clone(), index = index + 1);
+            (side_name, side)
+        });
+    let mended = place_all(scene, taken.plate, sides);
     Status::Info(tr!(
         "cut-parted-off",
-        name = name.to_owned(),
+        name = name.clone(),
         mending = mending(mended)
     ))
 }
@@ -420,50 +422,6 @@ fn scrap_notes(joined: usize, dropped: usize) -> String {
     notes
 }
 
-/// Puts a mesh that came out of a cut on the plate, mending it first if it did not come
-/// out sound. Answers the model it became, and whether it had to be mended. It is already in plate coordinates, so it
-/// goes down with no placement of its own.
-///
-/// Mending is not asked for the way an imported model's is (ADR 0194): the surface in
-/// question is surface this tool just invented, not surface a file brought in. What it
-/// did is said in the stage notice, so a mended piece carries no mark of its own; a piece it
-/// could not close keeps the diagnostics that say so.
-pub(crate) fn place(scene: &mut Scene, name: String, mesh: Mesh) -> (ObjectId, bool) {
-    let mut mesh = mesh;
-    let mut diagnostics = diagnose(&mesh);
-    let mended = !diagnostics.is_sound();
-    if mended {
-        mend(&mut mesh);
-        diagnostics = diagnose(&mesh);
-    }
-
-    let summary = ImportSummary {
-        vertices_merged: 0,
-        faces_removed: 0,
-        orientation: core_geometry::Orientation {
-            flipped_faces: 0,
-            inverted_shells: 0,
-            orientable: true,
-        },
-        diagnostics,
-    };
-    let id = scene.insert(Imported::new(
-        name,
-        std::sync::Arc::new(mesh),
-        Transform::default(),
-        summary,
-    ));
-    (id, mended)
-}
-
-/// What the stage notice adds about the pieces that had to be mended on their way down.
-pub(crate) fn mending(pieces: usize) -> String {
-    match pieces {
-        0 => String::new(),
-        pieces => tr!("cut-mended", count = pieces),
-    }
-}
-
 fn normal(axis: Axis) -> Vec3 {
     match axis {
         Axis::X => Vec3::X,
@@ -475,7 +433,8 @@ fn normal(axis: Axis) -> Vec3 {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use core_geometry::signed_volume;
+    use crate::scene::{ImportSummary, Imported};
+    use core_geometry::{diagnose, signed_volume};
     use std::sync::Arc;
 
     /// The tool set to one plane: where it crosses `axis`, and which halves to keep.
@@ -568,16 +527,7 @@ mod tests {
             "cube".to_owned(),
             Arc::clone(&mesh),
             transform,
-            ImportSummary {
-                vertices_merged: 0,
-                faces_removed: 0,
-                orientation: core_geometry::Orientation {
-                    flipped_faces: 0,
-                    inverted_shells: 0,
-                    orientable: true,
-                },
-                diagnostics: diagnose(&mesh),
-            },
+            ImportSummary::made(diagnose(&mesh)),
         ));
         (scene, id)
     }
@@ -826,7 +776,7 @@ mod tests {
     /// Splits `id` with a part marked at `at` on the plate, through to the end.
     fn part_off_now(tool: &mut CutTool, scene: &mut Scene, id: ObjectId, at: Vec3) -> Status {
         let object = scene.get(id).expect("the model is on the plate");
-        tool.mark_part(id, object, at);
+        tool.mark_part(object, at);
         if let Err(error) = tool.start_split(scene, id) {
             return Status::Error(error.to_string());
         }
@@ -852,8 +802,8 @@ mod tests {
         let mut tool = CutTool::default();
         let status = part_off_now(&mut tool, &mut scene, id, Vec3::new(5.0, 5.0, 5.0));
         assert!(!status.is_error(), "got {status:?}");
-        assert_eq!(
-            tool.part_mark, None,
+        assert!(
+            tool.part_mark.is_none(),
             "the mark went with the model it was on"
         );
         let [part, rest] = scene.objects() else {
@@ -914,6 +864,23 @@ mod tests {
         assert!(
             message.contains('1'),
             "the dropped scrap is told, got {message}"
+        );
+    }
+
+    #[test]
+    fn a_part_marked_on_a_mesh_since_replaced_marks_nothing() {
+        let (mut scene, id) = scene_with(cuboid(Vec3::splat(4.0)), Transform::default());
+        let mut tool = CutTool::default();
+        let object = scene.get(id).expect("the model is on the plate");
+        tool.mark_part(object, Vec3::new(0.0, 2.0, 2.0));
+        assert!(tool.marked_on(object).is_some());
+        let replaced = crate::scene::Shaped::of(Arc::new(cuboid(Vec3::splat(6.0))));
+        let object = scene.get_mut(id).expect("the model is on the plate");
+        object.reshape(replaced);
+        assert_eq!(
+            tool.marked_on(object),
+            None,
+            "the mark was on the mesh that went"
         );
     }
 }

@@ -1,5 +1,5 @@
 use core_csg::CsgError;
-use core_geometry::{FastMap, FastSet, Mesh, Plane, Scalar, Vec3, cut, diagnose};
+use core_geometry::{FastMap, FastSet, Mesh, Plane, Scalar, Vec3, cut, diagnose, point_key};
 use rayon::prelude::*;
 
 use super::{Boolean, exact};
@@ -88,7 +88,7 @@ fn stitched(lower: &Mesh, cap_faces: usize, upper: &Mesh, plane: Plane) -> Resul
     let cut_line: FastSet<u32> = lower_cap.iter().flatten().copied().collect();
     let seam: FastMap<[u32; 3], u32> = cut_line
         .iter()
-        .map(|vertex| (key(lower.vertices[*vertex as usize]), *vertex))
+        .map(|vertex| (point_key(lower.vertices[*vertex as usize]), *vertex))
         .collect();
 
     let on_cut = |point: Vec3| (point - plane.point).dot(plane.normal).abs() <= ON_CUT_MM;
@@ -102,7 +102,7 @@ fn stitched(lower: &Mesh, cap_faces: usize, upper: &Mesh, plane: Plane) -> Resul
     let mut remap = vec![u32::MAX; upper.vertices.len()];
     for face in upper.faces.iter().filter(|face| upper_cap(face)) {
         for vertex in face {
-            let at = key(upper.vertices[*vertex as usize]);
+            let at = point_key(upper.vertices[*vertex as usize]);
             remap[*vertex as usize] = *seam.get(&at).ok_or(Whole::Seam)?;
         }
     }
@@ -124,14 +124,6 @@ fn stitched(lower: &Mesh, cap_faces: usize, upper: &Mesh, plane: Plane) -> Resul
     let mut faces = lower_faces.to_vec();
     faces.extend(upper_faces);
     Ok(Mesh::new(vertices, faces))
-}
-
-/// A point's position as bits, with no negative zero: the engine may answer `-0.0` for a
-/// coordinate the cut made `0.0`.
-fn key(point: Vec3) -> [u32; 3] {
-    point
-        .to_array()
-        .map(|coordinate| (coordinate + 0.0).to_bits())
 }
 
 /// Whether every edge along the cut is walked once by a face of `lower` and once back by

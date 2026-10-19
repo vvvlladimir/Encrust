@@ -9,10 +9,13 @@ use core_engine::project::{
 };
 use serde::{Deserialize, Serialize};
 
+use core_volume::Boolean;
+
 use crate::relief::ReliefState;
 use crate::slicing::Slicing;
 use crate::state::Tools;
 use crate::supports::{SupportGroup, SupportTool};
+use crate::text::TextState;
 
 /// The numbers every tool is set to, and the slicing settings the panels edit.
 ///
@@ -27,6 +30,11 @@ pub struct ToolSettings {
     pub cut: CutState,
     pub relief: ReliefState,
     pub array: Array,
+    // A record written before these tools were stays readable, on their defaults.
+    #[serde(default)]
+    pub text: TextState,
+    #[serde(default)]
+    pub combine: Boolean,
 }
 
 impl ToolSettings {
@@ -40,6 +48,8 @@ impl ToolSettings {
             cut: tools.cut.state.clone(),
             relief: tools.relief.state,
             array: tools.array,
+            text: tools.text.state.clone(),
+            combine: tools.boolean.op,
         }
     }
 
@@ -53,6 +63,8 @@ impl ToolSettings {
         tools.cut.state = self.cut;
         tools.relief.state = self.relief;
         tools.array = self.array;
+        tools.text.state = self.text;
+        tools.boolean.op = self.combine;
     }
 }
 
@@ -149,6 +161,9 @@ mod tests {
         tools.cut.state.keep = Keep::Above;
         tools.relief.state.amplitude_mm = -0.75;
         tools.array.columns = 5;
+        tools.text.state.family = "Serif".to_owned();
+        tools.text.state.depth_mm = 1.5;
+        tools.boolean.op = Boolean::Difference;
         tools.supports.brush_radius_mm = 6.0;
         tools.supports.profile.name = "Heavy".to_owned();
         tools
@@ -165,6 +180,8 @@ mod tests {
         assert_eq!(ToolSettings::of(&tools, &slicing), settings);
         assert_eq!(tools.supports.profile.name, "Heavy");
         assert_eq!(tools.array.columns, 5);
+        assert_eq!(tools.text.state.family, "Serif");
+        assert_eq!(tools.boolean.op, Boolean::Difference);
     }
 
     #[test]
@@ -202,5 +219,21 @@ mod tests {
         let text = serde_json::to_string(&settings).expect("the settings serialise");
         let read: ToolSettings = serde_json::from_str(&text).expect("and read back");
         assert_eq!(read, settings);
+    }
+
+    #[test]
+    fn a_record_from_before_the_text_and_combine_tools_still_reads() {
+        let mut written = serde_json::to_value(ToolSettings::of(&edited(), &Slicing::default()))
+            .expect("the settings serialise");
+        let fields = written.as_object_mut().expect("the record is an object");
+        fields.remove("text");
+        fields.remove("combine");
+        let read: ToolSettings = serde_json::from_value(written).expect("an older record reads");
+        assert_eq!(read.text, TextState::default());
+        assert_eq!(read.combine, Boolean::Union);
+        assert!(
+            (read.hollow.thickness_mm - 3.5).abs() < f32::EPSILON,
+            "and keeps the rest"
+        );
     }
 }

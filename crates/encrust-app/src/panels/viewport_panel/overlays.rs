@@ -258,7 +258,7 @@ pub(super) fn draw_part_mark(ui: &egui::Ui, window: &Window, viewport: egui::Rec
         .doc
         .scene
         .get(id)
-        .and_then(|object| window.tools.cut.marked_on(id, object));
+        .and_then(|object| window.tools.cut.marked_on(object));
     let Some(at) = marked.and_then(projector(&window.view.camera, viewport)) else {
         return;
     };

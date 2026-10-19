@@ -44,7 +44,7 @@ pub use triangle::Triangle;
 pub use triangulate::triangulate;
 pub use uv::{Heightmap, Mapping, UvMap};
 pub use validate::{MeshDiagnostics, center_of_mass, diagnose, signed_volume, signed_volume_x6};
-pub use weld::{DEFAULT_WELD_TOLERANCE, Welded, weld};
+pub use weld::{DEFAULT_WELD_TOLERANCE, Welded, point_key, weld};
 pub use winding::{Winding, solid_angle, winding_number};
 
 pub use glam::{Mat3, Mat4, Quat, Vec2, Vec3};

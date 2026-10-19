@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 use std::ops::RangeInclusive;
 
-use core_csg::{CsgError, Solid};
+use core_csg::Solid;
 use core_geometry::{
     Aabb, DEFAULT_WELD_TOLERANCE, FastSet, Mesh, Scalar, Vec3, glam::IVec3, oriented_box,
     signed_volume, weld,
@@ -69,7 +69,7 @@ pub struct PartedOff {
 /// of it, in the coordinates `mesh` is in; see `docs/design/parts.md`.
 ///
 /// [`VolumeError::NotOnModel`] where `at` is not on it, [`VolumeError::NoNeck`] where the
-/// wave from it finds no join, [`VolumeError::NotSolid`] where the exact cut cannot read
+/// wave from it finds no join, [`VolumeError::Csg`] where the exact cut cannot read
 /// it, and [`VolumeError::Cancelled`] when `cancel` gives up.
 pub fn part_off(mesh: &Mesh, at: Vec3, cancel: Cancel<'_>) -> Result<PartedOff, VolumeError> {
     let welded = weld(mesh, DEFAULT_WELD_TOLERANCE).mesh;
@@ -126,12 +126,8 @@ fn cut_at_neck(body: &Solid, wave: &Wave, level: usize) -> Result<PartedOff, Vol
     Err(VolumeError::NoNeck)
 }
 
-fn not_solid(error: &CsgError) -> VolumeError {
-    VolumeError::NotSolid(error.to_string())
-}
-
 fn solid_of(mesh: &Mesh) -> Result<Solid, VolumeError> {
-    Solid::new(mesh).map_err(|error| not_solid(&error))
+    Ok(Solid::new(mesh)?)
 }
 
 /// `body` parted along the gap round the piece the wave filled, where no material the
@@ -141,8 +137,8 @@ fn cut_out(body: &Solid, wave: &Wave, cancel: Cancel<'_>) -> Result<PartedOff, V
     let cutter = occupied_surface(wave.lattice.grid, &wave.grown_into_gap(), cancel)?;
     let cutter = solid_of(&cutter)?;
     let (part, rest) = rayon::join(|| body.intersection(&cutter), || body.difference(&cutter));
-    let part = part.map_err(|error| not_solid(&error))?.mesh();
-    let rest = rest.map_err(|error| not_solid(&error))?.mesh();
+    let part = part?.mesh();
+    let rest = rest?.mesh();
     parted(part, rest)
 }
 
@@ -587,10 +583,10 @@ fn cut(
         section.centre + depth,
         [across * half_mm, along * half_mm, depth],
     );
-    let cutter = Solid::new(&cutter).map_err(|error| not_solid(&error))?;
+    let cutter = Solid::new(&cutter)?;
     let (inside, outside) = rayon::join(|| body.intersection(&cutter), || body.difference(&cutter));
-    let inside = inside.map_err(|error| not_solid(&error))?.mesh();
-    let outside = outside.map_err(|error| not_solid(&error))?.mesh();
+    let inside = inside?.mesh();
+    let outside = outside?.mesh();
     let ((part_in, rest_in), (part_out, rest_out)) = rayon::join(
         || sorted(&inside, true, wave, section, reached),
         || sorted(&outside, false, wave, section, reached),
@@ -633,10 +629,7 @@ fn joining_cost(left: &Mesh, right: &Mesh) -> usize {
 /// `body` less `side`, one of the two it was cut into, for when reading the other side
 /// back as a solid to join it costs more than taking this one out of the body.
 fn rest_of(body: &Solid, side: &Mesh) -> Result<Mesh, VolumeError> {
-    Ok(body
-        .difference(&solid_of(side)?)
-        .map_err(|error| not_solid(&error))?
-        .mesh())
+    Ok(body.difference(&solid_of(side)?)?.mesh())
 }
 
 fn parted(part: Mesh, rest: Mesh) -> Result<PartedOff, VolumeError> {
@@ -656,10 +649,7 @@ fn joined(left: Mesh, right: Mesh) -> Result<Mesh, VolumeError> {
         return Ok(left);
     }
     let (left, right) = rayon::join(|| solid_of(&left), || solid_of(&right));
-    Ok(left?
-        .union(&right?)
-        .map_err(|error| not_solid(&error))?
-        .mesh())
+    Ok(left?.union(&right?)?.mesh())
 }
 
 /// The bodies of `mesh` split into those of the part and those of the rest. A body with

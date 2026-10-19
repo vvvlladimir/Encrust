@@ -11,13 +11,14 @@ use std::sync::Arc;
 
 use crate::i18n::tr;
 use crate::job::{RepairJob, RepairOutcome, RepairRequest, Repaired};
-use crate::scene::{ObjectId, Scene, SceneObject};
+use crate::scene::{ObjectId, Scene, SceneObject, Taken};
 use crate::status::Status;
 
 /// The repairs under way, and the broken models the user chose to keep as they came.
 #[derive(Debug, Default)]
 pub struct Repairs {
-    jobs: Vec<RepairJob>,
+    /// Each with the model it took, so that a mesh replaced since is not mended over.
+    jobs: Vec<(RepairJob, Taken)>,
     kept: Vec<ObjectId>,
 }
 
@@ -28,7 +29,7 @@ impl Repairs {
         scene.printable(scene.active_plate()).filter(|object| {
             !object.summary.is_sound()
                 && !self.kept.contains(&object.id)
-                && !self.jobs.iter().any(|job| job.id() == object.id)
+                && !self.jobs.iter().any(|(job, _)| job.id() == object.id)
         })
     }
 
@@ -53,7 +54,7 @@ impl Repairs {
             mesh: Arc::clone(&object.mesh),
         });
         *status = Status::Info(job.label());
-        self.jobs.push(job);
+        self.jobs.push((job, Taken::of(object)));
     }
 
     pub fn is_busy(&self) -> bool {
@@ -64,21 +65,24 @@ impl Repairs {
     /// running, which is what tells the window to keep repainting.
     pub fn poll(&mut self, scene: &mut Scene, status: &mut Status) -> bool {
         let mut done = Vec::new();
-        self.jobs.retain_mut(|job| match job.poll() {
+        self.jobs.retain_mut(|(job, taken)| match job.poll() {
             None => true,
             Some(outcome) => {
-                done.push((job.id(), outcome));
+                done.push((taken.clone(), outcome));
                 false
             }
         });
 
-        for (id, outcome) in done {
-            match outcome {
-                RepairOutcome::Done(repaired) => {
-                    *status = apply(scene, &repaired);
+        for (taken, outcome) in done {
+            let id = taken.id;
+            let replaced = scene.get(id).is_some_and(|object| !taken.is_model(object));
+            *status = match outcome {
+                RepairOutcome::Done(_) if replaced => {
+                    Status::Error(tr!("job-model-changed", name = taken.name))
                 }
-                RepairOutcome::Failed(message) => *status = Status::Error(message),
-            }
+                RepairOutcome::Done(repaired) => apply(scene, &repaired),
+                RepairOutcome::Failed(message) => Status::Error(message),
+            };
             // A repair that could not mend it is not offered again; the button still is.
             if scene
                 .get(id)

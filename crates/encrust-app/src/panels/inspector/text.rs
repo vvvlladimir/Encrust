@@ -69,9 +69,7 @@ fn family(ui: &mut egui::Ui, tool: &mut TextTool) {
     let ctx = ui.ctx().clone();
     let open = egui::Popup::is_id_open(&ctx, list);
     let current = tool
-        .families
-        .list
-        .get(tool.state.family)
+        .family()
         .map(|family| family.name.clone())
         .unwrap_or_default();
     let mut query: String = ui.data(|data| data.get_temp(id)).unwrap_or_default();
@@ -104,7 +102,7 @@ fn family(ui: &mut egui::Ui, tool: &mut TextTool) {
     let first = matching(tool, &query).next();
     if open && response.lost_focus() && ui.input(|input| input.key_pressed(egui::Key::Enter)) {
         if let Some(index) = first {
-            tool.state.family = index;
+            tool.state.family = tool.families.list[index].name.clone();
         }
         egui::Popup::close_id(&ctx, list);
     }
@@ -147,10 +145,10 @@ fn choices(ui: &mut egui::Ui, tool: &mut TextTool, query: &str) -> bool {
             for index in found.iter().copied() {
                 let name = &tool.families.list[index].name;
                 if ui
-                    .selectable_label(index == tool.state.family, name)
+                    .selectable_label(*name == tool.state.family, name)
                     .clicked()
                 {
-                    tool.state.family = index;
+                    tool.state.family = name.clone();
                     picked = true;
                 }
             }

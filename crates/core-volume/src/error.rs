@@ -101,8 +101,9 @@ pub enum VolumeError {
     #[error("the models combined leave nothing behind")]
     NothingLeft,
 
-    #[error("a model is not a closed solid the exact cut can read: {0}")]
-    NotSolid(String),
+    /// The exact cut refused a model, or could not combine sound ones.
+    #[error(transparent)]
+    Csg(#[from] core_csg::CsgError),
 
     #[error("the point to part the model at is not on it")]
     NotOnModel,
