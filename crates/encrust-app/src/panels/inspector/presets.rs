@@ -139,11 +139,7 @@ mod tests {
         let dir = std::env::temp_dir().join("encrust-app-drain-preset");
         let _ = std::fs::remove_dir_all(&dir);
         let mut catalogue = Catalogue::with_root(&dir).expect("the shipped catalogue is valid");
-        let state = DrainState {
-            diameter_mm: 3.5,
-            depth_mm: 2.0,
-            taper: 0.8,
-        };
+        let state = DrainState::round(3.5, 2.0, 0.8);
         let id = keep(&mut catalogue, Kind::Drain, "Standard 3.5 mm", &state).expect("writable");
         assert_eq!(id, "standard-3-5-mm");
         let again = keep(&mut catalogue, Kind::Drain, "Standard 3.5 mm", &state).expect("writable");

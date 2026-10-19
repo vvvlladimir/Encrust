@@ -1,4 +1,4 @@
-use core_geometry::{Mat3, Scalar};
+use core_geometry::{Mat3, Scalar, Vec3};
 use thiserror::Error;
 
 /// What can go wrong building a field or combining two of them.
@@ -31,6 +31,15 @@ pub enum VolumeError {
     #[error("a tiled relief needs a tile of positive size, got {0} mm")]
     BadTile(Scalar),
 
+    #[error("a relief is smoothed by a finite, non-negative width, got {0} px")]
+    BadSmoothing(Scalar),
+
+    #[error("a relief's mask holds faces within 0 to 90 degrees of level, got {0}")]
+    BadMaskAngle(Scalar),
+
+    #[error("a relief's mask needs a direction for up, got {0}")]
+    BadMaskUp(Vec3),
+
     #[error("the texture covers {mapped} of the mesh's {faces} faces")]
     UnmappedMesh { faces: usize, mapped: usize },
 
@@ -43,8 +52,23 @@ pub enum VolumeError {
     #[error("the infill density must be between 0 and 1, got {0}")]
     BadDensity(Scalar),
 
+    #[error("the infill wall must be a positive thickness, got {0} mm")]
+    BadInfillWall(Scalar),
+
+    #[error(
+        "crossing holes need a diameter under the cell, a first row at or over the floor and a spacing, got {diameter_mm} mm, {first_mm} mm and {spacing_mm} mm"
+    )]
+    BadHoles {
+        diameter_mm: Scalar,
+        first_mm: Scalar,
+        spacing_mm: Scalar,
+    },
+
     #[error("drain hole {index} has no width, no depth or no direction to be drilled in")]
     BadDrain { index: usize },
+
+    #[error("a gap of {gap_mm} mm leaves nothing of the plug for drain hole {index}")]
+    TightPlug { index: usize, gap_mm: Scalar },
 
     #[error("drain channel {index} needs a width and at least two points to be dug along")]
     BadChannel { index: usize },
@@ -73,4 +97,20 @@ pub enum VolumeError {
         /// The coarsest lattice that would have fit, in millimetres.
         fits_at_mm: Scalar,
     },
+
+    #[error("combining models needs at least two, got {0}")]
+    TooFewModels(usize),
+
+    #[error("the models combined leave nothing behind")]
+    NothingLeft,
+
+    /// The exact cut refused a model, or could not combine sound ones.
+    #[error(transparent)]
+    Csg(#[from] core_csg::CsgError),
+
+    #[error("the point to part the model at is not on it")]
+    NotOnModel,
+
+    #[error("there is no narrow join to cut at from this point")]
+    NoNeck,
 }

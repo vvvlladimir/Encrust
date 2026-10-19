@@ -196,6 +196,24 @@ pub fn rebuild_tasks(scene: &Scene) -> Vec<HollowTask> {
         .collect()
 }
 
+/// The models of `models` still on the plate, each to be built at the settings beside it
+/// with the blockers and channels it carries now.
+pub fn again_tasks(scene: &Scene, models: &[(ObjectId, HollowSettings)]) -> Vec<HollowTask> {
+    models
+        .iter()
+        .filter_map(|(id, asked)| {
+            let object = scene.get(*id).filter(|object| !object.mesh.is_empty())?;
+            Some(HollowTask {
+                id: object.id,
+                mesh: Arc::clone(&object.mesh),
+                bvh: Arc::clone(&object.bvh),
+                shape: object.transform.unturned(),
+                settings: object.hollow.asking(asked),
+            })
+        })
+        .collect()
+}
+
 /// Hollows every model of the request.
 ///
 /// Every failure comes back as `HollowOutcome::Failed` rather than a `Result`: the caller
@@ -269,13 +287,7 @@ fn shell_of(task: &HollowTask, fields: &SharedFields) -> Result<Shell, VolumeErr
             field
         }
     };
-    let hollowed = carve(
-        &task.mesh,
-        &field,
-        &task.settings.blockers,
-        task.settings.infill,
-        Cancel::never(),
-    )?;
+    let hollowed = carve(&task.mesh, &field, &task.settings, Cancel::never())?;
     Ok(Shell {
         mesh: Arc::new(hollowed.mesh),
         cavity: hollowed.cavity,

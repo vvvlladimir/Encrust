@@ -15,6 +15,7 @@ doctest = false
 core-analysis.workspace = true
 core-format.workspace = true
 core-geometry.workspace = true
+core-joint.workspace = true
 core-pipeline.workspace = true
 core-plate.workspace = true
 core-raster.workspace = true

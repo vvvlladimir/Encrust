@@ -75,21 +75,53 @@ fn infill_puts_material_back_into_the_cavity() {
             "3",
             "--infill",
             "grid",
-            "--infill-size",
+            "--infill-cell",
             "4",
-            "--infill-density",
-            "0.3",
+            "--infill-wall",
+            "1",
+            "--infill-hole",
+            "2",
         ],
     );
 
     assert_eq!(
         field(&text, "infill"),
-        "grid, 4.0 mm cells at 30%, 0.65 mm walls"
+        "grid, 4.0 mm cells, 1.00 mm walls, 2.0 mm holes from 4.0 mm every 8.0 mm"
     );
     assert!(
         lit_pixels(&filled, 8) > lit_pixels(&empty, 8),
         "the grid must show up inside the cavity"
     );
+}
+
+#[test]
+fn an_infill_size_the_pattern_has_no_use_for_is_refused() {
+    let path = write_box_stl("hollow-unused-size", 16.0, 12, 0);
+    let out = output_dir("unused-size");
+    for (pattern, flag, value) in [
+        ("hive", "--infill-density", "0.2"),
+        ("scaffold", "--infill-wall", "1"),
+        ("scaffold", "--infill-hole-spacing", "6"),
+    ] {
+        let output = slice(&[
+            path.to_str().unwrap(),
+            "--profile",
+            test_panel().to_str().unwrap(),
+            "-o",
+            out.to_str().unwrap(),
+            "--hollow",
+            "3",
+            "--infill",
+            pattern,
+            flag,
+            value,
+        ]);
+        assert!(!output.status.success(), "{flag} on a {pattern} is refused");
+        assert!(
+            String::from_utf8_lossy(&output.stderr).contains(flag),
+            "and the refusal names the flag"
+        );
+    }
 }
 
 #[test]
@@ -251,8 +283,8 @@ fn a_hollow_box_with_no_hole_reports_the_resin_it_traps() {
 
 #[test]
 fn a_hive_in_a_cavity_drains_through_one_hole() {
-    // Each cell used to be a sealed box, so a hole in the lid drained the one under it and
-    // left every other cell full.
+    // A cell with no way into the next would be a sealed box, so a hole in the lid would
+    // drain the one under it and leave every other cell full.
     let path = write_box_stl("hive-drain", 20.0, 12, 0);
     let input = path.to_str().unwrap();
     let report = stdout(&estimate(&[
@@ -261,10 +293,6 @@ fn a_hive_in_a_cavity_drains_through_one_hole() {
         "2",
         "--infill",
         "hive",
-        "--infill-size",
-        "5",
-        "--infill-density",
-        "0.15",
         "--layer-height",
         "0.5",
         "--drain",
@@ -276,8 +304,7 @@ fn a_hive_in_a_cavity_drains_through_one_hole() {
     ]));
     assert!(
         !report.contains("trapped resin"),
-        "the cells are open over the floor of the cavity, so one hole drains all of \
-         them:\n{report}"
+        "crossing holes join every cell to the next, so one hole drains all of them:\n{report}"
     );
 }
 
@@ -356,5 +383,164 @@ fn a_hole_shallower_than_the_wall_still_goes_through_it() {
     assert!(
         wall.iter().all(|pixel| *pixel == 0),
         "the hole clears the whole 2 mm wall in front of it, got {wall:?}"
+    );
+}
+
+#[test]
+fn an_open_floor_leaves_the_first_layer_a_ring() {
+    let (out, text) = hollow_cube("open-floor", &["--hollow", "3", "--hollow-open-floor"]);
+
+    assert_eq!(
+        field(&text, "wall"),
+        "3.000 mm, internal, open through the floor"
+    );
+    // The floor is gone under the cavity, so the layer on the plate is the same ring as
+    // halfway up: 156 mm2 at a 0.1 mm pitch.
+    let floor = lit_pixels(&out, 0);
+    assert!(
+        (floor as f32 - 15_600.0).abs() / 15_600.0 < 0.03,
+        "the first layer of an open shell is a 16 mm ring round a 10 mm hole, got {floor}"
+    );
+}
+
+#[test]
+fn an_open_floor_is_refused_on_a_mould() {
+    let path = write_box_stl("open-mould", 16.0, 12, 0);
+    let output = estimate(&[
+        path.to_str().unwrap(),
+        "--hollow",
+        "2",
+        "--hollow-mode",
+        "external",
+        "--hollow-open-floor",
+    ]);
+    assert!(!output.status.success());
+    assert!(stderr(&output).contains("a mould has none"));
+}
+
+#[test]
+fn plugs_stand_beside_the_model_they_close() {
+    let path = write_box_stl("plugs", 8.0, 12, 0);
+    let out = output_dir("plugs");
+    let output = slice(&[
+        path.to_str().unwrap(),
+        "--profile",
+        test_panel().to_str().unwrap(),
+        "--layer-height",
+        "1",
+        "--drain",
+        "3",
+        "--drain-at",
+        "4,4,10",
+        "--drain-plugs",
+        "-o",
+        out.to_str().unwrap(),
+    ]);
+    let text = stdout(&output);
+    assert!(output.status.success(), "{text}");
+    assert_eq!(
+        field(&text, "plugs"),
+        "1 beside the model, 0.15 mm narrower a side"
+    );
+
+    // The 8 mm box fills 6 400 pixels of the first layer; a plug of 1.35 mm radius standing
+    // past its right-hand side adds about 570 more.
+    let lit = lit_pixels(&out, 0);
+    assert!(
+        (lit as f32 - 6_970.0).abs() < 150.0,
+        "the box and one plug beside it, about 6 970 pixels, got {lit}"
+    );
+}
+
+#[test]
+fn plugs_with_no_hole_are_refused() {
+    let path = write_box_stl("plugs-nothing", 8.0, 12, 0);
+    let output = estimate(&[path.to_str().unwrap(), "--hollow", "2", "--drain-plugs"]);
+    assert!(!output.status.success());
+    assert!(stderr(&output).contains("none was given"));
+}
+
+#[test]
+fn an_open_floor_with_no_shell_is_refused() {
+    let path = write_box_stl("open-solid", 16.0, 12, 0);
+    let output = estimate(&[path.to_str().unwrap(), "--hollow-open-floor"]);
+    assert!(
+        !output.status.success(),
+        "a solid model has no floor to open"
+    );
+    assert!(stderr(&output).contains("--hollow was not given"));
+}
+
+#[test]
+fn a_negative_plug_gap_is_refused() {
+    let path = write_box_stl("plugs-negative", 8.0, 12, 0);
+    let output = estimate(&[
+        path.to_str().unwrap(),
+        "--drain-at",
+        "4,4,10",
+        "--drain-plugs",
+        "--plug-gap=-0.1",
+    ]);
+    assert!(
+        !output.status.success(),
+        "a plug wider than its hole cannot go in"
+    );
+    assert!(stderr(&output).contains("--plug-gap"));
+}
+
+#[test]
+fn plugs_that_would_run_off_the_plate_are_refused() {
+    // The 40 mm plate leaves 4 mm past a 36 mm box, short of a spacing and a plug.
+    let path = write_box_stl("plugs-off", 36.0, 12, 0);
+    let output = estimate(&[
+        path.to_str().unwrap(),
+        "--profile",
+        test_panel().to_str().unwrap(),
+        "--drain",
+        "3",
+        "--drain-at",
+        "18,18,40",
+        "--drain-plugs",
+    ]);
+    assert!(!output.status.success(), "{}", stdout(&output));
+    assert!(stderr(&output).contains("run off the plate"));
+}
+
+#[test]
+fn a_square_hole_turned_on_its_corner_takes_a_plug() {
+    let path = write_box_stl("plugs-square", 8.0, 12, 0);
+    let out = output_dir("plugs-square");
+    let output = slice(&[
+        path.to_str().unwrap(),
+        "--profile",
+        test_panel().to_str().unwrap(),
+        "--layer-height",
+        "1",
+        "--drain",
+        "3",
+        "--drain-sides",
+        "4",
+        "--drain-turn",
+        "45",
+        "--drain-at",
+        "4,4,10",
+        "--drain-plugs",
+        "--plug-gap",
+        "0.2",
+        "-o",
+        out.to_str().unwrap(),
+    ]);
+    let text = stdout(&output);
+    assert!(output.status.success(), "{text}");
+    assert_eq!(
+        field(&text, "plugs"),
+        "1 beside the model, 0.20 mm narrower a side"
+    );
+    // A square with its corners on 1.5 mm, its sides 0.2 mm in, is 2 (1.5 / root 2 - 0.2)
+    // across, 3.1 mm2 or about 310 pixels over the box's 6 400.
+    let lit = lit_pixels(&out, 0);
+    assert!(
+        (lit as f32 - 6_710.0).abs() < 100.0,
+        "the box and one square plug beside it, about 6 710 pixels, got {lit}"
     );
 }

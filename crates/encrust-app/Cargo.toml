@@ -18,6 +18,8 @@ path = "src/main.rs"
 [dependencies]
 core-analysis.workspace = true
 core-geometry.workspace = true
+core-joint.workspace = true
+core-text.workspace = true
 core-mesh-io.workspace = true
 core-engine.workspace = true
 core-pipeline.workspace = true
@@ -26,6 +28,7 @@ core-slicer.workspace = true
 core-raster.workspace = true
 core-supports.workspace = true
 core-volume.workspace = true
+core-csg.workspace = true
 core-format.workspace = true
 core-thumbnail.workspace = true
 net-prusalink.workspace = true
@@ -74,6 +77,7 @@ snapshots = []
 
 # A browser has no TLS stack to build and no native dialogs; see docs/decisions/0181.
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+fontdb.workspace = true
 ureq = { workspace = true, features = ["rustls"] }
 rfd.workspace = true
 

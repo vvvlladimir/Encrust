@@ -1,19 +1,21 @@
 use std::sync::Arc;
-use std::sync::mpsc::{self, Receiver, TryRecvError};
 
-use core_geometry::{Bvh, Heightmap, Mesh, Scalar, Transform, transform_mesh};
-use core_volume::{ReliefSettings, Tiling, press, press_tiled};
+use core_geometry::{Bvh, Heightmap, Mesh, Transform, Vec3, transform_mesh};
+use core_volume::{
+    AngleMask, ReliefBasis, ReliefSettings, Tiling, press_reusing, press_tiled_reusing,
+};
 use rayon::prelude::*;
 
 use crate::i18n::tr;
-use crate::job::pipeline::{thread_pool, worker_threads};
+use crate::job::{Worker, pooled};
 use core_geometry::UvMap;
 
-use crate::scene::{Mapped, ObjectId, Scene, Shaped};
+use crate::scene::{Mapped, Scene, Shaped, Taken};
 
 /// One model to press a texture into, owned so that it can cross to the worker thread.
 pub struct ReliefTask {
-    pub id: ObjectId,
+    /// The model as the run took it, so that the press lands only on that model.
+    pub taken: Taken,
     /// The model and its hierarchy, both in its own space, which is where the map stands.
     pub mesh: Arc<Mesh>,
     pub bvh: Arc<Bvh>,
@@ -22,6 +24,11 @@ pub struct ReliefTask {
     /// The model's placement but for its turn (`Transform::sizing`). The relief is pressed
     /// at the size the model prints at, so the mesh is taken through this first; see ADR 0122.
     pub sizing: Transform,
+    /// The plate's up in the model's own space, which is where its faces are held.
+    pub up: Vec3,
+    /// The basis a run before this one kept for this very mesh, if any; the press checks
+    /// that it still fits and builds a new one where it does not.
+    pub basis: Option<Arc<ReliefBasis>>,
 }
 
 /// Everything one relief run needs.
@@ -43,18 +50,18 @@ pub enum ReliefSource {
 }
 
 /// One model with its texture pressed in, in its own space.
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone)]
 pub struct Pressed {
-    pub id: ObjectId,
+    pub taken: Taken,
     pub shaped: Shaped,
-    /// The lattice it came out on, in the model's own millimetres, and whether the memory
-    /// budget made that coarser than precision asked for.
-    pub voxel_mm: Scalar,
+    /// Whether the memory budget made the lattice coarser than precision asked for.
     pub coarsened: bool,
+    /// What the press stood on, for the window to keep while another picture may follow.
+    pub basis: Arc<ReliefBasis>,
 }
 
 /// How a relief run ended.
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone)]
 pub enum ReliefOutcome {
     Pressed(Vec<Pressed>),
     /// The whole error chain flattened into one line, as the window has no terminal.
@@ -65,31 +72,15 @@ pub enum ReliefOutcome {
 ///
 /// A relief is a field over the whole model with a nearest-point query per lattice point,
 /// which is seconds of work on a real part, the way hollowing is.
-#[derive(Debug)]
-pub struct ReliefJob {
-    outcome: Receiver<ReliefOutcome>,
-}
+pub type ReliefJob = Worker<ReliefOutcome>;
 
-impl ReliefJob {
-    /// Starts the run. The thread is detached: it ends on its own.
-    pub fn spawn(request: ReliefRequest) -> Self {
-        let (sender, outcome) = mpsc::channel();
-        crate::job::spawn(move || {
-            let _ = sender.send(run(&request));
-        });
-        Self { outcome }
-    }
-
-    /// Returns the outcome on the frame the run ends, and `None` while it is going.
-    pub fn poll(&mut self) -> Option<ReliefOutcome> {
-        match self.outcome.try_recv() {
-            Ok(outcome) => Some(outcome),
-            Err(TryRecvError::Empty) => None,
-            Err(TryRecvError::Disconnected) => {
-                Some(ReliefOutcome::Failed(tr!("job-thread-stopped-relief")))
-            }
-        }
-    }
+/// Starts the run. The thread is detached: it ends on its own.
+pub fn spawn_relief(request: ReliefRequest) -> ReliefJob {
+    // A press cannot be given up on part way; a run given up on is thrown away as it ends.
+    Worker::spawn(
+        move |_| pooled(|| run(&request), ReliefOutcome::Failed),
+        || ReliefOutcome::Failed(tr!("job-thread-stopped-relief")),
+    )
 }
 
 /// The models a run covers: everything on the plate being edited, or with `tiled` false
@@ -99,52 +90,58 @@ pub fn relief_tasks(scene: &Scene, tiled: bool) -> Vec<ReliefTask> {
         .targets()
         .filter(|object| tiled || object.mapped.is_some())
         .map(|object| ReliefTask {
-            id: object.id,
+            taken: Taken::of(object),
             mesh: Arc::clone(&object.mesh),
             bvh: Arc::clone(&object.bvh),
             mapped: object.mapped.clone(),
             sizing: object.transform.sizing(),
+            up: object.transform.rotation.inverse() * Vec3::Z,
+            basis: None,
         })
         .collect()
 }
 
 fn run(request: &ReliefRequest) -> ReliefOutcome {
-    let pool = match thread_pool(worker_threads()) {
-        Ok(pool) => pool,
-        Err(error) => return ReliefOutcome::Failed(error.to_string()),
-    };
-
-    pool.install(|| {
-        let pressed: Result<Vec<Pressed>, _> = request
-            .tasks
-            .par_iter()
-            .map(|task| {
-                let (mesh, bvh, uvs) = printed(task);
-                let relief = match (&request.source, &task.mapped, uvs) {
-                    (ReliefSource::Tiled { image, tiling }, _, _) => {
-                        press_tiled(&mesh, &bvh, image, *tiling, &request.settings)
-                    }
-                    (ReliefSource::Mapped, Some(mapped), Some(uvs)) => {
-                        press(&mesh, &bvh, &uvs, &mapped.heights, &request.settings)
-                    }
-                    (ReliefSource::Mapped, ..) => {
-                        return Err(anyhow::anyhow!(tr!("job-relief-no-texture")));
-                    }
-                };
-                relief.map_err(anyhow::Error::new).map(|relief| Pressed {
-                    id: task.id,
+    let pressed: Result<Vec<Pressed>, _> = request
+        .tasks
+        .par_iter()
+        .map(|task| {
+            let (mesh, bvh, uvs) = printed(task);
+            let settings = ReliefSettings {
+                mask: AngleMask {
+                    up: task.up,
+                    ..request.settings.mask
+                },
+                ..request.settings
+            };
+            let relief = match (&request.source, &task.mapped, uvs) {
+                (ReliefSource::Tiled { image, tiling }, _, _) => {
+                    let basis = task.basis.clone();
+                    press_tiled_reusing(&mesh, &bvh, image, *tiling, &settings, basis)
+                }
+                (ReliefSource::Mapped, Some(mapped), Some(uvs)) => {
+                    let basis = task.basis.clone();
+                    press_reusing(&mesh, &bvh, &uvs, &mapped.heights, &settings, basis)
+                }
+                (ReliefSource::Mapped, ..) => {
+                    return Err(anyhow::anyhow!(tr!("job-relief-no-texture")));
+                }
+            };
+            relief
+                .map_err(anyhow::Error::new)
+                .map(|(relief, basis)| Pressed {
+                    taken: task.taken.clone(),
                     shaped: Shaped::of(Arc::new(relief.mesh)),
-                    voxel_mm: relief.voxel_mm,
                     coarsened: relief.coarsened,
+                    basis,
                 })
-            })
-            .collect();
+        })
+        .collect();
 
-        match pressed {
-            Ok(pressed) => ReliefOutcome::Pressed(pressed),
-            Err(error) => ReliefOutcome::Failed(format!("{error:#}")),
-        }
-    })
+    match pressed {
+        Ok(pressed) => ReliefOutcome::Pressed(pressed),
+        Err(error) => ReliefOutcome::Failed(format!("{error:#}")),
+    }
 }
 
 /// The model at the size it prints at, with its map still over it.

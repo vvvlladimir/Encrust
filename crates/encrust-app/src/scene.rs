@@ -14,7 +14,7 @@ use core_supports::ModelSupports;
 use core_volume::ModelHollow;
 use printer_profiles::{Raft, SupportProfile};
 
-use crate::drain::Traps;
+use crate::drain::{PlugsLaid, Traps};
 use crate::i18n::tr;
 
 /// A mesh with what the window keeps beside it: its hierarchy, its centre of mass and what
@@ -89,6 +89,21 @@ impl ImportSummary {
             vertices_merged: welded.vertices_merged,
             faces_removed: welded.faces_removed() + doubled,
             orientation,
+            diagnostics,
+        }
+    }
+
+    /// The summary of a mesh a tool made rather than a file brought: nothing was welded,
+    /// dropped or turned on its way in.
+    pub fn made(diagnostics: MeshDiagnostics) -> Self {
+        Self {
+            vertices_merged: 0,
+            faces_removed: 0,
+            orientation: Orientation {
+                flipped_faces: 0,
+                inverted_shells: 0,
+                orientable: true,
+            },
             diagnostics,
         }
     }
@@ -237,6 +252,11 @@ pub struct SceneObject {
     /// How high over its raft the user stood the model, millimetres: what auto-orient
     /// lifts it by onto supports in place of the profile's lift.
     pub lift_mm: Option<f32>,
+    /// The model this one is a plug for, laid beside it by the Drain tool (ADR 0313).
+    pub plug_of: Option<ObjectId>,
+    /// What this model's plugs were last laid for; `None` for one read back from a project,
+    /// which takes its plugs as they stand.
+    pub plugs_laid: Option<PlugsLaid>,
     bounds: PlacedBounds,
 }
 
@@ -295,6 +315,51 @@ impl PlacedBounds {
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner) = Some((key, transform, bounds));
         Some(bounds)
+    }
+}
+
+/// A model as a background job took it, so what the job makes replaces only that model,
+/// unmoved and unchanged.
+#[derive(Debug, Clone)]
+pub struct Taken {
+    pub id: ObjectId,
+    pub name: String,
+    /// The plate it stood on, which is where what replaces it goes down.
+    pub plate: u32,
+    mesh: Arc<Mesh>,
+    transform: Transform,
+}
+
+impl Taken {
+    pub fn of(object: &SceneObject) -> Self {
+        Self {
+            id: object.id,
+            name: object.name.clone(),
+            plate: object.plate,
+            mesh: Arc::clone(&object.mesh),
+            transform: object.transform,
+        }
+    }
+
+    /// Whether the model is still on the plate as it was taken. A new project reuses ids,
+    /// so the mesh itself is compared, not only the id.
+    pub fn is_current(&self, scene: &Scene) -> bool {
+        scene.get(self.id).is_some_and(|object| {
+            self.is_model(object)
+                && object.transform == self.transform
+                && object.plate == self.plate
+        })
+    }
+
+    /// Whether `object` still stands turned and sized as the model was taken: what a job
+    /// that rewrites the mesh in its own space depends on, where a move does not matter.
+    pub fn is_shaped_alike_to(&self, object: &SceneObject) -> bool {
+        self.is_model(object) && object.transform.linear() == self.transform.linear()
+    }
+
+    /// Whether `object` is the model taken, still with the mesh it was taken with.
+    pub fn is_model(&self, object: &SceneObject) -> bool {
+        object.id == self.id && Arc::ptr_eq(&object.mesh, &self.mesh)
     }
 }
 
@@ -578,10 +643,20 @@ impl Scene {
         self.plates.push(name);
         let copy = (self.plates.len() - 1) as u32;
         let models: Vec<SceneObject> = self.on_plate(plate).cloned().collect();
-        for mut model in models {
+        let first = self.next_id;
+        let copied = |id: ObjectId| {
+            let index = models.iter().position(|model| model.id == id)?;
+            Some(ObjectId(first + index as u64))
+        };
+        let plugs: Vec<Option<ObjectId>> = models
+            .iter()
+            .map(|model| model.plug_of.and_then(copied))
+            .collect();
+        for (mut model, plug_of) in models.into_iter().zip(plugs) {
             model.id = ObjectId(self.next_id);
             self.next_id += 1;
             model.plate = copy;
+            model.plug_of = plug_of;
             self.objects.push(model);
         }
         self.active = copy;
@@ -767,6 +842,8 @@ impl Scene {
             mapped: imported.mapped,
             own: OwnSettings::default(),
             lift_mm: None,
+            plug_of: None,
+            plugs_laid: Some(PlugsLaid::default()),
             bounds: PlacedBounds::default(),
         });
         self.selected = vec![id];
@@ -782,6 +859,9 @@ impl Scene {
         copy.id = ObjectId(self.next_id);
         self.next_id += 1;
         copy.transform.translation += offset;
+        // A copy lays plugs of its own, and a copied plug is the user's, not its model's.
+        copy.plugs_laid = Some(PlugsLaid::default());
+        copy.plug_of = None;
 
         let copy_id = copy.id;
         self.objects.push(copy);

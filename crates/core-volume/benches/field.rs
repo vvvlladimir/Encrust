@@ -3,59 +3,15 @@
     reason = "a broken fixture must fail the run loudly"
 )]
 
-use core_geometry::{Bvh, Heightmap, Mesh, Scalar, UvMap, Vec2, Vec3};
+use core_geometry::{Bvh, Heightmap, Mesh, Scalar, UvMap, Vec2, Vec3, ball};
 use core_volume::{
     Cancel, FieldSettings, HollowMode, HollowSettings, InfillPattern, InfillSettings, Panel,
     ReliefSettings, SignMode, StackField, build, extract, hollow, offset, press, shell,
 };
 use criterion::{Criterion, criterion_group, criterion_main};
 
-/// Roughly 200k triangles, the size of a detailed miniature.
-fn sphere(radius: Scalar, rings: usize, segments: usize) -> Mesh {
-    let mut vertices = vec![Vec3::new(0.0, 0.0, radius)];
-    for ring in 1..rings {
-        let theta = std::f32::consts::PI * ring as Scalar / rings as Scalar;
-        let (sin_theta, cos_theta) = theta.sin_cos();
-        for segment in 0..segments {
-            let phi = std::f32::consts::TAU * segment as Scalar / segments as Scalar;
-            let (sin_phi, cos_phi) = phi.sin_cos();
-            vertices.push(Vec3::new(
-                radius * sin_theta * cos_phi,
-                radius * sin_theta * sin_phi,
-                radius * cos_theta,
-            ));
-        }
-    }
-    let south = vertices.len() as u32;
-    vertices.push(Vec3::new(0.0, 0.0, -radius));
-
-    let at = |ring: usize, segment: usize| (1 + (ring - 1) * segments + segment % segments) as u32;
-    let mut faces = Vec::new();
-    for segment in 0..segments {
-        faces.push([0, at(1, segment), at(1, segment + 1)]);
-    }
-    for ring in 1..rings - 1 {
-        for segment in 0..segments {
-            faces.push([
-                at(ring, segment),
-                at(ring + 1, segment),
-                at(ring + 1, segment + 1),
-            ]);
-            faces.push([
-                at(ring, segment),
-                at(ring + 1, segment + 1),
-                at(ring, segment + 1),
-            ]);
-        }
-    }
-    for segment in 0..segments {
-        faces.push([at(rings - 1, segment), south, at(rings - 1, segment + 1)]);
-    }
-    Mesh::new(vertices, faces)
-}
-
 fn benchmarks(c: &mut Criterion) {
-    let mesh = sphere(20.0, 320, 320);
+    let mesh = ball(Vec3::ZERO, 20.0, 320, 320);
     let bvh = Bvh::build(&mesh);
     let coarse = FieldSettings {
         voxel_mm: 0.4,
@@ -184,11 +140,7 @@ fn hollowing(c: &mut Criterion, mesh: &Mesh, bvh: &Bvh) {
         ..HollowSettings::default()
     };
     let filled = HollowSettings {
-        infill: Some(InfillSettings {
-            pattern: InfillPattern::Hive,
-            size_mm: 5.0,
-            density: 0.15,
-        }),
+        infill: Some(InfillSettings::default()),
         ..empty.clone()
     };
 
@@ -196,9 +148,11 @@ fn hollowing(c: &mut Criterion, mesh: &Mesh, bvh: &Bvh) {
         b.iter(|| hollow(std::hint::black_box(mesh), bvh, &empty, Cancel::never()));
     });
 
-    c.bench_function("hollow a 40 mm ball and fill it with a gyroid", |b| {
+    c.bench_function("hollow a 40 mm ball and fill it with a hive", |b| {
         b.iter(|| hollow(std::hint::black_box(mesh), bvh, &filled, Cancel::never()));
     });
+
+    infill(c, mesh, bvh, &empty);
 
     // A relief is a field of its own plus a nearest-point query per lattice point, so it
     // is priced against the build it is built on.
@@ -222,7 +176,7 @@ fn hollowing(c: &mut Criterion, mesh: &Mesh, bvh: &Bvh) {
     });
 
     // Half a million triangles is the size of a scanned bust, and what the step aimed at.
-    let dense = sphere(20.0, 500, 500);
+    let dense = ball(Vec3::ZERO, 20.0, 500, 500);
     let dense_bvh = Bvh::build(&dense);
     c.bench_function("hollow a 500k-triangle ball with a 2 mm wall", |b| {
         b.iter(|| {
@@ -234,6 +188,50 @@ fn hollowing(c: &mut Criterion, mesh: &Mesh, bvh: &Bvh) {
             )
         });
     });
+}
+
+/// Each pattern at 6 mm cells and 2 mm walls, on the ball and on one big enough that the
+/// lattice rather than the shell is what costs.
+fn infill(c: &mut Criterion, mesh: &Mesh, bvh: &Bvh, empty: &HollowSettings) {
+    let filled = |pattern| HollowSettings {
+        infill: Some(InfillSettings {
+            pattern,
+            ..InfillSettings::default()
+        }),
+        ..empty.clone()
+    };
+    let grid = filled(InfillPattern::Grid);
+    let big = ball(Vec3::ZERO, 50.0, 320, 320);
+    let big_bvh = Bvh::build(&big);
+
+    let mut group = c.benchmark_group("infill");
+    group.sample_size(10);
+    group.bench_function("grid_in_a_40mm_ball", |b| {
+        b.iter(|| hollow(std::hint::black_box(mesh), bvh, &grid, Cancel::never()));
+    });
+    group.bench_function("empty_100mm_ball", |b| {
+        b.iter(|| hollow(std::hint::black_box(&big), &big_bvh, empty, Cancel::never()));
+    });
+    group.bench_function("grid_in_a_100mm_ball", |b| {
+        b.iter(|| hollow(std::hint::black_box(&big), &big_bvh, &grid, Cancel::never()));
+    });
+    for (name, pattern) in [
+        ("hive_in_a_100mm_ball", InfillPattern::Hive),
+        ("scaffold_in_a_100mm_ball", InfillPattern::Scaffold),
+    ] {
+        let settings = filled(pattern);
+        group.bench_function(name, |b| {
+            b.iter(|| {
+                hollow(
+                    std::hint::black_box(&big),
+                    &big_bvh,
+                    &settings,
+                    Cancel::never(),
+                )
+            });
+        });
+    }
+    group.finish();
 }
 
 /// A latitude and longitude UV for every corner of every face.

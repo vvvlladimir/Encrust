@@ -2,11 +2,13 @@
 //! thickness asked for, that the cavity never reaches outside the model, and that what
 //! fills it takes its own volume back.
 
-use core_geometry::{Bvh, Mat3, Mesh, Quat, Scalar, Transform, Vec3, signed_volume};
+use core_geometry::{
+    Bvh, Mat3, Mesh, Quat, Scalar, Transform, Vec3, ball, diagnose, signed_volume,
+};
 use core_volume::{
-    Blocker, CUT_WEIGHT, Cancel, Channel, HollowMode, HollowSettings, InfillPattern,
-    InfillSettings, VolumeError, carve, cavity_field, drill, hole_at, hollow, hollow_at_scale,
-    pierce, sleeves,
+    Blocker, CUT_WEIGHT, Cancel, Channel, HoleSize, HollowMode, HollowSettings, Hollowed,
+    InfillPattern, InfillSettings, VolumeError, carve, cavity_field, drill, hole_at, hollow,
+    hollow_at_scale, pierce, plate_down, sleeves,
 };
 
 const PI: Scalar = std::f32::consts::PI;
@@ -45,48 +47,23 @@ fn cube(size: Scalar, base: Scalar) -> Mesh {
     )
 }
 
-/// A closed sphere approximation about the origin, wound outward.
-fn ball(radius: Scalar, rings: usize, segments: usize) -> Mesh {
-    let mut vertices = vec![Vec3::new(0.0, 0.0, radius)];
-    for ring in 1..rings {
-        let theta = PI * ring as Scalar / rings as Scalar;
-        let (sin_theta, cos_theta) = theta.sin_cos();
-        for segment in 0..segments {
-            let phi = std::f32::consts::TAU * segment as Scalar / segments as Scalar;
-            let (sin_phi, cos_phi) = phi.sin_cos();
-            vertices.push(Vec3::new(
-                radius * sin_theta * cos_phi,
-                radius * sin_theta * sin_phi,
-                radius * cos_theta,
-            ));
-        }
-    }
-    let south = vertices.len() as u32;
-    vertices.push(Vec3::new(0.0, 0.0, -radius));
-
-    let at = |ring: usize, segment: usize| (1 + (ring - 1) * segments + segment % segments) as u32;
-    let mut faces = Vec::new();
-    for segment in 0..segments {
-        faces.push([0, at(1, segment), at(1, segment + 1)]);
-    }
-    for ring in 1..rings - 1 {
-        for segment in 0..segments {
-            faces.push([
-                at(ring, segment),
-                at(ring + 1, segment),
-                at(ring + 1, segment + 1),
-            ]);
-            faces.push([
-                at(ring, segment),
-                at(ring + 1, segment + 1),
-                at(ring, segment + 1),
-            ]);
-        }
-    }
-    for segment in 0..segments {
-        faces.push([at(rings - 1, segment), south, at(rings - 1, segment + 1)]);
-    }
-    Mesh::new(vertices, faces)
+/// Two shells with the same faces, cavity and saving. The exact cut may split one flat
+/// polygon along other diagonals from one run to the next, so the faces are counted
+/// rather than compared one by one.
+fn assert_same_shell(left: &Hollowed, right: &Hollowed, why: &str) {
+    assert_eq!(left.mesh.faces.len(), right.mesh.faces.len(), "{why}");
+    assert_eq!(left.cavity, right.cavity, "{why}");
+    assert_eq!(
+        (left.voxel_mm, left.coarsened),
+        (right.voxel_mm, right.coarsened),
+        "{why}"
+    );
+    assert!(
+        (left.cavity_mm3 - right.cavity_mm3).abs() <= right.cavity_mm3 * 1e-4,
+        "{why}: {} mm3 against {} mm3",
+        left.cavity_mm3,
+        right.cavity_mm3
+    );
 }
 
 fn settings(thickness_mm: Scalar, mode: HollowMode) -> HollowSettings {
@@ -106,7 +83,7 @@ fn enclosed(mesh: &Mesh) -> Scalar {
 
 #[test]
 fn a_run_given_up_on_stops_inside_the_field_rather_than_after_it() {
-    let mesh = ball(10.0, 96, 96);
+    let mesh = ball(Vec3::ZERO, 10.0, 96, 96);
     let bvh = Bvh::build(&mesh);
     let stopped = || true;
     let error = hollow(
@@ -122,7 +99,7 @@ fn a_run_given_up_on_stops_inside_the_field_rather_than_after_it() {
 
 #[test]
 fn a_hollowed_ball_is_a_wall_of_the_thickness_it_asked_for() {
-    let mesh = ball(10.0, 96, 96);
+    let mesh = ball(Vec3::ZERO, 10.0, 96, 96);
     let bvh = Bvh::build(&mesh);
     let hollowed = hollow(
         &mesh,
@@ -142,7 +119,7 @@ fn a_hollowed_ball_is_a_wall_of_the_thickness_it_asked_for() {
 
 #[test]
 fn the_cavity_is_the_ball_the_wall_left_room_for() {
-    let mesh = ball(10.0, 96, 96);
+    let mesh = ball(Vec3::ZERO, 10.0, 96, 96);
     let bvh = Bvh::build(&mesh);
     let hollowed = hollow(
         &mesh,
@@ -165,7 +142,7 @@ fn the_cavity_is_the_ball_the_wall_left_room_for() {
 /// holding what the wall left room for.
 #[test]
 fn the_cavity_range_is_the_space_the_wall_left_room_for() {
-    let mesh = ball(10.0, 96, 96);
+    let mesh = ball(Vec3::ZERO, 10.0, 96, 96);
     let bvh = Bvh::build(&mesh);
     let hollowed = hollow(
         &mesh,
@@ -194,7 +171,7 @@ fn the_cavity_range_is_the_space_the_wall_left_room_for() {
 
 #[test]
 fn hollowing_leaves_the_outside_of_the_model_alone() {
-    let mesh = ball(10.0, 48, 48);
+    let mesh = ball(Vec3::ZERO, 10.0, 48, 48);
     let bvh = Bvh::build(&mesh);
     let hollowed = hollow(
         &mesh,
@@ -214,7 +191,7 @@ fn hollowing_leaves_the_outside_of_the_model_alone() {
 
 #[test]
 fn a_wall_thicker_than_the_model_hollows_nothing() {
-    let mesh = ball(5.0, 48, 48);
+    let mesh = ball(Vec3::ZERO, 5.0, 48, 48);
     let bvh = Bvh::build(&mesh);
     let hollowed = hollow(
         &mesh,
@@ -230,7 +207,7 @@ fn a_wall_thicker_than_the_model_hollows_nothing() {
 
 #[test]
 fn a_blocker_keeps_the_wall_solid() {
-    let mesh = ball(10.0, 48, 48);
+    let mesh = ball(Vec3::ZERO, 10.0, 48, 48);
     let bvh = Bvh::build(&mesh);
     let mut asked = settings(2.0, HollowMode::Internal);
     asked.blockers = vec![Blocker::ball(Vec3::ZERO, 9.0)];
@@ -245,7 +222,7 @@ fn a_blocker_keeps_the_wall_solid() {
 
 #[test]
 fn a_blocker_only_fills_in_what_it_covers() {
-    let mesh = ball(10.0, 48, 48);
+    let mesh = ball(Vec3::ZERO, 10.0, 48, 48);
     let bvh = Bvh::build(&mesh);
     let open = hollow(
         &mesh,
@@ -272,7 +249,7 @@ fn a_blocker_only_fills_in_what_it_covers() {
 
 #[test]
 fn a_channel_is_kept_out_of_the_cavity_as_a_pipe() {
-    let mesh = ball(10.0, 48, 48);
+    let mesh = ball(Vec3::ZERO, 10.0, 48, 48);
     let bvh = Bvh::build(&mesh);
     let open = hollow(
         &mesh,
@@ -287,6 +264,7 @@ fn a_channel_is_kept_out_of_the_cavity_as_a_pipe() {
     let channel = Channel {
         points: vec![Vec3::new(0.0, 0.0, -12.0), Vec3::new(0.0, 0.0, 12.0)],
         diameter_mm: 2.0,
+        ..Channel::default()
     };
     let mut asked = settings(2.0, HollowMode::Internal);
     asked.blockers = sleeves(&[channel], asked.thickness_mm);
@@ -305,7 +283,7 @@ fn a_channel_is_kept_out_of_the_cavity_as_a_pipe() {
 
 #[test]
 fn infill_takes_its_own_volume_back_out_of_the_cavity() {
-    let mesh = ball(12.0, 64, 64);
+    let mesh = ball(Vec3::ZERO, 12.0, 64, 64);
     let bvh = Bvh::build(&mesh);
     let empty = hollow(
         &mesh,
@@ -319,8 +297,7 @@ fn infill_takes_its_own_volume_back_out_of_the_cavity() {
         let mut asked = settings(2.0, HollowMode::Internal);
         asked.infill = Some(InfillSettings {
             pattern,
-            size_mm: 6.0,
-            density: 0.2,
+            ..InfillSettings::default()
         });
         let filled = hollow(&mesh, &bvh, &asked, Cancel::never()).expect("a closed ball hollows");
 
@@ -373,11 +350,7 @@ fn a_stretched_model_is_filled_as_if_it_had_been_built_that_size() {
     }
     .unturned();
     let mut asked = settings(2.0, HollowMode::Internal);
-    asked.infill = Some(InfillSettings {
-        pattern: InfillPattern::Hive,
-        size_mm: 5.0,
-        density: 0.15,
-    });
+    asked.infill = Some(InfillSettings::default());
     asked.blockers = vec![Blocker::ball(Vec3::new(10.0, 10.0, 10.0), 3.0)];
     let scaled = hollow_at_scale(&mesh, &bvh, &asked, shape, Cancel::never())
         .expect("a closed cube hollows");
@@ -391,9 +364,10 @@ fn a_stretched_model_is_filled_as_if_it_had_been_built_that_size() {
     let built = hollow(&placed, &Bvh::build(&placed), &asked, Cancel::never())
         .expect("a closed box hollows");
 
-    assert_eq!(
-        scaled.mesh.faces, built.mesh.faces,
-        "the same cells, the same struts and the same blocker as on the box itself"
+    assert_same_shell(
+        &scaled,
+        &built,
+        "the cells and the blocker of the box itself",
     );
     assert!(
         scaled
@@ -418,8 +392,7 @@ fn a_kept_field_carves_the_shell_a_whole_run_would() {
     let mut asked = settings(2.0, HollowMode::Internal);
     asked.infill = Some(InfillSettings {
         pattern: InfillPattern::Grid,
-        size_mm: 5.0,
-        density: 0.15,
+        ..InfillSettings::default()
     });
     let field = cavity_field(&mesh, &bvh, &asked, shape, Cancel::never())
         .expect("a closed cube has a cavity field");
@@ -434,19 +407,14 @@ fn a_kept_field_carves_the_shell_a_whole_run_would() {
         )],
     ] {
         asked.blockers = blockers;
-        let kept = carve(
-            &mesh,
-            &field,
-            &asked.blockers,
-            asked.infill,
-            Cancel::never(),
-        )
-        .expect("the kept field carves");
+        let kept = carve(&mesh, &field, &asked, Cancel::never()).expect("the kept field carves");
         let whole = hollow_at_scale(&mesh, &bvh, &asked, shape, Cancel::never())
             .expect("a closed cube hollows");
-        assert_eq!(
-            kept, whole,
-            "the field holds nothing of the blockers or the infill, so carving it again is the run"
+        assert_eq!(kept.mesh.vertices, whole.mesh.vertices);
+        assert_same_shell(
+            &kept,
+            &whole,
+            "the field holds nothing of the blockers or the infill, so carving it again is the run",
         );
     }
 }
@@ -549,7 +517,7 @@ fn a_shell_inside_the_model_gets_no_wall_of_its_own() {
 
 #[test]
 fn a_mould_grows_a_wall_outside_the_model() {
-    let mesh = ball(8.0, 64, 64);
+    let mesh = ball(Vec3::ZERO, 8.0, 64, 64);
     let bvh = Bvh::build(&mesh);
     let hollowed = hollow(
         &mesh,
@@ -576,7 +544,7 @@ fn a_mould_grows_a_wall_outside_the_model() {
 
 #[test]
 fn a_wall_of_no_thickness_is_refused() {
-    let mesh = ball(5.0, 16, 16);
+    let mesh = ball(Vec3::ZERO, 5.0, 16, 16);
     let bvh = Bvh::build(&mesh);
     assert_eq!(
         hollow(
@@ -608,13 +576,12 @@ fn a_mesh_with_no_faces_has_nothing_to_hollow() {
 
 #[test]
 fn an_infill_cell_of_no_size_is_refused() {
-    let mesh = ball(10.0, 32, 32);
+    let mesh = ball(Vec3::ZERO, 10.0, 32, 32);
     let bvh = Bvh::build(&mesh);
     let mut asked = settings(2.0, HollowMode::Internal);
     asked.infill = Some(InfillSettings {
-        pattern: InfillPattern::Hive,
-        size_mm: 0.0,
-        density: 0.2,
+        cell_mm: 0.0,
+        ..InfillSettings::default()
     });
     assert_eq!(
         hollow(&mesh, &bvh, &asked, Cancel::never()).unwrap_err(),
@@ -624,7 +591,7 @@ fn an_infill_cell_of_no_size_is_refused() {
 
 #[test]
 fn a_budget_too_small_for_the_lattice_coarsens_the_cavity_rather_than_failing() {
-    let mesh = ball(20.0, 96, 96);
+    let mesh = ball(Vec3::ZERO, 20.0, 96, 96);
     let bvh = Bvh::build(&mesh);
     let mut asked = settings(2.0, HollowMode::Internal);
     asked.precision = 1.0;
@@ -686,7 +653,7 @@ fn the_same_model_hollows_to_the_same_mesh_twice() {
     // Tiles come out of a hash map, so extraction has to put them in an order of its own
     // before merging them; without that the vertices of a cavity come out numbered
     // differently on every run, and a mesh with a hole in it then slices differently too.
-    let mesh = ball(10.0, 48, 48);
+    let mesh = ball(Vec3::ZERO, 10.0, 48, 48);
     let bvh = Bvh::build(&mesh);
     let asked = settings(2.0, HollowMode::Internal);
 
@@ -699,7 +666,7 @@ fn the_same_model_hollows_to_the_same_mesh_twice() {
 
 #[test]
 fn a_drain_hole_takes_its_own_tube_out_of_the_shell() {
-    let mesh = ball(10.0, 96, 96);
+    let mesh = ball(Vec3::ZERO, 10.0, 96, 96);
     let bvh = Bvh::build(&mesh);
     let solid = hollow(
         &mesh,
@@ -709,8 +676,13 @@ fn a_drain_hole_takes_its_own_tube_out_of_the_shell() {
     )
     .expect("a closed ball hollows");
 
-    let hole =
-        hole_at(&mesh, &bvh, Vec3::new(0.0, 0.0, 12.0), 3.0, 4.0, 1.0).expect("the ball has faces");
+    let hole = hole_at(
+        &mesh,
+        &bvh,
+        Vec3::new(0.0, 0.0, 12.0),
+        HoleSize::round(3.0, 4.0, 1.0),
+    )
+    .expect("the ball has faces");
     let mut drained = solid.mesh.clone();
     append(
         &mut drained,
@@ -730,7 +702,7 @@ fn a_drain_hole_takes_its_own_tube_out_of_the_shell() {
 
 #[test]
 fn a_hole_shallower_than_the_wall_is_deepened_until_it_is_through_it() {
-    let mesh = ball(10.0, 96, 96);
+    let mesh = ball(Vec3::ZERO, 10.0, 96, 96);
     let bvh = Bvh::build(&mesh);
     let shell = hollow(
         &mesh,
@@ -741,8 +713,13 @@ fn a_hole_shallower_than_the_wall_is_deepened_until_it_is_through_it() {
     .expect("a closed ball hollows");
 
     // Half a millimetre into a two millimetre wall: a dimple, not a drain.
-    let shallow =
-        hole_at(&mesh, &bvh, Vec3::new(0.0, 0.0, 12.0), 3.0, 0.5, 1.0).expect("the ball has faces");
+    let shallow = hole_at(
+        &mesh,
+        &bvh,
+        Vec3::new(0.0, 0.0, 12.0),
+        HoleSize::round(3.0, 0.5, 1.0),
+    )
+    .expect("the ball has faces");
     let through = pierce(&[shallow], 2.0, shell.voxel_mm);
     let mut drained = shell.mesh.clone();
     append(
@@ -767,4 +744,158 @@ fn append(whole: &mut Mesh, part: &Mesh) {
             .iter()
             .map(|[a, b, c]| [a + offset, b + offset, c + offset]),
     );
+}
+
+#[test]
+fn a_lattice_cut_exactly_costs_the_cavity_none_of_its_precision() {
+    let mesh = ball(Vec3::ZERO, 20.0, 96, 96);
+    let bvh = Bvh::build(&mesh);
+    let mut asked = settings(2.0, HollowMode::Internal);
+    asked.precision = 0.5;
+    // Sixteen megabytes holds the empty cavity at the lattice asked for; a lattice cut from
+    // its mesh rather than its field needs nothing more.
+    asked.budget_bytes = 16 << 20;
+    let empty = hollow(&mesh, &bvh, &asked, Cancel::never()).expect("the empty cavity fits");
+
+    asked.infill = Some(InfillSettings::default());
+    let filled = hollow(&mesh, &bvh, &asked, Cancel::never()).expect("the hive fits");
+    assert!(!filled.coarsened, "the cavity was built as asked");
+    assert_eq!(filled.voxel_mm, empty.voxel_mm);
+    assert!(filled.cavity_mm3 < empty.cavity_mm3);
+}
+
+#[test]
+fn infill_walls_are_refused_with_no_thickness_and_holes_wider_than_a_cell() {
+    let mesh = ball(Vec3::ZERO, 10.0, 32, 32);
+    let bvh = Bvh::build(&mesh);
+    let mut asked = settings(2.0, HollowMode::Internal);
+    asked.infill = Some(InfillSettings {
+        wall_mm: 0.0,
+        ..InfillSettings::default()
+    });
+    assert_eq!(
+        hollow(&mesh, &bvh, &asked, Cancel::never()).unwrap_err(),
+        VolumeError::BadInfillWall(0.0)
+    );
+    asked.infill = Some(InfillSettings {
+        hole_mm: 7.0,
+        ..InfillSettings::default()
+    });
+    assert!(matches!(
+        hollow(&mesh, &bvh, &asked, Cancel::never()).unwrap_err(),
+        VolumeError::BadHoles { .. }
+    ));
+}
+
+#[test]
+fn an_open_floor_is_cut_out_of_the_shell_and_nothing_else_is() {
+    let mesh = cube(20.0, 0.0);
+    let bvh = Bvh::build(&mesh);
+    let shut = hollow(
+        &mesh,
+        &bvh,
+        &settings(2.0, HollowMode::Internal),
+        Cancel::never(),
+    )
+    .expect("a closed cube hollows");
+    let open = hollow(
+        &mesh,
+        &bvh,
+        &HollowSettings {
+            open_toward: Some(Vec3::NEG_Z),
+            ..settings(2.0, HollowMode::Internal)
+        },
+        Cancel::never(),
+    )
+    .expect("a closed cube hollows open");
+
+    let report = diagnose(&open.mesh);
+    assert!(
+        report.is_sound() && report.unbalanced_edges == 0,
+        "the shell is one closed surface, not a cavity laid over the floor; {report:?}"
+    );
+    let in_the_opening = open.mesh.faces.iter().any(|face| {
+        let corners = face.map(|index| open.mesh.vertices[index as usize]);
+        let middle = (corners[0] + corners[1] + corners[2]) / 3.0;
+        corners.iter().all(|corner| corner.z.abs() < 1e-3)
+            && (5.0..15.0).contains(&middle.x)
+            && (5.0..15.0).contains(&middle.y)
+    });
+    assert!(
+        !in_the_opening,
+        "no face of the floor is left under the cavity"
+    );
+
+    // A 20 mm cube less a 16 mm square void from its roof's underside down through the
+    // floor: 8000 - 16 * 16 * 18 mm3, within what the lattice rounds the void's edges by.
+    let expected = 8000.0 - 16.0 * 16.0 * 18.0;
+    let got = enclosed(&open.mesh);
+    assert!(
+        (got - expected).abs() < 0.03 * expected,
+        "the open shell holds {expected} mm3, got {got}"
+    );
+    let roof = |hollowed: &Hollowed| {
+        hollowed.mesh.faces[hollowed.cavity.clone()]
+            .iter()
+            .flatten()
+            .map(|index| hollowed.mesh.vertices[*index as usize].z)
+            .fold(Scalar::MIN, Scalar::max)
+    };
+    assert!(
+        (roof(&shut) - roof(&open)).abs() < 0.5,
+        "the roof stays where it was: {} against {}",
+        roof(&shut),
+        roof(&open)
+    );
+}
+
+#[test]
+fn a_lattice_in_an_open_floor_stands_on_the_floor_and_not_under_it() {
+    let mesh = cube(20.0, 0.0);
+    let bvh = Bvh::build(&mesh);
+    let open = hollow(
+        &mesh,
+        &bvh,
+        &HollowSettings {
+            open_toward: Some(Vec3::NEG_Z),
+            infill: Some(InfillSettings {
+                pattern: InfillPattern::Hive,
+                ..InfillSettings::default()
+            }),
+            ..settings(2.0, HollowMode::Internal)
+        },
+        Cancel::never(),
+    )
+    .expect("a closed cube hollows open around a hive");
+
+    let lowest = open
+        .mesh
+        .vertices
+        .iter()
+        .map(|vertex| vertex.z)
+        .fold(Scalar::MAX, Scalar::min);
+    assert!(
+        lowest > -1e-3,
+        "nothing stands under the cube's floor at z = 0, got {lowest}"
+    );
+    let on_the_floor = open.mesh.faces[open.cavity.end..]
+        .iter()
+        .flatten()
+        .any(|index| open.mesh.vertices[*index as usize].z.abs() < 1e-3);
+    assert!(on_the_floor, "the hive still stands down to the floor");
+}
+
+#[test]
+fn the_plate_lies_the_way_a_turned_model_stands_on_it() {
+    let turned = Transform {
+        rotation: Quat::from_rotation_x(std::f32::consts::FRAC_PI_2),
+        scale: Vec3::new(1.4, 1.0, 1.0),
+        ..Transform::default()
+    };
+    let down = plate_down(turned);
+    assert!(
+        down.abs_diff_eq(Vec3::NEG_Y, 1e-5),
+        "a quarter turn about X stands the model on its own -Y side, got {down}"
+    );
+    assert!(plate_down(Transform::default()).abs_diff_eq(Vec3::NEG_Z, 1e-6));
 }

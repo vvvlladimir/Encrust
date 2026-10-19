@@ -14,6 +14,7 @@ doctest = false
 [dependencies]
 serde.workspace = true
 core-geometry.workspace = true
+core-csg.workspace = true
 rayon.workspace = true
 thiserror.workspace = true
 workspace-hack = { version = "0.1", path = "../../workspace-hack" }
@@ -23,6 +24,14 @@ criterion.workspace = true
 
 [[bench]]
 name = "field"
+harness = false
+
+[[bench]]
+name = "parts"
+harness = false
+
+[[bench]]
+name = "boolean"
 harness = false
 
 [lints]

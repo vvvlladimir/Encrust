@@ -5,6 +5,8 @@ use crate::hash::FastMap;
 use crate::topology::{edge_groups, edge_uses};
 use crate::triangulate::triangulate;
 use crate::validate::duplicate_faces;
+use rayon::prelude::*;
+
 use crate::{Mesh, Scalar, Vec2, Vec3};
 
 /// Smallest cross product treated as a direction, mm². Below it the loop is a line and
@@ -18,6 +20,66 @@ const MAX_MINIMAL_RING: usize = 256;
 /// Thinnest triangle a patch may hold, as twice its area over its longest edge squared:
 /// below it the triangle is a sliver that would read as a face with no area.
 const MIN_ASPECT: f64 = 1e-6;
+
+/// How near two corners of a face with no area must stand to be one point, mm. Two cells'
+/// vertices on one lattice point differ in the last bits of an `f32`, far under this; a
+/// sliver whose corners are further apart is left whole.
+const COINCIDENT_MM: Scalar = 1e-4;
+
+/// Welds the corners of a face with no area that stand on one point, and drops the faces
+/// that leaves with a repeated corner; returns how many faces went.
+///
+/// Collapsing a zero-length edge is what a decimator does, and it keeps a closed surface
+/// closed: the two faces either side of the edge are the ones that go. A face that is only
+/// a line through three points apart is left for the caller to see.
+pub fn collapse_flat_faces(mesh: &mut Mesh) -> usize {
+    let mut onto: FastMap<u32, u32> = FastMap::default();
+    for face in flat_faces(mesh) {
+        for (one, other) in [(face[0], face[1]), (face[1], face[2]), (face[0], face[2])] {
+            let gap = mesh.vertices[one as usize] - mesh.vertices[other as usize];
+            if one != other && gap.length() <= COINCIDENT_MM {
+                let (one, other) = (root(&onto, one), root(&onto, other));
+                if one != other {
+                    onto.insert(one.max(other), one.min(other));
+                }
+            }
+        }
+    }
+    if onto.is_empty() {
+        return 0;
+    }
+    for face in &mut mesh.faces {
+        for corner in face.iter_mut() {
+            *corner = root(&onto, *corner);
+        }
+    }
+    let before = mesh.faces.len();
+    mesh.faces
+        .retain(|face| face[0] != face[1] && face[1] != face[2] && face[0] != face[2]);
+    // A face the weld folded onto another is that one's reverse, and the two go together.
+    remove_duplicate_faces(mesh);
+    before - mesh.faces.len()
+}
+
+/// The corner `corner` was welded onto, through every weld after it.
+fn root(onto: &FastMap<u32, u32>, mut corner: u32) -> u32 {
+    while let Some(next) = onto.get(&corner) {
+        corner = *next;
+    }
+    corner
+}
+
+/// The faces whose corners enclose no area at all.
+fn flat_faces(mesh: &Mesh) -> Vec<[u32; 3]> {
+    mesh.faces
+        .par_iter()
+        .filter(|face| {
+            let [a, b, c] = face.map(|corner| mesh.vertices[corner as usize]);
+            (b - a).cross(c - a).length_squared() == 0.0
+        })
+        .copied()
+        .collect()
+}
 
 /// Drops the faces laid over others on the same three vertices without changing what the
 /// surface encloses, and returns where they were in the mesh, ascending.
@@ -485,5 +547,59 @@ mod tests {
         let mut welded = weld(&unwelded, DEFAULT_WELD_TOLERANCE).mesh;
         fill_holes(&mut welded);
         assert!(diagnose(&welded).is_closed());
+    }
+
+    #[test]
+    fn a_face_with_two_corners_on_one_point_is_collapsed_and_the_solid_stays_closed() {
+        // A tetrahedron whose edge 0-1 was split at vertex 0 itself, by a vertex 4 standing
+        // on it: the two faces either side of the split have no area.
+        let mut split = Mesh::new(
+            vec![Vec3::ZERO, Vec3::X, Vec3::Y, Vec3::Z, Vec3::ZERO],
+            vec![
+                [0, 2, 4],
+                [4, 2, 1],
+                [0, 4, 3],
+                [4, 1, 3],
+                [1, 2, 3],
+                [2, 0, 3],
+            ],
+        );
+        assert_eq!(diagnose(&split).degenerate_faces, 2);
+
+        assert_eq!(collapse_flat_faces(&mut split), 2);
+        let diagnostics = diagnose(&split);
+        assert_eq!(diagnostics.degenerate_faces, 0, "got {diagnostics:?}");
+        assert!(diagnostics.is_closed(), "got {diagnostics:?}");
+        assert_eq!(split.faces.len(), 4, "the tetrahedron it was split from");
+    }
+
+    #[test]
+    fn corners_a_rounding_apart_are_one_point() {
+        // The split again, its extra vertex a few bits of an f32 along the edge from
+        // vertex 0, and a fin of two faces along that edge with no area between them.
+        let mut split = Mesh::new(
+            vec![
+                Vec3::ZERO,
+                Vec3::X,
+                Vec3::Y,
+                Vec3::Z,
+                Vec3::new(1e-7, 0.0, 0.0),
+            ],
+            vec![
+                [0, 2, 4],
+                [4, 2, 1],
+                [0, 4, 3],
+                [4, 1, 3],
+                [1, 2, 3],
+                [2, 0, 3],
+                [0, 4, 1],
+                [0, 1, 4],
+            ],
+        );
+        assert_eq!(diagnose(&split).degenerate_faces, 2);
+        collapse_flat_faces(&mut split);
+        let diagnostics = diagnose(&split);
+        assert_eq!(diagnostics.degenerate_faces, 0, "got {diagnostics:?}");
+        assert!(diagnostics.is_closed(), "got {diagnostics:?}");
     }
 }

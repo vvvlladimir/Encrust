@@ -1,3 +1,4 @@
+use crate::relief::ReliefMode;
 use core_geometry::{PlacedHit, Vec2};
 use egui::{PointerButton, Sense};
 
@@ -18,6 +19,7 @@ mod overlays;
 mod paint;
 mod picking;
 mod supports;
+mod text;
 
 use hollow::{
     add_channel_point_under_cursor, blocker_ghost, channel_point_ghost, drain_ghost,
@@ -26,12 +28,12 @@ use hollow::{
 };
 use overlays::{
     cut_line, draw_aimed, draw_axis_letters, draw_bounds, draw_cut_plane, draw_facet, draw_measure,
-    draw_picked,
+    draw_part_mark, draw_picked,
 };
 use paint::{draw_brush, paint_stroke};
 use picking::{
-    aims_elsewhere, lay_face_under_cursor, material_under, measure_under_cursor, point_at_face,
-    select_under_cursor, surface_under, takes_the_pick,
+    aims_elsewhere, lay_face_under_cursor, mark_part_under_cursor, material_under,
+    measure_under_cursor, point_at_face, select_under_cursor, surface_under, takes_the_pick,
 };
 use supports::{
     drag_support, place_support_under_cursor, remove_support_under_cursor, support_ghost,
@@ -181,6 +183,13 @@ fn click(ui: &egui::Ui, window: &mut Window, rect: egui::Rect, cursor: egui::Pos
             add_channel_point_under_cursor(window, rect, cursor);
         }
         Tool::Drain => place_drain_under_cursor(window, rect, cursor),
+        // Shift or Cmd picks the model as anywhere else, so it can be picked without a stamp.
+        Tool::Relief
+            if window.tools.relief.mode == ReliefMode::Text
+                && !ui.input(|input| input.modifiers.command || input.modifiers.shift) =>
+        {
+            text::stamp_text_under_cursor(window, rect, cursor);
+        }
         Tool::Measure => {
             let alt = ui.input(|input| input.modifiers.alt);
             measure_under_cursor(window, rect, cursor, alt);
@@ -188,6 +197,7 @@ fn click(ui: &egui::Ui, window: &mut Window, rect: egui::Rect, cursor: egui::Pos
         Tool::Position if window.tools.orient.picking_face => {
             lay_face_under_cursor(window, rect, cursor);
         }
+        Tool::Cut if window.tools.cut.picking_part => mark_part_under_cursor(window, rect, cursor),
         _ => {
             let adding = ui.input(|input| input.modifiers.command || input.modifiers.shift);
             select_under_cursor(window, rect, cursor, adding);
@@ -214,6 +224,9 @@ fn ghost(ui: &egui::Ui, window: &Window, rect: egui::Rect, pointer: &Pointer) ->
             (surface_under, channel_point_ghost)
         }
         Tool::Drain => (surface_under, drain_ghost),
+        Tool::Relief if window.tools.relief.mode == ReliefMode::Text => {
+            (surface_under, text::text_ghost)
+        }
         _ => return None,
     };
     let cursor = pointer.position.map(|at| egui::pos2(at.x, at.y))?;
@@ -229,8 +242,9 @@ fn ghost(ui: &egui::Ui, window: &Window, rect: egui::Rect, pointer: &Pointer) ->
 
 /// Hands the 3D pass its frame: the models, the plate, the section and the shading.
 fn paint_plate(ui: &egui::Ui, window: &mut Window, rect: egui::Rect, ghost: Option<&Ghost>) {
-    let textures =
-        (*window.tool == Tool::Relief).then(|| window.tools.relief.textures(&window.doc.scene));
+    let textures = (*window.tool == Tool::Relief
+        && window.tools.relief.mode == ReliefMode::Texture)
+        .then(|| window.tools.relief.textures(&window.doc.scene));
     // What needs holding up is shown while the Supports tool is the one in hand, at the
     // angle its own profile is set to; see `docs/decisions/0034`.
     let overhang_deg = window.tool.shows_overhangs().then_some(
@@ -299,6 +313,7 @@ fn draw_tool_overlays(ui: &egui::Ui, window: &mut Window, rect: egui::Rect, poin
     }
     if *window.tool == Tool::Cut {
         draw_cut_plane(ui, window, rect);
+        draw_part_mark(ui, window, rect);
     }
     if *window.tool == Tool::Paint && window.tools.supports.placing.paints() {
         draw_brush(ui, window, rect);

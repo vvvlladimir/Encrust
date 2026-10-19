@@ -1,11 +1,11 @@
 //! The test prints the start page offers: resin tests of the project's own, built in code
 //! with the mark raised on each, and pictured from the same mesh; see `docs/decisions/0232` and `0234`.
 
-mod detail;
+pub(crate) mod detail;
 mod exposure;
 mod fit;
 mod mark;
-mod solid;
+pub(crate) mod solid;
 mod surface;
 
 use std::sync::Arc;

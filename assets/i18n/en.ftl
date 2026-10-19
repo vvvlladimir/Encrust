@@ -25,6 +25,7 @@ unit-g-ml = g/ml
 unit-h = h
 unit-m = m
 unit-mm = mm
+unit-mm3 = mm³
 unit-mm-min = mm/min
 unit-px = px
 unit-s = s
@@ -66,12 +67,35 @@ cut-measured-from-centre = Measured from the model's centre of mass.
 cut-afterwards = Afterwards
 cut-lay-flat = Lay the halves flat
 cut-lay-flat-note = Each half stands on the face the cut left.
-cut-pins = Alignment pins
-cut-pins-note = Pegs and sockets so the halves glue back true.
-cut-pin-count = Pins
-cut-pin-diameter = Diameter
-cut-pin-length = Length
-cut-pins-sockets = Pins stand on the lower half; the sockets are { $clearance } mm wider each side and show as holes in the Drain tool.
+cut-joints = Join the halves
+cut-joints-note = Fixings and sockets so the halves glue back true.
+cut-joint-dowels = Dowels
+cut-joint-pins = Pins
+cut-joint-magnets = Magnets
+cut-joint-key = Key
+cut-joint-dowels-note = Sockets in both halves and dowels printed beside them, so both cut faces stay flat for supports.
+cut-joint-pins-note = Pins stand on the lower half and go into sockets in the upper.
+cut-joint-magnets-note = A socket in each half for every disc magnet, to glue them in.
+cut-joint-key-note = A tongue round the lower half's cut face into a groove in the upper, for walls too thin for a peg.
+cut-per-piece = Per piece
+cut-auto-size = Size from the face
+cut-auto-size-note = Each piece of the cut face takes pegs as wide as it has room for.
+cut-diameter = Diameter
+cut-length = Length
+cut-thickness = Thickness
+cut-width = Width
+cut-clearance = Clearance
+cut-keyed = One narrower
+cut-keyed-note = One peg is narrower than the rest, so the halves go together one way only.
+cut-cutting = Cutting the model
+cut-cancelled = Cutting cancelled
+cut-parts = Parts
+cut-parts-mark = Mark a part
+cut-parts-click = Click the part on the model
+cut-parts-unmark = Clear the mark
+cut-parts-mark-note = With a part marked, Split cuts it off flat where it narrows into the rest of the model, and leaves the rest of the surface as it was.
+cut-parts-smallest = Smallest part
+cut-parts-smallest-note = A smaller piece is joined to the part it touches, or dropped if it touches none.
 cut-replaces = Two models replace one. Undo puts it back.
 cut-cut = Cut
 cut-split = Split into its parts
@@ -84,18 +108,62 @@ cut-misses = the plane misses { $name }, so there is nothing to cut
 cut-lower-name = { $name } (lower)
 cut-upper-name = { $name } (upper)
 cut-part-name = { $name } (part { $index })
-cut-too-small-for-pin = ; the cut is too small for a pin
-# Starts with a space: it follows the cut's position directly.
-cut-with-pins = { " " }with { $count } pin(s)
-cut-done = Cut { $name } at { $axis } { $position } mm{ $pinned }{ $mending }
-cut-done-open = Cut { $name }; { $open } cut loops were open and left uncapped{ $mending }
+cut-dowel-name = { $name } (dowel { $index })
+cut-no-room-for-joint = The cut face has no room for a joint.
+cut-joint-failed = The joint could not be built into the halves, which are left plain: { $reason }
+# Each starts with a space: it follows the cut's position directly.
+cut-with-pins =
+    { $count ->
+        [one] One pin stands on the lower half.
+       *[other] { $count } pins stand on the lower half.
+    }
+cut-with-dowels =
+    { $count ->
+        [one] Both halves have a socket for one dowel, printed beside them.
+       *[other] Both halves have sockets for { $count } dowels, printed beside them.
+    }
+cut-with-magnets =
+    { $count ->
+        [one] Each half has a socket for one magnet.
+       *[other] Each half has sockets for { $count } magnets.
+    }
+cut-with-key =
+    { $count ->
+        [one] A key runs round the cut face.
+       *[other] A key runs round { $count } pieces of the cut face.
+    }
+cut-bare =
+    { $count ->
+        [one] One piece of the cut face had no room for a fixing.
+       *[other] { $count } pieces of the cut face had no room for a fixing.
+    }
+cut-done = Cut { $name } at { $axis } { $position } mm
+cut-done-open =
+    { $open ->
+        [one] Cut { $name }; one cut loop was open and left uncapped
+       *[other] Cut { $name }; { $open } cut loops were open and left uncapped
+    }
 cut-nothing-to-split = nothing is selected to split
 cut-one-piece = { $name } is one piece
-cut-split-done = Split { $name } into { $count } parts{ $mending }
+cut-split-done = Split { $name } into { $count } parts
+cut-cleaned = Cleaned up { $name }, which is one piece
+cut-split-joined =
+    { $count ->
+        [one] One scrap was joined to the part it touches.
+       *[other] { $count } scraps were joined to the parts they touch.
+    }
+cut-split-dropped =
+    { $count ->
+        [one] One stray scrap was dropped.
+       *[other] { $count } stray scraps were dropped.
+    }
+cut-split-failed = the model could not be split: { $reason }
+cut-parted-off = Cut the marked part off { $name } where it joins the rest
+cut-no-neck = there is no narrow join to cut at from the marked point
 cut-mended =
     { $count ->
-        [1] ; one piece was mended to close it
-       *[other] ; { $count } pieces were mended to close them
+        [one] One piece was mended to close it.
+       *[other] { $count } pieces were mended to close them.
     }
 
 ## panels/inspector/cut.rs
@@ -482,6 +550,8 @@ hollow-inside = Inside
 hollow-outside = Outside
 hollow-inside-note = The wall grows inward; the outside is untouched.
 hollow-outside-note = The wall grows outward, making a mould of the model.
+hollow-bottom-through = Bottom through
+hollow-bottom-through-note = The wall grows inward and the floor the model stands on is cut away, so the cavity drains with no hole. On the plate it stays sealed until the print comes off, so add a small vent near the top.
 hollow-shell-help = A hollow model takes less resin and pulls less on the film. The wall is how thick its skin stays; about 2 mm suits most parts. A cavity needs a drain hole, or the resin trapped inside can crack the part later.
 hollow-wall = Wall
 hollow-precision = Precision
@@ -491,15 +561,21 @@ hollow-hive = Hive
 hollow-grid = Grid
 hollow-scaffold = Scaffold
 hollow-cell = Cell
+hollow-cell-hive = Hexagon diameter
+hollow-cell-grid = Cell width
 hollow-density = Density
-hollow-infill-note = { $walls } mm walls. Hive and Grid stand on the plate; Scaffold also braces sideways. Every cell is open at the cavity's floor and ceiling, so resin runs from cell to cell towards a hole.
+hollow-infill-wall = Wall
+hollow-hole = Crossing hole
+hollow-hole-from = First hole row
+hollow-hole-spacing = Hole row spacing
+hollow-walled-note = Cells stand on the plate, joined to each other by round holes row above row, so resin runs from cell to cell towards a drain hole.
+hollow-scaffold-note = Struts on the edges of a cube stood on its corner: every one leans, so none starts in mid-air, and the lattice braces sideways as well.
 hollow-blocker-size = Blocker size
 hollow-clear-blockers =
     { $count ->
         [one] Clear { $count } blocker
        *[other] Clear { $count } blockers
     }
-hollow-tooltip = Cuts a cavity inside { $scope }.
 hollow-hollow = Hollow
 hollow-hollowing = Hollowing
 hollow-hollowed = Hollowed
@@ -541,8 +617,28 @@ relief-tile-size = Tile size
 relief-angle = Angle
 relief-depth = Depth
 relief-precision = Precision
+relief-builtins = Textures
+relief-texture-leather = Leather
+relief-texture-matte = Matte grain
+relief-texture-carbon = Carbon weave
+relief-texture-weave = Basket weave
+relief-texture-honeycomb = Honeycomb
+relief-texture-hex-blocks = Hex blocks
+relief-texture-reptile = Reptile
+relief-texture-ripples = Ripples
+relief-texture-wood = Wood
+relief-texture-bark = Bark
+relief-texture-stone = Stone
+relief-texture-rock = Rock
+relief-invert = Invert the picture
+relief-smoothing = Smoothing
+relief-symmetric = Symmetric about mid grey
+relief-hold = Leave flat
+relief-hold-bottom = Faces down
+relief-hold-top = Faces up
+relief-hold-note = Faces within this many degrees of facing the plate, or of facing straight up, keep their shape, and the relief stops at their edge. Zero leaves none.
 relief-image = Image
-relief-image-note = A model's own texture becomes geometry: white moves the surface out, black leaves it where it is. Or choose a picture to tile over any model.
+relief-image-note = A model's own texture becomes geometry: white moves the surface out, black leaves it where it is. Or pick a texture below, or a picture of your own, to tile over any model.
 relief-picture-size = { $width } × { $height } px
 relief-choose-another = Choose another
 relief-choose-picture = Choose a picture
@@ -556,10 +652,80 @@ relief-textures =
        *[other] { $count } textures
     }
 relief-pressing = Pressing...
-relief-the-texture = the texture
-relief-tooltip = Presses { $picture } into { $scope }. The model is replaced, so its supports and its cavity go with it.
+relief-cancelled = Pressing cancelled
 relief-press = Press it in
 relief-pressing-status = Pressing the relief
+text-words = Text
+text-words-hint = What to write; a new line starts a second row
+text-reading-fonts = Reading the fonts installed on this machine...
+text-no-family = No installed font has that name
+text-raised = Raised
+text-sunk = Sunk
+text-height = Letter height
+text-depth = Depth
+text-angle = Angle
+text-flat = Flat
+text-follow = On the surface
+text-shape-note = The letters stand the depth out of the face or into it, measured from the face where you click, and follow it no further than that depth; on a curved face they stay flat.
+text-follow-note = Every letter is bent onto the face under it and stands the depth out of it or into it all over, however the face curves.
+text-click-note = Click a model to write the text there; the preview under the cursor shows what the click will write. Shift or Cmd click picks a model without writing on it.
+text-stamping = Stamping the text
+text-cancelled = Lettering cancelled
+text-nothing-under = there is no model there to write on
+text-done = Wrote on { $name }
+text-bad-font = this font cannot be read: { $reason }
+text-missing-glyph = this font has no letter for { $character }
+text-blank = there is nothing to write
+text-bad-size = the letters need a height and a depth
+text-off-the-model = the text does not stand on the model there
+relief-mode = Mode
+relief-mode-texture = Texture
+relief-mode-text = Text
+relief-mode-combine = Combine
+relief-mode-texture-note = A texture or a picture pressed into the surface of the models on the plate.
+relief-mode-text-note = Text raised out of a model or sunk into it, where you click.
+relief-mode-combine-note = The picked models joined into one, one cut out of another, or what they share.
+text-lettering = Lettering
+boolean-operation = Operation
+boolean-models = Models
+boolean-none-picked = Nothing picked yet.
+boolean-models-note = In the order they were picked. Click a model to pick it, and Shift or Cmd click to add the next.
+boolean-role-kept = kept
+boolean-role-taken-out = taken out
+boolean-role-joined = joined
+boolean-role-shared = shared part kept
+boolean-union = Union
+boolean-difference = Subtract
+boolean-intersection = Intersect
+boolean-union-note = The picked models become one model that holds everything any of them holds.
+boolean-difference-note = The other picked models are taken out of the one you picked first.
+boolean-intersection-note = Only what every picked model holds is kept.
+boolean-combine-none = Combine
+boolean-combine =
+    { $count ->
+        [one] Combine { $count } model
+       *[other] Combine { $count } models
+    }
+boolean-combining = Combining the models
+boolean-cancelled = Combining cancelled
+boolean-pick-two = Pick two or more models on the plate to combine, holding Shift or Cmd.
+boolean-not-solid = the model is not a closed solid, so it cannot be cut exactly; repair it first
+boolean-nothing-left = the models combined leave nothing behind
+boolean-failed = the models could not be combined: { $reason }
+boolean-done =
+    { $count ->
+        [one] Combined { $count } model into { $name }
+       *[other] Combined { $count } models into { $name }
+    }
+boolean-done-sampled =
+    { $count ->
+        [one] Combined { $count } model into { $name } on a { $lattice } mm lattice, as one was not a closed solid
+       *[other] Combined { $count } models into { $name } on a { $lattice } mm lattice, as one was not a closed solid
+    }
+job-thread-stopped-boolean = the combining thread stopped without finishing
+job-thread-stopped-cut = the cutting thread stopped without finishing
+job-thread-stopped-split = the splitting thread stopped without finishing
+job-model-changed = { $name } changed while it was being worked on, so the result was dropped
 
 ## panels/title_bar.rs
 
@@ -1077,7 +1243,7 @@ relief-done-coarsened =
         [one] Pressed { $depth } mm of relief into { $count } model; { $coarsened } came out on a coarser lattice than precision asked for
        *[other] Pressed { $depth } mm of relief into { $count } models; { $coarsened } came out on a coarser lattice than precision asked for
     }
-relief-pressing-picture = Pressing { $name }
+relief-picked-picture = { $name } is the picture to press
 
 ## panels/inspector/position.rs
 
@@ -1178,8 +1344,19 @@ drain-check-tooltip = Cuts the plate and follows the air through it, looking for
 drain-checking = Checking drainage
 drain-hole = Hole
 drain-channel = Channel
-drain-channel-note = Each click adds a point; the channel is a tube of the hole size running under all of them, open at its two ends alone.
-drain-sizes-note = The depth is measured from the surface inwards, so a hole has to be deeper than the wall. A taper under 1 makes it a cone.
+drain-channel-note = Each click adds a point; the channel takes the hole's width and outline and runs under all of them, open at its two ends alone.
+drain-sizes-note = The depth is measured from the surface inwards. A taper under 1 makes it a cone.
+drain-round = Round
+drain-polygon = Polygon
+drain-sides = Sides
+drain-turn = Turn
+drain-polygon-note = The corners lie on the hole size and the turn is measured from the level. In a side wall, turn it until a corner is at the top: a pointed roof prints without sagging.
+drain-plugs = Plugs
+drain-plugs-note = Each hole gets a plug on the plate beside its model as soon as it is cut: what the hole took out of the wall, narrower all round by the gap, its outer face following the surface so it closes flush.
+drain-plug-gap = Gap per side
+drain-plug-drift = The resin's tolerance compensation is off, so the plug is drawn { $drift } mm wider a side to print at this gap.
+drain-plug-name = { $name } (plug { $index })
+drain-plugs-failed = The plugs for the drain holes could not be cut.
 drain-none-cut = No hole and no channel is cut yet.
 drain-clear-cuts =
     { $count ->
@@ -1433,7 +1610,7 @@ inspector-about-measure = Click two points or two flat faces on a model.
 inspector-about-hollow = Cut a cavity to save resin and lighten the peel.
 inspector-about-drain = Let resin out of a hollow model.
 inspector-about-cut = Split a model along a plane.
-inspector-about-relief = Press a model's texture into its surface. White is the high point.
+inspector-about-relief = Press a texture into a model's surface, write text on it, or combine models into one.
 inspector-about-supports = Hold up what hangs over nothing.
 inspector-about-paint = Tell the supports where to go and where not to.
 inspector-about-shape = The shape of one support, part by part.

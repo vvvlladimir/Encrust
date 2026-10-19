@@ -1,0 +1,22 @@
+[package]
+name = "core-text"
+description = "Text laid out in a font and stood up as closed meshes, to raise on a model or sink into it."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+
+[lib]
+doctest = false
+
+[dependencies]
+core-geometry.workspace = true
+rayon.workspace = true
+ttf-parser.workspace = true
+thiserror.workspace = true
+workspace-hack = { version = "0.1", path = "../../workspace-hack" }
+
+[lints]
+workspace = true

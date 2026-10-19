@@ -132,6 +132,23 @@ pub(super) fn lay_face_under_cursor(window: &mut Window, viewport: egui::Rect, c
     }
 }
 
+/// Marks the point under the cursor as the part the Cut tool's Split cuts off, and picks
+/// the model it is on. A click on empty plate keeps the tool waiting.
+pub(super) fn mark_part_under_cursor(
+    window: &mut Window,
+    viewport: egui::Rect,
+    cursor: egui::Pos2,
+) {
+    let Some((id, hit)) = surface_under(window, viewport, cursor) else {
+        return;
+    };
+    let Some(object) = window.doc.scene.get(id) else {
+        return;
+    };
+    window.tools.cut.mark_part(object, hit.point);
+    window.doc.scene.select(Some(id));
+}
+
 /// Keeps the flat face under the cursor as the one a click would lay down.
 pub(super) fn point_at_face(window: &mut Window, viewport: egui::Rect, cursor: Option<egui::Pos2>) {
     let hit = cursor.and_then(|cursor| surface_under(window, viewport, cursor));

@@ -5,7 +5,7 @@
     reason = "a broken fixture must fail the run loudly"
 )]
 
-use core_geometry::{Bvh, Mesh, Scalar, Vec3, diagnose, glam::IVec3, signed_volume, weld};
+use core_geometry::{Bvh, Mesh, Scalar, Vec3, ball, diagnose, glam::IVec3, signed_volume, weld};
 use core_volume::{
     Cancel, FieldSettings, SignMode, VolumeError, build, difference, extract, shell,
 };
@@ -46,50 +46,6 @@ fn cube(size: Scalar) -> Mesh {
     )
 }
 
-/// A closed sphere approximation about the origin, wound outward.
-fn ball(radius: Scalar, rings: usize, segments: usize) -> Mesh {
-    let mut vertices = vec![Vec3::new(0.0, 0.0, radius)];
-    for ring in 1..rings {
-        let theta = PI * ring as Scalar / rings as Scalar;
-        let (sin_theta, cos_theta) = theta.sin_cos();
-        for segment in 0..segments {
-            let phi = std::f32::consts::TAU * segment as Scalar / segments as Scalar;
-            let (sin_phi, cos_phi) = phi.sin_cos();
-            vertices.push(Vec3::new(
-                radius * sin_theta * cos_phi,
-                radius * sin_theta * sin_phi,
-                radius * cos_theta,
-            ));
-        }
-    }
-    let south = vertices.len() as u32;
-    vertices.push(Vec3::new(0.0, 0.0, -radius));
-
-    let at = |ring: usize, segment: usize| (1 + (ring - 1) * segments + segment % segments) as u32;
-    let mut faces = Vec::new();
-    for segment in 0..segments {
-        faces.push([0, at(1, segment), at(1, segment + 1)]);
-    }
-    for ring in 1..rings - 1 {
-        for segment in 0..segments {
-            faces.push([
-                at(ring, segment),
-                at(ring + 1, segment),
-                at(ring + 1, segment + 1),
-            ]);
-            faces.push([
-                at(ring, segment),
-                at(ring + 1, segment + 1),
-                at(ring, segment + 1),
-            ]);
-        }
-    }
-    for segment in 0..segments {
-        faces.push([at(rings - 1, segment), south, at(rings - 1, segment + 1)]);
-    }
-    Mesh::new(vertices, faces)
-}
-
 fn field_of(mesh: &Mesh, settings: &FieldSettings) -> core_volume::Sdf {
     let bvh = Bvh::build(mesh);
     build(mesh, &bvh, settings, Cancel::never()).expect("the mesh has faces")
@@ -98,7 +54,7 @@ fn field_of(mesh: &Mesh, settings: &FieldSettings) -> core_volume::Sdf {
 #[test]
 fn a_ball_field_reads_the_distance_to_its_own_surface() {
     let radius = 10.0;
-    let mesh = ball(radius, 64, 64);
+    let mesh = ball(Vec3::ZERO, radius, 64, 64);
     let settings = FieldSettings {
         voxel_mm: 0.2,
         ..FieldSettings::default()
@@ -127,7 +83,7 @@ fn a_ball_field_reads_the_distance_to_its_own_surface() {
 #[test]
 fn a_ball_survives_the_round_trip_within_a_voxel() {
     let radius = 10.0;
-    let mesh = ball(radius, 96, 96);
+    let mesh = ball(Vec3::ZERO, radius, 96, 96);
     let settings = FieldSettings {
         voxel_mm: 0.25,
         ..FieldSettings::default()
@@ -174,7 +130,7 @@ fn a_cube_survives_the_round_trip_within_a_voxel() {
 
 #[test]
 fn the_winding_number_signs_the_same_field_as_the_pseudonormal() {
-    let mesh = ball(6.0, 48, 48);
+    let mesh = ball(Vec3::ZERO, 6.0, 48, 48);
     let coarse = FieldSettings {
         voxel_mm: 0.5,
         ..FieldSettings::default()
@@ -237,8 +193,8 @@ fn a_ball_taken_out_of_a_bigger_one_leaves_a_shell() {
         voxel_mm: 0.25,
         ..FieldSettings::default()
     };
-    let outer = field_of(&ball(6.0, 64, 64), &settings);
-    let inner = field_of(&ball(3.0, 64, 64), &settings);
+    let outer = field_of(&ball(Vec3::ZERO, 6.0, 64, 64), &settings);
+    let inner = field_of(&ball(Vec3::ZERO, 3.0, 64, 64), &settings);
 
     let hollow = difference(&outer, &inner).expect("both fields share the lattice");
     let extracted = extract(&hollow, Cancel::never());
@@ -336,7 +292,7 @@ fn two_fields_on_different_lattices_cannot_be_combined() {
 fn a_surface_crossing_tiles_shares_its_seam_vertices() {
     // A ball wide enough to cross many tiles: every vertex on a seam is written once, so
     // a mesh that came out of several tiles has no coincident pair left in it.
-    let mesh = ball(6.0, 64, 64);
+    let mesh = ball(Vec3::ZERO, 6.0, 64, 64);
     let settings = FieldSettings {
         voxel_mm: 0.2,
         ..FieldSettings::default()
@@ -363,7 +319,7 @@ fn a_surface_crossing_tiles_shares_its_seam_vertices() {
 #[test]
 fn the_sweep_answers_what_the_hierarchy_would() {
     let radius = 6.0;
-    let mesh = ball(radius, 64, 64);
+    let mesh = ball(Vec3::ZERO, radius, 64, 64);
     let bvh = Bvh::build(&mesh);
 
     for (voxel_mm, iso_mm) in [(0.2, 0.0), (0.2, -2.0), (0.1, -2.0)] {
@@ -421,7 +377,7 @@ fn the_sweep_answers_what_the_hierarchy_would() {
 #[test]
 fn a_smooth_cavity_costs_far_fewer_triangles_than_the_cells_it_crosses() {
     let radius = 10.0;
-    let mesh = ball(radius, 96, 96);
+    let mesh = ball(Vec3::ZERO, radius, 96, 96);
     let bvh = Bvh::build(&mesh);
     let settings = FieldSettings {
         voxel_mm: 0.2,

@@ -333,12 +333,11 @@ impl Draws {
         // culled from outside and only shows once the camera is in the wall.
         let mesh = object.hollow.shell().unwrap_or(&object.mesh).clone();
         let instance = ModelInstance::new(object.transform, colour, mark);
-        // The map is indexed by the model's own faces, so a hollowed model — whose shell
-        // carries the cavity's as well — is drawn flat like everything else.
-        let mapped = texture.filter(|_| object.hollow.shell().is_none());
-        match mapped {
+        match texture {
+            // The map is indexed by the model's own faces, so a hollowed model is drawn as
+            // its outer surface while it carries a texture: the cavity is not pressed.
             Some(mapped) => self.reliefs.push(ReliefDraw {
-                mesh: Arc::clone(&mesh),
+                mesh: Arc::clone(&object.mesh),
                 mapped: Arc::clone(mapped),
                 instance,
             }),
@@ -493,9 +492,8 @@ fn bands_of(ranges: &[ExposureRange]) -> Vec<ExposureBand> {
 
 /// The holes and channels of one model, in plate millimetres, ready for the shader.
 ///
-/// A channel is handed over a segment at a time with a ball at each joint, which is the
-/// same union of capsules `core-volume` meshes it as. Past `MAX_CUTS` a plate is drawn
-/// with its later holes uncut: only the picture is short, never the print.
+/// A channel is handed over a leg at a time with its mitres, the same prism `core-volume`
+/// meshes it as. Past `MAX_CUTS` a plate is drawn with its later holes uncut.
 pub(crate) fn cuts_of(
     drains: &[DrainHole],
     channels: &[Channel],
@@ -517,23 +515,57 @@ pub(crate) fn cuts_of(
         cuts.push(DrainCut {
             mouth: place(hole.at - axis * hole.lift_mm.max(MOUTH_LIFT_MM), radius),
             tip: place(hole.at + axis * hole.depth_mm, radius * hole.taper),
+            corner: corner_of(hole.corner(), hole.axis, transform),
+            ..DrainCut::default()
         });
     }
     for channel in channels {
         let radius = channel.diameter_mm / 2.0;
-        for pair in channel.points.windows(2) {
+        let sides = channel.shape.corners();
+        for leg in channel.legs() {
+            let axis = leg.to - leg.from;
             let mut cut = DrainCut {
-                mouth: place(pair[0], radius),
-                tip: place(pair[1], radius),
+                mouth: place(leg.from, radius),
+                tip: place(leg.to, radius),
+                corner: corner_of(sides.map(|sides| (leg.corner, sides)), axis, transform),
+                start: mitre_of(leg.start, transform),
+                end: mitre_of(leg.end, transform),
             };
-            // A channel is open at both ends and round at its joints, which the shader
-            // reads off the sign of the far radius.
+            // A channel is open at both ends, which the shader reads off the sign of the far
+            // radius; its legs meet at their mitres.
             cut.tip[3] = -cut.tip[3];
             cuts.push(cut);
         }
     }
     cuts.truncate(MAX_CUTS);
     cuts
+}
+
+/// A channel leg's mitre plane carried onto the plate: a plane's normal goes by the inverse
+/// transpose; all zero for an end that opens.
+fn mitre_of(normal: Option<Vec3>, transform: Transform) -> [f32; 4] {
+    let linear = transform.linear();
+    let Some(placed) =
+        normal.and_then(|normal| (linear.inverse().transpose() * normal).try_normalize())
+    else {
+        return [0.0; 4];
+    };
+    [placed.x, placed.y, placed.z, 1.0]
+}
+
+/// A polygonal cut's first corner about `axis` carried onto the plate, square to the axis
+/// there, and its sides; all zero for a round one, which the shader cuts as a circle.
+fn corner_of(corner: Option<(Vec3, usize)>, axis: Vec3, transform: Transform) -> [f32; 4] {
+    let linear = transform.linear();
+    let Some((corner, sides)) = corner else {
+        return [0.0; 4];
+    };
+    let axis = (linear * axis).normalize_or_zero();
+    let placed = linear * corner;
+    let Some(across) = (placed - axis * placed.dot(axis)).try_normalize() else {
+        return [0.0; 4];
+    };
+    [across.x, across.y, across.z, sides as f32]
 }
 
 /// The boxes of the pockets found in one model, carried onto the plate: a pocket travels
@@ -760,6 +792,8 @@ mod tests {
             depth_mm: 6.0,
             taper: 1.0,
             lift_mm: 0.0,
+            shape: core_volume::HoleShape::Round,
+            turn_deg: 0.0,
         }
     }
 
@@ -843,11 +877,67 @@ mod tests {
                 Vec3::new(4.0, 0.0, 5.0),
             ],
             diameter_mm: 2.0,
+            ..Channel::default()
         };
         let cuts = cuts_of(&[], &[channel], Transform::default());
 
         assert_eq!(cuts.len(), 2, "two segments between three points");
         assert!((cuts[1].tip[0] - 4.0).abs() < 1e-4);
+    }
+
+    #[test]
+    fn a_polygonal_hole_is_cut_to_its_corners_and_a_round_one_as_a_circle() {
+        let hexagon = DrainHole {
+            shape: core_volume::HoleShape::Polygon { sides: 6 },
+            turn_deg: 90.0,
+            ..hole()
+        };
+        let turned = Transform::from_scale_rotation_translation(
+            Vec3::ONE,
+            core_geometry::Quat::from_rotation_z(std::f32::consts::FRAC_PI_2),
+            Vec3::ZERO,
+        );
+        let [cut] = cuts_of(&[hexagon], &[], turned)[..] else {
+            panic!("one hole is one cut");
+        };
+        let corner = Vec3::new(cut.corner[0], cut.corner[1], cut.corner[2]);
+        assert_eq!(cut.corner[3], 6.0, "the shader is told it has six sides");
+        assert!(
+            (corner.length() - 1.0).abs() < 1e-5 && corner.z.abs() < 1e-5,
+            "the corner is a unit offset square to the upright axis, got {corner}"
+        );
+        assert_eq!(cuts_of(&[hole()], &[], turned)[0].corner, [0.0; 4]);
+        let channel = Channel {
+            points: vec![Vec3::ZERO, Vec3::new(10.0, 0.0, 0.0)],
+            diameter_mm: 2.0,
+            shape: core_volume::HoleShape::Polygon { sides: 5 },
+            turn_deg: 0.0,
+        };
+        let [leg] = cuts_of(&[], std::slice::from_ref(&channel), turned)[..] else {
+            panic!("two points are one leg");
+        };
+        assert_eq!(
+            leg.corner[3], 5.0,
+            "a channel's leg is cut to its outline too"
+        );
+
+        let bent = Channel {
+            points: vec![
+                Vec3::ZERO,
+                Vec3::new(10.0, 0.0, 0.0),
+                Vec3::new(10.0, 8.0, 0.0),
+            ],
+            ..channel
+        };
+        let [first, second] = cuts_of(&[], &[bent], turned)[..] else {
+            panic!("three points are two legs");
+        };
+        assert_eq!(first.start[3], 0.0, "the channel opens at its mouth");
+        assert_eq!(
+            first.end, second.start,
+            "two legs are cut off at the mitre they share"
+        );
+        assert_eq!(first.end[3], 1.0);
     }
 
     #[test]

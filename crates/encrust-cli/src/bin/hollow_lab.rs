@@ -118,19 +118,19 @@ fn matrix() -> Vec<Case> {
             sign: SignMode::Auto,
         },
         Case {
-            label: "2 mm wall, 5 mm grid at 15%",
+            label: "2 mm wall, 6 mm grid of 2 mm walls",
             wall_mm: 2.0,
             precision: 0.5,
-            infill: Some((Grid, 5.0, 0.15)),
+            infill: Some((Grid, 6.0, 2.0)),
             mode: HollowMode::Internal,
             lattice_mm: None,
             sign: SignMode::Auto,
         },
         Case {
-            label: "0.5 mm wall, 1 mm hive at 50%, finest",
+            label: "0.5 mm wall, 2 mm hive of 0.5 mm walls, finest",
             wall_mm: 0.5,
             precision: 1.0,
-            infill: Some((Hive, 1.0, 0.5)),
+            infill: Some((Hive, 2.0, 0.5)),
             mode: HollowMode::Internal,
             lattice_mm: None,
             sign: SignMode::Auto,
@@ -237,6 +237,10 @@ fn asked_case(args: &[String]) -> Option<Case> {
 }
 
 /// One case, with the field and the extraction timed on their own before the whole run.
+/// A crossing hole's diameter as a share of the cell: under a hexagon's side and a square's,
+/// so a hole always fits the wall it crosses.
+const HOLE_SHARE: Scalar = 0.5;
+
 fn run(mesh: &Mesh, bvh: &Bvh, case: &Case) -> Result<()> {
     let settings = HollowSettings {
         thickness_mm: case.wall_mm,
@@ -244,10 +248,12 @@ fn run(mesh: &Mesh, bvh: &Bvh, case: &Case) -> Result<()> {
         precision: case.precision,
         infill: case
             .infill
-            .map(|(pattern, size_mm, density)| InfillSettings {
+            .map(|(pattern, cell_mm, wall_mm)| InfillSettings {
                 pattern,
-                size_mm,
-                density,
+                cell_mm,
+                wall_mm,
+                hole_mm: cell_mm * HOLE_SHARE,
+                ..InfillSettings::default()
             }),
         sign: case.sign,
         ..HollowSettings::default()

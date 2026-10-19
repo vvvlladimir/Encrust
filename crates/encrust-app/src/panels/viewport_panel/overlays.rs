@@ -249,6 +249,29 @@ fn wash(
     painter.add(mesh);
 }
 
+/// The point the part Split cuts off is marked at, on the selected model.
+pub(super) fn draw_part_mark(ui: &egui::Ui, window: &Window, viewport: egui::Rect) {
+    let Some(id) = window.doc.scene.selected() else {
+        return;
+    };
+    let marked = window
+        .doc
+        .scene
+        .get(id)
+        .and_then(|object| window.tools.cut.marked_on(object));
+    let Some(at) = marked.and_then(projector(&window.view.camera, viewport)) else {
+        return;
+    };
+    let painter = ui.painter_at(viewport);
+    let colors = theme::colors();
+    painter.circle_filled(at, MEASURE_END_R + 1.0, colors.accent);
+    painter.circle_stroke(
+        at,
+        MEASURE_END_R + 1.0,
+        egui::Stroke::new(1.5, colors.text_high),
+    );
+}
+
 /// The outline of the Cut tool's plane, a little wider than the selected model, so the
 /// plane can be found where it misses the model and no line is traced on it.
 pub(super) fn draw_cut_plane(ui: &egui::Ui, window: &Window, viewport: egui::Rect) {

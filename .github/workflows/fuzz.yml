@@ -69,6 +69,7 @@ jobs:
           - sliced_svgx
           - sliced_cws
           - sniff
+          - font
     steps:
       - uses: actions/checkout@v7
 

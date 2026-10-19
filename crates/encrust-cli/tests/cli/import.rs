@@ -200,6 +200,39 @@ fn a_model_with_no_uvs_takes_a_tiled_picture_as_relief() {
 }
 
 #[test]
+fn the_relief_reading_and_holding_flags_reach_the_press() {
+    let path = write_box_stl("held-relief", 10.0, 12, 0);
+    let picture = write_checkers("held-relief");
+    let with = |hold_bottom: &str| {
+        slice(&[
+            path.to_str().unwrap(),
+            "--relief",
+            "0.4",
+            "--relief-image",
+            picture.to_str().unwrap(),
+            "--relief-invert",
+            "--relief-symmetric",
+            "--relief-smooth",
+            "1.5",
+            "--relief-hold-top",
+            "5",
+            "--relief-hold-bottom",
+            hold_bottom,
+        ])
+    };
+    let held = with("5");
+    assert!(held.status.success(), "{}", stderr(&held));
+
+    let refused = with("95");
+    assert_eq!(
+        refused.status.code(),
+        Some(1),
+        "a face cannot be past level: {}",
+        stderr(&refused)
+    );
+}
+
+#[test]
 fn an_orient_goal_without_orient_is_an_argument_error() {
     let path = write_box_stl("goal-alone", 10.0, 12, 0);
     let output = slice(&[path.to_str().unwrap(), "--orient-goal", "least-peel"]);

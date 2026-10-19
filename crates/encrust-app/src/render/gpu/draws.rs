@@ -53,6 +53,13 @@ pub struct DrainCut {
     pub mouth: [f32; 4],
     /// `xyz` is the tip, `w` the radius there.
     pub tip: [f32; 4],
+    /// `xyz` points from the axis to a polygon's first corner, `w` is its count of sides;
+    /// zero for a round cut.
+    pub corner: [f32; 4],
+    /// `xyz` is the unit normal, along the cut, of the plane a channel's leg is mitred off at
+    /// its mouth and at its tip; `w` is 1.0 where it is, 0.0 where the end is rounded.
+    pub start: [f32; 4],
+    pub end: [f32; 4],
 }
 
 /// One frame's worth of what to draw, handed over in one piece rather than as a row of

@@ -1,13 +1,15 @@
 //! Filling a flat ring with triangles, which both a cut's cap and a patch over a hole
 //! need; see `docs/decisions/0089`.
 
-use crate::{FastMap, Vec2};
+use crate::{FastMap, FastSet, Scalar, Vec2, ring_area};
 
-/// Fills one ring and the rings inside it, by ear clipping. The corners are indices into
-/// `flat`, and the triangles come back wound as the outer ring is.
-pub(crate) fn triangulate(outer: &[u32], holes: &[&Vec<u32>], flat: &[Vec2]) -> Vec<[u32; 3]> {
+/// Fills one ring and the rings inside it, by ear clipping: a cut's cap, a patch over a hole,
+/// a letter of a label. The corners are indices into `flat`, and the triangles come back
+/// wound as the outer ring is.
+pub fn triangulate(outer: &[u32], holes: &[&Vec<u32>], flat: &[Vec2]) -> Vec<[u32; 3]> {
     let mut patches = Vec::new();
     let mut ring: Vec<u32> = without_repeats(outer, flat, &mut patches);
+    let mut kept = vec![ring.clone()];
     let mut hole_starts = Vec::with_capacity(holes.len());
     for hole in holes {
         let hole = without_repeats(hole, flat, &mut patches);
@@ -15,7 +17,8 @@ pub(crate) fn triangulate(outer: &[u32], holes: &[&Vec<u32>], flat: &[Vec2]) -> 
             continue;
         }
         hole_starts.push(ring.len());
-        ring.extend(hole);
+        ring.extend(&hole);
+        kept.push(hole);
     }
 
     let coordinates: Vec<f64> = ring
@@ -36,8 +39,24 @@ pub(crate) fn triangulate(outer: &[u32], holes: &[&Vec<u32>], flat: &[Vec2]) -> 
         .map(|corner| [ring[corner[0]], ring[corner[1]], ring[corner[2]]])
         .collect();
     cover_repeats(&mut triangles, patches);
+    cover_dropped(&mut triangles, &kept, flat);
     flip_flat(&mut triangles, flat);
+    wind_as(&mut triangles, &kept[0], flat);
     triangles
+}
+
+/// Turns `triangles` to wind as `outer` does, which ear clipping does not promise.
+fn wind_as(triangles: &mut [[u32; 3]], outer: &[u32], flat: &[Vec2]) {
+    let corner = |index: u32| flat[index as usize];
+    let filled: Scalar = triangles
+        .iter()
+        .map(|[a, b, c]| (corner(*b) - corner(*a)).perp_dot(corner(*c) - corner(*a)))
+        .sum();
+    if filled * ring_area(outer.iter().map(|index| corner(*index))) < 0.0 {
+        for triangle in triangles {
+            triangle.swap(1, 2);
+        }
+    }
 }
 
 /// Adds the triangle each repeated corner needs, wound against the edge the fill left
@@ -49,6 +68,113 @@ fn cover_repeats(triangles: &mut Vec<[u32; 3]>, patches: Vec<[u32; 3]>) {
             triangles.push([to, corner, from]);
         } else {
             triangles.push([from, corner, to]);
+        }
+    }
+}
+
+/// How far off the line between its neighbours a dropped corner may stand and still be put
+/// back on it, as a share of that line's length squared: rounding, not a bend.
+const ON_LINE: f32 = 1e-6;
+
+/// Puts back the corners of `rings` that ear clipping passed over for lying on the line
+/// between two others, fanning the triangle over that line out to each of them.
+///
+/// The wall standing on the ring still runs to every one of them, so without them the fill
+/// and the wall meet along nothing there and the surface has a slit. Such a line is an edge
+/// of the fill with no triangle beyond it that is not a side of a ring, and the corners left
+/// out are those with a side of their ring no triangle covers.
+fn cover_dropped(triangles: &mut Vec<[u32; 3]>, rings: &[Vec<u32>], flat: &[Vec2]) {
+    let mut across = facing_edges(triangles);
+    let covered = |a: u32, b: u32, across: &FastMap<(u32, u32), usize>| {
+        across.contains_key(&(a, b)) || across.contains_key(&(b, a))
+    };
+    let mut sides: FastSet<(u32, u32)> = FastSet::default();
+    let mut left_out: Vec<u32> = Vec::new();
+    for ring in rings {
+        for (at, corner) in ring.iter().enumerate() {
+            let next = ring[(at + 1) % ring.len()];
+            sides.insert(((*corner).min(next), (*corner).max(next)));
+            if !covered(*corner, next, &across) {
+                left_out.extend([*corner, next]);
+            }
+        }
+    }
+    if left_out.is_empty() {
+        return;
+    }
+    left_out.sort_unstable();
+    left_out.dedup();
+    let spans: Vec<(u32, u32)> = across
+        .keys()
+        .copied()
+        .filter(|(a, b)| {
+            !across.contains_key(&(*b, *a)) && !sides.contains(&((*a).min(*b), (*a).max(*b)))
+        })
+        .collect();
+    for (a, b) in spans {
+        let mut between: Vec<u32> = left_out
+            .iter()
+            .copied()
+            .filter(|corner| *corner != a && *corner != b && on_line(a, b, &[*corner], flat))
+            .collect();
+        let (from, span) = (flat[a as usize], flat[b as usize] - flat[a as usize]);
+        between.sort_by(|p, q| {
+            let along = |corner: &u32| (flat[*corner as usize] - from).dot(span);
+            along(p).total_cmp(&along(q))
+        });
+        if !between.is_empty() {
+            fan(triangles, &mut across, a, b, &between);
+        }
+    }
+}
+
+/// Whether every one of `between` stands on the segment from `a` to `b`.
+fn on_line(a: u32, b: u32, between: &[u32], flat: &[Vec2]) -> bool {
+    let (a, b) = (flat[a as usize], flat[b as usize]);
+    let span = b - a;
+    let length = span.length_squared();
+    between.iter().all(|corner| {
+        let offset = flat[*corner as usize] - a;
+        let along = offset.dot(span);
+        span.perp_dot(offset).abs() <= ON_LINE * length && along > 0.0 && along < length
+    })
+}
+
+/// The triangle over the edge from `a` to `b`, either way round, split into a fan through
+/// `between`, the corners on that edge in order from `a`.
+fn fan(
+    triangles: &mut Vec<[u32; 3]>,
+    across: &mut FastMap<(u32, u32), usize>,
+    a: u32,
+    b: u32,
+    between: &[u32],
+) {
+    let mut line: Vec<u32> = std::iter::once(a)
+        .chain(between.iter().copied())
+        .chain(std::iter::once(b))
+        .collect();
+    let Some(index) = across.get(&(a, b)).copied().or_else(|| {
+        line.reverse();
+        across.get(&(b, a)).copied()
+    }) else {
+        return;
+    };
+    let triangle = triangles[index];
+    let Some(corner) = (0..3).find(|at| triangle[*at] == line[0]) else {
+        return;
+    };
+    let apex = triangle[(corner + 2) % 3];
+    for (piece, pair) in line.windows(2).enumerate() {
+        let made = [pair[0], pair[1], apex];
+        let slot = if piece == 0 {
+            triangles[index] = made;
+            index
+        } else {
+            triangles.push(made);
+            triangles.len() - 1
+        };
+        for at in 0..3 {
+            across.insert((made[at], made[(at + 1) % 3]), slot);
         }
     }
 }
@@ -177,29 +303,25 @@ mod tests {
         uses
     }
 
-    /// Every edge of the ring is covered once, which is what the wall on the other side
-    /// of it needs, and nothing the fill added is left on its own.
-    fn covers(ring: &[u32], triangles: &[[u32; 3]]) {
+    /// Every edge of the rings is covered once, which is what the wall on the other side of
+    /// it needs, and nothing the fill added is left on its own.
+    fn covers(rings: &[&[u32]], triangles: &[[u32; 3]]) {
         let uses = edge_uses(triangles);
-        for corner in 0..ring.len() {
-            let (a, b) = (ring[corner], ring[(corner + 1) % ring.len()]);
-            if a == b {
-                continue;
+        let mut sides: FastSet<(u32, u32)> = FastSet::default();
+        for ring in rings {
+            for corner in 0..ring.len() {
+                let (a, b) = (ring[corner], ring[(corner + 1) % ring.len()]);
+                if a == b {
+                    continue;
+                }
+                let key = (a.min(b), a.max(b));
+                assert_eq!(uses.get(&key), Some(&1), "the ring edge {key:?} is covered");
+                sides.insert(key);
             }
-            let key = (a.min(b), a.max(b));
-            assert_eq!(uses.get(&key), Some(&1), "the ring edge {key:?} is covered");
         }
-        for ((a, b), count) in uses {
-            let on_ring = ring
-                .iter()
-                .enumerate()
-                .any(|(corner, point)| *point == a && ring[(corner + 1) % ring.len()] == b)
-                || ring
-                    .iter()
-                    .enumerate()
-                    .any(|(corner, point)| *point == b && ring[(corner + 1) % ring.len()] == a);
-            if !on_ring {
-                assert_eq!(count, 2, "the edge {a}-{b} the fill added is used twice");
+        for (key, count) in uses {
+            if !sides.contains(&key) {
+                assert_eq!(count, 2, "the edge {key:?} the fill added is used twice");
             }
         }
     }
@@ -223,7 +345,35 @@ mod tests {
             let area = (points[1] - points[0]).perp_dot(points[2] - points[0]);
             assert!(area != 0.0, "{triangle:?} has area, got {area}");
         }
-        covers(&[0, 1, 2, 3], &triangles);
+        covers(&[&[0, 1, 2, 3]], &triangles);
+    }
+
+    #[test]
+    fn a_hole_whose_side_runs_on_from_a_side_of_the_ring_is_still_covered() {
+        // The hole's bottom lies on the line the ring's notch runs along, the line ear
+        // clipping bridges the hole along, and the corners on it collapsed.
+        let flat = [
+            Vec2::new(0.0, -10.0),
+            Vec2::new(1.0, -10.0),
+            Vec2::new(2.0, -10.0),
+            Vec2::new(3.0, -10.0),
+            Vec2::new(5.0, -10.0),
+            Vec2::new(5.0, -15.0),
+            Vec2::new(30.0, -15.0),
+            Vec2::new(30.0, 15.0),
+            Vec2::new(0.0, 15.0),
+            Vec2::new(20.0, -10.0),
+            Vec2::new(20.0, 5.0),
+            Vec2::new(25.0, 5.0),
+            Vec2::new(25.0, -10.0),
+            Vec2::new(22.5, -10.0),
+        ];
+        let ring = [0, 1, 2, 3, 4, 5, 6, 7, 8];
+        let hole = vec![9, 10, 11, 12, 13];
+
+        let triangles = triangulate(&ring, &[&hole], &flat);
+
+        covers(&[&ring, &hole], &triangles);
     }
 
     #[test]
@@ -241,6 +391,26 @@ mod tests {
 
         let triangles = triangulate(&ring, &[], &flat);
 
-        covers(&ring, &triangles);
+        covers(&[&ring], &triangles);
+    }
+
+    #[test]
+    fn the_fill_winds_as_the_outer_ring_whichever_way_that_runs() {
+        let flat = [
+            Vec2::new(0.0, 0.0),
+            Vec2::new(10.0, 0.0),
+            Vec2::new(10.0, 10.0),
+            Vec2::new(0.0, 10.0),
+        ];
+        for (ring, anticlockwise) in [([0, 1, 2, 3], true), ([3, 2, 1, 0], false)] {
+            for [a, b, c] in triangulate(&ring, &[], &flat) {
+                let (a, b, c) = (flat[a as usize], flat[b as usize], flat[c as usize]);
+                assert_eq!(
+                    (b - a).perp_dot(c - a) > 0.0,
+                    anticlockwise,
+                    "every triangle turns the way the ring does"
+                );
+            }
+        }
     }
 }

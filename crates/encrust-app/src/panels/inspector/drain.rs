@@ -1,3 +1,4 @@
+use core_volume::HoleShape;
 use printer_profiles::Kind;
 
 use super::presets;
@@ -9,8 +10,8 @@ use crate::panels::inspector::hollow;
 use crate::scene::ObjectId;
 use crate::state::Tools;
 use crate::ui::{
-    Segment, Segmented, describe, hint, icon, inline_button, notice, number_row, primary_button,
-    progress_bar, secondary_button, section, theme, tone,
+    Segment, Segmented, busy, count_row, describe, hint, icon, inline_button, notice, number_row,
+    primary_button, secondary_button, section, theme, tone,
 };
 
 /// Per point of drag, in millimetres for the sizes and hundredths for the taper.
@@ -26,6 +27,16 @@ const MAX_HOLE_MM: f32 = 20.0;
 /// drill through past the height of a plate.
 const MIN_DEPTH_MM: f32 = 0.5;
 const MAX_DEPTH_MM: f32 = 50.0;
+
+/// The sides a hole turns to polygon with, and how far it may be turned: past half a turn
+/// every polygon repeats itself.
+const DEFAULT_SIDES: u8 = 6;
+const MAX_TURN_DEG: f32 = 180.0;
+
+/// Bounds on a plug's gap, millimetres a side: past half a millimetre it rattles in its
+/// hole, and under nothing it is pressed in.
+const MIN_PLUG_GAP_MM: f32 = 0.0;
+const MAX_PLUG_GAP_MM: f32 = 0.5;
 
 /// The holes that let the resin out of a hollow model, and the resin that cannot get out
 /// yet.
@@ -55,11 +66,19 @@ pub fn ui(ui: &mut egui::Ui, window: &mut Window) {
     section(ui, &tr!("drain-opening"), None, |ui| {
         describe(ui, &tr!("drain-opening-note"));
         placing(ui, window);
-        scope::editing(window, own, &scoped, |window| sizes(ui, window.tools));
+        scope::editing(window, own, &scoped, |window| {
+            sizes(ui, window.tools);
+            outline(ui, window.tools);
+        });
         placed(ui, window);
         if let Some(job) = window.tools.hollow.job.as_ref() {
             hollow::running(ui, job);
         }
+    });
+    section(ui, &tr!("drain-plugs"), None, |ui| {
+        describe(ui, &tr!("drain-plugs-note"));
+        scope::editing(window, own, &scoped, |window| plug_gap(ui, window.tools));
+        drift(ui, window);
     });
 }
 
@@ -87,8 +106,7 @@ pub fn action(ui: &mut egui::Ui, window: &mut Window) {
         return;
     }
     if window.tools.drain.job.is_some() {
-        tone(ui, &tr!("hollow-looking"), theme::colors().text_mid);
-        progress_bar(ui, None);
+        busy(ui, &tr!("hollow-looking"), false);
         return;
     }
     let layer_height_mm = window.machine.slicing.layer_height_mm();
@@ -181,6 +199,68 @@ fn sizes(ui: &mut egui::Ui, tools: &mut Tools) {
     );
 
     describe(ui, &tr!("drain-sizes-note"));
+}
+
+/// Round, or a polygon of a number of sides turned about the hole's axis.
+fn outline(ui: &mut egui::Ui, tools: &mut Tools) {
+    let state = &mut tools.drain.state;
+    let round = matches!(state.shape, HoleShape::Round);
+    let segments = [
+        Segment::new(true, tr!("drain-round")),
+        Segment::new(false, tr!("drain-polygon")),
+    ];
+    let mut chosen = round;
+    let width = ui.available_width();
+    if Segmented::new(&segments).width(width).show(ui, &mut chosen) && chosen != round {
+        state.shape = if chosen {
+            HoleShape::Round
+        } else {
+            HoleShape::Polygon {
+                sides: DEFAULT_SIDES,
+            }
+        };
+    }
+    let HoleShape::Polygon { sides } = &mut state.shape else {
+        return;
+    };
+    let mut count = u32::from(*sides);
+    let range = u32::from(HoleShape::MIN_SIDES)..=u32::from(HoleShape::MAX_SIDES);
+    if count_row(ui, &tr!("drain-sides"), &mut count, "", 0.05, range) {
+        *sides = u8::try_from(count).unwrap_or(HoleShape::MAX_SIDES);
+    }
+    number_row(
+        ui,
+        &tr!("drain-turn"),
+        &mut state.turn_deg,
+        &tr!("unit-degrees"),
+        0.5,
+        0.0..=MAX_TURN_DEG,
+        0,
+    );
+    describe(ui, &tr!("drain-polygon-note"));
+}
+
+/// What the plugs are widened by where the resin's tolerance compensation is off.
+fn drift(ui: &mut egui::Ui, window: &Window) {
+    let drift_mm = window.machine.slicing.material.compensation.fit_drift_mm();
+    if drift_mm.abs() > f32::EPSILON {
+        describe(
+            ui,
+            &tr!("drain-plug-drift", drift = format!("{drift_mm:.2}")),
+        );
+    }
+}
+
+fn plug_gap(ui: &mut egui::Ui, tools: &mut Tools) {
+    number_row(
+        ui,
+        &tr!("drain-plug-gap"),
+        &mut tools.drain.state.plug_gap_mm,
+        &tr!("unit-mm"),
+        FINE_STEP,
+        MIN_PLUG_GAP_MM..=MAX_PLUG_GAP_MM,
+        2,
+    );
 }
 
 /// How many holes are standing, and the one way to take them all away.

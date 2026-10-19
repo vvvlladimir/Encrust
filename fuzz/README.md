@@ -16,7 +16,7 @@ cargo +nightly fuzz run sliced_chitu -- -max_total_time=60
 cargo +nightly fuzz run mesh         -- -max_total_time=300 -max_len=65536
 ```
 
-Thirteen targets:
+Fourteen targets:
 
 | target | what it covers |
 | --- | --- |
@@ -33,6 +33,7 @@ Thirteen targets:
 | `sliced_cws` | `.cws`: a zip, `slice.conf`, the gcode program and the PNGs behind it |
 | `sniff` | a file whose name says nothing: the sniffer picks the family, possibly the wrong one |
 | `resin_profile` | a resin another program exported, `.cfgx` or `.ini` by the first byte |
+| `font` | a font file read into outlines for a label: its tables, `kern` and glyph curves |
 
 Each reader is given the extension it expects rather than left to be found by chance, because a
 fuzzer spending its session failing a magic-number check tests the magic-number check.

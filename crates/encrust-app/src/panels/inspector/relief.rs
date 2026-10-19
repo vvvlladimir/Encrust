@@ -5,11 +5,11 @@ use core_volume::Tiling;
 
 use crate::i18n::tr;
 use crate::panels::Window;
-use crate::relief::Picture;
+use crate::relief::{BUILTINS, Picture, ReliefMode};
 use crate::state::Doc;
 use crate::ui::{
-    describe, hint, icon, meta, number_row, primary_button, progress_bar, secondary_button,
-    section, stats, theme, tone,
+    Segment, Segmented, blocked_hover, busy, describe, icon, meta, number_row, primary_button,
+    secondary_button, section, stats, subheading, swatch, switch, theme, tone,
 };
 
 /// Bounds on one tile of a picture, millimetres: under a millimetre it is finer than the
@@ -27,9 +27,53 @@ const FINE_STEP: f64 = 0.01;
 /// would cost a band that wide on every voxel of the field.
 const MAX_DEPTH_MM: f32 = 2.0;
 
+/// Past twenty pixels of blur a picture read down to 1024 pixels has lost its pattern.
+const MAX_SMOOTHING_PX: f32 = 20.0;
+const SMOOTHING_STEP: f64 = 0.1;
+
+/// The tool's three jobs behind one switch at its head — a texture pressed in, text
+/// written on, models combined — each with its own sections and its own action.
+pub fn ui(ui: &mut egui::Ui, window: &mut Window) {
+    section(ui, &tr!("relief-mode"), None, |ui| modes(ui, window));
+    match window.tools.relief.mode {
+        ReliefMode::Texture => texture(ui, window),
+        ReliefMode::Text => super::text::sections(ui, window),
+        ReliefMode::Combine => super::combine::sections(ui, window),
+    }
+}
+
+/// The action at the foot belongs to the job in hand, never to all three.
+pub fn action(ui: &mut egui::Ui, window: &mut Window) {
+    match window.tools.relief.mode {
+        ReliefMode::Texture => press(ui, window),
+        ReliefMode::Text => super::text::action(ui, window),
+        ReliefMode::Combine => super::combine::action(ui, window),
+    }
+}
+
+fn modes(ui: &mut egui::Ui, window: &mut Window) {
+    let segments = [
+        Segment::new(ReliefMode::Texture, tr!("relief-mode-texture")),
+        Segment::new(ReliefMode::Text, tr!("relief-mode-text")),
+        Segment::new(ReliefMode::Combine, tr!("relief-mode-combine")),
+    ];
+    let mode = &mut window.tools.relief.mode;
+    Segmented::new(&segments)
+        .width(ui.available_width())
+        .show(ui, mode);
+    describe(
+        ui,
+        &match mode {
+            ReliefMode::Texture => tr!("relief-mode-texture-note"),
+            ReliefMode::Text => tr!("relief-mode-text-note"),
+            ReliefMode::Combine => tr!("relief-mode-combine-note"),
+        },
+    );
+}
+
 /// What is pressed into the models on the plate — a chosen picture as tiles, or the
 /// texture each came with — and how deep.
-pub fn ui(ui: &mut egui::Ui, window: &mut Window) {
+fn texture(ui: &mut egui::Ui, window: &mut Window) {
     section(ui, &tr!("relief-image"), None, |ui| {
         match &window.tools.relief.picture {
             Some(picture) => chosen(ui, picture),
@@ -38,7 +82,10 @@ pub fn ui(ui: &mut egui::Ui, window: &mut Window) {
                 carried(ui, window.doc);
             }
         }
+        subheading(ui, &tr!("relief-builtins"));
+        gallery(ui, window);
         picture_buttons(ui, window);
+        reading(ui, window);
     });
     section(ui, &tr!("relief-depth"), None, |ui| {
         depth(ui, window);
@@ -46,6 +93,34 @@ pub fn ui(ui: &mut egui::Ui, window: &mut Window) {
             tiling(ui, &mut window.tools.relief.tiling);
         }
     });
+    section(ui, &tr!("relief-hold"), None, |ui| holding(ui, window));
+}
+
+/// How the grey of the texture is read before it is pressed.
+fn reading(ui: &mut egui::Ui, window: &mut Window) {
+    let state = &mut window.tools.relief.state;
+    switch(ui, &mut state.invert, &tr!("relief-invert"));
+    number_row(
+        ui,
+        &tr!("relief-smoothing"),
+        &mut state.smoothing_px,
+        &tr!("unit-px"),
+        SMOOTHING_STEP,
+        0.0..=MAX_SMOOTHING_PX,
+        1,
+    );
+}
+
+/// The faces turned to the plate or straight up that the relief leaves as they are.
+fn holding(ui: &mut egui::Ui, window: &mut Window) {
+    let state = &mut window.tools.relief.state;
+    for (label, angle) in [
+        (tr!("relief-hold-bottom"), &mut state.bottom_deg),
+        (tr!("relief-hold-top"), &mut state.top_deg),
+    ] {
+        number_row(ui, &label, angle, &tr!("unit-degrees"), 1.0, 0.0..=90.0, 0);
+    }
+    describe(ui, &tr!("relief-hold-note"));
 }
 
 /// The edge of the thumbnail a chosen picture is shown at, points.
@@ -101,6 +176,61 @@ fn thumbnail(ctx: &egui::Context, picture: &Picture) -> egui::TextureHandle {
     texture
 }
 
+/// Textures in a row of the gallery, and the gap between two, points.
+const GALLERY_COLUMNS: usize = 4;
+const GALLERY_GAP: f32 = 6.0;
+
+/// The textures that come with the window, a click on one taking it as the picture.
+fn gallery(ui: &mut egui::Ui, window: &mut Window) {
+    let picked = window
+        .tools
+        .relief
+        .picture
+        .as_ref()
+        .and_then(|picture| picture.builtin);
+    let side = (ui.available_width() - GALLERY_GAP * (GALLERY_COLUMNS - 1) as f32)
+        / GALLERY_COLUMNS as f32;
+    let mut clicked = None;
+    for (row, builtins) in BUILTINS.chunks(GALLERY_COLUMNS).enumerate() {
+        ui.horizontal(|ui| {
+            ui.spacing_mut().item_spacing.x = GALLERY_GAP;
+            for (column, builtin) in builtins.iter().enumerate() {
+                let index = row * GALLERY_COLUMNS + column;
+                let Some(texture) = builtin_thumbnail(ui.ctx(), index) else {
+                    continue;
+                };
+                let name = (builtin.name)();
+                if swatch(ui, &texture, side, picked == Some(index), &name).clicked() {
+                    clicked = Some(index);
+                }
+            }
+        });
+        ui.add_space(GALLERY_GAP);
+    }
+    if let Some(index) = clicked {
+        let relief = &mut window.tools.relief;
+        crate::relief::choose_builtin(relief, &mut window.machine.status, index);
+    }
+}
+
+/// One shipped texture shrunk to a thumbnail, made into a texture the first time it is
+/// shown. `None` only for one that does not decode, which a test rules out.
+fn builtin_thumbnail(ctx: &egui::Context, index: usize) -> Option<egui::TextureHandle> {
+    let id = egui::Id::new(("relief-builtin", index));
+    if let Some(texture) = ctx.data(|data| data.get_temp::<egui::TextureHandle>(id)) {
+        return Some(texture);
+    }
+    let grey = BUILTINS.get(index)?.thumbnail(THUMB_PX as u32).ok()?;
+    let pixels = grey
+        .into_iter()
+        .map(|grey| theme::mask_pixel(grey, false))
+        .collect();
+    let image = egui::ColorImage::new([THUMB_PX, THUMB_PX], pixels);
+    let texture = ctx.load_texture("relief-builtin", image, egui::TextureOptions::LINEAR);
+    ctx.data_mut(|data| data.insert_temp(id, texture.clone()));
+    Some(texture)
+}
+
 /// Choosing a picture, and going back to the models' own textures.
 fn picture_buttons(ui: &mut egui::Ui, window: &mut Window) {
     let relief = &mut window.tools.relief;
@@ -151,6 +281,11 @@ fn depth(ui: &mut egui::Ui, window: &mut Window) {
         DEPTH_STEP,
         -MAX_DEPTH_MM..=MAX_DEPTH_MM,
         2,
+    );
+    switch(
+        ui,
+        &mut window.tools.relief.state.symmetric,
+        &tr!("relief-symmetric"),
     );
     number_row(
         ui,
@@ -218,34 +353,21 @@ fn truncated(name: &str) -> String {
 }
 
 /// Pressing the texture in, or the progress of the run that is going.
-pub fn action(ui: &mut egui::Ui, window: &mut Window) {
+fn press(ui: &mut egui::Ui, window: &mut Window) {
     if window.tools.relief.is_busy() {
-        tone(ui, &tr!("relief-pressing"), theme::colors().text_mid);
-        progress_bar(ui, None);
+        if busy(ui, &tr!("relief-pressing"), true) {
+            window.tools.relief.cancel(&mut window.machine.status);
+        }
         return;
     }
 
     let blocked = window.tools.relief.blocker(&window.doc.scene);
-    let picture = match &window.tools.relief.picture {
-        Some(picture) => picture.name.clone(),
-        None => tr!("relief-the-texture"),
-    };
-    let what = tr!(
-        "relief-tooltip",
-        picture = picture,
-        scope = window.doc.scene.scope()
-    );
-    if primary_button(ui, icon::RELIEF, &tr!("relief-press"), blocked.is_none())
-        .on_hover_text(what)
-        .clicked()
-    {
+    let button = primary_button(ui, icon::RELIEF, &tr!("relief-press"), blocked.is_none());
+    if blocked_hover(button, blocked).clicked() {
         let started = window.tools.relief.start(&window.doc.scene);
         window
             .machine
             .status
             .report(&tr!("relief-pressing-status"), started);
-    }
-    if let Some(reason) = blocked {
-        hint(ui, &reason);
     }
 }

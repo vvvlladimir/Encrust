@@ -28,6 +28,7 @@ path = "src/bin/orient_lab/main.rs"
 [dependencies]
 core-analysis.workspace = true
 core-geometry.workspace = true
+core-joint.workspace = true
 core-mesh-io.workspace = true
 core-engine.workspace = true
 core-pipeline.workspace = true
@@ -38,6 +39,7 @@ core-supports.workspace = true
 core-volume.workspace = true
 printer-profiles.workspace = true
 core-format.workspace = true
+core-text.workspace = true
 core-thumbnail.workspace = true
 net-prusalink.workspace = true
 net-sdcp.workspace = true

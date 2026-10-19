@@ -20,7 +20,7 @@ use core_pipeline::{PanelOverrides, Tolerance, raster_settings};
 use core_plate::{OrientSettings, Printed};
 use core_raster::Shading;
 use core_slicer::{AdaptiveSettings, Solid, Windows};
-use core_volume::{ReliefSettings, Tiling, press, press_tiled};
+use core_volume::{AngleMask, ReliefSettings, Tiling, press, press_tiled};
 use printer_profiles::{Compensation, MaterialProfile, PrinterProfile, SupportProfile};
 
 use crate::args::{ImportArgs, JobArgs, RasterArgs};
@@ -173,16 +173,28 @@ pub fn import(
     Ok((mesh, import, oriented))
 }
 
+/// What hollowing and drilling made of one model besides the model itself.
+pub struct Shelled {
+    pub report: Option<HollowReport>,
+    /// The bodies the holes and channels cut, which only subtract, so they are no part of
+    /// what the stack has to be tall enough for (ADR 0199).
+    pub cuts: Option<Mesh>,
+    /// A plug for each hole, laid on the plate beside the model (ADR 0313).
+    pub plugs: Vec<Mesh>,
+}
+
 /// Shells the model when asked to, then meshes the bodies its drain holes and channels
-/// cut out of it. Those stay apart from the model: they only subtract, so they are no
-/// part of what the stack has to be tall enough for (ADR 0199).
+/// cut out of it, and the plugs that close the holes. `drift_mm` is what the resin leaves
+/// a fit wider by; see `Compensation::fit_drift_mm`.
 pub fn hollow_and_cut(
     mesh: &mut Mesh,
     args: &HollowArgs,
     precision: Scalar,
+    drift_mm: Scalar,
     watch: &Watch,
-) -> Result<(Option<HollowReport>, Option<Mesh>)> {
+) -> Result<Shelled> {
     let talk = watch.talk;
+    args.check_floor_and_plugs()?;
     // Where the cuts land is read off the model as it was imported; what they are cut
     // into may be the shell. See ADR 0075.
     let placed = args
@@ -191,15 +203,34 @@ pub fn hollow_and_cut(
         .transpose()?;
 
     let mut hollow = None;
-    let mut wall = None;
+    let mut shell = None;
     if args.wanted() {
         let (shelled, report) = hollowing::run(mesh, args, precision, watch.stop)?;
         if talk {
             print!("{report}");
         }
-        wall = Some(report.wall());
-        *mesh = shelled;
+        shell = Some(shelled);
         hollow = Some(report);
+    }
+    let wall = hollow.as_ref().map(HollowReport::wall);
+    // A plug is the solid a hole takes out as it is cut, so it is read off the model before
+    // the model is the shell.
+    let plugs = match &placed {
+        Some((holes, _)) if args.plugs => {
+            let cut = hollowing::pierced(holes, wall);
+            hollowing::plugs_beside(mesh, &cut, args, drift_mm)?
+        }
+        _ => Vec::new(),
+    };
+    if talk && !plugs.is_empty() {
+        println!(
+            "  plugs         {} beside the model, {:.2} mm narrower a side\n",
+            plugs.len(),
+            args.plug_gap_mm - drift_mm
+        );
+    }
+    if let Some(shell) = shell {
+        *mesh = shell;
     }
     let mut bodies = None;
     if let Some(placed) = placed {
@@ -209,7 +240,11 @@ pub fn hollow_and_cut(
         }
         bodies = Some(meshed);
     }
-    Ok((hollow, bodies))
+    Ok(Shelled {
+        report: hollow,
+        cuts: bodies,
+        plugs,
+    })
 }
 
 /// How the stack is cut, and what the resin's shrinkage does to it on the way in.
@@ -399,9 +434,18 @@ fn press_relief(
     let Some(amplitude_mm) = args.relief else {
         return Ok(mesh);
     };
+    // Pressed after placement, so the plate's up is the mesh's own +Z.
     let settings = ReliefSettings {
         amplitude_mm,
         precision: args.precision,
+        invert: args.relief_invert,
+        symmetric: args.relief_symmetric,
+        smoothing_px: args.relief_smooth,
+        mask: AngleMask {
+            bottom_deg: args.relief_hold_bottom,
+            top_deg: args.relief_hold_top,
+            ..AngleMask::default()
+        },
         ..ReliefSettings::default()
     };
     let started = Instant::now();

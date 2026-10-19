@@ -279,6 +279,17 @@ impl SlicerApp {
     /// Takes the pockets of the last drainage check off a plate that has been hollowed
     /// again: the cavity they stood in is a new mesh, and nothing is checked until the
     /// Drain panel is asked to. See ADR 0198.
+    /// Cuts the cavity again into a model a relief was pressed into, so a press keeps its
+    /// hollow. Says whether a run was started.
+    fn hollow_what_a_press_opened(&mut self) -> bool {
+        let unhollowed = &mut self.tools.relief.unhollowed;
+        if unhollowed.is_empty() || !self.tools.hollow.again(&self.doc.scene, unhollowed) {
+            return false;
+        }
+        unhollowed.clear();
+        self.tools.hollow.job.is_some()
+    }
+
     fn forget_what_an_old_check_found(&mut self) {
         if !self.tools.hollow.take_hollowed() {
             return;
@@ -290,11 +301,14 @@ impl SlicerApp {
     }
 
     /// Ends the frame's edits and puts them on the history. What follows from an edit by
-    /// itself — a model settling onto its raft once its supports go — is done first, so it
-    /// is part of that edit: done a frame later it would be one of its own, which the
-    /// next undo would put back and the frame after it do again.
+    /// itself — a model settling onto its raft, plugs laid for its holes — is done first, so
+    /// it is part of that edit: a frame later, an undo would put it back and redo it at once.
     fn record(&mut self, frame: Frame) {
         self.tools.supports.settle_on_raft(&mut self.doc.scene);
+        let drift_mm = self.machine.slicing.material.compensation.fit_drift_mm();
+        self.tools
+            .drain
+            .lay_plugs(&mut self.doc.scene, drift_mm, &mut self.machine.status);
         self.doc.history.observe(
             &self.doc.scene,
             &ToolSettings::of(&self.tools, &self.machine.slicing),
@@ -413,6 +427,18 @@ impl eframe::App for SlicerApp {
                 .poll(&mut self.doc.scene, &mut self.machine.status)
             | self
                 .tools
+                .boolean
+                .poll(&mut self.doc.scene, &mut self.machine.status)
+            | self
+                .tools
+                .text
+                .poll(&mut self.doc.scene, &mut self.machine.status)
+            | self
+                .tools
+                .cut
+                .poll(&mut self.doc.scene, &mut self.machine.status)
+            | self
+                .tools
                 .drain
                 .poll(&mut self.doc.scene, &mut self.machine.status)
             | self.tools.orient.poll(
@@ -421,7 +447,14 @@ impl eframe::App for SlicerApp {
                 &mut self.machine.status,
             )
             | crate::panels::animate_preview(ui.ctx(), &mut self.machine.preview);
+        let working = working | self.hollow_what_a_press_opened();
         self.forget_what_an_old_check_found();
+        if self.tool != Tool::Relief {
+            self.tools.relief.forget_kept();
+        }
+        if self.tool != Tool::Cut {
+            self.tools.cut.picking_part = false;
+        }
         if self.machine.slicing.job.is_some() || self.machine.preview.is_slicing() {
             self.tools.hollow.make_way();
         }

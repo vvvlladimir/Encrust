@@ -12,9 +12,10 @@ mod hash;
 mod hull;
 mod mesh;
 mod orient;
-mod pins;
+mod primitives;
 mod ray;
 mod repair;
+mod ring;
 mod split;
 mod topology;
 mod transform;
@@ -26,24 +27,26 @@ mod weld;
 mod winding;
 
 pub use bvh::Bvh;
-pub use clip::{Cut, Plane, cut};
+pub use clip::{Cut, Plane, axes_across, cut};
 pub use closest::{ClosestPoint, closest_point, point_aabb_squared, point_triangle};
 pub use hash::{FastHasher, FastMap, FastSet};
 pub use hull::{convex_hull, fitting_turn};
 pub use mesh::Mesh;
 pub use orient::{Orientation, orient_outward};
-pub use pins::{pin, pin_spots};
+pub use primitives::{ball, cuboid, cylinder, extrude, oriented_box, prism, revolve, segments_for};
 pub use ray::{PlacedHit, Ray, RayHit, ray_aabb, ray_triangle, raycast, raycast_placed};
-pub use repair::{Filled, fill_holes, remove_duplicate_faces};
-pub use split::split;
-pub use topology::Adjacency;
+pub use repair::{Filled, collapse_flat_faces, fill_holes, remove_duplicate_faces};
+pub use ring::{ring_area, ring_contains};
+pub use split::{split, split_at_edges};
+pub use topology::{Adjacency, Components};
 pub use transform::{
     Transform, center_over_plate, drop_to_plate, lift_over_plate, smallest_scale, transform_mesh,
 };
 pub use triangle::Triangle;
+pub use triangulate::triangulate;
 pub use uv::{Heightmap, Mapping, UvMap};
 pub use validate::{MeshDiagnostics, center_of_mass, diagnose, signed_volume, signed_volume_x6};
-pub use weld::{DEFAULT_WELD_TOLERANCE, Welded, weld};
+pub use weld::{DEFAULT_WELD_TOLERANCE, Welded, point_key, weld};
 pub use winding::{Winding, solid_angle, winding_number};
 
 pub use glam::{Mat3, Mat4, Quat, Vec2, Vec3};

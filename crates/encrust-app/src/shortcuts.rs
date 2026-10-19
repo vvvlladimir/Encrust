@@ -495,6 +495,7 @@ pub fn act(window: &mut Window, action: Action) {
         }
         Action::Deselect => {
             window.tools.orient.stop_picking();
+            window.tools.cut.picking_part = false;
             window.doc.scene.clear_selection();
         }
         Action::Duplicate => duplicate_selection(window),

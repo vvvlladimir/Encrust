@@ -19,8 +19,10 @@ use crate::network::{Network, Prusa};
 use crate::panels::Window;
 use crate::profiles;
 use crate::recent::Recent;
+use crate::relief::ReliefChoice;
 use crate::slicing::Slicing;
 use crate::state::Tools;
+use crate::status::Status;
 use crate::tool_settings::ToolSettings;
 use crate::ui::theme;
 use crate::updates::UpdatePrefs;
@@ -57,6 +59,8 @@ pub struct Preferences {
     /// `docs/decisions/0192`.
     #[serde(default)]
     tools: Option<ToolSettings>,
+    #[serde(default)]
+    relief: ReliefChoice,
     /// The files opened lately, newest first.
     #[serde(default)]
     recent: Recent,
@@ -114,6 +118,7 @@ impl Preferences {
                 .collect(),
             updates: updates.clone(),
             tools: Some(ToolSettings::of(tools, slicing)),
+            relief: tools.relief.choice(),
             recent: Recent::default(),
             mask_split: None,
             inspector_w: None,
@@ -237,6 +242,9 @@ impl Preferences {
         // user last cut at stands over what the profile was measured at.
         if let Some(tools) = self.tools.clone() {
             tools.apply(window.tools, &mut window.machine.slicing);
+        }
+        if let Err(error) = window.tools.relief.restore(&self.relief) {
+            window.machine.status = Status::failed(&error);
         }
     }
 

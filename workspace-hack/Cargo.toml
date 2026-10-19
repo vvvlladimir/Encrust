@@ -21,6 +21,7 @@ crc32fast = { version = "1" }
 flate2 = { version = "1", features = ["zlib-rs"] }
 getrandom-468e82937335b1c9 = { package = "getrandom", version = "0.3", default-features = false, features = ["std"] }
 getrandom-9fbad63c4bcf4a8f = { package = "getrandom", version = "0.4", default-features = false, features = ["std", "sys_rng"] }
+glam = { version = "0.32", features = ["mint"] }
 half = { version = "2", default-features = false, features = ["num-traits"] }
 hashbrown = { version = "0.17", default-features = false, features = ["default-hasher", "inline-more"] }
 http = { version = "1" }
@@ -53,6 +54,7 @@ libc = { version = "0.2", features = ["extra_traits"] }
 nix = { version = "0.31", default-features = false, features = ["fs", "signal"] }
 smallvec = { version = "1", default-features = false, features = ["union"] }
 tinystr = { version = "0.8", features = ["zerovec"] }
+ttf-parser = { version = "0.25", default-features = false, features = ["apple-layout", "glyph-names", "no-std-float", "opentype-layout", "std", "variable-fonts"] }
 yoke = { version = "0.8", default-features = false, features = ["derive"] }
 zerofrom = { version = "0.1", default-features = false, features = ["derive"] }
 zerovec = { version = "0.11", default-features = false, features = ["alloc", "derive", "yoke"] }
@@ -80,6 +82,7 @@ tinystr = { version = "0.8", features = ["zerovec"] }
 toml_datetime = { version = "1", features = ["serde"] }
 toml_parser = { version = "1" }
 tracing = { version = "0.1", features = ["log"] }
+ttf-parser = { version = "0.25", default-features = false, features = ["apple-layout", "glyph-names", "gvar-alloc", "no-std-float", "opentype-layout", "variable-fonts"] }
 winnow = { version = "1" }
 yoke = { version = "0.8", default-features = false, features = ["derive"] }
 zerofrom = { version = "0.1", default-features = false, features = ["derive"] }
@@ -104,6 +107,7 @@ zerovec = { version = "0.11", default-features = false, features = ["alloc", "de
 [target.x86_64-pc-windows-msvc.dependencies]
 smallvec = { version = "1", default-features = false, features = ["union"] }
 tinystr = { version = "0.8", features = ["zerovec"] }
+ttf-parser = { version = "0.25", default-features = false, features = ["apple-layout", "glyph-names", "no-std-float", "opentype-layout", "std", "variable-fonts"] }
 windows-sys = { version = "0.61", features = ["Win32_Globalization", "Win32_NetworkManagement_IpHelper", "Win32_NetworkManagement_Ndis", "Win32_Networking_WinSock", "Win32_Security", "Win32_Storage_FileSystem", "Win32_System_Com", "Win32_System_Console", "Win32_System_IO", "Win32_System_Memory", "Win32_System_SystemInformation", "Win32_System_Threading", "Win32_UI_Input_KeyboardAndMouse", "Win32_UI_Shell_Common", "Win32_UI_WindowsAndMessaging"] }
 yoke = { version = "0.8", default-features = false, features = ["derive"] }
 zerofrom = { version = "0.1", default-features = false, features = ["derive"] }

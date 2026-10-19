@@ -1,4 +1,6 @@
 use crate::i18n::tr;
+mod boolean;
+mod cut;
 mod format;
 mod hollow;
 mod import;
@@ -11,15 +13,18 @@ mod preview;
 mod relief;
 mod repair;
 mod send;
+mod split;
 mod trapped;
 
+pub use boolean::{BooleanJob, BooleanOutcome, BooleanRequest, Method};
 pub use core_pipeline::SlicedFormat;
+pub use cut::{CutJob, CutOutcome, CutRequest, spawn_cut};
 #[cfg(not(target_arch = "wasm32"))]
 pub use format::applied_to;
 pub use format::label_of;
 pub use hollow::{
-    HollowJob, HollowOutcome, HollowRequest, SharedFields, hollow_tasks, lock as lock_fields,
-    rebuild_tasks,
+    HollowJob, HollowOutcome, HollowRequest, SharedFields, again_tasks, hollow_tasks,
+    lock as lock_fields, rebuild_tasks,
 };
 pub use import::{ImportJob, ImportOutcome, ImportStage};
 pub use measure::{MeasureJob, MeasureOutcome};
@@ -32,9 +37,12 @@ pub use pipeline::{SliceRequest, worker_threads};
 pub use place::{SupportJob, SupportOutcome, SupportRequest, tasks_of};
 pub use plate::models_of;
 pub use preview::{PreviewJob, PreviewOutcome};
-pub use relief::{ReliefJob, ReliefOutcome, ReliefRequest, ReliefSource, relief_tasks};
+pub use relief::{
+    Pressed, ReliefJob, ReliefOutcome, ReliefRequest, ReliefSource, relief_tasks, spawn_relief,
+};
 pub use repair::{RepairJob, RepairOutcome, RepairRequest, Repaired, mend};
 pub use send::{Action, SendJob, SendOutcome, SendRequest};
+pub use split::{SplitJob, SplitOutcome, SplitRequest, spawn_split};
 pub use trapped::{TrapJob, TrapOutcome, TrapRequest, trap_tasks};
 
 use std::path::PathBuf;
@@ -49,6 +57,59 @@ pub fn spawn(work: impl FnOnce() + Send + 'static) {
     std::thread::spawn(work);
     #[cfg(target_arch = "wasm32")]
     crate::web::thread::spawn(work);
+}
+
+/// A run on a thread of its own that ends with one value, polled for it once a frame.
+///
+/// Dropping it asks the run to stop: `work` is handed the flag, for the steps that can be
+/// given up on part way, and whatever it ends with is thrown away.
+#[derive(Debug)]
+pub struct Worker<T> {
+    outcome: Receiver<T>,
+    /// What the run is taken to have ended with when its thread stops without a word.
+    lost: fn() -> T,
+    stop: Arc<AtomicBool>,
+}
+
+impl<T: Send + 'static> Worker<T> {
+    /// Starts `work`. The thread is detached: it ends on its own.
+    pub fn spawn(work: impl FnOnce(&AtomicBool) -> T + Send + 'static, lost: fn() -> T) -> Self {
+        let (sender, outcome) = mpsc::channel();
+        let stop = Arc::new(AtomicBool::new(false));
+        let asked = Arc::clone(&stop);
+        spawn(move || {
+            let _ = sender.send(work(&asked));
+        });
+        Self {
+            outcome,
+            lost,
+            stop,
+        }
+    }
+
+    /// Returns the outcome on the frame the run ends, and `None` while it is going.
+    pub fn poll(&mut self) -> Option<T> {
+        match self.outcome.try_recv() {
+            Ok(outcome) => Some(outcome),
+            Err(TryRecvError::Empty) => None,
+            Err(TryRecvError::Disconnected) => Some((self.lost)()),
+        }
+    }
+}
+
+impl<T> Drop for Worker<T> {
+    fn drop(&mut self) {
+        self.stop.store(true, Ordering::Relaxed);
+    }
+}
+
+/// Runs `work` with its parallel loops on a pool of the worker threads, or answers
+/// `failed` with why the pool could not start.
+pub fn pooled<T: Send>(work: impl FnOnce() -> T + Send, failed: impl FnOnce(String) -> T) -> T {
+    match pipeline::thread_pool(worker_threads()) {
+        Ok(pool) => pool.install(work),
+        Err(error) => failed(format!("{error:#}")),
+    }
 }
 
 /// The cores the machine has.

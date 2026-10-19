@@ -1,8 +1,13 @@
-use core_geometry::{Bvh, Mesh, Ray, Scalar, Vec3};
+use core_geometry::{Bvh, Mat3, Mesh, Ray, Scalar, Vec3};
 
 use serde::{Deserialize, Serialize};
 
 use crate::error::VolumeError;
+use channel::tunnel;
+
+mod channel;
+
+pub use channel::Leg;
 
 /// Sides of a hole's tube. A three millimetre hole is then within thirteen micrometres of
 /// round, which is under half a pixel on any panel the workspace writes for.
@@ -20,15 +25,67 @@ const RIM_SAMPLES: usize = 12;
 /// is enough to clear it and too little to show on the model.
 pub const MOUTH_LIFT_MM: Scalar = 0.05;
 
-/// Rings and segments of the ball that fills a channel's bend: as fine as a tube, so no
-/// facet sinks under the skin the viewport cuts the model away to.
-const BEND_RINGS: usize = 12;
-const BEND_SEGMENTS: usize = SIDES;
-
 /// How many times a cut is laid over itself. Its winding has to outweigh every body that
 /// can stand where it lands — a shell, the lattice bonded into it, three struts meeting at
 /// a corner, a support's tip — or what they add up to is left in the hole; see ADR 0188.
 pub const CUT_WEIGHT: usize = 8;
+
+/// The outline a hole is cut to across its axis.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum HoleShape {
+    #[default]
+    Round,
+    /// A regular polygon of this many sides, its corners on the hole's diameter.
+    Polygon { sides: u8 },
+}
+
+impl HoleShape {
+    /// The fewest and the most sides a polygon is cut with; past twelve it reads as round.
+    pub const MIN_SIDES: u8 = 3;
+    pub const MAX_SIDES: u8 = 12;
+
+    /// How many sides the hole is cut with: a round one as finely as a channel.
+    pub fn sides(self) -> usize {
+        match self {
+            Self::Round => SIDES,
+            Self::Polygon { sides } => usize::from(sides.clamp(Self::MIN_SIDES, Self::MAX_SIDES)),
+        }
+    }
+
+    /// How many corners a polygon has, or `None` for a round hole, drawn as a true circle.
+    pub fn corners(self) -> Option<usize> {
+        match self {
+            Self::Round => None,
+            Self::Polygon { .. } => Some(self.sides()),
+        }
+    }
+}
+
+/// The hole a click drills: its mouth and depth in millimetres of the plate, its far end
+/// as a fraction of its mouth, 1 being a cylinder, and its outline and turn.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct HoleSize {
+    pub diameter_mm: Scalar,
+    pub depth_mm: Scalar,
+    pub taper: Scalar,
+    pub shape: HoleShape,
+    /// How far a polygon is turned about the axis, degrees.
+    pub turn_deg: Scalar,
+}
+
+impl HoleSize {
+    /// A round hole, as every hole was before ADR 0313.
+    pub fn round(diameter_mm: Scalar, depth_mm: Scalar, taper: Scalar) -> Self {
+        Self {
+            diameter_mm,
+            depth_mm,
+            taper,
+            shape: HoleShape::Round,
+            turn_deg: 0.0,
+        }
+    }
+}
 
 /// A hole drilled into the model so the resin behind it can get out.
 ///
@@ -52,13 +109,47 @@ pub struct DrainHole {
     /// What the surface rises around the mouth, from `lift_for`; the mouth always stands
     /// clear by a little more than that, so nothing of it is left capped.
     pub lift_mm: Scalar,
+    /// The outline, and how far it is turned about the axis in degrees. A file without
+    /// them reads a round hole (ADR 0313).
+    #[serde(default)]
+    pub shape: HoleShape,
+    #[serde(default)]
+    pub turn_deg: Scalar,
 }
 
-/// A drainage channel: a tube of `diameter_mm` dug along a polyline in model space.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+impl DrainHole {
+    /// A hole of `size` with its mouth at `at`, drilled along `axis`.
+    pub fn sized(at: Vec3, axis: Vec3, size: HoleSize, lift_mm: Scalar) -> Self {
+        Self {
+            at,
+            axis,
+            diameter_mm: size.diameter_mm,
+            depth_mm: size.depth_mm,
+            taper: size.taper,
+            lift_mm,
+            shape: size.shape,
+            turn_deg: size.turn_deg,
+        }
+    }
+
+    /// The unit offset from the axis to the outline's first corner, in the model's own
+    /// space, and how many corners there are; `None` for a round hole or no axis.
+    pub fn corner(&self) -> Option<(Vec3, usize)> {
+        Section::of(self.shape, self.turn_deg).first_corner(self.shape, self.axis)
+    }
+}
+
+/// A drainage channel: a tube of `diameter_mm` dug along a polyline in model space, round
+/// or a polygon turned `turn_deg` from the level about each leg. A file without the outline
+/// reads a round one (ADR 0313).
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 pub struct Channel {
     pub points: Vec<Vec3>,
     pub diameter_mm: Scalar,
+    #[serde(default)]
+    pub shape: HoleShape,
+    #[serde(default)]
+    pub turn_deg: Scalar,
 }
 
 /// The bodies `holes` and `channels` take out of a model, wound inward and laid
@@ -95,7 +186,7 @@ fn weighted(body: &Mesh) -> Mesh {
     whole
 }
 
-/// Every hole deepened until it is through a wall of `thickness_mm` cut on a lattice of/// Every hole deepened until it is through a wall of `thickness_mm` cut on a lattice of
+/// Every hole deepened until it is through a wall of `thickness_mm` cut on a lattice of
 /// `voxel_mm`.
 ///
 /// A hole is drilled along the surface's own normal, so the wall in front of it is the
@@ -150,28 +241,15 @@ pub fn lift_for(mesh: &Mesh, bvh: &Bvh, at: Vec3, axis: Vec3, diameter_mm: Scala
         .fold(0.0, Scalar::max)
 }
 
-/// A hole through the surface nearest `near`, drilled straight into it.
+/// A hole of `size` through the surface nearest `near`, drilled straight into it.
 ///
 /// What the CLI and the trapped-volume report place a hole with, where the window has the
 /// face under the cursor already. Returns `None` for a mesh with no faces.
-pub fn hole_at(
-    mesh: &Mesh,
-    bvh: &Bvh,
-    near: Vec3,
-    diameter_mm: Scalar,
-    depth_mm: Scalar,
-    taper: Scalar,
-) -> Option<DrainHole> {
+pub fn hole_at(mesh: &Mesh, bvh: &Bvh, near: Vec3, size: HoleSize) -> Option<DrainHole> {
     let closest = bvh.closest(mesh, near)?;
     let axis = -mesh.triangle(closest.face)?.normal_unnormalized();
-    Some(DrainHole {
-        at: closest.point,
-        axis,
-        diameter_mm,
-        depth_mm,
-        taper,
-        lift_mm: lift_for(mesh, bvh, closest.point, axis, diameter_mm),
-    })
+    let lift_mm = lift_for(mesh, bvh, closest.point, axis, size.diameter_mm);
+    Some(DrainHole::sized(closest.point, axis, size, lift_mm))
 }
 
 /// A channel under a run of points clicked on a surface, each with its outward normal.
@@ -204,6 +282,7 @@ pub fn channel_under(surface: &[(Vec3, Vec3)], diameter_mm: Scalar) -> Option<Ch
     Some(Channel {
         points,
         diameter_mm,
+        ..Channel::default()
     })
 }
 
@@ -219,43 +298,75 @@ fn body_of(hole: &DrainHole) -> Option<Mesh> {
 
     let mouth = hole.at - axis * hole.lift_mm.max(MOUTH_LIFT_MM);
     let tip = hole.at + axis * hole.depth_mm;
-    Some(tube(mouth, tip, radius, radius * hole.taper))
+    Some(tube(
+        mouth,
+        tip,
+        radius,
+        radius * hole.taper,
+        Section::of(hole.shape, hole.turn_deg),
+    ))
 }
 
-/// The tube one channel digs, with a ball at every bend so the corners are not left open.
-fn tunnel(channel: &Channel) -> Option<Mesh> {
-    let radius = channel.diameter_mm / 2.0;
-    let diggable = radius > 0.0 && channel.points.len() >= 2;
-    if !diggable {
-        return None;
-    }
+/// How a tube's ring is laid out about its axis: its sides, and the turn of the first
+/// corner off the axis's [`frame`], radians.
+#[derive(Debug, Clone, Copy)]
+pub(crate) struct Section {
+    pub sides: usize,
+    pub turn_rad: Scalar,
+}
 
-    let mut dug = Mesh::default();
-    for pair in channel.points.windows(2) {
-        if (pair[1] - pair[0]).try_normalize().is_none() {
-            continue;
+impl Section {
+    pub(crate) fn of(shape: HoleShape, turn_deg: Scalar) -> Self {
+        Self {
+            sides: shape.sides(),
+            turn_rad: turn_deg.to_radians(),
         }
-        append(&mut dug, &tube(pair[0], pair[1], radius, radius));
     }
-    if dug.is_empty() {
-        return None;
+
+    /// The first of [`Self::corners`] about `axis` and the count of them, for a polygon.
+    fn first_corner(self, shape: HoleShape, axis: Vec3) -> Option<(Vec3, usize)> {
+        let sides = shape.corners()?;
+        Some((self.corners(axis.try_normalize()?).next()?, sides))
     }
-    for point in &channel.points {
-        append(&mut dug, &ball(*point, radius, BEND_RINGS, BEND_SEGMENTS));
+
+    /// Unit offsets from the axis to each corner, around `axis` the way [`frame`] turns.
+    pub(crate) fn corners(self, axis: Vec3) -> impl Iterator<Item = Vec3> {
+        let (right, up) = frame(axis);
+        let (sin, cos) = self.turn_rad.sin_cos();
+        around(axis, right * cos + up * sin, self.sides)
     }
-    Some(dug)
 }
 
-/// A closed cone frustum from `from` to `to`, wound outward; `drill` turns it round.
-fn tube(from: Vec3, to: Vec3, radius_from: Scalar, radius_to: Scalar) -> Mesh {
-    let axis = (to - from).normalize_or_zero();
-    let (right, up) = frame(axis);
+/// `sides` unit offsets evenly round unit `axis`, the first at `first`, square to it.
+pub(crate) fn around(axis: Vec3, first: Vec3, sides: usize) -> impl Iterator<Item = Vec3> {
+    let across = axis.cross(first);
+    (0..sides).map(move |side| {
+        let (sin, cos) = (std::f32::consts::TAU * side as Scalar / sides as Scalar).sin_cos();
+        first * cos + across * sin
+    })
+}
 
-    let mut vertices = Vec::with_capacity(2 * SIDES + 2);
-    for side in 0..SIDES {
-        let angle = std::f32::consts::TAU * side as Scalar / SIDES as Scalar;
-        let (sin, cos) = angle.sin_cos();
-        let offset = right * cos + up * sin;
+/// The turn about `axis`, in a model's own space, that puts a polygon's first corner
+/// `turn_deg` off the plate's level once `linear` stands the model on the plate.
+pub fn turn_in_model(axis: Vec3, turn_deg: Scalar, linear: Mat3) -> Scalar {
+    let (Some(axis), Some(placed)) = (axis.try_normalize(), (linear * axis).try_normalize()) else {
+        return turn_deg;
+    };
+    let (right, up) = frame(placed);
+    let (sin, cos) = turn_deg.to_radians().sin_cos();
+    let corner = linear.inverse() * (right * cos + up * sin);
+    let (right, up) = frame(axis);
+    corner.dot(up).atan2(corner.dot(right)).to_degrees()
+}
+
+/// A closed frustum of `section` from `from` to `to`, wound outward; `drill` turns it
+/// round.
+fn tube(from: Vec3, to: Vec3, radius_from: Scalar, radius_to: Scalar, section: Section) -> Mesh {
+    let axis = (to - from).normalize_or_zero();
+    let sides = section.sides;
+
+    let mut vertices = Vec::with_capacity(2 * sides + 2);
+    for offset in section.corners(axis) {
         vertices.push(from + offset * radius_from);
         vertices.push(to + offset * radius_to);
     }
@@ -263,9 +374,9 @@ fn tube(from: Vec3, to: Vec3, radius_from: Scalar, radius_to: Scalar) -> Mesh {
     vertices.push(from);
     vertices.push(to);
 
-    let mut faces = Vec::with_capacity(4 * SIDES);
-    for side in 0..SIDES as u32 {
-        let next = (side + 1) % SIDES as u32;
+    let mut faces = Vec::with_capacity(4 * sides);
+    for side in 0..sides as u32 {
+        let next = (side + 1) % sides as u32;
         let (low, high) = (2 * side, 2 * side + 1);
         let (low_next, high_next) = (2 * next, 2 * next + 1);
         faces.push([low, low_next, high_next]);
@@ -276,54 +387,15 @@ fn tube(from: Vec3, to: Vec3, radius_from: Scalar, radius_to: Scalar) -> Mesh {
     Mesh::new(vertices, faces)
 }
 
-/// Two unit vectors across `axis`, for laying a ring out around it.
-fn frame(axis: Vec3) -> (Vec3, Vec3) {
+/// Two unit vectors across `axis`, for laying a ring out around it. The first is level
+/// wherever the axis is not upright, so a polygon's turn is measured from the level.
+pub(crate) fn frame(axis: Vec3) -> (Vec3, Vec3) {
     let aside = if axis.z.abs() < 0.9 { Vec3::Z } else { Vec3::X };
     let right = axis.cross(aside).normalize_or_zero();
     (right, axis.cross(right))
 }
 
-/// A ball of `radius_mm` about `center` on `rings` and `segments`, wound outward.
-fn ball(center: Vec3, radius_mm: Scalar, rings: usize, segments: usize) -> Mesh {
-    let mut vertices = vec![center + Vec3::Z * radius_mm];
-    for ring in 1..rings {
-        let theta = std::f32::consts::PI * ring as Scalar / rings as Scalar;
-        let (sin_theta, cos_theta) = theta.sin_cos();
-        for segment in 0..segments {
-            let phi = std::f32::consts::TAU * segment as Scalar / segments as Scalar;
-            let (sin_phi, cos_phi) = phi.sin_cos();
-            vertices.push(
-                center + radius_mm * Vec3::new(sin_theta * cos_phi, sin_theta * sin_phi, cos_theta),
-            );
-        }
-    }
-    let south = vertices.len() as u32;
-    vertices.push(center - Vec3::Z * radius_mm);
-
-    let at = |ring: usize, segment: usize| (1 + (ring - 1) * segments + segment % segments) as u32;
-    let mut faces = Vec::new();
-    for segment in 0..segments {
-        faces.push([0, at(1, segment), at(1, segment + 1)]);
-        faces.push([south, at(rings - 1, segment + 1), at(rings - 1, segment)]);
-    }
-    for ring in 1..rings - 1 {
-        for segment in 0..segments {
-            faces.push([
-                at(ring, segment),
-                at(ring + 1, segment),
-                at(ring + 1, segment + 1),
-            ]);
-            faces.push([
-                at(ring, segment),
-                at(ring + 1, segment + 1),
-                at(ring, segment + 1),
-            ]);
-        }
-    }
-    Mesh::new(vertices, faces)
-}
-
-fn append(whole: &mut Mesh, part: &Mesh) {
+pub(crate) fn append(whole: &mut Mesh, part: &Mesh) {
     let offset = whole.vertices.len() as u32;
     whole.vertices.extend_from_slice(&part.vertices);
     whole.faces.extend(
@@ -338,32 +410,6 @@ mod tests {
     use super::*;
     use core_geometry::signed_volume;
 
-    /// The viewport takes away the model within 97% of a cut's radius and draws the cut's
-    /// own wall in the opening, so a facet sunk deeper than that is never drawn and the
-    /// bend shows the model's inside through it.
-    #[test]
-    fn a_bend_stands_within_two_percent_of_its_radius() {
-        let bend = ball(Vec3::ZERO, 1.0, BEND_RINGS, BEND_SEGMENTS);
-        let deepest = bend
-            .faces
-            .iter()
-            .flat_map(|face| {
-                let [a, b, c] = face.map(|index| bend.vertices[index as usize]);
-                [
-                    (a + b) / 2.0,
-                    (b + c) / 2.0,
-                    (c + a) / 2.0,
-                    (a + b + c) / 3.0,
-                ]
-            })
-            .map(Vec3::length)
-            .fold(Scalar::INFINITY, Scalar::min);
-        assert!(
-            deepest >= 0.98,
-            "a facet of the bend sinks to {deepest} of its radius"
-        );
-    }
-
     fn hole() -> DrainHole {
         DrainHole {
             at: Vec3::ZERO,
@@ -372,6 +418,8 @@ mod tests {
             depth_mm: 10.0,
             taper: 1.0,
             lift_mm: 1.0,
+            shape: HoleShape::Round,
+            turn_deg: 0.0,
         }
     }
 
@@ -385,6 +433,71 @@ mod tests {
         assert!(
             (volume - expected).abs() < 0.03 * expected,
             "a 2 mm by 11 mm tube holds {expected} mm3, got {volume}"
+        );
+    }
+
+    #[test]
+    fn a_square_hole_holds_the_square_its_circle_bounds() {
+        let square = DrainHole {
+            shape: HoleShape::Polygon { sides: 4 },
+            ..hole()
+        };
+        let cut = drill(&[square], &[]).expect("a square hole drills");
+        // Corners on a 1 mm radius make a square of side root two, 2 mm2, over 11 mm.
+        let expected = 2.0 * 11.0;
+        let volume = -signed_volume(&cut) / CUT_WEIGHT as Scalar;
+        assert!(
+            (volume - expected).abs() < 1e-3 * expected,
+            "a square in a 2 mm circle by 11 mm holds {expected} mm3, got {volume}"
+        );
+    }
+
+    #[test]
+    fn a_turn_moves_a_polygons_corners_about_its_axis() {
+        let square = |turn_deg| {
+            let cut = drill(
+                &[DrainHole {
+                    shape: HoleShape::Polygon { sides: 4 },
+                    turn_deg,
+                    ..hole()
+                }],
+                &[],
+            )
+            .expect("a square hole drills");
+            cut.aabb().expect("the hole has vertices")
+        };
+        let (upright, turned) = (square(0.0), square(45.0));
+        assert!(
+            (upright.maxs.x - 1.0).abs() < 1e-4,
+            "unturned, a corner stands on the level line a radius out, got {}",
+            upright.maxs.x
+        );
+        assert!(
+            (turned.maxs.x - std::f32::consts::FRAC_1_SQRT_2).abs() < 1e-4,
+            "an eighth of a turn puts a side there instead, got {}",
+            turned.maxs.x
+        );
+    }
+
+    #[test]
+    fn a_turn_is_measured_from_the_plates_level_on_a_turned_model() {
+        // A model stood up a quarter turn about X: its own -Y is the plate's -Z, and a hole
+        // drilled along its own +X runs along the plate's +X, level in both.
+        let linear = Mat3::from_rotation_x(std::f32::consts::FRAC_PI_2);
+        let axis = Vec3::X;
+        let turn = turn_in_model(axis, 0.0, linear);
+        let corner = Section::of(HoleShape::Polygon { sides: 6 }, turn)
+            .corners(axis)
+            .next()
+            .expect("a hexagon has corners");
+        assert!(
+            (linear * corner).z.abs() < 1e-5,
+            "unturned, the first corner lies level on the plate, got {}",
+            linear * corner
+        );
+        assert!(
+            (turn_in_model(axis, 30.0, Mat3::IDENTITY) - 30.0).abs() < 1e-4,
+            "on a model standing as it was made, the turn is the one asked for"
         );
     }
 
@@ -471,6 +584,7 @@ mod tests {
         let stub = Channel {
             points: vec![Vec3::ZERO],
             diameter_mm: 2.0,
+            ..Channel::default()
         };
         assert_eq!(
             drill(&[], &[stub]),
@@ -483,6 +597,7 @@ mod tests {
         let straight = Channel {
             points: vec![Vec3::ZERO, Vec3::new(10.0, 0.0, 0.0)],
             diameter_mm: 2.0,
+            ..Channel::default()
         };
         let bent = Channel {
             points: vec![
@@ -491,6 +606,7 @@ mod tests {
                 Vec3::new(10.0, 8.0, 0.0),
             ],
             diameter_mm: 2.0,
+            ..Channel::default()
         };
         let straight = drill(&[], &[straight]).expect("a straight channel digs");
         let bent = drill(&[], &[bent]).expect("a bent channel digs");
@@ -546,8 +662,13 @@ mod tests {
         // A box from the origin to (10, 10, 10), wound outward.
         let mesh = box_mesh();
         let bvh = Bvh::build(&mesh);
-        let placed = hole_at(&mesh, &bvh, Vec3::new(5.0, 5.0, 12.0), 2.0, 5.0, 1.0)
-            .expect("the box has faces");
+        let placed = hole_at(
+            &mesh,
+            &bvh,
+            Vec3::new(5.0, 5.0, 12.0),
+            HoleSize::round(2.0, 5.0, 1.0),
+        )
+        .expect("the box has faces");
 
         assert!(
             (placed.at.z - 10.0).abs() < 1e-4,

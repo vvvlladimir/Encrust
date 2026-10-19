@@ -26,8 +26,8 @@ pub struct Fields {
 }
 
 /// One field and what it was built from: the mesh, held weakly so the cache never keeps a
-/// model alive, the shape it stood at, and its settings with the blockers and infill taken
-/// out, since the field holds neither.
+/// model alive, the shape it stood at, and its settings with the blockers, infill and open
+/// floor taken out, since the field holds none of them.
 #[derive(Debug)]
 struct Kept {
     mesh: Weak<Mesh>,
@@ -123,6 +123,7 @@ fn field_part(settings: &HollowSettings) -> HollowSettings {
     HollowSettings {
         blockers: Vec::new(),
         infill: None,
+        open_toward: None,
         ..settings.clone()
     }
 }

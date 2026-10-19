@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
 use core_geometry::{
-    Scalar, Vec3,
+    Aabb, FastMap, Scalar, Vec3,
     glam::{IVec2, IVec3},
 };
 
@@ -42,25 +42,26 @@ pub struct Sdf {
     /// What one quantised step is worth, kept so that reading a value is a multiply
     /// rather than a divide: every lattice point of an extraction goes through it.
     step_mm: Scalar,
-    /// Tiles the band crosses, each 512 quantised values with X running fastest.
-    tiles: HashMap<IVec3, Box<[Quantised]>>,
+    /// Tiles the band crosses, each 512 quantised values with X running fastest. Keyed
+    /// by a fast hash: an extraction looks one up for every lattice point.
+    tiles: FastMap<IVec3, Box<[Quantised]>>,
     /// Per tile column, the inclusive ranges of tile Z that are wholly inside the solid.
-    solid: HashMap<IVec2, Vec<(i32, i32)>>,
+    solid: FastMap<IVec2, Vec<(i32, i32)>>,
 }
 
 impl Sdf {
-    pub(crate) fn new(
+    pub(crate) fn new<S, T>(
         grid: VoxelGrid,
         band_mm: Scalar,
-        tiles: HashMap<IVec3, Box<[Quantised]>>,
-        solid: HashMap<IVec2, Vec<(i32, i32)>>,
+        tiles: HashMap<IVec3, Box<[Quantised]>, S>,
+        solid: HashMap<IVec2, Vec<(i32, i32)>, T>,
     ) -> Self {
         Self {
             grid,
             band_mm,
             step_mm: step_mm(band_mm),
-            tiles,
-            solid,
+            tiles: tiles.into_iter().collect(),
+            solid: solid.into_iter().collect(),
         }
     }
 
@@ -99,6 +100,33 @@ impl Sdf {
         self.tiles.keys().copied()
     }
 
+    /// Tiles the field does not store because they lie wholly inside the solid.
+    pub(crate) fn inside_tiles(&self) -> impl Iterator<Item = IVec3> + '_ {
+        self.solid.iter().flat_map(|(column, runs)| {
+            runs.iter()
+                .flat_map(|(first, last)| *first..=*last)
+                .map(|z| IVec3::new(column.x, column.y, z))
+        })
+    }
+
+    /// Whether the surface or anything inside it may stand in `bounds`. Never false where
+    /// it does; it may be true a tile and two voxels off.
+    pub(crate) fn reaches(&self, bounds: &Aabb) -> bool {
+        // Two voxels take in a surface vertex clustered past the tile its corners are in.
+        let margin = Vec3::splat(2.0 * self.grid.voxel_mm);
+        let first = tile_of(self.grid.voxel(bounds.mins - margin));
+        let last = tile_of(self.grid.voxel(bounds.maxs + margin));
+        (first.x..=last.x).any(|x| {
+            (first.y..=last.y).any(|y| {
+                let inside = self.solid.get(&IVec2::new(x, y)).is_some_and(|runs| {
+                    runs.iter()
+                        .any(|(bottom, top)| *bottom <= last.z && *top >= first.z)
+                });
+                inside || (first.z..=last.z).any(|z| self.tiles.contains_key(&IVec3::new(x, y, z)))
+            })
+        })
+    }
+
     /// Value at a lattice point, in millimetres.
     pub fn value(&self, voxel: IVec3) -> Scalar {
         let tile = tile_of(voxel);
@@ -109,6 +137,37 @@ impl Sdf {
             -self.band_mm
         } else {
             self.band_mm
+        }
+    }
+
+    /// The values of the `side`³ lattice points from `low`, a tile's lowest corner, with X
+    /// running fastest, into `out`; `side` reaches at most one tile past `low`'s own.
+    ///
+    /// The same numbers as [`Self::value`] point by point, for eight tile lookups rather
+    /// than one per point: an extraction reads every lattice point of the band this way.
+    pub(crate) fn block(&self, low: IVec3, side: i32, out: &mut [Scalar]) {
+        let first = tile_of(low);
+        let around: [(Option<&[Quantised]>, Scalar); 8] = std::array::from_fn(|corner| {
+            let step = |bit: usize| i32::from(corner & bit != 0);
+            let tile = first + IVec3::new(step(1), step(2), step(4));
+            let outside = if self.is_solid_tile(tile) {
+                -self.band_mm
+            } else {
+                self.band_mm
+            };
+            (self.tiles.get(&tile).map(|values| &**values), outside)
+        });
+        for z in 0..side {
+            for y in 0..side {
+                for x in 0..side {
+                    let voxel = low + IVec3::new(x, y, z);
+                    let past = (voxel - first * TILE).div_euclid(IVec3::splat(TILE));
+                    let (values, outside) = around[(past.x + 2 * past.y + 4 * past.z) as usize];
+                    out[((z * side + y) * side + x) as usize] = values.map_or(outside, |values| {
+                        Scalar::from(values[index_in_tile(voxel)]) * self.step_mm
+                    });
+                }
+            }
         }
     }
 
@@ -216,6 +275,23 @@ mod tests {
     }
 
     #[test]
+    fn a_box_reaches_the_field_through_its_band_or_its_inside_and_nowhere_else() {
+        // Tiles are 8 mm on this 1 mm lattice: the band fills z 0..8, the inside z -24..0.
+        let field = one_tile_field();
+        let cube = |at: Vec3| Aabb::new(at, at + Vec3::ONE);
+        assert!(field.reaches(&cube(Vec3::new(2.0, 2.0, 4.0))), "the band");
+        assert!(
+            field.reaches(&cube(Vec3::new(2.0, 2.0, -20.0))),
+            "the inside"
+        );
+        assert!(!field.reaches(&cube(Vec3::new(100.0, 2.0, 4.0))), "far off");
+        assert!(
+            !field.reaches(&cube(Vec3::new(2.0, 2.0, -40.0))),
+            "under it"
+        );
+    }
+
+    #[test]
     fn sampling_between_two_voxels_lands_between_their_values() {
         let field = one_tile_field();
         let middle = field.sample(Vec3::new(0.5, 0.0, 0.0));
@@ -223,5 +299,36 @@ mod tests {
             (middle - 0.375).abs() < STEP,
             "halfway between -0.25 and 1.0 is 0.375, got {middle}"
         );
+    }
+
+    #[test]
+    fn a_block_reads_the_same_values_as_one_point_at_a_time() {
+        let band_mm = 1.0;
+        let ramp = |tile: i32| -> Box<[Quantised]> {
+            (0..TILE_VALUES)
+                .map(|index| encode((index as Scalar + tile as Scalar) / 600.0 - 0.5, band_mm))
+                .collect()
+        };
+        // Two stored tiles side by side in X, and a solid run under them.
+        let field = Sdf::new(
+            VoxelGrid::new(0.1),
+            band_mm,
+            HashMap::from([(IVec3::ZERO, ramp(0)), (IVec3::X, ramp(7))]),
+            HashMap::from([(IVec2::ZERO, vec![(-3, -1)])]),
+        );
+        for low in [IVec3::ZERO, IVec3::new(0, 0, -TILE), IVec3::new(TILE, 0, 0)] {
+            let side = TILE + 1;
+            let mut block = vec![0.0; (side * side * side) as usize];
+            field.block(low, side, &mut block);
+            for z in 0..side {
+                for y in 0..side {
+                    for x in 0..side {
+                        let voxel = low + IVec3::new(x, y, z);
+                        let read = block[((z * side + y) * side + x) as usize];
+                        assert_eq!(read, field.value(voxel), "at {voxel}");
+                    }
+                }
+            }
+        }
     }
 }

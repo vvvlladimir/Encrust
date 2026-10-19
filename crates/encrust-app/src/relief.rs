@@ -1,29 +1,44 @@
 use std::collections::HashMap;
 use std::io::Read as _;
-use std::sync::Arc;
+use std::sync::{Arc, Weak};
 
 use anyhow::{Context as _, Result, bail};
 use core_geometry::{Heightmap, Mapping, Mat3, Mesh, Scalar, UvMap, Vec2, Vec3};
-use core_volume::{ReliefSettings, Tiling};
+use core_volume::{AngleMask, HollowSettings, ReliefBasis, ReliefSettings, Tiling, prepared};
 use rayon::prelude::*;
 use serde::{Deserialize, Serialize};
 
 use crate::files::{self, Handed, Wanted};
 use crate::i18n::tr;
-use crate::job::{ReliefJob, ReliefOutcome, ReliefRequest, ReliefSource, relief_tasks};
+use crate::job::{
+    Pressed, ReliefJob, ReliefOutcome, ReliefRequest, ReliefSource, relief_tasks, spawn_relief,
+};
 use crate::scene::{Mapped, ObjectId, Scene};
 use crate::status::Status;
+
+mod library;
+
+pub use library::BUILTINS;
 
 /// The texture each model is drawn with while the Relief tool is open.
 pub type Textures = HashMap<ObjectId, Arc<Mapped>>;
 
-/// What a model's laid picture was laid for, so it is laid again only when one changes.
+/// What a model's drawn texture was made for, so it is made again only when one changes.
 #[derive(Debug, Clone, Copy, PartialEq)]
 struct LaidFor {
     mesh: usize,
-    picture: usize,
+    /// The chosen picture's heights, or the model's own texture.
+    source: usize,
     sizing: Mat3,
     tiling: Tiling,
+    look: Look,
+}
+
+/// What of the panel changes the picture itself, rather than where it is pressed.
+#[derive(Debug, Clone, Copy, PartialEq)]
+struct Look {
+    invert: bool,
+    smoothing_px: Scalar,
 }
 
 /// The widest a picture is read at, pixels. Past this a tile of a few millimetres has
@@ -37,6 +52,35 @@ pub struct Picture {
     pub heights: Arc<Heightmap>,
     /// The size of the file, pixels, before it was read down to `MAX_PICTURE_PX`.
     pub size_px: [u32; 2],
+    /// Which of [`BUILTINS`] it is, for one that came with the window.
+    pub builtin: Option<usize>,
+}
+
+/// What of the Relief tool the window remembers between runs and no undo takes back, like a
+/// view: the mode it is in and the built-in texture chosen, by its file.
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct ReliefChoice {
+    pub mode: ReliefMode,
+    pub texture: Option<String>,
+}
+
+/// How much memory the bases kept between presses may hold, bytes. A browser's memory
+/// only ever grows and is shared with every other tab, so the page keeps far less.
+#[cfg(target_arch = "wasm32")]
+const KEPT_BYTES: usize = 192 << 20;
+#[cfg(not(target_arch = "wasm32"))]
+const KEPT_BYTES: usize = 768 << 20;
+
+/// The basis one model was last pressed on, kept while the model it was built over is
+/// still the one on the plate — which, once pressed, it is again only after an undo.
+#[derive(Debug)]
+struct Kept {
+    id: ObjectId,
+    mesh: Weak<Mesh>,
+    /// The size and turn the mesh was pressed at, which a mirror changes and its box may not.
+    sizing: Mat3,
+    basis: Arc<ReliefBasis>,
 }
 
 /// What the Relief tool presses with. It is the window's own record: the project manifest
@@ -47,6 +91,47 @@ pub struct ReliefState {
     /// the relief in rather than raising it.
     pub amplitude_mm: Scalar,
     pub precision: Scalar,
+    #[serde(default)]
+    pub invert: bool,
+    #[serde(default)]
+    pub symmetric: bool,
+    /// How far the texture is blurred before it is pressed, pixels of the texture.
+    #[serde(default)]
+    pub smoothing_px: Scalar,
+    /// Faces within this many degrees of facing the plate are left as they are.
+    #[serde(default)]
+    pub bottom_deg: Scalar,
+    /// Faces within this many degrees of facing straight up are left as they are.
+    #[serde(default)]
+    pub top_deg: Scalar,
+}
+
+impl Default for ReliefState {
+    fn default() -> Self {
+        let asked = ReliefSettings::default();
+        Self {
+            amplitude_mm: asked.amplitude_mm,
+            precision: asked.precision,
+            invert: asked.invert,
+            symmetric: asked.symmetric,
+            smoothing_px: asked.smoothing_px,
+            bottom_deg: asked.mask.bottom_deg,
+            top_deg: asked.mask.top_deg,
+        }
+    }
+}
+
+/// Which of the Relief tool's three jobs the panel and a click are for.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum ReliefMode {
+    /// A texture or a picture pressed into the surface.
+    #[default]
+    Texture,
+    /// Text written where a model is clicked.
+    Text,
+    /// The picked models joined, subtracted or intersected.
+    Combine,
 }
 
 /// What the Relief tool is set to, and the run it has going.
@@ -54,8 +139,9 @@ pub struct ReliefState {
 /// A texture is pressed into the model as geometry rather than written as exposure: grey
 /// controls cure depth, so it could only texture a face pointing up or down; see
 /// `docs/decisions/0116-a-texture-is-pressed-into-the-field.md`.
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub struct ReliefTool {
+    pub mode: ReliefMode,
     pub state: ReliefState,
     pub job: Option<ReliefJob>,
     /// The picture pressed instead of the models' own textures, while one is chosen. The
@@ -64,30 +150,38 @@ pub struct ReliefTool {
     pub tiling: Tiling,
     /// The picture laid over each model it would be pressed into, for the view to draw.
     laid: HashMap<ObjectId, (LaidFor, Arc<Mapped>)>,
-}
-
-impl Default for ReliefTool {
-    fn default() -> Self {
-        let asked = ReliefSettings::default();
-        Self {
-            state: ReliefState {
-                amplitude_mm: asked.amplitude_mm,
-                precision: asked.precision,
-            },
-            job: None,
-            picture: None,
-            tiling: Tiling::default(),
-            laid: HashMap::new(),
-        }
-    }
+    /// What the last run stood on, so that trying another picture after an undo skips
+    /// the search that is most of a press.
+    kept: Vec<Kept>,
+    /// The models a press took the cavity off, with what it was built from, for the
+    /// Hollow tool to cut again into the pressed surface.
+    pub(crate) unhollowed: Vec<(ObjectId, HollowSettings)>,
 }
 
 impl ReliefTool {
+    /// What the panel is set to. The mask's up is the plate's; each run turns it into
+    /// the model's own.
     pub fn settings(&self) -> ReliefSettings {
+        let state = &self.state;
         ReliefSettings {
-            amplitude_mm: self.state.amplitude_mm,
-            precision: self.state.precision,
+            amplitude_mm: state.amplitude_mm,
+            precision: state.precision,
+            invert: state.invert,
+            symmetric: state.symmetric,
+            smoothing_px: state.smoothing_px,
+            mask: AngleMask {
+                bottom_deg: state.bottom_deg,
+                top_deg: state.top_deg,
+                ..AngleMask::default()
+            },
             ..ReliefSettings::default()
+        }
+    }
+
+    fn look(&self) -> Look {
+        Look {
+            invert: self.state.invert,
+            smoothing_px: self.state.smoothing_px,
         }
     }
 
@@ -104,10 +198,24 @@ impl ReliefTool {
 
     /// Starts a run over everything visible on the plate that carries a texture.
     pub fn start(&mut self, scene: &Scene) -> Result<()> {
-        let tasks = relief_tasks(scene, self.picture.is_some());
+        let mut tasks = relief_tasks(scene, self.picture.is_some());
         if tasks.is_empty() {
             bail!(tr!("relief-nothing-to-press"));
         }
+        for task in &mut tasks {
+            task.basis = self
+                .kept
+                .iter()
+                .find(|kept| {
+                    kept.id == task.taken.id
+                        && kept.mesh.as_ptr() == Arc::as_ptr(&task.mesh)
+                        && kept.sizing == task.sizing.linear()
+                })
+                .map(|kept| Arc::clone(&kept.basis));
+        }
+        // What this run does not take is dropped before it starts rather than after, so
+        // it is never resident beside the bases the run builds.
+        self.kept.clear();
         let source = match &self.picture {
             Some(picture) => ReliefSource::Tiled {
                 image: Arc::clone(&picture.heights),
@@ -116,7 +224,7 @@ impl ReliefTool {
             None => ReliefSource::Mapped,
         };
 
-        self.job = Some(ReliefJob::spawn(ReliefRequest {
+        self.job = Some(spawn_relief(ReliefRequest {
             tasks,
             settings: self.settings(),
             source,
@@ -135,66 +243,154 @@ impl ReliefTool {
         };
 
         self.job = None;
-        match outcome {
-            ReliefOutcome::Pressed(models) => {
-                let count = models.len();
-                let coarsened = models.iter().filter(|model| model.coarsened).count();
-                for model in models {
-                    if let Some(object) = scene.get_mut(model.id) {
-                        // The relief was pressed at printed size, so the scale and the
-                        // stretch are in the mesh now and must not be applied twice.
-                        object.reshape(model.shaped);
-                        object.transform.scale = Vec3::ONE;
-                        object.transform.stretch = Mat3::IDENTITY;
-                    }
-                }
-                let depth = self.state.amplitude_mm;
-                *status = match coarsened {
-                    0 => Status::Info(tr!(
-                        "relief-done",
-                        depth = format!("{depth:.2}"),
-                        count = count
-                    )),
-                    _ => Status::Info(tr!(
-                        "relief-done-coarsened",
-                        depth = format!("{depth:.2}"),
-                        count = count,
-                        coarsened = coarsened
-                    )),
-                };
-            }
-            ReliefOutcome::Failed(message) => *status = Status::Error(message),
-        }
+        *status = match outcome {
+            ReliefOutcome::Pressed(models) => self.land(scene, models),
+            ReliefOutcome::Failed(message) => Status::Error(message),
+        };
         false
+    }
+
+    /// Puts each pressed mesh on the model it was pressed into, unless that model has been
+    /// reshaped, turned or resized since, and keeps the bases there is room for.
+    fn land(&mut self, scene: &mut Scene, models: Vec<Pressed>) -> Status {
+        let count = models.len();
+        let coarsened = models.iter().filter(|model| model.coarsened).count();
+        let mut changed = None;
+        let mut room = KEPT_BYTES;
+        for model in models {
+            let Some(object) = scene
+                .get_mut(model.taken.id)
+                .filter(|object| model.taken.is_shaped_alike_to(object))
+            else {
+                changed.get_or_insert(model.taken.name);
+                continue;
+            };
+            if model.basis.bytes() <= room {
+                room -= model.basis.bytes();
+                self.kept.push(Kept {
+                    id: object.id,
+                    mesh: Arc::downgrade(&object.mesh),
+                    sizing: object.transform.sizing().linear(),
+                    basis: model.basis,
+                });
+            }
+            // The relief was pressed at printed size, so the scale and the stretch are in
+            // the mesh now and must not be applied twice.
+            let sizing = object.transform.sizing().linear();
+            let hollow = std::mem::take(&mut object.hollow);
+            object.reshape(model.shaped);
+            object.transform.scale = Vec3::ONE;
+            object.transform.stretch = Mat3::IDENTITY;
+            object.hollow = hollow.carried_onto(&object.mesh, &object.bvh, sizing);
+            if let Some(asked) = hollow.asked() {
+                self.unhollowed.push((object.id, asked.clone()));
+            }
+        }
+        if let Some(name) = changed {
+            return Status::Error(tr!("job-model-changed", name = name));
+        }
+        let depth = format!("{:.2}", self.state.amplitude_mm);
+        match coarsened {
+            0 => Status::Info(tr!("relief-done", depth = depth, count = count)),
+            _ => Status::Info(tr!(
+                "relief-done-coarsened",
+                depth = depth,
+                count = count,
+                coarsened = coarsened
+            )),
+        }
     }
 
     pub fn is_busy(&self) -> bool {
         self.job.is_some()
     }
 
-    /// The texture each model on the plate is drawn with: the chosen picture over the
-    /// models it would be pressed into, else the texture each model carries.
-    pub fn textures(&mut self, scene: &Scene) -> Textures {
-        let Some(picture) = &self.picture else {
-            self.laid.clear();
-            return scene
-                .printable(scene.active_plate())
-                .filter_map(|object| Some((object.id, Arc::clone(object.mapped.as_ref()?))))
-                .collect();
+    /// The mode and built-in texture to remember.
+    pub fn choice(&self) -> ReliefChoice {
+        let builtin = self.picture.as_ref().and_then(|picture| picture.builtin);
+        ReliefChoice {
+            mode: self.mode,
+            texture: builtin
+                .and_then(|index| BUILTINS.get(index))
+                .map(|b| b.file.to_owned()),
+        }
+    }
+
+    /// Stands the tool in the mode and on the texture remembered; a texture no longer
+    /// among the built-in ones is left unchosen.
+    pub fn restore(&mut self, choice: &ReliefChoice) -> Result<()> {
+        self.mode = choice.mode;
+        let Some(index) = choice.texture.as_ref().and_then(|file| {
+            BUILTINS
+                .iter()
+                .position(|builtin| builtin.file == file.as_str())
+        }) else {
+            return Ok(());
         };
+        self.picture = Some(builtin_picture(index)?);
+        Ok(())
+    }
+
+    /// Gives up on the press going: what it would have made is thrown away when it ends.
+    pub fn cancel(&mut self, status: &mut Status) {
+        if self.job.take().is_some() {
+            *status = Status::Info(tr!("relief-cancelled"));
+        }
+    }
+
+    /// Lets go of the bases kept for another press, which the window does once the tool
+    /// is put down: they can be hundreds of megabytes.
+    pub fn forget_kept(&mut self) {
+        self.kept.clear();
+    }
+
+    /// The texture each model on the plate is drawn with, read the way pressing reads it:
+    /// the chosen picture over the models it would be pressed into, else the texture each
+    /// model carries.
+    pub fn textures(&mut self, scene: &Scene) -> Textures {
+        let look = self.look();
+        let settings = self.settings();
         let mut laid = HashMap::new();
-        for object in scene.targets() {
-            let key = LaidFor {
-                mesh: Arc::as_ptr(&object.mesh) as usize,
-                picture: Arc::as_ptr(&picture.heights) as usize,
-                sizing: object.transform.sizing().linear(),
-                tiling: self.tiling,
-            };
-            let mapped = match self.laid.remove(&object.id) {
-                Some((was, mapped)) if was == key => mapped,
-                _ => Arc::new(lay(picture, &object.mesh, key.sizing, self.tiling)),
-            };
-            laid.insert(object.id, (key, mapped));
+        match &self.picture {
+            Some(picture) => {
+                // Read once for every model it is laid over, and only when one is laid anew.
+                let mut read: Option<Picture> = None;
+                for object in scene.targets() {
+                    let key = LaidFor {
+                        mesh: Arc::as_ptr(&object.mesh) as usize,
+                        source: Arc::as_ptr(&picture.heights) as usize,
+                        sizing: object.transform.sizing().linear(),
+                        tiling: self.tiling,
+                        look,
+                    };
+                    let mapped = relaid(&mut self.laid, object.id, key, || {
+                        let read = read.get_or_insert_with(|| Picture {
+                            heights: Arc::new(prepared(&picture.heights, &settings).into_owned()),
+                            ..picture.clone()
+                        });
+                        Arc::new(lay(read, &object.mesh, key.sizing, self.tiling))
+                    });
+                    laid.insert(object.id, (key, mapped));
+                }
+            }
+            None => {
+                for object in scene.printable(scene.active_plate()) {
+                    let Some(own) = &object.mapped else {
+                        continue;
+                    };
+                    let key = LaidFor {
+                        mesh: Arc::as_ptr(&object.mesh) as usize,
+                        source: Arc::as_ptr(own) as usize,
+                        sizing: Mat3::IDENTITY,
+                        tiling: Tiling::default(),
+                        look,
+                    };
+                    let mapped = relaid(&mut self.laid, object.id, key, || {
+                        read_as_pressed(own, &settings)
+                    });
+                    laid.insert(object.id, (key, mapped));
+                }
+            }
         }
         self.laid = laid;
         self.laid
@@ -202,6 +398,36 @@ impl ReliefTool {
             .map(|(id, (_, mapped))| (*id, Arc::clone(mapped)))
             .collect()
     }
+}
+
+/// What was laid over `id` before where it was laid for `key`, or what `make` lays anew.
+fn relaid(
+    was: &mut HashMap<ObjectId, (LaidFor, Arc<Mapped>)>,
+    id: ObjectId,
+    key: LaidFor,
+    make: impl FnOnce() -> Arc<Mapped>,
+) -> Arc<Mapped> {
+    match was.remove(&id) {
+        Some((laid_for, mapped)) if laid_for == key => mapped,
+        _ => make(),
+    }
+}
+
+/// A model's own texture as pressing with `settings` reads it, shared as it is where that
+/// changes nothing.
+fn read_as_pressed(own: &Arc<Mapped>, settings: &ReliefSettings) -> Arc<Mapped> {
+    if settings.smoothing_px <= 0.0 && !settings.invert {
+        return Arc::clone(own);
+    }
+    Arc::new(Mapped {
+        names: own.names.clone(),
+        uvs: own.uvs.clone(),
+        heights: own
+            .heights
+            .iter()
+            .map(|image| prepared(image, settings).into_owned())
+            .collect(),
+    })
 }
 
 /// `picture` laid over `mesh` at printed size the way pressing it lays it, each face read
@@ -251,8 +477,8 @@ pub fn load_picture(tool: &mut ReliefTool, status: &mut Status, file: &Handed) {
     let path = file.path();
     let read = read_picture(file)
         .with_context(|| tr!("error-cannot-read", path = path.display().to_string()));
-    let pressing = tr!("relief-pressing-picture", name = picture_name(file));
-    if let Some(picture) = status.report(&pressing, read) {
+    let picked = tr!("relief-picked-picture", name = picture_name(file));
+    if let Some(picture) = status.report(&picked, read) {
         tool.picture = Some(picture);
     }
 }
@@ -266,7 +492,34 @@ fn picture_name(file: &Handed) -> String {
 fn read_picture(file: &Handed) -> Result<Picture> {
     let mut bytes = Vec::new();
     file.reader()?.read_to_end(&mut bytes)?;
-    let image = image::load_from_memory(&bytes)?;
+    decoded(picture_name(file), &bytes)
+}
+
+/// Takes one of the textures that come with the window as what the Relief tool presses in.
+pub fn choose_builtin(tool: &mut ReliefTool, status: &mut Status, index: usize) {
+    let Some(builtin) = BUILTINS.get(index) else {
+        return;
+    };
+    let picked = tr!("relief-picked-picture", name = (builtin.name)());
+    if let Some(picture) = status.report(&picked, builtin_picture(index)) {
+        tool.picture = Some(picture);
+    }
+}
+
+/// One of [`BUILTINS`] read as the picture to press, or an error past the end of them.
+fn builtin_picture(index: usize) -> Result<Picture> {
+    let builtin = BUILTINS
+        .get(index)
+        .with_context(|| format!("no built-in texture {index}"))?;
+    decoded((builtin.name)(), builtin.bytes).map(|picture| Picture {
+        builtin: Some(index),
+        ..picture
+    })
+}
+
+/// `bytes` of any picture format read as grey, no wider than `MAX_PICTURE_PX`.
+fn decoded(name: String, bytes: &[u8]) -> Result<Picture> {
+    let image = image::load_from_memory(bytes)?;
     let size_px = [image.width(), image.height()];
     let image = if size_px[0].max(size_px[1]) > MAX_PICTURE_PX {
         image.thumbnail(MAX_PICTURE_PX, MAX_PICTURE_PX)
@@ -278,9 +531,10 @@ fn read_picture(file: &Handed) -> Result<Picture> {
     let heights =
         Heightmap::new(width, height, grey.into_raw()).context(tr!("relief-no-pixels"))?;
     Ok(Picture {
-        name: picture_name(file),
+        name,
         heights: Arc::new(heights),
         size_px,
+        builtin: None,
     })
 }
 
@@ -336,6 +590,15 @@ mod tests {
     }
 
     #[test]
+    fn a_builtin_texture_is_chosen_by_its_place_in_the_list() {
+        let mut tool = ReliefTool::default();
+        choose_builtin(&mut tool, &mut Status::default(), 2);
+        let picture = tool.picture.expect("a shipped texture reads");
+        assert_eq!(picture.builtin, Some(2));
+        assert_eq!(picture.name, (BUILTINS[2].name)());
+    }
+
+    #[test]
     fn a_file_that_is_no_picture_is_said_so() {
         let mut tool = ReliefTool::default();
         let mut status = Status::default();
@@ -357,6 +620,7 @@ mod tests {
             name: "flat.png".to_owned(),
             heights: Arc::new(Heightmap::new(1, 1, vec![1.0]).expect("one pixel")),
             size_px: [1, 1],
+            builtin: None,
         });
         assert_eq!(tool.blocker(&scene), None);
     }
@@ -385,6 +649,7 @@ mod tests {
             name: "stone.png".to_owned(),
             heights: Arc::new(Heightmap::new(1, 1, vec![1.0]).expect("one pixel")),
             size_px: [1, 1],
+            builtin: None,
         });
         let first = tool.textures(&scene);
         let laid = first
@@ -416,6 +681,7 @@ mod tests {
             name: "stone.png".to_owned(),
             heights: Arc::new(Heightmap::new(1, 1, vec![1.0]).expect("one pixel")),
             size_px: [1, 1],
+            builtin: None,
         };
         // A face in the plane z = 0, so it is read from above, 10 mm on a side.
         let mesh = Mesh::new(
@@ -445,11 +711,150 @@ mod tests {
             state: ReliefState {
                 amplitude_mm: -0.3,
                 precision: 0.8,
+                ..ReliefState::default()
             },
             ..ReliefTool::default()
         };
         let settings = tool.settings();
         assert!((settings.amplitude_mm + 0.3).abs() < 1e-6);
         assert!((settings.precision - 0.8).abs() < 1e-6);
+    }
+
+    #[test]
+    fn an_inverted_picture_is_drawn_the_way_it_is_pressed() {
+        let scene = scene_with_a_tetrahedron();
+        let mut tool = ReliefTool {
+            picture: Some(Picture {
+                name: "white.png".to_owned(),
+                heights: Arc::new(Heightmap::new(1, 1, vec![1.0]).expect("one pixel")),
+                size_px: [1, 1],
+                builtin: None,
+            }),
+            state: ReliefState {
+                invert: true,
+                ..ReliefState::default()
+            },
+            ..ReliefTool::default()
+        };
+        let drawn = tool.textures(&scene);
+        let laid = drawn
+            .values()
+            .next()
+            .expect("the picture is laid over the model");
+        assert!(
+            laid.heights[0].sample(Vec2::splat(0.5)).abs() < 1e-6,
+            "white turned over is drawn black, as it would press"
+        );
+    }
+
+    #[test]
+    fn a_turned_model_holds_the_faces_that_face_the_plate_once_turned() {
+        let mut scene = scene_with_a_tetrahedron();
+        let id = scene.objects()[0].id;
+        // A quarter turn about X stands the model's +Y up on the plate.
+        scene
+            .get_mut(id)
+            .expect("the tetrahedron is in the scene")
+            .transform
+            .rotation = core_geometry::Quat::from_rotation_x(std::f32::consts::FRAC_PI_2);
+        let tasks = relief_tasks(&scene, true);
+        let up = tasks[0].up;
+        assert!(
+            (up - Vec3::Y).length() < 1e-5,
+            "got {up}, expected the model's +Y"
+        );
+    }
+
+    #[test]
+    fn a_hollow_model_keeps_its_blockers_through_a_press_and_is_hollowed_again() {
+        let mut scene = scene_with_a_tetrahedron();
+        let mut status = Status::default();
+        let mut hollow = crate::hollow::HollowTool::default();
+        hollow.start(&scene).expect("a model is on the plate");
+        while hollow.poll(&mut scene, &mut status) {
+            std::thread::yield_now();
+        }
+        let object = &mut scene.objects_mut()[0];
+        assert!(object.hollow.is_hollow(), "{status:?}");
+        object
+            .hollow
+            .add_blocker(Vec3::new(5.0, 5.0, 5.0), 2.0, object.transform);
+
+        let mut tool = ReliefTool {
+            picture: Some(Picture {
+                name: "flat.png".to_owned(),
+                heights: Arc::new(Heightmap::new(1, 1, vec![1.0]).expect("one pixel")),
+                size_px: [1, 1],
+                builtin: None,
+            }),
+            ..ReliefTool::default()
+        };
+        tool.start(&scene)
+            .expect("the picture presses into the tetrahedron");
+        while tool.poll(&mut scene, &mut status) {
+            std::thread::yield_now();
+        }
+        let object = &scene.objects()[0];
+        assert!(
+            !object.hollow.is_hollow(),
+            "the old cavity was cut into the old surface"
+        );
+        assert_eq!(object.hollow.blockers().len(), 1, "the blocker stays");
+        assert_eq!(tool.unhollowed.len(), 1);
+
+        assert!(hollow.again(&scene, &tool.unhollowed));
+        while hollow.poll(&mut scene, &mut status) {
+            std::thread::yield_now();
+        }
+        assert!(scene.objects()[0].hollow.is_hollow(), "{status:?}");
+    }
+
+    #[test]
+    fn a_relief_pressed_into_a_model_resized_meanwhile_is_dropped() {
+        let mut scene = scene_with_a_tetrahedron();
+        let mut tool = ReliefTool {
+            picture: Some(Picture {
+                name: "flat.png".to_owned(),
+                heights: Arc::new(Heightmap::new(1, 1, vec![1.0]).expect("one pixel")),
+                size_px: [1, 1],
+                builtin: None,
+            }),
+            ..ReliefTool::default()
+        };
+        tool.start(&scene)
+            .expect("the picture presses into the tetrahedron");
+        let object = &mut scene.objects_mut()[0];
+        let before = Arc::clone(&object.mesh);
+        object.transform.scale = Vec3::splat(2.0);
+        let mut status = Status::default();
+        while tool.poll(&mut scene, &mut status) {
+            std::thread::yield_now();
+        }
+        assert_eq!(
+            status,
+            Status::Error(tr!("job-model-changed", name = "tetrahedron"))
+        );
+        let object = &scene.objects()[0];
+        assert!(Arc::ptr_eq(&object.mesh, &before), "the mesh is left alone");
+        assert_eq!(
+            object.transform.scale,
+            Vec3::splat(2.0),
+            "and so is its size"
+        );
+    }
+
+    #[test]
+    fn the_mode_and_texture_chosen_come_back_in_the_next_run() {
+        let mut tool = ReliefTool {
+            mode: ReliefMode::Combine,
+            ..ReliefTool::default()
+        };
+        choose_builtin(&mut tool, &mut Status::default(), 2);
+        let text = serde_json::to_string(&tool.choice()).expect("the choice serialises");
+        let read: ReliefChoice = serde_json::from_str(&text).expect("and reads back");
+        let mut next = ReliefTool::default();
+        next.restore(&read).expect("a built-in texture reads");
+        assert_eq!(next.mode, ReliefMode::Combine);
+        assert_eq!(next.picture.and_then(|picture| picture.builtin), Some(2));
     }
 }

@@ -86,8 +86,7 @@ constant and neither removes it, and both pay in rays per hole on every edit.
 
 ### Cut the mesh for real
 
-A boolean (CGAL, Manifold) or a subtraction in the SDF with marching cubes, which is what
-PrusaSlicer falls back to. It gives geometry everything can use, not just a picture, and it
+A boolean (CGAL, Manifold) or a subtraction in the SDF with marching cubes, which is what another slicer falls back to. It gives geometry everything can use, not just a picture, and it
 is the honest answer for a cut that is not a primitive. Rejected here because it remeshes
 the model on every change to a hole, which ADR 0059 and 0073 already turned down, and
 because it answers a question nobody asked yet: today's cuts are primitives.

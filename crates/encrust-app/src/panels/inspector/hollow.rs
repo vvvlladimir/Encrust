@@ -1,4 +1,4 @@
-use core_volume::{HollowMode, InfillPattern, MIN_WALL_MM};
+use core_volume::{HollowMode, InfillPattern, InfillSettings, MIN_WALL_MM};
 
 use printer_profiles::Kind;
 
@@ -9,8 +9,9 @@ use crate::job::HollowJob;
 use crate::panels::Window;
 use crate::state::{Doc, Tools};
 use crate::ui::{
-    Segment, Segmented, describe, hint, icon, nested, notice, number_row, primary_button,
-    progress_bar, secondary_button, section, section_with_switch, stats, subheading, theme, tone,
+    Segment, Segmented, blocked_hover, busy, describe, hint, icon, nested, notice, number_row,
+    primary_button, progress_bar, secondary_button, section, section_with_switch, stats,
+    subheading, theme, tone,
 };
 use crate::workspace::Tool;
 
@@ -28,8 +29,24 @@ const MAX_WALL_MM: f32 = 15.0;
 const MIN_CELL_MM: f32 = 1.0;
 const MAX_CELL_MM: f32 = 40.0;
 
-/// Bounds on the density. Under a twentieth the lattice holds nothing up, and past half
-/// it is a solid with a texture rather than an infill.
+/// Bounds on a hive or grid wall: under half a millimetre the field cannot carry it, and
+/// past ten it is solid with a few holes in it.
+const MIN_INFILL_WALL_MM: f32 = 0.5;
+const MAX_INFILL_WALL_MM: f32 = 10.0;
+
+/// The narrowest crossing hole resin still runs through, and the share of the widest the
+/// pattern allows that a hole may take.
+const MIN_HOLE_MM: f32 = 0.5;
+const MAX_HOLE_SHARE: f32 = 0.9;
+
+/// How high the rows of crossing holes may start, the least wall left between two rows and
+/// the furthest apart they may stand, mm.
+const MAX_HOLE_FROM_MM: f32 = 40.0;
+const MIN_HOLE_GAP_MM: f32 = 1.0;
+const MAX_HOLE_SPACING_MM: f32 = 40.0;
+
+/// Bounds on a scaffold's density. Under a twentieth the lattice holds nothing up, and
+/// past half it is a solid with a texture rather than an infill.
 const MIN_DENSITY: f32 = 0.05;
 const MAX_DENSITY: f32 = 0.5;
 
@@ -68,6 +85,11 @@ fn settings(ui: &mut egui::Ui, window: &mut Window) {
         modes(ui, window.tools);
         wall(ui, window);
     });
+    // A mould's void is the model itself: nothing stands in it and no wall is kept solid
+    // (docs/design/hollowing.md).
+    if window.tools.hollow.state.mode == HollowMode::External {
+        return;
+    }
     // The body reads the switch as it stood before this frame's click; the knob's slide
     // draws the frame after, which catches it up.
     let mut on = window.tools.hollow.state.infill_on;
@@ -86,8 +108,7 @@ fn settings(ui: &mut egui::Ui, window: &mut Window) {
 fn drainage(ui: &mut egui::Ui, window: &mut Window) {
     if window.tools.drain.job.is_some() {
         subheading(ui, &tr!("hollow-drainage"));
-        tone(ui, &tr!("hollow-looking"), theme::colors().text_mid);
-        progress_bar(ui, None);
+        busy(ui, &tr!("hollow-looking"), false);
         return;
     }
 
@@ -119,23 +140,43 @@ fn drainage(ui: &mut egui::Ui, window: &mut Window) {
     }
 }
 
-/// Which surface the wall is measured from.
+/// What the Shell picker offers: the two ways to measure a wall, and the inside shell
+/// opened through the floor it stands on.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Shell {
+    Inside,
+    Outside,
+    BottomThrough,
+}
+
+/// Which surface the wall is measured from, and whether a shell is open through its floor.
 fn modes(ui: &mut egui::Ui, tools: &mut Tools) {
     let segments = [
-        Segment::new(HollowMode::Internal, tr!("hollow-inside")),
-        Segment::new(HollowMode::External, tr!("hollow-outside")),
+        Segment::new(Shell::Inside, tr!("hollow-inside")),
+        Segment::new(Shell::Outside, tr!("hollow-outside")),
+        Segment::new(Shell::BottomThrough, tr!("hollow-bottom-through")),
     ];
+    let state = &mut tools.hollow.state;
+    let mut chosen = match (state.mode, state.open_floor) {
+        (HollowMode::External, _) => Shell::Outside,
+        (HollowMode::Internal, false) => Shell::Inside,
+        (HollowMode::Internal, true) => Shell::BottomThrough,
+    };
     let width = ui.available_width();
-    let mut chosen = tools.hollow.state.mode;
     if Segmented::new(&segments).width(width).show(ui, &mut chosen) {
-        tools.hollow.state.mode = chosen;
+        state.mode = match chosen {
+            Shell::Outside => HollowMode::External,
+            Shell::Inside | Shell::BottomThrough => HollowMode::Internal,
+        };
+        state.open_floor = chosen == Shell::BottomThrough;
     }
 
     describe(
         ui,
-        &match tools.hollow.state.mode {
-            HollowMode::Internal => tr!("hollow-inside-note"),
-            HollowMode::External => tr!("hollow-outside-note"),
+        &match chosen {
+            Shell::Inside => tr!("hollow-inside-note"),
+            Shell::Outside => tr!("hollow-outside-note"),
+            Shell::BottomThrough => tr!("hollow-bottom-through-note"),
         },
     );
 }
@@ -207,36 +248,88 @@ fn infill(ui: &mut egui::Ui, tools: &mut Tools) {
             .show(ui, &mut tools.hollow.state.infill.pattern);
 
         ui.add_space(2.0);
-        number_row(
-            ui,
-            &tr!("hollow-cell"),
-            &mut tools.hollow.state.infill.size_mm,
-            &tr!("unit-mm"),
-            COARSE_STEP,
-            MIN_CELL_MM..=MAX_CELL_MM,
-            1,
-        );
-        let mut percent = tools.hollow.state.infill.density * 100.0;
-        number_row(
-            ui,
-            &tr!("hollow-density"),
-            &mut percent,
-            "%",
-            COARSE_STEP,
-            MIN_DENSITY * 100.0..=MAX_DENSITY * 100.0,
-            0,
-        );
-        tools.hollow.state.infill.density = percent / 100.0;
+        let infill = &mut tools.hollow.state.infill;
+        let cell = match infill.pattern {
+            InfillPattern::Hive => tr!("hollow-cell-hive"),
+            InfillPattern::Grid => tr!("hollow-cell-grid"),
+            InfillPattern::Scaffold => tr!("hollow-cell"),
+        };
+        let mm = tr!("unit-mm");
+        let cells = MIN_CELL_MM..=MAX_CELL_MM;
+        number_row(ui, &cell, &mut infill.cell_mm, &mm, COARSE_STEP, cells, 1);
+        if infill.pattern.has_walls() {
+            walls(ui, infill);
+        } else {
+            let mut percent = infill.density * 100.0;
+            let range = MIN_DENSITY * 100.0..=MAX_DENSITY * 100.0;
+            number_row(
+                ui,
+                &tr!("hollow-density"),
+                &mut percent,
+                "%",
+                COARSE_STEP,
+                range,
+                0,
+            );
+            infill.density = percent / 100.0;
+        }
 
         ui.add_space(2.0);
         describe(
             ui,
-            &tr!(
-                "hollow-infill-note",
-                walls = format!("{:.2}", tools.hollow.state.infill.thickness_mm())
-            ),
+            &match infill.pattern.has_walls() {
+                true => tr!("hollow-walled-note"),
+                false => tr!("hollow-scaffold-note"),
+            },
         );
     });
+}
+
+/// The wall between two hive or grid cells, and the rows of crossing holes through it.
+fn walls(ui: &mut egui::Ui, infill: &mut InfillSettings) {
+    let mm = tr!("unit-mm");
+    let wall = MIN_INFILL_WALL_MM..=MAX_INFILL_WALL_MM;
+    number_row(
+        ui,
+        &tr!("hollow-infill-wall"),
+        &mut infill.wall_mm,
+        &mm,
+        COARSE_STEP,
+        wall,
+        2,
+    );
+    let holes = MIN_HOLE_MM..=(infill.widest_hole_mm() * MAX_HOLE_SHARE).max(MIN_HOLE_MM);
+    number_row(
+        ui,
+        &tr!("hollow-hole"),
+        &mut infill.hole_mm,
+        &mm,
+        COARSE_STEP,
+        holes,
+        2,
+    );
+    let from = 0.0..=MAX_HOLE_FROM_MM;
+    let first = &mut infill.first_hole_mm;
+    number_row(
+        ui,
+        &tr!("hollow-hole-from"),
+        first,
+        &mm,
+        COARSE_STEP,
+        from,
+        2,
+    );
+    let spacing = (infill.hole_mm + MIN_HOLE_GAP_MM)..=MAX_HOLE_SPACING_MM;
+    let rows = &mut infill.hole_spacing_mm;
+    number_row(
+        ui,
+        &tr!("hollow-hole-spacing"),
+        rows,
+        &mm,
+        COARSE_STEP,
+        spacing,
+        2,
+    );
 }
 
 /// How wide a blocker the next click drops, and how many are standing.
@@ -285,19 +378,13 @@ pub fn action(ui: &mut egui::Ui, window: &mut Window) {
 
 fn start(ui: &mut egui::Ui, window: &mut Window) {
     let blocked = window.tools.hollow.blocker(&window.doc.scene);
-    let what = tr!("hollow-tooltip", scope = window.doc.scene.scope());
-    if primary_button(ui, icon::HOLLOW, &tr!("hollow-hollow"), blocked.is_none())
-        .on_hover_text(what)
-        .clicked()
-    {
+    let button = primary_button(ui, icon::HOLLOW, &tr!("hollow-hollow"), blocked.is_none());
+    if blocked_hover(button, blocked).clicked() {
         let started = window.tools.hollow.start(&window.doc.scene);
         window
             .machine
             .status
             .report(&tr!("hollow-hollowing"), started);
-    }
-    if let Some(reason) = blocked {
-        ui.vertical_centered(|ui| tone(ui, &reason, theme::colors().text_low));
     }
 }
 

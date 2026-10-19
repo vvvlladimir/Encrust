@@ -4,6 +4,7 @@
 
 mod app;
 mod arrange;
+mod boolean;
 mod camera;
 mod cut;
 mod drain;
@@ -14,6 +15,7 @@ mod hollow;
 mod i18n;
 mod import;
 mod job;
+mod landing;
 mod measure;
 mod network;
 mod orient;
@@ -38,6 +40,7 @@ mod slicing;
 mod state;
 mod status;
 mod supports;
+mod text;
 mod tool_settings;
 #[cfg(target_os = "macos")]
 mod traffic_lights;

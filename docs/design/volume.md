@@ -109,7 +109,9 @@ points around it hold. The `CARRY³` voxels of a carrier cell share those eight,
 named once per cell and there are only ever two or three distinct ones. Nearer the mesh
 than `TRUST_VOXELS` carrier steps the carrier is not believed — the lateral miss costs
 about `step² / 2d` and that blows up as `d` falls — and the hierarchy is asked for that
-voxel, but only where the value would not be clamped to the band anyway.
+voxel, but only where the value would not be clamped to the band anyway. It is asked
+`closest_within` the carried face's own distance: only a nearer face can win, so the
+search culls from its first node and still comes back exact (ADR 0310).
 
 Neither the distance nor the side is carried with the face. The distance is a
 `point_triangle` away, and four more bytes a voxel over a shell is not affordable. The side
@@ -158,8 +160,12 @@ about a surface past its own reach. Asking for more is `OutsideBand`, never a cl
 `press` is an operator with a query behind it: at every lattice point of the band, the
 nearest point of the mesh names a face, the `UvMap` gives that point's coordinate and which
 of the model's images it lands on (ADR 0123), and that `Heightmap` gives a height which is
-subtracted like an offset — one whose distance varies over the surface. The band is built a whole amplitude wider so that the surface it moves
-stays in the tiles the field already stored, and the result's band is narrower by the same.
+subtracted like an offset — one whose distance varies over the surface. The band is built
+around the middle of the range the surface can move over, as an iso level, and as wide as
+half that range on top of what marching needs, so the moved surface stays in the tiles the
+field stored. The height is subtracted as each value is built (`build_moved`), at the
+nearest point the build asked the hierarchy for anyway, rather than by a second query per
+lattice point afterwards (ADR 0310).
 
 The relief is only as fine as the lattice, whatever the image's resolution, and only as
 continuous as the map: a UV that jumps between two faces jumps the surface with it, and so
@@ -167,17 +173,52 @@ does the edge of a map that covers only part of the mesh (ADR 0121). The amplitu
 plate millimetre, so a caller presses after placement or divides by the model's own scale,
 and `press` reports the lattice it settled on (ADR 0122). See ADR 0116.
 
+A model built of shells pushed into each other — a wall stood on a base — has faces inside
+the solid, and a nearest point on one of them would press its relief into the middle of the
+model, while the pseudonormal signs the overlap as air. So a mesh of several outward shells
+is unioned by the exact cut first, the field is built over that surface, and each height is
+read off the model's own face at the nearest point. A mesh the cut cannot read is pressed as
+it stands. The union is kept in the `ReliefBasis` with the rest.
+
 A picture with no map behind it is laid on by projection instead (`press_tiled`): it is
 read as square tiles of `tile_mm`, turned by `angle_deg`, on each of the three planes the
 model's own axes span, and the three readings are blended by the nearest face's normal
 raised to the fourth power, so a face takes the plane it squarely faces and a 45° face
 takes two equally. Its axes are the model's own, at the size it prints at (ADR 0225).
 
+Both read the image through `prepared`: blurred by `smoothing_px` with three box passes of
+radius `r`, `r(r + 1) = σ²`, wrapping at the edges because a texture tiles, then turned over
+if `invert` asks. `symmetric` reads each height less one half, so mid grey stays put and
+the relief spans half the amplitude either way (ADR 0308).
+
+An `AngleMask` holds the faces within `bottom_deg` of `-up` or `top_deg` of `up`, in a
+hierarchy of their own. A lattice point whose nearest held point is as near as its nearest
+point on the model, within 1e-4 mm, keeps its value, so an edge between a held and a moved
+face goes to the held one. That alone keeps a relief off a held face's square edge, but not
+off one a face meets leaning down — a chamfer, the underside of a sphere — whose relief
+would hang below the plane. So a point outside the model and past the held face's edge,
+off its normal, takes the larger of its moved value and its distance above the held plane:
+the moved solid intersected with the half-space behind that face, on both sides of the
+plane so the lattice interpolates the cut onto it. A point straight over a held face is not
+cut, because it lies in the open under an overhang beside a wall that keeps its relief.
+
+The pressed field is meshed with a clustering slack of 0.05 voxel instead of half, so a flat
+face the relief left alone still merges into facets and the relief itself does not. The
+lattice then places each vertex only to within half a voxel, so every vertex takes up to
+three Newton steps along the field's slope onto the surface the picture describes, read
+exactly at the model's nearest point, each stopping once it brings the vertex no nearer
+and all of them together held to half a voxel. A face those steps turn over has its corners
+put back where the lattice placed them, for up to four rounds, since each can turn a
+neighbour. The search for each lattice point's nearest face is most of a press and depends
+only on the model, the lattice and the range, so it is kept as a `ReliefBasis` and a second
+picture pressed into the same mesh reuses it.
+
 ## Extraction
 
 Surface nets over the band, one tile at a time on every core, clustered onto the lattice.
 A tile reads a 9³ block — its own values plus the neighbour row its far cells reach into —
-so a cell costs no hash lookups.
+with one lookup for each of the eight tiles the block spans, so a cell costs no hash
+lookups.
 
 A cell the surface passes through gets one vertex, the mean of the crossings of its own
 twelve edges, and the gradient of its trilinear field as a normal. A crossed lattice edge
@@ -197,6 +238,13 @@ the surface, so a facet is lifted back out along its normal by the rise the cell
 normals imply. And clustering can fold two quads onto one triangle. Copies are summed the
 way the surface sums them: one wound against another takes it out, and two wound alike both
 stay. Dropping either kind alone opens the surface. See ADR 0084 and 0186.
+
+A quantised value can be exactly zero, and every cell around a lattice point at zero
+crosses the surface there, so their vertices are one point, or a rounding of an `f32` apart.
+A triangle between two of them has no area, and a mesh with one reads as broken. The
+corners of such a triangle within `1e-4` mm are welded, which collapses the zero-length
+edge the way a decimator would and keeps the surface closed (`collapse_flat_faces`,
+ADR 0310).
 
 A quad around an edge on a tile's lowest face names cells of the tiles below it, which the
 field need not store when the surface only crosses the face they share. Those tiles are

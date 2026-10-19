@@ -2,10 +2,11 @@ use std::fmt;
 use std::time::{Duration, Instant};
 
 use anyhow::{Context, Result, bail};
-use core_geometry::{Bvh, Mesh, Scalar, Vec3};
+use core_geometry::{Bvh, Mesh, Scalar, Transform, Vec3};
 use core_volume::{
-    Cancel, Channel, DrainHole, HollowMode, HollowSettings, InfillPattern, InfillSettings,
-    VolumeError, drill, hole_at, hollow, pierce, sleeves,
+    Cancel, Channel, DrainHole, HoleShape, HoleSize, HollowMode, HollowSettings, InfillPattern,
+    InfillSettings, PLUG_GAP_MM, VolumeError, drill, hole_at, hollow, laid_beside, pierce,
+    plug_wall_mm, plugs, sleeves,
 };
 
 use crate::exit::{Cancelled, Stop};
@@ -58,17 +59,38 @@ pub struct HollowArgs {
     #[arg(long = "hollow-mode", value_name = "MODE", default_value = "internal")]
     pub mode: Mode,
 
+    /// Open the cavity through the floor the model stands on, so it drains with no hole.
+    #[arg(long = "hollow-open-floor")]
+    pub open_floor: bool,
+
     /// Fill the cavity with a lattice.
     #[arg(long = "infill", value_name = "PATTERN")]
     pub infill: Option<Pattern>,
 
-    /// Side of one infill cell, millimetres. For a hive, a hexagon's diameter.
-    #[arg(long = "infill-size", value_name = "MM", default_value_t = 5.0)]
-    pub size_mm: Scalar,
+    /// Across one infill cell, millimetres: a hexagon's corners for a hive, a square's
+    /// side for a grid, the cube's edge for a scaffold.
+    #[arg(long = "infill-cell", value_name = "MM")]
+    pub cell_mm: Option<Scalar>,
 
-    /// How much of the cavity the lattice fills, 0 to 1.
-    #[arg(long = "infill-density", value_name = "0..1", default_value_t = 0.15)]
-    pub density: Scalar,
+    /// Thickness of a hive or grid wall, millimetres.
+    #[arg(long = "infill-wall", value_name = "MM")]
+    pub wall_mm: Option<Scalar>,
+
+    /// How much of the cavity a scaffold fills, 0 to 1.
+    #[arg(long = "infill-density", value_name = "0..1")]
+    pub density: Option<Scalar>,
+
+    /// Diameter of the crossing holes joining hive or grid cells, millimetres.
+    #[arg(long = "infill-hole", value_name = "MM")]
+    pub hole_mm: Option<Scalar>,
+
+    /// Height of the first row of crossing holes over the cavity's floor, millimetres.
+    #[arg(long = "infill-hole-from", value_name = "MM")]
+    pub first_hole_mm: Option<Scalar>,
+
+    /// Height from one row of crossing holes to the next, millimetres.
+    #[arg(long = "infill-hole-spacing", value_name = "MM")]
+    pub hole_spacing_mm: Option<Scalar>,
 
     /// Diameter of the drain holes, millimetres.
     #[arg(long = "drain", value_name = "MM", default_value_t = 3.0)]
@@ -88,6 +110,29 @@ pub struct HollowArgs {
     #[arg(long = "drain-taper", value_name = "0..1", default_value_t = 1.0)]
     pub drain_taper: Scalar,
 
+    /// Cut the drain holes and channels as polygons of this many sides, their corners on the
+    /// diameter; round without it.
+    #[arg(long = "drain-sides", value_name = "3..12", value_parser = clap::value_parser!(u8).range(3..=12))]
+    pub drain_sides: Option<u8>,
+
+    /// Turn a polygonal hole about its axis by this many degrees from the level.
+    #[arg(
+        long = "drain-turn",
+        value_name = "DEG",
+        default_value_t = 0.0,
+        allow_hyphen_values = true
+    )]
+    pub drain_turn_deg: Scalar,
+
+    /// Print a plug for each drain hole, standing on the plate beside the model.
+    #[arg(long = "drain-plugs")]
+    pub plugs: bool,
+
+    /// How much narrower than its hole a plug is drawn, millimetres a side. A resin whose
+    /// tolerance compensation is off takes its hole and outer offsets off this too.
+    #[arg(long = "plug-gap", value_name = "MM", default_value_t = PLUG_GAP_MM)]
+    pub plug_gap_mm: Scalar,
+
     /// Dig a drainage channel along a polyline of points, `x,y,z:x,y,z:...`, in the same
     /// plate millimetres as --drain-at. Repeat for more than one channel.
     #[arg(long = "channel", value_name = "X,Y,Z:...", value_parser = polyline, allow_hyphen_values = true)]
@@ -99,7 +144,7 @@ pub struct HollowArgs {
 }
 
 /// One `x,y,z` point of the command line, in plate millimetres.
-fn point(text: &str) -> Result<Vec3, String> {
+pub(crate) fn point(text: &str) -> Result<Vec3, String> {
     let numbers: Vec<Scalar> = text
         .split(',')
         .map(|part| {
@@ -140,14 +185,94 @@ impl HollowArgs {
             thickness_mm,
             mode: self.mode.into(),
             precision,
-            infill: self.infill.map(|pattern| InfillSettings {
-                pattern: pattern.into(),
-                size_mm: self.size_mm,
-                density: self.density,
-            }),
+            infill: self.infill.map(|pattern| self.infill_settings(pattern)),
             blockers: sleeves(&self.dug(), thickness_mm),
+            // The model already stands where it prints, so the plate is straight down.
+            open_toward: self.open_floor.then_some(Vec3::NEG_Z),
             ..HollowSettings::default()
         })
+    }
+
+    /// Refuses an open floor on anything but a shell, and plugs with no hole to close or a
+    /// gap that would make them wider than it.
+    pub(crate) fn check_floor_and_plugs(&self) -> Result<()> {
+        if self.open_floor && !self.wanted() {
+            bail!("--hollow-open-floor opens a shell's floor, and --hollow was not given");
+        }
+        if self.open_floor && matches!(self.mode, Mode::External) {
+            bail!("--hollow-open-floor opens a shell's floor, and a mould has none");
+        }
+        if self.plugs && self.drain_at.is_empty() {
+            bail!("--drain-plugs closes the holes --drain-at drills, and none was given");
+        }
+        if self.plug_gap_mm.is_nan() || self.plug_gap_mm < 0.0 {
+            bail!(
+                "--plug-gap is how much narrower a plug is than its hole, so not {}",
+                self.plug_gap_mm
+            );
+        }
+        Ok(())
+    }
+
+    /// The hole every `--drain-at` drills.
+    fn hole_size(&self) -> HoleSize {
+        HoleSize {
+            diameter_mm: self.drain_mm,
+            depth_mm: self.drain_depth_mm,
+            taper: self.drain_taper,
+            shape: self
+                .drain_sides
+                .map_or(HoleShape::Round, |sides| HoleShape::Polygon { sides }),
+            turn_deg: self.drain_turn_deg,
+        }
+    }
+
+    /// The lattice `--infill` asked for, every size left out taken from the defaults.
+    fn infill_settings(&self, pattern: Pattern) -> InfillSettings {
+        let default = InfillSettings::default();
+        InfillSettings {
+            pattern: pattern.into(),
+            cell_mm: self.cell_mm.unwrap_or(default.cell_mm),
+            wall_mm: self.wall_mm.unwrap_or(default.wall_mm),
+            density: self.density.unwrap_or(default.density),
+            hole_mm: self.hole_mm.unwrap_or(default.hole_mm),
+            first_hole_mm: self.first_hole_mm.unwrap_or(default.first_hole_mm),
+            hole_spacing_mm: self.hole_spacing_mm.unwrap_or(default.hole_spacing_mm),
+        }
+    }
+
+    /// Refuses an infill size the pattern asked for has no use for, rather than dropping it.
+    fn check_infill(&self) -> Result<()> {
+        let walled = [
+            ("--infill-wall", self.wall_mm.is_some()),
+            ("--infill-hole", self.hole_mm.is_some()),
+            ("--infill-hole-from", self.first_hole_mm.is_some()),
+            ("--infill-hole-spacing", self.hole_spacing_mm.is_some()),
+        ];
+        let density = [("--infill-density", self.density.is_some())];
+        let cell = [("--infill-cell", self.cell_mm.is_some())];
+        let given = |flags: &[(&'static str, bool)]| {
+            flags
+                .iter()
+                .find(|(_, given)| *given)
+                .map(|(flag, _)| *flag)
+        };
+        match self.infill {
+            None => match given(&[&cell[..], &density, &walled].concat()) {
+                Some(flag) => bail!("{flag} sizes an infill, and --infill was not given"),
+                None => Ok(()),
+            },
+            Some(Pattern::Scaffold) => match given(&walled) {
+                Some(flag) => bail!("{flag} sizes a hive or grid, and a scaffold has no walls"),
+                None => Ok(()),
+            },
+            Some(Pattern::Hive | Pattern::Grid) => match given(&density) {
+                Some(flag) => bail!(
+                    "{flag} is how much a scaffold fills; a hive or grid is sized by its cell and wall"
+                ),
+                None => Ok(()),
+            },
+        }
     }
 
     fn dug(&self) -> Vec<Channel> {
@@ -156,6 +281,8 @@ impl HollowArgs {
             .map(|points| Channel {
                 points: points.clone(),
                 diameter_mm: self.channel_mm,
+                shape: self.hole_size().shape,
+                turn_deg: self.drain_turn_deg,
             })
             .collect()
     }
@@ -165,15 +292,8 @@ impl HollowArgs {
         self.drain_at
             .iter()
             .map(|near| {
-                hole_at(
-                    mesh,
-                    bvh,
-                    *near,
-                    self.drain_mm,
-                    self.drain_depth_mm,
-                    self.drain_taper,
-                )
-                .with_context(|| format!("no surface near {near} to drill a drain hole into"))
+                hole_at(mesh, bvh, *near, self.hole_size())
+                    .with_context(|| format!("no surface near {near} to drill a drain hole into"))
             })
             .collect()
     }
@@ -188,6 +308,7 @@ pub fn run(
     stop: &Stop,
 ) -> Result<(Mesh, HollowReport)> {
     let started = Instant::now();
+    args.check_infill()?;
     let bvh = Bvh::build(mesh);
     let Some(settings) = args.settings(precision) else {
         bail!("--hollow was not given, so there is nothing to hollow");
@@ -218,6 +339,34 @@ pub fn placed(mesh: &Mesh, args: &HollowArgs) -> Result<(Vec<DrainHole>, Vec<Cha
     Ok((args.drains(mesh, &Bvh::build(mesh))?, args.dug()))
 }
 
+/// A plug for each of `holes` as they are cut, drilled into `mesh` as it stands solid on
+/// the plate, laid on the plate in a row past the model's right-hand side. `drift_mm` is
+/// what the resin's compensation leaves a fit wider by, and comes off the gap asked for.
+pub fn plugs_beside(
+    mesh: &Mesh,
+    holes: &[DrainHole],
+    args: &HollowArgs,
+    drift_mm: Scalar,
+) -> Result<Vec<Mesh>> {
+    let wall_mm = args
+        .thickness_mm
+        .and_then(|thickness_mm| plug_wall_mm(args.mode.into(), thickness_mm));
+    let gap_mm = args.plug_gap_mm - drift_mm;
+    let made = plugs(mesh, &Bvh::build(mesh), holes, wall_mm, gap_mm)
+        .context("cutting the plugs for the drain holes")?;
+    let bounds = mesh.aabb().context("mesh has no vertices")?;
+    Ok(laid_beside(&made, holes, Transform::default(), bounds))
+}
+
+/// `holes` as a model hollowed to `wall` cuts them: deepened through the wall, where there
+/// is one, so none stops inside it.
+pub fn pierced(holes: &[DrainHole], wall: Option<(Scalar, Scalar)>) -> Vec<DrainHole> {
+    match wall {
+        Some((thickness_mm, voxel_mm)) => pierce(holes, thickness_mm, voxel_mm),
+        None => holes.to_vec(),
+    }
+}
+
 /// The bodies `placed` cuts out of a model hollowed to `wall`, and how many of each.
 ///
 /// They are wound inward, which is what subtracts them wherever they are appended
@@ -229,10 +378,7 @@ pub fn cut(
     wall: Option<(Scalar, Scalar)>,
 ) -> Result<(Cuts, Mesh)> {
     let (holes, channels) = placed;
-    let holes = match wall {
-        Some((thickness_mm, voxel_mm)) => pierce(&holes, thickness_mm, voxel_mm),
-        None => holes,
-    };
+    let holes = pierced(&holes, wall);
     let bodies = drill(&holes, &channels).context("drilling the drains")?;
     Ok((
         Cuts {
@@ -292,9 +438,14 @@ impl fmt::Display for HollowReport {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         writeln!(
             f,
-            "  wall          {:.3} mm, {}",
+            "  wall          {:.3} mm, {}{}",
             self.settings.thickness_mm,
-            self.settings.mode.label().to_lowercase()
+            self.settings.mode.label().to_lowercase(),
+            if self.settings.open_toward.is_some() {
+                ", open through the floor"
+            } else {
+                ""
+            }
         )?;
         writeln!(
             f,
@@ -308,14 +459,25 @@ impl fmt::Display for HollowReport {
             }
         )?;
         if let Some(infill) = &self.settings.infill {
-            writeln!(
-                f,
-                "  infill        {}, {:.1} mm cells at {:.0}%, {:.2} mm walls",
-                infill.pattern.label().to_lowercase(),
-                infill.size_mm,
-                infill.density * 100.0,
-                infill.thickness_mm()
-            )?;
+            let pattern = infill.pattern.label().to_lowercase();
+            if infill.pattern.has_walls() {
+                writeln!(
+                    f,
+                    "  infill        {pattern}, {:.1} mm cells, {:.2} mm walls, {:.1} mm holes from {:.1} mm every {:.1} mm",
+                    infill.cell_mm,
+                    infill.wall_mm,
+                    infill.hole_mm,
+                    infill.first_hole_mm,
+                    infill.hole_spacing_mm
+                )?;
+            } else {
+                writeln!(
+                    f,
+                    "  infill        {pattern}, {:.1} mm cells at {:.0}%",
+                    infill.cell_mm,
+                    infill.density * 100.0
+                )?;
+            }
         }
         writeln!(
             f,

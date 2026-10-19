@@ -64,6 +64,14 @@ pub fn weld(mesh: &Mesh, tolerance: Scalar) -> Welded {
     }
 }
 
+/// A point's exact position as bits, `-0.0` read as `0.0`: the key two vertices on the same
+/// point share, whichever sign of zero a cut gave each.
+pub fn point_key(point: Vec3) -> [u32; 3] {
+    point
+        .to_array()
+        .map(|coordinate| (coordinate + 0.0).to_bits())
+}
+
 /// For every vertex, the lowest index holding the same bits.
 ///
 /// Exporters write a shared corner with the same bits each time, so this finds most merges
@@ -214,6 +222,15 @@ type Cells = FastMap<[i64; 3], Vec<u32>>;
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_point_at_negative_zero_keys_as_the_same_point() {
+        assert_eq!(
+            point_key(Vec3::new(-0.0, 1.0, -0.0)),
+            point_key(Vec3::new(0.0, 1.0, 0.0))
+        );
+        assert_ne!(point_key(Vec3::X), point_key(-Vec3::X));
+    }
 
     /// Every point through the grid in turn, as welding did before it split the lonely
     /// points off: what the split has to reproduce exactly.

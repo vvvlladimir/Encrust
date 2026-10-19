@@ -1,11 +1,11 @@
 use std::ops::Range;
 use std::sync::Arc;
 
-use core_geometry::{Bvh, Mat3, Mesh, Scalar, Transform, Vec3};
+use core_geometry::{Bvh, Mat3, Mesh, Scalar, Transform, Vec3, smallest_scale};
 
 use crate::{
-    Blocker, Channel, DrainHole, HollowSettings, channel_under, drill, hole_at, lift_for, pierce,
-    sleeves,
+    Blocker, Channel, DrainHole, HoleSize, HollowSettings, channel_under, drill, hole_at, lift_for,
+    pierce, sleeves, turn_in_model,
 };
 
 /// A transform this close to singular has flattened its model, and a click on it cannot
@@ -77,15 +77,6 @@ pub struct Shell {
     pub settings: HollowSettings,
 }
 
-/// The hole a click drills: its mouth and depth in millimetres of the plate, and its far
-/// end as a fraction of its mouth, 1 being a cylinder.
-#[derive(Debug, Clone, Copy, PartialEq)]
-pub struct HoleSize {
-    pub diameter_mm: Scalar,
-    pub depth_mm: Scalar,
-    pub taper: Scalar,
-}
-
 impl ModelHollow {
     /// The cuts a project file was saved with. The cavity itself is not in the file: it is
     /// asked for again by the Hollow tool.
@@ -127,27 +118,33 @@ impl ModelHollow {
     /// Drills a hole from the nearest surface into `target`, a point in the model's own
     /// space, deep enough to reach it: what gives a trapped pocket its way out.
     ///
-    /// `diameter_mm` is measured on the plate, like the one a click drops. Returns whether
-    /// there was a surface to drill through at all.
+    /// `size` is measured on the plate, like the one a click drops; its depth is the
+    /// pocket's. Returns whether there was a surface to drill through at all.
     pub fn drill_into(
         &mut self,
         mesh: &Mesh,
         bvh: &Bvh,
         target: Vec3,
-        diameter_mm: Scalar,
-        taper: Scalar,
+        size: HoleSize,
         transform: Transform,
     ) -> bool {
         let smallest = transform.least_scale();
-        let diameter_mm = diameter_mm / smallest;
-        let Some(hole) = hole_at(mesh, bvh, target, diameter_mm, 0.0, taper) else {
+        let diameter_mm = size.diameter_mm / smallest;
+        let asked = HoleSize {
+            diameter_mm,
+            depth_mm: 0.0,
+            ..size
+        };
+        let Some(hole) = hole_at(mesh, bvh, target, asked) else {
             return false;
         };
+        let turn_deg = turn_in_model(hole.axis, size.turn_deg, transform.linear());
 
         // A diameter past the pocket's floor, so the tip is inside the pocket rather than
         // on its ceiling.
         self.drains.push(DrainHole {
             depth_mm: (target - hole.at).length() + diameter_mm,
+            turn_deg,
             ..hole
         });
         self.recut();
@@ -317,15 +314,14 @@ impl ModelHollow {
         // space, so both its numbers come back through the scale the model stands at.
         let smallest = transform.least_scale();
         let at = inverse.transform_point3(point);
-        let diameter_mm = size.diameter_mm / smallest;
-        Some(DrainHole {
-            at,
-            axis,
-            diameter_mm,
+        let size = HoleSize {
+            diameter_mm: size.diameter_mm / smallest,
             depth_mm: size.depth_mm / smallest,
-            taper: size.taper,
-            lift_mm: lift_for(mesh, bvh, at, axis, diameter_mm),
-        })
+            turn_deg: turn_in_model(axis, size.turn_deg, transform.linear()),
+            ..size
+        };
+        let lift_mm = lift_for(mesh, bvh, at, axis, size.diameter_mm);
+        Some(DrainHole::sized(at, axis, size, lift_mm))
     }
 
     /// `hole` as it would be cut here: through the wall, once the model is hollow.
@@ -394,10 +390,21 @@ impl ModelHollow {
         ))
     }
 
-    /// Digs the channel laid out so far, if it has two points to run between.
-    pub fn finish_channel(&mut self, diameter_mm: Scalar, transform: Transform) -> bool {
+    /// Digs the channel laid out so far, if it has two points to run between, as wide and
+    /// in the outline `size` asks for; its depth plays no part.
+    pub fn finish_channel(&mut self, size: HoleSize, transform: Transform) -> bool {
         let smallest = transform.least_scale();
-        let dug = channel_under(&self.pending, diameter_mm / smallest);
+        let dug = channel_under(&self.pending, size.diameter_mm / smallest)
+            .map(|channel| Channel {
+                shape: size.shape,
+                turn_deg: turn_in_model(
+                    channel.points[1] - channel.points[0],
+                    size.turn_deg,
+                    transform.linear(),
+                ),
+                ..channel
+            })
+            .filter(|channel| drill(&[], std::slice::from_ref(channel)).is_ok());
         self.pending.clear();
         let Some(channel) = dug else {
             self.recut();
@@ -461,6 +468,57 @@ impl ModelHollow {
     pub fn clear(&mut self) {
         self.built = None;
         self.recut();
+    }
+
+    /// These blockers, holes and channels carried onto `mesh`: the model's surface remade
+    /// with `sizing` pressed into it, as a relief does. Solid, for the next run to hollow.
+    #[must_use]
+    pub fn carried_onto(&self, mesh: &Mesh, bvh: &Bvh, sizing: Mat3) -> Self {
+        // Sizes were divided by the least scale on the way in (`blocker_at`, `drain_at`).
+        let least = smallest_scale(sizing);
+        let blockers = self
+            .blockers
+            .iter()
+            .map(|blocker| Blocker {
+                from: sizing * blocker.from,
+                to: sizing * blocker.to,
+                radius_mm: blocker.radius_mm * least,
+            })
+            .collect();
+        let drains = self
+            .drains
+            .iter()
+            .map(|hole| {
+                let at = sizing * hole.at;
+                let axis = (sizing * hole.axis).try_normalize().unwrap_or(hole.axis);
+                let diameter_mm = hole.diameter_mm * least;
+                DrainHole {
+                    at,
+                    axis,
+                    diameter_mm,
+                    depth_mm: hole.depth_mm * least,
+                    lift_mm: lift_for(mesh, bvh, at, axis, diameter_mm),
+                    ..*hole
+                }
+            })
+            .collect();
+        let channels = self
+            .channels
+            .iter()
+            .map(|channel| Channel {
+                points: channel.points.iter().map(|point| sizing * *point).collect(),
+                diameter_mm: channel.diameter_mm * least,
+                ..*channel
+            })
+            .collect();
+        let mut carried = Self {
+            blockers,
+            drains,
+            channels,
+            ..Self::default()
+        };
+        carried.recut();
+        carried
     }
 }
 
@@ -547,11 +605,7 @@ mod tests {
     use std::f32::consts::FRAC_PI_2;
 
     fn drain_tool(diameter_mm: Scalar, depth_mm: Scalar) -> HoleSize {
-        HoleSize {
-            diameter_mm,
-            depth_mm,
-            taper: 1.0,
-        }
+        HoleSize::round(diameter_mm, depth_mm, 1.0)
     }
 
     /// A flat lid in the z = 0 plane, wide enough to drill anywhere in these tests: a
@@ -742,14 +796,14 @@ mod tests {
         let mut hollow = ModelHollow::default();
         hollow.add_channel_point(Vec3::new(1.0, 0.0, 0.0), Vec3::X, Transform::default());
         assert!(
-            !hollow.finish_channel(2.0, Transform::default()),
+            !hollow.finish_channel(HoleSize::round(2.0, 0.0, 1.0), Transform::default()),
             "one point is not a channel"
         );
         assert!(hollow.channels().is_empty());
 
         hollow.add_channel_point(Vec3::new(1.0, 0.0, 0.0), Vec3::X, Transform::default());
         hollow.add_channel_point(Vec3::new(1.0, 0.0, 6.0), Vec3::X, Transform::default());
-        assert!(hollow.finish_channel(2.0, Transform::default()));
+        assert!(hollow.finish_channel(HoleSize::round(2.0, 0.0, 1.0), Transform::default()));
 
         let channel = &hollow.channels()[0];
         assert!((channel.diameter_mm - 2.0).abs() < 1e-4);
@@ -892,7 +946,7 @@ mod tests {
         hollow.take(shell(Mat3::IDENTITY, asked.clone()));
         hollow.add_channel_point(Vec3::new(1.0, 0.0, 0.0), Vec3::X, Transform::default());
         hollow.add_channel_point(Vec3::new(1.0, 0.0, 6.0), Vec3::X, Transform::default());
-        hollow.finish_channel(2.0, Transform::default());
+        hollow.finish_channel(HoleSize::round(2.0, 0.0, 1.0), Transform::default());
 
         assert!(
             hollow.is_stale(&asked, Transform::default()),
@@ -931,7 +985,7 @@ mod tests {
 
         hollow.add_channel_point(Vec3::new(1.0, 0.0, 0.0), Vec3::X, Transform::default());
         hollow.add_channel_point(Vec3::new(1.0, 0.0, 6.0), Vec3::X, Transform::default());
-        hollow.finish_channel(2.0, Transform::default());
+        hollow.finish_channel(HoleSize::round(2.0, 0.0, 1.0), Transform::default());
         let sleeved = hollow.rebuild().expect("the pipe needs its sleeve");
         assert!(
             (sleeved.thickness_mm - 3.0).abs() < 1e-6,
@@ -983,5 +1037,41 @@ mod tests {
             hollow.is_stale(&asked, stretched),
             "a turned model stretched along the plate has walls of new thicknesses"
         );
+    }
+
+    #[test]
+    fn cuts_carried_onto_a_pressed_surface_stand_where_they_printed_and_the_model_is_solid() {
+        let placed = Transform {
+            scale: Vec3::splat(2.0),
+            ..Transform::default()
+        };
+        let mut hollow = ModelHollow::default();
+        hollow.add_blocker(Vec3::new(10.0, 0.0, 0.0), 4.0, placed);
+        let (lid, bvh) = (lid(), Bvh::build(&lid()));
+        hollow.add_drain(
+            &lid,
+            &bvh,
+            Vec3::new(0.0, 0.0, 4.0),
+            Vec3::Z,
+            drain_tool(3.0, 4.0),
+            placed,
+        );
+        hollow.take(shell(placed.unturned(), HollowSettings::default()));
+
+        let carried = hollow.carried_onto(&lid, &bvh, placed.sizing().linear());
+
+        // With the doubling pressed into the mesh, own space is plate space: the click's
+        // point and the sizes asked for on the plate come back as they were.
+        let blocker = carried.blockers()[0];
+        assert!(blocker.from.abs_diff_eq(Vec3::new(10.0, 0.0, 0.0), 1e-4));
+        assert!((blocker.radius_mm - 4.0).abs() < 1e-4, "the 4 mm asked for");
+        let hole = carried.drains()[0];
+        assert!((hole.diameter_mm - 3.0).abs() < 1e-4, "the 3 mm asked for");
+        assert!((hole.depth_mm - 4.0).abs() < 1e-4, "the 4 mm asked for");
+        assert!(
+            !carried.is_hollow(),
+            "the cavity is cut again into the new surface"
+        );
+        assert!(carried.cut_bodies().is_some(), "the hole is cut at once");
     }
 }

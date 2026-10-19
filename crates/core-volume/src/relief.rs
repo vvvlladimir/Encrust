@@ -1,16 +1,28 @@
-use core_geometry::{Bvh, Heightmap, Mesh, Scalar, UvMap, Vec2, Vec3};
+use std::borrow::Cow;
+use std::sync::Arc;
+
+use core_geometry::{
+    Bvh, ClosestPoint, Heightmap, Mesh, Scalar, UvMap, Vec2, Vec3, collapse_flat_faces,
+};
 use serde::{Deserialize, Serialize};
 
-use crate::build::{DEFAULT_BUDGET_BYTES, FieldSettings, build};
+use crate::build::DEFAULT_BUDGET_BYTES;
 use crate::cancel::Cancel;
-use crate::csg::assemble;
 use crate::error::VolumeError;
-use crate::extract::extract;
-use crate::hollow::{BAND_VOXELS, COARSENINGS, lattice_mm};
-use crate::sign::SignMode;
+use crate::extract::extract_clustered;
+use crate::hollow::lattice_mm;
 
-/// How far the texture may move the surface, what it is cut on, and what the field may
-/// cost while it is.
+mod basis;
+mod mask;
+mod smooth;
+mod snap;
+
+pub use basis::ReliefBasis;
+pub use mask::AngleMask;
+use mask::Held;
+
+/// How far the texture may move the surface, how its grey is read, which faces it leaves
+/// alone, what it is cut on, and what the field may cost while it is.
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 pub struct ReliefSettings {
     /// How far the surface moves where the texture is white, in millimetres. Positive
@@ -19,6 +31,18 @@ pub struct ReliefSettings {
     /// How fine the lattice is, from 0 to 1, as everywhere else in this crate.
     pub precision: Scalar,
     pub budget_bytes: usize,
+    /// Reads the texture's black as high and its white as low.
+    #[serde(default)]
+    pub invert: bool,
+    /// Reads mid grey as the surface itself, so white raises it and black sinks it, each
+    /// by half the amplitude, and the model keeps about its size.
+    #[serde(default)]
+    pub symmetric: bool,
+    /// How far the texture is blurred before it is read, in pixels of the texture.
+    #[serde(default)]
+    pub smoothing_px: Scalar,
+    #[serde(default)]
+    pub mask: AngleMask,
 }
 
 impl Default for ReliefSettings {
@@ -27,6 +51,10 @@ impl Default for ReliefSettings {
             amplitude_mm: 0.5,
             precision: 0.5,
             budget_bytes: DEFAULT_BUDGET_BYTES,
+            invert: false,
+            symmetric: false,
+            smoothing_px: 0.0,
+            mask: AngleMask::default(),
         }
     }
 }
@@ -39,6 +67,47 @@ impl ReliefSettings {
     pub fn voxel_mm(&self, area_mm2: Scalar) -> Scalar {
         lattice_mm(self.amplitude_mm.abs(), self.precision, area_mm2)
     }
+
+    fn check(&self) -> Result<(), VolumeError> {
+        if !self.amplitude_mm.is_finite() || self.amplitude_mm == 0.0 {
+            return Err(VolumeError::BadAmplitude(self.amplitude_mm));
+        }
+        if !(self.smoothing_px.is_finite() && self.smoothing_px >= 0.0) {
+            return Err(VolumeError::BadSmoothing(self.smoothing_px));
+        }
+        self.mask.check()
+    }
+
+    /// How far, in amplitudes, a height read off the prepared texture moves the surface.
+    fn lifted(&self, height: Scalar) -> Scalar {
+        if self.symmetric { height - 0.5 } else { height }
+    }
+
+    /// The middle of the range the surface moves outward over, and how far either side of
+    /// it it reaches, millimetres.
+    fn range_mm(&self) -> (Scalar, Scalar) {
+        let ends = [self.lifted(0.0), self.lifted(1.0)].map(|lift| self.amplitude_mm * lift);
+        let (least_mm, most_mm) = (ends[0].min(ends[1]), ends[0].max(ends[1]));
+        (
+            Scalar::midpoint(least_mm, most_mm),
+            (most_mm - least_mm) / 2.0,
+        )
+    }
+}
+
+/// `image` as a relief pressed with `settings` reads it: smoothed, then turned over where
+/// `invert` asks. The window draws this, so what it shows is what is pressed.
+pub fn prepared<'a>(image: &'a Heightmap, settings: &ReliefSettings) -> Cow<'a, Heightmap> {
+    if settings.smoothing_px <= 0.0 && !settings.invert {
+        return Cow::Borrowed(image);
+    }
+    let mut image = smooth::smoothed(image, settings.smoothing_px);
+    if settings.invert {
+        for height in image.samples_mut() {
+            *height = 1.0 - *height;
+        }
+    }
+    Cow::Owned(image)
 }
 
 /// A model with its texture pressed in, and what that cost.
@@ -65,12 +134,28 @@ pub fn press(
     heights: &[Heightmap],
     settings: &ReliefSettings,
 ) -> Result<Relief, VolumeError> {
+    press_reusing(mesh, bvh, uvs, heights, settings, None).map(|(relief, _)| relief)
+}
+
+/// Refuses a mesh with no faces to press into, or settings no press can be made with.
+fn pressable(mesh: &Mesh, settings: &ReliefSettings) -> Result<(), VolumeError> {
     if mesh.aabb().is_none() {
         return Err(VolumeError::EmptyMesh);
     }
-    if !settings.amplitude_mm.is_finite() || settings.amplitude_mm == 0.0 {
-        return Err(VolumeError::BadAmplitude(settings.amplitude_mm));
-    }
+    settings.check()
+}
+
+/// [`press`] over `basis` where it fits this model and these settings, and the basis the
+/// press stood on, for the caller to keep for another press of the same mesh.
+pub fn press_reusing(
+    mesh: &Mesh,
+    bvh: &Bvh,
+    uvs: &UvMap,
+    heights: &[Heightmap],
+    settings: &ReliefSettings,
+    basis: Option<Arc<ReliefBasis>>,
+) -> Result<(Relief, Arc<ReliefBasis>), VolumeError> {
+    pressable(mesh, settings)?;
     // A map covering part of the mesh is honest — what it does not cover does not move —
     // but one indexed by a different face list is not the mesh's map at all.
     if uvs.len() != mesh.faces.len() || uvs.mapped() == 0 {
@@ -88,12 +173,20 @@ pub fn press(
         });
     }
 
+    let heights: Vec<_> = heights
+        .iter()
+        .map(|image| prepared(image, settings))
+        .collect();
     let sample = |face: usize, point: Vec3| {
         let (texture, uv) = uvs.at(mesh, face, point)?;
         Some(heights.get(texture)?.sample(uv))
     };
-    displaced(mesh, bvh, settings, &sample)
+    displaced(mesh, bvh, settings, &sample, basis)
 }
+
+/// How near their shared plane cells must stand to be clustered into one facet, in
+/// voxels: a flat face the relief left alone still clusters, the relief itself does not.
+const RELIEF_SLACK_VOXELS: Scalar = 0.05;
 
 /// How a picture is laid over a model that has no map of its own: as square tiles of
 /// `tile_mm`, turned by `angle_deg` on each of the three planes it is projected along.
@@ -126,15 +219,24 @@ pub fn press_tiled(
     tiling: Tiling,
     settings: &ReliefSettings,
 ) -> Result<Relief, VolumeError> {
-    if mesh.aabb().is_none() {
-        return Err(VolumeError::EmptyMesh);
-    }
-    if !settings.amplitude_mm.is_finite() || settings.amplitude_mm == 0.0 {
-        return Err(VolumeError::BadAmplitude(settings.amplitude_mm));
-    }
+    press_tiled_reusing(mesh, bvh, image, tiling, settings, None).map(|(relief, _)| relief)
+}
+
+/// [`press_tiled`] over `basis` where it fits this model and these settings, and the
+/// basis the press stood on, for the caller to keep beside this very mesh.
+pub fn press_tiled_reusing(
+    mesh: &Mesh,
+    bvh: &Bvh,
+    image: &Heightmap,
+    tiling: Tiling,
+    settings: &ReliefSettings,
+    basis: Option<Arc<ReliefBasis>>,
+) -> Result<(Relief, Arc<ReliefBasis>), VolumeError> {
+    pressable(mesh, settings)?;
     if !tiling.tile_mm.is_finite() || tiling.tile_mm <= 0.0 {
         return Err(VolumeError::BadTile(tiling.tile_mm));
     }
+    let image = prepared(image, settings);
     let (sin, cos) = tiling.angle_deg.to_radians().sin_cos();
     let on_plane = |a: Scalar, b: Scalar| {
         let turned = Vec2::new(a * cos - b * sin, a * sin + b * cos);
@@ -149,81 +251,92 @@ pub fn press_tiled(
             + weights.z * on_plane(point.x, point.y);
         Some(height / total)
     };
-    displaced(mesh, bvh, settings, &sample)
+    displaced(mesh, bvh, settings, &sample, basis)
 }
 
-/// The surface of `mesh` moved by the height `sample` reads at its nearest point, on the
-/// finest lattice the budget allows.
+/// The surface of `mesh` moved by the height `sample` reads at its nearest point, over
+/// `reused` where it fits and a basis built afresh where it does not.
 fn displaced(
     mesh: &Mesh,
     bvh: &Bvh,
     settings: &ReliefSettings,
     sample: &(dyn Fn(usize, Vec3) -> Option<Scalar> + Sync),
-) -> Result<Relief, VolumeError> {
-    let asked_mm = settings.voxel_mm(mesh.surface_area());
-    let mut voxel_mm = asked_mm;
-    let carried = |voxel_mm: Scalar| {
-        move |mesh| Relief {
-            mesh,
-            voxel_mm,
-            coarsened: voxel_mm > asked_mm,
-        }
+    reused: Option<Arc<ReliefBasis>>,
+) -> Result<(Relief, Arc<ReliefBasis>), VolumeError> {
+    let basis = match reused {
+        Some(basis) if basis.fits(mesh, settings) => basis,
+        _ => Arc::new(ReliefBasis::build(mesh, bvh, settings)?),
     };
-    for _ in 0..COARSENINGS {
-        match pressed(mesh, bvh, sample, settings, voxel_mm) {
-            // The lattice the field priced is the one that fits, taken a twentieth coarser
-            // still, the way a hollowing run steps back.
-            Err(VolumeError::TooFine { fits_at_mm, .. }) => voxel_mm = fits_at_mm * 1.05,
-            other => return other.map(carried(voxel_mm)),
-        }
-    }
-    pressed(mesh, bvh, sample, settings, voxel_mm).map(carried(voxel_mm))
+    let (surface, hierarchy) = basis.surface(mesh, bvh);
+    let press = Press {
+        mesh: surface,
+        bvh: hierarchy,
+        model: basis.is_united().then_some((mesh, bvh)),
+        held: Held::of(surface, &settings.mask),
+        sample,
+        settings,
+    };
+    let relief = Relief {
+        mesh: press.pressed(&basis),
+        voxel_mm: basis.voxel_mm(),
+        coarsened: basis.coarsened(),
+    };
+    Ok((relief, basis))
 }
 
-/// One attempt at a given lattice.
-fn pressed(
-    mesh: &Mesh,
-    bvh: &Bvh,
-    sample: &(dyn Fn(usize, Vec3) -> Option<Scalar> + Sync),
-    settings: &ReliefSettings,
-    voxel_mm: Scalar,
-) -> Result<Mesh, VolumeError> {
-    let reach_mm = settings.amplitude_mm.abs();
-    let field = build(
-        mesh,
-        bvh,
-        &FieldSettings {
-            voxel_mm,
-            // The displaced surface has to stay inside the band it was built in, so the
-            // band carries the amplitude on top of what marching the cells needs.
-            band_voxels: reach_mm / voxel_mm + BAND_VOXELS,
-            iso_mm: 0.0,
-            sign: SignMode::Auto,
-            clip: None,
-            budget_bytes: settings.budget_bytes,
-        },
-        Cancel::never(),
-    )?;
+/// What one relief run reads its heights from and moves the surface by.
+struct Press<'a> {
+    /// The surface moved: the model, or its shells unioned.
+    mesh: &'a Mesh,
+    bvh: &'a Bvh,
+    /// The model the texture is read off, when that is not the surface moved.
+    model: Option<(&'a Mesh, &'a Bvh)>,
+    held: Option<Held>,
+    sample: &'a (dyn Fn(usize, Vec3) -> Option<Scalar> + Sync),
+    settings: &'a ReliefSettings,
+}
 
-    let grid = field.grid();
-    let band_mm = field.band_mm();
-    let tiles = field.tile_keys().collect();
-    let displaced = assemble(grid, band_mm - reach_mm, tiles, |voxel| {
-        let value = field.value(voxel);
-        // Past the band the value is clamped anyway, and no displacement of it can reach
-        // back across zero, so the nearest-point query is not worth making.
-        if value.abs() >= band_mm {
+impl Press<'_> {
+    /// The pressed surface over `basis`, meshed and taken onto the surface the texture
+    /// describes.
+    fn pressed(&self, basis: &ReliefBasis) -> Mesh {
+        let field = self.field_on(basis);
+        let mut pressed = extract_clustered(&field, RELIEF_SLACK_VOXELS, Cancel::never());
+        self.snap(&mut pressed, &field);
+        // Snapping can bring two vertices onto one point where a feature narrows to one.
+        collapse_flat_faces(&mut pressed);
+        pressed
+    }
+
+    /// The signed distance `value` at `point`, whose nearest point of the model is
+    /// `found`, once the texture has moved the surface where the mask lets it; see
+    /// `docs/design/volume.md`.
+    fn moved(&self, value: Scalar, point: Vec3, found: &ClosestPoint) -> Scalar {
+        let held = self
+            .held
+            .as_ref()
+            .and_then(|held| Some((held, held.nearest(point)?)));
+        if held.is_some_and(|(_, at)| Held::is_held(&at, found)) {
             return value;
         }
-        let point = grid.position(voxel);
-        let Some(found) = bvh.closest(mesh, point) else {
-            return value;
-        };
-        sample(found.face, found.point)
-            .map_or(value, |height| value - settings.amplitude_mm * height)
-    });
+        let moved = self.height(found).map_or(value, |height| {
+            value - self.settings.amplitude_mm * self.settings.lifted(height)
+        });
+        match held {
+            // Only a point outside the model can be wrapped round an edge into it.
+            Some((held, at)) if value > 0.0 => held.clipped(moved, point, &at),
+            _ => moved,
+        }
+    }
 
-    Ok(extract(&displaced, Cancel::never()))
+    /// The texture's height at `found`, read off the model's own face there.
+    fn height(&self, found: &ClosestPoint) -> Option<Scalar> {
+        let face = match self.model {
+            Some((model, bvh)) => bvh.closest(model, found.point)?.face,
+            None => found.face,
+        };
+        (self.sample)(face, found.point)
+    }
 }
 
 #[cfg(test)]
@@ -291,7 +404,7 @@ mod tests {
             &ReliefSettings {
                 amplitude_mm,
                 precision: 0.5,
-                budget_bytes: DEFAULT_BUDGET_BYTES,
+                ..ReliefSettings::default()
             },
         )
         .expect("a mapped cube can be pressed")
@@ -545,5 +658,279 @@ mod tests {
             ),
             Err(VolumeError::EmptyMesh)
         ));
+    }
+
+    fn tiled_cube(heights: &Heightmap, settings: ReliefSettings) -> Aabb {
+        let (mesh, _) = cube(10.0);
+        let bvh = Bvh::build(&mesh);
+        let pressed = press_tiled(&mesh, &bvh, heights, Tiling::default(), &settings)
+            .expect("any closed mesh can be tiled");
+        bounds(&pressed.mesh)
+    }
+
+    fn raised(settings: ReliefSettings) -> ReliefSettings {
+        ReliefSettings {
+            amplitude_mm: 0.4,
+            ..settings
+        }
+    }
+
+    #[test]
+    fn an_inverted_texture_raises_what_was_black() {
+        let grown = tiled_cube(
+            &flat(0.0),
+            raised(ReliefSettings {
+                invert: true,
+                ..ReliefSettings::default()
+            }),
+        );
+        assert!(
+            (grown.maxs.z - 10.4).abs() < TOLERANCE_MM,
+            "got {grown:?}, expected black read as white to grow the cube 0.4 mm"
+        );
+    }
+
+    #[test]
+    fn a_symmetric_relief_leaves_mid_grey_where_it_was_and_moves_black_in() {
+        let symmetric = raised(ReliefSettings {
+            symmetric: true,
+            ..ReliefSettings::default()
+        });
+        let grey = tiled_cube(&flat(0.5), symmetric);
+        let black = tiled_cube(&flat(0.0), symmetric);
+        assert!(
+            (grey.maxs.z - 10.0).abs() < TOLERANCE_MM && (black.maxs.z - 9.8).abs() < TOLERANCE_MM,
+            "grey topped out at {} and black at {}, expected 10.0 and half of 0.4 mm in",
+            grey.maxs.z,
+            black.maxs.z
+        );
+    }
+
+    /// The cube with its lid widened to 14 mm, so that every side leans out over the
+    /// 10 mm bottom by about 11 degrees.
+    fn leaning_out() -> Mesh {
+        let (cube, _) = cube(10.0);
+        let vertices = cube
+            .vertices
+            .iter()
+            .map(|corner| {
+                if corner.z > 0.0 {
+                    Vec3::new(corner.x * 1.4 - 2.0, corner.y * 1.4 - 2.0, corner.z)
+                } else {
+                    *corner
+                }
+            })
+            .collect();
+        Mesh::new(vertices, cube.faces)
+    }
+
+    #[test]
+    fn a_held_bottom_stays_flat_where_leaning_sides_meet_it() {
+        let mesh = leaning_out();
+        let bvh = Bvh::build(&mesh);
+        let settings = raised(ReliefSettings {
+            mask: AngleMask {
+                bottom_deg: 5.0,
+                ..AngleMask::default()
+            },
+            ..ReliefSettings::default()
+        });
+        let pressed = press_tiled(&mesh, &bvh, &flat(1.0), Tiling::default(), &settings)
+            .expect("any closed mesh can be tiled");
+        let grown = bounds(&pressed.mesh);
+        // A side leaning out faces partly down, so without the clip at the held face's
+        // plane its relief hangs up to 0.4 × sin 11° ≈ 0.08 mm below the bottom edge.
+        assert!(
+            grown.mins.z.abs() < TOLERANCE_MM / 2.0 && grown.maxs.x > 12.2,
+            "got {grown:?}, expected the bottom at 0 and the sides moved out"
+        );
+    }
+
+    #[test]
+    fn a_held_top_is_measured_from_the_up_it_is_given() {
+        let grown = tiled_cube(
+            &flat(1.0),
+            raised(ReliefSettings {
+                mask: AngleMask {
+                    up: Vec3::X,
+                    top_deg: 5.0,
+                    ..AngleMask::default()
+                },
+                ..ReliefSettings::default()
+            }),
+        );
+        assert!(
+            (grown.maxs.x - 10.0).abs() < TOLERANCE_MM
+                && (grown.maxs.z - 10.4).abs() < TOLERANCE_MM,
+            "got {grown:?}, expected the +X face held and the lid moved"
+        );
+    }
+
+    #[test]
+    fn a_mask_past_level_or_with_no_up_is_refused() {
+        let (mesh, _) = cube(10.0);
+        let bvh = Bvh::build(&mesh);
+        let with = |mask: AngleMask| {
+            let settings = ReliefSettings {
+                mask,
+                ..ReliefSettings::default()
+            };
+            press_tiled(&mesh, &bvh, &flat(1.0), Tiling::default(), &settings)
+        };
+        assert!(matches!(
+            with(AngleMask {
+                bottom_deg: 95.0,
+                ..AngleMask::default()
+            }),
+            Err(VolumeError::BadMaskAngle(_))
+        ));
+        assert!(matches!(
+            with(AngleMask {
+                top_deg: Scalar::NAN,
+                ..AngleMask::default()
+            }),
+            Err(VolumeError::BadMaskAngle(_))
+        ));
+        assert!(matches!(
+            with(AngleMask {
+                up: Vec3::ZERO,
+                ..AngleMask::default()
+            }),
+            Err(VolumeError::BadMaskUp(_))
+        ));
+    }
+
+    #[test]
+    fn a_negative_smoothing_is_refused() {
+        let (mesh, uvs) = cube(10.0);
+        let bvh = Bvh::build(&mesh);
+        let settings = ReliefSettings {
+            smoothing_px: -1.0,
+            ..ReliefSettings::default()
+        };
+        assert!(matches!(
+            press(&mesh, &bvh, &uvs, &[flat(1.0)], &settings),
+            Err(VolumeError::BadSmoothing(_))
+        ));
+    }
+
+    #[test]
+    fn a_prepared_texture_is_smoothed_then_turned_over() {
+        let settings = ReliefSettings {
+            invert: true,
+            smoothing_px: 4.0,
+            ..ReliefSettings::default()
+        };
+        // Smoothed far past its four pixels, the half-black half-white strip is all
+        // mid grey, which turned over is mid grey again.
+        let strip = half();
+        let read = prepared(&strip, &settings);
+        assert!(
+            read.samples()
+                .iter()
+                .all(|height| (height - 0.5).abs() < 0.05),
+            "got {:?}",
+            read.samples()
+        );
+        assert!(matches!(
+            prepared(&strip, &ReliefSettings::default()),
+            Cow::Borrowed(_)
+        ));
+    }
+
+    #[test]
+    fn a_face_buried_in_another_shell_takes_no_relief() {
+        // Two 10 mm cubes pushed half into each other, so that each has a side inside
+        // the other: the solid is the 15 × 10 × 10 box they span.
+        let mut mesh = core_geometry::cuboid(Vec3::ZERO, Vec3::splat(10.0));
+        mesh.append(&core_geometry::cuboid(
+            Vec3::new(5.0, 0.0, 0.0),
+            Vec3::new(15.0, 10.0, 10.0),
+        ));
+        let bvh = Bvh::build(&mesh);
+        let settings = raised(ReliefSettings {
+            symmetric: true,
+            ..ReliefSettings::default()
+        });
+        let pressed = press_tiled(&mesh, &bvh, &flat(0.0), Tiling::default(), &settings)
+            .expect("two closed cubes can be tiled");
+        let depth = |p: Vec3| {
+            (p - Vec3::ZERO)
+                .min(Vec3::new(15.0, 10.0, 10.0) - p)
+                .min_element()
+        };
+        let deepest = pressed
+            .mesh
+            .vertices
+            .iter()
+            .copied()
+            .map(depth)
+            .fold(Scalar::MIN, Scalar::max);
+        // Black read symmetrically sinks the box's own sides by half the 0.4 mm amplitude.
+        assert!(
+            (deepest - 0.2).abs() < TOLERANCE_MM,
+            "the deepest vertex stands {deepest} mm inside, expected only the sides sunk 0.2 mm"
+        );
+    }
+
+    #[test]
+    fn a_kept_basis_presses_another_picture_into_the_same_model_as_a_fresh_one_would() {
+        let (mesh, _) = cube(10.0);
+        let bvh = Bvh::build(&mesh);
+        let settings = raised(ReliefSettings::default());
+        let tiled = |image: &Heightmap, basis| {
+            press_tiled_reusing(&mesh, &bvh, image, Tiling::default(), &settings, basis)
+                .expect("any closed mesh can be tiled")
+        };
+        let (_, basis) = tiled(&flat(1.0), None);
+        let (reused, again) = tiled(&half(), Some(Arc::clone(&basis)));
+        assert!(
+            Arc::ptr_eq(&basis, &again),
+            "the same model and lattice keep the basis"
+        );
+        let (fresh, _) = tiled(&half(), None);
+        assert_eq!(reused.mesh, fresh.mesh);
+    }
+
+    #[test]
+    fn a_basis_kept_for_another_depth_or_model_is_built_again() {
+        let (mesh, _) = cube(10.0);
+        let bvh = Bvh::build(&mesh);
+        let (_, basis) = press_tiled_reusing(
+            &mesh,
+            &bvh,
+            &flat(1.0),
+            Tiling::default(),
+            &raised(ReliefSettings::default()),
+            None,
+        )
+        .expect("any closed mesh can be tiled");
+
+        let deeper = ReliefSettings {
+            amplitude_mm: 0.6,
+            ..ReliefSettings::default()
+        };
+        let (_, rebuilt) = press_tiled_reusing(
+            &mesh,
+            &bvh,
+            &flat(1.0),
+            Tiling::default(),
+            &deeper,
+            Some(Arc::clone(&basis)),
+        )
+        .expect("any closed mesh can be tiled");
+        assert!(!Arc::ptr_eq(&basis, &rebuilt));
+
+        let (larger, _) = cube(12.0);
+        let (_, other) = press_tiled_reusing(
+            &larger,
+            &Bvh::build(&larger),
+            &flat(1.0),
+            Tiling::default(),
+            &raised(ReliefSettings::default()),
+            Some(Arc::clone(&basis)),
+        )
+        .expect("any closed mesh can be tiled");
+        assert!(!Arc::ptr_eq(&basis, &other));
     }
 }

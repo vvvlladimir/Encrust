@@ -14,6 +14,8 @@ ignore = [
     { id = "RUSTSEC-2026-0367", reason = "zip 8 `extract` only; threemf2 and we never call it" },
     { id = "RUSTSEC-2026-0368", reason = "zip 8 `extract` only; threemf2 and we never call it" },
     { id = "RUSTSEC-2026-0369", reason = "zip 8 `extract` only; threemf2 and we never call it" },
+    # Unmaintained, not unsound; fontdb ships the same copy to the window anyway (ADR 0305).
+    { id = "RUSTSEC-2026-0192", reason = "core-text outlines with ttf-parser 0.25 until it moves to skrifa" },
 ]
 
 [licenses]

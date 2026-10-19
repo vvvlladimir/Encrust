@@ -18,18 +18,26 @@ use std::sync::Arc;
 
 use core_format::ExposureRange;
 use core_geometry::{Mat3, Mesh, MeshDiagnostics, Orientation, Scalar, Transform, Vec3};
+use core_joint::Joints;
 use core_slicer::AdaptiveSettings;
 use core_supports::{ProjectSettings, Region, SupportPoint, SupportTree};
-use core_volume::{Blocker, Channel, DrainHole, HollowMode, HollowSettings, InfillSettings};
+use core_volume::{
+    Blocker, Channel, DrainHole, HoleShape, HollowMode, HollowSettings, InfillSettings,
+    PLUG_GAP_MM, PartSettings,
+};
 use printer_profiles::{OutputFormat, Raft, SupportProfile};
 use serde::{Deserialize, Serialize};
 
 /// What a project file is called, and what an open or save dialog filters on.
 pub const EXTENSION: &str = "encrust";
 
-/// The manifest this build writes. Version 4 is read as well, by the ids of its profiles
-/// alone; any other is refused, lacking built geometry and diagnostics (ADR 0191, 0205, 0261).
-pub const VERSION: u32 = 5;
+/// The manifest this build writes. Versions 4 and 5 are read as well; any other is refused,
+/// lacking built geometry and diagnostics (ADR 0191, 0205, 0261, 0302).
+pub const VERSION: u32 = 6;
+
+/// The last version whose lattice took one size for its cells and walls, which this build
+/// reads as the cell's.
+const ONE_LATTICE_SIZE: u32 = 5;
 
 /// The last version that carried its printer and resin whole rather than by id.
 const WHOLE_PROFILES: u32 = 4;
@@ -234,6 +242,10 @@ pub struct HollowState {
     pub infill_on: bool,
     pub infill: InfillSettings,
     pub blocker_mm: Scalar,
+    /// Whether a shell opens through the floor it stands on; a file without it reads a
+    /// closed one (ADR 0313).
+    #[serde(default)]
+    pub open_floor: bool,
 }
 
 /// What the next drain hole is drilled to. The holes standing carry their own sizes.
@@ -242,9 +254,36 @@ pub struct DrainState {
     pub diameter_mm: Scalar,
     pub depth_mm: Scalar,
     pub taper: Scalar,
+    /// The next hole's outline and its turn in degrees, and how much narrower than its hole
+    /// a plug is drawn, millimetres a side. A file without them reads a round hole and the
+    /// default gap (ADR 0313).
+    #[serde(default)]
+    pub shape: HoleShape,
+    #[serde(default)]
+    pub turn_deg: Scalar,
+    #[serde(default = "plug_gap")]
+    pub plug_gap_mm: Scalar,
 }
 
-/// Where the cut tool's plane stands and which halves it keeps.
+impl DrainState {
+    /// A round hole, with the default plug gap.
+    pub fn round(diameter_mm: Scalar, depth_mm: Scalar, taper: Scalar) -> Self {
+        Self {
+            diameter_mm,
+            depth_mm,
+            taper,
+            shape: HoleShape::Round,
+            turn_deg: 0.0,
+            plug_gap_mm: PLUG_GAP_MM,
+        }
+    }
+}
+
+fn plug_gap() -> Scalar {
+    PLUG_GAP_MM
+}
+
+/// Where the cut tool's plane stands, which halves it keeps and how they are joined.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct CutState {
     pub axis: Axis,
@@ -252,6 +291,12 @@ pub struct CutState {
     /// centre of mass. Named for the Z cut it began as.
     pub height_mm: Scalar,
     pub keep: Keep,
+    /// A file without them reads as a plain cut (ADR 0306).
+    #[serde(default)]
+    pub joints: Joints,
+    /// What Split into its parts goes by; a file without it reads the defaults (ADR 0307).
+    #[serde(default)]
+    pub parts: PartSettings,
 }
 
 /// One model on a plate: where it stands, and what was done to it.
@@ -278,6 +323,9 @@ pub struct ObjectState {
     /// (ADR 0253). A file without it reads as a model with none.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub own_raft: Option<Raft>,
+    /// Which model of the file, by its place among them, this one is a plug for (ADR 0313).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub plug_of: Option<u32>,
 }
 
 impl ObjectState {
@@ -407,6 +455,10 @@ pub struct Cavity {
     pub mode: HollowMode,
     pub precision: Scalar,
     pub infill: Option<InfillSettings>,
+    /// The way to the plate the floor was opened toward; absent for a closed shell, and in
+    /// a file from before ADR 0313.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub open_toward: Option<Vec3>,
 }
 
 impl Cavity {
@@ -417,6 +469,7 @@ impl Cavity {
             mode: asked.mode,
             precision: asked.precision,
             infill: asked.infill,
+            open_toward: asked.open_toward,
         }
     }
 
@@ -428,6 +481,7 @@ impl Cavity {
             mode: self.mode,
             precision: self.precision,
             infill: self.infill,
+            open_toward: self.open_toward,
             ..HollowSettings::default()
         }
     }
@@ -480,6 +534,10 @@ pub fn read_from<R: Read + Seek>(source: R) -> Result<Project, ProjectError> {
         let version: Version = serde_json::from_str(&text)?;
         match version.version {
             VERSION => serde_json::from_str(&text)?,
+            ONE_LATTICE_SIZE => Manifest {
+                version: VERSION,
+                ..serde_json::from_str(&text)?
+            },
             WHOLE_PROFILES => by_ids(serde_json::from_str(&text)?)?,
             found => return Err(ProjectError::WrongVersion { found }),
         }
@@ -568,6 +626,7 @@ mod tests {
 
     use super::*;
     use core_geometry::Vec3;
+    use core_volume::InfillPattern;
 
     /// A plate of `objects` models, each hollowed, so every part of the format is in it:
     /// a manifest, a source mesh and a shell beside it.
@@ -608,16 +667,15 @@ mod tests {
                     infill_on: true,
                     infill: InfillSettings::default(),
                     blocker_mm: 2.0,
+                    open_floor: false,
                 },
-                drain: DrainState {
-                    diameter_mm: 3.0,
-                    depth_mm: 3.0,
-                    taper: 1.0,
-                },
+                drain: DrainState::round(3.0, 3.0, 1.0),
                 cut: CutState {
                     axis: Axis::Z,
                     height_mm: 10.0,
                     keep: Keep::Both,
+                    joints: core_joint::Joints::default(),
+                    parts: PartSettings::default(),
                 },
                 array: Array::default(),
                 plates: vec!["Plate 1".to_owned()],
@@ -683,6 +741,7 @@ mod tests {
                 channels: vec![Channel {
                     points: vec![Vec3::ZERO, Vec3::Z],
                     diameter_mm: 3.0,
+                    ..Channel::default()
                 }],
                 built: Some(BuiltCavity {
                     wall: Cavity {
@@ -690,6 +749,7 @@ mod tests {
                         mode: HollowMode::External,
                         precision: 0.25,
                         infill: None,
+                        open_toward: None,
                     },
                     cavity_faces: 0..1,
                     cavity_mm3: 12.5,
@@ -704,11 +764,7 @@ mod tests {
                 }),
             },
             own_hollow: None,
-            own_drain: (index == 1).then_some(DrainState {
-                diameter_mm: 4.0,
-                depth_mm: 3.0,
-                taper: 1.0,
-            }),
+            own_drain: (index == 1).then_some(DrainState::round(4.0, 3.0, 1.0)),
             own_supports: if index == 1 {
                 vec![OwnSupportState {
                     group: 1,
@@ -718,6 +774,7 @@ mod tests {
                 Vec::new()
             },
             own_raft: None,
+            plug_of: None,
         }
     }
 
@@ -771,6 +828,23 @@ mod tests {
             back.manifest.objects[0].hollow.built,
             saved.manifest.objects[0].hollow.built
         );
+    }
+
+    #[test]
+    fn the_cut_joints_and_parts_come_back_and_a_file_without_them_reads_the_defaults() {
+        let mut saved = project(1);
+        saved.manifest.cut.joints.kind = Some(core_joint::JointKind::Magnets);
+        saved.manifest.cut.joints.magnets.thickness_mm = 3.0;
+        saved.manifest.cut.parts.smallest_mm3 = 5.0;
+        let back = round_trip(&saved);
+        assert_eq!(back.manifest.cut.joints, saved.manifest.cut.joints);
+        assert_eq!(back.manifest.cut.parts, saved.manifest.cut.parts);
+
+        let older: CutState =
+            serde_json::from_str(r#"{ "axis": "z", "height_mm": 10.0, "keep": "both" }"#)
+                .expect("a cut written before the joints reads");
+        assert_eq!(older.joints.kind, None);
+        assert_eq!(older.parts, PartSettings::default());
     }
 
     #[test]
@@ -893,10 +967,58 @@ mod tests {
     }
 
     #[test]
+    fn hole_shapes_an_open_floor_and_plugs_come_back_and_a_file_from_before_reads() {
+        let mut saved = project(2);
+        saved.manifest.objects[1].plug_of = Some(0);
+        saved.manifest.drain.shape = HoleShape::Polygon { sides: 6 };
+        saved.manifest.drain.plug_gap_mm = 0.2;
+        saved.manifest.hollow.open_floor = true;
+        let back = round_trip(&saved);
+        assert_eq!(back.manifest.drain, saved.manifest.drain);
+        assert!(back.manifest.hollow.open_floor);
+        assert_eq!(back.manifest.objects[1].plug_of, Some(0));
+
+        let older: DrainState =
+            serde_json::from_str(r#"{ "diameter_mm": 3.0, "depth_mm": 3.0, "taper": 1.0 }"#)
+                .expect("a drain written before ADR 0313 reads");
+        assert_eq!(older, DrainState::round(3.0, 3.0, 1.0));
+        let hole: DrainHole = serde_json::from_value(serde_json::json!({
+            "at": [0.0, 0.0, 0.0], "axis": [0.0, 0.0, -1.0], "diameter_mm": 3.0,
+            "depth_mm": 3.0, "taper": 1.0, "lift_mm": 0.0
+        }))
+        .expect("a hole written before ADR 0313 reads");
+        assert_eq!(hole.shape, HoleShape::Round);
+    }
+
+    #[test]
+    fn infill_saved_before_walls_had_their_own_size_reads() {
+        let older = serde_json::json!({ "pattern": "grid", "size_mm": 5.0, "density": 0.15 });
+        let read: InfillSettings = serde_json::from_value(older).expect("a file from before reads");
+        assert_eq!(read.pattern, InfillPattern::Grid);
+        assert_eq!(read.cell_mm, 5.0, "the old cell size carries over");
+        assert_eq!(read.wall_mm, InfillSettings::default().wall_mm);
+    }
+
+    #[test]
     fn an_empty_plate_round_trips() {
         let back = round_trip(&project(0));
         assert!(back.manifest.objects.is_empty());
         assert!(back.models.is_empty());
+    }
+
+    #[test]
+    fn a_version_5_file_reads_its_lattice_size_as_the_cell() {
+        let mut saved = project(1);
+        saved.manifest.version = ONE_LATTICE_SIZE;
+        let mut bytes = Cursor::new(Vec::new());
+        write_to(&mut bytes, &saved).expect("a project in memory writes");
+        bytes.set_position(0);
+        let back = read_from(bytes).expect("a version 5 file reads");
+        assert_eq!(
+            back.manifest.version, VERSION,
+            "and is this build's once open"
+        );
+        assert_eq!(back.manifest.hollow, saved.manifest.hollow);
     }
 
     #[test]

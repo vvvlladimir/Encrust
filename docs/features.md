@@ -141,24 +141,95 @@ capped silently.
 ### Cut
 - Cut a model with a plane. Position the plane by height from the plate or by an offset
   from the centre of mass, or click to place it on the model.
-- Add **alignment pins** (pegs and sockets, with diameter and length you set) so the halves
-  glue back true.
-- Lay each half flat on its cut face, or split a model into its separate parts.
+- **Join the halves** so they glue back true, choosing one of four kinds:
+  - **dowels**: sockets in both halves, with the dowels printed beside them, so both cut
+    faces stay flat and can carry the supports where the glue hides them;
+  - **pins**: pins on the lower half that go into the upper;
+  - **magnets**: a socket in each half for every disc magnet, sized to the magnet;
+  - **key**: a tongue round the cut face of the lower half that goes into a groove in the
+    upper, for hollow walls too thin for a peg.
+- Every separate piece of the cut face gets its own pins, dowels or magnets, placed as far
+  apart as it allows and only where both halves are deep enough to take a socket. Pegs can
+  be sized from the width of each piece, with a gap you set. One peg can be made narrower,
+  so the halves go together only one way.
+- In a hollow model a pillar carries a socket over the cavity. Sockets are part of the
+  half, not drain holes. The halves are built off the drawing thread, and the stage notice
+  says how many went in and which pieces had no room. A half with pins or a tongue is not
+  laid flat on its cut.
+- Lay each half flat on its cut face.
+- **Split into its parts**: bodies that touch only at a corner or along an edge become
+  separate parts. A cavity, and the lattice in it, stay with their body. Pieces smaller than
+  a size you set are scraps: one touching a part is joined to it, and a stray one is dropped
+  rather than handed back as a part of its own. **Mark a part** and click on a thin part of
+  the model, and Split cuts that part off flat where it narrows into the rest, leaving the
+  rest of the surface as it was. A part only a fold of a scan's surface joins to the rest,
+  with no material between them, is cut out whole along the gap round it; with no narrow join from the mark the stage notice says so
+  and nothing is cut. The split runs off the drawing thread, and the stage notice says what
+  it joined and dropped.
 - A piece the cut leaves broken is repaired automatically. Undo puts the original back.
 
-### Relief (textures pressed into the surface)
-- Use the model's own texture, or **any picture** tiled over the model from three sides.
-- Set the depth (a negative depth sinks the picture in), the tile size, the angle and the
-  precision.
-- Using the model's own texture needs a model with UVs (OBJ or 3MF).
+### Relief (texture, text and combining models)
+- Three modes, switched at the head of the panel, each with its own settings and its own
+  button at the foot.
+- **Texture:** press the model's own texture, one of **twelve built-in textures** (leather,
+  matte grain, carbon, basket weave, honeycomb, hex blocks, reptile, ripples, wood, bark,
+  stone, rock), or **any picture** tiled over the model from three sides, into its
+  surface. Set the depth (a negative depth sinks the picture in), the tile size, the angle
+  and the precision. The model's own texture needs a model with UVs (OBJ or 3MF).
+- The picture can be **inverted** (black raised, white left), **smoothed** to soften a
+  noisy photo, and pressed **symmetrically** about mid grey, so white raises the surface,
+  black sinks it and the model keeps about its size. The view shows the picture inverted
+  and smoothed, as it will be pressed.
+- **Leave flat:** faces within an angle you set of facing the plate, or of facing straight
+  up, keep their shape, and the relief stops square at their edge — a base the model stands
+  on stays flat.
+- A hollowed model keeps its cavity through a press: the cavity is cut again, at the same
+  wall and with the same blockers, holes and channels, into the pressed surface. Its
+  supports are not kept.
+- **Text:** click a model to write there, **raised** out of the surface or **sunk** into
+  it, several lines if you like. Pick the **font** from the ones installed on your computer
+  or the built-in IBM Plex Sans — type in the font field to find one by name — and set the
+  letter height, the depth and the angle; a preview under the cursor shows what the click
+  will write. **Flat** letters measure the
+  depth from the face where you click and follow it no further than that depth, so nothing
+  beside them is cut. **On the surface** bends every letter onto the face under it, so it
+  stands the full depth out of a curved face or into it everywhere; on a steep slope the
+  depth is measured along the direction you clicked from. Text is only ever cut
+  exactly: on a model that is not closed it is refused, and the model is left as it was.
+  Scripts that join their letters (Arabic, Devanagari) are not shaped. The browser build
+  offers only the built-in font.
+- **Combine:** pick two or more models — the panel lists them in the order picked and what
+  each does — and **Union** them into one, **Subtract** the others from the one picked
+  first, or **Intersect** them to keep only what they share. Closed models keep their sharp
+  edges, a model made of parts pushed into each other included; a torn scan is combined
+  through a field and its edges are rounded to the lattice the notice names.
+- Text and Combine replace the model; its supports, cavity, holes, own settings and
+  texture are not kept, and Undo puts the original back. The result stands on the plate the
+  models were taken from. Shift or Cmd click picks a model in Text mode without writing.
+- A press, a stamp, a combination, a cut or a split runs off the drawing thread and can be
+  cancelled from the panel. If the model is moved, resized, replaced or undone meanwhile,
+  the result is dropped and the stage notice says so.
+- The mode and the built-in texture chosen are remembered between runs.
 
 ### Hollow
 - Hollow a model with a wall thickness and precision you choose.
 - **Inside** grows the wall inward and leaves the outside untouched. **Outside** grows it
-  outward, which gives you a mould of the model.
-- **Infill** inside the cavity: **Hive** (hexagons, the stiffest for its weight), **Grid**
-  (square tubes) or **Scaffold** (struts on all three axes, the only one that takes a load
-  from the side), or leave the cavity empty. Set the cell size and density.
+  outward, which gives you a mould of the model; a mould takes no infill and keeps no
+  wall solid, so the panel hides both.
+- **Bottom through** grows the wall inward like Inside and cuts away the floor the model
+  stands on, so the resin runs out with no drain hole and the model shows the opening. It
+  follows the plate: turn the model and it asks to be hollowed again. Standing on the plate
+  the cavity stays sealed until the print comes off, so add a small vent near the top. On a
+  model with holes in its surface the floor is still drawn, though the layers are open.
+- **Infill** inside the cavity, or leave it empty:
+  - **Hive** (hexagonal cells) and **Grid** (square cells) stand on the plate. Set the cell
+    size, the wall thickness, and the round crossing holes that join each cell to its
+    neighbours: their diameter, the height of the first row and the spacing between rows.
+    One drain hole empties every cell. Walls come out flat and holes round, at any
+    precision.
+  - **Scaffold** is struts on the edges of a cube stood on its corner. None of them is
+    level, so none starts in mid-air, and it braces the part sideways too. Set the cell size
+    and the density.
 - **Keep solid:** click spots on the model where the wall must stay solid (blockers), and
   set their size.
 - Each model can keep its own hollow settings, and you can save settings as named presets.
@@ -166,8 +237,20 @@ capped silently.
 
 ### Drain
 - **Drill** a hole, with size, depth and taper, wherever you click.
-- **Channel:** dig a tube of the hole size through a path of points, open only at its two
-  ends.
+- A hole or a channel is **round** or a **polygon** of 3 to 12 sides that you can turn about
+  its axis: turn a corner to the top of a hole in a side wall and its roof prints without
+  sagging.
+- Once the model is hollow, a hole is carried on through the wall into the cavity, however
+  shallow you set it.
+- **Plugs:** every hole gets a plug standing on the plate beside its model as soon as it is
+  cut, and the plugs are made again when you add or clear holes, hollow the model or change
+  the gap. A plug is what the hole took out of the wall, narrower all round by the gap you
+  set (0.15 mm by default), with its outer face following the surface so it closes flush. If
+  the resin's tolerance compensation is off, its offsets are allowed for so the fit prints
+  as set. Plugs are models like any other; a project opens with the plugs it was saved with,
+  and a copied model gets plugs of its own.
+- **Channel:** dig a tube of the hole's width and outline through a path of points, open
+  only at its two ends.
 - **Check drainage:** Encrust follows the air through every layer and finds every pocket
   of resin with no way out. Pockets are painted in the view, and you can see through the
   model to find them.
@@ -428,7 +511,8 @@ address in a video player).
 - **Find (⌘K):** search every tool, action and model on the plate by name.
 - **Keyboard:** digits 1 to 0 pick the first ten tools, there is a shortcut sheet, Tab walks
   every control, and every control has a name for screen readers.
-- **Undo and redo** across the plate and the settings forms.
+- **Undo and redo** across the plate and the settings forms. A run that lands its result
+  after an undo is a new edit, so what could be redone before it can no longer be.
 - Tool values are remembered between runs.
 - **Updates:** checks once a day (can be turned off), downloads, verifies the signature and
   installs only when you press it. You can skip a version. A copy from the Microsoft Store
@@ -467,8 +551,16 @@ and leave nothing on disk if a model has defects), a config file for flags you a
 progress bars that turn off when not on a terminal, and Ctrl-C that stops cleanly and
 removes the half-written file.
 
-**You cannot** (from the command line): paint supports, place them by hand, or set blockers.
-Do that in the window, save a project, then slice the project.
+**Modelling:** combine the models given, write a label on one, cut it with a joint, split
+it into its parts or cut a part off, all at the window's default sizes, before it is sliced.
+
+**Holes:** open a shell's floor, cut drain holes round or as polygons, and
+print a plug for each beside the model, with the gap you choose. A run whose plugs have no
+room beside their model stops rather than printing them on a neighbour.
+
+**You cannot** (from the command line): paint supports, place them by hand, set blockers,
+take the pieces of a cut or a split out as meshes, or hollow or support a model a cut or a
+split broke into several pieces. Do that in the window, save a project, then slice it.
 
 ---
 

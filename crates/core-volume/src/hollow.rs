@@ -2,7 +2,9 @@ use std::borrow::Cow;
 use std::collections::HashSet;
 use std::ops::Range;
 
-use core_geometry::{Bvh, Mat3, Mesh, Scalar, Vec3, glam::IVec3, signed_volume, smallest_scale};
+use core_geometry::{
+    Bvh, Mat3, Mesh, Scalar, Transform, Vec3, glam::IVec3, signed_volume, smallest_scale,
+};
 
 use serde::{Deserialize, Serialize};
 
@@ -13,10 +15,12 @@ use crate::drain::Channel;
 use crate::error::VolumeError;
 use crate::extract::extract;
 use crate::grid::tile_of;
-use crate::infill::{InfillSettings, lattice};
+use crate::infill::{Carved, InfillSettings, cut};
 use crate::sdf::Sdf;
 use crate::shells::outer_shells;
 use crate::sign::SignMode;
+
+mod floor;
 
 /// How far past its own surface a hollowing field reaches.
 ///
@@ -173,6 +177,10 @@ pub struct HollowSettings {
     pub infill: Option<InfillSettings>,
     /// Where the wall stays solid.
     pub blockers: Vec<Blocker>,
+    /// Which way the plate lies, in the space the wall is measured in ([`plate_down`]),
+    /// where the cavity is to open through the floor the model stands on; `None` keeps it
+    /// closed. Only a shell has a floor to open (ADR 0313).
+    pub open_toward: Option<Vec3>,
     /// What the run may take in bytes, or zero for no ceiling. A lattice that would cost
     /// more is coarsened until it fits rather than left to run the machine out of memory.
     pub budget_bytes: usize,
@@ -203,6 +211,7 @@ impl Default for HollowSettings {
             sign: SignMode::default(),
             infill: None,
             blockers: Vec::new(),
+            open_toward: None,
             budget_bytes: DEFAULT_BUDGET_BYTES,
         }
     }
@@ -236,11 +245,11 @@ pub struct Hollowed {
 pub struct CavityField {
     offset: Sdf,
     shape: Mat3,
-    thickness_mm: Scalar,
     mode: HollowMode,
-    precision: Scalar,
     voxel_mm: Scalar,
     coarsened: bool,
+    /// What carving it may take besides, in bytes, or zero for no ceiling.
+    budget_bytes: usize,
 }
 
 impl CavityField {
@@ -276,11 +285,24 @@ pub fn hollow_at_scale(
     cancel: Cancel<'_>,
 ) -> Result<Hollowed, VolumeError> {
     let field = cavity_field(mesh, bvh, settings, shape, cancel)?;
-    carve(mesh, &field, &settings.blockers, settings.infill, cancel)
+    carve(mesh, &field, settings, cancel)
+}
+
+/// Which way the plate lies from a model standing under `transform`, in the space its wall
+/// is measured in (`Transform::unturned`): what [`HollowSettings::open_toward`] asks for to
+/// open the floor the model stands on.
+pub fn plate_down(transform: Transform) -> Vec3 {
+    let shape = transform.unturned();
+    if shape.determinant().abs() < Scalar::EPSILON {
+        return Vec3::NEG_Z;
+    }
+    // The placement is its turn after its shape, so the turn is what is left of it.
+    let turn = transform.linear() * shape.inverse();
+    (turn.transpose() * Vec3::NEG_Z).normalize_or(Vec3::NEG_Z)
 }
 
 /// The field [`hollow_at_scale`] cuts its cavity from, on the finest lattice that fits the
-/// budget. The settings' blockers and infill play no part in it.
+/// budget. The settings' blockers, infill and open floor play no part in it.
 pub fn cavity_field(
     mesh: &Mesh,
     bvh: &Bvh,
@@ -300,28 +322,27 @@ pub fn cavity_field(
     Ok(CavityField {
         offset,
         shape,
-        thickness_mm: settings.thickness_mm,
         mode: settings.mode,
-        precision: settings.precision,
         voxel_mm,
         coarsened,
+        budget_bytes: settings.budget_bytes,
     })
 }
 
-/// The shell `field` was built for, with `blockers` kept solid and `infill` standing in
-/// the cavity. `mesh` is the model the field was built from, in its own space, and the
-/// blockers are in that space too.
+/// The shell `field` was built for, with the settings' blockers kept solid, its infill
+/// standing in the cavity and its floor opened where they ask. `mesh` is the model the
+/// field was built from, in its own space, and the blockers are in that space too.
 pub fn carve(
     mesh: &Mesh,
     field: &CavityField,
-    blockers: &[Blocker],
-    infill: Option<InfillSettings>,
+    settings: &HollowSettings,
     cancel: Cancel<'_>,
 ) -> Result<Hollowed, VolumeError> {
     let placed = placed(mesh, field.shape)?;
     // A blocker's radius was brought into the model's space through the least scale.
     let smallest = smallest_scale(field.shape);
-    let blockers: Vec<Blocker> = blockers
+    let blockers: Vec<Blocker> = settings
+        .blockers
         .iter()
         .map(|blocker| Blocker {
             from: field.shape * blocker.from,
@@ -335,7 +356,15 @@ pub fn carve(
             Some(surface) => mould(&surface, field, cancel),
             None => mould(&placed, field, cancel),
         },
-        HollowMode::Internal => shelled(&placed, field, &blockers, infill, cancel),
+        HollowMode::Internal => {
+            let floor = settings.open_toward.map(|toward| floor::Opening {
+                toward,
+                wall_mm: settings.thickness_mm,
+                band_mm: field.offset.band_mm(),
+                voxel_mm: field.voxel_mm,
+            });
+            shelled(&placed, field, &blockers, floor, settings.infill, cancel)
+        }
     }?;
     hollowed.coarsened = field.coarsened;
     if field.shape != Mat3::IDENTITY {
@@ -375,18 +404,10 @@ fn field_to_budget(
     }
 
     let asked_mm = settings.voxel_mm(surface.surface_area());
-    let mut voxel_mm = asked_mm;
-    for _ in 0..COARSENINGS {
-        match offset_field(surface, bvh, settings, voxel_mm, cancel) {
-            // The lattice the field priced is the one that fits, taken a twentieth
-            // coarser still: the second run has the blockers to pay for as well, and a
-            // run refused twice over is worse than one voxel blunter.
-            Err(VolumeError::TooFine { fits_at_mm, .. }) => voxel_mm = fits_at_mm * 1.05,
-            other => return other.map(|field| (field, voxel_mm, voxel_mm > asked_mm)),
-        }
-    }
-    offset_field(surface, bvh, settings, voxel_mm, cancel)
-        .map(|field| (field, voxel_mm, voxel_mm > asked_mm))
+    coarsening(asked_mm, |voxel_mm| {
+        offset_field(surface, bvh, settings, voxel_mm, cancel)
+    })
+    .map(|(field, voxel_mm)| (field, voxel_mm, voxel_mm > asked_mm))
 }
 
 /// How many times a lattice may be coarsened before the run is given up on.
@@ -394,7 +415,26 @@ fn field_to_budget(
 /// Each attempt prices the whole field before filling any of it, so a coarsening costs the
 /// walk over the faces and nothing else; three is far more than the one step the estimate
 /// normally needs.
-pub(crate) const COARSENINGS: usize = 3;
+const COARSENINGS: usize = 3;
+
+/// What `build` makes on a lattice of `voxel_mm`, or where the memory budget refuses that,
+/// on the one the field priced as fitting, and the lattice it was made on.
+///
+/// The priced lattice is taken a twentieth coarser still: a second run may have more to pay
+/// for, as a hollow's blockers, and a run refused twice over is worse than one voxel blunter.
+pub(crate) fn coarsening<T>(
+    voxel_mm: Scalar,
+    mut build: impl FnMut(Scalar) -> Result<T, VolumeError>,
+) -> Result<(T, Scalar), VolumeError> {
+    let mut voxel_mm = voxel_mm;
+    for _ in 0..COARSENINGS {
+        match build(voxel_mm) {
+            Err(VolumeError::TooFine { fits_at_mm, .. }) => voxel_mm = fits_at_mm * 1.05,
+            other => return other.map(|built| (built, voxel_mm)),
+        }
+    }
+    build(voxel_mm).map(|built| (built, voxel_mm))
+}
 
 /// The field of the surface a wall off `surface`, on a lattice of `voxel_mm`.
 fn offset_field(
@@ -420,53 +460,69 @@ fn offset_field(
     build(surface, bvh, &field, cancel)
 }
 
-/// The model with the cavity `field` bounds appended to it, and whatever stands in that
-/// cavity appended after.
+/// The model with the void `field` bounds appended to it wound inward, and whatever lattice
+/// stands in it appended after. `floor`, where given, carries the void out through the
+/// floor the model stands on.
 fn shelled(
     mesh: &Mesh,
     field: &CavityField,
     blockers: &[Blocker],
+    floor: Option<floor::Opening>,
     infill: Option<InfillSettings>,
     cancel: Cancel<'_>,
 ) -> Result<Hollowed, VolumeError> {
-    let blocked = blocked(&field.offset, blockers);
-    let cavity = blocked.as_ref().unwrap_or(&field.offset);
-
+    let opened = floor.and_then(|opening| floor::opened(&field.offset, mesh, opening));
+    let floor = floor.filter(|_| opened.is_some());
+    let open = opened.as_ref().unwrap_or(&field.offset);
+    let blocked = blocked(open, blockers);
+    let cavity = blocked.as_ref().unwrap_or(open);
     let cavity_mesh = extract(cavity, cancel);
+    let Carved { void, solid } = match &infill {
+        Some(infill) => cut(cavity, cavity_mesh, infill, field.budget_bytes, cancel)?,
+        None => Carved {
+            void: cavity_mesh,
+            solid: Mesh::default(),
+        },
+    };
     if cancel.asked() {
         return Err(VolumeError::Cancelled);
     }
-    let hollow_mm3 = volume_of(&cavity_mesh);
-    // Half the wall, so a strut is fused into the shell rather than left touching it, and
-    // never so far that it could reach out through the wall.
-    let bond_mm = field.thickness_mm / 2.0;
-    let filling = match &infill {
-        Some(infill) if !cavity.is_empty() => lattice(cavity, infill, field.precision, bond_mm)?,
-        _ => Mesh::default(),
+    // The opening reaches past the floor, and a lattice standing in it is stopped at the floor.
+    let solid = match floor {
+        Some(opening) => floor::stopped_at_floor(solid, mesh, opening.toward),
+        None => solid,
     };
+    // Where the floor is open, the shell is cut exactly near it, so the model shows it gone.
+    let through = floor.and_then(|opening| floor::cut_through(mesh, &void, opening));
+    let cavity_mm3 = (volume_of(&void) - volume_of(&solid)).max(0.0);
+    if let Some((mut whole, cavity)) = through {
+        append(&mut whole, &solid);
+        return Ok(Hollowed {
+            mesh: whole,
+            cavity,
+            cavity_mm3,
+            voxel_mm: field.voxel_mm,
+            coarsened: false,
+        });
+    }
 
     // Grown to what the three parts come to before the first is copied: a mesh that
     // doubles its way there holds the old copy and the new one at once, and the cavity of
     // a real model is millions of triangles.
     let mut whole = Mesh::new(
-        Vec::with_capacity(
-            mesh.vertices.len() + cavity_mesh.vertices.len() + filling.vertices.len(),
-        ),
-        Vec::with_capacity(mesh.faces.len() + cavity_mesh.faces.len() + filling.faces.len()),
+        Vec::with_capacity(mesh.vertices.len() + void.vertices.len() + solid.vertices.len()),
+        Vec::with_capacity(mesh.faces.len() + void.faces.len() + solid.faces.len()),
     );
     append(&mut whole, mesh);
-    let cavity_faces = whole.faces.len()..whole.faces.len() + cavity_mesh.faces.len();
-    append(&mut whole, &flipped(&cavity_mesh));
-    drop(cavity_mesh);
-    append(&mut whole, &filling);
-
-    // The lattice overlaps itself at every junction, so its own volume over-reads. What it
-    // takes back out of the cavity is the density it was asked for.
-    let filled = infill.map_or(0.0, |infill| infill.density);
+    let cavity_faces = whole.faces.len()..whole.faces.len() + void.faces.len();
+    append(&mut whole, &flipped(&void));
+    append(&mut whole, &solid);
     Ok(Hollowed {
         mesh: whole,
         cavity: cavity_faces,
-        cavity_mm3: (hollow_mm3 * (1.0 - filled)).max(0.0),
+        // Where a scaffold's struts overlap at a node, their volume counts twice, a few
+        // percent at most.
+        cavity_mm3,
         voxel_mm: field.voxel_mm,
         coarsened: false,
     })

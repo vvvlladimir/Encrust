@@ -9,6 +9,10 @@ use crate::job::{TrapJob, TrapOutcome, TrapRequest, trap_tasks};
 use crate::scene::{ObjectId, Scene, SceneObject};
 use crate::status::Status;
 
+mod plugs;
+
+pub use plugs::PlugsLaid;
+
 /// What a click in the viewport puts down.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum Placing {
@@ -36,13 +40,9 @@ pub struct DrainTool {
 impl Default for DrainTool {
     fn default() -> Self {
         Self {
-            state: DrainState {
-                // Three millimetres is what a resin slicer offers by default, and drains
-                // a cavity of any size the machine can print.
-                diameter_mm: 3.0,
-                depth_mm: 3.0,
-                taper: 1.0,
-            },
+            // Three millimetres is what a resin slicer offers by default, and drains a
+            // cavity of any size the machine can print.
+            state: DrainState::round(3.0, 3.0, 1.0),
             placing: Placing::default(),
             job: None,
             checked: false,
@@ -59,7 +59,7 @@ impl DrainTool {
 
     /// The hole drilled into `object`: its own size, or the plate's.
     pub fn size_for(&self, object: &SceneObject) -> HoleSize {
-        size_of(object.own.drain.as_ref().unwrap_or(&self.state))
+        size_of(self.state_for(object))
     }
 
     /// Starts looking for resin that cannot get out of anything visible on the plate.
@@ -115,10 +115,9 @@ impl DrainTool {
         self.stale();
         let mut dug = 0;
         for object in scene.targets_mut() {
-            let diameter_mm = self.size_for(object).diameter_mm;
+            let size = self.size_for(object);
             let transform = object.transform;
-            if !object.hollow.pending().is_empty()
-                && object.hollow.finish_channel(diameter_mm, transform)
+            if !object.hollow.pending().is_empty() && object.hollow.finish_channel(size, transform)
             {
                 dug += 1;
             }
@@ -137,14 +136,10 @@ impl DrainTool {
         };
         self.stale();
         let size = self.size_for(object);
-        let drilled = object.hollow.drill_into(
-            &object.mesh,
-            &object.bvh,
-            target,
-            size.diameter_mm,
-            size.taper,
-            object.transform,
-        );
+        let drilled =
+            object
+                .hollow
+                .drill_into(&object.mesh, &object.bvh, target, size, object.transform);
         object.traps.remove(index);
         drilled
     }
@@ -159,7 +154,6 @@ impl DrainTool {
 
         for object in scene.targets_mut() {
             let size = self.size_for(object);
-            let (diameter_mm, taper) = (size.diameter_mm, size.taper);
             let targets: Vec<_> = object
                 .traps
                 .found()
@@ -171,8 +165,7 @@ impl DrainTool {
                     &object.mesh,
                     &object.bvh,
                     target,
-                    diameter_mm,
-                    taper,
+                    size,
                     object.transform,
                 ) {
                     drilled += 1;
@@ -182,6 +175,11 @@ impl DrainTool {
         }
         drilled
     }
+
+    /// What `object` drills with: its own settings, or the plate's.
+    pub(crate) fn state_for<'a>(&'a self, object: &'a SceneObject) -> &'a DrainState {
+        object.own.drain.as_ref().unwrap_or(&self.state)
+    }
 }
 
 fn size_of(state: &DrainState) -> HoleSize {
@@ -189,6 +187,8 @@ fn size_of(state: &DrainState) -> HoleSize {
         diameter_mm: state.diameter_mm,
         depth_mm: state.depth_mm,
         taper: state.taper,
+        shape: state.shape,
+        turn_deg: state.turn_deg,
     }
 }
 

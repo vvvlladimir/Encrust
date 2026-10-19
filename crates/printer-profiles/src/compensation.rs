@@ -124,6 +124,17 @@ impl Compensation {
         [hole + parity, outer + parity]
     }
 
+    /// How much wider, millimetres a side, a fit between a hole and a part slid into it
+    /// prints than it was drawn: the hole's offset and the outer wall's, which this resin
+    /// would have moved them by, while its tolerance is off. Nothing while it is on, since
+    /// the slicer moves them then (ADR 0313).
+    pub fn fit_drift_mm(&self) -> f32 {
+        if self.tolerance_on {
+            return 0.0;
+        }
+        self.hole_offset_mm + self.outer_offset_mm
+    }
+
     /// Whether any layer's walls move at all.
     pub fn offsets_nothing(&self) -> bool {
         let still = |offsets: &[f32]| offsets.iter().all(|offset| offset.abs() < f32::EPSILON);
@@ -163,6 +174,24 @@ fn factor(percent: f32) -> f32 {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_fit_drifts_by_the_offsets_only_while_the_slicer_does_not_apply_them() {
+        let measured = Compensation {
+            hole_offset_mm: 0.04,
+            outer_offset_mm: 0.03,
+            ..Compensation::default()
+        };
+        assert_eq!(measured.fit_drift_mm(), 0.0, "the slicer takes both off");
+        let off = Compensation {
+            tolerance_on: false,
+            ..measured
+        };
+        assert!(
+            (off.fit_drift_mm() - 0.07).abs() < 1e-6,
+            "the hole prints 0.04 wider and the part 0.03 thinner"
+        );
+    }
 
     #[test]
     fn a_fresh_compensation_changes_nothing() {

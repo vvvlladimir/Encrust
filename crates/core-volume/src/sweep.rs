@@ -6,8 +6,12 @@ use rayon::prelude::*;
 use crate::cancel::Cancel;
 use crate::grid::{TILE, VoxelGrid, index_in_tile, tile_of};
 use crate::scatter::{Faces, Nearest, UNSET};
-use crate::sdf::{Quantised, TILE_VALUES, encode};
+use crate::sdf::TILE_VALUES;
 use crate::sign::Signer;
+
+/// What a tile stores for each voxel, from its signed distance to the mesh, its position
+/// and its nearest point; and what a voxel the band never reached holds.
+pub(crate) type Record<'a, T> = (&'a (dyn Fn(Scalar, Vec3, &ClosestPoint) -> T + Sync), T);
 
 /// Voxels along one side of the block a tile is swept in: its own, plus the one row of
 /// neighbours a step can come from.
@@ -56,7 +60,7 @@ pub(crate) fn carrier_grid(grid: VoxelGrid, carry: i32) -> VoxelGrid {
 /// carrier hands each stored tile a block of candidate faces, and eight passes over that
 /// block pick the nearest of them for every voxel.
 #[allow(clippy::too_many_arguments)]
-pub(crate) fn fill(
+pub(crate) fn fill<T: Copy + Send + Sync>(
     mesh: &Mesh,
     faces: &Faces,
     bvh: &Bvh,
@@ -67,8 +71,9 @@ pub(crate) fn fill(
     rings: Vec<Vec<IVec3>>,
     wanted: &FastMap<IVec3, Scalar>,
     seeds: &FastMap<IVec3, Work>,
+    record: Record<'_, T>,
     cancel: Cancel<'_>,
-) -> HashMap<IVec3, Box<[Quantised]>> {
+) -> HashMap<IVec3, Box<[T]>> {
     let factor = carry_for(grid, band_mm, iso_mm);
     let coarse = carrier_grid(grid, factor);
     let carrier = carry(
@@ -103,8 +108,8 @@ pub(crate) fn fill(
                 grid,
                 (*tile, *centre_mm),
                 &work,
-                band_mm,
-                iso_mm,
+                (band_mm, iso_mm),
+                record,
             )?;
             Some((*tile, values))
         })
@@ -377,7 +382,10 @@ fn refine(
                 }
             }
             work[index_in_tile(voxel)] = if nearest < trust_mm && matters(nearest) {
-                searched(mesh, bvh, point)
+                // Only a face nearer than the one carried can replace it, which bounds
+                // the search from its first node.
+                bvh.closest_within(mesh, point, nearest)
+                    .map_or(carried, |found| found.face as Nearest)
             } else {
                 carried
             };
@@ -552,18 +560,18 @@ fn searched(mesh: &Mesh, bvh: &Bvh, point: Vec3) -> Nearest {
 /// `centre_mm` is the signed distance at the tile's centre. No surface is nearer the
 /// centre than that, so past the tile's own radius it settles the side of every voxel.
 #[allow(clippy::too_many_arguments)]
-fn tile_values(
+fn tile_values<T: Copy>(
     surface: (&Mesh, &Faces, &Bvh),
     signer: &Signer,
     grid: VoxelGrid,
     (tile, centre_mm): (IVec3, Scalar),
     work: &[Nearest],
-    band_mm: Scalar,
-    iso_mm: Scalar,
-) -> Option<Box<[Quantised]>> {
+    (band_mm, iso_mm): (Scalar, Scalar),
+    record: Record<'_, T>,
+) -> Option<Box<[T]>> {
     let base = tile * TILE;
     let settled = (centre_mm.abs() > grid.tile_radius()).then_some(centre_mm < 0.0);
-    let mut values = vec![Quantised::MAX; TILE_VALUES];
+    let mut values = vec![record.1; TILE_VALUES];
     let mut found: Vec<(usize, Vec3, ClosestPoint)> = Vec::with_capacity(64);
     let mut crosses = false;
 
@@ -575,7 +583,7 @@ fn tile_values(
             grid,
             (block, settled),
             work,
-            (band_mm, iso_mm),
+            (band_mm, iso_mm, record.0),
             &mut found,
             &mut values,
         );
@@ -591,19 +599,23 @@ fn tile_values(
 /// closed.
 const SIDED: i32 = 4;
 
+/// What a lattice value is written as, from its signed distance, its point and the nearest
+/// point of the mesh.
+type Written<'a, T> = &'a dyn Fn(Scalar, Vec3, &ClosestPoint) -> T;
+
 /// Writes one block of a tile and says whether the band crossed it.
 #[allow(clippy::too_many_arguments)]
-fn block_values(
+fn block_values<T>(
     (mesh, faces, bvh): (&Mesh, &Faces, &Bvh),
     signer: &Signer,
     grid: VoxelGrid,
     (block, settled): (IVec3, Option<bool>),
     work: &[Nearest],
-    band: (Scalar, Scalar),
+    band: (Scalar, Scalar, Written<'_, T>),
     found: &mut Vec<(usize, Vec3, ClosestPoint)>,
-    values: &mut [Quantised],
+    values: &mut [T],
 ) -> bool {
-    let (band_mm, iso_mm) = band;
+    let (band_mm, iso_mm, record) = band;
     // The surface crossing a lattice edge leaves one of its ends within half a voxel of
     // itself, so nothing nearer than a voxel means nothing crossed and one side for all.
     let reach_mm = grid.voxel_mm;
@@ -640,13 +652,13 @@ fn block_values(
     let mut crosses = false;
     for (slot, point, on_face) in found.iter() {
         let inside = one_sided.unwrap_or_else(|| signer.is_inside(mesh, *point, on_face));
-        let value = if inside {
+        let signed = if inside {
             -on_face.distance
         } else {
             on_face.distance
-        } - iso_mm;
-        crosses |= value.abs() < band_mm;
-        values[*slot] = encode(value, band_mm);
+        };
+        crosses |= (signed - iso_mm).abs() < band_mm;
+        values[*slot] = record(signed, *point, on_face);
     }
     crosses
 }
@@ -664,7 +676,7 @@ fn at(local: IVec3) -> usize {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::sdf::step_mm;
+    use crate::sdf::{Quantised, encode, step_mm};
     use crate::sign::SignMode;
 
     /// A plate ten millimetres square and a tenth thick, wound outward; its first two
@@ -718,8 +730,11 @@ mod tests {
             grid,
             (IVec3::new(2, 2, 2), 0.0),
             &underside,
-            band_mm,
-            iso_mm,
+            (band_mm, iso_mm),
+            (
+                &|signed, _, _| encode(signed - iso_mm, band_mm),
+                Quantised::MAX,
+            ),
         )
         .expect("the 3 mm offset crosses the tile");
 

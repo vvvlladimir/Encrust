@@ -103,12 +103,39 @@ would print. A file whose name says nothing is recognised by its own first bytes
 
 Hollowing, with an infill lattice in the cavity. `--hollow-mode internal` grows the wall
 inward, which is the default; `external` grows it outward and makes a mould of the model.
-Nothing opens the cavity by itself — `--drain-at` below is what lets the resin out:
+`--hollow-open-floor` opens a shell through the floor it stands on, so it drains with no
+hole; a mould has no floor to open and refuses it. Otherwise nothing opens the cavity by
+itself — `--drain-at` below is what lets the resin out:
 
 ```sh
 encrust slice model.stl \
   --printer elegoo-mars-4-ultra --hollow 2 \
-  --infill hive --infill-size 5 --infill-density 0.15 --precision 0.5 -o model.goo
+  --infill hive --infill-cell 6 --infill-wall 2 --precision 0.5 -o model.goo
+```
+
+A hive or grid takes `--infill-cell` (a hexagon's diameter, a square's side) and
+`--infill-wall`, and is joined by crossing holes `--infill-hole` millimetres across, the
+first row `--infill-hole-from` over the cavity's floor and the next every
+`--infill-hole-spacing`. A scaffold takes `--infill-cell` and `--infill-density`, 0 to 1.
+Every number left out is the window's default, and one the pattern has no use for is refused.
+
+Modelling, as the window's Relief and Cut tools do it, before the models are hollowed and
+supported (ADR 0312). `--combine union|difference|intersection` makes every model given one,
+a difference keeping the first; `--label TEXT --label-at X,Y,Z` writes on the surface nearest
+that plate point, with `--label-height`, `--label-depth`, `--label-sunk`, `--label-follow`,
+`--label-angle` and `--label-font`; `--cut x|y|z:MM` cuts at a plate coordinate, `--keep
+both|lower|upper` picks the halves and `--joint dowels|pins|magnets|key` joins them at the
+window's default sizes; `--split` breaks a model into its bodies, scraps under
+`--split-smallest` joined or dropped, and `--part-off X,Y,Z` cuts off the part that point is
+on. A half that no longer reaches the floor is laid on its cut face, and a cut needs
+`--arrange`. A piece of several is not hollowed or supported, and a project refuses the
+flags.
+
+```sh
+encrust slice base.stl lid.stl --printer elegoo-mars-4-ultra --resin my-grey \
+  --combine union --label "No 7" --label-at 20,10,30 --label-sunk -o part.goo
+encrust slice bust.stl --printer elegoo-mars-4-ultra --resin my-grey \
+  --cut z:60 --joint dowels --arrange -o bust.goo
 ```
 
 A hole into the surface nearest a point, cut with or without a cavity behind it, and the
@@ -120,6 +147,21 @@ pick it out of:
 ```sh
 encrust slice model.stl \
   --printer elegoo-mars-4-ultra --hollow 2 --drain 4 --drain-at 30,30,60 -o model.goo
+```
+
+A hole is round unless `--drain-sides 3..12` cuts it as a polygon, its corners on the
+diameter, turned `--drain-turn` degrees from the level; a `--channel` takes the same
+outline. Once the model is hollow a hole is carried on through the wall into the cavity.
+`--drain-plugs` prints a plug for each hole, standing on the plate past the model's
+right-hand side: what the hole took out of the wall, `--plug-gap` millimetres narrower a
+side (0.15 by default, never less than 0), its outer face flush with the surface (ADR 0313).
+A resin whose tolerance compensation is off takes its hole and outer offsets off that gap,
+so the fit prints as asked. A run whose plugs would land off the plate or on another model
+stops and says so; `--arrange` does not make room for them.
+
+```sh
+encrust slice figure.stl --printer elegoo-mars-4-ultra --hollow 2 \
+  --drain 5 --drain-sides 6 --drain-at 30,30,0 --drain-plugs -o figure.goo
 ```
 
 The model's own texture pressed in as relief, as deep as the plate millimetres given.
@@ -134,6 +176,17 @@ encrust slice textured.obj \
 encrust slice part.stl \
   --printer elegoo-mars-4-ultra --relief 0.4 --relief-image knurl.png --relief-tile 6 \
   --relief-angle 45 -o part.goo
+```
+
+`--relief-invert` reads black as high, `--relief-symmetric` reads mid grey as the surface
+and moves it half of `--relief` either way, and `--relief-smooth` blurs the texture by that
+many of its pixels first. `--relief-hold-bottom` and `--relief-hold-top` leave the faces
+within that many degrees of facing the plate, or straight up, as they are (ADR 0308):
+
+```sh
+encrust slice part.stl \
+  --printer elegoo-mars-4-ultra --relief 0.4 --relief-image stone.png --relief-symmetric \
+  --relief-smooth 1.5 --relief-hold-bottom 5 -o part.goo
 ```
 
 Exposure of its own over a band of print height, repeatable. The bottom block keeps the
@@ -223,7 +276,7 @@ supports = "medium"             # any support profile `profiles list` names
 
 [[model]]
 path = "b.stl"
-hollow = { wall_mm = 2.0, mode = "internal" }   # or "external" for a mould
+hollow = { wall_mm = 2.0, mode = "internal" }   # or "external" for a mould; open_floor = true opens a shell
 ```
 
 A project saved by the window slices as it was saved: the file holds its shells and its

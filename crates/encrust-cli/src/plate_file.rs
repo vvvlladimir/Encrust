@@ -57,6 +57,9 @@ pub struct Wall {
     pub wall_mm: Scalar,
     #[serde(default)]
     pub mode: Mode,
+    /// Opens the shell through the floor it stands on, as `--hollow-open-floor` does.
+    #[serde(default)]
+    pub open_floor: bool,
 }
 
 /// Reads a plate file.
@@ -126,6 +129,7 @@ fn shaping_of(flags: &Shaping, model: &ModelEntry) -> Result<Shaping> {
     {
         shaping.hollow.thickness_mm = Some(wall.wall_mm);
         shaping.hollow.mode = wall.mode;
+        shaping.hollow.open_floor = wall.open_floor;
     }
     shaping.position = model.position.map(Vec2::from_array);
     Ok(shaping)
@@ -151,7 +155,7 @@ mod tests {
             [[model]]
             path = "b.stl"
             scale = [1, 2, 1]
-            hollow = { wall_mm = 2.0, mode = "internal" }
+            hollow = { wall_mm = 2.0, mode = "internal", open_floor = true }
             [[model]]
             path = "c.stl"
             hollow = { wall_mm = 1.0, mode = "external" }
@@ -166,6 +170,7 @@ mod tests {
             plate.models[1].hollow,
             Some(Wall {
                 mode: Mode::Internal,
+                open_floor: true,
                 ..
             })
         ));

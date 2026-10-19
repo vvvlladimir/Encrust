@@ -157,6 +157,16 @@ impl Heightmap {
         self.height
     }
 
+    /// One height per pixel, row after row from the top.
+    pub fn samples(&self) -> &[Scalar] {
+        &self.samples
+    }
+
+    /// The heights to change in place, in the order [`Heightmap::samples`] gives them.
+    pub fn samples_mut(&mut self) -> &mut [Scalar] {
+        &mut self.samples
+    }
+
     /// The height at `uv`, bilinear between the four nearest pixels.
     ///
     /// Coordinates outside the unit square wrap, which is the default tile style of both

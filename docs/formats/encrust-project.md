@@ -27,9 +27,11 @@ one reads, and a plate with nothing on it has none.
 
 ## `project.json`
 
-`version` is read on its own before anything else. This build writes version 5. Version 4
-is read too: it carried its printer and resin whole, and only their ids are kept. Any other
-is refused whole: version 3 and below hold no built geometry or diagnostics.
+`version` is read on its own before anything else. This build writes version 6. Version 5
+is read too: its lattice had one `size_mm` for cells and walls, read as the `cell_mm`, and the
+fields it lacks take their defaults. Version 4 is read as well: it carried its printer and
+resin whole, and only their ids are kept. Any other is refused whole: version 3 and below
+hold no built geometry or diagnostics.
 
 | Key | Type |
 |---|---|
@@ -37,7 +39,12 @@ is refused whole: version 3 and below hold no built geometry or diagnostics.
 | `slicing` | layer height, `AdaptiveSettings`, `ExposureRange` bands, anti-aliasing, `OutputFormat`; taken up only with the printer |
 | `supports` | the group table, the active group, `ProjectSettings` for a fill, the brush |
 | `hollow` | what the Hollow tool is set to, not what it built |
+| `hollow.infill` | the lattice's `pattern`, `cell_mm`, `wall_mm`, a scaffold's `density`, and the crossing holes' `hole_mm`, `first_hole_mm` and `hole_spacing_mm` (ADR 0302); `null` for an empty cavity |
+| `hollow.open_floor` | whether a shell opens through the floor it stands on (ADR 0313); absent in older files and read as closed |
 | `drain`, `cut`, `array` | what the next hole, the cut plane and the copy grid are set to |
+| `drain.shape`, `drain.turn_deg`, `drain.plug_gap_mm` | the next hole's outline, its turn from the plate's level in degrees, and a plug's gap a side (ADR 0313); absent in older files and read as round, unturned and 0.15 mm |
+| `cut.parts` | what Split into its parts goes by: the smallest part (ADR 0307); absent in older files and read as the defaults, and the narrow-join fields of files written before it are ignored |
+| `cut.joints` | how a cut's halves are joined and what each kind is set to (ADR 0306); absent in older files and read as a plain cut |
 | `plates`, `active_plate` | one name per build plate, and the one the project was left on |
 | `objects[]` | name, plate, `Transform`, visibility, the import summary, and what each tool placed |
 | `objects[].supports.grown` | every tree the automatic run grew, in the model's own space |
@@ -48,7 +55,10 @@ is refused whole: version 3 and below hold no built geometry or diagnostics.
 | `objects[].own_raft` | the raft this model stands on instead (ADR 0253); absent when it keeps none, and in older files |
 | `objects[].own_supports` | the profile this model is built to in place of a group's, by group number (ADR 0246); absent when it keeps none, and in older files |
 | `objects[].supports.frozen` | every tree a hand took hold of, in the same space |
+| `objects[].hollow.drains[]`, `objects[].hollow.channels[]` | `shape` and `turn_deg`, the outline and its turn in the model's own space (ADR 0313); absent in older files and read as round |
+| `objects[].plug_of` | the place in `objects[]` of the model this one is a plug for (ADR 0313); absent on any other model, and in older files |
 | `objects[].hollow.built` | the shell standing on the model, or `null` for a solid one |
+| `objects[].hollow.built.wall.open_toward` | the way to the plate its floor was opened toward (ADR 0313); absent for a closed shell, and in older files |
 
 `built` is what the run measured, not what it was asked for: `wall` is the thickness, mode,
 precision and infill asked for, and beside it stand `cavity_faces` — which faces of

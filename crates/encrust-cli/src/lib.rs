@@ -11,6 +11,7 @@ mod estimate;
 mod exit;
 mod hollowing;
 mod json;
+mod modelling;
 mod plate_file;
 mod png_stack;
 mod progress;
