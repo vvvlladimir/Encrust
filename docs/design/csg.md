@@ -68,7 +68,7 @@ each a field on one lattice — precision 0.5 at their combined area, coarsened 
 as hollowing is — combined by `min`, `max` and `max(a, -b)` and extracted once.
 `combine_exact` is the same without the field, refusing with `NotSolid`.
 
-`combine_exact_toward` is what labels take (ADR 0312). The first model is cut by a plane
+`combine_exact_toward` is what labels take (ADR 0311). The first model is cut by a plane
 square to the side the others stand on, 0.5 mm under the lowest of them, and only the side
 above goes through the engine with them. The cut makes every point on it once, keyed by the
 edge it came from, so both halves carry it bit for bit. On the side below the cap is its last

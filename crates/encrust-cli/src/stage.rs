@@ -14,6 +14,7 @@ use printer_profiles::{MaterialProfile, PrinterProfile, SupportProfile};
 
 use crate::args::{ImportArgs, JobArgs};
 use crate::hollowing::{HollowArgs, HollowReport};
+use crate::modelling::{self, ModelArgs};
 use crate::pipeline::{OrientSummary, Watch, cutting_of, hollow_and_cut, import, overrides_of};
 use crate::profiles::{self, Chosen};
 use crate::report::ImportReport;
@@ -154,6 +155,9 @@ pub fn stage(inputs: &[PathBuf], arrange: bool, job: &JobArgs, watch: &Watch) ->
         }
         Given::PlateFile(path) => plate_file::stage(path, arrange, job, watch),
         Given::Project(path) => {
+            if job.model.wanted() {
+                bail!("a project's models are combined, cut and split in the window");
+            }
             if arrange {
                 bail!("a project stands where it was saved; arrange it in the window");
             }
@@ -173,6 +177,10 @@ pub fn models(
     let shaping = Shaping::of(job)?;
     if paths.len() > 1 {
         refuse_one_model_flags(&shaping)?;
+        let one_spot = job.model.label.is_some() || job.model.part_off.is_some();
+        if one_spot && job.model.combine.is_none() {
+            bail!("--label-at and --part-off point at one model; --combine makes the models one");
+        }
     }
     let entries: Vec<_> = paths
         .iter()
@@ -208,7 +216,8 @@ pub fn plate_of(
     chosen.measured()?;
     let printer = chosen.printer.as_ref();
     check_adaptive(job, printer)?;
-    let mut placed = Vec::with_capacity(entries.len());
+    let mut meshes = Vec::with_capacity(entries.len());
+    let mut found = Vec::with_capacity(entries.len());
     for (path, shaping) in entries {
         let (mut mesh, import, oriented) = import(
             path,
@@ -220,47 +229,42 @@ pub fn plate_of(
         if let Some(position) = shaping.position {
             mesh = stood_at(&mesh, position)?;
         }
-        placed.push((mesh, import, oriented));
+        meshes.push(mesh);
+        found.push((import, oriented));
         watch.stop.check()?;
     }
+    let mut pieces = modelling::shaped(meshes, &job.model, watch.talk)?;
+    check_pieces(&pieces, entries, &job.model, arrange)?;
+    watch.stop.check()?;
     if arrange {
-        spread(&mut placed, printer)?;
+        let mut spread_out: Vec<(&mut Mesh, &Path)> = pieces
+            .iter_mut()
+            .zip(entries)
+            .flat_map(|(meshes, (path, _))| {
+                meshes.iter_mut().map(move |mesh| (mesh, path.as_path()))
+            })
+            .collect();
+        spread(&mut spread_out, printer)?;
     }
 
     let mut parts = Vec::with_capacity(entries.len());
     let mut models = Vec::with_capacity(entries.len());
-    for ((mut mesh, import, oriented), (path, shaping)) in placed.into_iter().zip(entries) {
+    for ((meshes, (import, oriented)), (path, shaping)) in
+        pieces.into_iter().zip(found).zip(entries)
+    {
         // The imports are all reported before the first model is shaped, so on a plate
         // these lines would otherwise read as the last model's.
         if watch.talk && entries.len() > 1 && shapes_anything(shaping) {
             println!("{}", path.display());
         }
-        let (hollow, mut cuts) =
-            hollow_and_cut(&mut mesh, &shaping.hollow, shaping.import.precision, watch)?;
-        watch.stop.check()?;
         let seated = oriented.as_ref().is_some_and(|turn| turn.on_plate);
-        let stood = shaping
-            .supports
-            .as_ref()
-            .map(|profile| stand_under(&mut mesh, &mut cuts, profile, layer_height, seated))
-            .transpose()?
-            .filter(|(report, _)| !seated || !report.contacts.is_empty());
-        let (supports, columns) = match stood {
-            Some((report, mesh)) => (Some(report), vec![Arc::new(mesh)]),
-            None => (None, Vec::new()),
-        };
-        if watch.talk
-            && let Some(report) = &supports
-        {
-            print!("{report}");
+        let (mut hollow, mut supports) = (None, None);
+        for mesh in meshes {
+            let (model, hollowed, stood) = put_down(mesh, shaping, seated, layer_height, watch)?;
+            models.push(model);
+            hollow = hollow.or(hollowed);
+            supports = supports.or(stood);
         }
-        watch.stop.check()?;
-        models.push(Model {
-            mesh: Arc::new(mesh),
-            transform: Transform::default(),
-            cuts: cuts.map(Arc::new),
-            supports: columns,
-        });
         parts.push(Part {
             input: path.clone(),
             import: Some(import),
@@ -286,6 +290,68 @@ pub fn plate_of(
         hanging_passes: job.raster.hanging_passes,
         drainage,
     })
+}
+
+/// Hollows and supports one piece as `shaping` asks, ready to slice.
+fn put_down(
+    mut mesh: Mesh,
+    shaping: &Shaping,
+    seated: bool,
+    layer_height: Scalar,
+    watch: &Watch,
+) -> Result<(Model, Option<HollowReport>, Option<SupportReport>)> {
+    let (hollow, mut cuts) =
+        hollow_and_cut(&mut mesh, &shaping.hollow, shaping.import.precision, watch)?;
+    watch.stop.check()?;
+    let stood = shaping
+        .supports
+        .as_ref()
+        .map(|profile| stand_under(&mut mesh, &mut cuts, profile, layer_height, seated))
+        .transpose()?
+        .filter(|(report, _)| !seated || !report.contacts.is_empty());
+    let (supports, columns) = match stood {
+        Some((report, mesh)) => (Some(report), vec![Arc::new(mesh)]),
+        None => (None, Vec::new()),
+    };
+    if watch.talk
+        && let Some(report) = &supports
+    {
+        print!("{report}");
+    }
+    watch.stop.check()?;
+    let model = Model {
+        mesh: Arc::new(mesh),
+        transform: Transform::default(),
+        cuts: cuts.map(Arc::new),
+        supports: columns,
+    };
+    Ok((model, hollow, supports))
+}
+
+/// Refuses what the modelling flags leave that the rest of the run cannot take: several
+/// pieces of one model to hollow or support, which is reported once a model, or halves of a
+/// cut standing on one another's spot.
+fn check_pieces(
+    pieces: &[Vec<Mesh>],
+    entries: &[(PathBuf, Shaping)],
+    model: &ModelArgs,
+    arrange: bool,
+) -> Result<()> {
+    if model.cut.is_some() && !arrange {
+        bail!("--cut lays the halves down where they would stand on each other; add --arrange");
+    }
+    for (meshes, (path, shaping)) in pieces.iter().zip(entries) {
+        let shaped =
+            shaping.hollow.wanted() || shaping.hollow.cutting() || shaping.supports.is_some();
+        if meshes.len() > 1 && shaped {
+            bail!(
+                "{} comes out of --cut or --split in {} pieces; hollow or support them from a plate file of the pieces",
+                path.display(),
+                meshes.len()
+            );
+        }
+    }
+    Ok(())
 }
 
 /// Refuses an adaptive run on a machine that steps the plate by the header's layer
@@ -320,17 +386,14 @@ fn stood_at(mesh: &Mesh, position: Vec2) -> Result<Mesh> {
 }
 
 /// Packs the models over the plate, biggest first, and refuses a plate they do not fit.
-fn spread(
-    placed: &mut [(Mesh, ImportReport, Option<OrientSummary>)],
-    printer: Option<&PrinterProfile>,
-) -> Result<()> {
+fn spread(placed: &mut [(&mut Mesh, &Path)], printer: Option<&PrinterProfile>) -> Result<()> {
     let printer = printer.context("--arrange needs a printer to know the plate")?;
     let settings = ArrangeSettings::default();
     let footprints = placed
         .iter()
-        .map(|(mesh, import, _)| {
+        .map(|(mesh, path)| {
             Footprint::of(mesh, Transform::default(), settings.cell_mm)
-                .with_context(|| format!("{} has no footprint", import.path.display()))
+                .with_context(|| format!("{} has no footprint", path.display()))
         })
         .collect::<Result<Vec<_>>>()?;
     let plate = Vec2::new(printer.build_volume.x, printer.build_volume.y);
@@ -340,11 +403,11 @@ fn spread(
             "{} of {} models found no room on the plate, {} among them",
             arranged.left_out.len(),
             placed.len(),
-            placed[first].1.path.display()
+            placed[first].1.display()
         );
     }
     for spot in &arranged.placed {
-        let mesh = &mut placed[spot.index].0;
+        let mesh = &mut *placed[spot.index].0;
         let offset = Vec3::new(spot.offset_mm.x, spot.offset_mm.y, 0.0);
         *mesh = transform_mesh(mesh, Transform::from_translation(offset));
     }

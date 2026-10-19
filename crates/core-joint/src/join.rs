@@ -1,5 +1,5 @@
 use core_csg::Solid;
-use core_geometry::{Cut, Mesh, Plane};
+use core_geometry::{Cut, Mesh, Plane, Scalar};
 
 use crate::error::JointError;
 use crate::key::key;
@@ -24,12 +24,19 @@ pub struct Halves<'a> {
 pub struct Joined {
     pub below: Mesh,
     pub above: Mesh,
-    /// Dowels to print beside the halves, each standing on the plate at the origin.
-    pub loose: Vec<Mesh>,
+    /// Dowels to print beside the halves.
+    pub loose: Vec<Dowel>,
     /// Pins, dowels or magnets put in, or pieces of the face a key runs round.
     pub placed: usize,
     /// Separate pieces of the cut face too small or too thin through to take any.
     pub bare: usize,
+}
+
+/// A loose dowel standing on the plate at the origin, round the z axis.
+#[derive(Debug, Clone)]
+pub struct Dowel {
+    pub mesh: Mesh,
+    pub radius_mm: Scalar,
 }
 
 /// What one half gains and loses, in the order it is done: pillars cut to the model's
@@ -47,16 +54,18 @@ pub(crate) struct Work {
 pub(crate) struct Planned {
     pub below: Work,
     pub above: Work,
-    pub loose: Vec<Mesh>,
+    pub loose: Vec<Dowel>,
     pub placed: usize,
     pub bare: usize,
 }
 
 /// Joins the two halves of a cut as `joints` asks, so they go back together true. A plain
-/// cut, or a face with no room for any fixing, hands the halves back as they were.
+/// cut, or a face with no room for any fixing, hands the halves back as they were; a size
+/// that cannot be built is [`JointError::BadSize`].
 ///
 /// See `docs/design/joints.md` for where fixings go and how big they are.
 pub fn join(halves: Halves<'_>, joints: &Joints) -> Result<Joined, JointError> {
+    joints.check()?;
     let planned = match joints.kind {
         None => Planned::default(),
         Some(JointKind::Key) => key(&halves, joints.key),
@@ -74,6 +83,59 @@ pub fn join(halves: Halves<'_>, joints: &Joints) -> Result<Joined, JointError> {
         loose: planned.loose,
         placed: planned.placed,
         bare: planned.bare,
+    })
+}
+
+/// A model cut in two and its halves joined, as [`cut_and_join`] leaves them.
+#[derive(Debug, Clone)]
+pub struct CutJoined {
+    pub joined: Joined,
+    /// Cut loops that did not close, and were left uncapped.
+    pub open_loops: usize,
+    /// Why the halves were left plain when they were to be joined.
+    pub unjoined: Option<JointError>,
+}
+
+/// `printed` cut by `plane` and its halves joined as `joints` asks, or `None` where the
+/// plane misses it. `solid` is the model's outside where `printed` is a hollowed shell of it.
+/// A joint that cannot be built leaves the halves plain, with the reason.
+pub fn cut_and_join(
+    printed: &Mesh,
+    solid: Option<&Mesh>,
+    plane: Plane,
+    joints: Option<&Joints>,
+) -> Option<CutJoined> {
+    let halves = core_geometry::cut(printed, plane);
+    if halves.below.is_empty() || halves.above.is_empty() {
+        return None;
+    }
+    let open_loops = halves.open_loops;
+    let plain = |halves: Cut| Joined {
+        below: halves.below,
+        above: halves.above,
+        ..Joined::default()
+    };
+    let Some(joints) = joints.filter(|joints| joints.kind.is_some()) else {
+        return Some(CutJoined {
+            joined: plain(halves),
+            open_loops,
+            unjoined: None,
+        });
+    };
+    let joining = Halves {
+        cut: halves.clone(),
+        plane,
+        printed,
+        solid,
+    };
+    let (joined, unjoined) = match join(joining, joints) {
+        Ok(joined) => (joined, None),
+        Err(error) => (plain(halves), Some(error)),
+    };
+    Some(CutJoined {
+        joined,
+        open_loops,
+        unjoined,
     })
 }
 

@@ -297,8 +297,8 @@ fn message(stack: &mut Stack, status: &mut Status, running: bool, max_w: f32) {
     }
 }
 
-/// The message, and under it the figures a step changed, coloured by whether they got
-/// better.
+/// The message, and under it what it notes, or the figures a step changed coloured by
+/// whether they got better.
 fn words(ui: &mut egui::Ui, status: &Status) {
     let colors = theme::colors();
     ui.label(
@@ -306,6 +306,15 @@ fn words(ui: &mut egui::Ui, status: &Status) {
             .font(theme::label())
             .color(colors.text_high),
     );
+    if let Status::Noted(_, notes) = status {
+        for note in notes {
+            ui.label(
+                RichText::new(note)
+                    .font(theme::label())
+                    .color(colors.text_mid),
+            );
+        }
+    }
     let Status::Readings(_, readings) = status else {
         return;
     };

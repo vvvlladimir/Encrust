@@ -46,7 +46,7 @@ label's longest side or twice its depth, is where the point's bottom and top are
 from — the overlap below and the depth above for a raised letter, the other way round for
 a sunk one — and a point with none takes the mean of the others. The walls stay square to
 the label's plane, so on a steep face a letter is thinner across it by the cosine of the
-slope (ADR 0311).
+slope (ADR 0305).
 
 ## Joined exactly
 
@@ -55,4 +55,4 @@ whole model at its lattice, which rounds every edge of it for the sake of a few 
 A model the exact cut cannot read is refused with `NotSolid`, and left as it was.
 Only the side of the model the letters stand on goes through the engine: it is cut off
 0.5 mm under them square to the clicked normal, joined, and stitched back along the cut
-(ADR 0312; `docs/design/csg.md`).
+(ADR 0311; `docs/design/csg.md`).

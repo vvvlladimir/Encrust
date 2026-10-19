@@ -13,6 +13,12 @@ pub(crate) const OVERLAP_MM: Scalar = 0.2;
 /// label reads along y instead.
 const LEVEL: Scalar = 0.99;
 
+/// How tall a label's capitals stand unless asked otherwise, millimetres.
+pub const LETTER_HEIGHT_MM: Scalar = 6.0;
+
+/// How far a label stands out of the surface or into it unless asked otherwise, millimetres.
+pub const LABEL_DEPTH_MM: Scalar = 0.8;
+
 /// Where a label stands, on the plate: the point it is centred on, the way out of the
 /// surface there, and the way its letters read up, square to that.
 #[derive(Debug, Clone, Copy, PartialEq)]

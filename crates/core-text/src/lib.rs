@@ -12,6 +12,6 @@ mod sheet;
 
 pub use error::TextError;
 pub use font::Font;
-pub use label::{Frame, Label, LabelSettings, label};
+pub use label::{Frame, LABEL_DEPTH_MM, LETTER_HEIGHT_MM, Label, LabelSettings, label};
 pub use outline::{Shape, outline};
 pub use prism::prism;

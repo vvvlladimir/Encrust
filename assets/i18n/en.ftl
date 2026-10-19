@@ -88,6 +88,7 @@ cut-clearance = Clearance
 cut-keyed = One narrower
 cut-keyed-note = One peg is narrower than the rest, so the halves go together one way only.
 cut-cutting = Cutting the model
+cut-cancelled = Cutting cancelled
 cut-parts = Parts
 cut-parts-mark = Mark a part
 cut-parts-click = Click the part on the model
@@ -108,29 +109,61 @@ cut-lower-name = { $name } (lower)
 cut-upper-name = { $name } (upper)
 cut-part-name = { $name } (part { $index })
 cut-dowel-name = { $name } (dowel { $index })
-cut-no-room-for-joint = ; the cut face has no room for a joint
-cut-joint-failed = ; the joint could not be built into the halves, which are left plain: { $reason }
+cut-no-room-for-joint = The cut face has no room for a joint.
+cut-joint-failed = The joint could not be built into the halves, which are left plain: { $reason }
 # Each starts with a space: it follows the cut's position directly.
-cut-with-pins = { " " }with { $count } pin(s)
-cut-with-dowels = { " " }with sockets for { $count } dowel(s), printed beside the halves
-cut-with-magnets = { " " }with sockets for { $count } magnet(s) a half
-cut-with-key = { " " }with a key round { $count } piece(s) of the face
-cut-bare = ; { $count } piece(s) of the face had no room for one
-cut-done = Cut { $name } at { $axis } { $position } mm{ $joint }{ $bare }{ $mending }
-cut-done-open = Cut { $name }; { $open } cut loops were open and left uncapped{ $mending }
+cut-with-pins =
+    { $count ->
+        [one] One pin stands on the lower half.
+       *[other] { $count } pins stand on the lower half.
+    }
+cut-with-dowels =
+    { $count ->
+        [one] Both halves have a socket for one dowel, printed beside them.
+       *[other] Both halves have sockets for { $count } dowels, printed beside them.
+    }
+cut-with-magnets =
+    { $count ->
+        [one] Each half has a socket for one magnet.
+       *[other] Each half has sockets for { $count } magnets.
+    }
+cut-with-key =
+    { $count ->
+        [one] A key runs round the cut face.
+       *[other] A key runs round { $count } pieces of the cut face.
+    }
+cut-bare =
+    { $count ->
+        [one] One piece of the cut face had no room for a fixing.
+       *[other] { $count } pieces of the cut face had no room for a fixing.
+    }
+cut-done = Cut { $name } at { $axis } { $position } mm
+cut-done-open =
+    { $open ->
+        [one] Cut { $name }; one cut loop was open and left uncapped
+       *[other] Cut { $name }; { $open } cut loops were open and left uncapped
+    }
 cut-nothing-to-split = nothing is selected to split
 cut-one-piece = { $name } is one piece
-cut-split-done = Split { $name } into { $count } parts{ $scraps }{ $mending }
-cut-cleaned = { $name } is one piece{ $scraps }{ $mending }
-cut-split-joined = ; { $count } scrap(s) joined to the part they touch
-cut-split-dropped = ; { $count } stray scrap(s) dropped
+cut-split-done = Split { $name } into { $count } parts
+cut-cleaned = Cleaned up { $name }, which is one piece
+cut-split-joined =
+    { $count ->
+        [one] One scrap was joined to the part it touches.
+       *[other] { $count } scraps were joined to the parts they touch.
+    }
+cut-split-dropped =
+    { $count ->
+        [one] One stray scrap was dropped.
+       *[other] { $count } stray scraps were dropped.
+    }
 cut-split-failed = the model could not be split: { $reason }
-cut-parted-off = Cut the marked part off { $name } where it joins the rest{ $mending }
+cut-parted-off = Cut the marked part off { $name } where it joins the rest
 cut-no-neck = there is no narrow join to cut at from the marked point
 cut-mended =
     { $count ->
-        [1] ; one piece was mended to close it
-       *[other] ; { $count } pieces were mended to close them
+        [one] One piece was mended to close it.
+       *[other] { $count } pieces were mended to close them.
     }
 
 ## panels/inspector/cut.rs
@@ -618,6 +651,7 @@ relief-textures =
        *[other] { $count } textures
     }
 relief-pressing = Pressing...
+relief-cancelled = Pressing cancelled
 relief-the-texture = the texture
 relief-tooltip = Presses { $picture } into { $scope }. The model is replaced, so its supports and its cavity go with it.
 relief-press = Press it in
@@ -635,10 +669,11 @@ text-flat = Flat
 text-follow = On the surface
 text-shape-note = The letters stand the depth out of the face or into it, measured from the face where you click, and follow it no further than that depth; on a curved face they stay flat.
 text-follow-note = Every letter is bent onto the face under it and stands the depth out of it or into it all over, however the face curves.
-text-click-note = Click a model to write the text there; the preview under the cursor shows what the click will write.
+text-click-note = Click a model to write the text there; the preview under the cursor shows what the click will write. Shift or Cmd click picks a model without writing on it.
 text-stamping = Stamping the text
+text-cancelled = Lettering cancelled
 text-nothing-under = there is no model there to write on
-text-done = Wrote on { $name }{ $mending }
+text-done = Wrote on { $name }
 text-bad-font = this font cannot be read: { $reason }
 text-missing-glyph = this font has no letter for { $character }
 text-blank = there is nothing to write
@@ -673,6 +708,7 @@ boolean-combine =
        *[other] Combine { $count } models
     }
 boolean-combining = Combining the models
+boolean-cancelled = Combining cancelled
 boolean-tooltip = Replaces the picked models with the one they make. Their supports, cavities and holes go with them; a torn model is combined through a field and loses its sharp edges.
 boolean-pick-two = Pick two or more models on the plate to combine, holding Shift or Cmd.
 boolean-not-solid = the model is not a closed solid, so it cannot be cut exactly; repair it first
@@ -680,13 +716,13 @@ boolean-nothing-left = the models combined leave nothing behind
 boolean-failed = the models could not be combined: { $reason }
 boolean-done =
     { $count ->
-        [one] Combined { $count } model into { $name }{ $mending }
-       *[other] Combined { $count } models into { $name }{ $mending }
+        [one] Combined { $count } model into { $name }
+       *[other] Combined { $count } models into { $name }
     }
 boolean-done-sampled =
     { $count ->
-        [one] Combined { $count } model into { $name } on a { $lattice } mm lattice, as one was not a closed solid{ $mending }
-       *[other] Combined { $count } models into { $name } on a { $lattice } mm lattice, as one was not a closed solid{ $mending }
+        [one] Combined { $count } model into { $name } on a { $lattice } mm lattice, as one was not a closed solid
+       *[other] Combined { $count } models into { $name } on a { $lattice } mm lattice, as one was not a closed solid
     }
 job-thread-stopped-boolean = the combining thread stopped without finishing
 job-thread-stopped-cut = the cutting thread stopped without finishing
@@ -1209,7 +1245,7 @@ relief-done-coarsened =
         [one] Pressed { $depth } mm of relief into { $count } model; { $coarsened } came out on a coarser lattice than precision asked for
        *[other] Pressed { $depth } mm of relief into { $count } models; { $coarsened } came out on a coarser lattice than precision asked for
     }
-relief-pressing-picture = Pressing { $name }
+relief-picked-picture = { $name } is the picture to press
 
 ## panels/inspector/position.rs
 

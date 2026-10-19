@@ -1,9 +1,7 @@
 use crate::i18n::tr;
 use crate::panels::Window;
 use crate::text::{TextState, TextTool, reason};
-use crate::ui::{
-    Segment, Segmented, describe, hint, number_row, progress_bar, section, theme, tone,
-};
+use crate::ui::{Segment, Segmented, busy, describe, hint, number_row, section, theme, tone};
 
 /// Bounds on the letters, millimetres: under a millimetre a capital is finer than resin
 /// holds, past a hundred one letter is the model.
@@ -48,12 +46,13 @@ pub fn sections(ui: &mut egui::Ui, window: &mut Window) {
 
 /// Where the next click goes, why it cannot, or the stamp that is running.
 pub fn action(ui: &mut egui::Ui, window: &mut Window) {
-    let tool = &window.tools.text;
-    if tool.is_busy() {
-        tone(ui, &tr!("text-stamping"), theme::colors().text_mid);
-        progress_bar(ui, None);
+    if window.tools.text.is_busy() {
+        if busy(ui, &tr!("text-stamping"), true) {
+            window.tools.text.cancel(&mut window.machine.status);
+        }
         return;
     }
+    let tool = &window.tools.text;
     match tool.shapes() {
         Ok(_) => tone(ui, &tr!("text-click-note"), theme::colors().text_mid),
         Err(error) => hint(ui, &reason(&error)),
@@ -74,24 +73,7 @@ fn family(ui: &mut egui::Ui, tool: &mut TextTool) {
         .unwrap_or_default();
     let mut query: String = ui.data(|data| data.get_temp(id)).unwrap_or_default();
     let mut shown = if open { query.clone() } else { current.clone() };
-    let field = crate::ui::text_box(egui::TextEdit::singleline(&mut shown))
-        .hint_text(current)
-        .font(theme::label())
-        .margin(egui::Margin {
-            left: 10,
-            right: CARET_W as i8,
-            ..egui::Margin::ZERO
-        })
-        .desired_width(ui.available_width());
-    let response = ui.add(field);
-    let caret = response.rect.right_center() - egui::vec2(CARET_W / 2.0, 0.0);
-    ui.painter().text(
-        caret,
-        egui::Align2::CENTER_CENTER,
-        crate::ui::icon::CARET_DOWN,
-        theme::icon(CARET_GLYPH),
-        theme::colors().text_mid,
-    );
+    let response = family_field(ui, &mut shown, current);
     if response.gained_focus() || (response.clicked() && !open) {
         tool.families.ask();
         query.clear();
@@ -118,6 +100,29 @@ fn family(ui: &mut egui::Ui, tool: &mut TextTool) {
         }
     }
     ui.data_mut(|data| data.insert_temp(id, query));
+}
+
+/// The field the family is typed into, with the caret that says a list drops from it.
+fn family_field(ui: &mut egui::Ui, shown: &mut String, current: String) -> egui::Response {
+    let field = crate::ui::text_box(egui::TextEdit::singleline(shown))
+        .hint_text(current)
+        .font(theme::label())
+        .margin(egui::Margin {
+            left: 10,
+            right: CARET_W as i8,
+            ..egui::Margin::ZERO
+        })
+        .desired_width(ui.available_width());
+    let response = ui.add(field);
+    let caret = response.rect.right_center() - egui::vec2(CARET_W / 2.0, 0.0);
+    ui.painter().text(
+        caret,
+        egui::Align2::CENTER_CENTER,
+        crate::ui::icon::CARET_DOWN,
+        theme::icon(CARET_GLYPH),
+        theme::colors().text_mid,
+    );
+    response
 }
 
 /// The families whose name holds `query`, any case, by their place in the list.

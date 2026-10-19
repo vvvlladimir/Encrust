@@ -18,9 +18,9 @@ pub use field::{
     number_row, stepped_row, text_box, text_row, unit_field,
 };
 pub use layout::{
-    body_and_foot, card, card_foot, describe, described, describing, dialog_frame, dialog_head,
-    hairline, heading, help_mark, hint, meta, nested, notice, progress_bar, readings, section,
-    section_with_action, section_with_switch, stats, subheading, subheading_with_switch,
+    body_and_foot, busy, card, card_foot, describe, described, describing, dialog_frame,
+    dialog_head, hairline, heading, help_mark, hint, meta, nested, notice, progress_bar, readings,
+    section, section_with_action, section_with_switch, stats, subheading, subheading_with_switch,
 };
 pub use list::{issue_row, list, list_row, two_lines};
 pub use toggle::{Segment, Segmented, bare_switch, switch, tone};

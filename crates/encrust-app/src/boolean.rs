@@ -49,15 +49,13 @@ impl BooleanTool {
             None => tr!(
                 "boolean-done",
                 name = done.name.to_owned(),
-                count = done.count,
-                mending = done.mending.clone()
+                count = done.count
             ),
             Some(voxel_mm) => tr!(
                 "boolean-done-sampled",
                 name = done.name.to_owned(),
                 count = done.count,
-                lattice = format!("{voxel_mm:.2}"),
-                mending = done.mending.clone()
+                lattice = format!("{voxel_mm:.2}")
             ),
         }) {
             *status = landed;
@@ -68,6 +66,13 @@ impl BooleanTool {
     pub fn is_busy(&self) -> bool {
         self.job.is_some()
     }
+
+    /// Gives up on the run going, which leaves the picked models as they are.
+    pub fn cancel(&mut self, status: &mut Status) {
+        if self.job.take().is_some() {
+            *status = Status::Info(tr!("boolean-cancelled"));
+        }
+    }
 }
 
 /// What a finished combination did, for the stage notice to say.
@@ -77,7 +82,6 @@ pub(crate) struct Done<'a> {
     pub count: usize,
     /// The lattice it was sampled on, millimetres, when it could not be cut exactly.
     pub voxel_mm: Option<Scalar>,
-    pub mending: String,
 }
 
 /// Lands `job` once it has finished: its result stands on the plate in place of the models
@@ -106,12 +110,13 @@ pub(crate) fn land(
     if let Some(object) = scene.get_mut(id) {
         object.stand_on_plate();
     }
-    Some(Status::Info(said(&Done {
+    let said = said(&Done {
         name: &first.name,
         count: taken.len(),
         voxel_mm: combined.voxel_mm,
-        mending: landing::mending(usize::from(mended)),
-    })))
+    });
+    let notes = landing::mending(usize::from(mended)).into_iter().collect();
+    Some(Status::noted(said, notes))
 }
 
 /// The names of the models a combination would take, in the order they were picked.

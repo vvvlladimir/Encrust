@@ -237,6 +237,10 @@ fn asked_case(args: &[String]) -> Option<Case> {
 }
 
 /// One case, with the field and the extraction timed on their own before the whole run.
+/// A crossing hole's diameter as a share of the cell: under a hexagon's side and a square's,
+/// so a hole always fits the wall it crosses.
+const HOLE_SHARE: Scalar = 0.5;
+
 fn run(mesh: &Mesh, bvh: &Bvh, case: &Case) -> Result<()> {
     let settings = HollowSettings {
         thickness_mm: case.wall_mm,
@@ -248,7 +252,7 @@ fn run(mesh: &Mesh, bvh: &Bvh, case: &Case) -> Result<()> {
                 pattern,
                 cell_mm,
                 wall_mm,
-                hole_mm: cell_mm / 2.0,
+                hole_mm: cell_mm * HOLE_SHARE,
                 ..InfillSettings::default()
             }),
         sign: case.sign,

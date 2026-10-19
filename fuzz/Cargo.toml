@@ -16,6 +16,7 @@ libfuzzer-sys = "0.4"
 core-format = { path = "../crates/core-format" }
 core-mesh-io = { path = "../crates/core-mesh-io" }
 core-pipeline = { path = "../crates/core-pipeline" }
+core-text = { path = "../crates/core-text" }
 printer-profiles = { path = "../crates/printer-profiles" }
 
 [[bin]]
@@ -105,6 +106,13 @@ bench = false
 [[bin]]
 name = "resin_profile"
 path = "fuzz_targets/resin_profile.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "font"
+path = "fuzz_targets/font.rs"
 test = false
 doc = false
 bench = false

@@ -137,6 +137,14 @@ pub fn press(
     press_reusing(mesh, bvh, uvs, heights, settings, None).map(|(relief, _)| relief)
 }
 
+/// Refuses a mesh with no faces to press into, or settings no press can be made with.
+fn pressable(mesh: &Mesh, settings: &ReliefSettings) -> Result<(), VolumeError> {
+    if mesh.aabb().is_none() {
+        return Err(VolumeError::EmptyMesh);
+    }
+    settings.check()
+}
+
 /// [`press`] over `basis` where it fits this model and these settings, and the basis the
 /// press stood on, for the caller to keep for another press of the same mesh.
 pub fn press_reusing(
@@ -147,10 +155,7 @@ pub fn press_reusing(
     settings: &ReliefSettings,
     basis: Option<Arc<ReliefBasis>>,
 ) -> Result<(Relief, Arc<ReliefBasis>), VolumeError> {
-    if mesh.aabb().is_none() {
-        return Err(VolumeError::EmptyMesh);
-    }
-    settings.check()?;
+    pressable(mesh, settings)?;
     // A map covering part of the mesh is honest — what it does not cover does not move —
     // but one indexed by a different face list is not the mesh's map at all.
     if uvs.len() != mesh.faces.len() || uvs.mapped() == 0 {
@@ -227,10 +232,7 @@ pub fn press_tiled_reusing(
     settings: &ReliefSettings,
     basis: Option<Arc<ReliefBasis>>,
 ) -> Result<(Relief, Arc<ReliefBasis>), VolumeError> {
-    if mesh.aabb().is_none() {
-        return Err(VolumeError::EmptyMesh);
-    }
-    settings.check()?;
+    pressable(mesh, settings)?;
     if !tiling.tile_mm.is_finite() || tiling.tile_mm <= 0.0 {
         return Err(VolumeError::BadTile(tiling.tile_mm));
     }

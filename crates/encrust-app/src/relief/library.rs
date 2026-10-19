@@ -6,6 +6,8 @@ use crate::i18n::tr;
 /// are CC0; see docs/decisions/0309-ship-a-dozen-height-maps-in-the-window.md.
 pub struct Builtin {
     pub name: fn() -> String,
+    /// The file it was read from, which names it the same in every language and release.
+    pub file: &'static str,
     pub bytes: &'static [u8],
 }
 
@@ -13,6 +15,7 @@ macro_rules! builtin {
     ($name:expr, $file:literal) => {
         Builtin {
             name: $name,
+            file: $file,
             bytes: include_bytes!(concat!(
                 env!("CARGO_MANIFEST_DIR"),
                 "/../../assets/textures/",

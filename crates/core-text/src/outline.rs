@@ -1,4 +1,4 @@
-use core_geometry::{Scalar, Vec2};
+use core_geometry::{Scalar, Vec2, ring_area, ring_contains};
 use ttf_parser::{Face, GlyphId, OutlineBuilder};
 
 use crate::error::TextError;
@@ -176,23 +176,7 @@ impl OutlineBuilder for Pen {
 
 /// Twice the signed area of a ring, positive anticlockwise.
 fn area(ring: &[Vec2]) -> Scalar {
-    ring.iter()
-        .zip(ring.iter().cycle().skip(1))
-        .map(|(a, b)| a.perp_dot(*b))
-        .sum()
-}
-
-fn contains(ring: &[Vec2], point: Vec2) -> bool {
-    let mut inside = false;
-    for (a, b) in ring.iter().zip(ring.iter().cycle().skip(1)) {
-        if (a.y > point.y) != (b.y > point.y) {
-            let x = a.x + (point.y - a.y) / (b.y - a.y) * (b.x - a.x);
-            if point.x < x {
-                inside = !inside;
-            }
-        }
-    }
-    inside
+    ring_area(ring.iter().copied())
 }
 
 /// One glyph's rings grouped into shapes, whichever way the font winds them: a ring wound
@@ -204,7 +188,9 @@ fn nested(rings: &[Vec<Vec2>]) -> Vec<Shape> {
         .enumerate()
         .map(|(index, ring)| {
             (0..rings.len())
-                .filter(|other| *other != index && contains(&rings[*other], ring[0]))
+                .filter(|other| {
+                    *other != index && ring_contains(rings[*other].iter().copied(), ring[0])
+                })
                 .min_by(|a, b| area(&rings[*a]).abs().total_cmp(&area(&rings[*b]).abs()))
         })
         .collect();

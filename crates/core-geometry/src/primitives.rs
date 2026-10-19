@@ -1,6 +1,6 @@
 use glam::{Vec2, Vec3};
 
-use crate::{Mesh, Scalar};
+use crate::{FastSet, Mesh, Scalar};
 
 /// A box between two opposite corners, closed and wound outward.
 pub fn cuboid(min: Vec3, max: Vec3) -> Mesh {
@@ -40,52 +40,134 @@ pub fn oriented_box(center: Vec3, half: [Vec3; 3]) -> Mesh {
 /// A convex outline, anticlockwise seen from above, stood upright from `bottom_mm` to
 /// `top_mm`.
 pub fn prism(outline: &[Vec2], bottom_mm: Scalar, top_mm: Scalar) -> Mesh {
-    let sides = outline.len() as u32;
-    let mut vertices: Vec<Vec3> = outline
-        .iter()
-        .map(|corner| corner.extend(bottom_mm))
+    let fan: Vec<[u32; 3]> = (1..(outline.len() as u32).saturating_sub(1))
+        .map(|corner| [0, corner, corner + 1])
         .collect();
-    vertices.extend(outline.iter().map(|corner| corner.extend(top_mm)));
+    let count = outline.len();
+    extrude(
+        outline,
+        &fan,
+        Vec2::extend,
+        &vec![bottom_mm; count],
+        &vec![top_mm; count],
+    )
+}
 
-    let mut faces = Vec::with_capacity(4 * outline.len());
-    for side in 0..sides {
-        let next = (side + 1) % sides;
-        faces.push([side, next, sides + next]);
-        faces.push([side, sides + next, sides + side]);
+/// A flat region stood up into a slab: `cap`, triangles over `points` wound anticlockwise,
+/// at each point's `bottom` and its `top` height, `lift` placing a point at a height, and a
+/// wall along every edge only one triangle of the cap walks. Closed and wound outward
+/// wherever every top stands above its bottom.
+pub fn extrude(
+    points: &[Vec2],
+    cap: &[[u32; 3]],
+    lift: impl Fn(Vec2, Scalar) -> Vec3,
+    bottom: &[Scalar],
+    top: &[Scalar],
+) -> Mesh {
+    let count = points.len() as u32;
+    let mut vertices: Vec<Vec3> = points
+        .iter()
+        .zip(bottom)
+        .map(|(p, h)| lift(*p, *h))
+        .collect();
+    vertices.extend(points.iter().zip(top).map(|(p, h)| lift(*p, *h)));
+    let sides = |[a, b, c]: [u32; 3]| [(a, b), (b, c), (c, a)];
+    let walked: FastSet<(u32, u32)> = cap.iter().flat_map(|face| sides(*face)).collect();
+    let mut faces = Vec::with_capacity(4 * cap.len());
+    for [a, b, c] in cap {
+        faces.push([a + count, b + count, c + count]);
+        faces.push([*a, *c, *b]);
     }
-    for corner in 1..sides.saturating_sub(1) {
-        faces.push([0, corner + 1, corner]);
-        faces.push([sides, sides + corner, sides + corner + 1]);
+    for (from, to) in cap.iter().flat_map(|face| sides(*face)) {
+        if !walked.contains(&(to, from)) {
+            faces.push([from, to, to + count]);
+            faces.push([from, to + count, from + count]);
+        }
     }
     Mesh::new(vertices, faces)
 }
 
 /// A round bar of `radius` from `from` to `to`, its round side cut into `segments` flats.
 pub fn cylinder(from: Vec3, to: Vec3, radius: Scalar, segments: usize) -> Mesh {
-    let axis = (to - from).normalize_or_zero();
+    let circle: Vec<Vec2> = (0..segments)
+        .map(|step| Vec2::from_angle(std::f32::consts::TAU * step as Scalar / segments as Scalar))
+        .collect();
+    let length = from.distance(to);
+    revolve(from, to - from, &[(0.0, radius), (length, radius)], &circle)
+}
+
+/// A solid turned about `axis` from `base`: `outline`, a ring round the origin anticlockwise
+/// seen down the axis, set at each `(along, radius)` and scaled by the radius, the rings
+/// joined in order and closed at both ends, wound outward. Convex where `outline` is.
+pub fn revolve(base: Vec3, axis: Vec3, rings: &[(Scalar, Scalar)], outline: &[Vec2]) -> Mesh {
+    let (Some(first), Some(last)) = (rings.first(), rings.last()) else {
+        return Mesh::default();
+    };
+    let axis = axis.normalize_or_zero();
     let side = axis.any_orthonormal_vector();
     let up = axis.cross(side);
-    let ring = |center: Vec3| {
-        (0..segments).map(move |step| {
-            let angle = std::f32::consts::TAU * step as Scalar / segments as Scalar;
-            center + (side * angle.cos() + up * angle.sin()) * radius
-        })
-    };
-    let mut vertices: Vec<Vec3> = ring(from).chain(ring(to)).collect();
-    let (count, low, high) = (
-        segments as u32,
-        2 * segments as u32,
-        2 * segments as u32 + 1,
-    );
-    vertices.extend([from, to]);
+    let mut vertices = Vec::with_capacity(rings.len() * outline.len() + 2);
+    for (along, radius) in rings {
+        let centre = base + axis * *along;
+        vertices.extend(
+            outline
+                .iter()
+                .map(|point| centre + (side * point.x + up * point.y) * *radius),
+        );
+    }
+    let (low, high) = (vertices.len() as u32, vertices.len() as u32 + 1);
+    vertices.extend([base + axis * first.0, base + axis * last.0]);
 
-    let mut faces = Vec::with_capacity(4 * segments);
+    let count = outline.len() as u32;
+    let top = (rings.len() as u32 - 1) * count;
+    let mut faces = Vec::with_capacity(2 * outline.len() * (rings.len() + 1));
+    for ring in 0..rings.len() as u32 - 1 {
+        let (this, next_ring) = (ring * count, (ring + 1) * count);
+        for step in 0..count {
+            let next = (step + 1) % count;
+            faces.push([this + step, this + next, next_ring + next]);
+            faces.push([this + step, next_ring + next, next_ring + step]);
+        }
+    }
     for step in 0..count {
         let next = (step + 1) % count;
-        faces.push([step, next, count + next]);
-        faces.push([step, count + next, count + step]);
         faces.push([low, next, step]);
-        faces.push([high, count + step, count + next]);
+        faces.push([high, top + step, top + next]);
+    }
+    Mesh::new(vertices, faces)
+}
+
+/// A ball of `radius` about `centre`, cut into `rings` bands from pole to pole and
+/// `segments` meridians, closed and wound outward.
+pub fn ball(centre: Vec3, radius: Scalar, rings: usize, segments: usize) -> Mesh {
+    let mut vertices = vec![centre + Vec3::Z * radius];
+    for ring in 1..rings {
+        let theta = std::f32::consts::PI * ring as Scalar / rings as Scalar;
+        let (sin_theta, cos_theta) = theta.sin_cos();
+        for segment in 0..segments {
+            let phi = std::f32::consts::TAU * segment as Scalar / segments as Scalar;
+            let (sin_phi, cos_phi) = phi.sin_cos();
+            vertices.push(
+                centre + radius * Vec3::new(sin_theta * cos_phi, sin_theta * sin_phi, cos_theta),
+            );
+        }
+    }
+    let south = vertices.len() as u32;
+    vertices.push(centre - Vec3::Z * radius);
+
+    let at = |ring: usize, segment: usize| (1 + (ring - 1) * segments + segment % segments) as u32;
+    let mut faces = Vec::with_capacity(2 * segments * rings.saturating_sub(1));
+    for segment in 0..segments {
+        faces.push([0, at(1, segment), at(1, segment + 1)]);
+        faces.push([south, at(rings - 1, segment + 1), at(rings - 1, segment)]);
+    }
+    for ring in 1..rings.saturating_sub(1) {
+        for segment in 0..segments {
+            let (upper, lower) = (at(ring, segment), at(ring + 1, segment));
+            let (upper_next, lower_next) = (at(ring, segment + 1), at(ring + 1, segment + 1));
+            faces.push([upper, lower, lower_next]);
+            faces.push([upper, lower_next, upper_next]);
+        }
     }
     Mesh::new(vertices, faces)
 }

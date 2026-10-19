@@ -183,7 +183,11 @@ fn click(ui: &egui::Ui, window: &mut Window, rect: egui::Rect, cursor: egui::Pos
             add_channel_point_under_cursor(window, rect, cursor);
         }
         Tool::Drain => place_drain_under_cursor(window, rect, cursor),
-        Tool::Relief if window.tools.relief.mode == ReliefMode::Text => {
+        // Shift or Cmd picks the model as anywhere else, so it can be picked without a stamp.
+        Tool::Relief
+            if window.tools.relief.mode == ReliefMode::Text
+                && !ui.input(|input| input.modifiers.command || input.modifiers.shift) =>
+        {
             text::stamp_text_under_cursor(window, rect, cursor);
         }
         Tool::Measure => {

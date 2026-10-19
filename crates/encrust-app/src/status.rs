@@ -7,6 +7,8 @@ pub enum Status {
     Info(String),
     /// What happened, and what it reads now, each against what it read before.
     Readings(String, Vec<Reading>),
+    /// What happened, and under it each further fact about it, a sentence apiece.
+    Noted(String, Vec<String>),
     Error(String),
 }
 
@@ -62,12 +64,22 @@ impl Status {
         Self::Error(causes.join(": "))
     }
 
+    /// What happened, with `notes` under it where there are any.
+    pub fn noted(message: String, notes: Vec<String>) -> Self {
+        if notes.is_empty() {
+            Self::Info(message)
+        } else {
+            Self::Noted(message, notes)
+        }
+    }
+
     pub fn text(&self) -> String {
         match self {
             Self::Idle => tr!("card-ready"),
-            Self::Info(message) | Self::Readings(message, _) | Self::Error(message) => {
-                message.clone()
-            }
+            Self::Info(message)
+            | Self::Readings(message, _)
+            | Self::Noted(message, _)
+            | Self::Error(message) => message.clone(),
         }
     }
 

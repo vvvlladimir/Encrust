@@ -117,6 +117,25 @@ first row `--infill-hole-from` over the cavity's floor and the next every
 `--infill-hole-spacing`. A scaffold takes `--infill-cell` and `--infill-density`, 0 to 1.
 Every number left out is the window's default, and one the pattern has no use for is refused.
 
+Modelling, as the window's Relief and Cut tools do it, before the models are hollowed and
+supported (ADR 0312). `--combine union|difference|intersection` makes every model given one,
+a difference keeping the first; `--label TEXT --label-at X,Y,Z` writes on the surface nearest
+that plate point, with `--label-height`, `--label-depth`, `--label-sunk`, `--label-follow`,
+`--label-angle` and `--label-font`; `--cut x|y|z:MM` cuts at a plate coordinate, `--keep
+both|lower|upper` picks the halves and `--joint dowels|pins|magnets|key` joins them at the
+window's default sizes; `--split` breaks a model into its bodies, scraps under
+`--split-smallest` joined or dropped, and `--part-off X,Y,Z` cuts off the part that point is
+on. A half that no longer reaches the floor is laid on its cut face, and a cut needs
+`--arrange`. A piece of several is not hollowed or supported, and a project refuses the
+flags.
+
+```sh
+encrust slice base.stl lid.stl --printer elegoo-mars-4-ultra --resin my-grey \
+  --combine union --label "No 7" --label-at 20,10,30 --label-sunk -o part.goo
+encrust slice bust.stl --printer elegoo-mars-4-ultra --resin my-grey \
+  --cut z:60 --joint dowels --arrange -o bust.goo
+```
+
 A hole into the surface nearest a point, cut with or without a cavity behind it, and the
 check that says whether any resin is still stuck. `--check-drainage` asks for it alone. The
 point is in plate millimetres from the plate's front left corner, after `--center` and the

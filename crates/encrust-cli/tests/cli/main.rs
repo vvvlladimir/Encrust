@@ -5,6 +5,7 @@ mod batch;
 mod containers;
 mod hollowing;
 mod import;
+mod modelling;
 mod plate;
 mod png_stack;
 mod profiles;

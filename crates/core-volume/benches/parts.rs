@@ -4,49 +4,9 @@
 )]
 
 use core_csg::Solid;
-use core_geometry::{Mesh, Scalar, Vec3, cylinder};
+use core_geometry::{Mesh, Vec3, ball, cylinder};
 use core_volume::{Cancel, part_off};
 use criterion::{Criterion, criterion_group, criterion_main};
-
-/// A ball of `radius` at `centre`, `rings` by `segments` faces, wound outward.
-fn ball(centre: Vec3, radius: Scalar, rings: usize, segments: usize) -> Mesh {
-    let mut vertices = vec![centre + Vec3::new(0.0, 0.0, radius)];
-    for ring in 1..rings {
-        let theta = std::f32::consts::PI * ring as Scalar / rings as Scalar;
-        for segment in 0..segments {
-            let phi = std::f32::consts::TAU * segment as Scalar / segments as Scalar;
-            let direction = Vec3::new(
-                theta.sin() * phi.cos(),
-                theta.sin() * phi.sin(),
-                theta.cos(),
-            );
-            vertices.push(centre + direction * radius);
-        }
-    }
-    let south = vertices.len() as u32;
-    vertices.push(centre - Vec3::new(0.0, 0.0, radius));
-    let at = |ring: usize, segment: usize| (1 + (ring - 1) * segments + segment % segments) as u32;
-    let mut faces = Vec::new();
-    for segment in 0..segments {
-        faces.push([0, at(1, segment), at(1, segment + 1)]);
-        faces.push([at(rings - 1, segment), south, at(rings - 1, segment + 1)]);
-    }
-    for ring in 1..rings - 1 {
-        for segment in 0..segments {
-            faces.push([
-                at(ring, segment),
-                at(ring + 1, segment),
-                at(ring + 1, segment + 1),
-            ]);
-            faces.push([
-                at(ring, segment),
-                at(ring + 1, segment + 1),
-                at(ring, segment + 1),
-            ]);
-        }
-    }
-    Mesh::new(vertices, faces)
-}
 
 fn solid(mesh: &Mesh) -> Solid {
     Solid::new(mesh).expect("a ball or a bar is a solid")

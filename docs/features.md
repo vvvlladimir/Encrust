@@ -200,8 +200,13 @@ capped silently.
   first, or **Intersect** them to keep only what they share. Closed models keep their sharp
   edges, a model made of parts pushed into each other included; a torn scan is combined
   through a field and its edges are rounded to the lattice the notice names.
-- Text and Combine replace the model; its supports, cavity and holes are not kept, and
-  Undo puts the original back.
+- Text and Combine replace the model; its supports, cavity, holes, own settings and
+  texture are not kept, and Undo puts the original back. The result stands on the plate the
+  models were taken from. Shift or Cmd click picks a model in Text mode without writing.
+- A press, a stamp, a combination, a cut or a split runs off the drawing thread and can be
+  cancelled from the panel. If the model is moved, resized, replaced or undone meanwhile,
+  the result is dropped and the stage notice says so.
+- The mode and the built-in texture chosen are remembered between runs.
 
 ### Hollow
 - Hollow a model with a wall thickness and precision you choose.
@@ -486,7 +491,8 @@ address in a video player).
 - **Find (⌘K):** search every tool, action and model on the plate by name.
 - **Keyboard:** digits 1 to 0 pick the first ten tools, there is a shortcut sheet, Tab walks
   every control, and every control has a name for screen readers.
-- **Undo and redo** across the plate and the settings forms.
+- **Undo and redo** across the plate and the settings forms. A run that lands its result
+  after an undo is a new edit, so what could be redone before it can no longer be.
 - Tool values are remembered between runs.
 - **Updates:** checks once a day (can be turned off), downloads, verifies the signature and
   installs only when you press it. You can skip a version. A copy from the Microsoft Store
@@ -525,8 +531,12 @@ and leave nothing on disk if a model has defects), a config file for flags you a
 progress bars that turn off when not on a terminal, and Ctrl-C that stops cleanly and
 removes the half-written file.
 
-**You cannot** (from the command line): paint supports, place them by hand, or set blockers.
-Do that in the window, save a project, then slice the project.
+**Modelling:** combine the models given, write a label on one, cut it with a joint, split
+it into its parts or cut a part off, all at the window's default sizes, before it is sliced.
+
+**You cannot** (from the command line): paint supports, place them by hand, set blockers,
+take the pieces of a cut or a split out as meshes, or hollow or support a model a cut or a
+split broke into several pieces. Do that in the window, save a project, then slice it.
 
 ---
 

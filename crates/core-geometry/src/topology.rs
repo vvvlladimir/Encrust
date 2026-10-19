@@ -137,18 +137,22 @@ impl Adjacency {
     }
 }
 
-/// Union-find over face indices, used to group faces into connected shells.
-pub(crate) struct Components {
+/// Union-find over indices — of faces, vertices or corners — that gathers them into the
+/// groups the unions joined.
+#[derive(Debug, Clone)]
+pub struct Components {
     parent: Vec<u32>,
 }
 
 impl Components {
+    /// `len` indices, each a group of its own.
     pub fn new(len: usize) -> Self {
         Self {
             parent: (0..len as u32).collect(),
         }
     }
 
+    /// The index standing for the group `node` is in.
     pub fn find(&mut self, mut node: u32) -> u32 {
         while self.parent[node as usize] != node {
             let grandparent = self.parent[self.parent[node as usize] as usize];
@@ -158,6 +162,7 @@ impl Components {
         node
     }
 
+    /// Joins the groups of `a` and `b`.
     pub fn union(&mut self, a: u32, b: u32) {
         let (a, b) = (self.find(a), self.find(b));
         if a != b {

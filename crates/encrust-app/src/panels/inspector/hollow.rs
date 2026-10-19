@@ -9,7 +9,7 @@ use crate::job::HollowJob;
 use crate::panels::Window;
 use crate::state::{Doc, Tools};
 use crate::ui::{
-    Segment, Segmented, describe, hint, icon, nested, notice, number_row, primary_button,
+    Segment, Segmented, busy, describe, hint, icon, nested, notice, number_row, primary_button,
     progress_bar, secondary_button, section, section_with_switch, stats, subheading, theme, tone,
 };
 use crate::workspace::Tool;
@@ -107,8 +107,7 @@ fn settings(ui: &mut egui::Ui, window: &mut Window) {
 fn drainage(ui: &mut egui::Ui, window: &mut Window) {
     if window.tools.drain.job.is_some() {
         subheading(ui, &tr!("hollow-drainage"));
-        tone(ui, &tr!("hollow-looking"), theme::colors().text_mid);
-        progress_bar(ui, None);
+        busy(ui, &tr!("hollow-looking"), false);
         return;
     }
 

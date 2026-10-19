@@ -1,4 +1,4 @@
-use core_geometry::{FastMap, FastSet, Mesh, Scalar, Vec2};
+use core_geometry::{FastMap, Mesh, Scalar, Vec2, extrude};
 
 use crate::section::Section;
 
@@ -8,7 +8,7 @@ const NEAREST_CORNER: Scalar = 0.02;
 
 /// A point of the outline, named by what it is on the grid so neighbouring cells share it.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-enum Key {
+enum GridPoint {
     Corner(usize, usize),
     /// On the edge from a corner to the one to its right or above it.
     Right(usize, usize),
@@ -34,13 +34,13 @@ pub(crate) fn band(section: &Section, field: &[Scalar], bottom_mm: Scalar, top_m
 /// The region traced so far: its points, in the frame, and its triangles, anticlockwise.
 #[derive(Debug, Default)]
 struct Plan {
-    index: FastMap<Key, u32>,
+    index: FastMap<GridPoint, u32>,
     points: Vec<Vec2>,
     triangles: Vec<[u32; 3]>,
 }
 
 impl Plan {
-    fn point(&mut self, key: Key, at: Vec2) -> u32 {
+    fn point(&mut self, key: GridPoint, at: Vec2) -> u32 {
         *self.index.entry(key).or_insert_with(|| {
             self.points.push(at);
             self.points.len() as u32 - 1
@@ -61,7 +61,7 @@ impl Plan {
         for k in 0..4 {
             let (from, to) = (corners[k], corners[(k + 1) % 4]);
             if inside[k] {
-                outline.push(self.point(Key::Corner(from.0, from.1), at(from)));
+                outline.push(self.point(GridPoint::Corner(from.0, from.1), at(from)));
                 owner.push(Some(k));
             }
             if inside[k] != inside[(k + 1) % 4] {
@@ -82,7 +82,10 @@ impl Plan {
         }
         let middle_value = corners.iter().map(|corner| value(*corner)).sum::<Scalar>() / 4.0;
         if middle_value > 0.0 {
-            let middle = self.point(Key::Middle(x, y), (at(corners[0]) + at(corners[2])) / 2.0);
+            let middle = self.point(
+                GridPoint::Middle(x, y),
+                (at(corners[0]) + at(corners[2])) / 2.0,
+            );
             for k in 0..outline.len() {
                 self.triangles
                     .push([middle, outline[k], outline[(k + 1) % outline.len()]]);
@@ -103,40 +106,23 @@ impl Plan {
     /// edge only one triangle has.
     fn stood(self, section: &Section, bottom_mm: Scalar, top_mm: Scalar) -> Mesh {
         let frame = section.frame;
-        let count = self.points.len() as u32;
-        let mut vertices = Vec::with_capacity(2 * self.points.len());
-        for height in [bottom_mm, top_mm] {
-            vertices.extend(
-                self.points
-                    .iter()
-                    .map(|point| frame.lift(*point) + frame.normal * height),
-            );
-        }
-        let mut faces = Vec::with_capacity(4 * self.triangles.len());
-        let mut directed: FastSet<(u32, u32)> = FastSet::default();
-        for [a, b, c] in &self.triangles {
-            faces.push([a + count, b + count, c + count]);
-            faces.push([*a, *c, *b]);
-            for (from, to) in [(*a, *b), (*b, *c), (*c, *a)] {
-                directed.insert((from, to));
-            }
-        }
-        for (from, to) in &directed {
-            if !directed.contains(&(*to, *from)) {
-                faces.push([*from, *to, to + count]);
-                faces.push([*from, to + count, from + count]);
-            }
-        }
-        Mesh::new(vertices, faces)
+        let count = self.points.len();
+        extrude(
+            &self.points,
+            &self.triangles,
+            |point, height| frame.lift(point) + frame.normal * height,
+            &vec![bottom_mm; count],
+            &vec![top_mm; count],
+        )
     }
 }
 
-fn edge_key(from: (usize, usize), to: (usize, usize)) -> Key {
+fn edge_key(from: (usize, usize), to: (usize, usize)) -> GridPoint {
     let (low, high) = if from <= to { (from, to) } else { (to, from) };
     if low.1 == high.1 {
-        Key::Right(low.0, low.1)
+        GridPoint::Right(low.0, low.1)
     } else {
-        Key::Above(low.0, low.1)
+        GridPoint::Above(low.0, low.1)
     }
 }
 
@@ -149,8 +135,8 @@ mod tests {
     #[test]
     fn a_rim_inset_from_a_square_face_is_a_closed_frame_of_its_area() {
         let plane = Plane::at(Vec3::Z, 5.0).expect("+Z is a direction");
-        let half = cut(&cuboid(Vec3::ZERO, Vec3::splat(20.0)), plane).below;
-        let section = Section::of(&half, plane, 0.1).expect("the cut crosses the box");
+        let halves = cut(&cuboid(Vec3::ZERO, Vec3::splat(20.0)), plane);
+        let section = Section::of(&halves, plane, 0.1).expect("the cut crosses the box");
         // From 1 mm to 3 mm in from the edge: 18 mm square less 14 mm square.
         let field: Vec<Scalar> = section
             .distance

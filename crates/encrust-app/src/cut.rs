@@ -1,6 +1,6 @@
 use anyhow::{Result, anyhow};
 use core_geometry::{Mesh, Plane, Scalar, Transform, Vec3, transform_mesh};
-use core_joint::{JointKind, Joints};
+use core_joint::{Dowel, JointKind, Joints};
 use core_volume::PartedOff;
 
 pub use core_engine::project::Keep;
@@ -114,12 +114,8 @@ impl CutTool {
         }
     }
 
-    /// Starts cutting one model in two, in plate coordinates, off the drawing thread;
-    /// [`CutTool::poll`] puts the halves on the plate in its place.
-    ///
-    /// What the model carried — its supports, its cavity, its drain holes — does not
-    /// survive: the halves are new geometry, and a support placed on a surface that has
-    /// been cut away has nothing to hold.
+    /// Starts cutting one model in two off the drawing thread; [`CutTool::poll`] puts the
+    /// halves, new geometry with none of its supports, cavity or holes, in its place.
     pub fn start(&mut self, scene: &Scene, id: ObjectId) -> Result<()> {
         let object = scene
             .get(id)
@@ -171,6 +167,13 @@ impl CutTool {
 
     pub fn is_busy(&self) -> bool {
         self.running.is_some() || self.splitting.is_some()
+    }
+
+    /// Gives up on the cut or split going, which leaves the model as it is.
+    pub fn cancel(&mut self, status: &mut Status) {
+        if self.running.take().is_some() | self.splitting.take().is_some() {
+            *status = Status::Info(tr!("cut-cancelled"));
+        }
     }
 
     /// Marks the part at `point` on the plate as the one Split cuts off `object`, and
@@ -238,25 +241,19 @@ impl Running {
         if let Some(lower) = lower {
             lay_out_dowels(scene, lower, &name, &joined.loose);
         }
-        let mending = mending(mended);
         if open_loops > 0 {
-            return Status::Info(tr!(
-                "cut-done-open",
-                name = name,
-                open = open_loops,
-                mending = mending
-            ));
+            let said = tr!("cut-done-open", name = name, open = open_loops);
+            return Status::noted(said, mending(mended).into_iter().collect());
         }
-        let (joint, bare) = joint_notes(kind, joined.placed, joined.bare, unjoined);
-        Status::Info(tr!(
+        let mut notes = joint_notes(kind, joined.placed, joined.bare, unjoined);
+        notes.extend(mending(mended));
+        let said = tr!(
             "cut-done",
             name = name,
             axis = self.axis.label(),
-            position = format!("{:.1}", self.position_mm),
-            joint = joint,
-            bare = bare,
-            mending = mending
-        ))
+            position = format!("{:.1}", self.position_mm)
+        );
+        Status::noted(said, notes)
     }
 
     /// Puts the halves kept on the plate, each laid on its cut face if asked and unless
@@ -298,7 +295,7 @@ impl Running {
 }
 
 /// Stands each dowel on the plate in a row beside the lower half `beside`.
-fn lay_out_dowels(scene: &mut Scene, beside: ObjectId, name: &str, dowels: &[Mesh]) {
+fn lay_out_dowels(scene: &mut Scene, beside: ObjectId, name: &str, dowels: &[Dowel]) {
     let Some((bounds, plate)) = scene
         .get(beside)
         .and_then(|object| Some((object.world_bounds()?, object.plate)))
@@ -307,44 +304,37 @@ fn lay_out_dowels(scene: &mut Scene, beside: ObjectId, name: &str, dowels: &[Mes
     };
     let mut x = bounds.maxs.x + DOWEL_GAP_MM;
     for (index, dowel) in dowels.iter().enumerate() {
-        let radius = dowel
-            .vertices
-            .iter()
-            .map(|vertex| vertex.x.abs())
-            .fold(0.0, Scalar::max);
+        let radius = dowel.radius_mm;
         let offset = Vec3::new(x + radius, bounds.mins.y + radius, 0.0);
-        let placed = transform_mesh(dowel, Transform::from_translation(offset));
+        let placed = transform_mesh(&dowel.mesh, Transform::from_translation(offset));
         let name = tr!("cut-dowel-name", name = name.to_owned(), index = index + 1);
         place(scene, plate, name, placed);
         x += 2.0 * radius + DOWEL_GAP_MM;
     }
 }
 
-/// What the stage notice says of the joint, and of the pieces of the face it missed.
+/// What the stage notice notes of the joint, and of the pieces of the face it missed.
 fn joint_notes(
     kind: Option<JointKind>,
     placed: usize,
     bare: usize,
     unjoined: Option<String>,
-) -> (String, String) {
+) -> Vec<String> {
     let Some(kind) = kind else {
-        return (String::new(), String::new());
+        return Vec::new();
     };
     if let Some(reason) = unjoined {
-        return (tr!("cut-joint-failed", reason = reason), String::new());
+        return vec![tr!("cut-joint-failed", reason = reason)];
     }
     let joint = match (kind, placed) {
-        (_, 0) => return (tr!("cut-no-room-for-joint"), String::new()),
+        (_, 0) => return vec![tr!("cut-no-room-for-joint")],
         (JointKind::Pins, count) => tr!("cut-with-pins", count = count),
         (JointKind::Dowels, count) => tr!("cut-with-dowels", count = count),
         (JointKind::Magnets, count) => tr!("cut-with-magnets", count = count),
         (JointKind::Key, count) => tr!("cut-with-key", count = count),
     };
-    let bare = match bare {
-        0 => String::new(),
-        bare => tr!("cut-bare", count = bare),
-    };
-    (joint, bare)
+    let bare = (bare > 0).then(|| tr!("cut-bare", count = bare));
+    std::iter::once(joint).chain(bare).collect()
 }
 
 /// Puts the parts a split found on the plate in place of the model it took. A model that
@@ -363,7 +353,7 @@ fn land_parts(scene: &mut Scene, taken: &Taken, outcome: SplitOutcome) -> Status
     if let Err(changed) = landing::take_off(scene, std::slice::from_ref(taken)) {
         return Status::Error(changed);
     }
-    let scraps = scrap_notes(parts.joined, parts.dropped);
+    let mut notes = scrap_notes(parts.joined, parts.dropped);
     let named = parts.parts.into_iter().enumerate().map(|(index, part)| {
         let part_name = match count {
             1 => name.clone(),
@@ -371,22 +361,12 @@ fn land_parts(scene: &mut Scene, taken: &Taken, outcome: SplitOutcome) -> Status
         };
         (part_name, part)
     });
-    let mending = mending(place_all(scene, taken.plate, named));
-    if count < 2 {
-        return Status::Info(tr!(
-            "cut-cleaned",
-            name = name.clone(),
-            scraps = scraps,
-            mending = mending
-        ));
-    }
-    Status::Info(tr!(
-        "cut-split-done",
-        name = name.clone(),
-        count = count,
-        scraps = scraps,
-        mending = mending
-    ))
+    notes.extend(mending(place_all(scene, taken.plate, named)));
+    let said = match count {
+        0 | 1 => tr!("cut-cleaned", name = name.clone()),
+        count => tr!("cut-split-done", name = name.clone(), count = count),
+    };
+    Status::noted(said, notes)
 }
 
 /// Puts the marked part and the rest of the model on the plate in its place.
@@ -403,23 +383,15 @@ fn land_parted_off(scene: &mut Scene, taken: &Taken, parted: PartedOff) -> Statu
             (side_name, side)
         });
     let mended = place_all(scene, taken.plate, sides);
-    Status::Info(tr!(
-        "cut-parted-off",
-        name = name.clone(),
-        mending = mending(mended)
-    ))
+    let said = tr!("cut-parted-off", name = name.clone());
+    Status::noted(said, mending(mended).into_iter().collect())
 }
 
-/// What the stage notice says of the scraps a split joined to their parts or dropped.
-fn scrap_notes(joined: usize, dropped: usize) -> String {
-    let mut notes = String::new();
-    if joined > 0 {
-        notes.push_str(&tr!("cut-split-joined", count = joined));
-    }
-    if dropped > 0 {
-        notes.push_str(&tr!("cut-split-dropped", count = dropped));
-    }
-    notes
+/// What the stage notice notes of the scraps a split joined to their parts or dropped.
+fn scrap_notes(joined: usize, dropped: usize) -> Vec<String> {
+    let joined = (joined > 0).then(|| tr!("cut-split-joined", count = joined));
+    let dropped = (dropped > 0).then(|| tr!("cut-split-dropped", count = dropped));
+    joined.into_iter().chain(dropped).collect()
 }
 
 fn normal(axis: Axis) -> Vec3 {
@@ -586,10 +558,14 @@ mod tests {
         tool.state.joints = joined_by(JointKind::Pins);
         tool.lay_flat = true;
         let status = cut_now(tool, &mut scene, id);
-        let Status::Info(message) = &status else {
+        let Status::Noted(_, notes) = &status else {
             panic!("a block through the middle is a cut, got {status:?}");
         };
-        assert!(message.contains('2'), "two pins are named, got {message}");
+        assert_eq!(
+            notes,
+            &[tr!("cut-with-pins", count = 2)],
+            "two pins are named"
+        );
 
         let [lower, upper] = scene.objects() else {
             panic!("two halves, got {}", scene.objects().len());
@@ -748,10 +724,11 @@ mod tests {
     fn a_half_that_comes_off_the_cut_sound_is_left_alone() {
         let (mut scene, id) = scene_with(cuboid(Vec3::splat(10.0)), Transform::default());
 
-        let Status::Info(message) = cut_now(at(Axis::Z, 4.0, Keep::Both), &mut scene, id) else {
-            panic!("a cube through the middle is a cut");
-        };
-        assert!(!message.contains("mended"), "got {message}");
+        let status = cut_now(at(Axis::Z, 4.0, Keep::Both), &mut scene, id);
+        assert!(
+            matches!(status, Status::Info(_)),
+            "a cut with nothing mended notes nothing, got {status:?}"
+        );
     }
 
     #[test]
@@ -853,18 +830,15 @@ mod tests {
         );
         let (mut scene, id) = scene_with(model, Transform::default());
         let status = split_now(&mut scene, id);
-        let Status::Info(message) = &status else {
-            panic!("a split is not an error, got {status:?}");
+        let Status::Noted(_, notes) = &status else {
+            panic!("a split that dropped a scrap notes it, got {status:?}");
         };
         let [object] = scene.objects() else {
             panic!("the scrap is no part of its own");
         };
         assert_eq!(object.name, "cube", "the model keeps its name");
         assert!((signed_volume(&object.mesh) - 64.0).abs() < 1e-3);
-        assert!(
-            message.contains('1'),
-            "the dropped scrap is told, got {message}"
-        );
+        assert_eq!(notes, &[tr!("cut-split-dropped", count = 1)]);
     }
 
     #[test]

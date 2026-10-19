@@ -1,13 +1,9 @@
 use std::collections::VecDeque;
 
-use core_geometry::{FastMap, Mesh, Plane, Scalar, Vec2, Vec3};
+use core_geometry::{Cut, FastMap, Plane, Scalar, Vec2, Vec3};
 use rayon::prelude::*;
 
 use crate::distance;
-
-/// A vertex this near the plane belongs to the face a cut closed the half with, mm. The
-/// cut puts its points on the plane to within rounding.
-const ON_FACE_MM: Scalar = 1e-3;
 
 /// The finest and coarsest cell, mm. A tenth of a millimetre is past what a pixel of
 /// most panels resolves; a quarter still finds room for a 2 mm peg.
@@ -35,11 +31,11 @@ pub(crate) struct Frame {
 
 impl Frame {
     pub fn of(plane: Plane) -> Self {
-        let u = plane.normal.any_orthonormal_vector();
+        let (u, v) = plane.basis();
         Self {
             origin: plane.point,
             u,
-            v: plane.normal.cross(u),
+            v,
             normal: plane.normal,
         }
     }
@@ -72,15 +68,14 @@ pub(crate) struct Section {
 }
 
 impl Section {
-    /// The face `half` was closed with on `plane`, facing along its normal, drawn no
-    /// coarser than `coarsest_mm`. `None` where the half has no such face.
-    pub fn of(half: &Mesh, plane: Plane, coarsest_mm: Scalar) -> Option<Self> {
+    /// The cap `cut` closed its lower half with on `plane`, drawn no coarser than
+    /// `coarsest_mm`. `None` where the cut left no cap.
+    pub fn of(cut: &Cut, plane: Plane, coarsest_mm: Scalar) -> Option<Self> {
         let frame = Frame::of(plane);
-        let edges = edges(half, plane, &frame);
+        let edges = edges(cut, &frame);
         let (low, high) = bounds(&edges)?;
         let extent = (high - low).max_element();
         let cell_mm = FINEST_MM
-            .max(extent / MOST_CELLS)
             .min(coarsest_mm.min(COARSEST_MM))
             .max(extent / MOST_CELLS);
         let margin = cell_mm * MARGIN as Scalar;
@@ -234,21 +229,13 @@ impl Grid {
     }
 }
 
-/// The edges round the face `half` was closed with on `plane`, flattened into `frame`:
-/// those of its triangles facing along the normal that only one of them has.
-fn edges(half: &Mesh, plane: Plane, frame: &Frame) -> Vec<(Vec2, Vec2)> {
-    let on_face = |index: u32| {
-        let point = half.vertices[index as usize];
-        (point - plane.point).dot(plane.normal).abs() <= ON_FACE_MM
-    };
+/// The edges round the cap `cut` closed its lower half with, flattened into `frame`: those
+/// only one of the cap's triangles has.
+fn edges(cut: &Cut, frame: &Frame) -> Vec<(Vec2, Vec2)> {
+    let half = &cut.below;
+    let cap = &half.faces[half.faces.len().saturating_sub(cut.cap_faces)..];
     let mut uses: FastMap<(u32, u32), usize> = FastMap::default();
-    for (index, face) in half.faces.iter().enumerate() {
-        let facing = half
-            .triangle(index)
-            .is_some_and(|triangle| triangle.normal_unnormalized().dot(plane.normal) > 0.0);
-        if !facing || !face.iter().all(|corner| on_face(*corner)) {
-            continue;
-        }
+    for face in cap {
         for side in 0..3 {
             let (a, b) = (face[side], face[(side + 1) % 3]);
             *uses.entry((a.min(b), a.max(b))).or_default() += 1;
@@ -280,8 +267,8 @@ mod tests {
 
     fn lower_face(min: Vec3, max: Vec3, height_mm: Scalar) -> Section {
         let plane = Plane::at(Vec3::Z, height_mm).expect("+Z is a direction");
-        let half = cut(&cuboid(min, max), plane).below;
-        Section::of(&half, plane, COARSEST_MM).expect("the cut crosses the box")
+        Section::of(&cut(&cuboid(min, max), plane), plane, COARSEST_MM)
+            .expect("the cut crosses the box")
     }
 
     #[test]
@@ -304,8 +291,8 @@ mod tests {
             Vec3::new(30.0, 10.0, 10.0),
         ));
         let plane = Plane::at(Vec3::Z, 5.0).expect("+Z is a direction");
-        let half = cut(&both, plane).below;
-        let section = Section::of(&half, plane, COARSEST_MM).expect("the cut crosses both");
+        let section =
+            Section::of(&cut(&both, plane), plane, COARSEST_MM).expect("the cut crosses both");
         assert_eq!(section.pieces, 2);
         let area: Scalar = section
             .cells_by_piece()

@@ -1,6 +1,8 @@
 use core_geometry::Scalar;
 use serde::{Deserialize, Serialize};
 
+use crate::error::JointError;
+
 /// How the two halves of a cut are joined, and what every kind is set to, so switching
 /// between kinds keeps each one's numbers.
 #[derive(Debug, Clone, Copy, PartialEq, Default, Serialize, Deserialize)]
@@ -12,6 +14,39 @@ pub struct Joints {
     pub pegs: Pegs,
     pub magnets: Magnets,
     pub key: Key,
+}
+
+impl Joints {
+    /// Refuses a size of the kind chosen that is not finite, or not above nought — at or
+    /// above it for a clearance — as a project file or a typed field may carry.
+    pub fn check(&self) -> Result<(), JointError> {
+        let sizes: &[(&'static str, Scalar, bool)] = match self.kind {
+            None => &[],
+            Some(JointKind::Pins | JointKind::Dowels) => &[
+                ("peg diameter", self.pegs.diameter_mm, false),
+                ("peg length", self.pegs.length_mm, false),
+                ("peg clearance", self.pegs.clearance_mm, true),
+            ],
+            Some(JointKind::Magnets) => &[
+                ("magnet diameter", self.magnets.diameter_mm, false),
+                ("magnet thickness", self.magnets.thickness_mm, false),
+                ("magnet clearance", self.magnets.clearance_mm, true),
+            ],
+            Some(JointKind::Key) => &[
+                ("key width", self.key.width_mm, false),
+                ("key height", self.key.height_mm, false),
+                ("key clearance", self.key.clearance_mm, true),
+            ],
+        };
+        let unbuildable = |&&(_, value, nought): &&(&str, Scalar, bool)| {
+            let above = if nought { value >= 0.0 } else { value > 0.0 };
+            !value.is_finite() || !above
+        };
+        match sizes.iter().find(unbuildable) {
+            Some(&(what, value_mm, _)) => Err(JointError::BadSize { what, value_mm }),
+            None => Ok(()),
+        }
+    }
 }
 
 /// What holds the halves together.

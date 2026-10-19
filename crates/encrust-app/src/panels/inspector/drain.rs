@@ -9,8 +9,8 @@ use crate::panels::inspector::hollow;
 use crate::scene::ObjectId;
 use crate::state::Tools;
 use crate::ui::{
-    Segment, Segmented, describe, hint, icon, inline_button, notice, number_row, primary_button,
-    progress_bar, secondary_button, section, theme, tone,
+    Segment, Segmented, busy, describe, hint, icon, inline_button, notice, number_row,
+    primary_button, secondary_button, section, theme, tone,
 };
 
 /// Per point of drag, in millimetres for the sizes and hundredths for the taper.
@@ -87,8 +87,7 @@ pub fn action(ui: &mut egui::Ui, window: &mut Window) {
         return;
     }
     if window.tools.drain.job.is_some() {
-        tone(ui, &tr!("hollow-looking"), theme::colors().text_mid);
-        progress_bar(ui, None);
+        busy(ui, &tr!("hollow-looking"), false);
         return;
     }
     let layer_height_mm = window.machine.slicing.layer_height_mm();

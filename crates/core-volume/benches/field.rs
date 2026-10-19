@@ -3,59 +3,15 @@
     reason = "a broken fixture must fail the run loudly"
 )]
 
-use core_geometry::{Bvh, Heightmap, Mesh, Scalar, UvMap, Vec2, Vec3};
+use core_geometry::{Bvh, Heightmap, Mesh, Scalar, UvMap, Vec2, Vec3, ball};
 use core_volume::{
     Cancel, FieldSettings, HollowMode, HollowSettings, InfillPattern, InfillSettings, Panel,
     ReliefSettings, SignMode, StackField, build, extract, hollow, offset, press, shell,
 };
 use criterion::{Criterion, criterion_group, criterion_main};
 
-/// Roughly 200k triangles, the size of a detailed miniature.
-fn sphere(radius: Scalar, rings: usize, segments: usize) -> Mesh {
-    let mut vertices = vec![Vec3::new(0.0, 0.0, radius)];
-    for ring in 1..rings {
-        let theta = std::f32::consts::PI * ring as Scalar / rings as Scalar;
-        let (sin_theta, cos_theta) = theta.sin_cos();
-        for segment in 0..segments {
-            let phi = std::f32::consts::TAU * segment as Scalar / segments as Scalar;
-            let (sin_phi, cos_phi) = phi.sin_cos();
-            vertices.push(Vec3::new(
-                radius * sin_theta * cos_phi,
-                radius * sin_theta * sin_phi,
-                radius * cos_theta,
-            ));
-        }
-    }
-    let south = vertices.len() as u32;
-    vertices.push(Vec3::new(0.0, 0.0, -radius));
-
-    let at = |ring: usize, segment: usize| (1 + (ring - 1) * segments + segment % segments) as u32;
-    let mut faces = Vec::new();
-    for segment in 0..segments {
-        faces.push([0, at(1, segment), at(1, segment + 1)]);
-    }
-    for ring in 1..rings - 1 {
-        for segment in 0..segments {
-            faces.push([
-                at(ring, segment),
-                at(ring + 1, segment),
-                at(ring + 1, segment + 1),
-            ]);
-            faces.push([
-                at(ring, segment),
-                at(ring + 1, segment + 1),
-                at(ring, segment + 1),
-            ]);
-        }
-    }
-    for segment in 0..segments {
-        faces.push([at(rings - 1, segment), south, at(rings - 1, segment + 1)]);
-    }
-    Mesh::new(vertices, faces)
-}
-
 fn benchmarks(c: &mut Criterion) {
-    let mesh = sphere(20.0, 320, 320);
+    let mesh = ball(Vec3::ZERO, 20.0, 320, 320);
     let bvh = Bvh::build(&mesh);
     let coarse = FieldSettings {
         voxel_mm: 0.4,
@@ -220,7 +176,7 @@ fn hollowing(c: &mut Criterion, mesh: &Mesh, bvh: &Bvh) {
     });
 
     // Half a million triangles is the size of a scanned bust, and what the step aimed at.
-    let dense = sphere(20.0, 500, 500);
+    let dense = ball(Vec3::ZERO, 20.0, 500, 500);
     let dense_bvh = Bvh::build(&dense);
     c.bench_function("hollow a 500k-triangle ball with a 2 mm wall", |b| {
         b.iter(|| {
@@ -245,7 +201,7 @@ fn infill(c: &mut Criterion, mesh: &Mesh, bvh: &Bvh, empty: &HollowSettings) {
         ..empty.clone()
     };
     let grid = filled(InfillPattern::Grid);
-    let big = sphere(50.0, 320, 320);
+    let big = ball(Vec3::ZERO, 50.0, 320, 320);
     let big_bvh = Bvh::build(&big);
 
     let mut group = c.benchmark_group("infill");

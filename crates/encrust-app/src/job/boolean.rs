@@ -1,3 +1,5 @@
+use std::sync::atomic::{AtomicBool, Ordering};
+
 use core_csg::CsgError;
 use core_geometry::{Mesh, Vec3};
 use core_volume::{Boolean, Cancel, Combined, VolumeError, combine, combine_exact_toward};
@@ -51,7 +53,7 @@ impl BooleanJob {
             method,
         } = request;
         let worker = Worker::spawn(
-            move || pooled(|| run(&placed, op, method), BooleanOutcome::Failed),
+            move |stop| pooled(|| run(&placed, op, method, stop), BooleanOutcome::Failed),
             || BooleanOutcome::Failed(tr!("job-thread-stopped-boolean")),
         );
         Self { worker, taken }
@@ -68,9 +70,10 @@ impl BooleanJob {
     }
 }
 
-fn run(placed: &[Mesh], op: Boolean, method: Method) -> BooleanOutcome {
+fn run(placed: &[Mesh], op: Boolean, method: Method, stop: &AtomicBool) -> BooleanOutcome {
+    let asked = || stop.load(Ordering::Relaxed);
     let combined = match method {
-        Method::Sampled => combine(placed, op, Cancel::never()),
+        Method::Sampled => combine(placed, op, Cancel::when(&asked)),
         Method::ExactToward(toward) => {
             combine_exact_toward(placed, op, toward).map(|mesh| Combined {
                 mesh,

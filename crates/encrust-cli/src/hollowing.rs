@@ -116,7 +116,7 @@ pub struct HollowArgs {
 }
 
 /// One `x,y,z` point of the command line, in plate millimetres.
-fn point(text: &str) -> Result<Vec3, String> {
+pub(crate) fn point(text: &str) -> Result<Vec3, String> {
     let numbers: Vec<Scalar> = text
         .split(',')
         .map(|part| {

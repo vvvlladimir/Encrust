@@ -5,7 +5,7 @@
 
 use core_csg::CsgError;
 use core_geometry::{Mesh, Plane, Scalar, Vec3, cuboid, cut, diagnose, signed_volume};
-use core_joint::{Halves, JointError, JointKind, Joints, Pegs, join};
+use core_joint::{Halves, JointError, JointKind, Joints, Pegs, cut_and_join, join};
 
 const PI: Scalar = std::f32::consts::PI;
 
@@ -147,7 +147,7 @@ fn dowels_leave_sockets_in_both_halves_and_print_beside_them() {
             "two sockets of pi r2 h",
         );
     }
-    let dowel = solid_volume(&joined.loose[0], "a dowel");
+    let dowel = solid_volume(&joined.loose[0].mesh, "a dowel");
     near(dowel, PI * 4.0 * 6.0, 0.1, "a dowel of pi r2 h");
 }
 
@@ -168,7 +168,7 @@ fn a_keyed_set_has_one_narrower_dowel() {
     let volumes: Vec<Scalar> = joined
         .loose
         .iter()
-        .map(|dowel| solid_volume(dowel, "a dowel"))
+        .map(|dowel| solid_volume(&dowel.mesh, "a dowel"))
         .collect();
     near(
         volumes[0] / volumes[1],
@@ -325,4 +325,57 @@ fn a_half_that_is_not_a_solid_cannot_be_joined() {
         matches!(error, JointError::Boolean(CsgError::NotSolid(_))),
         "got {error:?}"
     );
+}
+
+#[test]
+fn a_size_that_cannot_be_built_is_refused_by_name() {
+    let (mesh, plane) = block();
+    for (pegs, what) in [
+        (
+            Pegs {
+                diameter_mm: Scalar::NAN,
+                ..fixed_pegs()
+            },
+            "peg diameter",
+        ),
+        (
+            Pegs {
+                clearance_mm: -0.1,
+                ..fixed_pegs()
+            },
+            "peg clearance",
+        ),
+    ] {
+        let halves = Halves {
+            cut: cut(&mesh, plane),
+            plane,
+            printed: &mesh,
+            solid: None,
+        };
+        let error =
+            join(halves, &joints(JointKind::Pins, pegs)).expect_err("a size it cannot build");
+        assert!(
+            matches!(error, JointError::BadSize { what: named, .. } if named == what),
+            "got {error:?}"
+        );
+    }
+}
+
+#[test]
+fn a_plane_that_misses_the_model_cuts_nothing_and_one_through_it_joins_the_halves() {
+    let (mesh, plane) = block();
+    let away = Plane::at(Vec3::Z, 50.0).expect("+Z is a direction");
+    assert!(
+        cut_and_join(&mesh, None, away, None).is_none(),
+        "a plane over the block"
+    );
+    let cut = cut_and_join(
+        &mesh,
+        None,
+        plane,
+        Some(&joints(JointKind::Pins, fixed_pegs())),
+    )
+    .expect("the plane crosses the block");
+    assert!(cut.unjoined.is_none(), "a block takes pins");
+    assert!(cut.joined.placed > 0);
 }

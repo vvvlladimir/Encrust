@@ -1,4 +1,4 @@
-use core_geometry::{Mesh, Scalar, Vec3, segments_for};
+use core_geometry::{Mesh, Scalar, Vec2, Vec3, revolve, segments_for};
 
 /// Furthest a round side's flats stray from the true circle, mm: under what a panel's
 /// pixel resolves.
@@ -16,49 +16,19 @@ const VENT: Scalar = 0.85;
 ///
 /// `vented` cuts one side of every ring flat; the profile stays convex either way.
 fn revolved(base: Vec3, axis: Vec3, rings: &[(Scalar, Scalar)], vented: bool) -> Mesh {
-    let axis = axis.normalize_or_zero();
-    let side = axis.any_orthonormal_vector();
-    let up = axis.cross(side);
     let widest = rings.iter().map(|ring| ring.1).fold(0.0, Scalar::max);
     let sides = segments_for(widest, ROUND_MM).max(FEWEST_SIDES);
-    let profile: Vec<(Scalar, Scalar)> = (0..sides)
+    let outline: Vec<Vec2> = (0..sides)
         .map(|step| {
-            let angle = std::f32::consts::TAU * step as Scalar / sides as Scalar;
-            let (x, y) = (angle.cos(), angle.sin());
-            (if vented { x.min(VENT) } else { x }, y)
+            let around = Vec2::from_angle(std::f32::consts::TAU * step as Scalar / sides as Scalar);
+            if vented {
+                Vec2::new(around.x.min(VENT), around.y)
+            } else {
+                around
+            }
         })
         .collect();
-
-    let mut vertices = Vec::with_capacity(rings.len() * sides + 2);
-    for (along, radius) in rings {
-        let centre = base + axis * *along;
-        vertices.extend(
-            profile
-                .iter()
-                .map(|(x, y)| centre + (side * *x + up * *y) * *radius),
-        );
-    }
-    let (first, last) = (rings[0].0, rings[rings.len() - 1].0);
-    let (low, high) = (vertices.len() as u32, vertices.len() as u32 + 1);
-    vertices.extend([base + axis * first, base + axis * last]);
-
-    let count = sides as u32;
-    let top = (rings.len() as u32 - 1) * count;
-    let mut faces = Vec::with_capacity(2 * sides * rings.len());
-    for ring in 0..rings.len() as u32 - 1 {
-        let (this, next_ring) = (ring * count, (ring + 1) * count);
-        for step in 0..count {
-            let next = (step + 1) % count;
-            faces.push([this + step, this + next, next_ring + next]);
-            faces.push([this + step, next_ring + next, next_ring + step]);
-        }
-    }
-    for step in 0..count {
-        let next = (step + 1) % count;
-        faces.push([low, next, step]);
-        faces.push([high, top + step, top + next]);
-    }
-    Mesh::new(vertices, faces)
+    revolve(base, axis, rings, &outline)
 }
 
 /// The chamfer on a peg's ends, mm, which leads it in and clears the flare of a

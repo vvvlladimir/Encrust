@@ -3,8 +3,7 @@ use core_volume::Boolean;
 use crate::i18n::tr;
 use crate::panels::Window;
 use crate::ui::{
-    Segment, Segmented, describe, hint, icon, primary_button, progress_bar, section, stats, theme,
-    tone,
+    Segment, Segmented, busy, describe, hint, icon, primary_button, section, stats, theme, tone,
 };
 
 /// What the picked models are to become, and which of them they are.
@@ -59,8 +58,9 @@ fn role(op: Boolean, index: usize) -> String {
 pub fn action(ui: &mut egui::Ui, window: &mut Window) {
     let tool = &mut window.tools.boolean;
     if tool.is_busy() {
-        tone(ui, &tr!("boolean-combining"), theme::colors().text_mid);
-        progress_bar(ui, None);
+        if busy(ui, &tr!("boolean-combining"), true) {
+            tool.cancel(&mut window.machine.status);
+        }
         return;
     }
     let blocked = tool.blocker(&window.doc.scene);

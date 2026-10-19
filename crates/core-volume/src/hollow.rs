@@ -374,18 +374,10 @@ fn field_to_budget(
     }
 
     let asked_mm = settings.voxel_mm(surface.surface_area());
-    let mut voxel_mm = asked_mm;
-    for _ in 0..COARSENINGS {
-        match offset_field(surface, bvh, settings, voxel_mm, cancel) {
-            // The lattice the field priced is the one that fits, taken a twentieth
-            // coarser still: the second run has the blockers to pay for as well, and a
-            // run refused twice over is worse than one voxel blunter.
-            Err(VolumeError::TooFine { fits_at_mm, .. }) => voxel_mm = fits_at_mm * 1.05,
-            other => return other.map(|field| (field, voxel_mm, voxel_mm > asked_mm)),
-        }
-    }
-    offset_field(surface, bvh, settings, voxel_mm, cancel)
-        .map(|field| (field, voxel_mm, voxel_mm > asked_mm))
+    coarsening(asked_mm, |voxel_mm| {
+        offset_field(surface, bvh, settings, voxel_mm, cancel)
+    })
+    .map(|(field, voxel_mm)| (field, voxel_mm, voxel_mm > asked_mm))
 }
 
 /// How many times a lattice may be coarsened before the run is given up on.
@@ -393,7 +385,26 @@ fn field_to_budget(
 /// Each attempt prices the whole field before filling any of it, so a coarsening costs the
 /// walk over the faces and nothing else; three is far more than the one step the estimate
 /// normally needs.
-pub(crate) const COARSENINGS: usize = 3;
+const COARSENINGS: usize = 3;
+
+/// What `build` makes on a lattice of `voxel_mm`, or where the memory budget refuses that,
+/// on the one the field priced as fitting, and the lattice it was made on.
+///
+/// The priced lattice is taken a twentieth coarser still: a second run may have more to pay
+/// for, as a hollow's blockers, and a run refused twice over is worse than one voxel blunter.
+pub(crate) fn coarsening<T>(
+    voxel_mm: Scalar,
+    mut build: impl FnMut(Scalar) -> Result<T, VolumeError>,
+) -> Result<(T, Scalar), VolumeError> {
+    let mut voxel_mm = voxel_mm;
+    for _ in 0..COARSENINGS {
+        match build(voxel_mm) {
+            Err(VolumeError::TooFine { fits_at_mm, .. }) => voxel_mm = fits_at_mm * 1.05,
+            other => return other.map(|built| (built, voxel_mm)),
+        }
+    }
+    build(voxel_mm).map(|built| (built, voxel_mm))
+}
 
 /// The field of the surface a wall off `surface`, on a lattice of `voxel_mm`.
 fn offset_field(

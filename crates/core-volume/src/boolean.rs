@@ -8,7 +8,7 @@ use crate::cancel::Cancel;
 use crate::csg;
 use crate::error::VolumeError;
 use crate::extract::extract;
-use crate::hollow::{COARSENINGS, lattice_mm};
+use crate::hollow::{coarsening, lattice_mm};
 use crate::sdf::Sdf;
 use crate::sign::SignMode;
 use local::Whole;
@@ -47,12 +47,7 @@ pub struct Combined {
 /// a shell crossing itself — the models are sampled into fields and combined there, which
 /// rounds sharp edges to the lattice; see `docs/design/csg.md`.
 pub fn combine(models: &[Mesh], op: Boolean, cancel: Cancel<'_>) -> Result<Combined, VolumeError> {
-    if models.len() < 2 {
-        return Err(VolumeError::TooFewModels(models.len()));
-    }
-    if models.iter().any(|model| model.faces.is_empty()) {
-        return Err(VolumeError::EmptyMesh);
-    }
+    checked(models)?;
     let combined = match exact(models, op) {
         Ok(mesh) => Combined {
             mesh,
@@ -69,12 +64,7 @@ pub fn combine(models: &[Mesh], op: Boolean, cancel: Cancel<'_>) -> Result<Combi
 /// `models` combined by `op` exactly, or refused: never sampled into a field. What a caller
 /// that must keep every edge of the model as it was asks for.
 pub fn combine_exact(models: &[Mesh], op: Boolean) -> Result<Mesh, VolumeError> {
-    if models.len() < 2 {
-        return Err(VolumeError::TooFewModels(models.len()));
-    }
-    if models.iter().any(|model| model.faces.is_empty()) {
-        return Err(VolumeError::EmptyMesh);
-    }
+    checked(models)?;
     let mesh = exact(models, op)?;
     if mesh.faces.is_empty() {
         return Err(VolumeError::NothingLeft);
@@ -91,12 +81,7 @@ pub fn combine_exact_toward(
     op: Boolean,
     toward: Vec3,
 ) -> Result<Mesh, VolumeError> {
-    if models.len() < 2 {
-        return Err(VolumeError::TooFewModels(models.len()));
-    }
-    if models.iter().any(|model| model.faces.is_empty()) {
-        return Err(VolumeError::EmptyMesh);
-    }
+    checked(models)?;
     if op == Boolean::Intersection {
         return combine_exact(models, op);
     }
@@ -105,6 +90,17 @@ pub fn combine_exact_toward(
         // Every reason it was not done near the others is one the whole model is tried for.
         Ok(_) | Err(Whole::NotLocal | Whole::Seam | Whole::Engine) => combine_exact(models, op),
     }
+}
+
+/// Refuses fewer than two models to combine, or one with no faces.
+fn checked(models: &[Mesh]) -> Result<(), VolumeError> {
+    if models.len() < 2 {
+        return Err(VolumeError::TooFewModels(models.len()));
+    }
+    if models.iter().any(|model| model.faces.is_empty()) {
+        return Err(VolumeError::EmptyMesh);
+    }
+    Ok(())
 }
 
 fn exact(models: &[Mesh], op: Boolean) -> Result<Mesh, CsgError> {
@@ -189,14 +185,9 @@ fn folded(
 fn sampled(models: &[Mesh], op: Boolean, cancel: Cancel<'_>) -> Result<Combined, VolumeError> {
     let area: Scalar = models.iter().map(Mesh::surface_area).sum();
     // No wall to resolve: the lattice is what precision and the models' size allow.
-    let mut voxel_mm = lattice_mm(Scalar::MAX, FIELD_PRECISION, area);
-    for _ in 0..COARSENINGS {
-        match fields(models, voxel_mm, cancel) {
-            Err(VolumeError::TooFine { fits_at_mm, .. }) => voxel_mm = fits_at_mm * 1.05,
-            other => return finished(other?, op, voxel_mm, cancel),
-        }
-    }
-    finished(fields(models, voxel_mm, cancel)?, op, voxel_mm, cancel)
+    let asked_mm = lattice_mm(Scalar::MAX, FIELD_PRECISION, area);
+    let (built, voxel_mm) = coarsening(asked_mm, |voxel_mm| fields(models, voxel_mm, cancel))?;
+    finished(built, op, voxel_mm, cancel)
 }
 
 fn fields(models: &[Mesh], voxel_mm: Scalar, cancel: Cancel<'_>) -> Result<Vec<Sdf>, VolumeError> {

@@ -5,7 +5,10 @@ use std::sync::mpsc::{self, Receiver};
 
 use anyhow::Result;
 use core_geometry::{Mesh, PlacedHit, Scalar, transform_mesh};
-use core_text::{Font, Frame, Label, LabelSettings, Shape, TextError, label, outline};
+use core_text::{
+    Font, Frame, LABEL_DEPTH_MM, LETTER_HEIGHT_MM, Label, LabelSettings, Shape, TextError, label,
+    outline,
+};
 use core_volume::Boolean;
 use serde::{Deserialize, Serialize};
 
@@ -152,8 +155,8 @@ impl Default for TextState {
         Self {
             text: "Encrust".to_owned(),
             family: BUNDLED_FAMILY.to_owned(),
-            height_mm: 6.0,
-            depth_mm: 0.8,
+            height_mm: LETTER_HEIGHT_MM,
+            depth_mm: LABEL_DEPTH_MM,
             raised: true,
             follow_surface: false,
             angle_deg: 0.0,
@@ -267,11 +270,7 @@ impl TextTool {
             self.families.ask();
         }
         if let Some(landed) = crate::boolean::land(&mut self.job, scene, |done| {
-            tr!(
-                "text-done",
-                name = done.name.to_owned(),
-                mending = done.mending.clone()
-            )
+            tr!("text-done", name = done.name.to_owned())
         }) {
             *status = landed;
         }
@@ -280,6 +279,13 @@ impl TextTool {
 
     pub fn is_busy(&self) -> bool {
         self.job.is_some()
+    }
+
+    /// Gives up on the stamp going, which leaves the model as it is.
+    pub fn cancel(&mut self, status: &mut Status) {
+        if self.job.take().is_some() {
+            *status = Status::Info(tr!("text-cancelled"));
+        }
     }
 }
 

@@ -37,7 +37,9 @@ pub use pipeline::{SliceRequest, worker_threads};
 pub use place::{SupportJob, SupportOutcome, SupportRequest, tasks_of};
 pub use plate::models_of;
 pub use preview::{PreviewJob, PreviewOutcome};
-pub use relief::{Pressed, ReliefJob, ReliefOutcome, ReliefRequest, ReliefSource, relief_tasks};
+pub use relief::{
+    Pressed, ReliefJob, ReliefOutcome, ReliefRequest, ReliefSource, relief_tasks, spawn_relief,
+};
 pub use repair::{RepairJob, RepairOutcome, RepairRequest, Repaired, mend};
 pub use send::{Action, SendJob, SendOutcome, SendRequest};
 pub use split::{SplitJob, SplitOutcome, SplitRequest, spawn_split};
@@ -58,21 +60,31 @@ pub fn spawn(work: impl FnOnce() + Send + 'static) {
 }
 
 /// A run on a thread of its own that ends with one value, polled for it once a frame.
+///
+/// Dropping it asks the run to stop: `work` is handed the flag, for the steps that can be
+/// given up on part way, and whatever it ends with is thrown away.
 #[derive(Debug)]
 pub struct Worker<T> {
     outcome: Receiver<T>,
     /// What the run is taken to have ended with when its thread stops without a word.
     lost: fn() -> T,
+    stop: Arc<AtomicBool>,
 }
 
 impl<T: Send + 'static> Worker<T> {
     /// Starts `work`. The thread is detached: it ends on its own.
-    pub fn spawn(work: impl FnOnce() -> T + Send + 'static, lost: fn() -> T) -> Self {
+    pub fn spawn(work: impl FnOnce(&AtomicBool) -> T + Send + 'static, lost: fn() -> T) -> Self {
         let (sender, outcome) = mpsc::channel();
+        let stop = Arc::new(AtomicBool::new(false));
+        let asked = Arc::clone(&stop);
         spawn(move || {
-            let _ = sender.send(work());
+            let _ = sender.send(work(&asked));
         });
-        Self { outcome, lost }
+        Self {
+            outcome,
+            lost,
+            stop,
+        }
     }
 
     /// Returns the outcome on the frame the run ends, and `None` while it is going.
@@ -82,6 +94,12 @@ impl<T: Send + 'static> Worker<T> {
             Err(TryRecvError::Empty) => None,
             Err(TryRecvError::Disconnected) => Some((self.lost)()),
         }
+    }
+}
+
+impl<T> Drop for Worker<T> {
+    fn drop(&mut self) {
+        self.stop.store(true, Ordering::Relaxed);
     }
 }
 

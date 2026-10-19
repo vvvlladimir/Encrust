@@ -1,7 +1,7 @@
 //! Filling a flat ring with triangles, which both a cut's cap and a patch over a hole
 //! need; see `docs/decisions/0089`.
 
-use crate::{FastMap, FastSet, Vec2};
+use crate::{FastMap, FastSet, Scalar, Vec2, ring_area};
 
 /// Fills one ring and the rings inside it, by ear clipping: a cut's cap, a patch over a hole,
 /// a letter of a label. The corners are indices into `flat`, and the triangles come back
@@ -41,7 +41,22 @@ pub fn triangulate(outer: &[u32], holes: &[&Vec<u32>], flat: &[Vec2]) -> Vec<[u3
     cover_repeats(&mut triangles, patches);
     cover_dropped(&mut triangles, &kept, flat);
     flip_flat(&mut triangles, flat);
+    wind_as(&mut triangles, &kept[0], flat);
     triangles
+}
+
+/// Turns `triangles` to wind as `outer` does, which ear clipping does not promise.
+fn wind_as(triangles: &mut [[u32; 3]], outer: &[u32], flat: &[Vec2]) {
+    let corner = |index: u32| flat[index as usize];
+    let filled: Scalar = triangles
+        .iter()
+        .map(|[a, b, c]| (corner(*b) - corner(*a)).perp_dot(corner(*c) - corner(*a)))
+        .sum();
+    if filled * ring_area(outer.iter().map(|index| corner(*index))) < 0.0 {
+        for triangle in triangles {
+            triangle.swap(1, 2);
+        }
+    }
 }
 
 /// Adds the triangle each repeated corner needs, wound against the edge the fill left
@@ -377,5 +392,25 @@ mod tests {
         let triangles = triangulate(&ring, &[], &flat);
 
         covers(&[&ring], &triangles);
+    }
+
+    #[test]
+    fn the_fill_winds_as_the_outer_ring_whichever_way_that_runs() {
+        let flat = [
+            Vec2::new(0.0, 0.0),
+            Vec2::new(10.0, 0.0),
+            Vec2::new(10.0, 10.0),
+            Vec2::new(0.0, 10.0),
+        ];
+        for (ring, anticlockwise) in [([0, 1, 2, 3], true), ([3, 2, 1, 0], false)] {
+            for [a, b, c] in triangulate(&ring, &[], &flat) {
+                let (a, b, c) = (flat[a as usize], flat[b as usize], flat[c as usize]);
+                assert_eq!(
+                    (b - a).perp_dot(c - a) > 0.0,
+                    anticlockwise,
+                    "every triangle turns the way the ring does"
+                );
+            }
+        }
     }
 }

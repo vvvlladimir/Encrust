@@ -240,9 +240,8 @@ Grouped by what the decision governs; the number is still the order it was taken
 | [0302](0302-a-lattice-is-cut-exactly-from-the-cavity.md) | Cut the lattice exactly from the cavity's mesh, its cells joined by crossing holes | Accepted |
 | [0303](0303-exact-booleans-live-in-core-csg-over-boolmesh.md) | Do exact mesh booleans in `core-csg`, over `boolmesh` | Accepted |
 | [0304](0304-models-are-combined-exactly-and-sampled-where-they-are-torn.md) | Combine models exactly, and through the field where one is not a solid | Accepted |
-| [0305](0305-a-label-is-outlined-by-ttf-parser-in-core-text.md) | Outline a label with `ttf-parser` in `core-text`, and offer the machine's fonts | Accepted; that the letters are flat is superseded by 0311 |
-| [0311](0311-a-label-may-follow-the-surface-point-by-point.md) | Let a label follow the surface, its letters filled fine and laid point by point | Accepted |
-| [0312](0312-a-label-is-joined-through-the-side-of-the-model-it-stands-on.md) | Join a label through the side of the model it stands on | Accepted |
+| [0305](0305-a-label-is-outlined-by-ttf-parser-in-core-text.md) | Outline a label with `ttf-parser` in `core-text`, offer the machine's fonts, and let it follow the surface | Accepted |
+| [0311](0311-a-label-is-joined-through-the-side-of-the-model-it-stands-on.md) | Join a label through the side of the model it stands on | Accepted |
 | [0204](0204-a-field-build-is-given-up-on-between-tiles.md) | A field build is given up on between tiles | Accepted |
 
 ### The plate
@@ -399,6 +398,7 @@ Grouped by what the decision governs; the number is still the order it was taken
 | [0229](0229-tab-walks-the-controls-and-every-control-has-a-name.md) | Tab walks the controls, and every control has a name | Accepted |
 | [0230](0230-find-is-a-palette-and-the-columns-stay-out.md) | Find is a palette, the plate column stays out, and a block explains itself on its question mark | Accepted |
 | [0231](0231-select-is-position-and-check-supports-its-islands.md) | Fold Select into Position, and let Check support the islands it finds | Accepted |
+| [0312](0312-the-command-line-shapes-models-before-it-slices-them.md) | Combine, label, cut and split models on the command line before slicing them | Accepted |
 | [0232](0232-the-start-page-offers-resin-test-prints-of-its-own.md) | The start page offers resin test prints of its own, and leaves the machine to the top bar | Accepted; the row of tests under the recent files is superseded by 0234 |
 | [0233](0233-settings-is-a-window-and-a-profile-travels-as-its-file.md) | Make Settings a window like Machine and resin, and carry a profile out as its file | Accepted; where the import is done is superseded by 0235 |
 | [0234](0234-recent-files-are-pictured-and-share-a-shelf-with-test-prints.md) | Show the recent files as pictures, and switch between them and the test prints | Accepted |

@@ -1,3 +1,5 @@
+use std::sync::atomic::{AtomicBool, Ordering};
+
 use core_geometry::{Mesh, Vec3};
 use core_volume::{Cancel, PartSettings, PartedOff, Parts, VolumeError, part_off, parts};
 
@@ -27,16 +29,17 @@ pub type SplitJob = Worker<SplitOutcome>;
 /// Starts the split. The thread is detached: it ends on its own.
 pub fn spawn_split(request: SplitRequest) -> SplitJob {
     Worker::spawn(
-        move || pooled(|| run(request), SplitOutcome::Failed),
+        move |stop| pooled(|| run(request, stop), SplitOutcome::Failed),
         || SplitOutcome::Failed(tr!("job-thread-stopped-split")),
     )
 }
 
-fn run(request: SplitRequest) -> SplitOutcome {
+fn run(request: SplitRequest, stop: &AtomicBool) -> SplitOutcome {
+    let asked = || stop.load(Ordering::Relaxed);
     let Some(at) = request.at else {
         return SplitOutcome::Split(parts(&request.placed, &request.settings));
     };
-    match part_off(&request.placed, at, Cancel::never()) {
+    match part_off(&request.placed, at, Cancel::when(&asked)) {
         Ok(parted) => SplitOutcome::PartedOff(parted),
         Err(VolumeError::NoNeck | VolumeError::NotOnModel) => {
             SplitOutcome::Failed(tr!("cut-no-neck"))

@@ -8,8 +8,8 @@ use crate::panels::Window;
 use crate::scene::{Axis, SceneObject};
 use crate::status::Status;
 use crate::ui::{
-    Segment, Segmented, count_row, describe, hint, icon, nested, number_row, primary_button,
-    progress_bar, secondary_button, section, switch, theme, tone,
+    Segment, Segmented, busy, count_row, describe, hint, icon, nested, number_row, primary_button,
+    secondary_button, section, switch,
 };
 
 /// The most fixings one piece of a cut face takes.
@@ -269,8 +269,9 @@ fn key(ui: &mut egui::Ui, key: &mut Key) {
 /// already made of.
 pub fn action(ui: &mut egui::Ui, window: &mut Window) {
     if window.tools.cut.is_busy() {
-        tone(ui, &tr!("cut-cutting"), theme::colors().text_mid);
-        progress_bar(ui, None);
+        if busy(ui, &tr!("cut-cutting"), true) {
+            window.tools.cut.cancel(&mut window.machine.status);
+        }
         return;
     }
     let picked = window.doc.scene.selected();

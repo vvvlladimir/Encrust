@@ -6,12 +6,11 @@ use crate::outline::Shape;
 /// halves every edge still too long, so twenty take a metre down to a micrometre.
 const MOST_ROUNDS: usize = 20;
 
-/// A shape filled flat: its points, the rings of them that bound it, outer first, and the
-/// triangles of the fill, facing up. The rings come first in the points.
+/// A shape filled flat: its points, the outline's first, and the triangles of the fill,
+/// facing up.
 #[derive(Debug, Clone, PartialEq)]
 pub(crate) struct Sheet {
     pub flat: Vec<Vec2>,
-    pub rings: Vec<Vec<u32>>,
     pub cap: Vec<[u32; 3]>,
 }
 
@@ -26,21 +25,9 @@ impl Sheet {
             rings.push((start..flat.len() as u32).collect());
         }
         let holes: Vec<&Vec<u32>> = rings[1..].iter().collect();
-        let mut cap = triangulate(&rings[0], &holes, &flat);
-        // The outer ring runs anticlockwise, so the cap should face up; earcut does not promise it.
-        let facing: Scalar = cap
-            .iter()
-            .map(|[a, b, c]| {
-                let (a, b, c) = (flat[*a as usize], flat[*b as usize], flat[*c as usize]);
-                (b - a).perp_dot(c - a)
-            })
-            .sum();
-        if facing < 0.0 {
-            for triangle in &mut cap {
-                triangle.swap(1, 2);
-            }
-        }
-        Self { flat, rings, cap }
+        // The outer ring runs anticlockwise, so the fill, wound as it is, faces up.
+        let cap = triangulate(&rings[0], &holes, &flat);
+        Self { flat, cap }
     }
 
     /// `shape` filled with triangles no edge of which is longer than `spacing_mm`, so that
@@ -54,8 +41,7 @@ impl Sheet {
     /// Splits every edge of the fill longer than `spacing_mm` at its middle, round after
     /// round, each triangle into the two, three or four its split edges leave.
     ///
-    /// An edge is split once for both triangles on it and for the wall along the rings, so
-    /// the letter stays closed.
+    /// An edge is split once for both triangles on it, so the letter stays closed.
     fn refine(&mut self, spacing_mm: Scalar) {
         let limit = spacing_mm * spacing_mm;
         let mut middles: FastMap<(u32, u32), u32> = FastMap::default();
@@ -82,25 +68,7 @@ impl Sheet {
             }
             self.cap = finer;
         }
-        for ring in &mut self.rings {
-            *ring = walked(ring, &middles);
-        }
     }
-}
-
-/// `ring` with the middles its edges were split at put back in, in order along it.
-fn walked(ring: &[u32], middles: &FastMap<(u32, u32), u32>) -> Vec<u32> {
-    let mut finer = Vec::with_capacity(ring.len());
-    for (index, from) in ring.iter().enumerate() {
-        let mut stack = vec![(*from, ring[(index + 1) % ring.len()])];
-        while let Some((a, b)) = stack.pop() {
-            match middles.get(&(a.min(b), a.max(b))) {
-                Some(middle) => stack.extend([(*middle, b), (a, *middle)]),
-                None => finer.push(a),
-            }
-        }
-    }
-    finer
 }
 
 fn edges([a, b, c]: [u32; 3]) -> [(u32, u32); 3] {

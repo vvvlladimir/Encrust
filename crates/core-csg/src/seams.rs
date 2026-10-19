@@ -2,7 +2,7 @@ use std::collections::HashMap;
 use std::ops::Range;
 
 use core_geometry::glam::DVec3;
-use core_geometry::{Mesh, point_key};
+use core_geometry::{Components, Mesh, point_key};
 
 use crate::error::CsgError;
 
@@ -177,24 +177,28 @@ fn copies(faces: &[[usize; 3]], pairs: &[(usize, usize, [usize; 2])]) -> (Vec<us
     let corner_of = |face: usize, vertex: usize| {
         face * 3 + faces[face].iter().position(|&at| at == vertex).unwrap_or(0)
     };
-    let mut corners = Corners::new(faces.len() * 3);
+    // The corners of faces that share a vertex across a paired edge, joined into the fans
+    // each copy of the vertex is to carry.
+    let mut corners = Components::new(faces.len() * 3);
     for &(face, other, edge) in pairs {
         for vertex in edge {
-            corners.union(corner_of(face, vertex), corner_of(other, vertex));
+            corners.union(
+                corner_of(face, vertex) as u32,
+                corner_of(other, vertex) as u32,
+            );
         }
     }
-
-    let mut copy_of = vec![usize::MAX; faces.len() * 3];
-    let (mut origin, mut indices) = (Vec::new(), Vec::with_capacity(faces.len() * 3));
-    for corner in 0..faces.len() * 3 {
-        let root = corners.find(corner);
-        if copy_of[root] == usize::MAX {
-            copy_of[root] = origin.len();
-            origin.push(faces[corner / 3][corner % 3]);
+    let (labels, count) = corners.labels();
+    let mut origin = vec![usize::MAX; count];
+    for (corner, &label) in labels.iter().enumerate() {
+        if origin[label as usize] == usize::MAX {
+            origin[label as usize] = faces[corner / 3][corner % 3];
         }
-        indices.push(copy_of[root]);
     }
-    (origin, indices)
+    (
+        origin,
+        labels.into_iter().map(|label| label as usize).collect(),
+    )
 }
 
 /// The edges, by the vertices they were split from, still not used by exactly two faces
@@ -249,31 +253,4 @@ fn drawn_apart(
             (points[vertex] + drift.normalize_or_zero() * NUDGE_MM).to_array()
         })
         .collect()
-}
-
-/// The corners of faces that share a vertex across a paired edge, joined into the fans each
-/// copy of the vertex is to carry.
-struct Corners {
-    parent: Vec<usize>,
-}
-
-impl Corners {
-    fn new(count: usize) -> Self {
-        Self {
-            parent: (0..count).collect(),
-        }
-    }
-
-    fn find(&mut self, mut corner: usize) -> usize {
-        while self.parent[corner] != corner {
-            self.parent[corner] = self.parent[self.parent[corner]];
-            corner = self.parent[corner];
-        }
-        corner
-    }
-
-    fn union(&mut self, a: usize, b: usize) {
-        let (a, b) = (self.find(a), self.find(b));
-        self.parent[a.max(b)] = a.min(b);
-    }
 }

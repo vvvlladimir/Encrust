@@ -1,5 +1,5 @@
 use crate::triangulate::triangulate;
-use crate::{FastMap, Mesh, Scalar, Vec2, Vec3};
+use crate::{FastMap, Mesh, Scalar, Vec2, Vec3, ring_area, ring_contains};
 
 /// A vertex within this distance of the plane is on it, in millimetres. Closer than a
 /// tenth of a layer, and splitting the edge would give a triangle no rasteriser can see.
@@ -28,10 +28,15 @@ impl Plane {
     }
 
     /// Two axes across the plane, with `u × v` pointing along the normal.
-    fn basis(&self) -> (Vec3, Vec3) {
-        let u = self.normal.any_orthonormal_vector();
-        (u, self.normal.cross(u))
+    pub fn basis(&self) -> (Vec3, Vec3) {
+        axes_across(self.normal)
     }
+}
+
+/// Two unit axes square to the unit `normal` and to each other, `u × v` along `normal`.
+pub fn axes_across(normal: Vec3) -> (Vec3, Vec3) {
+    let u = normal.any_orthonormal_vector();
+    (u, normal.cross(u))
 }
 
 /// A mesh cut in two, each half closed over the cut.
@@ -214,7 +219,7 @@ impl Section {
         let mut rings: Vec<(Vec<u32>, Scalar)> = loops
             .into_iter()
             .map(|ring| {
-                let area = signed_area(&ring, &flat);
+                let area = ring_area(ring.iter().map(|point| flat[*point as usize]));
                 (ring, area)
             })
             .collect();
@@ -236,9 +241,10 @@ impl Section {
         let mut inner: Vec<Vec<&Vec<u32>>> = vec![Vec::new(); outers.len()];
         for (hole, _) in &holes {
             let around = hole.first().and_then(|point| {
-                (0..outers.len())
-                    .rev()
-                    .find(|at| contains(&outers[*at].0, &flat, flat[*point as usize]))
+                (0..outers.len()).rev().find(|at| {
+                    let ring = outers[*at].0.iter().map(|corner| flat[*corner as usize]);
+                    ring_contains(ring, flat[*point as usize])
+                })
             });
             if let Some(at) = around {
                 inner[at].push(hole);
@@ -285,35 +291,6 @@ impl Section {
         }
         (rings, open)
     }
-}
-
-/// Twice the signed area of a ring, positive when it runs counter-clockwise in the
-/// plane's own basis.
-fn signed_area(ring: &[u32], flat: &[Vec2]) -> Scalar {
-    ring.iter()
-        .enumerate()
-        .map(|(index, point)| {
-            let a = flat[*point as usize];
-            let b = flat[ring[(index + 1) % ring.len()] as usize];
-            a.perp_dot(b)
-        })
-        .sum()
-}
-
-/// Whether a ring encloses a point, by the crossing number.
-fn contains(ring: &[u32], flat: &[Vec2], point: Vec2) -> bool {
-    let mut inside = false;
-    for index in 0..ring.len() {
-        let a = flat[ring[index] as usize];
-        let b = flat[ring[(index + 1) % ring.len()] as usize];
-        if (a.y > point.y) != (b.y > point.y) {
-            let crossing = (b.x - a.x) * (point.y - a.y) / (b.y - a.y) + a.x;
-            if point.x < crossing {
-                inside = !inside;
-            }
-        }
-    }
-    inside
 }
 
 /// The part of a triangle on one side of the plane, as the corners of a polygon.
@@ -492,7 +469,7 @@ impl Half {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{diagnose, signed_volume};
+    use crate::{ball, diagnose, signed_volume};
 
     /// Axis-aligned box, twelve triangles, spanning `min`..`max`.
     fn cuboid(min: Vec3, max: Vec3) -> Mesh {
@@ -645,48 +622,11 @@ mod tests {
         halves_hold(&cut(&step, against_x), 100.0, 200.0);
     }
 
-    /// A ball of `radius` about the origin, `rings` by `segments` faces, wound outward.
-    fn ball(radius: Scalar, rings: usize, segments: usize) -> Mesh {
-        let mut vertices = vec![Vec3::new(0.0, 0.0, radius)];
-        for ring in 1..rings {
-            let theta = std::f32::consts::PI * ring as Scalar / rings as Scalar;
-            for segment in 0..segments {
-                let phi = std::f32::consts::TAU * segment as Scalar / segments as Scalar;
-                let (sin, cos) = (theta.sin(), theta.cos());
-                vertices.push(Vec3::new(sin * phi.cos(), sin * phi.sin(), cos) * radius);
-            }
-        }
-        let south = vertices.len() as u32;
-        vertices.push(Vec3::new(0.0, 0.0, -radius));
-        let at =
-            |ring: usize, segment: usize| (1 + (ring - 1) * segments + segment % segments) as u32;
-        let mut faces = Vec::new();
-        for segment in 0..segments {
-            faces.push([0, at(1, segment), at(1, segment + 1)]);
-            faces.push([at(rings - 1, segment), south, at(rings - 1, segment + 1)]);
-        }
-        for ring in 1..rings - 1 {
-            for segment in 0..segments {
-                faces.push([
-                    at(ring, segment),
-                    at(ring + 1, segment),
-                    at(ring + 1, segment + 1),
-                ]);
-                faces.push([
-                    at(ring, segment),
-                    at(ring + 1, segment + 1),
-                    at(ring, segment + 1),
-                ]);
-            }
-        }
-        Mesh::new(vertices, faces)
-    }
-
     #[test]
     fn a_dense_ball_cut_aslant_near_its_pole_closes_both_halves() {
         // Near a pole the section crosses rings of tiny faces, and its fill has slivers
         // too thin for the sign of their own area to say which way they face.
-        let ball = ball(40.0, 400, 400);
+        let ball = ball(Vec3::ZERO, 40.0, 400, 400);
         for normal in [
             Vec3::new(0.3, 0.5, 1.0),
             Vec3::new(-0.7, 0.2, 0.4),

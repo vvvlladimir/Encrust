@@ -27,9 +27,11 @@ one reads, and a plate with nothing on it has none.
 
 ## `project.json`
 
-`version` is read on its own before anything else. This build writes version 5. Version 4
-is read too: it carried its printer and resin whole, and only their ids are kept. Any other
-is refused whole: version 3 and below hold no built geometry or diagnostics.
+`version` is read on its own before anything else. This build writes version 6. Version 5
+is read too: its lattice had one `size_mm` for cells and walls, read as the `cell_mm`, and the
+fields it lacks take their defaults. Version 4 is read as well: it carried its printer and
+resin whole, and only their ids are kept. Any other is refused whole: version 3 and below
+hold no built geometry or diagnostics.
 
 | Key | Type |
 |---|---|
@@ -37,6 +39,7 @@ is refused whole: version 3 and below hold no built geometry or diagnostics.
 | `slicing` | layer height, `AdaptiveSettings`, `ExposureRange` bands, anti-aliasing, `OutputFormat`; taken up only with the printer |
 | `supports` | the group table, the active group, `ProjectSettings` for a fill, the brush |
 | `hollow` | what the Hollow tool is set to, not what it built |
+| `hollow.infill` | the lattice's `pattern`, `cell_mm`, `wall_mm`, a scaffold's `density`, and the crossing holes' `hole_mm`, `first_hole_mm` and `hole_spacing_mm` (ADR 0302); `null` for an empty cavity |
 | `drain`, `cut`, `array` | what the next hole, the cut plane and the copy grid are set to |
 | `cut.parts` | what Split into its parts goes by: the smallest part (ADR 0307); absent in older files and read as the defaults, and the narrow-join fields of files written before it are ignored |
 | `cut.joints` | how a cut's halves are joined and what each kind is set to (ADR 0306); absent in older files and read as a plain cut |

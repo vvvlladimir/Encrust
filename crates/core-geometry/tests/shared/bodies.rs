@@ -4,7 +4,7 @@
 //! consumer uses a subset and unused ones are expected.
 #![allow(dead_code)]
 
-use std::f32::consts::{PI, TAU};
+use std::f32::consts::TAU;
 
 use core_geometry::{Mesh, Scalar, Vec3};
 
@@ -109,50 +109,7 @@ pub fn octahedron(radius: Scalar) -> Mesh {
 /// Closed sphere approximation with `rings` latitude bands and `segments` meridians.
 /// Its volume approaches `4/3 * PI * radius^3` from below as the counts grow.
 pub fn uv_sphere(radius: Scalar, rings: usize, segments: usize) -> Mesh {
-    assert!(
-        rings >= 2 && segments >= 3,
-        "a sphere needs at least 2 rings and 3 segments"
-    );
-
-    let mut vertices = vec![Vec3::new(0.0, 0.0, radius)];
-    for ring in 1..rings {
-        let theta = PI * ring as Scalar / rings as Scalar;
-        let (sin_theta, cos_theta) = theta.sin_cos();
-        for segment in 0..segments {
-            let phi = TAU * segment as Scalar / segments as Scalar;
-            let (sin_phi, cos_phi) = phi.sin_cos();
-            vertices.push(Vec3::new(
-                radius * sin_theta * cos_phi,
-                radius * sin_theta * sin_phi,
-                radius * cos_theta,
-            ));
-        }
-    }
-    let south = vertices.len() as u32;
-    vertices.push(Vec3::new(0.0, 0.0, -radius));
-
-    let ring_start = |ring: usize| 1 + (ring - 1) * segments;
-    let at = |ring: usize, segment: usize| (ring_start(ring) + segment % segments) as u32;
-
-    let mut faces = Vec::with_capacity(segments * (2 * rings - 2));
-    for segment in 0..segments {
-        faces.push([0, at(1, segment), at(1, segment + 1)]);
-    }
-    for ring in 1..rings - 1 {
-        for segment in 0..segments {
-            let upper = at(ring, segment);
-            let upper_next = at(ring, segment + 1);
-            let lower = at(ring + 1, segment);
-            let lower_next = at(ring + 1, segment + 1);
-            faces.push([upper, lower, lower_next]);
-            faces.push([upper, lower_next, upper_next]);
-        }
-    }
-    for segment in 0..segments {
-        faces.push([at(rings - 1, segment), south, at(rings - 1, segment + 1)]);
-    }
-
-    Mesh::new(vertices, faces)
+    core_geometry::ball(Vec3::ZERO, radius, rings, segments)
 }
 
 /// Mobius strip: a manifold surface with a boundary and no consistent orientation.

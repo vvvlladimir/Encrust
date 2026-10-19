@@ -95,8 +95,8 @@ mod tests {
 
     fn long_face() -> Section {
         let plane = Plane::at(Vec3::Z, 5.0).expect("+Z is a direction");
-        let half = cut(&cuboid(Vec3::ZERO, Vec3::new(40.0, 10.0, 10.0)), plane).below;
-        Section::of(&half, plane, 0.25).expect("the cut crosses the box")
+        let halves = cut(&cuboid(Vec3::ZERO, Vec3::new(40.0, 10.0, 10.0)), plane);
+        Section::of(&halves, plane, 0.25).expect("the cut crosses the box")
     }
 
     fn room() -> Room {

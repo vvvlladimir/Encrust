@@ -34,15 +34,17 @@ rule to union. Holes reach into the cells past their walls, so no face of a hole
 wall's.
 
 A shape whose box meets no tile of the cavity's field is left out, and the cavity is halved
-by the engine itself, intersection and difference with one box, until there are two pieces a
-thread; the pieces are carved in parallel and appended, meeting face to face on each cut.
+by the engine itself, intersection and difference with one box, four times over: sixteen
+pieces, two a thread on eight, on any machine so its mesh is the same on every one. The
+pieces are carved in parallel and appended, meeting face to face on each cut.
 
 `InfillSettings` states sizes, not a density, for the patterns with walls: `cell_mm`,
 `wall_mm`, and crossing holes `hole_mm` across — under a hexagon's side or a square's — the
 first row `first_hole_mm` over the cavity's floor and then every `hole_spacing_mm`, further
 apart than a hole. Scaffold keeps `cell_mm` and `density`, and stands its cubic lattice on
 a corner so every strut leans 35° off level; its density is inverted exactly from
-`3x² - 2x³`. A project saved with the old fields does not open.
+`3x² - 2x³`. The project format moves to version 6; a version 5 file still opens, its one
+`size_mm` read as the cell and the sizes it lacks as the defaults.
 
 ## Consequences
 

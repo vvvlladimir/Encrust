@@ -1,6 +1,6 @@
 use core_geometry::{Bvh, Mesh, Ray, Scalar, Vec2, Vec3};
 
-use crate::join::{Halves, Planned};
+use crate::join::{Dowel, Halves, Planned};
 use crate::section::{Frame, Section};
 use crate::settings::{JointKind, Magnets, Pegs};
 use crate::shapes;
@@ -134,16 +134,16 @@ impl Fixing {
 
 /// Pegs or magnets for every piece of the cut face, with the sockets they go into.
 pub(crate) fn peg(halves: &Halves<'_>, kind: JointKind, pegs: Pegs, magnets: Magnets) -> Planned {
-    let face = halves
+    let outside = halves
         .solid
-        .map(|solid| core_geometry::cut(solid, halves.plane).below);
-    let face = face.as_ref().unwrap_or(&halves.cut.below);
+        .map(|solid| core_geometry::cut(solid, halves.plane));
+    let face = outside.as_ref().unwrap_or(&halves.cut);
     let Some(section) = Section::of(face, halves.plane, Scalar::MAX) else {
         return Planned::default();
     };
     let printed = halves
         .solid
-        .and_then(|_| Section::of(&halves.cut.below, halves.plane, Scalar::MAX));
+        .and_then(|_| Section::of(&halves.cut, halves.plane, Scalar::MAX));
     let material = Probe::new(halves.solid.unwrap_or(halves.printed));
     let shell = halves.solid.map(|_| Probe::new(halves.printed));
     let context = Context {
@@ -308,9 +308,10 @@ fn built(
             work.sockets.append(&socket);
         }
         if kind == JointKind::Dowels {
-            pegged
-                .loose
-                .push(shapes::dowel(peg.radius_mm, peg.length_mm));
+            pegged.loose.push(Dowel {
+                mesh: shapes::dowel(peg.radius_mm, peg.length_mm),
+                radius_mm: peg.radius_mm,
+            });
         }
     }
     pegged

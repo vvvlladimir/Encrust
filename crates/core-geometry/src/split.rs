@@ -1,3 +1,4 @@
+use crate::topology::{Components, edge_groups, edge_uses};
 use crate::{FastMap, Mesh};
 
 /// Splits a mesh into the pieces that share no vertex, the biggest piece first.
@@ -7,23 +8,41 @@ use crate::{FastMap, Mesh};
 /// was not splits into whatever its indices say. A mesh that is all one piece comes back
 /// as itself.
 pub fn split(mesh: &Mesh) -> Vec<Mesh> {
-    if mesh.faces.is_empty() {
-        return Vec::new();
+    let mut vertices = Components::new(mesh.vertices.len());
+    for [a, b, c] in &mesh.faces {
+        vertices.union(*a, *b);
+        vertices.union(*a, *c);
     }
+    let roots: Vec<u32> = mesh
+        .faces
+        .iter()
+        .map(|face| vertices.find(face[0]))
+        .collect();
+    pieces(mesh, &roots)
+}
 
-    let mut parent: Vec<u32> = (0..mesh.vertices.len() as u32).collect();
-    for face in &mesh.faces {
-        let root = find(&mut parent, face[0]);
-        for corner in &face[1..] {
-            let other = find(&mut parent, *corner);
-            union(&mut parent, root, other);
+/// The pieces `mesh` is made of, two faces in one piece only through an edge exactly the
+/// two of them use. Two bodies meeting at a corner, or along an edge three or four faces
+/// use, come apart, where [`split`] would read them as one.
+pub fn split_at_edges(mesh: &Mesh) -> Vec<Mesh> {
+    let mut faces = Components::new(mesh.faces.len());
+    for group in edge_groups(&edge_uses(mesh)) {
+        if let [left, right] = group {
+            faces.union(left.face, right.face);
         }
     }
+    let roots: Vec<u32> = (0..mesh.faces.len() as u32)
+        .map(|face| faces.find(face))
+        .collect();
+    pieces(mesh, &roots)
+}
 
+/// The faces of `mesh` gathered by `roots`, one root a face, each piece holding only the
+/// vertices it uses, biggest first.
+fn pieces(mesh: &Mesh, roots: &[u32]) -> Vec<Mesh> {
     let mut pieces: FastMap<u32, Mesh> = FastMap::default();
     let mut moved: FastMap<(u32, u32), u32> = FastMap::default();
-    for face in &mesh.faces {
-        let root = find(&mut parent, face[0]);
+    for (face, &root) in mesh.faces.iter().zip(roots) {
         let piece = pieces.entry(root).or_default();
         let corners = face.map(|index| {
             *moved.entry((root, index)).or_insert_with(|| {
@@ -46,28 +65,6 @@ pub fn split(mesh: &Mesh) -> Vec<Mesh> {
         })
     });
     parts
-}
-
-/// Root of the set `index` is in, flattening the path it walked on the way.
-fn find(parent: &mut [u32], index: u32) -> u32 {
-    let mut root = index;
-    while parent[root as usize] != root {
-        root = parent[root as usize];
-    }
-    let mut walk = index;
-    while parent[walk as usize] != root {
-        let next = parent[walk as usize];
-        parent[walk as usize] = root;
-        walk = next;
-    }
-    root
-}
-
-fn union(parent: &mut [u32], left: u32, right: u32) {
-    let (left, right) = (find(parent, left), find(parent, right));
-    if left != right {
-        parent[right.max(left) as usize] = left.min(right);
-    }
 }
 
 #[cfg(test)]
@@ -170,6 +167,28 @@ mod tests {
             split(&welded.mesh).len(),
             1,
             "sharing a face's vertices makes them one"
+        );
+    }
+
+    #[test]
+    fn boxes_meeting_along_an_edge_are_one_piece_by_vertex_and_two_by_edge() {
+        let welded = weld(
+            &joined(&[
+                cuboid(Vec3::ZERO, Vec3::ONE),
+                cuboid(Vec3::new(1.0, 1.0, 0.0), Vec3::new(2.0, 2.0, 1.0)),
+            ]),
+            1e-6,
+        )
+        .mesh;
+        assert_eq!(
+            split(&welded).len(),
+            1,
+            "the shared edge's vertices join them"
+        );
+        assert_eq!(
+            split_at_edges(&welded).len(),
+            2,
+            "the edge four faces use joins nothing"
         );
     }
 

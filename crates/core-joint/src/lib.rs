@@ -16,5 +16,5 @@ mod shapes;
 mod spots;
 
 pub use error::JointError;
-pub use join::{Halves, Joined, join};
+pub use join::{CutJoined, Dowel, Halves, Joined, cut_and_join, join};
 pub use settings::{JointKind, Joints, Key, Magnets, Pegs};

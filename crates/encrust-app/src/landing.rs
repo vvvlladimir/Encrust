@@ -55,10 +55,7 @@ pub(crate) fn place_all(
         .sum()
 }
 
-/// What the stage notice adds about the pieces that had to be mended on their way down.
-pub(crate) fn mending(pieces: usize) -> String {
-    match pieces {
-        0 => String::new(),
-        pieces => tr!("cut-mended", count = pieces),
-    }
+/// What the stage notice notes about the pieces that had to be mended on their way down.
+pub(crate) fn mending(pieces: usize) -> Option<String> {
+    (pieces > 0).then(|| tr!("cut-mended", count = pieces))
 }

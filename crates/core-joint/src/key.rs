@@ -22,17 +22,15 @@ const GLUE_MM: Scalar = 0.2;
 /// cell, so twelve keep a 1.2 mm tongue's width to some 0.1 mm.
 const CELLS_ACROSS: Scalar = 12.0;
 
-/// A tongue round the lower half's cut face and the groove in the upper it goes into.
-pub(crate) fn key(halves: &Halves<'_>, key: Key) -> Planned {
-    let finest = key.width_mm / CELLS_ACROSS;
-    let Some(section) = Section::of(&halves.cut.below, halves.plane, finest) else {
-        return Planned::default();
-    };
+/// The tongue's field and the groove's over `section`, positive where each stands, and how
+/// many pieces of the face take a tongue.
+fn fields(section: &Section, key: Key) -> (Vec<Scalar>, Vec<Scalar>, usize) {
     let clearance = key.clearance_mm;
     // Off every piece the fields stay below zero, as the distance itself is there.
     let mut tongue_field = section.distance.clone();
     let mut groove_field = section.distance.clone();
     let mut keyed = 0;
+    let band_of = |distance: Scalar, from: Scalar, to: Scalar| (distance - from).min(to - distance);
     for cells in section.cells_by_piece() {
         let widest = cells
             .iter()
@@ -42,8 +40,6 @@ pub(crate) fn key(halves: &Halves<'_>, key: Key) -> Planned {
         let inset = (WALL_MM + clearance)
             .min(widest - key.width_mm / 2.0)
             .max(THIN_WALL_MM + clearance);
-        let band_of =
-            |distance: Scalar, from: Scalar, to: Scalar| (distance - from).min(to - distance);
         for cell in &cells {
             let distance = section.distance[*cell];
             tongue_field[*cell] = band_of(distance, inset, inset + key.width_mm);
@@ -55,6 +51,17 @@ pub(crate) fn key(halves: &Halves<'_>, key: Key) -> Planned {
         }
         keyed += usize::from(cells.iter().any(|cell| tongue_field[*cell] > 0.0));
     }
+    (tongue_field, groove_field, keyed)
+}
+
+/// A tongue round the lower half's cut face and the groove in the upper it goes into.
+pub(crate) fn key(halves: &Halves<'_>, key: Key) -> Planned {
+    let finest = key.width_mm / CELLS_ACROSS;
+    let Some(section) = Section::of(&halves.cut, halves.plane, finest) else {
+        return Planned::default();
+    };
+    let clearance = key.clearance_mm;
+    let (tongue_field, groove_field, keyed) = fields(&section, key);
     let tongue = band(&section, &tongue_field, -SINK_MM, key.height_mm);
     let groove = band(
         &section,

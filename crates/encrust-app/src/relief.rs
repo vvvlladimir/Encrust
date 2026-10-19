@@ -10,7 +10,9 @@ use serde::{Deserialize, Serialize};
 
 use crate::files::{self, Handed, Wanted};
 use crate::i18n::tr;
-use crate::job::{Pressed, ReliefJob, ReliefOutcome, ReliefRequest, ReliefSource, relief_tasks};
+use crate::job::{
+    Pressed, ReliefJob, ReliefOutcome, ReliefRequest, ReliefSource, relief_tasks, spawn_relief,
+};
 use crate::scene::{Mapped, ObjectId, Scene};
 use crate::status::Status;
 
@@ -52,6 +54,15 @@ pub struct Picture {
     pub size_px: [u32; 2],
     /// Which of [`BUILTINS`] it is, for one that came with the window.
     pub builtin: Option<usize>,
+}
+
+/// What of the Relief tool the window remembers between runs and no undo takes back, like a
+/// view: the mode it is in and the built-in texture chosen, by its file.
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct ReliefChoice {
+    pub mode: ReliefMode,
+    pub texture: Option<String>,
 }
 
 /// How much memory the bases kept between presses may hold, bytes. A browser's memory
@@ -111,7 +122,8 @@ impl Default for ReliefState {
 }
 
 /// Which of the Relief tool's three jobs the panel and a click are for.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
 pub enum ReliefMode {
     /// A texture or a picture pressed into the surface.
     #[default]
@@ -209,7 +221,7 @@ impl ReliefTool {
             None => ReliefSource::Mapped,
         };
 
-        self.job = Some(ReliefJob::spawn(ReliefRequest {
+        self.job = Some(spawn_relief(ReliefRequest {
             tasks,
             settings: self.settings(),
             source,
@@ -284,6 +296,39 @@ impl ReliefTool {
         self.job.is_some()
     }
 
+    /// The mode and built-in texture to remember.
+    pub fn choice(&self) -> ReliefChoice {
+        let builtin = self.picture.as_ref().and_then(|picture| picture.builtin);
+        ReliefChoice {
+            mode: self.mode,
+            texture: builtin
+                .and_then(|index| BUILTINS.get(index))
+                .map(|b| b.file.to_owned()),
+        }
+    }
+
+    /// Stands the tool in the mode and on the texture remembered; a texture no longer
+    /// among the built-in ones is left unchosen.
+    pub fn restore(&mut self, choice: &ReliefChoice) -> Result<()> {
+        self.mode = choice.mode;
+        let Some(index) = choice.texture.as_ref().and_then(|file| {
+            BUILTINS
+                .iter()
+                .position(|builtin| builtin.file == file.as_str())
+        }) else {
+            return Ok(());
+        };
+        self.picture = Some(builtin_picture(index)?);
+        Ok(())
+    }
+
+    /// Gives up on the press going: what it would have made is thrown away when it ends.
+    pub fn cancel(&mut self, status: &mut Status) {
+        if self.job.take().is_some() {
+            *status = Status::Info(tr!("relief-cancelled"));
+        }
+    }
+
     /// Lets go of the bases kept for another press, which the window does once the tool
     /// is put down: they can be hundreds of megabytes.
     pub fn forget_kept(&mut self) {
@@ -309,18 +354,13 @@ impl ReliefTool {
                         tiling: self.tiling,
                         look,
                     };
-                    let mapped = match self.laid.remove(&object.id) {
-                        Some((was, mapped)) if was == key => mapped,
-                        _ => {
-                            let read = read.get_or_insert_with(|| Picture {
-                                heights: Arc::new(
-                                    prepared(&picture.heights, &settings).into_owned(),
-                                ),
-                                ..picture.clone()
-                            });
-                            Arc::new(lay(read, &object.mesh, key.sizing, self.tiling))
-                        }
-                    };
+                    let mapped = relaid(&mut self.laid, object.id, key, || {
+                        let read = read.get_or_insert_with(|| Picture {
+                            heights: Arc::new(prepared(&picture.heights, &settings).into_owned()),
+                            ..picture.clone()
+                        });
+                        Arc::new(lay(read, &object.mesh, key.sizing, self.tiling))
+                    });
                     laid.insert(object.id, (key, mapped));
                 }
             }
@@ -336,10 +376,9 @@ impl ReliefTool {
                         tiling: Tiling::default(),
                         look,
                     };
-                    let mapped = match self.laid.remove(&object.id) {
-                        Some((was, mapped)) if was == key => mapped,
-                        _ => read_as_pressed(own, &settings),
-                    };
+                    let mapped = relaid(&mut self.laid, object.id, key, || {
+                        read_as_pressed(own, &settings)
+                    });
                     laid.insert(object.id, (key, mapped));
                 }
             }
@@ -349,6 +388,19 @@ impl ReliefTool {
             .iter()
             .map(|(id, (_, mapped))| (*id, Arc::clone(mapped)))
             .collect()
+    }
+}
+
+/// What was laid over `id` before where it was laid for `key`, or what `make` lays anew.
+fn relaid(
+    was: &mut HashMap<ObjectId, (LaidFor, Arc<Mapped>)>,
+    id: ObjectId,
+    key: LaidFor,
+    make: impl FnOnce() -> Arc<Mapped>,
+) -> Arc<Mapped> {
+    match was.remove(&id) {
+        Some((laid_for, mapped)) if laid_for == key => mapped,
+        _ => make(),
     }
 }
 
@@ -416,8 +468,8 @@ pub fn load_picture(tool: &mut ReliefTool, status: &mut Status, file: &Handed) {
     let path = file.path();
     let read = read_picture(file)
         .with_context(|| tr!("error-cannot-read", path = path.display().to_string()));
-    let pressing = tr!("relief-pressing-picture", name = picture_name(file));
-    if let Some(picture) = status.report(&pressing, read) {
+    let picked = tr!("relief-picked-picture", name = picture_name(file));
+    if let Some(picture) = status.report(&picked, read) {
         tool.picture = Some(picture);
     }
 }
@@ -439,14 +491,21 @@ pub fn choose_builtin(tool: &mut ReliefTool, status: &mut Status, index: usize) 
     let Some(builtin) = BUILTINS.get(index) else {
         return;
     };
-    let name = (builtin.name)();
-    let read = decoded(name.clone(), builtin.bytes).map(|picture| Picture {
-        builtin: Some(index),
-        ..picture
-    });
-    if let Some(picture) = status.report(&tr!("relief-pressing-picture", name = name), read) {
+    let picked = tr!("relief-picked-picture", name = (builtin.name)());
+    if let Some(picture) = status.report(&picked, builtin_picture(index)) {
         tool.picture = Some(picture);
     }
+}
+
+/// One of [`BUILTINS`] read as the picture to press, or an error past the end of them.
+fn builtin_picture(index: usize) -> Result<Picture> {
+    let builtin = BUILTINS
+        .get(index)
+        .with_context(|| format!("no built-in texture {index}"))?;
+    decoded((builtin.name)(), builtin.bytes).map(|picture| Picture {
+        builtin: Some(index),
+        ..picture
+    })
 }
 
 /// `bytes` of any picture format read as grey, no wider than `MAX_PICTURE_PX`.
@@ -729,5 +788,20 @@ mod tests {
             Vec3::splat(2.0),
             "and so is its size"
         );
+    }
+
+    #[test]
+    fn the_mode_and_texture_chosen_come_back_in_the_next_run() {
+        let mut tool = ReliefTool {
+            mode: ReliefMode::Combine,
+            ..ReliefTool::default()
+        };
+        choose_builtin(&mut tool, &mut Status::default(), 2);
+        let text = serde_json::to_string(&tool.choice()).expect("the choice serialises");
+        let read: ReliefChoice = serde_json::from_str(&text).expect("and reads back");
+        let mut next = ReliefTool::default();
+        next.restore(&read).expect("a built-in texture reads");
+        assert_eq!(next.mode, ReliefMode::Combine);
+        assert_eq!(next.picture.and_then(|picture| picture.builtin), Some(2));
     }
 }

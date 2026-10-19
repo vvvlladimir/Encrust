@@ -12,6 +12,7 @@ use core_volume::Tiling;
 use printer_profiles::SupportProfile;
 
 use crate::hollowing::HollowArgs;
+use crate::modelling::ModelArgs;
 use crate::profiles::Selection;
 use crate::report::{parse_exposure_band, parse_rotation, parse_scale};
 use crate::sliced_file::CtbRevision;
@@ -294,6 +295,9 @@ pub struct JobArgs {
 
     #[command(flatten)]
     pub import: ImportArgs,
+
+    #[command(flatten)]
+    pub model: ModelArgs,
 
     #[command(flatten)]
     pub hollow: HollowArgs,

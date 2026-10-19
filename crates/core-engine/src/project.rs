@@ -30,9 +30,13 @@ use serde::{Deserialize, Serialize};
 /// What a project file is called, and what an open or save dialog filters on.
 pub const EXTENSION: &str = "encrust";
 
-/// The manifest this build writes. Version 4 is read as well, by the ids of its profiles
-/// alone; any other is refused, lacking built geometry and diagnostics (ADR 0191, 0205, 0261).
-pub const VERSION: u32 = 5;
+/// The manifest this build writes. Versions 4 and 5 are read as well; any other is refused,
+/// lacking built geometry and diagnostics (ADR 0191, 0205, 0261, 0302).
+pub const VERSION: u32 = 6;
+
+/// The last version whose lattice took one size for its cells and walls, which this build
+/// reads as the cell's.
+const ONE_LATTICE_SIZE: u32 = 5;
 
 /// The last version that carried its printer and resin whole rather than by id.
 const WHOLE_PROFILES: u32 = 4;
@@ -489,6 +493,10 @@ pub fn read_from<R: Read + Seek>(source: R) -> Result<Project, ProjectError> {
         let version: Version = serde_json::from_str(&text)?;
         match version.version {
             VERSION => serde_json::from_str(&text)?,
+            ONE_LATTICE_SIZE => Manifest {
+                version: VERSION,
+                ..serde_json::from_str(&text)?
+            },
             WHOLE_PROFILES => by_ids(serde_json::from_str(&text)?)?,
             found => return Err(ProjectError::WrongVersion { found }),
         }
@@ -935,6 +943,21 @@ mod tests {
         let back = round_trip(&project(0));
         assert!(back.manifest.objects.is_empty());
         assert!(back.models.is_empty());
+    }
+
+    #[test]
+    fn a_version_5_file_reads_its_lattice_size_as_the_cell() {
+        let mut saved = project(1);
+        saved.manifest.version = ONE_LATTICE_SIZE;
+        let mut bytes = Cursor::new(Vec::new());
+        write_to(&mut bytes, &saved).expect("a project in memory writes");
+        bytes.set_position(0);
+        let back = read_from(bytes).expect("a version 5 file reads");
+        assert_eq!(
+            back.manifest.version, VERSION,
+            "and is this build's once open"
+        );
+        assert_eq!(back.manifest.hollow, saved.manifest.hollow);
     }
 
     #[test]

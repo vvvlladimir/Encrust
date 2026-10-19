@@ -1,10 +1,9 @@
-use core_geometry::{Bvh, Mesh, Ray, Scalar, Transform, Vec2, raycast_placed};
+use core_geometry::{Bvh, Mesh, Ray, Scalar, Transform, Vec2, extrude, raycast_placed};
 use rayon::prelude::*;
 
 use crate::error::TextError;
 use crate::label::{Frame, LabelSettings, OVERLAP_MM};
 use crate::outline::Shape;
-use crate::prism::stand;
 use crate::sheet::Sheet;
 
 /// The fill's spacing as a share of the label's longest side, so a long label is not cut
@@ -61,15 +60,24 @@ pub(crate) fn draped(
         .zip(&heights)
         .map(|(sheet, heights)| {
             let surface: Vec<Scalar> = heights.iter().map(|h| h.unwrap_or(mean)).collect();
-            let bottom: Vec<Scalar> = surface.iter().map(|h| h - below).collect();
-            let top: Vec<Scalar> = surface.iter().map(|h| h + above).collect();
-            let mut prism = stand(sheet, &bottom, &top);
-            for vertex in &mut prism.vertices {
-                *vertex = frame.place(*vertex);
-            }
-            prism
+            stood_off(sheet, &surface, below, above, frame)
         })
         .collect())
+}
+
+/// `sheet` stood from `below` under the surface found at each of its points to `above`
+/// over it, millimetres, and placed at `frame` on the plate.
+fn stood_off(
+    sheet: &Sheet,
+    surface: &[Scalar],
+    below: Scalar,
+    above: Scalar,
+    frame: Frame,
+) -> Mesh {
+    let bottom: Vec<Scalar> = surface.iter().map(|h| h - below).collect();
+    let top: Vec<Scalar> = surface.iter().map(|h| h + above).collect();
+    let lift = |point: Vec2, height: Scalar| frame.place(point.extend(height));
+    extrude(&sheet.flat, &sheet.cap, lift, &bottom, &top)
 }
 
 fn longest_side(shapes: &[Shape]) -> Scalar {

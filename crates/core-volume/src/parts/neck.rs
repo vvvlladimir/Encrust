@@ -3,8 +3,8 @@ use std::ops::RangeInclusive;
 
 use core_csg::Solid;
 use core_geometry::{
-    Aabb, DEFAULT_WELD_TOLERANCE, FastSet, Mesh, Scalar, Vec3, glam::IVec3, oriented_box,
-    signed_volume, weld,
+    Aabb, DEFAULT_WELD_TOLERANCE, FastSet, Mesh, Scalar, Vec3, axes_across, glam::IVec3,
+    oriented_box, signed_volume, weld,
 };
 use rayon::prelude::*;
 
@@ -529,14 +529,8 @@ fn crosses(section: &Section, half_mm: Scalar, lattice: &Lattice, from: usize, t
         return false;
     }
     let mid = (a + b) / 2.0 - section.centre;
-    let (across, along) = in_plane(section.normal);
+    let (across, along) = axes_across(section.normal);
     mid.dot(across).abs() < half_mm && mid.dot(along).abs() < half_mm
-}
-
-/// Two unit vectors square to `normal` and each other, with `across × along = normal`.
-fn in_plane(normal: Vec3) -> (Vec3, Vec3) {
-    let across = normal.any_orthonormal_vector();
-    (across, normal.cross(across))
 }
 
 /// The level whose front is the narrowest against the widest fronts before and after it,
@@ -577,7 +571,7 @@ fn cut(
     half_mm: Scalar,
     reached: &[bool],
 ) -> Result<PartedOff, VolumeError> {
-    let (across, along) = in_plane(section.normal);
+    let (across, along) = axes_across(section.normal);
     let depth = section.normal * (half_mm / 2.0);
     let cutter = oriented_box(
         section.centre + depth,

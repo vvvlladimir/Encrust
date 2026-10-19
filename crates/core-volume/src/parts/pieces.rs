@@ -1,4 +1,6 @@
-use core_geometry::{Aabb, FastMap, Mesh, Scalar, Winding, signed_volume};
+use core_geometry::{
+    Aabb, FastMap, Mesh, Scalar, Winding, diagnose, signed_volume, split_at_edges,
+};
 
 /// Points of a shell asked whether another shell stands around it.
 const SAMPLES: usize = 16;
@@ -29,64 +31,13 @@ fn size_of_mesh(mesh: &Mesh) -> Scalar {
 
 /// Whether every edge of `mesh` has two faces.
 fn is_closed(mesh: &Mesh) -> bool {
-    let mut uses: FastMap<(u32, u32), u32> = FastMap::default();
-    for face in &mesh.faces {
-        for side in 0..3 {
-            let (a, b) = (face[side], face[(side + 1) % 3]);
-            *uses.entry((a.min(b), a.max(b))).or_default() += 1;
-        }
-    }
-    uses.values().all(|count| *count == 2)
+    let report = diagnose(mesh);
+    report.boundary_edges == 0 && report.non_manifold_edges == 0
 }
 
 /// The shells of `mesh`: faces joined through edges exactly two faces share.
-///
-/// Two bodies that meet only at a corner, or along an edge three or four faces use, are
-/// two shells, where joining by shared vertices would read them as one.
 pub(crate) fn shells(mesh: &Mesh) -> Vec<Mesh> {
-    let mut edges: FastMap<(u32, u32), Vec<u32>> = FastMap::default();
-    for (index, face) in mesh.faces.iter().enumerate() {
-        for side in 0..3 {
-            let (a, b) = (face[side], face[(side + 1) % 3]);
-            edges
-                .entry((a.min(b), a.max(b)))
-                .or_default()
-                .push(index as u32);
-        }
-    }
-    let mut parent: Vec<u32> = (0..mesh.faces.len() as u32).collect();
-    for faces in edges.values() {
-        if let [left, right] = faces.as_slice() {
-            union(&mut parent, *left, *right);
-        }
-    }
-    let mut groups: FastMap<u32, Vec<u32>> = FastMap::default();
-    for face in 0..mesh.faces.len() as u32 {
-        groups
-            .entry(find(&mut parent, face))
-            .or_default()
-            .push(face);
-    }
-    groups
-        .into_values()
-        .map(|faces| compact(mesh, &faces))
-        .collect()
-}
-
-/// The faces `faces` of `mesh` as a mesh of their own, holding only the vertices they use.
-fn compact(mesh: &Mesh, faces: &[u32]) -> Mesh {
-    let mut moved: FastMap<u32, u32> = FastMap::default();
-    let mut piece = Mesh::default();
-    for face in faces {
-        let corners = mesh.faces[*face as usize].map(|index| {
-            *moved.entry(index).or_insert_with(|| {
-                piece.vertices.push(mesh.vertices[index as usize]);
-                piece.vertices.len() as u32 - 1
-            })
-        });
-        piece.faces.push(corners);
-    }
-    piece
+    split_at_edges(mesh)
 }
 
 /// `shells` gathered into bodies: each shell no other one stands around, with every shell
@@ -141,27 +92,6 @@ fn is_inside(shell: &Mesh, around: &Mesh, winding: &Winding) -> bool {
         inside += usize::from(winding.is_inside(around, *vertex));
     }
     asked > 0 && 2 * inside > asked
-}
-
-fn find(parent: &mut [u32], index: u32) -> u32 {
-    let mut root = index;
-    while parent[root as usize] != root {
-        root = parent[root as usize];
-    }
-    let mut walk = index;
-    while parent[walk as usize] != root {
-        let next = parent[walk as usize];
-        parent[walk as usize] = root;
-        walk = next;
-    }
-    root
-}
-
-fn union(parent: &mut [u32], left: u32, right: u32) {
-    let (left, right) = (find(parent, left), find(parent, right));
-    if left != right {
-        parent[right.max(left) as usize] = left.min(right);
-    }
 }
 
 #[cfg(test)]

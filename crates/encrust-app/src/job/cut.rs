@@ -1,6 +1,6 @@
 use core_engine::project::Keep;
-use core_geometry::{Mesh, Plane, cut};
-use core_joint::{Halves, Joined, Joints, join};
+use core_geometry::{Mesh, Plane};
+use core_joint::{Joined, Joints, cut_and_join};
 
 use crate::i18n::tr;
 use crate::job::{Worker, pooled};
@@ -38,44 +38,27 @@ pub type CutJob = Worker<CutOutcome>;
 /// Starts the cut. The thread is detached: it ends on its own.
 pub fn spawn_cut(request: CutRequest) -> CutJob {
     Worker::spawn(
-        move || pooled(|| cut_and_join(request), CutOutcome::Failed),
+        // Neither the cut nor the joint can be given up on part way.
+        move |_| pooled(|| cut(request), CutOutcome::Failed),
         || CutOutcome::Failed(tr!("job-thread-stopped-cut")),
     )
 }
 
-fn cut_and_join(request: CutRequest) -> CutOutcome {
-    let halves = cut(&request.printed, request.plane);
+fn cut(request: CutRequest) -> CutOutcome {
+    let joints = (request.keep == Keep::Both).then_some(&request.joints);
     // A plane that misses leaves the model whole. Replacing it with a copy of itself
     // would throw away its supports and its cavity for nothing.
-    if halves.below.is_empty() || halves.above.is_empty() {
+    let Some(cut) = cut_and_join(
+        &request.printed,
+        request.solid.as_ref(),
+        request.plane,
+        joints,
+    ) else {
         return CutOutcome::Missed;
-    }
-    let open_loops = halves.open_loops;
-    let plain = |halves: core_geometry::Cut| Joined {
-        below: halves.below,
-        above: halves.above,
-        ..Joined::default()
-    };
-    if request.keep != Keep::Both || request.joints.kind.is_none() {
-        return CutOutcome::Cut {
-            joined: plain(halves),
-            open_loops,
-            unjoined: None,
-        };
-    }
-    let joining = Halves {
-        cut: halves.clone(),
-        plane: request.plane,
-        printed: &request.printed,
-        solid: request.solid.as_ref(),
-    };
-    let (joined, unjoined) = match join(joining, &request.joints) {
-        Ok(joined) => (joined, None),
-        Err(error) => (plain(halves), Some(error.to_string())),
     };
     CutOutcome::Cut {
-        joined,
-        open_loops,
-        unjoined,
+        joined: cut.joined,
+        open_loops: cut.open_loops,
+        unjoined: cut.unjoined.map(|error| error.to_string()),
     }
 }

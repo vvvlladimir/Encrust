@@ -13,7 +13,7 @@ use crate::boolean::united;
 use crate::build::{FieldSettings, INSIDE, NO_FACE, build_nearest};
 use crate::error::VolumeError;
 use crate::grid::{TILE, VoxelGrid};
-use crate::hollow::{BAND_VOXELS, COARSENINGS};
+use crate::hollow::{BAND_VOXELS, coarsening};
 use crate::sdf::{Quantised, Sdf, TILE_VALUES, encode};
 use crate::sign::SignMode;
 
@@ -131,17 +131,10 @@ impl ReliefBasis {
         let (surface, hierarchy) = united
             .as_ref()
             .map_or((mesh, bvh), |(united, hierarchy)| (united, hierarchy));
-        let mut voxel_mm = asked_mm;
-        for _ in 0..COARSENINGS {
-            match Self::on_lattice(surface, hierarchy, settings, asked_mm, voxel_mm) {
-                // The lattice the field priced is the one that fits, taken a twentieth
-                // coarser still, the way a hollowing run steps back.
-                Err(VolumeError::TooFine { fits_at_mm, .. }) => voxel_mm = fits_at_mm * 1.05,
-                other => return other.map(|basis| basis.over(mesh, united)),
-            }
-        }
-        Self::on_lattice(surface, hierarchy, settings, asked_mm, voxel_mm)
-            .map(|basis| basis.over(mesh, united))
+        let (basis, _) = coarsening(asked_mm, |voxel_mm| {
+            Self::on_lattice(surface, hierarchy, settings, asked_mm, voxel_mm)
+        })?;
+        Ok(basis.over(mesh, united))
     }
 
     /// The basis known as one of `mesh`, whatever surface it was built over.

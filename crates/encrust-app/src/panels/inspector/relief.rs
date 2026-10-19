@@ -8,7 +8,7 @@ use crate::panels::Window;
 use crate::relief::{BUILTINS, Picture, ReliefMode};
 use crate::state::Doc;
 use crate::ui::{
-    Segment, Segmented, describe, hint, icon, meta, number_row, primary_button, progress_bar,
+    Segment, Segmented, busy, describe, hint, icon, meta, number_row, primary_button,
     secondary_button, section, stats, subheading, swatch, switch, theme, tone,
 };
 
@@ -355,8 +355,9 @@ fn truncated(name: &str) -> String {
 /// Pressing the texture in, or the progress of the run that is going.
 fn press(ui: &mut egui::Ui, window: &mut Window) {
     if window.tools.relief.is_busy() {
-        tone(ui, &tr!("relief-pressing"), theme::colors().text_mid);
-        progress_bar(ui, None);
+        if busy(ui, &tr!("relief-pressing"), true) {
+            window.tools.relief.cancel(&mut window.machine.status);
+        }
         return;
     }
 

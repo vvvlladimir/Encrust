@@ -1,4 +1,4 @@
-use core_geometry::{Bvh, Mesh, Ray, Scalar, Vec3};
+use core_geometry::{Bvh, Mesh, Ray, Scalar, Vec3, ball};
 
 use serde::{Deserialize, Serialize};
 
@@ -281,46 +281,6 @@ fn frame(axis: Vec3) -> (Vec3, Vec3) {
     let aside = if axis.z.abs() < 0.9 { Vec3::Z } else { Vec3::X };
     let right = axis.cross(aside).normalize_or_zero();
     (right, axis.cross(right))
-}
-
-/// A ball of `radius_mm` about `center` on `rings` and `segments`, wound outward.
-fn ball(center: Vec3, radius_mm: Scalar, rings: usize, segments: usize) -> Mesh {
-    let mut vertices = vec![center + Vec3::Z * radius_mm];
-    for ring in 1..rings {
-        let theta = std::f32::consts::PI * ring as Scalar / rings as Scalar;
-        let (sin_theta, cos_theta) = theta.sin_cos();
-        for segment in 0..segments {
-            let phi = std::f32::consts::TAU * segment as Scalar / segments as Scalar;
-            let (sin_phi, cos_phi) = phi.sin_cos();
-            vertices.push(
-                center + radius_mm * Vec3::new(sin_theta * cos_phi, sin_theta * sin_phi, cos_theta),
-            );
-        }
-    }
-    let south = vertices.len() as u32;
-    vertices.push(center - Vec3::Z * radius_mm);
-
-    let at = |ring: usize, segment: usize| (1 + (ring - 1) * segments + segment % segments) as u32;
-    let mut faces = Vec::new();
-    for segment in 0..segments {
-        faces.push([0, at(1, segment), at(1, segment + 1)]);
-        faces.push([south, at(rings - 1, segment + 1), at(rings - 1, segment)]);
-    }
-    for ring in 1..rings - 1 {
-        for segment in 0..segments {
-            faces.push([
-                at(ring, segment),
-                at(ring + 1, segment),
-                at(ring + 1, segment + 1),
-            ]);
-            faces.push([
-                at(ring, segment),
-                at(ring + 1, segment + 1),
-                at(ring, segment + 1),
-            ]);
-        }
-    }
-    Mesh::new(vertices, faces)
 }
 
 fn append(whole: &mut Mesh, part: &Mesh) {

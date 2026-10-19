@@ -1,4 +1,4 @@
-# 0312. Join a label through the side of the model it stands on
+# 0311. Join a label through the side of the model it stands on
 
 - **Status:** Accepted
 - **Date:** 2026-10-19
