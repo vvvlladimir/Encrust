@@ -1,4 +1,4 @@
-# 0303. Combine models exactly, and through the field where one is not a solid
+# 0304. Combine models exactly, and through the field where one is not a solid
 
 - **Status:** Accepted
 - **Date:** 2026-10-18
@@ -9,7 +9,7 @@ A user wants to add one model to another, take one out of another, or keep only 
 share: a base fused to a figure, a socket cut by a peg, a part cropped by a box. The
 slicer already unions overlapping models by the fill rule (ADR 0071), but only while
 slicing; the plate keeps two models, an export keeps both shells, and nothing subtracts.
-`core-csg` cuts closed meshes exactly (ADR 0302), and `core-volume` already combines
+`core-csg` cuts closed meshes exactly (ADR 0303), and `core-volume` already combines
 fields, which read any mesh with a winding number, open scans included.
 
 ## Decision
@@ -22,7 +22,7 @@ tree in parallel and a difference's subtrahends unioned first. Where any model i
 every model is sampled into a field on the lattice precision 0.5 gives their area,
 coarsened to the budget, combined there and extracted; `Combined::voxel_mm` says so.
 `combine_exact` never samples and refuses with `NotSolid`, for a caller that must not
-remesh the model, as a label must not (ADR 0304).
+remesh the model, as a label must not (ADR 0305).
 
 In the window it is the Relief tool's Combine mode, beside its Texture and Text modes: one
 tool switched at its head rather than three on the rail, each mode with its own sections

@@ -1,4 +1,4 @@
-# 0306. Split a model by shared edges, with its scraps, and cut a marked part off at its narrowest join
+# 0307. Split a model by shared edges, with its scraps, and cut a marked part off at its narrowest join
 
 - **Status:** Accepted
 - **Date:** 2026-10-18

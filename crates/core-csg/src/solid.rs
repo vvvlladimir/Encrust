@@ -36,15 +36,17 @@ impl Solid {
     /// `mesh` read as a solid. It may be several closed shells, touching along an edge or
     /// at a vertex but crossing none; vertices on the same exact point are taken as one.
     pub fn new(mesh: &Mesh) -> Result<Self, CsgError> {
-        if mesh.faces.is_empty() {
+        let Unzipped { positions, indices } = unzipped(mesh)?;
+        // Welding can leave no face at all, which the engine would refuse as not solid.
+        if indices.is_empty() {
             return Ok(Self::empty());
         }
-        let Unzipped { positions, indices } = unzipped(mesh)?;
         guarded(|| Manifold::new(&positions, &indices))
             .map(|inner| Self { inner: Some(inner) })
             .map_err(CsgError::NotSolid)
     }
 
+    /// Whether the solid holds nothing.
     pub fn is_empty(&self) -> bool {
         self.inner.is_none()
     }
@@ -238,5 +240,13 @@ mod tests {
         let mut open = cuboid(Vec3::ZERO, Vec3::ONE);
         open.faces.truncate(10);
         assert!(matches!(Solid::new(&open), Err(CsgError::NotSolid(_))));
+    }
+
+    #[test]
+    fn a_mesh_whose_faces_all_weld_away_is_the_empty_solid() {
+        let point = Vec3::splat(1.0);
+        let flat = Mesh::new(vec![point, point, Vec3::ZERO], vec![[0, 1, 2]]);
+        let solid = Solid::new(&flat).expect("nothing left is the empty solid");
+        assert!(solid.is_empty());
     }
 }

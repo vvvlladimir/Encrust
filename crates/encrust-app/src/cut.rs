@@ -9,7 +9,7 @@ use core_engine::project::{Axis, CutState};
 
 use crate::i18n::tr;
 use crate::job::{CutJob, CutOutcome, CutRequest, SplitJob, SplitOutcome, SplitRequest, mend};
-use crate::scene::{ImportSummary, Imported, ObjectId, Scene, SceneObject};
+use crate::scene::{ImportSummary, Imported, ObjectId, Scene, SceneObject, Taken};
 use crate::status::Status;
 
 /// Space left between a cut's lower half and the dowels laid out beside it, and between
@@ -20,7 +20,7 @@ const DOWEL_GAP_MM: Scalar = 3.0;
 #[derive(Debug)]
 pub struct CutTool {
     /// What the panel is set to, in the shape a project writes it down in (ADR 0191),
-    /// joints included (ADR 0305). Its `height_mm` is where the plane crosses the axis:
+    /// joints included (ADR 0306). Its `height_mm` is where the plane crosses the axis:
     /// across Z the height above the plate, across X or Y the distance from the model's
     /// centre of mass.
     pub state: CutState,
@@ -31,8 +31,8 @@ pub struct CutTool {
     /// moves the plane to it.
     pub centred_on: Option<ObjectId>,
     running: Option<Running>,
-    /// A split under way, and the name of the model it splits.
-    splitting: Option<(SplitJob, String)>,
+    /// A split under way, and the model it splits.
+    splitting: Option<(SplitJob, Taken, String)>,
     /// Whether the next click on a model marks the part Split cuts off it.
     pub picking_part: bool,
     /// The model a part is marked on, and the point, in the model's own coordinates so
@@ -44,6 +44,7 @@ pub struct CutTool {
 #[derive(Debug)]
 struct Running {
     job: CutJob,
+    taken: Taken,
     name: String,
     axis: Axis,
     position_mm: Scalar,
@@ -137,6 +138,7 @@ impl CutTool {
         });
         self.running = Some(Running {
             job,
+            taken: Taken::of(object),
             name: object.name.clone(),
             axis: self.state.axis,
             position_mm: self.position_mm(object),
@@ -156,13 +158,17 @@ impl CutTool {
         {
             *status = running.land(scene, outcome);
         }
-        if let Some(outcome) = self.splitting.as_mut().and_then(|(job, _)| job.poll())
-            && let Some((_, name)) = self.splitting.take()
+        if let Some(outcome) = self.splitting.as_mut().and_then(|(job, ..)| job.poll())
+            && let Some((_, taken, name)) = self.splitting.take()
         {
             if matches!(outcome, SplitOutcome::PartedOff { .. }) {
                 self.part_mark = None;
             }
-            *status = land_parts(scene, &name, outcome);
+            *status = if taken.is_current(scene) {
+                land_parts(scene, &name, outcome)
+            } else {
+                Status::Error(tr!("job-model-changed", name = name))
+            };
         }
         self.is_busy()
     }
@@ -203,7 +209,7 @@ impl CutTool {
             settings: self.state.parts,
             at: self.marked_on(id, object),
         });
-        self.splitting = Some((job, object.name.clone()));
+        self.splitting = Some((job, Taken::of(object), object.name.clone()));
         Ok(())
     }
 }
@@ -222,6 +228,9 @@ impl Running {
             }
             CutOutcome::Failed(message) => return Status::Error(message),
         };
+        if !self.taken.is_current(scene) {
+            return Status::Error(tr!("job-model-changed", name = self.name));
+        }
         scene.remove(id);
         let kind = self.joints.kind.filter(|_| self.keep == Keep::Both);
         let Joined {

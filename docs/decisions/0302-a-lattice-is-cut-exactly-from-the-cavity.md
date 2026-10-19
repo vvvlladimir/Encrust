@@ -1,4 +1,4 @@
-# 0301. Cut the lattice exactly from the cavity's mesh, its cells joined by crossing holes
+# 0302. Cut the lattice exactly from the cavity's mesh, its cells joined by crossing holes
 
 - **Status:** Accepted
 - **Date:** 2026-10-18
@@ -17,7 +17,7 @@ the cavity.
 Cutting the lattice out of the cavity's field, `max(cavity, -solid)`, was tried first. It
 is exact in what it keeps, but it is the cavity's lattice: at precision 0.5 the walls came
 out crumpled at 0.2 mm, the faces ran to millions, and a 140 mm block took 2–3 s for the
-lattice alone. `core-csg` now cuts closed meshes exactly (ADR 0302).
+lattice alone. `core-csg` now cuts closed meshes exactly (ADR 0303).
 
 ## Decision
 
@@ -56,7 +56,7 @@ parallel, gains nothing there and a quarter on a real bust. See `docs/design/hol
 for the tables. The hive is still the dear one: its holes are cut through the walls one
 group after another. Each cut between pieces leaves a pair of faces inside the walls, which
 no slice reads as a boundary. The exact cut's triangulation varies from run to run
-(ADR 0302), so a shell is reproducible in its surface and not in its triangle list.
+(ADR 0303), so a shell is reproducible in its surface and not in its triangle list.
 
 Reopen if the fallback turns out to be taken on real models, or if a sliver cell at the rim,
 lower than the first row, proves to be a pocket often enough to matter.

@@ -298,6 +298,33 @@ impl PlacedBounds {
     }
 }
 
+/// A model as a background job took it, so what the job makes replaces only that model,
+/// unmoved and unchanged.
+#[derive(Debug, Clone)]
+pub struct Taken {
+    pub id: ObjectId,
+    mesh: Arc<Mesh>,
+    transform: Transform,
+}
+
+impl Taken {
+    pub fn of(object: &SceneObject) -> Self {
+        Self {
+            id: object.id,
+            mesh: Arc::clone(&object.mesh),
+            transform: object.transform,
+        }
+    }
+
+    /// Whether the model is still on the plate as it was taken. A new project reuses ids,
+    /// so the mesh itself is compared, not only the id.
+    pub fn is_current(&self, scene: &Scene) -> bool {
+        scene.get(self.id).is_some_and(|object| {
+            Arc::ptr_eq(&object.mesh, &self.mesh) && object.transform == self.transform
+        })
+    }
+}
+
 impl SceneObject {
     /// Bounds of the placed model, in plate coordinates: of its vertices as placed, not
     /// of its own box turned, which grows by up to √3 at an angle. Cached per transform.

@@ -28,26 +28,33 @@ pub(crate) fn key(halves: &Halves<'_>, key: Key) -> Planned {
     let Some(section) = Section::of(&halves.cut.below, halves.plane, finest) else {
         return Planned::default();
     };
-    let widest = section.distance.iter().copied().fold(0.0, Scalar::max);
     let clearance = key.clearance_mm;
-    // A wall too thin for the tongue and both its walls keeps the tongue in its middle.
-    let inset = (WALL_MM + clearance)
-        .min(widest - key.width_mm / 2.0)
-        .max(THIN_WALL_MM + clearance);
-    let band_of = |from: Scalar, to: Scalar| -> Vec<Scalar> {
-        section
-            .distance
+    // Off every piece the fields stay below zero, as the distance itself is there.
+    let mut tongue_field = section.distance.clone();
+    let mut groove_field = section.distance.clone();
+    let mut keyed = 0;
+    for cells in section.cells_by_piece() {
+        let widest = cells
             .iter()
-            .map(|distance| (distance - from).min(to - distance))
-            .collect()
-    };
-    let tongue_field = band_of(inset, inset + key.width_mm);
-    let groove_field = band_of(inset - clearance, inset + key.width_mm + clearance);
-    let keyed = section
-        .cells_by_piece()
-        .iter()
-        .filter(|cells| cells.iter().any(|cell| tongue_field[*cell] > 0.0))
-        .count();
+            .map(|cell| section.distance[*cell])
+            .fold(0.0, Scalar::max);
+        // A wall too thin for the tongue and both its walls keeps the tongue in its middle.
+        let inset = (WALL_MM + clearance)
+            .min(widest - key.width_mm / 2.0)
+            .max(THIN_WALL_MM + clearance);
+        let band_of =
+            |distance: Scalar, from: Scalar, to: Scalar| (distance - from).min(to - distance);
+        for cell in &cells {
+            let distance = section.distance[*cell];
+            tongue_field[*cell] = band_of(distance, inset, inset + key.width_mm);
+            groove_field[*cell] = band_of(
+                distance,
+                inset - clearance,
+                inset + key.width_mm + clearance,
+            );
+        }
+        keyed += usize::from(cells.iter().any(|cell| tongue_field[*cell] > 0.0));
+    }
     let tongue = band(&section, &tongue_field, -SINK_MM, key.height_mm);
     let groove = band(
         &section,

@@ -3,7 +3,7 @@ use anyhow::Result;
 use crate::i18n::tr;
 
 /// A texture compiled into the window, ready to tile over any model without a file. All
-/// are CC0; see docs/decisions/0308-ship-a-dozen-height-maps-in-the-window.md.
+/// are CC0; see docs/decisions/0309-ship-a-dozen-height-maps-in-the-window.md.
 pub struct Builtin {
     pub name: fn() -> String,
     pub bytes: &'static [u8],

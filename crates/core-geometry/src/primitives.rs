@@ -90,6 +90,10 @@ pub fn cylinder(from: Vec3, to: Vec3, radius: Scalar, segments: usize) -> Mesh {
     Mesh::new(vertices, faces)
 }
 
+/// The most flats a circle is given, however fine the tolerance asked: a tolerance under
+/// f32's precision against the radius would otherwise ask for infinitely many.
+const MOST_SEGMENTS: Scalar = 4096.0;
+
 /// How many flats a circle of `radius` needs so that no point of it is further than
 /// `tolerance` from them, in the same unit.
 pub fn segments_for(radius: Scalar, tolerance: Scalar) -> usize {
@@ -97,7 +101,8 @@ pub fn segments_for(radius: Scalar, tolerance: Scalar) -> usize {
         return 3;
     }
     let step = 2.0 * (1.0 - tolerance / radius).acos();
-    (std::f32::consts::TAU / step).ceil().max(3.0) as usize
+    // A NaN tolerance casts to zero, so the bound is kept after the cast as well.
+    ((std::f32::consts::TAU / step).ceil().clamp(3.0, MOST_SEGMENTS) as usize).max(3)
 }
 
 #[cfg(test)]
@@ -117,6 +122,12 @@ mod tests {
             (volume - expected).abs() <= expected * 1e-3,
             "{what} holds {expected}, wound outward, got {volume}"
         );
+    }
+
+    #[test]
+    fn a_tolerance_too_fine_to_measure_asks_for_a_bounded_circle() {
+        assert_eq!(segments_for(10.0, 0.0), MOST_SEGMENTS as usize);
+        assert_eq!(segments_for(1.0e6, 1.0e-3), MOST_SEGMENTS as usize);
     }
 
     #[test]

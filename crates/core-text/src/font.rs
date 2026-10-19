@@ -16,7 +16,11 @@ impl Font {
     /// Face `index` of the font file `data`, refused unless it parses and has outlines.
     pub fn new(data: Arc<Vec<u8>>, index: u32) -> Result<Self, TextError> {
         let font = Self { data, index };
-        font.face()?;
+        let face = font.face()?;
+        let tables = face.tables();
+        if tables.glyf.is_none() && tables.cff.is_none() && tables.cff2.is_none() {
+            return Err(TextError::BadFont("the font has no outlines".to_owned()));
+        }
         Ok(font)
     }
 

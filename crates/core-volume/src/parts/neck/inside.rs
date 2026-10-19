@@ -101,9 +101,11 @@ fn crossings_of(mesh: &Mesh, face: usize, lattice: &Lattice, found: &mut Vec<Cro
         area = -area;
     }
     let step = f64::from(lattice.grid.voxel_mm);
+    // One column wider each side: the division may round a point standing on a corner out
+    // of range, and the weights below decide each point exactly.
     let columns = |low: f64, high: f64, first: i32, count: i32| {
-        let from = ((low / step).ceil() as i64 - i64::from(first)).max(0);
-        let to = ((high / step).floor() as i64 - i64::from(first)).min(i64::from(count) - 1);
+        let from = ((low / step).ceil() as i64 - 1 - i64::from(first)).max(0);
+        let to = ((high / step).floor() as i64 + 1 - i64::from(first)).min(i64::from(count) - 1);
         from..=to
     };
     let xs = columns(

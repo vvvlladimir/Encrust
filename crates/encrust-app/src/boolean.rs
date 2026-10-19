@@ -4,7 +4,7 @@ use core_volume::Boolean;
 
 use crate::i18n::tr;
 use crate::job::{BooleanJob, BooleanOutcome, BooleanRequest};
-use crate::scene::{ObjectId, Scene, SceneObject};
+use crate::scene::{Scene, SceneObject, Taken};
 use crate::status::Status;
 
 /// Union, difference and intersection of the models picked on the plate, replacing them
@@ -40,7 +40,7 @@ impl BooleanTool {
             bail!(tr!("boolean-pick-two"));
         }
         self.job = Some(BooleanJob::spawn(BooleanRequest {
-            ids: models.iter().map(|object| object.id).collect(),
+            taken: models.iter().map(|object| Taken::of(object)).collect(),
             name: first.name.clone(),
             // The model itself, not its shell: a cavity is not a solid the cut can read,
             // and the combination is hollowed again if it is to be.
@@ -64,28 +64,28 @@ impl BooleanTool {
         self.job = None;
         *status = match outcome {
             BooleanOutcome::Combined {
-                ids,
+                taken,
                 name,
                 mesh,
                 voxel_mm,
-            } => {
-                let mending = land(scene, &ids, name.clone(), mesh);
-                Status::Info(match voxel_mm {
+            } => match land(scene, &taken, name.clone(), mesh) {
+                Err(changed) => Status::Error(changed),
+                Ok(mending) => Status::Info(match voxel_mm {
                     None => tr!(
                         "boolean-done",
                         name = name,
-                        count = ids.len(),
+                        count = taken.len(),
                         mending = mending
                     ),
                     Some(voxel_mm) => tr!(
                         "boolean-done-sampled",
                         name = name,
-                        count = ids.len(),
+                        count = taken.len(),
                         lattice = format!("{voxel_mm:.2}"),
                         mending = mending
                     ),
-                })
-            }
+                }),
+            },
             BooleanOutcome::Failed(message) => Status::Error(message),
         };
         false
@@ -96,14 +96,22 @@ impl BooleanTool {
     }
 }
 
-/// Puts `mesh` on the plate in place of the models `ids`, and answers what the stage notice
-/// adds about mending it.
-pub(crate) fn land(scene: &mut Scene, ids: &[ObjectId], name: String, mesh: Mesh) -> String {
-    for id in ids {
-        scene.remove(*id);
+/// Puts `mesh` on the plate in place of the models `taken`, and answers what the stage
+/// notice adds about mending it, or why it was dropped when one of them has changed since.
+pub(crate) fn land(
+    scene: &mut Scene,
+    taken: &[Taken],
+    name: String,
+    mesh: Mesh,
+) -> Result<String, String> {
+    if !taken.iter().all(|model| model.is_current(scene)) {
+        return Err(tr!("job-model-changed", name = name));
+    }
+    for model in taken {
+        scene.remove(model.id);
     }
     let (_, mended) = crate::cut::place(scene, name, mesh);
-    crate::cut::mending(usize::from(mended))
+    Ok(crate::cut::mending(usize::from(mended)))
 }
 
 /// The names of the models a combination would take, in the order they were picked.
@@ -131,7 +139,7 @@ mod tests {
     use core_geometry::{Transform, Vec3, cuboid, diagnose, signed_volume};
 
     use super::*;
-    use crate::scene::{ImportSummary, Imported};
+    use crate::scene::{ImportSummary, Imported, ObjectId};
 
     fn cube_at(scene: &mut Scene, name: &str, at: Vec3) -> ObjectId {
         let mesh = cuboid(Vec3::ZERO, Vec3::splat(20.0));
@@ -214,6 +222,28 @@ mod tests {
         };
         let status = run(&mut tool, &mut scene);
         assert_eq!(status, Status::Error(tr!("boolean-nothing-left")));
+        assert_eq!(scene.objects().len(), 2, "nothing was replaced");
+    }
+
+    #[test]
+    fn a_model_moved_while_it_was_combined_keeps_its_place_and_the_result_is_dropped() {
+        let (mut scene, first, second) = two_picked();
+        let mut tool = BooleanTool::default();
+        tool.start(&scene).expect("two models are picked");
+        scene
+            .get_mut(first)
+            .expect("the first cube is on the plate")
+            .transform
+            .translation = Vec3::splat(100.0);
+        let mut status = Status::default();
+        while tool.poll(&mut scene, &mut status) {
+            std::thread::yield_now();
+        }
+        assert_eq!(
+            status,
+            Status::Error(tr!("job-model-changed", name = "first"))
+        );
+        assert!(scene.get(first).is_some() && scene.get(second).is_some());
         assert_eq!(scene.objects().len(), 2, "nothing was replaced");
     }
 }

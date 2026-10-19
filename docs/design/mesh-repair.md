@@ -133,7 +133,7 @@ keyed by sorted corners.
 
 Repair adds surface the file never had, so it runs only when the user presses Repair
 (ADR 0194, 0270). The order is collapse the faces with no area whose corners stand on one
-point (ADR 0309), drop the doubled faces, orient, fill, drop the doubled
+point (ADR 0310), drop the doubled faces, orient, fill, drop the doubled
 faces again, orient. If the result has more boundary edges, degenerate faces and
 duplicates between them than the input had, the input stands.
 

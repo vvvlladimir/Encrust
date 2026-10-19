@@ -162,6 +162,7 @@ impl Heightmap {
         &self.samples
     }
 
+    /// The heights to change in place, in the order [`Heightmap::samples`] gives them.
     pub fn samples_mut(&mut self) -> &mut [Scalar] {
         &mut self.samples
     }

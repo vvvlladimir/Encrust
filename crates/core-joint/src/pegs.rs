@@ -163,7 +163,9 @@ pub(crate) fn peg(halves: &Halves<'_>, kind: JointKind, pegs: Pegs, magnets: Mag
         placed.extend(spots.into_iter().map(|(_, placed)| placed));
     }
     if pegs.keyed && matches!(kind, JointKind::Pins | JointKind::Dowels) && placed.len() > 1 {
-        placed[0].radius_mm = (placed[0].radius_mm * KEYED_SHARE).max(KEYED_LEAST_MM);
+        let radius_mm = placed[0].radius_mm;
+        let least_mm = (KEYED_LEAST_MM / 2.0).min(radius_mm);
+        placed[0].radius_mm = (radius_mm * KEYED_SHARE).max(least_mm);
     }
     built(
         &placed,
@@ -205,7 +207,9 @@ fn fixing_for(
             .map(|cell| section.distance[*cell])
             .fold(0.0, Scalar::max);
         let (least, most) = AUTO_DIAMETER_MM;
-        let diameter = ((AUTO_SHARE * widest * 2.0).floor() / 2.0).clamp(least, most);
+        // `widest` is a radius; the diameter is rounded down to 0.5 mm.
+        let diameter = (AUTO_SHARE * 2.0 * widest * 2.0).floor() / 2.0;
+        let diameter = diameter.clamp(least, most);
         (diameter, AUTO_LENGTH * diameter)
     } else {
         (pegs.diameter_mm, pegs.length_mm)

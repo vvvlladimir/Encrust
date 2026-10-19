@@ -1,11 +1,11 @@
-# 0302. Do exact mesh booleans in `core-csg`, over `boolmesh`
+# 0303. Do exact mesh booleans in `core-csg`, over `boolmesh`
 
 - **Status:** Accepted
 - **Date:** 2026-10-18
 
 ## Context
 
-The lattice of a hollow needs cells and holes cut exactly from a cavity (ADR 0301), and the
+The lattice of a hollow needs cells and holes cut exactly from a cavity (ADR 0302), and the
 plan's next steps need the same operation between models (union, subtract, intersect),
 under raised or sunk text, and with primitives. The workspace had booleans only by
 sampling a distance field, which rounds every edge to the voxel. An exact boolean over
@@ -39,8 +39,10 @@ and counts. Using `BTreeMap` in its `boolean45` would fix that; it is worth send
 
 Its input must be a solid: open or self-crossing meshes are refused. It panics on an edge
 more than two faces use, so `Solid::new` splits such seams first, drawing the copies of a
-split vertex `1e-4` mm apart, and turns any panic of the engine into an error. A caller that
-has to answer anyway keeps a fallback — the lattice falls back on the field (ADR 0301), and
+split vertex `1e-4` mm apart, and turns any panic of the engine into an error — on the
+desktop only: `wasm32` aborts on a panic, so in the browser the seam splitting is the whole
+guard and a panic the engine still raises ends the page. A caller that
+has to answer anyway keeps a fallback — the lattice falls back on the field (ADR 0302), and
 model booleans will need to weld and check first.
 
 Reopen if `boolmesh` stalls, if a real model it refuses turns out common, or if its speed

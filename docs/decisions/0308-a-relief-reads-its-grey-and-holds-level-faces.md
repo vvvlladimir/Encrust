@@ -1,4 +1,4 @@
-# 0307. Read a relief's grey and hold its level faces in the press
+# 0308. Read a relief's grey and hold its level faces in the press
 
 - **Status:** Accepted
 - **Date:** 2026-10-18

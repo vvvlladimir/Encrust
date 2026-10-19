@@ -255,10 +255,10 @@ pub struct CutState {
     /// centre of mass. Named for the Z cut it began as.
     pub height_mm: Scalar,
     pub keep: Keep,
-    /// A file without them reads as a plain cut (ADR 0305).
+    /// A file without them reads as a plain cut (ADR 0306).
     #[serde(default)]
     pub joints: Joints,
-    /// What Split into its parts goes by; a file without it reads the defaults (ADR 0306).
+    /// What Split into its parts goes by; a file without it reads the defaults (ADR 0307).
     #[serde(default)]
     pub parts: PartSettings,
 }
@@ -577,6 +577,7 @@ mod tests {
 
     use super::*;
     use core_geometry::Vec3;
+    use core_volume::InfillPattern;
 
     /// A plate of `objects` models, each hollowed, so every part of the format is in it:
     /// a manifest, a source mesh and a shell beside it.
@@ -918,6 +919,15 @@ mod tests {
             Some(Mat3::from_diagonal(Vec3::new(2.0, 1.0, 0.5))),
             "an older shell was measured under the size of its scale"
         );
+    }
+
+    #[test]
+    fn infill_saved_before_walls_had_their_own_size_reads() {
+        let older = serde_json::json!({ "pattern": "grid", "size_mm": 5.0, "density": 0.15 });
+        let read: InfillSettings = serde_json::from_value(older).expect("a file from before reads");
+        assert_eq!(read.pattern, InfillPattern::Grid);
+        assert_eq!(read.cell_mm, 5.0, "the old cell size carries over");
+        assert_eq!(read.wall_mm, InfillSettings::default().wall_mm);
     }
 
     #[test]

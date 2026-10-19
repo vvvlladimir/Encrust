@@ -1,4 +1,4 @@
-# 0309. Move a relief's field as it is built, and collapse faces with no area
+# 0310. Move a relief's field as it is built, and collapse faces with no area
 
 - **Status:** Accepted
 - **Date:** 2026-10-19

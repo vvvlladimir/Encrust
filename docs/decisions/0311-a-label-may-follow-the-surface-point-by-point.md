@@ -1,11 +1,11 @@
-# 0310. Let a label follow the surface, its letters filled fine and laid point by point
+# 0311. Let a label follow the surface, its letters filled fine and laid point by point
 
 - **Status:** Accepted
 - **Date:** 2026-10-19
 
 ## Context
 
-A label is flat (ADR 0304): on a face that curves away by more than the depth, raised
+A label is flat (ADR 0305): on a face that curves away by more than the depth, raised
 letters stand off the surface at their ends and sunk ones cut deeper there. Text on a
 scanned figure, a bottle or a sphere needs every letter to keep the depth off the surface
 under it. The flat label keeps its own reason to exist — it never reaches past twice the

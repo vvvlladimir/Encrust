@@ -7,12 +7,12 @@ use core_volume::{
 
 use crate::i18n::tr;
 use crate::job::pipeline::{thread_pool, worker_threads};
-use crate::scene::ObjectId;
+use crate::scene::Taken;
 
 /// The models a combination takes, already placed on the plate, the first being what a
 /// difference keeps.
 pub struct BooleanRequest {
-    pub ids: Vec<ObjectId>,
+    pub taken: Vec<Taken>,
     pub name: String,
     pub placed: Vec<Mesh>,
     pub op: Boolean,
@@ -24,10 +24,10 @@ pub struct BooleanRequest {
 }
 
 /// How a combination ended.
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone)]
 pub enum BooleanOutcome {
     Combined {
-        ids: Vec<ObjectId>,
+        taken: Vec<Taken>,
         name: String,
         mesh: Mesh,
         /// The lattice it was sampled on, millimetres, when it could not be cut exactly.
@@ -86,7 +86,7 @@ fn run(request: BooleanRequest) -> BooleanOutcome {
     });
     match combined {
         Ok(combined) => BooleanOutcome::Combined {
-            ids: request.ids,
+            taken: request.taken,
             name: request.name,
             mesh: combined.mesh,
             voxel_mm: combined.voxel_mm,

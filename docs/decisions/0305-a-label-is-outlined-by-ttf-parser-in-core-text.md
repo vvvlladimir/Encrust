@@ -1,6 +1,6 @@
-# 0304. Outline a label with `ttf-parser` in `core-text`, and offer the machine's fonts
+# 0305. Outline a label with `ttf-parser` in `core-text`, and offer the machine's fonts
 
-- **Status:** Accepted; that the letters are flat is superseded by 0310
+- **Status:** Accepted; that the letters are flat is superseded by 0311
 - **Date:** 2026-10-18
 
 ## Context
@@ -8,7 +8,7 @@
 A user wants a name, a part number or a date on a print, raised out of a face or sunk into
 it, in a font they choose, placed where they click. That needs a font read into outlines,
 the outlines filled into flat letters with their counters open, the letters stood up and
-joined to the model. The join is `core_volume::combine` (ADR 0303); the filling is the ear
+joined to the model. The join is `core_volume::combine` (ADR 0304); the filling is the ear
 clipping `core-geometry` already caps a cut with (ADR 0089). What is missing is a font
 reader, and with it a list of fonts to pick from.
 

@@ -1,4 +1,4 @@
-# 0308. Ship a dozen height maps in the window
+# 0309. Ship a dozen height maps in the window
 
 - **Status:** Accepted
 - **Date:** 2026-10-19

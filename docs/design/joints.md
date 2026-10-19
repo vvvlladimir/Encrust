@@ -1,7 +1,7 @@
 # Joints
 
 How `core_joint::join` finds room on a cut face, sizes what goes there and builds it into
-the two halves. Why it is done this way is in ADR 0305.
+the two halves. Why it is done this way is in ADR 0306.
 
 ## The face on a grid
 

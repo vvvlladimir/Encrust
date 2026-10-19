@@ -30,6 +30,7 @@ pub struct ReliefBasis {
     united: Option<(Mesh, Bvh)>,
     /// The lattice precision asked for, and the one the budget allowed, mm.
     asked_mm: Scalar,
+    budget_bytes: usize,
     grid: VoxelGrid,
     middle_mm: Scalar,
     reach_mm: Scalar,
@@ -94,10 +95,12 @@ impl ReliefBasis {
     }
 
     /// Whether a press of `mesh` with `settings` would build this very basis again.
+    #[expect(clippy::float_cmp, reason = "the same settings compute the same bits")]
     pub(super) fn fits(&self, mesh: &Mesh, settings: &ReliefSettings) -> bool {
         let (middle_mm, reach_mm) = settings.range_mm();
         self.shape == Shape::of(mesh)
             && self.asked_mm == settings.voxel_mm(mesh.surface_area())
+            && self.budget_bytes == settings.budget_bytes
             && self.middle_mm == middle_mm
             && self.reach_mm == reach_mm
     }
@@ -168,6 +171,7 @@ impl ReliefBasis {
             shape: Shape::of(mesh),
             united: None,
             asked_mm,
+            budget_bytes: settings.budget_bytes,
             grid: built.grid,
             middle_mm,
             reach_mm,
@@ -197,7 +201,7 @@ impl Press<'_> {
     fn tile_on(&self, basis: &ReliefBasis, tile: IVec3, records: &[u32]) -> Box<[Quantised]> {
         let base = tile * TILE;
         let band_mm = basis.band_mm;
-        (0..TILE_VALUES as i32)
+        (0..TILE * TILE * TILE)
             .map(|index| {
                 let record = records[index as usize];
                 let local = IVec3::new(index % TILE, (index / TILE) % TILE, index / (TILE * TILE));

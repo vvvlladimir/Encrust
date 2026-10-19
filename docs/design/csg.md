@@ -1,7 +1,7 @@
 # Exact booleans
 
 `core-csg` unions, subtracts and intersects closed meshes exactly, over `boolmesh`, a pure
-Rust port of the Manifold algorithm (ADR 0302). The field in `core-volume` does the same
+Rust port of the Manifold algorithm (ADR 0303). The field in `core-volume` does the same
 by sampling; this is the answer when the edges must stay sharp and the faces few.
 
 ## A solid
@@ -54,7 +54,7 @@ is not. Tests compare face counts, volumes and vertices, never the list.
 
 ## Combining models
 
-`core_volume::combine` is what the window's Combine models runs (ADR 0303). Each model is
+`core_volume::combine` is what the window's Combine models runs (ADR 0304). Each model is
 split into its shells and they are unioned first: the engine reads shells that cross — a
 part pushed into a base — without a complaint, and then counts what they share twice. A
 model with a shell wound inward is a part with a cavity, and is read whole. The models are
@@ -68,7 +68,7 @@ each a field on one lattice — precision 0.5 at their combined area, coarsened 
 as hollowing is — combined by `min`, `max` and `max(a, -b)` and extracted once.
 `combine_exact` is the same without the field, refusing with `NotSolid`.
 
-`combine_exact_toward` is what labels take (ADR 0311). The first model is cut by a plane
+`combine_exact_toward` is what labels take (ADR 0312). The first model is cut by a plane
 square to the side the others stand on, 0.5 mm under the lowest of them, and only the side
 above goes through the engine with them. The cut makes every point on it once, keyed by the
 edge it came from, so both halves carry it bit for bit. On the side below the cap is its last

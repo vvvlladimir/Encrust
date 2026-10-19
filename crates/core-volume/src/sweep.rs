@@ -599,6 +599,10 @@ fn tile_values<T: Copy>(
 /// closed.
 const SIDED: i32 = 4;
 
+/// What a lattice value is written as, from its signed distance, its point and the nearest
+/// point of the mesh.
+type Written<'a, T> = &'a dyn Fn(Scalar, Vec3, &ClosestPoint) -> T;
+
 /// Writes one block of a tile and says whether the band crossed it.
 #[allow(clippy::too_many_arguments)]
 fn block_values<T>(
@@ -607,7 +611,7 @@ fn block_values<T>(
     grid: VoxelGrid,
     (block, settled): (IVec3, Option<bool>),
     work: &[Nearest],
-    band: (Scalar, Scalar, &dyn Fn(Scalar, Vec3, &ClosestPoint) -> T),
+    band: (Scalar, Scalar, Written<'_, T>),
     found: &mut Vec<(usize, Vec3, ClosestPoint)>,
     values: &mut [T],
 ) -> bool {

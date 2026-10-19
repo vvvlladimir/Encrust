@@ -58,10 +58,13 @@ impl InfillPattern {
 
 /// What fills the cavity and the size of each part of it, all lengths in millimetres.
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+// A project saved before walls and holes had their own sizes still opens.
+#[serde(default)]
 pub struct InfillSettings {
     pub pattern: InfillPattern,
     /// Across one cell: a hexagon's corners for a hive, a square's side for a grid, the
     /// cube's edge for a scaffold.
+    #[serde(alias = "size_mm")]
     pub cell_mm: Scalar,
     /// Thickness of the wall between two cells of a hive or a grid.
     pub wall_mm: Scalar,

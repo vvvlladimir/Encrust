@@ -10,7 +10,7 @@ use core_volume::Boolean;
 
 use crate::i18n::tr;
 use crate::job::{BooleanJob, BooleanOutcome, BooleanRequest};
-use crate::scene::{ObjectId, Scene, SceneObject};
+use crate::scene::{ObjectId, Scene, SceneObject, Taken};
 use crate::status::Status;
 
 /// The family the tool writes in until another is picked: the window's own, compiled in.
@@ -234,7 +234,7 @@ impl TextTool {
         let mut placed = vec![transform_mesh(&object.mesh, object.transform)];
         placed.extend(label.prisms);
         self.job = Some(BooleanJob::spawn(BooleanRequest {
-            ids: vec![id],
+            taken: vec![Taken::of(object)],
             name: object.name.clone(),
             placed,
             op: if label.raised {
@@ -258,11 +258,11 @@ impl TextTool {
         self.job = None;
         *status = match outcome {
             BooleanOutcome::Combined {
-                ids, name, mesh, ..
-            } => {
-                let mending = crate::boolean::land(scene, &ids, name.clone(), mesh);
-                Status::Info(tr!("text-done", name = name, mending = mending))
-            }
+                taken, name, mesh, ..
+            } => match crate::boolean::land(scene, &taken, name.clone(), mesh) {
+                Ok(mending) => Status::Info(tr!("text-done", name = name, mending = mending)),
+                Err(changed) => Status::Error(changed),
+            },
             BooleanOutcome::Failed(message) => Status::Error(message),
         };
         false

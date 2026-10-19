@@ -1,7 +1,7 @@
 # Parts
 
 How `core_volume::parts` splits a model into the parts a user would name. Why it is done
-this way is in ADR 0306.
+this way is in ADR 0307.
 
 ## Shells
 

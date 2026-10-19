@@ -25,47 +25,10 @@ impl Press<'_> {
         let signer = Signer::new(self.mesh, SignMode::Auto);
         let limit_mm = SNAP_LIMIT_VOXELS * field.grid().voxel_mm;
         let placed = mesh.vertices.clone();
-        let t0 = std::time::Instant::now(); // [DEBUG-q7x2]
-        let err = |vs: &[Vec3]| {
-            let e: Vec<Scalar> = vs
-                .par_iter()
-                .filter_map(|v| {
-                    let f = self.bvh.closest(self.mesh, *v)?;
-                    Some(self.pressed_value(*v, &f, &signer))
-                })
-                .map(Scalar::abs)
-                .collect();
-            (
-                e.iter().sum::<Scalar>() / e.len() as Scalar,
-                e.iter().copied().fold(0.0, Scalar::max),
-            )
-        }; // [DEBUG-q7x2]
-        let before = if std::env::var("ERR").is_ok() {
-            err(&mesh.vertices)
-        } else {
-            (0.0, 0.0)
-        }; // [DEBUG-q7x2]
-        if std::env::var("NOSNAP").is_err() {
-            // [DEBUG-q7x2]
-            mesh.vertices
-                .par_iter_mut()
-                .for_each(|vertex| *vertex = self.snapped(*vertex, field, &signer, limit_mm));
-            unflip(mesh, &placed);
-        } // [DEBUG-q7x2]
-        let after = if std::env::var("ERR").is_ok() {
-            err(&mesh.vertices)
-        } else {
-            (0.0, 0.0)
-        }; // [DEBUG-q7x2]
-        eprintln!(
-            "[DEBUG-q7x2] snap {:.2}s verts {} err before mean {:.4} max {:.4} after mean {:.4} max {:.4}",
-            t0.elapsed().as_secs_f32(),
-            mesh.vertices.len(),
-            before.0,
-            before.1,
-            after.0,
-            after.1
-        ); // [DEBUG-q7x2]
+        mesh.vertices
+            .par_iter_mut()
+            .for_each(|vertex| *vertex = self.snapped(*vertex, field, &signer, limit_mm));
+        unflip(mesh, &placed);
     }
 
     /// Where Newton's method along the field's slope takes `start`, stopping at the first
@@ -132,9 +95,8 @@ fn gradient(field: &Sdf, point: Vec3) -> Vec3 {
     let low = grid.voxel(point);
     let at = ((point - grid.position(low)) / grid.voxel_mm).clamp(Vec3::ZERO, Vec3::ONE);
     let corner = |x: i32, y: i32, z: i32| field.value(low + IVec3::new(x, y, z));
-    let values: [[[Scalar; 2]; 2]; 2] = std::array::from_fn(|z| {
-        std::array::from_fn(|y| std::array::from_fn(|x| corner(x as i32, y as i32, z as i32)))
-    });
+    let values: [[[Scalar; 2]; 2]; 2] =
+        [0, 1].map(|z| [0, 1].map(|y| [0, 1].map(|x| corner(x, y, z))));
     let lerp = |a: Scalar, b: Scalar, t: Scalar| a + (b - a) * t;
     // Each component is the difference across one axis, blended over the other two.
     let across = |pick: &dyn Fn(usize, usize) -> (Scalar, Scalar), u: Scalar, v: Scalar| {
@@ -179,7 +141,7 @@ mod tests {
 
     use super::*;
     use crate::grid::{TILE, VoxelGrid};
-    use crate::sdf::{Quantised, TILE_VALUES, encode};
+    use crate::sdf::{Quantised, encode};
 
     #[test]
     fn the_slope_of_a_field_rising_through_a_plane_is_its_normal() {
@@ -188,7 +150,7 @@ mod tests {
         let rise = Vec3::new(0.48, -0.6, 0.64);
         let grid = VoxelGrid::new(0.1);
         let band_mm = 2.0;
-        let values: Box<[Quantised]> = (0..TILE_VALUES as i32)
+        let values: Box<[Quantised]> = (0..TILE * TILE * TILE)
             .map(|index| {
                 let voxel = IVec3::new(index % TILE, (index / TILE) % TILE, index / (TILE * TILE));
                 encode(grid.position(voxel).dot(rise) - 0.3, band_mm)

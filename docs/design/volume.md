@@ -111,7 +111,7 @@ than `TRUST_VOXELS` carrier steps the carrier is not believed — the lateral mi
 about `step² / 2d` and that blows up as `d` falls — and the hierarchy is asked for that
 voxel, but only where the value would not be clamped to the band anyway. It is asked
 `closest_within` the carried face's own distance: only a nearer face can win, so the
-search culls from its first node and still comes back exact (ADR 0309).
+search culls from its first node and still comes back exact (ADR 0310).
 
 Neither the distance nor the side is carried with the face. The distance is a
 `point_triangle` away, and four more bytes a voxel over a shell is not affordable. The side
@@ -165,7 +165,7 @@ around the middle of the range the surface can move over, as an iso level, and a
 half that range on top of what marching needs, so the moved surface stays in the tiles the
 field stored. The height is subtracted as each value is built (`build_moved`), at the
 nearest point the build asked the hierarchy for anyway, rather than by a second query per
-lattice point afterwards (ADR 0309).
+lattice point afterwards (ADR 0310).
 
 The relief is only as fine as the lattice, whatever the image's resolution, and only as
 continuous as the map: a UV that jumps between two faces jumps the surface with it, and so
@@ -189,7 +189,7 @@ takes two equally. Its axes are the model's own, at the size it prints at (ADR 0
 Both read the image through `prepared`: blurred by `smoothing_px` with three box passes of
 radius `r`, `r(r + 1) = σ²`, wrapping at the edges because a texture tiles, then turned over
 if `invert` asks. `symmetric` reads each height less one half, so mid grey stays put and
-the relief spans half the amplitude either way (ADR 0307).
+the relief spans half the amplitude either way (ADR 0308).
 
 An `AngleMask` holds the faces within `bottom_deg` of `-up` or `top_deg` of `up`, in a
 hierarchy of their own. A lattice point whose nearest held point is as near as its nearest
@@ -201,6 +201,17 @@ off its normal, takes the larger of its moved value and its distance above the h
 the moved solid intersected with the half-space behind that face, on both sides of the
 plane so the lattice interpolates the cut onto it. A point straight over a held face is not
 cut, because it lies in the open under an overhang beside a wall that keeps its relief.
+
+The pressed field is meshed with a clustering slack of 0.05 voxel instead of half, so a flat
+face the relief left alone still merges into facets and the relief itself does not. The
+lattice then places each vertex only to within half a voxel, so every vertex takes up to
+three Newton steps along the field's slope onto the surface the picture describes, read
+exactly at the model's nearest point, each stopping once it brings the vertex no nearer
+and all of them together held to half a voxel. A face those steps turn over has its corners
+put back where the lattice placed them, for up to four rounds, since each can turn a
+neighbour. The search for each lattice point's nearest face is most of a press and depends
+only on the model, the lattice and the range, so it is kept as a `ReliefBasis` and a second
+picture pressed into the same mesh reuses it.
 
 ## Extraction
 
@@ -233,7 +244,7 @@ crosses the surface there, so their vertices are one point, or a rounding of an 
 A triangle between two of them has no area, and a mesh with one reads as broken. The
 corners of such a triangle within `1e-4` mm are welded, which collapses the zero-length
 edge the way a decimator would and keeps the surface closed (`collapse_flat_faces`,
-ADR 0309).
+ADR 0310).
 
 A quad around an edge on a tile's lowest face names cells of the tiles below it, which the
 field need not store when the surface only crosses the face they share. Those tiles are

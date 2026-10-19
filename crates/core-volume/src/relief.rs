@@ -138,7 +138,7 @@ pub fn press(
 }
 
 /// [`press`] over `basis` where it fits this model and these settings, and the basis the
-/// press stood on, for the caller to keep.
+/// press stood on, for the caller to keep beside this very mesh: only its size is compared.
 pub fn press_reusing(
     mesh: &Mesh,
     bvh: &Bvh,
@@ -218,7 +218,7 @@ pub fn press_tiled(
 }
 
 /// [`press_tiled`] over `basis` where it fits this model and these settings, and the
-/// basis the press stood on, for the caller to keep.
+/// basis the press stood on, for the caller to keep beside this very mesh.
 pub fn press_tiled_reusing(
     mesh: &Mesh,
     bvh: &Bvh,
@@ -263,12 +263,7 @@ fn displaced(
 ) -> Result<(Relief, Arc<ReliefBasis>), VolumeError> {
     let basis = match reused {
         Some(basis) if basis.fits(mesh, settings) => basis,
-        _ => {
-            let t = std::time::Instant::now();
-            let b = Arc::new(ReliefBasis::build(mesh, bvh, settings)?);
-            eprintln!("[DEBUG-q7x2] basis {:.2}s", t.elapsed().as_secs_f32());
-            b
-        } // [DEBUG-q7x2]
+        _ => Arc::new(ReliefBasis::build(mesh, bvh, settings)?),
     };
     let (surface, hierarchy) = basis.surface(mesh, bvh);
     let press = Press {
@@ -303,16 +298,8 @@ impl Press<'_> {
     /// The pressed surface over `basis`, meshed and taken onto the surface the texture
     /// describes.
     fn pressed(&self, basis: &ReliefBasis) -> Mesh {
-        let t0 = std::time::Instant::now(); // [DEBUG-q7x2]
         let field = self.field_on(basis);
-        eprintln!("[DEBUG-q7x2] field_on {:.2}s", t0.elapsed().as_secs_f32()); // [DEBUG-q7x2]
-        let t1 = std::time::Instant::now(); // [DEBUG-q7x2]
-        let slack = std::env::var("SLACK")
-            .ok()
-            .and_then(|v| v.parse().ok())
-            .unwrap_or(RELIEF_SLACK_VOXELS); // [DEBUG-q7x2]
-        let mut pressed = extract_clustered(&field, slack, Cancel::never());
-        eprintln!("[DEBUG-q7x2] extract {:.2}s", t1.elapsed().as_secs_f32()); // [DEBUG-q7x2]
+        let mut pressed = extract_clustered(&field, RELIEF_SLACK_VOXELS, Cancel::never());
         self.snap(&mut pressed, &field);
         // Snapping can bring two vertices onto one point where a feature narrows to one.
         collapse_flat_faces(&mut pressed);

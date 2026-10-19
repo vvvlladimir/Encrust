@@ -98,6 +98,35 @@ fn pins_stand_on_the_lower_half_and_sockets_go_into_the_upper() {
 }
 
 #[test]
+fn an_automatic_pin_is_half_as_wide_as_the_face_it_stands_on() {
+    let (mesh, plane) = block();
+    let halves = Halves {
+        cut: cut(&mesh, plane),
+        plane,
+        printed: &mesh,
+        solid: None,
+    };
+    let pegs = Pegs {
+        auto_size: true,
+        keyed: false,
+        ..Pegs::default()
+    };
+    let joined = join(halves, &joints(JointKind::Pins, pegs)).expect("a block joins");
+    assert!(joined.placed > 0, "a 10 mm wide face holds a pin");
+    let top = joined
+        .below
+        .vertices
+        .iter()
+        .map(|vertex| vertex.z)
+        .fold(0.0, Scalar::max);
+    // A 10 mm face holds a 10 mm circle: a pin about 5 mm wide and 7.5 mm long.
+    assert!(
+        (16.5..=17.5 + 1e-3).contains(&top),
+        "pins of about 5 mm by 7.5 mm stand on the cut at 10 mm, got a top at {top}"
+    );
+}
+
+#[test]
 fn dowels_leave_sockets_in_both_halves_and_print_beside_them() {
     let (mesh, plane) = block();
     let halves = Halves {
@@ -193,6 +222,38 @@ fn a_hollow_model_carries_its_pins_on_pillars_over_the_cavity() {
 }
 
 #[test]
+fn a_thin_wall_cut_beside_a_thick_body_still_takes_a_key() {
+    let (solid, plane) = block();
+    let cavity = cuboid(Vec3::splat(1.4), Vec3::new(38.6, 8.6, 18.6));
+    let body = cuboid(Vec3::new(50.0, 0.0, 0.0), Vec3::new(70.0, 20.0, 20.0));
+    let mut both = solid.clone();
+    for (other, inward) in [(&cavity, true), (&body, false)] {
+        let offset = both.vertices.len() as u32;
+        both.vertices.extend(&other.vertices);
+        both.faces.extend(other.faces.iter().map(|[a, b, c]| {
+            if inward {
+                [a + offset, c + offset, b + offset]
+            } else {
+                [a + offset, b + offset, c + offset]
+            }
+        }));
+    }
+    let halves = Halves {
+        cut: cut(&both, plane),
+        plane,
+        printed: &both,
+        solid: None,
+    };
+    let key = Joints {
+        kind: Some(JointKind::Key),
+        ..Joints::default()
+    };
+    let joined = join(halves, &key).expect("a shell and a block join");
+    // The 20 mm body must not hold the 1.4 mm wall's tongue to its own 0.9 mm inset.
+    assert_eq!((joined.placed, joined.bare), (2, 0));
+}
+
+#[test]
 fn a_thin_shell_takes_a_key_round_its_wall() {
     let (_, shell, plane) = hollow_block();
     let halves = Halves {
@@ -211,9 +272,8 @@ fn a_thin_shell_takes_a_key_round_its_wall() {
     )
     .expect("a shell joins");
     assert_eq!((joined.placed, joined.bare), (1, 0));
-    // The 2 mm wall narrows the 1.2 mm tongue to its middle 1 mm, 2 mm high, round a ring
-    // whose middle line is 2 × (38 + 8) = 92 mm long; the 0.1 mm grid reads each side of
-    // it to half a cell.
+    // The 2 mm wall narrows the 1.2 mm tongue to its middle 1 mm, 2 mm high, round a
+    // 2 × (38 + 8) = 92 mm ring; the 0.1 mm grid reads each side to half a cell.
     let tongue = solid_volume(&joined.below, "the lower half") - lower_before;
     near(
         tongue,

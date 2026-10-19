@@ -691,6 +691,7 @@ boolean-done-sampled =
 job-thread-stopped-boolean = the combining thread stopped without finishing
 job-thread-stopped-cut = the cutting thread stopped without finishing
 job-thread-stopped-split = the splitting thread stopped without finishing
+job-model-changed = { $name } changed while it was being worked on, so the result was dropped
 
 ## panels/title_bar.rs
 

@@ -87,12 +87,12 @@ Grouped by what the decision governs; the number is still the order it was taken
 | [0269](0269-orientation-never-worsens-and-a-fold-is-only-noted.md) | Orientation never worsens a file, and a fold is noted rather than asked about | Accepted |
 | [0270](0270-repair-cancels-what-encloses-nothing-and-never-worsens.md) | Repair cancels what encloses nothing, patches by least area, and never worsens | Accepted |
 | [0271](0271-import-geometry-runs-on-rayon.md) | Weld, index and sort a mesh's edges on rayon, with the same result one thread gives | Accepted |
-| [0223](0223-a-cut-is-pinned-by-a-shell-and-a-drain.md) | Pin a cut by an added shell and a drain hole | Superseded by 0305 |
-| [0305](0305-a-cut-is-joined-in-core-joint-by-exact-booleans.md) | Join a cut in `core-joint`, by pins, dowels, magnets or a key | Accepted |
-| [0306](0306-a-model-is-split-by-edges-and-parted-at-narrow-joins.md) | Split a model by shared edges, with its scraps, and cut a marked part off at its narrowest join | Accepted |
-| [0307](0307-a-relief-reads-its-grey-and-holds-level-faces.md) | Read a relief's grey and hold its level faces in the press | Accepted |
-| [0308](0308-ship-a-dozen-height-maps-in-the-window.md) | Ship a dozen height maps in the window | Accepted |
-| [0309](0309-a-field-is-moved-as-it-is-built-and-flat-faces-collapse.md) | Move a relief's field as it is built, and collapse faces with no area | Accepted |
+| [0223](0223-a-cut-is-pinned-by-a-shell-and-a-drain.md) | Pin a cut by an added shell and a drain hole | Superseded by 0306 |
+| [0306](0306-a-cut-is-joined-in-core-joint-by-exact-booleans.md) | Join a cut in `core-joint`, by pins, dowels, magnets or a key | Accepted |
+| [0307](0307-a-model-is-split-by-edges-and-parted-at-narrow-joins.md) | Split a model by shared edges, with its scraps, and cut a marked part off at its narrowest join | Accepted |
+| [0308](0308-a-relief-reads-its-grey-and-holds-level-faces.md) | Read a relief's grey and hold its level faces in the press | Accepted |
+| [0309](0309-ship-a-dozen-height-maps-in-the-window.md) | Ship a dozen height maps in the window | Accepted |
+| [0310](0310-a-field-is-moved-as-it-is-built-and-flat-faces-collapse.md) | Move a relief's field as it is built, and collapse faces with no area | Accepted |
 
 ### Mesh and texture input
 
@@ -216,7 +216,7 @@ Grouped by what the decision governs; the number is still the order it was taken
 | [0057](0057-a-field-is-band-tiles-and-solid-runs-on-a-global-lattice.md) | A field is band tiles and solid runs, on one global lattice | Accepted |
 | [0058](0058-the-band-is-built-around-an-isosurface.md) | The band is built around an isosurface, not around the mesh | Accepted; the bottom-through field it prices is dropped by 0189 |
 | [0059](0059-a-hollow-is-the-model-with-its-cavity-appended.md) | A hollow is the model with its cavity appended, not welded | Superseded by 0185 (the space the wall is measured in only); `BottomThrough` dropped by 0189 |
-| [0060](0060-a-lattice-is-boxes-clipped-to-the-cavity.md) | A lattice is boxes clipped to the cavity, not a field | Superseded by 0301 |
+| [0060](0060-a-lattice-is-boxes-clipped-to-the-cavity.md) | A lattice is boxes clipped to the cavity, not a field | Superseded by 0302 |
 | [0063](0063-a-field-is-built-to-a-memory-budget.md) | A field is priced and built to a memory budget | Accepted; the clipped floor field it names is dropped by 0189 |
 | [0064](0064-marching-cubes-merges-by-lattice-edge-in-layers.md) | Marching cubes merges by lattice edge, a layer at a time | Accepted |
 | [0065](0065-a-fields-distances-are-quantised-to-its-band.md) | A field's distances are quantised to its band | Accepted |
@@ -232,17 +232,17 @@ Grouped by what the decision governs; the number is still the order it was taken
 | [0185](0185-a-wall-is-measured-on-the-plate.md) | A wall is measured on the plate, not in the model's own space | Accepted |
 | [0186](0186-a-cavity-is-a-closed-surface-and-a-slice-follows-it-through-a-branch.md) | A cavity is a closed surface, and a slice follows it through a branch | Accepted |
 | [0188](0188-a-cut-outweighs-what-it-lands-in-and-a-channel-stays-a-pipe.md) | A cut outweighs what it lands in, and a channel stays a pipe | Accepted; the wall it drew is replaced by 0201 |
-| [0189](0189-resin-leaves-through-a-hole-and-a-lattice-never-closes-a-cell.md) | Resin leaves through a hole, and a lattice never closes a cell | Accepted; its marks are replaced by 0190, its automatic check by 0198, its openings by 0301's crossing holes |
+| [0189](0189-resin-leaves-through-a-hole-and-a-lattice-never-closes-a-cell.md) | Resin leaves through a hole, and a lattice never closes a cell | Accepted; its marks are replaced by 0190, its automatic check by 0198, its openings by 0302's crossing holes |
 | [0190](0190-the-space-that-holds-resin-is-painted-and-the-model-is-seen-through.md) | Paint the space that holds resin, and see the model through | Accepted; what opens the x-ray is amended by 0198, what is painted by 0200 |
 | [0200](0200-a-pocket-is-painted-on-its-own.md) | A pocket of trapped resin is painted on its own | Accepted |
 | [0198](0198-a-drainage-check-is-asked-for.md) | A drainage check is asked for, and the view it needs is the user's | Accepted |
 | [0201](0201-the-surface-of-a-cut-is-the-cut-itself.md) | The surface of a cut is the cut's own body, kept where it stands in material | Accepted |
-| [0301](0301-a-lattice-is-cut-exactly-from-the-cavity.md) | Cut the lattice exactly from the cavity's mesh, its cells joined by crossing holes | Accepted |
-| [0302](0302-exact-booleans-live-in-core-csg-over-boolmesh.md) | Do exact mesh booleans in `core-csg`, over `boolmesh` | Accepted |
-| [0303](0303-models-are-combined-exactly-and-sampled-where-they-are-torn.md) | Combine models exactly, and through the field where one is not a solid | Accepted |
-| [0304](0304-a-label-is-outlined-by-ttf-parser-in-core-text.md) | Outline a label with `ttf-parser` in `core-text`, and offer the machine's fonts | Accepted; that the letters are flat is superseded by 0310 |
-| [0310](0310-a-label-may-follow-the-surface-point-by-point.md) | Let a label follow the surface, its letters filled fine and laid point by point | Accepted |
-| [0311](0311-a-label-is-joined-through-the-side-of-the-model-it-stands-on.md) | Join a label through the side of the model it stands on | Accepted |
+| [0302](0302-a-lattice-is-cut-exactly-from-the-cavity.md) | Cut the lattice exactly from the cavity's mesh, its cells joined by crossing holes | Accepted |
+| [0303](0303-exact-booleans-live-in-core-csg-over-boolmesh.md) | Do exact mesh booleans in `core-csg`, over `boolmesh` | Accepted |
+| [0304](0304-models-are-combined-exactly-and-sampled-where-they-are-torn.md) | Combine models exactly, and through the field where one is not a solid | Accepted |
+| [0305](0305-a-label-is-outlined-by-ttf-parser-in-core-text.md) | Outline a label with `ttf-parser` in `core-text`, and offer the machine's fonts | Accepted; that the letters are flat is superseded by 0311 |
+| [0311](0311-a-label-may-follow-the-surface-point-by-point.md) | Let a label follow the surface, its letters filled fine and laid point by point | Accepted |
+| [0312](0312-a-label-is-joined-through-the-side-of-the-model-it-stands-on.md) | Join a label through the side of the model it stands on | Accepted |
 | [0204](0204-a-field-build-is-given-up-on-between-tiles.md) | A field build is given up on between tiles | Accepted |
 
 ### The plate

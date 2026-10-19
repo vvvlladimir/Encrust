@@ -5,7 +5,7 @@ blockers and assembly, `infill.rs` and `infill/` the lattices. Both stand on `vo
 
 Why: ADR 0058 (band on the isosurface), 0059 (cavity appended, not welded), 0063 (the
 budget), 0083 (the precision ceiling), 0189 (a hole is what drains a cavity), 0260 (kept
-fields), 0301 (the lattice is cut exactly from the cavity's mesh).
+fields), 0302 (the lattice is cut exactly from the cavity's mesh).
 
 ## What comes out
 
@@ -63,7 +63,7 @@ the same point — and an alt-click removes the one the click landed in.
 
 Each pattern is written down twice: as closed meshes on the global lattice — prisms for
 the cells, cylinders for the holes, square bars for the struts — and as a closed-form signed
-distance `solid(p)` (ADR 0301). The meshes are what a run cuts with, exactly, through
+distance `solid(p)` (ADR 0302). The meshes are what a run cuts with, exactly, through
 `core-csg` (`csg.md`): walls come out flat, holes round to `ROUND_TOLERANCE_MM`, and the
 faces follow the cells rather than the lattice the cavity was cut on.
 

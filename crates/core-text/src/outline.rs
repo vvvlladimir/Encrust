@@ -36,31 +36,35 @@ pub fn outline(font: &Font, text: &str, height_mm: Scalar) -> Result<Vec<Shape>,
     let scale = height_mm / Scalar::from(capitals.max(1));
     let line_mm = Scalar::from(face.ascender() - face.descender() + face.line_gap()) * scale;
 
-    let mut rings = Vec::new();
+    let mut shapes = Vec::new();
     for (row, line) in text.lines().enumerate() {
         let baseline = -(row as Scalar) * line_mm;
-        let start = rings.len();
-        let width = write_line(&face, line, scale, baseline, &mut rings)?;
-        for ring in &mut rings[start..] {
-            for point in ring.iter_mut() {
+        let start = shapes.len();
+        let width = write_line(&face, line, scale, baseline, &mut shapes)?;
+        for shape in &mut shapes[start..] {
+            for point in shape
+                .outer
+                .iter_mut()
+                .chain(shape.holes.iter_mut().flatten())
+            {
                 point.x -= width / 2.0;
             }
         }
     }
-    let shapes = nested(&rings);
     if shapes.is_empty() {
         return Err(TextError::Blank);
     }
     Ok(centred(shapes))
 }
 
-/// Outlines one line from x = 0 into `rings`, and answers how far it advanced.
+/// Outlines one line from x = 0 into `shapes`, and answers how far it advanced. Each glyph
+/// is nested on its own, so letters kerned into each other stay separate shapes.
 fn write_line(
     face: &Face<'_>,
     line: &str,
     scale: Scalar,
     baseline: Scalar,
-    rings: &mut Vec<Vec<Vec2>>,
+    shapes: &mut Vec<Shape>,
 ) -> Result<Scalar, TextError> {
     let mut pen = 0.0;
     let mut previous: Option<GlyphId> = None;
@@ -80,7 +84,7 @@ fn write_line(
         };
         face.outline_glyph(glyph, &mut pen_down);
         pen_down.close();
-        rings.extend(pen_down.rings);
+        shapes.extend(nested(&pen_down.rings));
         pen += Scalar::from(face.glyph_hor_advance(glyph).unwrap_or(0)) * scale;
         previous = Some(glyph);
     }
@@ -191,22 +195,28 @@ fn contains(ring: &[Vec2], point: Vec2) -> bool {
     inside
 }
 
-/// Rings grouped into shapes by how deep each lies in the others, whichever way the font
-/// winds them: a ring inside an even number of others is filled, inside an odd number it is
-/// a hole in the smallest ring around it.
+/// One glyph's rings grouped into shapes, whichever way the font winds them: a ring wound
+/// against the smallest ring around it is a hole in that ring, and any other is filled, so
+/// overlapping contours of one glyph stay filled as the nonzero rule fills them.
 fn nested(rings: &[Vec<Vec2>]) -> Vec<Shape> {
-    let parents: Vec<Vec<usize>> = rings
+    let parent: Vec<Option<usize>> = rings
         .iter()
         .enumerate()
         .map(|(index, ring)| {
             (0..rings.len())
                 .filter(|other| *other != index && contains(&rings[*other], ring[0]))
-                .collect()
+                .min_by(|a, b| area(&rings[*a]).abs().total_cmp(&area(&rings[*b]).abs()))
+        })
+        .collect();
+    let hole: Vec<bool> = (0..rings.len())
+        .map(|index| {
+            parent[index]
+                .is_some_and(|around| (area(&rings[around]) > 0.0) != (area(&rings[index]) > 0.0))
         })
         .collect();
     let mut shapes: Vec<(usize, Shape)> = Vec::new();
     for (index, ring) in rings.iter().enumerate() {
-        if parents[index].len().is_multiple_of(2) {
+        if !hole[index] {
             shapes.push((
                 index,
                 Shape {
@@ -217,16 +227,11 @@ fn nested(rings: &[Vec<Vec2>]) -> Vec<Shape> {
         }
     }
     for (index, ring) in rings.iter().enumerate() {
-        if !parents[index].len().is_multiple_of(2) {
-            let around = parents[index]
-                .iter()
-                .filter(|parent| parents[**parent].len() + 1 == parents[index].len())
-                .min_by(|a, b| area(&rings[**a]).abs().total_cmp(&area(&rings[**b]).abs()));
-            if let Some(shape) =
-                around.and_then(|parent| shapes.iter_mut().find(|(at, _)| at == parent))
-            {
-                shape.1.holes.push(wound(ring.clone(), false));
-            }
+        if hole[index]
+            && let Some(shape) =
+                parent[index].and_then(|around| shapes.iter_mut().find(|(at, _)| *at == around))
+        {
+            shape.1.holes.push(wound(ring.clone(), false));
         }
     }
     shapes.into_iter().map(|(_, shape)| shape).collect()
@@ -257,4 +262,33 @@ fn centred(mut shapes: Vec<Shape>) -> Vec<Shape> {
         }
     }
     shapes
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn square(low: Scalar, high: Scalar, anticlockwise: bool) -> Vec<Vec2> {
+        let ring = vec![
+            Vec2::new(low, low),
+            Vec2::new(high, low),
+            Vec2::new(high, high),
+            Vec2::new(low, high),
+        ];
+        wound(ring, anticlockwise)
+    }
+
+    #[test]
+    fn a_ring_wound_against_the_one_around_it_is_a_hole() {
+        let shapes = nested(&[square(0.0, 10.0, false), square(2.0, 8.0, true)]);
+        assert_eq!(shapes.len(), 1, "an O is one shape");
+        assert_eq!(shapes[0].holes.len(), 1, "with its counter as a hole");
+    }
+
+    #[test]
+    fn overlapping_contours_wound_alike_both_stay_filled() {
+        let shapes = nested(&[square(0.0, 10.0, false), square(5.0, 15.0, false)]);
+        assert_eq!(shapes.len(), 2, "the nonzero rule fills both");
+        assert!(shapes.iter().all(|shape| shape.holes.is_empty()));
+    }
 }

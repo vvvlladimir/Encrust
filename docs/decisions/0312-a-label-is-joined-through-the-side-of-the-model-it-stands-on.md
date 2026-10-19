@@ -1,11 +1,11 @@
-# 0311. Join a label through the side of the model it stands on
+# 0312. Join a label through the side of the model it stands on
 
 - **Status:** Accepted
 - **Date:** 2026-10-19
 
 ## Context
 
-A label is joined with `combine_exact` (ADR 0303, 0304), and every pass through the engine
+A label is joined with `combine_exact` (ADR 0304, 0305), and every pass through the engine
 costs the faces of the whole model however small the letters: reading a million-face model
 in takes about 1.2 s, a boolean with it about as long again, so writing on a dense scan took
 two and a half seconds after the union was made to take the model in once rather than three

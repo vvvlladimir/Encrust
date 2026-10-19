@@ -145,7 +145,7 @@ encrust slice part.stl \
 `--relief-invert` reads black as high, `--relief-symmetric` reads mid grey as the surface
 and moves it half of `--relief` either way, and `--relief-smooth` blurs the texture by that
 many of its pixels first. `--relief-hold-bottom` and `--relief-hold-top` leave the faces
-within that many degrees of facing the plate, or straight up, as they are (ADR 0307):
+within that many degrees of facing the plate, or straight up, as they are (ADR 0308):
 
 ```sh
 encrust slice part.stl \

@@ -729,6 +729,7 @@ boolean-done-sampled =
 job-thread-stopped-boolean = поток объединения остановился, не закончив
 job-thread-stopped-cut = поток разреза остановился, не закончив
 job-thread-stopped-split = поток разделения остановился, не закончив
+job-model-changed = пока шла работа, { $name } изменили, поэтому результат отброшен
 
 ## panels/title_bar.rs
 

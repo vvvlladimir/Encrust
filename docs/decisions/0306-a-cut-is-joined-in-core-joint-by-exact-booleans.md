@@ -1,4 +1,4 @@
-# 0305. Join a cut in `core-joint`, by pins, dowels, magnets or a key
+# 0306. Join a cut in `core-joint`, by pins, dowels, magnets or a key
 
 - **Status:** Accepted
 - **Date:** 2026-10-18
@@ -7,7 +7,7 @@
 
 ADR 0223 pinned a cut with a peg appended as a second shell and a socket drilled as a
 drain hole, for want of a mesh boolean, and said to reopen it when one landed. `core-csg`
-has one now (ADR 0302). The 0223 pins also fall short on a resin printer. A hollow model's
+has one now (ADR 0303). The 0223 pins also fall short on a resin printer. A hollow model's
 cut face is a wall too thin for any peg. A cut that crosses two legs could get both pins in
 one leg. Nothing checked that a socket fits in the half behind it. Two equal pins let the
 halves go together turned round. And a peg standing on a cut face keeps that face off the

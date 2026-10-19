@@ -437,6 +437,9 @@ impl eframe::App for SlicerApp {
         if self.tool != Tool::Relief {
             self.tools.relief.forget_kept();
         }
+        if self.tool != Tool::Cut {
+            self.tools.cut.picking_part = false;
+        }
         if self.machine.slicing.job.is_some() || self.machine.preview.is_slicing() {
             self.tools.hollow.make_way();
         }
