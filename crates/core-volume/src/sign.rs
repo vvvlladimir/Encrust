@@ -1,6 +1,5 @@
-use std::collections::HashMap;
-
 use core_geometry::{ClosestPoint, Mesh, Scalar, Vec3, Winding, diagnose};
+use rayon::prelude::*;
 
 /// Barycentric slack within which the nearest point counts as sitting on an edge or a
 /// vertex rather than inside the face. A hundredth of a percent of the triangle, which is
@@ -68,41 +67,28 @@ impl Signer {
 pub(crate) struct Pseudonormals {
     face: Vec<Vec3>,
     vertex: Vec<Vec3>,
-    edge: HashMap<(u32, u32), Vec3>,
+    /// Sorted by seam, for a binary search.
+    edge: Vec<((u32, u32), Vec3)>,
 }
 
+/// A face's unit normal and its interior angle at each corner, in radians.
+type Measured = Option<(Vec3, [Scalar; 3])>;
+
 impl Pseudonormals {
+    /// Faces are measured in parallel, and every sum is then taken in face order, so the
+    /// normals come out the same bits whatever the threads did.
     pub(crate) fn build(mesh: &Mesh) -> Self {
-        let mut face = vec![Vec3::ZERO; mesh.faces.len()];
-        let mut vertex = vec![Vec3::ZERO; mesh.vertices.len()];
-        let mut edge: HashMap<(u32, u32), Vec3> = HashMap::new();
-
-        for (index, corners) in mesh.faces.iter().enumerate() {
-            let Some(triangle) = mesh.triangle(index) else {
-                continue;
-            };
-            let normal = triangle.normal_unnormalized().normalize_or_zero();
-            face[index] = normal;
-
-            let points = [triangle.a, triangle.b, triangle.c];
-            for corner in 0..3 {
-                let here = points[corner];
-                let (first, second) = (points[(corner + 1) % 3], points[(corner + 2) % 3]);
-                // The interior angle at this corner is what weights the vertex normal.
-                let angle = (first - here)
-                    .normalize_or_zero()
-                    .dot((second - here).normalize_or_zero())
-                    .clamp(-1.0, 1.0)
-                    .acos();
-                if let Some(slot) = vertex.get_mut(corners[corner] as usize) {
-                    *slot += normal * angle;
-                }
-                *edge
-                    .entry(seam(corners[corner], corners[(corner + 1) % 3]))
-                    .or_insert(Vec3::ZERO) += normal;
-            }
-        }
-
+        let measured: Vec<Measured> = (0..mesh.faces.len())
+            .into_par_iter()
+            .map(|index| measure(mesh, index))
+            .collect();
+        let around = Around::of(mesh, &measured);
+        let vertex = vertex_normals(&around, &measured);
+        let face: Vec<Vec3> = measured
+            .into_par_iter()
+            .map(|measured| measured.map_or(Vec3::ZERO, |(normal, _)| normal))
+            .collect();
+        let edge = edge_normals(mesh, &around, &face);
         Self { face, vertex, edge }
     }
 
@@ -187,7 +173,9 @@ impl Pseudonormals {
     }
 
     fn edge_normal(&self, one: u32, other: u32, face: Vec3) -> Vec3 {
-        self.edge.get(&seam(one, other)).copied().unwrap_or(face)
+        self.edge
+            .binary_search_by_key(&seam(one, other), |(seam, _)| *seam)
+            .map_or(face, |at| self.edge[at].1)
     }
 }
 
@@ -206,6 +194,115 @@ fn closest_on_segment(point: Vec3, from: Vec3, to: Vec3) -> Vec3 {
         return from;
     }
     from + span * ((point - from).dot(span) / squared).clamp(0.0, 1.0)
+}
+
+/// What [`Pseudonormals`] needs of face `index`, or `None` for a face naming a vertex that
+/// is not there.
+fn measure(mesh: &Mesh, index: usize) -> Measured {
+    let triangle = mesh.triangle(index)?;
+    let points = [triangle.a, triangle.b, triangle.c];
+    let angles = std::array::from_fn(|corner| {
+        let here = points[corner];
+        let (first, second) = (points[(corner + 1) % 3], points[(corner + 2) % 3]);
+        (first - here)
+            .normalize_or_zero()
+            .dot((second - here).normalize_or_zero())
+            .clamp(-1.0, 1.0)
+            .acos()
+    });
+    Some((triangle.normal_unnormalized().normalize_or_zero(), angles))
+}
+
+/// The corners of measured faces around each vertex, as `face * 3 + corner`, a vertex's
+/// own stretch of them in face order.
+struct Around {
+    start: Vec<u32>,
+    corners: Vec<u32>,
+}
+
+impl Around {
+    fn of(mesh: &Mesh, measured: &[Measured]) -> Self {
+        let measured_faces = || {
+            mesh.faces
+                .iter()
+                .zip(measured)
+                .enumerate()
+                .filter(|(_, (_, measured))| measured.is_some())
+        };
+        let mut start = vec![0u32; mesh.vertices.len() + 1];
+        for (_, (corners, _)) in measured_faces() {
+            for vertex in corners {
+                start[*vertex as usize + 1] += 1;
+            }
+        }
+        for vertex in 1..start.len() {
+            start[vertex] += start[vertex - 1];
+        }
+        let mut next = start.clone();
+        let mut around = vec![0u32; start[mesh.vertices.len()] as usize];
+        for (face, (corners, _)) in measured_faces() {
+            for (corner, vertex) in corners.iter().enumerate() {
+                let slot = &mut next[*vertex as usize];
+                around[*slot as usize] = (face * 3 + corner) as u32;
+                *slot += 1;
+            }
+        }
+        Self {
+            start,
+            corners: around,
+        }
+    }
+
+    /// The corners at `vertex`, each as its face and which corner of it.
+    fn at(&self, vertex: usize) -> impl Iterator<Item = (usize, usize)> + '_ {
+        self.corners[self.start[vertex] as usize..self.start[vertex + 1] as usize]
+            .iter()
+            .map(|at| (*at as usize / 3, *at as usize % 3))
+    }
+}
+
+/// Each vertex's face normals weighted by their angle there, summed in face order.
+fn vertex_normals(around: &Around, measured: &[Measured]) -> Vec<Vec3> {
+    (0..around.start.len() - 1)
+        .into_par_iter()
+        .map(|vertex| {
+            around.at(vertex).fold(Vec3::ZERO, |sum, (face, corner)| {
+                measured[face].map_or(sum, |(normal, angles)| sum + normal * angles[corner])
+            })
+        })
+        .collect()
+}
+
+/// Each edge's face normals summed in face order, sorted by seam. An edge is gathered at
+/// its lower vertex, and an edge from a vertex to itself only where it leaves it.
+fn edge_normals(mesh: &Mesh, around: &Around, face: &[Vec3]) -> Vec<((u32, u32), Vec3)> {
+    (0..around.start.len() - 1)
+        .into_par_iter()
+        .flat_map_iter(|vertex| {
+            let here = vertex as u32;
+            let mut walks: Vec<(u32, usize)> = Vec::new();
+            for (on, corner) in around.at(vertex) {
+                let corners = mesh.faces[on];
+                let (after, before) = (corners[(corner + 1) % 3], corners[(corner + 2) % 3]);
+                if here <= after {
+                    walks.push((after, on));
+                }
+                if here < before {
+                    walks.push((before, on));
+                }
+            }
+            // Stable, so each edge's faces stay in face order.
+            walks.sort_by_key(|(other, _)| *other);
+            let mut edges: Vec<((u32, u32), Vec3)> = Vec::new();
+            for (other, on) in walks {
+                match edges.last_mut() {
+                    Some(((_, last), sum)) if *last == other => *sum += face[on],
+                    _ => edges.push(((here, other), Vec3::ZERO + face[on])),
+                }
+            }
+            edges
+        })
+        .collect()
 }
 
 /// An edge key that does not care which way round the two faces walk it.

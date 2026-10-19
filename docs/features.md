@@ -233,6 +233,7 @@ capped silently.
 - **Keep solid:** click spots on the model where the wall must stay solid (blockers), and
   set their size.
 - Each model can keep its own hollow settings, and you can save settings as named presets.
+- **Cancel** stops a run inside the model it is on, not only between models.
 - Undo with **Make solid again**.
 
 ### Drain

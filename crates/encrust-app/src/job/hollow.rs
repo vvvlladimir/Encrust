@@ -237,18 +237,19 @@ fn shell_each(
 ) -> HollowOutcome {
     let models = request.tasks.len();
     let mut shells: Vec<Shelled> = Vec::with_capacity(models);
+    let asked = || cancel.load(Ordering::Relaxed);
 
     for (index, task) in request.tasks.iter().enumerate() {
-        // The field is built in one call, so a run can only be stopped between models.
-        if cancel.load(Ordering::Relaxed) {
+        if asked() {
             return HollowOutcome::Cancelled;
         }
         report(index, models);
 
         let shell = match twin_of(&request.tasks[..index], task) {
             Some(twin) => shells[twin].shell.clone(),
-            None => match shell_of(task, &request.fields) {
+            None => match shell_of(task, &request.fields, Cancel::when(&asked)) {
                 Ok(shell) => shell,
+                Err(VolumeError::Cancelled) => return HollowOutcome::Cancelled,
                 Err(error) => return HollowOutcome::Failed(error.to_string()),
             },
         };
@@ -270,7 +271,11 @@ fn twin_of(earlier: &[HollowTask], task: &HollowTask) -> Option<usize> {
 }
 
 /// The shell of one model, cut from the field kept for it where there is one.
-fn shell_of(task: &HollowTask, fields: &SharedFields) -> Result<Shell, VolumeError> {
+fn shell_of(
+    task: &HollowTask,
+    fields: &SharedFields,
+    cancel: Cancel<'_>,
+) -> Result<Shell, VolumeError> {
     let kept = lock(fields).get(&task.mesh, task.shape, &task.settings);
     let field = match kept {
         Some(field) => field,
@@ -281,13 +286,13 @@ fn shell_of(task: &HollowTask, fields: &SharedFields) -> Result<Shell, VolumeErr
                 &task.bvh,
                 &task.settings,
                 task.shape,
-                Cancel::never(),
+                cancel,
             )?);
             lock(fields).keep(&task.mesh, task.shape, &task.settings, Arc::clone(&field));
             field
         }
     };
-    let hollowed = carve(&task.mesh, &field, &task.settings, Cancel::never())?;
+    let hollowed = carve(&task.mesh, &field, &task.settings, cancel)?;
     Ok(Shell {
         mesh: Arc::new(hollowed.mesh),
         cavity: hollowed.cavity,
@@ -365,6 +370,34 @@ mod tests {
         assert!(
             !Arc::ptr_eq(&shells[0].shell.mesh, &shells[2].shell.mesh),
             "a wall of its own is a field of its own"
+        );
+    }
+
+    #[test]
+    fn a_model_asked_to_stop_stops_inside_its_field_and_keeps_nothing() {
+        let mesh = Arc::new(Mesh::new(
+            vec![
+                core_geometry::Vec3::new(0.0, 0.0, 0.0),
+                core_geometry::Vec3::new(20.0, 0.0, 0.0),
+                core_geometry::Vec3::new(0.0, 20.0, 0.0),
+                core_geometry::Vec3::new(0.0, 0.0, 20.0),
+            ],
+            vec![[0, 2, 1], [0, 1, 3], [1, 2, 3], [2, 0, 3]],
+        ));
+        let fields = SharedFields::default();
+        let stopped = || true;
+
+        let shelled = shell_of(
+            &tetrahedron_task(0, &mesh, 1.5),
+            &fields,
+            Cancel::when(&stopped),
+        );
+
+        assert!(matches!(shelled, Err(VolumeError::Cancelled)));
+        assert_eq!(
+            lock(&fields).bytes(),
+            0,
+            "a field left unfinished is not kept"
         );
     }
 
