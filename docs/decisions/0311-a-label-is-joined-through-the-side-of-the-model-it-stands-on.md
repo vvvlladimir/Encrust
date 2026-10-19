@@ -16,23 +16,28 @@ times. The letters touch only the faces near them.
 `combine_exact_toward(models, op, toward)` cuts the first model with `core_geometry::cut`
 by a plane square to `toward` 0.5 mm under the lowest point of the others, sends only the
 side they stand on through the engine with them, and stitches the answer to the other side
-along the cut: the upper cap is the faces of the answer lying in the cut, the lower one the
-faces of the other side with every corner on that line facing out of it, and the two must
-meet point for point and walk every edge of the line back to each other. Where the side cut
-off holds more than half the model's vertices, the cut leaves a loop open or the stitch does
-not close, the whole model is combined instead; where the engine refuses the side cut off,
-the plane is tried three times more a few hundredths of a millimetre lower first. Union and
-difference only. The text tool passes the normal it was clicked on.
+along the cut: the lower cap is the last `Cut::cap_faces` faces of the side below, a field
+added for it, and the upper one the faces of the answer lying in the cut; the two must meet
+point for point and walk every edge of the line back to each other. A torn model, one of
+several shells, one whose side cut off holds more than half its vertices, a cut that leaves
+a loop open and a stitch that does not close all have the whole model combined instead.
+Union and difference only. The text tool passes the normal it was clicked on.
+
+The cut was made sound first: a fill turned over whole rather than triangle by triangle, a
+hole given to the smallest ring round it, a face lying in the plane given to the half it
+looks out of, and corners ear clipping passed over put back. Before, about a third of the
+cuts through the models at hand left edges walked twice one way or open.
 
 ## Consequences
 
-On a million-face model a label is joined in 0.1 to 0.5 s instead of about 2.3 s, as fast as
-the model is sparse near the letters, and answers the volume the whole cut does. The model
-gains a line of split faces along the cut, coplanar and invisible. A cut that fails costs
-up to four cuts and small booleans before the whole one, about a tenth more. The stitch
-checks itself, so a wrong join falls back rather than lands; a cut whose cap the engine will
-not read at any of the four heights is a defect of `cut` on vertices lying in its plane,
-and is the signal to fix that rather than add heights.
+On a million-face model a label is joined in 0.13 to 3.2 s where it took 1.6 to 4.3 s, as fast as
+the model is sparse near the letters, and answers the volume the whole cut does to within a
+millionth of a percent. Of 34 labels on six models, 21 went the short way; the rest were on a
+model of several shells, or curved so far round that the plane took most of the model, and
+cost a cut more than the whole join, a few per cent. The model gains a line of split faces
+along the cut, coplanar and invisible. The stitch checks itself, so a wrong join falls back
+rather than lands. Reopen if a model of several shells is the common case: its shells would
+have to be unioned once, kept, and cut after.
 
 ## Alternatives considered
 

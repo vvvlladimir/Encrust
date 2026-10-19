@@ -42,6 +42,8 @@ pub struct Cut {
     pub above: Mesh,
     /// Cut loops that did not close, and so were left uncapped. A closed mesh gives none.
     pub open_loops: usize,
+    /// How many faces each half's cap has: the last this many of each half's faces.
+    pub cap_faces: usize,
 }
 
 /// Cuts `mesh` with `plane` and closes both halves over the cut.
@@ -63,8 +65,22 @@ pub fn cut(mesh: &Mesh, plane: Plane) -> Cut {
 
     for face in &mesh.faces {
         let signs = face.map(|index| side(distances[index as usize]));
-        // A face lying in the plane is the face the lower half already ends with, so it
-        // is tested for first and stays there.
+        // A face lying in the plane is the surface of the half it looks out of, and the
+        // section runs round it like round any face of that half.
+        if signs == [0; 3] {
+            let side = if facing(mesh, face).dot(plane.normal) >= 0.0 {
+                -1
+            } else {
+                1
+            };
+            if side < 0 {
+                below.face(mesh, face);
+            } else {
+                above.face(mesh, face);
+            }
+            on_plane.lying(face, side);
+            continue;
+        }
         if signs.iter().all(|sign| *sign <= 0) {
             below.face(mesh, face);
             on_plane.face(face, signs, -1);
@@ -92,7 +108,14 @@ pub fn cut(mesh: &Mesh, plane: Plane) -> Cut {
         below: below.mesh,
         above: above.mesh,
         open_loops,
+        cap_faces: cap.len(),
     }
+}
+
+/// Twice the area of a face, along its normal.
+fn facing(mesh: &Mesh, face: &[u32; 3]) -> Vec3 {
+    let [a, b, c] = face.map(|index| mesh.vertices[index as usize]);
+    (b - a).cross(c - a)
 }
 
 /// Which side of the plane a distance is, with the band around it counted as on it.
@@ -208,17 +231,22 @@ impl Section {
             .into_iter()
             .partition(|(_, area)| (*area >= 0.0) == outward);
 
+        // A hole is in the smallest outer ring round it: the outers run largest first, and
+        // a hole in an island in a cavity lies inside the outside wall too.
+        let mut inner: Vec<Vec<&Vec<u32>>> = vec![Vec::new(); outers.len()];
+        for (hole, _) in &holes {
+            let around = hole.first().and_then(|point| {
+                (0..outers.len())
+                    .rev()
+                    .find(|at| contains(&outers[*at].0, &flat, flat[*point as usize]))
+            });
+            if let Some(at) = around {
+                inner[at].push(hole);
+            }
+        }
         let mut triangles = Vec::new();
-        for (outer, _) in &outers {
-            let inner: Vec<&Vec<u32>> = holes
-                .iter()
-                .filter(|(hole, _)| {
-                    hole.first()
-                        .is_some_and(|point| contains(outer, &flat, flat[*point as usize]))
-                })
-                .map(|(hole, _)| hole)
-                .collect();
-            triangles.extend(triangulate(outer, &inner, &flat));
+        for ((outer, _), inner) in outers.iter().zip(&inner) {
+            triangles.extend(triangulate(outer, inner, &flat));
         }
         (triangles, open)
     }
@@ -347,16 +375,25 @@ impl OnPlaneEdges {
         }
         for index in 0..3 {
             let next = (index + 1) % 3;
-            if signs[index] != 0 || signs[next] != 0 {
-                continue;
+            if signs[index] == 0 && signs[next] == 0 {
+                self.edge(face[index], face[next], side);
             }
-            let (from, to) = (face[index], face[next]);
-            let entry = self.edges.entry((from.min(to), from.max(to))).or_default();
-            if side < 0 {
-                entry.below = Some((from, to));
-            } else {
-                entry.above = true;
-            }
+        }
+    }
+
+    /// Takes a face lying in the plane, as a face of the half `side` it looks out of.
+    fn lying(&mut self, face: &[u32; 3], side: i8) {
+        for index in 0..3 {
+            self.edge(face[index], face[(index + 1) % 3], side);
+        }
+    }
+
+    fn edge(&mut self, from: u32, to: u32, side: i8) {
+        let entry = self.edges.entry((from.min(to), from.max(to))).or_default();
+        if side < 0 {
+            entry.below = Some((from, to));
+        } else {
+            entry.above = true;
         }
     }
 
@@ -408,13 +445,24 @@ impl Half {
         }
     }
 
-    /// Closes this half over the cut, with every cap triangle facing `outward`.
+    /// Closes this half over the cut, the cap facing `outward`.
+    ///
+    /// The fill comes back wound as its rings are, so the cap turns over whole, by its area:
+    /// a sliver turned on its own by the sign of its own tiny area would face against its
+    /// neighbours and leave the edges between them walked twice the same way.
     fn cap(&mut self, mesh: &Mesh, triangles: &[[u32; 3]], section: &Section, outward: Vec3) {
+        let facing: Scalar = triangles
+            .iter()
+            .map(|corners| {
+                let points = corners.map(|index| section.points[index as usize]);
+                (points[1] - points[0])
+                    .cross(points[2] - points[0])
+                    .dot(outward)
+            })
+            .sum();
         for corners in triangles {
-            let points = corners.map(|index| section.points[index as usize]);
-            let facing = (points[1] - points[0]).cross(points[2] - points[0]);
             let mut face = corners.map(|index| self.cut_vertex(mesh, section, index));
-            if facing.dot(outward) < 0.0 {
+            if facing < 0.0 {
                 face.swap(1, 2);
             }
             self.mesh.faces.push(face);
@@ -533,6 +581,129 @@ mod tests {
             (volume - (500.0 - 108.0)).abs() < 1e-1,
             "expected the wall only, got {volume}"
         );
+    }
+
+    /// Both halves closed, wound outward and holding `below` and `above` mm³.
+    fn halves_hold(halves: &Cut, below: Scalar, above: Scalar) {
+        assert_eq!(halves.open_loops, 0, "every loop of the section closes");
+        for (name, half, expected) in [
+            ("below", &halves.below, below),
+            ("above", &halves.above, above),
+        ] {
+            let report = diagnose(half);
+            assert!(
+                report.is_sound() && report.unbalanced_edges == 0 && report.non_manifold_edges == 0,
+                "the {name} half is closed, each edge walked once each way; got {report:?}"
+            );
+            let volume = signed_volume(half);
+            assert!(
+                (volume - expected).abs() < 1e-2,
+                "the {name} half holds {expected} mm³, got {volume}"
+            );
+        }
+    }
+
+    #[test]
+    fn rings_nested_two_deep_are_each_capped_once() {
+        // A 40 mm box round a 30 mm cavity round a 20 mm box round a 10 mm cavity: the
+        // innermost hole lies inside two outer rings and belongs to the nearer.
+        let mut nested = Mesh::default();
+        for (low, side, inward) in [
+            (0.0, 40.0, false),
+            (5.0, 30.0, true),
+            (10.0, 20.0, false),
+            (15.0, 10.0, true),
+        ] {
+            let mut shell = cuboid(Vec3::splat(low), Vec3::splat(low + side));
+            if inward {
+                for face in &mut shell.faces {
+                    face.swap(1, 2);
+                }
+            }
+            nested.append(&shell);
+        }
+        // Each half holds 40² × 20 − 30² × 15 + 20² × 10 − 10² × 5 mm³ of the four.
+        halves_hold(&cut(&nested, at_height(20.0)), 22_000.0, 22_000.0);
+    }
+
+    #[test]
+    fn a_plane_along_a_step_of_the_model_closes_both_halves() {
+        // An L 4 mm tall whose inner side at x = 5 lies in the plane: wall facing out of
+        // the half below it, and with the plane turned round, out of the half above.
+        let outline = [
+            Vec2::new(0.0, 0.0),
+            Vec2::new(10.0, 0.0),
+            Vec2::new(10.0, 5.0),
+            Vec2::new(5.0, 5.0),
+            Vec2::new(5.0, 10.0),
+            Vec2::new(0.0, 10.0),
+        ];
+        let step = crate::prism(&outline, 0.0, 4.0);
+        let along_x = Plane::at(Vec3::X, 5.0).expect("X is a direction");
+        halves_hold(&cut(&step, along_x), 200.0, 100.0);
+        let against_x = Plane::at(-Vec3::X, -5.0).expect("X is a direction");
+        halves_hold(&cut(&step, against_x), 100.0, 200.0);
+    }
+
+    /// A ball of `radius` about the origin, `rings` by `segments` faces, wound outward.
+    fn ball(radius: Scalar, rings: usize, segments: usize) -> Mesh {
+        let mut vertices = vec![Vec3::new(0.0, 0.0, radius)];
+        for ring in 1..rings {
+            let theta = std::f32::consts::PI * ring as Scalar / rings as Scalar;
+            for segment in 0..segments {
+                let phi = std::f32::consts::TAU * segment as Scalar / segments as Scalar;
+                let (sin, cos) = (theta.sin(), theta.cos());
+                vertices.push(Vec3::new(sin * phi.cos(), sin * phi.sin(), cos) * radius);
+            }
+        }
+        let south = vertices.len() as u32;
+        vertices.push(Vec3::new(0.0, 0.0, -radius));
+        let at =
+            |ring: usize, segment: usize| (1 + (ring - 1) * segments + segment % segments) as u32;
+        let mut faces = Vec::new();
+        for segment in 0..segments {
+            faces.push([0, at(1, segment), at(1, segment + 1)]);
+            faces.push([at(rings - 1, segment), south, at(rings - 1, segment + 1)]);
+        }
+        for ring in 1..rings - 1 {
+            for segment in 0..segments {
+                faces.push([
+                    at(ring, segment),
+                    at(ring + 1, segment),
+                    at(ring + 1, segment + 1),
+                ]);
+                faces.push([
+                    at(ring, segment),
+                    at(ring + 1, segment + 1),
+                    at(ring, segment + 1),
+                ]);
+            }
+        }
+        Mesh::new(vertices, faces)
+    }
+
+    #[test]
+    fn a_dense_ball_cut_aslant_near_its_pole_closes_both_halves() {
+        // Near a pole the section crosses rings of tiny faces, and its fill has slivers
+        // too thin for the sign of their own area to say which way they face.
+        let ball = ball(40.0, 400, 400);
+        for normal in [
+            Vec3::new(0.3, 0.5, 1.0),
+            Vec3::new(-0.7, 0.2, 0.4),
+            Vec3::new(0.1, 0.0, 1.0),
+        ] {
+            for height in [36.5, 38.2, 39.3] {
+                let plane = Plane::at(normal, height).expect("a direction");
+                let halves = cut(&ball, plane);
+                for half in [&halves.below, &halves.above] {
+                    let report = diagnose(half);
+                    assert!(
+                        report.is_sound() && report.unbalanced_edges == 0,
+                        "cut {height} mm along {normal}: each edge walked once each way; got {report:?}"
+                    );
+                }
+            }
+        }
     }
 
     #[test]

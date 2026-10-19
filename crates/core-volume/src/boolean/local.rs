@@ -5,16 +5,11 @@ use rayon::prelude::*;
 use super::{Boolean, exact};
 
 /// How far under the lowest point of the others the model is cut, in millimetres: clear of
-/// every face the engine adds where they meet it, so the cut and its cap pass through untouched.
+/// every face the engine adds where they meet it, so the cap passes through untouched.
 const CLEARANCE_MM: Scalar = 0.5;
 
 /// A point this close to the plane is on the cut, millimetres: the cut's own band.
 const ON_CUT_MM: Scalar = 1e-4;
-
-/// How much further down the plane is tried again when the engine refuses the side cut off,
-/// millimetres: a model vertex lying in the cut can leave its cap folded, and another height
-/// a little off may miss it.
-const STEPS_MM: [Scalar; 2] = [0.0, 0.0137];
 
 /// Past this share of the model's vertices on the side the others stand on, cutting it
 /// saves too little to be worth it.
@@ -49,16 +44,8 @@ pub(super) fn local(models: &[Mesh], op: Boolean, toward: Vec3) -> Result<Mesh, 
         .flat_map(|other| other.vertices.iter())
         .map(|vertex| vertex.dot(normal))
         .fold(Scalar::MAX, Scalar::min);
-    let mut refused = Whole::NotLocal;
-    for step in STEPS_MM {
-        let plane =
-            plane_under(model, normal, lowest - CLEARANCE_MM - step).ok_or(Whole::NotLocal)?;
-        match near_plane(model, others, op, plane) {
-            Err(Whole::Engine) => refused = Whole::Engine,
-            done => return done,
-        }
-    }
-    Err(refused)
+    let plane = plane_under(model, normal, lowest - CLEARANCE_MM).ok_or(Whole::NotLocal)?;
+    near_plane(model, others, op, plane)
 }
 
 /// `models` combined by `op` with the model cut at `plane`.
@@ -73,7 +60,7 @@ fn near_plane(model: &Mesh, others: &[Mesh], op: Boolean, plane: Plane) -> Resul
     let mut near = vec![halves.above];
     near.extend(others.iter().cloned());
     let combined = exact(&near, op).map_err(|_: CsgError| Whole::Engine)?;
-    stitched(&halves.below, &combined, plane)
+    stitched(&halves.below, halves.cap_faces, &combined, plane)
 }
 
 /// The plane square to `normal` at `height_mm`; `None` when the side above it holds most
@@ -90,34 +77,35 @@ fn plane_under(mesh: &Mesh, normal: Vec3, height_mm: Scalar) -> Option<Plane> {
     })
 }
 
-/// The lower half without its cap, and `upper` — the cut-off side as the engine answered
-/// it — without its own, joined along the cut where every point of one is a point of the
-/// other and every edge of the one is walked back by the other.
-fn stitched(lower: &Mesh, upper: &Mesh, plane: Plane) -> Result<Mesh, Whole> {
+/// The lower half without its cap — its last `cap_faces` faces — and `upper`, the side cut
+/// off as the engine answered it, without its own, joined along the cut where every point of
+/// one is a point of the other and every edge of the one is walked back by the other.
+fn stitched(lower: &Mesh, cap_faces: usize, upper: &Mesh, plane: Plane) -> Result<Mesh, Whole> {
+    let (lower_faces, lower_cap) = lower
+        .faces
+        .split_at_checked(lower.faces.len().saturating_sub(cap_faces))
+        .ok_or(Whole::Seam)?;
+    let cut_line: FastSet<u32> = lower_cap.iter().flatten().copied().collect();
+    let seam: FastMap<[u32; 3], u32> = cut_line
+        .iter()
+        .map(|vertex| (key(lower.vertices[*vertex as usize]), *vertex))
+        .collect();
+
     let on_cut = |point: Vec3| (point - plane.point).dot(plane.normal).abs() <= ON_CUT_MM;
-    // The upper half holds no face of the model's own lying in the cut: those the cut puts
-    // below. So every face of it there is its cap, and the cap's corners are the seam.
+    // The upper half holds no face of the model's own in the cut but one looking down out of
+    // it, which a plane the others set all but never meets: its faces there are its cap.
     let upper_cap = |face: &[u32; 3]| {
         face.iter()
             .all(|vertex| on_cut(upper.vertices[*vertex as usize]))
     };
-    let mut seam: FastMap<[u32; 3], u32> = FastMap::default();
-    for (index, vertex) in lower.vertices.iter().enumerate() {
-        if on_cut(*vertex) {
-            seam.insert(vertex.to_array().map(f32::to_bits), index as u32);
-        }
-    }
     let mut vertices = lower.vertices.clone();
     let mut remap = vec![u32::MAX; upper.vertices.len()];
     for face in upper.faces.iter().filter(|face| upper_cap(face)) {
         for vertex in face {
-            let at = upper.vertices[*vertex as usize]
-                .to_array()
-                .map(f32::to_bits);
+            let at = key(upper.vertices[*vertex as usize]);
             remap[*vertex as usize] = *seam.get(&at).ok_or(Whole::Seam)?;
         }
     }
-    let cut_line: FastSet<u32> = remap.iter().copied().filter(|at| *at != u32::MAX).collect();
     for (index, vertex) in upper.vertices.iter().enumerate() {
         if remap[index] == u32::MAX {
             remap[index] = vertices.len() as u32;
@@ -130,28 +118,20 @@ fn stitched(lower: &Mesh, upper: &Mesh, plane: Plane) -> Result<Mesh, Whole> {
         .filter(|face| !upper_cap(face))
         .map(|face| face.map(|vertex| remap[vertex as usize]))
         .collect();
-    // The lower cap is the faces facing up out of it with every corner on the cut line.
-    let lower_cap = |face: &[u32; 3]| {
-        face.iter().all(|vertex| cut_line.contains(vertex))
-            && facing(lower, face).dot(plane.normal) > 0.0
-    };
-    let lower_faces: Vec<[u32; 3]> = lower
-        .faces
-        .par_iter()
-        .filter(|face| !lower_cap(face))
-        .copied()
-        .collect();
-    if !closes(&lower_faces, &upper_faces, &cut_line) {
+    if !closes(lower_faces, &upper_faces, &cut_line) {
         return Err(Whole::Seam);
     }
-    let mut faces = lower_faces;
+    let mut faces = lower_faces.to_vec();
     faces.extend(upper_faces);
     Ok(Mesh::new(vertices, faces))
 }
 
-fn facing(mesh: &Mesh, [a, b, c]: &[u32; 3]) -> Vec3 {
-    let at = |vertex: u32| mesh.vertices[vertex as usize];
-    (at(*b) - at(*a)).cross(at(*c) - at(*a))
+/// A point's position as bits, with no negative zero: the engine may answer `-0.0` for a
+/// coordinate the cut made `0.0`.
+fn key(point: Vec3) -> [u32; 3] {
+    point
+        .to_array()
+        .map(|coordinate| (coordinate + 0.0).to_bits())
 }
 
 /// Whether every edge along the cut is walked once by a face of `lower` and once back by

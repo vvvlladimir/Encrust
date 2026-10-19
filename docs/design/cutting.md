@@ -7,7 +7,8 @@ what it is joined to. Why here and not through a field: `docs/decisions/0089`.
 
 Each vertex gets its signed distance to the plane, and each face a sign a corner: above,
 below, or on it within 0.1 µm. A face whose signs are all one way goes to that half
-whole; a face lying in the plane goes to the lower half, which is the half it closes.
+whole; a face lying in the plane goes to the half it looks out of — the lower half for a
+face looking along the normal — and is that half's surface there.
 
 A straddling face is clipped into the polygon on each side — four corners at most, always
 convex, so it is fanned rather than triangulated. The points the clip makes are keyed by
@@ -19,8 +20,9 @@ keeps it, rather than a second one on top of it.
 Nothing straddles where the plane holds a whole edge, as it does at the ring of vertices
 around a lathed model's equator. Such an edge is still where the section ends, so it is
 collected from the faces on either side and handed to the section whenever the material
-swaps sides across it. An edge both of whose faces lie on one side bounds no section: the
-face in the plane is the cap there already.
+swaps sides across it. A face lying in the plane counts as a face of the half it went to,
+so the section runs round a step whose top is in the plane as round any other edge; an edge
+both of whose faces lie on one side bounds no section.
 
 ## The cap
 
@@ -30,9 +32,13 @@ rings; a chain that never returns to its start is counted in `Cut::open_loops` a
 dropped, because a model with a hole in it has no section to close.
 
 Rings are projected into the plane's own basis. The largest one says which way the outside
-winds; anything winding the other way and lying inside it is a hole. `earcutr` fills each
-outer ring with its holes, and every cap triangle is wound by testing its normal against
-the plane, so the lower half's cap faces up and the upper half's faces down.
+winds; anything winding the other way is a hole in the smallest outer ring round it — not
+every one, since a hole in an island in a cavity lies inside the outside wall too, and would
+be filled twice. `earcutr` fills each outer ring with its holes, and the fill comes back
+wound as its rings are, so the cap is turned over whole by its area: the lower half's cap
+faces up and the upper half's down. Turning each triangle by its own normal instead leaves a
+sliver too thin for its sign facing against its neighbours, the edges between them walked
+twice one way, which on a dense scan was one cut in two.
 
 Two corrections stand between ear clipping and a cap that closes. A corner standing on the
 one before it — which a section has wherever the model touches itself on the plane — is
@@ -42,7 +48,11 @@ against the edge the fill left behind. Three corners in a straight line give an 
 area, which covers the ring but cuts into two coincident points when a plane crosses it
 later; each one is flipped into the triangle across its longest edge, the usual diagonal
 flip, which is safe because a flat triangle and its neighbour always cover a convex
-quadrilateral.
+quadrilateral. And ear clipping passes over corners lying exactly on a line between two
+others — along a straight side, or where it bridges a hole along a side the ring runs on
+— leaving an edge of the fill with nothing beyond it that is no side of a ring: the corners
+on it whose own sides went uncovered are put back by fanning the triangle over it out to
+each.
 
 ## The split
 

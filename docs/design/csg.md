@@ -71,14 +71,16 @@ as hollowing is — combined by `min`, `max` and `max(a, -b)` and extracted once
 `combine_exact_toward` is what labels take (ADR 0311). The first model is cut by a plane
 square to the side the others stand on, 0.5 mm under the lowest of them, and only the side
 above goes through the engine with them. The cut makes every point on it once, keyed by the
-edge it came from, so both halves carry it bit for bit. In the answer the faces with every
-corner within 0.1 µm of the plane are its cap — the cut puts any face of the model lying in
-the plane below, so above there are none — and their corners are the seam; on the side below,
-its cap is the faces facing up out of it with every corner on the seam. Both caps go, the
-seam's points are matched by position, and every edge along it must be walked by one side
-and back by the other, or the whole model is combined after all. A cut through a vertex
-lying in the plane can fold its cap; the engine refuses that, and the plane goes a few
-hundredths of a millimetre lower, three times at most.
+edge it came from, so both halves carry it bit for bit. On the side below the cap is its last
+faces, as many as `Cut::cap_faces` says, and their corners are the seam. In the answer the
+cap is the faces with every corner within 0.1 µm of the plane: the engine leaves the cap as
+it was, 0.5 mm clear of anything it adds, and the side above holds no face of the model's own
+in the plane but one looking down out of it, which a plane at a height the letters set all
+but never meets. Both caps go, the seam's points are matched by position — negative zero
+taken as zero, which the engine answers for some — and every edge along it must be walked by
+one side and back by the other, or the whole model is combined after all. A model that is
+torn or of several shells is combined whole from the start: cut, the side below would keep
+what the whole cut refuses, or count twice what crossing shells share.
 
 ## Primitives
 
