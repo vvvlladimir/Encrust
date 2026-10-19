@@ -4,7 +4,7 @@ use std::sync::{Arc, Weak};
 
 use anyhow::{Context as _, Result, bail};
 use core_geometry::{Heightmap, Mapping, Mat3, Mesh, Scalar, UvMap, Vec2, Vec3};
-use core_volume::{AngleMask, ReliefBasis, ReliefSettings, Tiling, prepared};
+use core_volume::{AngleMask, HollowSettings, ReliefBasis, ReliefSettings, Tiling, prepared};
 use rayon::prelude::*;
 use serde::{Deserialize, Serialize};
 
@@ -153,6 +153,9 @@ pub struct ReliefTool {
     /// What the last run stood on, so that trying another picture after an undo skips
     /// the search that is most of a press.
     kept: Vec<Kept>,
+    /// The models a press took the cavity off, with what it was built from, for the
+    /// Hollow tool to cut again into the pressed surface.
+    pub(crate) unhollowed: Vec<(ObjectId, HollowSettings)>,
 }
 
 impl ReliefTool {
@@ -273,9 +276,15 @@ impl ReliefTool {
             }
             // The relief was pressed at printed size, so the scale and the stretch are in
             // the mesh now and must not be applied twice.
+            let sizing = object.transform.sizing().linear();
+            let hollow = std::mem::take(&mut object.hollow);
             object.reshape(model.shaped);
             object.transform.scale = Vec3::ONE;
             object.transform.stretch = Mat3::IDENTITY;
+            object.hollow = hollow.carried_onto(&object.mesh, &object.bvh, sizing);
+            if let Some(asked) = hollow.asked() {
+                self.unhollowed.push((object.id, asked.clone()));
+            }
         }
         if let Some(name) = changed {
             return Status::Error(tr!("job-model-changed", name = name));
@@ -754,6 +763,50 @@ mod tests {
             (up - Vec3::Y).length() < 1e-5,
             "got {up}, expected the model's +Y"
         );
+    }
+
+    #[test]
+    fn a_hollow_model_keeps_its_blockers_through_a_press_and_is_hollowed_again() {
+        let mut scene = scene_with_a_tetrahedron();
+        let mut status = Status::default();
+        let mut hollow = crate::hollow::HollowTool::default();
+        hollow.start(&scene).expect("a model is on the plate");
+        while hollow.poll(&mut scene, &mut status) {
+            std::thread::yield_now();
+        }
+        let object = &mut scene.objects_mut()[0];
+        assert!(object.hollow.is_hollow(), "{status:?}");
+        object
+            .hollow
+            .add_blocker(Vec3::new(5.0, 5.0, 5.0), 2.0, object.transform);
+
+        let mut tool = ReliefTool {
+            picture: Some(Picture {
+                name: "flat.png".to_owned(),
+                heights: Arc::new(Heightmap::new(1, 1, vec![1.0]).expect("one pixel")),
+                size_px: [1, 1],
+                builtin: None,
+            }),
+            ..ReliefTool::default()
+        };
+        tool.start(&scene)
+            .expect("the picture presses into the tetrahedron");
+        while tool.poll(&mut scene, &mut status) {
+            std::thread::yield_now();
+        }
+        let object = &scene.objects()[0];
+        assert!(
+            !object.hollow.is_hollow(),
+            "the old cavity was cut into the old surface"
+        );
+        assert_eq!(object.hollow.blockers().len(), 1, "the blocker stays");
+        assert_eq!(tool.unhollowed.len(), 1);
+
+        assert!(hollow.again(&scene, &tool.unhollowed));
+        while hollow.poll(&mut scene, &mut status) {
+            std::thread::yield_now();
+        }
+        assert!(scene.objects()[0].hollow.is_hollow(), "{status:?}");
     }
 
     #[test]

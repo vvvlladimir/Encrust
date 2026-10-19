@@ -7,9 +7,10 @@ use core_volume::{HollowSettings, InfillSettings};
 
 use crate::i18n::tr;
 use crate::job::{
-    HollowJob, HollowOutcome, HollowRequest, SharedFields, hollow_tasks, lock_fields, rebuild_tasks,
+    HollowJob, HollowOutcome, HollowRequest, SharedFields, again_tasks, hollow_tasks, lock_fields,
+    rebuild_tasks,
 };
-use crate::scene::{Scene, SceneObject};
+use crate::scene::{ObjectId, Scene, SceneObject};
 use crate::status::Status;
 
 /// How wide a blocker a click drops, in millimetres of the plate.
@@ -99,6 +100,22 @@ impl HollowTool {
             tasks,
             fields: Arc::clone(&self.fields),
         }));
+        true
+    }
+
+    /// Hollows again, each at the numbers it was built at, the models a relief was pressed
+    /// into. Says whether it took them, which it cannot while a run is going.
+    pub fn again(&mut self, scene: &Scene, models: &[(ObjectId, HollowSettings)]) -> bool {
+        if self.job.is_some() {
+            return false;
+        }
+        let tasks = again_tasks(scene, models);
+        if !tasks.is_empty() {
+            self.job = Some(HollowJob::spawn(HollowRequest {
+                tasks,
+                fields: Arc::clone(&self.fields),
+            }));
+        }
         true
     }
 

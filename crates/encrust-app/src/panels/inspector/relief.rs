@@ -8,7 +8,7 @@ use crate::panels::Window;
 use crate::relief::{BUILTINS, Picture, ReliefMode};
 use crate::state::Doc;
 use crate::ui::{
-    Segment, Segmented, busy, describe, hint, icon, meta, number_row, primary_button,
+    Segment, Segmented, blocked_hover, busy, describe, icon, meta, number_row, primary_button,
     secondary_button, section, stats, subheading, swatch, switch, theme, tone,
 };
 
@@ -362,26 +362,12 @@ fn press(ui: &mut egui::Ui, window: &mut Window) {
     }
 
     let blocked = window.tools.relief.blocker(&window.doc.scene);
-    let picture = match &window.tools.relief.picture {
-        Some(picture) => picture.name.clone(),
-        None => tr!("relief-the-texture"),
-    };
-    let what = tr!(
-        "relief-tooltip",
-        picture = picture,
-        scope = window.doc.scene.scope()
-    );
-    if primary_button(ui, icon::RELIEF, &tr!("relief-press"), blocked.is_none())
-        .on_hover_text(what)
-        .clicked()
-    {
+    let button = primary_button(ui, icon::RELIEF, &tr!("relief-press"), blocked.is_none());
+    if blocked_hover(button, blocked).clicked() {
         let started = window.tools.relief.start(&window.doc.scene);
         window
             .machine
             .status
             .report(&tr!("relief-pressing-status"), started);
-    }
-    if let Some(reason) = blocked {
-        hint(ui, &reason);
     }
 }

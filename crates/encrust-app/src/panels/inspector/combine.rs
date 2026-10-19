@@ -3,7 +3,8 @@ use core_volume::Boolean;
 use crate::i18n::tr;
 use crate::panels::Window;
 use crate::ui::{
-    Segment, Segmented, busy, describe, hint, icon, primary_button, section, stats, theme, tone,
+    Segment, Segmented, blocked_hover, busy, describe, icon, primary_button, section, stats, theme,
+    tone,
 };
 
 /// What the picked models are to become, and which of them they are.
@@ -65,25 +66,16 @@ pub fn action(ui: &mut egui::Ui, window: &mut Window) {
     }
     let blocked = tool.blocker(&window.doc.scene);
     let count = crate::boolean::picked_names(&window.doc.scene).len();
-    if primary_button(
-        ui,
-        icon::COMBINE,
-        &match count {
-            0 | 1 => tr!("boolean-combine-none"),
-            count => tr!("boolean-combine", count = count),
-        },
-        blocked.is_none(),
-    )
-    .on_hover_text(tr!("boolean-tooltip"))
-    .clicked()
-    {
+    let label = match count {
+        0 | 1 => tr!("boolean-combine-none"),
+        count => tr!("boolean-combine", count = count),
+    };
+    let button = primary_button(ui, icon::COMBINE, &label, blocked.is_none());
+    if blocked_hover(button, blocked).clicked() {
         let started = tool.start(&window.doc.scene);
         window
             .machine
             .status
             .report(&tr!("boolean-combining"), started);
-    }
-    if let Some(reason) = blocked {
-        hint(ui, &reason);
     }
 }

@@ -279,6 +279,17 @@ impl SlicerApp {
     /// Takes the pockets of the last drainage check off a plate that has been hollowed
     /// again: the cavity they stood in is a new mesh, and nothing is checked until the
     /// Drain panel is asked to. See ADR 0198.
+    /// Cuts the cavity again into a model a relief was pressed into, so a press keeps its
+    /// hollow. Says whether a run was started.
+    fn hollow_what_a_press_opened(&mut self) -> bool {
+        let unhollowed = &mut self.tools.relief.unhollowed;
+        if unhollowed.is_empty() || !self.tools.hollow.again(&self.doc.scene, unhollowed) {
+            return false;
+        }
+        unhollowed.clear();
+        self.tools.hollow.job.is_some()
+    }
+
     fn forget_what_an_old_check_found(&mut self) {
         if !self.tools.hollow.take_hollowed() {
             return;
@@ -433,6 +444,7 @@ impl eframe::App for SlicerApp {
                 &mut self.machine.status,
             )
             | crate::panels::animate_preview(ui.ctx(), &mut self.machine.preview);
+        let working = working | self.hollow_what_a_press_opened();
         self.forget_what_an_old_check_found();
         if self.tool != Tool::Relief {
             self.tools.relief.forget_kept();

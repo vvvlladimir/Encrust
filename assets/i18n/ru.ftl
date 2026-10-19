@@ -619,7 +619,6 @@ hollow-clear-blockers =
         [few] Убрать { $count } блокиратора
        *[many] Убрать { $count } блокираторов
     }
-hollow-tooltip = Вырезает полость внутри: { $scope }.
 hollow-hollow = Выдолбить
 hollow-hollowing = Выдалбливание
 hollow-hollowed = Выдолблено
@@ -699,8 +698,6 @@ relief-textures =
     }
 relief-pressing = Вдавливание...
 relief-cancelled = Вдавливание отменено
-relief-the-texture = текстуру
-relief-tooltip = Вдавливает { $picture } в { $scope }. Модель заменяется, поэтому её поддержки и полость пропадают.
 relief-press = Вдавить
 relief-pressing-status = Вдавливание рельефа
 text-words = Текст
@@ -757,7 +754,6 @@ boolean-combine =
     }
 boolean-combining = Объединение моделей
 boolean-cancelled = Объединение отменено
-boolean-tooltip = Заменяет выбранные модели той, что из них получается. Их поддержки, полости и отверстия пропадают; дырявая модель объединяется через поле и теряет острые края.
 boolean-pick-two = Выберите на плите две модели или больше, удерживая Shift или Cmd.
 boolean-not-solid = модель не замкнута, поэтому её нельзя вырезать точно; сначала почините её
 boolean-nothing-left = после объединения от моделей ничего не остаётся

@@ -356,6 +356,14 @@ pub fn primary_button(ui: &mut Ui, glyph: &str, text: &str, enabled: bool) -> Re
     )
 }
 
+/// Why a button cannot be pressed, shown only while the pointer is on it; nothing while it can.
+pub fn blocked_hover(response: Response, blocker: Option<String>) -> Response {
+    match blocker {
+        Some(reason) => response.on_hover_text(reason),
+        None => response,
+    }
+}
+
 /// A row that opens a chooser: a leading glyph, what is chosen, and a caret.
 pub fn picker(ui: &mut Ui, glyph: &str, label: &str) -> Response {
     let colors = theme::colors();

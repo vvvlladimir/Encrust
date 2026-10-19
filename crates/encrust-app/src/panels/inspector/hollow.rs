@@ -9,8 +9,9 @@ use crate::job::HollowJob;
 use crate::panels::Window;
 use crate::state::{Doc, Tools};
 use crate::ui::{
-    Segment, Segmented, busy, describe, hint, icon, nested, notice, number_row, primary_button,
-    progress_bar, secondary_button, section, section_with_switch, stats, subheading, theme, tone,
+    Segment, Segmented, blocked_hover, busy, describe, hint, icon, nested, notice, number_row,
+    primary_button, progress_bar, secondary_button, section, section_with_switch, stats,
+    subheading, theme, tone,
 };
 use crate::workspace::Tool;
 
@@ -357,19 +358,13 @@ pub fn action(ui: &mut egui::Ui, window: &mut Window) {
 
 fn start(ui: &mut egui::Ui, window: &mut Window) {
     let blocked = window.tools.hollow.blocker(&window.doc.scene);
-    let what = tr!("hollow-tooltip", scope = window.doc.scene.scope());
-    if primary_button(ui, icon::HOLLOW, &tr!("hollow-hollow"), blocked.is_none())
-        .on_hover_text(what)
-        .clicked()
-    {
+    let button = primary_button(ui, icon::HOLLOW, &tr!("hollow-hollow"), blocked.is_none());
+    if blocked_hover(button, blocked).clicked() {
         let started = window.tools.hollow.start(&window.doc.scene);
         window
             .machine
             .status
             .report(&tr!("hollow-hollowing"), started);
-    }
-    if let Some(reason) = blocked {
-        ui.vertical_centered(|ui| tone(ui, &reason, theme::colors().text_low));
     }
 }
 

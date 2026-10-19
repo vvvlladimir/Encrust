@@ -183,6 +183,9 @@ capped silently.
 - **Leave flat:** faces within an angle you set of facing the plate, or of facing straight
   up, keep their shape, and the relief stops square at their edge — a base the model stands
   on stays flat.
+- A hollowed model keeps its cavity through a press: the cavity is cut again, at the same
+  wall and with the same blockers, holes and channels, into the pressed surface. Its
+  supports are not kept.
 - **Text:** click a model to write there, **raised** out of the surface or **sunk** into
   it, several lines if you like. Pick the **font** from the ones installed on your computer
   or the built-in IBM Plex Sans — type in the font field to find one by name — and set the

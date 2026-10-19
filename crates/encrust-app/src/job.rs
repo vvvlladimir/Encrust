@@ -23,8 +23,8 @@ pub use cut::{CutJob, CutOutcome, CutRequest, spawn_cut};
 pub use format::applied_to;
 pub use format::label_of;
 pub use hollow::{
-    HollowJob, HollowOutcome, HollowRequest, SharedFields, hollow_tasks, lock as lock_fields,
-    rebuild_tasks,
+    HollowJob, HollowOutcome, HollowRequest, SharedFields, again_tasks, hollow_tasks,
+    lock as lock_fields, rebuild_tasks,
 };
 pub use import::{ImportJob, ImportOutcome, ImportStage};
 pub use measure::{MeasureJob, MeasureOutcome};

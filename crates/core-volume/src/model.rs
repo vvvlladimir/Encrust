@@ -1,7 +1,7 @@
 use std::ops::Range;
 use std::sync::Arc;
 
-use core_geometry::{Bvh, Mat3, Mesh, Scalar, Transform, Vec3};
+use core_geometry::{Bvh, Mat3, Mesh, Scalar, Transform, Vec3, smallest_scale};
 
 use crate::{
     Blocker, Channel, DrainHole, HollowSettings, channel_under, drill, hole_at, lift_for, pierce,
@@ -461,6 +461,56 @@ impl ModelHollow {
     pub fn clear(&mut self) {
         self.built = None;
         self.recut();
+    }
+
+    /// These blockers, holes and channels carried onto `mesh`: the model's surface remade
+    /// with `sizing` pressed into it, as a relief does. Solid, for the next run to hollow.
+    #[must_use]
+    pub fn carried_onto(&self, mesh: &Mesh, bvh: &Bvh, sizing: Mat3) -> Self {
+        // Sizes were divided by the least scale on the way in (`blocker_at`, `drain_at`).
+        let least = smallest_scale(sizing);
+        let blockers = self
+            .blockers
+            .iter()
+            .map(|blocker| Blocker {
+                from: sizing * blocker.from,
+                to: sizing * blocker.to,
+                radius_mm: blocker.radius_mm * least,
+            })
+            .collect();
+        let drains = self
+            .drains
+            .iter()
+            .map(|hole| {
+                let at = sizing * hole.at;
+                let axis = (sizing * hole.axis).try_normalize().unwrap_or(hole.axis);
+                let diameter_mm = hole.diameter_mm * least;
+                DrainHole {
+                    at,
+                    axis,
+                    diameter_mm,
+                    depth_mm: hole.depth_mm * least,
+                    lift_mm: lift_for(mesh, bvh, at, axis, diameter_mm),
+                    ..*hole
+                }
+            })
+            .collect();
+        let channels = self
+            .channels
+            .iter()
+            .map(|channel| Channel {
+                points: channel.points.iter().map(|point| sizing * *point).collect(),
+                diameter_mm: channel.diameter_mm * least,
+            })
+            .collect();
+        let mut carried = Self {
+            blockers,
+            drains,
+            channels,
+            ..Self::default()
+        };
+        carried.recut();
+        carried
     }
 }
 
@@ -983,5 +1033,41 @@ mod tests {
             hollow.is_stale(&asked, stretched),
             "a turned model stretched along the plate has walls of new thicknesses"
         );
+    }
+
+    #[test]
+    fn cuts_carried_onto_a_pressed_surface_stand_where_they_printed_and_the_model_is_solid() {
+        let placed = Transform {
+            scale: Vec3::splat(2.0),
+            ..Transform::default()
+        };
+        let mut hollow = ModelHollow::default();
+        hollow.add_blocker(Vec3::new(10.0, 0.0, 0.0), 4.0, placed);
+        let (lid, bvh) = (lid(), Bvh::build(&lid()));
+        hollow.add_drain(
+            &lid,
+            &bvh,
+            Vec3::new(0.0, 0.0, 4.0),
+            Vec3::Z,
+            drain_tool(3.0, 4.0),
+            placed,
+        );
+        hollow.take(shell(placed.unturned(), HollowSettings::default()));
+
+        let carried = hollow.carried_onto(&lid, &bvh, placed.sizing().linear());
+
+        // With the doubling pressed into the mesh, own space is plate space: the click's
+        // point and the sizes asked for on the plate come back as they were.
+        let blocker = carried.blockers()[0];
+        assert!(blocker.from.abs_diff_eq(Vec3::new(10.0, 0.0, 0.0), 1e-4));
+        assert!((blocker.radius_mm - 4.0).abs() < 1e-4, "the 4 mm asked for");
+        let hole = carried.drains()[0];
+        assert!((hole.diameter_mm - 3.0).abs() < 1e-4, "the 3 mm asked for");
+        assert!((hole.depth_mm - 4.0).abs() < 1e-4, "the 4 mm asked for");
+        assert!(
+            !carried.is_hollow(),
+            "the cavity is cut again into the new surface"
+        );
+        assert!(carried.cut_bodies().is_some(), "the hole is cut at once");
     }
 }

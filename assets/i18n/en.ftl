@@ -574,7 +574,6 @@ hollow-clear-blockers =
         [one] Clear { $count } blocker
        *[other] Clear { $count } blockers
     }
-hollow-tooltip = Cuts a cavity inside { $scope }.
 hollow-hollow = Hollow
 hollow-hollowing = Hollowing
 hollow-hollowed = Hollowed
@@ -652,8 +651,6 @@ relief-textures =
     }
 relief-pressing = Pressing...
 relief-cancelled = Pressing cancelled
-relief-the-texture = the texture
-relief-tooltip = Presses { $picture } into { $scope }. The model is replaced, so its supports and its cavity go with it.
 relief-press = Press it in
 relief-pressing-status = Pressing the relief
 text-words = Text
@@ -709,7 +706,6 @@ boolean-combine =
     }
 boolean-combining = Combining the models
 boolean-cancelled = Combining cancelled
-boolean-tooltip = Replaces the picked models with the one they make. Their supports, cavities and holes go with them; a torn model is combined through a field and loses its sharp edges.
 boolean-pick-two = Pick two or more models on the plate to combine, holding Shift or Cmd.
 boolean-not-solid = the model is not a closed solid, so it cannot be cut exactly; repair it first
 boolean-nothing-left = the models combined leave nothing behind

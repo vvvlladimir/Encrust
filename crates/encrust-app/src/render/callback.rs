@@ -333,12 +333,11 @@ impl Draws {
         // culled from outside and only shows once the camera is in the wall.
         let mesh = object.hollow.shell().unwrap_or(&object.mesh).clone();
         let instance = ModelInstance::new(object.transform, colour, mark);
-        // The map is indexed by the model's own faces, so a hollowed model — whose shell
-        // carries the cavity's as well — is drawn flat like everything else.
-        let mapped = texture.filter(|_| object.hollow.shell().is_none());
-        match mapped {
+        match texture {
+            // The map is indexed by the model's own faces, so a hollowed model is drawn as
+            // its outer surface while it carries a texture: the cavity is not pressed.
             Some(mapped) => self.reliefs.push(ReliefDraw {
-                mesh: Arc::clone(&mesh),
+                mesh: Arc::clone(&object.mesh),
                 mapped: Arc::clone(mapped),
                 instance,
             }),
