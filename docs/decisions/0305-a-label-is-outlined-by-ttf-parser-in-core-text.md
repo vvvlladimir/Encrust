@@ -48,7 +48,9 @@ thinner across a face that turns steeply away, by the cosine, and carries hundre
 thousands of triangles, which the preview rebuilds each frame and the join has to cut. A
 font file is read again when the text changes. Reopen if a letter has to keep its depth
 square to a steep face, if the preview stutters on a long label, or if shaping a script
-`kern` cannot carry — Arabic, Devanagari — is asked for.
+`kern` cannot carry — Arabic, Devanagari — is asked for. `ttf-parser` is marked unmaintained
+(RUSTSEC-2026-0192), and `deny.toml` waives it as `fontdb` already ships it; a fix it needs
+and will not get is when `core-text` moves to `skrifa`.
 
 ## Alternatives considered
 
