@@ -4,8 +4,8 @@ use std::sync::Arc;
 use core_geometry::{Bvh, Mat3, Mesh, Scalar, Transform, Vec3, smallest_scale};
 
 use crate::{
-    Blocker, Channel, DrainHole, HollowSettings, channel_under, drill, hole_at, lift_for, pierce,
-    sleeves,
+    Blocker, Channel, DrainHole, HoleMode, HoleSize, HollowSettings, channel_under, drill, hole_at,
+    lift_for, pierce, sleeves,
 };
 
 /// A transform this close to singular has flattened its model, and a click on it cannot
@@ -77,15 +77,6 @@ pub struct Shell {
     pub settings: HollowSettings,
 }
 
-/// The hole a click drills: its mouth and depth in millimetres of the plate, and its far
-/// end as a fraction of its mouth, 1 being a cylinder.
-#[derive(Debug, Clone, Copy, PartialEq)]
-pub struct HoleSize {
-    pub diameter_mm: Scalar,
-    pub depth_mm: Scalar,
-    pub taper: Scalar,
-}
-
 impl ModelHollow {
     /// The cuts a project file was saved with. The cavity itself is not in the file: it is
     /// asked for again by the Hollow tool.
@@ -127,20 +118,26 @@ impl ModelHollow {
     /// Drills a hole from the nearest surface into `target`, a point in the model's own
     /// space, deep enough to reach it: what gives a trapped pocket its way out.
     ///
-    /// `diameter_mm` is measured on the plate, like the one a click drops. Returns whether
+    /// `size` is measured on the plate, like the one a click drops; its depth is the
+    /// pocket's, and the hole goes through whatever mode it was asked in. Returns whether
     /// there was a surface to drill through at all.
     pub fn drill_into(
         &mut self,
         mesh: &Mesh,
         bvh: &Bvh,
         target: Vec3,
-        diameter_mm: Scalar,
-        taper: Scalar,
+        size: HoleSize,
         transform: Transform,
     ) -> bool {
         let smallest = transform.least_scale();
-        let diameter_mm = diameter_mm / smallest;
-        let Some(hole) = hole_at(mesh, bvh, target, diameter_mm, 0.0, taper) else {
+        let diameter_mm = size.diameter_mm / smallest;
+        let asked = HoleSize {
+            diameter_mm,
+            depth_mm: 0.0,
+            mode: HoleMode::Through,
+            ..size
+        };
+        let Some(hole) = hole_at(mesh, bvh, target, asked) else {
             return false;
         };
 
@@ -317,15 +314,13 @@ impl ModelHollow {
         // space, so both its numbers come back through the scale the model stands at.
         let smallest = transform.least_scale();
         let at = inverse.transform_point3(point);
-        let diameter_mm = size.diameter_mm / smallest;
-        Some(DrainHole {
-            at,
-            axis,
-            diameter_mm,
+        let size = HoleSize {
+            diameter_mm: size.diameter_mm / smallest,
             depth_mm: size.depth_mm / smallest,
-            taper: size.taper,
-            lift_mm: lift_for(mesh, bvh, at, axis, diameter_mm),
-        })
+            ..size
+        };
+        let lift_mm = lift_for(mesh, bvh, at, axis, size.diameter_mm);
+        Some(DrainHole::sized(at, axis, size, lift_mm))
     }
 
     /// `hole` as it would be cut here: through the wall, once the model is hollow.
@@ -597,11 +592,7 @@ mod tests {
     use std::f32::consts::FRAC_PI_2;
 
     fn drain_tool(diameter_mm: Scalar, depth_mm: Scalar) -> HoleSize {
-        HoleSize {
-            diameter_mm,
-            depth_mm,
-            taper: 1.0,
-        }
+        HoleSize::round(diameter_mm, depth_mm, 1.0)
     }
 
     /// A flat lid in the z = 0 plane, wide enough to drill anywhere in these tests: a

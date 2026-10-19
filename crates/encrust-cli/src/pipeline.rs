@@ -173,15 +173,26 @@ pub fn import(
     Ok((mesh, import, oriented))
 }
 
+/// What hollowing and drilling made of one model besides the model itself.
+pub struct Shelled {
+    pub report: Option<HollowReport>,
+    /// The bodies the holes and channels cut, which only subtract, so they are no part of
+    /// what the stack has to be tall enough for (ADR 0199).
+    pub cuts: Option<Mesh>,
+    /// A plug for each hole, laid on the plate beside the model (ADR 0313).
+    pub plugs: Vec<Mesh>,
+}
+
 /// Shells the model when asked to, then meshes the bodies its drain holes and channels
-/// cut out of it. Those stay apart from the model: they only subtract, so they are no
-/// part of what the stack has to be tall enough for (ADR 0199).
+/// cut out of it, and the plugs that close the holes. `drift_mm` is what the resin leaves
+/// a fit wider by; see `Compensation::fit_drift_mm`.
 pub fn hollow_and_cut(
     mesh: &mut Mesh,
     args: &HollowArgs,
     precision: Scalar,
+    drift_mm: Scalar,
     watch: &Watch,
-) -> Result<(Option<HollowReport>, Option<Mesh>)> {
+) -> Result<Shelled> {
     let talk = watch.talk;
     // Where the cuts land is read off the model as it was imported; what they are cut
     // into may be the shell. See ADR 0075.
@@ -189,6 +200,18 @@ pub fn hollow_and_cut(
         .cutting()
         .then(|| hollowing::placed(mesh, args))
         .transpose()?;
+    // A plug is the solid the hole takes out, so it is read before the model is a shell.
+    let plugs = match &placed {
+        Some((holes, _)) if args.plugs => hollowing::plugs_beside(mesh, holes, args, drift_mm)?,
+        _ => Vec::new(),
+    };
+    if talk && !plugs.is_empty() {
+        println!(
+            "  plugs         {} beside the model, {:.2} mm narrower a side\n",
+            plugs.len(),
+            args.plug_gap_mm - drift_mm
+        );
+    }
 
     let mut hollow = None;
     let mut wall = None;
@@ -209,7 +232,11 @@ pub fn hollow_and_cut(
         }
         bodies = Some(meshed);
     }
-    Ok((hollow, bodies))
+    Ok(Shelled {
+        report: hollow,
+        cuts: bodies,
+        plugs,
+    })
 }
 
 /// How the stack is cut, and what the resin's shrinkage does to it on the way in.

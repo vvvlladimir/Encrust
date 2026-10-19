@@ -117,11 +117,7 @@ mod tests {
     #[test]
     fn a_drain_preset_travels_and_a_hollow_one_is_refused_in_its_place() {
         let mut catalogue = writable("presets");
-        let state = DrainState {
-            diameter_mm: 3.5,
-            depth_mm: 6.0,
-            taper: 0.0,
-        };
+        let state = DrainState::round(3.5, 6.0, 0.0);
         let preset = Preset::of("Wide", &state, Path::new("wide")).expect("the state is a table");
         catalogue
             .save_preset(Kind::Drain, "wide", &preset)

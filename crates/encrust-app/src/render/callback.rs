@@ -759,6 +759,9 @@ mod tests {
             depth_mm: 6.0,
             taper: 1.0,
             lift_mm: 0.0,
+            shape: core_volume::HoleShape::Round,
+            turn_deg: 0.0,
+            mode: core_volume::HoleMode::Through,
         }
     }
 

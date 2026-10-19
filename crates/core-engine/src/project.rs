@@ -22,7 +22,8 @@ use core_joint::Joints;
 use core_slicer::AdaptiveSettings;
 use core_supports::{ProjectSettings, Region, SupportPoint, SupportTree};
 use core_volume::{
-    Blocker, Channel, DrainHole, HollowMode, HollowSettings, InfillSettings, PartSettings,
+    Blocker, Channel, DrainHole, HoleMode, HoleShape, HollowMode, HollowSettings, InfillSettings,
+    PLUG_GAP_MM, PartSettings,
 };
 use printer_profiles::{OutputFormat, Raft, SupportProfile};
 use serde::{Deserialize, Serialize};
@@ -241,6 +242,10 @@ pub struct HollowState {
     pub infill_on: bool,
     pub infill: InfillSettings,
     pub blocker_mm: Scalar,
+    /// Whether a shell opens through the floor it stands on; a file without it reads a
+    /// closed one (ADR 0313).
+    #[serde(default)]
+    pub open_floor: bool,
 }
 
 /// What the next drain hole is drilled to. The holes standing carry their own sizes.
@@ -249,6 +254,36 @@ pub struct DrainState {
     pub diameter_mm: Scalar,
     pub depth_mm: Scalar,
     pub taper: Scalar,
+    /// The next hole's outline, its turn in degrees and whether it goes through a cavity,
+    /// and how much narrower than its hole a plug is drawn, millimetres a side. A file
+    /// without them reads a round hole that goes through and the default gap (ADR 0313).
+    #[serde(default)]
+    pub shape: HoleShape,
+    #[serde(default)]
+    pub turn_deg: Scalar,
+    #[serde(default)]
+    pub mode: HoleMode,
+    #[serde(default = "plug_gap")]
+    pub plug_gap_mm: Scalar,
+}
+
+impl DrainState {
+    /// A round hole that goes through, with the default plug gap.
+    pub fn round(diameter_mm: Scalar, depth_mm: Scalar, taper: Scalar) -> Self {
+        Self {
+            diameter_mm,
+            depth_mm,
+            taper,
+            shape: HoleShape::Round,
+            turn_deg: 0.0,
+            mode: HoleMode::Through,
+            plug_gap_mm: PLUG_GAP_MM,
+        }
+    }
+}
+
+fn plug_gap() -> Scalar {
+    PLUG_GAP_MM
 }
 
 /// Where the cut tool's plane stands, which halves it keeps and how they are joined.
@@ -420,6 +455,10 @@ pub struct Cavity {
     pub mode: HollowMode,
     pub precision: Scalar,
     pub infill: Option<InfillSettings>,
+    /// The way to the plate the floor was opened toward; absent for a closed shell, and in
+    /// a file from before ADR 0313.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub open_toward: Option<Vec3>,
 }
 
 impl Cavity {
@@ -430,6 +469,7 @@ impl Cavity {
             mode: asked.mode,
             precision: asked.precision,
             infill: asked.infill,
+            open_toward: asked.open_toward,
         }
     }
 
@@ -441,6 +481,7 @@ impl Cavity {
             mode: self.mode,
             precision: self.precision,
             infill: self.infill,
+            open_toward: self.open_toward,
             ..HollowSettings::default()
         }
     }
@@ -626,12 +667,9 @@ mod tests {
                     infill_on: true,
                     infill: InfillSettings::default(),
                     blocker_mm: 2.0,
+                    open_floor: false,
                 },
-                drain: DrainState {
-                    diameter_mm: 3.0,
-                    depth_mm: 3.0,
-                    taper: 1.0,
-                },
+                drain: DrainState::round(3.0, 3.0, 1.0),
                 cut: CutState {
                     axis: Axis::Z,
                     height_mm: 10.0,
@@ -710,6 +748,7 @@ mod tests {
                         mode: HollowMode::External,
                         precision: 0.25,
                         infill: None,
+                        open_toward: None,
                     },
                     cavity_faces: 0..1,
                     cavity_mm3: 12.5,
@@ -724,11 +763,7 @@ mod tests {
                 }),
             },
             own_hollow: None,
-            own_drain: (index == 1).then_some(DrainState {
-                diameter_mm: 4.0,
-                depth_mm: 3.0,
-                taper: 1.0,
-            }),
+            own_drain: (index == 1).then_some(DrainState::round(4.0, 3.0, 1.0)),
             own_supports: if index == 1 {
                 vec![OwnSupportState {
                     group: 1,
@@ -926,6 +961,32 @@ mod tests {
             read.hollow.built.map(|built| built.shape()),
             Some(Mat3::from_diagonal(Vec3::new(2.0, 1.0, 0.5))),
             "an older shell was measured under the size of its scale"
+        );
+    }
+
+    #[test]
+    fn hole_shapes_and_an_open_floor_come_back_and_a_file_from_before_reads() {
+        let mut saved = project(1);
+        saved.manifest.drain.shape = HoleShape::Polygon { sides: 6 };
+        saved.manifest.drain.mode = HoleMode::Blind;
+        saved.manifest.drain.plug_gap_mm = 0.2;
+        saved.manifest.hollow.open_floor = true;
+        let back = round_trip(&saved);
+        assert_eq!(back.manifest.drain, saved.manifest.drain);
+        assert!(back.manifest.hollow.open_floor);
+
+        let older: DrainState =
+            serde_json::from_str(r#"{ "diameter_mm": 3.0, "depth_mm": 3.0, "taper": 1.0 }"#)
+                .expect("a drain written before ADR 0313 reads");
+        assert_eq!(older, DrainState::round(3.0, 3.0, 1.0));
+        let hole: DrainHole = serde_json::from_value(serde_json::json!({
+            "at": [0.0, 0.0, 0.0], "axis": [0.0, 0.0, -1.0], "diameter_mm": 3.0,
+            "depth_mm": 3.0, "taper": 1.0, "lift_mm": 0.0
+        }))
+        .expect("a hole written before ADR 0313 reads");
+        assert_eq!(
+            (hole.shape, hole.mode),
+            (HoleShape::Round, HoleMode::Through)
         );
     }
 

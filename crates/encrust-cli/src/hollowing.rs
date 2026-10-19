@@ -2,10 +2,11 @@ use std::fmt;
 use std::time::{Duration, Instant};
 
 use anyhow::{Context, Result, bail};
-use core_geometry::{Bvh, Mesh, Scalar, Vec3};
+use core_geometry::{Bvh, Mesh, Scalar, Transform, Vec3, transform_mesh};
 use core_volume::{
-    Cancel, Channel, DrainHole, HollowMode, HollowSettings, InfillPattern, InfillSettings,
-    VolumeError, drill, hole_at, hollow, pierce, sleeves,
+    Cancel, Channel, DrainHole, HoleMode, HoleShape, HoleSize, HollowMode, HollowSettings,
+    InfillPattern, InfillSettings, PLUG_GAP_MM, VolumeError, drill, hole_at, hollow, pierce, plugs,
+    sleeves, stand_on_end,
 };
 
 use crate::exit::{Cancelled, Stop};
@@ -58,6 +59,10 @@ pub struct HollowArgs {
     #[arg(long = "hollow-mode", value_name = "MODE", default_value = "internal")]
     pub mode: Mode,
 
+    /// Open the cavity through the floor the model stands on, so it drains with no hole.
+    #[arg(long = "hollow-open-floor")]
+    pub open_floor: bool,
+
     /// Fill the cavity with a lattice.
     #[arg(long = "infill", value_name = "PATTERN")]
     pub infill: Option<Pattern>,
@@ -104,6 +109,34 @@ pub struct HollowArgs {
     /// Diameter of a hole's far end as a fraction of its mouth: 1 is a cylinder.
     #[arg(long = "drain-taper", value_name = "0..1", default_value_t = 1.0)]
     pub drain_taper: Scalar,
+
+    /// Cut the drain holes as polygons of this many sides, their corners on the diameter;
+    /// round without it.
+    #[arg(long = "drain-sides", value_name = "3..12", value_parser = clap::value_parser!(u8).range(3..=12))]
+    pub drain_sides: Option<u8>,
+
+    /// Turn a polygonal hole about its axis by this many degrees from the level.
+    #[arg(
+        long = "drain-turn",
+        value_name = "DEG",
+        default_value_t = 0.0,
+        allow_hyphen_values = true
+    )]
+    pub drain_turn_deg: Scalar,
+
+    /// Stop each hole at --drain-depth even where a cavity is behind it: a socket, not a
+    /// drain.
+    #[arg(long = "drain-blind")]
+    pub drain_blind: bool,
+
+    /// Print a plug for each drain hole, standing on the plate beside the model.
+    #[arg(long = "drain-plugs")]
+    pub plugs: bool,
+
+    /// How much narrower than its hole a plug is drawn, millimetres a side. A resin whose
+    /// tolerance compensation is off takes its hole and outer offsets off this too.
+    #[arg(long = "plug-gap", value_name = "MM", default_value_t = PLUG_GAP_MM)]
+    pub plug_gap_mm: Scalar,
 
     /// Dig a drainage channel along a polyline of points, `x,y,z:x,y,z:...`, in the same
     /// plate millimetres as --drain-at. Repeat for more than one channel.
@@ -159,8 +192,42 @@ impl HollowArgs {
             precision,
             infill: self.infill.map(|pattern| self.infill_settings(pattern)),
             blockers: sleeves(&self.dug(), thickness_mm),
+            // The model already stands where it prints, so the plate is straight down.
+            open_toward: self.open_floor.then_some(Vec3::NEG_Z),
             ..HollowSettings::default()
         })
+    }
+
+    /// Refuses an open floor on anything but a shell, and plugs with no hole to close.
+    fn check_floor_and_plugs(&self) -> Result<()> {
+        if self.open_floor && !self.wanted() {
+            bail!("--hollow-open-floor opens a shell's floor, and --hollow was not given");
+        }
+        if self.open_floor && matches!(self.mode, Mode::External) {
+            bail!("--hollow-open-floor opens a shell's floor, and a mould has none");
+        }
+        if self.plugs && self.drain_at.is_empty() {
+            bail!("--drain-plugs closes the holes --drain-at drills, and none was given");
+        }
+        Ok(())
+    }
+
+    /// The hole every `--drain-at` drills.
+    fn hole_size(&self) -> HoleSize {
+        HoleSize {
+            diameter_mm: self.drain_mm,
+            depth_mm: self.drain_depth_mm,
+            taper: self.drain_taper,
+            shape: self
+                .drain_sides
+                .map_or(HoleShape::Round, |sides| HoleShape::Polygon { sides }),
+            turn_deg: self.drain_turn_deg,
+            mode: if self.drain_blind {
+                HoleMode::Blind
+            } else {
+                HoleMode::Through
+            },
+        }
     }
 
     /// The lattice `--infill` asked for, every size left out taken from the defaults.
@@ -226,15 +293,8 @@ impl HollowArgs {
         self.drain_at
             .iter()
             .map(|near| {
-                hole_at(
-                    mesh,
-                    bvh,
-                    *near,
-                    self.drain_mm,
-                    self.drain_depth_mm,
-                    self.drain_taper,
-                )
-                .with_context(|| format!("no surface near {near} to drill a drain hole into"))
+                hole_at(mesh, bvh, *near, self.hole_size())
+                    .with_context(|| format!("no surface near {near} to drill a drain hole into"))
             })
             .collect()
     }
@@ -250,6 +310,7 @@ pub fn run(
 ) -> Result<(Mesh, HollowReport)> {
     let started = Instant::now();
     args.check_infill()?;
+    args.check_floor_and_plugs()?;
     let bvh = Bvh::build(mesh);
     let Some(settings) = args.settings(precision) else {
         bail!("--hollow was not given, so there is nothing to hollow");
@@ -278,6 +339,40 @@ pub fn run(
 /// point inside the model finds the surface a user was pointing at.
 pub fn placed(mesh: &Mesh, args: &HollowArgs) -> Result<(Vec<DrainHole>, Vec<Channel>)> {
     Ok((args.drains(mesh, &Bvh::build(mesh))?, args.dug()))
+}
+
+/// Space left between the model and the plugs laid out beside it, and between one plug and
+/// the next, millimetres.
+const PLUG_SPACING_MM: Scalar = 3.0;
+
+/// A plug for each of `holes`, drilled into `mesh` as it stands solid on the plate, laid
+/// on the plate in a row past the model's right-hand side. `drift_mm` is what the resin's
+/// compensation leaves a fit wider by, and comes off the gap asked for.
+pub fn plugs_beside(
+    mesh: &Mesh,
+    holes: &[DrainHole],
+    args: &HollowArgs,
+    drift_mm: Scalar,
+) -> Result<Vec<Mesh>> {
+    args.check_floor_and_plugs()?;
+    let wall_mm = args
+        .thickness_mm
+        .filter(|_| matches!(args.mode, Mode::Internal));
+    let gap_mm = args.plug_gap_mm - drift_mm;
+    let made = plugs(mesh, &Bvh::build(mesh), holes, wall_mm, gap_mm)
+        .context("cutting the plugs for the drain holes")?;
+    let bounds = mesh.aabb().context("mesh has no vertices")?;
+
+    let mut x = bounds.maxs.x + PLUG_SPACING_MM;
+    let mut laid = Vec::with_capacity(made.len());
+    for (plug, hole) in made.iter().zip(holes) {
+        let stood = stand_on_end(plug, hole.axis);
+        let size = stood.aabb().context("a plug has vertices")?.extents();
+        let offset = Vec3::new(x + size.x / 2.0, bounds.mins.y + size.y / 2.0, 0.0);
+        laid.push(transform_mesh(&stood, Transform::from_translation(offset)));
+        x += size.x + PLUG_SPACING_MM;
+    }
+    Ok(laid)
 }
 
 /// The bodies `placed` cuts out of a model hollowed to `wall`, and how many of each.
@@ -354,9 +449,14 @@ impl fmt::Display for HollowReport {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         writeln!(
             f,
-            "  wall          {:.3} mm, {}",
+            "  wall          {:.3} mm, {}{}",
             self.settings.thickness_mm,
-            self.settings.mode.label().to_lowercase()
+            self.settings.mode.label().to_lowercase(),
+            if self.settings.open_toward.is_some() {
+                ", open through the floor"
+            } else {
+                ""
+            }
         )?;
         writeln!(
             f,

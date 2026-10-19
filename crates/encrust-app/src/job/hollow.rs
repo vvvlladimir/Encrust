@@ -287,13 +287,7 @@ fn shell_of(task: &HollowTask, fields: &SharedFields) -> Result<Shell, VolumeErr
             field
         }
     };
-    let hollowed = carve(
-        &task.mesh,
-        &field,
-        &task.settings.blockers,
-        task.settings.infill,
-        Cancel::never(),
-    )?;
+    let hollowed = carve(&task.mesh, &field, &task.settings, Cancel::never())?;
     Ok(Shell {
         mesh: Arc::new(hollowed.mesh),
         cavity: hollowed.cavity,

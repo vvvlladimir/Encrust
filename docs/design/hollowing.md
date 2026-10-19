@@ -44,6 +44,19 @@ prints solid wherever it is, in the wall or standing in the cavity. A mould turn
 bounding shells inside out, not the stray ones, which would print as resin in its void
 (ADR 0186).
 
+An open floor carries the cavity out through the floor the model stands on (ADR 0313).
+`HollowSettings::open_toward` is the way to the plate in the space the wall is measured in,
+`plate_down` of the placement, so it follows the model's turn and a shell turned after it was
+built is stale. `carve` reads the cavity's outline a band in from the floor's inner face —
+`floor − wall − band`, where it is the cavity's own — and sweeps it along that direction to a
+band past the floor's outer face: `max(h − s, s − e, cavity(q))`, `q` the point carried back
+onto the outline's plane, taken with `min` into the cavity before the blockers, so a blocker
+still keeps the floor solid where it stands. The model's own floor stays in the mesh; the
+cavity outweighs it there, so the rasteriser fills nothing, and what the swept void reaches
+past the floor stands in air and prints as nothing. A floor that is not level opens only
+where the outline reaches it: a ball opens in a disc at its bottom. Only a shell has a floor;
+a mould ignores the direction.
+
 ## Blockers
 
 A ball of radius `r` swept from `from` to `to` inside which the wall stays solid, kept in
@@ -188,7 +201,7 @@ the shell rather than leaving them standing in the hole (ADR 0188).
 
 | | What it is | Where it comes from |
 |---|---|---|
-| `DrainHole` | mouth on the surface, axis into the model, diameter, depth, taper | a click in the window, `--drain-at` in the CLI |
+| `DrainHole` | mouth on the surface, axis into the model, diameter, depth, taper, outline (round or a polygon of 3 to 12 sides, turned from the level), through or blind | a click in the window, `--drain-at` in the CLI |
 | `Channel` | a tube along a polyline, a ball at each bend | clicks in Channel mode, `--channel` |
 
 Holes and channels live in the model's own space beside the blockers, and are cut on their
@@ -207,10 +220,26 @@ plus whatever that surface rises around the rim — `lift_for` casts a ray out o
 material along the hole's axis at twelve points around it — so no film is left over the
 mouth. A ray that meets air first counts nothing, so another part of the model standing over
 the hole is never cut.
-And `pierce` deepens a hole standing on a hollowed model until it is through the wall,
-`thickness + 2 voxels`, whatever depth was asked for: a hole shorter than its wall is a
-dimple, not a drain, so the depth a user types is a floor rather than a ceiling. On a solid
-model there is no wall to cross and the depth is what was typed.
+And `pierce` deepens a hole that goes through, standing on a hollowed model, until it is
+through the wall, `thickness + 2 voxels`, whatever depth was asked for: a hole shorter than
+its wall is a dimple, not a drain, so the depth a user types is a floor rather than a
+ceiling. A blind hole is the other answer, a socket for a magnet or a pin, and keeps the
+depth that was typed; so does any hole on a solid model, which has no wall to cross.
+
+A polygon's corners lie on the hole's diameter and its turn is measured from the level line
+`frame` lays the first corner on wherever the axis is not upright, so a user turns a corner
+to the top of a hole in a side wall and the roof prints as a point rather than a flat span.
+
+A plug is what a hole took out of the wall, cut as its own closed mesh rather than through
+the boolean engine (ADR 0313): the hole's outline moved in by the gap — by `gap / cos(π/n)`
+at a corner, so every side clears by the gap — and as long as the wall where the model is
+hollow and the hole goes through, as deep as the hole otherwise. Its inner end is flat. Its
+outer face is sampled on four rings over the mouth, each point dropped onto the model's
+surface by a ray cast out of the wall the way `lift_for` reads a rim, so it closes flush on
+a curved surface; a point no ray finds reads the mouth's own plane. `stand_on_end` turns it
+onto that flat end beside the model. The gap a user sets is the fit that prints, so a resin
+whose tolerance compensation is off has its hole and outer offsets taken off it
+(`Compensation::fit_drift_mm`).
 
 A channel runs exactly between the points it was given, which is what `--channel` hands
 over. A run of clicks is not those points: `channel_under` sinks the spine a radius and a
@@ -273,3 +302,6 @@ bounds the lot, and each pocket's own box is what the shader keeps the red insid
   notices and asks to be run again.
 - A channel narrower than a tenth of a millimetre drains in life and reads as closed to the
   scan, so the pocket behind it is reported. The error is a hole nobody needed.
+- The window draws an open floor closed: the model's floor is still in the mesh, and only
+  the layers show it gone. A floor on the plate seals the cavity until the print comes off,
+  which the drainage check reports as a suction cup it is.

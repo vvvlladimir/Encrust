@@ -385,3 +385,123 @@ fn a_hole_shallower_than_the_wall_still_goes_through_it() {
         "the hole clears the whole 2 mm wall in front of it, got {wall:?}"
     );
 }
+
+#[test]
+fn an_open_floor_leaves_the_first_layer_a_ring() {
+    let (out, text) = hollow_cube("open-floor", &["--hollow", "3", "--hollow-open-floor"]);
+
+    assert_eq!(
+        field(&text, "wall"),
+        "3.000 mm, internal, open through the floor"
+    );
+    // The floor is gone under the cavity, so the layer on the plate is the same ring as
+    // halfway up: 156 mm2 at a 0.1 mm pitch.
+    let floor = lit_pixels(&out, 0);
+    assert!(
+        (floor as f32 - 15_600.0).abs() / 15_600.0 < 0.03,
+        "the first layer of an open shell is a 16 mm ring round a 10 mm hole, got {floor}"
+    );
+}
+
+#[test]
+fn an_open_floor_is_refused_on_a_mould() {
+    let path = write_box_stl("open-mould", 16.0, 12, 0);
+    let output = estimate(&[
+        path.to_str().unwrap(),
+        "--hollow",
+        "2",
+        "--hollow-mode",
+        "external",
+        "--hollow-open-floor",
+    ]);
+    assert!(!output.status.success());
+    assert!(stderr(&output).contains("a mould has none"));
+}
+
+#[test]
+fn a_blind_hole_stops_short_of_the_cavity_a_drain_reaches() {
+    let path = write_box_stl("blind-drain", 20.0, 12, 0);
+    let input = path.to_str().unwrap();
+    let panel = test_panel();
+    let panel = panel.to_str().unwrap();
+    let drilled = |name: &str, extra: &[&str]| {
+        let out = output_dir(name);
+        let mut args = vec![
+            input,
+            "--profile",
+            panel,
+            "--hollow",
+            "2",
+            "--layer-height",
+            "0.5",
+            "--drain",
+            "6",
+            "--drain-depth",
+            "1",
+            "--drain-at",
+            "10,10,25",
+            "-o",
+            out.to_str().unwrap(),
+        ];
+        args.extend_from_slice(extra);
+        let output = slice(&args);
+        assert!(output.status.success(), "{}", stdout(&output));
+        out
+    };
+    let through = drilled("blind-through", &[]);
+    let blind = drilled("blind-socket", &["--drain-blind", "--drain-sides", "6"]);
+
+    // The lid runs from 18 to 20 mm; layer 36 is its lower half, under the 1 mm socket.
+    let (width, height, opened) = layer_pixels(&through, 36);
+    let (_, _, closed) = layer_pixels(&blind, 36);
+    let middle = (height as usize / 2) * width as usize + width as usize / 2;
+    assert_eq!(
+        opened[middle], 0x00,
+        "a drain is carried on through the lid"
+    );
+    assert_eq!(closed[middle], 0xFF, "a socket stops at its own depth");
+    let (_, _, socket) = layer_pixels(&blind, 39);
+    assert_eq!(socket[middle], 0x00, "and is open at the top all the same");
+}
+
+#[test]
+fn plugs_stand_beside_the_model_they_close() {
+    let path = write_box_stl("plugs", 8.0, 12, 0);
+    let out = output_dir("plugs");
+    let output = slice(&[
+        path.to_str().unwrap(),
+        "--profile",
+        test_panel().to_str().unwrap(),
+        "--layer-height",
+        "1",
+        "--drain",
+        "3",
+        "--drain-at",
+        "4,4,10",
+        "--drain-plugs",
+        "-o",
+        out.to_str().unwrap(),
+    ]);
+    let text = stdout(&output);
+    assert!(output.status.success(), "{text}");
+    assert_eq!(
+        field(&text, "plugs"),
+        "1 beside the model, 0.15 mm narrower a side"
+    );
+
+    // The 8 mm box fills 6 400 pixels of the first layer; a plug of 1.35 mm radius standing
+    // past its right-hand side adds about 570 more.
+    let lit = lit_pixels(&out, 0);
+    assert!(
+        (lit as f32 - 6_970.0).abs() < 150.0,
+        "the box and one plug beside it, about 6 970 pixels, got {lit}"
+    );
+}
+
+#[test]
+fn plugs_with_no_hole_are_refused() {
+    let path = write_box_stl("plugs-nothing", 8.0, 12, 0);
+    let output = estimate(&[path.to_str().unwrap(), "--hollow", "2", "--drain-plugs"]);
+    assert!(!output.status.success());
+    assert!(stderr(&output).contains("none was given"));
+}

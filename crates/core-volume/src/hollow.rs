@@ -2,7 +2,9 @@ use std::borrow::Cow;
 use std::collections::HashSet;
 use std::ops::Range;
 
-use core_geometry::{Bvh, Mat3, Mesh, Scalar, Vec3, glam::IVec3, signed_volume, smallest_scale};
+use core_geometry::{
+    Bvh, Mat3, Mesh, Scalar, Transform, Vec3, glam::IVec3, signed_volume, smallest_scale,
+};
 
 use serde::{Deserialize, Serialize};
 
@@ -173,6 +175,10 @@ pub struct HollowSettings {
     pub infill: Option<InfillSettings>,
     /// Where the wall stays solid.
     pub blockers: Vec<Blocker>,
+    /// Which way the plate lies, in the space the wall is measured in ([`plate_down`]),
+    /// where the cavity is to open through the floor the model stands on; `None` keeps it
+    /// closed. Only a shell has a floor to open (ADR 0313).
+    pub open_toward: Option<Vec3>,
     /// What the run may take in bytes, or zero for no ceiling. A lattice that would cost
     /// more is coarsened until it fits rather than left to run the machine out of memory.
     pub budget_bytes: usize,
@@ -203,6 +209,7 @@ impl Default for HollowSettings {
             sign: SignMode::default(),
             infill: None,
             blockers: Vec::new(),
+            open_toward: None,
             budget_bytes: DEFAULT_BUDGET_BYTES,
         }
     }
@@ -276,11 +283,24 @@ pub fn hollow_at_scale(
     cancel: Cancel<'_>,
 ) -> Result<Hollowed, VolumeError> {
     let field = cavity_field(mesh, bvh, settings, shape, cancel)?;
-    carve(mesh, &field, &settings.blockers, settings.infill, cancel)
+    carve(mesh, &field, settings, cancel)
+}
+
+/// Which way the plate lies from a model standing under `transform`, in the space its wall
+/// is measured in (`Transform::unturned`): what [`HollowSettings::open_toward`] asks for to
+/// open the floor the model stands on.
+pub fn plate_down(transform: Transform) -> Vec3 {
+    let shape = transform.unturned();
+    if shape.determinant().abs() < Scalar::EPSILON {
+        return Vec3::NEG_Z;
+    }
+    // The placement is its turn after its shape, so the turn is what is left of it.
+    let turn = transform.linear() * shape.inverse();
+    (turn.transpose() * Vec3::NEG_Z).normalize_or(Vec3::NEG_Z)
 }
 
 /// The field [`hollow_at_scale`] cuts its cavity from, on the finest lattice that fits the
-/// budget. The settings' blockers and infill play no part in it.
+/// budget. The settings' blockers, infill and open floor play no part in it.
 pub fn cavity_field(
     mesh: &Mesh,
     bvh: &Bvh,
@@ -307,20 +327,20 @@ pub fn cavity_field(
     })
 }
 
-/// The shell `field` was built for, with `blockers` kept solid and `infill` standing in
-/// the cavity. `mesh` is the model the field was built from, in its own space, and the
-/// blockers are in that space too.
+/// The shell `field` was built for, with the settings' blockers kept solid, its infill
+/// standing in the cavity and its floor opened where they ask. `mesh` is the model the
+/// field was built from, in its own space, and the blockers are in that space too.
 pub fn carve(
     mesh: &Mesh,
     field: &CavityField,
-    blockers: &[Blocker],
-    infill: Option<InfillSettings>,
+    settings: &HollowSettings,
     cancel: Cancel<'_>,
 ) -> Result<Hollowed, VolumeError> {
     let placed = placed(mesh, field.shape)?;
     // A blocker's radius was brought into the model's space through the least scale.
     let smallest = smallest_scale(field.shape);
-    let blockers: Vec<Blocker> = blockers
+    let blockers: Vec<Blocker> = settings
+        .blockers
         .iter()
         .map(|blocker| Blocker {
             from: field.shape * blocker.from,
@@ -334,7 +354,12 @@ pub fn carve(
             Some(surface) => mould(&surface, field, cancel),
             None => mould(&placed, field, cancel),
         },
-        HollowMode::Internal => shelled(&placed, field, &blockers, infill, cancel),
+        HollowMode::Internal => {
+            let floor = settings
+                .open_toward
+                .map(|toward| (toward, settings.thickness_mm));
+            shelled(&placed, field, &blockers, floor, settings.infill, cancel)
+        }
     }?;
     hollowed.coarsened = field.coarsened;
     if field.shape != Mat3::IDENTITY {
@@ -431,16 +456,20 @@ fn offset_field(
 }
 
 /// The model with the void `field` bounds appended to it wound inward, and whatever lattice
-/// stands in it appended after.
+/// stands in it appended after. `floor` is the way to the plate and the wall, where the
+/// void is carried out through the floor the model stands on.
 fn shelled(
     mesh: &Mesh,
     field: &CavityField,
     blockers: &[Blocker],
+    floor: Option<(Vec3, Scalar)>,
     infill: Option<InfillSettings>,
     cancel: Cancel<'_>,
 ) -> Result<Hollowed, VolumeError> {
-    let blocked = blocked(&field.offset, blockers);
-    let cavity = blocked.as_ref().unwrap_or(&field.offset);
+    let opened = floor.and_then(|(toward, wall_mm)| opened(&field.offset, mesh, toward, wall_mm));
+    let open = opened.as_ref().unwrap_or(&field.offset);
+    let blocked = blocked(open, blockers);
+    let cavity = blocked.as_ref().unwrap_or(open);
     let cavity_mesh = extract(cavity, cancel);
     let Carved { void, solid } = match &infill {
         Some(infill) => cut(cavity, cavity_mesh, infill, field.budget_bytes, cancel)?,
@@ -492,6 +521,70 @@ fn mould(mesh: &Mesh, field: &CavityField, cancel: Cancel<'_>) -> Result<Hollowe
         voxel_mm: field.voxel_mm,
         coarsened: false,
     })
+}
+
+/// `cavity` carried on through the floor of `mesh` that faces `toward`, or `None` for no
+/// direction: the outline it has a band in from the floor's inner face, swept out past the
+/// floor's outer face, so the floor is gone wherever the cavity stood over it. See
+/// `docs/design/hollowing.md`.
+fn opened(cavity: &Sdf, mesh: &Mesh, toward: Vec3, wall_mm: Scalar) -> Option<Sdf> {
+    let toward = toward.try_normalize()?;
+    let floor = mesh
+        .vertices
+        .iter()
+        .map(|vertex| vertex.dot(toward))
+        .fold(Scalar::NEG_INFINITY, Scalar::max);
+    if !floor.is_finite() {
+        return None;
+    }
+
+    let grid = cavity.grid();
+    let band_mm = cavity.band_mm();
+    // Read a band inside the cavity, where its outline is the cavity's own, and swept a
+    // band past the floor, where the surface it leaves is clear of the model's.
+    let outline_at = floor - wall_mm - band_mm;
+    let out_to = floor + band_mm;
+    let swept = |point: Vec3| {
+        let along = point.dot(toward);
+        let outline = cavity.sample(point - toward * (along - outline_at));
+        (outline_at - along).max(along - out_to).max(outline)
+    };
+    let candidates = sweep_tiles(cavity, toward, outline_at, out_to);
+    Some(assemble(grid, band_mm, candidates, |voxel| {
+        cavity.value(voxel).min(swept(grid.position(voxel)))
+    }))
+}
+
+/// The tiles the sweep of `cavity` from `from` to `to` along `toward` may cross: the
+/// cavity's own, and every tile its outline at `from` passes through on the way.
+fn sweep_tiles(cavity: &Sdf, toward: Vec3, from: Scalar, to: Scalar) -> HashSet<IVec3> {
+    let grid = cavity.grid();
+    let reach = grid.tile_radius() + cavity.band_mm();
+    let step = grid.tile_radius();
+    let mut candidates: HashSet<IVec3> = cavity.tile_keys().collect();
+    let outline = cavity
+        .tile_keys()
+        .chain(cavity.inside_tiles())
+        .filter(|tile| {
+            let along = grid.tile_center(*tile).dot(toward);
+            (from - reach..=from + reach).contains(&along)
+        });
+    for tile in outline.collect::<Vec<_>>() {
+        let center = grid.tile_center(tile);
+        let mut along = center.dot(toward);
+        while along <= to + reach {
+            let passed = tile_of(grid.voxel(center + toward * (along - center.dot(toward))));
+            for z in -1..=1 {
+                for y in -1..=1 {
+                    for x in -1..=1 {
+                        candidates.insert(passed + IVec3::new(x, y, z));
+                    }
+                }
+            }
+            along += step;
+        }
+    }
+    candidates
 }
 
 /// The cavity with every blocker taken out of it, or `None` when there are none.

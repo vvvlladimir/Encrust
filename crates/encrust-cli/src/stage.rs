@@ -249,6 +249,7 @@ pub fn plate_of(
 
     let mut parts = Vec::with_capacity(entries.len());
     let mut models = Vec::with_capacity(entries.len());
+    let drift_mm = chosen.material.compensation.fit_drift_mm();
     for ((meshes, (import, oriented)), (path, shaping)) in
         pieces.into_iter().zip(found).zip(entries)
     {
@@ -260,10 +261,11 @@ pub fn plate_of(
         let seated = oriented.as_ref().is_some_and(|turn| turn.on_plate);
         let (mut hollow, mut supports) = (None, None);
         for mesh in meshes {
-            let (model, hollowed, stood) = put_down(mesh, shaping, seated, layer_height, watch)?;
-            models.push(model);
-            hollow = hollow.or(hollowed);
-            supports = supports.or(stood);
+            let down = put_down(mesh, shaping, seated, layer_height, drift_mm, watch)?;
+            models.push(down.model);
+            models.extend(down.plugs);
+            hollow = hollow.or(down.hollow);
+            supports = supports.or(down.supports);
         }
         parts.push(Part {
             input: path.clone(),
@@ -292,16 +294,34 @@ pub fn plate_of(
     })
 }
 
-/// Hollows and supports one piece as `shaping` asks, ready to slice.
+/// Hollows and supports one piece as `shaping` asks, ready to slice, with the plugs for
+/// its holes standing beside it on no supports of their own.
 fn put_down(
     mut mesh: Mesh,
     shaping: &Shaping,
     seated: bool,
     layer_height: Scalar,
+    drift_mm: Scalar,
     watch: &Watch,
-) -> Result<(Model, Option<HollowReport>, Option<SupportReport>)> {
-    let (hollow, mut cuts) =
-        hollow_and_cut(&mut mesh, &shaping.hollow, shaping.import.precision, watch)?;
+) -> Result<PutDown> {
+    let shelled = hollow_and_cut(
+        &mut mesh,
+        &shaping.hollow,
+        shaping.import.precision,
+        drift_mm,
+        watch,
+    )?;
+    let (hollow, mut cuts) = (shelled.report, shelled.cuts);
+    let plugs = shelled
+        .plugs
+        .into_iter()
+        .map(|plug| Model {
+            mesh: Arc::new(plug),
+            transform: Transform::default(),
+            cuts: None,
+            supports: Vec::new(),
+        })
+        .collect();
     watch.stop.check()?;
     let stood = shaping
         .supports
@@ -325,7 +345,21 @@ fn put_down(
         cuts: cuts.map(Arc::new),
         supports: columns,
     };
-    Ok((model, hollow, supports))
+    Ok(PutDown {
+        model,
+        plugs,
+        hollow,
+        supports,
+    })
+}
+
+/// One piece ready to slice, the plugs for its holes, and what hollowing and supporting
+/// it found.
+struct PutDown {
+    model: Model,
+    plugs: Vec<Model>,
+    hollow: Option<HollowReport>,
+    supports: Option<SupportReport>,
 }
 
 /// Refuses what the modelling flags leave that the rest of the run cannot take: several

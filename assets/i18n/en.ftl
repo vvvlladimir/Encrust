@@ -550,6 +550,8 @@ hollow-inside = Inside
 hollow-outside = Outside
 hollow-inside-note = The wall grows inward; the outside is untouched.
 hollow-outside-note = The wall grows outward, making a mould of the model.
+hollow-open-floor = Open floor
+hollow-open-floor-note = The cavity opens through the floor the model stands on and drains with no hole. On the plate it stays sealed until the print comes off, so add a small vent near the top. The layer preview shows the opening; the model view still draws the floor.
 hollow-shell-help = A hollow model takes less resin and pulls less on the film. The wall is how thick its skin stays; about 2 mm suits most parts. A cavity needs a drain hole, or the resin trapped inside can crack the part later.
 hollow-wall = Wall
 hollow-precision = Precision
@@ -1343,7 +1345,32 @@ drain-checking = Checking drainage
 drain-hole = Hole
 drain-channel = Channel
 drain-channel-note = Each click adds a point; the channel is a tube of the hole size running under all of them, open at its two ends alone.
-drain-sizes-note = The depth is measured from the surface inwards, so a hole has to be deeper than the wall. A taper under 1 makes it a cone.
+drain-sizes-note = The depth is measured from the surface inwards. A taper under 1 makes it a cone.
+drain-round = Round
+drain-polygon = Polygon
+drain-sides = Sides
+drain-turn = Turn
+drain-polygon-note = The corners lie on the hole size and the turn is measured from the level. In a side wall, turn it until a corner is at the top: a pointed roof prints without sagging.
+drain-through = Through
+drain-blind = Blind
+drain-through-note = Once the model is hollow, the hole is carried on through the wall into the cavity, however shallow it was asked.
+drain-blind-note = The hole stops at its depth, cavity or not: a socket for a magnet or a pin.
+drain-plugs = Plugs
+drain-plugs-note = A plug is what a hole took out of the wall, narrower all round by the gap, its outer face following the surface so it closes flush. It prints standing on the plate beside the model.
+drain-plug-gap = Gap per side
+drain-plug-drift = The resin's tolerance compensation is off, so the plug is drawn { $drift } mm wider a side to print at this gap.
+drain-plugs-none = No hole to make a plug for yet.
+drain-lay-plugs =
+    { $count ->
+        [one] Make a plug for { $count } hole
+       *[other] Make plugs for { $count } holes
+    }
+drain-plugs-laid =
+    { $count ->
+        [one] { $count } plug laid beside its model
+       *[other] { $count } plugs laid beside their models
+    }
+drain-plug-name = { $name } (plug { $index })
 drain-none-cut = No hole and no channel is cut yet.
 drain-clear-cuts =
     { $count ->

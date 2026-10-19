@@ -16,6 +16,7 @@ mod hollow;
 mod infill;
 mod model;
 mod parts;
+mod plug;
 mod relief;
 mod scatter;
 mod sdf;
@@ -29,18 +30,20 @@ pub use build::{FieldSettings, build};
 pub use cancel::Cancel;
 pub use csg::{difference, intersection, offset, shell, union};
 pub use drain::{
-    CUT_WEIGHT, Channel, DrainHole, MOUTH_LIFT_MM, channel_under, drill, hole_at, lift_for, pierce,
+    CUT_WEIGHT, Channel, DrainHole, HoleMode, HoleShape, HoleSize, MOUTH_LIFT_MM, channel_under,
+    drill, hole_at, lift_for, pierce,
 };
 pub use error::VolumeError;
 pub use extract::extract;
 pub use grid::{TILE, VoxelGrid};
 pub use hollow::{
     Blocker, CavityField, HollowMode, HollowSettings, Hollowed, MIN_WALL_MM, carve, cavity_field,
-    hollow, hollow_at_scale, lattice_mm, sleeves,
+    hollow, hollow_at_scale, lattice_mm, plate_down, sleeves,
 };
 pub use infill::{InfillPattern, InfillSettings};
-pub use model::{HoleSize, ModelHollow, PENDING_MARKER_MM, Shell, markers};
+pub use model::{ModelHollow, PENDING_MARKER_MM, Shell, markers};
 pub use parts::{PartSettings, PartedOff, Parts, part_off, parts};
+pub use plug::{PLUG_GAP_MM, plugs, stand_on_end};
 pub use relief::{
     AngleMask, Relief, ReliefBasis, ReliefSettings, Tiling, prepared, press, press_reusing,
     press_tiled, press_tiled_reusing,

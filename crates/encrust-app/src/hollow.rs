@@ -2,8 +2,8 @@ use std::sync::Arc;
 
 use anyhow::{Result, bail};
 use core_engine::project::HollowState;
-use core_geometry::Scalar;
-use core_volume::{HollowSettings, InfillSettings};
+use core_geometry::{Scalar, Transform};
+use core_volume::{HollowMode, HollowSettings, InfillSettings, plate_down};
 
 use crate::i18n::tr;
 use crate::job::{
@@ -45,6 +45,7 @@ impl Default for HollowTool {
                 infill_on: false,
                 infill: InfillSettings::default(),
                 blocker_mm: DEFAULT_BLOCKER_MM,
+                open_floor: false,
             },
             job: None,
             hollowed: false,
@@ -58,12 +59,14 @@ impl HollowTool {
     /// its drain holes — is laid over this per model, in `hollow_tasks` and `is_stale`.
     #[cfg(test)]
     pub fn settings(&self) -> HollowSettings {
-        settings_of(&self.state)
+        settings_of(&self.state, Transform::default())
     }
 
-    /// What `object` is hollowed with: its own settings, or the plate's.
+    /// What `object` is hollowed with: its own settings, or the plate's, with its floor
+    /// opened toward the plate as it stands now.
     pub fn settings_for(&self, object: &SceneObject) -> HollowSettings {
-        settings_of(object.own.hollow.as_ref().unwrap_or(&self.state))
+        let state = object.own.hollow.as_ref().unwrap_or(&self.state);
+        settings_of(state, object.transform)
     }
 
     /// Why the Hollow button is greyed out, or `None` when it is not.
@@ -164,13 +167,16 @@ impl HollowTool {
     }
 }
 
-/// The run settings a panel's numbers ask for.
-fn settings_of(state: &HollowState) -> HollowSettings {
+/// The run settings a panel's numbers ask for, on a model standing under `transform`. An
+/// open floor faces the plate it stands on, so turning such a model makes its shell stale.
+fn settings_of(state: &HollowState, transform: Transform) -> HollowSettings {
+    let opens = state.open_floor && state.mode == HollowMode::Internal;
     HollowSettings {
         thickness_mm: state.thickness_mm,
         mode: state.mode,
         precision: state.precision,
         infill: state.infill_on.then_some(state.infill),
+        open_toward: opens.then(|| plate_down(transform)),
         ..HollowSettings::default()
     }
 }
@@ -228,6 +234,36 @@ mod tests {
             (tasks[0].settings.thickness_mm - (plate_mm + 1.0)).abs() < 1e-6,
             "the model's own wall, not the plate's {plate_mm} mm"
         );
+    }
+
+    #[test]
+    fn turning_a_model_with_an_open_floor_makes_its_shell_stale_and_a_closed_one_not() {
+        let mut scene = scene_with_a_tetrahedron();
+        let mut tool = HollowTool::default();
+        for open_floor in [true, false] {
+            tool.state.open_floor = open_floor;
+            let object = &mut scene.objects_mut()[0];
+            object.transform = Transform::default();
+            let built = object.hollow.asking(&tool.settings_for(object));
+            object.hollow.take(Shell {
+                mesh: Arc::new(Mesh::default()),
+                cavity: 0..0,
+                cavity_mm3: 0.0,
+                voxel_mm: 0.2,
+                coarsened: false,
+                shape: core_geometry::Mat3::IDENTITY,
+                settings: built,
+            });
+            object.transform.rotation = core_geometry::Quat::from_rotation_x(1.0);
+            let object = &scene.objects()[0];
+            assert_eq!(
+                object
+                    .hollow
+                    .is_stale(&tool.settings_for(object), object.transform),
+                open_floor,
+                "an open floor faces the plate, a closed shell does not care which way it turns"
+            );
+        }
     }
 
     #[test]

@@ -67,6 +67,9 @@ pub enum VolumeError {
     #[error("drain hole {index} has no width, no depth or no direction to be drilled in")]
     BadDrain { index: usize },
 
+    #[error("a gap of {gap_mm} mm leaves nothing of the plug for drain hole {index}")]
+    TightPlug { index: usize, gap_mm: Scalar },
+
     #[error("drain channel {index} needs a width and at least two points to be dug along")]
     BadChannel { index: usize },
 

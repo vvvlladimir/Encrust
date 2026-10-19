@@ -65,6 +65,9 @@ fn holes() -> Vec<DrainHole> {
             depth_mm: 4.0,
             taper: 1.0,
             lift_mm: 8.0,
+            shape: core_volume::HoleShape::Round,
+            turn_deg: 0.0,
+            mode: core_volume::HoleMode::Through,
         },
         DrainHole {
             at: Vec3::new(114.7, 40.0, 50.0),
@@ -73,6 +76,9 @@ fn holes() -> Vec<DrainHole> {
             depth_mm: 4.0,
             taper: 1.0,
             lift_mm: 8.0,
+            shape: core_volume::HoleShape::Round,
+            turn_deg: 0.0,
+            mode: core_volume::HoleMode::Through,
         },
     ]
 }

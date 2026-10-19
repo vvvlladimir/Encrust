@@ -4,9 +4,9 @@
 
 use core_geometry::{Bvh, Mat3, Mesh, Quat, Scalar, Transform, Vec3, ball, signed_volume};
 use core_volume::{
-    Blocker, CUT_WEIGHT, Cancel, Channel, HollowMode, HollowSettings, Hollowed, InfillPattern,
-    InfillSettings, VolumeError, carve, cavity_field, drill, hole_at, hollow, hollow_at_scale,
-    pierce, sleeves,
+    Blocker, CUT_WEIGHT, Cancel, Channel, HoleSize, HollowMode, HollowSettings, Hollowed,
+    InfillPattern, InfillSettings, VolumeError, carve, cavity_field, drill, hole_at, hollow,
+    hollow_at_scale, pierce, plate_down, sleeves,
 };
 
 const PI: Scalar = std::f32::consts::PI;
@@ -404,14 +404,7 @@ fn a_kept_field_carves_the_shell_a_whole_run_would() {
         )],
     ] {
         asked.blockers = blockers;
-        let kept = carve(
-            &mesh,
-            &field,
-            &asked.blockers,
-            asked.infill,
-            Cancel::never(),
-        )
-        .expect("the kept field carves");
+        let kept = carve(&mesh, &field, &asked, Cancel::never()).expect("the kept field carves");
         let whole = hollow_at_scale(&mesh, &bvh, &asked, shape, Cancel::never())
             .expect("a closed cube hollows");
         assert_eq!(kept.mesh.vertices, whole.mesh.vertices);
@@ -680,8 +673,13 @@ fn a_drain_hole_takes_its_own_tube_out_of_the_shell() {
     )
     .expect("a closed ball hollows");
 
-    let hole =
-        hole_at(&mesh, &bvh, Vec3::new(0.0, 0.0, 12.0), 3.0, 4.0, 1.0).expect("the ball has faces");
+    let hole = hole_at(
+        &mesh,
+        &bvh,
+        Vec3::new(0.0, 0.0, 12.0),
+        HoleSize::round(3.0, 4.0, 1.0),
+    )
+    .expect("the ball has faces");
     let mut drained = solid.mesh.clone();
     append(
         &mut drained,
@@ -712,8 +710,13 @@ fn a_hole_shallower_than_the_wall_is_deepened_until_it_is_through_it() {
     .expect("a closed ball hollows");
 
     // Half a millimetre into a two millimetre wall: a dimple, not a drain.
-    let shallow =
-        hole_at(&mesh, &bvh, Vec3::new(0.0, 0.0, 12.0), 3.0, 0.5, 1.0).expect("the ball has faces");
+    let shallow = hole_at(
+        &mesh,
+        &bvh,
+        Vec3::new(0.0, 0.0, 12.0),
+        HoleSize::round(3.0, 0.5, 1.0),
+    )
+    .expect("the ball has faces");
     let through = pierce(&[shallow], 2.0, shell.voxel_mm);
     let mut drained = shell.mesh.clone();
     append(
@@ -779,4 +782,78 @@ fn infill_walls_are_refused_with_no_thickness_and_holes_wider_than_a_cell() {
         hollow(&mesh, &bvh, &asked, Cancel::never()).unwrap_err(),
         VolumeError::BadHoles { .. }
     ));
+}
+
+#[test]
+fn an_open_floor_carries_the_cavity_out_through_the_floor_and_nowhere_else() {
+    let mesh = cube(20.0, 0.0);
+    let bvh = Bvh::build(&mesh);
+    let shut = hollow(
+        &mesh,
+        &bvh,
+        &settings(2.0, HollowMode::Internal),
+        Cancel::never(),
+    )
+    .expect("a closed cube hollows");
+    let open = hollow(
+        &mesh,
+        &bvh,
+        &HollowSettings {
+            open_toward: Some(Vec3::NEG_Z),
+            ..settings(2.0, HollowMode::Internal)
+        },
+        Cancel::never(),
+    )
+    .expect("a closed cube hollows open");
+
+    let cavity_of = |hollowed: &Hollowed| {
+        let corners: Vec<Vec3> = hollowed.mesh.faces[hollowed.cavity.clone()]
+            .iter()
+            .flatten()
+            .map(|index| hollowed.mesh.vertices[*index as usize])
+            .collect();
+        Mesh::new(corners, Vec::new())
+            .aabb()
+            .expect("the cube has a cavity")
+    };
+    let (shut, open) = (cavity_of(&shut), cavity_of(&open));
+    let voxel = 0.5;
+    assert!(
+        shut.mins.z > 2.0 - voxel,
+        "closed, the floor keeps its 2 mm, got {}",
+        shut.mins.z
+    );
+    assert!(
+        open.mins.z < 0.0,
+        "open, the cavity reaches out under the cube's floor, got {}",
+        open.mins.z
+    );
+    for (axis, (shut, open)) in [
+        (shut.mins.x, open.mins.x),
+        (shut.maxs.x, open.maxs.x),
+        (shut.maxs.z, open.maxs.z),
+    ]
+    .into_iter()
+    .enumerate()
+    {
+        assert!(
+            (shut - open).abs() < voxel,
+            "the walls and the roof stay where they were ({axis}): {shut} against {open}"
+        );
+    }
+}
+
+#[test]
+fn the_plate_lies_the_way_a_turned_model_stands_on_it() {
+    let turned = Transform {
+        rotation: Quat::from_rotation_x(std::f32::consts::FRAC_PI_2),
+        scale: Vec3::new(1.4, 1.0, 1.0),
+        ..Transform::default()
+    };
+    let down = plate_down(turned);
+    assert!(
+        down.abs_diff_eq(Vec3::NEG_Y, 1e-5),
+        "a quarter turn about X stands the model on its own -Y side, got {down}"
+    );
+    assert!(plate_down(Transform::default()).abs_diff_eq(Vec3::NEG_Z, 1e-6));
 }

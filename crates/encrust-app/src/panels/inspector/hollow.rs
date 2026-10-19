@@ -11,7 +11,7 @@ use crate::state::{Doc, Tools};
 use crate::ui::{
     Segment, Segmented, blocked_hover, busy, describe, hint, icon, nested, notice, number_row,
     primary_button, progress_bar, secondary_button, section, section_with_switch, stats,
-    subheading, theme, tone,
+    subheading, switch, theme, tone,
 };
 use crate::workspace::Tool;
 
@@ -159,6 +159,17 @@ fn modes(ui: &mut egui::Ui, tools: &mut Tools) {
             HollowMode::External => tr!("hollow-outside-note"),
         },
     );
+    // A mould is open nowhere; only a shell has a floor to open.
+    if tools.hollow.state.mode == HollowMode::Internal {
+        switch(
+            ui,
+            &mut tools.hollow.state.open_floor,
+            &tr!("hollow-open-floor"),
+        );
+        if tools.hollow.state.open_floor {
+            describe(ui, &tr!("hollow-open-floor-note"));
+        }
+    }
 }
 
 fn wall(ui: &mut egui::Ui, window: &mut Window) {

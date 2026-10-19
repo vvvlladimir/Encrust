@@ -103,7 +103,9 @@ would print. A file whose name says nothing is recognised by its own first bytes
 
 Hollowing, with an infill lattice in the cavity. `--hollow-mode internal` grows the wall
 inward, which is the default; `external` grows it outward and makes a mould of the model.
-Nothing opens the cavity by itself — `--drain-at` below is what lets the resin out:
+`--hollow-open-floor` opens a shell through the floor it stands on, so it drains with no
+hole; a mould has no floor to open and refuses it. Otherwise nothing opens the cavity by
+itself — `--drain-at` below is what lets the resin out:
 
 ```sh
 encrust slice model.stl \
@@ -145,6 +147,20 @@ pick it out of:
 ```sh
 encrust slice model.stl \
   --printer elegoo-mars-4-ultra --hollow 2 --drain 4 --drain-at 30,30,60 -o model.goo
+```
+
+A hole is round unless `--drain-sides 3..12` cuts it as a polygon, its corners on the
+diameter, turned `--drain-turn` degrees from the level. Once the model is hollow a hole is
+carried on through the wall into the cavity; `--drain-blind` stops it at `--drain-depth`
+instead, as a socket for a magnet or a pin. `--drain-plugs` prints a plug for each hole,
+standing on the plate past the model's right-hand side: what the hole took out of the wall,
+`--plug-gap` millimetres narrower a side (0.15 by default), its outer face flush with the
+surface (ADR 0313). A resin whose tolerance compensation is off takes its hole and outer
+offsets off that gap, so the fit prints as asked.
+
+```sh
+encrust slice figure.stl --printer elegoo-mars-4-ultra --hollow 2 \
+  --drain 5 --drain-sides 6 --drain-at 30,30,0 --drain-plugs -o figure.goo
 ```
 
 The model's own texture pressed in as relief, as deep as the plate millimetres given.
@@ -259,7 +275,7 @@ supports = "medium"             # any support profile `profiles list` names
 
 [[model]]
 path = "b.stl"
-hollow = { wall_mm = 2.0, mode = "internal" }   # or "external" for a mould
+hollow = { wall_mm = 2.0, mode = "internal" }   # or "external" for a mould; open_floor = true opens a shell
 ```
 
 A project saved by the window slices as it was saved: the file holds its shells and its

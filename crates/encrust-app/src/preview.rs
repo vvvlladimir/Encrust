@@ -777,11 +777,7 @@ pub(crate) mod tests {
 
         let object = &mut scene.objects_mut()[0];
         let (mesh, bvh) = (Arc::clone(&object.mesh), Arc::clone(&object.bvh));
-        let size = core_volume::HoleSize {
-            diameter_mm: 0.2,
-            depth_mm: 0.2,
-            taper: 1.0,
-        };
+        let size = core_volume::HoleSize::round(0.2, 0.2, 1.0);
         let point = mesh.vertices[0];
         let transform = object.transform;
         object
