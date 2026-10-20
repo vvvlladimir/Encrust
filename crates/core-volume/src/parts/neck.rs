@@ -73,9 +73,11 @@ pub struct PartedOff {
 /// it, and [`VolumeError::Cancelled`] when `cancel` gives up.
 pub fn part_off(mesh: &Mesh, at: Vec3, cancel: Cancel<'_>) -> Result<PartedOff, VolumeError> {
     let welded = weld(mesh, DEFAULT_WELD_TOLERANCE).mesh;
+    debug_mesh("welded", &welded);
     // The exact solid does not depend on the wave, so the two are built side by side.
     let (body, found) = rayon::join(|| solid_of(&welded), || found(&welded, at, cancel));
     let body = body?;
+    debug_mesh("body", &body.mesh());
     match found? {
         Found::Neck(wave, level) => cut_at_neck(&body, &wave, level),
         Found::Apart(wave) => cut_out(&body, &wave, cancel),
@@ -116,6 +118,14 @@ fn found(mesh: &Mesh, at: Vec3, cancel: Cancel<'_>) -> Result<Found, VolumeError
 /// wave gets round it.
 fn cut_at_neck(body: &Solid, wave: &Wave, level: usize) -> Result<PartedOff, VolumeError> {
     let section = wave.section(level).ok_or(VolumeError::NoNeck)?;
+    eprintln!(
+        "DEBUG level {level} voxel_mm {:#x} centre {:?} normal {:?} radius {:#x} fronts {:?}",
+        wave.lattice.grid.voxel_mm.to_bits(),
+        section.centre.to_array().map(f32::to_bits),
+        section.normal.to_array().map(f32::to_bits),
+        section.radius_mm.to_bits(),
+        wave.fronts.iter().map(Vec::len).collect::<Vec<_>>()
+    );
     let mut half_mm = section.radius_mm;
     for _ in 0..=WIDENINGS {
         if let Some(reached) = wave.closed_off(&section, half_mm) {
@@ -577,10 +587,14 @@ fn cut(
         section.centre + depth,
         [across * half_mm, along * half_mm, depth],
     );
+    eprintln!("DEBUG half_mm {:#x}", half_mm.to_bits());
+    debug_mesh("cutter", &cutter);
     let cutter = Solid::new(&cutter)?;
     let (inside, outside) = rayon::join(|| body.intersection(&cutter), || body.difference(&cutter));
     let inside = inside?.mesh();
     let outside = outside?.mesh();
+    debug_mesh("inside", &inside);
+    debug_mesh("outside", &outside);
     let ((part_in, rest_in), (part_out, rest_out)) = rayon::join(
         || sorted(&inside, true, wave, section, reached),
         || sorted(&outside, false, wave, section, reached),
@@ -598,8 +612,16 @@ fn cut(
     let both = join_part + join_rest;
     let part_less = join_rest + rest_faces + whole;
     let rest_less = join_part + part_faces + whole;
+    debug_mesh("part_in", &part_in);
+    debug_mesh("part_out", &part_out);
+    debug_mesh("rest_in", &rest_in);
+    debug_mesh("rest_out", &rest_out);
+    eprintln!("DEBUG both {both} part_less {part_less} rest_less {rest_less}");
     if both <= part_less.min(rest_less) {
         let (part, rest) = rayon::join(|| joined(part_in, part_out), || joined(rest_in, rest_out));
+        if let Ok(part) = &part {
+            debug_mesh("joined part", part);
+        }
         parted(part?, rest?)
     } else if part_less < rest_less {
         let rest = joined(rest_in, rest_out)?;
@@ -631,6 +653,32 @@ fn parted(part: Mesh, rest: Mesh) -> Result<PartedOff, VolumeError> {
         return Err(VolumeError::NoNeck);
     }
     Ok(PartedOff { part, rest })
+}
+
+// TODO(step-ci): temporary, for the dumbbell that parts wrongly on Windows only; delete.
+fn debug_mesh(what: &str, mesh: &Mesh) {
+    let mut hash: u64 = 0xcbf2_9ce4_8422_2325;
+    for value in mesh.vertices.iter().flat_map(Vec3::to_array) {
+        hash = (hash ^ u64::from(value.to_bits())).wrapping_mul(0x0100_0000_01b3);
+    }
+    for corner in mesh.faces.iter().flatten() {
+        hash = (hash ^ u64::from(*corner)).wrapping_mul(0x0100_0000_01b3);
+    }
+    let facing: Vec<String> = mesh
+        .faces
+        .iter()
+        .map(|face| face.map(|corner| mesh.vertices[corner as usize]))
+        .filter_map(|[a, b, c]| {
+            let area = (b - a).cross(c - a) / 2.0;
+            (area.normalize_or_zero().x.abs() > 0.999)
+                .then(|| format!("{:+.4}@{:.6}/{:.4}", area.x.signum(), a.x, area.length()))
+        })
+        .collect();
+    eprintln!(
+        "DEBUG {what}: {} vertices {} faces hash {hash:#018x} x-facing {facing:?}",
+        mesh.vertices.len(),
+        mesh.faces.len()
+    );
 }
 
 /// The two pieces of one side as one mesh, joined by exact union where both have faces:
