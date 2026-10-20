@@ -785,29 +785,6 @@ fn a_lattice_cut_exactly_costs_the_cavity_none_of_its_precision() {
 }
 
 #[test]
-fn infill_walls_are_refused_with_no_thickness_and_holes_wider_than_a_cell() {
-    let mesh = ball(Vec3::ZERO, 10.0, 32, 32);
-    let bvh = Bvh::build(&mesh);
-    let mut asked = settings(2.0, HollowMode::Internal);
-    asked.infill = Some(InfillSettings {
-        wall_mm: 0.0,
-        ..InfillSettings::default()
-    });
-    assert_eq!(
-        hollow(&mesh, &bvh, &asked, Cancel::never()).unwrap_err(),
-        VolumeError::BadInfillWall(0.0)
-    );
-    asked.infill = Some(InfillSettings {
-        hole_mm: 7.0,
-        ..InfillSettings::default()
-    });
-    assert!(matches!(
-        hollow(&mesh, &bvh, &asked, Cancel::never()).unwrap_err(),
-        VolumeError::BadHoles { .. }
-    ));
-}
-
-#[test]
 fn an_open_floor_is_cut_out_of_the_shell_and_nothing_else_is() {
     let mesh = cube(20.0, 0.0);
     let bvh = Bvh::build(&mesh);

@@ -238,7 +238,8 @@ Grouped by what the decision governs; the number is still the order it was taken
 | [0200](0200-a-pocket-is-painted-on-its-own.md) | A pocket of trapped resin is painted on its own | Accepted |
 | [0198](0198-a-drainage-check-is-asked-for.md) | A drainage check is asked for, and the view it needs is the user's | Accepted |
 | [0201](0201-the-surface-of-a-cut-is-the-cut-itself.md) | The surface of a cut is the cut's own body, kept where it stands in material | Accepted |
-| [0302](0302-a-lattice-is-cut-exactly-from-the-cavity.md) | Cut the lattice exactly from the cavity's mesh, its cells joined by crossing holes | Accepted |
+| [0302](0302-a-lattice-is-cut-exactly-from-the-cavity.md) | Cut the lattice exactly from the cavity's mesh, its cells joined by crossing holes | Accepted; its sizes for walls and holes superseded by 0320 |
+| [0320](0320-an-infill-is-a-cell-and-a-density.md) | State an infill by its cell and its density, and derive its walls and holes | Accepted |
 | [0313](0313-a-hole-takes-a-shape-and-a-plug-and-a-shell-an-open-floor.md) | A hole takes a shape and a plug, and a shell can open its floor | Accepted |
 | [0303](0303-exact-booleans-live-in-core-csg-over-boolmesh.md) | Do exact mesh booleans in `core-csg`, over `boolmesh` | Accepted; a result's triangle list varying from run to run is superseded by 0315 |
 | [0314](0314-a-solid-is-readied-on-every-core.md) | Ready a solid for the engine on every core | Accepted |

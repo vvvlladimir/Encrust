@@ -39,7 +39,7 @@ hold no built geometry or diagnostics.
 | `slicing` | layer height, `AdaptiveSettings`, `ExposureRange` bands, anti-aliasing, `OutputFormat`; taken up only with the printer |
 | `supports` | the group table, the active group, `ProjectSettings` for a fill, the brush |
 | `hollow` | what the Hollow tool is set to, not what it built |
-| `hollow.infill` | the lattice's `pattern`, `cell_mm`, `wall_mm`, a scaffold's `density`, and the crossing holes' `hole_mm`, `first_hole_mm` and `hole_spacing_mm` (ADR 0302); `null` for an empty cavity |
+| `hollow.infill` | the lattice's `pattern`, `cell_mm` and `density`, from which its walls and crossing holes follow; an older file's `wall_mm` reads as the density it made (ADR 0320); `null` for an empty cavity |
 | `hollow.open_floor` | whether a shell opens through the floor it stands on (ADR 0313); absent in older files and read as closed |
 | `drain`, `cut`, `array` | what the next hole, the cut plane and the copy grid are set to |
 | `drain.shape`, `drain.turn_deg`, `drain.plug_gap_mm` | the next hole's outline, its turn from the plate's level in degrees, and a plug's gap a side (ADR 0313); absent in older files and read as round, unturned and 0.15 mm |

@@ -77,16 +77,15 @@ fn infill_puts_material_back_into_the_cavity() {
             "grid",
             "--infill-cell",
             "4",
-            "--infill-wall",
-            "1",
-            "--infill-hole",
-            "2",
+            "--infill-density",
+            "0.4",
         ],
     );
 
+    // 4 mm cells 40% solid stand on a pitch of 4 / sqrt(0.6), 1.16 mm more than the cell.
     assert_eq!(
         field(&text, "infill"),
-        "grid, 4.0 mm cells, 1.00 mm walls, 2.0 mm holes from 4.0 mm every 8.0 mm"
+        "grid, 4.0 mm cells at 40%, 1.16 mm walls"
     );
     assert!(
         lit_pixels(&filled, 8) > lit_pixels(&empty, 8),
@@ -95,14 +94,10 @@ fn infill_puts_material_back_into_the_cavity() {
 }
 
 #[test]
-fn an_infill_size_the_pattern_has_no_use_for_is_refused() {
+fn an_infill_size_with_no_infill_is_refused() {
     let path = write_box_stl("hollow-unused-size", 16.0, 12, 0);
     let out = output_dir("unused-size");
-    for (pattern, flag, value) in [
-        ("hive", "--infill-density", "0.2"),
-        ("scaffold", "--infill-wall", "1"),
-        ("scaffold", "--infill-hole-spacing", "6"),
-    ] {
+    for (flag, value) in [("--infill-cell", "6"), ("--infill-density", "0.2")] {
         let output = slice(&[
             path.to_str().unwrap(),
             "--profile",
@@ -111,12 +106,13 @@ fn an_infill_size_the_pattern_has_no_use_for_is_refused() {
             out.to_str().unwrap(),
             "--hollow",
             "3",
-            "--infill",
-            pattern,
             flag,
             value,
         ]);
-        assert!(!output.status.success(), "{flag} on a {pattern} is refused");
+        assert!(
+            !output.status.success(),
+            "{flag} with no --infill is refused"
+        );
         assert!(
             String::from_utf8_lossy(&output.stderr).contains(flag),
             "and the refusal names the flag"

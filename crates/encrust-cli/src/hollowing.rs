@@ -72,25 +72,9 @@ pub struct HollowArgs {
     #[arg(long = "infill-cell", value_name = "MM")]
     pub cell_mm: Option<Scalar>,
 
-    /// Thickness of a hive or grid wall, millimetres.
-    #[arg(long = "infill-wall", value_name = "MM")]
-    pub wall_mm: Option<Scalar>,
-
-    /// How much of the cavity a scaffold fills, 0 to 1.
+    /// How much of the cavity the lattice fills, 0 to 1; its walls or struts follow.
     #[arg(long = "infill-density", value_name = "0..1")]
     pub density: Option<Scalar>,
-
-    /// Diameter of the crossing holes joining hive or grid cells, millimetres.
-    #[arg(long = "infill-hole", value_name = "MM")]
-    pub hole_mm: Option<Scalar>,
-
-    /// Height of the first row of crossing holes over the cavity's floor, millimetres.
-    #[arg(long = "infill-hole-from", value_name = "MM")]
-    pub first_hole_mm: Option<Scalar>,
-
-    /// Height from one row of crossing holes to the next, millimetres.
-    #[arg(long = "infill-hole-spacing", value_name = "MM")]
-    pub hole_spacing_mm: Option<Scalar>,
 
     /// Diameter of the drain holes, millimetres.
     #[arg(long = "drain", value_name = "MM", default_value_t = 3.0)]
@@ -233,45 +217,21 @@ impl HollowArgs {
         InfillSettings {
             pattern: pattern.into(),
             cell_mm: self.cell_mm.unwrap_or(default.cell_mm),
-            wall_mm: self.wall_mm.unwrap_or(default.wall_mm),
             density: self.density.unwrap_or(default.density),
-            hole_mm: self.hole_mm.unwrap_or(default.hole_mm),
-            first_hole_mm: self.first_hole_mm.unwrap_or(default.first_hole_mm),
-            hole_spacing_mm: self.hole_spacing_mm.unwrap_or(default.hole_spacing_mm),
         }
     }
 
-    /// Refuses an infill size the pattern asked for has no use for, rather than dropping it.
+    /// Refuses an infill size given with no infill, rather than dropping it.
     fn check_infill(&self) -> Result<()> {
-        let walled = [
-            ("--infill-wall", self.wall_mm.is_some()),
-            ("--infill-hole", self.hole_mm.is_some()),
-            ("--infill-hole-from", self.first_hole_mm.is_some()),
-            ("--infill-hole-spacing", self.hole_spacing_mm.is_some()),
+        let sized = [
+            ("--infill-cell", self.cell_mm.is_some()),
+            ("--infill-density", self.density.is_some()),
         ];
-        let density = [("--infill-density", self.density.is_some())];
-        let cell = [("--infill-cell", self.cell_mm.is_some())];
-        let given = |flags: &[(&'static str, bool)]| {
-            flags
-                .iter()
-                .find(|(_, given)| *given)
-                .map(|(flag, _)| *flag)
-        };
-        match self.infill {
-            None => match given(&[&cell[..], &density, &walled].concat()) {
-                Some(flag) => bail!("{flag} sizes an infill, and --infill was not given"),
-                None => Ok(()),
-            },
-            Some(Pattern::Scaffold) => match given(&walled) {
-                Some(flag) => bail!("{flag} sizes a hive or grid, and a scaffold has no walls"),
-                None => Ok(()),
-            },
-            Some(Pattern::Hive | Pattern::Grid) => match given(&density) {
-                Some(flag) => bail!(
-                    "{flag} is how much a scaffold fills; a hive or grid is sized by its cell and wall"
-                ),
-                None => Ok(()),
-            },
+        match sized.iter().find(|(_, given)| *given) {
+            Some((flag, _)) if self.infill.is_none() => {
+                bail!("{flag} sizes an infill, and --infill was not given")
+            }
+            _ => Ok(()),
         }
     }
 
@@ -460,24 +420,18 @@ impl fmt::Display for HollowReport {
         )?;
         if let Some(infill) = &self.settings.infill {
             let pattern = infill.pattern.label().to_lowercase();
-            if infill.pattern.has_walls() {
-                writeln!(
-                    f,
-                    "  infill        {pattern}, {:.1} mm cells, {:.2} mm walls, {:.1} mm holes from {:.1} mm every {:.1} mm",
-                    infill.cell_mm,
-                    infill.wall_mm,
-                    infill.hole_mm,
-                    infill.first_hole_mm,
-                    infill.hole_spacing_mm
-                )?;
+            let part = if infill.pattern.has_walls() {
+                "walls"
             } else {
-                writeln!(
-                    f,
-                    "  infill        {pattern}, {:.1} mm cells at {:.0}%",
-                    infill.cell_mm,
-                    infill.density * 100.0
-                )?;
-            }
+                "struts"
+            };
+            writeln!(
+                f,
+                "  infill        {pattern}, {:.1} mm cells at {:.0}%, {:.2} mm {part}",
+                infill.cell_mm,
+                infill.density * 100.0,
+                infill.wall_mm()
+            )?;
         }
         writeln!(
             f,

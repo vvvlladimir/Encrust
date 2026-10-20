@@ -13,10 +13,11 @@ pub(super) struct GridCells {
 
 impl GridCells {
     pub(super) fn new(settings: &InfillSettings, rows: Rows) -> Self {
+        let wall_mm = settings.wall_mm();
         Self {
-            pitch: settings.cell_mm + settings.wall_mm,
-            half_wall: settings.wall_mm / 2.0,
-            hole_radius: settings.hole_mm / 2.0,
+            pitch: settings.cell_mm + wall_mm,
+            half_wall: wall_mm / 2.0,
+            hole_radius: settings.hole_mm() / 2.0,
             rows,
         }
     }
@@ -102,11 +103,13 @@ mod tests {
     use super::*;
     use crate::infill::InfillPattern;
 
-    /// 6 mm cells and 2 mm walls, an 8 mm pitch, with 3 mm holes from z = 4 every 8 mm.
+    /// 6 mm cells at 7/16, which `(6 / (6 + t))² = 9/16` makes 2 mm walls on an 8 mm pitch,
+    /// with rows of holes from z = 4 every 8 mm.
     fn cells() -> GridCells {
         let settings = InfillSettings {
             pattern: InfillPattern::Grid,
-            ..InfillSettings::default()
+            cell_mm: 6.0,
+            density: 7.0 / 16.0,
         };
         GridCells::new(
             &settings,
@@ -118,8 +121,12 @@ mod tests {
     }
 
     #[test]
-    fn a_grid_under_its_holes_fills_what_its_walls_cover() {
+    fn a_grid_under_its_holes_fills_the_density_it_was_asked_for() {
         // A square pitch c with walls t is solid over 1 - ((c - t) / c)^2: 7/16 at 8 and 2.
+        assert!(
+            (cells().pitch - 8.0).abs() < 1e-4,
+            "7/16 makes an 8 mm pitch"
+        );
         let share = solid_share(&cells(), Vec3::ZERO, Vec3::new(16.0, 16.0, 1.0), 0.05);
         assert!(
             (share - 7.0 / 16.0).abs() < 0.01,

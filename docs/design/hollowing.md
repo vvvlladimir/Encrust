@@ -83,9 +83,11 @@ the same point — and an alt-click removes the one the click landed in.
 
 | Pattern | What it is | Its numbers |
 |---|---|---|
-| Hive | hexagonal cells standing on the plate | hexagon diameter, wall, crossing holes |
-| Grid | square cells standing on the plate | cell width, wall, crossing holes |
+| Hive | hexagonal cells standing on the plate | hexagon diameter, density |
+| Grid | square cells standing on the plate | cell width, density |
 | Scaffold | struts on the edges of a cubic lattice stood on a corner | cell, density |
+
+Walls, struts and crossing holes follow from the two numbers (ADR 0320).
 
 Each pattern is written down twice: as closed meshes on the global lattice — prisms for
 the cells, cylinders for the holes, square bars for the struts — and as a closed-form signed
@@ -125,11 +127,15 @@ inradius.
 
 **Grid.** Walls `t` thick on `x, y = k (c + t)`, so the cells are `c` across.
 
+**The wall a density makes.** Cells of opening `a` on a pitch `a + t` leave `1 - (a / (a +
+t))²` of a plane solid, squares and hexagons alike, so `t = a (1/sqrt(1 - d) - 1)`, with `a`
+the cell for a grid and `sqrt(3) D / 2` for a hive.
+
 **Crossing holes.** No cell of a hive or grid is closed: a round hole runs along the line
-between every two neighbouring centres, through the middle of the wall they share. Rows
-stand `first_hole_mm` over the cavity's floor and then every `hole_spacing_mm`, and none
-below the first, so the walls stand whole on the floor and every hole is an arch rather
-than a slot. A hole as wide as the cell would cut the junctions away and is refused. All the
+between every two neighbouring centres, through the middle of the wall they share. A hole
+is `0.4 c` across, under a hexagon's side `D / 2`, so it never cuts the junctions away. Rows
+stand `0.6 c` over the cavity's floor and then every `1.25 c`, and none below the first, so
+the walls stand whole on the floor and every hole is an arch rather than a slot. All the
 cells of a cavity are then one pocket, which one drain hole empties (ADR 0189). A sliver of
 a cell at the rim lower than the first row has no hole of its own; the drainage check
 reports it.

@@ -110,14 +110,13 @@ itself — `--drain-at` below is what lets the resin out:
 ```sh
 encrust slice model.stl \
   --printer elegoo-mars-4-ultra --hollow 2 \
-  --infill hive --infill-cell 6 --infill-wall 2 --precision 0.5 -o model.goo
+  --infill hive --infill-cell 6 --infill-density 0.3 --precision 0.5 -o model.goo
 ```
 
-A hive or grid takes `--infill-cell` (a hexagon's diameter, a square's side) and
-`--infill-wall`, and is joined by crossing holes `--infill-hole` millimetres across, the
-first row `--infill-hole-from` over the cavity's floor and the next every
-`--infill-hole-spacing`. A scaffold takes `--infill-cell` and `--infill-density`, 0 to 1.
-Every number left out is the window's default, and one the pattern has no use for is refused.
+Every pattern takes `--infill-cell` (a hexagon's diameter, a square's side, a cube's edge)
+and `--infill-density`, 0 to 1; the walls or struts and the crossing holes follow from them
+(ADR 0320). Every number left out is the window's default, and one given without
+`--infill` is refused.
 
 Modelling, as the window's Relief and Cut tools do it, before the models are hollowed and
 supported (ADR 0312). `--combine union|difference|intersection` makes every model given one,

@@ -21,7 +21,7 @@ impl Scaffold {
     pub(super) fn new(settings: &InfillSettings) -> Self {
         Self {
             cell: settings.cell_mm,
-            half_strut: settings.cell_mm * strut_share(settings.density) / 2.0,
+            half_strut: settings.wall_mm() / 2.0,
         }
     }
 }
@@ -152,7 +152,7 @@ fn span(line: &Line, bounds: &Aabb) -> Option<(Scalar, Scalar)> {
 /// Three square bars through a cube, each `x` across, fill `3x² - 2x³` of it: the three
 /// bars less the cube where all three meet, counted twice too many. That rises from 0 to 1
 /// over `x` from 0 to 1, so halving finds it.
-fn strut_share(density: Scalar) -> Scalar {
+pub(super) fn strut_share(density: Scalar) -> Scalar {
     let fill = |x: Scalar| 3.0 * x * x - 2.0 * x * x * x;
     let (mut low, mut high) = (0.0, 1.0);
     for _ in 0..32 {

@@ -237,15 +237,14 @@ whole-surface fill is Cmd-Shift-click.
   follows the plate: turn the model and it asks to be hollowed again. Standing on the plate
   the cavity stays sealed until the print comes off, so add a small vent near the top. On a
   model with holes in its surface the floor is still drawn, though the layers are open.
-- **Infill** inside the cavity, or leave it empty:
-  - **Hive** (hexagonal cells) and **Grid** (square cells) stand on the plate. Set the cell
-    size, the wall thickness, and the round crossing holes that join each cell to its
-    neighbours: their diameter, the height of the first row and the spacing between rows.
-    One drain hole empties every cell. Walls come out flat and holes round, at any
-    precision.
+- **Infill** inside the cavity, or leave it empty. Every pattern takes two numbers, the
+  cell size and the density, the share of the cavity the lattice fills; the panel shows how
+  thick the walls or struts come out and warns when they are too thin to print.
+  - **Hive** (hexagonal cells) and **Grid** (square cells) stand on the plate, each cell
+    joined to its neighbours by round holes sized to the cell, so one drain hole empties
+    every cell. Walls come out flat and holes round, at any precision.
   - **Scaffold** is struts on the edges of a cube stood on its corner. None of them is
-    level, so none starts in mid-air, and it braces the part sideways too. Set the cell size
-    and the density.
+    level, so none starts in mid-air, and it braces the part sideways too.
 - **Keep solid:** click spots on the model where the wall must stay solid (blockers), and
   set their size.
 - With one model picked, the settings you change are that model's own and are there again

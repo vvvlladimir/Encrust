@@ -240,13 +240,14 @@ fn hollowing(c: &mut Criterion, mesh: &Mesh, bvh: &Bvh) {
     });
 }
 
-/// Each pattern at 6 mm cells and 2 mm walls, on the ball and on one big enough that the
-/// lattice rather than the shell is what costs.
+/// Each pattern at 6 mm cells and 45%, about 2 mm walls, on the ball and on one big enough
+/// that the lattice rather than the shell is what costs.
 fn infill(c: &mut Criterion, mesh: &Mesh, bvh: &Bvh, empty: &HollowSettings) {
     let filled = |pattern| HollowSettings {
         infill: Some(InfillSettings {
             pattern,
-            ..InfillSettings::default()
+            cell_mm: 6.0,
+            density: 0.45,
         }),
         ..empty.clone()
     };

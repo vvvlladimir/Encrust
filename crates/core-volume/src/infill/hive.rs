@@ -26,10 +26,10 @@ impl HiveCells {
     pub(super) fn new(settings: &InfillSettings, rows: Rows) -> Self {
         let inradius = settings.cell_mm * (3.0 as Scalar).sqrt() / 4.0;
         Self {
-            pitch: 2.0 * inradius + settings.wall_mm,
+            pitch: 2.0 * inradius + settings.wall_mm(),
             inradius,
             circumradius: settings.cell_mm / 2.0,
-            hole_radius: settings.hole_mm / 2.0,
+            hole_radius: settings.hole_mm() / 2.0,
             rows,
         }
     }
@@ -139,7 +139,7 @@ mod tests {
     use super::super::tests::solid_share;
     use super::*;
 
-    /// 6 mm hexagons with 2 mm walls, 3 mm holes from z = 4 every 8 mm.
+    /// The default hexagons, with rows of holes from z = 4 every 8 mm.
     fn cells() -> HiveCells {
         HiveCells::new(
             &InfillSettings::default(),
@@ -151,16 +151,16 @@ mod tests {
     }
 
     #[test]
-    fn a_hive_under_its_holes_fills_what_its_walls_cover() {
+    fn a_hive_under_its_holes_fills_the_density_it_was_asked_for() {
         // A hexagon of inradius r on a triangular lattice of pitch p leaves
-        // 1 - 2 sqrt(3) r^2 / (sqrt(3)/2 p^2) solid.
+        // 1 - 2 sqrt(3) r^2 / (sqrt(3)/2 p^2) solid, which the wall was chosen to make.
         let cells = cells();
-        let (r, p) = (cells.inradius, cells.pitch);
-        let expected = 1.0 - 4.0 * r * r / (p * p);
+        let p = cells.pitch;
+        let expected = InfillSettings::default().density;
         let share = solid_share(&cells, Vec3::ZERO, Vec3::new(3.0 * p, 3.0 * p, 1.0), 0.05);
         assert!(
             (share - expected).abs() < 0.01,
-            "a hive of 6 mm cells and 2 mm walls is {expected} solid, got {share}"
+            "the hive's walls were sized to {expected} solid, got {share}"
         );
     }
 

@@ -24,31 +24,18 @@ const FINE_STEP: f64 = 0.01;
 /// machine. The floor is `core_volume::MIN_WALL_MM`, which is what the lattice can resolve.
 const MAX_WALL_MM: f32 = 15.0;
 
-/// Bounds on one infill cell. Under a millimetre no resin drains out of it, and past
-/// forty there is one cell in the model.
-const MIN_CELL_MM: f32 = 1.0;
+/// Bounds on one infill cell. Under two millimetres its crossing holes, sized to it, are
+/// too narrow for resin to run through, and past forty there is one cell in the model.
+const MIN_CELL_MM: f32 = 2.0;
 const MAX_CELL_MM: f32 = 40.0;
 
-/// Bounds on a hive or grid wall: under half a millimetre the field cannot carry it, and
-/// past ten it is solid with a few holes in it.
-const MIN_INFILL_WALL_MM: f32 = 0.5;
-const MAX_INFILL_WALL_MM: f32 = 10.0;
-
-/// The narrowest crossing hole resin still runs through, and the share of the widest the
-/// pattern allows that a hole may take.
-const MIN_HOLE_MM: f32 = 0.5;
-const MAX_HOLE_SHARE: f32 = 0.9;
-
-/// How high the rows of crossing holes may start, the least wall left between two rows and
-/// the furthest apart they may stand, mm.
-const MAX_HOLE_FROM_MM: f32 = 40.0;
-const MIN_HOLE_GAP_MM: f32 = 1.0;
-const MAX_HOLE_SPACING_MM: f32 = 40.0;
-
-/// Bounds on a scaffold's density. Under a twentieth the lattice holds nothing up, and
-/// past half it is a solid with a texture rather than an infill.
+/// Bounds on how much of the cavity a lattice fills. Under a twentieth it holds nothing up,
+/// and past half it is a solid with a texture rather than an infill.
 const MIN_DENSITY: f32 = 0.05;
 const MAX_DENSITY: f32 = 0.5;
+
+/// A wall or strut thinner than this, mm, is finer than the field can carry.
+const THIN_INFILL_MM: f32 = 0.5;
 
 /// The cavity inside the models on the plate, and what stands in it.
 pub fn ui(ui: &mut egui::Ui, window: &mut Window) {
@@ -257,22 +244,12 @@ fn infill(ui: &mut egui::Ui, tools: &mut Tools) {
         let mm = tr!("unit-mm");
         let cells = MIN_CELL_MM..=MAX_CELL_MM;
         number_row(ui, &cell, &mut infill.cell_mm, &mm, COARSE_STEP, cells, 1);
-        if infill.pattern.has_walls() {
-            walls(ui, infill);
-        } else {
-            let mut percent = infill.density * 100.0;
-            let range = MIN_DENSITY * 100.0..=MAX_DENSITY * 100.0;
-            number_row(
-                ui,
-                &tr!("hollow-density"),
-                &mut percent,
-                "%",
-                COARSE_STEP,
-                range,
-                0,
-            );
-            infill.density = percent / 100.0;
-        }
+        let mut percent = infill.density * 100.0;
+        let range = MIN_DENSITY * 100.0..=MAX_DENSITY * 100.0;
+        let density = tr!("hollow-density");
+        number_row(ui, &density, &mut percent, "%", COARSE_STEP, range, 0);
+        infill.density = percent / 100.0;
+        thickness(ui, infill);
 
         ui.add_space(2.0);
         describe(
@@ -285,51 +262,21 @@ fn infill(ui: &mut egui::Ui, tools: &mut Tools) {
     });
 }
 
-/// The wall between two hive or grid cells, and the rows of crossing holes through it.
-fn walls(ui: &mut egui::Ui, infill: &mut InfillSettings) {
-    let mm = tr!("unit-mm");
-    let wall = MIN_INFILL_WALL_MM..=MAX_INFILL_WALL_MM;
-    number_row(
-        ui,
-        &tr!("hollow-infill-wall"),
-        &mut infill.wall_mm,
-        &mm,
-        COARSE_STEP,
-        wall,
-        2,
-    );
-    let holes = MIN_HOLE_MM..=(infill.widest_hole_mm() * MAX_HOLE_SHARE).max(MIN_HOLE_MM);
-    number_row(
-        ui,
-        &tr!("hollow-hole"),
-        &mut infill.hole_mm,
-        &mm,
-        COARSE_STEP,
-        holes,
-        2,
-    );
-    let from = 0.0..=MAX_HOLE_FROM_MM;
-    let first = &mut infill.first_hole_mm;
-    number_row(
-        ui,
-        &tr!("hollow-hole-from"),
-        first,
-        &mm,
-        COARSE_STEP,
-        from,
-        2,
-    );
-    let spacing = (infill.hole_mm + MIN_HOLE_GAP_MM)..=MAX_HOLE_SPACING_MM;
-    let rows = &mut infill.hole_spacing_mm;
-    number_row(
-        ui,
-        &tr!("hollow-hole-spacing"),
-        rows,
-        &mm,
-        COARSE_STEP,
-        spacing,
-        2,
-    );
+/// How thick the walls or struts the cell and density make come out.
+fn thickness(ui: &mut egui::Ui, infill: &InfillSettings) {
+    let wall_mm = infill.wall_mm();
+    let mm = format!("{wall_mm:.2}");
+    if wall_mm < THIN_INFILL_MM {
+        tone(
+            ui,
+            &tr!("hollow-infill-thin", mm = mm),
+            theme::colors().warn,
+        );
+    } else if infill.pattern.has_walls() {
+        hint(ui, &tr!("hollow-infill-walls-are", mm = mm));
+    } else {
+        hint(ui, &tr!("hollow-infill-struts-are", mm = mm));
+    }
 }
 
 /// How wide a blocker the next click drops, and how many are standing.

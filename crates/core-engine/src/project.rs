@@ -1014,7 +1014,41 @@ mod tests {
         let read: InfillSettings = serde_json::from_value(older).expect("a file from before reads");
         assert_eq!(read.pattern, InfillPattern::Grid);
         assert_eq!(read.cell_mm, 5.0, "the old cell size carries over");
-        assert_eq!(read.wall_mm, InfillSettings::default().wall_mm);
+        assert_eq!(read.density, 0.15);
+    }
+
+    #[test]
+    fn infill_saved_with_a_wall_of_its_own_reads_as_the_density_it_made() {
+        // 6 mm cells and 2 mm walls on an 8 mm pitch leave 1 - (6/8)² = 7/16 solid.
+        let older = serde_json::json!({
+            "pattern": "grid", "cell_mm": 6.0, "wall_mm": 2.0, "density": 0.3, "hole_mm": 2.5
+        });
+        let read: InfillSettings = serde_json::from_value(older).expect("a file from before reads");
+        assert!(
+            (read.density - 7.0 / 16.0).abs() < 1e-6,
+            "got {}",
+            read.density
+        );
+        assert!(
+            (read.wall_mm() - 2.0).abs() < 1e-4,
+            "and it gives the wall back"
+        );
+        let scaffold = serde_json::json!({ "pattern": "scaffold", "wall_mm": 2.0, "density": 0.3 });
+        let read: InfillSettings =
+            serde_json::from_value(scaffold).expect("a file from before reads");
+        assert_eq!(read.density, 0.3, "a scaffold never had a wall of its own");
+        let hive = serde_json::json!({ "pattern": "hive", "cell_mm": 6.0, "wall_mm": 2.0 });
+        let read: InfillSettings = serde_json::from_value(hive).expect("a file from before reads");
+        assert!(
+            (read.wall_mm() - 2.0).abs() < 1e-4,
+            "a hive gives its wall back too"
+        );
+        let empty = serde_json::json!({ "pattern": "grid", "wall_mm": 0.0, "density": 0.3 });
+        let read: InfillSettings = serde_json::from_value(empty).expect("a file from before reads");
+        assert_eq!(
+            read.density, 0.3,
+            "a wall of no thickness is no density to read"
+        );
     }
 
     #[test]

@@ -1,6 +1,6 @@
 # 0302. Cut the lattice exactly from the cavity's mesh, its cells joined by crossing holes
 
-- **Status:** Accepted
+- **Status:** Accepted; its sizes for walls and holes superseded by 0320
 - **Date:** 2026-10-18
 
 ## Context

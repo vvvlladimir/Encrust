@@ -56,78 +56,111 @@ impl InfillPattern {
     }
 }
 
-/// What fills the cavity and the size of each part of it, all lengths in millimetres.
+/// A crossing hole's diameter, first row and row spacing as shares of the cell; why these,
+/// see "Crossing holes" in `docs/design/hollowing.md`.
+const HOLE_SHARE: Scalar = 0.4;
+const FIRST_ROW_SHARE: Scalar = 0.6;
+const ROW_SPACING_SHARE: Scalar = 1.25;
+
+/// What fills the cavity: the pattern, how coarse it is and how much of the cavity it takes.
+/// Walls, struts and crossing holes follow from the two numbers.
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
-// A project saved before walls and holes had their own sizes still opens.
-#[serde(default)]
+#[serde(from = "StoredInfill")]
 pub struct InfillSettings {
     pub pattern: InfillPattern,
-    /// Across one cell: a hexagon's corners for a hive, a square's side for a grid, the
-    /// cube's edge for a scaffold.
-    #[serde(alias = "size_mm")]
+    /// Across one cell, in millimetres: a hexagon's corners for a hive, a square's side for
+    /// a grid, the cube's edge for a scaffold.
     pub cell_mm: Scalar,
-    /// Thickness of the wall between two cells of a hive or a grid.
-    pub wall_mm: Scalar,
-    /// How much of the cavity a scaffold's struts fill, from 0 to 1.
+    /// How much of the cavity the lattice fills, from 0 to 1.
     pub density: Scalar,
-    /// Diameter of the crossing holes through a hive or grid wall.
-    pub hole_mm: Scalar,
-    /// Height of the first row of crossing holes over the cavity's floor.
-    pub first_hole_mm: Scalar,
-    /// Height from one row of crossing holes to the next.
-    pub hole_spacing_mm: Scalar,
 }
 
 impl Default for InfillSettings {
     fn default() -> Self {
         Self {
             pattern: InfillPattern::default(),
-            cell_mm: 6.0,
-            wall_mm: 2.0,
-            density: 0.3,
-            hole_mm: 2.5,
-            first_hole_mm: 4.0,
-            hole_spacing_mm: 8.0,
+            cell_mm: 8.0,
+            density: 0.25,
         }
     }
 }
 
 impl InfillSettings {
-    /// The widest a crossing hole may be, in millimetres: a hexagon's side, or a square's.
-    /// A hole as wide as that would cut into the junctions the walls stand on.
-    pub fn widest_hole_mm(&self) -> Scalar {
+    /// How thick the lattice stands, in millimetres: the wall between two cells of a hive or
+    /// a grid, or the side of a scaffold's strut.
+    pub fn wall_mm(&self) -> Scalar {
         match self.pattern {
-            InfillPattern::Hive => self.cell_mm / 2.0,
+            InfillPattern::Scaffold => self.cell_mm * scaffold::strut_share(self.density),
+            _ => self.opening_mm() * wall_share(self.density),
+        }
+    }
+
+    /// Across a hive or grid cell's opening between two of its walls, in millimetres.
+    fn opening_mm(&self) -> Scalar {
+        match self.pattern {
+            InfillPattern::Hive => self.cell_mm * (3.0 as Scalar).sqrt() / 2.0,
             _ => self.cell_mm,
         }
     }
 
+    fn hole_mm(&self) -> Scalar {
+        self.cell_mm * HOLE_SHARE
+    }
+
     fn validate(&self) -> Result<(), VolumeError> {
-        let positive = |mm: Scalar| mm.is_finite() && mm > 0.0;
-        if !positive(self.cell_mm) {
+        if !self.cell_mm.is_finite() || self.cell_mm <= 0.0 {
             return Err(VolumeError::BadCell(self.cell_mm));
         }
-        if !self.pattern.has_walls() {
-            if !self.density.is_finite() || self.density <= 0.0 || self.density >= 1.0 {
-                return Err(VolumeError::BadDensity(self.density));
-            }
-            return Ok(());
-        }
-        if !positive(self.wall_mm) {
-            return Err(VolumeError::BadInfillWall(self.wall_mm));
-        }
-        let fits = positive(self.hole_mm) && self.hole_mm < self.widest_hole_mm();
-        let starts = self.first_hole_mm.is_finite() && self.first_hole_mm >= 0.0;
-        // Rows closer than a hole would merge into a slot.
-        let apart = self.hole_spacing_mm.is_finite() && self.hole_spacing_mm > self.hole_mm;
-        if !(fits && starts && apart) {
-            return Err(VolumeError::BadHoles {
-                diameter_mm: self.hole_mm,
-                first_mm: self.first_hole_mm,
-                spacing_mm: self.hole_spacing_mm,
-            });
+        if !self.density.is_finite() || self.density <= 0.0 || self.density >= 1.0 {
+            return Err(VolumeError::BadDensity(self.density));
         }
         Ok(())
+    }
+}
+
+/// The wall as a share of the opening that leaves `density` of a plane of cells solid, see
+/// "The wall a density makes" in `docs/design/hollowing.md`.
+fn wall_share(density: Scalar) -> Scalar {
+    1.0 / (1.0 - density).sqrt() - 1.0
+}
+
+/// Infill as a project stores it. One saved with a wall of its own, before ADR 0320, reads
+/// as the density that wall made.
+#[derive(Deserialize)]
+#[serde(default)]
+struct StoredInfill {
+    pattern: InfillPattern,
+    #[serde(alias = "size_mm")]
+    cell_mm: Scalar,
+    density: Scalar,
+    wall_mm: Option<Scalar>,
+}
+
+impl Default for StoredInfill {
+    fn default() -> Self {
+        let settings = InfillSettings::default();
+        Self {
+            pattern: settings.pattern,
+            cell_mm: settings.cell_mm,
+            density: settings.density,
+            wall_mm: None,
+        }
+    }
+}
+
+impl From<StoredInfill> for InfillSettings {
+    fn from(stored: StoredInfill) -> Self {
+        let mut settings = Self {
+            pattern: stored.pattern,
+            cell_mm: stored.cell_mm,
+            density: stored.density,
+        };
+        let wall_mm = stored.wall_mm.filter(|mm| mm.is_finite() && *mm > 0.0);
+        if let Some(wall_mm) = wall_mm.filter(|_| stored.pattern.has_walls()) {
+            let opening = settings.opening_mm();
+            settings.density = 1.0 - (opening / (opening + wall_mm)).powi(2);
+        }
+        settings
     }
 }
 
@@ -186,8 +219,8 @@ struct Rows {
 impl Rows {
     fn new(settings: &InfillSettings, floor_mm: Scalar) -> Self {
         Self {
-            first: floor_mm + settings.first_hole_mm,
-            spacing: settings.hole_spacing_mm,
+            first: floor_mm + settings.cell_mm * FIRST_ROW_SHARE,
+            spacing: settings.cell_mm * ROW_SPACING_SHARE,
         }
     }
 
@@ -226,7 +259,7 @@ pub(crate) fn cut(
         });
     };
     let lattice = lattice_of(settings, bounds.mins.z);
-    let reach = Vec3::splat(settings.cell_mm + settings.wall_mm);
+    let reach = Vec3::splat(settings.cell_mm + settings.wall_mm());
     let keep = |shape: &Aabb| cavity.reaches(shape);
     if let Ok(solid) = carve::carved(&cavity_mesh, lattice.as_ref(), reach, &keep) {
         return Ok(Carved {
@@ -366,28 +399,26 @@ mod tests {
 
     #[test]
     fn a_crossing_hole_opens_its_wall_right_through() {
-        // In a 40 mm cube the rows stand at z = -16, -8, 0, 8 and 16; z = -4 is between two.
-        // A 6 mm hexagon is 3 sqrt(3) mm across its flats, and the wall adds 2 mm.
-        let pitch = 3.0 * (3.0 as Scalar).sqrt() + 2.0;
-        for (pattern, wall) in [
-            (InfillPattern::Grid, Vec3::new(0.0, 4.0, 0.0)),
-            (InfillPattern::Hive, Vec3::new(pitch / 2.0, 0.0, 0.0)),
-        ] {
+        // In a 40 mm cube a row of holes stands at z = -20 + 0.6 c + k 1.25 c.
+        for pattern in [InfillPattern::Grid, InfillPattern::Hive] {
+            let settings = walled(pattern);
+            let rows = Rows::new(&settings, -20.0);
+            let row = rows
+                .between(-5.0, 5.0)
+                .next()
+                .expect("one row is near the middle");
+            let pitch = settings.opening_mm() + settings.wall_mm();
+            let wall = match pattern {
+                InfillPattern::Grid => Vec3::new(0.0, pitch / 2.0, row),
+                _ => Vec3::new(pitch / 2.0, 0.0, row),
+            };
             let cube = cuboid(Vec3::splat(-20.0), Vec3::splat(20.0));
-            let carved = cut(
-                &box_cavity(20.0),
-                cube,
-                &walled(pattern),
-                0,
-                Cancel::never(),
-            )
-            .expect("valid");
+            let carved =
+                cut(&box_cavity(20.0), cube, &settings, 0, Cancel::never()).expect("valid");
             let solid = |at: Vec3| winding_number(&carved.solid, at) > 0.5;
             let name = pattern.label();
-            assert!(
-                solid(wall.with_z(-4.0)),
-                "{name}: the wall between two rows"
-            );
+            let between = wall.with_z(row - rows.spacing / 2.0);
+            assert!(solid(between), "{name}: the wall between two rows");
             assert!(!solid(wall), "{name}: the hole through it at its row");
         }
     }
@@ -423,54 +454,16 @@ mod tests {
     }
 
     #[test]
-    fn a_scaffold_density_outside_nought_to_one_is_refused() {
-        for density in [0.0, 1.0] {
-            let settings = InfillSettings {
-                density,
-                ..walled(InfillPattern::Scaffold)
-            };
-            assert_eq!(settings.validate(), Err(VolumeError::BadDensity(density)));
+    fn a_density_outside_nought_to_one_is_refused() {
+        for pattern in InfillPattern::ALL {
+            for density in [0.0, 1.0] {
+                let settings = InfillSettings {
+                    density,
+                    ..walled(pattern)
+                };
+                assert_eq!(settings.validate(), Err(VolumeError::BadDensity(density)));
+            }
         }
-    }
-
-    #[test]
-    fn a_wall_of_no_thickness_is_refused() {
-        let settings = InfillSettings {
-            wall_mm: -1.0,
-            ..InfillSettings::default()
-        };
-        assert_eq!(settings.validate(), Err(VolumeError::BadInfillWall(-1.0)));
-    }
-
-    #[test]
-    fn a_hole_wider_than_a_side_or_rows_that_merge_are_refused() {
-        let wide = InfillSettings {
-            hole_mm: 3.0,
-            ..InfillSettings::default()
-        };
-        let merged = InfillSettings {
-            hole_spacing_mm: 2.0,
-            ..InfillSettings::default()
-        };
-        let sunk = InfillSettings {
-            first_hole_mm: -1.0,
-            ..InfillSettings::default()
-        };
-        for settings in [wide, merged, sunk] {
-            assert!(
-                matches!(settings.validate(), Err(VolumeError::BadHoles { .. })),
-                "{settings:?} was let through"
-            );
-        }
-        let square = InfillSettings {
-            hole_mm: 3.0,
-            ..walled(InfillPattern::Grid)
-        };
-        assert_eq!(
-            square.validate(),
-            Ok(()),
-            "a square's side is the whole cell"
-        );
     }
 
     #[test]

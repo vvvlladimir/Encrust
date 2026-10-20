@@ -52,18 +52,6 @@ pub enum VolumeError {
     #[error("the infill density must be between 0 and 1, got {0}")]
     BadDensity(Scalar),
 
-    #[error("the infill wall must be a positive thickness, got {0} mm")]
-    BadInfillWall(Scalar),
-
-    #[error(
-        "crossing holes need a diameter under the cell, a first row at or over the floor and a spacing, got {diameter_mm} mm, {first_mm} mm and {spacing_mm} mm"
-    )]
-    BadHoles {
-        diameter_mm: Scalar,
-        first_mm: Scalar,
-        spacing_mm: Scalar,
-    },
-
     #[error("drain hole {index} has no width, no depth or no direction to be drilled in")]
     BadDrain { index: usize },
 
