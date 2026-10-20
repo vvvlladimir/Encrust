@@ -164,7 +164,7 @@ impl Adjacency {
 /// Union-find over indices — of faces, vertices or corners — that gathers them into the
 /// groups the unions joined.
 ///
-/// Each parent is atomic so that [`Components::joined`] can join from every thread; alone,
+/// Each parent is atomic so that `joined` can join from every thread; alone,
 /// a relaxed atomic reads and writes as a plain integer does.
 #[derive(Debug)]
 pub struct Components {
