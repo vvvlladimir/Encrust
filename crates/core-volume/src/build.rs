@@ -6,7 +6,7 @@ use core_geometry::{
 };
 use rayon::prelude::*;
 
-use crate::cancel::Cancel;
+use crate::cancel::{Cancel, Step};
 use crate::error::VolumeError;
 use crate::grid::{TILE, VoxelGrid, tile_of, within};
 use crate::scatter::{Faces, seeds};
@@ -143,6 +143,7 @@ fn built<T: Copy + Send + Sync>(
     let band_mm = settings.band_voxels * settings.voxel_mm;
     let iso_mm = settings.iso_mm;
     let grid = VoxelGrid::new(settings.voxel_mm);
+    cancel.begin(Step::Preparing, 0);
     let signer = Signer::new(mesh, settings.sign);
     let keep = settings.clip.map(|clip| clipped_tiles(grid, clip));
 
@@ -168,6 +169,7 @@ fn built<T: Copy + Send + Sync>(
 
     let faces = Faces::of(mesh);
     let wanted: FastMap<IVec3, Scalar> = candidates.into_iter().collect();
+    cancel.begin(Step::Seeding, 0);
 
     let tiles = sweep::fill(
         mesh,

@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use core_geometry::{Bvh, ClosestPoint, FastMap, FastSet, Mesh, Scalar, Vec3, glam::IVec3};
 use rayon::prelude::*;
 
-use crate::cancel::Cancel;
+use crate::cancel::{Cancel, Step};
 use crate::grid::{TILE, VoxelGrid, index_in_tile, tile_of};
 use crate::scatter::{Faces, Nearest, UNSET};
 use crate::sdf::TILE_VALUES;
@@ -82,10 +82,12 @@ pub(crate) fn fill<T: Copy + Send + Sync>(
     // A run given up on fills no further tile and comes back with what it had; the caller
     // is the one that turns that into an error.
     let shared = faces.mean_area_mm2() >= SHARED_AREA_VOXELS * grid.voxel_mm * grid.voxel_mm;
+    cancel.begin(Step::Refining, wanted.len());
     wanted
         .par_iter()
         .filter(|_| !cancel.asked())
         .filter_map(|(tile, centre_mm)| {
+            cancel.advance(1);
             let work = refine(
                 faces,
                 bvh,
@@ -157,6 +159,11 @@ fn carry(
     let mut current: FastMap<IVec3, Work> = FastMap::default();
     let mut deferred: Vec<IVec3> = Vec::new();
 
+    // Each settling pass goes over every tile the rings swept, so it counts as much again.
+    cancel.begin(
+        Step::Carrying,
+        rings.iter().map(Vec::len).sum::<usize>() * PASSES,
+    );
     for mut ring in rings {
         if cancel.asked() {
             return carrier;
@@ -172,7 +179,9 @@ fn carry(
                         .or_else(|| seeds.get(&at))
                         .map(|work| &work[..])
                 };
-                (*tile, swept_tile(faces, bvh, coarse, *tile, &look))
+                let swept = swept_tile(faces, bvh, coarse, *tile, &look);
+                cancel.advance(1);
+                (*tile, swept)
             })
             .collect();
 
@@ -191,7 +200,7 @@ fn carry(
         if cancel.asked() {
             return carrier;
         }
-        settle(faces, bvh, coarse, &mut carrier, seeds);
+        settle(faces, bvh, coarse, &mut carrier, seeds, cancel);
     }
     carrier
 }
@@ -211,6 +220,7 @@ fn settle(
     coarse: VoxelGrid,
     carrier: &mut FastMap<IVec3, Work>,
     seeds: &FastMap<IVec3, Work>,
+    cancel: Cancel<'_>,
 ) {
     let tiles: Vec<IVec3> = carrier.keys().copied().collect();
     let swept: Vec<Carried> = tiles
@@ -222,7 +232,9 @@ fn settle(
                     .or_else(|| seeds.get(&at))
                     .map(|work| &work[..])
             };
-            (*tile, resettled(faces, bvh, coarse, *tile, &look))
+            let swept = resettled(faces, bvh, coarse, *tile, &look);
+            cancel.advance(1);
+            (*tile, swept)
         })
         .collect();
 

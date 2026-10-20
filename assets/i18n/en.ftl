@@ -1707,9 +1707,23 @@ app-cannot-build-preview = cannot build the layer preview
 ## job/hollow.rs
 
 job-thread-stopped-hollowing = the hollowing thread stopped without finishing
-job-hollow-stopping = Stopping after this model
+job-hollow-stopping = Stopping...
 job-hollow-progress = Hollowing model { $index } of { $total }
-job-hollow-working = Hollowing...
+job-step-preparing = Checking the model
+job-step-seeding = Measuring the surface
+job-step-carrying = Building the field
+job-step-refining = Refining the field
+job-step-surfacing = Building the surface
+job-step-shaping = Finishing
+job-step-reading = Reading the models
+job-step-combining = Combining them
+job-step-finishing = Building the result
+job-hollow-preparing = Checking the model
+job-hollow-seeding = Measuring the surface
+job-hollow-carrying = Reaching across the wall
+job-hollow-refining = Shaping the wall
+job-hollow-surfacing = Building the inner surface
+job-hollow-shaping = Finishing the shell
 
 ## job/import.rs
 

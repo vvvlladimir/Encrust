@@ -27,7 +27,7 @@ mod sweep;
 
 pub use boolean::{Boolean, Combined, combine, combine_exact, combine_exact_toward};
 pub use build::{FieldSettings, build};
-pub use cancel::Cancel;
+pub use cancel::{Cancel, Progress, Step};
 pub use csg::{difference, intersection, offset, shell, union};
 pub use drain::{
     CUT_WEIGHT, Channel, DrainHole, HoleShape, HoleSize, Leg, MOUTH_LIFT_MM, channel_under, drill,

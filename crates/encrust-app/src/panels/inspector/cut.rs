@@ -269,7 +269,13 @@ fn key(ui: &mut egui::Ui, key: &mut Key) {
 /// already made of.
 pub fn action(ui: &mut egui::Ui, window: &mut Window) {
     if window.tools.cut.is_busy() {
-        if busy(ui, &tr!("cut-cutting"), true) {
+        let step = window
+            .tools
+            .cut
+            .counted()
+            .map(|counted| (counted.label(), counted.share));
+        let step = step.as_ref().map(|(label, share)| (label.as_str(), *share));
+        if busy(ui, &tr!("cut-cutting"), step, true) {
             window.tools.cut.cancel(&mut window.machine.status);
         }
         return;

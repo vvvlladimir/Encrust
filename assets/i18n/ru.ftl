@@ -1796,9 +1796,23 @@ app-cannot-build-preview = не удалось построить предпро
 ## job/hollow.rs
 
 job-thread-stopped-hollowing = поток выдалбливания остановился, не закончив
-job-hollow-stopping = Остановка после этой модели
+job-hollow-stopping = Остановка...
 job-hollow-progress = Выдалбливание модели { $index } из { $total }
-job-hollow-working = Выдалбливание...
+job-step-preparing = Проверка модели
+job-step-seeding = Замер поверхности
+job-step-carrying = Построение поля
+job-step-refining = Уточнение поля
+job-step-surfacing = Построение поверхности
+job-step-shaping = Завершение
+job-step-reading = Чтение моделей
+job-step-combining = Объединение
+job-step-finishing = Сборка результата
+job-hollow-preparing = Проверка модели
+job-hollow-seeding = Замер поверхности
+job-hollow-carrying = Проход через стенку
+job-hollow-refining = Расчёт стенки
+job-hollow-surfacing = Построение внутренней поверхности
+job-hollow-shaping = Завершение оболочки
 
 ## job/import.rs
 

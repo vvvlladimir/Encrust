@@ -11,7 +11,8 @@ use serde::{Deserialize, Serialize};
 use crate::files::{self, Handed, Wanted};
 use crate::i18n::tr;
 use crate::job::{
-    Pressed, ReliefJob, ReliefOutcome, ReliefRequest, ReliefSource, relief_tasks, spawn_relief,
+    Counted, Pressed, ReliefJob, ReliefOutcome, ReliefRequest, ReliefSource, relief_tasks,
+    spawn_relief,
 };
 use crate::scene::{Mapped, ObjectId, Scene};
 use crate::status::Status;
@@ -303,6 +304,11 @@ impl ReliefTool {
 
     pub fn is_busy(&self) -> bool {
         self.job.is_some()
+    }
+
+    /// How far the press going has got, while it has counted something.
+    pub fn counted(&self) -> Option<Counted> {
+        self.job.as_ref()?.counted()
     }
 
     /// The mode and built-in texture to remember.

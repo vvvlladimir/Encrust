@@ -355,7 +355,13 @@ fn truncated(name: &str) -> String {
 /// Pressing the texture in, or the progress of the run that is going.
 fn press(ui: &mut egui::Ui, window: &mut Window) {
     if window.tools.relief.is_busy() {
-        if busy(ui, &tr!("relief-pressing"), true) {
+        let step = window
+            .tools
+            .relief
+            .counted()
+            .map(|counted| (counted.label(), counted.share));
+        let step = step.as_ref().map(|(label, share)| (label.as_str(), *share));
+        if busy(ui, &tr!("relief-pressing"), step, true) {
             window.tools.relief.cancel(&mut window.machine.status);
         }
         return;

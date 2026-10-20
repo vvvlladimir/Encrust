@@ -39,7 +39,7 @@ pub type CutJob = Worker<CutOutcome>;
 pub fn spawn_cut(request: CutRequest) -> CutJob {
     Worker::spawn(
         // Neither the cut nor the joint can be given up on part way.
-        move |_| pooled(|| cut(request), CutOutcome::Failed),
+        move |_, _| pooled(|| cut(request), CutOutcome::Failed),
         || CutOutcome::Failed(tr!("job-thread-stopped-cut")),
     )
 }

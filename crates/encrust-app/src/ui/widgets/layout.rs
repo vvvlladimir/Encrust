@@ -519,10 +519,14 @@ pub fn progress_bar(ui: &mut Ui, fraction: Option<f32>) {
 }
 
 /// What a tool is busy with and the bar of its run, and where the run can be stopped a way
-/// to stop it. Answers whether it was asked to stop.
-pub fn busy(ui: &mut Ui, label: &str, stoppable: bool) -> bool {
+/// to stop it. `step` is the step in words and the share done, for a run that counts; the
+/// bar runs without a share for one that does not. Answers whether it was asked to stop.
+pub fn busy(ui: &mut Ui, label: &str, step: Option<(&str, f32)>, stoppable: bool) -> bool {
     super::tone(ui, label, theme::colors().text_mid);
-    progress_bar(ui, None);
+    progress_bar(ui, step.map(|(_, share)| share));
+    if let Some((step, _)) = step {
+        super::tone(ui, step, theme::colors().text_low);
+    }
     stoppable
         && super::secondary_button(ui, crate::ui::icon::CANCEL, &tr!("common-cancel")).clicked()
 }

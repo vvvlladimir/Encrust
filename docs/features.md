@@ -210,6 +210,10 @@ capped silently.
   cancelled from the panel; a cancelled press stops inside the model it is on rather than
   finishing unseen. If the model is moved, resized, replaced or undone meanwhile, the
   result is dropped and the stage notice says so.
+- While a press of one model, a combination or a split runs, the panel shows how much of
+  it is done and the step it is on: a combination reads the models one by one, combines
+  them and builds the result. A cut, and a press of several models at once, show a running
+  bar only.
 - The mode and the built-in texture chosen are remembered between runs.
 
 ### Hollow
@@ -234,6 +238,8 @@ capped silently.
 - **Keep solid:** click spots on the model where the wall must stay solid (blockers), and
   set their size.
 - Each model can keep its own hollow settings, and you can save settings as named presets.
+- While it runs, the panel names the step the model is on and shows how much of the run is
+  done.
 - **Cancel** stops a run inside the model it is on, not only between models.
 - Undo with **Make solid again**.
 

@@ -9,7 +9,8 @@ use core_engine::project::{Axis, CutState};
 
 use crate::i18n::tr;
 use crate::job::{
-    CutJob, CutOutcome, CutRequest, SplitJob, SplitOutcome, SplitRequest, spawn_cut, spawn_split,
+    Counted, CutJob, CutOutcome, CutRequest, SplitJob, SplitOutcome, SplitRequest, spawn_cut,
+    spawn_split,
 };
 use crate::landing::{self, mending, place, place_all};
 use crate::scene::{ObjectId, Scene, SceneObject, Taken};
@@ -167,6 +168,12 @@ impl CutTool {
 
     pub fn is_busy(&self) -> bool {
         self.running.is_some() || self.splitting.is_some()
+    }
+
+    /// How far the split going has got, while it has counted something; a cut counts
+    /// nothing.
+    pub fn counted(&self) -> Option<Counted> {
+        self.splitting.as_ref()?.0.counted()
     }
 
     /// Gives up on the cut or split going, which leaves the model as it is.

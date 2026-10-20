@@ -3,7 +3,8 @@ use std::sync::atomic::{AtomicBool, Ordering};
 
 use core_geometry::{Bvh, Heightmap, Mesh, Transform, Vec3, transform_mesh};
 use core_volume::{
-    AngleMask, Cancel, ReliefBasis, ReliefSettings, Tiling, press_reusing, press_tiled_reusing,
+    AngleMask, Cancel, Progress, ReliefBasis, ReliefSettings, Tiling, press_reusing,
+    press_tiled_reusing,
 };
 use rayon::prelude::*;
 
@@ -79,7 +80,7 @@ pub type ReliefJob = Worker<ReliefOutcome>;
 pub fn spawn_relief(request: ReliefRequest) -> ReliefJob {
     // A run given up on stops inside its field; what it then answers is thrown away.
     Worker::spawn(
-        move |stop| pooled(|| run(&request, stop), ReliefOutcome::Failed),
+        move |stop, progress| pooled(|| run(&request, stop, progress), ReliefOutcome::Failed),
         || ReliefOutcome::Failed(tr!("job-thread-stopped-relief")),
     )
 }
@@ -102,9 +103,13 @@ pub fn relief_tasks(scene: &Scene, tiled: bool) -> Vec<ReliefTask> {
         .collect()
 }
 
-fn run(request: &ReliefRequest, stop: &AtomicBool) -> ReliefOutcome {
+fn run(request: &ReliefRequest, stop: &AtomicBool, progress: &Progress) -> ReliefOutcome {
     let asked = || stop.load(Ordering::Relaxed);
-    let cancel = Cancel::when(&asked);
+    // Models are pressed side by side, and one count for several would jump between them.
+    let cancel = match request.tasks.len() {
+        1 => Cancel::when(&asked).reporting(progress),
+        _ => Cancel::when(&asked),
+    };
     let pressed: Result<Vec<Pressed>, _> = request
         .tasks
         .par_iter()

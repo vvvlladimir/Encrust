@@ -4,7 +4,7 @@ use rayon::prelude::*;
 use serde::{Deserialize, Serialize};
 
 use crate::build::{DEFAULT_BUDGET_BYTES, FieldSettings, build};
-use crate::cancel::Cancel;
+use crate::cancel::{Cancel, Step};
 use crate::csg;
 use crate::error::VolumeError;
 use crate::extract::extract;
@@ -48,7 +48,7 @@ pub struct Combined {
 /// rounds sharp edges to the lattice; see `docs/design/csg.md`.
 pub fn combine(models: &[Mesh], op: Boolean, cancel: Cancel<'_>) -> Result<Combined, VolumeError> {
     checked(models)?;
-    let combined = match exact(models, op) {
+    let combined = match exact(models, op, cancel) {
         Ok(mesh) => Combined {
             mesh,
             voxel_mm: None,
@@ -65,7 +65,7 @@ pub fn combine(models: &[Mesh], op: Boolean, cancel: Cancel<'_>) -> Result<Combi
 /// that must keep every edge of the model as it was asks for.
 pub fn combine_exact(models: &[Mesh], op: Boolean) -> Result<Mesh, VolumeError> {
     checked(models)?;
-    let mesh = exact(models, op)?;
+    let mesh = exact(models, op, Cancel::never())?;
     if mesh.faces.is_empty() {
         return Err(VolumeError::NothingLeft);
     }
@@ -103,8 +103,17 @@ fn checked(models: &[Mesh]) -> Result<(), VolumeError> {
     Ok(())
 }
 
-fn exact(models: &[Mesh], op: Boolean) -> Result<Mesh, CsgError> {
-    let solids: Vec<Solid> = models.par_iter().map(solid_of).collect::<Result<_, _>>()?;
+fn exact(models: &[Mesh], op: Boolean, cancel: Cancel<'_>) -> Result<Mesh, CsgError> {
+    cancel.begin(Step::Reading, models.len());
+    let solids: Vec<Solid> = models
+        .par_iter()
+        .map(|model| {
+            let solid = solid_of(model);
+            cancel.advance(1);
+            solid
+        })
+        .collect::<Result<_, _>>()?;
+    cancel.begin(Step::Combining, 0);
     let combined = match (op, solids.as_slice()) {
         (Boolean::Union, _) => Solid::union_all(&solids)?,
         (Boolean::Intersection, _) => largest_last(&solids, models, Solid::intersection)?,
@@ -112,6 +121,7 @@ fn exact(models: &[Mesh], op: Boolean) -> Result<Mesh, CsgError> {
         (Boolean::Difference, [first, rest @ ..]) => first.difference(&Solid::union_all(rest)?)?,
         (Boolean::Difference, []) => return Ok(Mesh::default()),
     };
+    cancel.begin(Step::Finishing, 0);
     Ok(combined.mesh())
 }
 
@@ -250,6 +260,20 @@ mod tests {
             "a combination is closed"
         );
         signed_volume(&combined.mesh)
+    }
+
+    #[test]
+    fn an_exact_combination_ends_on_making_its_mesh() {
+        let progress = crate::Progress::default();
+        let combined = combine(
+            &pair(),
+            Boolean::Union,
+            Cancel::never().reporting(&progress),
+        )
+        .expect("two cubes combine");
+
+        assert_eq!(combined.voxel_mm, None, "two solids combine exactly");
+        assert_eq!(progress.read(), Some((Step::Finishing, 0, 0)));
     }
 
     #[test]

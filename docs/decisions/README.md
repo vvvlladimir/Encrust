@@ -243,6 +243,7 @@ Grouped by what the decision governs; the number is still the order it was taken
 | [0314](0314-a-solid-is-readied-on-every-core.md) | Ready a solid for the engine on every core | Accepted |
 | [0315](0315-boolmesh-comes-from-our-fork.md) | Take `boolmesh` from our fork, threaded and deterministic | Accepted; the commit it pins is superseded by 0316 |
 | [0316](0316-many-solids-are-unioned-by-groups-and-set-apart-ones-side-by-side.md) | Union many solids by groups, set apart ones side by side, and slim the engine | Accepted |
+| [0317](0317-a-run-tells-how-far-it-has-got-through-its-cancel.md) | A run tells how far it has got through its `Cancel` | Accepted |
 | [0304](0304-models-are-combined-exactly-and-sampled-where-they-are-torn.md) | Combine models exactly, and through the field where one is not a solid | Accepted |
 | [0305](0305-a-label-is-outlined-by-ttf-parser-in-core-text.md) | Outline a label with `ttf-parser` in `core-text`, offer the machine's fonts, and let it follow the surface | Accepted |
 | [0311](0311-a-label-is-joined-through-the-side-of-the-model-it-stands-on.md) | Join a label through the side of the model it stands on | Accepted |

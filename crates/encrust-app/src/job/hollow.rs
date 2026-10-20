@@ -3,9 +3,12 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::{self, Receiver, TryRecvError};
 
 use core_geometry::{Bvh, Mat3, Mesh, Scalar};
-use core_volume::{Cancel, HollowSettings, Shell, VolumeError, carve, cavity_field};
+use core_volume::{
+    Cancel, HollowSettings, Progress, Shell, Step, VolumeError, carve, cavity_field,
+};
 
 use crate::i18n::tr;
+use crate::job::Counted;
 use crate::job::pipeline::{thread_pool, worker_threads};
 
 mod fields;
@@ -77,6 +80,8 @@ enum Report {
 pub struct HollowJob {
     reports: Receiver<Report>,
     cancel: Arc<AtomicBool>,
+    /// How far the model in hand has got, written by the worker and read every frame.
+    progress: Arc<Progress>,
     done: usize,
     total: usize,
 }
@@ -88,9 +93,12 @@ impl HollowJob {
         let (sender, reports) = mpsc::channel();
         let cancel = Arc::new(AtomicBool::new(false));
         let worker_cancel = Arc::clone(&cancel);
+        let progress = Arc::new(Progress::default());
+        let worker_progress = Arc::clone(&progress);
 
         crate::job::spawn(move || {
-            let outcome = run(&request, &worker_cancel, &mut |done, total| {
+            let watch = (&*worker_cancel, &*worker_progress);
+            let outcome = run(&request, watch, &mut |done, total| {
                 let _ = sender.send(Report::Progress { done, total });
             });
             let _ = sender.send(Report::Finished(outcome));
@@ -99,6 +107,7 @@ impl HollowJob {
         Self {
             reports,
             cancel,
+            progress,
             done: 0,
             total: 0,
         }
@@ -126,29 +135,50 @@ impl HollowJob {
         self.cancel.store(true, Ordering::Relaxed);
     }
 
-    /// The run has been told to stop but has not finished the model in hand yet.
+    /// The run has been told to stop and has not come back yet.
     pub fn is_cancelling(&self) -> bool {
         self.cancel.load(Ordering::Relaxed)
     }
 
-    /// Share of the models shelled, or `None` where there is nothing honest to show: a
-    /// cavity is built in one call, so a single model is either going or done.
+    /// Share of the whole run done: the models finished, and the share of its steps the
+    /// one in hand has got through. `None` until the worker has said how many there are.
     pub fn fraction(&self) -> Option<f32> {
-        (self.total > 1).then(|| self.done as f32 / self.total as f32)
+        (self.total > 0).then(|| {
+            let in_hand = Counted::of(&self.progress).map_or(0.0, |counted| counted.share);
+            ((self.done as f32 + in_hand) / self.total as f32).min(1.0)
+        })
     }
 
+    /// What the model in hand is going through.
     pub fn label(&self) -> String {
         if self.is_cancelling() {
             return tr!("job-hollow-stopping");
         }
-        match self.fraction() {
-            Some(_) => tr!(
-                "job-hollow-progress",
-                index = self.done + 1,
-                total = self.total
-            ),
-            None => tr!("job-hollow-working"),
+        match self
+            .progress
+            .read()
+            .map_or(Step::Preparing, |(step, _, _)| step)
+        {
+            Step::Preparing => tr!("job-hollow-preparing"),
+            Step::Seeding => tr!("job-hollow-seeding"),
+            Step::Carrying => tr!("job-hollow-carrying"),
+            Step::Refining => tr!("job-hollow-refining"),
+            Step::Surfacing => tr!("job-hollow-surfacing"),
+            Step::Shaping | Step::Reading | Step::Combining | Step::Finishing => {
+                tr!("job-hollow-shaping")
+            }
         }
+    }
+
+    /// Which model of a plate is in hand, when there is more than one.
+    pub fn models(&self) -> Option<String> {
+        (self.total > 1).then(|| {
+            tr!(
+                "job-hollow-progress",
+                index = (self.done + 1).min(self.total),
+                total = self.total
+            )
+        })
     }
 }
 
@@ -220,19 +250,19 @@ pub fn again_tasks(scene: &Scene, models: &[(ObjectId, HollowSettings)]) -> Vec<
 /// is a worker thread whose only channel to the user is `report`.
 fn run(
     request: &HollowRequest,
-    cancel: &AtomicBool,
+    watch: (&AtomicBool, &Progress),
     report: &mut (dyn FnMut(usize, usize) + Send),
 ) -> HollowOutcome {
     let pool = match thread_pool(worker_threads()) {
         Ok(pool) => pool,
         Err(error) => return HollowOutcome::Failed(error.to_string()),
     };
-    pool.install(|| shell_each(request, cancel, report))
+    pool.install(|| shell_each(request, watch, report))
 }
 
 fn shell_each(
     request: &HollowRequest,
-    cancel: &AtomicBool,
+    (cancel, progress): (&AtomicBool, &Progress),
     report: &mut (dyn FnMut(usize, usize) + Send),
 ) -> HollowOutcome {
     let models = request.tasks.len();
@@ -243,11 +273,16 @@ fn shell_each(
         if asked() {
             return HollowOutcome::Cancelled;
         }
+        progress.restart();
         report(index, models);
 
         let shell = match twin_of(&request.tasks[..index], task) {
             Some(twin) => shells[twin].shell.clone(),
-            None => match shell_of(task, &request.fields, Cancel::when(&asked)) {
+            None => match shell_of(
+                task,
+                &request.fields,
+                Cancel::when(&asked).reporting(progress),
+            ) {
                 Ok(shell) => shell,
                 Err(VolumeError::Cancelled) => return HollowOutcome::Cancelled,
                 Err(error) => return HollowOutcome::Failed(error.to_string()),
@@ -314,6 +349,7 @@ mod tests {
         HollowJob {
             reports,
             cancel: Arc::new(AtomicBool::new(false)),
+            progress: Arc::new(Progress::default()),
             done,
             total,
         }
@@ -351,9 +387,11 @@ mod tests {
                 tetrahedron_task(2, &mesh, 2.0),
             ],
         };
-        let HollowOutcome::Hollowed(shells) =
-            shell_each(&request, &AtomicBool::new(false), &mut |_, _| {})
-        else {
+        let HollowOutcome::Hollowed(shells) = shell_each(
+            &request,
+            (&AtomicBool::new(false), &Progress::default()),
+            &mut |_, _| {},
+        ) else {
             panic!("a 20 mm tetrahedron hollows at a 1.5 mm and a 2 mm wall");
         };
 
@@ -401,26 +439,31 @@ mod tests {
         );
     }
 
-    /// The bar runs rather than standing at nought for the whole of a run it cannot
-    /// honestly take a share of.
     #[test]
-    fn one_model_has_no_share_to_show() {
-        let job = job(0, 1);
+    fn a_run_not_yet_counted_has_no_share_to_show() {
+        let job = job(0, 0);
         assert_eq!(job.fraction(), None);
-        assert_eq!(job.label(), "Hollowing...");
+    }
+
+    #[test]
+    fn one_model_shows_the_step_it_is_in() {
+        let job = job(0, 1);
+        assert_eq!(job.fraction(), Some(0.0));
+        assert_eq!(job.label(), "Checking the model");
+        assert_eq!(job.models(), None);
     }
 
     #[test]
     fn a_plate_of_models_counts_the_one_in_hand() {
         let job = job(1, 4);
         assert_eq!(job.fraction(), Some(0.25));
-        assert_eq!(job.label(), "Hollowing model 2 of 4");
+        assert_eq!(job.models().as_deref(), Some("Hollowing model 2 of 4"));
     }
 
     #[test]
     fn cancelling_shows_in_the_label() {
         let job = job(1, 4);
         job.cancel();
-        assert_eq!(job.label(), "Stopping after this model");
+        assert_eq!(job.label(), "Stopping...");
     }
 }

@@ -3,6 +3,7 @@ use core_geometry::{FastMap, FastSet, Mesh, Plane, Scalar, Vec3, cut, diagnose, 
 use rayon::prelude::*;
 
 use super::{Boolean, exact};
+use crate::cancel::Cancel;
 
 /// How far under the lowest point of the others the model is cut, in millimetres: clear of
 /// every face the engine adds where they meet it, so the cap passes through untouched.
@@ -59,7 +60,7 @@ fn near_plane(model: &Mesh, others: &[Mesh], op: Boolean, plane: Plane) -> Resul
     }
     let mut near = vec![halves.above];
     near.extend(others.iter().cloned());
-    let combined = exact(&near, op).map_err(|_: CsgError| Whole::Engine)?;
+    let combined = exact(&near, op, Cancel::never()).map_err(|_: CsgError| Whole::Engine)?;
     stitched(&halves.below, halves.cap_faces, &combined, plane)
 }
 
