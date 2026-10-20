@@ -117,6 +117,7 @@ paints from tokens only.
 | `companion_button` | A second action beside the primary, raised rather than accented and as tall |
 | `inline_button` | A button as wide as what it says, in a row of several |
 | `secondary_button` | The ordinary full-width button |
+| `toggle_button` | A full-width button that stays pressed, washed in the accent while its tool is on |
 | `quiet_button` | A lesser action of a row with no surface until hovered, in `danger` when it cannot be taken back |
 | `filter_chip` | One of a row of filters, bordered, washed in the accent while on |
 | `dialog_frame`, `dialog_head` | A window over the plate: its frame, and its glyph, name and close button |

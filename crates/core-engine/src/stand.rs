@@ -125,7 +125,7 @@ fn facing(drilled: &Mesh, bvh: &Bvh, contacts: &[Vec3]) -> Vec<Vec3> {
     contacts
         .iter()
         .map(|contact| {
-            bvh.closest(drilled, *contact)
+            bvh.closest(*contact)
                 .and_then(|hit| drilled.triangle(hit.face))
                 .map_or(Vec3::ZERO, |triangle| {
                     triangle.normal_unnormalized().normalize_or_zero()

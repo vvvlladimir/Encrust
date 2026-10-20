@@ -14,8 +14,16 @@ doctest = false
 [dependencies]
 core-geometry.workspace = true
 boolmesh.workspace = true
+rayon.workspace = true
 thiserror.workspace = true
 workspace-hack = { version = "0.1", path = "../../workspace-hack" }
+
+[dev-dependencies]
+criterion.workspace = true
+
+[[bench]]
+name = "solid"
+harness = false
 
 [lints]
 workspace = true

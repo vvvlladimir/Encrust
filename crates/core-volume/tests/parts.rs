@@ -200,6 +200,18 @@ fn a_part_marked_on_a_dumbbell_is_cut_off_flat_across_its_bar() {
     assert_parted_across_the_bar(&parted, &model, 1000.0, 40.0, 4.0);
 }
 
+/// Each of these left the bar's face inside the part twice where its two pieces were joined.
+#[test]
+fn a_dumbbell_is_cut_off_flat_whatever_its_bar_is_across() {
+    for bar_mm in [1.0, 2.5, 3.75] {
+        let model = dumbbell(bar_mm);
+        let parted =
+            part_off(&model, Vec3::new(0.0, 5.0, 5.0), Cancel::never()).expect("the bar is a neck");
+        let across_mm2 = bar_mm * bar_mm;
+        assert_parted_across_the_bar(&parted, &model, 1000.0, 10.0 * across_mm2, across_mm2);
+    }
+}
+
 #[test]
 fn a_part_marked_on_a_thin_walled_dumbbell_is_cut_off_at_its_bar() {
     let model = hollow_dumbbell();

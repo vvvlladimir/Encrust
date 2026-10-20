@@ -6,7 +6,7 @@ use core_geometry::{
 };
 use rayon::prelude::*;
 
-use crate::cancel::Cancel;
+use crate::cancel::{Cancel, Step};
 use crate::error::VolumeError;
 use crate::grid::{TILE, VoxelGrid, tile_of, within};
 use crate::scatter::{Faces, seeds};
@@ -110,11 +110,12 @@ pub(crate) fn build_nearest(
     mesh: &Mesh,
     bvh: &Bvh,
     settings: &FieldSettings,
+    cancel: Cancel<'_>,
 ) -> Result<Built<u32>, VolumeError> {
     let record = |signed: Scalar, _: Vec3, found: &ClosestPoint| {
         found.face as u32 | if signed < 0.0 { INSIDE } else { 0 }
     };
-    built(mesh, bvh, settings, (&record, NO_FACE), Cancel::never())
+    built(mesh, bvh, settings, (&record, NO_FACE), cancel)
 }
 
 fn built<T: Copy + Send + Sync>(
@@ -142,6 +143,7 @@ fn built<T: Copy + Send + Sync>(
     let band_mm = settings.band_voxels * settings.voxel_mm;
     let iso_mm = settings.iso_mm;
     let grid = VoxelGrid::new(settings.voxel_mm);
+    cancel.begin(Step::Preparing, 0);
     let signer = Signer::new(mesh, settings.sign);
     let keep = settings.clip.map(|clip| clipped_tiles(grid, clip));
 
@@ -167,6 +169,7 @@ fn built<T: Copy + Send + Sync>(
 
     let faces = Faces::of(mesh);
     let wanted: FastMap<IVec3, Scalar> = candidates.into_iter().collect();
+    cancel.begin(Step::Seeding, 0);
 
     let tiles = sweep::fill(
         mesh,
@@ -188,7 +191,7 @@ fn built<T: Copy + Send + Sync>(
 
     let solid = gap_runs(walls(tiles.keys().copied(), settings.clip, grid), |tile| {
         let point = grid.tile_center(tile);
-        bvh.closest(mesh, point)
+        bvh.closest(point)
             .is_some_and(|found| signed(&signer, mesh, point, &found) < iso_mm)
     });
 
@@ -345,7 +348,7 @@ fn reach(
             .par_iter()
             .filter_map(|(tile, inside)| {
                 let center = grid.tile_center(*tile);
-                let found = bvh.closest(mesh, center)?;
+                let found = bvh.closest(center)?;
                 let inside = inside.unwrap_or_else(|| signer.is_inside(mesh, center, &found));
                 Some((
                     *tile,

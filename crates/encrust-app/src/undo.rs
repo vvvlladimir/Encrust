@@ -249,6 +249,7 @@ fn fingerprint(scene: &Scene) -> u64 {
             value.to_bits().hash(&mut hasher);
         }
 
+        object.relief_painted.hash(&mut hasher);
         object.supports.painted().hash(&mut hasher);
         object.supports.blocked().hash(&mut hasher);
         for tree in object.supports.frozen() {

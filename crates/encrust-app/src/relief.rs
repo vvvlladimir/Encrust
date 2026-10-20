@@ -1,9 +1,10 @@
 use std::collections::HashMap;
+use std::hash::{Hash as _, Hasher as _};
 use std::io::Read as _;
 use std::sync::{Arc, Weak};
 
 use anyhow::{Context as _, Result, bail};
-use core_geometry::{Heightmap, Mapping, Mat3, Mesh, Scalar, UvMap, Vec2, Vec3};
+use core_geometry::{Heightmap, Mapping, Mat3, Mesh, Region, Scalar, UvMap, Vec2, Vec3};
 use core_volume::{AngleMask, HollowSettings, ReliefBasis, ReliefSettings, Tiling, prepared};
 use rayon::prelude::*;
 use serde::{Deserialize, Serialize};
@@ -11,7 +12,8 @@ use serde::{Deserialize, Serialize};
 use crate::files::{self, Handed, Wanted};
 use crate::i18n::tr;
 use crate::job::{
-    Pressed, ReliefJob, ReliefOutcome, ReliefRequest, ReliefSource, relief_tasks, spawn_relief,
+    Counted, Pressed, ReliefJob, ReliefOutcome, ReliefRequest, ReliefSource, painting,
+    relief_tasks, spawn_relief,
 };
 use crate::scene::{Mapped, ObjectId, Scene};
 use crate::status::Status;
@@ -32,6 +34,9 @@ struct LaidFor {
     sizing: Mat3,
     tiling: Tiling,
     look: Look,
+    /// The faces the picture is held to, hashed, or `None` for the whole model: a stroke
+    /// lays it again.
+    painted: Option<u64>,
 }
 
 /// What of the panel changes the picture itself, rather than where it is pressed.
@@ -104,6 +109,13 @@ pub struct ReliefState {
     /// Faces within this many degrees of facing straight up are left as they are.
     #[serde(default)]
     pub top_deg: Scalar,
+    /// Radius of the brush that paints where the texture goes, millimetres of plate.
+    #[serde(default = "brush_radius_mm")]
+    pub brush_radius_mm: Scalar,
+}
+
+fn brush_radius_mm() -> Scalar {
+    3.0
 }
 
 impl Default for ReliefState {
@@ -117,6 +129,7 @@ impl Default for ReliefState {
             smoothing_px: asked.smoothing_px,
             bottom_deg: asked.mask.bottom_deg,
             top_deg: asked.mask.top_deg,
+            brush_radius_mm: brush_radius_mm(),
         }
     }
 }
@@ -148,6 +161,14 @@ pub struct ReliefTool {
     /// window's own, like the tiling: a project does not write it down.
     pub picture: Option<Picture>,
     pub tiling: Tiling,
+    /// The brush is in hand: a drag over a model paints where the texture goes.
+    pub brushing: bool,
+    /// The press that started this drag landed on a model, so the stroke paints instead
+    /// of turning the camera.
+    pub stroke: bool,
+    /// Where the brush was last put down, in panel points, so that a fast drag is painted
+    /// as the line it drew.
+    pub last_daub: Option<Vec2>,
     /// The picture laid over each model it would be pressed into, for the view to draw.
     laid: HashMap<ObjectId, (LaidFor, Arc<Mapped>)>,
     /// What the last run stood on, so that trying another picture after an undo skips
@@ -178,6 +199,11 @@ impl ReliefTool {
         }
     }
 
+    /// Whether a drag over a model paints where the texture goes.
+    pub fn paints(&self) -> bool {
+        self.mode == ReliefMode::Texture && self.brushing
+    }
+
     fn look(&self) -> Look {
         Look {
             invert: self.state.invert,
@@ -190,15 +216,18 @@ impl ReliefTool {
         if scene.target_count() == 0 {
             return Some(tr!("relief-nothing-visible"));
         }
-        if self.picture.is_none() && relief_tasks(scene, false).is_empty() {
+        if self.picture.is_none() && relief_tasks(scene, false, false).is_empty() {
             return Some(tr!("relief-no-textures"));
+        }
+        if relief_tasks(scene, self.picture.is_some(), self.paints()).is_empty() {
+            return Some(tr!("relief-nothing-painted"));
         }
         None
     }
 
     /// Starts a run over everything visible on the plate that carries a texture.
     pub fn start(&mut self, scene: &Scene) -> Result<()> {
-        let mut tasks = relief_tasks(scene, self.picture.is_some());
+        let mut tasks = relief_tasks(scene, self.picture.is_some(), self.paints());
         if tasks.is_empty() {
             bail!(tr!("relief-nothing-to-press"));
         }
@@ -265,13 +294,13 @@ impl ReliefTool {
                 changed.get_or_insert(model.taken.name);
                 continue;
             };
-            if model.basis.bytes() <= room {
-                room -= model.basis.bytes();
+            if let Some(basis) = model.basis.filter(|basis| basis.bytes() <= room) {
+                room -= basis.bytes();
                 self.kept.push(Kept {
                     id: object.id,
                     mesh: Arc::downgrade(&object.mesh),
                     sizing: object.transform.sizing().linear(),
-                    basis: model.basis,
+                    basis,
                 });
             }
             // The relief was pressed at printed size, so the scale and the stretch are in
@@ -303,6 +332,11 @@ impl ReliefTool {
 
     pub fn is_busy(&self) -> bool {
         self.job.is_some()
+    }
+
+    /// How far the press going has got, while it has counted something.
+    pub fn counted(&self) -> Option<Counted> {
+        self.job.as_ref()?.counted()
     }
 
     /// The mode and built-in texture to remember.
@@ -350,6 +384,7 @@ impl ReliefTool {
     pub fn textures(&mut self, scene: &Scene) -> Textures {
         let look = self.look();
         let settings = self.settings();
+        let brushing = self.paints();
         let mut laid = HashMap::new();
         match &self.picture {
             Some(picture) => {
@@ -362,13 +397,16 @@ impl ReliefTool {
                         sizing: object.transform.sizing().linear(),
                         tiling: self.tiling,
                         look,
+                        painted: painting(object, brushing).map(hashed),
                     };
                     let mapped = relaid(&mut self.laid, object.id, key, || {
                         let read = read.get_or_insert_with(|| Picture {
                             heights: Arc::new(prepared(&picture.heights, &settings).into_owned()),
                             ..picture.clone()
                         });
-                        Arc::new(lay(read, &object.mesh, key.sizing, self.tiling))
+                        let mut mapped = lay(read, &object.mesh, key.sizing, self.tiling);
+                        mapped.uvs = painted_only(&mapped.uvs, painting(object, brushing));
+                        Arc::new(mapped)
                     });
                     laid.insert(object.id, (key, mapped));
                 }
@@ -384,9 +422,10 @@ impl ReliefTool {
                         sizing: Mat3::IDENTITY,
                         tiling: Tiling::default(),
                         look,
+                        painted: painting(object, brushing).map(hashed),
                     };
                     let mapped = relaid(&mut self.laid, object.id, key, || {
-                        read_as_pressed(own, &settings)
+                        read_as_pressed(own, &settings, painting(object, brushing))
                     });
                     laid.insert(object.id, (key, mapped));
                 }
@@ -413,21 +452,44 @@ fn relaid(
     }
 }
 
-/// A model's own texture as pressing with `settings` reads it, shared as it is where that
-/// changes nothing.
-fn read_as_pressed(own: &Arc<Mapped>, settings: &ReliefSettings) -> Arc<Mapped> {
-    if settings.smoothing_px <= 0.0 && !settings.invert {
+/// A model's own texture as pressing with `settings` reads it over the faces `painted`
+/// holds it to, shared as it is where that changes nothing.
+fn read_as_pressed(
+    own: &Arc<Mapped>,
+    settings: &ReliefSettings,
+    painted: Option<&Region>,
+) -> Arc<Mapped> {
+    if settings.smoothing_px <= 0.0 && !settings.invert && painted.is_none() {
         return Arc::clone(own);
     }
     Arc::new(Mapped {
         names: own.names.clone(),
-        uvs: own.uvs.clone(),
+        uvs: painted_only(&own.uvs, painted),
         heights: own
             .heights
             .iter()
             .map(|image| prepared(image, settings).into_owned())
             .collect(),
     })
+}
+
+/// `uvs` with every face `painted` leaves out unmapped, so the view draws the texture
+/// only where it is pressed. `None` leaves the map whole.
+fn painted_only(uvs: &UvMap, painted: Option<&Region>) -> UvMap {
+    let Some(painted) = painted else {
+        return uvs.clone();
+    };
+    UvMap::new(
+        (0..uvs.len())
+            .map(|face| uvs.of_face(face).filter(|_| painted.contains(face)))
+            .collect(),
+    )
+}
+
+fn hashed(painted: &Region) -> u64 {
+    let mut hasher = std::collections::hash_map::DefaultHasher::new();
+    painted.hash(&mut hasher);
+    hasher.finish()
 }
 
 /// `picture` laid over `mesh` at printed size the way pressing it lays it, each face read
@@ -676,6 +738,49 @@ mod tests {
     }
 
     #[test]
+    fn a_painted_model_is_drawn_and_pressed_only_where_it_is_painted() {
+        let mut scene = scene_with_a_tetrahedron();
+        let mut tool = ReliefTool {
+            picture: Some(Picture {
+                name: "stone.png".to_owned(),
+                heights: Arc::new(Heightmap::new(1, 1, vec![1.0]).expect("one pixel")),
+                size_px: [1, 1],
+                builtin: None,
+            }),
+            ..ReliefTool::default()
+        };
+        let whole = tool.textures(&scene);
+        let whole = whole.values().next().expect("the picture is laid");
+        assert_eq!(whole.uvs.mapped(), 4, "nothing painted lays it everywhere");
+
+        tool.brushing = true;
+        let none = tool.textures(&scene);
+        let none = none.values().next().expect("still laid");
+        assert_eq!(
+            none.uvs.mapped(),
+            0,
+            "with the brush in hand, nothing painted is nowhere"
+        );
+        assert_eq!(tool.blocker(&scene), Some(tr!("relief-nothing-painted")));
+
+        scene.objects_mut()[0].relief_painted.set(2, true);
+        let painted = tool.textures(&scene);
+        let painted = painted.values().next().expect("still laid");
+        assert_eq!(
+            painted.uvs.mapped(),
+            1,
+            "only the painted face is drawn textured"
+        );
+        assert!(painted.uvs.of_face(2).is_some());
+        let tasks = relief_tasks(&scene, true, false);
+        assert_eq!(
+            tasks[0].painted.as_ref().map(Region::len),
+            Some(1),
+            "the press is handed the painted face"
+        );
+    }
+
+    #[test]
     fn a_face_is_laid_from_the_plane_it_faces_at_the_tile_size() {
         let picture = Picture {
             name: "stone.png".to_owned(),
@@ -757,7 +862,7 @@ mod tests {
             .expect("the tetrahedron is in the scene")
             .transform
             .rotation = core_geometry::Quat::from_rotation_x(std::f32::consts::FRAC_PI_2);
-        let tasks = relief_tasks(&scene, true);
+        let tasks = relief_tasks(&scene, true, false);
         let up = tasks[0].up;
         assert!(
             (up - Vec3::Y).length() < 1e-5,

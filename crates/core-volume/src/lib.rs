@@ -27,7 +27,7 @@ mod sweep;
 
 pub use boolean::{Boolean, Combined, combine, combine_exact, combine_exact_toward};
 pub use build::{FieldSettings, build};
-pub use cancel::Cancel;
+pub use cancel::{Cancel, Progress, Step};
 pub use csg::{difference, intersection, offset, shell, union};
 pub use drain::{
     CUT_WEIGHT, Channel, DrainHole, HoleShape, HoleSize, Leg, MOUTH_LIFT_MM, channel_under, drill,
@@ -45,8 +45,8 @@ pub use model::{ModelHollow, PENDING_MARKER_MM, Shell, markers};
 pub use parts::{PartSettings, PartedOff, Parts, part_off, parts};
 pub use plug::{PLUG_GAP_MM, PLUG_SPACING_MM, laid_beside, plug_wall_mm, plugs};
 pub use relief::{
-    AngleMask, Relief, ReliefBasis, ReliefSettings, Tiling, prepared, press, press_reusing,
-    press_tiled, press_tiled_reusing,
+    AngleMask, Relief, ReliefBasis, ReliefSettings, Tiling, prepared, press, press_painted,
+    press_painted_tiled, press_reusing, press_tiled, press_tiled_reusing,
 };
 pub use sdf::Sdf;
 pub use sign::SignMode;

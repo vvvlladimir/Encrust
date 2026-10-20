@@ -80,10 +80,16 @@ Nothing asks the hierarchy per voxel, and nothing measures the wall's interior a
 resolution the band is stored on (ADR 0082).
 
 **Seed.** `scatter.rs` buckets each face into the tiles its bounds grown by `SEED_VOXELS`
-reach, sorts the pairs by tile and fills each tile from its own faces alone. A voxel keeps
-a face only within that reach, where the list is complete, so the seed is exact. Work
-follows the surface, not the volume around it: a face is measured against the voxels its
-own bounds cover and no others.
+reach and fills each tile from its own faces alone. A voxel keeps a face only within that
+reach, where the list is complete, so the seed is exact; of faces equally near it keeps the
+lower, so the seed does not depend on how the lists were built. Work follows the surface,
+not the volume around it: a face is measured against the voxels its own bounds cover and
+no others.
+
+The buckets are counted first and laid out after, one list of face indices per tile end to
+end, rather than gathered as (tile, face) pairs: a face reaches about three tiles, and on a
+4.8 M-face model the pairs and their growing vectors were the peak of the whole build,
+1.31 GB against 0.94 GB now.
 
 **Carry.** `sweep.rs` propagates the nearest *face* outward from the seed to the
 isosurface, on a lattice `CARRY` times coarser than the stored one — crossing a wall is a
@@ -111,7 +117,13 @@ than `TRUST_VOXELS` carrier steps the carrier is not believed — the lateral mi
 about `step² / 2d` and that blows up as `d` falls — and the hierarchy is asked for that
 voxel, but only where the value would not be clamped to the band anyway. It is asked
 `closest_within` the carried face's own distance: only a nearer face can win, so the
-search culls from its first node and still comes back exact (ADR 0310).
+search culls from its first node and still comes back exact (ADR 0310). Where the mean face
+is at least two voxels of area, a cell's doubted voxels share one `faces_within` instead —
+every face that could beat a voxel's carried one lies within that distance plus the voxel's
+offset from the cell's middle — and choose among what it returns; a walk returning more
+than `SHARED_FACES` falls back to one search per voxel. A thin wall on a coarse figurine is
+where this pays: every voxel of its band is doubted. Of faces equally near, the shared walk
+may keep another than the search would; the distance and the seam's sign are the same.
 
 Neither the distance nor the side is carried with the face. The distance is a
 `point_triangle` away, and four more bytes a voxel over a shell is not affordable. The side
@@ -201,6 +213,16 @@ off its normal, takes the larger of its moved value and its distance above the h
 the moved solid intersected with the half-space behind that face, on both sides of the
 plane so the lattice interpolates the cut onto it. A point straight over a held face is not
 cut, because it lies in the open under an overhang beside a wall that keeps its relief.
+
+A painted relief has no field (ADR 0318). Each painted face the mask does not hold is split
+at the middle of every edge longer than the lattice the painted area would be cut on, and
+again until none is; a face beside it is split along the edge they share, so the surface
+stays closed. Each corner inside the paint then moves along its area-weighted normal over
+the painted faces by the mean height those faces read at it, a mapped face through its
+original face's map and a tiled one by the corner's normal. A corner any unpainted face
+shares stays, so the relief falls to nothing across the first ring of split faces and
+everything past it is the model's own mesh. A depth beyond the surface's curvature can fold
+it through itself; nothing checks.
 
 The pressed field is meshed with a clustering slack of 0.05 voxel instead of half, so a flat
 face the relief left alone still merges into facets and the relief itself does not. The

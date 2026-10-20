@@ -83,6 +83,10 @@ fn the_relief_tool_in_each_mode() {
         app.tools.relief.mode = mode;
         results.extend(picture(name, app));
     }
+    let mut app = app(true);
+    app.tool = Tool::Relief;
+    crate::relief::choose_builtin(&mut app.tools.relief, &mut app.machine.status, 2);
+    results.extend(picture("tool_relief_picture", app));
 }
 
 #[test]

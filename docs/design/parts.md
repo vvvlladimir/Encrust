@@ -61,12 +61,14 @@ most, before the answer is `NoNeck`. A box with one face on the square and as de
 half-width, on the mark's side, cuts the model into what is inside and what is outside it.
 Each body of each is voted for by its vertices more than a voxel off the plane. Each
 vertex counts for the side its nearest inside lattice point is on, by whether the second
-wave reached it. A body with no votes is the mark's where it came from inside the box. The
-mark's bodies inside and outside the box are joined by exact union, and so are the rest's.
-The box's other faces leave no seam that union does not take back out. Reading a side as a
-solid costs about what joining it does, so where a side's union would go through most of
-the model, the other side is joined instead and taken out of the model's solid, read once
-beside the wave.
+wave reached it. A body with no votes is the mark's where it came from inside the box. A side
+with bodies on one side of the box only is those bodies. A side with bodies on both is the
+model's solid, read once beside the wave, less the other side's bodies. It is never their
+union: they meet across a face of the box, and an exact union of solids touching over a
+face can keep both copies of it inside the side, as most bar widths of a dumbbell did.
+Both sides then go through the whole model: a ball cut off a dumbbell at its bar, the
+`part_off` bench, takes 593 ms on an M1 against 390 ms with one side a union, the price of
+a part that is right.
 
 A wave that dies out with no neck, having filled under half the model's volume, was held
 in by something finer than its lattice. The lattice is narrowed once onto the box round

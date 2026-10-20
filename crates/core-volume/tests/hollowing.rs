@@ -7,8 +7,8 @@ use core_geometry::{
 };
 use core_volume::{
     Blocker, CUT_WEIGHT, Cancel, Channel, HoleSize, HollowMode, HollowSettings, Hollowed,
-    InfillPattern, InfillSettings, VolumeError, carve, cavity_field, drill, hole_at, hollow,
-    hollow_at_scale, pierce, plate_down, sleeves,
+    InfillPattern, InfillSettings, Progress, Step, VolumeError, carve, cavity_field, drill,
+    hole_at, hollow, hollow_at_scale, pierce, plate_down, sleeves,
 };
 
 const PI: Scalar = std::f32::consts::PI;
@@ -95,6 +95,26 @@ fn a_run_given_up_on_stops_inside_the_field_rather_than_after_it() {
     .expect_err("the run was given up on before a tile was filled");
 
     assert_eq!(error, VolumeError::Cancelled);
+}
+
+#[test]
+fn a_watched_run_ends_on_its_last_step() {
+    let mesh = ball(Vec3::ZERO, 10.0, 96, 96);
+    let bvh = Bvh::build(&mesh);
+    let progress = Progress::default();
+    hollow(
+        &mesh,
+        &bvh,
+        &settings(2.0, HollowMode::Internal),
+        Cancel::never().reporting(&progress),
+    )
+    .expect("a closed ball hollows");
+
+    assert_eq!(
+        progress.read().map(|(step, _, _)| step),
+        Some(Step::Shaping),
+        "the shell is the last thing made"
+    );
 }
 
 #[test]

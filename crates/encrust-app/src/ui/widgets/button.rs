@@ -188,6 +188,32 @@ pub fn secondary_button(ui: &mut Ui, glyph: &str, text: &str) -> Response {
     )
 }
 
+/// A full-width button that stays pressed: washed in the accent while `on`, so a click
+/// takes up a tool and the next one puts it down.
+pub fn toggle_button(ui: &mut Ui, glyph: &str, text: &str, on: bool) -> Response {
+    let colors = theme::colors();
+    let skin = match on {
+        true => Skin {
+            fill: colors.accent_wash,
+            foreground: colors.accent_soft,
+            border: Some(colors.accent_deep),
+            hovered: colors.accent_wash,
+            pressed: colors.accent_wash,
+        },
+        false => Skin {
+            fill: colors.raised,
+            foreground: colors.text_high,
+            border: Some(colors.line),
+            hovered: colors.hover,
+            pressed: colors.active,
+        },
+    };
+    let size = vec2(ui.available_width(), theme::BUTTON_H);
+    let response = filled_button(ui, glyph, text, size, &skin, true);
+    response.widget_info(|| WidgetInfo::selected(WidgetType::Button, true, on, text));
+    response
+}
+
 /// A second action standing beside the primary one: raised rather than accented, and as
 /// tall as it, so the row reads as one control.
 pub fn companion_button(ui: &mut Ui, glyph: &str, text: &str, enabled: bool) -> Response {

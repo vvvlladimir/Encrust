@@ -79,6 +79,20 @@ fn bytes_that_are_not_a_font_are_refused() {
     ));
 }
 
+/// A fuzzer find: twelve bytes of collection header claiming four billion faces.
+#[test]
+fn a_collection_claiming_more_faces_than_it_holds_is_refused() {
+    let path = concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/tests/fixtures/crashes/collection_claiming_too_many_faces.ttc"
+    );
+    let data = std::fs::read(path).expect("the fixture is checked in");
+    assert!(matches!(
+        Font::new(Arc::new(data), 0),
+        Err(TextError::BadFont(_))
+    ));
+}
+
 #[test]
 fn a_character_the_font_lacks_is_named() {
     assert_eq!(

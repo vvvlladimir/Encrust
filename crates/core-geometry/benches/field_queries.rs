@@ -38,7 +38,7 @@ fn benchmarks(c: &mut Criterion) {
     });
 
     c.bench_function("nearest point on 200k triangles, hierarchy", |b| {
-        b.iter(|| bvh.closest(std::hint::black_box(&mesh), points[0]));
+        b.iter(|| bvh.closest(points[0]));
     });
 
     c.bench_function("winding number of 200k triangles, every face", |b| {
@@ -54,9 +54,7 @@ fn benchmarks(c: &mut Criterion) {
             points
                 .iter()
                 .map(|point| {
-                    let distance = bvh
-                        .closest(std::hint::black_box(&mesh), *point)
-                        .map_or(0.0, |found| found.distance);
+                    let distance = bvh.closest(*point).map_or(0.0, |found| found.distance);
                     if winding.is_inside(&mesh, *point) {
                         -distance
                     } else {

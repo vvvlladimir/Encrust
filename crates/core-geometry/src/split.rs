@@ -1,4 +1,7 @@
-use crate::topology::{Components, edge_groups, edge_uses};
+use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
+use rayon::slice::ParallelSlice;
+
+use crate::topology::{Components, edge_uses};
 use crate::{FastMap, Mesh};
 
 /// Splits a mesh into the pieces that share no vertex, the biggest piece first.
@@ -8,55 +11,66 @@ use crate::{FastMap, Mesh};
 /// was not splits into whatever its indices say. A mesh that is all one piece comes back
 /// as itself.
 pub fn split(mesh: &Mesh) -> Vec<Mesh> {
-    let mut vertices = Components::new(mesh.vertices.len());
-    for [a, b, c] in &mesh.faces {
-        vertices.union(*a, *b);
-        vertices.union(*a, *c);
-    }
-    let roots: Vec<u32> = mesh
+    let joins = mesh
         .faces
-        .iter()
-        .map(|face| vertices.find(face[0]))
+        .par_iter()
+        .flat_map_iter(|&[a, b, c]| [[a, b], [a, c]]);
+    let (vertex_piece, count) = Components::joined(mesh.vertices.len(), joins).labels();
+    let piece: Vec<u32> = mesh
+        .faces
+        .par_iter()
+        .map(|face| vertex_piece[face[0] as usize])
         .collect();
-    pieces(mesh, &roots)
+    pieces(mesh, &piece, count)
 }
 
 /// The pieces `mesh` is made of, two faces in one piece only through an edge exactly the
 /// two of them use. Two bodies meeting at a corner, or along an edge three or four faces
 /// use, come apart, where [`split`] would read them as one.
 pub fn split_at_edges(mesh: &Mesh) -> Vec<Mesh> {
-    let mut faces = Components::new(mesh.faces.len());
-    for group in edge_groups(&edge_uses(mesh)) {
-        if let [left, right] = group {
-            faces.union(left.face, right.face);
-        }
-    }
-    let roots: Vec<u32> = (0..mesh.faces.len() as u32)
-        .map(|face| faces.find(face))
-        .collect();
-    pieces(mesh, &roots)
+    let uses = edge_uses(mesh);
+    let joins = uses
+        .par_chunk_by(|a, b| a.edge == b.edge)
+        .filter_map(|group| match group {
+            [left, right] => Some([left.face, right.face]),
+            _ => None,
+        });
+    let (piece, count) = Components::joined(mesh.faces.len(), joins).labels();
+    pieces(mesh, &piece, count)
 }
 
-/// The faces of `mesh` gathered by `roots`, one root a face, each piece holding only the
-/// vertices it uses, biggest first.
-fn pieces(mesh: &Mesh, roots: &[u32]) -> Vec<Mesh> {
-    let mut pieces: FastMap<u32, Mesh> = FastMap::default();
-    let mut moved: FastMap<(u32, u32), u32> = FastMap::default();
-    for (face, &root) in mesh.faces.iter().zip(roots) {
-        let piece = pieces.entry(root).or_default();
+/// The faces of `mesh` gathered by `piece`, one of `count` labels a face, each piece holding
+/// only the vertices it uses in the order its faces first use them, biggest first.
+fn pieces(mesh: &Mesh, piece: &[u32], count: usize) -> Vec<Mesh> {
+    let mut pieces = vec![Mesh::default(); count];
+    // A vertex is nearly always in one piece only, so the first piece to use it keeps its
+    // new index here and any other goes to the map.
+    let mut first: Vec<(u32, u32)> = vec![(u32::MAX, 0); mesh.vertices.len()];
+    let mut others: FastMap<(u32, u32), u32> = FastMap::default();
+    for (face, &label) in mesh.faces.iter().zip(piece) {
+        let piece = &mut pieces[label as usize];
         let corners = face.map(|index| {
-            *moved.entry((root, index)).or_insert_with(|| {
+            let mut take = || {
                 piece.vertices.push(mesh.vertices[index as usize]);
                 (piece.vertices.len() - 1) as u32
-            })
+            };
+            match first[index as usize] {
+                (owner, at) if owner == label => at,
+                (u32::MAX, _) => {
+                    let at = take();
+                    first[index as usize] = (label, at);
+                    at
+                }
+                _ => *others.entry((label, index)).or_insert_with(take),
+            }
         });
         piece.faces.push(corners);
     }
+    pieces.retain(|piece| !piece.faces.is_empty());
 
     // Biggest first, so the body a user cares about is the piece they get first. Two
-    // pieces of the same face count are ordered by volume, or the map's order would
-    // decide it.
-    let mut parts: Vec<Mesh> = pieces.into_values().collect();
+    // pieces of the same face count are ordered by volume, then by their first face.
+    let mut parts = pieces;
     parts.sort_by(|a, b| {
         b.faces.len().cmp(&a.faces.len()).then_with(|| {
             crate::signed_volume(b)

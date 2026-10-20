@@ -93,6 +93,7 @@ Grouped by what the decision governs; the number is still the order it was taken
 | [0308](0308-a-relief-reads-its-grey-and-holds-level-faces.md) | Read a relief's grey and hold its level faces in the press | Accepted |
 | [0309](0309-ship-a-dozen-height-maps-in-the-window.md) | Ship a dozen height maps in the window | Accepted |
 | [0310](0310-a-field-is-moved-as-it-is-built-and-flat-faces-collapse.md) | Move a relief's field as it is built, and collapse faces with no area | Accepted |
+| [0318](0318-a-relief-is-pressed-only-where-it-is-painted.md) | Press a relief only where it is painted, by moving the painted faces | Accepted |
 
 ### Mesh and texture input
 
@@ -239,7 +240,11 @@ Grouped by what the decision governs; the number is still the order it was taken
 | [0201](0201-the-surface-of-a-cut-is-the-cut-itself.md) | The surface of a cut is the cut's own body, kept where it stands in material | Accepted |
 | [0302](0302-a-lattice-is-cut-exactly-from-the-cavity.md) | Cut the lattice exactly from the cavity's mesh, its cells joined by crossing holes | Accepted |
 | [0313](0313-a-hole-takes-a-shape-and-a-plug-and-a-shell-an-open-floor.md) | A hole takes a shape and a plug, and a shell can open its floor | Accepted |
-| [0303](0303-exact-booleans-live-in-core-csg-over-boolmesh.md) | Do exact mesh booleans in `core-csg`, over `boolmesh` | Accepted |
+| [0303](0303-exact-booleans-live-in-core-csg-over-boolmesh.md) | Do exact mesh booleans in `core-csg`, over `boolmesh` | Accepted; a result's triangle list varying from run to run is superseded by 0315 |
+| [0314](0314-a-solid-is-readied-on-every-core.md) | Ready a solid for the engine on every core | Accepted |
+| [0315](0315-boolmesh-comes-from-our-fork.md) | Take `boolmesh` from our fork, threaded and deterministic | Accepted |
+| [0316](0316-many-solids-are-unioned-by-groups-and-set-apart-ones-side-by-side.md) | Union many solids by groups, and set apart ones side by side | Accepted |
+| [0317](0317-a-run-tells-how-far-it-has-got-through-its-cancel.md) | A run tells how far it has got through its `Cancel` | Accepted |
 | [0304](0304-models-are-combined-exactly-and-sampled-where-they-are-torn.md) | Combine models exactly, and through the field where one is not a solid | Accepted |
 | [0305](0305-a-label-is-outlined-by-ttf-parser-in-core-text.md) | Outline a label with `ttf-parser` in `core-text`, offer the machine's fonts, and let it follow the surface | Accepted |
 | [0311](0311-a-label-is-joined-through-the-side-of-the-model-it-stands-on.md) | Join a label through the side of the model it stands on | Accepted |

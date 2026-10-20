@@ -9,7 +9,7 @@ use core_geometry::{
 use serde::{Deserialize, Serialize};
 
 use crate::build::{DEFAULT_BUDGET_BYTES, FieldSettings, build};
-use crate::cancel::Cancel;
+use crate::cancel::{Cancel, Step};
 use crate::csg::assemble;
 use crate::drain::Channel;
 use crate::error::VolumeError;
@@ -477,6 +477,7 @@ fn shelled(
     let blocked = blocked(open, blockers);
     let cavity = blocked.as_ref().unwrap_or(open);
     let cavity_mesh = extract(cavity, cancel);
+    cancel.begin(Step::Shaping, 0);
     let Carved { void, solid } = match &infill {
         Some(infill) => cut(cavity, cavity_mesh, infill, field.budget_bytes, cancel)?,
         None => Carved {
@@ -532,6 +533,7 @@ fn shelled(
 /// becomes the cavity.
 fn mould(mesh: &Mesh, field: &CavityField, cancel: Cancel<'_>) -> Result<Hollowed, VolumeError> {
     let mut whole = extract(&field.offset, cancel);
+    cancel.begin(Step::Shaping, 0);
     if cancel.asked() {
         return Err(VolumeError::Cancelled);
     }

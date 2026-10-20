@@ -47,15 +47,13 @@ const LOWER: usize = 0;
 const UPPER: usize = 1;
 
 /// A model's material along a ray from the cut, read off one of its meshes.
-struct Probe<'a> {
-    mesh: &'a Mesh,
+struct Probe {
     bvh: Bvh,
 }
 
-impl<'a> Probe<'a> {
-    fn new(mesh: &'a Mesh) -> Self {
+impl Probe {
+    fn new(mesh: &Mesh) -> Self {
         Self {
-            mesh,
             bvh: Bvh::build(mesh),
         }
     }
@@ -71,7 +69,7 @@ impl<'a> Probe<'a> {
         });
         let depths = std::iter::once(at).chain(rim).map(|from| {
             self.bvh
-                .raycast(self.mesh, &Ray::new(from, direction))
+                .raycast(&Ray::new(from, direction))
                 .map_or(0.0, |hit| hit.t)
         });
         if most {
@@ -225,13 +223,13 @@ fn fixing_for(
 
 /// What a spot is sounded against: the model's material, and in a hollow model its shell
 /// with the face the shell was cut to, to tell where a pillar has to carry the socket.
-struct Context<'a> {
+struct Context {
     frame: Frame,
-    material: Probe<'a>,
-    shell: Option<(Probe<'a>, Section)>,
+    material: Probe,
+    shell: Option<(Probe, Section)>,
 }
 
-impl Context<'_> {
+impl Context {
     /// The peg a spot takes, sized to the material either side of it, or `None`.
     fn fit(&self, point: Vec2, fixing: &Fixing) -> Option<Placed> {
         let at = self.frame.lift(point);

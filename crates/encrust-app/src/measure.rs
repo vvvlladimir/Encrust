@@ -1,9 +1,8 @@
 use std::sync::Arc;
 
 use core_geometry::{
-    Adjacency, Bvh, FastSet, Mat4, Mesh, Scalar, Transform, Triangle, Vec3, point_triangle,
+    Adjacency, Bvh, FastSet, Mat4, Mesh, Region, Scalar, Transform, Triangle, Vec3, point_triangle,
 };
-use core_supports::Region;
 
 use crate::i18n::tr;
 use crate::scene::{ObjectId, SceneObject};
@@ -286,7 +285,7 @@ pub fn snap(
     if to == Snap::Free || !inverse.is_finite() {
         return free;
     }
-    let Some(near) = bvh.closest(mesh, inverse.transform_point3(point)) else {
+    let Some(near) = bvh.closest(inverse.transform_point3(point)) else {
         return free;
     };
     let placed = Placed { mesh, matrix };

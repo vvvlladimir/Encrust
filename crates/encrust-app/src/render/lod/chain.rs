@@ -62,7 +62,7 @@ pub fn chain(mesh: &Mesh, mut landed: impl FnMut(Level)) -> Result<(), Error> {
         }
         let level = compacted(&lighter, &mesh.vertices);
         // Each level is simplified from the one before, so their errors add up.
-        error_mm = (error_mm + step_mm).max(sunk_mm(&level, mesh, &surface));
+        error_mm = (error_mm + step_mm).max(sunk_mm(&level, &surface));
         landed(Level {
             mesh: Arc::new(level),
             error_mm,
@@ -107,14 +107,14 @@ fn halved(
     Ok((merged.indices, merged.error * extent_mm))
 }
 
-/// The farthest the middle of a face of `level` stands from `mesh`, over faces spread
-/// evenly through it, mm.
-fn sunk_mm(level: &Mesh, mesh: &Mesh, surface: &Bvh) -> f32 {
+/// The farthest the middle of a face of `level` stands from the mesh `surface` was built
+/// over, over faces spread evenly through it, mm.
+fn sunk_mm(level: &Mesh, surface: &Bvh) -> f32 {
     let stride = (level.faces.len() / SAMPLES).max(1);
     (0..level.faces.len())
         .step_by(stride)
         .filter_map(|face| level.triangle(face))
-        .filter_map(|triangle| surface.closest(mesh, (triangle.a + triangle.b + triangle.c) / 3.0))
+        .filter_map(|triangle| surface.closest((triangle.a + triangle.b + triangle.c) / 3.0))
         .map(|closest| closest.distance)
         .fold(0.0, f32::max)
 }

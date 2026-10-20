@@ -318,10 +318,7 @@ fn a_ball_on_the_plate_is_held_under_its_cap_and_nowhere_above_it() {
         if winding.at(&model, *vertex) < 0.5 {
             continue;
         }
-        let depth = bvh
-            .closest(&model, *vertex)
-            .expect("the ball has faces")
-            .distance;
+        let depth = bvh.closest(*vertex).expect("the ball has faces").distance;
         assert!(
             depth <= bite_mm,
             "{vertex} is {depth} mm inside the ball, deeper than a tip's bite"

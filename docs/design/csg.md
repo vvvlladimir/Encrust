@@ -1,7 +1,8 @@
 # Exact booleans
 
 `core-csg` unions, subtracts and intersects closed meshes exactly, over `boolmesh`, a pure
-Rust port of the Manifold algorithm (ADR 0303). The field in `core-volume` does the same
+Rust port of an established C++ exact-boolean library (ADR 0303), taken from our fork
+(ADR 0315). The field in `core-volume` does the same
 by sampling; this is the answer when the edges must stay sharp and the faces few.
 
 ## A solid
@@ -33,24 +34,27 @@ The engine works in `f64`; a mesh goes in and comes out as the pipeline's `f32`.
 
 ## What it costs
 
-On an M-series laptop, a sphere minus a hundred square prisms:
+On an M1, a sphere minus a hundred square prisms:
 
 | Sphere faces | Read | Boolean |
 |---|---|---|
-| 20 k | 11 ms | 30 ms |
-| 200 k | 130 ms | 200 ms |
-| 1 M | 640 ms | 1.0 s |
+| 200 k | 73 ms | 120 ms |
+| 1 M | 350 ms | 0.52 s |
+| 4 M | 2.2 s | 2.9 s |
+
+The weld and the seams run on every core (ADR 0314), and so does the engine but for its
+grouping of coplanar faces and its simplification of the result (ADR 0315). At 4 M faces an
+8 GB machine swaps, which the last row includes.
 
 Cost follows the faces of both sides and the crossings between them. A union of thousands
 of shapes crossing each other — the struts of a scaffold at every node — is many times
 dearer than one cut of the same faces; see the lattice in `hollowing.md` for how that is
 avoided.
 
-## What it does not promise
+## What it promises
 
-The engine walks hash maps, so the same boolean may split a flat polygon of its result
-along other diagonals from one run to the next. The surface is the same; the triangle list
-is not. Tests compare face counts, volumes and vertices, never the list.
+The same two solids answer the same triangle list, bit for bit, on any number of threads
+and in the browser (ADR 0315).
 
 ## Combining models
 

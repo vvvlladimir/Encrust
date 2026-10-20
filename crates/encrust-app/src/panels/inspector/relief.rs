@@ -8,9 +8,12 @@ use crate::panels::Window;
 use crate::relief::{BUILTINS, Picture, ReliefMode};
 use crate::state::Doc;
 use crate::ui::{
-    Segment, Segmented, blocked_hover, busy, describe, icon, meta, number_row, primary_button,
-    secondary_button, section, stats, subheading, swatch, switch, theme, tone,
+    Segment, Segmented, blocked_hover, busy, describe, hint, icon, meta, number_row,
+    primary_button, secondary_button, section, stats, subheading, swatch, switch, theme,
+    toggle_button, tone,
 };
+
+use super::paint::{COARSE_STEP, MAX_BRUSH_MM, MIN_BRUSH_MM};
 
 /// Bounds on one tile of a picture, millimetres: under a millimetre it is finer than the
 /// lattice can carry, and past two hundred one tile covers the plate.
@@ -74,17 +77,12 @@ fn modes(ui: &mut egui::Ui, window: &mut Window) {
 /// What is pressed into the models on the plate — a chosen picture as tiles, or the
 /// texture each came with — and how deep.
 fn texture(ui: &mut egui::Ui, window: &mut Window) {
+    section(ui, &tr!("relief-paint"), None, |ui| painting(ui, window));
     section(ui, &tr!("relief-image"), None, |ui| {
-        match &window.tools.relief.picture {
-            Some(picture) => chosen(ui, picture),
-            None => {
-                describe(ui, &tr!("relief-image-note"));
-                carried(ui, window.doc);
-            }
+        if window.tools.relief.picture.is_none() {
+            describe(ui, &tr!("relief-image-note"));
         }
-        subheading(ui, &tr!("relief-builtins"));
-        gallery(ui, window);
-        picture_buttons(ui, window);
+        picker(ui, window);
         reading(ui, window);
     });
     section(ui, &tr!("relief-depth"), None, |ui| {
@@ -94,6 +92,37 @@ fn texture(ui: &mut egui::Ui, window: &mut Window) {
         }
     });
     section(ui, &tr!("relief-hold"), None, |ui| holding(ui, window));
+}
+
+/// The brush that paints where the texture is pressed, and the way to take it all off.
+fn painting(ui: &mut egui::Ui, window: &mut Window) {
+    let brushing = window.tools.relief.brushing;
+    if toggle_button(ui, icon::PAINT, &tr!("relief-paint-brush"), brushing).clicked() {
+        window.tools.relief.brushing = !brushing;
+    }
+    if window.tools.relief.brushing {
+        hint(ui, &tr!("relief-paint-hint"));
+        number_row(
+            ui,
+            &tr!("paint-brush"),
+            &mut window.tools.relief.state.brush_radius_mm,
+            &tr!("unit-mm"),
+            COARSE_STEP,
+            MIN_BRUSH_MM..=MAX_BRUSH_MM,
+            2,
+        );
+    }
+    describe(ui, &tr!("relief-paint-note"));
+    let painted = window
+        .doc
+        .scene
+        .targets()
+        .any(|object| !object.relief_painted.is_empty());
+    if painted && secondary_button(ui, icon::REMOVE, &tr!("relief-paint-clear")).clicked() {
+        for object in window.doc.scene.targets_mut() {
+            object.relief_painted.clear();
+        }
+    }
 }
 
 /// How the grey of the texture is read before it is pressed.
@@ -123,34 +152,109 @@ fn holding(ui: &mut egui::Ui, window: &mut Window) {
     describe(ui, &tr!("relief-hold-note"));
 }
 
+/// The disc behind the caret over the picture's square, points across.
+const CARET_PT: f32 = 22.0;
+
 /// The edge of the thumbnail a chosen picture is shown at, points.
-const THUMB_PT: f32 = 64.0;
+const THUMB_PT: f32 = 56.0;
 /// Pixels a side of that thumbnail.
 const THUMB_PX: usize = 64;
 
-/// The picture in hand: a thumbnail, its name and its size.
-fn chosen(ui: &mut egui::Ui, picture: &Picture) {
-    let colors = theme::colors();
-    ui.horizontal(|ui| {
-        let texture = thumbnail(ui.ctx(), picture);
-        ui.add(egui::Image::new(&texture).fit_to_exact_size(egui::vec2(THUMB_PT, THUMB_PT)));
-        ui.vertical(|ui| {
-            ui.add(
-                egui::Label::new(
-                    egui::RichText::new(truncated(&picture.name))
-                        .font(theme::code(12.0))
-                        .color(colors.text_high),
-                )
-                .truncate(),
-            );
-            let [width, height] = picture.size_px;
-            tone(
-                ui,
-                &tr!("relief-picture-size", width = width, height = height),
-                colors.text_low,
-            );
-        });
+/// The texture in hand: what it is, beside a square of it whose click drops every texture
+/// there is to choose instead, with the buttons for a picture of one's own.
+fn picker(ui: &mut egui::Ui, window: &mut Window) {
+    let width = ui.available_width();
+    let room = width - THUMB_PT - ui.spacing().item_spacing.x;
+    let square = ui
+        .horizontal(|ui| {
+            let left = egui::Layout::top_down(egui::Align::Min);
+            ui.allocate_ui_with_layout(egui::vec2(room, THUMB_PT), left, |ui| {
+                ui.set_width(room);
+                match &window.tools.relief.picture {
+                    Some(picture) => named(ui, picture),
+                    None => own(ui, window.doc),
+                }
+            });
+            preview(ui, window.tools.relief.picture.as_ref())
+        })
+        .inner;
+    egui::Popup::menu(&square).width(width).show(|ui| {
+        subheading(ui, &tr!("relief-builtins"));
+        gallery(ui, window);
+        picture_buttons(ui, window);
     });
+}
+
+/// The square the texture in hand is shown in, with the caret that says a click on it
+/// opens the others: the picture, or an empty square for the models' own.
+fn preview(ui: &mut egui::Ui, picture: Option<&Picture>) -> egui::Response {
+    let colors = theme::colors();
+    let side = egui::vec2(THUMB_PT, THUMB_PT);
+    let (rect, response) = ui.allocate_exact_size(side, egui::Sense::click());
+    match picture {
+        Some(picture) => {
+            let texture = thumbnail(ui.ctx(), picture);
+            egui::Image::new(&texture)
+                .corner_radius(theme::R_CONTROL)
+                .paint_at(ui, rect);
+        }
+        None => {
+            ui.painter()
+                .rect_filled(rect, theme::R_CONTROL, colors.raised);
+        }
+    }
+    let stroke = match response.hovered() {
+        true => egui::Stroke::new(1.0, colors.text_low),
+        false => egui::Stroke::new(1.0, colors.line),
+    };
+    let painter = ui.painter();
+    painter.rect_stroke(rect, theme::R_CONTROL, stroke, egui::StrokeKind::Inside);
+    // A dark disc behind the caret, so it reads over a white picture as over a black one.
+    painter.circle_filled(
+        rect.center(),
+        CARET_PT / 2.0,
+        colors.sunken.gamma_multiply(0.85),
+    );
+    painter.text(
+        rect.center(),
+        egui::Align2::CENTER_CENTER,
+        icon::CARET_DOWN,
+        theme::icon(13.0),
+        colors.text_high,
+    );
+    response
+        .on_hover_cursor(egui::CursorIcon::PointingHand)
+        .on_hover_text(tr!("relief-builtins"))
+}
+
+/// The models' own textures as the panel names them, or that there are none.
+fn own(ui: &mut egui::Ui, doc: &Doc) {
+    let colors = theme::colors();
+    tone(ui, &tr!("relief-own"), colors.text_high);
+    if doc.scene.targets().any(|object| object.mapped.is_some()) {
+        carried(ui, doc);
+    } else {
+        tone(ui, &tr!("relief-own-none"), colors.text_low);
+    }
+}
+
+/// The picture in hand by its name and its size.
+fn named(ui: &mut egui::Ui, picture: &Picture) {
+    let colors = theme::colors();
+    ui.add(
+        egui::Label::new(
+            egui::RichText::new(truncated(&picture.name))
+                .font(theme::code(12.0))
+                .color(colors.text_high),
+        )
+        .truncate(),
+    );
+    let [width, height] = picture.size_px;
+    tone(
+        ui,
+        &tr!("relief-picture-size", width = width, height = height),
+        colors.text_low,
+    );
 }
 
 /// The picture shrunk to a thumbnail, made into a texture once per picture.
@@ -355,7 +459,13 @@ fn truncated(name: &str) -> String {
 /// Pressing the texture in, or the progress of the run that is going.
 fn press(ui: &mut egui::Ui, window: &mut Window) {
     if window.tools.relief.is_busy() {
-        if busy(ui, &tr!("relief-pressing"), true) {
+        let step = window
+            .tools
+            .relief
+            .counted()
+            .map(|counted| (counted.label(), counted.share));
+        let step = step.as_ref().map(|(label, share)| (label.as_str(), *share));
+        if busy(ui, &tr!("relief-pressing"), step, true) {
             window.tools.relief.cancel(&mut window.machine.status);
         }
         return;

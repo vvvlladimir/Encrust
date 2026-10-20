@@ -140,6 +140,7 @@ fn object_state(scene: &Scene, object: &SceneObject) -> ObjectState {
             .plug_of
             .and_then(|model| scene.objects().iter().position(|other| other.id == model))
             .and_then(|index| u32::try_from(index).ok()),
+        relief_painted: object.relief_painted.clone(),
         own_supports: object
             .own
             .supports
@@ -309,6 +310,7 @@ fn restore_objects(
             &with_own(table.to_vec(), &own, plate_raft),
         );
         object.hollow = hollow_of(&state.hollow, meshes);
+        object.relief_painted = state.relief_painted;
         object.own = own;
     }
     // A plug names its model by its place in the file, which is known once all are in.
@@ -433,10 +435,10 @@ mod tests {
 
         let object = scene.get_mut(id).expect("the cube was just inserted");
         object.visible = false;
-        let mut painted = core_supports::Region::default();
+        let mut painted = core_geometry::Region::default();
         painted.set(5, true);
         painted.set(9, true);
-        let mut blocked = core_supports::Region::default();
+        let mut blocked = core_geometry::Region::default();
         blocked.set(2, true);
         object.supports = ModelSupports::restore(
             vec![
@@ -448,6 +450,7 @@ mod tests {
             Vec::new(),
         );
         object.supports.set_raft_lift_mm(0.5);
+        object.relief_painted.set(7, true);
         object.hollow = ModelHollow::restored(
             vec![Blocker::ball(Vec3::splat(0.5), 0.2)],
             Vec::new(),
@@ -594,6 +597,7 @@ mod tests {
         assert_eq!(after.summary.vertices_merged, 3, "repair is not re-run");
         assert_eq!(after.supports.points(), before.supports.points());
         assert_eq!(after.supports.painted(), before.supports.painted());
+        assert_eq!(after.relief_painted, before.relief_painted);
         assert_eq!(after.supports.blocked(), before.supports.blocked());
         assert!(
             (after.supports.raft_lift_mm() - 0.5).abs() < f32::EPSILON,

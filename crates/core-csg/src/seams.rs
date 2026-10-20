@@ -1,8 +1,11 @@
 use std::collections::HashMap;
+use std::hash::BuildHasherDefault;
 use std::ops::Range;
+use std::sync::atomic::{AtomicU32, Ordering::Relaxed};
 
 use core_geometry::glam::DVec3;
-use core_geometry::{Components, Mesh, point_key};
+use core_geometry::{Components, FastMap, Mesh, point_key};
+use rayon::prelude::*;
 
 use crate::error::CsgError;
 
@@ -23,13 +26,23 @@ pub(crate) struct Unzipped {
 /// a vertex split so each shell has its own copy; see `docs/design/csg.md`.
 pub(crate) fn unzipped(mesh: &Mesh) -> Result<Unzipped, CsgError> {
     let (points, faces) = welded(mesh);
-    let mut seams = Seams::new(&points, &faces)?;
+    let uses = edge_uses(&faces);
+    match whole(&points, &faces, &uses) {
+        Some(unzipped) => Ok(unzipped),
+        None => split(&points, &faces, &uses),
+    }
+}
+
+/// The mesh with its seams split, paired another way round each stuck edge up to `ROUNDS`
+/// times.
+fn split(points: &[DVec3], faces: &[[usize; 3]], uses: &[EdgeUse]) -> Result<Unzipped, CsgError> {
+    let mut seams = Seams::new(points, faces, uses)?;
     let mut stuck = Vec::new();
     for _ in 0..ROUNDS {
-        let (origin, indices) = copies(&faces, &seams.pairs);
+        let (origin, indices) = copies(faces, &seams.pairs);
         stuck = stuck_edges(&origin, &indices);
         if stuck.is_empty() {
-            let positions = drawn_apart(&points, &faces, &origin, &indices);
+            let positions = drawn_apart(points, faces, &origin, &indices);
             return Ok(Unzipped { positions, indices });
         }
         for edge in &stuck {
@@ -42,9 +55,105 @@ pub(crate) fn unzipped(mesh: &Mesh) -> Result<Unzipped, CsgError> {
     )))
 }
 
+/// One corner's use of its edge: the edge's lower and higher vertex, the corner as
+/// `3 * face + side`, and whether the face walks the edge from lower to higher.
+///
+/// `u32` halves what the sort moves; a mesh past four billion vertices is not printed.
+type EdgeUse = (u32, u32, u32, bool);
+
+/// Every corner's use of the edge it starts, sorted by edge, then face.
+fn edge_uses(faces: &[[usize; 3]]) -> Vec<EdgeUse> {
+    let mut uses: Vec<EdgeUse> = faces
+        .par_iter()
+        .enumerate()
+        .flat_map_iter(|(face, corners)| {
+            (0..3).map(move |side| {
+                let (tail, head) = (corners[side], corners[(side + 1) % 3]);
+                (
+                    tail.min(head) as u32,
+                    tail.max(head) as u32,
+                    (3 * face + side) as u32,
+                    tail < head,
+                )
+            })
+        })
+        .collect();
+    uses.par_sort_unstable();
+    uses
+}
+
+/// The mesh as `split` would answer it when there is nothing to split: every edge walked once
+/// each way and every vertex carrying one fan. Vertices are numbered as `copies` numbers
+/// them, in the order of the corners, and placed as `drawn_apart` places an unmoved copy.
+fn whole(points: &[DVec3], faces: &[[usize; 3]], uses: &[EdgeUse]) -> Option<Unzipped> {
+    let across: Vec<AtomicU32> = (0..uses.len()).map(|_| AtomicU32::new(u32::MAX)).collect();
+    let paired = uses
+        .par_chunk_by(|a, b| (a.0, a.1) == (b.0, b.1))
+        .all(|run| match run {
+            [a, b] if a.3 != b.3 => {
+                across[a.2 as usize].store(b.2, Relaxed);
+                across[b.2 as usize].store(a.2, Relaxed);
+                true
+            }
+            _ => false,
+        });
+    if !paired || !one_fan_each(points.len(), faces, &across) {
+        return None;
+    }
+    let mut number = vec![usize::MAX; points.len()];
+    let mut origin = Vec::with_capacity(points.len());
+    let indices = faces
+        .iter()
+        .flatten()
+        .map(|&vertex| {
+            if number[vertex] == usize::MAX {
+                number[vertex] = origin.len();
+                origin.push(vertex);
+            }
+            number[vertex]
+        })
+        .collect();
+    // Adding the zero `drawn_apart` adds keeps a -0.0 the same 0.0 it would be there.
+    let positions = origin
+        .iter()
+        .flat_map(|&vertex| (points[vertex] + DVec3::ZERO * NUDGE_MM).to_array())
+        .collect();
+    Some(Unzipped { positions, indices })
+}
+
+/// Whether the corners at each vertex form one fan, turning round it from face to face
+/// across the edges `across` pairs.
+fn one_fan_each(vertices: usize, faces: &[[usize; 3]], across: &[AtomicU32]) -> bool {
+    let next = |corner: usize| corner - corner % 3 + (corner + 1) % 3;
+    let vertex = |corner: usize| faces[corner / 3][corner % 3];
+    let (count, first): (Vec<AtomicU32>, Vec<AtomicU32>) = (0..vertices)
+        .map(|_| (AtomicU32::new(0), AtomicU32::new(u32::MAX)))
+        .unzip();
+    (0..across.len()).into_par_iter().for_each(|corner| {
+        count[vertex(corner)].fetch_add(1, Relaxed);
+        first[vertex(corner)].fetch_min(corner as u32, Relaxed);
+    });
+    (0..vertices).into_par_iter().all(|at| {
+        let start = first[at].load(Relaxed);
+        if start == u32::MAX {
+            return true;
+        }
+        let (mut corner, mut fan) = (start as usize, 0u32);
+        loop {
+            corner = next(across[corner].load(Relaxed) as usize);
+            fan += 1;
+            if corner == start as usize || fan as usize > across.len() {
+                break;
+            }
+        }
+        fan == count[at].load(Relaxed)
+    })
+}
+
 /// Vertices on the same exact point merged, and faces left without area by that dropped.
 fn welded(mesh: &Mesh) -> (Vec<DVec3>, Vec<[usize; 3]>) {
-    let mut index = HashMap::with_capacity(mesh.vertices.len());
+    let mut index =
+        FastMap::with_capacity_and_hasher(mesh.vertices.len(), BuildHasherDefault::default());
     let mut points = Vec::with_capacity(mesh.vertices.len());
     let mut remap = Vec::with_capacity(mesh.vertices.len());
     for vertex in &mesh.vertices {
@@ -73,24 +182,15 @@ struct Seams {
 }
 
 impl Seams {
-    fn new(points: &[DVec3], faces: &[[usize; 3]]) -> Result<Self, CsgError> {
-        let mut uses: Vec<(usize, usize, usize, bool)> = faces
-            .iter()
-            .enumerate()
-            .flat_map(|(face, corners)| {
-                (0..3).map(move |side| {
-                    let (tail, head) = (corners[side], corners[(side + 1) % 3]);
-                    (tail.min(head), tail.max(head), face, tail < head)
-                })
-            })
-            .collect();
-        uses.sort_unstable();
-
+    fn new(points: &[DVec3], faces: &[[usize; 3]], uses: &[EdgeUse]) -> Result<Self, CsgError> {
         let mut pairs = Vec::with_capacity(uses.len() / 2);
         let mut branching = HashMap::new();
         for run in uses.chunk_by(|a, b| (a.0, a.1) == (b.0, b.1)) {
-            let edge = [run[0].0, run[0].1];
-            let around: Vec<(usize, bool)> = run.iter().map(|&(.., face, up)| (face, up)).collect();
+            let edge = [run[0].0 as usize, run[0].1 as usize];
+            let around: Vec<(usize, bool)> = run
+                .iter()
+                .map(|&(.., corner, up)| (corner as usize / 3, up))
+                .collect();
             let wedges = match around.as_slice() {
                 [(first, up), (second, other_up)] if up != other_up => vec![(*first, *second)],
                 _ => wedges_around(points, faces, edge, around)?,
@@ -205,15 +305,15 @@ fn copies(faces: &[[usize; 3]], pairs: &[(usize, usize, [usize; 2])]) -> (Vec<us
 /// wound against each other.
 fn stuck_edges(origin: &[usize], indices: &[usize]) -> Vec<[usize; 2]> {
     let mut uses: Vec<(usize, usize, bool)> = indices
-        .chunks(3)
-        .flat_map(|face| {
+        .par_chunks(3)
+        .flat_map_iter(|face| {
             (0..3).map(move |side| {
                 let (tail, head) = (face[side], face[(side + 1) % 3]);
                 (tail.min(head), tail.max(head), tail < head)
             })
         })
         .collect();
-    uses.sort_unstable();
+    uses.par_sort_unstable();
     let mut stuck: Vec<[usize; 2]> = uses
         .chunk_by(|a, b| (a.0, a.1) == (b.0, b.1))
         .filter(|run| !matches!(run, [a, b] if a.2 != b.2))
@@ -253,4 +353,43 @@ fn drawn_apart(
             (points[vertex] + drift.normalize_or_zero() * NUDGE_MM).to_array()
         })
         .collect()
+}
+
+#[cfg(test)]
+mod tests {
+    use core_geometry::{Vec3, ball, cuboid};
+
+    use super::*;
+
+    fn both_ways(mesh: &Mesh) -> (Option<Unzipped>, Unzipped) {
+        let (points, faces) = welded(mesh);
+        let uses = edge_uses(&faces);
+        let split = split(&points, &faces, &uses).expect("the mesh is a solid");
+        (whole(&points, &faces, &uses), split)
+    }
+
+    #[test]
+    fn a_mesh_with_no_seam_reads_as_splitting_it_would() {
+        let mut mesh = ball(Vec3::new(-0.0, 1.0, 2.0), 3.0, 24, 32);
+        mesh.append(&cuboid(Vec3::splat(10.0), Vec3::splat(12.0)));
+        let (whole, split) = both_ways(&mesh);
+        let whole = whole.expect("a ball and a box apart have no seam");
+        assert_eq!(whole.indices, split.indices);
+        let bits = |at: &[f64]| at.iter().map(|x| x.to_bits()).collect::<Vec<_>>();
+        assert_eq!(bits(&whole.positions), bits(&split.positions));
+    }
+
+    #[test]
+    fn cubes_sharing_a_corner_are_left_to_the_seams() {
+        let mut mesh = cuboid(Vec3::ZERO, Vec3::ONE);
+        mesh.append(&cuboid(Vec3::ONE, Vec3::splat(2.0)));
+        assert!(both_ways(&mesh).0.is_none(), "the corner carries two fans");
+    }
+
+    #[test]
+    fn cubes_sharing_an_edge_are_left_to_the_seams() {
+        let mut mesh = cuboid(Vec3::ZERO, Vec3::ONE);
+        mesh.append(&cuboid(Vec3::new(1.0, 1.0, 0.0), Vec3::new(2.0, 2.0, 1.0)));
+        assert!(both_ways(&mesh).0.is_none(), "the edge is used four times");
+    }
 }

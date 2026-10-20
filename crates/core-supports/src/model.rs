@@ -1,10 +1,10 @@
 use std::sync::Arc;
 
-use core_geometry::{Adjacency, Bvh, Mesh, Scalar, Transform, Vec3};
+use core_geometry::{Adjacency, Bvh, Mesh, Region, Scalar, Transform, Vec3};
 use printer_profiles::SupportProfile;
 
 use crate::{
-    Blocked, Part, Placed, Profiles, Region, SupportPoint, SupportTree, columns, grow, mesh_groups,
+    Blocked, Part, Placed, Profiles, SupportPoint, SupportTree, columns, grow, mesh_groups,
 };
 
 /// A transform this close to singular has flattened its model, and a click on it cannot
@@ -384,7 +384,12 @@ impl ModelSupports {
         } else {
             &mut self.painted
         };
-        let changed = region.brush(placed, at, radius_mm, marked);
+        let changed = region.brush(
+            (placed.model, placed.bvh, placed.transform),
+            at,
+            radius_mm,
+            marked,
+        );
         if changed > 0 {
             self.built = None;
         }

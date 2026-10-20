@@ -637,11 +637,19 @@ relief-hold = Leave flat
 relief-hold-bottom = Faces down
 relief-hold-top = Faces up
 relief-hold-note = Faces within this many degrees of facing the plate, or of facing straight up, keep their shape, and the relief stops at their edge. Zero leaves none.
+relief-paint = Where
+relief-paint-brush = Paint where to press
+relief-paint-hint = Drag over the model to paint, alt to erase.
+relief-paint-note = Once any face of a model is painted, the texture is pressed into the painted faces only, the rest of the model keeps its own mesh, and the view shows the texture only there.
+relief-paint-clear = Clear painted areas
+relief-nothing-painted = Nothing painted to press into: paint where the texture goes, or put the brush down to press the whole model.
 relief-image = Image
 relief-image-note = A model's own texture becomes geometry: white moves the surface out, black leaves it where it is. Or pick a texture below, or a picture of your own, to tile over any model.
 relief-picture-size = { $width } × { $height } px
 relief-choose-another = Choose another
 relief-choose-picture = Choose a picture
+relief-own = The models' own textures
+relief-own-none = None on the plate: click the square to pick a texture
 relief-own-textures = Use the models' own textures
 relief-tiling-note = The picture is laid from the three sides the model faces, and each face reads it from the side it faces most.
 relief-lattice-note = The relief is cut on a { $lattice } mm lattice, and the whole model is meshed again at it. A negative depth sinks the texture in.
@@ -1707,9 +1715,23 @@ app-cannot-build-preview = cannot build the layer preview
 ## job/hollow.rs
 
 job-thread-stopped-hollowing = the hollowing thread stopped without finishing
-job-hollow-stopping = Stopping after this model
+job-hollow-stopping = Stopping...
 job-hollow-progress = Hollowing model { $index } of { $total }
-job-hollow-working = Hollowing...
+job-step-preparing = Checking the model
+job-step-seeding = Measuring the surface
+job-step-carrying = Building the field
+job-step-refining = Refining the field
+job-step-surfacing = Building the surface
+job-step-shaping = Finishing
+job-step-reading = Reading the models
+job-step-combining = Combining them
+job-step-finishing = Building the result
+job-hollow-preparing = Checking the model
+job-hollow-seeding = Measuring the surface
+job-hollow-carrying = Reaching across the wall
+job-hollow-refining = Shaping the wall
+job-hollow-surfacing = Building the inner surface
+job-hollow-shaping = Finishing the shell
 
 ## job/import.rs
 

@@ -236,7 +236,7 @@ fn labelled(mesh: &Mesh, text: &str, args: &ModelArgs, talk: bool) -> Result<Mes
     .context("reading the font")?;
     let shapes = outline(&font, text, args.label_height).context("outlining the label")?;
     let bvh = Bvh::build(mesh);
-    let nearest = bvh.closest(mesh, at).context("the model has no surface")?;
+    let nearest = bvh.closest(at).context("the model has no surface")?;
     let normal = mesh
         .triangle(nearest.face)
         .map(|triangle| triangle.normal_unnormalized())

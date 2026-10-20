@@ -563,7 +563,7 @@ fn neck(counts: &[usize]) -> Option<usize> {
 
 /// `body` cut by the flat face of a box `half_mm` either way of the section, its pieces
 /// sorted to the part or the rest by what the closed-off wave reached, and each side
-/// joined back where the box's other faces went through it.
+/// made whole again where the box's other faces went through it.
 fn cut(
     body: &Solid,
     wave: &Wave,
@@ -585,45 +585,33 @@ fn cut(
         || sorted(&inside, true, wave, section, reached),
         || sorted(&outside, false, wave, section, reached),
     );
-    let (part_faces, rest_faces) = (
-        part_in.faces.len() + part_out.faces.len(),
-        rest_in.faces.len() + rest_out.faces.len(),
+    let (part, rest) = rayon::join(
+        || whole(body, [&part_in, &part_out], [&rest_in, &rest_out]),
+        || whole(body, [&rest_in, &rest_out], [&part_in, &part_out]),
     );
-    let (join_part, join_rest) = (
-        joining_cost(&part_in, &part_out),
-        joining_cost(&rest_in, &rest_out),
-    );
-    // Taking a side out of the body reads it and goes through the whole body once more.
-    let whole = part_faces + rest_faces;
-    let both = join_part + join_rest;
-    let part_less = join_rest + rest_faces + whole;
-    let rest_less = join_part + part_faces + whole;
-    if both <= part_less.min(rest_less) {
-        let (part, rest) = rayon::join(|| joined(part_in, part_out), || joined(rest_in, rest_out));
-        parted(part?, rest?)
-    } else if part_less < rest_less {
-        let rest = joined(rest_in, rest_out)?;
-        parted(rest_of(body, &rest)?, rest)
-    } else {
-        let part = joined(part_in, part_out)?;
-        let rest = rest_of(body, &part)?;
-        parted(part, rest)
-    }
+    parted(part?, rest?)
 }
 
-/// What joining two pieces of a side costs, in faces gone through: nothing where one is
-/// empty, otherwise reading both as solids and the union over them.
-fn joining_cost(left: &Mesh, right: &Mesh) -> usize {
-    if left.faces.is_empty() || right.faces.is_empty() {
-        return 0;
+/// One side from its pieces inside and outside the box: the one piece where the other is
+/// empty, otherwise `body` less the other side's pieces.
+///
+/// Never their union: the two meet across a face of the box, and an exact union of solids
+/// touching over a face can keep both copies of it inside the side.
+fn whole(body: &Solid, pieces: [&Mesh; 2], other: [&Mesh; 2]) -> Result<Mesh, VolumeError> {
+    match pieces {
+        [inside, outside] if inside.faces.is_empty() => return Ok(outside.clone()),
+        [inside, outside] if outside.faces.is_empty() => return Ok(inside.clone()),
+        _ => {}
     }
-    2 * (left.faces.len() + right.faces.len())
-}
-
-/// `body` less `side`, one of the two it was cut into, for when reading the other side
-/// back as a solid to join it costs more than taking this one out of the body.
-fn rest_of(body: &Solid, side: &Mesh) -> Result<Mesh, VolumeError> {
-    Ok(body.difference(&solid_of(side)?)?.mesh())
+    let mut other = other.into_iter().filter(|piece| !piece.faces.is_empty());
+    let Some(first) = other.next() else {
+        return Err(VolumeError::NoNeck);
+    };
+    let mut left = body.difference(&solid_of(first)?)?;
+    for piece in other {
+        left = left.difference(&solid_of(piece)?)?;
+    }
+    Ok(left.mesh())
 }
 
 fn parted(part: Mesh, rest: Mesh) -> Result<PartedOff, VolumeError> {
@@ -631,19 +619,6 @@ fn parted(part: Mesh, rest: Mesh) -> Result<PartedOff, VolumeError> {
         return Err(VolumeError::NoNeck);
     }
     Ok(PartedOff { part, rest })
-}
-
-/// The two pieces of one side as one mesh, joined by exact union where both have faces:
-/// reading a side as a solid costs as much as the union does.
-fn joined(left: Mesh, right: Mesh) -> Result<Mesh, VolumeError> {
-    if left.faces.is_empty() {
-        return Ok(right);
-    }
-    if right.faces.is_empty() {
-        return Ok(left);
-    }
-    let (left, right) = rayon::join(|| solid_of(&left), || solid_of(&right));
-    Ok(left?.union(&right?)?.mesh())
 }
 
 /// The bodies of `mesh` split into those of the part and those of the rest. A body with

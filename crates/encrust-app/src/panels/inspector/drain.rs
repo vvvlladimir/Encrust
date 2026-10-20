@@ -106,7 +106,7 @@ pub fn action(ui: &mut egui::Ui, window: &mut Window) {
         return;
     }
     if window.tools.drain.job.is_some() {
-        busy(ui, &tr!("hollow-looking"), false);
+        busy(ui, &tr!("hollow-looking"), None, false);
         return;
     }
     let layer_height_mm = window.machine.slicing.layer_height_mm();

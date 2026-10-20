@@ -110,7 +110,7 @@ fn distance_to_a_sphere_is_the_offset_from_its_radius() {
         Vec3::ZERO,
         Vec3::new(3.0, -4.0, 5.0),
     ] {
-        let found = bvh.closest(&mesh, point).expect("the sphere has faces");
+        let found = bvh.closest(point).expect("the sphere has faces");
         let exact = (point.length() - radius).abs();
         assert!(
             (found.distance - exact).abs() <= sag + 1e-3,

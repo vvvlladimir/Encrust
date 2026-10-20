@@ -108,7 +108,7 @@ fn settings(ui: &mut egui::Ui, window: &mut Window) {
 fn drainage(ui: &mut egui::Ui, window: &mut Window) {
     if window.tools.drain.job.is_some() {
         subheading(ui, &tr!("hollow-drainage"));
-        busy(ui, &tr!("hollow-looking"), false);
+        busy(ui, &tr!("hollow-looking"), None, false);
         return;
     }
 
@@ -393,6 +393,9 @@ fn start(ui: &mut egui::Ui, window: &mut Window) {
 pub(super) fn running(ui: &mut egui::Ui, job: &HollowJob) {
     tone(ui, &job.label(), theme::colors().text_mid);
     progress_bar(ui, job.fraction());
+    if let Some(models) = job.models() {
+        tone(ui, &models, theme::colors().text_low);
+    }
 
     ui.add_space(4.0);
     ui.add_enabled_ui(!job.is_cancelling(), |ui| {

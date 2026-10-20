@@ -64,11 +64,10 @@ fn attach(parts: &mut [Body], scraps: Vec<Body>, reach_mm: Scalar, done: &mut Pa
     }
     let hierarchies: Vec<Bvh> = parts.iter().map(|part| Bvh::build(&part.mesh)).collect();
     for scrap in scraps {
-        let nearest = parts
+        let nearest = hierarchies
             .iter()
-            .zip(&hierarchies)
             .enumerate()
-            .map(|(index, (part, bvh))| (index, gap(&scrap.mesh, &part.mesh, bvh)))
+            .map(|(index, bvh)| (index, gap(&scrap.mesh, bvh)))
             .min_by(|a, b| a.1.total_cmp(&b.1));
         match nearest {
             Some((index, gap)) if gap <= reach_mm => {
@@ -80,12 +79,12 @@ fn attach(parts: &mut [Body], scraps: Vec<Body>, reach_mm: Scalar, done: &mut Pa
     }
 }
 
-/// How close `scrap` comes to `part`, mm, from its nearest vertex.
-fn gap(scrap: &Mesh, part: &Mesh, bvh: &Bvh) -> Scalar {
+/// How close `scrap` comes to the part `bvh` was built over, mm, from its nearest vertex.
+fn gap(scrap: &Mesh, bvh: &Bvh) -> Scalar {
     scrap
         .vertices
         .iter()
-        .filter_map(|vertex| bvh.closest(part, *vertex))
+        .filter_map(|vertex| bvh.closest(*vertex))
         .map(|closest| closest.distance)
         .fold(Scalar::MAX, Scalar::min)
 }

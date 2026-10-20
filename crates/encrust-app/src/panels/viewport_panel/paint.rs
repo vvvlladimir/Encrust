@@ -1,6 +1,6 @@
 //! The brush: where it is drawn, and the faces a stroke marks or clears.
 
-use core_geometry::Adjacency;
+use core_geometry::{Adjacency, Scalar, Vec2};
 use core_supports::Placed;
 
 use crate::panels::Window;
@@ -33,7 +33,7 @@ pub(super) fn draw_brush(ui: &egui::Ui, window: &Window, viewport: egui::Rect) {
 
     let on_screen = projector(&window.view.camera, viewport);
     let (across, along) = hit.normal.any_orthonormal_pair();
-    let radius_mm = window.tools.supports.brush_radius_mm;
+    let (radius_mm, colour) = brush(ui, window);
     let ring: Vec<egui::Pos2> = (0..BRUSH_SEGMENTS)
         .filter_map(|step| {
             let angle = std::f32::consts::TAU * step as f32 / BRUSH_SEGMENTS as f32;
@@ -44,17 +44,30 @@ pub(super) fn draw_brush(ui: &egui::Ui, window: &Window, viewport: egui::Rect) {
         return;
     }
 
-    let colors = theme::colors();
-    let colour = match window.tools.supports.placing {
-        Placing::Block => colors.danger,
-        Placing::Erase => colors.text_mid,
-        Placing::Point | Placing::Paint => colors.accent,
-    };
     let painter = ui.painter_at(viewport);
     painter.add(egui::Shape::closed_line(
         ring,
         egui::Stroke::new(1.5, colour),
     ));
+}
+
+/// The radius of the brush in hand, and the colour of what it paints: alt over a relief
+/// takes the paint off.
+fn brush(ui: &egui::Ui, window: &Window) -> (Scalar, egui::Color32) {
+    let colors = theme::colors();
+    if *window.tool == Tool::Relief {
+        let colour = match ui.input(|input| input.modifiers.alt) {
+            true => colors.text_mid,
+            false => colors.accent,
+        };
+        return (window.tools.relief.state.brush_radius_mm, colour);
+    }
+    let colour = match window.tools.supports.placing {
+        Placing::Block => colors.danger,
+        Placing::Erase => colors.text_mid,
+        Placing::Point | Placing::Paint => colors.accent,
+    };
+    (window.tools.supports.brush_radius_mm, colour)
 }
 
 /// Runs the brush for this frame and answers whether it has the pointer.
@@ -68,6 +81,9 @@ pub(super) fn paint_stroke(
     viewport: egui::Rect,
     pointer: &Pointer,
 ) -> bool {
+    if *window.tool == Tool::Relief {
+        return relief_stroke(ui, window, viewport, pointer);
+    }
     let out = *window.tool == Tool::Paint && window.tools.supports.placing.paints();
     let Some(position) = pointer.position.filter(|_| {
         out && pointer.primary_down
@@ -96,16 +112,8 @@ pub(super) fn paint_stroke(
     // A drag moves further in one frame than the brush is wide, so the stroke is painted
     // along the line the cursor drew rather than only where the frames fell.
     let from = window.tools.supports.last_daub.unwrap_or(position);
-    let steps = (from.distance(position) / DAUB_STEP_POINTS).ceil().max(1.0) as u32;
-    for step in 1..=steps {
-        let along = from.lerp(position, step as f32 / steps as f32);
-        paint_under_cursor(
-            window,
-            viewport,
-            egui::Pos2::new(along.x, along.y),
-            modifiers.command,
-            !modifiers.alt,
-        );
+    for along in daubs(from, position) {
+        paint_under_cursor(window, viewport, along, modifiers.command, !modifiers.alt);
     }
     window.tools.supports.last_daub = Some(position);
 
@@ -115,6 +123,63 @@ pub(super) fn paint_stroke(
         let mesh = std::sync::Arc::clone(&object.mesh);
         object.supports.refresh_patches(&mesh, object.transform);
     }
+    true
+}
+
+/// Where the brush is put down along a drag from `from` to `to`: a drag moves further in
+/// one frame than the brush is wide, so the stroke follows the line the cursor drew.
+fn daubs(from: Vec2, to: Vec2) -> impl Iterator<Item = egui::Pos2> {
+    let steps = (from.distance(to) / DAUB_STEP_POINTS).ceil().max(1.0) as u32;
+    (1..=steps).map(move |step| {
+        let along = from.lerp(to, step as f32 / steps as f32);
+        egui::Pos2::new(along.x, along.y)
+    })
+}
+
+/// The Relief brush for this frame, painting where the texture goes and taking it off
+/// under alt, and whether it has the pointer. Decided on the press, as the support brush.
+fn relief_stroke(
+    ui: &egui::Ui,
+    window: &mut Window,
+    viewport: egui::Rect,
+    pointer: &Pointer,
+) -> bool {
+    let out = window.tools.relief.paints();
+    let Some(position) = pointer.position.filter(|_| {
+        out && pointer.primary_down
+            && pointer.over_viewport
+            && !pointer.shift
+            && !window.view.gizmo.is_focused()
+    }) else {
+        window.tools.relief.stroke = false;
+        window.tools.relief.last_daub = None;
+        return false;
+    };
+
+    let cursor = egui::Pos2::new(position.x, position.y);
+    if pointer.pressed {
+        window.tools.relief.stroke = surface_under(window, viewport, cursor).is_some();
+        window.tools.relief.last_daub = None;
+    }
+    if !window.tools.relief.stroke {
+        return false;
+    }
+
+    let marked = !ui.input(|input| input.modifiers.alt);
+    let radius_mm = window.tools.relief.state.brush_radius_mm;
+    let from = window.tools.relief.last_daub.unwrap_or(position);
+    for along in daubs(from, position) {
+        let Some((id, hit)) = surface_under(window, viewport, along) else {
+            continue;
+        };
+        if let Some(object) = window.doc.scene.get_mut(id) {
+            let model = (&*object.mesh, &*object.bvh, object.transform);
+            object
+                .relief_painted
+                .brush(model, hit.point, radius_mm, marked);
+        }
+    }
+    window.tools.relief.last_daub = Some(position);
     true
 }
 

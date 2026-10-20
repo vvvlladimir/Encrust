@@ -2,10 +2,12 @@ use std::sync::atomic::{AtomicBool, Ordering};
 
 use core_csg::CsgError;
 use core_geometry::{Mesh, Vec3};
-use core_volume::{Boolean, Cancel, Combined, VolumeError, combine, combine_exact_toward};
+use core_volume::{
+    Boolean, Cancel, Combined, Progress, VolumeError, combine, combine_exact_toward,
+};
 
 use crate::i18n::tr;
-use crate::job::{Worker, pooled};
+use crate::job::{Counted, Worker, pooled};
 use crate::scene::Taken;
 
 /// The models a combination takes, already placed on the plate, the first being what a
@@ -53,7 +55,12 @@ impl BooleanJob {
             method,
         } = request;
         let worker = Worker::spawn(
-            move |stop| pooled(|| run(&placed, op, method, stop), BooleanOutcome::Failed),
+            move |stop, progress| {
+                pooled(
+                    || run(&placed, op, method, (stop, progress)),
+                    BooleanOutcome::Failed,
+                )
+            },
             || BooleanOutcome::Failed(tr!("job-thread-stopped-boolean")),
         );
         Self { worker, taken }
@@ -64,16 +71,26 @@ impl BooleanJob {
         self.worker.poll()
     }
 
+    /// How far the run has got; an exact combination counts nothing.
+    pub fn counted(&self) -> Option<Counted> {
+        self.worker.counted()
+    }
+
     /// The models the run took, in the order they were picked.
     pub fn taken(&self) -> &[Taken] {
         &self.taken
     }
 }
 
-fn run(placed: &[Mesh], op: Boolean, method: Method, stop: &AtomicBool) -> BooleanOutcome {
+fn run(
+    placed: &[Mesh],
+    op: Boolean,
+    method: Method,
+    (stop, progress): (&AtomicBool, &Progress),
+) -> BooleanOutcome {
     let asked = || stop.load(Ordering::Relaxed);
     let combined = match method {
-        Method::Sampled => combine(placed, op, Cancel::when(&asked)),
+        Method::Sampled => combine(placed, op, Cancel::when(&asked).reporting(progress)),
         Method::ExactToward(toward) => {
             combine_exact_toward(placed, op, toward).map(|mesh| Combined {
                 mesh,

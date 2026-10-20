@@ -3,7 +3,7 @@ use std::collections::{HashMap, HashSet};
 use core_geometry::{FastMap, Mesh, Scalar, Vec3, collapse_flat_faces, glam::IVec3};
 use rayon::prelude::*;
 
-use crate::cancel::Cancel;
+use crate::cancel::{Cancel, Step};
 use crate::grid::TILE;
 use crate::sdf::Sdf;
 
@@ -86,10 +86,12 @@ pub(crate) fn extract_clustered(field: &Sdf, slack_voxels: Scalar, cancel: Cance
     let mut mesh = Mesh::default();
     let mut shared: FastMap<u64, u32> = FastMap::default();
     let mut written = Written::default();
+    cancel.begin(Step::Surfacing, levels.len());
     for level in levels {
         if cancel.asked() {
             return Mesh::default();
         }
+        cancel.advance(1);
         let Some(mut tiles) = layers.remove(&level) else {
             continue;
         };

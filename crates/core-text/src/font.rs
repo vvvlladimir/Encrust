@@ -25,6 +25,24 @@ impl Font {
     }
 
     pub(crate) fn face(&self) -> Result<Face<'_>, TextError> {
+        refuse_overlong_collection(&self.data)?;
         Face::parse(&self.data, self.index).map_err(|error| TextError::BadFont(error.to_string()))
     }
+}
+
+/// Refuses a collection claiming more faces than its offset table has bytes for. The
+/// parser debug-asserts on such a claim instead of answering, so it must not see one.
+fn refuse_overlong_collection(data: &[u8]) -> Result<(), TextError> {
+    // The collection header is a tag, a version and a count, then one 32-bit offset a face.
+    const HEADER_BYTES: u64 = 12;
+    let Some(faces) = ttf_parser::fonts_in_collection(data) else {
+        return Ok(());
+    };
+    if HEADER_BYTES + 4 * u64::from(faces) > data.len() as u64 {
+        return Err(TextError::BadFont(format!(
+            "the collection claims {faces} faces in {} bytes",
+            data.len()
+        )));
+    }
+    Ok(())
 }

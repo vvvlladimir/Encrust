@@ -1,8 +1,10 @@
 use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 
-use core_geometry::{Bvh, Heightmap, Mesh, Transform, Vec3, transform_mesh};
+use core_geometry::{Bvh, Heightmap, Mesh, Region, Transform, Vec3, transform_mesh};
 use core_volume::{
-    AngleMask, ReliefBasis, ReliefSettings, Tiling, press_reusing, press_tiled_reusing,
+    AngleMask, Cancel, Progress, ReliefBasis, ReliefSettings, Tiling, press_painted,
+    press_painted_tiled, press_reusing, press_tiled_reusing,
 };
 use rayon::prelude::*;
 
@@ -10,7 +12,7 @@ use crate::i18n::tr;
 use crate::job::{Worker, pooled};
 use core_geometry::UvMap;
 
-use crate::scene::{Mapped, Scene, Shaped, Taken};
+use crate::scene::{Mapped, Scene, SceneObject, Shaped, Taken};
 
 /// One model to press a texture into, owned so that it can cross to the worker thread.
 pub struct ReliefTask {
@@ -26,6 +28,8 @@ pub struct ReliefTask {
     pub sizing: Transform,
     /// The plate's up in the model's own space, which is where its faces are held.
     pub up: Vec3,
+    /// The only faces pressed, where the brush has painted any.
+    pub painted: Option<Region>,
     /// The basis a run before this one kept for this very mesh, if any; the press checks
     /// that it still fits and builds a new one where it does not.
     pub basis: Option<Arc<ReliefBasis>>,
@@ -56,8 +60,9 @@ pub struct Pressed {
     pub shaped: Shaped,
     /// Whether the memory budget made the lattice coarser than precision asked for.
     pub coarsened: bool,
-    /// What the press stood on, for the window to keep while another picture may follow.
-    pub basis: Arc<ReliefBasis>,
+    /// What the press stood on, for the window to keep while another picture may follow;
+    /// a painted press stands on none.
+    pub basis: Option<Arc<ReliefBasis>>,
 }
 
 /// How a relief run ended.
@@ -76,19 +81,27 @@ pub type ReliefJob = Worker<ReliefOutcome>;
 
 /// Starts the run. The thread is detached: it ends on its own.
 pub fn spawn_relief(request: ReliefRequest) -> ReliefJob {
-    // A press cannot be given up on part way; a run given up on is thrown away as it ends.
+    // A run given up on stops inside its field; what it then answers is thrown away.
     Worker::spawn(
-        move |_| pooled(|| run(&request), ReliefOutcome::Failed),
+        move |stop, progress| pooled(|| run(&request, stop, progress), ReliefOutcome::Failed),
         || ReliefOutcome::Failed(tr!("job-thread-stopped-relief")),
     )
 }
 
+/// The faces of `object` a press is held to: what is painted, once anything is or while
+/// the brush is in hand, when nothing painted means nowhere. `None` presses it whole.
+pub fn painting(object: &SceneObject, brushing: bool) -> Option<&Region> {
+    (brushing || !object.relief_painted.is_empty()).then_some(&object.relief_painted)
+}
+
 /// The models a run covers: everything on the plate being edited, or with `tiled` false
-/// only what still carries the texture its file came with.
-pub fn relief_tasks(scene: &Scene, tiled: bool) -> Vec<ReliefTask> {
+/// only what still carries the texture its file came with, less those `brushing` leaves
+/// with nothing painted.
+pub fn relief_tasks(scene: &Scene, tiled: bool, brushing: bool) -> Vec<ReliefTask> {
     scene
         .targets()
         .filter(|object| tiled || object.mapped.is_some())
+        .filter(|object| painting(object, brushing).is_none_or(|painted| !painted.is_empty()))
         .map(|object| ReliefTask {
             taken: Taken::of(object),
             mesh: Arc::clone(&object.mesh),
@@ -96,17 +109,23 @@ pub fn relief_tasks(scene: &Scene, tiled: bool) -> Vec<ReliefTask> {
             mapped: object.mapped.clone(),
             sizing: object.transform.sizing(),
             up: object.transform.rotation.inverse() * Vec3::Z,
+            painted: painting(object, brushing).cloned(),
             basis: None,
         })
         .collect()
 }
 
-fn run(request: &ReliefRequest) -> ReliefOutcome {
-    let pressed: Result<Vec<Pressed>, _> = request
+fn run(request: &ReliefRequest, stop: &AtomicBool, progress: &Progress) -> ReliefOutcome {
+    let asked = || stop.load(Ordering::Relaxed);
+    // Models are pressed side by side, and one count for several would jump between them.
+    let cancel = match request.tasks.len() {
+        1 => Cancel::when(&asked).reporting(progress),
+        _ => Cancel::when(&asked),
+    };
+    let done: Result<Vec<Pressed>, _> = request
         .tasks
         .par_iter()
         .map(|task| {
-            let (mesh, bvh, uvs) = printed(task);
             let settings = ReliefSettings {
                 mask: AngleMask {
                     up: task.up,
@@ -114,34 +133,54 @@ fn run(request: &ReliefRequest) -> ReliefOutcome {
                 },
                 ..request.settings
             };
-            let relief = match (&request.source, &task.mapped, uvs) {
-                (ReliefSource::Tiled { image, tiling }, _, _) => {
-                    let basis = task.basis.clone();
-                    press_tiled_reusing(&mesh, &bvh, image, *tiling, &settings, basis)
-                }
-                (ReliefSource::Mapped, Some(mapped), Some(uvs)) => {
-                    let basis = task.basis.clone();
-                    press_reusing(&mesh, &bvh, &uvs, &mapped.heights, &settings, basis)
-                }
-                (ReliefSource::Mapped, ..) => {
-                    return Err(anyhow::anyhow!(tr!("job-relief-no-texture")));
-                }
-            };
-            relief
-                .map_err(anyhow::Error::new)
-                .map(|(relief, basis)| Pressed {
-                    taken: task.taken.clone(),
-                    shaped: Shaped::of(Arc::new(relief.mesh)),
-                    coarsened: relief.coarsened,
-                    basis,
-                })
+            pressed(request, task, &settings, cancel)
         })
         .collect();
 
-    match pressed {
+    match done {
         Ok(pressed) => ReliefOutcome::Pressed(pressed),
         Err(error) => ReliefOutcome::Failed(format!("{error:#}")),
     }
+}
+
+/// One model pressed: over a field where nothing is painted, or by moving the painted
+/// faces alone, which keeps a basis for no other press.
+fn pressed(
+    request: &ReliefRequest,
+    task: &ReliefTask,
+    settings: &ReliefSettings,
+    cancel: Cancel<'_>,
+) -> anyhow::Result<Pressed> {
+    let (mesh, bvh, uvs) = printed(task);
+    let basis = task.basis.clone();
+    let (relief, basis) = match (&request.source, &task.mapped, uvs, &task.painted) {
+        (ReliefSource::Tiled { image, tiling }, _, _, Some(painted)) => (
+            press_painted_tiled(&mesh, image, *tiling, settings, painted, cancel)?,
+            None,
+        ),
+        (ReliefSource::Tiled { image, tiling }, _, _, None) => {
+            let (relief, basis) =
+                press_tiled_reusing(&mesh, &bvh, image, *tiling, settings, basis, cancel)?;
+            (relief, Some(basis))
+        }
+        (ReliefSource::Mapped, Some(mapped), Some(uvs), Some(painted)) => (
+            press_painted(&mesh, &uvs, &mapped.heights, settings, painted, cancel)?,
+            None,
+        ),
+        (ReliefSource::Mapped, Some(mapped), Some(uvs), None) => {
+            let heights = &mapped.heights;
+            let (relief, basis) =
+                press_reusing(&mesh, &bvh, &uvs, heights, settings, basis, cancel)?;
+            (relief, Some(basis))
+        }
+        (ReliefSource::Mapped, ..) => anyhow::bail!(tr!("job-relief-no-texture")),
+    };
+    Ok(Pressed {
+        taken: task.taken.clone(),
+        shaped: Shaped::of(Arc::new(relief.mesh)),
+        coarsened: relief.coarsened,
+        basis,
+    })
 }
 
 /// The model at the size it prints at, with its map still over it.

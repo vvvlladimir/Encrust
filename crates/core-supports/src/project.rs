@@ -1,10 +1,8 @@
-use core_geometry::{Adjacency, FastMap, Mat3, Mesh, Scalar, Vec2, Vec3};
+use core_geometry::{Adjacency, FastMap, Mat3, Mesh, Region, Scalar, Vec2, Vec3};
 
 use serde::{Deserialize, Serialize};
 
 use crate::placed::Placed;
-
-use crate::region::Region;
 
 /// How close two contacts of a fill may come, as a fraction of the finest spacing it was
 /// asked for. Under one, so that a run of points laid down at exactly that spacing keeps

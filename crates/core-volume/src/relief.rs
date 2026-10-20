@@ -13,11 +13,14 @@ use crate::extract::extract_clustered;
 use crate::hollow::lattice_mm;
 
 mod basis;
+mod displace;
 mod mask;
+mod refine;
 mod smooth;
 mod snap;
 
 pub use basis::ReliefBasis;
+pub use displace::{press_painted, press_painted_tiled};
 pub use mask::AngleMask;
 use mask::Held;
 
@@ -134,28 +137,12 @@ pub fn press(
     heights: &[Heightmap],
     settings: &ReliefSettings,
 ) -> Result<Relief, VolumeError> {
-    press_reusing(mesh, bvh, uvs, heights, settings, None).map(|(relief, _)| relief)
+    press_reusing(mesh, bvh, uvs, heights, settings, None, Cancel::never())
+        .map(|(relief, _)| relief)
 }
 
-/// Refuses a mesh with no faces to press into, or settings no press can be made with.
-fn pressable(mesh: &Mesh, settings: &ReliefSettings) -> Result<(), VolumeError> {
-    if mesh.aabb().is_none() {
-        return Err(VolumeError::EmptyMesh);
-    }
-    settings.check()
-}
-
-/// [`press`] over `basis` where it fits this model and these settings, and the basis the
-/// press stood on, for the caller to keep for another press of the same mesh.
-pub fn press_reusing(
-    mesh: &Mesh,
-    bvh: &Bvh,
-    uvs: &UvMap,
-    heights: &[Heightmap],
-    settings: &ReliefSettings,
-    basis: Option<Arc<ReliefBasis>>,
-) -> Result<(Relief, Arc<ReliefBasis>), VolumeError> {
-    pressable(mesh, settings)?;
+/// Refuses a map that is not `mesh`'s, or that names an image `heights` does not hold.
+fn mapped(mesh: &Mesh, uvs: &UvMap, heights: &[Heightmap]) -> Result<(), VolumeError> {
     // A map covering part of the mesh is honest — what it does not cover does not move —
     // but one indexed by a different face list is not the mesh's map at all.
     if uvs.len() != mesh.faces.len() || uvs.mapped() == 0 {
@@ -172,6 +159,31 @@ pub fn press_reusing(
             given: heights.len(),
         });
     }
+    Ok(())
+}
+
+/// Refuses a mesh with no faces to press into, or settings no press can be made with.
+fn pressable(mesh: &Mesh, settings: &ReliefSettings) -> Result<(), VolumeError> {
+    if mesh.aabb().is_none() {
+        return Err(VolumeError::EmptyMesh);
+    }
+    settings.check()
+}
+
+/// [`press`] over `basis` where it fits this model and these settings, and the basis the
+/// press stood on, for the caller to keep for another press of the same mesh. `cancel` is
+/// asked between the stages of the press and inside its field.
+pub fn press_reusing(
+    mesh: &Mesh,
+    bvh: &Bvh,
+    uvs: &UvMap,
+    heights: &[Heightmap],
+    settings: &ReliefSettings,
+    basis: Option<Arc<ReliefBasis>>,
+    cancel: Cancel<'_>,
+) -> Result<(Relief, Arc<ReliefBasis>), VolumeError> {
+    pressable(mesh, settings)?;
+    mapped(mesh, uvs, heights)?;
 
     let heights: Vec<_> = heights
         .iter()
@@ -181,7 +193,7 @@ pub fn press_reusing(
         let (texture, uv) = uvs.at(mesh, face, point)?;
         Some(heights.get(texture)?.sample(uv))
     };
-    displaced(mesh, bvh, settings, &sample, basis)
+    displaced(mesh, bvh, settings, &sample, (basis, cancel))
 }
 
 /// How near their shared plane cells must stand to be clustered into one facet, in
@@ -194,6 +206,15 @@ const RELIEF_SLACK_VOXELS: Scalar = 0.05;
 pub struct Tiling {
     pub tile_mm: Scalar,
     pub angle_deg: Scalar,
+}
+
+impl Tiling {
+    fn check(self) -> Result<(), VolumeError> {
+        if !self.tile_mm.is_finite() || self.tile_mm <= 0.0 {
+            return Err(VolumeError::BadTile(self.tile_mm));
+        }
+        Ok(())
+    }
 }
 
 impl Default for Tiling {
@@ -219,11 +240,13 @@ pub fn press_tiled(
     tiling: Tiling,
     settings: &ReliefSettings,
 ) -> Result<Relief, VolumeError> {
-    press_tiled_reusing(mesh, bvh, image, tiling, settings, None).map(|(relief, _)| relief)
+    press_tiled_reusing(mesh, bvh, image, tiling, settings, None, Cancel::never())
+        .map(|(relief, _)| relief)
 }
 
 /// [`press_tiled`] over `basis` where it fits this model and these settings, and the
-/// basis the press stood on, for the caller to keep beside this very mesh.
+/// basis the press stood on, for the caller to keep beside this very mesh. `cancel` is
+/// asked as in [`press_reusing`].
 pub fn press_tiled_reusing(
     mesh: &Mesh,
     bvh: &Bvh,
@@ -231,27 +254,37 @@ pub fn press_tiled_reusing(
     tiling: Tiling,
     settings: &ReliefSettings,
     basis: Option<Arc<ReliefBasis>>,
+    cancel: Cancel<'_>,
 ) -> Result<(Relief, Arc<ReliefBasis>), VolumeError> {
     pressable(mesh, settings)?;
-    if !tiling.tile_mm.is_finite() || tiling.tile_mm <= 0.0 {
-        return Err(VolumeError::BadTile(tiling.tile_mm));
-    }
+    tiling.check()?;
     let image = prepared(image, settings);
+    let tiled = tiled(&image, tiling);
+    let sample = |face: usize, point: Vec3| {
+        tiled(
+            point,
+            mesh.triangle(face)?.normal_unnormalized().try_normalize()?,
+        )
+    };
+    displaced(mesh, bvh, settings, &sample, (basis, cancel))
+}
+
+/// The height `image`, laid as `tiling` lays it, reads at a point of a surface facing a
+/// unit normal: its three planes weighted by how squarely the surface faces each.
+fn tiled(image: &Heightmap, tiling: Tiling) -> impl Fn(Vec3, Vec3) -> Option<Scalar> + Sync + '_ {
     let (sin, cos) = tiling.angle_deg.to_radians().sin_cos();
-    let on_plane = |a: Scalar, b: Scalar| {
+    let on_plane = move |a: Scalar, b: Scalar| {
         let turned = Vec2::new(a * cos - b * sin, a * sin + b * cos);
         image.sample(turned / tiling.tile_mm)
     };
-    let sample = |face: usize, point: Vec3| {
-        let normal = mesh.triangle(face)?.normal_unnormalized().try_normalize()?;
+    move |point: Vec3, normal: Vec3| {
         let weights = normal.abs().powf(BLEND_POWER as Scalar);
         let total = weights.x + weights.y + weights.z;
         let height = weights.x * on_plane(point.y, point.z)
             + weights.y * on_plane(point.x, point.z)
             + weights.z * on_plane(point.x, point.y);
-        Some(height / total)
-    };
-    displaced(mesh, bvh, settings, &sample, basis)
+        (total > 0.0).then(|| height / total)
+    }
 }
 
 /// The surface of `mesh` moved by the height `sample` reads at its nearest point, over
@@ -261,23 +294,23 @@ fn displaced(
     bvh: &Bvh,
     settings: &ReliefSettings,
     sample: &(dyn Fn(usize, Vec3) -> Option<Scalar> + Sync),
-    reused: Option<Arc<ReliefBasis>>,
+    (reused, cancel): (Option<Arc<ReliefBasis>>, Cancel<'_>),
 ) -> Result<(Relief, Arc<ReliefBasis>), VolumeError> {
     let basis = match reused {
         Some(basis) if basis.fits(mesh, settings) => basis,
-        _ => Arc::new(ReliefBasis::build(mesh, bvh, settings)?),
+        _ => Arc::new(ReliefBasis::build(mesh, bvh, settings, cancel)?),
     };
     let (surface, hierarchy) = basis.surface(mesh, bvh);
     let press = Press {
         mesh: surface,
         bvh: hierarchy,
-        model: basis.is_united().then_some((mesh, bvh)),
+        model: basis.is_united().then_some(bvh),
         held: Held::of(surface, &settings.mask),
         sample,
         settings,
     };
     let relief = Relief {
-        mesh: press.pressed(&basis),
+        mesh: press.pressed(&basis, cancel)?,
         voxel_mm: basis.voxel_mm(),
         coarsened: basis.coarsened(),
     };
@@ -290,7 +323,7 @@ struct Press<'a> {
     mesh: &'a Mesh,
     bvh: &'a Bvh,
     /// The model the texture is read off, when that is not the surface moved.
-    model: Option<(&'a Mesh, &'a Bvh)>,
+    model: Option<&'a Bvh>,
     held: Option<Held>,
     sample: &'a (dyn Fn(usize, Vec3) -> Option<Scalar> + Sync),
     settings: &'a ReliefSettings,
@@ -299,13 +332,17 @@ struct Press<'a> {
 impl Press<'_> {
     /// The pressed surface over `basis`, meshed and taken onto the surface the texture
     /// describes.
-    fn pressed(&self, basis: &ReliefBasis) -> Mesh {
-        let field = self.field_on(basis);
-        let mut pressed = extract_clustered(&field, RELIEF_SLACK_VOXELS, Cancel::never());
+    fn pressed(&self, basis: &ReliefBasis, cancel: Cancel<'_>) -> Result<Mesh, VolumeError> {
+        let field = self.field_on(basis, cancel);
+        let mut pressed = extract_clustered(&field, RELIEF_SLACK_VOXELS, cancel);
+        // Each stage given up on hands on what it had, which is no relief at all.
+        if cancel.asked() {
+            return Err(VolumeError::Cancelled);
+        }
         self.snap(&mut pressed, &field);
         // Snapping can bring two vertices onto one point where a feature narrows to one.
         collapse_flat_faces(&mut pressed);
-        pressed
+        Ok(pressed)
     }
 
     /// The signed distance `value` at `point`, whose nearest point of the model is
@@ -332,7 +369,7 @@ impl Press<'_> {
     /// The texture's height at `found`, read off the model's own face there.
     fn height(&self, found: &ClosestPoint) -> Option<Scalar> {
         let face = match self.model {
-            Some((model, bvh)) => bvh.closest(model, found.point)?.face,
+            Some(bvh) => bvh.closest(found.point)?.face,
             None => found.face,
         };
         (self.sample)(face, found.point)
@@ -343,6 +380,8 @@ impl Press<'_> {
 mod tests {
     use super::*;
     use core_geometry::{Aabb, Mapping, Vec2, Vec3};
+
+    const NEVER: Cancel<'static> = Cancel::never();
 
     /// A closed cube of `side` millimetres standing on the origin, with every face's UVs
     /// taken from where its corners stand in X and Y.
@@ -879,8 +918,16 @@ mod tests {
         let bvh = Bvh::build(&mesh);
         let settings = raised(ReliefSettings::default());
         let tiled = |image: &Heightmap, basis| {
-            press_tiled_reusing(&mesh, &bvh, image, Tiling::default(), &settings, basis)
-                .expect("any closed mesh can be tiled")
+            press_tiled_reusing(
+                &mesh,
+                &bvh,
+                image,
+                Tiling::default(),
+                &settings,
+                basis,
+                NEVER,
+            )
+            .expect("any closed mesh can be tiled")
         };
         let (_, basis) = tiled(&flat(1.0), None);
         let (reused, again) = tiled(&half(), Some(Arc::clone(&basis)));
@@ -903,6 +950,7 @@ mod tests {
             Tiling::default(),
             &raised(ReliefSettings::default()),
             None,
+            NEVER,
         )
         .expect("any closed mesh can be tiled");
 
@@ -917,6 +965,7 @@ mod tests {
             Tiling::default(),
             &deeper,
             Some(Arc::clone(&basis)),
+            NEVER,
         )
         .expect("any closed mesh can be tiled");
         assert!(!Arc::ptr_eq(&basis, &rebuilt));
@@ -929,8 +978,38 @@ mod tests {
             Tiling::default(),
             &raised(ReliefSettings::default()),
             Some(Arc::clone(&basis)),
+            NEVER,
         )
         .expect("any closed mesh can be tiled");
         assert!(!Arc::ptr_eq(&basis, &other));
+    }
+
+    #[test]
+    fn a_press_given_up_on_is_cancelled_and_keeps_no_basis() {
+        let (mesh, uvs) = cube(10.0);
+        let bvh = Bvh::build(&mesh);
+        let settings = raised(ReliefSettings::default());
+        let stopped = || true;
+        let pressed = press_reusing(
+            &mesh,
+            &bvh,
+            &uvs,
+            &[flat(1.0)],
+            &settings,
+            None,
+            Cancel::when(&stopped),
+        );
+        assert!(matches!(pressed, Err(VolumeError::Cancelled)));
+
+        let tiled = press_tiled_reusing(
+            &mesh,
+            &bvh,
+            &flat(1.0),
+            Tiling::default(),
+            &settings,
+            None,
+            Cancel::when(&stopped),
+        );
+        assert!(matches!(tiled, Err(VolumeError::Cancelled)));
     }
 }

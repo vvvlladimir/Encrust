@@ -38,6 +38,16 @@ impl AngleMask {
         }
     }
 
+    /// Whether the mask holds `face` of `mesh`.
+    pub(super) fn holds_face(&self, mesh: &Mesh, face: usize) -> bool {
+        let Some(up) = self.up.try_normalize() else {
+            return false;
+        };
+        mesh.triangle(face)
+            .and_then(|triangle| triangle.normal_unnormalized().try_normalize())
+            .is_some_and(|normal| self.holds(normal, up))
+    }
+
     fn holds(&self, normal: Vec3, up: Vec3) -> bool {
         let within = |limit_deg: Scalar, toward: Vec3| {
             limit_deg > 0.0 && normal.dot(toward) >= limit_deg.to_radians().cos()
@@ -78,7 +88,7 @@ impl Held {
     }
 
     pub(super) fn nearest(&self, point: Vec3) -> Option<ClosestPoint> {
-        self.bvh.closest(&self.mesh, point)
+        self.bvh.closest(point)
     }
 
     /// Whether a point whose nearest held point is `held` and whose nearest point of the

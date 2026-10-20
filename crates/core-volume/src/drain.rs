@@ -234,7 +234,7 @@ pub fn lift_for(mesh: &Mesh, bvh: &Bvh, at: Vec3, axis: Vec3, diameter_mm: Scala
             let rim = at + (right * cos + up * sin) * radius;
             // Started just under the mouth's plane, so a flat face the rim lies on is met.
             let ray = Ray::new(rim + axis * MOUTH_LIFT_MM, -axis);
-            let hit = bvh.raycast(mesh, &ray)?;
+            let hit = bvh.raycast(&ray)?;
             let leaves = mesh.triangle(hit.face)?.normal_unnormalized().dot(axis) < 0.0;
             leaves.then_some(hit.t - MOUTH_LIFT_MM)
         })
@@ -246,7 +246,7 @@ pub fn lift_for(mesh: &Mesh, bvh: &Bvh, at: Vec3, axis: Vec3, diameter_mm: Scala
 /// What the CLI and the trapped-volume report place a hole with, where the window has the
 /// face under the cursor already. Returns `None` for a mesh with no faces.
 pub fn hole_at(mesh: &Mesh, bvh: &Bvh, near: Vec3, size: HoleSize) -> Option<DrainHole> {
-    let closest = bvh.closest(mesh, near)?;
+    let closest = bvh.closest(near)?;
     let axis = -mesh.triangle(closest.face)?.normal_unnormalized();
     let lift_mm = lift_for(mesh, bvh, closest.point, axis, size.diameter_mm);
     Some(DrainHole::sized(closest.point, axis, size, lift_mm))

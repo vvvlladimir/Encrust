@@ -1,9 +1,8 @@
 use std::sync::Arc;
 
 use anyhow::{Result, bail};
-use core_geometry::{Adjacency, Mesh, Vec2, Vec3};
+use core_geometry::{Adjacency, Mesh, Region, Vec2, Vec3};
 use core_plate::{OrientPreset, OrientSettings};
-use core_supports::Region;
 use printer_profiles::{MaterialProfile, PrinterProfile, SupportProfile};
 
 use crate::i18n::tr;

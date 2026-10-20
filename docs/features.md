@@ -183,6 +183,13 @@ capped silently.
 - **Leave flat:** faces within an angle you set of facing the plate, or of facing straight
   up, keep their shape, and the relief stops square at their edge — a base the model stands
   on stays flat.
+- **Where:** paint the faces to press with a brush, alt to erase. Once a model has any
+  face painted, the texture is pressed into the painted faces only, and the view shows it
+  only there; the rest of the model keeps its own mesh untouched, and the press takes as
+  long as the painted area, not the model. The relief tapers to nothing over a fraction of
+  a millimetre at the edge of the paint. While the brush is on, nothing painted shows and
+  presses nothing; with it off, nothing painted presses the whole model. The
+  painting is saved with the project and cleared when the model is reshaped.
 - A hollowed model keeps its cavity through a press: the cavity is cut again, at the same
   wall and with the same blockers, holes and channels, into the pressed surface. Its
   supports are not kept.
@@ -207,8 +214,13 @@ capped silently.
   texture are not kept, and Undo puts the original back. The result stands on the plate the
   models were taken from. Shift or Cmd click picks a model in Text mode without writing.
 - A press, a stamp, a combination, a cut or a split runs off the drawing thread and can be
-  cancelled from the panel. If the model is moved, resized, replaced or undone meanwhile,
-  the result is dropped and the stage notice says so.
+  cancelled from the panel; a cancelled press stops inside the model it is on rather than
+  finishing unseen. If the model is moved, resized, replaced or undone meanwhile, the
+  result is dropped and the stage notice says so.
+- While a press of one model, a combination or a split runs, the panel shows how much of
+  it is done and the step it is on: a combination reads the models one by one, combines
+  them and builds the result. A cut, a press into painted faces and a press of several
+  models at once show a running bar only.
 - The mode and the built-in texture chosen are remembered between runs.
 
 ### Hollow
@@ -233,6 +245,9 @@ capped silently.
 - **Keep solid:** click spots on the model where the wall must stay solid (blockers), and
   set their size.
 - Each model can keep its own hollow settings, and you can save settings as named presets.
+- While it runs, the panel names the step the model is on and shows how much of the run is
+  done.
+- **Cancel** stops a run inside the model it is on, not only between models.
 - Undo with **Make solid again**.
 
 ### Drain
@@ -558,9 +573,9 @@ it into its parts or cut a part off, all at the window's default sizes, before i
 print a plug for each beside the model, with the gap you choose. A run whose plugs have no
 room beside their model stops rather than printing them on a neighbour.
 
-**You cannot** (from the command line): paint supports, place them by hand, set blockers,
-take the pieces of a cut or a split out as meshes, or hollow or support a model a cut or a
-split broke into several pieces. Do that in the window, save a project, then slice it.
+**You cannot** (from the command line): paint supports or where a relief goes, place supports
+by hand, set blockers, take the pieces of a cut or a split out as meshes, or hollow or support
+a model a cut or a split broke into several pieces. Do that in the window, save a project, then slice it.
 
 ---
 

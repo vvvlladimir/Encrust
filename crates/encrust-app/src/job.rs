@@ -38,7 +38,8 @@ pub use place::{SupportJob, SupportOutcome, SupportRequest, tasks_of};
 pub use plate::models_of;
 pub use preview::{PreviewJob, PreviewOutcome};
 pub use relief::{
-    Pressed, ReliefJob, ReliefOutcome, ReliefRequest, ReliefSource, relief_tasks, spawn_relief,
+    Pressed, ReliefJob, ReliefOutcome, ReliefRequest, ReliefSource, painting, relief_tasks,
+    spawn_relief,
 };
 pub use repair::{RepairJob, RepairOutcome, RepairRequest, Repaired, mend};
 pub use send::{Action, SendJob, SendOutcome, SendRequest};
@@ -49,6 +50,8 @@ use std::path::PathBuf;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::{self, Receiver, TryRecvError};
+
+use core_volume::Step;
 
 /// Runs `work` off the thread that draws: on a thread of its own at the desk, and in a
 /// browser on a worker, since the page's thread may never wait; see ADR 0181.
@@ -62,29 +65,41 @@ pub fn spawn(work: impl FnOnce() + Send + 'static) {
 /// A run on a thread of its own that ends with one value, polled for it once a frame.
 ///
 /// Dropping it asks the run to stop: `work` is handed the flag, for the steps that can be
-/// given up on part way, and whatever it ends with is thrown away.
+/// given up on part way, and the [`core_volume::Progress`] it may tell how far it has got; whatever it
+/// ends with is thrown away.
 #[derive(Debug)]
 pub struct Worker<T> {
     outcome: Receiver<T>,
     /// What the run is taken to have ended with when its thread stops without a word.
     lost: fn() -> T,
     stop: Arc<AtomicBool>,
+    progress: Arc<core_volume::Progress>,
 }
 
 impl<T: Send + 'static> Worker<T> {
     /// Starts `work`. The thread is detached: it ends on its own.
-    pub fn spawn(work: impl FnOnce(&AtomicBool) -> T + Send + 'static, lost: fn() -> T) -> Self {
+    pub fn spawn(
+        work: impl FnOnce(&AtomicBool, &core_volume::Progress) -> T + Send + 'static,
+        lost: fn() -> T,
+    ) -> Self {
         let (sender, outcome) = mpsc::channel();
         let stop = Arc::new(AtomicBool::new(false));
-        let asked = Arc::clone(&stop);
+        let progress = Arc::new(core_volume::Progress::default());
+        let (asked, told) = (Arc::clone(&stop), Arc::clone(&progress));
         spawn(move || {
-            let _ = sender.send(work(&asked));
+            let _ = sender.send(work(&asked, &told));
         });
         Self {
             outcome,
             lost,
             stop,
+            progress,
         }
+    }
+
+    /// How far the run has got, or `None` while it has counted nothing.
+    pub fn counted(&self) -> Option<Counted> {
+        Counted::of(&self.progress)
     }
 
     /// Returns the outcome on the frame the run ends, and `None` while it is going.
@@ -101,6 +116,65 @@ impl<T> Drop for Worker<T> {
     fn drop(&mut self) {
         self.stop.store(true, Ordering::Relaxed);
     }
+}
+
+/// Where a run on a field has got: the share of it done and the step it is on.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct Counted {
+    pub share: f32,
+    pub step: Step,
+}
+
+impl Counted {
+    /// What `progress` says, or `None` before the run has begun a step.
+    pub fn of(progress: &core_volume::Progress) -> Option<Self> {
+        progress.read().map(|read| Self {
+            share: step_share(read),
+            step: read.0,
+        })
+    }
+
+    /// The step in words a user knows.
+    pub fn label(&self) -> String {
+        match self.step {
+            Step::Preparing => tr!("job-step-preparing"),
+            Step::Seeding => tr!("job-step-seeding"),
+            Step::Carrying => tr!("job-step-carrying"),
+            Step::Refining => tr!("job-step-refining"),
+            Step::Surfacing => tr!("job-step-surfacing"),
+            Step::Shaping => tr!("job-step-shaping"),
+            Step::Reading => tr!("job-step-reading"),
+            Step::Combining => tr!("job-step-combining"),
+            Step::Finishing => tr!("job-step-finishing"),
+        }
+    }
+}
+
+/// Where each step starts and ends in the share of one run, a field's or an exact boolean's,
+/// as weighed on a figurine and a bust; see ADR 0317.
+const STEP_SPANS: [(Step, f32, f32); 9] = [
+    (Step::Preparing, 0.0, 0.1),
+    (Step::Seeding, 0.1, 0.2),
+    (Step::Carrying, 0.2, 0.62),
+    (Step::Refining, 0.62, 0.9),
+    (Step::Surfacing, 0.9, 0.98),
+    (Step::Shaping, 0.98, 1.0),
+    (Step::Reading, 0.0, 0.45),
+    (Step::Combining, 0.45, 0.9),
+    (Step::Finishing, 0.9, 1.0),
+];
+
+/// The share of one run done, from its step and the pieces of the step done.
+fn step_share((step, done, total): (Step, usize, usize)) -> f32 {
+    let within = if total == 0 {
+        0.0
+    } else {
+        done as f32 / total as f32
+    };
+    STEP_SPANS
+        .iter()
+        .find(|(at, _, _)| *at == step)
+        .map_or(0.0, |(_, from, to)| from + (to - from) * within)
 }
 
 /// Runs `work` with its parallel loops on a pool of the worker threads, or answers
@@ -279,6 +353,21 @@ impl Drop for SliceJob {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn half_the_refine_is_three_quarters_of_a_run() {
+        let share = step_share((Step::Refining, 50, 100));
+        assert!(
+            (share - 0.76).abs() < 1e-6,
+            "0.62 + 0.28 x 0.5 is 0.76, got {share}"
+        );
+        assert!((step_share((Step::Shaping, 0, 0)) - 0.98).abs() < 1e-6);
+    }
+
+    #[test]
+    fn a_run_that_counts_nothing_shows_no_share() {
+        assert_eq!(Counted::of(&core_volume::Progress::default()), None);
+    }
 
     /// A handle with no worker behind it, so that the counters can be driven by hand.
     fn idle_job(progress: Receiver<Progress>) -> SliceJob {

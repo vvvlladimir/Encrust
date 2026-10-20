@@ -3,7 +3,7 @@ use core_geometry::{Scalar, transform_mesh};
 use core_volume::Boolean;
 
 use crate::i18n::tr;
-use crate::job::{BooleanJob, BooleanOutcome, BooleanRequest, Method};
+use crate::job::{BooleanJob, BooleanOutcome, BooleanRequest, Counted, Method};
 use crate::landing;
 use crate::scene::{Scene, SceneObject, Taken};
 use crate::status::Status;
@@ -65,6 +65,11 @@ impl BooleanTool {
 
     pub fn is_busy(&self) -> bool {
         self.job.is_some()
+    }
+
+    /// How far the combination going has got, while it has counted something.
+    pub fn counted(&self) -> Option<Counted> {
+        self.job.as_ref()?.counted()
     }
 
     /// Gives up on the run going, which leaves the picked models as they are.

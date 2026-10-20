@@ -57,6 +57,7 @@ hold no built geometry or diagnostics.
 | `objects[].supports.frozen` | every tree a hand took hold of, in the same space |
 | `objects[].hollow.drains[]`, `objects[].hollow.channels[]` | `shape` and `turn_deg`, the outline and its turn in the model's own space (ADR 0313); absent in older files and read as round |
 | `objects[].plug_of` | the place in `objects[]` of the model this one is a plug for (ADR 0313); absent on any other model, and in older files |
+| `objects[].relief_painted` | the faces the Relief brush painted, the only ones a texture is pressed into, as `supports.painted` writes a set of faces (ADR 0318); absent while none are painted, and in older files |
 | `objects[].hollow.built` | the shell standing on the model, or `null` for a solid one |
 | `objects[].hollow.built.wall.open_toward` | the way to the plate its floor was opened toward (ADR 0313); absent for a closed shell, and in older files |
 

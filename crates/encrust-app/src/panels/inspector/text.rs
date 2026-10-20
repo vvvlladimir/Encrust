@@ -47,7 +47,7 @@ pub fn sections(ui: &mut egui::Ui, window: &mut Window) {
 /// Where the next click goes, why it cannot, or the stamp that is running.
 pub fn action(ui: &mut egui::Ui, window: &mut Window) {
     if window.tools.text.is_busy() {
-        if busy(ui, &tr!("text-stamping"), true) {
+        if busy(ui, &tr!("text-stamping"), None, true) {
             window.tools.text.cancel(&mut window.machine.status);
         }
         return;

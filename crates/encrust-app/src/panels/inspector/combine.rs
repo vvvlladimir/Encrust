@@ -59,7 +59,11 @@ fn role(op: Boolean, index: usize) -> String {
 pub fn action(ui: &mut egui::Ui, window: &mut Window) {
     let tool = &mut window.tools.boolean;
     if tool.is_busy() {
-        if busy(ui, &tr!("boolean-combining"), true) {
+        let step = tool
+            .counted()
+            .map(|counted| (counted.label(), counted.share));
+        let step = step.as_ref().map(|(label, share)| (label.as_str(), *share));
+        if busy(ui, &tr!("boolean-combining"), step, true) {
             tool.cancel(&mut window.machine.status);
         }
         return;

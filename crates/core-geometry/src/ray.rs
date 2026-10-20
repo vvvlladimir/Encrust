@@ -163,7 +163,7 @@ pub fn raycast_placed(
         inverse.transform_vector3(ray.direction),
     );
 
-    let hit = bvh.raycast(mesh, &local)?;
+    let hit = bvh.raycast(&local)?;
     let point = matrix.transform_point3(local.at(hit.t));
 
     // A normal does not survive a non-uniform scale under the model matrix, but it does

@@ -682,11 +682,19 @@ relief-hold = Оставить ровными
 relief-hold-bottom = Грани вниз
 relief-hold-top = Грани вверх
 relief-hold-note = Грани, отклонённые от направления на платформу или прямо вверх не больше чем на столько градусов, сохраняют форму, и рельеф обрывается на их краю. Ноль не оставляет ни одной.
+relief-paint = Где
+relief-paint-brush = Рисовать, где выдавить
+relief-paint-hint = Ведите по модели, чтобы закрасить; Alt — стереть.
+relief-paint-note = Как только на модели закрашена хоть одна грань, текстура выдавливается только в закрашенные грани, остальная модель сохраняет свою сетку, и вид показывает текстуру только там.
+relief-paint-clear = Очистить закрашенные области
+relief-nothing-painted = Ничего не закрашено: закрасьте, где нужна текстура, или отключите кисть, чтобы выдавить на всю модель.
 relief-image = Изображение
 relief-image-note = Собственная текстура модели превращается в геометрию: белый выдвигает поверхность наружу, чёрный оставляет на месте. Либо выберите текстуру ниже или свою картинку, чтобы замостить ею любую модель.
 relief-picture-size = { $width } × { $height } пикс.
 relief-choose-another = Выбрать другую
 relief-choose-picture = Выбрать картинку
+relief-own = Собственные текстуры моделей
+relief-own-none = На столе их нет: нажмите на квадрат, чтобы выбрать текстуру
 relief-own-textures = Использовать собственные текстуры моделей
 relief-tiling-note = Картинка накладывается с трёх сторон, на которые смотрит модель, и каждая грань читает её со стороны, на которую смотрит больше всего.
 relief-lattice-note = Рельеф вырезается на сетке { $lattice } мм, и вся модель заново строится по ней. Отрицательная глубина вдавливает текстуру.
@@ -1796,9 +1804,23 @@ app-cannot-build-preview = не удалось построить предпро
 ## job/hollow.rs
 
 job-thread-stopped-hollowing = поток выдалбливания остановился, не закончив
-job-hollow-stopping = Остановка после этой модели
+job-hollow-stopping = Остановка...
 job-hollow-progress = Выдалбливание модели { $index } из { $total }
-job-hollow-working = Выдалбливание...
+job-step-preparing = Проверка модели
+job-step-seeding = Замер поверхности
+job-step-carrying = Построение поля
+job-step-refining = Уточнение поля
+job-step-surfacing = Построение поверхности
+job-step-shaping = Завершение
+job-step-reading = Чтение моделей
+job-step-combining = Объединение
+job-step-finishing = Сборка результата
+job-hollow-preparing = Проверка модели
+job-hollow-seeding = Замер поверхности
+job-hollow-carrying = Проход через стенку
+job-hollow-refining = Расчёт стенки
+job-hollow-surfacing = Построение внутренней поверхности
+job-hollow-shaping = Завершение оболочки
 
 ## job/import.rs
 
