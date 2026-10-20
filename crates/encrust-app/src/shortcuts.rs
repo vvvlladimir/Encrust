@@ -329,6 +329,29 @@ fn action_of(key: Key, modifiers: Modifiers) -> Option<Action> {
         .map(|(binding, _)| binding.action)
 }
 
+/// Whether a browser must not act on this chord as well as the window: Safari reopens a
+/// closed tab on Cmd Z, F1 opens help. A plain key stays the browser's, so typing still works.
+#[cfg(any(target_arch = "wasm32", test))]
+pub fn kept_from_browser(key: Key, modifiers: Modifiers) -> bool {
+    let typed = !modifiers.command
+        && !matches!(
+            key,
+            Key::F1
+                | Key::F2
+                | Key::F3
+                | Key::F4
+                | Key::F5
+                | Key::F6
+                | Key::F7
+                | Key::F8
+                | Key::F9
+                | Key::F10
+                | Key::F11
+                | Key::F12
+        );
+    !typed && action_of(key, modifiers).is_some()
+}
+
 /// How many modifiers a chord carries, which is what makes one busier than another.
 fn held(chord: &KeyboardShortcut) -> u32 {
     let modifiers = chord.modifiers;
@@ -731,6 +754,24 @@ mod tests {
         assert!(
             press(Key::Tab, Modifiers::COMMAND).is_empty(),
             "Cmd Tab belongs to the window manager"
+        );
+    }
+
+    #[test]
+    fn a_page_keeps_the_chords_a_browser_would_also_act_on() {
+        assert!(kept_from_browser(Key::Z, Modifiers::COMMAND));
+        assert!(kept_from_browser(
+            Key::Z,
+            Modifiers::COMMAND.plus(Modifiers::SHIFT)
+        ));
+        assert!(kept_from_browser(Key::F1, Modifiers::NONE));
+        assert!(
+            !kept_from_browser(Key::M, Modifiers::NONE),
+            "a plain key must still type into a field"
+        );
+        assert!(
+            !kept_from_browser(Key::C, Modifiers::COMMAND),
+            "Cmd C is the browser's copy, which the window reads"
         );
     }
 

@@ -110,6 +110,7 @@ web-sys = { workspace = true, features = [
     "FileSystemSyncAccessHandle",
     "HtmlCanvasElement",
     "HtmlInputElement",
+    "KeyboardEvent",
     "Storage",
     "StorageManager",
     "Window",

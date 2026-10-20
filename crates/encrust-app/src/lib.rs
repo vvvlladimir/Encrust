@@ -91,6 +91,7 @@ pub async fn run_web(
     bindings: String,
 ) -> Result<(), wasm_bindgen::JsValue> {
     web::thread::init(bindings);
+    web::keys::keep_from_browser()?;
     let mut options = eframe::WebOptions::default();
     render::ask_for_timestamps(&mut options.wgpu_options);
     eframe::WebRunner::new()

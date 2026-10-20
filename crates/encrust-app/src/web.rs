@@ -3,6 +3,7 @@
 //! `docs/design/web-build.md`.
 
 pub mod files;
+pub mod keys;
 pub mod opfs;
 pub mod profiles;
 pub mod thread;
