@@ -1,6 +1,6 @@
 # 0303. Do exact mesh booleans in `core-csg`, over `boolmesh`
 
-- **Status:** Accepted
+- **Status:** Accepted; a result's triangle list varying from run to run is superseded by 0315
 - **Date:** 2026-10-18
 
 ## Context

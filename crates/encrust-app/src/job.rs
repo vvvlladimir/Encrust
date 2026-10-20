@@ -150,11 +150,8 @@ impl Counted {
     }
 }
 
-/// Where each step starts and ends in the share of one run on a field, as the steps
-/// weighed on a figurine and a bust at two walls and two precisions; see ADR 0317.
-///
-/// An exact boolean reads its models in about the time the engine then takes, and the mesh
-/// it makes back is a tenth of the run, on a bust under a few models.
+/// Where each step starts and ends in the share of one run, a field's or an exact boolean's,
+/// as weighed on a figurine and a bust; see ADR 0317.
 const STEP_SPANS: [(Step, f32, f32); 9] = [
     (Step::Preparing, 0.0, 0.1),
     (Step::Seeding, 0.1, 0.2),

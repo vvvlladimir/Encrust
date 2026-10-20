@@ -828,6 +828,15 @@ mod tests {
     }
 
     #[test]
+    fn a_painted_region_counts_its_own_bits_whatever_count_the_file_claims() {
+        let mut region: Region = serde_json::from_str(r#"{ "words": [5], "marked": 0 }"#)
+            .expect("a region with a wrong count still reads");
+        assert_eq!(region.len(), 2, "bits 0 and 2 are set in the word 5");
+        assert!(region.set(0, false));
+        assert_eq!(region.len(), 1);
+    }
+
+    #[test]
     fn a_hollowed_model_brings_its_shell_back_with_what_it_was_measured_at() {
         let saved = project(1);
         let back = round_trip(&saved);

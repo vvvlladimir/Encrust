@@ -219,8 +219,8 @@ capped silently.
   result is dropped and the stage notice says so.
 - While a press of one model, a combination or a split runs, the panel shows how much of
   it is done and the step it is on: a combination reads the models one by one, combines
-  them and builds the result. A cut, and a press of several models at once, show a running
-  bar only.
+  them and builds the result. A cut, a press into painted faces and a press of several
+  models at once show a running bar only.
 - The mode and the built-in texture chosen are remembered between runs.
 
 ### Hollow
@@ -573,9 +573,9 @@ it into its parts or cut a part off, all at the window's default sizes, before i
 print a plug for each beside the model, with the gap you choose. A run whose plugs have no
 room beside their model stops rather than printing them on a neighbour.
 
-**You cannot** (from the command line): paint supports, place them by hand, set blockers,
-take the pieces of a cut or a split out as meshes, or hollow or support a model a cut or a
-split broke into several pieces. Do that in the window, save a project, then slice it.
+**You cannot** (from the command line): paint supports or where a relief goes, place supports
+by hand, set blockers, take the pieces of a cut or a split out as meshes, or hollow or support
+a model a cut or a split broke into several pieces. Do that in the window, save a project, then slice it.
 
 ---
 

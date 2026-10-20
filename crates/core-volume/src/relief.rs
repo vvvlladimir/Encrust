@@ -259,21 +259,32 @@ pub fn press_tiled_reusing(
     pressable(mesh, settings)?;
     tiling.check()?;
     let image = prepared(image, settings);
+    let tiled = tiled(&image, tiling);
+    let sample = |face: usize, point: Vec3| {
+        tiled(
+            point,
+            mesh.triangle(face)?.normal_unnormalized().try_normalize()?,
+        )
+    };
+    displaced(mesh, bvh, settings, &sample, (basis, cancel))
+}
+
+/// The height `image`, laid as `tiling` lays it, reads at a point of a surface facing a
+/// unit normal: its three planes weighted by how squarely the surface faces each.
+fn tiled(image: &Heightmap, tiling: Tiling) -> impl Fn(Vec3, Vec3) -> Option<Scalar> + Sync + '_ {
     let (sin, cos) = tiling.angle_deg.to_radians().sin_cos();
-    let on_plane = |a: Scalar, b: Scalar| {
+    let on_plane = move |a: Scalar, b: Scalar| {
         let turned = Vec2::new(a * cos - b * sin, a * sin + b * cos);
         image.sample(turned / tiling.tile_mm)
     };
-    let sample = |face: usize, point: Vec3| {
-        let normal = mesh.triangle(face)?.normal_unnormalized().try_normalize()?;
+    move |point: Vec3, normal: Vec3| {
         let weights = normal.abs().powf(BLEND_POWER as Scalar);
         let total = weights.x + weights.y + weights.z;
         let height = weights.x * on_plane(point.y, point.z)
             + weights.y * on_plane(point.x, point.z)
             + weights.z * on_plane(point.x, point.y);
-        Some(height / total)
-    };
-    displaced(mesh, bvh, settings, &sample, (basis, cancel))
+        (total > 0.0).then(|| height / total)
+    }
 }
 
 /// The surface of `mesh` moved by the height `sample` reads at its nearest point, over

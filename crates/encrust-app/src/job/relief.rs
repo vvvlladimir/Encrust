@@ -155,7 +155,7 @@ fn pressed(
     let basis = task.basis.clone();
     let (relief, basis) = match (&request.source, &task.mapped, uvs, &task.painted) {
         (ReliefSource::Tiled { image, tiling }, _, _, Some(painted)) => (
-            press_painted_tiled(&mesh, image, *tiling, settings, painted)?,
+            press_painted_tiled(&mesh, image, *tiling, settings, painted, cancel)?,
             None,
         ),
         (ReliefSource::Tiled { image, tiling }, _, _, None) => {
@@ -164,7 +164,7 @@ fn pressed(
             (relief, Some(basis))
         }
         (ReliefSource::Mapped, Some(mapped), Some(uvs), Some(painted)) => (
-            press_painted(&mesh, &uvs, &mapped.heights, settings, painted)?,
+            press_painted(&mesh, &uvs, &mapped.heights, settings, painted, cancel)?,
             None,
         ),
         (ReliefSource::Mapped, Some(mapped), Some(uvs), None) => {

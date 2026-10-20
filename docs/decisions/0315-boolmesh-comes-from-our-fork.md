@@ -1,6 +1,6 @@
 # 0315. Take `boolmesh` from our fork, threaded and deterministic
 
-- **Status:** Accepted; the commit it pins is superseded by 0316
+- **Status:** Accepted
 - **Date:** 2026-10-20
 
 ## Context
@@ -22,29 +22,33 @@ stay open.
 ## Decision
 
 The workspace takes `boolmesh` from git, `github.com/vvvlladimir/boolmesh`, pinned to commit
-`b6488b0` of its `parallel` branch, which is 0.2.1 plus two changes:
+`48b09fd` of its `parallel` branch, which is 0.2.1 plus three changes:
 
 - **Deterministic.** The edge maps of `boolean45` are `BTreeMap`s and ear-clipping ties
   break by creation order, so a boolean depends on its input alone.
 - **Threaded.** Reading a solid — weld, face sort, edge topology, normals, the collider's
   tree and boxes, the coplanar sort — and the boolean's collision queries, winding numbers,
   triangulation assembly and output buffers run on `rayon`, through one helper module.
+- **Slim.** A result is taken from its paired halfedges instead of rebuilt; coplanar faces
+  are grouped when an operand first needs it, walking only faces with a neighbour in their
+  plane; pinched vertices, duplicate edges and untouched edges are handled on every core;
+  indices are `u32` and the collider's boxes `f32` rounded outward. It adds `compose`, which
+  sets solids side by side with no boolean, for ADR 0316.
 
-Both hold one rule: the output is the same bit for bit on any number of threads and without
+All hold one rule, checked by the fork's `examples/golden.rs`: the output is the same bit for bit on any number of threads and without
 `rayon`, so the browser and the desktop agree. Each change is offered upstream, and the
 workspace returns to crates.io once a release carries them.
 
 ## Consequences
 
-At a million faces, reading falls from 0.65 s to 0.35 s and cutting from 0.92 s to 0.52 s;
-in `core-volume`'s `boolean` bench, letters on a dense ball take 44% less time and an
-opened floor 13% less. At four million faces the peak memory of one boolean falls from
-6.5 GB to 5.6 GB, because edge topology sorts 16-byte rows instead of 32. The steps still on
-one thread are the coplanar flood fill and the simplification, which are now the ceiling.
+Threading alone took reading a million faces from 0.65 s to 0.35 s and cutting them from
+0.92 s to 0.52 s; in `core-volume`'s `boolean` bench letters on a dense ball take 44% less
+time and an opened floor 13% less. Slimming then brought that boolean's peak from 1.4 GB to
+0.9 GB, so four million faces no longer swap on 8 GB.
 
 `cargo deny` allows this one git source. The fork is ours to rebase on each upstream
-release, and its collider carries the workspace's only `unsafe` boolean code: parallel box
-writes ordered by an atomic counter.
+release, and it carries the workspace's only `unsafe` boolean code: parallel box writes
+ordered by an atomic counter, and one helper for slices written from several threads.
 
 Tests may compare triangle lists of a boolean now, not only volumes.
 

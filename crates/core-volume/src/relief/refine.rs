@@ -1,6 +1,9 @@
 use core_geometry::{FastMap, FastSet, Mesh, Scalar, Vec3};
 use rayon::prelude::*;
 
+use crate::cancel::Cancel;
+use crate::error::VolumeError;
+
 /// A mesh split finer where it was painted, each face knowing the face it was cut from.
 pub(super) struct Refined {
     pub mesh: Mesh,
@@ -10,13 +13,15 @@ pub(super) struct Refined {
 }
 
 /// `mesh` with every face `painted` names split at the middle of each edge longer than
-/// `edge_mm`, until none is. A face beside a painted one is split along the edge they share,
-/// so the surface stays closed and nothing unpainted moves.
+/// `edge_mm`, until none is or another pass could pass `most_faces`, and whether it stopped
+/// for that. A face beside a painted one is split along their shared edge, so it stays closed.
 pub(super) fn refine(
     mesh: &Mesh,
     painted: &(dyn Fn(usize) -> bool + Sync),
     edge_mm: Scalar,
-) -> Refined {
+    most_faces: usize,
+    cancel: Cancel<'_>,
+) -> Result<(Refined, bool), VolumeError> {
     let mut refined = Refined {
         mesh: mesh.clone(),
         origin: (0..mesh.faces.len() as u32).collect(),
@@ -24,9 +29,16 @@ pub(super) fn refine(
     };
     let limit = edge_mm * edge_mm;
     loop {
+        if cancel.asked() {
+            return Err(VolumeError::Cancelled);
+        }
         let middles = long_edges(&refined, limit);
         if middles.is_empty() {
-            return refined;
+            return Ok((refined, false));
+        }
+        // Each split edge adds a face on either side of it, slivers or not.
+        if refined.mesh.faces.len() + 2 * middles.len() > most_faces {
+            return Ok((refined, true));
         }
         split(&mut refined, &middles);
     }
@@ -142,14 +154,20 @@ mod tests {
     use super::*;
     use core_geometry::{Vec3, cuboid, diagnose};
 
+    fn lid_of(mesh: &Mesh) -> impl Fn(usize) -> bool + Sync + '_ {
+        |face: usize| {
+            mesh.triangle(face)
+                .is_some_and(|triangle| triangle.normal_unnormalized().z > 0.0)
+        }
+    }
+
     #[test]
     fn a_painted_face_is_split_finer_than_asked_and_the_mesh_stays_closed() {
         let mesh = cuboid(Vec3::ZERO, Vec3::splat(10.0));
-        let lid = |face: usize| {
-            mesh.triangle(face)
-                .is_some_and(|triangle| triangle.normal_unnormalized().z > 0.0)
-        };
-        let refined = refine(&mesh, &lid, 1.0);
+        let lid = lid_of(&mesh);
+        let (refined, cut_short) =
+            refine(&mesh, &lid, 1.0, usize::MAX, Cancel::never()).expect("nothing stops it");
+        assert!(!cut_short);
         let longest = refined
             .mesh
             .faces
@@ -180,5 +198,34 @@ mod tests {
             (area(true) - 100.0).abs() < 1e-3 && (area(false) - 500.0).abs() < 1e-3,
             "the 10 mm lid and the five other sides keep their areas"
         );
+    }
+
+    #[test]
+    fn a_split_stops_short_of_more_faces_than_it_may_make() {
+        let mesh = cuboid(Vec3::ZERO, Vec3::splat(10.0));
+        let (refined, cut_short) =
+            refine(&mesh, &lid_of(&mesh), 0.01, 200, Cancel::never()).expect("nothing stops it");
+        assert!(
+            cut_short,
+            "a 0.01 mm edge over 100 mm² needs millions of faces"
+        );
+        assert!(refined.mesh.faces.len() <= 200);
+        assert!(diagnose(&refined.mesh).is_closed());
+    }
+
+    #[test]
+    fn a_split_asked_to_stop_stops() {
+        let mesh = cuboid(Vec3::ZERO, Vec3::splat(10.0));
+        let stopped = || true;
+        assert!(matches!(
+            refine(
+                &mesh,
+                &lid_of(&mesh),
+                1.0,
+                usize::MAX,
+                Cancel::when(&stopped)
+            ),
+            Err(VolumeError::Cancelled)
+        ));
     }
 }

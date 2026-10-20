@@ -219,6 +219,7 @@ fn hollowing(c: &mut Criterion, mesh: &Mesh, bvh: &Bvh) {
                     std::slice::from_ref(&checks),
                     &relief,
                     &patch,
+                    Cancel::never(),
                 )
             });
         },

@@ -1,8 +1,9 @@
-use core_geometry::{Heightmap, Mesh, Region, Scalar, UvMap, Vec2, Vec3};
+use core_geometry::{Heightmap, Mesh, Region, Scalar, UvMap, Vec3};
 use rayon::prelude::*;
 
 use super::refine::{Refined, refine};
-use super::{BLEND_POWER, Relief, ReliefSettings, Tiling, prepared, pressable};
+use super::{Relief, ReliefSettings, Tiling, prepared, pressable, tiled};
+use crate::cancel::Cancel;
 use crate::error::VolumeError;
 
 /// What one face of a split mesh costs while it is split and moved, bytes: its corners,
@@ -18,6 +19,7 @@ pub fn press_painted(
     heights: &[Heightmap],
     settings: &ReliefSettings,
     painted: &Region,
+    cancel: Cancel<'_>,
 ) -> Result<Relief, VolumeError> {
     pressable(mesh, settings)?;
     super::mapped(mesh, uvs, heights)?;
@@ -29,7 +31,7 @@ pub fn press_painted(
         let (texture, uv) = uvs.at(mesh, face, point)?;
         Some(heights.get(texture)?.sample(uv))
     };
-    Ok(moved(mesh, settings, painted, &sample))
+    moved(mesh, settings, painted, &sample, cancel)
 }
 
 /// [`press_painted`] with `image` laid over the painted faces as tiles, as [`super::press_tiled`]
@@ -40,24 +42,14 @@ pub fn press_painted_tiled(
     tiling: Tiling,
     settings: &ReliefSettings,
     painted: &Region,
+    cancel: Cancel<'_>,
 ) -> Result<Relief, VolumeError> {
     pressable(mesh, settings)?;
     tiling.check()?;
     let image = prepared(image, settings);
-    let (sin, cos) = tiling.angle_deg.to_radians().sin_cos();
-    let on_plane = |a: Scalar, b: Scalar| {
-        let turned = Vec2::new(a * cos - b * sin, a * sin + b * cos);
-        image.sample(turned / tiling.tile_mm)
-    };
-    let sample = |_face: usize, point: Vec3, normal: Vec3| {
-        let weights = normal.abs().powf(BLEND_POWER as Scalar);
-        let total = weights.x + weights.y + weights.z;
-        let height = weights.x * on_plane(point.y, point.z)
-            + weights.y * on_plane(point.x, point.z)
-            + weights.z * on_plane(point.x, point.y);
-        (total > 0.0).then(|| height / total)
-    };
-    Ok(moved(mesh, settings, painted, &sample))
+    let tiled = tiled(&image, tiling);
+    let sample = |_face: usize, point: Vec3, normal: Vec3| tiled(point, normal);
+    moved(mesh, settings, painted, &sample, cancel)
 }
 
 /// `mesh` split finer over the faces `painted` names and the mask does not hold, with
@@ -67,16 +59,19 @@ fn moved(
     settings: &ReliefSettings,
     painted: &Region,
     sample: &(dyn Fn(usize, Vec3, Vec3) -> Option<Scalar> + Sync),
-) -> Relief {
+    cancel: Cancel<'_>,
+) -> Result<Relief, VolumeError> {
     let pressed = |face: usize| painted.contains(face) && !settings.mask.holds_face(mesh, face);
-    let area: Scalar = (0..mesh.faces.len())
-        .into_par_iter()
+    // Summed in face order, so the edge and the faces it splits to are the same every run.
+    let area: Scalar = painted
+        .faces()
         .filter(|face| pressed(*face))
         .filter_map(|face| mesh.triangle(face))
         .map(|triangle| triangle.area())
         .sum();
     let (edge_mm, coarsened) = edge_mm(settings, area);
-    let mut refined = refine(mesh, &pressed, edge_mm);
+    let most_faces = settings.budget_bytes / BYTES_PER_FACE;
+    let (mut refined, cut_short) = refine(mesh, &pressed, edge_mm, most_faces, cancel)?;
     let (normals, heights) = corners(&refined, sample);
     let fixed = edges_of_the_paint(&refined);
     for (vertex, position) in refined.mesh.vertices.iter_mut().enumerate() {
@@ -86,11 +81,11 @@ fn moved(
         let lift_mm = settings.amplitude_mm * settings.lifted(height);
         *position += normals[vertex].normalize_or_zero() * lift_mm;
     }
-    Relief {
+    Ok(Relief {
         mesh: refined.mesh,
         voxel_mm: edge_mm,
-        coarsened,
-    }
+        coarsened: coarsened || cut_short,
+    })
 }
 
 /// The longest edge a painted face is split down to, mm: the lattice a field relief of
@@ -167,7 +162,9 @@ fn edges_of_the_paint(refined: &Refined) -> Vec<bool> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use core_geometry::{Mapping, cuboid, diagnose};
+    use core_geometry::{Mapping, Vec2, cuboid, diagnose};
+
+    const NEVER: Cancel<'static> = Cancel::never();
 
     fn flat(height: Scalar) -> Heightmap {
         Heightmap::new(1, 1, vec![height]).expect("one sample over one pixel")
@@ -201,9 +198,10 @@ mod tests {
     #[test]
     fn only_a_painted_lid_rises_and_the_rest_keeps_every_vertex() {
         let (mesh, lid) = cube_and_lid();
-        let pressed = press_painted_tiled(&mesh, &flat(1.0), Tiling::default(), &raised(), &lid)
-            .expect("a painted cube presses")
-            .mesh;
+        let pressed =
+            press_painted_tiled(&mesh, &flat(1.0), Tiling::default(), &raised(), &lid, NEVER)
+                .expect("a painted cube presses")
+                .mesh;
         let top = pressed
             .vertices
             .iter()
@@ -237,7 +235,7 @@ mod tests {
     fn a_painted_face_reads_its_own_map() {
         let (mesh, lid) = cube_and_lid();
         let uvs = UvMap::new(vec![Some(Mapping::sole([Vec2::ZERO; 3])); mesh.faces.len()]);
-        let pressed = press_painted(&mesh, &uvs, &[flat(1.0)], &raised(), &lid)
+        let pressed = press_painted(&mesh, &uvs, &[flat(1.0)], &raised(), &lid, NEVER)
             .expect("a mapped cube presses")
             .mesh;
         let top = pressed
@@ -253,7 +251,7 @@ mod tests {
         let (mesh, lid) = cube_and_lid();
         let short = UvMap::new(vec![Some(Mapping::sole([Vec2::ZERO; 3]))]);
         assert!(matches!(
-            press_painted(&mesh, &short, &[flat(1.0)], &raised(), &lid),
+            press_painted(&mesh, &short, &[flat(1.0)], &raised(), &lid, NEVER),
             Err(VolumeError::UnmappedMesh { .. })
         ));
         let second = UvMap::new(vec![
@@ -264,7 +262,7 @@ mod tests {
             mesh.faces.len()
         ]);
         assert!(matches!(
-            press_painted(&mesh, &second, &[flat(1.0)], &raised(), &lid),
+            press_painted(&mesh, &second, &[flat(1.0)], &raised(), &lid, NEVER),
             Err(VolumeError::MissingTexture {
                 wanted: 2,
                 given: 1
@@ -275,7 +273,7 @@ mod tests {
             angle_deg: 0.0,
         };
         assert!(matches!(
-            press_painted_tiled(&mesh, &flat(1.0), no_tile, &raised(), &lid),
+            press_painted_tiled(&mesh, &flat(1.0), no_tile, &raised(), &lid, NEVER),
             Err(VolumeError::BadTile(_))
         ));
         let nothing = ReliefSettings {
@@ -283,7 +281,7 @@ mod tests {
             ..ReliefSettings::default()
         };
         assert!(matches!(
-            press_painted_tiled(&mesh, &flat(1.0), Tiling::default(), &nothing, &lid),
+            press_painted_tiled(&mesh, &flat(1.0), Tiling::default(), &nothing, &lid, NEVER),
             Err(VolumeError::BadAmplitude(_))
         ));
     }

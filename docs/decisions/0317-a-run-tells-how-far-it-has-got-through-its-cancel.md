@@ -16,24 +16,26 @@ window (`.claude/rules/architecture.md`, rule 1).
 
 `Cancel` also carries an optional `&Progress`: `Cancel::when(..).reporting(&progress)`.
 `Progress` is three atomics — the `Step` in hand, pieces done, pieces in the step — written
-by the run from any of its threads and read by the window each frame, so nothing is sent
-per tile. The steps are Preparing, Seeding, Carrying (tiles of the rings and of the
-settling passes), Refining (stored tiles), Surfacing (layers of tiles) and Shaping; an
-exact boolean, which Combine tries before a field, adds Reading (models), Combining and
-Finishing, the engine itself counting nothing inside. The
-window turns them into one share with fixed spans per step, weighed on a figurine and a
-bust at two walls and two precisions, and names the step. It states no time left: with
-spans that are averages, a figure in seconds was wrong by half on a thin wall.
+by the run from any of its threads and read by the window each frame, so nothing is sent per
+tile. The steps are Preparing, Seeding, Carrying (tiles of the rings and of the settling
+passes), Refining (stored tiles), Surfacing (layers of tiles) and Shaping; an exact boolean,
+which Combine tries before a field, adds Reading (models), Combining and Finishing, the
+engine itself counting nothing inside. The window turns them into one share with fixed spans
+per step, weighed on a figurine and a bust at two walls and two precisions, and names the
+step. An exact boolean reads its models in about the time the engine then takes, and
+building its mesh back is a tenth of the run. It states no time left: with spans that are
+averages, a figure in seconds was wrong by half on a thin wall.
 
 ## Consequences
 
-Relief, Combine and Split report the same steps for free; the window's `Worker` carries a
-`Progress` for every tool, and a run that counts nothing leaves it unbegun, so its panel
-keeps a running bar. A press of several models runs them side by side and is not counted,
-since one count for all would jump between them. A count costs one relaxed `fetch_add` per tile; a field has thousands. The spans
-are averages, so on a thin wall, where carrying weighs more, the bar moves unevenly. Shaping is one uncounted step: an open floor or a lattice
-waits at 98 % until its booleans are done. Reopen if a step needs its own count — the
-floor's booleans — or the spans drift from what profiles show.
+Relief over a field, Combine and Split report the same steps for free; the window's `Worker`
+carries a `Progress` for every tool, and a run that counts nothing leaves it unbegun, so its
+panel keeps a running bar. A press of several models runs them side by side and is not
+counted, since one count for all would jump between them. A count costs one relaxed
+`fetch_add` per tile; a field has thousands. The spans are averages, so on a thin wall,
+where carrying weighs more, the bar moves unevenly. Shaping is one uncounted step: an open
+floor or a lattice waits at 98 % until its booleans are done. Reopen if a step needs its own
+count — the floor's booleans — or the spans drift from what profiles show.
 
 ## Alternatives considered
 

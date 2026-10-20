@@ -167,7 +167,8 @@ encrust slice figure.stl --printer elegoo-mars-4-ultra --hollow 2 \
 The model's own texture pressed in as relief, as deep as the plate millimetres given.
 Negative sinks it in. Needs a model carrying UVs and an image beside it — or
 `--relief-image`, a picture tiled over any model from three sides, `--relief-tile`
-millimetres wide (12 by default) and turned `--relief-angle` degrees (ADR 0225):
+millimetres wide (12 by default) and turned `--relief-angle` degrees (ADR 0225). It presses
+the whole model; a press into painted faces only is painted in the window (ADR 0318):
 
 ```sh
 encrust slice textured.obj \

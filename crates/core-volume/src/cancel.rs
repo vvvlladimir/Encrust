@@ -85,6 +85,21 @@ pub enum Step {
     Finishing,
 }
 
+impl Step {
+    /// Every step, in the order of its discriminant.
+    const ALL: [Self; 9] = [
+        Self::Preparing,
+        Self::Seeding,
+        Self::Carrying,
+        Self::Refining,
+        Self::Surfacing,
+        Self::Shaping,
+        Self::Reading,
+        Self::Combining,
+        Self::Finishing,
+    ];
+}
+
 /// How far a run has got: which step, and how many of its pieces are done. Written by the
 /// run from any of its threads and read by whoever watches, at whatever pace.
 #[derive(Debug, Default)]
@@ -107,18 +122,7 @@ impl Progress {
     /// has begun a step: a run that counts none never leaves it. A total of zero is a step
     /// that cannot be counted.
     pub fn read(&self) -> Option<(Step, usize, usize)> {
-        let step = match self.step.load(Relaxed) {
-            0 => return None,
-            1 => Step::Preparing,
-            2 => Step::Seeding,
-            3 => Step::Carrying,
-            4 => Step::Refining,
-            5 => Step::Surfacing,
-            6 => Step::Shaping,
-            7 => Step::Reading,
-            8 => Step::Combining,
-            _ => Step::Finishing,
-        };
+        let step = *Step::ALL.get(usize::from(self.step.load(Relaxed)).checked_sub(1)?)?;
         let total = self.total.load(Relaxed);
         Some((step, self.done.load(Relaxed).min(total), total))
     }

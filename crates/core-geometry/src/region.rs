@@ -12,12 +12,34 @@ const SINGULAR: Scalar = 1e-12;
 /// set survives moving and scaling the model, and a fill or a press reads the same
 /// triangles the slicer will. See `docs/decisions/0092` and `docs/decisions/0318`.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(from = "Stored")]
 pub struct Region {
     words: Vec<u64>,
     marked: usize,
 }
 
+/// A region as a file holds it, its count taken from the bits rather than trusted.
+#[derive(Deserialize)]
+struct Stored {
+    words: Vec<u64>,
+}
+
+impl From<Stored> for Region {
+    fn from(stored: Stored) -> Self {
+        let marked = stored
+            .words
+            .iter()
+            .map(|word| word.count_ones() as usize)
+            .sum();
+        Self {
+            words: stored.words,
+            marked,
+        }
+    }
+}
+
 impl Region {
+    /// Whether no face is marked.
     pub fn is_empty(&self) -> bool {
         self.marked == 0
     }
@@ -27,6 +49,7 @@ impl Region {
         self.marked
     }
 
+    /// Whether `face` is marked.
     pub fn contains(&self, face: usize) -> bool {
         self.words
             .get(face / 64)
@@ -59,6 +82,7 @@ impl Region {
         })
     }
 
+    /// Unmarks every face.
     pub fn clear(&mut self) {
         self.words.clear();
         self.marked = 0;
