@@ -19,7 +19,6 @@ account and no cloud.
 &nbsp;·&nbsp; [Discussions](https://github.com/vvvlladimir/Encrust/discussions)
 &nbsp;·&nbsp; [Report a bug](https://github.com/vvvlladimir/Encrust/issues)
 
-[![CI](https://github.com/vvvlladimir/Encrust/actions/workflows/ci.yml/badge.svg)](https://github.com/vvvlladimir/Encrust/actions/workflows/ci.yml)
 [![Latest release](https://img.shields.io/github/v/release/vvvlladimir/Encrust?display_name=tag&color=brightgreen)](https://github.com/vvvlladimir/Encrust/releases/latest)
 [![Status: alpha](https://img.shields.io/badge/status-alpha-orange.svg)](#where-it-stands)
 [![Platforms](https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux%20%7C%20Browser-lightgrey.svg)](#get-it)
@@ -53,22 +52,28 @@ or Edge is the safe bet — and it keeps working offline after the first visit. 
 is younger than the desktop one and still catching up to it; for a print you care about, use the
 desktop app.
 
+**On Windows, the easiest way in is the
+[Microsoft Store](https://apps.microsoft.com/detail/9NB0ZMB3M8H8):** the Store copy is signed,
+installs without a warning, and the Store keeps it up to date.
+
 **On your desktop**, from [encrust.app/download](https://encrust.app/download/) or the
 [latest release](https://github.com/vvvlladimir/Encrust/releases/latest):
 
 | System | Download |
 |---|---|
-| Windows 10/11, 64-bit | `Encrust-windows-x86_64-setup.exe` |
+| Windows 10/11, 64-bit | `Encrust-windows-x86_64-setup.exe`, or the [Microsoft Store](https://apps.microsoft.com/detail/9NB0ZMB3M8H8) |
 | macOS 12+, Apple silicon | `Encrust-macos-aarch64.dmg` |
 | macOS 12+, Intel | `Encrust-macos-x86_64.dmg` |
 | Linux, x86-64 | `Encrust-linux-x86_64.AppImage` or `encrust_amd64.deb` |
 
 Install it like any other application. You'll need a GPU with Vulkan, Metal or DirectX 12 — anything
 from the last several years will do. Encrust looks for a new release once a day and updates itself
-from Settings › Updates, where that daily look is also turned off.
+from Settings › Updates, where that daily look is also turned off; a copy from the Microsoft Store
+is updated by the Store instead.
 
-> **The builds aren't code-signed yet**, so the first launch needs one extra step. On Windows,
-> choose *More info › Run anyway*. On macOS, drag Encrust to Applications, then run
+> **The downloaded builds aren't code-signed yet**, so the first launch needs one extra step. On
+> Windows, choose *More info › Run anyway* — or install from the Microsoft Store, which needs no
+> extra step. On macOS, drag Encrust to Applications, then run
 > `xattr -dr com.apple.quarantine /Applications/Encrust.app` in Terminal.
 
 ## Your first print
