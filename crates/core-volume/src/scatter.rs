@@ -1,3 +1,6 @@
+use std::ops::Range;
+use std::sync::atomic::{AtomicU32, Ordering::Relaxed};
+
 use core_geometry::{
     ClosestPoint, FastMap, Mesh, Scalar, Triangle, Vec3, glam::IVec3, point_triangle,
 };
@@ -102,48 +105,51 @@ struct Touched {
     tiles: Vec<IVec3>,
     /// Where each tile's faces start in `faces`, with the end of the last one after it.
     starts: Vec<usize>,
-    faces: Vec<u32>,
+    /// Written from several threads, each slot by one, and only read after.
+    faces: Vec<AtomicU32>,
 }
 
 impl Touched {
+    /// Each run of faces counts its own tiles and then writes its faces where the runs
+    /// before it end, so every list comes out in face order whichever thread wrote it.
     fn of(mesh: &Mesh, grid: VoxelGrid, reach_mm: Scalar, keep: Option<(IVec3, IVec3)>) -> Self {
         let reached = |face: usize| reached(mesh, face, grid, reach_mm, keep);
-        let counts = (0..mesh.faces.len())
-            .into_par_iter()
-            .fold(FastMap::<IVec3, usize>::default, |mut counts, face| {
-                for tile in reached(face) {
+        let len = mesh.faces.len();
+        let run = len
+            .div_ceil(rayon::current_num_threads() * RUNS_PER_THREAD)
+            .max(1);
+        let runs: Vec<Range<usize>> = (0..len)
+            .step_by(run)
+            .map(|first| first..(first + run).min(len))
+            .collect();
+        let counts: Vec<FastMap<IVec3, usize>> = runs
+            .par_iter()
+            .map(|faces| {
+                let mut counts = FastMap::<IVec3, usize>::default();
+                for tile in faces.clone().flat_map(reached) {
                     *counts.entry(tile).or_default() += 1;
                 }
                 counts
             })
-            .reduce(FastMap::default, |mut counts, other| {
-                for (tile, count) in other {
-                    *counts.entry(tile).or_default() += count;
+            .collect();
+
+        let (tiles, starts, cursors) = laid_out(&counts);
+        let faces: Vec<AtomicU32> = (0..starts[tiles.len()])
+            .into_par_iter()
+            .map(|_| AtomicU32::new(0))
+            .collect();
+        runs.into_par_iter()
+            .zip(cursors)
+            .for_each(|(run, mut cursor)| {
+                for face in run {
+                    for tile in reached(face) {
+                        if let Some(at) = cursor.get_mut(&tile) {
+                            faces[*at].store(face as u32, Relaxed);
+                            *at += 1;
+                        }
+                    }
                 }
-                counts
             });
-
-        let mut tiles: Vec<IVec3> = counts.keys().copied().collect();
-        tiles.sort_unstable_by_key(|tile| (tile.z, tile.y, tile.x));
-        let mut starts = Vec::with_capacity(tiles.len() + 1);
-        let mut cursor: FastMap<IVec3, usize> = FastMap::default();
-        let mut total = 0;
-        for tile in &tiles {
-            starts.push(total);
-            cursor.insert(*tile, total);
-            total += counts[tile];
-        }
-        starts.push(total);
-
-        let mut faces = vec![0; total];
-        for face in 0..mesh.faces.len() {
-            for tile in reached(face) {
-                if let Some(at) = cursor.get_mut(&tile) {
-                    faces[*at] = face as u32;
-                    *at += 1;
-                }
-            }
-        }
         Self {
             tiles,
             starts,
@@ -151,9 +157,54 @@ impl Touched {
         }
     }
 
-    fn faces_of(&self, at: usize) -> &[u32] {
+    fn faces_of(&self, at: usize) -> &[AtomicU32] {
         &self.faces[self.starts[at]..self.starts[at + 1]]
     }
+}
+
+/// Runs of faces per thread for [`Touched::of`]: enough that one slow run does not keep the
+/// others waiting, few enough that a run's own count of tiles stays small beside the seed.
+const RUNS_PER_THREAD: usize = 4;
+
+/// The tiles every run's `counts` name, Z slowest, where each tile's list starts, and for
+/// each run where its first face goes in each of its tiles.
+fn laid_out(
+    counts: &[FastMap<IVec3, usize>],
+) -> (Vec<IVec3>, Vec<usize>, Vec<FastMap<IVec3, usize>>) {
+    let mut tiles: Vec<IVec3> = counts.iter().flat_map(FastMap::keys).copied().collect();
+    tiles.sort_unstable_by_key(|tile| (tile.z, tile.y, tile.x));
+    tiles.dedup();
+
+    let mut total: FastMap<IVec3, usize> = FastMap::default();
+    for (tile, count) in counts.iter().flatten() {
+        *total.entry(*tile).or_default() += count;
+    }
+    let mut starts = Vec::with_capacity(tiles.len() + 1);
+    let mut next: FastMap<IVec3, usize> = FastMap::default();
+    let mut end = 0;
+    for tile in &tiles {
+        starts.push(end);
+        next.insert(*tile, end);
+        end += total[tile];
+    }
+    starts.push(end);
+
+    let cursors = counts
+        .iter()
+        .map(|counts| {
+            counts
+                .iter()
+                .map(|(tile, count)| {
+                    let at = next.get_mut(tile).map_or(0, |at| {
+                        *at += count;
+                        *at - count
+                    });
+                    (*tile, at)
+                })
+                .collect()
+        })
+        .collect();
+    (tiles, starts, cursors)
 }
 
 /// The tiles `face`'s bounds grown by `reach_mm` come to, inside `keep` where it is given.
@@ -186,14 +237,15 @@ fn seed_tile(
     grid: VoxelGrid,
     reach_mm: Scalar,
     tile: IVec3,
-    touching: &[u32],
+    touching: &[AtomicU32],
 ) -> Box<[Nearest]> {
     let base = tile * TILE;
     let mut nearest = vec![UNSET; TILE_VALUES];
     let mut best = vec![reach_mm * reach_mm; TILE_VALUES];
 
     for face in touching {
-        let Some(triangle) = faces.get(*face as usize) else {
+        let face = face.load(Relaxed);
+        let Some(triangle) = faces.get(face as usize) else {
             continue;
         };
         let reach = Vec3::splat(reach_mm);
@@ -216,7 +268,7 @@ fn seed_tile(
                     // not be the nearest face and the sweep would carry it outward.
                     if squared < best[slot] {
                         best[slot] = squared;
-                        nearest[slot] = *face;
+                        nearest[slot] = face;
                     }
                 }
             }

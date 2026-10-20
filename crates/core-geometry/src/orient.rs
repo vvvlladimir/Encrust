@@ -1,5 +1,8 @@
 use std::cmp::Reverse;
 
+use rayon::iter::{
+    IndexedParallelIterator, IntoParallelRefIterator, IntoParallelRefMutIterator, ParallelIterator,
+};
 use serde::{Deserialize, Serialize};
 
 use crate::topology::{Components, agree, edge_groups, edge_uses};
@@ -38,9 +41,47 @@ pub fn orient_outward(mesh: &mut Mesh) -> Orientation {
         };
     }
 
+    let (links, touches_open_edge) = links(mesh);
+    let mut flip = settle(mesh.faces.len(), &links);
+    let (shell, shells) =
+        Components::joined(mesh.faces.len(), links.par_iter().map(|link| link.faces)).labels();
+    let turned = |face: &mut [u32; 3], wanted: bool| {
+        if wanted {
+            face.swap(1, 2);
+        }
+    };
+    mesh.faces
+        .par_iter_mut()
+        .zip(&flip)
+        .for_each(|(face, wanted)| turned(face, *wanted));
+    let invert = shells_to_invert(mesh, &shell, shells, &touches_open_edge);
+    let inverted_shells = invert.iter().filter(|wanted| **wanted).count();
+    mesh.faces
+        .par_iter_mut()
+        .zip(&mut flip)
+        .zip(&shell)
+        .for_each(|((face, flipped), shell)| {
+            let wanted = invert[*shell as usize];
+            turned(face, wanted);
+            *flipped ^= wanted;
+        });
+
+    Orientation {
+        flipped_faces: flip.par_iter().filter(|flipped| **flipped).count(),
+        inverted_shells,
+        orientable: links.par_iter().all(|link| {
+            let [a, b] = link.faces.map(|face| flip[face as usize]);
+            link.agreed == (a == b)
+        }),
+    }
+}
+
+/// Every edge exactly two faces use as a link between them, and for each face whether it
+/// has an edge any other number of faces use.
+fn links(mesh: &Mesh) -> (Vec<Link>, Vec<bool>) {
     let uses = edge_uses(mesh);
     let mut links = Vec::new();
-    let mut touches_open_edge = vec![false; mesh.faces.len()];
+    let mut open = vec![false; mesh.faces.len()];
     for group in edge_groups(&uses) {
         if let [first, second] = group {
             links.push(Link {
@@ -49,41 +90,13 @@ pub fn orient_outward(mesh: &mut Mesh) -> Orientation {
             });
         } else {
             for edge_use in group {
-                touches_open_edge[edge_use.face as usize] = true;
+                open[edge_use.face as usize] = true;
             }
         }
     }
-
-    let mut flip = settle(mesh.faces.len(), &links);
-    for (index, face) in mesh.faces.iter_mut().enumerate() {
-        if flip[index] {
-            face.swap(1, 2);
-        }
-    }
-
-    let mut shells = Components::new(mesh.faces.len());
-    for link in &links {
-        shells.union(link.faces[0], link.faces[1]);
-    }
-    let (shell, shells) = shells.labels();
-    let invert = shells_to_invert(mesh, &shell, shells, &touches_open_edge);
-    let inverted_shells = invert.iter().filter(|wanted| **wanted).count();
-    for (index, face) in mesh.faces.iter_mut().enumerate() {
-        if invert[shell[index] as usize] {
-            face.swap(1, 2);
-            flip[index] = !flip[index];
-        }
-    }
-
-    Orientation {
-        flipped_faces: flip.iter().filter(|flipped| **flipped).count(),
-        inverted_shells,
-        orientable: links.iter().all(|link| {
-            let [a, b] = link.faces.map(|face| flip[face as usize]);
-            link.agreed == (a == b)
-        }),
-    }
+    (links, open)
 }
+
 /// Two faces sharing an edge no third face uses, and whether they walk it in opposite
 /// directions as they stand.
 struct Link {
@@ -98,11 +111,11 @@ struct Link {
 /// Between patches the seams with the most edges are honoured first. Unless that leaves
 /// fewer edges in conflict than the file had, the file's own winding stands.
 fn settle(faces: usize, links: &[Link]) -> Vec<bool> {
-    let mut patches = Components::new(faces);
-    for link in links.iter().filter(|link| link.agreed) {
-        patches.union(link.faces[0], link.faces[1]);
-    }
-    let (patch, count) = patches.labels();
+    let agreed = links
+        .par_iter()
+        .filter(|link| link.agreed)
+        .map(|link| link.faces);
+    let (patch, count) = Components::joined(faces, agreed).labels();
     let seams = seams(&patch, links);
 
     let mut parity = Parity::new(count);

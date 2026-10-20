@@ -57,6 +57,7 @@ each.
 ## The split
 
 Union-find over the faces' vertex indices: two faces are in the same piece when they share
-one. Pieces come back biggest first. A mesh has to be welded before this means "separate
-parts" — two copies sharing a face's position but not its indices are two pieces until
-`weld` makes them one.
+one. Pieces come back biggest first, two of one face count by volume and then in the order
+of their first face. A mesh has to be welded before this means "separate parts" — two
+copies sharing a face's position but not its indices are two pieces until `weld` makes
+them one.

@@ -1,8 +1,13 @@
 use serde::{Deserialize, Serialize};
 
-use rayon::iter::{IndexedParallelIterator, IntoParallelRefIterator, ParallelIterator};
+use std::sync::atomic::{AtomicBool, Ordering::Relaxed};
 
-use crate::topology::{Components, EdgeUse, edge_groups, edge_uses, sort_runs};
+use rayon::iter::{
+    IndexedParallelIterator, IntoParallelIterator, IntoParallelRefIterator, ParallelIterator,
+};
+use rayon::slice::ParallelSlice;
+
+use crate::topology::{Components, EdgeUse, counted_out, edge_uses, sort_runs};
 use crate::{Mesh, Scalar, Vec3};
 
 /// What is structurally wrong, or right, with a mesh.
@@ -57,45 +62,56 @@ impl MeshDiagnostics {
 pub fn diagnose(mesh: &Mesh) -> MeshDiagnostics {
     let uses = edge_uses(mesh);
     let degenerate = degenerate_faces(mesh);
-    let mut components = Components::new(mesh.faces.len());
-
-    let mut boundary_edges = 0;
-    let mut non_manifold_edges = 0;
-    let mut unbalanced_edges = 0;
-    let mut edges: usize = 0;
-    for group in edge_groups(&uses) {
-        edges += 1;
-        match group.len() {
-            1 => boundary_edges += 1,
-            2 => {}
-            _ => non_manifold_edges += 1,
-        }
-        if !balanced(group, &degenerate) {
-            unbalanced_edges += 1;
-        }
-        for other in &group[1..] {
-            components.union(group[0].face, other.face);
-        }
-    }
+    let edges = EdgeTally::of(&uses, &degenerate);
 
     let shells = if mesh.faces.is_empty() {
         0
     } else {
-        components.labels().1
+        let joins = uses
+            .par_chunk_by(|a, b| a.edge == b.edge)
+            .flat_map_iter(|group| group[1..].iter().map(|other| [group[0].face, other.face]));
+        Components::joined(mesh.faces.len(), joins).count()
     };
     let referenced = referenced_vertices(mesh);
 
     MeshDiagnostics {
         vertices: mesh.vertices.len(),
         faces: mesh.faces.len(),
-        degenerate_faces: degenerate.iter().filter(|face| **face).count(),
+        degenerate_faces: degenerate.par_iter().filter(|face| **face).count(),
         duplicate_faces: count_duplicates(mesh),
         unreferenced_vertices: mesh.vertices.len() - referenced,
-        boundary_edges,
-        non_manifold_edges,
-        unbalanced_edges,
+        boundary_edges: edges.boundary,
+        non_manifold_edges: edges.non_manifold,
+        unbalanced_edges: edges.unbalanced,
         shells,
-        euler_characteristic: count(referenced) - count(edges) + count(mesh.faces.len()),
+        euler_characteristic: count(referenced) - count(edges.all) + count(mesh.faces.len()),
+    }
+}
+
+/// How many distinct edges a mesh has, and how many of them are of each wrong kind.
+#[derive(Default)]
+struct EdgeTally {
+    all: usize,
+    boundary: usize,
+    non_manifold: usize,
+    unbalanced: usize,
+}
+
+impl EdgeTally {
+    fn of(uses: &[EdgeUse], degenerate: &[bool]) -> Self {
+        uses.par_chunk_by(|a, b| a.edge == b.edge)
+            .map(|group| Self {
+                all: 1,
+                boundary: usize::from(group.len() == 1),
+                non_manifold: usize::from(group.len() > 2),
+                unbalanced: usize::from(!balanced(group, degenerate)),
+            })
+            .reduce(Self::default, |a, b| Self {
+                all: a.all + b.all,
+                boundary: a.boundary + b.boundary,
+                non_manifold: a.non_manifold + b.non_manifold,
+                unbalanced: a.unbalanced + b.unbalanced,
+            })
     }
 }
 
@@ -173,15 +189,16 @@ fn count(value: usize) -> i64 {
 }
 
 fn referenced_vertices(mesh: &Mesh) -> usize {
-    let mut seen = vec![false; mesh.vertices.len()];
-    for face in &mesh.faces {
-        for index in face {
-            if let Some(slot) = seen.get_mut(*index as usize) {
-                *slot = true;
-            }
+    let seen: Vec<AtomicBool> = (0..mesh.vertices.len())
+        .into_par_iter()
+        .map(|_| AtomicBool::new(false))
+        .collect();
+    mesh.faces.par_iter().flatten().for_each(|index| {
+        if let Some(slot) = seen.get(*index as usize) {
+            slot.store(true, Relaxed);
         }
-    }
-    seen.iter().filter(|s| **s).count()
+    });
+    seen.par_iter().filter(|s| s.load(Relaxed)).count()
 }
 
 /// Which faces have a repeated vertex or no area, one flag per face.
@@ -190,7 +207,7 @@ fn referenced_vertices(mesh: &Mesh) -> usize {
 /// concern, see docs/design/slicing.md when step 2 lands.
 pub(crate) fn degenerate_faces(mesh: &Mesh) -> Vec<bool> {
     mesh.faces
-        .iter()
+        .par_iter()
         .enumerate()
         .map(|(index, face)| {
             face[0] == face[1]
@@ -256,24 +273,15 @@ fn faces_by_corners(mesh: &Mesh) -> Vec<([u32; 3], bool, usize)> {
         })
         .collect();
     let buckets = keyed
-        .iter()
+        .par_iter()
         .map(|face| face.0[0] as usize + 1)
         .max()
         .unwrap_or(0);
-    let mut starts = vec![0usize; buckets + 1];
-    for face in &keyed {
-        starts[face.0[0] as usize + 1] += 1;
-    }
-    for at in 1..starts.len() {
-        starts[at] += starts[at - 1];
-    }
-    let mut sorted = vec![([0u32; 3], false, 0usize); keyed.len()];
-    let mut cursor = starts.clone();
-    for face in keyed {
-        let slot = &mut cursor[face.0[0] as usize];
-        sorted[*slot] = face;
-        *slot += 1;
-    }
+    let (order, starts) = counted_out(keyed.len(), buckets, |face| keyed[face].0[0] as usize);
+    let mut sorted: Vec<([u32; 3], bool, usize)> = order
+        .par_iter()
+        .map(|face| keyed[face.load(Relaxed) as usize])
+        .collect();
     sort_runs(&mut sorted, &starts);
     sorted
 }
