@@ -23,22 +23,25 @@ brush takes the mesh, hierarchy and transform instead of `core-supports`'s `Plac
 `press_painted_tiled`, which build no field: they split each painted face the mask does not
 hold until no edge of it is longer than the lattice the painted area would be cut on,
 splitting its unpainted neighbour along the shared edge, and move every corner inside the
-paint along its normal by the height read there. Corners on the edge of the paint stay.
-The Relief tool's Texture mode gains a brush, alt erasing, whose faces each model keeps as
+paint along its normal by the height read there. Corners on the edge of the paint stay. The
+Relief tool's Texture mode gains a brush, alt erasing, whose faces each model keeps as
 `relief_painted`, cleared when the mesh is replaced and written to the project manifest
-under that key, absent while empty. The view draws the texture only over painted faces.
-While the brush is in hand, nothing painted means nowhere; with it put down, nothing
-painted presses through the field, as before. See `docs/design/volume.md`.
+under that key, absent while empty. The view draws the texture only over painted faces. The
+texture is picked from a thumbnail that opens the gallery, and the brush is a
+`toggle_button`. While the brush is in hand, nothing painted means nowhere; with it put
+down, nothing painted presses through the field, as before. See `docs/design/volume.md`.
 
 ## Consequences
 
 Everything outside the paint is the model's own mesh, and a patch costs its own area: the
-`field` benchmark presses an 8 mm patch of a 40 mm ball in 8 ms against 1.7 s for the
-whole ball through the field. The relief tapers over one split face at the edge of the
-paint instead of stopping square, and a depth past the surface's curvature, in a crease,
-can fold the surface through itself, which the field never does; a print failing there
-reopens this. A painted press keeps no basis for the next. A project from an earlier
-build reads as nothing painted, so the manifest stays at version 6.
+`field` benchmark presses an 8 mm patch of a 40 mm ball in 8 ms against 1.7 s for the whole
+ball through the field. The relief tapers over one split face at the edge of the paint
+instead of stopping square. Faces are only halved, never flipped or remeshed even, so the
+slivers of a CAD fan, an inside corner or a crease can fold the surface through itself,
+which the field never does; this is accepted for now. A print failing there reopens this,
+for a remesh into even triangles before the press or a return to the field. A painted press
+keeps no basis for the next. A project from an earlier build reads as nothing painted, so
+the manifest stays at version 6.
 
 ## Alternatives considered
 

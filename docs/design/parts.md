@@ -66,6 +66,9 @@ with bodies on one side of the box only is those bodies. A side with bodies on b
 model's solid, read once beside the wave, less the other side's bodies. It is never their
 union: they meet across a face of the box, and an exact union of solids touching over a
 face can keep both copies of it inside the side, as most bar widths of a dumbbell did.
+Both sides then go through the whole model: a ball cut off a dumbbell at its bar, the
+`part_off` bench, takes 593 ms on an M1 against 390 ms with one side a union, the price of
+a part that is right.
 
 A wave that dies out with no neck, having filled under half the model's volume, was held
 in by something finer than its lattice. The lattice is narrowed once onto the box round
