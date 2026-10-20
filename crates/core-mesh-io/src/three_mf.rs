@@ -23,6 +23,9 @@ const MAX_DEPTH: usize = 64;
 /// million triangles is well under this; see `docs/design/hostile-files.md`.
 const MAX_PART_BYTES: u64 = 2 * 1024 * 1024 * 1024;
 
+/// Most bytes deflate can expand one byte into; a 3MF package stores or deflates its parts.
+const MAX_DEFLATE_RATIO: u64 = 1032;
+
 /// Reads 3MF: the zip container's `3D/3dmodel.model`, its build items, and the objects
 /// they reference through any depth of components.
 ///
@@ -77,12 +80,19 @@ impl MeshLoader for ThreeMfLoader {
     }
 }
 
-/// Refuses an archive that claims a part larger than `MAX_PART_BYTES`.
+/// Refuses an archive that claims a part larger than `MAX_PART_BYTES`, or larger than the
+/// whole file could inflate to.
 ///
 /// Every claim is read before any part is, because the reader under us reserves a buffer
-/// from it: a kilobyte of zip stating a four-gigabyte part is a bomb, not a model. The
+/// from it: a kilobyte of zip stating a two-gigabyte part is a bomb, not a model. The
 /// entries are opened raw, so this costs a seek each and decompresses nothing.
 fn refuse_oversized_parts(path: &Path, source: &mut dyn ReadSeek) -> Result<(), MeshIoError> {
+    let io = |source| MeshIoError::Io {
+        path: path.to_owned(),
+        source,
+    };
+    let file_bytes = source.seek(SeekFrom::End(0)).map_err(io)?;
+    let most = MAX_PART_BYTES.min(file_bytes.saturating_mul(MAX_DEFLATE_RATIO));
     let mut archive = zip::ZipArchive::new(BufReader::new(&mut *source))
         .map_err(|source| malformed(path, source.to_string()))?;
 
@@ -90,7 +100,7 @@ fn refuse_oversized_parts(path: &Path, source: &mut dyn ReadSeek) -> Result<(), 
         let entry = archive
             .by_index_raw(index)
             .map_err(|source| malformed(path, source.to_string()))?;
-        if entry.size() > MAX_PART_BYTES {
+        if entry.size() > most {
             return Err(malformed(
                 path,
                 format!(
@@ -102,12 +112,7 @@ fn refuse_oversized_parts(path: &Path, source: &mut dyn ReadSeek) -> Result<(), 
         }
     }
     drop(archive);
-    source
-        .seek(SeekFrom::Start(0))
-        .map_err(|source| MeshIoError::Io {
-            path: path.to_owned(),
-            source,
-        })?;
+    source.seek(SeekFrom::Start(0)).map_err(io)?;
     Ok(())
 }
 

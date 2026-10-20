@@ -175,13 +175,15 @@ fn a_file_without_the_materials_extension_carries_no_map() {
     assert!(loaded.textures.is_empty());
 }
 
-/// Both fuzzer finds: the second carries a data descriptor on another entry, which makes
-/// the archive's total size unknowable while each part still states its own.
+/// The fuzzer's finds: the second carries a data descriptor on another entry, which makes
+/// the archive's total size unknowable while each part still states its own; the third
+/// claims exactly two gigabytes, the most a part may hold but far more than a kilobyte inflates to.
 #[test]
 fn a_part_claiming_more_bytes_than_fit_in_memory_is_refused_rather_than_reserved_for() {
     for name in [
         "crashes/oversized_part.3mf",
         "crashes/oversized_part_behind_a_data_descriptor.3mf",
+        "crashes/part_claiming_two_gigabytes.3mf",
     ] {
         let err = ThreeMfLoader
             .load(&fixture(name))
