@@ -2,7 +2,7 @@ use crate::i18n::tr;
 use crate::panels::Window;
 use crate::scene::{ObjectId, SceneObject};
 use crate::state::Tools;
-use crate::ui::{Segment, Segmented, field_label, hint, theme};
+use crate::ui::hint;
 
 /// Where a tool keeps its numbers: the plate's in the tool, a model's own on the model.
 pub struct Scoped<T> {
@@ -11,76 +11,48 @@ pub struct Scoped<T> {
     pub read: fn(&SceneObject) -> &Option<T>,
 }
 
-/// Whether the numbers below are the plate's or the one picked model's own, and the switch
-/// between them. Answers the model whose own numbers the panel is editing. See ADR 0227.
-pub fn switch<T: Clone>(
-    ui: &mut egui::Ui,
-    window: &mut Window,
-    scoped: &Scoped<T>,
-) -> Option<ObjectId> {
+/// The one picked model whose own numbers the panel edits. With none or several picked the
+/// panel edits the plate's, and says how many models keep their own. See ADR 0319.
+pub fn owner<T>(ui: &mut egui::Ui, window: &Window, scoped: &Scoped<T>) -> Option<ObjectId> {
     let picked = match window.doc.scene.selection() {
         [id] => Some(*id),
         _ => None,
     };
-    let own = picked
-        .and_then(|id| window.doc.scene.get(id))
-        .is_some_and(|object| (scoped.read)(object).is_some());
-    let mut model = own;
-    ui.horizontal(|ui| {
-        field_label(ui, &tr!("scope-applies-to"), theme::colors().text_mid, "");
-        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-            let choices = [
-                Segment::new(false, tr!("scope-plate-choice")),
-                Segment::new(true, tr!("scope-model-choice")),
-            ];
-            ui.add_enabled_ui(picked.is_some(), |ui| {
-                Segmented::new(&choices)
-                    .width(theme::FIELD_W)
-                    .show(ui, &mut model);
-            });
-        });
-    });
-    if model != own
-        && let Some(object) = picked.and_then(|id| window.doc.scene.get_mut(id))
-    {
-        *(scoped.own)(object) = model.then(|| (scoped.plate)(window.tools).clone());
-    }
-
     let keeping = window
         .doc
         .scene
         .here()
         .filter(|object| (scoped.read)(object).is_some())
         .count();
-    match (picked, model, keeping) {
-        (None, _, 0) => hint(ui, &tr!("scope-pick-one")),
-        (_, true, _) => hint(ui, &tr!("scope-own")),
-        (_, false, 0) => {}
-        (_, false, n) => hint(ui, &tr!("scope-keeping", count = n)),
+    if picked.is_none() && keeping > 0 {
+        hint(ui, &tr!("scope-keeping", count = keeping));
     }
-    model.then_some(picked).flatten()
+    picked
 }
 
-/// Runs `draw` with the tool holding `id`'s own numbers in place of the plate's, and puts
-/// what it changed back on the model. Without a model, `draw` edits the plate's. The model
+/// Runs `draw` with the tool holding `id`'s own numbers in place of the plate's, and keeps
+/// what it changed on the model. A model with none of its own starts from the plate's and
+/// takes them up on its first change. Without a model, `draw` edits the plate's. The model
 /// keeps its numbers while the panel draws, so what reads them this frame still sees them.
-pub fn editing<T: Clone>(
+pub fn editing<T: Clone + PartialEq>(
     window: &mut Window,
     id: Option<ObjectId>,
     scoped: &Scoped<T>,
     draw: impl FnOnce(&mut Window),
 ) {
-    let own = id
-        .and_then(|id| window.doc.scene.get(id))
-        .and_then(|object| (scoped.read)(object).clone());
-    let Some(own) = own else {
+    let Some(object) = id.and_then(|id| window.doc.scene.get(id)) else {
         draw(window);
         return;
     };
-    let plate = std::mem::replace((scoped.plate)(window.tools), own);
+    let plate = (scoped.plate)(window.tools).clone();
+    let own = (scoped.read)(object).clone();
+    let shown = own.clone().unwrap_or_else(|| plate.clone());
+    *(scoped.plate)(window.tools) = shown.clone();
     draw(window);
     let edited = std::mem::replace((scoped.plate)(window.tools), plate);
-    if let Some(object) = id.and_then(|id| window.doc.scene.get_mut(id)) {
+    if (own.is_some() || edited != shown)
+        && let Some(object) = id.and_then(|id| window.doc.scene.get_mut(id))
+    {
         *(scoped.own)(object) = Some(edited);
     }
 }
@@ -263,12 +235,33 @@ mod tests {
     }
 
     #[test]
-    fn without_numbers_of_its_own_a_model_edits_the_plates() {
+    fn a_first_change_to_a_picked_model_becomes_its_own() {
         let (mut parts, id) = with_a_model();
+        let plate_mm = parts.tools.hollow.state.thickness_mm;
         editing(&mut parts.window(), Some(id), &hollow(), |window| {
             window.tools.hollow.state.thickness_mm = 6.0;
         });
-        assert_eq!(parts.tools.hollow.state.thickness_mm, 6.0);
+        let own = &parts.doc.scene.get(id).expect("there").own.hollow;
+        assert_eq!(own.as_ref().map(|own| own.thickness_mm), Some(6.0));
+        assert_eq!(
+            parts.tools.hollow.state.thickness_mm, plate_mm,
+            "the plate's stay what the next model starts from"
+        );
+    }
+
+    #[test]
+    fn a_picked_model_left_unchanged_keeps_following_the_plate() {
+        let (mut parts, id) = with_a_model();
+        editing(&mut parts.window(), Some(id), &hollow(), |_| {});
         assert_eq!(parts.doc.scene.get(id).expect("there").own.hollow, None);
+    }
+
+    #[test]
+    fn without_a_model_the_plates_numbers_are_edited() {
+        let (mut parts, _) = with_a_model();
+        editing(&mut parts.window(), None, &hollow(), |window| {
+            window.tools.hollow.state.thickness_mm = 6.0;
+        });
+        assert_eq!(parts.tools.hollow.state.thickness_mm, 6.0);
     }
 }

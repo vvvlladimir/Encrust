@@ -63,6 +63,10 @@ capped silently.
 
 ## Placing models on the plate
 
+In every tool, Cmd-click (Ctrl-click off a Mac) a model on the plate to add it to the
+selection or take it out, instead of what a click does in that tool. In **Paint**, the
+whole-surface fill is Cmd-Shift-click.
+
 **Position tool:**
 - Move, rotate and scale with typed numbers or the on-screen gizmo, in global or local axes.
 - Scale uniformly or per axis, keep the proportions, scale to fit the build volume, or go
@@ -206,7 +210,7 @@ capped silently.
   Scripts that join their letters (Arabic, Devanagari) are not shaped. The browser build
   offers only the built-in font.
 - **Combine:** pick two or more models — the panel lists them in the order picked and what
-  each does — and **Union** them into one, **Subtract** the others from the one picked
+  each does — move them into place with the on-screen gizmo, and **Union** them into one, **Subtract** the others from the one picked
   first, or **Intersect** them to keep only what they share. Closed models keep their sharp
   edges, a model made of parts pushed into each other included; a torn scan is combined
   through a field and its edges are rounded to the lattice the notice names.
@@ -244,7 +248,9 @@ capped silently.
     and the density.
 - **Keep solid:** click spots on the model where the wall must stay solid (blockers), and
   set their size.
-- Each model can keep its own hollow settings, and you can save settings as named presets.
+- With one model picked, the settings you change are that model's own and are there again
+  when you come back to it; with none picked they are the plate's, which every other model
+  uses. You can save settings as named presets.
 - While it runs, the panel names the step the model is on and shows how much of the run is
   done.
 - **Cancel** stops a run inside the model it is on, not only between models.
@@ -266,6 +272,7 @@ capped silently.
   and a copied model gets plugs of its own.
 - **Channel:** dig a tube of the hole's width and outline through a path of points, open
   only at its two ends.
+- Settings work as in **Hollow**: one picked model keeps its own.
 - **Check drainage:** Encrust follows the air through every layer and finds every pocket
   of resin with no way out. Pockets are painted in the view, and you can see through the
   model to find them.

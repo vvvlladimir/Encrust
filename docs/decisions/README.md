@@ -276,7 +276,8 @@ Grouped by what the decision governs; the number is still the order it was taken
 | [0256](0256-a-footprint-carries-the-supports-and-the-raft.md) | Pack a model with its supports and its raft | Accepted |
 | [0098](0098-a-plate-is-a-number-on-the-object.md) | A plate is a number on the object, not a scene of its own | Accepted |
 | [0101](0101-a-tool-works-on-the-selection-or-the-plate.md) | A tool works on what is picked, and on the whole plate only when nothing is | Accepted |
-| [0227](0227-a-model-may-keep-its-own-hollow-and-drain-numbers.md) | Let a model keep its own Hollow and Drain numbers | Accepted; that supports are not scoped this way is superseded by 0246 |
+| [0227](0227-a-model-may-keep-its-own-hollow-and-drain-numbers.md) | Let a model keep its own Hollow and Drain numbers | Accepted; that supports are not scoped this way is superseded by 0246; the switch superseded by 0319 |
+| [0319](0319-a-picked-model-is-edited-without-a-switch.md) | Edit the picked model's Hollow and Drain numbers without a switch | Accepted |
 | [0246](0246-a-model-keeps-the-support-profile-it-was-edited-to.md) | Keep an edited support profile on the picked models until it is saved | Accepted; what choosing another profile from the list does is superseded by 0247 |
 | [0247](0247-a-chosen-profile-is-a-group-of-its-own.md) | Make a profile chosen from the list a group of its own | Accepted |
 | [0248](0248-a-thinner-support-stands-on-a-thicker-one-of-another-group.md) | Stand a thinner support on the trunk of a thicker one of another group | Accepted |

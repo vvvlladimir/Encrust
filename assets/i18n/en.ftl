@@ -1298,10 +1298,10 @@ paint-brush = Brush
 paint-surface-angle = Surface angle
 paint-inside = Inside
 paint-hint-point = Click to place, alt-click to remove.
-paint-hint-paint = Drag to paint, ctrl-click a surface, alt to erase.
-paint-hint-block = Drag to block, ctrl-click a surface, alt to erase.
-paint-hint-erase = Drag to take paint and blocks off, ctrl-click a surface.
-paint-brush-help = Place puts one support where you click. Fill paints an area that gets supports when you press Fill painted areas; Block paints where no support may stand. Surface angle is how far a ctrl-click spreads: over every face turned less than that from the one clicked.
+paint-hint-paint = Drag to paint, Cmd-Shift-click a surface, alt to erase.
+paint-hint-block = Drag to block, Cmd-Shift-click a surface, alt to erase.
+paint-hint-erase = Drag to take paint and blocks off, Cmd-Shift-click a surface.
+paint-brush-help = Place puts one support where you click. Fill paints an area that gets supports when you press Fill painted areas; Block paints where no support may stand. Surface angle is how far a Cmd-Shift-click spreads: over every face turned less than that from the one clicked.
 paint-fill-help = How far apart the supports of a filled area stand: Rim along its edge, Inside across the rest. Smaller is denser and holds better, but leaves more marks.
 paint-groups-help = A group is a set of supports built to one profile, so one model can carry thick supports under heavy parts and thin ones under details. New supports join the group in hand.
 paint-rim = Rim
@@ -1814,11 +1814,6 @@ find-nothing = Nothing goes by that name
 
 ## panels/inspector/scope.rs
 
-scope-applies-to = Applies to
-scope-plate-choice = Plate
-scope-model-choice = Model
-scope-pick-one = Pick one model to give it numbers of its own.
-scope-own = These numbers are this model's alone.
 scope-keeping =
     { $count ->
         [one] { $count } model keeps numbers of its own.

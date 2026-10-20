@@ -1,6 +1,6 @@
 # 0227. Let a model keep its own Hollow and Drain numbers
 
-- **Status:** Accepted; that supports are not scoped this way is superseded by 0246
+- **Status:** Accepted; that supports are not scoped this way is superseded by 0246; the switch superseded by 0319
 - **Date:** 2026-10-11
 
 ## Context

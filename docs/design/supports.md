@@ -511,7 +511,7 @@ The Hollow and Drain tools show their blocker, hole or channel point the same wa
 `docs/design/viewport.md`. The stroke is painted along the line
 the cursor drew rather than only where the frames fell, and the brush itself is drawn as a
 ring lying on the surface under the cursor, in the colour of the patch it paints: drag to
-paint, ctrl-click for the whole surface, alt to erase. The inspector's Supports section
+paint, Cmd-Shift-click for the whole surface, alt to erase. The inspector's Supports section
 carries the group picker with its name, New and Drop, the preset pill, a **Regular
 Support** / **Small Pillar** tab pair, and below them
 branching, raft, bracing, the lift and its button, a **Place** / **Paint** / **Block** pill

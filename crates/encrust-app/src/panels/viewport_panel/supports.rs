@@ -141,7 +141,8 @@ pub(super) fn drag_support(window: &mut Window, viewport: egui::Rect, pointer: &
     };
 
     if pointer.pressed {
-        let on_plate = pointer.over_viewport && !window.view.gizmo.is_focused();
+        // A Cmd press is the click that picks a model, not a hold on a support.
+        let on_plate = pointer.over_viewport && !pointer.command && !window.view.gizmo.is_focused();
         window.tools.supports.stroke =
             on_plate && take_hold(window, viewport, cursor, pointer.shift);
         return window.tools.supports.stroke;

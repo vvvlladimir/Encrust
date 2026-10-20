@@ -58,7 +58,7 @@ pub fn ui(ui: &mut egui::Ui, window: &mut Window) {
         read: |object| &object.own.hollow,
     };
     let own = section(ui, &tr!("common-settings"), None, |ui| {
-        let own = scope::switch(ui, window, &scoped);
+        let own = scope::owner(ui, window, &scoped);
         scope::editing(window, own, &scoped, |window| {
             presets::bar(
                 ui,

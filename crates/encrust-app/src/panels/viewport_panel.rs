@@ -136,7 +136,7 @@ fn steer_camera(
         view.turn = None;
     }
     match drag {
-        Drag::Orbit if painting => {}
+        Drag::Orbit | Drag::Pan if painting => {}
         Drag::Orbit => view.camera.orbit(
             -pointer.delta.x * ORBIT_RAD_PER_POINT,
             pointer.delta.y * ORBIT_RAD_PER_POINT,
@@ -157,6 +157,10 @@ fn steer_camera(
 
 /// What a click on the plate does, which is the tool's to say.
 fn click(ui: &egui::Ui, window: &mut Window, rect: egui::Rect, cursor: egui::Pos2) {
+    if picks_instead(ui) {
+        select_under_cursor(window, rect, cursor, true);
+        return;
+    }
     let picking = *window.tool == Tool::Position;
     if !picking && takes_the_pick(window, rect, cursor) {
         return;
@@ -184,10 +188,10 @@ fn click(ui: &egui::Ui, window: &mut Window, rect: egui::Rect, cursor: egui::Pos
             add_channel_point_under_cursor(window, rect, cursor);
         }
         Tool::Drain => place_drain_under_cursor(window, rect, cursor),
-        // Shift or Cmd picks the model as anywhere else, so it can be picked without a stamp.
+        // Shift picks the model as Cmd does anywhere, so it can be picked without a stamp.
         Tool::Relief
             if window.tools.relief.mode == ReliefMode::Text
-                && !ui.input(|input| input.modifiers.command || input.modifiers.shift) =>
+                && !ui.input(|input| input.modifiers.shift) =>
         {
             text::stamp_text_under_cursor(window, rect, cursor);
         }
@@ -200,17 +204,23 @@ fn click(ui: &egui::Ui, window: &mut Window, rect: egui::Rect, cursor: egui::Pos
         }
         Tool::Cut if window.tools.cut.picking_part => mark_part_under_cursor(window, rect, cursor),
         _ => {
-            let adding = ui.input(|input| input.modifiers.command || input.modifiers.shift);
+            let adding = ui.input(|input| input.modifiers.shift);
             select_under_cursor(window, rect, cursor, adding);
         }
     }
+}
+
+/// Whether this click adds the model under it to the selection or takes it out, in every
+/// tool: Cmd held, or Ctrl off a Mac.
+fn picks_instead(ui: &egui::Ui) -> bool {
+    ui.input(|input| input.modifiers.command)
 }
 
 /// What a click would put down under a resting cursor, for every tool that puts something
 /// down on a model, drawn see-through so it reads as not placed yet. Alt shows nothing:
 /// it takes away instead.
 fn ghost(ui: &egui::Ui, window: &Window, rect: egui::Rect, pointer: &Pointer) -> Option<Ghost> {
-    let removing = ui.input(|input| input.modifiers.alt);
+    let removing = ui.input(|input| input.modifiers.alt) || picks_instead(ui);
     let resting = !pointer.primary_down && !pointer.pan_button_down;
     if removing || !resting || !pointer.over_viewport {
         return None;
@@ -302,11 +312,7 @@ fn draw_tool_overlays(ui: &egui::Ui, window: &mut Window, rect: egui::Rect, poin
         point_at_face(window, rect, hovered.map(|at| egui::pos2(at.x, at.y)));
         draw_facet(ui, window, rect);
     }
-    // While a face is being picked the click is for the model, not for a handle over it.
-    if !window.view.options.modal()
-        && *window.tool == Tool::Position
-        && !window.tools.orient.picking_face
-    {
+    if !window.view.options.modal() && moves_by_hand(window) {
         show_gizmo(ui, window, rect);
     }
     if *window.tool == Tool::Measure {
@@ -367,6 +373,7 @@ fn pointer_state(ui: &egui::Ui, rect: egui::Rect) -> Pointer {
             pan_button_down: input.pointer.button_down(PointerButton::Secondary)
                 || input.pointer.button_down(PointerButton::Middle),
             shift: input.modifiers.shift,
+            command: input.modifiers.command,
             delta: Vec2::new(delta.x, delta.y),
             scroll: input.smooth_scroll_delta.y,
         }
@@ -386,6 +393,16 @@ fn over_the_model(
 ) -> bool {
     position
         .is_some_and(|position| rect.contains(position) && over.is_none_or(|layer| layer == own))
+}
+
+/// Whether the picked models carry the handles: in Position, and while Relief combines
+/// them. While a face is being picked the click is for the model, not for a handle over it.
+fn moves_by_hand(window: &Window) -> bool {
+    match *window.tool {
+        Tool::Position => !window.tools.orient.picking_face,
+        Tool::Relief => window.tools.relief.mode == ReliefMode::Combine,
+        _ => false,
+    }
 }
 
 /// Draws the handles over the selected objects and writes back what the user dragged.

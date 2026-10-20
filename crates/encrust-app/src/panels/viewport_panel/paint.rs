@@ -88,7 +88,8 @@ pub(super) fn paint_stroke(
     let Some(position) = pointer.position.filter(|_| {
         out && pointer.primary_down
             && pointer.over_viewport
-            && !pointer.shift
+            // Shift alone pans and Cmd alone picks; the two together fill a whole surface.
+            && pointer.shift == pointer.command
             && !window.view.gizmo.is_focused()
     }) else {
         // Only the brush lets go here: the Edit mode keeps its own hold of the pointer.
@@ -149,6 +150,7 @@ fn relief_stroke(
         out && pointer.primary_down
             && pointer.over_viewport
             && !pointer.shift
+            && !pointer.command
             && !window.view.gizmo.is_focused()
     }) else {
         window.tools.relief.stroke = false;
