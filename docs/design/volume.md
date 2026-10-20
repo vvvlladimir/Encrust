@@ -117,7 +117,13 @@ than `TRUST_VOXELS` carrier steps the carrier is not believed — the lateral mi
 about `step² / 2d` and that blows up as `d` falls — and the hierarchy is asked for that
 voxel, but only where the value would not be clamped to the band anyway. It is asked
 `closest_within` the carried face's own distance: only a nearer face can win, so the
-search culls from its first node and still comes back exact (ADR 0310).
+search culls from its first node and still comes back exact (ADR 0310). Where the mean face
+is at least two voxels of area, a cell's doubted voxels share one `faces_within` instead —
+every face that could beat a voxel's carried one lies within that distance plus the voxel's
+offset from the cell's middle — and choose among what it returns; a walk returning more
+than `SHARED_FACES` falls back to one search per voxel. A thin wall on a coarse figurine is
+where this pays: every voxel of its band is doubted. Of faces equally near, the shared walk
+may keep another than the search would; the distance and the seam's sign are the same.
 
 Neither the distance nor the side is carried with the face. The distance is a
 `point_triangle` away, and four more bytes a voxel over a shell is not affordable. The side

@@ -81,6 +81,7 @@ pub(crate) fn fill<T: Copy + Send + Sync>(
     // A stored tile reads the carrier and nothing else, so there is no order between them.
     // A run given up on fills no further tile and comes back with what it had; the caller
     // is the one that turns that into an error.
+    let shared = faces.mean_area_mm2() >= SHARED_AREA_VOXELS * grid.voxel_mm * grid.voxel_mm;
     wanted
         .par_iter()
         .filter(|_| !cancel.asked())
@@ -88,7 +89,7 @@ pub(crate) fn fill<T: Copy + Send + Sync>(
             let work = refine(
                 faces,
                 bvh,
-                (grid, factor),
+                (grid, factor, shared),
                 &carrier,
                 *tile,
                 (band_mm, iso_mm),
@@ -319,7 +320,7 @@ const TRUST_VOXELS: Scalar = 3.0;
 fn refine(
     faces: &Faces,
     bvh: &Bvh,
-    (grid, carry): (VoxelGrid, i32),
+    (grid, carry, shared): (VoxelGrid, i32, bool),
     carrier: &FastMap<IVec3, Work>,
     tile: IVec3,
     band: (Scalar, Scalar),
@@ -334,6 +335,8 @@ fn refine(
     let mut work = vec![UNSET; TILE_VALUES];
     let mut held: Option<(IVec3, &Work)> = None;
     let mut offered: Vec<Nearest> = Vec::with_capacity(8);
+    let mut doubted: Vec<Doubted> = Vec::with_capacity((carry * carry * carry) as usize);
+    let mut nearby: Vec<u32> = Vec::new();
 
     for cell in cells(carry) {
         let low = base.div_euclid(IVec3::splat(carry)) + cell;
@@ -352,6 +355,7 @@ fn refine(
             }
         }
 
+        doubted.clear();
         for step in cell_voxels(carry) {
             let voxel = base + cell * carry + step;
             let point = grid.position(voxel);
@@ -365,17 +369,97 @@ fn refine(
                     carried = *face;
                 }
             }
-            work[index_in_tile(voxel)] = if nearest < trust_mm && matters(nearest) {
-                // Only a face nearer than the one carried can replace it, which bounds
-                // the search from its first node.
-                bvh.closest_within(point, nearest)
-                    .map_or(carried, |found| found.face as Nearest)
-            } else {
-                carried
-            };
+            work[index_in_tile(voxel)] = carried;
+            if nearest < trust_mm && matters(nearest) {
+                doubted.push(Doubted {
+                    voxel,
+                    nearest,
+                    carried,
+                });
+            }
+        }
+        if shared {
+            settle_doubted(faces, bvh, grid, &doubted, &mut nearby, &mut work);
+        } else {
+            settle_each(bvh, grid, &doubted, &mut work);
         }
     }
     work.into_boxed_slice()
+}
+
+/// Most faces one walk for a whole carrier cell may bring back before each voxel is
+/// better off with a walk of its own; tuned on a thin wall and on a relief.
+const SHARED_FACES: usize = 96;
+
+/// Smallest mean face, in voxels of area, for which one walk is shared by a carrier cell:
+/// a finer mesh brings back more faces than the voxels' own walks would open.
+const SHARED_AREA_VOXELS: Scalar = 2.0;
+
+/// A voxel too near the mesh for the face its carrier points offered to be trusted.
+struct Doubted {
+    voxel: IVec3,
+    /// How far the offered face is, which no nearer face can be beyond, mm.
+    nearest: Scalar,
+    carried: Nearest,
+}
+
+/// The true nearest face of each doubted voxel of one carrier cell, from one walk of the
+/// hierarchy for the whole cell rather than one per voxel.
+///
+/// Every face nearer a voxel than its offered one lies within that distance of the voxel,
+/// so within it plus the voxel's own distance from the cell's middle; the walk takes every
+/// leaf that near, and the voxels choose among its faces.
+fn settle_doubted(
+    faces: &Faces,
+    bvh: &Bvh,
+    grid: VoxelGrid,
+    doubted: &[Doubted],
+    nearby: &mut Vec<u32>,
+    work: &mut [Nearest],
+) {
+    let Some(first) = doubted.first() else {
+        return;
+    };
+    let (low, high) = doubted
+        .iter()
+        .fold((first.voxel, first.voxel), |(low, high), at| {
+            (low.min(at.voxel), high.max(at.voxel))
+        });
+    let middle = (grid.position(low) + grid.position(high)) * 0.5;
+    let spread = (grid.position(high) - grid.position(low)).length() * 0.5;
+    let reach = doubted.iter().map(|at| at.nearest).fold(0.0, Scalar::max) + spread;
+    bvh.faces_within(middle, reach, nearby);
+    if nearby.len() > SHARED_FACES {
+        settle_each(bvh, grid, doubted, work);
+        return;
+    }
+
+    for at in doubted {
+        let point = grid.position(at.voxel);
+        // Only a face nearer than the one carried can replace it, measured squared as the
+        // hierarchy's own search does.
+        let mut best = (at.nearest * at.nearest, at.carried);
+        for face in nearby.iter() {
+            if let Some(found) = faces.closest(*face, point) {
+                let squared = (found.point - point).length_squared();
+                if squared < best.0 {
+                    best = (squared, *face);
+                }
+            }
+        }
+        work[index_in_tile(at.voxel)] = best.1;
+    }
+}
+
+/// The true nearest face of each doubted voxel, from a walk of the hierarchy of its own.
+fn settle_each(bvh: &Bvh, grid: VoxelGrid, doubted: &[Doubted], work: &mut [Nearest]) {
+    for at in doubted {
+        // Only a face nearer than the one carried can replace it, which bounds the search
+        // from its first node.
+        work[index_in_tile(at.voxel)] = bvh
+            .closest_within(grid.position(at.voxel), at.nearest)
+            .map_or(at.carried, |found| found.face as Nearest);
+    }
 }
 
 /// Every carrier cell of a tile, as an offset in carrier voxels from its lowest.

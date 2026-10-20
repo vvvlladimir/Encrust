@@ -67,6 +67,19 @@ impl Faces {
             face: carried as usize,
         })
     }
+
+    /// The mean area of the faces, mm², summed in face order so it is the same every run.
+    pub(crate) fn mean_area_mm2(&self) -> Scalar {
+        if self.0.is_empty() {
+            return 0.0;
+        }
+        let total: f64 = self
+            .0
+            .iter()
+            .map(|triangle| f64::from(triangle.normal_unnormalized().length()) / 2.0)
+            .sum();
+        (total / self.0.len() as f64) as Scalar
+    }
 }
 
 /// The face nearest every voxel within [`SEED_VOXELS`] of the mesh, tile by tile.

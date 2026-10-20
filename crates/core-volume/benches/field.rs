@@ -152,6 +152,31 @@ fn hollowing(c: &mut Criterion, mesh: &Mesh, bvh: &Bvh) {
         b.iter(|| hollow(std::hint::black_box(mesh), bvh, &filled, Cancel::never()));
     });
 
+    // A wall a few voxels thick on a mesh of faces far larger than a voxel, as a coarse
+    // figurine is: every voxel of the band is too near the mesh to trust what was carried.
+    let coarse = ball(Vec3::ZERO, 20.0, 64, 64);
+    let coarse_bvh = Bvh::build(&coarse);
+    let thin = HollowSettings {
+        thickness_mm: 0.15,
+        ..empty.clone()
+    };
+    let mut group = c.benchmark_group("thin wall");
+    group.sample_size(10);
+    group.bench_function(
+        "hollow an 8k-triangle 40 mm ball with a 0.15 mm wall",
+        |b| {
+            b.iter(|| {
+                hollow(
+                    std::hint::black_box(&coarse),
+                    &coarse_bvh,
+                    &thin,
+                    Cancel::never(),
+                )
+            });
+        },
+    );
+    group.finish();
+
     infill(c, mesh, bvh, &empty);
 
     // A relief is a field of its own plus a nearest-point query per lattice point, so it
