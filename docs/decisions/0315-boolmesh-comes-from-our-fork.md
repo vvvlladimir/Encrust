@@ -1,6 +1,6 @@
 # 0315. Take `boolmesh` from our fork, threaded and deterministic
 
-- **Status:** Accepted
+- **Status:** Accepted; the commit it pins is superseded by 0316
 - **Date:** 2026-10-20
 
 ## Context

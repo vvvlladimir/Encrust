@@ -106,12 +106,10 @@ fn checked(models: &[Mesh]) -> Result<(), VolumeError> {
 fn exact(models: &[Mesh], op: Boolean) -> Result<Mesh, CsgError> {
     let solids: Vec<Solid> = models.par_iter().map(solid_of).collect::<Result<_, _>>()?;
     let combined = match (op, solids.as_slice()) {
-        (Boolean::Union, _) => largest_last(&solids, models, Solid::union)?,
+        (Boolean::Union, _) => Solid::union_all(&solids)?,
         (Boolean::Intersection, _) => largest_last(&solids, models, Solid::intersection)?,
         // The others may overlap each other, so they are one solid before they are cut.
-        (Boolean::Difference, [first, rest @ ..]) => {
-            first.difference(&folded(rest, Solid::union)?)?
-        }
+        (Boolean::Difference, [first, rest @ ..]) => first.difference(&Solid::union_all(rest)?)?,
         (Boolean::Difference, []) => return Ok(Mesh::default()),
     };
     Ok(combined.mesh())
@@ -163,7 +161,7 @@ fn union_of(shells: &[Mesh]) -> Result<Solid, CsgError> {
         .par_iter()
         .map(Solid::new)
         .collect::<Result<_, _>>()?;
-    folded(&solids, Solid::union)
+    Solid::union_all(&solids)
 }
 
 /// `solids` combined pairwise down a tree rather than one by one into a growing whole.

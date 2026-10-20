@@ -617,7 +617,7 @@ dependencies = [
 [[package]]
 name = "boolmesh"
 version = "0.2.1"
-source = "git+https://github.com/vvvlladimir/boolmesh?rev=b6488b0afe6ed46dab908d2cd2920b81aaa19b7c#b6488b0afe6ed46dab908d2cd2920b81aaa19b7c"
+source = "git+https://github.com/vvvlladimir/boolmesh?rev=48b09fd2ecbd86f18d6ebe4a6866d2c90d454146#48b09fd2ecbd86f18d6ebe4a6866d2c90d454146"
 dependencies = [
  "glam 0.32.1",
  "rayon",
@@ -994,6 +994,7 @@ version = "0.4.0"
 dependencies = [
  "boolmesh",
  "core-geometry",
+ "criterion",
  "rayon",
  "thiserror 2.0.21",
  "workspace-hack",
