@@ -78,50 +78,106 @@ pub(crate) fn seeds(
     keep: Option<(IVec3, IVec3)>,
 ) -> FastMap<IVec3, Box<[Nearest]>> {
     let reach_mm = SEED_VOXELS * grid.voxel_mm;
-    let mut pairs = touched(mesh, grid, reach_mm, keep);
-    pairs.par_sort_unstable_by_key(|(tile, _)| (tile.z, tile.y, tile.x));
-
-    let groups: Vec<&[(IVec3, u32)]> = pairs.chunk_by(|left, right| left.0 == right.0).collect();
-    groups
+    let touched = Touched::of(mesh, grid, reach_mm, keep);
+    (0..touched.tiles.len())
         .into_par_iter()
-        .map(|group| (group[0].0, seed_tile(faces, grid, reach_mm, group)))
+        .map(|at| {
+            let tile = touched.tiles[at];
+            (
+                tile,
+                seed_tile(faces, grid, reach_mm, tile, touched.faces_of(at)),
+            )
+        })
         .collect()
 }
 
-/// Every (tile, face) pair a face's bounds grown by `reach_mm` come to.
-fn touched(
+/// The faces whose bounds grown by the reach come to each tile, as one list per tile laid
+/// end to end, every list in face order.
+///
+/// Counted first and laid out after rather than gathered as (tile, face) pairs: a face
+/// reaches about three tiles, and at millions of faces the pairs and the growth of the
+/// vectors holding them were the peak of a whole field build.
+struct Touched {
+    /// The tiles, Z slowest, so the seed is built in the same order on every run.
+    tiles: Vec<IVec3>,
+    /// Where each tile's faces start in `faces`, with the end of the last one after it.
+    starts: Vec<usize>,
+    faces: Vec<u32>,
+}
+
+impl Touched {
+    fn of(mesh: &Mesh, grid: VoxelGrid, reach_mm: Scalar, keep: Option<(IVec3, IVec3)>) -> Self {
+        let reached = |face: usize| reached(mesh, face, grid, reach_mm, keep);
+        let counts = (0..mesh.faces.len())
+            .into_par_iter()
+            .fold(FastMap::<IVec3, usize>::default, |mut counts, face| {
+                for tile in reached(face) {
+                    *counts.entry(tile).or_default() += 1;
+                }
+                counts
+            })
+            .reduce(FastMap::default, |mut counts, other| {
+                for (tile, count) in other {
+                    *counts.entry(tile).or_default() += count;
+                }
+                counts
+            });
+
+        let mut tiles: Vec<IVec3> = counts.keys().copied().collect();
+        tiles.sort_unstable_by_key(|tile| (tile.z, tile.y, tile.x));
+        let mut starts = Vec::with_capacity(tiles.len() + 1);
+        let mut cursor: FastMap<IVec3, usize> = FastMap::default();
+        let mut total = 0;
+        for tile in &tiles {
+            starts.push(total);
+            cursor.insert(*tile, total);
+            total += counts[tile];
+        }
+        starts.push(total);
+
+        let mut faces = vec![0; total];
+        for face in 0..mesh.faces.len() {
+            for tile in reached(face) {
+                if let Some(at) = cursor.get_mut(&tile) {
+                    faces[*at] = face as u32;
+                    *at += 1;
+                }
+            }
+        }
+        Self {
+            tiles,
+            starts,
+            faces,
+        }
+    }
+
+    fn faces_of(&self, at: usize) -> &[u32] {
+        &self.faces[self.starts[at]..self.starts[at + 1]]
+    }
+}
+
+/// The tiles `face`'s bounds grown by `reach_mm` come to, inside `keep` where it is given.
+fn reached(
     mesh: &Mesh,
+    face: usize,
     grid: VoxelGrid,
     reach_mm: Scalar,
     keep: Option<(IVec3, IVec3)>,
-) -> Vec<(IVec3, u32)> {
+) -> impl Iterator<Item = IVec3> {
     let reach = Vec3::splat(reach_mm);
-    (0..mesh.faces.len())
-        .into_par_iter()
-        .fold(Vec::new, |mut pairs, face| {
-            let Some(triangle) = mesh.triangle(face) else {
-                return pairs;
-            };
-            let low = triangle.a.min(triangle.b).min(triangle.c) - reach;
-            let high = triangle.a.max(triangle.b).max(triangle.c) + reach;
-            let (first, last) = (tile_of(grid.voxel(low)), tile_of(grid.voxel(high)));
-
-            for z in first.z..=last.z {
-                for y in first.y..=last.y {
-                    for x in first.x..=last.x {
-                        let tile = IVec3::new(x, y, z);
-                        if keep.is_none_or(|(low, high)| within(tile, low, high)) {
-                            pairs.push((tile, face as u32));
-                        }
-                    }
-                }
-            }
-            pairs
+    let span = mesh.triangle(face).map(|triangle| {
+        let low = triangle.a.min(triangle.b).min(triangle.c) - reach;
+        let high = triangle.a.max(triangle.b).max(triangle.c) + reach;
+        (tile_of(grid.voxel(low)), tile_of(grid.voxel(high)))
+    });
+    span.into_iter()
+        .flat_map(|(first, last)| {
+            (first.z..=last.z).flat_map(move |z| {
+                (first.y..=last.y)
+                    .flat_map(move |y| (first.x..=last.x).map(move |x| IVec3::new(x, y, z)))
+            })
         })
-        .reduce(Vec::new, |mut pairs, mut other| {
-            pairs.append(&mut other);
-            pairs
-        })
+        .filter(move |tile| keep.is_none_or(|(low, high)| within(*tile, low, high)))
 }
 
 /// One tile's seed, from the faces whose bounds reach into it.
@@ -129,13 +185,14 @@ fn seed_tile(
     faces: &Faces,
     grid: VoxelGrid,
     reach_mm: Scalar,
-    group: &[(IVec3, u32)],
+    tile: IVec3,
+    touching: &[u32],
 ) -> Box<[Nearest]> {
-    let base = group[0].0 * TILE;
+    let base = tile * TILE;
     let mut nearest = vec![UNSET; TILE_VALUES];
     let mut best = vec![reach_mm * reach_mm; TILE_VALUES];
 
-    for (_, face) in group {
+    for face in touching {
         let Some(triangle) = faces.get(*face as usize) else {
             continue;
         };
@@ -245,5 +302,34 @@ mod tests {
             }
         }
         assert!(checked > 1_000, "only {checked} voxels were seeded");
+    }
+
+    /// A tie goes to the lower face, so the seed is the same however the faces were listed.
+    #[test]
+    fn a_voxel_as_near_two_faces_is_seeded_with_the_lower() {
+        let triangle = [
+            Vec3::ZERO,
+            Vec3::new(4.0, 0.0, 0.0),
+            Vec3::new(0.0, 4.0, 0.0),
+        ];
+        let mesh = Mesh::new(
+            triangle.iter().chain(&triangle).copied().collect(),
+            vec![[3, 4, 5], [0, 1, 2]],
+        );
+        let seeded = seeds(&mesh, &Faces::of(&mesh), VoxelGrid::new(0.25), None);
+
+        let carried: Vec<Nearest> = seeded
+            .values()
+            .flat_map(|values| values.iter().copied())
+            .filter(|face| *face != UNSET)
+            .collect();
+        assert!(
+            !carried.is_empty(),
+            "the triangle seeds the voxels round it"
+        );
+        assert!(
+            carried.iter().all(|face| *face == 0),
+            "two copies of one triangle are equally near every voxel, so face 0 wins"
+        );
     }
 }

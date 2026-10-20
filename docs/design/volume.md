@@ -80,10 +80,16 @@ Nothing asks the hierarchy per voxel, and nothing measures the wall's interior a
 resolution the band is stored on (ADR 0082).
 
 **Seed.** `scatter.rs` buckets each face into the tiles its bounds grown by `SEED_VOXELS`
-reach, sorts the pairs by tile and fills each tile from its own faces alone. A voxel keeps
-a face only within that reach, where the list is complete, so the seed is exact. Work
-follows the surface, not the volume around it: a face is measured against the voxels its
-own bounds cover and no others.
+reach and fills each tile from its own faces alone. A voxel keeps a face only within that
+reach, where the list is complete, so the seed is exact; of faces equally near it keeps the
+lower, so the seed does not depend on how the lists were built. Work follows the surface,
+not the volume around it: a face is measured against the voxels its own bounds cover and
+no others.
+
+The buckets are counted first and laid out after, one list of face indices per tile end to
+end, rather than gathered as (tile, face) pairs: a face reaches about three tiles, and on a
+4.8 M-face model the pairs and their growing vectors were the peak of the whole build,
+1.31 GB against 0.94 GB now.
 
 **Carry.** `sweep.rs` propagates the nearest *face* outward from the seed to the
 isosurface, on a lattice `CARRY` times coarser than the stored one — crossing a wall is a
