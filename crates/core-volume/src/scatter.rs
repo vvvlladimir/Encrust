@@ -225,7 +225,7 @@ mod tests {
                             continue;
                         }
                         let point = grid.position(voxel);
-                        let exact = bvh.closest(&mesh, point).expect("the cube has faces");
+                        let exact = bvh.closest(point).expect("the cube has faces");
                         let triangle = mesh
                             .triangle(values[slot] as usize)
                             .expect("the seed named a face of the mesh");

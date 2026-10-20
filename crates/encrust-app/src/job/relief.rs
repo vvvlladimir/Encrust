@@ -1,8 +1,9 @@
 use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 
 use core_geometry::{Bvh, Heightmap, Mesh, Transform, Vec3, transform_mesh};
 use core_volume::{
-    AngleMask, ReliefBasis, ReliefSettings, Tiling, press_reusing, press_tiled_reusing,
+    AngleMask, Cancel, ReliefBasis, ReliefSettings, Tiling, press_reusing, press_tiled_reusing,
 };
 use rayon::prelude::*;
 
@@ -76,9 +77,9 @@ pub type ReliefJob = Worker<ReliefOutcome>;
 
 /// Starts the run. The thread is detached: it ends on its own.
 pub fn spawn_relief(request: ReliefRequest) -> ReliefJob {
-    // A press cannot be given up on part way; a run given up on is thrown away as it ends.
+    // A run given up on stops inside its field; what it then answers is thrown away.
     Worker::spawn(
-        move |_| pooled(|| run(&request), ReliefOutcome::Failed),
+        move |stop| pooled(|| run(&request, stop), ReliefOutcome::Failed),
         || ReliefOutcome::Failed(tr!("job-thread-stopped-relief")),
     )
 }
@@ -101,7 +102,9 @@ pub fn relief_tasks(scene: &Scene, tiled: bool) -> Vec<ReliefTask> {
         .collect()
 }
 
-fn run(request: &ReliefRequest) -> ReliefOutcome {
+fn run(request: &ReliefRequest, stop: &AtomicBool) -> ReliefOutcome {
+    let asked = || stop.load(Ordering::Relaxed);
+    let cancel = Cancel::when(&asked);
     let pressed: Result<Vec<Pressed>, _> = request
         .tasks
         .par_iter()
@@ -117,11 +120,11 @@ fn run(request: &ReliefRequest) -> ReliefOutcome {
             let relief = match (&request.source, &task.mapped, uvs) {
                 (ReliefSource::Tiled { image, tiling }, _, _) => {
                     let basis = task.basis.clone();
-                    press_tiled_reusing(&mesh, &bvh, image, *tiling, &settings, basis)
+                    press_tiled_reusing(&mesh, &bvh, image, *tiling, &settings, basis, cancel)
                 }
                 (ReliefSource::Mapped, Some(mapped), Some(uvs)) => {
                     let basis = task.basis.clone();
-                    press_reusing(&mesh, &bvh, &uvs, &mapped.heights, &settings, basis)
+                    press_reusing(&mesh, &bvh, &uvs, &mapped.heights, &settings, basis, cancel)
                 }
                 (ReliefSource::Mapped, ..) => {
                     return Err(anyhow::anyhow!(tr!("job-relief-no-texture")));

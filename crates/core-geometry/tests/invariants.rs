@@ -191,7 +191,7 @@ proptest! {
         let bvh = Bvh::build(&mesh);
 
         let exact = closest_point(&mesh, point).expect("the octahedron has faces");
-        let found = bvh.closest(&mesh, point).expect("the octahedron has faces");
+        let found = bvh.closest(point).expect("the octahedron has faces");
         prop_assert!(
             (found.distance - exact.distance).abs() < 1e-3,
             "every face gives {}, the hierarchy {}",
@@ -205,7 +205,7 @@ proptest! {
     fn the_nearest_point_lies_on_the_face_it_names(point in any_vertex()) {
         let mesh = bodies::octahedron(7.0);
         let bvh = Bvh::build(&mesh);
-        let found = bvh.closest(&mesh, point).expect("the octahedron has faces");
+        let found = bvh.closest(point).expect("the octahedron has faces");
 
         let triangle = mesh.triangle(found.face).expect("the face was named by the mesh");
         let on_face = point_triangle(found.point, &triangle);

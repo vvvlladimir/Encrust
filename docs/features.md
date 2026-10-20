@@ -207,8 +207,9 @@ capped silently.
   texture are not kept, and Undo puts the original back. The result stands on the plate the
   models were taken from. Shift or Cmd click picks a model in Text mode without writing.
 - A press, a stamp, a combination, a cut or a split runs off the drawing thread and can be
-  cancelled from the panel. If the model is moved, resized, replaced or undone meanwhile,
-  the result is dropped and the stage notice says so.
+  cancelled from the panel; a cancelled press stops inside the model it is on rather than
+  finishing unseen. If the model is moved, resized, replaced or undone meanwhile, the
+  result is dropped and the stage notice says so.
 - The mode and the built-in texture chosen are remembered between runs.
 
 ### Hollow

@@ -1,8 +1,8 @@
-use rayon::iter::{IntoParallelIterator, ParallelIterator};
+use rayon::iter::{IntoParallelIterator, IntoParallelRefIterator, ParallelIterator};
 
 use crate::{
-    Aabb, ClosestPoint, Mesh, Ray, RayHit, Scalar, Vec3, point_aabb_squared, point_triangle,
-    ray_aabb, ray_triangle,
+    Aabb, ClosestPoint, Mesh, Ray, RayHit, Scalar, Triangle, Vec3, point_aabb_squared,
+    point_triangle, ray_aabb, ray_triangle,
 };
 
 /// Faces a leaf may hold. Four is small enough that a leaf costs less than the traversal
@@ -27,12 +27,15 @@ const STACK: usize = MAX_DEPTH + 1;
 ///
 /// Built once per mesh and used for every ray against it. A support run casts one ray per
 /// column and a print-sized mesh is a million faces, which is far past what testing every
-/// face can carry; see `docs/decisions/0036`.
+/// face can carry; see `docs/decisions/0036`. It keeps its own copy of each triangle, so a
+/// query needs no mesh: see `docs/design/distance-queries.md`.
 #[derive(Debug, Clone, Default)]
 pub struct Bvh {
     nodes: Vec<Node>,
     /// Face indices, grouped so that every leaf owns one contiguous stretch.
     faces: Vec<u32>,
+    /// The triangle of each entry of `faces`, beside it in memory.
+    triangles: Vec<Triangle>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -66,9 +69,17 @@ impl Bvh {
             subtree(&mut items, 0, 0)
         };
 
+        let faces: Vec<u32> = items.iter().map(|item| item.face).collect();
+        drop(items);
+        // Every face kept by the build names vertices that are there.
+        let triangles = faces
+            .par_iter()
+            .filter_map(|&face| mesh.triangle(face as usize))
+            .collect();
         Self {
-            faces: items.iter().map(|item| item.face).collect(),
             nodes,
+            faces,
+            triangles,
         }
     }
 
@@ -76,11 +87,8 @@ impl Bvh {
         self.nodes.is_empty()
     }
 
-    /// Nearest face of `mesh` that `ray` hits, in the mesh's own space.
-    ///
-    /// `mesh` must be the one the hierarchy was built from; a different mesh answers with
-    /// whatever its faces of the same indices happen to be.
-    pub fn raycast(&self, mesh: &Mesh, ray: &Ray) -> Option<RayHit> {
+    /// Nearest face that `ray` hits, in the space of the mesh the hierarchy was built from.
+    pub fn raycast(&self, ray: &Ray) -> Option<RayHit> {
         let mut best: Option<RayHit> = None;
         // An array rather than a `Vec`, so that a cast costs no allocation; a support run
         // makes one of these per column.
@@ -109,11 +117,8 @@ impl Bvh {
             }
 
             let leaf = node.at as usize..(node.at + node.count) as usize;
-            for &face in &self.faces[leaf] {
-                let Some(triangle) = mesh.triangle(face as usize) else {
-                    continue;
-                };
-                let Some(t) = ray_triangle(ray, &triangle) else {
+            for (&face, triangle) in self.faces[leaf.clone()].iter().zip(&self.triangles[leaf]) {
+                let Some(t) = ray_triangle(ray, triangle) else {
                     continue;
                 };
                 if best.is_none_or(|hit| t < hit.t) {
@@ -128,25 +133,19 @@ impl Bvh {
         best
     }
 
-    /// Nearest point of `mesh` to `point`, in the mesh's own space.
+    /// Nearest point of the mesh the hierarchy was built from to `point`, in its own space.
     ///
-    /// `mesh` must be the one the hierarchy was built from. A narrow-band distance field
-    /// asks this of every voxel near the surface; see `docs/design/distance-queries.md`.
-    pub fn closest(&self, mesh: &Mesh, point: Vec3) -> Option<ClosestPoint> {
-        self.closest_within(mesh, point, Scalar::INFINITY)
+    /// A narrow-band distance field asks this of every voxel near the surface; see
+    /// `docs/design/distance-queries.md`.
+    pub fn closest(&self, point: Vec3) -> Option<ClosestPoint> {
+        self.closest_within(point, Scalar::INFINITY)
     }
 
-    /// Nearest point of `mesh` to `point` that is nearer than `within_mm`, or `None` when
-    /// none is.
+    /// Nearest point to `point` that is nearer than `within_mm`, or `None` when none is.
     ///
     /// A caller that already knows a face at `within_mm` gets the exact answer for far
     /// less: every node no nearer than that is culled before it is opened.
-    pub fn closest_within(
-        &self,
-        mesh: &Mesh,
-        point: Vec3,
-        within_mm: Scalar,
-    ) -> Option<ClosestPoint> {
+    pub fn closest_within(&self, point: Vec3, within_mm: Scalar) -> Option<ClosestPoint> {
         let mut best: Option<ClosestPoint> = None;
         let mut best_squared = within_mm * within_mm;
         // Each entry carries the distance its box was at when it was pushed, so a node
@@ -182,11 +181,8 @@ impl Bvh {
             }
 
             let leaf = node.at as usize..(node.at + node.count) as usize;
-            for &face in &self.faces[leaf] {
-                let Some(triangle) = mesh.triangle(face as usize) else {
-                    continue;
-                };
-                let on_face = point_triangle(point, &triangle);
+            for (&face, triangle) in self.faces[leaf.clone()].iter().zip(&self.triangles[leaf]) {
+                let on_face = point_triangle(point, triangle);
                 let squared = (on_face - point).length_squared();
                 if squared < best_squared {
                     best_squared = squared;
@@ -409,7 +405,7 @@ mod tests {
             Vec3::new(-2.0, 5.0, 5.0),
             Vec3::new(11.0, 11.0, 11.0),
         ] {
-            let found = bvh.closest(&mesh, point).expect("the cube has faces");
+            let found = bvh.closest(point).expect("the cube has faces");
             bvh.faces_within(point, found.distance, &mut near);
             assert!(
                 near.contains(&(found.face as u32)),
@@ -489,10 +485,7 @@ mod tests {
     fn an_empty_mesh_builds_an_empty_hierarchy() {
         let bvh = Bvh::build(&Mesh::default());
         assert!(bvh.is_empty());
-        assert_eq!(
-            bvh.raycast(&Mesh::default(), &Ray::new(Vec3::ZERO, Vec3::Z)),
-            None
-        );
+        assert_eq!(bvh.raycast(&Ray::new(Vec3::ZERO, Vec3::Z)), None);
     }
 
     #[test]
@@ -501,7 +494,7 @@ mod tests {
         let bvh = Bvh::build(&mesh);
         let ray = Ray::new(Vec3::new(5.0, 5.0, 20.0), -Vec3::Z);
 
-        let hit = bvh.raycast(&mesh, &ray).expect("the cube is under the ray");
+        let hit = bvh.raycast(&ray).expect("the cube is under the ray");
         assert!(
             (hit.t - 10.0).abs() < 1e-4,
             "the top face is 10 mm below the origin, got {}",
@@ -514,7 +507,7 @@ mod tests {
         let mesh = cube(10.0);
         let bvh = Bvh::build(&mesh);
         let ray = Ray::new(Vec3::new(50.0, 50.0, 20.0), -Vec3::Z);
-        assert_eq!(bvh.raycast(&mesh, &ray), None);
+        assert_eq!(bvh.raycast(&ray), None);
     }
 
     #[test]
@@ -527,7 +520,7 @@ mod tests {
             let centre = (triangle.a + triangle.b + triangle.c) / 3.0;
             let ray = Ray::new(centre + Vec3::Z, -Vec3::Z);
             assert_eq!(
-                bvh.raycast(&mesh, &ray).map(|hit| hit.face),
+                bvh.raycast(&ray).map(|hit| hit.face),
                 Some(face),
                 "the ray through the middle of face {face} must find it"
             );
@@ -545,7 +538,7 @@ mod tests {
             let origin = Vec3::new(along, along * 0.5, 5.0);
             let ray = Ray::new(origin, Vec3::new(0.2, 0.1, -1.0));
             assert_eq!(
-                bvh.raycast(&mesh, &ray),
+                bvh.raycast(&ray),
                 raycast(&mesh, &ray),
                 "the hierarchy disagreed with a brute force sweep at step {step}"
             );
@@ -569,7 +562,7 @@ mod tests {
         let bvh = Bvh::build(&mesh);
 
         let ray = Ray::new(Vec3::new(0.2, 0.2, 1.0), -Vec3::Z);
-        assert!(bvh.raycast(&mesh, &ray).is_some());
+        assert!(bvh.raycast(&ray).is_some());
     }
 
     #[test]
@@ -584,7 +577,7 @@ mod tests {
             Vec3::new(5.0, 5.0, 9.9),
         ] {
             let exact = crate::closest_point(&mesh, point).expect("the cube has faces");
-            let found = bvh.closest(&mesh, point).expect("the cube has faces");
+            let found = bvh.closest(point).expect("the cube has faces");
             assert!(
                 (found.distance - exact.distance).abs() < 1e-5,
                 "at {point}: every face gives {}, the hierarchy {}",
@@ -599,7 +592,7 @@ mod tests {
         let mesh = cube(10.0);
         let bvh = Bvh::build(&mesh);
         let found = bvh
-            .closest(&mesh, Vec3::new(2.0, 5.0, 5.0))
+            .closest(Vec3::new(2.0, 5.0, 5.0))
             .expect("the cube has faces");
         assert!(
             (found.distance - 2.0).abs() < 1e-5,
@@ -612,6 +605,6 @@ mod tests {
     #[test]
     fn an_empty_hierarchy_has_no_nearest_point() {
         let mesh = Mesh::default();
-        assert!(Bvh::build(&mesh).closest(&mesh, Vec3::ZERO).is_none());
+        assert!(Bvh::build(&mesh).closest(Vec3::ZERO).is_none());
     }
 }

@@ -34,7 +34,7 @@ impl Press<'_> {
     /// Where Newton's method along the field's slope takes `start`, stopping at the first
     /// step that does not bring it nearer the surface.
     fn snapped(&self, start: Vec3, field: &Sdf, signer: &Signer, limit_mm: Scalar) -> Vec3 {
-        let Some(found) = self.bvh.closest(self.mesh, start) else {
+        let Some(found) = self.bvh.closest(start) else {
             return start;
         };
         let (mut at, mut face) = (start, found.face);
@@ -71,7 +71,7 @@ impl Press<'_> {
         };
         Some(
             self.bvh
-                .closest_within(self.mesh, point, bound.distance)
+                .closest_within(point, bound.distance)
                 .unwrap_or(bound),
         )
     }

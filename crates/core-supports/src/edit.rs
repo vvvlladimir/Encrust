@@ -65,9 +65,7 @@ pub fn on_model(placed: &Placed, at: Vec3) -> Option<Vec3> {
         return None;
     }
     let inverse = matrix.inverse();
-    let closest = placed
-        .bvh
-        .closest(placed.model, inverse.transform_point3(at))?;
+    let closest = placed.bvh.closest(inverse.transform_point3(at))?;
     (!placed.blocks_face(closest.face)).then(|| matrix.transform_point3(closest.point))
 }
 

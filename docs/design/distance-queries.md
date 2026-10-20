@@ -48,6 +48,11 @@ which is zero inside the box. Squared throughout, so no square root per node.
 Both children are measured and the nearer pushed last, so it opens first and its bound
 culls the sibling. Each stack entry carries the distance its box was at when pushed, so a
 node the search has outgrown is dropped without measuring again — worth 36% of the query.
+
+A leaf reads its triangles from the tree's own copy, laid out in leaf order, rather than
+through the mesh's face and vertex arrays: two jumps through memory fewer per face. That
+took 6% off a relief at precision 0.8 on a 1.5 M-face model and costs 36 bytes a face, about
+55 MB there; a query takes no mesh.
 The traversal is best-first in spirit without a priority queue, which on this tree costs
 more than it saves. The stack is a fixed array rather than a `Vec`, because a field build
 asks millions of these and one allocation each is measurable; it holds one slot more than

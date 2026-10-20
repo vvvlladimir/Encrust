@@ -11,6 +11,7 @@ use rayon::prelude::*;
 use super::{Press, ReliefSettings};
 use crate::boolean::united;
 use crate::build::{FieldSettings, INSIDE, NO_FACE, build_nearest};
+use crate::cancel::Cancel;
 use crate::error::VolumeError;
 use crate::grid::{TILE, VoxelGrid};
 use crate::hollow::{BAND_VOXELS, coarsening};
@@ -118,6 +119,7 @@ impl ReliefBasis {
         mesh: &Mesh,
         bvh: &Bvh,
         settings: &ReliefSettings,
+        cancel: Cancel<'_>,
     ) -> Result<Self, VolumeError> {
         let asked_mm = settings.voxel_mm(mesh.surface_area());
         // A mesh the exact cut cannot read is pressed as it stands, buried faces and all.
@@ -132,7 +134,7 @@ impl ReliefBasis {
             .as_ref()
             .map_or((mesh, bvh), |(united, hierarchy)| (united, hierarchy));
         let (basis, _) = coarsening(asked_mm, |voxel_mm| {
-            Self::on_lattice(surface, hierarchy, settings, asked_mm, voxel_mm)
+            Self::on_lattice(surface, hierarchy, settings, (asked_mm, voxel_mm), cancel)
         })?;
         Ok(basis.over(mesh, united))
     }
@@ -153,8 +155,8 @@ impl ReliefBasis {
         mesh: &Mesh,
         bvh: &Bvh,
         settings: &ReliefSettings,
-        asked_mm: Scalar,
-        voxel_mm: Scalar,
+        (asked_mm, voxel_mm): (Scalar, Scalar),
+        cancel: Cancel<'_>,
     ) -> Result<Self, VolumeError> {
         let (middle_mm, reach_mm) = settings.range_mm();
         let band_voxels = reach_mm / voxel_mm + BAND_VOXELS;
@@ -169,6 +171,7 @@ impl ReliefBasis {
                 clip: None,
                 budget_bytes: settings.budget_bytes,
             },
+            cancel,
         )?;
         Ok(Self {
             shape: Shape::of(mesh),
@@ -192,10 +195,12 @@ impl ReliefBasis {
 impl Press<'_> {
     /// The field of the pressed surface over `basis`: each voxel's distance read back off
     /// its nearest face, and moved by the texture there.
-    pub(super) fn field_on(&self, basis: &ReliefBasis) -> Sdf {
+    /// A run given up on leaves the tiles it had not reached out.
+    pub(super) fn field_on(&self, basis: &ReliefBasis, cancel: Cancel<'_>) -> Sdf {
         let tiles: HashMap<IVec3, Box<[Quantised]>> = basis
             .tiles
             .par_iter()
+            .filter(|_| !cancel.asked())
             .map(|(tile, records)| (*tile, self.tile_on(basis, *tile, records)))
             .collect();
         Sdf::new(basis.grid, basis.band_mm, tiles, basis.solid.clone())

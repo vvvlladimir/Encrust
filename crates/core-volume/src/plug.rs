@@ -140,7 +140,7 @@ fn plug(
 fn surface_depth(model: &Mesh, bvh: &Bvh, point: Vec3, axis: Vec3, length_mm: Scalar) -> Scalar {
     let start = length_mm - THINNEST_MM;
     let ray = Ray::new(point + axis * start, -axis);
-    bvh.raycast(model, &ray)
+    bvh.raycast(&ray)
         .filter(|hit| {
             model
                 .triangle(hit.face)

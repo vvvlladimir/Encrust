@@ -342,7 +342,7 @@ fn the_sweep_answers_what_the_hierarchy_would() {
                 for x in (-reach..=reach).step_by(stride) {
                     let voxel = IVec3::new(x, y, z);
                     let point = grid.position(voxel);
-                    let found = bvh.closest(&mesh, point).expect("the ball has faces");
+                    let found = bvh.closest(point).expect("the ball has faces");
                     // A ball is the one body where the side needs no pseudonormal.
                     let side = if point.length() < radius { -1.0 } else { 1.0 };
                     let truth = side * found.distance - iso_mm;

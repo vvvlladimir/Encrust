@@ -395,7 +395,7 @@ mod tests {
             Vec3::new(9.5, 9.5, 9.5),
             Vec3::new(10.5, 5.0, 5.0),
         ] {
-            let found = bvh.closest(&mesh, point).expect("the cube has faces");
+            let found = bvh.closest(point).expect("the cube has faces");
             let by_normal = Signer::new(&mesh, SignMode::Pseudonormal);
             let by_winding = Signer::new(&mesh, SignMode::Winding);
             assert_eq!(

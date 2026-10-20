@@ -76,15 +76,7 @@ pub(crate) fn fill<T: Copy + Send + Sync>(
 ) -> HashMap<IVec3, Box<[T]>> {
     let factor = carry_for(grid, band_mm, iso_mm);
     let coarse = carrier_grid(grid, factor);
-    let carrier = carry(
-        mesh,
-        faces,
-        bvh,
-        coarse,
-        coarsened(rings, factor),
-        seeds,
-        cancel,
-    );
+    let carrier = carry(faces, bvh, coarse, coarsened(rings, factor), seeds, cancel);
 
     // A stored tile reads the carrier and nothing else, so there is no order between them.
     // A run given up on fills no further tile and comes back with what it had; the caller
@@ -94,7 +86,6 @@ pub(crate) fn fill<T: Copy + Send + Sync>(
         .filter(|_| !cancel.asked())
         .filter_map(|(tile, centre_mm)| {
             let work = refine(
-                mesh,
                 faces,
                 bvh,
                 (grid, factor),
@@ -152,9 +143,7 @@ fn coarsened(rings: Vec<Vec<IVec3>>, carry: i32) -> Vec<Vec<IVec3>> {
 ///
 /// Only the two rings a ring can read from are kept as halo, so the shell is only ever
 /// resident as the carrier itself, which is the carry factor cubed smaller than it looks.
-#[allow(clippy::too_many_arguments)]
 fn carry(
-    mesh: &Mesh,
     faces: &Faces,
     bvh: &Bvh,
     coarse: VoxelGrid,
@@ -182,7 +171,7 @@ fn carry(
                         .or_else(|| seeds.get(&at))
                         .map(|work| &work[..])
                 };
-                (*tile, swept_tile(mesh, faces, bvh, coarse, *tile, &look))
+                (*tile, swept_tile(faces, bvh, coarse, *tile, &look))
             })
             .collect();
 
@@ -201,7 +190,7 @@ fn carry(
         if cancel.asked() {
             return carrier;
         }
-        settle(mesh, faces, bvh, coarse, &mut carrier, seeds);
+        settle(faces, bvh, coarse, &mut carrier, seeds);
     }
     carrier
 }
@@ -216,7 +205,6 @@ const PASSES: usize = 2;
 
 /// One more sweep of every tile of the shell, this time against the whole of it.
 fn settle(
-    mesh: &Mesh,
     faces: &Faces,
     bvh: &Bvh,
     coarse: VoxelGrid,
@@ -233,7 +221,7 @@ fn settle(
                     .or_else(|| seeds.get(&at))
                     .map(|work| &work[..])
             };
-            (*tile, resettled(mesh, faces, bvh, coarse, *tile, &look))
+            (*tile, resettled(faces, bvh, coarse, *tile, &look))
         })
         .collect();
 
@@ -246,7 +234,6 @@ fn settle(
 
 /// One carrier tile swept again, or `None` when nothing around it could move a voxel.
 fn resettled<'a>(
-    mesh: &Mesh,
     faces: &Faces,
     bvh: &Bvh,
     grid: VoxelGrid,
@@ -256,7 +243,7 @@ fn resettled<'a>(
     let base = tile * TILE;
     let mut near = vec![UNSET; BLOCK_VALUES];
     gather(&mut near, base, look, tile);
-    offers_nearer(faces, grid, base, &near).then(|| swept_block(mesh, faces, bvh, grid, base, near))
+    offers_nearer(faces, grid, base, &near).then(|| swept_block(faces, bvh, grid, base, near))
 }
 
 /// Whether the halo of a block offers a voxel on the border of its tile a nearer face
@@ -299,7 +286,6 @@ fn offers_nearer(faces: &Faces, grid: VoxelGrid, base: IVec3, near: &[Nearest]) 
 /// One carrier tile swept from whatever its neighbours already carry, or `None` when
 /// nothing around it carries anything yet.
 fn swept_tile<'a>(
-    mesh: &Mesh,
     faces: &Faces,
     bvh: &Bvh,
     grid: VoxelGrid,
@@ -312,7 +298,7 @@ fn swept_tile<'a>(
     if near.iter().all(|carried| *carried == UNSET) {
         return None;
     }
-    Some(swept_block(mesh, faces, bvh, grid, base, near))
+    Some(swept_block(faces, bvh, grid, base, near))
 }
 
 /// How far from the mesh the carrier is believed, in its own voxels.
@@ -330,9 +316,7 @@ const TRUST_VOXELS: Scalar = 3.0;
 /// march is needed because the tile arrives already full. The `carry` cubed voxels of one
 /// carrier cell share those eight points, so the faces are named once per cell rather than
 /// once per voxel, and there are only ever two or three distinct ones.
-#[allow(clippy::too_many_arguments)]
 fn refine(
-    mesh: &Mesh,
     faces: &Faces,
     bvh: &Bvh,
     (grid, carry): (VoxelGrid, i32),
@@ -384,7 +368,7 @@ fn refine(
             work[index_in_tile(voxel)] = if nearest < trust_mm && matters(nearest) {
                 // Only a face nearer than the one carried can replace it, which bounds
                 // the search from its first node.
-                bvh.closest_within(mesh, point, nearest)
+                bvh.closest_within(point, nearest)
                     .map_or(carried, |found| found.face as Nearest)
             } else {
                 carried
@@ -411,7 +395,6 @@ fn cell_voxels(carry: i32) -> impl Iterator<Item = IVec3> {
 /// Marches one block over and reads its own tile back out of it, asking the hierarchy for
 /// whatever the march never reached.
 fn swept_block(
-    mesh: &Mesh,
     faces: &Faces,
     bvh: &Bvh,
     grid: VoxelGrid,
@@ -434,7 +417,7 @@ fn swept_block(
     for local in tile_voxels() {
         let carried = near[at(local + IVec3::ONE)];
         work[index_in_tile(base + local)] = if carried == UNSET {
-            searched(mesh, bvh, grid.position(base + local))
+            searched(bvh, grid.position(base + local))
         } else {
             carried
         };
@@ -550,8 +533,8 @@ fn march(
 ///
 /// A voxel with neither a carrier nor a swept neighbour is the sweep's own blind spot: it
 /// costs a traversal rather than a wrong answer, and `hollow-lab` is where it shows.
-fn searched(mesh: &Mesh, bvh: &Bvh, point: Vec3) -> Nearest {
-    bvh.closest(mesh, point)
+fn searched(bvh: &Bvh, point: Vec3) -> Nearest {
+    bvh.closest(point)
         .map_or(UNSET, |found| found.face as Nearest)
 }
 
@@ -644,7 +627,7 @@ fn block_values<T>(
     // the far side of a thin wall is near enough for a distance and wrong for a side.
     let one_sided = settled.or_else(|| {
         (nearest > reach_mm).then(|| {
-            let exact = bvh.closest(mesh, *first);
+            let exact = bvh.closest(*first);
             signer.is_inside(mesh, *first, exact.as_ref().unwrap_or(on_first))
         })
     });

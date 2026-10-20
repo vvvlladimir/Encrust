@@ -286,7 +286,7 @@ pub fn snap(
     if to == Snap::Free || !inverse.is_finite() {
         return free;
     }
-    let Some(near) = bvh.closest(mesh, inverse.transform_point3(point)) else {
+    let Some(near) = bvh.closest(inverse.transform_point3(point)) else {
         return free;
     };
     let placed = Placed { mesh, matrix };

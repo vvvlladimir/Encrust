@@ -36,7 +36,7 @@ fn benchmarks(c: &mut Criterion) {
     });
 
     c.bench_function("raycast 200k triangles, hierarchy", |b| {
-        b.iter(|| bvh.raycast(std::hint::black_box(&mesh), &rays[0]));
+        b.iter(|| bvh.raycast(&rays[0]));
     });
 
     c.bench_function("64 support drops, every face", |b| {
@@ -48,11 +48,7 @@ fn benchmarks(c: &mut Criterion) {
     });
 
     c.bench_function("64 support drops, hierarchy", |b| {
-        b.iter(|| {
-            rays.iter()
-                .filter_map(|ray| bvh.raycast(std::hint::black_box(&mesh), ray))
-                .count()
-        });
+        b.iter(|| rays.iter().filter_map(|ray| bvh.raycast(ray)).count());
     });
 }
 

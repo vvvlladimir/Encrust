@@ -78,7 +78,7 @@ impl Held {
     }
 
     pub(super) fn nearest(&self, point: Vec3) -> Option<ClosestPoint> {
-        self.bvh.closest(&self.mesh, point)
+        self.bvh.closest(point)
     }
 
     /// Whether a point whose nearest held point is `held` and whose nearest point of the

@@ -361,7 +361,7 @@ fn tip_direction(placed: &Placed, contact: Vec3) -> Vec3 {
     }
     let inverse = matrix.inverse();
     let local = inverse.transform_point3(contact);
-    let Some(found) = placed.bvh.closest(placed.model, local) else {
+    let Some(found) = placed.bvh.closest(local) else {
         return -Vec3::Z;
     };
     // A normal does not survive a non-uniform scale under the model matrix, but it does

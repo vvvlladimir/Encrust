@@ -192,7 +192,6 @@ impl Region {
 #[derive(Debug)]
 pub struct Blocked {
     region: Region,
-    patch: Mesh,
     bvh: Bvh,
 }
 
@@ -204,7 +203,6 @@ impl Blocked {
         Some(Self {
             region: region.clone(),
             bvh: Bvh::build(&patch),
-            patch,
         })
     }
 
@@ -217,7 +215,7 @@ impl Blocked {
     /// coordinates: what keeps an automatic contact out of a painted area.
     pub fn covers(&self, point: Vec3, radius_mm: Scalar) -> bool {
         self.bvh
-            .closest(&self.patch, point)
+            .closest(point)
             .is_some_and(|closest| closest.distance <= radius_mm)
     }
 }
