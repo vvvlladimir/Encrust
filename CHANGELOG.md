@@ -1,5 +1,23 @@
 # Changelog
 
+## [0.5.0](https://github.com/vvvlladimir/Encrust/compare/v0.4.0...v0.5.0) (2026-10-20)
+
+
+### ✨ New
+
+* **app:** pick models with Cmd-click in Hollow and Drain, gizmo in ([43de445](https://github.com/vvvlladimir/Encrust/commit/43de445747ec0a63e41ae4c90a3e68c702c79a38))
+* **app:** query Microsoft Store for package updates on Windows ([99a9393](https://github.com/vvvlladimir/Encrust/commit/99a93939240bdea6a1720504b256d6d8121e48b3))
+* **i18n:** Add multi-language support and improve app help stylingf ([#132](https://github.com/vvvlladimir/Encrust/issues/132)) ([7a320cb](https://github.com/vvvlladimir/Encrust/commit/7a320cb8f3bcdbad5e186e3eedd40f9092e44e2b))
+* **mesh:** Enhance CSG operations with exact mesh booleans and app improvements ([#136](https://github.com/vvvlladimir/Encrust/issues/136)) ([4725efd](https://github.com/vvvlladimir/Encrust/commit/4725efd7f81287615a7ab1b1b7adbf474ab30fe4))
+* **printers:** Enhance printer profiles with locking and firmware settings ([#133](https://github.com/vvvlladimir/Encrust/issues/133)) ([07a5bbf](https://github.com/vvvlladimir/Encrust/commit/07a5bbf5c139114d04125845d109244863aec362))
+* **profiles:** Enhance profiles and volume handling with new import features ([#131](https://github.com/vvvlladimir/Encrust/issues/131)) ([2fa83e4](https://github.com/vvvlladimir/Encrust/commit/2fa83e47248af1b9de1a1476bb1010578318e763))
+* **viewport:** allow picking cut section material and surfaces ([d916754](https://github.com/vvvlladimir/Encrust/commit/d9167543d95592418fd3f34956e0593442bb67ab))
+
+
+### ⚡ Faster
+
+* Improve performance by parallelizing pseudonormal and solid preparation ([#139](https://github.com/vvvlladimir/Encrust/issues/139)) ([5757986](https://github.com/vvvlladimir/Encrust/commit/5757986253fb5b43b99c9108b223c4edf6b7a5b5))
+
 ## [0.4.0](https://github.com/vvvlladimir/Encrust/compare/v0.3.0...v0.4.0) (2026-10-16)
 
 
