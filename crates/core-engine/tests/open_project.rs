@@ -13,7 +13,7 @@ use core_engine::project::{
     Summary, SupportState, VERSION,
 };
 use core_engine::{EngineError, Machine, Opening, open_plate};
-use core_geometry::{Bvh, Mesh, Orientation, Transform, Vec3, diagnose};
+use core_geometry::{Bvh, Mesh, Orientation, Region, Transform, Vec3, diagnose};
 use core_supports::{ModelSupports, ProjectSettings, SupportPoint, SupportTree};
 use core_volume::{HollowMode, InfillSettings};
 use printer_profiles::{
@@ -98,6 +98,7 @@ fn object(name: &str, mesh: &Mesh, transform: Transform) -> ObjectState {
         own_supports: Vec::new(),
         own_raft: None,
         plug_of: None,
+        relief_painted: Region::default(),
     }
 }
 

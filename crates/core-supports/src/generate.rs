@@ -888,8 +888,8 @@ mod tests {
 
     /// The region every face of `mesh` looking down belongs to: the underside a support
     /// would otherwise be put against.
-    fn underside(mesh: &Mesh) -> crate::Region {
-        let mut region = crate::Region::default();
+    fn underside(mesh: &Mesh) -> core_geometry::Region {
+        let mut region = core_geometry::Region::default();
         for face in 0..mesh.faces.len() {
             let looking_down = mesh.triangle(face).is_some_and(|triangle| {
                 triangle.normal_unnormalized().normalize_or_zero().z < -0.9

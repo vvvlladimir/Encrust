@@ -3,10 +3,11 @@
     reason = "a broken fixture must fail the run loudly"
 )]
 
-use core_geometry::{Bvh, Heightmap, Mesh, Scalar, UvMap, Vec2, Vec3, ball};
+use core_geometry::{Bvh, Heightmap, Mesh, Region, Scalar, Transform, UvMap, Vec2, Vec3, ball};
 use core_volume::{
     Cancel, FieldSettings, HollowMode, HollowSettings, InfillPattern, InfillSettings, Panel,
-    ReliefSettings, SignMode, StackField, build, extract, hollow, offset, press, shell,
+    ReliefSettings, SignMode, StackField, build, extract, hollow, offset, press, press_painted,
+    shell,
 };
 use criterion::{Criterion, criterion_group, criterion_main};
 
@@ -199,6 +200,29 @@ fn hollowing(c: &mut Criterion, mesh: &Mesh, bvh: &Bvh) {
             )
         });
     });
+
+    // Painted, only the patch is split and moved: priced against the field press above.
+    let mut patch = Region::default();
+    patch.brush(
+        (mesh, bvh, Transform::default()),
+        Vec3::new(0.0, 0.0, 20.0),
+        8.0,
+        true,
+    );
+    c.bench_function(
+        "press a 0.4 mm relief into an 8 mm patch of a 40 mm ball",
+        |b| {
+            b.iter(|| {
+                press_painted(
+                    std::hint::black_box(mesh),
+                    &spherical,
+                    std::slice::from_ref(&checks),
+                    &relief,
+                    &patch,
+                )
+            });
+        },
+    );
 
     // Half a million triangles is the size of a scanned bust, and what the step aimed at.
     let dense = ball(Vec3::ZERO, 20.0, 500, 500);

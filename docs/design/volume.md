@@ -214,6 +214,16 @@ the moved solid intersected with the half-space behind that face, on both sides 
 plane so the lattice interpolates the cut onto it. A point straight over a held face is not
 cut, because it lies in the open under an overhang beside a wall that keeps its relief.
 
+A painted relief has no field (ADR 0318). Each painted face the mask does not hold is split
+at the middle of every edge longer than the lattice the painted area would be cut on, and
+again until none is; a face beside it is split along the edge they share, so the surface
+stays closed. Each corner inside the paint then moves along its area-weighted normal over
+the painted faces by the mean height those faces read at it, a mapped face through its
+original face's map and a tiled one by the corner's normal. A corner any unpainted face
+shares stays, so the relief falls to nothing across the first ring of split faces and
+everything past it is the model's own mesh. A depth beyond the surface's curvature can fold
+it through itself; nothing checks.
+
 The pressed field is meshed with a clustering slack of 0.05 voxel instead of half, so a flat
 face the relief left alone still merges into facets and the relief itself does not. The
 lattice then places each vertex only to within half a voxel, so every vertex takes up to

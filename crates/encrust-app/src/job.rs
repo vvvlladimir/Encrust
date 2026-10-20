@@ -38,7 +38,8 @@ pub use place::{SupportJob, SupportOutcome, SupportRequest, tasks_of};
 pub use plate::models_of;
 pub use preview::{PreviewJob, PreviewOutcome};
 pub use relief::{
-    Pressed, ReliefJob, ReliefOutcome, ReliefRequest, ReliefSource, relief_tasks, spawn_relief,
+    Pressed, ReliefJob, ReliefOutcome, ReliefRequest, ReliefSource, painting, relief_tasks,
+    spawn_relief,
 };
 pub use repair::{RepairJob, RepairOutcome, RepairRequest, Repaired, mend};
 pub use send::{Action, SendJob, SendOutcome, SendRequest};

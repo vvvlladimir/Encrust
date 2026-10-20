@@ -166,6 +166,7 @@ fn click(ui: &egui::Ui, window: &mut Window, rect: egui::Rect, cursor: egui::Pos
         // the other buttons are already spoken for by the camera.
         // A stroke of the brush has already painted whatever the click landed on.
         Tool::Paint if window.tools.supports.placing.paints() => {}
+        Tool::Relief if window.tools.relief.paints() => {}
         Tool::Paint if ui.input(|input| input.modifiers.alt) => {
             remove_support_under_cursor(window, rect, cursor);
         }
@@ -315,7 +316,9 @@ fn draw_tool_overlays(ui: &egui::Ui, window: &mut Window, rect: egui::Rect, poin
         draw_cut_plane(ui, window, rect);
         draw_part_mark(ui, window, rect);
     }
-    if *window.tool == Tool::Paint && window.tools.supports.placing.paints() {
+    if (*window.tool == Tool::Paint && window.tools.supports.placing.paints())
+        || (*window.tool == Tool::Relief && window.tools.relief.paints())
+    {
         draw_brush(ui, window, rect);
     }
     if *window.tool == Tool::Supports {

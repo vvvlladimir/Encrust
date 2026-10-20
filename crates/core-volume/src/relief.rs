@@ -13,11 +13,14 @@ use crate::extract::extract_clustered;
 use crate::hollow::lattice_mm;
 
 mod basis;
+mod displace;
 mod mask;
+mod refine;
 mod smooth;
 mod snap;
 
 pub use basis::ReliefBasis;
+pub use displace::{press_painted, press_painted_tiled};
 pub use mask::AngleMask;
 use mask::Held;
 
@@ -138,6 +141,27 @@ pub fn press(
         .map(|(relief, _)| relief)
 }
 
+/// Refuses a map that is not `mesh`'s, or that names an image `heights` does not hold.
+fn mapped(mesh: &Mesh, uvs: &UvMap, heights: &[Heightmap]) -> Result<(), VolumeError> {
+    // A map covering part of the mesh is honest — what it does not cover does not move —
+    // but one indexed by a different face list is not the mesh's map at all.
+    if uvs.len() != mesh.faces.len() || uvs.mapped() == 0 {
+        return Err(VolumeError::UnmappedMesh {
+            faces: mesh.faces.len(),
+            mapped: uvs.mapped(),
+        });
+    }
+    // A model textured by material carries one image per material, and a face names its
+    // own: a map naming an image that was not handed over has nothing to read.
+    if uvs.textures() > heights.len() {
+        return Err(VolumeError::MissingTexture {
+            wanted: uvs.textures(),
+            given: heights.len(),
+        });
+    }
+    Ok(())
+}
+
 /// Refuses a mesh with no faces to press into, or settings no press can be made with.
 fn pressable(mesh: &Mesh, settings: &ReliefSettings) -> Result<(), VolumeError> {
     if mesh.aabb().is_none() {
@@ -159,22 +183,7 @@ pub fn press_reusing(
     cancel: Cancel<'_>,
 ) -> Result<(Relief, Arc<ReliefBasis>), VolumeError> {
     pressable(mesh, settings)?;
-    // A map covering part of the mesh is honest — what it does not cover does not move —
-    // but one indexed by a different face list is not the mesh's map at all.
-    if uvs.len() != mesh.faces.len() || uvs.mapped() == 0 {
-        return Err(VolumeError::UnmappedMesh {
-            faces: mesh.faces.len(),
-            mapped: uvs.mapped(),
-        });
-    }
-    // A model textured by material carries one image per material, and a face names its
-    // own: a map naming an image that was not handed over has nothing to read.
-    if uvs.textures() > heights.len() {
-        return Err(VolumeError::MissingTexture {
-            wanted: uvs.textures(),
-            given: heights.len(),
-        });
-    }
+    mapped(mesh, uvs, heights)?;
 
     let heights: Vec<_> = heights
         .iter()
@@ -197,6 +206,15 @@ const RELIEF_SLACK_VOXELS: Scalar = 0.05;
 pub struct Tiling {
     pub tile_mm: Scalar,
     pub angle_deg: Scalar,
+}
+
+impl Tiling {
+    fn check(self) -> Result<(), VolumeError> {
+        if !self.tile_mm.is_finite() || self.tile_mm <= 0.0 {
+            return Err(VolumeError::BadTile(self.tile_mm));
+        }
+        Ok(())
+    }
 }
 
 impl Default for Tiling {
@@ -239,9 +257,7 @@ pub fn press_tiled_reusing(
     cancel: Cancel<'_>,
 ) -> Result<(Relief, Arc<ReliefBasis>), VolumeError> {
     pressable(mesh, settings)?;
-    if !tiling.tile_mm.is_finite() || tiling.tile_mm <= 0.0 {
-        return Err(VolumeError::BadTile(tiling.tile_mm));
-    }
+    tiling.check()?;
     let image = prepared(image, settings);
     let (sin, cos) = tiling.angle_deg.to_radians().sin_cos();
     let on_plane = |a: Scalar, b: Scalar| {

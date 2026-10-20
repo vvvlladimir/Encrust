@@ -183,6 +183,13 @@ capped silently.
 - **Leave flat:** faces within an angle you set of facing the plate, or of facing straight
   up, keep their shape, and the relief stops square at their edge — a base the model stands
   on stays flat.
+- **Where:** paint the faces to press with a brush, alt to erase. Once a model has any
+  face painted, the texture is pressed into the painted faces only, and the view shows it
+  only there; the rest of the model keeps its own mesh untouched, and the press takes as
+  long as the painted area, not the model. The relief tapers to nothing over a fraction of
+  a millimetre at the edge of the paint. While the brush is on, nothing painted shows and
+  presses nothing; with it off, nothing painted presses the whole model. The
+  painting is saved with the project and cleared when the model is reshaped.
 - A hollowed model keeps its cavity through a press: the cavity is cut again, at the same
   wall and with the same blockers, holes and channels, into the pressed surface. Its
   supports are not kept.

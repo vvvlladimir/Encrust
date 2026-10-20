@@ -538,7 +538,7 @@ mod tests {
     fn a_column_over_a_blocked_face_has_nowhere_to_land() {
         let model = cube_on_plate();
         let bvh = Bvh::build(&model);
-        let mut region = crate::Region::default();
+        let mut region = core_geometry::Region::default();
         for face in 0..model.faces.len() {
             region.set(face, true);
         }

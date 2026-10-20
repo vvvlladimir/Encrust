@@ -47,7 +47,7 @@ pub use placed::Placed;
 pub use preview::{Preview, preview, stands};
 pub use project::{ProjectSettings, project};
 pub use raft::{GRID_BAR_MM, GRID_HOLE_MM, LIP_WIDTH_MM};
-pub use region::{Blocked, Region};
+pub use region::Blocked;
 pub use trapped::{TrapScan, Trapped};
 pub use tree::{SupportTree, TreeNode};
 

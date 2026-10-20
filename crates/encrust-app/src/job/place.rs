@@ -2,8 +2,9 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::{self, Receiver, TryRecvError};
 
+use core_geometry::Region;
 use core_geometry::{Mesh, Scalar, Transform, Vec3, transform_mesh};
-use core_supports::{Blocked, Region, generate_supports, low_points};
+use core_supports::{Blocked, generate_supports, low_points};
 use printer_profiles::SupportProfile;
 
 use crate::i18n::tr;

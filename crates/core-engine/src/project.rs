@@ -17,10 +17,10 @@ use std::path::Path;
 use std::sync::Arc;
 
 use core_format::ExposureRange;
-use core_geometry::{Mat3, Mesh, MeshDiagnostics, Orientation, Scalar, Transform, Vec3};
+use core_geometry::{Mat3, Mesh, MeshDiagnostics, Orientation, Region, Scalar, Transform, Vec3};
 use core_joint::Joints;
 use core_slicer::AdaptiveSettings;
-use core_supports::{ProjectSettings, Region, SupportPoint, SupportTree};
+use core_supports::{ProjectSettings, SupportPoint, SupportTree};
 use core_volume::{
     Blocker, Channel, DrainHole, HoleShape, HollowMode, HollowSettings, InfillSettings,
     PLUG_GAP_MM, PartSettings,
@@ -326,6 +326,10 @@ pub struct ObjectState {
     /// Which model of the file, by its place among them, this one is a plug for (ADR 0313).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub plug_of: Option<u32>,
+    /// The faces the Relief brush painted, the only ones a texture is pressed into while
+    /// any are (ADR 0318). A file without it reads as a model with none.
+    #[serde(default, skip_serializing_if = "Region::is_empty")]
+    pub relief_painted: Region,
 }
 
 impl ObjectState {
@@ -692,7 +696,7 @@ mod tests {
         }
     }
 
-    /// One model on the plate, with a point, a painted face, a blocker, a channel and a
+    /// One model on the plate, with a point, painted faces, a blocker, a channel and a
     /// built cavity, so every part of an object's state is written and read back.
     fn object(index: usize) -> ObjectState {
         ObjectState {
@@ -775,6 +779,7 @@ mod tests {
             },
             own_raft: None,
             plug_of: None,
+            relief_painted: marked(&[0]),
         }
     }
 
@@ -809,6 +814,10 @@ mod tests {
         assert_eq!(
             object.supports.painted,
             saved.manifest.objects[0].supports.painted
+        );
+        assert_eq!(
+            object.relief_painted,
+            saved.manifest.objects[0].relief_painted
         );
         assert_eq!(
             object.hollow.channels,

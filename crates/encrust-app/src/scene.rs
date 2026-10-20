@@ -6,8 +6,8 @@ use rayon::prelude::*;
 pub use core_engine::project::Axis;
 use core_engine::project::{DrainState, HollowState};
 use core_geometry::{
-    Aabb, Bvh, Heightmap, Mesh, MeshDiagnostics, Orientation, Quat, Scalar, Transform, UvMap, Vec2,
-    Vec3, Welded, center_of_mass,
+    Aabb, Bvh, Heightmap, Mesh, MeshDiagnostics, Orientation, Quat, Region, Scalar, Transform,
+    UvMap, Vec2, Vec3, Welded, center_of_mass,
 };
 
 use core_supports::ModelSupports;
@@ -247,6 +247,8 @@ pub struct SceneObject {
     pub traps: Traps,
     /// The texture the file carried, until it is pressed in.
     pub mapped: Option<Arc<Mapped>>,
+    /// The faces the Relief brush painted: while any are, only they take the texture.
+    pub relief_painted: Region,
     /// The tool settings this model keeps instead of the plate's.
     pub own: OwnSettings,
     /// How high over its raft the user stood the model, millimetres: what auto-orient
@@ -409,6 +411,7 @@ impl SceneObject {
         self.hollow = ModelHollow::default();
         self.traps.clear();
         self.mapped = None;
+        self.relief_painted.clear();
         self.mesh = mesh;
     }
 
@@ -840,6 +843,7 @@ impl Scene {
             hollow: ModelHollow::default(),
             traps: Traps::default(),
             mapped: imported.mapped,
+            relief_painted: Region::default(),
             own: OwnSettings::default(),
             lift_mm: None,
             plug_of: None,
