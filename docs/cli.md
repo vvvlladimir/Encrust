@@ -473,3 +473,32 @@ cargo run --release -p encrust-cli --bin orient-lab
 cargo run --release -p encrust-cli --bin orient-lab -- a.stl b.obj --printer elegoo-saturn-4-ultra --support medium
 cargo run --release -p encrust-cli --bin orient-lab -- --corpus corpus.toml --json now.json --baseline before.json
 ```
+
+## `support-lab`
+
+Each model supported the way Generate supports it, cut and cured as it prints, and read
+along three lines: what falls — contacts left with no support, islands, pieces standing on
+nothing, and necks the pull is taken to tear; what marks the part — the scar the tips
+leave, measured where the surface cuts each tip, tips on faces looking up in the pose the
+model was drawn in, tips on material thinner than a millimetre, feet standing on the
+model; and what is more than needed — how much underside the busiest tips carry for each
+square millimetre of their own section, against what green resin holds with a safety
+factor, underside no tip reaches and no layer below carries, crowded tips and tall
+trunks with nothing to brace them to.
+
+`--profile` names the support profiles to bench, repeated for several. `--sweep` also
+supports each model at shares of the profile's density and reports the least that is
+still enough. `--neck-mpa` and `--safety` set what a tip holds once a print has measured
+it; `--coupon FILE` writes that print instead of benching: plates held by one to nine tips
+of six widths, with the stress the stack expects of each. `--corpus FILE` reads a TOML
+list of models with how each stands — the axis that points up, the height it prints at,
+its lean — and what a person expects of it. `--export DIR` writes each supported model
+and markers at every place the run names; `--json FILE` keeps the run, and `--baseline
+FILE` exits non-zero when anything got worse: a model that held fails, contacts or resin
+grow by more than 15 %, or more tips land on faces looking up or on thin material.
+
+```sh
+cargo run --release -p encrust-cli --bin support-lab -- a.stl b.obj --profile light --profile medium
+cargo run --release -p encrust-cli --bin support-lab -- --corpus corpus.toml --sweep --export out --json now.json --baseline before.json
+cargo run --release -p encrust-cli --bin support-lab -- --coupon coupon.stl
+```

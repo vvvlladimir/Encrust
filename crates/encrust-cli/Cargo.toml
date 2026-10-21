@@ -25,6 +25,11 @@ path = "src/bin/hollow_lab.rs"
 name = "orient-lab"
 path = "src/bin/orient_lab/main.rs"
 
+# A bench for automatic supports: what falls, what marks the part, what is more than enough.
+[[bin]]
+name = "support-lab"
+path = "src/bin/support_lab/main.rs"
+
 [dependencies]
 core-analysis.workspace = true
 core-geometry.workspace = true
