@@ -277,12 +277,11 @@ impl Draws {
         for object in scene.printable(scene.active_plate()) {
             let colour = color_for(scene.is_selected(object.id), object.summary.is_sound());
             let texture = textures.and_then(|textures| textures.get(&object.id));
-            let shown = shown(object, light);
             // A texture is mapped onto the model's own faces, so its holes stay shader cuts.
-            let drilled = texture
-                .is_none()
-                .then(|| object.hollow.drilled(object.uncut()))
-                .flatten();
+            let (shown, drilled) = match texture {
+                Some(_) => (Arc::clone(object.uncut()), None),
+                None => (shown(object, light), object.hollow.drilled(object.uncut())),
+            };
             draws.model(object, &shown, colour, mark, texture, drilled);
             draws.hollowing(object, &shown, colour, drilled);
             draws.supports(object, hidden);
@@ -892,6 +891,11 @@ mod tests {
             textured.cuts.len(),
             1,
             "drawn from its own faces, the hole is still cut by the shader"
+        );
+        let scene_object = scene.get(id).expect("the block");
+        assert!(
+            Arc::ptr_eq(&textured.cut_surfaces[0].solid.mesh, scene_object.uncut()),
+            "and its inside drawn against the faces still standing in it"
         );
     }
 

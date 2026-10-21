@@ -1,6 +1,6 @@
 # 0304. Combine models exactly, and through the field where one is not a solid
 
-- **Status:** Accepted
+- **Status:** Accepted; amended by 0321, which patches a torn model before the field
 - **Date:** 2026-10-18
 
 ## Context

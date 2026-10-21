@@ -19,11 +19,12 @@ hole's outline moved in by the gap, from the lifted mouth to a flat inner end. T
 read as a solid once for all its holes, its shells unioned first as `combine` reads them,
 and each plug is that solid's meeting with one body, less the holes drilled before it that
 meet it, so its outer face is the model's own surface and a hole drilled over another has
-that hole through its plug. A model the engine refuses is patched for it first: duplicates dropped, faces
-turned outward, holes filled, and the faces round any edge still not walked once each way cut
-out and filled over, which a plug minds only near its hole. One refused even then keeps the
-sampled face of ADR 0313, which this record supersedes for the plug's shape only; `plugs`
-counts such plugs, and both front ends say so.
+that hole through its plug. A model the engine refuses is patched for it first: duplicates
+dropped, faces turned outward, holes filled, and the faces round any edge still not walked
+once each way cut out and filled over, which a plug minds only near its hole. One refused
+even then keeps the sampled face of ADR 0313, which this record supersedes for the plug's
+shape only; `plugs` counts such plugs, and both front ends say so. `combine` and
+`combine_exact` patch a refused model the same way before ADR 0304's field takes it.
 
 Reading the model is most of the cost, and a change of gap or a hole moved nearby does not
 change it, so `plugs` reads the model only once its holes are found sound, crops it through
@@ -63,7 +64,7 @@ as the mouth plane, so a cone tip stays a cylinder.
 
 A pass of the whole model through the engine the first time its plugs are cut in the Drain
 tool, again for a hole past the piece kept, and whenever they are cut from elsewhere; a
-piece of the model held read while the tool is open; plugs that trail their holes by a cut's length, and by a second one where the holes moved
-during the first; a patch that can move the surface where it was torn, should the hole
+piece of the model held read while the tool is open; plugs that trail their holes by a
+cut's length, and by a second one where the holes moved during the first; a patch that can move the surface where it was torn, should the hole
 fall there; and two ways of making a plug where there was one, the sampled one used only
 on a model no patch makes readable.

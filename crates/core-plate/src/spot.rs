@@ -10,11 +10,8 @@ pub struct Rect {
 }
 
 /// The centre nearest `toward` for a part `size_mm` across on a plate `plate_mm` across,
-/// `clearance_mm` clear of every one of `taken` and `margin_mm` in from the edge, or `None`
-/// where no room is left on the plate.
-///
-/// Exact rather than on a grid: the nearest free point is `toward` itself or lies on a side
-/// of a box grown by the part, so only those sides' lines are walked, nearest first.
+/// `settings.clearance_mm` clear of every one of `taken` and `settings.margin_mm` in from the
+/// edge, or `None` where no room is left on the plate.
 pub fn nearest_free(
     size_mm: Vec2,
     taken: &[Rect],
@@ -30,6 +27,8 @@ pub fn nearest_free(
     if room.min.cmpgt(room.max).any() {
         return None;
     }
+    // The nearest free point is `toward` itself or lies on a side of a box grown by the part,
+    // so only those sides are walked, nearest first: exact, with no grid.
     let reach = half + Vec2::splat(settings.clearance_mm);
     let grown: Vec<Rect> = taken
         .iter()
@@ -213,6 +212,8 @@ mod tests {
             min: Vec2::splat(settings.margin_mm) + half,
             max: PLATE - Vec2::splat(settings.margin_mm) - half,
         };
+        // The nearest free point is `toward` itself or lies on a side of a box grown by the part,
+        // so only those sides are walked, nearest first: exact, with no grid.
         let reach = half + Vec2::splat(settings.clearance_mm);
         let grown: Vec<Rect> = taken
             .iter()

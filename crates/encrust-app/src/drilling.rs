@@ -74,7 +74,11 @@ impl Drilling {
             if !Arc::ptr_eq(object.uncut(), &source) {
                 continue;
             }
-            if outcome.is_err() {
+            let current = object
+                .hollow
+                .cut_bodies()
+                .is_some_and(|now| Arc::ptr_eq(now, &cuts));
+            if outcome.is_err() && current {
                 *status = Status::Info(tr!("drill-refused", name = object.name.clone()));
             }
             object.hollow.keep_drilled(&source, &cuts, outcome.ok());
@@ -98,6 +102,10 @@ mod tests {
 
     /// A 10 mm block with a 3 mm hole 5 mm down into the middle of its top.
     fn a_drilled_block() -> (Scene, ObjectId) {
+        a_block_drilled_by(HoleSize::round(3.0, 5.0, 1.0))
+    }
+
+    fn a_block_drilled_by(size: HoleSize) -> (Scene, ObjectId) {
         let mesh = cuboid(Vec3::ZERO, Vec3::splat(10.0));
         let mut scene = Scene::default();
         let id = scene.insert(Imported::new(
@@ -108,7 +116,6 @@ mod tests {
         ));
         let object = scene.get_mut(id).expect("the block is on the plate");
         let bvh = Bvh::build(&mesh);
-        let size = HoleSize::round(3.0, 5.0, 1.0);
         let at = Vec3::new(5.0, 5.0, 10.0);
         object
             .hollow
@@ -168,6 +175,34 @@ mod tests {
         assert!(
             Arc::ptr_eq(object.printed(), &object.mesh),
             "a block with no hole left prints as it came"
+        );
+    }
+
+    #[test]
+    fn a_refusal_for_holes_since_changed_is_not_reported() {
+        // A hole wider and deeper than the block leaves nothing of it, which the engine refuses.
+        let (mut scene, id) = a_block_drilled_by(HoleSize::round(30.0, 20.0, 1.0));
+        let mut drilling = Drilling::default();
+        drilling.start(&scene, true);
+        let object = scene.get_mut(id).expect("the block");
+        // An undo step still holds the old cuts.
+        let _held = object.hollow.cut_bodies().cloned();
+        object.hollow.clear_drains();
+        let mut status = Status::default();
+        while drilling.poll(&mut scene, &mut status) {
+            std::thread::sleep(std::time::Duration::from_millis(1));
+        }
+        assert_eq!(status, Status::Idle, "the holes it refused are gone");
+    }
+
+    #[test]
+    fn a_refusal_for_the_holes_standing_is_reported() {
+        let (mut scene, _) = a_block_drilled_by(HoleSize::round(30.0, 20.0, 1.0));
+        let mut status = Status::default();
+        settle(&mut Drilling::default(), &mut scene, &mut status);
+        assert!(
+            matches!(status, Status::Info(_)),
+            "the user is told: {status:?}"
         );
     }
 

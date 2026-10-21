@@ -37,6 +37,8 @@ pub struct DrainTool {
     pub checked: bool,
     /// The plugs being cut on a worker, one cut a model at a time.
     laying: Vec<plugs::Laying>,
+    /// Plugs asked for that wait for a cut under way, or a drag, to end.
+    waiting: Vec<plugs::Waiting>,
     read: Option<plugs::ReadModel>,
 }
 
@@ -50,6 +52,7 @@ impl Default for DrainTool {
             job: None,
             checked: false,
             laying: Vec::new(),
+            waiting: Vec::new(),
             read: None,
         }
     }

@@ -35,6 +35,14 @@ pub struct Laying {
     job: PlugsJob,
 }
 
+/// Plugs a model asks for that cannot be started yet, and the edit that first asked for them.
+#[derive(Debug)]
+pub struct Waiting {
+    model: ObjectId,
+    wanted: PlugsLaid,
+    asked_by: u64,
+}
+
 /// A cut that has ended, waiting to be laid into the edit that asked for it.
 #[derive(Debug)]
 pub struct Ended {
@@ -94,6 +102,11 @@ impl DrainTool {
                     .any(|(id, wanted, _)| *id == laying.model && *wanted == laying.wanted);
         }
 
+        self.waiting.retain(|waiting| {
+            due.iter()
+                .any(|(id, wanted, _)| *id == waiting.model && *wanted == waiting.wanted)
+        });
+
         for (id, wanted, kept) in due {
             if kept || wanted.holes.is_empty() {
                 if !kept {
@@ -102,9 +115,36 @@ impl DrainTool {
                 if let Some(object) = scene.get_mut(id) {
                     object.plugs_laid = Some(wanted);
                 }
-            } else if settled && !self.laying.iter().any(|laying| laying.model == id) {
-                self.start_plugs(scene, id, wanted, asked_by);
+            } else {
+                self.ask(scene, id, wanted, settled, asked_by);
             }
+        }
+    }
+
+    /// Starts cutting the plugs `wanted` for model `id` where nothing holds them back, else
+    /// keeps them waiting, under the edit that first asked for them either way.
+    fn ask(
+        &mut self,
+        scene: &Scene,
+        id: ObjectId,
+        wanted: PlugsLaid,
+        settled: bool,
+        asked_by: u64,
+    ) {
+        let asked_by = self
+            .waiting
+            .iter()
+            .find(|waiting| waiting.model == id)
+            .map_or(asked_by, |waiting| waiting.asked_by);
+        self.waiting.retain(|waiting| waiting.model != id);
+        if settled && !self.laying.iter().any(|laying| laying.model == id) {
+            self.start_plugs(scene, id, wanted, asked_by);
+        } else {
+            self.waiting.push(Waiting {
+                model: id,
+                wanted,
+                asked_by,
+            });
         }
     }
 
@@ -167,18 +207,27 @@ impl DrainTool {
     }
 
     /// Lays the plugs `ended` cut in place of the ones laid before, on a plate `plate_mm`
-    /// across, and says so where a plug is only sampled.
+    /// across, and says so where a plug is only sampled, missing or off the free plate.
     pub fn land_plugs(scene: &mut Scene, ended: &Ended, plate_mm: Vec2, status: &mut Status) {
         let id = ended.model;
         match &ended.made {
             Ok(made) => {
-                if made.sampled > 0 {
-                    *status = Status::Info(tr!("drain-plugs-sampled", count = made.sampled));
+                let crowded = replace(scene, id, &ended.wanted.holes, &made.meshes, plate_mm);
+                let notes: Vec<String> = [
+                    (
+                        made.sampled,
+                        tr!("drain-plugs-sampled", count = made.sampled),
+                    ),
+                    (made.closed, tr!("drain-plugs-closed", count = made.closed)),
+                    (crowded, tr!("drain-plugs-crowded", count = crowded)),
+                ]
+                .into_iter()
+                .filter(|(count, _)| *count > 0)
+                .map(|(_, note)| note)
+                .collect();
+                if let Some((first, rest)) = notes.split_first() {
+                    *status = Status::Noted(first.clone(), rest.to_vec());
                 }
-                if made.closed > 0 {
-                    *status = Status::Info(tr!("drain-plugs-closed", count = made.closed));
-                }
-                replace(scene, id, &ended.wanted.holes, &made.meshes, plate_mm);
             }
             Err(message) => {
                 let error = anyhow::Error::msg(message.clone()).context(tr!("drain-plugs-failed"));
@@ -231,55 +280,74 @@ fn take_away(scene: &mut Scene, id: ObjectId) {
 }
 
 /// Takes away the plugs laid for model `id` and lays `made`, cut for its `holes`, on a plate
-/// `plate_mm` across, leaving the selection where it was.
-fn replace(scene: &mut Scene, id: ObjectId, holes: &[DrainHole], made: &[Mesh], plate_mm: Vec2) {
+/// `plate_mm` across, leaving the selection where it was. Answers how many found no room.
+fn replace(
+    scene: &mut Scene,
+    id: ObjectId,
+    holes: &[DrainHole],
+    made: &[Mesh],
+    plate_mm: Vec2,
+) -> usize {
     take_away(scene, id);
     let selection = scene.selection().to_vec();
     let found = scene.get(id).and_then(|object| {
         let beside = object.world_bounds()?;
         Some((beside, object.transform, object.name.clone(), object.plate))
     });
+    let mut crowded = 0;
     if let Some((beside, transform, name, plate)) = found {
-        let laid = laid_beside(made, holes, transform, beside);
-        lay_out(scene, id, plate, &name, laid, plate_mm);
+        // `laid_beside` leaves out an empty plug, so each is numbered after its own hole.
+        let numbers = (1..).zip(made).filter(|(_, plug)| !plug.is_empty());
+        let laid = numbers
+            .map(|(number, _)| number)
+            .zip(laid_beside(made, holes, transform, beside));
+        crowded = lay_out(scene, id, plate, &name, laid, plate_mm);
     }
     scene.select_many(&selection);
+    crowded
 }
 
-/// Puts `plugs`, already in plate coordinates, on `plate`, each marked as a plug of `model`
-/// and moved to the nearest spot clear of what stands there, inside the plate where it fits.
+/// Puts `plugs`, numbered and already in plate coordinates, on `plate`, each marked as a plug
+/// of `model` and moved to the nearest spot clear of what stands there, inside the plate
+/// where it fits. Answers how many fit nowhere and were left where they were laid.
 fn lay_out(
     scene: &mut Scene,
     model: ObjectId,
     plate: u32,
     name: &str,
-    plugs: Vec<Mesh>,
+    plugs: impl Iterator<Item = (usize, Mesh)>,
     plate_mm: Vec2,
-) {
+) -> usize {
     let mut taken = covered(scene, plate);
     let settings = ArrangeSettings {
         clearance_mm: PLUG_SPACING_MM,
         ..ArrangeSettings::default()
     };
-    for (index, plug) in plugs.into_iter().enumerate() {
+    let mut crowded = 0;
+    for (number, plug) in plugs {
         let Some(bounds) = plug.aabb() else {
             continue;
         };
         let (min, max) = (bounds.mins.truncate(), bounds.maxs.truncate());
         let toward = (min + max) / 2.0;
-        let at = nearest_free(max - min, &taken, toward, plate_mm, &settings).unwrap_or(toward);
+        let at =
+            nearest_free(max - min, &taken, toward, plate_mm, &settings).unwrap_or_else(|| {
+                crowded += 1;
+                toward
+            });
         let shift = (at - toward).extend(0.0);
         taken.push(Rect {
             min: min + shift.truncate(),
             max: max + shift.truncate(),
         });
         let plug = transform_mesh(&plug, Transform::from_translation(shift));
-        let name = tr!("drain-plug-name", name = name.to_owned(), index = index + 1);
+        let name = tr!("drain-plug-name", name = name.to_owned(), index = number);
         let (id, _) = place(scene, plate, name, plug);
         if let Some(plug) = scene.get_mut(id) {
             plug.plug_of = Some(model);
         }
     }
+    crowded
 }
 
 /// What the models on `plate`, their supports and their rafts cover across it.
@@ -506,6 +574,69 @@ mod tests {
         assert!(
             plug.maxs.x <= 200.0 - 2.0 + 1e-4,
             "the plug stays inside the plate's margin, got {plug:?}"
+        );
+    }
+
+    #[test]
+    fn a_plug_with_no_room_on_the_plate_is_said_to_have_none() {
+        let (mut scene, id, mut tool) = a_block_with_holes(&[3.0]);
+        let mut status = Status::default();
+        tool.lay_plugs(&mut scene, 0.0, true, 0);
+        while tool.laying_plugs() {
+            for ended in tool.poll_plugs() {
+                // A plate no wider than the block leaves no room beside it.
+                DrainTool::land_plugs(&mut scene, &ended, Vec2::new(10.0, 10.0), &mut status);
+            }
+            std::thread::sleep(std::time::Duration::from_millis(1));
+        }
+        assert_eq!(plugs_of(&scene, id).len(), 1, "the plug is still laid");
+        assert!(
+            matches!(&status, Status::Noted(_, rest) if rest.is_empty()),
+            "and the user told it found no room: {status:?}"
+        );
+    }
+
+    #[test]
+    fn a_plug_is_numbered_after_its_hole_when_an_earlier_one_has_none() {
+        let (mut scene, id, _) = a_block_with_holes(&[3.0, 7.0]);
+        let holes = scene.get(id).expect("the block").hollow.cut().0.to_vec();
+        let made = [Mesh::default(), cuboid(Vec3::ZERO, Vec3::ONE)];
+        replace(&mut scene, id, &holes, &made, Vec2::new(200.0, 120.0));
+
+        let plugs = plugs_of(&scene, id);
+        assert_eq!(plugs.len(), 1, "the empty plug is not laid");
+        let name = tr!("drain-plug-name", name = "block".to_owned(), index = 2);
+        assert_eq!(plugs[0].name, name, "the one laid is the second hole's");
+    }
+
+    #[test]
+    fn plugs_started_again_after_a_stale_cut_land_in_the_edit_that_asked_for_them() {
+        let (mut scene, _, mut tool) = a_block_with_holes(&[5.0]);
+        tool.lay_plugs(&mut scene, 0.0, true, 0);
+        tool.state.plug_gap_mm = 0.5;
+        tool.lay_plugs(&mut scene, 0.0, true, 1);
+
+        let mut landed = Vec::new();
+        for frame in 2..10_000 {
+            tool.lay_plugs(&mut scene, 0.0, true, frame);
+            if !tool.laying_plugs() {
+                break;
+            }
+            for ended in tool.poll_plugs() {
+                landed.push(ended.asked_by());
+                DrainTool::land_plugs(
+                    &mut scene,
+                    &ended,
+                    Vec2::new(200.0, 120.0),
+                    &mut Status::default(),
+                );
+            }
+            std::thread::sleep(std::time::Duration::from_millis(1));
+        }
+        assert_eq!(
+            landed,
+            [1],
+            "the gap's edit asked for the plugs that landed"
         );
     }
 

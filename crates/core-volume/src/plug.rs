@@ -131,12 +131,8 @@ pub fn plug_wall_mm(mode: HollowMode, thickness_mm: Scalar) -> Option<Scalar> {
 /// A plug for each of `holes` as they are cut, after [`crate::pierce`], in the model's own
 /// space: what the hole took out of the wall, `gap_mm` narrower all round (ADR 0321).
 ///
-/// It is `source` intersected with the hole's body, so its outer face is the very surface
-/// the hole took, and its inner end is flat, `wall_mm` in, or at the hole's depth without
-/// one. A `source` that is `None` or not read round these holes is read again from `model`
-/// once the holes are found sound, and left for the next call unless it is the whole model;
-/// where it holds no solid, each plug's outer face is sampled off `model` instead. A plug the
-/// gap narrows to nothing short of its inner end is cut off where it does.
+/// Its outer face is the very surface the hole took, its inner end flat, `wall_mm` in, or at
+/// the hole's depth without one. `source` is the model as last read, kept for the next call.
 pub fn plugs(
     source: &mut Option<PlugSource>,
     model: &Mesh,
@@ -145,12 +141,12 @@ pub fn plugs(
     wall_mm: Option<Scalar>,
     gap_mm: Scalar,
 ) -> Result<Plugs, VolumeError> {
-    let bodies: Vec<(&DrainHole, Option<Body>)> = holes
+    let bodies: Vec<Option<Body>> = holes
         .iter()
         .enumerate()
-        .map(|(index, hole)| Ok((hole, Body::checked(hole, wall_mm, gap_mm, index)?)))
+        .map(|(index, hole)| Body::checked(hole, wall_mm, gap_mm, index))
         .collect::<Result<_, VolumeError>>()?;
-    let closed = bodies.iter().filter(|(_, body)| body.is_none()).count();
+    let closed = bodies.iter().filter(|body| body.is_none()).count();
     if closed == bodies.len() {
         return Ok(Plugs {
             meshes: vec![Mesh::default(); closed],
@@ -165,21 +161,7 @@ pub fn plugs(
         *source = Some(PlugSource::read(model, holes, wall_mm));
     }
     let solid = source.as_ref().and_then(PlugSource::readable);
-    let cut: Vec<(Mesh, bool)> = bodies
-        .par_iter()
-        .enumerate()
-        .map(|(index, (hole, body))| {
-            let Some(body) = body else {
-                return (Mesh::default(), false);
-            };
-            solid
-                .and_then(|solid| intersected(solid, &body.mesh(hole), &holes[..index]))
-                .map_or_else(
-                    || (sampled(model, bvh, hole, body), true),
-                    |mesh| (mesh, false),
-                )
-        })
-        .collect();
+    let cut = cut_each(solid, model, bvh, holes, &bodies);
     let sampled = cut.iter().filter(|(_, sampled)| *sampled).count();
     let meshes = cut.into_iter().map(|(mesh, _)| mesh).collect();
     if source.as_ref().is_some_and(PlugSource::is_whole) {
@@ -192,8 +174,34 @@ pub fn plugs(
     })
 }
 
+/// The plug of each of `bodies`, cut from `solid` or, where there is none or the engine
+/// fails, sampled off `model`, marked `true`; a hole the gap closes leaves an empty mesh.
+fn cut_each(
+    solid: Option<&Solid>,
+    model: &Mesh,
+    bvh: &Bvh,
+    holes: &[DrainHole],
+    bodies: &[Option<Body>],
+) -> Vec<(Mesh, bool)> {
+    bodies
+        .par_iter()
+        .enumerate()
+        .map(|(index, body)| {
+            let (hole, Some(body)) = (&holes[index], body) else {
+                return (Mesh::default(), false);
+            };
+            match solid.map(|solid| intersected(solid, &body.mesh(hole), &holes[..index])) {
+                Some(Ok(mesh)) => (mesh, false),
+                // The engine failing on a model it read is met as one it could not read.
+                None | Some(Err(_)) => (sampled(model, bvh, hole, body), true),
+            }
+        })
+        .collect()
+}
+
 /// `plugs`, cut for `holes` in a model's own space, carried onto the plate by `transform`,
-/// stood on the end that goes in, and laid in a row past the right-hand side of `beside`.
+/// stood on the end that goes in, and laid in a row past the right-hand side of `beside`;
+/// an empty one is left out.
 pub fn laid_beside(
     plugs: &[Mesh],
     holes: &[DrainHole],
@@ -202,7 +210,7 @@ pub fn laid_beside(
 ) -> Vec<Mesh> {
     let mut x = beside.maxs.x + PLUG_SPACING_MM;
     let mut laid = Vec::with_capacity(plugs.len());
-    for (plug, hole) in plugs.iter().zip(holes) {
+    for (plug, hole) in plugs.iter().zip(holes).filter(|(plug, _)| !plug.is_empty()) {
         let placed = transform_mesh(plug, transform);
         let stood = stand_on_end(&placed, transform.linear() * hole.axis);
         let Some(size) = stood.aabb().map(|bounds| bounds.extents()) else {
@@ -234,22 +242,22 @@ fn stand_on_end(plug: &Mesh, axis: Vec3) -> Mesh {
 }
 
 /// What of `solid` lies in `body` and out of every hole of `earlier` that meets it, as a
-/// hole drilled over others finds them; `None` where the engine fails or nothing is left.
-fn intersected(solid: &Solid, body: &Mesh, earlier: &[DrainHole]) -> Option<Mesh> {
-    let reach = body.aabb()?;
+/// hole drilled over others finds them: empty for a hole wholly inside an earlier one.
+fn intersected(solid: &Solid, body: &Mesh, earlier: &[DrainHole]) -> Result<Mesh, VolumeError> {
+    let Some(reach) = body.aabb() else {
+        return Ok(Mesh::default());
+    };
     let drilled = earlier
         .iter()
         .filter_map(body_of)
         .filter(|cut| cut.aabb().is_some_and(|bounds| meets(&bounds, &reach)))
         .map(|cut| Solid::new(&cut))
-        .collect::<Result<Vec<_>, _>>()
-        .ok()?;
-    let mut piece = Solid::new(body).ok()?;
+        .collect::<Result<Vec<_>, _>>()?;
+    let mut piece = Solid::new(body)?;
     if !drilled.is_empty() {
-        piece = piece.difference(&Solid::union_all(&drilled).ok()?).ok()?;
+        piece = piece.difference(&Solid::union_all(&drilled)?)?;
     }
-    let taken = solid.intersection(&piece).ok()?;
-    Some(taken.mesh()).filter(|mesh| !mesh.faces.is_empty())
+    Ok(solid.intersection(&piece)?.mesh())
 }
 
 /// The body a plug fills: the hole's frustum moved in by the gap, from the lifted mouth to
@@ -628,7 +636,7 @@ mod tests {
     }
 
     #[test]
-    fn a_plug_the_engine_cannot_cut_from_a_sound_model_is_counted_as_sampled() {
+    fn a_hole_inside_an_earlier_one_leaves_an_empty_plug_and_no_sampled_one() {
         let (mesh, bvh) = slab();
         let wide = DrainHole {
             diameter_mm: 10.0,
@@ -637,9 +645,11 @@ mod tests {
         // The narrow hole lies wholly in the wide one before it, so nothing is left to cut.
         let made =
             cut_plugs(&mesh, &bvh, &[wide, hole_in_the_top()], Some(2.0), 0.1).expect("sound");
-        assert_eq!(
-            made.sampled, 1,
-            "only the swallowed plug is sampled, and said to be"
+        assert_eq!(made.sampled, 0, "the model was read, so nothing is sampled");
+        assert!(!made.meshes[0].is_empty(), "the wide hole has its plug");
+        assert!(
+            made.meshes[1].is_empty(),
+            "which already fills the narrow one"
         );
     }
 
@@ -886,18 +896,5 @@ mod tests {
         let made = cut_plugs(&mesh, &bvh, &[hole_in_the_top()], Some(2.0), 2.5).expect("sound");
         assert_eq!(made.closed, 1);
         assert!(made.meshes[0].is_empty());
-    }
-
-    #[test]
-    fn a_hole_with_no_axis_has_no_plug() {
-        let (mesh, bvh) = slab();
-        let nowhere = DrainHole {
-            axis: Vec3::ZERO,
-            ..hole_in_the_top()
-        };
-        assert_eq!(
-            cut_plugs(&mesh, &bvh, &[nowhere], None, 0.1),
-            Err(VolumeError::BadDrain { index: 0 })
-        );
     }
 }

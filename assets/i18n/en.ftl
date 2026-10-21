@@ -1375,6 +1375,10 @@ drain-plugs-sampled = { $count ->
     [one] One plug follows the surface only approximately: the model could not be read as a solid, even mended.
    *[other] { $count } plugs follow the surface only approximately: the model could not be read as a solid, even mended.
 }
+drain-plugs-crowded = { $count ->
+    [one] One plug finds no free room on the plate and stands where it was laid, beside its model.
+   *[other] { $count } plugs find no free room on the plate and stand where they were laid, beside their model.
+}
 drain-none-cut = No hole and no channel is cut yet.
 drain-clear-cuts =
     { $count ->

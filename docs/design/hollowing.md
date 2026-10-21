@@ -273,19 +273,22 @@ plug, counted in `Plugs::closed`, without failing the others. The model, read on
 with its shells unioned, is intersected with each body through `core-csg`, so its inner end
 is flat and its outer face is the model's surface itself, over a cone's tip as over a flat
 face. Each body first loses the holes drilled before its own that meet it, so a hole drilled
-over an earlier one takes a plug with that hole through it. A model the engine refuses is
+over an earlier one takes a plug with that hole through it, and one wholly inside an earlier
+hole an empty plug, which that hole's own fills. A model the engine refuses is
 patched for it first — holes filled, the faces round an edge still not walked once each way cut
 out and filled over. One refused even then has the outer face sampled on four rings instead,
 each point dropped onto the surface by a ray cast out of the wall the way `lift_for` reads a
 rim. `laid_beside` stands a plug on that flat end in a row past the model, for the window
 and the CLI alike; the window then moves each to the spot nearest that clears every model,
 support, raft and plug already down by the plugs' spacing, inside the plate's margin while
-there is room (`core_plate::nearest_free`). The window cuts the plugs again on a worker
+there is room (`core_plate::nearest_free`), left in its row and reported where there is
+none. The window cuts the plugs again on a worker
 whenever a model's holes, wall or gap differ from what they were last laid for — one cut a
 model at a time, none during a drag, from the boxes round each hole last read while the
 Drain tool is open — and lays them into the edit that changed them, a tool's value
-included, and into every plate the history holds after it, so no later undo takes them
-away (`History::land`); a model opened from a project takes the plugs it was saved with, and a copy lays its own. The gap a user sets is
+included, even where the cut waited on another or on a drag, and into every plate the
+history holds after it, so no later undo takes them away (`History::land`); a model opened
+from a project takes the plugs it was saved with, and a copy lays its own. The gap a user sets is
 the fit that prints, so a resin whose tolerance compensation is off has its hole and outer
 offsets taken off it (`Compensation::fit_drift_mm`).
 
