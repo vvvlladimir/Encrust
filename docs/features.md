@@ -276,7 +276,9 @@ whole-surface fill is Cmd-Shift-click.
   the model or change the gap. A plug is what the hole took out of the wall, narrower all round by the gap you
   set (0.15 mm by default): the very piece of the model it took, so a hole over a cone's tip
   or an edge gives that tip or edge, and it closes flush. A hole drilled over an earlier one
-  takes a plug with that hole through it, which the earlier hole's own plug closes. A model
+  takes a plug with that hole through it, which the earlier hole's own plug closes. A tapered
+  plug the gap narrows to nothing before its end stops there; a hole whose mouth the gap
+  closes gets no plug, the window says so, and the other holes keep theirs. A model
   with flaws in its surface is mended for this first; one that cannot be mended gets plugs that follow its surface only
   approximately, and the window says so. The plugs are cut in the background, so a dense
   model keeps its old plugs for a moment after you change the holes or the gap; while you

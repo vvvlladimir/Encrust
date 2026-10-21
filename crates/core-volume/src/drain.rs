@@ -220,7 +220,16 @@ fn inward(mesh: &Mesh) -> Mesh {
 /// Each of `RIM_SAMPLES` points around the rim casts a ray out of the model along the
 /// hole's axis, and counts only when the first face it meets is one it leaves the material
 /// through: whatever stands clear over the mouth, past air, is another part of the model.
-pub fn lift_for(mesh: &Mesh, bvh: &Bvh, at: Vec3, axis: Vec3, diameter_mm: Scalar) -> Scalar {
+/// So is anything rising further than the hole's `depth_mm`: a mouth in a fold is not lifted
+/// through the lobe folded over it.
+pub fn lift_for(
+    mesh: &Mesh,
+    bvh: &Bvh,
+    at: Vec3,
+    axis: Vec3,
+    diameter_mm: Scalar,
+    depth_mm: Scalar,
+) -> Scalar {
     let Some(axis) = axis.try_normalize() else {
         return 0.0;
     };
@@ -236,7 +245,8 @@ pub fn lift_for(mesh: &Mesh, bvh: &Bvh, at: Vec3, axis: Vec3, diameter_mm: Scala
             let ray = Ray::new(rim + axis * MOUTH_LIFT_MM, -axis);
             let hit = bvh.raycast(&ray)?;
             let leaves = mesh.triangle(hit.face)?.normal_unnormalized().dot(axis) < 0.0;
-            leaves.then_some(hit.t - MOUTH_LIFT_MM)
+            let rise = hit.t - MOUTH_LIFT_MM;
+            (leaves && rise <= depth_mm).then_some(rise)
         })
         .fold(0.0, Scalar::max)
 }
@@ -248,7 +258,14 @@ pub fn lift_for(mesh: &Mesh, bvh: &Bvh, at: Vec3, axis: Vec3, diameter_mm: Scala
 pub fn hole_at(mesh: &Mesh, bvh: &Bvh, near: Vec3, size: HoleSize) -> Option<DrainHole> {
     let closest = bvh.closest(near)?;
     let axis = -mesh.triangle(closest.face)?.normal_unnormalized();
-    let lift_mm = lift_for(mesh, bvh, closest.point, axis, size.diameter_mm);
+    let lift_mm = lift_for(
+        mesh,
+        bvh,
+        closest.point,
+        axis,
+        size.diameter_mm,
+        size.depth_mm,
+    );
     Some(DrainHole::sized(closest.point, axis, size, lift_mm))
 }
 
@@ -703,7 +720,7 @@ mod tests {
             vec![[0, 1, 3], [0, 3, 2], [0, 4, 5], [0, 5, 1]],
         );
         let bvh = Bvh::build(&mesh);
-        let lift = lift_for(&mesh, &bvh, Vec3::ZERO, Vec3::NEG_Z, 4.0);
+        let lift = lift_for(&mesh, &bvh, Vec3::ZERO, Vec3::NEG_Z, 4.0, 3.0);
 
         assert!(
             (lift - 2.0).abs() < 1e-4,
@@ -720,11 +737,29 @@ mod tests {
             &boxed(Vec3::new(0.0, 0.0, 5.0), Vec3::new(10.0, 10.0, 8.0)),
         );
         let bvh = Bvh::build(&mesh);
-        let lift = lift_for(&mesh, &bvh, Vec3::new(5.0, 5.0, 2.0), Vec3::NEG_Z, 3.0);
+        let lift = lift_for(&mesh, &bvh, Vec3::new(5.0, 5.0, 2.0), Vec3::NEG_Z, 3.0, 3.0);
 
         assert!(
             lift < 1e-4,
             "the slab's lid is flat under the mouth, so the block over it is not cut, got {lift}"
+        );
+    }
+
+    #[test]
+    fn a_mouth_in_a_fold_is_not_lifted_through_the_lobe_beside_it() {
+        // A slab 2 mm thick against a tower rising 18 mm over it, whose wall the rim of a
+        // 3 mm mouth 1 mm from its foot reaches into.
+        let mut mesh = boxed(Vec3::ZERO, Vec3::new(6.0, 10.0, 2.0));
+        append(
+            &mut mesh,
+            &boxed(Vec3::new(6.0, 0.0, 0.0), Vec3::new(10.0, 10.0, 20.0)),
+        );
+        let bvh = Bvh::build(&mesh);
+        let lift = lift_for(&mesh, &bvh, Vec3::new(5.0, 5.0, 2.0), Vec3::NEG_Z, 3.0, 3.0);
+
+        assert!(
+            lift < 1e-4,
+            "a hole 3 mm deep does not cut the 18 mm tower over its rim, got {lift}"
         );
     }
 

@@ -175,6 +175,9 @@ impl DrainTool {
                 if made.sampled > 0 {
                     *status = Status::Info(tr!("drain-plugs-sampled", count = made.sampled));
                 }
+                if made.closed > 0 {
+                    *status = Status::Info(tr!("drain-plugs-closed", count = made.closed));
+                }
                 replace(scene, id, &ended.wanted.holes, &made.meshes, plate_mm);
             }
             Err(message) => {

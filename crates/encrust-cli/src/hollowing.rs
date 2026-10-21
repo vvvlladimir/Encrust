@@ -321,6 +321,13 @@ pub fn plugs_beside(
             made.meshes.len()
         );
     }
+    if made.closed > 0 {
+        tracing::warn!(
+            "{} of {} holes get no plug: a gap of {gap_mm} mm closes their mouth",
+            made.closed,
+            made.meshes.len()
+        );
+    }
     let bounds = mesh.aabb().context("mesh has no vertices")?;
     Ok(laid_beside(
         &made.meshes,

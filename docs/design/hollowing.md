@@ -240,7 +240,8 @@ Two things make a hole actually open. Its mouth starts `MOUTH_LIFT_MM` past the 
 plus whatever that surface rises around the rim — `lift_for` casts a ray out of the
 material along the hole's axis at twelve points around it — so no film is left over the
 mouth. A ray that meets air first counts nothing, so another part of the model standing over
-the hole is never cut.
+the hole is never cut; nor does one rising further than the hole is deep, so a mouth in a fold
+is not lifted through the lobe folded against it.
 And `pierce` deepens a hole standing on a hollowed model until it is through the wall,
 `thickness + 2 voxels`, whatever depth was asked for: a hole shorter than its wall is a
 dimple, not a drain, so the depth a user types is a floor rather than a ceiling. On a solid
@@ -266,7 +267,9 @@ measures a point off the nearest side, and stops a leg at the mitre planes it sh
 A plug is what a hole took out of the wall as it is cut, after `pierce` (ADR 0321): the
 model cut down to the hole's body, a convex frustum whose outline is moved in by the gap —
 by `gap / cos(π/n)` at a corner, so every side clears by the gap — and as long as the wall
-where the model is hollow, as deep as the hole otherwise. The model, read once as a solid
+where the model is hollow, as deep as the hole otherwise. A taper the gap closes first ends
+the body where its radius is `THINNEST_MM`, and a mouth it closes leaves that hole an empty
+plug, counted in `Plugs::closed`, without failing the others. The model, read once as a solid
 with its shells unioned, is intersected with each body through `core-csg`, so its inner end
 is flat and its outer face is the model's surface itself, over a cone's tip as over a flat
 face. Each body first loses the holes drilled before its own that meet it, so a hole drilled

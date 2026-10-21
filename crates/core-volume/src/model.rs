@@ -204,9 +204,11 @@ impl ModelHollow {
 
         // A diameter past the pocket's floor, so the tip is inside the pocket rather than
         // on its ceiling.
+        let depth_mm = (target - hole.at).length() + diameter_mm;
         self.drains.push(DrainHole {
-            depth_mm: (target - hole.at).length() + diameter_mm,
+            depth_mm,
             turn_deg,
+            lift_mm: lift_for(mesh, bvh, hole.at, hole.axis, diameter_mm, depth_mm),
             ..hole
         });
         self.recut();
@@ -392,7 +394,7 @@ impl ModelHollow {
             turn_deg: turn_in_model(axis, size.turn_deg, transform.linear()),
             ..size
         };
-        let lift_mm = lift_for(mesh, bvh, at, axis, size.diameter_mm);
+        let lift_mm = lift_for(mesh, bvh, at, axis, size.diameter_mm, size.depth_mm);
         Some(DrainHole::sized(at, axis, size, lift_mm))
     }
 
@@ -564,12 +566,13 @@ impl ModelHollow {
                 let at = sizing * hole.at;
                 let axis = (sizing * hole.axis).try_normalize().unwrap_or(hole.axis);
                 let diameter_mm = hole.diameter_mm * least;
+                let depth_mm = hole.depth_mm * least;
                 DrainHole {
                     at,
                     axis,
                     diameter_mm,
-                    depth_mm: hole.depth_mm * least,
-                    lift_mm: lift_for(mesh, bvh, at, axis, diameter_mm),
+                    depth_mm,
+                    lift_mm: lift_for(mesh, bvh, at, axis, diameter_mm, depth_mm),
                     ..*hole
                 }
             })

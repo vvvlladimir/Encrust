@@ -1367,6 +1367,10 @@ drain-plug-drift = The resin's tolerance compensation is off, so the plug is dra
 drain-plug-name = { $name } (plug { $index })
 drain-plugs-failed = The plugs for the drain holes could not be cut.
 drill-refused = The holes in { $name } are cut by approximation: the model could not be read as a solid, even mended, so they may cut what stands in them too.
+drain-plugs-closed = { $count ->
+    [one] One hole gets no plug: the gap per side is as wide as its mouth.
+   *[other] { $count } holes get no plug: the gap per side is as wide as their mouths.
+}
 drain-plugs-sampled = { $count ->
     [one] One plug follows the surface only approximately: the model could not be read as a solid, even mended.
    *[other] { $count } plugs follow the surface only approximately: the model could not be read as a solid, even mended.
