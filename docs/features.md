@@ -206,14 +206,16 @@ whole-surface fill is Cmd-Shift-click.
   beside them is cut. **On the surface** bends every letter onto the face under it, so it
   stands the full depth out of a curved face or into it everywhere; on a steep slope the
   depth is measured along the direction you clicked from. Text is only ever cut
-  exactly: on a model that is not closed it is refused, and the model is left as it was.
+  exactly: a torn model is patched where it is broken first, one no patch can close is
+  refused, and the model is left as it was.
   Scripts that join their letters (Arabic, Devanagari) are not shaped. The browser build
   offers only the built-in font.
 - **Combine:** pick two or more models — the panel lists them in the order picked and what
   each does — move them into place with the on-screen gizmo, and **Union** them into one, **Subtract** the others from the one picked
   first, or **Intersect** them to keep only what they share. Closed models keep their sharp
-  edges, a model made of parts pushed into each other included; a torn scan is combined
-  through a field and its edges are rounded to the lattice the notice names.
+  edges, a model made of parts pushed into each other included; a torn or folded model is
+  patched where it is broken and combined exactly too. Only one no patch can close is
+  combined through a field, its edges rounded to the lattice the notice names.
 - Text and Combine replace the model; its supports, cavity, holes, own settings and
   texture are not kept, and Undo puts the original back. The result stands on the plate the
   models were taken from. Shift or Cmd click picks a model in Text mode without writing.
