@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.5.1](https://github.com/vvvlladimir/Encrust/compare/v0.5.0...v0.5.1) (2026-10-21)
+
+
+### 🐛 Fixed
+
+* **drain:** Implement exact intersection of model solids with hole bodies ([#142](https://github.com/vvvlladimir/Encrust/issues/142)) ([95742dd](https://github.com/vvvlladimir/Encrust/commit/95742ddebedcc44139cb2f49c239c6ee998c9570))
+* **volume:** state an infill by its cell and its density ([c69e791](https://github.com/vvvlladimir/Encrust/commit/c69e79183a36c772be91c12ec76e661371892889))
+* **web:** keep the window's chords from the browser ([aea7f02](https://github.com/vvvlladimir/Encrust/commit/aea7f02a9f7c87a43336945e64029c92d64a119e))
+
 ## [0.5.0](https://github.com/vvvlladimir/Encrust/compare/v0.4.0...v0.5.0) (2026-10-20)
 
 
