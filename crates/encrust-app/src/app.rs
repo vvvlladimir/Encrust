@@ -309,9 +309,10 @@ impl SlicerApp {
     fn record(&mut self, frame: Frame) {
         self.tools.supports.settle_on_raft(&mut self.doc.scene);
         let drift_mm = self.machine.slicing.material.compensation.fit_drift_mm();
+        let asked_by = self.doc.history.next_edit();
         self.tools
             .drain
-            .lay_plugs(&mut self.doc.scene, drift_mm, frame.settled);
+            .lay_plugs(&mut self.doc.scene, drift_mm, frame.settled, asked_by);
         self.doc.drilling.start(&self.doc.scene, frame.settled);
         self.doc.history.observe(
             &self.doc.scene,
@@ -326,13 +327,14 @@ impl SlicerApp {
     /// Lays the plugs a worker has cut into the edit that asked for them. Returns whether
     /// any is still being cut.
     fn land_plugs(&mut self) -> bool {
-        let ended = self.tools.drain.poll_plugs();
-        if !ended.is_empty() {
-            let status = &mut self.machine.status;
-            let plate_mm = Vec2::new(self.doc.plate.x_mm, self.doc.plate.y_mm);
-            self.doc.history.land(&mut self.doc.scene, |scene| {
-                DrainTool::land_plugs(scene, ended, plate_mm, status);
-            });
+        let status = &mut self.machine.status;
+        let plate_mm = Vec2::new(self.doc.plate.x_mm, self.doc.plate.y_mm);
+        for ended in self.tools.drain.poll_plugs() {
+            self.doc
+                .history
+                .land(&mut self.doc.scene, ended.asked_by(), |scene| {
+                    DrainTool::land_plugs(scene, &ended, plate_mm, status);
+                });
         }
         self.tools.drain.laying_plugs()
     }

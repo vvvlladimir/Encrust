@@ -16,8 +16,13 @@ use crate::mend::readable;
 /// A model the engine refuses is mended first; one it refuses even then, or one that leaves
 /// nothing, is an error, and its cuts are left to the winding rule.
 pub fn drilled(mesh: &Mesh, cuts: &Mesh) -> Result<Mesh, VolumeError> {
-    let body = readable(mesh)?;
-    let left = body.difference(&cutter(cuts)?)?.mesh();
+    let cutter = solid_of(&once_over(cuts)?)?;
+    cut_by(mesh, &cutter)
+}
+
+/// `mesh`, mended where the engine refuses it, less `cutter`.
+fn cut_by(mesh: &Mesh, cutter: &Solid) -> Result<Mesh, VolumeError> {
+    let left = readable(mesh)?.difference(cutter)?.mesh();
     if left.faces.is_empty() {
         return Err(VolumeError::NothingLeft);
     }
@@ -92,19 +97,32 @@ fn cavity_last(drilled: Mesh, source: &Mesh, cavity: Range<usize>) -> (Mesh, Ran
 ///
 /// A piece the engine cannot cut is kept whole, so a tree it refuses still stands.
 pub fn drilled_pieces(mesh: &Mesh, cuts: &Mesh) -> Mesh {
-    let Some(reach) = cuts.aabb() else {
+    let Ok(once) = once_over(cuts) else {
         return mesh.clone();
     };
-    if mesh.aabb().is_none_or(|bounds| !meets(&bounds, &reach)) {
+    let bodies: Vec<Aabb> = split(&once).iter().filter_map(Mesh::aabb).collect();
+    let reached = |piece: &Mesh| {
+        piece
+            .aabb()
+            .is_some_and(|bounds| bodies.iter().any(|body| meets(&bounds, body)))
+    };
+    if !reached(mesh) {
         return mesh.clone();
     }
-    let pieces: Vec<Mesh> = split(mesh)
+    let pieces = split(mesh);
+    if !pieces.iter().any(reached) {
+        return mesh.clone();
+    }
+    let Ok(cutter) = solid_of(&once) else {
+        return mesh.clone();
+    };
+    let pieces: Vec<Mesh> = pieces
         .into_par_iter()
         .map(|piece| {
-            let reached = piece.aabb().is_some_and(|bounds| meets(&bounds, &reach));
-            match reached.then(|| drilled(&piece, cuts)) {
-                Some(Ok(cut)) => cut,
-                _ => piece,
+            if reached(&piece) {
+                cut_by(&piece, &cutter).unwrap_or(piece)
+            } else {
+                piece
             }
         })
         .collect();
@@ -117,7 +135,7 @@ pub fn drilled_pieces(mesh: &Mesh, cuts: &Mesh) -> Mesh {
 
 /// The bodies of `cuts` once over and wound outward: [`crate::drill`] lays them
 /// [`CUT_WEIGHT`] deep, wound inward, each copy on vertices of its own.
-fn cutter(cuts: &Mesh) -> Result<Solid, VolumeError> {
+fn once_over(cuts: &Mesh) -> Result<Mesh, VolumeError> {
     let (vertices, faces) = (cuts.vertices.len(), cuts.faces.len());
     let once = &cuts.faces[..faces / CUT_WEIGHT];
     let laid = vertices % CUT_WEIGHT == 0 && faces % CUT_WEIGHT == 0 && faces > 0;
@@ -125,14 +143,14 @@ fn cutter(cuts: &Mesh) -> Result<Solid, VolumeError> {
     if !laid || once.iter().flatten().any(|corner| *corner >= own) {
         return Err(VolumeError::NotCuts);
     }
-    let once = Mesh::new(
+    Ok(Mesh::new(
         cuts.vertices[..own as usize].to_vec(),
         once.iter().map(|[a, b, c]| [*a, *c, *b]).collect(),
-    );
-    Ok(solid_of(&once)?)
+    ))
 }
 
-fn meets(one: &Aabb, other: &Aabb) -> bool {
+/// Whether two boxes share any point, their faces included.
+pub(crate) fn meets(one: &Aabb, other: &Aabb) -> bool {
     one.mins.cmple(other.maxs).all() && one.maxs.cmpge(other.mins).all()
 }
 
@@ -266,6 +284,32 @@ mod tests {
         assert!(
             (volume - (3960.0 + 1000.0)).abs() < 1e-2,
             "only the slab is drilled, got {volume}"
+        );
+    }
+
+    #[test]
+    fn a_piece_between_two_holes_is_not_drilled() {
+        let far = DrainHole {
+            at: Vec3::new(70.0, 10.0, 10.0),
+            ..square_hole_through()
+        };
+        let mut three = slab();
+        three.append(&cuboid(
+            Vec3::new(60.0, 0.0, 0.0),
+            Vec3::new(80.0, 20.0, 10.0),
+        ));
+        let between = cuboid(Vec3::new(30.0, 5.0, 2.0), Vec3::new(50.0, 15.0, 8.0));
+        three.append(&between);
+        let cuts = drill(&[square_hole_through(), far], &[]).expect("the holes drill");
+        let left = drilled_pieces(&three, &cuts);
+        let block = split(&between);
+        assert!(
+            split(&left).iter().any(|piece| block.contains(piece)),
+            "the block in the box round both holes, but in neither, comes back as it went in"
+        );
+        assert!(
+            (signed_volume(&left) - (2.0 * 3960.0 + 1200.0)).abs() < 1e-2,
+            "each slab loses its 40 mm3 bore, the 1200 mm3 block nothing"
         );
     }
 }

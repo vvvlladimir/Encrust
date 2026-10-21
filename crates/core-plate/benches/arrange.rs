@@ -4,7 +4,7 @@
 )]
 
 use core_geometry::{Mesh, Scalar, Transform, Vec2, Vec3};
-use core_plate::{ArrangeSettings, Footprint, arrange};
+use core_plate::{ArrangeSettings, Footprint, Rect, arrange, nearest_free};
 use criterion::{Criterion, criterion_group, criterion_main};
 
 /// A star-shaped footprint: concave, so packing cannot fall back on bounding boxes.
@@ -51,5 +51,32 @@ fn packing(c: &mut Criterion) {
     group.finish();
 }
 
-criterion_group!(benches, packing);
+/// A plug asked for in the middle of four hundred models packed too close to take it.
+fn free_spot(c: &mut Criterion) {
+    let taken: Vec<Rect> = (0..20)
+        .flat_map(|row| (0..20).map(move |column| (row, column)))
+        .map(|(row, column)| {
+            let min = Vec2::new(30.0 + 12.0 * column as Scalar, 30.0 + 12.0 * row as Scalar);
+            Rect {
+                min,
+                max: min + Vec2::splat(8.0),
+            }
+        })
+        .collect();
+    let settings = ArrangeSettings::default();
+    c.bench_function("nearest free spot among four hundred models", |b| {
+        b.iter(|| {
+            nearest_free(
+                Vec2::splat(4.0),
+                &taken,
+                Vec2::splat(150.0),
+                Vec2::splat(300.0),
+                &settings,
+            )
+            .expect("the plate has room round the models")
+        });
+    });
+}
+
+criterion_group!(benches, packing, free_spot);
 criterion_main!(benches);

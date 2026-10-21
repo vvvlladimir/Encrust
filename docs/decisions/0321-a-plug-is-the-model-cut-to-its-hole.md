@@ -20,7 +20,7 @@ read as a solid once for all its holes, its shells unioned first as `combine` re
 and each plug is that solid's meeting with one body, less the holes drilled before it that
 meet it, so its outer face is the model's own surface and a hole drilled over another has
 that hole through its plug. A model the engine refuses is patched for it first: duplicates dropped, faces
-turned outward, holes filled, and the faces on any edge still not walked once each way cut
+turned outward, holes filled, and the faces round any edge still not walked once each way cut
 out and filled over, which a plug minds only near its hole. One refused even then keeps the
 sampled face of ADR 0313, which this record supersedes for the plug's shape only; `plugs`
 counts such plugs, and both front ends say so.
@@ -30,31 +30,20 @@ change it, so `plugs` reads the model only once its holes are found sound, crops
 the engine to a box 5 mm past each body a hole could leave at no gap, hands the caller that
 piece as a `PlugSource` for the next call, and cuts the holes' plugs from it in parallel; a
 hole past every box has the model read again. A read that would keep the whole model, every
-box holding it or the crop failing, is not handed back. The window cuts a model's
-plugs on a worker, one cut a model at a time and none while a drag is under way, keeps the
-last model read for the next cut while the Drain tool is open, and lays the plugs into the
-edit that asked for them: `History::land` takes them as part of that edit when it is
-recorded already, so one undo takes back hole and plug. A cut for what the model no longer
-asks for, as after an undo or a newer gap, or from a mesh since replaced, is thrown away
-when it lands. A plug is set down at the spot nearest its place in the row beside its model
-that keeps the plugs' spacing from every model, support and raft on the plate and from the
-plugs set down before it, inside the plate's margin where any spot is left there:
-`core_plate::nearest_free`, exact over the boxes they cover.
+box holding it or the crop failing, is not handed back. The window cuts plugs on a worker
+and lays them into the edit that asked for them, so one undo takes back hole and plug, and
+sets each down at the nearest free spot on the plate, `core_plate::nearest_free`; how is in
+docs/design/hollowing.md.
 
 ## Consequences
 
 A plug over a cone, a pin or an edge is the piece the hole took, flush to the face at
-every point rather than at its samples. Reading the model costs the most: on 1.5 million
-faces 0.4 s for one plug and 1.2 s for ten, 0.04 s and 0.12 s on 140 thousand; a model
-refused as it stands pays for the patching too, 1.2 s for one plug on a million faces
-folded at four edges. Cropping makes the first read dearer and every later cut cheaper:
-three plugs on a half-million-face ball take 211 ms read afresh and 31 ms from the piece kept. The window
-does not pause for any of it, and the old plugs stand until the new ones land. The piece
-kept is a few hundred thousand faces at most, where the whole model read held some 590 MB on
-1.5 million; the read itself still peaks that high, and the system allocator keeps those
-pages for the process to reuse rather than returning them, so the footprint the system
-shows stays at the peak. Lowering the peak is the engine's own representation, a separate
-decision.
+every point rather than at its samples. Reading the model costs the most, about 0.4 s for one
+plug on 1.5 million faces, and more where it must be patched first; cropping makes the first
+read dearer and every later cut several times cheaper. The window does not pause for any of
+it, and the old plugs stand until the new ones land. The read still peaks at some 590 MB on
+1.5 million faces, which the allocator keeps for reuse; lowering that peak is the engine's
+own representation, a separate decision.
 
 ## Alternatives considered
 

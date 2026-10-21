@@ -10,7 +10,7 @@ pub(crate) fn readable(mesh: &Mesh) -> Result<Solid, CsgError> {
 }
 
 /// `model` mended until the engine can read it: torn and folded faces patched, then every
-/// face on an edge still unpaired cut out and filled, which moves the surface only there.
+/// face touching an edge still unpaired cut out and filled, which moves the surface only there.
 fn patched(model: &Mesh) -> Mesh {
     let mut mesh = model.clone();
     remove_duplicate_faces(&mut mesh);

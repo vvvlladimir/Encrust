@@ -14,7 +14,7 @@ pub struct Rect {
 /// where no room is left on the plate.
 ///
 /// Exact rather than on a grid: the nearest free point is `toward` itself or lies on a side
-/// of a box grown by the part, so only those sides' lines and their crossings are tried.
+/// of a box grown by the part, so only those sides' lines are walked, nearest first.
 pub fn nearest_free(
     size_mm: Vec2,
     taken: &[Rect],
@@ -38,24 +38,83 @@ pub fn nearest_free(
             max: rect.max + reach,
         })
         .collect();
-    let lines = |axis: fn(Vec2) -> Scalar| -> Vec<Scalar> {
-        let mut lines = vec![axis(toward), axis(room.min), axis(room.max)];
-        lines.extend(
-            grown
-                .iter()
-                .flat_map(|rect| [axis(rect.min), axis(rect.max)]),
-        );
-        lines
+    let goal = toward.clamp(room.min, room.max);
+    if grown.iter().all(|rect| !strictly_inside(rect, goal)) {
+        return Some(goal);
+    }
+    let turned: Vec<Rect> = grown.iter().map(Rect::turned).collect();
+    let columns = nearest_on_columns(toward, &room, &grown, Scalar::INFINITY);
+    let within = columns.map_or(Scalar::INFINITY, |at| at.distance_squared(toward));
+    let rows = nearest_on_columns(swapped(toward), &room.turned(), &turned, within);
+    rows.map(swapped).or(columns)
+}
+
+impl Rect {
+    /// The box mirrored across the diagonal, so its rows are walked as columns.
+    fn turned(&self) -> Self {
+        Self {
+            min: swapped(self.min),
+            max: swapped(self.max),
+        }
+    }
+}
+
+/// The free point nearest `toward` on a line `x = constant` along a side of `room` or of one
+/// of `grown`, where it is nearer than `within`, squared millimetres.
+fn nearest_on_columns(toward: Vec2, room: &Rect, grown: &[Rect], within: Scalar) -> Option<Vec2> {
+    let mut xs: Vec<Scalar> = [room.min.x, room.max.x]
+        .into_iter()
+        .chain(grown.iter().flat_map(|rect| [rect.min.x, rect.max.x]))
+        .filter(|x| (room.min.x..=room.max.x).contains(x))
+        .collect();
+    xs.sort_by(|a, b| (a - toward.x).abs().total_cmp(&(b - toward.x).abs()));
+    let mut nearest = None;
+    let mut within = within;
+    for x in xs {
+        if (x - toward.x).powi(2) >= within {
+            break;
+        }
+        let Some(y) = nearest_free_along(x, toward.y, room, grown) else {
+            continue;
+        };
+        let at = Vec2::new(x, y);
+        if at.distance_squared(toward) < within {
+            within = at.distance_squared(toward);
+            nearest = Some(at);
+        }
+    }
+    nearest
+}
+
+/// The `y` nearest `toward_y` on the line through `x`, inside `room` and strictly inside
+/// none of `grown`.
+fn nearest_free_along(x: Scalar, toward_y: Scalar, room: &Rect, grown: &[Rect]) -> Option<Scalar> {
+    let mut blocked: Vec<(Scalar, Scalar)> = grown
+        .iter()
+        .filter(|rect| rect.min.x < x && x < rect.max.x)
+        .map(|rect| (rect.min.y, rect.max.y))
+        .collect();
+    blocked.sort_by(|a, b| a.0.total_cmp(&b.0));
+    // Open spans: two that only touch leave the point between them free.
+    let mut merged: Vec<(Scalar, Scalar)> = Vec::new();
+    for (low, high) in blocked {
+        match merged.last_mut() {
+            Some(last) if low < last.1 => last.1 = last.1.max(high),
+            _ => merged.push((low, high)),
+        }
+    }
+    let y = toward_y.clamp(room.min.y, room.max.y);
+    let Some(&(low, high)) = merged.iter().find(|(low, high)| *low < y && y < *high) else {
+        return Some(y);
     };
-    let (xs, ys) = (lines(|at| at.x), lines(|at| at.y));
-    xs.iter()
-        .flat_map(|x| ys.iter().map(move |y| Vec2::new(*x, *y)))
-        .map(|at| at.clamp(room.min, room.max))
-        .filter(|at| grown.iter().all(|rect| !strictly_inside(rect, *at)))
-        .min_by(|a, b| {
-            a.distance_squared(toward)
-                .total_cmp(&b.distance_squared(toward))
-        })
+    [low, high]
+        .into_iter()
+        .filter(|at| (room.min.y..=room.max.y).contains(at))
+        .min_by(|a, b| (a - toward_y).abs().total_cmp(&(b - toward_y).abs()))
+}
+
+fn swapped(at: Vec2) -> Vec2 {
+    Vec2::new(at.y, at.x)
 }
 
 fn strictly_inside(rect: &Rect, at: Vec2) -> bool {
@@ -144,6 +203,78 @@ mod tests {
             at.y <= 10.0 - 5.0 + 1e-5 || at.y >= 50.0 + 5.0 - 1e-5,
             "the part clears both models above or below them, got {at}"
         );
+    }
+
+    /// Every crossing of the grown boxes' sides tried, the slow way the walk must agree with.
+    fn by_every_crossing(size: Vec2, taken: &[Rect], toward: Vec2) -> Option<Vec2> {
+        let settings = settings();
+        let half = size / 2.0;
+        let room = Rect {
+            min: Vec2::splat(settings.margin_mm) + half,
+            max: PLATE - Vec2::splat(settings.margin_mm) - half,
+        };
+        let reach = half + Vec2::splat(settings.clearance_mm);
+        let grown: Vec<Rect> = taken
+            .iter()
+            .map(|taken| Rect {
+                min: taken.min - reach,
+                max: taken.max + reach,
+            })
+            .collect();
+        let lines = |axis: fn(Vec2) -> Scalar| -> Vec<Scalar> {
+            let sides = grown
+                .iter()
+                .flat_map(|rect| [axis(rect.min), axis(rect.max)]);
+            [axis(toward), axis(room.min), axis(room.max)]
+                .into_iter()
+                .chain(sides)
+                .collect()
+        };
+        let (xs, ys) = (lines(|at| at.x), lines(|at| at.y));
+        xs.iter()
+            .flat_map(|x| ys.iter().map(move |y| Vec2::new(*x, *y)))
+            .map(|at| at.clamp(room.min, room.max))
+            .filter(|at| grown.iter().all(|rect| !strictly_inside(rect, *at)))
+            .min_by(|a, b| {
+                a.distance_squared(toward)
+                    .total_cmp(&b.distance_squared(toward))
+            })
+    }
+
+    #[test]
+    fn walking_the_sides_finds_as_near_a_spot_as_trying_every_crossing() {
+        let mut seed = 0x2545_f491_u32;
+        let mut next = |span: Scalar| {
+            seed ^= seed << 13;
+            seed ^= seed >> 17;
+            seed ^= seed << 5;
+            span * (seed % 10_000) as Scalar / 10_000.0
+        };
+        for _ in 0..300 {
+            let taken: Vec<Rect> = (0..=next(12.0) as usize)
+                .map(|_| {
+                    let min = Vec2::new(next(100.0), next(60.0));
+                    Rect {
+                        min,
+                        max: min + Vec2::new(1.0 + next(30.0), 1.0 + next(20.0)),
+                    }
+                })
+                .collect();
+            let (size, toward) = (
+                Vec2::splat(1.0 + next(8.0)),
+                Vec2::new(next(110.0), next(70.0)),
+            );
+            let walked = nearest_free(size, &taken, toward, PLATE, &settings());
+            let tried = by_every_crossing(size, &taken, toward);
+            let distance = |at: Option<Vec2>| at.map(|at| at.distance(toward));
+            match (distance(walked), distance(tried)) {
+                (Some(walked), Some(tried)) => assert!(
+                    (walked - tried).abs() < 1e-3,
+                    "{walked} mm off against {tried} mm for {taken:?} toward {toward}"
+                ),
+                (walked, tried) => assert_eq!(walked, tried, "{taken:?} toward {toward}"),
+            }
+        }
     }
 
     #[test]

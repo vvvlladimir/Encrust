@@ -27,6 +27,22 @@ enum Step {
     Both(Scene, Box<ToolSettings>),
 }
 
+impl Step {
+    fn scene_mut(&mut self) -> Option<&mut Scene> {
+        match self {
+            Self::Plate(scene) | Self::Both(scene, _) => Some(scene),
+            Self::Tools(_) => None,
+        }
+    }
+
+    fn scene(&self) -> Option<&Scene> {
+        match self {
+            Self::Plate(scene) | Self::Both(scene, _) => Some(scene),
+            Self::Tools(_) => None,
+        }
+    }
+}
+
 /// What the frame the history is looking at was like.
 #[derive(Debug, Clone, Copy)]
 pub struct Frame {
@@ -42,8 +58,11 @@ pub struct Frame {
 /// added later is undoable without writing its inverse; see `docs/decisions/0086`.
 #[derive(Debug)]
 pub struct History {
-    past: VecDeque<Step>,
-    future: Vec<Step>,
+    /// Each entry with the number it was recorded under, which [`Self::land`] finds it by.
+    past: VecDeque<(u64, Step)>,
+    future: Vec<(u64, Step)>,
+    /// The number the next recorded edit takes.
+    next: u64,
     /// The scene as it stood after the last recorded edit, which is what goes onto `past`
     /// when the next one lands.
     last: Scene,
@@ -61,6 +80,7 @@ impl Default for History {
         Self {
             past: VecDeque::new(),
             future: Vec::new(),
+            next: 0,
             fingerprint: fingerprint(&last),
             last,
             tools: None,
@@ -116,23 +136,71 @@ impl History {
     /// Puts one entry on the stack, dropping the oldest when it is full, and with it the
     /// branch an undo had opened.
     fn record(&mut self, step: Step) {
-        self.past.push_back(step);
+        self.past.push_back((self.next, step));
+        self.next += 1;
         if self.past.len() > DEPTH {
             self.past.pop_front();
         }
         self.future.clear();
     }
 
-    /// Lets `change` put into the scene what a run built for the edit last recorded, as part
-    /// of that edit, so one undo takes back both; with an edit not recorded yet, as in a
-    /// drag, it joins that one instead. Answers with what `change` does.
-    pub fn land<T>(&mut self, scene: &mut Scene, change: impl FnOnce(&mut Scene) -> T) -> T {
+    /// The number the next edit is recorded under: a run started now is asked for by it.
+    pub fn next_edit(&self) -> u64 {
+        self.next
+    }
+
+    /// Lets `change` put into the scene what a run built for edit `asked_by`, its
+    /// [`Self::next_edit`] when it started, as part of that edit, so one undo takes back both.
+    ///
+    /// The plates held for the edits recorded since get it too, so undoing one of those keeps
+    /// it; with `asked_by` not recorded yet, it joins the edit under way, as in a drag.
+    /// Answers with what `change` does to `scene`.
+    pub fn land<T>(
+        &mut self,
+        scene: &mut Scene,
+        asked_by: u64,
+        mut change: impl FnMut(&mut Scene) -> T,
+    ) -> T {
         let caught_up = fingerprint(scene) == self.fingerprint;
+        if let Some(index) = self.past.iter().position(|(id, _)| *id == asked_by) {
+            self.carry_since(index, caught_up, &mut change);
+        }
         let answer = change(scene);
         if caught_up {
             self.settle(scene);
         }
         answer
+    }
+
+    /// Hands `change` to every plate held after the edit at `index` of the past, and makes a
+    /// tool edit there hold the plate it left, so its undo takes back what lands as well.
+    fn carry_since<T>(
+        &mut self,
+        index: usize,
+        caught_up: bool,
+        change: &mut impl FnMut(&mut Scene) -> T,
+    ) {
+        if matches!(self.past[index].1, Step::Tools(_)) {
+            let left = self
+                .past
+                .range(index + 1..)
+                .find_map(|(_, step)| step.scene())
+                .unwrap_or(&self.last)
+                .clone();
+            if let Some((id, Step::Tools(tools))) = self.past.remove(index) {
+                self.past.insert(index, (id, Step::Both(left, tools)));
+            }
+        }
+        for (_, step) in self.past.range_mut(index + 1..) {
+            if let Some(scene) = step.scene_mut() {
+                change(scene);
+            }
+        }
+        // Caught up, it is settled from the scene; otherwise the edit under way undoes to it.
+        if !caught_up {
+            change(&mut self.last);
+            self.fingerprint = fingerprint(&self.last);
+        }
     }
 
     pub fn can_undo(&self) -> bool {
@@ -145,23 +213,23 @@ impl History {
 
     /// Takes back the last edit, of the plate or of a tool.
     pub fn undo(&mut self, scene: &mut Scene, tools: &mut Tools, slicing: &mut Slicing) -> bool {
-        let Some(previous) = self.past.pop_back() else {
+        let Some((id, previous)) = self.past.pop_back() else {
             return false;
         };
         let held = self.put_back(previous, scene, tools, slicing);
         self.follow_up(scene, tools);
-        self.future.push(held);
+        self.future.push((id, held));
         true
     }
 
     /// Puts back the edit the last undo took away.
     pub fn redo(&mut self, scene: &mut Scene, tools: &mut Tools, slicing: &mut Slicing) -> bool {
-        let Some(next) = self.future.pop() else {
+        let Some((id, next)) = self.future.pop() else {
             return false;
         };
         let held = self.put_back(next, scene, tools, slicing);
         self.follow_up(scene, tools);
-        self.past.push_back(held);
+        self.past.push_back((id, held));
         true
     }
 
@@ -445,6 +513,30 @@ mod tests {
         fn x_of(&self, id: ObjectId) -> Option<f32> {
             self.scene.get(id).map(|o| o.transform.translation.x)
         }
+
+        /// Lays a plug for the edit numbered `asked_by`, the way a run lands one.
+        fn land_plug(&mut self, asked_by: u64) {
+            self.history.land(&mut self.scene, asked_by, |scene| {
+                let old = scene
+                    .objects()
+                    .iter()
+                    .find(|o| o.name == "plug")
+                    .map(|o| o.id);
+                if let Some(old) = old {
+                    scene.remove(old);
+                }
+                scene.insert(Imported::new(
+                    "plug".to_owned(),
+                    Arc::new(unit_cube()),
+                    Transform::default(),
+                    summary(),
+                ));
+            });
+        }
+
+        fn has_plug(&self) -> bool {
+            self.scene.objects().iter().any(|o| o.name == "plug")
+        }
     }
 
     #[test]
@@ -467,28 +559,80 @@ mod tests {
         let mut bench = Bench::default();
         let id = bench.add();
         bench.observe(true);
+        let asked_by = bench.history.next_edit();
         bench.move_to(id, 10.0);
         bench.observe(true);
 
         // A frame later a run lays a model the edit asked for, as plugs land.
-        let landed = bench.history.land(&mut bench.scene, |scene| {
-            scene.insert(Imported::new(
-                "plug".to_owned(),
-                Arc::new(unit_cube()),
-                Transform::default(),
-                summary(),
-            ))
-        });
+        bench.land_plug(asked_by);
         bench.observe(true);
 
         assert!(bench.undo(), "the edit is there to undo");
         assert_eq!(bench.x_of(id), Some(0.0), "the move is taken back");
-        assert!(
-            bench.scene.get(landed).is_none(),
-            "and what landed with it, in one step"
+        assert!(!bench.has_plug(), "and what landed with it, in one step");
+        assert!(bench.redo());
+        assert!(bench.has_plug(), "a redo puts both again");
+    }
+
+    #[test]
+    fn what_lands_after_a_later_edit_stays_with_the_edit_that_asked_for_it() {
+        let mut bench = Bench::default();
+        let (drilled, other) = (bench.add(), bench.add());
+        bench.observe(true);
+        let asked_by = bench.history.next_edit();
+        bench.move_to(drilled, 10.0);
+        bench.observe(true);
+        bench.move_to(other, 30.0);
+        bench.observe(true);
+
+        bench.land_plug(asked_by);
+        bench.observe(true);
+
+        assert!(bench.undo(), "the later move is there to undo");
+        assert_eq!(bench.x_of(other), Some(0.0), "and is taken back");
+        assert!(bench.has_plug(), "leaving what the earlier edit asked for");
+        assert!(bench.undo());
+        assert_eq!(
+            bench.x_of(drilled),
+            Some(0.0),
+            "the edit that asked goes back"
+        );
+        assert!(!bench.has_plug(), "and takes what landed with it");
+        assert!(bench.redo() && bench.redo());
+        assert!(bench.has_plug(), "both redone put it again");
+    }
+
+    #[test]
+    fn what_a_tool_edit_asks_for_is_taken_back_with_it() {
+        let mut bench = Bench::default();
+        bench.add();
+        bench.observe(true);
+        let asked_by = bench.history.next_edit();
+        bench.land_plug(asked_by);
+        bench.observe(true);
+        let first = bench.scene.objects().len();
+
+        let asked_by = bench.history.next_edit();
+        bench.tools.hollow.state.thickness_mm = 4.0;
+        bench.observe(true);
+        bench.land_plug(asked_by);
+        bench.observe(true);
+        let laid = bench.scene.objects().iter().map(|o| o.id).max();
+
+        assert!(bench.undo(), "the tool edit is there to undo");
+        assert_ne!(bench.tools.hollow.state.thickness_mm, 4.0);
+        assert_eq!(bench.scene.objects().len(), first, "one plug, as before");
+        assert_ne!(
+            bench.scene.objects().iter().map(|o| o.id).max(),
+            laid,
+            "the plug laid before the tool edit, not the one it asked for"
         );
         assert!(bench.redo());
-        assert!(bench.scene.get(landed).is_some(), "a redo puts both again");
+        assert_eq!(
+            bench.scene.objects().iter().map(|o| o.id).max(),
+            laid,
+            "a redo puts the plug it asked for again"
+        );
     }
 
     #[test]
@@ -496,22 +640,16 @@ mod tests {
         let mut bench = Bench::default();
         let id = bench.add();
         bench.observe(true);
+        let asked_by = bench.history.next_edit();
         bench.move_to(id, 10.0);
         bench.observe(false);
 
-        let landed = bench.history.land(&mut bench.scene, |scene| {
-            scene.insert(Imported::new(
-                "plug".to_owned(),
-                Arc::new(unit_cube()),
-                Transform::default(),
-                summary(),
-            ))
-        });
+        bench.land_plug(asked_by);
         bench.observe(true);
 
         assert!(bench.undo(), "the drag is one edit");
         assert_eq!(bench.x_of(id), Some(0.0), "and is taken back");
-        assert!(bench.scene.get(landed).is_none(), "with what landed in it");
+        assert!(!bench.has_plug(), "with what landed in it");
     }
 
     /// A frame of the window: what follows from an edit by itself, then the history.

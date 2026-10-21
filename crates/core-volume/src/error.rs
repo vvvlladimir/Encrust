@@ -92,6 +92,7 @@ pub enum VolumeError {
     #[error("the models combined leave nothing behind")]
     NothingLeft,
 
+    /// The cuts handed to the exact drilling are not a mesh `drill` made.
     #[error("the cuts are not laid the way `drill` lays them")]
     NotCuts,
 

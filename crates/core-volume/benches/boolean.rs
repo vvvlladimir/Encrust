@@ -6,7 +6,7 @@
 use core_geometry::{Bvh, Mat3, Mesh, Scalar, Vec3, ball, cuboid};
 use core_volume::{
     Boolean, Cancel, HoleSize, HollowMode, HollowSettings, carve, cavity_field, combine_exact,
-    drill, drilled, hole_at, plugs,
+    drill, drilled, drilled_pieces, hole_at, plugs,
 };
 use criterion::{Criterion, criterion_group, criterion_main};
 
@@ -101,6 +101,25 @@ fn drill_benchmarks(c: &mut Criterion) {
     group.sample_size(10);
     group.bench_function("three holes out of a dense ball", |b| {
         b.iter(|| drilled(&dense, &cuts).expect("a ball is a solid"));
+    });
+    // Twenty by twenty columns under a plate, a hole at two opposite corners: two reached.
+    let mut forest = Mesh::default();
+    for (row, column) in (0..20).flat_map(|row| (0..20).map(move |column| (row, column))) {
+        let at = Vec3::new(5.0 * column as Scalar, 5.0 * row as Scalar, 0.0);
+        forest.append(&ball(at, 1.0, 32, 32));
+    }
+    let corners = [Vec3::new(0.0, 0.0, 1.0), Vec3::new(95.0, 95.0, 1.0)];
+    let bvh = Bvh::build(&forest);
+    let holes: Vec<_> = corners
+        .into_iter()
+        .map(|at| {
+            hole_at(&forest, &bvh, at + Vec3::Z, HoleSize::round(1.0, 1.0, 1.0))
+                .expect("a column has a surface")
+        })
+        .collect();
+    let cuts = drill(&holes, &[]).expect("the holes drill");
+    group.bench_function("two holes through four hundred columns", |b| {
+        b.iter(|| drilled_pieces(&forest, &cuts));
     });
     group.finish();
 }

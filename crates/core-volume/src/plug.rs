@@ -3,6 +3,7 @@ use core_geometry::{Aabb, Bvh, Mesh, Quat, Ray, Scalar, Transform, Vec3, cuboid,
 use rayon::prelude::*;
 
 use crate::drain::{DrainHole, MOUTH_LIFT_MM, Section, body_of};
+use crate::drilled::meets;
 use crate::error::VolumeError;
 use crate::hollow::HollowMode;
 use crate::mend::readable;
@@ -156,16 +157,20 @@ pub fn plugs(
         *source = Some(PlugSource::read(model, holes, wall_mm));
     }
     let solid = source.as_ref().and_then(PlugSource::readable);
-    let meshes: Vec<Mesh> = bodies
+    let cut: Vec<(Mesh, bool)> = bodies
         .par_iter()
         .enumerate()
         .map(|(index, (hole, body))| {
             solid
                 .and_then(|solid| intersected(solid, &body.mesh(hole), &holes[..index]))
-                .unwrap_or_else(|| sampled(model, bvh, hole, body))
+                .map_or_else(
+                    || (sampled(model, bvh, hole, body), true),
+                    |mesh| (mesh, false),
+                )
         })
         .collect();
-    let sampled = if solid.is_some() { 0 } else { meshes.len() };
+    let sampled = cut.iter().filter(|(_, sampled)| *sampled).count();
+    let meshes = cut.into_iter().map(|(mesh, _)| mesh).collect();
     if source.as_ref().is_some_and(PlugSource::is_whole) {
         *source = None;
     }
@@ -230,10 +235,6 @@ fn intersected(solid: &Solid, body: &Mesh, earlier: &[DrainHole]) -> Option<Mesh
     }
     let taken = solid.intersection(&piece).ok()?;
     Some(taken.mesh()).filter(|mesh| !mesh.faces.is_empty())
-}
-
-fn meets(one: &Aabb, other: &Aabb) -> bool {
-    one.mins.cmple(other.maxs).all() && one.maxs.cmpge(other.mins).all()
 }
 
 /// The body a plug fills: the hole's frustum moved in by the gap, from the lifted mouth to
@@ -572,6 +573,22 @@ mod tests {
         assert!(
             (volume(&reversed.meshes[0]) - volume(&alone)).abs() < 1e-3,
             "a hole drilled later leaves an earlier plug whole"
+        );
+    }
+
+    #[test]
+    fn a_plug_the_engine_cannot_cut_from_a_sound_model_is_counted_as_sampled() {
+        let (mesh, bvh) = slab();
+        let wide = DrainHole {
+            diameter_mm: 10.0,
+            ..hole_in_the_top()
+        };
+        // The narrow hole lies wholly in the wide one before it, so nothing is left to cut.
+        let made =
+            cut_plugs(&mesh, &bvh, &[wide, hole_in_the_top()], Some(2.0), 0.1).expect("sound");
+        assert_eq!(
+            made.sampled, 1,
+            "only the swallowed plug is sampled, and said to be"
         );
     }
 
