@@ -366,6 +366,20 @@ impl Taken {
 }
 
 impl SceneObject {
+    /// The mesh the model's cuts are taken out of: its shell once hollowed.
+    pub fn uncut(&self) -> &Arc<Mesh> {
+        self.hollow.shell().unwrap_or(&self.mesh)
+    }
+
+    /// The mesh the model prints as: its cuts taken out exactly where they have been, its
+    /// shell or its own mesh while they are cut by the winding rule.
+    pub fn printed(&self) -> &Arc<Mesh> {
+        let uncut = self.uncut();
+        self.hollow
+            .drilled(uncut)
+            .map_or(uncut, |drilled| &drilled.mesh)
+    }
+
     /// Bounds of the placed model, in plate coordinates: of its vertices as placed, not
     /// of its own box turned, which grows by up to √3 at an angle. Cached per transform.
     pub fn world_bounds(&self) -> Option<Aabb> {
@@ -678,6 +692,31 @@ impl Scene {
         }
         if plate != self.active {
             self.selected.retain(|picked| *picked != id);
+        }
+    }
+
+    /// The scene as an undo step keeps it: without the cuts taken out exactly, which are
+    /// models' worth of mesh each and are taken out again when it is put back (ADR 0322).
+    pub fn snapshot(&self) -> Self {
+        let mut kept = self.clone();
+        kept.forget_drilled();
+        kept
+    }
+
+    /// Lets go of every model's cuts taken out exactly.
+    pub fn forget_drilled(&mut self) {
+        for object in &mut self.objects {
+            object.hollow.forget_drilled();
+        }
+    }
+
+    /// Takes over what `other` drilled for each model whose cuts are still the ones it was
+    /// drilled for.
+    pub fn adopt_drilled(&mut self, other: &Self) {
+        for object in &mut self.objects {
+            if let Some(was) = other.get(object.id) {
+                object.hollow.adopt_drilled(&was.hollow);
+            }
         }
     }
 

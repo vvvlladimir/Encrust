@@ -210,13 +210,15 @@ dense lattice puts on every layer, the stack, the file — is not priced, so a h
 
 ## Drain holes and channels
 
-A hole is a cone appended to the whole solid wound inward, so it cuts the shell and the
-cavity's ceiling in one pass, and it is exact at any layer height: `core-volume/drain.rs`
-meshes it, nothing about it is voxelised. Its mouth starts a radius clear of the surface —
-more than the sag of any surface curving away under a hole that wide — so the mouth is
-never left capped, and what stands outside the model prints as nothing. Every body is laid
-`CUT_WEIGHT` deep, so it takes out the lattice bonded into the wall and a support's tip with
-the shell rather than leaving them standing in the hole (ADR 0188).
+A hole is a cone, meshed by `core-volume/drain.rs` and never voxelised, so it is exact at
+any layer height. Its mouth starts a radius clear of the surface — more than the sag of any
+surface curving away under a hole that wide — so the mouth is never left capped. The bodies
+are taken out of their own model through `core-csg` (`drilled`, ADR 0322): the shell, its
+cavity's ceiling and the lattice bonded into the wall in one boolean, and the support trees
+the bodies reach one tree at a time (`drilled_pieces`), so nothing beside the model loses
+anything. A model the engine refuses even mended keeps the old cut: the bodies appended
+wound inward and `CUT_WEIGHT` deep, which outweighs whatever stands where they land, the
+model's lattice and supports and any other model too (ADR 0188).
 
 | | What it is | Where it comes from |
 |---|---|---|
@@ -238,7 +240,8 @@ Two things make a hole actually open. Its mouth starts `MOUTH_LIFT_MM` past the 
 plus whatever that surface rises around the rim — `lift_for` casts a ray out of the
 material along the hole's axis at twelve points around it — so no film is left over the
 mouth. A ray that meets air first counts nothing, so another part of the model standing over
-the hole is never cut.
+the hole is never cut; nor does one rising further than the hole is deep, so a mouth in a fold
+is not lifted through the lobe folded against it.
 And `pierce` deepens a hole standing on a hollowed model until it is through the wall,
 `thickness + 2 voxels`, whatever depth was asked for: a hole shorter than its wall is a
 dimple, not a drain, so the depth a user types is a floor rather than a ceiling. On a solid
@@ -261,18 +264,33 @@ point are one, and a channel that doubles straight back has no mitre and is refu
 that outline, not to its circle: the shader reads a cut's first corner and count of sides and
 measures a point off the nearest side, and stops a leg at the mitre planes it shares.
 
-A plug is what a hole took out of the wall as it is cut, after `pierce`, made as its own
-closed mesh rather than through the boolean engine (ADR 0313): the hole's outline moved in by the gap — by `gap / cos(π/n)`
-at a corner, so every side clears by the gap — and as long as the wall where the model is
-hollow, as deep as the hole otherwise. Its inner end is flat. Its
-outer face is sampled on four rings over the mouth, each point dropped onto the model's
-surface by a ray cast out of the wall the way `lift_for` reads a rim, so it closes flush on
-a curved surface; a point no ray finds reads the mouth's own plane. `laid_beside` stands it
-on that flat end in a row past the model, for the window and the CLI alike. The window lays
-the plugs again whenever a model's holes, wall or gap differ from what they were last laid
-for; a model opened from a project takes the plugs it was saved with, and a copy lays its
-own. The gap a user sets is the fit that prints, so a resin whose tolerance compensation is
-off has its hole and outer offsets taken off it (`Compensation::fit_drift_mm`).
+A plug is what a hole took out of the wall as it is cut, after `pierce` (ADR 0321): the
+model cut down to the hole's body, a convex frustum whose outline is moved in by the gap —
+by `gap / cos(π/n)` at a corner, so every side clears by the gap — and as long as the wall
+where the model is hollow, as deep as the hole otherwise. A taper the gap closes first ends
+the body where its radius is `THINNEST_MM`, and a mouth it closes leaves that hole an empty
+plug, counted in `Plugs::closed`, without failing the others. The model, read once as a solid
+with its shells unioned, is intersected with each body through `core-csg`, so its inner end
+is flat and its outer face is the model's surface itself, over a cone's tip as over a flat
+face. Each body first loses the holes drilled before its own that meet it, so a hole drilled
+over an earlier one takes a plug with that hole through it, and one wholly inside an earlier
+hole an empty plug, which that hole's own fills. A model the engine refuses is
+patched for it first — holes filled, the faces round an edge still not walked once each way cut
+out and filled over. One refused even then has the outer face sampled on four rings instead,
+each point dropped onto the surface by a ray cast out of the wall the way `lift_for` reads a
+rim. `laid_beside` stands a plug on that flat end in a row past the model, for the window
+and the CLI alike; the window then moves each to the spot nearest that clears every model,
+support, raft and plug already down by the plugs' spacing, inside the plate's margin while
+there is room (`core_plate::nearest_free`), left in its row and reported where there is
+none. The window cuts the plugs again on a worker
+whenever a model's holes, wall or gap differ from what they were last laid for — one cut a
+model at a time, none during a drag, from the boxes round each hole last read while the
+Drain tool is open — and lays them into the edit that changed them, a tool's value
+included, even where the cut waited on another or on a drag, and into every plate the
+history holds after it, so no later undo takes them away (`History::land`); a model opened
+from a project takes the plugs it was saved with, and a copy lays its own. The gap a user sets is
+the fit that prints, so a resin whose tolerance compensation is off has its hole and outer
+offsets taken off it (`Compensation::fit_drift_mm`).
 
 A channel runs exactly between the points it was given, which is what `--channel` hands
 over. A run of clicks is not those points: `channel_under` sinks the spine a radius and a
@@ -294,8 +312,11 @@ They may hold 512 MB together on the desktop and 128 MB in a browser, a field ov
 never kept, and in a browser they make way for a field being built or a plate being sliced
 (ADR 0260).
 
-What the window draws inside a cut is the cut's own body. Nothing meshes the surface of a
-hole: the bodies are already there, wound inward, so the face that survives culling is the
+The window drills each model on a worker a moment after its cuts or mesh change, draws
+what it gets with the cavity's faces found again on it — those within a micrometre of the
+shell's cavity — and hands it to `bake`, which otherwise drills the model itself. Until it
+lands, and on a model the engine refuses, the cut is drawn as follows. Nothing meshes the
+surface of a hole: the bodies are already there, wound inward, so the face that survives culling is the
 far wall of the tube — the one a hole is looked into. Four passes resolve it per object:
 the bodies into the depth plane, the object itself counted into the stencil against that
 depth, the bodies again wherever the count says material stood in front of them, and once

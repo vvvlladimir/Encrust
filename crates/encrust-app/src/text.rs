@@ -400,10 +400,13 @@ mod tests {
     }
 
     #[test]
-    fn text_on_a_model_that_is_not_closed_is_refused_and_leaves_it_be() {
+    fn text_on_a_model_no_patch_can_close_is_refused_and_leaves_it_be() {
         let (mut scene, id, hit) = cube();
         let mut open = scene.get(id).expect("the cube").mesh.as_ref().clone();
-        open.faces.truncate(10);
+        // The top alone: a sheet that holds nothing, however its edges are closed over.
+        let vertices = open.vertices.clone();
+        open.faces
+            .retain(|face| face.iter().all(|at| vertices[*at as usize].z == 40.0));
         let before = open.clone();
         scene
             .get_mut(id)

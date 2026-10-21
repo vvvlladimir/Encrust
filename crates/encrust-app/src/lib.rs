@@ -8,6 +8,7 @@ mod boolean;
 mod camera;
 mod cut;
 mod drain;
+mod drilling;
 mod exchange;
 mod files;
 mod gizmo;

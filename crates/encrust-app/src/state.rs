@@ -1,6 +1,7 @@
 use crate::camera::{CameraTurn, OrbitCamera};
 use crate::cut::CutTool;
 use crate::drain::DrainTool;
+use crate::drilling::Drilling;
 use crate::gizmo::TransformGizmo;
 use crate::hollow::HollowTool;
 use crate::import::Imports;
@@ -34,6 +35,7 @@ pub struct Doc {
     pub project: Opened,
     pub imports: Imports,
     pub repairs: Repairs,
+    pub drilling: Drilling,
 }
 
 /// How the plate is looked at: none of it changes what is printed.

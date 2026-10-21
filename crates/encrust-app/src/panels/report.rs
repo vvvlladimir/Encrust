@@ -192,7 +192,7 @@ fn handed_over(
 fn counted(scene: &Scene) -> Plate {
     let mut plate = Plate::default();
     for object in scene.printable(scene.active_plate()) {
-        let mesh = object.hollow.shell().unwrap_or(&object.mesh);
+        let mesh = object.printed();
         plate.models += 1;
         plate.triangles += mesh.faces.len();
         plate.vertices += mesh.vertices.len();

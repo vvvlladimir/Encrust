@@ -59,15 +59,22 @@ fn wind_as(triangles: &mut [[u32; 3]], outer: &[u32], flat: &[Vec2]) {
     }
 }
 
+/// The triangle a corner taken out for standing on the one before it needs, and the edge
+/// the fill runs in its place, from the kept corner before its run to the one after.
+struct Patch {
+    span: (u32, u32),
+    triangle: [u32; 3],
+}
+
 /// Adds the triangle each repeated corner needs, wound against the edge the fill left
-/// where the corner was taken out.
-fn cover_repeats(triangles: &mut Vec<[u32; 3]>, patches: Vec<[u32; 3]>) {
+/// where its run was taken out.
+fn cover_repeats(triangles: &mut Vec<[u32; 3]>, patches: Vec<Patch>) {
     let across = facing_edges(triangles);
-    for [from, corner, to] in patches {
-        if across.contains_key(&(to, from)) {
-            triangles.push([to, corner, from]);
+    for Patch { span, triangle } in patches {
+        if across.contains_key(&(span.1, span.0)) {
+            triangles.push([triangle[2], triangle[1], triangle[0]]);
         } else {
-            triangles.push([from, corner, to]);
+            triangles.push(triangle);
         }
     }
 }
@@ -184,29 +191,33 @@ fn fan(
 ///
 /// Ear clipping drops such a corner rather than covering those edges, which leaves a hole
 /// in the surface wherever the model touched itself on the plane.
-fn without_repeats(ring: &[u32], flat: &[Vec2], patches: &mut Vec<[u32; 3]>) -> Vec<u32> {
-    let place = |corner: u32| flat[corner as usize];
-    let mut kept: Vec<u32> = Vec::with_capacity(ring.len());
-    let mut repeats: Vec<(usize, u32)> = Vec::new();
-    for corner in ring.iter().copied() {
-        match kept.last() {
-            Some(last) if place(*last) == place(corner) => repeats.push((kept.len(), corner)),
-            _ => kept.push(corner),
-        }
-    }
-    // The ring closes, so its last corner can stand on its first as well as on its own
-    // neighbour.
-    if kept.len() > 2
-        && place(kept[0]) == place(kept[kept.len() - 1])
-        && let Some(last) = kept.pop()
-    {
-        repeats.push((kept.len(), last));
-    }
+fn without_repeats(ring: &[u32], flat: &[Vec2], patches: &mut Vec<Patch>) -> Vec<u32> {
+    let count = ring.len();
+    let before = |at: usize| ring[(at + count - 1) % count];
+    // The ring closes, so its first corner can stand on its last as well.
+    let repeated = |at: usize| flat[ring[at] as usize] == flat[before(at) as usize];
+    let kept: Vec<u32> = (0..count)
+        .filter(|at| !repeated(*at))
+        .map(|at| ring[at])
+        .collect();
     if kept.len() < 3 {
         return kept;
     }
-    for (at, corner) in repeats {
-        patches.push([kept[at - 1], corner, kept[at % kept.len()]]);
+    // A run's corners fan from the kept corner after it, each over the edge into it, so
+    // the edges along the run are covered one after another.
+    for at in (0..count).filter(|at| repeated(*at)) {
+        let mut after = (at + 1) % count;
+        while repeated(after) {
+            after = (after + 1) % count;
+        }
+        let mut back = (at + count - 1) % count;
+        while repeated(back) {
+            back = (back + count - 1) % count;
+        }
+        patches.push(Patch {
+            span: (ring[back], ring[after]),
+            triangle: [before(at), ring[at], ring[after]],
+        });
     }
     kept
 }
@@ -388,6 +399,43 @@ mod tests {
             Vec2::new(0.0, 10.0),
         ];
         let ring = [0, 1, 2, 3, 4];
+
+        let triangles = triangulate(&ring, &[], &flat);
+
+        covers(&[&ring], &triangles);
+    }
+
+    #[test]
+    fn a_run_of_corners_on_one_place_is_covered_edge_by_edge() {
+        // Corners 3 and 4 both stand on corner 2, as a section has where a cut runs through
+        // a vertex several of its edges share.
+        let flat = [
+            Vec2::new(0.0, 0.0),
+            Vec2::new(10.0, 0.0),
+            Vec2::new(10.0, 10.0),
+            Vec2::new(10.0, 10.0),
+            Vec2::new(10.0, 10.0),
+            Vec2::new(0.0, 10.0),
+        ];
+        let ring = [0, 1, 2, 3, 4, 5];
+
+        let triangles = triangulate(&ring, &[], &flat);
+
+        covers(&[&ring], &triangles);
+    }
+
+    #[test]
+    fn a_run_on_the_first_corner_that_closes_the_ring_is_covered() {
+        // Corners 4 and 5 stand on corner 0, so the run wraps round the ring's end.
+        let flat = [
+            Vec2::new(0.0, 0.0),
+            Vec2::new(10.0, 0.0),
+            Vec2::new(10.0, 10.0),
+            Vec2::new(0.0, 10.0),
+            Vec2::new(0.0, 0.0),
+            Vec2::new(0.0, 0.0),
+        ];
+        let ring = [0, 1, 2, 3, 4, 5];
 
         let triangles = triangulate(&ring, &[], &flat);
 

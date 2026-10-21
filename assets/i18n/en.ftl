@@ -732,6 +732,8 @@ boolean-done-sampled =
 job-thread-stopped-boolean = the combining thread stopped without finishing
 job-thread-stopped-cut = the cutting thread stopped without finishing
 job-thread-stopped-split = the splitting thread stopped without finishing
+job-thread-stopped-plugs = the thread cutting the plugs stopped without finishing
+job-thread-stopped-drill = the thread cutting the holes stopped without finishing
 job-model-changed = { $name } changed while it was being worked on, so the result was dropped
 
 ## panels/title_bar.rs
@@ -1364,6 +1366,19 @@ drain-plug-gap = Gap per side
 drain-plug-drift = The resin's tolerance compensation is off, so the plug is drawn { $drift } mm wider a side to print at this gap.
 drain-plug-name = { $name } (plug { $index })
 drain-plugs-failed = The plugs for the drain holes could not be cut.
+drill-refused = The holes in { $name } are cut by approximation: the model could not be read as a solid, even mended, so they may cut what stands in them too.
+drain-plugs-closed = { $count ->
+    [one] One hole gets no plug: the gap per side is as wide as its mouth.
+   *[other] { $count } holes get no plug: the gap per side is as wide as their mouths.
+}
+drain-plugs-sampled = { $count ->
+    [one] One plug follows the surface only approximately: the model could not be read as a solid, even mended.
+   *[other] { $count } plugs follow the surface only approximately: the model could not be read as a solid, even mended.
+}
+drain-plugs-crowded = { $count ->
+    [one] One plug finds no free room on the plate and stands where it was laid, beside its model.
+   *[other] { $count } plugs find no free room on the plate and stand where they were laid, beside their model.
+}
 drain-none-cut = No hole and no channel is cut yet.
 drain-clear-cuts =
     { $count ->

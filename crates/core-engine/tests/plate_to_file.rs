@@ -10,9 +10,10 @@ use std::sync::Arc;
 
 use core_engine::{Baked, Cutting, Model, Plate, Run, bake, cut, parts};
 use core_format::ExposurePlan;
-use core_geometry::{Aabb, Mesh, Scalar, Transform, Vec3};
+use core_geometry::{Aabb, Mesh, Scalar, Transform, Vec3, signed_volume};
 use core_pipeline::{Observer, PanelOverrides, SlicedFormat};
 use core_slicer::Sliced;
+use core_volume::{DrainHole, HoleShape, drill};
 use format_chitu::CtbVersion;
 use printer_profiles::{Compensation, MaterialProfile, PrinterProfile};
 
@@ -122,6 +123,7 @@ fn a_cut_standing_over_the_model_adds_no_layer_to_the_stack() {
             Vec3::new(0.4, 0.4, 0.9),
             Vec3::new(0.6, 0.6, 2.0),
         ))),
+        drilled: None,
         supports: Vec::new(),
     };
 
@@ -152,6 +154,67 @@ fn a_cut_standing_over_the_model_adds_no_layer_to_the_stack() {
     );
 }
 
+/// A 20 by 20 by 10 mm slab with a 2 mm square hole down through its middle, cut as the
+/// window and the command line cut it.
+fn drilled_slab() -> Model {
+    let hole = DrainHole {
+        at: Vec3::new(10.0, 10.0, 10.0),
+        axis: Vec3::NEG_Z,
+        diameter_mm: 2.0 * std::f32::consts::SQRT_2,
+        depth_mm: 12.0,
+        taper: 1.0,
+        lift_mm: 0.0,
+        shape: HoleShape::Polygon { sides: 4 },
+        turn_deg: 45.0,
+    };
+    Model {
+        cuts: Some(Arc::new(drill(&[hole], &[]).expect("the hole drills"))),
+        ..Model::placed(
+            Arc::new(box_mesh(Vec3::ZERO, Vec3::new(20.0, 20.0, 10.0))),
+            Transform::default(),
+        )
+    }
+}
+
+#[test]
+fn a_hole_leaves_a_model_standing_in_it_whole() {
+    // A 1 mm cube inside the slab's bore: drilled into the slab, not into the cube.
+    let inside = Model::placed(
+        Arc::new(box_mesh(
+            Vec3::new(9.5, 9.5, 4.0),
+            Vec3::new(10.5, 10.5, 5.0),
+        )),
+        Transform::default(),
+    );
+    let baked = bake(&[drilled_slab(), inside], &Compensation::default()).expect("geometry");
+    let volume = signed_volume(&baked.solid.mesh);
+    // The slab less its 40 mm3 bore, and the whole 1 mm3 cube in the bore.
+    assert!(
+        (volume - 3961.0).abs() < 1e-2,
+        "the hole is the slab's alone, got {volume} mm3"
+    );
+}
+
+#[test]
+fn a_support_standing_in_a_hole_is_drilled_with_its_model() {
+    let pillar = Arc::new(box_mesh(
+        Vec3::new(9.5, 9.5, -5.0),
+        Vec3::new(10.5, 10.5, 1.0),
+    ));
+    let model = Model {
+        supports: vec![pillar],
+        ..drilled_slab()
+    };
+    let baked = bake(&[model], &Compensation::default()).expect("geometry");
+    let volume = signed_volume(&baked.solid.mesh);
+    // The slab less its bore, and the 6 mm3 pillar less the 3 mm3 of it the hole reaches,
+    // down to its tip 2 mm under the slab.
+    assert!(
+        (volume - (3960.0 + 3.0)).abs() < 1e-2,
+        "the pillar's top is taken out of the hole, got {volume} mm3"
+    );
+}
+
 #[test]
 fn the_second_models_faces_point_at_its_own_vertices() {
     let merged = bake(&[cube_at(0.0), cube_at(5.0)], &Compensation::default())
@@ -177,6 +240,7 @@ fn a_support_goes_in_where_it_already_stands() {
             ..Transform::default()
         },
         cuts: None,
+        drilled: None,
         supports: vec![Arc::new(box_mesh(
             Vec3::new(4.0, 4.0, 0.0),
             Vec3::new(6.0, 6.0, 10.0),
@@ -441,6 +505,7 @@ fn lifted_pair(mesh: impl Fn() -> Arc<Mesh>) -> [Model; 2] {
             ..Transform::default()
         },
         cuts: None,
+        drilled: None,
         supports: vec![Arc::new(box_mesh(
             Vec3::new(pillar_x, 1.5, 0.0),
             Vec3::new(pillar_x + 1.0, 2.5, 1.0),

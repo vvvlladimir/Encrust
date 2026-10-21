@@ -312,10 +312,29 @@ pub fn plugs_beside(
         .thickness_mm
         .and_then(|thickness_mm| plug_wall_mm(args.mode.into(), thickness_mm));
     let gap_mm = args.plug_gap_mm - drift_mm;
-    let made = plugs(mesh, &Bvh::build(mesh), holes, wall_mm, gap_mm)
+    let made = plugs(&mut None, mesh, &Bvh::build(mesh), holes, wall_mm, gap_mm)
         .context("cutting the plugs for the drain holes")?;
+    if made.sampled > 0 {
+        tracing::warn!(
+            "{} of {} plugs follow the surface only approximately: the model could not be read as a solid",
+            made.sampled,
+            made.meshes.len()
+        );
+    }
+    if made.closed > 0 {
+        tracing::warn!(
+            "{} of {} holes get no plug: a gap of {gap_mm} mm closes their mouth",
+            made.closed,
+            made.meshes.len()
+        );
+    }
     let bounds = mesh.aabb().context("mesh has no vertices")?;
-    Ok(laid_beside(&made, holes, Transform::default(), bounds))
+    Ok(laid_beside(
+        &made.meshes,
+        holes,
+        Transform::default(),
+        bounds,
+    ))
 }
 
 /// `holes` as a model hollowed to `wall` cuts them: deepened through the wall, where there

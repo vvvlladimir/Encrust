@@ -3,7 +3,7 @@ use std::sync::mpsc::Sender;
 
 use core_format::ExposureRange;
 use core_geometry::{Mat4, Mesh, Scalar, Transform, Vec2, Vec3};
-use core_volume::{CUT_WEIGHT, Channel, DrainHole, MOUTH_LIFT_MM, drill};
+use core_volume::{CUT_WEIGHT, Channel, DrainHole, Drilled, MOUTH_LIFT_MM, drill};
 use egui::Color32;
 use egui::epaint::ViewportInPixels;
 use egui_wgpu::{CallbackResources, CallbackTrait, ScreenDescriptor};
@@ -224,7 +224,7 @@ impl ViewportCallback {
 
 /// What `object` is drawn as: its shell or its own mesh, or a lighter level of that.
 fn shown(object: &SceneObject, light: Option<&Light>) -> Arc<Mesh> {
-    let mesh = object.hollow.shell().unwrap_or(&object.mesh);
+    let mesh = object.printed();
     light
         .and_then(|light| light.meshes.get(&object.id))
         .unwrap_or(mesh)
@@ -277,9 +277,13 @@ impl Draws {
         for object in scene.printable(scene.active_plate()) {
             let colour = color_for(scene.is_selected(object.id), object.summary.is_sound());
             let texture = textures.and_then(|textures| textures.get(&object.id));
-            let shown = shown(object, light);
-            draws.model(object, &shown, colour, mark, texture);
-            draws.hollowing(object, &shown, colour);
+            // A texture is mapped onto the model's own faces, so its holes stay shader cuts.
+            let (shown, drilled) = match texture {
+                Some(_) => (Arc::clone(object.uncut()), None),
+                None => (shown(object, light), object.hollow.drilled(object.uncut())),
+            };
+            draws.model(object, &shown, colour, mark, texture, drilled);
+            draws.hollowing(object, &shown, colour, drilled);
             draws.supports(object, hidden);
         }
         // Last, so that the resin inside one model is still seen when another stands in
@@ -325,13 +329,21 @@ impl Draws {
         colour: Color32,
         mark: f32,
         texture: Option<&Arc<Mapped>>,
+        drilled: Option<&Drilled>,
     ) {
-        let (drains, channels) = object.hollow.cut();
-        self.cuts
-            .extend(cuts_of(drains, channels, object.transform));
+        // A model drilled exactly carries its holes as faces; until then the shader cuts them.
+        if drilled.is_none() {
+            let (drains, channels) = object.hollow.cut();
+            self.cuts
+                .extend(cuts_of(drains, channels, object.transform));
+        }
         // A hollowed model is drawn as its shell: the cavity faces inward, so it is
         // culled from outside and only shows once the camera is in the wall.
-        let mesh = object.hollow.shell().unwrap_or(&object.mesh).clone();
+        let mesh = Arc::clone(drilled.map_or(object.uncut(), |drilled| &drilled.mesh));
+        let cavity = match drilled {
+            Some(drilled) => drilled.cavity.clone(),
+            None => object.hollow.cavity_faces(),
+        };
         let instance = ModelInstance::new(object.transform, colour, mark);
         match texture {
             // The map is indexed by the model's own faces, so a hollowed model is drawn as
@@ -343,7 +355,7 @@ impl Draws {
             }),
             // The cavity's own faces are declared even while nothing is trapped in it, so
             // that the frame which does paint them finds the mesh already cut to suit.
-            None => self.models.push(match object.hollow.cavity_faces() {
+            None => self.models.push(match cavity {
                 Some(cavity) if Arc::ptr_eq(shown, &mesh) => {
                     ModelDraw::whole_around(Arc::clone(&mesh), cavity, instance)
                 }
@@ -364,10 +376,18 @@ impl Draws {
         }
     }
 
-    fn hollowing(&mut self, object: &SceneObject, shown: &Arc<Mesh>, colour: Color32) {
+    fn hollowing(
+        &mut self,
+        object: &SceneObject,
+        shown: &Arc<Mesh>,
+        colour: Color32,
+        drilled: Option<&Drilled>,
+    ) {
+        // Only while the cuts are not yet taken out exactly: then they are faces of the mesh.
+        let cuts = object.hollow.cut_bodies().filter(|_| drilled.is_none());
         // Counted but never drawn: a cut is wound inward, so it takes itself back out of
         // the count and the cap opens over the bore. See ADR 0074, 0075.
-        if let Some(cuts) = object.hollow.cut_bodies()
+        if let Some(cuts) = cuts
             && object.summary.is_sound()
         {
             self.solid(Arc::clone(cuts), object.transform);
@@ -375,7 +395,7 @@ impl Draws {
         // The inside of every hole: the far wall of the cut's own body, drawn where the
         // object stands in front of it. Nothing meshes what that looks like; see ADR 0201.
         // Against what the model is drawn as, so the hole's inside meets its surface.
-        if let Some(cuts) = object.hollow.cut_bodies() {
+        if let Some(cuts) = cuts {
             let mesh = shown;
             self.cut_surfaces.push(CutDraw {
                 body: ModelDraw::part(
@@ -829,6 +849,53 @@ mod tests {
             draws.solids.len(),
             solids,
             "it is not part of the print yet"
+        );
+    }
+
+    #[test]
+    fn a_textured_model_drilled_exactly_still_has_its_holes_cut_on_screen() {
+        let mesh = core_geometry::cuboid(Vec3::ZERO, Vec3::splat(10.0));
+        let mut scene = Scene::default();
+        let id = scene.insert(Imported::new(
+            "block".to_owned(),
+            Arc::new(mesh.clone()),
+            Transform::default(),
+            ImportSummary::made(diagnose(&mesh)),
+        ));
+        let object = scene.get_mut(id).expect("the block is on the plate");
+        let size = core_volume::HoleSize::round(3.0, 5.0, 1.0);
+        let at = Vec3::new(5.0, 5.0, 10.0);
+        let bvh = Bvh::build(&mesh);
+        object
+            .hollow
+            .add_drain(&mesh, &bvh, at, Vec3::Z, size, Transform::default());
+        let source = Arc::clone(object.uncut());
+        let cuts = Arc::clone(object.hollow.cut_bodies().expect("the hole is cut"));
+        let drilled = Drilled::of(&source, None, &cuts).expect("a block drills");
+        object.hollow.keep_drilled(&source, &cuts, Some(drilled));
+
+        let plain = Draws::of(&scene, NOT_MARKED, None, &[], None);
+        assert!(
+            plain.cuts.is_empty(),
+            "drilled, the hole is faces of the mesh"
+        );
+
+        let mapped = Arc::new(Mapped {
+            names: Vec::new(),
+            uvs: core_geometry::UvMap::default(),
+            heights: Vec::new(),
+        });
+        let textures = crate::relief::Textures::from([(id, mapped)]);
+        let textured = Draws::of(&scene, NOT_MARKED, Some(&textures), &[], None);
+        assert_eq!(
+            textured.cuts.len(),
+            1,
+            "drawn from its own faces, the hole is still cut by the shader"
+        );
+        let scene_object = scene.get(id).expect("the block");
+        assert!(
+            Arc::ptr_eq(&textured.cut_surfaces[0].solid.mesh, scene_object.uncut()),
+            "and its inside drawn against the faces still standing in it"
         );
     }
 

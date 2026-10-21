@@ -67,7 +67,11 @@ than `n` cuts into one growing whole. The model of the most faces stays out of t
 is cut once at the end, as a difference cuts its first once with everything after it unioned:
 every pass through the engine costs the faces of both sides, so letters folded into a
 million-face model a level at a time cost three passes over it, where one is enough —
-`benches/boolean.rs` measures it. If any of them is not a solid the engine reads, all of them are sampled instead,
+`benches/boolean.rs` measures it. A model the engine refuses as it stands is patched for it
+first, as a plug's model is (ADR 0321): on a million faces folded at four edges the field
+had rounded letters and pins away at 0.2 mm, where the patch moves the surface only at the
+faces it cuts out. If any of them is still not a solid the engine reads, or patching leaves
+nothing of it, all of them are sampled instead,
 each a field on one lattice — precision 0.5 at their combined area, coarsened to the budget
 as hollowing is — combined by `min`, `max` and `max(a, -b)` and extracted once.
 `combine_exact` is the same without the field, refusing with `NotSolid`.

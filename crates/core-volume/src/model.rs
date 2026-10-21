@@ -1,11 +1,11 @@
 use std::ops::Range;
-use std::sync::Arc;
+use std::sync::{Arc, Weak};
 
 use core_geometry::{Bvh, Mat3, Mesh, Scalar, Transform, Vec3, smallest_scale};
 
 use crate::{
-    Blocker, Channel, DrainHole, HoleSize, HollowSettings, channel_under, drill, hole_at, lift_for,
-    pierce, sleeves, turn_in_model,
+    Blocker, Channel, DrainHole, Drilled, HoleSize, HollowSettings, channel_under, drill, hole_at,
+    lift_for, pierce, sleeves, turn_in_model,
 };
 
 /// A transform this close to singular has flattened its model, and a click on it cannot
@@ -44,6 +44,18 @@ pub struct ModelHollow {
     deepened: Vec<DrainHole>,
     cuts: Option<Arc<Mesh>>,
     built: Option<Shell>,
+    /// The cuts taken out of the model exactly, rebuilt off the drawing thread whenever they
+    /// or what they cut change, and never kept in an undo snapshot (ADR 0322).
+    drilled: Option<DrilledFrom>,
+}
+
+/// What taking the cuts out exactly gave, `None` where the engine refused the model, and the
+/// meshes it was given: held weakly, so a replaced one is let go and no longer matches.
+#[derive(Debug, Clone)]
+struct DrilledFrom {
+    source: Weak<Mesh>,
+    cuts: Weak<Mesh>,
+    drilled: Option<Drilled>,
 }
 
 /// Whether two shapes are one, but for the rounding a turn leaves in them.
@@ -115,6 +127,56 @@ impl ModelHollow {
         self.cuts.as_ref()
     }
 
+    /// The model with its cuts taken out exactly, for `source`, the mesh it prints from — its
+    /// shell once hollowed —, or `None` while they are being taken out, where the engine
+    /// refused the model, or with nothing cut.
+    pub fn drilled(&self, source: &Arc<Mesh>) -> Option<&Drilled> {
+        self.drilled_for(source)?.drilled.as_ref()
+    }
+
+    /// Whether the cuts still wait to be taken out of `source` exactly: nothing has been tried
+    /// for them and it yet.
+    pub fn wants_drilling(&self, source: &Arc<Mesh>) -> bool {
+        self.cuts.is_some() && self.drilled_for(source).is_none()
+    }
+
+    /// Keeps what taking `cuts` out of `source` exactly gave, `None` where the engine refused
+    /// it; dropped once the model's cuts are no longer `cuts`.
+    pub fn keep_drilled(&mut self, source: &Arc<Mesh>, cuts: &Arc<Mesh>, drilled: Option<Drilled>) {
+        if self.cuts.as_ref().is_some_and(|now| Arc::ptr_eq(now, cuts)) {
+            self.drilled = Some(DrilledFrom {
+                source: Arc::downgrade(source),
+                cuts: Arc::downgrade(cuts),
+                drilled,
+            });
+        }
+    }
+
+    /// Lets go of the cuts taken out exactly, as an undo snapshot does: they are taken out
+    /// again for the plate put back.
+    pub fn forget_drilled(&mut self) {
+        self.drilled = None;
+    }
+
+    /// Takes over what `other` drilled where it was drilled for this model's own cuts, as
+    /// an undo that leaves them alone does.
+    pub fn adopt_drilled(&mut self, other: &Self) {
+        let same = match (&self.cuts, &other.cuts) {
+            (Some(mine), Some(theirs)) => Arc::ptr_eq(mine, theirs),
+            _ => false,
+        };
+        if same && self.drilled.is_none() {
+            self.drilled.clone_from(&other.drilled);
+        }
+    }
+
+    fn drilled_for(&self, source: &Arc<Mesh>) -> Option<&DrilledFrom> {
+        let cuts = self.cuts.as_ref()?;
+        self.drilled.as_ref().filter(|from| {
+            from.source.as_ptr() == Arc::as_ptr(source) && from.cuts.as_ptr() == Arc::as_ptr(cuts)
+        })
+    }
+
     /// Drills a hole from the nearest surface into `target`, a point in the model's own
     /// space, deep enough to reach it: what gives a trapped pocket its way out.
     ///
@@ -142,9 +204,11 @@ impl ModelHollow {
 
         // A diameter past the pocket's floor, so the tip is inside the pocket rather than
         // on its ceiling.
+        let depth_mm = (target - hole.at).length() + diameter_mm;
         self.drains.push(DrainHole {
-            depth_mm: (target - hole.at).length() + diameter_mm,
+            depth_mm,
             turn_deg,
+            lift_mm: lift_for(mesh, bvh, hole.at, hole.axis, diameter_mm, depth_mm),
             ..hole
         });
         self.recut();
@@ -277,7 +341,8 @@ impl ModelHollow {
     }
 
     /// Drills a hole where the model was clicked, straight into the surface it was
-    /// clicked on. `point` and `normal` are in plate coordinates.
+    /// clicked on, unless one already drilled there takes it in. `point` and `normal` are
+    /// in plate coordinates.
     pub fn add_drain(
         &mut self,
         mesh: &Mesh,
@@ -287,10 +352,19 @@ impl ModelHollow {
         size: HoleSize,
         transform: Transform,
     ) {
-        if let Some(hole) = Self::drain_at(mesh, bvh, point, normal, size, transform) {
+        let hole = Self::drain_at(mesh, bvh, point, normal, size, transform);
+        if let Some(hole) = hole.filter(|hole| !self.has_hole_over(hole)) {
             self.drains.push(hole);
             self.recut();
         }
+    }
+
+    /// Whether `hole`, in the model's own space, would land in one already drilled at least
+    /// as wide: a click on a hole adds nothing, a wider one over it is drilled.
+    pub fn has_hole_over(&self, hole: &DrainHole) -> bool {
+        self.drains
+            .iter()
+            .any(|old| within(old, hole.at) && hole.diameter_mm <= old.diameter_mm)
     }
 
     /// The hole a click at `point` on a face of `normal`, both in plate coordinates, would
@@ -320,7 +394,7 @@ impl ModelHollow {
             turn_deg: turn_in_model(axis, size.turn_deg, transform.linear()),
             ..size
         };
-        let lift_mm = lift_for(mesh, bvh, at, axis, size.diameter_mm);
+        let lift_mm = lift_for(mesh, bvh, at, axis, size.diameter_mm, size.depth_mm);
         Some(DrainHole::sized(at, axis, size, lift_mm))
     }
 
@@ -492,12 +566,13 @@ impl ModelHollow {
                 let at = sizing * hole.at;
                 let axis = (sizing * hole.axis).try_normalize().unwrap_or(hole.axis);
                 let diameter_mm = hole.diameter_mm * least;
+                let depth_mm = hole.depth_mm * least;
                 DrainHole {
                     at,
                     axis,
                     diameter_mm,
-                    depth_mm: hole.depth_mm * least,
-                    lift_mm: lift_for(mesh, bvh, at, axis, diameter_mm),
+                    depth_mm,
+                    lift_mm: lift_for(mesh, bvh, at, axis, diameter_mm, depth_mm),
                     ..*hole
                 }
             })
@@ -769,6 +844,63 @@ mod tests {
         assert!(hollow.remove_drain(Vec3::new(0.0, 0.0, -2.0), Transform::default()));
         assert!(hollow.drains().is_empty());
         assert!(hollow.cut_bodies().is_none(), "the tube goes with the hole");
+    }
+
+    #[test]
+    fn a_click_on_a_hole_drills_nothing_more_but_a_wider_one_over_it_is_drilled() {
+        let mut hollow = ModelHollow::default();
+        let (mesh, bvh) = (lid(), Bvh::build(&lid()));
+        let mut click = |at: Vec3, diameter_mm: Scalar| {
+            let size = drain_tool(diameter_mm, 5.0);
+            hollow.add_drain(&mesh, &bvh, at, Vec3::Z, size, Transform::default());
+        };
+        click(Vec3::ZERO, 3.0);
+        click(Vec3::new(0.5, 0.0, 0.0), 3.0);
+        click(Vec3::ZERO, 2.0);
+        click(Vec3::ZERO, 10.0);
+        assert_eq!(
+            hollow.drains().len(),
+            2,
+            "the same and a narrower hole land in the 3 mm one, the 10 mm one is drilled"
+        );
+    }
+
+    #[test]
+    fn what_was_drilled_holds_only_for_the_cuts_and_mesh_it_was_drilled_from() {
+        let (mesh, bvh) = (Arc::new(lid()), Bvh::build(&lid()));
+        let mut hollow = ModelHollow::default();
+        let click = |hollow: &mut ModelHollow, x: Scalar| {
+            let size = drain_tool(3.0, 5.0);
+            let at = Vec3::new(x, 0.0, 0.0);
+            hollow.add_drain(&mesh, &bvh, at, Vec3::Z, size, Transform::default());
+        };
+        click(&mut hollow, 0.0);
+        assert!(
+            hollow.wants_drilling(&mesh),
+            "a new hole waits to be drilled"
+        );
+        let cuts = Arc::clone(hollow.cut_bodies().expect("the hole is cut"));
+        let drilled = Drilled {
+            mesh: Arc::clone(&mesh),
+            cavity: None,
+        };
+        hollow.keep_drilled(&mesh, &cuts, Some(drilled));
+        assert!(hollow.drilled(&mesh).is_some(), "kept for the same cuts");
+        assert!(
+            hollow.drilled(&Arc::new(lid())).is_none(),
+            "not for a mesh that replaced it"
+        );
+
+        click(&mut hollow, 20.0);
+        assert!(
+            hollow.drilled(&mesh).is_none(),
+            "a second hole drills again"
+        );
+        hollow.keep_drilled(&mesh, &cuts, None);
+        assert!(
+            hollow.wants_drilling(&mesh),
+            "and what was drilled for the first alone is not kept"
+        );
     }
 
     #[test]

@@ -206,14 +206,16 @@ whole-surface fill is Cmd-Shift-click.
   beside them is cut. **On the surface** bends every letter onto the face under it, so it
   stands the full depth out of a curved face or into it everywhere; on a steep slope the
   depth is measured along the direction you clicked from. Text is only ever cut
-  exactly: on a model that is not closed it is refused, and the model is left as it was.
+  exactly: a torn model is patched where it is broken first, one no patch can close is
+  refused, and the model is left as it was.
   Scripts that join their letters (Arabic, Devanagari) are not shaped. The browser build
   offers only the built-in font.
 - **Combine:** pick two or more models — the panel lists them in the order picked and what
   each does — move them into place with the on-screen gizmo, and **Union** them into one, **Subtract** the others from the one picked
   first, or **Intersect** them to keep only what they share. Closed models keep their sharp
-  edges, a model made of parts pushed into each other included; a torn scan is combined
-  through a field and its edges are rounded to the lattice the notice names.
+  edges, a model made of parts pushed into each other included; a torn or folded model is
+  patched where it is broken and combined exactly too. Only one no patch can close is
+  combined through a field, its edges rounded to the lattice the notice names.
 - Text and Combine replace the model; its supports, cavity, holes, own settings and
   texture are not kept, and Undo puts the original back. The result stands on the plate the
   models were taken from. Shift or Cmd click picks a model in Text mode without writing.
@@ -256,18 +258,34 @@ whole-surface fill is Cmd-Shift-click.
 - Undo with **Make solid again**.
 
 ### Drain
-- **Drill** a hole, with size, depth and taper, wherever you click.
+- **Drill** a hole, with size, depth and taper, wherever you click. A click on a hole
+  already drilled at least as wide adds nothing; a wider hole over it is drilled.
+- A hole or a channel cuts only the model it was made in, and the supports under it: a
+  model set down in another's hole is printed whole. The cut is made for real in the
+  background a moment after each change; a model that cannot be read as a solid, even
+  mended, keeps an approximate cut that also reaches what stands in it, and the window
+  says so.
 - A hole or a channel is **round** or a **polygon** of 3 to 12 sides that you can turn about
   its axis: turn a corner to the top of a hole in a side wall and its roof prints without
   sagging.
 - Once the model is hollow, a hole is carried on through the wall into the cavity, however
   shallow you set it.
 - **Plugs:** every hole gets a plug standing on the plate beside its model as soon as it is
-  cut, and the plugs are made again when you add or clear holes, hollow the model or change
-  the gap. A plug is what the hole took out of the wall, narrower all round by the gap you
-  set (0.15 mm by default), with its outer face following the surface so it closes flush. If
-  the resin's tolerance compensation is off, its offsets are allowed for so the fit prints
-  as set. Plugs are models like any other; a project opens with the plugs it was saved with,
+  cut, at the nearest spot clear of every model, support and raft, and on the plate wherever
+  there is room left on it; where there is none, it stays beside its model and the window
+  says so. Each plug is numbered after its hole. The plugs are made again when you add or clear holes, hollow
+  the model or change the gap. A plug is what the hole took out of the wall, narrower all round by the gap you
+  set (0.15 mm by default): the very piece of the model it took, so a hole over a cone's tip
+  or an edge gives that tip or edge, and it closes flush. A hole drilled over an earlier one
+  takes a plug with that hole through it, which the earlier hole's own plug closes; one
+  wholly inside an earlier hole needs and gets no plug of its own. A tapered
+  plug the gap narrows to nothing before its end stops there; a hole whose mouth the gap
+  closes gets no plug, the window says so, and the other holes keep theirs. A model
+  with flaws in its surface is mended for this first; one that cannot be mended gets plugs that follow its surface only
+  approximately, and the window says so. The plugs are cut in the background, so a dense
+  model keeps its old plugs for a moment after you change the holes or the gap; while you
+  drag the gap, they follow when you let go. If the resin's tolerance compensation is off,
+  its offsets are allowed for so the fit prints as set. Plugs are models like any other; a project opens with the plugs it was saved with,
   and a copied model gets plugs of its own.
 - **Channel:** dig a tube of the hole's width and outline through a path of points, open
   only at its two ends.

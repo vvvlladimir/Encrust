@@ -9,6 +9,7 @@ use crate::csg;
 use crate::error::VolumeError;
 use crate::extract::extract;
 use crate::hollow::{coarsening, lattice_mm};
+use crate::mend::readable;
 use crate::sdf::Sdf;
 use crate::sign::SignMode;
 use local::Whole;
@@ -43,9 +44,10 @@ pub struct Combined {
 
 /// `models` combined by `op`, all in one space, the first being what a difference keeps.
 ///
-/// The cut is exact where every model is a closed solid. Where one is not — an open scan,
-/// a shell crossing itself — the models are sampled into fields and combined there, which
-/// rounds sharp edges to the lattice; see `docs/design/csg.md`.
+/// The cut is exact where every model is a closed solid or mends into one, which moves its
+/// surface only at the faces it had to patch. Where one does not — a sheet with nothing
+/// inside — the models are sampled into fields and combined there, which rounds sharp edges
+/// to the lattice; see `docs/design/csg.md`.
 pub fn combine(models: &[Mesh], op: Boolean, cancel: Cancel<'_>) -> Result<Combined, VolumeError> {
     checked(models)?;
     let combined = match exact(models, op, cancel) {
@@ -61,8 +63,8 @@ pub fn combine(models: &[Mesh], op: Boolean, cancel: Cancel<'_>) -> Result<Combi
     Ok(combined)
 }
 
-/// `models` combined by `op` exactly, or refused: never sampled into a field. What a caller
-/// that must keep every edge of the model as it was asks for.
+/// `models` combined by `op` exactly, a torn one mended first, or refused: never sampled into
+/// a field. What a caller that must keep every edge of the model as it was asks for.
 pub fn combine_exact(models: &[Mesh], op: Boolean) -> Result<Mesh, VolumeError> {
     checked(models)?;
     let mesh = exact(models, op, Cancel::never())?;
@@ -108,7 +110,7 @@ fn exact(models: &[Mesh], op: Boolean, cancel: Cancel<'_>) -> Result<Mesh, CsgEr
     let solids: Vec<Solid> = models
         .par_iter()
         .map(|model| {
-            let solid = solid_of(model);
+            let solid = mended(model);
             cancel.advance(1);
             solid
         })
@@ -123,6 +125,18 @@ fn exact(models: &[Mesh], op: Boolean, cancel: Cancel<'_>) -> Result<Mesh, CsgEr
     };
     cancel.begin(Step::Finishing, 0);
     Ok(combined.mesh())
+}
+
+/// `model` as the engine reads it, mended first where it refuses it as it stands, and refused
+/// still where mending leaves no volume, as a lone sheet closed over itself.
+fn mended(model: &Mesh) -> Result<Solid, CsgError> {
+    let solid = readable(model)?;
+    if solid.is_empty() {
+        return Err(CsgError::NotSolid(
+            "nothing is left once it is mended".to_owned(),
+        ));
+    }
+    Ok(solid)
 }
 
 /// `solids` combined by `op` with the one of the most faces taken in last, so that a dense
@@ -145,7 +159,7 @@ fn largest_last(
 /// `mesh` as one solid, its shells unioned first: the engine reads shells that cross — a
 /// part pushed into a base — without a complaint and then counts the overlap twice. A mesh
 /// with a shell wound inward is a cavity in a part, and is read whole.
-fn solid_of(mesh: &Mesh) -> Result<Solid, CsgError> {
+pub(crate) fn solid_of(mesh: &Mesh) -> Result<Solid, CsgError> {
     match outward_shells(mesh) {
         Some(shells) => union_of(&shells),
         None => Solid::new(mesh),
@@ -248,6 +262,19 @@ mod tests {
         cuboid(Vec3::splat(low), Vec3::splat(low + side))
     }
 
+    /// A 20 mm square lying flat at 10 mm: no volume, closed over or not.
+    fn sheet() -> Mesh {
+        Mesh::new(
+            vec![
+                Vec3::new(10.0, 10.0, 10.0),
+                Vec3::new(30.0, 10.0, 10.0),
+                Vec3::new(30.0, 30.0, 10.0),
+                Vec3::new(10.0, 30.0, 10.0),
+            ],
+            vec![[0, 1, 2], [0, 2, 3]],
+        )
+    }
+
     /// Two 20 mm cubes overlapping in a 10 mm cube at their shared corner.
     fn pair() -> Vec<Mesh> {
         vec![cube(0.0, 20.0), cube(10.0, 20.0)]
@@ -330,10 +357,8 @@ mod tests {
             combine_exact_toward(&[cube(0.0, 1.0), Mesh::default()], Boolean::Union, Vec3::Z),
             Err(VolumeError::EmptyMesh)
         );
-        let mut open = cube(0.0, 20.0);
-        open.faces.truncate(10);
         assert!(matches!(
-            combine_exact_toward(&[open, cube(5.0, 20.0)], Boolean::Union, Vec3::Z),
+            combine_exact_toward(&[sheet(), cube(5.0, 20.0)], Boolean::Union, Vec3::Z),
             Err(VolumeError::Csg(CsgError::NotSolid(_)))
         ));
     }
@@ -351,20 +376,35 @@ mod tests {
     }
 
     #[test]
-    fn a_model_that_is_not_a_solid_is_combined_through_the_field() {
-        let mut open = cube(10.0, 20.0);
-        open.faces.truncate(10);
-        let models = vec![cube(0.0, 20.0), open];
+    fn a_torn_model_is_mended_and_combined_exactly() {
+        let mut torn = cube(10.0, 20.0);
+        torn.faces.truncate(10);
+        let models = vec![cube(0.0, 20.0), torn];
+        let combined = combine(&models, Boolean::Union, Cancel::never()).expect("union");
+        assert_eq!(
+            combined.voxel_mm, None,
+            "a cube missing half a face is mended, not sampled"
+        );
+        let got = volume(&combined);
+        assert!(
+            (got - 15_000.0).abs() < 1e-2,
+            "8000 mm³ each, 1000 shared, so 15000; got {got}"
+        );
+    }
+
+    #[test]
+    fn a_model_no_mending_closes_is_combined_through_the_field() {
+        let models = vec![cube(0.0, 20.0), sheet()];
         let combined =
             combine(&models, Boolean::Union, Cancel::never()).expect("the field answers");
         assert!(
             combined.voxel_mm.is_some(),
-            "an open cube cannot be cut exactly"
+            "a sheet holds nothing to cut exactly"
         );
         let got = volume(&combined);
         assert!(
-            (got - 15_000.0).abs() < 0.03 * 15_000.0,
-            "within the lattice's rounding of the exact 15000; got {got}"
+            (got - 8_000.0).abs() < 0.03 * 8_000.0,
+            "the 8000 mm³ cube within the lattice's rounding, the sheet adding nothing; got {got}"
         );
     }
 
@@ -388,10 +428,8 @@ mod tests {
 
     #[test]
     fn an_exact_combination_refuses_what_it_cannot_read() {
-        let mut open = cube(10.0, 20.0);
-        open.faces.truncate(10);
         assert!(matches!(
-            combine_exact(&[cube(0.0, 20.0), open], Boolean::Union),
+            combine_exact(&[cube(0.0, 20.0), sheet()], Boolean::Union),
             Err(VolumeError::Csg(CsgError::NotSolid(_)))
         ));
         assert_eq!(
@@ -427,12 +465,10 @@ mod tests {
 
     #[test]
     fn a_run_given_up_on_stops_in_the_field() {
-        let mut open = cube(10.0, 20.0);
-        open.faces.truncate(10);
         let stop = || true;
         assert_eq!(
             combine(
-                &[cube(0.0, 20.0), open],
+                &[cube(0.0, 20.0), sheet()],
                 Boolean::Union,
                 Cancel::when(&stop)
             ),

@@ -55,9 +55,6 @@ pub enum VolumeError {
     #[error("drain hole {index} has no width, no depth or no direction to be drilled in")]
     BadDrain { index: usize },
 
-    #[error("a gap of {gap_mm} mm leaves nothing of the plug for drain hole {index}")]
-    TightPlug { index: usize, gap_mm: Scalar },
-
     #[error("drain channel {index} needs a width and at least two points to be dug along")]
     BadChannel { index: usize },
 
@@ -91,6 +88,10 @@ pub enum VolumeError {
 
     #[error("the models combined leave nothing behind")]
     NothingLeft,
+
+    /// The cuts handed to the exact drilling are not a mesh `drill` made.
+    #[error("the cuts are not laid the way `drill` lays them")]
+    NotCuts,
 
     /// The exact cut refused a model, or could not combine sound ones.
     #[error(transparent)]
