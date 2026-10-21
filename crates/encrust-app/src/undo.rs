@@ -123,6 +123,18 @@ impl History {
         self.future.clear();
     }
 
+    /// Lets `change` put into the scene what a run built for the edit last recorded, as part
+    /// of that edit, so one undo takes back both; with an edit not recorded yet, as in a
+    /// drag, it joins that one instead. Answers with what `change` does.
+    pub fn land<T>(&mut self, scene: &mut Scene, change: impl FnOnce(&mut Scene) -> T) -> T {
+        let caught_up = fingerprint(scene) == self.fingerprint;
+        let answer = change(scene);
+        if caught_up {
+            self.settle(scene);
+        }
+        answer
+    }
+
     pub fn can_undo(&self) -> bool {
         !self.past.is_empty()
     }
@@ -439,6 +451,58 @@ mod tests {
         assert_eq!(bench.x_of(id), Some(0.0));
         assert!(bench.redo());
         assert_eq!(bench.x_of(id), Some(10.0));
+    }
+
+    #[test]
+    fn what_a_run_lands_after_an_edit_is_taken_back_with_it() {
+        let mut bench = Bench::default();
+        let id = bench.add();
+        bench.observe(true);
+        bench.move_to(id, 10.0);
+        bench.observe(true);
+
+        // A frame later a run lays a model the edit asked for, as plugs land.
+        let landed = bench.history.land(&mut bench.scene, |scene| {
+            scene.insert(Imported::new(
+                "plug".to_owned(),
+                Arc::new(unit_cube()),
+                Transform::default(),
+                summary(),
+            ))
+        });
+        bench.observe(true);
+
+        assert!(bench.undo(), "the edit is there to undo");
+        assert_eq!(bench.x_of(id), Some(0.0), "the move is taken back");
+        assert!(
+            bench.scene.get(landed).is_none(),
+            "and what landed with it, in one step"
+        );
+        assert!(bench.redo());
+        assert!(bench.scene.get(landed).is_some(), "a redo puts both again");
+    }
+
+    #[test]
+    fn what_a_run_lands_during_a_drag_joins_the_drag() {
+        let mut bench = Bench::default();
+        let id = bench.add();
+        bench.observe(true);
+        bench.move_to(id, 10.0);
+        bench.observe(false);
+
+        let landed = bench.history.land(&mut bench.scene, |scene| {
+            scene.insert(Imported::new(
+                "plug".to_owned(),
+                Arc::new(unit_cube()),
+                Transform::default(),
+                summary(),
+            ))
+        });
+        bench.observe(true);
+
+        assert!(bench.undo(), "the drag is one edit");
+        assert_eq!(bench.x_of(id), Some(0.0), "and is taken back");
+        assert!(bench.scene.get(landed).is_none(), "with what landed in it");
     }
 
     /// A frame of the window: what follows from an edit by itself, then the history.

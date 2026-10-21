@@ -35,6 +35,9 @@ pub struct DrainTool {
     /// Whether a check has finished since the plate last changed under it. A check is
     /// asked for by hand and never follows a run; see ADR 0198.
     pub checked: bool,
+    /// The plugs being cut on a worker, one cut a model at a time.
+    laying: Vec<plugs::Laying>,
+    read: Option<plugs::ReadModel>,
 }
 
 impl Default for DrainTool {
@@ -46,6 +49,8 @@ impl Default for DrainTool {
             placing: Placing::default(),
             job: None,
             checked: false,
+            laying: Vec::new(),
+            read: None,
         }
     }
 }

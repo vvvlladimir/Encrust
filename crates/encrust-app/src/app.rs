@@ -1,5 +1,6 @@
 use std::path::Path;
 
+use crate::drain::DrainTool;
 use crate::files::{Arrived, Handed, Wanted};
 use crate::i18n::tr;
 use crate::panels::Window;
@@ -301,14 +302,14 @@ impl SlicerApp {
     }
 
     /// Ends the frame's edits and puts them on the history. What follows from an edit by
-    /// itself — a model settling onto its raft, plugs laid for its holes — is done first, so
-    /// it is part of that edit: a frame later, an undo would put it back and redo it at once.
+    /// itself is done first, so it is part of that edit: a model settling onto its raft, and
+    /// the plugs for its holes started, which `land_plugs` lays into the same edit.
     fn record(&mut self, frame: Frame) {
         self.tools.supports.settle_on_raft(&mut self.doc.scene);
         let drift_mm = self.machine.slicing.material.compensation.fit_drift_mm();
         self.tools
             .drain
-            .lay_plugs(&mut self.doc.scene, drift_mm, &mut self.machine.status);
+            .lay_plugs(&mut self.doc.scene, drift_mm, frame.settled);
         self.doc.history.observe(
             &self.doc.scene,
             &ToolSettings::of(&self.tools, &self.machine.slicing),
@@ -317,6 +318,19 @@ impl SlicerApp {
         );
         self.machine.settings.observe(frame);
         self.remember_choices(frame.settled && !frame.typing);
+    }
+
+    /// Lays the plugs a worker has cut into the edit that asked for them. Returns whether
+    /// any is still being cut.
+    fn land_plugs(&mut self) -> bool {
+        let ended = self.tools.drain.poll_plugs();
+        if !ended.is_empty() {
+            let status = &mut self.machine.status;
+            self.doc.history.land(&mut self.doc.scene, |scene| {
+                DrainTool::land_plugs(scene, ended, status);
+            });
+        }
+        self.tools.drain.laying_plugs()
     }
 
     /// Rebuilds the columns and the painted patches of every object whose placement,
@@ -441,6 +455,7 @@ impl eframe::App for SlicerApp {
                 .tools
                 .drain
                 .poll(&mut self.doc.scene, &mut self.machine.status)
+            | self.land_plugs()
             | self.tools.orient.poll(
                 &mut self.doc.scene,
                 &self.doc.plate,
@@ -451,6 +466,9 @@ impl eframe::App for SlicerApp {
         self.forget_what_an_old_check_found();
         if self.tool != Tool::Relief {
             self.tools.relief.forget_kept();
+        }
+        if self.tool != Tool::Drain {
+            self.tools.drain.forget_read_model();
         }
         if self.tool != Tool::Cut {
             self.tools.cut.picking_part = false;
@@ -494,6 +512,10 @@ impl eframe::App for SlicerApp {
             typing: ui.ctx().memory(|memory| memory.focused().is_some()),
         };
         self.record(frame);
+        // A cut started by this frame's edit is polled on the frames that follow.
+        if self.tools.drain.laying_plugs() {
+            ui.ctx().request_repaint();
+        }
         self.view.ui_ms = started.elapsed().as_secs_f32() * 1000.0;
     }
 

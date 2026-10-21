@@ -261,16 +261,23 @@ point are one, and a channel that doubles straight back has no mitre and is refu
 that outline, not to its circle: the shader reads a cut's first corner and count of sides and
 measures a point off the nearest side, and stops a leg at the mitre planes it shares.
 
-A plug is what a hole took out of the wall as it is cut, after `pierce`, made as its own
-closed mesh rather than through the boolean engine (ADR 0313): the hole's outline moved in by the gap — by `gap / cos(π/n)`
-at a corner, so every side clears by the gap — and as long as the wall where the model is
-hollow, as deep as the hole otherwise. Its inner end is flat. Its
-outer face is sampled on four rings over the mouth, each point dropped onto the model's
-surface by a ray cast out of the wall the way `lift_for` reads a rim, so it closes flush on
-a curved surface; a point no ray finds reads the mouth's own plane. `laid_beside` stands it
-on that flat end in a row past the model, for the window and the CLI alike. The window lays
-the plugs again whenever a model's holes, wall or gap differ from what they were last laid
-for; a model opened from a project takes the plugs it was saved with, and a copy lays its
+A plug is what a hole took out of the wall as it is cut, after `pierce` (ADR 0321): the
+model cut down to the hole's body, a convex frustum whose outline is moved in by the gap — by
+`gap / cos(π/n)` at a corner, so every side clears by the gap — and as long as the wall where
+the model is hollow, as deep as the hole otherwise. The model, read once as a solid with its
+shells unioned, is intersected with each body through `core-csg`, so its inner end is flat
+and its outer face is the model's surface itself, over a cone's tip as over a flat face.
+Each body first loses the holes drilled before its own that meet it, so a hole drilled over
+an earlier one takes a plug with that hole through it. A model the engine refuses is
+patched for it first — holes filled, the faces on an edge still not walked once each way cut
+out and filled over. One refused even then has the outer face
+sampled on four rings instead, each point dropped onto the surface by a ray cast out of the
+wall the way `lift_for` reads a rim. `laid_beside` stands a plug on that flat end in a row
+past the model, for the window and the CLI alike. The window cuts the plugs again on a worker
+whenever a model's holes, wall or gap differ from what they were last laid for — one cut a
+model at a time, none during a drag, from the boxes round each hole last read while the Drain
+tool is open — and lays them into the edit that changed them; a model opened from a project
+takes the plugs it was saved with, and a copy lays its
 own. The gap a user sets is the fit that prints, so a resin whose tolerance compensation is
 off has its hole and outer offsets taken off it (`Compensation::fit_drift_mm`).
 

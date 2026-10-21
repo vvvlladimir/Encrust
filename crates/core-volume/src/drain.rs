@@ -287,7 +287,7 @@ pub fn channel_under(surface: &[(Vec3, Vec3)], diameter_mm: Scalar) -> Option<Ch
 }
 
 /// The cone one hole cuts, or `None` when it is not a hole at all.
-fn body_of(hole: &DrainHole) -> Option<Mesh> {
+pub(crate) fn body_of(hole: &DrainHole) -> Option<Mesh> {
     let axis = hole.axis.try_normalize()?;
     let radius = hole.diameter_mm / 2.0;
     let drillable =

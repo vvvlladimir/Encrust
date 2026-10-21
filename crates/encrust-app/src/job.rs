@@ -9,6 +9,7 @@ mod orient;
 mod pipeline;
 mod place;
 mod plate;
+mod plugs;
 mod preview;
 mod relief;
 mod repair;
@@ -36,6 +37,7 @@ pub use pipeline::run_into;
 pub use pipeline::{SliceRequest, worker_threads};
 pub use place::{SupportJob, SupportOutcome, SupportRequest, tasks_of};
 pub use plate::models_of;
+pub use plugs::{PlugsJob, PlugsRequest, spawn_plugs};
 pub use preview::{PreviewJob, PreviewOutcome};
 pub use relief::{
     Pressed, ReliefJob, ReliefOutcome, ReliefRequest, ReliefSource, painting, relief_tasks,

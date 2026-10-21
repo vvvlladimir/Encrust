@@ -277,7 +277,8 @@ impl ModelHollow {
     }
 
     /// Drills a hole where the model was clicked, straight into the surface it was
-    /// clicked on. `point` and `normal` are in plate coordinates.
+    /// clicked on, unless one already drilled there takes it in. `point` and `normal` are
+    /// in plate coordinates.
     pub fn add_drain(
         &mut self,
         mesh: &Mesh,
@@ -287,10 +288,19 @@ impl ModelHollow {
         size: HoleSize,
         transform: Transform,
     ) {
-        if let Some(hole) = Self::drain_at(mesh, bvh, point, normal, size, transform) {
+        let hole = Self::drain_at(mesh, bvh, point, normal, size, transform);
+        if let Some(hole) = hole.filter(|hole| !self.drilled(hole)) {
             self.drains.push(hole);
             self.recut();
         }
+    }
+
+    /// Whether `hole`, in the model's own space, would land in one already drilled at least
+    /// as wide: a click on a hole adds nothing, a wider one over it is drilled.
+    pub fn drilled(&self, hole: &DrainHole) -> bool {
+        self.drains
+            .iter()
+            .any(|old| within(old, hole.at) && hole.diameter_mm <= old.diameter_mm)
     }
 
     /// The hole a click at `point` on a face of `normal`, both in plate coordinates, would
@@ -769,6 +779,25 @@ mod tests {
         assert!(hollow.remove_drain(Vec3::new(0.0, 0.0, -2.0), Transform::default()));
         assert!(hollow.drains().is_empty());
         assert!(hollow.cut_bodies().is_none(), "the tube goes with the hole");
+    }
+
+    #[test]
+    fn a_click_on_a_hole_drills_nothing_more_but_a_wider_one_over_it_is_drilled() {
+        let mut hollow = ModelHollow::default();
+        let (mesh, bvh) = (lid(), Bvh::build(&lid()));
+        let mut click = |at: Vec3, diameter_mm: Scalar| {
+            let size = drain_tool(diameter_mm, 5.0);
+            hollow.add_drain(&mesh, &bvh, at, Vec3::Z, size, Transform::default());
+        };
+        click(Vec3::ZERO, 3.0);
+        click(Vec3::new(0.5, 0.0, 0.0), 3.0);
+        click(Vec3::ZERO, 2.0);
+        click(Vec3::ZERO, 10.0);
+        assert_eq!(
+            hollow.drains().len(),
+            2,
+            "the same and a narrower hole land in the 3 mm one, the 10 mm one is drilled"
+        );
     }
 
     #[test]

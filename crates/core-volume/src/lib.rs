@@ -43,7 +43,7 @@ pub use hollow::{
 pub use infill::{InfillPattern, InfillSettings};
 pub use model::{ModelHollow, PENDING_MARKER_MM, Shell, markers};
 pub use parts::{PartSettings, PartedOff, Parts, part_off, parts};
-pub use plug::{PLUG_GAP_MM, PLUG_SPACING_MM, laid_beside, plug_wall_mm, plugs};
+pub use plug::{PLUG_GAP_MM, PLUG_SPACING_MM, PlugSource, Plugs, laid_beside, plug_wall_mm, plugs};
 pub use relief::{
     AngleMask, Relief, ReliefBasis, ReliefSettings, Tiling, prepared, press, press_painted,
     press_painted_tiled, press_reusing, press_tiled, press_tiled_reusing,

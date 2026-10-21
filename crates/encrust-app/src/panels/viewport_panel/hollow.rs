@@ -114,7 +114,8 @@ pub(super) fn blocker_ghost(window: &Window, id: ObjectId, hit: &PlacedHit) -> O
     marker_ghost(blocker.from, blocker.radius_mm, object.transform)
 }
 
-/// The drain hole a click at `hit` on object `id` would drill, as deep as it would be cut.
+/// The drain hole a click at `hit` on object `id` would drill, as deep as it would be cut;
+/// none over a hole already drilled that takes it in.
 pub(super) fn drain_ghost(window: &Window, id: ObjectId, hit: &PlacedHit) -> Option<Ghost> {
     let object = window.doc.scene.get(id)?;
     let size = window.tools.drain.size_for(object);
@@ -125,7 +126,8 @@ pub(super) fn drain_ghost(window: &Window, id: ObjectId, hit: &PlacedHit) -> Opt
         hit.normal,
         size,
         object.transform,
-    )?;
+    )
+    .filter(|hole| !object.hollow.drilled(hole))?;
     Some(Ghost {
         shape: GhostShape::Hole {
             id,

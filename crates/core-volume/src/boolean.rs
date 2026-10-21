@@ -145,7 +145,7 @@ fn largest_last(
 /// `mesh` as one solid, its shells unioned first: the engine reads shells that cross — a
 /// part pushed into a base — without a complaint and then counts the overlap twice. A mesh
 /// with a shell wound inward is a cavity in a part, and is read whole.
-fn solid_of(mesh: &Mesh) -> Result<Solid, CsgError> {
+pub(crate) fn solid_of(mesh: &Mesh) -> Result<Solid, CsgError> {
     match outward_shells(mesh) {
         Some(shells) => union_of(&shells),
         None => Solid::new(mesh),

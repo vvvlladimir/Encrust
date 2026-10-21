@@ -5,7 +5,8 @@
 
 use core_geometry::{Bvh, Mat3, Mesh, Scalar, Vec3, ball, cuboid};
 use core_volume::{
-    Boolean, Cancel, HollowMode, HollowSettings, carve, cavity_field, combine_exact,
+    Boolean, Cancel, HoleSize, HollowMode, HollowSettings, carve, cavity_field, combine_exact,
+    hole_at, plugs,
 };
 use criterion::{Criterion, criterion_group, criterion_main};
 
@@ -56,5 +57,32 @@ fn benchmarks(c: &mut Criterion) {
     group.finish();
 }
 
-criterion_group!(boolean, benchmarks);
+/// Three plugs on a half-million-face ball, what a change of the plug gap asks for.
+fn plug_benchmarks(c: &mut Criterion) {
+    let dense = ball(Vec3::ZERO, 20.0, 512, 512);
+    let bvh = Bvh::build(&dense);
+    let holes: Vec<_> = [Vec3::Z, Vec3::X, Vec3::NEG_Y]
+        .into_iter()
+        .map(|toward| {
+            hole_at(&dense, &bvh, toward * 25.0, HoleSize::round(3.0, 3.0, 1.0))
+                .expect("the ball has a surface")
+        })
+        .collect();
+    let mut group = c.benchmark_group("plugs");
+    group.sample_size(10);
+    group.bench_function("three plugs on a dense ball", |b| {
+        b.iter(|| plugs(&mut None, &dense, &bvh, &holes, None, 0.3).expect("the holes are sound"));
+    });
+    // What a second gap costs once the ball has been read round its holes for the first.
+    let mut source = None;
+    plugs(&mut source, &dense, &bvh, &holes, None, 0.3).expect("the holes are sound");
+    group.bench_function("three plugs from a dense ball already read", |b| {
+        b.iter(|| {
+            plugs(&mut source, &dense, &bvh, &holes, None, 0.3).expect("the holes are sound")
+        });
+    });
+    group.finish();
+}
+
+criterion_group!(boolean, benchmarks, plug_benchmarks);
 criterion_main!(boolean);

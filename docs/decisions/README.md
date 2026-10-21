@@ -240,7 +240,8 @@ Grouped by what the decision governs; the number is still the order it was taken
 | [0201](0201-the-surface-of-a-cut-is-the-cut-itself.md) | The surface of a cut is the cut's own body, kept where it stands in material | Accepted |
 | [0302](0302-a-lattice-is-cut-exactly-from-the-cavity.md) | Cut the lattice exactly from the cavity's mesh, its cells joined by crossing holes | Accepted; its sizes for walls and holes superseded by 0320 |
 | [0320](0320-an-infill-is-a-cell-and-a-density.md) | State an infill by its cell and its density, and derive its walls and holes | Accepted |
-| [0313](0313-a-hole-takes-a-shape-and-a-plug-and-a-shell-an-open-floor.md) | A hole takes a shape and a plug, and a shell can open its floor | Accepted |
+| [0313](0313-a-hole-takes-a-shape-and-a-plug-and-a-shell-an-open-floor.md) | A hole takes a shape and a plug, and a shell can open its floor | Accepted; the plug's shape superseded by 0321 |
+| [0321](0321-a-plug-is-the-model-cut-to-its-hole.md) | A plug is the model cut down to its hole | Accepted |
 | [0303](0303-exact-booleans-live-in-core-csg-over-boolmesh.md) | Do exact mesh booleans in `core-csg`, over `boolmesh` | Accepted; a result's triangle list varying from run to run is superseded by 0315 |
 | [0314](0314-a-solid-is-readied-on-every-core.md) | Ready a solid for the engine on every core | Accepted |
 | [0315](0315-boolmesh-comes-from-our-fork.md) | Take `boolmesh` from our fork, threaded and deterministic | Accepted |

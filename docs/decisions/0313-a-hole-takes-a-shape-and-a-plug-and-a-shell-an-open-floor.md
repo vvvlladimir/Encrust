@@ -1,6 +1,6 @@
 # 0313. A hole takes a shape and a plug, and a shell can open its floor
 
-- **Status:** Accepted
+- **Status:** Accepted; the plug's shape superseded by 0321
 - **Date:** 2026-10-19
 
 ## Context

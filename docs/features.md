@@ -256,7 +256,8 @@ whole-surface fill is Cmd-Shift-click.
 - Undo with **Make solid again**.
 
 ### Drain
-- **Drill** a hole, with size, depth and taper, wherever you click.
+- **Drill** a hole, with size, depth and taper, wherever you click. A click on a hole
+  already drilled at least as wide adds nothing; a wider hole over it is drilled.
 - A hole or a channel is **round** or a **polygon** of 3 to 12 sides that you can turn about
   its axis: turn a corner to the top of a hole in a side wall and its roof prints without
   sagging.
@@ -265,9 +266,14 @@ whole-surface fill is Cmd-Shift-click.
 - **Plugs:** every hole gets a plug standing on the plate beside its model as soon as it is
   cut, and the plugs are made again when you add or clear holes, hollow the model or change
   the gap. A plug is what the hole took out of the wall, narrower all round by the gap you
-  set (0.15 mm by default), with its outer face following the surface so it closes flush. If
-  the resin's tolerance compensation is off, its offsets are allowed for so the fit prints
-  as set. Plugs are models like any other; a project opens with the plugs it was saved with,
+  set (0.15 mm by default): the very piece of the model it took, so a hole over a cone's tip
+  or an edge gives that tip or edge, and it closes flush. A hole drilled over an earlier one
+  takes a plug with that hole through it, which the earlier hole's own plug closes. A model
+  with flaws in its surface is mended for this first; one that cannot be mended gets plugs that follow its surface only
+  approximately, and the window says so. The plugs are cut in the background, so a dense
+  model keeps its old plugs for a moment after you change the holes or the gap; while you
+  drag the gap, they follow when you let go. If the resin's tolerance compensation is off,
+  its offsets are allowed for so the fit prints as set. Plugs are models like any other; a project opens with the plugs it was saved with,
   and a copied model gets plugs of its own.
 - **Channel:** dig a tube of the hole's width and outline through a path of points, open
   only at its two ends.
