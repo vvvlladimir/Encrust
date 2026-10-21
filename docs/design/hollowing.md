@@ -210,13 +210,15 @@ dense lattice puts on every layer, the stack, the file — is not priced, so a h
 
 ## Drain holes and channels
 
-A hole is a cone appended to the whole solid wound inward, so it cuts the shell and the
-cavity's ceiling in one pass, and it is exact at any layer height: `core-volume/drain.rs`
-meshes it, nothing about it is voxelised. Its mouth starts a radius clear of the surface —
-more than the sag of any surface curving away under a hole that wide — so the mouth is
-never left capped, and what stands outside the model prints as nothing. Every body is laid
-`CUT_WEIGHT` deep, so it takes out the lattice bonded into the wall and a support's tip with
-the shell rather than leaving them standing in the hole (ADR 0188).
+A hole is a cone, meshed by `core-volume/drain.rs` and never voxelised, so it is exact at
+any layer height. Its mouth starts a radius clear of the surface — more than the sag of any
+surface curving away under a hole that wide — so the mouth is never left capped. The bodies
+are taken out of their own model through `core-csg` (`drilled`, ADR 0322): the shell, its
+cavity's ceiling and the lattice bonded into the wall in one boolean, and the support trees
+the bodies reach one tree at a time (`drilled_pieces`), so nothing beside the model loses
+anything. A model the engine refuses even mended keeps the old cut: the bodies appended
+wound inward and `CUT_WEIGHT` deep, which outweighs whatever stands where they land, the
+model's lattice and supports and any other model too (ADR 0188).
 
 | | What it is | Where it comes from |
 |---|---|---|
@@ -301,8 +303,11 @@ They may hold 512 MB together on the desktop and 128 MB in a browser, a field ov
 never kept, and in a browser they make way for a field being built or a plate being sliced
 (ADR 0260).
 
-What the window draws inside a cut is the cut's own body. Nothing meshes the surface of a
-hole: the bodies are already there, wound inward, so the face that survives culling is the
+The window drills each model on a worker a moment after its cuts or mesh change, draws
+what it gets with the cavity's faces found again on it — those within a micrometre of the
+shell's cavity — and hands it to `bake`, which otherwise drills the model itself. Until it
+lands, and on a model the engine refuses, the cut is drawn as follows. Nothing meshes the
+surface of a hole: the bodies are already there, wound inward, so the face that survives culling is the
 far wall of the tube — the one a hole is looked into. Four passes resolve it per object:
 the bodies into the depth plane, the object itself counted into the stencil against that
 depth, the bodies again wherever the count says material stood in front of them, and once

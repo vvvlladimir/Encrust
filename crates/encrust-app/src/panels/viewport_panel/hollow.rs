@@ -127,7 +127,7 @@ pub(super) fn drain_ghost(window: &Window, id: ObjectId, hit: &PlacedHit) -> Opt
         size,
         object.transform,
     )
-    .filter(|hole| !object.hollow.drilled(hole))?;
+    .filter(|hole| !object.hollow.has_hole_over(hole))?;
     Some(Ghost {
         shape: GhostShape::Hole {
             id,

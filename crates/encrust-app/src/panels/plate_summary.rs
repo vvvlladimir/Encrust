@@ -166,9 +166,9 @@ pub fn tally(ctx: &egui::Context, scene: &Scene) -> Tally {
     tally
 }
 
-/// The mesh an object prints as: its shell once hollowed.
+/// The mesh an object prints as: its shell once hollowed, its holes taken out.
 fn model(object: &crate::scene::SceneObject) -> &Arc<Mesh> {
-    object.hollow.shell().unwrap_or(&object.mesh)
+    object.printed()
 }
 
 fn layer_readings(window: &Window) -> Vec<(String, String)> {

@@ -224,7 +224,7 @@ impl ViewportCallback {
 
 /// What `object` is drawn as: its shell or its own mesh, or a lighter level of that.
 fn shown(object: &SceneObject, light: Option<&Light>) -> Arc<Mesh> {
-    let mesh = object.hollow.shell().unwrap_or(&object.mesh);
+    let mesh = object.printed();
     light
         .and_then(|light| light.meshes.get(&object.id))
         .unwrap_or(mesh)
@@ -326,12 +326,20 @@ impl Draws {
         mark: f32,
         texture: Option<&Arc<Mapped>>,
     ) {
-        let (drains, channels) = object.hollow.cut();
-        self.cuts
-            .extend(cuts_of(drains, channels, object.transform));
+        let drilled = object.hollow.drilled(object.uncut());
+        // A model drilled exactly carries its holes as faces; until then the shader cuts them.
+        if drilled.is_none() {
+            let (drains, channels) = object.hollow.cut();
+            self.cuts
+                .extend(cuts_of(drains, channels, object.transform));
+        }
         // A hollowed model is drawn as its shell: the cavity faces inward, so it is
         // culled from outside and only shows once the camera is in the wall.
-        let mesh = object.hollow.shell().unwrap_or(&object.mesh).clone();
+        let mesh = Arc::clone(object.printed());
+        let cavity = match drilled {
+            Some(drilled) => drilled.cavity.clone(),
+            None => object.hollow.cavity_faces(),
+        };
         let instance = ModelInstance::new(object.transform, colour, mark);
         match texture {
             // The map is indexed by the model's own faces, so a hollowed model is drawn as
@@ -343,7 +351,7 @@ impl Draws {
             }),
             // The cavity's own faces are declared even while nothing is trapped in it, so
             // that the frame which does paint them finds the mesh already cut to suit.
-            None => self.models.push(match object.hollow.cavity_faces() {
+            None => self.models.push(match cavity {
                 Some(cavity) if Arc::ptr_eq(shown, &mesh) => {
                     ModelDraw::whole_around(Arc::clone(&mesh), cavity, instance)
                 }
@@ -365,9 +373,14 @@ impl Draws {
     }
 
     fn hollowing(&mut self, object: &SceneObject, shown: &Arc<Mesh>, colour: Color32) {
+        // Only while the cuts are not yet taken out exactly: then they are faces of the mesh.
+        let cuts = object
+            .hollow
+            .cut_bodies()
+            .filter(|_| object.hollow.drilled(object.uncut()).is_none());
         // Counted but never drawn: a cut is wound inward, so it takes itself back out of
         // the count and the cap opens over the bore. See ADR 0074, 0075.
-        if let Some(cuts) = object.hollow.cut_bodies()
+        if let Some(cuts) = cuts
             && object.summary.is_sound()
         {
             self.solid(Arc::clone(cuts), object.transform);
@@ -375,7 +388,7 @@ impl Draws {
         // The inside of every hole: the far wall of the cut's own body, drawn where the
         // object stands in front of it. Nothing meshes what that looks like; see ADR 0201.
         // Against what the model is drawn as, so the hole's inside meets its surface.
-        if let Some(cuts) = object.hollow.cut_bodies() {
+        if let Some(cuts) = cuts {
             let mesh = shown;
             self.cut_surfaces.push(CutDraw {
                 body: ModelDraw::part(

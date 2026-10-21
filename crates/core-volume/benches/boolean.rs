@@ -6,7 +6,7 @@
 use core_geometry::{Bvh, Mat3, Mesh, Scalar, Vec3, ball, cuboid};
 use core_volume::{
     Boolean, Cancel, HoleSize, HollowMode, HollowSettings, carve, cavity_field, combine_exact,
-    hole_at, plugs,
+    drill, drilled, hole_at, plugs,
 };
 use criterion::{Criterion, criterion_group, criterion_main};
 
@@ -84,5 +84,26 @@ fn plug_benchmarks(c: &mut Criterion) {
     group.finish();
 }
 
-criterion_group!(boolean, benchmarks, plug_benchmarks);
+/// Three holes taken out of a half-million-face ball exactly, what each edit of its holes
+/// asks the window for.
+fn drill_benchmarks(c: &mut Criterion) {
+    let dense = ball(Vec3::ZERO, 20.0, 512, 512);
+    let bvh = Bvh::build(&dense);
+    let holes: Vec<_> = [Vec3::Z, Vec3::X, Vec3::NEG_Y]
+        .into_iter()
+        .map(|toward| {
+            hole_at(&dense, &bvh, toward * 25.0, HoleSize::round(3.0, 3.0, 1.0))
+                .expect("the ball has a surface")
+        })
+        .collect();
+    let cuts = drill(&holes, &[]).expect("the holes drill");
+    let mut group = c.benchmark_group("drilled");
+    group.sample_size(10);
+    group.bench_function("three holes out of a dense ball", |b| {
+        b.iter(|| drilled(&dense, &cuts).expect("a ball is a solid"));
+    });
+    group.finish();
+}
+
+criterion_group!(boolean, benchmarks, plug_benchmarks, drill_benchmarks);
 criterion_main!(boolean);

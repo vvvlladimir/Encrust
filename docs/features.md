@@ -258,6 +258,11 @@ whole-surface fill is Cmd-Shift-click.
 ### Drain
 - **Drill** a hole, with size, depth and taper, wherever you click. A click on a hole
   already drilled at least as wide adds nothing; a wider hole over it is drilled.
+- A hole or a channel cuts only the model it was made in, and the supports under it: a
+  model set down in another's hole is printed whole. The cut is made for real in the
+  background a moment after each change; a model that cannot be read as a solid, even
+  mended, keeps an approximate cut that also reaches what stands in it, and the window
+  says so.
 - A hole or a channel is **round** or a **polygon** of 3 to 12 sides that you can turn about
   its axis: turn a corner to the top of a hole in a side wall and its roof prints without
   sagging.

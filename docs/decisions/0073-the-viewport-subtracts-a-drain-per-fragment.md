@@ -1,6 +1,6 @@
 # 0073. Subtract a drain per fragment in the viewport
 
-- **Status:** Superseded by 0188 (a channel's wall only)
+- **Status:** Superseded by 0188 (a channel's wall only), and by 0322 for a model drilled exactly
 - **Date:** 2026-09-23
 
 ## Context

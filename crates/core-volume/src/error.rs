@@ -92,6 +92,9 @@ pub enum VolumeError {
     #[error("the models combined leave nothing behind")]
     NothingLeft,
 
+    #[error("the cuts are not laid the way `drill` lays them")]
+    NotCuts,
+
     /// The exact cut refused a model, or could not combine sound ones.
     #[error(transparent)]
     Csg(#[from] core_csg::CsgError),

@@ -158,7 +158,7 @@ fn model(
     height_px: f32,
     moving: bool,
 ) -> Model {
-    let mesh = object.hollow.shell().unwrap_or(&object.mesh);
+    let mesh = object.printed();
     let mut steps = vec![Step {
         faces: mesh.faces.len(),
         error_px: 0.0,

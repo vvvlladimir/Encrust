@@ -215,7 +215,7 @@ impl CutTool {
         let object = scene
             .get(id)
             .ok_or_else(|| anyhow!(tr!("cut-nothing-to-split")))?;
-        let mesh = object.hollow.shell().unwrap_or(&object.mesh);
+        let mesh = object.printed();
         let job = spawn_split(SplitRequest {
             placed: transform_mesh(mesh, object.transform),
             settings: self.state.parts,

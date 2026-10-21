@@ -1,14 +1,11 @@
 use core_csg::Solid;
-use core_geometry::{
-    Aabb, Bvh, FastMap, FastSet, Mesh, Quat, Ray, Scalar, Transform, Vec3, cuboid, fill_holes,
-    orient_outward, remove_duplicate_faces, transform_mesh,
-};
+use core_geometry::{Aabb, Bvh, Mesh, Quat, Ray, Scalar, Transform, Vec3, cuboid, transform_mesh};
 use rayon::prelude::*;
 
-use crate::boolean::solid_of;
 use crate::drain::{DrainHole, MOUTH_LIFT_MM, Section, body_of};
 use crate::error::VolumeError;
 use crate::hollow::HollowMode;
+use crate::mend::readable;
 
 /// Rings the outer face of a plug is sampled on between its middle and its rim. Four on a
 /// twenty-millimetre hole is a sample every two and a half millimetres, where a surface
@@ -46,7 +43,7 @@ impl PlugSource {
     /// kept only round what `holes` cut through a wall of `wall_mm`. A model it refuses even
     /// mended holds nothing, and its plugs are sampled.
     fn read(model: &Mesh, holes: &[DrainHole], wall_mm: Option<Scalar>) -> Self {
-        let Ok(whole) = solid_of(model).or_else(|_| solid_of(&patched(model))) else {
+        let Ok(whole) = readable(model) else {
             return Self {
                 solid: None,
                 regions: None,
@@ -214,44 +211,6 @@ fn stand_on_end(plug: &Mesh, axis: Vec3) -> Mesh {
         turned.into_iter().map(|vertex| vertex + offset).collect(),
         plug.faces.clone(),
     )
-}
-
-/// `model` mended until the engine can read it, which a plug needs only near its hole: torn
-/// and folded faces patched, then every face on an edge still unpaired cut out and filled.
-fn patched(model: &Mesh) -> Mesh {
-    let mut mesh = model.clone();
-    remove_duplicate_faces(&mut mesh);
-    orient_outward(&mut mesh);
-    fill_holes(&mut mesh);
-    let unsound = unpaired_corners(&mesh);
-    if !unsound.is_empty() {
-        mesh.faces
-            .retain(|face| !face.iter().any(|corner| unsound.contains(corner)));
-        fill_holes(&mut mesh);
-    }
-    orient_outward(&mut mesh);
-    mesh
-}
-
-/// The corners of every edge not walked once each way, as a closed surface walks it.
-fn unpaired_corners(mesh: &Mesh) -> FastSet<u32> {
-    let mut walks: FastMap<(u32, u32), (u32, u32)> = FastMap::default();
-    for face in &mesh.faces {
-        for side in 0..3 {
-            let (from, to) = (face[side], face[(side + 1) % 3]);
-            let walked = walks.entry((from.min(to), from.max(to))).or_default();
-            if from < to {
-                walked.0 += 1;
-            } else {
-                walked.1 += 1;
-            }
-        }
-    }
-    walks
-        .into_iter()
-        .filter(|(_, walked)| *walked != (1, 1))
-        .flat_map(|((low, high), _)| [low, high])
-        .collect()
 }
 
 /// What of `solid` lies in `body` and out of every hole of `earlier` that meets it, as a

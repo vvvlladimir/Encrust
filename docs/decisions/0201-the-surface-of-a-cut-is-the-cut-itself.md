@@ -1,6 +1,6 @@
 # 0201. The surface of a cut is the cut's own body, kept where it stands in material
 
-- **Status:** Accepted
+- **Status:** Accepted; superseded by 0322 for a model drilled exactly
 - **Date:** 2026-10-07
 
 ## Context

@@ -415,6 +415,7 @@ fn plate_of(
             mesh: Arc::clone(placed),
             transform: Transform::default(),
             cuts: cuts.cloned(),
+            drilled: None,
             supports: supports.to_vec(),
         }],
         printer: trial.printer.clone(),

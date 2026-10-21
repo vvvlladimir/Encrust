@@ -325,6 +325,7 @@ fn put_down(
             mesh: Arc::new(plug),
             transform: Transform::default(),
             cuts: None,
+            drilled: None,
             supports: Vec::new(),
         })
         .collect();
@@ -349,6 +350,7 @@ fn put_down(
         mesh: Arc::new(mesh),
         transform: Transform::default(),
         cuts: cuts.map(Arc::new),
+        drilled: None,
         supports: columns,
     };
     Ok(PutDown {

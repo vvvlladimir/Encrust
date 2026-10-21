@@ -13,9 +13,13 @@ pub fn models_of(scene: &Scene, plate: u32) -> Vec<Model> {
     scene
         .printable(plate)
         .map(|object| Model {
-            mesh: std::sync::Arc::clone(object.hollow.shell().unwrap_or(&object.mesh)),
+            mesh: std::sync::Arc::clone(object.uncut()),
             transform: object.transform,
             cuts: object.hollow.cut_bodies().cloned(),
+            drilled: object
+                .hollow
+                .drilled(object.uncut())
+                .map(|drilled| std::sync::Arc::clone(&drilled.mesh)),
             supports: object.supports.meshes().unwrap_or_default().to_vec(),
         })
         .collect()
@@ -274,10 +278,10 @@ mod tests {
         let merged = merge_plate(&scene, 0).expect("one cube is still visible");
         assert_eq!(merged.faces.len(), 12);
     }
-    /// What a hole cuts is gone whatever else stands there: a lattice bonded into the wall,
-    /// a support's tip, or here a second model laid over the first.
+    /// A hole is taken out of the model it was drilled in and nothing else: a second model
+    /// laid over the first still fills it (ADR 0322).
     #[test]
-    fn a_hole_opens_through_every_body_that_overlaps_where_it_is_drilled() {
+    fn a_hole_leaves_a_second_model_laid_over_its_own_whole() {
         let mut scene = Scene::default();
         let transform = Transform {
             scale: Vec3::splat(20.0),
@@ -320,8 +324,8 @@ mod tests {
             .to_mask();
         assert_eq!(
             mask.pixels()[LID_MIDDLE],
-            0x00,
-            "two cubes in one place count twice, and the hole still opens through both"
+            0xFF,
+            "the second cube fills the hole drilled in the first"
         );
     }
 

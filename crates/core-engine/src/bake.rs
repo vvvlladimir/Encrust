@@ -2,6 +2,7 @@ use std::sync::Arc;
 
 use core_geometry::{Aabb, Mat4, Mesh, Scalar, Transform, Vec3, transform_mesh};
 use core_slicer::{Repeated, Solid};
+use core_volume::{drilled, drilled_pieces};
 use printer_profiles::Compensation;
 
 use crate::plate::Model;
@@ -104,11 +105,12 @@ fn copies_of(models: &[Model]) -> Vec<Vec<&Model>> {
 /// One mesh and one set of cuts, standing the same way at the same height: `copy` is
 /// `model` moved along the plate and in no other way.
 fn is_copy(model: &Model, copy: &Model) -> bool {
-    let same_cuts = match (&model.cuts, &copy.cuts) {
+    let same = |a: &Option<Arc<Mesh>>, b: &Option<Arc<Mesh>>| match (a, b) {
         (None, None) => true,
         (Some(a), Some(b)) => Arc::ptr_eq(a, b),
         _ => false,
     };
+    let same_cuts = same(&model.cuts, &copy.cuts) && same(&model.drilled, &copy.drilled);
     let (a, b) = (model.transform, copy.transform);
     Arc::ptr_eq(&model.mesh, &copy.mesh)
         && same_cuts
@@ -150,6 +152,7 @@ fn repeat(
         })
         .collect();
 
+    let drill = body.drilled;
     corrected(&mut body.material, at_first);
     corrected(&mut body.cuts, at_first);
     extent.take(&body.material);
@@ -159,14 +162,29 @@ fn repeat(
         offsets_mm,
     });
     for model in std::iter::once(first).chain(rest.iter().copied()) {
-        add_supports(model, correction_of(model), solid, extent);
+        add_supports(model, drill, correction_of(model), solid, extent);
     }
 }
 
-/// `model`'s supports into the mesh, shrunk with the model they stand under.
-fn add_supports(model: &Model, matrix: Option<Mat4>, solid: &mut Solid, extent: &mut Extent) {
+/// `model`'s supports into the mesh, shrunk with the model they stand under, and drilled by
+/// its cuts where `drill` says the model was.
+fn add_supports(
+    model: &Model,
+    drill: bool,
+    matrix: Option<Mat4>,
+    solid: &mut Solid,
+    extent: &mut Extent,
+) {
+    let cuts = model
+        .cuts
+        .as_ref()
+        .filter(|_| drill)
+        .map(|cuts| transform_mesh(cuts, model.transform));
     for supports in &model.supports {
-        let mut supports = supports.as_ref().clone();
+        let mut supports = match &cuts {
+            Some(cuts) => drilled_pieces(supports, cuts),
+            None => supports.as_ref().clone(),
+        };
         corrected(&mut supports, matrix);
         extent.take(&supports);
         solid.mesh.append(&supports);
@@ -186,23 +204,50 @@ fn footprint(model: &Model, body: &Aabb, moved: Vec3) -> Aabb {
 /// One model in plate coordinates, with what prints kept apart from what only subtracts.
 struct Placed {
     material: Mesh,
+    /// What the winding rule still has to take out: nothing once the model is drilled.
     cuts: Mesh,
+    /// Whether the cuts were taken out of the model and its supports exactly.
+    drilled: bool,
 }
 
 fn placed(model: &Model) -> Placed {
+    let drilled = drilled_body(model);
+    let body = drilled.as_ref().unwrap_or(&model.mesh);
     let mut material = if model.transform == Transform::default() {
-        model.mesh.as_ref().clone()
+        body.as_ref().clone()
     } else {
-        transform_mesh(&model.mesh, model.transform)
+        transform_mesh(body, model.transform)
     };
-    for supports in &model.supports {
-        material.append(supports);
-    }
     let cuts = match &model.cuts {
         Some(cuts) => transform_mesh(cuts, model.transform),
         None => Mesh::default(),
     };
-    Placed { material, cuts }
+    for supports in &model.supports {
+        match drilled {
+            Some(_) => material.append(&drilled_pieces(supports, &cuts)),
+            None => material.append(supports),
+        }
+    }
+    Placed {
+        material,
+        cuts: if drilled.is_some() {
+            Mesh::default()
+        } else {
+            cuts
+        },
+        drilled: drilled.is_some(),
+    }
+}
+
+/// `model` with its cuts taken out exactly, as the front end handed it or cut here, so they
+/// reach nothing beside it; `None` without cuts, or where the engine cannot read the model
+/// and the winding rule takes them out instead (ADR 0322).
+fn drilled_body(model: &Model) -> Option<Arc<Mesh>> {
+    let cuts = model.cuts.as_ref()?;
+    model
+        .drilled
+        .clone()
+        .or_else(|| drilled(&model.mesh, cuts).ok().map(Arc::new))
 }
 
 /// Every mesh on the plate and where it stands, without copying any of them.
@@ -213,7 +258,8 @@ fn placed(model: &Model) -> Placed {
 pub fn parts(models: &[Model]) -> Vec<(Arc<Mesh>, Transform)> {
     let mut parts = Vec::new();
     for model in models {
-        parts.push((Arc::clone(&model.mesh), model.transform));
+        let mesh = model.drilled.as_ref().unwrap_or(&model.mesh);
+        parts.push((Arc::clone(mesh), model.transform));
         for supports in &model.supports {
             parts.push((Arc::clone(supports), Transform::default()));
         }

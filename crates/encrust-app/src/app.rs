@@ -310,6 +310,7 @@ impl SlicerApp {
         self.tools
             .drain
             .lay_plugs(&mut self.doc.scene, drift_mm, frame.settled);
+        self.doc.drilling.start(&self.doc.scene, frame.settled);
         self.doc.history.observe(
             &self.doc.scene,
             &ToolSettings::of(&self.tools, &self.machine.slicing),
@@ -421,6 +422,10 @@ impl eframe::App for SlicerApp {
             .repairs
             .poll(&mut self.doc.scene, &mut self.machine.status)
             | self
+                .doc
+                .drilling
+                .poll(&mut self.doc.scene, &mut self.machine.status)
+            | self
                 .machine
                 .slicing
                 .poll(&self.doc.scene, &mut self.machine.status)
@@ -513,7 +518,7 @@ impl eframe::App for SlicerApp {
         };
         self.record(frame);
         // A cut started by this frame's edit is polled on the frames that follow.
-        if self.tools.drain.laying_plugs() {
+        if self.tools.drain.laying_plugs() || self.doc.drilling.is_running() {
             ui.ctx().request_repaint();
         }
         self.view.ui_ms = started.elapsed().as_secs_f32() * 1000.0;

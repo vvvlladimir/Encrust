@@ -9,11 +9,13 @@ mod build;
 mod cancel;
 mod csg;
 mod drain;
+mod drilled;
 mod error;
 mod extract;
 mod grid;
 mod hollow;
 mod infill;
+mod mend;
 mod model;
 mod parts;
 mod plug;
@@ -33,6 +35,7 @@ pub use drain::{
     CUT_WEIGHT, Channel, DrainHole, HoleShape, HoleSize, Leg, MOUTH_LIFT_MM, channel_under, drill,
     hole_at, lift_for, pierce, turn_in_model,
 };
+pub use drilled::{Drilled, drilled, drilled_pieces};
 pub use error::VolumeError;
 pub use extract::extract;
 pub use grid::{TILE, VoxelGrid};

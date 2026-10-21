@@ -84,7 +84,7 @@ impl History {
         let now = fingerprint(scene);
         let plate = (now != self.fingerprint).then(|| {
             self.fingerprint = now;
-            std::mem::replace(&mut self.last, scene.clone())
+            std::mem::replace(&mut self.last, scene.snapshot())
         });
 
         if chosen != self.chosen {
@@ -184,13 +184,13 @@ impl History {
     ) -> Step {
         match step {
             Step::Plate(previous) => {
-                let held = std::mem::replace(scene, previous);
+                let held = put_scene_back(scene, previous);
                 self.settle(scene);
                 Step::Plate(held)
             }
             Step::Tools(previous) => Step::Tools(self.put_tools_back(*previous, tools, slicing)),
             Step::Both(previous, settings) => {
-                let held = std::mem::replace(scene, previous);
+                let held = put_scene_back(scene, previous);
                 let held_settings = self.put_tools_back(*settings, tools, slicing);
                 Step::Both(held, held_settings)
             }
@@ -214,9 +214,18 @@ impl History {
 
     /// The scene the window now holds is the one to measure the next edit against.
     fn settle(&mut self, scene: &Scene) {
-        self.last = scene.clone();
+        self.last = scene.snapshot();
         self.fingerprint = fingerprint(scene);
     }
+}
+
+/// Puts `previous` in place of `scene`, keeping what was drilled for cuts it shares, and
+/// answers with the scene it held as a step keeps it.
+fn put_scene_back(scene: &mut Scene, previous: Scene) -> Scene {
+    let mut held = std::mem::replace(scene, previous);
+    scene.adopt_drilled(&held);
+    held.forget_drilled();
+    held
 }
 
 /// Hashes what the user can edit: the plates, which models stand on which and where, and

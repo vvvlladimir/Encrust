@@ -171,6 +171,7 @@ fn model(
         mesh: Arc::clone(meshes.printed()),
         transform: object.transform,
         cuts: hollow.cut_bodies().cloned(),
+        drilled: None,
         supports: supports.meshes().unwrap_or_default().to_vec(),
     }
 }

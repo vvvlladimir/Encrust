@@ -18,9 +18,13 @@ pub struct Model {
     pub mesh: Arc<Mesh>,
     /// Where the model stands on the plate.
     pub transform: Transform,
-    /// Drain holes and channels, wound inward, in the model's own space: the winding is
-    /// what takes them out of the model, cavity or no cavity (ADR 0075).
+    /// Drain holes and channels as `core_volume::drill` lays them, in the model's own space:
+    /// taken out of the model and its supports exactly, or by the winding rule where the
+    /// engine cannot read it (ADR 0322).
     pub cuts: Option<Arc<Mesh>>,
+    /// `mesh` with `cuts` already taken out exactly, where a front end has it to hand;
+    /// `bake` takes them out itself otherwise.
+    pub drilled: Option<Arc<Mesh>>,
     /// The support trees standing under it, already in plate coordinates.
     pub supports: Vec<Arc<Mesh>>,
 }
@@ -32,6 +36,7 @@ impl Model {
             mesh,
             transform,
             cuts: None,
+            drilled: None,
             supports: Vec::new(),
         }
     }

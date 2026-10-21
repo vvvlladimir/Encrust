@@ -1,6 +1,6 @@
 # 0188. A cut outweighs what it lands in, and a channel stays a pipe
 
-- **Status:** Accepted
+- **Status:** Accepted; superseded by 0322 for a model drilled exactly
 - **Date:** 2026-10-05
 
 ## Context
