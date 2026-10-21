@@ -1,7 +1,8 @@
 use std::sync::{Arc, Weak};
 
-use core_geometry::{Mesh, Scalar};
-use core_volume::{DrainHole, PlugSource, Plugs, laid_beside, plug_wall_mm};
+use core_geometry::{Aabb, Mesh, Scalar, Transform, Vec2, transform_mesh};
+use core_plate::{ArrangeSettings, Rect, nearest_free};
+use core_volume::{DrainHole, PLUG_SPACING_MM, PlugSource, Plugs, laid_beside, plug_wall_mm};
 
 use super::DrainTool;
 use crate::i18n::tr;
@@ -86,7 +87,7 @@ impl DrainTool {
         for (id, wanted, kept) in due {
             if kept || wanted.holes.is_empty() {
                 if !kept {
-                    replace(scene, id, &[], Vec::new());
+                    take_away(scene, id);
                 }
                 if let Some(object) = scene.get_mut(id) {
                     object.plugs_laid = Some(wanted);
@@ -153,15 +154,16 @@ impl DrainTool {
         ended
     }
 
-    /// Lays the plugs of each cut in `ended` in place of the ones laid before.
-    pub fn land_plugs(scene: &mut Scene, ended: Vec<Ended>, status: &mut Status) {
+    /// Lays the plugs of each cut in `ended` in place of the ones laid before, on a plate
+    /// `plate_mm` across.
+    pub fn land_plugs(scene: &mut Scene, ended: Vec<Ended>, plate_mm: Vec2, status: &mut Status) {
         for Ended {
             model,
             wanted,
             made,
         } in ended
         {
-            land(scene, model, wanted, made, status);
+            land(scene, model, wanted, made, plate_mm, status);
         }
     }
 
@@ -196,6 +198,7 @@ fn land(
     id: ObjectId,
     wanted: PlugsLaid,
     outcome: Result<Plugs, String>,
+    plate_mm: Vec2,
     status: &mut Status,
 ) {
     match outcome {
@@ -203,7 +206,7 @@ fn land(
             if made.sampled > 0 {
                 *status = Status::Info(tr!("drain-plugs-sampled", count = made.sampled));
             }
-            replace(scene, id, &wanted.holes, made.meshes);
+            replace(scene, id, &wanted.holes, made.meshes, plate_mm);
         }
         Err(message) => {
             let error = anyhow::Error::msg(message).context(tr!("drain-plugs-failed"));
@@ -215,9 +218,8 @@ fn land(
     }
 }
 
-/// Takes away the plugs laid for model `id` and lays `made`, cut for its `holes`, leaving
-/// the selection where it was.
-fn replace(scene: &mut Scene, id: ObjectId, holes: &[DrainHole], made: Vec<Mesh>) {
+/// Takes away the plugs laid for model `id`, leaving the selection where it was.
+fn take_away(scene: &mut Scene, id: ObjectId) {
     let selection = scene.selection().to_vec();
     let old: Vec<ObjectId> = scene
         .objects()
@@ -228,26 +230,79 @@ fn replace(scene: &mut Scene, id: ObjectId, holes: &[DrainHole], made: Vec<Mesh>
     for plug in old {
         scene.remove(plug);
     }
+    scene.select_many(&selection);
+}
+
+/// Takes away the plugs laid for model `id` and lays `made`, cut for its `holes`, on a plate
+/// `plate_mm` across, leaving the selection where it was.
+fn replace(scene: &mut Scene, id: ObjectId, holes: &[DrainHole], made: Vec<Mesh>, plate_mm: Vec2) {
+    take_away(scene, id);
+    let selection = scene.selection().to_vec();
     let found = scene.get(id).and_then(|object| {
         let beside = object.world_bounds()?;
         Some((beside, object.transform, object.name.clone(), object.plate))
     });
     if let Some((beside, transform, name, plate)) = found {
         let laid = laid_beside(&made, holes, transform, beside);
-        lay_out(scene, id, plate, &name, laid);
+        lay_out(scene, id, plate, &name, laid, plate_mm);
     }
     scene.select_many(&selection);
 }
 
-/// Puts `plugs`, already in plate coordinates, on `plate`, each marked as a plug of `model`.
-fn lay_out(scene: &mut Scene, model: ObjectId, plate: u32, name: &str, plugs: Vec<Mesh>) {
+/// Puts `plugs`, already in plate coordinates, on `plate`, each marked as a plug of `model`
+/// and moved to the nearest spot clear of what stands there, inside the plate where it fits.
+fn lay_out(
+    scene: &mut Scene,
+    model: ObjectId,
+    plate: u32,
+    name: &str,
+    plugs: Vec<Mesh>,
+    plate_mm: Vec2,
+) {
+    let mut taken = covered(scene, plate);
+    let settings = ArrangeSettings {
+        clearance_mm: PLUG_SPACING_MM,
+        ..ArrangeSettings::default()
+    };
     for (index, plug) in plugs.into_iter().enumerate() {
+        let Some(bounds) = plug.aabb() else {
+            continue;
+        };
+        let (min, max) = (bounds.mins.truncate(), bounds.maxs.truncate());
+        let toward = (min + max) / 2.0;
+        let at = nearest_free(max - min, &taken, toward, plate_mm, &settings).unwrap_or(toward);
+        let shift = (at - toward).extend(0.0);
+        taken.push(Rect {
+            min: min + shift.truncate(),
+            max: max + shift.truncate(),
+        });
+        let plug = transform_mesh(&plug, Transform::from_translation(shift));
         let name = tr!("drain-plug-name", name = name.to_owned(), index = index + 1);
         let (id, _) = place(scene, plate, name, plug);
         if let Some(plug) = scene.get_mut(id) {
             plug.plug_of = Some(model);
         }
     }
+}
+
+/// What the models on `plate`, their supports and their rafts cover across it.
+fn covered(scene: &Scene, plate: u32) -> Vec<Rect> {
+    let rect = |bounds: Aabb| Rect {
+        min: bounds.mins.truncate(),
+        max: bounds.maxs.truncate(),
+    };
+    scene
+        .printable(plate)
+        .flat_map(|object| {
+            let supports = object
+                .supports
+                .drawn()
+                .iter()
+                .filter_map(|mesh| mesh.aabb());
+            object.world_bounds().into_iter().chain(supports)
+        })
+        .map(rect)
+        .collect()
 }
 
 #[cfg(test)]
@@ -296,7 +351,7 @@ mod tests {
                 return;
             }
             let ended = tool.poll_plugs();
-            DrainTool::land_plugs(scene, ended, status);
+            DrainTool::land_plugs(scene, ended, Vec2::new(200.0, 120.0), status);
             std::thread::sleep(std::time::Duration::from_millis(1));
         }
         panic!("the plugs were still being cut after ten seconds");
@@ -394,6 +449,64 @@ mod tests {
             read.mesh.as_ptr(),
             Arc::as_ptr(mesh),
             "cut from the mesh the block has now"
+        );
+    }
+
+    /// Whether two boxes across the plate overlap, touching aside.
+    fn overlap(one: Aabb, other: Aabb) -> bool {
+        one.mins.x < other.maxs.x
+            && other.mins.x < one.maxs.x
+            && one.mins.y < other.maxs.y
+            && other.mins.y < one.maxs.y
+    }
+
+    #[test]
+    fn a_plug_keeps_clear_of_a_model_standing_where_it_would_go() {
+        let (mut scene, id, mut tool) = a_block_with_holes(&[3.0, 7.0]);
+        // A second block just right of the first, where the plugs are laid in a row.
+        let mesh = cuboid(Vec3::ZERO, Vec3::splat(10.0));
+        let neighbour = scene.insert(Imported::new(
+            "neighbour".to_owned(),
+            Arc::new(mesh.clone()),
+            Transform::from_translation(Vec3::new(12.0, 0.0, 0.0)),
+            ImportSummary::made(diagnose(&mesh)),
+        ));
+        lay(&mut tool, &mut scene, &mut Status::default());
+
+        let next = scene.get(neighbour).expect("the neighbour");
+        let beside = next.world_bounds().expect("the neighbour has bounds");
+        let plugs: Vec<Aabb> = plugs_of(&scene, id)
+            .iter()
+            .map(|plug| plug.world_bounds().expect("a plug has bounds"))
+            .collect();
+        assert_eq!(plugs.len(), 2, "one plug a hole");
+        for plug in &plugs {
+            assert!(
+                !overlap(*plug, beside),
+                "no plug stands on the neighbour: {plug:?}"
+            );
+            assert!(
+                plug.mins.x >= 2.0 - 1e-4 && plug.mins.y >= 2.0 - 1e-4,
+                "on the plate"
+            );
+        }
+        assert!(!overlap(plugs[0], plugs[1]), "nor on one another");
+    }
+
+    #[test]
+    fn a_model_at_the_edge_of_the_plate_gets_its_plug_on_the_plate() {
+        let (mut scene, id, mut tool) = a_block_with_holes(&[3.0]);
+        // The test plate is 200 mm across: the block's right side 1 mm short of its edge.
+        scene.get_mut(id).expect("the block").transform =
+            Transform::from_translation(Vec3::new(189.0, 50.0, 0.0));
+        lay(&mut tool, &mut scene, &mut Status::default());
+
+        let plug = plugs_of(&scene, id)[0]
+            .world_bounds()
+            .expect("a plug has bounds");
+        assert!(
+            plug.maxs.x <= 200.0 - 2.0 + 1e-4,
+            "the plug stays inside the plate's margin, got {plug:?}"
         );
     }
 

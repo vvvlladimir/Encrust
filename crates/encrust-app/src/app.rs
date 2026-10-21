@@ -1,5 +1,7 @@
 use std::path::Path;
 
+use core_geometry::Vec2;
+
 use crate::drain::DrainTool;
 use crate::files::{Arrived, Handed, Wanted};
 use crate::i18n::tr;
@@ -327,8 +329,9 @@ impl SlicerApp {
         let ended = self.tools.drain.poll_plugs();
         if !ended.is_empty() {
             let status = &mut self.machine.status;
+            let plate_mm = Vec2::new(self.doc.plate.x_mm, self.doc.plate.y_mm);
             self.doc.history.land(&mut self.doc.scene, |scene| {
-                DrainTool::land_plugs(scene, ended, status);
+                DrainTool::land_plugs(scene, ended, plate_mm, status);
             });
         }
         self.tools.drain.laying_plugs()

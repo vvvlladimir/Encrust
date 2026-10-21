@@ -36,7 +36,10 @@ last model read for the next cut while the Drain tool is open, and lays the plug
 edit that asked for them: `History::land` takes them as part of that edit when it is
 recorded already, so one undo takes back hole and plug. A cut for what the model no longer
 asks for, as after an undo or a newer gap, or from a mesh since replaced, is thrown away
-when it lands.
+when it lands. A plug is set down at the spot nearest its place in the row beside its model
+that keeps the plugs' spacing from every model, support and raft on the plate and from the
+plugs set down before it, inside the plate's margin where any spot is left there:
+`core_plate::nearest_free`, exact over the boxes they cover.
 
 ## Consequences
 

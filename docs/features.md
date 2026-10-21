@@ -269,8 +269,9 @@ whole-surface fill is Cmd-Shift-click.
 - Once the model is hollow, a hole is carried on through the wall into the cavity, however
   shallow you set it.
 - **Plugs:** every hole gets a plug standing on the plate beside its model as soon as it is
-  cut, and the plugs are made again when you add or clear holes, hollow the model or change
-  the gap. A plug is what the hole took out of the wall, narrower all round by the gap you
+  cut, at the nearest spot clear of every model, support and raft, and on the plate wherever
+  there is room left on it. The plugs are made again when you add or clear holes, hollow
+  the model or change the gap. A plug is what the hole took out of the wall, narrower all round by the gap you
   set (0.15 mm by default): the very piece of the model it took, so a hole over a cone's tip
   or an edge gives that tip or edge, and it closes flush. A hole drilled over an earlier one
   takes a plug with that hole through it, which the earlier hole's own plug closes. A model
