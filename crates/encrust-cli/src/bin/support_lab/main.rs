@@ -18,7 +18,7 @@ use std::time::Instant;
 use anyhow::{Context, Result};
 use clap::Parser;
 use core_analysis::{NECK_LIMIT_MPA, PULL_N_PER_MM2};
-use core_geometry::{Mesh, Quat, Vec3};
+use core_geometry::{Mesh, Quat, Vec2};
 use printer_profiles::{Catalogue, MaterialProfile, PrinterProfile, SupportProfile};
 
 use crate::corpus::{Entry, Expect, Pose};
@@ -294,42 +294,54 @@ fn broken(expect: &Expect, shape: &shape::Shape) -> Vec<String> {
 /// Writes the coupon and says which of its plates the cured stack expects to tear off.
 fn write_coupon(path: &Path, base: &SupportProfile, setup: &Setup) -> Result<()> {
     let volume = &setup.printer.build_volume;
-    let centre = Vec3::new(volume.x / 2.0, volume.y / 2.0, 0.0);
+    let centre = Vec2::new(volume.x / 2.0, volume.y / 2.0);
     let mesh = coupon::coupon(base, setup.material.layer_height_mm, centre)?;
     export::stl(path, &mesh)?;
     println!("wrote {}", path.display());
     let cured = cure::cure(&mesh, &Mesh::default(), &setup.printer, &setup.material)?;
-    let at = coupon::Layout::new(centre);
-    let mut stress = [[0.0f32; coupon::HOLDERS.len()]; coupon::TIPS_MM.len()];
+    let blocks = coupon::blocks();
+    let specimens = coupon::layout(&blocks, centre);
+    // The worst neck stress over each specimen, and how many islands it cures.
+    let mut found = vec![(0.0f32, 0usize); specimens.len()];
     for placed in &cured.risks {
-        if let core_analysis::RiskKind::Lever { stress_mpa, .. } = placed.risk.kind
-            && stress_mpa >= setup.neck_mpa
-            && let Some((row, column)) = at.plate(placed.at)
-        {
-            stress[row][column] = stress[row][column].max(stress_mpa);
+        let Some(at) = specimens.iter().position(|s| {
+            coupon::specimen_at(&specimens, placed.at).is_some_and(|f| std::ptr::eq(f, s))
+        }) else {
+            continue;
+        };
+        match placed.risk.kind {
+            core_analysis::RiskKind::Lever { stress_mpa, .. } => {
+                found[at].0 = found[at].0.max(stress_mpa);
+            }
+            core_analysis::RiskKind::Island { .. } => found[at].1 += 1,
+            _ => {}
         }
     }
     println!(
-        "hardest pull {:.2} N. Neck stress the stack expects, MPa, torn past {}:",
+        "hardest pull {:.2} N. Neck stress the stack expects, MPa, torn past {}; any island fails the coupon itself:",
         cured.hardest_pull_n, setup.neck_mpa
     );
-    println!(
-        "| tip mm | {} |",
-        coupon::HOLDERS.map(|n| format!("{n} tips")).join(" | ")
-    );
-    println!("|---|{}", "---|".repeat(coupon::HOLDERS.len()));
-    for (row, tip) in coupon::TIPS_MM.iter().enumerate() {
-        let cells: Vec<String> = stress[row]
-            .iter()
-            .map(|mpa| {
-                if *mpa > 0.0 {
-                    format!("**{mpa:.0}**")
-                } else {
-                    "holds".to_owned()
-                }
-            })
-            .collect();
-        println!("| {tip} | {} |", cells.join(" | "));
+    for (index, block) in blocks.iter().enumerate() {
+        println!("\n{} (block {}):", block.name, index + 1);
+        let labels: Vec<String> = block.columns.iter().map(|c| c.label()).collect();
+        println!(
+            "| | {} |\n|---|{}",
+            labels.join(" | "),
+            "---|".repeat(labels.len())
+        );
+        for (row, setting) in block.rows.iter().enumerate() {
+            let cells: Vec<String> = specimens
+                .iter()
+                .zip(&found)
+                .filter(|(s, _)| s.block == index && s.row == row)
+                .map(|(_, (mpa, islands))| match (*mpa, *islands) {
+                    (_, islands) if islands > 0 => format!("**{islands} islands**"),
+                    (mpa, _) if mpa >= setup.neck_mpa => format!("**{mpa:.0}**"),
+                    _ => "holds".to_owned(),
+                })
+                .collect();
+            println!("| {} | {} |", setting.label(), cells.join(" | "));
+        }
     }
     Ok(())
 }
