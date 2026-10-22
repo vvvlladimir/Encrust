@@ -63,6 +63,7 @@ fn tips(model: &Mesh, bvh: &Bvh, profile: &SupportProfile) -> Vec<core_supports:
         &sliced,
         LAYER_HEIGHT_MM,
         profile,
+        None,
         &[],
         &[],
         None,

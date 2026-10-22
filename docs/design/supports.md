@@ -322,6 +322,15 @@ list adds each node's total into its parents, split evenly where it has several 
 joined piece is not counted twice. A contact remembers its node and how much of it lay at
 or under its layer; the model above it is the node's total less that.
 
+**Steps, when sized.** A run handed an automatic profile asks `unsupported` for the shelf
+put out over the layer below apart from the lean over the rise, and for the faces leaning
+past the profile's `step_lean_deg` and short of its overhang angle (ADR 0326). A step whose
+piece puts out at least the least step volume is held as one and sized by that volume; its
+samples become balls of the step's height above it in `step.rs`, bucketed by the tallest
+height and dropped once the climb passes them. An overhang or a gentle face inside a ball
+is held as a step of the largest one reaching it; a gentle face outside every ball is not
+held at all.
+
 **Cost.** The stack is walked in blocks of 32: read and examined in parallel, since what a
 layer needs depends only on the layers under it, with only the coverage check in order,
 because that is what makes a run repeatable (ADR 0033). `cargo bench -p core-supports`

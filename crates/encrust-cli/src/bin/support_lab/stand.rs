@@ -125,10 +125,17 @@ fn contacts_under(model: &Mesh, profile: &SupportProfile, layer_mm: Scalar) -> R
         )
         .context("the model cannot be cut for placement")?;
     let lows = low_points(model, Transform::default());
-    Ok(
-        generate_supports(&stack, layer_mm, profile, &[], &lows, None, &mut |_| true)
-            .into_iter()
-            .map(|need| need.contact)
-            .collect(),
+    Ok(generate_supports(
+        &stack,
+        layer_mm,
+        profile,
+        None,
+        &[],
+        &lows,
+        None,
+        &mut |_| true,
     )
+    .into_iter()
+    .map(|need| need.contact)
+    .collect())
 }

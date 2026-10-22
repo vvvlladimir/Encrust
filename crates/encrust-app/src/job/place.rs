@@ -5,7 +5,7 @@ use std::sync::mpsc::{self, Receiver, TryRecvError};
 use core_geometry::Region;
 use core_geometry::{Mesh, Scalar, Transform, Vec3, transform_mesh};
 use core_supports::{Blocked, Need, generate_supports, low_points};
-use printer_profiles::SupportProfile;
+use printer_profiles::{AutoProfile, SupportProfile};
 
 use crate::i18n::tr;
 use crate::job::pipeline::{slice_mesh, thread_pool, worker_threads};
@@ -35,6 +35,9 @@ pub struct SupportTask {
 pub struct SupportRequest {
     pub tasks: Vec<SupportTask>,
     pub layer_height_mm: Scalar,
+    /// The automatic profile the run sizes its supports by, which holds steps apart from
+    /// overhangs; `None` for a run built to the group in hand.
+    pub sizing: Option<AutoProfile>,
 }
 
 /// Where the run wants supports under one model, in the plate coordinates that model
@@ -235,6 +238,7 @@ fn place(
             &stack,
             request.layer_height_mm,
             &task.profile,
+            request.sizing.as_ref(),
             &task.seeds,
             &low_points(&task.mesh, task.transform),
             blocked.as_ref(),
@@ -327,6 +331,7 @@ mod tests {
         SupportRequest {
             tasks: tasks_of(scene, |_| SupportProfile::medium()),
             layer_height_mm: 0.1,
+            sizing: None,
         }
     }
 

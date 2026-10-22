@@ -313,8 +313,9 @@ whole-surface fill is Cmd-Shift-click.
   sizes every support by what it holds: an island over 2.4 mm² or an overhang under more
   than 1000 mm³ of the model takes **Auto Medium**, over 3.2 mm² or 2000 mm³ **Auto
   Heavy**, anything less **Auto Light**. Each shape is a group of its own, tuned like any
-  other, and the notice says how many of each were placed. **Sizes** sets where each
-  heavier shape starts; a merged support shows each tip in its own group's colour. **By hand**, supports are built
+  other, and the notice says how many of each were placed. A shelf put out in one layer
+  is sized by its resin — from 7 mm³ medium, 12 mm³ heavy — and faces leaning past 20° just
+  above it are held with it. **Sizes** sets where each heavier shape starts; a merged support shows each tip in its own group's colour. **By hand**, supports are built
   to the profile chosen for the group in hand.
 - Nearby tips merge into shared **branching trunks**. Trunks are cones sized by their
   height and load, and nothing carrying a load leans more than 45°.

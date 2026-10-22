@@ -25,6 +25,14 @@ pub struct AutoProfile {
     /// The least model standing above an overhang, mm³, held by the second shape and by
     /// the third.
     pub overhang_volume_mm3: [f32; AUTO_SIZES - 1],
+    /// The least resin a step puts out in its one layer, mm³, to be held as a step at
+    /// all, then by the second shape and by the third. See `docs/decisions/0326`.
+    pub step_volume_mm3: [f32; AUTO_SIZES],
+    /// How far above a step of each size the faces near it are held as part of it, mm.
+    pub step_height_mm: [f32; AUTO_SIZES],
+    /// How far from vertical a face near a step may lean before it is held, degrees: less
+    /// than the overhang angle, since the step is what it would sag from.
+    pub step_lean_deg: f32,
 }
 
 impl AutoProfile {
@@ -36,6 +44,13 @@ impl AutoProfile {
     /// Which shape holds an overhang with `carried_mm3` of model above it.
     pub fn overhang_size(&self, carried_mm3: f32) -> usize {
         size_of(&self.overhang_volume_mm3, carried_mm3)
+    }
+
+    /// Which shape holds a step that puts out `new_mm3` in its layer, or `None` for one too
+    /// small to be held as a step.
+    pub fn step_size(&self, new_mm3: f32) -> Option<usize> {
+        let reached = size_of(&self.step_volume_mm3, new_mm3);
+        reached.checked_sub(1)
     }
 
     /// `shape` placing by this profile's numbers: what a run of it is handed.
@@ -72,12 +87,15 @@ impl AutoProfile {
             ("max_overhang_deg", self.max_overhang_deg),
             ("contact_spacing_mm", self.contact_spacing_mm),
             ("steep_contact_spacing_mm", self.steep_contact_spacing_mm),
+            ("step_lean_deg", self.step_lean_deg),
         ];
         if let Some((field, value)) = positive.into_iter().find(|(_, value)| *value <= 0.0) {
             return Err(ProfileError::NonPositive { field, value });
         }
         ascending("island_area_mm2", &self.island_area_mm2)?;
-        ascending("overhang_volume_mm3", &self.overhang_volume_mm3)
+        ascending("overhang_volume_mm3", &self.overhang_volume_mm3)?;
+        ascending("step_volume_mm3", &self.step_volume_mm3)?;
+        ascending("step_height_mm", &self.step_height_mm)
     }
 }
 
@@ -148,6 +166,20 @@ mod tests {
         placing.density = 2.0;
         auto.take_placing(&placing);
         assert_eq!(auto.density, 2.0);
+    }
+
+    #[test]
+    fn a_step_too_small_is_no_step_and_a_larger_one_takes_a_heavier_shape() {
+        let auto = shipped();
+        let sizes: Vec<Option<usize>> = [0.05, 0.1, 6.9, 7.0, 12.0, 50.0]
+            .into_iter()
+            .map(|mm3| auto.step_size(mm3))
+            .collect();
+        assert_eq!(
+            sizes,
+            [None, Some(0), Some(0), Some(1), Some(2), Some(2)],
+            "thresholds 0.1, 7 and 12 mm³ as shipped"
+        );
     }
 
     #[test]

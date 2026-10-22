@@ -330,6 +330,7 @@ supports-no-room = Некоторым поддержкам негде встат
 supports-sizes = Размеры
 support-size-island = Остров для { $shape }
 support-size-load = Нагрузка для { $shape }
+support-size-step = Уступ для { $shape }
 supports-sizing-auto = Автоматически
 supports-sizing-manual = Вручную
 supports-remove-all = Удалить все

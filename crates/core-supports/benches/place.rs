@@ -7,7 +7,7 @@ use core_geometry::{Mesh, Scalar, Vec3};
 use core_slicer::{PlaneSliceEngine, SliceEngine, SliceSettings, Sliced};
 use core_supports::generate_supports;
 use criterion::{Criterion, criterion_group, criterion_main};
-use printer_profiles::SupportProfile;
+use printer_profiles::{Catalogue, SupportProfile};
 
 /// The layer height the shipped resin profile prints at.
 const LAYER_HEIGHT_MM: Scalar = 0.05;
@@ -167,6 +167,31 @@ fn placing(c: &mut Criterion) {
                 &tables,
                 LAYER_HEIGHT_MM,
                 &profile,
+                None,
+                &[],
+                &[],
+                None,
+                &mut |_| true,
+            )
+        });
+    });
+
+    // The same plate sized by the shipped automatic profile, which holds every step apart
+    // and the faces leaning over it: what the window's automatic run costs.
+    let catalogue = Catalogue::bundled().expect("the shipped catalogue is valid");
+    let auto = &catalogue
+        .autos()
+        .next()
+        .expect("an automatic profile ships")
+        .profile;
+    let sized = auto.placing_with(&profile);
+    c.bench_function("generate_supports/tables sized, 1200 layers", |b| {
+        b.iter(|| {
+            generate_supports(
+                &tables,
+                LAYER_HEIGHT_MM,
+                &sized,
+                Some(auto),
                 &[],
                 &[],
                 None,
@@ -184,6 +209,7 @@ fn placing(c: &mut Criterion) {
                 &tiers,
                 LAYER_HEIGHT_MM,
                 &profile,
+                None,
                 &[],
                 &[],
                 None,
@@ -200,6 +226,7 @@ fn placing(c: &mut Criterion) {
                 &coarse,
                 LAYER_HEIGHT_MM,
                 &profile,
+                None,
                 &[],
                 &[],
                 None,
@@ -218,6 +245,7 @@ fn placing(c: &mut Criterion) {
                 &dense,
                 LAYER_HEIGHT_MM,
                 &profile,
+                None,
                 &[],
                 &[],
                 None,

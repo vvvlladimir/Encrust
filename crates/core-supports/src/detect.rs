@@ -13,12 +13,22 @@ pub struct Unsupported {
     /// Pieces with nothing beneath them that are too small to be islands yet: held where
     /// they began once what grows out of them is more than dust.
     pub specks: Vec<Field>,
+    /// Shelves put out in this one layer, apart from `overhangs` only when steps are asked
+    /// for: what a step is held by and sized by. See `docs/decisions/0326`.
+    pub steps: Vec<Field>,
+    /// Pieces leaning past the step's gentler angle and not past the profile's: held only
+    /// where a step under them reaches. Found only when steps are asked for.
+    pub gentle: Vec<Field>,
 }
 
 impl Unsupported {
     /// Whether the layer needs nothing at all.
     pub fn is_empty(&self) -> bool {
-        self.islands.is_empty() && self.overhangs.is_empty() && self.specks.is_empty()
+        self.islands.is_empty()
+            && self.overhangs.is_empty()
+            && self.specks.is_empty()
+            && self.steps.is_empty()
+            && self.gentle.is_empty()
     }
 }
 
@@ -32,6 +42,9 @@ impl Unsupported {
 /// over the rise between `layer` and `reference`, which is the same thing as leaning
 /// further than the profile's angle, measured over enough rise for the grid to resolve
 /// it. Neither question is the overhang angle of a face; see `docs/decisions/0031`.
+///
+/// `step_lean_deg` asks for the steps apart from the overhangs, and for what leans past
+/// that gentler angle beside them.
 pub fn unsupported(
     layer: &Field,
     below: &Field,
@@ -39,6 +52,7 @@ pub fn unsupported(
     grid: &Grid,
     config: &SampleConfig,
     rise_mm: f32,
+    step_lean_deg: Option<f32>,
 ) -> Unsupported {
     // A wall standing on itself adds no underside, which is most of most models and
     // costs one pass over the spans.
@@ -66,21 +80,47 @@ pub fn unsupported(
     // What one layer may step out by on its own: a lean is measured over a rise, but a
     // ledge that appears in a single layer is no lean, it is a shelf over nothing.
     let step = grid.cells_of(config.min_overhang_mm);
-    let overhangs = ledges
-        .iter()
-        .flat_map(|ledge| {
-            ledge
-                .uncarried_by(reference, reach)
-                .with(&ledge.uncarried_by(below, step))
-                .pieces()
-        })
-        .filter(|piece| across_mm(piece, grid) >= config.min_overhang_mm)
-        .collect();
+    let worth = |piece: &Field| across_mm(piece, grid) >= config.min_overhang_mm;
+    let Some(lean_deg) = step_lean_deg else {
+        let overhangs = ledges
+            .iter()
+            .flat_map(|ledge| {
+                ledge
+                    .uncarried_by(reference, reach)
+                    .with(&ledge.uncarried_by(below, step))
+                    .pieces()
+            })
+            .filter(worth)
+            .collect();
+        return Unsupported {
+            islands,
+            overhangs,
+            specks,
+            ..Unsupported::default()
+        };
+    };
 
+    let gentle_reach = grid.cells_of(rise_mm * lean_deg.to_radians().tan());
+    let (mut overhangs, mut steps, mut gentle) = (Vec::new(), Vec::new(), Vec::new());
+    for ledge in &ledges {
+        let shelf = ledge.uncarried_by(below, step);
+        let leaning = ledge.uncarried_by(reference, reach);
+        let held = leaning.with(&shelf);
+        steps.extend(shelf.pieces().into_iter().filter(worth));
+        overhangs.extend(leaning.without(&shelf).pieces().into_iter().filter(worth));
+        // The foot of a shelf, which the wall under it carries, is the shelf's own.
+        let near = ledge
+            .uncarried_by(reference, gentle_reach)
+            .without(&held)
+            .uncarried_by(&shelf, step);
+        gentle.extend(near.pieces().into_iter().filter(worth));
+    }
     Unsupported {
         islands,
         overhangs,
         specks,
+        steps,
+        gentle,
     }
 }
 
@@ -138,6 +178,7 @@ mod tests {
             &grid(),
             &config(),
             REFERENCE_RISE_MM,
+            None,
         )
     }
 
@@ -258,12 +299,56 @@ mod tests {
                 &reference,
                 &grid(),
                 &strict,
-                REFERENCE_RISE_MM
+                REFERENCE_RISE_MM,
+                None
             )
             .overhangs
             .is_empty(),
             "20 degrees does not"
         );
+    }
+
+    /// What a layer has unsupported with steps asked for apart, leaning 20 degrees.
+    fn found_with_steps(layer: &Field, below: &Field, reference: &Field) -> Unsupported {
+        unsupported(
+            layer,
+            below,
+            reference,
+            &grid(),
+            &config(),
+            REFERENCE_RISE_MM,
+            Some(20.0),
+        )
+    }
+
+    #[test]
+    fn a_shelf_put_out_in_one_layer_is_a_step_and_not_an_overhang() {
+        let below = square(10.0, 10.0, 10.0);
+        let layer = rectangle(10.0, 10.0, 10.0, 12.0);
+        let split = found_with_steps(&layer, &below, &below);
+        assert_eq!(split.steps.len(), 1, "the 2 mm shelf is one step");
+        assert!(split.overhangs.is_empty(), "and nothing else leans");
+        assert!(
+            found_with_steps(&layer, &below, &below).gentle.is_empty(),
+            "a shelf is not a gentle face"
+        );
+        assert_eq!(
+            found(&layer, &below, &below).overhangs.len(),
+            1,
+            "without steps asked for, the shelf is an overhang as it always was"
+        );
+    }
+
+    #[test]
+    fn a_face_between_the_two_angles_is_gentle_and_nothing_else() {
+        // Half a millimetre out over a millimetre of rise is 27 degrees: past 20, short of
+        // the fixture's 45, and a hair a layer, never a shelf.
+        let reference = square(10.0, 10.0, 10.0);
+        let below = rectangle(10.0, 10.0, 10.0, 10.45);
+        let layer = rectangle(10.0, 10.0, 10.0, 10.5);
+        let split = found_with_steps(&layer, &below, &reference);
+        assert!(split.overhangs.is_empty() && split.steps.is_empty());
+        assert_eq!(split.gentle.len(), 1, "the lean is one gentle piece");
     }
 
     #[test]
@@ -282,7 +367,8 @@ mod tests {
                 &below,
                 &grid(),
                 &config(),
-                REFERENCE_RISE_MM / 2.0
+                REFERENCE_RISE_MM / 2.0,
+                None
             )
             .overhangs
             .is_empty(),

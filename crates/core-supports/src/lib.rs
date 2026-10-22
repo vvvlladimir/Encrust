@@ -32,6 +32,7 @@ mod project;
 mod raft;
 mod region;
 mod sample;
+mod step;
 mod trapped;
 mod tree;
 

@@ -84,6 +84,7 @@ fn points(mesh: &Mesh, profile: &SupportProfile) -> Vec<SupportPoint> {
         &slice(mesh),
         LAYER_HEIGHT_MM,
         profile,
+        None,
         &[],
         &low_points(mesh, Transform::default()),
         None,

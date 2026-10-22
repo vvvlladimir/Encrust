@@ -211,6 +211,7 @@ Grouped by what the decision governs; the number is still the order it was taken
 | [0323](0323-presets-differ-in-thickness-and-a-tip-meets-the-surface.md) | Let presets differ in thickness only, place densely, and let a tip meet the surface | Accepted |
 | [0324](0324-contact-spacing-follows-the-angle-of-the-face.md) | Space contacts by the angle of the face they hold | Accepted |
 | [0325](0325-an-automatic-profile-sizes-each-support-by-what-it-holds.md) | Size each support by what it holds, through an automatic profile over groups | Accepted |
+| [0326](0326-a-step-is-sized-by-the-resin-it-puts-out-and-holds-the-faces-above-it.md) | Size a step by the resin it puts out, and hold the faces just above it | Accepted |
 | [0255](0255-a-small-pillar-has-a-longest-run.md) | Thin a support between two surfaces only up to a longest run | Accepted |
 
 ### Volume: hollowing, infill and relief

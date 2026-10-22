@@ -1,6 +1,6 @@
 use core_geometry::{FastMap, Scalar, Vec2, Vec3};
 use core_slicer::{Layer, Sliced};
-use printer_profiles::SupportProfile;
+use printer_profiles::{AutoProfile, SupportProfile};
 use rayon::prelude::*;
 
 use crate::column::MIN_PILLAR_HEIGHT_MM;
@@ -15,6 +15,7 @@ use crate::low::Lows;
 use crate::need::{Need, Reason};
 use crate::region::Blocked;
 use crate::sample::{sample_piece, sample_stance};
+use crate::step::Zones;
 
 /// How many supports a part stands steady on: fewer hold it and let it rock on the peel.
 const STEADY: u8 = 3;
@@ -37,10 +38,15 @@ const READ_BLOCK: usize = 32;
 ///
 /// The returned contacts sit a layer under the surface that needs them, each with what it
 /// holds there. Whether one can actually stand there is a question for [`crate::columns`].
+///
+/// `sizing` is the automatic profile a run sizes its supports by: with one, a step and the
+/// faces just above it are held as steps rather than overhangs; see `docs/decisions/0326`.
+#[allow(clippy::too_many_arguments)]
 pub fn generate_supports(
     stack: &Sliced,
     layer_height_mm: Scalar,
     profile: &SupportProfile,
+    sizing: Option<&AutoProfile>,
     seeds: &[Vec3],
     lows: &[Vec3],
     blocked: Option<&Blocked>,
@@ -65,10 +71,15 @@ pub fn generate_supports(
         lowest_contact_mm: PLATE_CONTACT_MM.max(profile.footing_height_mm() + MIN_PILLAR_HEIGHT_MM),
         stance_mm: config.spacing_mm,
         blocked,
+        sizing,
     };
 
     let mut standing = Standing::new(seeds, lows, &grid, &config, layer_height_mm);
     let mut load = Load::new(grid.millimetres_of(1).powi(2) * layer_height_mm);
+    let tallest_mm = sizing.map_or(0.0, |auto| {
+        auto.step_height_mm.iter().copied().fold(0.0, Scalar::max)
+    });
+    let mut zones = Zones::new(tallest_mm);
     let mut placed = Vec::new();
     // The block being looked at, with as much of the block before it as the lean is
     // measured over still in front of it.
@@ -98,9 +109,11 @@ pub fn generate_supports(
             let parents = standing.parents_of(&parts);
             load.climb(parents.as_deref(), &cells);
             standing.climb(&parts, parents, &cells, contact_mm);
+            zones.prune(contact_mm);
             let placing = Placing {
                 standing: &mut standing,
                 load: &load,
+                zones: &mut zones,
                 parts: &parts,
                 contact_mm,
             };
@@ -128,6 +141,7 @@ fn needs(placed: Vec<(Vec3, Why)>, load: &Load) -> Vec<Need> {
                 Why::Overhang(mark) => Reason::Overhang {
                     carried_mm3: mark.map_or(0.0, |mark| mark.above_mm3(&totals)),
                 },
+                Why::Step { new_mm3 } => Reason::Step { new_mm3 },
                 Why::Steady => Reason::Steady,
             },
         })
@@ -139,6 +153,7 @@ fn needs(placed: Vec<(Vec3, Why)>, load: &Load) -> Vec<Need> {
 enum Why {
     Island { area_mm2: Scalar },
     Overhang(Option<Mark>),
+    Step { new_mm3: Scalar },
     Steady,
 }
 
@@ -147,6 +162,8 @@ enum Why {
 struct Placing<'a> {
     standing: &'a mut Standing,
     load: &'a Load,
+    /// The steps below that still reach this layer.
+    zones: &'a mut Zones,
     parts: &'a Parts,
     contact_mm: Scalar,
 }
@@ -162,17 +179,29 @@ fn contact_of(layer: &Layer, layer_height_mm: Scalar) -> Scalar {
 }
 
 /// What one layer wants held: the cells supports go at, each with the radius it then
-/// holds and the island's area in mm² or `None` on an overhang, and the specks that began
-/// on it, each with one cell and its area in mm².
+/// holds and what it is on, and the specks that began on it, each with one cell and its
+/// area in mm².
 #[derive(Default)]
 struct Wanted {
     cells: Vec<Want>,
     specks: Vec<([i32; 2], Scalar)>,
 }
 
-/// One cell a layer wants held, the radius a support there holds, and the area of the
-/// island it is on, or `None` on an overhang.
-type Want = ([i32; 2], Scalar, Option<Scalar>);
+/// One cell a layer wants held, the radius a support there holds, and what it is on.
+type Want = ([i32; 2], Scalar, On);
+
+/// What a wanted cell is on.
+#[derive(Debug, Clone, Copy)]
+enum On {
+    /// An island of this many mm².
+    Island(Scalar),
+    Overhang,
+    /// A step that put out this many mm³ in its layer.
+    Step(Scalar),
+    /// A face leaning past a step's angle and short of the profile's: held only where a
+    /// step below reaches it.
+    Gentle,
+}
 
 /// What one run measures with, so that one layer can be looked at on its own.
 ///
@@ -195,6 +224,9 @@ struct Pass<'a> {
     /// How far across a part has to be before the supports that steady it are put down.
     stance_mm: Scalar,
     blocked: Option<&'a Blocked>,
+    /// The automatic profile steps are held and sized by, or `None` to hold them as
+    /// overhangs.
+    sizing: Option<&'a AutoProfile>,
 }
 
 impl Pass<'_> {
@@ -217,7 +249,16 @@ impl Pass<'_> {
         };
         let rise_mm = seen as Scalar * self.layer_height_mm;
 
-        let found = unsupported(layer, below, reference, self.grid, self.config, rise_mm);
+        let step_lean_deg = self.sizing.map(|auto| auto.step_lean_deg);
+        let found = unsupported(
+            layer,
+            below,
+            reference,
+            self.grid,
+            self.config,
+            rise_mm,
+            step_lean_deg,
+        );
         if found.is_empty() {
             return Wanted::default();
         }
@@ -232,7 +273,7 @@ impl Pass<'_> {
             let spacing = self.grid.cells_of(spacing_mm).max(1);
             sample_piece(piece, &room, self.inset, spacing)
                 .into_iter()
-                .map(move |cell| (cell, coverage_mm, Some(area_mm2)))
+                .map(move |cell| (cell, coverage_mm, On::Island(area_mm2)))
         });
         let flatness = self.flatness(below, reference, rise_mm);
         let overhangs = found.overhangs.iter().flat_map(|piece| {
@@ -240,11 +281,32 @@ impl Pass<'_> {
                 .into_iter()
                 .map(|cell| {
                     let spacing_mm = self.config.band_spacing_mm(flatness.band_of(cell));
-                    (cell, self.config.coverage_at(spacing_mm), None)
+                    (cell, self.config.coverage_at(spacing_mm), On::Overhang)
                 })
         });
+        // A step too small to be held as one is the overhang it always was.
+        let level_mm = self.config.coverage_at(self.config.spacing_mm);
+        let steps = found.steps.iter().flat_map(|piece| {
+            let new_mm3 = piece.cell_count() as Scalar * cell_mm2 * self.layer_height_mm;
+            let on = match self.sizing.and_then(|auto| auto.step_size(new_mm3)) {
+                Some(_) => On::Step(new_mm3),
+                None => On::Overhang,
+            };
+            sample_piece(piece, &room, self.inset, self.spacing)
+                .into_iter()
+                .map(move |cell| (cell, level_mm, on))
+        });
+        let gentle = found.gentle.iter().flat_map(|piece| {
+            sample_piece(piece, &room, self.inset, self.spacing)
+                .into_iter()
+                .map(move |cell| (cell, level_mm, On::Gentle))
+        });
         Wanted {
-            cells: islands.chain(overhangs).collect(),
+            cells: islands
+                .chain(steps)
+                .chain(overhangs)
+                .chain(gentle)
+                .collect(),
             specks: found
                 .specks
                 .iter()
@@ -317,6 +379,7 @@ impl Pass<'_> {
         let Placing {
             standing,
             load,
+            zones,
             parts,
             contact_mm,
         } = at;
@@ -342,22 +405,41 @@ impl Pass<'_> {
         let anywhere = self.config.coverage_radius_mm;
         let cells = adrift
             .into_iter()
-            .map(|(cell, area_mm2)| (cell, anywhere, Some(area_mm2)));
-        for (cell, coverage_mm, island_mm2) in cells.chain(wanted.cells) {
+            .map(|(cell, area_mm2)| (cell, anywhere, On::Island(area_mm2)));
+        let mut stepped = Vec::new();
+        for (cell, coverage_mm, on) in cells.chain(wanted.cells) {
             let at = self.grid.centre_mm(cell[0], cell[1]);
             let piece = parts.at(cell[0], cell[1]);
+            // What a step below reaches is that step's, whatever leans there.
+            let reached = match on {
+                On::Overhang | On::Gentle => zones.reaching(at.extend(contact_mm)),
+                On::Island(_) | On::Step(_) => None,
+            };
+            let why = match (on, reached) {
+                (On::Island(area_mm2), _) => Why::Island { area_mm2 },
+                (On::Step(new_mm3), _) | (On::Overhang | On::Gentle, Some(new_mm3)) => {
+                    Why::Step { new_mm3 }
+                }
+                (On::Overhang, None) => Why::Overhang(piece.and_then(|piece| load.mark(piece))),
+                (On::Gentle, None) => continue,
+            };
+            if let On::Step(new_mm3) = on {
+                stepped.push((at.extend(contact_mm), new_mm3));
+            }
             // Asked before the cell is taken, or a place nothing may stand on would
             // still count as held and leave its neighbours a support short.
             if self.refuses(at.extend(contact_mm)) {
                 standing.leave(piece);
                 continue;
             }
-            let why = island_mm2.map_or_else(
-                || Why::Overhang(piece.and_then(|piece| load.mark(piece))),
-                |area_mm2| Why::Island { area_mm2 },
-            );
             let taken = standing.take(piece, at, contact_mm, coverage_mm);
             placed.extend(taken.map(|contact| (contact, why)));
+        }
+        if let Some(auto) = self.sizing {
+            for (at, new_mm3) in stepped {
+                let size = auto.step_size(new_mm3).unwrap_or(0);
+                zones.add(at, auto.step_height_mm[size], new_mm3);
+            }
         }
         for (piece, cell) in self.unsteady(standing, parts, contact_mm) {
             let at = self.grid.centre_mm(cell[0], cell[1]);
@@ -957,6 +1039,7 @@ mod tests {
             stack,
             layer_height_mm,
             profile,
+            None,
             seeds,
             lows,
             blocked,
@@ -1052,6 +1135,7 @@ mod tests {
             &slice(mesh),
             LAYER_HEIGHT_MM,
             &profile(),
+            None,
             &[],
             &[],
             None,
@@ -1081,7 +1165,7 @@ mod tests {
             .into_iter()
             .filter_map(|need| match need.reason {
                 Reason::Overhang { carried_mm3 } => Some(carried_mm3),
-                Reason::Island { .. } | Reason::Steady => None,
+                Reason::Island { .. } | Reason::Step { .. } | Reason::Steady => None,
             })
             .collect()
     }
@@ -1094,7 +1178,7 @@ mod tests {
             .iter()
             .filter_map(|need| match need.reason {
                 Reason::Island { area_mm2 } => Some(area_mm2),
-                Reason::Overhang { .. } | Reason::Steady => None,
+                Reason::Overhang { .. } | Reason::Step { .. } | Reason::Steady => None,
             })
             .collect();
         assert!(!islands.is_empty());
@@ -1253,6 +1337,92 @@ mod tests {
             Vec3::new(10.0, 10.0, 10.0 + rise + rise),
         );
         merged(&lower, &upper)
+    }
+
+    /// What a run sized by the shipped automatic profile wants under `mesh`.
+    fn sized_needs_for(mesh: &Mesh) -> Vec<Need> {
+        let catalogue = printer_profiles::Catalogue::bundled().expect("the shipped catalogue");
+        let auto = &catalogue
+            .autos()
+            .next()
+            .expect("an automatic profile ships")
+            .profile;
+        super::generate_supports(
+            &slice(mesh),
+            LAYER_HEIGHT_MM,
+            // Placed by the automatic profile's numbers, as the window places a sized run.
+            &auto.placing_with(&profile()),
+            Some(auto),
+            &[],
+            &[],
+            None,
+            &mut |_| true,
+        )
+    }
+
+    /// A block 20 mm square standing on the plate, a 20 by 12 mm shelf put out in one
+    /// layer at z = 5 when `shelf`, and on that a block 4 mm tall whose face over the shelf
+    /// leans 30 degrees out: past a step's 20, short of the fixture's 45.
+    fn shelf_under_a_lean(shelf: bool) -> Mesh {
+        let base_y = if shelf { 0.0 } else { -12.0 };
+        let base = box_mesh(Vec3::new(0.0, base_y, 0.0), Vec3::new(20.0, 20.0, 5.0));
+        let slab = box_mesh(Vec3::new(0.0, -12.0, 5.0), Vec3::new(20.0, 20.0, 6.0));
+        let mut lean = box_mesh(Vec3::new(0.0, -12.0, 6.0), Vec3::new(20.0, 20.0, 10.0));
+        let out = 4.0 * 30.0_f32.to_radians().tan();
+        // The two corners of the top face over the shelf's edge.
+        for corner in [4, 5] {
+            lean.vertices[corner].y -= out;
+        }
+        merged(&merged(&base, &slab), &lean)
+    }
+
+    /// The contacts under the leaning face, above the shelf's edge, with why each is there.
+    fn under_the_lean(needs: &[Need]) -> Vec<Reason> {
+        needs
+            .iter()
+            .filter(|need| need.contact.y < -12.3 && need.contact.z > 6.2)
+            .map(|need| need.reason)
+            .collect()
+    }
+
+    #[test]
+    fn a_shelf_is_held_as_a_step_of_the_resin_it_puts_out() {
+        let needs = sized_needs_for(&shelf_under_a_lean(true));
+        let steps: Vec<Scalar> = needs
+            .iter()
+            .filter(|need| (need.contact.z - 5.0).abs() < 0.2)
+            .filter_map(|need| match need.reason {
+                Reason::Step { new_mm3 } => Some(new_mm3),
+                _ => None,
+            })
+            .collect();
+        assert!(!steps.is_empty(), "the shelf is held as a step");
+        assert!(
+            steps.iter().all(|mm3| (11.0..=12.5).contains(mm3)),
+            "240 mm² of shelf in a 0.05 mm layer is 12 mm³, got {steps:?}"
+        );
+    }
+
+    #[test]
+    fn a_face_leaning_past_a_steps_angle_is_held_where_the_step_reaches_it() {
+        let held = under_the_lean(&sized_needs_for(&shelf_under_a_lean(true)));
+        assert!(
+            !held.is_empty(),
+            "the 30 degree face over the shelf is held"
+        );
+        assert!(
+            held.iter()
+                .all(|reason| matches!(reason, Reason::Step { .. })),
+            "as part of the step, got {held:?}"
+        );
+        assert!(
+            under_the_lean(&sized_needs_for(&shelf_under_a_lean(false))).is_empty(),
+            "the same face with no step under it leans less than the profile's angle"
+        );
+        assert!(
+            under_the_lean(&needs_for(&shelf_under_a_lean(true))).is_empty(),
+            "and a run that does not size its supports holds a step as it always has"
+        );
     }
 
     #[test]

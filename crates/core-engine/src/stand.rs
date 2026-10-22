@@ -155,6 +155,7 @@ fn contacts_under(
         &stack,
         layer_height_mm,
         profile,
+        None,
         &[],
         &lows,
         None,

@@ -203,6 +203,7 @@ impl SupportTool {
         self.job = Some(SupportJob::spawn(SupportRequest {
             tasks,
             layer_height_mm,
+            sizing: self.sizing.as_ref().map(|(auto, _)| auto.clone()),
         }));
         Ok(())
     }
@@ -748,6 +749,7 @@ fn size_of(auto: &AutoProfile, need: &Need) -> usize {
     match need.reason {
         Reason::Island { area_mm2 } => auto.island_size(area_mm2),
         Reason::Overhang { carried_mm3 } => auto.overhang_size(carried_mm3),
+        Reason::Step { new_mm3 } => auto.step_size(new_mm3).unwrap_or(0),
         // TODO(step-6): a stabilising support gets a shape of its own.
         Reason::Steady => 0,
     }

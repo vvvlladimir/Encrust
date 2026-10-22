@@ -17,6 +17,10 @@ pub enum Reason {
     /// An overhang, with `carried_mm3` of the model standing above the contact's layer on
     /// the part it holds.
     Overhang { carried_mm3: Scalar },
+    /// A step, or a face its reach takes in above it, with `new_mm3` the resin the step
+    /// put out in its one layer. Only a run sizing its supports asks for steps apart; see
+    /// `docs/decisions/0326`.
+    Step { new_mm3: Scalar },
     /// A part held at too few places to stand steady.
     Steady,
 }

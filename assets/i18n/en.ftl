@@ -314,6 +314,7 @@ supports-no-room = Some supports have no room to stand and are not printed.
 supports-sizes = Sizes
 support-size-island = Island for { $shape }
 support-size-load = Load for { $shape }
+support-size-step = Step for { $shape }
 supports-sizing-auto = Automatic
 supports-sizing-manual = By hand
 supports-remove-all = Remove all

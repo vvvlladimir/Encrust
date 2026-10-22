@@ -541,53 +541,94 @@ pub fn sizes(
     shipped: Option<&AutoProfile>,
     shapes: &[String; 3],
 ) {
-    for (size, shape) in shapes.iter().enumerate().skip(1) {
-        let at = size - 1;
-        let floor = if at == 0 {
-            0.0
-        } else {
-            auto.island_area_mm2[at - 1]
-        };
-        number(
-            ui,
-            &tr!("support-size-island", shape = shape.clone()),
-            shipped.map(|auto| auto.island_area_mm2[at]),
-            &mut auto.island_area_mm2[at],
-            &tr!("unit-mm2"),
-            COARSE_STEP,
-            floor..=MAX_ISLAND_MM2,
-            1,
-        );
-    }
-    for (size, shape) in shapes.iter().enumerate().skip(1) {
-        let at = size - 1;
-        let floor = if at == 0 {
-            0.0
-        } else {
-            auto.overhang_volume_mm3[at - 1]
-        };
-        number(
-            ui,
-            &tr!("support-size-load", shape = shape.clone()),
-            shipped.map(|auto| auto.overhang_volume_mm3[at]),
-            &mut auto.overhang_volume_mm3[at],
-            &tr!("unit-mm3"),
-            LOAD_STEP,
-            floor..=MAX_LOAD_MM3,
-            0,
-        );
-    }
-    for at in 1..auto.island_area_mm2.len() {
-        auto.island_area_mm2[at] = auto.island_area_mm2[at].max(auto.island_area_mm2[at - 1]);
-        auto.overhang_volume_mm3[at] =
-            auto.overhang_volume_mm3[at].max(auto.overhang_volume_mm3[at - 1]);
+    let heavier = &shapes[1..];
+    let island = Measure {
+        label: |shape| tr!("support-size-island", shape = shape),
+        unit: tr!("unit-mm2"),
+        step: COARSE_STEP,
+        max: MAX_ISLAND_MM2,
+        decimals: 1,
+    };
+    island.show(
+        ui,
+        heavier,
+        &mut auto.island_area_mm2,
+        shipped.map(|auto| &auto.island_area_mm2[..]),
+    );
+    let load = Measure {
+        label: |shape| tr!("support-size-load", shape = shape),
+        unit: tr!("unit-mm3"),
+        step: LOAD_STEP,
+        max: MAX_LOAD_MM3,
+        decimals: 0,
+    };
+    load.show(
+        ui,
+        heavier,
+        &mut auto.overhang_volume_mm3,
+        shipped.map(|auto| &auto.overhang_volume_mm3[..]),
+    );
+    // The first is the least step held as one at all, which stays in the profile's file.
+    let step = Measure {
+        label: |shape| tr!("support-size-step", shape = shape),
+        unit: tr!("unit-mm3"),
+        step: COARSE_STEP,
+        max: MAX_STEP_MM3,
+        decimals: 1,
+    };
+    step.show(
+        ui,
+        heavier,
+        &mut auto.step_volume_mm3[1..],
+        shipped.map(|auto| &auto.step_volume_mm3[1..]),
+    );
+}
+
+/// One measure an automatic profile sizes by, shown as the least of it each heavier shape
+/// takes.
+struct Measure {
+    /// The row's label, naming the shape.
+    label: fn(String) -> String,
+    unit: String,
+    step: f64,
+    max: f32,
+    decimals: usize,
+}
+
+impl Measure {
+    /// A row per shape of `shapes`, each over `least` of it, against `shipped`. A heavier
+    /// shape never starts below a lighter one.
+    fn show(
+        &self,
+        ui: &mut egui::Ui,
+        shapes: &[String],
+        least: &mut [f32],
+        shipped: Option<&[f32]>,
+    ) {
+        for (at, shape) in shapes.iter().enumerate().take(least.len()) {
+            let floor = if at == 0 { 0.0 } else { least[at - 1] };
+            number(
+                ui,
+                &(self.label)(shape.clone()),
+                shipped.and_then(|shipped| shipped.get(at).copied()),
+                &mut least[at],
+                &self.unit,
+                self.step,
+                floor..=self.max,
+                self.decimals,
+            );
+        }
+        for at in 1..least.len() {
+            least[at] = least[at].max(least[at - 1]);
+        }
     }
 }
 
 /// Bounds and step on where an automatic profile moves to a heavier shape: an island as
-/// large as a thumbnail, and a part as heavy as a bust.
+/// large as a thumbnail, a part as heavy as a bust, and a shelf as large as a plate.
 const MAX_ISLAND_MM2: f32 = 100.0;
 const MAX_LOAD_MM3: f32 = 100_000.0;
+const MAX_STEP_MM3: f32 = 1_000.0;
 const LOAD_STEP: f64 = 10.0;
 
 /// A ring wider than the one above it turns a support inside out where the two cross.
