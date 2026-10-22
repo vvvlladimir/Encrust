@@ -361,8 +361,10 @@ whole-surface fill is Cmd-Shift-click.
   rectangle, with margin and thickness. The raft is the plate's, whichever model is picked,
   and is kept when the window reopens. A model a project gave a raft of its own keeps it
   until **Use the plate's raft**.
-- **Bracing:** cross braces between tall trunks, where the first brace goes and how often
-  they repeat.
+- **Bracing:** braces between tall trunks, from one of four presets (Standard, Strong,
+  Tall, Small) or, under **Fine-tune**, by the numbers: where the first brace goes, how
+  often they repeat, and whether the bottom, middle and top of each pair are zigzagged or
+  crossed, the bottom and top over how many levels.
 
 ---
 

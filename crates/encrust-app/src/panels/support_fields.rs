@@ -4,12 +4,15 @@
 use std::ops::RangeInclusive;
 
 use printer_profiles::{
-    AutoProfile, Catalogue, ContactShape, Entry, PlatformShape, RaftShape, RaftStyle,
-    SupportProfile,
+    AutoProfile, BracePattern, Bracing, BracingPreset, Catalogue, ContactShape, Entry,
+    PlatformShape, RaftShape, RaftStyle, SupportProfile,
 };
 
 use crate::i18n::tr;
-use crate::ui::{Carried, Segment, Segmented, carried_row, describe, nested, switch};
+use crate::ui::{
+    Carried, Segment, Segmented, carried_row, count_row, describe, field_label, icon, nested,
+    quiet_button, switch, theme,
+};
 
 /// Millimetres per point of drag. The tip is measured in tenths and the foot in whole
 /// millimetres, so they do not share a step.
@@ -425,57 +428,158 @@ fn raft(ui: &mut egui::Ui, profile: &mut SupportProfile, saved: Option<&SupportP
     });
 }
 
-/// The struts tying tall trunks together.
+/// The most levels a bracing zone may take: past that the middle has nothing left to fill.
+const MAX_BRACE_LEVELS: u32 = 6;
+
+/// The struts tying tall trunks together: a ready preset, or every number of it once the
+/// user asks to fine-tune. Which of the two shows is the window's, not the profile's; a
+/// profile whose numbers are no preset opens on the numbers.
 fn bracing(ui: &mut egui::Ui, profile: &mut SupportProfile, saved: Option<&SupportProfile>) {
     describe(ui, &tr!("support-bracing-help"));
+    let id = ui.id().with(("bracing-fine-tune", &profile.name));
     let bracing = &mut profile.bracing;
     switch(ui, &mut bracing.enabled, &tr!("support-bracing"));
     if !bracing.enabled {
         return;
     }
+    let mut fine = ui
+        .data(|data| data.get_temp(id))
+        .unwrap_or_else(|| BracingPreset::of(bracing).is_none());
     nested(ui, |ui| {
-        mm(
-            ui,
-            &tr!("support-diameter"),
-            was(saved, |p| p.bracing.diameter_mm),
-            &mut bracing.diameter_mm,
-            FINE_STEP,
-            0.1..=3.0,
-        );
-        let span = &mut bracing.max_spacing_mm;
-        number(
-            ui,
-            &tr!("support-span"),
-            was(saved, |p| p.bracing.max_spacing_mm),
-            span,
-            &tr!("unit-mm"),
-            COARSE_STEP,
-            1.0..=40.0,
-            1,
-        );
-        let start = &mut bracing.start_height_mm;
-        number(
-            ui,
-            &tr!("support-first-at"),
-            was(saved, |p| p.bracing.start_height_mm),
-            start,
-            &tr!("unit-mm"),
-            COARSE_STEP,
-            0.0..=40.0,
-            1,
-        );
-        let rise = &mut bracing.rise_mm;
-        number(
-            ui,
-            &tr!("support-every"),
-            was(saved, |p| p.bracing.rise_mm),
-            rise,
-            &tr!("unit-mm"),
-            COARSE_STEP,
-            1.0..=40.0,
-            1,
-        );
+        if fine {
+            bracing_numbers(ui, bracing, saved);
+            fine = !quiet_button(ui, icon::BACK, &tr!("support-bracing-presets"), false, true)
+                .clicked();
+        } else {
+            bracing_presets(ui, bracing);
+            fine = quiet_button(
+                ui,
+                icon::PARAMETERS,
+                &tr!("support-bracing-fine-tune"),
+                false,
+                true,
+            )
+            .clicked();
+        }
     });
+    ui.data_mut(|data| data.insert_temp(id, fine));
+}
+
+/// The ready presets, the one whose numbers the profile holds picked. Picking one writes
+/// its numbers over the profile's.
+fn bracing_presets(ui: &mut egui::Ui, bracing: &mut Bracing) {
+    let presets = BracingPreset::ALL.map(|preset| Segment::new(Some(preset), preset_label(preset)));
+    let mut picked = BracingPreset::of(bracing);
+    let changed = Segmented::new(&presets)
+        .width(ui.available_width())
+        .show(ui, &mut picked);
+    if changed && let Some(preset) = picked {
+        *bracing = preset.bracing();
+    }
+    if let Some(preset) = picked {
+        describe(ui, &preset_help(preset));
+    } else {
+        describe(ui, &tr!("support-bracing-preset-none"));
+    }
+}
+
+fn preset_label(preset: BracingPreset) -> String {
+    match preset {
+        BracingPreset::Standard => tr!("support-bracing-standard"),
+        BracingPreset::Strong => tr!("support-bracing-strong"),
+        BracingPreset::Tall => tr!("support-bracing-tall"),
+        BracingPreset::Small => tr!("support-bracing-small"),
+    }
+}
+
+fn preset_help(preset: BracingPreset) -> String {
+    match preset {
+        BracingPreset::Standard => tr!("support-bracing-standard-help"),
+        BracingPreset::Strong => tr!("support-bracing-strong-help"),
+        BracingPreset::Tall => tr!("support-bracing-tall-help"),
+        BracingPreset::Small => tr!("support-bracing-small-help"),
+    }
+}
+
+/// Every number of the bracing, and how each zone up a pair is tied.
+fn bracing_numbers(ui: &mut egui::Ui, bracing: &mut Bracing, saved: Option<&SupportProfile>) {
+    mm(
+        ui,
+        &tr!("support-diameter"),
+        was(saved, |p| p.bracing.diameter_mm),
+        &mut bracing.diameter_mm,
+        FINE_STEP,
+        0.1..=3.0,
+    );
+    let mm_unit = tr!("unit-mm");
+    number(
+        ui,
+        &tr!("support-span"),
+        was(saved, |p| p.bracing.max_spacing_mm),
+        &mut bracing.max_spacing_mm,
+        &mm_unit,
+        COARSE_STEP,
+        1.0..=40.0,
+        1,
+    );
+    number(
+        ui,
+        &tr!("support-first-at"),
+        was(saved, |p| p.bracing.start_height_mm),
+        &mut bracing.start_height_mm,
+        &mm_unit,
+        COARSE_STEP,
+        0.0..=40.0,
+        1,
+    );
+    number(
+        ui,
+        &tr!("support-every"),
+        was(saved, |p| p.bracing.rise_mm),
+        &mut bracing.rise_mm,
+        &mm_unit,
+        COARSE_STEP,
+        1.0..=40.0,
+        1,
+    );
+    ui.add_space(2.0);
+    pattern_row(ui, &tr!("support-brace-top"), &mut bracing.top.pattern);
+    levels_row(
+        ui,
+        &tr!("support-brace-top-levels"),
+        &mut bracing.top.levels,
+    );
+    pattern_row(ui, &tr!("support-brace-middle"), &mut bracing.middle);
+    pattern_row(
+        ui,
+        &tr!("support-brace-bottom"),
+        &mut bracing.bottom.pattern,
+    );
+    levels_row(
+        ui,
+        &tr!("support-brace-bottom-levels"),
+        &mut bracing.bottom.levels,
+    );
+}
+
+/// How one zone ties a pair: a zigzag or a cross.
+fn pattern_row(ui: &mut egui::Ui, label: &str, pattern: &mut BracePattern) {
+    let patterns = [
+        Segment::new(BracePattern::Zigzag, tr!("support-brace-zigzag")),
+        Segment::new(BracePattern::Cross, tr!("support-brace-cross")),
+    ];
+    ui.horizontal(|ui| {
+        field_label(ui, label, theme::colors().text_mid, "");
+        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+            Segmented::new(&patterns)
+                .width(theme::FIELD_W)
+                .show(ui, pattern);
+        });
+    });
+}
+
+fn levels_row(ui: &mut egui::Ui, label: &str, levels: &mut u32) {
+    count_row(ui, label, levels, "", 0.05, 0..=MAX_BRACE_LEVELS);
 }
 
 /// What the automatic run holds up, how thickly, and how far the profile lifts a model.

@@ -5,10 +5,12 @@
 use std::path::PathBuf;
 
 use core_volume::InfillPattern;
+use egui_kittest::kittest::Queryable as _;
 use egui_kittest::{Harness, SnapshotResults};
+use printer_profiles::{Bracing, BracingPreset};
 
 use super::SlicerApp;
-use super::states::{app, drawn, with_machines, with_nothing};
+use super::states::{SETTLE_FRAMES, app, drawn, with_machines, with_nothing};
 use crate::workspace::{Mode, Tool};
 
 /// The size the window opens at, `lib::viewport`.
@@ -64,6 +66,31 @@ fn the_supports_tool_sizing_automatically() {
     app.tools.supports.set_automatic(true, &catalogue);
     let mut results = SnapshotResults::new();
     results.extend(picture("tool_supports_auto", app));
+}
+
+/// Tall enough for the Shape tool to show the bracing's drawing and every number under it.
+const TALL_WINDOW: egui::Vec2 = egui::vec2(1280.0, 1100.0);
+
+#[test]
+fn the_shape_tool_on_bracing_from_a_preset_and_by_the_numbers() {
+    let mut results = SnapshotResults::new();
+    let own = Bracing {
+        rise_mm: 6.0,
+        ..BracingPreset::Tall.bracing()
+    };
+    for (name, bracing) in [
+        ("tool_shape_brace_preset", BracingPreset::Standard.bracing()),
+        ("tool_shape_brace_numbers", own),
+    ] {
+        let mut app = app(true);
+        app.tool = Tool::Shape;
+        app.tools.supports.profile.bracing = bracing;
+        let mut harness = drawn(Harness::builder().with_size(TALL_WINDOW).wgpu(), app);
+        harness.get_by_label("Brace").click();
+        harness.run_steps(SETTLE_FRAMES);
+        harness.snapshot(name);
+        results.extend(harness.take_snapshot_results());
+    }
 }
 
 #[test]

@@ -150,10 +150,12 @@ leant keeps its braces.
 `[bracing]` is each group's own (ADR 0252): a trunk is tied only where its group braces,
 two groups are tied where both do and no further apart than both span, and the brace
 between them is built to the finer of the two and meshed with that group. It ties those
-neighbours every `rise_mm` from
-`start_height_mm`, as high as both still stand — the lower of the two root nodes, since
-above that a trunk has split. A tie is a cross, not a rung, so the pair is braced both
-ways; a pair with room for one level is not tied. A brace is no wider than either trunk
+neighbours one level every `rise_mm` from `start_height_mm`, as high as both still stand —
+the lower of the two root nodes, since above that a trunk has split. The levels fall into
+zones (ADR 0329): `bottom` takes its levels up from the start, `top` its levels down from
+that ceiling, and `middle` the whole rises between; a zone short of room gives way, the
+bottom last. A level is a cross or a zigzag's one leaning brace, never a rung; a pair
+without room for one level is not tied. A brace is no wider than either trunk
 where it meets it (ADR 0242). Each brace is one more tube, and one the
 model is in the way of is not tied at all: a brace goes through ADR 0077's beam like every
 other body, which is why `mesh_trees` is handed the model. The raft slab is the one thing

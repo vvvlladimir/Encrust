@@ -319,7 +319,29 @@ fn default_raft_margin_mm() -> f32 {
     2.0
 }
 
+/// How one level of bracing ties a pair of trunks.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum BracePattern {
+    /// One brace a level, leaning the other way on the next, so the levels zigzag up.
+    Zigzag,
+    /// Two braces a level, crossed, so the pair is held both ways.
+    #[default]
+    Cross,
+}
+
+/// The levels at one end of a pair of trunks, all tied the same way.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+pub struct BraceZone {
+    pub pattern: BracePattern,
+    /// How many levels the zone takes, at most.
+    pub levels: u32,
+}
+
 /// Struts tying tall trunks to each other, so that neither can sway on the peel.
+///
+/// Up one pair the levels fall into three zones: `bottom` from the first brace up, `top`
+/// down from where the lower trunk ends, and `middle` between; see `docs/decisions/0329`.
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 pub struct Bracing {
     pub enabled: bool,
@@ -331,6 +353,12 @@ pub struct Bracing {
     pub start_height_mm: f32,
     /// How far apart the braces up one pair of trunks are, millimetres.
     pub rise_mm: f32,
+    #[serde(default)]
+    pub bottom: BraceZone,
+    #[serde(default)]
+    pub middle: BracePattern,
+    #[serde(default)]
+    pub top: BraceZone,
 }
 
 impl Default for Bracing {
@@ -341,6 +369,9 @@ impl Default for Bracing {
             max_spacing_mm: 12.0,
             start_height_mm: 8.0,
             rise_mm: 10.0,
+            bottom: BraceZone::default(),
+            middle: BracePattern::default(),
+            top: BraceZone::default(),
         }
     }
 }
@@ -348,6 +379,58 @@ impl Default for Bracing {
 impl Bracing {
     pub fn radius_mm(&self) -> f32 {
         self.diameter_mm / 2.0
+    }
+}
+
+/// A ready set of bracing numbers to start from. A profile keeps the numbers, never the
+/// name, so one is recognised by its numbers alone.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum BracingPreset {
+    /// Zigzags, crossed once at the top.
+    Standard,
+    /// Crossed all the way up.
+    Strong,
+    /// Zigzags between two crossed levels at the top and one at the bottom, the braces
+    /// as thick as the trunks allow.
+    Tall,
+    /// Crossed all the way up, the braces thin.
+    Small,
+}
+
+impl BracingPreset {
+    pub const ALL: [Self; 4] = [Self::Standard, Self::Strong, Self::Tall, Self::Small];
+
+    /// The preset's numbers, switched on.
+    pub fn bracing(self) -> Bracing {
+        use BracePattern::{Cross, Zigzag};
+        let zone = |pattern, levels| BraceZone { pattern, levels };
+        let (diameter_mm, start_height_mm, bottom, middle, top) = match self {
+            Self::Standard => (0.9, 1.0, zone(Zigzag, 1), Zigzag, zone(Cross, 1)),
+            Self::Strong => (1.0, 0.0, zone(Cross, 1), Cross, zone(Cross, 1)),
+            Self::Tall => (2.0, 1.0, zone(Cross, 1), Zigzag, zone(Cross, 2)),
+            Self::Small => (0.8, 1.0, zone(Cross, 1), Cross, zone(Cross, 2)),
+        };
+        Bracing {
+            enabled: true,
+            diameter_mm,
+            max_spacing_mm: 10.0,
+            start_height_mm,
+            rise_mm: 5.0,
+            bottom,
+            middle,
+            top,
+        }
+    }
+
+    /// The preset `bracing` holds the numbers of, switched on or not.
+    pub fn of(bracing: &Bracing) -> Option<Self> {
+        Self::ALL.into_iter().find(|preset| {
+            let numbers = Bracing {
+                enabled: bracing.enabled,
+                ..preset.bracing()
+            };
+            numbers == *bracing
+        })
     }
 }
 
@@ -529,6 +612,7 @@ impl SupportProfile {
                 max_spacing_mm: 8.0,
                 start_height_mm: 5.0,
                 rise_mm: 8.5,
+                ..Bracing::default()
             },
             ..Self::shipped()
         }
@@ -551,6 +635,7 @@ impl SupportProfile {
                 max_spacing_mm: 8.0,
                 start_height_mm: 3.0,
                 rise_mm: 8.0,
+                ..Bracing::default()
             },
             ..Self::shipped()
         }
@@ -573,6 +658,7 @@ impl SupportProfile {
                 max_spacing_mm: 10.0,
                 start_height_mm: 8.0,
                 rise_mm: 13.0,
+                ..Bracing::default()
             },
             ..Self::shipped()
         }
@@ -925,6 +1011,53 @@ platform_thickness_mm = 1.0
         .expect("valid profile");
         assert_eq!(profile.branching, Branching::default());
         assert!(profile.branching.enabled);
+    }
+
+    #[test]
+    fn bracing_written_before_its_zones_is_crossed_all_the_way_up() {
+        let profile = SupportProfile::from_toml_str(
+            r#"
+name = "Braced"
+
+[tip]
+contact_diameter_mm = 0.4
+contact_depth_mm = 0.0
+
+[top]
+length_mm = 2.0
+
+[middle]
+diameter_mm = 1.0
+
+[bottom]
+platform_diameter_mm = 6.0
+platform_thickness_mm = 0.25
+
+[bracing]
+enabled = true
+diameter_mm = 0.6
+max_spacing_mm = 8.0
+start_height_mm = 5.0
+rise_mm = 8.5
+"#,
+            path(),
+        )
+        .expect("valid profile");
+        let bracing = profile.bracing;
+        assert_eq!((bracing.bottom.levels, bracing.top.levels), (0, 0));
+        assert_eq!(bracing.middle, BracePattern::Cross);
+    }
+
+    #[test]
+    fn a_preset_is_known_by_its_numbers_on_or_off() {
+        for preset in BracingPreset::ALL {
+            let mut bracing = preset.bracing();
+            assert_eq!(BracingPreset::of(&bracing), Some(preset));
+            bracing.enabled = false;
+            assert_eq!(BracingPreset::of(&bracing), Some(preset));
+            bracing.rise_mm += 0.5;
+            assert_eq!(BracingPreset::of(&bracing), None);
+        }
     }
 
     #[test]

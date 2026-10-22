@@ -6,8 +6,11 @@
 
 use std::cell::RefCell;
 
+use core_supports::{BraceBand, BraceLevel, brace_levels};
 use egui::{Align2, Color32, Painter, Pos2, Rect, Sense, Shape, Stroke, Ui, Vec2, pos2, vec2};
-use printer_profiles::{ContactShape, PlatformShape, RaftStyle, SupportProfile};
+use printer_profiles::{
+    BracePattern, Bracing, ContactShape, PlatformShape, RaftStyle, SupportProfile,
+};
 
 use crate::i18n::tr;
 use crate::ui::theme;
@@ -41,9 +44,10 @@ const TIP_LABEL_W: f32 = 44.0;
 /// Room left of the braces for their figures, points.
 const BRACE_LABEL_W: f32 = 52.0;
 
-/// Rings a sphere tip is drawn with, and brace levels drawn between two trunks.
+/// Rings a sphere tip is drawn with, and the middle levels drawn between two trunks: two,
+/// so a zigzag shows it turns.
 const BALL_STEPS: u32 = 12;
-const BRACE_LEVELS: u32 = 2;
+const BRACE_MIDDLE_LEVELS: u32 = 2;
 
 /// One part of a regular support, which is what the Part switch picks.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
@@ -1068,19 +1072,24 @@ fn raft_figures(
     );
 }
 
-/// Two trunks the spacing apart standing on the plate, the crossed braces tying them, and
-/// where they go.
+/// Two trunks the spacing apart standing on the plate, the braces tying them zone by zone
+/// as the generator places them, and where they go.
 fn brace_view(painter: &Painter, frame: Rect, profile: &SupportProfile) {
     let bracing = &profile.bracing;
     let gap = bracing.max_spacing_mm / 2.0;
-    let rise = bracing.rise_mm;
-    let levels = BRACE_LEVELS as f32;
-    let trunk = bracing.start_height_mm + rise * (levels + 1.0);
-    let column = Column::of(profile, 1, trunk);
-    let first = column.plate - bracing.start_height_mm;
-    let top = first - rise * levels;
+    let rise = bracing.rise_mm.max(0.1);
+    let shown = bracing.bottom.levels + BRACE_MIDDLE_LEVELS + bracing.top.levels;
+    let ceiling = bracing.start_height_mm + rise * shown as f32;
+    // A head of trunk above the top level, where it would split into its branches.
+    let column = Column::of(profile, 1, ceiling + rise / 2.0);
+    let shown = Bracing {
+        rise_mm: rise,
+        ..*bracing
+    };
+    let levels = brace_levels(&shown, bracing.start_height_mm, ceiling);
+    let along = |z: f32| column.plate - z;
     let half = gap + column.base.max(profile.pillar_radius_mm());
-    let view = brace_frame(frame, (top, column.plate), half);
+    let view = brace_frame(frame, (along(ceiling), column.plate), half);
     if view.standing {
         plate_floor(painter, &view, column.plate);
     } else {
@@ -1089,16 +1098,26 @@ fn brace_view(painter: &Painter, frame: Rect, profile: &SupportProfile) {
     for side in [-1.0, 1.0] {
         revolved(painter, &view, &column.stations, side * gap, Part::Brace);
     }
-    for level in 0..BRACE_LEVELS {
-        let near = first - rise * level as f32;
-        let far = near - rise;
+    for level in &levels {
+        let (near, far) = (along(level.z_mm), along(level.z_mm + rise));
         let thick = brace_half(profile, &column, near, far);
-        for (from, to) in [(-gap, gap), (gap, -gap)] {
-            let off = !bracing.enabled;
-            strut(painter, &view, (near, from), (far, to), thick, off);
+        let lean = if level.flipped { -gap } else { gap };
+        let mut ties = vec![(-lean, lean)];
+        if level.pattern == BracePattern::Cross {
+            ties.push((lean, -lean));
+        }
+        for (from, to) in ties {
+            strut(
+                painter,
+                &view,
+                (near, from),
+                (far, to),
+                thick,
+                !bracing.enabled,
+            );
         }
     }
-    brace_figures(painter, &view, profile, &column, (first, top, gap));
+    brace_figures(painter, &view, profile, &column, &levels, gap);
 }
 
 /// The braces lying or standing, whichever shows `along` and `half` either side of the
@@ -1129,50 +1148,88 @@ fn strut(painter: &Painter, view: &View, from: (f32, f32), to: (f32, f32), thick
     painter.extend(Pen::Picked.outline(outline, off));
 }
 
-/// Where the first brace goes, how far apart the levels are, how far apart the trunks
-/// may be and how wide a brace is, each written on the side away from the braces.
+/// Where the first brace goes and how far apart the levels are, on either side of the
+/// pair; which zone each level is in, beside the far trunk; and over the top, how far apart
+/// the trunks may be and how wide a brace is, pointed at one.
 fn brace_figures(
     painter: &Painter,
     view: &View,
     profile: &SupportProfile,
     column: &Column,
-    (first, top, gap): (f32, f32, f32),
+    levels: &[BraceLevel],
+    gap: f32,
 ) {
     let bracing = &profile.bracing;
+    let rise = bracing.rise_mm.max(0.1);
+    let at_z = |z: f32, y: f32| view.at(column.plate - z, y);
     let (along, across) = (view.along_dir(), view.across_dir());
-    let clear = across * (view.len(column.half_at(first)) + LANE);
-    let every = tr!("diagram-every", value = mm(bracing.rise_mm));
-    let (from, to) = (view.at(first - bracing.rise_mm, -gap), view.at(first, -gap));
-    dimension(painter, from - clear, to - clear, "");
-    beside(
-        painter,
-        (from - clear).lerp(to - clear, 0.5),
-        -across,
-        &every,
-    );
-    let start = tr!("diagram-first", value = mm(bracing.start_height_mm));
-    let (from, to) = (view.at(first, gap), view.at(column.plate, gap));
-    dimension(painter, from + clear, to + clear, "");
-    beside(
-        painter,
-        (from + clear).lerp(to + clear, 0.5),
-        across,
-        &start,
-    );
-    let back = along * 8.0;
-    let (from, to) = (view.at(top, -gap) - back, view.at(top, gap) - back);
+    let first = bracing.start_height_mm;
+    let clear = across * (view.len(column.half_at(column.plate - first)) + LANE);
+
+    let (from, to) = (at_z(first, -gap) - clear, at_z(first + rise, -gap) - clear);
     dimension(painter, from, to, "");
-    let middle = from.lerp(to, 0.5);
+    let every = tr!("diagram-every", value = mm(bracing.rise_mm));
+    beside(painter, from.lerp(to, 0.5), -across, &every);
+
+    let (from, to) = (at_z(0.0, gap) + clear, at_z(first, gap) + clear);
+    dimension(painter, from, to, "");
+    let start = tr!("diagram-first", value = mm(bracing.start_height_mm));
+    beside(painter, from.lerp(to, 0.5), across, &start);
+    let lane = clear + across * LANE_STEP;
+    zone_marks(painter, view, levels, rise, |z| at_z(z, gap) + lane);
+
+    let top = levels
+        .last()
+        .map_or(first + rise, |level| level.z_mm + rise);
+    let back = along * 8.0;
+    let (from, to) = (at_z(top, -gap) - back, at_z(top, gap) - back);
+    dimension(painter, from, to, "");
     let spacing = format!("≤{:.1}", bracing.max_spacing_mm);
-    beside(painter, middle, -along, &spacing);
-    beside(painter, middle, -along, &diameter(bracing.diameter_mm));
+    beside(painter, from.lerp(to, 0.5), -along, &spacing);
+    if let Some(level) = levels.last() {
+        // Where the strut leaving the near trunk is two fifths of the way across.
+        let lean = if level.flipped { -gap } else { gap };
+        let t = (lean - 0.4 * gap) / (2.0 * lean);
+        let on = at_z(level.z_mm, -lean).lerp(at_z(level.z_mm + rise, lean), t);
+        let label = diameter(bracing.diameter_mm);
+        let room = across * (label_width(painter, &label) / 2.0 + 4.0);
+        let out = at_z(level.z_mm + t * rise, -gap) - clear - room;
+        let leader = Stroke::new(1.0, theme::colors().accent.gamma_multiply(0.5));
+        painter.line_segment([on, out + room], leader);
+        text(painter, out, Align2::CENTER_CENTER, &label);
+    }
     if !bracing.enabled {
-        beside(
-            painter,
-            view.at(top, -gap) - clear,
-            -across,
-            &tr!("diagram-no-bracing"),
-        );
+        let at = at_z(top, -gap) - clear;
+        beside(painter, at, -across, &tr!("diagram-no-bracing"));
+    }
+}
+
+/// A bracket beside the far trunk over each zone's levels, named for the zone, a lane
+/// further out than the start's figure so the two never meet.
+fn zone_marks(
+    painter: &Painter,
+    view: &View,
+    levels: &[BraceLevel],
+    rise: f32,
+    at: impl Fn(f32) -> Pos2,
+) {
+    let across = view.across_dir();
+    for zone in levels.chunk_by(|a, b| a.band == b.band) {
+        let (Some(low), Some(high)) = (zone.first(), zone.last()) else {
+            continue;
+        };
+        let (from, to) = (at(low.z_mm), at(high.z_mm + rise));
+        let ends = across * 3.0;
+        let stroke = accent_line();
+        painter.line_segment([from, to], stroke);
+        painter.line_segment([from - ends, from + ends], stroke);
+        painter.line_segment([to - ends, to + ends], stroke);
+        let name = match low.band {
+            BraceBand::Bottom => tr!("diagram-brace-bottom"),
+            BraceBand::Middle => tr!("diagram-brace-middle"),
+            BraceBand::Top => tr!("diagram-brace-top"),
+        };
+        beside(painter, from.lerp(to, 0.5), across, &name);
     }
 }
 

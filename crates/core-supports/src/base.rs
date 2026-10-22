@@ -1,6 +1,6 @@
 use crate::placed::Placed;
 use core_geometry::{Mesh, Scalar, Vec2, Vec3, convex_hull};
-use printer_profiles::SupportProfile;
+use printer_profiles::{BracePattern, Bracing, SupportProfile};
 
 use crate::clear::{Beam, clear};
 use crate::group::Profiles;
@@ -263,18 +263,77 @@ fn tie(one: &SupportTree, two: &SupportTree, profiles: Profiles) -> Vec<(Vec3, V
         + bracing.start_height_mm;
     let ceiling = here.z.min(there.z);
 
-    // A cross, foot of one trunk to head of the other and back (ADR 0044), each end on its
-    // trunk's own axis at that height, not under its root: a hand may have leant it.
+    // A brace runs from the foot of one trunk's level to the head of the other's (ADR
+    // 0044), each end on its trunk's own axis at that height: a hand may have leant it.
     let on = |tree: &SupportTree, z: Scalar| trunk_axis_at(tree, own(tree), z);
     let mut struts = Vec::new();
-    let mut z = floor;
-    while z + bracing.rise_mm <= ceiling {
-        let up = z + bracing.rise_mm;
-        struts.push((on(one, z), on(two, up), width(one, z).min(width(two, up))));
-        struts.push((on(two, z), on(one, up), width(two, z).min(width(one, up))));
-        z = up;
+    for level in brace_levels(bracing, floor, ceiling) {
+        let (z, up) = (level.z_mm, level.z_mm + bracing.rise_mm);
+        let (a, b) = if level.flipped {
+            (two, one)
+        } else {
+            (one, two)
+        };
+        struts.push((on(a, z), on(b, up), width(a, z).min(width(b, up))));
+        if level.pattern == BracePattern::Cross {
+            struts.push((on(b, z), on(a, up), width(b, z).min(width(a, up))));
+        }
     }
     struts
+}
+
+/// Which of the three zones up a pair of trunks a level of bracing belongs to.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum BraceBand {
+    Bottom,
+    Middle,
+    Top,
+}
+
+/// One level of bracing up a pair of trunks: one rise from `z_mm` up, tied as `pattern`,
+/// and leaning the other way from its neighbour below when `flipped`.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct BraceLevel {
+    pub z_mm: Scalar,
+    pub band: BraceBand,
+    pub pattern: BracePattern,
+    pub flipped: bool,
+}
+
+/// The levels of `bracing` between `floor_mm` and `ceiling_mm`, lowest first: the bottom
+/// zone's up from the floor, the top zone's down from the ceiling, the middle's filling
+/// what is left from the bottom zone up. A zone takes only the levels there is room for,
+/// the bottom first; see `docs/decisions/0329`.
+pub fn brace_levels(bracing: &Bracing, floor_mm: Scalar, ceiling_mm: Scalar) -> Vec<BraceLevel> {
+    let rise = bracing.rise_mm;
+    if rise <= SAME_PLACE_MM {
+        return Vec::new();
+    }
+    // Rounding must not lose a level that fits to the last micrometre.
+    let fits = |room: Scalar| ((room + SAME_PLACE_MM) / rise).floor().max(0.0) as u32;
+    let bottom = bracing.bottom.levels.min(fits(ceiling_mm - floor_mm));
+    let above = ceiling_mm - floor_mm - bottom as Scalar * rise;
+    let top = bracing.top.levels.min(fits(above));
+    let middle = fits(above - top as Scalar * rise);
+
+    let up = |count: u32, from: u32, band, pattern| {
+        (0..count).map(move |index| BraceLevel {
+            z_mm: floor_mm + (from + index) as Scalar * rise,
+            band,
+            pattern,
+            flipped: (from + index) % 2 == 1,
+        })
+    };
+    let down = (0..top).rev().map(|index| BraceLevel {
+        z_mm: ceiling_mm - (index + 1) as Scalar * rise,
+        band: BraceBand::Top,
+        pattern: bracing.top.pattern,
+        flipped: index % 2 == 1,
+    });
+    up(bottom, 0, BraceBand::Bottom, bracing.bottom.pattern)
+        .chain(up(middle, bottom, BraceBand::Middle, bracing.middle))
+        .chain(down)
+        .collect()
 }
 
 #[cfg(test)]
@@ -555,6 +614,87 @@ mod tests {
                 profile.bracing.radius_mm()
             );
         }
+    }
+
+    /// Bracing of `rise_mm` levels zoned as the standard preset is: one zigzag at the
+    /// bottom, one cross at the top, zigzags between.
+    fn zoned(rise_mm: Scalar) -> Bracing {
+        Bracing {
+            rise_mm,
+            ..printer_profiles::BracingPreset::Standard.bracing()
+        }
+    }
+
+    #[test]
+    fn levels_without_zones_climb_crossed_from_the_floor() {
+        let bracing = Bracing {
+            rise_mm: 4.0,
+            ..Bracing::default()
+        };
+        let levels = brace_levels(&bracing, 2.0, 15.0);
+        let heights: Vec<Scalar> = levels.iter().map(|level| level.z_mm).collect();
+        assert_eq!(
+            heights,
+            [2.0, 6.0, 10.0],
+            "13 mm of room holds three 4 mm levels"
+        );
+        assert!(levels.iter().all(|l| l.pattern == BracePattern::Cross));
+    }
+
+    #[test]
+    fn the_top_zone_hangs_from_the_ceiling_and_the_middle_fills_below_it() {
+        let levels = brace_levels(&zoned(4.0), 0.0, 19.0);
+        let heights: Vec<Scalar> = levels.iter().map(|level| level.z_mm).collect();
+        // One bottom level at 0, then 19 − 4 − 4 = 11 mm holds two middle levels at 4 and
+        // 8, and the top level runs from 15 to the ceiling at 19.
+        assert_eq!(heights, [0.0, 4.0, 8.0, 15.0]);
+        let patterns: Vec<BracePattern> = levels.iter().map(|level| level.pattern).collect();
+        let (zigzag, cross) = (BracePattern::Zigzag, BracePattern::Cross);
+        assert_eq!(patterns, [zigzag, zigzag, zigzag, cross]);
+        let bands: Vec<BraceBand> = levels.iter().map(|level| level.band).collect();
+        let (bottom, middle, top) = (BraceBand::Bottom, BraceBand::Middle, BraceBand::Top);
+        assert_eq!(bands, [bottom, middle, middle, top]);
+        let flipped: Vec<bool> = levels[..3].iter().map(|level| level.flipped).collect();
+        assert_eq!(
+            flipped,
+            [false, true, false],
+            "a zigzag leans the other way each level, on from one zone into the next"
+        );
+    }
+
+    #[test]
+    fn a_pair_too_short_for_every_zone_fills_the_bottom_first() {
+        let levels = brace_levels(&zoned(4.0), 0.0, 6.0);
+        assert_eq!(levels.len(), 1, "6 mm holds one 4 mm level");
+        assert_eq!(
+            levels[0].pattern,
+            BracePattern::Zigzag,
+            "and it is the bottom's"
+        );
+    }
+
+    #[test]
+    fn a_zigzag_level_is_one_strut_and_a_crossed_one_two() {
+        let profile = SupportProfile {
+            bracing: Bracing {
+                start_height_mm: 5.0,
+                ..zoned(5.0)
+            },
+            ..with_bracing()
+        };
+        let trees = standing(&[(10.0, 10.0), (18.0, 10.0)], 30.0, &profile);
+        let mut struts = tied(&trees, &Mesh::default(), &profile);
+        struts.sort_by(|a, b| a.0.z.total_cmp(&b.0.z));
+        let per_level: Vec<usize> = struts
+            .chunk_by(|a, b| (a.0.z - b.0.z).abs() < 1e-3)
+            .map(<[_]>::len)
+            .collect();
+        assert!(per_level.len() >= 3, "{per_level:?}");
+        assert_eq!(per_level.last(), Some(&2), "the top level is crossed");
+        assert!(
+            per_level[..per_level.len() - 1].iter().all(|&n| n == 1),
+            "every level below it zigzags: {per_level:?}"
+        );
     }
 
     #[test]

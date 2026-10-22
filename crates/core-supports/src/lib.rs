@@ -37,7 +37,7 @@ mod step;
 mod trapped;
 mod tree;
 
-pub use base::{SKATE_BEVEL, SKATE_LENGTH, SKATE_WIDTH};
+pub use base::{BraceBand, BraceLevel, SKATE_BEVEL, SKATE_LENGTH, SKATE_WIDTH, brace_levels};
 pub use branch::grow;
 pub use column::{Column, Landing, SupportPoint, columns, landing, neck_of};
 pub use edit::{carried, fits, on_model, tip_carried};
