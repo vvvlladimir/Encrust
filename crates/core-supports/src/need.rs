@@ -21,6 +21,7 @@ pub enum Reason {
     /// put out in its one layer. Only a run sizing its supports asks for steps apart; see
     /// `docs/decisions/0326`.
     Step { new_mm3: Scalar },
-    /// A part held at too few places to stand steady.
+    /// A support that steadies a part: one held at too few places to stand, or, in a run
+    /// sizing its supports, a slope too gentle to sag (ADR 0327).
     Steady,
 }

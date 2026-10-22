@@ -80,6 +80,8 @@ pub fn generate_supports(
         auto.step_height_mm.iter().copied().fold(0.0, Scalar::max)
     });
     let mut zones = Zones::new(tallest_mm);
+    let steady_mm = sizing.map_or(0.0, |auto| config.coverage_at(auto.steady_spacing_mm));
+    let mut steadied = Zones::new(steady_mm);
     let mut placed = Vec::new();
     // The block being looked at, with as much of the block before it as the lean is
     // measured over still in front of it.
@@ -110,10 +112,12 @@ pub fn generate_supports(
             load.climb(parents.as_deref(), &cells);
             standing.climb(&parts, parents, &cells, contact_mm);
             zones.prune(contact_mm);
+            steadied.prune(contact_mm);
             let placing = Placing {
                 standing: &mut standing,
                 load: &load,
                 zones: &mut zones,
+                steadied: &mut steadied,
                 parts: &parts,
                 contact_mm,
             };
@@ -164,6 +168,8 @@ struct Placing<'a> {
     load: &'a Load,
     /// The steps below that still reach this layer.
     zones: &'a mut Zones,
+    /// The supports steadying a part on a slope that still keep the next one away.
+    steadied: &'a mut Zones,
     parts: &'a Parts,
     contact_mm: Scalar,
 }
@@ -198,9 +204,11 @@ enum On {
     Overhang,
     /// A step that put out this many mm³ in its layer.
     Step(Scalar),
-    /// A face leaning past a step's angle and short of the profile's: held only where a
-    /// step below reaches it.
+    /// A face leaning past a step's angle and short of the profile's: held as a step
+    /// where one below reaches it, else steadied on.
     Gentle,
+    /// A slope a part is steadied on, sparsely.
+    Slope,
 }
 
 /// What one run measures with, so that one layer can be looked at on its own.
@@ -249,7 +257,9 @@ impl Pass<'_> {
         };
         let rise_mm = seen as Scalar * self.layer_height_mm;
 
-        let step_lean_deg = self.sizing.map(|auto| auto.step_lean_deg);
+        let leans_deg = self
+            .sizing
+            .map(|auto| [auto.step_lean_deg, auto.steady_lean_deg]);
         let found = unsupported(
             layer,
             below,
@@ -257,7 +267,7 @@ impl Pass<'_> {
             self.grid,
             self.config,
             rise_mm,
-            step_lean_deg,
+            leans_deg,
         );
         if found.is_empty() {
             return Wanted::default();
@@ -301,11 +311,26 @@ impl Pass<'_> {
                 .into_iter()
                 .map(move |cell| (cell, level_mm, On::Gentle))
         });
+        // Steadied last, as sparsely as the profile says, on slopes worth it.
+        let (steady, least_mm) = self.sizing.map_or((1, Scalar::INFINITY), |auto| {
+            let steady = self.grid.cells_of(auto.steady_spacing_mm).max(1);
+            (steady, auto.steady_area_mm2.sqrt())
+        });
+        let slopes = found
+            .slopes
+            .iter()
+            .filter(|piece| across_mm(piece, self.grid) >= least_mm)
+            .flat_map(|piece| {
+                sample_piece(piece, &room, self.inset, steady)
+                    .into_iter()
+                    .map(move |cell| (cell, level_mm, On::Slope))
+            });
         Wanted {
             cells: islands
                 .chain(steps)
                 .chain(overhangs)
                 .chain(gentle)
+                .chain(slopes)
                 .collect(),
             specks: found
                 .specks
@@ -380,6 +405,7 @@ impl Pass<'_> {
             standing,
             load,
             zones,
+            steadied,
             parts,
             contact_mm,
         } = at;
@@ -413,7 +439,7 @@ impl Pass<'_> {
             // What a step below reaches is that step's, whatever leans there.
             let reached = match on {
                 On::Overhang | On::Gentle => zones.reaching(at.extend(contact_mm)),
-                On::Island(_) | On::Step(_) => None,
+                On::Island(_) | On::Step(_) | On::Slope => None,
             };
             let why = match (on, reached) {
                 (On::Island(area_mm2), _) => Why::Island { area_mm2 },
@@ -421,8 +447,12 @@ impl Pass<'_> {
                     Why::Step { new_mm3 }
                 }
                 (On::Overhang, None) => Why::Overhang(piece.and_then(|piece| load.mark(piece))),
-                (On::Gentle, None) => continue,
+                (On::Gentle, None) | (On::Slope, _) => Why::Steady,
             };
+            let steadies = matches!(why, Why::Steady);
+            if steadies && steadied.reaching(at.extend(contact_mm)).is_some() {
+                continue;
+            }
             if let On::Step(new_mm3) = on {
                 stepped.push((at.extend(contact_mm), new_mm3));
             }
@@ -433,6 +463,9 @@ impl Pass<'_> {
                 continue;
             }
             let taken = standing.take(piece, at, contact_mm, coverage_mm);
+            if let Some(contact) = taken.filter(|_| steadies) {
+                steadied.add(contact, self.steady_mm(), 0.0);
+            }
             placed.extend(taken.map(|contact| (contact, why)));
         }
         if let Some(auto) = self.sizing {
@@ -450,6 +483,12 @@ impl Pass<'_> {
             standing.leave(Some(piece));
         }
     }
+    /// How far one support steadying a part on a slope keeps the next away, mm.
+    fn steady_mm(&self) -> Scalar {
+        self.sizing
+            .map_or(0.0, |auto| self.config.coverage_at(auto.steady_spacing_mm))
+    }
+
     /// Whether the user has painted supports out of where `contact` would touch.
     fn refuses(&self, contact: Vec3) -> bool {
         self.blocked
@@ -1416,12 +1455,57 @@ mod tests {
             "as part of the step, got {held:?}"
         );
         assert!(
-            under_the_lean(&sized_needs_for(&shelf_under_a_lean(false))).is_empty(),
-            "the same face with no step under it leans less than the profile's angle"
+            under_the_lean(&sized_needs_for(&shelf_under_a_lean(false)))
+                .iter()
+                .all(|reason| matches!(reason, Reason::Steady)),
+            "the same face with no step under it is only steadied"
         );
         assert!(
             under_the_lean(&needs_for(&shelf_under_a_lean(true))).is_empty(),
             "and a run that does not size its supports holds a step as it always has"
+        );
+    }
+
+    /// A block 20 mm wide on the plate whose face along -y leans 15 degrees out over 30 mm
+    /// of rise: too gentle to sag, steep enough to steady a part on.
+    fn leaning_wall() -> Mesh {
+        let mut wall = box_mesh(Vec3::ZERO, Vec3::new(20.0, 10.0, 30.0));
+        let out = 30.0 * 15.0_f32.to_radians().tan();
+        for corner in [4, 5] {
+            wall.vertices[corner].y -= out;
+        }
+        wall
+    }
+
+    #[test]
+    fn a_gentle_slope_is_steadied_sparsely_and_only_when_sized() {
+        let on_the_face = |needs: Vec<Need>| -> Vec<Need> {
+            needs
+                .into_iter()
+                .filter(|need| need.contact.y < -0.5)
+                .collect()
+        };
+        let steadied = on_the_face(sized_needs_for(&leaning_wall()));
+        assert!(!steadied.is_empty(), "a 15 degree face is steadied on");
+        assert!(
+            steadied
+                .iter()
+                .all(|need| matches!(need.reason, Reason::Steady)),
+            "and only steadied"
+        );
+        for (index, one) in steadied.iter().enumerate() {
+            for other in &steadied[index + 1..] {
+                assert!(
+                    one.contact.distance(other.contact) > 5.0,
+                    "steadying supports stand far apart: {} and {}",
+                    one.contact,
+                    other.contact
+                );
+            }
+        }
+        assert!(
+            on_the_face(needs_for(&leaning_wall())).is_empty(),
+            "a run that does not size its supports leaves it alone"
         );
     }
 

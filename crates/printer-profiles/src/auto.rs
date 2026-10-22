@@ -33,6 +33,16 @@ pub struct AutoProfile {
     /// How far from vertical a face near a step may lean before it is held, degrees: less
     /// than the overhang angle, since the step is what it would sag from.
     pub step_lean_deg: f32,
+    /// The support profile, by catalogue id, a support that steadies a part is built to:
+    /// the lightest of all. See `docs/decisions/0327`.
+    pub steady_shape: String,
+    /// How far from vertical a face may lean before a part is steadied on it, degrees:
+    /// less than a step's angle, since nothing here would sag without it.
+    pub steady_lean_deg: f32,
+    /// How far apart the supports that steady a part go, mm.
+    pub steady_spacing_mm: f32,
+    /// The least slope worth steadying a part on, mm² of it.
+    pub steady_area_mm2: f32,
 }
 
 impl AutoProfile {
@@ -51,6 +61,14 @@ impl AutoProfile {
     pub fn step_size(&self, new_mm3: f32) -> Option<usize> {
         let reached = size_of(&self.step_volume_mm3, new_mm3);
         reached.checked_sub(1)
+    }
+
+    /// Every support profile this one builds to, by catalogue id: its sizes lightest
+    /// first, then the one that steadies a part.
+    pub fn every_shape(&self) -> impl Iterator<Item = &String> {
+        self.shapes
+            .iter()
+            .chain(std::iter::once(&self.steady_shape))
     }
 
     /// `shape` placing by this profile's numbers: what a run of it is handed.
@@ -88,12 +106,15 @@ impl AutoProfile {
             ("contact_spacing_mm", self.contact_spacing_mm),
             ("steep_contact_spacing_mm", self.steep_contact_spacing_mm),
             ("step_lean_deg", self.step_lean_deg),
+            ("steady_lean_deg", self.steady_lean_deg),
+            ("steady_spacing_mm", self.steady_spacing_mm),
         ];
         if let Some((field, value)) = positive.into_iter().find(|(_, value)| *value <= 0.0) {
             return Err(ProfileError::NonPositive { field, value });
         }
         ascending("island_area_mm2", &self.island_area_mm2)?;
         ascending("overhang_volume_mm3", &self.overhang_volume_mm3)?;
+        ascending("steady_area_mm2", &[self.steady_area_mm2])?;
         ascending("step_volume_mm3", &self.step_volume_mm3)?;
         ascending("step_height_mm", &self.step_height_mm)
     }

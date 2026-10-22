@@ -129,7 +129,7 @@ fn table(ui: &mut Ui, machine: &Machine, picked: Option<&str>, action: &mut Opti
 fn auto_rank(catalogue: &Catalogue, id: &str) -> usize {
     catalogue
         .autos()
-        .find_map(|auto| auto.profile.shapes.iter().position(|shape| shape == id))
+        .find_map(|auto| auto.profile.every_shape().position(|shape| shape == id))
         .unwrap_or(usize::MAX)
 }
 

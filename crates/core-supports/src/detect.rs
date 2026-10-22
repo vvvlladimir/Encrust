@@ -19,6 +19,10 @@ pub struct Unsupported {
     /// Pieces leaning past the step's gentler angle and not past the profile's: held only
     /// where a step under them reaches. Found only when steps are asked for.
     pub gentle: Vec<Field>,
+    /// Pieces leaning past the steadying angle and not past the step's: a slope a part
+    /// is steadied on, sparsely. Found only when steps are asked for; see
+    /// `docs/decisions/0327`.
+    pub slopes: Vec<Field>,
 }
 
 impl Unsupported {
@@ -29,6 +33,7 @@ impl Unsupported {
             && self.specks.is_empty()
             && self.steps.is_empty()
             && self.gentle.is_empty()
+            && self.slopes.is_empty()
     }
 }
 
@@ -43,8 +48,8 @@ impl Unsupported {
 /// further than the profile's angle, measured over enough rise for the grid to resolve
 /// it. Neither question is the overhang angle of a face; see `docs/decisions/0031`.
 ///
-/// `step_lean_deg` asks for the steps apart from the overhangs, and for what leans past
-/// that gentler angle beside them.
+/// `leans_deg` asks for the steps apart from the overhangs, for what leans past the first
+/// angle, a step's, and for what leans past the second, a steadying one, and no further.
 pub fn unsupported(
     layer: &Field,
     below: &Field,
@@ -52,7 +57,7 @@ pub fn unsupported(
     grid: &Grid,
     config: &SampleConfig,
     rise_mm: f32,
-    step_lean_deg: Option<f32>,
+    leans_deg: Option<[f32; 2]>,
 ) -> Unsupported {
     // A wall standing on itself adds no underside, which is most of most models and
     // costs one pass over the spans.
@@ -81,7 +86,7 @@ pub fn unsupported(
     // ledge that appears in a single layer is no lean, it is a shelf over nothing.
     let step = grid.cells_of(config.min_overhang_mm);
     let worth = |piece: &Field| across_mm(piece, grid) >= config.min_overhang_mm;
-    let Some(lean_deg) = step_lean_deg else {
+    let Some([lean_deg, steady_deg]) = leans_deg else {
         let overhangs = ledges
             .iter()
             .flat_map(|ledge| {
@@ -100,8 +105,10 @@ pub fn unsupported(
         };
     };
 
-    let gentle_reach = grid.cells_of(rise_mm * lean_deg.to_radians().tan());
+    let reach_of = |deg: f32| grid.cells_of(rise_mm * deg.to_radians().tan());
+    let (gentle_reach, steady_reach) = (reach_of(lean_deg), reach_of(steady_deg));
     let (mut overhangs, mut steps, mut gentle) = (Vec::new(), Vec::new(), Vec::new());
+    let mut slopes = Vec::new();
     for ledge in &ledges {
         let shelf = ledge.uncarried_by(below, step);
         let leaning = ledge.uncarried_by(reference, reach);
@@ -113,7 +120,13 @@ pub fn unsupported(
             .uncarried_by(reference, gentle_reach)
             .without(&held)
             .uncarried_by(&shelf, step);
+        let sloped = ledge
+            .uncarried_by(reference, steady_reach)
+            .without(&near)
+            .without(&held)
+            .uncarried_by(&shelf, step);
         gentle.extend(near.pieces().into_iter().filter(worth));
+        slopes.extend(sloped.pieces().into_iter().filter(worth));
     }
     Unsupported {
         islands,
@@ -121,6 +134,7 @@ pub fn unsupported(
         specks,
         steps,
         gentle,
+        slopes,
     }
 }
 
@@ -308,7 +322,8 @@ mod tests {
         );
     }
 
-    /// What a layer has unsupported with steps asked for apart, leaning 20 degrees.
+    /// What a layer has unsupported with steps asked for apart, a step's faces leaning 20
+    /// degrees and a steadied slope 10.
     fn found_with_steps(layer: &Field, below: &Field, reference: &Field) -> Unsupported {
         unsupported(
             layer,
@@ -317,7 +332,7 @@ mod tests {
             &grid(),
             &config(),
             REFERENCE_RISE_MM,
-            Some(20.0),
+            Some([20.0, 10.0]),
         )
     }
 
@@ -349,6 +364,18 @@ mod tests {
         let split = found_with_steps(&layer, &below, &reference);
         assert!(split.overhangs.is_empty() && split.steps.is_empty());
         assert_eq!(split.gentle.len(), 1, "the lean is one gentle piece");
+        assert!(split.slopes.is_empty(), "and no slope besides");
+    }
+
+    #[test]
+    fn a_face_between_the_steadying_angle_and_a_steps_is_a_slope() {
+        // 0.35 mm over a millimetre of rise is 19 degrees: past 10, short of 20.
+        let reference = square(10.0, 10.0, 10.0);
+        let below = rectangle(10.0, 10.0, 10.0, 10.25);
+        let layer = rectangle(10.0, 10.0, 10.0, 10.35);
+        let split = found_with_steps(&layer, &below, &reference);
+        assert!(split.gentle.is_empty() && split.overhangs.is_empty());
+        assert_eq!(split.slopes.len(), 1, "the lean is one slope");
     }
 
     #[test]

@@ -328,8 +328,10 @@ past the profile's `step_lean_deg` and short of its overhang angle (ADR 0326). A
 piece puts out at least the least step volume is held as one and sized by that volume; its
 samples become balls of the step's height above it in `step.rs`, bucketed by the tallest
 height and dropped once the climb passes them. An overhang or a gentle face inside a ball
-is held as a step of the largest one reaching it; a gentle face outside every ball is not
-held at all.
+is held as a step of the largest one reaching it. A gentle face outside every ball, and a
+slope past `steady_lean_deg` across at least the side of `steady_area_mm2`, is steadied on:
+sampled at `steady_spacing_mm`, last, each one kept in a second set of balls that keeps
+only its own kind away, so an overhang above it is still held (ADR 0327).
 
 **Cost.** The stack is walked in blocks of 32: read and examined in parallel, since what a
 layer needs depends only on the layers under it, with only the coverage check in order,

@@ -4,6 +4,9 @@ use core_geometry::{Adjacency, Ray, Scalar, Vec2, Vec3, raycast_placed};
 use core_supports::{Need, Part, Placed, ProjectSettings, Reason, project};
 use printer_profiles::{AUTO_SIZES, AutoProfile, Catalogue, Raft, SupportProfile};
 
+/// How many shapes an automatic run builds to: its sizes, and the one that steadies a part.
+const SHAPES: usize = AUTO_SIZES + 1;
+
 use crate::i18n::tr;
 use crate::job::{SupportJob, SupportOutcome, SupportRequest, tasks_of};
 use crate::scene::{ObjectId, OwnSettings, Scene, SceneObject};
@@ -107,7 +110,7 @@ pub struct SupportTool {
     /// that sizing turned back on finds its numbers as they were left.
     parked_auto: Option<AutoProfile>,
     /// What the run going sizes its supports by, and the shapes it sizes them into.
-    sizing: Option<(AutoProfile, [SupportProfile; AUTO_SIZES])>,
+    sizing: Option<(AutoProfile, [SupportProfile; SHAPES])>,
     /// The raft every model stands on that has none of its own. A raft is one slab under
     /// a part, so it is the part's and the plate's, not any one group's; see ADR 0253.
     pub raft: Raft,
@@ -223,7 +226,7 @@ impl SupportTool {
         match outcome {
             SupportOutcome::Placed(placements) => match self.sizing.take() {
                 Some((auto, shapes)) => {
-                    let mut sized = [0usize; AUTO_SIZES];
+                    let mut sized = [0usize; SHAPES];
                     for need in placements.iter().flat_map(|placement| &placement.needs) {
                         sized[size_of(&auto, need)] += 1;
                     }
@@ -250,7 +253,8 @@ impl SupportTool {
                         count = added,
                         light = sized[0],
                         medium = sized[1],
-                        heavy = sized[2]
+                        heavy = sized[2],
+                        steady = sized[3]
                     ));
                 }
                 None => {
@@ -279,9 +283,9 @@ impl SupportTool {
     /// A shape nothing is sized into is `None`, and is given no group.
     fn groups_for(
         &mut self,
-        shapes: [Option<SupportProfile>; AUTO_SIZES],
+        shapes: [Option<SupportProfile>; SHAPES],
         scene: &mut Scene,
-    ) -> [u16; AUTO_SIZES] {
+    ) -> [u16; SHAPES] {
         let table = self.table();
         let named = shapes.each_ref().map(|shape| {
             let shape = shape.as_ref()?;
@@ -289,7 +293,7 @@ impl SupportTool {
             Some(group as u16)
         });
         let mut taken: Vec<u16> = named.iter().flatten().copied().collect();
-        let mut groups = [0u16; AUTO_SIZES];
+        let mut groups = [0u16; SHAPES];
         for ((group, shape), named) in groups.iter_mut().zip(shapes).zip(named) {
             *group = match (shape, named) {
                 (_, Some(group)) => group,
@@ -729,9 +733,12 @@ fn underside(scene: &Scene, floor: Vec3, layer_mm: Scalar) -> Option<(ObjectId, 
         .map(|(id, hit)| (id, hit.point))
 }
 
-/// The support profiles `auto` names, lightest first, as `catalogue` has them.
-fn shapes_of(auto: &AutoProfile, catalogue: &Catalogue) -> Result<[SupportProfile; AUTO_SIZES]> {
-    let [light, medium, heavy] = auto.shapes.each_ref().map(|id| {
+/// The support profiles `auto` names, lightest first and the steadying one last, as
+/// `catalogue` has them.
+fn shapes_of(auto: &AutoProfile, catalogue: &Catalogue) -> Result<[SupportProfile; SHAPES]> {
+    let [light, medium, heavy] = auto.shapes.each_ref();
+    let ids = [light, medium, heavy, &auto.steady_shape];
+    let [light, medium, heavy, steady] = ids.map(|id| {
         let entry = catalogue.support(id).with_context(|| {
             tr!(
                 "supports-auto-no-shape",
@@ -741,17 +748,16 @@ fn shapes_of(auto: &AutoProfile, catalogue: &Catalogue) -> Result<[SupportProfil
         })?;
         Ok::<_, anyhow::Error>(entry.profile.clone())
     });
-    Ok([light?, medium?, heavy?])
+    Ok([light?, medium?, heavy?, steady?])
 }
 
-/// Which of `auto`'s shapes holds `need`, as an index into its `shapes`.
+/// Which of `auto`'s shapes holds `need`, as an index into [`shapes_of`].
 fn size_of(auto: &AutoProfile, need: &Need) -> usize {
     match need.reason {
         Reason::Island { area_mm2 } => auto.island_size(area_mm2),
         Reason::Overhang { carried_mm3 } => auto.overhang_size(carried_mm3),
         Reason::Step { new_mm3 } => auto.step_size(new_mm3).unwrap_or(0),
-        // TODO(step-6): a stabilising support gets a shape of its own.
-        Reason::Steady => 0,
+        Reason::Steady => AUTO_SIZES,
     }
 }
 

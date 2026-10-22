@@ -2,6 +2,8 @@ use core_geometry::{FastMap, Scalar, Vec3};
 
 /// The steps a run has held that still reach the layer it is on. Within its height above
 /// a step every face is held as part of it, and sized by it; see `docs/decisions/0326`.
+/// The supports that steady a part are kept the same way, each reaching its own spacing,
+/// so they stand that far apart without keeping anything else away (ADR 0327).
 ///
 /// Kept in buckets of the plate one tallest height across, so a sample asks nine buckets,
 /// and dropped once the climb is past them, so what is kept is the steps just below.
@@ -59,14 +61,14 @@ impl Zones {
     }
 
     /// What the largest step whose reach takes in `at` put out, or `None` where no step
-    /// below reaches it.
+    /// at or below its height reaches it.
     pub(crate) fn reaching(&self, at: Vec3) -> Option<Scalar> {
         let (x, y) = self.bucket_of(at);
         (x - 1..=x + 1)
             .flat_map(|x| (y - 1..=y + 1).map(move |y| (x, y)))
             .filter_map(|bucket| self.buckets.get(&bucket))
             .flatten()
-            .filter(|zone| zone.at.z < at.z && zone.at.distance(at) <= zone.height_mm)
+            .filter(|zone| zone.at.z <= at.z && zone.at.distance(at) <= zone.height_mm)
             .map(|zone| zone.new_mm3)
             .max_by(Scalar::total_cmp)
     }
@@ -101,7 +103,7 @@ mod tests {
         assert_eq!(reached(10.0, 6.0), Some(2.0), "a millimetre straight above");
         assert_eq!(reached(11.0, 6.0), Some(2.0), "1.41 mm away, inside 1.5");
         assert_eq!(reached(11.5, 6.0), None, "1.8 mm away is past its height");
-        assert_eq!(reached(10.5, 5.0), None, "beside it is not above it");
+        assert_eq!(reached(10.5, 4.5), None, "below it is not above it");
     }
 
     #[test]

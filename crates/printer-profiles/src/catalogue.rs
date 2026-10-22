@@ -190,7 +190,7 @@ impl Catalogue {
     pub fn is_auto_shape(&self, id: &str) -> bool {
         self.autos
             .values()
-            .any(|auto| auto.profile.shapes.iter().any(|shape| shape == id))
+            .any(|auto| auto.profile.every_shape().any(|shape| shape == id))
     }
 
     /// The named settings kept for a tool: `Kind::Hollow` or `Kind::Drain`, none else.
@@ -625,7 +625,7 @@ mod tests {
         let catalogue = Catalogue::bundled().expect("the shipped catalogue is valid");
         assert!(catalogue.autos().count() >= 1, "an automatic profile ships");
         for auto in catalogue.autos() {
-            for shape in &auto.profile.shapes {
+            for shape in auto.profile.every_shape() {
                 assert!(
                     catalogue.is_shipped(Kind::Support, shape),
                     "{} names {shape}, which does not ship",

@@ -315,7 +315,9 @@ whole-surface fill is Cmd-Shift-click.
   Heavy**, anything less **Auto Light**. Each shape is a group of its own, tuned like any
   other, and the notice says how many of each were placed. A shelf put out in one layer
   is sized by its resin — from 7 mm³ medium, 12 mm³ heavy — and faces leaning past 20° just
-  above it are held with it. **Sizes** sets where each heavier shape starts; a merged support shows each tip in its own group's colour. **By hand**, supports are built
+  above it are held with it. A gentle slope too shallow to sag — past 10° from vertical
+  — gets a few thin **Auto Stabilization** supports about 8 mm apart so the part does not
+  rock on the peel. **Sizes** sets where each heavier shape starts; a merged support shows each tip in its own group's colour. **By hand**, supports are built
   to the profile chosen for the group in hand.
 - Nearby tips merge into shared **branching trunks**. Trunks are cones sized by their
   height and load, and nothing carrying a load leans more than 45°.
@@ -337,8 +339,8 @@ whole-surface fill is Cmd-Shift-click.
 - A thin support may stand on a thicker one from another group. Tips of groups as thick as
   each other merge into one trunk, built to the group with the heavier tip; each tip keeps
   its own.
-- Bundled profiles: **light**, **medium**, **heavy**, and the three shapes **Auto** builds
-  to, **auto light**, **auto medium** and **auto heavy**. Light, medium and heavy differ in
+- Bundled profiles: **light**, **medium**, **heavy**, and the four shapes **Auto** builds
+  to, **auto light**, **auto medium**, **auto heavy** and **auto stabilization**. Light, medium and heavy differ in
   thickness only: all three place contacts 1.8 mm apart, hold surfaces leaning past 40°,
   lift a part 5 mm and touch the part without biting into it. Duplicate one, edit it, save it under a new name,
   export it or import it. A bundled profile cannot be deleted. Settings lists the automatic
