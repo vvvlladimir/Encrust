@@ -8,6 +8,7 @@ use rayon::prelude::*;
 
 use crate::clear::{Beam, MIN_BODY_MM, clear};
 use crate::mesher::FOOT_BEVEL;
+use crate::pad::{PadCut, pad_clear, pad_cut};
 
 /// Plate coordinates put the plate surface at z = 0; see `docs/architecture.md`.
 pub(crate) const PLATE_Z_MM: Scalar = 0.0;
@@ -79,6 +80,11 @@ pub struct Landing {
     /// without it reads as a pad under its trunk. See `docs/decisions/0239`.
     #[serde(default)]
     pub pad_offset: Vec2,
+    /// The pad cut back where the model stands beside it, or `None` for a whole one. A
+    /// pad is cut before it is moved aside; a file without it reads as a whole pad. See
+    /// `docs/decisions/0328`.
+    #[serde(default)]
+    pub pad_cut: Option<PadCut>,
     /// What it landed on is the trunk of a thicker support of another group, which it
     /// runs into at `base`; `on_model` is set with it, since it needs no foot either. A
     /// file without it reads as a landing on the model itself. See `docs/decisions/0248`.
@@ -303,6 +309,7 @@ pub(crate) fn landing_within(
                     base: hit.point,
                     on_model: true,
                     pad_offset: Vec2::ZERO,
+                    pad_cut: None,
                     on_support: false,
                 },
                 hit.point.z + touch_mm + SURFACE_EPSILON_MM,
@@ -314,10 +321,12 @@ pub(crate) fn landing_within(
             let base_mm = profile
                 .trunk_base_radius_mm(from.z - PLATE_Z_MM, tips)
                 .max(radius_mm);
+            let (pad_offset, pad_cut) = pad_offset(placed, base, base_mm, profile)?;
             let landing = Landing {
                 base,
                 on_model: false,
-                pad_offset: pad_offset(placed, base, base_mm, profile)?,
+                pad_offset,
+                pad_cut,
                 on_support: false,
             };
             let bottom_z = landing.pillar_bottom_z(profile);
@@ -349,7 +358,7 @@ pub fn neck_of(placed: &Placed, contact: Vec3, profile: &SupportProfile) -> Vec3
     // A head that would run into the model — a contact in a crevice, whose face looks at
     // the wall across it — goes straight down instead, where that is open.
     let reach_mm = length_mm + profile.pillar_radius_mm();
-    let square = tip_direction(placed, contact);
+    let (square, normal) = tip_direction(placed, contact);
     // Asked from a hair off the face the head leaves: straight down from a contact on a
     // wall starts on the solid's edge, which is neither in nor out.
     let off_the_face = contact + square * (10.0 * SURFACE_EPSILON_MM);
@@ -360,6 +369,32 @@ pub fn neck_of(placed: &Placed, contact: Vec3, profile: &SupportProfile) -> Vec3
     } else {
         square
     };
+    let neck = neck_along(contact, direction, profile);
+    let Some(normal) = normal else {
+        return neck;
+    };
+    // Only the tip may meet the model; a head that cannot clear it anywhere still stands,
+    // as it did, rather than leave its face unheld. See `docs/decisions/0328`.
+    let fits = |neck: &Vec3, clearance_mm| {
+        head_clear(placed, contact, *neck, normal, profile, clearance_mm)
+    };
+    if fits(&neck, profile.clearance_mm) {
+        return neck;
+    }
+    let necks: Vec<Vec3> = std::iter::once(-Vec3::Z)
+        .chain(headings_round(square, normal))
+        .map(|direction| neck_along(contact, direction, profile))
+        .collect();
+    [profile.clearance_mm, 0.0]
+        .into_iter()
+        .find_map(|clearance_mm| necks.iter().copied().find(|neck| fits(neck, clearance_mm)))
+        .unwrap_or(neck)
+}
+
+/// Where a head leaving `contact` along `direction` ends: one `[top]` out, shortened
+/// rather than allowed to eat the room the body needs above the plate.
+fn neck_along(contact: Vec3, direction: Vec3, profile: &SupportProfile) -> Vec3 {
+    let length_mm = profile.top_length_mm();
     let drop_mm = -direction.z * length_mm;
     let room_mm =
         (contact.z - PLATE_Z_MM - profile.footing_height_mm() - MIN_PILLAR_HEIGHT_MM).max(0.0);
@@ -369,6 +404,73 @@ pub fn neck_of(placed: &Placed, contact: Vec3, profile: &SupportProfile) -> Vec3
         length_mm
     };
     contact + direction * length_mm
+}
+
+/// How far, degrees, and round how many ways a head is turned off its own direction when
+/// that one is not clear: as far as a head may lean at all, in steps a contact notices.
+const HEAD_TURNS_DEG: [Scalar; 3] = [15.0, 30.0, 45.0];
+const HEAD_AZIMUTHS: u32 = 8;
+
+/// The other ways a head may leave the face `normal` belongs to, nearest `square` first:
+/// each descending no faster than a head may lean, and leaving the face rather than
+/// running along it.
+fn headings_round(square: Vec3, normal: Vec3) -> impl Iterator<Item = Vec3> {
+    let (across, along) = square.any_orthonormal_pair();
+    HEAD_TURNS_DEG
+        .into_iter()
+        .flat_map(move |turn_deg| {
+            let (sin, cos) = turn_deg.to_radians().sin_cos();
+            (0..HEAD_AZIMUTHS).map(move |step| {
+                let angle = std::f32::consts::TAU * step as Scalar / HEAD_AZIMUTHS as Scalar;
+                square * cos + (across * angle.cos() + along * angle.sin()) * sin
+            })
+        })
+        .filter(move |direction| {
+            -direction.z * MAX_LEAN_PER_DROP >= direction.truncate().length()
+                && direction.dot(normal) >= HEAD_OFF_THE_FACE
+        })
+}
+
+/// The least a head turned for room still leaves its face by, as the cosine of its angle
+/// to the normal: past 75 degrees it would run along the face it holds.
+const HEAD_OFF_THE_FACE: Scalar = 0.25;
+
+/// Whether the head from `contact` to `neck`, widening from the contact to the pillar with
+/// `clearance_mm` of air round it, leaves the face `normal` belongs to and then meets
+/// nothing.
+///
+/// The sweep starts where the widening cone stands clear of that face's own plane, so a
+/// head leaving at a slant is not refused by the face it holds.
+fn head_clear(
+    placed: &Placed,
+    contact: Vec3,
+    neck: Vec3,
+    normal: Vec3,
+    profile: &SupportProfile,
+    clearance_mm: Scalar,
+) -> bool {
+    let offset = neck - contact;
+    let length_mm = offset.length();
+    if length_mm < MIN_BODY_MM {
+        return true;
+    }
+    let off = (offset / length_mm).dot(normal);
+    let slant = (1.0 - off * off).max(0.0).sqrt();
+    let widening = (profile.pillar_radius_mm() - profile.contact_radius_mm()) / length_mm;
+    let leaving = off - widening * slant;
+    let from_mm = profile.contact_radius_mm() + clearance_mm;
+    let left_mm = (from_mm * slant + 10.0 * SURFACE_EPSILON_MM) / leaving;
+    // A head too slanted to get clear of its own face before the neck lies along it.
+    if leaving <= 0.0 || left_mm >= length_mm {
+        return false;
+    }
+    let head = Beam {
+        from: contact,
+        to: neck,
+        from_radius_mm: profile.contact_radius_mm(),
+        to_radius_mm: profile.pillar_radius_mm(),
+    };
+    clear(placed, &head.with_clearance(clearance_mm).trimmed(left_mm))
 }
 
 /// Whether a head leaving `contact` along `direction` meets the model within `reach_mm`,
@@ -383,18 +485,19 @@ fn runs_into(placed: &Placed, contact: Vec3, direction: Vec3, reach_mm: Scalar) 
 /// Which way a tip leaves the surface at `contact`: the outward normal of a face that looks
 /// down, out and down off one it sits on that does not, so a support placed by hand on any
 /// face leaves the model; straight down off a flat top, or from a contact off the surface.
+/// The normal of the face it leaves comes with it, where it leaves one.
 ///
 /// A contact on an edge or a corner sits on every face meeting there, and leaves the one
 /// that looks down most: which of them a search finds first is an accident of the mesh.
-fn tip_direction(placed: &Placed, contact: Vec3) -> Vec3 {
+fn tip_direction(placed: &Placed, contact: Vec3) -> (Vec3, Option<Vec3>) {
     let matrix = placed.transform.to_matrix();
     if matrix.determinant().abs() < SINGULAR {
-        return -Vec3::Z;
+        return (-Vec3::Z, None);
     }
     let inverse = matrix.inverse();
     let local = inverse.transform_point3(contact);
     let Some(found) = placed.bvh.closest(local) else {
-        return -Vec3::Z;
+        return (-Vec3::Z, None);
     };
     // A normal does not survive a non-uniform scale under the model matrix, but it does
     // under the inverse transpose of that matrix's upper 3x3.
@@ -406,7 +509,7 @@ fn tip_direction(placed: &Placed, contact: Vec3) -> Vec3 {
             .map(|triangle| (turn * triangle.normal_unnormalized()).normalize_or_zero())
     };
     let Some(mut normal) = normal_of(found.face) else {
-        return -Vec3::Z;
+        return (-Vec3::Z, None);
     };
 
     let on_surface = found.distance <= ON_SURFACE_MM;
@@ -429,9 +532,9 @@ fn tip_direction(placed: &Placed, contact: Vec3) -> Vec3 {
             );
     }
     if normal.z < 0.0 || on_surface {
-        out_and_down(normal)
+        (out_and_down(normal), Some(normal))
     } else {
-        -Vec3::Z
+        (-Vec3::Z, None)
     }
 }
 
@@ -457,23 +560,31 @@ fn out_and_down(normal: Vec3) -> Vec3 {
 const PAD_DIRECTIONS: u32 = 8;
 const PAD_REACHES: u32 = 3;
 
-/// Where the pad of a trunk of `radius_mm` standing at `base` goes: under the trunk, or
-/// as little aside as clears the model, and `None` when no place within reach does.
+/// Where the pad of a trunk of `radius_mm` standing at `base` goes, and how it is cut:
+/// whole under the trunk, whole as little aside as clears the model, or cut back on the
+/// side the model stands, and `None` when none of those does.
 ///
-/// A pad is never narrowed. It may be moved as far as still leaves the flare inside its
-/// top, which only a round pad that does not taper has room for; see
-/// `docs/decisions/0239`.
+/// A pad is never narrowed all round. It is moved only as far as still leaves the flare
+/// inside its top, which only a round pad that does not taper has room for, and cut only
+/// where the model is; see `docs/decisions/0239` and `docs/decisions/0328`.
 fn pad_offset(
     placed: &Placed,
     base: Vec3,
     radius_mm: Scalar,
     profile: &SupportProfile,
-) -> Option<Vec2> {
+) -> Option<(Vec2, Option<PadCut>)> {
     if foot_clear(placed, base, profile) {
-        return Some(Vec2::ZERO);
+        return Some((Vec2::ZERO, None));
     }
     let shape = profile.bottom.shape;
     let inside_mm = profile.flare_lower_radius_mm().max(radius_mm);
+    let cut = || {
+        shape
+            .is_round()
+            .then(|| pad_cut(placed, base, inside_mm, profile))
+            .flatten()
+            .map(|cut| (Vec2::ZERO, Some(cut)))
+    };
     let reach_mm = if shape.is_round() && !shape.tapers() {
         // Inside the rim the pad meets the plate on, which the bevel pulls in.
         profile.base_radius_mm() - profile.base_height_mm() * FOOT_BEVEL - inside_mm
@@ -481,7 +592,7 @@ fn pad_offset(
         0.0
     };
     if reach_mm <= SURFACE_EPSILON_MM {
-        return None;
+        return cut();
     }
 
     (1..=PAD_REACHES)
@@ -492,22 +603,17 @@ fn pad_offset(
                 * (reach_mm * step as Scalar / PAD_REACHES as Scalar)
         })
         .find(|offset| foot_clear(placed, base + offset.extend(0.0), profile))
+        .map(|offset| (offset, None))
+        .or_else(cut)
 }
 
 /// Whether the foot on the plate has the model out of its way.
 ///
 /// A pad is wider than anything above it, so a column that came down in clear air can
-/// still drive its foot into a part that stands on the plate beside it.
+/// still drive its foot into a part that stands on the plate beside it, or round a toe
+/// standing inside it, which rays down its rim and axis pass by (ADR 0328).
 pub(crate) fn foot_clear(placed: &Placed, base: Vec3, profile: &SupportProfile) -> bool {
-    let radius_mm = profile.base_radius_mm();
-    let beam = Beam {
-        from: Vec3::new(base.x, base.y, base.z + profile.base_height_mm()),
-        to: Vec3::new(base.x, base.y, base.z + SURFACE_EPSILON_MM),
-        from_radius_mm: radius_mm,
-        to_radius_mm: radius_mm,
-    }
-    .with_clearance(profile.clearance_mm);
-    clear(placed, &beam)
+    pad_clear(placed, base, profile)
 }
 
 /// How much ground the face `normal` belongs to covers per millimetre it rises, or `None`
@@ -522,18 +628,26 @@ fn lean_of(normal: Vec3, steepest_deg: Scalar) -> Option<Scalar> {
 /// The sweep begins the body's own width and clearance below its top. The top is where
 /// a head leaves the face it holds, and a head leaning at 45 degrees ends that near the
 /// face: asking for clear air all round it there refuses the very surface it stands
-/// under, which is how a contact under a rounded underside was left with no column.
+/// under, which is how a contact under a rounded underside was left with no column. That
+/// stretch is still kept out of the model itself, bare (ADR 0328).
 fn stands_clear(placed: &Placed, body: &Beam, profile: &SupportProfile) -> bool {
-    if body.from.z - body.to.z < MIN_BODY_MM {
+    let height_mm = body.from.z - body.to.z;
+    if height_mm < MIN_BODY_MM {
         return true;
     }
     let under_the_head = body.from_radius_mm + profile.clearance_mm;
-    clear(
-        placed,
-        &body
-            .with_clearance(profile.clearance_mm)
-            .trimmed(under_the_head),
-    )
+    let top = Beam {
+        to: body.from - Vec3::Z * under_the_head.min(height_mm),
+        to_radius_mm: body.from_radius_mm,
+        ..*body
+    };
+    clear(placed, &top.trimmed(10.0 * SURFACE_EPSILON_MM))
+        && clear(
+            placed,
+            &body
+                .with_clearance(profile.clearance_mm)
+                .trimmed(under_the_head),
+        )
 }
 
 #[cfg(test)]
@@ -816,9 +930,44 @@ mod tests {
     }
 
     #[test]
+    fn a_pad_with_nowhere_to_move_is_cut_back_on_the_kerbs_side() {
+        // The same step with the trunk 1.9 mm off it: the pad would have to move 2.6 mm
+        // and has 2.3, but cut back to 1.4 mm on that side it still holds the 1.1 mm flare.
+        let kerb = box_mesh(Vec3::new(-10.0, -10.0, 0.0), Vec3::new(1.0, 10.0, 2.0));
+        let landing = landing_on(
+            &kerb,
+            Transform::default(),
+            Vec3::new(2.9, 0.0, 20.0),
+            &profile(),
+        )
+        .expect("a cut pad has room");
+        let cut = landing.pad_cut.expect("the pad is cut, not moved");
+        assert_eq!(landing.pad_offset, Vec2::ZERO);
+        assert!(
+            (cut.reach_at(std::f32::consts::PI) - 1.4).abs() < 1e-3,
+            "it stops its clearance short of the kerb, got {}",
+            cut.reach_at(std::f32::consts::PI)
+        );
+    }
+
+    #[test]
+    fn a_toe_standing_inside_a_pad_is_in_its_way() {
+        // A toe 1 mm across standing 2.5 mm out from the pad's middle, between its axis and
+        // its rim, where no ray down the pad's rim or axis meets it.
+        let toe = box_mesh(Vec3::new(2.0, 1.0, 0.0), Vec3::new(3.0, 2.0, 3.0));
+        let bvh = Bvh::build(&toe);
+        let placed = Placed::new(&toe, &bvh, Transform::default());
+        assert!(!foot_clear(&placed, Vec3::ZERO, &profile()));
+        assert!(
+            foot_clear(&placed, Vec3::new(-10.0, 0.0, 0.0), &profile()),
+            "a pad well away from it is clear"
+        );
+    }
+
+    #[test]
     fn a_pad_with_nowhere_to_go_is_no_landing() {
         // The same step with the trunk 1.3 mm off it: the pad would have to move 3.2 mm,
-        // and has 2.3.
+        // and has 2.3, and cut back it would bare the flare.
         let kerb = box_mesh(Vec3::new(-10.0, -10.0, 0.0), Vec3::new(1.0, 10.0, 2.0));
         assert!(
             landing_on(
@@ -1068,6 +1217,32 @@ mod tests {
         assert!(
             along.abs_diff_eq(-Vec3::Z, 1e-4),
             "out and down from this wall is into the other one, got {along}"
+        );
+    }
+
+    #[test]
+    fn a_head_beside_a_lip_turns_away_rather_than_cure_into_it() {
+        // A slab's underside at z = 10, and a lip 1.5 mm deep hanging from it at x = 10:
+        // straight down from 0.3 mm short of the lip, the widening head runs into it.
+        let mut model = box_mesh(Vec3::new(0.0, -5.0, 10.0), Vec3::new(10.0, 5.0, 12.0));
+        let lip = box_mesh(Vec3::new(10.0, -5.0, 8.5), Vec3::new(11.0, 5.0, 12.0));
+        let offset = model.vertices.len() as u32;
+        model.vertices.extend_from_slice(&lip.vertices);
+        model
+            .faces
+            .extend(lip.faces.iter().map(|face| face.map(|at| at + offset)));
+        let bvh = Bvh::build(&model);
+        let placed = Placed::new(&model, &bvh, Transform::default());
+
+        let contact = Vec3::new(9.7, 0.0, 10.0);
+        let neck = neck_of(&placed, contact, &profile());
+        assert!(
+            neck.x < contact.x - 0.5,
+            "the head leans off the lip, got its neck at {neck}"
+        );
+        assert!(
+            head_clear(&placed, contact, neck, -Vec3::Z, &profile(), 0.0),
+            "and nothing of it but the tip meets the model"
         );
     }
 

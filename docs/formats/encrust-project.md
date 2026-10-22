@@ -49,6 +49,7 @@ hold no built geometry or diagnostics.
 | `objects[]` | name, plate, `Transform`, visibility, the import summary, and what each tool placed |
 | `objects[].supports.grown` | every tree the automatic run grew, in the model's own space |
 | `objects[].supports.grown[].landing.pad_offset` | how far a tree's pad stands off its trunk on the plate, on `frozen` trees too (ADR 0239); absent in older files and read as none |
+| `objects[].supports.grown[].landing.pad_cut` | how far a tree's pad reaches in each of 16 sectors where the model cut it back, `reach_mm`, mm (ADR 0328); absent in older files and read as a whole pad |
 | `objects[].supports.grown[].landing.on_support` | the tree ends on the trunk of a thicker tree of another group, on `frozen` trees too (ADR 0248); absent in older files and read as false |
 | `objects[].supports.raft_lift_mm` | how much of the height in `transform` is the raft's lift (ADR 0238); absent in older files and read as 0 |
 | `supports.raft` | the raft every model without its own stands on (ADR 0253); absent in older files, where it is read from the first group's profile |

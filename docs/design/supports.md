@@ -35,7 +35,12 @@ steep, and failing that run on one strut straight onto the model under it — on
 that looks up at it, so a contact inside the model is not run out through its skin. A head
 is not sent straight down where down is into the solid. A contact on an edge or a corner sits on every face meeting there
 and leaves the one that looks down most, so the support under a low point of the model is
-shaped like the rest. Everything below is measured from the neck, not from the contact.
+shaped like the rest. Only the tip may meet the model: the whole head, contact to pillar
+width with `clearance_mm` round it, is swept once it has left its own face's plane, and a
+head that meets the model there turns — straight down, then 15, 30 and 45 degrees off its
+direction in eight ways — to the first that is clear, with its clearance and then bare,
+and keeps its direction where none is (ADR 0328). Everything below is measured from the
+neck, not from the contact.
 
 A ray runs down from `SURFACE_EPSILON_MM` (1 µm) below the neck — starting at the surface
 itself would report the contact's own face at zero distance.
@@ -81,8 +86,11 @@ its rings run past the contact and rings never climb, so the neck is shorter tha
 corners sit on, so a cube's side is that over √2. Every pad is that wide, and neighbouring
 pads overlap into one where their supports stand closer than it. A pad the model is in the
 way of is moved aside whole — `Landing::pad_offset`, tried in eight directions as far as
-still leaves the flare inside its sole — and where that is not room enough the support
-has no landing there and leans for one like any other blocked front (ADR 0239). The foot is a tube of its own, because a
+still leaves the flare inside its sole. Where that is not room enough the pad is cut
+back instead, `Landing::pad_cut`: the nearest model along each of 16 sectors' edges and
+middle, at its sole, middle and top, less `clearance_mm`, as long as no sector bares the
+flare; the mesher pulls the foot's vertices in to it. Failing that the support has no
+landing there and leans for one like any other blocked front (ADR 0239, 0328). The foot is a tube of its own, because a
 tube has one side count, and the trunk runs down through it — the same overlap rule as
 every joint (ADR 0041).
 
@@ -373,11 +381,13 @@ a vertical trunk to their landing. `branching.enabled = false` gives back step 7
 exactly.
 
 **Keeping out of the model.** Every body — each strut of a merge, the trunk under every
-landing, and the foot on the plate — is swept as a beam of its own radius plus
-`clearance_mm` and tested with nine rays: its axis and eight on the ring (ADR 0077). A first hit on a back face is a body that set off inside
+landing — is swept as a beam of its own radius plus `clearance_mm` and tested with nine
+rays: its axis and eight on the ring (ADR 0077). A foot on the plate is tested from its
+middle out instead, 48 rays across the plate at three heights, so a toe standing inside
+it is found too (ADR 0328). A first hit on a back face is a body that set off inside
 the solid, which a forward ray otherwise reports as clear air out to the far wall. Where a
-body belongs in the surface it is exempt: the head at a tip is trimmed off by
-`top.length_mm`, and a landing stops the beam `(radius + clearance) · tan(slope)` above the
+body belongs in the surface it is exempt: the head at a tip is swept on its own (ADR
+0328), the top of a trunk under it bare, and a landing stops the beam `(radius + clearance) · tan(slope)` above the
 face, which is where the beam already reaches it. A face leaning more than 45 degrees from
 horizontal is not a landing: there is nothing under a foot on it.
 

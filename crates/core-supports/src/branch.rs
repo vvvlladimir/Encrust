@@ -137,6 +137,7 @@ fn stand_small_pillars_on_supports(
                 base: meet,
                 on_model: true,
                 pad_offset: Vec2::ZERO,
+                pad_cut: None,
                 on_support: true,
             });
         }
@@ -624,6 +625,7 @@ impl<'a> Forest<'a> {
                 base: candidate.meet,
                 on_model: true,
                 pad_offset: Vec2::ZERO,
+                pad_cut: None,
                 on_support: true,
             },
         ));
@@ -830,6 +832,7 @@ impl<'a> Forest<'a> {
                     base: under.point,
                     on_model: true,
                     pad_offset: Vec2::ZERO,
+                    pad_cut: None,
                     on_support: false,
                 };
                 let mut tree = SupportTree::new(vec![node], 0, landing);

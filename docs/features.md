@@ -321,6 +321,8 @@ whole-surface fill is Cmd-Shift-click.
   to the profile chosen for the group in hand.
 - Nearby tips merge into shared **branching trunks**. Trunks are cones sized by their
   height and load, and nothing carrying a load leans more than 45°.
+- Only the tip touches the model: a head that would run into the part beside its contact
+  turns away, and a pad beside a part that cannot be moved aside is cut back on that side.
 - A tip that has no room leans until it finds some. A support that still has no room is
   reported and left out of the print, never forced into the model.
 - **Lift off the plate** stands the picked model that high, a millimetre a press of − or

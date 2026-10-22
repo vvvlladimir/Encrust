@@ -6,6 +6,7 @@ use crate::Landing;
 use crate::base::{braces, skate, skate_half_width_mm, toe_of};
 use crate::column::SURFACE_EPSILON_MM;
 use crate::group::Profiles;
+use crate::pad::PAD_SECTORS;
 use crate::raft::raft;
 use crate::tree::{SupportTree, TreeNode};
 
@@ -195,6 +196,7 @@ pub(crate) fn mesh_head(contact: Vec3, neck: Vec3, profile: &SupportProfile) -> 
         base: neck,
         on_model: false,
         pad_offset: Vec2::ZERO,
+        pad_cut: None,
         on_support: false,
     };
     let tree = SupportTree::new(nodes, 1, landing);
@@ -315,7 +317,14 @@ fn stand_on(mesh: &mut Mesh, tree: &SupportTree, profile: &SupportProfile) {
     }
     if profile.bottom.shape.is_round() {
         if let Some(tube) = foot(tree, profile, style) {
+            let first = mesh.vertices.len();
             sweep(mesh, &tube);
+            if let Some(cut) = tree.landing().pad_cut {
+                let centre = tree.landing().pad_centre();
+                for vertex in &mut mesh.vertices[first..] {
+                    *vertex = cut.pull_in(centre, *vertex);
+                }
+            }
         }
         return;
     }
@@ -519,6 +528,12 @@ fn foot(tree: &SupportTree, profile: &SupportProfile, style: Style) -> Option<Tu
     // the model was in the way; see `docs/decisions/0239`.
     let centre = landing.pad_centre();
     let top = Vec3::new(centre.x, centre.y, landing.pillar_bottom_z(profile));
+    // A cut pad is drawn with a side to every half sector, so the cut keeps its shape.
+    let facets = if landing.pad_cut.is_some() {
+        profile.facets.max(2 * PAD_SECTORS as u32)
+    } else {
+        profile.facets
+    };
 
     // The bevel is what a blade gets under: the pad meets the plate on a rim pulled in
     // from its widest point. See `docs/decisions/0044` and `docs/decisions/0130`.
@@ -533,7 +548,7 @@ fn foot(tree: &SupportTree, profile: &SupportProfile, style: Style) -> Option<Tu
         top,
         direction: -Vec3::Z,
         rings,
-        sides: shape.sides(profile.facets) as usize,
+        sides: shape.sides(facets) as usize,
         apex: None,
         tail: None,
     })
@@ -695,6 +710,34 @@ mod tests {
             Transform::default(),
             Profiles::single(profile),
         )
+    }
+
+    #[test]
+    fn a_pad_cut_back_by_a_kerb_is_closed_and_stops_short_of_it() {
+        // A kerb 2 mm tall with its face at x = 1, and a trunk 1.9 mm off it: too near to
+        // move the pad aside, so it is cut back to keep its 0.5 mm of air.
+        let kerb = box_mesh(Vec3::new(-10.0, -10.0, 0.0), Vec3::new(1.0, 10.0, 2.0));
+        let profile = profile();
+        let trees = trees_on(
+            &[SupportPoint::new(Vec3::new(2.9, 0.0, 20.0))],
+            &kerb,
+            Transform::default(),
+            Profiles::single(&profile),
+        );
+        assert!(trees[0].landing().pad_cut.is_some(), "the pad is cut");
+        let mesh = meshed(&trees, Profiles::single(&profile));
+        let diagnostics = diagnose(&mesh);
+        assert_eq!(diagnostics.boundary_edges, 0, "a cut pad has no open edges");
+        assert_eq!(diagnostics.non_manifold_edges, 0);
+        let nearest = mesh
+            .vertices
+            .iter()
+            .map(|at| at.x)
+            .fold(Scalar::INFINITY, Scalar::min);
+        assert!(
+            nearest >= 1.5 - 1e-3,
+            "nothing of it comes within the clearance of the kerb, got x = {nearest}"
+        );
     }
 
     #[test]

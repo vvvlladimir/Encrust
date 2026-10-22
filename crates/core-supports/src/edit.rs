@@ -131,6 +131,7 @@ pub fn tip_carried(
                 pad_offset: inverse
                     .transform_vector3(under.pad_offset.extend(0.0))
                     .truncate(),
+                pad_cut: under.pad_cut.map(|cut| cut.moved(inverse)),
                 ..under
             });
         }

@@ -215,6 +215,7 @@ impl SupportTree {
         moved.landing.pad_offset = matrix
             .transform_vector3(moved.landing.pad_offset.extend(0.0))
             .truncate();
+        moved.landing.pad_cut = moved.landing.pad_cut.map(|cut| cut.moved(matrix));
         moved
     }
 
@@ -232,6 +233,7 @@ impl SupportTree {
             base,
             on_model: false,
             pad_offset: Vec2::ZERO,
+            pad_cut: None,
             on_support: false,
         };
     }
