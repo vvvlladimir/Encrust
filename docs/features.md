@@ -304,8 +304,10 @@ whole-surface fill is Cmd-Shift-click.
 - **Grow the supports** for the whole plate, one model or only the parts you picked.
 - Supports go only under what actually hangs over nothing, stay out of the model, and each
   one holds only the part it stands under.
-- A point or a needle hanging down is held at its very tip, however thin; a speck of
-  less than 0.01 mm³ is left alone. Small islands are held closer than large ones.
+- A point or a needle hanging down is held at its very tip, however thin, and every
+  island Check would name is touched where it begins, even with a bite of nought; a speck
+  too small for Check to name is left alone. Small islands are held closer than large
+  ones. A flat tip meets its face with its whole end, however its head leans.
 - A face looking straight down is held at the contact spacing, and one leaning just past
   the overhang angle at the wider **spacing on steep faces**; between them the spacing
   follows the angle.

@@ -21,6 +21,7 @@ mod edit;
 mod field;
 mod generate;
 mod group;
+mod islands;
 mod load;
 mod low;
 mod mesher;

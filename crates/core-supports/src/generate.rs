@@ -10,6 +10,7 @@ use crate::config::{
 };
 use crate::detect::{across_mm, unsupported};
 use crate::field::{Field, Grid, Parts};
+use crate::islands::{grid_of, hold_islands};
 use crate::load::{Load, Mark};
 use crate::low::Lows;
 use crate::need::{Need, Reason};
@@ -36,8 +37,9 @@ const READ_BLOCK: usize = 32;
 /// Nothing is put where `blocked` reaches: a painted patch keeps automatic placement off
 /// it the way it keeps a hand-placed support off it; see `docs/decisions/0093`.
 ///
-/// The returned contacts sit a layer under the surface that needs them, each with what it
-/// holds there. Whether one can actually stand there is a question for [`crate::columns`].
+/// The returned contacts sit a layer under the surface that needs them, or on the low
+/// point an island begins at, each with what it holds there. Whether one can actually
+/// stand there is a question for [`crate::columns`].
 ///
 /// `sizing` is the automatic profile a run sizes its supports by: with one, a step and the
 /// faces just above it are held as steps rather than overhangs; see `docs/decisions/0326`.
@@ -52,7 +54,7 @@ pub fn generate_supports(
     blocked: Option<&Blocked>,
     progress: &mut dyn FnMut(usize) -> bool,
 ) -> Vec<Need> {
-    let Some(grid) = grid_of(stack) else {
+    let Some(grid) = grid_of(stack, GRID_PITCH_MM) else {
         return Vec::new();
     };
     let config = SampleConfig::for_profile(profile);
@@ -130,6 +132,17 @@ pub fn generate_supports(
         first_held += spent;
     }
 
+    let mut contacts: Vec<Vec3> = placed.iter().map(|(contact, _)| *contact).collect();
+    let skip = |at: Vec3| at.z <= pass.lowest_contact_mm || pass.refuses(at);
+    let added = hold_islands(stack, layer_height_mm, &mut contacts, seeds, lows, skip);
+    for ((contact, _), moved) in placed.iter_mut().zip(contacts) {
+        *contact = moved;
+    }
+    placed.extend(
+        added
+            .into_iter()
+            .map(|(at, area_mm2)| (at, Why::Island { area_mm2 })),
+    );
     needs(placed, &load)
 }
 
@@ -1021,22 +1034,6 @@ fn middle_of(piece: &Field) -> Option<[i32; 2]> {
     Some([row.first()?.x0, y])
 }
 
-/// The grid the whole stack is read on, or `None` when there is nothing on it.
-fn grid_of(stack: &Sliced) -> Option<Grid> {
-    let mut min = Vec2::splat(Scalar::INFINITY);
-    let mut max = Vec2::splat(Scalar::NEG_INFINITY);
-    for point in stack
-        .layers
-        .iter()
-        .flat_map(|layer| &layer.contours)
-        .flat_map(|contour| &contour.points)
-    {
-        min = min.min(*point);
-        max = max.max(*point);
-    }
-    (min.x <= max.x).then(|| Grid::covering(min, max, GRID_PITCH_MM))
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1829,8 +1826,73 @@ mod tests {
 
     #[test]
     fn a_speck_too_small_to_print_is_left_alone() {
-        let speck = box_mesh(Vec3::new(0.0, 0.0, 10.0), Vec3::new(0.15, 0.15, 10.4));
+        // 0.0036 mm², under the least piece the printed stack names an island.
+        let speck = box_mesh(Vec3::new(0.0, 0.0, 10.0), Vec3::new(0.06, 0.06, 10.4));
         assert!(supports_for(&speck).is_empty());
+    }
+
+    #[test]
+    fn a_speck_the_stack_names_an_island_is_held() {
+        // 0.0225 mm², and dust by its resin: it never grows, but it cures on the film.
+        let speck = box_mesh(Vec3::new(0.0, 0.0, 10.0), Vec3::new(0.15, 0.15, 10.4));
+        let points = supports_for(&speck);
+        assert!(
+            points
+                .iter()
+                .any(|point| (0.0..=0.15).contains(&point.x) && (0.0..=0.15).contains(&point.y)),
+            "the speck hangs in mid-air, got {points:?}"
+        );
+    }
+
+    /// A pyramid of `side_mm` standing on its point at (`x`, `y`, 10), `tall_mm` high.
+    fn pyramid_on_its_point(x: Scalar, y: Scalar, side_mm: Scalar, tall_mm: Scalar) -> Mesh {
+        let h = side_mm / 2.0;
+        let top = 10.0 + tall_mm;
+        Mesh::new(
+            vec![
+                Vec3::new(x, y, 10.0),
+                Vec3::new(x - h, y - h, top),
+                Vec3::new(x + h, y - h, top),
+                Vec3::new(x + h, y + h, top),
+                Vec3::new(x - h, y + h, top),
+            ],
+            vec![
+                [0, 2, 1],
+                [0, 3, 2],
+                [0, 4, 3],
+                [0, 1, 4],
+                [1, 2, 3],
+                [1, 3, 4],
+            ],
+        )
+    }
+
+    #[test]
+    fn a_lobe_hanging_under_a_part_is_held_where_it_begins() {
+        // Too narrow for the placement grid on its first layers, which cure on the film.
+        let lobe = pyramid_on_its_point(5.33, 5.27, 1.0, 0.2);
+        let part = box_mesh(Vec3::new(0.0, 0.0, 10.2), Vec3::new(10.0, 10.0, 12.0));
+        let model = merged(&lobe, &part);
+        let lows = crate::low_points(&model, core_geometry::Transform::default());
+        let points = generate_supports(
+            &slice(&model),
+            LAYER_HEIGHT_MM,
+            &profile(),
+            &[],
+            &lows,
+            None,
+            &mut |_| true,
+        );
+        // The lobe's faces rise 0.4 mm a millimetre out from its point, and its first
+        // layer is cut half a layer over the point.
+        let surface_z =
+            |point: &Vec3| 10.0 + 0.4 * (point.x - 5.33).abs().max((point.y - 5.27).abs());
+        assert!(
+            points.iter().any(|point| {
+                point.z <= surface_z(point) && surface_z(point) < 10.0 + LAYER_HEIGHT_MM / 2.0
+            }),
+            "the lobe's point at (5.33, 5.27, 10) is its first layer, got {points:?}"
+        );
     }
 
     #[test]

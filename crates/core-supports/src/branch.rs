@@ -1250,9 +1250,14 @@ mod tests {
             &model,
             Profiles::single(&profile()),
         );
+        let highest = forest
+            .iter()
+            .flat_map(SupportTree::nodes)
+            .map(|node| node.position.z)
+            .fold(Scalar::NEG_INFINITY, Scalar::max);
         assert!(
-            forest.is_empty(),
-            "a strut built in the solid holds nothing up and pokes out of the part"
+            highest <= 5.0 + 1e-4,
+            "the tip is moved onto the underside at z = 5, not built in the solid, got {highest}"
         );
     }
 

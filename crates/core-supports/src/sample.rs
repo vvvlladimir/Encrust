@@ -34,8 +34,9 @@ const STANCE_REACH: (i32, i32) = (4, 5);
 /// grid's own origin rather than to the piece, so the same place comes up on every layer
 /// a slope passes through and the coverage check thins the run to one support per place.
 ///
-/// A piece too small to hold two supports is all corner, so it still comes back with one:
-/// this never returns nothing for a piece that has cells.
+/// A piece too small to hold two supports comes back with one at its middle, where its
+/// corners would leave the rest of it a lever: this never returns nothing for a piece
+/// that has cells.
 pub fn sample_piece(piece: &Field, room: &Field, inset: i32, spacing: i32) -> Vec<[i32; 2]> {
     let spacing = spacing.max(1);
     let (clear, narrow) = standing_room(piece, room, inset);
@@ -64,7 +65,24 @@ pub fn sample_piece(piece: &Field, room: &Field, inset: i32, spacing: i32) -> Ve
             }
         }
     }
+    if points.len() == 1 {
+        let room = if clear.is_empty() { &narrow } else { &clear };
+        return middle_of(room).into_iter().collect();
+    }
     points
+}
+
+/// The cell of `field` nearest the mean of its cells, or `None` for an empty one.
+fn middle_of(field: &Field) -> Option<[i32; 2]> {
+    let (mut sum, mut count) = ([0i64; 2], 0i64);
+    for [x, y] in cells_of(field) {
+        sum[0] += i64::from(x);
+        sum[1] += i64::from(y);
+        count += 1;
+    }
+    let mean = sum.map(|total| total as f32 / count.max(1) as f32);
+    let distance = |[x, y]: [i32; 2]| (x as f32 - mean[0]).powi(2) + (y as f32 - mean[1]).powi(2);
+    cells_of(field).min_by(|a, b| distance(*a).total_cmp(&distance(*b)))
 }
 
 /// Where the supports that steady one part go: a few on its outline, as far apart as it
@@ -470,6 +488,19 @@ mod tests {
         let points = sampled(&piece, SPACING);
         assert_eq!(points.len(), 1);
         assert!(piece.contains(points[0][0], points[0][1]));
+    }
+
+    #[test]
+    fn a_sliver_held_at_one_place_is_held_at_its_middle() {
+        // 0.8 by 0.3 mm: one support's worth, which an end would leave as a lever.
+        let piece = rectangle(10.0, 10.0, 0.8, 0.3);
+        let points = sampled(&piece, SPACING);
+        assert_eq!(points.len(), 1);
+        let [x, y] = points[0];
+        assert!(
+            (x - 104).abs() <= 1 && (y - 101).abs() <= 1,
+            "the middle of cells 100..108 by 100..103 is (104, 101), got ({x}, {y})"
+        );
     }
 
     #[test]

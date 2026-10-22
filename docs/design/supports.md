@@ -1,7 +1,7 @@
 # Supports
 
 How a support gets from a click into the printed file. Why it is built this way:
-ADR 0026–0029, 0031–0034, 0036, 0040–0044, 0092–0095.
+ADR 0026–0029, 0031–0034, 0036, 0040–0044, 0092–0095, 0330.
 
 ## The pipeline
 
@@ -75,7 +75,11 @@ sides are used for every ring; twelve puts the flats 0.026 mm inside the circle 
 pillar, finer than a 9K pixel.
 
 **Tips.** `plane`, the default, is the whole tip moved `bite_mm` along its axis into the
-model, ending on the sweep's flat disc of the contact's width (ADR 0243). `sphere` is a
+model, ending on the sweep's flat disc of the contact's width (ADR 0243). The disc is
+laid along the axis onto the face the tip sits on, so a head that leans off that face's
+normal still meets it with the whole disc, an ellipse as wide as the contact across the
+lean; past 75 degrees it stays square to the axis. The tip a trunk standing on the part
+ends in is laid on the face it lands on the same way (ADR 0330). `sphere` is a
 ball with its upper pole `bite_mm` in — more material inside the model, so a firmer hold;
 its rings run past the contact and rings never climb, so the neck is shorter than
 `top.length_mm`.
@@ -257,11 +261,22 @@ it, from one walk over the layer's spans, and summed where such pieces join. A l
 no adrift piece begins at within a millimetre of rise is a bump on a surface something
 already holds, and gets nothing.
 
+The grid is too coarse for a lobe a few tenths across, so once the climb is done every
+layer is read again on 0.02 mm cells, and every piece touching nothing under it — dust
+under 0.005 mm² aside, which the layer above does not stand on either — must have a
+contact on its seat, 0.06 mm in from its rim, within two layers under its plane. One
+without is held at the lowest low point on its seat, else the seat's cell nearest its
+middle: a placed contact on its rim is moved there, else the nearest within 0.3 mm, else
+one is added (ADR 0330). So a speck that never grows prints loose
+only if it is too small for the check to name.
+
 A contact goes a whole layer below the plane that was cut, because the surface is somewhere
 inside the layer's rise and a contact above it would land the column on the very surface it
 holds. The tip then sinks `contact_depth_mm` back in. A tip with no bite would never reach
 the surface from there, so building its column moves the contact up onto the face over it,
-when that face looks down and is no more than 0.5 mm above (ADR 0323).
+when that face looks down and is no more than 0.5 mm above (ADR 0323). A contact inside the
+model — a steadying support on the outline of a part's section — is moved down onto the
+underside its ray leaves through, whatever the bite (ADR 0330).
 
 **Where the points go.** The outline first, because a corner is where a ledge lifts and the
 edge is where the peel starts. Corners are the vertices of the piece's convex hull where it
@@ -273,7 +288,8 @@ rim cell is further than that from a support. The inside is filled from a lattic
 grid of a quarter of that into the gaps the rim's supports opened, both keeping three
 quarters of a spacing from what is taken; anchoring is what lets the coverage check thin a
 slope to one support per place rather than one per layer. A piece too small for two
-supports is all corner, so sampling never returns nothing. An island is sampled closer
+supports gets one at its middle, where a corner would leave it a lever, so sampling never
+returns nothing (ADR 0330). An island is sampled closer
 than an overhang, by its area: under 2.4 mm² at 13/18 of the spacing, under 3.2 mm² at
 15/18, and at the spacing itself above that, each keeping three quarters of its own
 spacing clear. It hangs on the film alone, with no edge of a part to steady it.

@@ -5,7 +5,7 @@ use printer_profiles::{ContactShape, SupportProfile};
 use crate::Landing;
 use crate::base::{braces, skate, skate_half_width_mm, toe_of};
 use crate::buttress::buttresses;
-use crate::column::SURFACE_EPSILON_MM;
+use crate::column::{SURFACE_EPSILON_MM, face_normal};
 use crate::group::Profiles;
 use crate::pad::PAD_SECTORS;
 use crate::raft::raft;
@@ -43,6 +43,10 @@ struct Style {
     /// The deepest a tip may bite, millimetres: half the wall behind its contact, so a
     /// tip on a thin edge is not pushed out through the far side.
     bite_limit_mm: Scalar,
+    /// The outward normal of the face a tip sits on, where it sits on one.
+    face: Option<Vec3>,
+    /// The outward normal of the face of the model a trunk stands on, where it does.
+    ground: Option<Vec3>,
 }
 
 impl Style {
@@ -57,6 +61,8 @@ impl Style {
                 && tree.tip_count() == 1
                 && run_mm(tree) <= profile.small_pillar.max_length_mm,
             bite_limit_mm: Scalar::INFINITY,
+            face: None,
+            ground: None,
         }
     }
 
@@ -222,6 +228,8 @@ pub(crate) fn mesh_head(contact: Vec3, neck: Vec3, profile: &SupportProfile) -> 
             Style {
                 small: false,
                 bite_limit_mm: Scalar::INFINITY,
+                face: None,
+                ground: None,
             },
         ),
     );
@@ -238,6 +246,7 @@ fn mesh_tree(slots: &mut Slots, tree: &SupportTree, profiles: Profiles, placed: 
             let into = nodes[child].position - nodes[parent].position;
             let style = Style {
                 bite_limit_mm: wall_mm(placed, nodes[child].position, into) * WALL_BITTEN,
+                face: face_normal(placed, nodes[child].position),
                 ..style
             };
             (style, profiles.of(tree.head_group(child)))
@@ -250,12 +259,17 @@ fn mesh_tree(slots: &mut Slots, tree: &SupportTree, profiles: Profiles, placed: 
         );
     }
     let mesh = slots.of(tree.group());
+    let style = Style {
+        ground: ground_normal(placed, tree.landing()),
+        ..style
+    };
     // A tree of one node has its tip on the trunk itself, held to the same half wall.
     let root = tree.root();
     let style = if root.is_leaf() {
         let into = root.position - trunk_bottom(tree, profile);
         Style {
             bite_limit_mm: wall_mm(placed, root.position, into) * WALL_BITTEN,
+            face: face_normal(placed, root.position),
             ..style
         }
     } else {
@@ -363,6 +377,8 @@ fn brace(from: Vec3, to: Vec3, radius_mm: Scalar, profile: &SupportProfile) -> T
         sides: profile.facets as usize,
         apex: None,
         tail: None,
+        seat: None,
+        sole: None,
     }
 }
 
@@ -397,6 +413,8 @@ fn strut(
         sides: profile.facets as usize,
         apex: apex_of(&nodes[child], direction, profile, style),
         tail: Some(to + direction * body_mm),
+        seat: seat_of(&nodes[child], profile, style),
+        sole: None,
     }
 }
 
@@ -429,8 +447,11 @@ fn trunk(tree: &SupportTree, profile: &SupportProfile, style: Style) -> Tube {
     let mut rings = Vec::with_capacity(8);
     head(&mut rings, root, profile, style, length);
     // A trunk run into another support ends plain, inside the trunk it joins.
+    let mut sole = None;
     let tail = if landing.on_model && !landing.on_support && !style.small {
-        foot_tip(&mut rings, length, base_mm, profile).then(|| top + direction * length)
+        let pointed = foot_tip(&mut rings, length, base_mm, profile);
+        sole = style.ground.filter(|_| !pointed);
+        pointed.then(|| top + direction * length)
     } else {
         push(&mut rings, length, base_mm);
         push(&mut rings, length + into_foot, base_mm);
@@ -444,6 +465,8 @@ fn trunk(tree: &SupportTree, profile: &SupportProfile, style: Style) -> Tube {
         sides: profile.facets as usize,
         apex: apex_of(root, direction, profile, style),
         tail,
+        seat: seat_of(root, profile, style),
+        sole,
     }
 }
 
@@ -562,6 +585,8 @@ fn foot(tree: &SupportTree, profile: &SupportProfile, style: Style) -> Option<Tu
         sides: shape.sides(facets) as usize,
         apex: None,
         tail: None,
+        seat: None,
+        sole: None,
     })
 }
 
@@ -615,6 +640,8 @@ fn flare(tree: &SupportTree, profile: &SupportProfile, style: Style) -> Option<T
         sides: profile.facets as usize,
         apex: None,
         tail: None,
+        seat: None,
+        sole: None,
     })
 }
 
@@ -678,6 +705,27 @@ fn head(
     let bite_mm = style.bite_mm(profile).min(top_mm);
     push(rings, -bite_mm, contact_mm);
     push(rings, top_mm - bite_mm, body_mm);
+}
+
+/// The outward normal of the face of the model `landing` stands on, if it stands on the
+/// model itself.
+fn ground_normal(placed: &Placed, landing: Landing) -> Option<Vec3> {
+    if !landing.on_model || landing.on_support {
+        return None;
+    }
+    let ray = Ray::new(landing.base + Vec3::Z * SURFACE_EPSILON_MM, -Vec3::Z);
+    raycast_placed(placed.model, placed.bvh, placed.transform, &ray)
+        .filter(|hit| hit.distance <= 2.0 * SURFACE_EPSILON_MM)
+        .map(|hit| hit.normal)
+}
+
+/// The face a plane tip is laid onto, for a tube that starts at one; a sphere, a small
+/// pillar and a joint have no flat end to lay.
+fn seat_of(node: &TreeNode, profile: &SupportProfile, style: Style) -> Option<Vec3> {
+    let plane = profile.tip.shape == ContactShape::Plane;
+    (node.is_leaf() && plane && !style.small)
+        .then_some(style.face)
+        .flatten()
 }
 
 /// Where the tip pokes into the model, for a tube that starts at a contact, and the pole

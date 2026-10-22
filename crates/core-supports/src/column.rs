@@ -223,12 +223,25 @@ pub(crate) fn column(
     }
 }
 
-/// `contact` moved up onto the face over it when the profile's tip does not bite.
+/// `contact` moved down onto the underside under it when it is inside the model, else up
+/// onto the face over it when the profile's tip does not bite.
 ///
 /// Automatic placement puts a contact a layer under the surface it holds, and a tip that
-/// does not sink in from there never touches that surface; see `docs/decisions/0323`.
+/// does not sink in from there never touches that surface; see `docs/decisions/0323`. A
+/// support steadying a part is put inside its outline, which a tip built from there would
+/// cure through; see `docs/decisions/0330`.
 fn onto_surface(placed: &Placed, contact: Vec3, profile: &SupportProfile) -> Vec3 {
-    if profile.contact_depth_mm() > 0.0 || on_surface(placed, contact) {
+    if on_surface(placed, contact) {
+        return contact;
+    }
+    // Leaving the model downwards is the one way out through a face that looks down.
+    let down = Ray::new(contact, -Vec3::Z);
+    if let Some(hit) = raycast_placed(placed.model, placed.bvh, placed.transform, &down)
+        .filter(|hit| hit.normal.z < 0.0)
+    {
+        return hit.point;
+    }
+    if profile.contact_depth_mm() > 0.0 {
         return contact;
     }
     let ray = Ray::new(contact, Vec3::Z);
@@ -480,6 +493,12 @@ fn runs_into(placed: &Placed, contact: Vec3, direction: Vec3, reach_mm: Scalar) 
     let ray = Ray::new(contact + direction * SURFACE_EPSILON_MM, direction);
     raycast_placed(placed.model, placed.bvh, placed.transform, &ray)
         .is_some_and(|hit| hit.distance < reach_mm || hit.normal.dot(direction) > 0.0)
+}
+
+/// The outward normal of the face a tip at `contact` sits on and leaves, if it sits on
+/// one; see [`tip_direction`].
+pub(crate) fn face_normal(placed: &Placed, contact: Vec3) -> Option<Vec3> {
+    tip_direction(placed, contact).1
 }
 
 /// Which way a tip leaves the surface at `contact`: the outward normal of a face that looks
@@ -795,6 +814,20 @@ mod tests {
             (column.contact.z - 7.0).abs() < 1e-4,
             "3 mm of air is a contact off the surface, not one a layer short of it"
         );
+    }
+
+    #[test]
+    fn a_contact_inside_the_part_is_put_on_the_underside_under_it() {
+        let mut flush = profile();
+        flush.tip.contact_depth_mm = 0.0;
+        for profile in [&flush, &profile()] {
+            let column = column_under_a_slab(-1.0, profile);
+            assert!(
+                (column.contact.z - 10.0).abs() < 1e-4,
+                "1 mm inside a slab whose underside is at z = 10, got {}",
+                column.contact.z
+            );
+        }
     }
 
     #[test]
