@@ -220,7 +220,10 @@ The stencil is the viewport's own: the scene is drawn into a window-sized colour
 a `Depth24PlusStencil8` plane in `render::target`, and one triangle copies the colour into
 egui's pass, the same in a browser as at the desk (ADR 0184). Which height the
 rail hands over depends on the mode, and `panels::section::cut_height` and `floor_height`
-are the one place that decides.
+are the one place that decides. Preview cuts at the plane the shown layer's mask is
+sampled at, not at the layer's top the readout states: the middle of the band with one
+sample, the highest of them with several, so the section shows nothing the mask lacks.
+Cut at the top, a part beginning in the upper half of a layer showed a layer early.
 
 ## Light
 

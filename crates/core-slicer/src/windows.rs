@@ -83,6 +83,12 @@ impl Windows {
         first..(first + self.window).min(self.heights.len())
     }
 
+    /// The highest plane sampled inside layer `layer`'s band: a section drawn there shows
+    /// nothing the layer's mask lacks, and with one sample it is the mask's own plane.
+    pub fn section_plane_of(&self, layer: usize) -> Option<Scalar> {
+        self.planes_of(layer).into_iter().reduce(Scalar::max)
+    }
+
     /// Every plane sampled inside layer `layer`'s band, the one nearest the middle first.
     ///
     /// `samples` planes split the band into that many equal parts and take the middle of
@@ -172,5 +178,35 @@ impl Windows {
             first = last;
         }
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn run(samples: u8) -> Windows {
+        let plan = LayerPlan::of_count(0.05, 10);
+        let samples = NonZeroU8::new(samples).expect("a run samples at least once");
+        Windows::planned(plan, samples, WINDOW_LAYERS)
+    }
+
+    #[test]
+    fn one_sample_is_sectioned_at_the_middle_of_its_layer() {
+        let plane = run(1).section_plane_of(3).expect("layer 3 is planned");
+        assert!(
+            (plane - 0.175).abs() < 1e-6,
+            "layer 3 spans 0.15..0.2, so its one plane is 0.175, got {plane}"
+        );
+    }
+
+    #[test]
+    fn several_samples_are_sectioned_at_the_highest() {
+        let plane = run(4).section_plane_of(3).expect("layer 3 is planned");
+        assert!(
+            (plane - 0.19375).abs() < 1e-6,
+            "four parts of 0.15..0.2 are sampled at their middles, the highest 0.19375, \
+             got {plane}"
+        );
     }
 }

@@ -272,6 +272,12 @@ impl Preview {
         self.top_of(self.layer)
     }
 
+    /// Height the viewport cuts the plate at for the layer being shown: the plane its
+    /// mask is sampled at rather than its top, so the section shows what the mask does.
+    pub fn section_z(&self) -> Option<Scalar> {
+        self.source.as_ref()?.windows.section_plane_of(self.layer)
+    }
+
     /// Bottom of layer `index` above the plate, millimetres, or `None` for the first,
     /// which stands on the plate.
     pub fn bottom_of(&self, index: usize) -> Option<Scalar> {
@@ -518,6 +524,18 @@ pub(crate) mod tests {
         // Every layer of the stack is the same 4 x 4 mm square.
         let area = preview.layer_area_mm2().expect("the stack has layers");
         assert!((area - 16.0).abs() < 1e-3, "expected 16 mm^2, got {area}");
+    }
+
+    #[test]
+    fn the_section_is_cut_where_the_mask_is_sampled() {
+        let mut preview = preview_with_stack(4);
+        preview.set_layer(1);
+        assert_eq!(preview.layer_z(), Some(1.0), "the top of the second layer");
+        assert_eq!(
+            preview.section_z(),
+            Some(0.75),
+            "the second half-millimetre layer is sampled at its middle"
+        );
     }
 
     #[test]

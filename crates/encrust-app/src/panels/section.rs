@@ -38,11 +38,12 @@ const RISK: egui::Vec2 = vec2(16.0, 2.0);
 /// Where the viewport cuts the plate's contents this frame, plate millimetres, or `None`
 /// when the whole model is drawn.
 ///
-/// The Preview mode always cuts at the layer it is showing, because that is what a layer
-/// preview is; the Prepare mode cuts only once the strip has been moved off the top.
+/// The Preview mode always cuts at the layer it is showing, where its mask is sampled,
+/// because that is what a layer preview is; the Prepare mode cuts only once the strip has
+/// been moved off the top.
 pub fn cut_height(mode: Mode, section: &Section, preview: &Preview) -> Option<Scalar> {
     match mode {
-        Mode::Preview => preview.layer_z(),
+        Mode::Preview => preview.section_z(),
         Mode::Prepare => section.height_mm,
     }
 }
