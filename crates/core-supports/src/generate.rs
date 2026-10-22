@@ -5,7 +5,8 @@ use rayon::prelude::*;
 
 use crate::column::MIN_PILLAR_HEIGHT_MM;
 use crate::config::{
-    GRID_PITCH_MM, MIN_ISLAND_MM, PLATE_CONTACT_MM, REFERENCE_RISE_MM, SampleConfig,
+    GRID_PITCH_MM, MICRO_ISLAND_HEIGHT_MM, MICRO_ISLAND_MM3, MIN_ISLAND_MM, PLATE_CONTACT_MM,
+    REFERENCE_RISE_MM, SampleConfig,
 };
 use crate::detect::{across_mm, unsupported};
 use crate::field::{Field, Grid, Parts};
@@ -74,7 +75,7 @@ pub fn generate_supports(
     for (block, layers) in stack.layers.chunks(READ_BLOCK).enumerate() {
         let fresh = fields.len();
         fields.par_extend(layers.par_iter().map(|layer| Field::of_layer(layer, &grid)));
-        let looked: Vec<(Parts, Vec<[i32; 2]>)> = (fresh..fields.len())
+        let looked: Vec<(Parts, Wanted)> = (fresh..fields.len())
             .into_par_iter()
             .map(|at| {
                 (
@@ -84,14 +85,14 @@ pub fn generate_supports(
             })
             .collect();
 
-        for (offset, (parts, cells)) in looked.into_iter().enumerate() {
+        for (offset, (parts, wanted)) in looked.into_iter().enumerate() {
             let index = block * READ_BLOCK + offset;
             if !progress(index) {
                 return placed;
             }
             let contact_mm = contact_of(&stack.layers[index], layer_height_mm);
             standing.climb(&parts, contact_mm);
-            pass.put_down(&mut standing, &parts, cells, contact_mm, &mut placed);
+            pass.put_down(&mut standing, &parts, wanted, contact_mm, &mut placed);
             standing.rest_on(parts);
         }
 
@@ -111,6 +112,14 @@ pub fn generate_supports(
 /// back into the model, and one that does not is put on it; see `docs/design/supports.md`.
 fn contact_of(layer: &Layer, layer_height_mm: Scalar) -> Scalar {
     layer.z - layer_height_mm
+}
+
+/// What one layer wants held: the cells supports go at, each with the radius it then
+/// holds, and the specks that began on it, each with one cell and its area in mm².
+#[derive(Default)]
+struct Wanted {
+    cells: Vec<([i32; 2], Scalar)>,
+    specks: Vec<([i32; 2], Scalar)>,
 }
 
 /// What one run measures with, so that one layer can be looked at on its own.
@@ -137,13 +146,12 @@ struct Pass<'a> {
 }
 
 impl Pass<'_> {
-    /// The cells of `fields[at]` that want a support, where that layer is `index` of the
-    /// stack and was cut at `cut`. `fields` holds it and the layers the lean is measured
-    /// back over.
-    fn wanted(&self, fields: &[Field], at: usize, index: usize, cut: &Layer) -> Vec<[i32; 2]> {
+    /// What `fields[at]` wants held, where that layer is `index` of the stack and was cut
+    /// at `cut`. `fields` holds it and the layers the lean is measured back over.
+    fn wanted(&self, fields: &[Field], at: usize, index: usize, cut: &Layer) -> Wanted {
         let layer = &fields[at];
         if layer.is_empty() || contact_of(cut, self.layer_height_mm) <= self.lowest_contact_mm {
-            return Vec::new();
+            return Wanted::default();
         }
 
         // The first layers of a stack have nothing under them to be measured against.
@@ -158,18 +166,38 @@ impl Pass<'_> {
         let rise_mm = seen as Scalar * self.layer_height_mm;
 
         let found = unsupported(layer, below, reference, self.grid, self.config, rise_mm);
-        if found.islands.is_empty() && found.overhangs.is_empty() {
-            return Vec::new();
+        if found.is_empty() {
+            return Wanted::default();
         }
         let room = layer.shrunk(self.inset);
+        let cell_mm2 = self.grid.millimetres_of(1).powi(2);
         // Islands first: a support put down under one also holds the overhang it is part
         // of, which the coverage check then leaves alone.
-        found
-            .islands
-            .iter()
-            .chain(&found.overhangs)
-            .flat_map(|piece| sample_piece(piece, &room, self.inset, self.spacing))
-            .collect()
+        let islands = found.islands.iter().flat_map(|piece| {
+            let spacing_mm = self
+                .config
+                .island_spacing_mm(piece.cell_count() as Scalar * cell_mm2);
+            let coverage_mm = self.config.coverage_at(spacing_mm);
+            let spacing = self.grid.cells_of(spacing_mm).max(1);
+            sample_piece(piece, &room, self.inset, spacing)
+                .into_iter()
+                .map(move |cell| (cell, coverage_mm))
+        });
+        let overhangs = found.overhangs.iter().flat_map(|piece| {
+            sample_piece(piece, &room, self.inset, self.spacing)
+                .into_iter()
+                .map(|cell| (cell, self.config.coverage_radius_mm))
+        });
+        Wanted {
+            cells: islands.chain(overhangs).collect(),
+            specks: found
+                .specks
+                .iter()
+                .filter_map(|speck| {
+                    Some((middle_of(speck)?, speck.cell_count() as Scalar * cell_mm2))
+                })
+                .collect(),
+        }
     }
 }
 
@@ -181,11 +209,20 @@ impl Pass<'_> {
         &self,
         standing: &mut Standing,
         parts: &Parts,
-        wanted: Vec<[i32; 2]>,
+        wanted: Wanted,
         contact_mm: Scalar,
         placed: &mut Vec<Vec3>,
     ) {
-        for (piece, tip) in self.hanging(standing, parts) {
+        for (cell, area_mm2) in wanted.specks {
+            let piece = parts.at(cell[0], cell[1]);
+            let at = self.grid.centre_mm(cell[0], cell[1]).extend(contact_mm);
+            if self.refuses(at) {
+                standing.leave(piece);
+            } else if let Some(piece) = piece {
+                standing.speck(piece, at, area_mm2 * self.layer_height_mm);
+            }
+        }
+        for (piece, tip) in self.hanging(standing, contact_mm) {
             if self.refuses(tip) {
                 standing.leave(Some(piece));
             } else {
@@ -193,14 +230,17 @@ impl Pass<'_> {
             }
         }
         let adrift = self.adrift(standing, parts, contact_mm);
-        for cell in adrift.into_iter().chain(wanted) {
+        let anywhere = self.config.coverage_radius_mm;
+        let cells = adrift.into_iter().map(|cell| (cell, anywhere));
+        for (cell, coverage_mm) in cells.chain(wanted.cells) {
             let at = self.grid.centre_mm(cell[0], cell[1]);
             // Asked before the cell is taken, or a place nothing may stand on would
             // still count as held and leave its neighbours a support short.
             if self.refuses(at.extend(contact_mm)) {
                 standing.leave(parts.at(cell[0], cell[1]));
             } else {
-                placed.extend(standing.take(parts.at(cell[0], cell[1]), at, contact_mm));
+                let piece = parts.at(cell[0], cell[1]);
+                placed.extend(standing.take(piece, at, contact_mm, coverage_mm));
             }
         }
         for (piece, cell) in self.unsteady(standing, parts, contact_mm) {
@@ -218,14 +258,19 @@ impl Pass<'_> {
             .is_some_and(|blocked| blocked.covers(contact, self.keep_out_mm))
     }
 
-    /// The pieces nothing holds that began at a low point of the model and have grown
-    /// into something worth holding, each with that point: where its support goes.
-    fn hanging(&self, standing: &Standing, parts: &Parts) -> Vec<(u32, Vec3)> {
+    /// The pieces nothing holds that began at a low point of the model or as a speck and
+    /// have grown into more than dust by the layer whose contacts sit at `contact_mm`,
+    /// each with the point it began at: where its support goes.
+    fn hanging(&self, standing: &Standing, contact_mm: Scalar) -> Vec<(u32, Vec3)> {
         standing
             .adrift()
-            .filter_map(|piece| Some((piece, standing.hung_from(piece)?)))
-            .filter(|(_, tip)| tip.z > self.lowest_contact_mm)
-            .filter(|(piece, _)| across_mm(&parts.piece(*piece), self.grid) >= MIN_ISLAND_MM)
+            .filter_map(|piece| Some((piece, standing.hung(piece)?)))
+            .filter(|(_, hung)| hung.point.z > self.lowest_contact_mm)
+            .filter(|(_, hung)| {
+                hung.volume_mm3 >= MICRO_ISLAND_MM3
+                    && contact_mm - hung.point.z >= MICRO_ISLAND_HEIGHT_MM
+            })
+            .map(|(piece, hung)| (piece, hung.point))
             .collect()
     }
 
@@ -287,8 +332,9 @@ struct Standing {
     /// of, counted no further than [`STEADY`]; a piece on the plate has that many. Kept
     /// apart from `held`, which forgets a support left far enough below.
     tips: Vec<u8>,
-    /// The low point each of those pieces began at, while nothing holds it yet.
-    hung: Vec<Option<Vec3>>,
+    /// Where each of those pieces began, at a low point or as a speck, while nothing
+    /// holds it yet.
+    hung: Vec<Option<Hung>>,
     /// The model's low points the climb has still to match to a piece.
     lows: Lows,
     /// The pieces of the layer below, so a piece can be followed onto what it grew from.
@@ -303,6 +349,15 @@ struct Standing {
     /// layer under the surface it holds and a seed sits on it, so the two disagree by
     /// exactly that much.
     above_mm: Scalar,
+    /// The resin one cell of one layer holds, cubic millimetres.
+    cell_mm3: Scalar,
+}
+
+/// Where a piece nothing holds began, and how much resin has grown out of it since.
+#[derive(Debug, Clone, Copy)]
+struct Hung {
+    point: Vec3,
+    volume_mm3: Scalar,
 }
 
 impl Standing {
@@ -329,6 +384,7 @@ impl Standing {
             waiting: Vec::new(),
             radius_mm: config.coverage_radius_mm.max(Scalar::MIN_POSITIVE),
             above_mm: layer_height_mm,
+            cell_mm3: grid.millimetres_of(1).powi(2) * layer_height_mm,
         }
     }
 
@@ -354,9 +410,16 @@ impl Standing {
         self.hung = parents
             .iter()
             .map(|grown_from| {
-                grown_from
+                let mut hung = grown_from
                     .iter()
-                    .find_map(|parent| self.hung[*parent as usize])
+                    .filter_map(|parent| self.hung[*parent as usize]);
+                let first = hung.next()?;
+                let volume_mm3 =
+                    first.volume_mm3 + hung.map(|other| other.volume_mm3).sum::<Scalar>();
+                Some(Hung {
+                    volume_mm3,
+                    ..first
+                })
             })
             .collect();
         self.tips = parents
@@ -370,6 +433,7 @@ impl Standing {
                     .min(STEADY)
             })
             .collect();
+        self.grow_hung(parts);
 
         // A piece that is the only child of its only parent takes that parent's set over
         // rather than copying it, which is the whole of a wall going straight up.
@@ -424,13 +488,42 @@ impl Standing {
             tips[piece as usize] == 0 && hung[piece as usize].is_none()
         });
         for (piece, point) in claimed {
-            self.hung[piece as usize] = Some(point);
+            self.hung[piece as usize] = Some(Hung {
+                point,
+                volume_mm3: 0.0,
+            });
         }
     }
 
-    /// The low point `piece` began at, if it began at one.
-    fn hung_from(&self, piece: u32) -> Option<Vec3> {
+    /// Adds the layer just climbed to onto what has grown out of every piece still hung.
+    fn grow_hung(&mut self, parts: &Parts) {
+        if self.hung.iter().all(Option::is_none) {
+            return;
+        }
+        let cells = parts.cells();
+        for ((hung, tips), cells) in self.hung.iter_mut().zip(&self.tips).zip(cells) {
+            if let Some(hung) = hung.as_mut().filter(|_| *tips == 0) {
+                hung.volume_mm3 += cells as Scalar * self.cell_mm3;
+            }
+        }
+    }
+
+    /// Where `piece` began, if it began at a low point or as a speck.
+    fn hung(&self, piece: u32) -> Option<Hung> {
         self.hung.get(piece as usize).copied().flatten()
+    }
+
+    /// Hangs `piece`, a speck nothing holds, from `point`, with the resin of its first
+    /// layer.
+    fn speck(&mut self, piece: u32, point: Vec3, volume_mm3: Scalar) {
+        let free = self.tips.get(piece as usize) == Some(&0);
+        if let Some(hung) = self
+            .hung
+            .get_mut(piece as usize)
+            .filter(|hung| free && hung.is_none())
+        {
+            *hung = Some(Hung { point, volume_mm3 });
+        }
     }
 
     /// Puts a support under `piece` at `tip`, the point it hangs from.
@@ -513,13 +606,13 @@ impl Standing {
     /// Puts a support at `at` on the underside of `piece` at height `z`, unless one
     /// standing under the same piece already holds that place. Returns the contact it
     /// placed.
-    fn take(&mut self, piece: Option<u32>, at: Vec2, z: Scalar) -> Option<Vec3> {
+    fn take(&mut self, piece: Option<u32>, at: Vec2, z: Scalar, reach_mm: Scalar) -> Option<Vec3> {
         let contact = at.extend(z);
         let Some(piece) = piece.filter(|piece| (*piece as usize) < self.held.len()) else {
             return Some(contact);
         };
         let held = &mut self.held[piece as usize];
-        if held.holds(at, z, self.radius_mm, self.above_mm) {
+        if held.holds(at, z, reach_mm, self.radius_mm, self.above_mm) {
             return None;
         }
         held.add(contact, self.radius_mm);
@@ -537,8 +630,16 @@ struct Held {
 }
 
 impl Held {
-    /// Whether anything here already holds `at` on the layer whose contacts sit at `z`.
-    fn holds(&self, at: Vec2, z: Scalar, radius_mm: Scalar, above_mm: Scalar) -> bool {
+    /// Whether anything here within `reach_mm` already holds `at` on the layer whose
+    /// contacts sit at `z`; `reach_mm` is no more than the side of a bucket.
+    fn holds(
+        &self,
+        at: Vec2,
+        z: Scalar,
+        reach_mm: Scalar,
+        radius_mm: Scalar,
+        above_mm: Scalar,
+    ) -> bool {
         let home = bucket_of(at, radius_mm);
         (-1..=1).any(|dy| {
             (-1..=1).any(|dx| {
@@ -546,7 +647,7 @@ impl Held {
                     .get(&packed([home[0] + dx, home[1] + dy]))
                     .is_some_and(|points| {
                         points.iter().any(|point| {
-                            let reach = reach_at(z - point.z, radius_mm, above_mm);
+                            let reach = reach_at(z - point.z, reach_mm, above_mm);
                             (point.truncate() - at).length_squared() < reach * reach
                         })
                     })
@@ -622,6 +723,17 @@ fn bucket_of(at: Vec2, radius_mm: Scalar) -> [i32; 2] {
         (at.x / radius_mm).floor() as i32,
         (at.y / radius_mm).floor() as i32,
     ]
+}
+
+/// One cell of `piece`: the middle of its bounds where the piece covers it, else its first.
+fn middle_of(piece: &Field) -> Option<[i32; 2]> {
+    let (min, max) = piece.bounds()?;
+    let middle = [i32::midpoint(min[0], max[0]), i32::midpoint(min[1], max[1])];
+    if piece.contains(middle[0], middle[1]) {
+        return Some(middle);
+    }
+    let (y, row) = piece.rows().next()?;
+    Some([row.first()?.x0, y])
 }
 
 /// The grid the whole stack is read on, or `None` when there is nothing on it.
@@ -1102,6 +1214,23 @@ mod tests {
             "the upper island is a part of its own and is held on its own account, got \
              {} supports under it",
             held_at(11.5)
+        );
+    }
+
+    #[test]
+    fn a_needle_hanging_under_a_part_is_held_at_its_tip() {
+        // Never as wide as an island anywhere along it, but far more than dust.
+        let needle = box_mesh(Vec3::new(0.0, 0.0, 10.0), Vec3::new(0.3, 0.3, 13.0));
+        let part = box_mesh(Vec3::new(-5.0, -5.0, 13.0), Vec3::new(5.0, 5.0, 15.0));
+        let points = supports_for(&merged(&needle, &part));
+
+        assert!(
+            points.iter().any(|point| {
+                (0.0..=0.3).contains(&point.x)
+                    && (0.0..=0.3).contains(&point.y)
+                    && (point.z - 10.0).abs() <= 2.0 * LAYER_HEIGHT_MM
+            }),
+            "the needle's tip at z = 10 hangs in mid-air, got {points:?}"
         );
     }
 

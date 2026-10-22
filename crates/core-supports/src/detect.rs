@@ -10,14 +10,15 @@ pub struct Unsupported {
     /// Pieces that lean further out than the surface below them can carry. Held where
     /// they are big enough to be worth a column.
     pub overhangs: Vec<Field>,
+    /// Pieces with nothing beneath them that are too small to be islands yet: held where
+    /// they began once what grows out of them is more than dust.
+    pub specks: Vec<Field>,
 }
 
 impl Unsupported {
-    /// Whether the layer needs nothing at all. Only the tests ask: placement walks both
-    /// lists, and walking two empty lists is already nothing.
-    #[cfg(test)]
+    /// Whether the layer needs nothing at all.
     pub fn is_empty(&self) -> bool {
-        self.islands.is_empty() && self.overhangs.is_empty()
+        self.islands.is_empty() && self.overhangs.is_empty() && self.specks.is_empty()
     }
 }
 
@@ -49,11 +50,14 @@ pub fn unsupported(
 
     let mut islands = Vec::new();
     let mut ledges = Vec::new();
+    let mut specks = Vec::new();
     for piece in fresh.pieces() {
         if piece.adjoins(&carried) {
             ledges.push(piece);
         } else if across_mm(&piece, grid) >= crate::config::MIN_ISLAND_MM {
             islands.push(piece);
+        } else {
+            specks.push(piece);
         }
     }
 
@@ -73,7 +77,11 @@ pub fn unsupported(
         .filter(|piece| across_mm(piece, grid) >= config.min_overhang_mm)
         .collect();
 
-    Unsupported { islands, overhangs }
+    Unsupported {
+        islands,
+        overhangs,
+        specks,
+    }
 }
 
 /// The longer side of a piece's bounding box, millimetres. What "smaller than" means to

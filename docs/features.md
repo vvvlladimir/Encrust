@@ -304,6 +304,8 @@ whole-surface fill is Cmd-Shift-click.
 - **Grow the supports** for the whole plate, one model or only the parts you picked.
 - Supports go only under what actually hangs over nothing, stay out of the model, and each
   one holds only the part it stands under.
+- A point or a needle hanging down is held at its very tip, however thin; a speck of
+  less than 0.01 mm³ is left alone. Small islands are held closer than large ones.
 - Nearby tips merge into shared **branching trunks**. Trunks are cones sized by their
   height and load, and nothing carrying a load leans more than 45°.
 - A tip that has no room leans until it finds some. A support that still has no room is

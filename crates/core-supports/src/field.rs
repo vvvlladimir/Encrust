@@ -33,8 +33,7 @@ pub struct Span {
 }
 
 impl Span {
-    #[cfg(test)]
-    fn len(self) -> i32 {
+    pub(crate) fn len(self) -> i32 {
         self.x1 - self.x0
     }
 
@@ -259,9 +258,7 @@ impl Field {
         }
     }
 
-    /// Cells this field covers. Only the tests count them: what placement asks about a
-    /// piece is how far across it is, not how much of the film it holds down.
-    #[cfg(test)]
+    /// Cells this field covers.
     pub fn cell_count(&self) -> u64 {
         self.spans.iter().map(|span| span.len().max(0) as u64).sum()
     }
@@ -272,8 +269,7 @@ impl Field {
         self.cell_count() as Scalar * grid.pitch_mm * grid.pitch_mm
     }
 
-    /// Whether a cell is covered. Only the tests ask: placement walks the spans instead.
-    #[cfg(test)]
+    /// Whether a cell is covered.
     pub fn contains(&self, x: i32, y: i32) -> bool {
         self.row(y).iter().any(|span| span.x0 <= x && x < span.x1)
     }

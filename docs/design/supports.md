@@ -214,10 +214,10 @@ the layer less the one below — which is a layer's only new underside.
 
 | On the layer | What it is | What is held |
 |---|---|---|
-| a new piece touching nothing below | an **island** | all of it, if at least `MIN_ISLAND_MM` (0.4 mm) across |
+| a new piece touching nothing below | an **island** | all of it, if at least `MIN_ISLAND_MM` (0.4 mm) across; a narrower one is a **speck** |
 | new material past the reach from the layer a millimetre below | an **overhang** | the part past the reach, if at least `min_overhang_mm` across |
 | new material past `min_overhang_mm` from the layer directly below | a **step** | the part past it, held as an overhang (ADR 0080) |
-| a piece with no support and no plate under it or under anything it grew out of | **adrift** | all of it, once it is `MIN_ISLAND_MM` across |
+| a piece with no support and no plate under it or under anything it grew out of | **adrift** | the point it began at, once it is more than dust; else all of it, once it is `MIN_ISLAND_MM` across |
 | a contact that would sit under a foot and the shortest pillar | standing on the plate | nothing |
 
 The reach is `REFERENCE_RISE_MM * tan(max_overhang_deg)`, measured over that rise because
@@ -232,10 +232,15 @@ angle, so no layer of it is an island or an overhang, and placement follows each
 parentage to know that nothing ever held it. A piece the blocker refused counts as held.
 
 Where such a piece began at a **low point** of the model — a vertex lower than every
-vertex it shares a face with, which `low_points` reads off the mesh — its support goes to
-that point itself rather than to wherever its first layers were wide enough to read. A low
-point no adrift piece begins at within a millimetre of rise is a bump on a surface
-something already holds, and gets nothing.
+vertex it shares a face with, which `low_points` reads off the mesh — or as a speck, its
+support goes to that point, or to the speck's middle, rather than to wherever its first
+layers were wide enough to read. It goes down once what has grown out of the point is
+more than dust: `MICRO_ISLAND_MM3` (0.01 mm³) of resin and `MICRO_ISLAND_HEIGHT_MM`
+(0.08 mm) of rise, so a needle too thin ever to be an island is held at its tip, and a
+speck that never grows prints loose. The resin is counted per piece while nothing holds
+it, from one walk over the layer's spans, and summed where such pieces join. A low point
+no adrift piece begins at within a millimetre of rise is a bump on a surface something
+already holds, and gets nothing.
 
 A contact goes a whole layer below the plane that was cut, because the surface is somewhere
 inside the layer's rise and a contact above it would land the column on the very surface it
@@ -253,7 +258,10 @@ rim cell is further than that from a support. The inside is filled from a lattic
 grid of a quarter of that into the gaps the rim's supports opened, both keeping three
 quarters of a spacing from what is taken; anchoring is what lets the coverage check thin a
 slope to one support per place rather than one per layer. A piece too small for two
-supports is all corner, so sampling never returns nothing.
+supports is all corner, so sampling never returns nothing. An island is sampled closer
+than an overhang, by its area: under 2.4 mm² at 13/18 of the spacing, under 3.2 mm² at
+15/18, and at the spacing itself above that, each keeping three quarters of its own
+spacing clear. It hangs on the film alone, with no edge of a part to steady it.
 
 **Clear of the edge.** A head centred on the layer's outline is half off the surface it
 holds: its nearest face is the wall above the edge, so the tip leans out and cures onto

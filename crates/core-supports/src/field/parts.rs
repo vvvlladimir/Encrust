@@ -125,6 +125,16 @@ impl Parts {
         Field::of_spans(spans)
     }
 
+    /// How many cells each piece covers, by its number, in one walk over the spans.
+    pub fn cells(&self) -> Vec<u64> {
+        let mut cells = vec![0u64; self.count];
+        let spans = self.field.rows().flat_map(|(_, row)| row);
+        for (span, label) in spans.zip(&self.labels) {
+            cells[*label as usize] += span.len().max(0) as u64;
+        }
+        cells
+    }
+
     /// For every piece here, the pieces of `below` it stands on, corner contact included.
     ///
     /// Both fields are run-length and sorted, so each row is walked once from left to

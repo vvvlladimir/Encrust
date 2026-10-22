@@ -15,9 +15,20 @@ pub const GRID_PITCH_MM: Scalar = 0.1;
 /// millimetre of rise turns it into ten cells, which the grid resolves cleanly.
 pub const REFERENCE_RISE_MM: Scalar = 1.0;
 
-/// An island narrower than this is a speck of stray geometry, not a part. Supporting it
-/// would cost more than losing it: 0.2 mm of bounding radius, which is this across.
+/// An island narrower than this is a speck: it is held where it began only once what
+/// grows out of it is more than dust, see [`MICRO_ISLAND_MM3`].
 pub const MIN_ISLAND_MM: Scalar = 0.4;
+
+/// A piece nothing holds is dust until it has grown to this much resin, cubic
+/// millimetres, and this tall, millimetres: one that never does is left to print loose.
+/// See `docs/design/supports.md`.
+pub const MICRO_ISLAND_MM3: Scalar = 0.01;
+pub const MICRO_ISLAND_HEIGHT_MM: Scalar = 0.08;
+
+/// How closely an island is held against the spacing, by the island's area in mm²: the
+/// least area of each step and its share of the spacing. A small island is held closer,
+/// since it hangs on the film alone and has no edge of a part to steady it.
+const ISLAND_SPACING: [(Scalar, Scalar); 3] = [(0.0, 13.0 / 18.0), (2.4, 15.0 / 18.0), (3.2, 1.0)];
 
 /// A layer whose underside is no higher than this stands on the build plate itself,
 /// millimetres.
@@ -100,11 +111,41 @@ impl SampleConfig {
             edge_inset_mm: head_radius_mm + GRID_PITCH_MM,
         }
     }
+
+    /// How far apart supports go on an island of `area_mm2`.
+    pub fn island_spacing_mm(&self, area_mm2: Scalar) -> Scalar {
+        let share = ISLAND_SPACING
+            .iter()
+            .rev()
+            .find(|(least_mm2, _)| area_mm2 >= *least_mm2)
+            .map_or(ISLAND_SPACING[0].1, |(_, share)| *share);
+        (self.spacing_mm * share).max(MIN_SPACING_MM)
+    }
+
+    /// How far a support put down at `spacing_mm` keeps another one away.
+    pub fn coverage_at(&self, spacing_mm: Scalar) -> Scalar {
+        self.coverage_radius_mm * spacing_mm / self.spacing_mm
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_small_island_is_held_closer_than_a_large_one() {
+        let config = SampleConfig::for_profile(&crate::tests::profile());
+        let (small, middling, large) = (
+            config.island_spacing_mm(1.0),
+            config.island_spacing_mm(2.8),
+            config.island_spacing_mm(100.0),
+        );
+        assert!(small < middling && middling < large);
+        assert!(
+            (large - config.spacing_mm).abs() < 1e-5,
+            "a large island is held at the spacing itself"
+        );
+    }
 
     #[test]
     fn the_lattice_is_spaced_the_way_the_profile_asks_for() {
