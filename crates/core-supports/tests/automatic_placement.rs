@@ -90,7 +90,7 @@ fn points(mesh: &Mesh, profile: &SupportProfile) -> Vec<SupportPoint> {
         &mut |_| true,
     )
     .into_iter()
-    .map(SupportPoint::new)
+    .map(|need| SupportPoint::new(need.contact))
     .collect()
 }
 

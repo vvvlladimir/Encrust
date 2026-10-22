@@ -4,7 +4,8 @@
 use std::ops::RangeInclusive;
 
 use printer_profiles::{
-    Catalogue, ContactShape, Entry, PlatformShape, RaftShape, RaftStyle, SupportProfile,
+    AutoProfile, Catalogue, ContactShape, Entry, PlatformShape, RaftShape, RaftStyle,
+    SupportProfile,
 };
 
 use crate::i18n::tr;
@@ -530,6 +531,64 @@ pub fn held_up(ui: &mut egui::Ui, profile: &mut SupportProfile, saved: Option<&S
         2,
     );
 }
+
+/// Where an automatic profile moves from one of its shapes to the next, named by `shapes`
+/// lightest first, against the profile it ships as. A heavier shape never starts below a
+/// lighter one. See `docs/decisions/0325`.
+pub fn sizes(
+    ui: &mut egui::Ui,
+    auto: &mut AutoProfile,
+    shipped: Option<&AutoProfile>,
+    shapes: &[String; 3],
+) {
+    for (size, shape) in shapes.iter().enumerate().skip(1) {
+        let at = size - 1;
+        let floor = if at == 0 {
+            0.0
+        } else {
+            auto.island_area_mm2[at - 1]
+        };
+        number(
+            ui,
+            &tr!("support-size-island", shape = shape.clone()),
+            shipped.map(|auto| auto.island_area_mm2[at]),
+            &mut auto.island_area_mm2[at],
+            &tr!("unit-mm2"),
+            COARSE_STEP,
+            floor..=MAX_ISLAND_MM2,
+            1,
+        );
+    }
+    for (size, shape) in shapes.iter().enumerate().skip(1) {
+        let at = size - 1;
+        let floor = if at == 0 {
+            0.0
+        } else {
+            auto.overhang_volume_mm3[at - 1]
+        };
+        number(
+            ui,
+            &tr!("support-size-load", shape = shape.clone()),
+            shipped.map(|auto| auto.overhang_volume_mm3[at]),
+            &mut auto.overhang_volume_mm3[at],
+            &tr!("unit-mm3"),
+            LOAD_STEP,
+            floor..=MAX_LOAD_MM3,
+            0,
+        );
+    }
+    for at in 1..auto.island_area_mm2.len() {
+        auto.island_area_mm2[at] = auto.island_area_mm2[at].max(auto.island_area_mm2[at - 1]);
+        auto.overhang_volume_mm3[at] =
+            auto.overhang_volume_mm3[at].max(auto.overhang_volume_mm3[at - 1]);
+    }
+}
+
+/// Bounds and step on where an automatic profile moves to a heavier shape: an island as
+/// large as a thumbnail, and a part as heavy as a bust.
+const MAX_ISLAND_MM2: f32 = 100.0;
+const MAX_LOAD_MM3: f32 = 100_000.0;
+const LOAD_STEP: f64 = 10.0;
 
 /// A ring wider than the one above it turns a support inside out where the two cross.
 /// The fields are independent, so the order is restored here rather than forbidden there.

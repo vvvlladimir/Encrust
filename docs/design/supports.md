@@ -311,6 +311,17 @@ sample asks nine buckets, and a point more than its own radius below the layer b
 dropped as the run climbs — which is what keeps the run's memory to the supports that can
 still hold something.
 
+**What each contact holds.** Every contact comes back with its `Reason`, which an
+automatic profile sizes it by (ADR 0325): an island with its area on the layer it begins
+on — a part that begins at a point has none — an overhang with the model above its layer,
+or a support that steadies a part. The model above is known only at the top of the stack,
+so the climb keeps a graph of pieces beside it (`load.rs`): a piece that is the only child
+of its only parent stays on its parent's node, any other starts a node whose parents are
+the nodes of what it grew out of. A node is made after its parents, so one walk down the
+list adds each node's total into its parents, split evenly where it has several so a
+joined piece is not counted twice. A contact remembers its node and how much of it lay at
+or under its layer; the model above it is the node's total less that.
+
 **Cost.** The stack is walked in blocks of 32: read and examined in parallel, since what a
 layer needs depends only on the layers under it, with only the coverage check in order,
 because that is what makes a run repeatable (ADR 0033). `cargo bench -p core-supports`
@@ -387,15 +398,25 @@ Volume figures read a little high, because an overlapping mesh counts its overla
 
 A support carries the number of a group, and `Profiles` is the table of profiles the plate
 is built with (ADR 0094). `columns` builds each tip to its own group's shape, `grow` runs
-once per group — so a trunk is never shared by two shapes — and `mesh_trees` meshes each
-tree to its group and each brace to the group it ties. The raft is not a group's: it is the
+once per family of groups — the groups that branch and whose pillars are one width — and
+`mesh_trees` meshes each tree to its group, each head to the group it names and each brace
+to the group it ties. The raft is not a group's: it is the
 model's own or the plate's (ADR 0253), written into every profile of the table a model is
 built with; the core builds the slab from the first and stands every group on it (ADR 0266). A tree also carries the group it was grown to, so what meshes it knows its shape.
 
-Groups are grown thickest first, and the struts and trunks a group has stood are carriers
-for the thinner groups after it (ADR 0248): while those merge, a front may run into a
-carrier wider than itself — by one strut within its own branch angle and half its merge
-distance, at the highest point it reaches — in the same heap its merges with other fronts sit in.
+Within a family every front carries the group of the heaviest head under it — the larger
+contact, then the wider pillar, then the lower number — and two fronts of two groups meet
+within both groups' branch angles and merge distances, clear by the larger clearance, and
+stand by the heavier one's profile (ADR 0325). A tree is stamped with its root front's
+group; a tip of another names its own in `TreeNode::head`, so a lighter head merged into a
+heavier trunk is still built as its own group's. `mesh_groups` puts each strut in the
+mesh of the heaviest head hanging from it, and the trunk and foot in the tree's.
+
+Families are grown thickest first, and the struts and trunks a family has stood are
+carriers for the families after it (ADR 0248): while those merge, a front may run into a
+carrier at least 0.05 mm wider than itself — by one strut within its own branch angle and
+half its merge distance, at the highest point it reaches — in the same heap its merges
+with other fronts sit in.
 Such a front is a tree whose `Landing` is that point with `on_support` beside `on_model`,
 so it has no trunk, no foot, no pad and no brace, and the mesher ends it plain inside the
 carrier. A tree built as a small pillar carries only as wide as that, and its trunk
@@ -422,6 +443,15 @@ numbers: the group built to the chosen profile becomes the one in hand, one is m
 when there is none, and what stands keeps the group it stands in (ADR 0247). A group
 nothing stands in is retuned instead. So two kinds of support on one part are two choices
 from one list, and a support changes kind by being picked and moved to the group in hand.
+
+A switch across the top of the Supports, Paint and Shape tools sizes supports
+automatically or by hand. Each list then offers only that side's profiles: the support
+profiles an automatic profile names, or every other one; the settings window's table shows
+the two apart. Sizing automatically, the
+Supports tool's list offers the automatic profiles themselves, the panel's placement and
+size fields edit the automatic profile's own numbers, and a run is placed by them on its lightest shape; each contact then goes into the group built to the shape its
+`Reason` sizes it into — a group of that profile's name, else one nothing stands in,
+retuned, else a new one — and a shape nothing is sized into gets no group (ADR 0325).
 
 Dropping a group takes every support built to it away — a group is a shape, so its supports
 do not survive it to be rebuilt to another group's numbers — and shifts the groups above it

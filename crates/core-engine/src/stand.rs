@@ -159,7 +159,10 @@ fn contacts_under(
         &lows,
         None,
         &mut |_| true,
-    ))
+    )
+    .into_iter()
+    .map(|need| need.contact)
+    .collect())
 }
 
 /// Stands `mesh` and what is cut out of it `lift_mm` clear of the plate, and answers how

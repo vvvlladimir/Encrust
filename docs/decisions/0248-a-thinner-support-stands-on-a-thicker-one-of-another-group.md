@@ -1,6 +1,6 @@
 # 0248. Stand a thinner support on the trunk of a thicker one of another group
 
-- **Status:** Accepted
+- **Status:** Accepted; that tips merge within a group only is superseded by 0325, where groups of one width merge
 - **Date:** 2026-10-13
 
 ## Context

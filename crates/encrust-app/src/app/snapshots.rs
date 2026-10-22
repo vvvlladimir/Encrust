@@ -57,6 +57,16 @@ fn every_tool_on_a_picked_model() {
 }
 
 #[test]
+fn the_supports_tool_sizing_automatically() {
+    let mut app = app(true);
+    app.tool = Tool::Supports;
+    let catalogue = app.machine.slicing.catalogue.clone();
+    app.tools.supports.set_automatic(true, &catalogue);
+    let mut results = SnapshotResults::new();
+    results.extend(picture("tool_supports_auto", app));
+}
+
+#[test]
 fn the_hollow_tool_with_each_kind_of_infill() {
     let mut results = SnapshotResults::new();
     for (name, pattern) in [

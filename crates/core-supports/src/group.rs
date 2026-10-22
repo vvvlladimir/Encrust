@@ -1,3 +1,5 @@
+use std::cmp::Ordering;
+
 use printer_profiles::SupportProfile;
 
 /// The profile each group of supports is built to.
@@ -39,5 +41,24 @@ impl<'a> Profiles<'a> {
             .iter()
             .enumerate()
             .map(|(group, profile)| (group as u16, profile))
+    }
+
+    /// `a` before `b` when its head is the heavier: the larger contact, then the wider
+    /// pillar, then the lower number.
+    pub(crate) fn heavier_first(&self, a: u16, b: u16) -> Ordering {
+        let (one, two) = (self.of(a), self.of(b));
+        two.contact_radius_mm()
+            .total_cmp(&one.contact_radius_mm())
+            .then_with(|| two.pillar_radius_mm().total_cmp(&one.pillar_radius_mm()))
+            .then_with(|| a.cmp(&b))
+    }
+
+    /// Which of two groups a joint of their tips is built to: the one with the heavier
+    /// head. See `docs/decisions/0325`.
+    pub(crate) fn heavier(&self, a: u16, b: u16) -> u16 {
+        match self.heavier_first(a, b) {
+            Ordering::Greater => b,
+            Ordering::Less | Ordering::Equal => a,
+        }
     }
 }

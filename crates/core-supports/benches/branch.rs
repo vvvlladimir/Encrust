@@ -69,7 +69,7 @@ fn tips(model: &Mesh, bvh: &Bvh, profile: &SupportProfile) -> Vec<core_supports:
         &mut |_| true,
     )
     .into_iter()
-    .map(SupportPoint::new)
+    .map(|need| SupportPoint::new(need.contact))
     .collect();
     columns(
         &points,

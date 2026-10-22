@@ -1,6 +1,7 @@
 //! Printer hardware descriptions, material exposure settings, support shapes and named
 //! tool settings, stored as TOML.
 
+mod auto;
 mod catalogue;
 mod compensation;
 mod error;
@@ -15,6 +16,7 @@ mod stated;
 mod store;
 mod support;
 
+pub use auto::{AUTO_SIZES, AutoProfile};
 pub use catalogue::{Catalogue, Entry, Kind, PROFILE_DIR_VAR, Source, is_valid_id, user_dir};
 pub use compensation::{Compensation, layer_time_between, shrink_pct_between};
 pub use error::ProfileError;

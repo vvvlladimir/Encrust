@@ -10,7 +10,9 @@ use crate::config::{
 };
 use crate::detect::{across_mm, unsupported};
 use crate::field::{Field, Grid, Parts};
+use crate::load::{Load, Mark};
 use crate::low::Lows;
+use crate::need::{Need, Reason};
 use crate::region::Blocked;
 use crate::sample::{sample_piece, sample_stance};
 
@@ -33,8 +35,8 @@ const READ_BLOCK: usize = 32;
 /// Nothing is put where `blocked` reaches: a painted patch keeps automatic placement off
 /// it the way it keeps a hand-placed support off it; see `docs/decisions/0093`.
 ///
-/// The returned contacts sit a layer under the surface that needs them. Whether one can
-/// actually stand there is a question for [`crate::columns`].
+/// The returned contacts sit a layer under the surface that needs them, each with what it
+/// holds there. Whether one can actually stand there is a question for [`crate::columns`].
 pub fn generate_supports(
     stack: &Sliced,
     layer_height_mm: Scalar,
@@ -43,7 +45,7 @@ pub fn generate_supports(
     lows: &[Vec3],
     blocked: Option<&Blocked>,
     progress: &mut dyn FnMut(usize) -> bool,
-) -> Vec<Vec3> {
+) -> Vec<Need> {
     let Some(grid) = grid_of(stack) else {
         return Vec::new();
     };
@@ -66,6 +68,7 @@ pub fn generate_supports(
     };
 
     let mut standing = Standing::new(seeds, lows, &grid, &config, layer_height_mm);
+    let mut load = Load::new(grid.millimetres_of(1).powi(2) * layer_height_mm);
     let mut placed = Vec::new();
     // The block being looked at, with as much of the block before it as the lean is
     // measured over still in front of it.
@@ -75,24 +78,33 @@ pub fn generate_supports(
     for (block, layers) in stack.layers.chunks(READ_BLOCK).enumerate() {
         let fresh = fields.len();
         fields.par_extend(layers.par_iter().map(|layer| Field::of_layer(layer, &grid)));
-        let looked: Vec<(Parts, Wanted)> = (fresh..fields.len())
+        let looked: Vec<(Parts, Vec<u64>, Wanted)> = (fresh..fields.len())
             .into_par_iter()
             .map(|at| {
-                (
-                    fields[at].parts(),
-                    pass.wanted(&fields, at, first_held + at, &stack.layers[first_held + at]),
-                )
+                let parts = fields[at].parts();
+                let cells = parts.cells();
+                let wanted =
+                    pass.wanted(&fields, at, first_held + at, &stack.layers[first_held + at]);
+                (parts, cells, wanted)
             })
             .collect();
 
-        for (offset, (parts, wanted)) in looked.into_iter().enumerate() {
+        for (offset, (parts, cells, wanted)) in looked.into_iter().enumerate() {
             let index = block * READ_BLOCK + offset;
             if !progress(index) {
-                return placed;
+                return needs(placed, &load);
             }
             let contact_mm = contact_of(&stack.layers[index], layer_height_mm);
-            standing.climb(&parts, contact_mm);
-            pass.put_down(&mut standing, &parts, wanted, contact_mm, &mut placed);
+            let parents = standing.parents_of(&parts);
+            load.climb(parents.as_deref(), &cells);
+            standing.climb(&parts, parents, &cells, contact_mm);
+            let placing = Placing {
+                standing: &mut standing,
+                load: &load,
+                parts: &parts,
+                contact_mm,
+            };
+            pass.put_down(placing, wanted, &mut placed);
             standing.rest_on(parts);
         }
 
@@ -101,7 +113,42 @@ pub fn generate_supports(
         first_held += spent;
     }
 
+    needs(placed, &load)
+}
+
+/// What was placed, with the model above each overhang contact now that all of it is known.
+fn needs(placed: Vec<(Vec3, Why)>, load: &Load) -> Vec<Need> {
+    let totals = load.totals();
     placed
+        .into_iter()
+        .map(|(contact, why)| Need {
+            contact,
+            reason: match why {
+                Why::Island { area_mm2 } => Reason::Island { area_mm2 },
+                Why::Overhang(mark) => Reason::Overhang {
+                    carried_mm3: mark.map_or(0.0, |mark| mark.above_mm3(&totals)),
+                },
+                Why::Steady => Reason::Steady,
+            },
+        })
+        .collect()
+}
+
+/// Why a contact was put down, while what stands above it is still being read.
+#[derive(Debug, Clone, Copy)]
+enum Why {
+    Island { area_mm2: Scalar },
+    Overhang(Option<Mark>),
+    Steady,
+}
+
+/// What one layer is put down against: the supports standing so far, the graph of what
+/// stands on what, the layer's pieces, and the height its contacts sit at.
+struct Placing<'a> {
+    standing: &'a mut Standing,
+    load: &'a Load,
+    parts: &'a Parts,
+    contact_mm: Scalar,
 }
 
 /// Where a column put under `layer` touches, in millimetres above the plate.
@@ -115,12 +162,17 @@ fn contact_of(layer: &Layer, layer_height_mm: Scalar) -> Scalar {
 }
 
 /// What one layer wants held: the cells supports go at, each with the radius it then
-/// holds, and the specks that began on it, each with one cell and its area in mm².
+/// holds and the island's area in mm² or `None` on an overhang, and the specks that began
+/// on it, each with one cell and its area in mm².
 #[derive(Default)]
 struct Wanted {
-    cells: Vec<([i32; 2], Scalar)>,
+    cells: Vec<Want>,
     specks: Vec<([i32; 2], Scalar)>,
 }
+
+/// One cell a layer wants held, the radius a support there holds, and the area of the
+/// island it is on, or `None` on an overhang.
+type Want = ([i32; 2], Scalar, Option<Scalar>);
 
 /// What one run measures with, so that one layer can be looked at on its own.
 ///
@@ -174,14 +226,13 @@ impl Pass<'_> {
         // Islands first: a support put down under one also holds the overhang it is part
         // of, which the coverage check then leaves alone.
         let islands = found.islands.iter().flat_map(|piece| {
-            let spacing_mm = self
-                .config
-                .island_spacing_mm(piece.cell_count() as Scalar * cell_mm2);
+            let area_mm2 = piece.cell_count() as Scalar * cell_mm2;
+            let spacing_mm = self.config.island_spacing_mm(area_mm2);
             let coverage_mm = self.config.coverage_at(spacing_mm);
             let spacing = self.grid.cells_of(spacing_mm).max(1);
             sample_piece(piece, &room, self.inset, spacing)
                 .into_iter()
-                .map(move |cell| (cell, coverage_mm))
+                .map(move |cell| (cell, coverage_mm, Some(area_mm2)))
         });
         let flatness = self.flatness(below, reference, rise_mm);
         let overhangs = found.overhangs.iter().flat_map(|piece| {
@@ -189,7 +240,7 @@ impl Pass<'_> {
                 .into_iter()
                 .map(|cell| {
                     let spacing_mm = self.config.band_spacing_mm(flatness.band_of(cell));
-                    (cell, self.config.coverage_at(spacing_mm))
+                    (cell, self.config.coverage_at(spacing_mm), None)
                 })
         });
         Wanted {
@@ -262,14 +313,13 @@ impl Pass<'_> {
     /// Puts down what one layer needs, in the order that makes a run repeatable: the
     /// points parts hang from, the pieces nothing holds, what the layer itself `wanted`,
     /// and last the supports that steady a part held at too few places.
-    fn put_down(
-        &self,
-        standing: &mut Standing,
-        parts: &Parts,
-        wanted: Wanted,
-        contact_mm: Scalar,
-        placed: &mut Vec<Vec3>,
-    ) {
+    fn put_down(&self, at: Placing, wanted: Wanted, placed: &mut Vec<(Vec3, Why)>) {
+        let Placing {
+            standing,
+            load,
+            parts,
+            contact_mm,
+        } = at;
         for (cell, area_mm2) in wanted.specks {
             let piece = parts.at(cell[0], cell[1]);
             let at = self.grid.centre_mm(cell[0], cell[1]).extend(contact_mm);
@@ -279,36 +329,45 @@ impl Pass<'_> {
                 standing.speck(piece, at, area_mm2 * self.layer_height_mm);
             }
         }
+        // A part that begins at a point is held there before it has any area to speak of.
+        let point = Why::Island { area_mm2: 0.0 };
         for (piece, tip) in self.hanging(standing, contact_mm) {
             if self.refuses(tip) {
                 standing.leave(Some(piece));
             } else {
-                placed.push(standing.hang(piece, tip));
+                placed.push((standing.hang(piece, tip), point));
             }
         }
         let adrift = self.adrift(standing, parts, contact_mm);
         let anywhere = self.config.coverage_radius_mm;
-        let cells = adrift.into_iter().map(|cell| (cell, anywhere));
-        for (cell, coverage_mm) in cells.chain(wanted.cells) {
+        let cells = adrift
+            .into_iter()
+            .map(|(cell, area_mm2)| (cell, anywhere, Some(area_mm2)));
+        for (cell, coverage_mm, island_mm2) in cells.chain(wanted.cells) {
             let at = self.grid.centre_mm(cell[0], cell[1]);
+            let piece = parts.at(cell[0], cell[1]);
             // Asked before the cell is taken, or a place nothing may stand on would
             // still count as held and leave its neighbours a support short.
             if self.refuses(at.extend(contact_mm)) {
-                standing.leave(parts.at(cell[0], cell[1]));
-            } else {
-                let piece = parts.at(cell[0], cell[1]);
-                placed.extend(standing.take(piece, at, contact_mm, coverage_mm));
+                standing.leave(piece);
+                continue;
             }
+            let why = island_mm2.map_or_else(
+                || Why::Overhang(piece.and_then(|piece| load.mark(piece))),
+                |area_mm2| Why::Island { area_mm2 },
+            );
+            let taken = standing.take(piece, at, contact_mm, coverage_mm);
+            placed.extend(taken.map(|contact| (contact, why)));
         }
         for (piece, cell) in self.unsteady(standing, parts, contact_mm) {
             let at = self.grid.centre_mm(cell[0], cell[1]);
             if !self.refuses(at.extend(contact_mm)) {
-                placed.extend(standing.prop(piece, at, contact_mm, self.stance_mm / 4.0));
+                let propped = standing.prop(piece, at, contact_mm, self.stance_mm / 4.0);
+                placed.extend(propped.map(|contact| (contact, Why::Steady)));
             }
             standing.leave(Some(piece));
         }
     }
-
     /// Whether the user has painted supports out of where `contact` would touch.
     fn refuses(&self, contact: Vec3) -> bool {
         self.blocked
@@ -331,19 +390,29 @@ impl Pass<'_> {
             .collect()
     }
 
-    /// The cells that hold up what `standing` has nothing under: a piece too small to be
-    /// an island when it began is held once it has grown into one, or everything that
-    /// grows out of it prints in mid-air. See `docs/design/supports.md`.
-    fn adrift(&self, standing: &Standing, parts: &Parts, contact_mm: Scalar) -> Vec<[i32; 2]> {
+    /// The cells that hold up what `standing` has nothing under, each with the area of its
+    /// piece in mm²: a piece too small to be an island when it began is held once it has
+    /// grown into one, or everything that grows out of it prints in mid-air. See
+    /// `docs/design/supports.md`.
+    fn adrift(
+        &self,
+        standing: &Standing,
+        parts: &Parts,
+        contact_mm: Scalar,
+    ) -> Vec<([i32; 2], Scalar)> {
         if contact_mm <= self.lowest_contact_mm {
             return Vec::new();
         }
+        let cell_mm2 = self.grid.millimetres_of(1).powi(2);
         standing
             .adrift()
             .map(|piece| parts.piece(piece))
             .filter(|piece| across_mm(piece, self.grid) >= MIN_ISLAND_MM)
             .flat_map(|piece| {
+                let area_mm2 = piece.cell_count() as Scalar * cell_mm2;
                 sample_piece(&piece, &piece.shrunk(self.inset), self.inset, self.spacing)
+                    .into_iter()
+                    .map(move |cell| (cell, area_mm2))
             })
             .collect()
     }
@@ -453,16 +522,22 @@ impl Standing {
         }
     }
 
+    /// What each piece of the next layer up grows out of on the layer last climbed to, or
+    /// `None` on the first layer.
+    fn parents_of(&self, parts: &Parts) -> Option<Vec<Vec<u32>>> {
+        self.below.as_ref().map(|below| parts.parents(below))
+    }
+
     /// Carries what is standing onto the pieces of the next layer up, whose contacts sit
-    /// at `z`, and takes on the seeds that layer has reached. The layer is handed back
+    /// at `z`, given their [`Standing::parents_of`] and how many cells each covers, and
+    /// takes on the seeds that layer has reached. The layer is handed back
     /// through [`Standing::rest_on`] once its own samples have been asked about.
     ///
     /// A point further below than the coverage radius is dropped on the way: it can hold
     /// nothing on this layer or on any layer above it, which is what keeps the run's
     /// memory to the supports that still matter rather than to every one ever placed.
-    fn climb(&mut self, parts: &Parts, z: Scalar) {
+    fn climb(&mut self, parts: &Parts, parents: Option<Vec<Vec<u32>>>, cells: &[u64], z: Scalar) {
         let on_plate = if z <= PLATE_CONTACT_MM { STEADY } else { 0 };
-        let parents = self.below.as_ref().map(|below| parts.parents(below));
         let Some(parents) = parents else {
             self.held = vec![Held::default(); parts.count()];
             self.tips = vec![on_plate; parts.count()];
@@ -497,7 +572,7 @@ impl Standing {
                     .min(STEADY)
             })
             .collect();
-        self.grow_hung(parts);
+        self.grow_hung(cells);
 
         // A piece that is the only child of its only parent takes that parent's set over
         // rather than copying it, which is the whole of a wall going straight up.
@@ -560,14 +635,13 @@ impl Standing {
     }
 
     /// Adds the layer just climbed to onto what has grown out of every piece still hung.
-    fn grow_hung(&mut self, parts: &Parts) {
+    fn grow_hung(&mut self, cells: &[u64]) {
         if self.hung.iter().all(Option::is_none) {
             return;
         }
-        let cells = parts.cells();
         for ((hung, tips), cells) in self.hung.iter_mut().zip(&self.tips).zip(cells) {
             if let Some(hung) = hung.as_mut().filter(|_| *tips == 0) {
-                hung.volume_mm3 += cells as Scalar * self.cell_mm3;
+                hung.volume_mm3 += *cells as Scalar * self.cell_mm3;
             }
         }
     }
@@ -868,6 +942,31 @@ mod tests {
             .expect("a closed mesh slices")
     }
 
+    /// The contacts of [`super::generate_supports`], which is what most of these tests ask
+    /// about.
+    fn generate_supports(
+        stack: &Sliced,
+        layer_height_mm: Scalar,
+        profile: &SupportProfile,
+        seeds: &[Vec3],
+        lows: &[Vec3],
+        blocked: Option<&Blocked>,
+        progress: &mut dyn FnMut(usize) -> bool,
+    ) -> Vec<Vec3> {
+        super::generate_supports(
+            stack,
+            layer_height_mm,
+            profile,
+            seeds,
+            lows,
+            blocked,
+            progress,
+        )
+        .into_iter()
+        .map(|need| need.contact)
+        .collect()
+    }
+
     /// Everything automatic placement puts under `mesh`, with nothing there already.
     fn supports_for(mesh: &Mesh) -> Vec<Vec3> {
         generate_supports(
@@ -945,6 +1044,89 @@ mod tests {
             faces.push([1, here, next]);
         }
         Mesh::new(vertices, faces)
+    }
+
+    /// What placement wants under `mesh`, with what each contact holds.
+    fn needs_for(mesh: &Mesh) -> Vec<Need> {
+        super::generate_supports(
+            &slice(mesh),
+            LAYER_HEIGHT_MM,
+            &profile(),
+            &[],
+            &[],
+            None,
+            &mut |_| true,
+        )
+    }
+
+    /// A 10 × 10 × 1 mm shelf on a 2 mm square post 5 mm tall, with a 10 × 10 mm tower
+    /// `tower_mm` tall on top of it.
+    fn shelf(tower_mm: Scalar) -> Mesh {
+        let post = crate::tests::box_mesh(Vec3::new(9.0, 9.0, 0.0), Vec3::new(11.0, 11.0, 5.0));
+        let slab = crate::tests::box_mesh(Vec3::new(5.0, 5.0, 5.0), Vec3::new(15.0, 15.0, 6.0));
+        let mesh = merged(&post, &slab);
+        if tower_mm <= 0.0 {
+            return mesh;
+        }
+        let tower = Vec3::new(15.0, 15.0, 6.0 + tower_mm);
+        merged(
+            &mesh,
+            &crate::tests::box_mesh(Vec3::new(5.0, 5.0, 6.0), tower),
+        )
+    }
+
+    /// The model above every overhang contact under `mesh`, mm³.
+    fn carried(mesh: &Mesh) -> Vec<Scalar> {
+        needs_for(mesh)
+            .into_iter()
+            .filter_map(|need| match need.reason {
+                Reason::Overhang { carried_mm3 } => Some(carried_mm3),
+                Reason::Island { .. } | Reason::Steady => None,
+            })
+            .collect()
+    }
+
+    #[test]
+    fn a_floating_slab_is_held_as_an_island_of_its_own_area() {
+        let slab = crate::tests::box_mesh(Vec3::new(2.0, 2.0, 5.0), Vec3::new(6.0, 5.0, 6.0));
+        let needs = needs_for(&slab);
+        let islands: Vec<Scalar> = needs
+            .iter()
+            .filter_map(|need| match need.reason {
+                Reason::Island { area_mm2 } => Some(area_mm2),
+                Reason::Overhang { .. } | Reason::Steady => None,
+            })
+            .collect();
+        assert!(!islands.is_empty());
+        assert!(
+            islands.iter().all(|mm2| (mm2 - 12.0).abs() < 0.5),
+            "the slab is 4 × 3 mm, so its island is 12 mm², got {islands:?}"
+        );
+        assert!(
+            !needs
+                .iter()
+                .any(|need| matches!(need.reason, Reason::Overhang { .. })),
+            "nothing on a slab with nothing beneath it is an overhang"
+        );
+    }
+
+    #[test]
+    fn an_overhang_carries_the_model_above_it() {
+        let alone = carried(&shelf(0.0));
+        let under_tower = carried(&shelf(20.0));
+        assert!(!alone.is_empty() && !under_tower.is_empty());
+        // The slab is 100 mm³ less its post and the layer the contacts are cut under; the
+        // tower adds 2000 mm³ more.
+        assert!(
+            alone.iter().all(|mm3| (90.0..=100.0).contains(mm3)),
+            "a bare shelf carries itself, got {alone:?}"
+        );
+        assert!(
+            under_tower
+                .iter()
+                .all(|mm3| (2090.0..=2100.0).contains(mm3)),
+            "a shelf under a 20 mm tower carries the tower too, got {under_tower:?}"
+        );
     }
 
     #[test]

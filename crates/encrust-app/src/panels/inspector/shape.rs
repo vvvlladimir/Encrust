@@ -9,8 +9,8 @@ use crate::panels::support_fields::{Group, saved_as};
 use crate::settings::keep_support;
 use crate::supports::own_raft_shown;
 use crate::ui::{
-    Segment, Segmented, describe, hint, icon, icon_button, secondary_button, section, subheading,
-    subheading_with_switch, theme,
+    Segment, Segmented, describe, hairline, hint, icon, icon_button, secondary_button, section,
+    subheading, subheading_with_switch, theme,
 };
 
 /// The groups of the profile's fields a part is drawn from, tip down to plate.
@@ -27,24 +27,51 @@ fn groups(part: Part) -> &'static [Group] {
 /// The shape of the supports in the group in hand, part by part, and the saved profile it
 /// is built to.
 pub fn ui(ui: &mut egui::Ui, window: &mut Window) {
+    sizing_switch(ui, window);
     scope::editing_supports(window, |window| shape(ui, window));
 }
 
 /// The profile the picked models' supports are built to, to be chosen, saved and opened
-/// for editing from any tool that places supports.
-pub fn profile_section(ui: &mut egui::Ui, window: &mut Window) {
+/// for editing from any tool that places supports, under the switch between sizing them
+/// automatically and by hand. `sizes_run` lists the automatic profiles themselves while
+/// sizing, for the tool whose run they size.
+pub fn profile_section(ui: &mut egui::Ui, window: &mut Window, sizes_run: bool) {
+    sizing_switch(ui, window);
     scope::editing_supports(window, |window| {
         section(ui, &tr!("table-profile"), None, |ui| {
             describe(ui, &tr!("shape-profile-help"));
-            profile_picker(ui, window, false);
+            profile_picker(ui, window, false, sizes_run);
         });
     });
+}
+
+/// Whether supports are sized automatically by what they hold or built to a profile
+/// chosen by hand, across the top of every tool that places or shapes them: which
+/// profiles the lists offer, and what a run places. See `docs/decisions/0325`.
+fn sizing_switch(ui: &mut egui::Ui, window: &mut Window) {
+    let mut automatic = window.tools.supports.auto.is_some();
+    egui::Frame::new()
+        .inner_margin(theme::PANEL_MARGIN)
+        .show(ui, |ui| {
+            let segments = [
+                Segment::new(true, tr!("supports-sizing-auto")),
+                Segment::new(false, tr!("supports-sizing-manual")),
+            ];
+            Segmented::new(&segments)
+                .width(ui.available_width())
+                .show(ui, &mut automatic);
+        });
+    hairline(ui);
+    window
+        .tools
+        .supports
+        .set_automatic(automatic, &window.machine.slicing.catalogue);
 }
 
 fn shape(ui: &mut egui::Ui, window: &mut Window) {
     section(ui, &tr!("table-profile"), None, |ui| {
         describe(ui, &tr!("shape-profile-help"));
-        profile_picker(ui, window, true);
+        profile_picker(ui, window, true, false);
     });
     section(ui, &tr!("shape-part"), None, |ui| {
         // The picked model's raft, or the plate's, lent to the profile while it is drawn so
@@ -155,20 +182,32 @@ where
 }
 
 /// Which saved profile the group in hand is built to, and the way to the screen where
-/// profiles are made, edited and thrown away.
-fn profile_picker(ui: &mut egui::Ui, window: &mut Window, with_manage: bool) {
+/// profiles are made, edited and thrown away. The list offers the shapes of the sizing
+/// switched to, or the automatic profiles themselves where `sizes_run` while sizing.
+fn profile_picker(ui: &mut egui::Ui, window: &mut Window, with_manage: bool, sizes_run: bool) {
     let catalogue = &window.machine.slicing.catalogue;
+    let automatic = window.tools.supports.auto.is_some();
+    let auto = window.tools.supports.auto.as_ref().filter(|_| sizes_run);
     let current = &window.tools.supports.profile;
     let matching = catalogue
         .supports()
-        .find(|entry| entry.profile == *current)
+        .find(|entry| auto.is_none() && entry.profile == *current)
         .map(|entry| entry.id.clone());
-    let shown = match &matching {
-        Some(_) => current.name.clone(),
-        None => tr!("shape-edited", name = current.name.clone()),
+    let auto_matching = auto.and_then(|auto| {
+        catalogue
+            .autos()
+            .find(|entry| entry.profile == *auto)
+            .map(|entry| entry.id.clone())
+    });
+    let shown = match (auto, &matching, &auto_matching) {
+        (Some(auto), _, Some(_)) => auto.name.clone(),
+        (Some(auto), _, None) => tr!("shape-edited", name = auto.name.clone()),
+        (None, Some(_), _) => current.name.clone(),
+        (None, None, _) => tr!("shape-edited", name = current.name.clone()),
     };
 
     let mut picked = None;
+    let mut picked_auto = None;
     let mut manage = false;
     // The way to the profiles' own screen is on the Shape tool, where they are edited.
     let beside = if with_manage {
@@ -181,7 +220,19 @@ fn profile_picker(ui: &mut egui::Ui, window: &mut Window, with_manage: bool) {
             .width((ui.available_width() - beside).max(80.0))
             .selected_text(shown)
             .show_ui(ui, |ui| {
-                for entry in catalogue.supports() {
+                if auto.is_some() {
+                    for entry in catalogue.autos() {
+                        let chosen = auto_matching.as_deref() == Some(entry.id.as_str());
+                        if ui.selectable_label(chosen, &entry.profile.name).clicked() {
+                            picked_auto = Some(entry.profile.clone());
+                        }
+                    }
+                    return;
+                }
+                let offered = catalogue
+                    .supports()
+                    .filter(|entry| catalogue.is_auto_shape(&entry.id) == automatic);
+                for entry in offered {
                     let chosen = matching.as_deref() == Some(entry.id.as_str());
                     if ui.selectable_label(chosen, &entry.profile.name).clicked() {
                         picked = Some(entry.profile.clone());
@@ -193,36 +244,43 @@ fn profile_picker(ui: &mut egui::Ui, window: &mut Window, with_manage: bool) {
         }
     });
 
+    let in_auto = auto.is_some();
+    if picked_auto.is_some() {
+        window.tools.supports.auto = picked_auto;
+    }
     // Not the numbers in hand: another profile is another kind of support, and what
     // stands stays as it was built. See `docs/decisions/0247`.
     if picked.is_some() {
         window.tools.supports.chosen = picked;
     }
     // Both always there, and dead while there is nothing to save: a button that comes and
-    // goes moves everything under it.
-    let edited = matching.is_none();
+    // goes moves everything under it. An automatic profile ships and is not saved.
+    let edited = matching.is_none() && !in_auto;
     let source = saved_as(
         &window.machine.slicing.catalogue,
         &window.tools.supports.profile,
     )
     .map(|entry| entry.id.clone());
     let (mut save, mut save_as) = (false, false);
-    ui.columns(2, |columns| {
-        save = columns[0]
-            .add_enabled_ui(edited && source.is_some(), |ui| {
-                secondary_button(ui, icon::SAVE, &tr!("shape-save"))
-                    .on_hover_text(tr!("shape-save-tooltip"))
-                    .clicked()
-            })
-            .inner;
-        save_as = columns[1]
-            .add_enabled_ui(edited, |ui| {
-                secondary_button(ui, icon::SAVE, &tr!("shape-save-as-new"))
-                    .on_hover_text(tr!("shape-save-as-new-tooltip"))
-                    .clicked()
-            })
-            .inner;
-    });
+    // An automatic profile ships and is not saved, so it has no buttons to grey out.
+    if !in_auto {
+        ui.columns(2, |columns| {
+            save = columns[0]
+                .add_enabled_ui(edited && source.is_some(), |ui| {
+                    secondary_button(ui, icon::SAVE, &tr!("shape-save"))
+                        .on_hover_text(tr!("shape-save-tooltip"))
+                        .clicked()
+                })
+                .inner;
+            save_as = columns[1]
+                .add_enabled_ui(edited, |ui| {
+                    secondary_button(ui, icon::SAVE, &tr!("shape-save-as-new"))
+                        .on_hover_text(tr!("shape-save-as-new-tooltip"))
+                        .clicked()
+                })
+                .inner;
+        });
+    }
 
     let profile = window.tools.supports.profile.clone();
     if let Some(id) = source.filter(|_| save) {

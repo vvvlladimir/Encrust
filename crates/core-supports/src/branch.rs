@@ -35,38 +35,62 @@ const ESCAPE_REACHES: u32 = 3;
 /// `columns` are in plate coordinates, and `placed` puts the mesh the struts have to keep
 /// clear of in the same space.
 ///
-/// Each group is grown on its own, so the tips of a trunk are all one shape (ADR 0094),
-/// and thickest first: what a thicker group has stood is there for a thinner one to run
-/// its struts into in place of trunks of its own, see `docs/decisions/0248`. The forest
-/// comes back in group order all the same.
+/// Groups whose pillars are one width grow together, so tips of each merge into one trunk
+/// built to the heaviest head among them (`docs/decisions/0325`). Such families are grown
+/// thickest first: what one has stood is there for a thinner one to run its struts into
+/// in place of trunks of its own, see `docs/decisions/0248`. The forest comes back in
+/// group order all the same.
 pub fn grow(columns: &[Column], placed: &Placed, profiles: Profiles) -> Vec<SupportTree> {
-    let mut order: Vec<(u16, &SupportProfile)> = profiles.groups().collect();
-    order.sort_by(|a, b| b.1.pillar_radius_mm().total_cmp(&a.1.pillar_radius_mm()));
-    let reach_mm = order
-        .iter()
+    let reach_mm = profiles
+        .groups()
         .map(|(_, profile)| profile.branching.max_merge_distance_mm)
         .fold(SAME_PLACE_MM, Scalar::max);
 
     let mut carriers = Carriers::new(reach_mm);
     let mut forest = Vec::new();
-    for (group, profile) in order {
+    for family in families(profiles) {
         let mine: Vec<Column> = columns
             .iter()
-            .filter(|column| column.group == group)
+            .filter(|column| family.contains(&column.group))
             .copied()
             .collect();
-        let mut trees = grow_one(&mine, placed, profile, group, &carriers);
+        let mut trees = grow_one(&mine, placed, profiles, &carriers);
         // Before anything thinner is leant onto them: a trunk moved afterwards would
         // leave what joined it ending in the air.
-        if profile.branching.enabled && profile.bracing.enabled {
-            gather(&mut trees, &forest, placed, profile, profiles);
-        }
-        carriers.take(&trees, profile);
+        gather(&mut trees, &forest, placed, profiles);
+        carriers.take(&trees, profiles);
         forest.extend(trees);
     }
     stand_small_pillars_on_supports(&mut forest, &carriers, placed, profiles);
     forest.sort_by_key(SupportTree::group);
     forest
+}
+
+/// The groups that grow together, thickest pillar first: every group that branches with
+/// the others of its pillar's width, and one that does not on its own.
+fn families(profiles: Profiles) -> Vec<Vec<u16>> {
+    let mut order: Vec<u16> = profiles.groups().map(|(group, _)| group).collect();
+    order.sort_by(|a, b| {
+        let width = |group: &u16| profiles.of(*group).pillar_radius_mm();
+        width(b)
+            .total_cmp(&width(a))
+            .then_with(|| profiles.heavier_first(*a, *b))
+    });
+    let mut families: Vec<Vec<u16>> = Vec::new();
+    for group in order {
+        let profile = profiles.of(group);
+        let joins = families.last().is_some_and(|family| {
+            let first = profiles.of(family[0]);
+            first.branching.enabled
+                && profile.branching.enabled
+                && first.pillar_radius_mm() - profile.pillar_radius_mm() < THICKER_BY_MM
+        });
+        match families.last_mut() {
+            Some(family) if joins => family.push(group),
+            _ => families.push(vec![group]),
+        }
+    }
+    families
 }
 
 /// Runs every tree that stands on the model as a small pillar into a support beside it
@@ -164,8 +188,9 @@ impl Carriers {
     /// small pillar is as wide as that, whatever its nodes say, and its trunk is left
     /// out: it may yet be run into a support beside it, and would leave what stood on
     /// it ending in the air.
-    fn take(&mut self, trees: &[SupportTree], profile: &SupportProfile) {
+    fn take(&mut self, trees: &[SupportTree], profiles: Profiles) {
         for tree in trees {
+            let profile = profiles.of(tree.group());
             let small = is_small(tree, profile);
             let widest_mm = if small {
                 profile.small_pillar.radius_mm()
@@ -269,28 +294,26 @@ fn meeting_on(from: Vec3, carrier: &Carrier, profile: &SupportProfile) -> Option
     (leans_within && in_reach && on_it && long_enough).then_some(meet)
 }
 
-/// Grows one group's columns, every one of which is built to `profile`.
+/// Grows one family's columns, each built to its own group's profile.
 fn grow_one(
     columns: &[Column],
     placed: &Placed,
-    profile: &SupportProfile,
-    group: u16,
+    profiles: Profiles,
     carriers: &Carriers,
 ) -> Vec<SupportTree> {
-    let mut forest = Forest::seeded(columns, profile, carriers);
-    if profile.branching.enabled {
-        forest.merge(placed, profile);
+    let mut forest = Forest::seeded(columns, profiles, carriers);
+    let branching = columns
+        .iter()
+        .all(|column| profiles.of(column.group).branching.enabled);
+    if branching {
+        forest.merge(placed);
         // Tips the model stands in the way of are bent aside before the second pass, so
         // that what they lean onto can share a trunk rather than stand alone.
-        if forest.bend_blocked(placed, profile) {
-            forest.merge(placed, profile);
+        if forest.bend_blocked(placed) {
+            forest.merge(placed);
         }
     }
-    let mut trees = forest.harvest(placed, profile);
-    for tree in &mut trees {
-        tree.set_group(group);
-    }
-    trees
+    forest.harvest(placed)
 }
 
 /// How near a trunk that stood alone is brought to its neighbour, as a share of the
@@ -305,25 +328,22 @@ const GATHERED: Scalar = 0.75;
 /// where the trunk under it is still tall enough to brace, clears the model and lands on
 /// the plate, and only as far as a branch reaches. The neighbour may be one of `settled`,
 /// the trunks thicker groups have already stood: a brace ties any two trunks, whatever
-/// their groups, where both groups have bracing switched on. See `docs/decisions/0240`,
+/// their groups, where both groups have bracing switched on. A trunk of a group that does
+/// not branch or brace stays where it stands. See `docs/decisions/0240`,
 /// `docs/decisions/0250` and `docs/decisions/0252`.
-fn gather(
-    trees: &mut [SupportTree],
-    settled: &[SupportTree],
-    placed: &Placed,
-    profile: &SupportProfile,
-    profiles: Profiles,
-) {
-    let reach = profile.bracing.max_spacing_mm;
-    // No further than a branch reaches: a trunk carried across a cavity to meet a brace
-    // is a longer lever than the one the brace was to steady.
-    let furthest = profile.branching.max_merge_distance_mm / 2.0;
+fn gather(trees: &mut [SupportTree], settled: &[SupportTree], placed: &Placed, profiles: Profiles) {
     let at = |tree: &SupportTree| tree.root().position.truncate();
     for index in 0..trees.len() {
         let tree = &trees[index];
-        if tree.landing().on_model || !braceable(tree, profile) {
+        let profile = profiles.of(tree.group());
+        let leans = profile.branching.enabled && profile.bracing.enabled;
+        if !leans || tree.landing().on_model || !braceable(tree, profile) {
             continue;
         }
+        let reach = profile.bracing.max_spacing_mm;
+        // No further than a branch reaches: a trunk carried across a cavity to meet a
+        // brace is a longer lever than the one the brace was to steady.
+        let furthest = profile.branching.max_merge_distance_mm / 2.0;
         let here = at(tree);
         let nearest = trees
             .iter()
@@ -372,6 +392,8 @@ struct Front {
     radius_mm: Scalar,
     /// How many tips hang off it, which is what its trunk's base is sized for.
     tips: usize,
+    /// The group of the heaviest head it carries, which what is under it is built to.
+    group: u16,
     node: usize,
     alive: bool,
 }
@@ -417,6 +439,7 @@ impl Eq for Candidate {}
 
 /// Every node placed so far, and which of them are still looking for a partner.
 struct Forest<'a> {
+    profiles: Profiles<'a>,
     nodes: Vec<TreeNode>,
     fronts: Vec<Front>,
     /// What thicker groups have stood, for a front to run into.
@@ -432,27 +455,34 @@ struct Forest<'a> {
 }
 
 impl<'a> Forest<'a> {
-    /// One front per column, each at its contact.
-    fn seeded(columns: &[Column], profile: &SupportProfile, carriers: &'a Carriers) -> Self {
-        let radius_mm = profile.pillar_radius_mm();
+    /// One front per column, each at its contact. Every tip names its own group until
+    /// the trees are cut, which is when the names their trunk took are forgotten.
+    fn seeded(columns: &[Column], profiles: Profiles<'a>, carriers: &'a Carriers) -> Self {
+        let cell_mm = columns
+            .iter()
+            .map(|column| profiles.of(column.group).branching.max_merge_distance_mm)
+            .fold(SAME_PLACE_MM, Scalar::max);
         let mut forest = Self {
+            profiles,
             nodes: Vec::with_capacity(columns.len()),
             fronts: Vec::with_capacity(columns.len()),
             carriers,
             landed: Vec::new(),
             grid: HashMap::new(),
-            cell_mm: profile.branching.max_merge_distance_mm.max(SAME_PLACE_MM),
+            cell_mm,
         };
 
         // A tip leaves the surface square on, so the contact and the neck under it are
         // two nodes, and what merges is the neck; see `docs/decisions/0125`.
         for column in columns {
+            let radius_mm = profiles.of(column.group).pillar_radius_mm();
             let contact = forest.nodes.len();
             forest.nodes.push(TreeNode {
                 position: column.contact,
                 radius_mm,
                 parent: Some(contact + 1),
                 point: Some(column.point),
+                head: Some(column.group),
             });
             let node = forest.nodes.len();
             forest.nodes.push(TreeNode {
@@ -460,16 +490,23 @@ impl<'a> Forest<'a> {
                 radius_mm,
                 parent: None,
                 point: None,
+                head: None,
             });
             forest.push_front(Front {
                 position: column.neck,
                 radius_mm,
                 tips: 1,
+                group: column.group,
                 node,
                 alive: true,
             });
         }
         forest
+    }
+
+    /// The profile what is under `front` is built to.
+    fn profile(&self, front: usize) -> &'a SupportProfile {
+        self.profiles.of(self.fronts[front].group)
     }
 
     fn push_front(&mut self, front: Front) -> usize {
@@ -508,20 +545,20 @@ impl<'a> Forest<'a> {
     }
 
     /// Merges what can be merged, highest meeting point first.
-    fn merge(&mut self, placed: &Placed, profile: &SupportProfile) {
+    fn merge(&mut self, placed: &Placed) {
         let mut heap = BinaryHeap::new();
         for index in 0..self.fronts.len() {
             for other in self.neighbours(index) {
                 if other < index {
-                    self.offer(&mut heap, index, other, profile);
+                    self.offer(&mut heap, index, other);
                 }
             }
-            self.offer_carriers(&mut heap, index, profile);
+            self.offer_carriers(&mut heap, index);
         }
 
         while let Some(candidate) = heap.pop() {
             if candidate.onto_carrier {
-                if self.fronts[candidate.a].alive && self.reaches(&candidate, placed, profile) {
+                if self.fronts[candidate.a].alive && self.reaches(&candidate, placed) {
                     self.land_on_carrier(&candidate);
                 }
                 continue;
@@ -529,24 +566,25 @@ impl<'a> Forest<'a> {
             if !self.fronts[candidate.a].alive || !self.fronts[candidate.b].alive {
                 continue;
             }
-            if !self.accepts(&candidate, placed, profile) {
+            if !self.accepts(&candidate, placed) {
                 continue;
             }
 
             let merged = self.join(&candidate);
             for other in self.neighbours(merged) {
-                self.offer(&mut heap, merged, other, profile);
+                self.offer(&mut heap, merged, other);
             }
-            self.offer_carriers(&mut heap, merged, profile);
+            self.offer_carriers(&mut heap, merged);
         }
     }
 
     /// Offers the heap every carrier front `a` could run into, and where.
-    fn offer_carriers(&self, heap: &mut BinaryHeap<Candidate>, a: usize, profile: &SupportProfile) {
+    fn offer_carriers(&self, heap: &mut BinaryHeap<Candidate>, a: usize) {
         let front = &self.fronts[a];
         if !front.alive {
             return;
         }
+        let profile = self.profile(a);
         for b in self.carriers.near(front.position) {
             let carrier = &self.carriers.all[b];
             if carrier.radius_mm < front.radius_mm + THICKER_BY_MM {
@@ -564,8 +602,9 @@ impl<'a> Forest<'a> {
     }
 
     /// Whether the strut from a front to the carrier it would run into clears the model.
-    fn reaches(&self, candidate: &Candidate, placed: &Placed, profile: &SupportProfile) -> bool {
+    fn reaches(&self, candidate: &Candidate, placed: &Placed) -> bool {
         let front = &self.fronts[candidate.a];
+        let profile = self.profile(candidate.a);
         let strut = Beam {
             from: front.position,
             to: candidate.meet,
@@ -590,27 +629,24 @@ impl<'a> Forest<'a> {
         ));
     }
 
-    /// Works out where `a` and `b` would meet and offers it to the heap.
-    fn offer(
-        &self,
-        heap: &mut BinaryHeap<Candidate>,
-        a: usize,
-        b: usize,
-        profile: &SupportProfile,
-    ) {
+    /// Works out where `a` and `b` would meet and offers it to the heap. Fronts of two
+    /// groups meet within both groups' branch angles and merge distances.
+    fn offer(&self, heap: &mut BinaryHeap<Candidate>, a: usize, b: usize) {
         let (one, two) = (&self.fronts[a], &self.fronts[b]);
+        let (first, second) = (&self.profile(a).branching, &self.profile(b).branching);
         let ground = Vec2::new(
             two.position.x - one.position.x,
             two.position.y - one.position.y,
         );
-        if ground.length() > profile.branching.max_merge_distance_mm {
+        if ground.length()
+            > first
+                .max_merge_distance_mm
+                .min(second.max_merge_distance_mm)
+        {
             return;
         }
-        let meet = meeting_point(
-            one.position,
-            two.position,
-            profile.branching.reach_per_drop(),
-        );
+        let reach_per_drop = first.reach_per_drop().min(second.reach_per_drop());
+        let meet = meeting_point(one.position, two.position, reach_per_drop);
 
         // A strut of no length is a merge that has already happened, and a node on top of
         // another node is what the sweep cannot mesh.
@@ -629,9 +665,13 @@ impl<'a> Forest<'a> {
 
     /// Whether the two struts of `candidate` can be built: clear of the model, and with
     /// room under the meeting point for a trunk to stand.
-    fn accepts(&self, candidate: &Candidate, placed: &Placed, profile: &SupportProfile) -> bool {
+    fn accepts(&self, candidate: &Candidate, placed: &Placed) -> bool {
         let (a, b) = (&self.fronts[candidate.a], &self.fronts[candidate.b]);
         let joint_mm = a.radius_mm.max(b.radius_mm);
+        let clearance_mm = self
+            .profile(candidate.a)
+            .clearance_mm
+            .max(self.profile(candidate.b).clearance_mm);
         let reaches = |front: &Front| {
             let beam = Beam {
                 from: front.position,
@@ -639,17 +679,18 @@ impl<'a> Forest<'a> {
                 from_radius_mm: front.radius_mm,
                 to_radius_mm: joint_mm,
             }
-            .with_clearance(profile.clearance_mm);
+            .with_clearance(clearance_mm);
             clear(placed, &beam)
         };
 
         let tips = a.tips + b.tips;
-        reaches(a) && reaches(b) && stands(candidate.meet, joint_mm, tips, placed, profile)
+        let under = self.profiles.of(self.profiles.heavier(a.group, b.group));
+        reaches(a) && reaches(b) && stands(candidate.meet, joint_mm, tips, placed, under)
     }
 
     /// Hangs both fronts of `candidate` off a new node at the meeting point. The joint
     /// keeps the branches' own width: only the trunk under the last one widens, see
-    /// `docs/decisions/0242`.
+    /// `docs/decisions/0242`. What is under it is built to the heavier head of the two.
     fn join(&mut self, candidate: &Candidate) -> usize {
         let (a, b) = (self.fronts[candidate.a], self.fronts[candidate.b]);
         let radius_mm = a.radius_mm.max(b.radius_mm);
@@ -660,6 +701,7 @@ impl<'a> Forest<'a> {
             radius_mm,
             parent: None,
             point: None,
+            head: None,
         });
         self.nodes[a.node].parent = Some(node);
         self.nodes[b.node].parent = Some(node);
@@ -670,6 +712,7 @@ impl<'a> Forest<'a> {
             position: candidate.meet,
             radius_mm,
             tips: a.tips + b.tips,
+            group: self.profiles.heavier(a.group, b.group),
             node,
             alive: true,
         })
@@ -677,13 +720,14 @@ impl<'a> Forest<'a> {
 
     /// Bends every front the model leaves no room under onto a knee, and carries on from
     /// there. Answers whether any of them moved.
-    fn bend_blocked(&mut self, placed: &Placed, profile: &SupportProfile) -> bool {
+    fn bend_blocked(&mut self, placed: &Placed) -> bool {
         let mut bent = false;
         for index in 0..self.fronts.len() {
             let front = self.fronts[index];
             if !front.alive {
                 continue;
             }
+            let profile = self.profile(index);
             if landing(placed, front.position, front.radius_mm, front.tips, profile).is_some() {
                 continue;
             }
@@ -697,6 +741,7 @@ impl<'a> Forest<'a> {
                 radius_mm: front.radius_mm,
                 parent: None,
                 point: None,
+                head: None,
             });
             self.nodes[front.node].parent = Some(node);
             self.fronts[index].alive = false;
@@ -712,7 +757,7 @@ impl<'a> Forest<'a> {
     }
 
     /// Drops a trunk from every surviving front and splits the arena into one tree each.
-    fn harvest(self, placed: &Placed, profile: &SupportProfile) -> Vec<SupportTree> {
+    fn harvest(self, placed: &Placed) -> Vec<SupportTree> {
         let mut children: Vec<Vec<usize>> = vec![Vec::new(); self.nodes.len()];
         for (index, node) in self.nodes.iter().enumerate() {
             if let Some(parent) = node.parent {
@@ -724,26 +769,27 @@ impl<'a> Forest<'a> {
             .iter()
             .filter(|front| front.alive)
             .flat_map(|front| {
+                let profile = self.profiles.of(front.group);
                 // Down, then aside; then both again onto a steeper face before the tips go
                 // to a strut each: a support cured onto a slope beats none under a contact.
                 for steepest_deg in [MAX_LANDING_SLOPE_DEG, LAST_RESORT_SLOPE_DEG] {
                     let (at, radius_mm, tips) = (front.position, front.radius_mm, front.tips);
                     let down = landing_within(placed, at, radius_mm, tips, profile, steepest_deg);
                     if let Some(landing) = down {
-                        return vec![self.cut(front.node, &children, landing)];
+                        return vec![self.cut(front, &children, landing)];
                     }
                     if let Some((knee, landing)) = escape(front, placed, profile, steepest_deg) {
-                        let mut tree = self.cut(front.node, &children, landing);
+                        let mut tree = self.cut(front, &children, landing);
                         tree.stand_on_knee(knee, front.radius_mm);
                         return vec![tree];
                     }
                 }
-                self.bridges(front, &children, placed, profile)
+                self.bridges(front, &children, placed)
             })
             .chain(
-                self.landed.iter().map(|(front, landing)| {
-                    self.cut(self.fronts[*front].node, &children, *landing)
-                }),
+                self.landed
+                    .iter()
+                    .map(|(front, landing)| self.cut(&self.fronts[*front], &children, *landing)),
             )
             .collect()
     }
@@ -752,16 +798,7 @@ impl<'a> Forest<'a> {
     /// from its contact straight down onto the model under it, as a contact in a crevice
     /// or under a low ledge needs. Each is a tree of the one node, which the mesher
     /// builds as a small pillar where the profile has one.
-    fn bridges(
-        &self,
-        front: &Front,
-        children: &[Vec<usize>],
-        placed: &Placed,
-        profile: &SupportProfile,
-    ) -> Vec<SupportTree> {
-        if !profile.land_on_model {
-            return Vec::new();
-        }
+    fn bridges(&self, front: &Front, children: &[Vec<usize>], placed: &Placed) -> Vec<SupportTree> {
         let mut under_it = vec![front.node];
         let mut index = 0;
         while index < under_it.len() {
@@ -773,6 +810,10 @@ impl<'a> Forest<'a> {
             .map(|node| self.nodes[node])
             .filter(TreeNode::is_leaf)
             .filter_map(|tip| {
+                let group = tip.head.unwrap_or(front.group);
+                if !self.profiles.of(group).land_on_model {
+                    return None;
+                }
                 // From just under the contact: one placed by hand sits on the face itself.
                 let ray = Ray::new(tip.position - Vec3::Z * SURFACE_EPSILON_MM, -Vec3::Z);
                 let under = raycast_placed(placed.model, placed.bvh, placed.transform, &ray)
@@ -791,14 +832,17 @@ impl<'a> Forest<'a> {
                     pad_offset: Vec2::ZERO,
                     on_support: false,
                 };
-                Some(SupportTree::new(vec![node], 0, landing))
+                let mut tree = SupportTree::new(vec![node], 0, landing);
+                tree.settle(group);
+                Some(tree)
             })
             .collect()
     }
 
-    /// The tree hanging off `root`, with its nodes renumbered from zero.
-    fn cut(&self, root: usize, children: &[Vec<usize>], landing: Landing) -> SupportTree {
-        let mut order = vec![root];
+    /// The tree hanging off `front`, with its nodes renumbered from zero, built to the
+    /// heaviest head it carries.
+    fn cut(&self, front: &Front, children: &[Vec<usize>], landing: Landing) -> SupportTree {
+        let mut order = vec![front.node];
         let mut index = 0;
         while index < order.len() {
             order.extend(children[order[index]].iter().copied());
@@ -821,7 +865,9 @@ impl<'a> Forest<'a> {
             })
             .collect();
 
-        SupportTree::new(nodes, 0, landing)
+        let mut tree = SupportTree::new(nodes, 0, landing);
+        tree.settle(front.group);
+        tree
     }
 }
 
@@ -838,6 +884,7 @@ fn stands(
         position: at,
         radius_mm,
         tips,
+        group: 0,
         node: 0,
         alive: true,
     };
@@ -1021,6 +1068,111 @@ mod tests {
         );
     }
 
+    /// Two groups of one width, the second under the heavier head, a tip of each 4 mm
+    /// apart 20 mm over an empty plate, the light one at x = 14 and the heavy at x = 10.
+    fn light_and_heavy() -> (Vec<SupportTree>, [SupportProfile; 2]) {
+        let mut heavy = profile();
+        heavy.tip.contact_diameter_mm += 0.2;
+        let table = [profile(), heavy];
+        let points = [
+            SupportPoint::new(Vec3::new(14.0, 10.0, 20.0)),
+            SupportPoint::new(Vec3::new(10.0, 10.0, 20.0)).in_group(1),
+        ];
+        let model = Mesh::default();
+        let bvh = Bvh::build(&model);
+        let placed = Placed::new(&model, &bvh, Transform::default());
+        let profiles = Profiles::new(&table).expect("two groups");
+        let forest = grow(
+            &crate::columns(&points, &placed, profiles),
+            &placed,
+            profiles,
+        );
+        (forest, table)
+    }
+
+    #[test]
+    fn tips_of_two_groups_of_one_width_merge_into_one_trunk_built_to_the_heavier() {
+        let (forest, _) = light_and_heavy();
+        assert_eq!(forest.len(), 1, "one trunk carries both tips");
+        let tree = &forest[0];
+        assert_eq!(tree.tip_count(), 2);
+        assert_eq!(tree.group(), 1, "the trunk is the heavier head's group's");
+        assert!(!tree.landing().on_model, "and stands on the plate");
+        let mut heads: Vec<u16> = tree.tip_groups().collect();
+        heads.sort_unstable();
+        assert_eq!(heads, vec![0, 1], "each tip keeps its own group");
+    }
+
+    #[test]
+    fn a_tip_merged_into_another_groups_trunk_is_meshed_with_its_own_head() {
+        let (forest, table) = light_and_heavy();
+        let mesh = crate::tests::meshed(&forest, Profiles::new(&table).expect("two groups"));
+        // A plane tip is pushed its 0.2 mm bite into the face, so its disc is above z = 20.
+        let widest_at = |x: Scalar| {
+            mesh.vertices
+                .iter()
+                .filter(|vertex| vertex.z > 20.1 && (vertex.x - x).abs() < 1.0)
+                .map(|vertex| (vertex.truncate() - Vec2::new(x, 10.0)).length())
+                .fold(0.0, Scalar::max)
+        };
+        assert!(
+            (widest_at(14.0) - 0.2).abs() < 1e-3,
+            "the light tip touches 0.4 mm across, got a radius of {}",
+            widest_at(14.0)
+        );
+        assert!(
+            (widest_at(10.0) - 0.3).abs() < 1e-3,
+            "the heavy tip touches 0.6 mm across, got a radius of {}",
+            widest_at(10.0)
+        );
+    }
+
+    #[test]
+    fn a_merged_tip_is_drawn_with_its_own_group_down_to_the_joint() {
+        let (forest, table) = light_and_heavy();
+        let model = Mesh::default();
+        let bvh = Bvh::build(&model);
+        let placed = Placed::new(&model, &bvh, Transform::default());
+        let meshes = crate::mesh_groups(&forest, &placed, Profiles::new(&table).expect("two"));
+        let joint = forest[0].root().position;
+        let light_tip = |mesh: &Mesh| {
+            mesh.vertices
+                .iter()
+                .any(|vertex| vertex.z > 19.0 && (vertex.x - 14.0).abs() < 0.5)
+        };
+        assert!(
+            light_tip(&meshes[0]),
+            "the light tip is drawn as the light group"
+        );
+        assert!(!light_tip(&meshes[1]), "and not as the heavy one");
+        assert!(
+            meshes[0]
+                .vertices
+                .iter()
+                .all(|vertex| vertex.z > joint.z - 1.5),
+            "nothing of the light group is drawn below the joint at {joint}"
+        );
+        assert!(
+            meshes[1].vertices.iter().any(|vertex| vertex.z < 1.0),
+            "the trunk and the foot are the heavy group's"
+        );
+    }
+
+    #[test]
+    fn groups_of_two_widths_grow_apart_and_one_of_one_width_together() {
+        let mut thin = profile();
+        thin.middle.diameter_mm *= 0.5;
+        let mut heavy = profile();
+        heavy.tip.contact_diameter_mm += 0.2;
+        let table = [profile(), thin, heavy];
+        let profiles = Profiles::new(&table).expect("three groups");
+        assert_eq!(
+            families(profiles),
+            vec![vec![2, 0], vec![1]],
+            "the two of one width share a family, heavier head first"
+        );
+    }
+
     #[test]
     fn a_thinner_support_runs_into_a_branch_of_a_thicker_tree_and_not_only_its_trunk() {
         let mut thin = profile();
@@ -1101,13 +1253,20 @@ mod tests {
         );
     }
 
+    /// The fixture with a pillar too slim to grow beside it or to be run into by it.
+    fn slimmer() -> SupportProfile {
+        let mut slimmer = profile();
+        slimmer.middle.diameter_mm -= 0.2;
+        slimmer
+    }
+
     #[test]
     fn a_small_pillar_stands_on_the_support_beside_it_and_never_the_other_way_round() {
         // A block with a contact 10 mm over it, which alone is a small pillar standing
         // on the block, and a contact beside the block with the plate under it. Two
-        // groups of one profile, so that the two do not simply merge; the pillar's first.
+        // groups of two widths, so that the two do not simply merge; the pillar's first.
         let block = box_mesh(Vec3::ZERO, Vec3::splat(10.0));
-        let table = [profile(), profile()];
+        let table = [profile(), slimmer()];
         let points = [
             SupportPoint::new(Vec3::new(9.0, 5.0, 20.0)),
             // Far enough out for its pad to clear the block, so it stands straight.
@@ -1155,7 +1314,8 @@ mod tests {
         let block = box_mesh(Vec3::ZERO, Vec3::splat(10.0));
         let mut thinner = profile();
         thinner.small_pillar.diameter_mm -= 0.2;
-        let table = [profile(), profile(), thinner];
+        thinner.middle.diameter_mm -= 0.4;
+        let table = [profile(), slimmer(), thinner];
         let points = [
             SupportPoint::new(Vec3::new(9.0, 5.0, 20.0)),
             SupportPoint::new(Vec3::new(14.5, 5.0, 20.0)).in_group(1),

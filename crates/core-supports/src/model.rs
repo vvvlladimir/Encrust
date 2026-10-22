@@ -124,9 +124,9 @@ impl ModelSupports {
             + self
                 .frozen
                 .iter()
-                .filter(|tree| tree.group() == group)
-                .map(SupportTree::tip_count)
-                .sum::<usize>()
+                .flat_map(SupportTree::tip_groups)
+                .filter(|tip| *tip == group)
+                .count()
     }
 
     /// Where every support touches the model, in plate coordinates: the points and the
@@ -265,9 +265,8 @@ impl ModelSupports {
             return;
         }
         let tree = self.frozen.remove(frozen);
-        for contact in tree.contacts() {
-            self.points
-                .push(SupportPoint::new(contact).in_group(tree.group()));
+        for (contact, group) in tree.contacts().zip(tree.tip_groups()) {
+            self.points.push(SupportPoint::new(contact).in_group(group));
         }
         self.built = None;
     }
@@ -460,7 +459,7 @@ impl ModelSupports {
     pub fn drop_group(&mut self, group: u16) -> usize {
         let before = self.point_count();
         self.points.retain(|support| support.group != group);
-        self.frozen.retain(|tree| tree.group() != group);
+        self.drop_frozen_of(group);
         let mut moved = false;
         for support in &mut self.points {
             if support.group > group {
@@ -469,10 +468,7 @@ impl ModelSupports {
             }
         }
         for tree in &mut self.frozen {
-            if tree.group() > group {
-                tree.set_group(tree.group() - 1);
-                moved = true;
-            }
+            moved |= tree.close_up_over(group);
         }
         let gone = before - self.point_count();
         if gone > 0 || moved {
@@ -495,12 +491,22 @@ impl ModelSupports {
     pub fn clear_group(&mut self, group: u16) -> usize {
         let before = self.point_count();
         self.points.retain(|support| support.group != group);
-        self.frozen.retain(|tree| tree.group() != group);
+        self.drop_frozen_of(group);
         let gone = before - self.point_count();
         if gone > 0 {
             self.built = None;
         }
         gone
+    }
+
+    /// Takes the frozen trees built to `group` away, and the tips of `group` off the trees
+    /// of other groups they were merged into.
+    fn drop_frozen_of(&mut self, group: u16) {
+        self.frozen = self
+            .frozen
+            .iter()
+            .filter_map(|tree| tree.without_group(group))
+            .collect();
     }
 
     /// Takes every support away: the points and the trees a hand has frozen alike.

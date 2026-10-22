@@ -25,6 +25,7 @@ unit-g-ml = г/мл
 unit-h = ч
 unit-m = мин
 unit-mm = мм
+unit-mm2 = мм²
 unit-mm3 = мм³
 unit-mm-min = мм/мин
 unit-px = пикс.
@@ -298,6 +299,8 @@ supports-placed =
        *[many] Поставлено { $count } поддержек
     }
 supports-cancelled = Расстановка отменена
+supports-placed-sized = Поставлено поддержек: { $count }, из них лёгких { $light }, средних { $medium } и тяжёлых { $heavy }
+supports-auto-no-shape = { $name } строит опоры по профилю { $id }, которого нет в каталоге
 supports-group-name = Группа { $index }
 
 ## measure.rs
@@ -324,6 +327,11 @@ supports-grow = Вырастить поддержки
 supports-grow-tooltip = Сечёт { $scope }, чтобы найти то, что нависает над пустотой.
 supports-placing = Расстановка поддержек
 supports-no-room = Некоторым поддержкам негде встать, и они не будут напечатаны.
+supports-sizes = Размеры
+support-size-island = Остров для { $shape }
+support-size-load = Нагрузка для { $shape }
+supports-sizing-auto = Автоматически
+supports-sizing-manual = Вручную
 supports-remove-all = Удалить все
 supports-remove-all-tooltip = Убрать все поддержки
 supports-remove-group = Только { $name }
@@ -896,6 +904,8 @@ support-bracing = Скреплять высокие стволы
 
 ## panels/settings/supports.rs
 
+support-table-auto = Автоматический подбор
+support-table-manual = Вручную
 support-table-tip = Наконечник
 support-table-spacing = Шаг
 support-cannot-add = не удалось добавить профиль поддержек

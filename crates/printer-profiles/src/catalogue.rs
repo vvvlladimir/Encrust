@@ -6,8 +6,8 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use crate::{
-    DirStore, MaterialProfile, Preset, PrinterProfile, PrinterTuning, ProfileError, ProfileStore,
-    SupportProfile,
+    AutoProfile, DirStore, MaterialProfile, Preset, PrinterProfile, PrinterTuning, ProfileError,
+    ProfileStore, SupportProfile,
 };
 
 include!(concat!(env!("OUT_DIR"), "/bundled_profiles.rs"));
@@ -72,6 +72,8 @@ pub struct Catalogue {
     printers: BTreeMap<String, Entry<PrinterProfile>>,
     resins: BTreeMap<String, Entry<MaterialProfile>>,
     supports: BTreeMap<String, Entry<SupportProfile>>,
+    /// Automatic profiles, which only ship: the user tunes the shapes they name.
+    autos: BTreeMap<String, Entry<AutoProfile>>,
     /// Named tool settings, which nothing ships: each is the user's own.
     hollows: BTreeMap<String, Entry<Preset>>,
     drains: BTreeMap<String, Entry<Preset>>,
@@ -90,6 +92,7 @@ impl Catalogue {
             printers: bundled_table(BUNDLED_PRINTERS, "printers", PrinterProfile::from_toml_str)?,
             resins: bundled_table(BUNDLED_RESINS, "resins", MaterialProfile::from_toml_str)?,
             supports: bundled_table(BUNDLED_SUPPORTS, "supports", SupportProfile::from_toml_str)?,
+            autos: bundled_table(BUNDLED_AUTOS, "auto", AutoProfile::from_toml_str)?,
             hollows: BTreeMap::new(),
             drains: BTreeMap::new(),
             unreadable: Vec::new(),
@@ -175,6 +178,19 @@ impl Catalogue {
 
     pub fn supports(&self) -> impl Iterator<Item = &Entry<SupportProfile>> {
         self.supports.values()
+    }
+
+    /// The automatic profiles, each naming support profiles of this catalogue by id.
+    pub fn autos(&self) -> impl Iterator<Item = &Entry<AutoProfile>> {
+        self.autos.values()
+    }
+
+    /// Whether the support profile `id` is one an automatic profile builds to: the lists
+    /// offer those apart from the profiles chosen by hand.
+    pub fn is_auto_shape(&self, id: &str) -> bool {
+        self.autos
+            .values()
+            .any(|auto| auto.profile.shapes.iter().any(|shape| shape == id))
     }
 
     /// The named settings kept for a tool: `Kind::Hollow` or `Kind::Drain`, none else.
@@ -601,6 +617,26 @@ mod tests {
             catalogue
                 .printers()
                 .all(|entry| entry.source == Source::Bundled)
+        );
+    }
+
+    #[test]
+    fn every_shipped_automatic_profile_names_shipped_shapes() {
+        let catalogue = Catalogue::bundled().expect("the shipped catalogue is valid");
+        assert!(catalogue.autos().count() >= 1, "an automatic profile ships");
+        for auto in catalogue.autos() {
+            for shape in &auto.profile.shapes {
+                assert!(
+                    catalogue.is_shipped(Kind::Support, shape),
+                    "{} names {shape}, which does not ship",
+                    auto.id
+                );
+                assert!(catalogue.is_auto_shape(shape));
+            }
+        }
+        assert!(
+            !catalogue.is_auto_shape("light"),
+            "a profile chosen by hand is not one"
         );
     }
 

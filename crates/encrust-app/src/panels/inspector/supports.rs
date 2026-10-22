@@ -4,7 +4,7 @@ use super::scope;
 use crate::i18n::tr;
 use crate::job::SupportJob;
 use crate::panels::Window;
-use crate::panels::support_fields::{held_up, saved_as};
+use crate::panels::support_fields::{held_up, saved_as, sizes};
 use crate::state::Doc;
 use crate::ui::{
     describe, hint, icon, primary_button, progress_bar, secondary_button, section, stats, theme,
@@ -14,22 +14,68 @@ use crate::ui::{
 /// Growing supports under whatever hangs over nothing, and the parts of those already
 /// standing, which a click in this tool picks.
 pub fn ui(ui: &mut egui::Ui, window: &mut Window) {
-    super::shape::profile_section(ui, window);
+    super::shape::profile_section(ui, window, true);
     section(ui, &tr!("supports-where"), None, |ui| {
         scope::editing_supports(window, |window| {
-            let profile = &mut window.tools.supports.profile;
-            let saved =
-                saved_as(&window.machine.slicing.catalogue, profile).map(|entry| &entry.profile);
-            held_up(ui, profile, saved);
+            if window.tools.supports.auto.is_some() {
+                auto_held_up(ui, window);
+            } else {
+                let profile = &mut window.tools.supports.profile;
+                let saved = saved_as(&window.machine.slicing.catalogue, profile)
+                    .map(|entry| &entry.profile);
+                held_up(ui, profile, saved);
+            }
             if let [id] = *window.doc.scene.selection() {
                 super::position::lift(ui, &mut window.doc.scene, id);
             }
         });
     });
+    if window.tools.supports.auto.is_some() {
+        section(ui, &tr!("supports-sizes"), None, |ui| {
+            auto_sizes(ui, window)
+        });
+    }
     section(ui, &tr!("supports-picked"), None, |ui| editing(ui, window));
     section(ui, &tr!("supports-already-done"), None, |ui| {
         placed(ui, window)
     });
+}
+
+/// Where the automatic profile chosen puts supports, against the one it ships as. Each
+/// support is then sized by what it holds; see `docs/decisions/0325`.
+fn auto_held_up(ui: &mut egui::Ui, window: &mut Window) {
+    let Some(auto) = window.tools.supports.auto.as_mut() else {
+        return;
+    };
+    let shipped = window
+        .machine
+        .slicing
+        .catalogue
+        .autos()
+        .find(|entry| entry.profile.name == auto.name)
+        .map(|entry| entry.profile.placing_with(&window.tools.supports.profile));
+    let mut placing = auto.placing_with(&window.tools.supports.profile);
+    held_up(ui, &mut placing, shipped.as_ref());
+    auto.take_placing(&placing);
+}
+
+/// Where the automatic profile chosen moves each support to a heavier shape, by the area of
+/// the island it holds and by how much of the model stands over the overhang it holds.
+fn auto_sizes(ui: &mut egui::Ui, window: &mut Window) {
+    let catalogue = &window.machine.slicing.catalogue;
+    let Some(auto) = window.tools.supports.auto.as_mut() else {
+        return;
+    };
+    let shipped = catalogue
+        .autos()
+        .find(|entry| entry.profile.name == auto.name)
+        .map(|entry| entry.profile.clone());
+    let shapes = auto.shapes.each_ref().map(|id| {
+        catalogue
+            .support(id)
+            .map_or_else(|_| id.clone(), |entry| entry.profile.name.clone())
+    });
+    sizes(ui, auto, shipped.as_ref(), &shapes);
 }
 
 /// How many supports stand on the plate, for the inspector's heading.
@@ -133,10 +179,11 @@ fn generate(ui: &mut egui::Ui, window: &mut Window) {
         .on_hover_text(what)
         .clicked()
     {
-        let started = window
-            .tools
-            .supports
-            .start(&window.doc.scene, window.machine.slicing.layer_height_mm());
+        let started = window.tools.supports.start(
+            &window.doc.scene,
+            window.machine.slicing.layer_height_mm(),
+            &window.machine.slicing.catalogue,
+        );
         window
             .machine
             .status

@@ -347,6 +347,7 @@ fn fingerprint(scene: &Scene) -> u64 {
                 for value in [node.position.x, node.position.y, node.position.z] {
                     value.to_bits().hash(&mut hasher);
                 }
+                node.head.hash(&mut hasher);
             }
             let base = tree.landing().base;
             for value in [base.x, base.y, base.z] {

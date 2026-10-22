@@ -1,8 +1,8 @@
-use anyhow::{Result, bail};
+use anyhow::{Context, Result, bail};
 use core_engine::project::own_table;
 use core_geometry::{Adjacency, Ray, Scalar, Vec2, Vec3, raycast_placed};
-use core_supports::{Part, Placed, ProjectSettings, project};
-use printer_profiles::{Raft, SupportProfile};
+use core_supports::{Need, Part, Placed, ProjectSettings, Reason, project};
+use printer_profiles::{AUTO_SIZES, AutoProfile, Catalogue, Raft, SupportProfile};
 
 use crate::i18n::tr;
 use crate::job::{SupportJob, SupportOutcome, SupportRequest, tasks_of};
@@ -100,6 +100,14 @@ pub struct SupportTool {
     /// as the line it drew rather than as the frames it was sampled on.
     pub last_daub: Option<Vec2>,
     pub job: Option<SupportJob>,
+    /// The automatic profile the panel's list has chosen in place of a support profile,
+    /// or `None` while a run places to the group in hand. See `docs/decisions/0325`.
+    pub auto: Option<AutoProfile>,
+    /// The automatic profile set aside while supports are built to the group in hand, so
+    /// that sizing turned back on finds its numbers as they were left.
+    parked_auto: Option<AutoProfile>,
+    /// What the run going sizes its supports by, and the shapes it sizes them into.
+    sizing: Option<(AutoProfile, [SupportProfile; AUTO_SIZES])>,
     /// The raft every model stands on that has none of its own. A raft is one slab under
     /// a part, so it is the part's and the plate's, not any one group's; see ADR 0253.
     pub raft: Raft,
@@ -131,6 +139,9 @@ impl Default for SupportTool {
             stroke: false,
             last_daub: None,
             job: None,
+            auto: None,
+            parked_auto: None,
+            sizing: None,
             raft: SupportProfile::default().raft,
             saved: None,
             chosen: None,
@@ -148,12 +159,43 @@ impl SupportTool {
         None
     }
 
-    /// Starts an automatic placement run over everything visible on the plate.
+    /// Sizes supports by what they hold, or builds them to the group in hand. Turned on,
+    /// it takes up the automatic profile last set aside, else the first `catalogue` ships.
+    pub fn set_automatic(&mut self, on: bool, catalogue: &Catalogue) {
+        if on == self.auto.is_some() {
+            return;
+        }
+        if on {
+            self.auto = self
+                .parked_auto
+                .take()
+                .or_else(|| catalogue.autos().next().map(|entry| entry.profile.clone()));
+        } else {
+            self.parked_auto = self.auto.take();
+        }
+    }
+
+    /// Starts an automatic placement run over everything visible on the plate: by the
+    /// group in hand, or by the automatic profile chosen, whose shapes are read from
+    /// `catalogue`.
     ///
     /// The run cuts each model at the height it will be printed at, so the layers it
     /// looks at are the layers the printer will expose.
-    pub fn start(&mut self, scene: &Scene, layer_height_mm: Scalar) -> Result<()> {
-        let tasks = tasks_of(scene, |object| self.profile_for(object).clone());
+    pub fn start(
+        &mut self,
+        scene: &Scene,
+        layer_height_mm: Scalar,
+        catalogue: &Catalogue,
+    ) -> Result<()> {
+        self.sizing = self
+            .auto
+            .as_ref()
+            .map(|auto| Ok::<_, anyhow::Error>((auto.clone(), shapes_of(auto, catalogue)?)))
+            .transpose()?;
+        let tasks = match &self.sizing {
+            Some((auto, shapes)) => tasks_of(scene, |_| auto.placing_with(&shapes[0])),
+            None => tasks_of(scene, |object| self.profile_for(object).clone()),
+        };
         if tasks.is_empty() {
             bail!(tr!("supports-nothing-visible-error"));
         }
@@ -176,24 +218,106 @@ impl SupportTool {
         };
 
         self.job = None;
-        let group = self.active;
         let added = outcome.count();
         match outcome {
-            SupportOutcome::Placed(placements) => {
-                for placement in placements {
-                    let Some(object) = scene.get_mut(placement.id) else {
-                        continue;
-                    };
-                    for contact in placement.contacts {
-                        object.supports.add(contact, placement.transform, group);
+            SupportOutcome::Placed(placements) => match self.sizing.take() {
+                Some((auto, shapes)) => {
+                    let mut sized = [0usize; AUTO_SIZES];
+                    for need in placements.iter().flat_map(|placement| &placement.needs) {
+                        sized[size_of(&auto, need)] += 1;
                     }
+                    let mut shapes = shapes.map(Some);
+                    for (shape, count) in shapes.iter_mut().zip(sized) {
+                        if count == 0 {
+                            *shape = None;
+                        }
+                    }
+                    let groups = self.groups_for(shapes, scene);
+                    for placement in placements {
+                        let Some(object) = scene.get_mut(placement.id) else {
+                            continue;
+                        };
+                        for need in placement.needs {
+                            let group = groups[size_of(&auto, &need)];
+                            object
+                                .supports
+                                .add(need.contact, placement.transform, group);
+                        }
+                    }
+                    *status = Status::Info(tr!(
+                        "supports-placed-sized",
+                        count = added,
+                        light = sized[0],
+                        medium = sized[1],
+                        heavy = sized[2]
+                    ));
                 }
-                *status = Status::Info(tr!("supports-placed", count = added));
-            }
+                None => {
+                    let group = self.active;
+                    for placement in placements {
+                        let Some(object) = scene.get_mut(placement.id) else {
+                            continue;
+                        };
+                        for need in placement.needs {
+                            object
+                                .supports
+                                .add(need.contact, placement.transform, group);
+                        }
+                    }
+                    *status = Status::Info(tr!("supports-placed", count = added));
+                }
+            },
             SupportOutcome::Cancelled => *status = Status::Info(tr!("supports-cancelled")),
             SupportOutcome::Failed(message) => *status = Status::Error(message),
         }
         false
+    }
+
+    /// The group each of `shapes` that is wanted is placed into: the one already built to
+    /// a profile of its name, else one nothing stands in, retuned to it, else a new one.
+    /// A shape nothing is sized into is `None`, and is given no group.
+    fn groups_for(
+        &mut self,
+        shapes: [Option<SupportProfile>; AUTO_SIZES],
+        scene: &mut Scene,
+    ) -> [u16; AUTO_SIZES] {
+        let table = self.table();
+        let named = shapes.each_ref().map(|shape| {
+            let shape = shape.as_ref()?;
+            let group = table.iter().position(|kind| kind.name == shape.name)?;
+            Some(group as u16)
+        });
+        let mut taken: Vec<u16> = named.iter().flatten().copied().collect();
+        let mut groups = [0u16; AUTO_SIZES];
+        for ((group, shape), named) in groups.iter_mut().zip(shapes).zip(named) {
+            *group = match (shape, named) {
+                (_, Some(group)) => group,
+                (Some(shape), None) => self.group_to_build(shape, &taken, scene),
+                (None, None) => continue,
+            };
+            taken.push(*group);
+        }
+        groups
+    }
+
+    /// A group for `shape` none of `taken` is: one nothing stands in, retuned to it, else
+    /// a new one.
+    fn group_to_build(&mut self, shape: SupportProfile, taken: &[u16], scene: &mut Scene) -> u16 {
+        let empty = (0..self.groups.len() as u16).find(|group| {
+            !taken.contains(group)
+                && self.groups[*group as usize].name != ISLANDS_GROUP
+                && self.group_holds(*group, scene) == 0
+        });
+        if let Some(group) = empty {
+            self.retune_group(group, shape, scene);
+            return group;
+        }
+        self.groups.push(SupportGroup {
+            name: shape.name.clone(),
+            profile: shape,
+            hidden: false,
+        });
+        (self.groups.len() - 1) as u16
     }
 
     /// Every group's profile, with the active group's taken from the numbers being
@@ -604,6 +728,31 @@ fn underside(scene: &Scene, floor: Vec3, layer_mm: Scalar) -> Option<(ObjectId, 
         .map(|(id, hit)| (id, hit.point))
 }
 
+/// The support profiles `auto` names, lightest first, as `catalogue` has them.
+fn shapes_of(auto: &AutoProfile, catalogue: &Catalogue) -> Result<[SupportProfile; AUTO_SIZES]> {
+    let [light, medium, heavy] = auto.shapes.each_ref().map(|id| {
+        let entry = catalogue.support(id).with_context(|| {
+            tr!(
+                "supports-auto-no-shape",
+                name = auto.name.clone(),
+                id = id.clone()
+            )
+        })?;
+        Ok::<_, anyhow::Error>(entry.profile.clone())
+    });
+    Ok([light?, medium?, heavy?])
+}
+
+/// Which of `auto`'s shapes holds `need`, as an index into its `shapes`.
+fn size_of(auto: &AutoProfile, need: &Need) -> usize {
+    match need.reason {
+        Reason::Island { area_mm2 } => auto.island_size(area_mm2),
+        Reason::Overhang { carried_mm3 } => auto.overhang_size(carried_mm3),
+        // TODO(step-6): a stabilising support gets a shape of its own.
+        Reason::Steady => 0,
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -646,6 +795,82 @@ mod tests {
         let transform = object.transform;
         object.supports.add(Vec3::new(0.5, 0.5, 10.0), transform, 0);
         scene
+    }
+
+    /// Runs placement with the shipped automatic profile under `scene` to its end.
+    fn grown_by_auto(scene: &mut Scene) -> (SupportTool, Status) {
+        let catalogue = Catalogue::bundled().expect("the shipped catalogue is valid");
+        let mut tool = SupportTool {
+            auto: catalogue.autos().next().map(|entry| entry.profile.clone()),
+            ..SupportTool::default()
+        };
+        tool.start(scene, 0.05, &catalogue)
+            .expect("a model to place under");
+        let mut status = Status::default();
+        while tool.poll(scene, &mut status) {
+            std::thread::yield_now();
+        }
+        (tool, status)
+    }
+
+    #[test]
+    fn a_small_island_is_held_by_the_lightest_shape_in_the_empty_group() {
+        let mut scene = one_cube();
+        scene.objects_mut()[0].transform.translation.z = 10.0;
+        let (tool, status) = grown_by_auto(&mut scene);
+
+        assert!(
+            matches!(status, Status::Info(_)),
+            "the run ends placed: {status:?}"
+        );
+        assert_eq!(
+            tool.groups.len(),
+            1,
+            "no group for a shape nothing is sized into"
+        );
+        assert_eq!(
+            tool.groups[0].profile.name, "Auto Light",
+            "the empty first group is retuned to the shape a 1 mm² island takes"
+        );
+        let object = &scene.objects()[0];
+        assert!(object.supports.point_count() > 0);
+        assert_eq!(
+            object.supports.group_count(0),
+            object.supports.point_count()
+        );
+    }
+
+    #[test]
+    fn sizing_turned_off_and_on_again_keeps_the_numbers_it_was_left_with() {
+        let catalogue = Catalogue::bundled().expect("the shipped catalogue is valid");
+        let mut tool = SupportTool::default();
+        tool.set_automatic(true, &catalogue);
+        let auto = tool
+            .auto
+            .as_mut()
+            .expect("the shipped automatic profile is taken up");
+        auto.density = 2.0;
+        tool.set_automatic(false, &catalogue);
+        assert!(tool.auto.is_none());
+        tool.set_automatic(true, &catalogue);
+        assert_eq!(tool.auto.map(|auto| auto.density), Some(2.0));
+    }
+
+    #[test]
+    fn a_missing_shape_stops_the_run_before_it_starts() {
+        let catalogue = Catalogue::bundled().expect("the shipped catalogue is valid");
+        let mut auto = catalogue
+            .autos()
+            .next()
+            .map(|entry| entry.profile.clone())
+            .expect("an automatic profile ships");
+        auto.shapes[2] = "no-such-shape".to_owned();
+        let mut tool = SupportTool {
+            auto: Some(auto),
+            ..SupportTool::default()
+        };
+        assert!(tool.start(&one_cube(), 0.05, &catalogue).is_err());
+        assert!(tool.job.is_none());
     }
 
     #[test]

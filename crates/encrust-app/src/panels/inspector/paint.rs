@@ -40,7 +40,7 @@ fn paint_hint(placing: Placing) -> String {
 /// Supports by hand: placed one at a time, or filled into a painted patch, in the group
 /// the next ones join.
 pub fn ui(ui: &mut egui::Ui, window: &mut Window) {
-    super::shape::profile_section(ui, window);
+    super::shape::profile_section(ui, window, false);
     section(ui, &tr!("paint-brush"), None, |ui| {
         describe(ui, &tr!("paint-brush-help"));
         painting(ui, window);

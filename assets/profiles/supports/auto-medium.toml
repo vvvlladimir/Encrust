@@ -1,0 +1,86 @@
+# The automatic profile's support for mid-sized islands and overhangs under a fair weight of model.
+#
+# One of the three shapes the automatic profile builds a support to; see ADR 0325.
+
+name = "Auto Medium"
+
+facets = 12
+
+# How many supports automatic placement puts down against what it reckons is enough,
+# counted over an area: doubling it puts down twice as many.
+density = 1.0
+
+# How far the lowest point of a part should stand clear of the plate: room for the pad,
+# the flare and a whole top segment under its lowest contact, see ADR 0237.
+z_lift_mm = 5.0
+
+# How much clear air a support's body keeps between itself and the model.
+clearance_mm = 0.5
+
+# How far a surface may lean before it needs holding up, degrees from vertical.
+max_overhang_deg = 40.0
+
+# How far apart automatic placement puts contacts under a face looking straight down,
+# and under one leaning just past the overhang angle, before the density scales them.
+# Between the two the spacing follows the face's angle.
+contact_spacing_mm = 1.8
+steep_contact_spacing_mm = 3.3
+
+[tip]
+# sphere or plane.
+shape = "plane"
+contact_diameter_mm = 0.3
+contact_depth_mm = 0.0
+
+[top]
+length_mm = 2.0
+
+[middle]
+diameter_mm = 1.2
+
+[bottom]
+# cylinder, cone, prism or cube.
+shape = "cylinder"
+platform_diameter_mm = 5.5
+platform_thickness_mm = 0.275
+
+# How wide the flare between the pillar and the pad is where it meets the pad. It leaves
+# the pillar at the pillar's own width and rises as far as it widens.
+lower_diameter_mm = 2.0
+
+# The thin strut used where a support runs from one part of the model to another rather
+# than down to the plate. Both of its ends meet a surface.
+[small_pillar]
+enabled = true
+diameter_mm = 0.3
+upper_depth_mm = 0.0
+lower_depth_mm = 0.0
+# The longest it runs before it keeps the regular pillar's width instead.
+max_length_mm = 5.0
+
+# How the tips of nearby supports merge into shared trunks on the way down.
+[branching]
+enabled = true
+max_angle_deg = 45.0
+max_merge_distance_mm = 10.0
+trunk_exponent = 2.5
+max_trunk_diameter_mm = 1.56
+
+# The slab the supports stand on instead of standing on the plate.
+[raft]
+enabled = false
+# skates, grid or connected.
+style = "skates"
+# hull or rectangle: the outline a skates or grid raft is drawn to.
+shape = "hull"
+margin_mm = 2.0
+thickness_mm = 0.5
+slope_deg = 30.0
+
+# Struts tying tall trunks to each other, so that neither can sway on the peel.
+[bracing]
+enabled = true
+diameter_mm = 0.6
+max_spacing_mm = 8.0
+start_height_mm = 5.0
+rise_mm = 8.5

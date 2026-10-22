@@ -19,6 +19,7 @@ fn main() {
     emit(&mut source, "BUNDLED_PRINTERS", &assets.join("printers"));
     emit(&mut source, "BUNDLED_RESINS", &assets.join("resins"));
     emit(&mut source, "BUNDLED_SUPPORTS", &assets.join("supports"));
+    emit(&mut source, "BUNDLED_AUTOS", &assets.join("auto"));
 
     let out = Path::new(&std::env::var_os("OUT_DIR").expect("cargo sets OUT_DIR"))
         .join("bundled_profiles.rs");

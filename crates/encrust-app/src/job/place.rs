@@ -4,7 +4,7 @@ use std::sync::mpsc::{self, Receiver, TryRecvError};
 
 use core_geometry::Region;
 use core_geometry::{Mesh, Scalar, Transform, Vec3, transform_mesh};
-use core_supports::{Blocked, generate_supports, low_points};
+use core_supports::{Blocked, Need, generate_supports, low_points};
 use printer_profiles::SupportProfile;
 
 use crate::i18n::tr;
@@ -46,7 +46,7 @@ pub struct Placement {
     /// since, so the contacts are mapped back into its own space through this rather than
     /// through where it stands now.
     pub transform: Transform,
-    pub contacts: Vec<Vec3>,
+    pub needs: Vec<Need>,
 }
 
 /// How an automatic placement run ended.
@@ -64,7 +64,7 @@ impl SupportOutcome {
         match self {
             Self::Placed(placements) => placements
                 .iter()
-                .map(|placement| placement.contacts.len())
+                .map(|placement| placement.needs.len())
                 .sum(),
             Self::Cancelled | Self::Failed(_) => 0,
         }
@@ -231,7 +231,7 @@ fn place(
         let done = index as f32 / models;
         let mut last = done;
         let blocked = Blocked::new(&task.mesh, &task.blocked, task.transform);
-        let contacts = generate_supports(
+        let needs = generate_supports(
             &stack,
             request.layer_height_mm,
             &task.profile,
@@ -254,7 +254,7 @@ fn place(
         placements.push(Placement {
             id: task.id,
             transform: task.transform,
-            contacts,
+            needs,
         });
     }
 
@@ -358,7 +358,7 @@ mod tests {
             panic!("a sound cube places");
         };
         assert_eq!(placements[0].transform, lift, "the placement it was cut in");
-        for contact in &placements[0].contacts {
+        for contact in placements[0].needs.iter().map(|need| need.contact) {
             assert!(
                 (contact.z - 10.0).abs() < 0.2,
                 "{contact} is not under the lifted cube"

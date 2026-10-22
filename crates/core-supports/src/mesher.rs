@@ -104,13 +104,19 @@ pub(crate) fn is_small(tree: &SupportTree, profile: &SupportProfile) -> bool {
 /// `placed` puts the mesh the braces have to keep clear of in the same space; every other
 /// body was already tested where it was built.
 ///
-/// Each tree is built to its own group's profile, and each brace to the group it ties
-/// (ADR 0252). The raft under them is built to group 0's: it belongs to the plate rather
-/// than to any one support. See `docs/decisions/0094`.
+/// Each tree is built to its own group's profile, each head on it to the group it names
+/// (ADR 0325), and each brace to the group it ties (ADR 0252). The raft under them is
+/// built to group 0's: it belongs to the plate rather than to any one support. See
+/// `docs/decisions/0094`.
 pub fn mesh_trees(trees: &[SupportTree], placed: &Placed, profiles: Profiles) -> Mesh {
     let mut mesh = Mesh::default();
     for tree in trees {
-        mesh_tree(&mut mesh, tree, profiles.of(tree.group()), placed);
+        mesh_tree(
+            &mut Slots(std::slice::from_mut(&mut mesh)),
+            tree,
+            profiles,
+            placed,
+        );
     }
     for (from, to, radius_mm, group) in braces(trees, placed, profiles) {
         sweep(&mut mesh, &brace(from, to, radius_mm, profiles.of(group)));
@@ -120,14 +126,14 @@ pub fn mesh_trees(trees: &[SupportTree], placed: &Placed, profiles: Profiles) ->
 }
 
 /// The same supports as [`mesh_trees`], one mesh per group in group order, so that each
-/// can be drawn apart. A brace goes with the group it is built to, and the raft with
-/// group 0, whose profile it takes.
+/// can be drawn apart. A strut goes with the heaviest head hanging from it, so a tip merged
+/// into another group's trunk is drawn in its own colour down to the joint; the trunk and
+/// the foot go with the tree's group, a brace with the group it is built to, and the raft
+/// with group 0, whose profile it takes.
 pub fn mesh_groups(trees: &[SupportTree], placed: &Placed, profiles: Profiles) -> Vec<Mesh> {
     let mut meshes = vec![Mesh::default(); profiles.groups().count()];
     for tree in trees {
-        let slot = usize::from(tree.group());
-        let slot = if slot < meshes.len() { slot } else { 0 };
-        mesh_tree(&mut meshes[slot], tree, profiles.of(tree.group()), placed);
+        mesh_tree(&mut Slots(&mut meshes), tree, profiles, placed);
     }
     for (from, to, radius_mm, group) in braces(trees, placed, profiles) {
         let slot = usize::from(group);
@@ -142,10 +148,27 @@ pub fn mesh_groups(trees: &[SupportTree], placed: &Placed, profiles: Profiles) -
 }
 
 /// One support on its own, without the braces and the raft it would share with others.
-pub(crate) fn mesh_alone(tree: &SupportTree, profile: &SupportProfile, placed: &Placed) -> Mesh {
+pub(crate) fn mesh_alone(tree: &SupportTree, profiles: Profiles, placed: &Placed) -> Mesh {
     let mut mesh = Mesh::default();
-    mesh_tree(&mut mesh, tree, profile, placed);
+    mesh_tree(
+        &mut Slots(std::slice::from_mut(&mut mesh)),
+        tree,
+        profiles,
+        placed,
+    );
     mesh
+}
+
+/// The meshes a tree's bodies go into, one per group, or one for every group.
+struct Slots<'a>(&'a mut [Mesh]);
+
+impl Slots<'_> {
+    /// The mesh `group` is drawn in: group 0's when there is no slot of its own.
+    fn of(&mut self, group: u16) -> &mut Mesh {
+        let slot = usize::from(group);
+        let slot = if slot < self.0.len() { slot } else { 0 };
+        &mut self.0[slot]
+    }
 }
 
 /// The tip alone, from `contact` out to `neck`: what a support that cannot stand is shown
@@ -158,12 +181,14 @@ pub(crate) fn mesh_head(contact: Vec3, neck: Vec3, profile: &SupportProfile) -> 
             radius_mm,
             parent: Some(1),
             point: Some(0),
+            head: None,
         },
         TreeNode {
             position: neck,
             radius_mm,
             parent: None,
             point: None,
+            head: None,
         },
     ];
     let landing = Landing {
@@ -190,21 +215,28 @@ pub(crate) fn mesh_head(contact: Vec3, neck: Vec3, profile: &SupportProfile) -> 
     mesh
 }
 
-fn mesh_tree(mesh: &mut Mesh, tree: &SupportTree, profile: &SupportProfile, placed: &Placed) {
+fn mesh_tree(slots: &mut Slots, tree: &SupportTree, profiles: Profiles, placed: &Placed) {
+    let profile = profiles.of(tree.group());
     let style = Style::of(tree, profile);
     let nodes = tree.nodes();
+    let drawn_in = tree.node_groups(profiles);
     for (child, parent) in tree.struts() {
-        let style = if nodes[child].is_leaf() {
+        let (style, own) = if nodes[child].is_leaf() {
             let into = nodes[child].position - nodes[parent].position;
-            Style {
+            let style = Style {
                 bite_limit_mm: wall_mm(placed, nodes[child].position, into) * WALL_BITTEN,
                 ..style
-            }
+            };
+            (style, profiles.of(tree.head_group(child)))
         } else {
-            style
+            (style, profile)
         };
-        sweep(mesh, &strut(tree, child, parent, profile, style));
+        sweep(
+            slots.of(drawn_in[child]),
+            &strut(tree, child, parent, own, style),
+        );
     }
+    let mesh = slots.of(tree.group());
     // A tree of one node has its tip on the trunk itself, held to the same half wall.
     let root = tree.root();
     let style = if root.is_leaf() {
@@ -1743,7 +1775,7 @@ mod tests {
         let bvh = core_geometry::Bvh::build(&model);
         let mesh = mesh_alone(
             &trees[0],
-            &profile,
+            Profiles::single(&profile),
             &Placed::new(&model, &bvh, Transform::default()),
         );
         let thickness = profile.raft.thickness_mm;

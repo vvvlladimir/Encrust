@@ -309,6 +309,13 @@ whole-surface fill is Cmd-Shift-click.
 - A face looking straight down is held at the contact spacing, and one leaning just past
   the overhang angle at the wider **spacing on steep faces**; between them the spacing
   follows the angle.
+- **Automatic** sizing, switched on at the top of the Supports, Paint and Shape tools,
+  sizes every support by what it holds: an island over 2.4 mm² or an overhang under more
+  than 1000 mm³ of the model takes **Auto Medium**, over 3.2 mm² or 2000 mm³ **Auto
+  Heavy**, anything less **Auto Light**. Each shape is a group of its own, tuned like any
+  other, and the notice says how many of each were placed. **Sizes** sets where each
+  heavier shape starts; a merged support shows each tip in its own group's colour. **By hand**, supports are built
+  to the profile chosen for the group in hand.
 - Nearby tips merge into shared **branching trunks**. Trunks are cones sized by their
   height and load, and nothing carrying a load leans more than 45°.
 - A tip that has no room leans until it finds some. A support that still has no room is
@@ -326,11 +333,15 @@ whole-surface fill is Cmd-Shift-click.
 ### Groups and profiles
 - Supports belong to **groups**. Each group is built to its own profile, so one model can
   have heavy supports underneath and light ones on its details.
-- A thin support may stand on a thicker one from another group.
-- Bundled profiles: **light**, **medium**, **heavy**. They differ in thickness only: all
-  three place contacts 1.8 mm apart, hold surfaces leaning past 40°, lift a part 5 mm and
-  touch the part without biting into it. Duplicate one, edit it, save it under a new name,
-  export it or import it. A bundled profile cannot be deleted.
+- A thin support may stand on a thicker one from another group. Tips of groups as thick as
+  each other merge into one trunk, built to the group with the heavier tip; each tip keeps
+  its own.
+- Bundled profiles: **light**, **medium**, **heavy**, and the three shapes **Auto** builds
+  to, **auto light**, **auto medium** and **auto heavy**. Light, medium and heavy differ in
+  thickness only: all three place contacts 1.8 mm apart, hold surfaces leaning past 40°,
+  lift a part 5 mm and touch the part without biting into it. Duplicate one, edit it, save it under a new name,
+  export it or import it. A bundled profile cannot be deleted. Settings lists the automatic
+  shapes apart from the profiles chosen by hand.
 - Each model remembers the profile it was edited with.
 
 ### What a profile lets you shape

@@ -25,6 +25,7 @@ unit-g-ml = g/ml
 unit-h = h
 unit-m = m
 unit-mm = mm
+unit-mm2 = mm²
 unit-mm3 = mm³
 unit-mm-min = mm/min
 unit-px = px
@@ -282,6 +283,8 @@ supports-placed =
        *[other] Placed { $count } supports
     }
 supports-cancelled = Placement cancelled
+supports-placed-sized = Placed { $count } supports: { $light } light, { $medium } medium and { $heavy } heavy
+supports-auto-no-shape = { $name } builds to the support profile { $id }, which is not in the catalogue
 supports-group-name = Group { $index }
 
 ## measure.rs
@@ -308,6 +311,11 @@ supports-grow = Grow the supports
 supports-grow-tooltip = Cuts { $scope } to find what hangs over nothing.
 supports-placing = Placing supports
 supports-no-room = Some supports have no room to stand and are not printed.
+supports-sizes = Sizes
+support-size-island = Island for { $shape }
+support-size-load = Load for { $shape }
+supports-sizing-auto = Automatic
+supports-sizing-manual = By hand
 supports-remove-all = Remove all
 supports-remove-all-tooltip = Take every support away
 supports-remove-group = Only { $name }
@@ -846,6 +854,8 @@ support-bracing = Brace tall trunks
 
 ## panels/settings/supports.rs
 
+support-table-auto = Automatic sizing
+support-table-manual = By hand
 support-table-tip = Tip
 support-table-spacing = Spacing
 support-cannot-add = cannot add a support profile
