@@ -12,6 +12,7 @@
 
 mod base;
 mod branch;
+mod buttress;
 mod clear;
 mod column;
 mod config;

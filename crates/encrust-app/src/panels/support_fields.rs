@@ -10,8 +10,8 @@ use printer_profiles::{
 
 use crate::i18n::tr;
 use crate::ui::{
-    Carried, Segment, Segmented, carried_row, count_row, describe, field_label, icon, nested,
-    quiet_button, switch, theme,
+    Carried, Segment, Segmented, bare_switch, carried_row, count_row, describe, field_label, icon,
+    icon_toggle, nested, switch, theme,
 };
 
 /// Millimetres per point of drag. The tip is measured in tenths and the foot in whole
@@ -438,31 +438,38 @@ fn bracing(ui: &mut egui::Ui, profile: &mut SupportProfile, saved: Option<&Suppo
     describe(ui, &tr!("support-bracing-help"));
     let id = ui.id().with(("bracing-fine-tune", &profile.name));
     let bracing = &mut profile.bracing;
-    switch(ui, &mut bracing.enabled, &tr!("support-bracing"));
-    if !bracing.enabled {
-        return;
-    }
     let mut fine = ui
         .data(|data| data.get_temp(id))
         .unwrap_or_else(|| BracingPreset::of(bracing).is_none());
+    bracing_switch(ui, &mut bracing.enabled, &mut fine);
+    ui.data_mut(|data| data.insert_temp(id, fine));
+    if !bracing.enabled {
+        return;
+    }
     nested(ui, |ui| {
         if fine {
             bracing_numbers(ui, bracing, saved);
-            fine = !quiet_button(ui, icon::BACK, &tr!("support-bracing-presets"), false, true)
-                .clicked();
         } else {
             bracing_presets(ui, bracing);
-            fine = quiet_button(
-                ui,
-                icon::PARAMETERS,
-                &tr!("support-bracing-fine-tune"),
-                false,
-                true,
-            )
-            .clicked();
         }
     });
-    ui.data_mut(|data| data.insert_temp(id, fine));
+}
+
+/// The row that turns bracing on, and before its switch the one that trades the presets
+/// for every number and back.
+fn bracing_switch(ui: &mut egui::Ui, on: &mut bool, fine: &mut bool) {
+    let label = tr!("support-bracing");
+    ui.horizontal(|ui| {
+        ui.set_min_height(theme::ROW_H);
+        field_label(ui, &label, theme::colors().text_mid, "");
+        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+            bare_switch(ui, on, &label);
+            let tip = tr!("support-bracing-fine-tune");
+            if *on && icon_toggle(ui, icon::PARAMETERS, &tip, *fine).clicked() {
+                *fine = !*fine;
+            }
+        });
+    });
 }
 
 /// The ready presets, the one whose numbers the profile holds picked. Picking one writes
@@ -559,6 +566,33 @@ fn bracing_numbers(ui: &mut egui::Ui, bracing: &mut Bracing, saved: Option<&Supp
         ui,
         &tr!("support-brace-bottom-levels"),
         &mut bracing.bottom.levels,
+    );
+    ui.add_space(2.0);
+    buttress(ui, bracing, saved);
+}
+
+/// The legs propping a tall trunk the bracing leaves free at the top.
+fn buttress(ui: &mut egui::Ui, bracing: &mut Bracing, saved: Option<&SupportProfile>) {
+    let buttress = &mut bracing.buttress;
+    switch(ui, &mut buttress.enabled, &tr!("support-buttress"));
+    if !buttress.enabled {
+        return;
+    }
+    mm(
+        ui,
+        &tr!("support-buttress-pair-above"),
+        was(saved, |p| p.bracing.buttress.pair_above_mm),
+        &mut buttress.pair_above_mm,
+        COARSE_STEP,
+        1.0..=200.0,
+    );
+    mm(
+        ui,
+        &tr!("support-buttress-one-above"),
+        was(saved, |p| p.bracing.buttress.one_above_mm),
+        &mut buttress.one_above_mm,
+        COARSE_STEP,
+        1.0..=200.0,
     );
 }
 

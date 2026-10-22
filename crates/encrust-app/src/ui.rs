@@ -9,9 +9,9 @@ pub mod theme;
 mod widgets;
 
 pub use widgets::{
-    Carried, Segment, Segmented, address_field, ago, axis_label, blocked_hover, body_and_foot,
-    busy, card, card_foot, carried_row, compact_button, companion_button, count_row, describe,
-    described, describing, dialog_frame, dialog_head, duration, field_label, filter_chip,
+    Carried, Segment, Segmented, address_field, ago, axis_label, bare_switch, blocked_hover,
+    body_and_foot, busy, card, card_foot, carried_row, compact_button, companion_button, count_row,
+    describe, described, describing, dialog_frame, dialog_head, duration, field_label, filter_chip,
     focus_ring, hairline, heading, help_mark, hint, icon_button, icon_toggle, inline_button,
     issue_row, list, list_row, meta, nested, notice, number_field, number_row, picker,
     primary_button, progress_bar, quiet_button, rail_button, readings, secondary_button, section,

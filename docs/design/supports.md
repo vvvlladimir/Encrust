@@ -155,7 +155,11 @@ the lower of the two root nodes, since above that a trunk has split. The levels 
 zones (ADR 0329): `bottom` takes its levels up from the start, `top` its levels down from
 that ceiling, and `middle` the whole rises between; a zone short of room gives way, the
 bottom last. A level is a cross or a zigzag's one leaning brace, never a rung; a pair
-without room for one level is not tied. A brace is no wider than either trunk
+without room for one level is not tied. A trunk left free above its highest brace by more than
+`buttress.pair_above_mm`, or above its second-highest by more than `one_above_mm`, is
+propped by two legs or one (ADR 0329): each leans 45 degrees out from the trunk's top for one
+rise, away from the middle of the part, and stands on the plate. Legs are made from the
+trees each time they are meshed, then braced like any trunk. A brace is no wider than either trunk
 where it meets it (ADR 0242). Each brace is one more tube, and one the
 model is in the way of is not tied at all: a brace goes through ADR 0077's beam like every
 other body, which is why `mesh_trees` is handed the model. The raft slab is the one thing

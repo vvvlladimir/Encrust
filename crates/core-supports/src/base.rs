@@ -130,6 +130,10 @@ fn rectangle(points: &[Vec2]) -> Vec<Vec2> {
     ]
 }
 
+/// One brace: the two points it runs between, its radius in millimetres, and the group
+/// whose bracing it is built to.
+pub(crate) type Brace = (Vec3, Vec3, Scalar, u16);
+
 /// Every brace between the trunks of `trees`: the pair of points it runs between, its
 /// radius in millimetres, and the group whose bracing it is built to.
 ///
@@ -142,17 +146,27 @@ fn rectangle(points: &[Vec2]) -> Vec<Vec2> {
 ///
 /// A brace is a support body like any other, so one the model is in the way of is not
 /// tied at all; see `docs/decisions/0077`.
-pub(crate) fn braces(
+pub(crate) fn braces(trees: &[SupportTree], placed: &Placed, profiles: Profiles) -> Vec<Brace> {
+    ties(trees, placed, profiles)
+        .into_iter()
+        .flat_map(|(_, _, struts)| struts)
+        .collect()
+}
+
+/// Every pair of `trees` tied, by index, with the braces [`braces`] ties it with; a pair
+/// the model stands in the way of everywhere is left out.
+pub(crate) fn ties(
     trees: &[SupportTree],
     placed: &Placed,
     profiles: Profiles,
-) -> Vec<(Vec3, Vec3, Scalar, u16)> {
-    let mut struts = Vec::new();
-    for (one, two) in neighbours(trees, profiles) {
+) -> Vec<(usize, usize, Vec<Brace>)> {
+    let mut pairs = Vec::new();
+    for (a, b) in neighbours(trees, profiles) {
+        let (one, two) = (&trees[a], &trees[b]);
         let (group, profile) = lead_of(one, two, profiles);
-        let tied = tie(one, two, profiles).into_iter();
-        struts.extend(
-            tied.filter(|&(from, to, radius_mm)| {
+        let struts: Vec<_> = tie(one, two, profiles)
+            .into_iter()
+            .filter(|&(from, to, radius_mm)| {
                 let beam = Beam {
                     from,
                     to,
@@ -162,10 +176,13 @@ pub(crate) fn braces(
                 .with_clearance(profile.clearance_mm);
                 clear(placed, &beam)
             })
-            .map(|(from, to, radius_mm)| (from, to, radius_mm, group)),
-        );
+            .map(|(from, to, radius_mm)| (from, to, radius_mm, group))
+            .collect();
+        if !struts.is_empty() {
+            pairs.push((a, b, struts));
+        }
     }
-    struts
+    pairs
 }
 
 /// Whether `tree` stands tall enough to carry one level of the bracing of `profile`,
@@ -204,34 +221,30 @@ fn lead_of<'a>(
 /// and it keeps every trunk's nearest neighbour, so nothing a tie would reach is left
 /// alone; tying every pair within reach puts three crosses where two hold as well. See
 /// `docs/decisions/0240`.
-fn neighbours<'a>(
-    trees: &'a [SupportTree],
-    profiles: Profiles,
-) -> Vec<(&'a SupportTree, &'a SupportTree)> {
+fn neighbours(trees: &[SupportTree], profiles: Profiles) -> Vec<(usize, usize)> {
     let own = |tree: &SupportTree| profiles.of(tree.group());
-    let tall: Vec<&SupportTree> = trees
-        .iter()
-        .filter(|tree| braceable(tree, own(tree)))
+    let tall: Vec<usize> = (0..trees.len())
+        .filter(|&index| braceable(&trees[index], own(&trees[index])))
         .collect();
-    let at = |tree: &SupportTree| tree.root().position.truncate();
+    let at = |index: usize| trees[index].root().position.truncate();
 
     let mut pairs = Vec::new();
-    for (index, one) in tall.iter().enumerate() {
-        for two in &tall[index + 1..] {
+    for (place, &one) in tall.iter().enumerate() {
+        for &two in &tall[place + 1..] {
             let (here, there) = (at(one), at(two));
-            let reach = own(one)
+            let reach = own(&trees[one])
                 .bracing
                 .max_spacing_mm
-                .min(own(two).bracing.max_spacing_mm);
+                .min(own(&trees[two]).bracing.max_spacing_mm);
             if (there - here).length() > reach {
                 continue;
             }
-            let between = tall.iter().any(|other| {
+            let between = tall.iter().any(|&other| {
                 let point = at(other);
                 (point - here).dot(point - there) < -SAME_PLACE_MM
             });
             if !between {
-                pairs.push((*one, *two));
+                pairs.push((one, two));
             }
         }
     }

@@ -214,7 +214,7 @@ Grouped by what the decision governs; the number is still the order it was taken
 | [0326](0326-a-step-is-sized-by-the-resin-it-puts-out-and-holds-the-faces-above-it.md) | Size a step by the resin it puts out, and hold the faces just above it | Accepted |
 | [0327](0327-a-gentle-slope-is-steadied-sparsely-by-a-shape-of-its-own.md) | Steady a part sparsely on its gentle slopes, with a shape of its own | Accepted |
 | [0328](0328-only-a-tip-meets-the-model.md) | Let only a tip meet the model: turn a head for room and cut a pad back | Accepted |
-| [0329](0329-bracing-is-zoned-and-starts-from-a-preset.md) | Zone the bracing up a pair, and start it from a preset | Accepted |
+| [0329](0329-bracing-is-zoned-and-starts-from-a-preset.md) | Zone the bracing up a pair, prop a free top, and start from a preset | Accepted |
 | [0255](0255-a-small-pillar-has-a-longest-run.md) | Thin a support between two surfaces only up to a longest run | Accepted |
 
 ### Volume: hollowing, infill and relief

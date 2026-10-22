@@ -4,6 +4,7 @@ use printer_profiles::{ContactShape, SupportProfile};
 
 use crate::Landing;
 use crate::base::{braces, skate, skate_half_width_mm, toe_of};
+use crate::buttress::buttresses;
 use crate::column::SURFACE_EPSILON_MM;
 use crate::group::Profiles;
 use crate::pad::PAD_SECTORS;
@@ -110,6 +111,7 @@ pub(crate) fn is_small(tree: &SupportTree, profile: &SupportProfile) -> bool {
 /// built to group 0's: it belongs to the plate rather than to any one support. See
 /// `docs/decisions/0094`.
 pub fn mesh_trees(trees: &[SupportTree], placed: &Placed, profiles: Profiles) -> Mesh {
+    let trees = &propped(trees, placed, profiles);
     let mut mesh = Mesh::default();
     for tree in trees {
         mesh_tree(
@@ -132,6 +134,7 @@ pub fn mesh_trees(trees: &[SupportTree], placed: &Placed, profiles: Profiles) ->
 /// the foot go with the tree's group, a brace with the group it is built to, and the raft
 /// with group 0, whose profile it takes.
 pub fn mesh_groups(trees: &[SupportTree], placed: &Placed, profiles: Profiles) -> Vec<Mesh> {
+    let trees = &propped(trees, placed, profiles);
     let mut meshes = vec![Mesh::default(); profiles.groups().count()];
     for tree in trees {
         mesh_tree(&mut Slots(&mut meshes), tree, profiles, placed);
@@ -146,6 +149,14 @@ pub fn mesh_groups(trees: &[SupportTree], placed: &Placed, profiles: Profiles) -
     }
     mesh_raft(&mut meshes[0], trees, placed, profiles);
     meshes
+}
+
+/// `trees` and the buttresses they want, which are meshed, braced and stood on the raft
+/// like any other support but never kept: they follow the trunks they prop.
+fn propped(trees: &[SupportTree], placed: &Placed, profiles: Profiles) -> Vec<SupportTree> {
+    let mut all = trees.to_vec();
+    all.extend(buttresses(trees, placed, profiles));
+    all
 }
 
 /// One support on its own, without the braces and the raft it would share with others.

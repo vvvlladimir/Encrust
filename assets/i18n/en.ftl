@@ -842,7 +842,7 @@ support-body-help = Diameter is how thick the column is: thicker is stiffer and 
 support-foot-help = The foot holds the support to the plate. Wider and thicker grips harder and is harder to take off; Tapered and Skate leave an edge a scraper gets under. Flare is how wide the column spreads before it meets the foot.
 support-branching-help = Nearby tips merge into shared trunks, like a tree: fewer columns, less resin and fewer marks on the plate. A wider branch angle merges more but leans the branches further; tips farther apart than Merge within keep columns of their own.
 support-raft-help = A slab the supports stand on instead of the plate: it spreads the peel over one footprint and comes off in one piece. Grid sucks less on the plate, Connected joins a pad under each foot. Margin is how far it reaches past the model, and a sloped wall grips harder yet still pries off.
-support-bracing-help = Struts that tie tall trunks together so they do not sway when a layer peels. Span is the widest gap they bridge; First at and Every set the height of the first one and the step between them. Up each pair the top and bottom zones take a few levels and the middle fills the rest: a zigzag is one strut a level, a cross is two.
+support-bracing-help = Struts that tie tall trunks together so they do not sway when a layer peels. Span is the widest gap they bridge; First at and Every set the height of the first one and the step between them. Up each pair the top and bottom zones take a few levels and the middle fills the rest: a zigzag is one strut a level, a cross is two. A tall trunk left free at the top gets buttresses: a pair once it stands Pair above its highest brace, one once it stands One above its second.
 support-held-up-help = Overhang is how far a surface may lean from vertical before it gets supports: 90° is a ceiling, and a lower number supports more. Contact spacing is the distance between tips under a face looking straight down, and spacing on steep faces is the distance under one leaning just past the overhang angle; between them it follows the angle. Density multiplies how many go down: 1 is what Encrust reckons is enough.
 support-lift-help = How high the model stands off the plate. Supports need room under it, and the first layers stick to the plate hardest, so a part printed straight on it is hard to free.
 support-raft = Raft under the feet
@@ -852,8 +852,7 @@ support-raft-connected = Connected
 support-raft-hull = Hull
 support-raft-rectangle = Rectangle
 support-bracing = Brace tall trunks
-support-bracing-presets = Presets
-support-bracing-fine-tune = Fine-tune
+support-bracing-fine-tune = Fine-tune: every number instead of the presets
 support-bracing-preset-none = These numbers are your own. Pick a preset to start over from one.
 support-bracing-standard = Standard
 support-bracing-strong = Strong
@@ -870,6 +869,9 @@ support-brace-bottom = Bottom
 support-brace-bottom-levels = Bottom levels
 support-brace-zigzag = Zigzag
 support-brace-cross = Cross
+support-buttress = Buttress tall trunks
+support-buttress-pair-above = Pair above
+support-buttress-one-above = One above
 
 ## panels/settings/supports.rs
 

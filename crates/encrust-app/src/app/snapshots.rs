@@ -69,7 +69,7 @@ fn the_supports_tool_sizing_automatically() {
 }
 
 /// Tall enough for the Shape tool to show the bracing's drawing and every number under it.
-const TALL_WINDOW: egui::Vec2 = egui::vec2(1280.0, 1100.0);
+const TALL_WINDOW: egui::Vec2 = egui::vec2(1280.0, 1200.0);
 
 #[test]
 fn the_shape_tool_on_bracing_from_a_preset_and_by_the_numbers() {

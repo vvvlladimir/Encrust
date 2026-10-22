@@ -364,7 +364,8 @@ whole-surface fill is Cmd-Shift-click.
 - **Bracing:** braces between tall trunks, from one of four presets (Standard, Strong,
   Tall, Small) or, under **Fine-tune**, by the numbers: where the first brace goes, how
   often they repeat, and whether the bottom, middle and top of each pair are zigzagged or
-  crossed, the bottom and top over how many levels.
+  crossed, the bottom and top over how many levels. A tall trunk the bracing leaves free
+  at the top is propped by one or two buttresses leaning out to the plate.
 
 ---
 

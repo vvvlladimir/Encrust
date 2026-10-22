@@ -338,6 +338,30 @@ pub struct BraceZone {
     pub levels: u32,
 }
 
+/// Legs propping a tall trunk the bracing leaves free at the top: each a strut leaning out
+/// and down from where the trunk ends, then a column to the plate, braced to the trunk.
+/// See `docs/decisions/0329`.
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+pub struct Buttress {
+    pub enabled: bool,
+    /// How far a trunk may stand above its highest brace, millimetres, before it gets a
+    /// pair of buttresses.
+    pub pair_above_mm: f32,
+    /// How far it may stand above its second-highest, to a second neighbour, before it
+    /// gets one.
+    pub one_above_mm: f32,
+}
+
+impl Default for Buttress {
+    fn default() -> Self {
+        Self {
+            enabled: false,
+            pair_above_mm: 30.0,
+            one_above_mm: 60.0,
+        }
+    }
+}
+
 /// Struts tying tall trunks to each other, so that neither can sway on the peel.
 ///
 /// Up one pair the levels fall into three zones: `bottom` from the first brace up, `top`
@@ -359,6 +383,8 @@ pub struct Bracing {
     pub middle: BracePattern,
     #[serde(default)]
     pub top: BraceZone,
+    #[serde(default)]
+    pub buttress: Buttress,
 }
 
 impl Default for Bracing {
@@ -372,6 +398,7 @@ impl Default for Bracing {
             bottom: BraceZone::default(),
             middle: BracePattern::default(),
             top: BraceZone::default(),
+            buttress: Buttress::default(),
         }
     }
 }
@@ -410,6 +437,12 @@ impl BracingPreset {
             Self::Tall => (2.0, 1.0, zone(Cross, 1), Zigzag, zone(Cross, 2)),
             Self::Small => (0.8, 1.0, zone(Cross, 1), Cross, zone(Cross, 2)),
         };
+        let (pair_above_mm, one_above_mm) = match self {
+            Self::Standard => (30.0, 60.0),
+            Self::Strong => (30.0, 50.0),
+            Self::Tall => (20.0, 50.0),
+            Self::Small => (10.0, 30.0),
+        };
         Bracing {
             enabled: true,
             diameter_mm,
@@ -419,6 +452,11 @@ impl BracingPreset {
             bottom,
             middle,
             top,
+            buttress: Buttress {
+                enabled: true,
+                pair_above_mm,
+                one_above_mm,
+            },
         }
     }
 
@@ -849,6 +887,11 @@ impl SupportProfile {
             ("contact_depth_mm", self.tip.contact_depth_mm),
             ("raft slope_deg", self.raft.slope_deg),
             ("bracing start_height_mm", self.bracing.start_height_mm),
+            (
+                "buttress pair_above_mm",
+                self.bracing.buttress.pair_above_mm,
+            ),
+            ("buttress one_above_mm", self.bracing.buttress.one_above_mm),
             ("z_lift_mm", self.z_lift_mm),
             ("clearance_mm", self.clearance_mm),
         ];
