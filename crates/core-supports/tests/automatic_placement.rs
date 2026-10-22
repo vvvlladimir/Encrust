@@ -141,6 +141,26 @@ fn every_point_placed_under_an_island_becomes_a_column_that_stands() {
 }
 
 #[test]
+fn a_tip_that_does_not_bite_touches_the_underside_it_holds() {
+    let mut profile = SupportProfile::medium();
+    profile.tip.contact_depth_mm = 0.0;
+    let model = floating_box();
+    let columns = columns(
+        &points(&model, &profile),
+        &Placed::new(&model, &Bvh::build(&model), Transform::default()),
+        Profiles::single(&profile),
+    );
+    assert!(!columns.is_empty(), "an island has to be held up");
+    for column in &columns {
+        assert!(
+            (column.contact.z - 10.0).abs() < 1e-4,
+            "the box's underside is at z = 10, a contact sits at {}",
+            column.contact.z
+        );
+    }
+}
+
+#[test]
 fn the_columns_of_a_run_mesh_into_a_closed_solid() {
     let profile = SupportProfile::medium();
     let model = floating_box();

@@ -322,13 +322,15 @@ whole-surface fill is Cmd-Shift-click.
 - Supports belong to **groups**. Each group is built to its own profile, so one model can
   have heavy supports underneath and light ones on its details.
 - A thin support may stand on a thicker one from another group.
-- Bundled profiles: **light**, **medium**, **heavy**. Duplicate one, edit it, save it under
-  a new name, export it or import it. A bundled profile cannot be deleted.
+- Bundled profiles: **light**, **medium**, **heavy**. They differ in thickness only: all
+  three place contacts 1.8 mm apart, hold surfaces leaning past 40°, lift a part 5 mm and
+  touch the part without biting into it. Duplicate one, edit it, save it under a new name,
+  export it or import it. A bundled profile cannot be deleted.
 - Each model remembers the profile it was edited with.
 
 ### What a profile lets you shape
 - **Tip:** a plane or a sphere contact, with its diameter, contact spacing, how deep it
-  bites into the part, and clearance.
+  bites into the part (nought touches the surface only), and clearance.
 - **Body:** diameter, overhang angle, branch angle, branching on or off, merge distance,
   maximum length, standing on the model on or off.
 - **Small pillar:** a separate thin shape for short supports.

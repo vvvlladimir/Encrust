@@ -196,7 +196,7 @@ fn top(ui: &mut egui::Ui, profile: &mut SupportProfile, saved: Option<&SupportPr
         was(saved, |p| p.tip.contact_depth_mm),
         &mut tip.contact_depth_mm,
         FINE_STEP,
-        0.05..=1.0,
+        0.0..=1.0,
     );
     let length = &mut profile.top.length_mm;
     mm(
@@ -316,7 +316,7 @@ fn small_pillar(ui: &mut egui::Ui, profile: &mut SupportProfile, saved: Option<&
             was(saved, |p| p.small_pillar.upper_depth_mm),
             &mut pillar.upper_depth_mm,
             FINE_STEP,
-            0.05..=1.0,
+            0.0..=1.0,
         );
         mm(
             ui,
@@ -324,7 +324,7 @@ fn small_pillar(ui: &mut egui::Ui, profile: &mut SupportProfile, saved: Option<&
             was(saved, |p| p.small_pillar.lower_depth_mm),
             &mut pillar.lower_depth_mm,
             FINE_STEP,
-            0.05..=1.0,
+            0.0..=1.0,
         );
         mm(
             ui,

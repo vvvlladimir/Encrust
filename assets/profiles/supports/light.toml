@@ -1,6 +1,6 @@
 # Thin supports for small, well-anchored parts. Easy to cut off, easy to snap.
 #
-# Tuned on prints rather than taken from the field; where the numbers come from: ADR 0254.
+# Why the presets look like this: ADR 0323.
 
 name = "Light"
 
@@ -8,61 +8,61 @@ facets = 12
 
 # How many supports automatic placement puts down against what it reckons is enough,
 # counted over an area: doubling it puts down twice as many.
-density = 0.6
+density = 1.0
 
 # How far the lowest point of a part should stand clear of the plate: room for the pad,
 # the flare and a whole top segment under its lowest contact, see ADR 0237.
-z_lift_mm = 3.6
+z_lift_mm = 5.0
 
 # How much clear air a support's body keeps between itself and the model.
-clearance_mm = 0.6
+clearance_mm = 0.5
 
 # How far a surface may lean before it needs holding up, degrees from vertical.
-max_overhang_deg = 55.0
+max_overhang_deg = 40.0
 
 # How far apart automatic placement puts contacts over an overhang, before the
 # density scales it.
-contact_spacing_mm = 4.0
+contact_spacing_mm = 1.8
 
 [tip]
 # sphere or plane.
 shape = "plane"
-contact_diameter_mm = 0.2
-contact_depth_mm = 0.2
+contact_diameter_mm = 0.3
+contact_depth_mm = 0.0
 
 [top]
-length_mm = 1.5
+length_mm = 2.0
 
 [middle]
-diameter_mm = 0.7
+diameter_mm = 1.0
 
 [bottom]
 # cylinder, cone, prism or cube.
 shape = "cylinder"
-platform_diameter_mm = 7.0
-platform_thickness_mm = 0.5
+platform_diameter_mm = 6.0
+platform_thickness_mm = 0.25
 
 # How wide the flare between the pillar and the pad is where it meets the pad. It leaves
 # the pillar at the pillar's own width and rises as far as it widens.
-lower_diameter_mm = 3.45
+lower_diameter_mm = 1.0
 
 # The thin strut used where a support runs from one part of the model to another rather
-# than down to the plate. Both of its ends sink into a surface.
+# than down to the plate. Both of its ends meet a surface.
 [small_pillar]
 enabled = true
 diameter_mm = 0.3
-upper_depth_mm = 0.15
-lower_depth_mm = 0.2
+upper_depth_mm = 0.0
+lower_depth_mm = 0.0
 # The longest it runs before it keeps the regular pillar's width instead.
-max_length_mm = 10.0
+max_length_mm = 5.0
 
 # How the tips of nearby supports merge into shared trunks on the way down.
 [branching]
 enabled = true
-max_angle_deg = 50.0
-max_merge_distance_mm = 7.0
+max_angle_deg = 45.0
+max_merge_distance_mm = 10.0
 trunk_exponent = 2.5
-max_trunk_diameter_mm = 1.0
+max_trunk_diameter_mm = 1.3
 
 # The slab the supports stand on instead of standing on the plate.
 [raft]

@@ -28,6 +28,10 @@ const SINGULAR: Scalar = 1e-12;
 /// space: a click lands on it to within float error.
 const ON_SURFACE_MM: Scalar = 1e-3;
 
+/// How far under a face a contact without a bite is moved up onto it, millimetres:
+/// further than a layer of any resin printer, and nearer than a contact put in the air.
+const ONTO_SURFACE_MM: Scalar = 0.5;
+
 /// How much ground anything that carries a support may cover per millimetre it descends,
 /// branches apart: 45 degrees off vertical, past which a strut is printed as an overhang
 /// of its own and sags. A tip's head and a leaning trunk are held to it alike; a branch
@@ -202,6 +206,7 @@ pub(crate) fn column(
     contact: Vec3,
     profile: &SupportProfile,
 ) -> Column {
+    let contact = onto_surface(placed, contact, profile);
     let neck = neck_of(placed, contact, profile);
     Column {
         point,
@@ -210,6 +215,33 @@ pub(crate) fn column(
         neck,
         landing: landing(placed, neck, profile.pillar_radius_mm(), 1, profile),
     }
+}
+
+/// `contact` moved up onto the face over it when the profile's tip does not bite.
+///
+/// Automatic placement puts a contact a layer under the surface it holds, and a tip that
+/// does not sink in from there never touches that surface; see `docs/decisions/0323`.
+fn onto_surface(placed: &Placed, contact: Vec3, profile: &SupportProfile) -> Vec3 {
+    if profile.contact_depth_mm() > 0.0 || on_surface(placed, contact) {
+        return contact;
+    }
+    let ray = Ray::new(contact, Vec3::Z);
+    raycast_placed(placed.model, placed.bvh, placed.transform, &ray)
+        .filter(|hit| hit.distance <= ONTO_SURFACE_MM && hit.normal.z < 0.0)
+        .map_or(contact, |hit| hit.point)
+}
+
+/// Whether `contact`, in plate coordinates, already sits on the model's surface.
+fn on_surface(placed: &Placed, contact: Vec3) -> bool {
+    let matrix = placed.transform.to_matrix();
+    if matrix.determinant().abs() < SINGULAR {
+        return false;
+    }
+    let local = matrix.inverse().transform_point3(contact);
+    placed
+        .bvh
+        .closest(local)
+        .is_some_and(|found| found.distance <= ON_SURFACE_MM)
 }
 
 /// Where a trunk carrying `tips` dropped from `from` lands, or `None` when there is no
@@ -611,6 +643,44 @@ mod tests {
             profile.contact_depth_mm()
         );
         assert!((landing.bottom_z(&profile) - expected).abs() < 1e-4);
+    }
+
+    /// A slab spanning 10..12 in z, hanging in the air, and the column of a contact
+    /// `under_mm` below its underside built to `profile`.
+    fn column_under_a_slab(under_mm: Scalar, profile: &SupportProfile) -> Column {
+        let model = box_mesh(Vec3::new(-5.0, -5.0, 10.0), Vec3::new(5.0, 5.0, 12.0));
+        let bvh = Bvh::build(&model);
+        let placed = Placed::new(&model, &bvh, Transform::default());
+        column(&placed, 0, 0, Vec3::new(0.0, 0.0, 10.0 - under_mm), profile)
+    }
+
+    #[test]
+    fn a_contact_without_a_bite_a_layer_under_the_surface_is_put_on_it() {
+        let mut flush = profile();
+        flush.tip.contact_depth_mm = 0.0;
+        let column = column_under_a_slab(0.05, &flush);
+        assert!(
+            (column.contact.z - 10.0).abs() < 1e-4,
+            "the slab's underside is at z = 10, got {}",
+            column.contact.z
+        );
+    }
+
+    #[test]
+    fn a_contact_that_bites_stays_where_it_was_put() {
+        let column = column_under_a_slab(0.05, &profile());
+        assert!((column.contact.z - 9.95).abs() < 1e-4);
+    }
+
+    #[test]
+    fn a_contact_without_a_bite_well_under_the_surface_stays_where_it_was_put() {
+        let mut flush = profile();
+        flush.tip.contact_depth_mm = 0.0;
+        let column = column_under_a_slab(3.0, &flush);
+        assert!(
+            (column.contact.z - 7.0).abs() < 1e-4,
+            "3 mm of air is a contact off the surface, not one a layer short of it"
+        );
     }
 
     #[test]

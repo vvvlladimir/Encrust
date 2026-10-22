@@ -952,7 +952,7 @@ mod tests {
         let bvh = Bvh::build(&mesh);
         scene.objects_mut()[0]
             .supports
-            .add(Vec3::new(0.5, 0.5, 5.0), Transform::default(), 0);
+            .add(Vec3::new(0.5, 0.5, 8.0), Transform::default(), 0);
 
         let rebuild = |scene: &mut Scene| {
             scene.objects_mut()[0].supports.refresh(

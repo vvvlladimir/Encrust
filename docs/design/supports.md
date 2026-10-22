@@ -164,7 +164,7 @@ cuts the model, leaving a part that already stands that high where it is. Whethe
 lowest contact of a lifted part can stand at all is arithmetic: the pad, the top segment
 and `MIN_PILLAR_HEIGHT_MM` have to fit under that contact, the segment being shortened
 rather than allowed to eat the body's room. Every shipped preset lifts by at least that
-much: Light 3.6 mm, Medium 5 mm and Heavy 5.5 mm (ADR 0237, 0254).
+much: all three lift 5 mm (ADR 0237, 0323).
 
 ## Keeping the mesh closed
 
@@ -239,7 +239,9 @@ something already holds, and gets nothing.
 
 A contact goes a whole layer below the plane that was cut, because the surface is somewhere
 inside the layer's rise and a contact above it would land the column on the very surface it
-holds. The tip then sinks `contact_depth_mm` back in.
+holds. The tip then sinks `contact_depth_mm` back in. A tip with no bite would never reach
+the surface from there, so building its column moves the contact up onto the face over it,
+when that face looks down and is no more than 0.5 mm above (ADR 0323).
 
 **Where the points go.** The outline first, because a corner is where a ledge lifts and the
 edge is where the peel starts. Corners are the vertices of the piece's convex hull where it

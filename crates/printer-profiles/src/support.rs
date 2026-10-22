@@ -24,8 +24,8 @@ pub struct TipSegment {
     pub shape: ContactShape,
     /// Diameter of the disc that meets the model, millimetres.
     pub contact_diameter_mm: f32,
-    /// How far the tip sinks into the model, millimetres. Without it the support and the
-    /// model cure as two touching solids and the support falls off during the print.
+    /// How far the tip sinks into the model, millimetres. Zero meets the surface and
+    /// relies on the layer above curing into it; see `docs/decisions/0323`.
     pub contact_depth_mm: f32,
 }
 
@@ -420,6 +420,48 @@ fn shipped_raft(shape: RaftShape) -> Raft {
     }
 }
 
+/// A shipped preset's contact: a plane that meets the surface without sinking in.
+fn shipped_tip(contact_diameter_mm: f32) -> TipSegment {
+    TipSegment {
+        shape: ContactShape::Plane,
+        contact_diameter_mm,
+        contact_depth_mm: 0.0,
+    }
+}
+
+/// A shipped preset's round pad; a flare as wide as the pillar is no flare at all.
+fn shipped_bottom(diameter_mm: f32, thickness_mm: f32, lower_diameter_mm: f32) -> BottomSegment {
+    BottomSegment {
+        shape: PlatformShape::Cylinder,
+        platform_diameter_mm: diameter_mm,
+        platform_thickness_mm: thickness_mm,
+        lower_diameter_mm,
+    }
+}
+
+/// A shipped preset's small pillar: as deep as its contact, so not at all, and no longer
+/// than 5 mm.
+fn shipped_small_pillar(diameter_mm: f32) -> SmallPillar {
+    SmallPillar {
+        enabled: true,
+        diameter_mm,
+        upper_depth_mm: 0.0,
+        lower_depth_mm: 0.0,
+        max_length_mm: 5.0,
+    }
+}
+
+/// A shipped preset's merging: a trunk grows at most 30 % past the pillar it carries.
+fn shipped_branching(max_trunk_diameter_mm: f32) -> Branching {
+    Branching {
+        enabled: true,
+        max_angle_deg: 45.0,
+        max_merge_distance_mm: 10.0,
+        max_trunk_diameter_mm,
+        ..Branching::default()
+    }
+}
+
 /// A support standing on the part is what reaches an undercut no column can, and its
 /// contact is as small as a tip's, so it is on by default.
 fn default_land_on_model() -> bool {
@@ -464,38 +506,12 @@ impl SupportProfile {
     pub fn light() -> Self {
         Self {
             name: "Light".to_owned(),
-            facets: default_facets(),
-            density: 0.6,
-            max_overhang_deg: 55.0,
-            contact_spacing_mm: default_contact_spacing_mm(),
-            clearance_mm: default_clearance_mm(),
-            tip: TipSegment {
-                shape: ContactShape::Plane,
-                contact_diameter_mm: 0.2,
-                contact_depth_mm: 0.2,
-            },
-            top: TopSegment { length_mm: 1.5 },
-            middle: MiddleSegment { diameter_mm: 0.7 },
-            bottom: BottomSegment {
-                shape: PlatformShape::Cylinder,
-                platform_diameter_mm: 7.0,
-                platform_thickness_mm: 0.5,
-                lower_diameter_mm: 3.45,
-            },
-            land_on_model: default_land_on_model(),
-            small_pillar: SmallPillar {
-                enabled: true,
-                diameter_mm: 0.3,
-                upper_depth_mm: 0.15,
-                lower_depth_mm: 0.2,
-                max_length_mm: default_small_pillar_max_length_mm(),
-            },
-            branching: Branching {
-                max_angle_deg: 50.0,
-                max_merge_distance_mm: 7.0,
-                max_trunk_diameter_mm: 1.0,
-                ..Branching::default()
-            },
+            tip: shipped_tip(0.3),
+            top: TopSegment { length_mm: 2.0 },
+            middle: MiddleSegment { diameter_mm: 1.0 },
+            bottom: shipped_bottom(6.0, 0.25, 1.0),
+            small_pillar: shipped_small_pillar(0.3),
+            branching: shipped_branching(1.3),
             raft: shipped_raft(RaftShape::Hull),
             bracing: Bracing {
                 enabled: true,
@@ -504,7 +520,7 @@ impl SupportProfile {
                 start_height_mm: 5.0,
                 rise_mm: 8.5,
             },
-            z_lift_mm: 3.6,
+            ..Self::shipped()
         }
     }
 
@@ -512,38 +528,12 @@ impl SupportProfile {
     pub fn medium() -> Self {
         Self {
             name: "Medium".to_owned(),
-            facets: default_facets(),
-            density: default_density(),
-            max_overhang_deg: default_max_overhang_deg(),
-            contact_spacing_mm: default_contact_spacing_mm(),
-            clearance_mm: default_clearance_mm(),
-            tip: TipSegment {
-                shape: ContactShape::Plane,
-                contact_diameter_mm: 0.4,
-                contact_depth_mm: 0.2,
-            },
-            top: TopSegment { length_mm: 2.0 },
-            middle: MiddleSegment { diameter_mm: 1.0 },
-            bottom: BottomSegment {
-                shape: PlatformShape::Cylinder,
-                platform_diameter_mm: 7.0,
-                platform_thickness_mm: 1.0,
-                lower_diameter_mm: 2.2,
-            },
-            land_on_model: default_land_on_model(),
-            small_pillar: SmallPillar {
-                enabled: true,
-                diameter_mm: 0.4,
-                upper_depth_mm: 0.2,
-                lower_depth_mm: 0.2,
-                max_length_mm: default_small_pillar_max_length_mm(),
-            },
-            branching: Branching {
-                max_angle_deg: 45.0,
-                max_merge_distance_mm: 10.0,
-                max_trunk_diameter_mm: 2.0,
-                ..Branching::default()
-            },
+            tip: shipped_tip(0.6),
+            top: TopSegment { length_mm: 3.0 },
+            middle: MiddleSegment { diameter_mm: 1.3 },
+            bottom: shipped_bottom(9.0, 0.5, 1.3),
+            small_pillar: shipped_small_pillar(0.4),
+            branching: shipped_branching(1.7),
             raft: shipped_raft(RaftShape::Hull),
             bracing: Bracing {
                 enabled: true,
@@ -552,48 +542,20 @@ impl SupportProfile {
                 start_height_mm: 3.0,
                 rise_mm: 8.0,
             },
-            z_lift_mm: 5.0,
+            ..Self::shipped()
         }
     }
 
-    /// Thick supports for heavy parts and large flat overhangs, standing on the plate
-    /// alone and never on the part.
+    /// Thick supports for heavy parts and large flat overhangs, at the cost of scarring.
     pub fn heavy() -> Self {
         Self {
             name: "Heavy".to_owned(),
-            facets: default_facets(),
-            density: 0.5,
-            max_overhang_deg: 35.0,
-            contact_spacing_mm: default_contact_spacing_mm(),
-            clearance_mm: default_clearance_mm(),
-            tip: TipSegment {
-                shape: ContactShape::Plane,
-                contact_diameter_mm: 0.6,
-                contact_depth_mm: 0.2,
-            },
-            top: TopSegment { length_mm: 2.4 },
-            middle: MiddleSegment { diameter_mm: 1.2 },
-            bottom: BottomSegment {
-                shape: PlatformShape::Cylinder,
-                platform_diameter_mm: 10.0,
-                platform_thickness_mm: 1.0,
-                lower_diameter_mm: 5.0,
-            },
-            land_on_model: false,
-            small_pillar: SmallPillar {
-                enabled: true,
-                diameter_mm: 0.5,
-                upper_depth_mm: 0.2,
-                lower_depth_mm: 0.2,
-                max_length_mm: default_small_pillar_max_length_mm(),
-            },
-            branching: Branching {
-                enabled: false,
-                max_angle_deg: 70.0,
-                max_merge_distance_mm: 10.0,
-                max_trunk_diameter_mm: 2.2,
-                ..Branching::default()
-            },
+            tip: shipped_tip(1.0),
+            top: TopSegment { length_mm: 4.0 },
+            middle: MiddleSegment { diameter_mm: 3.0 },
+            bottom: shipped_bottom(12.0, 0.5, 3.0),
+            small_pillar: shipped_small_pillar(0.5),
+            branching: shipped_branching(3.9),
             raft: shipped_raft(RaftShape::Rectangle),
             bracing: Bracing {
                 enabled: true,
@@ -602,7 +564,29 @@ impl SupportProfile {
                 start_height_mm: 8.0,
                 rise_mm: 13.0,
             },
-            z_lift_mm: 5.5,
+            ..Self::shipped()
+        }
+    }
+
+    /// What the three shipped presets share; see `docs/decisions/0323`.
+    fn shipped() -> Self {
+        Self {
+            name: String::new(),
+            facets: default_facets(),
+            density: 1.0,
+            max_overhang_deg: 40.0,
+            contact_spacing_mm: 1.8,
+            clearance_mm: 0.5,
+            tip: shipped_tip(0.6),
+            top: TopSegment { length_mm: 3.0 },
+            middle: MiddleSegment { diameter_mm: 1.3 },
+            bottom: shipped_bottom(9.0, 0.5, 1.3),
+            land_on_model: true,
+            small_pillar: shipped_small_pillar(0.4),
+            branching: shipped_branching(1.7),
+            raft: shipped_raft(RaftShape::Hull),
+            bracing: Bracing::default(),
+            z_lift_mm: 5.0,
         }
     }
 
@@ -741,7 +725,6 @@ impl SupportProfile {
             ("max_overhang_deg", self.max_overhang_deg),
             ("contact_spacing_mm", self.contact_spacing_mm),
             ("contact_diameter_mm", self.tip.contact_diameter_mm),
-            ("contact_depth_mm", self.tip.contact_depth_mm),
             ("length_mm", self.top.length_mm),
             ("diameter_mm", self.middle.diameter_mm),
             ("platform_diameter_mm", self.bottom.platform_diameter_mm),
@@ -765,6 +748,7 @@ impl SupportProfile {
         }
 
         let non_negative = [
+            ("contact_depth_mm", self.tip.contact_depth_mm),
             ("raft slope_deg", self.raft.slope_deg),
             ("bracing start_height_mm", self.bracing.start_height_mm),
             ("z_lift_mm", self.z_lift_mm),
@@ -948,7 +932,7 @@ platform_thickness_mm = 1.0
     #[test]
     fn a_small_pillar_without_a_length_takes_the_default() {
         let mut text = toml_of(&SupportProfile::medium());
-        text = text.replace("max_length_mm = 10.0\n", "");
+        text = text.replace("max_length_mm = 5.0\n", "");
         assert!(!text.contains("max_length_mm"), "the field is left out");
         let parsed = SupportProfile::from_toml_str(&text, path()).expect("still a profile");
         assert!((parsed.small_pillar.max_length_mm - 10.0).abs() < f32::EPSILON);
@@ -963,6 +947,23 @@ platform_thickness_mm = 1.0
             err,
             ProfileError::NonPositive {
                 field: "contact_diameter_mm",
+                ..
+            }
+        ));
+    }
+
+    #[test]
+    fn a_contact_may_meet_the_surface_but_not_stand_off_it() {
+        let mut flush = SupportProfile::medium();
+        flush.tip.contact_depth_mm = 0.0;
+        SupportProfile::from_toml_str(&toml_of(&flush), path()).expect("a flush contact loads");
+
+        flush.tip.contact_depth_mm = -0.1;
+        let err = SupportProfile::from_toml_str(&toml_of(&flush), path()).unwrap_err();
+        assert!(matches!(
+            err,
+            ProfileError::NonPositive {
+                field: "contact_depth_mm",
                 ..
             }
         ));
@@ -1093,9 +1094,9 @@ platform_thickness_mm = 1.0
     #[test]
     fn the_radii_are_half_the_diameters() {
         let profile = SupportProfile::medium();
-        assert!((profile.contact_radius_mm() - 0.2).abs() < f32::EPSILON);
-        assert!((profile.pillar_radius_mm() - 0.5).abs() < f32::EPSILON);
-        assert!((profile.base_radius_mm() - 3.5).abs() < f32::EPSILON);
+        assert!((profile.contact_radius_mm() - 0.3).abs() < f32::EPSILON);
+        assert!((profile.pillar_radius_mm() - 0.65).abs() < f32::EPSILON);
+        assert!((profile.base_radius_mm() - 4.5).abs() < f32::EPSILON);
     }
 
     #[test]

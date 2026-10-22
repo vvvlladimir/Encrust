@@ -225,12 +225,4 @@ mod tests {
             );
         }
     }
-
-    #[test]
-    fn the_shipped_presets_grow_stricter_as_they_grow_heavier() {
-        let light = SampleConfig::for_profile(&SupportProfile::light());
-        let heavy = SampleConfig::for_profile(&SupportProfile::heavy());
-
-        assert!(heavy.reach_mm < light.reach_mm, "heavier is stricter");
-    }
 }

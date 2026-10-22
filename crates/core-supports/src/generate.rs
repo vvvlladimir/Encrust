@@ -107,8 +107,8 @@ pub fn generate_supports(
 ///
 /// A whole layer under the plane, not half of one: a cell this layer is the first to
 /// cover has the model's own surface somewhere inside that rise, and a contact above it
-/// would stand a column on the very surface it is meant to hold up. The tip sinks further
-/// than this into the model anyway; see `docs/design/supports.md`.
+/// would stand a column on the very surface it is meant to hold up. A tip that bites sinks
+/// back into the model, and one that does not is put on it; see `docs/design/supports.md`.
 fn contact_of(layer: &Layer, layer_height_mm: Scalar) -> Scalar {
     layer.z - layer_height_mm
 }
