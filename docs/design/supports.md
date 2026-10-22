@@ -276,14 +276,25 @@ peel. Placement counts the supports under each piece and what it grew out of, an
 such a part is a spacing across it gets up to three more round its rim, 0.8 of its width
 apart, whatever the coverage ball says. A part on the plate, one the hand has placed a
 support under and one the blocker refused are left as they are.
+**By the angle.** Under an overhang the spacing runs from `contact_spacing_mm` under a face
+looking straight down to `steep_contact_spacing_mm` under one leaning just past the angle,
+linear in the angle between the face's normal and down (ADR 0324). Each sampled cell is put
+in one of `LEAN_BANDS` (4) bands by how far it lies past the reference layer — the band
+edges are the leans a quarter, a half and three quarters of the way from the angle to level,
+`Field::reaches` asked of that one cell — and takes its band's flattest spacing; a cell
+more than a step past the layer directly under it is a shelf and level. The lattice stays at
+`contact_spacing_mm`: the support placed there holds a ball of its own spacing less a
+quarter of `contact_spacing_mm`, which under a level face only keeps the next layer off the
+place and under a steep one is what spaces the supports.
+
 `spacing_mm` is the profile's own `contact_spacing_mm` divided by the root of `density`, so
 the knob counts supports over an area: doubling it puts down twice as many (ADR 0081), and
 widening a contact holds better without thinning the lattice (ADR 0131). The head's carry —
 a 0.4 mm head carries about 1.65 mm of island — is what `min_overhang_mm` is half of: a
 ledge that small is inside the head that would be put under it.
 
-**No doubling up.** A support holds a ball of `coverage_radius_mm` (¾ of the spacing)
-around itself, so its reach falls off as the part climbs away: `sqrt(r² − rise²)`, nothing
+**No doubling up.** A support holds a ball around itself — `coverage_radius_mm` (¾ of the
+spacing) under a level face, its own as above elsewhere — so its reach falls off as the part climbs away: `sqrt(r² − rise²)`, nothing
 past the radius (ADR 0079). A sample inside that of a support already standing — placed
 lower in this run, or a seed — is skipped. A seed sits on the surface and a placed contact
 a layer under it, so a support one layer above a place still counts. A seed the climb
@@ -294,9 +305,9 @@ still hold it, so a second run, in any group, adds nothing where the first alrea
 The ball is asked of one part only. `Field::parts` labels the pieces of a layer and
 `Parts::parents` maps each onto the pieces under it, so placement carries a set of standing
 supports **per piece**: a piece inherits what stood under the pieces it grew out of, merged
-where several do, and an island starts with nothing (ADR 0081). A column passing unrelated
-material therefore holds none of it. Each set sits in buckets one radius across, so a
-sample asks nine buckets, and a point more than a radius below the layer being looked at is
+where several do and each support kept once however many of them bring it back, and an island starts with nothing (ADR 0081). A column passing unrelated
+material therefore holds none of it. Each set sits in buckets as wide as the widest ball, so a
+sample asks nine buckets, and a point more than its own radius below the layer being looked at is
 dropped as the run climbs — which is what keeps the run's memory to the supports that can
 still hold something.
 

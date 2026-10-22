@@ -129,6 +129,7 @@ mod tests {
             density: 1.0,
             max_overhang_deg: 45.0,
             contact_spacing_mm: 4.0,
+            steep_contact_spacing_mm: 4.0,
             clearance_mm: 0.5,
             tip: TipSegment {
                 shape: ContactShape::Plane,

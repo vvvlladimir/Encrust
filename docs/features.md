@@ -306,6 +306,9 @@ whole-surface fill is Cmd-Shift-click.
   one holds only the part it stands under.
 - A point or a needle hanging down is held at its very tip, however thin; a speck of
   less than 0.01 mm³ is left alone. Small islands are held closer than large ones.
+- A face looking straight down is held at the contact spacing, and one leaning just past
+  the overhang angle at the wider **spacing on steep faces**; between them the spacing
+  follows the angle.
 - Nearby tips merge into shared **branching trunks**. Trunks are cones sized by their
   height and load, and nothing carrying a load leans more than 45°.
 - A tip that has no room leans until it finds some. A support that still has no room is

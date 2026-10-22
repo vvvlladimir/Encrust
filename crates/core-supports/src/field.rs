@@ -347,6 +347,19 @@ impl Field {
         rows.finish()
     }
 
+    /// Whether anything of this field lies within a disc of `radius` cells round
+    /// `(x, y)`: the one cell of [`Field::uncarried_by`] asked on its own, for when only a
+    /// few cells of a piece want the answer.
+    pub fn reaches(&self, x: i32, y: i32, radius: i32) -> bool {
+        let radius = radius.max(0);
+        (-radius..=radius).any(|dy| {
+            let widen = ((radius * radius - dy * dy) as Scalar).sqrt().floor() as i32;
+            self.row(y + dy)
+                .iter()
+                .any(|span| span.x0 - widen <= x && x < span.x1 + widen)
+        })
+    }
+
     /// This field grown outwards by `radius` cells, as a disc rather than a square: the
     /// growth is a measurement of how far the layer below reaches, and a square corner
     /// would claim it reaches half again as far along a diagonal.
@@ -850,6 +863,26 @@ mod tests {
             square(10.0, 10.0, 1.0).shrunk(20).is_empty(),
             "a square narrower than the radius has nothing left"
         );
+    }
+
+    #[test]
+    fn a_cell_reaches_what_carries_it_and_nothing_else() {
+        // An L of two rectangles against a ring of four, so rows meet spans on both
+        // sides and at every distance the radii below span.
+        let piece = rectangle(10.0, 10.0, 6.0, 1.5).with(&rectangle(10.0, 10.0, 1.5, 6.0));
+        let ring = square(8.0, 8.0, 10.0).without(&square(9.0, 9.0, 8.0));
+        for radius in [0, 1, 3, 7, 20] {
+            let left = piece.uncarried_by(&ring, radius);
+            for (y, spans) in piece.rows() {
+                for x in spans.iter().flat_map(|span| span.x0..span.x1) {
+                    assert_eq!(
+                        !ring.reaches(x, y, radius),
+                        left.contains(x, y),
+                        "cell ({x}, {y}) at radius {radius}"
+                    );
+                }
+            }
+        }
     }
 
     #[test]

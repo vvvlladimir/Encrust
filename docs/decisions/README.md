@@ -209,6 +209,7 @@ Grouped by what the decision governs; the number is still the order it was taken
 | [0132](0132-the-shipped-asset-is-the-preset.md) | The shipped TOML is the preset, and the constructor mirrors it | Accepted |
 | [0254](0254-the-shipped-presets-are-tuned-on-prints.md) | Ship presets tuned on prints, and let Heavy stand fewer, thicker supports | Superseded by 0323 |
 | [0323](0323-presets-differ-in-thickness-and-a-tip-meets-the-surface.md) | Let presets differ in thickness only, place densely, and let a tip meet the surface | Accepted |
+| [0324](0324-contact-spacing-follows-the-angle-of-the-face.md) | Space contacts by the angle of the face they hold | Accepted |
 | [0255](0255-a-small-pillar-has-a-longest-run.md) | Thin a support between two surfaces only up to a longest run | Accepted |
 
 ### Volume: hollowing, infill and relief

@@ -371,10 +371,15 @@ pub struct SupportProfile {
     /// Zero is a wall, ninety a ceiling; anything leaning further than this is supported.
     #[serde(default = "default_max_overhang_deg")]
     pub max_overhang_deg: f32,
-    /// How far apart automatic placement puts contacts over an overhang, millimetres,
-    /// before `density` scales it. See `docs/decisions/0131`.
+    /// How far apart automatic placement puts contacts under a face looking straight
+    /// down, millimetres, before `density` scales it. See `docs/decisions/0131`.
     #[serde(default = "default_contact_spacing_mm")]
     pub contact_spacing_mm: f32,
+    /// How far apart they go under a face leaning just past `max_overhang_deg`,
+    /// millimetres; between the two the spacing follows the face's angle, and it is
+    /// never closer than `contact_spacing_mm`. See `docs/decisions/0324`.
+    #[serde(default = "default_steep_contact_spacing_mm")]
+    pub steep_contact_spacing_mm: f32,
     /// How much clear air a support's body keeps between itself and the model,
     /// millimetres. Anything closer than this cures onto the part.
     #[serde(default = "default_clearance_mm")]
@@ -483,6 +488,11 @@ fn default_contact_spacing_mm() -> f32 {
     4.0
 }
 
+/// How far apart contacts go under a face that barely needs them; see ADR 0324.
+fn default_steep_contact_spacing_mm() -> f32 {
+    3.3
+}
+
 /// A ceiling, in the degrees-from-vertical the overhang angle is measured in.
 const RIGHT_ANGLE_DEG: f32 = 90.0;
 
@@ -576,6 +586,7 @@ impl SupportProfile {
             density: 1.0,
             max_overhang_deg: 40.0,
             contact_spacing_mm: 1.8,
+            steep_contact_spacing_mm: default_steep_contact_spacing_mm(),
             clearance_mm: 0.5,
             tip: shipped_tip(0.6),
             top: TopSegment { length_mm: 3.0 },
@@ -724,6 +735,7 @@ impl SupportProfile {
             ("density", self.density),
             ("max_overhang_deg", self.max_overhang_deg),
             ("contact_spacing_mm", self.contact_spacing_mm),
+            ("steep_contact_spacing_mm", self.steep_contact_spacing_mm),
             ("contact_diameter_mm", self.tip.contact_diameter_mm),
             ("length_mm", self.top.length_mm),
             ("diameter_mm", self.middle.diameter_mm),
@@ -964,6 +976,31 @@ platform_thickness_mm = 1.0
             err,
             ProfileError::NonPositive {
                 field: "contact_depth_mm",
+                ..
+            }
+        ));
+    }
+
+    #[test]
+    fn a_profile_without_a_steep_spacing_takes_the_default() {
+        let text = toml_of(&SupportProfile::medium())
+            .lines()
+            .filter(|line| !line.starts_with("steep_contact_spacing_mm"))
+            .collect::<Vec<_>>()
+            .join("\n");
+        let parsed = SupportProfile::from_toml_str(&text, path()).expect("still a profile");
+        assert!((parsed.steep_contact_spacing_mm - 3.3).abs() < f32::EPSILON);
+    }
+
+    #[test]
+    fn a_steep_spacing_of_zero_is_rejected() {
+        let mut broken = SupportProfile::medium();
+        broken.steep_contact_spacing_mm = 0.0;
+        let err = SupportProfile::from_toml_str(&toml_of(&broken), path()).unwrap_err();
+        assert!(matches!(
+            err,
+            ProfileError::NonPositive {
+                field: "steep_contact_spacing_mm",
                 ..
             }
         ));

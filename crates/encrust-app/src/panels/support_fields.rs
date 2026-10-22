@@ -511,6 +511,14 @@ pub fn held_up(ui: &mut egui::Ui, profile: &mut SupportProfile, saved: Option<&S
         COARSE_STEP,
         0.5..=20.0,
     );
+    mm(
+        ui,
+        &tr!("support-steep-contact-spacing"),
+        was(saved, |p| p.steep_contact_spacing_mm),
+        &mut profile.steep_contact_spacing_mm,
+        COARSE_STEP,
+        0.5..=20.0,
+    );
     number(
         ui,
         &tr!("support-density"),

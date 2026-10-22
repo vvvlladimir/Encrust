@@ -5,8 +5,8 @@ use rayon::prelude::*;
 
 use crate::column::MIN_PILLAR_HEIGHT_MM;
 use crate::config::{
-    GRID_PITCH_MM, MICRO_ISLAND_HEIGHT_MM, MICRO_ISLAND_MM3, MIN_ISLAND_MM, PLATE_CONTACT_MM,
-    REFERENCE_RISE_MM, SampleConfig,
+    GRID_PITCH_MM, LEAN_BANDS, MICRO_ISLAND_HEIGHT_MM, MICRO_ISLAND_MM3, MIN_ISLAND_MM,
+    PLATE_CONTACT_MM, REFERENCE_RISE_MM, SampleConfig,
 };
 use crate::detect::{across_mm, unsupported};
 use crate::field::{Field, Grid, Parts};
@@ -183,10 +183,14 @@ impl Pass<'_> {
                 .into_iter()
                 .map(move |cell| (cell, coverage_mm))
         });
+        let flatness = self.flatness(below, reference, rise_mm);
         let overhangs = found.overhangs.iter().flat_map(|piece| {
             sample_piece(piece, &room, self.inset, self.spacing)
                 .into_iter()
-                .map(|cell| (cell, self.config.coverage_radius_mm))
+                .map(|cell| {
+                    let spacing_mm = self.config.band_spacing_mm(flatness.band_of(cell));
+                    (cell, self.config.coverage_at(spacing_mm))
+                })
         });
         Wanted {
             cells: islands.chain(overhangs).collect(),
@@ -198,6 +202,59 @@ impl Pass<'_> {
                 })
                 .collect(),
         }
+    }
+}
+
+impl Pass<'_> {
+    /// How flat an overhang is, measured by how far each of its cells reaches past
+    /// `reference`, `rise_mm` under it; a shelf grown in one layer over `below` is level.
+    fn flatness<'f>(
+        &self,
+        below: &'f Field,
+        reference: &'f Field,
+        rise_mm: Scalar,
+    ) -> Flatness<'f> {
+        let mut reaches = [0; LEAN_BANDS - 1];
+        for (band, reach) in (1..LEAN_BANDS).zip(&mut reaches) {
+            *reach = self
+                .grid
+                .cells_of(rise_mm * self.config.band_lean_rad(band).tan());
+        }
+        Flatness {
+            leans: self.config.spacing_leans(),
+            below,
+            reference,
+            shelf: self.grid.cells_of(self.config.min_overhang_mm),
+            reaches,
+        }
+    }
+}
+
+/// How flat an overhang lies, asked a cell at a time: only the cells sampled on it want
+/// the answer, which is far fewer than the rows of the piece.
+struct Flatness<'f> {
+    leans: bool,
+    below: &'f Field,
+    reference: &'f Field,
+    /// How far past `below` a cell is a shelf, in cells.
+    shelf: i32,
+    /// How far past `reference` a cell is in each band past the first, in cells.
+    reaches: [i32; LEAN_BANDS - 1],
+}
+
+impl Flatness<'_> {
+    /// The band `cell` lies in, 0 just past the angle and `LEAN_BANDS - 1` level.
+    fn band_of(&self, [x, y]: [i32; 2]) -> usize {
+        if !self.leans {
+            return LEAN_BANDS - 1;
+        }
+        if !self.below.reaches(x, y, self.shelf) {
+            return LEAN_BANDS - 1;
+        }
+        self.reaches
+            .iter()
+            .take_while(|reach| !self.reference.reaches(x, y, **reach))
+            .count()
     }
 }
 
@@ -343,8 +400,10 @@ struct Standing {
     pending: Vec<(Vec3, [i32; 2])>,
     /// Supports the climb has reached whose piece has not appeared at their cell yet.
     waiting: Vec<(Vec3, [i32; 2])>,
-    /// Side of one bucket, millimetres: the radius over which a support holds.
+    /// Side of one bucket, millimetres: the widest radius over which a support holds.
     radius_mm: Scalar,
+    /// The radius a support holds over when nothing says otherwise, millimetres.
+    reach_mm: Scalar,
     /// How far above a place a support may stand and still hold it. A contact is put a
     /// layer under the surface it holds and a seed sits on it, so the two disagree by
     /// exactly that much.
@@ -382,7 +441,13 @@ impl Standing {
             below: None,
             pending,
             waiting: Vec::new(),
-            radius_mm: config.coverage_radius_mm.max(Scalar::MIN_POSITIVE),
+            // The widest any support holds, so that one bucket either way finds every
+            // support that holds a place.
+            radius_mm: config
+                .coverage_at(config.steep_spacing_mm)
+                .max(config.coverage_radius_mm)
+                .max(Scalar::MIN_POSITIVE),
+            reach_mm: config.coverage_radius_mm,
             above_mm: layer_height_mm,
             cell_mm3: grid.millimetres_of(1).powi(2) * layer_height_mm,
         }
@@ -396,7 +461,6 @@ impl Standing {
     /// nothing on this layer or on any layer above it, which is what keeps the run's
     /// memory to the supports that still matter rather than to every one ever placed.
     fn climb(&mut self, parts: &Parts, z: Scalar) {
-        let floor_z = z - self.radius_mm;
         let on_plate = if z <= PLATE_CONTACT_MM { STEADY } else { 0 };
         let parents = self.below.as_ref().map(|below| parts.parents(below));
         let Some(parents) = parents else {
@@ -449,7 +513,7 @@ impl Standing {
             let mut piece = match grown_from.as_slice() {
                 [only] if children[*only as usize] == 1 => {
                     let mut taken = std::mem::take(&mut self.held[*only as usize]);
-                    taken.prune(floor_z, self.radius_mm);
+                    taken.prune(z, self.radius_mm);
                     taken
                 }
                 // Where pieces join, the largest set no other piece grows out of is taken
@@ -462,11 +526,11 @@ impl Standing {
                         .copied();
                     let mut piece = largest.map_or_else(Held::default, |largest| {
                         let mut taken = std::mem::take(&mut self.held[largest as usize]);
-                        taken.prune(floor_z, self.radius_mm);
+                        taken.prune(z, self.radius_mm);
                         taken
                     });
                     for parent in parents.iter().filter(|parent| Some(**parent) != largest) {
-                        piece.take_in(&self.held[*parent as usize], floor_z, self.radius_mm);
+                        piece.take_in(&self.held[*parent as usize], z, self.radius_mm);
                     }
                     piece
                 }
@@ -528,7 +592,7 @@ impl Standing {
 
     /// Puts a support under `piece` at `tip`, the point it hangs from.
     fn hang(&mut self, piece: u32, tip: Vec3) -> Vec3 {
-        self.held[piece as usize].add(tip, self.radius_mm);
+        self.held[piece as usize].add(tip, self.reach_mm, self.radius_mm);
         self.count(piece);
         tip
     }
@@ -549,7 +613,7 @@ impl Standing {
             let Some(piece) = parts.at(cell[0], cell[1]) else {
                 return seed.z >= floor_z;
             };
-            self.held[piece as usize].add(*seed, self.radius_mm);
+            self.held[piece as usize].add(*seed, self.reach_mm, self.radius_mm);
             // A part the hand has held is held as its owner wants it, see ADR 0095.
             self.tips[piece as usize] = STEADY;
             false
@@ -586,7 +650,7 @@ impl Standing {
             return None;
         }
         let contact = at.extend(z);
-        held.add(contact, self.radius_mm);
+        held.add(contact, self.reach_mm, self.radius_mm);
         Some(contact)
     }
 
@@ -603,19 +667,19 @@ impl Standing {
         self.below = Some(parts);
     }
 
-    /// Puts a support at `at` on the underside of `piece` at height `z`, unless one
-    /// standing under the same piece already holds that place. Returns the contact it
-    /// placed.
+    /// Puts a support at `at` on the underside of `piece` at height `z`, holding a ball of
+    /// `reach_mm`, unless one standing under the same piece already holds that place.
+    /// Returns the contact it placed.
     fn take(&mut self, piece: Option<u32>, at: Vec2, z: Scalar, reach_mm: Scalar) -> Option<Vec3> {
         let contact = at.extend(z);
         let Some(piece) = piece.filter(|piece| (*piece as usize) < self.held.len()) else {
             return Some(contact);
         };
         let held = &mut self.held[piece as usize];
-        if held.holds(at, z, reach_mm, self.radius_mm, self.above_mm) {
+        if held.holds(at, z, self.radius_mm, self.above_mm) {
             return None;
         }
-        held.add(contact, self.radius_mm);
+        held.add(contact, reach_mm, self.radius_mm);
         self.count(piece);
         Some(contact)
     }
@@ -624,31 +688,39 @@ impl Standing {
 /// The supports standing under one piece of a layer.
 #[derive(Debug, Clone, Default)]
 struct Held {
-    buckets: FastMap<u64, Vec<Vec3>>,
-    /// The lowest point held, so that a set with nothing to drop is not walked at all.
-    lowest_z: Scalar,
+    buckets: FastMap<u64, Vec<Hold>>,
+    /// The lowest height any support here still holds up to, so that a set with nothing
+    /// to drop is not walked at all.
+    spent_z: Scalar,
+}
+
+/// One support standing, and the radius of the ball it holds.
+#[derive(Debug, Clone, Copy, PartialEq)]
+struct Hold {
+    at: Vec3,
+    reach_mm: Scalar,
+}
+
+impl Hold {
+    /// The height past which this support holds nothing.
+    fn spent_z(self) -> Scalar {
+        self.at.z + self.reach_mm
+    }
 }
 
 impl Held {
-    /// Whether anything here within `reach_mm` already holds `at` on the layer whose
-    /// contacts sit at `z`; `reach_mm` is no more than the side of a bucket.
-    fn holds(
-        &self,
-        at: Vec2,
-        z: Scalar,
-        reach_mm: Scalar,
-        radius_mm: Scalar,
-        above_mm: Scalar,
-    ) -> bool {
+    /// Whether anything here already holds `at` on the layer whose contacts sit at `z`,
+    /// each by its own ball, which is no wider than the side of a bucket.
+    fn holds(&self, at: Vec2, z: Scalar, radius_mm: Scalar, above_mm: Scalar) -> bool {
         let home = bucket_of(at, radius_mm);
         (-1..=1).any(|dy| {
             (-1..=1).any(|dx| {
                 self.buckets
                     .get(&packed([home[0] + dx, home[1] + dy]))
-                    .is_some_and(|points| {
-                        points.iter().any(|point| {
-                            let reach = reach_at(z - point.z, reach_mm, above_mm);
-                            (point.truncate() - at).length_squared() < reach * reach
+                    .is_some_and(|holds| {
+                        holds.iter().any(|hold| {
+                            let reach = reach_at(z - hold.at.z, hold.reach_mm, above_mm);
+                            (hold.at.truncate() - at).length_squared() < reach * reach
                         })
                     })
             })
@@ -663,42 +735,60 @@ impl Held {
             (-1..=1).any(|dx| {
                 self.buckets
                     .get(&packed([home[0] + dx, home[1] + dy]))
-                    .is_some_and(|points| {
-                        points.iter().any(|point| {
-                            (point.truncate() - at).length_squared() < clear_mm * clear_mm
+                    .is_some_and(|holds| {
+                        holds.iter().any(|hold| {
+                            (hold.at.truncate() - at).length_squared() < clear_mm * clear_mm
                         })
                     })
             })
         })
     }
 
-    fn add(&mut self, contact: Vec3, radius_mm: Scalar) {
-        if self.buckets.is_empty() {
-            self.lowest_z = contact.z;
-        }
-        self.lowest_z = self.lowest_z.min(contact.z);
-        self.buckets
-            .entry(packed(bucket_of(contact.truncate(), radius_mm)))
-            .or_default()
-            .push(contact);
+    fn add(&mut self, contact: Vec3, reach_mm: Scalar, radius_mm: Scalar) {
+        self.put(
+            Hold {
+                at: contact,
+                reach_mm,
+            },
+            radius_mm,
+        );
     }
 
-    /// Drops everything too far below `floor_z` to hold anything there or above it.
-    fn prune(&mut self, floor_z: Scalar, radius_mm: Scalar) {
-        if self.buckets.is_empty() || self.lowest_z >= floor_z {
+    fn put(&mut self, hold: Hold, radius_mm: Scalar) {
+        if self.buckets.is_empty() {
+            self.spent_z = hold.spent_z();
+        }
+        self.spent_z = self.spent_z.min(hold.spent_z());
+        self.buckets
+            .entry(packed(bucket_of(hold.at.truncate(), radius_mm)))
+            .or_default()
+            .push(hold);
+    }
+
+    /// Drops everything that holds nothing at `z` or above.
+    fn prune(&mut self, z: Scalar, radius_mm: Scalar) {
+        if self.buckets.is_empty() || self.spent_z >= z {
             return;
         }
         let kept = std::mem::take(self);
-        self.take_in(&kept, floor_z, radius_mm);
+        self.take_in(&kept, z, radius_mm);
     }
 
-    /// Takes on everything of `other` that can still hold something at `floor_z` or above.
-    fn take_in(&mut self, other: &Self, floor_z: Scalar, radius_mm: Scalar) {
-        for point in other.buckets.values().flatten() {
-            if point.z >= floor_z {
-                self.add(*point, radius_mm);
+    /// Takes on everything of `other` that still holds something at `z` or above and is
+    /// not here already: pieces that split and join again bring the same supports back,
+    /// and a part split a hundred ways would otherwise hold each a hundred times.
+    fn take_in(&mut self, other: &Self, z: Scalar, radius_mm: Scalar) {
+        for hold in other.buckets.values().flatten() {
+            if hold.spent_z() >= z && !self.has(*hold, radius_mm) {
+                self.put(*hold, radius_mm);
             }
         }
+    }
+
+    fn has(&self, hold: Hold, radius_mm: Scalar) -> bool {
+        self.buckets
+            .get(&packed(bucket_of(hold.at.truncate(), radius_mm)))
+            .is_some_and(|holds| holds.contains(&hold))
     }
 }
 
@@ -1217,6 +1307,62 @@ mod tests {
         );
     }
 
+    /// A wedge 30 mm across and 30 mm deep hanging from its top face, its underside
+    /// leaning `lean_deg` from vertical and its lowest edge at z = 10, wound outwards.
+    fn hanging_wedge(lean_deg: Scalar) -> Mesh {
+        let (run, depth) = (30.0, 15.0);
+        let top = 10.0 + run / lean_deg.to_radians().tan();
+        let vertices = vec![
+            Vec3::new(0.0, -depth, top),
+            Vec3::new(run, -depth, top),
+            Vec3::new(run, -depth, 10.0),
+            Vec3::new(0.0, depth, top),
+            Vec3::new(run, depth, top),
+            Vec3::new(run, depth, 10.0),
+        ];
+        let faces = vec![
+            [0, 2, 1],
+            [3, 4, 5],
+            [0, 1, 4],
+            [0, 4, 3],
+            [1, 2, 5],
+            [1, 5, 4],
+            [0, 5, 2],
+            [0, 3, 5],
+        ];
+        Mesh::new(vertices, faces)
+    }
+
+    /// Supports per square millimetre of plate under the middle of a hanging wedge.
+    fn held_per_mm2(lean_deg: Scalar, profile: &SupportProfile) -> Scalar {
+        let points = generate_supports(
+            &slice(&hanging_wedge(lean_deg)),
+            LAYER_HEIGHT_MM,
+            profile,
+            &[],
+            &[],
+            None,
+            &mut |_| true,
+        );
+        let inside = points
+            .iter()
+            .filter(|point| (4.0..26.0).contains(&point.x) && (-11.0..11.0).contains(&point.y))
+            .count();
+        inside as Scalar / (22.0 * 22.0)
+    }
+
+    #[test]
+    fn a_face_just_past_the_angle_is_held_more_sparsely_than_a_ceiling() {
+        let mut profile = profile();
+        profile.steep_contact_spacing_mm = 2.0 * profile.contact_spacing_mm;
+        let (steep, flat) = (held_per_mm2(50.0, &profile), held_per_mm2(85.0, &profile));
+        assert!(
+            flat > 0.0 && steep < 0.6 * flat,
+            "twice the spacing at the angle holds a steep face far more sparsely; got \
+             {steep} supports per mm2 under the steep face and {flat} under the flat one"
+        );
+    }
+
     #[test]
     fn a_needle_hanging_under_a_part_is_held_at_its_tip() {
         // Never as wide as an island anywhere along it, but far more than dust.
@@ -1232,6 +1378,17 @@ mod tests {
             }),
             "the needle's tip at z = 10 hangs in mid-air, got {points:?}"
         );
+    }
+
+    #[test]
+    fn supports_brought_back_by_pieces_that_split_and_join_are_held_once() {
+        let mut split = Held::default();
+        split.add(Vec3::new(1.0, 2.0, 3.0), 1.0, 1.0);
+        let mut joined = Held::default();
+        for _ in 0..100 {
+            joined.take_in(&split, 0.0, 1.0);
+        }
+        assert_eq!(joined.buckets.values().flatten().count(), 1);
     }
 
     #[test]

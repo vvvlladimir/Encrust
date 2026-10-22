@@ -23,9 +23,11 @@ land_on_model = true
 # How far a surface may lean before it needs holding up, degrees from vertical.
 max_overhang_deg = 40.0
 
-# How far apart automatic placement puts contacts over an overhang, before the
-# density scales it.
+# How far apart automatic placement puts contacts under a face looking straight down,
+# and under one leaning just past the overhang angle, before the density scales them.
+# Between the two the spacing follows the face's angle.
 contact_spacing_mm = 1.8
+steep_contact_spacing_mm = 3.3
 
 [tip]
 # sphere or plane.

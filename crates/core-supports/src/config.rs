@@ -30,6 +30,10 @@ pub const MICRO_ISLAND_HEIGHT_MM: Scalar = 0.08;
 /// since it hangs on the film alone and has no edge of a part to steady it.
 const ISLAND_SPACING: [(Scalar, Scalar); 3] = [(0.0, 13.0 / 18.0), (2.4, 15.0 / 18.0), (3.2, 1.0)];
 
+/// How many bands an overhang is cut into by how flat it is, from the one just past the
+/// angle to the one nearly level; see `docs/design/supports.md`.
+pub const LEAN_BANDS: usize = 4;
+
 /// A layer whose underside is no higher than this stands on the build plate itself,
 /// millimetres.
 pub const PLATE_CONTACT_MM: Scalar = 1e-3;
@@ -56,9 +60,12 @@ const MAX_OVERHANG_DEG: Scalar = 89.0;
 // `AGENTS.md` forbids.
 #[allow(clippy::struct_field_names)]
 pub struct SampleConfig {
-    /// How far apart supports are put down over an overhang. Doubling the profile's
-    /// density halves the ground one support covers, not the distance to the next.
+    /// How far apart supports are put down under a face looking straight down. Doubling
+    /// the profile's density halves the ground one support covers, not the distance to
+    /// the next.
     pub spacing_mm: Scalar,
+    /// How far apart they go under a face leaning just past the overhang angle.
+    pub steep_spacing_mm: Scalar,
     /// How far a support already standing keeps another one away.
     pub coverage_radius_mm: Scalar,
     /// How far a surface may lean before it needs holding up: the horizontal reach that
@@ -72,6 +79,8 @@ pub struct SampleConfig {
     /// cell more, so that the head ends on the surface it holds and not on the wall
     /// beside it.
     pub edge_inset_mm: Scalar,
+    /// The overhang angle itself, radians from vertical.
+    pub lean_rad: Scalar,
 }
 
 impl SampleConfig {
@@ -92,6 +101,11 @@ impl SampleConfig {
         // spacing by its own root. See `docs/decisions/0081`.
         let density = profile.density.max(MIN_DENSITY);
         let spacing_mm = profile.contact_spacing_mm.max(MIN_SPACING_MM) / density.sqrt();
+        let steep_spacing_mm = profile
+            .steep_contact_spacing_mm
+            .max(profile.contact_spacing_mm)
+            .max(MIN_SPACING_MM)
+            / density.sqrt();
         let lean = profile
             .max_overhang_deg
             .clamp(MIN_OVERHANG_DEG, MAX_OVERHANG_DEG)
@@ -99,6 +113,8 @@ impl SampleConfig {
 
         Self {
             spacing_mm,
+            steep_spacing_mm,
+            lean_rad: lean,
             // Three quarters of the spacing: a support put down on this layer suppresses
             // the same lattice point on the next one, and leaves the next point along
             // free. It is a radius in three dimensions, so it is also how far up a
@@ -122,15 +138,67 @@ impl SampleConfig {
         (self.spacing_mm * share).max(MIN_SPACING_MM)
     }
 
-    /// How far a support put down at `spacing_mm` keeps another one away.
+    /// Whether the spacing follows the angle of the face at all.
+    pub fn spacing_leans(&self) -> bool {
+        self.steep_spacing_mm > self.spacing_mm
+    }
+
+    /// The lean from vertical, radians, past which an overhang is in band `band` or a
+    /// flatter one: its normal is `(LEAN_BANDS - band) / LEAN_BANDS` of the way from
+    /// straight down to the overhang angle.
+    pub fn band_lean_rad(&self, band: usize) -> Scalar {
+        let past = std::f32::consts::FRAC_PI_2 - self.lean_rad;
+        std::f32::consts::FRAC_PI_2 - past * (LEAN_BANDS - band) as Scalar / LEAN_BANDS as Scalar
+    }
+
+    /// How far apart supports go in band `band` of an overhang: the spacing its flattest
+    /// face asks for, which is linear in the angle between that face's normal and down.
+    pub fn band_spacing_mm(&self, band: usize) -> Scalar {
+        let band = band.min(LEAN_BANDS - 1);
+        let share = (LEAN_BANDS - 1 - band) as Scalar / LEAN_BANDS as Scalar;
+        share.mul_add(self.steep_spacing_mm - self.spacing_mm, self.spacing_mm)
+    }
+
+    /// How far a support put down at `spacing_mm` keeps another one away: a quarter of
+    /// the profile's spacing short of it. Under a level face the lattice spaces supports
+    /// and this only keeps the next layer off the same place; under a steep one, where
+    /// each layer adds a sliver, it is what spaces them.
     pub fn coverage_at(&self, spacing_mm: Scalar) -> Scalar {
-        self.coverage_radius_mm * spacing_mm / self.spacing_mm
+        (spacing_mm - (self.spacing_mm - self.coverage_radius_mm)).max(GRID_PITCH_MM)
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_flatter_band_of_overhang_is_held_closer() {
+        let mut profile = crate::tests::profile();
+        profile.steep_contact_spacing_mm = 8.0;
+        let config = SampleConfig::for_profile(&profile);
+        let spacings: Vec<Scalar> = (0..LEAN_BANDS)
+            .map(|band| config.band_spacing_mm(band))
+            .collect();
+        assert!(spacings.windows(2).all(|pair| pair[1] < pair[0]));
+        assert!(
+            (spacings[LEAN_BANDS - 1] - config.spacing_mm).abs() < 1e-5,
+            "the flattest band is a face looking down, held at the spacing itself"
+        );
+        assert!(
+            (config.band_lean_rad(1).to_degrees() - 56.25).abs() < 1e-3,
+            "a quarter of the way from the 45 degree angle to level"
+        );
+    }
+
+    #[test]
+    fn a_steep_spacing_under_the_spacing_is_the_spacing() {
+        let mut profile = crate::tests::profile();
+        profile.steep_contact_spacing_mm = 1.0;
+        let config = SampleConfig::for_profile(&profile);
+        assert!(!config.spacing_leans());
+        assert!((config.band_spacing_mm(0) - config.spacing_mm).abs() < 1e-5);
+    }
 
     #[test]
     fn a_small_island_is_held_closer_than_a_large_one() {
