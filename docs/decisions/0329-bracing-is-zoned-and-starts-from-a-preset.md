@@ -20,7 +20,8 @@ the window shows only the numbers.
 **Bracing is zoned.** `[bracing]` gains `bottom` and `top`, each a `pattern` (`zigzag` or
 `cross`) and a number of `levels`, and `middle`, a pattern. Up a pair, `bottom` takes its
 levels up from the first brace and `top` takes its levels down from the ceiling — the lower
-of the two root nodes, so the top level ends where the trunk splits. `middle` fills what is
+of the two trunk tops, so the top level ends where a trunk splits or, on a column that holds
+its one tip itself, where the head meets it. `middle` fills what is
 left between them with whole rises. Where there is no room for every zone, the bottom fills
 first, then the top. A zigzag is one brace a level, leaning the other way on the next and
 carrying on from one zone into the next; a cross is two. `core_supports::brace_levels`
@@ -51,7 +52,7 @@ buttresses has them off.
 | Standard | 0.9 | 1 | zigzag ×1 | zigzag | cross ×1 | 30 | 60 |
 | Strong | 1.0 | 0 | cross ×1 | cross | cross ×1 | 30 | 50 |
 | Tall | 2.0 | 1 | cross ×1 | zigzag | cross ×2 | 20 | 50 |
-| Small | 0.8 | 1 | cross ×1 | cross | cross ×2 | 10 | 30 |
+| Small | 0.8 | 1 | cross ×1 | cross | cross ×1 | 10 | 30 |
 
 All four span 10 mm and rise 5 mm. A brace is still never wider than either trunk where it
 meets it (ADR 0242), so Tall's 2 mm is a ceiling the trunk usually sets lower.

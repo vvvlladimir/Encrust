@@ -193,8 +193,19 @@ pub(crate) fn braceable(tree: &SupportTree, profile: &SupportProfile) -> bool {
     bracing.enabled
         && bracing.rise_mm > SAME_PLACE_MM
         && !tree.landing().on_support
-        && tree.root().position.z - tree.landing().bottom_z(profile)
+        && top_z(tree, profile) - tree.landing().bottom_z(profile)
             >= bracing.start_height_mm + bracing.rise_mm
+}
+
+/// Where a trunk ends at the top, which is as high as a brace or a buttress reaches: at
+/// its root, or under the head of a column that holds its one tip on the trunk itself.
+pub(crate) fn top_z(tree: &SupportTree, profile: &SupportProfile) -> Scalar {
+    let root = tree.root();
+    if root.is_leaf() {
+        root.position.z - profile.top_length_mm()
+    } else {
+        root.position.z
+    }
 }
 
 /// The group a brace between `one` and `two` is built to, and its profile: the one whose
@@ -268,13 +279,13 @@ fn tie(one: &SupportTree, two: &SupportTree, profiles: Profiles) -> Vec<(Vec3, V
     }
 
     // A brace ties the two trunks, so it can only go where both of them are: above what
-    // each stands on and below the joint each one's branches leave from.
+    // each stands on and below the joint each one's branches or head leave from.
     let floor = one
         .landing()
         .bottom_z(own(one))
         .max(two.landing().bottom_z(own(two)))
         + bracing.start_height_mm;
-    let ceiling = here.z.min(there.z);
+    let ceiling = top_z(one, own(one)).min(top_z(two, own(two)));
 
     // A brace runs from the foot of one trunk's level to the head of the other's (ADR
     // 0044), each end on its trunk's own axis at that height: a hand may have leant it.
@@ -708,6 +719,21 @@ mod tests {
             per_level[..per_level.len() - 1].iter().all(|&n| n == 1),
             "every level below it zigzags: {per_level:?}"
         );
+    }
+
+    #[test]
+    fn a_brace_stops_under_the_head_of_a_column() {
+        let profile = with_bracing();
+        let trees = standing(&[(10.0, 10.0), (18.0, 10.0)], 30.0, &profile);
+        let neck = 30.0 - profile.top_length_mm();
+        let struts = tied(&trees, &Mesh::default(), &profile);
+        assert!(!struts.is_empty());
+        for (from, to, _, _) in &struts {
+            assert!(
+                from.z.max(to.z) <= neck + 1e-4,
+                "a brace reaches no higher than where the head meets the trunk, {neck} mm"
+            );
+        }
     }
 
     #[test]

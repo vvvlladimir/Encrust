@@ -3,7 +3,7 @@ use std::f32::consts::FRAC_1_SQRT_2;
 use core_geometry::{Quat, Scalar, Vec2, Vec3};
 use printer_profiles::SupportProfile;
 
-use crate::base::{SAME_PLACE_MM, ties};
+use crate::base::{SAME_PLACE_MM, ties, top_z};
 use crate::clear::{Beam, clear};
 use crate::column::landing;
 use crate::group::Profiles;
@@ -100,17 +100,6 @@ fn turns(
         &[0.0]
     } else {
         &[]
-    }
-}
-
-/// Where a trunk ends at the top: at its root, or under the head of a column that holds
-/// its one tip on the trunk itself.
-fn top_z(tree: &SupportTree, profile: &SupportProfile) -> Scalar {
-    let root = tree.root();
-    if root.is_leaf() {
-        root.position.z - profile.top_length_mm()
-    } else {
-        root.position.z
     }
 }
 

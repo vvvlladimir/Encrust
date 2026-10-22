@@ -435,7 +435,7 @@ impl BracingPreset {
             Self::Standard => (0.9, 1.0, zone(Zigzag, 1), Zigzag, zone(Cross, 1)),
             Self::Strong => (1.0, 0.0, zone(Cross, 1), Cross, zone(Cross, 1)),
             Self::Tall => (2.0, 1.0, zone(Cross, 1), Zigzag, zone(Cross, 2)),
-            Self::Small => (0.8, 1.0, zone(Cross, 1), Cross, zone(Cross, 2)),
+            Self::Small => (0.8, 1.0, zone(Cross, 1), Cross, zone(Cross, 1)),
         };
         let (pair_above_mm, one_above_mm) = match self {
             Self::Standard => (30.0, 60.0),
