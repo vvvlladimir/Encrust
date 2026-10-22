@@ -32,7 +32,7 @@ pub fn write(
 
     let falls: Vec<Vec3> = findings
         .iter()
-        .filter(|f| f.kind == Kind::Hanging)
+        .filter(|f| matches!(f.kind, Kind::Hanging | Kind::Overloaded))
         .map(|f| Vec3::from(f.at))
         .chain(
             cured
@@ -45,7 +45,7 @@ pub fn write(
     let marks = at(findings, &[Kind::Visible, Kind::ThinTip, Kind::OnModel]);
     let waste = at(
         findings,
-        &[Kind::Bare, Kind::Overloaded, Kind::Crowded, Kind::Slender],
+        &[Kind::Bare, Kind::RimGap, Kind::Crowded, Kind::Slender],
     );
     for (family, points) in [("falls", falls), ("marks", marks), ("balance", waste)] {
         if !points.is_empty() {

@@ -13,8 +13,6 @@ use crate::stand::Supported;
 /// A tip on material thinner than this behind it, millimetres, is on a detail: a finger, an
 /// ear, a blade. Taking it off is where details break.
 const THIN_DETAIL_MM: Scalar = 1.0;
-/// A tip carrying more than this many times the area its lattice gives it is overloaded.
-const OVERLOAD: Scalar = 2.0;
 /// Two tips closer than this share of a spacing hold the same place twice. Wider apart is
 /// the three a small part stands on, which placement puts there on purpose.
 const CROWDED: Scalar = 0.2;
@@ -30,6 +28,25 @@ const PIECE_MM: Scalar = 0.25;
 const REFERENCE_RISE_MM: Scalar = 1.0;
 /// How far off a face its outside is probed, millimetres: under a pixel, over rounding.
 const BURIED_PROBE_MM: Scalar = 1e-3;
+/// An underside whose normal is within this of straight down is flat: all of it appears on
+/// one layer and the film holds it hardest (local-docs/supports/experiments.md, №2).
+const FLAT_COS: Scalar = 0.966;
+/// How finely the rim of a flat underside is walked, millimetres.
+const RIM_STEP_MM: Scalar = 0.25;
+
+/// What a tip is taken to hold, as two prints of plates on tips measured it.
+#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
+pub struct Limits {
+    /// Flat underside a tip carries per square millimetre of its section before it tears.
+    pub flat_ratio: Scalar,
+    /// The same for an underside that leans, which appears a sliver at a time.
+    pub slope_ratio: Scalar,
+    /// The thinnest tip that holds at all, millimetres.
+    pub min_tip_mm: Scalar,
+    /// The furthest a flat rim may stand from every tip before its corner bends down,
+    /// millimetres.
+    pub rim_gap_mm: Scalar,
+}
 
 /// What one model's supports came to, as geometry.
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
@@ -53,28 +70,27 @@ pub struct Shape {
     pub thin_tips: usize,
     pub crowded: usize,
     pub slender: usize,
+    /// Of the overhang, what is flat.
+    pub flat_mm2: f32,
     /// Overhang carried per standing tip, square millimetres.
-    pub load_p50_mm2: f32,
     pub load_p90_mm2: f32,
-    pub load_max_mm2: f32,
     /// What the lattice gives one tip, square millimetres: the spacing squared.
     pub design_mm2: f32,
     /// The section of one tip where it meets the part, square millimetres.
     pub tip_mm2: f32,
+    /// How much of what a tip holds it carries, flat and leaning underside each against
+    /// its own limit: past 1 it tears.
+    pub use_p50: f32,
+    pub use_p90: f32,
+    pub use_max: f32,
     pub overloaded: usize,
+    /// Tips thinner than hold at all: every one of them, when the profile's tip is.
+    pub weak_tips: usize,
+    /// Rim of flat underside further than the limit from every tip, millimetres, and the
+    /// furthest any of it stands.
+    pub rim_bare_mm: f32,
+    pub rim_gap_max_mm: f32,
     pub findings: Vec<Finding>,
-}
-
-impl Shape {
-    /// Underside the busiest tips carry for each square millimetre of their own section:
-    /// what the peel pulls through a tip, as a share of what the tip is.
-    pub fn carry_ratio(&self) -> f32 {
-        if self.tip_mm2 > 0.0 {
-            self.load_p90_mm2 / self.tip_mm2
-        } else {
-            0.0
-        }
-    }
 }
 
 /// One place worth looking at, plate millimetres.
@@ -92,6 +108,7 @@ pub enum Kind {
     Hanging,
     Bare,
     Overloaded,
+    RimGap,
     ThinTip,
     Visible,
     Crowded,
@@ -99,9 +116,14 @@ pub enum Kind {
     OnModel,
 }
 
-/// Reads `supported` against `profile`; `upright` turns the printed pose back to the one
-/// the model was drawn in.
-pub fn read(supported: &Supported, profile: &SupportProfile, upright: Quat) -> Shape {
+/// Reads `supported` against `profile` and `limits`; `upright` turns the printed pose back
+/// to the one the model was drawn in.
+pub fn read(
+    supported: &Supported,
+    profile: &SupportProfile,
+    limits: &Limits,
+    upright: Quat,
+) -> Shape {
     let spacing = profile.contact_spacing_mm / profile.density.max(1e-3).sqrt();
     let standing = standing(supported);
     let tips: Vec<Vec3> = standing.iter().map(|&at| supported.contacts[at]).collect();
@@ -117,8 +139,11 @@ pub fn read(supported: &Supported, profile: &SupportProfile, upright: Quat) -> S
         tip_mm2: std::f32::consts::PI * surface_radius_mm(profile).powi(2),
         ..Shape::default()
     };
+    if profile.tip.contact_diameter_mm < limits.min_tip_mm {
+        shape.weak_tips = tips.len();
+    }
     hanging(&mut shape, supported, &standing);
-    underside(&mut shape, supported, profile, &tips, spacing);
+    underside(&mut shape, supported, profile, limits, &tips, spacing);
     tips_on_surface(&mut shape, &supported.model, &bvh, &tips, upright);
     crowding(&mut shape, &tips, spacing);
     trees(&mut shape, supported, profile);
@@ -205,11 +230,13 @@ impl Grid {
     }
 }
 
-/// The underside each tip carries, and the patches no tip reaches.
+/// The underside each tip carries, flat and leaning apart, the patches no tip reaches,
+/// and the rim of flat underside left far from every tip.
 fn underside(
     shape: &mut Shape,
     supported: &Supported,
     profile: &SupportProfile,
+    limits: &Limits,
     tips: &[Vec3],
     spacing: Scalar,
 ) {
@@ -217,9 +244,11 @@ fn underside(
     let grid = Grid::new(tips, spacing);
     let closed = diagnose(&supported.model).boundary_edges == 0;
     let bvh = Bvh::build(&supported.model);
-    let mut load = vec![0.0; tips.len()];
+    let mut flat = vec![0.0; tips.len()];
+    let mut slope = vec![0.0; tips.len()];
+    let mut flat_faces = Vec::new();
     let mut bare: FastMap<[i32; 3], (Scalar, Vec3)> = FastMap::default();
-    for triangle in supported.model.triangles() {
+    for (face, triangle) in supported.model.triangles().enumerate() {
         let normal = triangle.normal_unnormalized().normalize_or_zero();
         if normal.z >= needs {
             continue;
@@ -230,6 +259,12 @@ fn underside(
             continue;
         }
         shape.overhang_mm2 += area;
+        let is_flat = -normal.z >= FLAT_COS;
+        if is_flat {
+            shape.flat_mm2 += area;
+            flat_faces.push(face);
+        }
+        let load = if is_flat { &mut flat } else { &mut slope };
         for (point, piece) in pieces(&triangle) {
             match grid.nearest(tips, point) {
                 Some((tip, _)) => load[tip] += piece * -normal.z,
@@ -248,7 +283,95 @@ fn underside(
             shape.findings.push(finding(Kind::Bare, centre, area));
         }
     }
-    loads(shape, tips, &load);
+    uses(shape, limits, tips, &flat, &slope);
+    rim(
+        shape,
+        &supported.model,
+        &flat_faces,
+        tips,
+        &grid,
+        limits.rim_gap_mm,
+    );
+}
+
+/// How much of what each tip holds it carries, and the tips past it.
+fn uses(shape: &mut Shape, limits: &Limits, tips: &[Vec3], flat: &[Scalar], slope: &[Scalar]) {
+    let section = shape.tip_mm2.max(1e-6);
+    let used: Vec<Scalar> = flat
+        .iter()
+        .zip(slope)
+        .map(|(flat, slope)| {
+            flat / (section * limits.flat_ratio) + slope / (section * limits.slope_ratio)
+        })
+        .collect();
+    let mut sorted = used.clone();
+    sorted.sort_by(Scalar::total_cmp);
+    let at = |share: Scalar| {
+        sorted
+            .get(((sorted.len() as Scalar - 1.0) * share).round() as usize)
+            .copied()
+            .unwrap_or(0.0)
+    };
+    shape.use_p50 = at(0.5);
+    shape.use_p90 = at(0.9);
+    shape.use_max = sorted.last().copied().unwrap_or(0.0);
+    let mut load: Vec<Scalar> = flat.iter().zip(slope).map(|(f, s)| f + s).collect();
+    load.sort_by(Scalar::total_cmp);
+    shape.load_p90_mm2 = load
+        .get(((load.len() as Scalar - 1.0) * 0.9).round() as usize)
+        .copied()
+        .unwrap_or(0.0);
+    for (tip, used) in tips.iter().zip(&used) {
+        if *used > 1.0 {
+            shape.overloaded += 1;
+            shape.findings.push(finding(Kind::Overloaded, *tip, *used));
+        }
+    }
+}
+
+/// Walks every edge where flat underside meets anything else and measures how far it
+/// stands from the nearest tip: a corner left far from one is bent down by the film.
+fn rim(
+    shape: &mut Shape,
+    model: &Mesh,
+    flat_faces: &[usize],
+    tips: &[Vec3],
+    grid: &Grid,
+    gap_mm: Scalar,
+) {
+    let mut edges: FastMap<[u32; 2], u32> = FastMap::default();
+    for &face in flat_faces {
+        let [a, b, c] = model.faces[face];
+        for [p, q] in [[a, b], [b, c], [c, a]] {
+            *edges.entry([p.min(q), p.max(q)]).or_default() += 1;
+        }
+    }
+    let mut worst: Option<(Scalar, Vec3)> = None;
+    for ([p, q], count) in edges {
+        if count != 1 {
+            continue;
+        }
+        let (from, to) = (model.vertices[p as usize], model.vertices[q as usize]);
+        let steps = ((from.distance(to) / RIM_STEP_MM).ceil() as usize).max(1);
+        for step in 0..=steps {
+            let point = from.lerp(to, step as Scalar / steps as Scalar);
+            let gap = grid
+                .nearest(tips, point)
+                .map_or(grid.cell, |(_, distance)| distance);
+            if gap > gap_mm {
+                shape.rim_bare_mm += from.distance(to) / (steps + 1) as Scalar;
+            }
+            if worst.is_none_or(|(most, _)| gap > most) {
+                worst = Some((gap, point));
+            }
+        }
+    }
+    if let Some((gap, point)) = worst {
+        shape.rim_gap_max_mm = gap;
+        if gap > gap_mm {
+            shape.findings.push(finding(Kind::RimGap, point, gap));
+        }
+    }
 }
 
 /// Whether material under `point` within a millimetre of rise, leaning no further than
@@ -315,23 +438,6 @@ fn buried(bvh: &Bvh, point: Vec3) -> bool {
         }
     }
     crossings % 2 == 1
-}
-
-fn loads(shape: &mut Shape, tips: &[Vec3], load: &[Scalar]) {
-    let mut sorted = load.to_vec();
-    sorted.sort_by(Scalar::total_cmp);
-    let at = |share: Scalar| sorted.get(((sorted.len() as Scalar - 1.0) * share).round() as usize);
-    shape.load_p50_mm2 = at(0.5).copied().unwrap_or(0.0);
-    shape.load_p90_mm2 = at(0.9).copied().unwrap_or(0.0);
-    shape.load_max_mm2 = sorted.last().copied().unwrap_or(0.0);
-    for (tip, carried) in tips.iter().zip(load) {
-        if *carried > OVERLOAD * shape.design_mm2 {
-            shape.overloaded += 1;
-            shape
-                .findings
-                .push(finding(Kind::Overloaded, *tip, *carried));
-        }
-    }
 }
 
 /// Tips on details too thin to lose one, and tips on the side meant to be seen.
@@ -453,6 +559,38 @@ mod tests {
             pieces.len() > 100,
             "a 5 mm edge is cut at a quarter millimetre"
         );
+    }
+
+    #[test]
+    fn a_flat_corner_far_from_every_tip_is_found() {
+        let plate = core_geometry::cuboid(Vec3::ZERO, Vec3::new(8.0, 8.0, 1.0));
+        let flat: Vec<usize> = (0..plate.faces.len())
+            .filter(|&face| {
+                plate
+                    .triangle(face)
+                    .is_some_and(|t| t.normal_unnormalized().normalize_or_zero().z < -FLAT_COS)
+            })
+            .collect();
+        let tips: Vec<Vec3> = [1.5, 4.0, 6.5]
+            .iter()
+            .flat_map(|&x| [1.5, 4.0, 6.5].map(|y| Vec3::new(x, y, 0.0)))
+            .collect();
+        let mut shape = Shape::default();
+        rim(
+            &mut shape,
+            &plate,
+            &flat,
+            &tips,
+            &Grid::new(&tips, 4.0),
+            1.5,
+        );
+        // A corner 1.5 mm in each way from the nearest tip stands √2 · 1.5 off it.
+        assert!(
+            (shape.rim_gap_max_mm - 1.5 * std::f32::consts::SQRT_2).abs() < 0.05,
+            "the corner is the furthest rim, got {}",
+            shape.rim_gap_max_mm
+        );
+        assert!(shape.rim_bare_mm > 0.0, "the corners are past 1.5 mm");
     }
 
     #[test]

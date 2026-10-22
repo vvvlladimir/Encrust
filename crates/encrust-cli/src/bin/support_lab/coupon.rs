@@ -1,14 +1,18 @@
-//! A print that answers what the bench can only assume: what tears a tip off a part. Four
-//! blocks tell the causes apart — flat plates, the worst suction there is; the same plates
-//! leant as a figure is; balls on one tip, which pull on the film almost not at all; and
-//! one plate bitten to three depths. local-docs/supports/README.md says how to read it.
+//! A print that answers what the bench can only assume: what tears a tip off a part, and
+//! what mark it leaves. A spec file lays it out — tip shapes as rows, bodies and how many
+//! tips hold them as blocks and columns — so a new question is a new file, not new code.
+//! local-docs/supports/README.md says how to read one.
+
+use std::path::Path;
 
 use anyhow::{Context, Result};
 use core_geometry::{Bvh, Mesh, Quat, Transform, Vec2, Vec3, ball, cuboid, oriented_box};
 use core_supports::{Placed, Profiles, SupportPoint, columns, grow, mesh_trees};
 use printer_profiles::SupportProfile;
+use serde::Deserialize;
 
 use crate::export::append;
+use crate::stand::Supported;
 
 /// Each plate, millimetres: wide enough to pull, thin enough to bend no tip by its weight.
 const PLATE_MM: f32 = 8.0;
@@ -20,12 +24,9 @@ const PITCH_MM: f32 = 14.0;
 const BLOCK_GAP_MM: f32 = 24.0;
 /// Where the lowest point of every specimen stands, millimetres.
 const LIFT_MM: f32 = 5.0;
-const TILT_DEG: f32 = 45.0;
 /// How far up its slope from the low edge a leant plate's first row of tips stands,
 /// millimetres: on the edge, so the first layer it cures is already held.
 const EDGE_INSET_MM: f32 = 0.1;
-/// The bite the `bite` block's tips are 0.4 mm wide at, as a figure's medium tips are.
-const BITE_TIP_MM: f32 = 0.4;
 const RULER_OFFSET_MM: f32 = 10.0;
 const RULER_WIDTH_MM: f32 = 2.5;
 const RULER_MM: f32 = 1.0;
@@ -34,79 +35,88 @@ const BUMP_PITCH_MM: f32 = 1.6;
 /// A block's number stands past its corner in bumps twice as tall as a row's.
 const BLOCK_BUMP_MM: f32 = 2.0;
 
+/// A coupon as its spec file states it.
+#[derive(Debug, Clone, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct Spec {
+    #[serde(rename = "shape")]
+    pub shapes: Vec<TipShape>,
+    #[serde(rename = "block")]
+    pub blocks: Vec<Block>,
+}
+
+/// One way of making a tip: a row of every block that names it.
+#[derive(Debug, Clone, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct TipShape {
+    pub name: String,
+    /// The contact's own width, millimetres.
+    pub tip_mm: f32,
+    /// How wide the cone is where it meets the pillar, and the pillar's width, millimetres.
+    pub join_mm: f32,
+    /// How long the cone is, millimetres.
+    pub cone_mm: f32,
+    /// How far the tip is moved into the part from a contact a layer under its surface,
+    /// millimetres: one layer is just touching.
+    pub bite_mm: f32,
+}
+
+/// One block: one body, a row for each shape it names and a column for each count of tips.
+#[derive(Debug, Clone, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct Block {
+    pub name: String,
+    pub body: Body,
+    /// How far a leant plate leans, degrees.
+    #[serde(default)]
+    pub tilt_deg: f32,
+    /// The shapes it is printed in, by name; every shape of the spec when empty.
+    #[serde(default)]
+    pub shapes: Vec<String>,
+    pub holders: Vec<usize>,
+}
+
 /// What one specimen is.
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq, Deserialize)]
+#[serde(rename_all = "kebab-case")]
 pub enum Body {
     /// A plate square to the film: all of its first layer appears at once.
     Flat,
-    /// A plate leant `TILT_DEG`: its layers grow a sliver at a time, as a figure's do.
+    /// A plate leant by its block's `tilt_deg`: it grows a sliver at a time, as a figure does.
     Leant,
     /// A ball on one tip: a test of the tip and its bite with next to no pull.
     Ball,
 }
 
-/// One block of the coupon: one body, rows and columns of what changes.
-pub struct Block {
-    pub name: &'static str,
-    pub body: Body,
-    pub rows: Vec<Setting>,
-    pub columns: Vec<Setting>,
-}
-
-/// What a row or a column sets.
-#[derive(Debug, Clone, Copy, PartialEq)]
-pub enum Setting {
-    TipMm(f32),
-    Holders(usize),
-    DepthMm(f32),
-}
-
-impl Setting {
-    pub fn label(self) -> String {
-        match self {
-            Self::TipMm(mm) => format!("tip {mm} mm"),
-            Self::Holders(n) => format!("{n} tips"),
-            Self::DepthMm(mm) => format!("bite {mm} mm"),
+impl Spec {
+    pub fn read(path: &Path) -> Result<Self> {
+        let text = std::fs::read_to_string(path)
+            .with_context(|| format!("cannot read {}", path.display()))?;
+        let spec: Self = toml::from_str(&text)
+            .with_context(|| format!("{} is not a coupon spec", path.display()))?;
+        for block in &spec.blocks {
+            for name in &block.shapes {
+                anyhow::ensure!(
+                    spec.shapes.iter().any(|shape| &shape.name == name),
+                    "block {} names a shape {name} the spec does not define",
+                    block.name
+                );
+            }
         }
+        Ok(spec)
     }
-}
 
-/// The four blocks, left to right.
-pub fn blocks() -> Vec<Block> {
-    use Setting::{DepthMm, Holders, TipMm};
-    vec![
-        Block {
-            name: "flat",
-            body: Body::Flat,
-            rows: vec![TipMm(0.3), TipMm(0.4), TipMm(0.5)],
-            columns: vec![Holders(9), Holders(16), Holders(25)],
-        },
-        Block {
-            name: "leant",
-            body: Body::Leant,
-            rows: vec![TipMm(0.2), TipMm(0.3), TipMm(0.4)],
-            columns: vec![Holders(2), Holders(4), Holders(9)],
-        },
-        Block {
-            name: "ball",
-            body: Body::Ball,
-            rows: vec![
-                TipMm(0.15),
-                TipMm(0.2),
-                TipMm(0.25),
-                TipMm(0.3),
-                TipMm(0.4),
-                TipMm(0.5),
-            ],
-            columns: vec![Holders(1)],
-        },
-        Block {
-            name: "bite",
-            body: Body::Flat,
-            rows: vec![DepthMm(0.05), DepthMm(0.2), DepthMm(0.4)],
-            columns: vec![Holders(9)],
-        },
-    ]
+    /// The shapes `block` is printed in, in its rows' order.
+    pub fn rows<'a>(&'a self, block: &'a Block) -> Vec<&'a TipShape> {
+        if block.shapes.is_empty() {
+            return self.shapes.iter().collect();
+        }
+        block
+            .shapes
+            .iter()
+            .filter_map(|name| self.shapes.iter().find(|shape| &shape.name == name))
+            .collect()
+    }
 }
 
 /// One specimen and where it stands, plate millimetres.
@@ -117,25 +127,27 @@ pub struct Specimen {
     pub at: Vec2,
 }
 
-/// Where every specimen of `blocks` stands with the coupon centred on `centre`.
-pub fn layout(blocks: &[Block], centre: Vec2) -> Vec<Specimen> {
+/// Where every specimen of `spec` stands with the coupon centred on `centre`.
+pub fn layout(spec: &Spec, centre: Vec2) -> Vec<Specimen> {
     let span = |count: usize| PITCH_MM * (count as f32 - 1.0);
-    let width: f32 = blocks
+    let width: f32 = spec
+        .blocks
         .iter()
-        .map(|block| span(block.columns.len()))
+        .map(|block| span(block.holders.len()))
         .sum::<f32>()
-        + BLOCK_GAP_MM * (blocks.len() as f32 - 1.0);
-    let tallest = blocks
+        + BLOCK_GAP_MM * (spec.blocks.len() as f32 - 1.0);
+    let tallest = spec
+        .blocks
         .iter()
-        .map(|block| block.rows.len())
+        .map(|block| spec.rows(block).len())
         .max()
         .unwrap_or(1);
     let mut x = centre.x - width / 2.0;
     let y = centre.y - span(tallest) / 2.0;
     let mut specimens = Vec::new();
-    for (index, block) in blocks.iter().enumerate() {
-        for row in 0..block.rows.len() {
-            for column in 0..block.columns.len() {
+    for (index, block) in spec.blocks.iter().enumerate() {
+        for row in 0..spec.rows(block).len() {
+            for column in 0..block.holders.len() {
                 let at = Vec2::new(x + column as f32 * PITCH_MM, y + row as f32 * PITCH_MM);
                 specimens.push(Specimen {
                     block: index,
@@ -145,7 +157,7 @@ pub fn layout(blocks: &[Block], centre: Vec2) -> Vec<Specimen> {
                 });
             }
         }
-        x += span(block.columns.len()) + BLOCK_GAP_MM;
+        x += span(block.holders.len()) + BLOCK_GAP_MM;
     }
     specimens
 }
@@ -157,58 +169,74 @@ pub fn specimen_at(specimens: &[Specimen], at: Vec2) -> Option<&Specimen> {
         .find(|specimen| specimen.at.distance(at) < PITCH_MM / 2.0)
 }
 
-/// The coupon as one mesh: every specimen on its supports and every block's rulers, built
-/// on `base` with only what a row or a column sets changed and nothing merged or braced.
-pub fn coupon(base: &SupportProfile, layer_mm: f32, centre: Vec2) -> Result<Mesh> {
-    let blocks = blocks();
-    let specimens = layout(&blocks, centre);
+/// One specimen built: its body on its supports, and the profile they were built to.
+pub struct Built {
+    pub supported: Supported,
+    pub profile: SupportProfile,
+}
+
+/// Every specimen of `spec` centred on `centre`, built on `base` with only the tip's shape
+/// changed and nothing merged or braced, in `layout` order.
+pub fn build(
+    spec: &Spec,
+    base: &SupportProfile,
+    layer_mm: f32,
+    centre: Vec2,
+) -> Result<Vec<Built>> {
+    layout(spec, centre)
+        .iter()
+        .map(|specimen| {
+            let block = &spec.blocks[specimen.block];
+            let shape = spec.rows(block)[specimen.row];
+            let profile = profile_for(base, shape);
+            let holders = block.holders[specimen.column];
+            let (body, points) = body(block, specimen.at, holders, layer_mm);
+            let supported = supported(&profile, body, points)
+                .with_context(|| format!("block {}, shape {}", block.name, shape.name))?;
+            Ok(Built { supported, profile })
+        })
+        .collect()
+}
+
+/// The coupon as one mesh: every specimen on its supports and every block's rulers.
+pub fn coupon(spec: &Spec, built: &[Built], centre: Vec2) -> Result<Mesh> {
+    let specimens = layout(spec, centre);
     let mut whole = Mesh::default();
-    for specimen in &specimens {
-        let block = &blocks[specimen.block];
-        let (profile, holders) = setup(base, block, specimen);
-        let (body, points) = body(block.body, specimen.at, holders, layer_mm);
-        append(&mut whole, &supported(&profile, &body, &points)?);
+    for built in built {
+        append(&mut whole, &built.supported.model);
+        append(&mut whole, &built.supported.supports);
     }
-    for (index, block) in blocks.iter().enumerate() {
+    for (index, block) in spec.blocks.iter().enumerate() {
         let first = specimens
             .iter()
             .find(|specimen| specimen.block == index)
             .context("every block has a specimen")?;
-        append(&mut whole, &rulers(first.at, block, index + 1));
+        let size = (spec.rows(block).len(), block.holders.len());
+        append(&mut whole, &rulers(first.at, size, index + 1));
     }
     Ok(whole)
 }
 
-/// The profile one specimen is supported to and how many tips hold it.
-fn setup(base: &SupportProfile, block: &Block, specimen: &Specimen) -> (SupportProfile, usize) {
+/// `base` with its tip made to `shape`, and nothing that would tie two specimens together.
+fn profile_for(base: &SupportProfile, shape: &TipShape) -> SupportProfile {
     let mut profile = base.clone();
     profile.branching.enabled = false;
     profile.bracing.enabled = false;
     profile.raft.enabled = false;
-    let mut holders = 1;
-    let mut tip_mm = if block.name == "bite" {
-        BITE_TIP_MM
-    } else {
-        profile.tip.contact_diameter_mm
-    };
-    for setting in [block.rows[specimen.row], block.columns[specimen.column]] {
-        match setting {
-            Setting::TipMm(mm) => tip_mm = mm,
-            Setting::Holders(n) => holders = n,
-            Setting::DepthMm(mm) => profile.tip.contact_depth_mm = mm,
-        }
-    }
-    profile.tip.contact_diameter_mm = tip_mm;
-    profile.middle.diameter_mm = profile.middle.diameter_mm.max(tip_mm * 2.0);
-    (profile, holders)
+    profile.tip.contact_diameter_mm = shape.tip_mm;
+    profile.tip.contact_depth_mm = shape.bite_mm;
+    profile.top.length_mm = shape.cone_mm;
+    profile.middle.diameter_mm = shape.join_mm;
+    profile.bottom.lower_diameter_mm = profile.bottom.lower_diameter_mm.max(shape.join_mm);
+    profile
 }
 
 /// The body of one specimen over `at`, and the contacts under it: each a layer off the
 /// surface it holds, where placement puts one.
-fn body(kind: Body, at: Vec2, holders: usize, layer_mm: f32) -> (Mesh, Vec<Vec3>) {
+fn body(block: &Block, at: Vec2, holders: usize, layer_mm: f32) -> (Mesh, Vec<Vec3>) {
     let half = PLATE_MM / 2.0;
     let thick = PLATE_THICK_MM / 2.0;
-    match kind {
+    match block.body {
         Body::Flat => {
             let low = Vec3::new(at.x - half, at.y - half, LIFT_MM);
             let plate = cuboid(low, low + Vec3::new(PLATE_MM, PLATE_MM, PLATE_THICK_MM));
@@ -219,7 +247,7 @@ fn body(kind: Body, at: Vec2, holders: usize, layer_mm: f32) -> (Mesh, Vec<Vec3>
             (plate, points)
         }
         Body::Leant => {
-            let turn = Quat::from_rotation_x(TILT_DEG.to_radians());
+            let turn = Quat::from_rotation_x(block.tilt_deg.to_radians());
             let (across, along, up) = (turn * Vec3::X, turn * Vec3::Y, turn * Vec3::Z);
             let rise = half * along.z.abs() + thick * up.z.abs();
             let centre = Vec3::new(at.x, at.y, LIFT_MM + rise);
@@ -240,22 +268,28 @@ fn body(kind: Body, at: Vec2, holders: usize, layer_mm: f32) -> (Mesh, Vec<Vec3>
 }
 
 /// `body` with columns stood under `points` to `profile`.
-fn supported(profile: &SupportProfile, body: &Mesh, points: &[Vec3]) -> Result<Mesh> {
-    let points: Vec<SupportPoint> = points.iter().copied().map(SupportPoint::new).collect();
-    let bvh = Bvh::build(body);
-    let placed = Placed::new(body, &bvh, Transform::default());
+fn supported(profile: &SupportProfile, body: Mesh, points: Vec<Vec3>) -> Result<Supported> {
+    let tips: Vec<SupportPoint> = points.iter().copied().map(SupportPoint::new).collect();
+    let bvh = Bvh::build(&body);
+    let placed = Placed::new(&body, &bvh, Transform::default());
     let table = std::slice::from_ref(profile);
     let profiles = Profiles::new(table).context("a table of one profile is never empty")?;
-    let trees = grow(&columns(&points, &placed, profiles), &placed, profiles);
+    let trees = grow(&columns(&tips, &placed, profiles), &placed, profiles);
     let standing: usize = trees.iter().map(|tree| tree.tip_count()).sum();
     anyhow::ensure!(
-        standing == points.len(),
+        standing == tips.len(),
         "only {standing} of {} tips found room under a specimen",
-        points.len()
+        tips.len()
     );
-    let mut mesh = body.clone();
-    append(&mut mesh, &mesh_trees(&trees, &placed, profiles));
-    Ok(mesh)
+    let supports = mesh_trees(&trees, &placed, profiles);
+    Ok(Supported {
+        model: body,
+        contacts: points,
+        trees,
+        supports,
+        place_s: 0.0,
+        grow_s: 0.0,
+    })
 }
 
 /// Where `holders` tips go under a plate, millimetres off its middle: one, a diagonal pair,
@@ -303,13 +337,13 @@ fn leant_spots(holders: usize) -> Vec<(f32, f32)> {
 /// A block's two rails cured flat on the plate, where nothing tears them off: beside each
 /// row as many bumps as its place, beside each column the same, and past the corner the
 /// block's own number in taller bumps. They mark no specimen, so each is tested alike.
-fn rulers(first: Vec2, block: &Block, number: usize) -> Mesh {
+fn rulers(first: Vec2, (rows, columns): (usize, usize), number: usize) -> Mesh {
     let mut mesh = Mesh::default();
     let left = first.x - RULER_OFFSET_MM;
     let near = first.y - RULER_OFFSET_MM;
     let half = RULER_WIDTH_MM / 2.0;
-    let far_y = first.y + PITCH_MM * (block.rows.len() as f32 - 0.5);
-    let far_x = first.x + PITCH_MM * (block.columns.len() as f32 - 0.5);
+    let far_y = first.y + PITCH_MM * (rows as f32 - 0.5);
+    let far_x = first.x + PITCH_MM * (columns as f32 - 0.5);
     let tail = near - half - BUMP_PITCH_MM * (number as f32 + 0.5);
     let rails = [
         cuboid(
@@ -324,12 +358,12 @@ fn rulers(first: Vec2, block: &Block, number: usize) -> Mesh {
     for rail in &rails {
         append(&mut mesh, rail);
     }
-    for row in 0..block.rows.len() {
+    for row in 0..rows {
         for at in bumps(row + 1, first.y + row as f32 * PITCH_MM) {
             append(&mut mesh, &bump(Vec2::new(left, at), BUMP_MM));
         }
     }
-    for column in 0..block.columns.len() {
+    for column in 0..columns {
         for at in bumps(column + 1, first.x + column as f32 * PITCH_MM) {
             append(&mut mesh, &bump(Vec2::new(at, near), BUMP_MM));
         }
@@ -358,6 +392,42 @@ fn bump(at: Vec2, tall_mm: f32) -> Mesh {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    const SPEC: &str = r#"
+        [[shape]]
+        name = "narrow"
+        tip_mm = 0.3
+        join_mm = 0.7
+        cone_mm = 1.5
+        bite_mm = 0.2
+
+        [[shape]]
+        name = "wide"
+        tip_mm = 0.3
+        join_mm = 1.2
+        cone_mm = 2.0
+        bite_mm = 0.05
+
+        [[block]]
+        name = "flat"
+        body = "flat"
+        holders = [9, 16]
+
+        [[block]]
+        name = "leant"
+        body = "leant"
+        tilt_deg = 30
+        shapes = ["wide"]
+        holders = [4]
+    "#;
+
+    #[test]
+    fn a_block_with_no_shapes_is_printed_in_every_one() {
+        let spec: Spec = toml::from_str(SPEC).expect("the spec is well formed");
+        assert_eq!(spec.rows(&spec.blocks[0]).len(), 2);
+        assert_eq!(spec.rows(&spec.blocks[1])[0].name, "wide");
+        assert_eq!(layout(&spec, Vec2::ZERO).len(), 2 * 2 + 1);
+    }
 
     #[test]
     fn a_grid_of_tips_stays_under_the_plate() {
@@ -389,7 +459,8 @@ mod tests {
 
     #[test]
     fn every_specimen_of_the_coupon_has_its_own_place() {
-        let specimens = layout(&blocks(), Vec2::new(109.0, 61.0));
+        let spec: Spec = toml::from_str(SPEC).expect("the spec is well formed");
+        let specimens = layout(&spec, Vec2::new(109.0, 61.0));
         for specimen in &specimens {
             let found = specimen_at(&specimens, specimen.at).expect("a specimen finds itself");
             assert!(

@@ -17,15 +17,15 @@ use std::time::Instant;
 
 use anyhow::{Context, Result};
 use clap::Parser;
-use core_analysis::{NECK_LIMIT_MPA, PULL_N_PER_MM2};
+use core_analysis::NECK_LIMIT_MPA;
 use core_geometry::{Mesh, Quat, Vec2};
 use printer_profiles::{Catalogue, MaterialProfile, PrinterProfile, SupportProfile};
 
 use crate::corpus::{Entry, Expect, Pose};
 use crate::report::{CureRow, Report, Row, SweepRow};
 
-/// Shares of a profile's density a sweep tries: from a third of it to half again.
-const SWEEP: [f32; 6] = [0.35, 0.5, 0.7, 1.0, 1.4, 2.0];
+/// Shares of a profile's density a sweep tries: from a third of it to four times.
+const SWEEP: [f32; 8] = [0.35, 0.5, 0.7, 1.0, 1.4, 2.0, 2.8, 4.0];
 
 /// Benches automatic supports on models named outright or on a corpus.
 #[derive(Parser)]
@@ -60,26 +60,38 @@ struct Args {
     /// Compare with a run kept before; anything worse fails the run.
     #[arg(long)]
     baseline: Option<PathBuf>,
-    /// How many times over a tip is to hold the pull it carries, against green resin's
-    /// strength: sets how much underside a tip may carry.
-    #[arg(long, default_value_t = 4.0)]
-    safety: f32,
+    /// Flat underside a tip holds per square millimetre of its section, as the coupons
+    /// measured it (local-docs/supports/experiments.md).
+    #[arg(long, default_value_t = 50.0)]
+    flat_ratio: f32,
+    /// The same for underside that leans.
+    #[arg(long, default_value_t = 150.0)]
+    slope_ratio: f32,
+    /// The thinnest tip that holds at all, millimetres: a property of the resin and its
+    /// exposure.
+    #[arg(long, default_value_t = 0.3)]
+    min_tip_mm: f32,
+    /// The furthest a flat rim may stand from every tip, millimetres.
+    #[arg(long, default_value_t = 1.5)]
+    rim_gap_mm: f32,
     /// The stress a neck of green resin tears at, megapascals, once the coupon has measured
     /// it; no lower than the stack's own warning level, which it never names below.
     #[arg(long, default_value_t = NECK_LIMIT_MPA as f32)]
     neck_mpa: f32,
-    /// Write the tip calibration coupon to this STL instead of benching, with what the
-    /// bench expects of each of its plates.
-    #[arg(long)]
+    /// Write a calibration coupon to this STL instead of benching, with what the bench
+    /// expects of each specimen; laid out by `--coupon-spec`.
+    #[arg(long, requires = "coupon_spec")]
     coupon: Option<PathBuf>,
+    /// The TOML file a coupon is laid out by: tip shapes, and the blocks printed in them.
+    #[arg(long)]
+    coupon_spec: Option<PathBuf>,
 }
 
 /// What every model is printed with.
 struct Setup {
     printer: PrinterProfile,
     material: MaterialProfile,
-    /// The most underside a tip may carry per square millimetre of its section.
-    carry_limit: f32,
+    limits: shape::Limits,
     neck_mpa: f32,
 }
 
@@ -93,7 +105,12 @@ fn main() -> Result<ExitCode> {
     let setup = Setup {
         printer: catalogue.printer(&args.printer)?.profile.clone(),
         material,
-        carry_limit: args.neck_mpa / PULL_N_PER_MM2 as f32 / args.safety,
+        limits: shape::Limits {
+            flat_ratio: args.flat_ratio,
+            slope_ratio: args.slope_ratio,
+            min_tip_mm: args.min_tip_mm,
+            rim_gap_mm: args.rim_gap_mm,
+        },
         neck_mpa: args.neck_mpa.max(NECK_LIMIT_MPA as f32),
     };
     let profiles: Vec<SupportProfile> = args
@@ -101,16 +118,16 @@ fn main() -> Result<ExitCode> {
         .iter()
         .map(|id| Ok(catalogue.support(id)?.profile.clone()))
         .collect::<Result<_>>()?;
-    if let Some(path) = &args.coupon {
-        write_coupon(path, &profiles[0], &setup)?;
+    if let (Some(path), Some(spec)) = (&args.coupon, &args.coupon_spec) {
+        write_coupon(path, &coupon::Spec::read(spec)?, &profiles[0], &setup)?;
         return Ok(ExitCode::SUCCESS);
     }
 
-    let mut report = Report::new(&args.printer, args.layer_mm, setup.carry_limit);
+    let mut report = Report::new(&args.printer, args.layer_mm, setup.limits);
     for entry in entries(&args)? {
         for (id, profile) in args.profiles.iter().zip(&profiles) {
             let row = bench(&entry, id, profile, &setup, &args);
-            report::print_row(&row, setup.carry_limit);
+            report::print_row(&row);
             report.rows.push(row);
         }
     }
@@ -231,7 +248,7 @@ fn run(
     setup: &Setup,
 ) -> Result<(stand::Supported, shape::Shape, cure::Cured)> {
     let supported = stand::supported(posed.clone(), profile, setup.material.layer_height_mm)?;
-    let shape = shape::read(&supported, profile, leant);
+    let shape = shape::read(&supported, profile, &setup.limits, leant);
     let cured = cure::cure(
         &supported.model,
         &supported.supports,
@@ -260,8 +277,8 @@ fn sweep(
                 contacts: shape.standing,
                 supports_ml: shape.supports_ml,
                 held,
-                enough: held && shape.carry_ratio() <= setup.carry_limit,
-                carry_ratio: shape.carry_ratio(),
+                enough: report::enough(&shape, &cure),
+                use_p90: shape.use_p90,
                 levers: cure.levers,
                 islands: cure.islands,
                 bare_mm2: shape.bare_mm2,
@@ -292,56 +309,83 @@ fn broken(expect: &Expect, shape: &shape::Shape) -> Vec<String> {
 }
 
 /// Writes the coupon and says which of its plates the cured stack expects to tear off.
-fn write_coupon(path: &Path, base: &SupportProfile, setup: &Setup) -> Result<()> {
+fn write_coupon(
+    path: &Path,
+    spec: &coupon::Spec,
+    base: &SupportProfile,
+    setup: &Setup,
+) -> Result<()> {
     let volume = &setup.printer.build_volume;
     let centre = Vec2::new(volume.x / 2.0, volume.y / 2.0);
-    let mesh = coupon::coupon(base, setup.material.layer_height_mm, centre)?;
+    let built = coupon::build(spec, base, setup.material.layer_height_mm, centre)?;
+    let mesh = coupon::coupon(spec, &built, centre)?;
     export::stl(path, &mesh)?;
     println!("wrote {}", path.display());
     let cured = cure::cure(&mesh, &Mesh::default(), &setup.printer, &setup.material)?;
-    let blocks = coupon::blocks();
-    let specimens = coupon::layout(&blocks, centre);
-    // The worst neck stress over each specimen, and how many islands it cures.
-    let mut found = vec![(0.0f32, 0usize); specimens.len()];
-    for placed in &cured.risks {
-        let Some(at) = specimens.iter().position(|s| {
-            coupon::specimen_at(&specimens, placed.at).is_some_and(|f| std::ptr::eq(f, s))
-        }) else {
-            continue;
-        };
-        match placed.risk.kind {
-            core_analysis::RiskKind::Lever { stress_mpa, .. } => {
-                found[at].0 = found[at].0.max(stress_mpa);
-            }
-            core_analysis::RiskKind::Island { .. } => found[at].1 += 1,
-            _ => {}
-        }
-    }
-    println!(
-        "hardest pull {:.2} N. Neck stress the stack expects, MPa, torn past {}; any island fails the coupon itself:",
-        cured.hardest_pull_n, setup.neck_mpa
-    );
-    for (index, block) in blocks.iter().enumerate() {
+    let specimens = coupon::layout(spec, centre);
+    let verdicts: Vec<String> = specimens
+        .iter()
+        .zip(&built)
+        .map(|(specimen, built)| verdict(specimen, built, &specimens, &cured, setup))
+        .collect();
+    println!("What the bench expects of each specimen:");
+    for (index, block) in spec.blocks.iter().enumerate() {
         println!("\n{} (block {}):", block.name, index + 1);
-        let labels: Vec<String> = block.columns.iter().map(|c| c.label()).collect();
+        let labels: Vec<String> = block.holders.iter().map(|n| format!("{n} tips")).collect();
         println!(
             "| | {} |\n|---|{}",
             labels.join(" | "),
             "---|".repeat(labels.len())
         );
-        for (row, setting) in block.rows.iter().enumerate() {
-            let cells: Vec<String> = specimens
+        for (row, shape) in spec.rows(block).iter().enumerate() {
+            let cells: Vec<&str> = specimens
                 .iter()
-                .zip(&found)
+                .zip(&verdicts)
                 .filter(|(s, _)| s.block == index && s.row == row)
-                .map(|(_, (mpa, islands))| match (*mpa, *islands) {
-                    (_, islands) if islands > 0 => format!("**{islands} islands**"),
-                    (mpa, _) if mpa >= setup.neck_mpa => format!("**{mpa:.0}**"),
-                    _ => "holds".to_owned(),
-                })
+                .map(|(_, verdict)| verdict.as_str())
                 .collect();
-            println!("| {} | {} |", setting.label(), cells.join(" | "));
+            println!("| {} | {} |", shape.name, cells.join(" | "));
         }
     }
     Ok(())
+}
+
+/// One specimen as the bench reads it: an island in it is the coupon's own fault, then a
+/// tip too thin, a tip past what it holds, a corner too far from any tip.
+fn verdict(
+    specimen: &coupon::Specimen,
+    built: &coupon::Built,
+    specimens: &[coupon::Specimen],
+    cured: &cure::Cured,
+    setup: &Setup,
+) -> String {
+    let islands = cured
+        .risks
+        .iter()
+        .filter(|placed| matches!(placed.risk.kind, core_analysis::RiskKind::Island { .. }))
+        .filter(|placed| {
+            coupon::specimen_at(specimens, placed.at)
+                .is_some_and(|found| std::ptr::eq(found, specimen))
+        })
+        .count();
+    let shape = shape::read(
+        &built.supported,
+        &built.profile,
+        &setup.limits,
+        Quat::IDENTITY,
+    );
+    if islands > 0 {
+        format!("**{islands} islands**")
+    } else if shape.weak_tips > 0 {
+        "**tip too thin**".to_owned()
+    } else if shape.overloaded > 0 {
+        format!("**tears, use {:.1}**", shape.use_max)
+    } else if shape.rim_gap_max_mm > setup.limits.rim_gap_mm {
+        format!(
+            "holds, use {:.1}, corner {:.1} mm off",
+            shape.use_max, shape.rim_gap_max_mm
+        )
+    } else {
+        format!("holds, use {:.1}", shape.use_max)
+    }
 }

@@ -7,9 +7,9 @@ use core_analysis::RiskKind;
 use serde::{Deserialize, Serialize};
 
 use crate::cure::Cured;
-use crate::shape::{Kind, Shape};
+use crate::shape::{Kind, Limits, Shape};
 
-const SCHEMA: u32 = 1;
+const SCHEMA: u32 = 2;
 /// Growth in contacts or resin a run may show over its baseline before it is a regression:
 /// placement moves a little with any change, and a few percent is not a decision.
 const GROWTH: f32 = 1.15;
@@ -22,8 +22,8 @@ pub struct Report {
     pub schema: u32,
     pub printer: String,
     pub layer_mm: f32,
-    /// The most underside a tip may carry per square millimetre of its section.
-    pub carry_limit: f32,
+    /// What a tip was taken to hold.
+    pub limits: Limits,
     pub rows: Vec<Row>,
 }
 
@@ -139,18 +139,24 @@ pub struct SweepRow {
     pub contacts: usize,
     pub supports_ml: f32,
     pub held: bool,
-    /// Held, and no tip carries more than the limit: enough supports.
+    /// Held, and no tip carries more than it holds: enough supports.
     pub enough: bool,
-    pub carry_ratio: f32,
+    pub use_p90: f32,
     pub levers: usize,
     pub islands: usize,
     pub bare_mm2: f32,
 }
 
 impl Row {
-    /// Nothing falls: every contact stands and nothing cures over nothing.
+    /// Nothing falls: every contact stands, nothing cures over nothing, no tip is thinner
+    /// than holds at all.
     pub fn held(&self) -> bool {
         held(&self.shape, &self.cure)
+    }
+
+    /// Held, and no tip carries more than it holds.
+    pub fn enough(&self) -> bool {
+        enough(&self.shape, &self.cure)
     }
 
     /// The lowest share of the profile's density that is still enough, once a sweep ran.
@@ -176,16 +182,23 @@ impl Row {
 /// Torn necks are left out until the coupon calibrates them: the stack reads every tip
 /// under a piece as one disc, which no spread of tips bends like (README, «Калибровка»).
 pub fn held(shape: &Shape, cure: &CureRow) -> bool {
-    shape.contacts == shape.standing && cure.islands == 0 && cure.floating == 0
+    shape.contacts == shape.standing
+        && cure.islands == 0
+        && cure.floating == 0
+        && shape.weak_tips == 0
+}
+
+pub fn enough(shape: &Shape, cure: &CureRow) -> bool {
+    held(shape, cure) && shape.overloaded == 0
 }
 
 impl Report {
-    pub fn new(printer: &str, layer_mm: f32, carry_limit: f32) -> Self {
+    pub fn new(printer: &str, layer_mm: f32, limits: Limits) -> Self {
         Self {
             schema: SCHEMA,
             printer: printer.to_owned(),
             layer_mm,
-            carry_limit,
+            limits,
             rows: Vec::new(),
         }
     }
@@ -211,7 +224,7 @@ impl Report {
 }
 
 /// One model's block: the readings, then what to look at, worst first.
-pub fn print_row(row: &Row, carry_limit: f32) {
+pub fn print_row(row: &Row) {
     let shape = &row.shape;
     let cure = &row.cure;
     println!("## {} · {}", row.model, row.profile);
@@ -225,10 +238,12 @@ pub fn print_row(row: &Row, carry_limit: f32) {
         row.faces, shape.model_ml, row.seconds, row.stages_s[0], row.stages_s[1], row.stages_s[2]
     );
     println!(
-        "- holds: {} · contacts {}/{} standing, islands {}, specks {}, floating {}, torn necks {} (worst {:.1} MPa)",
+        "- holds: {}, enough: {} · contacts {}/{} standing, tips too thin {}, islands {}, specks {}, floating {}, torn necks {} (worst {:.1} MPa)",
         if row.held() { "yes" } else { "NO" },
+        if row.enough() { "yes" } else { "NO" },
         shape.standing,
         shape.contacts,
+        shape.weak_tips,
         cure.islands,
         cure.specks,
         cure.floating,
@@ -243,15 +258,18 @@ pub fn print_row(row: &Row, carry_limit: f32) {
         row.per_cm2(),
     );
     println!(
-        "- load per tip: median {:.1}, p90 {:.1}, max {:.1} mm² against {:.1} by design; p90 is {:.0}× the tip's section, limit {carry_limit:.0}×; overloaded {}, bare {:.1} of {:.0} mm²",
-        shape.load_p50_mm2,
+        "- load: p90 {:.1} mm² a tip against {:.1} by design; use of what a tip holds median {:.2}, p90 {:.2}, max {:.2}; overloaded {}; underside {:.0} mm², {:.0} of it flat, bare {:.1}; flat rim far from tips {:.1} mm (worst {:.1} mm)",
         shape.load_p90_mm2,
-        shape.load_max_mm2,
         shape.design_mm2,
-        shape.carry_ratio(),
+        shape.use_p50,
+        shape.use_p90,
+        shape.use_max,
         shape.overloaded,
-        shape.bare_mm2,
         shape.overhang_mm2,
+        shape.flat_mm2,
+        shape.bare_mm2,
+        shape.rim_bare_mm,
+        shape.rim_gap_max_mm,
     );
     println!(
         "- marks: {:.1} mm² of scar, {} on the visible side, {} on thin details, {} feet on the model, {} crowded, {} slender",
@@ -284,11 +302,11 @@ fn print_sweep(row: &Row) {
         .iter()
         .map(|step| {
             format!(
-                "×{:.2}: {} tips {:.2} ml {:.0}× {}",
+                "×{:.2}: {} tips {:.2} ml use {:.2} {}",
                 step.share,
                 step.contacts,
                 step.supports_ml,
-                step.carry_ratio,
+                step.use_p90,
                 match (step.held, step.enough) {
                     (true, true) => "enough",
                     (true, false) => "overloaded",
@@ -334,6 +352,7 @@ fn print_findings(shape: &Shape) {
         Kind::Hanging,
         Kind::Bare,
         Kind::Overloaded,
+        Kind::RimGap,
         Kind::ThinTip,
         Kind::Visible,
         Kind::OnModel,
@@ -366,7 +385,8 @@ fn print_findings(shape: &Shape) {
 fn value_of(kind: Kind, value: f32) -> String {
     match kind {
         Kind::Bare => format!(" {value:.1} mm²"),
-        Kind::Overloaded => format!(" carries {value:.1} mm²"),
+        Kind::Overloaded => format!(" uses {value:.1}× what it holds"),
+        Kind::RimGap => format!(" {value:.1} mm from a tip"),
         Kind::ThinTip => format!(" on {value:.2} mm"),
         Kind::Slender => format!(" {value:.0}:1"),
         _ => String::new(),
@@ -376,34 +396,40 @@ fn value_of(kind: Kind, value: f32) -> String {
 /// The summary table over every row.
 pub fn print_table(report: &Report) {
     println!(
-        "| model | profile | holds | contacts | supports ml | tips/cm² | carry | bare mm² | visible | thin | specks | torn | knee |"
+        "| model | profile | holds | enough | contacts | supports ml | tips/cm² | use p90 | over | rim mm | bare mm² | visible | thin | specks | knee |"
     );
-    println!("|---|---|---|---|---|---|---|---|---|---|---|---|---|");
+    println!("|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|");
     for row in report.rows.iter().filter(|row| row.skipped.is_none()) {
         let shape = &row.shape;
         println!(
-            "| {} | {} | {} | {} | {:.2} | {:.1} | {:.0}× | {:.0} | {} | {} | {} | {} | {} |",
+            "| {} | {} | {} | {} | {} | {:.2} | {:.1} | {:.2} | {} | {:.0} | {:.0} | {} | {} | {} | {} |",
             row.model,
             row.profile,
             if row.held() { "yes" } else { "**no**" },
+            if row.enough() { "yes" } else { "**no**" },
             shape.standing,
             shape.supports_ml,
             row.per_cm2(),
-            shape.carry_ratio(),
+            shape.use_p90,
+            shape.overloaded,
+            shape.rim_bare_mm,
             shape.bare_mm2,
             shape.visible,
             shape.thin_tips,
             row.cure.specks,
-            row.cure.levers,
             row.knee()
                 .map_or("-".to_owned(), |knee| format!("×{knee:.2}")),
         );
     }
     let counted = report.rows.iter().filter(|row| row.skipped.is_none());
-    let (held, all) = counted.fold((0, 0), |(held, all), row| {
-        (held + usize::from(row.held()), all + 1)
+    let (held, enough, all) = counted.fold((0, 0, 0), |(held, enough, all), row| {
+        (
+            held + usize::from(row.held()),
+            enough + usize::from(row.enough()),
+            all + 1,
+        )
     });
-    println!("\n{held} of {all} hold");
+    println!("\n{held} of {all} hold, {enough} with enough supports");
 }
 
 /// What got worse against `kept`, one line each.
@@ -418,6 +444,9 @@ pub fn regressions(kept: &Report, now: &Report) -> Vec<String> {
         let name = format!("{} · {}", row.model, row.profile);
         if before.held() && !row.held() {
             worse.push(format!("{name}: held, now fails"));
+        }
+        if before.enough() && !row.enough() {
+            worse.push(format!("{name}: had enough supports, now overloaded"));
         }
         let (b, n) = (&before.shape, &row.shape);
         if n.standing as f32 > b.standing as f32 * GROWTH + 2.0 {
