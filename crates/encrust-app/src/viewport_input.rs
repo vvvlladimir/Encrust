@@ -97,7 +97,8 @@ impl ViewportInput {
             } else {
                 Drag::Orbit
             };
-            self.candidate_click = pointer.primary_down && !pointer.shift;
+            // A shift press pans once it moves, but one that stays put is a shift-click.
+            self.candidate_click = pointer.primary_down;
             self.travel_points = 0.0;
         }
 
@@ -233,6 +234,22 @@ mod tests {
     fn a_release_after_an_orbit_selects_nothing() {
         let mut input = ViewportInput::default();
         let pressed = press(Drag::Orbit, false);
+        input.update(&pressed, false);
+        input.update(&hold(&pressed, Vec2::new(30.0, 0.0)), false);
+        assert!(!input.update(&released(), false).clicked);
+    }
+
+    #[test]
+    fn a_shift_press_released_on_the_spot_is_a_click() {
+        let mut input = ViewportInput::default();
+        input.update(&press(Drag::Orbit, true), false);
+        assert!(input.update(&released(), false).clicked);
+    }
+
+    #[test]
+    fn a_shift_drag_pans_and_ends_in_no_click() {
+        let mut input = ViewportInput::default();
+        let pressed = press(Drag::Orbit, true);
         input.update(&pressed, false);
         input.update(&hold(&pressed, Vec2::new(30.0, 0.0)), false);
         assert!(!input.update(&released(), false).clicked);

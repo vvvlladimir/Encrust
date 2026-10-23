@@ -558,6 +558,14 @@ blocked face is dropped, cursor and support staying where they were. Which nodes
 moves, and that the foot stays on the plate, are settled there too and not in the panel
 that reads the drag (ADR 0208).
 
+## A line of supports
+
+Shift-click with Place in hand stands a row from the last support placed on the same model
+to the click (ADR 0332). `inline` cuts the chord between them into the fewest equal steps
+no longer than the line spacing and takes each step to the nearest surface, the way a
+carried tip is pulled back onto its model; a point on a blocked face or within half a
+spacing of the one before is dropped, and each one left goes through `stands` like a click.
+
 ## Painting a patch
 
 A `Region` is one bit per face of the model. It is painted with a brush — a radius on the
@@ -616,7 +624,7 @@ paint, Cmd-Shift-click for the whole surface, alt to erase. The inspector's Supp
 carries the group picker with its name, New and Drop, the preset pill, a **Regular
 Support** / **Small Pillar** tab pair, and below them
 branching, raft, bracing, the lift and its button, a **Place** / **Paint** / **Block** pill
-with the mode's own one-line hint under it, the brush, the surface angle, the two fill
+with the mode's own one-line hint under it, the line spacing under Place, the brush, the surface angle, the two fill
 spacings and Fill — and, under **Edit**,
 how many parts of how many supports are held and the three buttons that move them to the
 group in hand, grow them again or take them away — the overhang angle, the density,

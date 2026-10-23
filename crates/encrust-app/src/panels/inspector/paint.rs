@@ -107,6 +107,18 @@ fn painting(ui: &mut egui::Ui, window: &mut Window) {
     ui.add_space(4.0);
     hint(ui, &paint_hint(window.tools.supports.placing));
 
+    if window.tools.supports.placing == Placing::Point {
+        ui.add_space(4.0);
+        number_row(
+            ui,
+            &tr!("paint-line-spacing"),
+            &mut window.tools.supports.inline_spacing_mm,
+            &tr!("unit-mm"),
+            COARSE_STEP,
+            MIN_SPACING_MM..=MAX_SPACING_MM,
+            2,
+        );
+    }
     if window.tools.supports.placing.paints() {
         ui.add_space(4.0);
         number_row(

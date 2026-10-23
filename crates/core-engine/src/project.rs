@@ -220,6 +220,10 @@ pub struct SupportState {
     pub fill: ProjectSettings,
     pub brush_radius_mm: Scalar,
     pub flood_angle_deg: Scalar,
+    /// How far apart a line of supports drawn with shift stands; a file without it reads
+    /// the default (ADR 0332).
+    #[serde(default = "inline_spacing")]
+    pub inline_spacing_mm: Scalar,
     /// The raft every model without one of its own stands on (ADR 0253). A file without
     /// it reads as the raft of the first group's profile, which is what it used to be.
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -277,6 +281,10 @@ impl DrainState {
             plug_gap_mm: PLUG_GAP_MM,
         }
     }
+}
+
+fn inline_spacing() -> Scalar {
+    core_supports::INLINE_SPACING_MM
 }
 
 fn plug_gap() -> Scalar {
@@ -662,6 +670,7 @@ mod tests {
                     fill: ProjectSettings::default(),
                     brush_radius_mm: 3.0,
                     flood_angle_deg: 30.0,
+                    inline_spacing_mm: 4.0,
                     raft: None,
                 },
                 hollow: HollowState {
@@ -863,6 +872,19 @@ mod tests {
                 .expect("a cut written before the joints reads");
         assert_eq!(older.joints.kind, None);
         assert_eq!(older.parts, PartSettings::default());
+    }
+
+    #[test]
+    fn a_support_tool_written_before_lines_reads_the_default_spacing() {
+        let mut state = serde_json::to_value(&project(1).manifest.supports)
+            .expect("the support tool serialises");
+        state
+            .as_object_mut()
+            .expect("the support tool is an object")
+            .remove("inline_spacing_mm");
+        let older: SupportState =
+            serde_json::from_value(state).expect("a tool written before lines reads");
+        assert!((older.inline_spacing_mm - core_supports::INLINE_SPACING_MM).abs() < f32::EPSILON);
     }
 
     #[test]

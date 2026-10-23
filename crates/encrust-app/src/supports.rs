@@ -96,6 +96,11 @@ pub struct SupportTool {
     /// with it, degrees.
     pub flood_angle_deg: Scalar,
     pub fill: ProjectSettings,
+    /// How far apart a line of supports drawn with shift stands, millimetres.
+    pub inline_spacing_mm: Scalar,
+    /// The support Place last put down, in its model's own space: where a line drawn with
+    /// shift starts from. See `docs/decisions/0332`.
+    pub last_placed: Option<(ObjectId, Vec3)>,
     /// The brush has hold of the pointer: the press that started this drag landed on a
     /// model, so the stroke paints instead of turning the camera.
     pub stroke: bool,
@@ -139,6 +144,8 @@ impl Default for SupportTool {
             brush_radius_mm: 2.0,
             flood_angle_deg: 30.0,
             fill: ProjectSettings::default(),
+            inline_spacing_mm: core_supports::INLINE_SPACING_MM,
+            last_placed: None,
             stroke: false,
             last_daub: None,
             job: None,

@@ -36,7 +36,8 @@ use picking::{
     measure_under_cursor, point_at_face, select_under_cursor, surface_under, takes_the_pick,
 };
 use supports::{
-    drag_support, place_support_under_cursor, remove_support_under_cursor, support_ghost,
+    drag_support, line_ghost, place_support_under_cursor, remove_support_under_cursor,
+    support_ghost,
 };
 
 /// Radians of orbit per point of cursor movement. A drag across a 600 point wide panel is
@@ -174,7 +175,10 @@ fn click(ui: &egui::Ui, window: &mut Window, rect: egui::Rect, cursor: egui::Pos
         Tool::Paint if ui.input(|input| input.modifiers.alt) => {
             remove_support_under_cursor(window, rect, cursor);
         }
-        Tool::Paint => place_support_under_cursor(window, rect, cursor),
+        Tool::Paint => {
+            let line = ui.input(|input| input.modifiers.shift);
+            place_support_under_cursor(window, rect, cursor, line);
+        }
         // The drag has already taken hold of whatever part the press landed on.
         Tool::Supports => {}
         Tool::Hollow if ui.input(|input| input.modifiers.alt) => {
@@ -221,6 +225,7 @@ fn picks_instead(ui: &egui::Ui) -> bool {
 /// it takes away instead.
 fn ghost(ui: &egui::Ui, window: &Window, rect: egui::Rect, pointer: &Pointer) -> Option<Ghost> {
     let removing = ui.input(|input| input.modifiers.alt) || picks_instead(ui);
+    let line = ui.input(|input| input.modifiers.shift);
     let resting = !pointer.primary_down && !pointer.pan_button_down;
     if removing || !resting || !pointer.over_viewport {
         return None;
@@ -229,6 +234,9 @@ fn ghost(ui: &egui::Ui, window: &Window, rect: egui::Rect, pointer: &Pointer) ->
     type Shows = fn(&Window, ObjectId, &PlacedHit) -> Option<Ghost>;
     // A blocker is a volume, so it can be put inside the material through the cap of a cut.
     let (under, shows): (Under, Shows) = match *window.tool {
+        Tool::Paint if !window.tools.supports.placing.paints() && line => {
+            (surface_under, line_ghost)
+        }
         Tool::Paint if !window.tools.supports.placing.paints() => (surface_under, support_ghost),
         Tool::Hollow => (material_under, blocker_ghost),
         Tool::Drain if window.tools.drain.placing == Placing::Channel => {

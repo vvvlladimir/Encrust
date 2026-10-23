@@ -141,6 +141,7 @@ fn project() -> Project {
                 fill: ProjectSettings::default(),
                 brush_radius_mm: 2.0,
                 flood_angle_deg: 30.0,
+                inline_spacing_mm: 4.0,
                 raft: None,
             },
             hollow: HollowState {

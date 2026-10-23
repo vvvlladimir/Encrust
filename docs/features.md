@@ -331,7 +331,9 @@ whole-surface fill is Cmd-Shift-click.
   +, so supports have room. It is the same number in Position and in Supports.
 
 ### Manual
-- **Place** a support with a click; Alt-click removes it.
+- **Place** a support with a click; Alt-click removes it. Shift-click places a line of
+  supports from the last one, evenly spaced at most **Line spacing** apart along the
+  model's surface; dots show where they will stand before you click.
 - **Paint** areas with a brush where supports must go, then **Fill** them at a spacing you
   set. You can fill the inside of an area or only its rim, filtered by surface angle.
 - **Block** areas where no support may go.

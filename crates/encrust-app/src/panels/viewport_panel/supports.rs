@@ -3,8 +3,9 @@
 
 use std::sync::Arc;
 
-use core_geometry::{PlacedHit, Transform, Vec3};
-use core_supports::{Part, Placed, Profiles, preview, stands, support_under};
+use core_geometry::{PlacedHit, Scalar, Transform, Vec3};
+use core_supports::{Part, Placed, Profiles, inline, preview, stands, support_under};
+use core_volume::markers;
 
 use crate::camera::OrbitCamera;
 use crate::panels::Window;
@@ -23,13 +24,20 @@ use super::picking::{aim_slack_mm, grab_under_cursor, surface_under};
 /// edge-on to it would shoot off to the horizon.
 const PLATE_GRAZE: f32 = 1e-3;
 
+/// Radius of a dot marking where a line of supports would stand, millimetres.
+const LINE_DOT_MM: Scalar = 0.4;
+
 /// Stands a support where the model was clicked, and selects what it was put on so that
 /// the inspector is talking about the same object. A support that would not stand there
 /// is not put down: the preview has already shown it red.
+///
+/// With `line` it stands a line of them instead, from the last one placed on the same
+/// model to the click, every one that would stand; see `docs/decisions/0332`.
 pub(super) fn place_support_under_cursor(
     window: &mut Window,
     viewport: egui::Rect,
     cursor: egui::Pos2,
+    line: bool,
 ) {
     let Some((id, hit)) = surface_under(window, viewport, cursor) else {
         return;
@@ -46,13 +54,69 @@ pub(super) fn place_support_under_cursor(
     let keep_out = object.supports.keep_out(&object.mesh, object.transform);
     let placed =
         Placed::new(&object.mesh, &object.bvh, object.transform).blocking(keep_out.as_ref());
-    if !stands(&placed, hit.point, group, profiles) {
+    let wanted = match line_start(window, id).filter(|_| line) {
+        Some(from) => inline(
+            &placed,
+            from,
+            hit.point,
+            window.tools.supports.inline_spacing_mm,
+        ),
+        None => vec![hit.point],
+    };
+    let standing: Vec<Vec3> = wanted
+        .into_iter()
+        .filter(|contact| stands(&placed, *contact, group, profiles))
+        .collect();
+    let Some(last) = standing.last() else {
         return;
-    }
+    };
+    let into_model = object.transform.to_matrix().inverse();
+    window.tools.supports.last_placed = Some((id, into_model.transform_point3(*last)));
     if let Some(object) = window.doc.scene.get_mut(id) {
         let transform = object.transform;
-        object.supports.add(hit.point, transform, group);
+        for contact in standing {
+            object.supports.add(contact, transform, group);
+        }
     }
+}
+
+/// Where a line of supports drawn on object `id` starts, in plate coordinates: the last
+/// support placed, if it was placed on that model.
+fn line_start(window: &Window, id: ObjectId) -> Option<Vec3> {
+    let (on, contact) = window.tools.supports.last_placed?;
+    let object = window.doc.scene.get(id).filter(|_| on == id)?;
+    Some(object.transform.to_matrix().transform_point3(contact))
+}
+
+/// A dot wherever a shift-click at `hit` would stand a support of the line, in the active
+/// group's tint, or the lone support a click would stand when no line starts on that model.
+pub(super) fn line_ghost(window: &Window, id: ObjectId, hit: &PlacedHit) -> Option<Ghost> {
+    let Some(from) = line_start(window, id) else {
+        return support_ghost(window, id, hit);
+    };
+    let object = window.doc.scene.get(id)?;
+    let table = window.tools.supports.table_for(object);
+    let profiles = Profiles::new(&table)?;
+    let keep_out = object.supports.keep_out(&object.mesh, object.transform);
+    let placed =
+        Placed::new(&object.mesh, &object.bvh, object.transform).blocking(keep_out.as_ref());
+    let active = window.tools.supports.active;
+    let dots = inline(
+        &placed,
+        from,
+        hit.point,
+        window.tools.supports.inline_spacing_mm,
+    )
+    .into_iter()
+    .filter(|contact| stands(&placed, *contact, active, profiles))
+    .map(|contact| (contact, LINE_DOT_MM));
+    Some(Ghost {
+        shape: GhostShape::Body {
+            mesh: Arc::new(markers(dots)?),
+            transform: Transform::default(),
+        },
+        colour: theme::support_tint(usize::from(active)),
+    })
 }
 
 /// The support a click at `hit` on object `id` would stand, in the active group's tint,

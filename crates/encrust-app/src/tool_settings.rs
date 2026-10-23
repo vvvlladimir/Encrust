@@ -98,6 +98,7 @@ fn support_state(supports: &SupportTool) -> SupportState {
         fill: supports.fill,
         brush_radius_mm: supports.brush_radius_mm,
         flood_angle_deg: supports.flood_angle_deg,
+        inline_spacing_mm: supports.inline_spacing_mm,
         raft: Some(supports.raft),
     }
 }
@@ -142,6 +143,7 @@ fn restore_supports(state: SupportState, supports: &mut SupportTool) {
     supports.fill = state.fill;
     supports.brush_radius_mm = state.brush_radius_mm;
     supports.flood_angle_deg = state.flood_angle_deg;
+    supports.inline_spacing_mm = state.inline_spacing_mm;
     supports.picked.clear();
 }
 
@@ -165,6 +167,7 @@ mod tests {
         tools.text.state.depth_mm = 1.5;
         tools.boolean.op = Boolean::Difference;
         tools.supports.brush_radius_mm = 6.0;
+        tools.supports.inline_spacing_mm = 2.5;
         tools.supports.profile.name = "Heavy".to_owned();
         tools
     }
@@ -179,6 +182,7 @@ mod tests {
 
         assert_eq!(ToolSettings::of(&tools, &slicing), settings);
         assert_eq!(tools.supports.profile.name, "Heavy");
+        assert!((tools.supports.inline_spacing_mm - 2.5).abs() < f32::EPSILON);
         assert_eq!(tools.array.columns, 5);
         assert_eq!(tools.text.state.family, "Serif");
         assert_eq!(tools.boolean.op, Boolean::Difference);

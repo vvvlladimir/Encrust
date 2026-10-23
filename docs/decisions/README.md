@@ -189,6 +189,7 @@ Grouped by what the decision governs; the number is still the order it was taken
 | [0080](0080-a-step-is-an-overhang-whatever-the-lean-says.md) | A step is an overhang, whatever the lean says | Accepted |
 | [0081](0081-a-support-holds-only-the-part-it-stands-under.md) | A support holds only the part it stands under | Accepted |
 | [0092](0092-a-painted-patch-is-a-set-of-faces.md) | A painted patch is a set of faces, filled on the plate's grid | Accepted |
+| [0332](0332-a-line-of-supports-is-drawn-from-the-last-one-placed.md) | Draw a line of supports from the last one placed, along the chord taken to the surface | Accepted |
 | [0093](0093-a-blocker-is-a-keep-out-not-a-hint.md) | A support blocker is a keep-out, not a hint | Accepted |
 | [0094](0094-a-supports-parameters-are-its-groups.md) | A support's parameters are its group's | Accepted; that no trunk is shared across groups is superseded by 0248; that the bracing is group 0's is superseded by 0252; that the raft is group 0's is superseded by 0253 |
 | [0095](0095-a-support-the-hand-touched-is-frozen.md) | A support the hand has touched is frozen into the scene | Accepted; the two-press rule is superseded by 0244 |
