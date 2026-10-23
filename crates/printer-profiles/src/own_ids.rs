@@ -90,7 +90,7 @@ impl Catalogue {
         let ids: Vec<(&String, &Source)> = match kind {
             Kind::Printer => self.printers().map(|e| (&e.id, &e.source)).collect(),
             Kind::Resin => self.resins().map(|e| (&e.id, &e.source)).collect(),
-            Kind::Support | Kind::Hollow | Kind::Drain => Vec::new(),
+            Kind::Support | Kind::Hollow | Kind::Drain | Kind::Auto => Vec::new(),
         };
         ids.into_iter()
             .filter(|(id, source)| {

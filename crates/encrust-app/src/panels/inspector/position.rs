@@ -15,7 +15,7 @@ use crate::ui::{
 };
 
 /// Millimetres, degrees and percent per point of drag on the transform fields.
-const POSITION_DRAG: f64 = 0.1;
+pub(super) const POSITION_DRAG: f64 = 0.1;
 const ANGLE_DRAG: f64 = 0.5;
 const PERCENT_DRAG: f64 = 0.5;
 /// The column the axis letters and their units stand in, in every block, so the fields
@@ -32,7 +32,7 @@ const MIN_SCALE: f32 = 1e-3;
 
 /// The highest a model may be lifted off the plate by typing, and how far a press of
 /// either button beside it moves it, millimetres.
-const MAX_LIFT_MM: f32 = 100.0;
+pub(super) const MAX_LIFT_MM: f32 = 100.0;
 const LIFT_STEP_MM: f32 = 1.0;
 
 /// The gap between a model and the mirrored copy stood beside it, millimetres.

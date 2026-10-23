@@ -102,7 +102,7 @@ fn tools(ui: &mut egui::Ui, window: &mut Window, fit: Fit) {
 }
 
 fn button(ui: &mut egui::Ui, window: &mut Window, tool: Tool, labelled: bool) {
-    let active = *window.tool == tool;
+    let active = window.tool.card() == tool;
     let tooltip = shortcuts::tooltip(Action::Pick(tool));
     let badge = badge(window, tool);
     let glyph = tool.glyph();

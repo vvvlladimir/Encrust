@@ -3,48 +3,233 @@ use std::sync::Arc;
 
 use core_supports::{Part, SupportTree};
 
-use super::scope;
+use super::{paint, scope, shape, support_picker};
 use crate::i18n::tr;
 use crate::job::SupportJob;
 use crate::panels::Window;
 use crate::panels::support_fields::{held_up, saved_as, sizes};
-use crate::scene::{Scene, SceneObject};
+use crate::scene::{ObjectId, Scene, SceneObject};
 use crate::state::Doc;
 use crate::status::Status;
-use crate::supports::{Side, SupportTool};
+use crate::supports::{Placing, Side, SupportTool};
 use crate::ui::{
-    describe, hint, icon, primary_button, progress_bar, secondary_button, section, stats, theme,
+    BinLook, bin_button, compact_button, companion_button, describe, hint, icon, icon_toggle,
+    instant_bin, number_row, primary_button, progress_bar, secondary_button, section, stats, theme,
     tone,
 };
+use crate::workspace::Tool;
 
-/// Growing supports under whatever hangs over nothing, and the parts of those already
-/// standing, which a click in this tool picks.
+/// The one card the supports are made in: grown, placed, painted and shaped, each a mode
+/// of it under its heading. See `docs/decisions/0338`.
 pub fn ui(ui: &mut egui::Ui, window: &mut Window) {
-    super::shape::profile_section(ui, window, true);
-    section(ui, &tr!("supports-where"), None, |ui| {
-        scope::editing_supports(window, |window| {
+    match mode(window) {
+        Mode::Pick => {
+            section(ui, &tr!("supports-picked"), None, |ui| editing(ui, window));
+            section(ui, &tr!("supports-where"), None, |ui| {
+                where_fields(ui, window)
+            });
+        }
+        Mode::Place => {
+            section(ui, &tr!("supports-place"), None, |ui| {
+                paint::place_fields(ui, window)
+            });
+            section(ui, &tr!("supports-where"), None, |ui| {
+                where_fields(ui, window)
+            });
+        }
+        Mode::Area => {
+            section(ui, &tr!("paint-brush"), None, |ui| {
+                paint::area_fields(ui, window)
+            });
+            paint::fill_section(ui, window);
+        }
+        Mode::Shape => {
+            shape::sections(ui, window);
             if window.tools.supports.auto.is_some() {
-                auto_held_up(ui, window);
-            } else {
-                let profile = &mut window.tools.supports.profile;
-                let saved = saved_as(&window.machine.slicing.catalogue, profile)
-                    .map(|entry| &entry.profile);
-                held_up(ui, profile, saved);
+                section(ui, &tr!("supports-sizes"), None, |ui| {
+                    auto_sizes(ui, window)
+                });
             }
-            if let [id] = *window.doc.scene.selection() {
-                super::position::lift(ui, &mut window.doc.scene, id);
-            }
-        });
-    });
-    if window.tools.supports.auto.is_some() {
-        section(ui, &tr!("supports-sizes"), None, |ui| {
-            auto_sizes(ui, window)
-        });
+        }
     }
-    section(ui, &tr!("supports-picked"), None, |ui| editing(ui, window));
-    section(ui, &tr!("supports-already-done"), None, |ui| {
-        placed(ui, window)
+}
+
+/// What stays over the scrolling blocks: the preset in hand and its groups. A plate
+/// nothing was ever chosen for starts on the automatic preset.
+pub fn top(ui: &mut egui::Ui, window: &mut Window) {
+    let standing = standing(window.doc).0 > 0;
+    let tool = &mut window.tools.supports;
+    if tool.sizing().is_none() && !standing {
+        tool.set_automatic(true, &window.machine.slicing.catalogue);
+    }
+    support_picker::line(ui, window);
+}
+
+/// What a click on the model does. Painting and blocking are one mode, chosen inside it,
+/// and alt takes off whichever is in hand, so there is no eraser of its own.
+#[derive(Clone, Copy, PartialEq)]
+enum Mode {
+    Pick,
+    Place,
+    Area,
+    Shape,
+}
+
+/// The mode is the tool underneath: Supports picks, Paint places and paints.
+fn mode(window: &Window) -> Mode {
+    match (*window.tool, window.tools.supports.placing) {
+        (Tool::Paint, Placing::Point) => Mode::Place,
+        (Tool::Paint, _) => Mode::Area,
+        (Tool::Shape, _) => Mode::Shape,
+        _ => Mode::Pick,
+    }
+}
+
+fn set_mode(window: &mut Window, mode: Mode) {
+    let supports = &mut window.tools.supports;
+    match mode {
+        Mode::Pick => *window.tool = Tool::Supports,
+        Mode::Shape => *window.tool = Tool::Shape,
+        Mode::Place => {
+            *window.tool = Tool::Paint;
+            supports.placing = Placing::Point;
+        }
+        Mode::Area => {
+            *window.tool = Tool::Paint;
+            if !matches!(supports.placing, Placing::Paint | Placing::Block) {
+                supports.placing = Placing::Paint;
+            }
+        }
+    }
+}
+
+/// The modes as icons at the right of the card's heading, laid right to left.
+pub fn modes(ui: &mut egui::Ui, window: &mut Window) {
+    let modes = [
+        (Mode::Shape, icon::SHAPE, tr!("supports-mode-shape")),
+        (Mode::Area, icon::PAINT, tr!("supports-mode-area")),
+        (Mode::Place, icon::ADD, tr!("supports-mode-place")),
+        (Mode::Pick, icon::SELECT, tr!("supports-mode-pick")),
+    ];
+    ui.spacing_mut().item_spacing.x = 2.0;
+    let current = mode(window);
+    for (value, glyph, name) in modes {
+        if icon_toggle(ui, glyph, &name, current == value).clicked() {
+            set_mode(window, value);
+        }
+    }
+}
+
+/// Where an automatic run puts supports, and the lift of the one model picked.
+fn where_fields(ui: &mut egui::Ui, window: &mut Window) {
+    scope::editing_supports(window, |window| {
+        if window.tools.supports.auto.is_some() {
+            auto_held_up(ui, window);
+        } else {
+            let profile = &mut window.tools.supports.profile;
+            let saved =
+                saved_as(&window.machine.slicing.catalogue, profile).map(|entry| &entry.profile);
+            held_up(ui, profile, saved);
+        }
+        if let [id] = *window.doc.scene.selection() {
+            lift_row(ui, &mut window.doc.scene, id);
+        }
     });
+}
+
+/// How far the one picked model stands off the plate, the same number as in Position.
+fn lift_row(ui: &mut egui::Ui, scene: &mut Scene, id: ObjectId) {
+    let Some(object) = scene.get_mut(id) else {
+        return;
+    };
+    let Some(mut lift_mm) = object.lift() else {
+        return;
+    };
+    if number_row(
+        ui,
+        &tr!("position-lift"),
+        &mut lift_mm,
+        &tr!("unit-mm"),
+        super::position::POSITION_DRAG,
+        0.0..=super::position::MAX_LIFT_MM,
+        2,
+    ) {
+        object.lift_to(lift_mm);
+    }
+}
+
+/// What has no room, Fill painted areas while there is paint or the brush is in hand, and
+/// the run: the cavity's button over Grow for a hollow model, or the run's progress.
+pub fn action(ui: &mut egui::Ui, window: &mut Window) {
+    let (points, columns) = standing(window.doc);
+    if points != columns {
+        let line = tr!("supports-without-room", count = points - columns);
+        tone(
+            ui,
+            &format!("{} {line}", icon::WARNING),
+            theme::colors().text_mid,
+        );
+    }
+    if let Some(job) = window.tools.supports.job.as_ref() {
+        running(ui, job);
+        return;
+    }
+    fill(ui, window);
+    cavity(ui, window);
+    grow(ui, window, points);
+}
+
+fn fill(ui: &mut egui::Ui, window: &mut Window) {
+    let painted = window
+        .doc
+        .scene
+        .targets()
+        .any(|object| !object.supports.painted().is_empty());
+    if !painted && mode(window) != Mode::Area {
+        return;
+    }
+    if companion_button(ui, icon::PAINT, &tr!("paint-fill"), painted).clicked() {
+        let added = window
+            .tools
+            .supports
+            .fill(&mut window.doc.scene, &window.machine.slicing.catalogue);
+        window.machine.status = Status::Info(tr!("paint-filled", count = added));
+    }
+}
+
+/// Grow, and at its right the bin that takes every support away on a second click.
+fn grow(ui: &mut egui::Ui, window: &mut Window, points: usize) {
+    let blocker = window.tools.supports.blocker(&window.doc.scene);
+    let label = if points > 0 {
+        tr!("supports-grow-again")
+    } else {
+        tr!("supports-grow")
+    };
+    let what = tr!("supports-grow-tooltip", scope = window.doc.scene.scope());
+    let mut all = false;
+    ui.horizontal(|ui| {
+        ui.spacing_mut().item_spacing.x = 6.0;
+        let width = ui.available_width() - theme::PRIMARY_H - 6.0;
+        let grow = ui
+            .allocate_ui(egui::vec2(width, theme::PRIMARY_H), |ui| {
+                primary_button(ui, icon::SUPPORTS, &label, blocker.is_none()).on_hover_text(what)
+            })
+            .inner;
+        if grow.clicked() {
+            start(window, Side::Outside);
+        }
+        let tip = tr!("supports-remove-all-tooltip");
+        all = bin_button(ui, theme::PRIMARY_H, BinLook::Framed, &tip, points > 0);
+    });
+    if all {
+        for object in window.doc.scene.targets_mut() {
+            object.supports.clear();
+        }
+        window.tools.supports.picked.clear();
+    }
+    if let Some(reason) = blocker {
+        ui.vertical_centered(|ui| tone(ui, &reason, theme::colors().text_low));
+    }
 }
 
 /// Where the automatic profile chosen puts supports, against the one it ships as. Each
@@ -84,20 +269,6 @@ fn auto_sizes(ui: &mut egui::Ui, window: &mut Window) {
     sizes(ui, auto, shipped.as_ref(), &shapes);
 }
 
-/// How many supports stand on the plate, for the inspector's heading.
-pub fn fact(window: &Window) -> Option<String> {
-    let (points, _) = standing(window.doc);
-    (points > 0).then(|| points.to_string())
-}
-
-/// The run that grows them, or its progress while it goes.
-pub fn action(ui: &mut egui::Ui, window: &mut Window) {
-    match window.tools.supports.job.as_ref() {
-        Some(job) => running(ui, job),
-        None => generate(ui, window),
-    }
-}
-
 /// How many supports the plate carries, and how many of them have room to stand.
 fn standing(doc: &Doc) -> (usize, usize) {
     doc.scene
@@ -133,8 +304,17 @@ fn editing(ui: &mut egui::Ui, window: &mut Window) {
     );
 
     ui.add_space(4.0);
-    let active = window.tools.supports.active;
-    if primary_button(ui, icon::SUPPORTS, &tr!("supports-move-to-group"), true).clicked() {
+    let (mut regroup, mut regrow, mut remove) = (false, false, false);
+    ui.horizontal(|ui| {
+        ui.spacing_mut().item_spacing.x = 6.0;
+        let width = (ui.available_width() - theme::BUTTON_H - 12.0) / 2.0;
+        regroup = compact_button(ui, &tr!("supports-move-to-group"), width).clicked();
+        regrow = compact_button(ui, &tr!("supports-grow-these-again"), width).clicked();
+        let tip = tr!("supports-remove-these");
+        remove = instant_bin(ui, theme::BUTTON_H, BinLook::Quiet, &tip);
+    });
+    if regroup {
+        let active = window.tools.supports.active;
         for (id, frozen) in &supports {
             if let Some(object) = window.doc.scene.get_mut(*id)
                 && let Some(tree) = object.supports.frozen_mut(*frozen)
@@ -143,9 +323,7 @@ fn editing(ui: &mut egui::Ui, window: &mut Window) {
             }
         }
     }
-
-    ui.add_space(4.0);
-    if secondary_button(ui, icon::SUPPORTS, &tr!("supports-grow-these-again")).clicked() {
+    if regrow {
         // Highest first: thawing renumbers everything above what was taken out.
         for (id, frozen) in supports.iter().rev() {
             if let Some(object) = window.doc.scene.get_mut(*id) {
@@ -155,9 +333,7 @@ fn editing(ui: &mut egui::Ui, window: &mut Window) {
         }
         window.tools.supports.picked.clear();
     }
-
-    ui.add_space(4.0);
-    if secondary_button(ui, icon::REMOVE, &tr!("supports-remove-these")).clicked() {
+    if remove {
         // Highest first: a support that goes whole renumbers everything above it.
         for (id, frozen) in supports.iter().rev() {
             let parts: Vec<Part> = held
@@ -170,26 +346,6 @@ fn editing(ui: &mut egui::Ui, window: &mut Window) {
             }
         }
         window.tools.supports.picked.clear();
-    }
-}
-
-fn generate(ui: &mut egui::Ui, window: &mut Window) {
-    let blocker = window.tools.supports.blocker(&window.doc.scene);
-    let label = if standing(window.doc).0 > 0 {
-        tr!("supports-grow-again")
-    } else {
-        tr!("supports-grow")
-    };
-    cavity(ui, window);
-    let what = tr!("supports-grow-tooltip", scope = window.doc.scene.scope());
-    if primary_button(ui, icon::SUPPORTS, &label, blocker.is_none())
-        .on_hover_text(what)
-        .clicked()
-    {
-        start(window, Side::Outside);
-    }
-    if let Some(reason) = blocker {
-        ui.vertical_centered(|ui| tone(ui, &reason, theme::colors().text_low));
     }
 }
 
@@ -277,60 +433,4 @@ fn running(ui: &mut egui::Ui, job: &SupportJob) {
             job.cancel();
         }
     });
-}
-
-/// How many supports are on the plate, and the one way to take them all off again.
-fn placed(ui: &mut egui::Ui, window: &mut Window) {
-    let (points, columns) = standing(window.doc);
-
-    stats(
-        ui,
-        &[
-            (tr!("supports-stat-supports"), points.to_string()),
-            (tr!("supports-stat-standing"), columns.to_string()),
-        ],
-    );
-
-    if points == 0 {
-        return;
-    }
-    if points != columns {
-        ui.add_space(4.0);
-        hint(ui, &tr!("supports-no-room"));
-    }
-
-    // Side by side: everything, or only what stands in the group in hand.
-    ui.add_space(4.0);
-    let active = window.tools.supports.active;
-    let name = window.tools.supports.groups[active as usize].name.clone();
-    let in_group: usize = window
-        .doc
-        .scene
-        .targets()
-        .map(|object| object.supports.group_count(active))
-        .sum();
-    let (mut all, mut group) = (false, false);
-    ui.columns(2, |columns| {
-        all = secondary_button(&mut columns[0], icon::REMOVE, &tr!("supports-remove-all"))
-            .on_hover_text(tr!("supports-remove-all-tooltip"))
-            .clicked();
-        group = columns[1]
-            .add_enabled_ui(in_group > 0, |ui| {
-                secondary_button(ui, icon::REMOVE, &tr!("supports-remove-group", name = name))
-                    .on_hover_text(tr!("supports-remove-group-tooltip", count = in_group))
-                    .clicked()
-            })
-            .inner;
-    });
-    for object in window.doc.scene.targets_mut() {
-        if all {
-            object.supports.clear();
-        } else if group {
-            object.supports.clear_group(active);
-        }
-    }
-    // What was held may be gone, and what is left of the frozen is renumbered.
-    if all || group {
-        window.tools.supports.picked.clear();
-    }
 }

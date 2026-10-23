@@ -310,30 +310,44 @@ supports-removed-inside =
     }
 supports-where = Where
 supports-picked = Picked
-supports-already-done = Already done
 supports-pick-hint = Click a tip, a strut, a joint, the trunk or the foot to pick it. Drag to carry it, shift adds, alt removes.
-supports-picked-help = Grow these again hands the picked supports back to the automatic run, and the next growth builds them afresh. Move to the group in hand builds them to that group's profile.
+supports-picked-help = Grow again hands the picked supports back to the automatic run, and the next growth builds them afresh. To the group builds them to the profile of the group in hand.
 supports-stat-parts = Parts
 supports-stat-supports = Supports
-supports-stat-standing = Standing
-supports-move-to-group = Move to the group in hand
-supports-grow-these-again = Grow these again
+supports-move-to-group = To the group
+supports-grow-these-again = Grow again
 supports-remove-these = Remove these supports
 supports-grow-again = Grow them again
 supports-grow = Grow the supports
 supports-grow-tooltip = Cuts { $scope } to find what hangs over nothing.
 supports-placing = Placing supports
-supports-no-room = Some supports have no room to stand and are not printed.
 supports-sizes = Sizes
+supports-place = Place
 support-size-island = Island for { $shape }
 support-size-load = Load for { $shape }
 support-size-step = Step for { $shape }
-supports-sizing-auto = Automatic
-supports-sizing-manual = By hand
-supports-remove-all = Remove all
 supports-remove-all-tooltip = Take every support away
-supports-remove-group = Only { $name }
-supports-remove-group-tooltip = Take away the { $count } of the group in hand and leave the rest
+supports-preset = Support preset
+supports-mode-pick = Pick supports
+supports-mode-place = Place supports
+supports-mode-area = Paint or block an area
+supports-mode-shape = Shape of the supports
+supports-without-room =
+    { $count ->
+        [one] { $count } support has no room to stand
+       *[other] { $count } supports have no room to stand
+    }
+supports-drop-preset =
+    { $count ->
+        [one] Remove { $name } and its { $count } support
+       *[other] Remove { $name } and its { $count } supports
+    }
+supports-clear-preset =
+    { $count ->
+        [one] Remove its { $count } support
+       *[other] Remove its { $count } supports
+    }
+bin-click-again = Click again to remove
 
 ## panels/settings.rs
 
@@ -909,13 +923,10 @@ shape-raft-plate = The raft is the plate's: every model stands on it.
 shape-use-plate-raft = Use the plate's raft
 shape-use-profile-raft = Use the raft of { $name }
 shape-edited = { $name } (edited)
-shape-edit-profiles = Edit support profiles
 shape-save = Save
 shape-save-tooltip = Save over the profile these numbers were taken from
 shape-save-as-new = Save as new
-shape-save-as-new-tooltip = Keep these numbers as a profile of their own
 shape-saved = Saved the support profile
-shape-profile-help = A profile is a saved set of support sizes. Picking another changes what grows next; supports already standing keep their shape. Changed numbers mark it as edited until Save writes over it or Save as new keeps a copy.
 
 ## panels/support_diagram.rs
 
@@ -1354,9 +1365,7 @@ paint-hint-point = Click to place, shift-click for a line from the last one, alt
 paint-hint-paint = Drag to paint, Cmd-Shift-click a surface, alt to erase.
 paint-hint-block = Drag to block, Cmd-Shift-click a surface, alt to erase.
 paint-hint-erase = Drag to take paint and blocks off, Cmd-Shift-click a surface.
-paint-brush-help = Place puts one support where you click, and a shift-click a line of them from the last one, Line spacing apart. Fill paints an area that gets supports when you press Fill painted areas; Block paints where no support may stand. Surface angle is how far a Cmd-Shift-click spreads: over every face turned less than that from the one clicked.
 paint-fill-help = How a filled area is held: Rim along its edge, Inside across the rest. Offset is how far in each starts — the rim from the edge, the inside from the rim. A second rim stands inside the first for large flat areas. The inside is laid on a grid, in rings that follow the rim, or scattered. Each can be built to a profile of its own, or to the group in hand. Smaller spacing is denser and holds better, but leaves more marks.
-paint-groups-help = A group is a set of supports built to one profile, so one model can carry thick supports under heavy parts and thin ones under details. New supports join the group in hand.
 paint-rim = Rim
 paint-line-spacing = Line spacing
 paint-offset = Offset
@@ -1367,7 +1376,6 @@ paint-pattern-rings = Rings
 paint-pattern-random = Random
 paint-profile = Profile
 paint-profile-in-hand = Group in hand
-paint-groups = Groups
 paint-fill = Fill painted areas
 paint-filled =
     { $count ->
@@ -1378,21 +1386,11 @@ paint-filled =
 paint-clear-blocked = Clear blocked areas
 paint-clear-both = Clear painted and blocked areas
 paint-clear-painted = Clear painted areas
-paint-drop-group = Drop this group
-paint-build-to = Build this group to
-paint-group-holds =
-    { $count ->
-        [one] { $name } holds { $count } support, which goes with it.
-       *[other] { $name } holds { $count } supports, which go with it.
-    }
-paint-drop-the-group = Drop the group
 paint-dropped =
     { $count ->
         [one] Dropped { $name } and { $count } support
        *[other] Dropped { $name } and { $count } supports
     }
-paint-keep-it = Keep it
-paint-new-group = New group
 
 ## panels/inspector/drain.rs
 
@@ -1695,8 +1693,6 @@ inspector-about-drain = Let resin out of a hollow model.
 inspector-about-cut = Split a model along a plane.
 inspector-about-relief = Press a texture into a model's surface, write text on it, or combine models into one.
 inspector-about-supports = Hold up what hangs over nothing.
-inspector-about-paint = Tell the supports where to go and where not to.
-inspector-about-shape = The shape of one support, part by part.
 inspector-about-check = What will fail on the machine, with the layer it fails on.
 inspector-about-export = From the plate to a file, and from the file to a printer.
 inspector-about-print-settings = How this plate is cut and exposed.

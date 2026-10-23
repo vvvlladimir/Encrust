@@ -135,7 +135,9 @@ mod tests {
             &mesh,
             &Bvh::build(&mesh),
             transform,
-            std::slice::from_ref(&SupportProfile::shipped("medium").expect("the medium preset ships")),
+            std::slice::from_ref(
+                &SupportProfile::shipped("medium").expect("the medium preset ships"),
+            ),
         );
         scene
     }

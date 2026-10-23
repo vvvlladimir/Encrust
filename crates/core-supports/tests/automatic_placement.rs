@@ -360,7 +360,10 @@ fn a_ball_on_the_plate_is_held_under_its_cap_and_nowhere_above_it() {
 #[test]
 fn a_denser_profile_holds_the_same_island_in_more_places() {
     let model = floating_box();
-    let sparse = points(&model, &SupportProfile::shipped("light").expect("the light preset ships"));
+    let sparse = points(
+        &model,
+        &SupportProfile::shipped("light").expect("the light preset ships"),
+    );
     let dense = points(
         &model,
         &SupportProfile {

@@ -20,6 +20,13 @@ impl Catalogue {
             Kind::Resin => self.resin(id)?.profile.to_toml_string(path),
             Kind::Support => self.support(id)?.profile.to_toml_string(path),
             Kind::Hollow | Kind::Drain => self.preset(kind, id)?.to_toml_string(path),
+            Kind::Auto => match self.autos().find(|entry| entry.id == id) {
+                Some(entry) => entry.profile.to_toml_string(path),
+                None => Err(ProfileError::Unknown {
+                    kind: kind.label(),
+                    id: id.to_owned(),
+                }),
+            },
         }
     }
 
@@ -38,7 +45,8 @@ impl Catalogue {
             Kind::Printer => self.import_printer(PrinterProfile::from_toml_str(text, path)?),
             Kind::Resin => self.import_resin(MaterialProfile::from_toml_str(text, path)?, printer),
             Kind::Support => self.import_support(SupportProfile::from_toml_str(text, path)?),
-            Kind::Hollow | Kind::Drain => Err(ProfileError::Unknown {
+            // No automatic profile is ever added, so none is taken in either.
+            Kind::Hollow | Kind::Drain | Kind::Auto => Err(ProfileError::Unknown {
                 kind: kind.label(),
                 id: path.display().to_string(),
             }),

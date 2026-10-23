@@ -228,7 +228,7 @@ impl Preferences {
             let held = match moved.kind {
                 Kind::Printer => &mut self.printer,
                 Kind::Resin => &mut self.resin,
-                Kind::Support | Kind::Hollow | Kind::Drain => continue,
+                Kind::Support | Kind::Hollow | Kind::Drain | Kind::Auto => continue,
             };
             if held.as_deref() == Some(moved.from.as_str()) {
                 *held = Some(moved.to.clone());

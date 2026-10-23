@@ -195,6 +195,8 @@ Grouped by what the decision governs; the number is still the order it was taken
 | [0335](0335-trunks-stand-on-a-grid.md) | Stand trunks on the nodes of a square grid when a profile asks for it | Accepted |
 | [0336](0336-a-panel-is-left-as-it-was-between-runs.md) | Leave every panel as it was between runs, and keep automatic sizing with the tools | Accepted |
 | [0337](0337-a-shipped-preset-lives-only-in-its-file.md) | Keep a shipped support preset only in its file | Accepted |
+| [0338](0338-one-card-makes-the-supports.md) | Make the supports in one card, its click modes in its heading | Accepted |
+| [0339](0339-an-automatic-preset-is-retuned-never-added.md) | Retune a shipped automatic preset, never add one | Accepted |
 | [0093](0093-a-blocker-is-a-keep-out-not-a-hint.md) | A support blocker is a keep-out, not a hint | Accepted |
 | [0094](0094-a-supports-parameters-are-its-groups.md) | A support's parameters are its group's | Accepted; that no trunk is shared across groups is superseded by 0248; that the bracing is group 0's is superseded by 0252; that the raft is group 0's is superseded by 0253 |
 | [0095](0095-a-support-the-hand-touched-is-frozen.md) | A support the hand has touched is frozen into the scene | Accepted; the two-press rule is superseded by 0244 |
@@ -216,7 +218,7 @@ Grouped by what the decision governs; the number is still the order it was taken
 | [0254](0254-the-shipped-presets-are-tuned-on-prints.md) | Ship presets tuned on prints, and let Heavy stand fewer, thicker supports | Superseded by 0323 |
 | [0323](0323-presets-differ-in-thickness-and-a-tip-meets-the-surface.md) | Let presets differ in thickness only, place densely, and let a tip meet the surface | Accepted |
 | [0324](0324-contact-spacing-follows-the-angle-of-the-face.md) | Space contacts by the angle of the face they hold | Accepted |
-| [0325](0325-an-automatic-profile-sizes-each-support-by-what-it-holds.md) | Size each support by what it holds, through an automatic profile over groups | Accepted |
+| [0325](0325-an-automatic-profile-sizes-each-support-by-what-it-holds.md) | Size each support by what it holds, through an automatic profile over groups | Accepted; the switch across three tools is superseded by 0338, the profile only shipping by 0339 |
 | [0326](0326-a-step-is-sized-by-the-resin-it-puts-out-and-holds-the-faces-above-it.md) | Size a step by the resin it puts out, and hold the faces just above it | Accepted |
 | [0327](0327-a-gentle-slope-is-steadied-sparsely-by-a-shape-of-its-own.md) | Steady a part sparsely on its gentle slopes, with a shape of its own | Accepted |
 | [0328](0328-only-a-tip-meets-the-model.md) | Let only a tip meet the model: turn a head for room and cut a pad back | Accepted; a head with no room under it is dropped by 0331 |
@@ -415,7 +417,7 @@ Grouped by what the decision governs; the number is still the order it was taken
 | [0151](0151-the-preview-shows-a-source-not-a-plate.md) | Let the preview show a source, which is either a plate or a file | Superseded by 0294 |
 | [0157](0157-the-slice-row-carries-two-actions.md) | The Slice row carries two actions, not a destination | Accepted; the Send button is superseded by 0217, the stale dot by 0262 |
 | [0217](0217-the-window-is-a-top-bar-a-flat-rail-and-a-layer-strip.md) | The window is a top bar, a flat rail, a docked inspector and a layer strip | Accepted; the return to the model on a tool press is superseded by 0218, the docked columns and layer strip by 0221, Find by 0230, the message under the jobs by 0231, the jobs top centre by 0263 |
-| [0218](0218-twelve-tools-on-the-rail-and-print-settings-as-a-form.md) | Twelve tools on the rail, and the print settings as a form | Accepted; Select and the digits are superseded by 0231 |
+| [0218](0218-twelve-tools-on-the-rail-and-print-settings-as-a-form.md) | Twelve tools on the rail, and the print settings as a form | Accepted; Select and the digits are superseded by 0231, Paint and Shape on the rail by 0338 |
 | [0219](0219-the-viewport-is-lit-shadowed-and-turned-by-a-cube.md) | Light the viewport by a sky, a key and a fill, shadow it by contact, and turn it by a cube | Accepted; the hatching of overhangs is superseded by 0245 |
 | [0245](0245-an-overhang-is-filled-not-hatched.md) | Fill an overhang with its colour instead of hatching it | Accepted |
 | [0220](0220-machines-and-resins-are-a-window-and-the-window-starts-on-a-page.md) | Edit the machines and resins in a window over the plate, and start on a page | Accepted; the start page's machine card is superseded by 0232, its recent list by 0234, and the Settings screen by 0233 |

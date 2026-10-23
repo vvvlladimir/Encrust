@@ -216,7 +216,7 @@ pub fn import_profile(window: &mut Window, kind: Kind, file: &Handed) {
             settings.pick_support(catalogue, &id);
         }
         (Kind::Hollow | Kind::Drain, _) => settings.preset = Some(id),
-        (Kind::Resin, None) => {}
+        (Kind::Resin, None) | (Kind::Auto, _) => {}
     }
     // A plate with no resin takes the first one its machine now has.
     if matches!(kind, Kind::Printer | Kind::Resin) {

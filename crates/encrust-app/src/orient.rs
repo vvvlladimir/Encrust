@@ -630,14 +630,20 @@ mod tests {
     fn a_lift_the_user_asked_for_stands_a_supported_pose_on_it() {
         let mut scene = scene_with(cuboid(Vec3::splat(10.0)));
         scene.objects_mut()[0].lift_to(2.5);
-        let tasks = orient_tasks(&scene, None, |_| SupportProfile::shipped("medium").expect("the medium preset ships"));
+        let tasks = orient_tasks(&scene, None, |_| {
+            SupportProfile::shipped("medium").expect("the medium preset ships")
+        });
         assert_eq!(tasks[0].support.z_lift_mm, 2.5);
 
         scene.objects_mut()[0].lift_to(0.0);
-        let tasks = orient_tasks(&scene, None, |_| SupportProfile::shipped("medium").expect("the medium preset ships"));
+        let tasks = orient_tasks(&scene, None, |_| {
+            SupportProfile::shipped("medium").expect("the medium preset ships")
+        });
         assert_eq!(
             tasks[0].support.z_lift_mm,
-            SupportProfile::shipped("medium").expect("the medium preset ships").z_lift_mm,
+            SupportProfile::shipped("medium")
+                .expect("the medium preset ships")
+                .z_lift_mm,
             "back on the plate, the profile's lift"
         );
     }
@@ -649,7 +655,8 @@ mod tests {
         assert!(tool.blocker(&scene).is_some());
         let mut scene = scene;
         let plate = BuildPlate::default();
-        let none = |_: &SceneObject| SupportProfile::shipped("medium").expect("the medium preset ships");
+        let none =
+            |_: &SceneObject| SupportProfile::shipped("medium").expect("the medium preset ships");
         let mut status = Status::default();
         assert!(
             tool.start(&mut scene, &plate, None, none, None, &mut status)

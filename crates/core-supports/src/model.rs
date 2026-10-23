@@ -760,7 +760,9 @@ mod tests {
             &nothing(),
             &Bvh::default(),
             Transform::default(),
-            std::slice::from_ref(&SupportProfile::shipped("heavy").expect("the heavy preset ships")),
+            std::slice::from_ref(
+                &SupportProfile::shipped("heavy").expect("the heavy preset ships"),
+            ),
         );
         let thick = &supports.meshes().expect("rebuilt")[0];
         assert!(

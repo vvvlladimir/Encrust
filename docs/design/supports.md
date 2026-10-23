@@ -506,24 +506,26 @@ support carries. A model may keep a profile of its own in place of a group's
 plate's only with nothing picked, `SupportTool::table_for` is the table a model is built
 to, and saving a profile is what hands an edit on to every other model built to it.
 
-The list of saved profiles on the Shape, Paint and Supports tools chooses a group, not
-numbers: the group built to the chosen profile becomes the one in hand, one is made for it
-when there is none, and what stands keeps the group it stands in (ADR 0247). A group
-nothing stands in is retuned instead. So two kinds of support on one part are two choices
-from one list, and a support changes kind by being picked and moved to the group in hand.
+The preset list at the top of the Supports card chooses a group, not numbers: the group
+built to the chosen preset becomes the one in hand, one is made for it when there is none,
+and what stands keeps the group it stands in (ADR 0247). A group nothing stands in is
+retuned instead. So two kinds of support on one part are two choices from one list, and a
+support changes kind by being picked and moved to the group in hand. The list shows only
+the groups that hold supports, each under its preset's name, on the line of that preset
+(ADR 0338).
 
-A switch across the top of the Supports, Paint and Shape tools sizes supports
-automatically or by hand. Each list then offers only that side's profiles: the support
-profiles an automatic profile names, or every other one; the settings window's table shows
-the two apart. Sizing automatically, the
-Supports tool's list offers the automatic profiles themselves, the panel's placement and
-size fields edit the automatic profile's own numbers, and a run is placed by them on its lightest shape; each contact then goes into the group built to the shape its
-`Reason` sizes it into — a group of that profile's name, else one nothing stands in,
-retuned, else a new one — and a shape nothing is sized into gets no group (ADR 0325).
+Choosing **Auto** in that list sizes supports automatically, any other preset by hand.
+Under Auto the list shows the shapes it built; in the Shape mode it shows every shape it
+builds to, since each is edited there like any support profile. Sizing automatically, the
+card's placement and size fields edit the automatic profile's own numbers, which Save
+writes over the shipped one (ADR 0339), and a run is placed by them on its lightest shape;
+each contact then goes into the group built to the shape its `Reason` sizes it into — a
+group of that profile's name, else one nothing stands in, retuned, else a new one — and a
+shape nothing is sized into gets no group (ADR 0325).
 
 Dropping a group takes every support built to it away — a group is a shape, so its supports
 do not survive it to be rebuilt to another group's numbers — and shifts the groups above it
-down into its number. The window asks first when the group holds anything, and the history
+down into its number. Its bin asks twice rather than a dialog (ADR 0338), and the history
 takes the whole thing back. Group 0 cannot go: it holds the raft's and the bracing's
 numbers.
 
@@ -656,21 +658,13 @@ The Hollow and Drain tools show their blocker, hole or channel point the same wa
 `docs/design/viewport.md`. The stroke is painted along the line
 the cursor drew rather than only where the frames fell, and the brush itself is drawn as a
 ring lying on the surface under the cursor, in the colour of the patch it paints: drag to
-paint, Cmd-Shift-click for the whole surface, alt to erase. The inspector's Supports section
-carries the group picker with its name, New and Drop, the preset pill, a **Regular
-Support** / **Small Pillar** tab pair, and below them
-branching, raft, bracing, the lift and its button, a **Place** / **Paint** / **Block** pill
-with the mode's own one-line hint under it, the line spacing under Place, the brush, the surface angle, the fill's rim and inside
-with their spacings, offsets, second rim, pattern and profiles, and Fill — and, under **Edit**,
-how many parts of how many supports are held and the three buttons that move them to the
-group in hand, grow them again or take them away — the overhang angle, the density,
-Generate with its progress bar and cancel, the standing-against-placed count, and Save and
-Load for the profile as TOML. Editing any field moves the pill to `Custom`; fields are
+paint, Cmd-Shift-click for the whole surface, alt to erase. The Supports card's modes and blocks are
+ADR 0338's. Editing any field marks the preset edited; fields are
 independent, so the order a profile must keep — every ring at least as wide as the one
 above, the small pillar no wider than the pillar it replaces — is restored after an edit
 rather than forbidden during one.
 
-**The Shape panel's drawing.** Each part is drawn from the same measurements the mesher
+**The Shape mode's drawing.** Each part is drawn from the same measurements the mesher
 builds it to — the plane or sphere tip, the trunk's cone up to the cap, the flare, the
 foot's shape and bevel, the raft's style — at one scale for lengths and widths alike, so a
 proportion on the panel is the proportion on the plate. Each view zooms to fit its own

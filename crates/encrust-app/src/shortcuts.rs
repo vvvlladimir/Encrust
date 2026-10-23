@@ -165,9 +165,12 @@ pub const BINDINGS: &[Binding] = &[
         Action::Pick(Tool::Supports),
         &[plain(Key::Num7)],
     ),
-    bind(Group::Tools, Action::Pick(Tool::Paint), &[plain(Key::Num8)]),
-    bind(Group::Tools, Action::Pick(Tool::Shape), &[plain(Key::Num9)]),
-    bind(Group::Tools, Action::Pick(Tool::Check), &[plain(Key::Num0)]),
+    bind(Group::Tools, Action::Pick(Tool::Check), &[plain(Key::Num8)]),
+    bind(
+        Group::Tools,
+        Action::Pick(Tool::Export),
+        &[plain(Key::Num9)],
+    ),
     bind(Group::Plate, Action::SelectAll, &[cmd(Key::A)]),
     bind(Group::Plate, Action::Deselect, &[plain(Key::Escape)]),
     bind(Group::Plate, Action::Duplicate, &[cmd(Key::D)]),
@@ -622,7 +625,7 @@ mod tests {
                 tool.label()
             );
         }
-        for tool in &rail[digits.len()..] {
+        for tool in rail.iter().skip(digits.len()) {
             assert!(chords(Action::Pick(*tool)).is_empty());
         }
     }

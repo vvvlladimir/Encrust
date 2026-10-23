@@ -94,6 +94,14 @@ impl AutoProfile {
         self.steep_contact_spacing_mm = placing.steep_contact_spacing_mm;
     }
 
+    /// The profile as the TOML it is kept in; `path` is where it is going, for the error.
+    pub fn to_toml_string(&self, path: &Path) -> Result<String, ProfileError> {
+        toml::to_string_pretty(self).map_err(|source| ProfileError::Serialise {
+            path: path.to_owned(),
+            source,
+        })
+    }
+
     pub fn from_toml_str(source: &str, path: &Path) -> Result<Self, ProfileError> {
         let profile: Self = toml::from_str(source).map_err(|source| ProfileError::Parse {
             path: path.to_owned(),

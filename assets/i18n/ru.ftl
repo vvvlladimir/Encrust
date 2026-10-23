@@ -328,30 +328,47 @@ supports-removed-inside =
     }
 supports-where = Где
 supports-picked = Выбрано
-supports-already-done = Уже сделано
 supports-pick-hint = Щёлкните по наконечнику, распорке, соединению, стволу или опоре, чтобы выбрать. Перетаскивание переносит, Shift добавляет, Alt убирает.
-supports-picked-help = «Вырастить их заново» возвращает выбранные поддержки автоматике, и следующее выращивание строит их заново. «Переместить в текущую группу» строит их по профилю этой группы.
+supports-picked-help = «Вырастить заново» возвращает выбранные поддержки автоматике, и следующее выращивание строит их заново. «В группу» строит их по профилю текущей группы.
 supports-stat-parts = Части
 supports-stat-supports = Поддержки
-supports-stat-standing = Стоят
-supports-move-to-group = Переместить в текущую группу
-supports-grow-these-again = Вырастить их заново
+supports-move-to-group = В группу
+supports-grow-these-again = Вырастить заново
 supports-remove-these = Удалить эти поддержки
 supports-grow-again = Вырастить заново
 supports-grow = Вырастить поддержки
 supports-grow-tooltip = Сечёт { $scope }, чтобы найти то, что нависает над пустотой.
 supports-placing = Расстановка поддержек
-supports-no-room = Некоторым поддержкам негде встать, и они не будут напечатаны.
 supports-sizes = Размеры
+supports-place = Расстановка
 support-size-island = Остров для { $shape }
 support-size-load = Нагрузка для { $shape }
 support-size-step = Уступ для { $shape }
-supports-sizing-auto = Автоматически
-supports-sizing-manual = Вручную
-supports-remove-all = Удалить все
 supports-remove-all-tooltip = Убрать все поддержки
-supports-remove-group = Только { $name }
-supports-remove-group-tooltip = Убрать поддержки текущей группы ({ $count }), остальные оставить
+supports-preset = Пресет поддержек
+supports-mode-pick = Выбрать поддержки
+supports-mode-place = Ставить поддержки
+supports-mode-area = Закрасить или запретить область
+supports-mode-shape = Форма поддержек
+supports-without-room =
+    { $count ->
+        [one] { $count } поддержке негде встать
+        [few] { $count } поддержкам негде встать
+       *[many] { $count } поддержкам негде встать
+    }
+supports-drop-preset =
+    { $count ->
+        [one] Убрать «{ $name }» и его { $count } поддержку
+        [few] Убрать «{ $name }» и его { $count } поддержки
+       *[many] Убрать «{ $name }» и его { $count } поддержек
+    }
+supports-clear-preset =
+    { $count ->
+        [one] Убрать { $count } поддержку
+        [few] Убрать { $count } поддержки
+       *[many] Убрать { $count } поддержек
+    }
+bin-click-again = Нажмите ещё раз, чтобы удалить
 
 ## panels/settings.rs
 
@@ -961,13 +978,10 @@ shape-raft-plate = Подложка принадлежит платформе: �
 shape-use-plate-raft = Использовать подложку платформы
 shape-use-profile-raft = Использовать подложку из «{ $name }»
 shape-edited = { $name } (изменён)
-shape-edit-profiles = Изменить профили поддержек
 shape-save = Сохранить
 shape-save-tooltip = Сохранить поверх профиля, с которого взяты эти значения
 shape-save-as-new = Сохранить как новый
-shape-save-as-new-tooltip = Сохранить эти значения как отдельный профиль
 shape-saved = Профиль поддержек сохранён
-shape-profile-help = Профиль — сохранённый набор размеров поддержек. Выбор другого меняет то, что вырастет дальше; уже стоящие поддержки сохраняют форму. Изменённые значения помечают профиль как изменённый, пока «Сохранить» не перезапишет его или «Сохранить как новый» не сохранит копию.
 
 ## panels/support_diagram.rs
 
@@ -1430,9 +1444,7 @@ paint-hint-point = Щелчок — поставить, Shift + щелчок —
 paint-hint-paint = Перетаскивайте, чтобы закрасить; Cmd + Shift + щелчок по поверхности; Alt — стереть.
 paint-hint-block = Перетаскивайте, чтобы запретить; Cmd + Shift + щелчок по поверхности; Alt — стереть.
 paint-hint-erase = Перетаскивайте, чтобы стереть разметку и запреты; Cmd + Shift + щелчок по поверхности.
-paint-brush-help = «Поставить» ставит одну поддержку по щелчку, а Shift + щелчок — линию поддержек от последней с шагом «Шаг линии». «Залить» закрашивает область, которая получит поддержки по кнопке «Залить закрашенные области»; «Запретить» закрашивает места, где поддержкам стоять нельзя. Угол поверхности — насколько далеко расходится Cmd + Shift + щелчок: по всем граням, повёрнутым меньше чем на этот угол от выбранной.
 paint-fill-help = Как держится залитая область: «Кайма» — по её краю, «Внутри» — по остальной площади. «Отступ» — насколько глубже начинается каждая часть: кайма от края, середина от каймы. Вторая кайма встаёт внутри первой — для больших плоских областей. Середина укладывается сеткой, кольцами вдоль каймы или вразброс. Каждую часть можно строить своим профилем или текущей группой. Меньше шаг — гуще и надёжнее, но следов больше.
-paint-groups-help = Группа — набор поддержек одного профиля: на одной модели могут стоять толстые поддержки под тяжёлыми частями и тонкие под деталями. Новые поддержки попадают в текущую группу.
 paint-rim = Кайма
 paint-line-spacing = Шаг линии
 paint-offset = Отступ
@@ -1443,7 +1455,6 @@ paint-pattern-rings = Кольца
 paint-pattern-random = Вразброс
 paint-profile = Профиль
 paint-profile-in-hand = Текущая группа
-paint-groups = Группы
 paint-fill = Залить закрашенные области
 paint-filled =
     { $count ->
@@ -1455,23 +1466,12 @@ paint-filled =
 paint-clear-blocked = Очистить запрещённые области
 paint-clear-both = Очистить закрашенные и запрещённые области
 paint-clear-painted = Очистить закрашенные области
-paint-drop-group = Удалить эту группу
-paint-build-to = Строить эту группу до
-paint-group-holds =
-    { $count ->
-        [one] В группе «{ $name }» { $count } поддержка, она удалится вместе с группой.
-        [few] В группе «{ $name }» { $count } поддержки, они удалятся вместе с группой.
-       *[many] В группе «{ $name }» { $count } поддержек, они удалятся вместе с группой.
-    }
-paint-drop-the-group = Удалить группу
 paint-dropped =
     { $count ->
         [one] Удалена «{ $name }» и { $count } поддержка
         [few] Удалена «{ $name }» и { $count } поддержки
        *[many] Удалена «{ $name }» и { $count } поддержек
     }
-paint-keep-it = Оставить
-paint-new-group = Новая группа
 
 ## panels/inspector/drain.rs
 
@@ -1787,8 +1787,6 @@ inspector-about-drain = Дайте смоле вытечь из полой мо�
 inspector-about-cut = Разделите модель плоскостью.
 inspector-about-relief = Вдавите текстуру в поверхность модели, напишите на ней текст или объедините модели в одну.
 inspector-about-supports = Поддержите то, что нависает над пустотой.
-inspector-about-paint = Укажите поддержкам, где им стоять, а где нет.
-inspector-about-shape = Форма одной поддержки, часть за частью.
 inspector-about-check = Что не получится на принтере, с указанием слоя, на котором это происходит.
 inspector-about-export = От платформы до файла и от файла до принтера.
 inspector-about-print-settings = Как эта платформа нарезается и экспонируется.

@@ -51,8 +51,6 @@ pub enum Placing {
 }
 
 impl Placing {
-    pub const ALL: [Self; 4] = [Self::Point, Self::Paint, Self::Block, Self::Erase];
-
     pub fn label(self) -> String {
         match self {
             Self::Point => tr!("supports-placing-place"),
@@ -147,9 +145,6 @@ pub struct SupportTool {
     pub saved: Option<SupportProfile>,
     /// A profile the panel's list has just had chosen, until a group has taken it up.
     pub chosen: Option<SupportProfile>,
-    /// The group the panel is asking about before it takes it away, and the supports it
-    /// holds, or `None` when it is asking nothing.
-    pub dropping: Option<(u16, usize)>,
 }
 
 impl Default for SupportTool {
@@ -181,7 +176,6 @@ impl Default for SupportTool {
             raft: SupportProfile::default().raft,
             saved: None,
             chosen: None,
-            dropping: None,
         }
     }
 }
@@ -620,7 +614,9 @@ impl SupportTool {
         self.profile = self.groups[group as usize].profile.clone();
     }
 
-    /// Adds a group starting from the numbers in hand and makes it the active one.
+    /// Adds a group starting from the numbers in hand and makes it the active one. The
+    /// window makes no group by hand any more; a test builds a plate of several with it.
+    #[cfg(test)]
     pub fn add_group(&mut self) {
         self.groups[self.active as usize].profile = self.profile.clone();
         self.groups.push(SupportGroup {
@@ -1261,11 +1257,20 @@ mod tests {
         let mut tool = SupportTool::default();
         let raft = another_raft(&tool);
         tool.raft = raft;
-        assert_ne!(SupportProfile::shipped("heavy").expect("the heavy preset ships").raft, raft);
+        assert_ne!(
+            SupportProfile::shipped("heavy")
+                .expect("the heavy preset ships")
+                .raft,
+            raft
+        );
 
         tool.chosen = Some(SupportProfile::shipped("heavy").expect("the heavy preset ships"));
         tool.take_up_chosen(&mut scene);
-        tool.retune_group(0, SupportProfile::shipped("light").expect("the light preset ships"), &mut scene);
+        tool.retune_group(
+            0,
+            SupportProfile::shipped("light").expect("the light preset ships"),
+            &mut scene,
+        );
 
         assert_eq!(
             tool.table_for(&scene.objects()[0])[0].raft,
@@ -1453,7 +1458,9 @@ mod tests {
                 &mesh,
                 &bvh,
                 Transform::default(),
-                std::slice::from_ref(&SupportProfile::shipped("medium").expect("the medium preset ships")),
+                std::slice::from_ref(
+                    &SupportProfile::shipped("medium").expect("the medium preset ships"),
+                ),
             );
             scene.objects()[0].supports.trees()[0].landing().on_model
         };
@@ -1665,8 +1672,16 @@ mod tests {
 
         assert_eq!(gone, 1, "the first group's one support went with it");
         assert_eq!(tool.groups.len(), 1);
-        assert_eq!(tool.groups[0].name, SupportProfile::shipped("heavy").expect("the heavy preset ships").name);
-        assert_eq!(tool.profile, SupportProfile::shipped("heavy").expect("the heavy preset ships"));
+        assert_eq!(
+            tool.groups[0].name,
+            SupportProfile::shipped("heavy")
+                .expect("the heavy preset ships")
+                .name
+        );
+        assert_eq!(
+            tool.profile,
+            SupportProfile::shipped("heavy").expect("the heavy preset ships")
+        );
         assert_eq!(
             scene.objects()[0].supports.group_count(0),
             1,
@@ -1682,10 +1697,22 @@ mod tests {
         own.raft.enabled = !own.raft.enabled;
         scene.objects_mut()[0].own.supports.insert(0, own);
 
-        tool.retune_group(0, SupportProfile::shipped("heavy").expect("the heavy preset ships"), &mut scene);
+        tool.retune_group(
+            0,
+            SupportProfile::shipped("heavy").expect("the heavy preset ships"),
+            &mut scene,
+        );
 
-        assert_eq!(tool.table(), vec![SupportProfile::shipped("heavy").expect("the heavy preset ships")]);
-        assert_eq!(tool.groups[0].name, SupportProfile::shipped("heavy").expect("the heavy preset ships").name);
+        assert_eq!(
+            tool.table(),
+            vec![SupportProfile::shipped("heavy").expect("the heavy preset ships")]
+        );
+        assert_eq!(
+            tool.groups[0].name,
+            SupportProfile::shipped("heavy")
+                .expect("the heavy preset ships")
+                .name
+        );
         assert!(scene.objects()[0].own.supports.is_empty());
         assert_eq!(
             scene.objects()[0].supports.group_count(0),

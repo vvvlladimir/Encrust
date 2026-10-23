@@ -14,6 +14,7 @@ mod relief;
 mod scope;
 mod select;
 mod shape;
+mod support_picker;
 mod supports;
 mod text;
 
@@ -30,8 +31,11 @@ use crate::workspace::Tool;
 /// `max_h` points. A heading names it, its sections scroll once they outgrow the card,
 /// and its action stays pinned to the foot; see `docs/decisions/0218`, `0221`.
 pub fn ui(ui: &mut egui::Ui, window: &mut Window, max_h: f32) {
-    let tool = *window.tool;
+    let tool = window.tool.card();
     header(ui, window, tool);
+    if tool == Tool::Supports {
+        supports::top(ui, window);
+    }
     body_and_foot(
         ui,
         max_h,
@@ -57,9 +61,7 @@ fn body(ui: &mut egui::Ui, window: &mut Window, tool: Tool) {
         Tool::Drain => drain::ui(ui, window),
         Tool::Cut => cut::ui(ui, window),
         Tool::Relief => relief::ui(ui, window),
-        Tool::Supports => supports::ui(ui, window),
-        Tool::Paint => paint::ui(ui, window),
-        Tool::Shape => shape::ui(ui, window),
+        Tool::Supports | Tool::Paint | Tool::Shape => supports::ui(ui, window),
         Tool::Check => check::ui(ui, window),
         Tool::Export => export::ui(ui, window),
         Tool::PrintSettings => print_settings::ui(ui, window.machine),
@@ -71,13 +73,7 @@ fn body(ui: &mut egui::Ui, window: &mut Window, tool: Tool) {
 fn has_action(tool: Tool) -> bool {
     matches!(
         tool,
-        Tool::Hollow
-            | Tool::Drain
-            | Tool::Cut
-            | Tool::Relief
-            | Tool::Supports
-            | Tool::Paint
-            | Tool::Export
+        Tool::Hollow | Tool::Drain | Tool::Cut | Tool::Relief | Tool::Supports | Tool::Export
     )
 }
 
@@ -88,7 +84,6 @@ fn action(ui: &mut egui::Ui, window: &mut Window, tool: Tool) {
         Tool::Cut => cut::action(ui, window),
         Tool::Relief => relief::action(ui, window),
         Tool::Supports => supports::action(ui, window),
-        Tool::Paint => paint::action(ui, window),
         Tool::Export => export::action(ui, window),
         _ => {}
     }
@@ -106,14 +101,6 @@ fn fact(window: &Window, tool: Tool) -> Option<(String, egui::Color32)> {
             value = format!("{:.2}", window.tools.hollow.state.thickness_mm)
         )),
         Tool::Drain => drain::fact(window).map(|text| (text, colors.danger)),
-        Tool::Supports => supports::fact(window).and_then(plain),
-        Tool::Paint => window
-            .tools
-            .supports
-            .groups
-            .get(usize::from(window.tools.supports.active))
-            .and_then(|group| plain(group.name.clone())),
-        Tool::Shape => plain(window.tools.supports.profile.name.clone()),
         Tool::Check => check::fact(window),
         Tool::Export => export::fact(window),
         Tool::PrintSettings => plain(crate::panels::layers_and_exposure(window.machine)),
@@ -130,7 +117,8 @@ fn fact(window: &Window, tool: Tool) -> Option<(String, egui::Color32)> {
                 .filter(crate::measure::PlaneGap::is_parallel)
                 .and_then(|_| plain(tr!("inspector-parallel"))),
         },
-        Tool::Cut | Tool::Relief => None,
+        // The Supports card has its click modes where the fact would stand.
+        Tool::Cut | Tool::Relief | Tool::Supports | Tool::Paint | Tool::Shape => None,
     }
 }
 
@@ -143,9 +131,7 @@ fn help(tool: Tool) -> String {
         Tool::Drain => tr!("inspector-about-drain"),
         Tool::Cut => tr!("inspector-about-cut"),
         Tool::Relief => tr!("inspector-about-relief"),
-        Tool::Supports => tr!("inspector-about-supports"),
-        Tool::Paint => tr!("inspector-about-paint"),
-        Tool::Shape => tr!("inspector-about-shape"),
+        Tool::Supports | Tool::Paint | Tool::Shape => tr!("inspector-about-supports"),
         Tool::Check => tr!("inspector-about-check"),
         Tool::Export => tr!("inspector-about-export"),
         Tool::PrintSettings => tr!("inspector-about-print-settings"),
@@ -175,7 +161,9 @@ fn header(ui: &mut egui::Ui, window: &mut Window, tool: Tool) {
     );
     help_mark(&mut child, &[help(tool)]);
     child.with_layout(Layout::right_to_left(Align::Center), |ui| {
-        if let Some((text, color)) = fact(window, tool) {
+        if tool == Tool::Supports {
+            supports::modes(ui, window);
+        } else if let Some((text, color)) = fact(window, tool) {
             ui.add(
                 egui::Label::new(RichText::new(text).font(theme::figures(11.5)).color(color))
                     .truncate(),

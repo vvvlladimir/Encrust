@@ -1,6 +1,6 @@
 # 0325. Size each support by what it holds, through an automatic profile over groups
 
-- **Status:** Accepted
+- **Status:** Accepted; the switch across three tools is superseded by 0338, the profile only shipping by 0339
 - **Date:** 2026-10-22
 
 ## Context

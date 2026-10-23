@@ -824,7 +824,10 @@ mod tests {
 
     #[test]
     fn each_group_is_meshed_apart_and_together_they_are_the_whole() {
-        let profiles = [profile(), SupportProfile::shipped("heavy").expect("the heavy preset ships")];
+        let profiles = [
+            profile(),
+            SupportProfile::shipped("heavy").expect("the heavy preset ships"),
+        ];
         let profiles = Profiles::new(&profiles).expect("two groups");
         let points = [
             SupportPoint::new(Vec3::new(10.0, 10.0, 20.0)),

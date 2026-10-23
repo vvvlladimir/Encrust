@@ -64,7 +64,7 @@ capped silently.
 ## Placing models on the plate
 
 In every tool, Cmd-click (Ctrl-click off a Mac) a model on the plate to add it to the
-selection or take it out, instead of what a click does in that tool. In **Paint**, the
+selection or take it out, instead of what a click does in that tool. In the Supports card's **Area** mode, the
 whole-surface fill is Cmd-Shift-click.
 
 **Position tool:**
@@ -311,7 +311,7 @@ whole-surface fill is Cmd-Shift-click.
 - A face looking straight down is held at the contact spacing, and one leaning just past
   the overhang angle at the wider **spacing on steep faces**; between them the spacing
   follows the angle.
-- **Automatic** sizing, switched on at the top of the Supports, Paint and Shape tools,
+- **Auto**, the first preset in the Supports card's list and the one a new plate starts on,
   sizes every support by what it holds: an island over 2.4 mm² or an overhang under more
   than 1000 mm³ of the model takes **Auto Medium**, over 3.2 mm² or 2000 mm³ **Auto
   Heavy**, anything less **Auto Light**. Each shape is a group of its own, tuned like any
@@ -319,13 +319,15 @@ whole-surface fill is Cmd-Shift-click.
   is sized by its resin — from 7 mm³ medium, 12 mm³ heavy — and faces leaning past 20° just
   above it are held with it. A gentle slope too shallow to sag — past 10° from vertical
   — gets a few thin **Auto Stabilization** supports about 8 mm apart so the part does not
-  rock on the peel. **Sizes** sets where each heavier shape starts; a merged support shows each tip in its own group's colour. **By hand**, supports are built
-  to the profile chosen for the group in hand. The switch, the automatic profile and its
-  edited numbers are saved with the project and remembered between runs, and Undo takes
-  them back.
+  rock on the peel. **Sizes**, at the foot of the shape mode, sets where each heavier shape starts; a merged support shows each tip in its own group's colour. Choose **Light**, **Medium**,
+  **Heavy** or a preset of your own instead, and supports are built to it. The preset in
+  hand, the automatic profile and its edited numbers are saved with the project and
+  remembered between runs, and Undo takes them back. **Save** writes an edited Auto over the
+  one that ships; Auto cannot be saved as a new preset, and no other automatic preset can be
+  added.
 - Nearby tips merge into shared **branching trunks**. Trunks are cones sized by their
   height and load, and nothing carrying a load leans more than 45°.
-- With **Grid** on in the Shape tool, trunks stand on a square grid instead, 5 mm apart
+- With **Grid** on in the **Shape** mode, trunks stand on a square grid instead, 5 mm apart
   unless set (1–15 mm): each tip leans to its nearest node at 45°, the tips of one node
   share one trunk, and the bracing ties the rows evenly. A tip no node can take stands as
   it would without the grid.
@@ -340,25 +342,34 @@ whole-surface fill is Cmd-Shift-click.
   becomes **Delete the cavity supports** once they stand. With the section cut open, the
   supports inside can be clicked and edited like any other. A hole is seen once it has
   been cut exactly.
-- **Lift off the plate** stands the picked model that high, a millimetre a press of − or
-  +, so supports have room. It is the same number in Position and in Supports.
+- **Lift off the plate** stands the picked model that high, so supports have room. It is
+  the same number in Position and in Supports.
 
 ### Manual
+- Supports are made in one **Supports** card. Four click modes sit in its heading: **Pick**
+  standing supports, **Place** them one by one, **Area** to paint or block, and **Shape**.
 - **Place** a support with a click; Alt-click removes it. Shift-click places a line of
   supports from the last one, evenly spaced at most **Line spacing** apart along the
   model's surface; dots show where they will stand before you click.
-- **Paint** areas with a brush where supports must go, then **Fill** them at a spacing you
+- In **Area**, **Paint** areas with a brush where supports must go, then **Fill** them at a spacing you
   set. You can fill the inside of an area or only its rim, filtered by surface angle.
   The rim stands an **offset** in from the edge (1 mm to start), with an optional
   **second rim** inside it; the inside starts its own offset in from the rim and is laid
   on a **grid**, in **rings** following the rim, or **scattered**. Rim and inside can each
   be built to a saved profile of their own, which gets a group, or to the group in hand.
-- **Block** areas where no support may go.
+- **Block** areas where no support may go, the other half of Area. Alt erases whichever of
+  the two is in hand, and **Clear** takes all of it off.
 - Click a standing support to select it, then rebuild, remove or move it to another group.
 
 ### Groups and profiles
-- Supports belong to **groups**. Each group is built to its own profile, so one model can
-  have heavy supports underneath and light ones on its details.
+- Supports belong to **groups**, one per preset, so one model can have heavy supports
+  underneath and light ones on its details. A group appears when its preset first holds
+  supports and is named for it; none is made or renamed by hand.
+- The preset list at the top of the Supports card is also the list of groups: each preset
+  that holds supports shows its colour and count, to switch to, hide or remove, and Auto
+  lists the shapes it built under it. Choosing a group takes its preset in hand.
+- A bin asks twice: the first click turns it red, the second removes. The bin beside the
+  preset removes the group in hand with its supports, the one beside **Grow** every support.
 - A thin support may stand on a thicker one from another group. Tips of groups as thick as
   each other merge into one trunk, built to the group with the heavier tip; each tip keeps
   its own.
@@ -596,7 +607,7 @@ address in a video player).
 ## Working in the window
 
 - **Find (⌘K):** search every tool, action and model on the plate by name.
-- **Keyboard:** digits 1 to 0 pick the first ten tools, there is a shortcut sheet, Tab walks
+- **Keyboard:** digits 1 to 9 pick the tools of the rail in order, there is a shortcut sheet, Tab walks
   every control, and every control has a name for screen readers.
 - **Undo and redo** across the plate and the settings forms. A run that lands its result
   after an undo is a new edit, so what could be redone before it can no longer be.

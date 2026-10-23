@@ -25,6 +25,8 @@ pub enum Kind {
     Hollow,
     /// Named settings of the Drain tool, as a [`Preset`].
     Drain,
+    /// The user's copy of a shipped automatic profile: one can be retuned, none added.
+    Auto,
 }
 
 impl Kind {
@@ -35,6 +37,7 @@ impl Kind {
             Self::Support => "supports",
             Self::Hollow => "hollow",
             Self::Drain => "drain",
+            Self::Auto => "auto",
         }
     }
 
@@ -45,6 +48,7 @@ impl Kind {
             Self::Support => "support profile",
             Self::Hollow => "hollow profile",
             Self::Drain => "drain profile",
+            Self::Auto => "automatic profile",
         }
     }
 }
@@ -72,7 +76,8 @@ pub struct Catalogue {
     printers: BTreeMap<String, Entry<PrinterProfile>>,
     resins: BTreeMap<String, Entry<MaterialProfile>>,
     supports: BTreeMap<String, Entry<SupportProfile>>,
-    /// Automatic profiles, which only ship: the user tunes the shapes they name.
+    /// Automatic profiles. Only those that ship exist; the user may keep a retuned copy
+    /// of one, and tunes the shapes they name as any support profile.
     autos: BTreeMap<String, Entry<AutoProfile>>,
     /// Named tool settings, which nothing ships: each is the user's own.
     hollows: BTreeMap<String, Entry<Preset>>,
@@ -148,6 +153,12 @@ impl Catalogue {
             Kind::Support,
             SupportProfile::from_toml_str,
         )?;
+        overlay_shipped(
+            &mut self.autos,
+            &*store,
+            Kind::Auto,
+            AutoProfile::from_toml_str,
+        )?;
         for kind in [Kind::Hollow, Kind::Drain] {
             if let Some(table) = self.preset_table_mut(kind) {
                 let skipped = overlay_presets(table, &*store, kind)?;
@@ -204,7 +215,7 @@ impl Catalogue {
         match kind {
             Kind::Hollow => Some(&self.hollows),
             Kind::Drain => Some(&self.drains),
-            Kind::Printer | Kind::Resin | Kind::Support => None,
+            Kind::Printer | Kind::Resin | Kind::Support | Kind::Auto => None,
         }
     }
 
@@ -212,7 +223,7 @@ impl Catalogue {
         match kind {
             Kind::Hollow => Some(&mut self.hollows),
             Kind::Drain => Some(&mut self.drains),
-            Kind::Printer | Kind::Resin | Kind::Support => None,
+            Kind::Printer | Kind::Resin | Kind::Support | Kind::Auto => None,
         }
     }
 
@@ -281,6 +292,7 @@ impl Catalogue {
             Kind::Printer => BUNDLED_PRINTERS,
             Kind::Resin => BUNDLED_RESINS,
             Kind::Support => BUNDLED_SUPPORTS,
+            Kind::Auto => BUNDLED_AUTOS,
             Kind::Hollow | Kind::Drain => return false,
         };
         table.iter().any(|(name, _)| *name == id)
@@ -375,6 +387,27 @@ impl Catalogue {
         Ok(path)
     }
 
+    /// Writes the user's copy of the shipped automatic profile `id`. There is no other
+    /// kind of automatic profile, so an id that does not ship is refused.
+    pub fn save_auto(&mut self, id: &str, profile: &AutoProfile) -> Result<PathBuf, ProfileError> {
+        if !self.autos.contains_key(id) {
+            return Err(ProfileError::Unknown {
+                kind: Kind::Auto.label(),
+                id: id.to_owned(),
+            });
+        }
+        let path = self.keep(Kind::Auto, id, |path| profile.to_toml_string(path))?;
+        self.autos.insert(
+            id.to_owned(),
+            Entry {
+                id: id.to_owned(),
+                profile: profile.clone(),
+                source: Source::User(path.clone()),
+            },
+        );
+        Ok(path)
+    }
+
     /// Throws away the user's copy of a profile. What was shipped under that id comes
     /// back; an id that was only ever theirs leaves the catalogue.
     pub fn forget_user_copy(&mut self, kind: Kind, id: &str) -> Result<(), ProfileError> {
@@ -400,6 +433,13 @@ impl Catalogue {
                 "supports",
                 id,
                 SupportProfile::from_toml_str,
+            ),
+            Kind::Auto => restore_bundled(
+                &mut self.autos,
+                BUNDLED_AUTOS,
+                "auto",
+                id,
+                AutoProfile::from_toml_str,
             ),
             Kind::Hollow | Kind::Drain => {
                 if let Some(table) = self.preset_table_mut(kind) {
@@ -545,6 +585,31 @@ fn overlay_presets(
         }
     }
     Ok(unreadable)
+}
+
+/// Lays the user's copies over `map` for the ids it already holds and no others: a kind
+/// the user may retune but never add to.
+fn overlay_shipped<T>(
+    map: &mut BTreeMap<String, Entry<T>>,
+    store: &dyn ProfileStore,
+    kind: Kind,
+    parse: Parse<T>,
+) -> Result<(), ProfileError> {
+    for (id, path, toml) in store.read_all(kind)? {
+        if !map.contains_key(&id) {
+            continue;
+        }
+        let profile = parse(&toml, &path)?;
+        map.insert(
+            id.clone(),
+            Entry {
+                id,
+                profile,
+                source: Source::User(path),
+            },
+        );
+    }
+    Ok(())
 }
 
 #[cfg(test)]
@@ -853,6 +918,64 @@ z = 100.0
             assert_eq!(
                 catalogue.support("medium").expect("shipped").profile,
                 shipped
+            );
+        });
+    }
+
+    #[test]
+    fn an_automatic_profile_is_saved_over_the_shipped_one_and_can_be_thrown_away() {
+        in_its_own_dir("edit-auto", |dir, mut catalogue| {
+            let entry = catalogue
+                .autos()
+                .next()
+                .expect("an automatic profile ships");
+            let (id, shipped) = (entry.id.clone(), entry.profile.clone());
+            let edited = AutoProfile {
+                max_overhang_deg: shipped.max_overhang_deg + 10.0,
+                ..shipped.clone()
+            };
+
+            let path = catalogue.save_auto(&id, &edited).expect("writable");
+            assert_eq!(path, dir.join(format!("auto/{id}.toml")));
+            let reloaded = Catalogue::with_root(dir).expect("the directory is readable");
+            let kept = reloaded
+                .autos()
+                .find(|entry| entry.id == id)
+                .expect("there");
+            assert_eq!(
+                kept.profile, edited,
+                "the copy is read back over the shipped one"
+            );
+
+            catalogue
+                .forget_user_copy(Kind::Auto, &id)
+                .expect("the file goes away");
+            let back = catalogue
+                .autos()
+                .find(|entry| entry.id == id)
+                .expect("shipped");
+            assert_eq!(back.profile, shipped);
+        });
+    }
+
+    #[test]
+    fn no_automatic_profile_can_be_added() {
+        in_its_own_dir("new-auto", |dir, mut catalogue| {
+            let shipped = catalogue.autos().next().expect("ships").profile.clone();
+            let refused = catalogue.save_auto("mine", &shipped);
+            assert!(
+                matches!(refused, Err(ProfileError::Unknown { .. })),
+                "an id that does not ship is no automatic profile"
+            );
+
+            let stray = dir.join("auto/mine.toml");
+            std::fs::create_dir_all(dir.join("auto")).expect("writable");
+            let text = shipped.to_toml_string(&stray).expect("serialises");
+            std::fs::write(&stray, text).expect("writable");
+            let reloaded = Catalogue::with_root(dir).expect("the directory is readable");
+            assert!(
+                reloaded.autos().all(|entry| entry.id != "mine"),
+                "a file under an id that does not ship is not taken up"
             );
         });
     }

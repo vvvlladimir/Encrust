@@ -114,9 +114,14 @@ mod tests {
     #[test]
     fn an_overhang_gets_columns_under_it_and_they_come_back_as_a_mesh() {
         let mut mesh = overhang();
-        let (report, supports) =
-            stand_under(&mut mesh, &mut None, &SupportProfile::shipped("medium").expect("the medium preset ships"), 0.05, false)
-                .expect("a slab slices and supports");
+        let (report, supports) = stand_under(
+            &mut mesh,
+            &mut None,
+            &SupportProfile::shipped("medium").expect("the medium preset ships"),
+            0.05,
+            false,
+        )
+        .expect("a slab slices and supports");
 
         assert!(!report.contacts.is_empty(), "a hanging slab needs holding");
         assert!(report.standing > 0, "and there is empty plate under it");
@@ -187,8 +192,14 @@ mod tests {
     #[test]
     fn a_part_already_standing_clear_of_the_plate_is_not_moved() {
         let mut mesh = overhang();
-        let (report, _) = stand_under(&mut mesh, &mut None, &SupportProfile::shipped("medium").expect("the medium preset ships"), 0.05, false)
-            .expect("a slab slices and supports");
+        let (report, _) = stand_under(
+            &mut mesh,
+            &mut None,
+            &SupportProfile::shipped("medium").expect("the medium preset ships"),
+            0.05,
+            false,
+        )
+        .expect("a slab slices and supports");
 
         assert!(
             report.lifted_mm.abs() < 1e-6,

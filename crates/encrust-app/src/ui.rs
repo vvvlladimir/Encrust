@@ -10,13 +10,13 @@ pub mod theme;
 mod widgets;
 
 pub use widgets::{
-    Carried, Segment, Segmented, address_field, ago, axis_label, bare_switch, blocked_hover,
-    body_and_foot, busy, card, card_foot, carried_row, compact_button, companion_button, count_row,
-    describe, described, describing, dialog_frame, dialog_head, duration, field_label, filter_chip,
-    focus_ring, hairline, heading, help_mark, hint, icon_button, icon_toggle, inline_button,
-    issue_row, list, list_row, meta, nested, notice, number_field, number_row, picker,
-    primary_button, progress_bar, quiet_button, rail_button, readings, secondary_button, section,
-    section_with_action, section_with_switch, stats, stepped_row, subheading,
-    subheading_with_switch, summary_button, swatch, switch, text_box, text_row, toggle_button,
-    tone, two_lines, unit_field, zone_button,
+    BinLook, Carried, Segment, Segmented, address_field, ago, axis_label, bare_switch, bin_button,
+    blocked_hover, body_and_foot, busy, card, card_foot, carried_row, compact_button,
+    companion_button, confirm_bin, count_row, describe, described, describing, dialog_frame,
+    dialog_head, duration, field_label, filter_chip, focus_ring, hairline, heading, help_mark,
+    hint, icon_button, icon_toggle, inline_button, instant_bin, issue_row, list, list_row, meta,
+    nested, notice, number_field, number_row, picker, primary_button, progress_bar, quiet_button,
+    rail_button, readings, secondary_button, section, section_with_action, section_with_switch,
+    stats, stepped_row, subheading, subheading_with_switch, summary_button, swatch, switch,
+    text_box, text_row, toggle_button, tone, two_lines, unit_field, zone_button,
 };

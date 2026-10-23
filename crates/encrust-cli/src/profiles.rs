@@ -166,6 +166,11 @@ pub fn show(id: &str, kind: Option<Kind>) -> Result<(Kind, String)> {
                 Kind::Printer => catalogue.printer(id).ok()?.profile.to_toml_string(named),
                 Kind::Resin => catalogue.resin(id).ok()?.profile.to_toml_string(named),
                 Kind::Support => catalogue.support(id).ok()?.profile.to_toml_string(named),
+                Kind::Auto => catalogue
+                    .autos()
+                    .find(|entry| entry.id == id)?
+                    .profile
+                    .to_toml_string(named),
                 Kind::Hollow | Kind::Drain => catalogue
                     .presets(candidate)
                     .find(|entry| entry.id == id)?
@@ -204,7 +209,9 @@ pub fn import(path: &Path, kind: Kind, printer: Option<&str>) -> Result<String> 
     let imported = match kind {
         Kind::Hollow => catalogue.import_preset::<HollowState>(kind, &text, path),
         Kind::Drain => catalogue.import_preset::<DrainState>(kind, &text, path),
-        Kind::Printer | Kind::Resin | Kind::Support => catalogue.import(kind, &text, path, printer),
+        Kind::Printer | Kind::Resin | Kind::Support | Kind::Auto => {
+            catalogue.import(kind, &text, path, printer)
+        }
     };
     imported.with_context(|| format!("cannot import {} as a {}", path.display(), kind.label()))
 }

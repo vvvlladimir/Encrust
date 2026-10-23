@@ -836,10 +836,18 @@ mod tests {
         edited.bracing.diameter_mm += 0.3;
 
         let saved = saved_as(&catalogue, &edited).expect("Medium is shipped");
-        assert_eq!(saved.profile, SupportProfile::shipped("medium").expect("the medium preset ships"));
+        assert_eq!(
+            saved.profile,
+            SupportProfile::shipped("medium").expect("the medium preset ships")
+        );
         assert_eq!(
             was(Some(&saved.profile), |profile| profile.bracing.diameter_mm),
-            Some(SupportProfile::shipped("medium").expect("the medium preset ships").bracing.diameter_mm),
+            Some(
+                SupportProfile::shipped("medium")
+                    .expect("the medium preset ships")
+                    .bracing
+                    .diameter_mm
+            ),
             "which is what the field's button puts back"
         );
     }
