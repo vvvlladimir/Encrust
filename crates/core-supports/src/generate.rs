@@ -187,6 +187,23 @@ struct Placing<'a> {
     contact_mm: Scalar,
 }
 
+/// Why a support goes on a cell that is `on`, touching at `contact`: what a step below
+/// reaches is that step's, whatever leans there; `overhang` marks an overhang's load.
+fn why_of(on: On, zones: &Zones, contact: Vec3, overhang: impl FnOnce() -> Option<Mark>) -> Why {
+    let reached = match on {
+        On::Overhang | On::Gentle => zones.reaching(contact),
+        On::Island(_) | On::Step(_) | On::Slope => None,
+    };
+    match (on, reached) {
+        (On::Island(area_mm2), _) => Why::Island { area_mm2 },
+        (On::Step(new_mm3), _) | (On::Overhang | On::Gentle, Some(new_mm3)) => {
+            Why::Step { new_mm3 }
+        }
+        (On::Overhang, None) => Why::Overhang(overhang()),
+        (On::Gentle, None) | (On::Slope, _) => Why::Steady,
+    }
+}
+
 /// Where a column put under `layer` touches, in millimetres above the plate.
 ///
 /// A whole layer under the plane, not half of one: a cell this layer is the first to
@@ -262,11 +279,10 @@ impl Pass<'_> {
         // The first layers of a stack have nothing under them to be measured against.
         let seen = self.window.min(index).min(at);
         let nothing = Field::default();
-        let below = if seen == 0 { &nothing } else { &fields[at - 1] };
-        let reference = if seen == 0 {
-            &nothing
+        let (below, reference) = if seen == 0 {
+            (&nothing, &nothing)
         } else {
-            &fields[at - seen]
+            (&fields[at - 1], &fields[at - seen])
         };
         let rise_mm = seen as Scalar * self.layer_height_mm;
 
@@ -286,73 +302,118 @@ impl Pass<'_> {
             return Wanted::default();
         }
         let room = layer.shrunk(self.inset);
-        let cell_mm2 = self.grid.millimetres_of(1).powi(2);
+        let flatness = self.flatness(below, reference, rise_mm);
         // Islands first: a support put down under one also holds the overhang it is part
-        // of, which the coverage check then leaves alone.
-        let islands = found.islands.iter().flat_map(|piece| {
-            let area_mm2 = piece.cell_count() as Scalar * cell_mm2;
+        // of, which the coverage check then leaves alone. Steadied last, as sparsely as the
+        // profile says.
+        let mut cells = Vec::new();
+        self.want_islands(&found.islands, &room, &mut cells);
+        self.want_steps(&found.steps, &room, &mut cells);
+        self.want_overhangs(&found.overhangs, &room, &flatness, &mut cells);
+        self.want_level(&found.gentle, &room, self.spacing, On::Gentle, &mut cells);
+        self.want_slopes(&found.slopes, &room, &mut cells);
+        Wanted {
+            cells,
+            specks: self.specks_of(&found.specks),
+        }
+    }
+
+    /// Each island's cells, held closer the smaller it is.
+    fn want_islands(&self, islands: &[Field], room: &Field, cells: &mut Vec<Want>) {
+        for piece in islands {
+            let area_mm2 = piece.cell_count() as Scalar * self.cell_mm2();
             let spacing_mm = self.config.island_spacing_mm(area_mm2);
             let coverage_mm = self.config.coverage_at(spacing_mm);
             let spacing = self.grid.cells_of(spacing_mm).max(1);
-            sample_piece(piece, &room, self.inset, spacing)
-                .into_iter()
-                .map(move |cell| (cell, coverage_mm, On::Island(area_mm2)))
-        });
-        let flatness = self.flatness(below, reference, rise_mm);
-        let overhangs = found.overhangs.iter().flat_map(|piece| {
-            sample_piece(piece, &room, self.inset, self.spacing)
-                .into_iter()
-                .map(|cell| {
-                    let spacing_mm = self.config.band_spacing_mm(flatness.band_of(cell));
-                    (cell, self.config.coverage_at(spacing_mm), On::Overhang)
-                })
-        });
-        // A step too small to be held as one is the overhang it always was.
-        let level_mm = self.config.coverage_at(self.config.spacing_mm);
-        let steps = found.steps.iter().flat_map(|piece| {
-            let new_mm3 = piece.cell_count() as Scalar * cell_mm2 * self.layer_height_mm;
+            cells.extend(
+                sample_piece(piece, room, self.inset, spacing)
+                    .into_iter()
+                    .map(|cell| (cell, coverage_mm, On::Island(area_mm2))),
+            );
+        }
+    }
+
+    /// Each overhang's cells, spaced by how flat it lies under each of them.
+    fn want_overhangs(
+        &self,
+        overhangs: &[Field],
+        room: &Field,
+        flatness: &Flatness<'_>,
+        cells: &mut Vec<Want>,
+    ) {
+        for piece in overhangs {
+            cells.extend(
+                sample_piece(piece, room, self.inset, self.spacing)
+                    .into_iter()
+                    .map(|cell| {
+                        let spacing_mm = self.config.band_spacing_mm(flatness.band_of(cell));
+                        (cell, self.config.coverage_at(spacing_mm), On::Overhang)
+                    }),
+            );
+        }
+    }
+
+    /// Each step's cells; a step too small to be held as one is the overhang it always was.
+    fn want_steps(&self, steps: &[Field], room: &Field, cells: &mut Vec<Want>) {
+        for piece in steps {
+            let new_mm3 = piece.cell_count() as Scalar * self.cell_mm2() * self.layer_height_mm;
             let on = match self.sizing.and_then(|auto| auto.step_size(new_mm3)) {
                 Some(_) => On::Step(new_mm3),
                 None => On::Overhang,
             };
-            sample_piece(piece, &room, self.inset, self.spacing)
-                .into_iter()
-                .map(move |cell| (cell, level_mm, on))
-        });
-        let gentle = found.gentle.iter().flat_map(|piece| {
-            sample_piece(piece, &room, self.inset, self.spacing)
-                .into_iter()
-                .map(move |cell| (cell, level_mm, On::Gentle))
-        });
-        // Steadied last, as sparsely as the profile says, on slopes worth it.
-        let (steady, least_mm) = self.sizing.map_or((1, Scalar::INFINITY), |auto| {
-            let steady = self.grid.cells_of(auto.steady_spacing_mm).max(1);
-            (steady, auto.steady_area_mm2.sqrt())
-        });
-        let slopes = found
-            .slopes
-            .iter()
-            .filter(|piece| across_mm(piece, self.grid) >= least_mm)
-            .flat_map(|piece| {
-                sample_piece(piece, &room, self.inset, steady)
-                    .into_iter()
-                    .map(move |cell| (cell, level_mm, On::Slope))
-            });
-        Wanted {
-            cells: islands
-                .chain(steps)
-                .chain(overhangs)
-                .chain(gentle)
-                .chain(slopes)
-                .collect(),
-            specks: found
-                .specks
-                .iter()
-                .filter_map(|speck| {
-                    Some((middle_of(speck)?, speck.cell_count() as Scalar * cell_mm2))
-                })
-                .collect(),
+            self.want_level(std::slice::from_ref(piece), room, self.spacing, on, cells);
         }
+    }
+
+    /// The slopes wide enough to steady a part on, held as sparsely as the profile says.
+    fn want_slopes(&self, slopes: &[Field], room: &Field, cells: &mut Vec<Want>) {
+        let Some(auto) = self.sizing else {
+            return;
+        };
+        let steady = self.grid.cells_of(auto.steady_spacing_mm).max(1);
+        let least_mm = auto.steady_area_mm2.sqrt();
+        for piece in slopes {
+            if across_mm(piece, self.grid) >= least_mm {
+                self.want_level(std::slice::from_ref(piece), room, steady, On::Slope, cells);
+            }
+        }
+    }
+
+    /// The cells of `pieces` `spacing` cells apart, each held as a face looking down is.
+    fn want_level(
+        &self,
+        pieces: &[Field],
+        room: &Field,
+        spacing: i32,
+        on: On,
+        cells: &mut Vec<Want>,
+    ) {
+        let level_mm = self.config.coverage_at(self.config.spacing_mm);
+        for piece in pieces {
+            cells.extend(
+                sample_piece(piece, room, self.inset, spacing)
+                    .into_iter()
+                    .map(|cell| (cell, level_mm, on)),
+            );
+        }
+    }
+
+    /// Where each speck began, and its area in mm².
+    fn specks_of(&self, specks: &[Field]) -> Vec<([i32; 2], Scalar)> {
+        specks
+            .iter()
+            .filter_map(|speck| {
+                Some((
+                    middle_of(speck)?,
+                    speck.cell_count() as Scalar * self.cell_mm2(),
+                ))
+            })
+            .collect()
+    }
+
+    /// The area of one cell of the grid, mm².
+    fn cell_mm2(&self) -> Scalar {
+        self.grid.millimetres_of(1).powi(2)
     }
 }
 
@@ -422,56 +483,31 @@ impl Pass<'_> {
             parts,
             contact_mm,
         } = at;
-        for (cell, area_mm2) in wanted.specks {
-            let piece = parts.at(cell[0], cell[1]);
-            let at = self.grid.centre_mm(cell[0], cell[1]).extend(contact_mm);
-            if self.refuses(at) {
-                standing.leave(piece);
-            } else if let Some(piece) = piece {
-                standing.speck(piece, at, area_mm2 * self.layer_height_mm);
-            }
-        }
-        // A part that begins at a point is held there before it has any area to speak of.
-        let point = Why::Island { area_mm2: 0.0 };
-        for (piece, tip) in self.hanging(standing, contact_mm) {
-            if self.refuses(tip) {
-                standing.leave(Some(piece));
-            } else {
-                placed.push((standing.hang(piece, tip), point));
-            }
-        }
-        let adrift = self.adrift(standing, parts, contact_mm);
+        self.mark_specks(standing, parts, wanted.specks, contact_mm);
+        self.hang_from_points(standing, contact_mm, placed);
         let anywhere = self.config.coverage_radius_mm;
-        let cells = adrift
+        let adrift = self
+            .adrift(standing, parts, contact_mm)
             .into_iter()
             .map(|(cell, area_mm2)| (cell, anywhere, On::Island(area_mm2)));
         let mut stepped = Vec::new();
-        for (cell, coverage_mm, on) in cells.chain(wanted.cells) {
+        for (cell, coverage_mm, on) in adrift.chain(wanted.cells) {
             let at = self.grid.centre_mm(cell[0], cell[1]);
+            let contact = at.extend(contact_mm);
             let piece = parts.at(cell[0], cell[1]);
-            // What a step below reaches is that step's, whatever leans there.
-            let reached = match on {
-                On::Overhang | On::Gentle => zones.reaching(at.extend(contact_mm)),
-                On::Island(_) | On::Step(_) | On::Slope => None,
-            };
-            let why = match (on, reached) {
-                (On::Island(area_mm2), _) => Why::Island { area_mm2 },
-                (On::Step(new_mm3), _) | (On::Overhang | On::Gentle, Some(new_mm3)) => {
-                    Why::Step { new_mm3 }
-                }
-                (On::Overhang, None) => Why::Overhang(piece.and_then(|piece| load.mark(piece))),
-                (On::Gentle, None) | (On::Slope, _) => Why::Steady,
-            };
+            let why = why_of(on, zones, contact, || {
+                piece.and_then(|piece| load.mark(piece))
+            });
             let steadies = matches!(why, Why::Steady);
-            if steadies && steadied.reaching(at.extend(contact_mm)).is_some() {
+            if steadies && steadied.reaching(contact).is_some() {
                 continue;
             }
             if let On::Step(new_mm3) = on {
-                stepped.push((at.extend(contact_mm), new_mm3));
+                stepped.push((contact, new_mm3));
             }
             // Asked before the cell is taken, or a place nothing may stand on would
             // still count as held and leave its neighbours a support short.
-            if self.refuses(at.extend(contact_mm)) {
+            if self.refuses(contact) {
                 standing.leave(piece);
                 continue;
             }
@@ -481,12 +517,65 @@ impl Pass<'_> {
             }
             placed.extend(taken.map(|contact| (contact, why)));
         }
-        if let Some(auto) = self.sizing {
-            for (at, new_mm3) in stepped {
-                let size = auto.step_size(new_mm3).unwrap_or(0);
-                zones.add(at, auto.step_height_mm[size], new_mm3);
+        self.reach_from_steps(zones, stepped);
+        self.steady_parts(standing, parts, contact_mm, placed);
+    }
+
+    /// Notes where each speck began, or lets go of one the user painted supports out of.
+    fn mark_specks(
+        &self,
+        standing: &mut Standing,
+        parts: &Parts,
+        specks: Vec<([i32; 2], Scalar)>,
+        contact_mm: Scalar,
+    ) {
+        for (cell, area_mm2) in specks {
+            let piece = parts.at(cell[0], cell[1]);
+            let at = self.grid.centre_mm(cell[0], cell[1]).extend(contact_mm);
+            if self.refuses(at) {
+                standing.leave(piece);
+            } else if let Some(piece) = piece {
+                standing.speck(piece, at, area_mm2 * self.layer_height_mm);
             }
         }
+    }
+
+    /// Holds each part that begins at a point there, before it has any area to speak of.
+    fn hang_from_points(
+        &self,
+        standing: &mut Standing,
+        contact_mm: Scalar,
+        placed: &mut Vec<(Vec3, Why)>,
+    ) {
+        let point = Why::Island { area_mm2: 0.0 };
+        for (piece, tip) in self.hanging(standing, contact_mm) {
+            if self.refuses(tip) {
+                standing.leave(Some(piece));
+            } else {
+                placed.push((standing.hang(piece, tip), point));
+            }
+        }
+    }
+
+    /// Lets each step held on this layer reach the faces above it, as far as its size says.
+    fn reach_from_steps(&self, zones: &mut Zones, stepped: Vec<(Vec3, Scalar)>) {
+        let Some(auto) = self.sizing else {
+            return;
+        };
+        for (at, new_mm3) in stepped {
+            let size = auto.step_size(new_mm3).unwrap_or(0);
+            zones.add(at, auto.step_height_mm[size], new_mm3);
+        }
+    }
+
+    /// Props each part held at too few places, and lets it go.
+    fn steady_parts(
+        &self,
+        standing: &mut Standing,
+        parts: &Parts,
+        contact_mm: Scalar,
+        placed: &mut Vec<(Vec3, Why)>,
+    ) {
         for (piece, cell) in self.unsteady(standing, parts, contact_mm) {
             let at = self.grid.centre_mm(cell[0], cell[1]);
             if !self.refuses(at.extend(contact_mm)) {
@@ -496,6 +585,7 @@ impl Pass<'_> {
             standing.leave(Some(piece));
         }
     }
+
     /// How far one support steadying a part on a slope keeps the next away, mm.
     fn steady_mm(&self) -> Scalar {
         self.sizing

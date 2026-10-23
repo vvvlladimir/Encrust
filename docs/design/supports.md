@@ -303,9 +303,10 @@ quarters of a spacing from what is taken; anchoring is what lets the coverage ch
 slope to one support per place rather than one per layer. A piece too small for two
 supports gets one at its middle, where a corner would leave it a lever, so sampling never
 returns nothing (ADR 0330). An island is sampled closer
-than an overhang, by its area: under 2.4 mm² at 13/18 of the spacing, under 3.2 mm² at
-15/18, and at the spacing itself above that, each keeping three quarters of its own
-spacing clear. It hangs on the film alone, with no edge of a part to steady it.
+than an overhang, by its area, as the profile's `[islands]` says: as shipped, under 2.4 mm²
+at 13/18 of the spacing, under 3.2 mm² at 15/18, and at the spacing itself above that, each
+keeping three quarters of its own spacing clear. Automatic sizing takes the two areas from
+its own `island_area_mm2`, so one number picks both a support's size and its spacing. It hangs on the film alone, with no edge of a part to steady it.
 
 **Clear of the edge.** A head centred on the layer's outline is half off the surface it
 holds: its nearest face is the wall above the edge, so the tip leans out and cures onto

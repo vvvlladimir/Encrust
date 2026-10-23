@@ -4,7 +4,7 @@
 use std::ops::RangeInclusive;
 
 use printer_profiles::{
-    AutoProfile, BracePattern, Bracing, BracingPreset, Catalogue, ContactShape, Entry,
+    AUTO_SIZES, AutoProfile, BracePattern, Bracing, BracingPreset, Catalogue, ContactShape, Entry,
     PlatformShape, RaftShape, RaftStyle, SupportProfile,
 };
 
@@ -703,7 +703,7 @@ pub fn sizes(
     ui: &mut egui::Ui,
     auto: &mut AutoProfile,
     shipped: Option<&AutoProfile>,
-    shapes: &[String; 3],
+    shapes: &[String; AUTO_SIZES],
 ) {
     let heavier = &shapes[1..];
     let island = Measure {
@@ -832,14 +832,14 @@ mod tests {
     #[test]
     fn an_edited_profile_is_measured_against_the_saved_one_of_its_name() {
         let catalogue = Catalogue::bundled().expect("the shipped catalogue loads");
-        let mut edited = SupportProfile::medium();
+        let mut edited = SupportProfile::shipped("medium").expect("the medium preset ships");
         edited.bracing.diameter_mm += 0.3;
 
         let saved = saved_as(&catalogue, &edited).expect("Medium is shipped");
-        assert_eq!(saved.profile, SupportProfile::medium());
+        assert_eq!(saved.profile, SupportProfile::shipped("medium").expect("the medium preset ships"));
         assert_eq!(
             was(Some(&saved.profile), |profile| profile.bracing.diameter_mm),
-            Some(SupportProfile::medium().bracing.diameter_mm),
+            Some(SupportProfile::shipped("medium").expect("the medium preset ships").bracing.diameter_mm),
             "which is what the field's button puts back"
         );
     }
@@ -847,7 +847,7 @@ mod tests {
     #[test]
     fn a_profile_of_a_name_nobody_saved_has_nothing_to_go_back_to() {
         let catalogue = Catalogue::bundled().expect("the shipped catalogue loads");
-        let mut renamed = SupportProfile::medium();
+        let mut renamed = SupportProfile::shipped("medium").expect("the medium preset ships");
         renamed.name = "Nobody's".to_owned();
         assert!(saved_as(&catalogue, &renamed).is_none());
     }

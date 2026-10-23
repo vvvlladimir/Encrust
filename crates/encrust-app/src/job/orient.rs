@@ -48,7 +48,7 @@ impl OrientTask {
             vents: Vec::new(),
             sizing: Transform::default(),
             down_now: Vec3::NEG_Z,
-            support: SupportProfile::medium(),
+            support: SupportProfile::shipped("medium").expect("the medium preset ships"),
         }
     }
 
@@ -386,7 +386,7 @@ mod tests {
             settings: HollowSettings::default(),
         });
 
-        let tasks = orient_tasks(&scene, None, |_| SupportProfile::medium());
+        let tasks = orient_tasks(&scene, None, |_| SupportProfile::shipped("medium").expect("the medium preset ships"));
         let judged = tasks[0].shell.as_ref().expect("the task carries the shell");
         assert!(Arc::ptr_eq(judged, &shell));
     }

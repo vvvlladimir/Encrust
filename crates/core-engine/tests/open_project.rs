@@ -135,7 +135,7 @@ fn project() -> Project {
             supports: SupportState {
                 groups: vec![Group {
                     name: "Default".to_owned(),
-                    profile: SupportProfile::medium(),
+                    profile: SupportProfile::shipped("medium").expect("the medium preset ships"),
                 }],
                 active: 0,
                 fill: ProjectSettings::default(),
@@ -217,7 +217,7 @@ fn grown_under(mesh: &Mesh, transform: Transform, contact: Vec3) -> Vec<SupportT
         mesh,
         &Bvh::build(mesh),
         transform,
-        std::slice::from_ref(&SupportProfile::medium()),
+        std::slice::from_ref(&SupportProfile::shipped("medium").expect("the medium preset ships")),
     );
     supports.grown(transform)
 }

@@ -347,7 +347,7 @@ mod tests {
 
     fn request(scene: &Scene) -> SupportRequest {
         SupportRequest {
-            tasks: tasks_of(scene, |_| SupportProfile::medium()),
+            tasks: tasks_of(scene, |_| SupportProfile::shipped("medium").expect("the medium preset ships")),
             layer_height_mm: 0.1,
             sizing: None,
         }
@@ -393,7 +393,7 @@ mod tests {
     fn a_hidden_model_is_not_worked_on() {
         let mut scene = scene_with_a_cube(Transform::from_translation(Vec3::new(0.0, 0.0, 10.0)));
         scene.objects_mut()[0].visible = false;
-        assert!(tasks_of(&scene, |_| SupportProfile::medium()).is_empty());
+        assert!(tasks_of(&scene, |_| SupportProfile::shipped("medium").expect("the medium preset ships")).is_empty());
     }
 
     #[test]
@@ -405,7 +405,7 @@ mod tests {
             .supports
             .paint_face(&mesh, &adjacency, 0, 30.0, true, true);
 
-        let tasks = tasks_of(&scene, |_| SupportProfile::medium());
+        let tasks = tasks_of(&scene, |_| SupportProfile::shipped("medium").expect("the medium preset ships"));
         assert!(
             !tasks[0].blocked.is_empty(),
             "the run has to know what it may not put a support on"
@@ -420,7 +420,7 @@ mod tests {
             .supports
             .add(Vec3::new(5.0, 5.0, 10.0), lift, 0);
 
-        let tasks = tasks_of(&scene, |_| SupportProfile::medium());
+        let tasks = tasks_of(&scene, |_| SupportProfile::shipped("medium").expect("the medium preset ships"));
         assert_eq!(tasks.len(), 1);
         assert!(
             tasks[0].seeds[0].abs_diff_eq(Vec3::new(5.0, 5.0, 10.0), 1e-4),

@@ -80,12 +80,8 @@ pub(super) fn place_support_under_cursor(
     }
 }
 
-/// Where a line of supports drawn on object `id` starts, in plate coordinates: the last
-/// support placed, if it was placed on that model.
 fn line_start(window: &Window, id: ObjectId) -> Option<Vec3> {
-    let (on, contact) = window.tools.supports.last_placed?;
-    let object = window.doc.scene.get(id).filter(|_| on == id)?;
-    Some(object.transform.to_matrix().transform_point3(contact))
+    window.tools.supports.line_start(&window.doc.scene, id)
 }
 
 /// The side of a hollow model's wall a line starting at `from`, in plate coordinates,
@@ -499,13 +495,8 @@ fn rebuild_held(window: &mut Window) {
         }
         done.push(picked.id);
         if let Some(object) = window.doc.scene.get_mut(picked.id) {
-            let model = std::sync::Arc::clone(&object.mesh);
-            let (surface, bvh) = object.support_surface();
-            let (surface, bvh) = (std::sync::Arc::clone(surface), std::sync::Arc::clone(bvh));
             let table = window.tools.supports.table_for(object);
-            object
-                .supports
-                .refresh_on(&model, &surface, &bvh, object.transform, &table);
+            object.refresh_supports(&table);
         }
     }
 }

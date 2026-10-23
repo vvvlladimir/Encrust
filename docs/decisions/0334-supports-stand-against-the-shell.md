@@ -17,14 +17,15 @@ its faces afresh. A cavity often wants holding up apart from the outside, after 
 
 - **The printed surface.** Supports stand against the model drilled where its holes have
   been taken out, else its shell once hollowed, else the model. The window keeps that
-  surface's hierarchy beside the model, built once per surface, and rebuilds the supports
-  when it changes; a run cuts and reads it, columns land and beams are swept against it,
+  surface's hierarchy beside the model, built once per surface on a worker, the model
+  standing in until it lands, and rebuilds the supports when it changes; a run cuts and reads it, columns land and beams are swept against it,
   and opening a project drills the shell it holds the same way and meshes against that.
 - **Patches stay on the model.** A fill reads the model's faces, and a blocked patch is
   asked by point — `Placed::blocks_at`, within 0.01 mm of the patch — rather than by face,
   so it holds on any surface however it is numbered.
 - **Inside is a run of its own.** A contact is inside when the surface nearest it bounds the
-  cavity, or the lattice standing in it. **Grow the supports** keeps only the outside;
+  cavity, or the lattice standing in it; a drilled shell keeps its lattice after its cavity,
+  as the shell does, so both count it inside. **Grow the supports** keeps only the outside;
   **Support the cavity**, shown while a model aimed at has a cavity, keeps only the inside,
   sized by the profile in hand like any run. Once anything stands inside, the button is
   **Delete the cavity supports** and takes those away, frozen trees whose every tip is
@@ -43,8 +44,9 @@ its faces afresh. A cavity often wants holding up apart from the outside, after 
 
 A cavity, a drain hole and any bore are held up like every other underside, by the profile
 chosen above, and a support under the outside bites only as deep as the real wall. One more
-hierarchy per hollowed or drilled model is held in memory and built on the window's thread
-when the surface changes. Until a hole has been taken out exactly, or where the engine
+hierarchy per hollowed or drilled model is held in memory, built off the window's thread
+when the surface changes, so a dense shell does not freeze a frame; until it lands a run
+stands against the model. Until a hole has been taken out exactly, or where the engine
 refused it, the hole is not seen.
 
 ## Alternatives considered

@@ -37,7 +37,8 @@ const ON_CAVITY_MM: Scalar = 1e-3;
 #[derive(Debug, Clone, PartialEq)]
 pub struct Drilled {
     pub mesh: Arc<Mesh>,
-    /// Which faces of `mesh` bound the cavity, as `Shell::cavity` names them for the shell.
+    /// Which faces of `mesh` bound the cavity, as `Shell::cavity` names them for the shell;
+    /// its infill follows it to the end, as in the shell.
     pub cavity: Option<Range<usize>>,
 }
 
@@ -64,11 +65,11 @@ impl Drilled {
     }
 }
 
-/// `drilled` with its faces that lie on `source`'s `cavity` moved to the end, and their range.
+/// `drilled` laid out as `source` is: its own faces, then those on `source`'s `cavity`, then
+/// those on the infill after it; with the cavity's range.
 fn cavity_last(drilled: Mesh, source: &Mesh, cavity: Range<usize>) -> (Mesh, Range<usize>) {
-    let bounding = Mesh::new(source.vertices.clone(), source.faces[cavity].to_vec());
-    let bvh = Bvh::build(&bounding);
-    let on_cavity: Vec<bool> = drilled
+    let bvh = Bvh::build(source);
+    let part: Vec<u8> = drilled
         .faces
         .par_iter()
         .map(|face| {
@@ -77,19 +78,27 @@ fn cavity_last(drilled: Mesh, source: &Mesh, cavity: Range<usize>) -> (Mesh, Ran
                 .map(|corner| drilled.vertices[*corner as usize])
                 .sum::<core_geometry::Vec3>()
                 / 3.0;
-            bvh.closest_within(middle, ON_CAVITY_MM).is_some()
+            match bvh.closest_within(middle, ON_CAVITY_MM) {
+                Some(on) if on.face >= cavity.end => 2,
+                Some(on) if on.face >= cavity.start => 1,
+                _ => 0,
+            }
         })
         .collect();
-    let (mut outer, inner): (Vec<_>, Vec<_>) = drilled
-        .faces
-        .iter()
-        .zip(&on_cavity)
-        .partition(|(_, on)| !**on);
-    let start = outer.len();
-    outer.extend(inner);
-    let faces = outer.into_iter().map(|(face, _)| *face).collect::<Vec<_>>();
-    let end = faces.len();
-    (Mesh::new(drilled.vertices, faces), start..end)
+    let mut faces = Vec::with_capacity(drilled.faces.len());
+    let mut ends = [0; 3];
+    for (wanted, end) in ends.iter_mut().enumerate() {
+        faces.extend(
+            drilled
+                .faces
+                .iter()
+                .zip(&part)
+                .filter(|(_, part)| usize::from(**part) == wanted)
+                .map(|(face, _)| *face),
+        );
+        *end = faces.len();
+    }
+    (Mesh::new(drilled.vertices, faces), ends[0]..ends[1])
 }
 
 /// `mesh` with each of its separate pieces that `cuts` reach drilled as [`drilled`] does, and
@@ -261,6 +270,44 @@ mod tests {
         assert!(
             (volume - 980.0).abs() < 1e-2,
             "only the cavity's own faces, open where the bore meets it, got {volume}"
+        );
+    }
+
+    #[test]
+    fn a_drilled_shell_keeps_its_infill_after_its_cavity() {
+        // A 30 mm box, a 20 mm cavity in it wound inward and a 6 mm block of infill in the
+        // middle of that, with the hole down through the top wall into the cavity.
+        let mut shell = cuboid(Vec3::ZERO, Vec3::splat(30.0));
+        let outer_faces = shell.faces.len();
+        let cavity = cuboid(Vec3::splat(5.0), Vec3::splat(25.0));
+        let offset = shell.vertices.len() as u32;
+        shell.vertices.extend(&cavity.vertices);
+        shell.faces.extend(
+            cavity
+                .faces
+                .iter()
+                .map(|[a, b, c]| [a + offset, c + offset, b + offset]),
+        );
+        let cavity_end = shell.faces.len();
+        shell.append(&cuboid(Vec3::splat(12.0), Vec3::splat(18.0)));
+        let hole = DrainHole {
+            at: Vec3::new(8.0, 8.0, 30.0),
+            depth_mm: 8.0,
+            ..square_hole_through()
+        };
+        let cuts = drill(&[hole], &[]).expect("the hole drills");
+        let cut = Drilled::of(&shell, Some(outer_faces..cavity_end), &cuts)
+            .expect("a box with a cavity is a solid");
+        let range = cut.cavity.expect("the cavity is carried over");
+        let infill = Mesh::new(
+            cut.mesh.vertices.clone(),
+            cut.mesh.faces[range.end..].to_vec(),
+        );
+        let volume = signed_volume(&infill);
+        // The 6 mm block alone, 216 mm3, untouched by a bore that passes beside it.
+        assert!(
+            (volume - 216.0).abs() < 1e-2,
+            "the infill follows the cavity to the end, got {volume} mm3 there"
         );
     }
 

@@ -348,10 +348,8 @@ impl SlicerApp {
         self.tools.supports.settle_on_raft(&mut self.doc.scene);
         let plate = self.tools.supports.table();
         let raft = self.tools.supports.raft;
+        self.doc.surfaces.start(&mut self.doc.scene);
         for object in self.doc.scene.objects_mut() {
-            if object.keep_support_surface() {
-                object.supports.surface_changed();
-            }
             let untouched = object.supports.is_empty()
                 && object.supports.meshes().is_none()
                 && object.supports.drawn().is_empty()
@@ -360,13 +358,8 @@ impl SlicerApp {
             if untouched {
                 continue;
             }
-            let model = std::sync::Arc::clone(&object.mesh);
-            let (surface, bvh) = object.support_surface();
-            let (surface, bvh) = (std::sync::Arc::clone(surface), std::sync::Arc::clone(bvh));
             let table = with_own(plate.clone(), &object.own, raft);
-            object
-                .supports
-                .refresh_on(&model, &surface, &bvh, object.transform, &table);
+            object.refresh_supports(&table);
         }
     }
 }
@@ -436,6 +429,7 @@ impl eframe::App for SlicerApp {
                 .doc
                 .drilling
                 .poll(&mut self.doc.scene, &mut self.machine.status)
+            | self.doc.surfaces.poll(&mut self.doc.scene)
             | self
                 .machine
                 .slicing

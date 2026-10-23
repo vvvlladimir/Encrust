@@ -2,7 +2,7 @@ use std::path::Path;
 
 use serde::{Deserialize, Serialize};
 
-use crate::{ProfileError, SupportProfile};
+use crate::{IslandSpacing, ProfileError, SupportProfile};
 
 /// How many shapes an automatic profile sizes supports into.
 pub const AUTO_SIZES: usize = 3;
@@ -20,7 +20,7 @@ pub struct AutoProfile {
     pub contact_spacing_mm: f32,
     pub steep_contact_spacing_mm: f32,
     /// The least island, mm² on the layer it begins on, held by the second shape and by
-    /// the third.
+    /// the third, and spaced as [`IslandSpacing`] says from there.
     pub island_area_mm2: [f32; AUTO_SIZES - 1],
     /// The least model standing above an overhang, mm³, held by the second shape and by
     /// the third.
@@ -78,6 +78,10 @@ impl AutoProfile {
             max_overhang_deg: self.max_overhang_deg,
             contact_spacing_mm: self.contact_spacing_mm,
             steep_contact_spacing_mm: self.steep_contact_spacing_mm,
+            islands: IslandSpacing {
+                area_mm2: self.island_area_mm2,
+                ..shape.islands
+            },
             ..shape.clone()
         }
     }
@@ -126,7 +130,7 @@ fn size_of(least: &[f32], value: f32) -> usize {
 }
 
 /// Thresholds that are not negative and do not fall.
-fn ascending(field: &'static str, least: &[f32]) -> Result<(), ProfileError> {
+pub(crate) fn ascending(field: &'static str, least: &[f32]) -> Result<(), ProfileError> {
     if let Some(value) = least.iter().copied().find(|value| *value < 0.0) {
         return Err(ProfileError::Negative { field, value });
     }
@@ -177,11 +181,14 @@ mod tests {
     #[test]
     fn placing_numbers_go_onto_a_shape_and_come_back() {
         let mut auto = shipped();
-        let mut placing = auto.placing_with(&SupportProfile::heavy());
+        let mut placing =
+            auto.placing_with(&SupportProfile::shipped("heavy").expect("the heavy preset ships"));
         assert_eq!(placing.contact_spacing_mm, 1.8);
         assert_eq!(
             placing.middle,
-            SupportProfile::heavy().middle,
+            SupportProfile::shipped("heavy")
+                .expect("the heavy preset ships")
+                .middle,
             "the shape is kept"
         );
         placing.density = 2.0;

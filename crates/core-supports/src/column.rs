@@ -867,7 +867,7 @@ mod tests {
 
     #[test]
     fn the_light_preset_stands_a_support_under_a_part_at_its_own_lift() {
-        let profile = SupportProfile::light();
+        let profile = SupportProfile::shipped("light").expect("the light preset ships");
         let contact = Vec3::new(1.0, 1.0, profile.z_lift_mm);
         assert!(
             landing_on(&Mesh::default(), Transform::default(), contact, &profile).is_some(),

@@ -1,5 +1,5 @@
 use core_geometry::Scalar;
-use printer_profiles::SupportProfile;
+use printer_profiles::{IslandSpacing, SupportProfile};
 
 /// Cell size of the grid layers are read on, millimetres.
 ///
@@ -24,11 +24,6 @@ pub const MIN_ISLAND_MM: Scalar = 0.4;
 /// See `docs/design/supports.md`.
 pub const MICRO_ISLAND_MM3: Scalar = 0.01;
 pub const MICRO_ISLAND_HEIGHT_MM: Scalar = 0.08;
-
-/// How closely an island is held against the spacing, by the island's area in mm²: the
-/// least area of each step and its share of the spacing. A small island is held closer,
-/// since it hangs on the film alone and has no edge of a part to steady it.
-const ISLAND_SPACING: [(Scalar, Scalar); 3] = [(0.0, 13.0 / 18.0), (2.4, 15.0 / 18.0), (3.2, 1.0)];
 
 /// How many bands an overhang is cut into by how flat it is, from the one just past the
 /// angle to the one nearly level; see `docs/design/supports.md`.
@@ -81,6 +76,8 @@ pub struct SampleConfig {
     pub edge_inset_mm: Scalar,
     /// The overhang angle itself, radians from vertical.
     pub lean_rad: Scalar,
+    /// How closely an island is held against `spacing_mm`, as the profile says.
+    pub islands: IslandSpacing,
 }
 
 impl SampleConfig {
@@ -125,16 +122,19 @@ impl SampleConfig {
             // would be put under it.
             min_overhang_mm: carry_mm / 2.0,
             edge_inset_mm: head_radius_mm + GRID_PITCH_MM,
+            islands: profile.islands,
         }
     }
 
     /// How far apart supports go on an island of `area_mm2`.
     pub fn island_spacing_mm(&self, area_mm2: Scalar) -> Scalar {
-        let share = ISLAND_SPACING
+        let reached = self
+            .islands
+            .area_mm2
             .iter()
-            .rev()
-            .find(|(least_mm2, _)| area_mm2 >= *least_mm2)
-            .map_or(ISLAND_SPACING[0].1, |(_, share)| *share);
+            .take_while(|least_mm2| area_mm2 >= **least_mm2)
+            .count();
+        let share = self.islands.share[reached];
         (self.spacing_mm * share).max(MIN_SPACING_MM)
     }
 
@@ -198,6 +198,24 @@ mod tests {
         let config = SampleConfig::for_profile(&profile);
         assert!(!config.spacing_leans());
         assert!((config.band_spacing_mm(0) - config.spacing_mm).abs() < 1e-5);
+    }
+
+    #[test]
+    fn an_island_is_spaced_as_its_profile_says() {
+        let mut profile = crate::tests::profile();
+        profile.islands = IslandSpacing {
+            area_mm2: [10.0, 20.0],
+            share: [0.5, 0.75, 1.0],
+        };
+        let config = SampleConfig::for_profile(&profile);
+        assert!(
+            (config.island_spacing_mm(5.0) - config.spacing_mm * 0.5).abs() < 1e-5,
+            "a 5 mm² island is under the profile's first 10 mm², so held at half the spacing"
+        );
+        assert!(
+            (config.island_spacing_mm(15.0) - config.spacing_mm * 0.75).abs() < 1e-5,
+            "a 15 mm² island reaches the first threshold alone"
+        );
     }
 
     #[test]
@@ -316,9 +334,9 @@ mod tests {
     #[test]
     fn every_shipped_preset_lifts_a_part_far_enough_for_its_own_support() {
         for profile in [
-            SupportProfile::light(),
-            SupportProfile::medium(),
-            SupportProfile::heavy(),
+            SupportProfile::shipped("light").expect("the light preset ships"),
+            SupportProfile::shipped("medium").expect("the medium preset ships"),
+            SupportProfile::shipped("heavy").expect("the heavy preset ships"),
         ] {
             let flare_mm = profile.flare_lower_radius_mm() - profile.pillar_radius_mm();
             let needed_mm = profile.base_height_mm()

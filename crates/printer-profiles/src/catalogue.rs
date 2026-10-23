@@ -495,6 +495,12 @@ fn shipped_printer(id: &str) -> Option<PrinterProfile> {
     PrinterProfile::from_toml_str(source, &path).ok()
 }
 
+pub(crate) fn shipped_support(id: &str) -> Option<SupportProfile> {
+    let (_, source) = BUNDLED_SUPPORTS.iter().find(|(name, _)| *name == id)?;
+    let path = PathBuf::from(format!("<bundled>/supports/{id}.toml"));
+    SupportProfile::from_toml_str(source, &path).ok()
+}
+
 fn overlay<T>(
     map: &mut BTreeMap<String, Entry<T>>,
     store: &dyn ProfileStore,
@@ -826,7 +832,11 @@ z = 100.0
                 .expect("shipped")
                 .profile
                 .clone();
-            assert_eq!(shipped, SupportProfile::medium(), "the asset is the preset");
+            assert_eq!(
+                shipped,
+                SupportProfile::shipped("medium").expect("the medium preset ships"),
+                "the asset is the preset"
+            );
             let edited = SupportProfile {
                 density: 3.0,
                 ..shipped.clone()

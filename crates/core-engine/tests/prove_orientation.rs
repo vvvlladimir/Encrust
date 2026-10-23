@@ -42,7 +42,7 @@ impl Bench {
             printer: PrinterProfile::from_toml_str(PROFILE, Path::new("inline.toml"))
                 .expect("the inline profile parses"),
             material: MaterialProfile::default(),
-            support: SupportProfile::medium(),
+            support: SupportProfile::shipped("medium").expect("the medium preset ships"),
         }
     }
 

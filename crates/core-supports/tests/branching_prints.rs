@@ -106,7 +106,7 @@ fn layer_at(sliced: &core_slicer::Sliced, z: f32) -> Layer {
 
 #[test]
 fn a_trunk_under_a_joint_exposes_one_circle_and_no_hole() {
-    let profile = SupportProfile::medium();
+    let profile = SupportProfile::shipped("medium").expect("the medium preset ships");
     let trees = pair(&profile);
     assert_eq!(trees.len(), 1, "the pair merges");
 
@@ -125,7 +125,7 @@ fn a_trunk_under_a_joint_exposes_one_circle_and_no_hole() {
 
 #[test]
 fn the_overlap_at_a_joint_is_exposed_once_not_twice() {
-    let profile = SupportProfile::medium();
+    let profile = SupportProfile::shipped("medium").expect("the medium preset ships");
     let trees = pair(&profile);
     let joint = trees[0].root();
     let sliced = slice(&meshed(&trees, &profile));
@@ -153,7 +153,7 @@ fn the_overlap_at_a_joint_is_exposed_once_not_twice() {
 
 #[test]
 fn every_layer_of_a_branched_support_is_solid() {
-    let profile = SupportProfile::medium();
+    let profile = SupportProfile::shipped("medium").expect("the medium preset ships");
     let trees = pair(&profile);
     let sliced = slice(&meshed(&trees, &profile));
 

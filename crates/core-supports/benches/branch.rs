@@ -80,7 +80,7 @@ fn tips(model: &Mesh, bvh: &Bvh, profile: &SupportProfile) -> Vec<core_supports:
 }
 
 fn branching(c: &mut Criterion) {
-    let profile = SupportProfile::medium();
+    let profile = SupportProfile::shipped("medium").expect("the medium preset ships");
     let mut straight = profile.clone();
     straight.branching.enabled = false;
 

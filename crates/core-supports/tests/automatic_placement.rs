@@ -65,7 +65,7 @@ fn slice(mesh: &Mesh) -> core_slicer::Sliced {
 /// The same profile with every tip standing on a column of its own and nothing tying the
 /// columns together, which is what the measurements of a single pillar are made against.
 fn unbranched() -> SupportProfile {
-    let mut profile = SupportProfile::medium();
+    let mut profile = SupportProfile::shipped("medium").expect("the medium preset ships");
     profile.branching.enabled = false;
     profile.bracing.enabled = false;
     profile
@@ -107,7 +107,7 @@ fn meshed(trees: &[SupportTree], model: &Mesh, profile: &SupportProfile) -> Mesh
 
 #[test]
 fn every_point_placed_under_an_island_becomes_a_column_that_stands() {
-    let profile = SupportProfile::medium();
+    let profile = SupportProfile::shipped("medium").expect("the medium preset ships");
     let model = floating_box();
     let points = points(&model, &profile);
     assert!(!points.is_empty(), "an island has to be held up");
@@ -143,7 +143,7 @@ fn every_point_placed_under_an_island_becomes_a_column_that_stands() {
 
 #[test]
 fn a_tip_that_does_not_bite_touches_the_underside_it_holds() {
-    let mut profile = SupportProfile::medium();
+    let mut profile = SupportProfile::shipped("medium").expect("the medium preset ships");
     profile.tip.contact_depth_mm = 0.0;
     let model = floating_box();
     let columns = columns(
@@ -163,7 +163,7 @@ fn a_tip_that_does_not_bite_touches_the_underside_it_holds() {
 
 #[test]
 fn the_columns_of_a_run_mesh_into_a_closed_solid() {
-    let profile = SupportProfile::medium();
+    let profile = SupportProfile::shipped("medium").expect("the medium preset ships");
     let model = floating_box();
 
     let mesh = meshed(&forest(&model, &profile), &model, &profile);
@@ -178,7 +178,7 @@ fn the_columns_of_a_run_mesh_into_a_closed_solid() {
 #[test]
 fn branching_holds_an_island_up_with_less_resin_than_columns_do() {
     let model = floating_box();
-    let branched = SupportProfile::medium();
+    let branched = SupportProfile::shipped("medium").expect("the medium preset ships");
     let straight = unbranched();
 
     let merged = signed_volume(&meshed(&forest(&model, &branched), &model, &branched));
@@ -193,7 +193,7 @@ fn branching_holds_an_island_up_with_less_resin_than_columns_do() {
 
 #[test]
 fn every_tip_of_a_run_is_still_carried_after_the_tips_merge() {
-    let profile = SupportProfile::medium();
+    let profile = SupportProfile::shipped("medium").expect("the medium preset ships");
     let model = floating_box();
     let bvh = Bvh::build(&model);
     let columns = columns(
@@ -293,7 +293,7 @@ fn ball(radius: f32) -> Mesh {
 
 #[test]
 fn a_ball_on_the_plate_is_held_under_its_cap_and_nowhere_above_it() {
-    let profile = SupportProfile::medium();
+    let profile = SupportProfile::shipped("medium").expect("the medium preset ships");
     let model = ball(15.0);
     let points = points(&model, &profile);
 
@@ -360,12 +360,12 @@ fn a_ball_on_the_plate_is_held_under_its_cap_and_nowhere_above_it() {
 #[test]
 fn a_denser_profile_holds_the_same_island_in_more_places() {
     let model = floating_box();
-    let sparse = points(&model, &SupportProfile::light());
+    let sparse = points(&model, &SupportProfile::shipped("light").expect("the light preset ships"));
     let dense = points(
         &model,
         &SupportProfile {
             density: 2.5,
-            ..SupportProfile::light()
+            ..SupportProfile::shipped("light").expect("the light preset ships")
         },
     );
     assert!(

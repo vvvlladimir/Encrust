@@ -41,6 +41,7 @@ mod slicing;
 mod state;
 mod status;
 mod supports;
+mod surfaces;
 mod text;
 mod tool_settings;
 #[cfg(target_os = "macos")]

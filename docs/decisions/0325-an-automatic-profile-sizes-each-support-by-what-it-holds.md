@@ -23,7 +23,9 @@ is bundled only; the user tunes the shapes it names.
 
 **Placement says why.** `generate_supports` answers each contact with a `Reason`: an island
 with its area, an overhang with the model above it, or a support that steadies a part. Only
-an island's size would move where supports go, and its spacing already follows its area; so
+an island's size would move where supports go, and its spacing already follows its area —
+by the support profile's `[islands]` areas and shares, the two areas taken from the
+automatic profile's own when it places, so one number picks both size and spacing; so
 placement runs as before and the model above an overhang is settled after the climb. The
 pieces of each layer are followed onto those of the layer before as a graph whose node runs
 on while a piece neither splits nor joins, so it grows with the model's branchings, not its

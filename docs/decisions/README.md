@@ -194,6 +194,7 @@ Grouped by what the decision governs; the number is still the order it was taken
 | [0334](0334-supports-stand-against-the-shell.md) | Stand supports against what prints, and hold a cavity up by a run of its own | Accepted |
 | [0335](0335-trunks-stand-on-a-grid.md) | Stand trunks on the nodes of a square grid when a profile asks for it | Accepted |
 | [0336](0336-a-panel-is-left-as-it-was-between-runs.md) | Leave every panel as it was between runs, and keep automatic sizing with the tools | Accepted |
+| [0337](0337-a-shipped-preset-lives-only-in-its-file.md) | Keep a shipped support preset only in its file | Accepted |
 | [0093](0093-a-blocker-is-a-keep-out-not-a-hint.md) | A support blocker is a keep-out, not a hint | Accepted |
 | [0094](0094-a-supports-parameters-are-its-groups.md) | A support's parameters are its group's | Accepted; that no trunk is shared across groups is superseded by 0248; that the bracing is group 0's is superseded by 0252; that the raft is group 0's is superseded by 0253 |
 | [0095](0095-a-support-the-hand-touched-is-frozen.md) | A support the hand has touched is frozen into the scene | Accepted; the two-press rule is superseded by 0244 |
@@ -211,7 +212,7 @@ Grouped by what the decision governs; the number is still the order it was taken
 | [0242](0242-a-trunk-is-a-cone-sized-by-its-height-and-load.md) | Make a trunk a cone sized by its height and load, and no brace wider than it | Accepted |
 | [0243](0243-a-tip-is-a-plane-or-a-sphere-and-a-plane-bites-by-moving-in.md) | Offer a plane or a sphere tip, and bite a plane tip by pushing it in | Accepted; a bite of nought is allowed by 0323, and the disc is laid on its face by 0330 |
 | [0244](0244-a-press-on-a-support-carries-it-and-the-aim-has-slack.md) | Carry a support by the press that picks it, and give the aim slack | Accepted |
-| [0132](0132-the-shipped-asset-is-the-preset.md) | The shipped TOML is the preset, and the constructor mirrors it | Accepted |
+| [0132](0132-the-shipped-asset-is-the-preset.md) | The shipped TOML is the preset, and the constructor mirrors it | Superseded by 0337 |
 | [0254](0254-the-shipped-presets-are-tuned-on-prints.md) | Ship presets tuned on prints, and let Heavy stand fewer, thicker supports | Superseded by 0323 |
 | [0323](0323-presets-differ-in-thickness-and-a-tip-meets-the-surface.md) | Let presets differ in thickness only, place densely, and let a tip meet the surface | Accepted |
 | [0324](0324-contact-spacing-follows-the-angle-of-the-face.md) | Space contacts by the angle of the face they hold | Accepted |

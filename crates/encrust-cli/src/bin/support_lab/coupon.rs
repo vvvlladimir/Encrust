@@ -284,7 +284,9 @@ fn supported(profile: &SupportProfile, body: Mesh, points: Vec<Vec3>) -> Result<
     let supports = mesh_trees(&trees, &placed, profiles);
     Ok(Supported {
         model: body,
+        groups: vec![0; points.len()],
         contacts: points,
+        profiles: vec![profile.clone()],
         trees,
         supports,
         place_s: 0.0,

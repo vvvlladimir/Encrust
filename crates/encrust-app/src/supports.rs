@@ -1,12 +1,16 @@
 use anyhow::{Context, Result, bail};
 use core_engine::project::{AutoSizing, FillProfiles, own_table};
 use core_geometry::{Adjacency, Ray, Scalar, Vec2, Vec3, raycast_placed};
-use core_supports::{Need, Part, Placed, ProjectSettings, Projected, Reason, SupportTree, project};
+use core_supports::{Part, Placed, ProjectSettings, Projected, SupportTree, project};
 use printer_profiles::{AUTO_SIZES, AutoProfile, Catalogue, Raft, SupportProfile};
 use serde::{Deserialize, Serialize};
 
 /// How many shapes an automatic run builds to: its sizes, and the one that steadies a part.
 const SHAPES: usize = AUTO_SIZES + 1;
+
+/// How near a support has to stand to where the last one was placed to start a line from
+/// it, millimetres: both are the same point put through the same matrix.
+const LINE_START_MM: Scalar = 1e-3;
 
 use crate::i18n::tr;
 use crate::job::{Placement, SupportJob, SupportOutcome, SupportRequest, tasks_of};
@@ -191,6 +195,23 @@ impl SupportTool {
         None
     }
 
+    /// Where a line of supports drawn on object `id` starts, in plate coordinates: the last
+    /// support placed, if it was placed on that model and still stands there. One undone,
+    /// taken away or left on a scene since replaced is no start.
+    pub fn line_start(&self, scene: &Scene, id: ObjectId) -> Option<Vec3> {
+        let (on, contact) = self.last_placed?;
+        let object = scene.get(id).filter(|_| on == id)?;
+        let supports = &object.supports;
+        let mut standing = supports
+            .points()
+            .iter()
+            .map(|point| point.contact)
+            .chain(supports.frozen().iter().flat_map(SupportTree::contacts));
+        standing
+            .any(|at| at.distance_squared(contact) < LINE_START_MM * LINE_START_MM)
+            .then(|| object.transform.to_matrix().transform_point3(contact))
+    }
+
     /// Sizes supports by what they hold, or builds them to the group in hand. Turned on,
     /// it takes up the automatic profile last set aside, else the first `catalogue` ships.
     pub fn set_automatic(&mut self, on: bool, catalogue: &Catalogue) {
@@ -302,7 +323,7 @@ impl SupportTool {
                 Some((auto, shapes)) => {
                     let mut sized = [0usize; SHAPES];
                     for need in placements.iter().flat_map(|placement| &placement.needs) {
-                        sized[size_of(&auto, need)] += 1;
+                        sized[need.size_in(&auto)] += 1;
                     }
                     let mut shapes = shapes.map(Some);
                     for (shape, count) in shapes.iter_mut().zip(sized) {
@@ -316,7 +337,7 @@ impl SupportTool {
                             continue;
                         };
                         for need in placement.needs {
-                            let group = groups[size_of(&auto, &need)];
+                            let group = groups[need.size_in(&auto)];
                             object
                                 .supports
                                 .add(need.contact, placement.transform, group);
@@ -941,21 +962,12 @@ fn shapes_of(auto: &AutoProfile, catalogue: &Catalogue) -> Result<[SupportProfil
     Ok([light?, medium?, heavy?, steady?])
 }
 
-/// Which of `auto`'s shapes holds `need`, as an index into [`shapes_of`].
-fn size_of(auto: &AutoProfile, need: &Need) -> usize {
-    match need.reason {
-        Reason::Island { area_mm2 } => auto.island_size(area_mm2),
-        Reason::Overhang { carried_mm3 } => auto.overhang_size(carried_mm3),
-        Reason::Step { new_mm3 } => auto.step_size(new_mm3).unwrap_or(0),
-        Reason::Steady => AUTO_SIZES,
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
     use core_geometry::{Bvh, Mesh, Transform};
     use core_supports::SupportTree;
+    use core_supports::{Need, Reason};
     use std::sync::Arc;
 
     /// A scene holding one unit cube standing on the plate.
@@ -1114,7 +1126,7 @@ mod tests {
         let mut scene = one_supported_cube();
         let mut tool = SupportTool::default();
         let first = tool.profile.clone();
-        let other = SupportProfile::heavy();
+        let other = SupportProfile::shipped("heavy").expect("the heavy preset ships");
         assert_ne!(first.name, other.name);
 
         tool.chosen = Some(other.clone());
@@ -1131,7 +1143,7 @@ mod tests {
     fn a_group_nothing_stands_in_is_retuned_rather_than_left_behind() {
         let mut scene = one_cube();
         let mut tool = SupportTool::default();
-        let other = SupportProfile::heavy();
+        let other = SupportProfile::shipped("heavy").expect("the heavy preset ships");
 
         tool.chosen = Some(other.clone());
         tool.take_up_chosen(&mut scene);
@@ -1146,7 +1158,7 @@ mod tests {
         let mut scene = one_supported_cube();
         let mut tool = SupportTool::default();
         let first = tool.profile.clone();
-        tool.chosen = Some(SupportProfile::heavy());
+        tool.chosen = Some(SupportProfile::shipped("heavy").expect("the heavy preset ships"));
         tool.take_up_chosen(&mut scene);
 
         tool.chosen = Some(first);
@@ -1249,11 +1261,11 @@ mod tests {
         let mut tool = SupportTool::default();
         let raft = another_raft(&tool);
         tool.raft = raft;
-        assert_ne!(SupportProfile::heavy().raft, raft);
+        assert_ne!(SupportProfile::shipped("heavy").expect("the heavy preset ships").raft, raft);
 
-        tool.chosen = Some(SupportProfile::heavy());
+        tool.chosen = Some(SupportProfile::shipped("heavy").expect("the heavy preset ships"));
         tool.take_up_chosen(&mut scene);
-        tool.retune_group(0, SupportProfile::light(), &mut scene);
+        tool.retune_group(0, SupportProfile::shipped("light").expect("the light preset ships"), &mut scene);
 
         assert_eq!(
             tool.table_for(&scene.objects()[0])[0].raft,
@@ -1441,7 +1453,7 @@ mod tests {
                 &mesh,
                 &bvh,
                 Transform::default(),
-                std::slice::from_ref(&SupportProfile::medium()),
+                std::slice::from_ref(&SupportProfile::shipped("medium").expect("the medium preset ships")),
             );
             scene.objects()[0].supports.trees()[0].landing().on_model
         };
@@ -1641,7 +1653,7 @@ mod tests {
         let mut scene = one_supported_cube();
         let transform = scene.objects()[0].transform;
         let mut tool = SupportTool {
-            chosen: Some(SupportProfile::heavy()),
+            chosen: Some(SupportProfile::shipped("heavy").expect("the heavy preset ships")),
             ..SupportTool::default()
         };
         tool.take_up_chosen(&mut scene);
@@ -1653,8 +1665,8 @@ mod tests {
 
         assert_eq!(gone, 1, "the first group's one support went with it");
         assert_eq!(tool.groups.len(), 1);
-        assert_eq!(tool.groups[0].name, SupportProfile::heavy().name);
-        assert_eq!(tool.profile, SupportProfile::heavy());
+        assert_eq!(tool.groups[0].name, SupportProfile::shipped("heavy").expect("the heavy preset ships").name);
+        assert_eq!(tool.profile, SupportProfile::shipped("heavy").expect("the heavy preset ships"));
         assert_eq!(
             scene.objects()[0].supports.group_count(0),
             1,
@@ -1670,10 +1682,10 @@ mod tests {
         own.raft.enabled = !own.raft.enabled;
         scene.objects_mut()[0].own.supports.insert(0, own);
 
-        tool.retune_group(0, SupportProfile::heavy(), &mut scene);
+        tool.retune_group(0, SupportProfile::shipped("heavy").expect("the heavy preset ships"), &mut scene);
 
-        assert_eq!(tool.table(), vec![SupportProfile::heavy()]);
-        assert_eq!(tool.groups[0].name, SupportProfile::heavy().name);
+        assert_eq!(tool.table(), vec![SupportProfile::shipped("heavy").expect("the heavy preset ships")]);
+        assert_eq!(tool.groups[0].name, SupportProfile::shipped("heavy").expect("the heavy preset ships").name);
         assert!(scene.objects()[0].own.supports.is_empty());
         assert_eq!(
             scene.objects()[0].supports.group_count(0),
@@ -2020,13 +2032,7 @@ mod tests {
             .supports
             .add(Vec3::new(10.0, 10.0, 20.95), transform, 0);
 
-        let model = Arc::clone(&object.mesh);
-        let (surface, bvh) = object.support_surface();
-        let (surface, bvh) = (Arc::clone(surface), Arc::clone(bvh));
-        let table = SupportTool::default().table();
-        object
-            .supports
-            .refresh_on(&model, &surface, &bvh, transform, &table);
+        object.refresh_supports(&SupportTool::default().table());
         assert_eq!(
             object.supports.standing(),
             1,
@@ -2177,13 +2183,7 @@ mod tests {
         object
             .supports
             .add(Vec3::new(10.0, 10.0, 5.0), transform, 0);
-        let model = Arc::clone(&object.mesh);
-        let (surface, bvh) = object.support_surface();
-        let (surface, bvh) = (Arc::clone(surface), Arc::clone(bvh));
-        let table = SupportTool::default().table();
-        object
-            .supports
-            .refresh_on(&model, &surface, &bvh, transform, &table);
+        object.refresh_supports(&SupportTool::default().table());
         let inside_tree = (0..object.supports.trees().len())
             .find(|tree| object.supports.trees()[*tree].root().position.z > 9.0)
             .expect("the cavity's support stands on the cavity's floor");
@@ -2206,5 +2206,27 @@ mod tests {
             "the underside's support stays"
         );
         assert_eq!(SupportTool::inside_count(&scene), 0);
+    }
+
+    #[test]
+    fn a_line_starts_only_from_a_support_that_still_stands() {
+        let mut scene = one_cube();
+        let object = &mut scene.objects_mut()[0];
+        object.transform.translation.z = 10.0;
+        let (id, transform) = (object.id, object.transform);
+        let at = Vec3::new(0.5, 0.5, 10.0);
+        object.supports.add(at, transform, 0);
+        let tool = SupportTool {
+            last_placed: Some((id, transform.to_matrix().inverse().transform_point3(at))),
+            ..SupportTool::default()
+        };
+        let start = tool
+            .line_start(&scene, id)
+            .expect("the last support stands");
+        assert!(start.distance(at) < 1e-4, "the line starts at {start}");
+
+        // As an undo, or a new scene whose first model reuses the id, leaves it.
+        scene.objects_mut()[0].supports.clear();
+        assert_eq!(tool.line_start(&scene, id), None);
     }
 }

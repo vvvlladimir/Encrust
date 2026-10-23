@@ -857,7 +857,7 @@ mod tests {
             material: MaterialProfile::default(),
             invented_exposure: false,
         };
-        let supports = SupportProfile::medium();
+        let supports = SupportProfile::shipped("medium").expect("the medium preset ships");
         let seated = |flags: &[&str]| {
             let args = Flags::parse_from(flags).import;
             let (_, oriented) =

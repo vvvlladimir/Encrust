@@ -21,6 +21,8 @@ use core_analysis::NECK_LIMIT_MPA;
 use core_geometry::{Mesh, Quat, Vec2};
 use printer_profiles::{Catalogue, MaterialProfile, PrinterProfile, SupportProfile};
 
+use crate::stand::Asked;
+
 use crate::corpus::{Entry, Expect, Pose};
 use crate::report::{CureRow, Report, Row, SweepRow};
 
@@ -41,9 +43,18 @@ struct Args {
     only: Option<String>,
     #[arg(long, default_value = "elegoo-saturn-4-ultra")]
     printer: String,
-    /// Support profiles to bench each model with; repeat for several.
-    #[arg(long = "profile", default_values_t = ["light".to_owned()])]
+    /// Support profiles to bench each model with; repeat for several. Light when neither
+    /// this nor `--auto` is given.
+    #[arg(long = "profile")]
     profiles: Vec<String>,
+    /// Automatic profiles to bench each model with, each support sized by what it holds as
+    /// Generate does with Automatic on; repeat for several.
+    #[arg(long = "auto")]
+    autos: Vec<String>,
+    /// Hollow each model to a wall this thick, millimetres, and stand its supports
+    /// against the shell from outside, as Generate does for a hollowed model.
+    #[arg(long)]
+    hollow_wall_mm: Option<f32>,
     /// Layer height, millimetres.
     #[arg(long, default_value_t = 0.05)]
     layer_mm: f32,
@@ -93,6 +104,7 @@ struct Setup {
     material: MaterialProfile,
     limits: shape::Limits,
     neck_mpa: f32,
+    wall_mm: Option<f32>,
 }
 
 fn main() -> Result<ExitCode> {
@@ -112,21 +124,22 @@ fn main() -> Result<ExitCode> {
             rim_gap_mm: args.rim_gap_mm,
         },
         neck_mpa: args.neck_mpa.max(NECK_LIMIT_MPA as f32),
+        wall_mm: args.hollow_wall_mm,
     };
-    let profiles: Vec<SupportProfile> = args
-        .profiles
-        .iter()
-        .map(|id| Ok(catalogue.support(id)?.profile.clone()))
-        .collect::<Result<_>>()?;
+    let asked = asked(&args, &catalogue)?;
     if let (Some(path), Some(spec)) = (&args.coupon, &args.coupon_spec) {
-        write_coupon(path, &coupon::Spec::read(spec)?, &profiles[0], &setup)?;
+        let base = match asked.first() {
+            Some((_, Asked::Profile(profile))) => profile.as_ref().clone(),
+            _ => catalogue.support("light")?.profile.clone(),
+        };
+        write_coupon(path, &coupon::Spec::read(spec)?, &base, &setup)?;
         return Ok(ExitCode::SUCCESS);
     }
 
     let mut report = Report::new(&args.printer, args.layer_mm, setup.limits);
     for entry in entries(&args)? {
-        for (id, profile) in args.profiles.iter().zip(&profiles) {
-            let row = bench(&entry, id, profile, &setup, &args);
+        for (id, asked) in &asked {
+            let row = bench(&entry, id, asked, &setup, &args);
             report::print_row(&row);
             report.rows.push(row);
         }
@@ -147,6 +160,46 @@ fn main() -> Result<ExitCode> {
         println!("\nNothing worse than {}", path.display());
     }
     Ok(ExitCode::SUCCESS)
+}
+
+/// What each model is benched with, and the name a row gives it: the profiles asked for,
+/// then the automatic ones, each with the shapes it names as the catalogue has them.
+fn asked(args: &Args, catalogue: &Catalogue) -> Result<Vec<(String, Asked)>> {
+    let light = ["light".to_owned()];
+    let profiles = match (args.profiles.is_empty(), args.autos.is_empty()) {
+        (true, true) => &light[..],
+        _ => &args.profiles[..],
+    };
+    let mut asked: Vec<(String, Asked)> = profiles
+        .iter()
+        .map(|id| {
+            let profile = catalogue.support(id)?.profile.clone();
+            Ok((id.clone(), Asked::Profile(Box::new(profile))))
+        })
+        .collect::<Result<_>>()?;
+    for id in &args.autos {
+        let auto = catalogue
+            .autos()
+            .find(|entry| entry.id == *id)
+            .with_context(|| format!("no automatic profile {id}"))?
+            .profile
+            .clone();
+        let mut shapes = Vec::new();
+        for shape in auto.every_shape() {
+            shapes.push(catalogue.support(shape)?.profile.clone());
+        }
+        let shapes = shapes.try_into().map_err(|_| {
+            anyhow::anyhow!("automatic profile {id} names the wrong number of shapes")
+        })?;
+        asked.push((
+            format!("auto:{id}"),
+            Asked::Auto {
+                auto: Box::new(auto),
+                shapes: Box::new(shapes),
+            },
+        ));
+    }
+    Ok(asked)
 }
 
 fn entries(args: &Args) -> Result<Vec<Entry>> {
@@ -180,7 +233,7 @@ pub fn name_of(path: &Path) -> String {
 
 /// One model with one profile; one that cannot be loaded or measured is reported skipped,
 /// so a run over a corpus still finishes.
-fn bench(entry: &Entry, id: &str, profile: &SupportProfile, setup: &Setup, args: &Args) -> Row {
+fn bench(entry: &Entry, id: &str, asked: &Asked, setup: &Setup, args: &Args) -> Row {
     let started = Instant::now();
     let mut row = Row {
         model: entry.name.clone(),
@@ -198,27 +251,21 @@ fn bench(entry: &Entry, id: &str, profile: &SupportProfile, setup: &Setup, args:
     if row.skipped.is_some() {
         return row;
     }
-    if let Err(error) = measure(&mut row, entry, profile, setup, args) {
+    if let Err(error) = measure(&mut row, entry, asked, setup, args) {
         row.skipped = Some(format!("{error:#}"));
     }
     row.seconds = started.elapsed().as_secs_f64();
     row
 }
 
-fn measure(
-    row: &mut Row,
-    entry: &Entry,
-    profile: &SupportProfile,
-    setup: &Setup,
-    args: &Args,
-) -> Result<()> {
+fn measure(row: &mut Row, entry: &Entry, asked: &Asked, setup: &Setup, args: &Args) -> Result<()> {
     let loaded = stand::load(&entry.path)?;
     let (posed, leant) = stand::posed(&loaded, entry.pose, &setup.printer.build_volume)?;
     row.faces = posed.faces.len();
     if let Some(bounds) = posed.aabb() {
         row.size_mm = (bounds.maxs - bounds.mins).to_array();
     }
-    let (supported, shape, cured) = run(&posed, profile, leant, setup)?;
+    let (supported, shape, cured) = run(&posed, asked, leant, setup)?;
     row.cure = CureRow::of(&cured, setup.neck_mpa);
     row.stages_s = [supported.place_s, supported.grow_s, cured.seconds];
     row.broken = broken(&entry.expect, &shape);
@@ -236,19 +283,20 @@ fn measure(
     }
     row.shape = shape;
     if args.sweep {
-        row.sweep = sweep(&posed, profile, leant, setup)?;
+        row.sweep = sweep(&posed, asked, leant, setup)?;
     }
     Ok(())
 }
 
 fn run(
     posed: &Mesh,
-    profile: &SupportProfile,
+    asked: &Asked,
     leant: Quat,
     setup: &Setup,
 ) -> Result<(stand::Supported, shape::Shape, cure::Cured)> {
-    let supported = stand::supported(posed.clone(), profile, setup.material.layer_height_mm)?;
-    let shape = shape::read(&supported, profile, &setup.limits, leant);
+    let layer_mm = setup.material.layer_height_mm;
+    let supported = stand::supported(posed.clone(), asked, setup.wall_mm, layer_mm)?;
+    let shape = shape::read(&supported, &asked.placing(), &setup.limits, leant);
     let cured = cure::cure(
         &supported.model,
         &supported.supports,
@@ -258,18 +306,11 @@ fn run(
     Ok((supported, shape, cured))
 }
 
-fn sweep(
-    posed: &Mesh,
-    profile: &SupportProfile,
-    leant: Quat,
-    setup: &Setup,
-) -> Result<Vec<SweepRow>> {
+fn sweep(posed: &Mesh, asked: &Asked, leant: Quat, setup: &Setup) -> Result<Vec<SweepRow>> {
     SWEEP
         .iter()
         .map(|share| {
-            let mut thinned = profile.clone();
-            thinned.density *= share;
-            let (_, shape, cured) = run(posed, &thinned, leant, setup)?;
+            let (_, shape, cured) = run(posed, &asked.thinned(*share), leant, setup)?;
             let cure = CureRow::of(&cured, setup.neck_mpa);
             let held = report::held(&shape, &cure);
             Ok(SweepRow {

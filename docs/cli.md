@@ -487,9 +487,12 @@ far from every tip, underside no tip reaches and no layer below carries, crowded
 tall trunks with nothing to brace them to. A model holds when nothing falls, and has
 enough when it holds and no tip carries more than it holds.
 
-`--profile` names the support profiles to bench, repeated for several. `--sweep` also
-supports each model at shares of the profile's density and reports the least that is
-enough. `--flat-ratio`, `--slope-ratio`, `--min-tip-mm` and `--rim-gap-mm` set what a tip
+`--profile` names the support profiles to bench, repeated for several, Light when none is
+given. `--auto` names automatic profiles to bench the same way, each support sized by what
+it holds as Generate does with Automatic on, and each tip read against the shape it was
+built to; its row is named `auto:<id>`. `--hollow-wall-mm` hollows each model to a wall that
+thick and stands its supports against the shell from outside. `--sweep` also supports each
+model at shares of the profile's density and reports the least that is enough. `--flat-ratio`, `--slope-ratio`, `--min-tip-mm` and `--rim-gap-mm` set what a tip
 holds, as prints of plates on tips measured it; `--coupon FILE --coupon-spec SPEC` writes
 such a print instead of benching, laid out by a TOML file of tip shapes and the blocks
 printed in them — balls, flat plates and leant plates on so many tips — with what the bench
@@ -503,6 +506,7 @@ material.
 
 ```sh
 cargo run --release -p encrust-cli --bin support-lab -- a.stl b.obj --profile light --profile medium
+cargo run --release -p encrust-cli --bin support-lab -- a.stl --auto default --hollow-wall-mm 2
 cargo run --release -p encrust-cli --bin support-lab -- --corpus corpus.toml --sweep --export out --json now.json --baseline before.json
 cargo run --release -p encrust-cli --bin support-lab -- --coupon coupon.stl --coupon-spec coupon.toml
 ```

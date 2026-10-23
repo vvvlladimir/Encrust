@@ -1168,7 +1168,7 @@ mod tests {
     fn the_support_page_opens_on_the_profile_a_group_was_taken_from() {
         let catalogue = writable("supports");
         let mut settings = Settings::default();
-        settings.open_supports(&catalogue, &SupportProfile::heavy());
+        settings.open_supports(&catalogue, &SupportProfile::shipped("heavy").expect("the heavy preset ships"));
         assert_eq!(settings.section, Section::Supports);
         assert_eq!(settings.support.as_ref().expect("open").id, "heavy");
     }

@@ -807,7 +807,7 @@ mod tests {
             own_supports: if index == 1 {
                 vec![OwnSupportState {
                     group: 1,
-                    profile: SupportProfile::heavy(),
+                    profile: SupportProfile::shipped("heavy").expect("the heavy preset ships"),
                 }]
             } else {
                 Vec::new()
@@ -955,22 +955,31 @@ mod tests {
 
     #[test]
     fn a_model_is_built_to_its_own_support_profile_where_it_keeps_one() {
-        let plate = [SupportProfile::light(), SupportProfile::medium()];
+        let plate = [
+            SupportProfile::shipped("light").expect("the light preset ships"),
+            SupportProfile::shipped("medium").expect("the medium preset ships"),
+        ];
         assert_eq!(object(0).support_table(&plate, None), plate.to_vec());
         let heavy = SupportProfile {
             raft: plate[0].raft,
-            ..SupportProfile::heavy()
+            ..SupportProfile::shipped("heavy").expect("the heavy preset ships")
         };
         assert_eq!(
             object(1).support_table(&plate, None),
-            vec![SupportProfile::light(), heavy],
+            vec![
+                SupportProfile::shipped("light").expect("the light preset ships"),
+                heavy
+            ],
             "the second model keeps its own profile of group 1, on the first group's raft"
         );
     }
 
     #[test]
     fn a_model_stands_on_its_own_raft_then_the_plates_then_the_first_groups() {
-        let plate = [SupportProfile::light(), SupportProfile::medium()];
+        let plate = [
+            SupportProfile::shipped("light").expect("the light preset ships"),
+            SupportProfile::shipped("medium").expect("the medium preset ships"),
+        ];
         let thick = Raft {
             enabled: true,
             thickness_mm: 3.5,
@@ -1008,7 +1017,7 @@ mod tests {
             back.manifest.objects[1].own_supports,
             vec![OwnSupportState {
                 group: 1,
-                profile: SupportProfile::heavy(),
+                profile: SupportProfile::shipped("heavy").expect("the heavy preset ships"),
             }]
         );
         let mut older = serde_json::to_value(&back.manifest.objects[1]).expect("serialises");

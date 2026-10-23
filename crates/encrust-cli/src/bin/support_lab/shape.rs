@@ -116,8 +116,9 @@ pub enum Kind {
     OnModel,
 }
 
-/// Reads `supported` against `profile` and `limits`; `upright` turns the printed pose back
-/// to the one the model was drawn in.
+/// Reads `supported` against `profile`, the one placement ran with, and `limits`, each tip
+/// against its own profile; `upright` turns the printed pose back to the one the model was
+/// drawn in.
 pub fn read(
     supported: &Supported,
     profile: &SupportProfile,
@@ -127,6 +128,12 @@ pub fn read(
     let spacing = profile.contact_spacing_mm / profile.density.max(1e-3).sqrt();
     let standing = standing(supported);
     let tips: Vec<Vec3> = standing.iter().map(|&at| supported.contacts[at]).collect();
+    let section =
+        |profile: &SupportProfile| std::f32::consts::PI * surface_radius_mm(profile).powi(2);
+    let sections: Vec<Scalar> = standing
+        .iter()
+        .map(|&at| section(supported.profile_of(at)))
+        .collect();
     let bvh = Bvh::build(&supported.model);
     let mut shape = Shape {
         contacts: supported.contacts.len(),
@@ -134,16 +141,19 @@ pub fn read(
         trees: supported.trees.len(),
         supports_ml: signed_volume(&supported.supports).abs() / 1000.0,
         model_ml: signed_volume(&supported.model).abs() / 1000.0,
-        scar_mm2: tips.len() as Scalar * std::f32::consts::PI * surface_radius_mm(profile).powi(2),
+        scar_mm2: sections.iter().sum(),
         design_mm2: spacing * spacing,
-        tip_mm2: std::f32::consts::PI * surface_radius_mm(profile).powi(2),
+        tip_mm2: section(profile),
+        weak_tips: standing
+            .iter()
+            .filter(|&&at| supported.profile_of(at).tip.contact_diameter_mm < limits.min_tip_mm)
+            .count(),
         ..Shape::default()
     };
-    if profile.tip.contact_diameter_mm < limits.min_tip_mm {
-        shape.weak_tips = tips.len();
-    }
     hanging(&mut shape, supported, &standing);
-    underside(&mut shape, supported, profile, limits, &tips, spacing);
+    underside(
+        &mut shape, supported, profile, limits, &tips, &sections, spacing,
+    );
     tips_on_surface(&mut shape, &supported.model, &bvh, &tips, upright);
     crowding(&mut shape, &tips, spacing);
     trees(&mut shape, supported, profile);
@@ -238,6 +248,7 @@ fn underside(
     profile: &SupportProfile,
     limits: &Limits,
     tips: &[Vec3],
+    sections: &[Scalar],
     spacing: Scalar,
 ) {
     let needs = -profile.max_overhang_deg.to_radians().sin();
@@ -283,7 +294,7 @@ fn underside(
             shape.findings.push(finding(Kind::Bare, centre, area));
         }
     }
-    uses(shape, limits, tips, &flat, &slope);
+    uses(shape, limits, tips, sections, &flat, &slope);
     rim(
         shape,
         &supported.model,
@@ -294,13 +305,22 @@ fn underside(
     );
 }
 
-/// How much of what each tip holds it carries, and the tips past it.
-fn uses(shape: &mut Shape, limits: &Limits, tips: &[Vec3], flat: &[Scalar], slope: &[Scalar]) {
-    let section = shape.tip_mm2.max(1e-6);
+/// How much of what each tip holds it carries, through its own `sections`, and the tips
+/// past it.
+fn uses(
+    shape: &mut Shape,
+    limits: &Limits,
+    tips: &[Vec3],
+    sections: &[Scalar],
+    flat: &[Scalar],
+    slope: &[Scalar],
+) {
     let used: Vec<Scalar> = flat
         .iter()
         .zip(slope)
-        .map(|(flat, slope)| {
+        .zip(sections)
+        .map(|((flat, slope), section)| {
+            let section = section.max(1e-6);
             flat / (section * limits.flat_ratio) + slope / (section * limits.slope_ratio)
         })
         .collect();
@@ -528,7 +548,7 @@ mod tests {
 
     #[test]
     fn a_plane_tip_crosses_the_surface_wider_than_its_contact() {
-        let mut profile = SupportProfile::medium();
+        let mut profile = SupportProfile::shipped("medium").expect("the medium preset ships");
         profile.tip.shape = ContactShape::Plane;
         profile.tip.contact_diameter_mm = 0.4;
         profile.tip.contact_depth_mm = 0.5;

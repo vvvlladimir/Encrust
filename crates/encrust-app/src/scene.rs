@@ -398,36 +398,73 @@ impl SceneObject {
         Placed::new(mesh, bvh, self.transform)
     }
 
+    /// Rebuilds the supports to `table` where an edit asks, standing against
+    /// [`Self::support_surface`] with the patches read off the model itself.
+    pub fn refresh_supports(&mut self, table: &[SupportProfile]) {
+        let model = Arc::clone(&self.mesh);
+        let (surface, bvh) = self.support_surface();
+        let (surface, bvh) = (Arc::clone(surface), Arc::clone(bvh));
+        self.supports
+            .refresh_on(&model, &surface, &bvh, self.transform, table);
+    }
+
     /// Builds the hierarchy of the surface supports stand against when that surface
-    /// changed, and answers whether it did.
+    /// changed, here and now, and answers whether it did; the window builds it on a worker
+    /// through [`crate::surfaces::SupportSurfaces`].
     pub fn keep_support_surface(&mut self) -> bool {
-        let kept = self.support_shell.as_ref().map(|kept| &kept.mesh);
-        let wanted = self.wanted_surface();
-        let same = match (kept, &wanted) {
-            (Some(kept), Some((wanted, _))) => Arc::ptr_eq(kept, wanted),
-            (None, None) => true,
-            _ => false,
+        let forgot = self.forget_stale_support_surface();
+        let Some(mesh) = self.unbuilt_support_surface().cloned() else {
+            return forgot;
         };
-        if same {
+        let bvh = Arc::new(Bvh::build(&mesh));
+        self.keep_support_bvh(&mesh, bvh) || forgot
+    }
+
+    /// The printed surface supports are to stand against whose hierarchy is not built yet.
+    pub fn unbuilt_support_surface(&self) -> Option<&Arc<Mesh>> {
+        let (wanted, _) = self.wanted_surface()?;
+        let kept = self.support_shell.as_ref();
+        (!kept.is_some_and(|kept| Arc::ptr_eq(&kept.mesh, wanted))).then_some(wanted)
+    }
+
+    /// Keeps `bvh` as the hierarchy of `mesh` while that is still the printed surface, and
+    /// answers whether it was kept.
+    pub fn keep_support_bvh(&mut self, mesh: &Arc<Mesh>, bvh: Arc<Bvh>) -> bool {
+        let Some((wanted, inner)) = self.wanted_surface() else {
+            return false;
+        };
+        if !Arc::ptr_eq(wanted, mesh) || self.unbuilt_support_surface().is_none() {
             return false;
         }
-        self.support_shell = wanted.map(|(mesh, inner)| SupportShell {
-            bvh: Arc::new(Bvh::build(mesh)),
+        self.support_shell = Some(SupportShell {
             mesh: Arc::clone(mesh),
+            bvh,
             inner,
         });
         true
     }
 
-    /// The printed surface when it is not the model itself, and which of its faces bound
-    /// the cavity: the drilled mesh, else the shell, its lattice counted with the cavity.
-    fn wanted_surface(&self) -> Option<(&Arc<Mesh>, Range<usize>)> {
-        if let Some(drilled) = self.hollow.drilled(self.uncut()) {
-            return Some((&drilled.mesh, drilled.cavity.clone().unwrap_or(0..0)));
+    /// Lets go of the surface kept for supports once the model prints as itself again, and
+    /// answers whether it did.
+    pub fn forget_stale_support_surface(&mut self) -> bool {
+        let stale = self.support_shell.is_some() && self.wanted_surface().is_none();
+        if stale {
+            self.support_shell = None;
         }
-        let shell = self.hollow.shell()?;
-        let cavity = self.hollow.cavity_faces().unwrap_or(0..0);
-        Some((shell, cavity.start..shell.faces.len().max(cavity.end)))
+        stale
+    }
+
+    /// The printed surface when it is not the model itself, and which of its faces lie
+    /// inside: the drilled mesh, else the shell, its lattice counted with the cavity.
+    fn wanted_surface(&self) -> Option<(&Arc<Mesh>, Range<usize>)> {
+        let (mesh, cavity) = match self.hollow.drilled(self.uncut()) {
+            Some(drilled) => (&drilled.mesh, drilled.cavity.clone()),
+            None => (self.hollow.shell()?, self.hollow.cavity_faces()),
+        };
+        let inner = cavity.map_or(0..0, |cavity| {
+            cavity.start..mesh.faces.len().max(cavity.end)
+        });
+        Some((mesh, inner))
     }
 
     /// Whether face `face` of [`Self::support_surface`] lies inside the model: on its

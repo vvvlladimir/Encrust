@@ -158,7 +158,7 @@ fn tiers() -> Sliced {
 }
 
 fn placing(c: &mut Criterion) {
-    let profile = SupportProfile::medium();
+    let profile = SupportProfile::shipped("medium").expect("the medium preset ships");
 
     let tables = tables();
     c.bench_function("generate_supports/tables, 1200 layers", |b| {

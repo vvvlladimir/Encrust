@@ -307,7 +307,7 @@ whole-surface fill is Cmd-Shift-click.
 - A point or a needle hanging down is held at its very tip, however thin, and every
   island Check would name is touched where it begins, even with a bite of nought; a speck
   too small for Check to name is left alone. Small islands are held closer than large
-  ones. A flat tip meets its face with its whole end, however its head leans.
+  ones, by areas and shares the support profile sets. A flat tip meets its face with its whole end, however its head leans.
 - A face looking straight down is held at the contact spacing, and one leaning just past
   the overhang angle at the wider **spacing on steep faces**; between them the spacing
   follows the angle.

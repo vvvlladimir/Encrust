@@ -135,6 +135,7 @@ mod tests {
         };
         SupportProfile {
             grid: printer_profiles::Grid::default(),
+            islands: printer_profiles::IslandSpacing::default(),
             name: "Fixture".to_owned(),
             facets: 12,
             density: 1.0,

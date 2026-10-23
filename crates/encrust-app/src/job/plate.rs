@@ -135,7 +135,7 @@ mod tests {
             &mesh,
             &Bvh::build(&mesh),
             transform,
-            std::slice::from_ref(&SupportProfile::medium()),
+            std::slice::from_ref(&SupportProfile::shipped("medium").expect("the medium preset ships")),
         );
         scene
     }
@@ -180,7 +180,7 @@ mod tests {
             .expect("the stack reaches the middle of the column");
 
         let area: f32 = layer.contours.iter().map(|contour| contour.area()).sum();
-        let profile = SupportProfile::medium();
+        let profile = SupportProfile::shipped("medium").expect("the medium preset ships");
         let radius = profile.pillar_radius_mm();
         let expected = std::f32::consts::PI * radius * radius;
         assert!(

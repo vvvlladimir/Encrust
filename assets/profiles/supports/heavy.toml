@@ -87,3 +87,10 @@ diameter_mm = 1.0
 max_spacing_mm = 10.0
 start_height_mm = 8.0
 rise_mm = 13.0
+
+# How closely automatic placement holds an island against the contact spacing: the least
+# island, mm² on the layer it begins on, of the second size and of the third, and the share
+# of the spacing each size is held at, smallest first.
+[islands]
+area_mm2 = [2.4, 3.2]
+share = [0.72222222, 0.83333333, 1.0]

@@ -29,6 +29,18 @@ pub struct TipSegment {
     pub contact_depth_mm: f32,
 }
 
+/// What a profile that names no tip meets the model with: the field's 0.4 mm plane
+/// (ADR 0131).
+impl Default for TipSegment {
+    fn default() -> Self {
+        Self {
+            shape: ContactShape::Plane,
+            contact_diameter_mm: 0.4,
+            contact_depth_mm: 0.2,
+        }
+    }
+}
+
 /// The cone between the tip and the pillar: as wide as the contact where it leaves the
 /// model and as wide as the pillar where it meets it, so it has a length and no widths of
 /// its own. See `docs/decisions/0238`.
@@ -39,11 +51,23 @@ pub struct TopSegment {
     pub length_mm: f32,
 }
 
+impl Default for TopSegment {
+    fn default() -> Self {
+        Self { length_mm: 2.0 }
+    }
+}
+
 /// The pillar body, or the trunk once branches have merged into it.
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 pub struct MiddleSegment {
     /// Diameter of the pillar body, millimetres.
     pub diameter_mm: f32,
+}
+
+impl Default for MiddleSegment {
+    fn default() -> Self {
+        Self { diameter_mm: 1.2 }
+    }
 }
 
 /// What the foot that stands on the plate is shaped like.
@@ -108,6 +132,17 @@ pub struct BottomSegment {
     /// well; see `docs/decisions/0130`.
     #[serde(default = "default_bottom_lower_diameter_mm")]
     pub lower_diameter_mm: f32,
+}
+
+impl Default for BottomSegment {
+    fn default() -> Self {
+        Self {
+            shape: PlatformShape::Cylinder,
+            platform_diameter_mm: 8.0,
+            platform_thickness_mm: 1.0,
+            lower_diameter_mm: default_bottom_lower_diameter_mm(),
+        }
+    }
 }
 
 /// What a pillar of about a millimetre flares out to where it meets its pad; see ADR 0131.
@@ -424,6 +459,28 @@ impl Grid {
     pub const SPACING_MM: std::ops::RangeInclusive<f32> = 1.0..=15.0;
 }
 
+/// How closely automatic placement holds an island against the contact spacing, by the
+/// island's area: a small one hangs on the film alone, with no edge of a part to steady it.
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+pub struct IslandSpacing {
+    /// The least island, mm² on the layer it begins on, held at the second share and at
+    /// the third.
+    pub area_mm2: [f32; 2],
+    /// The share of the contact spacing an island of each size is held at, smallest first.
+    pub share: [f32; 3],
+}
+
+/// What a profile saved before islands were spaced by it is read with; the shipped
+/// profiles say it themselves.
+impl Default for IslandSpacing {
+    fn default() -> Self {
+        Self {
+            area_mm2: [2.4, 3.2],
+            share: [13.0 / 18.0, 15.0 / 18.0, 1.0],
+        }
+    }
+}
+
 impl Default for Grid {
     fn default() -> Self {
         Self {
@@ -503,6 +560,7 @@ impl BracingPreset {
 /// numbers in another slicer can carry them across. See `docs/design/supports.md`.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct SupportProfile {
+    #[serde(default)]
     pub name: String,
     /// Sides of the polygon a pillar is drawn as. Fewer is cheaper to slice, more is
     /// rounder.
@@ -529,9 +587,13 @@ pub struct SupportProfile {
     /// millimetres. Anything closer than this cures onto the part.
     #[serde(default = "default_clearance_mm")]
     pub clearance_mm: f32,
+    #[serde(default)]
     pub tip: TipSegment,
+    #[serde(default)]
     pub top: TopSegment,
+    #[serde(default)]
     pub middle: MiddleSegment,
+    #[serde(default)]
     pub bottom: BottomSegment,
     /// Whether a support may stand on the model at all. Off, one with the model under it
     /// leans aside for the plate instead of resting on the part.
@@ -547,6 +609,8 @@ pub struct SupportProfile {
     pub bracing: Bracing,
     #[serde(default)]
     pub grid: Grid,
+    #[serde(default)]
+    pub islands: IslandSpacing,
     /// How far the lowest point of a part should stand clear of the plate, millimetres.
     /// Supports need room under the model, and the first layers of a part printed
     /// straight onto the plate are the ones that stick to it hardest.
@@ -557,61 +621,6 @@ pub struct SupportProfile {
 /// How far a part is lifted off the plate before it is supported; see ADR 0131.
 fn default_z_lift_mm() -> f32 {
     2.0
-}
-
-/// The raft every shipped preset carries: off, with the measurements of ADR 0131 when it
-/// is turned on.
-fn shipped_raft(shape: RaftShape) -> Raft {
-    Raft {
-        enabled: false,
-        style: RaftStyle::Skates,
-        shape,
-        margin_mm: default_raft_margin_mm(),
-        thickness_mm: 0.5,
-        slope_deg: 30.0,
-    }
-}
-
-/// A shipped preset's contact: a plane that meets the surface without sinking in.
-fn shipped_tip(contact_diameter_mm: f32) -> TipSegment {
-    TipSegment {
-        shape: ContactShape::Plane,
-        contact_diameter_mm,
-        contact_depth_mm: 0.0,
-    }
-}
-
-/// A shipped preset's round pad; a flare as wide as the pillar is no flare at all.
-fn shipped_bottom(diameter_mm: f32, thickness_mm: f32, lower_diameter_mm: f32) -> BottomSegment {
-    BottomSegment {
-        shape: PlatformShape::Cylinder,
-        platform_diameter_mm: diameter_mm,
-        platform_thickness_mm: thickness_mm,
-        lower_diameter_mm,
-    }
-}
-
-/// A shipped preset's small pillar: as deep as its contact, so not at all, and no longer
-/// than 5 mm.
-fn shipped_small_pillar(diameter_mm: f32) -> SmallPillar {
-    SmallPillar {
-        enabled: true,
-        diameter_mm,
-        upper_depth_mm: 0.0,
-        lower_depth_mm: 0.0,
-        max_length_mm: 5.0,
-    }
-}
-
-/// A shipped preset's merging: a trunk grows at most 30 % past the pillar it carries.
-fn shipped_branching(max_trunk_diameter_mm: f32) -> Branching {
-    Branching {
-        enabled: true,
-        max_angle_deg: 45.0,
-        max_merge_distance_mm: 10.0,
-        max_trunk_diameter_mm,
-        ..Branching::default()
-    }
 }
 
 /// A support standing on the part is what reaches an undercut no column can, and its
@@ -659,96 +668,36 @@ fn default_facets() -> u32 {
 const MIN_FACETS: u32 = 3;
 
 impl SupportProfile {
-    /// Thin supports for small, well-anchored parts. Easy to cut off, easy to snap.
-    pub fn light() -> Self {
-        Self {
-            name: "Light".to_owned(),
-            tip: shipped_tip(0.3),
-            top: TopSegment { length_mm: 2.0 },
-            middle: MiddleSegment { diameter_mm: 1.0 },
-            bottom: shipped_bottom(6.0, 0.25, 1.0),
-            small_pillar: shipped_small_pillar(0.3),
-            branching: shipped_branching(1.3),
-            raft: shipped_raft(RaftShape::Hull),
-            bracing: Bracing {
-                enabled: true,
-                diameter_mm: 0.6,
-                max_spacing_mm: 8.0,
-                start_height_mm: 5.0,
-                rise_mm: 8.5,
-                ..Bracing::default()
-            },
-            ..Self::shipped()
-        }
+    /// The support profile this build ships under `id`, as its file in
+    /// `assets/profiles/supports/` says, whatever the user's copy of it says; `None` for
+    /// an id it does not ship.
+    pub fn shipped(id: &str) -> Option<Self> {
+        crate::catalogue::shipped_support(id)
     }
 
-    /// The everyday choice, and what a new object starts with.
-    pub fn medium() -> Self {
+    /// A profile that says nothing, every field at its own default: what a file of no
+    /// fields reads as.
+    fn unstated() -> Self {
         Self {
-            name: "Medium".to_owned(),
-            tip: shipped_tip(0.6),
-            top: TopSegment { length_mm: 3.0 },
-            middle: MiddleSegment { diameter_mm: 1.3 },
-            bottom: shipped_bottom(9.0, 0.5, 1.3),
-            small_pillar: shipped_small_pillar(0.4),
-            branching: shipped_branching(1.7),
-            raft: shipped_raft(RaftShape::Hull),
-            bracing: Bracing {
-                enabled: true,
-                diameter_mm: 1.0,
-                max_spacing_mm: 8.0,
-                start_height_mm: 3.0,
-                rise_mm: 8.0,
-                ..Bracing::default()
-            },
-            ..Self::shipped()
-        }
-    }
-
-    /// Thick supports for heavy parts and large flat overhangs, at the cost of scarring.
-    pub fn heavy() -> Self {
-        Self {
-            name: "Heavy".to_owned(),
-            tip: shipped_tip(1.0),
-            top: TopSegment { length_mm: 4.0 },
-            middle: MiddleSegment { diameter_mm: 3.0 },
-            bottom: shipped_bottom(12.0, 0.5, 3.0),
-            small_pillar: shipped_small_pillar(0.5),
-            branching: shipped_branching(3.9),
-            raft: shipped_raft(RaftShape::Rectangle),
-            bracing: Bracing {
-                enabled: true,
-                diameter_mm: 1.0,
-                max_spacing_mm: 10.0,
-                start_height_mm: 8.0,
-                rise_mm: 13.0,
-                ..Bracing::default()
-            },
-            ..Self::shipped()
-        }
-    }
-
-    /// What the three shipped presets share; see `docs/decisions/0323`.
-    fn shipped() -> Self {
-        Self {
-            grid: Grid::default(),
             name: String::new(),
             facets: default_facets(),
-            density: 1.0,
-            max_overhang_deg: 40.0,
-            contact_spacing_mm: 1.8,
+            density: default_density(),
+            max_overhang_deg: default_max_overhang_deg(),
+            contact_spacing_mm: default_contact_spacing_mm(),
             steep_contact_spacing_mm: default_steep_contact_spacing_mm(),
-            clearance_mm: 0.5,
-            tip: shipped_tip(0.6),
-            top: TopSegment { length_mm: 3.0 },
-            middle: MiddleSegment { diameter_mm: 1.3 },
-            bottom: shipped_bottom(9.0, 0.5, 1.3),
-            land_on_model: true,
-            small_pillar: shipped_small_pillar(0.4),
-            branching: shipped_branching(1.7),
-            raft: shipped_raft(RaftShape::Hull),
+            clearance_mm: default_clearance_mm(),
+            tip: TipSegment::default(),
+            top: TopSegment::default(),
+            middle: MiddleSegment::default(),
+            bottom: BottomSegment::default(),
+            land_on_model: default_land_on_model(),
+            small_pillar: SmallPillar::default(),
+            branching: Branching::default(),
+            raft: Raft::default(),
             bracing: Bracing::default(),
-            z_lift_mm: 5.0,
+            grid: Grid::default(),
+            islands: IslandSpacing::default(),
+            z_lift_mm: default_z_lift_mm(),
         }
     }
 
@@ -906,9 +855,12 @@ impl SupportProfile {
                 self.branching.max_merge_distance_mm,
             ),
         ];
+        let shares = self.islands.share.map(|share| ("islands share", share));
+        let positive = positive.into_iter().chain(shares);
         if let Some((field, value)) = positive.into_iter().find(|(_, value)| *value <= 0.0) {
             return Err(ProfileError::NonPositive { field, value });
         }
+        crate::auto::ascending("islands area_mm2", &self.islands.area_mm2)?;
 
         let non_negative = [
             ("contact_depth_mm", self.tip.contact_depth_mm),
@@ -983,9 +935,14 @@ fn order(
     Ok(())
 }
 
+/// The id of the support profile a new object starts with.
+pub const STOCK_SUPPORT: &str = "medium";
+
+/// The shipped [`STOCK_SUPPORT`] as its file says; a profile of the fields' own defaults
+/// should that file not read, which a test of the shipped files rules out.
 impl Default for SupportProfile {
     fn default() -> Self {
-        Self::medium()
+        Self::shipped(STOCK_SUPPORT).unwrap_or_else(Self::unstated)
     }
 }
 
@@ -1002,24 +959,22 @@ mod tests {
     }
 
     #[test]
-    fn every_preset_is_valid_and_they_grow_in_order() {
-        let presets = [
-            SupportProfile::light(),
-            SupportProfile::medium(),
-            SupportProfile::heavy(),
-        ];
-        for preset in &presets {
+    fn every_shipped_preset_reads_as_valid() {
+        let catalogue = crate::Catalogue::bundled().expect("the shipped profiles read");
+        for entry in catalogue.supports() {
+            let preset = SupportProfile::shipped(&entry.id).expect("a shipped preset reads");
             preset.validate().expect("a shipped preset is valid");
         }
-        for pair in presets.windows(2) {
-            assert!(
-                pair[0].middle.diameter_mm < pair[1].middle.diameter_mm,
-                "{} must be thinner than {}",
-                pair[0].name,
-                pair[1].name
-            );
-            assert!(pair[0].tip.contact_diameter_mm < pair[1].tip.contact_diameter_mm);
-        }
+        assert!(
+            SupportProfile::shipped(STOCK_SUPPORT).is_some(),
+            "a new object starts with a preset this build ships"
+        );
+    }
+
+    #[test]
+    fn a_profile_that_names_nothing_reads_at_every_fields_default() {
+        let parsed = SupportProfile::from_toml_str("", path()).expect("every field has a default");
+        assert_eq!(parsed, SupportProfile::unstated());
     }
 
     #[test]
@@ -1132,7 +1087,7 @@ rise_mm = 8.5
 
     #[test]
     fn a_zero_small_pillar_length_is_rejected() {
-        let mut broken = SupportProfile::medium();
+        let mut broken = SupportProfile::shipped("medium").expect("the medium preset ships");
         broken.small_pillar.max_length_mm = 0.0;
         let err = SupportProfile::from_toml_str(&toml_of(&broken), path()).unwrap_err();
         assert!(matches!(
@@ -1146,7 +1101,8 @@ rise_mm = 8.5
 
     #[test]
     fn a_small_pillar_without_a_length_takes_the_default() {
-        let mut text = toml_of(&SupportProfile::medium());
+        let mut text =
+            toml_of(&SupportProfile::shipped("medium").expect("the medium preset ships"));
         text = text.replace("max_length_mm = 5.0\n", "");
         assert!(!text.contains("max_length_mm"), "the field is left out");
         let parsed = SupportProfile::from_toml_str(&text, path()).expect("still a profile");
@@ -1154,8 +1110,26 @@ rise_mm = 8.5
     }
 
     #[test]
+    fn islands_spaced_out_of_order_or_at_nothing_are_rejected() {
+        let mut falling = SupportProfile::shipped("medium").expect("the medium preset ships");
+        falling.islands.area_mm2 = [3.2, 2.4];
+        let err = SupportProfile::from_toml_str(&toml_of(&falling), path()).unwrap_err();
+        assert!(matches!(err, ProfileError::OutOfOrder { .. }));
+        let mut nothing = SupportProfile::shipped("medium").expect("the medium preset ships");
+        nothing.islands.share[0] = 0.0;
+        let err = SupportProfile::from_toml_str(&toml_of(&nothing), path()).unwrap_err();
+        assert!(matches!(
+            err,
+            ProfileError::NonPositive {
+                field: "islands share",
+                ..
+            }
+        ));
+    }
+
+    #[test]
     fn a_zero_contact_is_rejected() {
-        let mut broken = SupportProfile::medium();
+        let mut broken = SupportProfile::shipped("medium").expect("the medium preset ships");
         broken.tip.contact_diameter_mm = 0.0;
         let err = SupportProfile::from_toml_str(&toml_of(&broken), path()).unwrap_err();
         assert!(matches!(
@@ -1169,7 +1143,7 @@ rise_mm = 8.5
 
     #[test]
     fn a_contact_may_meet_the_surface_but_not_stand_off_it() {
-        let mut flush = SupportProfile::medium();
+        let mut flush = SupportProfile::shipped("medium").expect("the medium preset ships");
         flush.tip.contact_depth_mm = 0.0;
         SupportProfile::from_toml_str(&toml_of(&flush), path()).expect("a flush contact loads");
 
@@ -1186,7 +1160,7 @@ rise_mm = 8.5
 
     #[test]
     fn a_profile_without_a_steep_spacing_takes_the_default() {
-        let text = toml_of(&SupportProfile::medium())
+        let text = toml_of(&SupportProfile::shipped("medium").expect("the medium preset ships"))
             .lines()
             .filter(|line| !line.starts_with("steep_contact_spacing_mm"))
             .collect::<Vec<_>>()
@@ -1197,7 +1171,7 @@ rise_mm = 8.5
 
     #[test]
     fn a_steep_spacing_of_zero_is_rejected() {
-        let mut broken = SupportProfile::medium();
+        let mut broken = SupportProfile::shipped("medium").expect("the medium preset ships");
         broken.steep_contact_spacing_mm = 0.0;
         let err = SupportProfile::from_toml_str(&toml_of(&broken), path()).unwrap_err();
         assert!(matches!(
@@ -1211,7 +1185,7 @@ rise_mm = 8.5
 
     #[test]
     fn a_density_of_zero_is_rejected() {
-        let mut broken = SupportProfile::medium();
+        let mut broken = SupportProfile::shipped("medium").expect("the medium preset ships");
         broken.density = 0.0;
         let err = SupportProfile::from_toml_str(&toml_of(&broken), path()).unwrap_err();
         assert!(matches!(
@@ -1225,7 +1199,7 @@ rise_mm = 8.5
 
     #[test]
     fn an_overhang_angle_past_a_right_angle_is_rejected() {
-        let mut broken = SupportProfile::medium();
+        let mut broken = SupportProfile::shipped("medium").expect("the medium preset ships");
         broken.max_overhang_deg = 95.0;
         let err = SupportProfile::from_toml_str(&toml_of(&broken), path()).unwrap_err();
         assert!(matches!(
@@ -1239,7 +1213,7 @@ rise_mm = 8.5
 
     #[test]
     fn a_two_sided_pillar_is_rejected() {
-        let mut broken = SupportProfile::medium();
+        let mut broken = SupportProfile::shipped("medium").expect("the medium preset ships");
         broken.facets = 2;
         let err = SupportProfile::from_toml_str(&toml_of(&broken), path()).unwrap_err();
         assert!(matches!(
@@ -1253,7 +1227,7 @@ rise_mm = 8.5
 
     #[test]
     fn a_contact_wider_than_the_pillar_under_it_is_a_nail_head_not_an_error() {
-        let mut nailed = SupportProfile::medium();
+        let mut nailed = SupportProfile::shipped("medium").expect("the medium preset ships");
         nailed.tip.contact_diameter_mm = nailed.middle.diameter_mm + 1.0;
         SupportProfile::from_toml_str(&toml_of(&nailed), path())
             .expect("a head wider than its pillar is a cone that narrows");
@@ -1261,7 +1235,7 @@ rise_mm = 8.5
 
     #[test]
     fn a_profile_written_with_the_widths_a_segment_no_longer_has_still_loads() {
-        let old = toml_of(&SupportProfile::medium())
+        let old = toml_of(&SupportProfile::shipped("medium").expect("the medium preset ships"))
             .replace(
                 "[top]",
                 "[top]\nupper_diameter_mm = 0.55\nlower_diameter_mm = 1.2",
@@ -1269,12 +1243,15 @@ rise_mm = 8.5
             .replace("[bottom]", "[bottom]\nupper_diameter_mm = 1.2");
         let profile = SupportProfile::from_toml_str(&old, path())
             .expect("a profile saved before ADR 0238 names widths that are now derived");
-        assert_eq!(profile, SupportProfile::medium());
+        assert_eq!(
+            profile,
+            SupportProfile::shipped("medium").expect("the medium preset ships")
+        );
     }
 
     #[test]
     fn a_raft_lifts_the_part_by_its_own_thickness_on_top_of_the_lift() {
-        let mut profile = SupportProfile::medium();
+        let mut profile = SupportProfile::shipped("medium").expect("the medium preset ships");
         assert!((profile.lift_mm() - profile.z_lift_mm).abs() < f32::EPSILON);
         profile.raft.enabled = true;
         assert!(
@@ -1285,7 +1262,7 @@ rise_mm = 8.5
 
     #[test]
     fn a_flare_wider_than_the_pad_it_meets_is_rejected() {
-        let mut broken = SupportProfile::medium();
+        let mut broken = SupportProfile::shipped("medium").expect("the medium preset ships");
         broken.bottom.lower_diameter_mm = broken.bottom.platform_diameter_mm + 1.0;
         let err = SupportProfile::from_toml_str(&toml_of(&broken), path()).unwrap_err();
         assert!(matches!(
@@ -1299,7 +1276,7 @@ rise_mm = 8.5
 
     #[test]
     fn a_foot_narrower_than_the_thickest_trunk_is_rejected() {
-        let mut broken = SupportProfile::medium();
+        let mut broken = SupportProfile::shipped("medium").expect("the medium preset ships");
         broken.bottom.platform_diameter_mm = broken.branching.max_trunk_diameter_mm - 0.5;
         let err = SupportProfile::from_toml_str(&toml_of(&broken), path()).unwrap_err();
         assert!(matches!(
@@ -1313,7 +1290,7 @@ rise_mm = 8.5
 
     #[test]
     fn a_trunk_thinner_than_the_pillar_it_carries_is_rejected() {
-        let mut broken = SupportProfile::medium();
+        let mut broken = SupportProfile::shipped("medium").expect("the medium preset ships");
         broken.branching.max_trunk_diameter_mm = broken.middle.diameter_mm - 0.1;
         let err = SupportProfile::from_toml_str(&toml_of(&broken), path()).unwrap_err();
         assert!(matches!(
@@ -1333,7 +1310,7 @@ rise_mm = 8.5
 
     #[test]
     fn the_radii_are_half_the_diameters() {
-        let profile = SupportProfile::medium();
+        let profile = SupportProfile::shipped("medium").expect("the medium preset ships");
         assert!((profile.contact_radius_mm() - 0.3).abs() < f32::EPSILON);
         assert!((profile.pillar_radius_mm() - 0.65).abs() < f32::EPSILON);
         assert!((profile.base_radius_mm() - 4.5).abs() < f32::EPSILON);
@@ -1365,7 +1342,7 @@ rise_mm = 8.5
 
     #[test]
     fn a_trunk_base_widens_with_height_up_to_the_cap() {
-        let profile = SupportProfile::medium();
+        let profile = SupportProfile::shipped("medium").expect("the medium preset ships");
         let short = profile.trunk_base_radius_mm(5.0, 1);
         let tall = profile.trunk_base_radius_mm(24.0, 1);
         let towering = profile.trunk_base_radius_mm(200.0, 1);
@@ -1385,7 +1362,7 @@ rise_mm = 8.5
 
     #[test]
     fn a_trunk_base_widens_with_the_tips_it_carries() {
-        let profile = SupportProfile::medium();
+        let profile = SupportProfile::shipped("medium").expect("the medium preset ships");
         let one = profile.trunk_base_radius_mm(1.0, 1);
         let four = profile.trunk_base_radius_mm(1.0, 4);
         assert!(
