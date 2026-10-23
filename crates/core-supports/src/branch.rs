@@ -1,6 +1,8 @@
 use std::cmp::Ordering;
 use std::collections::{BinaryHeap, HashMap};
 
+mod grid;
+
 use crate::placed::Placed;
 use core_geometry::{Ray, Scalar, Vec2, Vec3, raycast_placed};
 use printer_profiles::SupportProfile;
@@ -56,8 +58,10 @@ pub fn grow(columns: &[Column], placed: &Placed, profiles: Profiles) -> Vec<Supp
             .collect();
         let mut trees = grow_one(&mine, placed, profiles, &carriers);
         // Before anything thinner is leant onto them: a trunk moved afterwards would
-        // leave what joined it ending in the air.
-        gather(&mut trees, &forest, placed, profiles);
+        // leave what joined it ending in the air. A trunk on the grid stays on its node.
+        if on_grid(&family, profiles).is_none() {
+            gather(&mut trees, &forest, placed, profiles);
+        }
         carriers.take(&trees, profiles);
         forest.extend(trees);
     }
@@ -298,6 +302,16 @@ fn meeting_on(from: Vec3, carrier: &Carrier, profile: &SupportProfile) -> Option
     (leans_within && in_reach && on_it && long_enough).then_some(meet)
 }
 
+/// The grid a family's trunks stand on: the first group's, where every group of it has
+/// one switched on.
+fn on_grid(groups: &[u16], profiles: Profiles) -> Option<printer_profiles::Grid> {
+    let first = profiles.of(*groups.first()?).grid;
+    groups
+        .iter()
+        .all(|group| profiles.of(*group).grid.enabled)
+        .then_some(first)
+}
+
 /// Grows one family's columns, each built to its own group's profile.
 fn grow_one(
     columns: &[Column],
@@ -309,7 +323,10 @@ fn grow_one(
     let branching = columns
         .iter()
         .all(|column| profiles.of(column.group).branching.enabled);
-    if branching {
+    let groups: Vec<u16> = columns.iter().map(|column| column.group).collect();
+    if let Some(grid) = on_grid(&groups, profiles) {
+        forest.snap_to_grid(placed, grid);
+    } else if branching {
         forest.merge(placed);
         // Tips the model stands in the way of are bent aside before the second pass, so
         // that what they lean onto can share a trunk rather than stand alone.

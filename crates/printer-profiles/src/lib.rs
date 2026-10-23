@@ -35,7 +35,7 @@ pub use stated::{
 };
 pub use store::{DirStore, ProfileStore};
 pub use support::{
-    BottomSegment, BracePattern, BraceZone, Bracing, BracingPreset, Branching, ContactShape,
+    BottomSegment, BracePattern, BraceZone, Bracing, BracingPreset, Branching, ContactShape, Grid,
     MiddleSegment, PlatformShape, Raft, RaftShape, RaftStyle, SmallPillar, SupportProfile,
     TipSegment, TopSegment,
 };

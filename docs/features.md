@@ -323,6 +323,10 @@ whole-surface fill is Cmd-Shift-click.
   to the profile chosen for the group in hand.
 - Nearby tips merge into shared **branching trunks**. Trunks are cones sized by their
   height and load, and nothing carrying a load leans more than 45°.
+- With **Grid** on in the Shape tool, trunks stand on a square grid instead, 5 mm apart
+  unless set (1–15 mm): each tip leans to its nearest node at 45°, the tips of one node
+  share one trunk, and the bracing ties the rows evenly. A tip no node can take stands as
+  it would without the grid.
 - Only the tip touches the model: a head that would run into the part beside its contact
   turns away, and a pad beside a part that cannot be moved aside is cut back on that side.
 - A tip that has no room leans until it finds some. A support that still has no room is

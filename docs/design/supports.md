@@ -59,8 +59,8 @@ model may move up — and the inspector reports standing against placed.
 ## The shape of a support
 
 The profile is grouped as MSLA slicers group it, so numbers tuned elsewhere carry across:
-`[tip]`, `[top]`, `[middle]`, `[bottom]`, `[small_pillar]`, `[branching]`, `[raft]`,
-`[bracing]`. An unmerged support is a solid of revolution about its own axis:
+`[tip]`, `[top]`, `[middle]`, `[bottom]`, `[small_pillar]`, `[branching]`, `[grid]`,
+`[raft]`, `[bracing]`. An unmerged support is a solid of revolution about its own axis:
 
 | Piece | From | To | Radius |
 |---|---|---|---|
@@ -417,6 +417,14 @@ a vertical trunk to their landing. A merged front that stands on the model is sp
 where every tip under it stands on the model as a small pillar of its own — from its neck,
 or straight from its contact — since two thin struts snap off where a joint between two
 faces has to be cut away (ADR 0331). `branching.enabled = false` gives back step 7a's column exactly.
+
+**On a grid.** Where every group of a family has `[grid]` on, nothing is merged: each tip
+goes to a node of a square grid `spacing_mm` across anchored to the plate (ADR 0335) — the
+nearest of the 25 nodes round it whose strut from the neck, leaning 45 degrees, clears the
+model, and under which a trunk lands straight down. The tips of a node hang one above
+another on one vertical trunk, each from a joint where its strut meets it; the lowest joint
+is the front that stands the trunk. A tip no node takes is stood as without the grid, and
+no gridded trunk is leant towards a neighbour.
 
 **Keeping out of the model.** Every body — each strut of a merge, the trunk under every
 landing — is swept as a beam of its own radius plus `clearance_mm` and tested with nine

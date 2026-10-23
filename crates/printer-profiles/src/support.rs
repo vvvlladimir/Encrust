@@ -409,6 +409,30 @@ impl Bracing {
     }
 }
 
+/// Trunks stood on the nodes of a square grid on the plate, each tip leant to its node at
+/// 45 degrees and the tips of one node down one trunk, so the forest is regular to brace
+/// and to cut away. Off, trunks stand where the tips merge. See `docs/decisions/0335`.
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+pub struct Grid {
+    pub enabled: bool,
+    /// Distance between two neighbouring nodes, millimetres.
+    pub spacing_mm: f32,
+}
+
+impl Grid {
+    /// The narrowest and widest a grid may be set, millimetres.
+    pub const SPACING_MM: std::ops::RangeInclusive<f32> = 1.0..=15.0;
+}
+
+impl Default for Grid {
+    fn default() -> Self {
+        Self {
+            enabled: false,
+            spacing_mm: 5.0,
+        }
+    }
+}
+
 /// A ready set of bracing numbers to start from. A profile keeps the numbers, never the
 /// name, so one is recognised by its numbers alone.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -521,6 +545,8 @@ pub struct SupportProfile {
     pub raft: Raft,
     #[serde(default)]
     pub bracing: Bracing,
+    #[serde(default)]
+    pub grid: Grid,
     /// How far the lowest point of a part should stand clear of the plate, millimetres.
     /// Supports need room under the model, and the first layers of a part printed
     /// straight onto the plate are the ones that stick to it hardest.
@@ -705,6 +731,7 @@ impl SupportProfile {
     /// What the three shipped presets share; see `docs/decisions/0323`.
     fn shipped() -> Self {
         Self {
+            grid: Grid::default(),
             name: String::new(),
             facets: default_facets(),
             density: 1.0,

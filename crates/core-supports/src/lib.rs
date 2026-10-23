@@ -134,6 +134,7 @@ mod tests {
             TipSegment, TopSegment,
         };
         SupportProfile {
+            grid: printer_profiles::Grid::default(),
             name: "Fixture".to_owned(),
             facets: 12,
             density: 1.0,

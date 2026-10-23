@@ -17,7 +17,7 @@ use crate::ui::{
 fn groups(part: Part) -> &'static [Group] {
     match part {
         Part::Tip => &[Group::Top],
-        Part::Body => &[Group::Main, Group::Branching],
+        Part::Body => &[Group::Main, Group::Branching, Group::Grid],
         Part::Base => &[Group::Bottom],
         Part::Raft => &[Group::Raft],
         Part::Brace => &[Group::Bracing],

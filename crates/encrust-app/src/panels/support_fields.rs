@@ -44,18 +44,20 @@ pub enum Group {
     Bottom,
     SmallPillar,
     Branching,
+    Grid,
     Raft,
     Bracing,
     Automatic,
 }
 
 impl Group {
-    pub const ALL: [Self; 8] = [
+    pub const ALL: [Self; 9] = [
         Self::Top,
         Self::Main,
         Self::Bottom,
         Self::SmallPillar,
         Self::Branching,
+        Self::Grid,
         Self::Raft,
         Self::Bracing,
         Self::Automatic,
@@ -68,6 +70,7 @@ impl Group {
             Self::Bottom => tr!("support-group-bottom"),
             Self::SmallPillar => tr!("support-group-small-pillar"),
             Self::Branching => tr!("support-group-branching"),
+            Self::Grid => tr!("support-group-grid"),
             Self::Raft => tr!("support-group-raft"),
             Self::Bracing => tr!("support-group-bracing"),
             Self::Automatic => tr!("support-group-automatic"),
@@ -78,6 +81,7 @@ impl Group {
     pub fn switch(self, profile: &mut SupportProfile) -> Option<&mut bool> {
         match self {
             Self::Branching => Some(&mut profile.branching.enabled),
+            Self::Grid => Some(&mut profile.grid.enabled),
             _ => None,
         }
     }
@@ -96,6 +100,7 @@ impl Group {
             Self::Bottom => bottom(ui, profile, saved),
             Self::SmallPillar => small_pillar(ui, profile, saved),
             Self::Branching => branching(ui, profile, saved),
+            Self::Grid => grid(ui, profile, saved),
             Self::Raft => raft(ui, profile, saved),
             Self::Bracing => bracing(ui, profile, saved),
             Self::Automatic => automatic(ui, profile, saved),
@@ -367,6 +372,29 @@ fn branching(ui: &mut egui::Ui, profile: &mut SupportProfile, saved: Option<&Sup
             &tr!("unit-mm"),
             COARSE_STEP,
             1.0..=40.0,
+            1,
+        );
+    });
+}
+
+/// The square grid trunks stand on, in place of where the tips merge; see
+/// `docs/decisions/0335`.
+fn grid(ui: &mut egui::Ui, profile: &mut SupportProfile, saved: Option<&SupportProfile>) {
+    let grid = &mut profile.grid;
+    if !grid.enabled {
+        describe(ui, &tr!("support-no-grid"));
+        return;
+    }
+    nested(ui, |ui| {
+        describe(ui, &tr!("support-grid-help"));
+        number(
+            ui,
+            &tr!("support-grid-spacing"),
+            was(saved, |p| p.grid.spacing_mm),
+            &mut grid.spacing_mm,
+            &tr!("unit-mm"),
+            COARSE_STEP,
+            printer_profiles::Grid::SPACING_MM,
             1,
         );
     });
