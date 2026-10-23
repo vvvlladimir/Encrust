@@ -583,8 +583,24 @@ left.
 
 - **Inside.** A grid of the plate at the asked-for spacing; over each cell the lowest
   surface of the patch is taken, so a patch that folds over itself is held from below.
-- **Rim.** The edges the region ends on — the faces across them are outside it — walked at
-  a spacing of its own. No polygon is offset (ADR 0092).
+  Or rings following the rim, a spacing apart along and across them, or a scatter no
+  closer than the spacing, ordered by a hash of each cell so it repeats.
+- **Rim.** At no offset, the edges the region ends on — the faces across them are outside
+  it — walked at a spacing of its own (ADR 0092). Otherwise a ring that far in, and a
+  second ring its gap further in if one is asked for.
+
+Anything measured in from the outline is read off the **footprint** (ADR 0333): the lowest
+surface over cells a quarter of the finest spacing across, 0.1 to 0.5 mm, and each cell's
+distance to the nearest cell the patch is not over, by the two-pass 8SSEDT sweep. A ring at
+depth `d` is the band of cells in `[d - cell/2, d + cell/2)`, walked from its first cell
+in row order to the nearest unvisited one within two cells and kept wherever it has gone
+a spacing from the last point kept, one loop after another. The inside starts its own
+offset in from the innermost rim, or from the outline with no rim. Depth is measured
+across the plate, so on a steep patch an offset is shorter along the surface than asked.
+
+`project` hands the rim back apart from the inside, and the window builds each to the
+saved profile chosen for it — the group built to that profile, else one made for it — or
+to the group in hand.
 
 The patch's own geometry is kept apart from the columns and rebuilt once a frame while a
 stroke is being drawn, because the columns take too long to rebuild per frame and a brush
@@ -624,8 +640,8 @@ paint, Cmd-Shift-click for the whole surface, alt to erase. The inspector's Supp
 carries the group picker with its name, New and Drop, the preset pill, a **Regular
 Support** / **Small Pillar** tab pair, and below them
 branching, raft, bracing, the lift and its button, a **Place** / **Paint** / **Block** pill
-with the mode's own one-line hint under it, the line spacing under Place, the brush, the surface angle, the two fill
-spacings and Fill — and, under **Edit**,
+with the mode's own one-line hint under it, the line spacing under Place, the brush, the surface angle, the fill's rim and inside
+with their spacings, offsets, second rim, pattern and profiles, and Fill — and, under **Edit**,
 how many parts of how many supports are held and the three buttons that move them to the
 group in hand, grow them again or take them away — the overhang angle, the density,
 Generate with its progress bar and cancel, the standing-against-placed count, and Save and

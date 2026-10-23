@@ -55,7 +55,7 @@ pub use pad::{PAD_SECTORS, PadCut};
 pub use pick::{Grab, Part, grab, grab_along, support_under};
 pub use placed::Placed;
 pub use preview::{Preview, preview, stands};
-pub use project::{ProjectSettings, project};
+pub use project::{InfillPattern, ProjectSettings, Projected, project};
 pub use raft::{GRID_BAR_MM, GRID_HOLE_MM, LIP_WIDTH_MM};
 pub use region::Blocked;
 pub use trapped::{TrapScan, Trapped};

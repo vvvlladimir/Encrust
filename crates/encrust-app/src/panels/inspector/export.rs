@@ -159,7 +159,7 @@ fn scope_row(ui: &mut egui::Ui, plates: usize) {
 }
 
 /// A drop-down that names its choice, under a label.
-fn picker_row(
+pub(super) fn picker_row(
     ui: &mut egui::Ui,
     id: &str,
     label: &str,

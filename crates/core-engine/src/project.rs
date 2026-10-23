@@ -224,10 +224,22 @@ pub struct SupportState {
     /// the default (ADR 0332).
     #[serde(default = "inline_spacing")]
     pub inline_spacing_mm: Scalar,
+    #[serde(default)]
+    pub fill_profiles: FillProfiles,
     /// The raft every model without one of its own stands on (ADR 0253). A file without
     /// it reads as the raft of the first group's profile, which is what it used to be.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub raft: Option<Raft>,
+}
+
+/// Which saved support profile a fill builds its rim and its inside to, by id; `None`, and
+/// a file without it, builds to the group in hand (ADR 0333).
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+pub struct FillProfiles {
+    #[serde(default)]
+    pub rim: Option<String>,
+    #[serde(default)]
+    pub inside: Option<String>,
 }
 
 /// A named set of support settings that supports are drawn with.
@@ -671,6 +683,7 @@ mod tests {
                     brush_radius_mm: 3.0,
                     flood_angle_deg: 30.0,
                     inline_spacing_mm: 4.0,
+                    fill_profiles: FillProfiles::default(),
                     raft: None,
                 },
                 hollow: HollowState {
@@ -885,6 +898,17 @@ mod tests {
         let older: SupportState =
             serde_json::from_value(state).expect("a tool written before lines reads");
         assert!((older.inline_spacing_mm - core_supports::INLINE_SPACING_MM).abs() < f32::EPSILON);
+    }
+
+    #[test]
+    fn a_fill_written_before_offsets_reads_as_it_was_filled() {
+        let older: ProjectSettings =
+            serde_json::from_str(r#"{ "infill_spacing_mm": 3.0, "border_spacing_mm": 2.0 }"#)
+                .expect("a fill written before offsets reads");
+        assert_eq!(older.border_offset_mm, 0.0, "the rim stood on the edge");
+        assert_eq!(older.infill_offset_mm, 0.0, "the grid ran up to the edge");
+        assert_eq!(older.second_border_mm, None);
+        assert_eq!(older.pattern, core_supports::InfillPattern::Grid);
     }
 
     #[test]

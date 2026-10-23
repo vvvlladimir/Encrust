@@ -4,6 +4,10 @@ use serde::{Deserialize, Serialize};
 
 use crate::placed::Placed;
 
+mod footprint;
+
+use footprint::Footprint;
+
 /// How close two contacts of a fill may come, as a fraction of the finest spacing it was
 /// asked for. Under one, so that a run of points laid down at exactly that spacing keeps
 /// every one of them.
@@ -23,15 +27,29 @@ const SINGULAR: Scalar = 1e-12;
 /// How a painted patch is filled with supports.
 ///
 /// The rim and the inside are asked for separately, because what an overhang needs held
-/// is its edge first: that is where a layer has nothing under it at all.
+/// is its edge first: that is where a layer has nothing under it at all. Every offset is
+/// measured in from the patch's outline seen from the plate.
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 pub struct ProjectSettings {
-    /// Spacing of the grid laid over the patch, millimetres, or `None` to leave the
-    /// inside of it bare.
+    /// Spacing of the points laid over the inside of the patch, millimetres, or `None` to
+    /// leave the inside of it bare.
     pub infill_spacing_mm: Option<Scalar>,
     /// Spacing of the points put along the patch's rim, millimetres, or `None` for a
     /// patch with nothing on its edge.
     pub border_spacing_mm: Option<Scalar>,
+    /// How far in from the outline the rim stands, millimetres; nought walks the edges the
+    /// patch ends on. A file without it reads nought, which is what it was filled with.
+    #[serde(default)]
+    pub border_offset_mm: Scalar,
+    /// How far inside the rim a second rim stands, millimetres, or `None` for one rim.
+    #[serde(default)]
+    pub second_border_mm: Option<Scalar>,
+    /// How far inside the innermost rim, or the outline with no rim, the inside begins,
+    /// millimetres.
+    #[serde(default)]
+    pub infill_offset_mm: Scalar,
+    #[serde(default)]
+    pub pattern: InfillPattern,
 }
 
 impl Default for ProjectSettings {
@@ -39,8 +57,33 @@ impl Default for ProjectSettings {
         Self {
             infill_spacing_mm: Some(3.0),
             border_spacing_mm: Some(2.0),
+            border_offset_mm: 1.0,
+            second_border_mm: None,
+            infill_offset_mm: 1.0,
+            pattern: InfillPattern::Grid,
         }
     }
+}
+
+/// How the inside of a patch is laid out.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum InfillPattern {
+    /// Rows and columns of the plate's own grid, the spacing apart.
+    #[default]
+    Grid,
+    /// Rings following the rim inwards, the spacing apart along and across them.
+    Concentric,
+    /// Scattered no closer than the spacing, the same way each time.
+    Random,
+}
+
+/// The contacts a fill puts down, in plate coordinates: the rim's apart from the
+/// inside's, since each may be built to a profile of its own.
+#[derive(Debug, Clone, Default, PartialEq)]
+pub struct Projected {
+    pub rim: Vec<Vec3>,
+    pub inside: Vec<Vec3>,
 }
 
 /// Where supports go to hold up `region` of the model, in plate coordinates.
@@ -50,10 +93,9 @@ impl Default for ProjectSettings {
 /// profile's overhang angle says whether one is needed. So painting over a patch that is
 /// partly forbidden, or over a wall that holds itself up, fills the rest of it.
 ///
-/// The inside is sampled on a grid of the plate rather than over the triangles, so the
-/// spacing is the spacing the print sees however finely the patch is meshed, and the rim
-/// is walked along the edges the fill ends on — the boundary of a set of faces, not an
-/// offset polygon. See `docs/decisions/0092`.
+/// A rim at nought is walked along the edges the fill ends on — the boundary of a set of
+/// faces, not an offset polygon (ADR 0092). Everything measured in from the outline is
+/// read off the patch's footprint on the plate (ADR 0333).
 pub fn project(
     placed: &Placed,
     adjacency: &Adjacency,
@@ -61,26 +103,32 @@ pub fn project(
     settings: &ProjectSettings,
     seeds: &[Vec3],
     max_overhang_deg: Scalar,
-) -> Vec<Vec3> {
-    let matrix = placed.transform.to_matrix();
+) -> Projected {
     let rim_mm = settings
         .border_spacing_mm
         .filter(|spacing| *spacing >= MIN_SPACING_MM);
     let pitch_mm = settings
         .infill_spacing_mm
         .filter(|spacing| *spacing >= MIN_SPACING_MM);
-    let Some(apart_mm) = rim_mm
+    let Some(finest_mm) = rim_mm
         .into_iter()
         .chain(pitch_mm)
         .fold(None, |least: Option<Scalar>, spacing| {
             Some(least.map_or(spacing, |least| least.min(spacing)))
         })
-        .map(|least| least * CROWD)
     else {
-        return Vec::new();
+        return Projected::default();
     };
+    let apart_mm = finest_mm * CROWD;
 
     let region = &hanging(placed, region, max_overhang_deg);
+    let rings = rim_rings(settings, rim_mm.is_some());
+    let inside_from_mm = rings.last().copied().unwrap_or(0.0) + settings.infill_offset_mm.max(0.0);
+    let footprint = (rings.iter().any(|ring| *ring > 0.0)
+        || (pitch_mm.is_some()
+            && (inside_from_mm > 0.0 || settings.pattern != InfillPattern::Grid)))
+        .then(|| Footprint::of(placed, region, finest_mm))
+        .flatten();
 
     // The supports already standing come first, so a second fill of the same patch adds
     // nothing on top of the first.
@@ -89,25 +137,89 @@ pub fn project(
         take_apart(&mut taken, *seed, apart_mm);
     }
 
-    let mut points = Vec::new();
+    let mut projected = Projected::default();
     // The rim goes down first: a patch's edge is where a layer has nothing under it at
-    // all, and the grid inside it gives way rather than the other way round.
+    // all, and the inside gives way rather than the other way round.
     if let Some(spacing_mm) = rim_mm {
-        for point in border_points(placed, adjacency, region, spacing_mm) {
-            let placed = matrix.transform_point3(point);
-            if take_apart(&mut taken, placed, apart_mm) {
-                points.push(placed);
-            }
+        for ring in &rings {
+            let points = match &footprint {
+                Some(footprint) if *ring > 0.0 => footprint.ring(*ring, spacing_mm),
+                _ => edge_points(placed, adjacency, region, spacing_mm),
+            };
+            projected.rim.extend(
+                points
+                    .into_iter()
+                    .filter(|point| take_apart(&mut taken, *point, apart_mm)),
+            );
         }
     }
     if let Some(pitch_mm) = pitch_mm {
-        for point in infill_points(placed, region, pitch_mm) {
-            if take_apart(&mut taken, point, apart_mm) {
-                points.push(point);
-            }
-        }
+        let points = inside_points(
+            placed,
+            region,
+            footprint.as_ref(),
+            settings.pattern,
+            inside_from_mm,
+            pitch_mm,
+        );
+        projected.inside.extend(
+            points
+                .into_iter()
+                .filter(|point| take_apart(&mut taken, *point, apart_mm)),
+        );
     }
-    points
+    projected
+}
+
+/// How far in from the outline each rim stands, millimetres: none without a rim, else the
+/// first and the second if one is asked for.
+fn rim_rings(settings: &ProjectSettings, rim: bool) -> Vec<Scalar> {
+    if !rim {
+        return Vec::new();
+    }
+    let first = settings.border_offset_mm.max(0.0);
+    std::iter::once(first)
+        .chain(
+            settings
+                .second_border_mm
+                .map(|gap| first + gap.max(MIN_SPACING_MM)),
+        )
+        .collect()
+}
+
+/// The inside of the patch laid out in `pattern`, from `from_mm` inside the outline.
+fn inside_points(
+    placed: &Placed,
+    region: &Region,
+    footprint: Option<&Footprint>,
+    pattern: InfillPattern,
+    from_mm: Scalar,
+    pitch_mm: Scalar,
+) -> Vec<Vec3> {
+    let Some(footprint) = footprint else {
+        return infill_points(placed, region, pitch_mm);
+    };
+    match pattern {
+        // A grid point the footprint cannot see under has nothing it is inside of.
+        InfillPattern::Grid => infill_points(placed, region, pitch_mm)
+            .into_iter()
+            .filter(|point| {
+                footprint.depth_at(point.truncate()) + footprint.cell_mm() / 2.0 >= from_mm
+            })
+            .collect(),
+        InfillPattern::Concentric => {
+            let mut points = Vec::new();
+            for ring in 0.. {
+                let ring = footprint.ring(from_mm + ring as Scalar * pitch_mm, pitch_mm);
+                if ring.is_empty() {
+                    break;
+                }
+                points.extend(ring);
+            }
+            points
+        }
+        InfillPattern::Random => footprint.scattered(from_mm, pitch_mm),
+    }
 }
 
 /// The faces of `region` a support may be put under: the ones the model has not blocked,
@@ -141,10 +253,19 @@ fn hanging(placed: &Placed, region: &Region, max_overhang_deg: Scalar) -> Region
 }
 
 /// The lowest point of the patch over each cell of a grid `pitch_mm` across.
+fn infill_points(placed: &Placed, region: &Region, pitch_mm: Scalar) -> Vec<Vec3> {
+    lowest_surface(placed, region, pitch_mm)
+        .into_iter()
+        .map(|(cell, z)| centre_of(cell, pitch_mm).extend(z))
+        .collect()
+}
+
+/// The height of the patch's lowest surface over the middle of each cell of a grid
+/// `pitch_mm` across that it covers.
 ///
 /// Lowest because a patch that folds over itself is being held from underneath: the
 /// support has to reach the first surface it meets on the way up, not the last.
-fn infill_points(placed: &Placed, region: &Region, pitch_mm: Scalar) -> Vec<Vec3> {
+fn lowest_surface(placed: &Placed, region: &Region, pitch_mm: Scalar) -> FastMap<[i32; 2], Scalar> {
     let matrix = placed.transform.to_matrix();
     let mut lowest: FastMap<[i32; 2], Scalar> = FastMap::default();
     for face in region.faces() {
@@ -177,8 +298,19 @@ fn infill_points(placed: &Placed, region: &Region, pitch_mm: Scalar) -> Vec<Vec3
     }
 
     lowest
+}
+
+/// Points every `spacing_mm` along the edges the region ends on, in plate coordinates.
+fn edge_points(
+    placed: &Placed,
+    adjacency: &Adjacency,
+    region: &Region,
+    spacing_mm: Scalar,
+) -> Vec<Vec3> {
+    let matrix = placed.transform.to_matrix();
+    border_points(placed, adjacency, region, spacing_mm)
         .into_iter()
-        .map(|(cell, z)| centre_of(cell, pitch_mm).extend(z))
+        .map(|point| matrix.transform_point3(point))
         .collect()
 }
 
@@ -327,28 +459,44 @@ mod tests {
 
     fn filled(model: &Mesh, settings: &ProjectSettings) -> Vec<Vec3> {
         let bvh = Bvh::build(model);
-        project(
+        every(project(
             &standing(model, &bvh),
             &Adjacency::of(model),
             &whole(model),
             settings,
             &[],
             OVERHANG_DEG,
-        )
+        ))
+    }
+
+    /// The rim's points and the inside's together.
+    fn every(projected: Projected) -> Vec<Vec3> {
+        projected.rim.into_iter().chain(projected.inside).collect()
+    }
+
+    /// The fill as it was before offsets: the rim on the patch's edges, the grid up to them.
+    fn at_the_edge() -> ProjectSettings {
+        ProjectSettings {
+            border_offset_mm: 0.0,
+            second_border_mm: None,
+            infill_offset_mm: 0.0,
+            pattern: InfillPattern::Grid,
+            ..ProjectSettings::default()
+        }
     }
 
     #[test]
     fn nothing_painted_is_nothing_to_hold_up() {
         let model = ceiling(5.0);
         let bvh = Bvh::build(&model);
-        let points = project(
+        let points = every(project(
             &standing(&model, &bvh),
             &Adjacency::of(&model),
             &Region::default(),
             &ProjectSettings::default(),
             &[],
             OVERHANG_DEG,
-        );
+        ));
         assert!(points.is_empty());
     }
 
@@ -359,6 +507,7 @@ mod tests {
             &ProjectSettings {
                 infill_spacing_mm: Some(2.0),
                 border_spacing_mm: None,
+                ..at_the_edge()
             },
         );
 
@@ -379,17 +528,18 @@ mod tests {
             &bvh,
             Transform::from_translation(Vec3::new(40.0, 0.0, 0.0)),
         );
-        let points = project(
+        let points = every(project(
             &moved,
             &Adjacency::of(&model),
             &whole(&model),
             &ProjectSettings {
                 infill_spacing_mm: Some(2.0),
                 border_spacing_mm: None,
+                ..at_the_edge()
             },
             &[],
             OVERHANG_DEG,
-        );
+        ));
 
         assert_eq!(points.len(), 25);
         assert!(
@@ -405,6 +555,7 @@ mod tests {
             &ProjectSettings {
                 infill_spacing_mm: None,
                 border_spacing_mm: Some(2.0),
+                ..at_the_edge()
             },
         );
 
@@ -446,6 +597,7 @@ mod tests {
             &ProjectSettings {
                 infill_spacing_mm: None,
                 border_spacing_mm: Some(2.0),
+                ..at_the_edge()
             },
         );
 
@@ -464,6 +616,7 @@ mod tests {
             &ProjectSettings {
                 infill_spacing_mm: None,
                 border_spacing_mm: Some(2.0),
+                ..at_the_edge()
             },
         );
         assert!(
@@ -481,6 +634,7 @@ mod tests {
             &ProjectSettings {
                 infill_spacing_mm: Some(2.0),
                 border_spacing_mm: Some(2.0),
+                ..at_the_edge()
             },
         );
         let close = points.iter().enumerate().any(|(at, point)| {
@@ -501,17 +655,18 @@ mod tests {
             .expect("half the square was blocked");
         let placed = standing(&model, &bvh).blocking(Some(&blocked));
 
-        let points = project(
+        let points = every(project(
             &placed,
             &Adjacency::of(&model),
             &whole(&model),
             &ProjectSettings {
                 infill_spacing_mm: Some(2.0),
                 border_spacing_mm: None,
+                ..at_the_edge()
             },
             &[],
             OVERHANG_DEG,
-        );
+        ));
 
         assert!(
             points.iter().all(|point| point.y >= point.x - 1e-4),
@@ -527,23 +682,24 @@ mod tests {
         let settings = ProjectSettings {
             infill_spacing_mm: Some(2.0),
             border_spacing_mm: None,
+            ..at_the_edge()
         };
-        let once = project(
+        let once = every(project(
             &standing(&model, &bvh),
             &Adjacency::of(&model),
             &whole(&model),
             &settings,
             &[],
             OVERHANG_DEG,
-        );
-        let twice = project(
+        ));
+        let twice = every(project(
             &standing(&model, &bvh),
             &Adjacency::of(&model),
             &whole(&model),
             &settings,
             &once,
             OVERHANG_DEG,
-        );
+        ));
 
         assert!(
             twice.is_empty(),
@@ -573,6 +729,7 @@ mod tests {
             &ProjectSettings {
                 infill_spacing_mm: Some(2.0),
                 border_spacing_mm: Some(2.0),
+                ..at_the_edge()
             },
         );
         assert!(
@@ -586,17 +743,18 @@ mod tests {
     fn a_wall_is_filled_once_the_angle_asks_for_it() {
         let model = wall();
         let bvh = Bvh::build(&model);
-        let points = project(
+        let points = every(project(
             &standing(&model, &bvh),
             &Adjacency::of(&model),
             &whole(&model),
             &ProjectSettings {
                 infill_spacing_mm: None,
                 border_spacing_mm: Some(2.0),
+                ..at_the_edge()
             },
             &[],
             0.0,
-        );
+        ));
         assert!(
             !points.is_empty(),
             "an angle of zero holds up every face that is painted"
@@ -611,11 +769,167 @@ mod tests {
             &ProjectSettings {
                 infill_spacing_mm: Some(4.0),
                 border_spacing_mm: None,
+                ..at_the_edge()
             },
         );
         assert!(
             points.iter().all(|point| point.z < 1e-4),
             "a cube painted all over is filled on its underside, not on its lid"
+        );
+    }
+    /// How far a point lies inside the 10 mm square of [`ceiling`], seen from above.
+    fn inside_square(point: Vec3) -> Scalar {
+        point.x.min(10.0 - point.x).min(point.y).min(10.0 - point.y)
+    }
+
+    fn projected(settings: &ProjectSettings) -> Projected {
+        let model = ceiling(5.0);
+        let bvh = Bvh::build(&model);
+        project(
+            &standing(&model, &bvh),
+            &Adjacency::of(&model),
+            &whole(&model),
+            settings,
+            &[],
+            OVERHANG_DEG,
+        )
+    }
+
+    /// Half a footprint cell for a 2 mm spacing, the most an offset is rounded by.
+    const CELL_SLACK_MM: Scalar = 0.26;
+
+    #[test]
+    fn a_rim_offset_stands_the_rim_that_far_inside_the_edge() {
+        let rim = projected(&ProjectSettings {
+            infill_spacing_mm: None,
+            border_spacing_mm: Some(2.0),
+            border_offset_mm: 1.0,
+            ..at_the_edge()
+        })
+        .rim;
+
+        // A square 8 mm a side, 32 mm round, walked every 2 mm.
+        assert!(
+            (12..=20).contains(&rim.len()),
+            "{} points on a 32 mm ring",
+            rim.len()
+        );
+        for point in &rim {
+            assert!(
+                (inside_square(*point) - 1.0).abs() <= CELL_SLACK_MM,
+                "{point} is not 1 mm inside the square's edge"
+            );
+            assert!((point.z - 5.0).abs() < 1e-4, "{point} is off the patch");
+        }
+    }
+
+    #[test]
+    fn a_second_rim_stands_its_gap_inside_the_first() {
+        let rim = projected(&ProjectSettings {
+            infill_spacing_mm: None,
+            border_spacing_mm: Some(2.0),
+            border_offset_mm: 1.0,
+            second_border_mm: Some(2.0),
+            ..at_the_edge()
+        })
+        .rim;
+
+        let near = |depth: Scalar| {
+            rim.iter()
+                .filter(|point| (inside_square(**point) - depth).abs() <= CELL_SLACK_MM)
+                .count()
+        };
+        assert!(near(1.0) > 0, "no point on the first rim, 1 mm in");
+        assert!(near(3.0) > 0, "no point on the second rim, 1 + 2 mm in");
+        assert_eq!(
+            near(1.0) + near(3.0),
+            rim.len(),
+            "a rim point stands on neither ring"
+        );
+    }
+
+    #[test]
+    fn the_inside_keeps_its_offset_from_the_innermost_rim() {
+        let inside = projected(&ProjectSettings {
+            infill_spacing_mm: Some(2.0),
+            border_spacing_mm: Some(2.0),
+            border_offset_mm: 1.0,
+            infill_offset_mm: 1.5,
+            ..at_the_edge()
+        })
+        .inside;
+
+        assert!(!inside.is_empty());
+        for point in &inside {
+            assert!(
+                inside_square(*point) >= 2.5 - CELL_SLACK_MM,
+                "{point} is nearer the edge than the rim at 1 mm and the offset of 1.5 mm"
+            );
+        }
+    }
+
+    #[test]
+    fn a_concentric_inside_lies_on_rings_the_spacing_apart() {
+        let inside = projected(&ProjectSettings {
+            infill_spacing_mm: Some(2.0),
+            border_spacing_mm: None,
+            infill_offset_mm: 1.0,
+            pattern: InfillPattern::Concentric,
+            ..at_the_edge()
+        })
+        .inside;
+
+        // Rings 1, 3 and 5 mm in; the last is the square's middle.
+        assert!(inside.len() > 8);
+        for point in &inside {
+            let depth = inside_square(*point);
+            let off_ring = ((depth - 1.0) / 2.0 - ((depth - 1.0) / 2.0).round()).abs() * 2.0;
+            assert!(
+                off_ring <= CELL_SLACK_MM * 2.0,
+                "{point} lies {depth} mm in, between the rings at 1, 3 and 5 mm"
+            );
+        }
+    }
+
+    #[test]
+    fn a_random_inside_scatters_the_same_way_every_time_and_never_crowds() {
+        let settings = ProjectSettings {
+            infill_spacing_mm: Some(2.0),
+            border_spacing_mm: None,
+            infill_offset_mm: 1.0,
+            pattern: InfillPattern::Random,
+            ..at_the_edge()
+        };
+        let inside = projected(&settings).inside;
+
+        assert_eq!(
+            inside,
+            projected(&settings).inside,
+            "a scatter is repeatable"
+        );
+        assert!(!inside.is_empty());
+        for (at, point) in inside.iter().enumerate() {
+            assert!(inside_square(*point) >= 1.0 - CELL_SLACK_MM);
+            assert!(
+                inside[at + 1..]
+                    .iter()
+                    .all(|other| other.distance(*point) >= 2.0 * CROWD),
+                "two scattered points within three quarters of the spacing"
+            );
+        }
+    }
+
+    #[test]
+    fn the_rim_and_the_inside_come_back_apart() {
+        let projected = projected(&ProjectSettings::default());
+        assert!(!projected.rim.is_empty());
+        assert!(!projected.inside.is_empty());
+        assert!(
+            projected
+                .rim
+                .iter()
+                .all(|point| (inside_square(*point) - 1.0).abs() <= CELL_SLACK_MM),
+            "the default rim stands 1 mm in"
         );
     }
 }

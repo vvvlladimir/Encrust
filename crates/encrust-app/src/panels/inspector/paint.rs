@@ -1,4 +1,5 @@
 use core_geometry::Scalar;
+use core_supports::InfillPattern;
 
 use crate::i18n::tr;
 use crate::panels::Window;
@@ -21,6 +22,9 @@ pub(super) const MAX_BRUSH_MM: f32 = 25.0;
 const MIN_SPACING_MM: f32 = 0.5;
 const MAX_SPACING_MM: f32 = 20.0;
 const DEFAULT_SPACING_MM: f32 = 3.0;
+const DEFAULT_SECOND_RIM_MM: f32 = 1.0;
+/// The furthest in a rim or the inside may be asked to start, millimetres.
+const MAX_OFFSET_MM: f32 = 10.0;
 
 /// Bounds on how far a painted surface may turn from the face that was clicked.
 const MIN_FLOOD_DEG: f32 = 1.0;
@@ -48,16 +52,8 @@ pub fn ui(ui: &mut egui::Ui, window: &mut Window) {
     section(ui, &tr!("supports-placing-fill"), None, |ui| {
         describe(ui, &tr!("paint-fill-help"));
         // How dense a fill comes out is worth reading whichever brush is in hand.
-        spacing_row(
-            ui,
-            &tr!("paint-rim"),
-            &mut window.tools.supports.fill.border_spacing_mm,
-        );
-        spacing_row(
-            ui,
-            &tr!("paint-inside"),
-            &mut window.tools.supports.fill.infill_spacing_mm,
-        );
+        rim_rows(ui, window);
+        inside_rows(ui, window);
         clear(ui, window);
     });
     section(ui, &tr!("paint-groups"), None, |ui| {
@@ -74,7 +70,10 @@ pub fn action(ui: &mut egui::Ui, window: &mut Window) {
         .targets()
         .any(|object| !object.supports.painted().is_empty());
     if primary_button(ui, icon::SUPPORTS, &tr!("paint-fill"), painted).clicked() {
-        let added = window.tools.supports.fill(&mut window.doc.scene);
+        let added = window
+            .tools
+            .supports
+            .fill(&mut window.doc.scene, &window.machine.slicing.catalogue);
         window.machine.status = Status::Info(tr!("paint-filled", count = added));
     }
 }
@@ -142,25 +141,127 @@ fn painting(ui: &mut egui::Ui, window: &mut Window) {
     }
 }
 
-/// One spacing of the fill, with the switch that leaves that half of it out.
-fn spacing_row(ui: &mut egui::Ui, label: &str, spacing_mm: &mut Option<Scalar>) {
+/// The fill's rim: its spacing, how far in it stands, a second rim inside it and the
+/// profile it is built to.
+fn rim_rows(ui: &mut egui::Ui, window: &mut Window) {
+    let fill = &mut window.tools.supports.fill;
+    if !half_switch(ui, &tr!("paint-rim"), &mut fill.border_spacing_mm) {
+        return;
+    }
+    nested(ui, |ui| {
+        if let Some(spacing_mm) = fill.border_spacing_mm.as_mut() {
+            spacing_row(ui, spacing_mm);
+        }
+        offset_row(ui, &tr!("paint-offset"), &mut fill.border_offset_mm);
+        let mut second = fill.second_border_mm.is_some();
+        if switch(ui, &mut second, &tr!("paint-second-rim")).changed() {
+            fill.second_border_mm = second.then_some(DEFAULT_SECOND_RIM_MM);
+        }
+        if let Some(gap_mm) = fill.second_border_mm.as_mut() {
+            offset_row(ui, &tr!("paint-second-rim-gap"), gap_mm);
+        }
+        let catalogue = &window.machine.slicing.catalogue;
+        fill_profile_row(
+            ui,
+            "fill-rim-profile",
+            catalogue,
+            &mut window.tools.supports.fill_profiles.rim,
+        );
+    });
+}
+
+/// The fill's inside: its spacing, its pattern, how far inside the rim it begins and the
+/// profile it is built to.
+fn inside_rows(ui: &mut egui::Ui, window: &mut Window) {
+    let fill = &mut window.tools.supports.fill;
+    if !half_switch(ui, &tr!("paint-inside"), &mut fill.infill_spacing_mm) {
+        return;
+    }
+    nested(ui, |ui| {
+        if let Some(spacing_mm) = fill.infill_spacing_mm.as_mut() {
+            spacing_row(ui, spacing_mm);
+        }
+        let segments = [
+            Segment::new(InfillPattern::Grid, tr!("paint-pattern-grid")),
+            Segment::new(InfillPattern::Concentric, tr!("paint-pattern-rings")),
+            Segment::new(InfillPattern::Random, tr!("paint-pattern-random")),
+        ];
+        let width = ui.available_width();
+        Segmented::new(&segments)
+            .width(width)
+            .show(ui, &mut fill.pattern);
+        offset_row(ui, &tr!("paint-offset"), &mut fill.infill_offset_mm);
+        let catalogue = &window.machine.slicing.catalogue;
+        fill_profile_row(
+            ui,
+            "fill-inside-profile",
+            catalogue,
+            &mut window.tools.supports.fill_profiles.inside,
+        );
+    });
+}
+
+/// The switch that leaves one half of the fill out. Answers whether that half is on.
+fn half_switch(ui: &mut egui::Ui, label: &str, spacing_mm: &mut Option<Scalar>) -> bool {
     let mut on = spacing_mm.is_some();
     if switch(ui, &mut on, label).changed() {
         *spacing_mm = on.then_some(DEFAULT_SPACING_MM);
     }
-    if let Some(value) = spacing_mm.as_mut() {
-        nested(ui, |ui| {
-            number_row(
-                ui,
-                &tr!("support-table-spacing"),
-                value,
-                &tr!("unit-mm"),
-                COARSE_STEP,
-                MIN_SPACING_MM..=MAX_SPACING_MM,
-                2,
-            );
-        });
-    }
+    on
+}
+
+/// How far apart the supports of one half of the fill stand.
+fn spacing_row(ui: &mut egui::Ui, spacing_mm: &mut Scalar) {
+    number_row(
+        ui,
+        &tr!("support-table-spacing"),
+        spacing_mm,
+        &tr!("unit-mm"),
+        COARSE_STEP,
+        MIN_SPACING_MM..=MAX_SPACING_MM,
+        2,
+    );
+}
+
+/// A distance measured in from the patch's outline, or in from the rim.
+fn offset_row(ui: &mut egui::Ui, label: &str, offset_mm: &mut Scalar) {
+    number_row(
+        ui,
+        label,
+        offset_mm,
+        &tr!("unit-mm"),
+        COARSE_STEP,
+        0.0..=MAX_OFFSET_MM,
+        2,
+    );
+}
+
+/// The saved profile one half of a fill is built to, or the group in hand.
+fn fill_profile_row(
+    ui: &mut egui::Ui,
+    id: &str,
+    catalogue: &printer_profiles::Catalogue,
+    chosen: &mut Option<String>,
+) {
+    let in_hand = tr!("paint-profile-in-hand");
+    let shown = chosen
+        .as_deref()
+        .and_then(|id| catalogue.supports().find(|entry| entry.id == id))
+        .map_or(in_hand.clone(), |entry| entry.profile.name.clone());
+    super::export::picker_row(ui, id, &tr!("paint-profile"), &shown, |ui| {
+        if ui.selectable_label(chosen.is_none(), &in_hand).clicked() {
+            *chosen = None;
+        }
+        let offered = catalogue
+            .supports()
+            .filter(|entry| !catalogue.is_auto_shape(&entry.id));
+        for entry in offered {
+            let picked = chosen.as_deref() == Some(entry.id.as_str());
+            if ui.selectable_label(picked, &entry.profile.name).clicked() {
+                *chosen = Some(entry.id.clone());
+            }
+        }
+    });
 }
 
 /// Which group the fields below belong to, and the two ways the list of them changes.

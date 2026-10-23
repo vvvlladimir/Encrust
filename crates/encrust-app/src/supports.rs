@@ -1,7 +1,7 @@
 use anyhow::{Context, Result, bail};
-use core_engine::project::own_table;
+use core_engine::project::{FillProfiles, own_table};
 use core_geometry::{Adjacency, Ray, Scalar, Vec2, Vec3, raycast_placed};
-use core_supports::{Need, Part, Placed, ProjectSettings, Reason, project};
+use core_supports::{Need, Part, Placed, ProjectSettings, Projected, Reason, project};
 use printer_profiles::{AUTO_SIZES, AutoProfile, Catalogue, Raft, SupportProfile};
 
 /// How many shapes an automatic run builds to: its sizes, and the one that steadies a part.
@@ -96,6 +96,8 @@ pub struct SupportTool {
     /// with it, degrees.
     pub flood_angle_deg: Scalar,
     pub fill: ProjectSettings,
+    /// The saved profiles a fill builds its rim and its inside to, or the group in hand.
+    pub fill_profiles: FillProfiles,
     /// How far apart a line of supports drawn with shift stands, millimetres.
     pub inline_spacing_mm: Scalar,
     /// The support Place last put down, in its model's own space: where a line drawn with
@@ -144,6 +146,7 @@ impl Default for SupportTool {
             brush_radius_mm: 2.0,
             flood_angle_deg: 30.0,
             fill: ProjectSettings::default(),
+            fill_profiles: FillProfiles::default(),
             inline_spacing_mm: core_supports::INLINE_SPACING_MM,
             last_placed: None,
             stroke: false,
@@ -632,13 +635,14 @@ impl SupportTool {
     }
 
     /// Fills every painted patch on the plate with supports, and returns how many were
-    /// put down.
+    /// put down. The rim and the inside each go into the group of the profile chosen for
+    /// them, made for it when there is none, or into the group in hand (ADR 0333).
     ///
     /// The face adjacency the rim is walked over is built here and thrown away: a fill is
     /// one press of a button, and keeping it beside every model would cost the memory of
     /// a third mesh for something a plate full of models asks for once.
-    pub fn fill(&self, scene: &mut Scene) -> usize {
-        let filled: Vec<(crate::scene::ObjectId, Vec<Vec3>)> = scene
+    pub fn fill(&mut self, scene: &mut Scene, catalogue: &Catalogue) -> usize {
+        let filled: Vec<(ObjectId, Projected)> = scene
             .targets()
             .filter(|object| !object.supports.painted().is_empty())
             .map(|object| {
@@ -667,18 +671,69 @@ impl SupportTool {
             })
             .collect();
 
+        let rim = filled
+            .iter()
+            .any(|(_, projected)| !projected.rim.is_empty());
+        let inside = filled
+            .iter()
+            .any(|(_, projected)| !projected.inside.is_empty());
+        let rim_group = match rim {
+            true => self.fill_group(self.fill_profiles.rim.clone(), &[], catalogue, scene),
+            false => self.active,
+        };
+        let inside_group = match inside {
+            true => self.fill_group(
+                self.fill_profiles.inside.clone(),
+                &[rim_group],
+                catalogue,
+                scene,
+            ),
+            false => self.active,
+        };
+
         let mut added = 0;
-        for (id, contacts) in filled {
+        for (id, projected) in filled {
             let Some(object) = scene.get_mut(id) else {
                 continue;
             };
             let transform = object.transform;
-            for contact in contacts {
-                object.supports.add(contact, transform, self.active);
-                added += 1;
+            let parts = [(projected.rim, rim_group), (projected.inside, inside_group)];
+            for (contacts, group) in parts {
+                for contact in contacts {
+                    object.supports.add(contact, transform, group);
+                    added += 1;
+                }
             }
         }
         added
+    }
+
+    /// The group one part of a fill goes into: the group in hand, or the one built to the
+    /// saved profile `id`, else one made for it that is none of `taken`.
+    fn fill_group(
+        &mut self,
+        id: Option<String>,
+        taken: &[u16],
+        catalogue: &Catalogue,
+        scene: &mut Scene,
+    ) -> u16 {
+        let Some(id) = id else {
+            return self.active;
+        };
+        // A profile deleted since it was chosen leaves the fill to the group in hand.
+        let Ok(entry) = catalogue.support(&id) else {
+            return self.active;
+        };
+        if let Some(group) = self
+            .table()
+            .iter()
+            .position(|kind| kind.name == entry.profile.name)
+        {
+            return group as u16;
+        }
+        let mut taken = taken.to_vec();
+        taken.push(self.active);
+        self.group_to_build(entry.profile.clone(), &taken, scene)
     }
 
     /// Stands every supported model up by the thickness of the raft under it, and back
@@ -1131,14 +1186,16 @@ mod tests {
         let underside = face_looking(&scene.objects()[0].mesh, -1.0);
         paint_surface(&mut scene, underside, false);
 
-        let tool = SupportTool {
+        let mut tool = SupportTool {
             fill: ProjectSettings {
                 infill_spacing_mm: Some(0.3),
                 border_spacing_mm: None,
+                infill_offset_mm: 0.0,
+                ..ProjectSettings::default()
             },
             ..SupportTool::default()
         };
-        let added = tool.fill(&mut scene);
+        let added = tool.fill(&mut scene, &Catalogue::default());
 
         assert!(
             added > 1,
@@ -1151,6 +1208,60 @@ mod tests {
                 point.contact
             );
         }
+    }
+
+    #[test]
+    fn a_fill_builds_its_rim_and_its_inside_to_the_profiles_chosen_for_them() {
+        let mut scene = one_cube();
+        let underside = face_looking(&scene.objects()[0].mesh, -1.0);
+        paint_surface(&mut scene, underside, false);
+        let catalogue = Catalogue::bundled().expect("the shipped catalogue is valid");
+        let manual: Vec<&printer_profiles::Entry<SupportProfile>> = catalogue
+            .supports()
+            .filter(|entry| !catalogue.is_auto_shape(&entry.id))
+            .collect();
+        let [rim, inside, ..] = manual.as_slice() else {
+            panic!("the shipped catalogue has at least two profiles to build by hand");
+        };
+
+        let mut tool = SupportTool {
+            fill: ProjectSettings {
+                infill_spacing_mm: Some(0.3),
+                border_spacing_mm: Some(0.3),
+                border_offset_mm: 0.0,
+                infill_offset_mm: 0.0,
+                ..ProjectSettings::default()
+            },
+            fill_profiles: FillProfiles {
+                rim: Some(rim.id.clone()),
+                inside: Some(inside.id.clone()),
+            },
+            ..SupportTool::default()
+        };
+        tool.fill(&mut scene, &catalogue);
+
+        let group_of = |name: &str| {
+            tool.groups
+                .iter()
+                .position(|group| group.profile.name == name)
+                .unwrap_or_else(|| panic!("no group was made for {name}")) as u16
+        };
+        let (rim_group, inside_group) =
+            (group_of(&rim.profile.name), group_of(&inside.profile.name));
+        assert_ne!(rim_group, tool.active, "the group in hand was not retuned");
+        assert_ne!(
+            inside_group, tool.active,
+            "the group in hand was not retuned"
+        );
+        let points = scene.objects()[0].supports.points();
+        assert!(
+            points.iter().any(|point| point.group == rim_group),
+            "nothing in the rim's group"
+        );
+        assert!(
+            points.iter().any(|point| point.group == inside_group),
+            "nothing in the inside's group"
+        );
     }
 
     #[test]
@@ -1176,9 +1287,9 @@ mod tests {
         paint_surface(&mut scene, underside, false);
         paint_surface(&mut scene, underside, true);
 
-        let tool = SupportTool::default();
+        let mut tool = SupportTool::default();
         assert_eq!(
-            tool.fill(&mut scene),
+            tool.fill(&mut scene, &Catalogue::default()),
             0,
             "the painted patch is the blocked patch"
         );

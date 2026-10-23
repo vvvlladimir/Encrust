@@ -99,6 +99,7 @@ fn support_state(supports: &SupportTool) -> SupportState {
         brush_radius_mm: supports.brush_radius_mm,
         flood_angle_deg: supports.flood_angle_deg,
         inline_spacing_mm: supports.inline_spacing_mm,
+        fill_profiles: supports.fill_profiles.clone(),
         raft: Some(supports.raft),
     }
 }
@@ -144,6 +145,7 @@ fn restore_supports(state: SupportState, supports: &mut SupportTool) {
     supports.brush_radius_mm = state.brush_radius_mm;
     supports.flood_angle_deg = state.flood_angle_deg;
     supports.inline_spacing_mm = state.inline_spacing_mm;
+    supports.fill_profiles = state.fill_profiles;
     supports.picked.clear();
 }
 

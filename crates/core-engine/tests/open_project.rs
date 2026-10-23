@@ -8,9 +8,9 @@
 use std::sync::Arc;
 
 use core_engine::project::{
-    Array, Axis, BuiltCavity, Cavity, CutState, DrainState, Group, HollowState, Keep, Manifest,
-    ModelMeshes, ObjectHollowState, ObjectState, ObjectSupportState, Project, SlicingState,
-    Summary, SupportState, VERSION,
+    Array, Axis, BuiltCavity, Cavity, CutState, DrainState, FillProfiles, Group, HollowState, Keep,
+    Manifest, ModelMeshes, ObjectHollowState, ObjectState, ObjectSupportState, Project,
+    SlicingState, Summary, SupportState, VERSION,
 };
 use core_engine::{EngineError, Machine, Opening, open_plate};
 use core_geometry::{Bvh, Mesh, Orientation, Region, Transform, Vec3, diagnose};
@@ -142,6 +142,7 @@ fn project() -> Project {
                 brush_radius_mm: 2.0,
                 flood_angle_deg: 30.0,
                 inline_spacing_mm: 4.0,
+                fill_profiles: FillProfiles::default(),
                 raft: None,
             },
             hollow: HollowState {

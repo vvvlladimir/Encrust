@@ -336,6 +336,10 @@ whole-surface fill is Cmd-Shift-click.
   model's surface; dots show where they will stand before you click.
 - **Paint** areas with a brush where supports must go, then **Fill** them at a spacing you
   set. You can fill the inside of an area or only its rim, filtered by surface angle.
+  The rim stands an **offset** in from the edge (1 mm to start), with an optional
+  **second rim** inside it; the inside starts its own offset in from the rim and is laid
+  on a **grid**, in **rings** following the rim, or **scattered**. Rim and inside can each
+  be built to a saved profile of their own, which gets a group, or to the group in hand.
 - **Block** areas where no support may go.
 - Click a standing support to select it, then rebuild, remove or move it to another group.
 
