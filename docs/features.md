@@ -218,7 +218,7 @@ whole-surface fill is Cmd-Shift-click.
   combined through a field, its edges rounded to the lattice the notice names.
 - Text and Combine replace the model; its supports, cavity, holes, own settings and
   texture are not kept, and Undo puts the original back. The result stands on the plate the
-  models were taken from. Shift or Cmd click picks a model in Text mode without writing.
+  models were taken from. Cmd click picks a model in Text mode without writing.
 - A press, a stamp, a combination, a cut or a split runs off the drawing thread and can be
   cancelled from the panel; a cancelled press stops inside the model it is on rather than
   finishing unseen. If the model is moved, resized, replaced or undone meanwhile, the
@@ -320,7 +320,9 @@ whole-surface fill is Cmd-Shift-click.
   above it are held with it. A gentle slope too shallow to sag — past 10° from vertical
   — gets a few thin **Auto Stabilization** supports about 8 mm apart so the part does not
   rock on the peel. **Sizes** sets where each heavier shape starts; a merged support shows each tip in its own group's colour. **By hand**, supports are built
-  to the profile chosen for the group in hand.
+  to the profile chosen for the group in hand. The switch, the automatic profile and its
+  edited numbers are saved with the project and remembered between runs, and Undo takes
+  them back.
 - Nearby tips merge into shared **branching trunks**. Trunks are cones sized by their
   height and load, and nothing carrying a load leans more than 45°.
 - With **Grid** on in the Shape tool, trunks stand on a square grid instead, 5 mm apart
@@ -598,7 +600,8 @@ address in a video player).
   every control, and every control has a name for screen readers.
 - **Undo and redo** across the plate and the settings forms. A run that lands its result
   after an undo is a new edit, so what could be redone before it can no longer be.
-- Tool values are remembered between runs.
+- Tool values are remembered between runs, and so is how each panel was left: which
+  sections are folded, which tab is open, what a click places, and what Measure snaps to.
 - **Updates:** checks once a day (can be turned off), downloads, verifies the signature and
   installs only when you press it. You can skip a version. A copy from the Microsoft Store
   is updated by the Store instead: it says when the Store has a new version, and its button

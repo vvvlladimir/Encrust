@@ -11,7 +11,7 @@ use printer_profiles::{
 use crate::i18n::tr;
 use crate::ui::{
     Carried, Segment, Segmented, bare_switch, carried_row, count_row, describe, field_label, icon,
-    icon_toggle, nested, switch, theme,
+    icon_toggle, kept, nested, switch, theme,
 };
 
 /// Millimetres per point of drag. The tip is measured in tenths and the foot in whole
@@ -466,11 +466,9 @@ fn bracing(ui: &mut egui::Ui, profile: &mut SupportProfile, saved: Option<&Suppo
     describe(ui, &tr!("support-bracing-help"));
     let id = ui.id().with(("bracing-fine-tune", &profile.name));
     let bracing = &mut profile.bracing;
-    let mut fine = ui
-        .data(|data| data.get_temp(id))
-        .unwrap_or_else(|| BracingPreset::of(bracing).is_none());
+    let mut fine = kept::get(ui.ctx(), id).unwrap_or_else(|| BracingPreset::of(bracing).is_none());
     bracing_switch(ui, &mut bracing.enabled, &mut fine);
-    ui.data_mut(|data| data.insert_temp(id, fine));
+    kept::set(ui.ctx(), id, &fine);
     if !bracing.enabled {
         return;
     }

@@ -19,7 +19,7 @@ its faces afresh. A cavity often wants holding up apart from the outside, after 
   been taken out, else its shell once hollowed, else the model. The window keeps that
   surface's hierarchy beside the model, built once per surface, and rebuilds the supports
   when it changes; a run cuts and reads it, columns land and beams are swept against it,
-  and opening a project meshes against the shell it holds.
+  and opening a project drills the shell it holds the same way and meshes against that.
 - **Patches stay on the model.** A fill reads the model's faces, and a blocked patch is
   asked by point — `Placed::blocks_at`, within 0.01 mm of the patch — rather than by face,
   so it holds on any surface however it is numbered.
@@ -29,6 +29,12 @@ its faces afresh. A cavity often wants holding up apart from the outside, after 
   sized by the profile in hand like any run. Once anything stands inside, the button is
   **Delete the cavity supports** and takes those away, frozen trees whose every tip is
   inside included.
+- **A run keeps to its side while it places**, as a blocked patch keeps it off: a contact
+  on the far side is never taken, so it holds up nothing near it, and a support already
+  standing there is no seed.
+- **A line keeps to its side too.** A line drawn with shift (ADR 0332) takes each point to
+  the nearest face on the side of the wall its first support stands on, so a chord that
+  dips into a thin wall is not taken through it onto the cavity.
 - **Seen through the section.** A part of a support is taken by a click between where the
   section lets the ray in and the first printed surface it meets, or the cap where the cut
   stands in material; so a support inside a cavity the section opens can be picked.
@@ -56,5 +62,6 @@ in hand, and take it away again.
 ### The option that won, and what it costs
 
 A face within a hundredth of a millimetre of a blocked patch counts as blocked, a frozen
-tree with tips on both sides of the wall belongs to neither button, and the button counts
-the supports inside every frame it is drawn, one nearest-face query each.
+tree with tips on both sides of the wall belongs to neither button, and a run on a hollow
+model asks one nearest-face query of every contact it considers. The button counts the
+supports inside again only when a support or the surface changed, one query each.

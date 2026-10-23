@@ -1,7 +1,7 @@
 //! What the window remembers between runs: the machine, the resin, the values every tool
 //! is set to, the printer on the network each machine sends to, whether to look for
-//! updates, how the window behaves, how wide the two side cards were dragged, and where
-//! Preview divides the model from the mask.
+//! updates, how the window behaves, how wide the two side cards were dragged, where
+//! Preview divides the model from the mask, and what each panel was switched to.
 
 use std::collections::BTreeMap;
 use std::net::IpAddr;
@@ -14,7 +14,10 @@ use net_prusalink::Link;
 use net_sdcp::Printer;
 use printer_profiles::{Kind, Renamed};
 
+use crate::drain;
+use crate::gizmo::Axes;
 use crate::i18n::Language;
+use crate::measure::{Snap, Target};
 use crate::network::{Network, Prusa};
 use crate::panels::Window;
 use crate::profiles;
@@ -23,7 +26,9 @@ use crate::relief::ReliefChoice;
 use crate::slicing::Slicing;
 use crate::state::Tools;
 use crate::status::Status;
+use crate::supports;
 use crate::tool_settings::ToolSettings;
+use crate::ui::kept::Kept;
 use crate::ui::theme;
 use crate::updates::UpdatePrefs;
 use crate::workspace::ViewOptions;
@@ -75,6 +80,48 @@ pub struct Preferences {
     plate_w: Option<f32>,
     #[serde(default)]
     general: General,
+    #[serde(default)]
+    modes: Modes,
+    /// Which sections were folded and which tab of a panel was open, by widget.
+    #[serde(default)]
+    kept: Kept,
+}
+
+/// What each tool's panel was switched to that is neither a value of the tool nor undone,
+/// like a view: what a click puts down, what Measure catches, which axes the handles
+/// follow. See `docs/decisions/0336`.
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct Modes {
+    supports: supports::Placing,
+    drain: drain::Placing,
+    snap: Snap,
+    target: Target,
+    show_axes: bool,
+    axes: Axes,
+}
+
+impl Modes {
+    /// What the panels are switched to now.
+    pub fn of(tools: &Tools, axes: Axes) -> Self {
+        Self {
+            supports: tools.supports.placing,
+            drain: tools.drain.placing,
+            snap: tools.measure.snap,
+            target: tools.measure.target,
+            show_axes: tools.measure.show_axes,
+            axes,
+        }
+    }
+
+    fn apply(&self, tools: &mut Tools, axes: &mut Axes) {
+        tools.supports.placing = self.supports;
+        tools.drain.placing = self.drain;
+        tools.measure.snap = self.snap;
+        tools.measure.target = self.target;
+        tools.measure.show_axes = self.show_axes;
+        *axes = self.axes;
+    }
 }
 
 /// How the window itself behaves, as the Settings window's General page sets it.
@@ -124,7 +171,23 @@ impl Preferences {
             inspector_w: None,
             plate_w: None,
             general: General::default(),
+            modes: Modes::of(tools, Axes::default()),
+            kept: Kept::default(),
         }
+    }
+
+    /// The same, with which axes the handles follow and what the panels themselves chose.
+    pub fn with_panels(self, axes: Axes, ctx: &egui::Context) -> Self {
+        Self {
+            modes: Modes { axes, ..self.modes },
+            kept: Kept::of(ctx),
+            ..self
+        }
+    }
+
+    /// Puts back what the panels themselves chose, where their widgets look for it.
+    pub fn restore_panels(&self, ctx: &egui::Context) {
+        self.kept.clone().restore(ctx);
     }
 
     /// The same, with how the window behaves.
@@ -243,6 +306,7 @@ impl Preferences {
         if let Some(tools) = self.tools.clone() {
             tools.apply(window.tools, &mut window.machine.slicing);
         }
+        self.modes.apply(window.tools, &mut window.view.gizmo.axes);
         if let Err(error) = window.tools.relief.restore(&self.relief) {
             window.machine.status = Status::failed(&error);
         }
@@ -355,6 +419,31 @@ mod tests {
 
         assert_eq!(read.boards.len(), 1, "the listed board is kept");
         assert_eq!(read.chosen.get("elegoo-saturn-4-ultra"), Some(&address));
+    }
+
+    #[test]
+    fn what_each_panel_was_switched_to_survives_the_round_trip() {
+        let mut tools = Tools::default();
+        tools.supports.placing = supports::Placing::Block;
+        tools.drain.placing = drain::Placing::Channel;
+        tools.measure.target = Target::Planes;
+        let prefs = Preferences::of(
+            &Slicing::default(),
+            &Network::default(),
+            &UpdatePrefs::default(),
+            &tools,
+        )
+        .with_panels(Axes::Local, &egui::Context::default());
+        let text = serde_json::to_string(&prefs).expect("the preferences serialise");
+        let read: Preferences = serde_json::from_str(&text).expect("and read back");
+
+        let mut tools = Tools::default();
+        let mut axes = Axes::Global;
+        read.modes.apply(&mut tools, &mut axes);
+        assert_eq!(tools.supports.placing, supports::Placing::Block);
+        assert_eq!(tools.drain.placing, drain::Placing::Channel);
+        assert_eq!(tools.measure.target, Target::Planes);
+        assert_eq!(axes, Axes::Local);
     }
 
     #[test]

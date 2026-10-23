@@ -5,6 +5,7 @@
 
 pub(crate) mod fonts;
 pub mod icon;
+pub mod kept;
 pub mod theme;
 mod widgets;
 

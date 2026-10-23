@@ -2,6 +2,7 @@ use core_geometry::{Scalar, Vec3};
 
 use crate::edit::on_model;
 use crate::placed::Placed;
+use crate::region::WallSide;
 
 /// How far apart a line of supports stands unless asked otherwise, millimetres.
 pub const INLINE_SPACING_MM: Scalar = 4.0;
@@ -21,7 +22,16 @@ const CROWD: Scalar = 0.5;
 /// surface, so it follows the model's underside without a path over its faces. `from`
 /// stands already and is left out, `to` is the last point. A point that comes down on a
 /// blocked face or crowds the one before it is left out too.
-pub fn inline(placed: &Placed, from: Vec3, to: Vec3, spacing_mm: Scalar) -> Vec<Vec3> {
+///
+/// On a hollow model the surface is that of `side`, so a chord dipping into a thin wall
+/// is not taken through it onto the cavity.
+pub fn inline(
+    placed: &Placed,
+    from: Vec3,
+    to: Vec3,
+    spacing_mm: Scalar,
+    side: Option<&WallSide>,
+) -> Vec<Vec3> {
     if spacing_mm.is_nan() || spacing_mm < MIN_SPACING_MM {
         return Vec::new();
     }
@@ -29,7 +39,12 @@ pub fn inline(placed: &Placed, from: Vec3, to: Vec3, spacing_mm: Scalar) -> Vec<
     let mut last = from;
     let mut points = Vec::with_capacity(steps);
     for step in 1..=steps {
-        let Some(point) = on_model(placed, from.lerp(to, step as Scalar / steps as Scalar)) else {
+        let at = from.lerp(to, step as Scalar / steps as Scalar);
+        let point = match side {
+            Some(side) => on_side(placed, side, at),
+            None => on_model(placed, at),
+        };
+        let Some(point) = point else {
             continue;
         };
         if point.distance(last) >= spacing_mm * CROWD {
@@ -38,6 +53,15 @@ pub fn inline(placed: &Placed, from: Vec3, to: Vec3, spacing_mm: Scalar) -> Vec<
         }
     }
     points
+}
+
+/// [`on_model`], kept to the faces on `side` of the wall.
+fn on_side(placed: &Placed, side: &WallSide, at: Vec3) -> Option<Vec3> {
+    let local = side.into_model.transform_point3(at);
+    let kept = |face: usize| side.inner.contains(&face) == side.inside;
+    let closest = side.bvh.closest_where(local, kept)?.point;
+    let closest = side.into_model.inverse().transform_point3(closest);
+    (!placed.blocks_at(closest)).then_some(closest)
 }
 
 #[cfg(test)]
@@ -60,7 +84,7 @@ mod tests {
         let from = Vec3::new(-4.0, 0.0, 5.0);
         let to = Vec3::new(4.0, 0.0, 5.0);
 
-        let points = inline(&placed, from, to, 3.0);
+        let points = inline(&placed, from, to, 3.0, None);
 
         // 8 mm at no more than 3 mm apart is three steps of 8/3 mm.
         let expected = [-4.0 + 8.0 / 3.0, -4.0 + 16.0 / 3.0, 4.0];
@@ -84,6 +108,7 @@ mod tests {
             Vec3::new(0.0, 0.0, 5.0),
             Vec3::new(5.0, 0.0, 10.0),
             1.0,
+            None,
         );
 
         assert!(!points.is_empty());
@@ -111,6 +136,7 @@ mod tests {
             Vec3::new(-4.0, 0.0, 5.0),
             Vec3::new(4.0, 0.0, 5.0),
             2.0,
+            None,
         );
 
         assert!(points.is_empty(), "every point fell on a blocked face");
@@ -126,7 +152,46 @@ mod tests {
             Vec3::new(-4.0, 0.0, 5.0),
             Vec3::new(4.0, 0.0, 5.0),
             0.0,
+            None,
         );
         assert!(points.is_empty());
+    }
+
+    #[test]
+    fn a_chord_through_a_thin_wall_keeps_to_its_side_of_it() {
+        let outer = floating();
+        let cavity = box_mesh(Vec3::new(-4.5, -4.5, 5.5), Vec3::new(4.5, 4.5, 14.5));
+        let offset = outer.vertices.len() as u32;
+        let vertices = [outer.vertices.clone(), cavity.vertices].concat();
+        let faces: Vec<[u32; 3]> = outer
+            .faces
+            .iter()
+            .copied()
+            .chain(cavity.faces.iter().map(|face| face.map(|at| at + offset)))
+            .collect();
+        let inner = outer.faces.len()..faces.len();
+        let shell = core_geometry::Mesh::new(vertices, faces);
+        let bvh = std::sync::Arc::new(Bvh::build(&shell));
+        let placed = Placed::new(&shell, &bvh, Transform::default());
+        let side = WallSide {
+            bvh: std::sync::Arc::clone(&bvh),
+            inner,
+            into_model: core_geometry::Mat4::IDENTITY,
+            inside: false,
+        };
+        let (from, to) = (Vec3::new(0.0, 0.0, 5.0), Vec3::new(5.0, 0.0, 10.0));
+
+        let through = inline(&placed, from, to, 1.0, None);
+        assert!(
+            through.iter().any(|point| (point.z - 5.5).abs() < 1e-4),
+            "the chord comes nearer the cavity's floor, 0.5 mm in, than the underside"
+        );
+        let points = inline(&placed, from, to, 1.0, Some(&side));
+        assert!(!points.is_empty());
+        for point in &points {
+            let on_floor = (point.z - 5.0).abs() < 1e-4;
+            let on_wall = (point.x - 5.0).abs() < 1e-4;
+            assert!(on_floor || on_wall, "{point} is off the box's outside");
+        }
     }
 }

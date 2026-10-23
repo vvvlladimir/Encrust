@@ -3,6 +3,7 @@ use std::sync::Arc;
 use core_geometry::{
     Adjacency, Bvh, FastSet, Mat4, Mesh, Region, Scalar, Transform, Triangle, Vec3, point_triangle,
 };
+use serde::{Deserialize, Serialize};
 
 use crate::i18n::tr;
 use crate::scene::{ObjectId, SceneObject};
@@ -39,7 +40,8 @@ impl Snapped {
 }
 
 /// What a click of the Measure tool is caught by.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
 pub enum Snap {
     /// The nearest corner where the surface turns, else a corner of the triangle clicked.
     Corner,
@@ -51,7 +53,8 @@ pub enum Snap {
 }
 
 /// What the Measure tool measures between.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
 pub enum Target {
     #[default]
     Points,

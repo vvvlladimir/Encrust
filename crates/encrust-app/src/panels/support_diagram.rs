@@ -50,7 +50,7 @@ const BALL_STEPS: u32 = 12;
 const BRACE_MIDDLE_LEVELS: u32 = 2;
 
 /// One part of a regular support, which is what the Part switch picks.
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub enum Part {
     #[default]
     Tip,

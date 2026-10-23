@@ -68,10 +68,12 @@ pub fn ui(ui: &mut egui::Ui, window: &mut Window) -> egui::Rect {
     };
     // What the gizmo reports is one frame old, because it is drawn after the input that
     // has to yield to it is read. That only matters on the frame a handle is crossed.
+    // Only Place reads a shift-click, as a line of supports; everywhere else shift pans.
+    let shift_clicks = *window.tool == Tool::Paint && !window.tools.supports.placing.paints();
     let gesture = window
         .view
         .input
-        .update(&pointer, window.view.gizmo.is_focused());
+        .update(&pointer, window.view.gizmo.is_focused(), shift_clicks);
 
     // The brush and the tip being dragged take the primary button only for a gesture that
     // began on something of theirs, so a drag that starts on empty plate still turns the
@@ -192,11 +194,7 @@ fn click(ui: &egui::Ui, window: &mut Window, rect: egui::Rect, cursor: egui::Pos
             add_channel_point_under_cursor(window, rect, cursor);
         }
         Tool::Drain => place_drain_under_cursor(window, rect, cursor),
-        // Shift picks the model as Cmd does anywhere, so it can be picked without a stamp.
-        Tool::Relief
-            if window.tools.relief.mode == ReliefMode::Text
-                && !ui.input(|input| input.modifiers.shift) =>
-        {
+        Tool::Relief if window.tools.relief.mode == ReliefMode::Text => {
             text::stamp_text_under_cursor(window, rect, cursor);
         }
         Tool::Measure => {
@@ -207,10 +205,7 @@ fn click(ui: &egui::Ui, window: &mut Window, rect: egui::Rect, cursor: egui::Pos
             lay_face_under_cursor(window, rect, cursor);
         }
         Tool::Cut if window.tools.cut.picking_part => mark_part_under_cursor(window, rect, cursor),
-        _ => {
-            let adding = ui.input(|input| input.modifiers.shift);
-            select_under_cursor(window, rect, cursor, adding);
-        }
+        _ => select_under_cursor(window, rect, cursor, false),
     }
 }
 

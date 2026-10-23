@@ -11,7 +11,7 @@ use core_geometry::{
     UvMap, Vec2, Vec3, Welded, center_of_mass,
 };
 
-use core_supports::{ModelSupports, Placed};
+use core_supports::{ModelSupports, Placed, WallSide};
 use core_volume::ModelHollow;
 use printer_profiles::{Raft, SupportProfile};
 
@@ -435,6 +435,18 @@ impl SceneObject {
     pub fn is_inner_face(&self, face: usize) -> bool {
         self.surface_kept()
             .is_some_and(|kept| kept.inner.contains(&face))
+    }
+
+    /// The side of the wall a run holding up the cavity, or everything outside it, keeps
+    /// to, or `None` for a model with no cavity supports stand against.
+    pub fn wall_side(&self, inside: bool) -> Option<WallSide> {
+        let kept = self.surface_kept().filter(|kept| !kept.inner.is_empty())?;
+        Some(WallSide {
+            bvh: Arc::clone(&kept.bvh),
+            inner: kept.inner.clone(),
+            into_model: self.transform.to_matrix().inverse(),
+            inside,
+        })
     }
 
     /// Whether a support touching the model at `contact`, in its own space, holds it up

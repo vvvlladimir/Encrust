@@ -146,6 +146,21 @@ impl Bvh {
     /// A caller that already knows a face at `within_mm` gets the exact answer for far
     /// less: every node no nearer than that is culled before it is opened.
     pub fn closest_within(&self, point: Vec3, within_mm: Scalar) -> Option<ClosestPoint> {
+        self.closest_kept(point, within_mm, |_| true)
+    }
+
+    /// Nearest point to `point` on a face `keep` answers true for, or `None` when there is
+    /// none: one side of a wall, say, whichever is nearer.
+    pub fn closest_where(&self, point: Vec3, keep: impl Fn(usize) -> bool) -> Option<ClosestPoint> {
+        self.closest_kept(point, Scalar::INFINITY, keep)
+    }
+
+    fn closest_kept(
+        &self,
+        point: Vec3,
+        within_mm: Scalar,
+        keep: impl Fn(usize) -> bool,
+    ) -> Option<ClosestPoint> {
         let mut best: Option<ClosestPoint> = None;
         let mut best_squared = within_mm * within_mm;
         // Each entry carries the distance its box was at when it was pushed, so a node
@@ -182,6 +197,9 @@ impl Bvh {
 
             let leaf = node.at as usize..(node.at + node.count) as usize;
             for (&face, triangle) in self.faces[leaf.clone()].iter().zip(&self.triangles[leaf]) {
+                if !keep(face as usize) {
+                    continue;
+                }
                 let on_face = point_triangle(point, triangle);
                 let squared = (on_face - point).length_squared();
                 if squared < best_squared {
@@ -600,6 +618,23 @@ mod tests {
             found.distance
         );
         assert!((found.point - Vec3::new(0.0, 5.0, 5.0)).length() < 1e-5);
+    }
+
+    #[test]
+    fn the_nearest_point_kept_skips_a_nearer_face_left_out() {
+        let mesh = cube(10.0);
+        let bvh = Bvh::build(&mesh);
+        let point = Vec3::new(2.0, 5.0, 5.0);
+        let wall = bvh.closest(point).expect("the cube has faces").face;
+        let found = bvh
+            .closest_where(point, |face| face != wall && face != (wall ^ 1))
+            .expect("other faces are kept");
+        assert!(
+            (found.distance - 5.0).abs() < 1e-5,
+            "with the wall 2 mm off left out, the next is 5 mm off; got {}",
+            found.distance
+        );
+        assert!(bvh.closest_where(point, |_| false).is_none());
     }
 
     #[test]

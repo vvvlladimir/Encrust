@@ -7,8 +7,8 @@ use crate::panels::plate_summary::file_readings;
 use crate::panels::printer_card::{self, Chosen};
 use crate::panels::slice::{Run, Via, bound_machine, broken_reminder, start};
 use crate::ui::{
-    hint, icon, primary_button, readings, secondary_button, section, section_with_action, text_row,
-    theme,
+    hint, icon, kept, primary_button, readings, secondary_button, section, section_with_action,
+    text_row, theme,
 };
 use crate::workspace::Tool;
 
@@ -139,7 +139,7 @@ fn every_plate_id() -> egui::Id {
 
 /// Whether the press at the foot slices every plate; never while there is one.
 fn every_plate(ctx: &egui::Context, plates: usize) -> bool {
-    plates > 1 && ctx.data(|data| data.get_temp(every_plate_id()).unwrap_or(false))
+    plates > 1 && kept::get(ctx, every_plate_id()).unwrap_or(false)
 }
 
 /// This plate or every plate, offered once there is more than one.
@@ -155,7 +155,7 @@ fn scope_row(ui: &mut egui::Ui, plates: usize) {
         ui.selectable_value(&mut every, false, &this);
         ui.selectable_value(&mut every, true, &all);
     });
-    ui.data_mut(|data| data.insert_temp(every_plate_id(), every));
+    kept::set(ui.ctx(), every_plate_id(), &every);
 }
 
 /// A drop-down that names its choice, under a label.

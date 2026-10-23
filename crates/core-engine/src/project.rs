@@ -25,7 +25,7 @@ use core_volume::{
     Blocker, Channel, DrainHole, HoleShape, HollowMode, HollowSettings, InfillSettings,
     PLUG_GAP_MM, PartSettings,
 };
-use printer_profiles::{OutputFormat, Raft, SupportProfile};
+use printer_profiles::{AutoProfile, OutputFormat, Raft, SupportProfile};
 use serde::{Deserialize, Serialize};
 
 /// What a project file is called, and what an open or save dialog filters on.
@@ -230,6 +230,18 @@ pub struct SupportState {
     /// it reads as the raft of the first group's profile, which is what it used to be.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub raft: Option<Raft>,
+    /// The automatic profile supports are sized by; `None`, and a file without it, never
+    /// had one chosen (ADR 0336).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub sizing: Option<AutoSizing>,
+}
+
+/// The automatic profile a run sizes supports by, numbers as edited, and whether a run uses
+/// it or builds to the group in hand (ADR 0325, 0336).
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct AutoSizing {
+    pub on: bool,
+    pub profile: AutoProfile,
 }
 
 /// Which saved support profile a fill builds its rim and its inside to, by id; `None`, and
@@ -685,6 +697,7 @@ mod tests {
                     inline_spacing_mm: 4.0,
                     fill_profiles: FillProfiles::default(),
                     raft: None,
+                    sizing: None,
                 },
                 hollow: HollowState {
                     thickness_mm: 2.0,

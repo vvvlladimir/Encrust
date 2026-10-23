@@ -81,6 +81,7 @@ impl SlicerApp {
         }
         let prefs = app.prefs.clone();
         prefs.apply(&mut app.window());
+        prefs.restore_panels(&cc.egui_ctx);
         project::mark_saved(&mut app.window());
         if let Some(path) = initial_model {
             open_by_what_it_is(&mut app.window(), Handed::Path(path.to_path_buf()));
@@ -96,7 +97,7 @@ impl SlicerApp {
     /// The machine, the resin, every tool value, the Preview divide and the side cards' widths
     /// are written the frame they change, so the next run opens on them however this one ends.
     /// Only on a settled frame: a slider under the pointer is one choice, not one per frame.
-    fn remember_choices(&mut self, settled: bool) {
+    fn remember_choices(&mut self, settled: bool, ctx: &egui::Context) {
         if !settled {
             return;
         }
@@ -108,7 +109,8 @@ impl SlicerApp {
         )
         .with_recent(&self.machine.recent)
         .with_layout(&self.view.options)
-        .with_general(&self.machine.general);
+        .with_general(&self.machine.general)
+        .with_panels(self.view.gizmo.axes, ctx);
         if now != self.prefs {
             self.prefs = now;
             self.prefs.save();
@@ -306,7 +308,7 @@ impl SlicerApp {
     /// Ends the frame's edits and puts them on the history. What follows from an edit by
     /// itself is done first, so it is part of that edit: a model settling onto its raft, and
     /// the plugs for its holes started, which `land_plugs` lays into the same edit.
-    fn record(&mut self, frame: Frame) {
+    fn record(&mut self, frame: Frame, ctx: &egui::Context) {
         self.tools.supports.settle_on_raft(&mut self.doc.scene);
         let drift_mm = self.machine.slicing.material.compensation.fit_drift_mm();
         let asked_by = self.doc.history.next_edit();
@@ -321,7 +323,7 @@ impl SlicerApp {
             frame,
         );
         self.machine.settings.observe(frame);
-        self.remember_choices(frame.settled && !frame.typing);
+        self.remember_choices(frame.settled && !frame.typing, ctx);
     }
 
     /// Lays the plugs a worker has cut into the edit that asked for them. Returns whether
@@ -525,7 +527,7 @@ impl eframe::App for SlicerApp {
             settled: ui.ctx().input(|input| !input.pointer.any_down()),
             typing: ui.ctx().memory(|memory| memory.focused().is_some()),
         };
-        self.record(frame);
+        self.record(frame, ui.ctx());
         // A cut started by this frame's edit is polled on the frames that follow.
         if self.tools.drain.laying_plugs() || self.doc.drilling.is_running() {
             ui.ctx().request_repaint();
@@ -662,27 +664,28 @@ mod tests {
             settled: true,
             typing: false,
         };
-        app.record(resting);
+        let ctx = egui::Context::default();
+        app.record(resting, &ctx);
         let object = &mut app.doc.scene.objects_mut()[0];
         object.transform.translation.z = 10.0;
         let transform = object.transform;
         object
             .supports
             .add(core_geometry::Vec3::new(5.0, 5.0, 10.0), transform, 0);
-        app.record(resting);
+        app.record(resting, &ctx);
         let stood_mm = app.doc.scene.objects()[0].transform.translation.z;
         assert!(stood_mm > 10.0, "the raft stood it up");
 
         app.doc.scene.objects_mut()[0].supports.clear();
-        app.record(resting);
-        app.record(resting);
+        app.record(resting, &ctx);
+        app.record(resting, &ctx);
         assert!(
             app.doc
                 .history
                 .undo(&mut app.doc.scene, &mut app.tools, &mut app.machine.slicing)
         );
-        app.record(resting);
-        app.record(resting);
+        app.record(resting, &ctx);
+        app.record(resting, &ctx);
 
         let object = &app.doc.scene.objects()[0];
         assert_eq!(object.supports.point_count(), 1, "the support is back");

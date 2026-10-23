@@ -10,8 +10,8 @@ use crate::plate::BuildPlate;
 use crate::scene::{Axis, ObjectId, Scene, SceneObject};
 use crate::ui::{
     Segment, Segmented, axis_label, compact_button, describe, field_label, hairline, icon,
-    icon_toggle, inline_button, number_field, picker, progress_bar, secondary_button, section,
-    section_with_action, stepped_row, switch, theme,
+    icon_toggle, inline_button, kept, number_field, picker, progress_bar, secondary_button,
+    section, section_with_action, stepped_row, switch, theme,
 };
 
 /// Millimetres, degrees and percent per point of drag on the transform fields.
@@ -182,7 +182,7 @@ fn about_plate(rotation: Quat, turn: Quat, axes: Axes) -> Quat {
 /// The model's size and stretch along the plate's axes or along its own.
 fn scale(ui: &mut egui::Ui, scene: &mut Scene, id: ObjectId, axes: Axes) {
     let linked_id = ui.id().with("scale-linked");
-    let mut linked = ui.memory(|memory| memory.data.get_temp(linked_id).unwrap_or(true));
+    let mut linked = kept::get(ui.ctx(), linked_id).unwrap_or(true);
     let tooltip = tr!("position-scale-reset");
     let (reset, _) =
         section_with_action(ui, &tr!("position-scale"), (icon::RESET, &tooltip), |ui| {
@@ -190,7 +190,7 @@ fn scale(ui: &mut egui::Ui, scene: &mut Scene, id: ObjectId, axes: Axes) {
                 scale_rows(ui, object, &mut linked, axes);
             }
         });
-    ui.memory_mut(|memory| memory.data.insert_temp(linked_id, linked));
+    kept::set(ui.ctx(), linked_id, &linked);
     if reset && let Some(object) = scene.get_mut(id) {
         let pivot = object.pivot();
         object.settle(Transform {
@@ -538,7 +538,7 @@ fn preset_hint(preset: OrientPreset) -> String {
 /// button pressed four times. Keeping the original flips a copy stood beside it instead.
 fn mirror(ui: &mut egui::Ui, scene: &mut Scene) {
     let keep_id = ui.id().with("mirror-keep");
-    let mut keep = ui.data(|data| data.get_temp(keep_id).unwrap_or(false));
+    let mut keep = kept::get(ui.ctx(), keep_id).unwrap_or(false);
     section(ui, &tr!("position-mirror"), None, |ui| {
         let picked = scene.selection().to_vec();
         let mut flipped = None;
@@ -559,7 +559,7 @@ fn mirror(ui: &mut egui::Ui, scene: &mut Scene) {
         switch(ui, &mut keep, &tr!("position-keep-original"));
         describe(ui, &tr!("position-keep-original-note"));
     });
-    ui.data_mut(|data| data.insert_temp(keep_id, keep));
+    kept::set(ui.ctx(), keep_id, &keep);
 }
 
 /// A copy of each of `ids` stood clear of it to the right, all of them selected.

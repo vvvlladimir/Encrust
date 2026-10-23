@@ -1,11 +1,14 @@
-use core_supports::Part;
+use std::hash::{DefaultHasher, Hash, Hasher};
+use std::sync::Arc;
+
+use core_supports::{Part, SupportTree};
 
 use super::scope;
 use crate::i18n::tr;
 use crate::job::SupportJob;
 use crate::panels::Window;
 use crate::panels::support_fields::{held_up, saved_as, sizes};
-use crate::scene::SceneObject;
+use crate::scene::{Scene, SceneObject};
 use crate::state::Doc;
 use crate::status::Status;
 use crate::supports::{Side, SupportTool};
@@ -201,7 +204,7 @@ fn cavity(ui: &mut egui::Ui, window: &mut Window) {
     {
         return;
     }
-    let inside = SupportTool::inside_count(&window.doc.scene);
+    let inside = inside_count(ui.ctx(), &window.doc.scene);
     if inside == 0 {
         if secondary_button(ui, icon::SUPPORTS, &tr!("supports-grow-inside"))
             .on_hover_text(tr!("supports-grow-inside-tooltip"))
@@ -219,6 +222,35 @@ fn cavity(ui: &mut egui::Ui, window: &mut Window) {
         window.tools.supports.picked.clear();
         window.machine.status = Status::Info(tr!("supports-removed-inside", count = gone));
     }
+}
+
+/// [`SupportTool::inside_count`], asked again only when a support or the surface it is
+/// asked against changed: it is a closest-point query per support.
+fn inside_count(ctx: &egui::Context, scene: &Scene) -> usize {
+    let mut hasher = DefaultHasher::new();
+    for object in scene.targets().filter(|object| object.supported_inside()) {
+        object.id.hash(&mut hasher);
+        Arc::as_ptr(object.support_surface().0).hash(&mut hasher);
+        let points = object.supports.points().iter().map(|point| point.contact);
+        let tips = object
+            .supports
+            .frozen()
+            .iter()
+            .flat_map(SupportTree::contacts);
+        for contact in points.chain(tips) {
+            contact.to_array().map(f32::to_bits).hash(&mut hasher);
+        }
+    }
+    let fingerprint = hasher.finish();
+    let id = egui::Id::new("supports-inside-count");
+    if let Some((cached, count)) = ctx.data(|data| data.get_temp::<(u64, usize)>(id))
+        && cached == fingerprint
+    {
+        return count;
+    }
+    let count = SupportTool::inside_count(scene);
+    ctx.data_mut(|data| data.insert_temp(id, (fingerprint, count)));
+    count
 }
 
 /// Starts a run on one side of the wall, and says on the stage whether it could.

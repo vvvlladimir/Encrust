@@ -193,6 +193,7 @@ Grouped by what the decision governs; the number is still the order it was taken
 | [0333](0333-a-fill-is-measured-in-from-its-footprint.md) | Measure a fill's rims and inside in from the patch's footprint, each to a profile of its own | Accepted |
 | [0334](0334-supports-stand-against-the-shell.md) | Stand supports against what prints, and hold a cavity up by a run of its own | Accepted |
 | [0335](0335-trunks-stand-on-a-grid.md) | Stand trunks on the nodes of a square grid when a profile asks for it | Accepted |
+| [0336](0336-a-panel-is-left-as-it-was-between-runs.md) | Leave every panel as it was between runs, and keep automatic sizing with the tools | Accepted |
 | [0093](0093-a-blocker-is-a-keep-out-not-a-hint.md) | A support blocker is a keep-out, not a hint | Accepted |
 | [0094](0094-a-supports-parameters-are-its-groups.md) | A support's parameters are its group's | Accepted; that no trunk is shared across groups is superseded by 0248; that the bracing is group 0's is superseded by 0252; that the raft is group 0's is superseded by 0253 |
 | [0095](0095-a-support-the-hand-touched-is-frozen.md) | A support the hand has touched is frozen into the scene | Accepted; the two-press rule is superseded by 0244 |

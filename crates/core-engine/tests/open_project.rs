@@ -15,7 +15,7 @@ use core_engine::project::{
 use core_engine::{EngineError, Machine, Opening, open_plate};
 use core_geometry::{Bvh, Mesh, Orientation, Region, Transform, Vec3, diagnose};
 use core_supports::{ModelSupports, ProjectSettings, SupportPoint, SupportTree};
-use core_volume::{HollowMode, InfillSettings};
+use core_volume::{DrainHole, HoleSize, HollowMode, InfillSettings};
 use printer_profiles::{
     Catalogue, MaterialProfile, OutputFormat, PrinterProfile, ProfileError, SupportProfile,
 };
@@ -144,6 +144,7 @@ fn project() -> Project {
                 inline_spacing_mm: 4.0,
                 fill_profiles: FillProfiles::default(),
                 raft: None,
+                sizing: None,
             },
             hollow: HollowState {
                 thickness_mm: 2.0,
@@ -253,6 +254,30 @@ fn a_hollowed_model_opens_as_the_shell_in_the_file() {
     assert!(
         Arc::ptr_eq(&plate.models[0].mesh, shell),
         "the shell is read, not hollowed again"
+    );
+}
+
+#[test]
+fn a_drilled_model_opens_drilled_as_the_window_drills_it() {
+    let mut saved = project();
+    let size = HoleSize::round(4.0, 5.0, 1.0);
+    saved.manifest.objects[0].hollow.drains = vec![DrainHole::sized(
+        Vec3::new(10.0, 10.0, 0.0),
+        Vec3::Z,
+        size,
+        0.0,
+    )];
+    let plate = open_plate(&saved, &machine(), &opening()).expect("the project is complete");
+
+    let model = &plate.models[0];
+    assert!(model.cuts.is_some(), "the hole is a cut");
+    let drilled = model
+        .drilled
+        .as_ref()
+        .expect("the hole is taken out exactly, so supports stand against its bore");
+    assert!(
+        drilled.faces.len() > saved.models[0].source.faces.len(),
+        "a bore adds faces to the cube"
     );
 }
 

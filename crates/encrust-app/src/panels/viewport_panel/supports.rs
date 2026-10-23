@@ -4,14 +4,14 @@
 use std::sync::Arc;
 
 use core_geometry::{PlacedHit, Scalar, Transform, Vec3};
-use core_supports::{Part, Profiles, inline, preview, stands, support_under};
+use core_supports::{Part, Profiles, WallSide, inline, preview, stands, support_under};
 use core_volume::markers;
 
 use crate::camera::OrbitCamera;
 use crate::panels::Window;
 use crate::pick::ray_through;
 use crate::render::{Ghost, GhostShape};
-use crate::scene::ObjectId;
+use crate::scene::{ObjectId, SceneObject};
 use crate::state::{Doc, Tools};
 use crate::supports::Picked;
 use crate::ui::theme;
@@ -59,6 +59,7 @@ pub(super) fn place_support_under_cursor(
             from,
             hit.point,
             window.tools.supports.inline_spacing_mm,
+            line_side(object, from).as_ref(),
         ),
         None => vec![hit.point],
     };
@@ -87,6 +88,13 @@ fn line_start(window: &Window, id: ObjectId) -> Option<Vec3> {
     Some(object.transform.to_matrix().transform_point3(contact))
 }
 
+/// The side of a hollow model's wall a line starting at `from`, in plate coordinates,
+/// keeps to: the one that support stands on.
+fn line_side(object: &SceneObject, from: Vec3) -> Option<WallSide> {
+    let into_model = object.transform.to_matrix().inverse();
+    object.wall_side(object.holds_inside(into_model.transform_point3(from)))
+}
+
 /// A dot wherever a shift-click at `hit` would stand a support of the line, in the active
 /// group's tint, or the lone support a click would stand when no line starts on that model.
 pub(super) fn line_ghost(window: &Window, id: ObjectId, hit: &PlacedHit) -> Option<Ghost> {
@@ -104,6 +112,7 @@ pub(super) fn line_ghost(window: &Window, id: ObjectId, hit: &PlacedHit) -> Opti
         from,
         hit.point,
         window.tools.supports.inline_spacing_mm,
+        line_side(object, from).as_ref(),
     )
     .into_iter()
     .filter(|contact| stands(&placed, *contact, active, profiles))

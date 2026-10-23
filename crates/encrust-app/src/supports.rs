@@ -1,8 +1,9 @@
 use anyhow::{Context, Result, bail};
-use core_engine::project::{FillProfiles, own_table};
+use core_engine::project::{AutoSizing, FillProfiles, own_table};
 use core_geometry::{Adjacency, Ray, Scalar, Vec2, Vec3, raycast_placed};
 use core_supports::{Need, Part, Placed, ProjectSettings, Projected, Reason, SupportTree, project};
 use printer_profiles::{AUTO_SIZES, AutoProfile, Catalogue, Raft, SupportProfile};
+use serde::{Deserialize, Serialize};
 
 /// How many shapes an automatic run builds to: its sizes, and the one that steadies a part.
 const SHAPES: usize = AUTO_SIZES + 1;
@@ -35,7 +36,8 @@ pub enum Side {
 /// What a click on the model does while the Paint tool is in hand: stand one support,
 /// paint the patch a fill covers, paint the patch supports keep out of, or take either
 /// paint off.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
 pub enum Placing {
     #[default]
     Point,
@@ -205,6 +207,28 @@ impl SupportTool {
         }
     }
 
+    /// The automatic profile in hand or set aside, as a project and the undo stack keep it.
+    pub fn sizing(&self) -> Option<AutoSizing> {
+        let (on, profile) = match (&self.auto, &self.parked_auto) {
+            (Some(profile), _) => (true, profile),
+            (None, Some(profile)) => (false, profile),
+            (None, None) => return None,
+        };
+        Some(AutoSizing {
+            on,
+            profile: profile.clone(),
+        })
+    }
+
+    /// Takes up automatic sizing as `sizing` left it, or none chosen at all.
+    pub fn set_sizing(&mut self, sizing: Option<AutoSizing>) {
+        (self.auto, self.parked_auto) = match sizing {
+            Some(AutoSizing { on: true, profile }) => (Some(profile), None),
+            Some(AutoSizing { on: false, profile }) => (None, Some(profile)),
+            None => (None, None),
+        };
+    }
+
     /// Starts an automatic placement run over everything visible on the plate: by the
     /// group in hand, or by the automatic profile chosen, whose shapes are read from
     /// `catalogue`.
@@ -235,12 +259,12 @@ impl SupportTool {
             Some((auto, shapes)) => tasks_of(scene, |_| auto.placing_with(&shapes[0])),
             None => tasks_of(scene, |object| self.profile_for(object).clone()),
         };
+        for task in &mut tasks {
+            let object = scene.get(task.id);
+            task.side = object.and_then(|object| object.wall_side(side == Side::Inside));
+        }
         if side == Side::Inside {
-            tasks.retain(|task| {
-                scene
-                    .get(task.id)
-                    .is_some_and(SceneObject::supported_inside)
-            });
+            tasks.retain(|task| task.side.is_some());
         }
         if tasks.is_empty() {
             bail!(tr!("supports-nothing-visible-error"));
@@ -1888,6 +1912,102 @@ mod tests {
             needs_at(&outside),
             [4.95],
             "only the underside is held from outside"
+        );
+    }
+
+    /// A box `min`..`max` from the unit cube, wound inward when `inward`.
+    fn box_of(min: Vec3, max: Vec3, inward: bool) -> Mesh {
+        let unit = cube();
+        let vertices = unit.vertices.iter().map(|at| min + *at * (max - min));
+        let faces = unit
+            .faces
+            .iter()
+            .map(|&[a, b, c]| if inward { [a, c, b] } else { [a, b, c] });
+        Mesh::new(vertices.collect(), faces.collect())
+    }
+
+    fn joined(meshes: &[Mesh]) -> Mesh {
+        let mut all = Mesh::new(Vec::new(), Vec::new());
+        for mesh in meshes {
+            let offset = all.vertices.len() as u32;
+            all.vertices.extend(&mesh.vertices);
+            all.faces
+                .extend(mesh.faces.iter().map(|face| face.map(|at| at + offset)));
+        }
+        all
+    }
+
+    /// A 4 mm slab tilted 50° about Y and lifted 25 mm, and, when `hollow`, a cavity in it
+    /// 0.6 mm in from every face: its ceiling runs along the slab's leaning underside.
+    fn tilted_slab(hollow: bool) -> Scene {
+        let solid = box_of(Vec3::ZERO, Vec3::new(20.0, 10.0, 4.0), false);
+        let mut scene = one_cube();
+        let object = &mut scene.objects_mut()[0];
+        object.mesh = Arc::new(solid.clone());
+        object.bvh = Arc::new(core_geometry::Bvh::build(&solid));
+        object.transform.rotation = core_geometry::Quat::from_rotation_y(50f32.to_radians());
+        object.transform.translation.z = 25.0;
+        if hollow {
+            let cavity = box_of(Vec3::splat(0.6), Vec3::new(19.4, 9.4, 3.4), true);
+            let shell = joined(&[solid.clone(), cavity]);
+            let settings = object
+                .hollow
+                .asking(&core_volume::HollowSettings::for_wall(1.0));
+            object.hollow.take(core_volume::Shell {
+                cavity: solid.faces.len()..shell.faces.len(),
+                mesh: Arc::new(shell),
+                cavity_mm3: 18.8 * 8.8 * 2.8,
+                voxel_mm: 0.1,
+                coarsened: false,
+                shape: object.transform.unturned(),
+                settings,
+            });
+            assert!(object.keep_support_surface());
+        }
+        scene
+    }
+
+    /// Runs `sides` one after the other over `scene`.
+    fn grown(scene: &mut Scene, sides: &[Side]) {
+        let catalogue = Catalogue::bundled().expect("the shipped catalogue is valid");
+        let mut tool = SupportTool::default();
+        for side in sides {
+            tool.start(scene, 0.05, &catalogue, *side)
+                .expect("a model to hold up");
+            let mut status = Status::default();
+            while tool.poll(scene, &mut status) {
+                std::thread::yield_now();
+            }
+        }
+    }
+
+    /// The contacts `sides` stand under the slab, in the model's own space.
+    fn under_the_slab(mut scene: Scene, sides: &[Side]) -> Vec<[u32; 3]> {
+        grown(&mut scene, sides);
+        let mut contacts: Vec<[u32; 3]> = scene.objects()[0]
+            .supports
+            .points()
+            .iter()
+            .filter(|point| point.contact.z < 1.0)
+            .map(|point| point.contact.to_array().map(f32::to_bits))
+            .collect();
+        contacts.sort_unstable();
+        contacts
+    }
+
+    #[test]
+    fn a_cavity_through_a_thin_wall_holds_none_of_the_outside_up() {
+        let solid = under_the_slab(tilted_slab(false), &[Side::Outside]);
+        assert!(!solid.is_empty(), "the slab's underside needs holding up");
+        assert_eq!(
+            under_the_slab(tilted_slab(true), &[Side::Outside]),
+            solid,
+            "the cavity's ceiling 0.6 mm through the wall holds none of the underside up"
+        );
+        assert_eq!(
+            under_the_slab(tilted_slab(true), &[Side::Inside, Side::Outside]),
+            solid,
+            "nor do the supports standing under it already"
         );
     }
 

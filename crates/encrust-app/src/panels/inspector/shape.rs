@@ -1,5 +1,7 @@
 use anyhow::Context as _;
 use printer_profiles::{Raft, SupportProfile};
+use serde::Serialize;
+use serde::de::DeserializeOwned;
 
 use super::scope;
 use crate::i18n::tr;
@@ -9,8 +11,8 @@ use crate::panels::support_fields::{Group, saved_as};
 use crate::settings::keep_support;
 use crate::supports::own_raft_shown;
 use crate::ui::{
-    Segment, Segmented, describe, hairline, hint, icon, icon_button, secondary_button, section,
-    subheading, subheading_with_switch, theme,
+    Segment, Segmented, describe, hairline, hint, icon, icon_button, kept, secondary_button,
+    section, subheading, subheading_with_switch, theme,
 };
 
 /// The groups of the profile's fields a part is drawn from, tip down to plate.
@@ -166,10 +168,10 @@ fn raft_owner(
 /// plate, under `key`.
 fn kept_switch<T>(ui: &mut egui::Ui, key: &str, choices: &[(T, String)]) -> T
 where
-    T: Copy + Default + PartialEq + Send + Sync + 'static,
+    T: Copy + Default + PartialEq + Serialize + DeserializeOwned,
 {
     let id = ui.id().with(key);
-    let mut chosen = ui.data(|data| data.get_temp::<T>(id)).unwrap_or_default();
+    let mut chosen = kept::get::<T>(ui.ctx(), id).unwrap_or_default();
     let segments: Vec<Segment<'_, T>> = choices
         .iter()
         .map(|(value, label)| Segment::new(*value, label.as_str()))
@@ -177,7 +179,7 @@ where
     Segmented::new(&segments)
         .width(ui.available_width())
         .show(ui, &mut chosen);
-    ui.data_mut(|data| data.insert_temp(id, chosen));
+    kept::set(ui.ctx(), id, &chosen);
     chosen
 }
 

@@ -4,7 +4,7 @@ use std::sync::mpsc::{self, Receiver, TryRecvError};
 
 use core_geometry::Region;
 use core_geometry::{Mesh, Scalar, Transform, Vec3, transform_mesh};
-use core_supports::{Blocked, Need, generate_supports, low_points};
+use core_supports::{Blocked, Need, WallSide, generate_supports, low_points};
 use printer_profiles::{AutoProfile, SupportProfile};
 
 use crate::i18n::tr;
@@ -32,6 +32,8 @@ pub struct SupportTask {
     pub blocked: Region,
     /// What this model's supports are placed by: its own profile where it keeps one.
     pub profile: SupportProfile,
+    /// The side of a hollow model's wall the run holds up, or `None` for a solid one.
+    pub side: Option<WallSide>,
 }
 
 /// Everything one automatic placement run needs.
@@ -183,6 +185,7 @@ pub fn tasks_of(
             seeds: object.supports.contacts(object.transform),
             blocked: object.supports.blocked().clone(),
             profile: profile_of(object),
+            side: None,
         })
         .collect()
 }
@@ -237,13 +240,24 @@ fn place(
         let layers = stack.layers.len().max(1) as f32;
         let done = index as f32 / models;
         let mut last = done;
-        let blocked = Blocked::new(&task.mesh, &task.blocked, task.transform);
+        let painted = Blocked::new(&task.mesh, &task.blocked, task.transform);
+        let blocked = Blocked::keeping(painted, task.side.clone());
+        // A support on the far side of the wall holds up nothing on this one.
+        let seeds: Vec<Vec3> = match &task.side {
+            Some(side) => task
+                .seeds
+                .iter()
+                .copied()
+                .filter(|seed| side.keeps(*seed))
+                .collect(),
+            None => task.seeds.clone(),
+        };
         let needs = generate_supports(
             &stack,
             request.layer_height_mm,
             &task.profile,
             request.sizing.as_ref(),
-            &task.seeds,
+            &seeds,
             &low_points(&task.surface, task.transform),
             blocked.as_ref(),
             &mut |layer| {

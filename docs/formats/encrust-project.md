@@ -53,6 +53,7 @@ hold no built geometry or diagnostics.
 | `objects[].supports.grown[].landing.on_support` | the tree ends on the trunk of a thicker tree of another group, on `frozen` trees too (ADR 0248); absent in older files and read as false |
 | `objects[].supports.raft_lift_mm` | how much of the height in `transform` is the raft's lift (ADR 0238); absent in older files and read as 0 |
 | `supports.raft` | the raft every model without its own stands on (ADR 0253); absent in older files, where it is read from the first group's profile |
+| `supports.sizing` | the automatic profile supports are sized by, numbers as edited, and whether a run uses it (ADR 0336); absent when none was chosen, and in older files |
 | `objects[].own_raft` | the raft this model stands on instead (ADR 0253); absent when it keeps none, and in older files |
 | `objects[].own_supports` | the profile this model is built to in place of a group's, by group number (ADR 0246); absent when it keeps none, and in older files |
 | `objects[].supports.frozen` | every tree a hand took hold of, in the same space |

@@ -2,10 +2,11 @@ use std::path::Path;
 use std::sync::Arc;
 
 use core_format::{ExposurePlan, ExposureRange};
-use core_geometry::Bvh;
+use core_geometry::{Bvh, Mesh};
 use core_pipeline::{PanelOverrides, SlicedFormat};
 use core_raster::Shading;
 use core_slicer::WINDOW_LAYERS;
+use core_volume::{Drilled, ModelHollow};
 use printer_profiles::{Catalogue, MaterialProfile, PrinterProfile, Raft, SupportProfile};
 
 use crate::project::{
@@ -149,6 +150,14 @@ fn support_table(manifest: &Manifest) -> Vec<SupportProfile> {
     }
 }
 
+/// The object's cuts taken out of what it prints from exactly, as the window takes them
+/// out, or `None` without cuts or where that fails and the winding rule takes them out.
+fn drilled_of(hollow: &ModelHollow, meshes: &ModelMeshes) -> Option<Arc<Mesh>> {
+    let cuts = hollow.cut_bodies()?;
+    let drilled = Drilled::of(meshes.printed(), hollow.cavity_faces(), cuts).ok()?;
+    Some(drilled.mesh)
+}
+
 /// One object as it prints: the shell the file holds, the bodies its holes cut, and the
 /// trees it keeps, meshed to the profile of their group.
 fn model(
@@ -158,9 +167,10 @@ fn model(
     plate_raft: Option<Raft>,
 ) -> Model {
     let hollow = hollow_of(&object.hollow, meshes);
+    let drilled = drilled_of(&hollow, meshes);
     // Against what prints, as the window stood them, so a cavity's supports are swept
-    // against the cavity and not the solid it was cut from (ADR 0334).
-    let surface = meshes.printed();
+    // against the cavity and a drilled hole's against its bore (ADR 0322, 0334).
+    let surface = drilled.as_ref().unwrap_or(meshes.printed());
     let bvh = Bvh::build(surface);
     let supports = supports_of(
         &object.supports,
@@ -175,7 +185,7 @@ fn model(
         mesh: Arc::clone(meshes.printed()),
         transform: object.transform,
         cuts: hollow.cut_bodies().cloned(),
-        drilled: None,
+        drilled,
         supports: supports.meshes().unwrap_or_default().to_vec(),
     }
 }
