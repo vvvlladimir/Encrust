@@ -7,7 +7,6 @@ mod corpus;
 mod coupon;
 mod cure;
 mod export;
-mod probe;
 mod report;
 mod shape;
 mod stand;
@@ -124,10 +123,6 @@ fn main() -> Result<ExitCode> {
         return Ok(ExitCode::SUCCESS);
     }
 
-    if let Ok(path) = std::env::var("PROJECT") {
-        probe::project_probe(&path);
-        return Ok(ExitCode::SUCCESS);
-    }
     let mut report = Report::new(&args.printer, args.layer_mm, setup.limits);
     for entry in entries(&args)? {
         for (id, profile) in args.profiles.iter().zip(&profiles) {

@@ -718,6 +718,7 @@ pub fn sizes(
     island.show(
         ui,
         heavier,
+        0.0,
         &mut auto.island_area_mm2,
         shipped.map(|auto| &auto.island_area_mm2[..]),
     );
@@ -731,6 +732,7 @@ pub fn sizes(
     load.show(
         ui,
         heavier,
+        0.0,
         &mut auto.overhang_volume_mm3,
         shipped.map(|auto| &auto.overhang_volume_mm3[..]),
     );
@@ -742,10 +744,12 @@ pub fn sizes(
         max: MAX_STEP_MM3,
         decimals: 1,
     };
+    let [least_step, heavier_steps @ ..] = &mut auto.step_volume_mm3;
     step.show(
         ui,
         heavier,
-        &mut auto.step_volume_mm3[1..],
+        *least_step,
+        heavier_steps,
         shipped.map(|auto| &auto.step_volume_mm3[1..]),
     );
 }
@@ -762,17 +766,18 @@ struct Measure {
 }
 
 impl Measure {
-    /// A row per shape of `shapes`, each over `least` of it, against `shipped`. A heavier
-    /// shape never starts below a lighter one.
+    /// A row per shape of `shapes`, each over `least` of it and none under `floor`, against
+    /// `shipped`. A heavier shape never starts below a lighter one.
     fn show(
         &self,
         ui: &mut egui::Ui,
         shapes: &[String],
+        floor: f32,
         least: &mut [f32],
         shipped: Option<&[f32]>,
     ) {
         for (at, shape) in shapes.iter().enumerate().take(least.len()) {
-            let floor = if at == 0 { 0.0 } else { least[at - 1] };
+            let floor = if at == 0 { floor } else { least[at - 1] };
             number(
                 ui,
                 &(self.label)(shape.clone()),
@@ -784,8 +789,10 @@ impl Measure {
                 self.decimals,
             );
         }
-        for at in 1..least.len() {
-            least[at] = least[at].max(least[at - 1]);
+        let mut below = floor;
+        for value in least.iter_mut() {
+            *value = value.max(below);
+            below = *value;
         }
     }
 }

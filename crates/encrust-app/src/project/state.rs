@@ -302,15 +302,20 @@ fn restore_objects(
             supports: own_supports,
             raft: state.own_raft,
         };
+        object.hollow = hollow_of(&state.hollow, meshes);
+        // Stood against the shell now, or the first frame would take it for a new surface
+        // and grow the saved trees again (ADR 0334).
+        object.keep_support_surface();
+        let (surface, surface_bvh) = object.support_surface();
+        let (surface, surface_bvh) = (Arc::clone(surface), Arc::clone(surface_bvh));
         object.supports = supports_of(
             &state.supports,
             &meshes.source,
-            &meshes.source,
-            &bvh,
+            &surface,
+            &surface_bvh,
             state.transform,
             &with_own(table.to_vec(), &own, plate_raft),
         );
-        object.hollow = hollow_of(&state.hollow, meshes);
         object.relief_painted = state.relief_painted;
         object.own = own;
     }
@@ -735,6 +740,18 @@ mod tests {
             settings,
         });
         shell
+    }
+
+    #[test]
+    fn a_hollow_models_supports_open_standing_against_its_shell() {
+        let mut saved = bench();
+        hollowed(&mut saved);
+        let back = round_trip(&saved);
+        let mut object = back.scene.objects()[0].clone();
+        assert!(
+            !object.keep_support_surface(),
+            "the shell was found on opening, so the first frame grows nothing again"
+        );
     }
 
     #[test]

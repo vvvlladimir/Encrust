@@ -1583,9 +1583,8 @@ mod tests {
 
     #[test]
     fn a_small_pillar_meets_sloping_faces_with_the_whole_of_each_end() {
-        // Two faces leaning 26.6 degrees a millimetre apart, too near for a head: the
-        // underside z = 12 - x / 2 of a turned ramp over the top z = 11 - x / 2 of a
-        // mirrored one, so the strut runs straight down from its contact.
+        // Underside z = 12 - x / 2 over top z = 11 - x / 2: faces at 26.6 degrees a
+        // millimetre apart, too near for a head, so the strut runs straight down.
         let mut model = Mesh::default();
         let ramp = ramp(10.0, 5.0);
         for place in [

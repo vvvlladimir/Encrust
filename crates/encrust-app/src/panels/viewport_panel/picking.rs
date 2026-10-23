@@ -224,9 +224,8 @@ pub(super) fn grab_under_cursor(
     let ray = ray_through(&window.view.camera, viewport, cursor)?;
     let slack_mm = aim_slack_mm(&window.view.camera, viewport, cursor);
 
-    // A support behind a model, or cut away by the section, is not under the cursor, and
-    // one of a group left out of the view is not there to be aimed at. A cavity the section
-    // opens is seen into, so what stands in it can be taken.
+    // Only what is seen can be aimed at: not behind a model, cut away or in a hidden group,
+    // but inside a cavity the section opens.
     let (near_mm, wall_mm) = seen_along(&window.doc.scene, &ray, section::shown(window))?;
     window.doc.scene.here().find_map(|object| {
         let table = window.tools.supports.table_for(object);
