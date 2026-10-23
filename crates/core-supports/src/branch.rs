@@ -893,7 +893,7 @@ impl<'a> Forest<'a> {
                     // A face looking up at the contact: one looking away is the inside of
                     // the model, and a strut to it is built in the solid and pokes out.
                     .filter(|hit| hit.normal.z > 0.0)
-                    .filter(|hit| hit.point.z > PLATE_Z_MM && !placed.blocks_face(hit.face))
+                    .filter(|hit| hit.point.z > PLATE_Z_MM && !placed.blocks_at(hit.point))
                     .filter(|hit| (MIN_PILLAR_HEIGHT_MM..=BRIDGE_MAX_MM).contains(&hit.distance))?;
                 let node = TreeNode {
                     parent: None,

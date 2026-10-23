@@ -1,4 +1,5 @@
 use std::collections::BTreeMap;
+use std::ops::Range;
 use std::sync::{Arc, Mutex};
 
 use rayon::prelude::*;
@@ -10,7 +11,7 @@ use core_geometry::{
     UvMap, Vec2, Vec3, Welded, center_of_mass,
 };
 
-use core_supports::ModelSupports;
+use core_supports::{ModelSupports, Placed};
 use core_volume::ModelHollow;
 use printer_profiles::{Raft, SupportProfile};
 
@@ -260,6 +261,18 @@ pub struct SceneObject {
     /// which takes its plugs as they stand.
     pub plugs_laid: Option<PlugsLaid>,
     bounds: PlacedBounds,
+    /// The printed surface supports stand against and its hierarchy, once built; see
+    /// [`SceneObject::support_surface`].
+    support_shell: Option<SupportShell>,
+}
+
+/// A printed surface, its hierarchy, built once per surface, and the faces bounding the
+/// cavity.
+#[derive(Debug, Clone)]
+struct SupportShell {
+    mesh: Arc<Mesh>,
+    bvh: Arc<Bvh>,
+    inner: Range<usize>,
 }
 
 /// The Hollow and Drain settings a model keeps instead of the plate's, where it has its
@@ -366,6 +379,85 @@ impl Taken {
 }
 
 impl SceneObject {
+    /// The surface supports stand against and its hierarchy: the model as it prints, its
+    /// shell drilled where it has holes, so a cavity and a hole are held up like any other
+    /// underside; the model itself until that surface's hierarchy is built (ADR 0334).
+    pub fn support_surface(&self) -> (&Arc<Mesh>, &Arc<Bvh>) {
+        match (&self.support_shell, self.wanted_surface()) {
+            (Some(kept), Some((wanted, _))) if Arc::ptr_eq(&kept.mesh, wanted) => {
+                (&kept.mesh, &kept.bvh)
+            }
+            _ => (&self.mesh, &self.bvh),
+        }
+    }
+
+    /// The model as a support placement asks about it, standing where it stands, against
+    /// [`Self::support_surface`].
+    pub fn support_placed(&self) -> Placed<'_> {
+        let (mesh, bvh) = self.support_surface();
+        Placed::new(mesh, bvh, self.transform)
+    }
+
+    /// Builds the hierarchy of the surface supports stand against when that surface
+    /// changed, and answers whether it did.
+    pub fn keep_support_surface(&mut self) -> bool {
+        let kept = self.support_shell.as_ref().map(|kept| &kept.mesh);
+        let wanted = self.wanted_surface();
+        let same = match (kept, &wanted) {
+            (Some(kept), Some((wanted, _))) => Arc::ptr_eq(kept, wanted),
+            (None, None) => true,
+            _ => false,
+        };
+        if same {
+            return false;
+        }
+        self.support_shell = wanted.map(|(mesh, inner)| SupportShell {
+            bvh: Arc::new(Bvh::build(mesh)),
+            mesh: Arc::clone(mesh),
+            inner,
+        });
+        true
+    }
+
+    /// The printed surface when it is not the model itself, and which of its faces bound
+    /// the cavity: the drilled mesh, else the shell, its lattice counted with the cavity.
+    fn wanted_surface(&self) -> Option<(&Arc<Mesh>, Range<usize>)> {
+        if let Some(drilled) = self.hollow.drilled(self.uncut()) {
+            return Some((&drilled.mesh, drilled.cavity.clone().unwrap_or(0..0)));
+        }
+        let shell = self.hollow.shell()?;
+        let cavity = self.hollow.cavity_faces().unwrap_or(0..0);
+        Some((shell, cavity.start..shell.faces.len().max(cavity.end)))
+    }
+
+    /// Whether face `face` of [`Self::support_surface`] lies inside the model: on its
+    /// cavity, or on the lattice standing in it.
+    pub fn is_inner_face(&self, face: usize) -> bool {
+        self.surface_kept()
+            .is_some_and(|kept| kept.inner.contains(&face))
+    }
+
+    /// Whether a support touching the model at `contact`, in its own space, holds it up
+    /// from inside its cavity: the surface nearest it bounds the cavity.
+    pub fn holds_inside(&self, contact: Vec3) -> bool {
+        self.support_surface()
+            .1
+            .closest(contact)
+            .is_some_and(|closest| self.is_inner_face(closest.face))
+    }
+
+    /// Whether the model has a cavity supports stand against, so a run can hold it up.
+    pub fn supported_inside(&self) -> bool {
+        self.surface_kept()
+            .is_some_and(|kept| !kept.inner.is_empty())
+    }
+
+    /// The surface kept for supports, while it is still the one the model prints as.
+    fn surface_kept(&self) -> Option<&SupportShell> {
+        let kept = self.support_shell.as_ref()?;
+        Arc::ptr_eq(&kept.mesh, self.support_surface().0).then_some(kept)
+    }
+
     /// The mesh the model's cuts are taken out of: its shell once hollowed.
     pub fn uncut(&self) -> &Arc<Mesh> {
         self.hollow.shell().unwrap_or(&self.mesh)
@@ -888,6 +980,7 @@ impl Scene {
             plug_of: None,
             plugs_laid: Some(PlugsLaid::default()),
             bounds: PlacedBounds::default(),
+            support_shell: None,
         });
         self.selected = vec![id];
         id

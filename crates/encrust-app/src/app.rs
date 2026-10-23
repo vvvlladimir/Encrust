@@ -347,6 +347,9 @@ impl SlicerApp {
         let plate = self.tools.supports.table();
         let raft = self.tools.supports.raft;
         for object in self.doc.scene.objects_mut() {
+            if object.keep_support_surface() {
+                object.supports.surface_changed();
+            }
             let untouched = object.supports.is_empty()
                 && object.supports.meshes().is_none()
                 && object.supports.drawn().is_empty()
@@ -355,12 +358,13 @@ impl SlicerApp {
             if untouched {
                 continue;
             }
-            let mesh = std::sync::Arc::clone(&object.mesh);
-            let bvh = std::sync::Arc::clone(&object.bvh);
+            let model = std::sync::Arc::clone(&object.mesh);
+            let (surface, bvh) = object.support_surface();
+            let (surface, bvh) = (std::sync::Arc::clone(surface), std::sync::Arc::clone(bvh));
             let table = with_own(plate.clone(), &object.own, raft);
             object
                 .supports
-                .refresh(&mesh, &bvh, object.transform, &table);
+                .refresh_on(&model, &surface, &bvh, object.transform, &table);
         }
     }
 }

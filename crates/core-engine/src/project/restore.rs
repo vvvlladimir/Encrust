@@ -35,10 +35,12 @@ pub fn hollow_of(state: &ObjectHollowState, meshes: &ModelMeshes) -> ModelHollow
 }
 
 /// The supports an object carries, standing where the file says they stand: the trees are
-/// read and meshed, and no run decides where a column goes again.
+/// read and meshed against `surface`, whose hierarchy is `bvh`, and no run decides where a
+/// column goes again. The patches are `model`'s.
 pub fn supports_of(
     state: &ObjectSupportState,
     model: &Mesh,
+    surface: &Mesh,
     bvh: &Bvh,
     transform: Transform,
     table: &[SupportProfile],
@@ -49,7 +51,7 @@ pub fn supports_of(
         state.blocked.clone(),
         state.frozen.clone(),
     );
-    supports.stand(&state.grown, model, bvh, transform, table);
+    supports.stand(&state.grown, model, surface, bvh, transform, table);
     supports.set_raft_lift_mm(state.raft_lift_mm);
     supports
 }

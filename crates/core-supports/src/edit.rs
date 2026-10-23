@@ -65,8 +65,8 @@ pub fn on_model(placed: &Placed, at: Vec3) -> Option<Vec3> {
         return None;
     }
     let inverse = matrix.inverse();
-    let closest = placed.bvh.closest(inverse.transform_point3(at))?;
-    (!placed.blocks_face(closest.face)).then(|| matrix.transform_point3(closest.point))
+    let closest = matrix.transform_point3(placed.bvh.closest(inverse.transform_point3(at))?.point);
+    (!placed.blocks_at(closest)).then_some(closest)
 }
 
 /// `tree` carried by `step`, or `None` when that is a step the model refuses.
@@ -493,5 +493,30 @@ mod tests {
         let tree = under_the_shelf(&model);
 
         assert!(carried(&tree, &[Part::Foot], Vec3::X, &placed, &profile()).is_none());
+    }
+
+    #[test]
+    fn a_blocked_patch_holds_on_a_surface_numbered_otherwise() {
+        let model = cube();
+        let mut region = core_geometry::Region::default();
+        // The cube's underside: the first two faces of the model.
+        region.set(0, true);
+        region.set(1, true);
+        let blocked = crate::Blocked::new(&model, &region, Transform::default())
+            .expect("the underside was painted");
+        // The same cube with its faces the other way round, as a drilled shell renumbers them.
+        let mut surface = model.clone();
+        surface.faces.reverse();
+        let bvh = Bvh::build(&surface);
+        let placed = Placed::new(&surface, &bvh, Transform::default()).blocking(Some(&blocked));
+
+        assert!(
+            on_model(&placed, Vec3::new(5.0, 5.0, -0.2)).is_none(),
+            "under the painted underside nothing may be put"
+        );
+        assert!(
+            on_model(&placed, Vec3::new(5.0, 5.0, 10.2)).is_some(),
+            "the lid was not painted"
+        );
     }
 }

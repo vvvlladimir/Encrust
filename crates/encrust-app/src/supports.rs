@@ -1,14 +1,14 @@
 use anyhow::{Context, Result, bail};
 use core_engine::project::{FillProfiles, own_table};
 use core_geometry::{Adjacency, Ray, Scalar, Vec2, Vec3, raycast_placed};
-use core_supports::{Need, Part, Placed, ProjectSettings, Projected, Reason, project};
+use core_supports::{Need, Part, Placed, ProjectSettings, Projected, Reason, SupportTree, project};
 use printer_profiles::{AUTO_SIZES, AutoProfile, Catalogue, Raft, SupportProfile};
 
 /// How many shapes an automatic run builds to: its sizes, and the one that steadies a part.
 const SHAPES: usize = AUTO_SIZES + 1;
 
 use crate::i18n::tr;
-use crate::job::{SupportJob, SupportOutcome, SupportRequest, tasks_of};
+use crate::job::{Placement, SupportJob, SupportOutcome, SupportRequest, tasks_of};
 use crate::scene::{ObjectId, OwnSettings, Scene, SceneObject};
 use crate::status::Status;
 
@@ -17,6 +17,20 @@ const FIRST_GROUP: &str = "Default";
 
 /// The group the Check tool stands island supports in, apart from the ones built by hand.
 pub const ISLANDS_GROUP: &str = "Islands";
+
+/// Whether a tree a hand has frozen stands inside the model's cavity: every tip of it does.
+fn frozen_inside(object: &SceneObject, tree: &SupportTree) -> bool {
+    let mut contacts = tree.contacts().peekable();
+    contacts.peek().is_some() && contacts.all(|contact| object.holds_inside(contact))
+}
+
+/// Which side of a hollow model's wall an automatic run holds up: everything outside it,
+/// or only its cavity; see `docs/decisions/0334`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Side {
+    Outside,
+    Inside,
+}
 
 /// What a click on the model does while the Paint tool is in hand: stand one support,
 /// paint the patch a fill covers, paint the patch supports keep out of, or take either
@@ -98,6 +112,8 @@ pub struct SupportTool {
     pub fill: ProjectSettings,
     /// The saved profiles a fill builds its rim and its inside to, or the group in hand.
     pub fill_profiles: FillProfiles,
+    /// Which side of a hollow model's wall the run going holds up.
+    side: Side,
     /// How far apart a line of supports drawn with shift stands, millimetres.
     pub inline_spacing_mm: Scalar,
     /// The support Place last put down, in its model's own space: where a line drawn with
@@ -147,6 +163,7 @@ impl Default for SupportTool {
             flood_angle_deg: 30.0,
             fill: ProjectSettings::default(),
             fill_profiles: FillProfiles::default(),
+            side: Side::Outside,
             inline_spacing_mm: core_supports::INLINE_SPACING_MM,
             last_placed: None,
             stroke: false,
@@ -194,24 +211,41 @@ impl SupportTool {
     ///
     /// The run cuts each model at the height it will be printed at, so the layers it
     /// looks at are the layers the printer will expose.
+    ///
+    /// Run for the inside, it holds up only the cavities of hollow models, taking what
+    /// stood in them away first.
     pub fn start(
         &mut self,
-        scene: &Scene,
+        scene: &mut Scene,
         layer_height_mm: Scalar,
         catalogue: &Catalogue,
+        side: Side,
     ) -> Result<()> {
         self.sizing = self
             .auto
             .as_ref()
             .map(|auto| Ok::<_, anyhow::Error>((auto.clone(), shapes_of(auto, catalogue)?)))
             .transpose()?;
-        let tasks = match &self.sizing {
+        if side == Side::Inside {
+            Self::clear_inside(scene);
+            // A frozen tree taken away renumbers the ones after it.
+            self.picked.clear();
+        }
+        let mut tasks = match &self.sizing {
             Some((auto, shapes)) => tasks_of(scene, |_| auto.placing_with(&shapes[0])),
             None => tasks_of(scene, |object| self.profile_for(object).clone()),
         };
+        if side == Side::Inside {
+            tasks.retain(|task| {
+                scene
+                    .get(task.id)
+                    .is_some_and(SceneObject::supported_inside)
+            });
+        }
         if tasks.is_empty() {
             bail!(tr!("supports-nothing-visible-error"));
         }
+        self.side = side;
 
         self.job = Some(SupportJob::spawn(SupportRequest {
             tasks,
@@ -232,6 +266,12 @@ impl SupportTool {
         };
 
         self.job = None;
+        let outcome = match outcome {
+            SupportOutcome::Placed(placements) => {
+                SupportOutcome::Placed(self.on_its_side(placements, scene))
+            }
+            other => other,
+        };
         let added = outcome.count();
         match outcome {
             SupportOutcome::Placed(placements) => match self.sizing.take() {
@@ -616,6 +656,69 @@ impl SupportTool {
         found.len()
     }
 
+    /// What a run found, each placement keeping only the contacts on the side of the wall
+    /// the run was started for. A contact is inside when the surface nearest it bounds the
+    /// cavity (ADR 0334).
+    fn on_its_side(&self, mut placements: Vec<Placement>, scene: &Scene) -> Vec<Placement> {
+        let inside = self.side == Side::Inside;
+        for placement in &mut placements {
+            let Some(object) = scene.get(placement.id) else {
+                continue;
+            };
+            let into_model = placement.transform.to_matrix().inverse();
+            placement.needs.retain(|need| {
+                object.holds_inside(into_model.transform_point3(need.contact)) == inside
+            });
+        }
+        placements
+    }
+
+    /// How many supports stand inside the cavities of the models aimed at, frozen ones
+    /// counted by their tips.
+    pub fn inside_count(scene: &Scene) -> usize {
+        scene
+            .targets()
+            .filter(|object| object.supported_inside())
+            .map(|object| {
+                let points = object.supports.points().iter();
+                let frozen = object.supports.frozen().iter();
+                points
+                    .filter(|point| object.holds_inside(point.contact))
+                    .count()
+                    + frozen
+                        .filter(|tree| frozen_inside(object, tree))
+                        .map(SupportTree::tip_count)
+                        .sum::<usize>()
+            })
+            .sum()
+    }
+
+    /// Takes every support standing inside a cavity off the models aimed at, the ones a
+    /// hand has frozen included. Answers how many went.
+    pub fn clear_inside(scene: &mut Scene) -> usize {
+        let mut gone = 0;
+        for object in scene.targets_mut() {
+            if !object.supported_inside() {
+                continue;
+            }
+            let points: Vec<bool> = object
+                .supports
+                .points()
+                .iter()
+                .map(|point| object.holds_inside(point.contact))
+                .collect();
+            let frozen: Vec<bool> = object
+                .supports
+                .frozen()
+                .iter()
+                .map(|tree| frozen_inside(object, tree))
+                .collect();
+            gone += object.supports.retain_points(|index| !points[index]);
+            gone += object.supports.retain_frozen(|index| !frozen[index]);
+        }
+        gone
+    }
+
     /// The group named for islands, made from the numbers in hand the first time.
     fn islands_group(&mut self) -> u16 {
         if let Some(group) = self
@@ -647,6 +750,7 @@ impl SupportTool {
             .filter(|object| !object.supports.painted().is_empty())
             .map(|object| {
                 let keep_out = object.supports.keep_out(&object.mesh, object.transform);
+                // On the model the patch is painted on: a fill reads its faces by number.
                 let placed = Placed::new(&object.mesh, &object.bvh, object.transform)
                     .blocking(keep_out.as_ref());
                 let adjacency = Adjacency::of(&object.mesh);
@@ -874,7 +978,7 @@ mod tests {
             auto: catalogue.autos().next().map(|entry| entry.profile.clone()),
             ..SupportTool::default()
         };
-        tool.start(scene, 0.05, &catalogue)
+        tool.start(scene, 0.05, &catalogue, Side::Outside)
             .expect("a model to place under");
         let mut status = Status::default();
         while tool.poll(scene, &mut status) {
@@ -939,7 +1043,10 @@ mod tests {
             auto: Some(auto),
             ..SupportTool::default()
         };
-        assert!(tool.start(&one_cube(), 0.05, &catalogue).is_err());
+        assert!(
+            tool.start(&mut one_cube(), 0.05, &catalogue, Side::Outside)
+                .is_err()
+        );
         assert!(tool.job.is_none());
     }
 
@@ -1696,5 +1803,288 @@ mod tests {
             0
         );
         assert_eq!(tool.groups.len(), 1);
+    }
+    /// The cube 20 mm a side, 5 mm over the plate, hollowed to a cavity 12 mm a side in its
+    /// middle: the shell is the cube with that box appended wound inward.
+    fn hollow_cube() -> Scene {
+        let mut scene = one_cube();
+        let object = &mut scene.objects_mut()[0];
+        object.transform = Transform {
+            translation: Vec3::new(0.0, 0.0, 5.0),
+            scale: Vec3::splat(20.0),
+            ..Transform::default()
+        };
+        let mut shell = cube();
+        let inner = cube();
+        let offset = shell.vertices.len() as u32;
+        shell
+            .vertices
+            .extend(inner.vertices.iter().map(|at| *at * 0.6 + Vec3::splat(0.2)));
+        shell.faces.extend(
+            inner
+                .faces
+                .iter()
+                .map(|[a, b, c]| [a + offset, c + offset, b + offset]),
+        );
+        let settings = object
+            .hollow
+            .asking(&core_volume::HollowSettings::for_wall(4.0));
+        object.hollow.take(core_volume::Shell {
+            mesh: Arc::new(shell),
+            cavity: 12..24,
+            cavity_mm3: 1728.0,
+            voxel_mm: 0.1,
+            coarsened: false,
+            shape: object.transform.unturned(),
+            settings,
+        });
+        assert!(
+            object.keep_support_surface(),
+            "the shell begins with the cube"
+        );
+        scene
+    }
+
+    /// A run's placement under the hollow cube: one contact under the cavity's ceiling,
+    /// 21 mm up, and one under the cube's own underside at 5 mm.
+    fn inside_and_out(scene: &Scene) -> Vec<Placement> {
+        let object = &scene.objects()[0];
+        let need = |z: Scalar| Need {
+            contact: Vec3::new(10.0, 10.0, z),
+            reason: Reason::Steady,
+        };
+        vec![Placement {
+            id: object.id,
+            transform: object.transform,
+            needs: vec![need(20.95), need(4.95)],
+        }]
+    }
+
+    fn needs_at(placements: &[Placement]) -> Vec<Scalar> {
+        placements[0]
+            .needs
+            .iter()
+            .map(|need| need.contact.z)
+            .collect()
+    }
+
+    #[test]
+    fn a_run_keeps_only_the_contacts_on_its_side_of_the_wall() {
+        let scene = hollow_cube();
+        let tool = SupportTool {
+            side: Side::Inside,
+            ..SupportTool::default()
+        };
+        let inside = tool.on_its_side(inside_and_out(&scene), &scene);
+        assert_eq!(
+            needs_at(&inside),
+            [20.95],
+            "only the cavity's ceiling is held from inside"
+        );
+
+        let tool = SupportTool::default();
+        let outside = tool.on_its_side(inside_and_out(&scene), &scene);
+        assert_eq!(
+            needs_at(&outside),
+            [4.95],
+            "only the underside is held from outside"
+        );
+    }
+
+    #[test]
+    fn a_support_under_a_cavitys_ceiling_lands_on_its_floor() {
+        let mut scene = hollow_cube();
+        let object = &mut scene.objects_mut()[0];
+        let transform = object.transform;
+        object
+            .supports
+            .add(Vec3::new(10.0, 10.0, 20.95), transform, 0);
+
+        let model = Arc::clone(&object.mesh);
+        let (surface, bvh) = object.support_surface();
+        let (surface, bvh) = (Arc::clone(surface), Arc::clone(bvh));
+        let table = SupportTool::default().table();
+        object
+            .supports
+            .refresh_on(&model, &surface, &bvh, transform, &table);
+        assert_eq!(
+            object.supports.standing(),
+            1,
+            "the cavity's floor is 12 mm under its ceiling, room enough to stand"
+        );
+    }
+
+    #[test]
+    fn holding_the_cavity_up_again_takes_only_what_stood_inside_it() {
+        let mut scene = hollow_cube();
+        let object = &mut scene.objects_mut()[0];
+        let transform = object.transform;
+        object
+            .supports
+            .add(Vec3::new(10.0, 10.0, 20.95), transform, 0);
+        object
+            .supports
+            .add(Vec3::new(10.0, 10.0, 5.0), transform, 0);
+
+        assert_eq!(SupportTool::clear_inside(&mut scene), 1);
+        let left = scene.objects()[0].supports.points();
+        assert_eq!(left.len(), 1);
+        assert!(
+            left[0].contact.z.abs() < 1e-4,
+            "the underside's support stays"
+        );
+    }
+
+    #[test]
+    fn a_solid_model_has_nothing_inside() {
+        let scene = one_cube();
+        let tool = SupportTool::default();
+        let object = &scene.objects()[0];
+        let placements = vec![Placement {
+            id: object.id,
+            transform: object.transform,
+            needs: vec![Need {
+                contact: Vec3::new(0.5, 0.5, 0.5),
+                reason: Reason::Steady,
+            }],
+        }];
+        assert!(!object.supported_inside());
+        let outside = tool.on_its_side(placements, &scene);
+        assert_eq!(
+            outside[0].needs.len(),
+            1,
+            "every contact of a solid model is outside"
+        );
+    }
+
+    #[test]
+    fn holding_the_cavity_up_stands_supports_under_its_ceiling_and_nowhere_else() {
+        let mut scene = hollow_cube();
+        let catalogue = Catalogue::bundled().expect("the shipped catalogue is valid");
+        let mut tool = SupportTool::default();
+        tool.start(&mut scene, 0.05, &catalogue, Side::Inside)
+            .expect("a hollow model to hold up");
+        let mut status = Status::default();
+        while tool.poll(&mut scene, &mut status) {
+            std::thread::yield_now();
+        }
+
+        let object = &scene.objects()[0];
+        let points = object.supports.points();
+        assert!(
+            !points.is_empty(),
+            "the cavity's 12 mm ceiling needs holding up: {status:?}"
+        );
+        for point in points {
+            // The cavity spans 0.2..0.8 of the unit cube the model is built from.
+            assert!(
+                (point.contact.z - 0.8).abs() < 0.01,
+                "{} is not under the cavity's ceiling",
+                point.contact
+            );
+        }
+    }
+
+    #[test]
+    fn a_drilled_hole_is_held_up_inside_like_any_underside() {
+        use crate::scene::{ImportSummary, Imported};
+        use core_geometry::diagnose;
+
+        let mesh = core_geometry::cuboid(Vec3::ZERO, Vec3::splat(20.0));
+        let mut scene = Scene::default();
+        let transform = Transform::from_translation(Vec3::new(0.0, 0.0, 5.0));
+        let id = scene.insert(Imported::new(
+            "block".to_owned(),
+            Arc::new(mesh.clone()),
+            transform,
+            ImportSummary::made(diagnose(&mesh)),
+        ));
+        let object = scene.get_mut(id).expect("the block is on the plate");
+        // A hole 10 mm across bored 10 mm in from the side at x = 20: a millimetre under
+        // its crown it is 6 mm wide, 3 mm past the reach of a 45 degree face either side.
+        let size = core_volume::HoleSize::round(10.0, 10.0, 1.0);
+        let bvh = Bvh::build(&mesh);
+        object.hollow.add_drain(
+            &mesh,
+            &bvh,
+            Vec3::new(20.0, 10.0, 10.0),
+            Vec3::X,
+            size,
+            transform,
+        );
+        let source = Arc::clone(object.uncut());
+        let cuts = Arc::clone(object.hollow.cut_bodies().expect("the hole is cut"));
+        let drilled = core_volume::Drilled::of(&source, None, &cuts).expect("a block drills");
+        object.hollow.keep_drilled(&source, &cuts, Some(drilled));
+        assert!(
+            object.keep_support_surface(),
+            "supports stand against the block drilled"
+        );
+
+        let catalogue = Catalogue::bundled().expect("the shipped catalogue is valid");
+        let mut tool = SupportTool::default();
+        tool.start(&mut scene, 0.05, &catalogue, Side::Outside)
+            .expect("a model to place under");
+        let mut status = Status::default();
+        while tool.poll(&mut scene, &mut status) {
+            std::thread::yield_now();
+        }
+
+        let in_the_hole = scene.objects()[0]
+            .supports
+            .points()
+            .iter()
+            .filter(|point| {
+                let at = point.contact;
+                // Over the block's underside, in from the side the hole was bored through.
+                at.x > 10.0 && (at.y - 10.0).abs() < 5.0 && at.z > 1.0
+            })
+            .count();
+        assert!(
+            in_the_hole > 0,
+            "the ceiling of the bore hangs over nothing: {status:?}"
+        );
+    }
+
+    #[test]
+    fn a_support_edited_inside_the_cavity_is_counted_and_deleted_with_it() {
+        let mut scene = hollow_cube();
+        let object = &mut scene.objects_mut()[0];
+        let transform = object.transform;
+        object
+            .supports
+            .add(Vec3::new(10.0, 10.0, 20.95), transform, 0);
+        object
+            .supports
+            .add(Vec3::new(10.0, 10.0, 5.0), transform, 0);
+        let model = Arc::clone(&object.mesh);
+        let (surface, bvh) = object.support_surface();
+        let (surface, bvh) = (Arc::clone(surface), Arc::clone(bvh));
+        let table = SupportTool::default().table();
+        object
+            .supports
+            .refresh_on(&model, &surface, &bvh, transform, &table);
+        let inside_tree = (0..object.supports.trees().len())
+            .find(|tree| object.supports.trees()[*tree].root().position.z > 9.0)
+            .expect("the cavity's support stands on the cavity's floor");
+        object.supports.freeze(inside_tree, transform);
+
+        assert_eq!(
+            SupportTool::inside_count(&scene),
+            1,
+            "the frozen tree is the cavity's"
+        );
+        assert_eq!(SupportTool::clear_inside(&mut scene), 1);
+        let object = &scene.objects()[0];
+        assert!(
+            object.supports.frozen().is_empty(),
+            "the edited support went with the cavity"
+        );
+        assert_eq!(
+            object.supports.points().len(),
+            1,
+            "the underside's support stays"
+        );
+        assert_eq!(SupportTool::inside_count(&scene), 0);
     }
 }

@@ -1,4 +1,4 @@
-use core_geometry::{Bvh, Mesh, Transform};
+use core_geometry::{Bvh, Mesh, Transform, Vec3};
 
 use crate::region::Blocked;
 
@@ -33,9 +33,10 @@ impl<'a> Placed<'a> {
         Self { blocked, ..self }
     }
 
-    /// Whether a face of the model has been painted out of bounds.
-    pub fn blocks_face(&self, face: usize) -> bool {
-        self.blocked
-            .is_some_and(|blocked| blocked.contains_face(face))
+    /// Whether `point`, on the model and in plate coordinates, lies on a patch painted out
+    /// of bounds. Asked of the point rather than its face, so it holds however the surface
+    /// supports stand against is numbered: the model, its shell or the shell drilled.
+    pub fn blocks_at(&self, point: Vec3) -> bool {
+        self.blocked.is_some_and(|blocked| blocked.holds(point))
     }
 }

@@ -225,6 +225,15 @@ belongs to its model and travels with it (ADR 0028). The job reports progress an
 like the slicing job (ADR 0018). Supports already under the model are handed in as seeds:
 they hold what is near them and are never moved, so a run only adds.
 
+**What prints.** A model is cut, landed and swept as it prints: drilled where its holes
+have been taken out exactly, else as its shell once hollowed (ADR 0334). The cavity's
+ceiling and the crown of a hole are then undersides like any other, and the faces under
+them faces a column lands on. The patches stay the model's: a fill reads its faces, and a
+blocked patch is asked by point, within 0.01 mm of it, so it holds on a surface numbered
+otherwise. A contact whose nearest face bounds the cavity, or the lattice in it, is inside:
+**Grow the supports** keeps only those outside, and **Support the cavity** keeps only those
+inside; once something stands inside it is **Delete the cavity supports**.
+
 **The grid.** Layers are read onto 0.1 mm cells anchored to the plate by the same
 `ScanlineRasterizer` the printed mask comes from, binary-shaded: a cell is material when
 the layer covers its middle. The result is a `Field` — every row's spans in one buffer —
@@ -523,8 +532,10 @@ goes through nothing takes the part it passes nearest, within a slack the viewpo
 two points of the screen where the camera is looking: a pillar seen from far away is a
 point wide, and a part the ray does go through always wins over one it only passes.
 The part a press would take is drawn fainter than what is held before the button goes down.
-A part met further along the ray than a model's surface is behind that model and is not
-taken, hover or press: `grab_along` answers how far along the part stands.
+A part met further along the ray than the first printed surface is behind that model and is
+not taken, hover or press: `grab_along` answers how far along the part stands. The ray is
+measured from where the section lets it in, and a cut standing in material is a cap that
+hides what is behind it, so a part inside a cavity the section opens is taken (ADR 0334).
 
 A press picks a part and the same drag carries it, by the step the cursor takes on the
 plane through it facing the camera, measured from where the cursor was pressed and not from

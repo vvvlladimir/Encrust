@@ -161,11 +161,12 @@ fn rim_rows(ui: &mut egui::Ui, window: &mut Window) {
             offset_row(ui, &tr!("paint-second-rim-gap"), gap_mm);
         }
         let catalogue = &window.machine.slicing.catalogue;
-        fill_profile_row(
+        profile_row(
             ui,
             "fill-rim-profile",
             catalogue,
             &mut window.tools.supports.fill_profiles.rim,
+            tr!("paint-profile-in-hand"),
         );
     });
 }
@@ -192,11 +193,12 @@ fn inside_rows(ui: &mut egui::Ui, window: &mut Window) {
             .show(ui, &mut fill.pattern);
         offset_row(ui, &tr!("paint-offset"), &mut fill.infill_offset_mm);
         let catalogue = &window.machine.slicing.catalogue;
-        fill_profile_row(
+        profile_row(
             ui,
             "fill-inside-profile",
             catalogue,
             &mut window.tools.supports.fill_profiles.inside,
+            tr!("paint-profile-in-hand"),
         );
     });
 }
@@ -236,14 +238,15 @@ fn offset_row(ui: &mut egui::Ui, label: &str, offset_mm: &mut Scalar) {
     );
 }
 
-/// The saved profile one half of a fill is built to, or the group in hand.
-fn fill_profile_row(
+/// The saved profile a kind of support is built to, or `in_hand` naming what it is built
+/// to with none chosen.
+pub(super) fn profile_row(
     ui: &mut egui::Ui,
     id: &str,
     catalogue: &printer_profiles::Catalogue,
     chosen: &mut Option<String>,
+    in_hand: String,
 ) {
-    let in_hand = tr!("paint-profile-in-hand");
     let shown = chosen
         .as_deref()
         .and_then(|id| catalogue.supports().find(|entry| entry.id == id))

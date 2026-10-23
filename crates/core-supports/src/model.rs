@@ -90,6 +90,12 @@ impl ModelSupports {
         }
     }
 
+    /// Drops what was built, so the next refresh builds against a surface that changed
+    /// under the supports: a model hollowed, or solid again.
+    pub fn surface_changed(&mut self) {
+        self.built = None;
+    }
+
     pub fn is_empty(&self) -> bool {
         self.points.is_empty() && self.frozen.is_empty()
     }
@@ -175,6 +181,7 @@ impl ModelSupports {
         &mut self,
         grown: &[SupportTree],
         model: &Mesh,
+        surface: &Mesh,
         bvh: &Bvh,
         transform: Transform,
         table: &[SupportProfile],
@@ -189,7 +196,7 @@ impl ModelSupports {
         trees.extend(self.frozen.iter().map(|tree| tree.moved(matrix)));
 
         let keep_out = self.keep_out(model, transform);
-        let placed = Placed::new(model, bvh, transform).blocking(keep_out.as_ref());
+        let placed = Placed::new(surface, bvh, transform).blocking(keep_out.as_ref());
         let meshes: Vec<Arc<Mesh>> = mesh_groups(&trees, &placed, profiles)
             .into_iter()
             .map(Arc::new)
@@ -486,6 +493,40 @@ impl ModelSupports {
         }
     }
 
+    /// Keeps the points `keep` answers true for, by their index, and answers how many went.
+    pub fn retain_points(&mut self, mut keep: impl FnMut(usize) -> bool) -> usize {
+        let before = self.points.len();
+        let mut index = 0;
+        self.points.retain(|_| {
+            index += 1;
+            keep(index - 1)
+        });
+        let gone = before - self.points.len();
+        if gone > 0 {
+            self.built = None;
+        }
+        gone
+    }
+
+    /// Keeps the frozen trees `keep` answers true for, by their index, and answers how many
+    /// tips went with the rest.
+    pub fn retain_frozen(&mut self, mut keep: impl FnMut(usize) -> bool) -> usize {
+        let mut index = 0;
+        let mut gone = 0;
+        self.frozen.retain(|tree| {
+            index += 1;
+            let kept = keep(index - 1);
+            if !kept {
+                gone += tree.tip_count();
+            }
+            kept
+        });
+        if gone > 0 {
+            self.built = None;
+        }
+        gone
+    }
+
     /// Takes every support of `group` away and leaves the group itself, and every other
     /// group's number, as it was. Returns how many supports went.
     pub fn clear_group(&mut self, group: u16) -> usize {
@@ -528,6 +569,20 @@ impl ModelSupports {
         transform: Transform,
         table: &[SupportProfile],
     ) {
+        self.refresh_on(model, model, bvh, transform, table);
+    }
+
+    /// [`Self::refresh`] standing the supports against `surface`, whose hierarchy is
+    /// `bvh`, rather than against `model`, which the patches are painted on: a hollowed
+    /// model's shell, drilled where it has holes (ADR 0334).
+    pub fn refresh_on(
+        &mut self,
+        model: &Mesh,
+        surface: &Mesh,
+        bvh: &Bvh,
+        transform: Transform,
+        table: &[SupportProfile],
+    ) {
         self.refresh_patches(model, transform);
         let Some(profiles) = Profiles::new(table) else {
             return;
@@ -543,7 +598,7 @@ impl ModelSupports {
         }
 
         let keep_out = self.keep_out(model, transform);
-        let placed = Placed::new(model, bvh, transform).blocking(keep_out.as_ref());
+        let placed = Placed::new(surface, bvh, transform).blocking(keep_out.as_ref());
         let columns = columns(&self.points, &placed, profiles);
         let mut trees = grow(&columns, &placed, profiles);
         let grown = trees.len();

@@ -4,7 +4,7 @@
 use std::sync::Arc;
 
 use core_geometry::{PlacedHit, Scalar, Transform, Vec3};
-use core_supports::{Part, Placed, Profiles, inline, preview, stands, support_under};
+use core_supports::{Part, Profiles, inline, preview, stands, support_under};
 use core_volume::markers;
 
 use crate::camera::OrbitCamera;
@@ -52,8 +52,7 @@ pub(super) fn place_support_under_cursor(
         return;
     };
     let keep_out = object.supports.keep_out(&object.mesh, object.transform);
-    let placed =
-        Placed::new(&object.mesh, &object.bvh, object.transform).blocking(keep_out.as_ref());
+    let placed = object.support_placed().blocking(keep_out.as_ref());
     let wanted = match line_start(window, id).filter(|_| line) {
         Some(from) => inline(
             &placed,
@@ -98,8 +97,7 @@ pub(super) fn line_ghost(window: &Window, id: ObjectId, hit: &PlacedHit) -> Opti
     let table = window.tools.supports.table_for(object);
     let profiles = Profiles::new(&table)?;
     let keep_out = object.supports.keep_out(&object.mesh, object.transform);
-    let placed =
-        Placed::new(&object.mesh, &object.bvh, object.transform).blocking(keep_out.as_ref());
+    let placed = object.support_placed().blocking(keep_out.as_ref());
     let active = window.tools.supports.active;
     let dots = inline(
         &placed,
@@ -126,8 +124,7 @@ pub(super) fn support_ghost(window: &Window, id: ObjectId, hit: &PlacedHit) -> O
     let table = window.tools.supports.table_for(object);
     let profiles = Profiles::new(&table)?;
     let keep_out = object.supports.keep_out(&object.mesh, object.transform);
-    let placed =
-        Placed::new(&object.mesh, &object.bvh, object.transform).blocking(keep_out.as_ref());
+    let placed = object.support_placed().blocking(keep_out.as_ref());
     let active = window.tools.supports.active;
     let shown = preview(&placed, hit.point, active, profiles);
     let colour = if shown.stands {
@@ -293,8 +290,7 @@ fn carry_tip(window: &mut Window, viewport: egui::Rect, cursor: egui::Pos2, tip:
         return false;
     };
     let keep_out = object.supports.keep_out(&object.mesh, object.transform);
-    let placed =
-        Placed::new(&object.mesh, &object.bvh, object.transform).blocking(keep_out.as_ref());
+    let placed = object.support_placed().blocking(keep_out.as_ref());
     let profile = profiles.of(standing.group());
     let Some(carried) = pointed
         .into_iter()
@@ -452,8 +448,7 @@ fn carry_parts(window: &mut Window, step: Vec3) -> bool {
         };
 
         let keep_out = object.supports.keep_out(&object.mesh, object.transform);
-        let placed =
-            Placed::new(&object.mesh, &object.bvh, object.transform).blocking(keep_out.as_ref());
+        let placed = object.support_placed().blocking(keep_out.as_ref());
         let Some(carried) = core_supports::carried(
             &standing,
             &parts,
@@ -495,12 +490,13 @@ fn rebuild_held(window: &mut Window) {
         }
         done.push(picked.id);
         if let Some(object) = window.doc.scene.get_mut(picked.id) {
-            let mesh = std::sync::Arc::clone(&object.mesh);
-            let bvh = std::sync::Arc::clone(&object.bvh);
+            let model = std::sync::Arc::clone(&object.mesh);
+            let (surface, bvh) = object.support_surface();
+            let (surface, bvh) = (std::sync::Arc::clone(surface), std::sync::Arc::clone(bvh));
             let table = window.tools.supports.table_for(object);
             object
                 .supports
-                .refresh(&mesh, &bvh, object.transform, &table);
+                .refresh_on(&model, &surface, &bvh, object.transform, &table);
         }
     }
 }

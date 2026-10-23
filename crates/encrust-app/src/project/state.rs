@@ -305,6 +305,7 @@ fn restore_objects(
         object.supports = supports_of(
             &state.supports,
             &meshes.source,
+            &meshes.source,
             &bvh,
             state.transform,
             &with_own(table.to_vec(), &own, plate_raft),

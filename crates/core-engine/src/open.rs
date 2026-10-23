@@ -157,11 +157,15 @@ fn model(
     table: &[SupportProfile],
     plate_raft: Option<Raft>,
 ) -> Model {
-    let bvh = Arc::new(Bvh::build(&meshes.source));
     let hollow = hollow_of(&object.hollow, meshes);
+    // Against what prints, as the window stood them, so a cavity's supports are swept
+    // against the cavity and not the solid it was cut from (ADR 0334).
+    let surface = meshes.printed();
+    let bvh = Bvh::build(surface);
     let supports = supports_of(
         &object.supports,
         &meshes.source,
+        surface,
         &bvh,
         object.transform,
         &object.support_table(table, plate_raft),

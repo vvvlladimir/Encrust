@@ -1,5 +1,9 @@
 use core_geometry::{Bvh, Mesh, Region, Scalar, Transform, Vec3};
 
+/// How far off the blocked patch a point on the model may lie and still be on it,
+/// millimetres: a hundredth, well over what single precision loses across a plate.
+const ON_PATCH_MM: Scalar = 0.01;
+
 /// A region the user has forbidden supports, as the question every placement asks it.
 ///
 /// Both halves of that question are answered here: a face is blocked, so no tip and no
@@ -7,7 +11,6 @@ use core_geometry::{Bvh, Mesh, Region, Scalar, Transform, Vec3};
 /// placement puts nothing there. See `docs/decisions/0093`.
 #[derive(Debug)]
 pub struct Blocked {
-    region: Region,
     bvh: Bvh,
 }
 
@@ -17,14 +20,13 @@ impl Blocked {
     pub fn new(model: &Mesh, region: &Region, transform: Transform) -> Option<Self> {
         let patch = region.submesh(model, transform, 0.0)?;
         Some(Self {
-            region: region.clone(),
             bvh: Bvh::build(&patch),
         })
     }
 
-    /// Whether `face` of the model is inside the blocked patch.
-    pub fn contains_face(&self, face: usize) -> bool {
-        self.region.contains(face)
+    /// Whether `point`, in plate coordinates, lies on the blocked patch.
+    pub fn holds(&self, point: Vec3) -> bool {
+        self.covers(point, ON_PATCH_MM)
     }
 
     /// Whether the blocked patch comes within `radius_mm` of `point`, in plate
@@ -66,8 +68,12 @@ mod tests {
 
         let blocked =
             Blocked::new(&model, &region, Transform::default()).expect("a patch was painted");
-        assert!(blocked.contains_face(face));
-        assert!(!blocked.contains_face(model.faces.len()));
+        let painted = model.triangle(face).expect("the face was painted");
+        assert!(blocked.holds((painted.a + painted.b + painted.c) / 3.0));
+        assert!(
+            !blocked.holds(Vec3::new(5.0, 5.0, 0.0)),
+            "the cube's underside was not painted"
+        );
         assert!(
             blocked.covers(Vec3::new(5.0, 5.0, 10.2), 0.5),
             "a contact a fifth of a millimetre under the painted top is covered"

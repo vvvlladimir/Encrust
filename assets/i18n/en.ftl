@@ -295,6 +295,19 @@ measure-snapped-free = free
 
 ## panels/inspector/supports.rs
 
+supports-grow-inside = Support the cavity
+supports-grow-inside-tooltip = Takes away the supports inside the cavities of hollow models and grows them again by the profile above. Grow the supports holds a model up only from outside.
+supports-remove-inside = Delete the cavity supports
+supports-remove-inside-tooltip =
+    { $count ->
+        [one] Takes away the { $count } support standing inside the cavities of hollow models, one edited by hand included.
+       *[other] Takes away the { $count } supports standing inside the cavities of hollow models, ones edited by hand included.
+    }
+supports-removed-inside =
+    { $count ->
+        [one] Took { $count } support out of the cavities
+       *[other] Took { $count } supports out of the cavities
+    }
 supports-where = Where
 supports-picked = Picked
 supports-already-done = Already done

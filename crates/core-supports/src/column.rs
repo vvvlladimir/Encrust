@@ -309,7 +309,7 @@ pub(crate) fn landing_within(
     // the model at the height its rim already meets the face it stands on.
     let (landing, bottom_z, base_mm) = match below {
         // A foot may not be put down on a blocked face; see `docs/decisions/0093`.
-        Some(hit) if placed.blocks_face(hit.face) => return None,
+        Some(hit) if placed.blocks_at(hit.point) => return None,
         // The profile forbids standing on the part, so the support leans for the plate
         // instead; see `docs/decisions/0124`.
         Some(hit) if hit.point.z > PLATE_Z_MM && !profile.land_on_model => return None,

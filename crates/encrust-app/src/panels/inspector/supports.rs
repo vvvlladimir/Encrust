@@ -5,7 +5,10 @@ use crate::i18n::tr;
 use crate::job::SupportJob;
 use crate::panels::Window;
 use crate::panels::support_fields::{held_up, saved_as, sizes};
+use crate::scene::SceneObject;
 use crate::state::Doc;
+use crate::status::Status;
+use crate::supports::{Side, SupportTool};
 use crate::ui::{
     describe, hint, icon, primary_button, progress_bar, secondary_button, section, stats, theme,
     tone,
@@ -174,24 +177,62 @@ fn generate(ui: &mut egui::Ui, window: &mut Window) {
     } else {
         tr!("supports-grow")
     };
+    cavity(ui, window);
     let what = tr!("supports-grow-tooltip", scope = window.doc.scene.scope());
     if primary_button(ui, icon::SUPPORTS, &label, blocker.is_none())
         .on_hover_text(what)
         .clicked()
     {
-        let started = window.tools.supports.start(
-            &window.doc.scene,
-            window.machine.slicing.layer_height_mm(),
-            &window.machine.slicing.catalogue,
-        );
-        window
-            .machine
-            .status
-            .report(&tr!("supports-placing"), started);
+        start(window, Side::Outside);
     }
     if let Some(reason) = blocker {
         ui.vertical_centered(|ui| tone(ui, &reason, theme::colors().text_low));
     }
+}
+
+/// Holding the cavities of the hollow models aimed at up, or, once something stands in
+/// them, taking that away again; see `docs/decisions/0334`.
+fn cavity(ui: &mut egui::Ui, window: &mut Window) {
+    if !window
+        .doc
+        .scene
+        .targets()
+        .any(SceneObject::supported_inside)
+    {
+        return;
+    }
+    let inside = SupportTool::inside_count(&window.doc.scene);
+    if inside == 0 {
+        if secondary_button(ui, icon::SUPPORTS, &tr!("supports-grow-inside"))
+            .on_hover_text(tr!("supports-grow-inside-tooltip"))
+            .clicked()
+        {
+            start(window, Side::Inside);
+        }
+        return;
+    }
+    if secondary_button(ui, icon::REMOVE, &tr!("supports-remove-inside"))
+        .on_hover_text(tr!("supports-remove-inside-tooltip", count = inside))
+        .clicked()
+    {
+        let gone = SupportTool::clear_inside(&mut window.doc.scene);
+        window.tools.supports.picked.clear();
+        window.machine.status = Status::Info(tr!("supports-removed-inside", count = gone));
+    }
+}
+
+/// Starts a run on one side of the wall, and says on the stage whether it could.
+fn start(window: &mut Window, side: Side) {
+    let started = window.tools.supports.start(
+        &mut window.doc.scene,
+        window.machine.slicing.layer_height_mm(),
+        &window.machine.slicing.catalogue,
+        side,
+    );
+    window
+        .machine
+        .status
+        .report(&tr!("supports-placing"), started);
 }
 
 /// The progress bar and the cancel button of the run that is going.

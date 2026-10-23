@@ -19,8 +19,11 @@ const REPORT_STEP: f32 = 0.005;
 /// One model to stand supports under, owned so that it can cross to the worker thread.
 pub struct SupportTask {
     pub id: ObjectId,
-    /// The model in its own space, and where it stands.
+    /// The model in its own space, which the blocked faces are painted on, and where it
+    /// stands.
     pub mesh: Arc<Mesh>,
+    /// What the model prints as, in the same space: what is cut and read for undersides.
+    pub surface: Arc<Mesh>,
     pub transform: Transform,
     /// Contacts of the supports already under this model, in plate coordinates. They
     /// hold up what is near them, and the run never returns or moves them.
@@ -175,6 +178,7 @@ pub fn tasks_of(
         .map(|object| SupportTask {
             id: object.id,
             mesh: Arc::clone(&object.mesh),
+            surface: Arc::clone(object.support_surface().0),
             transform: object.transform,
             seeds: object.supports.contacts(object.transform),
             blocked: object.supports.blocked().clone(),
@@ -213,9 +217,9 @@ fn place(
         }
 
         let placed = if task.transform == Transform::default() {
-            task.mesh.as_ref().clone()
+            task.surface.as_ref().clone()
         } else {
-            transform_mesh(&task.mesh, task.transform)
+            transform_mesh(&task.surface, task.transform)
         };
         let stack = match slice_mesh(&placed, request.layer_height_mm) {
             Ok(stack) => stack,
@@ -240,7 +244,7 @@ fn place(
             &task.profile,
             request.sizing.as_ref(),
             &task.seeds,
-            &low_points(&task.mesh, task.transform),
+            &low_points(&task.surface, task.transform),
             blocked.as_ref(),
             &mut |layer| {
                 let fraction = done + layer as f32 / layers / models;

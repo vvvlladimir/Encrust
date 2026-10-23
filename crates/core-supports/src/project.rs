@@ -238,10 +238,14 @@ fn hanging(placed: &Placed, region: &Region, max_overhang_deg: Scalar) -> Region
     let holds_itself_up = max_overhang_deg.clamp(0.0, 90.0).to_radians().sin();
 
     let mut hanging = Region::default();
-    for face in region.faces().filter(|face| !placed.blocks_face(*face)) {
+    for face in region.faces() {
         let Some(triangle) = placed.model.triangle(face) else {
             continue;
         };
+        let middle = (triangle.a + triangle.b + triangle.c) / 3.0;
+        if placed.blocks_at(matrix.transform_point3(middle)) {
+            continue;
+        }
         let lean = -(normals * triangle.normal_unnormalized())
             .normalize_or_zero()
             .z;

@@ -311,6 +311,21 @@ measure-snapped-free = свободно
 
 ## panels/inspector/supports.rs
 
+supports-grow-inside = Поддержать полость
+supports-grow-inside-tooltip = Убирает поддержки внутри полостей полых моделей и выращивает их заново по профилю выше. «Вырастить поддержки» держит модель только снаружи.
+supports-remove-inside = Удалить поддержки полости
+supports-remove-inside-tooltip =
+    { $count ->
+        [one] Убирает { $count } поддержку внутри полостей полых моделей, в том числе исправленную вручную.
+        [few] Убирает { $count } поддержки внутри полостей полых моделей, в том числе исправленные вручную.
+       *[many] Убирает { $count } поддержек внутри полостей полых моделей, в том числе исправленные вручную.
+    }
+supports-removed-inside =
+    { $count ->
+        [one] Из полостей убрана { $count } поддержка
+        [few] Из полостей убраны { $count } поддержки
+       *[many] Из полостей убрано { $count } поддержек
+    }
 supports-where = Где
 supports-picked = Выбрано
 supports-already-done = Уже сделано

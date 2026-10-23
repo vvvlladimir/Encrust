@@ -3,12 +3,12 @@
 
 use core_supports::{Grab, Profiles, SupportTree, grab_along};
 
-use core_geometry::{PlacedHit, Ray, Vec3, raycast_placed};
+use core_geometry::{PlacedHit, Ray, Vec3};
 
 use crate::camera::OrbitCamera;
 use crate::measure;
 use crate::panels::{Window, section};
-use crate::pick::{pick, pick_material, pick_surface, ray_through};
+use crate::pick::{pick, pick_material, pick_surface, ray_through, seen_along};
 use crate::scene::{ObjectId, Scene};
 
 /// The model under the cursor through the section this frame shows; see [`pick`].
@@ -224,22 +224,19 @@ pub(super) fn grab_under_cursor(
     let ray = ray_through(&window.view.camera, viewport, cursor)?;
     let slack_mm = aim_slack_mm(&window.view.camera, viewport, cursor);
 
-    // A support behind a model is not under the cursor, and one of a group left out of
-    // the view is not there to be aimed at.
-    let wall_mm = window
-        .doc
-        .scene
-        .here()
-        .filter_map(|object| raycast_placed(&object.mesh, &object.bvh, object.transform, &ray))
-        .map(|hit| hit.distance)
-        .fold(f32::INFINITY, f32::min);
+    // A support behind a model, or cut away by the section, is not under the cursor, and
+    // one of a group left out of the view is not there to be aimed at. A cavity the section
+    // opens is seen into, so what stands in it can be taken.
+    let (near_mm, wall_mm) = seen_along(&window.doc.scene, &ray, section::shown(window))?;
     window.doc.scene.here().find_map(|object| {
         let table = window.tools.supports.table_for(object);
         let profiles = Profiles::new(&table)?;
         let hidden = window.tools.supports.hidden();
         let (hit, along_mm) =
             grab_shown(object.supports.trees(), &hidden, &ray, profiles, slack_mm)?;
-        (along_mm <= wall_mm + BEHIND_MM).then_some((object.id, hit))
+        (near_mm - BEHIND_MM..=wall_mm + BEHIND_MM)
+            .contains(&along_mm)
+            .then_some((object.id, hit))
     })
 }
 

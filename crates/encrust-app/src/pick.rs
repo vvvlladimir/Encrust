@@ -67,6 +67,26 @@ impl Shown {
     }
 }
 
+/// The stretch of `ray` a support can be seen along, as distances: from where the section
+/// lets the ray in to the first thing drawn that hides what is behind it — a model's
+/// printed surface, its cavity and holes included, or the cap the cut leaves across its
+/// material. `None` when the cuts leave the ray nothing.
+pub fn seen_along(scene: &Scene, ray: &Ray, shown: Shown) -> Option<(Scalar, Scalar)> {
+    let (near, far) = shown.span(ray)?;
+    let from_cut = Ray::new(ray.at(near), ray.direction);
+    let wall = scene
+        .here()
+        .filter_map(|object| {
+            let (surface, bvh) = object.support_surface();
+            let hit = raycast_placed(surface, bvh, object.transform, &from_cut)?;
+            // A first face the ray leaves through: the cut stands in material, capped.
+            let capped = near > 0.0 && hit.normal.dot(ray.direction) > 0.0;
+            Some(if capped { near } else { near + hit.distance })
+        })
+        .fold(far, Scalar::min);
+    Some((near, wall))
+}
+
 /// What the cursor is over where the section cut a model open: one of its faces, or the
 /// cap the cut leaves across its material, which has no face of its own.
 enum Under {
@@ -447,6 +467,75 @@ mod tests {
         assert!(
             !occluded(&scene, eye, Vec3::new(0.5, 0.5, 1.0)),
             "a point on the cube's own top face is not hidden by it"
+        );
+    }
+
+    /// The unit cube hollowed to a cavity spanning 0.2..0.8, as a shell keeps it: the cube
+    /// with that box appended wound inward.
+    fn hollowed(scene: &mut Scene, id: ObjectId) {
+        let mut shell = unit_cube();
+        let inner = unit_cube();
+        let offset = shell.vertices.len() as u32;
+        shell
+            .vertices
+            .extend(inner.vertices.iter().map(|at| *at * 0.6 + Vec3::splat(0.2)));
+        shell.faces.extend(
+            inner
+                .faces
+                .iter()
+                .map(|[a, b, c]| [a + offset, c + offset, b + offset]),
+        );
+        let object = scene.get_mut(id).expect("the cube is on the plate");
+        let settings = object
+            .hollow
+            .asking(&core_volume::HollowSettings::for_wall(0.2));
+        object.hollow.take(core_volume::Shell {
+            mesh: Arc::new(shell),
+            cavity: 12..24,
+            cavity_mm3: 0.216,
+            voxel_mm: 0.05,
+            coarsened: false,
+            shape: object.transform.unturned(),
+            settings,
+        });
+        object.keep_support_surface();
+    }
+
+    #[test]
+    fn a_cut_through_a_cavity_is_seen_into_down_to_its_floor() {
+        let mut scene = Scene::default();
+        let cube = add(&mut scene, "cube", Vec3::ZERO);
+        hollowed(&mut scene, cube);
+        let cut = Shown {
+            top_mm: Some(0.5),
+            ..Shown::default()
+        };
+        let camera = from_above();
+        let down = ray_through(&camera, VIEWPORT, center()).expect("a ray down the middle");
+        let (near, wall) = seen_along(&scene, &down, cut).expect("the cut lets the ray in");
+
+        assert!(
+            (down.at(wall).z - 0.2).abs() < 1e-3,
+            "the cavity's floor at 0.2 mm hides what is under it, not the cut at {}",
+            down.at(near).z
+        );
+    }
+
+    #[test]
+    fn a_cut_through_the_wall_is_capped() {
+        let mut scene = Scene::default();
+        let cube = add(&mut scene, "cube", Vec3::ZERO);
+        hollowed(&mut scene, cube);
+        let cut = Shown {
+            top_mm: Some(0.5),
+            ..Shown::default()
+        };
+        // Down through the wall, a tenth in from the cube's edge.
+        let ray = Ray::new(Vec3::new(0.1, 0.5, 20.0), Vec3::NEG_Z);
+        let (near, wall) = seen_along(&scene, &ray, cut).expect("the cut lets the ray in");
+        assert!(
+            (near - wall).abs() < 1e-4,
+            "the cap at the cut hides the wall's inside"
         );
     }
 }

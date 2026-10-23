@@ -327,6 +327,13 @@ whole-surface fill is Cmd-Shift-click.
   turns away, and a pad beside a part that cannot be moved aside is cut back on that side.
 - A tip that has no room leans until it finds some. A support that still has no room is
   reported and left out of the print, never forced into the model.
+- Supports stand against the model **as it prints**: hollowed, its cavity, and drilled,
+  its holes, so the crown of a drain hole or any bore is held up like other overhangs.
+  **Grow the supports** holds a model up from outside; **Support the cavity**, shown for
+  hollow models, grows the supports inside the cavity by the profile chosen above, and
+  becomes **Delete the cavity supports** once they stand. With the section cut open, the
+  supports inside can be clicked and edited like any other. A hole is seen once it has
+  been cut exactly.
 - **Lift off the plate** stands the picked model that high, a millimetre a press of − or
   +, so supports have room. It is the same number in Position and in Supports.
 
