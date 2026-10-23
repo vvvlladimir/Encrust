@@ -365,7 +365,8 @@ pub(crate) fn landing_within(
 /// whatever angle the column or the branch under it happens to take (ADR 0125).
 ///
 /// The tip is shortened rather than allowed to eat the room the body needs above the
-/// plate, which is what keeps a contact close to the plate standing at all.
+/// plate, which is what keeps a contact close to the plate standing at all. A contact
+/// with the model nearer under it than a head is long, and no way round, is its own neck.
 pub fn neck_of(placed: &Placed, contact: Vec3, profile: &SupportProfile) -> Vec3 {
     let length_mm = profile.top_length_mm();
     // A head that would run into the model — a contact in a crevice, whose face looks at
@@ -401,7 +402,23 @@ pub fn neck_of(placed: &Placed, contact: Vec3, profile: &SupportProfile) -> Vec3
     [profile.clearance_mm, 0.0]
         .into_iter()
         .find_map(|clearance_mm| necks.iter().copied().find(|neck| fits(neck, clearance_mm)))
+        .or_else(|| no_room_below(placed, contact, profile).then_some(contact))
         .unwrap_or(neck)
+}
+
+/// Whether the model under `contact` is nearer than a head is long, so a head that can
+/// turn nowhere else would run through it: such a contact gets no head, see
+/// [`has_head`].
+fn no_room_below(placed: &Placed, contact: Vec3, profile: &SupportProfile) -> bool {
+    let ray = Ray::new(contact - Vec3::Z * SURFACE_EPSILON_MM, -Vec3::Z);
+    raycast_placed(placed.model, placed.bvh, placed.transform, &ray)
+        .is_some_and(|hit| hit.distance < profile.top_length_mm() && hit.normal.z > 0.0)
+}
+
+/// Whether a support at `contact` leaves it by a head to `neck`. One without is a single
+/// strut from the contact itself, which is how [`crate::grow`] stands it.
+pub(crate) fn has_head(contact: Vec3, neck: Vec3) -> bool {
+    contact.distance(neck) >= MIN_BODY_MM
 }
 
 /// Where a head leaving `contact` along `direction` ends: one `[top]` out, shortened
@@ -672,7 +689,7 @@ fn stands_clear(placed: &Placed, body: &Beam, profile: &SupportProfile) -> bool 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::tests::{box_mesh, columns_on, landing_on, profile, ramp};
+    use crate::tests::{box_mesh, columns_on, landing_on, profile, ramp, under_a_gap_over_a_bar};
     use core_geometry::{Bvh, Mesh, Transform};
 
     /// A wall filling 0..1 on x, standing on the plate.
@@ -1277,6 +1294,19 @@ mod tests {
             head_clear(&placed, contact, neck, -Vec3::Z, &profile(), 0.0),
             "and nothing of it but the tip meets the model"
         );
+    }
+
+    #[test]
+    fn a_contact_with_less_room_under_it_than_a_head_has_no_head() {
+        // An underside at z = 10.5 over a bar 9..10: half a millimetre of air, where a
+        // 2 mm head would run through the bar and stand its trunk under it.
+        let model = under_a_gap_over_a_bar();
+        let bvh = Bvh::build(&model);
+        let placed = Placed::new(&model, &bvh, Transform::default());
+
+        let contact = Vec3::new(0.0, 0.0, 10.5);
+        let neck = neck_of(&placed, contact, &profile());
+        assert!(!has_head(contact, neck), "got a head to {neck}");
     }
 
     #[test]

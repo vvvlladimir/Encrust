@@ -452,6 +452,11 @@ fn trunk(tree: &SupportTree, profile: &SupportProfile, style: Style) -> Tube {
         let pointed = foot_tip(&mut rings, length, base_mm, profile);
         sole = style.ground.filter(|_| !pointed);
         pointed.then(|| top + direction * length)
+    } else if style.small && landing.on_model && !landing.on_support {
+        // One ring, so the whole of it can be laid onto the face it stands on.
+        push(&mut rings, length, base_mm);
+        sole = style.ground;
+        None
     } else {
         push(&mut rings, length, base_mm);
         push(&mut rings, length + into_foot, base_mm);
@@ -719,11 +724,11 @@ fn ground_normal(placed: &Placed, landing: Landing) -> Option<Vec3> {
         .map(|hit| hit.normal)
 }
 
-/// The face a plane tip is laid onto, for a tube that starts at one; a sphere, a small
-/// pillar and a joint have no flat end to lay.
+/// The face a plane tip or a small pillar is laid onto, for a tube that starts at one; a
+/// sphere and a joint have no flat end to lay.
 fn seat_of(node: &TreeNode, profile: &SupportProfile, style: Style) -> Option<Vec3> {
     let plane = profile.tip.shape == ContactShape::Plane;
-    (node.is_leaf() && plane && !style.small)
+    (node.is_leaf() && (plane || style.small))
         .then_some(style.face)
         .flatten()
 }
@@ -1577,6 +1582,73 @@ mod tests {
     }
 
     #[test]
+    fn a_small_pillar_meets_sloping_faces_with_the_whole_of_each_end() {
+        // Two faces leaning 26.6 degrees a millimetre apart, too near for a head: the
+        // underside z = 12 - x / 2 of a turned ramp over the top z = 11 - x / 2 of a
+        // mirrored one, so the strut runs straight down from its contact.
+        let mut model = Mesh::default();
+        let ramp = ramp(10.0, 5.0);
+        for place in [
+            (|v: Vec3| Vec3::new(v.x, v.y, 12.0 - v.z)) as fn(Vec3) -> Vec3,
+            |v: Vec3| Vec3::new(10.0 - v.x, v.y, v.z + 6.0),
+        ] {
+            let offset = model.vertices.len() as u32;
+            model
+                .vertices
+                .extend(ramp.vertices.iter().map(|v| place(*v)));
+            // Both turn the ramp inside out, so its faces are wound back.
+            model.faces.extend(
+                ramp.faces
+                    .iter()
+                    .map(|face| [face[0] + offset, face[2] + offset, face[1] + offset]),
+            );
+        }
+        let fixture = profile();
+        let points = [SupportPoint::new(Vec3::new(5.0, 0.0, 9.5))];
+        let trees = trees_on(
+            &points,
+            &model,
+            Transform::default(),
+            Profiles::single(&fixture),
+        );
+        assert!(
+            trees[0].root().is_leaf(),
+            "one strut, from the contact itself"
+        );
+        assert!(Style::of(&trees[0], &fixture).small, "it runs face to face");
+
+        let bvh = core_geometry::Bvh::build(&model);
+        let placed = Placed::new(&model, &bvh, Transform::default());
+        let mesh = mesh_trees(&trees, &placed, Profiles::single(&fixture));
+        // Each end is laid on its face and then sunk along the axis, so every point of
+        // it stands the same height off that face.
+        for (name, upper) in [("top", true), ("bottom", false)] {
+            let heights: Vec<Scalar> = mesh
+                .vertices
+                .iter()
+                .filter(|vertex| (vertex.z > 9.0) == upper)
+                .map(|v| {
+                    if upper {
+                        12.0 - v.x / 2.0 - v.z
+                    } else {
+                        v.z - 11.0 + v.x / 2.0
+                    }
+                })
+                .collect();
+            let low = heights.iter().copied().fold(Scalar::INFINITY, Scalar::min);
+            let high = heights
+                .iter()
+                .copied()
+                .fold(Scalar::NEG_INFINITY, Scalar::max);
+            assert!(
+                !heights.is_empty() && high - low < 1e-3,
+                "the {name} end lies along its face, got {low}..{high} off it"
+            );
+        }
+        assert_eq!(diagnose(&mesh).boundary_edges, 0, "it is closed");
+    }
+
+    #[test]
     fn a_small_pillar_has_no_tip_and_is_one_width_from_end_to_end() {
         for shape in [ContactShape::Plane, ContactShape::Sphere] {
             let mut profile = profile();
@@ -1666,11 +1738,12 @@ mod tests {
     /// Three tips over the same shelf, close enough to merge into one trunk wider than
     /// the top segment it ends in.
     fn merged_on_the_model(profile: &SupportProfile) -> Vec<SupportTree> {
+        // Further over the shelf than a small pillar reaches, which would stand each alone.
         let shelf = box_mesh(Vec3::ZERO, Vec3::splat(10.0));
         let points = [
-            SupportPoint::new(Vec3::new(4.0, 5.0, 20.0)),
-            SupportPoint::new(Vec3::new(6.0, 5.0, 20.0)),
-            SupportPoint::new(Vec3::new(5.0, 6.5, 20.0)),
+            SupportPoint::new(Vec3::new(4.0, 5.0, 25.0)),
+            SupportPoint::new(Vec3::new(6.0, 5.0, 25.0)),
+            SupportPoint::new(Vec3::new(5.0, 6.5, 25.0)),
         ];
         trees_on(
             &points,

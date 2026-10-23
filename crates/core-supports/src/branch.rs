@@ -10,7 +10,7 @@ use crate::base::braceable;
 use crate::clear::{Beam, clear};
 use crate::column::{
     Column, LAST_RESORT_SLOPE_DEG, MAX_LANDING_SLOPE_DEG, MAX_LEAN_PER_DROP, MIN_PILLAR_HEIGHT_MM,
-    PLATE_Z_MM, SURFACE_EPSILON_MM, landing, landing_within,
+    PLATE_Z_MM, SURFACE_EPSILON_MM, has_head, landing, landing_within,
 };
 use crate::group::Profiles;
 use crate::mesher::is_small;
@@ -94,8 +94,8 @@ fn families(profiles: Profiles) -> Vec<Vec<u16>> {
 }
 
 /// Runs every tree that stands on the model as a small pillar into a support beside it
-/// instead, where one wider than the pillar is in its reach, and builds it that thin
-/// all the way up.
+/// instead, where one wider than the pillar is in its reach no further off than the part
+/// under it, and builds it that thin all the way up.
 ///
 /// A small pillar is the thinnest thing on the plate whatever its group's pillar is, so
 /// it is never what a regular support stands on, and it is asked last, once every group
@@ -113,12 +113,15 @@ fn stand_small_pillars_on_supports(
             continue;
         }
         let radius_mm = profile.small_pillar.radius_mm().min(root.radius_mm);
+        // A thin strut longer than the drop to the part sways and marks no less.
+        let own_mm = root.position.distance(tree.landing().base);
         let met = carriers
             .near(root.position)
             .into_iter()
             .map(|index| &carriers.all[index])
             .filter(|carrier| carrier.radius_mm >= radius_mm + THICKER_BY_MM)
             .filter_map(|carrier| meeting_on(root.position, carrier, profile))
+            .filter(|meet| root.position.distance(*meet) <= own_mm)
             .filter(|meet| {
                 let strut = Beam {
                     from: root.position,
@@ -477,22 +480,25 @@ impl<'a> Forest<'a> {
         // two nodes, and what merges is the neck; see `docs/decisions/0125`.
         for column in columns {
             let radius_mm = profiles.of(column.group).pillar_radius_mm();
+            let headed = has_head(column.contact, column.neck);
             let contact = forest.nodes.len();
             forest.nodes.push(TreeNode {
                 position: column.contact,
                 radius_mm,
-                parent: Some(contact + 1),
+                parent: headed.then_some(contact + 1),
                 point: Some(column.point),
                 head: Some(column.group),
             });
-            let node = forest.nodes.len();
-            forest.nodes.push(TreeNode {
-                position: column.neck,
-                radius_mm,
-                parent: None,
-                point: None,
-                head: None,
-            });
+            if headed {
+                forest.nodes.push(TreeNode {
+                    position: column.neck,
+                    radius_mm,
+                    parent: None,
+                    point: None,
+                    head: None,
+                });
+            }
+            let node = forest.nodes.len() - 1;
             forest.push_front(Front {
                 position: column.neck,
                 radius_mm,
@@ -771,28 +777,93 @@ impl<'a> Forest<'a> {
             .iter()
             .filter(|front| front.alive)
             .flat_map(|front| {
-                let profile = self.profiles.of(front.group);
-                // Down, then aside; then both again onto a steeper face before the tips go
-                // to a strut each: a support cured onto a slope beats none under a contact.
-                for steepest_deg in [MAX_LANDING_SLOPE_DEG, LAST_RESORT_SLOPE_DEG] {
-                    let (at, radius_mm, tips) = (front.position, front.radius_mm, front.tips);
-                    let down = landing_within(placed, at, radius_mm, tips, profile, steepest_deg);
-                    if let Some(landing) = down {
-                        return vec![self.cut(front, &children, landing)];
+                let trees = self.stand(front, &children, placed);
+                match &trees[..] {
+                    [tree] if tree.landing().on_model => {
+                        self.small_apart(front, &children, placed).unwrap_or(trees)
                     }
-                    if let Some((knee, landing)) = escape(front, placed, profile, steepest_deg) {
-                        let mut tree = self.cut(front, &children, landing);
-                        tree.stand_on_knee(knee, front.radius_mm);
-                        return vec![tree];
-                    }
+                    _ => trees,
                 }
-                self.bridges(front, &children, placed)
             })
             .chain(
                 self.landed
                     .iter()
                     .map(|(front, landing)| self.cut(&self.fronts[*front], &children, *landing)),
             )
+            .collect()
+    }
+
+    /// What stands under `front`: down, then aside; then both again onto a steeper face
+    /// before the tips go to a strut each, since a support cured onto a slope beats none
+    /// under a contact.
+    fn stand(&self, front: &Front, children: &[Vec<usize>], placed: &Placed) -> Vec<SupportTree> {
+        let profile = self.profiles.of(front.group);
+        for steepest_deg in [MAX_LANDING_SLOPE_DEG, LAST_RESORT_SLOPE_DEG] {
+            let (at, radius_mm, tips) = (front.position, front.radius_mm, front.tips);
+            if let Some(landing) =
+                landing_within(placed, at, radius_mm, tips, profile, steepest_deg)
+            {
+                return vec![self.cut(front, children, landing)];
+            }
+            if let Some((knee, landing)) = escape(front, placed, profile, steepest_deg) {
+                let mut tree = self.cut(front, children, landing);
+                tree.stand_on_knee(knee, front.radius_mm);
+                return vec![tree];
+            }
+        }
+        self.bridges(front, children, placed)
+    }
+
+    /// The tips under a front that stands on the model, each as a small pillar of its own
+    /// from its own neck, or `None` unless every one of them is: a joint between two
+    /// faces is a full support to cut away where two thin struts snap off.
+    fn small_apart(
+        &self,
+        front: &Front,
+        children: &[Vec<usize>],
+        placed: &Placed,
+    ) -> Option<Vec<SupportTree>> {
+        if front.tips < 2 {
+            return None;
+        }
+        let mut under_it = vec![front.node];
+        let mut index = 0;
+        while index < under_it.len() {
+            under_it.extend(children[under_it[index]].iter().copied());
+            index += 1;
+        }
+        under_it
+            .into_iter()
+            .filter(|node| self.nodes[*node].is_leaf())
+            .map(|tip| {
+                let group = self.nodes[tip].head.unwrap_or(front.group);
+                // A neck carries its tip alone; a parent carrying more is a joint, and
+                // the tip under it has no head.
+                let node = self.nodes[tip]
+                    .parent
+                    .filter(|parent| children[*parent].len() == 1)
+                    .unwrap_or(tip);
+                let alone = Front {
+                    position: self.nodes[node].position,
+                    radius_mm: self.nodes[node].radius_mm,
+                    tips: 1,
+                    group,
+                    node,
+                    alive: true,
+                };
+                let small = |trees: Vec<SupportTree>| match &trees[..] {
+                    [tree]
+                        if tree.landing().on_model && is_small(tree, self.profiles.of(group)) =>
+                    {
+                        Some(tree.clone())
+                    }
+                    _ => None,
+                };
+                // Where the pillar's width finds no room, the thin strut may still fit
+                // straight down from the contact.
+                small(self.stand(&alone, children, placed))
+                    .or_else(|| small(self.bridges(&alone, children, placed)))
+            })
             .collect()
     }
 
@@ -1315,6 +1386,32 @@ mod tests {
     }
 
     #[test]
+    fn a_small_pillar_stays_on_the_part_when_the_support_beside_it_is_further() {
+        // As above, but over a post whose top is 2 mm under the pillar's neck, while the
+        // column beside it is over 7 mm away at the steepest lean.
+        let block = box_mesh(Vec3::new(8.5, 4.5, 0.0), Vec3::new(9.5, 5.5, 16.0));
+        let table = [profile(), slimmer()];
+        let points = [
+            SupportPoint::new(Vec3::new(9.0, 5.0, 20.0)),
+            SupportPoint::new(Vec3::new(14.5, 5.0, 20.0)).in_group(1),
+        ];
+        let bvh = Bvh::build(&block);
+        let placed = Placed::new(&block, &bvh, Transform::default());
+        let profiles = Profiles::new(&table).expect("two groups");
+        let forest = grow(
+            &crate::columns(&points, &placed, profiles),
+            &placed,
+            profiles,
+        );
+
+        let landing = forest[0].landing();
+        assert!(
+            landing.on_model && !landing.on_support,
+            "it stands on the post, got {landing:?}"
+        );
+    }
+
+    #[test]
     fn a_small_pillar_never_stands_on_another_that_has_moved_away() {
         // The block and the two supports of the test above, and a third group whose small
         // pillar is thinner still, beside the first: its nearest carrier would be the
@@ -1362,6 +1459,55 @@ mod tests {
         assert!(
             (lean_per_drop(&narrow) - 30.0_f32.to_radians().tan()).abs() < 1e-6,
             "a profile that asks for less keeps what it asked for"
+        );
+    }
+
+    #[test]
+    fn two_tips_a_small_pillar_reaches_from_the_model_stand_apart_rather_than_merge() {
+        // Two contacts a millimetre apart, 6 mm over a shelf: within a small pillar's
+        // 10 mm, so each is a thin strut of its own rather than one full support.
+        let shelf = box_mesh(Vec3::ZERO, Vec3::splat(10.0));
+        let contacts = [Vec3::new(4.5, 5.0, 16.0), Vec3::new(5.5, 5.0, 16.0)];
+        let fixture = profile();
+        let forest = forest_of(&contacts, &shelf, Profiles::single(&fixture));
+
+        assert_eq!(forest.len(), 2, "each tip stands alone");
+        for tree in &forest {
+            assert_eq!(tree.tip_count(), 1);
+            assert!(
+                tree.landing().on_model,
+                "on the shelf, got {:?}",
+                tree.landing()
+            );
+            assert!(
+                crate::mesher::is_small(tree, &fixture),
+                "and is a small pillar"
+            );
+        }
+
+        let mut far = fixture.clone();
+        far.small_pillar.enabled = false;
+        let merged = forest_of(&contacts, &shelf, Profiles::single(&far));
+        assert_eq!(merged.len(), 1, "without small pillars the two still merge");
+    }
+
+    #[test]
+    fn a_tip_over_a_thin_bar_is_run_onto_the_bar_rather_than_through_it() {
+        let model = crate::tests::under_a_gap_over_a_bar();
+        let forest = forest_of(
+            &[Vec3::new(0.0, 0.0, 10.5)],
+            &model,
+            Profiles::single(&profile()),
+        );
+
+        assert_eq!(forest.len(), 1, "the contact is held, not left bare");
+        let tree = &forest[0];
+        assert!(tree.root().is_leaf(), "one strut, from the contact itself");
+        let landing = tree.landing();
+        assert!(
+            landing.on_model && (landing.base.z - 10.0).abs() < 1e-3,
+            "it comes down on the bar's top, half a millimetre under it, got {}",
+            landing.base
         );
     }
 

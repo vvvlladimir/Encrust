@@ -3,7 +3,7 @@ use printer_profiles::SupportProfile;
 
 use crate::Landing;
 use crate::clear::{Beam, clear};
-use crate::column::{foot_clear, landing, neck_of, swept_bottom_z};
+use crate::column::{foot_clear, has_head, landing, neck_of, swept_bottom_z};
 use crate::pick::Part;
 use crate::placed::Placed;
 use crate::tree::SupportTree;
@@ -123,6 +123,10 @@ pub fn tip_carried(
     let mut carried = tree.clone();
     carried.move_node(tip, inverse.transform_point3(contact));
     if let Some(parent) = node.parent {
+        // A head with no room under it would run through the model.
+        if !has_head(contact, neck) {
+            return None;
+        }
         carried.move_node(parent, inverse.transform_point3(neck));
         let alone = parent == tree.root_index() && tree.tip_count() == 1;
         if alone && let Some(under) = landing(placed, neck, tree.root().radius_mm, 1, profile) {

@@ -39,8 +39,11 @@ shaped like the rest. Only the tip may meet the model: the whole head, contact t
 width with `clearance_mm` round it, is swept once it has left its own face's plane, and a
 head that meets the model there turns — straight down, then 15, 30 and 45 degrees off its
 direction in eight ways — to the first that is clear, with its clearance and then bare,
-and keeps its direction where none is (ADR 0328). Everything below is measured from the
-neck, not from the contact.
+and keeps its direction where none is (ADR 0328) — unless the model under the contact is
+nearer than a head is long, where that head would run through it and stand its trunk
+underneath: such a contact has no head, and `grow` runs it as one strut from the contact
+itself, straight onto what is under it (ADR 0331). Everything below is measured from the neck, not
+from the contact.
 
 A ray runs down from `SURFACE_EPSILON_MM` (1 µm) below the neck — starting at the surface
 itself would report the contact's own face at zero distance.
@@ -79,7 +82,8 @@ model, ending on the sweep's flat disc of the contact's width (ADR 0243). The di
 laid along the axis onto the face the tip sits on, so a head that leans off that face's
 normal still meets it with the whole disc, an ellipse as wide as the contact across the
 lean; past 75 degrees it stays square to the axis. The tip a trunk standing on the part
-ends in is laid on the face it lands on the same way (ADR 0330). `sphere` is a
+ends in is laid on the face it lands on the same way (ADR 0330), and so are both plain
+ends of a small pillar, whatever the tip shape (ADR 0331). `sphere` is a
 ball with its upper pole `bite_mm` in — more material inside the model, so a firmer hold;
 its rings run past the contact and rings never climb, so the neck is shorter than
 `top.length_mm`.
@@ -400,8 +404,10 @@ width to a base of `min(cap, max(pillar, height / 15 / 2, carried))`, where `car
 `(r_a^k + r_b^k)^(1/k)` for `trunk_exponent` `k` over the tips it holds: 2 conserves
 cross-section, 3 volume, the presets ship 2.5 (ADR 0242). A trunk is a front again; a candidate whose fronts have merged is dropped when popped.
 Fronts sit in a grid of the merge distance, so a new one asks nine buckets. Survivors drop
-a vertical trunk to their landing. `branching.enabled = false` gives back step 7a's column
-exactly.
+a vertical trunk to their landing. A merged front that stands on the model is split again
+where every tip under it stands on the model as a small pillar of its own — from its neck,
+or straight from its contact — since two thin struts snap off where a joint between two
+faces has to be cut away (ADR 0331). `branching.enabled = false` gives back step 7a's column exactly.
 
 **Keeping out of the model.** Every body — each strut of a merge, the trunk under every
 landing — is swept as a beam of its own radius plus `clearance_mm` and tested with nine
@@ -465,9 +471,9 @@ Such a front is a tree whose `Landing` is that point with `on_support` beside `o
 so it has no trunk, no foot, no pad and no brace, and the mesher ends it plain inside the
 carrier. A tree built as a small pillar carries only as wide as that, and its trunk
 carries nothing, since it may yet be moved from under what stood on it; once every group
-is grown each one with a neck is itself run into a wider carrier in its reach and built
-that thin all the way up, so a small pillar stands on a support and never the other way
-round (ADR 0251). `grow` hands the forest back in group order.
+is grown each one with a neck is itself run into a wider carrier in its reach, by a strut
+no longer than its own drop to the part, and built that thin all the way up, so a small
+pillar stands on a support and never the other way round (ADR 0251, 0331). `grow` hands the forest back in group order.
 
 Any group can be dropped but the last, and the one after the first takes its place and the
 raft with it. A secondary click on a group's row builds the whole group to another saved

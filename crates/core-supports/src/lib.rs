@@ -162,6 +162,19 @@ mod tests {
     }
 
     /// An axis-aligned box spanning `min`..`max`, twelve triangles wound outwards.
+    /// A slab with its underside at z = 10.5, half a millimetre over a bar 9..10 thick
+    /// that hangs in the air.
+    pub fn under_a_gap_over_a_bar() -> Mesh {
+        let mut model = box_mesh(Vec3::new(-5.0, -5.0, 9.0), Vec3::new(5.0, 5.0, 10.0));
+        let over = box_mesh(Vec3::new(-5.0, -5.0, 10.5), Vec3::new(5.0, 5.0, 12.0));
+        let offset = model.vertices.len() as u32;
+        model.vertices.extend_from_slice(&over.vertices);
+        model
+            .faces
+            .extend(over.faces.iter().map(|face| face.map(|at| at + offset)));
+        model
+    }
+
     pub fn box_mesh(min: Vec3, max: Vec3) -> Mesh {
         let vertices = vec![
             Vec3::new(min.x, min.y, min.z),

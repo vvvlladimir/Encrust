@@ -356,7 +356,8 @@ whole-surface fill is Cmd-Shift-click.
   bites into the part (nought touches the surface only), and clearance.
 - **Body:** diameter, overhang angle, branch angle, branching on or off, merge distance,
   maximum length, standing on the model on or off.
-- **Small pillar:** a separate thin shape for short supports.
+- **Small pillar:** a separate thin shape for short supports from the part to the part.
+  Tips that could each stand as one are not merged into a full support on the part.
 - **Base:** the pad's shape (round, cube, prism or tapered), its size, flare and wall slope.
 - **Raft:** **Skates** (a saucer-shaped slab), **Grid** (rim and bars) or **Connected** (a
   pad under each foot, joined by strips), drawn to the model's outline (hull) or a
