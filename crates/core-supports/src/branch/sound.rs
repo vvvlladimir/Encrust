@@ -9,7 +9,7 @@ use crate::mesher::{Fault, faults, is_small, sound};
 use crate::placed::Placed;
 use crate::tree::SupportTree;
 use core_geometry::{FastMap, Vec2};
-use std::collections::VecDeque;
+use rayon::prelude::*;
 
 /// Runs every small-pillar tree on the model into a wider support in reach, no further off than
 /// the part under it, and builds it thin all the way up; asked last of all groups (ADR 0251).
@@ -19,11 +19,11 @@ pub(super) fn stand_small_pillars_on_supports(
     placed: &Placed,
     profiles: Profiles,
 ) {
-    for tree in forest.iter_mut() {
+    forest.par_iter_mut().for_each(|tree| {
         let profile = profiles.of(tree.group());
         let root = *tree.root();
         if !profile.branching.enabled || root.is_leaf() || !is_small(tree, profile) {
-            continue;
+            return;
         }
         let radius_mm = profile.small_pillar.radius_mm().min(root.radius_mm);
         // A thin strut longer than the drop to the part sways and marks no less.
@@ -61,7 +61,7 @@ pub(super) fn stand_small_pillars_on_supports(
                 *tree = moved;
             }
         }
-    }
+    });
 }
 
 /// `trees` with every tree whose bodies meet the model past their tips mended: faulty heads stand
@@ -82,37 +82,19 @@ pub(super) fn only_sound(
         profiles,
         carriers,
     };
+    // Rounds in the order a queue would take them: each tree of a round is mended on its own,
+    // so a round runs at once and what it keeps and regrows is joined in order.
     let mut kept = Vec::with_capacity(trees.len());
-    let mut pending: VecDeque<(SupportTree, u32)> =
-        trees.into_iter().map(|tree| (tree, 0)).collect();
-    while let Some((tree, regrown)) = pending.pop_front() {
-        let Some(fault) = faults(&tree, profiles, placed) else {
-            kept.push(tree);
-            continue;
-        };
-        let points: Vec<usize> = tree.points().collect();
-        if points.len() < 2 {
-            continue;
-        }
-        if regrown >= MAX_REGROWS {
-            kept.extend(points.into_iter().flat_map(|point| mender.alone(point)));
-            continue;
-        }
-        let regrow = match fault {
-            Fault::Trunk => halves(&tree),
-            Fault::Heads(heads) => {
-                kept.extend(heads.iter().flat_map(|point| mender.alone(*point)));
-                vec![
-                    points
-                        .into_iter()
-                        .filter(|point| !heads.contains(point))
-                        .collect(),
-                ]
-            }
-        };
-        for group in regrow {
-            let grown = mender.grow(&group);
-            pending.extend(grown.into_iter().map(|tree| (tree, regrown + 1)));
+    let mut round: Vec<SupportTree> = trees;
+    for regrown in 0..=MAX_REGROWS {
+        let mended: Vec<(Vec<SupportTree>, Vec<SupportTree>)> = round
+            .into_par_iter()
+            .map(|tree| mender.mend(tree, regrown))
+            .collect();
+        round = Vec::new();
+        for (sound, again) in mended {
+            kept.extend(sound);
+            round.extend(again);
         }
     }
     kept
@@ -127,6 +109,35 @@ struct Mender<'a> {
 }
 
 impl Mender<'_> {
+    /// `tree` as it stands if sound, else what stands in its place and what is to be checked
+    /// again, `regrown` times grown already.
+    fn mend(&self, tree: SupportTree, regrown: u32) -> (Vec<SupportTree>, Vec<SupportTree>) {
+        let Some(fault) = faults(&tree, self.profiles, self.placed) else {
+            return (vec![tree], Vec::new());
+        };
+        let points: Vec<usize> = tree.points().collect();
+        if points.len() < 2 {
+            return (Vec::new(), Vec::new());
+        }
+        if regrown >= MAX_REGROWS {
+            let alone = points.into_iter().flat_map(|point| self.alone(point));
+            return (alone.collect(), Vec::new());
+        }
+        let (sound, regrow) = match fault {
+            Fault::Trunk => (Vec::new(), halves(&tree)),
+            Fault::Heads(heads) => {
+                let alone = heads.iter().flat_map(|point| self.alone(*point)).collect();
+                let rest = points
+                    .into_iter()
+                    .filter(|point| !heads.contains(point))
+                    .collect();
+                (alone, vec![rest])
+            }
+        };
+        let again = regrow.iter().flat_map(|group| self.grow(group)).collect();
+        (sound, again)
+    }
+
     /// The trees the columns of `points` grow into together.
     fn grow(&self, points: &[usize]) -> Vec<SupportTree> {
         let columns: Vec<Column> = points

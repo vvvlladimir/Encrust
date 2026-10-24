@@ -3,6 +3,7 @@ use core_geometry::{
     raycast_placed_within,
 };
 
+use crate::clearances::{Against, Clearances};
 use crate::region::Blocked;
 
 /// The model a support lives with: mesh, hierarchy, plate placement and the patch forbidden to
@@ -15,6 +16,8 @@ pub struct Placed<'a> {
     pub transform: Transform,
     /// Where supports are forbidden, or `None` when nothing is painted.
     pub blocked: Option<&'a Blocked>,
+    /// Where the answers of earlier clearance sweeps are kept, if anywhere.
+    pub(crate) clearances: Option<&'a Clearances>,
     /// `transform` as a matrix and its inverse, or `None` where it flattens the model.
     matrices: Option<(Mat4, Mat4)>,
 }
@@ -26,6 +29,7 @@ impl<'a> Placed<'a> {
             bvh,
             transform,
             blocked: None,
+            clearances: None,
             matrices: transform
                 .inverse_matrix()
                 .map(|inverse| (transform.to_matrix(), inverse)),
@@ -42,6 +46,26 @@ impl<'a> Placed<'a> {
     pub fn raycast_within(&self, ray: &Ray, max_mm: Scalar) -> Option<PlacedHit> {
         let (matrix, inverse) = self.matrices?;
         raycast_placed_within(self.model, self.bvh, matrix, inverse, ray, max_mm)
+    }
+
+    /// The same model answering clearance sweeps from `clearances`, and keeping new ones there.
+    #[must_use]
+    pub fn remembering(self, clearances: &'a Clearances) -> Self {
+        Self {
+            clearances: Some(clearances),
+            ..self
+        }
+    }
+
+    /// What a clearance answer about this model holds for.
+    pub(crate) fn against(&self) -> Against {
+        Against {
+            surface: std::ptr::from_ref(self.model) as usize,
+            faces: self.model.faces.len(),
+            matrix: self.matrices.map_or([0; 16], |(matrix, _)| {
+                matrix.to_cols_array().map(f32::to_bits)
+            }),
+        }
     }
 
     /// The same model with `blocked` forbidden to supports.

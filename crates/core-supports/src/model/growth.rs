@@ -1,5 +1,9 @@
-use super::ModelSupports;
-use crate::{Blocked, Placed, Profiles, SupportPoint, SupportTree, columns, grow};
+use std::sync::Arc;
+
+use super::{Built, ModelSupports};
+use crate::{
+    Blocked, Clearances, Placed, Profiles, SupportPoint, SupportTree, columns, grow, mesh_groups,
+};
 use core_geometry::{Bvh, Mesh, Region, Transform};
 use printer_profiles::SupportProfile;
 
@@ -12,17 +16,26 @@ pub struct Growth {
     pub(super) transform: Transform,
     pub(super) table: Vec<SupportProfile>,
     pub(super) revision: u64,
+    pub(super) clearances: Arc<Clearances>,
+    /// The frozen trees, in the model's own space, meshed beside the grown ones.
+    pub(super) frozen: Vec<SupportTree>,
 }
 
 impl Growth {
     /// Grows the trees against `surface`, whose hierarchy is `bvh`, keeping out of the
-    /// patch blocked on `model`.
+    /// patch blocked on `model`, and meshes them with the frozen ones off the drawing thread.
     pub fn grow(self, model: &Mesh, surface: &Mesh, bvh: &Bvh) -> Grown {
         let keep_out = Blocked::new(model, &self.blocked, self.transform);
-        let placed = Placed::new(surface, bvh, self.transform).blocking(keep_out.as_ref());
-        let trees = Profiles::new(&self.table).map_or_else(Vec::new, |profiles| {
-            grow(&columns(&self.points, &placed, profiles), &placed, profiles)
-        });
+        let placed = Placed::new(surface, bvh, self.transform)
+            .blocking(keep_out.as_ref())
+            .remembering(&self.clearances);
+        let (trees, meshes) =
+            Profiles::new(&self.table).map_or_else(Default::default, |profiles| {
+                let trees = grow(&columns(&self.points, &placed, profiles), &placed, profiles);
+                let all = with_frozen(&trees, &self.frozen, self.transform);
+                let meshes = mesh_groups(&all, &placed, profiles);
+                (trees, meshes.into_iter().map(Arc::new).collect())
+            });
         Grown {
             forest: Forest {
                 trees,
@@ -31,8 +44,22 @@ impl Growth {
                 blocked: self.blocked,
             },
             revision: self.revision,
+            frozen: self.frozen,
+            meshes,
         }
     }
+}
+
+/// `grown` followed by `frozen` stood on the plate at `transform`: every tree a model meshes.
+pub(super) fn with_frozen(
+    grown: &[SupportTree],
+    frozen: &[SupportTree],
+    transform: Transform,
+) -> Vec<SupportTree> {
+    let matrix = transform.to_matrix();
+    let mut trees = grown.to_vec();
+    trees.extend(frozen.iter().map(|tree| tree.moved(matrix)));
+    trees
 }
 
 /// The trees a [`Growth`] grew, to be handed back to the model it was taken from.
@@ -40,6 +67,9 @@ impl Growth {
 pub struct Grown {
     pub(super) forest: Forest,
     pub(super) revision: u64,
+    /// The frozen trees `meshes` were built with, which still hold if the model's still match.
+    pub(super) frozen: Vec<SupportTree>,
+    pub(super) meshes: Vec<Arc<Mesh>>,
 }
 
 /// The trees grown from the points, in plate coordinates, and what they were grown against.
@@ -72,6 +102,8 @@ impl ModelSupports {
             transform,
             table: table.to_vec(),
             revision: self.revision,
+            clearances: Arc::clone(&self.clearances),
+            frozen: self.frozen.clone(),
         })
     }
 
@@ -86,13 +118,31 @@ impl ModelSupports {
     }
 
     /// Takes on trees grown from a [`Growth`], and answers whether they were still wanted:
-    /// nothing they grow from has changed since it was taken.
+    /// nothing they grow from has changed since it was taken. Their meshes hold unless the
+    /// frozen trees have been edited meanwhile.
     pub fn take_grown(&mut self, grown: Grown) -> bool {
         if grown.revision != self.revision {
             return false;
         }
-        self.forest = Some(grown.forest);
-        self.built = None;
+        let Grown {
+            forest,
+            frozen,
+            meshes,
+            ..
+        } = grown;
+        self.built = (frozen == self.frozen).then(|| {
+            self.drawn.clone_from(&meshes);
+            Built {
+                trees: with_frozen(&forest.trees, &frozen, forest.transform),
+                grown: forest.trees.len(),
+                meshes,
+                transform: forest.transform,
+                table: forest.table.clone(),
+                painted: self.painted.clone(),
+                blocked: forest.blocked.clone(),
+            }
+        });
+        self.forest = Some(forest);
         true
     }
 }

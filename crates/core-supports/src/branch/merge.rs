@@ -1,6 +1,7 @@
 use super::carriers::{THICKER_BY_MM, meeting_on};
 use super::ground::escape;
 use super::harvest::stands;
+use super::speculate::Judged;
 use super::{Forest, Front, SAME_PLACE_MM};
 use crate::Landing;
 use crate::clear::{Beam, clear};
@@ -8,6 +9,7 @@ use crate::column::{MAX_LANDING_SLOPE_DEG, PLATE_Z_MM, landing, stands_clear};
 use crate::placed::Placed;
 use crate::tree::TreeNode;
 use core_geometry::{Scalar, Vec2, Vec3};
+use rayon::prelude::*;
 use std::cmp::Ordering;
 use std::collections::BinaryHeap;
 
@@ -84,6 +86,7 @@ impl Forest<'_> {
     /// Merges what can be merged, highest meeting point first.
     pub(super) fn merge(&mut self, placed: &Placed) {
         let mut heap = BinaryHeap::new();
+        let mut judged = Judged::default();
         for index in 0..self.fronts.len() {
             for other in self.neighbours(index) {
                 if other < index {
@@ -106,7 +109,7 @@ impl Forest<'_> {
             if !self.fronts[candidate.a].alive || !self.fronts[candidate.b].alive {
                 continue;
             }
-            if !self.accepts(&candidate, placed) {
+            if !self.accepted(&candidate, &mut heap, &mut judged, placed) {
                 let lower = candidate.drop_mm + DROP_STEP_MM;
                 self.offer(&mut heap, candidate.a, candidate.b, lower);
                 continue;
@@ -332,21 +335,14 @@ impl Forest<'_> {
     /// Bends every front the model leaves no room under onto a knee, and carries on from
     /// there. Answers whether any of them moved.
     pub(super) fn bend_blocked(&mut self, placed: &Placed) -> bool {
-        let mut bent = false;
-        for index in 0..self.fronts.len() {
+        // Where each front bends is its own question, so they are asked at once.
+        let knees: Vec<(usize, Vec3)> = (0..self.fronts.len())
+            .into_par_iter()
+            .filter_map(|index| Some((index, self.knee(index, placed)?)))
+            .collect();
+        let bent = !knees.is_empty();
+        for (index, knee) in knees {
             let front = self.fronts[index];
-            // A contact with no head stands as a small pillar onto the model under it.
-            if !front.alive || self.nodes[front.node].is_leaf() {
-                continue;
-            }
-            let profile = self.profile(index);
-            if landing(placed, front.position, front.radius_mm, front.tips, profile).is_some() {
-                continue;
-            }
-            let Some((knee, _)) = escape(&front, placed, profile, MAX_LANDING_SLOPE_DEG) else {
-                continue;
-            };
-
             let node = self.nodes.len();
             self.nodes.push(TreeNode {
                 position: knee,
@@ -363,8 +359,21 @@ impl Forest<'_> {
                 alive: true,
                 ..front
             });
-            bent = true;
         }
         bent
+    }
+
+    /// Where front `index` bends to with no room under it, or `None` if it has room or nowhere.
+    fn knee(&self, index: usize, placed: &Placed) -> Option<Vec3> {
+        let front = self.fronts[index];
+        // A contact with no head stands as a small pillar onto the model under it.
+        if !front.alive || self.nodes[front.node].is_leaf() {
+            return None;
+        }
+        let profile = self.profile(index);
+        if landing(placed, front.position, front.radius_mm, front.tips, profile).is_some() {
+            return None;
+        }
+        escape(&front, placed, profile, MAX_LANDING_SLOPE_DEG).map(|(knee, _)| knee)
     }
 }

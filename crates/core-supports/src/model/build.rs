@@ -1,5 +1,5 @@
 use super::ModelSupports;
-use super::growth::Forest;
+use super::growth::{Forest, with_frozen};
 use crate::{Placed, Profiles, SupportTree, columns, grow, mesh_groups};
 use core_geometry::{Bvh, Mesh, Region, Transform};
 use printer_profiles::SupportProfile;
@@ -56,17 +56,19 @@ impl ModelSupports {
         };
         let matrix = transform.to_matrix();
         let standing = grown.len();
-        let mut trees: Vec<SupportTree> = grown.iter().map(|tree| tree.moved(matrix)).collect();
+        let stood: Vec<SupportTree> = grown.iter().map(|tree| tree.moved(matrix)).collect();
+        let trees = with_frozen(&stood, &self.frozen, transform);
         self.forest = Some(Forest {
-            trees: trees.clone(),
+            trees: stood,
             transform,
             table: table.to_vec(),
             blocked: self.blocked.clone(),
         });
-        trees.extend(self.frozen.iter().map(|tree| tree.moved(matrix)));
 
         let keep_out = self.keep_out(model, transform);
-        let placed = Placed::new(surface, bvh, transform).blocking(keep_out.as_ref());
+        let placed = Placed::new(surface, bvh, transform)
+            .blocking(keep_out.as_ref())
+            .remembering(&self.clearances);
         let meshes: Vec<Arc<Mesh>> = mesh_groups(&trees, &placed, profiles)
             .into_iter()
             .map(Arc::new)
@@ -128,8 +130,10 @@ impl ModelSupports {
         }
 
         let keep_out = self.keep_out(model, transform);
-        let placed = Placed::new(surface, bvh, transform).blocking(keep_out.as_ref());
-        let mut trees = match &self.forest {
+        let placed = Placed::new(surface, bvh, transform)
+            .blocking(keep_out.as_ref())
+            .remembering(&self.clearances);
+        let grown_trees = match &self.forest {
             Some(forest) if forest.grown_for(transform, table, &self.blocked) => {
                 forest.trees.clone()
             }
@@ -144,12 +148,10 @@ impl ModelSupports {
                 trees
             }
         };
-        let grown = trees.len();
-
+        let grown = grown_trees.len();
         // A frozen tree is kept in the model's own space, so it rides the placement the
         // same way a point does; nothing else is asked of it.
-        let matrix = transform.to_matrix();
-        trees.extend(self.frozen.iter().map(|tree| tree.moved(matrix)));
+        let trees = with_frozen(&grown_trees, &self.frozen, transform);
 
         let meshes: Vec<Arc<Mesh>> = mesh_groups(&trees, &placed, profiles)
             .into_iter()

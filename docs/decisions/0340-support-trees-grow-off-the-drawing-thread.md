@@ -1,6 +1,6 @@
 # 0340. Grow support trees off the drawing thread, and look round a pad only as far as it reaches
 
-- **Status:** Accepted
+- **Status:** Accepted; meshing in the frame is superseded by 0351
 - **Date:** 2026-10-24
 
 ## Context

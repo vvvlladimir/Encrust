@@ -3,7 +3,7 @@ use std::sync::atomic::{AtomicU64, Ordering};
 
 use core_geometry::{Mesh, Region, Scalar, Transform, Vec3};
 
-use crate::{SupportPoint, SupportTree};
+use crate::{Clearances, SupportPoint, SupportTree};
 
 mod build;
 mod frozen;
@@ -51,6 +51,9 @@ pub struct ModelSupports {
     /// What the trees grow from as it last changed: the points, the blocked patch or the
     /// surface. Trees grown elsewhere for another revision are stale.
     revision: u64,
+    /// What the model's clearance sweeps answered, shared with every growth of it so one
+    /// edit re-asks only the beams it moved.
+    clearances: Arc<Clearances>,
 }
 
 impl ModelSupports {
@@ -74,6 +77,7 @@ impl ModelSupports {
     /// Drops what was built, so the next refresh builds against a surface that changed
     /// under the supports: a model hollowed, or solid again.
     pub fn surface_changed(&mut self) {
+        self.clearances = Arc::default();
         self.points_changed();
     }
 

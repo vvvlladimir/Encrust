@@ -58,7 +58,11 @@ impl Beam {
 /// Whether `beam` reaches its far end without meeting `model`: a ring of rays down its surface
 /// (ADR 0077) and a row of balls down its axis kept inside its ends (ADR 0341).
 pub(crate) fn clear(placed: &Placed, beam: &Beam) -> bool {
-    rays_clear(placed, beam) && balls_clear(placed, beam)
+    let sweep = || rays_clear(placed, beam) && balls_clear(placed, beam);
+    match placed.clearances {
+        Some(kept) => kept.answer(placed, beam, sweep),
+        None => sweep(),
+    }
 }
 
 /// Whether no face of the model comes inside a row of balls filling `beam`, each as wide
@@ -102,7 +106,7 @@ fn rays_clear(placed: &Placed, beam: &Beam) -> bool {
 
     let direction = offset / length;
     let (across, along) = direction.any_orthonormal_pair();
-    let ring = (0..BEAM_RAYS).map(|step| {
+    let mut ring = (0..BEAM_RAYS).map(|step| {
         let angle = std::f32::consts::TAU * step as Scalar / BEAM_RAYS as Scalar;
         let out = across * angle.cos() + along * angle.sin();
         (
@@ -111,14 +115,14 @@ fn rays_clear(placed: &Placed, beam: &Beam) -> bool {
         )
     });
 
-    std::iter::once((beam.from, beam.to))
-        .chain(ring)
-        .all(|(from, to)| unobstructed(placed, from, to))
+    // Only the axis asks past its own end: whether the beam set off inside the solid.
+    unobstructed(placed, beam.from, beam.to, Scalar::INFINITY)
+        && ring.all(|(from, to)| unobstructed(placed, from, to, 0.0))
 }
 
-/// Whether the segment `from`..`to` crosses the model or starts inside it: a first hit on a back
-/// face means it set off in the solid, which a forward ray reports as clear air.
-fn unobstructed(placed: &Placed, from: Vec3, to: Vec3) -> bool {
+/// Whether the segment `from`..`to` crosses the model or, looking `past_mm` beyond its end,
+/// starts inside it: a first hit on a back face means it set off in the solid.
+fn unobstructed(placed: &Placed, from: Vec3, to: Vec3, past_mm: Scalar) -> bool {
     let offset = to - from;
     let length = offset.length();
     if length < MIN_BODY_MM {
@@ -130,7 +134,7 @@ fn unobstructed(placed: &Placed, from: Vec3, to: Vec3) -> bool {
     // The tolerance is what keeps a beam that ends exactly on a surface — which is how
     // one lands on the model — from reporting its own landing as an obstacle.
     placed
-        .raycast(&ray)
+        .raycast_within(&ray, length + MIN_BODY_MM + past_mm)
         .is_none_or(|hit| hit.distance + MIN_BODY_MM >= length && hit.normal.dot(direction) <= 0.0)
 }
 

@@ -42,7 +42,7 @@ diameter_mm = 1.0
 # cylinder, cone, prism or cube.
 shape = "cylinder"
 platform_diameter_mm = 6.0
-platform_thickness_mm = 0.25
+platform_thickness_mm = 0.5
 
 # How wide the flare between the pillar and the pad is where it meets the pad. It leaves
 # the pillar at the pillar's own width and rises as far as it widens.
@@ -83,10 +83,19 @@ slope_deg = 30.0
 # Struts tying tall trunks to each other, so that neither can sway on the peel.
 [bracing]
 enabled = true
-diameter_mm = 0.6
-max_spacing_mm = 8.0
-start_height_mm = 5.0
-rise_mm = 8.5
+diameter_mm = 0.9
+max_spacing_mm = 10.0
+start_height_mm = 1.0
+rise_mm = 10.0
+middle = "zigzag"
+
+[bracing.bottom]
+pattern = "zigzag"
+levels = 1
+
+[bracing.top]
+pattern = "cross"
+levels = 1
 
 # How closely automatic placement holds an island against the contact spacing: the least
 # island, mm² on the layer it begins on, of the second size and of the third, and the share

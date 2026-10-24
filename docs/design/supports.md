@@ -694,8 +694,9 @@ its hierarchy, its placement and this patch — travel together as `Placed`.
 
 ## In the window
 
-The trees are grown on a worker and meshed in the frame they land in; until then the
-supports drawn last stay, and slicing and the preview wait (ADR 0340).
+The trees are grown and meshed on a worker, against the clearance answers the model kept
+from its last growth; until they land the supports drawn last stay, and slicing and the
+preview wait (ADR 0340, 0351).
 Supports are drawn as a second mesh per object with an identity transform — they are
 already in plate coordinates — in a cooler, darker colour; a painted patch is drawn the
 same way, lifted 0.05 mm off the faces it covers, green for a fill and violet for a

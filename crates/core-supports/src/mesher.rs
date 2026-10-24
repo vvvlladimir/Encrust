@@ -1,6 +1,7 @@
 use crate::placed::Placed;
 use core_geometry::{Mesh, Scalar, Vec3};
 use printer_profiles::SupportProfile;
+use rayon::prelude::*;
 
 use crate::Landing;
 use crate::base::{braces, skate, toe_of};
@@ -108,15 +109,9 @@ pub(crate) fn is_small(tree: &SupportTree, profile: &SupportProfile) -> bool {
 /// fill unions; `placed` is kept clear of (ADR 0008, 0041, 0094, 0252, 0325).
 pub fn mesh_trees(trees: &[SupportTree], placed: &Placed, profiles: Profiles) -> Mesh {
     let trees = &propped(trees, placed, profiles);
-    let mut mesh = Mesh::default();
-    for tree in trees {
-        mesh_tree(
-            &mut Slots(std::slice::from_mut(&mut mesh)),
-            tree,
-            profiles,
-            placed,
-        );
-    }
+    let mut mesh = in_groups(trees, 1, profiles, placed)
+        .pop()
+        .unwrap_or_default();
     for (from, to, radius_mm, group) in braces(trees, placed, profiles) {
         sweep(&mut mesh, &brace(from, to, radius_mm, profiles.of(group)));
     }
@@ -128,10 +123,7 @@ pub fn mesh_trees(trees: &[SupportTree], placed: &Placed, profiles: Profiles) ->
 /// a strut goes with its heaviest head, a trunk and foot with the tree, a brace with its group.
 pub fn mesh_groups(trees: &[SupportTree], placed: &Placed, profiles: Profiles) -> Vec<Mesh> {
     let trees = &propped(trees, placed, profiles);
-    let mut meshes = vec![Mesh::default(); profiles.groups().count()];
-    for tree in trees {
-        mesh_tree(&mut Slots(&mut meshes), tree, profiles, placed);
-    }
+    let mut meshes = in_groups(trees, profiles.groups().count(), profiles, placed);
     for (from, to, radius_mm, group) in braces(trees, placed, profiles) {
         let slot = usize::from(group);
         let slot = if slot < meshes.len() { slot } else { 0 };
@@ -163,6 +155,37 @@ pub(crate) fn mesh_alone(tree: &SupportTree, profiles: Profiles, placed: &Placed
     );
     mesh
 }
+
+/// Every tree of `trees` meshed into `slots` meshes, a chunk of trees per thread, joined in
+/// order so the mesh is the one meshing them one by one gives.
+fn in_groups(
+    trees: &[SupportTree],
+    slots: usize,
+    profiles: Profiles,
+    placed: &Placed,
+) -> Vec<Mesh> {
+    let chunks: Vec<Vec<Mesh>> = trees
+        .par_chunks(TREES_PER_THREAD)
+        .map(|chunk| {
+            let mut meshes = vec![Mesh::default(); slots];
+            for tree in chunk {
+                mesh_tree(&mut Slots(&mut meshes), tree, profiles, placed);
+            }
+            meshes
+        })
+        .collect();
+    let mut meshes = vec![Mesh::default(); slots];
+    for chunk in chunks {
+        for (mesh, part) in meshes.iter_mut().zip(&chunk) {
+            append(mesh, part);
+        }
+    }
+    meshes
+}
+
+/// How many trees one thread meshes at a time: enough that joining the parts costs little
+/// beside meshing them.
+const TREES_PER_THREAD: usize = 32;
 
 /// The meshes a tree's bodies go into, one per group, or one for every group.
 struct Slots<'a>(&'a mut [Mesh]);

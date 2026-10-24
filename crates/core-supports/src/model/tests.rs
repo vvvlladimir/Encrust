@@ -97,6 +97,47 @@ fn trees_grown_elsewhere_are_built_without_growing_again() {
 }
 
 #[test]
+fn trees_grown_elsewhere_come_back_meshed() {
+    let mut supports = ModelSupports::default();
+    supports.add(Vec3::new(10.0, 10.0, 20.0), Transform::default(), 0);
+    let table = [profile()];
+    let growth = supports
+        .growth(Transform::default(), &table)
+        .expect("a new point has nothing grown for it");
+    let model = nothing();
+    let bvh = Bvh::build(&model);
+
+    assert!(supports.take_grown(growth.grow(&model, &model, &bvh)));
+    assert!(
+        supports.meshes().is_some(),
+        "the worker meshed them, so the drawing thread has nothing to build"
+    );
+}
+
+#[test]
+fn a_frozen_support_edited_while_the_others_grow_is_meshed_again() {
+    let mut supports = three_apart();
+    supports.freeze(tree_at(&supports, 0.0), Transform::default());
+    supports.add(Vec3::new(90.0, 0.0, 20.0), Transform::default(), 0);
+    let table = [profile()];
+    let growth = supports
+        .growth(Transform::default(), &table)
+        .expect("a new point has nothing grown for it");
+    supports
+        .frozen_mut(0)
+        .expect("the support frozen above")
+        .set_radius_mm(1.0);
+    let model = nothing();
+    let bvh = Bvh::build(&model);
+
+    assert!(supports.take_grown(growth.grow(&model, &model, &bvh)));
+    assert!(
+        supports.meshes().is_none(),
+        "the meshes show the frozen support as it was, so they are built again"
+    );
+}
+
+#[test]
 fn points_saved_before_their_trees_grew_are_grown_when_stood() {
     let mut supports = ModelSupports::restore(
         vec![SupportPoint::new(Vec3::new(10.0, 10.0, 20.0))],

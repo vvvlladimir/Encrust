@@ -197,7 +197,7 @@ Grouped by what the decision governs; the number is still the order it was taken
 | [0337](0337-a-shipped-preset-lives-only-in-its-file.md) | Keep a shipped support preset only in its file | Accepted |
 | [0338](0338-one-card-makes-the-supports.md) | Make the supports in one card, its click modes in its heading | Accepted |
 | [0339](0339-an-automatic-preset-is-retuned-never-added.md) | Retune a shipped automatic preset, never add one | Accepted |
-| [0340](0340-support-trees-grow-off-the-drawing-thread.md) | Grow support trees off the drawing thread, and look round a pad only as far as it reaches | Accepted |
+| [0340](0340-support-trees-grow-off-the-drawing-thread.md) | Grow support trees off the drawing thread, and look round a pad only as far as it reaches | Accepted; meshing in the frame is superseded by 0351 |
 | [0341](0341-a-support-is-checked-as-it-is-drawn.md) | Check a support as it is drawn, fill a beam with balls, and leave out what still meets the part | Accepted; standing a merged tree tip by tip is superseded by 0347 |
 | [0342](0342-a-support-searches-further-for-ground.md) | Search further for ground before a support is run onto the part or left out | Accepted |
 | [0343](0343-supports-are-drawn-round-and-filleted.md) | Draw supports with 24 sides and round joints, and fillet a pillar into its pad | Accepted |
@@ -303,6 +303,7 @@ Grouped by what the decision governs; the number is still the order it was taken
 | [0291](0291-the-window-orients-for-auto-at-the-models-own-lift.md) | The window orients for auto, at the model's own lift, on one plate raft | Accepted |
 | [0349](0349-a-proof-stands-supports-to-the-plan-the-window-builds-them-to.md) | A proof stands supports to the plan the window builds them to, automatic sizing included | Accepted |
 | [0350](0350-a-head-lying-over-is-turned-down-behind-a-pin.md) | Turn a head lying past 45 degrees back down, by at most 33, behind a pin | Accepted |
+| [0351](0351-a-growth-keeps-its-answers-runs-on-every-core-and-meshes-its-trees.md) | Keep a model's clearance answers, grow on every core, and mesh on the growth's worker | Accepted |
 | [0088](0088-the-plate-is-packed-as-a-bitmap.md) | The plate is packed as a bitmap into the corner, and the block centred | Accepted; supports left out of a footprint is superseded by 0256 |
 | [0256](0256-a-footprint-carries-the-supports-and-the-raft.md) | Pack a model with its supports and its raft | Accepted |
 | [0098](0098-a-plate-is-a-number-on-the-object.md) | A plate is a number on the object, not a scene of its own | Accepted |

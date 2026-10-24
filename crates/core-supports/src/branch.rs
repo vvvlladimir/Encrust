@@ -19,6 +19,7 @@ mod harvest;
 mod merge;
 mod small;
 mod sound;
+mod speculate;
 use carriers::{Carriers, THICKER_BY_MM};
 use small::tidy_small_pillars;
 use sound::{only_sound, stand_small_pillars_on_supports};

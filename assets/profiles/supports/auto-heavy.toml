@@ -42,11 +42,11 @@ diameter_mm = 1.2
 # cylinder, cone, prism or cube.
 shape = "cylinder"
 platform_diameter_mm = 6.5
-platform_thickness_mm = 0.325
+platform_thickness_mm = 0.5
 
 # How wide the flare between the pillar and the pad is where it meets the pad. It leaves
 # the pillar at the pillar's own width and rises as far as it widens.
-lower_diameter_mm = 2.0
+lower_diameter_mm = 3.0
 
 # The thin strut used where a support runs from one part of the model to another rather
 # than down to the plate. Both of its ends meet a surface.
@@ -87,6 +87,20 @@ diameter_mm = 0.6
 max_spacing_mm = 8.0
 start_height_mm = 5.0
 rise_mm = 8.5
+middle = "zigzag"
+
+[bracing.bottom]
+pattern = "zigzag"
+levels = 1
+
+[bracing.buttress]
+enabled = true
+pair_above_mm = 30.0
+one_above_mm = 60.0
+
+[bracing.top]
+pattern = "cross"
+levels = 1
 
 # How closely automatic placement holds an island against the contact spacing: the least
 # island, mm² on the layer it begins on, of the second size and of the third, and the share

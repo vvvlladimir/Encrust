@@ -7,7 +7,9 @@
 
 use core_geometry::{Bvh, Mesh, Scalar, Transform, Vec3, signed_volume};
 use core_slicer::{PlaneSliceEngine, SliceEngine, SliceSettings};
-use core_supports::{Placed, Profiles, SupportPoint, columns, generate_supports, grow, mesh_trees};
+use core_supports::{
+    Clearances, Placed, Profiles, SupportPoint, columns, generate_supports, grow, mesh_trees,
+};
 use criterion::{Criterion, criterion_group, criterion_main};
 use printer_profiles::SupportProfile;
 
@@ -148,5 +150,64 @@ fn branching(c: &mut Criterion) {
     });
 }
 
-criterion_group!(benches, branching);
+/// Nine balls of 128 thousand faces each, staggered in height so the trunks under the high
+/// ones pass the low ones: a crowded figurine's clearance work, at its density.
+fn cluster() -> Mesh {
+    let mut vertices = Vec::new();
+    let mut faces = Vec::new();
+    for index in 0..9_u32 {
+        let (column, row) = ((index % 3) as Scalar, (index / 3) as Scalar);
+        let lift = 6.0 + 7.0 * ((index * 5) % 9) as Scalar;
+        let part = ball(12.0, lift, 360, 180);
+        let offset = Vec3::new(column * 26.0, row * 26.0, 0.0);
+        let base = vertices.len() as u32;
+        vertices.extend(part.vertices.iter().map(|vertex| *vertex + offset));
+        faces.extend(
+            part.faces
+                .iter()
+                .map(|face| face.map(|corner| corner + base)),
+        );
+    }
+    Mesh::new(vertices, faces)
+}
+
+/// What a click in the window grows against, and whether one tip added costs a whole forest
+/// again, on [`cluster`].
+fn dense(c: &mut Criterion) {
+    let profile = SupportProfile::shipped("medium").expect("the medium preset ships");
+    let model = cluster();
+    let bvh = Bvh::build(&model);
+    let tips = tips_under(&model, &bvh, &profile);
+    let placed = Placed::new(&model, &bvh, Transform::default());
+    let profiles = Profiles::single(&profile);
+    let mut added = tips.clone();
+    added.push(*tips.last().expect("a ball has an underside to hold"));
+    added.last_mut().expect("just pushed").point = tips.len();
+
+    println!("dense: {} faces, {} tips", model.faces.len(), tips.len());
+    let mut group = c.benchmark_group("dense");
+    group.sample_size(10);
+    group.bench_function("grow/crowded balls", |b| {
+        b.iter(|| grow(&tips, &placed, profiles));
+    });
+    // As the window does it: the answers of the first growth kept for the second.
+    group.bench_function("regrow/crowded balls, one tip added", |b| {
+        b.iter_batched(
+            || {
+                let kept = Clearances::default();
+                grow(&tips, &placed.remembering(&kept), profiles);
+                kept
+            },
+            |kept| grow(&added, &placed.remembering(&kept), profiles),
+            criterion::BatchSize::LargeInput,
+        );
+    });
+    let trees = grow(&tips, &placed, profiles);
+    group.bench_function("mesh_trees/crowded balls", |b| {
+        b.iter(|| mesh_trees(&trees, &placed, profiles));
+    });
+    group.finish();
+}
+
+criterion_group!(benches, branching, dense);
 criterion_main!(benches);

@@ -1,6 +1,7 @@
 use crate::placed::Placed;
 use core_geometry::{Mesh, Scalar, Vec2, Vec3, convex_hull};
 use printer_profiles::{BracePattern, Bracing, SupportProfile};
+use rayon::prelude::*;
 
 use crate::clear::{Beam, clear};
 use crate::group::Profiles;
@@ -145,29 +146,29 @@ pub(crate) fn ties(
     placed: &Placed,
     profiles: Profiles,
 ) -> Vec<(usize, usize, Vec<Brace>)> {
-    let mut pairs = Vec::new();
-    for (a, b) in neighbours(trees, profiles) {
-        let (one, two) = (&trees[a], &trees[b]);
-        let (group, profile) = lead_of(one, two, profiles);
-        let struts: Vec<_> = tie(one, two, profiles)
-            .into_iter()
-            .filter(|&(from, to, radius_mm)| {
-                let beam = Beam {
-                    from,
-                    to,
-                    from_radius_mm: radius_mm,
-                    to_radius_mm: radius_mm,
-                }
-                .with_clearance(profile.clearance_mm);
-                clear(placed, &beam)
-            })
-            .map(|(from, to, radius_mm)| (from, to, radius_mm, group))
-            .collect();
-        if !struts.is_empty() {
-            pairs.push((a, b, struts));
-        }
-    }
-    pairs
+    // Each pair is tied on its own, so all are asked at once, kept in order.
+    neighbours(trees, profiles)
+        .into_par_iter()
+        .filter_map(|(a, b)| {
+            let (one, two) = (&trees[a], &trees[b]);
+            let (group, profile) = lead_of(one, two, profiles);
+            let struts: Vec<_> = tie(one, two, profiles)
+                .into_iter()
+                .filter(|&(from, to, radius_mm)| {
+                    let beam = Beam {
+                        from,
+                        to,
+                        from_radius_mm: radius_mm,
+                        to_radius_mm: radius_mm,
+                    }
+                    .with_clearance(profile.clearance_mm);
+                    clear(placed, &beam)
+                })
+                .map(|(from, to, radius_mm)| (from, to, radius_mm, group))
+                .collect();
+            (!struts.is_empty()).then_some((a, b, struts))
+        })
+        .collect()
 }
 
 /// Whether `tree` stands tall enough to carry one level of the bracing of `profile`,

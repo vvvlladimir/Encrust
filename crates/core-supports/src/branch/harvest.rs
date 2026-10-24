@@ -11,6 +11,7 @@ use crate::placed::Placed;
 use crate::tree::{SupportTree, TreeNode};
 use core_geometry::{Ray, Scalar, Vec2, Vec3};
 use printer_profiles::SupportProfile;
+use rayon::prelude::*;
 use std::collections::HashMap;
 
 /// Whether a trunk carrying `tips` under `at`, leaving it `radius_mm` wide, has anywhere
@@ -44,10 +45,12 @@ impl Forest<'_> {
             }
         }
 
-        self.fronts
-            .iter()
+        // Each front stands on its own, so they stand at once, kept in order.
+        let stood: Vec<Vec<SupportTree>> = self
+            .fronts
+            .par_iter()
             .filter(|front| front.alive)
-            .flat_map(|front| {
+            .map(|front| {
                 let trees = self.stand(front, &children, placed);
                 match &trees[..] {
                     [tree] if tree.landing().on_model => {
@@ -56,6 +59,10 @@ impl Forest<'_> {
                     _ => trees,
                 }
             })
+            .collect();
+        stood
+            .into_iter()
+            .flatten()
             .chain(
                 self.landed
                     .iter()
