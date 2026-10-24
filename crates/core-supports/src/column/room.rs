@@ -1,21 +1,21 @@
 use super::{SURFACE_EPSILON_MM, face_normal, has_room};
 use crate::islands::MOVE_REACH_MM;
 use crate::placed::Placed;
-use core_geometry::{Ray, Scalar, Vec3};
+use core_geometry::{Ray, Scalar, Vec3, turns};
 use printer_profiles::SupportProfile;
 
 /// How far apart the rings a contact with no room for a head looks round on are, mm, and how
 /// many ways round each: a sixth of the reach, and every 30 degrees.
 const RING_MM: Scalar = MOVE_REACH_MM / 6.0;
 
-const AROUND: u32 = 12;
+const AROUND: usize = 12;
 
 /// How far above or below the contact a spot may lie and still hold what it held, mm: a layer
 /// of the finest printer, so the first layer of an island stays touched.
 const LEVEL_MM: Scalar = 0.05;
 
 /// How many points round its rim a contact's circle is checked on for lying on its face.
-const RIM_POINTS: u32 = 8;
+const RIM_POINTS: usize = 8;
 
 /// How far off the contact's plane its rim may find the face, as a share of the radius: a face
 /// curving away by up to 26 degrees over one radius still holds the whole tip.
@@ -56,10 +56,7 @@ fn spots<'a>(
     let rings = (reach_mm / RING_MM).ceil() as u32;
     (1..=rings)
         .flat_map(|ring| {
-            (0..AROUND).map(move |step| {
-                let turn = std::f32::consts::TAU * step as Scalar / AROUND as Scalar;
-                Vec3::new(turn.cos(), turn.sin(), 0.0) * (ring as Scalar * RING_MM)
-            })
+            turns(AROUND).map(move |turn| turn.extend(0.0) * (ring as Scalar * RING_MM))
         })
         .filter_map(move |offset| face_under(placed, contact + offset))
 }
@@ -74,9 +71,8 @@ fn seated(placed: &Placed, contact: Vec3, profile: &SupportProfile) -> bool {
     let depth_mm = RIM_DEPTH * radius_mm;
     let across = normal.any_orthonormal_vector();
     let along = normal.cross(across);
-    (0..RIM_POINTS).all(|step| {
-        let turn = std::f32::consts::TAU * step as Scalar / RIM_POINTS as Scalar;
-        let rim = contact + (across * turn.cos() + along * turn.sin()) * radius_mm;
+    turns(RIM_POINTS).all(|turn| {
+        let rim = contact + (across * turn.x + along * turn.y) * radius_mm;
         let ray = Ray::new(rim + normal * depth_mm, -normal);
         placed
             .raycast_within(&ray, 2.0 * depth_mm)

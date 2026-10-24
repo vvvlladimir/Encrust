@@ -62,7 +62,7 @@ impl OrientSummary {
 pub(super) fn place(
     mesh: Mesh,
     args: &ImportArgs,
-    supports: Option<&SupportProfile>,
+    supports: Option<&SupportPlan>,
     chosen: &Chosen,
 ) -> Result<(Mesh, Option<OrientSummary>)> {
     let transform = &args.transform;
@@ -116,7 +116,7 @@ pub(super) fn place(
 pub(super) fn orientation(
     mesh: &Mesh,
     args: &ImportArgs,
-    supports: Option<&SupportProfile>,
+    supports: Option<&SupportPlan>,
     chosen: &Chosen,
 ) -> Result<OrientSummary> {
     let transform = &args.transform;
@@ -126,10 +126,9 @@ pub(super) fn orientation(
         max_tilt_deg: transform.max_tilt,
         build_volume_mm: profile
             .map(|p| Vec3::new(p.build_volume.x, p.build_volume.y, p.build_volume.z)),
-        ..orient_settings(supports)
+        ..orient_settings(supports.map(SupportPlan::placing).as_ref())
     };
-    let plan = supports.map(|support| SupportPlan::of(support.clone()));
-    let trial = profile.zip(plan.as_ref()).map(|(printer, support)| Trial {
+    let trial = profile.zip(supports).map(|(printer, support)| Trial {
         printer,
         material: &chosen.material,
         support,

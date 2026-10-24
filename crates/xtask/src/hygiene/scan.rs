@@ -63,16 +63,21 @@ pub fn measure(path: &str, text: &str) -> Vec<Finding> {
         }
     };
 
-    for at in (0..lines.len()).filter(|&at| outside(at)) {
+    let code = code_mask(&lines);
+    for at in (0..lines.len()).filter(|&at| outside(at) && code[at]) {
         let Some(name) = fn_name(lines[at]) else {
             continue;
         };
         if let Some(end) = body_end(&lines, at) {
-            push(Kind::Fn, name, code_lines(&lines[at..=end]));
+            push(
+                Kind::Fn,
+                name,
+                code[at..=end].iter().filter(|code| **code).count(),
+            );
         }
     }
     let code = (0..lines.len())
-        .filter(|&at| outside(at) && is_code(lines[at]))
+        .filter(|&at| outside(at) && code[at])
         .count();
     push(Kind::File, "", code);
     if let Some(range) = tests {
@@ -81,16 +86,27 @@ pub fn measure(path: &str, text: &str) -> Vec<Finding> {
     found
 }
 
-/// The lines of an inline `#[cfg(test)] mod tests { … }`, attribute to closing brace.
+/// The lines of an inline `#[cfg(test)] mod tests { … }`, first attribute to closing brace;
+/// other attributes may stand between the two.
 fn test_module(lines: &[&str]) -> Option<Range<usize>> {
-    let start = lines.windows(2).position(|pair| {
-        pair[0].trim() == "#[cfg(test)]" && pair[1].trim_start().starts_with("mod tests {")
+    let (module, start) = lines.iter().enumerate().find_map(|(at, line)| {
+        if !line.trim_start().starts_with("mod tests {") {
+            return None;
+        }
+        let first = (0..at)
+            .rev()
+            .take_while(|&above| lines[above].trim_start().starts_with("#["))
+            .last()?;
+        lines[first..at]
+            .iter()
+            .any(|line| line.trim() == "#[cfg(test)]")
+            .then_some((at, first))
     })?;
-    let close = closing(lines[start + 1]);
-    let end = lines[start + 2..]
+    let close = closing(lines[module]);
+    let end = lines[module + 1..]
         .iter()
         .position(|line| *line == close)
-        .map_or(lines.len(), |at| start + 2 + at + 1);
+        .map_or(lines.len(), |at| module + 1 + at + 1);
     Some(start..end)
 }
 
@@ -130,11 +146,22 @@ fn closing(opening: &str) -> String {
     format!("{}}}", " ".repeat(indent))
 }
 
-fn code_lines(lines: &[&str]) -> usize {
-    lines.iter().filter(|line| is_code(line)).count()
-}
-
-fn is_code(line: &str) -> bool {
-    let line = line.trim();
-    !line.is_empty() && !line.starts_with("//")
+/// Which of `lines` are code: not blank, not a `//` comment, not inside a `/* */` comment.
+fn code_mask(lines: &[&str]) -> Vec<bool> {
+    let mut in_block = false;
+    lines
+        .iter()
+        .map(|line| {
+            let line = line.trim();
+            if in_block {
+                in_block = !line.contains("*/");
+                return false;
+            }
+            if line.starts_with("/*") {
+                in_block = !line.contains("*/");
+                return false;
+            }
+            !line.is_empty() && !line.starts_with("//")
+        })
+        .collect()
 }

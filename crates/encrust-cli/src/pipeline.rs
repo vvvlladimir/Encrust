@@ -1,17 +1,18 @@
 //! The stages one model goes through onto the plate, and the cut of a staged plate into a file.
 //! The single run, the batch and a multi-model plate share it; `stage` assembles a plate.
 
+use std::ops::Range;
 use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result};
 use core_analysis::Measured;
-use core_engine::{Cutting, bake, cut};
+use core_engine::{Cutting, SupportPlan, bake, cut};
 use core_geometry::{Mesh, Scalar, Welded, diagnose, orient_outward, remove_duplicate_faces, weld};
 use core_mesh_io::{Loaded, loader_for_extension};
 use core_pipeline::{PanelOverrides, Tolerance, raster_settings};
 use core_raster::Shading;
 use core_slicer::{AdaptiveSettings, Solid, Windows};
-use printer_profiles::{Compensation, MaterialProfile, PrinterProfile, SupportProfile};
+use printer_profiles::{Compensation, MaterialProfile, PrinterProfile};
 
 use crate::args::{ImportArgs, JobArgs, RasterArgs};
 use crate::exit::Stop;
@@ -82,7 +83,7 @@ pub fn slice_one(
 pub fn import(
     input: &Path,
     args: &ImportArgs,
-    supports: Option<&SupportProfile>,
+    supports: Option<&SupportPlan>,
     chosen: &Chosen,
     talk: bool,
 ) -> Result<(Mesh, ImportReport, Option<OrientSummary>)> {
@@ -123,6 +124,8 @@ pub fn import(
 /// What hollowing and drilling made of one model besides the model itself.
 pub struct Shelled {
     pub report: Option<HollowReport>,
+    /// Which faces of the shell bound its cavity, when the model was hollowed.
+    pub cavity: Option<Range<usize>>,
     /// The bodies the holes and channels cut, which only subtract, so they are no part of
     /// what the stack has to be tall enough for (ADR 0199).
     pub cuts: Option<Mesh>,
@@ -150,12 +153,14 @@ pub fn hollow_and_cut(
 
     let mut hollow = None;
     let mut shell = None;
+    let mut cavity = None;
     if args.wanted() {
-        let (shelled, report) = hollowing::run(mesh, args, precision, watch.stop)?;
+        let (shelled, faces, report) = hollowing::run(mesh, args, precision, watch.stop)?;
         if talk {
             print!("{report}");
         }
         shell = Some(shelled);
+        cavity = Some(faces);
         hollow = Some(report);
     }
     let wall = hollow.as_ref().map(HollowReport::wall);
@@ -188,6 +193,7 @@ pub fn hollow_and_cut(
     }
     Ok(Shelled {
         report: hollow,
+        cavity,
         cuts: bodies,
         plugs,
     })

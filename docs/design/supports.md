@@ -87,12 +87,12 @@ The profile is grouped as MSLA slicers group it, so numbers tuned elsewhere carr
 
 | Piece | From | To | Radius |
 |---|---|---|---|
-| top segment | the contact disc, `tip.contact_depth_mm` into the model | `top.length_mm` along the face normal | `tip.contact_diameter_mm / 2` to the pillar's radius |
+| top segment | a half ball of the contact's radius, `tip.contact_depth_mm` into the model (ADR 0345) | `top.length_mm` along the face normal, leaned back towards straight down by at most 33 degrees behind a pin (ADR 0350) | `tip.contact_diameter_mm / 2` to the pillar's radius |
 | pillar | the top segment | the top of the flare | the node's radius, `middle.diameter_mm / 2` unless it is a trunk |
 | flare | the pillar | the top of the foot | the pillar's radius to `bottom.lower_diameter_mm / 2` |
 | foot | the top of the foot | `z = 0` | `bottom.platform_diameter_mm / 2` in to the bevelled rim |
 
-The bite goes back along the tip's own axis, which is that normal, so it drives into
+The bite goes back along the tip's own axis, so it drives into
 the face rather than up past it (ADR 0125, superseding that clause of ADR 0028), and no
 deeper than half the wall behind the contact, measured by one ray along that axis: a tip
 on a thin edge would otherwise come out of its far side as a nub, and above the model's

@@ -283,7 +283,11 @@ supports-placed =
        *[other] Placed { $count } supports
     }
 supports-cancelled = Placement cancelled
-supports-placed-sized = Placed { $count } supports: { $light } light, { $medium } medium, { $heavy } heavy and { $steady } steadying
+supports-placed-sized =
+    { $count ->
+        [one] Placed 1 support: { $light } light, { $medium } medium, { $heavy } heavy and { $steady } steadying
+       *[other] Placed { $count } supports: { $light } light, { $medium } medium, { $heavy } heavy and { $steady } steadying
+    }
 supports-auto-no-shape = { $name } builds to the support profile { $id }, which is not in the catalogue
 supports-group-name = Group { $index }
 supports-cannot-grow = The supports could not be built: { $reason }

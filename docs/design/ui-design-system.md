@@ -84,7 +84,7 @@ a codepoint pasted into a panel.
 ### Density
 
 Row 30 points, every box a value is typed in as tall as a button, 32, a named field's box 128 wide, primary button 40,
-section heading 36, panel padding 12, item gap 8. Tool rail 60 with 46 point buttons, 34 without their names, plate
+section heading 36, panel padding 12, item gap 8, buttons in a row 6 apart, mode icons 2, a row of buttons 4 under its reading. Tool rail 60 with 46 point buttons, 34 without their names, plate
 panel 272, inspector 328, top bar 44, layer strip 56, a chip 32.
 The two side columns are the widths a drag on their edge leaves them at; everything else is
 fixed. A card over the stage stands 8 from its edge and from the next card. A form block's title column is 180 wide beside at most 460 of fields; a window over

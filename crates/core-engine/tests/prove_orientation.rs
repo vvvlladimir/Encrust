@@ -8,8 +8,7 @@
 use std::path::Path;
 
 use core_engine::{
-    Choice, EngineError, Printout, SupportPlan, SupportShapes, Trial, orient_for_print, print_out,
-    prove,
+    Choice, EngineError, Printout, SupportPlan, Trial, orient_for_print, print_out, prove,
 };
 use core_geometry::{Mesh, Quat, Vec3};
 use core_plate::{OrientGoal, OrientPreset, OrientSettings, Printed, Ruling, finalists};
@@ -349,21 +348,7 @@ fn sized_plan() -> SupportPlan {
         .expect("an automatic profile ships")
         .profile
         .clone();
-    let [light, medium, heavy] = auto.shapes.each_ref();
-    let shapes = [light, medium, heavy, &auto.steady_shape].map(|id| {
-        catalogue
-            .support(id)
-            .expect("every shape an automatic profile names ships")
-            .profile
-            .clone()
-    });
-    SupportPlan {
-        shapes: SupportShapes::Sized {
-            auto: Box::new(auto),
-            shapes: Box::new(shapes),
-        },
-        cavity: false,
-    }
+    SupportPlan::sized(auto, &catalogue).expect("every shape an automatic profile names ships")
 }
 
 #[test]

@@ -37,9 +37,8 @@ struct Asked {
 }
 
 impl SupportGrowth {
-    /// Starts growing the trees of `object` to `table` where they need it, no run for it is
-    /// under way and none failed on the same. One under way goes on to its end, so a model
-    /// dragged across the plate is grown for where it stands when the run lands.
+    /// Starts growing `object`'s trees to `table` unless they hold, a run for it is under way
+    /// (it goes on to its end) or one failed on the same asking.
     pub fn start(&mut self, object: &SceneObject, table: &[SupportProfile]) {
         if self.runs.iter().any(|run| run.asked.model == object.id) {
             return;
@@ -73,9 +72,8 @@ impl SupportGrowth {
         });
     }
 
-    /// Hands every tree that has been grown to its model, which turns it away if its
-    /// supports have changed since, and tells `status` of a run that failed. Returns
-    /// whether any run is still going.
+    /// Hands grown trees to their models, tells `status` of a failed run, and answers whether
+    /// any run is still going.
     pub fn poll(&mut self, scene: &mut Scene, status: &mut Status) -> bool {
         let failed = &mut self.failed;
         self.runs.retain_mut(|run| {

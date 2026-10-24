@@ -161,8 +161,6 @@ fn waiting_to_print(stack: &mut Stack, window: &mut Window) {
     }
 }
 
-/// A model that will not print as it stands, with the repair beside it. Nothing waits on
-/// the answer, so it is offered here rather than in a dialog, until it is taken or put by.
 /// The user's profile files that would not read, and the way to reset them.
 fn unreadable(stack: &mut Stack, window: &mut Window) {
     if !unreadable_profiles::any(window) {
@@ -175,6 +173,8 @@ fn unreadable(stack: &mut Stack, window: &mut Window) {
     });
 }
 
+/// A model that will not print as it stands, with the repair beside it. Nothing waits on
+/// the answer, so it is offered here rather than in a dialog, until it is taken or put by.
 fn broken(stack: &mut Stack, window: &mut Window) {
     let offered: Vec<(ObjectId, String, Vec<String>)> = window
         .doc

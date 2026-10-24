@@ -448,28 +448,8 @@ fn turn(ui: &mut egui::Ui, window: &mut Window, id: ObjectId) {
         .inner
         .clicked();
 
-    let supports = &window.tools.supports;
-    let machine = window
-        .machine
-        .slicing
-        .printer
-        .as_ref()
-        .map(|printer| (printer, &window.machine.slicing.material));
-    if oriented
-        && let Err(error) = supports
-            .orient_plans(&window.machine.slicing.catalogue)
-            .and_then(|plans| {
-                window.tools.orient.start(
-                    &mut window.doc.scene,
-                    &window.doc.plate,
-                    Some(id),
-                    plans,
-                    machine,
-                    &mut window.machine.status,
-                )
-            })
-    {
-        window.machine.status = crate::status::Status::failed(&error);
+    if oriented {
+        auto_orient(window, Some(id));
     }
     if laid {
         let orient = &mut window.tools.orient;
@@ -601,6 +581,33 @@ fn keeping_mirror(scale: Vec3, sizes: Vec3) -> Vec3 {
 fn recentre(scene: &mut Scene, plate: &BuildPlate, id: ObjectId) {
     if let Some(index) = scene.objects().iter().position(|object| object.id == id) {
         recenter(scene, plate, index);
+    }
+}
+
+/// Starts Auto-orient on `only`, or on the whole plate, and says so on the stage if it cannot.
+pub(crate) fn auto_orient(window: &mut Window, only: Option<ObjectId>) {
+    let machine = window
+        .machine
+        .slicing
+        .printer
+        .as_ref()
+        .map(|printer| (printer, &window.machine.slicing.material));
+    let started = window
+        .tools
+        .supports
+        .orient_plans(&window.machine.slicing.catalogue)
+        .and_then(|plans| {
+            window.tools.orient.start(
+                &mut window.doc.scene,
+                &window.doc.plate,
+                only,
+                plans,
+                machine,
+                &mut window.machine.status,
+            )
+        });
+    if let Err(error) = started {
+        window.machine.status = crate::status::Status::failed(&error);
     }
 }
 

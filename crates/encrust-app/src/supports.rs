@@ -41,9 +41,8 @@ pub enum Side {
     Inside,
 }
 
-/// What a click on the model does while the Paint tool is in hand: stand one support,
-/// paint the patch a fill covers, paint the patch supports keep out of, or take either
-/// paint off.
+/// What a click on the model does with the Paint tool: stand a support, paint a fill, paint
+/// where supports keep out, or take paint off.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
 pub enum Placing {

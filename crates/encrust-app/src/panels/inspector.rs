@@ -19,6 +19,7 @@ mod supports;
 mod text;
 
 pub use check::tint as risk_tint;
+pub(super) use position::auto_orient;
 
 use egui::{Align, Layout, RichText, Sense, UiBuilder, vec2};
 

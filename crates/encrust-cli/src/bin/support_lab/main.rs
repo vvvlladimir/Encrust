@@ -19,7 +19,7 @@ use core_analysis::NECK_LIMIT_MPA;
 use core_geometry::{Mesh, Quat, Vec2};
 use printer_profiles::{Catalogue, MaterialProfile, PrinterProfile, SupportProfile};
 
-use crate::stand::Asked;
+use core_engine::{SupportPlan, SupportShapes};
 
 use crate::corpus::{Entry, Expect, Pose};
 use crate::report::{CureRow, Report, Row, SweepRow};
@@ -127,7 +127,13 @@ fn main() -> Result<ExitCode> {
     let asked = asked(&args, &catalogue)?;
     if let (Some(path), Some(spec)) = (&args.coupon, &args.coupon_spec) {
         let base = match asked.first() {
-            Some((_, Asked::Profile(profile))) => profile.as_ref().clone(),
+            Some((
+                _,
+                SupportPlan {
+                    shapes: SupportShapes::One(profile),
+                    ..
+                },
+            )) => profile.as_ref().clone(),
             _ => catalogue.support("light")?.profile.clone(),
         };
         write_coupon(path, &coupon::Spec::read(spec)?, &base, &setup)?;
@@ -162,17 +168,17 @@ fn main() -> Result<ExitCode> {
 
 /// What each model is benched with, and the name a row gives it: the profiles asked for,
 /// then the automatic ones, each with the shapes it names as the catalogue has them.
-fn asked(args: &Args, catalogue: &Catalogue) -> Result<Vec<(String, Asked)>> {
+fn asked(args: &Args, catalogue: &Catalogue) -> Result<Vec<(String, SupportPlan)>> {
     let light = ["light".to_owned()];
     let profiles = match (args.profiles.is_empty(), args.autos.is_empty()) {
         (true, true) => &light[..],
         _ => &args.profiles[..],
     };
-    let mut asked: Vec<(String, Asked)> = profiles
+    let mut asked: Vec<(String, SupportPlan)> = profiles
         .iter()
         .map(|id| {
             let profile = catalogue.support(id)?.profile.clone();
-            Ok((id.clone(), Asked::Profile(Box::new(profile))))
+            Ok((id.clone(), SupportPlan::of(profile)))
         })
         .collect::<Result<_>>()?;
     for id in &args.autos {
@@ -182,20 +188,7 @@ fn asked(args: &Args, catalogue: &Catalogue) -> Result<Vec<(String, Asked)>> {
             .with_context(|| format!("no automatic profile {id}"))?
             .profile
             .clone();
-        let mut shapes = Vec::new();
-        for shape in auto.every_shape() {
-            shapes.push(catalogue.support(shape)?.profile.clone());
-        }
-        let shapes = shapes.try_into().map_err(|_| {
-            anyhow::anyhow!("automatic profile {id} names the wrong number of shapes")
-        })?;
-        asked.push((
-            format!("auto:{id}"),
-            Asked::Auto {
-                auto: Box::new(auto),
-                shapes: Box::new(shapes),
-            },
-        ));
+        asked.push((format!("auto:{id}"), SupportPlan::sized(auto, catalogue)?));
     }
     Ok(asked)
 }
@@ -231,7 +224,7 @@ pub fn name_of(path: &Path) -> String {
 
 /// One model with one profile; one that cannot be loaded or measured is reported skipped,
 /// so a run over a corpus still finishes.
-fn bench(entry: &Entry, id: &str, asked: &Asked, setup: &Setup, args: &Args) -> Row {
+fn bench(entry: &Entry, id: &str, asked: &SupportPlan, setup: &Setup, args: &Args) -> Row {
     let started = Instant::now();
     let mut row = Row {
         model: entry.name.clone(),
@@ -256,7 +249,13 @@ fn bench(entry: &Entry, id: &str, asked: &Asked, setup: &Setup, args: &Args) -> 
     row
 }
 
-fn measure(row: &mut Row, entry: &Entry, asked: &Asked, setup: &Setup, args: &Args) -> Result<()> {
+fn measure(
+    row: &mut Row,
+    entry: &Entry,
+    asked: &SupportPlan,
+    setup: &Setup,
+    args: &Args,
+) -> Result<()> {
     let loaded = stand::load(&entry.path)?;
     let (posed, leant) = stand::posed(&loaded, entry.pose, &setup.printer.build_volume)?;
     row.faces = posed.faces.len();
@@ -288,7 +287,7 @@ fn measure(row: &mut Row, entry: &Entry, asked: &Asked, setup: &Setup, args: &Ar
 
 fn run(
     posed: &Mesh,
-    asked: &Asked,
+    asked: &SupportPlan,
     leant: Quat,
     setup: &Setup,
 ) -> Result<(stand::Supported, shape::Shape, cure::Cured)> {
@@ -304,11 +303,11 @@ fn run(
     Ok((supported, shape, cured))
 }
 
-fn sweep(posed: &Mesh, asked: &Asked, leant: Quat, setup: &Setup) -> Result<Vec<SweepRow>> {
+fn sweep(posed: &Mesh, asked: &SupportPlan, leant: Quat, setup: &Setup) -> Result<Vec<SweepRow>> {
     SWEEP
         .iter()
         .map(|share| {
-            let (_, shape, cured) = run(posed, &asked.thinned(*share), leant, setup)?;
+            let (_, shape, cured) = run(posed, &stand::thinned(asked, *share), leant, setup)?;
             let cure = CureRow::of(&cured, setup.neck_mpa);
             let held = report::held(&shape, &cure);
             Ok(SweepRow {

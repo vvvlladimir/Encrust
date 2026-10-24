@@ -7,6 +7,7 @@ use std::time::Instant;
 use anyhow::{Context, Result, bail};
 use std::sync::Arc;
 
+use core_engine::{SupportPlan, SupportShapes};
 use core_geometry::{
     Bvh, Mat4, Mesh, Quat, Scalar, Transform, Vec3, center_over_plate, drop_to_plate,
     lift_over_plate, orient_outward, transform_mesh, weld,
@@ -18,59 +19,18 @@ use core_supports::{
 };
 use core_volume::{Cancel, HollowSettings, hollow};
 use encrust_cli::pipeline;
-use printer_profiles::{AUTO_SIZES, AutoProfile, BuildVolume, SupportProfile};
+use printer_profiles::{AutoProfile, BuildVolume, SupportProfile};
 
 use crate::corpus::{Pose, Up};
 
-/// What a bench supports a model to: one profile, or the shapes an automatic profile sizes
-/// each support into, as Generate does with Automatic on (ADR 0325).
-#[derive(Clone)]
-pub enum Asked {
-    Profile(Box<SupportProfile>),
-    Auto {
-        auto: Box<AutoProfile>,
-        /// Its shapes lightest first, then its steadying one.
-        shapes: Box<[SupportProfile; AUTO_SIZES + 1]>,
-    },
-}
-
-impl Asked {
-    /// The profile placement runs with: where supports go and how close.
-    pub fn placing(&self) -> SupportProfile {
-        match self {
-            Self::Profile(profile) => profile.as_ref().clone(),
-            Self::Auto { auto, shapes } => auto.placing_with(&shapes[0]),
-        }
+/// `plan` with `share` of its density, for a sweep of how densely it places.
+pub fn thinned(plan: &SupportPlan, share: f32) -> SupportPlan {
+    let mut thinned = plan.clone();
+    match &mut thinned.shapes {
+        SupportShapes::One(profile) => profile.density *= share,
+        SupportShapes::Sized { auto, .. } => auto.density *= share,
     }
-
-    /// The same, with `share` of its density.
-    pub fn thinned(&self, share: f32) -> Self {
-        let mut thinned = self.clone();
-        match &mut thinned {
-            Self::Profile(profile) => profile.density *= share,
-            Self::Auto { auto, .. } => auto.density *= share,
-        }
-        thinned
-    }
-
-    fn table(&self) -> Vec<SupportProfile> {
-        match self {
-            Self::Profile(profile) => vec![profile.as_ref().clone()],
-            Self::Auto { shapes, .. } => shapes.to_vec(),
-        }
-    }
-
-    fn sizing(&self) -> Option<&AutoProfile> {
-        match self {
-            Self::Profile(_) => None,
-            Self::Auto { auto, .. } => Some(auto.as_ref()),
-        }
-    }
-
-    fn group_of(&self, need: &Need) -> u16 {
-        self.sizing()
-            .map_or(0, |auto| u16::try_from(need.size_in(auto)).unwrap_or(0))
-    }
+    thinned
 }
 
 /// A model on the plate and everything automatic placement stood under it.
@@ -149,7 +109,7 @@ fn rotation(rotation: Quat) -> Transform {
 /// from outside as Generate does with nothing painted, blocked or placed by hand.
 pub fn supported(
     mut model: Mesh,
-    asked: &Asked,
+    asked: &SupportPlan,
     wall_mm: Option<Scalar>,
     layer_mm: Scalar,
 ) -> Result<Supported> {

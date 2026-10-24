@@ -1,9 +1,7 @@
-use std::collections::HashMap;
-
 mod grid;
 
 use crate::placed::Placed;
-use core_geometry::{Buckets, Scalar, Vec3};
+use core_geometry::{Buckets, FastMap, Scalar, Vec3};
 use printer_profiles::SupportProfile;
 
 use crate::Landing;
@@ -206,7 +204,7 @@ struct Forest<'a> {
     /// own.
     landed: Vec<(usize, Landing)>,
     /// Tips landed on each tree of `carriers` so far, on top of its own.
-    carried: HashMap<usize, usize>,
+    carried: FastMap<usize, usize>,
     /// Fronts bucketed by plate square so a new one asks nine buckets; dead fronts stay and are
     /// skipped, so entries never exceed twice the number of tips.
     grid: Buckets<usize>,
@@ -226,7 +224,7 @@ impl<'a> Forest<'a> {
             fronts: Vec::with_capacity(columns.len()),
             carriers,
             landed: Vec::new(),
-            carried: HashMap::new(),
+            carried: FastMap::default(),
             grid: Buckets::new(cell_mm),
         };
 

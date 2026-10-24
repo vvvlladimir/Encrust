@@ -684,6 +684,10 @@ removes the half-written file.
 **Modelling:** combine the models given, write a label on one, cut it with a joint, split
 it into its parts or cut a part off, all at the window's default sizes, before it is sliced.
 
+**Supports:** build to any support profile, size each support by what it holds as **Auto**
+does (`--supports auto`), and hold up a hollowed model's cavity as well as its outside
+(`--support-cavity`).
+
 **Holes:** open a shell's floor, cut drain holes round or as polygons, and
 print a plug for each beside the model, with the gap you choose. A run whose plugs have no
 room beside their model stops rather than printing them on a neighbour.

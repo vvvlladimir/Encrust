@@ -104,7 +104,7 @@ pub fn modes(ui: &mut egui::Ui, window: &mut Window) {
         (Mode::Place, icon::ADD, tr!("supports-mode-place")),
         (Mode::Pick, icon::SELECT, tr!("supports-mode-pick")),
     ];
-    ui.spacing_mut().item_spacing.x = 2.0;
+    ui.spacing_mut().item_spacing.x = theme::ICON_GAP;
     let current = mode(window);
     for (value, glyph, name) in modes {
         if icon_toggle(ui, glyph, &name, current == value).clicked() {
@@ -207,8 +207,8 @@ fn grow(ui: &mut egui::Ui, window: &mut Window, points: usize) {
     let what = tr!("supports-grow-tooltip", scope = window.doc.scene.scope());
     let mut all = false;
     ui.horizontal(|ui| {
-        ui.spacing_mut().item_spacing.x = 6.0;
-        let width = ui.available_width() - theme::PRIMARY_H - 6.0;
+        ui.spacing_mut().item_spacing.x = theme::BUTTON_GAP;
+        let width = ui.available_width() - theme::PRIMARY_H - theme::BUTTON_GAP;
         let grow = ui
             .allocate_ui(egui::vec2(width, theme::PRIMARY_H), |ui| {
                 primary_button(ui, icon::SUPPORTS, &label, blocker.is_none()).on_hover_text(what)
@@ -302,11 +302,11 @@ fn editing(ui: &mut egui::Ui, window: &mut Window) {
         ],
     );
 
-    ui.add_space(4.0);
+    ui.add_space(theme::NOTE_GAP);
     let (mut regroup, mut regrow, mut remove) = (false, false, false);
     ui.horizontal(|ui| {
-        ui.spacing_mut().item_spacing.x = 6.0;
-        let width = (ui.available_width() - theme::BUTTON_H - 12.0) / 2.0;
+        ui.spacing_mut().item_spacing.x = theme::BUTTON_GAP;
+        let width = (ui.available_width() - theme::BUTTON_H - 2.0 * theme::BUTTON_GAP) / 2.0;
         regroup = compact_button(ui, &tr!("supports-move-to-group"), width).clicked();
         regrow = compact_button(ui, &tr!("supports-grow-these-again"), width).clicked();
         let tip = tr!("supports-remove-these");

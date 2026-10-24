@@ -122,7 +122,7 @@ fn shaping_of(flags: &Shaping, model: &ModelEntry) -> Result<Shaping> {
     if shaping.supports.is_none()
         && let Some(id) = model.supports.as_deref()
     {
-        shaping.supports = Some(crate::profiles::support(id)?);
+        shaping.supports = Some(crate::profiles::plan_of(id)?);
     }
     if !shaping.hollow.wanted()
         && let Some(wall) = model.hollow

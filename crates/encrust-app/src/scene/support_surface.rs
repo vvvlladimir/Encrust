@@ -15,9 +15,8 @@ pub(super) struct SupportShell {
 }
 
 impl SceneObject {
-    /// The surface supports stand against and its hierarchy: the model as it prints, its
-    /// shell drilled where it has holes, so a cavity and a hole are held up like any other
-    /// underside; the model itself until that surface's hierarchy is built (ADR 0334).
+    /// The surface supports stand against, as the model prints, drilled and hollowed, and its
+    /// hierarchy; the model itself until that hierarchy is built (ADR 0334).
     pub fn support_surface(&self) -> (&Arc<Mesh>, &Arc<Bvh>) {
         match (&self.support_shell, self.wanted_surface()) {
             (Some(kept), Some((wanted, _))) if Arc::ptr_eq(&kept.mesh, wanted) => {

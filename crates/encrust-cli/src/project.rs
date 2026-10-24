@@ -149,6 +149,7 @@ fn refuse_shaping_flags(job: &JobArgs) -> Result<()> {
             "--supports",
             job.supports.supports.is_some() || job.supports.support_profile.is_some(),
         ),
+        ("--support-cavity", job.supports.support_cavity),
         ("--adaptive", job.slicing.adaptive),
         (
             "--samples-per-layer",

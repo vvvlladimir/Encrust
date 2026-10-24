@@ -6,7 +6,7 @@ use crate::group::Profiles;
 use crate::mesher::{ground_normal, is_small, longest_run_mm, run_mm, sound};
 use crate::placed::Placed;
 use crate::tree::{SupportTree, TreeNode};
-use core_geometry::{Ray, Scalar, Vec2, Vec3};
+use core_geometry::{Ray, Scalar, Vec3, turns};
 use printer_profiles::SupportProfile;
 use rayon::prelude::*;
 
@@ -18,7 +18,7 @@ const SQUARE_ENOUGH_COS: Scalar = 0.94;
 /// [`AROUND`] ways round: out to the 45 degrees every strut is held to (ADR 0249).
 const LEANS_DEG: [Scalar; 3] = [15.0, 30.0, 45.0];
 
-const AROUND: u32 = 16;
+const AROUND: usize = 16;
 
 /// How far a small pillar runs out along the normal of each face it meets before it bends,
 /// mm: one diameter, so the bend's dome keeps a radius off the face (ADR 0348).
@@ -55,7 +55,7 @@ pub(super) fn small_pillar(
                 point: Some(point),
                 head: None,
             };
-            let mut tree = SupportTree::new(vec![tip], 0, on_part(base));
+            let mut tree = SupportTree::new(vec![tip], 0, Landing::on_part(base));
             tree.set_group(group);
             let tree = squared(&tree, placed, profile)?;
             is_small(&tree, profile).then(|| ((turn_rad(&tree), run_mm(&tree)), tree))
@@ -193,26 +193,10 @@ fn landing_along(
 fn directions() -> impl Iterator<Item = Vec3> {
     let leaning = LEANS_DEG.into_iter().flat_map(|lean_deg| {
         let lean = lean_deg.to_radians();
-        (0..AROUND).map(move |step| {
-            let turn = std::f32::consts::TAU * step as Scalar / AROUND as Scalar;
-            Vec3::new(
-                lean.sin() * turn.cos(),
-                lean.sin() * turn.sin(),
-                -lean.cos(),
-            )
-        })
+        turns(AROUND)
+            .map(move |turn| Vec3::new(lean.sin() * turn.x, lean.sin() * turn.y, -lean.cos()))
     });
     std::iter::once(-Vec3::Z).chain(leaning)
-}
-
-fn on_part(base: Vec3) -> Landing {
-    Landing {
-        base,
-        on_model: true,
-        pad_offset: Vec2::ZERO,
-        pad_cut: None,
-        on_support: false,
-    }
 }
 
 fn same_way(along: Vec3, normal: Vec3) -> bool {

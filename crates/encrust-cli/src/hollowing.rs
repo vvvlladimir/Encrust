@@ -1,4 +1,5 @@
 use std::fmt;
+use std::ops::Range;
 use std::time::{Duration, Instant};
 
 use anyhow::{Context, Result, bail};
@@ -264,7 +265,7 @@ pub fn run(
     args: &HollowArgs,
     precision: Scalar,
     stop: &Stop,
-) -> Result<(Mesh, HollowReport)> {
+) -> Result<(Mesh, Range<usize>, HollowReport)> {
     let started = Instant::now();
     args.check_infill()?;
     let bvh = Bvh::build(mesh);
@@ -286,7 +287,7 @@ pub fn run(
         coarsened: hollowed.coarsened,
         took: started.elapsed(),
     };
-    Ok((hollowed.mesh, report))
+    Ok((hollowed.mesh, hollowed.cavity, report))
 }
 
 /// Where every `--drain-at` lands on `mesh`, and the channels asked for beside them.

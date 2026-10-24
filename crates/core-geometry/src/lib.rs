@@ -31,7 +31,9 @@ pub use hash::{FastHasher, FastMap, FastSet};
 pub use hull::{convex_hull, fitting_turn};
 pub use mesh::Mesh;
 pub use orient::{Orientation, orient_outward};
-pub use primitives::{ball, cuboid, cylinder, extrude, oriented_box, prism, revolve, segments_for};
+pub use primitives::{
+    ball, cuboid, cylinder, extrude, oriented_box, prism, revolve, segments_for, turns,
+};
 pub use ray::{
     PlacedHit, Ray, RayHit, ray_aabb, ray_triangle, raycast, raycast_placed, raycast_placed_within,
 };

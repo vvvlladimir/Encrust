@@ -62,7 +62,7 @@ pub fn ui(ui: &mut Ui, window: &mut Window) {
                 );
             }
             if unreadable_profiles::any(window) {
-                page.add_space(8.0);
+                page.add_space(theme::ITEM_GAP);
                 unreadable_profiles::row(&mut page, window);
             }
             page.add_space(28.0);

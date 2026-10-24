@@ -2,7 +2,7 @@
 //! each tip carries, what is left bare, and what a tip will scar or break when it comes off.
 
 use core_geometry::{
-    Bvh, FastMap, Mesh, Quat, Ray, Scalar, Triangle, Vec3, diagnose, signed_volume,
+    Bvh, FastMap, Mesh, Quat, Ray, Scalar, Triangle, Vec3, Winding, diagnose, signed_volume,
 };
 use core_plate::LOOKS_UP;
 use printer_profiles::{ContactShape, SupportProfile};
@@ -253,6 +253,7 @@ fn underside(
     let grid = Grid::new(tips, spacing);
     let closed = diagnose(&supported.model).boundary_edges == 0;
     let bvh = Bvh::build(&supported.model);
+    let winding = closed.then(|| Winding::build(&supported.model));
     let mut flat = vec![0.0; tips.len()];
     let mut slope = vec![0.0; tips.len()];
     let mut flat_faces = Vec::new();
@@ -264,7 +265,12 @@ fn underside(
         }
         let area = triangle.area();
         let centre = (triangle.a + triangle.b + triangle.c) / 3.0;
-        if closed && buried(&bvh, centre + normal * BURIED_PROBE_MM) {
+        // A face of one shell inside another is no underside of the union.
+        let probe = centre + normal * BURIED_PROBE_MM;
+        if winding
+            .as_ref()
+            .is_some_and(|winding| winding.is_inside(&supported.model, probe))
+        {
             continue;
         }
         shape.overhang_mm2 += area;
@@ -442,22 +448,6 @@ fn pieces(triangle: &Triangle) -> Vec<(Vec3, Scalar)> {
     pieces
 }
 
-/// Whether `point` is inside the solid, by the parity of the surfaces a ray from it
-/// crosses: a face of one shell inside another is no underside of the union.
-fn buried(bvh: &Bvh, point: Vec3) -> bool {
-    let direction = Vec3::new(0.37, 0.29, 0.88).normalize();
-    let mut from = point;
-    let mut crossings = 0;
-    while let Some(hit) = bvh.raycast(&Ray::new(from, direction)) {
-        crossings += 1;
-        from += direction * (hit.t + BURIED_PROBE_MM);
-        if crossings > 512 {
-            return false;
-        }
-    }
-    crossings % 2 == 1
-}
-
 /// Tips on details too thin to lose one, and tips on the side meant to be seen.
 fn tips_on_surface(shape: &mut Shape, model: &Mesh, bvh: &Bvh, tips: &[Vec3], upright: Quat) {
     let back = upright.inverse();
@@ -609,13 +599,5 @@ mod tests {
             shape.rim_gap_max_mm
         );
         assert!(shape.rim_bare_mm > 0.0, "the corners are past 1.5 mm");
-    }
-
-    #[test]
-    fn a_point_inside_a_closed_box_is_buried_and_one_outside_is_not() {
-        let cube = core_geometry::cuboid(Vec3::ZERO, Vec3::splat(10.0));
-        let bvh = Bvh::build(&cube);
-        assert!(buried(&bvh, Vec3::splat(5.0)));
-        assert!(!buried(&bvh, Vec3::new(5.0, 5.0, -1.0)));
     }
 }

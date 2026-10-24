@@ -8,7 +8,7 @@ use core_supports::{
     low_points, mesh_trees,
 };
 use core_volume::Drilled;
-use printer_profiles::{AUTO_SIZES, AutoProfile, SupportProfile};
+use printer_profiles::{AUTO_SIZES, AutoProfile, Catalogue, ProfileError, SupportProfile};
 
 use crate::error::EngineError;
 
@@ -39,6 +39,18 @@ impl SupportPlan {
             shapes: SupportShapes::One(Box::new(profile)),
             cavity: false,
         }
+    }
+
+    /// Supports sized by `auto` into the shapes `catalogue` has for it, outside only.
+    pub fn sized(auto: AutoProfile, catalogue: &Catalogue) -> Result<Self, ProfileError> {
+        let shapes = auto.shapes_in(catalogue)?;
+        Ok(Self {
+            shapes: SupportShapes::Sized {
+                auto: Box::new(auto),
+                shapes: Box::new(shapes),
+            },
+            cavity: false,
+        })
     }
 
     /// The profile placement runs with: where supports go, how close, how far a model is

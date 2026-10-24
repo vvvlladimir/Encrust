@@ -2,7 +2,7 @@ use std::path::Path;
 
 use serde::{Deserialize, Serialize};
 
-use crate::{IslandSpacing, ProfileError, SupportProfile};
+use crate::{Catalogue, IslandSpacing, ProfileError, SupportProfile};
 
 /// How many shapes an automatic profile sizes supports into.
 pub const AUTO_SIZES: usize = 3;
@@ -69,6 +69,17 @@ impl AutoProfile {
         self.shapes
             .iter()
             .chain(std::iter::once(&self.steady_shape))
+    }
+
+    /// The support profiles of [`Self::every_shape`] as `catalogue` has them, in that order.
+    pub fn shapes_in(
+        &self,
+        catalogue: &Catalogue,
+    ) -> Result<[SupportProfile; AUTO_SIZES + 1], ProfileError> {
+        let [light, medium, heavy] = self.shapes.each_ref();
+        let [light, medium, heavy, steady] = [light, medium, heavy, &self.steady_shape]
+            .map(|id| catalogue.support(id).map(|entry| entry.profile.clone()));
+        Ok([light?, medium?, heavy?, steady?])
     }
 
     /// `shape` placing by this profile's numbers: what a run of it is handed.
@@ -241,6 +252,31 @@ mod tests {
         assert!(matches!(
             AutoProfile::from_toml_str(&source, Path::new("auto/odd.toml")),
             Err(ProfileError::OutOfOrder { .. })
+        ));
+    }
+
+    #[test]
+    fn the_shipped_profile_sizes_into_shapes_that_ship() {
+        let catalogue = Catalogue::bundled().expect("the shipped catalogue loads");
+        let shapes = shipped()
+            .shapes_in(&catalogue)
+            .expect("every shape it names ships");
+        let auto = shipped();
+        let found: Vec<String> = auto
+            .every_shape()
+            .map(|id| catalogue.support(id).expect("ships").profile.name.clone())
+            .collect();
+        assert_eq!(shapes.map(|shape| shape.name).to_vec(), found);
+    }
+
+    #[test]
+    fn a_shape_the_catalogue_lacks_is_unknown() {
+        let catalogue = Catalogue::bundled().expect("the shipped catalogue loads");
+        let mut auto = shipped();
+        auto.steady_shape = "no-such-shape".to_owned();
+        assert!(matches!(
+            auto.shapes_in(&catalogue),
+            Err(ProfileError::Unknown { .. })
         ));
     }
 

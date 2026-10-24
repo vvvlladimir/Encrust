@@ -3,10 +3,10 @@ use crate::i18n::tr;
 use crate::job::{Placement, SupportJob, SupportOutcome, SupportRequest, tasks_of};
 use crate::scene::Scene;
 use crate::status::Status;
-use anyhow::{Context, Result, bail};
+use anyhow::{Result, bail};
 use core_geometry::Scalar;
 use core_supports::Need;
-use printer_profiles::{AutoProfile, Catalogue, SupportProfile};
+use printer_profiles::{AutoProfile, Catalogue, ProfileError, SupportProfile};
 
 /// The support profiles `auto` names, lightest first and the steadying one last, as
 /// `catalogue` has them.
@@ -14,19 +14,14 @@ pub(super) fn shapes_of(
     auto: &AutoProfile,
     catalogue: &Catalogue,
 ) -> Result<[SupportProfile; SHAPES]> {
-    let [light, medium, heavy] = auto.shapes.each_ref();
-    let ids = [light, medium, heavy, &auto.steady_shape];
-    let [light, medium, heavy, steady] = ids.map(|id| {
-        let entry = catalogue.support(id).with_context(|| {
-            tr!(
-                "supports-auto-no-shape",
-                name = auto.name.clone(),
-                id = id.clone()
-            )
-        })?;
-        Ok::<_, anyhow::Error>(entry.profile.clone())
-    });
-    Ok([light?, medium?, heavy?, steady?])
+    match auto.shapes_in(catalogue) {
+        Err(ProfileError::Unknown { id, .. }) => bail!(tr!(
+            "supports-auto-no-shape",
+            name = auto.name.clone(),
+            id = id
+        )),
+        shapes => Ok(shapes?),
+    }
 }
 
 impl SupportTool {
@@ -42,15 +37,8 @@ impl SupportTool {
             .transpose()
     }
 
-    /// Starts an automatic placement run over everything visible on the plate: by the
-    /// group in hand, or by the automatic profile chosen, whose shapes are read from
-    /// `catalogue`.
-    ///
-    /// The run cuts each model at the height it will be printed at, so the layers it
-    /// looks at are the layers the printer will expose.
-    ///
-    /// Run for the inside, it holds up only the cavities of hollow models, and what stood
-    /// in them is taken away when it lands.
+    /// Starts placement over everything visible, by the group in hand or the automatic profile;
+    /// for the inside, only cavities, and what stood in them goes when it lands (ADR 0334).
     pub fn start(
         &mut self,
         scene: &mut Scene,

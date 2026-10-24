@@ -1,6 +1,7 @@
 use super::place::{OrientSummary, centred, euler_degrees, place};
 use crate::args::ImportArgs;
 use crate::profiles::Chosen;
+use core_engine::SupportPlan;
 use core_geometry::{Mesh, Quat, Scalar, Vec3};
 use printer_profiles::{MaterialProfile, SupportProfile};
 
@@ -76,8 +77,13 @@ fn a_rotate_that_tips_a_seated_model_stands_it_on_supports() {
     let supports = SupportProfile::shipped("medium").expect("the medium preset ships");
     let seated = |flags: &[&str]| {
         let args = Flags::parse_from(flags).import;
-        let (_, oriented) =
-            place(cube.clone(), &args, Some(&supports), &chosen).expect("a cube orients");
+        let (_, oriented) = place(
+            cube.clone(),
+            &args,
+            Some(&SupportPlan::of(supports.clone())),
+            &chosen,
+        )
+        .expect("a cube orients");
         oriented.expect("--orient reports its turn").on_plate
     };
 

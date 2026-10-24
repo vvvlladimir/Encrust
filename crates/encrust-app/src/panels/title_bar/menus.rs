@@ -223,28 +223,7 @@ pub(super) fn edit_menu(ui: &mut egui::Ui, window: &mut Window) {
         .clicked()
     {
         ui.close();
-        let supports = &window.tools.supports;
-        let machine = window
-            .machine
-            .slicing
-            .printer
-            .as_ref()
-            .map(|printer| (printer, &window.machine.slicing.material));
-        let started = supports
-            .orient_plans(&window.machine.slicing.catalogue)
-            .and_then(|plans| {
-                window.tools.orient.start(
-                    &mut window.doc.scene,
-                    &window.doc.plate,
-                    None,
-                    plans,
-                    machine,
-                    &mut window.machine.status,
-                )
-            });
-        if let Err(error) = started {
-            window.machine.status = crate::status::Status::failed(&error);
-        }
+        crate::panels::inspector::auto_orient(window, None);
     }
 }
 

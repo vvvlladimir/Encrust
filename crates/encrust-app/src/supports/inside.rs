@@ -6,12 +6,8 @@ use core_geometry::{Scalar, Vec3};
 use core_supports::SupportTree;
 
 impl SupportTool {
-    /// Stands one support under each island whose floor is in `floors`, plate points at
-    /// the bottom of the layer it starts on, in the islands' group. Answers how many stood:
-    /// an island whose centre misses it, a ring or a crescent, is left to the hand.
-    ///
-    /// `layer_mm` is how far under a floor the underside may lie and still be the
-    /// island's: a layer is cut somewhere inside its own thickness.
+    /// Stands one support under each island floor of `floors` (plate, `layer_mm` deep), in the
+    /// islands' group, and answers how many; a ring or a crescent is left to the hand.
     pub fn support_islands(
         &mut self,
         scene: &mut Scene,

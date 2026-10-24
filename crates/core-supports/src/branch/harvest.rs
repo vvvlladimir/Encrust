@@ -9,7 +9,7 @@ use crate::column::{
 use crate::mesher::is_small;
 use crate::placed::Placed;
 use crate::tree::{SupportTree, TreeNode};
-use core_geometry::{Ray, Scalar, Vec2, Vec3};
+use core_geometry::{Ray, Scalar, Vec3};
 use printer_profiles::SupportProfile;
 use rayon::prelude::*;
 use std::collections::HashMap;
@@ -217,14 +217,7 @@ impl Forest<'_> {
             parent: None,
             ..tip
         };
-        let landing = Landing {
-            base: under.point,
-            on_model: true,
-            pad_offset: Vec2::ZERO,
-            pad_cut: None,
-            on_support: false,
-        };
-        let mut tree = SupportTree::new(vec![node], 0, landing);
+        let mut tree = SupportTree::new(vec![node], 0, Landing::on_part(under.point));
         tree.settle(group);
         Some(tree)
     }

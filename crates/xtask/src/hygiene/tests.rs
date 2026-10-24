@@ -82,3 +82,24 @@ fn functions_of_one_name_pair_longest_with_longest() {
     assert!(verdict.grown.is_empty());
     assert_eq!(verdict.shrunk.len(), 2);
 }
+
+#[test]
+fn an_attribute_between_cfg_test_and_the_module_still_sets_it_apart() {
+    let body = (0..700)
+        .map(|at| format!("    fn t{at}() {{}}\n"))
+        .collect::<Vec<_>>()
+        .concat();
+    let text = format!("#[cfg(test)]\n#[expect(clippy::expect_used)]\nmod tests {{\n{body}}}\n");
+    let found = kinds(&text);
+    assert!(
+        found.iter().all(|(kind, _, _)| *kind == Kind::Tests),
+        "the tests are not counted as the file's code: {found:?}"
+    );
+}
+
+#[test]
+fn block_comment_lines_do_not_count() {
+    let comment = (0..700).map(|_| " * words\n").collect::<String>();
+    let text = format!("/*\n{comment} */\nfn a() {{}}\n");
+    assert!(kinds(&text).is_empty());
+}

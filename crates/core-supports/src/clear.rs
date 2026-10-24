@@ -1,5 +1,5 @@
 use crate::placed::Placed;
-use core_geometry::{Ray, Scalar, Vec3};
+use core_geometry::{Ray, Scalar, Vec3, turns};
 
 /// A segment shorter than this is a joint, not a body: there is nothing to sweep and
 /// nothing to hit. Well under any printable feature.
@@ -7,7 +7,7 @@ pub(crate) const MIN_BODY_MM: Scalar = 1e-4;
 
 /// How many rays the surface of a body is tested with: enough to catch a thin obstacle
 /// against the cost of casting them; see `docs/decisions/0077`.
-const BEAM_RAYS: u32 = 8;
+const BEAM_RAYS: usize = 8;
 
 /// How far apart the balls filling a beam stand, as a share of their radius: at half a
 /// radius their union covers the beam to within 3% of its radius. See ADR 0341.
@@ -106,9 +106,8 @@ fn rays_clear(placed: &Placed, beam: &Beam) -> bool {
 
     let direction = offset / length;
     let (across, along) = direction.any_orthonormal_pair();
-    let mut ring = (0..BEAM_RAYS).map(|step| {
-        let angle = std::f32::consts::TAU * step as Scalar / BEAM_RAYS as Scalar;
-        let out = across * angle.cos() + along * angle.sin();
+    let mut ring = turns(BEAM_RAYS).map(|turn| {
+        let out = across * turn.x + along * turn.y;
         (
             beam.from + out * beam.from_radius_mm,
             beam.to + out * beam.to_radius_mm,

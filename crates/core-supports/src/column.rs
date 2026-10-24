@@ -91,6 +91,17 @@ pub struct Landing {
 }
 
 impl Landing {
+    /// A landing on the part at `base`, which needs no foot.
+    pub(crate) fn on_part(base: Vec3) -> Self {
+        Self {
+            base,
+            on_model: true,
+            pad_offset: Vec2::ZERO,
+            pad_cut: None,
+            on_support: false,
+        }
+    }
+
     /// Height at which the pillar body ends: the top of the foot or the raft, or the surface
     /// it sank into.
     pub fn pillar_bottom_z(&self, profile: &SupportProfile) -> Scalar {

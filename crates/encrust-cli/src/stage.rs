@@ -6,12 +6,12 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use anyhow::{Context, Result, bail};
-use core_engine::{Cutting, Model, Plate};
+use core_engine::{Cutting, Model, Plate, SupportPlan};
 use core_format::ExposurePlan;
 use core_geometry::{Mesh, Scalar, Transform, Vec2, Vec3, transform_mesh};
 use core_pipeline::{PanelOverrides, SlicedFormat};
 use core_plate::{ArrangeSettings, Footprint, arrange};
-use printer_profiles::{MaterialProfile, PrinterProfile, SupportProfile};
+use printer_profiles::{MaterialProfile, PrinterProfile};
 
 use crate::args::{ImportArgs, JobArgs};
 use crate::hollowing::{HollowArgs, HollowReport};
@@ -28,7 +28,7 @@ use crate::{plate_file, project};
 pub struct Shaping {
     pub import: ImportArgs,
     pub hollow: HollowArgs,
-    pub supports: Option<SupportProfile>,
+    pub supports: Option<SupportPlan>,
     /// Where the middle of the model's footprint goes, plate millimetres, standing on the
     /// plate; `None` leaves it where the file and the flags put it.
     pub position: Option<Vec2>,
@@ -37,10 +37,15 @@ pub struct Shaping {
 impl Shaping {
     /// What the flags ask of every model.
     pub fn of(job: &JobArgs) -> Result<Self> {
+        if job.supports.support_cavity && !job.hollow.wanted() {
+            bail!(
+                "--support-cavity holds up the cavity --hollow leaves, and --hollow was not given"
+            );
+        }
         Ok(Self {
             import: job.import.clone(),
             hollow: job.hollow.clone(),
-            supports: job.supports.profile()?,
+            supports: job.supports.plan()?,
             position: None,
         })
     }
@@ -314,7 +319,7 @@ fn put_down(
         drift_mm,
         watch,
     )?;
-    let (hollow, mut cuts) = (shelled.report, shelled.cuts);
+    let (hollow, cavity, mut cuts) = (shelled.report, shelled.cavity, shelled.cuts);
     let plugs = shelled
         .plugs
         .into_iter()
@@ -330,7 +335,16 @@ fn put_down(
     let stood = shaping
         .supports
         .as_ref()
-        .map(|profile| stand_under(&mut mesh, &mut cuts, profile, layer_height, seated))
+        .map(|plan| {
+            stand_under(
+                &mut mesh,
+                cavity.clone(),
+                &mut cuts,
+                plan,
+                layer_height,
+                seated,
+            )
+        })
         .transpose()?
         .filter(|(report, _)| !seated || !report.contacts.is_empty());
     let (supports, columns) = match stood {

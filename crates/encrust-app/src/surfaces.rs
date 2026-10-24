@@ -61,9 +61,8 @@ impl SupportSurfaces {
         }
     }
 
-    /// Keeps each hierarchy that has been built where its model still prints as that
-    /// surface, so its supports grow against it again, and tells `status` of a run that
-    /// failed. Returns whether any is still going.
+    /// Keeps each built hierarchy whose model still prints as its surface, tells `status` of
+    /// a failed run, and answers whether any is still going.
     pub fn poll(&mut self, scene: &mut Scene, status: &mut Status) -> bool {
         let failed = &mut self.failed;
         self.runs.retain_mut(|run| {

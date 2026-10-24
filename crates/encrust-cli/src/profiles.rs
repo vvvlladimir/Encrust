@@ -4,6 +4,7 @@ use std::fmt;
 use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result};
+use core_engine::SupportPlan;
 use core_engine::project::{DrainState, HollowState};
 use core_format::OpenFile;
 use printer_profiles::{
@@ -154,6 +155,30 @@ pub fn support(id: &str) -> Result<SupportProfile> {
         )
     })?;
     Ok(entry.profile.clone())
+}
+
+/// What a support profile is asked for by, for supports sized by what they hold.
+pub const AUTO: &str = "auto";
+
+/// Supports built to the profile `id`, or sized by the automatic profile for [`AUTO`].
+pub fn plan_of(id: &str) -> Result<SupportPlan> {
+    if id == AUTO {
+        auto_plan()
+    } else {
+        Ok(SupportPlan::of(support(id)?))
+    }
+}
+
+/// Supports sized by the catalogue's automatic profile, which is the window's Auto.
+fn auto_plan() -> Result<SupportPlan> {
+    let catalogue = catalogue()?;
+    let auto = catalogue
+        .autos()
+        .next()
+        .context("the catalogue has no automatic profile")?
+        .profile
+        .clone();
+    SupportPlan::sized(auto, &catalogue).context("the automatic profile names a missing shape")
 }
 
 /// Every kind of profile the catalogue keeps, in the order they are listed.

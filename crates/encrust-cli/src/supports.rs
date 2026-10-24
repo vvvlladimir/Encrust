@@ -2,10 +2,11 @@
 //! columns, trunks, mesh, merge. See `docs/design/supports.md`.
 
 use std::fmt;
+use std::ops::Range;
 
 use anyhow::{Context, Result};
+use core_engine::SupportPlan;
 use core_geometry::{Mesh, Scalar, Vec3};
-use printer_profiles::SupportProfile;
 
 /// What automatic placement put under one model.
 pub struct SupportReport {
@@ -47,8 +48,9 @@ impl fmt::Display for SupportReport {
 /// for a model left on the plate, with what it found laid out for a terminal.
 pub fn stand_under(
     mesh: &mut Mesh,
+    cavity: Option<Range<usize>>,
     cuts: &mut Option<Mesh>,
-    profile: &SupportProfile,
+    plan: &SupportPlan,
     layer_height_mm: Scalar,
     seated: bool,
 ) -> Result<(SupportReport, Mesh)> {
@@ -59,13 +61,12 @@ pub fn stand_under(
     };
     let model = core_engine::ToStand {
         mesh,
-        cavity: None,
+        cavity,
         cuts,
         drill_exactly: true,
     };
-    let plan = core_engine::SupportPlan::of(profile.clone());
     let stood =
-        stand(model, &plan, layer_height_mm).context("cannot stand supports under the model")?;
+        stand(model, plan, layer_height_mm).context("cannot stand supports under the model")?;
     let report = SupportReport {
         lifted_mm: stood.lifted_mm,
         contacts: stood.contacts,
@@ -79,6 +80,11 @@ pub fn stand_under(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use printer_profiles::SupportProfile;
+
+    fn medium() -> SupportPlan {
+        SupportPlan::of(SupportProfile::shipped("medium").expect("the medium preset ships"))
+    }
 
     /// A flat slab hanging ten millimetres over the plate: nothing holds it up, so
     /// placement has to put something under it.
@@ -116,14 +122,8 @@ mod tests {
     #[test]
     fn an_overhang_gets_columns_under_it_and_they_come_back_as_a_mesh() {
         let mut mesh = overhang();
-        let (report, supports) = stand_under(
-            &mut mesh,
-            &mut None,
-            &SupportProfile::shipped("medium").expect("the medium preset ships"),
-            0.05,
-            false,
-        )
-        .expect("a slab slices and supports");
+        let (report, supports) = stand_under(&mut mesh, None, &mut None, &medium(), 0.05, false)
+            .expect("a slab slices and supports");
 
         assert!(!report.contacts.is_empty(), "a hanging slab needs holding");
         assert!(report.standing > 0, "and there is empty plate under it");
@@ -169,8 +169,15 @@ mod tests {
         let mut mesh = slab_on_the_plate();
         let profile = SupportProfile::shipped("medium").expect("the medium preset ships");
 
-        let (report, _) = stand_under(&mut mesh, &mut None, &profile, 0.05, false)
-            .expect("a slab slices and supports");
+        let (report, _) = stand_under(
+            &mut mesh,
+            None,
+            &mut None,
+            &SupportPlan::of(profile.clone()),
+            0.05,
+            false,
+        )
+        .expect("a slab slices and supports");
 
         assert!(
             (report.lifted_mm - profile.z_lift_mm).abs() < 1e-4,
@@ -194,14 +201,8 @@ mod tests {
     #[test]
     fn a_part_already_standing_clear_of_the_plate_is_not_moved() {
         let mut mesh = overhang();
-        let (report, _) = stand_under(
-            &mut mesh,
-            &mut None,
-            &SupportProfile::shipped("medium").expect("the medium preset ships"),
-            0.05,
-            false,
-        )
-        .expect("a slab slices and supports");
+        let (report, _) = stand_under(&mut mesh, None, &mut None, &medium(), 0.05, false)
+            .expect("a slab slices and supports");
 
         assert!(
             report.lifted_mm.abs() < 1e-6,

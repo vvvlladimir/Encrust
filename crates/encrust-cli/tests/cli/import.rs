@@ -367,3 +367,59 @@ fn an_oriented_model_stands_on_the_plate_without_centring() {
         stderr(&output)
     );
 }
+
+#[test]
+fn supports_sized_by_what_they_hold_stand_from_the_command_line() {
+    let path = write_boxes_stl(
+        "ledge-auto",
+        &[
+            ([0.0, 0.0, 0.0], [20.0, 20.0, 20.0]),
+            ([20.0, 8.0, 18.0], [24.0, 12.0, 20.0]),
+        ],
+    );
+    let output = slice(&[path.to_str().unwrap(), "--supports", "auto", "--json"]);
+    assert!(output.status.success(), "{}", stderr(&output));
+    let report = json(&output);
+    assert!(
+        report["supports"]["contacts"].as_u64().unwrap_or(0) > 0,
+        "the automatic profile holds the model up: {report}"
+    );
+}
+
+#[test]
+fn a_cavity_is_held_up_from_inside_only_when_asked() {
+    let path = write_box_stl("cavity", 20.0, 12, 0);
+    let contacts = |more: &[&str]| {
+        let mut args = vec![
+            path.to_str().unwrap(),
+            "--hollow",
+            "2",
+            "--supports",
+            "medium",
+            "--json",
+        ];
+        args.extend_from_slice(more);
+        let output = slice(&args);
+        assert!(output.status.success(), "{}", stderr(&output));
+        json(&output)["supports"]["contacts"].as_u64().unwrap_or(0)
+    };
+    let outside = contacts(&[]);
+    let inside = contacts(&["--support-cavity"]);
+    assert!(
+        inside > outside,
+        "a 16 mm cavity has a flat ceiling to hold: {inside} contacts against {outside}"
+    );
+}
+
+#[test]
+fn holding_up_a_cavity_without_hollowing_is_refused() {
+    let path = write_box_stl("no-cavity", 10.0, 12, 0);
+    let output = slice(&[
+        path.to_str().unwrap(),
+        "--supports",
+        "medium",
+        "--support-cavity",
+    ]);
+    assert!(!output.status.success());
+    assert!(stderr(&output).contains("--hollow"), "{}", stderr(&output));
+}
