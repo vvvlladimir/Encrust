@@ -42,7 +42,8 @@ or rises so nearly straight up that a trunk from its neck would come down on its
 contact, is not placed: `columns` leaves it out and the panel counts it with those that have
 no room to stand (ADR 0346). First it is moved to the nearest spot of a face looking down
 within 0.3 mm across and 0.05 mm up or down where a head has room, on rings 0.05 mm apart
-every 30 degrees; failing that, in a profile with small pillars it has no head, and `grow`
+every 30 degrees — out to its radius and a ring where that brings its whole circle onto its
+face, which a contact with room moves for too (ADR 0354); failing that, in a profile with small pillars it has no head, and `grow`
 holds it with a small pillar or not at all (ADR 0348). Everything below
 is measured from the neck, not from the contact.
 

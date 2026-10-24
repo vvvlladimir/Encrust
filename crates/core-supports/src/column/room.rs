@@ -25,45 +25,51 @@ const RIM_DEPTH: Scalar = 0.5;
 /// coarse curve is still the same face, a wall meeting it at an edge is not.
 const RIM_SAME_FACE_COS: Scalar = 0.5;
 
-/// The nearest spot on a face looking down at `contact`'s height where a head has room and the
-/// contact's circle lies wholly on its face, within [`MOVE_REACH_MM`] or one radius and a ring;
-/// failing that, where a head has room alone. `None` when `contact` needs no move or no spot
-/// will do (ADR 0348, 0354).
+/// The nearest spot at `contact`'s height where a head has room and the contact's circle lies
+/// wholly on its face, else where a head has room alone; `None` when none or no move (ADR 0354).
 pub(super) fn roomier(placed: &Placed, contact: Vec3, profile: &SupportProfile) -> Option<Vec3> {
     let room = has_room(placed, contact, profile);
-    eprintln!("DBG room={room} seated={}", seated(placed, contact, profile));
     if room && seated(placed, contact, profile) {
         return None;
     }
     let reach_mm = MOVE_REACH_MM.max(profile.contact_radius_mm() + RING_MM);
-    let spots = || {
-        let rings = (reach_mm / RING_MM).ceil() as u32;
-        (1..=rings)
-            .flat_map(|ring| {
-                (0..AROUND).map(move |step| {
-                    let turn = std::f32::consts::TAU * step as Scalar / AROUND as Scalar;
-                    Vec3::new(turn.cos(), turn.sin(), 0.0) * (ring as Scalar * RING_MM)
-                })
-            })
-            .filter_map(move |offset| face_under(placed, contact + offset))
-            .filter(|spot| !placed.blocks_at(*spot) && has_room(placed, *spot, profile))
-    };
-    let held = spots().find(|spot| seated(placed, *spot, profile));
-    match (held, room) {
-        (Some(spot), _) => Some(spot),
-        (None, true) => None,
-        (None, false) => spots().find(|spot| spot.distance(contact) <= MOVE_REACH_MM),
+    let mut roomy = None;
+    for spot in spots(placed, contact, reach_mm)
+        .filter(|spot| !placed.blocks_at(*spot) && has_room(placed, *spot, profile))
+    {
+        if seated(placed, spot, profile) {
+            return Some(spot);
+        }
+        if !room && roomy.is_none() && spot.distance(contact) <= MOVE_REACH_MM {
+            roomy = Some(spot);
+        }
     }
+    roomy
+}
+
+/// The spots of faces looking down round `contact`, ring by ring out to `reach_mm`.
+fn spots<'a>(
+    placed: &'a Placed<'_>,
+    contact: Vec3,
+    reach_mm: Scalar,
+) -> impl Iterator<Item = Vec3> + 'a {
+    let rings = (reach_mm / RING_MM).ceil() as u32;
+    (1..=rings)
+        .flat_map(|ring| {
+            (0..AROUND).map(move |step| {
+                let turn = std::f32::consts::TAU * step as Scalar / AROUND as Scalar;
+                Vec3::new(turn.cos(), turn.sin(), 0.0) * (ring as Scalar * RING_MM)
+            })
+        })
+        .filter_map(move |offset| face_under(placed, contact + offset))
 }
 
 /// Whether the contact's circle round `contact` lies wholly on the face it sits on: a tip half
 /// over an edge cures onto the wall past it.
 fn seated(placed: &Placed, contact: Vec3, profile: &SupportProfile) -> bool {
     let Some(normal) = face_normal(placed, contact) else {
-        eprintln!("DBG no normal at {contact:?}");
         return true;
     };
-    eprintln!("DBG normal {normal:?} at {contact:?}");
     let radius_mm = profile.contact_radius_mm();
     let depth_mm = RIM_DEPTH * radius_mm;
     let across = normal.any_orthonormal_vector();
@@ -74,7 +80,6 @@ fn seated(placed: &Placed, contact: Vec3, profile: &SupportProfile) -> bool {
         let ray = Ray::new(rim + normal * depth_mm, -normal);
         placed
             .raycast_within(&ray, 2.0 * depth_mm)
-            .inspect(|hit| eprintln!("DBG rim {rim:?} hit {:?} n {:?}", hit.point, hit.normal))
             .is_some_and(|hit| hit.normal.dot(normal) >= RIM_SAME_FACE_COS)
     })
 }

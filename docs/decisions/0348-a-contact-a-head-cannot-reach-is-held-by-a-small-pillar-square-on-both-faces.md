@@ -1,6 +1,6 @@
 # 0348. Hold a contact a head cannot reach with a small pillar, square on both faces
 
-- **Status:** Accepted
+- **Status:** Accepted; the step aside is widened for a contact that ends seated by 0354
 - **Date:** 2026-10-24
 
 ## Context

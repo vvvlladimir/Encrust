@@ -687,11 +687,14 @@ fn a_tip_on_the_side_edge_of_a_slope_moves_in_until_its_contact_lies_on_the_face
     let profile = profile();
     let radius_mm = profile.contact_radius_mm();
     let (model, transform) = ramp_overhead();
-    // The sloping face is at z = 20 - 2.5 x; a contact 0.05 mm in from its side.
-    let points = [SupportPoint::new(Vec3::new(2.0, -4.95, 15.0))];
+    // On the model the slope is z = 2.5 x; turned over, this is plate (2, -4.95, 15), 0.05 mm in.
+    let points = [SupportPoint::new(Vec3::new(2.0, 4.95, 5.0))];
     let columns = columns_on(&points, &model, transform, Profiles::single(&profile));
 
-    let contact = columns.first().expect("the slope has room for a head").contact;
+    let contact = columns
+        .first()
+        .expect("the slope has room for a head")
+        .contact;
     let in_mm = 5.0 - contact.y.abs();
     assert!(
         (radius_mm - 1e-3..=radius_mm + 0.05 + 1e-3).contains(&in_mm),

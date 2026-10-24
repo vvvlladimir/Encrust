@@ -413,7 +413,8 @@ whole-surface fill is Cmd-Shift-click.
   diameter, and a small pillar runs as one straight strut wherever one fits. A small pillar
   is at most 30 of its diameters long; a longer one keeps the regular width.
 - **No room for a head:** a contact a hair too near a wall moves up to 0.3 mm along the face
-  to where a regular support fits. Where it has no room even so — in a crevice, beside a lip
+  to where a regular support fits, and one near an edge moves in until its whole tip lies on
+  the face. Where it has no room even so — in a crevice, beside a lip
   — a small pillar holds the spot instead, leaning up to 45 degrees to find a face to stand on.
 - **Base:** the pad's shape (round, cube, prism or tapered), its size, flare and wall slope.
 - **Raft:** **Skates** (a saucer-shaped slab), **Grid** (rim and bars) or **Connected** (a

@@ -205,7 +205,8 @@ Grouped by what the decision governs; the number is still the order it was taken
 | [0345](0345-a-plane-tip-ends-in-a-half-ball.md) | End a plane tip in a half ball of its contact, centred on the contact | Accepted |
 | [0346](0346-a-head-meets-its-face-square-on-or-the-support-is-not-placed.md) | Meet every face square on with the head, or leave the support out | Accepted; a contact with no room for a head is left to a small pillar by 0348, the head along the normal whatever way it looks is superseded by 0350 |
 | [0347](0347-a-merge-drops-past-the-part-and-a-tree-is-held-to-its-reach.md) | Keep a tree near its tips: merge onto a lower front, drop past the part, and hold a strut's length and a trunk's tips | Accepted |
-| [0348](0348-a-contact-a-head-cannot-reach-is-held-by-a-small-pillar-square-on-both-faces.md) | Hold a contact a head cannot reach with a small pillar, square on both faces | Accepted |
+| [0348](0348-a-contact-a-head-cannot-reach-is-held-by-a-small-pillar-square-on-both-faces.md) | Hold a contact a head cannot reach with a small pillar, square on both faces | Accepted; the step aside is widened for a contact that ends seated by 0354 |
+| [0354](0354-a-contact-moves-in-until-its-whole-tip-lies-on-its-face.md) | Move a contact in until its whole tip lies on its face | Accepted |
 | [0093](0093-a-blocker-is-a-keep-out-not-a-hint.md) | A support blocker is a keep-out, not a hint | Accepted |
 | [0094](0094-a-supports-parameters-are-its-groups.md) | A support's parameters are its group's | Accepted; that no trunk is shared across groups is superseded by 0248; that the bracing is group 0's is superseded by 0252; that the raft is group 0's is superseded by 0253 |
 | [0095](0095-a-support-the-hand-touched-is-frozen.md) | A support the hand has touched is frozen into the scene | Accepted; the two-press rule is superseded by 0244 |
