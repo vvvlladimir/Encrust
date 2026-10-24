@@ -354,8 +354,8 @@ whole-surface fill is Cmd-Shift-click.
 - A tip that has no room leans until it finds some, as far as a 25 mm strut at 45° reaches.
   A support that still has no room is reported and left out of the print, never forced
   into the model.
-- Supports are drawn round, 24 sides to a pillar, with rounded joints, and widen into
-  their pad on a curved fillet.
+- Supports are drawn round, 12 sides to a pillar shaded smooth, with rounded joints, and
+  widen into their pad on a curved fillet.
 - Supports stand against the model **as it prints**: hollowed, its cavity, and drilled,
   its holes, so the crown of a drain hole or any bore is held up like other overhangs.
   **Grow the supports** holds a model up from outside; **Support the cavity**, shown for

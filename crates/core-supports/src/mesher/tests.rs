@@ -274,8 +274,8 @@ fn the_volume_matches_the_cones_and_cylinders_it_is_made_of() {
     let tip = PI * pillar_r * pillar_r * profile.tip.contact_depth_mm;
     let neck = PI * profile.top.length_mm / 3.0
         * (contact_r * contact_r + contact_r * pillar_r + pillar_r * pillar_r);
-    // The neck ends in a dome inside the pillar and the pillar starts under one inside the neck,
-    // each a cone on its pole and two frustums, counted on top of the tube they sit in.
+    // The neck ends flat inside the pillar, which starts under a dome inside the neck: a cone
+    // on its pole and frustums, counted on top of the tube it sits in (ADR 0352).
     let pillar = PI * pillar_r * pillar_r * (height - profile.top.length_mm - trunk_bottom);
     let rings = tube::DOME_RINGS as f32;
     let ring = |step: f32| (PI / 2.0 * step / rings).sin() * pillar_r;
@@ -288,7 +288,7 @@ fn the_volume_matches_the_cones_and_cylinders_it_is_made_of() {
                 * (upper * upper + upper * lower + lower * lower)
         })
         .sum();
-    let seam = 2.0 * dome;
+    let seam = dome;
     let pad = PI * foot_h / 3.0 * (base_r * base_r + base_r * rim_r + rim_r * rim_r);
     // The flare is a quarter circle as tall as it is wide, drawn as a frustum a step,
     // and sinks into the pad as far as the pillar does.
@@ -639,7 +639,46 @@ fn nothing_of_a_plain_column_is_wider_than_its_pillar() {
 }
 
 #[test]
-fn a_strut_ends_rounded_inside_its_trunk_and_nothing_swells_round_the_joint() {
+fn a_strut_over_a_trunk_too_short_to_hold_its_end_keeps_its_dome() {
+    let profile = profile();
+    let radius_mm = profile.pillar_radius_mm();
+    let joint = Vec3::new(10.0, 10.0, 0.5 * radius_mm + profile.footing_height_mm());
+    let nodes = vec![
+        TreeNode {
+            position: joint + Vec3::new(0.0, 0.0, 3.0),
+            radius_mm,
+            parent: Some(1),
+            point: None,
+            head: None,
+        },
+        TreeNode {
+            position: joint,
+            radius_mm,
+            parent: None,
+            point: None,
+            head: None,
+        },
+    ];
+    let landing = Landing {
+        base: Vec3::new(joint.x, joint.y, 0.0),
+        on_model: false,
+        pad_offset: Vec2::ZERO,
+        pad_cut: None,
+        on_support: false,
+    };
+    let tree = SupportTree::new(nodes, 1, landing);
+    let tube = strut(&tree, 0, 1, &profile, Style::of(&tree, &profile));
+
+    let past = tube.tail.map(|tail| (tail - joint).dot(tube.direction));
+    assert!(
+        past.is_some_and(|past| (past - radius_mm).abs() < 1e-4),
+        "a trunk half a strut's width long cannot hold its end, so it is rounded {radius_mm} mm \
+         past the joint, got {past:?}"
+    );
+}
+
+#[test]
+fn a_strut_ends_flat_inside_its_trunk_and_nothing_swells_round_the_joint() {
     let profile = profile();
     let trees = trees_on(
         &[
@@ -673,17 +712,22 @@ fn a_strut_ends_rounded_inside_its_trunk_and_nothing_swells_round_the_joint() {
 
         let mut swept = Mesh::default();
         sweep(&mut swept, &tube);
-        let past: Vec<Scalar> = swept
+        let end: Vec<Scalar> = swept
             .vertices
             .iter()
-            .filter(|vertex| (**vertex - tube.top).dot(tube.direction) > reaches + 1e-4)
+            .filter(|vertex| (**vertex - tube.top).dot(tube.direction) > reaches - 1e-4)
             .map(|vertex| (*vertex - joint).length())
             .collect();
-        assert!(!past.is_empty(), "the strut is rounded off past the joint");
         assert!(
-            past.iter().all(|far| *far <= trunk_mm + 1e-4),
-            "what is past the joint is inside the trunk's own dome of {trunk_mm} mm: \
-                 {past:?}"
+            swept
+                .vertices
+                .iter()
+                .all(|vertex| (*vertex - tube.top).dot(tube.direction) <= reaches + 1e-4),
+            "the strut ends flat on the joint, nothing of it past"
+        );
+        assert!(
+            end.iter().all(|far| *far <= trunk_mm + 1e-4),
+            "its end is inside the trunk's own dome of {trunk_mm} mm: {end:?}"
         );
     }
 

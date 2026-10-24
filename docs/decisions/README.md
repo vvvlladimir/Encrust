@@ -216,7 +216,7 @@ Grouped by what the decision governs; the number is still the order it was taken
 | [0130](0130-a-pillar-flares-into-its-pad-at-forty-five-degrees.md) | Flare a pillar into its pad at forty-five degrees | Accepted; the flare's upper width is superseded by 0238, its straight cone by 0343 |
 | [0131](0131-the-shipped-presets-are-field-measurements.md) | Ship the field's measurements, and the two rules they broke | Accepted; the measurements and the order of the densities are superseded by 0254 |
 | [0237](0237-a-pad-is-fitted-to-the-room-it-has.md) | Fit a pad to the room it has, and lift a part by what its support needs | Accepted; the fitting of a pad is superseded by 0239 |
-| [0238](0238-a-support-has-one-width-and-its-joints-are-domes.md) | Give a support one width, round its joints, and let a raft lift the part | Accepted |
+| [0238](0238-a-support-has-one-width-and-its-joints-are-domes.md) | Give a support one width, round its joints, and let a raft lift the part | Accepted; the dome at the end of every strut is superseded by 0352 |
 | [0239](0239-a-pad-is-as-wide-as-its-profile-says.md) | Make a pad as wide as its profile says, and move it rather than narrow it | Accepted |
 | [0240](0240-braces-follow-a-gabriel-graph-and-a-lone-trunk-leans-in.md) | Tie trunks along a Gabriel graph, and lean a lone trunk into reach | Accepted; how far a trunk leans and towards what is superseded by 0250 |
 | [0241](0241-a-raft-covers-the-part-and-comes-in-three-styles.md) | Draw a raft around the part by a margin in millimetres, in one of three styles | Accepted; the radius a foot is drawn at superseded by 0266 |
@@ -304,6 +304,7 @@ Grouped by what the decision governs; the number is still the order it was taken
 | [0349](0349-a-proof-stands-supports-to-the-plan-the-window-builds-them-to.md) | A proof stands supports to the plan the window builds them to, automatic sizing included | Accepted |
 | [0350](0350-a-head-lying-over-is-turned-down-behind-a-pin.md) | Turn a head lying past 45 degrees back down, by at most 33, behind a pin | Accepted |
 | [0351](0351-a-growth-keeps-its-answers-runs-on-every-core-and-meshes-its-trees.md) | Keep a model's clearance answers, grow on every core, and mesh on the growth's worker | Accepted |
+| [0352](0352-a-buried-strut-ends-flat-and-supports-are-shaded-smooth.md) | End a strut buried in its joint flat, and shade supports smooth on twelve sides | Accepted |
 | [0088](0088-the-plate-is-packed-as-a-bitmap.md) | The plate is packed as a bitmap into the corner, and the block centred | Accepted; supports left out of a footprint is superseded by 0256 |
 | [0256](0256-a-footprint-carries-the-supports-and-the-raft.md) | Pack a model with its supports and its raft | Accepted |
 | [0098](0098-a-plate-is-a-number-on-the-object.md) | A plate is a number on the object, not a scene of its own | Accepted |

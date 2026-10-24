@@ -465,7 +465,8 @@ impl Draws {
             // only paint the scaffolding red.
             let instance =
                 ModelInstance::new(Transform::default(), theme::support_tint(group), NOT_MARKED)
-                    .pulled(GROUP_PULL * (groups.len() - group) as f32);
+                    .pulled(GROUP_PULL * (groups.len() - group) as f32)
+                    .smoothed();
             self.models
                 .push(ModelDraw::whole(Arc::clone(mesh), instance));
             self.solid(Arc::clone(mesh), Transform::default());

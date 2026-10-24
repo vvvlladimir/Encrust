@@ -4,7 +4,7 @@
 
 name = "Medium"
 
-facets = 24
+facets = 12
 
 # How many supports automatic placement puts down against what it reckons is enough,
 # counted over an area: doubling it puts down twice as many.

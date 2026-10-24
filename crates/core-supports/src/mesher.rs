@@ -295,11 +295,17 @@ fn strut(
     let direction = offset / length;
     let body_mm = style.body_radius_mm(nodes[child].radius_mm, profile);
 
-    // One width down to a dome on the joint, under which the next, no narrower, tube
-    // starts: every end is inside what it meets. See `docs/decisions/0238`.
+    // One width down to the joint, under which the next, no narrower, tube starts: every end
+    // is inside what it meets, so one buried in it ends flat (ADR 0238, 0352).
     let mut rings = Vec::with_capacity(8);
     head(&mut rings, &nodes[child], direction, profile, style, length);
-    round_off(&mut rings, length, body_mm);
+    let tail = if buried(tree, parent, body_mm, profile, style) {
+        push(&mut rings, length, body_mm);
+        to
+    } else {
+        round_off(&mut rings, length, body_mm);
+        to + direction * body_mm
+    };
 
     Tube {
         top: from,
@@ -307,8 +313,26 @@ fn strut(
         rings,
         sides: profile.facets as usize,
         apex: Some(apex_of(&nodes[child], direction, profile, style, length)),
-        tail: Some(to + direction * body_mm),
+        tail: Some(tail),
     }
+}
+
+/// Whether a strut `body_mm` wide ending at node `joint` ends inside the tube leaving it: that
+/// tube starts in a dome no narrower and runs on twice the strut's width, so a ball holds the end.
+fn buried(
+    tree: &SupportTree,
+    joint: usize,
+    body_mm: Scalar,
+    profile: &SupportProfile,
+    style: Style,
+) -> bool {
+    let nodes = tree.nodes();
+    let node = &nodes[joint];
+    let below = match node.parent {
+        Some(parent) => node.position.distance(nodes[parent].position),
+        None => node.position.distance(trunk_bottom(tree, profile)),
+    };
+    style.body_radius_mm(node.radius_mm, profile) >= body_mm && below >= 2.0 * body_mm
 }
 
 /// The tube under the root: a cone from the joint's own width out to the base its height

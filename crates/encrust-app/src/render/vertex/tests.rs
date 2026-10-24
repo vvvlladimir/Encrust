@@ -165,6 +165,6 @@ fn one_flipped_axis_mirrors_and_two_turn_the_model_round() {
 fn the_instance_stride_has_no_padding() {
     assert_eq!(
         size_of::<ModelInstance>(),
-        (16 + 9 + 4 + 3) * size_of::<f32>()
+        (16 + 9 + 4 + 4) * size_of::<f32>()
     );
 }

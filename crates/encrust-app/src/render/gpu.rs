@@ -115,7 +115,7 @@ struct Globals {
     pockets: [TrapBox; MAX_POCKETS],
 }
 
-/// A mesh already on the GPU, flat-shaded and ready to draw.
+/// A mesh already on the GPU, flat or smooth-shaded and ready to draw.
 ///
 /// The `Arc` is held so the address it was cached under cannot be reused by a different
 /// mesh while the buffer is still in the map. The vertices are one buffer per piece: a
@@ -128,6 +128,8 @@ struct CachedMesh {
     /// drawn in part — the drainage check lands frames after the shell does — so a cache
     /// entry whose breaks no longer cover what is asked for is uploaded again.
     splits: Vec<usize>,
+    /// Whether its corners carry normals smoothed over their faces rather than a face's own.
+    smooth: bool,
     /// When a frame last drew it: a mesh drawn only while the camera moves, a light copy,
     /// stays on the card between moves rather than going up again with each one.
     drawn_at: web_time::Instant,
@@ -462,6 +464,7 @@ impl ViewportResources {
             device,
             &draw.mesh,
             &splits[&(Arc::as_ptr(&draw.mesh) as usize)],
+            draw.instance.is_smooth(),
         );
         Drawn {
             key,
@@ -521,13 +524,19 @@ impl ViewportResources {
     /// Uploads a mesh the first time it is seen, or again once a draw asks for a part of
     /// it the pieces do not break at, and returns its cache key. `splits` are face indices
     /// no piece may straddle, so that a draw of part of the mesh is a whole number of
-    /// pieces.
-    fn cache(&mut self, device: &wgpu::Device, mesh: &Arc<Mesh>, splits: &[usize]) -> usize {
+    /// pieces. A smooth upload serves a flat draw too, as the section's stencil only counts.
+    fn cache(
+        &mut self,
+        device: &wgpu::Device,
+        mesh: &Arc<Mesh>,
+        splits: &[usize],
+        smooth: bool,
+    ) -> usize {
         let key = Arc::as_ptr(mesh) as usize;
         if self
             .meshes
             .get(&key)
-            .is_some_and(|held| held.splits == splits)
+            .is_some_and(|held| held.splits == splits && (held.smooth || !smooth))
         {
             return key;
         }
@@ -536,8 +545,9 @@ impl ViewportResources {
             key,
             CachedMesh {
                 _mesh: Arc::clone(mesh),
-                pieces: pieces(device, mesh, splits),
+                pieces: pieces(device, mesh, splits, smooth),
                 splits: splits.to_vec(),
+                smooth,
                 drawn_at: web_time::Instant::now(),
             },
         );

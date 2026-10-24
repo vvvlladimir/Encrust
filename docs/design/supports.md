@@ -488,10 +488,11 @@ the same beam. What still cannot stand is dropped, and the panel's
 standing-against-placed count is where that shows.
 
 **Meshing.** Every strut is its own closed tube and tubes overlap rather than weld
-(ADR 0041). A strut keeps its own width all the way down and ends in a dome of that width
-centred on the node; the tube leaving the node starts under a dome of its own. A trunk is
-never thinner than a branch, so every end lies inside what it meets: nothing covers the
-joint and nothing is wider there than the trunk itself (ADR 0238). Ring
+(ADR 0041). A strut keeps its own width all the way down to the node; the tube leaving the
+node starts under a dome of its own. A trunk is never thinner than a branch, so every end lies
+inside what it meets: nothing covers the joint and nothing is wider there than the trunk
+itself (ADR 0238). A strut ends flat where that tube runs on twice the strut's width, and in a
+dome of its own width elsewhere (ADR 0352). Ring
 frames come from the tube's direction, chosen so a vertical tube uses the plate's own X
 and Y.
 `tests/branching_prints.rs` checks the point of all this: through a joint the layer has

@@ -6,6 +6,9 @@ use egui::Color32;
 
 use crate::ui::theme;
 
+mod smooth;
+pub use smooth::smooth_vertices;
+
 /// One corner of a mesh, shared by the faces that meet at it, carrying the normal of the
 /// one face it leads; see `docs/design/viewport.md`.
 #[repr(C)]
@@ -180,6 +183,9 @@ pub struct ModelInstance {
     /// Share of the way to the eye the instance is drawn pulled, depth only: what wins
     /// between two coplanar faces of different meshes.
     pull: f32,
+    /// 1.0 where the mesh goes to the card with normals smoothed over its corners and is
+    /// shaded by them, 0.0 for flat faces.
+    smooth: f32,
 }
 
 /// What [`ModelInstance::new`] is given for a mesh that is not marked: no lean can be
@@ -187,7 +193,7 @@ pub struct ModelInstance {
 pub const NOT_MARKED: f32 = -1.0;
 
 impl ModelInstance {
-    const ATTRIBUTES: [wgpu::VertexAttribute; 11] = wgpu::vertex_attr_array![
+    const ATTRIBUTES: [wgpu::VertexAttribute; 12] = wgpu::vertex_attr_array![
         2 => Float32x4,
         3 => Float32x4,
         4 => Float32x4,
@@ -199,6 +205,7 @@ impl ModelInstance {
         10 => Float32,
         13 => Float32,
         14 => Float32,
+        15 => Float32,
     ];
 
     pub const fn layout() -> wgpu::VertexBufferLayout<'static> {
@@ -221,7 +228,20 @@ impl ModelInstance {
             overhang,
             surface: 1.0,
             pull: 0.0,
+            smooth: 0.0,
         }
+    }
+
+    /// The same instance shaded smooth over its mesh's corners, which then goes to the card
+    /// with [`smooth_vertices`]: a tube of few sides reads round.
+    pub fn smoothed(mut self) -> Self {
+        self.smooth = 1.0;
+        self
+    }
+
+    /// Whether the mesh is shaded smooth, and so uploaded with normals at its corners.
+    pub fn is_smooth(&self) -> bool {
+        self.smooth > 0.5
     }
 
     /// The same instance drawn `share` of the way nearer the eye in depth, and nowhere
