@@ -203,10 +203,7 @@ fn wall(ui: &mut egui::Ui, window: &mut Window) {
 }
 
 /// The largest surface of any model on the plate, in square millimetres.
-///
-/// The lattice is bounded by it: the cost of a cavity follows the model's area over the
-/// square of the spacing, so a spacing in millimetres alone would let a big model cost
-/// what the machine has not got.
+/// Bounds the lattice: cavity cost follows area over spacing squared, not spacing alone.
 fn widest(doc: &Doc) -> f32 {
     doc.scene
         .targets()

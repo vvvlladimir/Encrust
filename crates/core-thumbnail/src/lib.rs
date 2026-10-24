@@ -1,8 +1,5 @@
-//! The shaded picture of a plate that a sliced file carries as its thumbnail.
-//!
-//! Rendering is done in software, on the CPU, so that the CLI and the window produce the
-//! same image and no core crate has to know about a graphics API; see
-//! `docs/decisions/0048-thumbnails-are-rendered-in-software.md`.
+//! The shaded picture of a plate that a sliced file carries as its thumbnail. Rendered in software
+//! so the CLI and window agree and no core crate knows a graphics API (ADR 0048).
 
 mod image;
 mod render;

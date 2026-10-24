@@ -71,11 +71,8 @@ impl Folded {
     }
 }
 
-/// Rasterises `layers` in parallel and folds them into `measured` in print order, which
-/// is where an island is taken out.
-///
-/// Print order is why the fold is not parallel: what a layer stands on is only known once
-/// the layer under it has been folded. See `docs/design/analysis.md`.
+/// Rasterises `layers` in parallel and folds them into `measured` in print order, where islands go.
+/// The fold is serial: what a layer stands on is known once the one under it is folded.
 pub fn fold_group(
     layers: &[Layer],
     settings: &RasterSettings,

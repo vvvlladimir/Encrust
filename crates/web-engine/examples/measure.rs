@@ -1,10 +1,5 @@
-//! The browser's run, natively: time and peak live bytes of `slice_project` on a project.
-//!
-//! `cargo run --release -p web-engine --example measure -- plate.encrust printer.toml
-//! resin.toml`, with
-//! `RAYON_NUM_THREADS=1` for the single thread the browser has. Peak memory is counted by
-//! the allocator, so it is what the run holds and not what the process was given; see
-//! `docs/design/web-build.md`.
+//! The browser's run, natively: time and peak live bytes of `slice_project`; run with
+//! `RAYON_NUM_THREADS=1`. See `docs/design/web-build.md`.
 
 use std::alloc::{GlobalAlloc, Layout, System};
 use std::error::Error;

@@ -26,12 +26,8 @@ impl Orientation {
     }
 }
 
-/// Makes every face wind the same way round, and turns closed shells outwards.
-///
-/// STL face normals are ignored throughout: exporters write them inconsistently, so
-/// winding order is the only trustworthy source of orientation. Run [`crate::weld`]
-/// first, or no two faces will look adjacent. Never leaves more edges walked the same way
-/// by both their faces than it found; see `docs/design/mesh-repair.md`.
+/// Makes every face wind the same way and turns closed shells outwards; STL normals are ignored.
+/// Run [`crate::weld`] first; see `docs/design/mesh-repair.md`.
 pub fn orient_outward(mesh: &mut Mesh) -> Orientation {
     if mesh.faces.is_empty() {
         return Orientation {
@@ -104,12 +100,8 @@ struct Link {
     agreed: bool,
 }
 
-/// Which faces to turn round so that as few links as possible are walked the same way.
-///
-/// Faces that already agree with each other form patches, and a patch is turned as a
-/// whole, so a conflict inside one, which no turning can mend, never spreads out of it.
-/// Between patches the seams with the most edges are honoured first. Unless that leaves
-/// fewer edges in conflict than the file had, the file's own winding stands.
+/// Agreeing faces form patches turned whole; bigger seams win; the file's winding stands unless
+/// beaten.
 fn settle(faces: usize, links: &[Link]) -> Vec<bool> {
     let agreed = links
         .par_iter()

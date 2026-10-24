@@ -22,9 +22,8 @@ struct Fit {
 }
 
 impl Fit {
-    /// The roomiest fit in `room` points: names first, then the gaps spread up to their
-    /// most; short of room the names go, then the gaps close, and past that the rail
-    /// scrolls at its tightest.
+    /// The roomiest fit in `room` points: names first, then gaps to their most; short of room the
+    /// names go, then the gaps close, then the rail scrolls.
     fn into(room: f32) -> Self {
         let tight = |labelled| Self {
             labelled,
@@ -102,7 +101,7 @@ fn tools(ui: &mut egui::Ui, window: &mut Window, fit: Fit) {
 }
 
 fn button(ui: &mut egui::Ui, window: &mut Window, tool: Tool, labelled: bool) {
-    let active = *window.tool == tool;
+    let active = window.tool.card() == tool;
     let tooltip = shortcuts::tooltip(Action::Pick(tool));
     let badge = badge(window, tool);
     let glyph = tool.glyph();

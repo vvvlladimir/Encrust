@@ -6,9 +6,13 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use crate::{
-    DirStore, MaterialProfile, Preset, PrinterProfile, PrinterTuning, ProfileError, ProfileStore,
-    SupportProfile,
+    AutoProfile, DirStore, MaterialProfile, Preset, PrinterProfile, PrinterTuning, ProfileError,
+    ProfileStore, SupportProfile,
 };
+
+mod unreadable;
+
+pub use unreadable::Unreadable;
 
 include!(concat!(env!("OUT_DIR"), "/bundled_profiles.rs"));
 
@@ -25,6 +29,8 @@ pub enum Kind {
     Hollow,
     /// Named settings of the Drain tool, as a [`Preset`].
     Drain,
+    /// The user's copy of a shipped automatic profile: one can be retuned, none added.
+    Auto,
 }
 
 impl Kind {
@@ -35,6 +41,7 @@ impl Kind {
             Self::Support => "supports",
             Self::Hollow => "hollow",
             Self::Drain => "drain",
+            Self::Auto => "auto",
         }
     }
 
@@ -45,6 +52,7 @@ impl Kind {
             Self::Support => "support profile",
             Self::Hollow => "hollow profile",
             Self::Drain => "drain profile",
+            Self::Auto => "automatic profile",
         }
     }
 }
@@ -72,12 +80,14 @@ pub struct Catalogue {
     printers: BTreeMap<String, Entry<PrinterProfile>>,
     resins: BTreeMap<String, Entry<MaterialProfile>>,
     supports: BTreeMap<String, Entry<SupportProfile>>,
+    /// Automatic profiles. Only those that ship exist; the user may keep a retuned copy
+    /// of one, and tunes the shapes they name as any support profile.
+    autos: BTreeMap<String, Entry<AutoProfile>>,
     /// Named tool settings, which nothing ships: each is the user's own.
     hollows: BTreeMap<String, Entry<Preset>>,
     drains: BTreeMap<String, Entry<Preset>>,
-    /// Preset files that would not read, left out rather than failing the catalogue: a
-    /// tool's settings are never what a slice depends on.
-    unreadable: Vec<PathBuf>,
+    /// The user's files that would not read, left out rather than failing the catalogue.
+    unreadable: Vec<Unreadable>,
     /// Where an edited profile is written. `None` until a store is laid over the
     /// catalogue, which is what makes a bundled-only catalogue read-only.
     store: Option<Arc<dyn ProfileStore>>,
@@ -90,6 +100,7 @@ impl Catalogue {
             printers: bundled_table(BUNDLED_PRINTERS, "printers", PrinterProfile::from_toml_str)?,
             resins: bundled_table(BUNDLED_RESINS, "resins", MaterialProfile::from_toml_str)?,
             supports: bundled_table(BUNDLED_SUPPORTS, "supports", SupportProfile::from_toml_str)?,
+            autos: bundled_table(BUNDLED_AUTOS, "auto", AutoProfile::from_toml_str)?,
             hollows: BTreeMap::new(),
             drains: BTreeMap::new(),
             unreadable: Vec::new(),
@@ -123,41 +134,60 @@ impl Catalogue {
 
     /// Lays what `store` keeps over what is already loaded, by id, and writes edits there.
     pub fn overlay_store(&mut self, store: Arc<dyn ProfileStore>) -> Result<(), ProfileError> {
-        overlay(
+        let printers = overlay(
             &mut self.printers,
             &*store,
             Kind::Printer,
             PrinterProfile::from_toml_str,
+            Adds::Yes,
         )?;
+        self.unreadable.extend(printers);
         let copies = self.printers.values_mut();
         for entry in copies.filter(|entry| matches!(entry.source, Source::User(_))) {
             entry.profile.locked = shipped_locks(&entry.id, &entry.profile);
         }
-        overlay(
+        let resins = overlay(
             &mut self.resins,
             &*store,
             Kind::Resin,
             MaterialProfile::from_toml_str,
+            Adds::Yes,
         )?;
-        overlay(
+        let supports = overlay(
             &mut self.supports,
             &*store,
             Kind::Support,
             SupportProfile::from_toml_str,
+            Adds::Yes,
         )?;
-        for kind in [Kind::Hollow, Kind::Drain] {
-            if let Some(table) = self.preset_table_mut(kind) {
-                let skipped = overlay_presets(table, &*store, kind)?;
-                self.unreadable.extend(skipped);
-            }
-        }
+        let autos = overlay(
+            &mut self.autos,
+            &*store,
+            Kind::Auto,
+            AutoProfile::from_toml_str,
+            Adds::No,
+        )?;
+        let hollows = overlay(
+            &mut self.hollows,
+            &*store,
+            Kind::Hollow,
+            Preset::from_toml_str,
+            Adds::Yes,
+        )?;
+        let drains = overlay(
+            &mut self.drains,
+            &*store,
+            Kind::Drain,
+            Preset::from_toml_str,
+            Adds::Yes,
+        )?;
+        self.unreadable.extend(
+            [resins, supports, autos, hollows, drains]
+                .into_iter()
+                .flatten(),
+        );
         self.store = Some(store);
         Ok(())
-    }
-
-    /// The preset files left out of the catalogue because they would not read.
-    pub fn unreadable(&self) -> &[PathBuf] {
-        &self.unreadable
     }
 
     /// Whether edits have somewhere to be written.
@@ -177,6 +207,19 @@ impl Catalogue {
         self.supports.values()
     }
 
+    /// The automatic profiles, each naming support profiles of this catalogue by id.
+    pub fn autos(&self) -> impl Iterator<Item = &Entry<AutoProfile>> {
+        self.autos.values()
+    }
+
+    /// Whether the support profile `id` is one an automatic profile builds to: the lists
+    /// offer those apart from the profiles chosen by hand.
+    pub fn is_auto_shape(&self, id: &str) -> bool {
+        self.autos
+            .values()
+            .any(|auto| auto.profile.every_shape().any(|shape| shape == id))
+    }
+
     /// The named settings kept for a tool: `Kind::Hollow` or `Kind::Drain`, none else.
     pub fn presets(&self, kind: Kind) -> impl Iterator<Item = &Entry<Preset>> {
         self.preset_table(kind)
@@ -188,7 +231,7 @@ impl Catalogue {
         match kind {
             Kind::Hollow => Some(&self.hollows),
             Kind::Drain => Some(&self.drains),
-            Kind::Printer | Kind::Resin | Kind::Support => None,
+            Kind::Printer | Kind::Resin | Kind::Support | Kind::Auto => None,
         }
     }
 
@@ -196,7 +239,7 @@ impl Catalogue {
         match kind {
             Kind::Hollow => Some(&mut self.hollows),
             Kind::Drain => Some(&mut self.drains),
-            Kind::Printer | Kind::Resin | Kind::Support => None,
+            Kind::Printer | Kind::Resin | Kind::Support | Kind::Auto => None,
         }
     }
 
@@ -265,14 +308,14 @@ impl Catalogue {
             Kind::Printer => BUNDLED_PRINTERS,
             Kind::Resin => BUNDLED_RESINS,
             Kind::Support => BUNDLED_SUPPORTS,
+            Kind::Auto => BUNDLED_AUTOS,
             Kind::Hollow | Kind::Drain => return false,
         };
         table.iter().any(|(name, _)| *name == id)
     }
 
-    /// The printer this build ships under `id`, whatever the user's copy of it says. It
-    /// is what tells a copy made by an older release from the profile beside it, and what
-    /// *Restore* writes back; see `docs/decisions/0196`.
+    /// The printer this build ships under `id`, whatever the user's copy says; tells an older
+    /// release's copy apart and is what *Restore* writes back (`docs/decisions/0196`).
     pub fn shipped_printer(&self, id: &str) -> Option<PrinterProfile> {
         shipped_printer(id)
     }
@@ -289,7 +332,7 @@ impl Catalogue {
 
     /// Writes `toml` as the profile of `kind` and `id`, and says where it went.
     fn keep(
-        &self,
+        &mut self,
         kind: Kind,
         id: &str,
         toml: impl FnOnce(&Path) -> Result<String, ProfileError>,
@@ -297,6 +340,7 @@ impl Catalogue {
         let store = self.store_for(id)?;
         let path = store.path_of(kind, id);
         store.write(kind, id, &toml(&path)?)?;
+        self.readable_again(kind, id);
         Ok(path)
     }
 
@@ -359,10 +403,32 @@ impl Catalogue {
         Ok(path)
     }
 
+    /// Writes the user's copy of the shipped automatic profile `id`. There is no other
+    /// kind of automatic profile, so an id that does not ship is refused.
+    pub fn save_auto(&mut self, id: &str, profile: &AutoProfile) -> Result<PathBuf, ProfileError> {
+        if !self.autos.contains_key(id) {
+            return Err(ProfileError::Unknown {
+                kind: Kind::Auto.label(),
+                id: id.to_owned(),
+            });
+        }
+        let path = self.keep(Kind::Auto, id, |path| profile.to_toml_string(path))?;
+        self.autos.insert(
+            id.to_owned(),
+            Entry {
+                id: id.to_owned(),
+                profile: profile.clone(),
+                source: Source::User(path.clone()),
+            },
+        );
+        Ok(path)
+    }
+
     /// Throws away the user's copy of a profile. What was shipped under that id comes
     /// back; an id that was only ever theirs leaves the catalogue.
     pub fn forget_user_copy(&mut self, kind: Kind, id: &str) -> Result<(), ProfileError> {
         self.store_for(id)?.remove(kind, id)?;
+        self.readable_again(kind, id);
         match kind {
             Kind::Printer => restore_bundled(
                 &mut self.printers,
@@ -385,6 +451,13 @@ impl Catalogue {
                 id,
                 SupportProfile::from_toml_str,
             ),
+            Kind::Auto => restore_bundled(
+                &mut self.autos,
+                BUNDLED_AUTOS,
+                "auto",
+                id,
+                AutoProfile::from_toml_str,
+            ),
             Kind::Hollow | Kind::Drain => {
                 if let Some(table) = self.preset_table_mut(kind) {
                     table.remove(id);
@@ -396,9 +469,7 @@ impl Catalogue {
 }
 
 /// Whether `id` can be a file stem in the profile directory.
-///
-/// An id ends up as a path, so it is held to what a catalogue id looks like rather than
-/// to what a file system would merely tolerate.
+/// An id becomes a path, so it is held to what a catalogue id looks like.
 pub fn is_valid_id(id: &str) -> bool {
     !id.is_empty()
         && id
@@ -479,35 +550,40 @@ fn shipped_printer(id: &str) -> Option<PrinterProfile> {
     PrinterProfile::from_toml_str(source, &path).ok()
 }
 
+pub(crate) fn shipped_support(id: &str) -> Result<SupportProfile, ProfileError> {
+    let (_, source) = BUNDLED_SUPPORTS
+        .iter()
+        .find(|(name, _)| *name == id)
+        .ok_or_else(|| ProfileError::Unknown {
+            kind: Kind::Support.label(),
+            id: id.to_owned(),
+        })?;
+    let path = PathBuf::from(format!("<bundled>/supports/{id}.toml"));
+    SupportProfile::from_toml_str(source, &path)
+}
+
+/// Whether the user's directory may hold ids nothing ships, or only copies of shipped ones.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum Adds {
+    Yes,
+    No,
+}
+
+/// Lays the user's files of `kind` over `map` by id, and answers those that would not read:
+/// each leaves in place whatever was there before it.
 fn overlay<T>(
     map: &mut BTreeMap<String, Entry<T>>,
     store: &dyn ProfileStore,
     kind: Kind,
     parse: Parse<T>,
-) -> Result<(), ProfileError> {
-    for (id, path, toml) in store.read_all(kind)? {
-        let profile = parse(&toml, &path)?;
-        map.insert(
-            id.clone(),
-            Entry {
-                id,
-                profile,
-                source: Source::User(path),
-            },
-        );
-    }
-    Ok(())
-}
-
-/// Lays the presets of `kind` over `map`, and answers the files that would not read.
-fn overlay_presets(
-    map: &mut BTreeMap<String, Entry<Preset>>,
-    store: &dyn ProfileStore,
-    kind: Kind,
-) -> Result<Vec<PathBuf>, ProfileError> {
+    adds: Adds,
+) -> Result<Vec<Unreadable>, ProfileError> {
     let mut unreadable = Vec::new();
     for (id, path, toml) in store.read_all(kind)? {
-        match Preset::from_toml_str(&toml, &path) {
+        if adds == Adds::No && !map.contains_key(&id) {
+            continue;
+        }
+        match parse(&toml, &path) {
             Ok(profile) => {
                 let source = Source::User(path);
                 map.insert(
@@ -519,484 +595,16 @@ fn overlay_presets(
                     },
                 );
             }
-            Err(_) => unreadable.push(path),
+            Err(error) => unreadable.push(Unreadable {
+                kind,
+                id,
+                path,
+                error: Arc::new(error),
+            }),
         }
     }
     Ok(unreadable)
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::PrinterTuning;
-
-    #[test]
-    fn a_broken_preset_is_left_out_and_the_rest_of_the_catalogue_reads() {
-        in_its_own_dir("broken-preset", |dir, _| {
-            let drain = dir.join("drain");
-            std::fs::create_dir_all(&drain).expect("writable");
-            std::fs::write(drain.join("broken.toml"), "name = ").expect("writable");
-
-            let catalogue = Catalogue::with_root(dir).expect("a preset cannot fail the catalogue");
-            assert!(catalogue.printer("elegoo-mars-4-ultra").is_ok());
-            assert_eq!(catalogue.presets(Kind::Drain).count(), 0);
-            assert_eq!(catalogue.unreadable(), [drain.join("broken.toml")]);
-        });
-    }
-
-    #[test]
-    fn a_hollow_preset_is_kept_beside_the_profiles_and_forgotten() {
-        in_its_own_dir("hollow-preset", |dir, mut catalogue| {
-            let preset = Preset {
-                name: "Hive 2 mm".to_owned(),
-                settings: toml::Table::from_iter([("thickness_mm".to_owned(), 2.0.into())]),
-            };
-            let path = catalogue
-                .save_preset(Kind::Hollow, "hive-2-mm", &preset)
-                .expect("writable");
-            assert_eq!(path, dir.join("hollow/hive-2-mm.toml"));
-            let reloaded = Catalogue::with_root(dir).expect("the directory reads back");
-            let kept: Vec<&str> = reloaded
-                .presets(Kind::Hollow)
-                .map(|entry| entry.profile.name.as_str())
-                .collect();
-            assert_eq!(kept, ["Hive 2 mm"]);
-            assert_eq!(
-                reloaded.presets(Kind::Drain).count(),
-                0,
-                "kept apart by tool"
-            );
-
-            catalogue
-                .forget_user_copy(Kind::Hollow, "hive-2-mm")
-                .expect("removable");
-            assert_eq!(
-                catalogue.presets(Kind::Hollow).count(),
-                0,
-                "nothing shipped to fall back on"
-            );
-        });
-    }
-
-    #[test]
-    fn only_a_tools_kind_takes_a_preset() {
-        let mut catalogue = Catalogue::bundled().expect("shipped");
-        let preset = Preset {
-            name: "x".to_owned(),
-            settings: toml::Table::new(),
-        };
-        let refused = catalogue.save_preset(Kind::Printer, "x", &preset);
-        assert!(matches!(refused, Err(ProfileError::Unknown { .. })));
-    }
-
-    #[test]
-    fn every_bundled_profile_parses() {
-        let catalogue = Catalogue::bundled().expect("the shipped catalogue is valid");
-
-        assert!(
-            catalogue.printers().count() >= 5,
-            "the catalogue ships at least five machines"
-        );
-        assert!(
-            catalogue
-                .printers()
-                .all(|entry| entry.source == Source::Bundled)
-        );
-    }
-
-    /// An exposure is measured on the machine in the room, and an invented one costs a
-    /// tank of resin, so the catalogue ships none; see ADR 0196.
-    #[test]
-    fn the_catalogue_ships_no_resin() {
-        let catalogue = Catalogue::bundled().expect("the shipped catalogue is valid");
-        assert_eq!(catalogue.resins().count(), 0);
-        assert!(!catalogue.is_shipped(Kind::Resin, "standard-grey"));
-    }
-
-    #[test]
-    fn the_catalogue_covers_three_manufacturers() {
-        let catalogue = Catalogue::bundled().expect("the shipped catalogue is valid");
-
-        let makers: std::collections::BTreeSet<_> = catalogue
-            .printers()
-            .map(|entry| entry.profile.manufacturer.clone())
-            .collect();
-        assert!(makers.len() >= 3, "{makers:?} is not three manufacturers");
-    }
-
-    #[test]
-    fn a_user_profile_overrides_the_bundled_id() {
-        let dir = std::env::temp_dir().join("encrust-catalogue-override");
-        let printers = dir.join("printers");
-        std::fs::create_dir_all(&printers).expect("a writable temporary directory");
-        let path = printers.join("elegoo-mars-4-ultra.toml");
-        std::fs::write(
-            &path,
-            r#"
-name = "Mine"
-manufacturer = "Elegoo"
-
-[display]
-width_px = 100
-height_px = 50
-width_mm = 10.0
-height_mm = 5.0
-
-[build_volume]
-x = 10.0
-y = 5.0
-z = 100.0
-"#,
-        )
-        .expect("a writable file");
-
-        let mut catalogue = Catalogue::bundled().expect("the shipped catalogue is valid");
-        catalogue.overlay(&dir).expect("the directory is readable");
-
-        let entry = catalogue
-            .printer("elegoo-mars-4-ultra")
-            .expect("still there");
-        assert_eq!(entry.profile.name, "Mine");
-        assert_eq!(entry.source, Source::User(path.clone()));
-
-        std::fs::remove_dir_all(&dir).expect("the temporary directory goes away");
-    }
-
-    #[test]
-    fn a_missing_user_directory_leaves_the_catalogue_alone() {
-        let mut catalogue = Catalogue::bundled().expect("the shipped catalogue is valid");
-        let before = catalogue.printers().count();
-        catalogue
-            .overlay(Path::new("/nonexistent/encrust/profiles"))
-            .expect("a missing directory is not an error");
-        assert_eq!(catalogue.printers().count(), before);
-    }
-
-    #[test]
-    fn an_unknown_id_is_reported_as_unknown() {
-        let catalogue = Catalogue::bundled().expect("the shipped catalogue is valid");
-        let error = catalogue.printer("no-such-machine").unwrap_err();
-        assert!(matches!(
-            error,
-            ProfileError::Unknown {
-                kind: "printer",
-                ..
-            }
-        ));
-    }
-
-    #[test]
-    fn a_resin_comes_out_carrying_the_printers_numbers() {
-        in_its_own_dir("resolve-resin", |_, mut catalogue| {
-            let mut resin = MaterialProfile {
-                exposure_s: 2.6,
-                ..MaterialProfile::default()
-            };
-            resin.printers.insert(
-                MARS.to_owned(),
-                PrinterTuning {
-                    exposure_s: Some(3.2),
-                    ..PrinterTuning::default()
-                },
-            );
-            catalogue.save_resin("mine", &resin).expect("writable");
-
-            let tuned = catalogue.resin_for("mine", MARS).expect("saved");
-            assert!(
-                (tuned.exposure_s - 3.2).abs() < 1e-6,
-                "the machine's own measured exposure"
-            );
-            assert!(tuned.printers.is_empty(), "a resolved resin carries no map");
-        });
-    }
-
-    const MARS: &str = "elegoo-mars-3-pro";
-
-    /// A catalogue writing into a directory of this test's own, so nothing reads or
-    /// writes the profile directory the user actually keeps.
-    fn in_its_own_dir(name: &str, body: impl FnOnce(&Path, Catalogue)) {
-        let dir = std::env::temp_dir().join(format!("encrust-catalogue-{name}"));
-        let _ = std::fs::remove_dir_all(&dir);
-        let catalogue = Catalogue::with_root(&dir).expect("the shipped catalogue is valid");
-        body(&dir, catalogue);
-        let _ = std::fs::remove_dir_all(&dir);
-    }
-
-    #[test]
-    fn an_edited_printer_is_saved_over_the_shipped_one_and_can_be_thrown_away() {
-        in_its_own_dir("edit-printer", |dir, mut catalogue| {
-            let mut edited = catalogue
-                .printer("elegoo-mars-4-ultra")
-                .expect("shipped")
-                .profile
-                .clone();
-            edited.build_volume.z = 199.0;
-
-            let path = catalogue
-                .save_printer("elegoo-mars-4-ultra", &edited)
-                .expect("the profile directory is writable");
-            assert_eq!(path, dir.join("printers/elegoo-mars-4-ultra.toml"));
-
-            let entry = catalogue
-                .printer("elegoo-mars-4-ultra")
-                .expect("still there");
-            assert!((entry.profile.build_volume.z - 199.0).abs() < f32::EPSILON);
-            assert_eq!(entry.source, Source::User(path.clone()));
-
-            // A catalogue built fresh over the same directory reads the file back.
-            let reloaded = Catalogue::with_root(dir).expect("the directory is readable");
-            let entry = reloaded
-                .printer("elegoo-mars-4-ultra")
-                .expect("still there");
-            assert!((entry.profile.build_volume.z - 199.0).abs() < f32::EPSILON);
-
-            catalogue
-                .forget_user_copy(Kind::Printer, "elegoo-mars-4-ultra")
-                .expect("the file goes away");
-            let entry = catalogue
-                .printer("elegoo-mars-4-ultra")
-                .expect("shipped again");
-            assert_eq!(entry.source, Source::Bundled);
-            assert!(!path.exists());
-        });
-    }
-
-    #[test]
-    fn a_resin_the_user_invented_leaves_the_catalogue_when_it_is_thrown_away() {
-        in_its_own_dir("invented-resin", |_, mut catalogue| {
-            let resin = MaterialProfile {
-                name: "Mine".to_owned(),
-                ..MaterialProfile::default()
-            };
-
-            catalogue.save_resin("my-resin", &resin).expect("writable");
-            assert!(catalogue.resin("my-resin").is_ok());
-
-            catalogue
-                .forget_user_copy(Kind::Resin, "my-resin")
-                .expect("the file goes away");
-            assert!(
-                catalogue.resin("my-resin").is_err(),
-                "nothing was shipped under that id, so it is gone"
-            );
-        });
-    }
-
-    #[test]
-    fn a_support_profile_is_saved_over_the_shipped_one_and_can_be_thrown_away() {
-        in_its_own_dir("edit-support", |dir, mut catalogue| {
-            let shipped = catalogue
-                .support("medium")
-                .expect("shipped")
-                .profile
-                .clone();
-            assert_eq!(shipped, SupportProfile::medium(), "the asset is the preset");
-            let edited = SupportProfile {
-                density: 3.0,
-                ..shipped.clone()
-            };
-
-            let path = catalogue.save_support("medium", &edited).expect("writable");
-            assert_eq!(path, dir.join("supports/medium.toml"));
-            let reloaded = Catalogue::with_root(dir).expect("the directory is readable");
-            assert_eq!(reloaded.support("medium").expect("there").profile, edited);
-
-            catalogue
-                .forget_user_copy(Kind::Support, "medium")
-                .expect("the file goes away");
-            assert_eq!(
-                catalogue.support("medium").expect("shipped").profile,
-                shipped
-            );
-        });
-    }
-
-    #[test]
-    fn only_a_shipped_id_is_shipped() {
-        let catalogue = Catalogue::bundled().expect("the shipped catalogue is valid");
-        assert!(catalogue.is_shipped(Kind::Printer, "elegoo-mars-4-ultra"));
-        assert!(!catalogue.is_shipped(Kind::Printer, "my-printer"));
-        assert!(catalogue.is_shipped(Kind::Support, "medium"));
-    }
-
-    /// What P-11 costs the user: a copy made by an older release stands over the shipped
-    /// profile, and nothing in the file says so.
-    #[test]
-    fn the_shipped_printer_is_still_reachable_under_an_edited_id() {
-        in_its_own_dir("shipped-printer", |_, mut catalogue| {
-            let shipped = catalogue
-                .shipped_printer("elegoo-saturn-4-ultra")
-                .expect("a shipped machine");
-            // The one thing ADR 0142 forbids on a tilting vat, which is what a copy made
-            // before that decision keeps.
-            let edited = PrinterProfile {
-                firmware: crate::Firmware {
-                    per_layer_settings: true,
-                    ..shipped.firmware
-                },
-                ..shipped.clone()
-            };
-            catalogue
-                .save_printer("elegoo-saturn-4-ultra", &edited)
-                .expect("writable");
-
-            assert_eq!(
-                catalogue.shipped_printer("elegoo-saturn-4-ultra"),
-                Some(shipped),
-                "the user's copy does not hide what the build ships"
-            );
-            assert!(catalogue.shipped_printer("my-printer").is_none());
-        });
-    }
-
-    #[test]
-    fn a_copy_saved_before_a_lock_still_takes_the_shipped_one() {
-        in_its_own_dir("copy-before-lock", |dir, mut catalogue| {
-            let shipped = catalogue
-                .shipped_printer("elegoo-saturn-4-ultra")
-                .expect("a shipped machine");
-            let old = PrinterProfile {
-                locked: PrinterTuning::default(),
-                ..shipped.clone()
-            };
-            catalogue
-                .save_printer("elegoo-saturn-4-ultra", &old)
-                .expect("writable");
-            let written = catalogue
-                .printer("elegoo-saturn-4-ultra")
-                .expect("saved")
-                .profile
-                .locked
-                .clone();
-            assert_eq!(written, shipped.locked, "a save keeps the machine's locks");
-            let file = dir.join("printers/elegoo-saturn-4-ultra.toml");
-            let on_disk = std::fs::read_to_string(&file).expect("the save wrote it");
-            let on_disk = PrinterProfile::from_toml_str(&on_disk, &file).expect("and it reads");
-            assert_eq!(on_disk.locked, shipped.locked, "and so does the file");
-
-            std::fs::write(
-                dir.join("printers/elegoo-saturn-4-ultra.toml"),
-                old.to_toml_string(dir).expect("a valid profile writes"),
-            )
-            .expect("writable");
-            let reloaded = Catalogue::with_root(dir).expect("the directory is readable");
-            let entry = reloaded.printer("elegoo-saturn-4-ultra").expect("the copy");
-            assert!(matches!(entry.source, Source::User(_)), "the copy stands");
-            assert_eq!(
-                entry.profile.locked, shipped.locked,
-                "with the shipped locks"
-            );
-        });
-    }
-
-    #[test]
-    fn a_name_that_would_not_be_a_file_stem_is_refused() {
-        in_its_own_dir("bad-id", |_, mut catalogue| {
-            let profile = PrinterProfile::from_toml_str(SAMPLE_PRINTER, Path::new("inline.toml"))
-                .expect("valid");
-            let error = catalogue.save_printer("../escape", &profile).unwrap_err();
-            assert!(matches!(error, ProfileError::BadId { .. }));
-        });
-    }
-
-    #[test]
-    fn a_profile_that_would_not_load_is_never_written() {
-        in_its_own_dir("invalid-save", |dir, mut catalogue| {
-            let mut broken =
-                PrinterProfile::from_toml_str(SAMPLE_PRINTER, Path::new("inline.toml"))
-                    .expect("valid");
-            broken.display.width_mm = 0.0;
-
-            let error = catalogue.save_printer("my-printer", &broken).unwrap_err();
-            assert!(matches!(error, ProfileError::NonPositive { .. }));
-            assert!(!dir.join("printers/my-printer.toml").exists());
-        });
-    }
-
-    #[test]
-    fn a_bundled_catalogue_has_nowhere_to_save() {
-        let mut catalogue = Catalogue::bundled().expect("the shipped catalogue is valid");
-        assert!(!catalogue.has_store());
-        let error = catalogue
-            .save_resin("my-resin", &MaterialProfile::default())
-            .unwrap_err();
-        assert!(matches!(error, ProfileError::NoUserDir { .. }));
-    }
-
-    /// A store with no directory behind it, as a browser's is.
-    #[derive(Debug, Default)]
-    struct Kept(std::sync::Mutex<BTreeMap<(&'static str, String), String>>);
-
-    impl ProfileStore for Kept {
-        fn path_of(&self, kind: Kind, id: &str) -> PathBuf {
-            PathBuf::from(format!("kept/{}/{id}.toml", kind.dir()))
-        }
-
-        fn read_all(&self, kind: Kind) -> Result<Vec<(String, PathBuf, String)>, ProfileError> {
-            let kept = self.0.lock().expect("no test panics holding it");
-            Ok(kept
-                .iter()
-                .filter(|((dir, _), _)| *dir == kind.dir())
-                .map(|((_, id), toml)| (id.clone(), self.path_of(kind, id), toml.clone()))
-                .collect())
-        }
-
-        fn write(&self, kind: Kind, id: &str, toml: &str) -> Result<(), ProfileError> {
-            let mut kept = self.0.lock().expect("no test panics holding it");
-            kept.insert((kind.dir(), id.to_owned()), toml.to_owned());
-            Ok(())
-        }
-
-        fn remove(&self, kind: Kind, id: &str) -> Result<(), ProfileError> {
-            let mut kept = self.0.lock().expect("no test panics holding it");
-            kept.remove(&(kind.dir(), id.to_owned()));
-            Ok(())
-        }
-    }
-
-    #[test]
-    fn a_store_with_no_directory_keeps_what_is_saved_into_it() {
-        let store = Arc::new(Kept::default());
-        let mut catalogue = Catalogue::bundled().expect("the shipped catalogue is valid");
-        catalogue
-            .overlay_store(Arc::clone(&store) as Arc<dyn ProfileStore>)
-            .expect("an empty store reads");
-        let resin = MaterialProfile {
-            name: "Mine".to_owned(),
-            ..MaterialProfile::default()
-        };
-        let path = catalogue
-            .save_resin("my-resin", &resin)
-            .expect("the store takes it");
-        assert_eq!(path, PathBuf::from("kept/resins/my-resin.toml"));
-
-        let mut reloaded = Catalogue::bundled().expect("the shipped catalogue is valid");
-        reloaded
-            .overlay_store(Arc::clone(&store) as Arc<dyn ProfileStore>)
-            .expect("the store reads back");
-        let entry = reloaded.resin("my-resin").expect("the saved resin is back");
-        assert_eq!(entry.profile.name, "Mine");
-        assert_eq!(entry.source, Source::User(path));
-
-        reloaded
-            .forget_user_copy(Kind::Resin, "my-resin")
-            .expect("the store lets it go");
-        assert!(reloaded.resin("my-resin").is_err(), "only the user had it");
-    }
-
-    const SAMPLE_PRINTER: &str = r#"
-name = "Mine"
-manufacturer = "Me"
-
-[display]
-width_px = 100
-height_px = 50
-width_mm = 10.0
-height_mm = 5.0
-
-[build_volume]
-x = 10.0
-y = 5.0
-z = 100.0
-"#;
-}
+mod tests;

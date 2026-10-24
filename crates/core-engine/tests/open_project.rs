@@ -8,14 +8,14 @@
 use std::sync::Arc;
 
 use core_engine::project::{
-    Array, Axis, BuiltCavity, Cavity, CutState, DrainState, Group, HollowState, Keep, Manifest,
-    ModelMeshes, ObjectHollowState, ObjectState, ObjectSupportState, Project, SlicingState,
-    Summary, SupportState, VERSION,
+    Array, Axis, BuiltCavity, Cavity, CutState, DrainState, FillProfiles, Group, HollowState, Keep,
+    Manifest, ModelMeshes, ObjectHollowState, ObjectState, ObjectSupportState, Project,
+    SlicingState, Summary, SupportState, VERSION,
 };
 use core_engine::{EngineError, Machine, Opening, open_plate};
 use core_geometry::{Bvh, Mesh, Orientation, Region, Transform, Vec3, diagnose};
 use core_supports::{ModelSupports, ProjectSettings, SupportPoint, SupportTree};
-use core_volume::{HollowMode, InfillSettings};
+use core_volume::{DrainHole, HoleSize, HollowMode, InfillSettings};
 use printer_profiles::{
     Catalogue, MaterialProfile, OutputFormat, PrinterProfile, ProfileError, SupportProfile,
 };
@@ -41,38 +41,7 @@ const GREY: &str = "standard-grey";
 
 /// A closed box, twelve triangles, wound outward.
 fn box_mesh(mins: Vec3, maxs: Vec3) -> Mesh {
-    let corner = |x: bool, y: bool, z: bool| {
-        Vec3::new(
-            if x { maxs.x } else { mins.x },
-            if y { maxs.y } else { mins.y },
-            if z { maxs.z } else { mins.z },
-        )
-    };
-    let vertices = vec![
-        corner(false, false, false),
-        corner(true, false, false),
-        corner(true, true, false),
-        corner(false, true, false),
-        corner(false, false, true),
-        corner(true, false, true),
-        corner(true, true, true),
-        corner(false, true, true),
-    ];
-    let faces = vec![
-        [0, 2, 1],
-        [0, 3, 2],
-        [4, 5, 6],
-        [4, 6, 7],
-        [0, 1, 5],
-        [0, 5, 4],
-        [1, 2, 6],
-        [1, 6, 5],
-        [2, 3, 7],
-        [2, 7, 6],
-        [3, 0, 4],
-        [3, 4, 7],
-    ];
-    Mesh::new(vertices, faces)
+    core_geometry::cuboid(mins, maxs)
 }
 
 fn object(name: &str, mesh: &Mesh, transform: Transform) -> ObjectState {
@@ -135,13 +104,16 @@ fn project() -> Project {
             supports: SupportState {
                 groups: vec![Group {
                     name: "Default".to_owned(),
-                    profile: SupportProfile::medium(),
+                    profile: SupportProfile::shipped("medium").expect("the medium preset ships"),
                 }],
                 active: 0,
                 fill: ProjectSettings::default(),
                 brush_radius_mm: 2.0,
                 flood_angle_deg: 30.0,
+                inline_spacing_mm: 4.0,
+                fill_profiles: FillProfiles::default(),
                 raft: None,
+                sizing: None,
             },
             hollow: HollowState {
                 thickness_mm: 2.0,
@@ -214,7 +186,7 @@ fn grown_under(mesh: &Mesh, transform: Transform, contact: Vec3) -> Vec<SupportT
         mesh,
         &Bvh::build(mesh),
         transform,
-        std::slice::from_ref(&SupportProfile::medium()),
+        std::slice::from_ref(&SupportProfile::shipped("medium").expect("the medium preset ships")),
     );
     supports.grown(transform)
 }
@@ -251,6 +223,30 @@ fn a_hollowed_model_opens_as_the_shell_in_the_file() {
     assert!(
         Arc::ptr_eq(&plate.models[0].mesh, shell),
         "the shell is read, not hollowed again"
+    );
+}
+
+#[test]
+fn a_drilled_model_opens_drilled_as_the_window_drills_it() {
+    let mut saved = project();
+    let size = HoleSize::round(4.0, 5.0, 1.0);
+    saved.manifest.objects[0].hollow.drains = vec![DrainHole::sized(
+        Vec3::new(10.0, 10.0, 0.0),
+        Vec3::Z,
+        size,
+        0.0,
+    )];
+    let plate = open_plate(&saved, &machine(), &opening()).expect("the project is complete");
+
+    let model = &plate.models[0];
+    assert!(model.cuts.is_some(), "the hole is a cut");
+    let drilled = model
+        .drilled
+        .as_ref()
+        .expect("the hole is taken out exactly, so supports stand against its bore");
+    assert!(
+        drilled.faces.len() > saved.models[0].source.faces.len(),
+        "a bore adds faces to the cube"
     );
 }
 

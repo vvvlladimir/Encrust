@@ -1,9 +1,85 @@
+use std::ops::Range;
+use std::sync::Arc;
+
 use core_geometry::{Bvh, Mesh, Scalar, Transform, Vec3, lift_over_plate, transform_mesh};
-use core_slicer::{PlaneSliceEngine, SliceEngine, SliceSettings};
-use core_supports::{Placed, Profiles, SupportPoint, columns, grow, mesh_trees};
-use printer_profiles::SupportProfile;
+use core_slicer::{PlaneSliceEngine, SliceEngine, SliceSettings, Sliced};
+use core_supports::{
+    Blocked, Need, Placed, Profiles, SupportPoint, WallSide, columns, generate_supports, grow,
+    low_points, mesh_trees,
+};
+use core_volume::Drilled;
+use printer_profiles::{AUTO_SIZES, AutoProfile, SupportProfile};
 
 use crate::error::EngineError;
+
+/// What a run builds supports to: one profile, or the shapes an automatic profile sizes
+/// each support into by what it holds (ADR 0325).
+#[derive(Debug, Clone, PartialEq)]
+pub enum SupportShapes {
+    One(Box<SupportProfile>),
+    Sized {
+        auto: Box<AutoProfile>,
+        /// The shapes it names, lightest first, then its steadying one.
+        shapes: Box<[SupportProfile; AUTO_SIZES + 1]>,
+    },
+}
+
+/// What a run stands under a model: the shapes it builds to, and whether it holds up a
+/// hollowed model's cavity as well as its outside, as the window's two runs do (ADR 0334).
+#[derive(Debug, Clone, PartialEq)]
+pub struct SupportPlan {
+    pub shapes: SupportShapes,
+    pub cavity: bool,
+}
+
+impl SupportPlan {
+    /// Supports built to `profile` alone, outside only.
+    pub fn of(profile: SupportProfile) -> Self {
+        Self {
+            shapes: SupportShapes::One(Box::new(profile)),
+            cavity: false,
+        }
+    }
+
+    /// The profile placement runs with: where supports go, how close, how far a model is
+    /// lifted and what raft it stands on.
+    pub fn placing(&self) -> SupportProfile {
+        match &self.shapes {
+            SupportShapes::One(profile) => profile.as_ref().clone(),
+            SupportShapes::Sized { auto, shapes } => auto.placing_with(&shapes[0]),
+        }
+    }
+
+    /// The profiles supports are built to, by group.
+    pub fn table(&self) -> Vec<SupportProfile> {
+        match &self.shapes {
+            SupportShapes::One(profile) => vec![profile.as_ref().clone()],
+            SupportShapes::Sized { shapes, .. } => shapes.to_vec(),
+        }
+    }
+
+    /// Every profile of [`Self::table`], to set what all of them share, a raft or a lift.
+    pub fn profiles_mut(&mut self) -> &mut [SupportProfile] {
+        match &mut self.shapes {
+            SupportShapes::One(profile) => std::slice::from_mut(profile.as_mut()),
+            SupportShapes::Sized { shapes, .. } => shapes.as_mut_slice(),
+        }
+    }
+
+    /// The automatic profile supports are sized by, if any.
+    pub fn sizing(&self) -> Option<&AutoProfile> {
+        match &self.shapes {
+            SupportShapes::One(_) => None,
+            SupportShapes::Sized { auto, .. } => Some(auto),
+        }
+    }
+
+    /// The group of [`Self::table`] a support holding `need` is built to.
+    pub fn group_of(&self, need: &Need) -> u16 {
+        self.sizing()
+            .map_or(0, |auto| u16::try_from(need.size_in(auto)).unwrap_or(0))
+    }
+}
 
 /// What automatic placement put under one model.
 #[derive(Debug, Clone, PartialEq)]
@@ -15,6 +91,8 @@ pub struct Stood {
     pub contacts: Vec<Vec3>,
     /// The way the surface under each contact faces, unit, or zero where none was found.
     pub facing: Vec<Vec3>,
+    /// How many contacts each profile of the plan's table was given, by group.
+    pub sized: Vec<usize>,
     /// Contacts a column was stood under.
     pub standing: usize,
     pub trees: usize,
@@ -22,76 +100,151 @@ pub struct Stood {
     pub supports: Mesh,
 }
 
-/// Stands supports under `mesh`, lifted first by the profile's lift and raft with `cuts`
-/// riding along, and answers with them: `docs/design/supports.md`.
+/// A model to stand supports under, in plate coordinates: its mesh, which of its faces
+/// bound its cavity once hollowed, and the bodies its holes cut out of it, which ride along
+/// as it is lifted.
+pub struct ToStand<'a> {
+    pub mesh: &'a mut Mesh,
+    pub cavity: Option<Range<usize>>,
+    pub cuts: &'a mut Option<Mesh>,
+    /// Whether the cuts are taken out exactly, as the window takes them out, or left to the
+    /// winding rule: a search over poses cannot afford the engine on every one.
+    pub drill_exactly: bool,
+}
+
+/// Stands supports under the model, lifted first by the plan's lift and raft, against what
+/// it prints as, and answers with them: `docs/design/supports.md`.
 pub fn stand_under(
-    mesh: &mut Mesh,
-    cuts: &mut Option<Mesh>,
-    profile: &SupportProfile,
+    model: ToStand<'_>,
+    plan: &SupportPlan,
     layer_height_mm: Scalar,
 ) -> Result<Stood, EngineError> {
-    stand(mesh, cuts, profile, layer_height_mm, profile.lift_mm())
+    let lift_mm = plan.placing().lift_mm();
+    let (lifted_mm, surface, inner) = touched(model, lift_mm)?;
+    let bvh = Arc::new(Bvh::build(&surface));
+    let needs = needs_under(&surface, &bvh, inner, plan, layer_height_mm)?;
+    grown(lifted_mm, &surface, &bvh, &needs, plan)
 }
 
 /// The same for a model left standing on the plate: supports go only under what hangs
 /// over it, and the plate holds the rest. A model that needs none gets none, and one that
 /// needs some stands on the raft's top, as the window's raft stands it.
 pub fn stand_seated(
-    mesh: &mut Mesh,
-    cuts: &mut Option<Mesh>,
-    profile: &SupportProfile,
+    model: ToStand<'_>,
+    plan: &SupportPlan,
     layer_height_mm: Scalar,
 ) -> Result<Stood, EngineError> {
-    let (mut lifted_mm, mut drilled, mut contacts) =
-        touched(mesh, cuts, profile, layer_height_mm, 0.0)?;
-    if profile.raft.enabled && !contacts.is_empty() {
-        let up = Vec3::Z * profile.raft.thickness_mm;
+    let raft = plan.placing().raft;
+    let ToStand {
+        mesh,
+        cavity,
+        cuts,
+        drill_exactly,
+    } = model;
+    let seated = ToStand {
+        mesh: &mut *mesh,
+        cavity,
+        cuts: &mut *cuts,
+        drill_exactly,
+    };
+    let (mut lifted_mm, mut surface, inner) = touched(seated, 0.0)?;
+    let mut bvh = Arc::new(Bvh::build(&surface));
+    let mut needs = needs_under(&surface, &bvh, inner, plan, layer_height_mm)?;
+    if raft.enabled && !needs.is_empty() {
+        let up = Vec3::Z * raft.thickness_mm;
         let moved = Transform::from_translation(up);
         *mesh = transform_mesh(mesh, moved);
         if let Some(cuts) = cuts.as_mut() {
             *cuts = transform_mesh(cuts, moved);
         }
-        drilled = transform_mesh(&drilled, moved);
-        for contact in &mut contacts {
-            *contact += up;
+        surface = transform_mesh(&surface, moved);
+        bvh = Arc::new(Bvh::build(&surface));
+        for need in &mut needs {
+            need.contact += up;
         }
         lifted_mm += up.z;
     }
-    held(lifted_mm, &drilled, contacts, profile)
+    grown(lifted_mm, &surface, &bvh, &needs, plan)
 }
 
-fn stand(
-    mesh: &mut Mesh,
-    cuts: &mut Option<Mesh>,
-    profile: &SupportProfile,
-    layer_height_mm: Scalar,
+/// The model lifted `lift_mm` clear of the plate with its cuts, then how far it moved, the
+/// surface it prints as and which faces of that lie inside it.
+fn touched(
+    model: ToStand<'_>,
     lift_mm: Scalar,
-) -> Result<Stood, EngineError> {
-    let (lifted_mm, drilled, contacts) = touched(mesh, cuts, profile, layer_height_mm, lift_mm)?;
-    held(lifted_mm, &drilled, contacts, profile)
+) -> Result<(Scalar, Mesh, Option<Range<usize>>), EngineError> {
+    let lifted_mm = lift(model.mesh, model.cuts, lift_mm)?;
+    let cuts = model.cuts.as_ref();
+    let (surface, inner) = printed(model.mesh, model.cavity, cuts, model.drill_exactly);
+    Ok((lifted_mm, surface, inner))
 }
 
-/// Columns stood under `contacts` on `drilled`, and what they came to.
-fn held(
+/// What `mesh` prints as: its cuts taken out exactly where asked, as the window takes them
+/// out, else appended for the winding rule, as they are where the engine refuses them
+/// (ADR 0322); and its faces on the cavity and the lattice in it.
+fn printed(
+    mesh: &Mesh,
+    cavity: Option<Range<usize>>,
+    cuts: Option<&Mesh>,
+    exactly: bool,
+) -> (Mesh, Option<Range<usize>>) {
+    let inside = |faces: usize, cavity: Range<usize>| cavity.start..faces.max(cavity.end);
+    let Some(cuts) = cuts else {
+        return (
+            mesh.clone(),
+            cavity.map(|cavity| inside(mesh.faces.len(), cavity)),
+        );
+    };
+    if let Some(Ok(drilled)) = exactly.then(|| Drilled::of(mesh, cavity.clone(), cuts)) {
+        let surface = Arc::unwrap_or_clone(drilled.mesh);
+        let inner = drilled
+            .cavity
+            .map(|cavity| inside(surface.faces.len(), cavity));
+        return (surface, inner);
+    }
+    let mut surface = mesh.clone();
+    append(&mut surface, cuts);
+    (
+        surface,
+        cavity.map(|cavity| inside(mesh.faces.len(), cavity)),
+    )
+}
+
+/// Columns stood on `surface` under each of `needs`, built to the group its size names,
+/// and what they came to.
+fn grown(
     lifted_mm: Scalar,
-    drilled: &Mesh,
-    contacts: Vec<Vec3>,
-    profile: &SupportProfile,
+    surface: &Mesh,
+    bvh: &Bvh,
+    needs: &[Need],
+    plan: &SupportPlan,
 ) -> Result<Stood, EngineError> {
-    let points: Vec<SupportPoint> = contacts.iter().copied().map(SupportPoint::new).collect();
+    let points: Vec<SupportPoint> = needs
+        .iter()
+        .map(|need| SupportPoint {
+            group: plan.group_of(need),
+            ..SupportPoint::new(need.contact)
+        })
+        .collect();
+    let contacts: Vec<Vec3> = points.iter().map(|point| point.contact).collect();
+    let table = plan.table();
+    let mut sized = vec![0; table.len()];
+    for point in &points {
+        if let Some(count) = sized.get_mut(usize::from(point.group)) {
+            *count += 1;
+        }
+    }
 
-    let bvh = Bvh::build(drilled);
-    let placed = Placed::new(drilled, &bvh, Transform::default());
-    let table = std::slice::from_ref(profile);
-    let profiles = Profiles::new(table).ok_or(EngineError::EmptyPlate)?;
-
+    let placed = Placed::new(surface, bvh, Transform::default());
+    let profiles = Profiles::new(&table).ok_or(EngineError::EmptyPlate)?;
     let columns = columns(&points, &placed, profiles);
     let trees = grow(&columns, &placed, profiles);
-    let facing = facing(drilled, &bvh, &contacts);
+    let facing = facing(surface, bvh, &contacts);
     Ok(Stood {
         lifted_mm,
         contacts,
         facing,
+        sized,
         standing: trees
             .iter()
             .map(core_supports::SupportTree::tip_count)
@@ -99,24 +252,6 @@ fn held(
         trees: trees.len(),
         supports: mesh_trees(&trees, &placed, profiles),
     })
-}
-
-/// `mesh` and what is cut out of it lifted `lift_mm` clear of the plate, then how far they
-/// moved, the drilled model, and where it needs holding up.
-fn touched(
-    mesh: &mut Mesh,
-    cuts: &mut Option<Mesh>,
-    profile: &SupportProfile,
-    layer_height_mm: Scalar,
-    lift_mm: Scalar,
-) -> Result<(Scalar, Mesh, Vec<Vec3>), EngineError> {
-    let lifted_mm = lift(mesh, cuts, lift_mm)?;
-    let mut drilled = mesh.clone();
-    if let Some(cuts) = cuts.as_ref() {
-        append(&mut drilled, cuts);
-    }
-    let contacts = contacts_under(&drilled, profile, layer_height_mm)?;
-    Ok((lifted_mm, drilled, contacts))
 }
 
 /// The way the surface of `drilled` under each contact faces, unit, or zero where the
@@ -134,32 +269,76 @@ fn facing(drilled: &Mesh, bvh: &Bvh, contacts: &[Vec3]) -> Vec<Vec3> {
         .collect()
 }
 
-/// Where `drilled`, standing where it is, needs holding up: what automatic placement
-/// would touch, before anything is stood under it.
-fn contacts_under(
-    drilled: &Mesh,
-    profile: &SupportProfile,
+/// Where `surface`, standing where it is, needs holding up: what automatic placement would
+/// touch from outside its wall, then inside its cavity where the plan asks, each contact
+/// with what it holds.
+fn needs_under(
+    surface: &Mesh,
+    bvh: &Arc<Bvh>,
+    inner: Option<Range<usize>>,
+    plan: &SupportPlan,
     layer_height_mm: Scalar,
-) -> Result<Vec<Vec3>, EngineError> {
+) -> Result<Vec<Need>, EngineError> {
     let stack = PlaneSliceEngine
         .slice(
-            drilled,
+            surface,
             &SliceSettings {
                 layer_height: layer_height_mm,
                 ..SliceSettings::default()
             },
         )
         .map_err(EngineError::Supports)?;
-    let lows = core_supports::low_points(drilled, Transform::default());
-    Ok(core_supports::generate_supports(
-        &stack,
+    let run = Run {
+        stack: &stack,
         layer_height_mm,
-        profile,
-        &[],
-        &lows,
-        None,
-        &mut |_| true,
-    ))
+        placing: plan.placing(),
+        sizing: plan.sizing(),
+        lows: low_points(surface, Transform::default()),
+    };
+    let inner = inner.filter(|inner| !inner.is_empty());
+    let side = |inside| {
+        inner.clone().map(|inner| WallSide {
+            bvh: Arc::clone(bvh),
+            inner,
+            into_model: core_geometry::Mat4::IDENTITY,
+            inside,
+        })
+    };
+    let mut needs = run.place(side(false));
+    if plan.cavity && inner.is_some() {
+        needs.extend(run.place(side(true)));
+    }
+    Ok(needs)
+}
+
+/// One cut stack and what placement on it is asked with.
+struct Run<'a> {
+    stack: &'a Sliced,
+    layer_height_mm: Scalar,
+    placing: SupportProfile,
+    sizing: Option<&'a AutoProfile>,
+    lows: Vec<Vec3>,
+}
+
+impl Run<'_> {
+    /// What automatic placement touches, kept to `side` of the wall where there is one.
+    fn place(&self, side: Option<WallSide>) -> Vec<Need> {
+        let blocked = Blocked::keeping(None, side.clone());
+        let mut needs = generate_supports(
+            self.stack,
+            self.layer_height_mm,
+            &self.placing,
+            self.sizing,
+            &[],
+            &self.lows,
+            blocked.as_ref(),
+            &mut |_| true,
+        );
+        if let Some(side) = side {
+            needs.retain(|need| side.keeps(need.contact));
+        }
+        needs
+    }
 }
 
 /// Stands `mesh` and what is cut out of it `lift_mm` clear of the plate, and answers how
@@ -195,15 +374,24 @@ fn append(mesh: &mut Mesh, other: &Mesh) {
 mod tests {
     use super::*;
 
+    fn medium() -> SupportPlan {
+        SupportPlan::of(SupportProfile::shipped("medium").expect("the medium preset ships"))
+    }
+
+    /// `mesh` with no cavity, and `cuts` taken out of it.
+    fn solid<'a>(mesh: &'a mut Mesh, cuts: &'a mut Option<Mesh>) -> ToStand<'a> {
+        ToStand {
+            mesh,
+            cavity: None,
+            cuts,
+            drill_exactly: true,
+        }
+    }
+
     #[test]
     fn a_model_with_no_vertices_has_nothing_to_stand_under() {
-        let error = stand_under(
-            &mut Mesh::default(),
-            &mut None,
-            &SupportProfile::medium(),
-            0.05,
-        )
-        .expect_err("an empty mesh cannot be supported");
+        let error = stand_under(solid(&mut Mesh::default(), &mut None), &medium(), 0.05)
+            .expect_err("an empty mesh cannot be supported");
         assert!(matches!(error, EngineError::EmptyPlate));
     }
 
@@ -218,7 +406,7 @@ mod tests {
             ],
             vec![[0, 2, 1], [0, 1, 3], [1, 2, 3], [2, 0, 3]],
         );
-        let error = stand_under(&mut slab, &mut None, &SupportProfile::medium(), 0.0)
+        let error = stand_under(solid(&mut slab, &mut None), &medium(), 0.0)
             .expect_err("no layer height, no stack");
         assert!(matches!(error, EngineError::Supports(_)));
     }
@@ -270,11 +458,15 @@ mod tests {
 
     #[test]
     fn a_seated_model_with_supports_stands_on_its_rafts_top() {
-        let mut profile = SupportProfile::medium();
+        let mut profile = SupportProfile::shipped("medium").expect("the medium preset ships");
         profile.raft.enabled = true;
         let mut mesh = mushroom();
-        let stood = stand_seated(&mut mesh, &mut None, &profile, 0.05)
-            .expect("a mushroom on the plate can be supported");
+        let stood = stand_seated(
+            solid(&mut mesh, &mut None),
+            &SupportPlan::of(profile.clone()),
+            0.05,
+        )
+        .expect("a mushroom on the plate can be supported");
         let low_mm = mesh.aabb().expect("the mushroom has bounds").mins.z;
 
         assert!(!stood.contacts.is_empty(), "the slab's underside hangs");
@@ -287,12 +479,16 @@ mod tests {
 
     #[test]
     fn a_seated_model_needing_no_supports_stays_on_the_plate_over_a_raft() {
-        let mut profile = SupportProfile::medium();
+        let mut profile = SupportProfile::shipped("medium").expect("the medium preset ships");
         profile.raft.enabled = true;
         let mut mesh = Mesh::default();
         cuboid(&mut mesh, Vec3::ZERO, Vec3::splat(10.0));
-        let stood = stand_seated(&mut mesh, &mut None, &profile, 0.05)
-            .expect("a cube on the plate can be supported");
+        let stood = stand_seated(
+            solid(&mut mesh, &mut None),
+            &SupportPlan::of(profile.clone()),
+            0.05,
+        )
+        .expect("a cube on the plate can be supported");
 
         assert!(stood.contacts.is_empty(), "nothing on a cube hangs");
         assert!(stood.lifted_mm.abs() < 1e-6, "no raft is built, so no lift");

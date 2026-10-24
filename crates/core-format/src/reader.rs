@@ -4,11 +4,7 @@ use printer_profiles::{MaterialProfile, PrinterTuning};
 use crate::{FormatError, ReadSeek};
 
 /// What a sliced file says about itself, whoever wrote it.
-///
-/// Every field is what the container states rather than what we would have written, so a
-/// file from another slicer reports that slicer's numbers. A field the container has no
-/// place for is `None`, which is itself worth showing: it is why two files of the same
-/// stack differ.
+/// Fields are what the container states; `None` means the container has no place for it.
 #[derive(Debug, Clone, PartialEq)]
 pub struct SlicedFile {
     /// Extension of the container, without the dot.
@@ -80,11 +76,8 @@ impl SlicedFile {
     }
 }
 
-/// What a container's layer table says about one layer.
-///
-/// This is held for every layer, because it is how a reader reaches one: the table is the
-/// index. It is deliberately the smallest thing that can be — a stack of ten thousand
-/// layers costs a few hundred kilobytes and no mask is held at all.
+/// What a container's layer table says about one layer; held for every layer, as the table is the
+/// index. Deliberately small: ten thousand layers cost a few hundred kilobytes and no mask.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct LayerEntry {
     /// Top of the layer above the plate, millimetres, or zero where the container records
@@ -136,11 +129,8 @@ pub fn layer_in_range(index: u32, layer_count: u32) -> Result<(), FormatError> {
     Ok(())
 }
 
-/// Most pixels a panel stated by a file may claim.
-///
-/// The largest panel in the catalogue is 15120x6230, about 94 megapixels, so this leaves
-/// room to spare and still refuses a header whose only purpose is the mask it would make
-/// us allocate.
+/// Most pixels a panel stated by a file may claim. The largest catalogue panel is 15120x6230, about
+/// 94 megapixels; larger refuses a header-driven allocation.
 pub const MAX_PANEL_PX: u32 = 256 * 1024 * 1024;
 
 /// The pixel count of a panel a container states, checked before anything is sized from

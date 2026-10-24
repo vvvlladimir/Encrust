@@ -129,6 +129,11 @@ took. The normal is not read off the screen-space derivatives of the position in
 which would halve it again: on the machine this was built on the same frame came out
 different from one run to the next.
 
+Supports are a tube of few sides, not a sliceable model's facets, so an instance may ask to be
+shaded smooth (ADR 0352): its mesh goes up with every corner carrying the faces round it
+weighted by their angle there, apart across an edge turning more than 50 degrees, and the
+fragment reads that normal blended across the face instead of the flat one.
+
 | Buffer | Step | Contents |
 |---|---|---|
 | 0 | vertex | `position: vec3`, `normal: vec3` |
@@ -220,7 +225,10 @@ The stencil is the viewport's own: the scene is drawn into a window-sized colour
 a `Depth24PlusStencil8` plane in `render::target`, and one triangle copies the colour into
 egui's pass, the same in a browser as at the desk (ADR 0184). Which height the
 rail hands over depends on the mode, and `panels::section::cut_height` and `floor_height`
-are the one place that decides.
+are the one place that decides. Preview cuts at the plane the shown layer's mask is
+sampled at, not at the layer's top the readout states: the middle of the band with one
+sample, the highest of them with several, so the section shows nothing the mask lacks.
+Cut at the top, a part beginning in the upper half of a layer showed a layer early.
 
 ## Light
 

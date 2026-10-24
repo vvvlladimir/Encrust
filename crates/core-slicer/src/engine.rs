@@ -10,26 +10,19 @@ use crate::{Layer, SliceError, SliceSettings, Sliced};
 pub trait SliceEngine {
     fn slice(&self, mesh: &Mesh, settings: &SliceSettings) -> Result<Sliced, SliceError>;
 
-    /// Slices exactly the planes in `heights`, which a caller takes from
-    /// [`layer_heights`] in chunks to work a window at a time. No heights is an empty
-    /// stack, not an error; see
-    /// `docs/decisions/0066-a-stack-is-sliced-a-window-at-a-time.md`.
+    /// Slices exactly the planes in `heights`, taken from [`layer_heights`] in chunks. No heights
+    /// is an empty stack, not an error (ADR 0066).
     fn slice_at(&self, mesh: &Mesh, heights: &[Scalar]) -> Result<Sliced, SliceError>;
 }
 
-/// Every plane `mesh` will be sliced at, without slicing any of them.
-///
-/// A caller that wants the stack a window at a time asks for these first, hands chunks of
-/// them to [`SliceEngine::slice_at`], and never holds more than one chunk's contours.
+/// Every plane `mesh` will be ssliced at, without slicing any of them. Hand chunks to
+/// [`SliceEngine::slice_at`] so no more than one chunk's contours are held.
 pub fn layer_heights(mesh: &Mesh, settings: &SliceSettings) -> Result<Vec<Scalar>, SliceError> {
     layer_heights_under(mesh, settings, Scalar::INFINITY)
 }
 
-/// The same, with nothing planned above `ceiling_mm`.
-///
-/// A plate carries bodies that only subtract, and a cut reaches past the surface it
-/// pierces (ADR 0071), so the baked mesh can stand taller than anything that prints. The
-/// caller that merged it is the one that knows how far the material goes.
+/// The same, with nothing planned above `ceiling_mm`. A cut reaches past the surface it pierces
+/// (ADR 0071), so the baked mesh can stand taller than what prints.
 pub fn layer_heights_under(
     mesh: &Mesh,
     settings: &SliceSettings,

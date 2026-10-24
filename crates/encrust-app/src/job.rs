@@ -37,7 +37,7 @@ pub use orient::{
 #[cfg(target_arch = "wasm32")]
 pub use pipeline::run_into;
 pub use pipeline::{SliceRequest, worker_threads};
-pub use place::{SupportJob, SupportOutcome, SupportRequest, tasks_of};
+pub use place::{Placement, SupportJob, SupportOutcome, SupportRequest, tasks_of};
 pub use plate::models_of;
 pub use plugs::{PlugsJob, PlugsRequest, spawn_plugs};
 pub use preview::{PreviewJob, PreviewOutcome};

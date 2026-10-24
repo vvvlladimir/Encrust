@@ -2,12 +2,8 @@ use glam::Vec2;
 
 use crate::RasterSettings;
 
-/// Maps model millimetres onto the display's pixel grid.
-///
-/// Row `0` is the first row a sliced file carries, which is the near edge of the plate:
-/// Y runs the same way as model space. The panel's own
-/// mirroring is applied here rather than in the geometry, so that the mesh on screen and
-/// the mesh being sliced stay the same object.
+/// Maps model millimetres onto the display's pixel grid; row `0` is the near edge. The panel's
+/// mirroring is applied here, not in the geometry.
 #[derive(Debug, Clone, Copy)]
 pub(crate) struct PixelSpace {
     width_px: f32,
@@ -28,11 +24,8 @@ impl PixelSpace {
         }
     }
 
-    /// Whether the map turns a contour the other way round.
-    ///
-    /// Material is what a positive winding encloses, so a ring that lands mirrored has to
-    /// be reversed before it is swept: each panel mirror is one reflection, and it is the
-    /// parity of the two that decides.
+    /// Whether the map turns a contour the other way round. Each panel mirror is one reflection;
+    /// the parity of the two decides, since material is positive winding.
     pub(crate) fn reverses_winding(&self) -> bool {
         self.mirror_x != self.mirror_y
     }

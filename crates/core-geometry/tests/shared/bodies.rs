@@ -11,33 +11,7 @@ use core_geometry::{Mesh, Scalar, Vec3};
 /// Axis-aligned cube from the origin to `(size, size, size)`, wound outwards.
 /// Volume `size^3`, 8 vertices, 12 faces, Euler characteristic 2.
 pub fn cube(size: Scalar) -> Mesh {
-    let s = size;
-    Mesh::new(
-        vec![
-            Vec3::new(0.0, 0.0, 0.0),
-            Vec3::new(s, 0.0, 0.0),
-            Vec3::new(s, s, 0.0),
-            Vec3::new(0.0, s, 0.0),
-            Vec3::new(0.0, 0.0, s),
-            Vec3::new(s, 0.0, s),
-            Vec3::new(s, s, s),
-            Vec3::new(0.0, s, s),
-        ],
-        vec![
-            [0, 3, 2],
-            [0, 2, 1],
-            [4, 5, 6],
-            [4, 6, 7],
-            [0, 1, 5],
-            [0, 5, 4],
-            [1, 2, 6],
-            [1, 6, 5],
-            [2, 3, 7],
-            [2, 7, 6],
-            [3, 0, 4],
-            [3, 4, 7],
-        ],
-    )
+    core_geometry::cuboid(Vec3::ZERO, Vec3::splat(size))
 }
 
 /// The same cube written the way STL stores it: three fresh vertices per triangle.

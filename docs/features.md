@@ -64,7 +64,7 @@ capped silently.
 ## Placing models on the plate
 
 In every tool, Cmd-click (Ctrl-click off a Mac) a model on the plate to add it to the
-selection or take it out, instead of what a click does in that tool. In **Paint**, the
+selection or take it out, instead of what a click does in that tool. In the Supports card's **Area** mode, the
 whole-surface fill is Cmd-Shift-click.
 
 **Position tool:**
@@ -91,7 +91,8 @@ whole-surface fill is Cmd-Shift-click.
   stands the model the next of them, round to the first, without searching again. A
   change to the model, its supports, its lift, the preset, the printer or the resin
   searches again. With a printer chosen, the notice shows each pose's supports, pull and
-  height, green where it beats the pose before and red where it loses. Auto offers every
+  height (the supports built as the plate builds them, by the automatic profile's sizes
+  where one is chosen), green where it beats the pose before and red where it loses. Auto offers every
   trade that no other pose beats on all three; a single goal offers the poses it reads as
   just as good.
 - You can cap the tilt (for example "no more than 30° from how it stands now"). A cap of 0
@@ -218,7 +219,7 @@ whole-surface fill is Cmd-Shift-click.
   combined through a field, its edges rounded to the lattice the notice names.
 - Text and Combine replace the model; its supports, cavity, holes, own settings and
   texture are not kept, and Undo puts the original back. The result stands on the plate the
-  models were taken from. Shift or Cmd click picks a model in Text mode without writing.
+  models were taken from. Cmd click picks a model in Text mode without writing.
 - A press, a stamp, a combination, a cut or a split runs off the drawing thread and can be
   cancelled from the panel; a cancelled press stops inside the model it is on rather than
   finishing unseen. If the model is moved, resized, replaced or undone meanwhile, the
@@ -304,42 +305,128 @@ whole-surface fill is Cmd-Shift-click.
 - **Grow the supports** for the whole plate, one model or only the parts you picked.
 - Supports go only under what actually hangs over nothing, stay out of the model, and each
   one holds only the part it stands under.
-- Nearby tips merge into shared **branching trunks**. Trunks are cones sized by their
-  height and load, and nothing carrying a load leans more than 45°.
-- A tip that has no room leans until it finds some. A support that still has no room is
-  reported and left out of the print, never forced into the model.
-- **Lift off the plate** stands the picked model that high, a millimetre a press of − or
-  +, so supports have room. It is the same number in Position and in Supports.
+- A point or a needle hanging down is held at its very tip, however thin, and every
+  island Check would name is touched where it begins, even with a bite of nought; a speck
+  too small for Check to name is left alone. Small islands are held closer than large
+  ones, by areas and shares the support profile sets. A tip ends in a half ball as wide as
+  its contact, centred on the surface, so even with a bite of nought half of it is in the
+  part and its mark is a circle of the contact's width, however its head leans.
+- A face looking straight down is held at the contact spacing, and one leaning just past
+  the overhang angle at the wider **spacing on steep faces**; between them the spacing
+  follows the angle.
+- **Auto**, the first preset in the Supports card's list and the one a new plate starts on,
+  sizes every support by what it holds: an island over 2.4 mm² or an overhang under more
+  than 1000 mm³ of the model takes **Auto Medium**, over 3.2 mm² or 2000 mm³ **Auto
+  Heavy**, anything less **Auto Light**. Each shape is a group of its own, tuned like any
+  other, and the notice says how many of each were placed. A shelf put out in one layer
+  is sized by its resin — from 7 mm³ medium, 12 mm³ heavy — and faces leaning past 20° just
+  above it are held with it. A gentle slope too shallow to sag — past 10° from vertical
+  — gets a few thin **Auto Stabilization** supports about 8 mm apart so the part does not
+  rock on the peel. **Sizes**, at the foot of the shape mode, sets where each heavier shape starts; a merged support shows each tip in its own group's colour. Choose **Light**, **Medium**,
+  **Heavy** or a preset of your own instead, and supports are built to it. The preset in
+  hand, the automatic profile and its edited numbers are saved with the project and
+  remembered between runs, and Undo takes them back. **Save** writes an edited Auto over the
+  one that ships; Auto cannot be saved as a new preset, and no other automatic preset can be
+  added.
+- Nearby tips merge into shared **branching trunks**, a higher tip running down onto the
+  trunk of a lower one beside it. Where the part is in the way of a merge, the two drop
+  straight down past it and merge lower. A support that has to step aside for room steps
+  the least it can, a millimetre at a time. No strut of a merge runs
+  longer than **Longest strut** (6 mm as shipped, 10 mm in Auto's light and steadying shapes) and no trunk carries more than **Tips
+  per trunk** (6), so a wide spread of tips stands on several trees rather than one fan.
+  Trunks are cones sized by their height and load, and nothing carrying a load leans more
+  than 45°. A tip's head meets its face square on wherever that is within 45° of straight
+  down; off a steeper face it is turned back down to 45°, by at most 33°, so a support under
+  a wall no longer runs out level. What is under it leans and bends.
+- The trunks are built in the background after every change, so the window keeps
+  answering on a dense model; until they are, the supports shown last stay, and slicing
+  and the preview wait for them.
+- With **Grid** on in the **Shape** mode, trunks stand on a square grid instead, 5 mm apart
+  unless set (1–15 mm): each tip leans to its nearest node at 45°, the tips of one node
+  share one trunk, and the bracing ties the rows evenly. A tip no node can take stands as
+  it would without the grid.
+- Only the tip touches the model, and its mark is the contact's width, at most 9 % wider on
+  one side under a turned head: a support whose head would run into the part beside its contact, where no small
+  pillar can hold it, or rise from a face looking up with nowhere to come down is not placed — by Grow or by a click —
+  and is counted among those with no room to stand. A pad beside a part that cannot be moved aside is cut back on that side.
+  Every support is checked once more as it is drawn, down to a rib thinner than itself; a
+  merged one whose trunk meets the part is split into its two halves, each grown again.
+- A tip that has no room leans until it finds some, as far as a 25 mm strut at 45° reaches.
+  A support that still has no room is reported and left out of the print, never forced
+  into the model.
+- Supports are drawn round, 12 sides to a pillar shaded smooth, with rounded joints, and
+  widen into their pad on a curved fillet.
+- Supports stand against the model **as it prints**: hollowed, its cavity, and drilled,
+  its holes, so the crown of a drain hole or any bore is held up like other overhangs.
+  **Grow the supports** holds a model up from outside; **Support the cavity**, shown for
+  hollow models, grows the supports inside the cavity by the profile chosen above, and
+  becomes **Delete the cavity supports** once they stand. With the section cut open, the
+  supports inside can be clicked and edited like any other. A hole is seen once it has
+  been cut exactly.
+- **Lift off the plate** stands the picked model that high, so supports have room. It is
+  the same number in Position and in Supports.
 
 ### Manual
-- **Place** a support with a click; Alt-click removes it.
-- **Paint** areas with a brush where supports must go, then **Fill** them at a spacing you
+- Supports are made in one **Supports** card. Four click modes sit in its heading: **Pick**
+  standing supports, **Place** them one by one, **Area** to paint or block, and **Shape**.
+- **Place** a support with a click; Alt-click removes it. Shift-click places a line of
+  supports from the last one, evenly spaced at most **Line spacing** apart along the
+  model's surface; dots show where they will stand before you click.
+- In **Area**, **Paint** areas with a brush where supports must go, then **Fill** them at a spacing you
   set. You can fill the inside of an area or only its rim, filtered by surface angle.
-- **Block** areas where no support may go.
+  The rim stands an **offset** in from the edge (1 mm to start), with an optional
+  **second rim** inside it; the inside starts its own offset in from the rim and is laid
+  on a **grid**, in **rings** following the rim, or **scattered**. Rim and inside can each
+  be built to a saved profile of their own, which gets a group, or to the group in hand.
+- **Block** areas where no support may go, the other half of Area. Alt erases whichever of
+  the two is in hand, and **Clear** takes all of it off.
 - Click a standing support to select it, then rebuild, remove or move it to another group.
 
 ### Groups and profiles
-- Supports belong to **groups**. Each group is built to its own profile, so one model can
-  have heavy supports underneath and light ones on its details.
-- A thin support may stand on a thicker one from another group.
-- Bundled profiles: **light**, **medium**, **heavy**. Duplicate one, edit it, save it under
-  a new name, export it or import it. A bundled profile cannot be deleted.
+- Supports belong to **groups**, one per preset, so one model can have heavy supports
+  underneath and light ones on its details. A group appears when its preset first holds
+  supports and is named for it; none is made or renamed by hand.
+- The preset list at the top of the Supports card is also the list of groups: each preset
+  that holds supports shows its colour and count, to switch to, hide or remove, and Auto
+  lists the shapes it built under it. Choosing a group takes its preset in hand.
+- A bin asks twice: the first click turns it red, the second removes. The bin beside the
+  preset removes the group in hand with its supports, the one beside **Grow** every support.
+- A thin support may stand on a thicker one from another group. Tips of groups as thick as
+  each other merge into one trunk, built to the group with the heavier tip; each tip keeps
+  its own.
+- Bundled profiles: **light**, **medium**, **heavy**, and the four shapes **Auto** builds
+  to, **auto light**, **auto medium**, **auto heavy** and **auto stabilization**. Light, medium and heavy all
+  place contacts 1.8 mm apart, hold surfaces leaning past 40° (heavy past 45°),
+  lift a part 5 mm and centre their tips on the part's surface without biting further. Duplicate one, edit it, save it under a new name,
+  export it or import it. A bundled profile cannot be deleted. Settings lists the automatic
+  shapes apart from the profiles chosen by hand.
 - Each model remembers the profile it was edited with.
 
 ### What a profile lets you shape
 - **Tip:** a plane or a sphere contact, with its diameter, contact spacing, how deep it
-  bites into the part, and clearance.
+  bites into the part (nought centres the tip's rounded end on the surface), and clearance.
 - **Body:** diameter, overhang angle, branch angle, branching on or off, merge distance,
-  maximum length, standing on the model on or off.
-- **Small pillar:** a separate thin shape for short supports.
+  longest strut, tips per trunk, maximum length, standing on the model on or off.
+- **Small pillar:** a separate thin shape for short supports from the part to the part.
+  Tips that could each stand as one are not merged into a full support on the part. Each
+  end is rounded and meets the part square on, leaving a round mark of the pillar's
+  diameter, and a small pillar runs as one straight strut wherever one fits. A small pillar
+  is at most 30 of its diameters long; a longer one keeps the regular width.
+- **No room for a head:** a contact a hair too near a wall moves up to 0.3 mm along the face
+  to where a regular support fits, and one near an edge moves in until its whole tip lies on
+  the face. Where it has no room even so — in a crevice, beside a lip
+  — a small pillar holds the spot instead, leaning up to 45 degrees to find a face to stand on.
 - **Base:** the pad's shape (round, cube, prism or tapered), its size, flare and wall slope.
 - **Raft:** **Skates** (a saucer-shaped slab), **Grid** (rim and bars) or **Connected** (a
   pad under each foot, joined by strips), drawn to the model's outline (hull) or a
   rectangle, with margin and thickness. The raft is the plate's, whichever model is picked,
   and is kept when the window reopens. A model a project gave a raft of its own keeps it
   until **Use the plate's raft**.
-- **Bracing:** cross braces between tall trunks, where the first brace goes and how often
-  they repeat.
+- **Bracing:** braces between tall trunks, from one of four presets (Standard, Strong,
+  Tall, Small) or, under **Fine-tune**, by the numbers: where the first brace goes, how
+  often they repeat, and whether the bottom, middle and top of each pair are zigzagged or
+  crossed, the bottom and top over how many levels. A tall trunk the bracing leaves free
+  at the top is propped by one or two buttresses leaning out to the plate.
 
 ---
 
@@ -508,6 +595,9 @@ encrypted profile, and a bundle of several materials in one file, cannot be read
   being ignored.
 - Your own profiles live in a folder of their own, layered over the bundled ones. Open it
   from Settings.
+- A profile file of yours that no longer reads, after an update for instance, is left out
+  and the bundled one of the same name is used. The start page and the stage say so and
+  offer to reset those files to the bundled profiles; your own profiles are never deleted.
 - Export and import any profile as a file. An import never overwrites one you already have.
 - Profile forms have undo.
 - A project names its printer and resin by id, so it opens with your own profiles.
@@ -548,11 +638,12 @@ address in a video player).
 ## Working in the window
 
 - **Find (⌘K):** search every tool, action and model on the plate by name.
-- **Keyboard:** digits 1 to 0 pick the first ten tools, there is a shortcut sheet, Tab walks
+- **Keyboard:** digits 1 to 9 pick the tools of the rail in order, there is a shortcut sheet, Tab walks
   every control, and every control has a name for screen readers.
 - **Undo and redo** across the plate and the settings forms. A run that lands its result
   after an undo is a new edit, so what could be redone before it can no longer be.
-- Tool values are remembered between runs.
+- Tool values are remembered between runs, and so is how each panel was left: which
+  sections are folded, which tab is open, what a click places, and what Measure snaps to.
 - **Updates:** checks once a day (can be turned off), downloads, verifies the signature and
   installs only when you press it. You can skip a version. A copy from the Microsoft Store
   is updated by the Store instead: it says when the Store has a new version, and its button

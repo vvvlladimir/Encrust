@@ -1,7 +1,5 @@
-//! A bench for orientation: each goal's choice, the poses a person would try by hand and,
-//! asked for, an even spread over the sphere, all judged by the supports and the stack
-//! they actually produce, against rules of success every goal shares. See
-//! `docs/design/orientation.md`; the rules are in `verdict.rs`.
+//! A bench for orientation: each goal's choice and hand-picked poses judged by the supports and
+//! stack they produce. See `docs/design/orientation.md`; the rules are in `verdict.rs`.
 
 mod bodies;
 mod corpus;
@@ -14,7 +12,7 @@ use std::process::ExitCode;
 
 use anyhow::{Context, Result};
 use clap::Parser;
-use core_engine::Trial;
+use core_engine::{SupportPlan, Trial};
 use core_geometry::{Mesh, orient_outward, weld};
 use core_plate::OrientPreset;
 use encrust_cli::pipeline;
@@ -51,9 +49,8 @@ struct Args {
     /// Write the run as JSON, to keep as a baseline.
     #[arg(long)]
     json: Option<PathBuf>,
-    /// Compare with a run kept before; a goal that passed there and fails here fails the
-    /// run. The poses its goals chose, and those it knew from before, are measured again
-    /// here, so the best known pose of a model is never forgotten.
+    /// Compare with a run kept before; a goal that passed there and fails here fails the run.
+    /// Poses chosen or known from before are measured again, so the best known pose is kept.
     #[arg(long)]
     baseline: Option<PathBuf>,
     /// Judge the poses a run kept again, measuring nothing: what changing a rule of
@@ -71,6 +68,7 @@ struct Setup {
     printer: PrinterProfile,
     material: MaterialProfile,
     support: SupportProfile,
+    plan: SupportPlan,
     full_finalists: Option<OrientPreset>,
 }
 
@@ -80,7 +78,7 @@ impl Setup {
             trial: Trial {
                 printer: &self.printer,
                 material: &self.material,
-                support: &self.support,
+                support: &self.plan,
                 raster_window: rayon::current_num_threads(),
             },
             support: &self.support,
@@ -107,14 +105,13 @@ enum MeshSource {
 fn main() -> Result<ExitCode> {
     let args = Args::parse();
     let catalogue = Catalogue::bundled().context("the bundled profiles do not load")?;
+    let mut support = catalogue.support(&args.support)?.profile.clone();
+    support.raft.enabled |= args.raft;
     let setup = Setup {
         printer: catalogue.printer(&args.printer)?.profile.clone(),
         material: MaterialProfile::default(),
-        support: {
-            let mut support = catalogue.support(&args.support)?.profile.clone();
-            support.raft.enabled |= args.raft;
-            support
-        },
+        plan: SupportPlan::of(support.clone()),
+        support,
         full_finalists: args
             .full_finalists
             .as_deref()

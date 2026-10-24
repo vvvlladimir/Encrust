@@ -1,12 +1,9 @@
+use std::cmp::Ordering;
+
 use printer_profiles::SupportProfile;
 
-/// The profile each group of supports is built to.
-///
-/// A support carries the number of its group, not a profile of its own: two supports of
-/// one group are the same shape, and a support is retuned by moving it to another group.
-/// Group 0 is the one everything falls back to, and the one the raft — which belongs to
-/// the plate rather than to any one support — is built from.
-/// See `docs/decisions/0094`.
+/// The profile each group of supports is built to; a support carries its group's number, and is
+/// retuned by moving groups. Group 0 is the fallback and the raft's source (ADR 0094).
 #[derive(Debug, Clone, Copy)]
 pub struct Profiles<'a>(&'a [SupportProfile]);
 
@@ -39,5 +36,24 @@ impl<'a> Profiles<'a> {
             .iter()
             .enumerate()
             .map(|(group, profile)| (group as u16, profile))
+    }
+
+    /// `a` before `b` when its head is the heavier: the larger contact, then the wider
+    /// pillar, then the lower number.
+    pub(crate) fn heavier_first(&self, a: u16, b: u16) -> Ordering {
+        let (one, two) = (self.of(a), self.of(b));
+        two.contact_radius_mm()
+            .total_cmp(&one.contact_radius_mm())
+            .then_with(|| two.pillar_radius_mm().total_cmp(&one.pillar_radius_mm()))
+            .then_with(|| a.cmp(&b))
+    }
+
+    /// Which of two groups a joint of their tips is built to: the one with the heavier
+    /// head. See `docs/decisions/0325`.
+    pub(crate) fn heavier(&self, a: u16, b: u16) -> u16 {
+        match self.heavier_first(a, b) {
+            Ordering::Greater => b,
+            Ordering::Less | Ordering::Equal => a,
+        }
     }
 }

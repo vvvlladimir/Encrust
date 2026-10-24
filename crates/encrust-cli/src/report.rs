@@ -12,9 +12,8 @@ pub struct FitCheck {
     pub printer: String,
     /// How much larger than the build envelope the model is, per axis, millimetres.
     pub overflow: Vec3,
-    /// How far the model reaches outside the envelope where it stands, per axis,
-    /// millimetres. A model small enough to print can still hang off the plate, and
-    /// whatever hangs off it is clipped off the masks.
+    /// How far the model reaches outside the envelope where it stands, per axis, mm.
+    /// Whatever hangs off the plate is clipped off the masks.
     pub outside: Vec3,
 }
 

@@ -5,6 +5,7 @@ mod app;
 mod arch;
 mod containers;
 mod cross_check;
+mod hygiene;
 mod i18n;
 mod ini;
 mod licenses;
@@ -33,6 +34,8 @@ enum Command {
     Man(man::Args),
     /// Checks the dependency graph `docs/architecture.md` draws against the manifests.
     Arch(arch::Args),
+    /// Holds functions, files and inline test modules to their size limits by a ratchet.
+    Hygiene(hygiene::Args),
     /// Writes the terms of every library a release ships, from the lockfile.
     Licenses(licenses::Args),
     /// Builds the window as a macOS app bundle macOS lets onto the local network, and opens it.
@@ -47,6 +50,7 @@ fn main() -> Result<()> {
         Command::Web(args) => web::run(&args),
         Command::Man(args) => man::run(&args),
         Command::Arch(args) => arch::run(&args),
+        Command::Hygiene(args) => hygiene::run(&args),
         Command::Licenses(args) => licenses::run(&args),
         Command::App(args) => app::run(&args),
         Command::I18n(args) => i18n::run(&args),

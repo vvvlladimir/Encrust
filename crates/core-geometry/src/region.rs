@@ -2,15 +2,8 @@ use serde::{Deserialize, Serialize};
 
 use crate::{Adjacency, Bvh, Mesh, Scalar, Transform, Vec3, point_triangle, transform_mesh};
 
-/// A transform this close to singular has flattened its model, and a point on the plate
-/// cannot be mapped back onto its surface.
-const SINGULAR: Scalar = 1e-12;
-
-/// A patch of a model's surface, as the set of faces it covers.
-///
-/// Faces rather than a texture or a point cloud: a click resolves to a face already, the
-/// set survives moving and scaling the model, and a fill or a press reads the same
-/// triangles the slicer will. See `docs/decisions/0092` and `docs/decisions/0318`.
+/// A patch of a model's surface, as the set of faces it covers. Faces survive moving and scaling
+/// and match what the slicer reads (ADR 0092, ADR 0318).
 #[derive(Debug, Clone, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(from = "Stored")]
 pub struct Region {
@@ -88,12 +81,8 @@ impl Region {
         self.marked = 0;
     }
 
-    /// Marks every face of `model`, standing at `transform` with `bvh` its hierarchy,
-    /// within `radius_mm` of `at`, given in plate coordinates, or unmarks them when `marked`
-    /// is false. Returns how many changed.
-    ///
-    /// The hierarchy's leaves are taken whole, so each candidate is measured against the
-    /// brush before it is taken.
+    /// Marks (or unmarks) every face of `model` at `transform` within `radius_mm` of `at`, in plate
+    /// space. Returns the count changed; `bvh` leaves are taken whole then measured.
     pub fn brush(
         &mut self,
         (model, bvh, transform): (&Mesh, &Bvh, Transform),
@@ -101,13 +90,12 @@ impl Region {
         radius_mm: Scalar,
         marked: bool,
     ) -> usize {
-        let matrix = transform.to_matrix();
-        if matrix.determinant().abs() < SINGULAR {
+        let Some(inverse) = transform.inverse_matrix() else {
             return 0;
-        }
+        };
         // The brush is a radius on the plate, and the model's own space is where the
         // faces live, so the radius travels with the least scale the model carries.
-        let local = matrix.inverse().transform_point3(at);
+        let local = inverse.transform_point3(at);
         let reach_mm = radius_mm / transform.least_scale();
 
         let mut found = Vec::new();

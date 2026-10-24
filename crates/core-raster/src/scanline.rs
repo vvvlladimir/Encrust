@@ -3,10 +3,8 @@ use glam::Vec2;
 use crate::runs::RunsBuilder;
 use crate::settings::Grey;
 
-/// One non-horizontal contour segment, ready to be crossed by a sample line.
-///
-/// Horizontal segments are left out: they never cross a sample line and cut no area from
-/// any pixel row, and including them would put a crossing at every vertex of a flat edge.
+/// One non-horizontal contour segment, ready to be crossed by a sample line. Horizontal segments
+/// never cross a sample line and would put a crossing at every vertex of a flat edge.
 pub(crate) struct Edge {
     pub(crate) y_min: f32,
     pub(crate) y_max: f32,
@@ -58,10 +56,8 @@ pub(crate) fn edges_of(rings: impl Iterator<Item = Vec<Vec2>>) -> Vec<Edge> {
     edges
 }
 
-/// Walks the image downwards, keeping the edges that currently matter.
-///
-/// One `Sweep` serves one caller: rows and sample lines must both be asked for in
-/// increasing order, because it is a single pass over the edge table either way.
+/// Walks the image downwards, keeping the edges that currently matter. Rows and sample lines must
+/// both be asked for in increasing order: one pass over the edge table.
 pub(crate) struct Sweep<'a> {
     edges: &'a [Edge],
     next: usize,
@@ -120,11 +116,8 @@ impl<'a> Sweep<'a> {
     }
 }
 
-/// Pairs crossings into solid spans by the positive winding rule: material runs from
-/// where the winding number turns positive to where it stops being positive.
-///
-/// Positive rather than non-zero so that a body wound inward takes material away wherever
-/// it lands, including outside the model; see `docs/decisions/0071`.
+/// Pairs crossings into solid spans by the positive winding rule. Positive rather than non-zero so
+/// inward-wound bodies subtract anywhere (ADR 0071).
 fn spans(crossings: &[(f32, i32)]) -> impl Iterator<Item = (f32, f32)> + '_ {
     let mut winding = 0;
     let mut start = 0.0;
@@ -138,12 +131,8 @@ fn spans(crossings: &[(f32, i32)]) -> impl Iterator<Item = (f32, f32)> + '_ {
     })
 }
 
-/// Coverage differences of one pixel row: at pixel `index`, the winding-weighted coverage
-/// changes by `delta` and holds that value until the next difference.
-///
-/// The row is described by the handful of pixels an edge or a span touches, never by the
-/// pixels in between, so a solid interior of any width is free. See
-/// `docs/design/rasterisation.md`.
+/// Coverage differences of one pixel row: at pixel `index` the coverage changes by `delta`.
+/// Only touched pixels are described, so a solid interior is free (`docs/design/rasterisation.md`).
 pub(crate) type Deltas = Vec<(u32, f32)>;
 
 /// Adds a span as whole pixels, lighting those whose centre the span contains.
@@ -157,11 +146,8 @@ pub(crate) fn add_span_binary(deltas: &mut Deltas, width_px: u32, span: (f32, f3
     }
 }
 
-/// Turns the differences of one row into runs of equal grey and appends them to `out`,
-/// leaving `deltas` empty for the next row.
-///
-/// `row_start` is the index of the row's first pixel within the layer, which is how the
-/// builder learns about the dark rows and columns nothing was written to.
+/// Turns the differences of one row into runs of equal grey appended to `out`, leaving `deltas`
+/// empty. `row_start` is the row's first pixel index within the layer.
 pub(crate) fn emit_row(
     deltas: &mut Deltas,
     width_px: u32,
@@ -195,18 +181,12 @@ pub(crate) fn emit_row(
     deltas.clear();
 }
 
-/// Coverage this close to empty or to full is given the panel's own black and white.
-///
-/// A pixel the edge clips by half a percent is not a grey the resin can tell from white,
-/// but as a value of its own it breaks the run it sits in into three chunks. Two
-/// hundredths of a pixel is 0.4 micrometres on a 0.018 mm panel, and worth megabytes on a
-/// real file; see `docs/decisions/0039`.
+/// Coverage this close to empty or full snaps to the panel's black or white, so runs do not split.
+/// Two hundredths of a pixel is 0.4 micrometres on a 0.018 mm panel; see `docs/decisions/0039`.
 const SNAP: f32 = 0.02;
 
-/// Coverage as the 8-bit grey the panel is given.
-///
-/// A winding of zero or less is air: what a body wound inward covers is what it takes
-/// away, not what it exposes.
+/// Coverage as the 8-bit grey the panel is given. A winding of zero or less is air: an inward-wound
+/// body takes away, it does not expose.
 pub(crate) fn shade(winding: f32, grey: Grey) -> u8 {
     let coverage = winding.clamp(0.0, 1.0);
     if coverage <= SNAP {

@@ -1,6 +1,5 @@
-//! The frame the Settings window and the Machine and resin window are both drawn in: a
-//! title row, a list down the left, and beside it a header, what the page shows and an
-//! action bar along its foot. See `docs/decisions/0233`.
+//! The frame the Settings and Machine and resin windows share: title row, list at the left,
+//! header, page and action bar. See `docs/decisions/0233`.
 
 use egui::{Align, Color32, Layout, Rect, Sense, Ui, UiBuilder, pos2, vec2};
 
@@ -134,9 +133,8 @@ pub(super) fn tab_button(ui: &mut Ui, label: &str, open: bool) -> egui::Response
     response
 }
 
-/// The columns of a table: their names, where each starts as a share of the width, how
-/// many lead with words before the figures, and the room before the first, which a row
-/// may draw a mark in.
+/// The columns of a table: names, each start as a share of the width, how many lead with
+/// words before figures, and the room before the first, where a row may draw a mark.
 pub(super) struct Table {
     /// The column names, in the window's language.
     pub heads: fn() -> Vec<String>,

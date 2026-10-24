@@ -21,10 +21,8 @@ pub enum Shading {
     Binary,
 }
 
-/// How much of the grey range the panel and the resin between them can actually hold.
-///
-/// Coverage shading can ask for any of 255 greys, but a pixel dim enough leaves resin
-/// uncured rather than partly cured. See `docs/design/rasterisation.md`.
+/// How much of the grey range the panel and the resin between them can actually hold. A pixel dim
+/// enough leaves resin uncured rather than partly cured; see `docs/design/rasterisation.md`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub struct Grey {
     /// Dimmest grey the panel cures. Anything below it is written black instead.
@@ -34,10 +32,8 @@ pub struct Grey {
 }
 
 impl Grey {
-    /// The 8-bit grey a coverage of `0.0..=1.0` is written as, before the floor.
-    ///
-    /// The ladder matches what other slicers write at the same level count: eight levels
-    /// are `31, 63, ..., 255`. A count that does not divide 256 lands a little low.
+    /// The 8-bit grey a coverage of `0.0..=1.0` is written as, before the floor. Eight levels are
+    /// `31, 63, ..., 255`; a count that does not divide 256 lands a little low.
     fn ladder(self, coverage: f32) -> u8 {
         let Some(levels) = self.levels else {
             return (coverage * 255.0).round() as u8;

@@ -1,6 +1,7 @@
 # The window's design system
 
-The tokens, the widgets made of them, and the layout they sit in. Why not stock egui:
+The tokens, the widgets made of them, and the layout they sit in; how a panel must use them
+is [`ui-standards.md`](ui-standards.md). Why not stock egui:
 ADR 0024; why the layout is fixed: ADR 0025.
 
 Everything here is `crates/encrust-app/src/ui/`, and the rule the module exists for is:
@@ -156,23 +157,6 @@ only the reason it cannot run is written under it (ADR 0230).
 `panels::Window::show` builds the window in a fixed order. Nothing is dockable. Under the
 top bar the viewport takes the whole window, and every column is a card floating over it,
 as tall as what it holds; see `docs/decisions/0221`.
-
-```
-┌──────────────────────────────────────────────────────────────────────────┐
-│ top 44:  ● ● ●  File Edit View     printer / resin │ 50 µm   Find   ⌨  ⚙   │
-├──────────────────────────────────────────────────────────────────────────┤
-│ ╭────╮╭─────────────╮                       ╭cube╮ ╭────────────╮ ╭────╮ │
-│ │rail││ the open    │   ╭ job, notice ╮     ╰────╯ │ 1  2  +    │ │view│ │
-│ │ 60 ││ tool 328    │                              │ Models   + │ │ 650│ │
-│ │    ││ action      │                              │ list 272   │ │  ▲ │ │
-│ │    │╰─────────────╯                              │ ⧉ ⊞ ≡ ␡    │ │  ┃ │ │
-│ │    │                                             ╰────────────╯ │  ● │ │
-│ │    │            the stage, everywhere            ╭────────────╮ │  ┃ │ │
-│ │    │                                      ╭view╮ │ This plate │ │  ▼ │ │
-│ │    │                                      ╰────╯ │ Slice  ⌄   │ │  ▶ │ │
-│ ╰────╯                                             ╰────────────╯ ╰────╯ │
-└──────────────────────────────────────────────────────────────────────────┘
-```
 
 The top bar is the window's own title bar rather than a band under one: it drags the
 window, double-clicks to maximise, and on every platform but macOS draws its own window

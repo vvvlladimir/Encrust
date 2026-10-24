@@ -1,8 +1,7 @@
 use std::path::{Path, PathBuf};
 
 use printer_profiles::{
-    Catalogue, Connection, MaterialProfile, OutputFormat, PrinterProfile, SupportProfile, WaitMode,
-    Waits,
+    Catalogue, Connection, MaterialProfile, OutputFormat, PrinterProfile, WaitMode, Waits,
 };
 
 fn asset(name: &str) -> PathBuf {
@@ -153,24 +152,6 @@ fn the_saturn_4_ultra_rests_and_keeps_the_resins_rests() {
         printed.waits.after_retract_s, 1.3,
         "the rests stay the resin's"
     );
-}
-
-#[test]
-fn every_shipped_support_preset_matches_the_built_in_one() {
-    let expected = [
-        ("light.toml", SupportProfile::light()),
-        ("medium.toml", SupportProfile::medium()),
-        ("heavy.toml", SupportProfile::heavy()),
-    ];
-
-    for (file, built_in) in expected {
-        let loaded = SupportProfile::load(&asset(&format!("supports/{file}")))
-            .expect("a shipped support profile is valid");
-        assert_eq!(
-            loaded, built_in,
-            "{file} has drifted from the preset the window offers"
-        );
-    }
 }
 
 #[test]

@@ -274,37 +274,47 @@ fn the_orient_goal_and_the_tilt_limit_reach_the_search() {
 
 #[test]
 fn the_overhang_an_orientation_is_scored_on_is_the_support_profiles_own() {
-    // A wall hanging 50 degrees from vertical: past the 45 the medium profile holds up
-    // from, inside the 55 the light one does.
+    // A wall hanging 50 degrees from vertical: past the 40 the medium profile holds up
+    // from, inside the 55 a profile of its own asks for.
     let lean = 10.0 * 50.0_f32.to_radians().tan();
     let path = write_leaning_box_stl("leaning", 10.0, lean, 12, 0);
-    let overhang = |profile: &str| {
-        let output = slice(&[
+    let medium = std::fs::read_to_string(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/../../assets/profiles/supports/medium.toml"
+    ))
+    .expect("the shipped medium profile");
+    let lenient = std::env::temp_dir()
+        .join("encrust-cli-tests")
+        .join("lenient.toml");
+    std::fs::write(
+        &lenient,
+        medium.replace("max_overhang_deg = 40.0", "max_overhang_deg = 55.0"),
+    )
+    .expect("write the lenient profile");
+    let overhang = |profile: &[&str]| {
+        let mut args = vec![
             path.to_str().unwrap(),
             "--orient",
             "--max-tilt",
             "0",
-            "--supports",
-            profile,
             "--json",
-        ]);
+        ];
+        args.extend_from_slice(profile);
+        let output = slice(&args);
         assert!(output.status.success(), "{}", stderr(&output));
         json(&output)["oriented"]["overhang_mm2"]
             .as_f64()
             .expect("an oriented run reports its overhang")
     };
 
-    // 155.6 mm2 of wall, weighted by how far past the angle it leans: sin 50 - sin 45.
+    // 155.6 mm2 of wall, weighted by how far past the angle it leans: sin 50 - sin 40.
+    let held = overhang(&["--supports", "medium"]);
     assert!(
-        overhang("medium") > 5.0,
-        "the wall is 9 mm2 of weighted overhang at 45 degrees, got {}",
-        overhang("medium")
+        held > 5.0,
+        "the wall is 19 mm2 of weighted overhang at 40 degrees, got {held}"
     );
-    assert!(
-        overhang("light") < 0.01,
-        "and none at the 55 degrees the light profile asks for, got {}",
-        overhang("light")
-    );
+    let lenient = overhang(&["--support-profile", lenient.to_str().unwrap()]);
+    assert!(lenient < 0.01, "and none at 55 degrees, got {lenient}");
 }
 
 #[test]

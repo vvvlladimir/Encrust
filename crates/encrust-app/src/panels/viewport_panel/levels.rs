@@ -1,6 +1,5 @@
-//! Which level each model is drawn at this frame, from what the card has shown it can
-//! draw, whether the camera moves, and how large each model looks; see
-//! `docs/design/viewport.md`.
+//! Which level each model is drawn at this frame, from what the card can draw, camera
+//! motion and apparent size; see `docs/design/viewport.md`.
 
 use std::sync::Arc;
 
@@ -33,11 +32,8 @@ struct Model {
     lighter: Vec<Arc<Mesh>>,
 }
 
-/// The levels this frame draws in a view `height_px` tall. While the camera moves they
-/// keep the frame within what the card draws at 60 Hz, whatever that gives up; at rest
-/// only what cannot be seen is given up, and only where the card needs it. Detail comes
-/// back a level a frame once the camera stops. A capped cut draws everything whole,
-/// since its cap is counted against the meshes themselves.
+/// The levels this frame draws in a view `height_px` tall: within the card's 60 Hz budget
+/// while the camera moves, detail back a level a frame at rest. A capped cut draws whole.
 pub(super) fn levels(ui: &egui::Ui, window: &mut Window, capped: bool, height_px: f32) -> Levels {
     let view = &mut *window.view;
     let moving = camera_moving(ui, view, capped);
@@ -118,9 +114,8 @@ fn camera_moving(ui: &egui::Ui, view: &mut View, capped: bool) -> bool {
     moving
 }
 
-/// The levels the frame would draw if it could go straight to them: whatever fits a 60 Hz
-/// frame while the camera moves, and at rest only what cannot be seen. Every model whole
-/// while nothing says the card cannot draw them.
+/// The levels the frame would draw going straight to them: what fits 60 Hz while the camera
+/// moves, only the unseen given up at rest, every model whole while the card copes.
 fn wanted(budget: &Budget, models: &[Model], moving: bool) -> Vec<usize> {
     let candidates: Vec<Candidate> = models.iter().map(|model| model.steps.clone()).collect();
     let allotted = if moving {

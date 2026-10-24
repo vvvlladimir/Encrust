@@ -67,8 +67,7 @@ pub fn network(ui: &mut egui::Ui, window: &mut Window) {
     }
 }
 
-/// Says that this machine is the user's copy of a shipped one and no longer matches it,
-/// which is what a copy taken out of the library by an older release never said (P-11).
+/// Says this machine is the user's copy of a shipped one and no longer matches it (P-11).
 /// Answers whether the shipped profile was asked for back.
 fn own_copy_note(ui: &mut egui::Ui) -> bool {
     ui.add_space(4.0);
@@ -273,9 +272,8 @@ fn firmware(ui: &mut egui::Ui, profile: &mut PrinterProfile) {
     hint(ui, &tr!("printer-variable-height-note"));
 }
 
-/// The container this machine's firmware reads. Every one the window can write *for this
-/// machine* is on the list, and nothing else: a `.cxdlp` asks for a CL or CT code in the
-/// name, so a machine without one is never offered it.
+/// The container this machine's firmware reads. Only containers the window can write for
+/// this machine are listed: a `.cxdlp` needs a CL or CT code in the name.
 fn output(ui: &mut egui::Ui, profile: &mut PrinterProfile) {
     let chosen = SlicedFormat::from(profile.output);
     let offered: Vec<SlicedFormat> = SlicedFormat::choices_for(profile).collect();

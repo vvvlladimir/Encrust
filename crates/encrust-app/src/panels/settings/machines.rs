@@ -1,7 +1,5 @@
-//! The Machine and resin window: the machines down its left, and the resins, the profile
-//! and the network of the one picked in tabs beside them. A printer's resins are its own
-//! presets, and any resin ever added to a printer is in the pool for the others. See
-//! `docs/decisions/0220`.
+//! The Machine and resin window: machines at the left, and the resins, profile and network of
+//! the picked one in tabs. See `docs/decisions/0220`.
 
 use egui::{Align, Color32, Layout, Rect, RichText, Sense, Ui, pos2, vec2};
 use printer_profiles::{Catalogue, Connection, Entry, Kind, PrinterProfile, ProfileError};
@@ -471,7 +469,7 @@ fn delete(window: &mut Window, deleting: Deleting) {
             None
         }
         // Asked from the Settings window, which answers it itself.
-        Deleting::Profile(..) => None,
+        Deleting::Profile(..) | Deleting::Unreadable => None,
     };
     window.machine.slicing.reload_resin();
     pick(window, picked);
@@ -485,9 +483,8 @@ fn pick(window: &mut Window, node: Option<Node>) {
     }
 }
 
-/// Stands the plate under the machine the list moved to, or under none when the last one
-/// has been removed: the window prints with the machine it has, not with one that is gone
-/// (BUG-14).
+/// Stands the plate under the machine the list moved to, or none after the last is removed:
+/// the window must not print with a machine that is gone (BUG-14).
 fn stand_under(window: &mut Window, id: Option<String>) {
     let profile = id
         .as_deref()
@@ -571,6 +568,10 @@ fn ask(ctx: &egui::Context, window: &mut Window) {
     let Some(deleting) = window.machine.settings.confirm.clone() else {
         return;
     };
+    // Asked from outside this window, so `settings::window` answers it whether or not it is open.
+    if deleting == Deleting::Unreadable {
+        return;
+    }
     let Some(answer) = confirm::ask(ctx, &window.machine.slicing.catalogue, &deleting) else {
         return;
     };

@@ -170,11 +170,8 @@ fn plan_of(facts: &SlicedFile) -> LayerPlan {
     LayerPlan::from_bounds(bounds, ceiling)
 }
 
-/// Layers right above the bottom block carrying the resin's own ramp down to the normal
-/// exposure, which every header states as a transition count and no band can.
-///
-/// Read back as bands they would make a file a header-only machine has to refuse (ADR
-/// 0090), and the new file's own header states the ramp again.
+/// Layers right above the bottom block carrying the resin's own ramp down to the normal exposure.
+/// Read back as bands they would make a file a header-only machine must refuse (ADR 0090).
 fn transition_of(facts: &SlicedFile) -> u16 {
     let above = facts
         .layers

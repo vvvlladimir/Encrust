@@ -3,6 +3,7 @@ use core_engine::project::DrainState;
 use core_geometry::Scalar;
 use core_supports::Trapped;
 use core_volume::HoleSize;
+use serde::{Deserialize, Serialize};
 
 use crate::i18n::tr;
 use crate::job::{TrapJob, TrapOutcome, TrapRequest, trap_tasks};
@@ -14,7 +15,8 @@ mod plugs;
 pub use plugs::PlugsLaid;
 
 /// What a click in the viewport puts down.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
 pub enum Placing {
     #[default]
     Hole,

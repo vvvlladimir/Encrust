@@ -2,7 +2,7 @@ use egui::layers::ShapeIdx;
 use egui::{Frame, RichText, Sense, Ui, UiBuilder, vec2};
 
 use crate::i18n::tr;
-use crate::ui::theme;
+use crate::ui::{kept, theme};
 
 /// Where `describe` sends its text while a section's body is being drawn.
 const DESCRIBING: &str = "encrust-describing";
@@ -68,7 +68,7 @@ fn block<R>(
     add: impl FnOnce(&mut Ui) -> R,
 ) -> (bool, Option<R>) {
     let id = ui.id().with(("section", title));
-    let open = ui.data(|data| data.get_temp::<bool>(id.with("open"))) != Some(false);
+    let open = kept::get::<bool>(ui.ctx(), id.with("open")) != Some(false);
     let pressed = block_heading(ui, id, title, open, hint_text, trailing);
     let inner = open.then(|| {
         Frame::new()
@@ -134,7 +134,7 @@ fn block_heading(
         .on_hover_cursor(egui::CursorIcon::PointingHand)
         .clicked()
     {
-        child.data_mut(|data| data.insert_temp(id.with("open"), !open));
+        kept::set(child.ctx(), id.with("open"), &!open);
     }
 
     let texts = described(&child, id);

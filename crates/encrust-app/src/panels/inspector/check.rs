@@ -9,7 +9,7 @@ use crate::state::Machine;
 use crate::status::Status;
 use crate::supports::ISLANDS_GROUP;
 use crate::ui::{
-    Segment, Segmented, describe, focus_ring, hint, icon, issue_row, list, readings,
+    Segment, Segmented, describe, focus_ring, hint, icon, issue_row, kept, list, readings,
     secondary_button, section, theme,
 };
 use crate::workspace::Tool;
@@ -19,7 +19,7 @@ use crate::workspace::Tool;
 const LISTED: usize = 200;
 
 /// Which kind of issue the list shows.
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 enum Filter {
     #[default]
     All,
@@ -176,10 +176,7 @@ fn waiting(ui: &mut egui::Ui, window: &mut Window) {
 }
 
 /// Which layers pull hardest on the film as the plate lifts, above the bottom block.
-///
-/// Every row is listed whether its peak is known or not: a print setting edited meanwhile
-/// is measured again, and a block that comes and goes takes the field under it out from
-/// under the pointer.
+/// Every row is listed, peak known or not: a setting edited meanwhile is measured again.
 fn pull(ui: &mut egui::Ui, window: &mut Window) {
     let measured = window.measured();
     if measured.is_none() && !window.machine.preview.is_measuring() {
@@ -462,8 +459,7 @@ fn filter(ui: &mut egui::Ui, risks: &[Risk]) -> Filter {
         .map(|filter| (filter, tally(filter)))
         .filter(|(_, count)| *count > 0)
         .collect();
-    let mut chosen = ui
-        .data(|data| data.get_temp::<Filter>(id))
+    let mut chosen = kept::get::<Filter>(ui.ctx(), id)
         .filter(|chosen| present.iter().any(|(filter, _)| filter == chosen))
         .unwrap_or_default();
     if present.len() < 2 {
@@ -484,7 +480,7 @@ fn filter(ui: &mut egui::Ui, risks: &[Risk]) -> Filter {
     Segmented::new(&segments)
         .width(ui.available_width())
         .show(ui, &mut chosen);
-    ui.data_mut(|data| data.insert_temp(id, chosen));
+    kept::set(ui.ctx(), id, &chosen);
     chosen
 }
 

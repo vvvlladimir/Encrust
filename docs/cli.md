@@ -336,6 +336,14 @@ one you have; `--printer ID` sets an imported resin up on that machine (ADR 0233
 encrust profiles import grey.toml --kind resin --printer elegoo-mars-4-ultra
 ```
 
+A file in your folder that no longer reads is left out with a warning, and the shipped
+profile of its id is used. `profiles reset-unreadable` throws away those copies of shipped
+profiles; a file under an id of your own is kept (ADR 0353):
+
+```sh
+encrust profiles reset-unreadable
+```
+
 Without `--kind`, `FILE` is a sliced file and its resin is taken in: whatever the file states
 of exposure, transition, waits, lifts and light power, our defaults for the rest, set up on
 the machine the file was cut for. That machine is found by the panel and the name the file
@@ -472,4 +480,41 @@ the rules as they are now, measuring nothing.
 cargo run --release -p encrust-cli --bin orient-lab
 cargo run --release -p encrust-cli --bin orient-lab -- a.stl b.obj --printer elegoo-saturn-4-ultra --support medium
 cargo run --release -p encrust-cli --bin orient-lab -- --corpus corpus.toml --json now.json --baseline before.json
+```
+
+## `support-lab`
+
+Each model supported the way Generate supports it, cut and cured as it prints, and read
+along three lines: what falls — contacts left with no support, islands, pieces standing on
+nothing, tips thinner than hold at all; what marks the part — the scar the tips leave,
+measured where the surface cuts each tip, tips on faces looking up in the pose the model
+was drawn in, tips on material thinner than a millimetre, feet standing on the model; and
+what is more or less than needed — how much of what it holds each tip carries, flat
+underside and leaning underside each against its own limit, the rim of flat underside left
+far from every tip, underside no tip reaches and no layer below carries, crowded tips and
+tall trunks with nothing to brace them to. A model holds when nothing falls, and has
+enough when it holds and no tip carries more than it holds.
+
+`--profile` names the support profiles to bench, repeated for several, Light when none is
+given. `--auto` names automatic profiles to bench the same way, each support sized by what
+it holds as Generate does with Automatic on, and each tip read against the shape it was
+built to; its row is named `auto:<id>`. `--hollow-wall-mm` hollows each model to a wall that
+thick and stands its supports against the shell from outside. `--sweep` also supports each
+model at shares of the profile's density and reports the least that is enough. `--flat-ratio`, `--slope-ratio`, `--min-tip-mm` and `--rim-gap-mm` set what a tip
+holds, as prints of plates on tips measured it; `--coupon FILE --coupon-spec SPEC` writes
+such a print instead of benching, laid out by a TOML file of tip shapes and the blocks
+printed in them — balls, flat plates and leant plates on so many tips — with what the bench
+expects of each specimen. `--corpus FILE` reads a
+TOML list of models with how each stands — the axis that points up, the height it prints
+at, its lean — and what a person expects of it. `--export DIR` writes each supported model
+and markers at every place the run names; `--json FILE` keeps the run, and `--baseline
+FILE` exits non-zero when anything got worse: a model that held fails or loses enough,
+contacts or resin grow by more than 15 %, or more tips land on faces looking up or on thin
+material.
+
+```sh
+cargo run --release -p encrust-cli --bin support-lab -- a.stl b.obj --profile light --profile medium
+cargo run --release -p encrust-cli --bin support-lab -- a.stl --auto default --hollow-wall-mm 2
+cargo run --release -p encrust-cli --bin support-lab -- --corpus corpus.toml --sweep --export out --json now.json --baseline before.json
+cargo run --release -p encrust-cli --bin support-lab -- --coupon coupon.stl --coupon-spec coupon.toml
 ```

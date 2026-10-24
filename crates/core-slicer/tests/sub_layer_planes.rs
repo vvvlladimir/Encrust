@@ -5,37 +5,12 @@
 
 use std::num::NonZeroU8;
 
-use core_geometry::{Mesh, Scalar, Vec3};
+use core_geometry::{Mesh, Vec3};
 use core_slicer::{ONE_SAMPLE, SliceSettings, Windows};
 
 /// An axis-aligned box, wound outward.
 fn box_mesh(min: Vec3, max: Vec3) -> Mesh {
-    let v = |x: Scalar, y: Scalar, z: Scalar| Vec3::new(x, y, z);
-    let vertices = vec![
-        v(min.x, min.y, min.z),
-        v(max.x, min.y, min.z),
-        v(max.x, max.y, min.z),
-        v(min.x, max.y, min.z),
-        v(min.x, min.y, max.z),
-        v(max.x, min.y, max.z),
-        v(max.x, max.y, max.z),
-        v(min.x, max.y, max.z),
-    ];
-    let faces = vec![
-        [0, 2, 1],
-        [0, 3, 2],
-        [4, 5, 6],
-        [4, 6, 7],
-        [0, 1, 5],
-        [0, 5, 4],
-        [1, 2, 6],
-        [1, 6, 5],
-        [2, 3, 7],
-        [2, 7, 6],
-        [3, 0, 4],
-        [3, 4, 7],
-    ];
-    Mesh::new(vertices, faces)
+    core_geometry::cuboid(min, max)
 }
 
 /// A 10 mm slab one layer thick, with a fin standing in the top fifth of that layer only.

@@ -16,11 +16,8 @@ use format_svgx::SvgxReader;
 
 use crate::error::PipelineError;
 
-/// A sliced file opened for inspection, whichever container it turned out to be.
-///
-/// One enum rather than a boxed trait object: every reader is in this workspace, and a
-/// caller that wanted another would be adding a `format-*` crate beside them anyway. See
-/// `docs/decisions/0149`.
+/// A sliced file opened for inspection, whichever container it turned out to be. An enum rather
+/// than a trait object: every reader is in this workspace (ADR 0149).
 pub enum Opened<S> {
     Goo(format_goo::OpenGoo<S>),
     Chitu(format_chitu::OpenChitu<S>),
@@ -66,11 +63,8 @@ impl<S: ReadSeek> OpenFile for Opened<S> {
     }
 }
 
-/// Opens a sliced file for inspection, reading its tables and no mask.
-///
-/// The extension chooses the reader, as it chooses the writer (ADR 0047). A name no reader
-/// claims is decided by the first bytes instead, because a file renamed on the way out of
-/// another slicer is still the container it was.
+/// Opens a sliced file for inspection, reading its tables and no mask. The extension chooses the
+/// reader as for the writer (ADR 0047); an unknown name falls back to the first bytes.
 pub fn open<S: ReadSeek>(path: &Path, mut source: S) -> Result<Opened<S>, FormatError> {
     let family = match claimed_by(path) {
         Some(family) => family,
@@ -93,10 +87,8 @@ pub fn open_file(path: &Path) -> Result<Opened<Box<dyn ReadSeek>>, PipelineError
     })
 }
 
-/// The family the first bytes name.
-///
-/// Every container announces itself in its first sixteen bytes, so one read settles it and
-/// no reader is run speculatively.
+/// The family the first bytes name. Every container announces itself in its first sixteen bytes, so
+/// no reader runs speculatively.
 fn sniff<S: ReadSeek>(source: &mut S) -> Result<Family, FormatError> {
     let mut head = [0; 16];
     source.seek(SeekFrom::Start(0))?;

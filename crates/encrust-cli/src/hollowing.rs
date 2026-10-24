@@ -80,9 +80,8 @@ pub struct HollowArgs {
     #[arg(long = "drain", value_name = "MM", default_value_t = 3.0)]
     pub drain_mm: Scalar,
 
-    /// Drill a drain hole into the surface nearest this point, in plate millimetres from
-    /// the plate's front left corner, after any placement; `inspect` prints a model's own
-    /// bounds. Repeat for more than one hole.
+    /// Drill a drain hole into the surface nearest this point, plate mm from the front left corner,
+    /// after any placement; `inspect` prints bounds. Repeat for more holes.
     #[arg(long = "drain-at", value_name = "X,Y,Z", value_parser = point, allow_hyphen_values = true)]
     pub drain_at: Vec<Vec3>,
 
@@ -160,9 +159,8 @@ impl HollowArgs {
         !self.drain_at.is_empty() || !self.channels.is_empty()
     }
 
-    /// What was asked for, cut on the lattice `precision` picks, or `None` when `--hollow`
-    /// was not given. Every channel keeps a wall of solid around it, so it comes out of the
-    /// run as a pipe through the part.
+    /// What was asked for, cut on the lattice `precision` picks, or `None` without `--hollow`.
+    /// Every channel keeps a solid wall around it, so it comes out as a pipe through the part.
     fn settings(&self, precision: Scalar) -> Option<HollowSettings> {
         let thickness_mm = self.thickness_mm?;
         Some(HollowSettings {
@@ -292,16 +290,13 @@ pub fn run(
 }
 
 /// Where every `--drain-at` lands on `mesh`, and the channels asked for beside them.
-///
-/// Placed against the model as it was imported, before any cavity is cut into it, so a
-/// point inside the model finds the surface a user was pointing at.
+/// Placed against the model as imported, before any cavity, so a point inside finds its surface.
 pub fn placed(mesh: &Mesh, args: &HollowArgs) -> Result<(Vec<DrainHole>, Vec<Channel>)> {
     Ok((args.drains(mesh, &Bvh::build(mesh))?, args.dug()))
 }
 
-/// A plug for each of `holes` as they are cut, drilled into `mesh` as it stands solid on
-/// the plate, laid on the plate in a row past the model's right-hand side. `drift_mm` is
-/// what the resin's compensation leaves a fit wider by, and comes off the gap asked for.
+/// A plug for each of `holes`, laid on the plate in a row past the model's right-hand side.
+/// `drift_mm` is what the resin's compensation leaves a fit wider by; it comes off the gap.
 pub fn plugs_beside(
     mesh: &Mesh,
     holes: &[DrainHole],
@@ -347,11 +342,7 @@ pub fn pierced(holes: &[DrainHole], wall: Option<(Scalar, Scalar)>) -> Vec<Drain
 }
 
 /// The bodies `placed` cuts out of a model hollowed to `wall`, and how many of each.
-///
-/// They are wound inward, which is what subtracts them wherever they are appended
-/// (ADR 0071, 0075), so this needs no cavity: a hole is a hole in a solid model too.
-/// `wall` is the cavity the model was hollowed to, and deepens a hole that would
-/// otherwise stop inside that wall.
+/// Wound inward so they subtract wherever appended (ADR 0071, 0075); `wall` deepens shallow holes.
 pub fn cut(
     placed: (Vec<DrainHole>, Vec<Channel>),
     wall: Option<(Scalar, Scalar)>,

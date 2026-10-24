@@ -14,9 +14,7 @@ use crate::raster_report::RasterReport;
 use crate::slice_report::SliceReport;
 
 /// Which `.ctb` revision `--ctb-version` asked for.
-///
-/// Version 4 is the default because every machine that reads version 5 reads it too; see
-/// `docs/formats/chitu.md`.
+/// Version 4 is the default as every machine reading 5 reads it; see `docs/formats/chitu.md`.
 #[derive(Debug, Default, Clone, Copy, clap::ValueEnum)]
 pub enum CtbRevision {
     #[default]
@@ -40,10 +38,8 @@ pub fn format_of(path: &Path, revision: CtbRevision) -> Option<SlicedFormat> {
     SlicedFormat::of(path, revision.into())
 }
 
-/// Slices and rasterises `plate` straight into a printable sliced file at `path`.
-///
-/// Nothing but the window being worked on is ever in memory; see `core_engine::Run` and
-/// ADR 0010. A run `watch.stop` cancels leaves no file behind.
+/// Slices and rasterises `plate` straight into a sliced file at `path`, one window in memory
+/// (ADR 0010). A run `watch.stop` cancels leaves no file.
 pub fn write_plate(
     plate: Plate,
     path: &Path,
@@ -89,13 +85,8 @@ fn warn_if_the_machine_reads_another_container(printer: &PrinterProfile, format:
     }
 }
 
-/// Why the container the output names is dear on this machine's panel, or `None` where the
-/// panel is one its machines have.
-///
-/// A `.cbddlp` carries grey in eight one-bit passes over the whole panel (ADR 0146) and an
-/// `.svgx` traces every lit run into polygons (ADR 0169): both cost by the panel and not by
-/// the model, so on a panel ten times the one they were made for a plate takes minutes and
-/// gigabytes.
+/// Why the container is dear on this machine's panel, or `None` where the panel is usual for it.
+/// A `.cbddlp` (ADR 0146) and an `.svgx` (ADR 0169) cost by panel, not model.
 fn panel_too_big_for(format: SlicedFormat, printer: &PrinterProfile) -> Option<String> {
     let made_for: (u32, u32) = match format {
         // The Photon, at 1440 x 2560, is the largest panel of the machines reading it.

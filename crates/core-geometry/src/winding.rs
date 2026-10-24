@@ -8,25 +8,14 @@ const LEAF_FACES: usize = 8;
 /// Deepest the tree can go, as in `bvh.rs`.
 const MAX_DEPTH: usize = 64;
 
-/// How many node radii a query point must stand off before the node is summarised instead
-/// of walked. Barill et al. call this beta.
-///
-/// The dipole term's error falls as the square of the stand-off, and the cost roughly
-/// doubles with it: on a 200k-triangle sphere the worst error over a sample of points is
-/// 3.6% at two radii and 1.1% at three, for 7.3 and 15.6 microseconds a query. Two is
-/// Barill's own recommendation and is what the half-winding this is read against needs;
-/// a consumer wanting the winding number itself, rather than its sign, should buy the
-/// accuracy with the quadrupole term rather than a wider beta.
+/// How many node radii a query point must stand off before the node is summarised (Barill's beta).
+/// Two matches Barill's recommendation; error 3.6% at two radii, 1.1% at three, for twice the cost.
 const FAR_ENOUGH: Scalar = 2.0;
 
 const FOUR_PI: Scalar = 4.0 * std::f32::consts::PI;
 
-/// Signed solid angle in steradians that `triangle` subtends at `point`, by the formula of
-/// Van Oosterom and Strackee (1983).
-///
-/// Positive when the triangle is wound counter-clockwise seen from `point`, so a closed
-/// outward-wound surface sums to `4pi` around a point inside it. Zero when `point` lies on
-/// a vertex, which is the only place the formula has nothing to say.
+/// Signed solid angle in steradians that `triangle` subtends at `point` (Van Oosterom, Strackee
+/// 1983).
 pub fn solid_angle(point: Vec3, triangle: &Triangle) -> Scalar {
     let a = triangle.a - point;
     let b = triangle.b - point;
@@ -38,12 +27,8 @@ pub fn solid_angle(point: Vec3, triangle: &Triangle) -> Scalar {
     2.0 * numerator.atan2(denominator)
 }
 
-/// Generalised winding number of `mesh` at `point`, by summing every face.
-///
-/// One inside a closed outward-wound mesh, zero outside it, and a fraction near a hole or
-/// a self-intersection — which is what makes it a usable sign on an imported mesh; see
-/// `docs/decisions/0054-inside-is-decided-by-the-generalised-winding-number.md`. Linear in the face count: for more than a handful of points,
-/// build a [`Winding`] instead, which is what this is measured and tested against.
+/// Generalised winding number of `mesh` at `point`, summing every face; linear in the face count.
+/// Use a [`Winding`] for many points; sign semantics in `docs/decisions/0054`.
 pub fn winding_number(mesh: &Mesh, point: Vec3) -> Scalar {
     mesh.triangles()
         .map(|triangle| solid_angle(point, &triangle))
@@ -51,13 +36,8 @@ pub fn winding_number(mesh: &Mesh, point: Vec3) -> Scalar {
         / FOUR_PI
 }
 
-/// A hierarchy over a mesh's faces that answers the generalised winding number in
-/// logarithmic time, after Barill et al., *Fast Winding Numbers for Soups and Clouds*
-/// (2018).
-///
-/// Built once per mesh, beside its [`crate::Bvh`], and asked for the sign of every voxel
-/// of a distance field. The expansion and what it costs are in
-/// `docs/design/distance-queries.md`.
+/// A hierarchy answering the generalised winding number in log time, after Barill et al. (2018).
+/// Built once per mesh beside its [`crate::Bvh`]; see `docs/design/distance-queries.md`.
 #[derive(Debug, Clone, Default)]
 pub struct Winding {
     nodes: Vec<Node>,
@@ -128,12 +108,8 @@ impl Winding {
         self.nodes.is_empty()
     }
 
-    /// Generalised winding number of `mesh` at `point`: one well inside it, zero well
-    /// outside.
-    ///
-    /// `mesh` must be the one the hierarchy was built from. Faces near `point` are summed
-    /// exactly and distant groups are summarised by their dipole, which costs a few
-    /// percent of winding at the stand-off of two radii this uses.
+    /// Generalised winding number of `mesh` at `point`: one well inside, zero well outside.
+    /// `mesh` must be the one the hierarchy was built from; error is a few percent at two radii.
     pub fn at(&self, mesh: &Mesh, point: Vec3) -> Scalar {
         let mut total: Scalar = 0.0;
         let mut stack: Vec<u32> = Vec::with_capacity(MAX_DEPTH);
@@ -270,33 +246,7 @@ mod tests {
 
     /// A cube from the origin to `(size, size, size)`, wound outward.
     fn cube(size: Scalar) -> Mesh {
-        let s = size;
-        Mesh::new(
-            vec![
-                Vec3::new(0.0, 0.0, 0.0),
-                Vec3::new(s, 0.0, 0.0),
-                Vec3::new(s, s, 0.0),
-                Vec3::new(0.0, s, 0.0),
-                Vec3::new(0.0, 0.0, s),
-                Vec3::new(s, 0.0, s),
-                Vec3::new(s, s, s),
-                Vec3::new(0.0, s, s),
-            ],
-            vec![
-                [0, 2, 1],
-                [0, 3, 2],
-                [4, 5, 6],
-                [4, 6, 7],
-                [0, 1, 5],
-                [0, 5, 4],
-                [1, 2, 6],
-                [1, 6, 5],
-                [2, 3, 7],
-                [2, 7, 6],
-                [3, 0, 4],
-                [3, 4, 7],
-            ],
-        )
+        crate::cuboid(Vec3::ZERO, Vec3::splat(size))
     }
 
     #[test]

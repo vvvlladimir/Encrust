@@ -1,6 +1,5 @@
-//! `cargo xtask licenses`: the terms of every library compiled into a release, as one
-//! markdown file. Why it is generated rather than written, and what ships it, is in
-//! `docs/decisions/0214`.
+//! `cargo xtask licenses`: the terms of every library compiled into a release, as one markdown
+//! file. See `docs/decisions/0214`.
 
 use std::path::{Path, PathBuf};
 use std::process::Command;
@@ -43,9 +42,8 @@ pub fn run(args: &Args) -> Result<()> {
     Ok(())
 }
 
-/// The file as the lockfile says it should read. A crate under a licence `about.toml` does
-/// not accept fails here, which is the point: its terms would otherwise reach a user
-/// unstated.
+/// The file as the lockfile says it should read. A crate under a licence `about.toml` does not
+/// accept fails here, so its terms never reach a user unstated.
 fn generated(root: &Path) -> Result<String> {
     let run = Command::new("cargo")
         .current_dir(root)

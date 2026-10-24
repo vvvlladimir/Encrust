@@ -1,9 +1,5 @@
-//! The stage every front end shares: a cut stack rasterised into a printable file, and a
-//! printable file read back or written again in another container.
-//!
-//! What is *above* this — which model to orient, hollow or support — belongs to the front
-//! end that asked. What is below is the format writers and readers. See
-//! `docs/architecture.md`.
+//! The stage every front end shares: a cut stack rasterised into a file, and files read or
+//! rewritten. Orienting and supporting belong to the front end; see `docs/architecture.md`.
 
 mod convert;
 mod error;

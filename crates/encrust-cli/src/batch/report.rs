@@ -1,8 +1,5 @@
-//! What a run writes down as JSON: one report per model, from `slice`, `inspect` and each
-//! model of a `batch`, and one over a whole batch.
-//!
-//! The shape is the report, not the code: every number a farm would want to gate on is a
-//! field here rather than a line of prose to be grepped.
+//! What a run writes down as JSON: one report per model and one over a whole batch.
+//! Every number a farm would gate on is a field here, not prose.
 
 use std::path::{Path, PathBuf};
 use std::time::Duration;
@@ -209,9 +206,8 @@ pub struct Cured {
     pub widest_step_layer: Option<usize>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub widest_step_mm2: Option<f32>,
-    /// Pieces cured over nothing or left floating over one taken out, necks pulled past
-    /// their limit, layers pulling the film past its, holes sealed from below, pieces too
-    /// thin to hold, and the parts taken out of the file as islands.
+    /// Pieces cured over nothing or left floating, necks and layers past their limits, sealed holes
+    /// pieces too thin to hold, and parts taken out of the file as islands.
     pub islands: usize,
     pub levers: usize,
     pub peels: usize,
@@ -456,10 +452,8 @@ impl Summary {
             // Wall time is not the sum when models run at once, so this is the work done
             // rather than how long the run took.
             seconds: reports.iter().map(|report| report.seconds).sum(),
-            // Only what would print: a model that does not fit was cut as it stands and
-            // clipped by the panel, so its resin is not resin the batch will use. Rust
-            // sums floats from -0.0, so a run that sliced nothing would report a negative
-            // volume.
+            // Only what would print: a model that does not fit is clipped, so its resin is unused.
+            // Floats sum from -0.0 in Rust, so an empty run would report a negative volume.
             resin_mm3: reports
                 .iter()
                 .filter(|report| report.status == Status::Ok)

@@ -23,10 +23,8 @@ impl Command {
     }
 }
 
-/// Pauses, resumes or stops the print under way.
-///
-/// A board takes the command on a connection of its own; a Prusa machine is asked which
-/// job is running first, because the command is addressed to it.
+/// Pauses, resumes or stops the print under way; a Prusa machine is first asked which job runs,
+/// as the command is addressed to it.
 pub fn control(wire: &Wire, command: Command) -> Result<(), SendError> {
     match wire {
         Wire::Sdcp(printer) => {

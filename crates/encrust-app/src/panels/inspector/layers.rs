@@ -7,7 +7,7 @@ use crate::i18n::tr;
 use crate::slicing::{MAX_LAYER_HEIGHT_MM, MIN_LAYER_HEIGHT_MM};
 use crate::state::Machine;
 use crate::ui::{
-    Carried, Segment, Segmented, carried_row, describe, hint, icon, icon_button, nested,
+    Carried, Segment, Segmented, carried_row, describe, hint, icon, icon_button, kept, nested,
     number_row, secondary_button, section, subheading_with_switch, switch, theme, tone,
 };
 
@@ -86,7 +86,7 @@ pub fn edges(ui: &mut egui::Ui, machine: &mut Machine) {
     section(ui, &tr!("layers-edge-smoothing"), aside.as_deref(), |ui| {
         describe(ui, &tr!("layers-edge-note"));
         let by_look_id = ui.id().with("edges-by-look");
-        let mut by_look = ui.data(|data| data.get_temp(by_look_id).unwrap_or(look.is_some()));
+        let mut by_look = kept::get(ui.ctx(), by_look_id).unwrap_or(look.is_some());
         let choices = [
             Segment::new(true, tr!("layers-look")),
             Segment::new(false, tr!("layers-number")),
@@ -94,7 +94,7 @@ pub fn edges(ui: &mut egui::Ui, machine: &mut Machine) {
         Segmented::new(&choices)
             .width(ui.available_width())
             .show(ui, &mut by_look);
-        ui.data_mut(|data| data.insert_temp(by_look_id, by_look));
+        kept::set(ui.ctx(), by_look_id, &by_look);
 
         if by_look {
             if let Some(picked) = looks(ui, look) {

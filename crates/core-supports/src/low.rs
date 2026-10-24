@@ -8,17 +8,12 @@ use crate::field::{Grid, Parts};
 /// low point, millimetres: above float noise at plate scale, under any printable step.
 const LOWER_BY_MM: Scalar = 1e-4;
 
-/// How many cells round a low point a piece may begin in and still be the one hanging
-/// from it: a point is thinner than a cell for its first layers, and is read onto the
-/// grid wherever a cell's middle first falls inside it.
+/// How many cells round a low point a piece may begin in and still hang from it: a point is
+/// thinner than a cell for its first layers.
 const NEAR_CELLS: i32 = 2;
 
-/// The points of a placed model that hang lower than everything round them, in plate
-/// coordinates: every vertex below all the vertices it shares a face with.
-///
-/// The mesh is taken as welded, which every import leaves it. Most of what comes back is
-/// a bump on a surface something else already holds; automatic placement keeps the ones
-/// a part actually begins at. See `docs/design/supports.md`.
+/// The points of a placed model, in plate coordinates, that hang lower than every vertex they
+/// share a face with; the mesh is taken as welded, and placement keeps those a part begins at.
 pub fn low_points(model: &Mesh, transform: Transform) -> Vec<Vec3> {
     let matrix = transform.to_matrix();
     let placed: Vec<Vec3> = model
@@ -111,7 +106,7 @@ fn beside(parts: &Parts, cell: [i32; 2]) -> Option<u32> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::tests::box_mesh;
+    use crate::fixtures::box_mesh;
 
     /// A four-sided pyramid standing on its point at the origin, `height` tall.
     fn pyramid_on_its_point(height: Scalar) -> Mesh {

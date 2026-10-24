@@ -1,9 +1,7 @@
 use core_geometry::{Mesh, Scalar, Vec2};
 
-/// Identity of the mesh edge a contour point sits on: both vertex indices, lower first.
-///
-/// Two faces sharing an edge produce the same key, which is what lets contours be
-/// stitched by topology instead of by comparing coordinates.
+/// Identity of the mesh edge a contour point sits on: both vertex indices, lower first. Faces
+/// sharing an edge give one key, so contours stitch by topology, not coordinates.
 pub(crate) type EdgeKey = (u32, u32);
 
 /// Where one face crosses a slicing plane, directed so that material lies to the left.
@@ -15,10 +13,8 @@ pub(crate) struct Crossing {
     pub end: Vec2,
 }
 
-/// Intersects one face with the plane at height `z`, in millimetres.
-///
-/// A vertex sitting exactly on the plane counts as below it. That single rule removes
-/// every degenerate case at once; see `docs/design/slicing.md`.
+/// Intersects one face with the plane at height `z`, in millimetres. A vertex exactly on the plane
+/// counts as below it, removing every degenerate case.
 pub(crate) fn crossing(mesh: &Mesh, face: usize, z: Scalar) -> Option<Crossing> {
     let indices = *mesh.faces.get(face)?;
     let mut above = [false; 3];

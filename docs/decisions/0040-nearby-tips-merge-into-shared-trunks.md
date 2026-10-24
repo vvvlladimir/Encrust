@@ -1,6 +1,6 @@
 # 0040. Merge nearby tips into shared trunks, greedily, highest meeting point first
 
-- **Status:** Superseded by 0242 (the width of a merged trunk only)
+- **Status:** Superseded by 0242 (the width of a merged trunk only); merging is held to a strut length and a tip count by 0347
 - **Date:** 2026-09-19
 
 ## Context

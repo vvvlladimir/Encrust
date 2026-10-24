@@ -1,6 +1,6 @@
 # 0254. Ship presets tuned on prints, and let Heavy stand fewer, thicker supports
 
-- **Status:** Accepted
+- **Status:** Superseded by 0323
 - **Date:** 2026-10-13
 
 ## Context

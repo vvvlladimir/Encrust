@@ -1,10 +1,8 @@
 /// One pixel of a thumbnail, red, green and blue.
 pub type Rgb = [u8; 3];
 
-/// Packs one pixel as `rrrrrggg gggbbbbb`, the five-six-five form a preview record holds.
-///
-/// Two sliced-file formats store their previews this way and disagree only on the byte
-/// order of the word, so the packing lives here with the pixel it packs.
+/// Packs one pixel as `rrrrrggg gggbbbbb`, the five-six-five form a preview record holds. Two
+/// formats store previews this way and differ only in the word's byte order.
 pub fn rgb565(pixel: Rgb) -> u16 {
     let [r, g, b] = pixel;
     (u16::from(r >> 3) << 11) | (u16::from(g >> 2) << 5) | u16::from(b >> 3)
@@ -23,10 +21,8 @@ pub struct ThumbnailSettings {
 }
 
 impl ThumbnailSettings {
-    /// The size a writer's largest preview record is cut down from.
-    ///
-    /// Square and larger than every record either format holds, so a record is always a
-    /// reduction and never a magnification of what was rendered.
+    /// The size a writer's largest preview record is cut down from. Square and larger than every
+    /// record, so a record is a reduction, never a magnification.
     pub const SOURCE_PX: u32 = 512;
 }
 

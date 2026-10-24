@@ -71,10 +71,8 @@ fn divide(stage: Rect, clear: Rect, split: f32) -> f32 {
     x.floor()
 }
 
-/// The rule between the model and the mask, which a drag moves.
-///
-/// The handle is its own area, so the camera beside it does not take the drag as an orbit,
-/// and it keeps to `clear`, so it never lies over a card.
+/// The rule between the model and the mask, which a drag moves. Its own area, so the camera
+/// does not orbit on it, and kept to `clear` so it never lies over a card.
 fn divider(ui: &egui::Ui, window: &mut Window, stage: Rect, clear: Rect, middle: f32) {
     let colors = theme::colors();
     ui.painter()

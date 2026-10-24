@@ -13,10 +13,8 @@ const DARK: u8 = 0;
 /// off the edge of the grid.
 const MARGIN_CELLS: i32 = 4;
 
-/// How far a point may be from the outline it is dropped out of, in cells.
-///
-/// Half a cell: what is thrown away cannot move the edge of the field by a whole cell,
-/// which is the finest thing the field knows about in the first place.
+/// How far a point may be from the outline it is dropped out of, in cells: half a cell cannot
+/// move the field's edge by a whole cell, its finest resolution.
 const SIMPLIFY_TOLERANCE_CELLS: Scalar = 0.5;
 
 /// Row counts are held as `i32` so that a row index and a cell index are the same kind
@@ -33,8 +31,7 @@ pub struct Span {
 }
 
 impl Span {
-    #[cfg(test)]
-    fn len(self) -> i32 {
+    pub(crate) fn len(self) -> i32 {
         self.x1 - self.x0
     }
 
@@ -45,11 +42,8 @@ impl Span {
     }
 }
 
-/// The grid a layer is read on: square cells, anchored to whole multiples of the cell
-/// size from the plate's own origin.
-///
-/// Anchoring to the plate rather than to the model is what makes a run repeatable: a
-/// model moved a whole number of cells reads exactly the same.
+/// The grid a layer is read on: square cells anchored to whole multiples of the cell size from
+/// the plate origin, so a model moved a whole number of cells reads the same.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Grid {
     pitch_mm: Scalar,
@@ -129,14 +123,8 @@ impl Grid {
     }
 }
 
-/// An area of one layer, as the cells it covers: the spans of every row end to end,
-/// bottom row first, with `starts` saying where each row's spans begin.
-///
-/// The same run-length shape the rasteriser already produces, because the cost of every
-/// operation here follows the outline rather than the area. One buffer rather than a
-/// vector per row, because a run reads thousands of layers and a vector per row of each
-/// of them is more time in the allocator than in the geometry; see `docs/decisions/0020`
-/// and `docs/decisions/0032`.
+/// An area of one layer as run-length spans of cells, bottom row first, `starts` saying where
+/// each row begins; one buffer, not a vector per row (ADR 0020, 0032).
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct Field {
     /// Row the first entry of `starts` stands for, counted from the plate's origin.
@@ -148,12 +136,8 @@ pub struct Field {
 }
 
 impl Field {
-    /// Reads one sliced layer onto `grid`.
-    ///
-    /// The contours are moved onto the grid's own origin and thinned to what the grid can
-    /// tell apart on the way: a model's outline carries far more points than a cell of a
-    /// tenth of a millimetre can show, and every one of them would be an edge of the
-    /// sweep. See `docs/decisions/0032`.
+    /// Reads one sliced layer onto `grid`, moved to the grid origin and thinned to what a cell can
+    /// tell apart, since each outline point would be a sweep edge (ADR 0032).
     pub fn of_layer(layer: &Layer, grid: &Grid) -> Self {
         let shift = Vec2::new(
             grid.origin[0] as Scalar * grid.pitch_mm,
@@ -182,12 +166,8 @@ impl Field {
         Self::of_runs(&rastered, grid)
     }
 
-    /// Everything on the grid that is lit, unpacked from the rasteriser's runs.
-    ///
-    /// The runs arrive row-major from the near edge of the plate, counting the same way
-    /// this field does, and may cross the end of a row, so they are only cut at row
-    /// boundaries here. A row of the rasteriser holds no two lit runs that touch, so the
-    /// spans need no welding.
+    /// Everything on the grid that is lit, unpacked from the rasteriser's row-major runs; runs are
+    /// cut at row boundaries only, and no two lit runs of a row touch, so no welding.
     fn of_runs(rastered: &core_raster::Rastered, grid: &Grid) -> Self {
         let width = i64::from(grid.width);
         let mut found: Vec<(i32, Span)> = Vec::new();
@@ -259,9 +239,7 @@ impl Field {
         }
     }
 
-    /// Cells this field covers. Only the tests count them: what placement asks about a
-    /// piece is how far across it is, not how much of the film it holds down.
-    #[cfg(test)]
+    /// Cells this field covers.
     pub fn cell_count(&self) -> u64 {
         self.spans.iter().map(|span| span.len().max(0) as u64).sum()
     }
@@ -272,8 +250,7 @@ impl Field {
         self.cell_count() as Scalar * grid.pitch_mm * grid.pitch_mm
     }
 
-    /// Whether a cell is covered. Only the tests ask: placement walks the spans instead.
-    #[cfg(test)]
+    /// Whether a cell is covered.
     pub fn contains(&self, x: i32, y: i32) -> bool {
         self.row(y).iter().any(|span| span.x0 <= x && x < span.x1)
     }
@@ -301,29 +278,20 @@ impl Field {
         rows.finish()
     }
 
-    /// Whether the two share a single cell. Only the tests ask: what placement needs to
-    /// know is whether two fields touch or lie next to each other, which is
-    /// [`Field::adjoins`].
+    /// Whether the two share a single cell; only tests ask, placement uses [`Field::adjoins`].
     #[cfg(test)]
     pub fn touches(&self, other: &Self) -> bool {
         self.rows().any(|(y, spans)| overlaps(spans, other.row(y)))
     }
 
-    /// Whether any cell of this field sits next to a cell of `other`, corner to corner
-    /// included: whether the two would be one piece if they were laid on top of each
-    /// other.
+    /// Whether any cell of this field sits next to a cell of `other`, corners included.
     pub fn adjoins(&self, other: &Self) -> bool {
         self.rows()
             .any(|(y, spans)| (-1..=1).any(|dy| neighbouring(spans, other.row(y + dy))))
     }
 
-    /// What this field covers that `other` does not reach within `radius` cells: the same
-    /// as `self.without(&other.grown(radius))`, without ever building the grown field.
-    ///
-    /// Only the rows this field has anything on are looked at, and a row whose spans all
-    /// sit within reach of `other`'s own row costs one subtraction. Reaching out over a
-    /// disc is the most expensive thing done to a layer, and almost every row of almost
-    /// every layer is carried by the row directly under it.
+    /// What this field covers that `other` does not reach within `radius` cells, equal to
+    /// `self.without(&other.grown(radius))` without building the grown field; the hottest sweep.
     pub fn uncarried_by(&self, other: &Self, radius: i32) -> Self {
         if radius <= 0 {
             return self.without(other);
@@ -351,12 +319,20 @@ impl Field {
         rows.finish()
     }
 
-    /// This field grown outwards by `radius` cells, as a disc rather than a square: the
-    /// growth is a measurement of how far the layer below reaches, and a square corner
-    /// would claim it reaches half again as far along a diagonal.
-    ///
-    /// Only the tests build one. Placement asks what a grown field would leave behind,
-    /// which [`Field::uncarried_by`] answers without building it.
+    /// Whether anything of this field lies within a disc of `radius` cells round `(x, y)`: one cell
+    /// of [`Field::uncarried_by`] asked alone.
+    pub fn reaches(&self, x: i32, y: i32, radius: i32) -> bool {
+        let radius = radius.max(0);
+        (-radius..=radius).any(|dy| {
+            let widen = ((radius * radius - dy * dy) as Scalar).sqrt().floor() as i32;
+            self.row(y + dy)
+                .iter()
+                .any(|span| span.x0 - widen <= x && x < span.x1 + widen)
+        })
+    }
+
+    /// This field grown by `radius` cells as a disc, not a square, whose corner overreaches along
+    /// a diagonal; tests only, placement uses [`Field::uncarried_by`].
     #[cfg(test)]
     pub fn grown(&self, radius: i32) -> Self {
         if radius <= 0 || self.is_empty() {
@@ -462,11 +438,8 @@ impl Field {
     }
 }
 
-/// Collects a field one row at a time, rows arriving bottom first.
-///
-/// Empty rows under the first row with anything on it are dropped and gaps between rows
-/// are filled, so that a field built this way is the same whichever way it was arrived at
-/// and two fields covering the same cells compare equal.
+/// Collects a field one row at a time, bottom first; empty leading rows are dropped and gaps
+/// filled, so equal cells compare equal.
 #[derive(Debug, Default)]
 struct Rows {
     y0: i32,
@@ -504,16 +477,8 @@ impl Rows {
     }
 }
 
-/// One contour moved back by `shift` and thinned to `tolerance_mm`.
-///
-/// A point is dropped while it stays inside a corridor of that width around the line the
-/// run of points started along, which is one pass and keeps the outline inside the
-/// tolerance everywhere.
-///
-/// The walk starts at the ring's lowest point rather than at whichever vertex the slicer
-/// happened to stitch from, because two layers of the same wall must thin to the same
-/// outline: a ring thinned from a different vertex lands a fraction of a cell elsewhere,
-/// and the layer above would read as material the layer below does not carry.
+/// One contour moved back by `shift` and thinned to `tolerance_mm` in one corridor pass.
+/// The walk starts at the lowest point so layers of one wall thin to the same outline.
 fn simplified(points: &[Vec2], shift: Vec2, tolerance_mm: Scalar) -> Vec<Vec2> {
     if points.len() < 4 {
         return points.iter().map(|point| *point - shift).collect();
@@ -590,11 +555,8 @@ fn merge(spans: &mut Vec<Span>) {
     spans.truncate(spans.len().min(kept + 1));
 }
 
-/// Writes into `left` the parts of `spans` that `cut` does not cover once every one of
-/// its spans has been pushed out by `widen` cells on both sides.
-///
-/// The cut is applied as it is read rather than built first, because this is the inner
-/// loop of [`Field::uncarried_by`] and the widened row is thrown away immediately.
+/// Writes into `left` the parts of `spans` that `cut` leaves once its spans are pushed out by
+/// `widen` cells; applied as read, since the widened row is discarded at once.
 fn subtract_widened(spans: &[Span], cut: &[Span], widen: i32, left: &mut Vec<Span>) {
     if cut.is_empty() {
         left.extend_from_slice(spans);
@@ -694,266 +656,4 @@ fn overlaps(spans: &[Span], other: &[Span]) -> bool {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-    use core_slicer::Contour;
-
-    /// A tenth of a millimetre a cell, the grid placement reads layers on.
-    const PITCH_MM: Scalar = 0.1;
-
-    pub(super) fn grid() -> Grid {
-        Grid::covering(Vec2::ZERO, Vec2::splat(40.0), PITCH_MM)
-    }
-
-    /// One axis-aligned rectangle, read onto the grid.
-    pub(super) fn rectangle(x: Scalar, y: Scalar, width: Scalar, height: Scalar) -> Field {
-        let points = vec![
-            Vec2::new(x, y),
-            Vec2::new(x + width, y),
-            Vec2::new(x + width, y + height),
-            Vec2::new(x, y + height),
-        ];
-        let layer = Layer {
-            z: 1.0,
-            contours: vec![Contour::from_points(points).expect("a rectangle encloses area")],
-            extra: Vec::new(),
-        };
-        Field::of_layer(&layer, &grid())
-    }
-
-    pub(super) fn square(x: Scalar, y: Scalar, side: Scalar) -> Field {
-        rectangle(x, y, side, side)
-    }
-
-    #[test]
-    fn a_square_covers_the_cells_its_own_area_comes_to() {
-        let field = square(10.0, 10.0, 5.0);
-        let area = field.area_mm2(&grid());
-        assert!(
-            (area - 25.0).abs() < 0.2,
-            "a 5 mm square covers 25 mm2, got {area}"
-        );
-    }
-
-    #[test]
-    fn a_square_lands_where_it_was_drawn() {
-        let field = square(10.0, 20.0, 5.0);
-        let grid = grid();
-        let (min, max) = field.bounds().expect("the square has cells");
-
-        let low = grid.centre_mm(min[0], min[1]);
-        let high = grid.centre_mm(max[0], max[1]);
-        assert!(
-            (low - Vec2::new(10.0, 20.0)).length() < 2.0 * PITCH_MM,
-            "the low corner landed at {low}"
-        );
-        assert!(
-            (high - Vec2::new(15.0, 25.0)).length() < 2.0 * PITCH_MM,
-            "the high corner landed at {high}"
-        );
-    }
-
-    #[test]
-    fn a_hole_in_a_layer_is_a_hole_in_the_field() {
-        let mut points = vec![
-            Vec2::new(13.0, 13.0),
-            Vec2::new(17.0, 13.0),
-            Vec2::new(17.0, 17.0),
-            Vec2::new(13.0, 17.0),
-        ];
-        points.reverse();
-        let layer = Layer {
-            z: 1.0,
-            contours: vec![
-                Contour::from_points(vec![
-                    Vec2::new(10.0, 10.0),
-                    Vec2::new(20.0, 10.0),
-                    Vec2::new(20.0, 20.0),
-                    Vec2::new(10.0, 20.0),
-                ])
-                .expect("the outside encloses area"),
-                Contour::from_points(points).expect("the hole encloses area"),
-            ],
-            extra: Vec::new(),
-        };
-
-        let field = Field::of_layer(&layer, &grid());
-        let area = field.area_mm2(&grid());
-        assert!(
-            (area - (100.0 - 16.0)).abs() < 0.5,
-            "a 10 mm square with a 4 mm hole covers 84 mm2, got {area}"
-        );
-        assert!(!field.contains(150, 150), "the middle is a hole");
-        assert!(field.contains(110, 110), "the rim is material");
-    }
-
-    #[test]
-    fn an_empty_layer_is_an_empty_field() {
-        let field = Field::of_layer(&Layer::empty(1.0), &grid());
-        assert!(field.is_empty());
-        assert!(field.bounds().is_none());
-        assert_eq!(field.cell_count(), 0);
-        assert!(field.pieces().is_empty());
-    }
-
-    #[test]
-    fn taking_one_field_out_of_another_leaves_what_it_did_not_cover() {
-        let block = square(10.0, 10.0, 10.0);
-        let bite = square(10.0, 10.0, 5.0);
-        let left = block.without(&bite);
-
-        let area = left.area_mm2(&grid());
-        assert!(
-            (area - 75.0).abs() < 0.5,
-            "100 mm2 less the 25 taken out, got {area}"
-        );
-        assert!(block.without(&block).is_empty());
-    }
-
-    #[test]
-    fn two_fields_touch_only_where_they_share_a_cell() {
-        let here = square(10.0, 10.0, 5.0);
-        let there = square(20.0, 20.0, 5.0);
-        assert!(!here.touches(&there));
-        assert!(here.touches(&here));
-        assert!(here.touches(&square(12.0, 12.0, 5.0)));
-    }
-
-    #[test]
-    fn growing_a_square_pushes_every_side_out_by_the_radius() {
-        let grown = square(10.0, 10.0, 10.0).grown(20);
-        let area = grown.area_mm2(&grid());
-        // A 10 mm square grown by 2 mm: the square, four 2 mm sides, four quarter discs.
-        let expected = 14.0f32.mul_add(14.0, -(4.0 * 4.0)) + std::f32::consts::PI * 4.0;
-        assert!(
-            (area - expected).abs() / expected < 0.02,
-            "expected about {expected} mm2, got {area}"
-        );
-    }
-
-    #[test]
-    fn growing_rounds_the_corners_instead_of_squaring_them() {
-        let grown = square(10.0, 10.0, 10.0).grown(20);
-        let grid = grid();
-        let corner = grid.cell_of(Vec2::new(21.8, 21.8));
-        assert!(
-            !grown.contains(corner[0], corner[1]),
-            "a square corner would claim to reach 2.8 mm across the diagonal"
-        );
-    }
-
-    #[test]
-    fn shrinking_a_square_pulls_every_side_in_by_the_radius() {
-        let shrunk = square(10.0, 10.0, 10.0).shrunk(20);
-        let area = shrunk.area_mm2(&grid());
-        assert!(
-            (area - 36.0).abs() / 36.0 < 0.05,
-            "a 10 mm square pulled in 2 mm is a 6 mm one, got {area}"
-        );
-        assert!(
-            square(10.0, 10.0, 1.0).shrunk(20).is_empty(),
-            "a square narrower than the radius has nothing left"
-        );
-    }
-
-    #[test]
-    fn the_rim_of_a_square_is_its_own_outline() {
-        let field = square(10.0, 10.0, 5.0);
-        let rim = field.rim();
-        let grid = grid();
-
-        assert!(!rim.is_empty());
-        assert!(
-            rim.area_mm2(&grid) < field.area_mm2(&grid) / 4.0,
-            "an outline one cell thick is a sliver of the area"
-        );
-        let (min, max) = field.bounds().expect("the square has cells");
-        assert!(rim.contains(min[0], min[1]), "the corner is on the rim");
-        assert!(
-            !rim.contains(i32::midpoint(min[0], max[0]), i32::midpoint(min[1], max[1])),
-            "the middle is not"
-        );
-    }
-
-    /// A circle of `sides` points, fine enough that thinning it has something to do.
-    fn circle(centre: Vec2, radius: Scalar, sides: usize, from: usize) -> Field {
-        let points: Vec<Vec2> = (0..sides)
-            .map(|step| {
-                let angle =
-                    std::f32::consts::TAU * ((step + from) % sides) as Scalar / sides as Scalar;
-                centre + Vec2::new(radius * angle.cos(), radius * angle.sin())
-            })
-            .collect();
-        let layer = Layer {
-            z: 1.0,
-            contours: vec![Contour::from_points(points).expect("a circle encloses area")],
-            extra: Vec::new(),
-        };
-        Field::of_layer(&layer, &grid())
-    }
-
-    #[test]
-    fn a_ring_read_from_a_different_vertex_covers_the_same_cells() {
-        // Two layers of one wall are the same ring, and the slicer may stitch each of them
-        // from a different vertex. Thinning them differently would make the upper layer
-        // read as material the lower one does not carry, and put a support under a wall.
-        let here = circle(Vec2::splat(20.0), 8.0, 256, 0);
-        let there = circle(Vec2::splat(20.0), 8.0, 256, 97);
-        assert_eq!(here, there);
-        assert!(here.without(&there).is_empty());
-    }
-
-    #[test]
-    fn thinning_a_ring_keeps_the_area_it_encloses() {
-        let fine = circle(Vec2::splat(20.0), 8.0, 512, 0);
-        let area = fine.area_mm2(&grid());
-        let expected = std::f32::consts::PI * 8.0 * 8.0;
-        assert!(
-            (area - expected).abs() / expected < 0.01,
-            "an 8 mm circle covers {expected} mm2, got {area}"
-        );
-    }
-
-    #[test]
-    fn what_is_uncarried_is_what_growing_would_have_left_behind() {
-        let over = square(10.0, 10.0, 14.0);
-        let under = square(10.0, 10.0, 10.0);
-        for radius in [1, 7, 20] {
-            assert_eq!(
-                over.uncarried_by(&under, radius),
-                over.without(&under.grown(radius)),
-                "growing by {radius} cells and subtracting must give the same field"
-            );
-        }
-    }
-
-    #[test]
-    fn a_field_lying_next_to_another_adjoins_it_without_touching_it() {
-        let here = square(10.0, 10.0, 5.0);
-        let (min, max) = here.bounds().expect("the square has cells");
-
-        // One cell to the right of its right-hand edge: no cell in common, side by side.
-        let beside = Field::of_spans(vec![(
-            min[1],
-            Span {
-                x0: max[0] + 1,
-                x1: max[0] + 2,
-            },
-        )]);
-        assert!(!here.touches(&beside));
-        assert!(here.adjoins(&beside));
-
-        // One cell up and across from its corner: no edge in common, only a corner.
-        let corner = Field::of_spans(vec![(
-            max[1] + 1,
-            Span {
-                x0: max[0] + 1,
-                x1: max[0] + 2,
-            },
-        )]);
-        assert!(here.adjoins(&corner), "a corner is still next to it");
-
-        let away = square(30.0, 30.0, 5.0);
-        assert!(!here.adjoins(&away));
-    }
-}
+mod tests;

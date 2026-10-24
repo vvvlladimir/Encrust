@@ -1,9 +1,7 @@
 use core_geometry::{Mesh, Scalar, Transform, Vec2};
 
-/// Cells of a mask, one bit each, packed into 64-bit words a row at a time.
-///
-/// A row is words rather than bytes so that testing a part against the plate is an `and`
-/// of a few words a row instead of a loop over cells.
+/// Cells of a mask, one bit each, packed into 64-bit words a row at a time. Words make testing a
+/// part against the plate an `and` of a few words a row.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Mask {
     words: Vec<u64>,
@@ -91,11 +89,8 @@ impl Mask {
         }
     }
 
-    /// The mask grown by `cells` in every direction, which is how a clearance is kept:
-    /// what a part must not touch is its neighbours plus the gap around them.
-    ///
-    /// The result is `cells` bigger on each side, so the gap reaches outside the part
-    /// rather than eating into it. Its corner sits `cells` before the original's.
+    /// The mask grown by `cells` in every direction, which is how a clearance is kept. The result
+    /// is `cells` bigger on each side; its corner sits `cells` before the original's.
     pub fn grown(&self, cells: usize) -> Mask {
         if cells == 0 {
             return self.clone();
@@ -154,11 +149,8 @@ pub struct Footprint {
 }
 
 impl Footprint {
-    /// Rasterises where a placed model stands on the plate.
-    ///
-    /// Every triangle is projected and filled, and its edges are walked as well, so a
-    /// sliver thinner than a cell still marks the cells it crosses: the mask has to cover
-    /// the model, never merely sample it.
+    /// Rasterises where a placed model stands on the plate. Edges are walked too, so a sliver
+    /// thinner than a cell still marks its cells: the mask must cover.
     pub fn of(mesh: &Mesh, transform: Transform, cell_mm: Scalar) -> Option<Self> {
         Self::of_parts(&[(mesh, transform)], cell_mm)
     }
@@ -267,31 +259,7 @@ mod tests {
 
     /// Axis-aligned box, twelve triangles, spanning 0..size on every axis.
     fn cuboid(size: Vec3) -> Mesh {
-        let vertices = vec![
-            Vec3::new(0.0, 0.0, 0.0),
-            Vec3::new(size.x, 0.0, 0.0),
-            Vec3::new(size.x, size.y, 0.0),
-            Vec3::new(0.0, size.y, 0.0),
-            Vec3::new(0.0, 0.0, size.z),
-            Vec3::new(size.x, 0.0, size.z),
-            Vec3::new(size.x, size.y, size.z),
-            Vec3::new(0.0, size.y, size.z),
-        ];
-        let faces = vec![
-            [0, 2, 1],
-            [0, 3, 2],
-            [4, 5, 6],
-            [4, 6, 7],
-            [0, 1, 5],
-            [0, 5, 4],
-            [1, 2, 6],
-            [1, 6, 5],
-            [2, 3, 7],
-            [2, 7, 6],
-            [3, 0, 4],
-            [3, 4, 7],
-        ];
-        Mesh::new(vertices, faces)
+        core_geometry::cuboid(Vec3::ZERO, size)
     }
 
     #[test]

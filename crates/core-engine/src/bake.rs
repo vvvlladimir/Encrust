@@ -250,11 +250,8 @@ fn drilled_body(model: &Model) -> Option<Arc<Mesh>> {
         .or_else(|| drilled(&model.mesh, cuts).ok().map(Arc::new))
 }
 
-/// Every mesh on the plate and where it stands, without copying any of them.
-///
-/// The thumbnail is rendered from this rather than from [`bake`], because a render reads
-/// each vertex once wherever it lives and merging would copy the whole plate for nothing.
-/// Support meshes are already in plate coordinates.
+/// Every mesh on the plate and where it stands, without copying any of them. The thumbnail renders
+/// from this rather than [`bake`], which would copy the plate; supports are in plate coordinates.
 pub fn parts(models: &[Model]) -> Vec<(Arc<Mesh>, Transform)> {
     let mut parts = Vec::new();
     for model in models {

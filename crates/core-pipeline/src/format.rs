@@ -10,11 +10,8 @@ pub use format_chitu::{CbddlpFlavour, CtbVersion};
 pub use format_creality::CxdlpVersion;
 pub use format_sl1::Sl1Flavour;
 
-/// A sliced-file format, and for `.ctb` the revision of it.
-///
-/// This is both what a front end offers and what the writer is chosen by. The output
-/// name has the last word on the family; see
-/// `docs/decisions/0047-the-output-extension-picks-the-format.md`.
+/// A sliced-file format, and for `.ctb` the revision of it. What a front end offers and the writer
+/// is chosen by; the output name has the last word (ADR 0047).
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
 pub enum SlicedFormat {
     #[default]
@@ -32,10 +29,8 @@ pub enum SlicedFormat {
 }
 
 impl SlicedFormat {
-    /// The fourteen a front end offers, in the order it offers them.
-    ///
-    /// Only `.pwmx` of the Anycubic family is on the picker: the other sixteen extensions
-    /// are the same file under another name, and a user who needs one types it (ADR 0047).
+    /// The fourteen a front end offers, in the order it offers them. Only `.pwmx` of the Anycubic
+    /// family is on the picker; the others are renames (ADR 0047).
     pub const CHOICES: [Self; 14] = [
         Self::Goo,
         Self::Ctb(CtbVersion::V4),
@@ -88,10 +83,8 @@ impl SlicedFormat {
         }
     }
 
-    /// This format at the revision `stated` names, where both name the same container.
-    ///
-    /// An output name has the last word on which container is written (ADR 0047) but it
-    /// cannot carry a revision, so the profile keeps the one its machine reads.
+    /// This format at the revision `stated` names, where both name the same container. An output
+    /// name picks the container (ADR 0047) but not a revision, so the profile keeps its own.
     #[must_use]
     pub fn at_revision_of(self, stated: OutputFormat) -> Self {
         match (self, Self::from(stated)) {
@@ -104,22 +97,16 @@ impl SlicedFormat {
         }
     }
 
-    /// The choices `printer` can be written into, in the order a picker offers them.
-    ///
-    /// A front end offers these and nothing else: a container the machine's own fields
-    /// cannot fill is a file it would refuse at the end of a run, with the stack already
-    /// cut (ADR 0210).
+    /// The choices `printer` can be written into, in picker order. Offer only these: a container
+    /// the machine's fields cannot fill fails after the stack is cut (ADR 0210).
     pub fn choices_for(printer: &PrinterProfile) -> impl Iterator<Item = Self> + '_ {
         Self::CHOICES
             .into_iter()
             .filter(|choice| choice.writable_for(printer))
     }
 
-    /// Whether a file of this format can carry what `printer` states.
-    ///
-    /// Only the `.cxdlp` family asks for anything a profile may not have: its header
-    /// names the machine's own CL or CT code and the firmware matches nothing else, so a
-    /// machine whose name carries no code cannot be written one.
+    /// Whether a file of this format can carry what `printer` states. Only the `.cxdlp` family
+    /// needs the machine's CL or CT code, so a name without one cannot be written.
     pub fn writable_for(self, printer: &PrinterProfile) -> bool {
         match self {
             Self::Cxdlp(_) => format_creality::model_code(printer.machine_name()).is_some(),
@@ -261,165 +248,4 @@ fn photon_revision(version: AnycubicVersion) -> PhotonRevision {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn the_extension_decides_what_is_written() {
-        let of = |name: &str| SlicedFormat::of(Path::new(name), CtbVersion::V4);
-        assert_eq!(of("cube.goo"), Some(SlicedFormat::Goo));
-        assert_eq!(of("cube.GOO"), Some(SlicedFormat::Goo));
-        assert_eq!(of("cube.ctb"), Some(SlicedFormat::Ctb(CtbVersion::V4)));
-        assert_eq!(
-            of("cube.cbddlp"),
-            Some(SlicedFormat::Cbddlp(CbddlpFlavour::Cbddlp))
-        );
-        assert_eq!(
-            of("cube.PHOTON"),
-            Some(SlicedFormat::Cbddlp(CbddlpFlavour::Photon))
-        );
-        assert_eq!(
-            of("cube.pwmx"),
-            Some(SlicedFormat::Anycubic(
-                AnycubicFlavour::Pwmx,
-                AnycubicVersion::V516
-            ))
-        );
-        assert_eq!(
-            of("cube.DLP"),
-            Some(SlicedFormat::Anycubic(
-                AnycubicFlavour::Dlp,
-                AnycubicVersion::V516
-            ))
-        );
-        assert_eq!(of("cube.sl1"), Some(SlicedFormat::Sl1(Sl1Flavour::Sl1)));
-        assert_eq!(of("cube.ZIP"), Some(SlicedFormat::GcodeZip));
-        assert_eq!(
-            of("cube.cxdlp"),
-            Some(SlicedFormat::Cxdlp(CxdlpVersion::V3))
-        );
-        assert_eq!(of("cube.svgx"), Some(SlicedFormat::Svgx));
-        assert_eq!(of("cube.cws"), Some(SlicedFormat::Cws));
-        assert_eq!(of("cube.sl1s"), Some(SlicedFormat::Sl1(Sl1Flavour::Sl1s)));
-        assert_eq!(
-            SlicedFormat::of(Path::new("cube.ctb"), CtbVersion::V5),
-            Some(SlicedFormat::Ctb(CtbVersion::V5))
-        );
-        assert_eq!(
-            of("out"),
-            None,
-            "a name without an extension is a PNG directory"
-        );
-        assert_eq!(of("out.d/cube"), None);
-    }
-
-    #[test]
-    fn another_choice_still_names_a_revision_for_a_ctb_name_under_it() {
-        assert_eq!(SlicedFormat::Goo.ctb_version(), CtbVersion::V4);
-        assert_eq!(
-            SlicedFormat::Cbddlp(CbddlpFlavour::Photon).ctb_version(),
-            CtbVersion::V4
-        );
-        assert_eq!(
-            SlicedFormat::Ctb(CtbVersion::V5).ctb_version(),
-            CtbVersion::V5
-        );
-    }
-
-    #[test]
-    fn a_name_without_a_revision_takes_the_one_the_profile_states() {
-        let named = SlicedFormat::Anycubic(AnycubicFlavour::Pwmb, AnycubicVersion::V517);
-        let stated = OutputFormat::Anycubic {
-            extension: AnycubicExtension::Pwmb,
-            revision: PhotonRevision::V516,
-        };
-        assert_eq!(
-            named.at_revision_of(stated),
-            SlicedFormat::Anycubic(AnycubicFlavour::Pwmb, AnycubicVersion::V516)
-        );
-        assert_eq!(
-            SlicedFormat::Goo.at_revision_of(stated),
-            SlicedFormat::Goo,
-            "a name of another container keeps what it named"
-        );
-        assert_eq!(
-            SlicedFormat::Anycubic(AnycubicFlavour::Pm5, AnycubicVersion::V517)
-                .at_revision_of(stated),
-            SlicedFormat::Anycubic(AnycubicFlavour::Pm5, AnycubicVersion::V517),
-            "another extension is another container"
-        );
-    }
-
-    #[test]
-    fn every_shipped_machine_names_a_container_a_writer_exists_for() {
-        let catalogue =
-            printer_profiles::Catalogue::bundled().expect("the shipped catalogue is valid");
-
-        for entry in catalogue.printers() {
-            let format = SlicedFormat::from(entry.profile.output);
-            let named = format!("job.{}", format.extension());
-
-            // The revision is not in a file name, so only the writer has to come back:
-            // a profile is what states which revision of a container a machine reads.
-            let routed = SlicedFormat::of(Path::new(&named), format.ctb_version())
-                .unwrap_or_else(|| panic!("{} writes {named}, which routes nowhere", entry.id));
-            assert_eq!(
-                routed.extension(),
-                format.extension(),
-                "{} is written as {named}, which routes to another writer",
-                entry.id
-            );
-        }
-    }
-
-    #[test]
-    fn every_shipped_machine_is_offered_the_container_it_states() {
-        let catalogue =
-            printer_profiles::Catalogue::bundled().expect("the shipped catalogue is valid");
-
-        for entry in catalogue.printers() {
-            let stated = SlicedFormat::from(entry.profile.output);
-            assert!(
-                stated.writable_for(&entry.profile),
-                "{} states {} and cannot be written one",
-                entry.id,
-                stated.extension()
-            );
-        }
-    }
-
-    #[test]
-    fn a_machine_whose_name_carries_no_model_code_is_offered_no_cxdlp() {
-        let mut printer = PrinterProfile {
-            name: "Mars 4 Ultra".to_owned(),
-            machine_name: None,
-            ..Default::default()
-        };
-
-        let offered: Vec<_> = SlicedFormat::choices_for(&printer).collect();
-        assert!(
-            !offered.iter().any(|choice| choice.extension() == "cxdlp"),
-            "the firmware matches a CL or CT code this name has none of"
-        );
-        assert_eq!(
-            offered.len(),
-            SlicedFormat::CHOICES.len() - 2,
-            "only the two .cxdlp revisions come off the list"
-        );
-
-        printer.machine_name = Some("Halot One CL-60".to_owned());
-        assert_eq!(
-            SlicedFormat::choices_for(&printer).count(),
-            SlicedFormat::CHOICES.len(),
-            "a name with a code is offered every container"
-        );
-    }
-
-    #[test]
-    fn a_format_survives_the_round_trip_through_a_profile() {
-        for format in SlicedFormat::CHOICES {
-            let family: OutputFormat = format.into();
-            assert_eq!(SlicedFormat::from(family), format);
-        }
-    }
-}
+mod tests;

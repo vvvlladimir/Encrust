@@ -3,6 +3,7 @@ use crate::cut::CutTool;
 use crate::drain::DrainTool;
 use crate::drilling::Drilling;
 use crate::gizmo::TransformGizmo;
+use crate::growth::SupportGrowth;
 use crate::hollow::HollowTool;
 use crate::import::Imports;
 use crate::measure::Measure;
@@ -20,6 +21,7 @@ use crate::settings::Settings;
 use crate::slicing::Slicing;
 use crate::status::Status;
 use crate::supports::SupportTool;
+use crate::surfaces::SupportSurfaces;
 use crate::undo::History;
 use crate::updates::Updates;
 use crate::viewport_input::ViewportInput;
@@ -36,6 +38,8 @@ pub struct Doc {
     pub imports: Imports,
     pub repairs: Repairs,
     pub drilling: Drilling,
+    pub surfaces: SupportSurfaces,
+    pub growth: SupportGrowth,
 }
 
 /// How the plate is looked at: none of it changes what is printed.

@@ -59,9 +59,7 @@ impl Ini {
     }
 
     /// The `FILEFORMAT_` keyword in the notes block, with the `FILEVERSION_` beside it.
-    ///
-    /// Both are keywords inside one free-text field, so they are looked for rather than
-    /// read off a key of their own.
+    /// Both sit in one free-text field, so they are searched for.
     pub fn container_keyword(&self) -> Option<(String, Option<u32>)> {
         let notes = self.get("printer_notes")?;
         let keyword = keyword_after(notes, "FILEFORMAT_")?;

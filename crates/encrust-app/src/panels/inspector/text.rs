@@ -59,9 +59,8 @@ pub fn action(ui: &mut egui::Ui, window: &mut Window) {
     }
 }
 
-/// The family to write in, picked from a list the field filters as a name is typed. The
-/// machine's own are read the first time the field is focused: reading every installed face
-/// takes a while.
+/// The family to write in, filtered as a name is typed. The machine's faces are read on
+/// first focus: reading every installed face takes a while.
 fn family(ui: &mut egui::Ui, tool: &mut TextTool) {
     let id = ui.make_persistent_id("text-family");
     let list = id.with("list");

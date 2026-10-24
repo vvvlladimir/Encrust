@@ -1,9 +1,5 @@
-//! Supports from the command line: found on the model's own stack, meshed, and merged
-//! into what gets sliced.
-//!
-//! The same sequence the window runs, without the hand placement: cut the model, ask
-//! where it needs holding, drop a column under each contact, merge the near ones into
-//! trunks and mesh the lot. See `docs/design/supports.md`.
+//! Supports from the command line, the window's sequence without hand placement: find contacts,
+//! columns, trunks, mesh, merge. See `docs/design/supports.md`.
 
 use std::fmt;
 
@@ -47,9 +43,8 @@ impl fmt::Display for SupportReport {
     }
 }
 
-/// Stands supports under `mesh`, in plate coordinates, and answers with them: the
-/// engine's `stand_under`, or `stand_seated` for a model left on the plate, with what it
-/// found laid out for a terminal.
+/// Stands supports under `mesh`, in plate coordinates: `stand_under`, or `stand_seated`
+/// for a model left on the plate, with what it found laid out for a terminal.
 pub fn stand_under(
     mesh: &mut Mesh,
     cuts: &mut Option<Mesh>,
@@ -62,8 +57,15 @@ pub fn stand_under(
     } else {
         core_engine::stand_under
     };
-    let stood = stand(mesh, cuts, profile, layer_height_mm)
-        .context("cannot stand supports under the model")?;
+    let model = core_engine::ToStand {
+        mesh,
+        cavity: None,
+        cuts,
+        drill_exactly: true,
+    };
+    let plan = core_engine::SupportPlan::of(profile.clone());
+    let stood =
+        stand(model, &plan, layer_height_mm).context("cannot stand supports under the model")?;
     let report = SupportReport {
         lifted_mm: stood.lifted_mm,
         contacts: stood.contacts,
@@ -114,9 +116,14 @@ mod tests {
     #[test]
     fn an_overhang_gets_columns_under_it_and_they_come_back_as_a_mesh() {
         let mut mesh = overhang();
-        let (report, supports) =
-            stand_under(&mut mesh, &mut None, &SupportProfile::medium(), 0.05, false)
-                .expect("a slab slices and supports");
+        let (report, supports) = stand_under(
+            &mut mesh,
+            &mut None,
+            &SupportProfile::shipped("medium").expect("the medium preset ships"),
+            0.05,
+            false,
+        )
+        .expect("a slab slices and supports");
 
         assert!(!report.contacts.is_empty(), "a hanging slab needs holding");
         assert!(report.standing > 0, "and there is empty plate under it");
@@ -160,7 +167,7 @@ mod tests {
     #[test]
     fn a_slab_on_the_plate_is_lifted_before_anything_is_stood_under_it() {
         let mut mesh = slab_on_the_plate();
-        let profile = SupportProfile::medium();
+        let profile = SupportProfile::shipped("medium").expect("the medium preset ships");
 
         let (report, _) = stand_under(&mut mesh, &mut None, &profile, 0.05, false)
             .expect("a slab slices and supports");
@@ -187,8 +194,14 @@ mod tests {
     #[test]
     fn a_part_already_standing_clear_of_the_plate_is_not_moved() {
         let mut mesh = overhang();
-        let (report, _) = stand_under(&mut mesh, &mut None, &SupportProfile::medium(), 0.05, false)
-            .expect("a slab slices and supports");
+        let (report, _) = stand_under(
+            &mut mesh,
+            &mut None,
+            &SupportProfile::shipped("medium").expect("the medium preset ships"),
+            0.05,
+            false,
+        )
+        .expect("a slab slices and supports");
 
         assert!(
             report.lifted_mm.abs() < 1e-6,

@@ -9,9 +9,8 @@ use crate::ui::{
     section, subheading,
 };
 
-/// How this plate is cut and exposed: a form rather than a tool, opened from the top bar.
-/// The exposure, waits and motion change the copy the plate is sliced with, never the resin
-/// profile: a new printer or resin puts them back.
+/// How this plate is cut and exposed: a form opened from the top bar. Its edits change the
+/// plate's copy, never the resin profile; a new printer or resin resets them.
 pub fn ui(ui: &mut egui::Ui, machine: &mut Machine) {
     let locked = machine
         .slicing

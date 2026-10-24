@@ -298,32 +298,7 @@ mod tests {
 
     /// A unit cube at the origin, wound outward.
     fn cube() -> Mesh {
-        Mesh::new(
-            vec![
-                Vec3::new(0.0, 0.0, 0.0),
-                Vec3::new(4.0, 0.0, 0.0),
-                Vec3::new(4.0, 4.0, 0.0),
-                Vec3::new(0.0, 4.0, 0.0),
-                Vec3::new(0.0, 0.0, 4.0),
-                Vec3::new(4.0, 0.0, 4.0),
-                Vec3::new(4.0, 4.0, 4.0),
-                Vec3::new(0.0, 4.0, 4.0),
-            ],
-            vec![
-                [0, 2, 1],
-                [0, 3, 2],
-                [4, 5, 6],
-                [4, 6, 7],
-                [0, 1, 5],
-                [0, 5, 4],
-                [1, 2, 6],
-                [1, 6, 5],
-                [2, 3, 7],
-                [2, 7, 6],
-                [3, 0, 4],
-                [3, 4, 7],
-            ],
-        )
+        core_geometry::cuboid(Vec3::ZERO, Vec3::splat(4.0))
     }
 
     /// Every seeded voxel carries the face a full search would have given it, and the

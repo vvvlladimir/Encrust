@@ -12,12 +12,8 @@ const PROBE_WINDOW: Duration = Duration::from_secs(1);
 /// How often `stop` is asked while waiting for the next look.
 const POLL: Duration = Duration::from_millis(200);
 
-/// Reports what the printer is doing every `period` until `stop` answers yes.
-///
-/// A version 3 board is watched over one control connection held for the whole watch and
-/// reopened after a failure; see ADR 0262. A version 1 board is asked through the probe,
-/// which carries its status, and a Prusa machine through its status call. A failure is
-/// reported like a state, and the watch goes on.
+/// Reports what the printer is doing every `period` until `stop` answers yes; a failure is
+/// reported like a state and the watch goes on. Connection use per generation: ADR 0262.
 pub fn watch(
     wire: &Wire,
     period: Duration,

@@ -1,26 +1,22 @@
 # Testing rules
 
-- Unit tests sit next to the code in `#[cfg(test)] mod tests`; integration tests live in the
-  crate's `tests/` and use only the public API. Fixtures resolve through
-  `env!("CARGO_MANIFEST_DIR")`, never a relative path.
-- Name a test after the behaviour it pins down: `empty_mesh_has_no_aabb`, not `test_aabb`.
-- Every error variant a function can return has a test that triggers it, matching on the
-  variant and never on the text of a message.
-- Geometry is tested against bodies with a closed-form answer — a unit cube, a sphere of radius
-  `r`, a right triangle, a regular tetrahedron — with an explicit tolerance and an assertion
-  message saying where the expected value comes from.
-- `proptest` covers invariants: a closed mesh slices into closed contours, reversing a contour
-  flips its signed area, a transform followed by its inverse is the identity.
-- A hot path gets a `criterion` benchmark in `benches/` *before* it is optimised. Without a
-  before-and-after number from it, no performance claim and no optimisation.
-- A bug fix comes with a test that fails before it. A reader of bytes somebody else wrote gets
-  a fuzz target in `fuzz/`, and a crash it finds lands as a fixture and a test in the owning
-  crate: `fuzz/README.md`.
-- A change to how the window looks runs the panel pictures before and after and commits the
-  new ones: `cargo test -p encrust-app --features snapshots --lib snapshots` (ADR 0215).
-- Test what the behaviour needs and stop. No test that only restates a getter.
-- `cargo test --workspace` passes before a step is done. Never `#[ignore]` a test to get there:
+- Unit tests in `#[cfg(test)] mod tests`, moved to `foo/tests.rs` past ~150 lines; integration
+  tests in `tests/`, public API only. Fixtures via `env!("CARGO_MANIFEST_DIR")`.
+- Test bodies come from `core_geometry`'s primitives (`cuboid`, `ball`, …) and the crate's
+  `#[cfg(test)] mod fixtures` — never built by hand, never in `lib.rs`.
+- A test is named for the behaviour: `empty_mesh_has_no_aabb`, not `test_aabb`.
+- Every error variant a function returns has a test matching the variant, never the message.
+- Geometry is checked against closed-form bodies (unit cube, sphere of radius `r`, right
+  triangle, regular tetrahedron), with a tolerance and a message citing the expected value.
+- `proptest` for invariants: a closed mesh slices into closed contours, reversing a contour
+  flips its area, a transform then its inverse is the identity.
+- A hot path gets a `criterion` bench in `benches/` before it is optimised; no performance
+  claim without its before and after.
+- A bug fix comes with a test that fails before it. A reader of foreign bytes has a fuzz
+  target; a crash lands as a fixture and a test in the owning crate (`fuzz/README.md`).
+- A visual change retakes and commits the panel pictures:
+  `cargo test -p encrust-app --features snapshots --lib snapshots` (ADR 0215).
+- Test the behaviour, then stop: no test restating a getter. Never `#[ignore]` to get green —
   fix it, or delete it and say so.
-- A run that changed nothing takes about 23 s. Minutes means something rebuilt that did not
-  have to — a new library crate missing `[lib] doctest = false`, or a build script watching a
-  path that does not exist; both in docs/decisions/0207.
+- A run with nothing changed takes ~23 s; minutes means a needless rebuild — a library missing
+  `[lib] doctest = false`, or a build script watching a missing path (ADR 0207).

@@ -9,13 +9,7 @@ pub struct Run {
     pub value: u8,
 }
 
-/// One layer as runs of identical pixels, row-major from the top-left of the LCD.
-///
-/// This is what a rasteriser produces and what a sliced-file format consumes. Every MSLA
-/// format either encodes runs directly, as the `.goo` and `.ctb` families do, or expands
-/// them into pixels with [`LayerRuns::to_mask`]. Working in runs is also what keeps the
-/// cost of a layer proportional to its contours rather than to the panel; see
-/// `docs/design/rasterisation.md`.
+/// Keeps layer cost proportional to its contours, not the panel (`docs/design/rasterisation.md`).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct LayerRuns {
     width: u32,
@@ -92,11 +86,8 @@ impl LayerRuns {
         total as f32 / 255.0
     }
 
-    /// The brighter of two layers of the same size, pixel by pixel.
-    ///
-    /// This is how the planes sampled inside one layer are combined: a feature standing on
-    /// one plane and not the next keeps its own coverage instead of being averaged away.
-    /// A layer of another size is returned unchanged, since there is nothing to line up.
+    /// The brighter of two same-size layers, pixel by pixel; combines planes sampled inside one
+    /// layer. A layer of another size is returned unchanged.
     #[must_use]
     pub fn brightest_of(&self, other: &Self) -> Self {
         if self.width != other.width || self.height != other.height {
@@ -120,10 +111,8 @@ impl LayerRuns {
     }
 }
 
-/// Collects the runs of one layer in reading order.
-///
-/// Neighbouring runs of the same value are merged as they arrive, so a caller may push a
-/// pixel at a time without producing a run per pixel.
+/// Collects the runs of one layer in reading order. Neighbouring runs of the same value merge as
+/// they arrive, so a pixel at a time is fine.
 #[derive(Debug)]
 pub struct RunsBuilder {
     width: u32,
@@ -152,10 +141,8 @@ impl RunsBuilder {
         self.push(index.saturating_sub(self.emitted), 0);
     }
 
-    /// Fills whatever is left with dark pixels and closes the layer.
-    ///
-    /// The printer decodes a layer into a buffer it does not clear first, so runs that
-    /// stop short of the last pixel print whatever the previous layer left there.
+    /// Fills whatever is left with dark pixels and closes the layer. The printer decodes into an
+    /// uncleared buffer, so short runs would print the previous layer's pixels.
     pub fn finish(mut self) -> LayerRuns {
         self.push(self.remaining(), 0);
         LayerRuns {

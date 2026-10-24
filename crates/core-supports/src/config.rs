@@ -1,23 +1,26 @@
 use core_geometry::Scalar;
-use printer_profiles::SupportProfile;
+use printer_profiles::{IslandSpacing, SupportProfile};
 
-/// Cell size of the grid layers are read on, millimetres.
-///
-/// A tenth of a millimetre is four times finer than the thinnest support head and five
-/// times finer than the narrowest overhang worth holding, and coarse enough that a layer
-/// of a large model is a few hundred rows; see `docs/decisions/0032`.
+/// Cell size of the grid layers are read on, mm: four times finer than the thinnest head and
+/// coarse enough that a large layer is a few hundred rows (ADR 0032).
 pub const GRID_PITCH_MM: Scalar = 0.1;
 
-/// How far up the stack an overhang is measured over, millimetres.
-///
-/// An angle cannot be read off one layer: at 0.05 mm a wall leaning 45 degrees moves
-/// 0.05 mm, which is under one cell of the grid. Measuring the same lean over a
-/// millimetre of rise turns it into ten cells, which the grid resolves cleanly.
+/// How far up the stack an overhang is measured over, mm: 0.05 mm of rise hides a 45 degree
+/// lean under one cell, a millimetre turns it into ten.
 pub const REFERENCE_RISE_MM: Scalar = 1.0;
 
-/// An island narrower than this is a speck of stray geometry, not a part. Supporting it
-/// would cost more than losing it: 0.2 mm of bounding radius, which is this across.
+/// An island narrower than this is a speck: it is held where it began only once what
+/// grows out of it is more than dust, see [`MICRO_ISLAND_MM3`].
 pub const MIN_ISLAND_MM: Scalar = 0.4;
+
+/// Dust until grown to this much resin, mm3, and this tall, mm; one that never does prints
+/// loose. See `docs/design/supports.md`.
+pub const MICRO_ISLAND_MM3: Scalar = 0.01;
+pub const MICRO_ISLAND_HEIGHT_MM: Scalar = 0.08;
+
+/// How many bands an overhang is cut into by how flat it is, from the one just past the
+/// angle to the one nearly level; see `docs/design/supports.md`.
+pub const LEAN_BANDS: usize = 4;
 
 /// A layer whose underside is no higher than this stands on the build plate itself,
 /// millimetres.
@@ -35,43 +38,38 @@ const MIN_SPACING_MM: Scalar = 0.5;
 const MIN_OVERHANG_DEG: Scalar = 1.0;
 const MAX_OVERHANG_DEG: Scalar = 89.0;
 
-/// What one run of automatic placement measures with, all in millimetres.
-///
-/// Everything here is derived from the profile: the head's own area says how much island
-/// one support carries, the density says how many of them to put down, and the overhang
-/// angle says what counts as hanging over nothing at all.
+/// What one run of automatic placement measures with, all in mm, derived from the profile:
+/// head area, density and overhang angle.
 #[derive(Debug, Clone, Copy, PartialEq)]
 // Every one of these is a length, and a length without its unit in the name is what
 // `AGENTS.md` forbids.
 #[allow(clippy::struct_field_names)]
 pub struct SampleConfig {
-    /// How far apart supports are put down over an overhang. Doubling the profile's
-    /// density halves the ground one support covers, not the distance to the next.
+    /// How far apart supports are put under a face looking straight down; doubling the density
+    /// halves the ground one covers, not the distance.
     pub spacing_mm: Scalar,
+    /// How far apart they go under a face leaning just past the overhang angle.
+    pub steep_spacing_mm: Scalar,
     /// How far a support already standing keeps another one away.
     pub coverage_radius_mm: Scalar,
     /// How far a surface may lean before it needs holding up: the horizontal reach that
     /// [`REFERENCE_RISE_MM`] of rise is allowed to cover.
     pub reach_mm: Scalar,
-    /// A piece of overhang narrower and shorter than this is not worth a column of its
-    /// own: a ledge of a few cells is a step of the staircase every sloped surface is
-    /// printed as.
+    /// Overhang narrower and shorter than this gets no column: a few cells is a step of the
+    /// staircase every sloped surface is printed as.
     pub min_overhang_mm: Scalar,
-    /// How far in from a layer's outline a contact is put: the head's own radius and a
-    /// cell more, so that the head ends on the surface it holds and not on the wall
-    /// beside it.
+    /// How far in from a layer's outline a contact is put: head radius and a cell more, so the head
+    /// ends on the surface it holds.
     pub edge_inset_mm: Scalar,
+    /// The overhang angle itself, radians from vertical.
+    pub lean_rad: Scalar,
+    /// How closely an island is held against `spacing_mm`, as the profile says.
+    pub islands: IslandSpacing,
 }
 
 impl SampleConfig {
-    /// The measurements a profile asks for.
-    ///
-    /// The spacing is the profile's own, not the head's: a slicer that widens a contact
-    /// to hold better must not thin the lattice out by doing it (ADR 0131). The two
-    /// constants, 2.9 and 1.3, come from measurements of how much a single head of a
-    /// given area can hold: a 0.4 mm head carries about 1.65 mm of island, a 0.5 mm head
-    /// about 1.85 mm. That carry is what says when a ledge is too
-    /// small to bother with.
+    /// The measurements a profile asks for; spacing is the profile's, not the head's (ADR 0131).
+    /// The constants 2.9 and 1.3 fit measured carry: a 0.4 mm head holds ~1.65 mm, 0.5 mm ~1.85 mm.
     pub fn for_profile(profile: &SupportProfile) -> Self {
         let head_radius_mm = profile.contact_radius_mm();
         let head_area = std::f32::consts::PI * head_radius_mm * head_radius_mm;
@@ -81,6 +79,11 @@ impl SampleConfig {
         // spacing by its own root. See `docs/decisions/0081`.
         let density = profile.density.max(MIN_DENSITY);
         let spacing_mm = profile.contact_spacing_mm.max(MIN_SPACING_MM) / density.sqrt();
+        let steep_spacing_mm = profile
+            .steep_contact_spacing_mm
+            .max(profile.contact_spacing_mm)
+            .max(MIN_SPACING_MM)
+            / density.sqrt();
         let lean = profile
             .max_overhang_deg
             .clamp(MIN_OVERHANG_DEG, MAX_OVERHANG_DEG)
@@ -88,149 +91,58 @@ impl SampleConfig {
 
         Self {
             spacing_mm,
-            // Three quarters of the spacing: a support put down on this layer suppresses
-            // the same lattice point on the next one, and leaves the next point along
-            // free. It is a radius in three dimensions, so it is also how far up a
-            // support holds; see `docs/decisions/0079`.
+            steep_spacing_mm,
+            lean_rad: lean,
+            // Three quarters of the spacing: a 3D radius that suppresses the same lattice point
+            // on the next layer and is how far up a support holds (ADR 0079).
             coverage_radius_mm: spacing_mm * 0.75,
             reach_mm: REFERENCE_RISE_MM * lean.tan(),
             // Half of what one head carries: a ledge that small is inside the head that
             // would be put under it.
             min_overhang_mm: carry_mm / 2.0,
             edge_inset_mm: head_radius_mm + GRID_PITCH_MM,
+            islands: profile.islands,
         }
+    }
+
+    /// How far apart supports go on an island of `area_mm2`.
+    pub fn island_spacing_mm(&self, area_mm2: Scalar) -> Scalar {
+        let reached = self
+            .islands
+            .area_mm2
+            .iter()
+            .take_while(|least_mm2| area_mm2 >= **least_mm2)
+            .count();
+        let share = self.islands.share[reached];
+        (self.spacing_mm * share).max(MIN_SPACING_MM)
+    }
+
+    /// Whether the spacing follows the angle of the face at all.
+    pub fn spacing_leans(&self) -> bool {
+        self.steep_spacing_mm > self.spacing_mm
+    }
+
+    /// The lean from vertical, radians, past which an overhang is in band `band` or flatter: its
+    /// normal is `(LEAN_BANDS - band) / LEAN_BANDS` of the way from straight down to the angle.
+    pub fn band_lean_rad(&self, band: usize) -> Scalar {
+        let past = std::f32::consts::FRAC_PI_2 - self.lean_rad;
+        std::f32::consts::FRAC_PI_2 - past * (LEAN_BANDS - band) as Scalar / LEAN_BANDS as Scalar
+    }
+
+    /// How far apart supports go in band `band` of an overhang: the spacing its flattest
+    /// face asks for, which is linear in the angle between that face's normal and down.
+    pub fn band_spacing_mm(&self, band: usize) -> Scalar {
+        let band = band.min(LEAN_BANDS - 1);
+        let share = (LEAN_BANDS - 1 - band) as Scalar / LEAN_BANDS as Scalar;
+        share.mul_add(self.steep_spacing_mm - self.spacing_mm, self.spacing_mm)
+    }
+
+    /// How far a support put down at `spacing_mm` keeps another away: a quarter short of the
+    /// spacing; under a steep face, where layers add slivers, it is what spaces them.
+    pub fn coverage_at(&self, spacing_mm: Scalar) -> Scalar {
+        (spacing_mm - (self.spacing_mm - self.coverage_radius_mm)).max(GRID_PITCH_MM)
     }
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn the_lattice_is_spaced_the_way_the_profile_asks_for() {
-        let profile = crate::tests::profile();
-        let config = SampleConfig::for_profile(&profile);
-        assert!(
-            (config.spacing_mm - profile.contact_spacing_mm).abs() < 1e-4,
-            "at the default density the spacing is the profile's own, got {}",
-            config.spacing_mm
-        );
-    }
-
-    #[test]
-    fn a_wider_head_does_not_thin_the_lattice_out() {
-        let profile = crate::tests::profile();
-        let fat = SampleConfig::for_profile(&SupportProfile {
-            tip: printer_profiles::TipSegment {
-                contact_diameter_mm: profile.tip.contact_diameter_mm * 2.0,
-                ..profile.tip
-            },
-            ..profile.clone()
-        });
-        let thin = SampleConfig::for_profile(&profile);
-        assert!(
-            (fat.spacing_mm - thin.spacing_mm).abs() < 1e-4,
-            "the head says what a ledge is too small for, not how far apart the lattice \
-             stands; see `docs/decisions/0131`"
-        );
-        assert!(
-            fat.min_overhang_mm > thin.min_overhang_mm,
-            "a wider head swallows a wider ledge"
-        );
-    }
-
-    #[test]
-    fn twice_the_density_puts_twice_as_many_supports_on_the_same_area() {
-        let normal = SampleConfig::for_profile(&crate::tests::profile());
-        let dense = SampleConfig::for_profile(&SupportProfile {
-            density: 2.0,
-            ..crate::tests::profile()
-        });
-
-        // Twice as many over an area is the spacing over the root of two, which is what
-        // makes the density a count per square millimetre.
-        let over_an_area = (normal.spacing_mm / dense.spacing_mm).powi(2);
-        assert!(
-            (over_an_area - 2.0).abs() < 1e-3,
-            "expected twice the supports per area, got {over_an_area} times as many"
-        );
-        assert!(dense.coverage_radius_mm < normal.coverage_radius_mm);
-    }
-
-    #[test]
-    fn a_density_of_zero_is_clamped_instead_of_dividing_by_it() {
-        let config = SampleConfig::for_profile(&SupportProfile {
-            density: 0.0,
-            ..crate::tests::profile()
-        });
-        assert!(config.spacing_mm.is_finite() && config.spacing_mm > 0.0);
-    }
-
-    #[test]
-    fn forty_five_degrees_lets_a_surface_move_its_own_rise() {
-        let config = SampleConfig::for_profile(&SupportProfile {
-            max_overhang_deg: 45.0,
-            ..crate::tests::profile()
-        });
-        assert!(
-            (config.reach_mm - REFERENCE_RISE_MM).abs() < 1e-4,
-            "a 45 degree lean covers as much ground as it climbs, got {}",
-            config.reach_mm
-        );
-    }
-
-    #[test]
-    fn a_shallower_angle_is_stricter_about_what_hangs_over_nothing() {
-        let strict = SampleConfig::for_profile(&SupportProfile {
-            max_overhang_deg: 30.0,
-            ..crate::tests::profile()
-        });
-        let loose = SampleConfig::for_profile(&SupportProfile {
-            max_overhang_deg: 60.0,
-            ..crate::tests::profile()
-        });
-        assert!(
-            strict.reach_mm < loose.reach_mm,
-            "a surface allowed to lean further may cover more ground before it is held"
-        );
-    }
-
-    #[test]
-    fn an_angle_at_a_right_angle_stays_a_number() {
-        let flat = SampleConfig::for_profile(&SupportProfile {
-            max_overhang_deg: 90.0,
-            ..crate::tests::profile()
-        });
-        assert!(flat.reach_mm.is_finite(), "got {}", flat.reach_mm);
-    }
-
-    #[test]
-    fn every_shipped_preset_lifts_a_part_far_enough_for_its_own_support() {
-        for profile in [
-            SupportProfile::light(),
-            SupportProfile::medium(),
-            SupportProfile::heavy(),
-        ] {
-            let flare_mm = profile.flare_lower_radius_mm() - profile.pillar_radius_mm();
-            let needed_mm = profile.base_height_mm()
-                + flare_mm
-                + profile.top_length_mm()
-                + crate::column::MIN_PILLAR_HEIGHT_MM;
-            assert!(
-                needed_mm <= profile.z_lift_mm + 1e-4,
-                "{}: a pad, a flare, a top segment and the shortest pillar take {needed_mm} mm \
-                 and the lift leaves {} mm",
-                profile.name,
-                profile.z_lift_mm
-            );
-        }
-    }
-
-    #[test]
-    fn the_shipped_presets_grow_stricter_as_they_grow_heavier() {
-        let light = SampleConfig::for_profile(&SupportProfile::light());
-        let heavy = SampleConfig::for_profile(&SupportProfile::heavy());
-
-        assert!(heavy.reach_mm < light.reach_mm, "heavier is stricter");
-    }
-}
+mod tests;

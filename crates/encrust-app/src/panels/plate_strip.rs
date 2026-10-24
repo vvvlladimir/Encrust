@@ -8,9 +8,8 @@ use crate::ui::{focus_ring, icon, icon_button, theme};
 /// How big a plate's square is.
 const PLATE_SIZE: f32 = 32.0;
 
-/// The row at the head of the plate panel: one square per plate, numbered, and the way to
-/// add another, scrolling past `max_w` points. A project of one plate still
-/// shows it: the strip is where a second one is reached from.
+/// The row at the head of the plate panel: one numbered square per plate and the way to add
+/// another, scrolling past `max_w` points. A one-plate project still shows it.
 pub fn ui(ui: &mut egui::Ui, scene: &mut Scene, max_w: f32) {
     let names: Vec<String> = scene.plates().to_vec();
     let active = scene.active_plate();

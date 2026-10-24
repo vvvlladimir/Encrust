@@ -49,7 +49,8 @@ pub struct TransformGizmo {
 }
 
 /// Which axes the handles, the turn buttons and the size fields follow.
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "kebab-case")]
 pub enum Axes {
     /// The plate's.
     #[default]

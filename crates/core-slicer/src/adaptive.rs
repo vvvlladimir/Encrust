@@ -64,12 +64,8 @@ const HORIZONTAL: Scalar = 0.999;
 /// Millimetres two boundaries have to differ by to be worth keeping apart.
 const APART_MM: Scalar = 1e-4;
 
-/// A plan whose layers are as thick as the surface running through them allows.
-///
-/// The thickness a height may take is the cusp target over how far the steepest surface
-/// there leans away from vertical: a wall takes the thickest layer going, a shallow slope
-/// the thinnest. A flat face does not stair-step at all — it asks for a boundary of its
-/// own, and gets one. See `docs/design/slicing.md`.
+/// Thickness is the cusp target over the steepest lean; flat faces ask for a boundary of their own.
+/// See `docs/design/slicing.md`.
 pub fn plan(mesh: &Mesh, settings: &AdaptiveSettings) -> Result<LayerPlan, SliceError> {
     plan_under(mesh, settings, Scalar::INFINITY)
 }
@@ -122,12 +118,7 @@ pub fn plan_under(
     Ok(LayerPlan::from_bounds(bounds, z_max))
 }
 
-/// How far a layer standing below a flat face has to reach to land on it, or `None` where
-/// the thickness the surface allows stands.
-///
-/// A boundary on a flat face reproduces the surface with no error at all, which no
-/// thickness can do. Only ever a shorter layer: stretching one to reach a flat face would
-/// skip the thin layers the surface below it asked for.
+/// How far a layer below a flat face must reach to land on it, or `None` if the thickness stands.
 fn reach_flat(
     thickness: Scalar,
     to_flat: Option<Scalar>,
@@ -164,12 +155,8 @@ fn walk(
     taken.max(1)
 }
 
-/// For each `step`-tall slot of the model, the sine of the steepest lean any face
-/// crossing it shows: zero where nothing crosses, one just short of a flat ceiling.
-///
-/// A face is scattered into every slot it spans rather than queried per slot, so the cost
-/// follows the faces and not the height of the model. A flat face is left out: it is a
-/// boundary to land on, not a surface to slice thinner for.
+/// Per `step`-tall slot, the sine of the steepest lean of any face crossing it; flat faces
+/// excluded.
 fn steepest_lean(mesh: &Mesh, z_min: Scalar, z_max: Scalar, step: Scalar) -> Vec<Scalar> {
     let slots = (((z_max - z_min) / step).ceil() as usize).max(1);
     let slot_of = |z: Scalar| (((z - z_min) / step).floor().max(0.0) as usize).min(slots - 1);
@@ -234,244 +221,4 @@ fn face_lean(mesh: &Mesh, face: &[u32; 3]) -> Option<([core_geometry::Vec3; 3], 
 }
 
 #[cfg(test)]
-mod tests {
-    use core_geometry::Vec3;
-
-    use super::*;
-
-    /// An axis-aligned box from the origin to `size`, wound outward.
-    fn box_mesh(size: Vec3) -> Mesh {
-        let corners = [
-            Vec3::new(0.0, 0.0, 0.0),
-            Vec3::new(size.x, 0.0, 0.0),
-            Vec3::new(size.x, size.y, 0.0),
-            Vec3::new(0.0, size.y, 0.0),
-            Vec3::new(0.0, 0.0, size.z),
-            Vec3::new(size.x, 0.0, size.z),
-            Vec3::new(size.x, size.y, size.z),
-            Vec3::new(0.0, size.y, size.z),
-        ];
-        let faces = vec![
-            [0, 2, 1],
-            [0, 3, 2],
-            [4, 5, 6],
-            [4, 6, 7],
-            [0, 1, 5],
-            [0, 5, 4],
-            [1, 2, 6],
-            [1, 6, 5],
-            [2, 3, 7],
-            [2, 7, 6],
-            [3, 0, 4],
-            [3, 4, 7],
-        ];
-        Mesh::new(corners.to_vec(), faces)
-    }
-
-    /// A wedge whose top face leans at 45 degrees: a right triangular prism lying along Y.
-    fn ramp(run: Scalar, rise: Scalar) -> Mesh {
-        let vertices = vec![
-            Vec3::new(0.0, 0.0, 0.0),
-            Vec3::new(run, 0.0, 0.0),
-            Vec3::new(run, 0.0, rise),
-            Vec3::new(0.0, 1.0, 0.0),
-            Vec3::new(run, 1.0, 0.0),
-            Vec3::new(run, 1.0, rise),
-        ];
-        let faces = vec![
-            [0, 1, 2],
-            [3, 5, 4],
-            [0, 2, 5],
-            [0, 5, 3],
-            [1, 4, 5],
-            [1, 5, 2],
-            [0, 3, 4],
-            [0, 4, 1],
-        ];
-        Mesh::new(vertices, faces)
-    }
-
-    fn settings() -> AdaptiveSettings {
-        AdaptiveSettings {
-            cusp_mm: 0.05,
-            min_height_mm: 0.05,
-            max_height_mm: 0.20,
-        }
-    }
-
-    #[test]
-    fn a_box_is_sliced_at_the_thickest_layer_allowed() {
-        let plan = plan(&box_mesh(Vec3::new(2.0, 2.0, 2.0)), &settings()).expect("a box plans");
-
-        assert_eq!(
-            plan.layer_count(),
-            10,
-            "2 mm of vertical wall at the 0.2 mm ceiling is ten layers"
-        );
-        assert!(plan.is_uniform());
-    }
-
-    #[test]
-    fn a_forty_five_degree_ramp_is_sliced_thinner_than_the_ceiling() {
-        // cos 45 is 0.707, so a 0.05 mm cusp allows 0.0707 mm, which is one 0.05 mm step.
-        let plan = plan(&ramp(1.0, 1.0), &settings()).expect("a ramp plans");
-
-        assert_eq!(
-            plan.layer_count(),
-            20,
-            "1 mm of ramp at 0.05 mm is 20 layers"
-        );
-        for index in 0..plan.layer_count() {
-            let thickness = plan.thickness_of(index).expect("a layer");
-            assert!(
-                (thickness - 0.05).abs() < 1e-5,
-                "layer {index} is {thickness} mm, not the 0.05 mm a 45 degree face allows"
-            );
-        }
-    }
-
-    /// Two boxes stacked, the lower one ending at `shelf`: the step between them is a
-    /// flat face at a height the layer grid would otherwise miss.
-    fn stepped(shelf: Scalar) -> Mesh {
-        let lower = box_mesh(Vec3::new(4.0, 4.0, shelf));
-        let upper = core_geometry::transform_mesh(
-            &box_mesh(Vec3::new(2.0, 2.0, 2.0 - shelf)),
-            core_geometry::Transform::from_translation(Vec3::new(0.0, 0.0, shelf)),
-        );
-        let offset = lower.vertices.len() as u32;
-        let mut vertices = lower.vertices;
-        vertices.extend(upper.vertices);
-        let mut faces = lower.faces;
-        faces.extend(upper.faces.iter().map(|face| face.map(|i| i + offset)));
-        Mesh::new(vertices, faces)
-    }
-
-    #[test]
-    fn a_tall_stack_does_not_drift_into_a_layer_above_the_model() {
-        let settings = AdaptiveSettings {
-            cusp_mm: 0.05,
-            min_height_mm: 0.025,
-            max_height_mm: 0.05,
-        };
-        let plan = plan(&box_mesh(Vec3::new(2.0, 2.0, 30.0)), &settings).expect("a tall box plans");
-
-        assert_eq!(
-            plan.layer_count(),
-            600,
-            "30 mm of vertical wall at the 0.05 mm ceiling is 600 layers and no more"
-        );
-        let top = plan.top_of(599).expect("the top layer");
-        assert!(
-            (top - 30.0).abs() < 1e-3,
-            "the stack tops out at {top} mm over a model 30 mm tall"
-        );
-    }
-
-    #[test]
-    fn a_shelf_gets_a_boundary_of_its_own_rather_than_the_nearest_grid_line() {
-        let shelf = 0.93;
-        let plan = plan(&stepped(shelf), &settings()).expect("a stepped model plans");
-
-        let landed = (0..plan.layer_count())
-            .filter_map(|index| plan.top_of(index))
-            .any(|top| (top - shelf).abs() < 1e-5);
-        assert!(
-            landed,
-            "no layer tops out at the {shelf} mm shelf, so the step prints at the wrong height"
-        );
-    }
-
-    #[test]
-    fn a_shallow_ramp_is_sliced_thinner_than_a_steep_one() {
-        let steep = plan(&ramp(1.0, 4.0), &settings()).expect("a steep ramp plans");
-        let shallow = plan(&ramp(4.0, 4.0), &settings()).expect("a shallow ramp plans");
-
-        assert!(
-            shallow.layer_count() > steep.layer_count(),
-            "the same 4 mm of rise takes {} layers shallow against {} steep",
-            shallow.layer_count(),
-            steep.layer_count()
-        );
-    }
-
-    #[test]
-    fn every_layer_stays_inside_the_range_and_the_stack_covers_the_model() {
-        let settings = AdaptiveSettings {
-            cusp_mm: 0.02,
-            min_height_mm: 0.03,
-            max_height_mm: 0.12,
-        };
-        let plan = plan(&ramp(3.0, 5.0), &settings).expect("a ramp plans");
-
-        let mut total = 0.0;
-        for index in 0..plan.layer_count() {
-            let thickness = plan.thickness_of(index).expect("a layer");
-            assert!(
-                thickness <= settings.max_height_mm + 1e-5,
-                "layer {index} is {thickness} mm, over the ceiling"
-            );
-            total += thickness;
-        }
-        assert!(
-            (5.0..5.0 + settings.max_height_mm).contains(&total),
-            "the stack covers {total} mm of a 5 mm model: it may overshoot by under a layer"
-        );
-    }
-
-    #[test]
-    fn a_ceiling_that_is_not_a_whole_number_of_the_floor_is_never_reached() {
-        let settings = AdaptiveSettings {
-            cusp_mm: 0.05,
-            min_height_mm: 0.023,
-            max_height_mm: 0.05,
-        };
-        assert!((settings.reachable_max_mm() - 0.046).abs() < 1e-6);
-
-        let divisible = AdaptiveSettings {
-            min_height_mm: 0.025,
-            ..settings
-        };
-        assert!((divisible.reachable_max_mm() - 0.05).abs() < 1e-6);
-    }
-
-    #[test]
-    fn a_range_that_is_upside_down_is_rejected() {
-        let broken = AdaptiveSettings {
-            min_height_mm: 0.1,
-            max_height_mm: 0.05,
-            ..settings()
-        };
-        assert!(matches!(
-            plan(&box_mesh(Vec3::ONE), &broken).unwrap_err(),
-            SliceError::UpsideDownRange { .. }
-        ));
-    }
-
-    #[test]
-    fn a_cusp_of_zero_is_rejected() {
-        let broken = AdaptiveSettings {
-            cusp_mm: 0.0,
-            ..settings()
-        };
-        assert!(matches!(
-            plan(&box_mesh(Vec3::ONE), &broken).unwrap_err(),
-            SliceError::NonPositiveCusp(_)
-        ));
-    }
-
-    #[test]
-    fn a_zero_thickness_floor_is_rejected_and_an_empty_mesh_too() {
-        let broken = AdaptiveSettings {
-            min_height_mm: 0.0,
-            ..settings()
-        };
-        assert!(matches!(
-            plan(&box_mesh(Vec3::ONE), &broken).unwrap_err(),
-            SliceError::NonPositiveLayerHeight(_)
-        ));
-        assert!(matches!(
-            plan(&Mesh::default(), &settings()).unwrap_err(),
-            SliceError::EmptyMesh
-        ));
-    }
-}
+mod tests;

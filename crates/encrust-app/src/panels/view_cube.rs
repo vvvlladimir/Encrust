@@ -1,6 +1,5 @@
-//! The cube in the viewport's top right corner: which way the camera faces, and a click on
-//! a face, an edge or a corner to look from there. Drawn with egui shapes, so it needs no
-//! pass of its own; see ADR 0219.
+//! The cube in the viewport's top right: which way the camera faces, and a click on a face,
+//! edge or corner looks from there. Drawn with egui shapes; see ADR 0219.
 
 use core_geometry::{Mat4, Vec3};
 use egui::{Align2, Id, Pos2, Rect, Sense, Shape, Stroke, Vec2, vec2};

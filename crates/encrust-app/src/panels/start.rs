@@ -1,13 +1,11 @@
-//! The start page: what the window shows under the top bar until the first model, project
-//! or sliced file arrives. A place to drop a model, and under it the files opened lately or
-//! the test prints bundled with the window, as pictures; see `docs/decisions/0220`, `0232`
-//! and `0234`.
+//! The start page, shown until the first model, project or sliced file arrives: a drop target
+//! over recent files or bundled test prints. See `docs/decisions/0220`, `0232`, `0234`.
 
 use egui::{Align, Align2, Layout, Rect, RichText, Sense, Stroke, Ui, UiBuilder, pos2, vec2};
 
 use crate::files::{self, Handed, Wanted};
 use crate::i18n::tr;
-use crate::panels::Window;
+use crate::panels::{Window, unreadable_profiles};
 use crate::recent::RecentFile;
 use crate::samples::SAMPLES;
 use crate::ui::{ago, describe, focus_ring, icon, inline_button, theme, tone};
@@ -62,6 +60,10 @@ pub fn ui(ui: &mut Ui, window: &mut Window) {
                     &window.machine.status.text(),
                     theme::colors().danger,
                 );
+            }
+            if unreadable_profiles::any(window) {
+                page.add_space(8.0);
+                unreadable_profiles::row(&mut page, window);
             }
             page.add_space(28.0);
             actions(&mut page, window, width);
