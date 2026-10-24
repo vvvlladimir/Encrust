@@ -35,7 +35,9 @@ pub use hull::{convex_hull, fitting_turn};
 pub use mesh::Mesh;
 pub use orient::{Orientation, orient_outward};
 pub use primitives::{ball, cuboid, cylinder, extrude, oriented_box, prism, revolve, segments_for};
-pub use ray::{PlacedHit, Ray, RayHit, ray_aabb, ray_triangle, raycast, raycast_placed};
+pub use ray::{
+    PlacedHit, Ray, RayHit, ray_aabb, ray_triangle, raycast, raycast_placed, raycast_placed_by,
+};
 pub use region::Region;
 pub use repair::{Filled, collapse_flat_faces, fill_holes, remove_duplicate_faces};
 pub use ring::{ring_area, ring_contains};

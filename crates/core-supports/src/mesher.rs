@@ -1,5 +1,5 @@
 use crate::placed::Placed;
-use core_geometry::{Mesh, Ray, Scalar, Vec2, Vec3, raycast_placed};
+use core_geometry::{Mesh, Ray, Scalar, Vec2, Vec3};
 use printer_profiles::{ContactShape, SupportProfile};
 
 use crate::Landing;
@@ -296,7 +296,7 @@ fn wall_mm(placed: &Placed, contact: Vec3, into: Vec3) -> Scalar {
     let mut entered_mm = SURFACE_EPSILON_MM;
     for _ in 0..2 {
         let ray = Ray::new(from, direction);
-        let Some(hit) = raycast_placed(placed.model, placed.bvh, placed.transform, &ray) else {
+        let Some(hit) = placed.raycast(&ray) else {
             return Scalar::INFINITY;
         };
         if hit.normal.dot(direction) > 0.0 {
@@ -719,7 +719,8 @@ fn ground_normal(placed: &Placed, landing: Landing) -> Option<Vec3> {
         return None;
     }
     let ray = Ray::new(landing.base + Vec3::Z * SURFACE_EPSILON_MM, -Vec3::Z);
-    raycast_placed(placed.model, placed.bvh, placed.transform, &ray)
+    placed
+        .raycast(&ray)
         .filter(|hit| hit.distance <= 2.0 * SURFACE_EPSILON_MM)
         .map(|hit| hit.normal)
 }

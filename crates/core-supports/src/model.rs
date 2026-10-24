@@ -15,9 +15,10 @@ const SINGULAR: f32 = 1e-12;
 /// and meshes built from that; see `docs/decisions/0129`.
 ///
 /// Points are kept in the model's own space so that they stay on the surface when the
-/// model is moved, turned or scaled. Everything derived from them is rebuilt whenever the
-/// points, the placement or the profile change, and the mesh is kept behind an `Arc` so
-/// that a viewport caches it on the GPU by address.
+/// model is moved, turned or scaled. The trees are grown again only when the points, the
+/// placement, the profile or the blocked patch change; an edit to a frozen tree or to the
+/// paint only meshes again. The mesh is kept behind an `Arc` so that a viewport caches it
+/// on the GPU by address.
 #[derive(Debug, Clone, Default)]
 pub struct ModelSupports {
     points: Vec<SupportPoint>,
@@ -32,6 +33,9 @@ pub struct ModelSupports {
     /// brush has to show up in the frame it was painted in, and the columns take too long
     /// to be rebuilt per frame of a drag.
     patches: Patches,
+    /// The trees last grown from the points, which outlive `built`: growing is the costly
+    /// part of a rebuild, meshing is not.
+    forest: Option<Forest>,
     built: Option<Built>,
     /// The column meshes as they were last built. `built` is dropped by every edit and
     /// rebuilt a frame later, and what is drawn in between is this; see [`Self::drawn`].
@@ -39,6 +43,21 @@ pub struct ModelSupports {
     /// How much of the height the model stands at is its raft's doing, millimetres: what
     /// has to be taken back when the raft goes. See `docs/decisions/0238`.
     raft_lift_mm: Scalar,
+}
+
+/// The trees grown from the points, in plate coordinates, and what they were grown against.
+#[derive(Debug, Clone)]
+struct Forest {
+    trees: Vec<SupportTree>,
+    transform: Transform,
+    table: Vec<SupportProfile>,
+    blocked: Region,
+}
+
+impl Forest {
+    fn grown_for(&self, transform: Transform, table: &[SupportProfile], blocked: &Region) -> bool {
+        self.transform == transform && self.table == table && self.blocked == *blocked
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -93,6 +112,7 @@ impl ModelSupports {
     /// Drops what was built, so the next refresh builds against a surface that changed
     /// under the supports: a model hollowed, or solid again.
     pub fn surface_changed(&mut self) {
+        self.forest = None;
         self.built = None;
     }
 
@@ -193,6 +213,12 @@ impl ModelSupports {
         let matrix = transform.to_matrix();
         let standing = grown.len();
         let mut trees: Vec<SupportTree> = grown.iter().map(|tree| tree.moved(matrix)).collect();
+        self.forest = Some(Forest {
+            trees: trees.clone(),
+            transform,
+            table: table.to_vec(),
+            blocked: self.blocked.clone(),
+        });
         trees.extend(self.frozen.iter().map(|tree| tree.moved(matrix)));
 
         let keep_out = self.keep_out(model, transform);
@@ -240,19 +266,39 @@ impl ModelSupports {
         if matrix.determinant().abs() < SINGULAR {
             return None;
         }
-        let standing = self.built.as_ref()?.trees.get(tree)?.clone();
+        let built = self.built.as_ref()?;
+        let standing = built.trees.get(tree)?.clone();
+        let grown = built.grown;
 
         let mut taken: Vec<usize> = standing.points().collect();
         taken.sort_unstable();
-        for point in taken.into_iter().rev() {
-            if point < self.points.len() {
-                self.points.remove(point);
+        for point in taken.iter().rev() {
+            if *point < self.points.len() {
+                self.points.remove(*point);
             }
         }
+        self.lift_out_of_forest(tree, grown, &taken);
 
         self.frozen.push(standing.moved(matrix.inverse()));
         self.built = None;
         Some(self.frozen.len() - 1)
+    }
+
+    /// Takes grown tree `tree` out of the forest and renumbers the points the others hold
+    /// past the `taken` ones, so freezing one support leaves every other where it stood.
+    fn lift_out_of_forest(&mut self, tree: usize, grown: usize, taken: &[usize]) {
+        let Some(forest) = self
+            .forest
+            .as_mut()
+            .filter(|forest| forest.trees.len() == grown)
+        else {
+            self.forest = None;
+            return;
+        };
+        forest.trees.remove(tree);
+        for kept in &mut forest.trees {
+            kept.close_up_points(taken);
+        }
     }
 
     /// The frozen tree `frozen`, to be edited in the model's own space.
@@ -275,7 +321,7 @@ impl ModelSupports {
         for (contact, group) in tree.contacts().zip(tree.tip_groups()) {
             self.points.push(SupportPoint::new(contact).in_group(group));
         }
-        self.built = None;
+        self.points_changed();
     }
 
     /// Takes a frozen support away for good.
@@ -454,7 +500,7 @@ impl ModelSupports {
         }
         self.points
             .push(SupportPoint::new(matrix.inverse().transform_point3(contact)).in_group(group));
-        self.built = None;
+        self.points_changed();
     }
 
     /// Takes every support built to `group` away with it, and shifts the groups above it
@@ -479,7 +525,7 @@ impl ModelSupports {
         }
         let gone = before - self.point_count();
         if gone > 0 || moved {
-            self.built = None;
+            self.points_changed();
         }
         gone
     }
@@ -489,7 +535,7 @@ impl ModelSupports {
     pub fn remove(&mut self, point: usize) {
         if point < self.points.len() {
             self.points.remove(point);
-            self.built = None;
+            self.points_changed();
         }
     }
 
@@ -503,7 +549,7 @@ impl ModelSupports {
         });
         let gone = before - self.points.len();
         if gone > 0 {
-            self.built = None;
+            self.points_changed();
         }
         gone
     }
@@ -535,7 +581,7 @@ impl ModelSupports {
         self.drop_frozen_of(group);
         let gone = before - self.point_count();
         if gone > 0 {
-            self.built = None;
+            self.points_changed();
         }
         gone
     }
@@ -554,14 +600,29 @@ impl ModelSupports {
     pub fn clear(&mut self) {
         self.points.clear();
         self.frozen.clear();
+        self.points_changed();
+    }
+
+    /// Drops the trees grown from the points with everything built of them.
+    fn points_changed(&mut self) {
+        self.forest = None;
         self.built = None;
+    }
+
+    /// Whether the next rebuild against `transform` and `table` would grow the trees again
+    /// for the table alone: what a window may put off while a field is still being dragged.
+    pub fn retuned(&self, transform: Transform, table: &[SupportProfile]) -> bool {
+        self.forest.as_ref().is_some_and(|forest| {
+            forest.transform == transform && forest.blocked == self.blocked && forest.table != table
+        })
     }
 
     /// Rebuilds the supports if anything they depend on has changed.
     ///
     /// Every point is dropped down the model again, which is one ray each through `bvh`,
     /// the hierarchy of `model`; see `docs/decisions/0036`. The tips that came through
-    /// are then merged into shared trunks; see `docs/decisions/0040`.
+    /// are then merged into shared trunks; see `docs/decisions/0040`. Neither is done
+    /// again for an edit that left the points, placement, table and blocked patch alone.
     pub fn refresh(
         &mut self,
         model: &Mesh,
@@ -599,8 +660,21 @@ impl ModelSupports {
 
         let keep_out = self.keep_out(model, transform);
         let placed = Placed::new(surface, bvh, transform).blocking(keep_out.as_ref());
-        let columns = columns(&self.points, &placed, profiles);
-        let mut trees = grow(&columns, &placed, profiles);
+        let mut trees = match &self.forest {
+            Some(forest) if forest.grown_for(transform, table, &self.blocked) => {
+                forest.trees.clone()
+            }
+            _ => {
+                let trees = grow(&columns(&self.points, &placed, profiles), &placed, profiles);
+                self.forest = Some(Forest {
+                    trees: trees.clone(),
+                    transform,
+                    table: table.to_vec(),
+                    blocked: self.blocked.clone(),
+                });
+                trees
+            }
+        };
         let grown = trees.len();
 
         // A frozen tree is kept in the model's own space, so it rides the placement the
@@ -883,5 +957,76 @@ mod tests {
         let mut supports = ModelSupports::default();
         supports.add(Vec3::new(10.0, 10.0, 20.0), flat, 0);
         assert!(supports.is_empty());
+    }
+
+    /// Three supports far enough apart never to share a trunk, built on an empty model.
+    fn three_apart() -> ModelSupports {
+        let mut supports = ModelSupports::default();
+        for x in [0.0, 30.0, 60.0] {
+            supports.add(Vec3::new(x, 0.0, 20.0), Transform::default(), 0);
+        }
+        refresh(&mut supports, &nothing(), Transform::default());
+        supports
+    }
+
+    /// Which grown tree holds the tip at `x`.
+    fn tree_at(supports: &ModelSupports, x: Scalar) -> usize {
+        supports.trees()[..supports.trees().len() - supports.frozen().len()]
+            .iter()
+            .position(|tree| tree.contacts().any(|tip| (tip.x - x).abs() < 1e-3))
+            .expect("a support stands at that x")
+    }
+
+    #[test]
+    fn freezing_one_support_leaves_the_others_holding_their_own_points() {
+        let mut supports = three_apart();
+        supports.freeze(tree_at(&supports, 0.0), Transform::default());
+        refresh(&mut supports, &nothing(), Transform::default());
+
+        supports.freeze(tree_at(&supports, 60.0), Transform::default());
+        let left: Vec<Scalar> = supports
+            .points()
+            .iter()
+            .map(|point| point.contact.x)
+            .collect();
+        assert_eq!(left, vec![30.0], "the second freeze took the point it held");
+    }
+
+    #[test]
+    fn editing_a_frozen_support_does_not_grow_the_others_again() {
+        let mut supports = three_apart();
+        supports.freeze(tree_at(&supports, 0.0), Transform::default());
+        // A slab over the plate the grown supports would now have to stand on: growing them
+        // again would land them on it, reusing them leaves them on the plate.
+        let slab =
+            crate::tests::box_mesh(Vec3::new(-50.0, -50.0, 5.0), Vec3::new(100.0, 50.0, 6.0));
+        let bvh = Bvh::build(&slab);
+        let profile = profile();
+        let table = std::slice::from_ref(&profile);
+        supports.refresh(&slab, &bvh, Transform::default(), table);
+        supports.frozen_mut(0);
+        supports.refresh(&slab, &bvh, Transform::default(), table);
+
+        let on_plate = supports.trees()[..2]
+            .iter()
+            .all(|tree| !tree.landing().on_model);
+        assert!(on_plate, "only the frozen support was built again");
+    }
+
+    #[test]
+    fn a_new_table_alone_is_told_apart_from_other_edits() {
+        let mut supports = three_apart();
+        let mut thicker = profile();
+        thicker.middle.diameter_mm += 0.5;
+        let table = std::slice::from_ref(&thicker);
+        assert!(supports.retuned(Transform::default(), table));
+
+        let moved = Transform::from_translation(Vec3::X);
+        assert!(!supports.retuned(moved, table), "a move is no retune");
+        supports.add(Vec3::new(90.0, 0.0, 20.0), Transform::default(), 0);
+        assert!(
+            !supports.retuned(Transform::default(), table),
+            "nor is a new point"
+        );
     }
 }

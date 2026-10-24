@@ -2,7 +2,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::group::Profiles;
 use crate::placed::Placed;
-use core_geometry::{Mat3, Ray, Scalar, Vec2, Vec3, point_triangle, raycast_placed};
+use core_geometry::{Mat3, Ray, Scalar, Vec2, Vec3, point_triangle};
 use printer_profiles::SupportProfile;
 use rayon::prelude::*;
 
@@ -140,7 +140,8 @@ pub(crate) fn swept_bottom_z(
     // chooses; a landing on another support has no face of the model at its base.
     let ray = Ray::new(landing.base + Vec3::Z * SURFACE_EPSILON_MM, -Vec3::Z);
     let chosen = MAX_LANDING_SLOPE_DEG.to_radians().tan();
-    let lean = raycast_placed(placed.model, placed.bvh, placed.transform, &ray)
+    let lean = placed
+        .raycast(&ray)
         .filter(|hit| hit.distance <= 2.0 * SURFACE_EPSILON_MM)
         .and_then(|hit| lean_of(hit.normal, LAST_RESORT_SLOPE_DEG))
         .map_or(chosen, |lean| lean.max(chosen));
@@ -236,16 +237,15 @@ fn onto_surface(placed: &Placed, contact: Vec3, profile: &SupportProfile) -> Vec
     }
     // Leaving the model downwards is the one way out through a face that looks down.
     let down = Ray::new(contact, -Vec3::Z);
-    if let Some(hit) = raycast_placed(placed.model, placed.bvh, placed.transform, &down)
-        .filter(|hit| hit.normal.z < 0.0)
-    {
+    if let Some(hit) = placed.raycast(&down).filter(|hit| hit.normal.z < 0.0) {
         return hit.point;
     }
     if profile.contact_depth_mm() > 0.0 {
         return contact;
     }
     let ray = Ray::new(contact, Vec3::Z);
-    raycast_placed(placed.model, placed.bvh, placed.transform, &ray)
+    placed
+        .raycast(&ray)
         .filter(|hit| hit.distance <= ONTO_SURFACE_MM && hit.normal.z < 0.0)
         .map_or(contact, |hit| hit.point)
 }
@@ -303,7 +303,7 @@ pub(crate) fn landing_within(
 ) -> Option<Landing> {
     let contact = from;
     let ray = Ray::new(contact - Vec3::Z * SURFACE_EPSILON_MM, -Vec3::Z);
-    let below = raycast_placed(placed.model, placed.bvh, placed.transform, &ray);
+    let below = placed.raycast(&ray);
 
     // Where the body stops being asked about: at the top of the foot on the plate, and on
     // the model at the height its rim already meets the face it stands on.
@@ -411,7 +411,8 @@ pub fn neck_of(placed: &Placed, contact: Vec3, profile: &SupportProfile) -> Vec3
 /// [`has_head`].
 fn no_room_below(placed: &Placed, contact: Vec3, profile: &SupportProfile) -> bool {
     let ray = Ray::new(contact - Vec3::Z * SURFACE_EPSILON_MM, -Vec3::Z);
-    raycast_placed(placed.model, placed.bvh, placed.transform, &ray)
+    placed
+        .raycast(&ray)
         .is_some_and(|hit| hit.distance < profile.top_length_mm() && hit.normal.z > 0.0)
 }
 
@@ -508,7 +509,8 @@ fn head_clear(
 /// leaving by, which looks the way the ray goes.
 fn runs_into(placed: &Placed, contact: Vec3, direction: Vec3, reach_mm: Scalar) -> bool {
     let ray = Ray::new(contact + direction * SURFACE_EPSILON_MM, direction);
-    raycast_placed(placed.model, placed.bvh, placed.transform, &ray)
+    placed
+        .raycast(&ray)
         .is_some_and(|hit| hit.distance < reach_mm || hit.normal.dot(direction) > 0.0)
 }
 

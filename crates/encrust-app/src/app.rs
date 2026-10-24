@@ -343,8 +343,8 @@ impl SlicerApp {
 
     /// Rebuilds the columns and the painted patches of every object whose placement,
     /// points, paint or profile moved under them, so that what the viewport draws is what
-    /// would be sliced.
-    fn refresh_supports(&mut self) {
+    /// would be sliced. A profile still being dragged is grown to once it is let go.
+    fn refresh_supports(&mut self, held: bool) {
         self.tools.supports.settle_on_raft(&mut self.doc.scene);
         let plate = self.tools.supports.table();
         let raft = self.tools.supports.raft;
@@ -359,6 +359,9 @@ impl SlicerApp {
                 continue;
             }
             let table = with_own(plate.clone(), &object.own, raft);
+            if held && object.supports.retuned(object.transform, &table) {
+                continue;
+            }
             object.refresh_supports(&table);
         }
     }
@@ -500,7 +503,7 @@ impl eframe::App for SlicerApp {
         self.hand_written_file_to_the_network();
         self.refresh_preview();
         self.carry_height();
-        self.refresh_supports();
+        self.refresh_supports(ui.ctx().input(|input| input.pointer.any_down()));
         self.take_shortcuts();
 
         project::guard_close(ui, &mut self.window());

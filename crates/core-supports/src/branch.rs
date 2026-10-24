@@ -4,7 +4,7 @@ use std::collections::{BinaryHeap, HashMap};
 mod grid;
 
 use crate::placed::Placed;
-use core_geometry::{Ray, Scalar, Vec2, Vec3, raycast_placed};
+use core_geometry::{Ray, Scalar, Vec2, Vec3};
 use printer_profiles::SupportProfile;
 
 use crate::Landing;
@@ -906,7 +906,8 @@ impl<'a> Forest<'a> {
                 }
                 // From just under the contact: one placed by hand sits on the face itself.
                 let ray = Ray::new(tip.position - Vec3::Z * SURFACE_EPSILON_MM, -Vec3::Z);
-                let under = raycast_placed(placed.model, placed.bvh, placed.transform, &ray)
+                let under = placed
+                    .raycast(&ray)
                     // A face looking up at the contact: one looking away is the inside of
                     // the model, and a strut to it is built in the solid and pokes out.
                     .filter(|hit| hit.normal.z > 0.0)

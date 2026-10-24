@@ -62,8 +62,15 @@ pub fn stand_under(
     } else {
         core_engine::stand_under
     };
-    let stood = stand(mesh, cuts, profile, layer_height_mm)
-        .context("cannot stand supports under the model")?;
+    let model = core_engine::ToStand {
+        mesh,
+        cavity: None,
+        cuts,
+        drill_exactly: true,
+    };
+    let plan = core_engine::SupportPlan::of(profile.clone());
+    let stood =
+        stand(model, &plan, layer_height_mm).context("cannot stand supports under the model")?;
     let report = SupportReport {
         lifted_mm: stood.lifted_mm,
         contacts: stood.contacts,

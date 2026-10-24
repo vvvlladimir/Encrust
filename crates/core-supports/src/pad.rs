@@ -1,4 +1,4 @@
-use core_geometry::{Mat4, Ray, Scalar, Vec2, Vec3, raycast_placed};
+use core_geometry::{Mat4, Ray, Scalar, Vec2, Vec3};
 use printer_profiles::SupportProfile;
 use serde::{Deserialize, Serialize};
 
@@ -129,7 +129,7 @@ fn room_towards(placed: &Placed, base: Vec3, angle: Scalar, profile: &SupportPro
             let up_mm = SURFACE_EPSILON_MM
                 + (height_mm - SURFACE_EPSILON_MM) * step as Scalar / (PAD_HEIGHTS - 1) as Scalar;
             let ray = Ray::new(base + Vec3::Z * up_mm, out);
-            match raycast_placed(placed.model, placed.bvh, placed.transform, &ray) {
+            match placed.raycast(&ray) {
                 // Set off inside the model: there is no pad here at all.
                 Some(hit) if hit.normal.dot(out) > 0.0 => 0.0,
                 Some(hit) => hit.distance - profile.clearance_mm,

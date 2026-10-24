@@ -537,6 +537,13 @@ A rebuild then maps it back into plate coordinates and meshes it with the grown 
 `ObjectSupports::trees` hands over the grown trees first and the frozen ones after them,
 and `frozen_of` says which is which.
 
+Growing is the costly half of a rebuild — about a second for fifteen hundred heavy tips —
+and meshing the cheap one, so the grown trees are kept apart from the meshes and grown again
+only when the points, the placement, the table or the blocked patch change. Freezing a
+support lifts its tree out of them and renumbers the rest, and carrying, regrouping or
+cutting a frozen one only meshes again. A table changed while a field is still dragged is
+grown to once the pointer is let go.
+
 `grab` names what a ray met: `Node`, `Strut`, `Trunk` or `Foot`. Nodes and the foot are
 aimed at as balls 1.6 pillars wide and win a tie with the stick they sit on. A ray that
 goes through nothing takes the part it passes nearest, within a slack the viewport sets to

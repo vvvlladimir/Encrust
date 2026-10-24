@@ -1,5 +1,5 @@
 use crate::placed::Placed;
-use core_geometry::{Ray, Scalar, Vec3, raycast_placed};
+use core_geometry::{Ray, Scalar, Vec3};
 
 /// A segment shorter than this is a joint, not a body: there is nothing to sweep and
 /// nothing to hit. Well under any printable feature.
@@ -90,7 +90,8 @@ fn unobstructed(placed: &Placed, from: Vec3, to: Vec3) -> bool {
     let ray = Ray::new(from, direction);
     // The tolerance is what keeps a beam that ends exactly on a surface — which is how
     // one lands on the model — from reporting its own landing as an obstacle.
-    raycast_placed(placed.model, placed.bvh, placed.transform, &ray)
+    placed
+        .raycast(&ray)
         .is_none_or(|hit| hit.distance + MIN_BODY_MM >= length && hit.normal.dot(direction) <= 0.0)
 }
 

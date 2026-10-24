@@ -195,6 +195,14 @@ impl SupportTree {
         self.nodes.iter().filter_map(|node| node.point)
     }
 
+    /// Renumbers the points this tree holds as the points list reads once `taken`, sorted,
+    /// have gone from it.
+    pub(crate) fn close_up_points(&mut self, taken: &[usize]) {
+        for point in self.nodes.iter_mut().filter_map(|node| node.point.as_mut()) {
+            *point -= taken.partition_point(|before| *before < *point);
+        }
+    }
+
     /// How many tips the tree carries. One for a plain vertical column.
     pub fn tip_count(&self) -> usize {
         self.nodes.iter().filter(|node| node.is_leaf()).count()

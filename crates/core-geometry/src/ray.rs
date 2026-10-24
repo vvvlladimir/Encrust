@@ -1,4 +1,4 @@
-use crate::{Aabb, Bvh, Mat3, Mesh, Scalar, Transform, Triangle, Vec3};
+use crate::{Aabb, Bvh, Mat3, Mat4, Mesh, Scalar, Transform, Triangle, Vec3};
 
 /// Below this the ray runs parallel to the triangle's plane and there is no single
 /// intersection. The determinant scales with the triangle's area in square millimetres,
@@ -156,8 +156,18 @@ pub fn raycast_placed(
     if matrix.determinant().abs() < SINGULAR {
         return None;
     }
+    raycast_placed_by(mesh, bvh, matrix, matrix.inverse(), ray)
+}
 
-    let inverse = matrix.inverse();
+/// [`raycast_placed`] with the placement given as its matrix and that matrix's inverse,
+/// for a caller casting many rays at one placement. `matrix` must not be singular.
+pub fn raycast_placed_by(
+    mesh: &Mesh,
+    bvh: &Bvh,
+    matrix: Mat4,
+    inverse: Mat4,
+    ray: &Ray,
+) -> Option<PlacedHit> {
     let local = Ray::new(
         inverse.transform_point3(ray.origin),
         inverse.transform_vector3(ray.direction),

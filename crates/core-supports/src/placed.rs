@@ -1,6 +1,9 @@
-use core_geometry::{Bvh, Mesh, Transform, Vec3};
+use core_geometry::{Bvh, Mat4, Mesh, PlacedHit, Ray, Transform, Vec3, raycast_placed_by};
 
 use crate::region::Blocked;
+
+/// A placement this close to singular has flattened its model, which no ray then hits.
+const SINGULAR: f32 = 1e-12;
 
 /// The model a support has to live with: the mesh, its hierarchy, where it stands on the
 /// plate, and the patch the user has forbidden supports on.
@@ -15,16 +18,27 @@ pub struct Placed<'a> {
     pub transform: Transform,
     /// Where supports are forbidden, or `None` when nothing is painted.
     pub blocked: Option<&'a Blocked>,
+    /// `transform` as a matrix and its inverse, or `None` where it flattens the model.
+    matrices: Option<(Mat4, Mat4)>,
 }
 
 impl<'a> Placed<'a> {
     pub fn new(model: &'a Mesh, bvh: &'a Bvh, transform: Transform) -> Self {
+        let matrix = transform.to_matrix();
         Self {
             model,
             bvh,
             transform,
             blocked: None,
+            matrices: (matrix.determinant().abs() >= SINGULAR).then(|| (matrix, matrix.inverse())),
         }
+    }
+
+    /// The nearest face of the model `ray`, in plate coordinates, hits: `raycast_placed`
+    /// without working the placement's inverse out again for every ray.
+    pub fn raycast(&self, ray: &Ray) -> Option<PlacedHit> {
+        let (matrix, inverse) = self.matrices?;
+        raycast_placed_by(self.model, self.bvh, matrix, inverse, ray)
     }
 
     /// The same model with `blocked` forbidden to supports.
