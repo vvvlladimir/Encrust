@@ -117,6 +117,21 @@ impl ModelSupports {
                 .is_some_and(|forest| forest.grown_for(transform, table, &self.blocked))
     }
 
+    /// Lets go of what was built when the trees must grow again for `transform` and `table`,
+    /// so nothing slices it meanwhile; [`Self::drawn`] still shows it. Answers whether they must.
+    pub fn outgrown(&mut self, transform: Transform, table: &[SupportProfile]) -> bool {
+        let outgrown = self.needs_growing(transform, table);
+        if outgrown {
+            self.built = None;
+        }
+        outgrown
+    }
+
+    /// What the trees grow from as it last changed; a run grown from another is stale.
+    pub fn revision(&self) -> u64 {
+        self.revision
+    }
+
     /// Takes on trees grown from a [`Growth`], and answers whether they were still wanted:
     /// nothing they grow from has changed since it was taken. Their meshes hold unless the
     /// frozen trees have been edited meanwhile.

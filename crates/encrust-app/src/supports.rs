@@ -210,6 +210,18 @@ impl SupportTool {
             .then(|| object.transform.to_matrix().transform_point3(contact))
     }
 
+    /// Starts a plate nothing was ever chosen for and nothing stands on with the automatic
+    /// profile; done where the undo stack starts, as that is not an edit.
+    pub fn start_automatic_unless_chosen(&mut self, scene: &Scene, catalogue: &Catalogue) {
+        let supported = scene
+            .objects()
+            .iter()
+            .any(|object| !object.supports.is_empty());
+        if self.sizing().is_none() && !supported {
+            self.set_automatic(true, catalogue);
+        }
+    }
+
     /// Sizes supports by what they hold, or builds them to the group in hand. Turned on,
     /// it takes up the automatic profile last set aside, else the first `catalogue` ships.
     pub fn set_automatic(&mut self, on: bool, catalogue: &Catalogue) {

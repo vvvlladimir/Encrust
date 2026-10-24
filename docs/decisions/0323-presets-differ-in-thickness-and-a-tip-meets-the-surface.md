@@ -1,6 +1,6 @@
 # 0323. Let presets differ in thickness only, place densely, and let a tip meet the surface
 
-- **Status:** Accepted
+- **Status:** Accepted; the preset numbers and the one overhang angle are superseded by 0355
 - **Date:** 2026-10-22
 
 ## Context

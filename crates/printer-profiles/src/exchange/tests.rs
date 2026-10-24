@@ -168,6 +168,29 @@ fn a_preset_travels_and_is_refused_as_another_tools() {
 }
 
 #[test]
+fn an_import_never_writes_over_a_users_file_that_would_not_read() {
+    let dir = std::env::temp_dir().join(format!("encrust-exchange-broken-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    let broken = dir.join("supports/heavy-imported.toml");
+    std::fs::create_dir_all(broken.parent().expect("a file in a folder")).expect("writable");
+    std::fs::write(&broken, "name = ").expect("writable");
+    let mut catalogue = Catalogue::with_root(&dir).expect("a broken file cannot fail it");
+    let text = catalogue
+        .export(Kind::Support, "heavy")
+        .expect("heavy ships");
+
+    let id = catalogue
+        .import(Kind::Support, &text, Path::new("heavy.toml"), None)
+        .expect("the file is the profile");
+    assert_ne!(id, "heavy-imported", "the broken file's id is taken");
+    assert_eq!(
+        std::fs::read_to_string(&broken).expect("still there"),
+        "name = ",
+        "the user's file is untouched"
+    );
+}
+
+#[test]
 fn a_file_imported_twice_comes_in_under_two_names() {
     let mut catalogue = writable("support-twice");
     let text = catalogue

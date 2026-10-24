@@ -63,9 +63,7 @@ impl Catalogue {
         preset.name = fresh_name(&preset.name, |name| {
             self.presets(kind).any(|entry| entry.profile.name == name)
         });
-        let id = unique_id(&preset.name, |id| {
-            self.presets(kind).any(|entry| entry.id == id)
-        });
+        let id = unique_id(&preset.name, |id| self.is_taken(kind, id));
         self.save_preset(kind, &id, &preset)?;
         Ok(id)
     }
@@ -76,7 +74,7 @@ impl Catalogue {
             let wanted = format!("{} {name}", profile.manufacturer);
             self.printers().any(|entry| label(&entry.profile) == wanted)
         });
-        let id = own_id(&label(&profile), |id| self.printer(id).is_ok())?;
+        let id = own_id(&label(&profile), |id| self.is_taken(Kind::Printer, id))?;
         self.save_printer(&id, &profile)?;
         Ok(id)
     }
@@ -134,7 +132,7 @@ impl Catalogue {
         if let Some(printer) = printer {
             set_up_on(&mut resin, printer);
         }
-        let id = own_id(&resin.name, |id| self.resin(id).is_ok())?;
+        let id = own_id(&resin.name, |id| self.is_taken(Kind::Resin, id))?;
         self.save_resin(&id, &resin)?;
         Ok(id)
     }
@@ -143,7 +141,7 @@ impl Catalogue {
         profile.name = fresh_name(&profile.name, |name| {
             self.supports().any(|entry| entry.profile.name == name)
         });
-        let id = unique_id(&profile.name, |id| self.support(id).is_ok());
+        let id = unique_id(&profile.name, |id| self.is_taken(Kind::Support, id));
         self.save_support(&id, &profile)?;
         Ok(id)
     }

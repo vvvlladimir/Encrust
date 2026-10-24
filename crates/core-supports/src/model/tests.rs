@@ -174,6 +174,28 @@ fn trees_grown_for_points_since_changed_are_turned_away() {
 }
 
 #[test]
+fn a_model_moved_off_its_trees_has_nothing_built_until_they_grow_again() {
+    let mut supports = with_one_support(Transform::default());
+    let moved = Transform::from_translation(Vec3::new(5.0, 0.0, 0.0));
+    let table = [profile()];
+
+    assert!(!supports.outgrown(Transform::default(), &table));
+    assert!(
+        supports.meshes().is_some(),
+        "where it stood, the build holds"
+    );
+    assert!(supports.outgrown(moved, &table));
+    assert!(
+        supports.meshes().is_none(),
+        "moved, nothing built is current"
+    );
+    assert!(
+        !supports.drawn().is_empty(),
+        "the last columns are still drawn"
+    );
+}
+
+#[test]
 fn a_placed_support_becomes_a_column_with_geometry() {
     let supports = with_one_support(Transform::default());
     assert_eq!(supports.point_count(), 1);

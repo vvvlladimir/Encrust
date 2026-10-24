@@ -332,7 +332,7 @@ whole-surface fill is Cmd-Shift-click.
   trunk of a lower one beside it. Where the part is in the way of a merge, the two drop
   straight down past it and merge lower. A support that has to step aside for room steps
   the least it can, a millimetre at a time. No strut of a merge runs
-  longer than **Longest strut** (6 mm as shipped) and no trunk carries more than **Tips
+  longer than **Longest strut** (6 mm as shipped, 10 mm in Auto's light and steadying shapes) and no trunk carries more than **Tips
   per trunk** (6), so a wide spread of tips stands on several trees rather than one fan.
   Trunks are cones sized by their height and load, and nothing carrying a load leans more
   than 45°. A tip's head meets its face square on wherever that is within 45° of straight
@@ -346,8 +346,8 @@ whole-surface fill is Cmd-Shift-click.
   share one trunk, and the bracing ties the rows evenly. A tip no node can take stands as
   it would without the grid.
 - Only the tip touches the model, and its mark is the contact's width, at most 9 % wider on
-  one side under a turned head: a support whose head would run into the part beside its contact or rise
-  from a face looking up with nowhere to come down is not placed — by Grow or by a click —
+  one side under a turned head: a support whose head would run into the part beside its contact, where no small
+  pillar can hold it, or rise from a face looking up with nowhere to come down is not placed — by Grow or by a click —
   and is counted among those with no room to stand. A pad beside a part that cannot be moved aside is cut back on that side.
   Every support is checked once more as it is drawn, down to a rib thinner than itself; a
   merged one whose trunk meets the part is split into its two halves, each grown again.
@@ -395,8 +395,8 @@ whole-surface fill is Cmd-Shift-click.
   each other merge into one trunk, built to the group with the heavier tip; each tip keeps
   its own.
 - Bundled profiles: **light**, **medium**, **heavy**, and the four shapes **Auto** builds
-  to, **auto light**, **auto medium**, **auto heavy** and **auto stabilization**. Light, medium and heavy differ in
-  thickness only: all three place contacts 1.8 mm apart, hold surfaces leaning past 40°,
+  to, **auto light**, **auto medium**, **auto heavy** and **auto stabilization**. Light, medium and heavy all
+  place contacts 1.8 mm apart, hold surfaces leaning past 40° (heavy past 45°),
   lift a part 5 mm and centre their tips on the part's surface without biting further. Duplicate one, edit it, save it under a new name,
   export it or import it. A bundled profile cannot be deleted. Settings lists the automatic
   shapes apart from the profiles chosen by hand.

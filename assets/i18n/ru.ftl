@@ -302,6 +302,10 @@ supports-cancelled = Расстановка отменена
 supports-placed-sized = Поставлено поддержек: { $count }, из них лёгких { $light }, средних { $medium }, тяжёлых { $heavy } и стабилизирующих { $steady }
 supports-auto-no-shape = { $name } строит опоры по профилю { $id }, которого нет в каталоге
 supports-group-name = Группа { $index }
+supports-cannot-grow = Не удалось построить поддержки: { $reason }
+supports-growth-stopped = Построение поддержек прервалось без ответа
+surfaces-cannot-build = Не удалось подготовить поверхность для поддержек: { $reason }
+surfaces-build-stopped = Подготовка поверхности для поддержек прервалась без ответа
 
 ## measure.rs
 

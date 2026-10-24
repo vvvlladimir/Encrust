@@ -53,14 +53,8 @@ pub fn ui(ui: &mut egui::Ui, window: &mut Window) {
     }
 }
 
-/// What stays over the scrolling blocks: the preset in hand and its groups. A plate
-/// nothing was ever chosen for starts on the automatic preset.
+/// What stays over the scrolling blocks: the preset in hand and its groups.
 pub fn top(ui: &mut egui::Ui, window: &mut Window) {
-    let standing = standing(window.doc).0 > 0;
-    let tool = &mut window.tools.supports;
-    if tool.sizing().is_none() && !standing {
-        tool.set_automatic(true, &window.machine.slicing.catalogue);
-    }
     support_picker::line(ui, window);
 }
 

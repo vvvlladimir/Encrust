@@ -1,6 +1,6 @@
 # 0329. Zone the bracing up a pair, prop a free top, and start from a preset
 
-- **Status:** Accepted
+- **Status:** Accepted; the shipped profiles' bracing is superseded by 0355
 - **Date:** 2026-10-22
 
 ## Context

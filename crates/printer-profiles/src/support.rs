@@ -9,6 +9,7 @@ mod branching;
 mod raft;
 mod segments;
 mod validate;
+
 pub use bracing::{BracePattern, BraceZone, Bracing, BracingPreset, Grid, IslandSpacing};
 pub use branching::Branching;
 use branching::TRUNK_SLENDERNESS;
@@ -16,6 +17,7 @@ pub use raft::{Raft, RaftShape, RaftStyle};
 pub use segments::{
     BottomSegment, ContactShape, MiddleSegment, PlatformShape, SmallPillar, TipSegment, TopSegment,
 };
+pub(crate) use validate::overhang_within_right_angle;
 
 /// Shape of one support, from the tip on the model down to the foot on the plate, and how several
 /// merge on the way down. See `docs/design/supports.md`.
@@ -117,10 +119,10 @@ fn default_max_overhang_deg() -> f32 {
     45.0
 }
 
-/// Twenty-four sides put the flats about 0.013 mm inside the circle of the heaviest
-/// preset's 3 mm pillar, and read as round on the screen; see ADR 0343.
+/// Twelve sides, shaded smooth, read as round on the screen, as every shipped preset has;
+/// see ADR 0352.
 fn default_facets() -> u32 {
-    24
+    12
 }
 
 /// The fewest sides that still enclose an area.
@@ -128,8 +130,8 @@ const MIN_FACETS: u32 = 3;
 
 impl SupportProfile {
     /// The support profile this build ships under `id`, as its file in `assets/profiles/supports/`
-    /// says, whatever the user's copy says; `None` if not shipped.
-    pub fn shipped(id: &str) -> Option<Self> {
+    /// says, whatever the user's copy says.
+    pub fn shipped(id: &str) -> Result<Self, ProfileError> {
         crate::catalogue::shipped_support(id)
     }
 
@@ -260,7 +262,7 @@ pub const STOCK_SUPPORT: &str = "medium";
 /// should that file not read, which a test of the shipped files rules out.
 impl Default for SupportProfile {
     fn default() -> Self {
-        Self::shipped(STOCK_SUPPORT).unwrap_or_else(Self::unstated)
+        Self::shipped(STOCK_SUPPORT).unwrap_or_else(|_| Self::unstated())
     }
 }
 

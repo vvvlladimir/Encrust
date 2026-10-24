@@ -20,7 +20,7 @@ fn every_shipped_preset_reads_as_valid() {
         preset.validate().expect("a shipped preset is valid");
     }
     assert!(
-        SupportProfile::shipped(STOCK_SUPPORT).is_some(),
+        SupportProfile::shipped(STOCK_SUPPORT).is_ok(),
         "a new object starts with a preset this build ships"
     );
 }
@@ -61,7 +61,7 @@ platform_thickness_mm = 1.0
         path(),
     )
     .expect("valid profile");
-    assert_eq!(profile.facets, 24);
+    assert_eq!(profile.facets, 12, "as every shipped preset has");
     assert!((profile.density - 1.0).abs() < f32::EPSILON);
 }
 
@@ -431,4 +431,12 @@ fn a_forty_five_degree_branch_covers_as_much_ground_as_it_drops() {
         ..Branching::default()
     };
     assert!((branching.reach_per_drop() - 1.0).abs() < 1e-5);
+}
+
+#[test]
+fn an_id_nothing_ships_under_is_unknown() {
+    assert!(matches!(
+        SupportProfile::shipped("no-such-preset"),
+        Err(ProfileError::Unknown { .. })
+    ));
 }

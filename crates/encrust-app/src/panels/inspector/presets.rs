@@ -121,9 +121,7 @@ pub fn keep<T: Serialize>(
     name: &str,
     settings: &T,
 ) -> anyhow::Result<String> {
-    let id = unique_id(name, |id| {
-        catalogue.presets(kind).any(|entry| entry.id == id)
-    });
+    let id = unique_id(name, |id| catalogue.is_taken(kind, id));
     let preset = Preset::of(name, settings, Path::new(&id))?;
     catalogue.save_preset(kind, &id, &preset)?;
     Ok(id)

@@ -550,10 +550,16 @@ fn shipped_printer(id: &str) -> Option<PrinterProfile> {
     PrinterProfile::from_toml_str(source, &path).ok()
 }
 
-pub(crate) fn shipped_support(id: &str) -> Option<SupportProfile> {
-    let (_, source) = BUNDLED_SUPPORTS.iter().find(|(name, _)| *name == id)?;
+pub(crate) fn shipped_support(id: &str) -> Result<SupportProfile, ProfileError> {
+    let (_, source) = BUNDLED_SUPPORTS
+        .iter()
+        .find(|(name, _)| *name == id)
+        .ok_or_else(|| ProfileError::Unknown {
+            kind: Kind::Support.label(),
+            id: id.to_owned(),
+        })?;
     let path = PathBuf::from(format!("<bundled>/supports/{id}.toml"));
-    SupportProfile::from_toml_str(source, &path).ok()
+    SupportProfile::from_toml_str(source, &path)
 }
 
 /// Whether the user's directory may hold ids nothing ships, or only copies of shipped ones.

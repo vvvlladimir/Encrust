@@ -49,8 +49,8 @@ impl SupportTool {
     /// The run cuts each model at the height it will be printed at, so the layers it
     /// looks at are the layers the printer will expose.
     ///
-    /// Run for the inside, it holds up only the cavities of hollow models, taking what
-    /// stood in them away first.
+    /// Run for the inside, it holds up only the cavities of hollow models, and what stood
+    /// in them is taken away when it lands.
     pub fn start(
         &mut self,
         scene: &mut Scene,
@@ -59,18 +59,20 @@ impl SupportTool {
         side: Side,
     ) -> Result<()> {
         self.sizing = self.sized(catalogue)?;
-        if side == Side::Inside {
-            Self::clear_inside(scene);
-            // A frozen tree taken away renumbers the ones after it.
-            self.picked.clear();
-        }
         let mut tasks = match &self.sizing {
             Some((auto, shapes)) => tasks_of(scene, |_| auto.placing_with(&shapes[0])),
             None => tasks_of(scene, |object| self.profile_for(object).clone()),
         };
         for task in &mut tasks {
-            let object = scene.get(task.id);
-            task.side = object.and_then(|object| object.wall_side(side == Side::Inside));
+            let Some(object) = scene.get(task.id) else {
+                continue;
+            };
+            task.side = object.wall_side(side == Side::Inside);
+            if side == Side::Inside {
+                let into_model = object.transform.to_matrix().inverse();
+                task.seeds
+                    .retain(|seed| !object.holds_inside(into_model.transform_point3(*seed)));
+            }
         }
         if side == Side::Inside {
             tasks.retain(|task| task.side.is_some());
@@ -100,6 +102,11 @@ impl SupportTool {
         self.job = None;
         *status = match outcome {
             SupportOutcome::Placed(placements) => {
+                if self.side == Side::Inside {
+                    Self::clear_inside(scene);
+                    // A frozen tree taken away renumbers the ones after it.
+                    self.picked.clear();
+                }
                 let placements = self.on_its_side(placements, scene);
                 match self.sizing.take() {
                     Some((auto, shapes)) => self.place_sized(placements, &auto, shapes, scene),

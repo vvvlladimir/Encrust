@@ -1,6 +1,6 @@
 # 0343. Draw supports with 24 sides and round joints, and fillet a pillar into its pad
 
-- **Status:** Accepted
+- **Status:** Accepted; 24 sides are superseded by 0352, the flare widths by 0355
 - **Date:** 2026-10-24
 
 ## Context

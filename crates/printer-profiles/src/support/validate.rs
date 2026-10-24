@@ -18,18 +18,23 @@ pub(super) fn order(
     Ok(())
 }
 
+/// Refuses a `max_overhang_deg` past a right angle: no surface of a print leans further.
+pub(crate) fn overhang_within_right_angle(max_overhang_deg: f32) -> Result<(), ProfileError> {
+    if max_overhang_deg > RIGHT_ANGLE_DEG {
+        return Err(ProfileError::OutOfOrder {
+            smaller: "max_overhang_deg",
+            smaller_value: max_overhang_deg,
+            larger: "a right angle",
+            larger_value: RIGHT_ANGLE_DEG,
+        });
+    }
+    Ok(())
+}
+
 impl SupportProfile {
     pub(super) fn validate(&self) -> Result<(), ProfileError> {
         self.validate_signs()?;
-        // A surface that leans past a right angle is not a surface a print can have.
-        if self.max_overhang_deg > RIGHT_ANGLE_DEG {
-            return Err(ProfileError::OutOfOrder {
-                smaller: "max_overhang_deg",
-                smaller_value: self.max_overhang_deg,
-                larger: "a right angle",
-                larger_value: RIGHT_ANGLE_DEG,
-            });
-        }
+        overhang_within_right_angle(self.max_overhang_deg)?;
         if self.facets < MIN_FACETS {
             return Err(ProfileError::TooFew {
                 field: "facets",

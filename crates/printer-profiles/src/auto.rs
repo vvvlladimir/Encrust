@@ -124,6 +124,7 @@ impl AutoProfile {
         if let Some((field, value)) = positive.into_iter().find(|(_, value)| *value <= 0.0) {
             return Err(ProfileError::NonPositive { field, value });
         }
+        crate::support::overhang_within_right_angle(self.max_overhang_deg)?;
         ascending("island_area_mm2", &self.island_area_mm2)?;
         ascending("overhang_volume_mm3", &self.overhang_volume_mm3)?;
         ascending("steady_area_mm2", &[self.steady_area_mm2])?;
@@ -231,6 +232,15 @@ mod tests {
         assert!(matches!(
             with("island_area_mm2 = [-1.0, 2.4]"),
             Err(ProfileError::Negative { .. })
+        ));
+    }
+
+    #[test]
+    fn an_overhang_past_a_right_angle_is_refused() {
+        let source = SHIPPED.replace("max_overhang_deg = 40.0", "max_overhang_deg = 120.0");
+        assert!(matches!(
+            AutoProfile::from_toml_str(&source, Path::new("auto/odd.toml")),
+            Err(ProfileError::OutOfOrder { .. })
         ));
     }
 

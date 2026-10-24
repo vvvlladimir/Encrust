@@ -96,8 +96,8 @@ the face rather than up past it (ADR 0125, superseding that clause of ADR 0028),
 deeper than half the wall behind the contact, measured by one ray along that axis: a tip
 on a thin edge would otherwise come out of its far side as a nub, and above the model's
 top as layers of nothing but tips. `facets`
-sides are used for every ring; the default of 24 puts the flats 0.013 mm inside the circle
-of a 3 mm pillar, and a joint's domes take six rings so a bend reads round (ADR 0343).
+sides are used for every ring; the default of 12, shaded smooth, reads as round, and a
+joint's domes take six rings so a bend reads round (ADR 0343, 0352).
 
 **Tips.** `plane`, the default, ends in a half ball of the contact's radius centred
 `bite_mm` into the face along the head's axis, the cone running from its equator: at a

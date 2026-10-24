@@ -195,7 +195,7 @@ pub(super) fn save_as_own(
         last_printer: Some(printer.to_owned()),
         ..values
     };
-    let id = own_id(&resin.name, |id| catalogue.resin(id).is_ok())?;
+    let id = own_id(&resin.name, |id| catalogue.is_taken(Kind::Resin, id))?;
     catalogue.save_resin(&id, &resin)?;
     Ok(id)
 }
@@ -206,7 +206,7 @@ pub fn new_printer(catalogue: &mut Catalogue) -> Result<String, ProfileError> {
         name: tr!("settings-new-printer"),
         ..PrinterProfile::default()
     };
-    let id = own_id(&printer.name, |id| catalogue.printer(id).is_ok())?;
+    let id = own_id(&printer.name, |id| catalogue.is_taken(Kind::Printer, id))?;
     catalogue.save_printer(&id, &printer)?;
     Ok(id)
 }
@@ -232,7 +232,7 @@ pub fn keep_support(
     catalogue: &mut Catalogue,
     profile: &SupportProfile,
 ) -> Result<String, ProfileError> {
-    let id = unique_id(&profile.name, |id| catalogue.support(id).is_ok());
+    let id = unique_id(&profile.name, |id| catalogue.is_taken(Kind::Support, id));
     catalogue.save_support(&id, profile)?;
     Ok(id)
 }

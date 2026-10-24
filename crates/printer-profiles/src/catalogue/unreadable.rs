@@ -24,6 +24,23 @@ impl Catalogue {
         &self.unreadable
     }
 
+    /// Whether `id` is in use for `kind`: by a profile, or by a file of the user's that would
+    /// not read, which a new profile must not be written over.
+    pub fn is_taken(&self, kind: Kind, id: &str) -> bool {
+        let listed = match kind {
+            Kind::Printer => self.printer(id).is_ok(),
+            Kind::Resin => self.resin(id).is_ok(),
+            Kind::Support => self.support(id).is_ok(),
+            Kind::Auto => self.autos().any(|entry| entry.id == id),
+            Kind::Hollow | Kind::Drain => self.presets(kind).any(|entry| entry.id == id),
+        };
+        listed
+            || self
+                .unreadable
+                .iter()
+                .any(|file| file.kind == kind && file.id == id)
+    }
+
     /// Whether throwing `file` away gives back a shipped profile, rather than losing a
     /// profile of the user's own.
     pub fn resets_to_shipped(&self, file: &Unreadable) -> bool {

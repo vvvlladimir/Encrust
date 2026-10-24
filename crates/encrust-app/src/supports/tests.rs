@@ -91,6 +91,23 @@ fn a_small_island_is_held_by_the_lightest_shape_in_the_empty_group() {
 }
 
 #[test]
+fn a_plate_nothing_was_chosen_for_starts_sized_and_one_chosen_for_is_left_alone() {
+    let catalogue = Catalogue::bundled().expect("the shipped catalogue is valid");
+    let mut fresh = SupportTool::default();
+    fresh.start_automatic_unless_chosen(&Scene::default(), &catalogue);
+    assert!(
+        fresh.auto.is_some(),
+        "a fresh plate starts on the automatic profile"
+    );
+
+    let mut chosen = SupportTool::default();
+    chosen.set_automatic(true, &catalogue);
+    chosen.set_automatic(false, &catalogue);
+    chosen.start_automatic_unless_chosen(&Scene::default(), &catalogue);
+    assert!(chosen.auto.is_none(), "sizing turned off stays off");
+}
+
+#[test]
 fn sizing_turned_off_and_on_again_keeps_the_numbers_it_was_left_with() {
     let catalogue = Catalogue::bundled().expect("the shipped catalogue is valid");
     let mut tool = SupportTool::default();
@@ -1142,6 +1159,31 @@ fn holding_the_cavity_up_again_takes_only_what_stood_inside_it() {
         left[0].contact.z.abs() < 1e-4,
         "the underside's support stays"
     );
+}
+
+#[test]
+fn a_cavity_run_cancelled_leaves_what_stood_inside_it() {
+    let mut scene = hollow_cube();
+    let object = &mut scene.objects_mut()[0];
+    let transform = object.transform;
+    object
+        .supports
+        .add(Vec3::new(10.0, 10.0, 20.95), transform, 0);
+    let catalogue = Catalogue::bundled().expect("the shipped catalogue is valid");
+    let mut tool = SupportTool::default();
+    tool.start(&mut scene, 0.05, &catalogue, Side::Inside)
+        .expect("a hollow model to hold up");
+    assert_eq!(
+        scene.objects()[0].supports.point_count(),
+        1,
+        "nothing goes before it lands"
+    );
+    tool.job.as_ref().expect("the run is going").cancel();
+    let mut status = Status::default();
+    while tool.poll(&mut scene, &mut status) {
+        std::thread::yield_now();
+    }
+    assert_eq!(scene.objects()[0].supports.point_count(), 1, "{status:?}");
 }
 
 #[test]

@@ -132,6 +132,10 @@ pub fn open(window: &mut Window, file: &Handed) {
             note = note
         ));
     }
+    window
+        .tools
+        .supports
+        .start_automatic_unless_chosen(&window.doc.scene, &window.machine.slicing.catalogue);
     remember(window, &path, preview);
     window.doc.project.path = Some(path);
     window.doc.project.saved = Some(digest(&captured(window).manifest));

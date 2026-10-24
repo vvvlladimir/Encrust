@@ -82,6 +82,9 @@ impl SlicerApp {
         }
         let prefs = app.prefs.clone();
         prefs.apply(&mut app.window());
+        app.tools
+            .supports
+            .start_automatic_unless_chosen(&app.doc.scene, &app.machine.slicing.catalogue);
         prefs.restore_panels(&cc.egui_ctx);
         project::mark_saved(&mut app.window());
         if let Some(path) = initial_model {
@@ -365,11 +368,11 @@ impl SlicerApp {
                 continue;
             }
             let table = with_own(plate.clone(), &object.own, raft);
-            if held && object.supports.retuned(object.transform, &table) {
-                continue;
-            }
-            if object.supports.needs_growing(object.transform, &table) {
-                self.doc.growth.start(object, &table);
+            let retuned = held && object.supports.retuned(object.transform, &table);
+            if object.supports.outgrown(object.transform, &table) {
+                if !retuned {
+                    self.doc.growth.start(object, &table);
+                }
                 continue;
             }
             object.refresh_supports(&table);
@@ -426,8 +429,8 @@ impl SlicerApp {
             .poll(scene, &doc.plate, &mut self.view.camera, status);
         working |= doc.repairs.poll(scene, status);
         working |= doc.drilling.poll(scene, status);
-        working |= doc.surfaces.poll(scene);
-        working |= doc.growth.poll(scene);
+        working |= doc.surfaces.poll(scene, status);
+        working |= doc.growth.poll(scene, status);
         working |= machine.slicing.poll(scene, status);
         working |= machine.network.poll(status);
         working |= machine.preview.poll(status);

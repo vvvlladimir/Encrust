@@ -1,6 +1,6 @@
 # 0347. Keep a tree near its tips: merge onto a lower front, drop past the part, and hold a strut's length and a trunk's tips
 
-- **Status:** Accepted
+- **Status:** Accepted; 6 mm shipped in every profile is superseded by 0355
 - **Date:** 2026-10-24
 
 ## Context

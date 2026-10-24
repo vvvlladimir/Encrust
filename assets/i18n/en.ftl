@@ -286,6 +286,10 @@ supports-cancelled = Placement cancelled
 supports-placed-sized = Placed { $count } supports: { $light } light, { $medium } medium, { $heavy } heavy and { $steady } steadying
 supports-auto-no-shape = { $name } builds to the support profile { $id }, which is not in the catalogue
 supports-group-name = Group { $index }
+supports-cannot-grow = The supports could not be built: { $reason }
+supports-growth-stopped = Building the supports stopped without an answer
+surfaces-cannot-build = The surface supports stand on could not be prepared: { $reason }
+surfaces-build-stopped = Preparing the surface supports stand on stopped without an answer
 
 ## measure.rs
 
