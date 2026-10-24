@@ -197,6 +197,7 @@ Grouped by what the decision governs; the number is still the order it was taken
 | [0337](0337-a-shipped-preset-lives-only-in-its-file.md) | Keep a shipped support preset only in its file | Accepted |
 | [0338](0338-one-card-makes-the-supports.md) | Make the supports in one card, its click modes in its heading | Accepted |
 | [0339](0339-an-automatic-preset-is-retuned-never-added.md) | Retune a shipped automatic preset, never add one | Accepted |
+| [0340](0340-support-trees-grow-off-the-drawing-thread.md) | Grow support trees off the drawing thread, and look round a pad only as far as it reaches | Accepted |
 | [0093](0093-a-blocker-is-a-keep-out-not-a-hint.md) | A support blocker is a keep-out, not a hint | Accepted |
 | [0094](0094-a-supports-parameters-are-its-groups.md) | A support's parameters are its group's | Accepted; that no trunk is shared across groups is superseded by 0248; that the bracing is group 0's is superseded by 0252; that the raft is group 0's is superseded by 0253 |
 | [0095](0095-a-support-the-hand-touched-is-frozen.md) | A support the hand has touched is frozen into the scene | Accepted; the two-press rule is superseded by 0244 |

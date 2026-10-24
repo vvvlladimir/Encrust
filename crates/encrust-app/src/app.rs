@@ -10,6 +10,7 @@ use crate::prefs::Preferences;
 use crate::preview::stack_fingerprint;
 use crate::project;
 use crate::render;
+use crate::scene::SceneObject;
 use crate::shortcuts;
 use crate::state::{Doc, Machine, Tools, View};
 use crate::status::Status;
@@ -195,6 +196,16 @@ impl SlicerApp {
         if !reads_the_stack || self.machine.preview.is_building() {
             return;
         }
+        // A stack cut before the supports land would be cut without them.
+        let plate = self.doc.scene.active_plate();
+        if self
+            .doc
+            .scene
+            .printable(plate)
+            .any(SceneObject::supports_pending)
+        {
+            return;
+        }
         let fingerprint = stack_fingerprint(&self.doc.scene, self.machine.slicing.cutting());
         let wanted =
             self.machine.preview.layer_count() == 0 || self.machine.preview.is_stale(fingerprint);
@@ -362,6 +373,10 @@ impl SlicerApp {
             if held && object.supports.retuned(object.transform, &table) {
                 continue;
             }
+            if object.supports.needs_growing(object.transform, &table) {
+                self.doc.growth.start(object, &table);
+                continue;
+            }
             object.refresh_supports(&table);
         }
     }
@@ -433,6 +448,7 @@ impl eframe::App for SlicerApp {
                 .drilling
                 .poll(&mut self.doc.scene, &mut self.machine.status)
             | self.doc.surfaces.poll(&mut self.doc.scene)
+            | self.doc.growth.poll(&mut self.doc.scene)
             | self
                 .machine
                 .slicing
@@ -508,13 +524,15 @@ impl eframe::App for SlicerApp {
 
         project::guard_close(ui, &mut self.window());
         self.window().show(ui);
-        // An edit made in this frame is built in the next one, which nothing else asks
-        // for while the pointer is held still.
-        let stale = |object: &crate::scene::SceneObject| {
-            object.supports.meshes().is_none()
-                && !(object.supports.is_empty() && object.supports.drawn().is_empty())
-        };
-        if self.doc.scene.objects().iter().any(stale) {
+        // An edit made in this frame is built in the next one, or once its trees have
+        // grown, which nothing else asks for while the pointer is held still.
+        if self
+            .doc
+            .scene
+            .objects()
+            .iter()
+            .any(SceneObject::supports_pending)
+        {
             ui.ctx().request_repaint();
         }
 

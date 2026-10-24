@@ -408,6 +408,13 @@ impl SceneObject {
             .refresh_on(&model, &surface, &bvh, self.transform, table);
     }
 
+    /// Whether the supports have changed and what is printed of them has not been built
+    /// again yet: their trees may still be growing on a worker (ADR 0340).
+    pub fn supports_pending(&self) -> bool {
+        self.supports.meshes().is_none()
+            && !(self.supports.is_empty() && self.supports.drawn().is_empty())
+    }
+
     /// Builds the hierarchy of the surface supports stand against when that surface
     /// changed, here and now, and answers whether it did; the window builds it on a worker
     /// through [`crate::surfaces::SupportSurfaces`].

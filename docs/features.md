@@ -327,6 +327,9 @@ whole-surface fill is Cmd-Shift-click.
   added.
 - Nearby tips merge into shared **branching trunks**. Trunks are cones sized by their
   height and load, and nothing carrying a load leans more than 45°.
+- The trunks are built in the background after every change, so the window keeps
+  answering on a dense model; until they are, the supports shown last stay, and slicing
+  and the preview wait for them.
 - With **Grid** on in the **Shape** mode, trunks stand on a square grid instead, 5 mm apart
   unless set (1–15 mm): each tip leans to its nearest node at 45°, the tips of one node
   share one trunk, and the bracing ties the rows evenly. A tip no node can take stands as

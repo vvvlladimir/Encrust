@@ -97,7 +97,8 @@ way of is moved aside whole — `Landing::pad_offset`, tried in eight directions
 still leaves the flare inside its sole. Where that is not room enough the pad is cut
 back instead, `Landing::pad_cut`: the nearest model along each of 16 sectors' edges and
 middle, at its sole, middle and top, less `clearance_mm`, as long as no sector bares the
-flare; the mesher pulls the foot's vertices in to it. Failing that the support has no
+flare; each look stops at the pad's reach, and one ray per height says whether the pad sets
+off inside the model (ADR 0340). The mesher pulls the foot's vertices in to it. Failing that the support has no
 landing there and leans for one like any other blocked front (ADR 0239, 0328). The foot is a tube of its own, because a
 tube has one side count, and the trunk runs down through it — the same overlap rule as
 every joint (ADR 0041).
@@ -650,6 +651,8 @@ its hierarchy, its placement and this patch — travel together as `Placed`.
 
 ## In the window
 
+The trees are grown on a worker and meshed in the frame they land in; until then the
+supports drawn last stay, and slicing and the preview wait (ADR 0340).
 Supports are drawn as a second mesh per object with an identity transform — they are
 already in plate coordinates — in a cooler, darker colour; a painted patch is drawn the
 same way, lifted 0.05 mm off the faces it covers, green for a fill and violet for a

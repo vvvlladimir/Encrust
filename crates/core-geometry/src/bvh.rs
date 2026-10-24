@@ -89,6 +89,12 @@ impl Bvh {
 
     /// Nearest face that `ray` hits, in the space of the mesh the hierarchy was built from.
     pub fn raycast(&self, ray: &Ray) -> Option<RayHit> {
+        self.raycast_within(ray, Scalar::INFINITY)
+    }
+
+    /// [`Self::raycast`] looking no further than `max_t` along the ray: a short look skips
+    /// every box beyond it rather than walking the whole line through the mesh.
+    pub fn raycast_within(&self, ray: &Ray, max_t: Scalar) -> Option<RayHit> {
         let mut best: Option<RayHit> = None;
         // An array rather than a `Vec`, so that a cast costs no allocation; a support run
         // makes one of these per column.
@@ -103,7 +109,7 @@ impl Bvh {
                 continue;
             };
             // Everything in this box is further away than what has already been hit.
-            if best.is_some_and(|hit| entry >= hit.t) {
+            if entry > max_t || best.is_some_and(|hit| entry >= hit.t) {
                 continue;
             }
 
@@ -118,7 +124,7 @@ impl Bvh {
 
             let leaf = node.at as usize..(node.at + node.count) as usize;
             for (&face, triangle) in self.faces[leaf.clone()].iter().zip(&self.triangles[leaf]) {
-                let Some(t) = ray_triangle(ray, triangle) else {
+                let Some(t) = ray_triangle(ray, triangle).filter(|t| *t <= max_t) else {
                     continue;
                 };
                 if best.is_none_or(|hit| t < hit.t) {

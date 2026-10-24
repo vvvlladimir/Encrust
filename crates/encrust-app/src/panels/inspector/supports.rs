@@ -162,7 +162,13 @@ fn lift_row(ui: &mut egui::Ui, scene: &mut Scene, id: ObjectId) {
 /// the run: the cavity's button over Grow for a hollow model, or the run's progress.
 pub fn action(ui: &mut egui::Ui, window: &mut Window) {
     let (points, columns) = standing(window.doc);
-    if points != columns {
+    // Trees still growing stand nothing yet, which is not a want of room.
+    let growing = window
+        .doc
+        .scene
+        .targets()
+        .any(crate::scene::SceneObject::supports_pending);
+    if points != columns && !growing {
         let line = tr!("supports-without-room", count = points - columns);
         tone(
             ui,

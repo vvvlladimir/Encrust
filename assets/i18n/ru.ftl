@@ -1297,10 +1297,12 @@ slicing-select-resin = Выберите смолу
 slicing-pick-machine = Выберите принтер, чтобы узнать, под какой экран нарезать.
 slicing-add-resin = Добавьте смолу для этого принтера: экспозиция подбирается на вашем принтере.
 slicing-nothing-visible = На платформе нет видимых моделей для нарезки.
+slicing-supports-growing = Поддержки ещё строятся.
 slicing-steps-by-header = Этот принтер двигает платформу на высоту слоя из заголовка.
 slicing-no-printer = профиль принтера не загружен
 slicing-no-resin = смола не выбрана, а экспозиция подбирается, а не поставляется
 slicing-nothing-visible-error = на платформе нет видимых моделей для нарезки
+slicing-supports-growing-error = поддержки ещё строятся
 slicing-no-format = в { $path } не указан формат нарезанного файла
 slicing-clipped =
     { $count ->

@@ -1,4 +1,5 @@
 use std::sync::Arc;
+use std::sync::atomic::{AtomicU64, Ordering};
 
 use core_geometry::{Adjacency, Bvh, Mesh, Region, Scalar, Transform, Vec3};
 use printer_profiles::SupportProfile;
@@ -10,6 +11,14 @@ use crate::{
 /// A transform this close to singular has flattened its model, and a click on it cannot
 /// be mapped back into the model's own space.
 const SINGULAR: f32 = 1e-12;
+
+/// The next revision any model's supports take, shared by all of them so that no two
+/// states, even one put back by an undo, are ever stamped alike.
+static REVISIONS: AtomicU64 = AtomicU64::new(1);
+
+fn next_revision() -> u64 {
+    REVISIONS.fetch_add(1, Ordering::Relaxed)
+}
 
 /// The supports of one model: where they touch it, what is painted on it, and the trees
 /// and meshes built from that; see `docs/decisions/0129`.
@@ -43,6 +52,48 @@ pub struct ModelSupports {
     /// How much of the height the model stands at is its raft's doing, millimetres: what
     /// has to be taken back when the raft goes. See `docs/decisions/0238`.
     raft_lift_mm: Scalar,
+    /// What the trees grow from as it last changed: the points, the blocked patch or the
+    /// surface. Trees grown elsewhere for another revision are stale.
+    revision: u64,
+}
+
+/// What the trees of one model are grown from, taken off it so that they can be grown on
+/// another thread while the window keeps drawing; see `docs/decisions/0340`.
+#[derive(Debug, Clone)]
+pub struct Growth {
+    points: Vec<SupportPoint>,
+    blocked: Region,
+    transform: Transform,
+    table: Vec<SupportProfile>,
+    revision: u64,
+}
+
+impl Growth {
+    /// Grows the trees against `surface`, whose hierarchy is `bvh`, keeping out of the
+    /// patch blocked on `model`.
+    pub fn grow(self, model: &Mesh, surface: &Mesh, bvh: &Bvh) -> Grown {
+        let keep_out = Blocked::new(model, &self.blocked, self.transform);
+        let placed = Placed::new(surface, bvh, self.transform).blocking(keep_out.as_ref());
+        let trees = Profiles::new(&self.table).map_or_else(Vec::new, |profiles| {
+            grow(&columns(&self.points, &placed, profiles), &placed, profiles)
+        });
+        Grown {
+            forest: Forest {
+                trees,
+                transform: self.transform,
+                table: self.table,
+                blocked: self.blocked,
+            },
+            revision: self.revision,
+        }
+    }
+}
+
+/// The trees a [`Growth`] grew, to be handed back to the model it was taken from.
+#[derive(Debug, Clone)]
+pub struct Grown {
+    forest: Forest,
+    revision: u64,
 }
 
 /// The trees grown from the points, in plate coordinates, and what they were grown against.
@@ -112,8 +163,45 @@ impl ModelSupports {
     /// Drops what was built, so the next refresh builds against a surface that changed
     /// under the supports: a model hollowed, or solid again.
     pub fn surface_changed(&mut self) {
-        self.forest = None;
+        self.points_changed();
+    }
+
+    /// What the trees have to be grown from before [`Self::refresh_on`] can build against
+    /// `transform` and `table`, or `None` while the trees grown last still hold.
+    pub fn growth(&self, transform: Transform, table: &[SupportProfile]) -> Option<Growth> {
+        self.needs_growing(transform, table).then(|| Growth {
+            points: self.points.clone(),
+            blocked: self.blocked.clone(),
+            transform,
+            table: table.to_vec(),
+            revision: self.revision,
+        })
+    }
+
+    /// Whether [`Self::refresh_on`] against `transform` and `table` would grow the trees
+    /// again, which is the part of it too slow for a frame.
+    pub fn needs_growing(&self, transform: Transform, table: &[SupportProfile]) -> bool {
+        Profiles::new(table).is_some()
+            && !self
+                .forest
+                .as_ref()
+                .is_some_and(|forest| forest.grown_for(transform, table, &self.blocked))
+    }
+
+    /// The revision a [`Growth`] taken now carries.
+    pub fn revision(&self) -> u64 {
+        self.revision
+    }
+
+    /// Takes on trees grown from a [`Growth`], and answers whether they were still wanted:
+    /// nothing they grow from has changed since it was taken.
+    pub fn take_grown(&mut self, grown: Grown) -> bool {
+        if grown.revision != self.revision {
+            return false;
+        }
+        self.forest = Some(grown.forest);
         self.built = None;
+        true
     }
 
     pub fn is_empty(&self) -> bool {
@@ -197,6 +285,7 @@ impl ModelSupports {
 
     /// Stands `grown` back up beside the frozen trees and meshes them, without growing
     /// anything: a project carries what the run decided, so opening it decides nothing.
+    /// One saved while its trees were still growing carries none, and grows them now.
     pub fn stand(
         &mut self,
         grown: &[SupportTree],
@@ -206,6 +295,10 @@ impl ModelSupports {
         transform: Transform,
         table: &[SupportProfile],
     ) {
+        if grown.is_empty() && !self.points.is_empty() {
+            self.refresh_on(model, surface, bvh, transform, table);
+            return;
+        }
         self.refresh_patches(model, transform);
         let Some(profiles) = Profiles::new(table) else {
             return;
@@ -278,6 +371,7 @@ impl ModelSupports {
             }
         }
         self.lift_out_of_forest(tree, grown, &taken);
+        self.revision = next_revision();
 
         self.frozen.push(standing.moved(matrix.inverse()));
         self.built = None;
@@ -443,7 +537,7 @@ impl ModelSupports {
             marked,
         );
         if changed > 0 {
-            self.built = None;
+            self.paint_changed(blocking);
         }
         changed
     }
@@ -465,7 +559,7 @@ impl ModelSupports {
         };
         let changed = region.flood(model, adjacency, seed, max_angle_deg, marked);
         if changed > 0 {
-            self.built = None;
+            self.paint_changed(blocking);
         }
         changed
     }
@@ -482,7 +576,16 @@ impl ModelSupports {
             // Dropped rather than rebuilt: an object with nothing left on it is not asked
             // to refresh, so a stale patch would stay on screen.
             self.patches = Patches::default();
-            self.built = None;
+            self.paint_changed(blocking);
+        }
+    }
+
+    /// Drops what was built from the paint, and with the blocked patch what the trees
+    /// were grown from as well.
+    fn paint_changed(&mut self, blocking: bool) {
+        self.built = None;
+        if blocking {
+            self.revision = next_revision();
         }
     }
 
@@ -607,6 +710,7 @@ impl ModelSupports {
     fn points_changed(&mut self) {
         self.forest = None;
         self.built = None;
+        self.revision = next_revision();
     }
 
     /// Whether the next rebuild against `transform` and `table` would grow the trees again
@@ -776,6 +880,59 @@ mod tests {
 
         assert!(supports.frozen().is_empty());
         assert_eq!(supports.standing(), 0, "nothing is left standing");
+    }
+
+    #[test]
+    fn trees_grown_elsewhere_are_built_without_growing_again() {
+        let mut supports = ModelSupports::default();
+        supports.add(Vec3::new(10.0, 10.0, 20.0), Transform::default(), 0);
+        let table = [profile()];
+        let growth = supports
+            .growth(Transform::default(), &table)
+            .expect("a new point has nothing grown for it");
+        let model = nothing();
+        let bvh = Bvh::build(&model);
+
+        assert!(supports.take_grown(growth.grow(&model, &model, &bvh)));
+        assert!(!supports.needs_growing(Transform::default(), &table));
+        supports.refresh(&model, &bvh, Transform::default(), &table);
+        assert_eq!(supports.standing(), 1);
+    }
+
+    #[test]
+    fn points_saved_before_their_trees_grew_are_grown_when_stood() {
+        let mut supports = ModelSupports::restore(
+            vec![SupportPoint::new(Vec3::new(10.0, 10.0, 20.0))],
+            Region::default(),
+            Region::default(),
+            Vec::new(),
+        );
+        let model = nothing();
+        supports.stand(
+            &[],
+            &model,
+            &model,
+            &Bvh::build(&model),
+            Transform::default(),
+            &[profile()],
+        );
+        assert_eq!(supports.standing(), 1);
+    }
+
+    #[test]
+    fn trees_grown_for_points_since_changed_are_turned_away() {
+        let mut supports = ModelSupports::default();
+        supports.add(Vec3::new(10.0, 10.0, 20.0), Transform::default(), 0);
+        let table = [profile()];
+        let growth = supports
+            .growth(Transform::default(), &table)
+            .expect("a new point has nothing grown for it");
+        supports.add(Vec3::new(20.0, 10.0, 20.0), Transform::default(), 0);
+        let model = nothing();
+        let bvh = Bvh::build(&model);
+
+        assert!(!supports.take_grown(growth.grow(&model, &model, &bvh)));
+        assert!(supports.needs_growing(Transform::default(), &table));
     }
 
     #[test]

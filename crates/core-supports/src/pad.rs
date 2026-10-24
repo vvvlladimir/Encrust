@@ -10,7 +10,7 @@ pub const PAD_SECTORS: usize = 16;
 
 /// How many heights through the pad the model is looked for at: its sole, its middle and
 /// its top, since a part standing on the plate may lean in over it.
-const PAD_HEIGHTS: u32 = 3;
+const PAD_HEIGHTS: usize = 3;
 
 /// The least a pad may be cut back to beyond what stands in it, mm, so the cut never
 /// bares the flare or the trunk.
@@ -91,9 +91,10 @@ pub(crate) fn room_round(
     profile: &SupportProfile,
 ) -> [Scalar; PAD_SECTORS] {
     let rim_mm = profile.base_radius_mm();
+    let sole = Sole::at(placed, base, profile);
     std::array::from_fn(|sector| {
         looks_of(sector)
-            .map(|angle| room_towards(placed, base, angle, profile))
+            .map(|angle| sole.room_towards(placed, angle, profile))
             .fold(rim_mm, Scalar::min)
     })
 }
@@ -102,9 +103,10 @@ pub(crate) fn room_round(
 /// the way [`room_round`] is and stopping at the first look that finds the model.
 pub(crate) fn pad_clear(placed: &Placed, base: Vec3, profile: &SupportProfile) -> bool {
     let rim_mm = profile.base_radius_mm();
+    let sole = Sole::at(placed, base, profile);
     (0..PAD_SECTORS)
         .flat_map(looks_of)
-        .all(|angle| room_towards(placed, base, angle, profile) >= rim_mm)
+        .all(|angle| sole.room_towards(placed, angle, profile) >= rim_mm)
 }
 
 /// The directions sector `sector` is looked along, radians from +x: its two edges and its
@@ -115,28 +117,59 @@ fn looks_of(sector: usize) -> impl Iterator<Item = Scalar> {
     [middle - half, middle, middle + half].into_iter()
 }
 
-/// How far a pad standing at `base` reaches towards `angle` before it comes within its
-/// clearance of the model at any height through it, capped at its radius, mm.
+/// A pad standing at `base`, looked out from at each of [`PAD_HEIGHTS`] through it.
 ///
-/// Looked for out from the pad's middle, so a toe standing inside the pad is found
-/// wherever it is.
-fn room_towards(placed: &Placed, base: Vec3, angle: Scalar, profile: &SupportProfile) -> Scalar {
-    let rim_mm = profile.base_radius_mm();
-    let height_mm = profile.base_height_mm();
-    let out = Vec2::new(angle.cos(), angle.sin()).extend(0.0);
-    (0..PAD_HEIGHTS)
-        .map(|step| {
-            let up_mm = SURFACE_EPSILON_MM
-                + (height_mm - SURFACE_EPSILON_MM) * step as Scalar / (PAD_HEIGHTS - 1) as Scalar;
-            let ray = Ray::new(base + Vec3::Z * up_mm, out);
-            match placed.raycast(&ray) {
-                // Set off inside the model: there is no pad here at all.
-                Some(hit) if hit.normal.dot(out) > 0.0 => 0.0,
-                Some(hit) => hit.distance - profile.clearance_mm,
-                None => rim_mm,
-            }
-        })
-        .fold(rim_mm, Scalar::min)
+/// Every look reaches no further than the pad does, which skips the rest of the model;
+/// whether a height sets off inside the model is asked once, along a ray of any length.
+struct Sole {
+    base: Vec3,
+    up_mm: [Scalar; PAD_HEIGHTS],
+    inside: [bool; PAD_HEIGHTS],
+}
+
+impl Sole {
+    fn at(placed: &Placed, base: Vec3, profile: &SupportProfile) -> Self {
+        let height_mm = profile.base_height_mm();
+        let up_mm = std::array::from_fn(|step| {
+            SURFACE_EPSILON_MM
+                + (height_mm - SURFACE_EPSILON_MM) * step as Scalar / (PAD_HEIGHTS - 1) as Scalar
+        });
+        let inside = up_mm.map(|up_mm| {
+            placed
+                .raycast(&Ray::new(base + Vec3::Z * up_mm, Vec3::X))
+                .is_some_and(|hit| hit.normal.dot(Vec3::X) > 0.0)
+        });
+        Self {
+            base,
+            up_mm,
+            inside,
+        }
+    }
+
+    /// How far the pad reaches towards `angle` before it comes within its clearance of
+    /// the model at any height through it, capped at its radius, mm.
+    ///
+    /// Looked for out from the pad's middle, so a toe standing inside the pad is found
+    /// wherever it is.
+    fn room_towards(&self, placed: &Placed, angle: Scalar, profile: &SupportProfile) -> Scalar {
+        let rim_mm = profile.base_radius_mm();
+        let out = Vec2::new(angle.cos(), angle.sin()).extend(0.0);
+        let reach_mm = rim_mm + profile.clearance_mm;
+        self.up_mm
+            .iter()
+            .zip(self.inside)
+            .map(|(up_mm, inside)| {
+                let ray = Ray::new(self.base + Vec3::Z * *up_mm, out);
+                match placed.raycast_within(&ray, reach_mm) {
+                    // Set off inside the model: there is no pad here at all.
+                    Some(hit) if hit.normal.dot(out) > 0.0 => 0.0,
+                    Some(hit) => hit.distance - profile.clearance_mm,
+                    None if inside => 0.0,
+                    None => rim_mm,
+                }
+            })
+            .fold(rim_mm, Scalar::min)
+    }
 }
 
 #[cfg(test)]
@@ -149,6 +182,20 @@ mod tests {
         PadCut {
             reach_mm: [reach_mm; PAD_SECTORS],
         }
+    }
+
+    #[test]
+    fn a_pad_inside_a_part_wider_than_it_has_no_room() {
+        // A block 40 mm across standing on the plate round a pad 8 mm across: every wall
+        // is further off than the pad reaches, and the pad still stands in solid resin.
+        let model = box_mesh(Vec3::new(-20.0, -20.0, 0.0), Vec3::new(20.0, 20.0, 5.0));
+        let bvh = Bvh::build(&model);
+        let placed = Placed::new(&model, &bvh, Transform::default());
+        assert!(!pad_clear(&placed, Vec3::ZERO, &profile()));
+        assert_eq!(
+            room_round(&placed, Vec3::ZERO, &profile()),
+            [0.0; PAD_SECTORS]
+        );
     }
 
     #[test]

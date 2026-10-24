@@ -49,7 +49,7 @@ fn ball(radius: Scalar, lift: Scalar, segments: u32, rings: u32) -> Mesh {
 }
 
 /// The tips automatic placement puts under `model`, already dropped onto their landings.
-fn tips(model: &Mesh, bvh: &Bvh, profile: &SupportProfile) -> Vec<core_supports::Column> {
+fn tips_under(model: &Mesh, bvh: &Bvh, profile: &SupportProfile) -> Vec<core_supports::Column> {
     let sliced = PlaneSliceEngine
         .slice(
             model,
@@ -86,13 +86,28 @@ fn branching(c: &mut Criterion) {
 
     let model = ball(20.0, 10.0, 256, 128);
     let bvh = Bvh::build(&model);
-    let tips = tips(&model, &bvh, &profile);
+    let tips = tips_under(&model, &bvh, &profile);
 
     c.bench_function("grow/40 mm ball, lifted", |b| {
         b.iter(|| {
             grow(
                 &tips,
                 &Placed::new(&model, &bvh, Transform::default()),
+                Profiles::single(&profile),
+            )
+        });
+    });
+
+    // Standing on the plate, the outer pads stand beside it, so each looks round at a
+    // part rather than at an empty plate.
+    let seated = ball(20.0, 0.0, 256, 128);
+    let seated_bvh = Bvh::build(&seated);
+    let seated_tips = tips_under(&seated, &seated_bvh, &profile);
+    c.bench_function("grow/40 mm ball, on the plate", |b| {
+        b.iter(|| {
+            grow(
+                &seated_tips,
+                &Placed::new(&seated, &seated_bvh, Transform::default()),
                 Profiles::single(&profile),
             )
         });

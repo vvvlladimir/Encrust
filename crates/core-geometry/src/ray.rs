@@ -168,12 +168,24 @@ pub fn raycast_placed_by(
     inverse: Mat4,
     ray: &Ray,
 ) -> Option<PlacedHit> {
-    let local = Ray::new(
-        inverse.transform_point3(ray.origin),
-        inverse.transform_vector3(ray.direction),
-    );
+    raycast_placed_within(mesh, bvh, matrix, inverse, ray, Scalar::INFINITY)
+}
 
-    let hit = bvh.raycast(&local)?;
+/// [`raycast_placed_by`] looking no further than `max_distance` along `ray`, in the
+/// ray's own space.
+pub fn raycast_placed_within(
+    mesh: &Mesh,
+    bvh: &Bvh,
+    matrix: Mat4,
+    inverse: Mat4,
+    ray: &Ray,
+    max_distance: Scalar,
+) -> Option<PlacedHit> {
+    let along = inverse.transform_vector3(ray.direction);
+    let local = Ray::new(inverse.transform_point3(ray.origin), along);
+
+    // A unit step of the ray is `along` long in the mesh's own space.
+    let hit = bvh.raycast_within(&local, max_distance * along.length())?;
     let point = matrix.transform_point3(local.at(hit.t));
 
     // A normal does not survive a non-uniform scale under the model matrix, but it does
@@ -335,6 +347,26 @@ mod tests {
             hit.normal.abs_diff_eq(Vec3::Z, 1e-5),
             "the top face faces up"
         );
+    }
+
+    #[test]
+    fn a_look_stops_at_its_length_in_the_rays_own_space() {
+        // Doubled, the cube's top is at z = 2, three millimetres under an eye at z = 5;
+        // in the cube's own space that is a millimetre and a half.
+        let mesh = unit_cube();
+        let bvh = Bvh::build(&mesh);
+        let matrix = Transform {
+            scale: Vec3::splat(2.0),
+            ..Transform::default()
+        }
+        .to_matrix();
+        let ray = Ray::new(Vec3::new(1.0, 1.0, 5.0), -Vec3::Z);
+        let look =
+            |max_mm| raycast_placed_within(&mesh, &bvh, matrix, matrix.inverse(), &ray, max_mm);
+
+        assert!(look(2.9).is_none(), "the top is 3 mm away");
+        let hit = look(3.1).expect("the top is within 3.1 mm");
+        assert!((hit.distance - 3.0).abs() < 1e-5, "5 mm up, top at z = 2");
     }
 
     #[test]

@@ -3,6 +3,7 @@ use crate::cut::CutTool;
 use crate::drain::DrainTool;
 use crate::drilling::Drilling;
 use crate::gizmo::TransformGizmo;
+use crate::growth::SupportGrowth;
 use crate::hollow::HollowTool;
 use crate::import::Imports;
 use crate::measure::Measure;
@@ -38,6 +39,7 @@ pub struct Doc {
     pub repairs: Repairs,
     pub drilling: Drilling,
     pub surfaces: SupportSurfaces,
+    pub growth: SupportGrowth,
 }
 
 /// How the plate is looked at: none of it changes what is printed.

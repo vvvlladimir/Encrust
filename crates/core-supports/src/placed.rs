@@ -1,4 +1,7 @@
-use core_geometry::{Bvh, Mat4, Mesh, PlacedHit, Ray, Transform, Vec3, raycast_placed_by};
+use core_geometry::{
+    Bvh, Mat4, Mesh, PlacedHit, Ray, Scalar, Transform, Vec3, raycast_placed_by,
+    raycast_placed_within,
+};
 
 use crate::region::Blocked;
 
@@ -39,6 +42,12 @@ impl<'a> Placed<'a> {
     pub fn raycast(&self, ray: &Ray) -> Option<PlacedHit> {
         let (matrix, inverse) = self.matrices?;
         raycast_placed_by(self.model, self.bvh, matrix, inverse, ray)
+    }
+
+    /// [`Self::raycast`] looking no further than `max_mm` along the ray.
+    pub fn raycast_within(&self, ray: &Ray, max_mm: Scalar) -> Option<PlacedHit> {
+        let (matrix, inverse) = self.matrices?;
+        raycast_placed_within(self.model, self.bvh, matrix, inverse, ray, max_mm)
     }
 
     /// The same model with `blocked` forbidden to supports.

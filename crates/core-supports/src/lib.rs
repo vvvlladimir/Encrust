@@ -49,7 +49,7 @@ pub use group::Profiles;
 pub use inline::{INLINE_SPACING_MM, inline};
 pub use low::low_points;
 pub use mesher::{FOOT_BEVEL, FOOT_TAPER, mesh_groups, mesh_trees};
-pub use model::ModelSupports;
+pub use model::{Grown, Growth, ModelSupports};
 pub use need::{Need, Reason};
 pub use pad::{PAD_SECTORS, PadCut};
 pub use pick::{Grab, Part, grab, grab_along, support_under};

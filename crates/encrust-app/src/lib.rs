@@ -12,6 +12,7 @@ mod drilling;
 mod exchange;
 mod files;
 mod gizmo;
+mod growth;
 mod hollow;
 mod i18n;
 mod import;

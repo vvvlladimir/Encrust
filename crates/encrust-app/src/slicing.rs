@@ -409,6 +409,9 @@ impl Slicing {
         if !scene.has_printable(scene.active_plate()) {
             return Some(tr!("slicing-nothing-visible"));
         }
+        if supports_pending(scene, scene.active_plate()) {
+            return Some(tr!("slicing-supports-growing"));
+        }
         if !self.exposure.is_empty() && !self.printer_reads_per_layer() {
             return Some(tr!("layers-bands-refused"));
         }
@@ -429,6 +432,9 @@ impl Slicing {
         let models = models_of(scene, plate);
         if models.is_empty() {
             bail!(tr!("slicing-nothing-visible-error"));
+        }
+        if supports_pending(scene, plate) {
+            bail!(tr!("slicing-supports-growing-error"));
         }
         // The output name has the last word on the container, and only the profile knows
         // which revision of it the machine reads; see ADR 0047.
@@ -576,6 +582,14 @@ impl Slicing {
 /// Where one plate of a whole-project run is written: the name the user typed with the
 /// plate's own name on the end, so a project of six plates comes out named rather than
 /// numbered.
+/// Whether a model of `plate` is still waiting on its supports, which a stack cut now
+/// would leave out.
+fn supports_pending(scene: &Scene, plate: u32) -> bool {
+    scene
+        .printable(plate)
+        .any(crate::scene::SceneObject::supports_pending)
+}
+
 fn per_plate_path(output: &Path, scene: &Scene, plate: u32) -> PathBuf {
     let name = scene.plates()[plate as usize]
         .replace(' ', "-")
@@ -842,6 +856,23 @@ z = 10.0
         let mut slicing = Slicing::default();
         let scene = scene_with_a_model();
         assert!(slicing.blocker(&scene).is_some());
+        assert!(slicing.start(&scene, 0, PathBuf::from("out.goo")).is_err());
+        assert!(slicing.job.is_none(), "a rejected start runs nothing");
+    }
+
+    #[test]
+    fn slicing_while_the_supports_are_growing_is_blocked() {
+        let mut slicing = with_printer();
+        let mut scene = scene_with_a_model();
+        let object = &mut scene.objects_mut()[0];
+        object
+            .supports
+            .add(Vec3::new(0.2, 0.2, 0.0), object.transform, 0);
+
+        assert_eq!(
+            slicing.blocker(&scene),
+            Some(tr!("slicing-supports-growing"))
+        );
         assert!(slicing.start(&scene, 0, PathBuf::from("out.goo")).is_err());
         assert!(slicing.job.is_none(), "a rejected start runs nothing");
     }
