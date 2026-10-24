@@ -317,8 +317,8 @@ fn strut(
     }
 }
 
-/// Whether a strut `body_mm` wide ending at node `joint` ends inside the tube leaving it: that
-/// tube starts in a dome no narrower and runs on twice the strut's width, so a ball holds the end.
+/// Whether a strut of radius `body_mm` ending at node `joint` ends inside the tube leaving it:
+/// that tube starts in a dome no narrower and runs on twice the strut's width (ADR 0352).
 fn buried(
     tree: &SupportTree,
     joint: usize,
@@ -332,7 +332,7 @@ fn buried(
         Some(parent) => node.position.distance(nodes[parent].position),
         None => node.position.distance(trunk_bottom(tree, profile)),
     };
-    style.body_radius_mm(node.radius_mm, profile) >= body_mm && below >= 2.0 * body_mm
+    style.body_radius_mm(node.radius_mm, profile) >= body_mm && below >= 4.0 * body_mm
 }
 
 /// The tube under the root: a cone from the joint's own width out to the base its height

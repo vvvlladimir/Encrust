@@ -727,3 +727,18 @@ fn a_tip_under_a_rib_narrower_than_its_contact_keeps_its_place() {
         "nowhere on a 0.3 mm rib holds the whole tip, so the contact stays at {contact}, got {kept}"
     );
 }
+
+#[test]
+fn a_face_level_but_for_float_noise_keeps_its_normal_as_a_level_one_does() {
+    for normal in [
+        Vec3::Z,
+        Vec3::new(1e-7, 0.0, 1.0).normalize(),
+        Vec3::new(0.0, -1e-6, 1.0).normalize(),
+    ] {
+        let leaned = leaned(normal);
+        assert!(
+            leaned.abs_diff_eq(normal, 1e-6),
+            "{normal} looks straight up and has no way down, got {leaned}"
+        );
+    }
+}

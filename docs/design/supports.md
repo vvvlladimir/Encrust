@@ -27,7 +27,8 @@ nearest the contact and puts the **neck** — the far end of the `[top]` segment
 over the plate (ADR 0125). A normal more than 45 degrees off straight down is turned back to
 45, by at most 33. Behind the tip's half ball a turned head runs at the contact's width for
 `r · tan θ` before it widens, so a face cut slantwise meets only the ball and that pin: the
-mark reaches `r / cos θ` on one side, 9 per cent wider at most; only what is under the neck
+mark reaches `r / cos θ` on one side, 9 per cent wider at most. The pin is at most
+`r · tan 33°`: 0.32 mm on Heavy's 1 mm contact, 0.19 mm on Medium's; only what is under the neck
 leans and bends (ADR 0346, 0350). A contact off the
 surface sends it straight down. A knee
 and the strut into a thicker support are held to 45 degrees, whatever the branch
@@ -441,7 +442,7 @@ or above it, the meeting point is the lower front itself and only the higher one
 it comes down onto that neck or joint, so a tip joins the trunk beside it rather than one
 at its own height further off (ADR 0347). A pair refused for its bodies or its
 landing is offered again with both fronts dropped `DROP_STEP_MM` (1 mm) straight down
-first, and again lower, until the meeting point reaches the plate: what blocks a strut is
+first, then twice as far each time, until the meeting point reaches the plate: what blocks a strut is
 mostly the part right beside the tips, and dropping past it is how two columns under a
 crowded part still share a trunk (ADR 0347). The joint
 keeps the branches' own width; only the trunk under the root widens, as a cone from that
@@ -479,8 +480,8 @@ standing on nothing at harvest bends a **knee**: eight directions and a reach ev
 `ESCAPE_STEP_MM` (1 mm), shortest first, at the branch angle and no further than the merge
 distance or than the height left under it allows (ADR 0078, 0347). A contact with no head
 is not bent at all: it is held by a small pillar or by nothing (ADR 0348). From a diameter
-out along its normal, the pillar looks along the normal, straight down, and 16 ways round at
-15, 30 and 45 degrees for a face of the part looking back at it, no steeper than 75 degrees,
+out along its normal, the pillar casts 50 rays — along the normal, straight down, and 16
+ways round at 15, 30 and 45 degrees off straight down — for a face of the part looking back at it, no steeper than 75 degrees,
 and of the sound runs whose struts lean no more than 45 degrees takes the one that turns
 least at its joints, then the shortest. The same search
 is the last resort of any tip that cannot stand, before a strut straight down, and of a tip

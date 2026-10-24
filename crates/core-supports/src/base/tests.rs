@@ -438,3 +438,38 @@ fn a_trunk_too_short_for_the_start_height_is_not_tied() {
     let trees = standing(&[(10.0, 10.0), (18.0, 10.0)], 3.0, &profile);
     assert!(tied(&trees, &Mesh::default(), &profile).is_empty());
 }
+
+#[test]
+fn trunks_are_paired_as_the_gabriel_graph_of_every_pair_would_pair_them() {
+    let profile = with_bracing();
+    // A scatter on a 7 mm lattice, jittered so no three lie on one line.
+    let places: Vec<(Scalar, Scalar)> = (0..36)
+        .map(|index| {
+            let (column, row) = ((index % 6) as Scalar, (index / 6) as Scalar);
+            let jitter = ((index * 7919) % 13) as Scalar / 10.0;
+            (
+                10.0 + 7.0 * column + jitter,
+                10.0 + 7.0 * row - jitter / 2.0,
+            )
+        })
+        .collect();
+    let trees = standing(&places, 30.0, &profile);
+    assert_eq!(trees.len(), places.len(), "branching is off");
+
+    let at = |index: usize| trees[index].root().position.truncate();
+    let mut every = Vec::new();
+    for one in 0..trees.len() {
+        for two in one + 1..trees.len() {
+            let (here, there) = (at(one), at(two));
+            let empty = !(0..trees.len()).any(|other| {
+                let point = at(other);
+                (point - here).dot(point - there) < -SAME_PLACE_MM
+            });
+            if (there - here).length() <= profile.bracing.max_spacing_mm && empty {
+                every.push((one, two));
+            }
+        }
+    }
+    assert!(!every.is_empty());
+    assert_eq!(neighbours(&trees, Profiles::single(&profile)), every);
+}

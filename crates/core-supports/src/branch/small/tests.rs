@@ -159,3 +159,35 @@ fn a_small_pillar_over_a_slope_is_one_straight_strut_meeting_it_nearly_square() 
         );
     }
 }
+
+#[test]
+fn two_nodes_in_one_place_on_a_straight_run_are_no_turn() {
+    let node = |z: Scalar, parent: Option<usize>, point: Option<usize>| crate::TreeNode {
+        position: Vec3::new(0.0, 0.0, z),
+        radius_mm: 0.2,
+        parent,
+        point,
+        head: None,
+    };
+    let landing = Landing {
+        base: Vec3::ZERO,
+        on_model: false,
+        pad_offset: core_geometry::Vec2::ZERO,
+        pad_cut: None,
+        on_support: false,
+    };
+    let tree = SupportTree::new(
+        vec![
+            node(10.0, Some(1), Some(0)),
+            node(10.0, Some(2), None),
+            node(5.0, None, None),
+        ],
+        2,
+        landing,
+    );
+    assert!(
+        turn_rad(&tree) < 1e-6,
+        "straight down, got {}",
+        turn_rad(&tree)
+    );
+}

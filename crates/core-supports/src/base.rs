@@ -1,5 +1,5 @@
 use crate::placed::Placed;
-use core_geometry::{Mesh, Scalar, Vec2, Vec3, convex_hull};
+use core_geometry::{Buckets, Mesh, Scalar, Vec2, Vec3, convex_hull};
 use printer_profiles::{BracePattern, Bracing, SupportProfile};
 use rayon::prelude::*;
 
@@ -213,32 +213,47 @@ fn lead_of<'a>(
 /// The pairs of trunks worth tying: the Gabriel graph of the trunks tall enough to brace, cut at
 /// the shorter span their groups allow; planar and keeps nearest neighbours (ADR 0240).
 fn neighbours(trees: &[SupportTree], profiles: Profiles) -> Vec<(usize, usize)> {
-    let own = |tree: &SupportTree| profiles.of(tree.group());
-    let tall: Vec<usize> = (0..trees.len())
-        .filter(|&index| braceable(&trees[index], own(&trees[index])))
-        .collect();
+    let reach = |index: usize| profiles.of(trees[index].group()).bracing.max_spacing_mm;
     let at = |index: usize| trees[index].root().position.truncate();
+    let tall: Vec<usize> = (0..trees.len())
+        .filter(|&index| braceable(&trees[index], profiles.of(trees[index].group())))
+        .collect();
+    let widest = tall
+        .iter()
+        .map(|&index| reach(index))
+        .fold(0.0, Scalar::max);
+    if widest <= 0.0 {
+        return Vec::new();
+    }
+    let mut buckets = Buckets::new(widest);
+    for &index in &tall {
+        buckets.insert(at(index), index);
+    }
 
-    let mut pairs = Vec::new();
-    for (place, &one) in tall.iter().enumerate() {
-        for &two in &tall[place + 1..] {
-            let (here, there) = (at(one), at(two));
-            let reach = own(&trees[one])
-                .bracing
-                .max_spacing_mm
-                .min(own(&trees[two]).bracing.max_spacing_mm);
-            if (there - here).length() > reach {
-                continue;
-            }
-            let between = tall.iter().any(|&other| {
+    // Nothing stands inside the circle a pair spans: within half the pair's span of its middle.
+    let gabriel = |one: usize, two: usize| {
+        let (here, there) = (at(one), at(two));
+        let (middle, half) = (
+            (here + there) / 2.0,
+            Vec2::splat((there - here).length() / 2.0),
+        );
+        (there - here).length() <= reach(one).min(reach(two))
+            && !buckets.within(middle - half, middle + half).any(|&other| {
                 let point = at(other);
                 (point - here).dot(point - there) < -SAME_PLACE_MM
-            });
-            if !between {
-                pairs.push((one, two));
-            }
-        }
-    }
+            })
+    };
+    let mut pairs: Vec<(usize, usize)> = tall
+        .par_iter()
+        .flat_map_iter(|&one| {
+            let span = Vec2::splat(widest);
+            buckets
+                .within(at(one) - span, at(one) + span)
+                .filter(move |&&two| two > one && gabriel(one, two))
+                .map(move |&two| (one, two))
+        })
+        .collect();
+    pairs.sort_unstable();
     pairs
 }
 

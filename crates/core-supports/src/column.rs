@@ -425,18 +425,21 @@ pub(crate) fn pin_mm(contact_radius_mm: Scalar, axis: Vec3, face: Vec3) -> Scala
     contact_radius_mm * (1.0 - cos * cos).max(0.0).sqrt() / cos
 }
 
+/// How far from straight up, as the sine, a unit normal may be and still be taken as level.
+const LEVEL_NOISE: Scalar = 1e-4;
+
 /// `normal`, or past [`STEEPEST_SQUARE_HEAD_DEG`] off straight down turned back towards it by at
 /// most [`MAX_HEAD_LEAN_DEG`]; a normal straight up has no way down and is kept.
 fn leaned(normal: Vec3) -> Vec3 {
     let down = -Vec3::Z;
     let off = normal.dot(down).clamp(-1.0, 1.0).acos();
     let lean = (off - STEEPEST_SQUARE_HEAD_DEG.to_radians()).min(MAX_HEAD_LEAN_DEG.to_radians());
-    if lean <= 0.0 {
+    let across = down - normal * normal.dot(down);
+    // Within float noise of straight up, the way down is the noise's, not the face's.
+    if lean <= 0.0 || across.length() < LEVEL_NOISE {
         return normal;
     }
-    let Some(across) = (down - normal * normal.dot(down)).try_normalize() else {
-        return normal;
-    };
+    let across = across.normalize();
     normal * lean.cos() + across * lean.sin()
 }
 

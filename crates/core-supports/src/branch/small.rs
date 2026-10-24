@@ -68,6 +68,9 @@ pub(super) fn small_pillar(
         .find(|tree| sound(tree, profiles, placed))
 }
 
+/// How near two nodes of a path are taken as one, mm.
+const SAME_POINT_MM: Scalar = 1e-5;
+
 /// How much a one-tip tree turns on its way from the contact to where it stands: the sum of
 /// the angles at its joints, radians; a straight strut turns none.
 fn turn_rad(tree: &SupportTree) -> Scalar {
@@ -83,6 +86,8 @@ fn turn_rad(tree: &SupportTree) -> Scalar {
         at = nodes[here].parent;
     }
     path.push(tree.landing().base);
+    // Two nodes in one place are one joint, not a turn of a right angle.
+    path.dedup_by(|next, last| next.distance_squared(*last) < SAME_POINT_MM * SAME_POINT_MM);
     path.windows(3)
         .map(|three| {
             let (into, out) = (three[1] - three[0], three[2] - three[1]);
@@ -106,6 +111,12 @@ pub(super) fn tidy_small_pillars(forest: &mut [SupportTree], placed: &Placed, pr
         let squared = squared(tree, placed, profile)
             .filter(|squared| squared == tree || sound(squared, profiles, placed))
             .unwrap_or_else(|| tree.clone());
+        let turned = turn_rad(&squared);
+        // Nothing turns less than none, so a pillar this straight is not searched for again.
+        if turned <= STRAIGHTER_RAD {
+            *tree = squared;
+            return;
+        }
         let tip = tree.nodes().iter().find(|node| node.is_leaf());
         let straighter = tip
             .and_then(|tip| {
@@ -113,7 +124,7 @@ pub(super) fn tidy_small_pillars(forest: &mut [SupportTree], placed: &Placed, pr
                 let group = tip.head.unwrap_or(tree.group());
                 small_pillar(tip.position, point, group, placed, profiles)
             })
-            .filter(|found| turn_rad(found) + STRAIGHTER_RAD < turn_rad(&squared));
+            .filter(|found| turn_rad(found) + STRAIGHTER_RAD < turned);
         *tree = straighter.unwrap_or(squared);
     });
 }

@@ -638,11 +638,16 @@ fn nothing_of_a_plain_column_is_wider_than_its_pillar() {
     );
 }
 
-#[test]
-fn a_strut_over_a_trunk_too_short_to_hold_its_end_keeps_its_dome() {
+/// How far past its joint a vertical strut of the pillar's width ends over a trunk
+/// `trunk_radii` of its radii long, or `None` for no end.
+fn strut_end_past_joint(trunk_radii: Scalar) -> Option<Scalar> {
     let profile = profile();
     let radius_mm = profile.pillar_radius_mm();
-    let joint = Vec3::new(10.0, 10.0, 0.5 * radius_mm + profile.footing_height_mm());
+    let joint = Vec3::new(
+        10.0,
+        10.0,
+        trunk_radii * radius_mm + profile.footing_height_mm(),
+    );
     let nodes = vec![
         TreeNode {
             position: joint + Vec3::new(0.0, 0.0, 3.0),
@@ -669,11 +674,28 @@ fn a_strut_over_a_trunk_too_short_to_hold_its_end_keeps_its_dome() {
     let tree = SupportTree::new(nodes, 1, landing);
     let tube = strut(&tree, 0, 1, &profile, Style::of(&tree, &profile));
 
-    let past = tube.tail.map(|tail| (tail - joint).dot(tube.direction));
+    tube.tail.map(|tail| (tail - joint).dot(tube.direction))
+}
+
+#[test]
+fn a_strut_over_a_trunk_too_short_to_hold_its_end_keeps_its_dome() {
+    let radius_mm = profile().pillar_radius_mm();
+    for trunk_radii in [0.5, 3.0] {
+        let past = strut_end_past_joint(trunk_radii);
+        assert!(
+            past.is_some_and(|past| (past - radius_mm).abs() < 1e-4),
+            "a trunk {trunk_radii} radii long is shorter than twice the strut's width, so its end \
+             is rounded {radius_mm} mm past the joint, got {past:?}"
+        );
+    }
+}
+
+#[test]
+fn a_strut_over_a_trunk_twice_its_width_ends_flat_on_the_joint() {
+    let past = strut_end_past_joint(4.5);
     assert!(
-        past.is_some_and(|past| (past - radius_mm).abs() < 1e-4),
-        "a trunk half a strut's width long cannot hold its end, so it is rounded {radius_mm} mm \
-         past the joint, got {past:?}"
+        past.is_some_and(|past| past.abs() < 1e-4),
+        "the end is buried, got {past:?}"
     );
 }
 

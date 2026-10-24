@@ -10,6 +10,7 @@ use crate::group::Profiles;
 use crate::mesher::trunk_axis_at;
 use crate::placed::Placed;
 use crate::tree::{SupportTree, TreeNode};
+use rayon::prelude::*;
 
 /// How far either buttress of a pair turns off the way out from the part, degrees: apart
 /// enough to hold the trunk two ways, near enough to be braced to each other.
@@ -40,9 +41,9 @@ pub(crate) fn buttresses(
         .unwrap_or_default()
         .truncate();
     trees
-        .iter()
+        .par_iter()
         .zip(held)
-        .flat_map(|(tree, held)| {
+        .flat_map_iter(|(tree, held)| {
             let profile = profiles.of(tree.group());
             let out = (tree.root().position.truncate() - middle)
                 .try_normalize()

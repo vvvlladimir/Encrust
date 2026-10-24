@@ -13,9 +13,15 @@ use rayon::prelude::*;
 use std::cmp::Ordering;
 use std::collections::BinaryHeap;
 
-/// How far both fronts of a refused merge drop straight down before a retry, mm: what blocks a
-/// strut is mostly just under the tips (ADR 0347).
+/// How far both fronts of a refused merge first drop straight down before a retry, mm, each
+/// retry twice the last: what blocks a strut is mostly just under the tips (ADR 0347).
 pub(super) const DROP_STEP_MM: Scalar = 1.0;
+
+/// The drop a refused merge at `drop_mm` is tried again at: doubling, so a pair standing
+/// `h` mm up is retried about log₂ h times before it meets the plate.
+fn lower(drop_mm: Scalar) -> Scalar {
+    (2.0 * drop_mm).max(DROP_STEP_MM)
+}
 
 /// Two fronts that could merge, or a front and the carrier it could run into, and how
 /// high up they would meet.
@@ -110,8 +116,12 @@ impl Forest<'_> {
                 continue;
             }
             if !self.accepted(&candidate, &mut heap, &mut judged, placed) {
-                let lower = candidate.drop_mm + DROP_STEP_MM;
-                self.offer(&mut heap, candidate.a, candidate.b, lower);
+                self.offer(
+                    &mut heap,
+                    candidate.a,
+                    candidate.b,
+                    lower(candidate.drop_mm),
+                );
                 continue;
             }
 
@@ -375,5 +385,18 @@ impl Forest<'_> {
             return None;
         }
         escape(&front, placed, profile, MAX_LANDING_SLOPE_DEG).map(|(knee, _)| knee)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn a_pair_refused_80_mm_up_is_retried_eight_times_before_the_plate() {
+        let drops: Vec<Scalar> = std::iter::successors(Some(0.0), |drop| Some(lower(*drop)))
+            .take_while(|drop| *drop < 80.0)
+            .collect();
+        assert_eq!(drops, [0.0, 1.0, 2.0, 4.0, 8.0, 16.0, 32.0, 64.0]);
     }
 }

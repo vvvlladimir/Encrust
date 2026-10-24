@@ -74,3 +74,25 @@ fn a_face_with_a_corner_twice_still_points_every_index_at_a_vertex() {
         "no index runs past the corners laid out"
     );
 }
+
+#[test]
+fn a_face_of_no_area_neither_lays_a_corner_nor_bends_one() {
+    let cube = cuboid(Vec3::ZERO, Vec3::ONE);
+    let mut pinched = cube.clone();
+    pinched.faces.push([0, 0, 1]);
+    let (plain, _) = smooth_vertices(&cube, 0..cube.faces.len());
+    let (vertices, _) = smooth_vertices(&pinched, 0..pinched.faces.len());
+
+    assert_eq!(
+        vertices.len(),
+        plain.len(),
+        "no corner laid for a face of no area"
+    );
+    assert!(
+        vertices
+            .iter()
+            .zip(&plain)
+            .all(|(one, other)| one.normal == other.normal),
+        "and none of the cube's corners leans"
+    );
+}

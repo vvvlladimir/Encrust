@@ -1,7 +1,5 @@
-use std::collections::HashMap;
-
 use core_geometry::glam::IVec2;
-use core_geometry::{Scalar, Vec3};
+use core_geometry::{FastMap, Scalar, Vec3};
 use printer_profiles::Grid;
 
 use super::{Forest, Front, SAME_PLACE_MM};
@@ -9,6 +7,7 @@ use crate::clear::{Beam, clear};
 use crate::column::{MAX_LEAN_PER_DROP, landing};
 use crate::placed::Placed;
 use crate::tree::TreeNode;
+use rayon::prelude::*;
 
 /// How many rings of nodes round a tip are tried for its trunk: the cell it stands in and
 /// the one round that, past which the strut to a node is longer than a merge would be.
@@ -28,14 +27,17 @@ impl Forest<'_> {
         let spacing_mm = grid
             .spacing_mm
             .clamp(*Grid::SPACING_MM.start(), *Grid::SPACING_MM.end());
-        let mut at_node: HashMap<IVec2, Vec<Hung>> = HashMap::new();
-        for front in 0..self.fronts.len() {
-            if !self.fronts[front].alive {
-                continue;
-            }
-            if let Some((node, meet)) = self.node_for(front, placed, spacing_mm) {
-                at_node.entry(node).or_default().push(Hung { front, meet });
-            }
+        let found: Vec<(IVec2, Hung)> = (0..self.fronts.len())
+            .into_par_iter()
+            .filter(|&front| self.fronts[front].alive)
+            .filter_map(|front| {
+                let (node, meet) = self.node_for(front, placed, spacing_mm)?;
+                Some((node, Hung { front, meet }))
+            })
+            .collect();
+        let mut at_node: FastMap<IVec2, Vec<Hung>> = FastMap::default();
+        for (node, hung) in found {
+            at_node.entry(node).or_default().push(hung);
         }
         // In node order, so a run is repeatable whatever the map's order.
         let mut nodes: Vec<(IVec2, Vec<Hung>)> = at_node.into_iter().collect();

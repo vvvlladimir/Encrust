@@ -1,5 +1,5 @@
 use core_geometry::glam::IVec2;
-use core_geometry::{FastMap, FastSet, Region, Scalar, Vec2, Vec3};
+use core_geometry::{Buckets, FastSet, Region, Scalar, Vec2, Vec3};
 
 use super::{centre_of, lowest_surface};
 use crate::placed::Placed;
@@ -114,25 +114,18 @@ impl Footprint {
             .map(|(cell, _)| cell)
             .collect();
         cells.sort_unstable_by_key(|cell| scramble(*cell));
-        let mut taken: FastMap<[i32; 2], Vec<Vec2>> = FastMap::default();
+        let mut taken = Buckets::new(spacing_mm);
         let mut points = Vec::new();
         for cell in cells {
             let Some(point) = self.point(cell) else {
                 continue;
             };
             let flat = point.truncate();
-            let bucket = (flat / spacing_mm).floor().as_ivec2();
-            let crowded = (-1..=1).any(|x| {
-                (-1..=1).any(|y| {
-                    taken
-                        .get(&(bucket + IVec2::new(x, y)).to_array())
-                        .is_some_and(|near| {
-                            near.iter().any(|other| other.distance(flat) < spacing_mm)
-                        })
-                })
-            });
+            let crowded = taken
+                .around(flat)
+                .any(|other: &Vec2| other.distance(flat) < spacing_mm);
             if !crowded {
-                taken.entry(bucket.to_array()).or_default().push(flat);
+                taken.insert(flat, flat);
                 points.push(point);
             }
         }

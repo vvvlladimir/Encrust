@@ -12,9 +12,12 @@ const CREASE_DEG: f32 = 50.0;
 /// [`CREASE_DEG`] of each other, and the triangles over them; a corner is laid out once a side.
 pub fn smooth_vertices(mesh: &Mesh, faces: Range<usize>) -> (Vec<ModelVertex>, Vec<u32>) {
     let first = faces.start;
+    // A face of no area has no way to face; it is left out rather than shaded straight up.
     let normals: Vec<Option<Vec3>> = faces
         .clone()
-        .map(|face| Some(mesh.triangle(face)?.normal_unnormalized()))
+        .map(|face| {
+            Some(mesh.triangle(face)?.normal_unnormalized()).filter(|n| n.length_squared() > 0.0)
+        })
         .collect();
     let around = Around::of(mesh, &faces, &normals);
     let crease = CREASE_DEG.to_radians().cos();
@@ -73,7 +76,8 @@ fn angle_at(mesh: &Mesh, face: usize, vertex: usize) -> f32 {
     let at = mesh.vertices[vertex];
     let next = mesh.vertices[corners[(slot + 1) % 3] as usize] - at;
     let previous = mesh.vertices[corners[(slot + 2) % 3] as usize] - at;
-    next.angle_between(previous)
+    let angle = next.angle_between(previous);
+    if angle.is_finite() { angle } else { 0.0 }
 }
 
 /// The faces of a range round each vertex of the mesh, by their place in the range.
