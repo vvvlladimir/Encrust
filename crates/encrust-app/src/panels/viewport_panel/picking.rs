@@ -175,12 +175,8 @@ pub(super) fn select_under_cursor(
     }
 }
 
-/// Whether this click only picks the model it landed on, which is what a click outside
-/// the selection does: a tool works on what is picked, so the first click on another part
-/// changes what is aimed at and the next one acts on it. See `docs/decisions/0193`.
-///
-/// With nothing picked a tool has the whole plate (ADR 0101), so there is nothing to aim
-/// and the click goes through.
+/// Whether this click only picks the model it landed on (outside the selection), so the next
+/// click acts on it (`docs/decisions/0193`). With nothing picked the click goes through (ADR 0101).
 pub(super) fn takes_the_pick(
     window: &mut Window,
     viewport: egui::Rect,
@@ -200,9 +196,8 @@ pub(super) fn aims_elsewhere(scene: &Scene, hit: Option<ObjectId>) -> bool {
     hit.is_some_and(|id| scene.has_selection() && !scene.is_selected(id))
 }
 
-/// How much further along the ray than the model's surface a part may be met and still
-/// be in front of it, millimetres: a part is met on its axis, half its width behind the
-/// side that faces the camera, and a tip is sunk into the surface it holds.
+/// How far past the model's surface along the ray a part may be met and still be in front,
+/// millimetres: parts are met on their axis, and a tip is sunk into its surface.
 const BEHIND_MM: f32 = 1.0;
 
 /// How far a ray through `cursor` may pass a part of a support and still take it,

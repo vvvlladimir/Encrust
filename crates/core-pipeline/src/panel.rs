@@ -15,10 +15,8 @@ pub struct PanelOverrides {
     pub blur_px: u8,
 }
 
-/// The panel the masks are drawn for, straight off the printer profile.
-///
-/// The masks go into the file the way the plate stands, from its near edge up; the
-/// profile's mirroring is the panel's mounting and only the header carries it (ADR 0134).
+/// The panel the masks are drawn for, straight off the printer profile. Masks go in as the plate
+/// stands, near edge up; only the header carries the mirroring (ADR 0134).
 pub fn raster_settings(printer: &PrinterProfile, overrides: PanelOverrides) -> RasterSettings {
     let (x, y) = printer.display.pixel_pitch_mm();
     RasterSettings {

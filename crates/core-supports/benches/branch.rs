@@ -1,7 +1,5 @@
-//! What merging tips into trunks costs, and what it saves.
-//!
-//! The saving is reported as a benchmark of its own so that a change to the merge rule
-//! shows up as a number rather than as a look at the viewport.
+//! What merging tips into trunks costs, and what it saves; the saving is its own benchmark so a
+//! change to the merge rule shows up as a number.
 #![expect(
     clippy::expect_used,
     reason = "a broken fixture must fail the run loudly"
@@ -16,10 +14,8 @@ use printer_profiles::SupportProfile;
 /// The layer height the shipped resin profile prints at.
 const LAYER_HEIGHT_MM: Scalar = 0.05;
 
-/// A ball standing `lift` millimetres clear of the plate, which is how a resin part is
-/// actually laid out. Its whole lower cap hangs over nothing, so automatic placement
-/// fills it with the lattice of tips branching is meant to thin out, and the lift is the
-/// room the trunks have to merge in.
+/// A ball `lift` mm clear of the plate, as a resin part is laid out: its lower cap is filled with
+/// the tip lattice branching thins out, and the lift is the room trunks merge in.
 fn ball(radius: Scalar, lift: Scalar, segments: u32, rings: u32) -> Mesh {
     let mut vertices = Vec::new();
     let mut faces = Vec::new();

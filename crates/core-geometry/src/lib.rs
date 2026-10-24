@@ -1,10 +1,6 @@
-//! Geometric primitives shared by the whole slicing pipeline, plus the mesh repair and
-//! inspection that every consumer needs before it can trust a mesh.
-//!
-//! Types here are plain data; the operations on them are free functions. Vector types
-//! come from `glam` so that meshes reach the GPU without a conversion pass; see
-//! `docs/decisions/0003-math-library.md`.
+//! Types are plain data, operations free functions; `glam` vectors, see ADR 0003.
 
+mod buckets;
 mod bvh;
 mod clip;
 mod closest;
@@ -27,6 +23,7 @@ mod validate;
 mod weld;
 mod winding;
 
+pub use buckets::Buckets;
 pub use bvh::Bvh;
 pub use clip::{Cut, Plane, axes_across, cut};
 pub use closest::{ClosestPoint, closest_point, point_aabb_squared, point_triangle};

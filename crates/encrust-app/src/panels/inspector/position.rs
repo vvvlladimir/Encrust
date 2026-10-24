@@ -105,9 +105,8 @@ fn position(ui: &mut egui::Ui, scene: &mut Scene, plate: &BuildPlate, id: Object
     }
 }
 
-/// Euler angles are written back only on the frames the user actually changed one.
-/// Round-tripping the quaternion every frame would let rounding accumulate, and near
-/// gimbal lock the three numbers would drift on their own.
+/// Euler angles are written back only on frames the user changed one: round-tripping the
+/// quaternion every frame accumulates rounding and drifts near gimbal lock.
 fn rotation(ui: &mut egui::Ui, window: &mut Window, id: ObjectId, axes: Axes) {
     let tooltip = tr!("position-rotation-reset");
     let (reset, _) = section_with_action(
@@ -130,9 +129,8 @@ fn rotation(ui: &mut egui::Ui, window: &mut Window, id: ObjectId, axes: Axes) {
     }
 }
 
-/// The angles the model is turned to, and the buttons that turn it further. Answers the
-/// turn about the plate's axes a frame asked for, which every turn is, so a stretch the
-/// model carries turns with it.
+/// The angles the model is turned to, and the buttons that turn it further, about the
+/// plate's axes, so a stretch the model carries turns with it.
 fn rotation_rows(ui: &mut egui::Ui, rotation: Quat, axes: Axes) -> Option<Quat> {
     let (x, y, z) = rotation.to_euler(EulerRot::XYZ);
     // Rounded to what the field shows, plus zero, so float dust never reads as "-0.00".
@@ -325,9 +323,8 @@ fn scale_row(ui: &mut egui::Ui, shown: &Shown, axis: usize, width: f32) -> Optio
     }
 }
 
-/// `pivot` with `axis` grown `grow` times — along the model's own axis or the plate's, as
-/// `axes` says — or all three when `together`. Nothing is drawn out to under the smallest
-/// scale, from `ratio`, what each axis reads now.
+/// `pivot` with `axis` grown `grow` times (model or plate axes per `axes`), or all three when
+/// `together`. Never drawn out below the smallest scale, from `ratio`.
 fn grown(
     pivot: Transform,
     ratio: Vec3,
@@ -402,9 +399,8 @@ fn place(ui: &mut egui::Ui, window: &mut Window, id: ObjectId) {
     });
 }
 
-/// How high the model stands over the plate, a millimetre a press either way. The height
-/// typed is the one auto-orient stands it on supports at; nought hands that back to the
-/// support profile. Supports shows the same row.
+/// How high the model stands over the plate, a millimetre a press. The height typed is the
+/// one auto-orient stands it on supports at; nought hands that back to the support profile.
 pub fn lift(ui: &mut egui::Ui, scene: &mut Scene, id: ObjectId) {
     let Some(object) = scene.get_mut(id) else {
         return;

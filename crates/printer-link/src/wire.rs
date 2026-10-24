@@ -34,9 +34,7 @@ impl Wire {
 }
 
 /// Sends a written file and returns the name it landed under on the printer.
-///
-/// `progress` hears each packet a board takes; `cancel` is asked between packets, and only
-/// before the one PUT a Prusa machine takes.
+/// `progress` hears each board packet; `cancel` is asked between packets, not during a Prusa PUT.
 pub fn upload(
     wire: &Wire,
     path: &Path,
@@ -49,12 +47,8 @@ pub fn upload(
     }
 }
 
-/// The board is asked what it takes before the file is sent, so a mismatch costs a
-/// connection rather than a whole transfer.
-///
-/// Only a version 3 board is asked. The generation before it answers the question with its
-/// status rather than its attributes, and opening a connection to it means running a broker
-/// and waiting for it to dial back — a price to pay twice for an answer that is empty.
+/// The board is asked what it takes before the file is sent, so a mismatch costs a connection.
+/// Only a version 3 board is asked: the generation before answers with status and needs a broker.
 fn upload_sdcp(
     printer: &Printer,
     path: &Path,

@@ -23,9 +23,8 @@ pub struct Selection<'a> {
 pub struct Chosen {
     pub printer: Option<PrinterProfile>,
     pub material: MaterialProfile,
-    /// Whether the exposure in `material` is one nobody measured: a machine taken out of
-    /// the catalogue with no resin named for it. Nothing ships a resin (ADR 0196), so
-    /// there is nothing to fall back on; see [`Chosen::measured`].
+    /// Whether the exposure in `material` is one nobody measured: a machine with no resin named.
+    /// Nothing ships a resin (ADR 0196); see [`Chosen::measured`].
     pub invented_exposure: bool,
 }
 

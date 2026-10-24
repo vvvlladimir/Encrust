@@ -2,13 +2,8 @@ use std::cmp::Ordering;
 
 use printer_profiles::SupportProfile;
 
-/// The profile each group of supports is built to.
-///
-/// A support carries the number of its group, not a profile of its own: two supports of
-/// one group are the same shape, and a support is retuned by moving it to another group.
-/// Group 0 is the one everything falls back to, and the one the raft — which belongs to
-/// the plate rather than to any one support — is built from.
-/// See `docs/decisions/0094`.
+/// The profile each group of supports is built to; a support carries its group's number, and is
+/// retuned by moving groups. Group 0 is the fallback and the raft's source (ADR 0094).
 #[derive(Debug, Clone, Copy)]
 pub struct Profiles<'a>(&'a [SupportProfile]);
 

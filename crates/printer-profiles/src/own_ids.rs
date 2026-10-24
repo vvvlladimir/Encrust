@@ -54,9 +54,8 @@ fn has_own_tail(id: &str) -> bool {
 }
 
 impl Catalogue {
-    /// Moves every printer and resin the user keeps under a bare name to an id of its own,
-    /// and points the resins' tuning at the printers' new ids. Answers what moved, so
-    /// whatever else holds one of those ids can follow it.
+    /// Moves every printer and resin kept under a bare name to an id of its own, and repoints the
+    /// resins' tuning. Answers what moved so other holders of those ids can follow.
     pub fn give_own_ids(&mut self) -> Result<Vec<Renamed>, ProfileError> {
         let mut renamed = Vec::new();
         for from in self.bare(Kind::Printer) {

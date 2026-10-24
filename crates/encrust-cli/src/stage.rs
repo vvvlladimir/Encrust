@@ -83,11 +83,8 @@ pub struct Staged {
 }
 
 impl Staged {
-    /// The run's input for a file of `format`, or `None` without a printer to draw for.
-    /// With no format, the one the printer reads.
-    ///
-    /// The models move into the plate, so that once the run has baked them the caller can
-    /// let them go rather than hold a second copy of the plate through the write.
+    /// The run's input for a file of `format` (default: the printer's), or `None` with no printer.
+    /// The models move into the plate so the caller can free them before the write.
     pub fn take_plate(
         &mut self,
         format: Option<SlicedFormat>,
@@ -415,9 +412,8 @@ struct PutDown {
     supports: Option<SupportReport>,
 }
 
-/// Refuses what the modelling flags leave that the rest of the run cannot take: several
-/// pieces of one model to hollow or support, which is reported once a model, or halves of a
-/// cut standing on one another's spot.
+/// Refuses what the rest of the run cannot take: several pieces of one model to hollow or support,
+/// or halves of a cut standing on one another's spot.
 fn check_pieces(
     pieces: &[Vec<Mesh>],
     entries: &[(PathBuf, Shaping)],

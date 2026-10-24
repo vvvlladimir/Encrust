@@ -1,8 +1,5 @@
-//! A mesh as bytes inside a project file.
-//!
-//! Not STL: the painted patches of `core_supports::Region` are sets of face indices, so a
-//! round trip that renumbered or dropped a face would move every patch on the model. This
-//! writes the index buffer as it stands. See `docs/formats/encrust-project.md`.
+//! A mesh as bytes inside a project file. Not STL: painted `core_supports::Region` patches are face
+//! indices, so faces must keep their order.
 
 use core_geometry::{Mesh, Vec3};
 

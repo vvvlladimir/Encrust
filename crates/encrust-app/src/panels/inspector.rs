@@ -27,9 +27,8 @@ use crate::panels::Window;
 use crate::ui::{body_and_foot, card_foot, hairline, help_mark, theme};
 use crate::workspace::Tool;
 
-/// The card beside the rail: the open tool, whatever the stage shows, no taller than
-/// `max_h` points. A heading names it, its sections scroll once they outgrow the card,
-/// and its action stays pinned to the foot; see `docs/decisions/0218`, `0221`.
+/// The card beside the rail: the open tool, no taller than `max_h` points; its sections
+/// scroll and its action stays pinned (`docs/decisions/0218`, `0221`).
 pub fn ui(ui: &mut egui::Ui, window: &mut Window, max_h: f32) {
     let tool = window.tool.card();
     header(ui, window, tool);

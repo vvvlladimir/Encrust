@@ -1,8 +1,5 @@
 //! The sheet that writes a bug report: what the user types, what the window adds, and the
-//! three ways out — the clipboard, a file, or a prefilled issue.
-//!
-//! The report is composed again every frame the sheet is open, so what is shown is what
-//! the buttons hand over; see `docs/decisions/0212`.
+//! clipboard, file or prefilled issue. Recomposed every frame, see `docs/decisions/0212`.
 
 use egui::RichText;
 

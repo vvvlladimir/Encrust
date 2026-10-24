@@ -25,9 +25,7 @@ const OFFSET_STEP: f64 = 0.1;
 const VOLUME_STEP: f64 = 0.1;
 
 /// Where the plane cuts the selected model, and what to do with the halves.
-///
-/// The viewport draws the plane itself; the section slider is a view of its own and is
-/// neither moved by the plane nor moves it.
+/// The section slider is a view of its own, neither moved by the plane nor moving it.
 pub fn ui(ui: &mut egui::Ui, window: &mut Window) {
     let Some(id) = window.doc.scene.selected() else {
         section(ui, &tr!("cut-plane"), None, |ui| {

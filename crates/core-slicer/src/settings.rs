@@ -44,12 +44,8 @@ impl SliceSettings {
         count as usize
     }
 
-    /// Z of every sampling plane: the middle of each layer's band of material.
-    ///
-    /// Sampling the middle rather than an edge is what keeps the top and bottom layers of
-    /// a model whose faces sit exactly on a layer boundary; see `docs/design/slicing.md`.
-    /// The topmost band is clipped to the mesh, so a partial layer is still sampled
-    /// inside the material instead of just above it.
+    /// Middle sampling keeps faces on a layer boundary; the top band is clipped
+    /// (`docs/design/slicing.md`).
     pub fn plane_heights(&self, z_min: Scalar, z_max: Scalar) -> Vec<Scalar> {
         (0..self.layer_count(z_min, z_max))
             .map(|layer| {

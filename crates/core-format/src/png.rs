@@ -5,13 +5,8 @@ use core_thumbnail::Thumbnail;
 
 use crate::{FormatError, panel_in_range};
 
-/// Expands a layer into an eight-bit greyscale PNG, which is one layer of an archive
-/// container.
-///
-/// `Fast` rather than the default: on a panel-sized mask deflate costs more than the
-/// rasterisation it follows, and a second pass over it buys a few per cent. This is the
-/// archive codec that wants a dense mask, so it is the one that pays for expanding the
-/// runs.
+/// Expands a layer into an eight-bit greyscale PNG, one layer of an archive container.
+/// `Fast` compression: on a panel-sized mask deflate costs more than the rasterisation it follows.
 pub fn encode_grey(layer: &LayerRuns) -> Result<Vec<u8>, FormatError> {
     let mask = layer.to_mask();
     let mut bytes = Vec::new();

@@ -1,7 +1,5 @@
-//! The Settings window: the support profiles, the presets of the Hollow and Drain tools,
-//! how the window behaves and the updates, a page each down its left. It is drawn in the
-//! frame the Machine and resin window is, and every edit is written as it is made. See
-//! `docs/decisions/0233` and `docs/design/profiles.md`.
+//! The Settings window: support profiles, Hollow and Drain presets, behaviour and updates,
+//! a page each. Edits are written as made; see `docs/decisions/0233`, `docs/design/profiles.md`.
 
 mod compensation;
 mod confirm;
@@ -292,9 +290,8 @@ fn forget_profile(machine: &mut Machine, kind: Kind, id: &str) {
 /// Room above and below the fields of a block.
 const BLOCK_PAD: f32 = 18.0;
 
-/// One category of a form: its title in a column of its own beside its fields, over a
-/// hairline. Where the form is too narrow for both, the title stands over the fields.
-/// What the fields `describe` is a question mark beside the title.
+/// One category of a form: its title in a column beside its fields over a hairline, or above
+/// them when narrow. What the fields `describe` is a question mark beside the title.
 pub(super) fn form_card<R>(
     ui: &mut egui::Ui,
     title: &str,

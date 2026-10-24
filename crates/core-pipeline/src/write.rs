@@ -69,11 +69,8 @@ pub struct Written {
     pub measured: Measured,
 }
 
-/// Cuts, rasterises and writes the whole stack into `sink`, a window at a time.
-///
-/// `None` means the observer cancelled it, and whatever reached `sink` is a file stopped
-/// half way through the stack: the caller throws it away. [`write()`] does that for a file
-/// on disk.
+/// Cuts, rasterises and writes the whole stack into `sink`, a window at a time. `None` means the
+/// observer cancelled and `sink` holds a half file; [`write()`] discards it on disk.
 pub fn write_to(
     request: &Writing<'_>,
     sink: &mut dyn WriteSeek,

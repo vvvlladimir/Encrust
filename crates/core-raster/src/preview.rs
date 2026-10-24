@@ -1,11 +1,7 @@
 use crate::{LayerMask, LayerRuns};
 
-/// Shrinks a rasterised layer to at most `max_width_px` x `max_height_px` pixels.
-///
-/// A block of source pixels becomes the brightest pixel it holds rather than their
-/// average: a wall one pixel wide is what a preview exists to show, and averaging a
-/// 5760 x 3600 panel down to a screen would fade it out of the picture. Both axes shrink
-/// by the same factor, so the mask keeps the panel's pixel aspect.
+/// Shrinks a rasterised layer to at most `max_width_px` x `max_height_px` pixels, keeping aspect.
+/// A block becomes its brightest pixel, not the average, so a one-pixel wall stays visible.
 pub fn downsample(runs: &LayerRuns, max_width_px: u32, max_height_px: u32) -> LayerMask {
     let (width, height) = (runs.width(), runs.height());
     if width == 0 || height == 0 {
@@ -26,10 +22,8 @@ pub fn downsample(runs: &LayerRuns, max_width_px: u32, max_height_px: u32) -> La
     mask
 }
 
-/// The `width_px` x `height_px` pixels of a layer from `(x_px, y_px)`, at full resolution.
-///
-/// What a shrunk preview cannot show, such as the grey of an edge, a magnifier shows here.
-/// Pixels past the panel are dark.
+/// The `width_px` x `height_px` pixels of a layer from `(x_px, y_px)`, at full resolution. Shows
+/// what a shrunk preview cannot, such as an edge's grey; pixels past the panel are dark.
 pub fn crop(runs: &LayerRuns, x_px: u32, y_px: u32, width_px: u32, height_px: u32) -> LayerMask {
     let mut mask = LayerMask::new(width_px, height_px);
     let source_width = u64::from(runs.width());
@@ -63,20 +57,16 @@ pub fn crop(runs: &LayerRuns, x_px: u32, y_px: u32, width_px: u32, height_px: u3
     mask
 }
 
-/// Pixels of the panel that collapse into one pixel of the preview, along each axis.
-///
-/// Public so that a caller can say what it is showing: a mask shrunk by four is a quarter
-/// of the panel's resolution, and the screen has to admit that.
+/// Pixels of the panel that collapse into one pixel of the preview, along each axis. Public so a
+/// caller can say what it shows: shrunk by four is a quarter of the panel's resolution.
 pub fn shrink_factor(width: u32, height: u32, max_width_px: u32, max_height_px: u32) -> u32 {
     let by_x = width.div_ceil(max_width_px.max(1));
     let by_y = height.div_ceil(max_height_px.max(1));
     by_x.max(by_y).max(1)
 }
 
-/// Raises every preview pixel the source range `pixels` touches to at least `value`.
-///
-/// The range is in reading order and may cross rows, so it is walked a row at a time:
-/// two ends of one run belong to opposite sides of the image.
+/// Raises every preview pixel the source range `pixels` touches to at least `value`. The range is
+/// in reading order and may cross rows, so it is walked a row at a time.
 fn brighten(
     mask: &mut LayerMask,
     factor: u32,

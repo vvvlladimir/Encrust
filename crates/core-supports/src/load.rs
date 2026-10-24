@@ -1,11 +1,7 @@
 use core_geometry::Scalar;
 
-/// How much of the model stands on each piece of the layers a run has climbed, known once
-/// the whole stack has been read.
-///
-/// Pieces are followed up the stack into what grows out of them. A piece that is the only
-/// child of its only parent stays on that parent's node, so the graph grows with where
-/// parts split and join rather than with the layers; see `docs/design/supports.md`.
+/// How much of the model stands on each piece of the layers a run has climbed, known once the
+/// stack is read; a lone child stays on its parent's node, so the graph follows splits and joins.
 pub(crate) struct Load {
     nodes: Vec<Node>,
     /// The node each piece of the layer last climbed to is on.

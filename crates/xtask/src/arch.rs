@@ -1,8 +1,5 @@
-//! The drawn dependency graph against the one the manifests declare.
-//!
-//! `docs/architecture.md` says which crate may depend on which, and
-//! `.claude/rules/architecture.md` says anything it does not draw is forbidden. This reads
-//! both and answers with the difference, so the drawing cannot drift away from the code.
+//! The drawn dependency graph (`docs/architecture.md`) against the one the manifests declare;
+//! anything not drawn is forbidden (`.claude/rules/architecture.md`).
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
@@ -117,9 +114,8 @@ fn drawn(doc: &str, members: &BTreeSet<String>) -> Result<Edges> {
     Ok(edges)
 }
 
-/// The workspace crates a side of a rule names. `every core-*` stands for the family, an
-/// aside in brackets or after the name is ignored, and anything that is not a crate of
-/// this workspace — a third-party dependency — is not the graph's business.
+/// The workspace crates a side of a rule names; `every core-*` stands for the family, and asides
+/// and third-party dependencies are ignored.
 fn names(side: &str, members: &BTreeSet<String>) -> Vec<String> {
     let mut found = Vec::new();
     for part in side.split(',') {

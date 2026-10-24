@@ -5,9 +5,8 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output};
 
-/// Binary STL of an axis-aligned box, written the way an exporter would: three fresh
-/// vertices per triangle. `faces` selects which of the twelve triangles to include, and
-/// `invert` reverses the winding of the first `invert` of them.
+/// Binary STL of an axis-aligned box, three fresh vertices per triangle; `faces` selects triangles
+/// and `invert` reverses the winding of the first `invert` of them.
 pub fn write_box_stl(name: &str, size: f32, faces: usize, invert: usize) -> PathBuf {
     write_leaning_box_stl(name, size, 0.0, faces, invert)
 }

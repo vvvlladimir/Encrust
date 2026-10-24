@@ -70,11 +70,8 @@ fn brush(ui: &egui::Ui, window: &Window) -> (Scalar, egui::Color32) {
     (window.tools.supports.brush_radius_mm, colour)
 }
 
-/// Runs the brush for this frame and answers whether it has the pointer.
-///
-/// The stroke is decided on the frame the button goes down: a press that misses every
-/// model leaves the drag to the camera, and one that lands on a model paints until the
-/// button comes up.
+/// Runs the brush for this frame and answers whether it has the pointer. The stroke is
+/// decided when the button goes down: a miss leaves the drag to the camera.
 pub(super) fn paint_stroke(
     ui: &egui::Ui,
     window: &mut Window,
@@ -185,11 +182,8 @@ fn relief_stroke(
     true
 }
 
-/// Paints the model under the cursor, with the brush or — while `whole_face` is held —
-/// with the surface the face it hit belongs to.
-///
-/// `marked` is false for the alt-click that takes the paint off again. The eraser takes
-/// both paints off, whatever is held.
+/// Paints the model under the cursor with the brush, or the face's whole surface while
+/// `whole_face` is held. `marked` is false for the alt-click that erases; eraser removes both.
 fn paint_under_cursor(
     window: &mut Window,
     viewport: egui::Rect,

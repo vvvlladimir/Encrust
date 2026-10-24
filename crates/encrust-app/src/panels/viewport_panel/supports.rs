@@ -27,12 +27,8 @@ const PLATE_GRAZE: f32 = 1e-3;
 /// Radius of a dot marking where a line of supports would stand, millimetres.
 const LINE_DOT_MM: Scalar = 0.4;
 
-/// Stands a support where the model was clicked, and selects what it was put on so that
-/// the inspector is talking about the same object. A support that would not stand there
-/// is not put down: the preview has already shown it red.
-///
-/// With `line` it stands a line of them instead, from the last one placed on the same
-/// model to the click, every one that would stand; see `docs/decisions/0332`.
+/// Stands a support where the model was clicked and selects it; one that would not stand is
+/// skipped. With `line`, a line of them runs from the last placed (`docs/decisions/0332`).
 pub(super) fn place_support_under_cursor(
     window: &mut Window,
     viewport: egui::Rect,
@@ -185,14 +181,8 @@ pub(super) fn remove_support_under_cursor(
     }
 }
 
-/// Picks and carries the parts of a support the Edit mode is working on, and answers
-/// whether it has the pointer.
-///
-/// A press that lands on a part of a support takes hold of it and the same drag carries
-/// it, with everything else picked, until the button comes up — wherever the cursor goes
-/// meanwhile, so the camera never turns under a support in hand. With shift the press
-/// only adds the part to what is picked or takes it back out. A press that misses lets go
-/// and leaves the drag to the camera.
+/// Picks and carries the support parts the Edit mode works on; answers whether it has the
+/// pointer. A press on a part carries it and the picked set; shift toggles; a miss is the camera's.
 pub(super) fn drag_support(window: &mut Window, viewport: egui::Rect, pointer: &Pointer) -> bool {
     if *window.tool != Tool::Supports {
         return false;
@@ -259,13 +249,8 @@ fn lone_tip(window: &Window) -> Option<Picked> {
     tree.nodes().get(node)?.is_leaf().then_some(*picked)
 }
 
-/// Puts the held tip where the cursor points on its own model, or failing that on the
-/// surface nearest the cursor at the depth the tip stands at. Answers whether it moved.
-///
-/// A tip has to touch what it holds, so it is aimed like a new support rather than slid
-/// by a step: the hand follows the cursor, not the surface. The second aim is what keeps
-/// it following past the model's outline, and from a view the held face is hidden in.
-/// See `docs/decisions/0244`.
+/// Puts the held tip where the cursor points on its own model, else on the nearest surface
+/// at the tip's depth; answers whether it moved. See `docs/decisions/0244`.
 fn carry_tip(window: &mut Window, viewport: egui::Rect, cursor: egui::Pos2, tip: Picked) -> bool {
     let Part::Node(node) = tip.part else {
         return false;
@@ -314,12 +299,8 @@ fn carry_tip(window: &mut Window, viewport: egui::Rect, cursor: egui::Pos2, tip:
     }
 }
 
-/// Carries what is held by `step`, or by as much of it as the model allows: the whole of
-/// it, else what it covers across the plate, else its rise alone. Answers what was taken.
-///
-/// A step is measured on a plane facing the camera, so it nearly always rises or falls a
-/// little, and a part under an overhang would otherwise stop dead at the first touch
-/// instead of sliding along it.
+/// Carries what is held by `step`, or as much as the model allows: whole, else across the
+/// plate, else its rise alone, so a part slides along an overhang.
 fn carry_as_far_as_allowed(window: &mut Window, step: Vec3) -> Option<Vec3> {
     let across = Vec3::new(step.x, step.y, 0.0);
     let rise = Vec3::new(0.0, 0.0, step.z);
@@ -329,13 +310,8 @@ fn carry_as_far_as_allowed(window: &mut Window, step: Vec3) -> Option<Vec3> {
         .find(|part| carry_parts(window, *part))
 }
 
-/// Takes hold of the part under the cursor, freezing the support it belongs to so that
-/// the next rebuild cannot undo what is about to be done to it. Answers whether the press
-/// landed on a support, which is whether the drag that follows is this tool's.
-///
-/// A part not yet picked replaces what was; one already picked keeps the others with it,
-/// so several are carried by any one of them. With `add` the part is only put into the
-/// set or taken out, and the drag carries nothing.
+/// Takes hold of the part under the cursor and freezes its support against rebuilds; answers
+/// whether the press landed on a support. With `add` the part is only toggled in the set.
 fn take_hold(window: &mut Window, viewport: egui::Rect, cursor: egui::Pos2, add: bool) -> bool {
     window.tools.supports.anchor = None;
     let Some((id, hit)) = grab_under_cursor(window, viewport, cursor) else {
@@ -417,12 +393,8 @@ fn on_camera_plane(
     Some(ray.at((anchor - ray.origin).dot(normal) / facing))
 }
 
-/// Moves every held part by `step`, in plate millimetres, and answers whether anything
-/// moved.
-///
-/// Each support is carried as a whole and then held to the rule the automatic run places
-/// by, which is `core_supports::carried`: a step the model refuses leaves that support
-/// where it was. See `docs/decisions/0095`.
+/// Moves every held part by `step`, plate millimetres; answers whether anything moved. Each
+/// support is held to `core_supports::carried`; see `docs/decisions/0095`.
 fn carry_parts(window: &mut Window, step: Vec3) -> bool {
     let mut moved = false;
     for (id, frozen) in held_trees(window.tools) {

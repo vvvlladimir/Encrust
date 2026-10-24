@@ -8,10 +8,8 @@ use crate::runs::{LayerRuns, RunsBuilder};
 type Step = (u32, u32);
 
 impl LayerRuns {
-    /// The layer under a box filter `2 · radius_px + 1` pixels wide in each direction.
-    ///
-    /// Worked on the steps between runs rather than on pixels, so the cost follows the
-    /// edges and not the panel; see `docs/design/rasterisation.md`.
+    /// The layer under a box filter `2 · radius_px + 1` pixels wide in each direction. Worked on
+    /// steps between runs, so cost follows the edges; see `docs/design/rasterisation.md`.
     #[must_use]
     pub fn blurred(&self, radius_px: u8) -> Self {
         let Some(lit) = lit_rows(self).filter(|_| radius_px > 0) else {
@@ -160,10 +158,8 @@ impl<'a> Reader<'a> {
     }
 }
 
-/// Appends a row's sums over `[x - radius, x + radius]`, left unscaled, to `out`.
-///
-/// Away from a step the window holds one value, so only pixels within `radius` of a step
-/// are summed one at a time; every other stretch is its value times the window.
+/// Appends a row's sums over `[x - radius, x + radius]`, left unscaled, to `out`. Within `radius`
+/// of a step pixels are summed one at a time; other stretches are value times window.
 fn box_row(steps: &[Step], width: u32, radius: u32, out: &mut Vec<Step>) {
     if steps.is_empty() {
         return;

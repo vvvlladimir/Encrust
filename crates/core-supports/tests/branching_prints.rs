@@ -1,6 +1,5 @@
-//! A branch and the trunk it joins are two overlapping solids, not one welded shape.
-//! What has to hold is that the printer sees their union: no double exposure where they
-//! cross, and no seam where they meet. See `docs/decisions/0041`.
+//! A branch and the trunk it joins are two overlapping solids, not one welded shape; the printer
+//! must see their union, with no double exposure or seam (ADR 0041).
 #![expect(
     clippy::expect_used,
     reason = "a broken fixture must fail the run loudly"

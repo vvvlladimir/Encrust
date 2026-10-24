@@ -37,11 +37,8 @@ pub struct MeshDiagnostics {
 }
 
 impl MeshDiagnostics {
-    /// A surface that closes a volume: every edge walked as often one way as the other.
-    ///
-    /// Branching alone does not open a mesh. Two sheets meeting along a seam use its edge
-    /// four times, twice each way, and each sheet still has an inside; see
-    /// `docs/design/mesh-repair.md`.
+    /// A surface that closes a volume: every edge walked as often one way as the other. Branching
+    /// alone does not open a mesh, e.g. two sheets along a seam; see `docs/design/mesh-repair.md`.
     pub fn is_closed(&self) -> bool {
         self.unbalanced_edges == 0
     }
@@ -150,11 +147,8 @@ pub fn signed_volume(mesh: &Mesh) -> Scalar {
     signed_volume_x6(mesh) / 6.0
 }
 
-/// Centre of mass of the solid a closed mesh encloses, in the mesh's own space.
-///
-/// A mesh that encloses no volume — a sheet, a shell, a flat fan — has no mass to be at
-/// the centre of, and gives the centre of its bounding box instead. `None` only for a
-/// mesh with no vertices.
+/// Centre of mass of the solid a closed mesh encloses, in the mesh's own space. A mesh with no
+/// volume gives its bounding-box centre; `None` only for no vertices.
 pub fn center_of_mass(mesh: &Mesh) -> Option<Vec3> {
     let aabb = mesh.aabb()?;
     let middle = (aabb.mins + aabb.maxs) / 2.0;
@@ -224,11 +218,8 @@ fn count_duplicates(mesh: &Mesh) -> usize {
     duplicate_faces(mesh).len()
 }
 
-/// The faces to drop where several cover the same three vertices, ascending.
-///
-/// Two of them wound opposite ways enclose nothing between them, so each such pair goes
-/// whole; of what is left, the first face stays and the rest go. What remains walks every
-/// edge as the majority did, so dropping these never unbalances one.
+/// The faces to drop where several cover the same three vertices, ascending. Opposite-wound pairs
+/// go whole; of the rest the first stays, so no edge is unbalanced.
 pub(crate) fn duplicate_faces(mesh: &Mesh) -> Vec<usize> {
     let keyed = faces_by_corners(mesh);
     let mut dropped = Vec::new();
@@ -255,11 +246,8 @@ pub(crate) fn duplicate_faces(mesh: &Mesh) -> Vec<usize> {
     dropped
 }
 
-/// Every face under its corners in ascending order, whether it winds the way that order
-/// does, and its index; sorted, so faces over the same corners are adjacent.
-///
-/// Counted out by lowest corner and sorted only within each run, the same order a full
-/// sort gives at linear cost, as `edge_uses` does.
+/// Every face under its corners in ascending order, whether it winds that way, and its index;
+/// sorted. Counted by lowest corner and sorted within runs, as `edge_uses` does, for linear cost.
 fn faces_by_corners(mesh: &Mesh) -> Vec<([u32; 3], bool, usize)> {
     let keyed: Vec<([u32; 3], bool, usize)> = mesh
         .faces
@@ -287,259 +275,4 @@ fn faces_by_corners(mesh: &Mesh) -> Vec<([u32; 3], bool, usize)> {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::Vec3;
-
-    /// A cube of side `side` with every face cut into `n` by `n` squares, wound outward.
-    fn tessellated_cube(n: u32, side: Scalar) -> Mesh {
-        let mut mesh = Mesh::default();
-        let faces = [
-            (Vec3::ZERO, Vec3::Y, Vec3::X),
-            (Vec3::Z, Vec3::X, Vec3::Y),
-            (Vec3::ZERO, Vec3::X, Vec3::Z),
-            (Vec3::Y, Vec3::Z, Vec3::X),
-            (Vec3::ZERO, Vec3::Z, Vec3::Y),
-            (Vec3::X, Vec3::Y, Vec3::Z),
-        ];
-        for (origin, u, v) in faces {
-            let base = mesh.vertices.len() as u32;
-            for j in 0..=n {
-                for i in 0..=n {
-                    let (s, t) = (i as Scalar / n as Scalar, j as Scalar / n as Scalar);
-                    mesh.vertices.push((origin + u * s + v * t) * side);
-                }
-            }
-            for j in 0..n {
-                for i in 0..n {
-                    let a = base + j * (n + 1) + i;
-                    let c = a + n + 1;
-                    mesh.faces.push([a, a + 1, c + 1]);
-                    mesh.faces.push([a, c + 1, c]);
-                }
-            }
-        }
-        mesh
-    }
-
-    #[test]
-    fn the_volume_of_a_dense_mesh_does_not_drift() {
-        // 1.9 million faces, as a detailed resin model has; summed in f32 this came to
-        // 1008.8 mm^3.
-        let cube = tessellated_cube(400, 10.0);
-        let volume = signed_volume(&cube);
-        assert!(
-            (volume - 1000.0).abs() < 0.1,
-            "a 10 mm cube holds 1000 mm^3, got {volume}"
-        );
-    }
-
-    fn two_triangles() -> Mesh {
-        Mesh::new(
-            vec![Vec3::ZERO, Vec3::X, Vec3::Y, Vec3::new(1.0, 1.0, 0.0)],
-            vec![[0, 1, 2], [1, 3, 2]],
-        )
-    }
-
-    /// An axis-aligned box from `mins` to `maxs`, twelve triangles wound outward.
-    fn box_mesh(mins: Vec3, maxs: Vec3) -> Mesh {
-        let corner = |x: bool, y: bool, z: bool| {
-            Vec3::new(
-                if x { maxs.x } else { mins.x },
-                if y { maxs.y } else { mins.y },
-                if z { maxs.z } else { mins.z },
-            )
-        };
-        let vertices = vec![
-            corner(false, false, false),
-            corner(true, false, false),
-            corner(true, true, false),
-            corner(false, true, false),
-            corner(false, false, true),
-            corner(true, false, true),
-            corner(true, true, true),
-            corner(false, true, true),
-        ];
-        Mesh::new(
-            vertices,
-            vec![
-                [0, 2, 1],
-                [0, 3, 2],
-                [4, 5, 6],
-                [4, 6, 7],
-                [0, 1, 5],
-                [0, 5, 4],
-                [1, 2, 6],
-                [1, 6, 5],
-                [2, 3, 7],
-                [2, 7, 6],
-                [3, 0, 4],
-                [3, 4, 7],
-            ],
-        )
-    }
-
-    #[test]
-    fn a_box_has_its_centre_of_mass_in_the_middle() {
-        let mesh = box_mesh(Vec3::new(10.0, -4.0, 0.0), Vec3::new(14.0, 2.0, 8.0));
-        let centre = center_of_mass(&mesh).expect("a box has vertices");
-        // A solid box is symmetric about all three midplanes.
-        assert!(
-            centre.abs_diff_eq(Vec3::new(12.0, -1.0, 4.0), 1e-4),
-            "expected the middle of the box, got {centre:?}"
-        );
-    }
-
-    #[test]
-    fn a_tetrahedron_has_its_centre_of_mass_at_the_average_of_its_corners() {
-        let mesh = Mesh::new(
-            vec![
-                Vec3::ZERO,
-                Vec3::new(3.0, 0.0, 0.0),
-                Vec3::new(0.0, 3.0, 0.0),
-                Vec3::new(0.0, 0.0, 3.0),
-            ],
-            vec![[0, 2, 1], [0, 1, 3], [1, 2, 3], [2, 0, 3]],
-        );
-        let centre = center_of_mass(&mesh).expect("a tetrahedron has vertices");
-        // The centroid of a solid tetrahedron is the mean of its four vertices.
-        assert!(
-            centre.abs_diff_eq(Vec3::splat(0.75), 1e-5),
-            "expected (0.75, 0.75, 0.75), got {centre:?}"
-        );
-    }
-
-    #[test]
-    fn a_flat_sheet_falls_back_to_the_middle_of_its_bounding_box() {
-        let centre = center_of_mass(&two_triangles()).expect("the sheet has vertices");
-        assert!(
-            centre.abs_diff_eq(Vec3::new(0.5, 0.5, 0.0), 1e-6),
-            "a sheet encloses nothing, so the box decides; got {centre:?}"
-        );
-    }
-
-    #[test]
-    fn a_mesh_with_no_vertices_has_no_centre_of_mass() {
-        assert_eq!(center_of_mass(&Mesh::new(Vec::new(), Vec::new())), None);
-    }
-
-    #[test]
-    fn the_centre_of_mass_is_not_the_middle_of_the_bounding_box() {
-        // Two boxes of the same 2 mm side, one at the origin, one eight times further
-        // out: mass is shared evenly, so the centroid sits between them, not in the
-        // middle of the pair's bounding box.
-        let mut mesh = box_mesh(Vec3::ZERO, Vec3::splat(2.0));
-        let far = box_mesh(Vec3::new(16.0, 0.0, 0.0), Vec3::new(18.0, 2.0, 2.0));
-        let offset = mesh.vertices.len() as u32;
-        mesh.vertices.extend(far.vertices);
-        mesh.faces
-            .extend(far.faces.iter().map(|f| f.map(|i| i + offset)));
-
-        let centre = center_of_mass(&mesh).expect("two boxes have vertices");
-        assert!(
-            (centre.x - 9.0).abs() < 1e-3,
-            "equal masses at x = 1 and x = 17 average to 9, got {centre:?}"
-        );
-    }
-
-    #[test]
-    fn an_open_sheet_reports_its_boundary() {
-        let diagnostics = diagnose(&two_triangles());
-        assert_eq!(diagnostics.boundary_edges, 4);
-        assert_eq!(diagnostics.non_manifold_edges, 0);
-        assert_eq!(diagnostics.shells, 1);
-        assert!(!diagnostics.is_closed());
-    }
-
-    /// Two boxes meeting along one vertical edge: the four faces at it pair off, two
-    /// walking it each way, so each box still has an inside.
-    #[test]
-    fn two_boxes_sharing_an_edge_branch_there_and_still_close() {
-        let mut mesh = box_mesh(Vec3::ZERO, Vec3::splat(2.0));
-        let other = box_mesh(Vec3::new(2.0, 2.0, 0.0), Vec3::new(4.0, 4.0, 2.0));
-        let offset = mesh.vertices.len() as u32;
-        mesh.vertices.extend(other.vertices);
-        mesh.faces
-            .extend(other.faces.iter().map(|f| f.map(|i| i + offset)));
-        let mesh = crate::weld(&mesh, crate::DEFAULT_WELD_TOLERANCE).mesh;
-
-        let diagnostics = diagnose(&mesh);
-        assert_eq!(
-            diagnostics.non_manifold_edges, 1,
-            "the shared edge branches"
-        );
-        assert_eq!(diagnostics.unbalanced_edges, 0);
-        assert!(diagnostics.is_closed(), "two solids, no hole in either");
-    }
-
-    /// One face turned round leaves its three edges walked twice the same way, which is
-    /// where a surface stops having one inside.
-    #[test]
-    fn a_face_turned_round_leaves_its_edges_unbalanced() {
-        let mut mesh = box_mesh(Vec3::ZERO, Vec3::splat(2.0));
-        mesh.faces[0].swap(1, 2);
-
-        let diagnostics = diagnose(&mesh);
-        assert_eq!(diagnostics.boundary_edges, 0);
-        assert_eq!(diagnostics.non_manifold_edges, 0);
-        assert_eq!(diagnostics.unbalanced_edges, 3);
-        assert!(!diagnostics.is_closed());
-        assert!(
-            diagnostics.is_sound(),
-            "the fill rule takes what the box encloses, so it slices as it stands"
-        );
-    }
-
-    #[test]
-    fn a_hole_makes_a_mesh_unsound() {
-        let mut mesh = box_mesh(Vec3::ZERO, Vec3::splat(2.0));
-        mesh.faces.pop();
-        assert!(!diagnose(&mesh).is_sound());
-    }
-
-    #[test]
-    fn a_third_face_on_one_edge_is_non_manifold() {
-        let mut mesh = two_triangles();
-        mesh.vertices.push(Vec3::new(0.0, 0.0, 1.0));
-        mesh.faces.push([1, 2, 4]);
-        assert_eq!(diagnose(&mesh).non_manifold_edges, 1);
-    }
-
-    #[test]
-    fn a_repeated_face_is_counted_once_as_a_duplicate() {
-        let mut mesh = two_triangles();
-        mesh.faces.push([2, 0, 1]);
-        assert_eq!(diagnose(&mesh).duplicate_faces, 1);
-    }
-
-    /// Wound opposite ways the two enclose nothing between them, so both are counted.
-    #[test]
-    fn a_face_laid_back_to_back_on_another_counts_as_a_pair() {
-        let mut mesh = two_triangles();
-        mesh.faces.push([0, 2, 1]);
-        assert_eq!(duplicate_faces(&mesh), vec![0, 2]);
-    }
-
-    #[test]
-    fn a_collinear_face_is_degenerate() {
-        let mesh = Mesh::new(
-            vec![Vec3::ZERO, Vec3::X, Vec3::new(2.0, 0.0, 0.0)],
-            vec![[0, 1, 2]],
-        );
-        assert_eq!(diagnose(&mesh).degenerate_faces, 1);
-    }
-
-    #[test]
-    fn a_vertex_no_face_uses_is_reported() {
-        let mut mesh = two_triangles();
-        mesh.vertices.push(Vec3::new(9.0, 9.0, 9.0));
-        assert_eq!(diagnose(&mesh).unreferenced_vertices, 1);
-    }
-
-    #[test]
-    fn an_empty_mesh_has_no_shells() {
-        let diagnostics = diagnose(&Mesh::default());
-        assert_eq!(diagnostics.shells, 0);
-        assert_eq!(diagnostics.euler_characteristic, 0);
-    }
-}
+mod tests;

@@ -16,35 +16,10 @@ const PI: Scalar = std::f32::consts::PI;
 /// A cube of `size`, standing at `base` on Z and nudged off the lattice: a face landing
 /// exactly on a plane of lattice points is a separate question from this one.
 fn cube(size: Scalar, base: Scalar) -> Mesh {
-    let s = size;
-    let nudge = Vec3::new(0.017, 0.023, base);
-    let corners = [
-        Vec3::new(0.0, 0.0, 0.0),
-        Vec3::new(s, 0.0, 0.0),
-        Vec3::new(s, s, 0.0),
-        Vec3::new(0.0, s, 0.0),
-        Vec3::new(0.0, 0.0, s),
-        Vec3::new(s, 0.0, s),
-        Vec3::new(s, s, s),
-        Vec3::new(0.0, s, s),
-    ];
-    Mesh::new(
-        corners.into_iter().map(|corner| corner + nudge).collect(),
-        vec![
-            [0, 2, 1],
-            [0, 3, 2],
-            [4, 5, 6],
-            [4, 6, 7],
-            [0, 1, 5],
-            [0, 5, 4],
-            [1, 2, 6],
-            [1, 6, 5],
-            [2, 3, 7],
-            [2, 7, 6],
-            [3, 0, 4],
-            [3, 4, 7],
-        ],
-    )
+    {
+        let nudge = Vec3::new(0.017, 0.023, base);
+        core_geometry::cuboid(nudge, nudge + Vec3::splat(size))
+    }
 }
 
 /// Two shells with the same faces, cavity and saving. The exact cut may split one flat

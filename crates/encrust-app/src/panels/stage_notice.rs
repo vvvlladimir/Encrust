@@ -18,9 +18,8 @@ const INFO_LINGER_S: f64 = 4.0;
 /// Where egui keeps when the message was last seen changing.
 const SEEN: &str = "stage-notice-seen";
 
-/// Every notice, centred at the foot of `stage`: what is running, with a way to stop it, a
-/// file waiting to be started, a broken model, a plate that cannot slice yet, then what
-/// happened last, nearest the edge. See `docs/decisions/0217` and `0263`.
+/// Every notice, centred at the foot of `stage`, from what is running to what happened last,
+/// nearest the edge. See `docs/decisions/0217` and `0263`.
 pub fn ui(ui: &egui::Ui, window: &mut Window, stage: Rect) {
     let machine = &window.machine;
     let running = machine.network.job.is_some()

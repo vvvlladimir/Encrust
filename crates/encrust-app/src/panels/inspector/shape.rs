@@ -24,13 +24,12 @@ fn groups(part: Part) -> &'static [Group] {
     }
 }
 
-/// The shape of the supports in the group in hand, part by part. The raft shown is the
-/// picked model's or the plate's, lent to the profile while it is drawn so the profile's
-/// own never moves; see `docs/decisions/0253`.
+/// The shape of the supports in the group in hand, part by part. The raft shown is lent to
+/// the profile while drawn so the profile's own never moves (`docs/decisions/0253`).
 pub(super) fn sections(ui: &mut egui::Ui, window: &mut Window) {
     scope::editing_supports(window, |window| {
         section(ui, &tr!("shape-part"), None, |ui| {
-            let raft = window.tools.supports.raft_shown(&window.doc.scene);
+            let raft = own_raft_shown(&window.doc.scene).unwrap_or(window.tools.supports.raft);
             let profiles_own = std::mem::replace(&mut window.tools.supports.profile.raft, raft);
             parts(ui, window, profiles_own);
             let edited = std::mem::replace(&mut window.tools.supports.profile.raft, profiles_own);
@@ -45,8 +44,7 @@ pub(super) fn sections(ui: &mut egui::Ui, window: &mut Window) {
 }
 
 /// The parts of a support, one at a time, and the numbers each is built to.
-/// `profiles_raft` is the raft the profile in hand was saved with, which the one being
-/// shown can be set back to.
+/// `profiles_raft` is the raft the profile was saved with, which the shown one can reset to.
 fn parts(ui: &mut egui::Ui, window: &mut Window, profiles_raft: Raft) {
     {
         let plate = own_raft_shown(&window.doc.scene).map(|_| window.tools.supports.raft);

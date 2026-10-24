@@ -181,9 +181,8 @@ pub(super) fn picker_row(
     });
 }
 
-/// Where the printer in hand sends its files: one row naming the listed printer and
-/// what it is doing, opening the others the profile lists, and beside it that printer's
-/// sheet. Which printers a profile lists is its own network settings (ADR 0265).
+/// Where the printer in hand sends its files: a row naming it and its state, the others the
+/// profile lists, and its sheet. The listed printers are network settings (ADR 0265).
 fn send(ui: &mut egui::Ui, window: &mut Window) {
     if cfg!(target_arch = "wasm32") {
         return;

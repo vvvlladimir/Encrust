@@ -13,12 +13,8 @@ const BINS: Scalar = 16.0;
 /// a face a model would rest on.
 const FLATS: usize = 24;
 
-/// Directions worth trying as "down", in the model's own space.
-///
-/// A model rests on its own flat faces, so the largest of them come first and a candidate
-/// from the sphere that lands on one is dropped rather than the other way round. The
-/// sphere is what covers a model that has no flat face at all; see
-/// `docs/design/orientation.md`.
+/// Directions worth trying as "down", in the model's own space; the largest flat faces come first.
+/// The sphere covers models with no flat face; see `docs/design/orientation.md`.
 pub fn directions(mesh: &Mesh, samples: usize) -> Vec<Vec3> {
     let mut chosen: Vec<Vec3> = Vec::with_capacity(FLATS + samples);
     for direction in flats(mesh).into_iter().chain(sphere(samples)) {
@@ -52,10 +48,8 @@ pub struct FlatFace {
     pub area_mm2: Scalar,
 }
 
-/// The directions the model's surface faces, largest area first, in its own space.
-///
-/// Normals are binned rather than clustered properly: a bin is a hash lookup a face,
-/// where clustering would be a comparison against every cluster found so far.
+/// The directions the model's surface faces, largest area first, in its own space. Normals are
+/// binned, a hash lookup a face, rather than clustered against every cluster so far.
 pub fn flat_faces(mesh: &Mesh) -> Vec<FlatFace> {
     let mut bins: FastMap<[i32; 3], (Vec3, Scalar)> = FastMap::default();
     for triangle in mesh.triangles() {
@@ -106,31 +100,7 @@ mod tests {
 
     /// Axis-aligned cube spanning 0..1 on every axis, twelve triangles.
     fn unit_cube() -> Mesh {
-        let vertices = vec![
-            Vec3::new(0.0, 0.0, 0.0),
-            Vec3::new(1.0, 0.0, 0.0),
-            Vec3::new(1.0, 1.0, 0.0),
-            Vec3::new(0.0, 1.0, 0.0),
-            Vec3::new(0.0, 0.0, 1.0),
-            Vec3::new(1.0, 0.0, 1.0),
-            Vec3::new(1.0, 1.0, 1.0),
-            Vec3::new(0.0, 1.0, 1.0),
-        ];
-        let faces = vec![
-            [0, 2, 1],
-            [0, 3, 2],
-            [4, 5, 6],
-            [4, 6, 7],
-            [0, 1, 5],
-            [0, 5, 4],
-            [1, 2, 6],
-            [1, 6, 5],
-            [2, 3, 7],
-            [2, 7, 6],
-            [3, 0, 4],
-            [3, 4, 7],
-        ];
-        Mesh::new(vertices, faces)
+        core_geometry::cuboid(Vec3::ZERO, Vec3::ONE)
     }
 
     #[test]

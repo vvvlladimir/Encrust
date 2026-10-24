@@ -5,10 +5,8 @@ use core_geometry::{Mesh, Scalar};
 use crate::engine::{layer_heights_under, on_the_plate};
 use crate::{Layer, LayerPlan, SliceError, SliceSettings, Sliced, Source};
 
-/// Layers cut in one go before their contours are handed on and dropped.
-///
-/// Shorter holds less and rebuilds the face index more often; see
-/// `docs/decisions/0066-a-stack-is-sliced-a-window-at-a-time.md`.
+/// Layers cut in one go before their contours are handed on and dropped. Shorter holds less and
+/// rebuilds the face index more often (ADR 0066).
 pub const WINDOW_LAYERS: usize = 64;
 
 /// A slicing run that knows its layer heights but has cut none of them, so a caller can
@@ -89,11 +87,8 @@ impl Windows {
         self.planes_of(layer).into_iter().reduce(Scalar::max)
     }
 
-    /// Every plane sampled inside layer `layer`'s band, the one nearest the middle first.
-    ///
-    /// `samples` planes split the band into that many equal parts and take the middle of
-    /// each. The one nearest the band's own middle leads, because that is the cross-section
-    /// everything but the rasteriser reads; see `docs/design/slicing.md`.
+    /// Every plane sampled inside layer `layer`'s band, the one nearest the middle first. `samples`
+    /// planes split the band equally; the middle one leads as the rasteriser's cross-section.
     fn planes_of(&self, layer: usize) -> Vec<Scalar> {
         let samples = usize::from(self.settings.samples.get());
         let Some((bottom, top)) = self.plan.band_of(layer) else {

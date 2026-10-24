@@ -12,11 +12,8 @@ use crate::cut::cut;
 use crate::error::EngineError;
 use crate::plate::{Model, Plate};
 
-/// A plate ready to be written: baked, with the layers it will be cut in
-/// and the header its file carries.
-///
-/// Built once, then written or measured as often as the caller likes. No stack is ever
-/// held whole: each layer is cut as it is needed (ADR 0010, 0068).
+/// A plate ready to be written: baked, with the layers it will be cut in and the header its file
+/// carries. Built once, written or measured often; no stack is ever held whole (ADR 0010, 0068).
 pub struct Run {
     solid: Solid,
     windows: Windows,
@@ -109,11 +106,8 @@ impl Run {
         &self.job
     }
 
-    /// Cuts, rasterises and writes the whole stack into `sink`, a window at a time.
-    ///
-    /// `name` is what the file is called without its directory or extension, which is
-    /// what an `.sl1` names its layer entries after. `None` means the observer cancelled
-    /// it, and what reached `sink` is a file stopped half way through the stack.
+    /// Cuts, rasterises and writes the whole stack into `sink`, a window at a time. `name` is the
+    /// file name without directory or extension; `None` means cancelled.
     pub fn write(
         &self,
         name: &str,

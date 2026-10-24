@@ -12,9 +12,8 @@ use crate::ui::{
 pub(super) const COARSE_STEP: f64 = 0.05;
 const ANGLE_STEP: f64 = 0.5;
 
-/// Bounds on the brush and on the fill, millimetres of plate. A brush finer than a tenth
-/// of a millimetre paints one triangle at a time; one wider than the plate paints all of
-/// it.
+/// Bounds on the brush and the fill, millimetres of plate: finer than 0.1 paints one
+/// triangle at a time, wider than the plate paints all of it.
 pub(super) const MIN_BRUSH_MM: f32 = 0.1;
 pub(super) const MAX_BRUSH_MM: f32 = 25.0;
 const MIN_SPACING_MM: f32 = 0.5;

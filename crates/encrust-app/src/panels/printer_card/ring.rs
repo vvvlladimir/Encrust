@@ -1,6 +1,5 @@
-//! The ring at the left of the print chip: how far the current printer has got, in the
-//! colour of what it is doing. A press opens that printer, or a list of every printer on
-//! the network when there is more than one. See `docs/decisions/0264`.
+//! The ring left of the print chip: the current printer's progress in the colour of its state.
+//! A press opens that printer or the list of printers. See `docs/decisions/0264`.
 
 use egui::{Align2, Pos2, RichText, Sense, Shape, Stroke, pos2, vec2};
 

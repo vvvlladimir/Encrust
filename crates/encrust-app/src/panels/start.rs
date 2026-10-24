@@ -1,7 +1,5 @@
-//! The start page: what the window shows under the top bar until the first model, project
-//! or sliced file arrives. A place to drop a model, and under it the files opened lately or
-//! the test prints bundled with the window, as pictures; see `docs/decisions/0220`, `0232`
-//! and `0234`.
+//! The start page, shown until the first model, project or sliced file arrives: a drop target
+//! over recent files or bundled test prints. See `docs/decisions/0220`, `0232`, `0234`.
 
 use egui::{Align, Align2, Layout, Rect, RichText, Sense, Stroke, Ui, UiBuilder, pos2, vec2};
 

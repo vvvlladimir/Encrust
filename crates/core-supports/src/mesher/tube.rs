@@ -73,10 +73,8 @@ pub fn round_off(rings: &mut Vec<Ring>, along_mm: Scalar, radius_mm: Scalar) {
     }
 }
 
-/// Rings of a ball whose top sits `bite_mm` above the contact, along the tube's axis.
-///
-/// The poles are left out: the cap vertex the sweep puts above the first ring is the top
-/// pole, and the bottom one is inside the segment underneath.
+/// Rings of a ball whose top sits `bite_mm` above the contact along the tube's axis; the poles
+/// are left out: the sweep's cap is the top and the bottom is inside the segment under it.
 pub fn ball(rings: &mut Vec<Ring>, bite_mm: Scalar, radius_mm: Scalar, steps: u32) {
     for step in 1..steps {
         let angle = std::f32::consts::PI * step as Scalar / steps as Scalar;
@@ -105,10 +103,8 @@ pub fn push(rings: &mut Vec<Ring>, along_mm: Scalar, radius_mm: Scalar) {
     }
 }
 
-/// The two unit vectors a tube's circles are drawn in, so that the polygon runs the same
-/// way round whichever way the tube points.
-///
-/// Straight down is the common case and keeps the axes the plate itself is measured in.
+/// The two unit vectors a tube's circles are drawn in, so the polygon runs the same way round
+/// whichever way it points; straight down keeps the plate's own axes.
 pub fn frame(direction: Vec3) -> (Vec3, Vec3) {
     let across = if direction.z.abs() > 0.999 {
         Vec3::X
@@ -118,14 +114,12 @@ pub fn frame(direction: Vec3) -> (Vec3, Vec3) {
     (across, (-direction).cross(across))
 }
 
-/// The least a head may lean off the face its tip sits on, as the cosine between its
-/// axis and the face's normal, for the disc to be laid onto that face: past it the disc
-/// would stretch along the face further than the head is wide.
+/// The least a head may lean off the face its tip sits on, as the cosine between axis and face
+/// normal, for the disc to lie on it; past it the disc would stretch further than the head is wide.
 const SEAT_MIN_COS: Scalar = 0.25;
 
-/// How far along the axis each point of ring `index` moves to lie on the face `normal`
-/// names, given the point's offset from the axis; no further than halfway to the ring
-/// beside it, so the band between the two never turns over.
+/// How far along the axis each point of ring `index` moves to lie on the face `normal`, given its
+/// offset from the axis; at most halfway to the next ring so the band never turns over.
 fn laid(tube: &Tube, index: usize, normal: Option<Vec3>) -> impl Fn(Vec3) -> Scalar {
     let rings = &tube.rings;
     let beside = if index == 0 {

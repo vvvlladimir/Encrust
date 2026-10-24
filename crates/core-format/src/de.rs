@@ -10,12 +10,8 @@ pub trait ReadSeek: Read + Seek {}
 
 impl<T: Read + Seek + ?Sized> ReadSeek for T {}
 
-/// Most bytes one entry of an archive container may expand to.
-///
-/// A zip states an entry's uncompressed size in its own directory; this is what a reader
-/// of the archive containers believes instead. One greyscale mask of the largest panel
-/// `MAX_PANEL_PX` allows is the largest thing an entry legitimately holds, and the image
-/// an entry actually carries is well under that.
+/// Most bytes one entry of an archive container may expand to, whatever the zip directory states.
+/// It is one greyscale mask of the largest panel `MAX_PANEL_PX` allows.
 pub const MAX_ENTRY_BYTES: u64 = crate::MAX_PANEL_PX as u64;
 
 /// Reads one entry of an archive, growing rather than trusting the size it states.
@@ -37,14 +33,8 @@ pub fn read_entry(source: &mut impl Read, name: &str) -> Result<Vec<u8>, FormatE
     Ok(bytes)
 }
 
-/// Field reader for a sliced-file container, the dual of `Fields`.
-///
-/// It owns its source rather than borrowing one, so an open file can be held for as long as
-/// a caller wants to read layers out of it; see `docs/decisions/0150`. A `&mut File` is
-/// itself a source, so a caller that only wants the tables passes one.
-///
-/// Both endiannesses are spelt out at the call site because the formats disagree: `.goo` is
-/// big-endian throughout and the rest are little-endian.
+/// Field reader for a sliced-file container, the dual of `Fields`; owns its source (ADR 0150).
+/// Endianness is spelt out at the call site: `.goo` is big-endian, the rest little-endian.
 pub struct Reads<S> {
     source: S,
     /// The length, measured on the first question and kept: a file being read does not
@@ -74,11 +64,8 @@ impl<S: ReadSeek> Reads<S> {
         Ok(end)
     }
 
-    /// Moves to an absolute offset a field pointed at.
-    ///
-    /// Fails when the offset is past the end of the file, because a container whose header
-    /// addresses a block that is not there is a truncated one, and reading on from a
-    /// clamped position would report nonsense rather than a fault.
+    /// Moves to an absolute offset a field pointed at. Fails past the end of the file: a header
+    /// addressing a missing block means a truncated container.
     pub fn seek_to(&mut self, offset: u64) -> Result<(), FormatError> {
         let end = self.length()?;
         if offset > end {
@@ -100,10 +87,7 @@ impl<S: ReadSeek> Reads<S> {
     }
 
     /// Refuses a count the source is too small to hold, before a caller reserves for it.
-    ///
-    /// `each_bytes` is the least one of the claimed things costs in the file, so a header
-    /// promising more rows than there are bytes behind them is refused rather than
-    /// turned into an allocation; see `docs/design/hostile-files.md`.
+    /// `each_bytes` is the least one thing costs in the file (`docs/design/hostile-files.md`).
     pub fn claim(
         &mut self,
         what: &'static str,

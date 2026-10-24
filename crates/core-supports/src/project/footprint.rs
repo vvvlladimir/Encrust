@@ -16,9 +16,8 @@ const MAX_CELL_MM: Scalar = 0.5;
 /// which bridges the corners an 8-connected band of one cell can leave.
 const WALK_REACH: i32 = 2;
 
-/// A painted patch seen from the plate: the lowest surface over each cell and how far the
-/// cell lies inside the patch's outline, which is what a rim offset or a ring of the inside
-/// is measured by. See `docs/design/supports.md`.
+/// A painted patch seen from the plate: the lowest surface over each cell and how far the cell
+/// lies inside the outline, for rim offsets and rings. See `docs/design/supports.md`.
 pub(super) struct Footprint {
     cell_mm: Scalar,
     /// The cell at index 0, one cell outside the patch on every side.
@@ -106,9 +105,8 @@ impl Footprint {
         points
     }
 
-    /// Points no closer than `spacing_mm` scattered over the cells at least `depth_mm`
-    /// inside the outline, on the surface. The order is a hash of each cell, so the same
-    /// patch scatters the same way every time.
+    /// Points no closer than `spacing_mm` scattered over cells at least `depth_mm` inside the
+    /// outline, on the surface, in a per-cell hash order so the same patch scatters the same way.
     pub(super) fn scattered(&self, depth_mm: Scalar, spacing_mm: Scalar) -> Vec<Vec3> {
         let mut cells: Vec<IVec2> = self
             .cells()
@@ -181,9 +179,8 @@ fn nearest_left(left: &FastSet<IVec2>, at: IVec2) -> Option<IVec2> {
     best.map(|(_, cell)| cell)
 }
 
-/// Millimetres from each cell's middle to the outline of the cells that are not NaN,
-/// by the two-pass sweep that carries each cell's nearest outside cell to its neighbours
-/// (8SSEDT). Accurate to within a cell; outside cells are nought.
+/// Millimetres from each cell middle to the outline of the non-NaN cells, by the two-pass 8SSEDT
+/// sweep; accurate to within a cell, outside cells are nought.
 fn depths(z: &[Scalar], width: i32, height: i32, cell_mm: Scalar) -> Vec<Scalar> {
     const FAR: IVec2 = IVec2::splat(1 << 14);
     let mut near: Vec<IVec2> = z

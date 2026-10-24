@@ -13,9 +13,8 @@ pub enum ProfilesCommand {
     List,
     /// Print one profile as TOML, the starting point for one of your own.
     Show(ShowArgs),
-    /// Take a profile file someone exported, a resin another program exported, or the resin
-    /// a sliced file was printed with, into your own catalogue under an id of its own: an
-    /// import never writes over what you have.
+    /// Import an exported profile, a resin from another program, or the resin a sliced file was
+    /// printed with, under a new id of its own; an import never overwrites.
     Import(ImportArgs),
 }
 

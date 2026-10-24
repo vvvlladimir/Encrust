@@ -22,10 +22,8 @@ struct Hung {
 }
 
 impl Forest<'_> {
-    /// Stands every front on a node of a square grid `grid.spacing_mm` across, anchored to
-    /// the plate: the nearest node a 45 degree strut reaches clear of the model and a trunk
-    /// stands under straight down. The fronts of one node hang one above another on one
-    /// trunk, and a front no node takes is left where it is. See `docs/decisions/0335`.
+    /// Stands every front on a node of a plate-anchored square grid `grid.spacing_mm` across: the
+    /// nearest a 45 degree strut reaches clear of the model; unplaced fronts stay (ADR 0335).
     pub(super) fn snap_to_grid(&mut self, placed: &Placed, grid: Grid) {
         let spacing_mm = grid
             .spacing_mm
@@ -133,7 +131,7 @@ impl Forest<'_> {
 
 #[cfg(test)]
 mod tests {
-    use crate::tests::{box_mesh, profile, trees_on};
+    use crate::fixtures::{box_mesh, profile, trees_on};
     use crate::{Profiles, SupportPoint, SupportTree};
     use core_geometry::{Scalar, Transform, Vec2, Vec3};
     use printer_profiles::{Grid, SupportProfile};

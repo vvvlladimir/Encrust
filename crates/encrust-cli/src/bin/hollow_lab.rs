@@ -1,8 +1,5 @@
-//! A bench for hollowing: what each stage costs in time and in live bytes.
-//!
-//! Peak memory is counted by the allocator rather than read off the process, so it is the
-//! bytes this run actually holds — no allocator slack, no page-cache noise, and the same
-//! number on every machine. See `docs/design/hollowing.md`.
+//! A bench for hollowing: what each stage costs in time and in live bytes, counted by the
+//! allocator so it is the same on every machine. See `docs/design/hollowing.md`.
 
 use std::alloc::{GlobalAlloc, Layout, System};
 use std::path::PathBuf;

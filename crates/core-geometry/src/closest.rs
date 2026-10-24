@@ -24,11 +24,8 @@ pub fn point_aabb_squared(point: Vec3, bounds: &Aabb) -> Scalar {
     outside.length_squared()
 }
 
-/// Nearest point of `triangle` to `point`, by the Voronoi region test of Ericson,
-/// *Real-Time Collision Detection* §5.1.5; see `docs/design/distance-queries.md`.
-///
-/// The seven regions — three vertices, three edges, the face — are tested in an order that
-/// lets each one reuse the dot products the last one computed.
+/// Nearest point of `triangle` to `point`, by Ericson's Voronoi region test (*Real-Time Collision
+/// Detection* §5.1.5). See `docs/design/distance-queries.md`.
 pub fn point_triangle(point: Vec3, triangle: &Triangle) -> Vec3 {
     let (a, b, c) = (triangle.a, triangle.b, triangle.c);
     let ab = b - a;
@@ -88,11 +85,8 @@ pub fn point_triangle(point: Vec3, triangle: &Triangle) -> Vec3 {
     a + ab * (along_ac * inverse) + ac * (along_ab * inverse)
 }
 
-/// Nearest point of `mesh` to `point`, in the mesh's own space, by testing every face.
-///
-/// Linear in the face count. A narrow-band distance field asks this of every voxel near
-/// the surface, so build a [`crate::Bvh`] instead; this is what it is measured and tested
-/// against.
+/// Nearest point of `mesh` to `point`, in the mesh's own space, by testing every face; linear in
+/// faces. Build a [`crate::Bvh`] for many queries; this is what it is measured and tested against.
 pub fn closest_point(mesh: &Mesh, point: Vec3) -> Option<ClosestPoint> {
     (0..mesh.faces.len())
         .filter_map(|face| {

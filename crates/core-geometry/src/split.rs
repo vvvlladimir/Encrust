@@ -5,11 +5,7 @@ use crate::topology::{Components, edge_uses};
 use crate::{FastMap, Mesh};
 
 /// Splits a mesh into the pieces that share no vertex, the biggest piece first.
-///
-/// Two triangles belong to the same piece when they share a vertex index, so a mesh that
-/// was welded first splits into the shells a user would call separate parts, and one that
-/// was not splits into whatever its indices say. A mesh that is all one piece comes back
-/// as itself.
+/// Pieces follow vertex indices, so weld first to get the shells a user would call parts.
 pub fn split(mesh: &Mesh) -> Vec<Mesh> {
     let joins = mesh
         .faces
@@ -88,31 +84,7 @@ mod tests {
 
     /// Axis-aligned box, twelve triangles, spanning `min`..`max`.
     fn cuboid(min: Vec3, max: Vec3) -> Mesh {
-        let vertices = vec![
-            Vec3::new(min.x, min.y, min.z),
-            Vec3::new(max.x, min.y, min.z),
-            Vec3::new(max.x, max.y, min.z),
-            Vec3::new(min.x, max.y, min.z),
-            Vec3::new(min.x, min.y, max.z),
-            Vec3::new(max.x, min.y, max.z),
-            Vec3::new(max.x, max.y, max.z),
-            Vec3::new(min.x, max.y, max.z),
-        ];
-        let faces = vec![
-            [0, 2, 1],
-            [0, 3, 2],
-            [4, 5, 6],
-            [4, 6, 7],
-            [0, 1, 5],
-            [0, 5, 4],
-            [1, 2, 6],
-            [1, 6, 5],
-            [2, 3, 7],
-            [2, 7, 6],
-            [3, 0, 4],
-            [3, 4, 7],
-        ];
-        Mesh::new(vertices, faces)
+        crate::cuboid(min, max)
     }
 
     fn joined(meshes: &[Mesh]) -> Mesh {

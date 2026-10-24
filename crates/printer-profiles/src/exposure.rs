@@ -2,10 +2,8 @@
 /// 0.05 to 0.15 mm a pigmented 405 nm resin shows; see `docs/decisions/0143`.
 pub const ASSUMED_PENETRATION_DEPTH_MM: f32 = 0.10;
 
-/// What a layer of `thickness_mm` needs, out of the `exposure_s` a resin was measured at
-/// `measured_at_mm` for, along the resin's Jacobs working curve.
-///
-/// See `docs/decisions/0143-exposure-follows-the-working-curve.md`.
+/// What a layer of `thickness_mm` needs, from the `exposure_s` a resin was measured at
+/// `measured_at_mm`, along its Jacobs working curve (`docs/decisions/0143`).
 pub fn exposure_for_mm(
     exposure_s: f32,
     measured_at_mm: f32,

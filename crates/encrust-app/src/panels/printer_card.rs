@@ -1,6 +1,5 @@
-//! A printer on the network, in the parts the window shows it in: one row in the Export
-//! tool naming where files go, the ring in the top bar, and the sheet the ring opens with
-//! everything about it. See `docs/decisions/0264`.
+//! A printer on the network as the window shows it: a row in the Export tool, the ring in the
+//! top bar and the sheet the ring opens. See `docs/decisions/0264`.
 
 mod controls;
 mod history;
@@ -53,10 +52,8 @@ pub enum Chosen {
     Open(String),
 }
 
-/// Where the printer in hand sends its files, as one row: the chosen printer's name and
-/// what it is doing, a list of the others when the profile lists more than one, and
-/// beside it the way into that printer's sheet. What went wrong — the caller's `warning`,
-/// the printer's own failure, what the scan could not do — waits behind the status word.
+/// Where the printer in hand sends its files, as one row: its name and state, the others the
+/// profile lists, and its sheet. Failures wait behind the status word.
 pub fn destination(
     ui: &mut egui::Ui,
     network: &Network,

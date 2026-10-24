@@ -1,7 +1,5 @@
-/// One layer as an 8-bit greyscale image, row-major from the top-left of the LCD.
-///
-/// 0 means the pixel stays dark; 255 means full exposure. Intermediate values come from
-/// anti-aliasing and are honoured by the printer as reduced exposure.
+/// One layer as an 8-bit greyscale image, row-major from the top-left of the LCD. 0 is dark, 255
+/// full exposure; intermediate values are anti-aliasing and expose proportionally less.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct LayerMask {
     width: u32,

@@ -81,11 +81,8 @@ fn pieces_of(field: &Field, labels: &[u32], count: usize) -> Vec<Field> {
     pieces.into_iter().map(Field::of_spans).collect()
 }
 
-/// The pieces of a field, keeping which piece each of its spans belongs to.
-///
-/// Placement needs more than the pieces themselves: it has to tell which piece a cell
-/// falls in, and to follow a piece onto the pieces of the layer under it, so that a
-/// support holds only the part of the model it stands under. See `docs/decisions/0081`.
+/// The pieces of a field, keeping which piece each span belongs to, so placement can tell which
+/// piece a cell is in and follow it onto the layer under it (ADR 0081).
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct Parts {
     field: Field,
@@ -135,10 +132,8 @@ impl Parts {
         cells
     }
 
-    /// For every piece here, the pieces of `below` it stands on, corner contact included.
-    ///
-    /// Both fields are run-length and sorted, so each row is walked once from left to
-    /// right: a layer's parentage costs its outline, not its area.
+    /// For every piece here, the pieces of `below` it stands on, corner contact included; each row
+    /// is walked once, so parentage costs the outline, not the area.
     pub fn parents(&self, below: &Self) -> Vec<Vec<u32>> {
         let mut parents = vec![Vec::new(); self.count];
         for (y, spans) in self.field.rows() {

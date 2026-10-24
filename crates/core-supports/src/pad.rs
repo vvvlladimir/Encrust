@@ -16,9 +16,8 @@ const PAD_HEIGHTS: usize = 3;
 /// bares the flare or the trunk.
 const PAD_LEFT_MM: Scalar = 0.05;
 
-/// A pad cut back where the model stands beside it: how far from its middle it reaches in
-/// each of [`PAD_SECTORS`] directions across the plate, the first along +x and
-/// counter-clockwise from there, mm. See `docs/decisions/0328`.
+/// A pad cut back where the model stands beside it: how far it reaches from its middle in each of
+/// [`PAD_SECTORS`] directions, from +x counter-clockwise, mm (ADR 0328).
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 pub struct PadCut {
     pub reach_mm: [Scalar; PAD_SECTORS],
@@ -68,9 +67,8 @@ fn sector_angle() -> Scalar {
     std::f32::consts::TAU / PAD_SECTORS as Scalar
 }
 
-/// The pad standing at `base` cut back to keep its clearance from the model beside it, or
-/// `None` where the model leaves it no room past `inside_mm`, the flare and trunk it
-/// carries, or does not reach it at all.
+/// The pad at `base` cut back to keep its clearance from the model beside it, or `None` where
+/// the model leaves no room past `inside_mm` (flare and trunk) or does not reach it.
 pub(crate) fn pad_cut(
     placed: &Placed,
     base: Vec3,
@@ -117,10 +115,8 @@ fn looks_of(sector: usize) -> impl Iterator<Item = Scalar> {
     [middle - half, middle, middle + half].into_iter()
 }
 
-/// A pad standing at `base`, looked out from at each of [`PAD_HEIGHTS`] through it.
-///
-/// Every look reaches no further than the pad does, which skips the rest of the model;
-/// whether a height sets off inside the model is asked once, along a ray of any length.
+/// A pad at `base` looked out from at each of [`PAD_HEIGHTS`] through it; looks reach no further
+/// than the pad, and whether a height starts inside the model is asked once by an unbounded ray.
 struct Sole {
     base: Vec3,
     up_mm: [Scalar; PAD_HEIGHTS],
@@ -129,7 +125,7 @@ struct Sole {
 
 impl Sole {
     fn at(placed: &Placed, base: Vec3, profile: &SupportProfile) -> Self {
-        let height_mm = profile.base_height_mm();
+        let height_mm = profile.bottom.platform_thickness_mm;
         let up_mm = std::array::from_fn(|step| {
             SURFACE_EPSILON_MM
                 + (height_mm - SURFACE_EPSILON_MM) * step as Scalar / (PAD_HEIGHTS - 1) as Scalar
@@ -146,11 +142,8 @@ impl Sole {
         }
     }
 
-    /// How far the pad reaches towards `angle` before it comes within its clearance of
-    /// the model at any height through it, capped at its radius, mm.
-    ///
-    /// Looked for out from the pad's middle, so a toe standing inside the pad is found
-    /// wherever it is.
+    /// How far the pad reaches towards `angle` before coming within clearance of the model at any
+    /// height, capped at its radius, mm; looked for out from its middle so an inner toe is found.
     fn room_towards(&self, placed: &Placed, angle: Scalar, profile: &SupportProfile) -> Scalar {
         let rim_mm = profile.base_radius_mm();
         let out = Vec2::new(angle.cos(), angle.sin()).extend(0.0);
@@ -175,7 +168,7 @@ impl Sole {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::tests::{box_mesh, profile};
+    use crate::fixtures::{box_mesh, profile};
     use core_geometry::{Bvh, Transform};
 
     fn full(reach_mm: Scalar) -> PadCut {

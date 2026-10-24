@@ -16,11 +16,8 @@ const ZOOM_PER_POINT: f32 = 0.004;
 /// The ring around an issue on the shown layer, points: wide enough to find a pixel by.
 const RISK_RING_R: f32 = 12.0;
 
-/// The exposure mask, beside the model rather than under the inspector.
-///
-/// A 300 point column cannot show an 8520 pixel panel, so Preview gives the mask a pane of
-/// the stage, or all of it; see `docs/decisions/0103`. The picture fills the pane, under
-/// the cards as the model does; the caption keeps to `clear`, the room they leave.
+/// The exposure mask beside the model: a 300 point column cannot show an 8520 pixel panel,
+/// so Preview gives it a pane of the stage (`docs/decisions/0103`); the caption keeps to `clear`.
 pub fn ui(ui: &mut egui::Ui, machine: &mut Machine, clear: Rect) {
     let Some(settings) = machine.slicing.raster_settings() else {
         caption(ui, clear, &tr!("mask-pick-machine"));
@@ -81,11 +78,8 @@ fn caption(ui: &egui::Ui, clear: Rect, text: &str) {
     );
 }
 
-/// Draws the mask as the view has it and answers the pointer. Returns whether what is on
-/// screen is the panel's own pixels rather than the shrunk picture.
-///
-/// Only a failure reaches the stage notice: a picture that is drawn says so by being there,
-/// and reporting it every frame would wipe out whatever else is written.
+/// Draws the mask as the view has it and answers the pointer; returns whether the panel's own
+/// pixels are on screen. Only a failure reaches the stage notice, never per frame.
 fn picture(
     ui: &mut egui::Ui,
     preview: &mut Preview,

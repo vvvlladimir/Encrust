@@ -16,11 +16,8 @@ pub struct Preview {
     pub stands: bool,
 }
 
-/// What a support of `group` touching the model at `contact` would be built as.
-///
-/// It is grown by the same rule a placed point is (ADR 0040), but alone: what it would
-/// merge with or be braced to among the supports already standing is left out, so the
-/// rebuild a hover asks for stays one column. `contact` is in plate coordinates.
+/// What a support of `group` touching the model at `contact` (plate coordinates) would be built
+/// as, grown by the placed-point rule (ADR 0040) alone, so a hover rebuilds one column.
 pub fn preview(placed: &Placed, contact: Vec3, group: u16, profiles: Profiles) -> Preview {
     if let Some(tree) = alone(placed, contact, group, profiles) {
         return Preview {
@@ -53,7 +50,7 @@ fn alone(placed: &Placed, contact: Vec3, group: u16, profiles: Profiles) -> Opti
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::tests::{box_mesh, profile};
+    use crate::fixtures::{box_mesh, profile};
     use core_geometry::{Bvh, Transform};
 
     #[test]

@@ -31,12 +31,8 @@ const VENT_STEP_MM: Scalar = 0.5;
 /// The most planes one run of cuts is given, however long a channel it is.
 const VENT_PLANES: usize = 16;
 
-/// Cuts the model standing with `down` at the plate at `sections` heights, and reads off
-/// its largest section, its hardest pull and its widest suction cup.
-///
-/// The heights are samples across the model, not the layers it prints at: the hardest
-/// section is a property of the shape. Each section is the pieces its contours cover, so
-/// bodies that overlap there pull the film once (ADR 0206) and pieces apart pull apart.
+/// Cuts the model standing with `down` at the plate at `sections` heights; reads the largest
+/// section. Heights are samples, not print layers; overlaps pull the film once (ADR 0206).
 pub fn cut(
     printed: &Printed,
     down: Vec3,

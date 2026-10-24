@@ -7,11 +7,8 @@ use core_geometry::{Bvh, Mat4, Mesh, Region, Scalar, Transform, Vec3};
 /// millimetres: a hundredth, well over what single precision loses across a plate.
 const ON_PATCH_MM: Scalar = 0.01;
 
-/// A region the user has forbidden supports, as the question every placement asks it.
-///
-/// Both halves of that question are answered here: a face is blocked, so no tip and no
-/// foot may be put on it, and a point on the plate is over blocked surface, so automatic
-/// placement puts nothing there. See `docs/decisions/0093`.
+/// A region the user has forbidden supports, as the question every placement asks: is a face
+/// blocked, and is a plate point over blocked surface (ADR 0093).
 #[derive(Debug)]
 pub struct Blocked {
     patch: Option<Bvh>,
@@ -72,9 +69,8 @@ impl Blocked {
         self.near_patch(point, ON_PATCH_MM)
     }
 
-    /// Whether the blocked patch comes within `radius_mm` of `point`, in plate
-    /// coordinates, or the point is on the side of the wall a run keeps off: what keeps an
-    /// automatic contact out.
+    /// Whether the blocked patch comes within `radius_mm` of `point`, plate coordinates, or the
+    /// point is on the side of the wall a run keeps off: keeps automatic contacts out.
     pub fn covers(&self, point: Vec3, radius_mm: Scalar) -> bool {
         self.near_patch(point, radius_mm)
             || self.side.as_ref().is_some_and(|side| !side.keeps(point))
@@ -92,7 +88,7 @@ impl Blocked {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::tests::box_mesh;
+    use crate::fixtures::box_mesh;
 
     /// The box every test paints on: 10 mm on a side, standing on the plate.
     fn cube() -> Mesh {

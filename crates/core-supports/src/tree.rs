@@ -4,10 +4,8 @@ use serde::{Deserialize, Serialize};
 
 use crate::Landing;
 
-/// One joint of a support, in plate coordinates.
-///
-/// A node hangs from the node below it, so the parent link always points downwards and
-/// the tree has its root at the bottom.
+/// One joint of a support, in plate coordinates, hanging from the node below it, so the parent
+/// link points down and the root is at the bottom.
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 pub struct TreeNode {
     pub position: Vec3,
@@ -29,11 +27,8 @@ impl TreeNode {
     }
 }
 
-/// One support: the tips it holds, the struts that carry them down, and where the trunk
-/// underneath them comes to rest.
-///
-/// A support with no branching is a tree of one node, which is the vertical column of
-/// step 7a. See `docs/decisions/0040` and `docs/design/supports.md`.
+/// One support: the tips it holds, the struts carrying them down and where the trunk rests;
+/// without branching a tree of one node (ADR 0040, `docs/design/supports.md`).
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct SupportTree {
     nodes: Vec<TreeNode>,
@@ -93,9 +88,8 @@ impl SupportTree {
             .map(|node| node.head.unwrap_or(self.group))
     }
 
-    /// The group each node is drawn in: a tip its own head's, any other node the heaviest
-    /// head hanging from it, so a lighter branch keeps its colour down to where it joins a
-    /// heavier one.
+    /// The group each node is drawn in: a tip its own head's, any other the heaviest head hanging
+    /// from it, so a lighter branch keeps its colour down to a heavier one.
     pub(crate) fn node_groups(&self, profiles: crate::Profiles) -> Vec<u16> {
         let mut groups: Vec<Option<u16>> = vec![None; self.nodes.len()];
         for (leaf, node) in self
@@ -208,11 +202,8 @@ impl SupportTree {
         self.nodes.iter().filter(|node| node.is_leaf()).count()
     }
 
-    /// The same tree with every position put through `matrix`, which is what carries a
-    /// tree the hand has edited between the model's own space and the plate.
-    ///
-    /// Radii are left alone: a support keeps the thickness its profile asks for however
-    /// the model it stands under is scaled.
+    /// The same tree with every position put through `matrix`, between model space and plate;
+    /// radii are left alone so profile thickness survives model scaling.
     #[must_use]
     pub fn moved(&self, matrix: Mat4) -> Self {
         let mut moved = self.clone();
@@ -260,11 +251,8 @@ impl SupportTree {
         self.landing = landing;
     }
 
-    /// The tree without the nodes in `cut` and everything they hold up, or `None` when
-    /// that leaves it nothing to hold: the root went, or every tip did.
-    ///
-    /// A joint left with nothing above it goes too, and so on down, so no stub is left
-    /// reaching for a tip that is not there.
+    /// The tree without the nodes in `cut` and everything they hold up, or `None` when nothing is
+    /// left to hold: the root went or every tip did; a joint left with nothing above goes too.
     #[must_use]
     pub fn without(&self, cut: &[usize]) -> Option<Self> {
         let mut kept: Vec<bool> = (0..self.nodes.len())
@@ -355,7 +343,7 @@ impl SupportTree {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::tests::{profile, trees_on};
+    use crate::fixtures::{profile, trees_on};
     use crate::{Profiles, SupportPoint};
     use core_geometry::{Mesh, Transform};
 

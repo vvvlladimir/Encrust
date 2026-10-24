@@ -1,10 +1,7 @@
 use std::io::{self, Seek, SeekFrom, Write};
 
-/// A sink a sliced file can be written to.
-///
-/// `Seek` is required of every format, not only the ones that need it: a container whose
-/// header points at a table it precedes can only be written by going back over it. See
-/// `docs/decisions/0045-sliced-files-are-written-to-a-seekable-sink.md`.
+/// A sink a sliced file can be written to; `Seek` is required of every format. A header that points
+/// at a table it precedes is written by going back over it (ADR 0045).
 pub trait WriteSeek: Write + Seek {}
 
 impl<T: Write + Seek + ?Sized> WriteSeek for T {}

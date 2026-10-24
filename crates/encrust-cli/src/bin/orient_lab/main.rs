@@ -1,7 +1,5 @@
-//! A bench for orientation: each goal's choice, the poses a person would try by hand and,
-//! asked for, an even spread over the sphere, all judged by the supports and the stack
-//! they actually produce, against rules of success every goal shares. See
-//! `docs/design/orientation.md`; the rules are in `verdict.rs`.
+//! A bench for orientation: each goal's choice and hand-picked poses judged by the supports and
+//! stack they produce. See `docs/design/orientation.md`; the rules are in `verdict.rs`.
 
 mod bodies;
 mod corpus;
@@ -51,9 +49,8 @@ struct Args {
     /// Write the run as JSON, to keep as a baseline.
     #[arg(long)]
     json: Option<PathBuf>,
-    /// Compare with a run kept before; a goal that passed there and fails here fails the
-    /// run. The poses its goals chose, and those it knew from before, are measured again
-    /// here, so the best known pose of a model is never forgotten.
+    /// Compare with a run kept before; a goal that passed there and fails here fails the run.
+    /// Poses chosen or known from before are measured again, so the best known pose is kept.
     #[arg(long)]
     baseline: Option<PathBuf>,
     /// Judge the poses a run kept again, measuring nothing: what changing a rule of

@@ -1,10 +1,5 @@
-//! A `.encrust` project saved by the window, sliced without one.
-//!
-//! The project carries its own models, placements, supports and walls, so the flags that
-//! shape a model are refused rather than quietly ignored. It names its printer and resin
-//! by id only, found among the user's profiles unless a flag names others (ADR 0261). The
-//! printer, the resin, the layer height and how many layers are cut at once are what a
-//! flag may still change.
+//! A `.encrust` project saved by the window, sliced without one. Flags that shape a model are
+//! refused; printer and resin are named by id only (ADR 0261) and flags may still change them.
 
 use std::path::{Path, PathBuf};
 

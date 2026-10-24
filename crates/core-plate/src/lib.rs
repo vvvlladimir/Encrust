@@ -1,8 +1,5 @@
-//! Where a model stands on the build plate.
-//!
-//! Orienting asks which way up a model prints best and answers with a rotation; arranging
-//! asks where several models go and answers with an offset each. Both are explained in
-//! `docs/design/orientation.md`.
+//! Where a model stands on the build plate: orienting answers with a rotation, arranging with an
+//! offset each. See `docs/design/orientation.md`.
 
 mod arrange;
 mod candidates;

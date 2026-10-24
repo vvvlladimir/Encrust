@@ -23,11 +23,8 @@ pub struct ModelFile<'a> {
     pub beside: &'a dyn Fn(&str) -> Option<Vec<u8>>,
 }
 
-/// A mesh importer for one file format.
-///
-/// Loaders return the file's triangles as they are stored, with no vertices shared
-/// between faces unless the format itself shares them. Call [`core_geometry::weld`]
-/// before asking anything about the topology.
+/// A mesh importer for one file format. Returns triangles as stored, with no shared vertices; call
+/// [`core_geometry::weld`] before topology.
 pub trait MeshLoader {
     /// Lower-case extensions this loader accepts, without the dot.
     fn extensions(&self) -> &'static [&'static str];

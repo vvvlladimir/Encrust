@@ -1,14 +1,7 @@
 use crate::scanline::{Deltas, Edge};
 
-/// Deposits the exact area one edge cuts from each pixel of one row.
-///
-/// Every pixel the edge crosses receives the signed area the edge takes from it, and the
-/// running sum taken in `emit_row` carries that along the row, so the solid pixels between
-/// two edges cost nothing at all. The sign follows the edge's direction, which is what
-/// makes the running sum a winding number rather than a count of edges.
-///
-/// The formula is the exact-area one every font rasteriser uses; see
-/// `docs/design/rasterisation.md` for where it comes from and what it assumes.
+/// The sign follows the edge direction, so the running sum is a winding number. See
+/// `docs/design/rasterisation.md`.
 pub(crate) fn add_edge_row(deltas: &mut Deltas, width_px: u32, row: u32, edge: &Edge) {
     let top = (row as f32).max(edge.y_min);
     let bottom = ((row + 1) as f32).min(edge.y_max);
@@ -27,10 +20,8 @@ pub(crate) fn add_edge_row(deltas: &mut Deltas, width_px: u32, row: u32, edge: &
     spread(deltas, width_px, x, x_next, height * edge.direction as f32);
 }
 
-/// Spreads `area` over the pixels of one row that the segment from `x` to `x_next`
-/// crosses, giving each the share of it that falls inside that pixel.
-///
-/// Columns are relative to the row; `emit_row` is what places the row in the layer.
+/// Spreads `area` over the pixels of one row that the segment from `x` to `x_next` crosses. Columns
+/// are relative to the row; `emit_row` places the row in the layer.
 fn spread(deltas: &mut Deltas, width_px: u32, x: f32, x_next: f32, area: f32) {
     let (left, right) = if x < x_next { (x, x_next) } else { (x_next, x) };
     let left_floor = left.floor();

@@ -116,9 +116,8 @@ pub enum Kind {
     OnModel,
 }
 
-/// Reads `supported` against `profile`, the one placement ran with, and `limits`, each tip
-/// against its own profile; `upright` turns the printed pose back to the one the model was
-/// drawn in.
+/// Reads `supported` against `profile` (the placement's) and `limits`, each tip against its own;
+/// `upright` turns the printed pose back to the one the model was drawn in.
 pub fn read(
     supported: &Supported,
     profile: &SupportProfile,
@@ -160,15 +159,14 @@ pub fn read(
     shape
 }
 
-/// How wide a tip is where it crosses the part's surface, millimetres. A plane tip is the
-/// whole cone moved its bite in, so the surface cuts it wider than its contact disc
-/// (ADR 0243); that section is what the peel pulls through and what is left as a scar.
+/// How wide a tip is where it crosses the part's surface, mm: the surface cuts a plane tip wider
+/// than its contact disc (ADR 0243); that section is what the peel pulls through.
 pub fn surface_radius_mm(profile: &SupportProfile) -> Scalar {
     let contact = profile.contact_radius_mm();
     match profile.tip.shape {
         ContactShape::Plane => {
-            let top = profile.top_length_mm().max(1e-3);
-            let bite = profile.contact_depth_mm().min(top);
+            let top = profile.top.length_mm.max(1e-3);
+            let bite = profile.tip.contact_depth_mm.min(top);
             contact + (profile.pillar_radius_mm() - contact) * bite / top
         }
         ContactShape::Sphere => contact,

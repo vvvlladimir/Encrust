@@ -1,7 +1,5 @@
-//! A print that answers what the bench can only assume: what tears a tip off a part, and
-//! what mark it leaves. A spec file lays it out — tip shapes as rows, bodies and how many
-//! tips hold them as blocks and columns — so a new question is a new file, not new code.
-//! local-docs/supports/README.md says how to read one.
+//! A print answering what the bench can only assume: what tears a tip off and what it leaves.
+//! A spec file lays it out; `local-docs/supports/README.md` says how to read one.
 
 use std::path::Path;
 
@@ -336,9 +334,8 @@ fn leant_spots(holders: usize) -> Vec<(f32, f32)> {
     }
 }
 
-/// A block's two rails cured flat on the plate, where nothing tears them off: beside each
-/// row as many bumps as its place, beside each column the same, and past the corner the
-/// block's own number in taller bumps. They mark no specimen, so each is tested alike.
+/// A block's two rails cured flat on the plate, where nothing tears them off: numbered bumps
+/// beside each row and column, so each specimen is tested alike.
 fn rulers(first: Vec2, (rows, columns): (usize, usize), number: usize) -> Mesh {
     let mut mesh = Mesh::default();
     let left = first.x - RULER_OFFSET_MM;

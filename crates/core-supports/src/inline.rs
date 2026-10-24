@@ -15,16 +15,8 @@ const MIN_SPACING_MM: Scalar = 0.05;
 /// surface nearest a chord bunches its samples where it folds away from it.
 const CROWD: Scalar = 0.5;
 
-/// Contacts in a line from the support at `from` to `to`, evenly spaced no further apart
-/// than `spacing_mm`, each on the model's surface. In plate coordinates.
-///
-/// The line is laid along the chord between the two and every point taken to the nearest
-/// surface, so it follows the model's underside without a path over its faces. `from`
-/// stands already and is left out, `to` is the last point. A point that comes down on a
-/// blocked face or crowds the one before it is left out too.
-///
-/// On a hollow model the surface is that of `side`, so a chord dipping into a thin wall
-/// is not taken through it onto the cavity.
+/// Contacts in plate coordinates evenly spaced no further than `spacing_mm` along the chord
+/// `from`..`to`, each on the nearest surface; `from` is left out, blocked or crowded points too.
 pub fn inline(
     placed: &Placed,
     from: Vec3,
@@ -68,7 +60,7 @@ fn on_side(placed: &Placed, side: &WallSide, at: Vec3) -> Option<Vec3> {
 mod tests {
     use super::*;
     use crate::Blocked;
-    use crate::tests::box_mesh;
+    use crate::fixtures::box_mesh;
     use core_geometry::{Bvh, Region, Transform};
 
     /// A 10 mm box floating 5 mm over the plate.

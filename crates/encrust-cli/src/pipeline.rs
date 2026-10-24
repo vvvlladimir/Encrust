@@ -1,26 +1,16 @@
-//! The stages one model goes through on its way onto the plate, and the cut of a staged
-//! plate into a file.
-//!
-//! The single run, the batch and a plate of several models all go through here; what
-//! assembles a plate is `stage`.
+//! The stages one model goes through onto the plate, and the cut of a staged plate into a file.
+//! The single run, the batch and a multi-model plate share it; `stage` assembles a plate.
 
 use std::path::{Path, PathBuf};
-use std::time::Instant;
 
 use anyhow::{Context, Result};
 use core_analysis::Measured;
-use core_engine::{Cutting, Trial, bake, cut, orient_for_print};
-use core_geometry::{
-    Bvh, Heightmap, Mesh, Quat, Scalar, Transform, UvMap, Vec3, Welded, center_over_plate,
-    diagnose, drop_to_plate, glam::EulerRot, orient_outward, remove_duplicate_faces,
-    transform_mesh, weld,
-};
-use core_mesh_io::{Loaded, Texture, loader_for_extension};
+use core_engine::{Cutting, bake, cut};
+use core_geometry::{Mesh, Scalar, Welded, diagnose, orient_outward, remove_duplicate_faces, weld};
+use core_mesh_io::{Loaded, loader_for_extension};
 use core_pipeline::{PanelOverrides, Tolerance, raster_settings};
-use core_plate::{OrientSettings, Printed};
 use core_raster::Shading;
 use core_slicer::{AdaptiveSettings, Solid, Windows};
-use core_volume::{AngleMask, ReliefSettings, Tiling, press, press_tiled};
 use printer_profiles::{Compensation, MaterialProfile, PrinterProfile, SupportProfile};
 
 use crate::args::{ImportArgs, JobArgs, RasterArgs};
@@ -34,6 +24,12 @@ use crate::slice_report::SliceReport;
 use crate::sliced_file::{format_of, write_plate};
 use crate::stage::{self, Part, Staged};
 use crate::stats::MeshStats;
+
+mod place;
+mod relief;
+pub use place::{OrientSummary, orient_settings};
+use place::{centred, place};
+use relief::press_relief;
 
 /// How a run talks while it works, and what can stop it.
 pub struct Watch<'a> {
@@ -59,54 +55,6 @@ impl Outcome {
         self.parts.iter().all(Part::is_clean)
             && self.slice.is_clean()
             && self.raster.as_ref().is_none_or(RasterReport::is_clean)
-    }
-}
-
-/// The turn auto-orientation applied, and why it chose it.
-pub struct OrientSummary {
-    pub rotation: Quat,
-    pub peak_mm2: Scalar,
-    pub overhang_mm2: Scalar,
-    /// Whether the model needs no supports this way up, set straight on the plate.
-    pub on_plate: bool,
-}
-
-impl OrientSummary {
-    /// How far the turn goes, degrees.
-    pub fn degrees(&self) -> Scalar {
-        self.rotation.to_axis_angle().1.to_degrees()
-    }
-
-    /// The angles `--rotate X,Y,Z` repeats the turn with, degrees. Zero is added to each,
-    /// so float dust never reads as a turn of minus nothing.
-    pub fn rotate_degrees(&self) -> Vec3 {
-        let (x, y, z) = self.rotation.to_euler(EulerRot::XYZEx);
-        Vec3::new(x.to_degrees(), y.to_degrees(), z.to_degrees()).round() + 0.0
-    }
-
-    /// The turn in words: its axis where that is one of the plate's own, and the flag that
-    /// repeats it.
-    fn describe(&self) -> String {
-        let flag = {
-            let turn = self.rotate_degrees();
-            format!("--rotate {:.0},{:.0},{:.0}", turn.x, turn.y, turn.z)
-        };
-        match self.axis_name() {
-            Some(axis) => format!(
-                "turned {:.0} degrees around {axis} ({flag})",
-                self.degrees()
-            ),
-            None => format!("turned {:.0} degrees ({flag})", self.degrees()),
-        }
-    }
-
-    /// X, Y or Z when the turn is about that axis of the plate, `None` for any other.
-    fn axis_name(&self) -> Option<&'static str> {
-        let axis = self.rotation.to_axis_angle().0;
-        [("X", Vec3::X), ("Y", Vec3::Y), ("Z", Vec3::Z)]
-            .into_iter()
-            .find(|(_, about)| axis.dot(*about).abs() > 1.0 - 1.0e-3)
-            .map(|(name, _)| name)
     }
 }
 
@@ -159,9 +107,8 @@ pub fn import(
         );
     }
 
-    // After placement, so that a depth in millimetres is the plate's millimetre and not
-    // whatever unit the file was drawn in; before the orientation fix, which renumbers
-    // nothing but rewinds the faces the map is indexed by.
+    // After placement, so depth in mm is the plate's; before the orientation fix, which rewinds
+    // the faces the map is indexed by.
     let mut mesh = press_relief(mesh, &welded, &loaded, args, talk)?;
     if args.transform.center {
         mesh = centred(mesh, profile)?;
@@ -183,9 +130,8 @@ pub struct Shelled {
     pub plugs: Vec<Mesh>,
 }
 
-/// Shells the model when asked to, then meshes the bodies its drain holes and channels
-/// cut out of it, and the plugs that close the holes. `drift_mm` is what the resin leaves
-/// a fit wider by; see `Compensation::fit_drift_mm`.
+/// Shells the model when asked, then meshes the bodies its holes and channels cut, and the plugs.
+/// `drift_mm` is what the resin leaves a fit wider by; see `Compensation::fit_drift_mm`.
 pub fn hollow_and_cut(
     mesh: &mut Mesh,
     args: &HollowArgs,
@@ -272,12 +218,8 @@ pub fn cutting_of(
     }
 }
 
-/// Cuts the staged plate and writes it, or only measures it when there is no panel to
-/// draw on.
-///
-/// A printable file is the engine's run over the whole plate; a PNG stack and a run with
-/// no printer are cut here, because neither needs a container and the PNG stack is a
-/// debug artefact rather than a printer format.
+/// Cuts the staged plate and writes it, or only measures it when there is no panel to draw on.
+/// A printable file is the engine's run; a PNG stack or no printer is cut here, no container.
 pub fn slice_staged(
     staged: &mut Staged,
     output: &Path,
@@ -317,9 +259,8 @@ pub fn slice_staged(
     Ok((slice, raster))
 }
 
-/// Takes the output of a `--strict` run that found something off the disk, so that the
-/// exit code and what is left behind say the same thing: a file nobody should print is
-/// not one to be found later and sent to a machine.
+/// Takes the output of a `--strict` run that found something off the disk, so the exit code and
+/// what is left behind agree.
 fn discard(output: &Path, talk: bool) {
     let taken = match output.is_dir() {
         true => std::fs::remove_dir_all(output),
@@ -420,107 +361,6 @@ fn talk_mapping(loaded: &Loaded) {
         uvs.mapped() * 3,
         images.join(", ")
     );
-}
-
-/// Presses `--relief-image` or the file's own texture into the welded mesh, where
-/// `--relief` asked for it.
-fn press_relief(
-    mesh: Mesh,
-    welded: &Welded,
-    loaded: &Loaded,
-    args: &ImportArgs,
-    talk: bool,
-) -> Result<Mesh> {
-    let Some(amplitude_mm) = args.relief else {
-        return Ok(mesh);
-    };
-    // Pressed after placement, so the plate's up is the mesh's own +Z.
-    let settings = ReliefSettings {
-        amplitude_mm,
-        precision: args.precision,
-        invert: args.relief_invert,
-        symmetric: args.relief_symmetric,
-        smoothing_px: args.relief_smooth,
-        mask: AngleMask {
-            bottom_deg: args.relief_hold_bottom,
-            top_deg: args.relief_hold_top,
-            ..AngleMask::default()
-        },
-        ..ReliefSettings::default()
-    };
-    let started = Instant::now();
-    let (relief, source) = match &args.relief_image {
-        Some(path) => {
-            let image = read_picture(path)?;
-            let tiling = Tiling {
-                tile_mm: args.relief_tile,
-                angle_deg: args.relief_angle,
-            };
-            let relief = press_tiled(&mesh, &Bvh::build(&mesh), &image, tiling, &settings)
-                .context("pressing the picture into the model")?;
-            let source = format!("{} tiled every {} mm", path.display(), tiling.tile_mm);
-            (relief, source)
-        }
-        None => {
-            let (uvs, heights) = texture_of(welded, loaded)?;
-            let relief = press(&mesh, &Bvh::build(&mesh), &uvs, &heights, &settings)
-                .context("pressing the texture into the model")?;
-            (relief, format!("{} image(s)", heights.len()))
-        }
-    };
-
-    if talk {
-        let lattice = match relief.coarsened {
-            true => format!(
-                "{:.2} mm lattice, coarsened to fit the memory budget",
-                relief.voxel_mm
-            ),
-            false => format!("{:.2} mm lattice", relief.voxel_mm),
-        };
-        println!(
-            "Relief: {amplitude_mm} mm of {source} pressed in on a {lattice}, {} faces \
-             became {}, took {:.1}s\n",
-            mesh.faces.len(),
-            relief.mesh.faces.len(),
-            started.elapsed().as_secs_f32()
-        );
-    }
-    Ok(relief.mesh)
-}
-
-/// The file's own map, taken through the weld first: welding is the one step that
-/// renumbers the faces it is indexed by. And the images it addresses, as heights.
-fn texture_of(welded: &Welded, loaded: &Loaded) -> Result<(UvMap, Vec<Heightmap>)> {
-    let uvs = loaded
-        .uvs
-        .as_ref()
-        .context("--relief needs a model carrying texture coordinates, or --relief-image")?
-        .without(&welded.dropped);
-    if loaded.textures.is_empty() {
-        anyhow::bail!("--relief needs a texture beside the model, or --relief-image");
-    }
-    let heights = loaded
-        .textures
-        .iter()
-        .map(|texture| {
-            texture
-                .decode()
-                .with_context(|| format!("reading {}", texture.name))
-        })
-        .collect::<Result<Vec<_>>>()?;
-    Ok((uvs, heights))
-}
-
-/// The picture at `path` as one height per pixel, read as a texture would be.
-fn read_picture(path: &Path) -> Result<Heightmap> {
-    let bytes = std::fs::read(path).with_context(|| format!("cannot read {}", path.display()))?;
-    let texture = Texture {
-        name: path.display().to_string(),
-        bytes,
-    };
-    texture
-        .decode()
-        .with_context(|| format!("reading {}", path.display()))
 }
 
 /// Loads and repairs a model without slicing it, for `inspect`.
@@ -627,312 +467,5 @@ pub fn load(path: &Path) -> Result<Loaded> {
         .with_context(|| format!("cannot load {}", path.display()))
 }
 
-/// Applies the requested scale, orientation, rotation and placement, in that order: the
-/// search judges the model at the size it prints.
-fn place(
-    mesh: Mesh,
-    args: &ImportArgs,
-    supports: Option<&SupportProfile>,
-    chosen: &Chosen,
-) -> Result<(Mesh, Option<OrientSummary>)> {
-    let transform = &args.transform;
-    let mesh = match transform.scale {
-        Some(scale) => transform_mesh(
-            &mesh,
-            Transform {
-                scale,
-                ..Transform::default()
-            },
-        ),
-        None => mesh,
-    };
-    let (mesh, mut oriented) = if transform.orient {
-        let summary = orientation(&mesh, args, supports, chosen)?;
-        (turned_in_place(&mesh, summary.rotation)?, Some(summary))
-    } else {
-        (mesh, None)
-    };
-
-    let rotation = transform.rotate.map_or(Quat::IDENTITY, euler_degrees);
-    let mut mesh = if rotation == Quat::IDENTITY {
-        mesh
-    } else {
-        transform_mesh(
-            &mesh,
-            Transform {
-                rotation,
-                ..Transform::default()
-            },
-        )
-    };
-    // A --rotate that tips the model off the face --orient seated it on leaves it on supports.
-    if let Some(summary) = oriented.as_mut()
-        && !(rotation * Vec3::NEG_Z).abs_diff_eq(Vec3::NEG_Z, 1e-4)
-    {
-        summary.on_plate = false;
-    }
-
-    if transform.center {
-        mesh = centred(mesh, chosen.printer.as_ref())?;
-    } else if oriented.is_some() {
-        // --rotate turns about the file's origin and can sink what --orient stood.
-        mesh = dropped(mesh)?;
-    }
-    Ok((mesh, oriented))
-}
-
-/// The turn --orient finds, printed to choose between the search's best where a printer
-/// and supports to print it on are known, as the window does.
-fn orientation(
-    mesh: &Mesh,
-    args: &ImportArgs,
-    supports: Option<&SupportProfile>,
-    chosen: &Chosen,
-) -> Result<OrientSummary> {
-    let transform = &args.transform;
-    let profile = chosen.printer.as_ref();
-    let settings = OrientSettings {
-        preset: transform.orient_goal.into(),
-        max_tilt_deg: transform.max_tilt,
-        build_volume_mm: profile
-            .map(|p| Vec3::new(p.build_volume.x, p.build_volume.y, p.build_volume.z)),
-        ..orient_settings(supports)
-    };
-    let trial = profile.zip(supports).map(|(printer, support)| Trial {
-        printer,
-        material: &chosen.material,
-        support,
-        raster_window: rayon::current_num_threads(),
-    });
-    let found = orient_for_print(&Printed::solid(mesh), &settings, trial.as_ref())
-        .context("cannot find an orientation for this model")?
-        .into_iter()
-        .next()
-        .context("the search found no orientation for this model")?;
-    Ok(OrientSummary {
-        rotation: found.oriented.rotation,
-        peak_mm2: found.oriented.score.peak_mm2.unwrap_or_default(),
-        overhang_mm2: found.oriented.score.overhang_mm2,
-        on_plate: supports.is_some() && found.oriented.on_plate,
-    })
-}
-
-/// `mesh` turned by `rotation` and stood on z = 0 over the middle it stood over, where a
-/// turn about the file's origin would carry it off, perhaps off the plate.
-fn turned_in_place(mesh: &Mesh, rotation: Quat) -> Result<Mesh> {
-    let middle = |mesh: &Mesh| {
-        mesh.aabb()
-            .map(|bounds| ((bounds.mins + bounds.maxs) / 2.0).truncate())
-            .context("mesh has no vertices")
-    };
-    let before = middle(mesh)?;
-    let turned = transform_mesh(
-        mesh,
-        Transform {
-            rotation,
-            ..Transform::default()
-        },
-    );
-    let back = (before - middle(&turned)?).extend(0.0);
-    let moved = transform_mesh(&turned, Transform::from_translation(back));
-    dropped(moved)
-}
-
-/// The model stood on z = 0, where it is in x and y.
-fn dropped(mesh: Mesh) -> Result<Mesh> {
-    let bounds = mesh.aabb().context("mesh has no vertices")?;
-    Ok(transform_mesh(
-        &mesh,
-        Transform::from_translation(drop_to_plate(&bounds)),
-    ))
-}
-
-/// How the search judges a model that will stand on `supports`, or on the plate.
-pub fn orient_settings(supports: Option<&SupportProfile>) -> OrientSettings {
-    let plain = OrientSettings::default();
-    supports.map_or(plain, |profile| OrientSettings {
-        max_overhang_deg: profile.max_overhang_deg,
-        contact_spacing_mm: profile.contact_spacing_mm,
-        on_supports: true,
-        lift_mm: profile.lift_mm(),
-        rest_on_plate: true,
-        ..plain
-    })
-}
-
-/// The model stood in the middle of the plate and on z = 0.
-///
-/// Called again after relief, which moves the surface the first call centred: a texture
-/// pressed in sinks the model's own bottom under the plate, and what is under the plate is
-/// not cut.
-fn centred(mesh: Mesh, profile: Option<&PrinterProfile>) -> Result<Mesh> {
-    let bounds = mesh.aabb().context("mesh has no vertices")?;
-    let plate = profile.map_or(Vec3::ZERO, |p| {
-        Vec3::new(p.build_volume.x, p.build_volume.y, 0.0)
-    });
-    let offset = drop_to_plate(&bounds) + center_over_plate(&bounds, plate.x, plate.y);
-    if offset == Vec3::ZERO {
-        return Ok(mesh);
-    }
-    Ok(transform_mesh(&mesh, Transform::from_translation(offset)))
-}
-
-fn euler_degrees(angles: Vec3) -> Quat {
-    let radians = angles * (std::f32::consts::PI / 180.0);
-    Quat::from_rotation_z(radians.z)
-        * Quat::from_rotation_y(radians.y)
-        * Quat::from_rotation_x(radians.x)
-}
-
 #[cfg(test)]
-mod tests {
-    use super::*;
-
-    fn summary(rotation: Quat) -> OrientSummary {
-        OrientSummary {
-            rotation,
-            peak_mm2: 0.0,
-            overhang_mm2: 0.0,
-            on_plate: false,
-        }
-    }
-
-    #[test]
-    fn a_model_pushed_under_the_plate_is_stood_back_on_it() {
-        // What relief does to a model's own bottom, which is why centring is redone after it.
-        let sunk = Mesh::new(
-            vec![
-                Vec3::new(0.0, 0.0, -0.5),
-                Vec3::new(1.0, 0.0, -0.5),
-                Vec3::new(0.0, 1.0, 2.0),
-            ],
-            vec![[0, 1, 2]],
-        );
-        let stood = centred(sunk, None).expect("the mesh has vertices");
-        let bounds = stood.aabb().expect("the mesh has vertices");
-
-        assert!(
-            bounds.mins.z.abs() < 1.0e-6,
-            "nothing under the plate is cut, so --center has to end on it: {}",
-            bounds.mins.z
-        );
-    }
-
-    #[derive(clap::Parser)]
-    struct Flags {
-        #[command(flatten)]
-        import: ImportArgs,
-    }
-
-    #[test]
-    fn a_rotate_that_tips_a_seated_model_stands_it_on_supports() {
-        use clap::Parser;
-
-        let corners = (0..8)
-            .map(|at| {
-                Vec3::new(
-                    (at & 1) as Scalar,
-                    ((at >> 1) & 1) as Scalar,
-                    (at >> 2) as Scalar,
-                ) * 10.0
-            })
-            .collect();
-        let faces = vec![
-            [0, 2, 1],
-            [1, 2, 3],
-            [4, 5, 6],
-            [5, 7, 6],
-            [0, 1, 4],
-            [1, 5, 4],
-            [2, 6, 3],
-            [3, 6, 7],
-            [0, 4, 2],
-            [2, 4, 6],
-            [1, 3, 5],
-            [3, 7, 5],
-        ];
-        let cube = Mesh::new(corners, faces);
-        let chosen = Chosen {
-            printer: None,
-            material: MaterialProfile::default(),
-            invented_exposure: false,
-        };
-        let supports = SupportProfile::shipped("medium").expect("the medium preset ships");
-        let seated = |flags: &[&str]| {
-            let args = Flags::parse_from(flags).import;
-            let (_, oriented) =
-                place(cube.clone(), &args, Some(&supports), &chosen).expect("a cube orients");
-            oriented.expect("--orient reports its turn").on_plate
-        };
-
-        assert!(seated(&["encrust", "--orient"]), "a cube needs no supports");
-        assert!(
-            !seated(&["encrust", "--orient", "--rotate", "30,0,0"]),
-            "tipped onto an edge, it no longer rests on a face"
-        );
-        assert!(
-            seated(&["encrust", "--orient", "--rotate", "0,0,30"]),
-            "a turn about the vertical keeps the face down"
-        );
-    }
-
-    #[test]
-    fn an_oriented_model_is_stood_on_the_plate_over_the_middle_it_stood_over() {
-        use clap::Parser;
-
-        // A pyramid on its tip, its base 100..110 by 50..60 mm: it prints best turned over.
-        let base = [(100.0, 50.0), (110.0, 50.0), (110.0, 60.0), (100.0, 60.0)];
-        let mut vertices: Vec<Vec3> = base.iter().map(|&(x, y)| Vec3::new(x, y, 30.0)).collect();
-        vertices.push(Vec3::new(105.0, 55.0, 0.0));
-        let faces = vec![
-            [0, 1, 2],
-            [0, 2, 3],
-            [1, 0, 4],
-            [2, 1, 4],
-            [3, 2, 4],
-            [0, 3, 4],
-        ];
-        let args = Flags::parse_from(["encrust", "--orient"]).import;
-        let chosen = Chosen {
-            printer: None,
-            material: MaterialProfile::default(),
-            invented_exposure: false,
-        };
-
-        let (mesh, oriented) =
-            place(Mesh::new(vertices, faces), &args, None, &chosen).expect("a pyramid orients");
-        let bounds = mesh.aabb().expect("the mesh has vertices");
-        let middle = (bounds.mins + bounds.maxs) / 2.0;
-
-        assert!(oriented.is_some(), "--orient reports the turn it applied");
-        assert!(
-            bounds.mins.z.abs() < 1.0e-4,
-            "stood on z = 0: {}",
-            bounds.mins.z
-        );
-        assert!(
-            (middle.x - 105.0).abs() < 1.0e-3 && (middle.y - 55.0).abs() < 1.0e-3,
-            "the base's middle, (105, 55), stays where it was: {middle}"
-        );
-    }
-
-    #[test]
-    fn a_turn_about_one_axis_names_it_and_the_flag_that_repeats_it() {
-        let quarter = summary(Quat::from_rotation_x(std::f32::consts::FRAC_PI_2));
-        assert_eq!(
-            quarter.describe(),
-            "turned 90 degrees around X (--rotate 90,0,0)"
-        );
-    }
-
-    #[test]
-    fn the_angles_reported_are_the_angles_rotate_would_apply() {
-        let turn = Vec3::new(-30.0, 0.0, 45.0);
-        let summary = summary(euler_degrees(turn));
-        assert_eq!(summary.rotate_degrees(), turn, "--rotate repeats the turn");
-        assert!(
-            summary.axis_name().is_none(),
-            "two axes are not one of them"
-        );
-    }
-}
+mod tests;

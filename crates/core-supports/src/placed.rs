@@ -5,14 +5,8 @@ use core_geometry::{
 
 use crate::region::Blocked;
 
-/// A placement this close to singular has flattened its model, which no ray then hits.
-const SINGULAR: f32 = 1e-12;
-
-/// The model a support has to live with: the mesh, its hierarchy, where it stands on the
-/// plate, and the patch the user has forbidden supports on.
-///
-/// The four travel together because every placement question — where a column lands, what
-/// a beam runs into, where a tip may be put — asks all of them at once.
+/// The model a support lives with: mesh, hierarchy, plate placement and the patch forbidden to
+/// supports; they travel together as every placement question asks all four.
 #[derive(Debug, Clone, Copy)]
 pub struct Placed<'a> {
     pub model: &'a Mesh,
@@ -27,13 +21,14 @@ pub struct Placed<'a> {
 
 impl<'a> Placed<'a> {
     pub fn new(model: &'a Mesh, bvh: &'a Bvh, transform: Transform) -> Self {
-        let matrix = transform.to_matrix();
         Self {
             model,
             bvh,
             transform,
             blocked: None,
-            matrices: (matrix.determinant().abs() >= SINGULAR).then(|| (matrix, matrix.inverse())),
+            matrices: transform
+                .inverse_matrix()
+                .map(|inverse| (transform.to_matrix(), inverse)),
         }
     }
 
@@ -55,17 +50,14 @@ impl<'a> Placed<'a> {
         Self { blocked, ..self }
     }
 
-    /// Whether `point`, on the model and in plate coordinates, lies on a patch painted out
-    /// of bounds. Asked of the point rather than its face, so it holds however the surface
-    /// supports stand against is numbered: the model, its shell or the shell drilled.
+    /// Whether `point`, on the model in plate coordinates, lies on a patch painted out of bounds;
+    /// asked of the point, not its face, so it holds for the model, its shell or the drilled shell.
     pub fn blocks_at(&self, point: Vec3) -> bool {
         self.blocked.is_some_and(|blocked| blocked.holds(point))
     }
 
-    /// Whether any face of the model comes within `radius_mm` of `centre`, both in plate
-    /// coordinates, measured exactly against each face the hierarchy offers.
-    ///
-    /// `found` is scratch room the caller keeps, so a run of balls allocates once.
+    /// Whether any face of the model comes within `radius_mm` of `centre`, plate coordinates;
+    /// `found` is caller scratch so a run of balls allocates once.
     pub(crate) fn reaches_ball(
         &self,
         centre: Vec3,

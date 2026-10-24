@@ -22,9 +22,8 @@ struct Fit {
 }
 
 impl Fit {
-    /// The roomiest fit in `room` points: names first, then the gaps spread up to their
-    /// most; short of room the names go, then the gaps close, and past that the rail
-    /// scrolls at its tightest.
+    /// The roomiest fit in `room` points: names first, then gaps to their most; short of room the
+    /// names go, then the gaps close, then the rail scrolls.
     fn into(room: f32) -> Self {
         let tight = |labelled| Self {
             labelled,

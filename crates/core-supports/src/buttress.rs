@@ -15,13 +15,8 @@ use crate::tree::{SupportTree, TreeNode};
 /// enough to hold the trunk two ways, near enough to be braced to each other.
 const PAIR_TURN_DEG: Scalar = 20.0;
 
-/// The buttresses `trees` want, each a tree of its own to mesh and brace with the rest.
-///
-/// A trunk that stands further above its highest brace than its group's
-/// `pair_above_mm` gets two, turned either side of the way out from the part; one held
-/// below that but standing further above its second-highest, to a second neighbour, than
-/// `one_above_mm` gets one, straight out. A buttress the model stands in the way of, or
-/// that would land on the model, is not built. See `docs/decisions/0329`.
+/// The buttresses `trees` want, each a tree of its own: a trunk standing over `pair_above_mm`
+/// above its highest brace gets two, over `one_above_mm` above its second gets one (ADR 0329).
 pub(crate) fn buttresses(
     trees: &[SupportTree],
     placed: &Placed,
@@ -145,7 +140,7 @@ fn buttress(
 mod tests {
     use super::*;
     use crate::SupportPoint;
-    use crate::tests::{profile, trees_on};
+    use crate::fixtures::{profile, trees_on};
     use core_geometry::{Bvh, Mesh, Transform};
     use printer_profiles::{BracingPreset, Branching};
 

@@ -40,11 +40,8 @@ impl Thumbnail {
         &self.pixels
     }
 
-    /// This image scaled to fill a record of `width_px` by `height_px`.
-    ///
-    /// The aspect ratio is kept and what is left over is padded with `background`: every
-    /// preview record has a shape of its own, and a model squashed sideways to fill a
-    /// 4:3 record looks like a model that was sliced squashed.
+    /// This image scaled to fill a record of `width_px` by `height_px`. The aspect ratio is kept
+    /// and the remainder padded with `background`.
     #[must_use]
     pub fn fitted_to(&self, width_px: u32, height_px: u32, background: Rgb) -> Self {
         let mut fitted = Self::filled(width_px, height_px, background);
@@ -69,10 +66,8 @@ impl Thumbnail {
         fitted
     }
 
-    /// Mean of the source pixels that fall inside destination pixel `(x, y)`.
-    ///
-    /// A box filter rather than a point sample: a thumbnail is a heavy reduction, and
-    /// point sampling drops thin supports out of the picture altogether.
+    /// Mean of the source pixels that fall inside destination pixel `(x, y)`. A box filter: point
+    /// sampling would drop thin supports from the picture.
     fn box_average(&self, x: u32, y: u32, content_w: u32, content_h: u32) -> Rgb {
         let span = |index: u32, count: u32, source: u32| {
             let start = (u64::from(index) * u64::from(source) / u64::from(count)) as u32;

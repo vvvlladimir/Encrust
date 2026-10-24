@@ -1,15 +1,9 @@
-use core_geometry::{FastMap, Scalar, Vec3};
+use core_geometry::{Buckets, Scalar, Vec3};
 
-/// The steps a run has held that still reach the layer it is on. Within its height above
-/// a step every face is held as part of it, and sized by it; see `docs/decisions/0326`.
-/// The supports that steady a part are kept the same way, each reaching its own spacing,
-/// so they stand that far apart without keeping anything else away (ADR 0327).
-///
-/// Kept in buckets of the plate one tallest height across, so a sample asks nine buckets,
-/// and dropped once the climb is past them, so what is kept is the steps just below.
+/// The steps a run has held that still reach the layer; faces within a step's height are held
+/// as part of it (ADR 0326), steadying supports likewise (ADR 0327); bucketed, dropped when passed.
 pub(crate) struct Zones {
-    buckets: FastMap<(i32, i32), Vec<Zone>>,
-    cell_mm: Scalar,
+    buckets: Buckets<Zone>,
     /// The lowest height any zone still reaches up to.
     spent_z: Scalar,
 }
@@ -32,17 +26,9 @@ impl Zones {
     /// `tallest_mm` is the furthest any step reaches.
     pub(crate) fn new(tallest_mm: Scalar) -> Self {
         Self {
-            buckets: FastMap::default(),
-            cell_mm: tallest_mm.max(1e-3),
+            buckets: Buckets::new(tallest_mm.max(1e-3)),
             spent_z: Scalar::INFINITY,
         }
-    }
-
-    fn bucket_of(&self, at: Vec3) -> (i32, i32) {
-        (
-            (at.x / self.cell_mm).floor() as i32,
-            (at.y / self.cell_mm).floor() as i32,
-        )
     }
 
     /// Takes on a sample of a step at `at` that reaches `height_mm` above itself and put
@@ -54,20 +40,14 @@ impl Zones {
             new_mm3,
         };
         self.spent_z = self.spent_z.min(zone.spent_z());
-        self.buckets
-            .entry(self.bucket_of(at))
-            .or_default()
-            .push(zone);
+        self.buckets.insert(at.truncate(), zone);
     }
 
     /// What the largest step whose reach takes in `at` put out, or `None` where no step
     /// at or below its height reaches it.
     pub(crate) fn reaching(&self, at: Vec3) -> Option<Scalar> {
-        let (x, y) = self.bucket_of(at);
-        (x - 1..=x + 1)
-            .flat_map(|x| (y - 1..=y + 1).map(move |y| (x, y)))
-            .filter_map(|bucket| self.buckets.get(&bucket))
-            .flatten()
+        self.buckets
+            .around(at.truncate())
             .filter(|zone| zone.at.z <= at.z && zone.at.distance(at) <= zone.height_mm)
             .map(|zone| zone.new_mm3)
             .max_by(Scalar::total_cmp)
@@ -78,14 +58,10 @@ impl Zones {
         if self.spent_z >= z {
             return;
         }
-        self.buckets.retain(|_, zones| {
-            zones.retain(|zone| zone.spent_z() >= z);
-            !zones.is_empty()
-        });
+        self.buckets.retain(|zone| zone.spent_z() >= z);
         self.spent_z = self
             .buckets
-            .values()
-            .flatten()
+            .iter()
             .map(|zone| zone.spent_z())
             .fold(Scalar::INFINITY, Scalar::min);
     }
@@ -113,11 +89,7 @@ mod tests {
         zones.add(Vec3::new(10.0, 11.0, 5.0), 3.2, 9.0);
         assert_eq!(zones.reaching(Vec3::new(10.0, 10.5, 6.0)), Some(9.0));
         zones.prune(7.0);
-        assert_eq!(
-            zones.buckets.values().flatten().count(),
-            1,
-            "1.5 mm up is spent"
-        );
+        assert_eq!(zones.buckets.len(), 1, "1.5 mm up is spent");
         assert_eq!(zones.reaching(Vec3::new(10.0, 10.5, 7.5)), Some(9.0));
     }
 }

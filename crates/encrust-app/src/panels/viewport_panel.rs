@@ -66,18 +66,16 @@ pub fn ui(ui: &mut egui::Ui, window: &mut Window) -> egui::Rect {
     } else {
         pointer_state(ui, rect)
     };
-    // What the gizmo reports is one frame old, because it is drawn after the input that
-    // has to yield to it is read. That only matters on the frame a handle is crossed.
-    // Only Place reads a shift-click, as a line of supports; everywhere else shift pans.
+    // The gizmo's report is one frame old, which matters only on the frame a handle is crossed.
+    // Only Place reads a shift-click, as a line of supports; elsewhere shift pans.
     let shift_clicks = *window.tool == Tool::Paint && !window.tools.supports.placing.paints();
     let gesture = window
         .view
         .input
         .update(&pointer, window.view.gizmo.is_focused(), shift_clicks);
 
-    // The brush and the tip being dragged take the primary button only for a gesture that
-    // began on something of theirs, so a drag that starts on empty plate still turns the
-    // camera while either is out.
+    // The brush and the dragged tip take the primary button only for a gesture begun on them,
+    // so a drag from empty plate still turns the camera.
     let painting = paint_stroke(ui, window, rect, &pointer);
     // A support in hand has the whole gesture, shift and all: it neither turns the camera
     // nor slides it.
@@ -169,9 +167,8 @@ fn click(ui: &egui::Ui, window: &mut Window, rect: egui::Rect, cursor: egui::Pos
         return;
     }
     match *window.tool {
-        // Alt is what every modelling tool uses for "the opposite of this click", and
-        // the other buttons are already spoken for by the camera.
-        // A stroke of the brush has already painted whatever the click landed on.
+        // Alt is the opposite of a click in modelling tools; other buttons belong to the camera.
+        // A brush stroke has already painted whatever the click landed on.
         Tool::Paint if window.tools.supports.placing.paints() => {}
         Tool::Relief if window.tools.relief.paints() => {}
         Tool::Paint if ui.input(|input| input.modifiers.alt) => {
@@ -215,9 +212,8 @@ fn picks_instead(ui: &egui::Ui) -> bool {
     ui.input(|input| input.modifiers.command)
 }
 
-/// What a click would put down under a resting cursor, for every tool that puts something
-/// down on a model, drawn see-through so it reads as not placed yet. Alt shows nothing:
-/// it takes away instead.
+/// What a click would put down under a resting cursor, drawn see-through as not placed yet.
+/// Alt shows nothing: it takes away instead.
 fn ghost(ui: &egui::Ui, window: &Window, rect: egui::Rect, pointer: &Pointer) -> Option<Ghost> {
     let removing = ui.input(|input| input.modifiers.alt) || picks_instead(ui);
     let line = ui.input(|input| input.modifiers.shift);
@@ -383,11 +379,8 @@ fn pointer_state(ui: &egui::Ui, rect: egui::Rect) -> Pointer {
     })
 }
 
-/// Whether the pointer is on the model rather than on something drawn over it.
-///
-/// A card, a popup, a menu or a floating window is its own egui layer above the
-/// viewport's, and whatever egui has at this point owns the pointer: the camera must not
-/// read a drag meant for a field in a popup. See `docs/decisions/0193`.
+/// Whether the pointer is on the model rather than on a card, popup, menu or window over it,
+/// whose egui layer owns the pointer. See `docs/decisions/0193`.
 fn over_the_model(
     rect: egui::Rect,
     position: Option<egui::Pos2>,

@@ -1,4 +1,4 @@
-use core_geometry::{FastMap, Scalar, Vec2, Vec3};
+use core_geometry::{Buckets, Scalar, Vec2, Vec3};
 use core_slicer::{Layer, Sliced};
 use rayon::prelude::*;
 
@@ -9,20 +9,16 @@ use crate::field::{Field, Grid};
 /// the printed stack sees standing on nothing is seen here too.
 const FINE_PITCH_MM: Scalar = 0.02;
 
-/// The least piece standing on nothing that is an island, mm²: half the least the
-/// stack's own check names, whose pixels fall apart from these cells. A smaller one is
-/// read as not there at all.
+/// The least piece standing on nothing that is an island, mm2: half the stack's own check, whose
+/// pixels fall apart from these cells; smaller reads as not there.
 const DUST_MM2: Scalar = 0.005;
 
-/// How far a placed contact is moved onto an island rather than another put beside it,
-/// millimetres, across the plate and down: under the width of a pillar, so what it held
-/// is still held. One placed higher was put on the same lobe where the coarse grid first
-/// saw it.
+/// How far a placed contact is moved onto an island, mm across the plate and down: under a pillar
+/// width, so what it held is still held; higher landed on the lobe the coarse grid first saw.
 const MOVE_REACH_MM: Scalar = 0.3;
 
-/// How far inside an island a contact has to stand to hold it, millimetres: half the
-/// thinnest tip's radius, so the tip is on the island and not on its rim. An island too
-/// thin to have any of itself that far in is held by a contact anywhere on it.
+/// How far inside an island a contact stands to hold it, mm: half the thinnest tip's radius; an
+/// island too thin for that is held by a contact anywhere on it.
 const SEAT_MM: Scalar = 0.06;
 
 /// Side of a bucket contacts and low points are kept in, millimetres.
@@ -31,14 +27,8 @@ const BUCKET_MM: Scalar = 1.0;
 /// How many layers are read onto the fine grid in one go, as placement reads its own.
 const READ_BLOCK: usize = 32;
 
-/// Holds every island `stack` begins that no contact touches: moves the nearest of
-/// `placed` onto it, or answers with a new contact and the island's area in mm².
-///
-/// Placement reads the stack on a grid too coarse for a lobe a few tenths across, so one
-/// may begin beside the contact put under it and print loose; see `docs/decisions/0330`.
-/// A contact touches an island when it stands inside it no more than two layers under the
-/// plane it was first cut on; `seeds` touch as well and are never moved. Nothing is put
-/// where `skip` says no contact may go.
+/// Holds every island `stack` begins that no contact touches: moves the nearest of `placed` onto
+/// it or returns a new contact and the island's area in mm2 (ADR 0330); `skip` bars places.
 pub(crate) fn hold_islands(
     stack: &Sliced,
     layer_height_mm: Scalar,
@@ -158,9 +148,8 @@ impl<'a> Island<'a> {
         })
     }
 
-    /// The placed contact to move to `at` that no island has claimed: one standing on the
-    /// piece's rim where a column holds it, which is this island's own, else the nearest
-    /// within reach of `at` across the plate and of the piece's height.
+    /// The placed contact to move to `at` that no island has claimed: one on the piece's rim where
+    /// a column holds it, else the nearest within reach across the plate and of the piece's height.
     fn movable(&self, contacts: &Contacts, at: Vec3) -> Option<usize> {
         let free = |index: &usize| *index < contacts.placed && !contacts.pinned[*index];
         let on_rim = contacts
@@ -192,9 +181,8 @@ impl<'a> Island<'a> {
         })
     }
 
-    /// Where its support goes: the lowest point of the model on its seat, which the tip
-    /// then meets exactly, or failing one the cell of the seat nearest its middle, a layer
-    /// under the plane as every placed contact is.
+    /// Where its support goes: the lowest model point on its seat, else the seat cell nearest its
+    /// middle, a layer under the plane as every placed contact is.
     fn start(&self, lows: &Points) -> Vec3 {
         let floor_z = self.layer.z - REFERENCE_RISE_MM;
         let lowest = lows
@@ -265,16 +253,10 @@ impl Contacts {
 
     /// Moves placed contact `index` to `at`, where it now holds an island.
     fn move_to(&mut self, index: usize, at: Vec3) {
-        let from = Points::key(self.points.points[index].truncate());
-        if let Some(bucket) = self.points.buckets.get_mut(&from) {
-            bucket.retain(|other| *other != index);
-        }
+        let from = self.points.points[index].truncate();
+        self.points.buckets.retain_at(from, |other| *other != index);
         self.points.points[index] = at;
-        self.points
-            .buckets
-            .entry(Points::key(at.truncate()))
-            .or_default()
-            .push(index);
+        self.points.buckets.insert(at.truncate(), index);
         self.pinned[index] = true;
     }
 }
@@ -282,34 +264,21 @@ impl Contacts {
 /// Points, and their indices in buckets of the plate [`BUCKET_MM`] across.
 struct Points {
     points: Vec<Vec3>,
-    buckets: FastMap<[i32; 2], Vec<usize>>,
+    buckets: Buckets<usize>,
 }
 
 impl Points {
     fn new(points: Vec<Vec3>) -> Self {
-        let mut buckets: FastMap<[i32; 2], Vec<usize>> = FastMap::default();
+        let mut buckets = Buckets::new(BUCKET_MM);
         for (index, point) in points.iter().enumerate() {
-            buckets
-                .entry(Self::key(point.truncate()))
-                .or_default()
-                .push(index);
+            buckets.insert(point.truncate(), index);
         }
         Self { points, buckets }
     }
 
-    fn key(at: Vec2) -> [i32; 2] {
-        [
-            (at.x / BUCKET_MM).floor() as i32,
-            (at.y / BUCKET_MM).floor() as i32,
-        ]
-    }
-
     /// The indices of the points whose bucket meets the box `min`..`max`.
     fn near(&self, (min, max): (Vec2, Vec2)) -> impl Iterator<Item = usize> + '_ {
-        let (low, high) = (Self::key(min), Self::key(max));
-        (low[1]..=high[1])
-            .flat_map(move |y| (low[0]..=high[0]).map(move |x| [x, y]))
-            .flat_map(|key| self.buckets.get(&key).into_iter().flatten().copied())
+        self.buckets.within(min, max).copied()
     }
 }
 

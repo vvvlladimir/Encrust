@@ -8,13 +8,8 @@ use crate::Contour;
 /// a tenth of a micron is under any panel's pixel by three orders of magnitude.
 const STILL_MM: Scalar = 1e-4;
 
-/// Moves the walls of one plane's contours: `outer_mm` outwards on every outer contour
-/// and `hole_mm` inwards on every hole, so a positive value of either leaves more
-/// material.
-///
-/// The whole plane goes in at once, because which contour is a hole in which is what
-/// decides where a wall ends up. Contours that close up under the offset are dropped, and
-/// contours the offset runs together come out merged. See `docs/design/compensation.md`.
+/// Moves one plane's walls: `outer_mm` outwards on outer contours, `hole_mm` inwards on holes.
+/// A positive value of either leaves more material; see `docs/design/compensation.md`.
 pub fn offset_contours(contours: &[Contour], hole_mm: Scalar, outer_mm: Scalar) -> Vec<Contour> {
     if contours.is_empty() || (hole_mm.abs() < STILL_MM && outer_mm.abs() < STILL_MM) {
         return contours.to_vec();

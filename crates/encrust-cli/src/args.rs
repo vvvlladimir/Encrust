@@ -64,9 +64,8 @@ pub struct ImportArgs {
     #[command(flatten)]
     pub transform: TransformArgs,
 
-    /// Press the file's own texture into the model as relief, this many millimetres deep.
-    /// Negative sinks it in. Needs a model carrying UVs and an image beside it, or
-    /// --relief-image.
+    /// Press the file's own texture into the model as relief, this many mm deep; negative sinks it.
+    /// Needs a model carrying UVs and an image beside it, or --relief-image.
     #[arg(long, value_name = "MM", allow_hyphen_values = true)]
     pub relief: Option<Scalar>,
 

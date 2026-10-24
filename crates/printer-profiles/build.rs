@@ -1,7 +1,5 @@
-//! Embeds every profile under `assets/profiles/` into the crate, so a fresh install has a
-//! catalogue before it has any files on disk. See docs/decisions/0049. A kind with no
-//! directory ships nothing, which is what a resin does: it is measured, not shipped
-//! (docs/decisions/0196).
+//! Embeds every profile under `assets/profiles/` into the crate (docs/decisions/0049). A kind with
+//! no directory ships nothing, as a resin is measured, not shipped (docs/decisions/0196).
 #![expect(
     clippy::expect_used,
     reason = "a build script reports failure by panicking"

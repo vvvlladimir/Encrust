@@ -14,12 +14,8 @@ pub fn report_for(destination: PathBuf, settings: &RasterSettings, fold: Measure
     RasterReport::new(destination, *settings, fold)
 }
 
-/// Rasterises `layers` and hands each one to `write`, in order, folding what it cost and
-/// what it cures into `report`.
-///
-/// Layers are taken `window` at a time: the window is rasterised in parallel, folded in
-/// order, which is where an island is taken out, compressed in parallel and written in
-/// order, so the stack is never in memory at once. See ADR 0010 and 0066.
+/// Rasterises `layers` and hands each to `write`, in order, folding cost and cure into `report`.
+/// A `window` at a time, so the stack is never in memory at once. See ADR 0010 and 0066.
 pub fn stream_into<T, E, W>(
     report: &mut RasterReport,
     layers: &[Layer],

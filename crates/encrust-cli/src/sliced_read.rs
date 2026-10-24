@@ -23,10 +23,8 @@ pub struct Stack {
     pub cured_mm3: Option<f64>,
 }
 
-/// Opens a sliced file, reads what it says about itself, and decodes every layer.
-///
-/// Decoding the whole stack is the point: a header can be read from a file no machine would
-/// print, and the layers are where a container is really tested.
+/// Opens a sliced file, reads what it says about itself, and decodes every layer, since a
+/// header can be read from a file no machine would print.
 pub fn read(path: &Path) -> Result<Info> {
     let file =
         std::fs::File::open(path).with_context(|| format!("cannot open {}", path.display()))?;
@@ -154,11 +152,8 @@ fn thickness_of(facts: &SlicedFile, index: u32) -> f32 {
     }
 }
 
-/// The thinnest and thickest layer of the stack, millimetres, or `None` for a stack of one
-/// thickness — which is what the header already states.
-///
-/// A tenth of a micron apart is the same thickness: a container states Z per layer as an
-/// `f32`, and adding those up leaves dust well below what any machine steps.
+/// The thinnest and thickest layer, mm, or `None` for a uniform stack the header already states.
+/// Under a tenth of a micron is the same thickness: per-layer Z is an `f32` and sums leave dust.
 fn varying_thickness(facts: &SlicedFile) -> Option<(f32, f32)> {
     let (thin, thick) = (0..facts.layer_count())
         .map(|index| thickness_of(facts, index))
@@ -168,11 +163,8 @@ fn varying_thickness(facts: &SlicedFile) -> Option<(f32, f32)> {
     (thick - thin > 1e-4).then_some((thin, thick))
 }
 
-/// One run of layers above the bottom block whose own exposure is not the header's.
-///
-/// A resin's transition ramp is one such run, and so is every `--exposure-at` band: what
-/// the container records is an exposure per layer, and a run of them is what a reader can
-/// say about it.
+/// One run of layers above the bottom block whose exposure is not the header's, such as a
+/// resin's transition ramp or an `--exposure-at` band.
 #[derive(Serialize)]
 pub struct Band {
     from_layer: u32,

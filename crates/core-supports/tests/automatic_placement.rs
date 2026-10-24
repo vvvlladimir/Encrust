@@ -1,6 +1,5 @@
-//! What automatic placement hands over has to be printable: every point it returns must
-//! become a column that stands, and those columns must mesh into closed geometry the
-//! slicer can cut.
+//! Automatic placement must hand over printable supports: every point becomes a column that
+//! stands, and the columns mesh into closed geometry the slicer can cut.
 #![expect(
     clippy::expect_used,
     reason = "a broken fixture must fail the run loudly"
@@ -18,31 +17,7 @@ const LAYER_HEIGHT_MM: f32 = 0.05;
 
 /// An axis-aligned box spanning `min`..`max`, twelve triangles wound outwards.
 fn box_mesh(min: Vec3, max: Vec3) -> Mesh {
-    let vertices = vec![
-        Vec3::new(min.x, min.y, min.z),
-        Vec3::new(max.x, min.y, min.z),
-        Vec3::new(max.x, max.y, min.z),
-        Vec3::new(min.x, max.y, min.z),
-        Vec3::new(min.x, min.y, max.z),
-        Vec3::new(max.x, min.y, max.z),
-        Vec3::new(max.x, max.y, max.z),
-        Vec3::new(min.x, max.y, max.z),
-    ];
-    let faces = vec![
-        [0, 2, 1],
-        [0, 3, 2],
-        [4, 5, 6],
-        [4, 6, 7],
-        [0, 1, 5],
-        [0, 5, 4],
-        [1, 2, 6],
-        [1, 6, 5],
-        [2, 3, 7],
-        [2, 7, 6],
-        [3, 0, 4],
-        [3, 4, 7],
-    ];
-    Mesh::new(vertices, faces)
+    core_geometry::cuboid(min, max)
 }
 
 /// A 20 mm box hanging 10 mm over the plate: nothing holds it up but supports.
@@ -303,9 +278,8 @@ fn a_ball_on_the_plate_is_held_under_its_cap_and_nowhere_above_it() {
         points.len()
     );
 
-    // A ball resting on the plate leaves no room under its own skirt: a column there can
-    // neither stand on the skirt, which is too steep, nor put a foot down beside it. What
-    // holds those tips is the lean `grow` bends them into; see `docs/decisions/0077`.
+    // A ball on the plate leaves no room under its skirt: too steep to stand on, no foot beside it.
+    // The lean `grow` bends those tips into holds them (ADR 0077).
     let bvh = Bvh::build(&model);
     let columns = columns(
         &points,
@@ -334,7 +308,7 @@ fn a_ball_on_the_plate_is_held_under_its_cap_and_nowhere_above_it() {
     let bvh = Bvh::build(&model);
     // A tip stood straight down on a slope sinks its rim further than its bite, by no more
     // than the rim's own radius.
-    let bite_mm = profile.contact_depth_mm() + profile.contact_radius_mm() + 0.05;
+    let bite_mm = profile.tip.contact_depth_mm + profile.contact_radius_mm() + 0.05;
     for vertex in &mesh.vertices {
         if winding.at(&model, *vertex) < 0.5 {
             continue;

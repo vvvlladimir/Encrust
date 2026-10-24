@@ -1,7 +1,5 @@
-//! A bench for automatic supports: each model of a corpus supported as Generate supports
-//! it, cut and cured as it prints, and read for what falls, what marks the part and what is
-//! more than it needs. See `docs/design/supports.md`; the corpus and the rules of success
-//! live outside the repository, in local-docs/supports/.
+//! A bench for automatic supports: a corpus supported as Generate supports it, cut and read.
+//! See `docs/design/supports.md`; the corpus and rules of success live in local-docs/supports/.
 
 mod corpus;
 mod coupon;

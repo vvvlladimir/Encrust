@@ -176,10 +176,7 @@ fn waiting(ui: &mut egui::Ui, window: &mut Window) {
 }
 
 /// Which layers pull hardest on the film as the plate lifts, above the bottom block.
-///
-/// Every row is listed whether its peak is known or not: a print setting edited meanwhile
-/// is measured again, and a block that comes and goes takes the field under it out from
-/// under the pointer.
+/// Every row is listed, peak known or not: a setting edited meanwhile is measured again.
 fn pull(ui: &mut egui::Ui, window: &mut Window) {
     let measured = window.measured();
     if measured.is_none() && !window.machine.preview.is_measuring() {

@@ -6,8 +6,7 @@ use serde::{Deserialize, Serialize};
 use crate::ProfileError;
 
 /// A named set of a tool's settings, kept as TOML whose shape is the tool's own: this crate
-/// stores and lists it, and the tool that saved it reads it back. See
-/// `docs/decisions/0226`.
+/// stores and lists it. See `docs/decisions/0226`.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Preset {
     pub name: String,

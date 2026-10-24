@@ -1,6 +1,5 @@
-//! A model stood the way the corpus asks and supported the way the window's Generate
-//! supports it, sized by an automatic profile and against its hollowed shell where asked,
-//! keeping every tree so the bench can read what each support carries.
+//! A model stood the way the corpus asks and supported as the window's Generate does,
+//! keeping every tree so the bench can read what each carries.
 
 use std::path::Path;
 use std::time::Instant;
@@ -146,9 +145,8 @@ fn rotation(rotation: Quat) -> Transform {
     }
 }
 
-/// `model` lifted by the placing profile's lift, hollowed to a wall of `wall_mm` where one
-/// is given, and supported on its own from outside, as Generate supports a model on the
-/// plate with nothing painted, blocked or placed by hand.
+/// `model` lifted by the placing profile's lift, hollowed to `wall_mm` where given, and supported
+/// from outside as Generate does with nothing painted, blocked or placed by hand.
 pub fn supported(
     mut model: Mesh,
     asked: &Asked,

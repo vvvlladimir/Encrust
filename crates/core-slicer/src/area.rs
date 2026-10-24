@@ -4,12 +4,8 @@ use i_overlay::float::simplify::SimplifyShape;
 
 use crate::Contour;
 
-/// The material one plane's contours cover, square millimetres, by the positive winding
-/// rule the rasteriser fills by: what two overlapping bodies share is counted once, and a
-/// hole cut through both takes its area off once.
-///
-/// The whole plane goes in at once, because which contour overlaps which is what the
-/// figure is about. See `docs/decisions/0206`.
+/// Area in mm2 the plane's contours cover by the positive winding rule: overlaps count once.
+/// The whole plane goes in at once; see `docs/decisions/0206`.
 pub fn covered_area(contours: &[Contour]) -> Scalar {
     covered_pieces(contours)
         .iter()

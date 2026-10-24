@@ -1,9 +1,5 @@
-//! Supports from the command line: found on the model's own stack, meshed, and merged
-//! into what gets sliced.
-//!
-//! The same sequence the window runs, without the hand placement: cut the model, ask
-//! where it needs holding, drop a column under each contact, merge the near ones into
-//! trunks and mesh the lot. See `docs/design/supports.md`.
+//! Supports from the command line, the window's sequence without hand placement: find contacts,
+//! columns, trunks, mesh, merge. See `docs/design/supports.md`.
 
 use std::fmt;
 
@@ -47,9 +43,8 @@ impl fmt::Display for SupportReport {
     }
 }
 
-/// Stands supports under `mesh`, in plate coordinates, and answers with them: the
-/// engine's `stand_under`, or `stand_seated` for a model left on the plate, with what it
-/// found laid out for a terminal.
+/// Stands supports under `mesh`, in plate coordinates: `stand_under`, or `stand_seated`
+/// for a model left on the plate, with what it found laid out for a terminal.
 pub fn stand_under(
     mesh: &mut Mesh,
     cuts: &mut Option<Mesh>,

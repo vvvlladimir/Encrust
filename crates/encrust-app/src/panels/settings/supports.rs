@@ -1,6 +1,5 @@
-//! The Supports page: every support profile as a table, and the one picked opened in its
-//! form, every measurement in the groups the Supports tool folds them into. A group on the
-//! plate picks one of these and tunes its own copy.
+//! The Supports page: every support profile as a table, the picked one opened in its form.
+//! A group on the plate picks one and tunes its own copy.
 
 use egui::{Rect, Ui, pos2};
 use printer_profiles::{Catalogue, ContactShape, Kind, SupportProfile};

@@ -41,38 +41,7 @@ const GREY: &str = "standard-grey";
 
 /// A closed box, twelve triangles, wound outward.
 fn box_mesh(mins: Vec3, maxs: Vec3) -> Mesh {
-    let corner = |x: bool, y: bool, z: bool| {
-        Vec3::new(
-            if x { maxs.x } else { mins.x },
-            if y { maxs.y } else { mins.y },
-            if z { maxs.z } else { mins.z },
-        )
-    };
-    let vertices = vec![
-        corner(false, false, false),
-        corner(true, false, false),
-        corner(true, true, false),
-        corner(false, true, false),
-        corner(false, false, true),
-        corner(true, false, true),
-        corner(true, true, true),
-        corner(false, true, true),
-    ];
-    let faces = vec![
-        [0, 2, 1],
-        [0, 3, 2],
-        [4, 5, 6],
-        [4, 6, 7],
-        [0, 1, 5],
-        [0, 5, 4],
-        [1, 2, 6],
-        [1, 6, 5],
-        [2, 3, 7],
-        [2, 7, 6],
-        [3, 0, 4],
-        [3, 4, 7],
-    ];
-    Mesh::new(vertices, faces)
+    core_geometry::cuboid(mins, maxs)
 }
 
 fn object(name: &str, mesh: &Mesh, transform: Transform) -> ObjectState {

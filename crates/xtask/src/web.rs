@@ -23,9 +23,8 @@ pub struct Args {
     check: bool,
 }
 
-/// Every thread is a worker on one shared memory, which the module imports rather than
-/// owns, with room for wasm32's whole 4 GiB; the TLS exports are what a worker sets its
-/// thread-locals up with.
+/// Every thread is a worker on one imported shared memory of wasm32's whole 4 GiB; the TLS exports
+/// set a worker's thread-locals up.
 const RUSTFLAGS: &str = concat!(
     "--cfg getrandom_backend=\"wasm_js\" ",
     "-C target-feature=+atomics,+bulk-memory,+mutable-globals ",
