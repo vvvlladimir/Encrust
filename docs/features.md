@@ -326,7 +326,8 @@ whole-surface fill is Cmd-Shift-click.
   one that ships; Auto cannot be saved as a new preset, and no other automatic preset can be
   added.
 - Nearby tips merge into shared **branching trunks**. Trunks are cones sized by their
-  height and load, and nothing carrying a load leans more than 45°.
+  height and load, and nothing carrying a load leans more than 45°; a tip's head may lean
+  up to 60° to meet its face square on.
 - The trunks are built in the background after every change, so the window keeps
   answering on a dense model; until they are, the supports shown last stay, and slicing
   and the preview wait for them.
@@ -336,8 +337,13 @@ whole-surface fill is Cmd-Shift-click.
   it would without the grid.
 - Only the tip touches the model: a head that would run into the part beside its contact
   turns away, and a pad beside a part that cannot be moved aside is cut back on that side.
-- A tip that has no room leans until it finds some. A support that still has no room is
-  reported and left out of the print, never forced into the model.
+  Every support is checked once more as it is drawn, down to a rib thinner than itself; a
+  merged one that meets the part is stood again tip by tip.
+- A tip that has no room leans until it finds some, as far as a 25 mm strut at 45° reaches.
+  A support that still has no room is reported and left out of the print, never forced
+  into the model — not even a head in a crevice too narrow to turn in.
+- Supports are drawn round, 24 sides to a pillar, with rounded joints, and widen into
+  their pad on a curved fillet.
 - Supports stand against the model **as it prints**: hollowed, its cavity, and drilled,
   its holes, so the crown of a drain hole or any bore is held up like other overhangs.
   **Grow the supports** holds a model up from outside; **Support the cavity**, shown for

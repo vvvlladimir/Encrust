@@ -4,7 +4,7 @@
 
 name = "Heavy"
 
-facets = 12
+facets = 24
 
 # How many supports automatic placement puts down against what it reckons is enough,
 # counted over an area: doubling it puts down twice as many.
@@ -49,7 +49,7 @@ platform_thickness_mm = 0.5
 
 # How wide the flare between the pillar and the pad is where it meets the pad. It leaves
 # the pillar at the pillar's own width and rises as far as it widens.
-lower_diameter_mm = 3.0
+lower_diameter_mm = 3.6
 
 # The thin strut used where a support runs from one part of the model to another rather
 # than down to the plate. Both of its ends meet a surface.

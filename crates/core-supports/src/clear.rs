@@ -9,6 +9,14 @@ pub(crate) const MIN_BODY_MM: Scalar = 1e-4;
 /// against the cost of casting them; see `docs/decisions/0077`.
 const BEAM_RAYS: u32 = 8;
 
+/// How far apart the balls filling a beam stand, as a share of their radius: at half a
+/// radius their union covers the beam to within 3% of its radius. See ADR 0341.
+const BALL_STEP: Scalar = 0.5;
+
+/// The smallest ball a beam is filled with, millimetres: nearer an end than this the
+/// ring of rays answers alone.
+const SMALLEST_BALL_MM: Scalar = 0.05;
+
 /// The solid a length of support sweeps: a cone from `from` to `to` with the air it must
 /// keep around itself already added to both radii.
 #[derive(Debug, Clone, Copy)]
@@ -49,10 +57,46 @@ impl Beam {
 
 /// Whether `beam` reaches its far end without meeting `model`.
 ///
-/// The surface of the beam is sampled with a ring of rays rather than its axis alone: a
-/// body has width, and a single axis ray misses everything the body's own radius would
-/// have run into; see `docs/decisions/0077`.
+/// A ring of rays down its surface finds a wall it crosses and a start inside the solid
+/// (ADR 0077); a row of balls down its axis finds whatever pokes in between those rays,
+/// each ball kept inside the beam's own ends (ADR 0341).
 pub(crate) fn clear(placed: &Placed, beam: &Beam) -> bool {
+    rays_clear(placed, beam) && balls_clear(placed, beam)
+}
+
+/// Whether no face of the model comes inside a row of balls filling `beam`, each as wide
+/// as the beam where it stands and no wider than its distance to the nearer end.
+fn balls_clear(placed: &Placed, beam: &Beam) -> bool {
+    let offset = beam.to - beam.from;
+    let length = offset.length();
+    if length < 2.0 * SMALLEST_BALL_MM {
+        return true;
+    }
+    let direction = offset / length;
+    let mut found = Vec::new();
+    let mut along = SMALLEST_BALL_MM;
+    while along <= length - SMALLEST_BALL_MM {
+        let wide_at = |at: Scalar| {
+            let share = (at / length).clamp(0.0, 1.0);
+            beam.from_radius_mm + (beam.to_radius_mm - beam.from_radius_mm) * share
+        };
+        // Narrowest over the ball's own length, so it stays inside a tapering beam.
+        let wide_mm = wide_at(along);
+        let ball_mm = wide_mm
+            .min(wide_at(along - wide_mm))
+            .min(wide_at(along + wide_mm))
+            .min(along)
+            .min(length - along);
+        if placed.reaches_ball(beam.from + direction * along, ball_mm, &mut found) {
+            return false;
+        }
+        along += (ball_mm * BALL_STEP).max(SMALLEST_BALL_MM);
+    }
+    true
+}
+
+/// The ring of rays and the axis ray of ADR 0077.
+fn rays_clear(placed: &Placed, beam: &Beam) -> bool {
     let offset = beam.to - beam.from;
     let length = offset.length();
     if length < MIN_BODY_MM {
@@ -219,5 +263,52 @@ mod tests {
             &Placed::new(&model, &Bvh::build(&model), Transform::default()),
             &beam.trimmed(100.0)
         ));
+    }
+
+    #[test]
+    fn a_rod_standing_inside_a_body_between_its_rays_is_blocked() {
+        // A rod 0.1 mm square, 0.5 mm off the axis of a body 1 mm in radius: parallel to
+        // every ray, it lies between the axis and the ring and meets none of them.
+        let model = box_mesh(Vec3::new(0.45, -0.05, 5.0), Vec3::new(0.55, 0.05, 10.0));
+        let bvh = Bvh::build(&model);
+        let placed = Placed::new(&model, &bvh, Transform::default());
+        let beam = Beam {
+            from: Vec3::new(0.0, 0.0, 15.0),
+            to: Vec3::new(0.0, 0.0, 1.0),
+            from_radius_mm: 1.0,
+            to_radius_mm: 1.0,
+        };
+        assert!(rays_clear(&placed, &beam), "the rays alone pass it by");
+        assert!(!clear(&placed, &beam), "the balls down the axis find it");
+    }
+
+    #[test]
+    fn a_body_ending_on_the_face_it_lands_on_is_clear() {
+        // Standing straight on the wall's top at z = 20, as a landing on the model does.
+        let model = wall();
+        let bvh = Bvh::build(&model);
+        let placed = Placed::new(&model, &bvh, Transform::default());
+        let beam = Beam {
+            from: Vec3::new(0.5, 0.0, 30.0),
+            to: Vec3::new(0.5, 0.0, 20.0 + 1e-3),
+            from_radius_mm: 0.4,
+            to_radius_mm: 0.4,
+        };
+        assert!(clear(&placed, &beam));
+    }
+
+    #[test]
+    fn a_ball_is_measured_on_the_plate_through_a_stretched_placement() {
+        // Doubled along x, the wall's face stands at x = 2 on the plate.
+        let model = wall();
+        let bvh = Bvh::build(&model);
+        let transform = Transform {
+            scale: Vec3::new(2.0, 1.0, 1.0),
+            ..Transform::default()
+        };
+        let placed = Placed::new(&model, &bvh, transform);
+        let mut found = Vec::new();
+        assert!(placed.reaches_ball(Vec3::new(2.4, 0.0, 10.0), 0.5, &mut found));
+        assert!(!placed.reaches_ball(Vec3::new(2.6, 0.0, 10.0), 0.5, &mut found));
     }
 }

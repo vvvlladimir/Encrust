@@ -658,10 +658,10 @@ fn default_max_overhang_deg() -> f32 {
     45.0
 }
 
-/// Twelve sides put the flats about 0.02 mm inside the circle for the thickest preset's
-/// 1.2 mm pillar, which is finer than one pixel of a 9K panel.
+/// Twenty-four sides put the flats about 0.013 mm inside the circle of the heaviest
+/// preset's 3 mm pillar, and read as round on the screen; see ADR 0343.
 fn default_facets() -> u32 {
-    12
+    24
 }
 
 /// The fewest sides that still enclose an area.
@@ -1007,7 +1007,7 @@ platform_thickness_mm = 1.0
             path(),
         )
         .expect("valid profile");
-        assert_eq!(profile.facets, 12);
+        assert_eq!(profile.facets, 24);
         assert!((profile.density - 1.0).abs() < f32::EPSILON);
     }
 

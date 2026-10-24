@@ -1,5 +1,5 @@
 use std::cmp::Ordering;
-use std::collections::{BinaryHeap, HashMap};
+use std::collections::{BinaryHeap, HashMap, VecDeque};
 
 mod grid;
 
@@ -15,7 +15,7 @@ use crate::column::{
     PLATE_Z_MM, SURFACE_EPSILON_MM, has_head, landing, landing_within,
 };
 use crate::group::Profiles;
-use crate::mesher::is_small;
+use crate::mesher::{faults, is_small, sound};
 use crate::tree::{SupportTree, TreeNode};
 
 /// Two tips this close together stand in the same place, and the direction between them
@@ -62,6 +62,7 @@ pub fn grow(columns: &[Column], placed: &Placed, profiles: Profiles) -> Vec<Supp
         if on_grid(&family, profiles).is_none() {
             gather(&mut trees, &forest, placed, profiles);
         }
+        let trees = only_sound(trees, &mine, placed, profiles, &carriers);
         carriers.take(&trees, profiles);
         forest.extend(trees);
     }
@@ -139,17 +140,76 @@ fn stand_small_pillars_on_supports(
             })
             .max_by(|a, b| a.z.total_cmp(&b.z));
         if let Some(meet) = met {
-            tree.set_radius_mm(radius_mm);
-            tree.stand_on(Landing {
+            let mut moved = tree.clone();
+            moved.set_radius_mm(radius_mm);
+            moved.stand_on(Landing {
                 base: meet,
                 on_model: true,
                 pad_offset: Vec2::ZERO,
                 pad_cut: None,
                 on_support: true,
             });
+            if sound(&moved, profiles, placed) {
+                *tree = moved;
+            }
         }
     }
 }
+
+/// `trees` with every one whose bodies meet the model past their tips mended: the tips
+/// whose own branches do are stood alone, and the rest grown together again; a tree whose
+/// trunk or inner strut does, or that will not mend, is stood again tip by tip. A tip
+/// that is still not sound on its own is left unstood rather than cured into the part;
+/// see ADR 0341.
+fn only_sound(
+    trees: Vec<SupportTree>,
+    columns: &[Column],
+    placed: &Placed,
+    profiles: Profiles,
+    carriers: &Carriers,
+) -> Vec<SupportTree> {
+    let column_of = |point: usize| columns.iter().find(|column| column.point == point);
+    let alone = |point: usize| -> Vec<SupportTree> {
+        column_of(point).map_or_else(Vec::new, |column| {
+            grow_one(std::slice::from_ref(column), placed, profiles, carriers)
+                .into_iter()
+                .filter(|tree| sound(tree, profiles, placed))
+                .collect()
+        })
+    };
+    let mut kept = Vec::with_capacity(trees.len());
+    let mut pending: VecDeque<(SupportTree, u32)> =
+        trees.into_iter().map(|tree| (tree, 0)).collect();
+    while let Some((tree, regrown)) = pending.pop_front() {
+        let Some(faulty) = faults(&tree, profiles, placed) else {
+            kept.push(tree);
+            continue;
+        };
+        let points: Vec<usize> = tree.points().collect();
+        if points.len() < 2 {
+            continue;
+        }
+        if faulty.is_empty() || regrown >= MAX_REGROWS {
+            kept.extend(points.into_iter().flat_map(alone));
+            continue;
+        }
+        kept.extend(faulty.iter().copied().flat_map(alone));
+        let rest: Vec<Column> = points
+            .iter()
+            .filter(|point| !faulty.contains(point))
+            .filter_map(|point| column_of(*point).copied())
+            .collect();
+        if !rest.is_empty() {
+            let grown = grow_one(&rest, placed, profiles, carriers);
+            pending.extend(grown.into_iter().map(|tree| (tree, regrown + 1)));
+        }
+    }
+    kept
+}
+
+/// How many times a tree is grown again without the tips that made it unsound before it
+/// is stood tip by tip instead.
+const MAX_REGROWS: u32 = 3;
 
 /// How much wider a carrier has to be than what joins it, millimetres: under this the
 /// two are one width, and neither is the other's base.
@@ -810,25 +870,41 @@ impl<'a> Forest<'a> {
             .collect()
     }
 
-    /// What stands under `front`: down, then aside; then both again onto a steeper face
-    /// before the tips go to a strut each, since a support cured onto a slope beats none
-    /// under a contact.
+    /// What stands under `front`: down, then aside; then both again onto a steeper face,
+    /// then a long lean for ground, before the tips go to a strut each, since a support
+    /// cured onto a slope beats none under a contact.
     fn stand(&self, front: &Front, children: &[Vec<usize>], placed: &Placed) -> Vec<SupportTree> {
         let profile = self.profiles.of(front.group);
-        for steepest_deg in [MAX_LANDING_SLOPE_DEG, LAST_RESORT_SLOPE_DEG] {
+        let steeper = [MAX_LANDING_SLOPE_DEG, LAST_RESORT_SLOPE_DEG];
+        for steepest_deg in steeper {
             let (at, radius_mm, tips) = (front.position, front.radius_mm, front.tips);
             if let Some(landing) =
                 landing_within(placed, at, radius_mm, tips, profile, steepest_deg)
             {
                 return vec![self.cut(front, children, landing)];
             }
-            if let Some((knee, landing)) = escape(front, placed, profile, steepest_deg) {
-                let mut tree = self.cut(front, children, landing);
-                tree.stand_on_knee(knee, front.radius_mm);
-                return vec![tree];
+            if let Some(leant) = escape(front, placed, profile, steepest_deg) {
+                return vec![self.on_knee(front, children, leant)];
+            }
+        }
+        for steepest_deg in steeper {
+            if let Some(leant) = search_for_ground(front, placed, profile, steepest_deg) {
+                return vec![self.on_knee(front, children, leant)];
             }
         }
         self.bridges(front, children, placed)
+    }
+
+    /// The tree hanging off `front`, its trunk bent at `knee` onto `landing`.
+    fn on_knee(
+        &self,
+        front: &Front,
+        children: &[Vec<usize>],
+        (knee, landing): (Vec3, Landing),
+    ) -> SupportTree {
+        let mut tree = self.cut(front, children, landing);
+        tree.stand_on_knee(knee, front.radius_mm);
+        tree
     }
 
     /// The tips under a front that stands on the model, each as a small pillar of its own
@@ -1007,20 +1083,83 @@ fn escape(
     profile: &SupportProfile,
     steepest_deg: Scalar,
 ) -> Option<(Vec3, Landing)> {
+    let search = Search {
+        from_mm: 0.0,
+        to_mm: profile.branching.max_merge_distance_mm,
+        reaches: ESCAPE_REACHES,
+        directions: ESCAPE_DIRECTIONS,
+    };
+    lean_for_ground(front, placed, profile, steepest_deg, search)
+}
+
+/// The longest strut a support with nowhere nearer to stand leans down to find ground,
+/// millimetres along it; see ADR 0342.
+const GROUND_SEARCH_MM: Scalar = 25.0;
+
+/// How far apart the reaches of the long search for ground are, millimetres across the
+/// plate, and how many ways round it looks at each.
+const GROUND_SEARCH_STEP_MM: Scalar = 1.5;
+const GROUND_SEARCH_DIRECTIONS: u32 = 16;
+
+/// [`escape`] carried on past the reach a merge leans, to a strut [`GROUND_SEARCH_MM`]
+/// long, finer round: the last lean a support is offered before it runs onto the model
+/// under it or is left unstood. See ADR 0342.
+fn search_for_ground(
+    front: &Front,
+    placed: &Placed,
+    profile: &SupportProfile,
+    steepest_deg: Scalar,
+) -> Option<(Vec3, Landing)> {
+    let reach_per_drop = lean_per_drop(profile);
+    let to_mm = GROUND_SEARCH_MM * reach_per_drop / reach_per_drop.hypot(1.0);
+    let from_mm = profile.branching.max_merge_distance_mm.min(to_mm);
+    let reaches = ((to_mm - from_mm) / GROUND_SEARCH_STEP_MM).ceil();
+    if reaches < 1.0 {
+        return None;
+    }
+    let search = Search {
+        from_mm,
+        to_mm,
+        reaches: reaches as u32,
+        directions: GROUND_SEARCH_DIRECTIONS,
+    };
+    lean_for_ground(front, placed, profile, steepest_deg, search)
+}
+
+/// Where a lean for ground looks: `reaches` evenly out past `from_mm` to `to_mm` across
+/// the plate, each tried `directions` ways round.
+#[derive(Debug, Clone, Copy)]
+struct Search {
+    from_mm: Scalar,
+    to_mm: Scalar,
+    reaches: u32,
+    directions: u32,
+}
+
+/// The nearest knee `search` finds a front can lean to and stand under, and what it
+/// stands on.
+fn lean_for_ground(
+    front: &Front,
+    placed: &Placed,
+    profile: &SupportProfile,
+    steepest_deg: Scalar,
+    search: Search,
+) -> Option<(Vec3, Landing)> {
     let (from, radius_mm) = (front.position, front.radius_mm);
     let reach_per_drop = lean_per_drop(profile);
     // A lean costs height, and what is left underneath is the ceiling on it: a support low
     // over the plate can only step aside as far as it can still descend.
     let room_mm = from.z - profile.footing_height_mm() - MIN_PILLAR_HEIGHT_MM;
-    let reach_mm = (room_mm * reach_per_drop).min(profile.branching.max_merge_distance_mm);
-    if reach_mm <= SAME_PLACE_MM {
+    let reach_mm = (room_mm * reach_per_drop).min(search.to_mm);
+    if reach_mm <= search.from_mm.max(SAME_PLACE_MM) {
         return None;
     }
 
-    for step in 1..=ESCAPE_REACHES {
-        let ground = reach_mm * step as Scalar / ESCAPE_REACHES as Scalar;
-        for turn in 0..ESCAPE_DIRECTIONS {
-            let angle = std::f32::consts::TAU * turn as Scalar / ESCAPE_DIRECTIONS as Scalar;
+    for step in 1..=search.reaches {
+        let share = step as Scalar / search.reaches as Scalar;
+        let ground = search.from_mm + (reach_mm - search.from_mm) * share;
+        for turn in 0..search.directions {
+            let angle = std::f32::consts::TAU * turn as Scalar / search.directions as Scalar;
             let knee = from
                 + Vec3::new(
                     ground * angle.cos(),
@@ -1076,6 +1215,184 @@ mod tests {
     use crate::SupportPoint;
     use crate::tests::{box_mesh, profile, ramp};
     use core_geometry::{Bvh, Mesh, Transform};
+
+    #[test]
+    fn a_support_never_stands_through_a_thin_rod_under_it() {
+        // A slab's underside at z = 10 and a rod 0.1 mm square standing on the plate 6 mm
+        // tall, 0.4 mm off the contact: parallel to every ray down the trunk and between
+        // them, it is inside the 0.6 mm pillar dropped straight from the neck.
+        let mut model = box_mesh(Vec3::new(-6.0, -6.0, 10.0), Vec3::new(6.0, 6.0, 12.0));
+        let rod = box_mesh(Vec3::new(0.35, -0.05, 0.0), Vec3::new(0.45, 0.05, 6.0));
+        let offset = model.vertices.len() as u32;
+        model.vertices.extend_from_slice(&rod.vertices);
+        model
+            .faces
+            .extend(rod.faces.iter().map(|face| face.map(|at| at + offset)));
+        let fixture = profile();
+        let profiles = Profiles::single(&fixture);
+        let bvh = Bvh::build(&model);
+        let placed = Placed::new(&model, &bvh, Transform::default());
+        let forest = forest_of(&[Vec3::new(0.0, 0.0, 10.0)], &model, profiles);
+        assert_eq!(forest.len(), 1, "it still stands, beside the rod");
+        let tree = &forest[0];
+        assert!(sound(tree, profiles, &placed), "got {tree:?}");
+        for step in 0..=12 {
+            let z = step as Scalar * 0.5;
+            let axis = crate::mesher::trunk_axis_at(tree, &fixture, z);
+            let apart = axis.truncate().distance(Vec2::new(0.4, 0.0));
+            let radius_mm = crate::mesher::trunk_radius_at_mm(tree, &fixture, z);
+            assert!(
+                apart >= radius_mm + 0.05,
+                "at z = {z} the trunk's axis is {apart} mm off the rod, inside its {radius_mm} mm"
+            );
+        }
+    }
+
+    #[test]
+    fn a_merged_tree_through_the_model_is_stood_again_tip_by_tip() {
+        // Two contacts 2 mm apart under a slab at z = 10, merged by hand at z = 7 over a
+        // rod standing 0.3 mm off the trunk's axis, between its rays.
+        let mut model = box_mesh(Vec3::new(-6.0, -6.0, 10.0), Vec3::new(6.0, 6.0, 12.0));
+        let rod = box_mesh(Vec3::new(0.25, -0.05, 0.0), Vec3::new(0.35, 0.05, 6.0));
+        let offset = model.vertices.len() as u32;
+        model.vertices.extend_from_slice(&rod.vertices);
+        model
+            .faces
+            .extend(rod.faces.iter().map(|face| face.map(|at| at + offset)));
+        let fixture = profile();
+        let profiles = Profiles::single(&fixture);
+        let bvh = Bvh::build(&model);
+        let placed = Placed::new(&model, &bvh, Transform::default());
+        let points = [
+            SupportPoint::new(Vec3::new(-1.0, 0.0, 10.0)),
+            SupportPoint::new(Vec3::new(1.0, 0.0, 10.0)),
+        ];
+        let columns = crate::columns(&points, &placed, profiles);
+        let radius_mm = fixture.pillar_radius_mm();
+        let node = |position, parent, point| TreeNode {
+            position,
+            radius_mm,
+            parent,
+            point,
+            head: None,
+        };
+        let nodes = vec![
+            node(columns[0].contact, Some(2), Some(0)),
+            node(columns[1].contact, Some(3), Some(1)),
+            node(columns[0].neck, Some(4), None),
+            node(columns[1].neck, Some(4), None),
+            node(Vec3::new(0.0, 0.0, 7.0), None, None),
+        ];
+        let landing = Landing {
+            base: Vec3::ZERO,
+            on_model: false,
+            pad_offset: Vec2::ZERO,
+            pad_cut: None,
+            on_support: false,
+        };
+        let merged = SupportTree::new(nodes, 4, landing);
+        assert!(
+            !sound(&merged, profiles, &placed),
+            "the trunk runs through the rod"
+        );
+
+        let carriers = Carriers::new(fixture.branching.max_merge_distance_mm);
+        let stood = only_sound(vec![merged], &columns, &placed, profiles, &carriers);
+        let mut held: Vec<usize> = stood.iter().flat_map(SupportTree::points).collect();
+        held.sort_unstable();
+        assert_eq!(held, [0, 1], "both tips stand, each on its own");
+        assert!(stood.iter().all(|tree| sound(tree, profiles, &placed)));
+    }
+
+    #[test]
+    fn a_support_over_a_wide_block_leans_further_than_a_merge_for_the_plate() {
+        // A slab's underside at z = 30 over a block 25 mm square and 5 mm tall, which the
+        // profile will not stand on: the plate is more than a merge's 12 mm away.
+        let mut model = box_mesh(Vec3::new(-20.0, -20.0, 30.0), Vec3::new(20.0, 20.0, 32.0));
+        let block = box_mesh(Vec3::new(-12.5, -12.5, 0.0), Vec3::new(12.5, 12.5, 5.0));
+        let offset = model.vertices.len() as u32;
+        model.vertices.extend_from_slice(&block.vertices);
+        model
+            .faces
+            .extend(block.faces.iter().map(|face| face.map(|at| at + offset)));
+        let mut fixture = profile();
+        fixture.land_on_model = false;
+        let forest = forest_of(
+            &[Vec3::new(0.0, 0.0, 30.0)],
+            &model,
+            Profiles::single(&fixture),
+        );
+        assert_eq!(forest.len(), 1, "it stands");
+        let landing = forest[0].landing();
+        assert!(!landing.on_model);
+        let across = landing.base.truncate().length();
+        assert!(
+            across > fixture.branching.max_merge_distance_mm,
+            "it leant {across} mm, past what a merge reaches"
+        );
+    }
+
+    #[test]
+    fn a_tip_whose_head_meets_the_model_leaves_the_rest_of_its_tree_merged() {
+        // Three contacts under a slab at z = 10, merged by hand; a rod hangs 0.3 mm beside
+        // the third one's contact, inside its head.
+        let mut model = box_mesh(Vec3::new(-6.0, -6.0, 10.0), Vec3::new(6.0, 6.0, 12.0));
+        let rod = box_mesh(Vec3::new(3.25, -0.05, 8.5), Vec3::new(3.35, 0.05, 10.0));
+        let offset = model.vertices.len() as u32;
+        model.vertices.extend_from_slice(&rod.vertices);
+        model
+            .faces
+            .extend(rod.faces.iter().map(|face| face.map(|at| at + offset)));
+        let fixture = profile();
+        let profiles = Profiles::single(&fixture);
+        let bvh = Bvh::build(&model);
+        let placed = Placed::new(&model, &bvh, Transform::default());
+        let points = [-1.0, 1.0, 3.0].map(|x| SupportPoint::new(Vec3::new(x, 0.0, 10.0)));
+        let mut columns = crate::columns(&points, &placed, profiles);
+        // Straight down, as it would have stood without the rod.
+        columns[2].neck = columns[2].contact - Vec3::Z * fixture.top_length_mm();
+        let radius_mm = fixture.pillar_radius_mm();
+        let node = |position, parent, point| TreeNode {
+            position,
+            radius_mm,
+            parent,
+            point,
+            head: None,
+        };
+        let nodes = vec![
+            node(columns[0].contact, Some(3), Some(0)),
+            node(columns[1].contact, Some(4), Some(1)),
+            node(columns[2].contact, Some(5), Some(2)),
+            node(columns[0].neck, Some(6), None),
+            node(columns[1].neck, Some(6), None),
+            node(columns[2].neck, Some(6), None),
+            node(Vec3::new(1.0, 0.0, 6.0), None, None),
+        ];
+        let landing = Landing {
+            base: Vec3::new(1.0, 0.0, 0.0),
+            on_model: false,
+            pad_offset: Vec2::ZERO,
+            pad_cut: None,
+            on_support: false,
+        };
+        let merged = SupportTree::new(nodes, 6, landing);
+        assert_eq!(
+            faults(&merged, profiles, &placed),
+            Some(vec![2]),
+            "only the third head"
+        );
+
+        let carriers = Carriers::new(fixture.branching.max_merge_distance_mm);
+        let stood = only_sound(vec![merged], &columns, &placed, profiles, &carriers);
+        assert!(
+            stood.iter().any(|tree| {
+                let held: Vec<usize> = tree.points().collect();
+                held.contains(&0) && held.contains(&1)
+            }),
+            "the two good tips still share a trunk"
+        );
+        assert!(stood.iter().all(|tree| sound(tree, profiles, &placed)));
+    }
 
     /// The trees a set of contacts grows into, over an empty plate unless a model is
     /// given.

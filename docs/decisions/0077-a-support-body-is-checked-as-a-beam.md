@@ -1,6 +1,6 @@
 # 0077. Check a support body as a beam, not as its axis
 
-- **Status:** Accepted
+- **Status:** Accepted; the sampling by rays alone is superseded by 0341
 - **Date:** 2026-09-23
 
 ## Context

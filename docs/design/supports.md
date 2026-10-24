@@ -24,10 +24,10 @@ churning. Landing is one ray per point through the scene's `Bvh`, on every core 
 A tip leaves the surface square on: `columns` reads the normal of the face nearest the
 contact and puts the **neck** — the far end of the `[top]` segment — one `top.length_mm`
 out along it, and shorter where a full one would eat the room the body needs over the plate
-(ADR 0125). The head follows the normal only while that falls as fast as it runs out; a
-steeper face, a wall or a slope looking up sends it out the way the face looks and down as
-fast, 45 degrees, and a head that would meet the model within its own length goes straight
-down (ADR 0249). A flat top, or a contact off the surface, sends it straight down. A knee
+(ADR 0125). The head follows the normal while that is within 60 degrees of straight
+down; a steeper face, a wall or a slope looking up sends it out the way the face looks at
+60 degrees (ADR 0344), and a head that would meet the model within its own length goes
+straight down (ADR 0249). A flat top, or a contact off the surface, sends it straight down. A knee
 and the strut into a thicker support are held to 45 degrees too, whatever the branch
 angle; a trunk is swept for clearance from its own width below its top; and a tip that can
 neither stand nor lean is first let stand, or lean and stand, on a face up to 75 degrees
@@ -37,9 +37,9 @@ is not sent straight down where down is into the solid. A contact on an edge or 
 and leaves the one that looks down most, so the support under a low point of the model is
 shaped like the rest. Only the tip may meet the model: the whole head, contact to pillar
 width with `clearance_mm` round it, is swept once it has left its own face's plane, and a
-head that meets the model there turns — straight down, then 15, 30 and 45 degrees off its
+head that meets the model there turns — straight down, then 15, 30, 45 and 60 degrees off its
 direction in eight ways — to the first that is clear, with its clearance and then bare,
-and keeps its direction where none is (ADR 0328) — unless the model under the contact is
+and keeps its direction where none is, for the check below to refuse (ADR 0328, 0341) — unless the model under the contact is
 nearer than a head is long, where that head would run through it and stand its trunk
 underneath: such a contact has no head, and `grow` runs it as one strut from the contact
 itself, straight onto what is under it (ADR 0331). Everything below is measured from the neck, not
@@ -55,6 +55,23 @@ itself would report the contact's own face at zero distance.
 
 Less than `MIN_PILLAR_HEIGHT_MM` (0.2 mm) of room means no column. The point is kept — the
 model may move up — and the inspector reports standing against placed.
+
+A front that cannot stand, nor lean within a merge's reach, searches further before it
+is run onto the model: out to where a 25 mm strut at the profile's lean ends, every
+1.5 mm across and 16 ways round, onto a gentle face and then a steeper one (ADR 0342).
+
+## Checking a body against the model
+
+Every placement question sweeps a `Beam` — a cone with its clearance — by the nine rays of
+ADR 0077 and a row of balls down its axis, each as wide as the beam where it stands, no
+wider than its distance to either end, half a radius apart; a ball is measured against
+each face the `Bvh` offers, exactly, on the plate (ADR 0341). Once a family has grown, each
+tree is held to its drawn bodies: `mesher::bodies` hands back the tubes the mesher sweeps,
+and `sound` tests each ring-to-ring frustum, a 0.05 mm graze narrower, from where the
+tube stands that graze off the face its tip — or the foot it stands on the part with —
+was built to meet. A merged tree that fails is stood again tip by tip; a support of one
+tip that fails is left unstood, and the inspector counts it. A dragged support is held to
+the same test.
 
 ## The shape of a support
 
@@ -74,8 +91,8 @@ the face rather than up past it (ADR 0125, superseding that clause of ADR 0028),
 deeper than half the wall behind the contact, measured by one ray along that axis: a tip
 on a thin edge would otherwise come out of its far side as a nub, and above the model's
 top as layers of nothing but tips. `facets`
-sides are used for every ring; twelve puts the flats 0.026 mm inside the circle of a 2 mm
-pillar, finer than a 9K pixel.
+sides are used for every ring; the default of 24 puts the flats 0.013 mm inside the circle
+of a 3 mm pillar, and a joint's domes take six rings so a bend reads round (ADR 0343).
 
 **Tips.** `plane`, the default, is the whole tip moved `bite_mm` along its axis into the
 model, ending on the sweep's flat disc of the contact's width (ADR 0243). The disc is
@@ -110,8 +127,8 @@ on its widest edge is the pad a blade cannot get under (ADR 0044, ADR 0130). A t
 foot keeps its rim as a middle ring, so it narrows towards the support and still meets the
 plate on the bevel.
 
-**The flare.** The pillar widens out into the pad over a cone that rises as far as it
-widens, which is forty-five degrees. It leaves the pillar at the pillar's own width, so
+**The flare.** The pillar widens out into the pad over a quarter-circle fillet, tangent
+to the pillar above and the pad below, that rises as far as it widens (ADR 0343). It leaves the pillar at the pillar's own width, so
 its height is `(lower - pillar) / 2` rather than a field of its own (ADR 0238), it is drawn with the pillar's facets rather than the pad's, and it sinks
 `FOOT_BITE` into the pad the way the trunk does. It never reaches above the root it widens,
 never narrower than the trunk standing in it, and never wider than the narrowest ring of

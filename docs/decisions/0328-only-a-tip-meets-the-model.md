@@ -1,6 +1,6 @@
 # 0328. Let only a tip meet the model: turn a head for room and cut a pad back
 
-- **Status:** Accepted; superseded in part by 0331 (a head with no room under it)
+- **Status:** Accepted; superseded in part by 0331 (a head with no room under it) and 0341 (a head with no clear direction)
 - **Date:** 2026-10-22
 
 ## Context

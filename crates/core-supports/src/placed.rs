@@ -1,6 +1,6 @@
 use core_geometry::{
-    Bvh, Mat4, Mesh, PlacedHit, Ray, Scalar, Transform, Vec3, raycast_placed_by,
-    raycast_placed_within,
+    Bvh, Mat3, Mat4, Mesh, PlacedHit, Ray, Scalar, Transform, Triangle, Vec3, point_triangle,
+    raycast_placed_by, raycast_placed_within,
 };
 
 use crate::region::Blocked;
@@ -61,5 +61,39 @@ impl<'a> Placed<'a> {
     /// supports stand against is numbered: the model, its shell or the shell drilled.
     pub fn blocks_at(&self, point: Vec3) -> bool {
         self.blocked.is_some_and(|blocked| blocked.holds(point))
+    }
+
+    /// Whether any face of the model comes within `radius_mm` of `centre`, both in plate
+    /// coordinates, measured exactly against each face the hierarchy offers.
+    ///
+    /// `found` is scratch room the caller keeps, so a run of balls allocates once.
+    pub(crate) fn reaches_ball(
+        &self,
+        centre: Vec3,
+        radius_mm: Scalar,
+        found: &mut Vec<u32>,
+    ) -> bool {
+        let Some((matrix, inverse)) = self.matrices else {
+            return false;
+        };
+        // The Frobenius norm bounds how far the inverse stretches any length, so the ball
+        // in the model's own space holds every point of the one on the plate.
+        let stretch = Mat3::from_mat4(inverse);
+        let bound = (stretch.x_axis.length_squared()
+            + stretch.y_axis.length_squared()
+            + stretch.z_axis.length_squared())
+        .sqrt();
+        self.bvh
+            .faces_within(inverse.transform_point3(centre), radius_mm * bound, found);
+        found.iter().any(|&face| {
+            self.model.triangle(face as usize).is_some_and(|local| {
+                let triangle = Triangle::new(
+                    matrix.transform_point3(local.a),
+                    matrix.transform_point3(local.b),
+                    matrix.transform_point3(local.c),
+                );
+                point_triangle(centre, &triangle).distance_squared(centre) <= radius_mm * radius_mm
+            })
+        })
     }
 }

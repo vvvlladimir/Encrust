@@ -13,9 +13,9 @@ pub struct Ring {
     pub radius_mm: Scalar,
 }
 
-/// How many rings a rounded end is drawn with, the tube's own last ring among them. An end
-/// is hidden inside the joint it meets, so it needs a silhouette and no more.
-const DOME_RINGS: u32 = 3;
+/// How many rings a rounded end is drawn with, the tube's own last ring among them. At a
+/// bend the outside of the joint is these ends, so they are drawn round; see ADR 0343.
+pub const DOME_RINGS: u32 = 6;
 
 /// A straight run of a support: an axis, the circles along it and what closes its top.
 pub struct Tube {

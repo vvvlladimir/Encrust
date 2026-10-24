@@ -4,6 +4,8 @@ use printer_profiles::SupportProfile;
 use crate::Landing;
 use crate::clear::{Beam, clear};
 use crate::column::{foot_clear, has_head, landing, neck_of, swept_bottom_z};
+use crate::group::Profiles;
+use crate::mesher::sound;
 use crate::pick::Part;
 use crate::placed::Placed;
 use crate::tree::SupportTree;
@@ -16,7 +18,8 @@ const SINGULAR: Scalar = 1e-12;
 ///
 /// The same rule the automatic run places by (ADR 0077): each strut, the trunk and the
 /// foot are swept as beams of their own radius with the profile's clearance around them,
-/// and only the head of a tip is let through, because a tip is meant to touch. `tree` is
+/// and only the head of a tip is let through, because a tip is meant to touch. Then the
+/// bodies as they are drawn are held to the test a grown tree is (ADR 0341). `tree` is
 /// in plate coordinates, the space `placed` puts the model in.
 pub fn fits(tree: &SupportTree, placed: &Placed, profile: &SupportProfile) -> bool {
     let head_mm = profile.top_length_mm() + profile.contact_depth_mm();
@@ -51,6 +54,7 @@ pub fn fits(tree: &SupportTree, placed: &Placed, profile: &SupportProfile) -> bo
     struts
         && clear(placed, &trunk)
         && (landing.on_model || foot_clear(placed, landing.pad_centre(), profile))
+        && sound(tree, Profiles::single(profile), placed)
 }
 
 /// The nearest point of the model to `at`, in plate coordinates, for a tip that has to

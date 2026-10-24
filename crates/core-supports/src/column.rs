@@ -34,10 +34,14 @@ const ON_SURFACE_MM: Scalar = 1e-3;
 const ONTO_SURFACE_MM: Scalar = 0.5;
 
 /// How much ground anything that carries a support may cover per millimetre it descends,
-/// branches apart: 45 degrees off vertical, past which a strut is printed as an overhang
-/// of its own and sags. A tip's head and a leaning trunk are held to it alike; a branch
-/// keeps its profile's angle. See `docs/decisions/0249`.
+/// branches and heads apart: 45 degrees off vertical, past which a strut is printed as an
+/// overhang of its own and sags. A branch keeps its profile's angle. See
+/// `docs/decisions/0249`.
 pub(crate) const MAX_LEAN_PER_DROP: Scalar = 1.0;
+
+/// The same for a tip's head: tan 60°. A head is short and hangs from the face it holds, so
+/// it may meet a steeper face square on; see `docs/decisions/0344`.
+pub(crate) const MAX_HEAD_LEAN_PER_DROP: Scalar = 1.732_050_8;
 
 /// The least a face has to lean for a tip leaving it to have an out to run along at all.
 const OUT_MIN: Scalar = 0.05;
@@ -439,7 +443,7 @@ fn neck_along(contact: Vec3, direction: Vec3, profile: &SupportProfile) -> Vec3 
 
 /// How far, degrees, and round how many ways a head is turned off its own direction when
 /// that one is not clear: as far as a head may lean at all, in steps a contact notices.
-const HEAD_TURNS_DEG: [Scalar; 3] = [15.0, 30.0, 45.0];
+const HEAD_TURNS_DEG: [Scalar; 4] = [15.0, 30.0, 45.0, 60.0];
 const HEAD_AZIMUTHS: u32 = 8;
 
 /// The other ways a head may leave the face `normal` belongs to, nearest `square` first:
@@ -457,7 +461,7 @@ fn headings_round(square: Vec3, normal: Vec3) -> impl Iterator<Item = Vec3> {
             })
         })
         .filter(move |direction| {
-            -direction.z * MAX_LEAN_PER_DROP >= direction.truncate().length()
+            -direction.z * MAX_HEAD_LEAN_PER_DROP >= direction.truncate().length()
                 && direction.dot(normal) >= HEAD_OFF_THE_FACE
         })
 }
@@ -577,9 +581,9 @@ fn tip_direction(placed: &Placed, contact: Vec3) -> (Vec3, Option<Vec3>) {
 }
 
 /// The way a tip leaves a face with this outward `normal`: along the normal where that
-/// descends at least as fast as [`MAX_LEAN_PER_DROP`] lets it run out, and otherwise out
-/// the way the normal points and down as fast as that. So a face that looks down is met
-/// square on, and a wall, a slope looking up or a face barely past vertical is left at 45
+/// descends at least as fast as [`MAX_HEAD_LEAN_PER_DROP`] lets it run out, and otherwise
+/// out the way the normal points and down as fast as that. So a face that looks down is met
+/// square on, and a wall, a slope looking up or a face barely past vertical is left at 60
 /// degrees rather than sideways.
 fn out_and_down(normal: Vec3) -> Vec3 {
     let across = normal.truncate();
@@ -587,10 +591,10 @@ fn out_and_down(normal: Vec3) -> Vec3 {
     if run <= OUT_MIN {
         return -Vec3::Z;
     }
-    if -normal.z * MAX_LEAN_PER_DROP >= run {
+    if -normal.z * MAX_HEAD_LEAN_PER_DROP >= run {
         return normal;
     }
-    across.extend(-run / MAX_LEAN_PER_DROP).normalize()
+    across.extend(-run / MAX_HEAD_LEAN_PER_DROP).normalize()
 }
 
 /// How many directions and how many reaches a pad is tried at round its trunk before the
@@ -664,7 +668,7 @@ fn lean_of(normal: Vec3, steepest_deg: Scalar) -> Option<Scalar> {
 /// Whether `body`, a trunk dropped from its joint, has the model out of its way.
 ///
 /// The sweep begins the body's own width and clearance below its top. The top is where
-/// a head leaves the face it holds, and a head leaning at 45 degrees ends that near the
+/// a head leaves the face it holds, and a head leaning at 60 degrees ends that near the
 /// face: asking for clear air all round it there refuses the very surface it stands
 /// under, which is how a contact under a rounded underside was left with no column. That
 /// stretch is still kept out of the model itself, bare (ADR 0328).
@@ -1177,14 +1181,26 @@ mod tests {
     }
 
     #[test]
-    fn a_tip_under_a_face_near_vertical_leaves_at_45_degrees_and_no_flatter() {
+    fn a_tip_under_a_face_near_vertical_leaves_at_60_degrees_and_no_flatter() {
         // Rising 10 over a run of 4: the normal is 68 degrees off straight down, and a
         // head along it would be printed nearly level.
         let along = tip_under_a_turned_ramp(4.0, 10.0).normalize();
-        let expected = Vec3::new(-1.0, 0.0, -1.0).normalize();
+        let expected = Vec3::new(-MAX_HEAD_LEAN_PER_DROP, 0.0, -1.0).normalize();
         assert!(
             along.abs_diff_eq(expected, 1e-4),
             "the head runs out the way the face looks and falls as fast, got {along}"
+        );
+    }
+
+    #[test]
+    fn a_tip_under_a_face_50_degrees_off_down_meets_it_square_on() {
+        // Rising 11.92 over a run of 10: the normal is 50 degrees off straight down, past
+        // a trunk's 45 and inside a head's 60.
+        let along = tip_under_a_turned_ramp(10.0, 11.917_536).normalize();
+        let lean = along.truncate().length().atan2(-along.z).to_degrees();
+        assert!(
+            (lean - 50.0).abs() < 0.1,
+            "the head follows the normal, got {lean} degrees"
         );
     }
 

@@ -5,6 +5,7 @@ use printer_profiles::{ContactShape, SupportProfile};
 use crate::Landing;
 use crate::base::{braces, skate, skate_half_width_mm, toe_of};
 use crate::buttress::buttresses;
+use crate::clear::{Beam, clear};
 use crate::column::{SURFACE_EPSILON_MM, face_normal};
 use crate::group::Profiles;
 use crate::pad::PAD_SECTORS;
@@ -237,12 +238,37 @@ pub(crate) fn mesh_head(contact: Vec3, neck: Vec3, profile: &SupportProfile) -> 
 }
 
 fn mesh_tree(slots: &mut Slots, tree: &SupportTree, profiles: Profiles, placed: &Placed) {
+    for body in bodies(tree, profiles, placed) {
+        sweep(slots.of(body.group), &body.tube);
+    }
+    stand_on(slots.of(tree.group()), tree, profiles.of(tree.group()));
+}
+
+/// One straight run of a support as it is drawn, with the outward normal of the face each
+/// end is built to meet: the tip at its top, the part it stands on at its bottom.
+pub(crate) struct Body {
+    /// The group whose mesh it is drawn in.
+    pub group: u16,
+    pub tube: Tube,
+    pub meets_top: Option<Vec3>,
+    /// The point whose tip the tube carries from its contact, for a tube that starts at one.
+    pub point: Option<usize>,
+    /// The face's normal and how far down the axis it is met, millimetres: the tube
+    /// itself runs on past it by its bite.
+    pub meets_bottom: Option<(Vec3, Scalar)>,
+}
+
+/// Every strut of `tree` and the trunk under it, as the mesher draws them and as
+/// [`sound`] tests them; the foot is the pad's, tested where it is placed.
+pub(crate) fn bodies(tree: &SupportTree, profiles: Profiles, placed: &Placed) -> Vec<Body> {
     let profile = profiles.of(tree.group());
     let style = Style::of(tree, profile);
     let nodes = tree.nodes();
     let drawn_in = tree.node_groups(profiles);
+    let mut bodies = Vec::with_capacity(nodes.len());
     for (child, parent) in tree.struts() {
-        let (style, own) = if nodes[child].is_leaf() {
+        let leaf = nodes[child].is_leaf();
+        let (style, own) = if leaf {
             let into = nodes[child].position - nodes[parent].position;
             let style = Style {
                 bite_limit_mm: wall_mm(placed, nodes[child].position, into) * WALL_BITTEN,
@@ -253,12 +279,15 @@ fn mesh_tree(slots: &mut Slots, tree: &SupportTree, profiles: Profiles, placed: 
         } else {
             (style, profile)
         };
-        sweep(
-            slots.of(drawn_in[child]),
-            &strut(tree, child, parent, own, style),
-        );
+        let tube = strut(tree, child, parent, own, style);
+        bodies.push(Body {
+            group: drawn_in[child],
+            meets_top: leaf.then(|| style.face.unwrap_or(tube.direction)),
+            point: nodes[child].point.filter(|_| leaf),
+            meets_bottom: None,
+            tube,
+        });
     }
-    let mesh = slots.of(tree.group());
     let style = Style {
         ground: ground_normal(placed, tree.landing()),
         ..style
@@ -275,8 +304,149 @@ fn mesh_tree(slots: &mut Slots, tree: &SupportTree, profiles: Profiles, placed: 
     } else {
         style
     };
-    sweep(mesh, &trunk(tree, profile, style));
-    stand_on(mesh, tree, profile);
+    let tube = trunk(tree, profile, style);
+    let landing = tree.landing();
+    bodies.push(Body {
+        group: tree.group(),
+        meets_top: root.is_leaf().then(|| style.face.unwrap_or(tube.direction)),
+        point: root.point.filter(|_| root.is_leaf()),
+        meets_bottom: (landing.on_model && !landing.on_support).then(|| {
+            let ground = style.ground.unwrap_or(-tube.direction);
+            (ground, (landing.base - tube.top).dot(tube.direction))
+        }),
+        tube,
+    });
+    bodies
+}
+
+/// How far a body may graze the model and still be sound, millimetres: a layer of the
+/// finest printer, under which a facet of the model and a facet of the body only touch.
+const GRAZE_MM: Scalar = 0.05;
+
+/// Whether every body of `tree`, as it is drawn, keeps out of the model past the ends
+/// built to meet it: the one test a finished support is held to. See ADR 0341.
+pub(crate) fn sound(tree: &SupportTree, profiles: Profiles, placed: &Placed) -> bool {
+    bodies(tree, profiles, placed)
+        .iter()
+        .all(|body| body_clear(placed, body))
+}
+
+/// What of `tree` fails [`sound`]: `None` when nothing does, the points whose own tubes
+/// do when only those do, and no points when a strut between joints or the trunk does.
+pub(crate) fn faults(
+    tree: &SupportTree,
+    profiles: Profiles,
+    placed: &Placed,
+) -> Option<Vec<usize>> {
+    let mut heads = Vec::new();
+    let mut failed = false;
+    for body in bodies(tree, profiles, placed) {
+        if body_clear(placed, &body) {
+            continue;
+        }
+        failed = true;
+        match body.point {
+            Some(point) => heads.push(point),
+            None => return Some(Vec::new()),
+        }
+    }
+    failed.then_some(heads)
+}
+
+/// Whether `body` meets the model only where an end of it is built to.
+fn body_clear(placed: &Placed, body: &Body) -> bool {
+    let rings = &body.tube.rings;
+    let (Some(first), Some(last)) = (rings.first(), rings.last()) else {
+        return true;
+    };
+    let start = first.along_mm.max(0.0);
+    let end = body
+        .meets_bottom
+        .map_or(last.along_mm, |(_, face_mm)| face_mm.min(last.along_mm));
+    let from_mm = match body.meets_top {
+        Some(face) => match leaves(rings, body.tube.direction, face, start, end) {
+            Some(along) => along,
+            None => return false,
+        },
+        None => start,
+    };
+    let to_mm = match body.meets_bottom {
+        Some((face, _)) => match leaves(rings, -body.tube.direction, face, end, start) {
+            Some(along) => along,
+            None => return false,
+        },
+        None => end,
+    };
+    let at = |along: Scalar| body.tube.top + body.tube.direction * along;
+    let mut marks: Vec<Scalar> = rings
+        .iter()
+        .map(|ring| ring.along_mm)
+        .filter(|along| *along > from_mm && *along < to_mm)
+        .collect();
+    marks.insert(0, from_mm);
+    marks.push(to_mm);
+    marks.windows(2).all(|pair| {
+        let beam = Beam {
+            from: at(pair[0]),
+            to: at(pair[1]),
+            from_radius_mm: (radius_at(rings, pair[0]) - GRAZE_MM).max(0.0),
+            to_radius_mm: (radius_at(rings, pair[1]) - GRAZE_MM).max(0.0),
+        };
+        pair[1] - pair[0] < RING_EPSILON_MM || clear(placed, &beam)
+    })
+}
+
+/// How far along the axis, from `from_mm` towards `to_mm`, a body leaving the face whose
+/// outward normal is `face` the way `away` points stands a graze off that face's plane, or
+/// `None` when it never does: a body lying along the face, or turning into it.
+fn leaves(
+    rings: &[Ring],
+    away: Vec3,
+    face: Vec3,
+    from_mm: Scalar,
+    to_mm: Scalar,
+) -> Option<Scalar> {
+    let off = away.dot(face);
+    if off <= 0.0 {
+        return None;
+    }
+    let slant = (1.0 - off * off).max(0.0).sqrt();
+    let span = (to_mm - from_mm).abs();
+    let toward = (to_mm - from_mm).signum();
+    let mut gone = 0.0;
+    while gone <= span {
+        let along = toward.mul_add(gone, from_mm);
+        let radius_mm = (radius_at(rings, along) - GRAZE_MM).max(0.0);
+        if gone * off >= radius_mm.mul_add(slant, GRAZE_MM) {
+            return Some(along);
+        }
+        gone += LEAVING_STEP_MM;
+    }
+    None
+}
+
+/// How finely [`leaves`] walks down a body for where it stands off its face, millimetres.
+const LEAVING_STEP_MM: Scalar = 0.02;
+
+/// The radius of the tube `rings` draw at `along_mm`, straight between rings.
+fn radius_at(rings: &[Ring], along_mm: Scalar) -> Scalar {
+    let below = rings.iter().rposition(|ring| ring.along_mm <= along_mm);
+    match below {
+        None => rings.first().map_or(0.0, |ring| ring.radius_mm),
+        Some(index) => match rings.get(index + 1) {
+            None => rings[index].radius_mm,
+            Some(next) => {
+                let ring = rings[index];
+                let span = next.along_mm - ring.along_mm;
+                if span < RING_EPSILON_MM {
+                    ring.radius_mm.max(next.radius_mm)
+                } else {
+                    let share = (along_mm - ring.along_mm) / span;
+                    ring.radius_mm + (next.radius_mm - ring.radius_mm) * share
+                }
+            }
+        },
+    }
 }
 
 /// How much of the wall behind a contact a tip may bite into: half, so that what is left
@@ -602,12 +772,14 @@ fn plate_radius_mm(profile: &SupportProfile, trunk_mm: Scalar) -> Scalar {
     (profile.base_radius_mm() - bevel).max(trunk_mm)
 }
 
-/// The cone that widens the pillar out into the pad or raft it stands on, or `None` when the
-/// support lands on the model or has no room for one.
+/// How many steps the fillet between a pillar and its pad is drawn in.
+const FLARE_RINGS: u32 = 4;
+
+/// The fillet that widens the pillar out into the pad or raft it stands on, or `None` when
+/// the support lands on the model or has no room for one.
 ///
-/// It rises as far as it widens, which is the forty-five degrees every MSLA slicer draws
-/// this joint at, and it is drawn with the pillar's own facets rather than the pad's; see
-/// `docs/decisions/0130`.
+/// It rises as far as it widens, and it is drawn with the pillar's own facets rather than
+/// the pad's; see `docs/decisions/0130` and `docs/decisions/0343`.
 fn flare(tree: &SupportTree, profile: &SupportProfile, style: Style) -> Option<Tube> {
     let landing = tree.landing();
     let trunk_mm = trunk_base_mm(tree, profile, style);
@@ -629,9 +801,17 @@ fn flare(tree: &SupportTree, profile: &SupportProfile, style: Style) -> Option<T
         return None;
     }
 
-    let mut rings = Vec::with_capacity(3);
-    push(&mut rings, 0.0, upper_mm);
-    push(&mut rings, rise_mm, upper_mm + rise_mm);
+    // A quarter circle, tangent to the pillar at its top and to the pad at its foot, so
+    // the joint carries no notch for the peel to start a crack in; see ADR 0343.
+    let mut rings = Vec::with_capacity(FLARE_RINGS as usize + 2);
+    for step in 0..=FLARE_RINGS {
+        let angle = std::f32::consts::FRAC_PI_2 * step as Scalar / FLARE_RINGS as Scalar;
+        push(
+            &mut rings,
+            rise_mm * angle.sin(),
+            rise_mm.mul_add(1.0 - angle.cos(), upper_mm),
+        );
+    }
     push(
         &mut rings,
         rise_mm + profile.footing_height_mm() * FOOT_BITE,
@@ -893,6 +1073,86 @@ mod tests {
         );
     }
 
+    /// A support by hand under a slab's underside at z = 10: a head straight down from
+    /// the contact at the origin to a neck 2 mm under it, and a trunk to the plate.
+    fn under_a_slab(beside: &[Mesh]) -> (Mesh, SupportTree) {
+        let mut model = box_mesh(Vec3::new(-10.0, -10.0, 10.0), Vec3::new(10.0, 10.0, 12.0));
+        for other in beside {
+            let offset = model.vertices.len() as u32;
+            model.vertices.extend_from_slice(&other.vertices);
+            model
+                .faces
+                .extend(other.faces.iter().map(|face| face.map(|at| at + offset)));
+        }
+        let radius_mm = profile().pillar_radius_mm();
+        let nodes = vec![
+            TreeNode {
+                position: Vec3::new(0.0, 0.0, 10.0),
+                radius_mm,
+                parent: Some(1),
+                point: Some(0),
+                head: None,
+            },
+            TreeNode {
+                position: Vec3::new(0.0, 0.0, 8.0),
+                radius_mm,
+                parent: None,
+                point: None,
+                head: None,
+            },
+        ];
+        let landing = Landing {
+            base: Vec3::ZERO,
+            on_model: false,
+            pad_offset: Vec2::ZERO,
+            pad_cut: None,
+            on_support: false,
+        };
+        (model, SupportTree::new(nodes, 1, landing))
+    }
+
+    fn is_sound(model: &Mesh, tree: &SupportTree) -> bool {
+        let bvh = core_geometry::Bvh::build(model);
+        let fixture = profile();
+        sound(
+            tree,
+            Profiles::single(&fixture),
+            &Placed::new(model, &bvh, Transform::default()),
+        )
+    }
+
+    #[test]
+    fn a_support_clear_of_the_model_but_for_its_tip_is_sound() {
+        let (model, tree) = under_a_slab(&[]);
+        assert!(is_sound(&model, &tree));
+    }
+
+    #[test]
+    fn a_head_a_thin_rod_pokes_into_is_not_sound() {
+        // A rod 0.1 mm square hanging 1.5 mm from the underside, 0.3 mm off the head's
+        // axis, where the head is 0.4 mm in radius halfway down.
+        let rod = box_mesh(Vec3::new(0.25, -0.05, 8.5), Vec3::new(0.35, 0.05, 10.0));
+        let (model, tree) = under_a_slab(&[rod]);
+        assert!(!is_sound(&model, &tree));
+    }
+
+    #[test]
+    fn a_trunk_a_ledge_reaches_into_is_not_sound() {
+        // A ledge reaching 0.2 mm inside the 0.6 mm pillar, 4 mm over the plate.
+        let ledge = box_mesh(Vec3::new(0.4, -5.0, 3.5), Vec3::new(6.0, 5.0, 4.0));
+        let (model, tree) = under_a_slab(&[ledge]);
+        assert!(!is_sound(&model, &tree));
+    }
+
+    #[test]
+    fn a_head_lying_along_its_face_is_not_sound() {
+        // The neck slid 2 mm aside at the contact's own height: the head runs along the
+        // underside rather than leaving it.
+        let (model, mut tree) = under_a_slab(&[]);
+        tree.move_node(1, Vec3::new(2.0, 0.0, 9.9));
+        assert!(!is_sound(&model, &tree));
+    }
+
     #[test]
     fn a_column_landing_on_the_model_is_closed_too() {
         let profile = profile();
@@ -958,10 +1218,11 @@ mod tests {
         // the neck, each drawn as a cone on its pole and two frustums, and both counted
         // on top of the tube they sit in.
         let pillar = PI * pillar_r * pillar_r * (height - profile.top_length_mm() - trunk_bottom);
-        let ring = |step: f32| (PI / 2.0 * step / 3.0).sin() * pillar_r;
-        let drop = |step: f32| (1.0 - (PI / 2.0 * step / 3.0).cos()) * pillar_r;
-        let dome: f32 = (0..3u8)
-            .map(f32::from)
+        let rings = tube::DOME_RINGS as f32;
+        let ring = |step: f32| (PI / 2.0 * step / rings).sin() * pillar_r;
+        let drop = |step: f32| (1.0 - (PI / 2.0 * step / rings).cos()) * pillar_r;
+        let dome: f32 = (0..tube::DOME_RINGS)
+            .map(|step| step as f32)
             .map(|step| {
                 let (upper, lower) = (ring(step), ring(step + 1.0));
                 PI * (drop(step + 1.0) - drop(step)) / 3.0
@@ -970,16 +1231,23 @@ mod tests {
             .sum();
         let seam = 2.0 * dome;
         let pad = PI * foot_h / 3.0 * (base_r * base_r + base_r * rim_r + rim_r * rim_r);
-        // The flare rises as far as it widens, and sinks into the pad as far as the
-        // pillar does.
-        let flare_top_r = pillar_r;
+        // The flare is a quarter circle as tall as it is wide, drawn as a frustum a step,
+        // and sinks into the pad as far as the pillar does.
         let flare_bottom_r = profile.flare_lower_radius_mm();
-        let rise = flare_bottom_r - flare_top_r;
-        let flare = PI * rise / 3.0
-            * (flare_top_r * flare_top_r
-                + flare_top_r * flare_bottom_r
-                + flare_bottom_r * flare_bottom_r)
-            + PI * flare_bottom_r * flare_bottom_r * foot_h * FOOT_BITE;
+        let rise = flare_bottom_r - pillar_r;
+        let steps = FLARE_RINGS as f32;
+        let at = |step: f32| {
+            let angle = PI / 2.0 * step / steps;
+            (rise * angle.sin(), pillar_r + rise * (1.0 - angle.cos()))
+        };
+        let fillet: f32 = (0..FLARE_RINGS)
+            .map(|step| step as f32)
+            .map(|step| {
+                let ((top_z, upper), (bottom_z, lower)) = (at(step), at(step + 1.0));
+                PI * (bottom_z - top_z) / 3.0 * (upper * upper + upper * lower + lower * lower)
+            })
+            .sum();
+        let flare = fillet + PI * flare_bottom_r * flare_bottom_r * foot_h * FOOT_BITE;
         let expected = tip + neck + pillar + seam + pad + flare;
 
         let volume = signed_volume(&mesh);
@@ -990,19 +1258,26 @@ mod tests {
     }
 
     #[test]
-    fn the_pillar_flares_into_its_pad_at_forty_five_degrees() {
+    fn the_pillar_meets_its_pad_on_a_quarter_circle() {
         let profile = profile();
         let trees = column_on_plate(20.0, &profile);
         let style = Style::of(&trees[0], &profile);
         let tube = flare(&trees[0], &profile, style).expect("a column on the plate flares");
 
-        let (top, bottom) = (tube.rings[0], tube.rings[1]);
+        let (top, bottom) = (tube.rings[0], tube.rings[FLARE_RINGS as usize]);
         let widens = bottom.radius_mm - top.radius_mm;
         let rises = bottom.along_mm - top.along_mm;
         assert!(
             (widens - rises).abs() < 1e-5,
-            "forty-five degrees is a flare that rises as far as it widens: {rises} mm up              against {widens} mm out"
+            "a quarter circle rises as far as it widens: {rises} mm up against {widens} mm out"
         );
+        for ring in &tube.rings[..=FLARE_RINGS as usize] {
+            let off = Vec2::new(ring.along_mm, ring.radius_mm - bottom.radius_mm).length();
+            assert!(
+                (off - rises).abs() < 1e-5,
+                "every ring lies on the circle round the fillet's corner, got {off}"
+            );
+        }
         assert!(
             (tube.top.z - (profile.base_height_mm() + rises)).abs() < 1e-5,
             "the flare stands on the top of the pad"
@@ -1977,9 +2252,10 @@ mod tests {
         }
         let style = Style::of(&trees[0], &profile);
         let tube = flare(&trees[0], &profile, style).expect("a column on a raft flares");
-        let rises = tube.rings[1].along_mm - tube.rings[0].along_mm;
+        let foot = tube.rings[FLARE_RINGS as usize];
+        let rises = foot.along_mm - tube.rings[0].along_mm;
         assert!(
-            (tube.rings[1].radius_mm - flare_mm).abs() < 1e-5,
+            (foot.radius_mm - flare_mm).abs() < 1e-5,
             "the flare widens to its own lower diameter, not to what a pad would allow"
         );
         assert!(
